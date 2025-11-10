@@ -1,0 +1,58 @@
+[gd_scene load_steps=9 format=3 uid="uid://cwt2fedgrkapc"]
+
+[ext_resource type="Script" uid="uid://bd50fqn8yhbm" path="res://scripts/player/Player.gd" id="1_owqtu"]
+[ext_resource type="PackedScene" uid="uid://dgimv5l3sdn3s" path="res://scenes/ui/health_bar.tscn" id="2_grjwn"]
+[ext_resource type="Script" uid="uid://btfpaa603y5e7" path="res://scripts/systems/crit_system.gd" id="3_k8eo2"]
+[ext_resource type="Script" uid="uid://dwhimhmok233g" path="res://scripts/systems/crit_window_manager.gd" id="4_ua83j"]
+[ext_resource type="Script" uid="uid://dmlg2b1kcbv0s" path="res://scripts/ui/chain_ui.gd" id="5_puml6"]
+
+[sub_resource type="PlaceholderTexture2D" id="PlaceholderTexture2D_0m6gh"]
+size = Vector2(32, 32)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_7i164"]
+size = Vector2(30, 30)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_0sifs"]
+radius = 100.0
+
+[node name="Player" type="CharacterBody2D"]
+script = ExtResource("1_owqtu")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = SubResource("PlaceholderTexture2D_0m6gh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_7i164")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="AttackRange" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackRange"]
+shape = SubResource("CircleShape2D_0sifs")
+
+[node name="HealthBar" parent="." instance=ExtResource("2_grjwn")]
+offset_left = -25.0
+offset_top = -46.0
+offset_right = -25.0
+offset_bottom = -46.0
+
+[node name="CritSystem" type="Node" parent="."]
+script = ExtResource("3_k8eo2")
+
+[node name="CritWindowManager" type="Node" parent="."]
+script = ExtResource("4_ua83j")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="ChainLabel" type="Label" parent="UI"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -80.0
+offset_right = 80.0
+offset_bottom = 53.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 36
+text = "Chain: 0x"
+script = ExtResource("5_puml6")

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://6env7rjye12c"]
+
+[ext_resource type="Script" uid="uid://dujctye1isup2" path="res://generate_varied_props.gd" id="1"]
+
+[node name="PropGenerator" type="Node"]
+script = ExtResource("1")

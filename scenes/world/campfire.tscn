@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3 uid="uid://campfire001"]
+
+[ext_resource type="Script" uid="uid://v16p4a8ap3xm" path="res://scripts/systems/Campfire.gd" id="1_campfire"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_warmth"]
+radius = 150.0
+
+[node name="Campfire" type="Area2D"]
+position = Vector2(-50, -50)
+script = ExtResource("1_campfire")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(-4, 1)
+shape = SubResource("CircleShape2D_warmth")

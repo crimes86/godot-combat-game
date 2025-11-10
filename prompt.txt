@@ -1,0 +1,213 @@
+# 🎮 CONTINUATION PROMPT - RhythmRPG Development Session
+
+## 📋 Copy/Paste This to Start Tomorrow's Chat:
+
+---
+
+Hi! I'm continuing development on my **action MMO game** (working title: RhythmRPG). Here's where we are:
+
+### 🎯 **Core Game Concept:**
+- **Genre:** Isometric action MMO with unique combat mechanics
+- **Focus:** Cooperative/MMO gameplay where players explore a persistent world together
+- **Not:** A roguelike, not a rhythm game (despite the name)
+- **Key Hook:** Hybrid crit window system with global windows, personal weakpoints, and shared chain building
+
+### 💎 **The Unique Combat System:**
+
+**Crit Windows (Global):**
+- When enemies take 100% damage threshold, they enter "crit window"
+- Enemy grows to 2.8x scale, glows, becomes vulnerable
+- ALL players see this simultaneously (global event)
+
+**Weakpoints (Personal):**
+- Each player sees 3 unique weakpoint positions on the enemy
+- Players must destroy THEIR OWN weakpoints (individual skill check)
+- Positions are different for each player (no fighting over same targets)
+
+**Chain System (Shared):**
+- Every weakpoint destroyed by ANY player adds +1 to SHARED team chain
+- Chain multiplier benefits all players
+- Higher chains = massive damage bonuses
+- Individual mistakes don't break chain (forgiving design)
+
+**Why this system is brilliant:**
+- Everyone participates (global windows)
+- Individual skill still matters (personal weakpoints)
+- Team coordination is rewarded (shared chain)
+- Scales from 2 to 40+ players beautifully
+
+### 🔧 **Current Technical Status:**
+
+**Working Systems:**
+✅ Solo combat (attack, dodge, crit windows)
+✅ Crit window system (enemies grow, become vulnerable)
+✅ Weakpoint spawning system
+✅ Chain system (currently solo, needs co-op implementation)
+✅ Health bars (bright pill capsule design with smooth animations)
+✅ Enemy AI (patrol, aggro, retreat, campfire deterrent)
+✅ XP and leveling system
+✅ World structure (campfire hub + spawn zones by difficulty)
+
+**Current Issues:**
+🔄 Weakpoint positioning - still clustering even with sectioning system
+- Tried random pool (clustered)
+- Tried sectioned spawning with max 2 per section (still clustering)
+- Need better approach, possibly visual positioning tool
+
+**Tech Stack:**
+- Engine: Godot 4.x
+- Language: GDScript
+- Project path: `/home/claude/rhythmrpg`
+- Key files:
+  - `scripts/enemies/Enemy.gd` (enemy behavior, crit windows, weakpoints)
+  - `scripts/enemies/weakpoint.gd` (weakpoint behavior)
+  - `scripts/ui/HealthBar.gd` (health bar UI)
+
+### 📂 **Recent Changes (from last session):**
+
+**Health Bar Polish:**
+- Thin pill capsule design (6px height)
+- 4-stage color system (green→yellow→orange→red), 50% brighter
+- Smooth fill animations
+- White damage flash effect
+- Critical pulse when HP < 25%
+- Positioned 39px above character heads
+
+**Weakpoint System:**
+- Implemented sectioned spawning (upper/mid/lower body sections)
+- Max 2 weakpoints per section rule
+- 20 total possible positions across skeleton body
+- Random rotation per weakpoint for visual variety
+- Still having clustering issues despite sectioning
+
+**Files to Commit:**
+- scenes/ui/health_bar.tscn
+- scripts/enemies/Enemy.gd
+- scripts/enemies/weakpoint.gd
+- scripts/ui/HealthBar.gd
+
+### 🎯 **Immediate Priority (Today's Session):**
+
+**Main Goal:** Fix weakpoint positioning so they don't cluster on the blown-up skeleton sprite
+
+**Proposed Approach:**
+Create a visual tool/system to manually map weakpoint positions:
+- Option 1: In-game debug mode (click to place positions, see all 20 positions as colored dots)
+- Option 2: Use external image editor to mark positions on screenshot
+- Option 3: Godot scene editor with visual positioning
+
+**What we need:**
+- Screenshot of blown-up skeleton (2.8x scale) 
+- Hand-placed positions that look good visually
+- Clear section boundaries defined
+- Testing to verify no clustering with new positions
+
+**The weakpoint system needs to work well for:**
+- Solo play (3 weakpoints on one enemy)
+- Small groups (2-4 players, each seeing their own 3 weakpoints)
+- Large groups/raids (20-40 players, 60-120 total weakpoints on screen)
+
+### 🚀 **Long-Term Vision (Context):**
+
+**Development Roadmap:**
+1. Phase 1 (current): Solo combat perfection (2 months)
+2. Phase 2: Co-op prototype (2-4 players) (3 months)
+3. Phase 3: Co-op polish (2 months)
+4. Phase 4: MMO-lite (20-40 players per server) (4 months)
+5. Phase 5: Full MMO features (4 months)
+6. Phase 6: Content expansion (3 months)
+7. Phase 7: Launch prep (2 months)
+
+**Near-term milestones:**
+- Week 1: Perfect weakpoint positioning
+- Week 2-3: Add more enemy variety
+- Week 4: More combat juice (screen shake, particles, sound)
+- Month 2: Basic loot system
+- Month 3: Start co-op prototype
+
+### 📚 **Reference Documents Created:**
+
+Available in `/mnt/user-data/outputs/`:
+- `THE_COOP_VISION.md` - Co-op gameplay vision
+- `MMO_HYBRID_SYSTEM.md` - Complete hybrid crit window system design ⭐ (most important)
+- `TODO_WEAKPOINT_POSITIONING.md` - Notes for weakpoint positioning work
+- `SECTIONED_WEAKPOINTS_GUIDE.md` - Current sectioning system
+- `WEAKPOINT_POSITION_MAP.md` - Visual position reference
+
+### 🎨 **Art/Design Context:**
+
+**Skeleton Enemy:**
+- Small sprite at normal size (~32x48px)
+- Grows to 2.8x scale during crit window (~90x135px)
+- Weakpoints are bone spur sprites
+- Need to be placed on actual skeleton body parts (head, shoulders, chest, ribs, hips, legs)
+
+**Current Position System:**
+- 20 positions divided into 3 sections:
+  - UPPER (6): Head, neck, shoulders
+  - MID (11): Chest, arms, ribs, hips  
+  - LOWER (3): Pelvis, legs
+- Max 2 weakpoints per section
+- Still visually clustering (needs fixing)
+
+### 💬 **My Communication Style:**
+
+I prefer:
+- Clear, actionable solutions over theory
+- Code examples over explanations
+- Visual diagrams when helpful
+- Being told when I'm wrong/heading the wrong direction
+- Step-by-step implementation plans
+- File downloads I can immediately use
+
+### ❓ **Questions You Might Ask Me:**
+
+**"What exactly is clustering?"** 
+Multiple weakpoints spawning too close together visually, making them overlap or look bunched up on the skeleton sprite.
+
+**"How do you want to approach positioning today?"**
+I'm open to suggestions! Last session we discussed creating a visual tool to manually place positions. I'm ready to try whatever approach will get us to well-distributed positions fastest.
+
+**"Do you want to tackle other features instead?"**
+The weakpoint positioning is bugging me, but I'm flexible. If you think we should work on something else first (like more enemy types or combat juice), I'm open to that too.
+
+**"Have you made the git commit yet?"**
+[I'll update you on this when we start]
+
+### 🎯 **Today's Success Criteria:**
+
+By end of session, I want:
+1. ✅ Weakpoints positioned well on skeleton (no clustering)
+2. ✅ Visual confirmation it works (screenshot or in-game test)
+3. ✅ Code committed to git
+4. ✅ Clear path forward for tomorrow's work
+
+### 🔥 **Let's Build:**
+
+I'm ready to continue development. What's the best approach to fix the weakpoint positioning issue?
+
+---
+
+## 📎 **Additional Context If Needed:**
+
+**My working style:**
+- I work on this project evenings/weekends
+- I'm comfortable with Godot and GDScript
+- I prefer iterative development (ship early, improve continuously)
+- I'm building toward a co-op Early Access launch in ~8 months
+- Long-term vision is full MMO, but starting with 2-4 player co-op
+
+**What motivates me:**
+- Making tight, satisfying combat
+- Creating systems that reward skill
+- Building something unique (the hybrid crit system)
+- Eventually playing with friends in a world we explore together
+
+**What frustrates me:**
+- Getting stuck on polish details (like current weakpoint positioning)
+- Not being sure if I'm heading in the right direction
+- Features that feel "good enough" instead of "great"
+
+---
+
+**Thanks for helping me build this! Let's make progress today.** 🚀
