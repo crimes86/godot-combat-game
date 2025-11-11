@@ -4,9 +4,9 @@ extends Node
 # Tracks successful crit windows and applies damage multipliers
 
 # Chain settings
-@export var damage_per_chain_level: float = 10.0
-@export var max_chain_level: int = 10
-@export var chain_timeout: float = 5.0
+@export var damage_per_chain_level: float = Constants.CHAIN_DAMAGE_PER_LEVEL
+@export var max_chain_level: int = Constants.CHAIN_MAX_LEVEL
+@export var chain_timeout: float = Constants.CHAIN_TIMEOUT
 
 # Reset reasons enum
 enum ResetReason {
@@ -53,7 +53,7 @@ func increase_chain() -> void:
 		
 		# ✨ NEW: Play milestone sound at every 5 chain levels or at max
 		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager and (current_chain % 5 == 0 or current_chain == max_chain_level):
+		if sound_manager and (current_chain % Constants.CHAIN_MILESTONE_INTERVAL == 0 or current_chain == max_chain_level):
 			sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_MILESTONE, -6.0)
 		
 		if current_chain == max_chain_level:

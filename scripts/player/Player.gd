@@ -10,7 +10,7 @@ var selected_gender: Gender = Gender.MALE  # Will be set at game start
 # Combat - Cone Attack - Now derived from CharacterStats
 @export var damage_override: float = -1.0      # -1 = use CharacterStats
 @export var cooldown_override: float = -1.0    # -1 = use CharacterStats
-@export var hold_attack_interval: float = 0.13  # Slightly slower than manual clicking
+@export var hold_attack_interval: float = Constants.PLAYER_HOLD_ATTACK_INTERVAL  # Slightly slower than manual clicking
 @export var attack_range: float = Constants.PLAYER_ATTACK_RANGE
 @export var attack_cone_angle: float = Constants.PLAYER_ATTACK_CONE_ANGLE
 var can_attack: bool = true
@@ -19,9 +19,9 @@ var is_mouse_held: bool = false
 var hold_attack_timer: float = 0.0
 
 # Combat stats - synced from CharacterStats
-var speed: float = 200.0
-var attack_damage: float = 10.0
-var attack_cooldown: float = 0.10
+var speed: float = Constants.PLAYER_BASE_SPEED
+var attack_damage: float = Constants.PLAYER_BASE_ATTACK_DAMAGE
+var attack_cooldown: float = Constants.PLAYER_ATTACK_COOLDOWN
 
 # Health - Now derived from CharacterStats
 var max_health: float = 100.0
@@ -547,7 +547,7 @@ func check_crit_window_click(event: InputEvent) -> bool:
 		if distance < enemy_size:
 			# Check if we're in attack range
 			var distance_to_edge = global_position.distance_to(enemy.global_position) - enemy_size
-			if distance_to_edge <= attack_range + 20.0:
+			if distance_to_edge <= attack_range + Constants.PLAYER_ATTACK_RANGE_BUFFER:
 				handle_crit_window_attack(enemy, click_pos)
 				return true  # Handled the click
 			else:

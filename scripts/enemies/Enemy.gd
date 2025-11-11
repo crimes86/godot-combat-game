@@ -9,6 +9,8 @@ extends CharacterBody2D
 @export var enemy_level: int = 1
 @export var xp_reward_base: int = 10  # Base XP, scales with level
 var xp_reward: int = 10  # Actual XP granted
+@export var gold_drop_base: int = 5  # Base gold drop, scales with level
+var gold_drop: int = 5  # Actual gold dropped
 
 # References
 @onready var health_bar: Control = $HealthBar
@@ -38,9 +40,10 @@ signal damage_taken(damage: float, is_crit: bool)  # ✨ NEW: For unified feedba
 
 func _ready() -> void:
 	# Scale stats by enemy level
-	max_health = 50.0 * pow(1.12, enemy_level - 1)  # ~500 HP at level 10
-	base_damage = 5.0 * pow(1.08, enemy_level - 1)
-	xp_reward = int(xp_reward_base * pow(1.15, enemy_level - 1))
+	max_health = Constants.ENEMY_BASE_HEALTH * pow(Constants.ENEMY_HEALTH_SCALING, enemy_level - 1)  # ~500 HP at level 10
+	base_damage = Constants.ENEMY_BASE_DAMAGE * pow(Constants.ENEMY_DAMAGE_SCALING, enemy_level - 1)
+	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
+	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))  # Same scaling as XP
 	
 	current_health = max_health
 	health_bar.update_health(current_health, max_health)
@@ -248,58 +251,9 @@ func update_level_display() -> void:
 		add_child(level_label)
 
 func _on_click_area_input(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
-	# 🔧 DISABLED: Let Player handle ALL clicks (including crit window)
+	# Let Player handle ALL clicks (including crit window)
 	# This prevents double-damage bugs where both Player and Enemy handle the same click
 	return
-	
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		# Check if player is in range
-		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-		if not player:
-			return
-		
-		# Account for enemy size (especially important during crit window when scaled 2.8x)
-		var enemy_size = 30.0  # Base size
-		if has_node("CollisionShape2D"):
-			var collision = get_node("CollisionShape2D")
-			if collision.shape is RectangleShape2D:
-				var rect = collision.shape as RectangleShape2D
-				enemy_size = max(rect.size.x, rect.size.y) * scale.x / 2.0
-		
-		var distance_to_player = global_position.distance_to(player.global_position)
-		var player_attack_range = Constants.PLAYER_ATTACK_RANGE
-		
-		# Check distance to enemy EDGE, not center
-		var distance_to_edge = distance_to_player - enemy_size
-		
-		# Allow clicks if edge is within attack range + small buffer
-		if distance_to_edge > player_attack_range + 20.0:  # 20px buffer for forgiveness
-			# Only print warning if significantly out of range
-			if distance_to_edge > player_attack_range + 50.0:
-				print("⚠️ Too far from player (%.1fpx from edge, %.1fpx buffer), ignoring click" % [distance_to_edge, player_attack_range + 20.0])
-			return
-		
-		# ✨ NEW: If weakpoints haven't spawned yet (during growth), just do normal damage
-		if weakpoints.is_empty():
-			print("Crit window growing - dealing normal damage")
-			take_damage(base_damage, false)
-			return
-		
-		# Check if weakpoint was hit
-		var hit_weakpoint = false
-		var click_pos = get_global_mouse_position()
-		
-		for weakpoint in weakpoints:
-			if is_instance_valid(weakpoint) and not weakpoint.is_destroyed:
-				var distance = click_pos.distance_to(weakpoint.global_position)
-				var weakpoint_radius = 28 * weakpoint.scale.x  # Updated to match new size
-				if distance < weakpoint_radius:
-					hit_weakpoint = true
-					break
-		
-		if not hit_weakpoint:
-			print("Missed weakpoint - dealing normal damage")
-			take_damage(base_damage, false)
 
 func take_damage(amount: float, is_crit: bool = false) -> void:
 	if is_dying:
@@ -411,9 +365,9 @@ func start_crit_window(difficulty: float = 1.0) -> void:
 		print("   ❌ No sprite found!")
 	
 	# ✨ FIX: Check if we're already at target scale (prevents no-grow bug)
-	var target_scale = original_scale * 2.8
-	
-	if scale.x >= target_scale.x * 0.9:  # If already 90% of target, skip growth
+	var target_scale = original_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
+
+	if scale.x >= target_scale.x * Constants.CRIT_WINDOW_SCALE_THRESHOLD:  # If already 90% of target, skip growth
 		print("   ⚠️ Already at target scale, skipping growth animation")
 		# Just spawn weakpoints immediately
 		spawn_weakpoints()
@@ -423,8 +377,8 @@ func start_crit_window(difficulty: float = 1.0) -> void:
 		# ✨ FIX: Store reference to ensure tween isn't garbage collected
 		var scale_tween = create_tween()
 		scale_tween.set_parallel(false)
-		scale_tween.tween_property(self, "scale", target_scale, 0.25)
-		z_index = 100
+		scale_tween.tween_property(self, "scale", target_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
+		z_index = Constants.CRIT_WINDOW_Z_INDEX
 		
 		# ✨ NEW: Player can attack during growth animation!
 		# Weakpoints will spawn after growth completes
@@ -438,7 +392,7 @@ func start_crit_window(difficulty: float = 1.0) -> void:
 	
 	# ✨ CHANGED: Very short protection after growth (just to prevent double-click)
 	spam_protection_active = true
-	get_tree().create_timer(0.1).timeout.connect(func():
+	get_tree().create_timer(Constants.CRIT_WINDOW_SPAM_PROTECTION).timeout.connect(func():
 		if is_instance_valid(self) and not is_dying:
 			spam_protection_active = false
 			print("Weakpoints active!")
@@ -538,11 +492,11 @@ func spawn_weakpoints() -> void:
 		print("🎯 Picked weakpoint in %s section at %s (section total: %d/2)" % 
 			[section_name, random_pos, positions_per_section[section_name]])
 	
-	print("📊 Final distribution - Upper: %d | Mid: %d | Lower: %d" % 
+	print("📊 Final distribution - Upper: %d | Mid: %d | Lower: %d" %
 		[positions_per_section["upper"], positions_per_section["mid"], positions_per_section["lower"]])
-	
+
 	# Slightly smaller scale for better fit
-	var counter_scale = 1.0 / 3.2
+	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR
 	
 	for i in range(chosen_positions.size()):
 		var weakpoint_scene = preload("res://scenes/enemies/weakpoint.tscn")
@@ -604,8 +558,8 @@ func _process(delta: float) -> void:
 func _on_weakpoint_hit(weakpoint) -> void:
 	if spam_protection_active or is_dying:
 		return
-	
-	var crit_damage = base_damage * 2.0
+
+	var crit_damage = base_damage * Constants.CRIT_DAMAGE_MULTIPLIER
 	take_damage(crit_damage, true)
 	weakpoint_hit_success.emit()
 
@@ -704,6 +658,10 @@ func die() -> void:
 	if player and player.has_method("gain_experience"):
 		player.gain_experience(xp_reward)
 		print("💰 Granted ", xp_reward, " XP to player")
+
+	# Grant gold to player
+	CharacterStats.add_gold(gold_drop)
+	print("💰 Dropped ", gold_drop, " gold")
 	
 	# ✨ NEW: Play death sound
 	var sound_manager = get_node_or_null("/root/SoundManager")

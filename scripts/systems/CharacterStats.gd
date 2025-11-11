@@ -8,30 +8,30 @@ extends Node
 # LEVEL & EXPERIENCE
 # ============================================
 
-var level: int = 1
-var experience: int = 0
-var experience_to_next_level: int = 100
+var level: int = Constants.STARTING_LEVEL
+var experience: int = Constants.STARTING_XP
+var experience_to_next_level: int = Constants.BASE_XP_REQUIREMENT
 
 # ============================================
 # CURRENCY
 # ============================================
 
-var gold: int = 500         # Currency for purchasing equipment (starting gold for testing)
+var gold: int = Constants.STARTING_GOLD  # Currency for purchasing equipment (starting gold for testing)
 
 # ============================================
 # BASE ATTRIBUTES
 # ============================================
 
-var strength: int = 10      # Affects base damage
-var agility: int = 10       # Affects attack speed
-var vitality: int = 10      # Affects max HP
-var luck: int = 10          # Affects crit chance
+var strength: int = Constants.STARTING_STRENGTH  # Affects base damage
+var agility: int = Constants.STARTING_AGILITY    # Affects attack speed
+var vitality: int = Constants.STARTING_VITALITY  # Affects max HP
+var luck: int = Constants.STARTING_LUCK          # Affects crit chance
 
 # Starting stats (for reset/new character)
-const STARTING_STRENGTH: int = 10
-const STARTING_AGILITY: int = 10
-const STARTING_VITALITY: int = 10
-const STARTING_LUCK: int = 10
+const STARTING_STRENGTH: int = Constants.STARTING_STRENGTH
+const STARTING_AGILITY: int = Constants.STARTING_AGILITY
+const STARTING_VITALITY: int = Constants.STARTING_VITALITY
+const STARTING_LUCK: int = Constants.STARTING_LUCK
 
 # ============================================
 # EQUIPPED WEAPON
@@ -144,7 +144,7 @@ func level_up_character() -> void:
 	level += 1
 	
 	# Calculate next level XP requirement (exponential curve)
-	experience_to_next_level = int(100 * pow(1.15, level - 1))
+	experience_to_next_level = int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, level - 1))
 	
 	# Grant stat points (balanced increases)
 	strength += 2
@@ -274,9 +274,9 @@ func create_starter_weapon():  # Returns Weapon
 
 func reset_character() -> void:
 	"""Reset character to level 1 (for testing or new game)"""
-	level = 1
-	experience = 0
-	experience_to_next_level = 100
+	level = Constants.STARTING_LEVEL
+	experience = Constants.STARTING_XP
+	experience_to_next_level = Constants.BASE_XP_REQUIREMENT
 	
 	strength = STARTING_STRENGTH
 	agility = STARTING_AGILITY
@@ -306,9 +306,9 @@ func get_save_data() -> Dictionary:
 
 func load_save_data(data: Dictionary) -> void:
 	"""Load character data from saved dictionary"""
-	level = data.get("level", 1)
-	experience = data.get("experience", 0)
-	experience_to_next_level = data.get("experience_to_next_level", 100)
+	level = data.get("level", Constants.STARTING_LEVEL)
+	experience = data.get("experience", Constants.STARTING_XP)
+	experience_to_next_level = data.get("experience_to_next_level", Constants.BASE_XP_REQUIREMENT)
 	strength = data.get("strength", STARTING_STRENGTH)
 	agility = data.get("agility", STARTING_AGILITY)
 	vitality = data.get("vitality", STARTING_VITALITY)

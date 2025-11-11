@@ -58,7 +58,7 @@ func _ready():
 func create_world_boundaries():
 	"""Create invisible walls around world to prevent player from going out of bounds"""
 	# World bounds: X: -5000 to 13000, Y: -3000 to 3000
-	var boundary_thickness = 100.0
+	var boundary_thickness = Constants.WORLD_BOUNDARY_THICKNESS
 
 	# Top wall
 	var top_wall = StaticBody2D.new()
@@ -121,11 +121,11 @@ func setup_camera_limits():
 		print("⚠️ Camera2D not found on player")
 		return
 
-	# Set limits to world bounds: X: -5000 to 13000, Y: -3000 to 3000
-	camera.limit_left = -5000
-	camera.limit_right = 13000
-	camera.limit_top = -3000
-	camera.limit_bottom = 3000
+	# Set limits to world bounds
+	camera.limit_left = Constants.WORLD_LEFT
+	camera.limit_right = Constants.WORLD_RIGHT
+	camera.limit_top = Constants.WORLD_TOP
+	camera.limit_bottom = Constants.WORLD_BOTTOM
 
 	print("📷 Camera limits set to world boundaries")
 
@@ -158,9 +158,9 @@ func create_ground_texture_optimized():
 	rng.seed = 12345
 
 	# Performance mode: 900px spacing for smooth gameplay
-	# Cover full world bounds: -5000 to 13000 (X), -3000 to 3000 (Y)
-	for x in range(-5000, 13000, 900):
-		for y in range(-3000, 3000, 900):
+	# Cover full world bounds
+	for x in range(Constants.WORLD_LEFT, Constants.WORLD_RIGHT, Constants.TERRAIN_PATCH_SPACING):
+		for y in range(Constants.WORLD_TOP, Constants.WORLD_BOTTOM, Constants.TERRAIN_PATCH_SPACING):
 			if rng.randf() > 0.2:  # 80% coverage (doubled from 40%)
 				continue
 
@@ -496,9 +496,9 @@ func spawn_trees_everywhere_dynamic(parent: Node2D):
 
 	# Cover full world bounds for tree placement
 	# 20% spawn rate (reduced from 40% for better balance)
-	for x in range(-5000, 13000, 200):
-		for y in range(-3000, 3000, 200):
-			if rng.randf() > 0.20:
+	for x in range(Constants.WORLD_LEFT, Constants.WORLD_RIGHT, Constants.TREE_GRID_SPACING):
+		for y in range(Constants.WORLD_TOP, Constants.WORLD_BOTTOM, Constants.TREE_GRID_SPACING):
+			if rng.randf() > Constants.TREE_SPAWN_RATE:
 				continue
 			
 			var tree_pos = Vector2(
