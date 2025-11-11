@@ -233,7 +233,9 @@ z = 0:   Player, enemies, campfire (game entities)
 - **WASD**: Move
 - **Mouse**: Aim
 - **Left Click**: Attack
-- **E**: Convert ruins to campfire (when in range and killed a skeleton)
+- **Mouse Wheel**: Camera zoom (disabled while shop is open)
+- **E**: Open/close vendor shop (when near vendor) OR Convert ruins to campfire (when in range and killed a skeleton)
+- **ESC**: Close shop (when shop is open)
 - **F**: Toggle character gender (MALE/FEMALE)
 - **F12**: Toggle screenshot mode
 
@@ -302,6 +304,166 @@ z = 0:   Player, enemies, campfire (game entities)
 ### Signal Connections
 - Enemy `died` signal connects to respawn systems
 - Skeleton death signals to RuinsCampfire for tracking
+
+---
+
+## Vendor & Shop System
+
+### Blacksmith Vendor
+**Location**: Position (-253, -113) near player spawn
+- Interactive NPC with proximity detection (80 pixel radius)
+- Press **E** to open shop when in range
+- Shop automatically closes if player walks away
+
+### Shop UI Features
+**Interface**:
+- Centered CanvasLayer UI (doesn't pause gameplay)
+- Tabbed interface: Weapons / Armor
+- Scrollable item lists with detailed information
+- Real-time gold display
+- Toggle with E or ESC key
+
+**Item Display**:
+- Item name with rarity-based color coding
+- Description and full stats
+- Price in gold
+- Level requirements
+- Buy buttons (auto-disabled if can't afford or don't meet level)
+- Visual feedback messages for purchases
+
+**Rarity Colors**:
+- White: Common
+- Yellow-Green: Uncommon
+- Blue: Rare
+- Purple: Epic
+- Orange: Legendary
+
+### Currency System
+- **Gold**: Used for purchasing equipment
+- Starting gold: 500 (for testing)
+- Managed through CharacterStats autoload
+- Methods: `can_afford()`, `spend_gold()`, `add_gold()`
+
+### Shop Inventory
+
+**Weapons** (6 available):
+1. Wooden Club - 0 gold (Dmg: 3.0) - Common
+2. Iron Sword - 100 gold (Dmg: 8.0, +2% crit) - Common, Lv 3
+3. Steel Blade - 300 gold (Dmg: 15.0, +5% crit, -5% speed) - Uncommon, Lv 6
+4. Battle Axe - 600 gold (Dmg: 25.0, +8% crit, +15% speed) - Uncommon, Lv 10
+5. Mithril Sword - 1200 gold (Dmg: 35.0, +10% crit, -15% speed) - Rare, Lv 15
+6. Dragon Slayer - 2500 gold (Dmg: 50.0, +15% crit, -10% speed) - Epic, Lv 20
+
+**Armor** (7 available):
+1. Leather Vest - 50 gold (+5 Def)
+2. Chainmail Armor - 250 gold (+12 Def)
+3. Plate Armor - 800 gold (+25 Def)
+4. Leather Boots - 30 gold (+2 Def)
+5. Iron Boots - 200 gold (+5 Def)
+6. Leather Gloves - 30 gold (+2 Def)
+7. Iron Helm - 150 gold (+8 Def)
+
+### Data Files
+- `data/shop_weapons.json` - Weapon definitions with stats
+- `data/shop_armor.json` - Armor definitions with stats
+- JSON format allows easy addition of new items
+
+### Technical Implementation
+**Scripts**:
+- `scripts/systems/Vendor.gd` - Vendor NPC logic, proximity detection
+- `scripts/ui/ShopUI.gd` - Shop interface and purchase system
+- `scenes/npcs/vendor.tscn` - Vendor scene with Area2D collision
+- `scenes/ui/shop_ui.tscn` - Shop UI layout
+
+**Features**:
+- Player must be in "player" group for vendor detection
+- Shop UI disables camera zoom while open
+- Dynamic item row generation with proper styling
+- Purchase validation (gold, level requirements)
+- Signal-based communication between vendor and UI
+
+---
+
+## Next Steps & Planned Features
+
+### High Priority
+1. **Armor Equipping System**
+   - Implement armor slots (chest, boots, gloves, helm)
+   - Apply defense bonuses to CharacterStats
+   - Visual feedback when armor is equipped
+   - Inventory management for owned armor
+
+2. **Gold Rewards**
+   - Add gold drops from enemies
+   - Scale gold rewards by enemy difficulty/level
+   - Ruins skeletons drop more gold than regular enemies
+   - Boss/elite enemies special gold bonuses
+
+3. **Save System**
+   - Save player progress (level, stats, gold)
+   - Save equipped weapons and owned armor
+   - Save world state (ruins converted, enemies killed)
+   - Auto-save and manual save options
+
+### Medium Priority
+4. **Additional Vendors**
+   - Potion vendor (health/mana consumables)
+   - Enchanter (weapon/armor upgrades)
+   - Multiple vendor locations along the path
+
+5. **Inventory System**
+   - Weapon switching (own multiple weapons)
+   - Armor sets and bonuses
+   - Consumable items (potions, food)
+   - Inventory UI with tabs
+
+6. **Quest System**
+   - Tutorial quests near campfire
+   - Kill X enemies quests
+   - Reach castle quest
+   - Convert ruins quest
+   - Quest rewards (gold, items, XP)
+
+7. **Character Progression**
+   - Skill trees or talent points
+   - Stat allocation on level up
+   - Passive abilities unlock
+   - Class specializations
+
+### Polish & Balance
+8. **Shop Enhancements**
+   - Sell items back to vendors (50% value)
+   - Item comparison tooltips
+   - "New!" badges for recently added items
+   - Limited stock or rotating inventory
+   - Vendor dialogue system
+
+9. **Economy Balancing**
+   - Adjust gold drop rates
+   - Fine-tune item prices
+   - Level requirement balancing
+   - Testing progression curve
+
+10. **UI/UX Improvements**
+    - Minimap with vendor/campfire icons
+    - Quick-access hotbar for consumables
+    - Better visual feedback for shop interactions
+    - Tooltip system for items
+    - Stats comparison (current vs new weapon)
+
+### Long-term Features
+11. **Multiplayer/Social**
+    - Trading between players
+    - Shared vendor shops
+    - Player marketplace
+    - Co-op combat
+
+12. **Advanced Systems**
+    - Crafting system
+    - Enchanting/upgrading equipment
+    - Rare/legendary item drops from enemies
+    - Achievement system
+    - Leaderboards
 
 ---
 
