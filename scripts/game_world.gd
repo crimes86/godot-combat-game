@@ -765,10 +765,10 @@ func create_tree_at_position(parent: Node2D, pos: Vector2, tree_type: String, rn
 	var shadow_width = 45 * (tree_scale / 2.5)  # Scale shadow with tree (tighter)
 	var shadow_height = shadow_width * 0.4  # Oval shape
 	shadow.size = Vector2(shadow_width, shadow_height)
-	# Position at bottom of tree - offset scales with tree size (moved down 55px total)
-	var shadow_y = (64 * tree_scale / 2) + (tree_scale * 8) + 55  # Scales: small=115, medium=155, large=215
-	# Adjust shadow X based on tree direction (flipped trees slant left)
-	var shadow_x = -shadow_width/2 + (5 if not tree_flipped else -8)
+	# Position at bottom of tree - new sprites are 128x128, tree base is at y=120 (56 from center when centered)
+	var shadow_y = 56 * tree_scale  # Tree base position scaled
+	# Center shadow horizontally (no skew adjustment needed with new symmetric trees)
+	var shadow_x = -shadow_width / 2
 	shadow.position = Vector2(shadow_x, shadow_y)
 	shadow.color = Color(0, 0, 0, 0.6)  # Darker shadow
 	shadow.z_index = -4  # Above ground layers, below props
