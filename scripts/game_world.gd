@@ -491,14 +491,14 @@ func generate_dynamic_elements():
 func spawn_trees_everywhere_dynamic(parent: Node2D):
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 77777
-	
+
 	var trees_placed = 0
 
 	# Cover full world bounds for tree placement
-	# 40% spawn rate
+	# 20% spawn rate (reduced from 40% for better balance)
 	for x in range(-5000, 13000, 200):
 		for y in range(-3000, 3000, 200):
-			if rng.randf() > 0.40:
+			if rng.randf() > 0.20:
 				continue
 			
 			var tree_pos = Vector2(
