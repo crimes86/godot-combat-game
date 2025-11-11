@@ -7,6 +7,13 @@ const PROP_TEXTURES = {
 	"dead_tree_1": "res://assets/environment/wasteland/dead_tree_1.png",
 	"dead_tree_2": "res://assets/environment/wasteland/dead_tree_2.png",
 	"dead_tree_3": "res://assets/environment/wasteland/dead_tree_3.png",
+	"dead_tree_4": "res://assets/environment/wasteland/dead_tree_4.png",
+	"dead_tree_5": "res://assets/environment/wasteland/dead_tree_5.png",
+	"dead_tree_6": "res://assets/environment/wasteland/dead_tree_6.png",
+	"dead_tree_7": "res://assets/environment/wasteland/dead_tree_7.png",
+	"dead_tree_8": "res://assets/environment/wasteland/dead_tree_8.png",
+	"dead_tree_9": "res://assets/environment/wasteland/dead_tree_9.png",
+	"dead_tree_10": "res://assets/environment/wasteland/dead_tree_10.png",
 	"rock_large": "res://assets/environment/wasteland/rock_large.png",
 	"rock_medium": "res://assets/environment/wasteland/rock_medium.png",
 	"rock_small": "res://assets/environment/wasteland/rock_small.png",
@@ -27,12 +34,15 @@ const LAYER_TEMPLATE = [
 	{"count": 10, "size_mult": [0.3, 0.5], "spread_mult": 0.2, "darkness": 0.10, "alpha": 0.080}
 ]
 
-var tree_types = ["dead_tree_1", "dead_tree_2", "dead_tree_3"]
+var tree_types = ["dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5", "dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10"]
 var screenshot_mode = false
 var tree_positions = []  # Track tree positions to avoid spawning small rocks on them
 
 func _ready():
 	print("🗺️ GameWorld initializing (optimized - no baking needed)...")
+
+	# Create world boundaries first
+	create_world_boundaries()
 
 	# Generate optimized world layers directly (reduced from 267k to ~40k nodes)
 	await generate_optimized_world_layers()
@@ -40,7 +50,84 @@ func _ready():
 	# Generate dynamic elements (trees, enemies, props)
 	generate_dynamic_elements()
 
+	# Set camera limits
+	setup_camera_limits()
+
 	print("✅ GameWorld ready!")
+
+func create_world_boundaries():
+	"""Create invisible walls around world to prevent player from going out of bounds"""
+	# World bounds: X: -5000 to 13000, Y: -3000 to 3000
+	var boundary_thickness = 100.0
+
+	# Top wall
+	var top_wall = StaticBody2D.new()
+	top_wall.name = "TopBoundary"
+	var top_shape = CollisionShape2D.new()
+	var top_rect = RectangleShape2D.new()
+	top_rect.size = Vector2(18000 + boundary_thickness * 2, boundary_thickness)
+	top_shape.shape = top_rect
+	top_shape.position = Vector2(4000, -3000 - boundary_thickness/2)
+	top_wall.add_child(top_shape)
+	add_child(top_wall)
+
+	# Bottom wall
+	var bottom_wall = StaticBody2D.new()
+	bottom_wall.name = "BottomBoundary"
+	var bottom_shape = CollisionShape2D.new()
+	var bottom_rect = RectangleShape2D.new()
+	bottom_rect.size = Vector2(18000 + boundary_thickness * 2, boundary_thickness)
+	bottom_shape.shape = bottom_rect
+	bottom_shape.position = Vector2(4000, 3000 + boundary_thickness/2)
+	bottom_wall.add_child(bottom_shape)
+	add_child(bottom_wall)
+
+	# Left wall
+	var left_wall = StaticBody2D.new()
+	left_wall.name = "LeftBoundary"
+	var left_shape = CollisionShape2D.new()
+	var left_rect = RectangleShape2D.new()
+	left_rect.size = Vector2(boundary_thickness, 6000)
+	left_shape.shape = left_rect
+	left_shape.position = Vector2(-5000 - boundary_thickness/2, 0)
+	left_wall.add_child(left_shape)
+	add_child(left_wall)
+
+	# Right wall
+	var right_wall = StaticBody2D.new()
+	right_wall.name = "RightBoundary"
+	var right_shape = CollisionShape2D.new()
+	var right_rect = RectangleShape2D.new()
+	right_rect.size = Vector2(boundary_thickness, 6000)
+	right_shape.shape = right_rect
+	right_shape.position = Vector2(13000 + boundary_thickness/2, 0)
+	right_wall.add_child(right_shape)
+	add_child(right_wall)
+
+	print("🚧 World boundaries created")
+
+func setup_camera_limits():
+	"""Set camera limits to prevent seeing outside world boundaries"""
+	# Wait for player to be in scene tree
+	await get_tree().process_frame
+
+	var player = get_tree().get_first_node_in_group("player")
+	if not player:
+		print("⚠️ Player not found for camera limits")
+		return
+
+	var camera = player.get_node_or_null("Camera2D")
+	if not camera:
+		print("⚠️ Camera2D not found on player")
+		return
+
+	# Set limits to world bounds: X: -5000 to 13000, Y: -3000 to 3000
+	camera.limit_left = -5000
+	camera.limit_right = 13000
+	camera.limit_top = -3000
+	camera.limit_bottom = 3000
+
+	print("📷 Camera limits set to world boundaries")
 
 func generate_optimized_world_layers():
 	"""Generate world with reduced complexity - no baking needed!"""
@@ -71,15 +158,20 @@ func create_ground_texture_optimized():
 	rng.seed = 12345
 
 	# Performance mode: 900px spacing for smooth gameplay
+	# Cover full world bounds: -5000 to 13000 (X), -3000 to 3000 (Y)
 	for x in range(-5000, 13000, 900):
 		for y in range(-3000, 3000, 900):
-			if rng.randf() > 0.6:
+			if rng.randf() > 0.2:  # 80% coverage (doubled from 40%)
 				continue
 
 			var patch_pos = Vector2(
 				x + rng.randf_range(-250, 250),
 				y + rng.randf_range(-250, 250)
 			)
+
+			# Clamp to world boundaries
+			patch_pos.x = clamp(patch_pos.x, -5000, 13000)
+			patch_pos.y = clamp(patch_pos.y, -3000, 3000)
 
 			var base_size = rng.randf_range(100, 140)
 			var elongation = rng.randf_range(0.7, 1.5)
@@ -96,11 +188,11 @@ func create_terrain_variation_spots():
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 99999
 
-	# Performance mode: 12 spots for smooth gameplay
-	for i in range(12):
+	# Performance mode: 30 spots to cover full world (doubled for better coverage)
+	for i in range(30):
 		var terrain_pos = Vector2(
-			rng.randf_range(-4000, 10000),
-			rng.randf_range(-2500, 2500)
+			rng.randf_range(-5000, 13000),
+			rng.randf_range(-3000, 3000)
 		)
 
 		var spot_size = rng.randf_range(300, 600)
@@ -119,11 +211,11 @@ func create_rock_dark_spots():
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 54321
 
-	# Performance mode: 40 spots for smooth gameplay
-	for i in range(40):
+	# Performance mode: 100 spots to cover full world (doubled for better coverage)
+	for i in range(100):
 		var rock_pos = Vector2(
-			rng.randf_range(-3000, 9000),
-			rng.randf_range(-2000, 2000)
+			rng.randf_range(-5000, 13000),
+			rng.randf_range(-3000, 3000)
 		)
 
 		if rock_pos.distance_to(Vector2.ZERO) < 450:
@@ -198,6 +290,71 @@ func create_path_to_castle_optimized():
 
 	# Create heavily-visited circle around campfire
 	create_campfire_circle(path_layer, campfire_pos, rng)
+
+	# Create branch paths that lead to dead ends
+	await create_branch_paths(path_layer, path_points, rng)
+
+func create_branch_paths(path_layer: Node2D, main_path_points: Array, rng: RandomNumberGenerator):
+	"""Create branching paths that fork off main path to dead ends"""
+
+	# Branch 1: Early fork going north (around 25% along main path)
+	var branch1_start = main_path_points[7]  # Fork at point 7 of 30
+	var branch1_points = []
+	branch1_points.append(branch1_start)
+	for i in range(1, 15):  # 15 point branch
+		var t = float(i) / 14.0
+		var pos = branch1_start + Vector2(t * 800, -1200 - t * 400)  # Go north-ish
+		# Add some curves
+		pos.x += sin(t * PI * 3) * 150
+		branch1_points.append(pos)
+
+	# Branch 2: Mid-path fork going south (around 50% along main path)
+	var branch2_start = main_path_points[15]  # Fork at midpoint
+	var branch2_points = []
+	branch2_points.append(branch2_start)
+	for i in range(1, 18):  # 18 point branch
+		var t = float(i) / 17.0
+		var pos = branch2_start + Vector2(t * 600, 1400 + t * 300)  # Go south-ish
+		# Add some curves
+		pos.x += sin(t * PI * 2.5) * 120
+		branch2_points.append(pos)
+
+	# Branch 3: Late fork going north-east (around 70% along main path)
+	var branch3_start = main_path_points[21]  # Fork at point 21
+	var branch3_points = []
+	branch3_points.append(branch3_start)
+	for i in range(1, 12):  # 12 point branch
+		var t = float(i) / 11.0
+		var pos = branch3_start + Vector2(t * 900, -900 - t * 200)  # Go northeast-ish
+		# Add some curves
+		pos.y += sin(t * PI * 2) * 100
+		branch3_points.append(pos)
+
+	# Draw all branches
+	for branch in [branch1_points, branch2_points, branch3_points]:
+		for i in range(branch.size() - 1):
+			var start = branch[i]
+			var end = branch[i + 1]
+			var segment_length = start.distance_to(end)
+			var num_spots = int(segment_length / 100) + 1
+
+			for j in range(num_spots):
+				var t = float(j) / float(max(1, num_spots - 1))
+				var pos = start.lerp(end, t)
+
+				var direction = (end - start).normalized()
+				var elongation = 1.5
+				if abs(direction.x) > abs(direction.y):
+					elongation = 1.6
+				else:
+					elongation = 0.8
+
+				# Same darkness as main path
+				create_feathered_area(path_layer, pos, 180, rng, elongation, 0.55)
+
+			await get_tree().process_frame
+
+	print("🔀 Created 3 branch paths with dead ends")
 
 func create_feathered_area(parent: Node2D, center: Vector2, base_size: float, rng: RandomNumberGenerator, elongation: float = 1.0, darkness_multiplier: float = 1.0):
 	for layer_data in LAYER_TEMPLATE:
@@ -336,10 +493,12 @@ func spawn_trees_everywhere_dynamic(parent: Node2D):
 	rng.seed = 77777
 	
 	var trees_placed = 0
-	
-	for x in range(-3000, 9000, 200):
-		for y in range(-2000, 2000, 200):
-			if rng.randf() > 0.35:
+
+	# Cover full world bounds for tree placement
+	# 40% spawn rate
+	for x in range(-5000, 13000, 200):
+		for y in range(-3000, 3000, 200):
+			if rng.randf() > 0.40:
 				continue
 			
 			var tree_pos = Vector2(
@@ -347,12 +506,17 @@ func spawn_trees_everywhere_dynamic(parent: Node2D):
 				y + rng.randf_range(-95, 95)
 			)
 
+			# Clamp to world boundaries with buffer to prevent edge clipping
+			var buffer = 300.0  # Keep trees 300px from edges
+			tree_pos.x = clamp(tree_pos.x, -5000 + buffer, 13000 - buffer)
+			tree_pos.y = clamp(tree_pos.y, -3000 + buffer, 3000 - buffer)
+
 			# Avoid campfire area (larger radius to account for large trees and campfire circle)
 			if tree_pos.distance_to(Vector2.ZERO) < 700:
 				continue
 
-			# Don't place trees on the path - only battle props (skull, bones, sword) go there
-			if is_position_on_path(tree_pos, 250.0):
+			# Don't place trees on the path - increased avoidance to prevent creeping
+			if is_position_on_path(tree_pos, 350.0):
 				continue
 
 			var tree_type = tree_types[rng.randi() % tree_types.size()]
@@ -369,11 +533,12 @@ func spawn_rock_sprites(parent: Node2D):
 
 	var rocks_placed = 0
 
-	# Use same seed/positions as rock dark spots
-	for i in range(40):
+	# Cover full world bounds for rock placement with buffer
+	var buffer = 300.0  # Keep large rocks 300px from edges
+	for i in range(50):  # Increased from 40 to cover larger area
 		var rock_pos = Vector2(
-			rng.randf_range(-3000, 9000),
-			rng.randf_range(-2000, 2000)
+			rng.randf_range(-5000 + buffer, 13000 - buffer),
+			rng.randf_range(-3000 + buffer, 3000 - buffer)
 		)
 
 		if rock_pos.distance_to(Vector2.ZERO) < 450:
@@ -399,12 +564,13 @@ func spawn_scattered_props(parent: Node2D):
 	var visual_props = ["ash_pile"]
 	var props_placed = 0
 
-	# Reduced from 800 to 200 for performance
-	for i in range(200):
+	# Cover full world with scattered props with buffer
+	var buffer = 150.0  # Keep small props 150px from edges
+	for i in range(250):  # Increased to cover larger area
 		var prop_type = visual_props[rng.randi() % visual_props.size()]
 		var prop_pos = Vector2(
-			rng.randf_range(-3000, 8000),
-			rng.randf_range(-1500, 1500)
+			rng.randf_range(-5000 + buffer, 13000 - buffer),
+			rng.randf_range(-3000 + buffer, 3000 - buffer)
 		)
 
 		# Don't place on the path
@@ -431,11 +597,12 @@ func spawn_small_rocks(parent: Node2D):
 
 	var rocks_placed = 0
 
-	# Lots of small rocks to fill in bare areas (500 rocks)
-	for i in range(500):
+	# Lots of small rocks to fill in bare areas across full world with buffer
+	var buffer = 200.0  # Keep small rocks 200px from edges
+	for i in range(1200):  # Increased significantly to fill bare spots
 		var rock_pos = Vector2(
-			rng.randf_range(-3000, 9000),
-			rng.randf_range(-2000, 2000)
+			rng.randf_range(-5000 + buffer, 13000 - buffer),
+			rng.randf_range(-3000 + buffer, 3000 - buffer)
 		)
 
 		# Avoid campfire area
@@ -445,6 +612,12 @@ func spawn_small_rocks(parent: Node2D):
 		# Don't place on the path
 		if is_position_on_path(rock_pos, 150.0):
 			continue
+
+		# Prefer spawning in bare areas (far from path and campfire)
+		# 70% of rocks should be in outer regions away from central path
+		var distance_from_center = abs(rock_pos.y)
+		if distance_from_center < 800 and rng.randf() > 0.3:
+			continue  # Skip 70% of rocks near the path corridor
 
 		# Don't place on top of trees (check distance to all tree positions)
 		var too_close_to_tree = false
@@ -506,20 +679,62 @@ func load_interactive_props(parent: Node2D):
 # ===== HELPER FUNCTIONS =====
 
 func is_position_on_path(pos: Vector2, path_width: float = 100.0) -> bool:
+	# Check main path
 	var campfire_pos = Vector2(0, 0)
 	var castle_pos = Vector2(7600, 0)
-	
-	if pos.x < campfire_pos.x or pos.x > castle_pos.x:
-		return false
-	
-	var t = pos.x / 7600.0
-	var path_y = 0.0
-	if t > 0 and t < 1:
-		var curve_amount = sin(t * PI) * 250
-		path_y = sin(t * PI * 2.5) * curve_amount
-	
-	var distance_from_path = abs(pos.y - path_y)
-	return distance_from_path <= path_width
+
+	if pos.x >= campfire_pos.x and pos.x <= castle_pos.x:
+		var t = pos.x / 7600.0
+		var path_y = 0.0
+		if t > 0 and t < 1:
+			var curve_amount = sin(t * PI) * 250
+			path_y = sin(t * PI * 2.5) * curve_amount
+
+		var distance_from_path = abs(pos.y - path_y)
+		if distance_from_path <= path_width:
+			return true
+
+	# Check branch 1 (early north fork)
+	# Approximate branch path: starts around x=1800, goes to x=2600, y from 0 to -1600
+	if pos.x >= 1600 and pos.x <= 2800:
+		var branch_start = Vector2(1800, -150)
+		var branch_end = Vector2(2600, -1600)
+		var closest_dist = point_to_line_segment_distance(pos, branch_start, branch_end)
+		if closest_dist <= path_width:
+			return true
+
+	# Check branch 2 (mid-path south fork)
+	# Approximate branch path: starts around x=3800, goes to x=4400, y from 0 to 1700
+	if pos.x >= 3600 and pos.x <= 4600:
+		var branch_start = Vector2(3800, 150)
+		var branch_end = Vector2(4400, 1700)
+		var closest_dist = point_to_line_segment_distance(pos, branch_start, branch_end)
+		if closest_dist <= path_width:
+			return true
+
+	# Check branch 3 (late north-east fork)
+	# Approximate branch path: starts around x=6000, goes to x=6900, y from 0 to -1100
+	if pos.x >= 5800 and pos.x <= 7100:
+		var branch_start = Vector2(6000, -50)
+		var branch_end = Vector2(6900, -1100)
+		var closest_dist = point_to_line_segment_distance(pos, branch_start, branch_end)
+		if closest_dist <= path_width:
+			return true
+
+	return false
+
+func point_to_line_segment_distance(point: Vector2, line_start: Vector2, line_end: Vector2) -> float:
+	"""Calculate shortest distance from point to line segment"""
+	var line_vec = line_end - line_start
+	var point_vec = point - line_start
+	var line_len = line_vec.length()
+
+	if line_len == 0:
+		return point.distance_to(line_start)
+
+	var t = clamp(point_vec.dot(line_vec) / (line_len * line_len), 0.0, 1.0)
+	var projection = line_start + t * line_vec
+	return point.distance_to(projection)
 
 func create_tree_at_position(parent: Node2D, pos: Vector2, tree_type: String, rng: RandomNumberGenerator):
 	var prop_container = Node2D.new()
@@ -532,26 +747,26 @@ func create_tree_at_position(parent: Node2D, pos: Vector2, tree_type: String, rn
 
 	var texture = load(texture_path)
 
-	# Determine tree size (small, medium, large for more variety)
+	# Determine tree size (small trees now rare - only 10% instead of 30%)
 	var size_roll = rng.randf()
 	var tree_scale: float
-	if size_roll < 0.3:
-		tree_scale = rng.randf_range(1.5, 2.25)  # Small trees
-	elif size_roll < 0.7:
-		tree_scale = rng.randf_range(2.25, 3.0)  # Medium trees
+	if size_roll < 0.1:
+		tree_scale = rng.randf_range(1.95, 2.93)  # Small trees (rare - 10%)
+	elif size_roll < 0.55:
+		tree_scale = rng.randf_range(2.93, 3.9)  # Medium trees (45%)
 	else:
-		tree_scale = rng.randf_range(3.0, 4.0)  # Large trees
+		tree_scale = rng.randf_range(3.9, 5.2)  # Large trees (45%)
 
 	var tree_flipped = rng.randf() < 0.5
 
 	# Create simple dark oval shadow at base of tree
 	var shadow = ColorRect.new()
 	shadow.name = "Shadow"
-	var shadow_width = 60 * (tree_scale / 2.5)  # Scale shadow with tree
+	var shadow_width = 45 * (tree_scale / 2.5)  # Scale shadow with tree (tighter)
 	var shadow_height = shadow_width * 0.4  # Oval shape
 	shadow.size = Vector2(shadow_width, shadow_height)
-	# Position at bottom of tree - offset scales with tree size
-	var shadow_y = (64 * tree_scale / 2) + (tree_scale * 8)  # Scales: small=60, medium=100, large=160
+	# Position at bottom of tree - offset scales with tree size (moved down 55px total)
+	var shadow_y = (64 * tree_scale / 2) + (tree_scale * 8) + 55  # Scales: small=115, medium=155, large=215
 	# Adjust shadow X based on tree direction (flipped trees slant left)
 	var shadow_x = -shadow_width/2 + (5 if not tree_flipped else -8)
 	shadow.position = Vector2(shadow_x, shadow_y)
@@ -731,7 +946,7 @@ void fragment() {
 
 func get_safe_rotation(prop_type: String, requested_rotation: float) -> float:
 	match prop_type:
-		"dead_tree_1", "dead_tree_2", "dead_tree_3", "ash_pile":
+		"dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5", "dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10", "ash_pile":
 			return 0.0
 		_:
 			return requested_rotation
