@@ -43,6 +43,7 @@ var debug_mode: bool = false
 var debug_shapes: Node2D = null
 var world_debug_nodes: Array = []  # Track world-space debug nodes for cleanup
 var debug_update_timer: float = 0.0  # Throttle debug updates
+var debug_label: Label = null  # Display debug info (coordinates, etc.)
 
 # Camera zoom
 @export var zoom_min: float = 0.5   # Zoom out 2x (see more)
@@ -114,6 +115,22 @@ func _ready() -> void:
 	debug_shapes.name = "DebugShapes"
 	debug_shapes.z_index = 1000
 	add_child(debug_shapes)
+
+	# Setup debug label (screen-space coordinates display)
+	var debug_canvas = CanvasLayer.new()
+	debug_canvas.name = "DebugCanvas"
+	debug_canvas.layer = 100  # Draw on top of everything
+	add_child(debug_canvas)
+
+	debug_label = Label.new()
+	debug_label.name = "DebugLabel"
+	debug_label.position = Vector2(10, 10)  # Top-left corner
+	debug_label.add_theme_font_size_override("font_size", 16)
+	debug_label.add_theme_color_override("font_color", Color.WHITE)
+	debug_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	debug_label.add_theme_constant_override("outline_size", 2)
+	debug_label.visible = false  # Hidden by default
+	debug_canvas.add_child(debug_label)
 	
 	# Setup camera
 	camera = get_node_or_null("Camera2D")
@@ -1282,20 +1299,28 @@ func update_cone_visualizer() -> void:
 func update_debug_visualization() -> void:
 	if not debug_shapes:
 		return
-	
+
 	# === STEP 1: IMMEDIATE CLEANUP ===
 	# Clean up player-space debug shapes IMMEDIATELY
 	for child in debug_shapes.get_children():
 		debug_shapes.remove_child(child)
 		child.queue_free()
-	
+
 	# Clean up ALL tracked world-space debug nodes IMMEDIATELY
 	for node in world_debug_nodes:
 		if is_instance_valid(node) and node.get_parent():
 			node.get_parent().remove_child(node)
 			node.queue_free()
 	world_debug_nodes.clear()
-	
+
+	# Update debug label visibility and text
+	if debug_label:
+		if debug_mode:
+			debug_label.visible = true
+			debug_label.text = "Position: (%.1f, %.1f)" % [global_position.x, global_position.y]
+		else:
+			debug_label.visible = false
+
 	# If debug mode is off, stop here
 	if not debug_mode:
 		return

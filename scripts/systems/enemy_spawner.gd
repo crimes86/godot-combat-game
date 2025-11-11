@@ -45,6 +45,12 @@ func _ready() -> void:
 	for i in max_enemies:
 		spawn_enemy_at(i)
 
+func _exit_tree() -> void:
+	"""Clean up when node is removed from tree"""
+	# Stop processing to prevent hanging on exit
+	set_process(false)
+	set_physics_process(false)
+
 func spawn_enemy_at(spawn_index: int, is_respawn: bool = false) -> void:
 	if spawn_index >= spawn_positions.size():
 		return

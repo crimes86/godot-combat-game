@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3 uid="uid://c2ui1a8yb4sjg"]
+[gd_scene load_steps=6 format=3 uid="uid://c2ui1a8yb4sjg"]
 
 [ext_resource type="Script" uid="uid://dyi12b6lpp773" path="res://scripts/game_world.gd" id="1_0vfqx"]
 [ext_resource type="PackedScene" uid="uid://campfire001" path="res://scenes/world/campfire.tscn" id="1_ywgp6"]
 [ext_resource type="Texture2D" uid="uid://mchri6sm0jap" path="res://assets/environment/castle.png" id="2_0vfqx"]
 [ext_resource type="PackedScene" uid="uid://b36nm2tlkwaee" path="res://scenes/enemy_spawn_point.tscn" id="3_wbbl4"]
+[ext_resource type="PackedScene" path="res://scenes/world/ruins_campfire.tscn" id="4_ruins"]
 
 [node name="GameWorld" type="Node2D"]
 script = ExtResource("1_0vfqx")
@@ -25,6 +26,9 @@ z_index = -1
 [node name="Campfire" type="Node2D" parent="."]
 
 [node name="Campfire" parent="Campfire" instance=ExtResource("1_ywgp6")]
+
+[node name="RuinsCampfire" parent="." instance=ExtResource("4_ruins")]
+position = Vector2(2264, -1163)
 
 [node name="Castle" type="Sprite2D" parent="."]
 z_index = -2

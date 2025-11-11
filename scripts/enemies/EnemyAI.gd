@@ -50,6 +50,7 @@ var state_timer: float = 0.0
 var enemy: CharacterBody2D = null
 var player: CharacterBody2D = null
 var sprite: CanvasItem = null  # ✨ Changed from Sprite2D to support AnimatedSprite2D too
+var debug_label: Label = null
 
 # Patrol state
 var spawn_position: Vector2 = Vector2.ZERO
@@ -62,6 +63,12 @@ var pause_timer: float = 0.0
 var is_in_combat: bool = false  # CRITICAL: Only true after player attacks
 var attack_timer: float = 0.0
 var retreat_direction: Vector2 = Vector2.ZERO
+
+# Stuck detection
+var last_position: Vector2 = Vector2.ZERO
+var stuck_timer: float = 0.0
+var stuck_check_interval: float = 5.0  # Check every 5 seconds (longer to avoid false positives)
+var stuck_distance_threshold: float = 10.0  # If moved less than this in 5 seconds, considered stuck
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
@@ -85,6 +92,7 @@ func _ready() -> void:
 	# Store spawn position for patrol
 	spawn_position = enemy.global_position
 	original_spawn_position = enemy.global_position  # Save the TRUE spawn point
+	last_position = enemy.global_position  # Initialize stuck detection
 	
 	# Connect to damage signal to detect player attacks
 	if enemy.has_signal("damage_taken"):
@@ -99,7 +107,10 @@ func _ready() -> void:
 	# Start patrolling
 	pick_new_patrol_target()
 	change_state(State.PATROLLING)
-	
+
+	# Create debug label (always created, visibility controlled by player debug mode)
+	create_debug_label()
+
 	print("🤖 Enemy AI initialized - Patrolling (non-aggro)")
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -109,7 +120,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not enemy or not is_instance_valid(enemy):
 		return
-	
+
 	# Only stop movement if THIS enemy is dying
 	# Crit window: enemy should keep fighting while player shoots weakpoints!
 	if enemy.has_method("get"):
@@ -117,15 +128,52 @@ func _physics_process(delta: float) -> void:
 			enemy.velocity = Vector2.ZERO
 			enemy.move_and_slide()
 			return
-	
+
 	# Update timers
 	state_timer += delta
 	attack_timer = max(0, attack_timer - delta)
-	
+
 	# Find player if needed
 	if not player or not is_instance_valid(player):
 		player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-	
+
+	# Update debug label visibility based on player debug mode
+	if debug_label and player:
+		debug_label.visible = player.get("debug_mode") == true
+		if debug_label.visible:
+			update_debug_label_position()
+
+	# Check for stuck (only when patrolling, not in combat, and not paused)
+	if current_state == State.PATROLLING and not is_in_combat and not is_paused:
+		stuck_timer += delta
+		if stuck_timer >= stuck_check_interval:
+			var distance_moved = enemy.global_position.distance_to(last_position)
+			# Also check if we're actually trying to move (velocity is non-zero)
+			var is_trying_to_move = enemy.velocity.length() > 5.0
+			if distance_moved < stuck_distance_threshold and is_trying_to_move:
+				# We're stuck! Physically move backwards and shift on Y axis
+				print("⚠️ Enemy stuck (moved %.1f in %.1fs), trying to unstick" % [distance_moved, stuck_check_interval])
+
+				# Move backwards (opposite of current velocity direction)
+				var backward_direction = -enemy.velocity.normalized()
+				enemy.global_position += backward_direction * 30.0  # Move back 30 pixels
+
+				# Shift up or down on Y axis randomly
+				var y_shift = randf_range(-40.0, 40.0)
+				enemy.global_position.y += y_shift
+
+				print("  🔄 Moved backwards %.0f pixels, Y shift %.0f" % [30.0, y_shift])
+
+				# Pick a new patrol target
+				pick_new_patrol_target()
+				is_paused = false  # Unpause if we were paused
+			last_position = enemy.global_position
+			stuck_timer = 0.0
+	else:
+		# Reset stuck timer when not actively patrolling
+		stuck_timer = 0.0
+		last_position = enemy.global_position
+
 	# State machine
 	match current_state:
 		State.PATROLLING:
@@ -146,7 +194,7 @@ func process_patrolling(delta: float) -> void:
 	if is_in_combat and player:
 		change_state(State.COMBAT)
 		return
-	
+
 	# Handle patrol pause
 	if is_paused:
 		pause_timer -= delta
@@ -155,13 +203,13 @@ func process_patrolling(delta: float) -> void:
 			pick_new_patrol_target()
 		enemy.velocity = Vector2.ZERO
 		update_enemy_animation(Vector2.ZERO)
-		
+
 		enemy.move_and_slide()
 		return
-	
+
 	# Move toward patrol target
 	var distance_to_target = enemy.global_position.distance_to(patrol_target)
-	
+
 	if distance_to_target < 10.0:
 		# Reached target - pause
 		is_paused = true
@@ -173,7 +221,7 @@ func process_patrolling(delta: float) -> void:
 		var direction = (patrol_target - enemy.global_position).normalized()
 		enemy.velocity = direction * patrol_speed
 		update_enemy_animation(direction)
-		
+
 	enemy.move_and_slide()
 
 func pick_new_patrol_target() -> void:
@@ -503,3 +551,40 @@ func update_enemy_animation(velocity: Vector2) -> void:
 		# Each row (up, left, down, right) is pre-drawn facing that direction.
 		# Flipping would make them face the wrong way.
 		anim_sprite.flip_h = false
+
+func create_debug_label() -> void:
+	"""Create debug label showing enemy name above head"""
+	var canvas = CanvasLayer.new()
+	canvas.name = "DebugCanvas"
+	canvas.layer = 100  # Draw on top
+	enemy.add_child(canvas)
+
+	debug_label = Label.new()
+	debug_label.name = "DebugLabel"
+	debug_label.add_theme_font_size_override("font_size", 12)
+	debug_label.add_theme_color_override("font_color", Color.YELLOW)
+	debug_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	debug_label.add_theme_constant_override("outline_size", 2)
+	debug_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	debug_label.visible = false  # Hidden by default
+	canvas.add_child(debug_label)
+
+	# Set the label text to the enemy's name
+	debug_label.text = enemy.name
+
+	# Position label above enemy head
+	update_debug_label_position()
+
+func update_debug_label_position() -> void:
+	"""Update debug label position to follow enemy"""
+	if not debug_label or not debug_label.visible:
+		return
+
+	var camera = enemy.get_viewport().get_camera_2d()
+	if camera:
+		var viewport_size = enemy.get_viewport().get_visible_rect().size
+		var world_pos = enemy.global_position + Vector2(0, -60)  # Above head
+		var camera_pos = camera.global_position
+		var screen_center = viewport_size / 2
+		var relative_pos = (world_pos - camera_pos) * camera.zoom.x + screen_center
+		debug_label.position = relative_pos - debug_label.size / 2

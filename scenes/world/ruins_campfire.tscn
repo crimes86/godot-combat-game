@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3 uid="uid://ruins_campfire_001"]
+
+[ext_resource type="Script" path="res://scripts/systems/RuinsCampfire.gd" id="1_ruins"]
+
+[node name="RuinsCampfire" type="Node2D"]
+position = Vector2(2061, 1277)
+script = ExtResource("1_ruins")
+skeleton_count = 8
+skeleton_respawn_time = 60.0
+convert_range = 100.0
+abandon_time = 120.0
+patrol_before_ruins_time = 5.0
+spawn_min_distance = 400.0
+spawn_max_distance = 1000.0
+avoid_campfire_radius = 300.0
+avoid_path_distance = 150.0

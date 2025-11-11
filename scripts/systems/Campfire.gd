@@ -71,30 +71,39 @@ func _on_body_exited(body: Node2D) -> void:
 		print("❄️ Player left warmth")
 
 func check_enemy_deterrent() -> void:
-	"""Deter enemies that reach the warmth radius - they refuse to enter"""
+	"""Deter enemies that reach the warmth radius - they get blocked at the edge"""
 	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
-	
+
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
 			continue
-		
+
 		var distance_to_fire = enemy.global_position.distance_to(global_position)
-		
+
 		# Enemy reached the campfire warmth radius
 		if distance_to_fire <= warmth_radius:
 			if enemy.has_node("EnemyAI"):
 				var ai = enemy.get_node("EnemyAI")
-				
+
 				# Skip enemies in crit window (let player finish combo)
 				if enemy.has_method("get") and enemy.get("in_crit_window"):
 					continue
-				
+
 				# Only deter if in combat (chasing player)
 				if ai.has_method("get") and ai.get("is_in_combat"):
-					# Enemy refuses to enter the warmth - turns back
-					if ai.has_method("disengage_to_spawn"):
-						ai.disengage_to_spawn()
-						print("🔥 Enemy deterred by campfire - returning to spawn")
+					# Push enemy back to edge of warmth radius
+					var direction_away = (enemy.global_position - global_position).normalized()
+					var edge_position = global_position + direction_away * (warmth_radius + 10)
+
+					# Stop enemy and position them at edge
+					enemy.velocity = Vector2.ZERO
+					enemy.global_position = edge_position
+
+					# Make them look "frustrated" - small random movements
+					if randf() < 0.05:  # 5% chance per frame to move slightly
+						var random_offset = Vector2(randf_range(-20, 20), randf_range(-20, 20))
+						enemy.global_position += random_offset
+						enemy.global_position = global_position + (enemy.global_position - global_position).normalized() * warmth_radius
 
 func create_campfire_visual() -> void:
 	"""Create an improved campfire with particle effects"""
