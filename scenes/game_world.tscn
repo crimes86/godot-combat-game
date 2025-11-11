@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://dyi12b6lpp773" path="res://scripts/game_world.gd" id="1_0vfqx"]
 [ext_resource type="PackedScene" uid="uid://campfire001" path="res://scenes/world/campfire.tscn" id="1_ywgp6"]
 [ext_resource type="Texture2D" uid="uid://mchri6sm0jap" path="res://assets/environment/castle.png" id="2_0vfqx"]
-[ext_resource type="PackedScene" uid="uid://b36nm2tlkwaee" path="res://scenes/enemy_spawn_point.tscn" id="3_wbbl4"]
+[ext_resource type="PackedScene" uid="uid://b36nm2tlkwaee" path="res://scenes/enemies/enemy_spawn_point.tscn" id="3_wbbl4"]
 [ext_resource type="PackedScene" path="res://scenes/world/ruins_campfire.tscn" id="4_ruins"]
 
 [node name="GameWorld" type="Node2D"]

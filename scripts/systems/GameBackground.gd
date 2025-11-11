@@ -130,7 +130,7 @@ func create_dark_spots():
 	
 	# Save dark spot positions to JSON for prop generator to use
 	var data = {"DarkSpots": dark_spot_positions}
-	var file = FileAccess.open("res://dark_spots.json", FileAccess.WRITE)
+	var file = FileAccess.open("res://data/dark_spots.json", FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(data, "\t"))
 		file.close()
@@ -248,7 +248,7 @@ func create_path_spot(parent: Node2D, center: Vector2, rng: RandomNumberGenerato
 
 func load_props_from_json():
 	"""Load and spawn all props from prop_placements.json"""
-	var file = FileAccess.open("res://prop_placements.json", FileAccess.READ)
+	var file = FileAccess.open("res://data/prop_placements.json", FileAccess.READ)
 	if not file:
 		print("❌ Could not load prop_placements.json")
 		return
@@ -417,7 +417,7 @@ func create_shadow_for_prop(prop_type: String, texture: Texture2D, scale: float,
 
 func load_path_markers_from_json():
 	"""Load and spawn all path markers from path_markers.json"""
-	var file = FileAccess.open("res://path_markers.json", FileAccess.READ)
+	var file = FileAccess.open("res://data/path_markers.json", FileAccess.READ)
 	if not file:
 		print("❌ Could not load path_markers.json")
 		return

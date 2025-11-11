@@ -952,7 +952,7 @@ func get_safe_rotation(prop_type: String, requested_rotation: float) -> float:
 			return requested_rotation
 
 func load_path_markers_from_json():
-	var file = FileAccess.open("res://path_markers.json", FileAccess.READ)
+	var file = FileAccess.open("res://data/path_markers.json", FileAccess.READ)
 	if not file:
 		return
 

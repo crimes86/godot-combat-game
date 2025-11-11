@@ -6,7 +6,8 @@
       "Bash(where:*)",
       "Bash(dir:*)",
       "Bash(git rm:*)",
-      "Bash(godot:*)"
+      "Bash(godot:*)",
+      "Bash(git mv:*)"
     ],
     "deny": [],
     "ask": []
