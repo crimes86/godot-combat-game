@@ -1,0 +1,40 @@
+[gd_scene load_steps=3 format=3 uid="uid://vendor_npc_001"]
+
+[ext_resource type="Script" path="res://scripts/systems/Vendor.gd" id="1_vendor"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_interact"]
+radius = 80.0
+
+[node name="Vendor" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+monitoring = true
+monitorable = false
+script = ExtResource("1_vendor")
+vendor_name = "Blacksmith"
+greeting_text = "Looking for better equipment?"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_interact")
+
+[node name="VisualBody" type="ColorRect" parent="."]
+offset_left = -20.0
+offset_top = -40.0
+offset_right = 20.0
+offset_bottom = 0.0
+color = Color(0.8, 0.6, 0.2, 1)
+
+[node name="Head" type="ColorRect" parent="."]
+offset_left = -15.0
+offset_top = -60.0
+offset_right = 15.0
+offset_bottom = -40.0
+color = Color(0.9, 0.7, 0.5, 1)
+
+[node name="Label" type="Label" parent="."]
+offset_left = -40.0
+offset_top = -80.0
+offset_right = 40.0
+offset_bottom = -60.0
+text = "Blacksmith"
+horizontal_alignment = 1

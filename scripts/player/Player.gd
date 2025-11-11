@@ -450,11 +450,13 @@ func _input(event: InputEvent) -> void:
 				is_mouse_held = false
 				hold_attack_timer = 0.0
 		
-		# ✨ FIX: CAMERA ZOOM - Mouse wheel handling
+		# ✨ FIX: CAMERA ZOOM - Mouse wheel handling (disabled when shop is open)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-			zoom_in()
+			if not is_shop_open():
+				zoom_in()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-			zoom_out()
+			if not is_shop_open():
+				zoom_out()
 	
 	# Debug mode toggle
 	if event is InputEventKey and event.pressed:
@@ -1392,11 +1394,21 @@ func update_camera_zoom(delta: float) -> void:
 	"""Smoothly interpolate camera zoom to target"""
 	if not camera:
 		return
-	
+
 	# Smoothly lerp current zoom to target zoom
 	var current_zoom_value = camera.zoom.x
 	var new_zoom = lerp(current_zoom_value, target_zoom, zoom_speed)
 	camera.zoom = Vector2(new_zoom, new_zoom)
+
+func is_shop_open() -> bool:
+	"""Check if any shop UI is currently open"""
+	# Look for ShopUI in the scene tree
+	var root = get_tree().root
+	for child in root.get_children():
+		if child is CanvasLayer and child.has_method("close_shop"):
+			if child.visible:
+				return true
+	return false
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DEATH & RESPAWN

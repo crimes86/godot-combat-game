@@ -13,6 +13,12 @@ var experience: int = 0
 var experience_to_next_level: int = 100
 
 # ============================================
+# CURRENCY
+# ============================================
+
+var gold: int = 500         # Currency for purchasing equipment (starting gold for testing)
+
+# ============================================
 # BASE ATTRIBUTES
 # ============================================
 
@@ -42,6 +48,7 @@ signal experience_gained(amount: int, total: int)
 signal stat_changed(stat_name: String, old_value: int, new_value: int)
 signal weapon_equipped(weapon)  # weapon is Weapon type
 signal weapon_unequipped()
+signal gold_changed(amount: int, total: int)  # amount can be positive (gain) or negative (spend)
 
 # ============================================
 # INITIALIZATION
@@ -164,6 +171,39 @@ func get_experience_progress() -> float:
 	if experience_to_next_level <= 0:
 		return 1.0
 	return float(experience) / float(experience_to_next_level)
+
+# ============================================
+# GOLD / CURRENCY
+# ============================================
+
+func add_gold(amount: int) -> void:
+	"""Add gold (from enemy drops, quest rewards, etc)"""
+	if amount <= 0:
+		return
+
+	gold += amount
+	gold_changed.emit(amount, gold)
+
+	print("💰 Gained ", amount, " gold (Total: ", gold, ")")
+
+func spend_gold(amount: int) -> bool:
+	"""Spend gold (returns false if not enough gold)"""
+	if amount <= 0:
+		return false
+
+	if gold < amount:
+		print("❌ Not enough gold! Need ", amount, " but only have ", gold)
+		return false
+
+	gold -= amount
+	gold_changed.emit(-amount, gold)
+
+	print("💸 Spent ", amount, " gold (Remaining: ", gold, ")")
+	return true
+
+func can_afford(amount: int) -> bool:
+	"""Check if player can afford something"""
+	return gold >= amount
 
 # ============================================
 # STAT MODIFICATION

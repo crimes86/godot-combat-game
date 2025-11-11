@@ -1,0 +1,76 @@
+{
+	"weapons": [
+		{
+			"id": "wooden_club",
+			"name": "Wooden Club",
+			"description": "A crude club made from wood. Better than bare fists.",
+			"type": "club",
+			"base_damage": 3.0,
+			"attack_speed_bonus": 0.0,
+			"crit_chance_bonus": 0.0,
+			"required_level": 1,
+			"price": 0,
+			"rarity": "COMMON"
+		},
+		{
+			"id": "iron_sword",
+			"name": "Iron Sword",
+			"description": "A solid blade forged from iron. Reliable and sturdy.",
+			"type": "sword",
+			"base_damage": 8.0,
+			"attack_speed_bonus": 0.0,
+			"crit_chance_bonus": 0.02,
+			"required_level": 3,
+			"price": 100,
+			"rarity": "COMMON"
+		},
+		{
+			"id": "steel_blade",
+			"name": "Steel Blade",
+			"description": "Tempered steel with a keen edge.",
+			"type": "sword",
+			"base_damage": 15.0,
+			"attack_speed_bonus": -0.05,
+			"crit_chance_bonus": 0.05,
+			"required_level": 6,
+			"price": 300,
+			"rarity": "UNCOMMON"
+		},
+		{
+			"id": "battle_axe",
+			"name": "Battle Axe",
+			"description": "Heavy and devastating. Slow but powerful.",
+			"type": "axe",
+			"base_damage": 25.0,
+			"attack_speed_bonus": 0.15,
+			"crit_chance_bonus": 0.08,
+			"required_level": 10,
+			"price": 600,
+			"rarity": "UNCOMMON"
+		},
+		{
+			"id": "mithril_sword",
+			"name": "Mithril Sword",
+			"description": "Lightweight and deadly, forged from rare mithril.",
+			"type": "sword",
+			"base_damage": 35.0,
+			"attack_speed_bonus": -0.15,
+			"crit_chance_bonus": 0.10,
+			"required_level": 15,
+			"price": 1200,
+			"rarity": "RARE"
+		},
+		{
+			"id": "dragon_slayer",
+			"name": "Dragon Slayer",
+			"description": "A legendary blade said to have slain dragons.",
+			"type": "sword",
+			"base_damage": 50.0,
+			"attack_speed_bonus": -0.10,
+			"crit_chance_bonus": 0.15,
+			"required_level": 20,
+			"price": 2500,
+			"rarity": "EPIC"
+		}
+	]
+}
