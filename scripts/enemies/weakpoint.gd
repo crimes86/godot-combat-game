@@ -149,10 +149,10 @@ func hit() -> void:
 	
 	current_hits += 1
 	weakpoint_hit.emit(self)
-	
+
 	spawn_crack_particles()
 	spawn_impact_wave()
-	spawn_hit_number()
+	# spawn_hit_number()  # Removed - visual effects only, no text
 	
 	# Shrink and rotate
 	if sprite:

@@ -269,6 +269,10 @@ func spawn_weakpoints() -> void:
 	weakpoint.position = weakpoint_pos
 	weakpoint.z_index = 150
 
+	# Counter-scale weakpoint to compensate for parent scaling during crit window
+	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR
+	weakpoint.scale = Vector2(counter_scale, counter_scale)
+
 	# Connect weakpoint signal
 	weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed)
 
