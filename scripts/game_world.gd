@@ -496,6 +496,9 @@ func generate_dynamic_elements():
 	# Enemies
 	spawn_all_enemies()
 
+	# Training Dummy (near campfire for combat practice)
+	spawn_training_dummy()
+
 # ===== DYNAMIC ELEMENT GENERATION =====
 # These functions generate trees, props, and enemies that need to be separate nodes
 
@@ -1168,5 +1171,19 @@ func spawn_enemy_at(spawn_point: Node2D):
 			enemy.modulate = Color(1.0, 1.0, 0.5)
 		"hard":
 			enemy.modulate = Color(1.0, 0.5, 0.5)
-	
+
 	add_child(enemy)
+
+func spawn_training_dummy():
+	"""Spawn a training dummy near the campfire for combat practice"""
+	const DUMMY_SCENE = preload("res://scenes/training/training_dummy.tscn")
+
+	# Spawn dummy to the right of campfire (campfire is at 0, 0)
+	var dummy_pos = Vector2(150, 50)  # Near campfire but not blocking it
+
+	var dummy = DUMMY_SCENE.instantiate()
+	dummy.global_position = dummy_pos
+	dummy.name = "TrainingDummy"
+	add_child(dummy)
+
+	print("🎯 Training Dummy spawned at: ", dummy_pos)

@@ -153,11 +153,19 @@ static func create_weakpoint(damage: float, world_pos: Vector2, parent: Node) ->
 static func create_miss(world_pos: Vector2, parent: Node) -> CombatText:
 	return _create_text("MISS", TextType.MISS, world_pos, parent)
 
-static func create_damage(damage: float, world_pos: Vector2, parent: Node) -> CombatText:
-	return _create_text("-" + str(int(damage)), TextType.DAMAGE, world_pos, parent)
+static func create_damage(damage: float, world_pos: Vector2, parent: Node, direction: Vector2 = Vector2.ZERO) -> CombatText:
+	# Spawn damage text behind player (opposite of facing direction)
+	var spawn_pos = world_pos
+	if direction != Vector2.ZERO:
+		spawn_pos = world_pos - direction.normalized() * 40  # 40px behind player
+	return _create_text("-" + str(int(damage)), TextType.DAMAGE, spawn_pos, parent)
 
-static func create_heal(amount: float, world_pos: Vector2, parent: Node) -> CombatText:
-	return _create_text("+" + str(int(amount)), TextType.HEAL, world_pos, parent)
+static func create_heal(amount: float, world_pos: Vector2, parent: Node, direction: Vector2 = Vector2.ZERO) -> CombatText:
+	# Spawn heal text behind player (opposite of facing direction)
+	var spawn_pos = world_pos
+	if direction != Vector2.ZERO:
+		spawn_pos = world_pos - direction.normalized() * 40  # 40px behind player
+	return _create_text("+" + str(int(amount)), TextType.HEAL, spawn_pos, parent)
 
 static func _create_text(damage_text: String, text_type: TextType, world_pos: Vector2, parent: Node) -> CombatText:
 	var combat_text = preload("res://scenes/ui/combat_text.tscn").instantiate() as CombatText

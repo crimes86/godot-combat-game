@@ -49,16 +49,17 @@ func _ready() -> void:
 	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))  # Same scaling as XP
 
-	# Calculate weakpoint count based on enemy level
-	if enemy_level >= 10:
-		num_weakpoints = 3  # Level 10+: All 3 weakpoints
-	elif enemy_level >= 5:
-		num_weakpoints = 2  # Level 5-9: 2 weakpoints
+	# Calculate weakpoint count based on PLAYER level (not enemy level)
+	var player_level = CharacterStats.level
+	if player_level >= 20:
+		num_weakpoints = 3  # Level 20+: All 3 weakpoints
+	elif player_level >= 10:
+		num_weakpoints = 2  # Level 10-19: 2 weakpoints
 	else:
-		num_weakpoints = 1  # Level 1-4: 1 weakpoint
+		num_weakpoints = 1  # Level 1-9: 1 weakpoint
 
 	# Debug gold drop calculation
-	DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d, num_weakpoints: %d" % [enemy_level, gold_drop_base, gold_drop, num_weakpoints])
+	DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d, num_weakpoints: %d (based on player level %d)" % [enemy_level, gold_drop_base, gold_drop, num_weakpoints, player_level])
 	
 	current_health = max_health
 	health_bar.update_health(current_health, max_health)
@@ -67,15 +68,11 @@ func _ready() -> void:
 	# ✨ Store original difficulty color (set by GameWorld)
 	await get_tree().process_frame  # Wait one frame for GameWorld to set color
 	original_modulate = self.modulate
-	print("   📝 Stored original modulate: %s" % original_modulate)
-	
+
 	# Debug: Check what sprite node we have
 	if not sprite:
 		push_error("❌ Enemy sprite is null! Cannot load skeleton animation.")
 		return
-	
-	print("🎨 Loading skeleton sprite for enemy: ", name)
-	print("   Sprite node type: ", sprite.get_class())
 	
 	# Create animated skeleton sprite
 	if sprite:
@@ -87,27 +84,18 @@ func _ready() -> void:
 		var walk_tex: Texture2D = null
 		var slash_tex: Texture2D = null
 		var hurt_tex: Texture2D = null
-		
-		print("🎨 Loading skeleton sprites for enemy: ", name)
-		print("   Sprite node type: ", sprite.get_class())
-		
+
 		# Try to load walking sprite
 		if ResourceLoader.exists(SKELETON_WALK_PATH):
 			walk_tex = ResourceLoader.load(SKELETON_WALK_PATH, "Texture2D")
-			if walk_tex:
-				print("   ✅ Walk texture loaded")
 		
 		# Try to load attack sprite
 		if ResourceLoader.exists(SKELETON_SLASH_PATH):
 			slash_tex = ResourceLoader.load(SKELETON_SLASH_PATH, "Texture2D")
-			if slash_tex:
-				print("   ✅ Slash texture loaded")
-		
+
 		# Try to load hurt sprite
 		if ResourceLoader.exists(SKELETON_HURT_PATH):
 			hurt_tex = ResourceLoader.load(SKELETON_HURT_PATH, "Texture2D")
-			if hurt_tex:
-				print("   ✅ Hurt texture loaded")
 		
 		if walk_tex:
 			# Store old sprite properties
@@ -130,39 +118,31 @@ func _ready() -> void:
 			
 			# Verify sprite_frames was set
 			if not anim_sprite.sprite_frames:
-				push_error("   ❌ Failed to setup sprite_frames!")
+				push_error("❌ Failed to setup sprite_frames!")
 				return
-			
-			print("   ✅ Sprite frames configured with ", anim_sprite.sprite_frames.get_animation_names().size(), " animations")
-			
+
 			# Remove old sprite and add animated one
 			var old_sprite = sprite
 			remove_child(old_sprite)
 			old_sprite.queue_free()
-			
+
 			add_child(anim_sprite)
 			sprite = anim_sprite
-			
+
 			# Verify animation exists before playing
 			if anim_sprite.sprite_frames.has_animation("idle_down"):
 				anim_sprite.play("idle_down")
-				print("   ✅ Playing idle_down animation")
 			else:
-				push_error("   ❌ idle_down animation not found!")
-			
-			print("   ✅ Skeleton sprite loaded and animated")
-			print("   📊 Sprite visible: ", anim_sprite.visible, " | Playing: ", anim_sprite.is_playing())
-			print("   🎨 Sprite modulate: ", anim_sprite.modulate)
-			
+				push_error("❌ idle_down animation not found!")
+
 			# ✨ FIX: Refresh HitFlash sprite reference after conversion
 			if has_node("HitFlash"):
 				await get_tree().process_frame  # Wait for scene tree to update
 				var hit_flash = get_node("HitFlash")
 				hit_flash.sprite = anim_sprite  # Directly set the new sprite
-				print("   ✅ HitFlash sprite reference updated")
 		else:
 			# Fallback to red square if texture fails to load
-			print("   ⚠️ Failed to load skeleton texture, using RED fallback")
+			push_error("⚠️ Failed to load skeleton texture, using RED fallback")
 			if sprite is Sprite2D:
 				var img = Image.create(64, 64, false, Image.FORMAT_RGBA8)
 				img.fill(Color.RED)
@@ -192,48 +172,42 @@ func _ready() -> void:
 
 func setup_skeleton_animations(anim_sprite: AnimatedSprite2D, walk_tex: Texture2D, slash_tex: Texture2D, hurt_tex: Texture2D = null) -> void:
 	"""Setup skeleton animations from separate walk, attack, and hurt sprite sheets"""
-	print("   🎬 Setting up skeleton animations...")
-	
 	var sprite_frames = SpriteFrames.new()
 	
 	# Setup WALKING animations from walk texture (9 frames per row)
 	if walk_tex:
 		var walk_img = walk_tex.get_image()
-		print("   📐 Walk image size: ", walk_img.get_width(), "x", walk_img.get_height())
-		
+
 		# Walk animations - 4 rows (UP, LEFT, DOWN, RIGHT), 9 frames each
 		create_skeleton_animation(sprite_frames, walk_img, "walk_up", 0, 9, 8.0)
 		create_skeleton_animation(sprite_frames, walk_img, "walk_left", 1, 9, 8.0)
 		create_skeleton_animation(sprite_frames, walk_img, "walk_down", 2, 9, 8.0)
 		create_skeleton_animation(sprite_frames, walk_img, "walk_right", 3, 9, 8.0)
-		
+
 		# Idle animations - use middle frame (frame 4 of 9) for neutral pose
 		create_skeleton_animation(sprite_frames, walk_img, "idle_up", 0, 1, 1.0, true, 4)
 		create_skeleton_animation(sprite_frames, walk_img, "idle_left", 1, 1, 1.0, true, 4)
 		create_skeleton_animation(sprite_frames, walk_img, "idle_down", 2, 1, 1.0, true, 4)
 		create_skeleton_animation(sprite_frames, walk_img, "idle_right", 3, 1, 1.0, true, 4)
-	
+
 	# Setup ATTACK animations from slash texture (6 frames per row)
 	if slash_tex:
 		var slash_img = slash_tex.get_image()
-		print("   ⚔️ Slash image size: ", slash_img.get_width(), "x", slash_img.get_height())
-		
+
 		# Attack animations - 4 rows (UP, LEFT, DOWN, RIGHT), 6 frames each
 		create_skeleton_animation(sprite_frames, slash_img, "attack_up", 0, 6, 12.0, false)
 		create_skeleton_animation(sprite_frames, slash_img, "attack_left", 1, 6, 12.0, false)
 		create_skeleton_animation(sprite_frames, slash_img, "attack_down", 2, 6, 12.0, false)
 		create_skeleton_animation(sprite_frames, slash_img, "attack_right", 3, 6, 12.0, false)
-	
+
 	# Setup HURT animation from hurt texture (6 frames, single row)
 	if hurt_tex:
 		var hurt_img = hurt_tex.get_image()
-		print("   🤕 Hurt image size: ", hurt_img.get_width(), "x", hurt_img.get_height())
-		
+
 		# Hurt animation - 1 row, 6 frames (getting hit and falling)
 		create_skeleton_animation(sprite_frames, hurt_img, "hurt", 0, 6, 10.0, false)
-	
+
 	anim_sprite.sprite_frames = sprite_frames
-	print("   ✅ Created ", sprite_frames.get_animation_names().size(), " animations")
 
 func create_skeleton_animation(sprite_frames: SpriteFrames, skeleton_img: Image, anim_name: String, row: int, frame_count: int, fps: float, loop: bool = true, start_frame: int = 0) -> void:
 	"""Create animation from skeleton spritesheet
@@ -301,10 +275,10 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	# ✨ NEW: Spawn combat text
 	var combat_text_scene = preload("res://scenes/ui/combat_text.tscn")
 	var combat_text = combat_text_scene.instantiate()
-	
+
 	# Set damage text
 	combat_text.text = str(int(amount))
-	
+
 	# Determine text type - check if this is a weakpoint hit
 	var is_weakpoint = is_crit and in_crit_window
 	if is_weakpoint:
@@ -313,9 +287,18 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 		combat_text.type = 1  # TextType.CRIT
 	else:
 		combat_text.type = 0  # TextType.NORMAL
-	
-	# Position and add to scene
-	combat_text.global_position = global_position
+
+	# Position: spawn in front of player, halfway between player and enemy
+	# This keeps it visible but not overlapping the enemy sprite
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	var spawn_pos = global_position
+	if player:
+		var direction_to_enemy = (global_position - player.global_position).normalized()
+		var distance = player.global_position.distance_to(global_position)
+		# Spawn 40% of the way toward enemy (closer to player, in front of player)
+		spawn_pos = player.global_position + direction_to_enemy * min(distance * 0.4, 60)
+
+	combat_text.global_position = spawn_pos
 	get_tree().root.add_child(combat_text)
 	
 	# ✨ NEW: Play hit sound

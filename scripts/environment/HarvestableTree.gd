@@ -27,14 +27,9 @@ var original_scale: Vector2 = Vector2.ONE
 var wood_amount: int = 0  # Set based on tree size (1-3 wood)
 
 func _ready() -> void:
-	print("🌲 HarvestableTree._ready() started for: ", name)
-
 	# Find sprite and shadow from children (created by game_world.gd)
 	tree_sprite = get_node_or_null("Sprite")
 	tree_shadow = get_node_or_null("Shadow")
-
-	print("   Found sprite: ", tree_sprite != null)
-	print("   Found shadow: ", tree_shadow != null)
 
 	if tree_sprite:
 		original_modulate = tree_sprite.modulate
@@ -49,15 +44,11 @@ func _ready() -> void:
 		else:
 			wood_amount = 3  # Large trees
 
-		print("   Tree scale: %.2f, wood amount: %d" % [tree_scale_avg, wood_amount])
-
 	# Create interaction area
 	create_interaction_area()
 
 	# Create interaction prompt
 	create_interaction_prompt()
-
-	print("🌲 HarvestableTree._ready() completed")
 
 func _physics_process(delta: float) -> void:
 	# Handle respawn timer
@@ -72,10 +63,6 @@ func _physics_process(delta: float) -> void:
 		var should_show = player_in_range and not is_harvested
 		if should_show != interaction_prompt.visible:
 			interaction_prompt.visible = should_show
-			if should_show:
-				print("   🪵 Showing tree chop prompt")
-			else:
-				print("   🪵 Hiding tree chop prompt")
 
 		# Update position every frame when visible
 		if should_show:
@@ -85,13 +72,11 @@ func _physics_process(delta: float) -> void:
 	if player_in_range and not is_harvested:
 		var f_is_pressed = Input.is_physical_key_pressed(KEY_F)
 		if f_is_pressed and not e_key_was_pressed:
-			print("🪓 F key pressed near tree!")
 			chop_tree()
 		e_key_was_pressed = f_is_pressed
 
 func create_interaction_area() -> void:
 	"""Create Area2D to detect player proximity"""
-	print("   Creating interaction area...")
 	interaction_area = Area2D.new()
 	interaction_area.name = "InteractionArea"
 	interaction_area.collision_layer = 0
@@ -105,26 +90,19 @@ func create_interaction_area() -> void:
 	collision.shape = shape
 
 	# Position at BASE of tree trunk (where player sees it)
-	# Trees are centered sprites, so the base is below center
-	# The tree collision is at y=50*scale, let's use that
 	if tree_sprite:
 		collision.position = Vector2(0, 50 * tree_sprite.scale.y)
-		print("   Interaction at tree base: y=", collision.position.y)
 	else:
 		collision.position = Vector2(0, 100)  # Fallback
-		print("   Interaction at fallback position")
 
 	interaction_area.add_child(collision)
 
 	# Connect signals
 	interaction_area.body_entered.connect(_on_body_entered)
 	interaction_area.body_exited.connect(_on_body_exited)
-	print("   Interaction area created and signals connected")
 
 func create_interaction_prompt() -> void:
-	"""Create floating [E] prompt above tree"""
-	print("   Creating interaction prompt...")
-
+	"""Create floating [F] prompt above tree"""
 	# Use CanvasLayer like PickableItem does (Labels need to be in UI tree)
 	var canvas = CanvasLayer.new()
 	canvas.name = "InteractionCanvas"
@@ -141,8 +119,6 @@ func create_interaction_prompt() -> void:
 	interaction_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	interaction_prompt.visible = false
 	canvas.add_child(interaction_prompt)
-
-	print("   Interaction prompt created")
 
 func update_prompt_position() -> void:
 	"""Update prompt position to 10 pixels below player's feet"""
@@ -180,7 +156,6 @@ func chop_tree() -> void:
 
 	is_harvested = true
 	respawn_timer = 0.0
-	print("🪓 Chopping tree at position %s (yields %d wood)" % [global_position, wood_amount])
 
 	# Hide interaction prompt
 	if interaction_prompt:
@@ -204,16 +179,9 @@ func spawn_wood_drops() -> void:
 	}
 
 	# Try to add wood to inventory
-	var added_count = 0
 	for i in range(wood_amount):
-		if InventorySystem.add_item(wood_item_data.duplicate()):
-			added_count += 1
-		else:
-			print("⚠️ Inventory full! Could not collect all wood.")
+		if not InventorySystem.add_item(wood_item_data.duplicate()):
 			break
-
-	if added_count > 0:
-		print("  🪵 Collected %d wood (Value: %d gold each)" % [added_count, wood_item_data["value"]])
 
 func animate_tree_chop() -> void:
 	"""Animate tree being chopped down and create stump"""
@@ -287,7 +255,6 @@ func respawn_tree() -> void:
 
 	is_harvested = false
 	respawn_timer = 0.0
-	print("🌲 Tree respawned at position %s" % global_position)
 
 	# Remove stump if it exists
 	var stump = get_node_or_null("TreeStump")
@@ -312,10 +279,8 @@ func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = true
-		print("👤 Player entered range of harvestable tree: ", name)
 
 func _on_body_exited(body: Node2D) -> void:
 	"""Player left interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
-		print("👤 Player left range of harvestable tree: ", name)

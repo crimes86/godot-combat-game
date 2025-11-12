@@ -829,9 +829,9 @@ func take_damage(amount: float) -> void:
 		current_health = 0
 	
 	health_bar.update_health(current_health, max_health)
-	
-	# Spawn damage number at player position
-	CombatText.create_damage(amount, global_position, get_tree().root)
+
+	# Spawn damage number behind player (opposite of facing direction)
+	CombatText.create_damage(amount, global_position, get_tree().root, attack_direction)
 	
 	print("Player health now: %.1f / %.1f" % [current_health, max_health])
 	
@@ -852,9 +852,9 @@ func heal(amount: float) -> void:
 	
 	# Update health bar
 	health_bar.update_health(current_health, max_health)
-	
-	# Spawn heal number at player position
-	CombatText.create_heal(actual_heal, global_position, get_tree().root)
+
+	# Spawn heal number behind player (opposite of facing direction)
+	CombatText.create_heal(actual_heal, global_position, get_tree().root, attack_direction)
 	
 	print("Player healed %.1f HP (now %.1f / %.1f)" % [actual_heal, current_health, max_health])
 
