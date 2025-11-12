@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/systems/RuinsCampfire.gd" id="1_ruins"]
 
 [node name="RuinsCampfire" type="Node2D"]
-position = Vector2(2061, 1277)
+position = Vector2(2150, -1325)
 script = ExtResource("1_ruins")
 skeleton_count = 8
 skeleton_respawn_time = 60.0
