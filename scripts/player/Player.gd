@@ -148,8 +148,8 @@ func _ready() -> void:
 	CharacterStats.level_up.connect(_on_character_level_up)
 	CharacterStats.weapon_equipped.connect(_on_weapon_equipped)
 
-	# Create inventory UI
-	create_inventory_ui()
+	# Create inventory UI after this frame (when Player is fully in tree)
+	call_deferred("create_inventory_ui")
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent crash on exit
@@ -1500,23 +1500,25 @@ func die() -> void:
 
 func create_inventory_ui() -> void:
 	"""Create and add inventory UI to scene tree"""
-	print("🏗️ Player.create_inventory_ui() called")
+	print("🏗️ Player.create_inventory_ui() called (deferred)")
 	var InventoryUIScript = load("res://scripts/ui/InventoryUI.gd")
-	print("   Script loaded: ", InventoryUIScript)
 	inventory_ui = InventoryUIScript.new()
-	print("   Instance created: ", inventory_ui)
 	inventory_ui.name = "InventoryUI"
 
-	# Add to scene tree (this triggers _ready() immediately since we're outside of _ready())
+	# Add to scene tree (now that Player is fully ready, this works properly)
 	get_tree().root.add_child(inventory_ui)
 
-	# Force _ready() to be called if it wasn't
-	if not inventory_ui.is_node_ready():
-		print("   WARNING: Node not ready, calling _notification(NOTIFICATION_READY)")
-		inventory_ui._ready()
-
-	print("📦 Inventory UI created and added to scene tree")
+	print("📦 Inventory UI added to scene tree")
 	print("   In tree: ", inventory_ui.is_inside_tree())
 	print("   Parent: ", inventory_ui.get_parent())
-	print("   Is node ready: ", inventory_ui.is_node_ready())
+
+	# Wait one frame for _ready() to complete, then verify
+	await get_tree().process_frame
+	print("📦 Inventory UI verification after _ready():")
+	if inventory_ui.panel:
+		print("   Panel exists: true")
+		print("   Panel in tree: ", inventory_ui.panel.is_inside_tree())
+		print("   Panel size: ", inventory_ui.panel.size)
+	else:
+		print("   ERROR: Panel is null!")
 
