@@ -65,13 +65,9 @@ func _physics_process(delta: float) -> void:
 		else:
 			interaction_prompt.visible = false
 
-func _input(event: InputEvent) -> void:
-	if is_harvested:
-		return
-
 	# Check for E key press when player is in range
-	if event is InputEventKey and event.pressed and event.keycode == KEY_E:
-		if player_in_range:
+	if player_in_range and not is_harvested:
+		if Input.is_key_pressed(KEY_E):
 			chop_tree()
 
 func create_interaction_area() -> void:

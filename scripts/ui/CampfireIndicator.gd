@@ -4,7 +4,7 @@ extends CanvasLayer
 ## Shows a subtle arrow pointing toward the campfire when player is far away
 ## Fades in at 500+ units, fully visible at 1000+ units
 
-const CAMPFIRE_POSITION: Vector2 = Vector2(2230, -1351)  # Ruins campfire location
+const CAMPFIRE_POSITION: Vector2 = Vector2.ZERO  # Main spawn campfire location
 const MIN_DISTANCE: float = 500.0   # Start showing indicator
 const MAX_DISTANCE: float = 1000.0  # Fully opaque at this distance
 

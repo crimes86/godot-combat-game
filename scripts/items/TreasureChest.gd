@@ -59,13 +59,9 @@ func _physics_process(_delta: float) -> void:
 		else:
 			interaction_prompt.visible = false
 
-func _input(event: InputEvent) -> void:
-	if is_opened:
-		return
-
 	# Check for E key press when player is in range
-	if event is InputEventKey and event.pressed and event.keycode == KEY_E:
-		if player_in_range:
+	if player_in_range and not is_opened:
+		if Input.is_key_pressed(KEY_E):
 			open_chest()
 
 func create_chest_visual() -> void:

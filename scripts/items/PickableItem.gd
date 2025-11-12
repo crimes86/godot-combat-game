@@ -42,13 +42,9 @@ func _physics_process(_delta: float) -> void:
 		else:
 			interaction_prompt.visible = false
 
-func _input(event: InputEvent) -> void:
-	if is_picked_up:
-		return
-
-	# Check for F key press when player is in range
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F:
-		if player_in_range:
+	# Check for F key press when player is in range (use is_physical_key_pressed to get just-pressed)
+	if player_in_range and not is_picked_up:
+		if Input.is_physical_key_pressed(KEY_F):
 			pick_up_item()
 
 func create_interaction_prompt() -> void:
@@ -126,11 +122,13 @@ func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = true
+		print("👤 Player entered range of %s" % item_name)
 
 func _on_body_exited(body: Node2D) -> void:
 	"""Player left interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
+		print("👤 Player left range of %s" % item_name)
 
 # ===== SETUP HELPERS =====
 

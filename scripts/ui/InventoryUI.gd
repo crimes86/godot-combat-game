@@ -54,8 +54,11 @@ func create_inventory_ui() -> void:
 	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	panel.custom_minimum_size = Vector2(200, 180)
 
-	# Adjust position from bottom-right corner
-	panel.position = Vector2(-220, -200)
+	# Use offsets instead of position to stay anchored to viewport
+	panel.offset_left = -220
+	panel.offset_top = -200
+	panel.offset_right = -20
+	panel.offset_bottom = -20
 
 	# Add subtle background color
 	var style = StyleBoxFlat.new()
