@@ -155,7 +155,7 @@ func update_prompt_position() -> void:
 		return
 
 	# Calculate screen position above tree (simple fixed offset like PickableItem)
-	var world_pos = global_position + Vector2(0, -40)  # Float above tree base
+	var world_pos = global_position + Vector2(0, -15)  # Float slightly above tree base
 	var camera_pos = camera.global_position
 	var screen_center = viewport_size / 2
 	var relative_pos = (world_pos - camera_pos) * camera.zoom.x + screen_center
