@@ -11,6 +11,7 @@ var player_in_range: bool = false
 var is_harvested: bool = false
 var interaction_prompt: Label = null
 var interaction_area: Area2D = null
+var e_key_was_pressed: bool = false  # Track key state to prevent auto-chop
 
 # Respawn
 var respawn_time: float = 120.0  # 2 minutes to respawn
@@ -79,11 +80,13 @@ func _physics_process(delta: float) -> void:
 		if should_show:
 			update_prompt_position()
 
-	# Check for E key press when player is in range
+	# Check for E key press when player is in range (only trigger once per press)
 	if player_in_range and not is_harvested:
-		if Input.is_key_pressed(KEY_E):
+		var e_is_pressed = Input.is_physical_key_pressed(KEY_E)
+		if e_is_pressed and not e_key_was_pressed:
 			print("🪓 E key pressed near tree!")
 			chop_tree()
+		e_key_was_pressed = e_is_pressed
 
 func create_interaction_area() -> void:
 	"""Create Area2D to detect player proximity"""
@@ -97,16 +100,12 @@ func create_interaction_area() -> void:
 	# Create larger interaction radius than collision
 	var collision = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
-	shape.radius = 80.0  # Generous harvest range
+	shape.radius = 100.0  # Generous harvest range (increased from 80)
 	collision.shape = shape
 
-	# Position at base of tree (same as collision shape)
-	if tree_sprite:
-		collision.position = Vector2(0, 50 * tree_sprite.scale.y)
-		print("   Collision position: ", collision.position)
-	else:
-		collision.position = Vector2(0, 100)
-		print("   Collision position (no sprite): ", collision.position)
+	# Position at CENTER of tree for easy interaction
+	collision.position = Vector2(0, 0)
+	print("   Collision position: ", collision.position, " (centered on tree)")
 
 	interaction_area.add_child(collision)
 
