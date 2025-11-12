@@ -68,21 +68,17 @@ func create_interaction_prompt() -> void:
 	canvas.add_child(interaction_prompt)
 
 func update_prompt_position() -> void:
-	"""Update prompt position to stay above item on screen"""
+	"""Update prompt position to fixed screen location above player"""
 	if not interaction_prompt:
 		return
 
 	var viewport_size = get_viewport().get_visible_rect().size
-	var camera = get_viewport().get_camera_2d()
-	if not camera:
-		return
 
-	# Calculate screen position of item relative to camera
-	var world_pos = global_position + Vector2(0, -30)  # Float above item
-	var camera_pos = camera.global_position
-	var screen_center = viewport_size / 2
-	var relative_pos = (world_pos - camera_pos) * camera.zoom.x + screen_center
-	interaction_prompt.position = relative_pos - interaction_prompt.size / 2
+	# Fixed position: centered horizontally, 100 pixels from top (above player health bar)
+	var screen_x = viewport_size.x / 2 - interaction_prompt.size.x / 2
+	var screen_y = 100.0
+
+	interaction_prompt.position = Vector2(screen_x, screen_y)
 
 func pick_up_item() -> void:
 	"""Add item to player inventory and remove from world"""

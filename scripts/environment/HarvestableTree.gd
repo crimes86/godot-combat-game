@@ -145,24 +145,17 @@ func create_interaction_prompt() -> void:
 	print("   Interaction prompt created")
 
 func update_prompt_position() -> void:
-	"""Update prompt position to stay above tree on screen"""
+	"""Update prompt position to fixed screen location above player"""
 	if not interaction_prompt:
 		return
 
 	var viewport_size = get_viewport().get_visible_rect().size
-	var camera = get_viewport().get_camera_2d()
-	if not camera:
-		return
 
-	# Calculate screen position above tree (simple fixed offset like PickableItem)
-	var world_pos = global_position + Vector2(0, 5)  # Very close to tree base
-	var camera_pos = camera.global_position
-	var screen_center = viewport_size / 2
-	var relative_pos = (world_pos - camera_pos) * camera.zoom.x + screen_center
+	# Fixed position: centered horizontally, 100 pixels from top (above player health bar)
+	var screen_x = viewport_size.x / 2 - interaction_prompt.size.x / 2
+	var screen_y = 100.0
 
-	# Center the label horizontally
-	var label_width = interaction_prompt.size.x
-	interaction_prompt.position = Vector2(relative_pos.x - label_width / 2, relative_pos.y)
+	interaction_prompt.position = Vector2(screen_x, screen_y)
 
 func chop_tree() -> void:
 	"""Chop down the tree and drop wood"""
