@@ -15,9 +15,9 @@ func _ready() -> void:
 	z_index = 300
 	input_pickable = true
 
-	# 🫀 VITAL ORGAN - Deep dark blood red, anatomical feel
+	# 🫀 VITAL ORGAN - Dark but shiny blood red
 	sprite = Polygon2D.new()
-	sprite.color = Color(0.5, 0.05, 0.05, 1.0)  # Deep dark blood red
+	sprite.color = Color(0.9, 0.12, 0.12, 1.0)  # Brighter dark blood red (more visible)
 
 	# Organic oval/heart shape - like looking at a vital organ
 	var points = PackedVector2Array()
@@ -35,26 +35,40 @@ func _ready() -> void:
 	sprite.polygon = points
 	add_child(sprite)
 
-	# 🩸 SHINY BLOOD GLOW - Makes it look wet/alive
+	# 🩸 INTENSE BLOOD GLOW - Makes it look wet/shiny/alive
 	glow_sprite = Polygon2D.new()
-	glow_sprite.color = Color(0.8, 0.1, 0.1, 0.7)  # Brighter blood red glow
+	glow_sprite.color = Color(1.4, 0.2, 0.2, 0.85)  # Bright shiny blood glow
 	glow_sprite.z_index = -1
 
 	# Make glow slightly larger for depth
 	var glow_points = PackedVector2Array()
-	var glow_scale = 1.3
+	var glow_scale = 1.4
 	for point in points:
 		glow_points.append(point * glow_scale)
 	glow_sprite.polygon = glow_points
 	sprite.add_child(glow_sprite)
 
+	# ✨ SHINE HIGHLIGHT - makes it look wet/glossy
+	var shine = Polygon2D.new()
+	shine.color = Color(2.0, 0.6, 0.6, 0.5)  # Bright red-white shine
+	shine.z_index = 1
+
+	# Small highlight spot on top-left (like light reflecting off wet surface)
+	var shine_points = PackedVector2Array()
+	shine_points.append(Vector2(-4, -6))
+	shine_points.append(Vector2(2, -7))
+	shine_points.append(Vector2(3, -3))
+	shine_points.append(Vector2(-2, -2))
+	shine.polygon = shine_points
+	sprite.add_child(shine)
+
 	# 💓 HEARTBEAT PULSE - thump-thump rhythm
 	start_heartbeat_pulse()
 
-	# Very dark outline for anatomical contrast (like looking inside body)
+	# Dark outline for contrast
 	var outline = Line2D.new()
 	outline.width = 2.0
-	outline.default_color = Color(0.15, 0.02, 0.02, 1.0)  # Almost black red
+	outline.default_color = Color(0.25, 0.03, 0.03, 1.0)  # Dark red-black outline
 	outline.closed = true
 	for point in points:
 		outline.add_point(point)
@@ -84,19 +98,19 @@ func start_heartbeat_pulse() -> void:
 
 	# THUMP (quick expand)
 	tween.tween_property(sprite, "scale", Vector2(1.15, 1.15), 0.15)
-	tween.parallel().tween_property(glow_sprite, "color:a", 0.9, 0.15)
+	tween.parallel().tween_property(glow_sprite, "color:a", 1.0, 0.15)
 
 	# Release (quick contract)
 	tween.tween_property(sprite, "scale", Vector2(0.95, 0.95), 0.15)
-	tween.parallel().tween_property(glow_sprite, "color:a", 0.5, 0.15)
+	tween.parallel().tween_property(glow_sprite, "color:a", 0.6, 0.15)
 
 	# THUMP (second beat)
 	tween.tween_property(sprite, "scale", Vector2(1.1, 1.1), 0.12)
-	tween.parallel().tween_property(glow_sprite, "color:a", 0.85, 0.12)
+	tween.parallel().tween_property(glow_sprite, "color:a", 0.95, 0.12)
 
 	# Release and rest
 	tween.tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.2)
-	tween.parallel().tween_property(glow_sprite, "color:a", 0.6, 0.2)
+	tween.parallel().tween_property(glow_sprite, "color:a", 0.7, 0.2)
 
 	# Pause before next heartbeat
 	tween.tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.4)
@@ -170,7 +184,7 @@ func hit() -> void:
 		flash_tween.set_parallel(true)
 
 		# Fast color return to dark blood (snappy feedback)
-		flash_tween.tween_property(sprite, "color", Color(0.5, 0.05, 0.05, 1.0), 0.08)
+		flash_tween.tween_property(sprite, "color", Color(0.9, 0.12, 0.12, 1.0), 0.08)
 
 		# Quick squish (like hitting an organ)
 		var pop_scale = Vector2(1.3, 1.3) * scale_factor
