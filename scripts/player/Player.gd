@@ -52,6 +52,9 @@ var debug_label: Label = null  # Display debug info (coordinates, etc.)
 var target_zoom: float = 1.0
 var camera: Camera2D = null
 
+# Inventory UI
+var inventory_ui: CanvasLayer = null
+
 func _ready() -> void:
 	print("🎮 Player._ready() started")
 	
@@ -144,6 +147,9 @@ func _ready() -> void:
 	# Connect to CharacterStats signals
 	CharacterStats.level_up.connect(_on_character_level_up)
 	CharacterStats.weapon_equipped.connect(_on_weapon_equipped)
+
+	# Create inventory UI
+	create_inventory_ui()
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent crash on exit
@@ -526,6 +532,11 @@ func _input(event: InputEvent) -> void:
 				CharacterStats.debug_fix_negative_xp()
 				update_stats_from_character()
 				print("Press F7 to verify XP is fixed")
+
+			KEY_B:
+				# Toggle inventory
+				if inventory_ui:
+					inventory_ui.toggle_inventory()
 
 func check_crit_window_click(event: InputEvent) -> bool:
 	"""Check if clicking on enemy during crit window. Returns true if handled."""
@@ -1486,3 +1497,12 @@ func die() -> void:
 	print("✨ Player respawned at origin")
 	print("   Stats preserved: Level %d, XP: %d" % [CharacterStats.level, CharacterStats.experience])
 	print("===== END PLAYER DEATH =====\n")
+
+func create_inventory_ui() -> void:
+	"""Create and add inventory UI to scene tree"""
+	var InventoryUIScript = load("res://scripts/ui/InventoryUI.gd")
+	inventory_ui = InventoryUIScript.new()
+	inventory_ui.name = "InventoryUI"
+	get_tree().root.add_child(inventory_ui)
+	print("📦 Inventory UI created and added to scene tree")
+
