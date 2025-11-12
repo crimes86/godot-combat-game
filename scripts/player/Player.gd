@@ -1500,9 +1500,14 @@ func die() -> void:
 
 func create_inventory_ui() -> void:
 	"""Create and add inventory UI to scene tree"""
+	print("🏗️ Player.create_inventory_ui() called")
 	var InventoryUIScript = load("res://scripts/ui/InventoryUI.gd")
+	print("   Script loaded: ", InventoryUIScript)
 	inventory_ui = InventoryUIScript.new()
+	print("   Instance created: ", inventory_ui)
 	inventory_ui.name = "InventoryUI"
 	get_tree().root.add_child(inventory_ui)
 	print("📦 Inventory UI created and added to scene tree")
+	print("   In tree: ", inventory_ui.is_inside_tree())
+	print("   Parent: ", inventory_ui.get_parent())
 

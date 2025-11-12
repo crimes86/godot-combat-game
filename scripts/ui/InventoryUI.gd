@@ -13,22 +13,33 @@ var gold_label: Label
 var slots_grid: GridContainer
 
 func _ready() -> void:
+	print("🎨 InventoryUI._ready() started")
+
 	# Set layer above game elements
 	layer = 100
+	print("   Set layer to 100, current value: ", layer)
 
 	# Start hidden
 	visible = false
+	print("   Set visible to false")
 
 	# Create UI first
+	print("   Calling create_inventory_ui()...")
 	create_inventory_ui()
+	print("   create_inventory_ui() completed")
 
 	# Then connect to inventory system (after UI is created)
+	print("   Connecting to InventorySystem signals...")
 	InventorySystem.inventory_changed.connect(_on_inventory_changed)
 	InventorySystem.item_added.connect(_on_item_added)
 	InventorySystem.item_removed.connect(_on_item_removed)
+	print("   Signals connected")
 
 	# Initial update (UI is guaranteed to exist now)
+	print("   Calling initial _on_inventory_changed()...")
 	_on_inventory_changed()
+
+	print("🎨 InventoryUI._ready() COMPLETED")
 
 func create_inventory_ui() -> void:
 	"""Create WoW-style inventory bag in bottom-right corner"""
