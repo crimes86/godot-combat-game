@@ -14,85 +14,92 @@ signal weakpoint_destroyed(weakpoint)
 func _ready() -> void:
 	z_index = 300
 	input_pickable = true
-	
-	# ✨ BRIGHT RED bone spur (weakpoint indicator)
+
+	# 🫀 VITAL ORGAN - Deep dark blood red, anatomical feel
 	sprite = Polygon2D.new()
-	sprite.color = Color(2.0, 0.3, 0.3, 1.0)  # Bright red
-	
-	# Draw a jagged bone spur shape
+	sprite.color = Color(0.5, 0.05, 0.05, 1.0)  # Deep dark blood red
+
+	# Organic oval/heart shape - like looking at a vital organ
 	var points = PackedVector2Array()
-	var size = 21.0
-	
-	# Jagged bone spur shape
-	points.append(Vector2(0, -size))
-	points.append(Vector2(size * 0.3, -size * 0.6))
-	points.append(Vector2(size * 0.5, -size * 0.3))
-	points.append(Vector2(size * 0.4, 0))
-	points.append(Vector2(size * 0.2, size * 0.3))
-	points.append(Vector2(0, size * 0.4))
-	points.append(Vector2(-size * 0.2, size * 0.3))
-	points.append(Vector2(-size * 0.4, 0))
-	points.append(Vector2(-size * 0.5, -size * 0.3))
-	points.append(Vector2(-size * 0.3, -size * 0.6))
-	
+	var size = 18.0
+	var segments = 12
+
+	# Create smooth organic shape (elongated oval, slightly irregular)
+	for i in range(segments):
+		var angle = (i * TAU) / segments
+		var radius = size * (0.8 + 0.2 * sin(angle * 3))  # Slight irregularity
+		var x = cos(angle) * radius * 0.8  # Slightly flattened horizontally
+		var y = sin(angle) * radius
+		points.append(Vector2(x, y))
+
 	sprite.polygon = points
 	add_child(sprite)
-	
-	# ✨ RED GLOW - visible but not overpowering
+
+	# 🩸 SHINY BLOOD GLOW - Makes it look wet/alive
 	glow_sprite = Polygon2D.new()
-	glow_sprite.color = Color(1.8, 0.2, 0.2, 0.6)  # Red glow
+	glow_sprite.color = Color(0.8, 0.1, 0.1, 0.7)  # Brighter blood red glow
 	glow_sprite.z_index = -1
-	
-	# Make glow slightly larger
+
+	# Make glow slightly larger for depth
 	var glow_points = PackedVector2Array()
-	var glow_scale = 1.4
+	var glow_scale = 1.3
 	for point in points:
 		glow_points.append(point * glow_scale)
 	glow_sprite.polygon = glow_points
 	sprite.add_child(glow_sprite)
-	
-	# ✨ GENTLE PULSE
-	start_glow_pulse()
-	
-	# Dark outline for contrast
+
+	# 💓 HEARTBEAT PULSE - thump-thump rhythm
+	start_heartbeat_pulse()
+
+	# Very dark outline for anatomical contrast (like looking inside body)
 	var outline = Line2D.new()
-	outline.width = 2.5
-	outline.default_color = Color(0.4, 0.4, 0.4, 1.0)  # Medium gray outline
+	outline.width = 2.0
+	outline.default_color = Color(0.15, 0.02, 0.02, 1.0)  # Almost black red
 	outline.closed = true
 	for point in points:
 		outline.add_point(point)
 	sprite.add_child(outline)
-	
-	# ✨ MODERATE SPARKLES
-	create_sparkle_particles()
-	
+
+	# NO SPARKLES - clean anatomical look
+
 	# Forgiving hitbox
 	var col = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
 	shape.radius = 25
 	col.shape = shape
 	add_child(col)
-	
+
 	input_event.connect(_on_input)
 	max_hits = randi_range(3, 5)
 
-func start_glow_pulse() -> void:
-	"""Gentle glow pulse"""
-	if not glow_sprite:
+func start_heartbeat_pulse() -> void:
+	"""Heartbeat pulse - thump-thump rhythm like a vital organ"""
+	if not sprite or not glow_sprite:
 		return
-	
+
 	var tween = create_tween()
 	tween.set_loops()
-	tween.set_trans(Tween.TRANS_SINE)
+	tween.set_trans(Tween.TRANS_CIRC)  # More organic curve
 	tween.set_ease(Tween.EASE_IN_OUT)
-	
-	# Gentle pulse
-	tween.tween_property(glow_sprite, "color:a", 0.75, 0.5)
-	tween.tween_property(glow_sprite, "color:a", 0.4, 0.5)
-	
-	# Scale pulse
-	tween.parallel().tween_property(glow_sprite, "scale", Vector2(1.15, 1.15), 0.5)
-	tween.tween_property(glow_sprite, "scale", Vector2(1.0, 1.0), 0.5)
+
+	# THUMP (quick expand)
+	tween.tween_property(sprite, "scale", Vector2(1.15, 1.15), 0.15)
+	tween.parallel().tween_property(glow_sprite, "color:a", 0.9, 0.15)
+
+	# Release (quick contract)
+	tween.tween_property(sprite, "scale", Vector2(0.95, 0.95), 0.15)
+	tween.parallel().tween_property(glow_sprite, "color:a", 0.5, 0.15)
+
+	# THUMP (second beat)
+	tween.tween_property(sprite, "scale", Vector2(1.1, 1.1), 0.12)
+	tween.parallel().tween_property(glow_sprite, "color:a", 0.85, 0.12)
+
+	# Release and rest
+	tween.tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.2)
+	tween.parallel().tween_property(glow_sprite, "color:a", 0.6, 0.2)
+
+	# Pause before next heartbeat
+	tween.tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.4)
 
 func create_sparkle_particles() -> void:
 	"""Subtle sparkle particles"""
@@ -150,30 +157,30 @@ func hit() -> void:
 	current_hits += 1
 	weakpoint_hit.emit(self)
 
-	# Simplified hit feedback - fast and responsive for spam-clicking
+	# 🩸 BLOOD BURST feedback - fast and responsive for spam-clicking
 	if sprite:
 		var progress = float(current_hits) / float(max_hits)
 		var scale_factor = 1.0 - (progress * 0.3)
 
-		# ✨ POWERFUL INSTANT FLASH - bright white-red
-		sprite.color = Color(4.0, 2.0, 2.0, 1.0)  # Intense white-red flash
-		sprite.rotation += 0.3
+		# 🔴 FRESH BLOOD FLASH - bright oxygenated red
+		sprite.color = Color(1.2, 0.15, 0.15, 1.0)  # Bright fresh blood red
+		sprite.rotation += 0.25
 
 		var flash_tween = create_tween()
 		flash_tween.set_parallel(true)
 
-		# Fast color return (snappy feedback)
-		flash_tween.tween_property(sprite, "color", Color(2.0, 0.3, 0.3, 1.0), 0.08)
+		# Fast color return to dark blood (snappy feedback)
+		flash_tween.tween_property(sprite, "color", Color(0.5, 0.05, 0.05, 1.0), 0.08)
 
-		# Quick pop scale (feels punchy)
-		var pop_scale = Vector2(1.35, 1.35) * scale_factor
+		# Quick squish (like hitting an organ)
+		var pop_scale = Vector2(1.3, 1.3) * scale_factor
 		sprite.scale = pop_scale
 		flash_tween.tween_property(sprite, "scale", Vector2(scale_factor, scale_factor), 0.08).set_ease(Tween.EASE_OUT)
 
-		# Glow burst
+		# Blood glow burst
 		if glow_sprite:
-			glow_sprite.color.a = 1.0
-			flash_tween.tween_property(glow_sprite, "color:a", 0.6, 0.08)
+			glow_sprite.color = Color(1.0, 0.2, 0.2, 1.0)  # Bright blood glow
+			flash_tween.tween_property(glow_sprite, "color", Color(0.8, 0.1, 0.1, 0.7), 0.08)
 
 	if current_hits >= max_hits:
 		destroy()
