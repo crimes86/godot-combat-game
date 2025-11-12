@@ -7,16 +7,20 @@ class_name Vendor
 signal shop_opened()
 signal shop_closed()
 
-@export var vendor_name: String = "Merchant"
-@export var greeting_text: String = "Welcome, traveler! Browse my wares."
+@export var vendor_name: String = "Blacksmith"
+@export var greeting_text: String = "Need some quality steel?"
 
 var weapons_for_sale: Array = []
 var armor_for_sale: Array = []
 var player_in_range: bool = false
 var shop_ui: CanvasLayer = null
+var animated_sprite: AnimatedSprite2D = null
 
 func _ready() -> void:
 	print("🏪 Vendor '%s' starting initialization..." % vendor_name)
+
+	# Create animated blacksmith sprite
+	setup_blacksmith_sprite()
 
 	# Connect area signals
 	body_entered.connect(_on_body_entered)
@@ -30,6 +34,46 @@ func _ready() -> void:
 	print("🏪 Vendor '%s' initialized with %d weapons and %d armor pieces" % [vendor_name, weapons_for_sale.size(), armor_for_sale.size()])
 	print("   Position: ", global_position)
 	print("   Monitoring: ", monitoring)
+
+func setup_blacksmith_sprite() -> void:
+	# Create animated sprite for blacksmith
+	animated_sprite = AnimatedSprite2D.new()
+	animated_sprite.name = "BlacksmithSprite"
+	animated_sprite.centered = true
+	animated_sprite.z_index = 1
+	add_child(animated_sprite)
+
+	# Load blacksmith walk animation (4 frames, 64x64 each)
+	var sprite_path = "res://assets/characters/lpc/blacksmith/blacksmith_walk.png"
+
+	if not ResourceLoader.exists(sprite_path):
+		DebugConfig.log_warning("Blacksmith sprite not found: %s" % sprite_path)
+		return
+
+	var texture = ResourceLoader.load(sprite_path, "Texture2D")
+	if not texture:
+		DebugConfig.log_error("Failed to load blacksmith sprite")
+		return
+
+	# Create sprite frames with single frame (stationary blacksmith)
+	var sprite_frames = SpriteFrames.new()
+	sprite_frames.add_animation("idle")
+	sprite_frames.set_animation_loop("idle", false)
+	sprite_frames.set_animation_speed("idle", 1.0)
+
+	# Extract frame 3 (facing right) - 256x64 = 4 frames of 64x64 (down, left, up, right)
+	var source_img = texture.get_image()
+	var frame_img = Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	frame_img.blit_rect(source_img, Rect2i(192, 0, 64, 64), Vector2i(0, 0))  # Frame 3 (right-facing)
+
+	var frame_texture = ImageTexture.create_from_image(frame_img)
+	sprite_frames.add_frame("idle", frame_texture)
+
+	# Apply to sprite
+	animated_sprite.sprite_frames = sprite_frames
+	animated_sprite.play("idle")
+
+	DebugConfig.debug_log("🔨 Blacksmith sprite loaded and animating")
 
 func _input(event: InputEvent) -> void:
 	# Use E key to interact with vendor
