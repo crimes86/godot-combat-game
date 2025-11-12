@@ -41,38 +41,41 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 
 func load_shop_data() -> void:
-	"""Load weapons and armor from JSON data files"""
-	# Load weapons
-	var weapons_file = FileAccess.open("res://data/shop_weapons.json", FileAccess.READ)
-	if weapons_file:
-		var json = JSON.new()
-		var parse_result = json.parse(weapons_file.get_as_text())
-		weapons_file.close()
-
-		if parse_result == OK:
-			var data = json.data
-			if data.has("weapons"):
-				for weapon_data in data["weapons"]:
-					var weapon = create_weapon_from_data(weapon_data)
-					if weapon:
-						weapons_for_sale.append(weapon)
+	# Load weapons with validation
+	var weapons_result = JSONValidator.load_json_file("res://data/shop_weapons.json")
+	if weapons_result.success:
+		var data = weapons_result.data
+		if data.has("weapons") and data["weapons"] is Array:
+			for weapon_data in data["weapons"]:
+				if weapon_data is Dictionary:
+					# Validate required weapon fields
+					if JSONValidator.validate_required_fields(weapon_data, ["name", "type", "base_damage"], "weapon"):
+						var weapon = create_weapon_from_data(weapon_data)
+						if weapon:
+							weapons_for_sale.append(weapon)
+				else:
+					DebugConfig.log_warning("Invalid weapon entry in shop_weapons.json (not a Dictionary)")
 		else:
-			push_error("Failed to parse shop_weapons.json")
+			DebugConfig.log_error("shop_weapons.json missing 'weapons' array")
+	else:
+		DebugConfig.log_error("Failed to load shop_weapons.json: %s" % weapons_result.error)
 
-	# Load armor
-	var armor_file = FileAccess.open("res://data/shop_armor.json", FileAccess.READ)
-	if armor_file:
-		var json = JSON.new()
-		var parse_result = json.parse(armor_file.get_as_text())
-		armor_file.close()
-
-		if parse_result == OK:
-			var data = json.data
-			if data.has("armor"):
-				for armor_data in data["armor"]:
-					armor_for_sale.append(armor_data)
+	# Load armor with validation
+	var armor_result = JSONValidator.load_json_file("res://data/shop_armor.json")
+	if armor_result.success:
+		var data = armor_result.data
+		if data.has("armor") and data["armor"] is Array:
+			for armor_data in data["armor"]:
+				if armor_data is Dictionary:
+					# Validate required armor fields
+					if JSONValidator.validate_required_fields(armor_data, ["name", "slot"], "armor"):
+						armor_for_sale.append(armor_data)
+				else:
+					DebugConfig.log_warning("Invalid armor entry in shop_armor.json (not a Dictionary)")
 		else:
-			push_error("Failed to parse shop_armor.json")
+			DebugConfig.log_error("shop_armor.json missing 'armor' array")
+	else:
+		DebugConfig.log_error("Failed to load shop_armor.json: %s" % armor_result.error)
 
 func create_weapon_from_data(data: Dictionary) -> Weapon:
 	"""Create a Weapon resource from JSON data"""
@@ -146,17 +149,15 @@ func _on_item_purchased(item_name: String, price: int) -> void:
 	print("✅ Purchased: %s for %d gold" % [item_name, price])
 
 func get_weapon_price_data(index: int) -> int:
-	"""Get weapon price from the JSON data (temporary until proper UI)"""
-	var weapons_file = FileAccess.open("res://data/shop_weapons.json", FileAccess.READ)
-	if weapons_file:
-		var json = JSON.new()
-		var parse_result = json.parse(weapons_file.get_as_text())
-		weapons_file.close()
-
-		if parse_result == OK:
-			var data = json.data
-			if data.has("weapons") and index < data["weapons"].size():
-				return data["weapons"][index].get("price", 0)
+	# Get weapon price from the JSON data with validation
+	var result = JSONValidator.load_json_file("res://data/shop_weapons.json")
+	if result.success:
+		var data = result.data
+		if data.has("weapons") and data["weapons"] is Array:
+			if index >= 0 and index < data["weapons"].size():
+				var weapon = data["weapons"][index]
+				if weapon is Dictionary:
+					return JSONValidator.get_safe_value(weapon, "price", 0)
 
 	return 0
 

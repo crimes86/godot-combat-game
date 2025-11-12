@@ -952,19 +952,21 @@ func get_safe_rotation(prop_type: String, requested_rotation: float) -> float:
 			return requested_rotation
 
 func load_path_markers_from_json():
-	var file = FileAccess.open("res://data/path_markers.json", FileAccess.READ)
-	if not file:
+	# Load path markers with validation
+	var result = JSONValidator.load_json_file("res://data/path_markers.json")
+	if not result.success:
+		DebugConfig.log_error("Failed to load path_markers.json: %s" % result.error)
 		return
 
-	var json = JSON.new()
-	var parse_result = json.parse(file.get_as_text())
-	file.close()
-
-	if parse_result != OK:
+	var data = result.data
+	if not data.has("PathMarkers"):
+		DebugConfig.log_error("path_markers.json missing 'PathMarkers' array")
 		return
 
-	var data = json.data
-	var markers = data.get("PathMarkers", [])
+	var markers = data["PathMarkers"]
+	if not markers is Array:
+		DebugConfig.log_error("PathMarkers in path_markers.json is not an array")
+		return
 
 	# Use existing PathMarkers node from scene (don't create new one)
 	var path_markers_node = get_node_or_null("PathMarkers")
@@ -975,7 +977,12 @@ func load_path_markers_from_json():
 		add_child(path_markers_node)
 
 	for marker in markers:
-		create_marker_sprite(marker, path_markers_node)
+		if marker is Dictionary:
+			# Validate required marker fields
+			if JSONValidator.validate_required_fields(marker, ["id", "x", "y"], "path marker"):
+				create_marker_sprite(marker, path_markers_node)
+		else:
+			DebugConfig.log_warning("Invalid path marker entry (not a Dictionary)")
 
 func create_marker_sprite(marker_data: Dictionary, parent: Node2D) -> bool:
 	var sprite = Sprite2D.new()
