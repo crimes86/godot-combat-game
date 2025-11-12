@@ -479,11 +479,16 @@ func generate_dynamic_elements():
 	# Interactive props on the path (skull, bones, broken sword)
 	load_interactive_props(scattered_props_node)
 
-	# Pickable items for inventory (collectible loot)
-	spawn_pickable_items(scattered_props_node)
+	# Register with spawn manager
+	LootSpawnManager.register_game_world(self)
 
-	# Treasure chests with random loot
-	spawn_treasure_chests(scattered_props_node)
+	# Generate possible spawn points (many more than will actually spawn)
+	generate_item_spawn_points()
+	generate_chest_spawn_points()
+
+	# Trigger initial spawn (spawn manager decides which points to use)
+	LootSpawnManager.initial_spawn()
+	print("📦 LootSpawnManager spawned initial items and chests")
 
 	# Path markers
 	load_path_markers_from_json()
@@ -682,22 +687,13 @@ func load_interactive_props(parent: Node2D):
 			}
 			create_prop_sprite(prop_data, parent)
 
-func spawn_pickable_items(parent: Node2D):
-	"""Spawn pickable items (skulls, bones, etc.) that can be collected and sold"""
+func generate_item_spawn_points():
+	"""Generate possible spawn points for items (5x more than will actually spawn)"""
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 77777
 
-	# Define pickable item types with their properties
-	var pickable_types = [
-		{"type": "skull", "name": "Ancient Skull", "desc": "A weathered skull from an ancient warrior", "value": 15},
-		{"type": "bones", "name": "Old Bones", "desc": "Bones from a long-forgotten battle", "value": 8},
-		{"type": "broken_sword", "name": "Broken Sword", "desc": "Fragments of a shattered blade", "value": 25}
-	]
-
-	# Spawn 20 pickable items scattered around the world
-	for i in range(20):
-		var item_type = pickable_types[rng.randi() % pickable_types.size()]
-
+	# Generate 75 possible spawn points (LootSpawnManager will spawn 15 at a time)
+	for i in range(75):
 		# Find a random position (avoid campfire and path)
 		var attempts = 0
 		var item_pos = Vector2.ZERO
@@ -718,37 +714,18 @@ func spawn_pickable_items(parent: Node2D):
 
 			attempts += 1
 
-		# Create pickable item
-		var pickable_item = preload("res://scripts/items/PickableItem.gd").new()
-		pickable_item.name = "PickableItem_" + str(i)
-		pickable_item.position = item_pos
+		# Add to spawn manager's pool
+		LootSpawnManager.add_item_spawn_point(item_pos)
 
-		# Load texture for the item
-		var texture_path = PROP_TEXTURES[item_type["type"]]
-		var texture = null
-		if ResourceLoader.exists(texture_path):
-			texture = load(texture_path)
+	print("💎 Generated 75 possible item spawn points")
 
-		# Setup item properties BEFORE adding to tree
-		pickable_item.setup_item(
-			item_type["name"],
-			item_type["desc"],
-			item_type["value"],
-			texture
-		)
-
-		# Add to world
-		parent.add_child(pickable_item)
-
-	print("💎 Spawned 20 pickable items for collection")
-
-func spawn_treasure_chests(parent: Node2D):
-	"""Spawn treasure chests containing valuable loot"""
+func generate_chest_spawn_points():
+	"""Generate possible spawn points for chests (5x more than will actually spawn)"""
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 55555
 
-	# Spawn 8 treasure chests scattered around the world (rarer than pickable items)
-	for i in range(8):
+	# Generate 50 possible spawn points (LootSpawnManager will spawn 10 at a time)
+	for i in range(50):
 		# Find a random position (avoid campfire, prefer interesting locations)
 		var attempts = 0
 		var chest_pos = Vector2.ZERO
@@ -771,16 +748,10 @@ func spawn_treasure_chests(parent: Node2D):
 			# Valid position found
 			break
 
-		# Create treasure chest
-		var chest = preload("res://scripts/items/TreasureChest.gd").new()
-		chest.name = "TreasureChest_" + str(i)
-		chest.position = chest_pos
-		chest.z_index = 1  # Draw above ground
+		# Add to spawn manager's pool
+		LootSpawnManager.add_chest_spawn_point(chest_pos)
 
-		# Add to world
-		parent.add_child(chest)
-
-	print("📦 Spawned 8 treasure chests with random loot")
+	print("📦 Generated 50 possible chest spawn points")
 
 # ===== HELPER FUNCTIONS =====
 
