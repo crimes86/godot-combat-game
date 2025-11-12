@@ -1506,8 +1506,17 @@ func create_inventory_ui() -> void:
 	inventory_ui = InventoryUIScript.new()
 	print("   Instance created: ", inventory_ui)
 	inventory_ui.name = "InventoryUI"
+
+	# Add to scene tree (this triggers _ready() immediately since we're outside of _ready())
 	get_tree().root.add_child(inventory_ui)
+
+	# Force _ready() to be called if it wasn't
+	if not inventory_ui.is_node_ready():
+		print("   WARNING: Node not ready, calling _notification(NOTIFICATION_READY)")
+		inventory_ui._ready()
+
 	print("📦 Inventory UI created and added to scene tree")
 	print("   In tree: ", inventory_ui.is_inside_tree())
 	print("   Parent: ", inventory_ui.get_parent())
+	print("   Is node ready: ", inventory_ui.is_node_ready())
 
