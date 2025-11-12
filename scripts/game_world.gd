@@ -479,6 +479,9 @@ func generate_dynamic_elements():
 	# Interactive props on the path (skull, bones, broken sword)
 	load_interactive_props(scattered_props_node)
 
+	# Pickable items for inventory (collectible loot)
+	spawn_pickable_items(scattered_props_node)
+
 	# Path markers
 	load_path_markers_from_json()
 
@@ -675,6 +678,66 @@ func load_interactive_props(parent: Node2D):
 				"id": 2000 + i
 			}
 			create_prop_sprite(prop_data, parent)
+
+func spawn_pickable_items(parent: Node2D):
+	"""Spawn pickable items (skulls, bones, etc.) that can be collected and sold"""
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 77777
+
+	# Define pickable item types with their properties
+	var pickable_types = [
+		{"type": "skull", "name": "Ancient Skull", "desc": "A weathered skull from an ancient warrior", "value": 15},
+		{"type": "bones", "name": "Old Bones", "desc": "Bones from a long-forgotten battle", "value": 8},
+		{"type": "broken_sword", "name": "Broken Sword", "desc": "Fragments of a shattered blade", "value": 25}
+	]
+
+	# Spawn 20 pickable items scattered around the world
+	for i in range(20):
+		var item_type = pickable_types[rng.randi() % pickable_types.size()]
+
+		# Find a random position (avoid campfire and path)
+		var attempts = 0
+		var item_pos = Vector2.ZERO
+		while attempts < 50:
+			item_pos = Vector2(
+				rng.randf_range(-4000, 12000),
+				rng.randf_range(-2500, 2500)
+			)
+
+			# Avoid campfire area
+			if item_pos.distance_to(Vector2.ZERO) < 600:
+				attempts += 1
+				continue
+
+			# Prefer areas off the main path (but not required)
+			if not is_position_on_path(item_pos, 200.0):
+				break
+
+			attempts += 1
+
+		# Create pickable item
+		var pickable_item = preload("res://scripts/items/PickableItem.gd").new()
+		pickable_item.name = "PickableItem_" + str(i)
+		pickable_item.position = item_pos
+
+		# Load texture for the item
+		var texture_path = PROP_TEXTURES[item_type["type"]]
+		var texture = null
+		if ResourceLoader.exists(texture_path):
+			texture = load(texture_path)
+
+		# Setup item properties BEFORE adding to tree
+		pickable_item.setup_item(
+			item_type["name"],
+			item_type["desc"],
+			item_type["value"],
+			texture
+		)
+
+		# Add to world
+		parent.add_child(pickable_item)
+
+	print("💎 Spawned 20 pickable items for collection")
 
 # ===== HELPER FUNCTIONS =====
 
