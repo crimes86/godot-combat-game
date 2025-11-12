@@ -23,7 +23,7 @@ var original_scale: Vector2 = Vector2.ONE
 var original_modulate: Color = Color.WHITE  # ✨ Store original difficulty color
 var weakpoints: Array = []
 var weakpoints_destroyed: int = 0
-var num_weakpoints: int = 3
+var num_weakpoints: int = 1  # Will be calculated based on enemy_level in _ready()
 var spam_protection_active: bool = false
 var window_duration: float = 4.0
 var window_timer: Timer = null
@@ -45,8 +45,16 @@ func _ready() -> void:
 	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))  # Same scaling as XP
 
+	# Calculate weakpoint count based on enemy level
+	if enemy_level >= 10:
+		num_weakpoints = 3  # Level 10+: All 3 weakpoints
+	elif enemy_level >= 5:
+		num_weakpoints = 2  # Level 5-9: 2 weakpoints
+	else:
+		num_weakpoints = 1  # Level 1-4: 1 weakpoint
+
 	# Debug gold drop calculation
-	DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d" % [enemy_level, gold_drop_base, gold_drop])
+	DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d, num_weakpoints: %d" % [enemy_level, gold_drop_base, gold_drop, num_weakpoints])
 	
 	current_health = max_health
 	health_bar.update_health(current_health, max_health)
@@ -447,56 +455,41 @@ func spawn_weakpoints() -> void:
 		Vector2(0, 12),       # Between legs (pelvis bottom)
 	]
 	
-	# 🎲 Smart random selection - max 2 per section
+	# 🎲 New distribution: Exactly 1 weakpoint per section, sections chosen randomly
 	var chosen_positions = []
 	var sections = [
 		{"name": "upper", "positions": upper_positions},
 		{"name": "mid", "positions": mid_positions},
 		{"name": "lower", "positions": lower_positions}
 	]
-	
-	# Shuffle sections to pick from random order
+
+	# Shuffle sections to pick random sections when we have < 3 weakpoints
 	sections.shuffle()
-	
-	var spots_needed = num_weakpoints  # Usually 3
+
+	var spots_needed = num_weakpoints  # 1, 2, or 3 based on enemy level
 	var positions_per_section = {}
-	
+
 	# Initialize counters
 	for section in sections:
 		positions_per_section[section["name"]] = 0
-	
-	# Pick positions ensuring max 2 per section
-	var attempts = 0
-	var max_attempts = 100  # Prevent infinite loop
-	
-	while chosen_positions.size() < spots_needed and attempts < max_attempts:
-		attempts += 1
-		
-		# Pick a random section
-		var random_section = sections[randi() % sections.size()]
-		var section_name = random_section["name"]
-		var section_positions = random_section["positions"]
-		
-		# Check if this section can still take more weakpoints
-		if positions_per_section[section_name] >= 2:
-			continue  # This section is full, try another
-		
-		# Pick a random position from this section
+
+	# Pick exactly 1 weakpoint from each of the first N sections (where N = num_weakpoints)
+	for i in range(min(spots_needed, sections.size())):
+		var section = sections[i]
+		var section_name = section["name"]
+		var section_positions = section["positions"]
+
+		# Pick a RANDOM position from this section
 		var random_pos = section_positions[randi() % section_positions.size()]
-		
-		# Make sure we don't duplicate positions
-		if chosen_positions.has(random_pos):
-			continue  # Already picked this spot, try again
-		
+
 		# Add the position!
 		chosen_positions.append(random_pos)
-		positions_per_section[section_name] += 1
-		
-		print("🎯 Picked weakpoint in %s section at %s (section total: %d/2)" % 
-			[section_name, random_pos, positions_per_section[section_name]])
-	
-	print("📊 Final distribution - Upper: %d | Mid: %d | Lower: %d" %
-		[positions_per_section["upper"], positions_per_section["mid"], positions_per_section["lower"]])
+		positions_per_section[section_name] = 1
+
+		print("🎯 Picked weakpoint in %s section at %s" % [section_name, random_pos])
+
+	print("📊 Final distribution - Upper: %d | Mid: %d | Lower: %d (Total: %d)" %
+		[positions_per_section["upper"], positions_per_section["mid"], positions_per_section["lower"], spots_needed])
 
 	# Slightly smaller scale for better fit
 	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR

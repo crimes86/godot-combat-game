@@ -29,9 +29,9 @@ const CRIT_WINDOW_Z_INDEX: int = 100  # Enemy z-index during crit window
 const CRIT_WINDOW_SPAM_PROTECTION: float = 0.1  # Short delay after weakpoints spawn
 
 # Weakpoints
-const WEAKPOINT_COUNT: int = 3  # Number of weakpoints per crit window
+const WEAKPOINT_COUNT: int = 3  # Max weakpoints (at level 10+)
 const WEAKPOINT_COUNTER_SCALE_DIVISOR: float = 3.2  # Counter-scale weakpoints (1/3.2)
-const WEAKPOINT_MAX_PER_SECTION: int = 2  # Max weakpoints per body section
+const WEAKPOINT_MAX_PER_SECTION: int = 1  # Exactly 1 weakpoint per body section
 const CRIT_DAMAGE_MULTIPLIER: float = 2.0  # Weakpoint damage multiplier
 
 # ============================================
