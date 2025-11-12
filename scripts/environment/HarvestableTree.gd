@@ -103,9 +103,15 @@ func create_interaction_area() -> void:
 	shape.radius = 60.0  # Reasonable range around trunk
 	collision.shape = shape
 
-	# Position at CENTER of tree
-	collision.position = Vector2(0, 0)
-	print("   Interaction radius: 60 units, centered on tree")
+	# Position at BASE of tree trunk (where player sees it)
+	# Trees are centered sprites, so the base is below center
+	# The tree collision is at y=50*scale, let's use that
+	if tree_sprite:
+		collision.position = Vector2(0, 50 * tree_sprite.scale.y)
+		print("   Interaction at tree base: y=", collision.position.y)
+	else:
+		collision.position = Vector2(0, 100)  # Fallback
+		print("   Interaction at fallback position")
 
 	interaction_area.add_child(collision)
 
