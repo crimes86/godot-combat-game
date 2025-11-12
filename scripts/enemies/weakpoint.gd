@@ -95,10 +95,10 @@ func start_glow_pulse() -> void:
 	tween.tween_property(glow_sprite, "scale", Vector2(1.0, 1.0), 0.5)
 
 func create_sparkle_particles() -> void:
-	"""Moderate sparkle particles"""
+	"""Subtle sparkle particles"""
 	sparkle_particles = CPUParticles2D.new()
 	sparkle_particles.emitting = true
-	sparkle_particles.amount = 14  # Moderate amount
+	sparkle_particles.amount = 6  # Reduced for less clutter
 	sparkle_particles.lifetime = 1.0
 	sparkle_particles.preprocess = 0.5
 	sparkle_particles.local_coords = true
@@ -297,12 +297,12 @@ func spawn_destruction_wave() -> void:
 		tween.finished.connect(func(): ring.queue_free())
 
 func spawn_crack_particles() -> void:
-	"""Moderate crack particles"""
+	"""Subtle crack particles"""
 	var particles = CPUParticles2D.new()
 	particles.emitting = false
 	particles.one_shot = true
 	particles.explosiveness = 1.0
-	particles.amount = 15
+	particles.amount = 8  # Reduced for less clutter
 	particles.lifetime = 0.4
 	particles.local_coords = false
 	particles.global_position = global_position
@@ -339,13 +339,13 @@ func spawn_crack_particles() -> void:
 		particles.queue_free()
 
 func spawn_destruction_particles() -> void:
-	"""Moderate explosion"""
-	
+	"""Subtle explosion"""
+
 	var dust = CPUParticles2D.new()
 	dust.emitting = false
 	dust.one_shot = true
 	dust.explosiveness = 1.0
-	dust.amount = 50
+	dust.amount = 20  # Reduced for less clutter
 	dust.lifetime = 0.65
 	dust.local_coords = false
 	dust.global_position = global_position
@@ -383,7 +383,7 @@ func spawn_destruction_particles() -> void:
 	chunks.emitting = false
 	chunks.one_shot = true
 	chunks.explosiveness = 1.0
-	chunks.amount = 12
+	chunks.amount = 6  # Reduced for less clutter
 	chunks.lifetime = 0.85
 	chunks.local_coords = false
 	chunks.global_position = global_position
