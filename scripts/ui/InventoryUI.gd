@@ -16,15 +16,15 @@ func _ready() -> void:
 	# Start hidden
 	visible = false
 
-	# Create UI
+	# Create UI first
 	create_inventory_ui()
 
-	# Connect to inventory system
+	# Then connect to inventory system (after UI is created)
 	InventorySystem.inventory_changed.connect(_on_inventory_changed)
 	InventorySystem.item_added.connect(_on_item_added)
 	InventorySystem.item_removed.connect(_on_item_removed)
 
-	# Initial update
+	# Initial update (UI is guaranteed to exist now)
 	_on_inventory_changed()
 
 func create_inventory_ui() -> void:
@@ -140,6 +140,10 @@ func toggle_inventory() -> void:
 
 func _on_inventory_changed() -> void:
 	"""Update UI when inventory changes"""
+	# Null check - UI might not be created yet
+	if not gold_label or slot_buttons.is_empty():
+		return
+
 	# Update gold display
 	var gold_amount = InventorySystem.get_gold()
 	gold_label.text = "%d Gold" % gold_amount
