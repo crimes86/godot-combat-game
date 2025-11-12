@@ -13,6 +13,9 @@ var gold_label: Label
 var slots_grid: GridContainer
 
 func _ready() -> void:
+	# Set layer above game elements
+	layer = 100
+
 	# Start hidden
 	visible = false
 
@@ -34,13 +37,14 @@ func create_inventory_ui() -> void:
 	panel = PanelContainer.new()
 	panel.name = "InventoryPanel"
 
-	# Position in bottom-right corner
-	panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	panel.offset_left = -220  # 20px from right edge
-	panel.offset_top = -200   # 200px from bottom
-	panel.offset_right = -20
-	panel.offset_bottom = -20
+	# Position in bottom-right corner with proper anchors
+	panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 20)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	panel.custom_minimum_size = Vector2(200, 180)
+
+	# Adjust position from bottom-right corner
+	panel.position = Vector2(-220, -200)
 
 	# Add subtle background color
 	var style = StyleBoxFlat.new()
@@ -125,7 +129,14 @@ func create_inventory_ui() -> void:
 		slot_buttons.append(slot_button)
 
 	add_child(panel)
+
+	# Ensure panel inherits visibility from parent
+	panel.visible = true
+
 	print("✅ Inventory UI created")
+	print("   Panel size: ", panel.size)
+	print("   Panel position: ", panel.position)
+	print("   Panel visible: ", panel.visible)
 
 func toggle_inventory() -> void:
 	"""Toggle inventory visibility"""
@@ -134,6 +145,12 @@ func toggle_inventory() -> void:
 
 	if is_visible:
 		print("📦 Inventory opened")
+		print("   CanvasLayer visible: ", visible)
+		print("   CanvasLayer layer: ", layer)
+		if panel:
+			print("   Panel visible: ", panel.visible)
+			print("   Panel in tree: ", panel.is_inside_tree())
+			print("   Panel global_position: ", panel.global_position)
 		_on_inventory_changed()  # Refresh display
 	else:
 		print("📦 Inventory closed")
