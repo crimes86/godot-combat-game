@@ -5,6 +5,7 @@ class_name TreasureChest
 ## Press E to open and see loot UI
 ## Spawns 1-3 random valuable items when opened
 ## Player can click items to loot or press F to take all
+## Respawns after 1-5 minutes
 
 # Interaction
 var player_in_range: bool = false
@@ -17,6 +18,11 @@ var generated_loot: Array = []
 var chest_visual: Node2D = null
 var lid_sprite: Polygon2D = null
 var body_sprite: Polygon2D = null
+var original_lid_rotation: float = 0.0
+
+# Respawn
+var respawn_time: float = 0.0  # Set randomly between 60-300 seconds
+var respawn_timer: float = 0.0
 
 # Loot table - items that can be found in chests
 const LOOT_TABLE = [
@@ -51,9 +57,19 @@ func _ready() -> void:
 	# Create interaction prompt
 	create_interaction_prompt()
 
-	print("📦 TreasureChest initialized at position %s" % global_position)
+	# Set random respawn time (1-5 minutes)
+	respawn_time = randf_range(60.0, 300.0)
 
-func _physics_process(_delta: float) -> void:
+	print("📦 TreasureChest initialized at position %s (respawn: %.1fs)" % [global_position, respawn_time])
+
+func _physics_process(delta: float) -> void:
+	# Handle respawn timer
+	if is_opened:
+		respawn_timer += delta
+		if respawn_timer >= respawn_time:
+			respawn_chest()
+		return
+
 	# Update interaction prompt visibility
 	if interaction_prompt:
 		if player_in_range and not is_opened:
@@ -185,7 +201,8 @@ func open_chest() -> void:
 		return
 
 	is_opened = true
-	print("📦 Opening treasure chest at position %s" % global_position)
+	respawn_timer = 0.0
+	print("📦 Opening treasure chest at position %s (respawns in %.1fs)" % [global_position, respawn_time])
 
 	# Hide interaction prompt
 	if interaction_prompt:
@@ -236,34 +253,59 @@ func create_loot_ui() -> void:
 
 func _on_loot_ui_closed() -> void:
 	"""Handle loot UI closing"""
-	print("📦 Loot UI closed, removing chest")
+	print("📦 Loot UI closed, hiding chest until respawn")
 
-	# Fade out and remove chest
-	fade_out_chest()
+	# Fade out chest (but don't remove)
+	animate_chest_close()
 
 func animate_lid_opening() -> void:
 	"""Animate the chest lid opening"""
 	if not lid_sprite:
 		return
 
+	# Store original rotation
+	original_lid_rotation = lid_sprite.rotation
+
 	# Rotate lid backwards (opening animation)
 	var tween = create_tween()
 	tween.set_parallel(false)
 	tween.tween_property(lid_sprite, "rotation", -0.7, 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
-func fade_out_chest() -> void:
-	"""Fade out and remove chest from world"""
+func animate_chest_close() -> void:
+	"""Fade out chest (but keep it for respawn)"""
 	if not chest_visual:
-		queue_free()
 		return
 
 	var tween = create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(chest_visual, "modulate:a", 0.0, 1.0)
-	tween.tween_property(chest_visual, "scale", Vector2(0.5, 0.5), 1.0)
-	await tween.finished
+	tween.tween_property(chest_visual, "modulate:a", 0.2, 1.0)
+	tween.tween_property(chest_visual, "scale", Vector2(0.8, 0.8), 1.0)
 
-	queue_free()
+func respawn_chest() -> void:
+	"""Respawn the chest after timer completes"""
+	if not is_opened:
+		return
+
+	is_opened = false
+	respawn_timer = 0.0
+	generated_loot.clear()
+
+	# Set new random respawn time
+	respawn_time = randf_range(60.0, 300.0)
+
+	print("📦 Chest respawned at position %s (next respawn: %.1fs)" % [global_position, respawn_time])
+
+	# Close lid
+	if lid_sprite:
+		var tween1 = create_tween()
+		tween1.tween_property(lid_sprite, "rotation", original_lid_rotation, 0.5)
+
+	# Restore chest visual
+	if chest_visual:
+		var tween2 = create_tween()
+		tween2.set_parallel(true)
+		tween2.tween_property(chest_visual, "modulate:a", 1.0, 0.5)
+		tween2.tween_property(chest_visual, "scale", Vector2.ONE, 0.5)
 
 func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
