@@ -146,36 +146,35 @@ func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
 func hit() -> void:
 	if is_destroyed:
 		return
-	
+
 	current_hits += 1
 	weakpoint_hit.emit(self)
 
-	spawn_crack_particles()
-	spawn_impact_wave()
-	# spawn_hit_number()  # Removed - visual effects only, no text
-	
-	# Shrink and rotate
+	# Simplified hit feedback - fast and responsive for spam-clicking
 	if sprite:
 		var progress = float(current_hits) / float(max_hits)
 		var scale_factor = 1.0 - (progress * 0.3)
-		sprite.scale = Vector2(scale_factor, scale_factor)
-		sprite.rotation += 0.4
-		
-		# ✨ BRIGHT RED FLASH
-		sprite.color = Color(3.0, 1.0, 1.0, 1.0)  # Bright red-white flash
+
+		# ✨ POWERFUL INSTANT FLASH - bright white-red
+		sprite.color = Color(4.0, 2.0, 2.0, 1.0)  # Intense white-red flash
+		sprite.rotation += 0.3
+
 		var flash_tween = create_tween()
 		flash_tween.set_parallel(true)
-		flash_tween.tween_property(sprite, "color", Color(2.0, 0.3, 0.3, 1.0), 0.15)
-		
-		# Pop scale
-		var pop_scale = Vector2(1.2, 1.2) * scale_factor
+
+		# Fast color return (snappy feedback)
+		flash_tween.tween_property(sprite, "color", Color(2.0, 0.3, 0.3, 1.0), 0.08)
+
+		# Quick pop scale (feels punchy)
+		var pop_scale = Vector2(1.35, 1.35) * scale_factor
 		sprite.scale = pop_scale
-		flash_tween.tween_property(sprite, "scale", Vector2(scale_factor, scale_factor), 0.15).set_ease(Tween.EASE_OUT)
-		
-		# Glow flare
+		flash_tween.tween_property(sprite, "scale", Vector2(scale_factor, scale_factor), 0.08).set_ease(Tween.EASE_OUT)
+
+		# Glow burst
 		if glow_sprite:
-			glow_sprite.color.a = 0.9
-	
+			glow_sprite.color.a = 1.0
+			flash_tween.tween_property(glow_sprite, "color:a", 0.6, 0.08)
+
 	if current_hits >= max_hits:
 		destroy()
 
@@ -265,22 +264,27 @@ func destroy() -> void:
 
 func spawn_destruction_wave() -> void:
 	"""Multiple shockwaves"""
+	# Get world container to avoid parent scaling issues
+	var world = get_tree().root.get_node_or_null("World")
+	if not world:
+		return
+
 	for i in range(3):
 		await get_tree().create_timer(i * 0.05).timeout
-		
+
 		var ring = Line2D.new()
 		ring.width = 4.5 - i
 		ring.default_color = Color(2.0, 0.3, 0.3, 1.0)  # Bright red
 		ring.z_index = 299
-		
+
 		var segments = 48
 		for j in range(segments + 1):
 			var angle = (j * TAU) / segments
 			var point = Vector2(cos(angle), sin(angle)) * 20
 			ring.add_point(point)
-		
+
 		ring.global_position = global_position
-		get_parent().add_child(ring)
+		world.add_child(ring)
 		
 		var tween = create_tween()
 		tween.set_parallel(true)
@@ -340,6 +344,10 @@ func spawn_crack_particles() -> void:
 
 func spawn_destruction_particles() -> void:
 	"""Subtle explosion"""
+	# Get world container to avoid parent scaling issues
+	var world = get_tree().root.get_node_or_null("World")
+	if not world:
+		return
 
 	var dust = CPUParticles2D.new()
 	dust.emitting = false
@@ -349,10 +357,10 @@ func spawn_destruction_particles() -> void:
 	dust.lifetime = 0.65
 	dust.local_coords = false
 	dust.global_position = global_position
-	
+
 	dust.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
 	dust.emission_sphere_radius = 15.0
-	
+
 	var img = Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	img.fill(Color(2.0, 0.3, 0.3, 1.0))
 	var tex = ImageTexture.create_from_image(img)
@@ -368,16 +376,16 @@ func spawn_destruction_particles() -> void:
 	dust.scale_amount_max = 5.0
 
 	dust.color = Color(2.0, 0.3, 0.3, 1.0)
-	
+
 	var dust_gradient = Gradient.new()
 	dust_gradient.add_point(0.0, Color(1, 1, 1, 1))
 	dust_gradient.add_point(0.7, Color(1, 1, 1, 0.5))
 	dust_gradient.add_point(1.0, Color(1, 1, 1, 0))
 	dust.color_ramp = dust_gradient
-	
-	get_parent().add_child(dust)
+
+	world.add_child(dust)
 	dust.emitting = true
-	
+
 	# Chunks
 	var chunks = CPUParticles2D.new()
 	chunks.emitting = false
@@ -387,32 +395,32 @@ func spawn_destruction_particles() -> void:
 	chunks.lifetime = 0.85
 	chunks.local_coords = false
 	chunks.global_position = global_position
-	
+
 	chunks.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
 	chunks.emission_sphere_radius = 10.0
 	chunks.texture = tex
-	
+
 	chunks.direction = Vector2(0, 0)
 	chunks.spread = 180.0
 	chunks.initial_velocity_min = 45.0
 	chunks.initial_velocity_max = 100.0
 	chunks.gravity = Vector2(0, 125)
-	
+
 	chunks.scale_amount_min = 5.0
 	chunks.scale_amount_max = 10.0
 
 	chunks.color = Color(1.8, 0.2, 0.2, 1.0)  # Dark red chunks
-	
+
 	var chunk_gradient = Gradient.new()
 	chunk_gradient.add_point(0.0, Color(1, 1, 1, 1))
 	chunk_gradient.add_point(0.8, Color(1, 1, 1, 0.35))
 	chunk_gradient.add_point(1.0, Color(1, 1, 1, 0))
 	chunks.color_ramp = chunk_gradient
-	
+
 	chunks.angular_velocity_min = -560.0
 	chunks.angular_velocity_max = 560.0
-	
-	get_parent().add_child(chunks)
+
+	world.add_child(chunks)
 	chunks.emitting = true
 	
 	await get_tree().create_timer(1.2).timeout
