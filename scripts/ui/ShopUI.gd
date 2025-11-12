@@ -306,11 +306,15 @@ func populate_sell_items() -> void:
 			var item_name = item.get("name", "Unknown")
 			var item_desc = item.get("description", "")
 			var item_value = item.get("value", 0)
+			var quantity = item.get("quantity", 1)
+			var total_value = item_value * quantity
 
 			var item_row = create_sell_item_row(
 				item_name,
 				item_desc,
 				item_value,
+				quantity,
+				total_value,
 				func(): sell_item(i)
 			)
 
@@ -325,10 +329,10 @@ func populate_sell_items() -> void:
 		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		sell_list.add_child(empty_label)
 
-func create_sell_item_row(item_name: String, description: String, value: int, on_sell: Callable) -> PanelContainer:
+func create_sell_item_row(item_name: String, description: String, unit_value: int, quantity: int, total_value: int, on_sell: Callable) -> PanelContainer:
 	"""Create a row for an item to sell"""
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 60)
+	panel.custom_minimum_size = Vector2(0, 70)
 
 	# Add subtle background
 	var style = StyleBoxFlat.new()
@@ -348,9 +352,12 @@ func create_sell_item_row(item_name: String, description: String, value: int, on
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hbox.add_child(vbox)
 
-	# Item name
+	# Item name with quantity
 	var name_label = Label.new()
-	name_label.text = item_name
+	if quantity > 1:
+		name_label.text = "%s x%d" % [item_name, quantity]
+	else:
+		name_label.text = item_name
 	name_label.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(name_label)
 
@@ -366,11 +373,15 @@ func create_sell_item_row(item_name: String, description: String, value: int, on
 	right_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	hbox.add_child(right_vbox)
 
-	# Value
+	# Value (show per-item and total if stacked)
 	var value_label = Label.new()
-	value_label.text = "%d gold" % value
-	value_label.add_theme_font_size_override("font_size", 16)
+	if quantity > 1:
+		value_label.text = "%d gold total\n(%d ea)" % [total_value, unit_value]
+	else:
+		value_label.text = "%d gold" % total_value
+	value_label.add_theme_font_size_override("font_size", 14)
 	value_label.add_theme_color_override("font_color", Color.GOLD)
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	right_vbox.add_child(value_label)
 
 	# Sell button
@@ -383,7 +394,7 @@ func create_sell_item_row(item_name: String, description: String, value: int, on
 	return panel
 
 func sell_item(slot: int) -> void:
-	"""Sell an item from inventory"""
+	"""Sell an item from inventory (entire stack if stackable)"""
 	if slot < 0 or slot >= InventorySystem.inventory_items.size():
 		return
 
@@ -393,13 +404,18 @@ func sell_item(slot: int) -> void:
 
 	var item_name = item.get("name", "Unknown")
 	var item_value = item.get("value", 0)
+	var quantity = item.get("quantity", 1)
+	var total_value = item_value * quantity
 
-	# Remove from inventory and add gold
+	# Remove from inventory and add gold for entire stack
 	InventorySystem.remove_item(slot)
-	CharacterStats.add_gold(item_value)
+	CharacterStats.add_gold(total_value)
 
-	show_message("Sold %s for %d gold!" % [item_name, item_value], Color.GREEN)
-	item_sold.emit(item_name, item_value)
+	if quantity > 1:
+		show_message("Sold %s x%d for %d gold!" % [item_name, quantity, total_value], Color.GREEN)
+	else:
+		show_message("Sold %s for %d gold!" % [item_name, total_value], Color.GREEN)
+	item_sold.emit(item_name, total_value)
 
 	# Refresh the UI
 	update_gold_display()

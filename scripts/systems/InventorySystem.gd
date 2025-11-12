@@ -39,16 +39,46 @@ func _ready() -> void:
 # ============================================
 
 func add_item(item: Dictionary) -> bool:
-	"""Add an item to the first available slot"""
+	"""Add an item to inventory (stacks if possible)"""
+	var item_name = item.get("name", "Unknown")
+	var is_stackable = item.get("stackable", false)
+	var quantity = item.get("quantity", 1)
+	var max_stack = item.get("max_stack", 1)
+
+	# If stackable, try to add to existing stack first
+	if is_stackable:
+		for i in range(inventory_items.size()):
+			var existing_item = inventory_items[i]
+			if existing_item != null and existing_item.get("name") == item_name:
+				var current_quantity = existing_item.get("quantity", 1)
+				var space_available = max_stack - current_quantity
+
+				if space_available > 0:
+					var amount_to_add = min(quantity, space_available)
+					existing_item["quantity"] = current_quantity + amount_to_add
+					inventory_changed.emit()
+					print("📦 Stacked +%d %s (now %d in slot %d)" % [amount_to_add, item_name, existing_item["quantity"], i])
+
+					# If we added everything, we're done
+					if amount_to_add >= quantity:
+						return true
+
+					# Otherwise, reduce quantity and continue looking for more stacks
+					quantity -= amount_to_add
+
+	# If not stackable or couldn't stack all, find empty slot
 	for i in range(inventory_items.size()):
 		if inventory_items[i] == null:
-			inventory_items[i] = item
-			item_added.emit(item)
+			# Create new item with remaining quantity
+			var new_item = item.duplicate()
+			new_item["quantity"] = quantity
+			inventory_items[i] = new_item
+			item_added.emit(new_item)
 			inventory_changed.emit()
-			print("📦 Added item to slot %d: %s" % [i, item.get("name", "Unknown")])
+			print("📦 Added item to slot %d: %s x%d" % [i, item_name, quantity])
 			return true
 
-	print("❌ Inventory full! Cannot add item: %s" % item.get("name", "Unknown"))
+	print("❌ Inventory full! Cannot add item: %s" % item_name)
 	return false
 
 func remove_item(slot: int) -> Dictionary:

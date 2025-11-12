@@ -11,6 +11,9 @@ var item_name: String = "Unknown Item"
 var item_description: String = "A mysterious item."
 var item_value: int = 10  # Gold value for selling
 var item_icon: String = ""  # Optional icon texture path
+var item_stackable: bool = false  # Can this item stack?
+var item_max_stack: int = 1  # Max stack size
+var item_quantity: int = 1  # Current quantity
 
 # Interaction
 var player_in_range: bool = false
@@ -104,7 +107,10 @@ func pick_up_item() -> void:
 		"name": item_name,
 		"description": item_description,
 		"value": item_value,
-		"icon": item_icon
+		"icon": item_icon,
+		"stackable": item_stackable,
+		"max_stack": item_max_stack,
+		"quantity": item_quantity
 	}
 
 	# Try to add to inventory

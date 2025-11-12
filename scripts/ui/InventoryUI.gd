@@ -185,8 +185,16 @@ func _on_inventory_changed() -> void:
 		var button = slot_buttons[i]
 
 		if item and item.size() > 0:
-			# Show item
-			button.text = item.get("name", "???")
+			# Show item with quantity if stackable
+			var item_name = item.get("name", "???")
+			var quantity = item.get("quantity", 1)
+			var is_stackable = item.get("stackable", false)
+
+			if is_stackable and quantity > 1:
+				button.text = "%s x%d" % [item_name, quantity]
+			else:
+				button.text = item_name
+
 			button.tooltip_text = "%s\nValue: %d gold" % [item.get("description", ""), item.get("value", 0)]
 		else:
 			# Empty slot

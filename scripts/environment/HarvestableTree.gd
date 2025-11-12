@@ -193,9 +193,12 @@ func chop_tree() -> void:
 func spawn_wood_drops() -> void:
 	"""Spawn wood items at tree base"""
 	var wood_item_data = {
-		"name": "Dead Wood",
+		"name": "Dry Log",
 		"description": "Dry wood from a dead wasteland tree. Burns well.",
-		"value": 12
+		"value": 12,
+		"stackable": true,
+		"max_stack": 1000,
+		"quantity": 1
 	}
 
 	# Try to add wood to inventory

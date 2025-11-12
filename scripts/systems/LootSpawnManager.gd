@@ -144,9 +144,12 @@ func spawn_random_item() -> void:
 	item.global_position = spawn_pos
 
 	# Set item properties
-	item.item_name = "Dead Wood"
+	item.item_name = "Dry Log"
 	item.item_description = "Dry wood from a dead wasteland tree. Burns well."
 	item.item_value = 12
+	item.item_stackable = true
+	item.item_max_stack = 1000
+	item.item_quantity = 1
 
 	# Track it
 	active_items.append(item)
