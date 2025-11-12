@@ -843,8 +843,19 @@ func point_to_line_segment_distance(point: Vector2, line_start: Vector2, line_en
 	return point.distance_to(projection)
 
 func create_tree_at_position(parent: Node2D, pos: Vector2, tree_type: String, rng: RandomNumberGenerator):
-	# Use StaticBody2D for collision
-	var prop_container = StaticBody2D.new()
+	# 30% chance to make tree harvestable
+	var is_harvestable = rng.randf() < 0.30
+
+	# Use StaticBody2D for collision (or HarvestableTree script if harvestable)
+	var prop_container: StaticBody2D
+	if is_harvestable:
+		# Load and create harvestable tree
+		var HarvestableTreeScript = preload("res://scripts/environment/HarvestableTree.gd")
+		prop_container = HarvestableTreeScript.new()
+	else:
+		# Regular static tree
+		prop_container = StaticBody2D.new()
+
 	prop_container.name = tree_type + "_at_" + str(pos.x) + "_" + str(pos.y)
 	prop_container.position = pos
 	# Set collision layers (layer 1 = environment, blocks player and enemies)
