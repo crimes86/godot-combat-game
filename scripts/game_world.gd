@@ -585,19 +585,30 @@ func spawn_scattered_props(parent: Node2D):
 		)
 
 		# Don't place on the path
-		if not is_position_on_path(prop_pos, 100.0):
-			var prop_data = {
-				"type": prop_type,
-				"x": prop_pos.x,
-				"y": prop_pos.y,
-				"scale": rng.randf_range(0.4, 1.5),  # More variety in ash pile sizes
-				"rotation": rng.randf() * TAU,
-				"flip_h": rng.randf() < 0.5,
-				"z_index": 0,  # Same as trees/rocks for proper Y-sorting
-				"id": 3000 + i
-			}
-			if create_prop_sprite(prop_data, parent):
-				props_placed += 1
+		if is_position_on_path(prop_pos, 100.0):
+			continue
+
+		# Don't place too close to trees (avoid visual overlap)
+		var too_close_to_tree = false
+		for tree_pos in tree_positions:
+			if prop_pos.distance_to(tree_pos) < 100:  # 100px clearance around trees
+				too_close_to_tree = true
+				break
+		if too_close_to_tree:
+			continue
+
+		var prop_data = {
+			"type": prop_type,
+			"x": prop_pos.x,
+			"y": prop_pos.y,
+			"scale": rng.randf_range(0.4, 1.5),  # More variety in ash pile sizes
+			"rotation": rng.randf() * TAU,
+			"flip_h": rng.randf() < 0.5,
+			"z_index": 0,  # Same as trees/rocks for proper Y-sorting
+			"id": 3000 + i
+		}
+		if create_prop_sprite(prop_data, parent):
+			props_placed += 1
 
 	print("🌿 Placed ", props_placed, " scattered props")
 
@@ -608,9 +619,9 @@ func spawn_small_rocks(parent: Node2D):
 
 	var rocks_placed = 0
 
-	# Lots of small rocks to fill in bare areas across full world with buffer
+	# Increased rock count to fill bare areas better (was 1200)
 	var buffer = 200.0  # Keep small rocks 200px from edges
-	for i in range(1200):  # Increased significantly to fill bare spots
+	for i in range(2400):  # Doubled count for better coverage in bare areas
 		var rock_pos = Vector2(
 			rng.randf_range(-5000 + buffer, 13000 - buffer),
 			rng.randf_range(-3000 + buffer, 3000 - buffer)
@@ -625,10 +636,10 @@ func spawn_small_rocks(parent: Node2D):
 			continue
 
 		# Prefer spawning in bare areas (far from path and campfire)
-		# 70% of rocks should be in outer regions away from central path
+		# 80% of rocks should be in outer regions away from central path (was 70%)
 		var distance_from_center = abs(rock_pos.y)
-		if distance_from_center < 800 and rng.randf() > 0.3:
-			continue  # Skip 70% of rocks near the path corridor
+		if distance_from_center < 800 and rng.randf() > 0.2:
+			continue  # Skip 80% of rocks near the path corridor
 
 		# Don't place on top of trees (check distance to all tree positions)
 		var too_close_to_tree = false
@@ -665,16 +676,25 @@ func load_interactive_props(parent: Node2D):
 		
 		var attempts = 0
 		var prop_pos = Vector2.ZERO
+		var valid_position = false
 		while attempts < 50:
 			prop_pos = Vector2(
 				rng.randf_range(0, 7600),
 				rng.randf_range(-800, 800)
 			)
 			if is_position_on_path(prop_pos, 100.0):
-				break
+				# Check if not too close to trees
+				var too_close_to_tree = false
+				for tree_pos in tree_positions:
+					if prop_pos.distance_to(tree_pos) < 100:
+						too_close_to_tree = true
+						break
+				if not too_close_to_tree:
+					valid_position = true
+					break
 			attempts += 1
-		
-		if attempts < 50:
+
+		if valid_position:
 			var prop_data = {
 				"type": prop_type,
 				"x": prop_pos.x,
@@ -854,7 +874,7 @@ func create_tree_at_position(parent: Node2D, pos: Vector2, tree_type: String, rn
 	# Create simple dark oval shadow at base of tree
 	var shadow = ColorRect.new()
 	shadow.name = "Shadow"
-	var shadow_width = 45 * (tree_scale / 2.5)  # Scale shadow with tree (tighter)
+	var shadow_width = 45 * (tree_scale / 2.5) * 0.75  # Scale shadow with tree (25% smaller)
 	var shadow_height = shadow_width * 0.4  # Oval shape
 	shadow.size = Vector2(shadow_width, shadow_height)
 	# Position at bottom of tree - new sprites are 128x128, tree base is at y=120 (56 from center when centered)

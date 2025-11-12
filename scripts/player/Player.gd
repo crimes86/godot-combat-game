@@ -938,13 +938,8 @@ func create_player_sprite() -> void:
 	anim_sprite.position = Vector2(0, -8)
 	anim_sprite.centered = true
 	
-	# DEBUG: Make female character have pink tint so we can SEE the difference
-	if selected_gender == Gender.FEMALE:
-		anim_sprite.modulate = Color(1.0, 0.7, 1.0, 1.0)  # Pink tint for female
-		print("  🩷 FEMALE: Adding pink tint for visibility")
-	else:
-		anim_sprite.modulate = Color.WHITE
-		print("  👨 MALE: Using white (no tint)")
+	# No tint for any gender - show natural colors
+	anim_sprite.modulate = Color.WHITE
 	
 	add_child(anim_sprite)
 	
@@ -1189,9 +1184,9 @@ func overlay_hair_on_spritesheet(body_sheet: Image, hair_sheet: Image, frames_pe
 			var hair_x = hair_col * hair_cell_size
 			var hair_y = hair_style_row * hair_cell_size
 			
-			# Center hair horizontally in the 64x64 cell
+			# Center hair horizontally and position on top of head
 			var offset_x = (cell_size - hair_cell_size) / 2
-			var offset_y = 0
+			var offset_y = 8  # Position hair 8px down to sit on top of head
 			
 			# Overlay ONLY TOP HALF of hair pixels (hair + face, no arms!)
 			for y in range(hair_height_to_use):  # Only top 20 pixels!

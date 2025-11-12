@@ -125,11 +125,15 @@ func create_inventory_ui() -> void:
 		# Style the button
 		var slot_style_normal = StyleBoxFlat.new()
 		slot_style_normal.bg_color = Color(0.2, 0.2, 0.25, 1.0)  # Dark gray
-		slot_style_normal.border_width_left = 1
-		slot_style_normal.border_width_right = 1
-		slot_style_normal.border_width_top = 1
-		slot_style_normal.border_width_bottom = 1
+		slot_style_normal.border_width_left = 2
+		slot_style_normal.border_width_right = 2
+		slot_style_normal.border_width_top = 2
+		slot_style_normal.border_width_bottom = 2
 		slot_style_normal.border_color = Color(0.5, 0.5, 0.5, 1.0)
+		slot_style_normal.corner_radius_top_left = 4
+		slot_style_normal.corner_radius_top_right = 4
+		slot_style_normal.corner_radius_bottom_left = 4
+		slot_style_normal.corner_radius_bottom_right = 4
 		slot_button.add_theme_stylebox_override("normal", slot_style_normal)
 
 		var slot_style_hover = slot_style_normal.duplicate()

@@ -15,6 +15,7 @@ var armor_for_sale: Array = []
 var player_in_range: bool = false
 var shop_ui: CanvasLayer = null
 var animated_sprite: AnimatedSprite2D = null
+var interaction_prompt: Label = null
 
 func _ready() -> void:
 	print("🏪 Vendor '%s' starting initialization..." % vendor_name)
@@ -33,6 +34,9 @@ func _ready() -> void:
 
 	# Load shop inventory
 	load_shop_data()
+
+	# Create interaction prompt
+	create_interaction_prompt()
 
 	print("🏪 Vendor '%s' initialized with %d weapons and %d armor pieces" % [vendor_name, weapons_for_sale.size(), armor_for_sale.size()])
 	print("   Position: ", global_position)
@@ -54,6 +58,58 @@ func add_collision_body() -> void:
 	collision_body.add_child(collision_shape)
 
 	print("   Added collision body to vendor")
+
+func create_interaction_prompt() -> void:
+	"""Create floating [F] Talk prompt above blacksmith"""
+	print("   Creating interaction prompt...")
+
+	# Use CanvasLayer like other interaction prompts
+	var canvas = CanvasLayer.new()
+	canvas.name = "InteractionCanvas"
+	canvas.layer = 50
+	add_child(canvas)
+
+	interaction_prompt = Label.new()
+	interaction_prompt.name = "InteractionPrompt"
+	interaction_prompt.text = "[F] Talk"
+	interaction_prompt.add_theme_font_size_override("font_size", 16)
+	interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Golden color
+	interaction_prompt.add_theme_color_override("font_outline_color", Color.BLACK)
+	interaction_prompt.add_theme_constant_override("outline_size", 2)
+	interaction_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	interaction_prompt.visible = false
+	canvas.add_child(interaction_prompt)
+
+	print("   Interaction prompt created")
+
+func update_prompt_position() -> void:
+	"""Update prompt position to 30 pixels below player's feet"""
+	if not interaction_prompt:
+		return
+
+	# Find the player
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		return
+
+	var viewport_size = get_viewport().get_visible_rect().size
+	var camera = get_viewport().get_camera_2d()
+	if not camera:
+		return
+
+	# Get player position in screen space, then add 30 pixels below feet
+	var player_world_pos = player.global_position + Vector2(0, 30)
+	var camera_pos = camera.global_position
+	var screen_center = viewport_size / 2
+	var player_screen_pos = (player_world_pos - camera_pos) * camera.zoom.x + screen_center
+
+	# Center the prompt horizontally on player (wait for size to be calculated)
+	var screen_x = player_screen_pos.x
+	if interaction_prompt.size.x > 0:
+		screen_x -= interaction_prompt.size.x / 2
+	var screen_y = player_screen_pos.y
+
+	interaction_prompt.position = Vector2(screen_x, screen_y)
 
 func setup_blacksmith_sprite() -> void:
 	# Create animated sprite for blacksmith
@@ -95,14 +151,23 @@ func setup_blacksmith_sprite() -> void:
 
 	DebugConfig.debug_log("🔨 Blacksmith sprite loaded and animating")
 
-func _input(event: InputEvent) -> void:
-	# Use E key to interact with vendor
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_E and player_in_range:
+func _physics_process(_delta: float) -> void:
+	# Update interaction prompt visibility and position
+	if interaction_prompt:
+		var should_show = player_in_range and (not shop_ui or not shop_ui.visible)
+		if should_show != interaction_prompt.visible:
+			interaction_prompt.visible = should_show
+
+		# Update position every frame when visible
+		if should_show:
+			update_prompt_position()
+
+	# Check for F key press when player is in range
+	if player_in_range:
+		if Input.is_physical_key_pressed(KEY_F):
 			# Only open if shop is not already visible
 			if not shop_ui or not shop_ui.visible:
 				toggle_shop()
-				get_viewport().set_input_as_handled()
 
 func load_shop_data() -> void:
 	# Load weapons with validation
@@ -254,7 +319,7 @@ func purchase_weapon(index: int) -> bool:
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = true
-		print("💬 %s: %s (Press E to shop)" % [vendor_name, greeting_text])
+		print("💬 %s: %s (Press F to shop)" % [vendor_name, greeting_text])
 
 func _on_body_exited(body: Node) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):

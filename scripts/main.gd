@@ -11,3 +11,12 @@ func _ready():
 		if spawn_point:
 			player.global_position = spawn_point.global_position
 			print("🎮 Player spawned at: ", spawn_point.global_position)
+
+func _notification(what):
+	# Handle window close request to prevent freeze
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		print("🚪 Game closing - cleaning up...")
+		# Stop all tweens to prevent hang
+		get_tree().call_group("tweens", "kill")
+		# Force immediate quit without waiting for cleanup
+		get_tree().quit()

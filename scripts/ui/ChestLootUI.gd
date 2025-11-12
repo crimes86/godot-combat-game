@@ -26,9 +26,9 @@ func _ready() -> void:
 		take_all_button.pressed.connect(_on_take_all_pressed)
 
 func _input(event: InputEvent) -> void:
-	# Allow E, ESC, or F to interact with the chest UI
+	# Allow ESC to close or F to take all items from the chest UI
 	if visible and event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_E or event.keycode == KEY_ESCAPE:
+		if event.keycode == KEY_ESCAPE:
 			close_ui()
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_F:

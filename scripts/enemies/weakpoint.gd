@@ -15,9 +15,9 @@ func _ready() -> void:
 	z_index = 300
 	input_pickable = true
 	
-	# ✨ MODERATELY BRIGHT bone spur (50% less than before!)
+	# ✨ BRIGHT RED bone spur (weakpoint indicator)
 	sprite = Polygon2D.new()
-	sprite.color = Color(1.5, 1.5, 1.6, 1.0)  # Noticeably bright but not blinding
+	sprite.color = Color(2.0, 0.3, 0.3, 1.0)  # Bright red
 	
 	# Draw a jagged bone spur shape
 	var points = PackedVector2Array()
@@ -38,9 +38,9 @@ func _ready() -> void:
 	sprite.polygon = points
 	add_child(sprite)
 	
-	# ✨ MODERATE GLOW - visible but not overpowering
+	# ✨ RED GLOW - visible but not overpowering
 	glow_sprite = Polygon2D.new()
-	glow_sprite.color = Color(1.3, 1.3, 1.5, 0.6)  # Subtle glow
+	glow_sprite.color = Color(1.8, 0.2, 0.2, 0.6)  # Red glow
 	glow_sprite.z_index = -1
 	
 	# Make glow slightly larger
@@ -106,26 +106,26 @@ func create_sparkle_particles() -> void:
 	sparkle_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
 	sparkle_particles.emission_sphere_radius = 28.0
 	
-	# Moderate sparkle texture
+	# Red sparkle texture
 	var img = Image.create(7, 7, false, Image.FORMAT_RGBA8)
 	img.fill(Color.TRANSPARENT)
 	for x in range(2, 5):
 		for y in range(2, 5):
-			img.set_pixel(x, y, Color(1.5, 1.5, 1.6, 1.0))
+			img.set_pixel(x, y, Color(2.0, 0.3, 0.3, 1.0))
 	var tex = ImageTexture.create_from_image(img)
 	sparkle_particles.texture = tex
-	
+
 	sparkle_particles.direction = Vector2(0, -1)
 	sparkle_particles.spread = 180.0
 	sparkle_particles.initial_velocity_min = 12.0
 	sparkle_particles.initial_velocity_max = 25.0
 	sparkle_particles.gravity = Vector2(0, -12)
-	
+
 	sparkle_particles.scale_amount_min = 2.0
 	sparkle_particles.scale_amount_max = 4.0
-	
-	# Moderate brightness
-	sparkle_particles.color = Color(1.5, 1.5, 1.6, 1.0)
+
+	# Red sparkles
+	sparkle_particles.color = Color(2.0, 0.3, 0.3, 1.0)
 	
 	# Twinkle fade
 	var gradient = Gradient.new()
@@ -161,11 +161,11 @@ func hit() -> void:
 		sprite.scale = Vector2(scale_factor, scale_factor)
 		sprite.rotation += 0.4
 		
-		# ✨ BRIGHT FLASH (but not blinding)
-		sprite.color = Color(2.5, 2.5, 2.5, 1.0)  # Noticeable flash
+		# ✨ BRIGHT RED FLASH
+		sprite.color = Color(3.0, 1.0, 1.0, 1.0)  # Bright red-white flash
 		var flash_tween = create_tween()
 		flash_tween.set_parallel(true)
-		flash_tween.tween_property(sprite, "color", Color(1.5, 1.5, 1.6, 1.0), 0.15)
+		flash_tween.tween_property(sprite, "color", Color(2.0, 0.3, 0.3, 1.0), 0.15)
 		
 		# Pop scale
 		var pop_scale = Vector2(1.2, 1.2) * scale_factor
@@ -184,7 +184,7 @@ func spawn_hit_number() -> void:
 	var label = Label.new()
 	label.text = "CRACK!"
 	label.add_theme_font_size_override("font_size", 26)
-	label.add_theme_color_override("font_color", Color(1.8, 1.8, 1.5, 1.0))  # Moderate bright
+	label.add_theme_color_override("font_color", Color(2.2, 0.5, 0.3, 1.0))  # Red-orange
 	label.add_theme_color_override("font_outline_color", Color(0.15, 0.15, 0.15, 1))
 	label.add_theme_constant_override("outline_size", 4)
 	label.position = Vector2(-32, -42)
@@ -203,7 +203,7 @@ func spawn_impact_wave() -> void:
 	"""Expanding ring effect"""
 	var ring = Line2D.new()
 	ring.width = 3.5
-	ring.default_color = Color(1.5, 1.5, 1.6, 1.0)  # Moderate bright
+	ring.default_color = Color(2.0, 0.3, 0.3, 1.0)  # Bright red
 	ring.z_index = 299
 	
 	var segments = 32
@@ -270,7 +270,7 @@ func spawn_destruction_wave() -> void:
 		
 		var ring = Line2D.new()
 		ring.width = 4.5 - i
-		ring.default_color = Color(1.5, 1.5, 1.6, 1.0)
+		ring.default_color = Color(2.0, 0.3, 0.3, 1.0)  # Bright red
 		ring.z_index = 299
 		
 		var segments = 48
@@ -311,20 +311,20 @@ func spawn_crack_particles() -> void:
 	particles.emission_sphere_radius = 8.0
 	
 	var img = Image.create(6, 6, false, Image.FORMAT_RGBA8)
-	img.fill(Color(1.5, 1.5, 1.6, 1.0))
+	img.fill(Color(2.0, 0.3, 0.3, 1.0))
 	var tex = ImageTexture.create_from_image(img)
 	particles.texture = tex
-	
+
 	particles.direction = Vector2(0, 0)
 	particles.spread = 180.0
 	particles.initial_velocity_min = 55.0
 	particles.initial_velocity_max = 100.0
 	particles.gravity = Vector2(0, 85)
-	
+
 	particles.scale_amount_min = 2.0
 	particles.scale_amount_max = 4.0
-	
-	particles.color = Color(1.5, 1.5, 1.6, 1.0)
+
+	particles.color = Color(2.0, 0.3, 0.3, 1.0)
 	
 	var gradient = Gradient.new()
 	gradient.add_point(0.0, Color(1, 1, 1, 1))
@@ -354,20 +354,20 @@ func spawn_destruction_particles() -> void:
 	dust.emission_sphere_radius = 15.0
 	
 	var img = Image.create(8, 8, false, Image.FORMAT_RGBA8)
-	img.fill(Color(1.5, 1.5, 1.6, 1.0))
+	img.fill(Color(2.0, 0.3, 0.3, 1.0))
 	var tex = ImageTexture.create_from_image(img)
 	dust.texture = tex
-	
+
 	dust.direction = Vector2(0, 0)
 	dust.spread = 180.0
 	dust.initial_velocity_min = 85.0
 	dust.initial_velocity_max = 145.0
 	dust.gravity = Vector2(0, 105)
-	
+
 	dust.scale_amount_min = 2.0
 	dust.scale_amount_max = 5.0
-	
-	dust.color = Color(1.5, 1.5, 1.6, 1.0)
+
+	dust.color = Color(2.0, 0.3, 0.3, 1.0)
 	
 	var dust_gradient = Gradient.new()
 	dust_gradient.add_point(0.0, Color(1, 1, 1, 1))
@@ -400,8 +400,8 @@ func spawn_destruction_particles() -> void:
 	
 	chunks.scale_amount_min = 5.0
 	chunks.scale_amount_max = 10.0
-	
-	chunks.color = Color(1.4, 1.4, 1.5, 1.0)
+
+	chunks.color = Color(1.8, 0.2, 0.2, 1.0)  # Dark red chunks
 	
 	var chunk_gradient = Gradient.new()
 	chunk_gradient.add_point(0.0, Color(1, 1, 1, 1))

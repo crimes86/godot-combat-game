@@ -63,9 +63,9 @@ func _physics_process(_delta: float) -> void:
 		else:
 			interaction_prompt.visible = false
 
-	# Check for E key press when player is in range
+	# Check for F key press when player is in range
 	if player_in_range and not is_opened:
-		if Input.is_key_pressed(KEY_E):
+		if Input.is_key_pressed(KEY_F):
 			open_chest()
 
 func create_chest_visual() -> void:
@@ -131,14 +131,14 @@ func create_chest_visual() -> void:
 	clasp.color = Color(0.8, 0.7, 0.3, 1.0)  # Gold color
 	chest_visual.add_child(clasp)
 
-	# Add a subtle shadow
+	# Add a wider shadow that covers the whole bottom
 	var shadow = Polygon2D.new()
 	shadow.name = "Shadow"
 	var shadow_points = PackedVector2Array([
 		Vector2(-30, 20),
 		Vector2(30, 20),
-		Vector2(25, 28),
-		Vector2(-25, 28)
+		Vector2(35, 28),
+		Vector2(-35, 28)
 	])
 	shadow.polygon = shadow_points
 	shadow.color = Color(0, 0, 0, 0.4)
@@ -154,8 +154,8 @@ func create_interaction_prompt() -> void:
 
 	interaction_prompt = Label.new()
 	interaction_prompt.name = "InteractionPrompt"
-	interaction_prompt.text = "[E] Open Chest"
-	interaction_prompt.add_theme_font_size_override("font_size", 14)
+	interaction_prompt.text = "[F] Open Chest"
+	interaction_prompt.add_theme_font_size_override("font_size", 16)
 	interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Golden color
 	interaction_prompt.add_theme_color_override("font_outline_color", Color.BLACK)
 	interaction_prompt.add_theme_constant_override("outline_size", 2)
@@ -184,8 +184,10 @@ func update_prompt_position() -> void:
 	var screen_center = viewport_size / 2
 	var player_screen_pos = (player_world_pos - camera_pos) * camera.zoom.x + screen_center
 
-	# Center the prompt horizontally on player
-	var screen_x = player_screen_pos.x - interaction_prompt.size.x / 2
+	# Center the prompt horizontally on player (wait for size to be calculated)
+	var screen_x = player_screen_pos.x
+	if interaction_prompt.size.x > 0:
+		screen_x -= interaction_prompt.size.x / 2
 	var screen_y = player_screen_pos.y
 
 	interaction_prompt.position = Vector2(screen_x, screen_y)

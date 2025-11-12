@@ -62,7 +62,7 @@ func create_interaction_prompt() -> void:
 	interaction_prompt = Label.new()
 	interaction_prompt.name = "InteractionPrompt"
 	interaction_prompt.text = "[F] Pick up %s" % item_name
-	interaction_prompt.add_theme_font_size_override("font_size", 12)
+	interaction_prompt.add_theme_font_size_override("font_size", 16)
 	interaction_prompt.add_theme_color_override("font_color", Color.WHITE)
 	interaction_prompt.add_theme_color_override("font_outline_color", Color.BLACK)
 	interaction_prompt.add_theme_constant_override("outline_size", 2)
@@ -91,8 +91,10 @@ func update_prompt_position() -> void:
 	var screen_center = viewport_size / 2
 	var player_screen_pos = (player_world_pos - camera_pos) * camera.zoom.x + screen_center
 
-	# Center the prompt horizontally on player
-	var screen_x = player_screen_pos.x - interaction_prompt.size.x / 2
+	# Center the prompt horizontally on player (wait for size to be calculated)
+	var screen_x = player_screen_pos.x
+	if interaction_prompt.size.x > 0:
+		screen_x -= interaction_prompt.size.x / 2
 	var screen_y = player_screen_pos.y
 
 	interaction_prompt.position = Vector2(screen_x, screen_y)

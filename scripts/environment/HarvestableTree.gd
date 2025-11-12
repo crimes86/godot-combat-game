@@ -81,13 +81,13 @@ func _physics_process(delta: float) -> void:
 		if should_show:
 			update_prompt_position()
 
-	# Check for E key press when player is in range (only trigger once per press)
+	# Check for F key press when player is in range (only trigger once per press)
 	if player_in_range and not is_harvested:
-		var e_is_pressed = Input.is_physical_key_pressed(KEY_E)
-		if e_is_pressed and not e_key_was_pressed:
-			print("🪓 E key pressed near tree!")
+		var f_is_pressed = Input.is_physical_key_pressed(KEY_F)
+		if f_is_pressed and not e_key_was_pressed:
+			print("🪓 F key pressed near tree!")
 			chop_tree()
-		e_key_was_pressed = e_is_pressed
+		e_key_was_pressed = f_is_pressed
 
 func create_interaction_area() -> void:
 	"""Create Area2D to detect player proximity"""
@@ -133,8 +133,8 @@ func create_interaction_prompt() -> void:
 
 	interaction_prompt = Label.new()
 	interaction_prompt.name = "InteractionPrompt"
-	interaction_prompt.text = "[E] Chop Tree"
-	interaction_prompt.add_theme_font_size_override("font_size", 14)
+	interaction_prompt.text = "[F] Chop Tree"
+	interaction_prompt.add_theme_font_size_override("font_size", 16)
 	interaction_prompt.add_theme_color_override("font_color", Color(0.8, 1.0, 0.8))  # Light green
 	interaction_prompt.add_theme_color_override("font_outline_color", Color.BLACK)
 	interaction_prompt.add_theme_constant_override("outline_size", 2)
@@ -165,8 +165,10 @@ func update_prompt_position() -> void:
 	var screen_center = viewport_size / 2
 	var player_screen_pos = (player_world_pos - camera_pos) * camera.zoom.x + screen_center
 
-	# Center the prompt horizontally on player
-	var screen_x = player_screen_pos.x - interaction_prompt.size.x / 2
+	# Center the prompt horizontally on player (wait for size to be calculated)
+	var screen_x = player_screen_pos.x
+	if interaction_prompt.size.x > 0:
+		screen_x -= interaction_prompt.size.x / 2
 	var screen_y = player_screen_pos.y
 
 	interaction_prompt.position = Vector2(screen_x, screen_y)
@@ -214,19 +216,69 @@ func spawn_wood_drops() -> void:
 		print("  🪵 Collected %d wood (Value: %d gold each)" % [added_count, wood_item_data["value"]])
 
 func animate_tree_chop() -> void:
-	"""Animate tree being chopped down"""
+	"""Animate tree being chopped down and create stump"""
 	if not tree_sprite:
 		return
 
-	# Fade out and shrink
+	# Create stump from bottom portion of tree before fading out main tree
+	create_tree_stump()
+
+	# Fade out the main tree (top portion)
 	var tween = create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(tree_sprite, "modulate:a", 0.2, 1.0)  # Mostly transparent
-	tween.tween_property(tree_sprite, "scale", original_scale * 0.8, 1.0)
+	tween.tween_property(tree_sprite, "modulate:a", 0.0, 1.0)  # Fully transparent
+	tween.tween_property(tree_sprite, "position:y", tree_sprite.position.y - 100, 1.0)  # Fall upward (tree falls away)
 
-	# Also fade shadow
-	if tree_shadow:
-		tween.tween_property(tree_shadow, "modulate:a", 0.1, 1.0)
+	# Keep shadow visible for the stump
+	# Don't fade the shadow anymore - it stays for the stump
+
+func create_tree_stump() -> void:
+	"""Create a tree stump from the bottom section of the tree sprite"""
+	if not tree_sprite or not tree_sprite.texture:
+		return
+
+	# Get the tree texture
+	var tree_texture = tree_sprite.texture
+	var source_img = tree_texture.get_image()
+
+	# Extract bottom 12% of tree image as stump (cut off top 88%)
+	var stump_height = int(source_img.get_height() * 0.12)
+	var stump_img = Image.create(source_img.get_width(), stump_height, false, Image.FORMAT_RGBA8)
+	stump_img.fill(Color(0, 0, 0, 0))  # Start with transparent background
+
+	# Copy bottom 12% from source image
+	var src_y = source_img.get_height() - stump_height
+	stump_img.blit_rect(source_img, Rect2i(0, src_y, source_img.get_width(), stump_height), Vector2i(0, 0))
+
+	# Add jagged cut effect to top edge (make it look chopped/splintered)
+	var rng = RandomNumberGenerator.new()
+	rng.seed = hash(global_position)  # Use position as seed for consistency
+	for x in range(stump_img.get_width()):
+		# Random jagged variation for top 3-5 rows
+		var cut_depth = rng.randi_range(3, 7)
+		for y in range(cut_depth):
+			if y < stump_img.get_height():
+				var pixel = stump_img.get_pixel(x, y)
+				if pixel.a > 0:
+					# Gradually fade out pixels near the cut
+					var fade = 1.0 - (float(y) / float(cut_depth))
+					pixel.a *= fade * rng.randf_range(0.3, 1.0)
+					stump_img.set_pixel(x, y, pixel)
+
+	# Create stump sprite at same scale as original tree
+	var stump_sprite = Sprite2D.new()
+	stump_sprite.name = "TreeStump"
+	stump_sprite.texture = ImageTexture.create_from_image(stump_img)
+	stump_sprite.centered = true
+	stump_sprite.scale = tree_sprite.scale  # Keep same scale as original tree
+	stump_sprite.modulate = Color(0.7, 0.6, 0.5, 1.0)  # Brownish/darker color for dead stump
+
+	# Position stump at base of tree (offset downward since we're only showing bottom portion)
+	var stump_offset = (source_img.get_height() - stump_height) / 2.0 * tree_sprite.scale.y
+	stump_sprite.position = Vector2(0, stump_offset)
+	stump_sprite.z_index = 0  # Same z-index as tree for proper sorting
+
+	add_child(stump_sprite)
 
 func respawn_tree() -> void:
 	"""Respawn the tree after timer completes"""
@@ -237,8 +289,15 @@ func respawn_tree() -> void:
 	respawn_timer = 0.0
 	print("🌲 Tree respawned at position %s" % global_position)
 
+	# Remove stump if it exists
+	var stump = get_node_or_null("TreeStump")
+	if stump:
+		stump.queue_free()
+
 	# Restore tree visual
 	if tree_sprite:
+		# Reset position in case it was animated
+		tree_sprite.position = Vector2.ZERO
 		var tween = create_tween()
 		tween.set_parallel(true)
 		tween.tween_property(tree_sprite, "modulate:a", original_modulate.a, 0.5)

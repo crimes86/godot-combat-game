@@ -520,8 +520,8 @@ func create_interaction_prompt() -> void:
 
 	interaction_prompt = Label.new()
 	interaction_prompt.name = "InteractionPrompt"
-	interaction_prompt.text = "[E] Destroy ruins and build campfire"
-	interaction_prompt.add_theme_font_size_override("font_size", 14)
+	interaction_prompt.text = "[F] Destroy ruins and build campfire"
+	interaction_prompt.add_theme_font_size_override("font_size", 16)
 	interaction_prompt.add_theme_color_override("font_color", Color.WHITE)
 	interaction_prompt.add_theme_color_override("font_outline_color", Color.BLACK)
 	interaction_prompt.add_theme_constant_override("outline_size", 2)
@@ -557,7 +557,11 @@ func update_interaction_prompt() -> void:
 			var camera_pos = camera.global_position
 			var screen_center = viewport_size / 2
 			var relative_pos = (world_pos - camera_pos) * camera.zoom.x + screen_center
-			interaction_prompt.position = relative_pos - interaction_prompt.size / 2
+			# Center prompt (wait for size to be calculated)
+			var offset = Vector2.ZERO
+			if interaction_prompt.size.x > 0:
+				offset = interaction_prompt.size / 2
+			interaction_prompt.position = relative_pos - offset
 	else:
 		interaction_prompt.visible = false
 
@@ -570,7 +574,7 @@ func _on_interaction_body_exited(body: Node2D) -> void:
 		pass  # Don't clear player reference
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_E:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F:
 		if current_state == RuinsState.RUINS and player:
 			var distance = player.global_position.distance_to(global_position)
 			if distance < convert_range:

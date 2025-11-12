@@ -39,6 +39,10 @@ signal died()
 signal damage_taken(damage: float, is_crit: bool)  # ✨ NEW: For unified feedback
 
 func _ready() -> void:
+	# Set collision layers: enemies on layer 1, detect layers 1 (other entities) and 2 (obstacles like trees)
+	collision_layer = 1
+	collision_mask = 3  # Bitmask: 1 (layer 1) + 2 (layer 2) = 3
+
 	# Scale stats by enemy level
 	max_health = Constants.ENEMY_BASE_HEALTH * pow(Constants.ENEMY_HEALTH_SCALING, enemy_level - 1)  # ~500 HP at level 10
 	base_damage = Constants.ENEMY_BASE_DAMAGE * pow(Constants.ENEMY_DAMAGE_SCALING, enemy_level - 1)

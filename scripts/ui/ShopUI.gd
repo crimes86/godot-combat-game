@@ -43,9 +43,9 @@ func _ready() -> void:
 		push_warning("ShopUI: close_button not found")
 
 func _input(event: InputEvent) -> void:
-	# Allow E or ESC to close the shop
+	# Allow F or ESC to close the shop
 	if visible and event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_E or event.keycode == KEY_ESCAPE:
+		if event.keycode == KEY_F or event.keycode == KEY_ESCAPE:
 			close_shop()
 			get_viewport().set_input_as_handled()
 

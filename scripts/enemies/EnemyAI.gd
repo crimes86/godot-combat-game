@@ -263,6 +263,16 @@ func process_combat(delta: float) -> void:
 	update_enemy_animation(direction)
 	enemy.move_and_slide()
 
+	# Fix magnet effect: if we collided, reduce velocity temporarily
+	if enemy.get_slide_collision_count() > 0:
+		for i in range(enemy.get_slide_collision_count()):
+			var collision = enemy.get_slide_collision(i)
+			var collider = collision.get_collider()
+			# If we hit the player or another entity, stop pushing
+			if collider and (collider.is_in_group(Constants.GROUP_PLAYER) or collider is CharacterBody2D):
+				enemy.velocity *= 0.3  # Reduce velocity to 30% to prevent sticking
+				break
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ATTACKING STATE (In Range)
 # ═══════════════════════════════════════════════════════════════════════════
