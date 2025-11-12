@@ -55,6 +55,9 @@ var camera: Camera2D = null
 # Inventory UI
 var inventory_ui: CanvasLayer = null
 
+# Campfire Direction Indicator
+var campfire_indicator: CanvasLayer = null
+
 func _ready() -> void:
 	print("🎮 Player._ready() started")
 	
@@ -150,6 +153,9 @@ func _ready() -> void:
 
 	# Create inventory UI after this frame (when Player is fully in tree)
 	call_deferred("create_inventory_ui")
+
+	# Create campfire direction indicator
+	call_deferred("create_campfire_indicator")
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent crash on exit
@@ -1521,4 +1527,21 @@ func create_inventory_ui() -> void:
 		print("   Panel size: ", inventory_ui.panel.size)
 	else:
 		print("   ERROR: Panel is null!")
+
+func create_campfire_indicator() -> void:
+	"""Create and add campfire direction indicator to scene tree"""
+	print("🏗️ Player.create_campfire_indicator() called (deferred)")
+	var CampfireIndicatorScript = load("res://scripts/ui/CampfireIndicator.gd")
+	campfire_indicator = CampfireIndicatorScript.new()
+	campfire_indicator.name = "CampfireIndicator"
+
+	# Add to scene tree
+	get_tree().root.add_child(campfire_indicator)
+
+	print("🧭 Campfire indicator added to scene tree")
+	print("   In tree: ", campfire_indicator.is_inside_tree())
+
+	# Wait one frame for _ready() to complete
+	await get_tree().process_frame
+	print("🧭 Campfire indicator initialized")
 
