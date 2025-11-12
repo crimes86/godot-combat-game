@@ -6,11 +6,13 @@ class_name ShopUI
 
 signal shop_closed()
 signal item_purchased(item_name: String, price: int)
+signal item_sold(item_name: String, value: int)
 
 @onready var vendor_name_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/VendorName
 @onready var gold_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/GoldLabel
 @onready var weapons_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Weapons/ScrollContainer/WeaponsList
 @onready var armor_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Armor/ScrollContainer/ArmorList
+@onready var sell_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Sell/ScrollContainer/SellList
 @onready var close_button: Button = $Control/Panel/MarginContainer/VBoxContainer/Header/CloseButton
 @onready var message_label: Label = $Control/Panel/MarginContainer/VBoxContainer/MessageLabel
 
@@ -29,6 +31,8 @@ func _ready() -> void:
 		push_warning("ShopUI: weapons_list not found")
 	if not armor_list:
 		push_warning("ShopUI: armor_list not found")
+	if not sell_list:
+		push_warning("ShopUI: sell_list not found")
 	if not message_label:
 		push_warning("ShopUI: message_label not found")
 
@@ -61,6 +65,7 @@ func open_shop(vendor_node: Vendor) -> void:
 	update_gold_display()
 	populate_weapons()
 	populate_armor()
+	populate_sell_items()
 
 	show()
 
@@ -282,6 +287,123 @@ func get_armor_rarity_color(rarity_str: String) -> Color:
 			return Color.ORANGE
 		_:
 			return Color.WHITE
+
+func populate_sell_items() -> void:
+	"""Populate the sell list with inventory items"""
+	if not sell_list:
+		return
+
+	# Clear existing items
+	for child in sell_list.get_children():
+		child.queue_free()
+
+	# Add inventory items (only non-null slots)
+	var has_items = false
+	for i in range(InventorySystem.inventory_items.size()):
+		var item = InventorySystem.inventory_items[i]
+		if item:  # Skip null/empty slots
+			has_items = true
+			var item_name = item.get("name", "Unknown")
+			var item_desc = item.get("description", "")
+			var item_value = item.get("value", 0)
+
+			var item_row = create_sell_item_row(
+				item_name,
+				item_desc,
+				item_value,
+				func(): sell_item(i)
+			)
+
+			sell_list.add_child(item_row)
+
+	# Show message if inventory is empty
+	if not has_items:
+		var empty_label = Label.new()
+		empty_label.text = "Your inventory is empty"
+		empty_label.add_theme_font_size_override("font_size", 16)
+		empty_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sell_list.add_child(empty_label)
+
+func create_sell_item_row(item_name: String, description: String, value: int, on_sell: Callable) -> PanelContainer:
+	"""Create a row for an item to sell"""
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(0, 60)
+
+	# Add subtle background
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.2, 0.25, 0.5)
+	style.border_width_left = 4
+	style.border_color = Color.GOLD
+	style.corner_radius_top_left = 4
+	style.corner_radius_bottom_left = 4
+	panel.add_theme_stylebox_override("panel", style)
+
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 10)
+	panel.add_child(hbox)
+
+	# Left side - Item info
+	var vbox = VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(vbox)
+
+	# Item name
+	var name_label = Label.new()
+	name_label.text = item_name
+	name_label.add_theme_font_size_override("font_size", 16)
+	vbox.add_child(name_label)
+
+	# Description
+	var desc_label = Label.new()
+	desc_label.text = description
+	desc_label.add_theme_font_size_override("font_size", 12)
+	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	vbox.add_child(desc_label)
+
+	# Right side - Value and sell button
+	var right_vbox = VBoxContainer.new()
+	right_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_child(right_vbox)
+
+	# Value
+	var value_label = Label.new()
+	value_label.text = "%d gold" % value
+	value_label.add_theme_font_size_override("font_size", 16)
+	value_label.add_theme_color_override("font_color", Color.GOLD)
+	right_vbox.add_child(value_label)
+
+	# Sell button
+	var sell_button = Button.new()
+	sell_button.text = "SELL"
+	sell_button.custom_minimum_size = Vector2(80, 40)
+	sell_button.pressed.connect(on_sell)
+	right_vbox.add_child(sell_button)
+
+	return panel
+
+func sell_item(slot: int) -> void:
+	"""Sell an item from inventory"""
+	if slot < 0 or slot >= InventorySystem.inventory_items.size():
+		return
+
+	var item = InventorySystem.inventory_items[slot]
+	if not item:  # Slot is empty
+		return
+
+	var item_name = item.get("name", "Unknown")
+	var item_value = item.get("value", 0)
+
+	# Remove from inventory and add gold
+	InventorySystem.remove_item(slot)
+	CharacterStats.add_gold(item_value)
+
+	show_message("Sold %s for %d gold!" % [item_name, item_value], Color.GREEN)
+	item_sold.emit(item_name, item_value)
+
+	# Refresh the UI
+	update_gold_display()
+	populate_sell_items()
 
 func _on_close_pressed() -> void:
 	"""Handle close button press"""
