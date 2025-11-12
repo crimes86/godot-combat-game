@@ -82,8 +82,8 @@ func update_prompt_position() -> void:
 	if not camera:
 		return
 
-	# Get player position in screen space, then add 10 pixels below feet
-	var player_world_pos = player.global_position + Vector2(0, 10)
+	# Get player position in screen space, then add 30 pixels below feet
+	var player_world_pos = player.global_position + Vector2(0, 30)
 	var camera_pos = camera.global_position
 	var screen_center = viewport_size / 2
 	var player_screen_pos = (player_world_pos - camera_pos) * camera.zoom.x + screen_center
