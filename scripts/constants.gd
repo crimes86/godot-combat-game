@@ -4,6 +4,7 @@ extends Node
 ## Add to project.godot autoloads as "Constants"
 
 func _ready():
+	# Note: Can't use DebugConfig here as we initialize before it
 	print("✅ Constants autoload initialized")
 
 # ============================================

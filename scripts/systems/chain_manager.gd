@@ -27,8 +27,8 @@ signal chain_reset(reason: String)
 signal overdrive_activated()
 
 func _ready() -> void:
-	print("ChainManager initialized")
-	print("ChainManager has signals: chain_increased, chain_reset, overdrive_activated")
+	DebugConfig.debug_log("ChainManager initialized")
+	DebugConfig.debug_log("ChainManager has signals: chain_increased, chain_reset, overdrive_activated")
 
 func _process(delta: float) -> void:
 	if current_chain > 0:
@@ -48,23 +48,23 @@ func on_crit_window_completed(all_weakpoints_destroyed: bool) -> void:
 func increase_chain() -> void:
 	if current_chain < max_chain_level:
 		current_chain += 1
-		print("⚡ Chain increased to ", current_chain, "x")
+		DebugConfig.log_combat("⚡ Chain increased to %dx" % current_chain)
 		chain_increased.emit(current_chain)
-		
+
 		# ✨ NEW: Play milestone sound at every 5 chain levels or at max
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager and (current_chain % Constants.CHAIN_MILESTONE_INTERVAL == 0 or current_chain == max_chain_level):
 			sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_MILESTONE, -6.0)
-		
+
 		if current_chain == max_chain_level:
-			print("🔥 OVERDRIVE! Maximum chain reached! 🔥")
+			DebugConfig.log_combat("🔥 OVERDRIVE! Maximum chain reached! 🔥")
 			overdrive_activated.emit()
 	else:
-		print("⚡ Chain at maximum (", max_chain_level, "x)")
+		DebugConfig.log_combat("⚡ Chain at maximum (%dx)" % max_chain_level)
 
 func reset_chain(reason: ResetReason = ResetReason.MANUAL) -> void:
 	if current_chain > 0:
-		print("💔 Chain reset from ", current_chain, "x (", ResetReason.keys()[reason], ")")
+		DebugConfig.log_combat("💔 Chain reset from %dx (%s)" % [current_chain, ResetReason.keys()[reason]])
 		
 		# ✨ NEW: Play chain broken sound
 		var sound_manager = get_node_or_null("/root/SoundManager")

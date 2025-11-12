@@ -269,8 +269,8 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	
 	current_health -= amount
 	current_health = max(current_health, 0.0)
-	
-	print("Enemy hit! Damage: ", amount, " (Crit: ", is_crit, ") | Health: ", current_health, " / ", max_health)
+
+	DebugConfig.log_combat("Enemy hit! Damage: %d (Crit: %s) | Health: %d/%d" % [amount, is_crit, current_health, max_health])
 	
 	# ✨ NEW: Emit signal for player to handle feedback
 	damage_taken.emit(amount, is_crit)
@@ -320,27 +320,27 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	# ✨ NEW: Track if killed by crit during window
 	if current_health <= 0 and is_crit and in_crit_window:
 		killed_by_weakpoint_in_window = true
-		print("🎯 Enemy killed by weakpoint during crit window!")
+		DebugConfig.log_combat("🎯 Enemy killed by weakpoint during crit window!")
 	
 	if current_health <= 0:
 		die()
 
 func start_crit_window(difficulty: float = 1.0) -> void:
-	print("🔍 start_crit_window called - in_crit_window: %s, is_dying: %s" % [in_crit_window, is_dying])
-	
+	DebugConfig.log_combat("🔍 start_crit_window called - in_crit_window: %s, is_dying: %s" % [in_crit_window, is_dying])
+
 	if in_crit_window or is_dying:
-		print("⚠️  Crit window blocked: already in window or dying")
+		DebugConfig.log_combat("⚠️  Crit window blocked: already in window or dying")
 		return
-	
+
 	in_crit_window = true
 	# ✨ CHANGED: Don't activate spam protection immediately - allow attacks during growth
 	spam_protection_active = false
 	weakpoints_destroyed = 0
 	killed_by_weakpoint_in_window = false  # ✨ NEW: Reset flag
-	
-	print("🌟 Starting crit window")
-	print("   Current scale: %s (original: %s)" % [scale, original_scale])
-	print("   Current color: %s" % sprite.modulate if sprite else "no sprite")
+
+	DebugConfig.log_combat("🌟 Starting crit window")
+	DebugConfig.log_combat("   Current scale: %s (original: %s)" % [scale, original_scale])
+	DebugConfig.log_combat("   Current color: %s" % (sprite.modulate if sprite else "no sprite"))
 	
 	# ✨ NEW: Play crit window opening sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
@@ -565,10 +565,10 @@ func _on_weakpoint_hit(weakpoint) -> void:
 
 func _on_weakpoint_destroyed(weakpoint) -> void:
 	weakpoints_destroyed += 1
-	print("💥 Weakpoint destroyed (", weakpoints_destroyed, "/", num_weakpoints, ")")
-	
+	DebugConfig.log_combat("💥 Weakpoint destroyed (%d/%d)" % [weakpoints_destroyed, num_weakpoints])
+
 	if weakpoints_destroyed >= num_weakpoints:
-		print("🎯 All weakpoints destroyed")
+		DebugConfig.log_combat("🎯 All weakpoints destroyed")
 		
 		# ✨ NEW: Play victory sound for clearing all weakpoints
 		var sound_manager = get_node_or_null("/root/SoundManager")
@@ -579,14 +579,14 @@ func _on_weakpoint_destroyed(weakpoint) -> void:
 
 func _on_window_timeout() -> void:
 	if in_crit_window and not is_dying:
-		print("⏱️ Window timeout")
+		DebugConfig.log_combat("⏱️ Window timeout")
 		end_crit_window()
 
 func end_crit_window() -> void:
 	if not in_crit_window or is_dying:
 		return
-	
-	print("Ending crit window")
+
+	DebugConfig.log_combat("Ending crit window")
 	in_crit_window = false
 	
 	# Stop timer

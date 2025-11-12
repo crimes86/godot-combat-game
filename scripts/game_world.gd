@@ -39,7 +39,7 @@ var screenshot_mode = false
 var tree_positions = []  # Track tree positions to avoid spawning small rocks on them
 
 func _ready():
-	print("🗺️ GameWorld initializing (optimized - no baking needed)...")
+	DebugConfig.log_spawning("🗺️ GameWorld initializing (optimized - no baking needed)...")
 
 	# Create world boundaries first
 	create_world_boundaries()
@@ -53,7 +53,7 @@ func _ready():
 	# Set camera limits
 	setup_camera_limits()
 
-	print("✅ GameWorld ready!")
+	DebugConfig.log_spawning("✅ GameWorld ready!")
 
 func create_world_boundaries():
 	"""Create invisible walls around world to prevent player from going out of bounds"""

@@ -17,9 +17,10 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+Constants="*res://scripts/constants.gd"
+DebugConfig="*res://scripts/systems/DebugConfig.gd"
 ChainManager="*res://scripts/systems/chain_manager.gd"
 SoundManager="*res://scripts/systems/sound_manager.gd"
-Constants="*res://scripts/constants.gd"
 CharacterStats="*res://scripts/systems/CharacterStats.gd"
 
 [input]

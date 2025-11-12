@@ -55,11 +55,11 @@ signal gold_changed(amount: int, total: int)  # amount can be positive (gain) or
 # ============================================
 
 func _ready() -> void:
-	print("═══════════════════════════════════════")
-	print("CharacterStats System Initialized")
-	print("Level: ", level)
-	print("Stats: STR:", strength, " AGI:", agility, " VIT:", vitality, " LUCK:", luck)
-	print("═══════════════════════════════════════")
+	DebugConfig.debug_log("═══════════════════════════════════════")
+	DebugConfig.debug_log("CharacterStats System Initialized")
+	DebugConfig.debug_log("Level: %d" % level)
+	DebugConfig.debug_log("Stats: STR:%d AGI:%d VIT:%d LUCK:%d" % [strength, agility, vitality, luck])
+	DebugConfig.debug_log("═══════════════════════════════════════")
 	
 	# Create default starter weapon
 	equipped_weapon = create_starter_weapon()
