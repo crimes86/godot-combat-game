@@ -815,8 +815,8 @@ void fragment() {
 	# Add collision shape at tree trunk base
 	var collision_shape = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
-	# Collision radius scales with tree size (trunk width)
-	shape.radius = 15 * tree_scale
+	# Collision radius scales with tree size (trunk width) - tighter for better feel
+	shape.radius = 10 * tree_scale  # Reduced from 15 for tighter collision
 	collision_shape.shape = shape
 	# Position collision at base of tree trunk (where sprite base is)
 	collision_shape.position = Vector2(0, 50 * tree_scale)  # Near bottom of tree
@@ -825,9 +825,13 @@ void fragment() {
 	parent.add_child(prop_container)
 
 func create_rock_at_position(parent: Node2D, pos: Vector2, rng: RandomNumberGenerator):
-	var prop_container = Node2D.new()
+	# Use StaticBody2D for collision
+	var prop_container = StaticBody2D.new()
 	prop_container.name = "rock_large_at_" + str(pos.x) + "_" + str(pos.y)
 	prop_container.position = pos
+	# Set collision layers (layer 2 for obstacles)
+	prop_container.collision_layer = 2
+	prop_container.collision_mask = 0
 
 	var texture_path = PROP_TEXTURES["rock_large"]
 	if not ResourceLoader.exists(texture_path):
@@ -893,6 +897,17 @@ void fragment() {
 	sprite.modulate = Color(color_variation, color_variation * 0.95, color_variation * 0.9)
 
 	prop_container.add_child(sprite)
+
+	# Add collision shape for large rocks
+	var collision_shape = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	# Collision radius scales with rock size
+	shape.radius = 20 * rock_scale  # Rocks are wider than tree trunks
+	collision_shape.shape = shape
+	# Position collision at center of rock
+	collision_shape.position = Vector2(0, 0)
+	prop_container.add_child(collision_shape)
+
 	parent.add_child(prop_container)
 
 func create_prop_sprite(prop_data: Dictionary, parent: Node2D) -> bool:
