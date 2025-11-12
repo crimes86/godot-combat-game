@@ -145,6 +145,13 @@ func _ready() -> void:
 	CharacterStats.level_up.connect(_on_character_level_up)
 	CharacterStats.weapon_equipped.connect(_on_weapon_equipped)
 
+func _exit_tree() -> void:
+	# Disconnect signals to prevent crash on exit
+	if CharacterStats.level_up.is_connected(_on_character_level_up):
+		CharacterStats.level_up.disconnect(_on_character_level_up)
+	if CharacterStats.weapon_equipped.is_connected(_on_weapon_equipped):
+		CharacterStats.weapon_equipped.disconnect(_on_weapon_equipped)
+
 func _create_gender_selection_ui() -> void:
 	"""Create and show the gender selection UI - blocks until selection made"""
 	print("🎭 Creating gender selection UI...")

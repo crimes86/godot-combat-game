@@ -73,6 +73,7 @@ const STARTING_LUCK: int = 10
 # XP Progression
 const BASE_XP_REQUIREMENT: int = 100  # XP needed for level 2
 const XP_SCALING_EXPONENT: float = 1.15  # Exponential XP curve
+const MAX_LEVEL: int = 100  # Maximum level cap (prevents overflow bugs)
 
 # ============================================
 # WORLD GENERATION

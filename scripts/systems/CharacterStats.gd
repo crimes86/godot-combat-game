@@ -139,12 +139,21 @@ func gain_experience(amount: int) -> void:
 
 func level_up_character() -> void:
 	"""Level up the character and grant stat increases"""
+	# Check max level cap
+	if level >= Constants.MAX_LEVEL:
+		print("⚠️  MAX LEVEL REACHED: ", Constants.MAX_LEVEL)
+		experience = 0
+		experience_to_next_level = 999999999  # Prevent further leveling
+		return
+
 	# Deduct XP
 	experience -= experience_to_next_level
 	level += 1
-	
+
 	# Calculate next level XP requirement (exponential curve)
-	experience_to_next_level = int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, level - 1))
+	# Clamp to prevent overflow at high levels
+	var level_exponent = min(level - 1, 50)  # Cap exponent to prevent overflow
+	experience_to_next_level = int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, level_exponent))
 	
 	# Grant stat points (balanced increases)
 	strength += 2
@@ -323,7 +332,12 @@ func load_save_data(data: Dictionary) -> void:
 func debug_add_levels(count: int) -> void:
 	"""Add levels instantly for testing (without XP penalties)"""
 	for i in range(count):
-		# 🔧 FIX: Grant enough XP to level up cleanly (prevents negative XP)
+		# Check if we're at max level
+		if level >= Constants.MAX_LEVEL:
+			print("⚠️  Cannot add more levels - MAX LEVEL ", Constants.MAX_LEVEL, " reached!")
+			return
+
+		# Grant enough XP to level up cleanly (prevents negative XP)
 		var xp_needed = experience_to_next_level - experience
 		if xp_needed > 0:
 			experience += xp_needed
@@ -331,8 +345,14 @@ func debug_add_levels(count: int) -> void:
 
 func debug_set_level(target_level: int) -> void:
 	"""Set character to specific level"""
+	# Clamp target level to max
+	var clamped_level = min(target_level, Constants.MAX_LEVEL)
+	if target_level > Constants.MAX_LEVEL:
+		print("⚠️  Target level ", target_level, " exceeds MAX_LEVEL ", Constants.MAX_LEVEL)
+		print("   Setting to MAX_LEVEL instead")
+
 	reset_character()
-	while level < target_level:
+	while level < clamped_level:
 		level_up_character()
 
 func debug_fix_negative_xp() -> void:
