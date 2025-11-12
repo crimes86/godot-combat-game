@@ -4,7 +4,7 @@ class_name PickableItem
 ## Pickable Item - Can be collected by player and added to inventory
 ## Place in world as a prop with an interaction area
 ## Press F to pick up when near
-## Respawns after 1-5 minutes
+## Disappears when picked up, new items spawn elsewhere
 
 # Item data
 var item_name: String = "Unknown Item"
@@ -20,12 +20,6 @@ var is_picked_up: bool = false
 # Visual
 var sprite: Sprite2D = null
 
-# Respawn
-var respawn_time: float = 0.0  # Set randomly between 60-300 seconds
-var respawn_timer: float = 0.0
-var original_modulate: Color = Color.WHITE
-var original_scale: Vector2 = Vector2.ONE
-
 func _ready() -> void:
 	# Set up Area2D
 	collision_layer = 0
@@ -38,19 +32,9 @@ func _ready() -> void:
 	# Create interaction prompt
 	create_interaction_prompt()
 
-	# Set random respawn time (1-5 minutes)
-	respawn_time = randf_range(60.0, 300.0)
+	print("💎 PickableItem '%s' initialized at position %s" % [item_name, global_position])
 
-	print("💎 PickableItem '%s' initialized at position %s (respawn: %.1fs)" % [item_name, global_position, respawn_time])
-
-func _physics_process(delta: float) -> void:
-	# Handle respawn timer
-	if is_picked_up:
-		respawn_timer += delta
-		if respawn_timer >= respawn_time:
-			respawn_item()
-		return
-
+func _physics_process(_delta: float) -> void:
 	# Update interaction prompt visibility
 	if interaction_prompt:
 		if player_in_range and not is_picked_up:
@@ -101,7 +85,7 @@ func update_prompt_position() -> void:
 	interaction_prompt.position = relative_pos - interaction_prompt.size / 2
 
 func pick_up_item() -> void:
-	"""Add item to player inventory and hide item"""
+	"""Add item to player inventory and remove from world"""
 	if is_picked_up:
 		return
 
@@ -116,52 +100,28 @@ func pick_up_item() -> void:
 	# Try to add to inventory
 	if InventorySystem.add_item(item_data):
 		is_picked_up = true
-		respawn_timer = 0.0
-		print("✨ Player picked up: %s (Value: %d gold, respawns in %.1fs)" % [item_name, item_value, respawn_time])
+		print("✨ Player picked up: %s (Value: %d gold)" % [item_name, item_value])
+
+		# Notify spawn manager
+		if has_node("/root/LootSpawnManager"):
+			get_node("/root/LootSpawnManager").on_item_looted()
 
 		# Hide interaction prompt
 		if interaction_prompt:
 			interaction_prompt.visible = false
 
-		# Store original visual properties
-		if sprite:
-			original_modulate = sprite.modulate
-			original_scale = sprite.scale
-
 		# Play pickup animation/effect (fade out and scale up)
-		animate_pickup()
+		if sprite:
+			var tween = create_tween()
+			tween.set_parallel(true)
+			tween.tween_property(sprite, "modulate:a", 0.0, 0.3)
+			tween.tween_property(sprite, "scale", sprite.scale * 1.5, 0.3)
+			await tween.finished
+
+		# Remove from world
+		queue_free()
 	else:
 		print("❌ Inventory full! Cannot pick up %s" % item_name)
-
-func animate_pickup() -> void:
-	"""Animate item being picked up"""
-	if not sprite:
-		return
-
-	var tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(sprite, "modulate:a", 0.0, 0.3)
-	tween.tween_property(sprite, "scale", sprite.scale * 1.5, 0.3)
-
-func respawn_item() -> void:
-	"""Respawn the item after timer completes"""
-	if not is_picked_up:
-		return
-
-	is_picked_up = false
-	respawn_timer = 0.0
-
-	# Set new random respawn time for next pickup
-	respawn_time = randf_range(60.0, 300.0)
-
-	print("💎 Item '%s' respawned at position %s (next respawn: %.1fs)" % [item_name, global_position, respawn_time])
-
-	# Restore item visual
-	if sprite:
-		var tween = create_tween()
-		tween.set_parallel(true)
-		tween.tween_property(sprite, "modulate:a", original_modulate.a, 0.5)
-		tween.tween_property(sprite, "scale", original_scale, 0.5)
 
 func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""

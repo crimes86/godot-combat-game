@@ -23,6 +23,7 @@ ChainManager="*res://scripts/systems/chain_manager.gd"
 SoundManager="*res://scripts/systems/sound_manager.gd"
 CharacterStats="*res://scripts/systems/CharacterStats.gd"
 InventorySystem="*res://scripts/systems/InventorySystem.gd"
+LootSpawnManager="*res://scripts/systems/LootSpawnManager.gd"
 
 [input]
 
