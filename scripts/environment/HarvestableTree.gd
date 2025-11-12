@@ -97,15 +97,15 @@ func create_interaction_area() -> void:
 	interaction_area.collision_mask = 1  # Detect player on layer 1
 	add_child(interaction_area)
 
-	# Create larger interaction radius than collision
+	# Create interaction area around tree base/trunk
 	var collision = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
-	shape.radius = 100.0  # Generous harvest range (increased from 80)
+	shape.radius = 60.0  # Reasonable range around trunk
 	collision.shape = shape
 
-	# Position at CENTER of tree for easy interaction
+	# Position at CENTER of tree
 	collision.position = Vector2(0, 0)
-	print("   Collision position: ", collision.position, " (centered on tree)")
+	print("   Interaction radius: 60 units, centered on tree")
 
 	interaction_area.add_child(collision)
 
