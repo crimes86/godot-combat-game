@@ -68,15 +68,29 @@ func create_interaction_prompt() -> void:
 	canvas.add_child(interaction_prompt)
 
 func update_prompt_position() -> void:
-	"""Update prompt position to fixed screen location above player"""
+	"""Update prompt position to 10 pixels below player's feet"""
 	if not interaction_prompt:
 		return
 
-	var viewport_size = get_viewport().get_visible_rect().size
+	# Find the player
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		return
 
-	# Fixed position: centered horizontally, 100 pixels from top (above player health bar)
-	var screen_x = viewport_size.x / 2 - interaction_prompt.size.x / 2
-	var screen_y = 100.0
+	var viewport_size = get_viewport().get_visible_rect().size
+	var camera = get_viewport().get_camera_2d()
+	if not camera:
+		return
+
+	# Get player position in screen space, then add 10 pixels below feet
+	var player_world_pos = player.global_position + Vector2(0, 10)
+	var camera_pos = camera.global_position
+	var screen_center = viewport_size / 2
+	var player_screen_pos = (player_world_pos - camera_pos) * camera.zoom.x + screen_center
+
+	# Center the prompt horizontally on player
+	var screen_x = player_screen_pos.x - interaction_prompt.size.x / 2
+	var screen_y = player_screen_pos.y
 
 	interaction_prompt.position = Vector2(screen_x, screen_y)
 
