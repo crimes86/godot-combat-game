@@ -1013,9 +1013,11 @@ func setup_lpc_animations(anim_sprite: AnimatedSprite2D) -> void:
 				print("   👕 Adding torso/armor layer")
 				walk_composite.blend_rect(torso_tex.get_image(), Rect2i(0, 0, 576, 256), Vector2i(0, 0))
 		
-		if ResourceLoader.exists(HAT_WALK_PATH):
+		# Only apply hat for male characters (female shows hair instead)
+		if selected_gender == Gender.MALE and ResourceLoader.exists(HAT_WALK_PATH):
 			var hat_tex = ResourceLoader.load(HAT_WALK_PATH, "Texture2D")
 			if hat_tex:
+				print("   🎩 Adding hat layer (male only)")
 				walk_composite.blend_rect(hat_tex.get_image(), Rect2i(0, 0, 576, 256), Vector2i(0, 0))
 	
 	# Load and composite SLASH sprites
@@ -1042,7 +1044,8 @@ func setup_lpc_animations(anim_sprite: AnimatedSprite2D) -> void:
 			var torso_tex = ResourceLoader.load(TORSO_SLASH_PATH, "Texture2D")
 			if torso_tex: slash_composite.blend_rect(torso_tex.get_image(), Rect2i(0, 0, 384, 256), Vector2i(0, 0))
 		
-		if ResourceLoader.exists(HAT_SLASH_PATH):
+		# Only apply hat for male characters (female shows hair instead)
+		if selected_gender == Gender.MALE and ResourceLoader.exists(HAT_SLASH_PATH):
 			var hat_tex = ResourceLoader.load(HAT_SLASH_PATH, "Texture2D")
 			if hat_tex: slash_composite.blend_rect(hat_tex.get_image(), Rect2i(0, 0, 384, 256), Vector2i(0, 0))
 		
@@ -1074,7 +1077,8 @@ func setup_lpc_animations(anim_sprite: AnimatedSprite2D) -> void:
 			var torso_tex = ResourceLoader.load(TORSO_HURT_PATH, "Texture2D")
 			if torso_tex: hurt_composite.blend_rect(torso_tex.get_image(), Rect2i(0, 0, 384, 64), Vector2i(0, 0))
 		
-		if ResourceLoader.exists(HAT_HURT_PATH):
+		# Only apply hat for male characters (female shows hair instead)
+		if selected_gender == Gender.MALE and ResourceLoader.exists(HAT_HURT_PATH):
 			var hat_tex = ResourceLoader.load(HAT_HURT_PATH, "Texture2D")
 			if hat_tex: hurt_composite.blend_rect(hat_tex.get_image(), Rect2i(0, 0, 384, 64), Vector2i(0, 0))
 	
