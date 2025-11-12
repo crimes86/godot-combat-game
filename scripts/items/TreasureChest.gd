@@ -2,13 +2,16 @@ extends Area2D
 class_name TreasureChest
 
 ## Treasure Chest - Contains random loot
-## Press E to open and receive items
+## Press E to open and see loot UI
 ## Spawns 1-3 random valuable items when opened
+## Player can click items to loot or press F to take all
 
 # Interaction
 var player_in_range: bool = false
 var interaction_prompt: Label = null
 var is_opened: bool = false
+var loot_ui: CanvasLayer = null
+var generated_loot: Array = []
 
 # Visual
 var chest_visual: Node2D = null
@@ -177,7 +180,7 @@ func update_prompt_position() -> void:
 	interaction_prompt.position = relative_pos - interaction_prompt.size / 2
 
 func open_chest() -> void:
-	"""Open chest and give loot to player"""
+	"""Open chest and show loot UI"""
 	if is_opened:
 		return
 
@@ -192,27 +195,50 @@ func open_chest() -> void:
 	animate_lid_opening()
 
 	# Generate random loot (1-3 items)
+	generate_loot()
+
+	# Create and show loot UI
+	create_loot_ui()
+
+func generate_loot() -> void:
+	"""Generate random loot items for the chest"""
 	var num_items = randi_range(1, 3)
-	var items_added = 0
+	generated_loot.clear()
 
 	for i in range(num_items):
-		# Check if inventory has space
-		if not InventorySystem.has_empty_slot():
-			print("⚠️ Inventory full! Chest contains more items but cannot pick them up.")
-			break
-
 		# Pick random item from loot table
 		var item_data = LOOT_TABLE[randi() % LOOT_TABLE.size()].duplicate()
+		generated_loot.append(item_data)
+		print("  ✨ Chest contains: %s (Value: %d gold)" % [item_data["name"], item_data["value"]])
 
-		# Add to inventory
-		if InventorySystem.add_item(item_data):
-			items_added += 1
-			print("  ✨ Found: %s (Value: %d gold)" % [item_data["name"], item_data["value"]])
+	print("📦 Chest generated %d items" % generated_loot.size())
 
-	print("📦 Chest opened! Received %d items" % items_added)
+func create_loot_ui() -> void:
+	"""Create and open the loot UI"""
+	# Load the loot UI scene
+	var loot_scene = load("res://scenes/ui/chest_loot_ui.tscn")
+	if not loot_scene:
+		push_error("Failed to load chest loot UI scene!")
+		return
 
-	# Wait a moment, then fade out and remove chest
-	await get_tree().create_timer(2.0).timeout
+	loot_ui = loot_scene.instantiate()
+
+	# Add to scene tree
+	get_tree().root.add_child(loot_ui)
+
+	# Connect signals
+	loot_ui.loot_ui_closed.connect(_on_loot_ui_closed)
+
+	# Open with loot
+	loot_ui.open_chest_ui(self, generated_loot)
+
+	print("✅ Chest loot UI opened")
+
+func _on_loot_ui_closed() -> void:
+	"""Handle loot UI closing"""
+	print("📦 Loot UI closed, removing chest")
+
+	# Fade out and remove chest
 	fade_out_chest()
 
 func animate_lid_opening() -> void:
