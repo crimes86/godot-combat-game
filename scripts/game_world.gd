@@ -482,6 +482,9 @@ func generate_dynamic_elements():
 	# Pickable items for inventory (collectible loot)
 	spawn_pickable_items(scattered_props_node)
 
+	# Treasure chests with random loot
+	spawn_treasure_chests(scattered_props_node)
+
 	# Path markers
 	load_path_markers_from_json()
 
@@ -738,6 +741,46 @@ func spawn_pickable_items(parent: Node2D):
 		parent.add_child(pickable_item)
 
 	print("💎 Spawned 20 pickable items for collection")
+
+func spawn_treasure_chests(parent: Node2D):
+	"""Spawn treasure chests containing valuable loot"""
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 55555
+
+	# Spawn 8 treasure chests scattered around the world (rarer than pickable items)
+	for i in range(8):
+		# Find a random position (avoid campfire, prefer interesting locations)
+		var attempts = 0
+		var chest_pos = Vector2.ZERO
+		while attempts < 50:
+			chest_pos = Vector2(
+				rng.randf_range(-4000, 12000),
+				rng.randf_range(-2500, 2500)
+			)
+
+			# Avoid campfire area
+			if chest_pos.distance_to(Vector2.ZERO) < 800:
+				attempts += 1
+				continue
+
+			# Avoid main path (chests should be off the beaten track)
+			if is_position_on_path(chest_pos, 300.0):
+				attempts += 1
+				continue
+
+			# Valid position found
+			break
+
+		# Create treasure chest
+		var chest = preload("res://scripts/items/TreasureChest.gd").new()
+		chest.name = "TreasureChest_" + str(i)
+		chest.position = chest_pos
+		chest.z_index = 1  # Draw above ground
+
+		# Add to world
+		parent.add_child(chest)
+
+	print("📦 Spawned 8 treasure chests with random loot")
 
 # ===== HELPER FUNCTIONS =====
 
