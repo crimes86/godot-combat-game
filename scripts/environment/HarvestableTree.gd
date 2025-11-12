@@ -67,7 +67,7 @@ func _physics_process(delta: float) -> void:
 			respawn_tree()
 		return
 
-	# Update interaction prompt visibility
+	# Update interaction prompt visibility and position
 	if interaction_prompt:
 		var should_show = player_in_range and not is_harvested
 		if should_show != interaction_prompt.visible:
@@ -76,6 +76,10 @@ func _physics_process(delta: float) -> void:
 				print("   🪵 Showing tree chop prompt")
 			else:
 				print("   🪵 Hiding tree chop prompt")
+
+		# Update position every frame when visible
+		if should_show:
+			update_prompt_position()
 
 	# Check for E key press when player is in range (only trigger once per press)
 	if player_in_range and not is_harvested:
@@ -121,18 +125,11 @@ func create_interaction_prompt() -> void:
 	"""Create floating [E] prompt above tree"""
 	print("   Creating interaction prompt...")
 
-	# Use simple Node2D parent for world-space positioning
-	var prompt_container = Node2D.new()
-	prompt_container.name = "PromptContainer"
-	prompt_container.z_index = 100  # Draw on top
-	add_child(prompt_container)
-
-	# Position above tree top
-	if tree_sprite:
-		# Tree height is approximately 64 * scale, position above that
-		prompt_container.position = Vector2(0, -70 * tree_sprite.scale.y)
-	else:
-		prompt_container.position = Vector2(0, -150)
+	# Use CanvasLayer like PickableItem does (Labels need to be in UI tree)
+	var canvas = CanvasLayer.new()
+	canvas.name = "InteractionCanvas"
+	canvas.layer = 50
+	add_child(canvas)
 
 	interaction_prompt = Label.new()
 	interaction_prompt.name = "InteractionPrompt"
@@ -143,17 +140,27 @@ func create_interaction_prompt() -> void:
 	interaction_prompt.add_theme_constant_override("outline_size", 2)
 	interaction_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	interaction_prompt.visible = false
+	canvas.add_child(interaction_prompt)
 
-	# Center the label
-	interaction_prompt.position = Vector2(-50, -10)  # Approximate centering
-	interaction_prompt.size = Vector2(100, 20)
-
-	prompt_container.add_child(interaction_prompt)
 	print("   Interaction prompt created")
 
 func update_prompt_position() -> void:
-	"""No longer needed - using world-space positioning"""
-	pass
+	"""Update prompt position to stay above tree on screen"""
+	if not interaction_prompt or not tree_sprite:
+		return
+
+	var viewport_size = get_viewport().get_visible_rect().size
+	var camera = get_viewport().get_camera_2d()
+	if not camera:
+		return
+
+	# Calculate screen position above tree
+	var tree_height = 64 * tree_sprite.scale.y
+	var world_pos = global_position + Vector2(0, -tree_height - 20)
+	var camera_pos = camera.global_position
+	var screen_center = viewport_size / 2
+	var relative_pos = (world_pos - camera_pos) * camera.zoom.x + screen_center
+	interaction_prompt.position = relative_pos - interaction_prompt.size / 2
 
 func chop_tree() -> void:
 	"""Chop down the tree and drop wood"""
