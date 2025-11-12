@@ -22,6 +22,9 @@ func _ready() -> void:
 	# Create animated blacksmith sprite
 	setup_blacksmith_sprite()
 
+	# Add physical collision so player can't walk through
+	add_collision_body()
+
 	# Connect area signals
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
@@ -34,6 +37,23 @@ func _ready() -> void:
 	print("🏪 Vendor '%s' initialized with %d weapons and %d armor pieces" % [vendor_name, weapons_for_sale.size(), armor_for_sale.size()])
 	print("   Position: ", global_position)
 	print("   Monitoring: ", monitoring)
+
+func add_collision_body() -> void:
+	"""Add StaticBody2D collision so player can't walk through vendor"""
+	var collision_body = StaticBody2D.new()
+	collision_body.name = "CollisionBody"
+	collision_body.collision_layer = 2  # Layer 2 for obstacles
+	collision_body.collision_mask = 0
+	add_child(collision_body)
+
+	# Add circular collision shape
+	var collision_shape = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = 20.0  # Tight collision around vendor
+	collision_shape.shape = shape
+	collision_body.add_child(collision_shape)
+
+	print("   Added collision body to vendor")
 
 func setup_blacksmith_sprite() -> void:
 	# Create animated sprite for blacksmith

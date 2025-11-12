@@ -29,18 +29,38 @@ func _ready() -> void:
 	# Set up collision detection
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
-	
+
 	# Create visual representation
 	create_campfire_visual()
 	create_warmth_circle()
-	
+
+	# Add physical collision so player can't walk through fire
+	add_collision_body()
+
 	# Set collision shape to match warmth radius
 	if has_node("CollisionShape2D"):
 		var collision = get_node("CollisionShape2D")
 		if collision.shape is CircleShape2D:
 			collision.shape.radius = warmth_radius
-	
+
 	print("🔥 Campfire initialized at ", global_position)
+
+func add_collision_body() -> void:
+	"""Add StaticBody2D collision so player can't walk through campfire"""
+	var collision_body = StaticBody2D.new()
+	collision_body.name = "CollisionBody"
+	collision_body.collision_layer = 2  # Layer 2 for obstacles
+	collision_body.collision_mask = 0
+	add_child(collision_body)
+
+	# Add circular collision shape (smaller than warmth radius)
+	var collision_shape = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = 30.0  # Collision around fire logs
+	collision_shape.shape = shape
+	collision_body.add_child(collision_shape)
+
+	print("   Added collision body to campfire")
 
 func _physics_process(delta: float) -> void:
 	# Heal player if in warmth
