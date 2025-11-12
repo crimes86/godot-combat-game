@@ -44,6 +44,9 @@ func _ready() -> void:
 	base_damage = Constants.ENEMY_BASE_DAMAGE * pow(Constants.ENEMY_DAMAGE_SCALING, enemy_level - 1)
 	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))  # Same scaling as XP
+
+	# Debug gold drop calculation
+	DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d" % [enemy_level, gold_drop_base, gold_drop])
 	
 	current_health = max_health
 	health_bar.update_health(current_health, max_health)
@@ -660,8 +663,9 @@ func die() -> void:
 		print("💰 Granted ", xp_reward, " XP to player")
 
 	# Grant gold to player
+	DebugConfig.debug_log("💰 Attempting to drop %d gold (gold_drop_base=%d, enemy_level=%d)" % [gold_drop, gold_drop_base, enemy_level])
 	CharacterStats.add_gold(gold_drop)
-	print("💰 Dropped ", gold_drop, " gold")
+	DebugConfig.debug_log("💰 CharacterStats.add_gold() called - Player total gold now: %d" % CharacterStats.gold)
 	
 	# ✨ NEW: Play death sound
 	var sound_manager = get_node_or_null("/root/SoundManager")

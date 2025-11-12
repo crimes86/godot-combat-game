@@ -737,9 +737,13 @@ func point_to_line_segment_distance(point: Vector2, line_start: Vector2, line_en
 	return point.distance_to(projection)
 
 func create_tree_at_position(parent: Node2D, pos: Vector2, tree_type: String, rng: RandomNumberGenerator):
-	var prop_container = Node2D.new()
+	# Use StaticBody2D for collision
+	var prop_container = StaticBody2D.new()
 	prop_container.name = tree_type + "_at_" + str(pos.x) + "_" + str(pos.y)
 	prop_container.position = pos
+	# Set collision layers (layer 1 = environment, blocks player and enemies)
+	prop_container.collision_layer = 2  # Layer 2 for obstacles
+	prop_container.collision_mask = 0  # Doesn't need to detect anything
 
 	var texture_path = PROP_TEXTURES[tree_type]
 	if not ResourceLoader.exists(texture_path):
@@ -807,6 +811,17 @@ void fragment() {
 	sprite.modulate = Color(color_variation, color_variation * 0.95, color_variation * 0.9)
 
 	prop_container.add_child(sprite)
+
+	# Add collision shape at tree trunk base
+	var collision_shape = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	# Collision radius scales with tree size (trunk width)
+	shape.radius = 15 * tree_scale
+	collision_shape.shape = shape
+	# Position collision at base of tree trunk (where sprite base is)
+	collision_shape.position = Vector2(0, 50 * tree_scale)  # Near bottom of tree
+	prop_container.add_child(collision_shape)
+
 	parent.add_child(prop_container)
 
 func create_rock_at_position(parent: Node2D, pos: Vector2, rng: RandomNumberGenerator):
