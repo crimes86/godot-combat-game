@@ -1328,4 +1328,404 @@ z = 0:   Player, enemies, campfire (game entities)
 
 ---
 
+## Development Roadmap: Path to Multiplayer Playtest
+
+**Current State**: Single-player combat working with weakpoint system, level cap 30, 4-zone progression designed
+
+**Goal**: First multiplayer playtest with 5-15 players testing PvP and co-op PvE
+
+### Phase 0: Single-Player Content Completion (Current → 2-3 weeks)
+
+**Status**: 60% complete
+
+**Critical for Multiplayer Foundation**:
+- [x] Basic combat system with crit windows
+- [x] Weakpoint system (sectioned, level-based)
+- [x] Level cap system (30 max, stats stop at 25)
+- [x] Zone design (4 zones + boss)
+- [x] Ruins 1 with 8 guardians
+- [ ] **Ruins 2 & 3 implementation** ⭐ HIGH PRIORITY
+  - Create Ruins 2 scene at position (4200, Y)
+  - Create Ruins 3 scene at position (6000, Y)
+  - 8x guardians each with proper level scaling
+  - Vendor shops with tier-appropriate gear
+
+- [ ] **Roaming enemies along path** ⭐ HIGH PRIORITY
+  - Spawn system for levels 1-30 enemies
+  - Patrol behavior (200-300px segments)
+  - Smooth level progression (every ~300px)
+
+- [ ] **Boss implementation** ⭐ MEDIUM PRIORITY
+  - Level 33 Necromancer King scene
+  - Boss arena at castle (7600, 0)
+  - Choose mechanic: Phase transition, summons, or hazards
+  - Door guardians (2x Level 30)
+
+- [ ] **Loot system basics**
+  - Gold drops from enemies (zone-scaled)
+  - Weapon drops (3-10% based on zone)
+  - Boss guaranteed legendary drop
+
+**Can Wait for Post-Multiplayer**:
+- Armor system (vendors already sell armor, just not equippable yet)
+- Consumables/potions
+- Quest system
+- Advanced UI polish
+
+**Estimated Time**: 2-3 weeks
+**Blockers**: None, all systems designed
+
+---
+
+### Phase 1: Multiplayer Foundation (3-4 weeks)
+
+**Status**: Not started (design complete ✓)
+
+**Goal**: Basic networking with 2-5 players in same world
+
+**Core Networking**:
+- [ ] **Godot multiplayer setup** ⭐ HIGH PRIORITY
+  - ENetMultiplayerPeer for client-server model
+  - Server hosting (dedicated server or player-hosted)
+  - Client connection flow
+  - Lobby system (5 player max for testing)
+
+- [ ] **Player synchronization**
+  - Sync player positions (smooth interpolation)
+  - Sync player animations (walk, slash, hurt)
+  - Sync player stats (level, HP, equipped weapon)
+  - Player nameplate rendering
+
+- [ ] **Basic combat sync**
+  - Attack actions broadcast to nearby players
+  - Damage calculations server-authoritative
+  - HP updates synced to all clients
+  - Death/respawn synchronization
+
+**Enemy Synchronization**:
+- [ ] **Server-authoritative enemies** ⭐ HIGH PRIORITY
+  - Server spawns and controls all enemies
+  - Enemy positions synced to clients
+  - Enemy HP synced on damage events
+  - Enemy death broadcast to all players
+
+- [ ] **Enemy scaling by player count**
+  - Detect nearby players (1000px radius)
+  - Scale HP: Base × (1 + 0.4 × (players - 1))
+  - Scale damage: Base × (1 + 0.1 × (players - 1))
+  - Dynamic scaling as players join/leave area
+
+**World State Sync**:
+- [ ] Ruins conversion state synced
+- [ ] Campfire warmth synced
+- [ ] Vendor availability synced
+
+**Testing Milestone**: 2-5 players can see each other, walk around, fight enemies together
+
+**Estimated Time**: 3-4 weeks
+**Blockers**: Need Phase 0 content complete for meaningful testing
+
+---
+
+### Phase 2: Multiplayer Combat & Weakpoints (2-3 weeks)
+
+**Status**: Not started (design complete ✓)
+
+**Goal**: Owner-only weakpoint system working, fair damage distribution
+
+**Weakpoint System (Owner-Only)**:
+- [ ] **Crit trigger networking** ⭐ CRITICAL
+  - Client sends crit trigger to server
+  - Server validates: legit crit, target valid, not cheating
+  - Server generates 1-3 weakpoint positions (random sectioned)
+  - Server sends positions ONLY to owner client
+
+- [ ] **Weakpoint ownership tracking**
+  - Add `owner_player_id` to weakpoint nodes
+  - Client only renders weakpoints they own
+  - Server tracks active crit windows per player
+  - Auto-cleanup expired windows (4 second timeout)
+
+- [ ] **Weakpoint hit validation** ⭐ CRITICAL
+  - Client sends click position to server
+  - Server validates:
+    - Does player own this crit window?
+    - Is window still active?
+    - Is click position near actual weakpoint? (±20px)
+    - Is click rate humanly possible? (<15/sec)
+  - Server applies damage if valid, rejects if invalid
+  - Broadcast weakpoint destruction to all clients (visual only)
+
+**Visual Clarity**:
+- [ ] Your weakpoints: Full brightness, z_index 400
+- [ ] Other players' crit windows: Subtle enemy glow (white outline)
+- [ ] Particle effects: Only for your weakpoints
+- [ ] UI: "Player X triggered crit!" notifications
+
+**Group XP & Loot**:
+- [ ] **XP bonus system**
+  - 2 players: 110% XP each
+  - 3 players: 105% XP each
+  - 4-5 players: 100% XP each
+
+- [ ] **Loot distribution**
+  - Gold split evenly (with group bonus)
+  - Weapon drops: Personal loot (each player rolls)
+  - Drop rate scaling: 3% solo → 10% in party
+
+**Testing Milestone**: 5 players fighting same enemies, each getting their own crit windows, fair XP/loot
+
+**Estimated Time**: 2-3 weeks
+**Blockers**: Phase 1 networking must be stable
+
+---
+
+### Phase 3: Party System & Respawn (1-2 weeks)
+
+**Status**: Not started
+
+**Goal**: Players can form parties, respawn together, coordinate
+
+**Party Mechanics**:
+- [ ] **Party formation UI**
+  - Invite/accept/decline system
+  - Party list UI (5 player max)
+  - Party leader designation
+
+- [ ] **Party features**
+  - Shared ruins conversion
+  - Shared quest progress (future)
+  - Party chat (future)
+  - HP bars for party members
+
+- [ ] **Respawn system**
+  - Solo death: Respawn at nearest converted ruins
+  - Party death: Can rejoin party
+  - Party wipe: All respawn together at same ruins
+  - 10% XP penalty on death
+
+**Testing Milestone**: 5 players can form party, fight together, respawn correctly
+
+**Estimated Time**: 1-2 weeks
+**Blockers**: Phase 2 combat must be working
+
+---
+
+### Phase 4: Anti-Cheat Basics (1 week)
+
+**Status**: Not started (design complete ✓)
+
+**Goal**: Basic protections against common cheats
+
+**Server Validation**:
+- [ ] **Rate limiting**
+  - Track clicks per player (15/sec max)
+  - Track attacks per player (based on attack speed stat)
+  - Reject impossible sequences
+
+- [ ] **Spatial validation**
+  - Player must be in range to attack enemy
+  - Click position must be near weakpoint (±20px)
+  - Player can't attack through walls
+
+- [ ] **State validation**
+  - Player can't hit weakpoints they don't own
+  - Crit windows expire after 4 seconds
+  - Dead players can't attack
+
+**Logging**:
+- [ ] Log suspicious activity (high click rate, off-target hits)
+- [ ] Admin review tools (view flagged players)
+- [ ] Auto-kick for severe violations (optional, testing only)
+
+**Testing Milestone**: Cheaters get rejected, legitimate players unaffected
+
+**Estimated Time**: 1 week
+**Blockers**: Phase 2 weakpoint system must be working
+
+---
+
+### Phase 5: PvP Foundation (2-3 weeks)
+
+**Status**: Not started
+
+**Goal**: Players can attack each other, PvP combat works
+
+**PvP Mechanics**:
+- [ ] **Toggle PvP mode** (safe for testing)
+  - Players opt-in to PvP
+  - PvP zone markers (ruins to ruins?)
+  - Non-PvP zones (campfires?)
+
+- [ ] **Player vs player combat**
+  - Attacks can target other players
+  - Damage calculations (same as PvE)
+  - Player death/respawn
+  - XP loss on PvP death (5%?)
+
+- [ ] **Crit windows on players**
+  - Owner-only weakpoints (same as PvE)
+  - Player can crit other players
+  - Fair damage distribution
+
+**Testing Milestone**: 5-10 players can PvP, crit system works, feels balanced
+
+**Estimated Time**: 2-3 weeks
+**Blockers**: Phase 2 & 3 must be solid
+
+---
+
+### Phase 6: Optimization & Polish (2 weeks)
+
+**Status**: Not started
+
+**Goal**: Smooth 60 FPS with 15 players in combat
+
+**Network Optimization**:
+- [ ] **Spatial partitioning**
+  - Only send updates to nearby players (1000px radius)
+  - Reduces network traffic by ~70%
+
+- [ ] **Message batching**
+  - Batch network messages every 50ms
+  - Reduces packet spam
+
+- [ ] **Client-side prediction**
+  - Predict own movement locally
+  - Smooth interpolation for other players
+
+**Performance Optimization**:
+- [ ] **Object pooling**
+  - Pool weakpoint nodes (reuse instead of create/destroy)
+  - Pool damage numbers
+  - Pool particle effects
+
+- [ ] **Particle culling**
+  - Limit to 10 simultaneous crit windows on screen
+  - Reduce particle counts when >5 players visible
+
+- [ ] **Render optimization**
+  - Cull offscreen enemies
+  - Reduce shadow quality with many players
+  - LOD system for distant players
+
+**Testing Milestone**: 15 players in same zone, all fighting, 60 FPS maintained
+
+**Estimated Time**: 2 weeks
+**Blockers**: Need stress testing data from Phase 5
+
+---
+
+### Phase 7: First Multiplayer Playtest (GOAL!) 🎯
+
+**Status**: Not started
+
+**Goal**: 10-15 player playtest, gather feedback, iterate
+
+**Playtest Scope**:
+- [ ] **Content available**
+  - All 4 zones (Wasteland → Castle)
+  - Ruins 1, 2, 3 functional
+  - Boss fight (Level 33)
+  - Roaming enemies levels 1-30
+
+- [ ] **Multiplayer features**
+  - Party system (up to 5)
+  - Owner-only weakpoints
+  - Group scaling (HP/XP/loot)
+  - Basic PvP (opt-in)
+  - Respawn system
+
+- [ ] **Testing goals**
+  - Test solo vs duo vs group difficulty
+  - Test boss with 1, 2, 3, 5 players
+  - Test PvP balance
+  - Find exploits/bugs
+  - Gather performance data
+  - Collect feedback on fun factor
+
+**Success Criteria**:
+- ✅ 10+ players can connect and play together
+- ✅ 60 FPS with 15 players in combat
+- ✅ No major bugs or crashes
+- ✅ Combat feels fun and fair
+- ✅ Weakpoint system works smoothly
+- ✅ Players want to keep playing
+
+**Estimated Time**: 1 week of testing + iteration
+**Timeline from Start**: ~14-18 weeks (3.5-4.5 months)
+
+---
+
+### Post-Playtest Priorities
+
+**Based on feedback, prioritize**:
+
+**High Priority (Core Gameplay)**:
+- Armor equipping system (vendors already sell it)
+- Save/load system (preserve progress)
+- Additional bosses or zones
+- PvP balancing tweaks
+- Guild/clan system
+
+**Medium Priority (Polish)**:
+- Quest system
+- Consumables/potions
+- Crafting system
+- Achievement system
+- Leaderboards
+
+**Low Priority (Nice to Have)**:
+- Advanced UI polish
+- Minimap
+- Trading system
+- Player marketplace
+- Cosmetics
+
+---
+
+### Quick Reference: Critical Path to Multiplayer
+
+**Absolute Must-Haves** (Can't playtest without):
+1. ✅ Zones 1-4 with enemies (Ruins 2 & 3 needed)
+2. ✅ Boss fight (Level 33)
+3. ✅ Networking foundation (Phase 1)
+4. ✅ Owner-only weakpoints (Phase 2)
+5. ✅ Party system (Phase 3)
+6. ✅ Basic anti-cheat (Phase 4)
+
+**Should-Haves** (Playtest works but missing these hurts):
+- PvP combat (can test PvE-only first)
+- Optimization (can test with fewer players)
+- Loot drops (can use vendor gear only)
+
+**Nice-to-Haves** (Can add post-playtest):
+- Armor equipping
+- Save system
+- Quests
+- Advanced UI
+
+---
+
+### Timeline Summary
+
+| Phase | Duration | Cumulative | Key Deliverable |
+|-------|----------|------------|-----------------|
+| Phase 0: Content | 2-3 weeks | 2-3 weeks | Ruins 2/3, roaming enemies, boss |
+| Phase 1: Networking | 3-4 weeks | 5-7 weeks | 5 players can connect and play |
+| Phase 2: Weakpoints | 2-3 weeks | 7-10 weeks | Owner-only crits working |
+| Phase 3: Party System | 1-2 weeks | 8-12 weeks | Parties, respawn, group play |
+| Phase 4: Anti-Cheat | 1 week | 9-13 weeks | Basic cheat protection |
+| Phase 5: PvP | 2-3 weeks | 11-16 weeks | Player vs player combat |
+| Phase 6: Optimization | 2 weeks | 13-18 weeks | 60 FPS with 15 players |
+| **Phase 7: PLAYTEST** | **1 week** | **14-19 weeks** | **🎯 First multiplayer test!** |
+
+**Total Time to Playtest**: ~3.5-4.5 months (14-19 weeks)
+
+**Aggressive Timeline** (if focused full-time): 3 months
+**Realistic Timeline** (part-time work): 4-5 months
+**Conservative Timeline** (with setbacks): 6 months
+
+---
+
 This documentation reflects the current state of the Rhythm RPG build.
