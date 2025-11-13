@@ -53,8 +53,8 @@ var cone_update_timer: float = 0.0  # Throttle cone color updates (CRITICAL for 
 var target_zoom: float = 1.0
 var camera: Camera2D = null
 
-# Inventory UI
-var inventory_ui: CanvasLayer = null
+# Character UI
+var character_ui: CanvasLayer = null
 
 # Campfire Direction Indicator
 var campfire_indicator: CanvasLayer = null
@@ -152,8 +152,8 @@ func _ready() -> void:
 	CharacterStats.level_up.connect(_on_character_level_up)
 	CharacterStats.weapon_equipped.connect(_on_weapon_equipped)
 
-	# Create inventory UI after this frame (when Player is fully in tree)
-	call_deferred("create_inventory_ui")
+	# Create character UI after this frame
+	call_deferred("create_character_ui")
 
 	# Create campfire direction indicator
 	call_deferred("create_campfire_indicator")
@@ -540,10 +540,10 @@ func _input(event: InputEvent) -> void:
 				update_stats_from_character()
 				print("Press F7 to verify XP is fixed")
 
-			KEY_B:
-				# Toggle inventory
-				if inventory_ui:
-					inventory_ui.toggle_inventory()
+			KEY_C:
+				# Toggle character sheet (includes inventory)
+				if character_ui:
+					character_ui.toggle_character_ui()
 
 func check_crit_window_click(event: InputEvent) -> bool:
 	"""Check if clicking on enemy during crit window. Returns true if handled."""
@@ -1507,29 +1507,19 @@ func die() -> void:
 	print("   Stats preserved: Level %d, XP: %d" % [CharacterStats.level, CharacterStats.experience])
 	print("===== END PLAYER DEATH =====\n")
 
-func create_inventory_ui() -> void:
-	"""Create and add inventory UI to scene tree"""
-	print("🏗️ Player.create_inventory_ui() called (deferred)")
-	var InventoryUIScript = load("res://scripts/ui/InventoryUI.gd")
-	inventory_ui = InventoryUIScript.new()
-	inventory_ui.name = "InventoryUI"
+func create_character_ui() -> void:
+	"""Create and add character UI to scene tree"""
+	print("🏗️ Player.create_character_ui() called (deferred)")
+	var CharacterUIScript = load("res://scripts/ui/CharacterUI.gd")
+	character_ui = CharacterUIScript.new()
+	character_ui.name = "CharacterUI"
 
 	# Add to scene tree (now that Player is fully ready, this works properly)
-	get_tree().root.add_child(inventory_ui)
+	get_tree().root.add_child(character_ui)
 
-	print("📦 Inventory UI added to scene tree")
-	print("   In tree: ", inventory_ui.is_inside_tree())
-	print("   Parent: ", inventory_ui.get_parent())
-
-	# Wait one frame for _ready() to complete, then verify
-	await get_tree().process_frame
-	print("📦 Inventory UI verification after _ready():")
-	if inventory_ui.panel:
-		print("   Panel exists: true")
-		print("   Panel in tree: ", inventory_ui.panel.is_inside_tree())
-		print("   Panel size: ", inventory_ui.panel.size)
-	else:
-		print("   ERROR: Panel is null!")
+	print("📋 Character UI added to scene tree")
+	print("   In tree: ", character_ui.is_inside_tree())
+	print("   Parent: ", character_ui.get_parent())
 
 func create_campfire_indicator() -> void:
 	"""Create and add campfire direction indicator to scene tree"""

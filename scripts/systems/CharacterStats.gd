@@ -40,6 +40,20 @@ const STARTING_LUCK: int = Constants.STARTING_LUCK
 var equipped_weapon = null  # Type: Weapon (untyped to avoid circular dependency)
 
 # ============================================
+# EQUIPPED ARMOR
+# ============================================
+
+var equipped_armor = {
+	"mainhand": null,  # Primary weapon (right hand)
+	"offhand": null,   # Secondary weapon/shield (left hand)
+	"head": null,      # Helmet/helm
+	"chest": null,     # Body armor/vest
+	"hands": null,     # Gloves/gauntlets
+	"legs": null,      # Pants/greaves
+	"feet": null       # Boots
+}
+
+# ============================================
 # SIGNALS
 # ============================================
 
@@ -48,6 +62,8 @@ signal experience_gained(amount: int, total: int)
 signal stat_changed(stat_name: String, old_value: int, new_value: int)
 signal weapon_equipped(weapon)  # weapon is Weapon type
 signal weapon_unequipped()
+signal armor_equipped(slot: String, armor_item: Dictionary)
+signal armor_unequipped(slot: String, armor_item: Dictionary)
 signal gold_changed(amount: int, total: int)  # amount can be positive (gain) or negative (spend)
 
 # ============================================
@@ -279,6 +295,72 @@ func unequip_weapon() -> void:
 	equipped_weapon = create_starter_weapon()
 	weapon_unequipped.emit()
 	print("Weapon unequipped")
+
+# ============================================
+# ARMOR EQUIPPING
+# ============================================
+
+func equip_armor(armor_item: Dictionary) -> bool:
+	"""Equip an armor piece to the appropriate slot"""
+	if not armor_item or armor_item.is_empty():
+		push_error("Trying to equip null or empty armor")
+		return false
+
+	var slot = armor_item.get("slot", "")
+	if slot not in equipped_armor:
+		push_error("Invalid armor slot: " + slot)
+		return false
+
+	# Unequip existing armor in that slot (return to inventory)
+	if equipped_armor[slot]:
+		var old_armor = equipped_armor[slot]
+		InventorySystem.add_item(old_armor)
+
+	# Equip new armor
+	equipped_armor[slot] = armor_item
+	armor_equipped.emit(slot, armor_item)
+
+	print("🛡️  Equipped %s: %s (+%d Defense)" % [slot.capitalize(), armor_item.get("name", "Unknown"), armor_item.get("defense", 0)])
+	return true
+
+func unequip_armor(slot: String) -> bool:
+	"""Unequip armor from a slot and return to inventory"""
+	if slot not in equipped_armor:
+		push_error("Invalid armor slot: " + slot)
+		return false
+
+	var armor_item = equipped_armor[slot]
+	if not armor_item:
+		print("No armor equipped in %s slot" % slot)
+		return false
+
+	# Add back to inventory
+	if InventorySystem.add_item(armor_item):
+		equipped_armor[slot] = null
+		armor_unequipped.emit(slot, armor_item)
+		print("🛡️  Unequipped %s: %s" % [slot.capitalize(), armor_item.get("name", "Unknown")])
+		return true
+	else:
+		print("❌ Inventory full! Cannot unequip armor")
+		return false
+
+func get_total_defense() -> int:
+	"""Calculate total defense from all equipped armor"""
+	var total = 0
+	for slot in equipped_armor:
+		var armor_item = equipped_armor[slot]
+		if armor_item:
+			total += armor_item.get("defense", 0)
+	return total
+
+func get_equipped_armor_count() -> int:
+	"""Return number of armor pieces equipped (excludes weapons)"""
+	var count = 0
+	var armor_slots = ["head", "chest", "hands", "legs", "feet"]
+	for slot in armor_slots:
+		if equipped_armor.get(slot):
+			count += 1
+	return count
 
 func create_starter_weapon():  # Returns Weapon
 	"""Create the default starter weapon"""
