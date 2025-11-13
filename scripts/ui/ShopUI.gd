@@ -3,11 +3,19 @@ class_name ShopUI
 
 ## Shop UI for vendor interactions
 ## Displays weapons, armor, and handles purchases
+## Modern stone grey theme matching CharacterUI
 
 signal shop_closed()
 signal item_purchased(item_name: String, price: int)
 signal item_sold(item_name: String, value: int)
 
+# Modern color palette (matching CharacterUI)
+const BG_COLOR = Color(0.25, 0.25, 0.28, 0.95)  # Stone grey background
+const BORDER_COLOR = Color(0.6, 0.6, 0.6, 1.0)  # Light border
+const TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)  # White text
+const ITEM_BG_COLOR = Color(0.2, 0.2, 0.23, 0.7)  # Darker stone for items
+
+@onready var main_panel: PanelContainer = $Control/Panel
 @onready var vendor_name_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/VendorName
 @onready var gold_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/GoldLabel
 @onready var weapons_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Weapons/ScrollContainer/WeaponsList
@@ -15,12 +23,16 @@ signal item_sold(item_name: String, value: int)
 @onready var sell_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Sell/ScrollContainer/SellList
 @onready var close_button: Button = $Control/Panel/MarginContainer/VBoxContainer/Header/CloseButton
 @onready var message_label: Label = $Control/Panel/MarginContainer/VBoxContainer/MessageLabel
+@onready var tab_container: TabContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer
 
 var vendor: Vendor = null
 
 func _ready() -> void:
 	print("🏪 ShopUI initialized")
 	hide()
+
+	# Apply modern styling to main panel
+	apply_modern_styling()
 
 	# Verify node references
 	if not vendor_name_label:
@@ -44,6 +56,42 @@ func _ready() -> void:
 
 	# Connect to gold changes for auto-update
 	CharacterStats.gold_changed.connect(_on_gold_changed)
+
+func apply_modern_styling() -> void:
+	"""Apply modern CharacterUI-style theme to the shop"""
+	if main_panel:
+		# Modern panel styling with rounded corners and shadow
+		var panel_style = StyleBoxFlat.new()
+		panel_style.bg_color = BG_COLOR
+		panel_style.border_width_left = 2
+		panel_style.border_width_right = 2
+		panel_style.border_width_top = 2
+		panel_style.border_width_bottom = 2
+		panel_style.border_color = BORDER_COLOR
+
+		# Rounded corners
+		panel_style.corner_radius_top_left = 12
+		panel_style.corner_radius_top_right = 12
+		panel_style.corner_radius_bottom_left = 12
+		panel_style.corner_radius_bottom_right = 12
+
+		# Drop shadow
+		panel_style.shadow_size = 8
+		panel_style.shadow_color = Color(0, 0, 0, 0.6)
+		panel_style.shadow_offset = Vector2(0, 4)
+
+		main_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# Update text colors to white
+	if vendor_name_label:
+		vendor_name_label.add_theme_color_override("font_color", TEXT_COLOR)
+	if gold_label:
+		gold_label.add_theme_color_override("font_color", Color.GOLD)
+
+	# Style the close button
+	if close_button:
+		close_button.add_theme_font_size_override("font_size", 24)
+		close_button.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))  # Red X
 
 func _input(event: InputEvent) -> void:
 	# Allow F or ESC to close the shop
@@ -138,31 +186,44 @@ func populate_armor() -> void:
 		child.queue_free()
 
 	# Add armor items
-	for armor_data in vendor.armor_for_sale:
+	for i in range(vendor.armor_for_sale.size()):
+		var armor_data = vendor.armor_for_sale[i]
 		var item_row = create_item_row(
 			armor_data.get("name", "Unknown"),
 			armor_data.get("description", ""),
 			armor_data.get("price", 0),
-			"Defense: +%.1f" % armor_data.get("defense", 0),
+			"Defense: +%d | Slot: %s" % [armor_data.get("defense", 0), armor_data.get("slot", "").capitalize()],
 			armor_data.get("required_level", 1),
 			get_armor_rarity_color(armor_data.get("rarity", "COMMON")),
-			func(): show_message("Armor equipping not yet implemented!", Color.ORANGE)
+			func(): purchase_armor(i)
 		)
 
 		armor_list.add_child(item_row)
 
 func create_item_row(item_name: String, description: String, price: int, stats: String, req_level: int, color: Color, on_buy: Callable) -> PanelContainer:
-	"""Create a row for an item in the shop"""
+	"""Create a modern styled row for an item in the shop"""
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 80)
+	panel.custom_minimum_size = Vector2(0, 90)
 
-	# Add subtle background
+	# Modern styled background with rounded corners
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.2, 0.25, 0.5)
-	style.border_width_left = 4
-	style.border_color = color
-	style.corner_radius_top_left = 4
-	style.corner_radius_bottom_left = 4
+	style.bg_color = ITEM_BG_COLOR
+	style.border_width_left = 3
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = color  # Rarity color on left edge
+
+	# Rounded corners for modern look
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+
+	# Subtle shadow for depth
+	style.shadow_size = 2
+	style.shadow_color = Color(0, 0, 0, 0.3)
+
 	panel.add_theme_stylebox_override("panel", style)
 
 	var hbox = HBoxContainer.new()
@@ -185,14 +246,14 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	var desc_label = Label.new()
 	desc_label.text = description
 	desc_label.add_theme_font_size_override("font_size", 12)
-	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	desc_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))  # Lighter grey
 	vbox.add_child(desc_label)
 
 	# Stats
 	var stats_label = Label.new()
 	stats_label.text = stats
 	stats_label.add_theme_font_size_override("font_size", 14)
-	stats_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
+	stats_label.add_theme_color_override("font_color", Color(0.6, 0.9, 1.0))  # Bright cyan
 	vbox.add_child(stats_label)
 
 	# Right side - Price and buy button
@@ -215,10 +276,51 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 		level_label.add_theme_color_override("font_color", Color.ORANGE if CharacterStats.level < req_level else Color.GREEN)
 		right_vbox.add_child(level_label)
 
-	# Buy button
+	# Buy button with modern styling
 	var buy_button = Button.new()
 	buy_button.text = "BUY" if price > 0 else "TAKE"
-	buy_button.custom_minimum_size = Vector2(80, 40)
+	buy_button.custom_minimum_size = Vector2(90, 45)
+
+	# Modern button styling
+	var btn_normal = StyleBoxFlat.new()
+	btn_normal.bg_color = Color(0.2, 0.2, 0.25, 1.0)
+	btn_normal.border_width_left = 2
+	btn_normal.border_width_right = 2
+	btn_normal.border_width_top = 2
+	btn_normal.border_width_bottom = 2
+	btn_normal.border_color = Color(0.5, 0.5, 0.55, 0.8)
+	btn_normal.corner_radius_top_left = 6
+	btn_normal.corner_radius_top_right = 6
+	btn_normal.corner_radius_bottom_left = 6
+	btn_normal.corner_radius_bottom_right = 6
+
+	var btn_hover = StyleBoxFlat.new()
+	btn_hover.bg_color = Color(0.28, 0.32, 0.38, 1.0)  # Brighter on hover
+	btn_hover.border_width_left = 2
+	btn_hover.border_width_right = 2
+	btn_hover.border_width_top = 2
+	btn_hover.border_width_bottom = 2
+	btn_hover.border_color = Color(0.6, 0.6, 0.65, 1.0)
+	btn_hover.corner_radius_top_left = 6
+	btn_hover.corner_radius_top_right = 6
+	btn_hover.corner_radius_bottom_left = 6
+	btn_hover.corner_radius_bottom_right = 6
+
+	var btn_pressed = StyleBoxFlat.new()
+	btn_pressed.bg_color = Color(0.15, 0.18, 0.22, 1.0)  # Darker when pressed
+	btn_pressed.border_width_left = 2
+	btn_pressed.border_width_right = 2
+	btn_pressed.border_width_top = 2
+	btn_pressed.border_width_bottom = 2
+	btn_pressed.border_color = Color(0.4, 0.4, 0.45, 1.0)
+	btn_pressed.corner_radius_top_left = 6
+	btn_pressed.corner_radius_top_right = 6
+	btn_pressed.corner_radius_bottom_left = 6
+	btn_pressed.corner_radius_bottom_right = 6
+
+	buy_button.add_theme_stylebox_override("normal", btn_normal)
+	buy_button.add_theme_stylebox_override("hover", btn_hover)
+	buy_button.add_theme_stylebox_override("pressed", btn_pressed)
 
 	# Check if can afford/level requirement
 	var can_buy = CharacterStats.can_afford(price) and CharacterStats.level >= req_level
@@ -246,6 +348,43 @@ func purchase_weapon(index: int) -> void:
 		update_gold_display()
 		populate_weapons()
 		populate_armor()
+	else:
+		show_message("Cannot purchase this item!", Color.RED)
+
+func purchase_armor(index: int) -> void:
+	"""Attempt to purchase armor"""
+	if not vendor:
+		return
+
+	if index < 0 or index >= vendor.armor_for_sale.size():
+		return
+
+	var armor_data = vendor.armor_for_sale[index]
+	var price = armor_data.get("price", 0)
+	var armor_name = armor_data.get("name", "Unknown")
+	var req_level = armor_data.get("required_level", 1)
+
+	# Check level requirement
+	if CharacterStats.level < req_level:
+		show_message("Level %d required!" % req_level, Color.RED)
+		return
+
+	# Check gold
+	if not CharacterStats.can_afford(price):
+		show_message("Not enough gold!", Color.RED)
+		return
+
+	# Purchase successful
+	if CharacterStats.spend_gold(price):
+		# Add armor to inventory
+		InventorySystem.add_item(armor_data)
+		show_message("Purchased %s for %d gold!" % [armor_name, price], Color.GREEN)
+		item_purchased.emit(armor_name, price)
+
+		# Refresh the UI
+		update_gold_display()
+		populate_armor()
+		populate_sell_items()
 	else:
 		show_message("Cannot purchase this item!", Color.RED)
 
@@ -337,17 +476,29 @@ func populate_sell_items() -> void:
 		sell_list.add_child(empty_label)
 
 func create_sell_item_row(item_name: String, description: String, unit_value: int, quantity: int, total_value: int, on_sell: Callable) -> PanelContainer:
-	"""Create a row for an item to sell"""
+	"""Create a modern styled row for an item to sell"""
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 70)
+	panel.custom_minimum_size = Vector2(0, 80)
 
-	# Add subtle background
+	# Modern styled background
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.2, 0.25, 0.5)
-	style.border_width_left = 4
-	style.border_color = Color.GOLD
-	style.corner_radius_top_left = 4
-	style.corner_radius_bottom_left = 4
+	style.bg_color = ITEM_BG_COLOR
+	style.border_width_left = 3
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = Color.GOLD  # Gold border for sell items
+
+	# Rounded corners
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+
+	# Subtle shadow
+	style.shadow_size = 2
+	style.shadow_color = Color(0, 0, 0, 0.3)
+
 	panel.add_theme_stylebox_override("panel", style)
 
 	var hbox = HBoxContainer.new()
@@ -391,10 +542,52 @@ func create_sell_item_row(item_name: String, description: String, unit_value: in
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	right_vbox.add_child(value_label)
 
-	# Sell button
+	# Sell button with modern styling
 	var sell_button = Button.new()
 	sell_button.text = "SELL"
-	sell_button.custom_minimum_size = Vector2(80, 40)
+	sell_button.custom_minimum_size = Vector2(90, 45)
+
+	# Modern button styling (reuse the same style as buy button)
+	var btn_normal = StyleBoxFlat.new()
+	btn_normal.bg_color = Color(0.2, 0.2, 0.25, 1.0)
+	btn_normal.border_width_left = 2
+	btn_normal.border_width_right = 2
+	btn_normal.border_width_top = 2
+	btn_normal.border_width_bottom = 2
+	btn_normal.border_color = Color(0.5, 0.5, 0.55, 0.8)
+	btn_normal.corner_radius_top_left = 6
+	btn_normal.corner_radius_top_right = 6
+	btn_normal.corner_radius_bottom_left = 6
+	btn_normal.corner_radius_bottom_right = 6
+
+	var btn_hover = StyleBoxFlat.new()
+	btn_hover.bg_color = Color(0.28, 0.32, 0.38, 1.0)
+	btn_hover.border_width_left = 2
+	btn_hover.border_width_right = 2
+	btn_hover.border_width_top = 2
+	btn_hover.border_width_bottom = 2
+	btn_hover.border_color = Color(0.6, 0.6, 0.65, 1.0)
+	btn_hover.corner_radius_top_left = 6
+	btn_hover.corner_radius_top_right = 6
+	btn_hover.corner_radius_bottom_left = 6
+	btn_hover.corner_radius_bottom_right = 6
+
+	var btn_pressed = StyleBoxFlat.new()
+	btn_pressed.bg_color = Color(0.15, 0.18, 0.22, 1.0)
+	btn_pressed.border_width_left = 2
+	btn_pressed.border_width_right = 2
+	btn_pressed.border_width_top = 2
+	btn_pressed.border_width_bottom = 2
+	btn_pressed.border_color = Color(0.4, 0.4, 0.45, 1.0)
+	btn_pressed.corner_radius_top_left = 6
+	btn_pressed.corner_radius_top_right = 6
+	btn_pressed.corner_radius_bottom_left = 6
+	btn_pressed.corner_radius_bottom_right = 6
+
+	sell_button.add_theme_stylebox_override("normal", btn_normal)
+	sell_button.add_theme_stylebox_override("hover", btn_hover)
+	sell_button.add_theme_stylebox_override("pressed", btn_pressed)
+
 	sell_button.pressed.connect(on_sell)
 	right_vbox.add_child(sell_button)
 
