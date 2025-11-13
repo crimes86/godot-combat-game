@@ -284,24 +284,24 @@ func destroy() -> void:
 	queue_free()
 
 func spawn_destruction_wave() -> void:
-	"""Multiple shockwaves"""
+	"""💥 EXPLOSIVE BLOOD SHOCKWAVES"""
 	# Get world container to avoid parent scaling issues
 	var world = get_tree().root.get_node_or_null("World")
 	if not world:
 		return
 
-	for i in range(3):
-		await get_tree().create_timer(i * 0.05).timeout
+	for i in range(4):  # 4 waves instead of 3
+		await get_tree().create_timer(i * 0.04).timeout
 
 		var ring = Line2D.new()
-		ring.width = 4.5 - i
-		ring.default_color = Color(2.0, 0.3, 0.3, 1.0)  # Bright red
+		ring.width = 5.5 - i  # Thicker initial wave
+		ring.default_color = Color(1.8, 0.2, 0.2, 1.0)  # Deep blood red
 		ring.z_index = 299
 
-		var segments = 48
+		var segments = 64  # Smoother circles
 		for j in range(segments + 1):
 			var angle = (j * TAU) / segments
-			var point = Vector2(cos(angle), sin(angle)) * 20
+			var point = Vector2(cos(angle), sin(angle)) * 25  # Start larger
 			ring.add_point(point)
 
 		ring.global_position = global_position
@@ -364,68 +364,69 @@ func spawn_crack_particles() -> void:
 		particles.queue_free()
 
 func spawn_destruction_particles() -> void:
-	"""Subtle explosion"""
+	"""💥 DRAMATIC BLOOD EXPLOSION when weakpoint destroyed"""
 	# Get world container to avoid parent scaling issues
 	var world = get_tree().root.get_node_or_null("World")
 	if not world:
 		return
 
-	var dust = CPUParticles2D.new()
-	dust.emitting = false
-	dust.one_shot = true
-	dust.explosiveness = 1.0
-	dust.amount = 20  # Reduced for less clutter
-	dust.lifetime = 0.65
-	dust.local_coords = false
-	dust.global_position = global_position
+	# 🩸 BLOOD SPRAY - bright red particles bursting out
+	var blood_spray = CPUParticles2D.new()
+	blood_spray.emitting = false
+	blood_spray.one_shot = true
+	blood_spray.explosiveness = 1.0
+	blood_spray.amount = 40  # More particles for dramatic effect
+	blood_spray.lifetime = 0.8
+	blood_spray.local_coords = false
+	blood_spray.global_position = global_position
 
-	dust.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	dust.emission_sphere_radius = 15.0
+	blood_spray.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	blood_spray.emission_sphere_radius = 20.0
 
-	var img = Image.create(8, 8, false, Image.FORMAT_RGBA8)
-	img.fill(Color(2.0, 0.3, 0.3, 1.0))
+	var img = Image.create(10, 10, false, Image.FORMAT_RGBA8)
+	img.fill(Color(1.5, 0.15, 0.15, 1.0))  # Bright blood red
 	var tex = ImageTexture.create_from_image(img)
-	dust.texture = tex
+	blood_spray.texture = tex
 
-	dust.direction = Vector2(0, 0)
-	dust.spread = 180.0
-	dust.initial_velocity_min = 85.0
-	dust.initial_velocity_max = 145.0
-	dust.gravity = Vector2(0, 105)
+	blood_spray.direction = Vector2(0, 0)
+	blood_spray.spread = 180.0
+	blood_spray.initial_velocity_min = 100.0
+	blood_spray.initial_velocity_max = 200.0  # Faster burst
+	blood_spray.gravity = Vector2(0, 120)
 
-	dust.scale_amount_min = 2.0
-	dust.scale_amount_max = 5.0
+	blood_spray.scale_amount_min = 2.5
+	blood_spray.scale_amount_max = 6.0  # Bigger particles
 
-	dust.color = Color(2.0, 0.3, 0.3, 1.0)
+	blood_spray.color = Color(1.5, 0.15, 0.15, 1.0)
 
-	var dust_gradient = Gradient.new()
-	dust_gradient.add_point(0.0, Color(1, 1, 1, 1))
-	dust_gradient.add_point(0.7, Color(1, 1, 1, 0.5))
-	dust_gradient.add_point(1.0, Color(1, 1, 1, 0))
-	dust.color_ramp = dust_gradient
+	var spray_gradient = Gradient.new()
+	spray_gradient.add_point(0.0, Color(1, 1, 1, 1))
+	spray_gradient.add_point(0.6, Color(1, 1, 1, 0.6))
+	spray_gradient.add_point(1.0, Color(1, 1, 1, 0))
+	blood_spray.color_ramp = spray_gradient
 
-	world.add_child(dust)
-	dust.emitting = true
+	world.add_child(blood_spray)
+	blood_spray.emitting = true
 
-	# Chunks
+	# 💀 DARK BLOOD CHUNKS - slower, heavier pieces
 	var chunks = CPUParticles2D.new()
 	chunks.emitting = false
 	chunks.one_shot = true
 	chunks.explosiveness = 1.0
-	chunks.amount = 6  # Reduced for less clutter
-	chunks.lifetime = 0.85
+	chunks.amount = 12  # More chunks
+	chunks.lifetime = 1.0
 	chunks.local_coords = false
 	chunks.global_position = global_position
 
 	chunks.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	chunks.emission_sphere_radius = 10.0
+	chunks.emission_sphere_radius = 15.0
 	chunks.texture = tex
 
 	chunks.direction = Vector2(0, 0)
 	chunks.spread = 180.0
-	chunks.initial_velocity_min = 45.0
-	chunks.initial_velocity_max = 100.0
-	chunks.gravity = Vector2(0, 125)
+	chunks.initial_velocity_min = 60.0
+	chunks.initial_velocity_max = 130.0
+	chunks.gravity = Vector2(0, 150)
 
 	chunks.scale_amount_min = 5.0
 	chunks.scale_amount_max = 10.0
