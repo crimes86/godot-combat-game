@@ -1328,6 +1328,205 @@ z = 0:   Player, enemies, campfire (game entities)
 
 ---
 
+## Healing System Design
+
+**Philosophy**: Mirror combat mechanics for familiarity, enable healer role for group play
+
+### Core Mechanics
+
+**Friendly Targeting:**
+- Click on friendly player (or self) to heal
+- Auto-heal projectile shoots to target (visual only, instant application)
+- Same targeting system as combat (click = action)
+
+**Base Healing:**
+- Scales with **VIT** (Vitality)
+  - Formula: 20 HP + (VIT - 10) × 2
+  - Level 10 (VIT 10): 20 HP per heal
+  - Level 25 (VIT 58): 116 HP per heal
+  - Encourages tank builds to off-heal
+
+**Crit Heal:**
+- **Crit chance**: Based on LUCK (same as combat)
+  - Level 10 (LUCK 10): ~1% crit chance
+  - Level 25 (LUCK 58): ~10% crit chance
+- **Crit heal effect**: Opens 1-3 weakpoints on healed target
+  - 1-3 weakpoints based on healer level (same breakpoints as combat)
+  - Level 1-10: 1 weakpoint
+  - Level 11-20: 2 weakpoints
+  - Level 21+: 3 weakpoints
+
+**Crit Heal Weakpoints:**
+- **Owner-only**: Only healer sees their heal weakpoints
+- **Green visual theme**: Green particles, green combat text, green weakpoints
+- **4 second window**: Same duration as combat crit windows
+- **Click weakpoints for 2x heal**:
+  - Base heal: 116 HP
+  - Crit heal weakpoint: 232 HP (2x)
+  - 3 weakpoints: 696 HP total burst (3 × 232)
+
+### Visual Design
+
+**Colors:**
+- Combat: Red (damage) / Yellow (crit)
+- Healing: Green (heal) / Bright Green (crit heal)
+
+**Particles:**
+- Green mist instead of blood spray
+- Upward-floating sparkles (healing energy)
+- Gentle glow on healed player
+
+**Combat Text:**
+- "+116" in green (instead of red damage)
+- Floats upward (instead of outward)
+- Larger text for crit heals
+
+**Weakpoints:**
+- Same sectioned positions as combat
+- Green color theme (instead of red/white)
+- Same click detection and validation
+
+### Balance Mechanics
+
+**Cooldown:**
+- 1-2 seconds between heals
+- Prevents spam healing
+- Creates decision-making (who to heal?)
+
+**Combat Healing Penalty:**
+- 50% effectiveness if target damaged in last 3 seconds
+- Prevents "unkillable" tanks
+- Encourages proactive healing (before damage)
+
+**Diminishing Returns:**
+- Repeated heals on same target = reduced effectiveness
+- Stack decay: 5 seconds
+- Example:
+  - 1st heal: 100 HP
+  - 2nd heal (within 5s): 90 HP
+  - 3rd heal (within 5s): 81 HP
+  - After 5s: Reset to 100 HP
+
+**Range:**
+- Same as attack range: 100 pixels
+- Forces healers to stay near party
+- Creates positioning gameplay
+
+### Stat Synergy
+
+**Pure Healer Build (VIT + LUCK):**
+- High VIT: Strong base heals (116 HP at level 25)
+- High LUCK: Frequent crit heals (~10% chance)
+- Low damage output
+- Group-focused playstyle
+
+**Tank/Off-Healer Build (VIT + STR):**
+- Moderate VIT: Decent heals (80-100 HP)
+- High STR: Can deal damage
+- Low crit heal chance
+- Solo + duo viable
+
+**Hybrid Build (Balanced stats):**
+- Moderate heals (60-80 HP)
+- Can DPS or heal as needed
+- Flexible playstyle
+
+### Multiplayer Implementation
+
+**Server-Authoritative:**
+- Server validates heal target is friendly
+- Server calculates heal amount based on healer's VIT
+- Server determines crit heal (LUCK-based)
+- Server generates weakpoint positions (if crit)
+- Server sends weakpoints ONLY to healer (owner-only)
+
+**Network Messages:**
+```gdscript
+// Heal trigger (Client → Server)
+{
+    healer_id: int,
+    target_id: int,
+    timestamp: float
+}
+
+// Heal response (Server → Healer)
+{
+    heal_amount: float,
+    is_crit: bool,
+    weakpoint_positions: [Vector2, ...],  // Only if crit
+    window_id: int
+}
+
+// Heal effect (Server → All Clients)
+{
+    target_id: int,
+    new_hp: float,
+    heal_amount: float,  // For combat text
+    is_crit: bool
+}
+```
+
+**Weakpoint Validation:**
+- Same as combat weakpoints
+- Healer clicks weakpoint → Server validates ownership
+- Server checks: position, timing, rate limiting
+- Server applies 2x heal if valid
+
+### Role Design
+
+**Healer Role Benefits:**
+- **Lower mechanical skill floor**: Healing is more forgiving than DPS
+- **High skill ceiling**: Crit heal weakpoints reward good clicking
+- **Social gameplay**: "Carry your friends" appeal
+- **Strategic depth**: Who to heal? When to heal? Positioning?
+- **Party enabler**: Makes group content viable
+
+**Healer Weaknesses:**
+- Low damage output (VIT build doesn't boost damage)
+- Vulnerable when solo (can heal self but can't kill fast)
+- Cooldown limits spam healing
+- Combat penalty prevents face-tanking
+
+### Group Dynamics
+
+**Tank + Healer + DPS (3 players):**
+- Tank (VIT build): Draws aggro, takes damage, off-heals
+- Healer (VIT + LUCK): Main heals, crit heal bursts
+- DPS (STR/AGI): Damage output, clicks weakpoints
+
+**Duo (Tank + Healer OR DPS + Healer):**
+- Tank + Healer: Slow but safe
+- DPS + Healer: Fast clears, healer keeps DPS alive
+
+**Solo:**
+- Can self-heal (click yourself)
+- Less effective than group healing
+- VIT builds viable for solo sustain
+
+### Future Enhancements
+
+**Heal Over Time (HoT):**
+- Crit heals apply HoT effect (10 HP/sec for 5 seconds)
+- Stacks with burst healing
+
+**Group Heal:**
+- AoE heal (radius around target)
+- Heals 3-5 nearby players for reduced amount
+- High cooldown (30 seconds)
+
+**Resurrection:**
+- Revive dead party member
+- Long cast time (5 seconds)
+- Can be interrupted
+- High cooldown (60 seconds)
+
+**Mana/Resource System:**
+- Healing costs mana
+- Limits spam healing
+- Adds resource management
+
+---
+
 ## Development Roadmap: Path to Multiplayer Playtest
 
 **Current State**: Single-player combat working with weakpoint system, level cap 30, 4-zone progression designed
@@ -1366,18 +1565,26 @@ z = 0:   Player, enemies, campfire (game entities)
   - Weapon drops (3-10% based on zone)
   - Boss guaranteed legendary drop
 
+- [ ] **Healing system basics** ⭐ HIGH PRIORITY (New!)
+  - Friendly targeting (click player to heal)
+  - Base healing calculation (VIT-based: 20 HP + (VIT-10) × 2)
+  - Crit heal chance (LUCK-based, same as combat)
+  - Crit heal weakpoints (green theme, 1-3 based on healer level)
+  - Green visual effects (combat text, particles, weakpoints)
+  - Test on training dummy or self-healing
+
 **Can Wait for Post-Multiplayer**:
 - Armor system (vendors already sell armor, just not equippable yet)
 - Consumables/potions
 - Quest system
 - Advanced UI polish
 
-**Estimated Time**: 2-3 weeks
+**Estimated Time**: 2.5-3.5 weeks (+0.5 weeks for healing)
 **Blockers**: None, all systems designed
 
 ---
 
-### Phase 1: Multiplayer Foundation (3-4 weeks)
+### Phase 1: Multiplayer Foundation (4-5 weeks)
 
 **Status**: Not started (design complete ✓)
 
@@ -1420,9 +1627,32 @@ z = 0:   Player, enemies, campfire (game entities)
 - [ ] Campfire warmth synced
 - [ ] Vendor availability synced
 
-**Testing Milestone**: 2-5 players can see each other, walk around, fight enemies together
+**Healing System Networking** ⭐ NEW FEATURE:
+- [ ] **Friendly targeting sync**
+  - Click friendly player to heal (same targeting as combat)
+  - Server validates heal target is friendly and in range
+  - Sync heal projectile visuals to all clients
 
-**Estimated Time**: 3-4 weeks
+- [ ] **Healing calculations (server-authoritative)**
+  - Server calculates heal amount based on healer's VIT
+  - Server determines crit heal (based on LUCK)
+  - Server applies healing to target HP
+  - Broadcast HP updates to all clients
+
+- [ ] **Crit heal weakpoints (owner-only)**
+  - Server generates 1-3 weakpoint positions on healed target
+  - Send positions ONLY to healer (owner-only)
+  - Healer clicks weakpoints for 2x heal (same validation as combat)
+  - Green visual theme (particles, combat text, weakpoints)
+
+- [ ] **Healing balance**
+  - Cooldown: 1-2 seconds between heals
+  - Combat healing penalty: 50% effectiveness if target damaged in last 3 seconds
+  - Diminishing returns: Repeated heals on same target less effective
+
+**Testing Milestone**: 2-5 players can see each other, walk around, fight enemies together, AND heal each other
+
+**Estimated Time**: 4-5 weeks (+1 week for healing networking)
 **Blockers**: Need Phase 0 content complete for meaningful testing
 
 ---
@@ -1693,6 +1923,7 @@ z = 0:   Player, enemies, campfire (game entities)
 4. ✅ Owner-only weakpoints (Phase 2)
 5. ✅ Party system (Phase 3)
 6. ✅ Basic anti-cheat (Phase 4)
+7. ✅ **Healing system** (Phase 0 & 1) - Attracts support players, enables healer role
 
 **Should-Haves** (Playtest works but missing these hurts):
 - PvP combat (can test PvE-only first)
@@ -1711,19 +1942,24 @@ z = 0:   Player, enemies, campfire (game entities)
 
 | Phase | Duration | Cumulative | Key Deliverable |
 |-------|----------|------------|-----------------|
-| Phase 0: Content | 2-3 weeks | 2-3 weeks | Ruins 2/3, roaming enemies, boss |
-| Phase 1: Networking | 3-4 weeks | 5-7 weeks | 5 players can connect and play |
-| Phase 2: Weakpoints | 2-3 weeks | 7-10 weeks | Owner-only crits working |
-| Phase 3: Party System | 1-2 weeks | 8-12 weeks | Parties, respawn, group play |
-| Phase 4: Anti-Cheat | 1 week | 9-13 weeks | Basic cheat protection |
-| Phase 5: PvP | 2-3 weeks | 11-16 weeks | Player vs player combat |
-| Phase 6: Optimization | 2 weeks | 13-18 weeks | 60 FPS with 15 players |
-| **Phase 7: PLAYTEST** | **1 week** | **14-19 weeks** | **🎯 First multiplayer test!** |
+| Phase 0: Content + Healing | 2.5-3.5 weeks | 2.5-3.5 weeks | Ruins 2/3, roaming enemies, boss, healing basics |
+| Phase 1: Networking + Healing | 4-5 weeks | 6.5-8.5 weeks | 5 players can connect, play, and heal each other |
+| Phase 2: Weakpoints | 2-3 weeks | 8.5-11.5 weeks | Owner-only crits working |
+| Phase 3: Party System | 1-2 weeks | 9.5-13.5 weeks | Parties, respawn, group play |
+| Phase 4: Anti-Cheat | 1 week | 10.5-14.5 weeks | Basic cheat protection |
+| Phase 5: PvP | 2-3 weeks | 12.5-17.5 weeks | Player vs player combat |
+| Phase 6: Optimization | 2 weeks | 14.5-19.5 weeks | 60 FPS with 15 players |
+| **Phase 7: PLAYTEST** | **1 week** | **15.5-20.5 weeks** | **🎯 First multiplayer test!** |
 
-**Total Time to Playtest**: ~3.5-4.5 months (14-19 weeks)
+**Total Time to Playtest**: ~4-5 months (15.5-20.5 weeks)
 
-**Aggressive Timeline** (if focused full-time): 3 months
-**Realistic Timeline** (part-time work): 4-5 months
+**With Healing System Added:**
+- +0.5 weeks to Phase 0 (healing basics)
+- +1 week to Phase 1 (healing networking)
+- Total added time: ~1.5 weeks
+
+**Aggressive Timeline** (if focused full-time): 3.5 months
+**Realistic Timeline** (part-time work): 4.5-5 months
 **Conservative Timeline** (with setbacks): 6 months
 
 ---
