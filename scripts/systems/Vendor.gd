@@ -117,6 +117,7 @@ func setup_blacksmith_sprite() -> void:
 	animated_sprite.name = "BlacksmithSprite"
 	animated_sprite.centered = true
 	animated_sprite.z_index = 1
+	animated_sprite.scale.x = -1  # Flip to face left (toward campfire)
 	add_child(animated_sprite)
 
 	# Load blacksmith walk animation (4 frames, 64x64 each)

@@ -105,8 +105,8 @@ func get_max_health() -> float:
 
 func get_base_crit_chance() -> float:
 	"""Calculate crit chance from luck + weapon"""
-	# Base formula: 1% at 10 LUCK, +0.2% per point
-	var stat_crit = 0.01 + (luck - 10) * 0.002  # 5% at 30 LUCK, 9% at 50 LUCK
+	# Base formula: 1% at 10 LUCK, +0.6% per point (for rhythm combat)
+	var stat_crit = 0.01 + (luck - 10) * 0.006  # 16% at 35 LUCK (level 25+)
 	
 	# Add weapon bonus
 	var weapon_crit = 0.0
@@ -116,9 +116,9 @@ func get_base_crit_chance() -> float:
 	return clamp(stat_crit + weapon_crit, 0.01, 0.50)  # Min 1%, max 50%
 
 func get_movement_speed() -> float:
-	"""Calculate movement speed (slight AGI bonus)"""
-	# Base: 200, +1 per AGI point above 10
-	return 200.0 + (agility - 10) * 1.0
+	"""Calculate movement speed (fixed for all levels)"""
+	# Fixed: 200 for all levels (equipment may add bonuses later)
+	return 200.0
 
 # ============================================
 # EXPERIENCE & LEVELING
@@ -286,7 +286,7 @@ func create_starter_weapon():  # Returns Weapon
 	var weapon = Weapon.new()
 	weapon.weapon_name = "Rusty Sword"
 	weapon.weapon_type = "sword"
-	weapon.base_damage = 0.0  # Stats provide base damage
+	weapon.base_damage = 2.0  # Basic starter damage (total 7 damage at level 1)
 	weapon.attack_speed_bonus = 0.0
 	weapon.crit_chance_bonus = 0.0
 	weapon.can_trade = false

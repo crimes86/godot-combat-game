@@ -5,6 +5,8 @@
 [ext_resource type="Texture2D" uid="uid://mchri6sm0jap" path="res://assets/environment/castle.png" id="2_0vfqx"]
 [ext_resource type="PackedScene" uid="uid://b36nm2tlkwaee" path="res://scenes/enemies/enemy_spawn_point.tscn" id="3_wbbl4"]
 [ext_resource type="PackedScene" path="res://scenes/world/ruins_campfire.tscn" id="4_ruins"]
+[ext_resource type="PackedScene" path="res://scenes/world/ruins2_campfire.tscn" id="5_ruins2"]
+[ext_resource type="PackedScene" path="res://scenes/world/ruins3_campfire.tscn" id="6_ruins3"]
 [ext_resource type="PackedScene" path="res://scenes/npcs/vendor.tscn" id="6_6c6v5"]
 
 [node name="GameWorld" type="Node2D"]
@@ -25,19 +27,24 @@ z_index = -1
 z_index = -1
 
 [node name="Campfire" type="Node2D" parent="."]
+position = Vector2(-2000, 0)
 
 [node name="Campfire" parent="Campfire" instance=ExtResource("1_ywgp6")]
 
 [node name="RuinsCampfire" parent="." instance=ExtResource("4_ruins")]
 
+[node name="RuinsCampfire2" parent="." instance=ExtResource("5_ruins2")]
+
+[node name="RuinsCampfire3" parent="." instance=ExtResource("6_ruins3")]
+
 [node name="Castle" type="Sprite2D" parent="."]
 z_index = -2
-position = Vector2(7600, 0)
+position = Vector2(11000, -300)
 scale = Vector2(3, 3)
 texture = ExtResource("2_0vfqx")
 
 [node name="PlayerSpawnPoint" type="Marker2D" parent="."]
-position = Vector2(472, -2)
+position = Vector2(-2150, 0)
 
 [node name="EnemySpawnPoint" parent="." instance=ExtResource("3_wbbl4")]
 position = Vector2(1200, -350)
@@ -85,6 +92,6 @@ position = Vector2(6400, 120)
 position = Vector2(7200, -80)
 
 [node name="Vendor" parent="." instance=ExtResource("6_6c6v5")]
-position = Vector2(-253, -113)
+position = Vector2(-1850, 0)
 
 [editable path="Campfire/Campfire"]

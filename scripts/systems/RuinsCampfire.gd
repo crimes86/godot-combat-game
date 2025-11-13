@@ -24,6 +24,9 @@ class_name RuinsCampfire
 @export var avoid_campfire_radius: float = 300.0  # Don't spawn near main campfire
 @export var avoid_path_distance: float = 150.0  # Don't spawn on path
 
+# Guardian configuration
+@export var guardian_level: int = 10  # Level of skeleton guardians
+
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE
 # ═══════════════════════════════════════════════════════════════════════════
@@ -56,7 +59,7 @@ var interaction_prompt: Label = null
 
 # References
 var player: CharacterBody2D = null
-var main_campfire_position: Vector2 = Vector2(-141, -114)  # Default campfire location
+var main_campfire_position: Vector2 = Vector2(-2000, 0)  # Main campfire location
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
@@ -150,6 +153,7 @@ func spawn_skeleton(index: int) -> void:
 
 	skeleton.global_position = spawn_pos
 	skeleton.name = "RuinsSkeleton_" + str(index)
+	skeleton.enemy_level = guardian_level  # Set guardian level
 
 	# Add to world (parent is the game world)
 	get_parent().add_child(skeleton)
@@ -390,6 +394,7 @@ func respawn_skeleton(data: Dictionary) -> void:
 	var skeleton = skeleton_scene.instantiate()
 	skeleton.global_position = spawn_pos
 	skeleton.name = "RuinsSkeleton_" + str(data["index"])
+	skeleton.enemy_level = guardian_level  # Set guardian level
 
 	get_parent().add_child(skeleton)
 

@@ -35,6 +35,10 @@ func _ready() -> void:
 	InventorySystem.item_removed.connect(_on_item_removed)
 	print("   Signals connected")
 
+	# Connect to CharacterStats gold changes for auto-update
+	CharacterStats.gold_changed.connect(_on_gold_changed)
+	print("   Connected to CharacterStats.gold_changed")
+
 	# Initial update (UI is guaranteed to exist now)
 	print("   Calling initial _on_inventory_changed()...")
 	_on_inventory_changed()
@@ -222,3 +226,8 @@ func _on_slot_clicked(slot_index: int) -> void:
 		# Future: Could show item details, use item, sell item, etc.
 	else:
 		print("🖱️ Clicked empty slot %d" % slot_index)
+
+func _on_gold_changed(_amount: int, total: int) -> void:
+	"""Auto-update gold display when gold changes"""
+	if gold_label:
+		gold_label.text = "%d Gold" % total

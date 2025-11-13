@@ -42,6 +42,9 @@ func _ready() -> void:
 	else:
 		push_warning("ShopUI: close_button not found")
 
+	# Connect to gold changes for auto-update
+	CharacterStats.gold_changed.connect(_on_gold_changed)
+
 func _input(event: InputEvent) -> void:
 	# Allow F or ESC to close the shop
 	if visible and event is InputEventKey and event.pressed and not event.echo:
@@ -81,6 +84,10 @@ func update_gold_display() -> void:
 	"""Update the gold display"""
 	if gold_label:
 		gold_label.text = "Gold: %d" % CharacterStats.gold
+
+func _on_gold_changed(_amount: int, total: int) -> void:
+	"""Auto-update gold display when gold changes"""
+	update_gold_display()
 
 func populate_weapons() -> void:
 	"""Populate the weapons list"""

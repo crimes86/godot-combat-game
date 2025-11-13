@@ -1480,9 +1480,9 @@ func die() -> void:
 				ai.reset_to_patrol()
 	
 	print("🔄 All enemies deaggroed")
-	
+
 	# Reset player position to campfire spawn point
-	global_position = Vector2(400, 0)
+	global_position = Vector2(-2000, 0)
 	velocity = Vector2.ZERO
 	
 	# Restore health (but keep XP, level, stats, weapons)

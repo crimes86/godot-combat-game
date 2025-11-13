@@ -32,6 +32,10 @@ var is_dying: bool = false
 # ✨ NEW: Track if killed by weakpoint during crit window
 var killed_by_weakpoint_in_window: bool = false
 
+# ✨ Crit immunity system (prevents crit window stalemates)
+var crit_immune_until: float = 0.0  # Timestamp when immunity ends
+const CRIT_IMMUNITY_DURATION: float = 4.0  # 4 seconds of immunity after window
+
 # Signals
 signal weakpoint_hit_success()
 signal crit_window_complete(weakpoints_destroyed: int)
@@ -463,14 +467,40 @@ func spawn_weakpoints() -> void:
 	for section in sections:
 		positions_per_section[section["name"]] = 0
 
+	# Minimum distance between weakpoints to prevent overlap (based on hitbox size)
+	var min_distance = 40.0  # Buffer to prevent visual overlap (hitbox is 18-35px radius)
+
 	# Pick exactly 1 weakpoint from each of the first N sections (where N = num_weakpoints)
 	for i in range(min(spots_needed, sections.size())):
 		var section = sections[i]
 		var section_name = section["name"]
 		var section_positions = section["positions"]
 
-		# Pick a RANDOM position from this section
-		var random_pos = section_positions[randi() % section_positions.size()]
+		# Try to find a position that doesn't overlap with already chosen positions
+		var random_pos = null
+		var attempts = 0
+		var max_attempts = 10  # Prevent infinite loop
+
+		while attempts < max_attempts:
+			var candidate_pos = section_positions[randi() % section_positions.size()]
+
+			# Check distance to all already-chosen positions
+			var is_valid = true
+			for chosen_pos in chosen_positions:
+				if candidate_pos.distance_to(chosen_pos) < min_distance:
+					is_valid = false
+					break
+
+			if is_valid:
+				random_pos = candidate_pos
+				break
+
+			attempts += 1
+
+		# Fallback: if no valid position found after max_attempts, use any random position
+		if random_pos == null:
+			random_pos = section_positions[randi() % section_positions.size()]
+			print("⚠️ Could not find non-overlapping position in %s section, using fallback" % section_name)
 
 		# Add the position!
 		chosen_positions.append(random_pos)

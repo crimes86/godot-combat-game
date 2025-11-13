@@ -106,15 +106,31 @@ func _ready() -> void:
 
 	# NO SPARKLES - clean anatomical look
 
-	# Forgiving hitbox
+	# Level-based forgiving hitbox (degrades with player level)
 	var col = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
-	shape.radius = 25
+	shape.radius = calculate_hitbox_radius()
 	col.shape = shape
 	add_child(col)
 
 	input_event.connect(_on_input)
 	max_hits = randi_range(3, 5)
+
+func calculate_hitbox_radius() -> float:
+	"""Calculate hitbox radius based on player level (degrades for tighter precision at higher levels)"""
+	var level = CharacterStats.level
+
+	# Forgiving at low levels, tighter at high levels
+	# Level 1: 35px (very forgiving for new players)
+	# Level 10: 25px (moderate)
+	# Level 20: 20px (tighter)
+	# Level 30: 18px (minimum buffer for sprite/rendering)
+	var base_radius = 35.0
+	var min_radius = 18.0
+	var level_scaling = 0.6  # How much radius reduces per level
+
+	var radius = base_radius - (level - 1) * level_scaling
+	return clamp(radius, min_radius, base_radius)
 
 func start_heartbeat_pulse() -> void:
 	"""Heartbeat pulse - thump-thump rhythm like a vital organ"""
@@ -343,6 +359,11 @@ func spawn_destruction_wave() -> void:
 	var colors = theme_colors[color_theme]
 
 	for i in range(2):  # Just 2 waves
+		# ✨ FIX: Check if weakpoint still exists before continuing
+		if not is_instance_valid(self):
+			print("   ⚠️ Weakpoint destroyed during wave spawn, aborting")
+			return
+
 		await get_tree().create_timer(i * 0.05).timeout
 
 		var ring = Line2D.new()
@@ -360,7 +381,9 @@ func spawn_destruction_wave() -> void:
 		world.add_child(ring)
 		print("   💥 Shockwave ring %d added to world" % (i + 1))
 
-		var tween = create_tween()
+		# ✨ FIX: Create a SceneTreeTween on the world instead of the weakpoint
+		# This ensures the tween survives even if the weakpoint is destroyed
+		var tween = world.create_tween()
 		tween.set_parallel(true)
 		tween.tween_property(ring, "width", 0.5, 0.3)
 		tween.tween_property(ring, "modulate:a", 0.0, 0.3)
@@ -368,11 +391,25 @@ func spawn_destruction_wave() -> void:
 		for j in range(ring.get_point_count()):
 			var point = ring.get_point_position(j)
 			tween.tween_method(
-				func(scale_val): ring.set_point_position(j, point * scale_val),
+				func(scale_val):
+					if is_instance_valid(ring):
+						ring.set_point_position(j, point * scale_val),
 				1.0, 2.2, 0.3  # Compact expansion (2.2x)
 			)
-		
-		tween.finished.connect(func(): ring.queue_free())
+
+		# ✨ FIX: Add failsafe cleanup in case tween fails
+		tween.finished.connect(func():
+			if is_instance_valid(ring):
+				ring.queue_free()
+		)
+
+		# ✨ FIX: Failsafe timer - ensure ring is ALWAYS cleaned up after max duration
+		var cleanup_timer = world.get_tree().create_timer(0.5)
+		cleanup_timer.timeout.connect(func():
+			if is_instance_valid(ring):
+				print("   🧹 Failsafe cleanup: removing orphaned ring")
+				ring.queue_free()
+		)
 
 func spawn_crack_particles() -> void:
 	"""Subtle crack particles"""

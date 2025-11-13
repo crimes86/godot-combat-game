@@ -98,11 +98,8 @@ func _ready() -> void:
 	if enemy.has_signal("damage_taken"):
 		enemy.damage_taken.connect(_on_enemy_damaged)
 	
-	# Scale speed with level
-	if enemy.has_method("get") and enemy.get("enemy_level"):
-		var level = enemy.enemy_level
-		combat_speed = 100.0 * pow(1.05, level - 1)
-		patrol_speed = 30.0 * pow(1.03, level - 1)
+	# Fixed speed (no level scaling - equipment may add bonuses later)
+	# Note: combat_speed and patrol_speed use @export defaults (100.0 and 30.0)
 	
 	# Start patrolling
 	pick_new_patrol_target()
@@ -259,7 +256,13 @@ func process_combat(delta: float) -> void:
 	
 	# Chase player
 	var direction = (player.global_position - enemy.global_position).normalized()
-	enemy.velocity = direction * combat_speed
+	var speed = combat_speed
+
+	# Slow enemy during crit window (60% slow for easier weakpoint targeting)
+	if enemy.has_method("get") and enemy.get("in_crit_window"):
+		speed *= 0.4  # 60% slow
+
+	enemy.velocity = direction * speed
 	update_enemy_animation(direction)
 	enemy.move_and_slide()
 
@@ -323,11 +326,16 @@ func process_attacking(delta: float) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func process_retreating(delta: float) -> void:
+	# If crit window opens, stop retreating and fight
+	if enemy.has_method("get") and enemy.get("in_crit_window"):
+		change_state(State.COMBAT)
+		return
+
 	# Retreat for duration
 	if state_timer > retreat_duration:
 		change_state(State.COMBAT)
 		return
-	
+
 	# Move away from player
 	enemy.velocity = retreat_direction * combat_speed * 1.2
 	update_enemy_animation(retreat_direction)
@@ -425,10 +433,14 @@ func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
 	
 	# Already in combat - chance to retreat
 	elif current_state != State.RETREATING:
+		# Don't retreat during crit window - stand and fight!
+		if enemy.has_method("get") and enemy.get("in_crit_window"):
+			return
+
 		var retreat_roll = retreat_chance
 		if is_crit:
 			retreat_roll += 0.2  # +20% on crit
-		
+
 		if randf() < retreat_roll:
 			# Calculate retreat direction
 			if is_instance_valid(player):

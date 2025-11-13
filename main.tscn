@@ -9,5 +9,6 @@
 [node name="GameWorld" parent="." instance=ExtResource("6_7mycd")]
 
 [node name="Player" parent="." instance=ExtResource("1_akxy0")]
+position = Vector2(-2150, 0)
 
 [node name="LevelUI" parent="." instance=ExtResource("4_1bvp3")]

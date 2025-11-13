@@ -39,10 +39,10 @@ const CRIT_DAMAGE_MULTIPLIER: float = 2.0  # Weakpoint damage multiplier
 # ============================================
 
 # Enemy Level Scaling Formulas
-const ENEMY_BASE_HEALTH: float = 50.0  # Base health at level 1 (~500 HP at level 10)
-const ENEMY_HEALTH_SCALING: float = 1.12  # Exponential health growth per level
+const ENEMY_BASE_HEALTH: float = 100.0  # Base health at level 1 (scales for rhythm combat)
+const ENEMY_HEALTH_SCALING: float = 1.27  # 27% exponential health growth per level
 const ENEMY_BASE_DAMAGE: float = 5.0  # Base damage at level 1
-const ENEMY_DAMAGE_SCALING: float = 1.08  # Exponential damage growth per level
+const ENEMY_DAMAGE_SCALING: float = 1.11  # 11% exponential damage growth per level
 const ENEMY_XP_BASE: int = 10  # Base XP reward at level 1
 const ENEMY_GOLD_BASE: int = 5  # Base gold drop at level 1
 const ENEMY_XP_GOLD_SCALING: float = 1.15  # XP and gold scale together

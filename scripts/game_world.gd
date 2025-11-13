@@ -218,7 +218,8 @@ func create_rock_dark_spots():
 			rng.randf_range(-3000, 3000)
 		)
 
-		if rock_pos.distance_to(Vector2.ZERO) < 450:
+		var campfire_pos = Vector2(-2000, 0)
+		if rock_pos.distance_to(campfire_pos) < 450:
 			continue
 
 		var spot_size = rng.randf_range(120, 350)
@@ -234,7 +235,7 @@ func create_campfire_clearing():
 	clearing_layer.z_index = -6
 	add_child(clearing_layer)
 
-	var campfire_pos = Vector2(0, 0)
+	var campfire_pos = Vector2(-2000, 0)
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 54321
 
@@ -249,8 +250,8 @@ func create_path_to_castle_optimized():
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 777
 
-	var campfire_pos = Vector2(0, 0)
-	var castle_pos = Vector2(7600, 0)
+	var campfire_pos = Vector2(-2000, 0)
+	var castle_pos = Vector2(11000, -300)
 
 	# Performance mode: 30 points for smooth gameplay
 	var path_points = []
@@ -291,8 +292,11 @@ func create_path_to_castle_optimized():
 	# Create heavily-visited circle around campfire
 	create_campfire_circle(path_layer, campfire_pos, rng)
 
-	# Create branch paths that lead to dead ends
-	await create_branch_paths(path_layer, path_points, rng)
+	# Create branch paths that lead to ruins
+	await create_ruins_branch_paths(path_layer, path_points, rng)
+
+	# Create clearings at each ruins
+	create_ruins_clearings(rng)
 
 func create_branch_paths(path_layer: Node2D, main_path_points: Array, rng: RandomNumberGenerator):
 	"""Create branching paths that fork off main path to dead ends"""
@@ -355,6 +359,91 @@ func create_branch_paths(path_layer: Node2D, main_path_points: Array, rng: Rando
 			await get_tree().process_frame
 
 	print("🔀 Created 3 branch paths with dead ends")
+
+func create_ruins_branch_paths(path_layer: Node2D, main_path_points: Array, rng: RandomNumberGenerator):
+	"""Create branching paths from main path to each ruins"""
+
+	# Branch to Ruins 1 (1,200, -2,000) - north branch around 25% of path
+	var ruins1_start_index = 7  # Around x=1,200
+	var ruins1_start = main_path_points[ruins1_start_index]
+	var ruins1_target = Vector2(1200, -2000)
+	var ruins1_points = create_branch_to_target(ruins1_start, ruins1_target, 20, rng)
+
+	# Branch to Ruins 2 (4,800, 2,200) - south branch around 52% of path
+	var ruins2_start_index = 15  # Around x=4,800
+	var ruins2_start = main_path_points[ruins2_start_index]
+	var ruins2_target = Vector2(4800, 2200)
+	var ruins2_points = create_branch_to_target(ruins2_start, ruins2_target, 22, rng)
+
+	# Branch to Ruins 3 (8,200, -2,200) - north branch around 78% of path
+	var ruins3_start_index = 23  # Around x=8,200
+	var ruins3_start = main_path_points[ruins3_start_index]
+	var ruins3_target = Vector2(8200, -2200)
+	var ruins3_points = create_branch_to_target(ruins3_start, ruins3_target, 22, rng)
+
+	# Draw all ruins branches
+	for branch in [ruins1_points, ruins2_points, ruins3_points]:
+		for i in range(branch.size() - 1):
+			var start = branch[i]
+			var end = branch[i + 1]
+			var segment_length = start.distance_to(end)
+			var num_spots = int(segment_length / 100) + 1
+
+			for j in range(num_spots):
+				var t = float(j) / float(max(1, num_spots - 1))
+				var pos = start.lerp(end, t)
+
+				var direction = (end - start).normalized()
+				var elongation = 1.5
+				if abs(direction.x) > abs(direction.y):
+					elongation = 1.6
+				else:
+					elongation = 0.8
+
+				# Same darkness as main path
+				create_feathered_area(path_layer, pos, 180, rng, elongation, 0.55)
+
+			await get_tree().process_frame
+
+	print("🏛️ Created 3 branch paths to ruins")
+
+func create_branch_to_target(start: Vector2, target: Vector2, num_points: int, rng: RandomNumberGenerator) -> Array:
+	"""Create a curved path from start to target"""
+	var points = []
+	points.append(start)
+
+	for i in range(1, num_points):
+		var t = float(i) / float(num_points - 1)
+		var pos = start.lerp(target, t)
+
+		# Add some natural curves perpendicular to direction
+		var direction = (target - start).normalized()
+		var perpendicular = Vector2(-direction.y, direction.x)
+		var curve_amount = sin(t * PI) * 150.0  # Max 150px deviation
+		pos += perpendicular * curve_amount * rng.randf_range(-1.0, 1.0)
+
+		points.append(pos)
+
+	points.append(target)  # Ensure we end exactly at target
+	return points
+
+func create_ruins_clearings(rng: RandomNumberGenerator):
+	"""Create clearings around each ruins location"""
+	var clearing_layer = Node2D.new()
+	clearing_layer.name = "RuinsClearings"
+	clearing_layer.z_index = -6
+	add_child(clearing_layer)
+
+	# Clearing at Ruins 1 (1,200, -2,000) - 75% of campfire size (450 * 0.75 = 340)
+	create_feathered_area(clearing_layer, Vector2(1200, -2000), 340, rng, 1.0)
+
+	# Clearing at Ruins 2 (4,800, 2,200) - 75% of campfire size
+	create_feathered_area(clearing_layer, Vector2(4800, 2200), 340, rng, 1.0)
+
+	# Clearing at Ruins 3 (8,200, -2,200) - 75% of campfire size
+	create_feathered_area(clearing_layer, Vector2(8200, -2200), 340, rng, 1.0)
+
+	print("🏛️ Created clearings at 3 ruins locations")
 
 func create_feathered_area(parent: Node2D, center: Vector2, base_size: float, rng: RandomNumberGenerator, elongation: float = 1.0, darkness_multiplier: float = 1.0):
 	for layer_data in LAYER_TEMPLATE:
@@ -526,7 +615,8 @@ func spawn_trees_everywhere_dynamic(parent: Node2D):
 			tree_pos.y = clamp(tree_pos.y, -3000 + buffer, 3000 - buffer)
 
 			# Avoid campfire area (larger radius to account for large trees and campfire circle)
-			if tree_pos.distance_to(Vector2.ZERO) < 700:
+			var campfire_pos = Vector2(-2000, 0)
+			if tree_pos.distance_to(campfire_pos) < 700:
 				continue
 
 			# Don't place trees on the path - increased avoidance to prevent creeping
@@ -555,11 +645,21 @@ func spawn_rock_sprites(parent: Node2D):
 			rng.randf_range(-3000 + buffer, 3000 - buffer)
 		)
 
-		if rock_pos.distance_to(Vector2.ZERO) < 450:
+		var campfire_pos = Vector2(-2000, 0)
+		if rock_pos.distance_to(campfire_pos) < 450:
 			continue
 
 		# Don't place rocks on the path - only battle props (skull, bones, sword) go there
 		if is_position_on_path(rock_pos, 150.0):
+			continue
+
+		# Don't place on top of trees (check distance to all tree positions)
+		var too_close_to_tree = false
+		for tree_pos in tree_positions:
+			if rock_pos.distance_to(tree_pos) < 250:  # 250px clearance around trees (trees can be very large)
+				too_close_to_tree = true
+				break
+		if too_close_to_tree:
 			continue
 
 		# Skip the dark spot generation (already done)
@@ -594,7 +694,7 @@ func spawn_scattered_props(parent: Node2D):
 		# Don't place too close to trees (avoid visual overlap)
 		var too_close_to_tree = false
 		for tree_pos in tree_positions:
-			if prop_pos.distance_to(tree_pos) < 100:  # 100px clearance around trees
+			if prop_pos.distance_to(tree_pos) < 250:  # 250px clearance around trees (trees can be very large)
 				too_close_to_tree = true
 				break
 		if too_close_to_tree:
@@ -631,7 +731,8 @@ func spawn_small_rocks(parent: Node2D):
 		)
 
 		# Avoid campfire area
-		if rock_pos.distance_to(Vector2.ZERO) < 450:
+		var campfire_pos = Vector2(-2000, 0)
+		if rock_pos.distance_to(campfire_pos) < 450:
 			continue
 
 		# Don't place on the path
@@ -647,7 +748,7 @@ func spawn_small_rocks(parent: Node2D):
 		# Don't place on top of trees (check distance to all tree positions)
 		var too_close_to_tree = false
 		for tree_pos in tree_positions:
-			if rock_pos.distance_to(tree_pos) < 120:  # 120px clearance around trees
+			if rock_pos.distance_to(tree_pos) < 250:  # 250px clearance around trees (trees can be very large)
 				too_close_to_tree = true
 				break
 		if too_close_to_tree:
@@ -671,25 +772,27 @@ func spawn_small_rocks(parent: Node2D):
 func load_interactive_props(parent: Node2D):
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 98765
-	
+
 	var battle_props = ["skull", "bones", "broken_sword"]
-	
-	for i in range(40):
+	var props_placed = 0
+
+	# Main path props (80 total for full extended path)
+	for i in range(80):
 		var prop_type = battle_props[rng.randi() % battle_props.size()]
-		
+
 		var attempts = 0
 		var prop_pos = Vector2.ZERO
 		var valid_position = false
 		while attempts < 50:
 			prop_pos = Vector2(
-				rng.randf_range(0, 7600),
-				rng.randf_range(-800, 800)
+				rng.randf_range(-2200, 11200),  # Cover full new path range
+				rng.randf_range(-2500, 2500)     # Wider Y range for ruins branches
 			)
 			if is_position_on_path(prop_pos, 100.0):
 				# Check if not too close to trees
 				var too_close_to_tree = false
 				for tree_pos in tree_positions:
-					if prop_pos.distance_to(tree_pos) < 100:
+					if prop_pos.distance_to(tree_pos) < 250:  # 250px clearance around trees (trees can be very large)
 						too_close_to_tree = true
 						break
 				if not too_close_to_tree:
@@ -709,6 +812,59 @@ func load_interactive_props(parent: Node2D):
 				"id": 2000 + i
 			}
 			create_prop_sprite(prop_data, parent)
+			props_placed += 1
+
+	# 2x density in cleared areas (campfire and ruins)
+	var cleared_areas = [
+		{"pos": Vector2(-2000, 0), "radius": 450, "min_radius": 150},    # Main campfire (donut shape - avoid fire)
+		{"pos": Vector2(1200, -2000), "radius": 340, "min_radius": 0},   # Ruins 1 (75% of campfire)
+		{"pos": Vector2(4800, 2200), "radius": 340, "min_radius": 0},    # Ruins 2 (75% of campfire)
+		{"pos": Vector2(8200, -2200), "radius": 340, "min_radius": 0}    # Ruins 3 (75% of campfire)
+	]
+
+	for area in cleared_areas:
+		for i in range(30):  # 30 props per cleared area
+			var prop_type = battle_props[rng.randi() % battle_props.size()]
+
+			var attempts = 0
+			var prop_pos = Vector2.ZERO
+			var valid_position = false
+			while attempts < 50:
+				# Random position within the cleared area
+				# Use sqrt for uniform distribution in annulus/circle (spreads props more evenly)
+				var angle = rng.randf() * TAU
+				var min_r = area.get("min_radius", 0)
+				var max_r = area["radius"]
+				# For annulus (donut): interpolate between min and max radius using sqrt for uniform distribution
+				var distance = sqrt(rng.randf() * (max_r * max_r - min_r * min_r) + min_r * min_r)
+				prop_pos = area["pos"] + Vector2(cos(angle), sin(angle)) * distance
+
+				# Check if not too close to trees
+				var too_close_to_tree = false
+				for tree_pos in tree_positions:
+					if prop_pos.distance_to(tree_pos) < 250:  # 250px clearance around trees (trees can be very large)
+						too_close_to_tree = true
+						break
+				if not too_close_to_tree:
+					valid_position = true
+					break
+				attempts += 1
+
+			if valid_position:
+				var prop_data = {
+					"type": prop_type,
+					"x": prop_pos.x,
+					"y": prop_pos.y,
+					"scale": rng.randf_range(0.5, 1.2),
+					"rotation": rng.randf() * TAU,
+					"flip_h": rng.randf() < 0.5,
+					"z_index": 0,
+					"id": 3000 + props_placed
+				}
+				create_prop_sprite(prop_data, parent)
+				props_placed += 1
+
+	print("⚔️ Placed ", props_placed, " battle props (skulls, bones, swords)")
 
 func generate_item_spawn_points():
 	"""Generate possible spawn points for items (5x more than will actually spawn)"""
@@ -727,7 +883,8 @@ func generate_item_spawn_points():
 			)
 
 			# Avoid campfire area
-			if item_pos.distance_to(Vector2.ZERO) < 600:
+			var campfire_pos = Vector2(-2000, 0)
+			if item_pos.distance_to(campfire_pos) < 600:
 				attempts += 1
 				continue
 
@@ -759,7 +916,8 @@ func generate_chest_spawn_points():
 			)
 
 			# Avoid campfire area
-			if chest_pos.distance_to(Vector2.ZERO) < 800:
+			var campfire_pos = Vector2(-2000, 0)
+			if chest_pos.distance_to(campfire_pos) < 800:
 				attempts += 1
 				continue
 
@@ -780,43 +938,59 @@ func generate_chest_spawn_points():
 
 func is_position_on_path(pos: Vector2, path_width: float = 100.0) -> bool:
 	# Check main path
-	var campfire_pos = Vector2(0, 0)
-	var castle_pos = Vector2(7600, 0)
+	var campfire_pos = Vector2(-2000, 0)
+	var castle_pos = Vector2(11000, -300)
 
 	if pos.x >= campfire_pos.x and pos.x <= castle_pos.x:
-		var t = pos.x / 7600.0
-		var path_y = 0.0
+		var path_length = castle_pos.x - campfire_pos.x
+		var t = (pos.x - campfire_pos.x) / path_length
+		var path_y = lerp(campfire_pos.y, castle_pos.y, t)
 		if t > 0 and t < 1:
 			var curve_amount = sin(t * PI) * 250
-			path_y = sin(t * PI * 2.5) * curve_amount
+			path_y += sin(t * PI * 2.5) * curve_amount
 
 		var distance_from_path = abs(pos.y - path_y)
 		if distance_from_path <= path_width:
 			return true
 
-	# Check branch 1 (early north fork)
-	# Approximate branch path: starts around x=1800, goes to x=2600, y from 0 to -1600
-	if pos.x >= 1600 and pos.x <= 2800:
-		var branch_start = Vector2(1800, -150)
-		var branch_end = Vector2(2600, -1600)
+	# Check Ruins 1 branch (to 1,200, -2,000)
+	# Branch from main path around x=1,200 northward to ruins
+	if pos.x >= 800 and pos.x <= 1600:
+		var branch_start_index = 7  # Approximate fork point
+		var t = float(branch_start_index) / 29.0
+		var branch_start = campfire_pos.lerp(castle_pos, t)
+		if t > 0 and t < 1:
+			var curve_amount = sin(t * PI) * 250
+			branch_start.y += sin(t * PI * 2.5) * curve_amount
+		var branch_end = Vector2(1200, -2000)
 		var closest_dist = point_to_line_segment_distance(pos, branch_start, branch_end)
 		if closest_dist <= path_width:
 			return true
 
-	# Check branch 2 (mid-path south fork)
-	# Approximate branch path: starts around x=3800, goes to x=4400, y from 0 to 1700
-	if pos.x >= 3600 and pos.x <= 4600:
-		var branch_start = Vector2(3800, 150)
-		var branch_end = Vector2(4400, 1700)
+	# Check Ruins 2 branch (to 4,800, 2,200)
+	# Branch from main path around x=4,800 southward to ruins
+	if pos.x >= 4400 and pos.x <= 5200:
+		var branch_start_index = 15  # Approximate fork point
+		var t = float(branch_start_index) / 29.0
+		var branch_start = campfire_pos.lerp(castle_pos, t)
+		if t > 0 and t < 1:
+			var curve_amount = sin(t * PI) * 250
+			branch_start.y += sin(t * PI * 2.5) * curve_amount
+		var branch_end = Vector2(4800, 2200)
 		var closest_dist = point_to_line_segment_distance(pos, branch_start, branch_end)
 		if closest_dist <= path_width:
 			return true
 
-	# Check branch 3 (late north-east fork)
-	# Approximate branch path: starts around x=6000, goes to x=6900, y from 0 to -1100
-	if pos.x >= 5800 and pos.x <= 7100:
-		var branch_start = Vector2(6000, -50)
-		var branch_end = Vector2(6900, -1100)
+	# Check Ruins 3 branch (to 8,200, -2,200)
+	# Branch from main path around x=8,200 northward to ruins
+	if pos.x >= 7800 and pos.x <= 8600:
+		var branch_start_index = 23  # Approximate fork point
+		var t = float(branch_start_index) / 29.0
+		var branch_start = campfire_pos.lerp(castle_pos, t)
+		if t > 0 and t < 1:
+			var curve_amount = sin(t * PI) * 250
+			branch_start.y += sin(t * PI * 2.5) * curve_amount
+		var branch_end = Vector2(8200, -2200)
 		var closest_dist = point_to_line_segment_distance(pos, branch_start, branch_end)
 		if closest_dist <= path_width:
 			return true
@@ -1178,8 +1352,8 @@ func spawn_training_dummy():
 	"""Spawn a training dummy near the campfire for combat practice"""
 	const DUMMY_SCENE = preload("res://scenes/training/training_dummy.tscn")
 
-	# Spawn dummy to the right of campfire (campfire is at 0, 0)
-	var dummy_pos = Vector2(150, 50)  # Near campfire but not blocking it
+	# Spawn dummy south of campfire (campfire is at -2000, 0)
+	var dummy_pos = Vector2(-2000, 180)  # South of campfire in cleared area
 
 	var dummy = DUMMY_SCENE.instantiate()
 	dummy.global_position = dummy_pos
