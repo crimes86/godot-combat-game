@@ -292,11 +292,23 @@ func _on_weakpoint_hit(weakpoint) -> void:
 	emit_signal("weakpoint_hit_success")
 
 func _on_weakpoint_destroyed(weakpoint) -> void:
-	"""Handle weakpoint destruction"""
-	pass  # Just visual feedback, damage is handled by hits
+	"""Handle weakpoint destruction - end crit window when all destroyed"""
+	# Count how many weakpoints are left
+	var remaining_weakpoints = 0
+	for wp in weakpoints:
+		if is_instance_valid(wp) and not wp.is_destroyed:
+			remaining_weakpoints += 1
+
+	# If all weakpoints destroyed, end crit window early
+	if remaining_weakpoints == 0:
+		end_crit_window()
 
 func _on_crit_window_timeout() -> void:
 	"""Crit window expired - return to normal"""
+	end_crit_window()
+
+func end_crit_window() -> void:
+	"""End crit window and return dummy to normal size"""
 	if not in_crit_window:
 		return
 
@@ -320,4 +332,4 @@ func _on_crit_window_timeout() -> void:
 	tween.tween_property(self, "z_index", 0, 0.3)
 
 	# Emit completion signal
-	emit_signal("crit_window_complete", weakpoints.size())
+	emit_signal("crit_window_complete", 0)
