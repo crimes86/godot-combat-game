@@ -49,6 +49,7 @@ var use_baked_terrain = true  # Set to false to force regeneration
 var tree_types = ["dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5", "dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10"]
 var screenshot_mode = false
 var tree_positions = []  # Track tree positions to avoid spawning small rocks on them
+var lava_pool_positions = []  # Track lava pool positions to avoid spawning props on them
 
 # Viewport culling for terrain
 var terrain_spots = []  # Store all terrain spot data {pos, size, type, elongation, darkness}
@@ -1133,6 +1134,9 @@ func generate_dynamic_elements():
 	# Enable Y-sorting so props layer correctly based on position
 	scattered_props_node.y_sort_enabled = true
 
+	# Lava pools FIRST (so trees and props can avoid them)
+	spawn_lava_pools()
+
 	# Trees (need to be separate for proper z-ordering with player)
 	spawn_trees_everywhere_dynamic(scattered_props_node)
 
@@ -1215,6 +1219,17 @@ func spawn_trees_everywhere_dynamic(parent: Node2D):
 			if is_position_on_path(tree_pos, 350.0):
 				continue
 
+			# Don't place trees on lava pools
+			var on_lava = false
+			for pool in lava_pool_positions:
+				var dist = tree_pos.distance_to(pool.pos)
+				var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 50  # Larger buffer for trees
+				if dist < pool_radius:
+					on_lava = true
+					break
+			if on_lava:
+				continue
+
 			var tree_type = tree_types[rng.randi() % tree_types.size()]
 			create_tree_at_position(parent, tree_pos, tree_type, rng)
 			tree_positions.append(tree_pos)  # Store position to avoid small rocks spawning here
@@ -1254,6 +1269,17 @@ func spawn_rock_sprites(parent: Node2D):
 		if too_close_to_tree:
 			continue
 
+		# Don't place on lava pools
+		var on_lava = false
+		for pool in lava_pool_positions:
+			var dist = rock_pos.distance_to(pool.pos)
+			var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 20  # Buffer
+			if dist < pool_radius:
+				on_lava = true
+				break
+		if on_lava:
+			continue
+
 		# Skip the dark spot generation (already done)
 		# Just create the rock sprite
 		create_rock_at_position(parent, rock_pos, rng)
@@ -1281,6 +1307,17 @@ func spawn_scattered_props(parent: Node2D):
 
 		# Don't place on the path
 		if is_position_on_path(prop_pos, 100.0):
+			continue
+
+		# Don't place on lava pools
+		var on_lava = false
+		for pool in lava_pool_positions:
+			var dist = prop_pos.distance_to(pool.pos)
+			var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 30
+			if dist < pool_radius:
+				on_lava = true
+				break
+		if on_lava:
 			continue
 
 		var prop_data = {
@@ -1320,6 +1357,17 @@ func spawn_small_rocks(parent: Node2D):
 
 		# Don't place on the path
 		if is_position_on_path(rock_pos, 150.0):
+			continue
+
+		# Don't place on lava pools
+		var on_lava = false
+		for pool in lava_pool_positions:
+			var dist = rock_pos.distance_to(pool.pos)
+			var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 30
+			if dist < pool_radius:
+				on_lava = true
+				break
+		if on_lava:
 			continue
 
 		# Prefer spawning in bare areas (far from path and campfire)
@@ -1369,7 +1417,17 @@ func load_interactive_props(parent: Node2D):
 					if prop_pos.distance_to(tree_pos) < 100:  # 100px clearance around trees
 						too_close_to_tree = true
 						break
-				if not too_close_to_tree:
+
+				# Check if not on lava pool
+				var on_lava = false
+				for pool in lava_pool_positions:
+					var dist = prop_pos.distance_to(pool.pos)
+					var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 30
+					if dist < pool_radius:
+						on_lava = true
+						break
+
+				if not too_close_to_tree and not on_lava:
 					valid_position = true
 					break
 			attempts += 1
@@ -1419,7 +1477,17 @@ func load_interactive_props(parent: Node2D):
 					if prop_pos.distance_to(tree_pos) < 100:  # 100px clearance around trees
 						too_close_to_tree = true
 						break
-				if not too_close_to_tree:
+
+				# Check if not on lava pool
+				var on_lava = false
+				for pool in lava_pool_positions:
+					var dist = prop_pos.distance_to(pool.pos)
+					var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 30
+					if dist < pool_radius:
+						on_lava = true
+						break
+
+				if not too_close_to_tree and not on_lava:
 					valid_position = true
 					break
 				attempts += 1
@@ -2037,6 +2105,17 @@ func spawn_bone_clusters(parent: Node2D):
 		if cluster_pos.distance_to(campfire_pos) < 600:
 			continue
 
+		# Don't place on lava pools
+		var on_lava = false
+		for pool in lava_pool_positions:
+			var dist = cluster_pos.distance_to(pool.pos)
+			var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 150  # Larger buffer for clusters
+			if dist < pool_radius:
+				on_lava = true
+				break
+		if on_lava:
+			continue
+
 		# Prefer areas near the path but not on it
 		var distance_from_path = abs(cluster_pos.y)
 		if distance_from_path < 100:  # Too close to path
@@ -2082,6 +2161,17 @@ func spawn_ground_cracks(parent: Node2D):
 			rng.randf_range(-4000, 12000),
 			rng.randf_range(-2500, 2500)
 		)
+
+		# Don't place on lava pools
+		var on_lava = false
+		for pool in lava_pool_positions:
+			var dist = crack_pos.distance_to(pool.pos)
+			var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 30
+			if dist < pool_radius:
+				on_lava = true
+				break
+		if on_lava:
+			continue
 
 		# Prefer cracks on the path and near clearings (broken ground)
 		var campfire_pos = Vector2(-2000, 0)
@@ -2132,6 +2222,17 @@ func spawn_dead_vegetation(parent: Node2D):
 		# Avoid campfire area
 		var campfire_pos = Vector2(-2000, 0)
 		if veg_pos.distance_to(campfire_pos) < 600:
+			continue
+
+		# Don't place on lava pools
+		var on_lava = false
+		for pool in lava_pool_positions:
+			var dist = veg_pos.distance_to(pool.pos)
+			var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 30
+			if dist < pool_radius:
+				on_lava = true
+				break
+		if on_lava:
 			continue
 
 		# Avoid the main path
@@ -2231,6 +2332,279 @@ func create_ambient_particles():
 	add_child(particles)
 
 	print("💨 Ambient ash particles created")
+
+func spawn_lava_pools():
+	"""Create glowing lava pools scattered across the wasteland"""
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 15151515
+
+	var pools_placed = 0
+
+	# Spawn 60 lava pools throughout the world (ground about to erupt!)
+	for i in range(60):
+		var pool_pos = Vector2(
+			rng.randf_range(-4000, 12000),
+			rng.randf_range(-2500, 2500)
+		)
+
+		# Avoid campfire area
+		var campfire_pos = Vector2(-2000, 0)
+		if pool_pos.distance_to(campfire_pos) < 800:
+			continue
+
+		# Avoid spawning on the main path
+		if is_position_on_path(pool_pos, 200.0):
+			continue
+
+		# Check if overlaps with existing pools
+		var overlaps = false
+		for existing_pool in lava_pool_positions:
+			var dist = pool_pos.distance_to(existing_pool.pos)
+			var combined_radius = (existing_pool.size / 2) * max(existing_pool.elongation_x, existing_pool.elongation_y) + 30
+			if dist < combined_radius:
+				overlaps = true
+				break
+		if overlaps:
+			continue
+
+		# Random size and shape for variety
+		var pool_size = rng.randf_range(60, 200)  # Wider size range
+
+		# 30% chance for perfect circle, otherwise elongated
+		var elongation_x = 1.0
+		var elongation_y = 1.0
+		var pool_rotation = 0.0
+
+		if rng.randf() > 0.3:  # 70% elongated
+			elongation_x = rng.randf_range(0.6, 1.6)  # Horizontal stretch
+			elongation_y = rng.randf_range(0.6, 1.6)  # Vertical stretch
+			pool_rotation = rng.randf() * TAU  # Random rotation for elongated pools
+
+		# Create lava pool node
+		var lava_pool = Node2D.new()
+		lava_pool.name = "LavaPool%d" % i
+		lava_pool.position = pool_pos
+		lava_pool.rotation = pool_rotation  # Rotate elongated pools randomly
+		lava_pool.z_index = -3  # Above ground, below props
+
+		# Add flowing animation script
+		var animation_script = load("res://scripts/effects/LavaPoolAnimation.gd")
+		lava_pool.set_script(animation_script)
+
+		# Create cracks radiating from pool (eruption crater effect)
+		var num_cracks = rng.randi_range(4, 8)  # Fewer cracks for subtler effect
+		for crack_i in range(num_cracks):
+			var crack = Line2D.new()
+			crack.width = rng.randf_range(1.5, 3.5)  # Vary crack thickness
+			crack.default_color = Color(0.02, 0.015, 0.01, rng.randf_range(0.6, 0.9))  # Very dark cracks
+			crack.joint_mode = Line2D.LINE_JOINT_SHARP
+			crack.begin_cap_mode = Line2D.LINE_CAP_NONE
+			crack.end_cap_mode = Line2D.LINE_CAP_NONE
+			crack.antialiased = false  # Crisp pixel-art style
+
+			# Start crack at pool edge
+			var angle = (float(crack_i) / num_cracks) * TAU + rng.randf_range(-0.2, 0.2)
+			var start_radius = (pool_size / 2) + 8  # Just outside the pool
+			var start_x = cos(angle) * start_radius * elongation_x
+			var start_y = sin(angle) * start_radius * elongation_y
+
+			# Crack extends outward with random length (half as long)
+			var crack_length = rng.randf_range(pool_size * 0.2, pool_size * 0.6)
+			var num_segments = rng.randi_range(3, 6)  # Jagged crack with multiple segments
+
+			var points = PackedVector2Array()
+			points.append(Vector2(start_x, start_y))
+
+			# Create jagged crack path
+			var current_angle = angle
+			var current_distance = start_radius
+			for seg in range(num_segments):
+				# Add some angular deviation for jagged look
+				current_angle += rng.randf_range(-0.3, 0.3)
+				current_distance += crack_length / num_segments
+
+				var seg_x = cos(current_angle) * current_distance * elongation_x
+				var seg_y = sin(current_angle) * current_distance * elongation_y
+				points.append(Vector2(seg_x, seg_y))
+
+			crack.points = points
+			lava_pool.add_child(crack)
+
+		# Create multiple soft borders for gradual blending to ground
+		# Add these BEFORE gradient layers so they render underneath as shadows
+
+		# Outer border - very subtle
+		var outer_border = Polygon2D.new()
+		var outer_vertices = PackedVector2Array()
+		for j in range(64):
+			var angle = (float(j) / 64) * TAU
+			var radius = (pool_size / 2) + 15  # Wider
+			var x = cos(angle) * radius * elongation_x
+			var y = sin(angle) * radius * elongation_y
+			outer_vertices.append(Vector2(x, y))
+		outer_border.polygon = outer_vertices
+		outer_border.color = Color(0.09, 0.085, 0.08, 0.3)  # Match ground color, very transparent
+		lava_pool.add_child(outer_border)
+
+		# Middle border - medium blend
+		var mid_border = Polygon2D.new()
+		var mid_vertices = PackedVector2Array()
+		for j in range(64):
+			var angle = (float(j) / 64) * TAU
+			var radius = (pool_size / 2) + 10
+			var x = cos(angle) * radius * elongation_x
+			var y = sin(angle) * radius * elongation_y
+			mid_vertices.append(Vector2(x, y))
+		mid_border.polygon = mid_vertices
+		mid_border.color = Color(0.07, 0.06, 0.055, 0.5)  # Darker, semi-transparent
+		lava_pool.add_child(mid_border)
+
+		# Inner border - darkest edge
+		var inner_border = Polygon2D.new()
+		var inner_vertices = PackedVector2Array()
+		for j in range(64):
+			var angle = (float(j) / 64) * TAU
+			var radius = (pool_size / 2) + 5
+			var x = cos(angle) * radius * elongation_x
+			var y = sin(angle) * radius * elongation_y
+			inner_vertices.append(Vector2(x, y))
+		inner_border.polygon = inner_vertices
+		inner_border.color = Color(0.04, 0.03, 0.02, 0.7)  # Very dark, but still transparent
+		lava_pool.add_child(inner_border)
+
+		# Create smooth gradient using 10 layered circles with irregular edges
+		# Define gradient colors from outer (red) to inner (bright orange) - deep lava colors
+		var layer_data = [
+			{"size": 1.00, "color": Color(0.7, 0.15, 0.0, 1.0)},   # Deep dark red (solid base)
+			{"size": 0.90, "color": Color(0.8, 0.2, 0.0, 0.8)},    # Dark red
+			{"size": 0.80, "color": Color(0.9, 0.25, 0.0, 0.7)},   # Red
+			{"size": 0.70, "color": Color(1.0, 0.3, 0.0, 0.65)},   # Red
+			{"size": 0.60, "color": Color(1.0, 0.35, 0.02, 0.6)},  # Red-orange
+			{"size": 0.50, "color": Color(1.0, 0.42, 0.05, 0.55)}, # Orange-red
+			{"size": 0.40, "color": Color(1.0, 0.5, 0.08, 0.5)},   # Orange
+			{"size": 0.30, "color": Color(1.0, 0.58, 0.1, 0.45)},  # Bright orange
+			{"size": 0.20, "color": Color(1.0, 0.65, 0.12, 0.5)},  # Brighter orange
+			{"size": 0.12, "color": Color(1.0, 0.7, 0.15, 0.6)}    # Deep bright orange center (no yellow!)
+		]
+
+		for layer in layer_data:
+			var circle = Polygon2D.new()
+			var vertices = PackedVector2Array()
+
+			# Create irregular circle with random perturbations
+			for j in range(64):
+				var angle = (float(j) / 64) * TAU
+				var radius = pool_size / 2 * layer.size
+
+				# Add significant irregularity to each vertex (breaks up rings)
+				radius += rng.randf_range(-4, 4)
+
+				# Apply elongation for oval shapes
+				var x = cos(angle) * radius * elongation_x
+				var y = sin(angle) * radius * elongation_y
+
+				vertices.append(Vector2(x, y))
+
+			circle.polygon = vertices
+			circle.color = layer.color
+			lava_pool.add_child(circle)
+
+		# Add PointLight2D for glowing effect (scales with pool size)
+		var light = PointLight2D.new()
+		light.enabled = true
+		light.position = Vector2.ZERO
+		light.color = Color(1.0, 0.5, 0.1, 1.0)  # Warm orange glow
+		light.energy = rng.randf_range(1.0, 1.6)  # Vary intensity
+		light.blend_mode = PointLight2D.BLEND_MODE_ADD  # Additive blending for glow
+		light.range_z_min = -10
+		light.range_z_max = 10
+		light.shadow_enabled = false
+
+		# Create gradient texture for light falloff
+		var light_gradient = Gradient.new()
+		light_gradient.set_color(0, Color(1, 1, 1, 1))
+		light_gradient.set_color(1, Color(0, 0, 0, 0))
+		var light_texture = GradientTexture2D.new()
+		light_texture.gradient = light_gradient
+		light_texture.width = 256
+		light_texture.height = 256
+		light_texture.fill = GradientTexture2D.FILL_RADIAL
+		light_texture.fill_from = Vector2(0.5, 0.5)
+		light.texture = light_texture
+
+		# Scale light based on average of elongation (bigger pools = bigger glow)
+		var avg_elongation = (elongation_x + elongation_y) / 2.0
+		light.texture_scale = (pool_size / 80.0) * avg_elongation
+
+		lava_pool.add_child(light)
+
+		# Add heat particles (embers rising) - sharper and more defined
+		var particles = GPUParticles2D.new()
+		particles.amount = int(pool_size / 8)  # More particles for bigger pools
+		particles.lifetime = 2.5
+		particles.explosiveness = 0.0
+		particles.randomness = 0.7
+		particles.local_coords = false
+
+		var material = ParticleProcessMaterial.new()
+		material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+		# Box emission with elongation to match pool shape
+		var emission_width = (pool_size / 3) * elongation_x
+		var emission_height = (pool_size / 3) * elongation_y
+		material.emission_box_extents = Vector3(emission_width, emission_height, 0)
+		material.direction = Vector3(0, -1, 0)  # Rise upward
+		material.spread = 12.0  # Very tight spread
+		material.initial_velocity_min = 25.0
+		material.initial_velocity_max = 50.0
+		material.gravity = Vector3(0, -28, 0)  # Float upward faster
+		material.scale_min = 1.0  # Smaller, tighter particles
+		material.scale_max = 2.0
+
+		# Hot orange embers that fade to red (realistic lava)
+		material.color = Color(1.0, 0.65, 0.1, 1.0)  # Bright orange embers
+
+		# Color over lifetime: bright orange -> red-orange -> red -> fade
+		var particle_gradient = Gradient.new()
+		particle_gradient.add_point(0.0, Color(1.0, 0.7, 0.15, 0))  # Fade in bright orange
+		particle_gradient.add_point(0.08, Color(1.0, 0.65, 0.12, 1))  # Full bright orange
+		particle_gradient.add_point(0.35, Color(1.0, 0.5, 0.08, 1))  # Orange
+		particle_gradient.add_point(0.65, Color(0.95, 0.3, 0.05, 1))  # Red-orange
+		particle_gradient.add_point(1.0, Color(0.6, 0.15, 0.0, 0))  # Fade to dark red
+		var particle_gradient_tex = GradientTexture1D.new()
+		particle_gradient_tex.gradient = particle_gradient
+		material.color_ramp = particle_gradient_tex
+
+		particles.process_material = material
+
+		# Crisp pixel-art style texture - very small with hard edges
+		var ember_gradient = Gradient.new()
+		ember_gradient.set_color(0, Color(1, 1, 1, 1))  # Solid bright center
+		ember_gradient.set_color(0.7, Color(1, 1, 1, 1))  # Hold solid longer
+		ember_gradient.set_color(0.85, Color(1, 1, 1, 0.5))  # Sharp falloff
+		ember_gradient.set_color(1, Color(0, 0, 0, 0))  # Transparent edge
+		var ember_texture = GradientTexture2D.new()
+		ember_texture.gradient = ember_gradient
+		ember_texture.width = 4  # Tiny = crisp pixel-art look
+		ember_texture.height = 4
+		ember_texture.fill = GradientTexture2D.FILL_RADIAL
+		ember_texture.fill_from = Vector2(0.5, 0.5)
+		particles.texture = ember_texture
+
+		lava_pool.add_child(particles)
+
+		add_child(lava_pool)
+
+		# Store pool position and size for collision avoidance
+		lava_pool_positions.append({
+			"pos": pool_pos,
+			"size": pool_size,
+			"elongation_x": elongation_x,
+			"elongation_y": elongation_y
+		})
+
+		pools_placed += 1
+
+	print("🔥 Placed ", pools_placed, " lava pools with glowing effects")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TERRAIN BAKING FUNCTIONS (for generating high-quality texture once)
