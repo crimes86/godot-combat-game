@@ -23,13 +23,6 @@ extends Node
 @export var SHOW_ATTACK_CONES: bool = false
 @export var SHOW_AI_PATHS: bool = false
 
-func _ready() -> void:
-	log("DebugConfig initialized")
-	if ENABLE_DEBUG:
-		log("🐛 Debug mode ENABLED")
-	else:
-		log("🚀 Debug mode DISABLED (production)")
-
 func log(message: String, category: String = "") -> void:
 	"""Centralized logging function"""
 	if not ENABLE_DEBUG:
@@ -77,3 +70,10 @@ func set_debug_mode(enabled: bool) -> void:
 	"""Toggle debug mode at runtime"""
 	ENABLE_DEBUG = enabled
 	log("Debug mode %s" % ("ENABLED" if enabled else "DISABLED"))
+
+func _ready() -> void:
+	log("DebugConfig initialized")
+	if ENABLE_DEBUG:
+		log("🐛 Debug mode ENABLED")
+	else:
+		log("🚀 Debug mode DISABLED (production)")
