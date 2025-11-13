@@ -196,7 +196,9 @@ func hit() -> void:
 			glow_sprite.color = Color(1.0, 0.2, 0.2, 1.0)  # Bright blood glow
 			flash_tween.tween_property(glow_sprite, "color", Color(0.8, 0.1, 0.1, 0.7), 0.08)
 
+	print("💥 Weakpoint hit: %d/%d" % [current_hits, max_hits])
 	if current_hits >= max_hits:
+		print("🔥 DESTROYING WEAKPOINT!")
 		destroy()
 
 func spawn_hit_number() -> void:
