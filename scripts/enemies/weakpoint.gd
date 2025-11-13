@@ -286,7 +286,7 @@ func destroy() -> void:
 func spawn_destruction_wave() -> void:
 	"""💥 EXPLOSIVE BLOOD SHOCKWAVES"""
 	# Get world container to avoid parent scaling issues
-	var world = get_tree().root.get_node_or_null("World")
+	var world = get_tree().root.get_node_or_null("GameWorld")
 	if not world:
 		return
 
@@ -366,7 +366,7 @@ func spawn_crack_particles() -> void:
 func spawn_destruction_particles() -> void:
 	"""💥 DRAMATIC BLOOD EXPLOSION when weakpoint destroyed"""
 	# Get world container to avoid parent scaling issues
-	var world = get_tree().root.get_node_or_null("World")
+	var world = get_tree().root.get_node_or_null("GameWorld")
 	if not world:
 		return
 
