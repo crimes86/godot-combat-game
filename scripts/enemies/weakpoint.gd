@@ -296,7 +296,7 @@ func spawn_destruction_wave() -> void:
 		var ring = Line2D.new()
 		ring.width = 5.5 - i  # Thicker initial wave
 		ring.default_color = Color(1.8, 0.2, 0.2, 1.0)  # Deep blood red
-		ring.z_index = 299
+		ring.z_index = 400  # High z-index to render above enemy/dummy sprites
 
 		var segments = 64  # Smoother circles
 		for j in range(segments + 1):
@@ -405,6 +405,9 @@ func spawn_destruction_particles() -> void:
 	spray_gradient.add_point(1.0, Color(1, 1, 1, 0))
 	blood_spray.color_ramp = spray_gradient
 
+	# HIGH Z-INDEX to render in front of enemy/dummy sprites
+	blood_spray.z_index = 400
+
 	world.add_child(blood_spray)
 	blood_spray.emitting = true
 
@@ -441,6 +444,9 @@ func spawn_destruction_particles() -> void:
 
 	chunks.angular_velocity_min = -560.0
 	chunks.angular_velocity_max = 560.0
+
+	# HIGH Z-INDEX to render in front of enemy/dummy sprites
+	chunks.z_index = 400
 
 	world.add_child(chunks)
 	chunks.emitting = true
