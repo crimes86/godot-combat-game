@@ -258,26 +258,93 @@ func start_crit_window(difficulty: float = 1.0) -> void:
 	timer.start()
 
 func spawn_weakpoints() -> void:
-	"""Spawn a single weakpoint on the dummy for practice"""
-	var weakpoint_scene = preload("res://scenes/enemies/weakpoint.tscn")
+	"""Spawn weakpoints based on player level (1-3 weakpoints, sectioned)"""
 
-	# Simple position - center of dummy
-	var weakpoint_pos = Vector2(0, -32)
+	# Get player level to determine number of weakpoints
+	var player_level = CharacterStats.level
+	var num_weakpoints = 1
 
-	var weakpoint = weakpoint_scene.instantiate()
-	weakpoint.position = weakpoint_pos
-	weakpoint.z_index = 150
+	# Level cap is 30, no stat gains past 25
+	# Breakpoints: 1-10 = 1 WP, 11-20 = 2 WP, 21+ = 3 WP
+	if player_level >= 21:
+		num_weakpoints = 3
+	elif player_level >= 11:
+		num_weakpoints = 2
+	else:
+		num_weakpoints = 1
 
-	# Counter-scale weakpoint to compensate for parent scaling during crit window
+	print("🎯 Training Dummy: Player level %d → spawning %d weakpoint(s)" % [player_level, num_weakpoints])
+
+	# Define sectioned positions on the dummy (similar to skeleton)
+	var upper_positions = [
+		Vector2(0, -45),      # Head
+		Vector2(-8, -42),     # Left shoulder
+		Vector2(8, -42),      # Right shoulder
+		Vector2(-6, -38),     # Upper left torso
+		Vector2(6, -38),      # Upper right torso
+	]
+
+	var mid_positions = [
+		Vector2(0, -32),      # Center chest
+		Vector2(-8, -32),     # Left mid torso
+		Vector2(8, -32),      # Right mid torso
+		Vector2(-6, -26),     # Left lower ribs
+		Vector2(6, -26),      # Right lower ribs
+		Vector2(0, -24),      # Center abdomen
+	]
+
+	var lower_positions = [
+		Vector2(-6, -18),     # Left hip
+		Vector2(6, -18),      # Right hip
+		Vector2(0, -16),      # Center pelvis
+		Vector2(-4, -12),     # Left upper leg
+		Vector2(4, -12),      # Right upper leg
+	]
+
+	# Shuffle and pick sections (same logic as Enemy.gd)
+	var sections = [
+		{"name": "upper", "positions": upper_positions},
+		{"name": "mid", "positions": mid_positions},
+		{"name": "lower", "positions": lower_positions}
+	]
+	sections.shuffle()
+
+	var chosen_positions = []
+
+	# Pick exactly 1 weakpoint from each of the first N sections
+	for i in range(min(num_weakpoints, sections.size())):
+		var section = sections[i]
+		var section_positions = section["positions"]
+
+		# Pick random position from this section
+		var random_pos = section_positions[randi() % section_positions.size()]
+		chosen_positions.append(random_pos)
+
+		print("   🎯 Picked weakpoint in %s section at %s" % [section["name"], random_pos])
+
+	# Spawn weakpoints
 	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR
-	weakpoint.scale = Vector2(counter_scale, counter_scale)
 
-	# Connect weakpoint signals
-	weakpoint.weakpoint_hit.connect(_on_weakpoint_hit)
-	weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed)
+	for i in range(chosen_positions.size()):
+		var weakpoint_scene = preload("res://scenes/enemies/weakpoint.tscn")
+		var weakpoint = weakpoint_scene.instantiate()
 
-	add_child(weakpoint)
-	weakpoints.append(weakpoint)
+		# Set blood theme for training dummy (has blood!)
+		weakpoint.color_theme = "blood"
+
+		weakpoint.position = chosen_positions[i]
+		weakpoint.z_index = 150
+		weakpoint.scale = Vector2(counter_scale, counter_scale)
+
+		# Random rotation for dynamic look
+		weakpoint.rotation = randf_range(-PI, PI)
+
+		# Connect weakpoint signals
+		weakpoint.weakpoint_hit.connect(_on_weakpoint_hit)
+		weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed)
+
+		add_child(weakpoint)
+		weakpoints.append(weakpoint)
 
 func _on_weakpoint_hit(weakpoint) -> void:
 	"""Handle weakpoint being hit - deal damage and show combat text"""
@@ -293,15 +360,25 @@ func _on_weakpoint_hit(weakpoint) -> void:
 
 func _on_weakpoint_destroyed(weakpoint) -> void:
 	"""Handle weakpoint destruction - end crit window when all destroyed"""
+	print("🎯 TrainingDummy._on_weakpoint_destroyed() CALLED")
+	print("   - Weakpoint array size: %d" % weakpoints.size())
+
 	# Count how many weakpoints are left
 	var remaining_weakpoints = 0
 	for wp in weakpoints:
-		if is_instance_valid(wp) and not wp.is_destroyed:
-			remaining_weakpoints += 1
+		if is_instance_valid(wp):
+			print("   - Checking weakpoint: is_destroyed=%s" % wp.is_destroyed)
+			if not wp.is_destroyed:
+				remaining_weakpoints += 1
+
+	print("   - Remaining weakpoints: %d" % remaining_weakpoints)
 
 	# If all weakpoints destroyed, end crit window early
 	if remaining_weakpoints == 0:
+		print("✅ All weakpoints destroyed! Ending crit window early")
 		end_crit_window()
+	else:
+		print("⏳ Still have %d weakpoints remaining" % remaining_weakpoints)
 
 func _on_crit_window_timeout() -> void:
 	"""Crit window expired - return to normal"""

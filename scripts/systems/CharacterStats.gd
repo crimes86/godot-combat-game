@@ -70,12 +70,13 @@ func _ready() -> void:
 
 func get_attack_cooldown() -> float:
 	"""Calculate attack cooldown based on agility + weapon bonuses"""
-	# 🔧 BALANCED: Good progression curve
-	# Level 1 (AGI 10): 1.0s
-	# Level 10 (AGI 28): 0.48s  
-	# Level 25 (AGI 58): 0.24s
-	# Level 50 (AGI 108): 0.14s
-	var base_cooldown = 1.0 / (1.0 + (agility - 10) * 0.06)
+	# 🔧 BALANCED: Progression curve for level 30 cap
+	# Level 1 (AGI 10): 1.0s (1 attack/sec)
+	# Level 10 (AGI 28): 0.27s (3.7 attacks/sec)
+	# Level 15 (AGI 38): 0.19s (5.3 attacks/sec)
+	# Level 20 (AGI 48): 0.15s (6.7 attacks/sec)
+	# Level 25 (AGI 58): 0.12s (8.2 attacks/sec) - Near uncapped feel, needs gear to hit 0.05s cap
+	var base_cooldown = 1.0 / (1.0 + (agility - 10) * 0.15)
 	
 	# Apply weapon bonus
 	var weapon_bonus = 0.0
@@ -154,12 +155,23 @@ func level_up_character() -> void:
 	# Clamp to prevent overflow at high levels
 	var level_exponent = min(level - 1, 50)  # Cap exponent to prevent overflow
 	experience_to_next_level = int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, level_exponent))
-	
-	# Grant stat points (balanced increases)
-	strength += 2
-	agility += 2
-	vitality += 2
-	luck += 1
+
+	# Grant stat points (balanced increases) - ONLY up to level 25
+	var stat_gain_str = 0
+	var stat_gain_agi = 0
+	var stat_gain_vit = 0
+	var stat_gain_luck = 0
+
+	if level <= Constants.STAT_GAIN_CAP_LEVEL:
+		stat_gain_str = 2
+		stat_gain_agi = 2
+		stat_gain_vit = 2
+		stat_gain_luck = 1
+
+		strength += stat_gain_str
+		agility += stat_gain_agi
+		vitality += stat_gain_vit
+		luck += stat_gain_luck
 	
 	# Emit signal
 	level_up.emit(level)
@@ -168,10 +180,14 @@ func level_up_character() -> void:
 	print("\n╔══════════════════════════════════════╗")
 	print("║      🎉 LEVEL UP! Level ", level, "         ║")
 	print("╚══════════════════════════════════════╝")
-	print("  STR: ", strength, " (+2)")
-	print("  AGI: ", agility, " (+2)")
-	print("  VIT: ", vitality, " (+2)")
-	print("  LUCK: ", luck, " (+1)")
+	if level <= Constants.STAT_GAIN_CAP_LEVEL:
+		print("  STR: ", strength, " (+", stat_gain_str, ")")
+		print("  AGI: ", agility, " (+", stat_gain_agi, ")")
+		print("  VIT: ", vitality, " (+", stat_gain_vit, ")")
+		print("  LUCK: ", luck, " (+", stat_gain_luck, ")")
+	else:
+		print("  ⚠️  MAX STAT LEVEL (", Constants.STAT_GAIN_CAP_LEVEL, ") - No stat gains")
+		print("  STR: ", strength, " | AGI: ", agility, " | VIT: ", vitality, " | LUCK: ", luck)
 	print("  Next Level: ", experience_to_next_level, " XP")
 	print("════════════════════════════════════════\n")
 

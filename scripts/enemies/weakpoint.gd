@@ -8,6 +8,31 @@ var sprite: Polygon2D
 var glow_sprite: Polygon2D
 var sparkle_particles: CPUParticles2D
 
+# Color theme: "blood" for training dummy, "bone" for skeletons
+var color_theme: String = "blood"
+
+# Theme colors
+var theme_colors = {
+	"blood": {
+		"base": Color(0.9, 0.12, 0.12, 1.0),  # Dark blood red
+		"glow": Color(1.4, 0.2, 0.2, 0.85),  # Bright blood glow
+		"shine": Color(2.0, 0.6, 0.6, 0.5),  # Red-white shine
+		"flash": Color(1.2, 0.15, 0.15, 1.0),  # Bright blood flash
+		"particle_base": Color(1.5, 0.15, 0.15, 1.0),  # Particle red
+		"particle_dark": Color(1.2, 0.1, 0.1, 1.0),  # Dark blood
+		"wave": Color(1.8, 0.2, 0.2, 1.0)  # Shockwave red
+	},
+	"bone": {
+		"base": Color(0.92, 0.88, 0.78, 1.0),  # Cream/bone white
+		"glow": Color(1.0, 0.95, 0.75, 0.85),  # Pale yellow glow
+		"shine": Color(1.2, 1.15, 0.95, 0.6),  # Bright bone shine
+		"flash": Color(1.1, 1.05, 0.9, 1.0),  # Bright bone flash
+		"particle_base": Color(1.1, 1.05, 0.9, 1.0),  # Particle cream
+		"particle_dark": Color(0.9, 0.85, 0.7, 1.0),  # Dark bone
+		"wave": Color(1.0, 0.95, 0.8, 1.0)  # Shockwave cream
+	}
+}
+
 signal weakpoint_hit(weakpoint)
 signal weakpoint_destroyed(weakpoint)
 
@@ -15,9 +40,11 @@ func _ready() -> void:
 	z_index = 300
 	input_pickable = true
 
-	# 🫀 VITAL ORGAN - Dark but shiny blood red
+	var colors = theme_colors[color_theme]
+
+	# 🫀 VITAL ORGAN or BONE FRAGMENT - Themed appearance
 	sprite = Polygon2D.new()
-	sprite.color = Color(0.9, 0.12, 0.12, 1.0)  # Brighter dark blood red (more visible)
+	sprite.color = colors["base"]
 
 	# Organic oval/heart shape - like looking at a vital organ
 	var points = PackedVector2Array()
@@ -35,9 +62,9 @@ func _ready() -> void:
 	sprite.polygon = points
 	add_child(sprite)
 
-	# 🩸 INTENSE BLOOD GLOW - Makes it look wet/shiny/alive
+	# 🩸 INTENSE GLOW - Makes it look wet/shiny/alive (or glowing bone)
 	glow_sprite = Polygon2D.new()
-	glow_sprite.color = Color(1.4, 0.2, 0.2, 0.85)  # Bright shiny blood glow
+	glow_sprite.color = colors["glow"]
 	glow_sprite.z_index = -1
 
 	# Make glow slightly larger for depth
@@ -48,9 +75,9 @@ func _ready() -> void:
 	glow_sprite.polygon = glow_points
 	sprite.add_child(glow_sprite)
 
-	# ✨ SHINE HIGHLIGHT - makes it look wet/glossy
+	# ✨ SHINE HIGHLIGHT - makes it look wet/glossy (or polished bone)
 	var shine = Polygon2D.new()
-	shine.color = Color(2.0, 0.6, 0.6, 0.5)  # Bright red-white shine
+	shine.color = colors["shine"]
 	shine.z_index = 1
 
 	# Small highlight spot on top-left (like light reflecting off wet surface)
@@ -68,7 +95,10 @@ func _ready() -> void:
 	# Dark outline for contrast
 	var outline = Line2D.new()
 	outline.width = 2.0
-	outline.default_color = Color(0.25, 0.03, 0.03, 1.0)  # Dark red-black outline
+	# Darker version of base color for outline
+	var outline_color = colors["base"] * 0.3
+	outline_color.a = 1.0
+	outline.default_color = outline_color
 	outline.closed = true
 	for point in points:
 		outline.add_point(point)
@@ -171,30 +201,35 @@ func hit() -> void:
 	current_hits += 1
 	weakpoint_hit.emit(self)
 
-	# 🩸 BLOOD BURST feedback - fast and responsive for spam-clicking
+	# 🩸 IMPACT feedback - fast and responsive for spam-clicking
 	if sprite:
+		var colors = theme_colors[color_theme]
 		var progress = float(current_hits) / float(max_hits)
 		var scale_factor = 1.0 - (progress * 0.3)
 
-		# 🔴 FRESH BLOOD FLASH - bright oxygenated red
-		sprite.color = Color(1.2, 0.15, 0.15, 1.0)  # Bright fresh blood red
+		# Flash effect (bright blood or bone)
+		sprite.color = colors["flash"]
 		sprite.rotation += 0.25
 
 		var flash_tween = create_tween()
 		flash_tween.set_parallel(true)
 
-		# Fast color return to dark blood (snappy feedback)
-		flash_tween.tween_property(sprite, "color", Color(0.9, 0.12, 0.12, 1.0), 0.08)
+		# Fast color return to base (snappy feedback)
+		flash_tween.tween_property(sprite, "color", colors["base"], 0.08)
 
 		# Quick squish (like hitting an organ)
 		var pop_scale = Vector2(1.3, 1.3) * scale_factor
 		sprite.scale = pop_scale
 		flash_tween.tween_property(sprite, "scale", Vector2(scale_factor, scale_factor), 0.08).set_ease(Tween.EASE_OUT)
 
-		# Blood glow burst
+		# Glow burst
 		if glow_sprite:
-			glow_sprite.color = Color(1.0, 0.2, 0.2, 1.0)  # Bright blood glow
-			flash_tween.tween_property(glow_sprite, "color", Color(0.8, 0.1, 0.1, 0.7), 0.08)
+			var bright_glow = colors["glow"]
+			bright_glow.a = 1.0
+			glow_sprite.color = bright_glow
+			var dim_glow = colors["glow"]
+			dim_glow.a = 0.7
+			flash_tween.tween_property(glow_sprite, "color", dim_glow, 0.08)
 
 	print("💥 Weakpoint hit: %d/%d" % [current_hits, max_hits])
 	if current_hits >= max_hits:
@@ -253,20 +288,28 @@ func spawn_impact_wave() -> void:
 
 func destroy() -> void:
 	if is_destroyed:
+		print("⚠️ Weakpoint destroy() called but already destroyed - skipping")
 		return
+
+	print("💀 DESTROY() - Starting destruction sequence")
 	is_destroyed = true
-	
+
 	if sparkle_particles:
 		sparkle_particles.emitting = false
-	
+
+	print("🎆 Spawning destruction particles...")
 	spawn_destruction_particles()
+
+	print("💥 Spawning destruction wave...")
 	spawn_destruction_wave()
-	
+
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		sound_manager.play_sound(sound_manager.SoundType.WEAKPOINT_DESTROYED, global_position, -3.0)
-	
+
+	print("📡 Emitting weakpoint_destroyed signal")
 	weakpoint_destroyed.emit(self)
+	print("✅ Signal emitted successfully")
 	
 	# Shatter
 	if sprite:
@@ -286,39 +329,47 @@ func destroy() -> void:
 	queue_free()
 
 func spawn_destruction_wave() -> void:
-	"""💥 EXPLOSIVE BLOOD SHOCKWAVES"""
+	"""💥 EXPLOSIVE SHOCKWAVES (blood or bone)"""
+	print("   💢 spawn_destruction_wave() called")
+
 	# Get world container to avoid parent scaling issues
-	var world = get_tree().root.get_node_or_null("GameWorld")
+	var world = get_tree().current_scene
 	if not world:
+		print("   ❌ ERROR: Could not find current scene!")
 		return
 
-	for i in range(4):  # 4 waves instead of 3
-		await get_tree().create_timer(i * 0.04).timeout
+	print("   ✅ Found world scene (%s), spawning waves at position: %s" % [world.name, global_position])
+
+	var colors = theme_colors[color_theme]
+
+	for i in range(2):  # Just 2 waves
+		await get_tree().create_timer(i * 0.05).timeout
 
 		var ring = Line2D.new()
-		ring.width = 5.5 - i  # Thicker initial wave
-		ring.default_color = Color(1.8, 0.2, 0.2, 1.0)  # Deep blood red
+		ring.width = 3.0 - (i * 0.5)  # Thin waves
+		ring.default_color = colors["wave"]
 		ring.z_index = 400  # High z-index to render above enemy/dummy sprites
 
-		var segments = 64  # Smoother circles
+		var segments = 32  # Simpler circles
 		for j in range(segments + 1):
 			var angle = (j * TAU) / segments
-			var point = Vector2(cos(angle), sin(angle)) * 25  # Start larger
+			var point = Vector2(cos(angle), sin(angle)) * 12  # Start small
 			ring.add_point(point)
 
 		ring.global_position = global_position
 		world.add_child(ring)
-		
+		print("   💥 Shockwave ring %d added to world" % (i + 1))
+
 		var tween = create_tween()
 		tween.set_parallel(true)
-		tween.tween_property(ring, "width", 0.5, 0.5)
-		tween.tween_property(ring, "modulate:a", 0.0, 0.5)
-		
+		tween.tween_property(ring, "width", 0.5, 0.3)
+		tween.tween_property(ring, "modulate:a", 0.0, 0.3)
+
 		for j in range(ring.get_point_count()):
 			var point = ring.get_point_position(j)
 			tween.tween_method(
 				func(scale_val): ring.set_point_position(j, point * scale_val),
-				1.0, 5.0, 0.5
+				1.0, 2.2, 0.3  # Compact expansion (2.2x)
 			)
 		
 		tween.finished.connect(func(): ring.queue_free())
@@ -366,45 +417,77 @@ func spawn_crack_particles() -> void:
 		particles.queue_free()
 
 func spawn_destruction_particles() -> void:
-	"""💥 DRAMATIC BLOOD EXPLOSION when weakpoint destroyed"""
+	"""💥 DRAMATIC EXPLOSION when weakpoint destroyed (blood or bone fragments)"""
+	print("   🩸 spawn_destruction_particles() called")
+
 	# Get world container to avoid parent scaling issues
-	var world = get_tree().root.get_node_or_null("GameWorld")
+	var world = get_tree().current_scene
 	if not world:
+		print("   ❌ ERROR: Could not find current scene!")
 		return
 
-	# 🩸 BLOOD SPRAY - bright red particles bursting out
+	print("   ✅ Found world scene (%s), spawning particles at position: %s" % [world.name, global_position])
+
+	var colors = theme_colors[color_theme]
+
+	# 🩸 SPRAY/FRAGMENTS - themed particles bursting out
 	var blood_spray = CPUParticles2D.new()
 	blood_spray.emitting = false
 	blood_spray.one_shot = true
 	blood_spray.explosiveness = 1.0
-	blood_spray.amount = 40  # More particles for dramatic effect
-	blood_spray.lifetime = 0.8
+	blood_spray.amount = 12  # Compact particle count
+	blood_spray.lifetime = 0.5
 	blood_spray.local_coords = false
 	blood_spray.global_position = global_position
 
 	blood_spray.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	blood_spray.emission_sphere_radius = 20.0
+	blood_spray.emission_sphere_radius = 8.0  # Tight spread
 
-	var img = Image.create(10, 10, false, Image.FORMAT_RGBA8)
-	img.fill(Color(1.5, 0.15, 0.15, 1.0))  # Bright blood red
+	# Create circular gradient texture for mist/spray effect
+	var img = Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color.TRANSPARENT)
+	var center = Vector2(8, 8)
+	var particle_color = colors["particle_base"]
+	for x in range(16):
+		for y in range(16):
+			var dist = center.distance_to(Vector2(x, y))
+			if dist < 8.0:
+				# Radial gradient: opaque center to transparent edge
+				var alpha = 1.0 - (dist / 8.0)
+				alpha = pow(alpha, 1.5)  # Softer falloff
+				var pixel_color = particle_color
+				pixel_color.a = alpha
+				img.set_pixel(x, y, pixel_color)
 	var tex = ImageTexture.create_from_image(img)
 	blood_spray.texture = tex
 
 	blood_spray.direction = Vector2(0, 0)
 	blood_spray.spread = 180.0
-	blood_spray.initial_velocity_min = 100.0
-	blood_spray.initial_velocity_max = 200.0  # Faster burst
+	blood_spray.initial_velocity_min = 30.0  # Slower velocity
+	blood_spray.initial_velocity_max = 60.0
 	blood_spray.gravity = Vector2(0, 120)
 
-	blood_spray.scale_amount_min = 2.5
-	blood_spray.scale_amount_max = 6.0  # Bigger particles
+	blood_spray.scale_amount_min = 0.8  # Fine mist particles
+	blood_spray.scale_amount_max = 2.5  # Some larger droplets
 
-	blood_spray.color = Color(1.5, 0.15, 0.15, 1.0)
+	# Add scale variation over lifetime (shrink as they disperse)
+	var scale_curve = Curve.new()
+	scale_curve.add_point(Vector2(0, 1.0))  # Start normal size
+	scale_curve.add_point(Vector2(0.5, 0.8))  # Shrink a bit mid-flight
+	scale_curve.add_point(Vector2(1, 0.4))  # End tiny (mist dissipating)
+	blood_spray.scale_amount_curve = scale_curve
+
+	# Color variation based on theme
+	blood_spray.color = colors["particle_base"]
 
 	var spray_gradient = Gradient.new()
-	spray_gradient.add_point(0.0, Color(1, 1, 1, 1))
-	spray_gradient.add_point(0.6, Color(1, 1, 1, 0.6))
-	spray_gradient.add_point(1.0, Color(1, 1, 1, 0))
+	var bright_color = colors["particle_base"]
+	var mid_color = colors["particle_dark"]
+	var fade_color = colors["particle_dark"] * 0.6
+	fade_color.a = 0
+	spray_gradient.add_point(0.0, bright_color)
+	spray_gradient.add_point(0.3, mid_color)
+	spray_gradient.add_point(1.0, fade_color)  # Fade out
 	blood_spray.color_ramp = spray_gradient
 
 	# HIGH Z-INDEX to render in front of enemy/dummy sprites
@@ -412,46 +495,70 @@ func spawn_destruction_particles() -> void:
 
 	world.add_child(blood_spray)
 	blood_spray.emitting = true
+	print("   🎨 Blood spray particles added to world and emitting!")
 
 	# 💀 DARK BLOOD CHUNKS - slower, heavier pieces
 	var chunks = CPUParticles2D.new()
 	chunks.emitting = false
 	chunks.one_shot = true
 	chunks.explosiveness = 1.0
-	chunks.amount = 12  # More chunks
-	chunks.lifetime = 1.0
+	chunks.amount = 4  # Minimal chunks
+	chunks.lifetime = 0.5
 	chunks.local_coords = false
 	chunks.global_position = global_position
 
 	chunks.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	chunks.emission_sphere_radius = 15.0
-	chunks.texture = tex
+	chunks.emission_sphere_radius = 6.0  # Tight spread
+
+	# Create circular gradient texture for droplets/fragments (larger, more opaque)
+	var chunk_img = Image.create(12, 12, false, Image.FORMAT_RGBA8)
+	chunk_img.fill(Color.TRANSPARENT)
+	var chunk_center = Vector2(6, 6)
+	var chunk_color = colors["particle_dark"]
+	for x in range(12):
+		for y in range(12):
+			var dist = chunk_center.distance_to(Vector2(x, y))
+			if dist < 6.0:
+				# Slightly irregular droplet/fragment shape
+				var alpha = 1.0 - (dist / 6.0)
+				alpha = pow(alpha, 0.8)  # More solid center
+				var pixel_color = chunk_color
+				pixel_color.a = alpha * 0.9
+				chunk_img.set_pixel(x, y, pixel_color)
+	var chunk_tex = ImageTexture.create_from_image(chunk_img)
+	chunks.texture = chunk_tex
 
 	chunks.direction = Vector2(0, 0)
 	chunks.spread = 180.0
-	chunks.initial_velocity_min = 60.0
-	chunks.initial_velocity_max = 130.0
+	chunks.initial_velocity_min = 25.0  # Slower velocity
+	chunks.initial_velocity_max = 50.0
 	chunks.gravity = Vector2(0, 150)
 
-	chunks.scale_amount_min = 5.0
-	chunks.scale_amount_max = 10.0
+	chunks.scale_amount_min = 1.5  # Blood droplets
+	chunks.scale_amount_max = 3.0
 
-	chunks.color = Color(1.8, 0.2, 0.2, 1.0)  # Dark red chunks
-
+	# Color gradient: darker chunks/fragments that fade
 	var chunk_gradient = Gradient.new()
-	chunk_gradient.add_point(0.0, Color(1, 1, 1, 1))
-	chunk_gradient.add_point(0.8, Color(1, 1, 1, 0.35))
-	chunk_gradient.add_point(1.0, Color(1, 1, 1, 0))
+	var chunk_bright = colors["particle_dark"]
+	var chunk_mid = colors["particle_dark"] * 0.8
+	chunk_mid.a = 0.7
+	var chunk_fade = colors["particle_dark"] * 0.5
+	chunk_fade.a = 0
+	chunk_gradient.add_point(0.0, chunk_bright)
+	chunk_gradient.add_point(0.5, chunk_mid)
+	chunk_gradient.add_point(1.0, chunk_fade)
 	chunks.color_ramp = chunk_gradient
 
-	chunks.angular_velocity_min = -560.0
-	chunks.angular_velocity_max = 560.0
+	# Gentle rotation for natural droplet motion
+	chunks.angular_velocity_min = -180.0
+	chunks.angular_velocity_max = 180.0
 
 	# HIGH Z-INDEX to render in front of enemy/dummy sprites
 	chunks.z_index = 400
 
 	world.add_child(chunks)
 	chunks.emitting = true
+	print("   💀 Blood chunks added to world and emitting!")
 
 	await get_tree().create_timer(1.2).timeout
 	if is_instance_valid(blood_spray):

@@ -49,17 +49,8 @@ func _ready() -> void:
 	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))  # Same scaling as XP
 
-	# Calculate weakpoint count based on PLAYER level (not enemy level)
-	var player_level = CharacterStats.level
-	if player_level >= 20:
-		num_weakpoints = 3  # Level 20+: All 3 weakpoints
-	elif player_level >= 10:
-		num_weakpoints = 2  # Level 10-19: 2 weakpoints
-	else:
-		num_weakpoints = 1  # Level 1-9: 1 weakpoint
-
 	# Debug gold drop calculation
-	DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d, num_weakpoints: %d (based on player level %d)" % [enemy_level, gold_drop_base, gold_drop, num_weakpoints, player_level])
+	DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d" % [enemy_level, gold_drop_base, gold_drop])
 	
 	current_health = max_health
 	health_bar.update_health(current_health, max_health)
@@ -406,9 +397,21 @@ func start_crit_window(difficulty: float = 1.0) -> void:
 	window_timer.start()
 
 func spawn_weakpoints() -> void:
+	# Calculate weakpoint count based on CURRENT PLAYER level (when crit triggers, not when enemy spawned)
+	# Level cap is 30, no stat gains past 25
+	var player_level = CharacterStats.level
+	if player_level >= 21:
+		num_weakpoints = 3  # Level 21+: All 3 weakpoints
+	elif player_level >= 11:
+		num_weakpoints = 2  # Level 11-20: 2 weakpoints
+	else:
+		num_weakpoints = 1  # Level 1-10: 1 weakpoint
+
+	print("🎯 Calculating weakpoints: Player level %d → %d weakpoints" % [player_level, num_weakpoints])
+
 	# 🎯 SECTIONED POSITION POOL - Organized by body parts!
 	# Max 2 weakpoints per section for better spread
-	
+
 	# 🎯 OPTIMIZED POSITIONS - Better spacing, no clustering!
 	# 17 well-distributed positions (down from 20)
 	# Minimum 8+ pixel spacing between all positions
@@ -478,20 +481,25 @@ func spawn_weakpoints() -> void:
 	print("📊 Final distribution - Upper: %d | Mid: %d | Lower: %d (Total: %d)" %
 		[positions_per_section["upper"], positions_per_section["mid"], positions_per_section["lower"], spots_needed])
 
+	print("🎯 SPAWNING %d WEAKPOINTS for player level %d" % [spots_needed, CharacterStats.level])
+
 	# Slightly smaller scale for better fit
 	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR
 	
 	for i in range(chosen_positions.size()):
 		var weakpoint_scene = preload("res://scenes/enemies/weakpoint.tscn")
 		var weakpoint = weakpoint_scene.instantiate()
-		
+
+		# Set bone theme for skeletons (no blood!)
+		weakpoint.color_theme = "bone"
+
 		# Position from randomly chosen pool
 		weakpoint.position = chosen_positions[i]
 		weakpoint.scale = Vector2(counter_scale, counter_scale)
-		
+
 		# ✨ RANDOM ROTATION for dynamic look!
 		weakpoint.rotation = randf_range(-PI, PI)
-		
+
 		weakpoint.weakpoint_hit.connect(_on_weakpoint_hit)
 		weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed)
 		add_child(weakpoint)
