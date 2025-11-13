@@ -80,13 +80,219 @@ The path creates an S-curve through the wasteland, winding north and south:
 
 ## Combat System
 
-### Enemy Spawn Points (15 total)
-Enemies spawn along the journey from campfire to castle:
-```
-Positions range from (1200, -350) to (7200, -80)
-Progressive difficulty LEFT→RIGHT
-Spread across vertical range for variety
-```
+### Enemy Progression & Zone Design
+
+**Journey**: 7,200 pixels from Campfire (400, 0) to Castle (7,600, 0)
+
+#### Zone-Based Level Scaling
+
+**Zone 1: The Wasteland** (Campfire → Ruins 1: ~2,000px)
+- **Roaming enemies**: Levels 1, 3, 5, 7 (scattered along path)
+- **Ruins 1 guardians**: 8x Level 8 skeletons
+- **Player expected level**: 1-10
+- **Theme**: Tutorial area, learn combat mechanics
+- **Enemy type**: Basic Skeletons (white bone, light gear)
+
+**Zone 2: The Cursed Lands** (Ruins 1 → Ruins 2: ~2,200px)
+- **Roaming enemies**: Levels 9, 11, 13, 15 (more frequent spawns)
+- **Ruins 2 guardians**: 8x Level 16 skeletons
+- **Player expected level**: 10-18
+- **Theme**: Difficulty ramps up, need better gear
+- **Enemy type**: Armored Skeletons (gray metal, shields)
+
+**Zone 3: The Shadow Realm** (Ruins 2 → Ruins 3: ~2,000px)
+- **Roaming enemies**: Levels 17, 19, 21, 23 (dense spawns)
+- **Ruins 3 guardians**: 8x Level 24 skeletons
+- **Player expected level**: 18-26
+- **Theme**: Late game, need max stats soon
+- **Enemy type**: Shadow Skeletons (dark purple, faster attacks)
+
+**Zone 4: Castle Approach** (Ruins 3 → Castle: ~1,000px)
+- **Elite guards**: 3-4 encounters with levels 26, 28, 30
+- **Door guardians**: 2x Level 30 (must defeat to unlock boss)
+- **Player expected level**: 25-30 (max stats + good gear)
+- **Theme**: Gauntlet before boss, prove you're ready
+- **Enemy type**: Royal Guards (golden trim, elite warriors)
+
+**Boss Zone: Castle Interior**
+- **Boss**: Level 33 (Necromancer King / Shadow Lord)
+- **Mechanics**: 2-phase fight or summon system
+- **Requires**: Level 25+ stats + upgraded weapons/armor
+- **Rewards**: 2,000-5,000 gold, guaranteed legendary weapon (Level 33-35)
+
+#### Enemy Placement Formula
+
+**Smooth progression**: Every ~300px = +1 enemy level
+
+| Position | Enemy Level | Type |
+|----------|-------------|------|
+| 400 | Level 1 | Campfire (safe zone) |
+| 700 | Level 1 | Roaming skeleton |
+| 1000 | Level 2 | Roaming skeleton |
+| 1300 | Level 3 | Roaming skeleton |
+| 1600 | Level 5 | Roaming skeleton |
+| 1900 | Level 7 | Roaming skeleton |
+| **2184** | **Level 8** | **Ruins 1 Guardians (8x)** |
+| 2500 | Level 9 | Roaming skeleton |
+| 3000 | Level 11 | Roaming skeleton |
+| 3500 | Level 13 | Roaming skeleton |
+| 4000 | Level 15 | Roaming skeleton |
+| **4200** | **Level 16** | **Ruins 2 Guardians (8x)** |
+| 4700 | Level 18 | Roaming skeleton |
+| 5200 | Level 20 | Roaming skeleton |
+| 5700 | Level 22 | Roaming skeleton |
+| **6000** | **Level 24** | **Ruins 3 Guardians (8x)** |
+| 6400 | Level 26 | Elite guard |
+| 6800 | Level 28 | Elite guard |
+| 7200 | Level 30 | Door Guardians (2x) |
+| **7600** | **Level 33** | **BOSS (Necromancer King)** |
+
+#### Roaming vs Stationary Behavior
+
+**Roaming Enemies**:
+- Patrol 200-300px path segments
+- Lower density (1 every ~400px)
+- Drop standard loot
+- Can be avoided with skillful movement
+
+**Ruins Guardians**:
+- Circle ruins in formation (180-unit radius)
+- Higher level than nearby roamers
+- Better loot drops (mini-boss quality)
+- Must defeat at least 1 to convert ruins to campfire
+
+#### Progression Gates
+
+**Soft Gates** (recommended level):
+- Zone 1: Suggested level 1-10
+- Zone 2: Suggested level 10-18
+- Zone 3: Suggested level 18-26
+- Boss: Suggested level 25-30
+
+**Hard Gates** (required):
+1. **Ruins 1 Conversion**: Must kill at least 1 guardian to unlock vendor
+2. **Castle Door**: Must be level 20+ to attempt door guardians
+3. **Door Guardians**: Must defeat 2x Level 30 elites to unlock boss room
+
+#### Loot Scaling by Zone
+
+**Zone 1** (Levels 1-8):
+- Gold: 5-20 per kill
+- Weapon drop rate: 3%
+- Drop quality: Level 5-10 gear
+
+**Zone 2** (Levels 9-16):
+- Gold: 25-60 per kill
+- Weapon drop rate: 5%
+- Drop quality: Level 12-18 gear
+
+**Zone 3** (Levels 17-24):
+- Gold: 70-120 per kill
+- Weapon drop rate: 7%
+- Drop quality: Level 20-26 gear
+
+**Zone 4** (Levels 25-30):
+- Gold: 150-250 per kill
+- Weapon drop rate: 10%
+- Drop quality: Level 28-30 gear
+
+**Boss** (Level 33):
+- Gold: 2,000-5,000
+- Guaranteed legendary weapon (Level 33-35)
+- Cosmetic reward (title, special armor skin)
+
+#### Ruins as Checkpoints & Vendors
+
+**Ruins 1** (Level 8 area):
+- Convert to unlock vendor access
+- Sells Level 10-12 weapons and armor
+- Respawn point for Zones 1-2
+- Acts as mid-point safe zone
+
+**Ruins 2** (Level 16 area):
+- Sells Level 18-20 gear
+- Weapons with stat bonuses (+AGI, +STR)
+- Respawn point for Zones 2-3
+- Required for progressing to Zone 3
+
+**Ruins 3** (Level 24 area):
+- Sells Level 26-28 gear (best pre-boss)
+- High-tier weapons with crit chance bonuses
+- Respawn point for Zones 3-4 and boss attempts
+- Final preparation before boss fight
+
+#### Death & Respawn System
+
+**Respawn Locations**:
+- Die in Zone 1 → Respawn at main Campfire (400, 0)
+- Die in Zone 2 → Respawn at Ruins 1 (if converted)
+- Die in Zone 3 → Respawn at Ruins 2 (if converted)
+- Die in Zone 4 or Boss → Respawn at Ruins 3 (if converted)
+
+**Death Penalty**:
+- Lose 10% of current XP progress (not enough to de-level)
+- Encourages converting ruins for closer respawns
+- Creates risk/reward for pushing forward
+
+#### Boss Design
+
+**Level 33 Necromancer King**
+
+**Stats**:
+- HP: 5,000-8,000 (long endurance fight)
+- Damage: 30-40 per hit (punishing but not one-shot)
+- Crit chance: 15% (dangerous crit windows)
+- Attack speed: 1.0s (slower than player but hits hard)
+
+**Mechanics** (choose one):
+
+**Option A: Summon Mechanic**
+- Boss summons 2x Level 28 skeleton adds every 30 seconds
+- Must manage adds while DPSing boss
+- Tests multi-target combat skill
+
+**Option B: Phase Transition**
+- Phase 1 (100%-50% HP): Normal combat
+- Phase 2 (50%-0% HP): Gains shadow armor, requires weakpoint hits to break
+- Forces players to master crit system
+
+**Option C: Arena Hazards**
+- Purple zones spawn on ground (10 damage/sec)
+- Forces movement during combat
+- Tests positioning + combat skill
+
+**Rewards**:
+- 2,000-5,000 gold
+- Guaranteed legendary weapon (Level 33-35, best in game)
+- Cosmetic title: "Necromancer Slayer"
+- Special armor skin (visual only)
+
+#### Visual Zone Progression
+
+**Zone 1**: Brown wasteland, sparse dead trees, bright lighting (tutorial feel)
+**Zone 2**: Darker terrain, fog increasing, ominous atmosphere (danger rising)
+**Zone 3**: Purple/black corruption on ground, thick mist (nightmare zone)
+**Zone 4**: Castle walls visible, red sky, foreboding (end is near)
+**Boss Arena**: Dark throne room, dramatic lighting, boss on elevated platform
+
+#### Post-Boss Content (Future)
+
+**Option 1: New Game+**
+- Replay journey with all enemies +5 levels
+- Boss becomes Level 38
+- Better loot drops (Level 38-40 gear)
+
+**Option 2: Boss Rush Mode**
+- Fight Ruins 1, 2, 3 guardians + boss back-to-back
+- No healing between fights
+- Leaderboard for fastest clear time
+
+**Option 3: Endless Mode**
+- After boss defeat, unlock "Nightmare Path"
+- Endless waves of enemies, increasing difficulty
+- See how far you can survive
+
+---
 
 ### Weakpoint System
 Optimized weakpoint positions for skeleton enemies:
