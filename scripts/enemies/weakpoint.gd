@@ -444,10 +444,10 @@ func spawn_destruction_particles() -> void:
 
 	world.add_child(chunks)
 	chunks.emitting = true
-	
+
 	await get_tree().create_timer(1.2).timeout
-	if is_instance_valid(dust):
-		dust.queue_free()
+	if is_instance_valid(blood_spray):
+		blood_spray.queue_free()
 	if is_instance_valid(chunks):
 		chunks.queue_free()
 
