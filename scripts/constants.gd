@@ -94,7 +94,7 @@ const WORLD_EDGE_BUFFER: float = 300.0  # Keep props away from edges
 const TERRAIN_PATCH_SPACING: int = 900  # Distance between terrain patches
 const TERRAIN_PATCH_COVERAGE: float = 0.8  # 80% of grid spots get patches (1 - 0.2)
 const TREE_GRID_SPACING: int = 200  # Distance between tree spawn points
-const TREE_SPAWN_RATE: float = 0.20  # 20% chance to spawn tree at each point
+const TREE_SPAWN_RATE: float = 0.31  # 31% chance to spawn tree at each point (dense forest coverage)
 
 # Prop Counts
 const TERRAIN_FEATURE_COUNT: int = 30  # Large rock formations
