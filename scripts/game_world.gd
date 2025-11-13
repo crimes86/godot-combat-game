@@ -2376,8 +2376,8 @@ func spawn_lava_pools():
 		var pool_rotation = 0.0
 
 		if rng.randf() > 0.3:  # 70% elongated
-			elongation_x = rng.randf_range(0.6, 1.6)  # Horizontal stretch
-			elongation_y = rng.randf_range(0.6, 1.6)  # Vertical stretch
+			elongation_x = rng.randf_range(0.8, 1.25)  # Subtle horizontal stretch (stay rounded)
+			elongation_y = rng.randf_range(0.8, 1.25)  # Subtle vertical stretch (stay rounded)
 			pool_rotation = rng.randf() * TAU  # Random rotation for elongated pools
 
 		# Create lava pool node
@@ -2591,6 +2591,26 @@ func spawn_lava_pools():
 		particles.texture = ember_texture
 
 		lava_pool.add_child(particles)
+
+		# Add damage area (tighter circle - 60% of pool size so edges are safe)
+		var damage_area = Area2D.new()
+		damage_area.collision_layer = 0  # Don't exist on any layer
+		damage_area.collision_mask = 1  # Detect layer 1 (player)
+
+		# Add damage script
+		var damage_script = load("res://scripts/effects/LavaDamage.gd")
+		damage_area.set_script(damage_script)
+
+		# Create circular collision shape (60% of pool size)
+		var collision_shape = CollisionShape2D.new()
+		var circle_shape = CircleShape2D.new()
+		# Use 60% of the smaller dimension to create tight circle
+		var damage_radius = (pool_size / 2) * 0.6 * min(elongation_x, elongation_y)
+		circle_shape.radius = damage_radius
+		collision_shape.shape = circle_shape
+
+		damage_area.add_child(collision_shape)
+		lava_pool.add_child(damage_area)
 
 		add_child(lava_pool)
 
