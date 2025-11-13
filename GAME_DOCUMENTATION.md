@@ -292,6 +292,227 @@ The path creates an S-curve through the wasteland, winding north and south:
 - Endless waves of enemies, increasing difficulty
 - See how far you can survive
 
+#### Multiplayer Scaling & Group Mechanics
+
+**Design Philosophy**: Hybrid Dynamic Scaling
+- **Base tuning**: Designed for 2 players (duo)
+- **Solo**: Hard but possible with skill
+- **Groups (3+)**: Easier, faster progression
+- **Grouping is rewarded, not required**
+
+**Difficulty Tiers:**
+
+| Players | Difficulty | Enemy HP | Enemy Damage | XP Per Player | Loot Bonus |
+|---------|-----------|----------|--------------|---------------|------------|
+| 1 (Solo) | HARD | 100% | 100% | 100% | 0% |
+| 2 (Duo) | BALANCED | 140% | 110% | 110% | +5% |
+| 3 (Trio) | EASY | 180% | 115% | 105% | +10% |
+| 4-5 (Party) | VERY EASY | 220-260% | 120% | 100% | +15% |
+
+**Enemy Scaling Formula:**
+- **HP**: Base HP × (1 + 0.4 × (players - 1))
+  - 1 player: 100% HP
+  - 2 players: 140% HP (tuned for this)
+  - 3 players: 180% HP (easier per-player)
+  - 5 players: 260% HP (much easier per-player)
+
+- **Damage**: Base damage × (1 + 0.1 × (players - 1))
+  - Scales slower than HP (groups naturally tankier)
+  - 1 player: 100% damage
+  - 5 players: 140% damage
+
+**XP Bonus System:**
+- **Duo (2 players)**: Each gets 110% XP (20% total bonus!)
+- **Trio (3 players)**: Each gets 105% XP (15% total bonus)
+- **Party (4-5)**: Each gets 100% XP (no penalty, balanced)
+
+**Why XP Bonuses?**
+- Encourages grouping without forcing it
+- Rewards social play
+- Duo gets biggest per-player bonus (sweet spot)
+- 3+ players still beneficial (easier combat + loot bonuses)
+
+**Loot Distribution:**
+- **Gold**: Split evenly, but enemies drop more gold in groups
+  - 2 players: Enemy drops 110% gold, split 55% each
+  - 3 players: Enemy drops 120% gold, split 40% each
+  - 5 players: Enemy drops 150% gold, split 30% each
+
+- **Weapon/Armor Drops**: Personal loot (each player rolls separately)
+  - Drop rate increases with group size
+  - Solo: 3% base drop rate
+  - Duo: 5% drop rate each
+  - Trio: 7% drop rate each
+  - Party: 10% drop rate each
+
+- **Boss Drops**: Everyone gets guaranteed legendary weapon
+  - Each player receives their own Level 33-35 weapon
+  - Encourages group boss kills
+  - No fighting over loot
+
+**Zone-Specific Difficulty (Solo vs Group):**
+
+**Zone 1 (Levels 1-8): Solo-Friendly**
+- Tutorial area, designed to be soloable
+- Players learn combat mechanics alone
+- Grouping is optional (faster but not needed)
+
+**Zone 2 (Levels 9-16): Duo Recommended**
+- Enemy HP/damage tuned for 2 players
+- Solo requires good gear or over-leveling
+- Example: Level 16 skeleton has 800 HP base
+  - Solo: 800 HP, 30 damage → Hard fight
+  - Duo: 1,120 HP, 33 damage → Balanced fight
+  - Trio: 1,440 HP, 36 damage → Easy fight
+
+**Zone 3 (Levels 17-24): Duo Strongly Recommended**
+- Enemies hit harder, have more HP
+- Solo requires max stats + good gear + skill
+- Example: Level 24 skeleton has 1,500 HP base
+  - Solo: 1,500 HP, 50 damage → Very hard
+  - Duo: 2,100 HP, 55 damage → Challenging but fair
+  - Trio: 2,700 HP, 60 damage → Manageable
+
+**Zone 4 (Levels 25-30): Group Recommended**
+- Elite enemies designed for coordinated combat
+- Solo is "challenge mode"
+- Example: Level 30 Royal Guard has 2,500 HP base
+  - Solo: 2,500 HP, 70 damage → Extreme challenge
+  - Duo: 3,500 HP, 77 damage → Difficult but doable
+  - Trio: 4,500 HP, 84 damage → Balanced
+
+**Boss (Level 33): Designed for 2-3 Players**
+- **Solo**: Extreme challenge mode (possible but very hard)
+  - 5,000-8,000 HP, 30-40 damage
+  - Requires perfect clicking, gear, and skill
+  - 3-5 minute fight with no mistakes
+  - Bragging rights for solo kills!
+
+- **Duo (2 players)**: Balanced boss fight
+  - 7,000-11,200 HP, 33-44 damage
+  - 2-3 minute coordinated fight
+  - Each player manages their own crit windows
+  - Intended difficulty
+
+- **Trio (3 players)**: Easier boss fight
+  - 9,000-14,400 HP, 36-48 damage
+  - 1-2 minute fight
+  - More forgiving, faster clear
+
+- **Party (4-5 players)**: Easy mode
+  - 11,000-20,800 HP, 39-52 damage
+  - <1 minute fight
+  - Farming boss for alts/gear
+
+**Boss Scaling Options:**
+
+Choose one mechanic based on group size:
+
+**Solo/Duo (1-2 players):**
+- **Option B: Phase Transition** (rewards skill)
+  - Phase 1: Normal combat
+  - Phase 2: Shadow armor, requires weakpoint hits
+  - Tests mastery of crit system
+
+**Trio (3 players):**
+- **Option A: Summon Mechanic** (tests coordination)
+  - Boss summons 2x Level 28 adds every 30 seconds
+  - Group must manage adds while DPSing boss
+  - Tests multi-target combat
+
+**Party (4-5 players):**
+- **Option C: Arena Hazards** (keeps it interesting)
+  - Purple damage zones spawn on ground
+  - Prevents boss from being pure tank-and-spank
+  - Still easier, but requires some movement
+
+**Ruins Guardians (Group Tactics):**
+
+**8x Guardians circling each ruins:**
+
+- **Solo Strategy**: Pick off 1-2 at a time
+  - Pull individual guardians away from pack
+  - Risky if others aggro
+  - Takes 5-10 minutes to clear
+
+- **Duo Strategy**: Fight 3-4 at once
+  - Manageable with coordination
+  - Share aggro, focus fire
+  - Takes 3-5 minutes to clear
+
+- **Group Strategy**: Pull all 8 at once
+  - AoE damage, mass clear
+  - Fast and efficient
+  - Takes 1-2 minutes to clear
+
+**Respawn in Multiplayer:**
+
+**Party Member Dies:**
+- Respawn at nearest converted ruins
+- Can run back to rejoin party
+- No XP penalty if party survives
+
+**Party Wipe (All Die):**
+- All respawn together at same ruins
+- 10% XP loss for each player
+- Encourages safer play
+
+**Party Member Joins Mid-Fight:**
+- Can rejoin active combat
+- Enemies don't reset
+- Allows reinforcements
+
+**Aggro System:**
+
+**Threat Generation:**
+- **Damage dealt**: +1 threat per damage
+- **Proximity**: Closer = higher threat
+- **Healing**: +0.5 threat per HP healed (future)
+
+**Enemy Behavior:**
+- Targets highest threat player
+- Switches target if threat difference >50%
+- Roaming enemies aggro nearest player in range
+
+**Tank/DPS Roles Emerge Naturally:**
+- High-damage players (DPS): Focus on crit windows, stay back
+- Tanky players (VIT build): Get in close, draw aggro
+- Balanced players (Hybrid): Flexible positioning
+
+**Progression Gates in Multiplayer:**
+
+**Ruins Conversion:**
+- Any party member can interact to convert
+- Conversion unlocks vendor for entire party
+- All party members can use ruins as respawn
+
+**Level Gates (Castle Door):**
+- Checks party leader's level OR highest level in party
+- Must be level 20+ to enter Zone 4
+- Prevents low-level players from being carried too hard
+
+**Door Guardians (2x Level 30):**
+- Must defeat as group to unlock boss room
+- Unlock persists for all party members
+- Can re-enter boss room freely after unlock
+
+**Social Features (Future):**
+
+**Party System:**
+- Party size: 1-5 players
+- Party leader controls loot rules
+- Shared quest progress (ruins conversion)
+
+**Guild/Clan System:**
+- Guild ruins (claim ruins as guild territory)
+- Guild PvP (contest ruins ownership)
+- Guild bonuses (XP/loot boosts)
+
+**World Events:**
+- Boss spawns in open world (10+ players)
+- Defend ruins from skeleton invasions
+- Competitive leaderboards
+
 ---
 
 ### Weakpoint System
