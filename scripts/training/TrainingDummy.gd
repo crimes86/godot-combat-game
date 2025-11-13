@@ -281,8 +281,8 @@ func spawn_weakpoints() -> void:
 
 func _on_weakpoint_hit(weakpoint) -> void:
 	"""Handle weakpoint being hit - deal damage and show combat text"""
-	# Calculate crit damage (same as regular attack but with crit multiplier)
-	var base_damage = CharacterStats.damage
+	# Calculate crit damage using player's base damage
+	var base_damage = CharacterStats.get_base_damage()
 	var crit_damage = base_damage * Constants.CRIT_DAMAGE_MULTIPLIER
 
 	# Deal damage with crit flag
