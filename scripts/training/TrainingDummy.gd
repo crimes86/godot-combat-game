@@ -272,15 +272,28 @@ func spawn_weakpoints() -> void:
 	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR
 	weakpoint.scale = Vector2(counter_scale, counter_scale)
 
-	# Connect weakpoint signal
+	# Connect weakpoint signals
+	weakpoint.weakpoint_hit.connect(_on_weakpoint_hit)
 	weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed)
 
 	add_child(weakpoint)
 	weakpoints.append(weakpoint)
 
-func _on_weakpoint_destroyed() -> void:
-	"""Handle weakpoint destruction"""
+func _on_weakpoint_hit(weakpoint) -> void:
+	"""Handle weakpoint being hit - deal damage and show combat text"""
+	# Calculate crit damage (same as regular attack but with crit multiplier)
+	var base_damage = CharacterStats.damage
+	var crit_damage = base_damage * Constants.CRIT_DAMAGE_MULTIPLIER
+
+	# Deal damage with crit flag
+	take_damage(crit_damage, true)
+
+	# Emit signal for any listeners
 	emit_signal("weakpoint_hit_success")
+
+func _on_weakpoint_destroyed(weakpoint) -> void:
+	"""Handle weakpoint destruction"""
+	pass  # Just visual feedback, damage is handled by hits
 
 func _on_crit_window_timeout() -> void:
 	"""Crit window expired - return to normal"""
