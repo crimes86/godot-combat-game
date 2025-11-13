@@ -259,13 +259,12 @@ func start_crit_window(difficulty: float = 1.0) -> void:
 
 func spawn_weakpoints() -> void:
 	"""Spawn a single weakpoint on the dummy for practice"""
-	const WEAKPOINT_SCRIPT = preload("res://scripts/enemies/weakpoint.gd")
+	var weakpoint_scene = preload("res://scenes/enemies/weakpoint.tscn")
 
 	# Simple position - center of dummy
 	var weakpoint_pos = Vector2(0, -32)
 
-	var weakpoint = Area2D.new()
-	weakpoint.set_script(WEAKPOINT_SCRIPT)
+	var weakpoint = weakpoint_scene.instantiate()
 	weakpoint.position = weakpoint_pos
 	weakpoint.z_index = 150
 
