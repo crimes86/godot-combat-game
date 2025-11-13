@@ -161,6 +161,11 @@ func spawn_skeleton(index: int) -> void:
 	# Wait a frame for skeleton to initialize
 	await get_tree().process_frame
 
+	# Set 120px aggro range for guardians (allows body pulls)
+	if skeleton.has_node("EnemyAI"):
+		var ai = skeleton.get_node("EnemyAI")
+		ai.aggro_range = 120.0  # Tighter aggro for body pulls
+
 	# Verify skeleton was added
 	if not is_instance_valid(skeleton):
 		push_error("❌ Skeleton %d became invalid after adding to tree!" % index)
@@ -400,6 +405,11 @@ func respawn_skeleton(data: Dictionary) -> void:
 
 	# Wait for skeleton to initialize
 	await get_tree().process_frame
+
+	# Set 120px aggro range for guardians (allows body pulls)
+	if skeleton.has_node("EnemyAI"):
+		var ai = skeleton.get_node("EnemyAI")
+		ai.aggro_range = 120.0  # Tighter aggro for body pulls
 
 	if skeleton.has_signal("died"):
 		skeleton.died.connect(_on_skeleton_died.bind(skeleton))

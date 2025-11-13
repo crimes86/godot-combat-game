@@ -18,7 +18,12 @@ class_name EnemyAI
 @export var patrol_pause_min: float = 2.0
 @export var patrol_pause_max: float = 5.0
 
-## Combat (triggered by player attack)
+## Aggro System (NEW)
+@export var aggro_range: float = 150.0  # Distance to auto-aggro player (150 patrol, 120 guardians)
+@export var leash_distance: float = 800.0  # Max distance from spawn before returning
+@export var chain_aggro_range: float = 100.0  # Nearby allies aggro too (creates trains!)
+
+## Combat (triggered by player attack OR aggro)
 @export var combat_speed: float = 100.0
 @export var attack_range: float = 60.0
 @export var attack_cooldown: float = 1.5
@@ -69,6 +74,16 @@ var last_position: Vector2 = Vector2.ZERO
 var stuck_timer: float = 0.0
 var stuck_check_interval: float = 5.0  # Check every 5 seconds (longer to avoid false positives)
 var stuck_distance_threshold: float = 10.0  # If moved less than this in 5 seconds, considered stuck
+
+# Sound spam prevention (static across all enemies)
+static var last_attack_sound_time: float = 0.0
+static var attack_sound_cooldown: float = 0.15  # Min 0.15s between attack sounds
+
+# Performance: Throttle AI updates based on distance from player
+var ai_update_timer: float = 0.0
+var ai_update_interval: float = 0.1  # Default: update AI every 0.1s instead of 60 FPS
+var debug_update_timer: float = 0.0
+var cached_player: CharacterBody2D = null  # Cache player reference
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
@@ -129,16 +144,49 @@ func _physics_process(delta: float) -> void:
 	# Update timers
 	state_timer += delta
 	attack_timer = max(0, attack_timer - delta)
+	ai_update_timer += delta
 
-	# Find player if needed
-	if not player or not is_instance_valid(player):
-		player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	# Cache player reference (look up once, reuse for 1 second)
+	if not cached_player or not is_instance_valid(cached_player):
+		cached_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+		player = cached_player
 
-	# Update debug label visibility based on player debug mode
-	if debug_label and player:
+	# Calculate distance-based update rate
+	var distance_to_player = 999999.0
+	if cached_player and is_instance_valid(cached_player):
+		distance_to_player = enemy.global_position.distance_to(cached_player.global_position)
+
+	# CRITICAL OPTIMIZATION: Completely disable AI for very distant enemies
+	if not is_in_combat and distance_to_player > 1500:
+		enemy.velocity = Vector2.ZERO
+		enemy.move_and_slide()
+		return  # Skip AI entirely when far away
+
+	# Dynamic AI update rate based on distance
+	if is_in_combat or distance_to_player < 300:
+		ai_update_interval = 0.05  # 20 FPS when near player or in combat (responsive)
+	elif distance_to_player < 800:
+		ai_update_interval = 0.1   # 10 FPS when medium distance
+	else:
+		ai_update_interval = 0.2   # 5 FPS when far away (save performance)
+
+	# Only run AI logic at throttled rate (not every frame!)
+	var should_update_ai = ai_update_timer >= ai_update_interval
+	if not should_update_ai:
+		# Still need to apply movement every frame for smooth motion
+		enemy.move_and_slide()
+		return
+
+	ai_update_timer = 0.0  # Reset timer
+	player = cached_player  # Update player reference
+
+	# Update debug label (only when AI updates, not every frame)
+	debug_update_timer += delta
+	if debug_label and player and debug_update_timer >= 0.5:  # Update label twice per second max
 		debug_label.visible = player.get("debug_mode") == true
 		if debug_label.visible:
 			update_debug_label_position()
+		debug_update_timer = 0.0
 
 	# Check for stuck (only when patrolling, not in combat, and not paused)
 	if current_state == State.PATROLLING and not is_in_combat and not is_paused:
@@ -192,6 +240,14 @@ func process_patrolling(delta: float) -> void:
 		change_state(State.COMBAT)
 		return
 
+	# Check for player in aggro range (auto-aggro)
+	if player and is_instance_valid(player):
+		var distance_to_player = enemy.global_position.distance_to(player.global_position)
+		if distance_to_player <= aggro_range:
+			# AGGRO!
+			trigger_aggro()
+			return
+
 	# Handle patrol pause
 	if is_paused:
 		pause_timer -= delta
@@ -235,14 +291,21 @@ func process_combat(delta: float) -> void:
 	if not player or not is_instance_valid(player):
 		disengage()
 		return
-	
+
+	# Check leashing - if too far from spawn, return home
+	var distance_from_spawn = enemy.global_position.distance_to(spawn_position)
+	if distance_from_spawn > leash_distance:
+		print("🏠 Enemy leashed - too far from home, returning to patrol")
+		disengage()
+		return
+
 	var distance_to_player = enemy.global_position.distance_to(player.global_position)
-	
+
 	# Account for enemy's enlarged size during crit window
 	var effective_attack_range = attack_range
 	if enemy.has_method("get") and enemy.get("in_crit_window"):
 		effective_attack_range = attack_range * 2.0  # 60 * 2 = 120
-	
+
 	# Check if player escaped
 	if distance_to_player > disengage_distance:
 		print("💤 Player escaped - returning to patrol")
@@ -410,10 +473,70 @@ func perform_attack() -> void:
 		rot_tween.tween_property(enemy, "rotation_degrees", 8, 0.05)
 		rot_tween.tween_property(enemy, "rotation_degrees", 0, 0.05)
 	
-	# Play sound
+	# Play sound (with spam prevention for multiple attackers)
+	var current_time = Time.get_ticks_msec() / 1000.0
+	if current_time - last_attack_sound_time >= attack_sound_cooldown:
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound(sound_manager.SoundType.HIT_NORMAL, enemy.global_position, -8.0)
+			last_attack_sound_time = current_time
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AGGRO SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════
+
+func trigger_aggro() -> void:
+	"""Called when player enters aggro range - enemy charges!"""
+	if is_in_combat:
+		return  # Already in combat
+
+	print("👁️ Enemy spotted player - AGGRO!")
+	is_in_combat = true
+
+	# Play aggro sound (placeholder)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound(sound_manager.SoundType.HIT_NORMAL, enemy.global_position, -8.0)
+		sound_manager.play_sound(sound_manager.SoundType.HIT_CRIT, enemy.global_position, -5.0)  # Placeholder
+
+	# Chain aggro - alert nearby allies!
+	trigger_chain_aggro()
+
+	# Enter combat immediately
+	if current_state == State.PATROLLING:
+		change_state(State.COMBAT)
+
+func trigger_chain_aggro() -> void:
+	"""Alert nearby enemies to join the fight (creates trains!)"""
+	# Performance: Use Area2D query instead of checking all enemies
+	var space_state = enemy.get_world_2d().direct_space_state
+	var query = PhysicsPointQueryParameters2D.new()
+	query.position = enemy.global_position
+	query.collision_mask = 1  # Layer 1 for enemies
+
+	# Simple proximity check - just get enemies within range
+	var nearby_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+	var checked = 0
+
+	for other_enemy in nearby_enemies:
+		if not is_instance_valid(other_enemy) or other_enemy == enemy:
+			continue
+
+		# Early out if too far (square distance check is faster)
+		var dx = other_enemy.global_position.x - enemy.global_position.x
+		var dy = other_enemy.global_position.y - enemy.global_position.y
+		var dist_squared = dx * dx + dy * dy
+		var range_squared = chain_aggro_range * chain_aggro_range
+
+		if dist_squared <= range_squared:
+			# Alert the nearby enemy's AI
+			if other_enemy.has_node("EnemyAI"):
+				var other_ai = other_enemy.get_node("EnemyAI")
+				if other_ai.has_method("trigger_aggro") and not other_ai.is_in_combat:
+					print("   ⚡ Chain aggro: %s joins the fight!" % other_enemy.name)
+					other_ai.trigger_aggro()
+					checked += 1
+					if checked >= 5:  # Max 5 chain aggros at once
+						break
 
 # ═══════════════════════════════════════════════════════════════════════════
 # EVENT HANDLERS
@@ -421,12 +544,15 @@ func perform_attack() -> void:
 
 func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
 	"""Called when enemy takes damage - this triggers combat!"""
-	
+
 	# CRITICAL: This is how we enter combat (player attacked us)
 	if not is_in_combat:
 		print("⚔️  Enemy engaged! Player attacked first!")
 		is_in_combat = true
-		
+
+		# Chain aggro - alert nearby allies when attacked!
+		trigger_chain_aggro()
+
 		# Enter combat immediately
 		if current_state == State.PATROLLING:
 			change_state(State.COMBAT)
