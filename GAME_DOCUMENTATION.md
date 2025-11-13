@@ -108,6 +108,440 @@ Optimized weakpoint positions for skeleton enemies:
 
 **Tool**: Use `scenes/tools/weakpoint_positioner.tscn` for visual editing of weakpoint positions.
 
+### Multiplayer Crit/Weakpoint System Design
+
+**Design Philosophy**: Owner-only weakpoint visibility for fair PvP/PvE and optimal performance
+
+#### Weakpoint Ownership Model
+
+**Owner-Only Visibility**:
+- Only the player who triggers a crit sees the weakpoints on that target
+- Multiple players can have simultaneous crit windows on the same enemy
+- Each player's weakpoints are independent (different positions, separate timers)
+- Prevents "kill stealing" and creates fair damage distribution
+
+**Example Scenarios**:
+
+**PvE (Cooperative)**:
+```
+Player A crits Skeleton → Only Player A sees 3 weakpoints (red)
+Player B crits same Skeleton → Only Player B sees 3 weakpoints (different positions)
+Both players can attack their own weakpoints simultaneously
+Fair damage: Each player gets rewarded for their own crits
+```
+
+**PvP (Competitive)**:
+```
+Player A crits Player C → Only Player A sees weakpoints on Player C
+Player B does NOT see Player A's weakpoints (can't steal damage)
+Player B can also crit Player C → Gets their own independent weakpoints
+Skill-based: Your crits = your reward
+```
+
+#### Network Architecture
+
+**Crit Trigger Event** (Client → Server):
+```gdscript
+{
+    player_id: int,        # Who triggered the crit
+    target_id: int,        # What they hit (enemy or player)
+    timestamp: float       # When it happened
+}
+# Size: ~20 bytes per crit
+```
+
+**Weakpoint Spawn Response** (Server → Client):
+```gdscript
+{
+    positions: [Vector2, Vector2, Vector2],  # 3 weakpoint locations
+    expires_at: float,                        # Window duration
+    window_id: int                            # Unique crit window identifier
+}
+# Size: ~50 bytes (sent only to owner)
+```
+
+**Weakpoint Hit Event** (Client → Server):
+```gdscript
+{
+    player_id: int,        # Who clicked
+    target_id: int,        # What they're hitting
+    window_id: int,        # Which crit window
+    weakpoint_index: int,  # Which weakpoint (0-2)
+    click_position: Vector2, # Where they clicked (for validation)
+    timestamp: float       # When they clicked
+}
+# Size: ~30 bytes per hit
+```
+
+#### Server-Side Validation
+
+**Active Crit Window Tracking**:
+```gdscript
+# Server maintains state for all active crit windows
+var active_crit_windows = {
+    "player_123": {
+        "window_456": {
+            target_id: 789,
+            weakpoints: [Vector2(10, -45), Vector2(-8, -32), Vector2(6, -18)],
+            expires_at: 1234567890.5,
+            hits_remaining: 3,
+            created_at: 1234567886.5
+        }
+    }
+}
+```
+
+**Validation Checks**:
+1. **Ownership**: Does this player own this crit window?
+2. **Timing**: Is the window still active (not expired)?
+3. **Target**: Is the target still valid (alive, in range)?
+4. **Spatial**: Is click position near actual weakpoint? (±20px tolerance for latency)
+5. **Rate**: Is player clicking at humanly possible rate? (<15 clicks/sec)
+6. **Pattern**: Does click timing show human variance? (anti-bot detection)
+
+**Validation Function**:
+```gdscript
+func validate_weakpoint_hit(player_id: int, window_id: int, target_id: int,
+                            weakpoint_index: int, click_pos: Vector2) -> bool:
+    # Check if player has this window
+    if player_id not in active_crit_windows:
+        return false  # No active windows
+
+    var player_windows = active_crit_windows[player_id]
+    if window_id not in player_windows:
+        return false  # Invalid window ID
+
+    var window = player_windows[window_id]
+
+    # Validate target matches
+    if window.target_id != target_id:
+        return false  # Wrong target
+
+    # Check expiration
+    if Time.get_ticks_msec() / 1000.0 > window.expires_at:
+        player_windows.erase(window_id)
+        return false  # Window expired
+
+    # Validate weakpoint index
+    if weakpoint_index < 0 or weakpoint_index >= window.weakpoints.size():
+        return false  # Invalid index
+
+    # Spatial validation (allow 20px tolerance for latency)
+    var actual_pos = window.weakpoints[weakpoint_index]
+    if click_pos.distance_to(actual_pos) > 20.0:
+        log_suspicious_activity(player_id, "Click too far from weakpoint")
+        return false  # Suspicious click position
+
+    # Rate limiting check
+    if not check_click_rate(player_id):
+        log_suspicious_activity(player_id, "Click rate too high")
+        return false  # Clicking too fast
+
+    # Valid hit!
+    window.hits_remaining -= 1
+    if window.hits_remaining <= 0:
+        player_windows.erase(window_id)  # Window complete
+
+    return true
+```
+
+#### Anti-Cheat System
+
+**1. Client-Side Obfuscation**:
+- Weakpoints only rendered for owner (other players can't see positions)
+- Weakpoint positions randomized server-side (client can't predict)
+- Visual elements use generic node names (harder to memory-scan)
+
+**2. Server-Side Enforcement**:
+- All weakpoint hits validated server-side
+- Reject hits from non-owners immediately
+- Track and log suspicious patterns
+
+**3. Rate Limiting**:
+```gdscript
+# Track clicks per player
+var player_click_history = {}  # player_id: [timestamp1, timestamp2, ...]
+
+func check_click_rate(player_id: int) -> bool:
+    var now = Time.get_ticks_msec() / 1000.0
+
+    # Initialize history
+    if player_id not in player_click_history:
+        player_click_history[player_id] = []
+
+    var history = player_click_history[player_id]
+
+    # Remove clicks older than 1 second
+    history = history.filter(func(t): return now - t < 1.0)
+
+    # Check if too many clicks in last second
+    if history.size() >= 15:  # Max 15 clicks/sec (human limit ~10-12)
+        return false  # Too fast!
+
+    # Add this click
+    history.append(now)
+    player_click_history[player_id] = history
+
+    return true
+```
+
+**4. Pattern Analysis**:
+```gdscript
+# Detect bot-like consistent timing
+func analyze_click_pattern(player_id: int) -> float:
+    var history = player_click_history[player_id]
+    if history.size() < 5:
+        return 0.0  # Not enough data
+
+    # Calculate variance in click intervals
+    var intervals = []
+    for i in range(1, history.size()):
+        intervals.append(history[i] - history[i-1])
+
+    # Human clicks have variance, bots are consistent
+    var variance = calculate_variance(intervals)
+
+    # Low variance = suspicious (< 0.01s variance)
+    if variance < 0.01:
+        return 1.0  # High suspicion score
+
+    return 0.0  # Normal variance
+```
+
+**5. Success Rate Monitoring**:
+```gdscript
+# Track weakpoint hit accuracy
+var player_stats = {}  # player_id: {hits: int, misses: int}
+
+func track_weakpoint_attempt(player_id: int, success: bool):
+    if player_id not in player_stats:
+        player_stats[player_id] = {hits: 0, misses: 0}
+
+    if success:
+        player_stats[player_id].hits += 1
+    else:
+        player_stats[player_id].misses += 1
+
+    # Check accuracy over time
+    var stats = player_stats[player_id]
+    var total = stats.hits + stats.misses
+
+    if total > 100:  # After 100 attempts
+        var accuracy = float(stats.hits) / float(total)
+        if accuracy > 0.95:  # >95% accuracy is suspicious
+            log_suspicious_activity(player_id, "Unusually high accuracy: %.2f" % accuracy)
+```
+
+**6. Spatial Validation**:
+- Server knows exact weakpoint positions
+- Compares client click position to actual position
+- Allows 20px tolerance for network latency
+- Repeated off-target hits = flagged
+
+#### Performance & Scale Estimates
+
+**Network Traffic Per Crit Window**:
+- Crit trigger: 20 bytes
+- Weakpoint spawn: 50 bytes (to owner only)
+- 3 weakpoint hits: 90 bytes (30 bytes × 3)
+- **Total: ~160 bytes per complete crit window**
+
+**Scale Calculations** (15 players, active combat):
+- Average player stats at mid-level:
+  - 5 attacks/second
+  - 50% crit rate
+  - 2.5 crits/second per player
+- 15 players × 2.5 crits/sec = **37.5 crit windows/second**
+- Network traffic: 37.5 × 160 bytes = **6 KB/second** (negligible!)
+
+**Maximum Supported Players**:
+
+| Scenario | Players | Crits/sec | Network | Feasible? |
+|----------|---------|-----------|---------|-----------|
+| Small PvP | 5-10 | 12-25 | 2-4 KB/s | ✅ Excellent |
+| Medium PvP | 10-15 | 25-37 | 4-6 KB/s | ✅ Great |
+| Large PvP | 15-25 | 37-62 | 6-10 KB/s | ✅ Good |
+| World PvE | 50+ | 125+ | 20 KB/s | ✅ Manageable |
+
+**Optimization: Spatial Partitioning**:
+- Only send crit events to nearby players (within 1000px radius)
+- Reduces network traffic by ~70% in spread-out combat
+- 50 players across large world: Only 10-15 players receive each event
+
+**Client Performance** (15 players visible):
+- Render only YOUR weakpoints: 3 nodes × 60 FPS = negligible
+- Other players' crit windows: Subtle glow effect (1 shader per enemy)
+- Particle effects: Cull when >10 simultaneous crit windows
+- **Target: 60 FPS with 15 players in combat**
+
+#### Visual Clarity (Multi-Player)
+
+**Your Weakpoints** (High Priority):
+- Full brightness (themed colors: blood/bone)
+- z_index 400 (top layer)
+- Full particle effects
+- Clear hit indicators
+
+**Other Players' Crit Windows** (Low Priority):
+- Subtle enemy glow (white outline, 0.3 alpha)
+- z_index 50 (behind UI)
+- No weakpoint markers visible
+- Minimal particle effects
+
+**UI Indicators**:
+- "[Player Name] triggered crit window!" (brief notification)
+- Enemy nameplate shows: "🎯 Active Crits: 3" (all players' windows)
+- Your crit timer: Large, bright
+- Others' crits: Small icon on enemy
+
+#### Implementation Roadmap
+
+**Phase 1: Multiplayer Foundation** (Current: Single-player working)
+- Add Godot's built-in multiplayer (RPC/NetworkMultiplayerENet)
+- Implement server authority for combat
+- Add `owner_player_id` to weakpoint nodes
+- Network crit trigger events
+
+**Phase 2: Crit Window Synchronization**
+- Server generates weakpoint positions (server-authoritative)
+- Send positions only to owner
+- Validate all weakpoint hits server-side
+- Broadcast crit window notifications (for visual effects)
+
+**Phase 3: Anti-Cheat Implementation**
+- Rate limiting system
+- Pattern analysis for bot detection
+- Spatial validation
+- Success rate monitoring
+- Admin tools for reviewing flagged players
+
+**Phase 4: Optimization**
+- Spatial partitioning for network events
+- Message batching (send every 50ms, not instantly)
+- Client-side prediction for smooth gameplay
+- Object pooling for weakpoint nodes
+- Particle effect culling
+
+**Phase 5: Testing & Tuning**
+- Stress test with 5, 10, 15, 25 players
+- Measure network bandwidth and latency
+- Tune anti-cheat thresholds
+- Balance PvP crit window difficulty
+- Optimize render performance
+
+#### Code Structure Changes
+
+**Minimal changes to existing code!**
+
+**Current (Single-Player)**:
+```gdscript
+# Enemy.gd
+func spawn_weakpoints():
+    for i in range(num_weakpoints):
+        var weakpoint = weakpoint_scene.instantiate()
+        weakpoint.position = chosen_positions[i]
+        add_child(weakpoint)
+```
+
+**Future (Multiplayer)**:
+```gdscript
+# Enemy.gd (Server)
+func spawn_weakpoints(owner_player_id: int):
+    # Server generates positions
+    var positions = generate_weakpoint_positions()
+
+    # Send only to owner
+    rpc_id(owner_player_id, "_receive_weakpoints", positions, window_id)
+
+    # Track server-side
+    register_crit_window(owner_player_id, get_instance_id(), positions)
+
+# Enemy.gd (Client)
+@rpc("authority", "call_remote")
+func _receive_weakpoints(positions: Array, window_id: int):
+    # Only spawn if we own this window
+    for pos in positions:
+        var weakpoint = weakpoint_scene.instantiate()
+        weakpoint.position = pos
+        weakpoint.owner_id = multiplayer.get_unique_id()
+        weakpoint.window_id = window_id
+        add_child(weakpoint)
+```
+
+**Weakpoint Click** (Multiplayer):
+```gdscript
+# weakpoint.gd
+func _on_input_event(viewport, event, shape_idx):
+    if event is InputEventMouseButton and event.pressed:
+        # Send to server for validation
+        rpc_id(1, "_validate_weakpoint_hit",
+               multiplayer.get_unique_id(),
+               owner_id,
+               get_parent().get_instance_id(),
+               window_id,
+               weakpoint_index,
+               event.position)
+
+# Server validates
+@rpc("any_peer", "call_remote")
+func _validate_weakpoint_hit(player_id, owner_id, target_id, window_id, index, pos):
+    if validate_weakpoint_hit(player_id, window_id, target_id, index, pos):
+        # Valid! Apply damage
+        apply_crit_damage(target_id, player_id)
+        # Notify all clients
+        rpc("_weakpoint_destroyed", window_id, index)
+```
+
+#### Security Considerations
+
+**Trust Model**: Never trust the client
+- Client sends: "I clicked here at this time"
+- Server validates: "Is that a valid click for this player?"
+- Server decides: "Apply damage or reject"
+
+**Preventing Common Exploits**:
+1. **Speed hacks**: Server tracks timing, rejects impossible sequences
+2. **Teleport hacks**: Server validates player position relative to target
+3. **Damage hacks**: Server calculates damage, client never sends damage values
+4. **ESP/Wallhacks**: Weakpoints only sent to owner, can't see others' weakpoints
+5. **Aimbots**: Spatial validation + pattern analysis detects perfect accuracy
+
+**Logging & Monitoring**:
+```gdscript
+# Log suspicious activity
+func log_suspicious_activity(player_id: int, reason: String):
+    var log_entry = {
+        player_id: player_id,
+        timestamp: Time.get_unix_time_from_system(),
+        reason: reason,
+        severity: calculate_severity(reason)
+    }
+
+    # Store in database
+    save_to_anticheat_log(log_entry)
+
+    # Auto-kick for severe violations
+    if log_entry.severity >= 8:
+        kick_player(player_id, reason)
+```
+
+#### Future Enhancements
+
+**Cooperative PvE Bonuses**:
+- "Combo" system: If 2+ players hit weakpoints within 1 second → bonus damage
+- Shared crit windows (opt-in): Party members can see each other's weakpoints
+- Difficulty scaling: More players = more weakpoints (up to 5)
+
+**PvP Balance**:
+- Diminishing returns: Multiple crits on same player reduce window duration
+- Crit resistance stat: Reduce weakpoint count or window duration
+- Counter-crit: Getting crit triggers auto-crit window for defender
+
+**Spectator Mode**:
+- Show all players' weakpoints for spectators
+- Combat analytics: Crit success rate, average weakpoint clear time
+- Highlight reel: Best crit window clears
+
 ---
 
 ## Ruins System
