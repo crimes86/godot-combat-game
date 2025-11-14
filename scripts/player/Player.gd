@@ -384,9 +384,16 @@ func _physics_process(delta: float) -> void:
 		die()
 
 func update_lpc_animation(velocity_dir: Vector2) -> void:
-	"""Update animation based on movement direction"""
-	var anim_sprite = get_node_or_null("PlayerSprite") as AnimatedSprite2D
-	if not anim_sprite:
+	"""Update animation based on movement direction - syncs all sprite layers"""
+	# Get all sprite layers
+	var body_sprite = get_node_or_null("BodySprite") as AnimatedSprite2D
+	var legs_sprite = get_node_or_null("LegsSprite") as AnimatedSprite2D
+	var torso_sprite = get_node_or_null("TorsoSprite") as AnimatedSprite2D
+	var hat_sprite = get_node_or_null("HatSprite") as AnimatedSprite2D
+	var weapon_sprite = get_node_or_null("WeaponSprite") as AnimatedSprite2D
+
+	# Need at least body sprite
+	if not body_sprite:
 		return
 
 	# Get direction string for animation
@@ -399,51 +406,18 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	var prefix = "walk_" if is_moving else "idle_"
 
 	# Don't interrupt attack animations
-	if anim_sprite.animation.begins_with("attack_") and anim_sprite.is_playing():
+	if body_sprite.animation.begins_with("attack_") and body_sprite.is_playing():
 		return
 
-	# Play appropriate animation
+	# Play appropriate animation on ALL layers (sync them)
 	var new_anim = prefix + dir_str
-	if anim_sprite.animation != new_anim:
-		anim_sprite.play(new_anim)
+	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
+		if sprite and sprite.sprite_frames and sprite.sprite_frames.has_animation(new_anim):
+			if sprite.animation != new_anim:
+				sprite.play(new_anim)
 
-	# ═══════════════════════════════════════════════════════════════════════
-	# FLIP LOGIC - CRITICAL: DO NOT MODIFY WITHOUT UNDERSTANDING
-	# ═══════════════════════════════════════════════════════════════════════
-	# The pre-generated LPC sprite sheet (walk_longsword.png) has weapon positioning:
-	# - Row 0 (up):    weapon in right hand, facing up
-	# - Row 1 (left):  weapon in right hand, facing left
-	# - Row 2 (down):  weapon in LEFT hand (needs horizontal flip to put in right hand)
-	# - Row 3 (right): weapon in right hand, facing right
-	#
-	# FLIP RULES:
-	# 1. When moving DOWN (S key): ALWAYS flip to put weapon in right hand
-	#    - Sprite shows weapon in left hand by default
-	#    - Exception: backwards walking (cursor UP) = don't flip
-	#
-	# 2. When moving UP (W key): ONLY flip for backwards walking
-	#    - Moving UP + cursor DOWN = walking backwards facing down = FLIP
-	#
-	# 3. When moving LEFT/RIGHT or standing still: Check cursor direction
-	#    - Standing facing down = FLIP (weapon in right hand)
-	#    - Otherwise use sprite sheet default
-	#
-	# 4. Animation selection is ALWAYS based on KEYBOARD input (velocity_dir), not cursor
-	#    - This prevents animation changing when cursor moves during vertical movement
-	# ═══════════════════════════════════════════════════════════════════════
-
-	var keyboard_dir_str = get_direction_string(velocity_dir) if is_moving else ""
-	var cursor_dir_str = get_direction_string(attack_direction)
-
-	if is_moving and keyboard_dir_str == "up":
-		# Walking UP: flip if facing down (walking backwards)
-		anim_sprite.flip_h = (cursor_dir_str == "down" or cursor_dir_str.contains("down_"))
-	elif is_moving and keyboard_dir_str == "down":
-		# Walking DOWN: ALWAYS flip (weapon in right hand)
-		anim_sprite.flip_h = true
-	else:
-		# Standing still or moving left/right: flip if facing down
-		anim_sprite.flip_h = (dir_str == "down" or dir_str.contains("down_"))
+	# Note: With layered paper doll system, no complex flip logic needed
+	# Each sprite sheet has proper up/left/down/right rows
 
 func get_direction_string(dir: Vector2) -> String:
 	"""Convert direction vector to animation name string (8-way)"""
@@ -907,20 +881,28 @@ func heal(amount: float) -> void:
 	print("Player healed %.1f HP (now %.1f / %.1f)" % [actual_heal, current_health, max_health])
 
 func flash_player_sprite() -> void:
-	"""Flash the player sprite red when taking damage"""
-	var player_sprite = get_node_or_null("PlayerSprite")
-	if not player_sprite:
-		return
-	
-	# ✨ FIX: Always restore to WHITE, not current color
-	# This prevents getting stuck red if multiple rapid hits occur
-	player_sprite.modulate = Color(2.0, 0.5, 0.5, 1.0)  # Red flash
-	
+	"""Flash all player sprite layers red when taking damage"""
+	# Get all sprite layers
+	var sprite_layers = [
+		get_node_or_null("BodySprite"),
+		get_node_or_null("LegsSprite"),
+		get_node_or_null("TorsoSprite"),
+		get_node_or_null("HatSprite"),
+		get_node_or_null("WeaponSprite")
+	]
+
+	# Flash all layers red
+	for sprite in sprite_layers:
+		if sprite:
+			sprite.modulate = Color(2.0, 0.5, 0.5, 1.0)  # Red flash
+
 	# Use a short timer to restore color
 	await get_tree().create_timer(0.1).timeout
-	
-	if player_sprite and is_instance_valid(player_sprite):
-		player_sprite.modulate = Color.WHITE  # Always restore to white
+
+	# Restore all layers to white
+	for sprite in sprite_layers:
+		if sprite and is_instance_valid(sprite):
+			sprite.modulate = Color.WHITE
 
 
 ## Visual System Functions
@@ -929,42 +911,26 @@ func flash_player_sprite() -> void:
 
 func create_player_sprite() -> void:
 	print("🧹 Removing old sprites...")
-	
-	# Get references to sprites to remove
-	var player_sprite = get_node_or_null("PlayerSprite")
-	var player_shadow = get_node_or_null("PlayerShadow")
-	
-	# Remove old sprites IMMEDIATELY (not queued)
-	if player_sprite:
-		remove_child(player_sprite)
-		player_sprite.queue_free()
-		print("  ❌ Removed old PlayerSprite")
-	
-	if player_shadow:
-		remove_child(player_shadow)
-		player_shadow.queue_free()
-		print("  ❌ Removed old PlayerShadow")
-	
-	# Also check for any other Sprite2D or AnimatedSprite2D nodes
+
+	# Remove all sprite layers
 	for child in get_children():
 		if child is AnimatedSprite2D or child is Sprite2D:
-			if child.name.contains("Sprite") or child.name.contains("Shadow"):
-				remove_child(child)
-				child.queue_free()
-				print("  ❌ Removed stray sprite: ", child.name)
-	
+			remove_child(child)
+			child.queue_free()
+			print("  ❌ Removed: ", child.name)
+
 	# Wait to ensure cleanup
 	await get_tree().process_frame
 	await get_tree().process_frame
-	
-	print("🎨 Creating NEW sprite for gender: ", "MALE" if selected_gender == Gender.MALE else "FEMALE")
-	
+
+	print("🎨 Creating LAYERED sprite system (paper doll) for gender: ", "MALE" if selected_gender == Gender.MALE else "FEMALE")
+
 	# Create shadow
 	var shadow = Sprite2D.new()
-	shadow.name = "PlayerShadow"
+	shadow.name = "Shadow"
 	var shadow_img = Image.create(48, 16, false, Image.FORMAT_RGBA8)
 	shadow_img.fill(Color.TRANSPARENT)
-	
+
 	# Draw elliptical shadow
 	for x in range(48):
 		for y in range(16):
@@ -974,33 +940,160 @@ func create_player_sprite() -> void:
 			if dist <= 1.0:
 				var alpha = (1.0 - dist) * 0.4
 				shadow_img.set_pixel(x, y, Color(0, 0, 0, alpha))
-	
+
 	var shadow_texture = ImageTexture.create_from_image(shadow_img)
 	shadow.texture = shadow_texture
 	shadow.position = Vector2(0, 20)
 	shadow.z_index = -5
 	add_child(shadow)
 	print("  ✅ Shadow created")
-	
-	# Create animated sprite
-	var anim_sprite = AnimatedSprite2D.new()
-	anim_sprite.name = "PlayerSprite"
-	anim_sprite.position = Vector2(0, -8)
-	anim_sprite.centered = true
-	
-	# No tint for any gender - show natural colors
-	anim_sprite.modulate = Color.WHITE
-	
-	add_child(anim_sprite)
-	
-	# Load and setup LPC animations
-	setup_lpc_animations(anim_sprite)
-	
-	# Start with idle down
-	if anim_sprite.sprite_frames and anim_sprite.sprite_frames.has_animation("idle_down"):
-		anim_sprite.play("idle_down")
-	else:
-		print("ERROR: No animations created!")
+
+	# Create layered sprite system (paper doll) - each piece is a separate node
+	var base_position = Vector2(0, -8)
+
+	# Layer 0: Body (naked base)
+	var body_sprite = AnimatedSprite2D.new()
+	body_sprite.name = "BodySprite"
+	body_sprite.position = base_position
+	body_sprite.centered = true
+	body_sprite.z_index = 0
+	add_child(body_sprite)
+	print("  ✅ Body layer created")
+
+	# Layer 1: Legs/Pants
+	var legs_sprite = AnimatedSprite2D.new()
+	legs_sprite.name = "LegsSprite"
+	legs_sprite.position = base_position
+	legs_sprite.centered = true
+	legs_sprite.z_index = 1
+	add_child(legs_sprite)
+	print("  ✅ Legs layer created")
+
+	# Layer 2: Torso/Armor
+	var torso_sprite = AnimatedSprite2D.new()
+	torso_sprite.name = "TorsoSprite"
+	torso_sprite.position = base_position
+	torso_sprite.centered = true
+	torso_sprite.z_index = 2
+	add_child(torso_sprite)
+	print("  ✅ Torso layer created")
+
+	# Layer 3: Hat/Helmet
+	var hat_sprite = AnimatedSprite2D.new()
+	hat_sprite.name = "HatSprite"
+	hat_sprite.position = base_position
+	hat_sprite.centered = true
+	hat_sprite.z_index = 3
+	add_child(hat_sprite)
+	print("  ✅ Hat layer created")
+
+	# Layer 4: Weapon (on top)
+	var weapon_sprite = AnimatedSprite2D.new()
+	weapon_sprite.name = "WeaponSprite"
+	weapon_sprite.position = base_position
+	weapon_sprite.centered = true
+	weapon_sprite.z_index = 4
+	add_child(weapon_sprite)
+	print("  ✅ Weapon layer created")
+
+	# Setup animations for all layers
+	setup_lpc_animations_layered()
+
+	# Start all layers with idle_down
+	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
+		if sprite.sprite_frames and sprite.sprite_frames.has_animation("idle_down"):
+			sprite.play("idle_down")
+
+func setup_lpc_animations_layered() -> void:
+	"""Setup animations for layered paper doll system - each equipment piece is separate"""
+	print("🎨 setup_lpc_animations_layered called")
+	print("   Selected gender: ", selected_gender)
+
+	# Determine body type based on selected gender
+	var body_type = "human" if selected_gender == Gender.MALE else "female"
+	print("   Body type: ", body_type)
+
+	# Sprite paths for each layer
+	var BODY_WALK_PATH = "res://assets/characters/BODY_" + body_type + "_walk.png"
+	var BODY_SLASH_PATH = "res://assets/characters/BODY_" + body_type + "_slash.png"
+	var BODY_HURT_PATH = "res://assets/characters/BODY_" + body_type + "_hurt.png"
+
+	const LEGS_WALK_PATH = "res://assets/characters/LEGS_pants_greenish_walk.png"
+	const LEGS_SLASH_PATH = "res://assets/characters/LEGS_pants_greenish_slash.png"
+	const LEGS_HURT_PATH = "res://assets/characters/LEGS_pants_greenish_hurt.png"
+
+	const TORSO_WALK_PATH = "res://assets/characters/TORSO_leather_armor_torso_walk.png"
+	const TORSO_SLASH_PATH = "res://assets/characters/TORSO_leather_armor_torso_slash.png"
+	const TORSO_HURT_PATH = "res://assets/characters/TORSO_leather_armor_torso_hurt.png"
+
+	const HAT_WALK_PATH = "res://assets/characters/HEAD_leather_armor_hat_walk.png"
+	const HAT_SLASH_PATH = "res://assets/characters/HEAD_leather_armor_hat_slash.png"
+	const HAT_HURT_PATH = "res://assets/characters/HEAD_leather_armor_hat_hurt.png"
+
+	# Setup each layer
+	setup_sprite_layer("BodySprite", BODY_WALK_PATH, BODY_SLASH_PATH, BODY_HURT_PATH)
+	setup_sprite_layer("LegsSprite", LEGS_WALK_PATH, LEGS_SLASH_PATH, LEGS_HURT_PATH)
+	setup_sprite_layer("TorsoSprite", TORSO_WALK_PATH, TORSO_SLASH_PATH, TORSO_HURT_PATH)
+	setup_sprite_layer("HatSprite", HAT_WALK_PATH, HAT_SLASH_PATH, HAT_HURT_PATH)
+
+	# Weapon layer (todo)
+	# setup_sprite_layer("WeaponSprite", weapon_walk_path, weapon_slash_path, weapon_hurt_path)
+
+	print("✅ All sprite layers setup complete!")
+
+func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: String, hurt_path: String) -> void:
+	"""Setup animations for a single equipment layer"""
+	var sprite = get_node_or_null(sprite_name) as AnimatedSprite2D
+	if not sprite:
+		print("⚠️ Sprite not found: ", sprite_name)
+		return
+
+	var sprite_frames = SpriteFrames.new()
+
+	# Load walk sprite (576x256, 9 frames x 4 rows)
+	if ResourceLoader.exists(walk_path):
+		var walk_tex = ResourceLoader.load(walk_path, "Texture2D")
+		if walk_tex:
+			var walk_img = walk_tex.get_image()
+			for dir in ["up", "left", "down", "right"]:
+				var row_index = ["up", "left", "down", "right"].find(dir)
+				create_animation(sprite_frames, "walk_" + dir, walk_img, 64, 64, 9, row_index, 10.0)
+				create_animation(sprite_frames, "idle_" + dir, walk_img, 64, 64, 1, row_index, 1.0)  # First frame
+			print("  ✅ ", sprite_name, ": Walk animations loaded")
+
+	# Load slash sprite (384x256, 6 frames x 4 rows)
+	if ResourceLoader.exists(slash_path):
+		var slash_tex = ResourceLoader.load(slash_path, "Texture2D")
+		if slash_tex:
+			var slash_img = slash_tex.get_image()
+			for dir in ["up", "left", "down", "right"]:
+				var row_index = ["up", "left", "down", "right"].find(dir)
+				create_animation(sprite_frames, "attack_" + dir, slash_img, 64, 64, 6, row_index, 12.0)
+			print("  ✅ ", sprite_name, ": Attack animations loaded")
+
+	# Load hurt sprite (384x256, 6 frames x 4 rows)
+	if ResourceLoader.exists(hurt_path):
+		var hurt_tex = ResourceLoader.load(hurt_path, "Texture2D")
+		if hurt_tex:
+			var hurt_img = hurt_tex.get_image()
+			create_animation(sprite_frames, "hurt", hurt_img, 64, 64, 6, 0, 10.0)  # Just use up row
+			print("  ✅ ", sprite_name, ": Hurt animation loaded")
+
+	sprite.sprite_frames = sprite_frames
+
+func create_animation(sprite_frames: SpriteFrames, anim_name: String, source_img: Image, frame_width: int, frame_height: int, frame_count: int, row: int, fps: float) -> void:
+	"""Extract frames from spritesheet and create animation"""
+	sprite_frames.add_animation(anim_name)
+	sprite_frames.set_animation_loop(anim_name, true)
+	sprite_frames.set_animation_speed(anim_name, fps)
+
+	for frame_idx in range(frame_count):
+		# Extract frame from row
+		var frame_img = Image.create(frame_width, frame_height, false, Image.FORMAT_RGBA8)
+		frame_img.blit_rect(source_img, Rect2i(frame_idx * frame_width, row * frame_height, frame_width, frame_height), Vector2i(0, 0))
+
+		var frame_texture = ImageTexture.create_from_image(frame_img)
+		sprite_frames.add_frame(anim_name, frame_texture)
 
 func setup_lpc_animations(anim_sprite: AnimatedSprite2D) -> void:
 	"""Setup all LPC animations with layered compositing - separate walk, attack, and hurt sprites"""
