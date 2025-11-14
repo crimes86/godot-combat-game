@@ -1,0 +1,71 @@
+{
+	"zone": "Zone 4: The Abyss",
+	"theme": "Dark gleaming armor forged in the depths of the Abyss",
+	"armor": [
+		{
+			"id": "abyss_helm",
+			"name": "Abyssal Greathelm",
+			"description": "A dark flattop helmet that gleams with otherworldly power. Worn by the greatest warriors of the Abyss.",
+			"slot": "head",
+			"defense": 28,
+			"type": "armor",
+			"rarity": "Legendary",
+			"value": 800,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "abyss_chest",
+			"name": "Legion Cuirass of the Abyss",
+			"description": "Dark legion armor that pulses with shadow energy. The ultimate protection against the forces of chaos.",
+			"slot": "chest",
+			"defense": 35,
+			"type": "armor",
+			"rarity": "Legendary",
+			"value": 1200,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "abyss_gauntlets",
+			"name": "Abyssal Gauntlets",
+			"description": "Dark iron plate gauntlets that gleam like obsidian. Your strikes carry the weight of the void.",
+			"slot": "hands",
+			"defense": 22,
+			"type": "armor",
+			"rarity": "Legendary",
+			"value": 700,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "abyss_greaves",
+			"name": "Abyssal Legguards",
+			"description": "Dark gleaming leg armor forged in the deepest pits. Unyielding protection for those who face the ultimate darkness.",
+			"slot": "legs",
+			"defense": 32,
+			"type": "armor",
+			"rarity": "Legendary",
+			"value": 950,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "abyss_boots",
+			"name": "Abyssal Warboots",
+			"description": "Dark iron boots that echo with the footsteps of fallen champions. Walk the path to ultimate power.",
+			"slot": "feet",
+			"defense": 25,
+			"type": "armor",
+			"rarity": "Legendary",
+			"value": 750,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		}
+	]
+}

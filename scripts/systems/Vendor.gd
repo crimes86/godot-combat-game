@@ -9,6 +9,7 @@ signal shop_closed()
 
 @export var vendor_name: String = "Blacksmith"
 @export var greeting_text: String = "Need some quality steel?"
+@export var vendor_zone: int = 1  # Only sell items for this zone (0 = all zones)
 
 var weapons_for_sale: Array = []
 var weapon_prices: Array = []  # Parallel array for weapon prices
@@ -179,15 +180,24 @@ func load_shop_data() -> void:
 		if data.has("weapons") and data["weapons"] is Array:
 			for weapon_data in data["weapons"]:
 				if weapon_data is Dictionary:
-					# Validate required weapon fields
-					if JSONValidator.validate_required_fields(weapon_data, ["name", "type", "base_damage"], "weapon"):
+					# Skip weapons not matching vendor's zone (unless vendor_zone is 0 = all zones)
+					var weapon_zone = weapon_data.get("zone", 1)
+					if vendor_zone > 0 and weapon_zone != vendor_zone:
+						continue
+
+					# Skip drop-only items
+					if weapon_data.get("drop_only", false):
+						continue
+
+					# Validate required weapon fields (removed "type" - now using unified damage)
+					if JSONValidator.validate_required_fields(weapon_data, ["name", "weapon_type", "base_damage"], "weapon"):
 						var weapon = create_weapon_from_data(weapon_data)
 						if weapon:
 							weapons_for_sale.append(weapon)
 							# Store price alongside weapon
 							var price = weapon_data.get("price", 0)
 							weapon_prices.append(price)
-							print("   Loaded weapon: %s (price: %d)" % [weapon.weapon_name, price])
+							print("   Loaded weapon: %s (zone %d, price: %d)" % [weapon.weapon_name, weapon_zone, price])
 				else:
 					DebugConfig.log_warning("Invalid weapon entry in shop_weapons.json (not a Dictionary)")
 		else:
@@ -218,16 +228,28 @@ func create_weapon_from_data(data: Dictionary) -> Weapon:
 
 	weapon.weapon_name = data.get("name", "Unknown")
 	weapon.weapon_type = data.get("weapon_type", "sword")  # Visual type (club, sword, dagger, etc)
-	weapon.damage_type = data.get("type", "slash")  # Damage type (blunt, slash, pierce) for crit windows
+	weapon.damage_type = "unified"  # Unified damage system (no slash/pierce/blunt)
 	weapon.description = data.get("description", "")
 	weapon.base_damage = data.get("base_damage", 5.0)
-	weapon.attack_speed_bonus = data.get("attack_speed_bonus", 0.0)
-	weapon.crit_chance_bonus = data.get("crit_chance_bonus", 0.0)
+
+	# Convert attack_speed category to numeric multiplier
+	# fast = -0.30 (30% faster), medium = 0.0, slow = +0.30 (30% slower)
+	var attack_speed_category = data.get("attack_speed", "medium")
+	match attack_speed_category:
+		"fast":
+			weapon.attack_speed_bonus = -0.30  # 30% faster (1.5x attack rate)
+		"slow":
+			weapon.attack_speed_bonus = 0.30   # 30% slower (0.7x attack rate)
+		_:  # "medium" or any other value
+			weapon.attack_speed_bonus = 0.0
+
+	# Crit chance is already in the right format
+	weapon.crit_chance_bonus = data.get("crit_chance", 0.0)
 	weapon.required_level = data.get("required_level", 1)
 	weapon.can_trade = true
 
-	# Set rarity
-	var rarity_str = data.get("rarity", "COMMON")
+	# Set rarity (support both "Common" and "COMMON" formats)
+	var rarity_str = data.get("rarity", "COMMON").to_upper()
 	match rarity_str:
 		"COMMON":
 			weapon.rarity = Weapon.Rarity.COMMON
@@ -292,15 +314,21 @@ func get_weapon_price_data(index: int) -> int:
 
 func weapon_to_dict(weapon: Weapon, price: int) -> Dictionary:
 	"""Convert a Weapon resource to a dictionary for inventory storage"""
+	# Convert attack_speed_bonus back to category for display
+	var attack_speed_category = "medium"
+	if weapon.attack_speed_bonus < -0.15:
+		attack_speed_category = "fast"
+	elif weapon.attack_speed_bonus > 0.15:
+		attack_speed_category = "slow"
+
 	return {
 		"name": weapon.weapon_name,
 		"description": weapon.description,
 		"type": "weapon",
 		"weapon_type": weapon.weapon_type,  # Visual type (club, sword, etc)
-		"damage_type": weapon.damage_type,  # Damage type (blunt, slash, pierce) - for future crit window mechanics
 		"base_damage": weapon.base_damage,
-		"attack_speed_bonus": weapon.attack_speed_bonus,
-		"crit_chance_bonus": weapon.crit_chance_bonus,
+		"attack_speed": attack_speed_category,  # Converted from numeric to category
+		"crit_chance": weapon.crit_chance_bonus,  # Renamed for consistency
 		"required_level": weapon.required_level,
 		"rarity": Weapon.Rarity.keys()[weapon.rarity],
 		"value": max(1, int(price * 0.5)),  # Sell for 50% of purchase price
