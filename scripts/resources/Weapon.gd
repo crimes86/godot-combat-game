@@ -10,7 +10,8 @@ class_name Weapon
 # ============================================
 
 @export var weapon_name: String = "Unnamed Weapon"
-@export var weapon_type: String = "sword"  # sword, axe, staff, dagger, etc
+@export var weapon_type: String = "sword"  # sword, axe, staff, dagger, etc (visual/flavor)
+@export var damage_type: String = "slash"  # blunt, slash, pierce (for crit window mechanics)
 @export_multiline var description: String = ""
 
 # ============================================

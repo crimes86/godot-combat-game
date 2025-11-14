@@ -118,6 +118,15 @@ func open_shop(vendor_node: Vendor) -> void:
 	populate_armor()
 	populate_sell_items()
 
+	# Hide armor tab if vendor doesn't sell armor
+	if tab_container and vendor.armor_for_sale.is_empty():
+		var armor_tab = tab_container.get_node_or_null("Armor")
+		if armor_tab:
+			armor_tab.visible = false
+			# Switch to Weapons tab if currently on Armor
+			if tab_container.current_tab == 1:  # Armor tab index
+				tab_container.current_tab = 0  # Switch to Weapons
+
 	show()
 
 	print("🏪 Shop UI opened for: %s" % vendor.vendor_name)

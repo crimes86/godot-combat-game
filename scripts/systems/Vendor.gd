@@ -217,7 +217,8 @@ func create_weapon_from_data(data: Dictionary) -> Weapon:
 	var weapon = Weapon.new()
 
 	weapon.weapon_name = data.get("name", "Unknown")
-	weapon.weapon_type = data.get("type", "sword")
+	weapon.weapon_type = data.get("weapon_type", "sword")  # Visual type (club, sword, dagger, etc)
+	weapon.damage_type = data.get("type", "slash")  # Damage type (blunt, slash, pierce) for crit windows
 	weapon.description = data.get("description", "")
 	weapon.base_damage = data.get("base_damage", 5.0)
 	weapon.attack_speed_bonus = data.get("attack_speed_bonus", 0.0)
@@ -295,7 +296,8 @@ func weapon_to_dict(weapon: Weapon, price: int) -> Dictionary:
 		"name": weapon.weapon_name,
 		"description": weapon.description,
 		"type": "weapon",
-		"weapon_type": weapon.weapon_type,
+		"weapon_type": weapon.weapon_type,  # Visual type (club, sword, etc)
+		"damage_type": weapon.damage_type,  # Damage type (blunt, slash, pierce) - for future crit window mechanics
 		"base_damage": weapon.base_damage,
 		"attack_speed_bonus": weapon.attack_speed_bonus,
 		"crit_chance_bonus": weapon.crit_chance_bonus,
