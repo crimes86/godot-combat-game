@@ -294,17 +294,16 @@ func update_stats_from_character() -> void:
 	else:
 		attack_cooldown = cooldown_override
 	
-	# Update crit system base chance
+	# Update crit system base chance (preserves pity progress)
 	if crit_system:
-		crit_system.base_crit_chance = CharacterStats.get_base_crit_chance()
-		crit_system.current_crit_chance = crit_system.base_crit_chance
-	
+		crit_system.on_weapon_changed()
+
 	print("📊 Player stats updated:")
 	print("  Level: ", CharacterStats.level)
 	print("  HP: ", max_health)
 	print("  Damage: ", attack_damage)
 	print("  Attack Speed: %.3fs" % attack_cooldown)
-	print("  Crit Chance: %.1f%%" % (crit_system.base_crit_chance * 100 if crit_system else 0))
+	print("  Crit Chance: %.1f%%" % (crit_system.get_player_base_crit() * 100 if crit_system else 0))
 	print("  Movement Speed: ", speed)
 
 func gain_experience(amount: int) -> void:

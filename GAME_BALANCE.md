@@ -4,22 +4,35 @@
 
 ### Attack Speed & Crit Chance Balance
 
-**CRITICAL DESIGN RULE:** Crit chance MUST scale inversely with attack speed to prevent fast weapons from dominating through crit window frequency.
+**CRITICAL DESIGN RULE:** All weapon types achieve equal DPS and equal crit window frequency through inverse scaling.
 
-**Attack Speed Categories:**
+**Attack Speed Multipliers (at max level AGI):**
 
-| Speed | Attack Multiplier | Crit Chance | Weapon Types | Gameplay Feel |
-|-------|------------------|-------------|--------------|---------------|
-| **Fast** | 1.5x attacks/min | 5% | Dagger, Rapier | Constant rhythm, rare crits |
-| **Medium** | 1.0x attacks/min | 10% | Sword, Mace, Spear | Balanced, standard feel |
-| **Slow** | 0.7x attacks/min | 15-20% | Warhammer, 2H weapons | Deliberate strikes, frequent crits |
+| Speed | Attack Multiplier | Damage Scaling | Crit Chance | Weapon Types |
+|-------|------------------|----------------|-------------|--------------|
+| **Fast** | 1.43x attacks | 1.0x damage | 5.0% | Dagger, Rapier |
+| **Medium** | 1.0x attacks | 1.43x damage | 7.1% | Sword, Mace, Spear |
+| **Slow** | 0.77x attacks | 1.86x damage | 9.3% | Warhammer, 2H weapons |
 
-**Why This Matters:**
-- Fast weapon at 5% crit × 1.5 attacks = 0.075 crit opportunities/min
-- Medium weapon at 10% crit × 1.0 attacks = 0.10 crit opportunities/min
-- Slow weapon at 15% crit × 0.7 attacks = 0.105 crit opportunities/min
+**Balance Formula:**
+- Attack speed bonus: -30% (fast), 0% (medium), +30% (slow)
+- Cooldown multiplier: 0.7 (fast), 1.0 (medium), 1.3 (slow)
+- Attack rate multiplier: 1.43x (fast), 1.0x (medium), 0.77x (slow)
+- For equal DPS: Damage × Attack Rate = Constant
+- For equal crit windows: Crit% × Attack Rate = Constant
 
-This keeps all weapon types viable while providing different gameplay experiences.
+**Proof of Balance (Zone 2 weapons at max level):**
+```
+Fast (Rapier):    18 dmg × 1.43 = 25.7 DPS | 5.0% × 1.43 = 0.0715 crit/sec
+Medium (Longsword): 26 dmg × 1.0 = 26.0 DPS | 7.1% × 1.0 = 0.071 crit/sec
+Slow (Warhammer):  34 dmg × 0.77 = 26.2 DPS | 9.3% × 0.77 = 0.072 crit/sec
+```
+
+**Design Philosophy:**
+- Fast weapons hit attack speed cap at max level + gear
+- Medium/slow weapons attack naturally slower
+- ALL weapon types produce equal DPS and crit opportunities
+- Player choice is based on gameplay feel, not min/max optimization
 
 ---
 
@@ -58,31 +71,34 @@ This keeps all weapon types viable while providing different gameplay experience
 
 ### Zone 1: The Wasteland (Blacksmith Vendor)
 
-| Weapon | Price | Attack Speed | Base Damage | Crit % | Rarity |
-|--------|-------|--------------|-------------|--------|--------|
-| Wooden Club | 0g (starter) | Medium | 4 | 10% | Common |
-| Rusty Dagger | 50g | Fast | 6 | 5% | Common |
-| Iron Short Sword | 150g | Medium | 8 | 10% | Common |
-| Bone Mace | 180g | Medium | 10 | 10% | Common |
-| Bronze Spear | 250g | Medium | 12 | 10% | Uncommon |
+| Weapon | Price | Attack Speed | Base Damage | DPS | Crit % | Rarity |
+|--------|-------|--------------|-------------|-----|--------|--------|
+| Wooden Club | 0g (starter) | Medium | 4 | 4.0 | 7.1% | Common |
+| Rusty Dagger | 50g | Fast | 8 | 11.4 | 5.0% | Common |
+| Iron Short Sword | 150g | Medium | 12 | 12.0 | 7.1% | Common |
+| Bone Mace | 180g | Medium | 12 | 12.0 | 7.1% | Common |
+| Bronze Spear | 250g | Medium | 12 | 12.0 | 7.1% | Uncommon |
 
 **Rationale:**
-- Free starter (club)
-- Budget option (dagger, 50g)
-- 2-3 standard weapons (150-250g range)
+- Free starter (club) - intentionally weak (4 DPS) to encourage first upgrade
+- Budget option (dagger, 50g) - 11.4 DPS
+- Standard weapons (150-250g) - ALL balanced at 12.0 DPS
 - After 1-2hr grinding (160-320g), player can buy 2-3 weapons to test
+- All non-starter weapons are balanced - choice is about gameplay feel, not power
 
 ### Zone 2: Cursed Lands Vendor
 
-| Weapon | Price | Attack Speed | Base Damage | Crit % | Rarity |
-|--------|-------|--------------|-------------|--------|--------|
-| Steel Longsword | 400g | Medium | 18 | 10% | Uncommon |
-| Iron Warhammer | 550g | Slow | 22 | 15% | Uncommon |
-| Silver Rapier | 650g | Fast | 20 | 5% | Uncommon |
+| Weapon | Price | Attack Speed | Base Damage | DPS | Crit % | Rarity |
+|--------|-------|--------------|-------------|-----|--------|--------|
+| Steel Longsword | 400g | Medium | 26 | 26.0 | 7.1% | Uncommon |
+| Iron Warhammer | 550g | Slow | 34 | 26.2 | 9.3% | Uncommon |
+| Silver Rapier | 650g | Fast | 18 | 25.7 | 5.0% | Uncommon |
 
 **Rationale:**
 - Mid-tier pricing (400-650g)
+- ALL weapons balanced at ~26 DPS
 - After Zone 2 grinding (450-900g), can buy 1-2 weapons
+- Perfect balance: choice is gameplay feel (fast rhythm vs heavy hits), not power
 
 ### Zone 3: Shadow Realm Vendor
 
