@@ -291,11 +291,48 @@ func equip_weapon(weapon) -> void:  # weapon: Weapon
 	print("   Attack Speed: ", weapon.attack_speed_bonus * 100, "%")
 	print("   Crit Chance: +", weapon.crit_chance_bonus * 100, "%")
 
-func unequip_weapon() -> void:
-	"""Remove equipped weapon (back to unarmed)"""
-	equipped_weapon = null
-	weapon_unequipped.emit()
-	print("👊 Weapon unequipped - now unarmed")
+func unequip_weapon() -> bool:
+	"""Remove equipped weapon and return to inventory"""
+	if not equipped_weapon:
+		print("No weapon equipped")
+		return false
+
+	# Convert Weapon resource to dict for inventory
+	var weapon_dict = {
+		"name": equipped_weapon.weapon_name,
+		"description": equipped_weapon.description,
+		"type": "weapon",
+		"slot": "mainhand",
+		"weapon_type": equipped_weapon.weapon_type,
+		"base_damage": equipped_weapon.base_damage,
+		"attack_speed": _speed_bonus_to_category(equipped_weapon.attack_speed_bonus),
+		"crit_chance": equipped_weapon.crit_chance_bonus,
+		"required_level": equipped_weapon.required_level,
+		"rarity": Weapon.Rarity.keys()[equipped_weapon.rarity],
+		"value": 0,  # TODO: Store original purchase price
+		"can_trade": equipped_weapon.can_trade,
+		"stackable": false,
+		"quantity": 1
+	}
+
+	# Add back to inventory
+	if InventorySystem.add_item(weapon_dict):
+		equipped_weapon = null
+		weapon_unequipped.emit()
+		print("🛡️  Unequipped weapon: %s" % weapon_dict.get("name", "Unknown"))
+		return true
+	else:
+		print("❌ Inventory full! Cannot unequip weapon")
+		return false
+
+func _speed_bonus_to_category(bonus: float) -> String:
+	"""Convert attack_speed_bonus back to category string"""
+	if bonus < -0.15:
+		return "fast"
+	elif bonus > 0.15:
+		return "slow"
+	else:
+		return "medium"
 
 # ============================================
 # ARMOR EQUIPPING
