@@ -720,7 +720,23 @@ func refresh_equipment() -> void:
 		if not label:
 			continue
 
-		var armor_item = CharacterStats.equipped_armor[slot_name]
+		# Special handling for mainhand - check equipped_weapon instead of equipped_armor
+		var armor_item = null
+		if slot_name == "mainhand" and CharacterStats.equipped_weapon:
+			# Convert Weapon resource to dict for display
+			var weapon = CharacterStats.equipped_weapon
+			armor_item = {
+				"name": weapon.weapon_name,
+				"description": weapon.description,
+				"type": "weapon",
+				"base_damage": weapon.base_damage,
+				"attack_speed_bonus": weapon.attack_speed_bonus,
+				"crit_chance_bonus": weapon.crit_chance_bonus,
+				"rarity": Weapon.Rarity.keys()[weapon.rarity]
+			}
+		else:
+			armor_item = CharacterStats.equipped_armor[slot_name]
+
 		if armor_item:
 			label.text = armor_item.get("name", "???")
 
@@ -833,21 +849,33 @@ func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		# Double-click or right-click to unequip
 		if event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
-			var armor_item = CharacterStats.equipped_armor[slot_name]
-			if armor_item:
-				if CharacterStats.unequip_armor(slot_name):
-					refresh_all()
-					print("✅ Unequipped %s (double-click)" % armor_item.get("name", "Unknown"))
+			# Special handling for mainhand - check equipped_weapon
+			if slot_name == "mainhand" and CharacterStats.equipped_weapon:
+				CharacterStats.unequip_weapon()
+				refresh_all()
+				print("✅ Unequipped weapon (double-click)")
 			else:
-				print("No armor equipped in %s slot" % slot_name)
+				var armor_item = CharacterStats.equipped_armor[slot_name]
+				if armor_item:
+					if CharacterStats.unequip_armor(slot_name):
+						refresh_all()
+						print("✅ Unequipped %s (double-click)" % armor_item.get("name", "Unknown"))
+				else:
+					print("No armor equipped in %s slot" % slot_name)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			var armor_item = CharacterStats.equipped_armor[slot_name]
-			if armor_item:
-				if CharacterStats.unequip_armor(slot_name):
-					refresh_all()
-					print("✅ Unequipped %s (right-click)" % armor_item.get("name", "Unknown"))
+			# Special handling for mainhand - check equipped_weapon
+			if slot_name == "mainhand" and CharacterStats.equipped_weapon:
+				CharacterStats.unequip_weapon()
+				refresh_all()
+				print("✅ Unequipped weapon (right-click)")
 			else:
-				print("No armor equipped in %s slot" % slot_name)
+				var armor_item = CharacterStats.equipped_armor[slot_name]
+				if armor_item:
+					if CharacterStats.unequip_armor(slot_name):
+						refresh_all()
+						print("✅ Unequipped %s (right-click)" % armor_item.get("name", "Unknown"))
+				else:
+					print("No armor equipped in %s slot" % slot_name)
 
 func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 	"""Handle GUI input on inventory slot (double-click or right-click to equip)"""
@@ -996,16 +1024,39 @@ func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: in
 		# Move from equipment to inventory
 		var source_slot_name = data.get("source_slot_name", "")
 		if source_slot_name:
-			# Unequip the item
-			if CharacterStats.unequip_armor(source_slot_name):
+			# Special handling for mainhand weapon
+			if source_slot_name == "mainhand" and CharacterStats.equipped_weapon:
+				CharacterStats.unequip_weapon()
+				refresh_all()
+				print("✅ Unequipped %s to inventory" % dragged_item.get("name", "Unknown"))
+			# Unequip armor
+			elif CharacterStats.unequip_armor(source_slot_name):
 				# Item is now in inventory via unequip_armor
 				refresh_all()
 				print("✅ Unequipped %s to inventory" % dragged_item.get("name", "Unknown"))
 
 func _get_equipment_drag_data(at_position: Vector2, slot_name: String) -> Variant:
 	"""Start dragging an equipped item"""
-	var armor_item = CharacterStats.equipped_armor[slot_name]
-	if not armor_item or armor_item.is_empty():
+	# Special handling for mainhand - check equipped_weapon
+	var armor_item = null
+	if slot_name == "mainhand" and CharacterStats.equipped_weapon:
+		# Convert Weapon resource to dict for dragging
+		var weapon = CharacterStats.equipped_weapon
+		armor_item = {
+			"name": weapon.weapon_name,
+			"description": weapon.description,
+			"type": "weapon",
+			"slot": "mainhand",
+			"weapon_type": weapon.weapon_type,
+			"base_damage": weapon.base_damage,
+			"attack_speed": "medium",  # Will be converted properly on equip
+			"crit_chance": weapon.crit_chance_bonus,
+			"rarity": Weapon.Rarity.keys()[weapon.rarity]
+		}
+	else:
+		armor_item = CharacterStats.equipped_armor[slot_name]
+
+	if not armor_item or (armor_item is Dictionary and armor_item.is_empty()):
 		return null
 
 	# Create drag preview
