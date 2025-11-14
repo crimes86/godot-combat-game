@@ -858,6 +858,30 @@ func finish_attack_cooldown() -> void:
 	await get_tree().create_timer(attack_cooldown).timeout
 	can_attack = true
 
+func _on_attack_animation_finished() -> void:
+	"""Called when attack animation finishes - return all layers to idle"""
+	var body_sprite = get_node_or_null("BodySprite") as AnimatedSprite2D
+	if not body_sprite:
+		return
+
+	# Only process if we just finished an attack animation
+	if not body_sprite.animation.begins_with("attack_"):
+		return
+
+	# Get all sprite layers
+	var legs_sprite = get_node_or_null("LegsSprite") as AnimatedSprite2D
+	var torso_sprite = get_node_or_null("TorsoSprite") as AnimatedSprite2D
+	var hat_sprite = get_node_or_null("HatSprite") as AnimatedSprite2D
+	var weapon_sprite = get_node_or_null("WeaponSprite") as AnimatedSprite2D
+
+	# Return all layers to idle in current facing direction
+	var dir_str = get_direction_string(attack_direction)
+	var idle_anim = "idle_" + dir_str
+
+	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
+		if sprite and sprite.sprite_frames and sprite.sprite_frames.has_animation(idle_anim):
+			sprite.play(idle_anim)
+
 func take_damage(amount: float) -> void:
 	print("Player taking %.1f damage (current: %.1f)" % [amount, current_health])
 	current_health -= amount
@@ -974,6 +998,11 @@ func create_player_sprite() -> void:
 	body_sprite.centered = true
 	body_sprite.z_index = 0
 	add_child(body_sprite)
+
+	# Connect animation_finished signal to return to idle after attack
+	if not body_sprite.animation_finished.is_connected(_on_attack_animation_finished):
+		body_sprite.animation_finished.connect(_on_attack_animation_finished)
+
 	print("  ✅ Body layer created")
 
 	# Layer 1: Legs/Pants
@@ -1119,7 +1148,7 @@ func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: Stri
 			var slash_img = slash_tex.get_image()
 			for dir in ["up", "left", "down", "right"]:
 				var row_index = ["up", "left", "down", "right"].find(dir)
-				create_animation(sprite_frames, "attack_" + dir, slash_img, 64, 64, 6, row_index, 12.0)
+				create_animation(sprite_frames, "attack_" + dir, slash_img, 64, 64, 6, row_index, 12.0, false)  # Don't loop attacks
 			print("  ✅ ", sprite_name, ": Attack animations loaded")
 
 	# Load hurt sprite (384x256, 6 frames x 4 rows)
@@ -1133,10 +1162,10 @@ func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: Stri
 	sprite.sprite_frames = sprite_frames
 	sprite.visible = true  # Make sure sprite is visible when loaded
 
-func create_animation(sprite_frames: SpriteFrames, anim_name: String, source_img: Image, frame_width: int, frame_height: int, frame_count: int, row: int, fps: float) -> void:
+func create_animation(sprite_frames: SpriteFrames, anim_name: String, source_img: Image, frame_width: int, frame_height: int, frame_count: int, row: int, fps: float, should_loop: bool = true) -> void:
 	"""Extract frames from spritesheet and create animation"""
 	sprite_frames.add_animation(anim_name)
-	sprite_frames.set_animation_loop(anim_name, true)
+	sprite_frames.set_animation_loop(anim_name, should_loop)
 	sprite_frames.set_animation_speed(anim_name, fps)
 
 	for frame_idx in range(frame_count):
