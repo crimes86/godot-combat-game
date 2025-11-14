@@ -568,7 +568,7 @@ func create_styled_separator() -> Control:
 	separator_container.add_child(separator)
 	return separator_container
 
-func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, border_width: int = 2) -> StyleBoxFlat:
+func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, border_width: int = 2, use_glow: bool = false) -> StyleBoxFlat:
 	"""Create a wasteland style for equipment/inventory slots with optional rarity glow"""
 	var style = StyleBoxFlat.new()
 	style.bg_color = bg_color
@@ -584,9 +584,15 @@ func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, bord
 	style.corner_radius_bottom_left = 4
 	style.corner_radius_bottom_right = 4
 
-	# Deep inner shadow for inset effect
-	style.shadow_size = 3
-	style.shadow_color = BORDER_INNER  # Dark inner shadow
+	# Shadow - either outer glow for rarity or inner shadow for empty slots
+	if use_glow and border_color != BORDER_INNER:
+		# OUTER GLOW for items with rarity
+		style.shadow_size = 6
+		style.shadow_color = Color(border_color.r, border_color.g, border_color.b, 0.5)
+	else:
+		# Deep inner shadow for inset effect (empty slots)
+		style.shadow_size = 3
+		style.shadow_color = BORDER_INNER
 
 	return style
 
@@ -615,20 +621,20 @@ func create_inner_panel_style() -> StyleBoxFlat:
 	return style
 
 func get_rarity_glow_color(rarity_str: String) -> Color:
-	"""Get bold glow color for item rarity (for thick borders and outer glow)"""
+	"""Get ULTRA BRIGHT glow color for item rarity (thick borders + outer glow)"""
 	match rarity_str.to_upper():
 		"COMMON":
-			return Color(0.5, 0.5, 0.5, 0.9)  # Dull grey
+			return Color(0.7, 0.7, 0.7, 1.0)  # Brighter grey
 		"UNCOMMON":
-			return Color(0.3, 0.9, 0.3, 1.0)  # Bright green
+			return Color(0.2, 1.0, 0.2, 1.0)  # VIVID green
 		"RARE":
-			return Color(0.3, 0.5, 1.0, 1.0)  # Bright blue
+			return Color(0.2, 0.4, 1.0, 1.0)  # VIVID blue
 		"EPIC":
-			return Color(0.8, 0.3, 1.0, 1.0)  # Bright purple
+			return Color(0.9, 0.2, 1.0, 1.0)  # VIVID purple
 		"LEGENDARY":
-			return Color(1.0, 0.6, 0.1, 1.0)  # Bright orange
+			return Color(1.0, 0.5, 0.0, 1.0)  # VIVID orange
 		"ARTIFACT":
-			return Color(1.0, 0.85, 0.0, 1.0)  # Golden glow
+			return Color(1.0, 0.9, 0.0, 1.0)  # VIVID golden glow
 		_:
 			return BORDER_INNER  # Default to dark border
 
@@ -718,10 +724,10 @@ func refresh_equipment() -> void:
 		if armor_item:
 			label.text = armor_item.get("name", "???")
 
-			# Apply rarity glow to slot border
+			# Apply VIVID rarity glow to slot border with outer glow
 			var rarity = armor_item.get("rarity", "COMMON")
 			var glow_color = get_rarity_glow_color(rarity)
-			var glow_style = create_slot_style(SLOT_BG, glow_color, 4)  # Thick border for glow
+			var glow_style = create_slot_style(SLOT_BG, glow_color, 5, true)  # Thick border + outer glow
 			panel.add_theme_stylebox_override("panel", glow_style)
 
 			var tooltip = armor_item.get("description", "")
@@ -782,10 +788,10 @@ func refresh_inventory() -> void:
 			else:
 				label.text = item_name
 
-			# Apply rarity glow to slot border
+			# Apply VIVID rarity glow to slot border with outer glow
 			var rarity = item.get("rarity", "COMMON")
 			var glow_color = get_rarity_glow_color(rarity)
-			var glow_style = create_slot_style(SLOT_BG, glow_color, 4)  # Thick border for glow
+			var glow_style = create_slot_style(SLOT_BG, glow_color, 5, true)  # Thick border + outer glow
 			panel.add_theme_stylebox_override("panel", glow_style)
 
 			print("    Label text set to: '%s' (visible: %s)" % [label.text, label.visible])
