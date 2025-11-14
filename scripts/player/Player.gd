@@ -1036,8 +1036,37 @@ func setup_lpc_animations_layered() -> void:
 	setup_sprite_layer("TorsoSprite", TORSO_WALK_PATH, TORSO_SLASH_PATH, TORSO_HURT_PATH)
 	setup_sprite_layer("HatSprite", HAT_WALK_PATH, HAT_SLASH_PATH, HAT_HURT_PATH)
 
-	# Weapon layer (todo)
-	# setup_sprite_layer("WeaponSprite", weapon_walk_path, weapon_slash_path, weapon_hurt_path)
+	# Weapon layer - load based on equipped weapon
+	if CharacterStats.equipped_weapon:
+		var weapon_type = CharacterStats.equipped_weapon.weapon_type
+		var weapon_name = ""
+
+		# Map weapon types to sprite names
+		match weapon_type:
+			"sword": weapon_name = "longsword"
+			"hammer": weapon_name = "warhammer"
+			"club": weapon_name = "club"
+			"dagger": weapon_name = "dagger"
+			"mace": weapon_name = "mace"
+			"spear": weapon_name = "spear"
+			"rapier": weapon_name = "rapier"
+
+		print("  🗡️ Equipping weapon: ", CharacterStats.equipped_weapon.weapon_name, " (type: ", weapon_type, ", sprite: ", weapon_name, ")")
+
+		var WEAPON_WALK_PATH = "res://assets/weapons/walk/" + weapon_name + ".png"
+		var WEAPON_SLASH_PATH = "res://assets/weapons/" + weapon_name + ".png"
+		var WEAPON_HURT_PATH = ""  # Weapons don't have hurt animations
+
+		print("      Walk path: ", WEAPON_WALK_PATH)
+		print("      Slash path: ", WEAPON_SLASH_PATH)
+
+		setup_sprite_layer("WeaponSprite", WEAPON_WALK_PATH, WEAPON_SLASH_PATH, WEAPON_HURT_PATH)
+	else:
+		print("  👊 No weapon equipped - player is unarmed")
+		# Hide weapon sprite when unarmed
+		var weapon_sprite = get_node_or_null("WeaponSprite") as AnimatedSprite2D
+		if weapon_sprite:
+			weapon_sprite.visible = false
 
 	print("✅ All sprite layers setup complete!")
 
@@ -1080,6 +1109,7 @@ func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: Stri
 			print("  ✅ ", sprite_name, ": Hurt animation loaded")
 
 	sprite.sprite_frames = sprite_frames
+	sprite.visible = true  # Make sure sprite is visible when loaded
 
 func create_animation(sprite_frames: SpriteFrames, anim_name: String, source_img: Image, frame_width: int, frame_height: int, frame_count: int, row: int, fps: float) -> void:
 	"""Extract frames from spritesheet and create animation"""
