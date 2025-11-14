@@ -412,9 +412,15 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	# Play appropriate animation on ALL layers (sync them)
 	var new_anim = prefix + dir_str
 	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
-		if sprite and sprite.sprite_frames and sprite.sprite_frames.has_animation(new_anim):
-			if sprite.animation != new_anim:
-				sprite.play(new_anim)
+		if sprite and sprite.sprite_frames:
+			if sprite.sprite_frames.has_animation(new_anim):
+				# Has the animation - play it and show sprite
+				if sprite.animation != new_anim:
+					sprite.play(new_anim)
+				sprite.visible = true
+			elif sprite == weapon_sprite and (prefix == "walk_" or prefix == "idle_"):
+				# Weapon doesn't have walk/idle animation - hide it during walking
+				sprite.visible = false
 
 	# Note: With layered paper doll system, no complex flip logic needed
 	# Each sprite sheet has proper up/left/down/right rows
@@ -665,12 +671,22 @@ func attempt_attack() -> void:
 		return
 	
 	can_attack = false  # Set immediately, before any other code!
-	
-	# Trigger attack animation
-	var anim_sprite = get_node_or_null("PlayerSprite") as AnimatedSprite2D
-	if anim_sprite:
-		var dir_str = get_direction_string(attack_direction)
-		anim_sprite.play("attack_" + dir_str)
+
+	# Trigger attack animation on ALL sprite layers (paper doll system)
+	var dir_str = get_direction_string(attack_direction)
+	var attack_anim = "attack_" + dir_str
+
+	var body_sprite = get_node_or_null("BodySprite") as AnimatedSprite2D
+	var legs_sprite = get_node_or_null("LegsSprite") as AnimatedSprite2D
+	var torso_sprite = get_node_or_null("TorsoSprite") as AnimatedSprite2D
+	var hat_sprite = get_node_or_null("HatSprite") as AnimatedSprite2D
+	var weapon_sprite = get_node_or_null("WeaponSprite") as AnimatedSprite2D
+
+	# Play attack animation on all layers and make weapon visible
+	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
+		if sprite and sprite.sprite_frames and sprite.sprite_frames.has_animation(attack_anim):
+			sprite.play(attack_anim)
+			sprite.visible = true  # Show weapon during attack even if hidden during walk
 	
 	ChainManager.register_attack()
 	
@@ -1078,17 +1094,23 @@ func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: Stri
 		return
 
 	var sprite_frames = SpriteFrames.new()
+	var has_walk_animations = false
 
-	# Load walk sprite (576x256, 9 frames x 4 rows)
+	# Load walk sprite (576x256, 9 frames x 4 rows) - OPTIONAL for weapons
 	if ResourceLoader.exists(walk_path):
 		var walk_tex = ResourceLoader.load(walk_path, "Texture2D")
 		if walk_tex:
 			var walk_img = walk_tex.get_image()
-			for dir in ["up", "left", "down", "right"]:
-				var row_index = ["up", "left", "down", "right"].find(dir)
-				create_animation(sprite_frames, "walk_" + dir, walk_img, 64, 64, 9, row_index, 10.0)
-				create_animation(sprite_frames, "idle_" + dir, walk_img, 64, 64, 1, row_index, 1.0)  # First frame
-			print("  ✅ ", sprite_name, ": Walk animations loaded")
+			# Check if sprite has proper 4-row format (height >= 256)
+			if walk_img.get_height() >= 256:
+				for dir in ["up", "left", "down", "right"]:
+					var row_index = ["up", "left", "down", "right"].find(dir)
+					create_animation(sprite_frames, "walk_" + dir, walk_img, 64, 64, 9, row_index, 10.0)
+					create_animation(sprite_frames, "idle_" + dir, walk_img, 64, 64, 1, row_index, 1.0)  # First frame
+				has_walk_animations = true
+				print("  ✅ ", sprite_name, ": Walk animations loaded")
+			else:
+				print("  ⚠️ ", sprite_name, ": Walk sprite too small (", walk_img.get_height(), "px), skipping walk animations")
 
 	# Load slash sprite (384x256, 6 frames x 4 rows)
 	if ResourceLoader.exists(slash_path):
