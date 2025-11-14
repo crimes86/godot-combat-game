@@ -426,37 +426,30 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	# Each sprite sheet has proper up/left/down/right rows
 
 func get_direction_string(dir: Vector2) -> String:
-	"""Convert direction vector to animation name string (8-way)"""
+	"""Convert direction vector to animation name string (4-way for LPC sprites)"""
 	if dir.length() < 0.1:
 		return "down"
-	
+
 	var angle = dir.angle()
-	
-	# Convert to 8 directions
+
+	# Convert to degrees
 	# Right = 0, Down = PI/2, Left = PI, Up = -PI/2
 	var deg = rad_to_deg(angle)
-	
+
 	# Normalize to 0-360
 	if deg < 0:
 		deg += 360
-	
-	# 8 directions, 45 degrees each
-	if deg >= 337.5 or deg < 22.5:
-		return "right"
-	elif deg >= 22.5 and deg < 67.5:
-		return "down_right"
-	elif deg >= 67.5 and deg < 112.5:
-		return "down"
-	elif deg >= 112.5 and deg < 157.5:
-		return "down_left"
-	elif deg >= 157.5 and deg < 202.5:
-		return "left"
-	elif deg >= 202.5 and deg < 247.5:
-		return "up_left"
-	elif deg >= 247.5 and deg < 292.5:
-		return "up"
-	else:  # 292.5 to 337.5
-		return "up_right"
+
+	# LPC sprites only have 4 directions, so map to closest cardinal direction
+	# Divide into 4 quadrants, 90 degrees each
+	if deg >= 315 or deg < 45:
+		return "right"  # East (mostly right)
+	elif deg >= 45 and deg < 135:
+		return "down"   # South (mostly down)
+	elif deg >= 135 and deg < 225:
+		return "left"   # West (mostly left)
+	else:  # 225 to 315
+		return "up"     # North (mostly up)
 
 func update_facing_direction() -> void:
 	var mouse_pos = get_global_mouse_position()
