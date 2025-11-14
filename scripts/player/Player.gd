@@ -415,11 +415,13 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 		if sprite and sprite.sprite_frames:
 			if sprite.sprite_frames.has_animation(new_anim):
 				# Has the animation - play it and show sprite
+				# (Weapons have idle animations created from attack frames, so they show when standing)
 				if sprite.animation != new_anim:
 					sprite.play(new_anim)
 				sprite.visible = true
-			elif sprite == weapon_sprite and (prefix == "walk_" or prefix == "idle_"):
-				# Weapon doesn't have walk/idle animation - hide it during walking
+			elif sprite == weapon_sprite and prefix == "walk_":
+				# Weapon doesn't have walk animation - hide it while moving
+				# (But idle animations exist, so weapon shows when standing still)
 				sprite.visible = false
 
 	# Note: With layered paper doll system, no complex flip logic needed
@@ -1142,7 +1144,14 @@ func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: Stri
 			for dir in ["up", "left", "down", "right"]:
 				var row_index = ["up", "left", "down", "right"].find(dir)
 				create_animation(sprite_frames, "attack_" + dir, slash_img, 64, 64, 6, row_index, 12.0, false)  # Don't loop attacks
+
+				# If weapon doesn't have walk animations, create idle from first attack frame
+				if not has_walk_animations:
+					create_animation(sprite_frames, "idle_" + dir, slash_img, 64, 64, 1, row_index, 1.0)  # First frame of attack
 			print("  ✅ ", sprite_name, ": Attack animations loaded")
+
+			if not has_walk_animations:
+				print("  ✅ ", sprite_name, ": Idle animations created from attack frames (no walk sprite)")
 
 	# Load hurt sprite (384x256, 6 frames x 4 rows)
 	if ResourceLoader.exists(hurt_path):
