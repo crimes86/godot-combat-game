@@ -1137,20 +1137,41 @@ func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: Stri
 			else:
 				print("  ⚠️ ", sprite_name, ": Walk sprite has only ", sprite_rows, " rows (need 4), skipping walk animations")
 
-	# Load slash sprite (384x256, 6 frames x 4 rows)
+	# Load slash sprite (384x256, 6 frames x 4 rows - but some weapons only have 3 rows!)
 	if ResourceLoader.exists(slash_path):
 		var slash_tex = ResourceLoader.load(slash_path, "Texture2D")
 		if slash_tex:
 			var slash_img = slash_tex.get_image()
-			print("  📐 ", sprite_name, ": Attack sprite dimensions: ", slash_img.get_width(), "x", slash_img.get_height())
-			for dir in ["up", "left", "down", "right"]:
-				var row_index = ["up", "left", "down", "right"].find(dir)
+			var slash_rows = slash_img.get_height() / 64
+			print("  📐 ", sprite_name, ": Attack sprite dimensions: ", slash_img.get_width(), "x", slash_img.get_height(), " (", slash_rows, " rows)")
+
+			# Some LPC weapons only have 3 rows: up=0, left=1, right=2 (no down!)
+			# Standard 4-row format: up=0, left=1, down=2, right=3
+			var row_mapping = {}
+			if slash_rows >= 4:
+				# Standard 4-row mapping
+				row_mapping = {"up": 0, "left": 1, "down": 2, "right": 3}
+			else:
+				# 3-row mapping (no down direction available)
+				row_mapping = {"up": 0, "left": 1, "right": 2}
+				print("  ⚠️ ", sprite_name, ": Attack sprite has only ", slash_rows, " rows (missing 'down' direction)")
+
+			for dir in row_mapping.keys():
+				var row_index = row_mapping[dir]
 				create_animation(sprite_frames, "attack_" + dir, slash_img, 64, 64, 6, row_index, 12.0, false)  # Don't loop attacks
 
 				# If weapon doesn't have walk animations, create idle from first attack frame
 				if not has_walk_animations:
 					create_animation(sprite_frames, "idle_" + dir, slash_img, 64, 64, 1, row_index, 1.0)  # First frame of attack
 					print("      Created idle_", dir, " from attack frame (row ", row_index, ")")
+
+			# For 3-row sprites, create down direction as copy of up direction
+			if slash_rows < 4 and not row_mapping.has("down"):
+				create_animation(sprite_frames, "attack_down", slash_img, 64, 64, 6, 0, 12.0, false)  # Use up row
+				if not has_walk_animations:
+					create_animation(sprite_frames, "idle_down", slash_img, 64, 64, 1, 0, 1.0)  # Use up row
+				print("      Created down animations from 'up' row (fallback)")
+
 			print("  ✅ ", sprite_name, ": Attack animations loaded")
 
 			if not has_walk_animations:
