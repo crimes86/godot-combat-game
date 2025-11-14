@@ -21,15 +21,21 @@ var gold_label: Label
 var hp_label: Label
 var defense_label: Label
 
-# EverQuest color palette
-const BG_COLOR = Color(0.25, 0.25, 0.28, 0.95)  # Stone grey background
-const BORDER_COLOR = Color(0.42, 0.41, 0.41, 1.0)  # Stone gray border
-const TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)  # White text
-const HEADER_COLOR = Color(1.0, 1.0, 1.0, 1.0)  # White headers
-const HP_COLOR = Color(0.77, 0.19, 0.19, 1.0)  # Red
-const XP_COLOR = Color(0.26, 0.60, 0.83, 1.0)  # Blue
-const BUFF_COLOR = Color(0.2, 0.9, 0.2, 1.0)  # Green for buffed stats
-const DEBUFF_COLOR = Color(0.9, 0.2, 0.2, 1.0)  # Red for debuffed stats
+# Dark Fantasy Wasteland Palette
+const BG_COLOR = Color(0.12, 0.10, 0.08, 0.75)  # Dark weathered leather (transparent for combat)
+const BORDER_COLOR = Color(0.45, 0.30, 0.18, 1.0)  # Rusted bronze/copper
+const BORDER_INNER = Color(0.08, 0.06, 0.05, 1.0)  # Dark inner shadow
+const ACCENT_COLOR = Color(0.65, 0.50, 0.30, 1.0)  # Tarnished gold
+const TEXT_COLOR = Color(0.95, 0.92, 0.85, 1.0)  # Aged parchment white
+const HEADER_COLOR = Color(0.85, 0.70, 0.45, 1.0)  # Faded gold headers
+const HP_COLOR = Color(0.85, 0.20, 0.15, 1.0)  # Blood red
+const XP_COLOR = Color(0.40, 0.55, 0.70, 1.0)  # Muted steel blue
+const SLOT_BG = Color(0.10, 0.08, 0.06, 0.8)  # Darker leather inset
+const BUFF_COLOR = Color(0.3, 0.8, 0.3, 1.0)  # Sickly green for buffs
+const DEBUFF_COLOR = Color(0.8, 0.3, 0.2, 1.0)  # Rust red for debuffs
+
+# Animation timing (snappy for rhythm combat)
+const ANIM_SPEED = 0.1
 
 func _ready() -> void:
 	print("🎨 CharacterUI._ready() started")
@@ -94,25 +100,25 @@ func create_character_ui() -> void:
 	main_panel.offset_top = -300
 	main_panel.offset_bottom = 300
 
-	# Modern polished background with rounded corners and shadow
+	# Dark Fantasy Wasteland styling with transparency
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = BG_COLOR
-	panel_style.border_width_left = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_bottom = 2
-	panel_style.border_color = Color(0.6, 0.6, 0.6, 1.0)  # Lighter border for contrast
+	panel_style.bg_color = BG_COLOR  # 75% transparent dark leather
+	panel_style.border_width_left = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = BORDER_COLOR  # Rusted bronze
 
-	# Rounded corners for modern look
-	panel_style.corner_radius_top_left = 12
-	panel_style.corner_radius_top_right = 12
-	panel_style.corner_radius_bottom_left = 12
-	panel_style.corner_radius_bottom_right = 12
+	# Subtle rounded corners
+	panel_style.corner_radius_top_left = 8
+	panel_style.corner_radius_top_right = 8
+	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_bottom_right = 8
 
-	# Drop shadow for depth
-	panel_style.shadow_size = 8
-	panel_style.shadow_color = Color(0, 0, 0, 0.6)
-	panel_style.shadow_offset = Vector2(0, 4)
+	# Heavy shadow for depth
+	panel_style.shadow_size = 12
+	panel_style.shadow_color = Color(0, 0, 0, 0.8)  # Darker shadow for wasteland
+	panel_style.shadow_offset = Vector2(0, 6)
 
 	main_panel.add_theme_stylebox_override("panel", panel_style)
 
@@ -251,21 +257,21 @@ func create_character_info_panel(parent: Control) -> void:
 	xp_bar.show_percentage = true
 	xp_bar.add_theme_color_override("font_color", TEXT_COLOR)
 
-	# Modern styled progress bar
+	# Dark wasteland styled progress bar
 	var xp_bg = StyleBoxFlat.new()
-	xp_bg.bg_color = Color(0.15, 0.15, 0.18, 1.0)
-	xp_bg.border_width_left = 1
-	xp_bg.border_width_right = 1
-	xp_bg.border_width_top = 1
-	xp_bg.border_width_bottom = 1
-	xp_bg.border_color = Color(0.4, 0.4, 0.45, 0.6)
+	xp_bg.bg_color = SLOT_BG  # Dark leather inset
+	xp_bg.border_width_left = 2
+	xp_bg.border_width_right = 2
+	xp_bg.border_width_top = 2
+	xp_bg.border_width_bottom = 2
+	xp_bg.border_color = BORDER_INNER  # Dark inner shadow
 	xp_bg.corner_radius_top_left = 4
 	xp_bg.corner_radius_top_right = 4
 	xp_bg.corner_radius_bottom_left = 4
 	xp_bg.corner_radius_bottom_right = 4
 
 	var xp_fill = StyleBoxFlat.new()
-	xp_fill.bg_color = Color(0.3, 0.65, 0.9, 1.0)  # Bright blue
+	xp_fill.bg_color = XP_COLOR  # Muted steel blue
 	xp_fill.corner_radius_top_left = 4
 	xp_fill.corner_radius_top_right = 4
 	xp_fill.corner_radius_bottom_left = 4
@@ -417,8 +423,8 @@ func create_equipment_slot(slot_name: String, label_text: String) -> VBoxContain
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let parent handle input
 	slot_control.add_child(panel)
 
-	# Modern slot styling with smooth hover transitions
-	var slot_style_normal = create_slot_style(Color(0.2, 0.2, 0.25, 1.0))
+	# Wasteland slot styling with deep inset
+	var slot_style_normal = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 	panel.add_theme_stylebox_override("panel", slot_style_normal)
 
 	# Add label for item text
@@ -468,8 +474,8 @@ func create_inventory_slot(slot_index: int) -> Control:
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let parent handle input
 	slot_control.add_child(panel)
 
-	# Modern slot styling
-	var slot_style_normal = create_slot_style(Color(0.2, 0.2, 0.25, 1.0))
+	# Wasteland slot styling with deep inset
+	var slot_style_normal = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 	panel.add_theme_stylebox_override("panel", slot_style_normal)
 
 	# Add label for item text
@@ -542,7 +548,7 @@ func create_text_label(text: String, size: int = 14) -> Label:
 	return label
 
 func create_styled_separator() -> Control:
-	"""Create a modern styled separator line"""
+	"""Create a wasteland styled separator line"""
 	var separator_container = MarginContainer.new()
 	separator_container.add_theme_constant_override("margin_top", 8)
 	separator_container.add_theme_constant_override("margin_bottom", 8)
@@ -552,9 +558,9 @@ func create_styled_separator() -> Control:
 	var separator = HSeparator.new()
 	separator.custom_minimum_size = Vector2(0, 2)
 
-	# Create styled separator with gradient effect
+	# Rusted metal separator
 	var sep_style = StyleBoxFlat.new()
-	sep_style.bg_color = Color(0.5, 0.5, 0.55, 0.6)  # Lighter grey with transparency
+	sep_style.bg_color = BORDER_COLOR  # Rusted bronze
 	sep_style.content_margin_top = 1
 	sep_style.content_margin_bottom = 1
 	separator.add_theme_stylebox_override("separator", sep_style)
@@ -562,47 +568,69 @@ func create_styled_separator() -> Control:
 	separator_container.add_child(separator)
 	return separator_container
 
-func create_slot_style(bg_color: Color) -> StyleBoxFlat:
-	"""Create a modern style for equipment/inventory slots"""
+func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, border_width: int = 2) -> StyleBoxFlat:
+	"""Create a wasteland style for equipment/inventory slots with optional rarity glow"""
 	var style = StyleBoxFlat.new()
 	style.bg_color = bg_color
+	style.border_width_left = border_width
+	style.border_width_right = border_width
+	style.border_width_top = border_width
+	style.border_width_bottom = border_width
+	style.border_color = border_color
+
+	# Subtle rounded corners
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+
+	# Deep inner shadow for inset effect
+	style.shadow_size = 3
+	style.shadow_color = BORDER_INNER  # Dark inner shadow
+
+	return style
+
+func create_inner_panel_style() -> StyleBoxFlat:
+	"""Create wasteland style for inner panels"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = SLOT_BG  # Darker leather inset
+
+	# Rusted metal borders
 	style.border_width_left = 2
 	style.border_width_right = 2
 	style.border_width_top = 2
 	style.border_width_bottom = 2
-	style.border_color = Color(0.5, 0.5, 0.55, 0.8)  # Lighter border for modern look
+	style.border_color = BORDER_INNER  # Dark inner shadow
 
-	# Rounded corners for modern feel
+	# Subtle rounded corners
 	style.corner_radius_top_left = 6
 	style.corner_radius_top_right = 6
 	style.corner_radius_bottom_left = 6
 	style.corner_radius_bottom_right = 6
 
-	# Subtle inner shadow for depth
-	style.shadow_size = 2
-	style.shadow_color = Color(0, 0, 0, 0.3)
+	# Inset shadow effect
+	style.shadow_size = 4
+	style.shadow_color = Color(0, 0, 0, 0.5)
 
 	return style
 
-func create_inner_panel_style() -> StyleBoxFlat:
-	"""Create modern style for inner panels"""
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.2, 0.23, 0.5)  # Darker stone grey
-
-	# Modern rounded borders
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(0.5, 0.5, 0.55, 0.4)
-
-	# Rounded corners
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-
-	return style
+func get_rarity_glow_color(rarity_str: String) -> Color:
+	"""Get bold glow color for item rarity (for thick borders and outer glow)"""
+	match rarity_str.to_upper():
+		"COMMON":
+			return Color(0.5, 0.5, 0.5, 0.9)  # Dull grey
+		"UNCOMMON":
+			return Color(0.3, 0.9, 0.3, 1.0)  # Bright green
+		"RARE":
+			return Color(0.3, 0.5, 1.0, 1.0)  # Bright blue
+		"EPIC":
+			return Color(0.8, 0.3, 1.0, 1.0)  # Bright purple
+		"LEGENDARY":
+			return Color(1.0, 0.6, 0.1, 1.0)  # Bright orange
+		"ARTIFACT":
+			return Color(1.0, 0.85, 0.0, 1.0)  # Golden glow
+		_:
+			return BORDER_INNER  # Default to dark border
 
 func toggle_character_ui() -> void:
 	"""Toggle character UI visibility"""
@@ -689,6 +717,13 @@ func refresh_equipment() -> void:
 		var armor_item = CharacterStats.equipped_armor[slot_name]
 		if armor_item:
 			label.text = armor_item.get("name", "???")
+
+			# Apply rarity glow to slot border
+			var rarity = armor_item.get("rarity", "COMMON")
+			var glow_color = get_rarity_glow_color(rarity)
+			var glow_style = create_slot_style(SLOT_BG, glow_color, 4)  # Thick border for glow
+			panel.add_theme_stylebox_override("panel", glow_style)
+
 			var tooltip = armor_item.get("description", "")
 
 			# Weapon stats (for mainhand/offhand)
@@ -711,6 +746,9 @@ func refresh_equipment() -> void:
 		else:
 			label.text = ""
 			slot_control.tooltip_text = "Empty " + slot_name + " slot"
+			# Reset to default style when empty
+			var default_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
+			panel.add_theme_stylebox_override("panel", default_style)
 
 func refresh_inventory() -> void:
 	"""Update inventory slot displays"""
@@ -744,6 +782,12 @@ func refresh_inventory() -> void:
 			else:
 				label.text = item_name
 
+			# Apply rarity glow to slot border
+			var rarity = item.get("rarity", "COMMON")
+			var glow_color = get_rarity_glow_color(rarity)
+			var glow_style = create_slot_style(SLOT_BG, glow_color, 4)  # Thick border for glow
+			panel.add_theme_stylebox_override("panel", glow_style)
+
 			print("    Label text set to: '%s' (visible: %s)" % [label.text, label.visible])
 
 			var tooltip = item.get("description", "")
@@ -774,6 +818,9 @@ func refresh_inventory() -> void:
 			print("  ⬜ Slot %d: Empty" % i)
 			label.text = ""
 			slot_control.tooltip_text = "Empty slot"
+			# Reset to default style when empty
+			var default_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
+			panel.add_theme_stylebox_override("panel", default_style)
 
 func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
 	"""Handle GUI input on equipment slot (double-click or right-click to unequip)"""

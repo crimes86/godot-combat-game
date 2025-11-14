@@ -9,11 +9,15 @@ signal shop_closed()
 signal item_purchased(item_name: String, price: int)
 signal item_sold(item_name: String, value: int)
 
-# Modern color palette (matching CharacterUI)
-const BG_COLOR = Color(0.25, 0.25, 0.28, 0.95)  # Stone grey background
-const BORDER_COLOR = Color(0.6, 0.6, 0.6, 1.0)  # Light border
-const TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)  # White text
-const ITEM_BG_COLOR = Color(0.2, 0.2, 0.23, 0.7)  # Darker stone for items
+# Dark Fantasy Wasteland Palette (matching CharacterUI)
+const BG_COLOR = Color(0.12, 0.10, 0.08, 0.85)  # Dark weathered leather (slightly more opaque for shop)
+const BORDER_COLOR = Color(0.45, 0.30, 0.18, 1.0)  # Rusted bronze/copper
+const BORDER_INNER = Color(0.08, 0.06, 0.05, 1.0)  # Dark inner shadow
+const ACCENT_COLOR = Color(0.65, 0.50, 0.30, 1.0)  # Tarnished gold
+const TEXT_COLOR = Color(0.95, 0.92, 0.85, 1.0)  # Aged parchment white
+const HEADER_COLOR = Color(0.85, 0.70, 0.45, 1.0)  # Faded gold headers
+const ITEM_BG_COLOR = Color(0.10, 0.08, 0.06, 0.9)  # Darker leather for items
+const SLOT_BG = Color(0.10, 0.08, 0.06, 0.8)  # Darker leather inset
 
 @onready var main_panel: PanelContainer = $Control/Panel
 @onready var vendor_name_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/VendorName
@@ -58,40 +62,40 @@ func _ready() -> void:
 	CharacterStats.gold_changed.connect(_on_gold_changed)
 
 func apply_modern_styling() -> void:
-	"""Apply modern CharacterUI-style theme to the shop"""
+	"""Apply Dark Fantasy Wasteland theme to match CharacterUI"""
 	if main_panel:
-		# Modern panel styling with rounded corners and shadow
+		# Dark Fantasy Wasteland styling with transparency
 		var panel_style = StyleBoxFlat.new()
-		panel_style.bg_color = BG_COLOR
-		panel_style.border_width_left = 2
-		panel_style.border_width_right = 2
-		panel_style.border_width_top = 2
-		panel_style.border_width_bottom = 2
-		panel_style.border_color = BORDER_COLOR
+		panel_style.bg_color = BG_COLOR  # 85% transparent dark leather
+		panel_style.border_width_left = 3
+		panel_style.border_width_right = 3
+		panel_style.border_width_top = 3
+		panel_style.border_width_bottom = 3
+		panel_style.border_color = BORDER_COLOR  # Rusted bronze
 
-		# Rounded corners
-		panel_style.corner_radius_top_left = 12
-		panel_style.corner_radius_top_right = 12
-		panel_style.corner_radius_bottom_left = 12
-		panel_style.corner_radius_bottom_right = 12
+		# Subtle rounded corners
+		panel_style.corner_radius_top_left = 8
+		panel_style.corner_radius_top_right = 8
+		panel_style.corner_radius_bottom_left = 8
+		panel_style.corner_radius_bottom_right = 8
 
-		# Drop shadow
-		panel_style.shadow_size = 8
-		panel_style.shadow_color = Color(0, 0, 0, 0.6)
-		panel_style.shadow_offset = Vector2(0, 4)
+		# Heavy shadow for depth
+		panel_style.shadow_size = 12
+		panel_style.shadow_color = Color(0, 0, 0, 0.8)  # Darker shadow for wasteland
+		panel_style.shadow_offset = Vector2(0, 6)
 
 		main_panel.add_theme_stylebox_override("panel", panel_style)
 
-	# Update text colors to white
+	# Update text colors to aged parchment
 	if vendor_name_label:
-		vendor_name_label.add_theme_color_override("font_color", TEXT_COLOR)
+		vendor_name_label.add_theme_color_override("font_color", HEADER_COLOR)  # Faded gold
 	if gold_label:
-		gold_label.add_theme_color_override("font_color", Color.GOLD)
+		gold_label.add_theme_color_override("font_color", ACCENT_COLOR)  # Tarnished gold
 
-	# Style the close button
+	# Style the close button (blood red for wasteland)
 	if close_button:
 		close_button.add_theme_font_size_override("font_size", 24)
-		close_button.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))  # Red X
+		close_button.add_theme_color_override("font_color", Color(0.85, 0.20, 0.15))  # Blood red
 
 func _input(event: InputEvent) -> void:
 	# Allow F or ESC to close the shop
@@ -214,28 +218,28 @@ func populate_armor() -> void:
 		armor_list.add_child(item_row)
 
 func create_item_row(item_name: String, description: String, price: int, stats: String, req_level: int, color: Color, on_buy: Callable) -> PanelContainer:
-	"""Create a modern styled row for an item in the shop"""
+	"""Create a wasteland styled row for an item with bold rarity glow"""
 	var panel = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(0, 90)
 
-	# Modern styled background with rounded corners
+	# Dark wasteland background with thick rarity border glow
 	var style = StyleBoxFlat.new()
-	style.bg_color = ITEM_BG_COLOR
-	style.border_width_left = 3
+	style.bg_color = ITEM_BG_COLOR  # Dark leather
+	style.border_width_left = 4  # Thick left border for rarity glow
 	style.border_width_right = 2
 	style.border_width_top = 2
 	style.border_width_bottom = 2
-	style.border_color = color  # Rarity color on left edge
+	style.border_color = color  # Bold rarity glow color
 
-	# Rounded corners for modern look
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
+	# Subtle rounded corners
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
 
-	# Subtle shadow for depth
-	style.shadow_size = 2
-	style.shadow_color = Color(0, 0, 0, 0.3)
+	# Deep shadow for wasteland depth
+	style.shadow_size = 4
+	style.shadow_color = BORDER_INNER  # Dark shadow
 
 	panel.add_theme_stylebox_override("panel", style)
 
@@ -255,18 +259,18 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	name_label.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(name_label)
 
-	# Description
+	# Description (aged parchment color)
 	var desc_label = Label.new()
 	desc_label.text = description
 	desc_label.add_theme_font_size_override("font_size", 12)
-	desc_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))  # Lighter grey
+	desc_label.add_theme_color_override("font_color", Color(0.75, 0.72, 0.68))  # Faded parchment
 	vbox.add_child(desc_label)
 
-	# Stats
+	# Stats (tarnished gold)
 	var stats_label = Label.new()
 	stats_label.text = stats
 	stats_label.add_theme_font_size_override("font_size", 14)
-	stats_label.add_theme_color_override("font_color", Color(0.6, 0.9, 1.0))  # Bright cyan
+	stats_label.add_theme_color_override("font_color", ACCENT_COLOR)  # Tarnished gold
 	vbox.add_child(stats_label)
 
 	# Right side - Price and buy button
@@ -274,54 +278,54 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	right_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	hbox.add_child(right_vbox)
 
-	# Price
+	# Price (tarnished gold)
 	var price_label = Label.new()
 	price_label.text = "%d gold" % price
 	price_label.add_theme_font_size_override("font_size", 16)
-	price_label.add_theme_color_override("font_color", Color.GOLD if price > 0 else Color.GREEN)
+	price_label.add_theme_color_override("font_color", ACCENT_COLOR if price > 0 else Color(0.3, 0.8, 0.3))
 	right_vbox.add_child(price_label)
 
-	# Buy button with modern styling
+	# Buy button with wasteland styling
 	var buy_button = Button.new()
 	buy_button.text = "BUY" if price > 0 else "TAKE"
 	buy_button.custom_minimum_size = Vector2(90, 45)
 
-	# Modern button styling
+	# Wasteland button styling - dark leather with rusted borders
 	var btn_normal = StyleBoxFlat.new()
-	btn_normal.bg_color = Color(0.2, 0.2, 0.25, 1.0)
+	btn_normal.bg_color = SLOT_BG  # Dark leather
 	btn_normal.border_width_left = 2
 	btn_normal.border_width_right = 2
 	btn_normal.border_width_top = 2
 	btn_normal.border_width_bottom = 2
-	btn_normal.border_color = Color(0.5, 0.5, 0.55, 0.8)
-	btn_normal.corner_radius_top_left = 6
-	btn_normal.corner_radius_top_right = 6
-	btn_normal.corner_radius_bottom_left = 6
-	btn_normal.corner_radius_bottom_right = 6
+	btn_normal.border_color = BORDER_COLOR  # Rusted bronze
+	btn_normal.corner_radius_top_left = 4
+	btn_normal.corner_radius_top_right = 4
+	btn_normal.corner_radius_bottom_left = 4
+	btn_normal.corner_radius_bottom_right = 4
 
 	var btn_hover = StyleBoxFlat.new()
-	btn_hover.bg_color = Color(0.28, 0.32, 0.38, 1.0)  # Brighter on hover
+	btn_hover.bg_color = Color(0.15, 0.12, 0.10, 1.0)  # Slightly lighter leather on hover
 	btn_hover.border_width_left = 2
 	btn_hover.border_width_right = 2
 	btn_hover.border_width_top = 2
 	btn_hover.border_width_bottom = 2
-	btn_hover.border_color = Color(0.6, 0.6, 0.65, 1.0)
-	btn_hover.corner_radius_top_left = 6
-	btn_hover.corner_radius_top_right = 6
-	btn_hover.corner_radius_bottom_left = 6
-	btn_hover.corner_radius_bottom_right = 6
+	btn_hover.border_color = ACCENT_COLOR  # Tarnished gold glow on hover
+	btn_hover.corner_radius_top_left = 4
+	btn_hover.corner_radius_top_right = 4
+	btn_hover.corner_radius_bottom_left = 4
+	btn_hover.corner_radius_bottom_right = 4
 
 	var btn_pressed = StyleBoxFlat.new()
-	btn_pressed.bg_color = Color(0.15, 0.18, 0.22, 1.0)  # Darker when pressed
+	btn_pressed.bg_color = BORDER_INNER  # Darker when pressed
 	btn_pressed.border_width_left = 2
 	btn_pressed.border_width_right = 2
 	btn_pressed.border_width_top = 2
 	btn_pressed.border_width_bottom = 2
-	btn_pressed.border_color = Color(0.4, 0.4, 0.45, 1.0)
-	btn_pressed.corner_radius_top_left = 6
-	btn_pressed.corner_radius_top_right = 6
-	btn_pressed.corner_radius_bottom_left = 6
-	btn_pressed.corner_radius_bottom_right = 6
+	btn_pressed.border_color = BORDER_INNER  # Dark border when pressed
+	btn_pressed.corner_radius_top_left = 4
+	btn_pressed.corner_radius_top_right = 4
+	btn_pressed.corner_radius_bottom_left = 4
+	btn_pressed.corner_radius_bottom_right = 4
 
 	buy_button.add_theme_stylebox_override("normal", btn_normal)
 	buy_button.add_theme_stylebox_override("hover", btn_hover)
@@ -402,36 +406,36 @@ func show_message(text: String, color: Color) -> void:
 		message_label.hide()
 
 func get_rarity_color(rarity: Weapon.Rarity) -> Color:
-	"""Get subtle color for weapon rarity (for border accent only)"""
+	"""Get bold glow color for weapon rarity (thick border glow)"""
 	match rarity:
 		Weapon.Rarity.COMMON:
-			return Color(0.6, 0.6, 0.6, 0.8)  # Subtle grey
+			return Color(0.5, 0.5, 0.5, 0.9)  # Dull grey
 		Weapon.Rarity.UNCOMMON:
-			return Color(0.5, 0.7, 0.4, 0.8)  # Muted green
+			return Color(0.3, 0.9, 0.3, 1.0)  # Bright green
 		Weapon.Rarity.RARE:
-			return Color(0.4, 0.6, 0.8, 0.8)  # Muted blue
+			return Color(0.3, 0.5, 1.0, 1.0)  # Bright blue
 		Weapon.Rarity.EPIC:
-			return Color(0.6, 0.4, 0.7, 0.8)  # Muted purple
+			return Color(0.8, 0.3, 1.0, 1.0)  # Bright purple
 		Weapon.Rarity.LEGENDARY:
-			return Color(0.9, 0.6, 0.3, 0.9)  # Muted orange
+			return Color(1.0, 0.6, 0.1, 1.0)  # Bright orange
 		_:
-			return Color(0.6, 0.6, 0.6, 0.8)
+			return BORDER_INNER  # Default to dark border
 
 func get_armor_rarity_color(rarity_str: String) -> Color:
-	"""Get subtle color for armor rarity (for border accent only)"""
-	match rarity_str:
+	"""Get bold glow color for armor rarity (thick border glow)"""
+	match rarity_str.to_upper():
 		"COMMON":
-			return Color(0.6, 0.6, 0.6, 0.8)  # Subtle grey
+			return Color(0.5, 0.5, 0.5, 0.9)  # Dull grey
 		"UNCOMMON":
-			return Color(0.5, 0.7, 0.4, 0.8)  # Muted green
+			return Color(0.3, 0.9, 0.3, 1.0)  # Bright green
 		"RARE":
-			return Color(0.4, 0.6, 0.8, 0.8)  # Muted blue
+			return Color(0.3, 0.5, 1.0, 1.0)  # Bright blue
 		"EPIC":
-			return Color(0.6, 0.4, 0.7, 0.8)  # Muted purple
+			return Color(0.8, 0.3, 1.0, 1.0)  # Bright purple
 		"LEGENDARY":
-			return Color(0.9, 0.6, 0.3, 0.9)  # Muted orange
+			return Color(1.0, 0.6, 0.1, 1.0)  # Bright orange
 		_:
-			return Color(0.6, 0.6, 0.6, 0.8)
+			return BORDER_INNER  # Default to dark border
 
 func populate_sell_items() -> void:
 	"""Populate the sell list with inventory items"""
@@ -475,28 +479,28 @@ func populate_sell_items() -> void:
 		sell_list.add_child(empty_label)
 
 func create_sell_item_row(item_name: String, description: String, unit_value: int, quantity: int, total_value: int, on_sell: Callable) -> PanelContainer:
-	"""Create a modern styled row for an item to sell"""
+	"""Create a wasteland styled row for an item to sell"""
 	var panel = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(0, 80)
 
-	# Modern styled background
+	# Dark wasteland background with tarnished gold border
 	var style = StyleBoxFlat.new()
-	style.bg_color = ITEM_BG_COLOR
-	style.border_width_left = 3
+	style.bg_color = ITEM_BG_COLOR  # Dark leather
+	style.border_width_left = 4  # Thick left border for sell glow
 	style.border_width_right = 2
 	style.border_width_top = 2
 	style.border_width_bottom = 2
-	style.border_color = Color.GOLD  # Gold border for sell items
+	style.border_color = ACCENT_COLOR  # Tarnished gold border for sell items
 
-	# Rounded corners
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
+	# Subtle rounded corners
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
 
-	# Subtle shadow
-	style.shadow_size = 2
-	style.shadow_color = Color(0, 0, 0, 0.3)
+	# Deep shadow
+	style.shadow_size = 4
+	style.shadow_color = BORDER_INNER  # Dark shadow
 
 	panel.add_theme_stylebox_override("panel", style)
 
@@ -518,11 +522,11 @@ func create_sell_item_row(item_name: String, description: String, unit_value: in
 	name_label.add_theme_font_size_override("font_size", 16)
 	vbox.add_child(name_label)
 
-	# Description
+	# Description (faded parchment)
 	var desc_label = Label.new()
 	desc_label.text = description
 	desc_label.add_theme_font_size_override("font_size", 12)
-	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	desc_label.add_theme_color_override("font_color", Color(0.75, 0.72, 0.68))
 	vbox.add_child(desc_label)
 
 	# Right side - Value and sell button
@@ -530,58 +534,58 @@ func create_sell_item_row(item_name: String, description: String, unit_value: in
 	right_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	hbox.add_child(right_vbox)
 
-	# Value (show per-item and total if stacked)
+	# Value (tarnished gold)
 	var value_label = Label.new()
 	if quantity > 1:
 		value_label.text = "%d gold total\n(%d ea)" % [total_value, unit_value]
 	else:
 		value_label.text = "%d gold" % total_value
 	value_label.add_theme_font_size_override("font_size", 14)
-	value_label.add_theme_color_override("font_color", Color.GOLD)
+	value_label.add_theme_color_override("font_color", ACCENT_COLOR)  # Tarnished gold
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	right_vbox.add_child(value_label)
 
-	# Sell button with modern styling
+	# Sell button with wasteland styling
 	var sell_button = Button.new()
 	sell_button.text = "SELL"
 	sell_button.custom_minimum_size = Vector2(90, 45)
 
-	# Modern button styling (reuse the same style as buy button)
+	# Wasteland button styling (matching buy button)
 	var btn_normal = StyleBoxFlat.new()
-	btn_normal.bg_color = Color(0.2, 0.2, 0.25, 1.0)
+	btn_normal.bg_color = SLOT_BG  # Dark leather
 	btn_normal.border_width_left = 2
 	btn_normal.border_width_right = 2
 	btn_normal.border_width_top = 2
 	btn_normal.border_width_bottom = 2
-	btn_normal.border_color = Color(0.5, 0.5, 0.55, 0.8)
-	btn_normal.corner_radius_top_left = 6
-	btn_normal.corner_radius_top_right = 6
-	btn_normal.corner_radius_bottom_left = 6
-	btn_normal.corner_radius_bottom_right = 6
+	btn_normal.border_color = BORDER_COLOR  # Rusted bronze
+	btn_normal.corner_radius_top_left = 4
+	btn_normal.corner_radius_top_right = 4
+	btn_normal.corner_radius_bottom_left = 4
+	btn_normal.corner_radius_bottom_right = 4
 
 	var btn_hover = StyleBoxFlat.new()
-	btn_hover.bg_color = Color(0.28, 0.32, 0.38, 1.0)
+	btn_hover.bg_color = Color(0.15, 0.12, 0.10, 1.0)  # Slightly lighter leather on hover
 	btn_hover.border_width_left = 2
 	btn_hover.border_width_right = 2
 	btn_hover.border_width_top = 2
 	btn_hover.border_width_bottom = 2
-	btn_hover.border_color = Color(0.6, 0.6, 0.65, 1.0)
-	btn_hover.corner_radius_top_left = 6
-	btn_hover.corner_radius_top_right = 6
-	btn_hover.corner_radius_bottom_left = 6
-	btn_hover.corner_radius_bottom_right = 6
+	btn_hover.border_color = ACCENT_COLOR  # Tarnished gold glow on hover
+	btn_hover.corner_radius_top_left = 4
+	btn_hover.corner_radius_top_right = 4
+	btn_hover.corner_radius_bottom_left = 4
+	btn_hover.corner_radius_bottom_right = 4
 
 	var btn_pressed = StyleBoxFlat.new()
-	btn_pressed.bg_color = Color(0.15, 0.18, 0.22, 1.0)
+	btn_pressed.bg_color = BORDER_INNER  # Darker when pressed
 	btn_pressed.border_width_left = 2
 	btn_pressed.border_width_right = 2
 	btn_pressed.border_width_top = 2
 	btn_pressed.border_width_bottom = 2
-	btn_pressed.border_color = Color(0.4, 0.4, 0.45, 1.0)
-	btn_pressed.corner_radius_top_left = 6
-	btn_pressed.corner_radius_top_right = 6
-	btn_pressed.corner_radius_bottom_left = 6
-	btn_pressed.corner_radius_bottom_right = 6
+	btn_pressed.border_color = BORDER_INNER  # Dark border when pressed
+	btn_pressed.corner_radius_top_left = 4
+	btn_pressed.corner_radius_top_right = 4
+	btn_pressed.corner_radius_bottom_left = 4
+	btn_pressed.corner_radius_bottom_right = 4
 
 	sell_button.add_theme_stylebox_override("normal", btn_normal)
 	sell_button.add_theme_stylebox_override("hover", btn_hover)
