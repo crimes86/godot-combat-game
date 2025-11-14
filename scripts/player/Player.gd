@@ -899,13 +899,25 @@ func get_weapon_sprite_path() -> String:
 		return ""  # Unarmed - no weapon sprite
 
 	var weapon_type = CharacterStats.equipped_weapon.weapon_type
-	var sprite_path = "res://assets/characters/WEAPON_" + weapon_type + "_slash.png"
+
+	# Map weapon types to sprite filenames
+	var weapon_sprite_name = weapon_type
+	match weapon_type:
+		"sword":
+			weapon_sprite_name = "longsword"
+		"hammer":
+			weapon_sprite_name = "warhammer"
+		# All others use their weapon_type directly (club, dagger, mace, spear, rapier)
+
+	var sprite_path = "res://assets/weapons/" + weapon_sprite_name + ".png"
 
 	# Check if file exists, otherwise fallback to dagger
 	if not ResourceLoader.exists(sprite_path):
-		print("⚠️ Warning: No sprite found for weapon type '", weapon_type, "' - using dagger fallback")
-		sprite_path = "res://assets/characters/WEAPON_dagger_slash.png"
+		print("⚠️ Warning: No sprite found for weapon type '", weapon_type, "' at ", sprite_path)
+		print("   Falling back to dagger")
+		sprite_path = "res://assets/weapons/dagger.png"
 
+	print("🗡️ Using weapon sprite: ", sprite_path)
 	return sprite_path
 
 func create_player_sprite() -> void:
@@ -1010,7 +1022,7 @@ func setup_lpc_animations(anim_sprite: AnimatedSprite2D) -> void:
 	const TORSO_SLASH_PATH = "res://assets/characters/TORSO_leather_armor_torso_slash.png"
 	const LEGS_SLASH_PATH = "res://assets/characters/LEGS_pants_greenish_slash.png"
 	const HAT_SLASH_PATH = "res://assets/characters/HEAD_leather_armor_hat_slash.png"
-	const WEAPON_SLASH_PATH = "res://assets/characters/WEAPON_dagger_slash.png"
+	var WEAPON_SLASH_PATH = get_weapon_sprite_path()  # Dynamic weapon based on equipped item
 	
 	# HURT sprite paths
 	var BODY_HURT_PATH = "res://assets/characters/BODY_" + body_type + "_hurt.png"
