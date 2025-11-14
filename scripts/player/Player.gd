@@ -1125,16 +1125,17 @@ func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: Stri
 		var walk_tex = ResourceLoader.load(walk_path, "Texture2D")
 		if walk_tex:
 			var walk_img = walk_tex.get_image()
-			# Check if sprite has proper 4-row format (height >= 256)
-			if walk_img.get_height() >= 256:
+			var sprite_rows = walk_img.get_height() / 64
+			# Check if sprite has proper 4-row format (needs exactly 4 rows for all directions)
+			if sprite_rows >= 4:
 				for dir in ["up", "left", "down", "right"]:
 					var row_index = ["up", "left", "down", "right"].find(dir)
 					create_animation(sprite_frames, "walk_" + dir, walk_img, 64, 64, 9, row_index, 10.0)
 					create_animation(sprite_frames, "idle_" + dir, walk_img, 64, 64, 1, row_index, 1.0)  # First frame
 				has_walk_animations = true
-				print("  ✅ ", sprite_name, ": Walk animations loaded")
+				print("  ✅ ", sprite_name, ": Walk animations loaded (", sprite_rows, " rows)")
 			else:
-				print("  ⚠️ ", sprite_name, ": Walk sprite too small (", walk_img.get_height(), "px), skipping walk animations")
+				print("  ⚠️ ", sprite_name, ": Walk sprite has only ", sprite_rows, " rows (need 4), skipping walk animations")
 
 	# Load slash sprite (384x256, 6 frames x 4 rows)
 	if ResourceLoader.exists(slash_path):
