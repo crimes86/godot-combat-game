@@ -222,14 +222,14 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	var panel = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(0, 90)
 
-	# Dark wasteland background with ULTRA THICK rarity border glow
+	# Dark wasteland background with subtle rarity border glow
 	var style = StyleBoxFlat.new()
 	style.bg_color = ITEM_BG_COLOR  # Dark leather
-	style.border_width_left = 6  # ULTRA THICK left border for rarity glow
-	style.border_width_right = 6  # Match all sides for full glow
-	style.border_width_top = 6
-	style.border_width_bottom = 6
-	style.border_color = color  # VIVID rarity glow color
+	style.border_width_left = 4  # Thicker left border for rarity accent
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = color  # Muted rarity glow color
 
 	# Subtle rounded corners
 	style.corner_radius_top_left = 6
@@ -237,9 +237,9 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	style.corner_radius_bottom_left = 6
 	style.corner_radius_bottom_right = 6
 
-	# OUTER GLOW using shadow with rarity color
-	style.shadow_size = 8  # Large outer glow
-	style.shadow_color = Color(color.r, color.g, color.b, 0.6)  # Glow with rarity color
+	# Subtle outer glow using shadow with rarity color
+	style.shadow_size = 4
+	style.shadow_color = Color(color.r, color.g, color.b, 0.3)  # Subtle glow
 
 	panel.add_theme_stylebox_override("panel", style)
 
@@ -406,34 +406,34 @@ func show_message(text: String, color: Color) -> void:
 		message_label.hide()
 
 func get_rarity_color(rarity: Weapon.Rarity) -> Color:
-	"""Get ULTRA BRIGHT glow color for weapon rarity (thick border + outer glow)"""
+	"""Get muted glow color for weapon rarity (visible but not overwhelming)"""
 	match rarity:
 		Weapon.Rarity.COMMON:
-			return Color(0.7, 0.7, 0.7, 1.0)  # Brighter grey
+			return Color(0.6, 0.6, 0.6, 0.9)  # Subtle grey
 		Weapon.Rarity.UNCOMMON:
-			return Color(0.2, 1.0, 0.2, 1.0)  # VIVID green
+			return Color(0.4, 0.8, 0.4, 1.0)  # Muted green
 		Weapon.Rarity.RARE:
-			return Color(0.2, 0.4, 1.0, 1.0)  # VIVID blue
+			return Color(0.4, 0.5, 0.9, 1.0)  # Muted blue
 		Weapon.Rarity.EPIC:
-			return Color(0.9, 0.2, 1.0, 1.0)  # VIVID purple
+			return Color(0.7, 0.4, 0.9, 1.0)  # Muted purple
 		Weapon.Rarity.LEGENDARY:
-			return Color(1.0, 0.5, 0.0, 1.0)  # VIVID orange
+			return Color(0.9, 0.6, 0.2, 1.0)  # Muted orange
 		_:
 			return BORDER_INNER  # Default to dark border
 
 func get_armor_rarity_color(rarity_str: String) -> Color:
-	"""Get ULTRA BRIGHT glow color for armor rarity (thick border + outer glow)"""
+	"""Get muted glow color for armor rarity (visible but not overwhelming)"""
 	match rarity_str.to_upper():
 		"COMMON":
-			return Color(0.7, 0.7, 0.7, 1.0)  # Brighter grey
+			return Color(0.6, 0.6, 0.6, 0.9)  # Subtle grey
 		"UNCOMMON":
-			return Color(0.2, 1.0, 0.2, 1.0)  # VIVID green
+			return Color(0.4, 0.8, 0.4, 1.0)  # Muted green
 		"RARE":
-			return Color(0.2, 0.4, 1.0, 1.0)  # VIVID blue
+			return Color(0.4, 0.5, 0.9, 1.0)  # Muted blue
 		"EPIC":
-			return Color(0.9, 0.2, 1.0, 1.0)  # VIVID purple
+			return Color(0.7, 0.4, 0.9, 1.0)  # Muted purple
 		"LEGENDARY":
-			return Color(1.0, 0.5, 0.0, 1.0)  # VIVID orange
+			return Color(0.9, 0.6, 0.2, 1.0)  # Muted orange
 		_:
 			return BORDER_INNER  # Default to dark border
 
