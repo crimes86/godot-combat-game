@@ -1141,6 +1141,7 @@ func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: Stri
 		var slash_tex = ResourceLoader.load(slash_path, "Texture2D")
 		if slash_tex:
 			var slash_img = slash_tex.get_image()
+			print("  📐 ", sprite_name, ": Attack sprite dimensions: ", slash_img.get_width(), "x", slash_img.get_height())
 			for dir in ["up", "left", "down", "right"]:
 				var row_index = ["up", "left", "down", "right"].find(dir)
 				create_animation(sprite_frames, "attack_" + dir, slash_img, 64, 64, 6, row_index, 12.0, false)  # Don't loop attacks
@@ -1148,6 +1149,7 @@ func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: Stri
 				# If weapon doesn't have walk animations, create idle from first attack frame
 				if not has_walk_animations:
 					create_animation(sprite_frames, "idle_" + dir, slash_img, 64, 64, 1, row_index, 1.0)  # First frame of attack
+					print("      Created idle_", dir, " from attack frame (row ", row_index, ")")
 			print("  ✅ ", sprite_name, ": Attack animations loaded")
 
 			if not has_walk_animations:
