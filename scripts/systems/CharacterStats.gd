@@ -76,9 +76,10 @@ func _ready() -> void:
 	DebugConfig.debug_log("Level: %d" % level)
 	DebugConfig.debug_log("Stats: STR:%d AGI:%d VIT:%d LUCK:%d" % [strength, agility, vitality, luck])
 	DebugConfig.debug_log("═══════════════════════════════════════")
-	
-	# Create default starter weapon
-	equipped_weapon = create_starter_weapon()
+
+	# Start unarmed - player must buy/equip weapons
+	equipped_weapon = null
+	print("👊 Player starts UNARMED - buy weapons from vendor!")
 
 # ============================================
 # DERIVED STATS (Combat Calculations)
@@ -291,10 +292,10 @@ func equip_weapon(weapon) -> void:  # weapon: Weapon
 	print("   Crit Chance: +", weapon.crit_chance_bonus * 100, "%")
 
 func unequip_weapon() -> void:
-	"""Remove equipped weapon (revert to fists or starter weapon)"""
-	equipped_weapon = create_starter_weapon()
+	"""Remove equipped weapon (back to unarmed)"""
+	equipped_weapon = null
 	weapon_unequipped.emit()
-	print("Weapon unequipped")
+	print("👊 Weapon unequipped - now unarmed")
 
 # ============================================
 # ARMOR EQUIPPING
@@ -389,10 +390,11 @@ func reset_character() -> void:
 	agility = STARTING_AGILITY
 	vitality = STARTING_VITALITY
 	luck = STARTING_LUCK
-	
-	equipped_weapon = create_starter_weapon()
-	
-	print("Character reset to level 1")
+
+	# Reset to unarmed
+	equipped_weapon = null
+
+	print("Character reset to level 1 (unarmed)")
 
 # ============================================
 # SAVE / LOAD (Future)

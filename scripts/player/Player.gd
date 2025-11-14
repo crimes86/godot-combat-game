@@ -151,6 +151,7 @@ func _ready() -> void:
 	# Connect to CharacterStats signals
 	CharacterStats.level_up.connect(_on_character_level_up)
 	CharacterStats.weapon_equipped.connect(_on_weapon_equipped)
+	CharacterStats.weapon_unequipped.connect(_on_weapon_unequipped)
 
 	# Create character UI after this frame
 	call_deferred("create_character_ui")
@@ -164,6 +165,8 @@ func _exit_tree() -> void:
 		CharacterStats.level_up.disconnect(_on_character_level_up)
 	if CharacterStats.weapon_equipped.is_connected(_on_weapon_equipped):
 		CharacterStats.weapon_equipped.disconnect(_on_weapon_equipped)
+	if CharacterStats.weapon_unequipped.is_connected(_on_weapon_unequipped):
+		CharacterStats.weapon_unequipped.disconnect(_on_weapon_unequipped)
 
 func _create_gender_selection_ui() -> void:
 	"""Create and show the gender selection UI - blocks until selection made"""
@@ -332,6 +335,19 @@ func _on_weapon_equipped(weapon) -> void:  # weapon is Weapon type
 	"""Called when weapon is equipped"""
 	print("⚔️ Weapon equipped: ", weapon.weapon_name)
 	update_stats_from_character()
+
+	# Refresh player sprite to show the new weapon
+	print("🔄 Refreshing player sprite with new weapon...")
+	create_player_sprite()
+
+func _on_weapon_unequipped() -> void:
+	"""Called when weapon is unequipped"""
+	print("👊 Weapon unequipped - back to unarmed")
+	update_stats_from_character()
+
+	# Refresh player sprite to remove weapon
+	print("🔄 Refreshing player sprite to unarmed...")
+	create_player_sprite()
 
 func _physics_process(delta: float) -> void:
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -878,6 +894,21 @@ func flash_player_sprite() -> void:
 
 ## Visual System Functions
 
+func get_weapon_sprite_path() -> String:
+	"""Get the sprite path for the currently equipped weapon"""
+	if not CharacterStats.equipped_weapon:
+		return ""  # Unarmed - no weapon sprite
+
+	var weapon_type = CharacterStats.equipped_weapon.weapon_type
+	var sprite_path = "res://assets/characters/WEAPON_" + weapon_type + "_slash.png"
+
+	# Check if file exists, otherwise fallback to dagger
+	if not ResourceLoader.exists(sprite_path):
+		print("⚠️ Warning: No sprite found for weapon type '", weapon_type, "' - using dagger fallback")
+		sprite_path = "res://assets/characters/WEAPON_dagger_slash.png"
+
+	return sprite_path
+
 func create_player_sprite() -> void:
 	print("🧹 Removing old sprites...")
 	
@@ -1061,10 +1092,16 @@ func setup_lpc_animations(anim_sprite: AnimatedSprite2D) -> void:
 		if selected_gender == Gender.MALE and ResourceLoader.exists(HAT_SLASH_PATH):
 			var hat_tex = ResourceLoader.load(HAT_SLASH_PATH, "Texture2D")
 			if hat_tex: slash_composite.blend_rect(hat_tex.get_image(), Rect2i(0, 0, 384, 256), Vector2i(0, 0))
-		
-		if ResourceLoader.exists(WEAPON_SLASH_PATH):
-			var weapon_tex = ResourceLoader.load(WEAPON_SLASH_PATH, "Texture2D")
-			if weapon_tex: slash_composite.blend_rect(weapon_tex.get_image(), Rect2i(0, 0, 384, 256), Vector2i(0, 0))
+
+		# Load weapon sprite based on equipped weapon (if any)
+		var weapon_slash_path = get_weapon_sprite_path()
+		if weapon_slash_path != "" and ResourceLoader.exists(weapon_slash_path):
+			var weapon_tex = ResourceLoader.load(weapon_slash_path, "Texture2D")
+			if weapon_tex:
+				print("   ⚔️ Adding weapon layer: ", weapon_slash_path)
+				slash_composite.blend_rect(weapon_tex.get_image(), Rect2i(0, 0, 384, 256), Vector2i(0, 0))
+		else:
+			print("   👊 No weapon equipped - unarmed combat")
 	
 	# Load and composite HURT sprites
 	var hurt_composite: Image = null
