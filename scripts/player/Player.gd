@@ -388,25 +388,62 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	var anim_sprite = get_node_or_null("PlayerSprite") as AnimatedSprite2D
 	if not anim_sprite:
 		return
-	
+
 	# Get direction string for animation
-	var dir_str = get_direction_string(velocity_dir if velocity_dir.length() > 0.1 else attack_direction)
-	
-	# Determine state
 	var is_moving = velocity_dir.length() > 0.1
+	# When moving: ALWAYS use keyboard direction for animation
+	# When standing: use cursor direction
+	var dir_str = get_direction_string(velocity_dir) if is_moving else get_direction_string(attack_direction)
+
+	# Determine state
 	var prefix = "walk_" if is_moving else "idle_"
-	
+
 	# Don't interrupt attack animations
 	if anim_sprite.animation.begins_with("attack_") and anim_sprite.is_playing():
 		return
-	
+
 	# Play appropriate animation
 	var new_anim = prefix + dir_str
 	if anim_sprite.animation != new_anim:
 		anim_sprite.play(new_anim)
-	
-	# FIX: Flip for LEFT-facing directions (not right!)
-	anim_sprite.flip_h = dir_str.contains("left")
+
+	# ═══════════════════════════════════════════════════════════════════════
+	# FLIP LOGIC - CRITICAL: DO NOT MODIFY WITHOUT UNDERSTANDING
+	# ═══════════════════════════════════════════════════════════════════════
+	# The pre-generated LPC sprite sheet (walk_longsword.png) has weapon positioning:
+	# - Row 0 (up):    weapon in right hand, facing up
+	# - Row 1 (left):  weapon in right hand, facing left
+	# - Row 2 (down):  weapon in LEFT hand (needs horizontal flip to put in right hand)
+	# - Row 3 (right): weapon in right hand, facing right
+	#
+	# FLIP RULES:
+	# 1. When moving DOWN (S key): ALWAYS flip to put weapon in right hand
+	#    - Sprite shows weapon in left hand by default
+	#    - Exception: backwards walking (cursor UP) = don't flip
+	#
+	# 2. When moving UP (W key): ONLY flip for backwards walking
+	#    - Moving UP + cursor DOWN = walking backwards facing down = FLIP
+	#
+	# 3. When moving LEFT/RIGHT or standing still: Check cursor direction
+	#    - Standing facing down = FLIP (weapon in right hand)
+	#    - Otherwise use sprite sheet default
+	#
+	# 4. Animation selection is ALWAYS based on KEYBOARD input (velocity_dir), not cursor
+	#    - This prevents animation changing when cursor moves during vertical movement
+	# ═══════════════════════════════════════════════════════════════════════
+
+	var keyboard_dir_str = get_direction_string(velocity_dir) if is_moving else ""
+	var cursor_dir_str = get_direction_string(attack_direction)
+
+	if is_moving and keyboard_dir_str == "up":
+		# Walking UP: flip if facing down (walking backwards)
+		anim_sprite.flip_h = (cursor_dir_str == "down" or cursor_dir_str.contains("down_"))
+	elif is_moving and keyboard_dir_str == "down":
+		# Walking DOWN: ALWAYS flip (weapon in right hand)
+		anim_sprite.flip_h = true
+	else:
+		# Standing still or moving left/right: flip if facing down
+		anim_sprite.flip_h = (dir_str == "down" or dir_str.contains("down_"))
 
 func get_direction_string(dir: Vector2) -> String:
 	"""Convert direction vector to animation name string (8-way)"""
@@ -445,17 +482,12 @@ func update_facing_direction() -> void:
 	var mouse_pos = get_global_mouse_position()
 	var direction_to_mouse = (mouse_pos - global_position).normalized()
 	attack_direction = direction_to_mouse
-	
+
 	# ✨ ISOMETRIC STYLE: Flip sprite instead of rotating player
 	# Player node stays at 0 rotation, sprite flips left/right
-	
-	# Flip sprite based on mouse position (left or right of player)
-	if has_node("PlayerSprite"):
-		var sprite = get_node("PlayerSprite")
-		if mouse_pos.x < global_position.x:
-			sprite.scale.x = -1  # Flip left
-		else:
-			sprite.scale.x = 1   # Face right
+
+	# NOTE: Flip logic is now handled in update_lpc_animation()
+	# Don't flip here - it conflicts with animation-based flipping
 	
 	# Rotate cone visualizer to show attack direction
 	#if cone_visualizer:
@@ -893,32 +925,7 @@ func flash_player_sprite() -> void:
 
 ## Visual System Functions
 
-func get_weapon_sprite_path() -> String:
-	"""Get the sprite path for the currently equipped weapon"""
-	if not CharacterStats.equipped_weapon:
-		return ""  # Unarmed - no weapon sprite
-
-	var weapon_type = CharacterStats.equipped_weapon.weapon_type
-
-	# Map weapon types to sprite filenames
-	var weapon_sprite_name = weapon_type
-	match weapon_type:
-		"sword":
-			weapon_sprite_name = "longsword"
-		"hammer":
-			weapon_sprite_name = "warhammer"
-		# All others use their weapon_type directly (club, dagger, mace, spear, rapier)
-
-	var sprite_path = "res://assets/weapons/" + weapon_sprite_name + ".png"
-
-	# Check if file exists, otherwise fallback to dagger
-	if not ResourceLoader.exists(sprite_path):
-		print("⚠️ Warning: No sprite found for weapon type '", weapon_type, "' at ", sprite_path)
-		print("   Falling back to dagger")
-		sprite_path = "res://assets/weapons/dagger.png"
-
-	print("🗡️ Using weapon sprite: ", sprite_path)
-	return sprite_path
+# WEAPON SYSTEM REMOVED - To be reimplemented from scratch
 
 func create_player_sprite() -> void:
 	print("🧹 Removing old sprites...")
@@ -1022,7 +1029,7 @@ func setup_lpc_animations(anim_sprite: AnimatedSprite2D) -> void:
 	const TORSO_SLASH_PATH = "res://assets/characters/TORSO_leather_armor_torso_slash.png"
 	const LEGS_SLASH_PATH = "res://assets/characters/LEGS_pants_greenish_slash.png"
 	const HAT_SLASH_PATH = "res://assets/characters/HEAD_leather_armor_hat_slash.png"
-	var WEAPON_SLASH_PATH = get_weapon_sprite_path()  # Dynamic weapon based on equipped item
+	# WEAPON SYSTEM REMOVED - see git commit for details on issues faced
 	
 	# HURT sprite paths
 	var BODY_HURT_PATH = "res://assets/characters/BODY_" + body_type + "_hurt.png"
@@ -1039,80 +1046,77 @@ func setup_lpc_animations(anim_sprite: AnimatedSprite2D) -> void:
 			print("   🦱 Hair sprite loaded: ", hair_img.get_size())
 			print("   🦱 Hair layout: 3 columns (down/up/right) x 7 rows (styles)")
 	
-	# Load and composite WALK sprites
+	# Load and composite WALK sprites (NO WEAPON - weapons only show during attacks)
 	var walk_composite: Image = null
-	
-	# Always start with body sprite as base (for face, arms, body)
+
+	# STEP 1: Start with body
 	if ResourceLoader.exists(BODY_WALK_PATH):
 		var body_tex = ResourceLoader.load(BODY_WALK_PATH, "Texture2D")
 		if body_tex:
 			walk_composite = body_tex.get_image().duplicate()
 			print("   📦 Base body loaded: ", walk_composite.get_size())
-	
+
 	if walk_composite:
 		# For FEMALE: Overlay just the HAIR portion from hair sprite (not face/arms)
 		if selected_gender == Gender.FEMALE and hair_img:
 			print("   🦱 Overlaying HAIR ONLY from hair sprite...")
 			overlay_hair_on_spritesheet(walk_composite, hair_img, 9, 4, 64)
-		
+
 		# Layer clothing on sprite (works for both male and female)
 		if ResourceLoader.exists(LEGS_WALK_PATH):
 			var legs_tex = ResourceLoader.load(LEGS_WALK_PATH, "Texture2D")
 			if legs_tex:
 				print("   👖 Adding legs/pants layer")
 				walk_composite.blend_rect(legs_tex.get_image(), Rect2i(0, 0, 576, 256), Vector2i(0, 0))
-		
+
 		if ResourceLoader.exists(TORSO_WALK_PATH):
 			var torso_tex = ResourceLoader.load(TORSO_WALK_PATH, "Texture2D")
 			if torso_tex:
 				print("   👕 Adding torso/armor layer")
 				walk_composite.blend_rect(torso_tex.get_image(), Rect2i(0, 0, 576, 256), Vector2i(0, 0))
-		
+
 		# Only apply hat for male characters (female shows hair instead)
 		if selected_gender == Gender.MALE and ResourceLoader.exists(HAT_WALK_PATH):
 			var hat_tex = ResourceLoader.load(HAT_WALK_PATH, "Texture2D")
 			if hat_tex:
 				print("   🎩 Adding hat layer (male only)")
 				walk_composite.blend_rect(hat_tex.get_image(), Rect2i(0, 0, 576, 256), Vector2i(0, 0))
-	
-	# Load and composite SLASH sprites
+
+		# NOTE: Weapons are NOT shown during walk animations (sheathed)
+		# Weapons only appear during attack/slash animations
+		print("   ✅ Walk sprite complete (weapon sheathed)")
+
+	# Load and composite SLASH sprites (NO WEAPONS - system removed)
 	var slash_composite: Image = null
-	
-	# Always start with body sprite as base
+
+	# STEP 1: Start with body sprite
 	if ResourceLoader.exists(BODY_SLASH_PATH):
 		var body_tex = ResourceLoader.load(BODY_SLASH_PATH, "Texture2D")
 		if body_tex:
 			slash_composite = body_tex.get_image().duplicate()
-	
+			print("   📦 Base body loaded for slash")
+
 	if slash_composite:
 		# For FEMALE: Overlay just hair
 		if selected_gender == Gender.FEMALE and hair_img:
 			print("   🦱 Overlaying HAIR ONLY for slash...")
 			overlay_hair_on_spritesheet(slash_composite, hair_img, 6, 4, 64)
-		
+
 		# Layer clothing
 		if ResourceLoader.exists(LEGS_SLASH_PATH):
 			var legs_tex = ResourceLoader.load(LEGS_SLASH_PATH, "Texture2D")
 			if legs_tex: slash_composite.blend_rect(legs_tex.get_image(), Rect2i(0, 0, 384, 256), Vector2i(0, 0))
-		
+
 		if ResourceLoader.exists(TORSO_SLASH_PATH):
 			var torso_tex = ResourceLoader.load(TORSO_SLASH_PATH, "Texture2D")
 			if torso_tex: slash_composite.blend_rect(torso_tex.get_image(), Rect2i(0, 0, 384, 256), Vector2i(0, 0))
-		
+
 		# Only apply hat for male characters (female shows hair instead)
 		if selected_gender == Gender.MALE and ResourceLoader.exists(HAT_SLASH_PATH):
 			var hat_tex = ResourceLoader.load(HAT_SLASH_PATH, "Texture2D")
 			if hat_tex: slash_composite.blend_rect(hat_tex.get_image(), Rect2i(0, 0, 384, 256), Vector2i(0, 0))
 
-		# Load weapon sprite based on equipped weapon (if any)
-		var weapon_slash_path = get_weapon_sprite_path()
-		if weapon_slash_path != "" and ResourceLoader.exists(weapon_slash_path):
-			var weapon_tex = ResourceLoader.load(weapon_slash_path, "Texture2D")
-			if weapon_tex:
-				print("   ⚔️ Adding weapon layer: ", weapon_slash_path)
-				slash_composite.blend_rect(weapon_tex.get_image(), Rect2i(0, 0, 384, 256), Vector2i(0, 0))
-		else:
-			print("   👊 No weapon equipped - unarmed combat")
+		print("   ✅ Slash sprite complete (unarmed - weapon system removed)")
 	
 	# Load and composite HURT sprites
 	var hurt_composite: Image = null
@@ -1163,17 +1167,18 @@ func setup_lpc_animations(anim_sprite: AnimatedSprite2D) -> void:
 	
 	var sprite_frames = SpriteFrames.new()
 	
-	# WALK animations - 9 frames per row (UP, LEFT, DOWN, RIGHT in rows 0-3)
-	create_lpc_animation(sprite_frames, walk_texture, "walk_up", 0, 9, 10.0)
-	create_lpc_animation(sprite_frames, walk_texture, "walk_left", 1, 9, 10.0)
-	create_lpc_animation(sprite_frames, walk_texture, "walk_down", 2, 9, 10.0)
-	create_lpc_animation(sprite_frames, walk_texture, "walk_right", 3, 9, 10.0)
+	# WALK animations - Use frames 1-8 (skip frame 0, same as LPC generator)
+	# LPC generator uses 8 FPS and frames [1,2,3,4,5,6,7,8]
+	create_lpc_animation_with_offset(sprite_frames, walk_texture, "walk_up", 0, 8, 8.0, true, 1)
+	create_lpc_animation_with_offset(sprite_frames, walk_texture, "walk_left", 1, 8, 8.0, true, 1)
+	create_lpc_animation_with_offset(sprite_frames, walk_texture, "walk_down", 2, 8, 8.0, true, 1)
+	create_lpc_animation_with_offset(sprite_frames, walk_texture, "walk_right", 3, 8, 8.0, true, 1)
 	
 	# Diagonals - reuse cardinal directions
-	create_lpc_animation(sprite_frames, walk_texture, "walk_up_left", 0, 9, 10.0)
-	create_lpc_animation(sprite_frames, walk_texture, "walk_up_right", 0, 9, 10.0)
-	create_lpc_animation(sprite_frames, walk_texture, "walk_down_left", 2, 9, 10.0)
-	create_lpc_animation(sprite_frames, walk_texture, "walk_down_right", 2, 9, 10.0)
+	create_lpc_animation_with_offset(sprite_frames, walk_texture, "walk_up_left", 1, 8, 8.0, true, 1)
+	create_lpc_animation_with_offset(sprite_frames, walk_texture, "walk_up_right", 3, 8, 8.0, true, 1)
+	create_lpc_animation_with_offset(sprite_frames, walk_texture, "walk_down_left", 1, 8, 8.0, true, 1)
+	create_lpc_animation_with_offset(sprite_frames, walk_texture, "walk_down_right", 3, 8, 8.0, true, 1)
 	
 	# IDLE animations - use middle frame (frame 4) from walk
 	create_lpc_animation_with_offset(sprite_frames, walk_texture, "idle_up", 0, 1, 1.0, true, 4)
@@ -1585,4 +1590,3 @@ func create_campfire_indicator() -> void:
 	# Wait one frame for _ready() to complete
 	await get_tree().process_frame
 	print("🧭 Campfire indicator initialized")
-
