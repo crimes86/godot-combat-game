@@ -11,6 +11,7 @@ signal shop_closed()
 @export var greeting_text: String = "Need some quality steel?"
 
 var weapons_for_sale: Array = []
+var weapon_prices: Array = []  # Parallel array for weapon prices
 var armor_for_sale: Array = []
 var player_in_range: bool = false
 var shop_ui: CanvasLayer = null
@@ -183,6 +184,10 @@ func load_shop_data() -> void:
 						var weapon = create_weapon_from_data(weapon_data)
 						if weapon:
 							weapons_for_sale.append(weapon)
+							# Store price alongside weapon
+							var price = weapon_data.get("price", 0)
+							weapon_prices.append(price)
+							print("   Loaded weapon: %s (price: %d)" % [weapon.weapon_name, price])
 				else:
 					DebugConfig.log_warning("Invalid weapon entry in shop_weapons.json (not a Dictionary)")
 		else:
@@ -279,17 +284,29 @@ func _on_item_purchased(item_name: String, price: int) -> void:
 	print("✅ Purchased: %s for %d gold" % [item_name, price])
 
 func get_weapon_price_data(index: int) -> int:
-	# Get weapon price from the JSON data with validation
-	var result = JSONValidator.load_json_file("res://data/shop_weapons.json")
-	if result.success:
-		var data = result.data
-		if data.has("weapons") and data["weapons"] is Array:
-			if index >= 0 and index < data["weapons"].size():
-				var weapon = data["weapons"][index]
-				if weapon is Dictionary:
-					return JSONValidator.get_safe_value(weapon, "price", 0)
-
+	# Get weapon price from stored array (loaded at startup)
+	if index >= 0 and index < weapon_prices.size():
+		return weapon_prices[index]
 	return 0
+
+func weapon_to_dict(weapon: Weapon, price: int) -> Dictionary:
+	"""Convert a Weapon resource to a dictionary for inventory storage"""
+	return {
+		"name": weapon.weapon_name,
+		"description": weapon.description,
+		"type": "weapon",
+		"weapon_type": weapon.weapon_type,
+		"base_damage": weapon.base_damage,
+		"attack_speed_bonus": weapon.attack_speed_bonus,
+		"crit_chance_bonus": weapon.crit_chance_bonus,
+		"required_level": weapon.required_level,
+		"rarity": Weapon.Rarity.keys()[weapon.rarity],
+		"value": max(1, int(price * 0.5)),  # Sell for 50% of purchase price
+		"slot": "mainhand",  # Weapons go in mainhand slot
+		"can_trade": weapon.can_trade,
+		"stackable": false,
+		"quantity": 1
+	}
 
 func purchase_weapon(index: int) -> bool:
 	"""Attempt to purchase a weapon by index"""
@@ -299,21 +316,27 @@ func purchase_weapon(index: int) -> bool:
 	var weapon: Weapon = weapons_for_sale[index]
 	var price = get_weapon_price_data(index)
 
-	# Check level requirement
-	if CharacterStats.level < weapon.required_level:
-		print("❌ Level %d required to purchase %s" % [weapon.required_level, weapon.weapon_name])
-		return false
-
-	# Check gold
-	if not CharacterStats.can_afford(price):
+	# Check gold (skip check if item is free)
+	if price > 0 and not CharacterStats.can_afford(price):
 		print("❌ Not enough gold! Need %d gold" % price)
 		return false
 
 	# Purchase successful
-	if CharacterStats.spend_gold(price):
-		CharacterStats.equip_weapon(weapon)
-		print("✅ Purchased %s for %d gold!" % [weapon.weapon_name, price])
-		return true
+	if price == 0 or CharacterStats.spend_gold(price):
+		# Convert weapon to dictionary and add to inventory
+		var weapon_dict = weapon_to_dict(weapon, price)
+		if InventorySystem.add_item(weapon_dict):
+			if price == 0:
+				print("✅ Took %s (free item)!" % weapon.weapon_name)
+			else:
+				print("✅ Purchased %s for %d gold!" % [weapon.weapon_name, price])
+			return true
+		else:
+			# Inventory full - refund the gold
+			if price > 0:
+				CharacterStats.add_gold(price)
+			print("❌ Inventory full! Cannot purchase %s" % weapon.weapon_name)
+			return false
 
 	return false
 

@@ -6,10 +6,13 @@ extends CanvasLayer
 
 var is_visible: bool = false
 
+# Pending deletion data (for confirmation dialog)
+var pending_delete_data: Dictionary = {}
+
 # UI References
 var main_panel: PanelContainer
 var equipment_slots: Dictionary = {}  # slot_name: VBoxContainer (contains CenterContainer with Button + Label)
-var inventory_slots: Array[Button] = []
+var inventory_slots: Array[Control] = []  # Changed from Array[Button] to Array[Control]
 var stat_labels: Dictionary = {}  # stat_name: Label
 var character_name_label: Label
 var level_label: Label
@@ -56,6 +59,29 @@ func _ready() -> void:
 func create_character_ui() -> void:
 	"""Create EverQuest-style character sheet"""
 
+	# Create full-screen drop zone for deletion (sits behind everything)
+	var drop_zone = Control.new()
+	drop_zone.name = "FullScreenDropZone"
+	drop_zone.set_anchors_preset(Control.PRESET_FULL_RECT)
+	drop_zone.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks but receive drag events
+
+	# Enable drag-drop on the drop zone
+	drop_zone.set_drag_forwarding(
+		Callable(self, "_get_drop_zone_drag_data"),
+		Callable(self, "_can_drop_on_drop_zone"),
+		Callable(self, "_drop_on_drop_zone")
+	)
+
+	add_child(drop_zone)
+
+	# Create confirmation dialog for deletion
+	var delete_dialog = ConfirmationDialog.new()
+	delete_dialog.name = "DeleteConfirmDialog"
+	delete_dialog.title = "Delete Item"
+	delete_dialog.dialog_text = "Are you sure you want to delete this item?"
+	delete_dialog.confirmed.connect(_on_delete_confirmed)
+	add_child(delete_dialog)
+
 	# Main panel container - centered (wider for 3 columns)
 	main_panel = PanelContainer.new()
 	main_panel.name = "CharacterPanel"
@@ -89,6 +115,8 @@ func create_character_ui() -> void:
 	panel_style.shadow_offset = Vector2(0, 4)
 
 	main_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# Don't enable drag-drop on main panel - we'll use a full-screen drop zone instead
 
 	# Main horizontal layout (3 columns: Stats | Equipment | Inventory) with padding
 	var margin = MarginContainer.new()
@@ -359,7 +387,7 @@ func create_inventory_panel(parent: Control) -> void:
 	gold_container.add_child(gold_label)
 
 func create_equipment_slot(slot_name: String, label_text: String) -> VBoxContainer:
-	"""Create a single equipment slot button"""
+	"""Create a single equipment slot button with drag-drop support"""
 	var container = VBoxContainer.new()
 	container.add_theme_constant_override("separation", 4)
 	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -368,49 +396,101 @@ func create_equipment_slot(slot_name: String, label_text: String) -> VBoxContain
 	var button_center = CenterContainer.new()
 	container.add_child(button_center)
 
-	var button = Button.new()
-	button.name = "Equip_" + slot_name
-	button.custom_minimum_size = Vector2(60, 60)
-	button.text = ""
+	# Use a Control wrapper for drag-drop support
+	var slot_control = Control.new()
+	slot_control.name = "Equip_" + slot_name
+	slot_control.custom_minimum_size = Vector2(60, 60)
+	slot_control.set_meta("slot_name", slot_name)
+	slot_control.set_meta("slot_type", "equipment")
+
+	# Enable drag-drop
+	slot_control.set_drag_forwarding(
+		Callable(self, "_get_equipment_drag_data").bind(slot_name),
+		Callable(self, "_can_drop_equipment_data").bind(slot_name),
+		Callable(self, "_drop_equipment_data").bind(slot_name)
+	)
+	button_center.add_child(slot_control)
+
+	# Add panel for styling
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(60, 60)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let parent handle input
+	slot_control.add_child(panel)
 
 	# Modern slot styling with smooth hover transitions
 	var slot_style_normal = create_slot_style(Color(0.2, 0.2, 0.25, 1.0))
-	var slot_style_hover = create_slot_style(Color(0.28, 0.32, 0.38, 1.0))  # Brighter on hover
-	var slot_style_pressed = create_slot_style(Color(0.15, 0.18, 0.22, 1.0))  # Darker when pressed
+	panel.add_theme_stylebox_override("panel", slot_style_normal)
 
-	button.add_theme_stylebox_override("normal", slot_style_normal)
-	button.add_theme_stylebox_override("hover", slot_style_hover)
-	button.add_theme_stylebox_override("pressed", slot_style_pressed)
+	# Add label for item text
+	var label = Label.new()
+	label.name = "ItemLabel"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 12)  # Larger font
+	label.add_theme_color_override("font_color", Color.WHITE)  # Bright white
+	label.add_theme_color_override("font_outline_color", Color.BLACK)  # Black outline
+	label.add_theme_constant_override("outline_size", 2)  # Outline for contrast
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # Wrap long item names
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_child(label)
 
-	button.pressed.connect(_on_equipment_slot_clicked.bind(slot_name))
-	button_center.add_child(button)
+	# Connect click event
+	slot_control.gui_input.connect(_on_equipment_slot_gui_input.bind(slot_name))
 
 	# Label centered below button
-	var label = create_text_label(label_text, 11)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	container.add_child(label)
+	var slot_label = create_text_label(label_text, 11)
+	slot_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	container.add_child(slot_label)
 
 	return container
 
-func create_inventory_slot(slot_index: int) -> Button:
-	"""Create a single inventory slot button"""
-	var button = Button.new()
-	button.name = "InvSlot_" + str(slot_index)
-	button.custom_minimum_size = Vector2(70, 70)
-	button.text = ""
+func create_inventory_slot(slot_index: int) -> Control:
+	"""Create a single inventory slot button with drag-drop support"""
+	# Create a custom control for drag-drop
+	var slot_control = Control.new()
+	slot_control.name = "InvSlot_" + str(slot_index)
+	slot_control.custom_minimum_size = Vector2(70, 70)
+	slot_control.set_meta("slot_index", slot_index)
+	slot_control.set_meta("slot_type", "inventory")
 
-	# Modern slot styling with smooth hover transitions
+	# Enable drag-drop
+	slot_control.set_drag_forwarding(
+		Callable(self, "_get_inventory_drag_data").bind(slot_index),
+		Callable(self, "_can_drop_inventory_data").bind(slot_index),
+		Callable(self, "_drop_inventory_data").bind(slot_index)
+	)
+
+	# Add panel for styling
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(70, 70)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let parent handle input
+	slot_control.add_child(panel)
+
+	# Modern slot styling
 	var slot_style_normal = create_slot_style(Color(0.2, 0.2, 0.25, 1.0))
-	var slot_style_hover = create_slot_style(Color(0.28, 0.32, 0.38, 1.0))  # Brighter on hover
-	var slot_style_pressed = create_slot_style(Color(0.15, 0.18, 0.22, 1.0))  # Darker when pressed
+	panel.add_theme_stylebox_override("panel", slot_style_normal)
 
-	button.add_theme_stylebox_override("normal", slot_style_normal)
-	button.add_theme_stylebox_override("hover", slot_style_hover)
-	button.add_theme_stylebox_override("pressed", slot_style_pressed)
+	# Add label for item text
+	var label = Label.new()
+	label.name = "ItemLabel"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 14)  # Larger font
+	label.add_theme_color_override("font_color", Color.WHITE)  # Bright white
+	label.add_theme_color_override("font_outline_color", Color.BLACK)  # Black outline
+	label.add_theme_constant_override("outline_size", 2)  # Outline for contrast
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # Wrap long item names
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_child(label)
 
-	button.pressed.connect(_on_inventory_slot_clicked.bind(slot_index))
+	# Connect click event
+	slot_control.gui_input.connect(_on_inventory_slot_gui_input.bind(slot_index))
 
-	return button
+	return slot_control
 
 func create_stat_row(stat_name: String) -> HBoxContainer:
 	"""Create a row for displaying a stat with tooltip"""
@@ -595,69 +675,405 @@ func refresh_equipment() -> void:
 	for slot_name in equipment_slots:
 		var slot_container = equipment_slots[slot_name]  # VBoxContainer
 		var button_center = slot_container.get_child(0)  # CenterContainer
-		var button = button_center.get_child(0) as Button
+		var slot_control = button_center.get_child(0)  # Control wrapper
+
+		# Get the label from the slot control
+		var panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
+		if not panel:
+			continue
+
+		var label = panel.get_node_or_null("ItemLabel")
+		if not label:
+			continue
 
 		var armor_item = CharacterStats.equipped_armor[slot_name]
 		if armor_item:
-			button.text = armor_item.get("name", "???")
-			button.tooltip_text = "%s\nDefense: +%d" % [armor_item.get("description", ""), armor_item.get("defense", 0)]
+			label.text = armor_item.get("name", "???")
+			var tooltip = armor_item.get("description", "")
+
+			# Weapon stats (for mainhand/offhand)
+			if armor_item.get("type") == "weapon":
+				if armor_item.has("base_damage"):
+					tooltip += "\nDamage: +%.1f" % armor_item.get("base_damage", 0)
+				if armor_item.has("attack_speed_bonus"):
+					var speed_bonus = armor_item.get("attack_speed_bonus", 0.0)
+					if speed_bonus != 0:
+						tooltip += "\nAttack Speed: %+.1f%%" % (speed_bonus * 100)
+				if armor_item.has("crit_chance_bonus"):
+					var crit_bonus = armor_item.get("crit_chance_bonus", 0.0)
+					if crit_bonus != 0:
+						tooltip += "\nCrit Chance: +%.1f%%" % (crit_bonus * 100)
+			# Armor stats
+			elif armor_item.has("defense"):
+				tooltip += "\nDefense: +%d" % armor_item.get("defense", 0)
+
+			slot_control.tooltip_text = tooltip
 		else:
-			button.text = ""
-			button.tooltip_text = "Empty " + slot_name + " slot"
+			label.text = ""
+			slot_control.tooltip_text = "Empty " + slot_name + " slot"
 
 func refresh_inventory() -> void:
 	"""Update inventory slot displays"""
+	print("🔄 CharacterUI: Refreshing inventory...")
+	print("   inventory_slots.size() = %d" % inventory_slots.size())
+	print("   InventorySystem.inventory_items.size() = %d" % InventorySystem.inventory_items.size())
 	for i in range(inventory_slots.size()):
-		var button = inventory_slots[i]
+		var slot_control = inventory_slots[i]
 		var item = InventorySystem.get_item(i)
+
+		# Get the label from the slot control
+		var panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
+		if not panel:
+			print("  ❌ Slot %d: No panel found" % i)
+			continue
+
+		var label = panel.get_node_or_null("ItemLabel")
+		if not label:
+			print("  ❌ Slot %d: No label found" % i)
+			continue
 
 		if item and item.size() > 0:
 			var item_name = item.get("name", "???")
+			print("  ✅ Slot %d: Found item: %s" % [i, item_name])
+			print("    Setting label text to: '%s'" % item_name)
 			var quantity = item.get("quantity", 1)
 			var is_stackable = item.get("stackable", false)
 
 			if is_stackable and quantity > 1:
-				button.text = "%s x%d" % [item_name, quantity]
+				label.text = "%s x%d" % [item_name, quantity]
 			else:
-				button.text = item_name
+				label.text = item_name
+
+			print("    Label text set to: '%s' (visible: %s)" % [label.text, label.visible])
 
 			var tooltip = item.get("description", "")
+
+			# Weapon stats
+			if item.get("type") == "weapon":
+				if item.has("base_damage"):
+					tooltip += "\nDamage: +%.1f" % item.get("base_damage", 0)
+				if item.has("attack_speed_bonus"):
+					var speed_bonus = item.get("attack_speed_bonus", 0.0)
+					if speed_bonus != 0:
+						tooltip += "\nAttack Speed: %+.1f%%" % (speed_bonus * 100)
+				if item.has("crit_chance_bonus"):
+					var crit_bonus = item.get("crit_chance_bonus", 0.0)
+					if crit_bonus != 0:
+						tooltip += "\nCrit Chance: +%.1f%%" % (crit_bonus * 100)
+
+			# Armor stats
 			if item.has("defense"):
 				tooltip += "\nDefense: +%d" % item.get("defense", 0)
+
+			# Value
 			if item.has("value"):
 				tooltip += "\nValue: %d gold" % item.get("value", 0)
-			button.tooltip_text = tooltip
+
+			slot_control.tooltip_text = tooltip
 		else:
-			button.text = ""
-			button.tooltip_text = "Empty slot"
+			print("  ⬜ Slot %d: Empty" % i)
+			label.text = ""
+			slot_control.tooltip_text = "Empty slot"
 
-func _on_equipment_slot_clicked(slot_name: String) -> void:
-	"""Handle clicking an equipment slot (unequip)"""
-	var armor_item = CharacterStats.equipped_armor[slot_name]
-	if armor_item:
-		if CharacterStats.unequip_armor(slot_name):
-			refresh_all()
-			print("✅ Unequipped %s" % armor_item.get("name", "Unknown"))
-	else:
-		print("No armor equipped in %s slot" % slot_name)
+func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
+	"""Handle GUI input on equipment slot (double-click or right-click to unequip)"""
+	if event is InputEventMouseButton and event.pressed:
+		# Double-click or right-click to unequip
+		if event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
+			var armor_item = CharacterStats.equipped_armor[slot_name]
+			if armor_item:
+				if CharacterStats.unequip_armor(slot_name):
+					refresh_all()
+					print("✅ Unequipped %s (double-click)" % armor_item.get("name", "Unknown"))
+			else:
+				print("No armor equipped in %s slot" % slot_name)
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			var armor_item = CharacterStats.equipped_armor[slot_name]
+			if armor_item:
+				if CharacterStats.unequip_armor(slot_name):
+					refresh_all()
+					print("✅ Unequipped %s (right-click)" % armor_item.get("name", "Unknown"))
+			else:
+				print("No armor equipped in %s slot" % slot_name)
 
-func _on_inventory_slot_clicked(slot_index: int) -> void:
-	"""Handle clicking an inventory slot (equip if armor)"""
+func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
+	"""Handle GUI input on inventory slot (double-click or right-click to equip)"""
+	if event is InputEventMouseButton and event.pressed:
+		# Double-click or right-click to equip
+		if (event.button_index == MOUSE_BUTTON_LEFT and event.double_click) or event.button_index == MOUSE_BUTTON_RIGHT:
+			var item = InventorySystem.get_item(slot_index)
+
+			if item and item.size() > 0:
+				# Check if it's armor or weapon (has a slot)
+				if item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
+					# Try to equip it
+					if CharacterStats.equip_armor(item):
+						# Remove from inventory
+						InventorySystem.remove_item(slot_index)
+						refresh_all()
+						var action = "double-click" if event.double_click else "right-click"
+						print("✅ Equipped %s (%s)" % [item.get("name", "Unknown"), action])
+				else:
+					print("🖱️ Item not equippable: %s" % item.get("name", "Unknown"))
+			else:
+				print("🖱️ Empty slot %d" % slot_index)
+
+# ============================================
+# DRAG AND DROP FUNCTIONS
+# ============================================
+
+func _get_inventory_drag_data(at_position: Vector2, slot_index: int) -> Variant:
+	"""Start dragging an inventory item"""
+	print("🖱️ _get_inventory_drag_data called for slot %d" % slot_index)
 	var item = InventorySystem.get_item(slot_index)
+	if not item or item.is_empty():
+		print("  ❌ No item to drag")
+		return null
 
-	if item and item.size() > 0:
-		# Check if it's armor
-		if item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
-			# Try to equip it
-			if CharacterStats.equip_armor(item):
-				# Remove from inventory
-				InventorySystem.remove_item(slot_index)
+	print("  ✅ Starting drag for: %s" % item.get("name", "Item"))
+
+	# Create drag preview
+	var preview = Label.new()
+	preview.text = item.get("name", "Item")
+	preview.add_theme_font_size_override("font_size", 16)
+	preview.add_theme_color_override("font_color", Color.GOLD)
+	preview.modulate = Color(1, 1, 1, 0.8)  # Slightly transparent
+
+	# Get the slot control and set preview on it
+	var slot_control = inventory_slots[slot_index]
+	slot_control.set_drag_preview(preview)
+
+	# Return drag data
+	return {
+		"source_type": "inventory",
+		"source_index": slot_index,
+		"item": item
+	}
+
+func _can_drop_inventory_data(at_position: Vector2, data: Variant, slot_index: int) -> bool:
+	"""Check if data can be dropped on this inventory slot"""
+	if not data is Dictionary:
+		return false
+
+	# Can always drop items into inventory
+	return data.has("item")
+
+func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: int) -> void:
+	"""Handle dropping data on an inventory slot"""
+	print("📥 _drop_inventory_data called for slot %d" % slot_index)
+	if not data.has("item"):
+		return
+
+	var source_type = data.get("source_type", "")
+	var source_index = data.get("source_index", -1)
+	var dragged_item = data.get("item", {})
+
+	if source_type == "inventory":
+		# Swap inventory items
+		if source_index != slot_index:
+			var target_item = InventorySystem.get_item(slot_index)
+
+			# Remove both items
+			InventorySystem.set_item(source_index, {})
+			InventorySystem.set_item(slot_index, {})
+
+			# Swap them
+			InventorySystem.set_item(slot_index, dragged_item)
+			if target_item and not target_item.is_empty():
+				InventorySystem.set_item(source_index, target_item)
+
+			refresh_all()
+			print("🔄 Swapped inventory items")
+
+	elif source_type == "equipment":
+		# Move from equipment to inventory
+		var source_slot_name = data.get("source_slot_name", "")
+		if source_slot_name:
+			# Unequip the item
+			if CharacterStats.unequip_armor(source_slot_name):
+				# Item is now in inventory via unequip_armor
 				refresh_all()
-				print("✅ Equipped %s" % item.get("name", "Unknown"))
-		else:
-			print("🖱️ Clicked item: %s (not equippable)" % item.get("name", "Unknown"))
+				print("✅ Unequipped %s to inventory" % dragged_item.get("name", "Unknown"))
+
+func _get_equipment_drag_data(at_position: Vector2, slot_name: String) -> Variant:
+	"""Start dragging an equipped item"""
+	var armor_item = CharacterStats.equipped_armor[slot_name]
+	if not armor_item or armor_item.is_empty():
+		return null
+
+	# Create drag preview
+	var preview = Label.new()
+	preview.text = armor_item.get("name", "Item")
+	preview.add_theme_font_size_override("font_size", 16)
+	preview.add_theme_color_override("font_color", Color.GOLD)
+	preview.modulate = Color(1, 1, 1, 0.8)  # Slightly transparent
+
+	# Get the equipment slot control and set preview on it
+	var slot_container = equipment_slots[slot_name]  # VBoxContainer
+	var button_center = slot_container.get_child(0)  # CenterContainer
+	var slot_control = button_center.get_child(0)  # Control wrapper
+	slot_control.set_drag_preview(preview)
+
+	# Return drag data
+	return {
+		"source_type": "equipment",
+		"source_slot_name": slot_name,
+		"item": armor_item
+	}
+
+func _can_drop_equipment_data(at_position: Vector2, data: Variant, slot_name: String) -> bool:
+	"""Check if data can be dropped on this equipment slot"""
+	if not data is Dictionary:
+		return false
+
+	if not data.has("item"):
+		return false
+
+	var item = data.get("item", {})
+
+	# Check if item has a slot type
+	if not item.has("slot"):
+		return false
+
+	# Check if item's slot matches this equipment slot
+	var item_slot = item.get("slot", "")
+	if item_slot != slot_name:
+		return false
+
+	# No level requirement - twinking allowed!
+	return true
+
+func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: String) -> void:
+	"""Handle dropping data on an equipment slot"""
+	if not data.has("item"):
+		return
+
+	var source_type = data.get("source_type", "")
+	var dragged_item = data.get("item", {})
+
+	# Validate the drop
+	var item_slot = dragged_item.get("slot", "")
+	if item_slot != slot_name:
+		print("❌ Cannot equip %s in %s slot (requires %s slot)" % [dragged_item.get("name", ""), slot_name, item_slot])
+		return
+
+	if source_type == "inventory":
+		# Equip from inventory
+		var source_index = data.get("source_index", -1)
+		if source_index >= 0:
+			# Try to equip the item
+			if CharacterStats.equip_armor(dragged_item):
+				# Remove from inventory
+				InventorySystem.remove_item(source_index)
+				refresh_all()
+				print("✅ Equipped %s to %s" % [dragged_item.get("name", "Unknown"), slot_name])
+			else:
+				print("❌ Failed to equip %s" % dragged_item.get("name", "Unknown"))
+
+	elif source_type == "equipment":
+		# Swap equipment
+		var source_slot_name = data.get("source_slot_name", "")
+		if source_slot_name and source_slot_name != slot_name:
+			var target_item = CharacterStats.equipped_armor[slot_name]
+
+			# Unequip both items
+			CharacterStats.unequip_armor(source_slot_name)
+			if target_item:
+				CharacterStats.unequip_armor(slot_name)
+
+			# Equip them in swapped positions
+			CharacterStats.equip_armor(dragged_item)
+			if target_item:
+				CharacterStats.equip_armor(target_item)
+
+			refresh_all()
+			print("🔄 Swapped equipment slots")
+
+# ============================================
+# DROP ZONE (DELETE ITEMS WITH CONFIRMATION)
+# ============================================
+
+func _get_drop_zone_drag_data(at_position: Vector2) -> Variant:
+	"""Drop zone can't be dragged"""
+	return null
+
+func _can_drop_on_drop_zone(at_position: Vector2, data: Variant) -> bool:
+	"""Accept any item drop on drop zone (outside UI panel)"""
+	print("🔍 _can_drop_on_drop_zone called at position: %s" % at_position)
+
+	if not data is Dictionary:
+		print("  ❌ Data is not a Dictionary")
+		return false
+
+	if not data.has("item"):
+		print("  ❌ No item in data")
+		return false
+
+	# Check if drop position is outside the main panel
+	if main_panel:
+		var panel_rect = main_panel.get_global_rect()
+		var is_outside = not panel_rect.has_point(at_position)
+		print("  Drop position: %s, Panel rect: %s, Outside: %s" % [at_position, panel_rect, is_outside])
+		return is_outside
+
+	return false
+
+func _drop_on_drop_zone(at_position: Vector2, data: Dictionary) -> void:
+	"""Handle dropping item outside UI - show confirmation dialog"""
+	print("🗑️ _drop_on_drop_zone called - showing confirmation")
+
+	if not data.has("item"):
+		print("  ❌ No item in data")
+		return
+
+	# Store the deletion data for confirmation
+	pending_delete_data = data
+
+	var item_name = data.get("item", {}).get("name", "Unknown")
+
+	# Show confirmation dialog
+	var dialog = get_node_or_null("DeleteConfirmDialog")
+	if dialog:
+		dialog.dialog_text = "Are you sure you want to delete '%s'?" % item_name
+		dialog.popup_centered()
+		print("  ✅ Showing delete confirmation for: %s" % item_name)
 	else:
-		print("🖱️ Clicked empty slot %d" % slot_index)
+		print("  ❌ DeleteConfirmDialog not found!")
+
+func _on_delete_confirmed() -> void:
+	"""Handle deletion confirmation - actually delete the item"""
+	print("✅ Delete confirmed!")
+
+	if pending_delete_data.is_empty():
+		print("  ❌ No pending deletion data")
+		return
+
+	var source_type = pending_delete_data.get("source_type", "")
+	var dragged_item = pending_delete_data.get("item", {})
+	var item_name = dragged_item.get("name", "Unknown")
+
+	print("  Deleting: %s from %s" % [item_name, source_type])
+
+	if source_type == "inventory":
+		# Remove from inventory
+		var source_index = pending_delete_data.get("source_index", -1)
+		if source_index >= 0:
+			InventorySystem.remove_item(source_index)
+			refresh_all()
+			print("🗑️ Deleted %s from inventory" % item_name)
+
+	elif source_type == "equipment":
+		# Unequip and delete (don't add to inventory)
+		var source_slot_name = pending_delete_data.get("source_slot_name", "")
+		if source_slot_name:
+			# Directly remove from equipped_armor without adding to inventory
+			CharacterStats.equipped_armor[source_slot_name] = null
+			CharacterStats.armor_unequipped.emit(source_slot_name, {})
+			refresh_all()
+			print("🗑️ Deleted %s from equipment" % item_name)
+
+	# Clear pending data
+	pending_delete_data = {}
 
 func _on_stats_changed(_level: int = 0) -> void:
 	"""Called when character stats change"""
@@ -678,4 +1094,5 @@ func _on_armor_changed(_slot: String, _armor: Dictionary) -> void:
 
 func _on_inventory_changed() -> void:
 	"""Called when inventory changes"""
+	print("📢 CharacterUI._on_inventory_changed() called!")
 	refresh_inventory()

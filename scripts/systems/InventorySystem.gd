@@ -104,6 +104,19 @@ func get_item(slot: int) -> Dictionary:
 	var item = inventory_items[slot]
 	return item if item else {}
 
+func set_item(slot: int, item: Dictionary) -> void:
+	"""Set item at specific slot (use empty dict {} to clear slot)"""
+	if slot < 0 or slot >= inventory_items.size():
+		return
+
+	if item.is_empty():
+		inventory_items[slot] = null
+	else:
+		inventory_items[slot] = item
+
+	inventory_changed.emit()
+	print("📝 Set slot %d to: %s" % [slot, item.get("name", "Empty") if not item.is_empty() else "Empty"])
+
 func has_empty_slot() -> bool:
 	"""Check if there's any empty slot"""
 	for item in inventory_items:

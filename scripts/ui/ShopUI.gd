@@ -134,8 +134,12 @@ func update_gold_display() -> void:
 		gold_label.text = "Gold: %d" % CharacterStats.gold
 
 func _on_gold_changed(_amount: int, total: int) -> void:
-	"""Auto-update gold display when gold changes"""
+	"""Auto-update gold display and refresh shop when gold changes"""
 	update_gold_display()
+	# Refresh shop items to update buy button states
+	if vendor and visible:
+		populate_weapons()
+		populate_armor()
 
 func populate_weapons() -> void:
 	"""Populate the weapons list"""
@@ -235,10 +239,10 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hbox.add_child(vbox)
 
-	# Item name
+	# Item name (white, not rarity colored - rarity shown by subtle left border)
 	var name_label = Label.new()
 	name_label.text = item_name
-	name_label.add_theme_color_override("font_color", color)
+	name_label.add_theme_color_override("font_color", TEXT_COLOR)  # White
 	name_label.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(name_label)
 
@@ -267,14 +271,6 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	price_label.add_theme_font_size_override("font_size", 16)
 	price_label.add_theme_color_override("font_color", Color.GOLD if price > 0 else Color.GREEN)
 	right_vbox.add_child(price_label)
-
-	# Level requirement
-	if req_level > 1:
-		var level_label = Label.new()
-		level_label.text = "Lv %d" % req_level
-		level_label.add_theme_font_size_override("font_size", 12)
-		level_label.add_theme_color_override("font_color", Color.ORANGE if CharacterStats.level < req_level else Color.GREEN)
-		right_vbox.add_child(level_label)
 
 	# Buy button with modern styling
 	var buy_button = Button.new()
@@ -322,8 +318,8 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	buy_button.add_theme_stylebox_override("hover", btn_hover)
 	buy_button.add_theme_stylebox_override("pressed", btn_pressed)
 
-	# Check if can afford/level requirement
-	var can_buy = CharacterStats.can_afford(price) and CharacterStats.level >= req_level
+	# Only check gold - no level requirement for purchasing
+	var can_buy = CharacterStats.can_afford(price)
 	buy_button.disabled = not can_buy
 
 	buy_button.pressed.connect(on_buy)
@@ -362,12 +358,6 @@ func purchase_armor(index: int) -> void:
 	var armor_data = vendor.armor_for_sale[index]
 	var price = armor_data.get("price", 0)
 	var armor_name = armor_data.get("name", "Unknown")
-	var req_level = armor_data.get("required_level", 1)
-
-	# Check level requirement
-	if CharacterStats.level < req_level:
-		show_message("Level %d required!" % req_level, Color.RED)
-		return
 
 	# Check gold
 	if not CharacterStats.can_afford(price):
@@ -403,36 +393,36 @@ func show_message(text: String, color: Color) -> void:
 		message_label.hide()
 
 func get_rarity_color(rarity: Weapon.Rarity) -> Color:
-	"""Get color for weapon rarity"""
+	"""Get subtle color for weapon rarity (for border accent only)"""
 	match rarity:
 		Weapon.Rarity.COMMON:
-			return Color.WHITE
+			return Color(0.6, 0.6, 0.6, 0.8)  # Subtle grey
 		Weapon.Rarity.UNCOMMON:
-			return Color.GREEN_YELLOW
+			return Color(0.5, 0.7, 0.4, 0.8)  # Muted green
 		Weapon.Rarity.RARE:
-			return Color.DODGER_BLUE
+			return Color(0.4, 0.6, 0.8, 0.8)  # Muted blue
 		Weapon.Rarity.EPIC:
-			return Color.MEDIUM_PURPLE
+			return Color(0.6, 0.4, 0.7, 0.8)  # Muted purple
 		Weapon.Rarity.LEGENDARY:
-			return Color.ORANGE
+			return Color(0.9, 0.6, 0.3, 0.9)  # Muted orange
 		_:
-			return Color.WHITE
+			return Color(0.6, 0.6, 0.6, 0.8)
 
 func get_armor_rarity_color(rarity_str: String) -> Color:
-	"""Get color for armor rarity string"""
+	"""Get subtle color for armor rarity (for border accent only)"""
 	match rarity_str:
 		"COMMON":
-			return Color.WHITE
+			return Color(0.6, 0.6, 0.6, 0.8)  # Subtle grey
 		"UNCOMMON":
-			return Color.GREEN_YELLOW
+			return Color(0.5, 0.7, 0.4, 0.8)  # Muted green
 		"RARE":
-			return Color.DODGER_BLUE
+			return Color(0.4, 0.6, 0.8, 0.8)  # Muted blue
 		"EPIC":
-			return Color.MEDIUM_PURPLE
+			return Color(0.6, 0.4, 0.7, 0.8)  # Muted purple
 		"LEGENDARY":
-			return Color.ORANGE
+			return Color(0.9, 0.6, 0.3, 0.9)  # Muted orange
 		_:
-			return Color.WHITE
+			return Color(0.6, 0.6, 0.6, 0.8)
 
 func populate_sell_items() -> void:
 	"""Populate the sell list with inventory items"""
