@@ -1,0 +1,66 @@
+{
+	"zone": "Zone 2: The Cursed Lands",
+	"theme": "Dark metal armor imbued with cursed energy",
+	"armor": [
+		{
+			"id": "cursed_helm",
+			"name": "Cursed Helm",
+			"description": "A dark helmet that whispers forgotten secrets. Offers strong protection.",
+			"slot": "head",
+			"defense": 14,
+			"type": "armor",
+			"value": 120,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "cursed_chest",
+			"name": "Cursed Breastplate",
+			"description": "Heavy dark metal plate infused with cursed energy. The weight is worth the defense.",
+			"slot": "chest",
+			"defense": 18,
+			"type": "armor",
+			"value": 180,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "cursed_gloves",
+			"name": "Cursed Gauntlets",
+			"description": "Reinforced metal gauntlets that hum with dark power.",
+			"slot": "hands",
+			"defense": 10,
+			"type": "armor",
+			"value": 100,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "cursed_greaves",
+			"name": "Cursed Legguards",
+			"description": "Dark metal leg armor. Those who wear it feel an eerie chill.",
+			"slot": "legs",
+			"defense": 16,
+			"type": "armor",
+			"value": 140,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "cursed_boots",
+			"name": "Cursed Sabatons",
+			"description": "Heavy boots that leave a faint dark trail. Solid footing in cursed lands.",
+			"slot": "feet",
+			"defense": 12,
+			"type": "armor",
+			"value": 110,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		}
+	]
+}

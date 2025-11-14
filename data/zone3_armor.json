@@ -1,0 +1,66 @@
+{
+	"zone": "Zone 3: The Shadow Realm",
+	"theme": "Shadow-forged armor that bends light",
+	"armor": [
+		{
+			"id": "shadow_helm",
+			"name": "Shadow Helm",
+			"description": "Forged in absolute darkness. The shadows themselves protect your head.",
+			"slot": "head",
+			"defense": 20,
+			"type": "armor",
+			"value": 250,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "shadow_chest",
+			"name": "Shadow Plate",
+			"description": "Dark armor that seems to absorb light. Near-impenetrable defense.",
+			"slot": "chest",
+			"defense": 25,
+			"type": "armor",
+			"value": 350,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "shadow_gloves",
+			"name": "Shadow Grips",
+			"description": "Gauntlets that shimmer like smoke. Your hands barely exist in this realm.",
+			"slot": "hands",
+			"defense": 15,
+			"type": "armor",
+			"value": 200,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "shadow_greaves",
+			"name": "Shadow Legguards",
+			"description": "Leg armor woven from pure shadow. Moves silently with your steps.",
+			"slot": "legs",
+			"defense": 22,
+			"type": "armor",
+			"value": 280,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "shadow_boots",
+			"name": "Shadow Treads",
+			"description": "Boots that leave no footprints. Walk between worlds.",
+			"slot": "feet",
+			"defense": 18,
+			"type": "armor",
+			"value": 240,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		}
+	]
+}
