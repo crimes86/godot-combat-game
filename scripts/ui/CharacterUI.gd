@@ -857,19 +857,73 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 			var item = InventorySystem.get_item(slot_index)
 
 			if item and item.size() > 0:
-				# Check if it's armor or weapon (has a slot)
-				if item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
-					# Try to equip it
+				var action = "double-click" if event.double_click else "right-click"
+
+				# Check if it's a weapon
+				if item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
+					# Convert dict to Weapon resource and equip
+					var weapon = dict_to_weapon(item)
+					if weapon:
+						CharacterStats.equip_weapon(weapon)
+						# Remove from inventory
+						InventorySystem.remove_item(slot_index)
+						refresh_all()
+						print("✅ Equipped weapon %s (%s)" % [item.get("name", "Unknown"), action])
+					else:
+						print("❌ Failed to create weapon resource for %s" % item.get("name", "Unknown"))
+				# Check if it's armor (has a slot)
+				elif item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
+					# Try to equip armor
 					if CharacterStats.equip_armor(item):
 						# Remove from inventory
 						InventorySystem.remove_item(slot_index)
 						refresh_all()
-						var action = "double-click" if event.double_click else "right-click"
-						print("✅ Equipped %s (%s)" % [item.get("name", "Unknown"), action])
+						print("✅ Equipped armor %s (%s)" % [item.get("name", "Unknown"), action])
 				else:
 					print("🖱️ Item not equippable: %s" % item.get("name", "Unknown"))
 			else:
 				print("🖱️ Empty slot %d" % slot_index)
+
+func dict_to_weapon(item_dict: Dictionary) -> Weapon:
+	"""Convert a weapon dictionary (from inventory) to a Weapon resource"""
+	var weapon = Weapon.new()
+
+	weapon.weapon_name = item_dict.get("name", "Unknown")
+	weapon.weapon_type = item_dict.get("weapon_type", "sword")
+	weapon.damage_type = "unified"  # Unified damage system
+	weapon.description = item_dict.get("description", "")
+	weapon.base_damage = item_dict.get("base_damage", 5.0)
+
+	# Convert attack_speed category to numeric multiplier
+	var attack_speed_category = item_dict.get("attack_speed", "medium")
+	match attack_speed_category:
+		"fast":
+			weapon.attack_speed_bonus = -0.30  # 30% faster
+		"slow":
+			weapon.attack_speed_bonus = 0.30   # 30% slower
+		_:  # "medium" or any other value
+			weapon.attack_speed_bonus = 0.0
+
+	# Crit chance
+	weapon.crit_chance_bonus = item_dict.get("crit_chance", 0.0)
+	weapon.required_level = item_dict.get("required_level", 1)
+	weapon.can_trade = item_dict.get("can_trade", true)
+
+	# Set rarity
+	var rarity_str = item_dict.get("rarity", "COMMON").to_upper()
+	match rarity_str:
+		"COMMON":
+			weapon.rarity = Weapon.Rarity.COMMON
+		"UNCOMMON":
+			weapon.rarity = Weapon.Rarity.UNCOMMON
+		"RARE":
+			weapon.rarity = Weapon.Rarity.RARE
+		"EPIC":
+			weapon.rarity = Weapon.Rarity.EPIC
+		"LEGENDARY":
+			weapon.rarity = Weapon.Rarity.LEGENDARY
+
+	return weapon
 
 # ============================================
 # DRAG AND DROP FUNCTIONS
@@ -1014,8 +1068,20 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 		# Equip from inventory
 		var source_index = data.get("source_index", -1)
 		if source_index >= 0:
-			# Try to equip the item
-			if CharacterStats.equip_armor(dragged_item):
+			var equipped = false
+
+			# Check if it's a weapon
+			if dragged_item.get("type", "") == "weapon" and slot_name == "mainhand":
+				# Convert dict to Weapon resource and equip
+				var weapon = dict_to_weapon(dragged_item)
+				if weapon:
+					CharacterStats.equip_weapon(weapon)
+					equipped = true
+			# Otherwise it's armor
+			else:
+				equipped = CharacterStats.equip_armor(dragged_item)
+
+			if equipped:
 				# Remove from inventory
 				InventorySystem.remove_item(source_index)
 				refresh_all()
