@@ -9,9 +9,9 @@ var current_anim: String = "idle"
 var current_dir: String = "south"
 
 func _ready():
-	print("=" * 60)
+	print("=".repeat(60))
 	print("LPC Addon Test Scene")
-	print("=" * 60)
+	print("=".repeat(60))
 
 	# Create body sprite
 	character_sprite = LPCAnimatedSprite2D.new()
@@ -54,7 +54,7 @@ func _ready():
 	add_child(label)
 
 	print("Test scene ready! Use controls to test animations.")
-	print("=" * 60)
+	print("=".repeat(60))
 
 func _process(delta):
 	# Arrow key movement
