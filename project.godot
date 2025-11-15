@@ -25,6 +25,10 @@ CharacterStats="*res://scripts/systems/CharacterStats.gd"
 InventorySystem="*res://scripts/systems/InventorySystem.gd"
 LootSpawnManager="*res://scripts/systems/LootSpawnManager.gd"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/LPCAnimatedSprite/plugin.cfg")
+
 [input]
 
 move_up={
