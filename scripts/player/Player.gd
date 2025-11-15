@@ -390,7 +390,8 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	var legs_sprite = get_node_or_null("LegsSprite") as AnimatedSprite2D
 	var torso_sprite = get_node_or_null("TorsoSprite") as AnimatedSprite2D
 	var hat_sprite = get_node_or_null("HatSprite") as AnimatedSprite2D
-	var weapon_sprite = get_node_or_null("WeaponSprite") as AnimatedSprite2D
+	var weapon_front = get_node_or_null("WeaponFrontSprite") as AnimatedSprite2D
+	var weapon_behind = get_node_or_null("WeaponBehindSprite") as AnimatedSprite2D
 
 	# Need at least body sprite
 	if not body_sprite:
@@ -409,33 +410,22 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	if body_sprite.animation.begins_with("attack_") and body_sprite.is_playing():
 		return
 
-	# Update weapon z-index based on direction (proper layering for LPC sprites)
-	if weapon_sprite:
-		match dir_str:
-			"left", "up":
-				# Weapon behind character
-				weapon_sprite.z_index = -1
-			"right", "down":
-				# Weapon in front of character
-				weapon_sprite.z_index = 4
-
 	# Play appropriate animation on ALL layers (sync them)
 	var new_anim = prefix + dir_str
-	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
+	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_front, weapon_behind]:
 		if sprite and sprite.sprite_frames:
 			if sprite.sprite_frames.has_animation(new_anim):
 				# Has the animation - play it and show sprite
-				# (Weapons have idle animations created from attack frames, so they show when standing)
 				if sprite.animation != new_anim:
 					sprite.play(new_anim)
 				sprite.visible = true
-			elif sprite == weapon_sprite and prefix == "walk_":
+			elif (sprite == weapon_front or sprite == weapon_behind) and prefix == "walk_":
 				# Weapon doesn't have walk animation - hide it while moving
 				# (But idle animations exist, so weapon shows when standing still)
 				sprite.visible = false
 
-	# Note: With layered paper doll system, no complex flip logic needed
-	# Each sprite sheet has proper up/left/down/right rows
+	# Note: With dual-layer weapon system, both front and behind sprites are always present
+	# The sprite sheets themselves contain transparent frames where the weapon shouldn't show
 
 func get_direction_string(dir: Vector2) -> String:
 	"""Convert direction vector to animation name string (4-way for LPC sprites)"""
@@ -685,23 +675,14 @@ func attempt_attack() -> void:
 	var legs_sprite = get_node_or_null("LegsSprite") as AnimatedSprite2D
 	var torso_sprite = get_node_or_null("TorsoSprite") as AnimatedSprite2D
 	var hat_sprite = get_node_or_null("HatSprite") as AnimatedSprite2D
-	var weapon_sprite = get_node_or_null("WeaponSprite") as AnimatedSprite2D
+	var weapon_front = get_node_or_null("WeaponFrontSprite") as AnimatedSprite2D
+	var weapon_behind = get_node_or_null("WeaponBehindSprite") as AnimatedSprite2D
 
-	# Update weapon z-index based on attack direction (proper layering for LPC sprites)
-	if weapon_sprite:
-		match dir_str:
-			"left", "up":
-				# Weapon behind character
-				weapon_sprite.z_index = -1
-			"right", "down":
-				# Weapon in front of character
-				weapon_sprite.z_index = 4
-
-	# Play attack animation on all layers and make weapon visible
-	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
+	# Play attack animation on all layers and make weapons visible
+	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_front, weapon_behind]:
 		if sprite and sprite.sprite_frames and sprite.sprite_frames.has_animation(attack_anim):
 			sprite.play(attack_anim)
-			sprite.visible = true  # Show weapon during attack even if hidden during walk
+			sprite.visible = true  # Show weapons during attack even if hidden during walk
 	
 	ChainManager.register_attack()
 	
@@ -887,13 +868,14 @@ func _on_attack_animation_finished() -> void:
 	var legs_sprite = get_node_or_null("LegsSprite") as AnimatedSprite2D
 	var torso_sprite = get_node_or_null("TorsoSprite") as AnimatedSprite2D
 	var hat_sprite = get_node_or_null("HatSprite") as AnimatedSprite2D
-	var weapon_sprite = get_node_or_null("WeaponSprite") as AnimatedSprite2D
+	var weapon_front = get_node_or_null("WeaponFrontSprite") as AnimatedSprite2D
+	var weapon_behind = get_node_or_null("WeaponBehindSprite") as AnimatedSprite2D
 
 	# Return all layers to idle in current facing direction
 	var dir_str = get_direction_string(attack_direction)
 	var idle_anim = "idle_" + dir_str
 
-	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
+	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_front, weapon_behind]:
 		if sprite and sprite.sprite_frames and sprite.sprite_frames.has_animation(idle_anim):
 			sprite.play(idle_anim)
 
@@ -1047,20 +1029,29 @@ func create_player_sprite() -> void:
 	add_child(hat_sprite)
 	print("  ✅ Hat layer created")
 
-	# Layer 4: Weapon (on top)
-	var weapon_sprite = AnimatedSprite2D.new()
-	weapon_sprite.name = "WeaponSprite"
-	weapon_sprite.position = base_position
-	weapon_sprite.centered = true
-	weapon_sprite.z_index = 4
-	add_child(weapon_sprite)
-	print("  ✅ Weapon layer created")
+	# Layer 4: Weapon Behind (Z:9 - behind character body)
+	var weapon_behind_sprite = AnimatedSprite2D.new()
+	weapon_behind_sprite.name = "WeaponBehindSprite"
+	weapon_behind_sprite.position = base_position
+	weapon_behind_sprite.centered = true
+	weapon_behind_sprite.z_index = -1  # Behind everything
+	add_child(weapon_behind_sprite)
+	print("  ✅ Weapon behind layer created")
+
+	# Layer 5: Weapon Front (Z:140-150 - in front of character)
+	var weapon_front_sprite = AnimatedSprite2D.new()
+	weapon_front_sprite.name = "WeaponFrontSprite"
+	weapon_front_sprite.position = base_position
+	weapon_front_sprite.centered = true
+	weapon_front_sprite.z_index = 140  # In front of character
+	add_child(weapon_front_sprite)
+	print("  ✅ Weapon front layer created")
 
 	# Setup animations for all layers
 	setup_lpc_animations_layered()
 
 	# Start all layers with idle_down
-	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
+	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_behind_sprite, weapon_front_sprite]:
 		if sprite.sprite_frames and sprite.sprite_frames.has_animation("idle_down"):
 			sprite.play("idle_down")
 
@@ -1096,7 +1087,7 @@ func setup_lpc_animations_layered() -> void:
 	setup_sprite_layer("TorsoSprite", TORSO_WALK_PATH, TORSO_SLASH_PATH, TORSO_HURT_PATH)
 	setup_sprite_layer("HatSprite", HAT_WALK_PATH, HAT_SLASH_PATH, HAT_HURT_PATH)
 
-	# Weapon layer - load based on equipped weapon
+	# Weapon layers - load based on equipped weapon (dual-layer system)
 	if CharacterStats.equipped_weapon:
 		var weapon_type = CharacterStats.equipped_weapon.weapon_type
 		var weapon_name = ""
@@ -1113,20 +1104,28 @@ func setup_lpc_animations_layered() -> void:
 
 		print("  🗡️ Equipping weapon: ", CharacterStats.equipped_weapon.weapon_name, " (type: ", weapon_type, ", sprite: ", weapon_name, ")")
 
-		var WEAPON_WALK_PATH = "res://assets/weapons/walk/" + weapon_name + ".png"
-		var WEAPON_SLASH_PATH = "res://assets/weapons/" + weapon_name + ".png"
-		var WEAPON_HURT_PATH = ""  # Weapons don't have hurt animations
+		# NEW LPC-style dual-layer paths
+		var weapon_base = "res://assets/weapons/" + weapon_name + "/"
+		var WEAPON_WALK_FRONT = weapon_base + "walk_front.png"
+		var WEAPON_WALK_BEHIND = weapon_base + "walk_behind.png"
+		var WEAPON_SLASH_FRONT = weapon_base + "slash_front.png"
+		var WEAPON_SLASH_BEHIND = weapon_base + "slash_behind.png"
 
-		print("      Walk path: ", WEAPON_WALK_PATH)
-		print("      Slash path: ", WEAPON_SLASH_PATH)
+		print("      Front sprites: walk=", WEAPON_WALK_FRONT, ", slash=", WEAPON_SLASH_FRONT)
+		print("      Behind sprites: walk=", WEAPON_WALK_BEHIND, ", slash=", WEAPON_SLASH_BEHIND)
 
-		setup_sprite_layer("WeaponSprite", WEAPON_WALK_PATH, WEAPON_SLASH_PATH, WEAPON_HURT_PATH)
+		# Setup both weapon layers
+		setup_sprite_layer("WeaponFrontSprite", WEAPON_WALK_FRONT, WEAPON_SLASH_FRONT, "")
+		setup_sprite_layer("WeaponBehindSprite", WEAPON_WALK_BEHIND, WEAPON_SLASH_BEHIND, "")
 	else:
 		print("  👊 No weapon equipped - player is unarmed")
-		# Hide weapon sprite when unarmed
-		var weapon_sprite = get_node_or_null("WeaponSprite") as AnimatedSprite2D
-		if weapon_sprite:
-			weapon_sprite.visible = false
+		# Hide weapon sprites when unarmed
+		var weapon_front = get_node_or_null("WeaponFrontSprite") as AnimatedSprite2D
+		var weapon_behind = get_node_or_null("WeaponBehindSprite") as AnimatedSprite2D
+		if weapon_front:
+			weapon_front.visible = false
+		if weapon_behind:
+			weapon_behind.visible = false
 
 	print("✅ All sprite layers setup complete!")
 
