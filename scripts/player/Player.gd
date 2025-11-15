@@ -409,6 +409,16 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	if body_sprite.animation.begins_with("attack_") and body_sprite.is_playing():
 		return
 
+	# Update weapon z-index based on direction (proper layering for LPC sprites)
+	if weapon_sprite:
+		match dir_str:
+			"left", "up":
+				# Weapon behind character
+				weapon_sprite.z_index = -1
+			"right", "down":
+				# Weapon in front of character
+				weapon_sprite.z_index = 4
+
 	# Play appropriate animation on ALL layers (sync them)
 	var new_anim = prefix + dir_str
 	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
@@ -676,6 +686,16 @@ func attempt_attack() -> void:
 	var torso_sprite = get_node_or_null("TorsoSprite") as AnimatedSprite2D
 	var hat_sprite = get_node_or_null("HatSprite") as AnimatedSprite2D
 	var weapon_sprite = get_node_or_null("WeaponSprite") as AnimatedSprite2D
+
+	# Update weapon z-index based on attack direction (proper layering for LPC sprites)
+	if weapon_sprite:
+		match dir_str:
+			"left", "up":
+				# Weapon behind character
+				weapon_sprite.z_index = -1
+			"right", "down":
+				# Weapon in front of character
+				weapon_sprite.z_index = 4
 
 	# Play attack animation on all layers and make weapon visible
 	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_sprite]:
