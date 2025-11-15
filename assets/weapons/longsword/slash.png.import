@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://5amqb6xq5ub1"
-path="res://.godot/imported/slash_oversize.png-a30ffec48c9b12a34ca381c1547a9188.ctex"
+uid="uid://c71fdd6jcycoy"
+path="res://.godot/imported/slash.png-c3ba438edc5988b0922cd4c825d2feb8.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/weapons/longsword/custom/slash_oversize.png"
-dest_files=["res://.godot/imported/slash_oversize.png-a30ffec48c9b12a34ca381c1547a9188.ctex"]
+source_file="res://assets/weapons/longsword/slash.png"
+dest_files=["res://.godot/imported/slash.png-c3ba438edc5988b0922cd4c825d2feb8.ctex"]
 
 [params]
 

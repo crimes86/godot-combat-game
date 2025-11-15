@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dwerf6n5ga6ku"
-path="res://.godot/imported/walk_longsword.png-ffcd7f434b8945201cd07a657a72b9a6.ctex"
+uid="uid://cgmnypi65qsmd"
+path="res://.godot/imported/walk.png-7881cea3c6cc6353c6676e3b002a74ca.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/test_sprites/walk_longsword.png"
-dest_files=["res://.godot/imported/walk_longsword.png-ffcd7f434b8945201cd07a657a72b9a6.ctex"]
+source_file="res://assets/weapons/longsword/walk.png"
+dest_files=["res://.godot/imported/walk.png-7881cea3c6cc6353c6676e3b002a74ca.ctex"]
 
 [params]
 
