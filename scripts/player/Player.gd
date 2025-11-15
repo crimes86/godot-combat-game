@@ -963,10 +963,10 @@ func create_player_sprite() -> void:
 	character_sprite.centered = true
 
 	# Load textures
-	var body_type = "human" if selected_gender == Gender.MALE else "female"
-	var walk_tex = load("res://assets/characters/BODY_" + body_type + "_walk.png")
-	var slash_tex = load("res://assets/characters/BODY_" + body_type + "_slash.png")
-	var hurt_tex = load("res://assets/characters/BODY_" + body_type + "_hurt.png")
+	var body_type = "body_male" if selected_gender == Gender.MALE else "body_female"
+	var walk_tex = load("res://assets/characters/" + body_type + "/standard/walk.png")
+	var slash_tex = load("res://assets/characters/" + body_type + "/standard/slash.png")
+	var hurt_tex = load("res://assets/characters/" + body_type + "/standard/hurt.png")
 
 	# Load weapon textures based on equipped weapon
 	var weapon_slash_tex = null
