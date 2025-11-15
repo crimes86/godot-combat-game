@@ -32,7 +32,7 @@ func _setup_data() -> void:
 
 	animation_frame_counts = {
 		"walk": 9,
-		"idle": 2,  # Use first 2 frames of walk
+		"idle": 1,  # Just one frame (standing pose)
 		"slash_oversize": 6
 	}
 
@@ -68,5 +68,5 @@ func _setup_data() -> void:
 
 	custom_frames = {
 		"walk": [1, 2, 3, 4, 5, 6, 7, 8],  # Skip frame 0
-		"idle": [0, 0, 1]  # Hold first frame, then second
+		"idle": [0]  # Just standing pose, no stepping!
 	}
