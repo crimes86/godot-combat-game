@@ -1131,6 +1131,10 @@ func setup_lpc_animations_layered() -> void:
 
 func setup_sprite_layer(sprite_name: String, walk_path: String, slash_path: String, hurt_path: String) -> void:
 	"""Setup animations for a single equipment layer"""
+	print("🔧 setup_sprite_layer called for: ", sprite_name)
+	print("   walk_path: ", walk_path)
+	print("   slash_path: ", slash_path)
+
 	var sprite = get_node_or_null(sprite_name) as AnimatedSprite2D
 	if not sprite:
 		print("⚠️ Sprite not found: ", sprite_name)
