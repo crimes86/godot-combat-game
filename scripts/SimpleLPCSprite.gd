@@ -1,4 +1,4 @@
-extends AnimatedSprite2D
+extends Sprite2D
 class_name SimpleLPCSprite
 
 ## Simple LPC sprite handler with row-based directions
@@ -20,92 +20,125 @@ const DIRECTION_ROWS = {
 
 # Current state
 var current_direction := "south"
-var sprite_frames_data := {}
+var current_animation := "idle"
+var current_frame := 0
+var animation_timer := 0.0
+var animation_speed := 10.0  # FPS
+var is_playing := false
+var loop := true
 
-func setup_lpc_sprite(walk_texture: Texture2D, slash_texture: Texture2D = null, hurt_texture: Texture2D = null):
+# Textures
+var walk_texture: Texture2D
+var slash_texture: Texture2D
+var hurt_texture: Texture2D
+
+# Animation data
+var animation_frames := {
+	"walk": {"frames": [1, 2, 3, 4, 5, 6, 7, 8], "fps": 10.0, "loop": true},
+	"idle": {"frames": [0], "fps": 1.0, "loop": true},
+	"slash": {"frames": [0, 1, 2, 3, 4, 5], "fps": 12.0, "loop": false},
+	"hurt": {"frames": [0, 1, 2, 3, 4, 5], "fps": 10.0, "loop": false}
+}
+
+signal animation_finished
+
+func setup_lpc_sprite(walk_tex: Texture2D, slash_tex: Texture2D = null, hurt_tex: Texture2D = null):
 	"""Setup LPC sprite with standard walk/slash/hurt textures"""
 	print("SimpleLPCSprite.setup_lpc_sprite() called")
-	print("  walk_texture: ", walk_texture)
-	print("  slash_texture: ", slash_texture)
-	print("  hurt_texture: ", hurt_texture)
+	print("  walk_texture: ", walk_tex, " size: ", walk_tex.get_size() if walk_tex else "null")
+	print("  slash_texture: ", slash_tex, " size: ", slash_tex.get_size() if slash_tex else "null")
+	print("  hurt_texture: ", hurt_tex, " size: ", hurt_tex.get_size() if hurt_tex else "null")
 
-	sprite_frames = SpriteFrames.new()
+	# Store textures
+	walk_texture = walk_tex
+	slash_texture = slash_tex
+	hurt_texture = hurt_tex
 
-	# Create walk animations for all 4 directions
-	if walk_texture:
-		print("  Creating walk/idle animations...")
-		create_lpc_animation("walk", walk_texture, 9, [1, 2, 3, 4, 5, 6, 7, 8], 10.0)
-		create_lpc_animation("idle", walk_texture, 1, [0], 1.0)
-		print("  Walk/idle animations created")
-	else:
-		print("  ERROR: No walk texture provided!")
+	# Enable region and set initial state
+	region_enabled = true
+	texture = walk_texture
 
-	# Create slash animations for all 4 directions
-	if slash_texture:
-		print("  Creating slash animations...")
-		create_lpc_animation("slash", slash_texture, 6, [], 12.0, false)
-		print("  Slash animations created")
+	# Start with idle south (row 2, frame 0)
+	current_animation = "idle"
+	current_direction = "south"
+	current_frame = 0
+	update_sprite_region()
 
-	# Create hurt animation (usually only south direction)
-	if hurt_texture:
-		create_single_direction_animation("hurt", hurt_texture, 6, 10.0, false)
-
-	# Start with idle_south animation
-	print("  Starting idle_south animation...")
-	if sprite_frames.has_animation("idle_south"):
-		play("idle_south")
-		print("  idle_south animation started")
-	else:
-		print("  ERROR: idle_south animation not found!")
-
-func create_lpc_animation(anim_name: String, texture: Texture2D, frame_count: int, custom_frames: Array = [], fps: float = 10.0, loop: bool = true):
-	"""Create animation for all 4 directions using LPC row-based system"""
-	print("  create_lpc_animation: ", anim_name, " texture_size: ", texture.get_size())
-	for dir_name in DIRECTION_ROWS.keys():
-		var anim_key = anim_name + "_" + dir_name
-		sprite_frames.add_animation(anim_key)
-		sprite_frames.set_animation_loop(anim_key, loop)
-		sprite_frames.set_animation_speed(anim_key, fps)
-
-		var row = DIRECTION_ROWS[dir_name]  # Simple: 0, 1, 2, or 3
-		var frames_to_use = custom_frames if custom_frames.size() > 0 else range(frame_count)
-		print("    ", anim_key, " -> row ", row, " frames: ", frames_to_use)
-
-		for frame_idx in frames_to_use:
-			var atlas = AtlasTexture.new()
-			atlas.atlas = texture
-			var region = Rect2(frame_idx * 64, row * 64, 64, 64)
-			atlas.region = region
-			sprite_frames.add_frame(anim_key, atlas)
-			if frame_idx == 0:  # Print first frame for debugging
-				print("      First frame region: ", region)
-
-func create_single_direction_animation(anim_name: String, texture: Texture2D, frame_count: int, fps: float = 10.0, loop: bool = false):
-	"""Create animation with only one direction (like hurt) - uses south/row 2"""
-	sprite_frames.add_animation(anim_name)
-	sprite_frames.set_animation_loop(anim_name, loop)
-	sprite_frames.set_animation_speed(anim_name, fps)
-
-	for frame_idx in range(frame_count):
-		var atlas = AtlasTexture.new()
-		atlas.atlas = texture
-		atlas.region = Rect2(frame_idx * 64, 2 * 64, 64, 64)  # Row 2 (south)
-		sprite_frames.add_frame(anim_name, atlas)
+	print("  ✅ Sprite setup complete - region: ", region_rect)
 
 func play_lpc_animation(anim_name: String, direction: String):
 	"""Play animation with direction - NO FLIPPING!"""
-	current_direction = direction
+	if not animation_frames.has(anim_name):
+		push_warning("Unknown animation: " + anim_name)
+		return
 
-	# Check if this animation has directions
-	var anim_key = anim_name + "_" + direction
-	if sprite_frames and sprite_frames.has_animation(anim_key):
-		play(anim_key)
-	elif sprite_frames and sprite_frames.has_animation(anim_name):
-		# Animation without directions (like hurt)
-		play(anim_name)
+	current_animation = anim_name
+	current_direction = direction
+	current_frame = 0
+	animation_timer = 0.0
+
+	var anim_data = animation_frames[anim_name]
+	animation_speed = anim_data["fps"]
+	loop = anim_data["loop"]
+	is_playing = true
+
+	# Switch texture based on animation
+	if anim_name == "slash" and slash_texture:
+		texture = slash_texture
+	elif anim_name == "hurt" and hurt_texture:
+		texture = hurt_texture
 	else:
-		push_warning("Animation not found: " + anim_key)
+		texture = walk_texture
+
+	update_sprite_region()
+
+func update_sprite_region():
+	"""Update the sprite region to show the current frame"""
+	if not texture:
+		return
+
+	var row = DIRECTION_ROWS[current_direction]
+	var anim_data = animation_frames[current_animation]
+	var frame_list = anim_data["frames"]
+	var actual_frame = frame_list[current_frame]
+
+	region_rect = Rect2(actual_frame * 64, row * 64, 64, 64)
+
+func _process(delta):
+	"""Handle animation frame updates"""
+	if not is_playing:
+		return
+
+	animation_timer += delta
+	var frame_time = 1.0 / animation_speed
+
+	if animation_timer >= frame_time:
+		animation_timer = 0.0
+		var anim_data = animation_frames[current_animation]
+		var frame_list = anim_data["frames"]
+
+		current_frame += 1
+		if current_frame >= frame_list.size():
+			if loop:
+				current_frame = 0
+			else:
+				current_frame = frame_list.size() - 1
+				is_playing = false
+				animation_finished.emit()
+
+		update_sprite_region()
 
 func is_lpc_animation_playing() -> bool:
 	"""Check if animation is currently playing"""
-	return is_playing()
+	return is_playing
+
+func play(anim_name: String = ""):
+	"""Compatibility wrapper for play()"""
+	if anim_name != "":
+		# Try to extract direction from name
+		if "_" in anim_name:
+			var parts = anim_name.split("_")
+			play_lpc_animation(parts[0], parts[1])
+		else:
+			play_lpc_animation(anim_name, current_direction)
+	is_playing = true

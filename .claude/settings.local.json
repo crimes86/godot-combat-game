@@ -1,17 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git log:*)",
-      "Bash(python:*)",
-      "Bash(where:*)",
-      "Bash(dir:*)",
-      "Bash(git rm:*)",
-      "Bash(godot:*)",
-      "Bash(git mv:*)",
-      "Bash(nul)",
-      "Bash(git add:*)",
-      "Bash(find:*)",
-      "Bash(git commit:*)"
+      "Bash(identify:*)"
     ],
     "deny": [],
     "ask": []

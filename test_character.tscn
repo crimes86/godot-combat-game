@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c7tn8nv5nl5ox"]
+
+[ext_resource type="Script" uid="uid://q6avx8s5bdn7" path="res://scripts/characters/ModularLPCCharacter.gd" id="1_fksbf"]
+
+[node name="TestCharacter" type="Node2D"]
+script = ExtResource("1_fksbf")

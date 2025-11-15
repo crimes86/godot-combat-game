@@ -390,7 +390,7 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 		return
 
 	# Don't interrupt attack animations
-	if character_sprite.animation and character_sprite.animation.begins_with("slash_") and character_sprite.is_playing():
+	if character_sprite.current_animation == "slash" and character_sprite.is_lpc_animation_playing():
 		return
 
 	# Get direction (down/up/left/right from old system)

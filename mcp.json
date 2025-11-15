@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "godot": {
+      "command": "node",
+      "args": ["/absolute/path/to/godot-mcp/build/index.js"],
+      "env": {
+        "DEBUG": "true"                  // Enable detailed logging
+      }
+    }
+  }
+}

@@ -1,16 +1,15 @@
 extends Node2D
 
-## Test script for LPCAnimatedSprite2D addon
-## Run this scene to verify the addon works before refactoring Player.gd
+## Test script for LPCAnimatedSprite2D addon - CHARACTER ONLY
+## Weapons disabled - waiting for new plan
 
 var character_sprite: LPCAnimatedSprite2D
-var weapon_sprite: LPCAnimatedSprite2D
 var current_anim: String = "idle"
 var current_dir: String = "south"
 
 func _ready():
 	print("=".repeat(60))
-	print("LPC Addon Test Scene")
+	print("LPC Addon Test Scene - CHARACTER ONLY")
 	print("=".repeat(60))
 
 	# Create body sprite
@@ -22,25 +21,10 @@ func _ready():
 
 	# Set sprite data
 	character_sprite.spritesheets_path = "res://assets/characters/body_male"
-	character_sprite.animation_data = CharacterAnimationData.new()  # Use custom animation data!
+	character_sprite.animation_data = CharacterAnimationData.new()
 
 	add_child(character_sprite)
 	print("Body sprite created")
-
-	# Create weapon sprite (layered on top)
-	weapon_sprite = LPCAnimatedSprite2D.new()
-	weapon_sprite.name = "WeaponSprite"
-	weapon_sprite.position = Vector2(400, 300)
-	weapon_sprite.centered = true
-	weapon_sprite.scale = Vector2(2, 2)
-	weapon_sprite.z_index = 10  # In front of body
-
-	# Set weapon data - use custom animation data for weapons!
-	weapon_sprite.spritesheets_path = "res://assets/weapons/longsword"
-	weapon_sprite.animation_data = WeaponAnimationData.new()
-
-	add_child(weapon_sprite)
-	print("Weapon sprite created")
 
 	# Wait for sprites to initialize
 	await get_tree().process_frame
@@ -51,23 +35,17 @@ func _ready():
 	else:
 		print("WARNING: Character sprite_frames is null!")
 
-	if weapon_sprite.sprite_frames:
-		print("Weapon animations: ", weapon_sprite.sprite_frames.get_animation_names())
-	else:
-		print("WARNING: Weapon sprite_frames is null!")
-
 	# Start idle animation
 	character_sprite.play_animation("idle", "south")
-	weapon_sprite.play_animation("idle", "south")
 	print("Playing idle animation facing south")
 
 	# Create UI label
 	var label = Label.new()
-	label.text = "LPC Addon Test\\nControls:\\nArrow keys: Walk\\nSpace: Attack\\n1-4: Change direction\\nI: Idle, W: Walk, S: Slash"
+	label.text = "LPC Addon Test (Character Only)\\nArrow keys: Walk\\nSpace: Slash attack\\nI: Idle, W: Walk, S: Slash"
 	label.position = Vector2(10, 10)
 	add_child(label)
 
-	print("Test scene ready! Use controls to test animations.")
+	print("Test scene ready! Weapons disabled - waiting for new plan")
 	print("=".repeat(60))
 
 func _process(delta):
@@ -90,60 +68,32 @@ func _process(delta):
 			current_dir = new_dir
 			print("WALK: ", current_dir)
 			character_sprite.play_animation(current_anim, current_dir)
-			weapon_sprite.play_animation(current_anim, current_dir)
 	else:
 		# Not moving - play idle animation
 		if current_anim != "idle":
 			current_anim = "idle"
 			print("IDLE: ", current_dir)
 			character_sprite.play_animation(current_anim, current_dir)
-			weapon_sprite.play_animation(current_anim, current_dir)
 
 func _unhandled_input(event):
 	if event.is_action_pressed("ui_accept"):  # Space
-		current_anim = "slash_oversize"  # Longsword uses oversize
+		current_anim = "slash"
 		character_sprite.play_animation("slash", current_dir)
-		weapon_sprite.play_animation("slash_oversize", current_dir)
 		print("Attack! Playing slash animation facing ", current_dir)
-
-	# Manual direction change
-	if event.is_action_pressed("ui_page_up"):  # 1
-		current_dir = "north"
-		character_sprite.play_animation(current_anim, current_dir)
-		weapon_sprite.play_animation(current_anim, current_dir)
-		print("Changed direction to north")
-	elif event.is_action_pressed("ui_page_down"):  # 2
-		current_dir = "south"
-		character_sprite.play_animation(current_anim, current_dir)
-		weapon_sprite.play_animation(current_anim, current_dir)
-		print("Changed direction to south")
-	elif event.is_action_pressed("ui_home"):  # 3
-		current_dir = "west"
-		character_sprite.play_animation(current_anim, current_dir)
-		weapon_sprite.play_animation(current_anim, current_dir)
-		print("Changed direction to west")
-	elif event.is_action_pressed("ui_end"):  # 4
-		current_dir = "east"
-		character_sprite.play_animation(current_anim, current_dir)
-		weapon_sprite.play_animation(current_anim, current_dir)
-		print("Changed direction to east")
 
 	# Animation type change - check if it's a keyboard event
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_I:
 			current_anim = "idle"
 			character_sprite.play_animation(current_anim, current_dir)
-			weapon_sprite.play_animation(current_anim, current_dir)
 			print("Idle animation")
 		elif event.keycode == KEY_W:
 			current_anim = "walk"
 			character_sprite.play_animation(current_anim, current_dir)
-			weapon_sprite.play_animation(current_anim, current_dir)
 			print("Walk animation")
 		elif event.keycode == KEY_S:
 			current_anim = "slash"
 			character_sprite.play_animation("slash", current_dir)
-			weapon_sprite.play_animation("slash_oversize", current_dir)
 			print("Slash animation")
 
 func get_direction_from_velocity(velocity: Vector2) -> String:
