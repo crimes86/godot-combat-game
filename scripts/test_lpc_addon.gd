@@ -69,10 +69,19 @@ func _process(delta):
 		velocity.y -= 1
 
 	if velocity.length() > 0:
-		current_anim = "walk"
-		current_dir = get_direction_from_velocity(velocity)
-		character_sprite.play_animation(current_anim, current_dir)
-		weapon_sprite.play_animation(current_anim, current_dir)
+		# Moving - play walk animation
+		var new_dir = get_direction_from_velocity(velocity)
+		if current_anim != "walk" or current_dir != new_dir:
+			current_anim = "walk"
+			current_dir = new_dir
+			character_sprite.play_animation(current_anim, current_dir)
+			weapon_sprite.play_animation(current_anim, current_dir)
+	else:
+		# Not moving - play idle animation
+		if current_anim != "idle":
+			current_anim = "idle"
+			character_sprite.play_animation(current_anim, current_dir)
+			weapon_sprite.play_animation(current_anim, current_dir)
 
 func _unhandled_input(event):
 	if event.is_action_pressed("ui_accept"):  # Space
