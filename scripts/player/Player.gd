@@ -955,8 +955,11 @@ func create_player_sprite() -> void:
 	var slash_tex = load("res://assets/characters/BODY_" + body_type + "_slash.png")
 	var hurt_tex = load("res://assets/characters/BODY_" + body_type + "_hurt.png")
 
+	# Load weapon texture (dagger for testing)
+	var weapon_slash_tex = load("res://sprites/lpc_characters/lpc_entry/png/slash/WEAPON_dagger.png")
+
 	# Setup sprite
-	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex)
+	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, weapon_slash_tex)
 
 	add_child(character_sprite)
 

@@ -16,7 +16,10 @@ const DIRECTION_ROWS = {
 # Current state
 var current_direction := "south"
 
-func setup_lpc_sprite(walk_tex: Texture2D, slash_tex: Texture2D = null, hurt_tex: Texture2D = null):
+# Weapon layer (optional)
+var weapon_sprite: AnimatedSprite2D = null
+
+func setup_lpc_sprite(walk_tex: Texture2D, slash_tex: Texture2D = null, hurt_tex: Texture2D = null, weapon_slash_tex: Texture2D = null):
 	"""Setup LPC sprite with standard walk/slash/hurt textures - EXACTLY like Enemy.gd"""
 	print("SimpleLPCSprite.setup_lpc_sprite() called")
 	print("  walk_texture: ", walk_tex, " size: ", walk_tex.get_size() if walk_tex else "null")
@@ -59,6 +62,23 @@ func setup_lpc_sprite(walk_tex: Texture2D, slash_tex: Texture2D = null, hurt_tex
 	print("  📋 Animations created: ", sprite_frames.get_animation_names())
 	print("  📊 Total animations: ", sprite_frames.get_animation_names().size())
 
+	# Setup weapon layer if provided
+	if weapon_slash_tex:
+		print("  Creating weapon layer...")
+		weapon_sprite = AnimatedSprite2D.new()
+		weapon_sprite.name = "WeaponLayer"
+		weapon_sprite.centered = true
+		weapon_sprite.sprite_frames = SpriteFrames.new()
+
+		var weapon_img = weapon_slash_tex.get_image()
+		for dir_name in DIRECTION_ROWS.keys():
+			var row = DIRECTION_ROWS[dir_name]
+			create_animation_from_image(weapon_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], 12.0, false, weapon_sprite.sprite_frames)
+
+		add_child(weapon_sprite)
+		weapon_sprite.visible = false  # Hide until attacking
+		print("  ✅ Weapon layer created")
+
 	# Start with idle_south
 	print("  Starting idle_south animation...")
 	if sprite_frames.has_animation("idle_south"):
@@ -69,11 +89,13 @@ func setup_lpc_sprite(walk_tex: Texture2D, slash_tex: Texture2D = null, hurt_tex
 		print("  ERROR: idle_south animation not found!")
 		print("  Available animations: ", sprite_frames.get_animation_names())
 
-func create_animation_from_image(img: Image, anim_name: String, row: int, frame_count: int, frame_indices: Array, fps: float, loop: bool):
+func create_animation_from_image(img: Image, anim_name: String, row: int, frame_count: int, frame_indices: Array, fps: float, loop: bool, target_frames: SpriteFrames = null):
 	"""Create animation from spritesheet using Image.blit_rect() - EXACTLY like Enemy.gd create_skeleton_animation()"""
-	sprite_frames.add_animation(anim_name)
-	sprite_frames.set_animation_loop(anim_name, loop)
-	sprite_frames.set_animation_speed(anim_name, fps)
+	var frames = target_frames if target_frames else sprite_frames
+
+	frames.add_animation(anim_name)
+	frames.set_animation_loop(anim_name, loop)
+	frames.set_animation_speed(anim_name, fps)
 
 	for frame_idx in frame_indices:
 		# Create new 64x64 image for this frame
@@ -83,7 +105,7 @@ func create_animation_from_image(img: Image, anim_name: String, row: int, frame_
 		# Convert to texture
 		var frame_texture = ImageTexture.create_from_image(frame_img)
 		# Add to sprite frames
-		sprite_frames.add_frame(anim_name, frame_texture)
+		frames.add_frame(anim_name, frame_texture)
 
 func play_lpc_animation(anim_name: String, direction: String):
 	"""Play animation with direction - NO FLIPPING!"""
@@ -98,6 +120,15 @@ func play_lpc_animation(anim_name: String, direction: String):
 		play(anim_name)
 	else:
 		push_warning("Animation not found: " + anim_key)
+
+	# Play weapon animation if attacking
+	if weapon_sprite:
+		if anim_name == "slash":
+			weapon_sprite.visible = true
+			if weapon_sprite.sprite_frames.has_animation(anim_key):
+				weapon_sprite.play(anim_key)
+		else:
+			weapon_sprite.visible = false
 
 func is_lpc_animation_playing() -> bool:
 	"""Check if animation is currently playing"""
