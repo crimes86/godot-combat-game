@@ -42,6 +42,20 @@ func _ready():
 	add_child(weapon_sprite)
 	print("Weapon sprite created")
 
+	# Wait for sprites to initialize
+	await get_tree().process_frame
+
+	# Debug: Check available animations
+	if character_sprite.sprite_frames:
+		print("Character animations: ", character_sprite.sprite_frames.get_animation_names())
+	else:
+		print("WARNING: Character sprite_frames is null!")
+
+	if weapon_sprite.sprite_frames:
+		print("Weapon animations: ", weapon_sprite.sprite_frames.get_animation_names())
+	else:
+		print("WARNING: Weapon sprite_frames is null!")
+
 	# Start idle animation
 	character_sprite.play_animation("idle", "south")
 	weapon_sprite.play_animation("idle", "south")
@@ -74,12 +88,14 @@ func _process(delta):
 		if current_anim != "walk" or current_dir != new_dir:
 			current_anim = "walk"
 			current_dir = new_dir
+			print("WALK: ", current_dir)
 			character_sprite.play_animation(current_anim, current_dir)
 			weapon_sprite.play_animation(current_anim, current_dir)
 	else:
 		# Not moving - play idle animation
 		if current_anim != "idle":
 			current_anim = "idle"
+			print("IDLE: ", current_dir)
 			character_sprite.play_animation(current_anim, current_dir)
 			weapon_sprite.play_animation(current_anim, current_dir)
 
