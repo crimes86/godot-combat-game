@@ -81,6 +81,41 @@ func _ready() -> void:
 	equipped_weapon = null
 	print("👊 Player starts UNARMED - buy weapons from vendor!")
 
+	# Equip default starting clothes (non-removable)
+	_equip_starting_clothes()
+
+func _equip_starting_clothes() -> void:
+	"""Equip default shirt and pants - minimal value, no stats"""
+	# Default white shirt (chest slot)
+	equipped_armor["chest"] = {
+		"name": "Tattered Shirt",
+		"description": "A worn white shirt. Better than nothing.",
+		"type": "armor",
+		"slot": "chest",
+		"armor": 0,
+		"value": 1,
+		"rarity": "COMMON",
+		"can_trade": true,  # Can be sold/destroyed/unequipped
+		"stackable": false,
+		"quantity": 1
+	}
+
+	# Default green pants (legs slot)
+	equipped_armor["legs"] = {
+		"name": "Tattered Pants",
+		"description": "Worn pants. At least you're not naked.",
+		"type": "armor",
+		"slot": "legs",
+		"armor": 0,
+		"value": 1,
+		"rarity": "COMMON",
+		"can_trade": true,  # Can be sold/destroyed/unequipped
+		"stackable": false,
+		"quantity": 1
+	}
+
+	print("👕 Equipped starting clothes: Tattered Shirt, Tattered Pants")
+
 # ============================================
 # DERIVED STATS (Combat Calculations)
 # ============================================
