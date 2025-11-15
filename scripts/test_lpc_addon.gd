@@ -35,9 +35,9 @@ func _ready():
 	weapon_sprite.scale = Vector2(2, 2)
 	weapon_sprite.z_index = 10  # In front of body
 
-	# Set weapon data
+	# Set weapon data - use custom animation data for weapons!
 	weapon_sprite.spritesheets_path = "res://assets/weapons/longsword"
-	weapon_sprite.animation_data = LPCAnimationData.new()
+	weapon_sprite.animation_data = WeaponAnimationData.new()
 
 	add_child(weapon_sprite)
 	print("Weapon sprite created")
