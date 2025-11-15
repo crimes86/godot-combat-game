@@ -968,9 +968,25 @@ func create_player_sprite() -> void:
 	var slash_tex = load("res://assets/characters/BODY_" + body_type + "_slash.png")
 	var hurt_tex = load("res://assets/characters/BODY_" + body_type + "_hurt.png")
 
-	# Load weapon textures (longsword with walk animations)
-	var weapon_slash_tex = load("res://assets/weapons/longsword/slash.png")
-	var weapon_walk_tex = load("res://assets/weapons/longsword/walk.png")
+	# Load weapon textures based on equipped weapon
+	var weapon_slash_tex = null
+	var weapon_walk_tex = null
+
+	if CharacterStats.equipped_weapon:
+		var weapon_type = CharacterStats.equipped_weapon.weapon_type
+		var weapon_path = "res://assets/weapons/" + weapon_type + "/"
+
+		# Try to load weapon sprites
+		if ResourceLoader.exists(weapon_path + "slash.png"):
+			weapon_slash_tex = load(weapon_path + "slash.png")
+		if ResourceLoader.exists(weapon_path + "walk.png"):
+			weapon_walk_tex = load(weapon_path + "walk.png")
+
+		print("🗡️ Loading weapon sprites for: %s (type: %s)" % [CharacterStats.equipped_weapon.weapon_name, weapon_type])
+		print("   Slash: %s" % ("✅" if weapon_slash_tex else "❌"))
+		print("   Walk: %s" % ("✅" if weapon_walk_tex else "❌"))
+	else:
+		print("👊 No weapon equipped - player is unarmed")
 
 	# Setup sprite
 	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, weapon_slash_tex, weapon_walk_tex)

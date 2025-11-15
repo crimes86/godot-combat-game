@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dls3jx5f2ttwm"
-path="res://.godot/imported/slash_oversize.png-c850a10376e2c3a3814f47cb69c8eff6.ctex"
+uid="uid://dbhlvfa2q2xx2"
+path="res://.godot/imported/hurt.png-f71549e4b6463e6d0754718263c4115c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/weapons/mace/slash_oversize.png"
-dest_files=["res://.godot/imported/slash_oversize.png-c850a10376e2c3a3814f47cb69c8eff6.ctex"]
+source_file="res://assets/weapons/longsword/hurt.png"
+dest_files=["res://.godot/imported/hurt.png-f71549e4b6463e6d0754718263c4115c.ctex"]
 
 [params]
 

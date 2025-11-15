@@ -203,11 +203,11 @@ func play_lpc_animation(anim_name: String, direction: String):
 					"east":  # facing right
 						slash_offset = Vector2(-5, 10)
 					"west":  # facing left
-						slash_offset = Vector2(0, 10)
+						slash_offset = Vector2(5, 10)
 					"north":  # facing up
 						slash_offset = Vector2(-10, 0)
 					"south":  # facing down
-						slash_offset = Vector2(0, 5)
+						slash_offset = Vector2(-5, 5)
 				weapon_sprite.offset = slash_offset
 				print("  ✅ Weapon playing slash: %s (visible=%s, z=%d, offset=%s)" % [anim_key, weapon_sprite.visible, weapon_sprite.z_index, weapon_sprite.offset])
 			else:

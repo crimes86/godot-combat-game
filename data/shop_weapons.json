@@ -1,17 +1,17 @@
 {
 	"weapons": [
 		{
-			"id": "wooden_club",
-			"name": "Wooden Club",
-			"description": "A crude club made from scrap wood. Better than bare fists, but barely.",
-			"weapon_type": "club",
+			"id": "wooden_mace",
+			"name": "Wooden Mace",
+			"description": "A crude mace made from scrap wood. Better than bare fists, but barely.",
+			"weapon_type": "mace",
 			"base_damage": 4,
 			"attack_speed": "medium",
 			"crit_chance": 0.071,
 			"required_level": 1,
 			"price": 0,
 			"rarity": "Common",
-			"sprite_path": "res://assets/weapons/club.png",
+			"sprite_path": "res://assets/weapons/mace.png",
 			"zone": 1,
 			"notes": "Intentionally weak starter weapon - encourages buying first upgrade"
 		},
