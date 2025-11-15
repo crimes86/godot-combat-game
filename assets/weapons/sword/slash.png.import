@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dbhlvfa2q2xx2"
-path="res://.godot/imported/hurt.png-f71549e4b6463e6d0754718263c4115c.ctex"
+uid="uid://c71fdd6jcycoy"
+path="res://.godot/imported/slash.png-368827cb06d0b9e8975a64c782d7ac9c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/weapons/longsword/hurt.png"
-dest_files=["res://.godot/imported/hurt.png-f71549e4b6463e6d0754718263c4115c.ctex"]
+source_file="res://assets/weapons/sword/slash.png"
+dest_files=["res://.godot/imported/slash.png-368827cb06d0b9e8975a64c782d7ac9c.ctex"]
 
 [params]
 

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://govfigyno1t2"]
+
+[ext_resource type="Script" path="res://scripts/test_lpc_addon.gd" id="1"]
+
+[node name="TestLPCAddon" type="Node2D"]
+script = ExtResource("1")

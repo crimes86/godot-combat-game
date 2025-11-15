@@ -152,6 +152,8 @@ func _ready() -> void:
 	CharacterStats.level_up.connect(_on_character_level_up)
 	CharacterStats.weapon_equipped.connect(_on_weapon_equipped)
 	CharacterStats.weapon_unequipped.connect(_on_weapon_unequipped)
+	CharacterStats.armor_equipped.connect(_on_armor_equipped)
+	CharacterStats.armor_unequipped.connect(_on_armor_unequipped)
 
 	# Create character UI after this frame
 	call_deferred("create_character_ui")
@@ -167,6 +169,10 @@ func _exit_tree() -> void:
 		CharacterStats.weapon_equipped.disconnect(_on_weapon_equipped)
 	if CharacterStats.weapon_unequipped.is_connected(_on_weapon_unequipped):
 		CharacterStats.weapon_unequipped.disconnect(_on_weapon_unequipped)
+	if CharacterStats.armor_equipped.is_connected(_on_armor_equipped):
+		CharacterStats.armor_equipped.disconnect(_on_armor_equipped)
+	if CharacterStats.armor_unequipped.is_connected(_on_armor_unequipped):
+		CharacterStats.armor_unequipped.disconnect(_on_armor_unequipped)
 
 func _create_gender_selection_ui() -> void:
 	"""Create and show the gender selection UI - blocks until selection made"""
@@ -346,6 +352,24 @@ func _on_weapon_unequipped() -> void:
 
 	# Refresh player sprite to remove weapon
 	print("🔄 Refreshing player sprite to unarmed...")
+	create_player_sprite()
+
+func _on_armor_equipped(slot: String, armor_item: Dictionary) -> void:
+	"""Called when armor is equipped"""
+	print("🛡️ Armor equipped in slot %s: %s" % [slot, armor_item["name"]])
+	update_stats_from_character()
+
+	# Refresh player sprite to show the new armor
+	print("🔄 Refreshing player sprite with new armor...")
+	create_player_sprite()
+
+func _on_armor_unequipped(slot: String, armor_item: Dictionary) -> void:
+	"""Called when armor is unequipped"""
+	print("👕 Armor unequipped from slot %s: %s" % [slot, armor_item["name"]])
+	update_stats_from_character()
+
+	# Refresh player sprite to remove armor
+	print("🔄 Refreshing player sprite without armor...")
 	create_player_sprite()
 
 func _physics_process(delta: float) -> void:
@@ -988,8 +1012,46 @@ func create_player_sprite() -> void:
 	else:
 		print("👊 No weapon equipped - player is unarmed")
 
-	# Setup sprite
-	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, weapon_slash_tex, weapon_walk_tex)
+	# Load armor textures based on equipped armor
+	var shirt_walk_tex = null
+	var shirt_slash_tex = null
+	var pants_walk_tex = null
+	var pants_slash_tex = null
+
+	# Check for equipped chest armor (shirt)
+	if CharacterStats.equipped_armor.has("chest") and CharacterStats.equipped_armor["chest"] != null:
+		var chest_armor = CharacterStats.equipped_armor["chest"]
+		var sprite_name = chest_armor.get("sprite_name", "white_shirt")
+		var shirt_path = "res://assets/characters/shirt/"
+
+		# Try to load shirt sprites based on sprite_name
+		if ResourceLoader.exists(shirt_path + sprite_name + "_walk.png"):
+			shirt_walk_tex = load(shirt_path + sprite_name + "_walk.png")
+		if ResourceLoader.exists(shirt_path + sprite_name + "_slash.png"):
+			shirt_slash_tex = load(shirt_path + sprite_name + "_slash.png")
+
+		print("👕 Loading chest armor: %s (sprite: %s)" % [chest_armor["name"], sprite_name])
+		print("   Walk: %s" % ("✅" if shirt_walk_tex else "❌"))
+		print("   Slash: %s" % ("✅" if shirt_slash_tex else "❌"))
+
+	# Check for equipped leg armor (pants)
+	if CharacterStats.equipped_armor.has("legs") and CharacterStats.equipped_armor["legs"] != null:
+		var leg_armor = CharacterStats.equipped_armor["legs"]
+		var sprite_name = leg_armor.get("sprite_name", "green_pants")
+		var pants_path = "res://assets/characters/pants/"
+
+		# Try to load pants sprites based on sprite_name
+		if ResourceLoader.exists(pants_path + sprite_name + "_walk.png"):
+			pants_walk_tex = load(pants_path + sprite_name + "_walk.png")
+		if ResourceLoader.exists(pants_path + sprite_name + "_slash.png"):
+			pants_slash_tex = load(pants_path + sprite_name + "_slash.png")
+
+		print("👖 Loading leg armor: %s (sprite: %s)" % [leg_armor["name"], sprite_name])
+		print("   Walk: %s" % ("✅" if pants_walk_tex else "❌"))
+		print("   Slash: %s" % ("✅" if pants_slash_tex else "❌"))
+
+	# Setup sprite with all layers
+	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, shirt_walk_tex, shirt_slash_tex, pants_walk_tex, pants_slash_tex, weapon_slash_tex, weapon_walk_tex)
 
 	add_child(character_sprite)
 

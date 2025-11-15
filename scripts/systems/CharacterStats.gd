@@ -97,7 +97,8 @@ func _equip_starting_clothes() -> void:
 		"rarity": "COMMON",
 		"can_trade": true,  # Can be sold/destroyed/unequipped
 		"stackable": false,
-		"quantity": 1
+		"quantity": 1,
+		"sprite_name": "white_shirt"  # Sprite to use for rendering
 	}
 
 	# Default green pants (legs slot)
@@ -111,7 +112,8 @@ func _equip_starting_clothes() -> void:
 		"rarity": "COMMON",
 		"can_trade": true,  # Can be sold/destroyed/unequipped
 		"stackable": false,
-		"quantity": 1
+		"quantity": 1,
+		"sprite_name": "green_pants"  # Sprite to use for rendering
 	}
 
 	print("👕 Equipped starting clothes: Tattered Shirt, Tattered Pants")

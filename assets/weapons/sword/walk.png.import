@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cgmnypi65qsmd"
-path="res://.godot/imported/walk.png-7881cea3c6cc6353c6676e3b002a74ca.ctex"
+path="res://.godot/imported/walk.png-d25104f66dd09b8651a1c2c623b000c3.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/weapons/longsword/walk.png"
-dest_files=["res://.godot/imported/walk.png-7881cea3c6cc6353c6676e3b002a74ca.ctex"]
+source_file="res://assets/weapons/sword/walk.png"
+dest_files=["res://.godot/imported/walk.png-d25104f66dd09b8651a1c2c623b000c3.ctex"]
 
 [params]
 
