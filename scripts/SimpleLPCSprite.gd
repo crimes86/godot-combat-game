@@ -5,16 +5,12 @@ class_name SimpleLPCSprite
 ## NO SPRITE FLIPPING - uses correct row for each direction
 
 # Direction to row mapping (LPC standard)
-# LPC sprites have multiple animation types at different row offsets:
-# - Walk: rows 8-11 (up=8, left=9, down=10, right=11)
-# - Idle: rows 20-23 (up=20, left=21, down=22, right=23) OR use walk frame 0
-# - Slash: rows 12-15 (up=12, left=13, down=14, right=15)
-# - Hurt: row 20 (single direction)
-const WALK_ROW_OFFSET = 8
-const IDLE_ROW_OFFSET = 8  # Use walk animation, frame 0
-const SLASH_ROW_OFFSET = 12
-const HURT_ROW = 20
-
+# LPC sprites use simple row-based directions:
+# - Row 0 = north/up
+# - Row 1 = west/left
+# - Row 2 = south/down
+# - Row 3 = east/right
+# All animation types (walk, slash, hurt) use these same rows
 const DIRECTION_ROWS = {
 	"north": 0,  # up
 	"west": 1,   # left
@@ -38,8 +34,8 @@ func setup_lpc_sprite(walk_texture: Texture2D, slash_texture: Texture2D = null, 
 	# Create walk animations for all 4 directions
 	if walk_texture:
 		print("  Creating walk/idle animations...")
-		create_lpc_animation("walk", walk_texture, WALK_ROW_OFFSET, 9, [1, 2, 3, 4, 5, 6, 7, 8], 10.0)
-		create_lpc_animation("idle", walk_texture, IDLE_ROW_OFFSET, 1, [0], 1.0)
+		create_lpc_animation("walk", walk_texture, 9, [1, 2, 3, 4, 5, 6, 7, 8], 10.0)
+		create_lpc_animation("idle", walk_texture, 1, [0], 1.0)
 		print("  Walk/idle animations created")
 	else:
 		print("  ERROR: No walk texture provided!")
@@ -47,7 +43,7 @@ func setup_lpc_sprite(walk_texture: Texture2D, slash_texture: Texture2D = null, 
 	# Create slash animations for all 4 directions
 	if slash_texture:
 		print("  Creating slash animations...")
-		create_lpc_animation("slash", slash_texture, SLASH_ROW_OFFSET, 6, [], 12.0, false)
+		create_lpc_animation("slash", slash_texture, 6, [], 12.0, false)
 		print("  Slash animations created")
 
 	# Create hurt animation (usually only south direction)
@@ -62,26 +58,30 @@ func setup_lpc_sprite(walk_texture: Texture2D, slash_texture: Texture2D = null, 
 	else:
 		print("  ERROR: idle_south animation not found!")
 
-func create_lpc_animation(anim_name: String, texture: Texture2D, row_offset: int, frame_count: int, custom_frames: Array = [], fps: float = 10.0, loop: bool = true):
+func create_lpc_animation(anim_name: String, texture: Texture2D, frame_count: int, custom_frames: Array = [], fps: float = 10.0, loop: bool = true):
 	"""Create animation for all 4 directions using LPC row-based system"""
+	print("  create_lpc_animation: ", anim_name, " texture_size: ", texture.get_size())
 	for dir_name in DIRECTION_ROWS.keys():
 		var anim_key = anim_name + "_" + dir_name
 		sprite_frames.add_animation(anim_key)
 		sprite_frames.set_animation_loop(anim_key, loop)
 		sprite_frames.set_animation_speed(anim_key, fps)
 
-		var direction_offset = DIRECTION_ROWS[dir_name]
-		var row = row_offset + direction_offset  # e.g., walk_south = 8 + 2 = row 10
+		var row = DIRECTION_ROWS[dir_name]  # Simple: 0, 1, 2, or 3
 		var frames_to_use = custom_frames if custom_frames.size() > 0 else range(frame_count)
+		print("    ", anim_key, " -> row ", row, " frames: ", frames_to_use)
 
 		for frame_idx in frames_to_use:
 			var atlas = AtlasTexture.new()
 			atlas.atlas = texture
-			atlas.region = Rect2(frame_idx * 64, row * 64, 64, 64)
+			var region = Rect2(frame_idx * 64, row * 64, 64, 64)
+			atlas.region = region
 			sprite_frames.add_frame(anim_key, atlas)
+			if frame_idx == 0:  # Print first frame for debugging
+				print("      First frame region: ", region)
 
 func create_single_direction_animation(anim_name: String, texture: Texture2D, frame_count: int, fps: float = 10.0, loop: bool = false):
-	"""Create animation with only one direction (like hurt)"""
+	"""Create animation with only one direction (like hurt) - uses south/row 2"""
 	sprite_frames.add_animation(anim_name)
 	sprite_frames.set_animation_loop(anim_name, loop)
 	sprite_frames.set_animation_speed(anim_name, fps)
@@ -89,7 +89,7 @@ func create_single_direction_animation(anim_name: String, texture: Texture2D, fr
 	for frame_idx in range(frame_count):
 		var atlas = AtlasTexture.new()
 		atlas.atlas = texture
-		atlas.region = Rect2(frame_idx * 64, HURT_ROW * 64, 64, 64)  # Row 20
+		atlas.region = Rect2(frame_idx * 64, 2 * 64, 64, 64)  # Row 2 (south)
 		sprite_frames.add_frame(anim_name, atlas)
 
 func play_lpc_animation(anim_name: String, direction: String):
