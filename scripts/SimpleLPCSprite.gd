@@ -18,12 +18,21 @@ var sprite_frames_data := {}
 
 func setup_lpc_sprite(walk_texture: Texture2D, slash_texture: Texture2D = null, hurt_texture: Texture2D = null):
 	"""Setup LPC sprite with standard walk/slash/hurt textures"""
+	print("SimpleLPCSprite.setup_lpc_sprite() called")
+	print("  walk_texture: ", walk_texture)
+	print("  slash_texture: ", slash_texture)
+	print("  hurt_texture: ", hurt_texture)
+
 	sprite_frames = SpriteFrames.new()
 
 	# Create walk animations for all 4 directions
 	if walk_texture:
+		print("  Creating walk/idle animations...")
 		create_lpc_animation("walk", walk_texture, 9, [1, 2, 3, 4, 5, 6, 7, 8], 10.0)
 		create_lpc_animation("idle", walk_texture, 1, [0], 1.0)
+		print("  Walk/idle animations created")
+	else:
+		print("  ERROR: No walk texture provided!")
 
 	# Create slash animations for all 4 directions
 	if slash_texture:
@@ -32,6 +41,14 @@ func setup_lpc_sprite(walk_texture: Texture2D, slash_texture: Texture2D = null, 
 	# Create hurt animation (usually only south direction)
 	if hurt_texture:
 		create_single_direction_animation("hurt", hurt_texture, 6, 10.0, false)
+
+	# Start with idle_south animation
+	print("  Starting idle_south animation...")
+	if sprite_frames.has_animation("idle_south"):
+		play("idle_south")
+		print("  idle_south animation started")
+	else:
+		print("  ERROR: idle_south animation not found!")
 
 func create_lpc_animation(anim_name: String, texture: Texture2D, frame_count: int, custom_frames: Array = [], fps: float = 10.0, loop: bool = true):
 	"""Create animation for all 4 directions using LPC row-based system"""

@@ -289,7 +289,7 @@ func update_skeleton_patrol_spawn(data: Dictionary, delta: float) -> void:
 		# Reset stuck detection for the new state
 		data["stuck_timer"] = 0.0
 		data["last_position"] = skeleton.global_position
-		print("  💀 Skeleton %d heading to ruins" % data["index"])
+		# print("  💀 Skeleton %d heading to ruins" % data["index"])
 
 func update_skeleton_walking_to_ruins(data: Dictionary, delta: float) -> void:
 	"""Skeleton walks toward ruins"""
@@ -314,7 +314,7 @@ func update_skeleton_walking_to_ruins(data: Dictionary, delta: float) -> void:
 		var distance_moved = skeleton.global_position.distance_to(data["last_position"])
 		if distance_moved < data["stuck_distance_threshold"]:
 			# Skeleton is stuck! Physically move backwards and shift on Y axis
-			print("  ⚠️ Skeleton %d stuck, repositioning..." % data["index"])
+			# print("  ⚠️ Skeleton %d stuck, repositioning..." % data["index"])
 
 			# Move backwards (opposite of current velocity direction)
 			var backward_direction = -skeleton.velocity.normalized() if skeleton.velocity.length() > 0 else Vector2(-1, 0)
