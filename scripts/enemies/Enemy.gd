@@ -411,7 +411,7 @@ func spawn_weakpoints() -> void:
 	else:
 		num_weakpoints = 1  # Level 1-10: 1 weakpoint
 
-	print("🎯 Calculating weakpoints: Player level %d → %d weakpoints" % [player_level, num_weakpoints])
+	# print("🎯 Calculating weakpoints: Player level %d → %d weakpoints" % [player_level, num_weakpoints])
 
 	# 🎯 SECTIONED POSITION POOL - Organized by body parts!
 	# Max 2 weakpoints per section for better spread
@@ -506,12 +506,12 @@ func spawn_weakpoints() -> void:
 		chosen_positions.append(random_pos)
 		positions_per_section[section_name] = 1
 
-		print("🎯 Picked weakpoint in %s section at %s" % [section_name, random_pos])
+		# print("🎯 Picked weakpoint in %s section at %s" % [section_name, random_pos])
 
-	print("📊 Final distribution - Upper: %d | Mid: %d | Lower: %d (Total: %d)" %
-		[positions_per_section["upper"], positions_per_section["mid"], positions_per_section["lower"], spots_needed])
+	# print("📊 Final distribution - Upper: %d | Mid: %d | Lower: %d (Total: %d)" %
+	#	[positions_per_section["upper"], positions_per_section["mid"], positions_per_section["lower"], spots_needed])
 
-	print("🎯 SPAWNING %d WEAKPOINTS for player level %d" % [spots_needed, CharacterStats.level])
+	# print("🎯 SPAWNING %d WEAKPOINTS for player level %d" % [spots_needed, CharacterStats.level])
 
 	# Slightly smaller scale for better fit
 	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR
@@ -536,40 +536,41 @@ func spawn_weakpoints() -> void:
 		weakpoints.append(weakpoint)
 	
 	# 🔍 DEBUG: Show all possible positions on the blown-up sprite
-	print("🔍 DEBUG: Spawned weakpoints, triggering debug visualization")
-	queue_redraw()  # Trigger _draw() to show debug circles
+	# print("🔍 DEBUG: Spawned weakpoints, triggering debug visualization")
+	# queue_redraw()  # Trigger _draw() to show debug circles
 
 # 🔍 DEBUG VISUALIZATION - Shows where all 17 positions are!
 func _draw() -> void:
+	pass
 	# Only draw if we have weakpoints spawned
-	if weakpoints.is_empty():
-		return
-	
-	print("🔍 DEBUG: Drawing position circles (17 red dots + 3 green dots)")
-	
+	# if weakpoints.is_empty():
+	# 	return
+
+	# print("🔍 DEBUG: Drawing position circles (17 red dots + 3 green dots)")
+
 	# Draw circles at ALL 17 possible positions (optimized spread)
-	var position_pool = [
-		# Upper (5)
-		Vector2(0, -14), Vector2(-6, -11), Vector2(6, -11),
-		Vector2(-8, -6), Vector2(8, -6),
-		# Mid (9)
-		Vector2(0, -3), Vector2(-6, -2), Vector2(6, -2),
-		Vector2(-5, 1), Vector2(5, 1), Vector2(0, 3),
-		Vector2(-5, 5), Vector2(5, 5), Vector2(0, 7),
-		# Lower (3)
-		Vector2(-4, 10), Vector2(4, 10), Vector2(0, 12)
-	]
-	
+	# var position_pool = [
+	# 	# Upper (5)
+	# 	Vector2(0, -14), Vector2(-6, -11), Vector2(6, -11),
+	# 	Vector2(-8, -6), Vector2(8, -6),
+	# 	# Mid (9)
+	# 	Vector2(0, -3), Vector2(-6, -2), Vector2(6, -2),
+	# 	Vector2(-5, 1), Vector2(5, 1), Vector2(0, 3),
+	# 	Vector2(-5, 5), Vector2(5, 5), Vector2(0, 7),
+	# 	# Lower (3)
+	# 	Vector2(-4, 10), Vector2(4, 10), Vector2(0, 12)
+	# ]
+
 	# Draw small red circles at each possible position
-	for pos in position_pool:
-		draw_circle(pos, 3, Color(1, 0, 0, 0.7))  # Red
-	
+	# for pos in position_pool:
+	# 	draw_circle(pos, 3, Color(1, 0, 0, 0.7))  # Red
+
 	# Draw larger green circles at the 3 chosen positions
-	for weakpoint in weakpoints:
-		if is_instance_valid(weakpoint):
-			draw_circle(weakpoint.position, 5, Color(0, 1, 0, 0.9))  # Bright green
-	
-	print("🔍 DEBUG: Drew %d red circles and %d green circles" % [position_pool.size(), weakpoints.size()])
+	# for weakpoint in weakpoints:
+	# 	if is_instance_valid(weakpoint):
+	# 		draw_circle(weakpoint.position, 5, Color(0, 1, 0, 0.9))  # Bright green
+
+	# print("🔍 DEBUG: Drew %d red circles and %d green circles" % [position_pool.size(), weakpoints.size()])
 
 # Keep redrawing while in crit window
 func _process(delta: float) -> void:
@@ -666,19 +667,19 @@ func die() -> void:
 		return
 	
 	is_dying = true
-	print("\n☠️ ===== ENEMY DEATH =====")
-	print("Enemy name: ", name)
-	print("Enemy level: ", enemy_level)
-	print("Position: ", global_position)
-	print("Health: ", current_health)
-	print("Is in tree: ", is_inside_tree())
-	print("Killed by weakpoint in window: ", killed_by_weakpoint_in_window)
-	
+	# print("\n☠️ ===== ENEMY DEATH =====")
+	# print("Enemy name: ", name)
+	# print("Enemy level: ", enemy_level)
+	# print("Position: ", global_position)
+	# print("Health: ", current_health)
+	# print("Is in tree: ", is_inside_tree())
+	# print("Killed by weakpoint in window: ", killed_by_weakpoint_in_window)
+
 	# Grant XP to player
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("gain_experience"):
 		player.gain_experience(xp_reward)
-		print("💰 Granted ", xp_reward, " XP to player")
+		# print("💰 Granted ", xp_reward, " XP to player")
 
 	# Grant gold to player
 	DebugConfig.debug_log("💰 Attempting to drop %d gold (gold_drop_base=%d, enemy_level=%d)" % [gold_drop, gold_drop_base, enemy_level])
@@ -724,10 +725,10 @@ func die() -> void:
 		else:
 			crit_window_complete.emit(weakpoints_destroyed)
 	
-	print("Calling queue_free()...")
+	# print("Calling queue_free()...")
 	queue_free()
-	print("Enemy queued for deletion")
-	print("===== END DEATH =====\n")
+	# print("Enemy queued for deletion")
+	# print("===== END DEATH =====\n")
 
 ## Debug Visualization
 func draw_debug_shapes(debug_container: Node2D) -> void:
