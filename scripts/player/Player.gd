@@ -390,7 +390,7 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 		return
 
 	# Don't interrupt attack animations
-	if character_sprite.current_animation == "slash" and character_sprite.is_lpc_animation_playing():
+	if character_sprite.animation and character_sprite.animation.begins_with("slash_") and character_sprite.is_playing():
 		return
 
 	# Get direction (down/up/left/right from old system)
@@ -837,7 +837,7 @@ func _on_attack_animation_finished() -> void:
 		return
 
 	# Only process if we just finished an attack animation
-	if character_sprite.current_animation != "slash":
+	if not character_sprite.animation or not character_sprite.animation.begins_with("slash_"):
 		return
 
 	# Return to idle in current facing direction
@@ -953,17 +953,6 @@ func create_player_sprite() -> void:
 	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex)
 
 	add_child(character_sprite)
-
-	# DEBUG: Verify sprite is visible
-	print("  🔍 Sprite debug:")
-	print("    - Node exists: ", character_sprite != null)
-	print("    - Visible: ", character_sprite.visible)
-	print("    - Modulate: ", character_sprite.modulate)
-	print("    - Texture: ", character_sprite.texture)
-	print("    - Region enabled: ", character_sprite.region_enabled)
-	print("    - Region rect: ", character_sprite.region_rect)
-	print("    - Position: ", character_sprite.position)
-	print("    - Z-index: ", character_sprite.z_index)
 
 	# Connect animation_finished signal
 	if not character_sprite.animation_finished.is_connected(_on_attack_animation_finished):
