@@ -103,22 +103,23 @@ func _unhandled_input(event):
 		weapon_sprite.play_animation(current_anim, current_dir)
 		print("Changed direction to east")
 
-	# Animation type change
-	if event.is_key_pressed(KEY_I):
-		current_anim = "idle"
-		character_sprite.play_animation(current_anim, current_dir)
-		weapon_sprite.play_animation(current_anim, current_dir)
-		print("Idle animation")
-	elif event.is_key_pressed(KEY_W):
-		current_anim = "walk"
-		character_sprite.play_animation(current_anim, current_dir)
-		weapon_sprite.play_animation(current_anim, current_dir)
-		print("Walk animation")
-	elif event.is_key_pressed(KEY_S):
-		current_anim = "slash"
-		character_sprite.play_animation("slash", current_dir)
-		weapon_sprite.play_animation("slash_oversize", current_dir)
-		print("Slash animation")
+	# Animation type change - check if it's a keyboard event
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_I:
+			current_anim = "idle"
+			character_sprite.play_animation(current_anim, current_dir)
+			weapon_sprite.play_animation(current_anim, current_dir)
+			print("Idle animation")
+		elif event.keycode == KEY_W:
+			current_anim = "walk"
+			character_sprite.play_animation(current_anim, current_dir)
+			weapon_sprite.play_animation(current_anim, current_dir)
+			print("Walk animation")
+		elif event.keycode == KEY_S:
+			current_anim = "slash"
+			character_sprite.play_animation("slash", current_dir)
+			weapon_sprite.play_animation("slash_oversize", current_dir)
+			print("Slash animation")
 
 func get_direction_from_velocity(velocity: Vector2) -> String:
 	velocity = velocity.normalized()
