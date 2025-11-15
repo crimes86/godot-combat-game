@@ -22,7 +22,7 @@ func _ready():
 
 	# Set sprite data
 	character_sprite.spritesheets_path = "res://assets/characters/body_male"
-	character_sprite.animation_data = LPCAnimationData.new()
+	character_sprite.animation_data = CharacterAnimationData.new()  # Use custom animation data!
 
 	add_child(character_sprite)
 	print("Body sprite created")
