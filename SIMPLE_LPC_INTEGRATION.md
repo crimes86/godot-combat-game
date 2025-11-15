@@ -1,9 +1,11 @@
-# Simple LPC Integration Guide
+# Simple LPC Sprite System - Layered Architecture
 
-## What Changed
+## Overview
 
-**OLD (Complex):** ModularLPCCharacter with multiple layers, weapon overrides, complex synchronization
-**NEW (Simple):** SimpleLPCSprite with row-based directions - that's it!
+The sprite system uses a **layered approach** with three main components:
+1. **Base Body Layer** - The character's body (walk, slash, hurt animations)
+2. **Armor Layers** - Equipment worn on the body (chest, legs, etc.)
+3. **Weapon Layer** - Held weapons (dynamically loaded based on equipped weapon)
 
 ## Key Concept
 
@@ -15,162 +17,208 @@ LPC sprites have **4 rows** in each spritesheet:
 
 **NEVER use flip_h or scale.x = -1 with LPC sprites!**
 
-## Integration Steps
+## Sprite Layering System
 
-###Step 1: Update create_player_sprite() in Player.gd
+### Layer 1: Base Body
+- Z-index: 0 (base layer)
+- Contains walk, slash, hurt animations
+- Always visible
+- Location: `assets/characters/BODY_{type}_{animation}.png`
 
-Replace the entire function with this:
+### Layer 2: Armor (Future)
+- Z-index: 0.5 (between body and weapon)
+- Shirt (chest slot) and Pants (legs slot)
+- Currently in equipment system but not rendered visually
+- Location: `assets/characters/shirt/` and `assets/characters/pants/`
 
+### Layer 3: Weapon
+- Z-index: 1 (on top) or -1 (behind when facing north)
+- Dynamically loaded based on equipped weapon's `weapon_type`
+- Has walk and slash animations
+- Auto-hides when no weapon equipped
+- Location: `assets/weapons/{weapon_type}/walk.png` and `slash.png`
+
+## Variable Tile Size Support
+
+The system automatically detects sprite tile sizes:
+- **Standard sprites**: 64x64 tiles (384x256 sheets)
+- **Oversize sprites**: 192x192 tiles (1152x768 sheets)
+
+Calculation: `tile_size = sprite_width / frame_count`
+
+## Weapon System Integration
+
+### Dynamic Weapon Loading
 ```gdscript
-func create_player_sprite() -> void:
-	print("🎨 Creating simple LPC sprite system")
+if CharacterStats.equipped_weapon:
+    var weapon_type = CharacterStats.equipped_weapon.weapon_type
+    var weapon_path = "res://assets/weapons/" + weapon_type + "/"
 
-	# Create shadow
-	var shadow = Sprite2D.new()
-	shadow.name = "Shadow"
-	var shadow_img = Image.create(48, 16, false, Image.FORMAT_RGBA8)
-	for x in range(48):
-		for y in range(16):
-			var dx = (x - 24) / 24.0
-			var dy = (y - 8) / 8.0
-			var dist = dx * dx + dy * dy
-			if dist <= 1.0:
-				var alpha = (1.0 - dist) * 0.4
-				shadow_img.set_pixel(x, y, Color(0, 0, 0, alpha))
-	var shadow_texture = ImageTexture.create_from_image(shadow_img)
-	shadow.texture = shadow_texture
-	shadow.position = Vector2(0, 20)
-	shadow.z_index = -5
-	add_child(shadow)
-	print("  ✅ Shadow created")
-
-	# Preload SimpleLPCSprite
-	var SimpleLPCSprite = preload("res://scripts/SimpleLPCSprite.gd")
-
-	# Create character sprite
-	var character_sprite = SimpleLPCSprite.new()
-	character_sprite.name = "CharacterSprite"
-	character_sprite.position = Vector2(0, -8)
-	character_sprite.centered = true
-
-	# Load textures
-	var body_type = "body_male" if selected_gender == Gender.MALE else "body_female"
-	var walk_tex = load("res://assets/characters/" + body_type + "/standard/walk.png")
-	var slash_tex = load("res://assets/characters/" + body_type + "/standard/slash.png")
-	var hurt_tex = load("res://assets/characters/" + body_type + "/standard/hurt.png")
-
-	# Setup sprite
-	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex)
-
-	add_child(character_sprite)
-
-	# Connect animation_finished signal
-	if not character_sprite.animation_finished.is_connected(_on_attack_animation_finished):
-		character_sprite.animation_finished.connect(_on_attack_animation_finished)
-
-	print("  ✅ Simple LPC character created")
+    weapon_slash_tex = load(weapon_path + "slash.png")
+    weapon_walk_tex = load(weapon_path + "walk.png")
 ```
 
-### Step 2: Update update_lpc_animation() in Player.gd
+### Weapon Layer Features
+- **Auto-detection**: Tile size calculated from sprite dimensions
+- **Direction-based offsets**: Slash animations offset to align with player body
+- **Z-index switching**: Weapon renders behind player when facing north
+- **Visibility control**: Hidden when no weapon equipped or during walk/idle
 
-Replace with:
+### Weapon Slash Offsets
+Direction-specific offsets to align weapon with player body:
+- **East** (facing right): `(-5, 10)`
+- **West** (facing left): `(5, 10)`
+- **North** (facing up): `(-10, 0)`
+- **South** (facing down): `(-5, 5)`
 
+## Starting Equipment
+
+Players spawn with:
+- **Tattered Shirt** (chest) - 0 armor, 1 gold value
+- **Tattered Pants** (legs) - 0 armor, 1 gold value
+- **No weapon** - must pick up from vendor
+
+All starting items are:
+- ✅ Equippable/Unequippable
+- ✅ Sellable/Destroyable
+- ✅ Tradeable
+
+## SimpleLPCSprite API
+
+### setup_lpc_sprite()
+```gdscript
+func setup_lpc_sprite(
+    walk_tex: Texture2D,
+    slash_tex: Texture2D = null,
+    hurt_tex: Texture2D = null,
+    weapon_slash_tex: Texture2D = null,
+    weapon_walk_tex: Texture2D = null
+)
+```
+
+### play_lpc_animation()
+```gdscript
+func play_lpc_animation(anim_name: String, direction: String)
+```
+- `anim_name`: "walk", "idle", "slash", "hurt"
+- `direction`: "north", "south", "east", "west"
+
+### create_animation_from_image()
+```gdscript
+func create_animation_from_image(
+    img: Image,
+    anim_name: String,
+    row: int,
+    frame_count: int,
+    frame_indices: Array,
+    fps: float,
+    loop: bool,
+    target_frames: SpriteFrames = null,
+    tile_size: int = 64  # Auto-calculated for variable sizes
+)
+```
+
+## Implementation Example
+
+### Player.gd - create_player_sprite()
+```gdscript
+# Load base body textures
+var body_type = "human" if selected_gender == Gender.MALE else "female"
+var walk_tex = load("res://assets/characters/BODY_" + body_type + "_walk.png")
+var slash_tex = load("res://assets/characters/BODY_" + body_type + "_slash.png")
+var hurt_tex = load("res://assets/characters/BODY_" + body_type + "_hurt.png")
+
+# Load weapon textures based on equipped weapon
+var weapon_slash_tex = null
+var weapon_walk_tex = null
+
+if CharacterStats.equipped_weapon:
+    var weapon_type = CharacterStats.equipped_weapon.weapon_type
+    var weapon_path = "res://assets/weapons/" + weapon_type + "/"
+
+    if ResourceLoader.exists(weapon_path + "slash.png"):
+        weapon_slash_tex = load(weapon_path + "slash.png")
+    if ResourceLoader.exists(weapon_path + "walk.png"):
+        weapon_walk_tex = load(weapon_path + "walk.png")
+
+# Setup layered sprite
+character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, weapon_slash_tex, weapon_walk_tex)
+```
+
+### Player.gd - update_lpc_animation()
 ```gdscript
 func update_lpc_animation(velocity_dir: Vector2) -> void:
-	"""Update animation - NO FLIPPING, use row-based directions!"""
-	var character_sprite = get_node_or_null("CharacterSprite")
-	if not character_sprite:
-		return
+    var character_sprite = get_node_or_null("CharacterSprite")
+    if not character_sprite:
+        return
 
-	# Don't interrupt attack animations
-	if character_sprite.animation and character_sprite.animation.begins_with("slash_") and character_sprite.is_playing():
-		return
+    # Don't interrupt attack animations
+    if character_sprite.animation and character_sprite.animation.begins_with("slash_") and character_sprite.is_playing():
+        return
 
-	# Get direction (down/up/left/right from old system)
-	var is_moving = velocity_dir.length() > 0.1
-	var dir_str = get_direction_string(velocity_dir) if is_moving else get_direction_string(attack_direction)
+    # Get direction
+    var is_moving = velocity_dir.length() > 0.1
+    var dir_str = get_direction_string(velocity_dir) if is_moving else get_direction_string(attack_direction)
+    var lpc_dir = convert_to_lpc_direction(dir_str)
 
-	# Convert to LPC direction (south/north/west/east)
-	var lpc_dir = convert_to_lpc_direction(dir_str)
-
-	# Play animation
-	var anim = "walk" if is_moving else "idle"
-	character_sprite.play_lpc_animation(anim, lpc_dir)
+    # Play animation
+    var anim = "walk" if is_moving else "idle"
+    character_sprite.play_lpc_animation(anim, lpc_dir)
 ```
 
-### Step 3: Add direction conversion helper
-
-Add this function anywhere in Player.gd:
-
-```gdscript
-func convert_to_lpc_direction(dir_string: String) -> String:
-	"""Convert old direction names to LPC standard"""
-	match dir_string:
-		"down": return "south"
-		"up": return "north"
-		"left": return "west"
-		"right": return "east"
-		_: return "south"
-```
-
-### Step 4: Update attempt_attack() in Player.gd
-
-Replace the animation part with:
-
+### Player.gd - attempt_attack()
 ```gdscript
 func attempt_attack() -> void:
-	if not can_attack:
-		return
+    # ... attack logic ...
 
-	can_attack = false
-
-	# Play attack animation
-	var character_sprite = get_node_or_null("CharacterSprite")
-	if character_sprite:
-		var dir_str = get_direction_string(attack_direction)
-		var lpc_dir = convert_to_lpc_direction(dir_str)
-		character_sprite.play_lpc_animation("slash", lpc_dir)
-
-	# ... rest of attack logic stays the same ...
-	Chain Manager.register_attack()
-
-	var mouse_pos = get_global_mouse_position()
-	attack_direction = (mouse_pos - global_position).normalized()
-
-	var enemies_in_cone = get_enemies_in_cone()
-
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_sound(sound_manager.SoundType.SWING, global_position, -8.0)
-
-	if enemies_in_cone.size() > 0:
-		attack_enemies_in_cone(enemies_in_cone)
-		finish_attack_cooldown()
-	else:
-		if sound_manager:
-			sound_manager.play_sound(sound_manager.SoundType.MISS, global_position, -10.0)
-		finish_attack_cooldown()
+    # Play attack animation
+    var character_sprite = get_node_or_null("CharacterSprite")
+    if character_sprite:
+        var dir_str = get_direction_string(attack_direction)
+        var lpc_dir = convert_to_lpc_direction(dir_str)
+        character_sprite.play_lpc_animation("slash", lpc_dir)
 ```
 
-### Step 5: Delete old functions
+## Weapon Equipment Flow
 
-Remove these functions entirely:
-- `setup_lpc_animations_layered()`
-- `setup_sprite_layer()`
-- `create_animation()`
+1. **Player picks up weapon from vendor** → Added to inventory
+2. **Player equips weapon** → `CharacterStats.equip_weapon()` called
+3. **Signal emitted** → `weapon_equipped` signal triggers
+4. **Player sprite refreshed** → `create_player_sprite()` rebuilds sprite with weapon
+5. **Weapon layer created** → SimpleLPCSprite creates weapon AnimatedSprite2D child
+6. **Animations synced** → Weapon animations play in sync with body animations
+
+## Supported Weapon Types
+
+The system supports any weapon type with sprites in `assets/weapons/{type}/`:
+- `mace` - Default starter weapon (Wooden Mace - free)
+- `sword` - Longsword family
+- `dagger` - Fast attack weapons
+- `spear` - Polearms
+- `hammer` - Slow, heavy weapons
+- `rapier` - Fast precision weapons
+
+## Future: Armor Layer System
+
+To render shirt and pants visually, implement armor layers:
+1. Add armor sprite children to SimpleLPCSprite
+2. Load armor textures from equipped_armor slots
+3. Layer between body (z=0) and weapon (z=1)
+4. Sync animations with body layer
 
 ## Testing
 
-After applying changes:
-1. Run the game
-2. Use arrow keys to walk in all 4 directions
-3. Character should face the correct direction WITHOUT flipping
-4. Click to attack - weapon should face the same direction as character
+After changes:
+1. ✅ Walk in all 4 directions - character faces correctly without flipping
+2. ✅ Pick up Wooden Mace from vendor - weapon appears
+3. ✅ Attack in all directions - weapon slashes in correct direction
+4. ✅ Unequip weapon - weapon disappears
+5. ✅ Check equipment UI - Tattered Shirt and Pants shown in slots
 
 ## Why This Works
 
-- **Row-based system**: Each direction has its own sprite row in the texture
-- **No flip_h**: LPC sprites are designed to NOT be flipped
-- **Simple**: One sprite, one system, easy to understand and debug
-
-That's it! Much simpler than the modular system.
+- **Row-based system**: Each direction has its own sprite row
+- **No flip_h**: LPC sprites designed to NOT be flipped
+- **Layered rendering**: Clean separation between body, armor, and weapons
+- **Dynamic loading**: Weapons loaded based on equipment, not hardcoded
+- **Variable tile sizes**: Supports both standard (64x64) and oversize (192x192) sprites
