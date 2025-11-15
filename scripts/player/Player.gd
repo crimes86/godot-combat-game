@@ -915,6 +915,19 @@ func flash_player_sprite() -> void:
 func create_player_sprite() -> void:
 	print("Creating simple LPC sprite system")
 
+	# Remove old sprites if they exist (for weapon equip/unequip)
+	var old_character_sprite = get_node_or_null("CharacterSprite")
+	if old_character_sprite:
+		print("  Removing old CharacterSprite")
+		remove_child(old_character_sprite)
+		old_character_sprite.queue_free()
+
+	var old_shadow = get_node_or_null("Shadow")
+	if old_shadow:
+		print("  Removing old Shadow")
+		remove_child(old_shadow)
+		old_shadow.queue_free()
+
 	# Hide the placeholder Sprite2D from the scene
 	var placeholder_sprite = get_node_or_null("Sprite2D")
 	if placeholder_sprite:
