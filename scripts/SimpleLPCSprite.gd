@@ -27,7 +27,7 @@ func setup_lpc_sprite(walk_texture: Texture2D, slash_texture: Texture2D = null, 
 
 	# Create slash animations for all 4 directions
 	if slash_texture:
-		create_lpc_animation("slash", slash_texture, 6, null, 12.0, false)
+		create_lpc_animation("slash", slash_texture, 6, [], 12.0, false)
 
 	# Create hurt animation (usually only south direction)
 	if hurt_texture:
