@@ -915,6 +915,12 @@ func flash_player_sprite() -> void:
 func create_player_sprite() -> void:
 	print("Creating simple LPC sprite system")
 
+	# Hide the placeholder Sprite2D from the scene
+	var placeholder_sprite = get_node_or_null("Sprite2D")
+	if placeholder_sprite:
+		placeholder_sprite.visible = false
+		print("  Hidden placeholder sprite")
+
 	# Create shadow
 	var shadow = Sprite2D.new()
 	shadow.name = "Shadow"

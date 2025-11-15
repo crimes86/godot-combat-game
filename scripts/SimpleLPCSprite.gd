@@ -55,13 +55,19 @@ func setup_lpc_sprite(walk_tex: Texture2D, slash_tex: Texture2D = null, hurt_tex
 		print("  Creating hurt animation from image...")
 		create_animation_from_image(hurt_img, "hurt", 2, 6, [0, 1, 2, 3, 4, 5], 10.0, false)
 
+	# Debug: List all animations created
+	print("  📋 Animations created: ", sprite_frames.get_animation_names())
+	print("  📊 Total animations: ", sprite_frames.get_animation_names().size())
+
 	# Start with idle_south
 	print("  Starting idle_south animation...")
 	if sprite_frames.has_animation("idle_south"):
 		play("idle_south")
 		print("  ✅ SimpleLPCSprite setup complete!")
+		print("  🎬 Currently playing: ", animation)
 	else:
 		print("  ERROR: idle_south animation not found!")
+		print("  Available animations: ", sprite_frames.get_animation_names())
 
 func create_animation_from_image(img: Image, anim_name: String, row: int, frame_count: int, frame_indices: Array, fps: float, loop: bool):
 	"""Create animation from spritesheet using Image.blit_rect() - EXACTLY like Enemy.gd create_skeleton_animation()"""
