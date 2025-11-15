@@ -831,29 +831,19 @@ func finish_attack_cooldown() -> void:
 	can_attack = true
 
 func _on_attack_animation_finished() -> void:
-	"""Called when attack animation finishes - return all layers to idle"""
-	var body_sprite = get_node_or_null("BodySprite") as AnimatedSprite2D
-	if not body_sprite:
+	"""Called when attack animation finishes - return to idle"""
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if not character_sprite:
 		return
 
 	# Only process if we just finished an attack animation
-	if not body_sprite.animation.begins_with("attack_"):
+	if character_sprite.current_animation != "slash":
 		return
 
-	# Get all sprite layers
-	var legs_sprite = get_node_or_null("LegsSprite") as AnimatedSprite2D
-	var torso_sprite = get_node_or_null("TorsoSprite") as AnimatedSprite2D
-	var hat_sprite = get_node_or_null("HatSprite") as AnimatedSprite2D
-	var weapon_front = get_node_or_null("WeaponFrontSprite") as AnimatedSprite2D
-	var weapon_behind = get_node_or_null("WeaponBehindSprite") as AnimatedSprite2D
-
-	# Return all layers to idle in current facing direction
+	# Return to idle in current facing direction
 	var dir_str = get_direction_string(attack_direction)
-	var idle_anim = "idle_" + dir_str
-
-	for sprite in [body_sprite, legs_sprite, torso_sprite, hat_sprite, weapon_front, weapon_behind]:
-		if sprite and sprite.sprite_frames and sprite.sprite_frames.has_animation(idle_anim):
-			sprite.play(idle_anim)
+	var lpc_dir = convert_to_lpc_direction(dir_str)
+	character_sprite.play_lpc_animation("idle", lpc_dir)
 
 func take_damage(amount: float) -> void:
 	print("Player taking %.1f damage (current: %.1f)" % [amount, current_health])
@@ -963,6 +953,17 @@ func create_player_sprite() -> void:
 	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex)
 
 	add_child(character_sprite)
+
+	# DEBUG: Verify sprite is visible
+	print("  🔍 Sprite debug:")
+	print("    - Node exists: ", character_sprite != null)
+	print("    - Visible: ", character_sprite.visible)
+	print("    - Modulate: ", character_sprite.modulate)
+	print("    - Texture: ", character_sprite.texture)
+	print("    - Region enabled: ", character_sprite.region_enabled)
+	print("    - Region rect: ", character_sprite.region_rect)
+	print("    - Position: ", character_sprite.position)
+	print("    - Z-index: ", character_sprite.z_index)
 
 	# Connect animation_finished signal
 	if not character_sprite.animation_finished.is_connected(_on_attack_animation_finished):
