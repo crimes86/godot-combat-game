@@ -68,6 +68,7 @@ func setup_lpc_sprite(walk_tex: Texture2D, slash_tex: Texture2D = null, hurt_tex
 		weapon_sprite = AnimatedSprite2D.new()
 		weapon_sprite.name = "WeaponLayer"
 		weapon_sprite.centered = true
+		weapon_sprite.z_index = 1  # Draw weapon on top
 		weapon_sprite.sprite_frames = SpriteFrames.new()
 
 		var weapon_img = weapon_slash_tex.get_image()
@@ -77,7 +78,8 @@ func setup_lpc_sprite(walk_tex: Texture2D, slash_tex: Texture2D = null, hurt_tex
 
 		add_child(weapon_sprite)
 		weapon_sprite.visible = false  # Hide until attacking
-		print("  ✅ Weapon layer created")
+		weapon_sprite.stop()  # Make sure it's not playing
+		print("  ✅ Weapon layer created (hidden, z_index=1)")
 
 	# Start with idle_south
 	print("  Starting idle_south animation...")

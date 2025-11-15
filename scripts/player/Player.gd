@@ -967,6 +967,12 @@ func create_player_sprite() -> void:
 	if not character_sprite.animation_finished.is_connected(_on_attack_animation_finished):
 		character_sprite.animation_finished.connect(_on_attack_animation_finished)
 
+	# Debug: List all sprite children
+	print("  🔍 Player children after sprite creation:")
+	for child in get_children():
+		if child is Sprite2D or child is AnimatedSprite2D:
+			print("    - ", child.name, " (", child.get_class(), ") visible=", child.visible, " z_index=", child.z_index)
+
 	print("  Simple LPC character created")
 
 # Old animation functions removed - now using SimpleLPCSprite system
