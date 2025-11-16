@@ -173,6 +173,27 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	# Emit signal for player feedback (damage numbers)
 	damage_taken.emit(amount, is_crit)
 
+	# Play skeleton sounds for testing (same as Enemy)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		# Determine if this is a weakpoint hit
+		var is_weakpoint = is_crit and in_crit_window
+
+		if not is_weakpoint:
+			# Get player's weapon type for weapon-specific sounds
+			var weapon_type = ""
+			if CharacterStats.equipped_weapon:
+				weapon_type = CharacterStats.equipped_weapon.weapon_type
+
+			# Play hit sound
+			if is_crit:
+				sound_manager.play_critical_hit_sound(global_position, -8.0)
+			else:
+				sound_manager.play_normal_hit_sound(global_position, -8.0, weapon_type)
+
+		# Play skeleton hurt reaction sound (for all hit types)
+		sound_manager.play_skeleton_hurt_sound(global_position, -8.0)
+
 	# Trigger hit flash visual feedback
 	if has_node("HitFlash"):
 		var hit_flash = get_node("HitFlash")
@@ -195,14 +216,14 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	else:
 		combat_text.type = 0  # TextType.NORMAL
 
-	# Position: spawn in front of player, between player and dummy
+	# Position: spawn behind dummy (opposite side from player)
+	# This keeps damage numbers from overlapping weakpoints/crit windows
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	var spawn_pos = global_position
 	if player:
-		var direction_to_dummy = (global_position - player.global_position).normalized()
-		var distance = player.global_position.distance_to(global_position)
-		# Spawn 40% of the way toward dummy (closer to player, in front of player)
-		spawn_pos = player.global_position + direction_to_dummy * min(distance * 0.4, 60)
+		var direction_from_player = (global_position - player.global_position).normalized()
+		# Spawn 40px behind dummy (away from player)
+		spawn_pos = global_position + direction_from_player * 40
 
 	combat_text.global_position = spawn_pos
 	get_tree().root.add_child(combat_text)
@@ -238,13 +259,18 @@ func start_crit_window(difficulty: float = 1.0) -> void:
 		if has_node("HitFlash"):
 			get_node("HitFlash").set_base_color(Color(1.0, 1.0, 1.05, 1.0))
 
-	# Scale up animation
-	var target_scale = original_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
-	var scale_tween = create_tween()
-	scale_tween.tween_property(self, "scale", target_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
-	z_index = Constants.CRIT_WINDOW_Z_INDEX
+	# Scale up animation - ONLY SPRITE, not collision box!
+	# Sprite always starts at Vector2.ONE (base scale)
+	var base_sprite_scale = Vector2.ONE
+	var target_sprite_scale = base_sprite_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
+	if sprite:
+		var scale_tween = create_tween()
+		scale_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
+		z_index = Constants.CRIT_WINDOW_Z_INDEX
 
-	await scale_tween.finished
+		await scale_tween.finished
+	else:
+		print("⚠️ TrainingDummy: No sprite to scale!")
 
 	# Spawn weakpoints (simplified - just spawn 1 for practice)
 	spawn_weakpoints()
@@ -275,75 +301,63 @@ func spawn_weakpoints() -> void:
 
 	print("🎯 Training Dummy: Player level %d → spawning %d weakpoint(s)" % [player_level, num_weakpoints])
 
-	# Define sectioned positions on the dummy (similar to skeleton)
-	var upper_positions = [
-		Vector2(0, -45),      # Head
-		Vector2(-8, -42),     # Left shoulder
-		Vector2(8, -42),      # Right shoulder
-		Vector2(-6, -38),     # Upper left torso
-		Vector2(6, -38),      # Upper right torso
-	]
+	# Calculate sprite bounds for random positioning within sections
+	var sprite_scale = sprite.scale if sprite else Vector2.ONE
+	var sprite_pos = sprite.position  # Local position relative to dummy root
 
-	var mid_positions = [
-		Vector2(0, -32),      # Center chest
-		Vector2(-8, -32),     # Left mid torso
-		Vector2(8, -32),      # Right mid torso
-		Vector2(-6, -26),     # Left lower ribs
-		Vector2(6, -26),      # Right lower ribs
-		Vector2(0, -24),      # Center abdomen
-	]
+	# LPC sprites are 64x64, sprite is CENTERED (centered = true)
+	# Character occupies roughly 32x64 in center of the sprite
+	var sprite_width = 32.0 * sprite_scale.x
+	var sprite_height = 64.0 * sprite_scale.y
 
-	var lower_positions = [
-		Vector2(-6, -18),     # Left hip
-		Vector2(6, -18),      # Right hip
-		Vector2(0, -16),      # Center pelvis
-		Vector2(-4, -12),     # Left upper leg
-		Vector2(4, -12),      # Right upper leg
-	]
+	# Divide into 3 equal sections (in local space)
+	var section_height = sprite_height / 3.0
+	var sprite_top = sprite_pos.y - (sprite_height / 2.0)
 
-	# Shuffle and pick sections (same logic as Enemy.gd)
+	# Define the 3 sections with their bounds
 	var sections = [
-		{"name": "upper", "positions": upper_positions},
-		{"name": "mid", "positions": mid_positions},
-		{"name": "lower", "positions": lower_positions}
+		{
+			"name": "upper",
+			"y_min": sprite_top,
+			"y_max": sprite_top + section_height
+		},
+		{
+			"name": "mid",
+			"y_min": sprite_top + section_height,
+			"y_max": sprite_top + 2.0 * section_height
+		},
+		{
+			"name": "lower",
+			"y_min": sprite_top + 2.0 * section_height,
+			"y_max": sprite_top + 3.0 * section_height
+		}
 	]
+
+	# Shuffle sections so we pick random ones
 	sections.shuffle()
 
 	var chosen_positions = []
 
-	# Minimum distance between weakpoints to prevent overlap (based on hitbox size)
-	var min_distance = 40.0  # Buffer to prevent visual overlap (hitbox is 18-35px radius)
-
 	# Pick exactly 1 weakpoint from each of the first N sections
 	for i in range(min(num_weakpoints, sections.size())):
 		var section = sections[i]
-		var section_positions = section["positions"]
 
-		# Try to find a position that doesn't overlap with already chosen positions
-		var random_pos = null
-		var attempts = 0
-		var max_attempts = 10  # Prevent infinite loop
+		# Generate random position within this section's bounds
+		# Use 80% of width to avoid edges (10% margin on each side)
+		var margin_x = sprite_width * 0.1
+		var random_x = randf_range(-sprite_width / 2.0 + margin_x, sprite_width / 2.0 - margin_x)
 
-		while attempts < max_attempts:
-			var candidate_pos = section_positions[randi() % section_positions.size()]
+		# Different margins for different sections
+		var random_y = 0.0
+		if section["name"] == "upper" or section["name"] == "lower":
+			# Top and bottom sections: 25% margin on top/bottom
+			var margin_y = section_height * 0.25
+			random_y = randf_range(section["y_min"] + margin_y, section["y_max"] - margin_y)
+		else:
+			# Middle section: no margin
+			random_y = randf_range(section["y_min"], section["y_max"])
 
-			# Check distance to all already-chosen positions
-			var is_valid = true
-			for chosen_pos in chosen_positions:
-				if candidate_pos.distance_to(chosen_pos) < min_distance:
-					is_valid = false
-					break
-
-			if is_valid:
-				random_pos = candidate_pos
-				break
-
-			attempts += 1
-
-		# Fallback: if no valid position found after max_attempts, use any random position
-		if random_pos == null:
-			random_pos = section_positions[randi() % section_positions.size()]
-			print("   ⚠️ Could not find non-overlapping position, using fallback")
+		var random_pos = Vector2(random_x, random_y)
 
 		chosen_positions.append(random_pos)
 
@@ -359,9 +373,11 @@ func spawn_weakpoints() -> void:
 		# Set blood theme for training dummy (has blood!)
 		weakpoint.color_theme = "blood"
 
+		# ✨ Weakpoints are children of ROOT, positions are in root's local space
 		weakpoint.position = chosen_positions[i]
 		weakpoint.z_index = 150
-		weakpoint.scale = Vector2(counter_scale, counter_scale)
+		# ✨ Make weakpoints 3x larger (300% bigger)
+		weakpoint.scale = Vector2(counter_scale, counter_scale) * 3.0
 
 		# Random rotation for dynamic look
 		weakpoint.rotation = randf_range(-PI, PI)
@@ -416,7 +432,8 @@ func end_crit_window() -> void:
 	if not in_crit_window:
 		return
 
-	in_crit_window = false
+	# ✨ DON'T set in_crit_window = false yet!
+	# Wait until tween finishes to prevent overlapping crit windows
 
 	# Remove any remaining weakpoints
 	for weakpoint in weakpoints:
@@ -424,16 +441,129 @@ func end_crit_window() -> void:
 			weakpoint.queue_free()
 	weakpoints.clear()
 
-	# Return to normal size and color
+	# Return to normal size and color - ONLY SPRITE, not collision box!
 	if sprite:
 		sprite.modulate = original_modulate
 		if has_node("HitFlash"):
 			get_node("HitFlash").set_base_color(original_modulate)
 
-	var tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(self, "scale", original_scale, 0.3)
-	tween.tween_property(self, "z_index", 0, 0.3)
+		var base_sprite_scale = Vector2.ONE  # Sprite base scale is always ONE
+		var tween = create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(sprite, "scale", base_sprite_scale, 0.3)
+		tween.tween_property(self, "z_index", 0, 0.3)
+
+		# ✨ Wait for tween to finish BEFORE clearing the flag
+		await tween.finished
+
+	# ✨ NOW it's safe to clear the flag - prevents new crit windows during scale-down
+	in_crit_window = false
 
 	# Emit completion signal
 	emit_signal("crit_window_complete", 0)
+
+## Debug Visualization (F3)
+func draw_debug_shapes_world(world_container: Node2D) -> Node2D:
+	"""Draw debug shapes for training dummy in world space"""
+
+	# Create temporary container for this dummy's debug shapes
+	var dummy_debug = Node2D.new()
+	dummy_debug.name = "DummyDebug_" + name
+	world_container.add_child(dummy_debug)
+
+	# Draw static collision shape (green - physics body)
+	if has_node("CollisionShape2D"):
+		var collision = get_node("CollisionShape2D")
+		if collision.shape is RectangleShape2D:
+			var rect_shape = collision.shape as RectangleShape2D
+			var rect_pos = collision.global_position
+			var rect = draw_debug_rect_world(rect_pos, rect_shape.size * scale, Color.GREEN)
+			dummy_debug.add_child(rect)
+
+	# Draw click area (cyan - clickable area for attacks)
+	# This is just for mouse click detection, NOT the actual attack hitbox!
+	# Actual attacks use the player's attack cone which is shown in red on the player
+	if has_node("ClickArea"):
+		var click_area_node = get_node("ClickArea")
+		# Look for CollisionShape2D child
+		for child in click_area_node.get_children():
+			if child is CollisionShape2D:
+				var area_collision = child as CollisionShape2D
+				if area_collision.shape is CircleShape2D:
+					var circle_shape = area_collision.shape as CircleShape2D
+					var circle_pos = area_collision.global_position
+					var circle = draw_debug_circle_world(circle_pos, circle_shape.radius * scale.x, Color.CYAN)
+					dummy_debug.add_child(circle)
+					break
+
+	# ✨ Draw PURPLE boxes - 3 equal sections for weakpoint placement visualization
+	if sprite:
+		var sprite_scale = sprite.scale
+		var sprite_pos = sprite.global_position
+
+		# LPC sprites are 64x64, sprite is CENTERED (centered = true)
+		# Character occupies roughly 32x64 in center of the sprite
+		var sprite_width = 32.0 * sprite_scale.x
+		var sprite_height = 64.0 * sprite_scale.y
+
+		# Divide into 3 equal sections
+		var section_height = sprite_height / 3.0
+
+		# Calculate the top of the sprite (sprite is centered)
+		var sprite_top = sprite_pos.y - (sprite_height / 2.0)
+
+		# Draw 3 boxes: upper, mid, lower
+		var sections = [
+			{"name": "upper", "y": sprite_top + section_height / 2.0},
+			{"name": "mid", "y": sprite_top + section_height * 1.5},
+			{"name": "lower", "y": sprite_top + section_height * 2.5}
+		]
+
+		for section in sections:
+			var section_center = Vector2(sprite_pos.x, section["y"])
+			var section_size = Vector2(sprite_width, section_height)
+			var purple_box = draw_debug_rect_world(section_center, section_size, Color.MAGENTA)
+			dummy_debug.add_child(purple_box)
+
+	# Draw weakpoint hitboxes (red - if in crit window)
+	for weakpoint in weakpoints:
+		if is_instance_valid(weakpoint) and not weakpoint.is_destroyed:
+			if weakpoint.has_node("CollisionShape2D"):
+				var wp_collision = weakpoint.get_node("CollisionShape2D")
+				if wp_collision.shape is CircleShape2D:
+					var wp_shape = wp_collision.shape as CircleShape2D
+					var wp_pos = weakpoint.global_position
+					var wp_circle = draw_debug_circle_world(wp_pos, wp_shape.radius, Color.RED)
+					dummy_debug.add_child(wp_circle)
+
+	return dummy_debug
+
+func draw_debug_circle_world(center: Vector2, radius: float, color: Color) -> Line2D:
+	"""Draw a circle in world space for debug visualization"""
+	var line = Line2D.new()
+	line.width = 2.0
+	line.default_color = color
+
+	var segments = 32
+	for i in range(segments + 1):
+		var angle = (i * TAU) / segments
+		var point = center + Vector2(cos(angle), sin(angle)) * radius
+		line.add_point(point)
+
+	return line
+
+func draw_debug_rect_world(center: Vector2, size: Vector2, color: Color) -> Line2D:
+	"""Draw a rectangle in world space for debug visualization"""
+	var line = Line2D.new()
+	line.width = 2.0
+	line.default_color = color
+
+	# Draw rectangle outline
+	var half_size = size / 2.0
+	line.add_point(center + Vector2(-half_size.x, -half_size.y))  # Top-left
+	line.add_point(center + Vector2(half_size.x, -half_size.y))   # Top-right
+	line.add_point(center + Vector2(half_size.x, half_size.y))    # Bottom-right
+	line.add_point(center + Vector2(-half_size.x, half_size.y))   # Bottom-left
+	line.add_point(center + Vector2(-half_size.x, -half_size.y))  # Back to top-left
+
+	return line

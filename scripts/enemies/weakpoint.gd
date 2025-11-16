@@ -7,6 +7,7 @@ var is_destroyed: bool = false
 var sprite: Polygon2D
 var glow_sprite: Polygon2D
 var sparkle_particles: CPUParticles2D
+var shine_layers: Array = []  # Store shine polygons for brightness animation
 
 # Color theme: "blood" for training dummy, "bone" for skeletons
 var color_theme: String = "blood"
@@ -42,66 +43,101 @@ func _ready() -> void:
 
 	var colors = theme_colors[color_theme]
 
-	# 🫀 VITAL ORGAN or BONE FRAGMENT - Themed appearance
+	# 💎 HIGH-FIDELITY GEM/GLASS - Starts visible, brightens as it cracks
 	sprite = Polygon2D.new()
-	sprite.color = colors["base"]
+	# ✨ START VISIBLE - 60% brightness (easier to see, still gets brighter)
+	var dull_base = colors["base"] * 0.6
+	dull_base.a = colors["base"].a
+	sprite.color = dull_base
+	sprite.antialiased = true  # Smooth edges
 
-	# Organic oval/heart shape - like looking at a vital organ
+	# Perfect circle for gem-like appearance
 	var points = PackedVector2Array()
 	var size = 18.0
-	var segments = 12
+	var segments = 64  # Many segments for smooth circle
 
-	# Create smooth organic shape (elongated oval, slightly irregular)
 	for i in range(segments):
 		var angle = (i * TAU) / segments
-		var radius = size * (0.8 + 0.2 * sin(angle * 3))  # Slight irregularity
-		var x = cos(angle) * radius * 0.8  # Slightly flattened horizontally
-		var y = sin(angle) * radius
+		var x = cos(angle) * size
+		var y = sin(angle) * size
 		points.append(Vector2(x, y))
 
 	sprite.polygon = points
 	add_child(sprite)
 
-	# 🩸 INTENSE GLOW - Makes it look wet/shiny/alive (or glowing bone)
+	# 💫 OUTER GLOW - Soft radiant aura (starts visible, grows with damage)
 	glow_sprite = Polygon2D.new()
-	glow_sprite.color = colors["glow"]
+	var outer_glow = colors["glow"]
+	outer_glow.a = 0.3  # ✨ START VISIBLE - 30% glow, grows to 80%
+	glow_sprite.color = outer_glow
 	glow_sprite.z_index = -1
+	glow_sprite.antialiased = true
 
-	# Make glow slightly larger for depth
 	var glow_points = PackedVector2Array()
-	var glow_scale = 1.4
+	var glow_scale = 1.1  # Tight glow close to the gem
 	for point in points:
 		glow_points.append(point * glow_scale)
 	glow_sprite.polygon = glow_points
 	sprite.add_child(glow_sprite)
 
-	# ✨ SHINE HIGHLIGHT - makes it look wet/glossy (or polished bone)
-	var shine = Polygon2D.new()
-	shine.color = colors["shine"]
-	shine.z_index = 1
+	# ✨ MULTIPLE SHINE HIGHLIGHTS - Glass-like reflections (start visible)
+	# Large curved highlight (top)
+	var shine1 = Polygon2D.new()
+	shine1.color = Color(2.5, 2.5, 2.5, 0.3)  # ✨ START VISIBLE - 0.3 alpha, grows to 0.7
+	shine1.z_index = 2
+	shine1.antialiased = true
+	var shine1_points = PackedVector2Array()
+	shine1_points.append(Vector2(-8, -12))
+	shine1_points.append(Vector2(6, -14))
+	shine1_points.append(Vector2(8, -8))
+	shine1_points.append(Vector2(0, -6))
+	shine1_points.append(Vector2(-6, -8))
+	shine1.polygon = shine1_points
+	sprite.add_child(shine1)
+	shine_layers.append(shine1)
 
-	# Small highlight spot on top-left (like light reflecting off wet surface)
-	var shine_points = PackedVector2Array()
-	shine_points.append(Vector2(-4, -6))
-	shine_points.append(Vector2(2, -7))
-	shine_points.append(Vector2(3, -3))
-	shine_points.append(Vector2(-2, -2))
-	shine.polygon = shine_points
-	sprite.add_child(shine)
+	# Small bright spot (top-left)
+	var shine2 = Polygon2D.new()
+	shine2.color = Color(3.0, 3.0, 3.0, 0.35)  # ✨ START VISIBLE - grows to 0.9
+	shine2.z_index = 3
+	shine2.antialiased = true
+	var shine2_points = PackedVector2Array()
+	shine2_points.append(Vector2(-5, -10))
+	shine2_points.append(Vector2(-2, -11))
+	shine2_points.append(Vector2(-1, -8))
+	shine2_points.append(Vector2(-4, -7))
+	shine2.polygon = shine2_points
+	sprite.add_child(shine2)
+	shine_layers.append(shine2)
 
-	# 💓 HEARTBEAT PULSE - thump-thump rhythm
-	start_heartbeat_pulse()
+	# Bottom reflection (subtle)
+	var shine3 = Polygon2D.new()
+	shine3.color = Color(1.8, 1.8, 1.8, 0.15)  # ✨ START VISIBLE - grows to 0.3
+	shine3.z_index = 1
+	shine3.antialiased = true
+	var shine3_points = PackedVector2Array()
+	shine3_points.append(Vector2(-4, 8))
+	shine3_points.append(Vector2(4, 8))
+	shine3_points.append(Vector2(2, 4))
+	shine3_points.append(Vector2(-2, 4))
+	shine3.polygon = shine3_points
+	sprite.add_child(shine3)
+	shine_layers.append(shine3)
 
-	# Dark outline for contrast
+	# ✨ NO HEARTBEAT - let the click feedback be the main animation
+
+	# Smooth dark outline for gem definition
 	var outline = Line2D.new()
-	outline.width = 2.0
+	outline.width = 1.5
+	outline.antialiased = true  # Smooth outline
 	# Darker version of base color for outline
-	var outline_color = colors["base"] * 0.3
-	outline_color.a = 1.0
+	var outline_color = colors["base"] * 0.2
+	outline_color.a = 0.8
 	outline.default_color = outline_color
 	outline.closed = true
-	for point in points:
-		outline.add_point(point)
+	# Only use every 4th point for cleaner look (still smooth due to many segments)
+	for i in range(0, points.size(), 4):
+		outline.add_point(points[i])
 	sprite.add_child(outline)
 
 	# NO SPARKLES - clean anatomical look
@@ -204,6 +240,76 @@ func create_sparkle_particles() -> void:
 	
 	add_child(sparkle_particles)
 
+func add_crack(progress: float) -> void:
+	"""Add cracks that get denser as damage increases"""
+	if not sprite:
+		return
+
+	var colors = theme_colors[color_theme]
+	var crack_color = colors["base"] * 0.2  # Darker cracks
+	crack_color.a = 0.8
+
+	# Number of cracks increases with damage (1-3 cracks per hit)
+	var num_cracks = int(progress * 3) + 1
+
+	for i in range(num_cracks):
+		var crack = Line2D.new()
+		crack.width = randf_range(0.8, 1.5)
+		crack.default_color = crack_color
+		crack.z_index = 2
+
+		# Random crack from center outward
+		var start_angle = randf_range(0, TAU)
+		var start_dist = randf_range(0, 6)
+		var end_dist = randf_range(12, 18)
+
+		var start_point = Vector2(cos(start_angle), sin(start_angle)) * start_dist
+		var end_point = Vector2(cos(start_angle), sin(start_angle)) * end_dist
+
+		# Add slight randomness to make it look more natural
+		var mid_point = (start_point + end_point) / 2.0
+		mid_point += Vector2(randf_range(-3, 3), randf_range(-3, 3))
+
+		crack.add_point(start_point)
+		crack.add_point(mid_point)
+		crack.add_point(end_point)
+
+		sprite.add_child(crack)
+
+func start_damage_pulse(progress: float) -> void:
+	"""Pulsing glow that gets stronger and grows larger with damage"""
+	if not glow_sprite:
+		return
+
+	var colors = theme_colors[color_theme]
+
+	# Pulse intensity increases with damage
+	var base_alpha = 0.3 + (progress * 0.5)  # 0.3 to 0.8
+	var pulse_alpha = base_alpha + 0.2  # Pulse peak
+
+	# Glow size grows with damage
+	var base_scale = 1.0 + (progress * 0.15)  # 1.0 to 1.15
+	var pulse_scale = base_scale + 0.1  # 1.1 to 1.25
+
+	# Create pulsing animation
+	var pulse_tween = create_tween()
+	pulse_tween.set_loops(3)  # Pulse a few times
+	pulse_tween.set_trans(Tween.TRANS_SINE)
+	pulse_tween.set_ease(Tween.EASE_IN_OUT)
+
+	# Pulse glow alpha
+	var glow_bright = colors["glow"]
+	glow_bright.a = pulse_alpha
+	var glow_dim = colors["glow"]
+	glow_dim.a = base_alpha
+
+	pulse_tween.tween_property(glow_sprite, "color", glow_bright, 0.3)
+	pulse_tween.tween_property(glow_sprite, "color", glow_dim, 0.3)
+
+	# Pulse glow scale in parallel
+	pulse_tween.parallel().tween_property(glow_sprite, "scale", Vector2(pulse_scale, pulse_scale), 0.3)
+	pulse_tween.tween_property(glow_sprite, "scale", Vector2(base_scale, base_scale), 0.3)
+
 func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
 	if is_destroyed:
 		return
@@ -217,35 +323,62 @@ func hit() -> void:
 	current_hits += 1
 	weakpoint_hit.emit(self)
 
-	# 🩸 IMPACT feedback - fast and responsive for spam-clicking
+	# 🔊 Play satisfying bone-crack sound (randomized with pitch variation)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_weakpoint_sound(global_position, -8.0)
+
+	# 🩸 IMPACT feedback - rapid expand/contract with progressive brightening
 	if sprite:
 		var colors = theme_colors[color_theme]
 		var progress = float(current_hits) / float(max_hits)
-		var scale_factor = 1.0 - (progress * 0.3)
 
-		# Flash effect (bright blood or bone)
-		sprite.color = colors["flash"]
-		sprite.rotation += 0.25
+		# ✨ PROGRESSIVE BRIGHTENING - get brighter with each hit
+		# Progress from 60% brightness to 100% brightness
+		var brightness = 0.6 + (progress * 0.4)  # 0.6 to 1.0
+		var target_color = colors["base"] * brightness
+		target_color.a = colors["base"].a
 
+		# Flash effect (extra bright)
+		var flash_color = colors["flash"] * (1.0 + progress * 0.5)  # Get brighter each hit
+		sprite.color = flash_color
+
+		# ✨ RAPID EXPAND/CONTRACT (2.0x) - snappy feedback
 		var flash_tween = create_tween()
 		flash_tween.set_parallel(true)
 
-		# Fast color return to base (snappy feedback)
-		flash_tween.tween_property(sprite, "color", colors["base"], 0.08)
+		# Return to progressively brighter base color
+		flash_tween.tween_property(sprite, "color", target_color, 0.06)
 
-		# Quick squish (like hitting an organ)
-		var pop_scale = Vector2(1.3, 1.3) * scale_factor
-		sprite.scale = pop_scale
-		flash_tween.tween_property(sprite, "scale", Vector2(scale_factor, scale_factor), 0.08).set_ease(Tween.EASE_OUT)
+		# Rapid 2.0x expand then contract - dramatic feedback
+		sprite.scale = Vector2(2.0, 2.0)
+		flash_tween.tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.06).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
-		# Glow burst
+		# ✨ GLOW GROWS - increases with damage (30% to 80%)
 		if glow_sprite:
 			var bright_glow = colors["glow"]
 			bright_glow.a = 1.0
 			glow_sprite.color = bright_glow
-			var dim_glow = colors["glow"]
-			dim_glow.a = 0.7
-			flash_tween.tween_property(glow_sprite, "color", dim_glow, 0.08)
+			# Target glow alpha increases with progress
+			var target_glow = colors["glow"]
+			target_glow.a = 0.3 + (progress * 0.5)  # 0.3 to 0.8
+			flash_tween.tween_property(glow_sprite, "color", target_glow, 0.06)
+
+		# ✨ SHINE LAYERS GET BRIGHTER (start at 30-35%, grow to target)
+		for i in range(shine_layers.size()):
+			var shine = shine_layers[i]
+			var start_alphas = [0.3, 0.35, 0.15]  # Starting alphas for each layer
+			var target_alphas = [0.7, 0.9, 0.3]  # Target alphas for each shine layer
+			var target_alpha = start_alphas[i] + (progress * (target_alphas[i] - start_alphas[i]))
+			var shine_color = shine.color
+			shine_color.a = target_alpha
+			flash_tween.tween_property(shine, "color", shine_color, 0.06)
+
+		# ✨ ADD CRACKS - increasingly dense as hits increase
+		add_crack(progress)
+
+		# 💫 PULSING GLOW - grows stronger with more damage
+		start_damage_pulse(progress)
 
 	print("💥 Weakpoint hit: %d/%d" % [current_hits, max_hits])
 	if current_hits >= max_hits:
@@ -313,12 +446,6 @@ func destroy() -> void:
 	if sparkle_particles:
 		sparkle_particles.emitting = false
 
-	print("🎆 Spawning destruction particles...")
-	spawn_destruction_particles()
-
-	print("💥 Spawning destruction wave...")
-	spawn_destruction_wave()
-
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		sound_manager.play_sound(sound_manager.SoundType.WEAKPOINT_DESTROYED, global_position, -3.0)
@@ -326,22 +453,34 @@ func destroy() -> void:
 	print("📡 Emitting weakpoint_destroyed signal")
 	weakpoint_destroyed.emit(self)
 	print("✅ Signal emitted successfully")
-	
-	# Shatter
+
+	# 💥 SHAKE FIRST (building tension)
 	if sprite:
 		var shake_tween = create_tween()
-		shake_tween.set_loops(5)
-		shake_tween.tween_property(sprite, "position", Vector2(4, 0), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(-4, 0), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(0, 0), 0.02)
+		shake_tween.set_loops(4)  # Half as long (was 8)
+		shake_tween.tween_property(sprite, "position", Vector2(3, 0), 0.025)
+		shake_tween.tween_property(sprite, "position", Vector2(-3, 0), 0.025)
+		shake_tween.tween_property(sprite, "position", Vector2(0, 0), 0.025)
 		await shake_tween.finished
-		
+
+		# Brief pause before explosion
+		await get_tree().create_timer(0.05).timeout
+
+	# 💥 NOW SPAWN EFFECTS (after shake completes)
+	print("🎆 Spawning destruction particles...")
+	spawn_destruction_particles()
+
+	print("💥 Spawning destruction wave...")
+	spawn_destruction_wave()
+
+	# 💥 THEN EXPLODE (dramatic release)
+	if sprite:
 		var explode_tween = create_tween()
 		explode_tween.set_parallel(true)
 		explode_tween.tween_property(sprite, "scale", Vector2(2.0, 2.0), 0.16)
 		explode_tween.tween_property(sprite, "modulate:a", 0.0, 0.16)
 		await explode_tween.finished
-	
+
 	queue_free()
 
 func spawn_destruction_wave() -> void:
@@ -467,64 +606,77 @@ func spawn_destruction_particles() -> void:
 
 	var colors = theme_colors[color_theme]
 
-	# 🩸 SPRAY/FRAGMENTS - themed particles bursting out
+	# 🩸 SPRAY/FRAGMENTS - dramatic explosive burst
 	var blood_spray = CPUParticles2D.new()
 	blood_spray.emitting = false
 	blood_spray.one_shot = true
-	blood_spray.explosiveness = 1.0
-	blood_spray.amount = 12  # Compact particle count
-	blood_spray.lifetime = 0.5
+	blood_spray.explosiveness = 0.95  # Slight randomness for natural look
+	blood_spray.amount = 100  # Very high density for mist-like cloud
+	blood_spray.randomness = 0.4  # More chaos for mist effect
+	blood_spray.lifetime = 0.4  # Quick dissipation like mist
 	blood_spray.local_coords = false
 	blood_spray.global_position = global_position
 
 	blood_spray.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	blood_spray.emission_sphere_radius = 8.0  # Tight spread
+	blood_spray.emission_sphere_radius = 0.5  # Very tight spawn - burst from center
 
-	# Create circular gradient texture for mist/spray effect
-	var img = Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	# ✨ SMOOTH MIST PARTICLES - tiny soft circles
+	var img_size = 8  # Slightly larger for smoother circles
+	var img = Image.create(img_size, img_size, false, Image.FORMAT_RGBA8)
 	img.fill(Color.TRANSPARENT)
-	var center = Vector2(8, 8)
 	var particle_color = colors["particle_base"]
-	for x in range(16):
-		for y in range(16):
-			var dist = center.distance_to(Vector2(x, y))
-			if dist < 8.0:
-				# Radial gradient: opaque center to transparent edge
-				var alpha = 1.0 - (dist / 8.0)
-				alpha = pow(alpha, 1.5)  # Softer falloff
-				var pixel_color = particle_color
-				pixel_color.a = alpha
-				img.set_pixel(x, y, pixel_color)
+	var center = Vector2(img_size / 2.0, img_size / 2.0)
+
+	# Create smooth circular mist particles
+	for x in range(img_size):
+		for y in range(img_size):
+			var pos = Vector2(x, y)
+			var to_center = pos - center
+			var dist = to_center.length()
+			var max_dist = (img_size / 2.0) - 0.5  # Slightly smaller for clean edges
+
+			if dist < max_dist:
+				# Smooth radial gradient for round mist particles
+				var alpha = 1.0 - (dist / max_dist)
+				alpha = pow(alpha, 0.6)  # Softer gradient = smoother circles
+
+				var final_color = particle_color
+				final_color.a = alpha
+				img.set_pixel(x, y, final_color)
+
 	var tex = ImageTexture.create_from_image(img)
 	blood_spray.texture = tex
 
 	blood_spray.direction = Vector2(0, 0)
 	blood_spray.spread = 180.0
-	blood_spray.initial_velocity_min = 30.0  # Slower velocity
-	blood_spray.initial_velocity_max = 60.0
-	blood_spray.gravity = Vector2(0, 120)
+	# ✨ DENSE BURST - thick concentrated explosion
+	blood_spray.initial_velocity_min = 80.0  # Slower for more concentrated
+	blood_spray.initial_velocity_max = 130.0
+	blood_spray.gravity = Vector2(0, 120)  # Heavier fall keeps them close
 
-	blood_spray.scale_amount_min = 0.8  # Fine mist particles
-	blood_spray.scale_amount_max = 2.5  # Some larger droplets
+	blood_spray.scale_amount_min = 2.0  # Compensate for 8px texture
+	blood_spray.scale_amount_max = 3.5  # Small smooth mist particles
 
-	# Add scale variation over lifetime (shrink as they disperse)
+	# Scale variation - expand then dissipate like mist
 	var scale_curve = Curve.new()
-	scale_curve.add_point(Vector2(0, 1.0))  # Start normal size
-	scale_curve.add_point(Vector2(0.5, 0.8))  # Shrink a bit mid-flight
-	scale_curve.add_point(Vector2(1, 0.4))  # End tiny (mist dissipating)
+	scale_curve.add_point(Vector2(0, 0.8))  # Start small
+	scale_curve.add_point(Vector2(0.2, 1.2))  # Expand quickly (mist puffing out)
+	scale_curve.add_point(Vector2(1, 0.2))  # Shrink to nothing (dissipate)
 	blood_spray.scale_amount_curve = scale_curve
 
 	# Color variation based on theme
 	blood_spray.color = colors["particle_base"]
 
+	# Mist-like fade - bright flash then quick dissipation
 	var spray_gradient = Gradient.new()
 	var bright_color = colors["particle_base"]
 	var mid_color = colors["particle_dark"]
-	var fade_color = colors["particle_dark"] * 0.6
-	fade_color.a = 0
-	spray_gradient.add_point(0.0, bright_color)
-	spray_gradient.add_point(0.3, mid_color)
-	spray_gradient.add_point(1.0, fade_color)  # Fade out
+	mid_color.a = 0.6  # Start fading earlier
+	var fade_color = colors["particle_dark"] * 0.3
+	fade_color.a = 0  # Fully transparent
+	spray_gradient.add_point(0.0, bright_color)  # Bright burst
+	spray_gradient.add_point(0.15, mid_color)  # Quick fade
+	spray_gradient.add_point(1.0, fade_color)  # Dissipate into nothing
 	blood_spray.color_ramp = spray_gradient
 
 	# HIGH Z-INDEX to render in front of enemy/dummy sprites
@@ -597,7 +749,7 @@ func spawn_destruction_particles() -> void:
 	chunks.emitting = true
 	print("   💀 Blood chunks added to world and emitting!")
 
-	await get_tree().create_timer(1.2).timeout
+	await get_tree().create_timer(0.5).timeout  # Quick cleanup for mist effect
 	if is_instance_valid(blood_spray):
 		blood_spray.queue_free()
 	if is_instance_valid(chunks):

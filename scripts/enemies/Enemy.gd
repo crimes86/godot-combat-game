@@ -58,11 +58,16 @@ func _ready() -> void:
 	
 	current_health = max_health
 	health_bar.update_health(current_health, max_health)
-	original_scale = scale
-	
+	original_scale = scale  # For general reference
+
 	# ✨ Store original difficulty color (set by GameWorld)
 	await get_tree().process_frame  # Wait one frame for GameWorld to set color
 	original_modulate = self.modulate
+
+	# ✨ Store sprite's original scale (for crit window scaling)
+	# Sprite always starts at Vector2.ONE, but store it just in case
+	if sprite:
+		sprite.scale = Vector2.ONE  # Ensure sprite starts at base scale
 
 	# Debug: Check what sprite node we have
 	if not sprite:
@@ -280,31 +285,44 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 		combat_text.type = 2  # TextType.WEAKPOINT
 	elif is_crit:
 		combat_text.type = 1  # TextType.CRIT
+		# 🔊 Play critical hit sound (non-weakpoint crits only)
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_critical_hit_sound(global_position, -3.0)
 	else:
 		combat_text.type = 0  # TextType.NORMAL
 
-	# Position: spawn in front of player, halfway between player and enemy
-	# This keeps it visible but not overlapping the enemy sprite
+	# Position: spawn behind enemy (opposite side from player)
+	# This keeps damage numbers from overlapping weakpoints/crit windows
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	var spawn_pos = global_position
 	if player:
-		var direction_to_enemy = (global_position - player.global_position).normalized()
-		var distance = player.global_position.distance_to(global_position)
-		# Spawn 40% of the way toward enemy (closer to player, in front of player)
-		spawn_pos = player.global_position + direction_to_enemy * min(distance * 0.4, 60)
+		var direction_from_player = (global_position - player.global_position).normalized()
+		# Spawn 40px behind enemy (away from player)
+		spawn_pos = global_position + direction_from_player * 40
 
 	combat_text.global_position = spawn_pos
 	get_tree().root.add_child(combat_text)
 	
 	# ✨ NEW: Play hit sound
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		if is_weakpoint:
-			sound_manager.play_sound(sound_manager.SoundType.HIT_WEAKPOINT, global_position, -5.0)
-		elif is_crit:
-			sound_manager.play_sound(sound_manager.SoundType.HIT_CRIT, global_position, -5.0)
-		else:
-			sound_manager.play_sound(sound_manager.SoundType.HIT_NORMAL, global_position, -8.0)
+	# NOTE: Weakpoint sounds are handled in weakpoint.gd directly
+	# Only play sounds here for non-weakpoint hits
+	if not is_weakpoint:
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			# Get player's weapon type for weapon-specific sounds
+			var weapon_type = ""
+			if CharacterStats.equipped_weapon:
+				weapon_type = CharacterStats.equipped_weapon.weapon_type
+
+			if is_crit:
+				# Critical hit sound already played above at line 286
+				pass
+			else:
+				sound_manager.play_normal_hit_sound(global_position, -8.0, weapon_type)
+
+			# Play skeleton hurt reaction sound (for all hit types)
+			sound_manager.play_skeleton_hurt_sound(global_position, -8.0)
 	
 	# ✨ NEW: Trigger hit flash locally (always works)
 	if has_node("HitFlash"):
@@ -358,38 +376,43 @@ func start_crit_window(difficulty: float = 1.0) -> void:
 		print("   ❌ No sprite found!")
 	
 	# ✨ FIX: Check if we're already at target scale (prevents no-grow bug)
-	var target_scale = original_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
+	# Sprite always starts at Vector2.ONE (base scale)
+	var base_sprite_scale = Vector2.ONE
+	var target_sprite_scale = base_sprite_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
 
-	if scale.x >= target_scale.x * Constants.CRIT_WINDOW_SCALE_THRESHOLD:  # If already 90% of target, skip growth
-		print("   ⚠️ Already at target scale, skipping growth animation")
+	# Check sprite scale, not root node scale (since we only scale sprite now)
+	var current_sprite_scale = sprite.scale if sprite else Vector2.ONE
+	if current_sprite_scale.x >= target_sprite_scale.x * Constants.CRIT_WINDOW_SCALE_THRESHOLD:  # If already 90% of target, skip growth
+		print("   ⚠️ Already at target scale (%s), skipping growth animation" % current_sprite_scale)
 		# Just spawn weakpoints immediately
 		spawn_weakpoints()
 	else:
-		print("   Scaling from %s to %s" % [scale, target_scale])
-		
-		# ✨ FIX: Store reference to ensure tween isn't garbage collected
-		var scale_tween = create_tween()
-		scale_tween.set_parallel(false)
-		scale_tween.tween_property(self, "scale", target_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
-		z_index = Constants.CRIT_WINDOW_Z_INDEX
-		
-		# ✨ NEW: Player can attack during growth animation!
-		# Weakpoints will spawn after growth completes
-		
-		await scale_tween.finished
-		
-		print("   ✅ Scale animation complete - final scale: %s" % scale)
-		
+		print("   Scaling sprite from %s to %s" % [current_sprite_scale, target_sprite_scale])
+
+		# ✨ CHANGED: Only scale the SPRITE, not the collision box!
+		# This prevents collision/pathing issues while still showing visual growth
+		if sprite:
+			var scale_tween = create_tween()
+			scale_tween.set_parallel(false)
+			scale_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
+			z_index = Constants.CRIT_WINDOW_Z_INDEX
+
+			# ✨ NEW: Player can attack during growth animation!
+			# Weakpoints will spawn after growth completes
+
+			await scale_tween.finished
+
+			print("   ✅ Sprite scale animation complete - final sprite scale: %s" % sprite.scale)
+		else:
+			print("   ⚠️ No sprite to scale!")
+
 		# Spawn weakpoints AFTER growth
 		spawn_weakpoints()
-	
-	# ✨ CHANGED: Very short protection after growth (just to prevent double-click)
-	spam_protection_active = true
-	get_tree().create_timer(Constants.CRIT_WINDOW_SPAM_PROTECTION).timeout.connect(func():
-		if is_instance_valid(self) and not is_dying:
-			spam_protection_active = false
-			print("Weakpoints active!")
-	)
+
+	# ✨ CHANGED: No spam protection - weakpoints are immediately clickable!
+	# Attack cooldown system already prevents excessive spam
+	spam_protection_active = false
+	print("Weakpoints active immediately!")
 	
 	# Start timer
 	var scaled_duration = window_duration / difficulty
@@ -413,109 +436,69 @@ func spawn_weakpoints() -> void:
 
 	# print("🎯 Calculating weakpoints: Player level %d → %d weakpoints" % [player_level, num_weakpoints])
 
-	# 🎯 SECTIONED POSITION POOL - Organized by body parts!
-	# Max 2 weakpoints per section for better spread
+	# Calculate sprite bounds for random positioning within sections
+	var sprite_scale = sprite.scale if sprite else Vector2.ONE
+	var sprite_pos = sprite.position  # Local position relative to enemy root
 
-	# 🎯 OPTIMIZED POSITIONS - Better spacing, no clustering!
-	# 17 well-distributed positions (down from 20)
-	# Minimum 8+ pixel spacing between all positions
-	
-	var upper_positions = [
-		# HEAD & SHOULDERS - 5 positions, well-spaced
-		Vector2(0, -14),      # Top of skull (crown)
-		Vector2(-6, -11),     # Left temple
-		Vector2(6, -11),      # Right temple  
-		Vector2(-8, -6),      # Left shoulder
-		Vector2(8, -6),       # Right shoulder
-	]
-	
-	var mid_positions = [
-		# TORSO & ARMS - 9 positions, maximum coverage
-		Vector2(0, -3),       # Upper chest (sternum)
-		Vector2(-6, -2),      # Left upper ribs
-		Vector2(6, -2),       # Right upper ribs
-		Vector2(-5, 1),       # Left mid ribs
-		Vector2(5, 1),        # Right mid ribs
-		Vector2(0, 3),        # Center spine/lower ribs
-		Vector2(-5, 5),       # Left hip
-		Vector2(5, 5),        # Right hip
-		Vector2(0, 7),        # Center pelvis (top)
-	]
-	
-	var lower_positions = [
-		# LEGS - 3 positions, clear spacing
-		Vector2(-4, 10),      # Left upper leg
-		Vector2(4, 10),       # Right upper leg
-		Vector2(0, 12),       # Between legs (pelvis bottom)
-	]
-	
-	# 🎲 New distribution: Exactly 1 weakpoint per section, sections chosen randomly
-	var chosen_positions = []
+	# LPC sprites are 64x64, sprite is CENTERED (centered = true)
+	# Character occupies roughly 32x64 in center of the sprite
+	var sprite_width = 32.0 * sprite_scale.x
+	var sprite_height = 64.0 * sprite_scale.y
+
+	# Divide into 3 equal sections (in local space)
+	var section_height = sprite_height / 3.0
+	var sprite_top = sprite_pos.y - (sprite_height / 2.0)
+
+	# Define the 3 sections with their bounds
 	var sections = [
-		{"name": "upper", "positions": upper_positions},
-		{"name": "mid", "positions": mid_positions},
-		{"name": "lower", "positions": lower_positions}
+		{
+			"name": "upper",
+			"y_min": sprite_top,
+			"y_max": sprite_top + section_height
+		},
+		{
+			"name": "mid",
+			"y_min": sprite_top + section_height,
+			"y_max": sprite_top + 2.0 * section_height
+		},
+		{
+			"name": "lower",
+			"y_min": sprite_top + 2.0 * section_height,
+			"y_max": sprite_top + 3.0 * section_height
+		}
 	]
 
-	# Shuffle sections to pick random sections when we have < 3 weakpoints
+	# Shuffle sections so we pick random ones
 	sections.shuffle()
 
-	var spots_needed = num_weakpoints  # 1, 2, or 3 based on enemy level
-	var positions_per_section = {}
+	var chosen_positions = []
 
-	# Initialize counters
-	for section in sections:
-		positions_per_section[section["name"]] = 0
-
-	# Minimum distance between weakpoints to prevent overlap (based on hitbox size)
-	var min_distance = 40.0  # Buffer to prevent visual overlap (hitbox is 18-35px radius)
-
-	# Pick exactly 1 weakpoint from each of the first N sections (where N = num_weakpoints)
-	for i in range(min(spots_needed, sections.size())):
+	# Pick exactly 1 weakpoint from each of the first N sections
+	for i in range(min(num_weakpoints, sections.size())):
 		var section = sections[i]
-		var section_name = section["name"]
-		var section_positions = section["positions"]
 
-		# Try to find a position that doesn't overlap with already chosen positions
-		var random_pos = null
-		var attempts = 0
-		var max_attempts = 10  # Prevent infinite loop
+		# Generate random position within this section's bounds
+		# Use 80% of width to avoid edges (10% margin on each side)
+		var margin_x = sprite_width * 0.1
+		var random_x = randf_range(-sprite_width / 2.0 + margin_x, sprite_width / 2.0 - margin_x)
 
-		while attempts < max_attempts:
-			var candidate_pos = section_positions[randi() % section_positions.size()]
+		# Different margins for different sections
+		var random_y = 0.0
+		if section["name"] == "upper" or section["name"] == "lower":
+			# Top and bottom sections: 25% margin on top/bottom
+			var margin_y = section_height * 0.25
+			random_y = randf_range(section["y_min"] + margin_y, section["y_max"] - margin_y)
+		else:
+			# Middle section: no margin
+			random_y = randf_range(section["y_min"], section["y_max"])
 
-			# Check distance to all already-chosen positions
-			var is_valid = true
-			for chosen_pos in chosen_positions:
-				if candidate_pos.distance_to(chosen_pos) < min_distance:
-					is_valid = false
-					break
+		var random_pos = Vector2(random_x, random_y)
 
-			if is_valid:
-				random_pos = candidate_pos
-				break
-
-			attempts += 1
-
-		# Fallback: if no valid position found after max_attempts, use any random position
-		if random_pos == null:
-			random_pos = section_positions[randi() % section_positions.size()]
-			print("⚠️ Could not find non-overlapping position in %s section, using fallback" % section_name)
-
-		# Add the position!
 		chosen_positions.append(random_pos)
-		positions_per_section[section_name] = 1
-
-		# print("🎯 Picked weakpoint in %s section at %s" % [section_name, random_pos])
-
-	# print("📊 Final distribution - Upper: %d | Mid: %d | Lower: %d (Total: %d)" %
-	#	[positions_per_section["upper"], positions_per_section["mid"], positions_per_section["lower"], spots_needed])
-
-	# print("🎯 SPAWNING %d WEAKPOINTS for player level %d" % [spots_needed, CharacterStats.level])
 
 	# Slightly smaller scale for better fit
 	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR
-	
+
 	for i in range(chosen_positions.size()):
 		var weakpoint_scene = preload("res://scenes/enemies/weakpoint.tscn")
 		var weakpoint = weakpoint_scene.instantiate()
@@ -523,15 +506,17 @@ func spawn_weakpoints() -> void:
 		# Set bone theme for skeletons (no blood!)
 		weakpoint.color_theme = "bone"
 
-		# Position from randomly chosen pool
+		# ✨ Weakpoints are children of ROOT, positions are in root's local space
 		weakpoint.position = chosen_positions[i]
-		weakpoint.scale = Vector2(counter_scale, counter_scale)
+		# ✨ Make weakpoints 3x larger (300% bigger)
+		weakpoint.scale = Vector2(counter_scale, counter_scale) * 3.0
 
 		# ✨ RANDOM ROTATION for dynamic look!
 		weakpoint.rotation = randf_range(-PI, PI)
 
 		weakpoint.weakpoint_hit.connect(_on_weakpoint_hit)
 		weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed)
+
 		add_child(weakpoint)
 		weakpoints.append(weakpoint)
 	
@@ -609,23 +594,22 @@ func end_crit_window() -> void:
 		return
 
 	DebugConfig.log_combat("Ending crit window")
-	in_crit_window = false
-	
+
+	# ✨ DON'T set in_crit_window = false yet!
+	# Wait until tween finishes to prevent overlapping crit windows
+
 	# Stop timer
 	if window_timer and is_instance_valid(window_timer):
 		window_timer.stop()
 		window_timer.queue_free()
 		window_timer = null
-	
-	# Emit signal
-	crit_window_complete.emit(weakpoints_destroyed)
-	
+
 	# Clean weakpoints
 	for weakpoint in weakpoints:
 		if is_instance_valid(weakpoint):
 			weakpoint.queue_free()
 	weakpoints.clear()
-	
+
 	# ✨ FIXED: Reset HitFlash first, then change color back
 	if has_node("HitFlash"):
 		var hit_flash = get_node("HitFlash")
@@ -634,33 +618,40 @@ func end_crit_window() -> void:
 			hit_flash.reset()
 		# Set base color back to white
 		hit_flash.set_base_color(Color.WHITE)
-	
+
 	# ✨ FIX: Restore original difficulty color (parent modulate)
 	self.modulate = original_modulate
 	print("   ✅ Restored parent modulate: %s" % self.modulate)
-	
+
 	# Change sprite back to white (normal enemy color)
 	if sprite:
 		sprite.modulate = Color.WHITE
-	
-# ✨ FIX #3: Scale back with forced final state
-	if is_instance_valid(self):
+
+# ✨ FIX #3: Scale SPRITE back to base (not collision box)
+	if is_instance_valid(self) and sprite:
+		var base_sprite_scale = Vector2.ONE  # Sprite base scale is always ONE
 		var tween = create_tween()
-		tween.tween_property(self, "scale", original_scale, 0.25)
-		
+		tween.tween_property(sprite, "scale", base_sprite_scale, 0.25)
+
 		# Wait for tween to finish, then FORCE final state
 		await get_tree().create_timer(0.26).timeout
-		
-		if is_instance_valid(self):
-			# Force all properties to final state
-			scale = original_scale  # ✨ FORCE scale value!
+
+		if is_instance_valid(self) and sprite:
+			# Force sprite scale to final state
+			sprite.scale = base_sprite_scale  # ✨ FORCE sprite scale to ONE!
 			z_index = 0
-			
+
 			# Force color back to white
-			if sprite and is_instance_valid(self):
+			if is_instance_valid(self):
 				sprite.modulate = Color.WHITE
-			
-			print("✅ Enemy scaled back to normal: ", scale)
+
+			print("✅ Enemy sprite scaled back to normal: ", sprite.scale)
+
+	# ✨ NOW it's safe to clear the flag - prevents new crit windows during scale-down
+	in_crit_window = false
+
+	# Emit signal AFTER everything is cleaned up
+	crit_window_complete.emit(weakpoints_destroyed)
 
 func die() -> void:
 	if is_dying:
@@ -760,7 +751,36 @@ func draw_debug_shapes_world(world_container: Node2D) -> Node2D:
 			var rect_shape = area_collision.shape as RectangleShape2D
 			var rect = draw_debug_rect_world(area_collision.global_position, rect_shape.size * scale, rotation, Color.CYAN)
 			enemy_debug.add_child(rect)
-	
+
+	# ✨ Draw PURPLE boxes - 3 equal sections for weakpoint placement visualization
+	if sprite:
+		var sprite_scale = sprite.scale
+		var sprite_pos = sprite.global_position
+
+		# LPC sprites are 64x64, sprite is CENTERED (centered = true)
+		# Character occupies roughly 32x64 in center of the sprite
+		var sprite_width = 32.0 * sprite_scale.x
+		var sprite_height = 64.0 * sprite_scale.y
+
+		# Divide into 3 equal sections
+		var section_height = sprite_height / 3.0
+
+		# Calculate the top of the sprite (sprite is centered)
+		var sprite_top = sprite_pos.y - (sprite_height / 2.0)
+
+		# Draw 3 boxes: upper, mid, lower
+		var sections = [
+			{"name": "upper", "y": sprite_top + section_height / 2.0},
+			{"name": "mid", "y": sprite_top + section_height * 1.5},
+			{"name": "lower", "y": sprite_top + section_height * 2.5}
+		]
+
+		for section in sections:
+			var section_center = Vector2(sprite_pos.x, section["y"])
+			var section_size = Vector2(sprite_width, section_height)
+			var purple_box = draw_debug_rect_world(section_center, section_size, 0.0, Color.MAGENTA)
+			enemy_debug.add_child(purple_box)
+
 	# Draw weakpoint hitboxes
 	for weakpoint in weakpoints:
 		if is_instance_valid(weakpoint) and weakpoint.has_method("draw_debug_hitbox_world"):
