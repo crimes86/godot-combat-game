@@ -29,6 +29,7 @@ var sound_cache: Dictionary = {}
 
 # Real sound file variations (for randomization)
 var weakpoint_sounds: Array[AudioStream] = []
+var weakpoint_destroyed_sound: AudioStream = null
 var critical_hit_sound: AudioStream = null
 var normal_hit_sounds: Array[AudioStream] = []  # Generic fallback
 var skeleton_hurt_sound: AudioStream = null
@@ -53,9 +54,10 @@ func _ready() -> void:
 
 func _load_real_sounds() -> void:
 	"""Load real sound files for combat effects"""
-	# Load weakpoint hit sounds
+	# Load weakpoint hit sounds (devastating bone crunch sounds)
 	var weakpoint_1 = load("res://assets/sounds/combat/hits/weakpoint_hit_1.wav")
 	var weakpoint_2 = load("res://assets/sounds/combat/hits/weakpoint_hit_2.wav")
+	var weakpoint_3 = load("res://assets/sounds/combat/hits/weakpoint_hit_3.wav")
 
 	if weakpoint_1:
 		weakpoint_sounds.append(weakpoint_1)
@@ -69,7 +71,20 @@ func _load_real_sounds() -> void:
 	else:
 		push_warning("  ⚠️ Failed to load weakpoint_hit_2.wav")
 
+	if weakpoint_3:
+		weakpoint_sounds.append(weakpoint_3)
+		print("  ✅ Loaded weakpoint_hit_3.wav")
+	else:
+		push_warning("  ⚠️ Failed to load weakpoint_hit_3.wav")
+
 	print("  📊 Loaded %d weakpoint sound variations" % weakpoint_sounds.size())
+
+	# Load weakpoint destruction sound
+	weakpoint_destroyed_sound = load("res://assets/sounds/combat/hits/weakpoint_destroyed.wav")
+	if weakpoint_destroyed_sound:
+		print("  ✅ Loaded weakpoint_destroyed.wav")
+	else:
+		push_warning("  ⚠️ Failed to load weakpoint_destroyed.wav")
 
 	# Load critical hit sound (for non-weakpoint crits)
 	critical_hit_sound = load("res://assets/sounds/combat/hits/critical_hit.wav")
@@ -258,6 +273,25 @@ func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.max_polyphony = 3  # Allow some overlap but not too much
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play weakpoint destruction sound (explosive glass/bone shatter finale)
+func play_weakpoint_destroyed_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	if not weakpoint_destroyed_sound:
+		# Fallback to placeholder sound if no real sound loaded
+		play_sound(SoundType.WEAKPOINT_DESTROYED, global_pos, volume_db)
+		return
+
+	# Create player - no pitch randomization for this dramatic finale
+	var player = AudioStreamPlayer2D.new()
+	player.stream = weakpoint_destroyed_sound
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = 1.0  # Keep original pitch for maximum impact
+	player.max_polyphony = 2  # Allow slight overlap in case of rapid weakpoint destruction
 	player.finished.connect(player.queue_free)
 
 	get_tree().root.add_child(player)

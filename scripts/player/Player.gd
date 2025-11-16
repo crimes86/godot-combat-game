@@ -728,12 +728,10 @@ func attempt_attack() -> void:
 	attack_direction = (mouse_pos - global_position).normalized()
 	
 	var enemies_in_cone = get_enemies_in_cone()
-	
-	# ✨ NEW: Play swing sound
+
+	# Sound is now handled by weapon-specific sounds in Enemy.gd
 	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_sound(sound_manager.SoundType.SWING, global_position, -8.0)
-	
+
 	if enemies_in_cone.size() > 0:
 		attack_enemies_in_cone(enemies_in_cone)
 		finish_attack_cooldown()
