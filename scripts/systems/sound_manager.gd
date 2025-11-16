@@ -27,11 +27,100 @@ enum SoundType {
 # Cache for generated sounds
 var sound_cache: Dictionary = {}
 
+# Real sound file variations (for randomization)
+var weakpoint_sounds: Array[AudioStream] = []
+var critical_hit_sound: AudioStream = null
+var normal_hit_sounds: Array[AudioStream] = []  # Generic fallback
+var skeleton_hurt_sound: AudioStream = null
+
+# Weapon-specific hit sounds (organized by weapon type)
+var weapon_hit_sounds: Dictionary = {
+	"sword": [],
+	"mace": [],
+	"spear": [],
+	"dagger": []
+}
+
 func _ready() -> void:
+	# Load real sound files first
+	print("🔊 Loading real sound files...")
+	_load_real_sounds()
+
 	# Pre-generate all placeholder sounds
 	print("🔊 Generating placeholder sounds...")
 	_generate_all_sounds()
 	print("✅ Sound system ready!")
+
+func _load_real_sounds() -> void:
+	"""Load real sound files for combat effects"""
+	# Load weakpoint hit sounds
+	var weakpoint_1 = load("res://assets/sounds/combat/hits/weakpoint_hit_1.wav")
+	var weakpoint_2 = load("res://assets/sounds/combat/hits/weakpoint_hit_2.wav")
+
+	if weakpoint_1:
+		weakpoint_sounds.append(weakpoint_1)
+		print("  ✅ Loaded weakpoint_hit_1.wav")
+	else:
+		push_warning("  ⚠️ Failed to load weakpoint_hit_1.wav")
+
+	if weakpoint_2:
+		weakpoint_sounds.append(weakpoint_2)
+		print("  ✅ Loaded weakpoint_hit_2.wav")
+	else:
+		push_warning("  ⚠️ Failed to load weakpoint_hit_2.wav")
+
+	print("  📊 Loaded %d weakpoint sound variations" % weakpoint_sounds.size())
+
+	# Load critical hit sound (for non-weakpoint crits)
+	critical_hit_sound = load("res://assets/sounds/combat/hits/critical_hit.wav")
+	if critical_hit_sound:
+		print("  ✅ Loaded critical_hit.wav")
+	else:
+		push_warning("  ⚠️ Failed to load critical_hit.wav")
+
+	# Load normal hit sounds
+	var normal_hit_1 = load("res://assets/sounds/combat/hits/normal_hit_1.wav")
+	var normal_hit_2 = load("res://assets/sounds/combat/hits/normal_hit_2.wav")
+
+	if normal_hit_1:
+		normal_hit_sounds.append(normal_hit_1)
+		print("  ✅ Loaded normal_hit_1.wav")
+	else:
+		push_warning("  ⚠️ Failed to load normal_hit_1.wav")
+
+	if normal_hit_2:
+		normal_hit_sounds.append(normal_hit_2)
+		print("  ✅ Loaded normal_hit_2.wav")
+	else:
+		push_warning("  ⚠️ Failed to load normal_hit_2.wav")
+
+	print("  📊 Loaded %d normal hit sound variations" % normal_hit_sounds.size())
+
+	# Load skeleton hurt sound
+	skeleton_hurt_sound = load("res://assets/sounds/combat/reactions/skeleton_hurt.wav")
+	if skeleton_hurt_sound:
+		print("  ✅ Loaded skeleton_hurt.wav")
+	else:
+		push_warning("  ⚠️ Failed to load skeleton_hurt.wav")
+
+	# Load weapon-specific hit sounds
+	print("  🗡️ Loading weapon hit sounds...")
+	_load_weapon_sounds("sword", 4)
+	# More weapon types can be added here later:
+	# _load_weapon_sounds("mace", 4)
+	# _load_weapon_sounds("spear", 4)
+	print("  📊 Loaded weapon sounds: sword=%d" % weapon_hit_sounds["sword"].size())
+
+func _load_weapon_sounds(weapon_type: String, count: int) -> void:
+	"""Load weapon-specific hit sounds"""
+	for i in range(1, count + 1):
+		var sound_path = "res://assets/sounds/combat/weapons/%s/%s_hit_%d.wav" % [weapon_type, weapon_type, i]
+		var sound = load(sound_path)
+		if sound:
+			weapon_hit_sounds[weapon_type].append(sound)
+			print("    ✅ Loaded %s_hit_%d.wav" % [weapon_type, i])
+		else:
+			push_warning("    ⚠️ Failed to load %s" % sound_path)
 
 func _generate_all_sounds() -> void:
 	# Player sounds
@@ -84,6 +173,95 @@ func play_sound_2d(sound_type: SoundType, volume_db: float = 0.0) -> void:
 ## Get a sound stream for attaching to existing AudioStreamPlayer nodes
 func get_sound(sound_type: SoundType) -> AudioStream:
 	return sound_cache.get(sound_type, null)
+
+## Play a random weakpoint hit sound with pitch variation (for satisfying spam-clicking)
+func play_weakpoint_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	if weakpoint_sounds.is_empty():
+		# Fallback to placeholder sound if no real sounds loaded
+		play_sound(SoundType.HIT_WEAKPOINT, global_pos, volume_db)
+		return
+
+	# Pick random sound variation
+	var sound_stream = weakpoint_sounds[randi() % weakpoint_sounds.size()]
+
+	# Create player with subtle pitch randomization (±3% for variety)
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation to avoid distortion
+	player.max_polyphony = 8  # Allow multiple instances for spam clicking
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play critical hit sound (for non-weakpoint critical hits)
+func play_critical_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	if not critical_hit_sound:
+		# Fallback to placeholder sound if no real sound loaded
+		play_sound(SoundType.HIT_CRIT, global_pos, volume_db)
+		return
+
+	# Create player with slight pitch randomization
+	var player = AudioStreamPlayer2D.new()
+	player.stream = critical_hit_sound
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
+	player.max_polyphony = 4  # Allow some overlap but less than weakpoints
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play normal hit sound (for regular non-crit hits)
+func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0, weapon_type: String = "") -> void:
+	var sounds_to_use = []  # Untyped to avoid type mismatch with Dictionary values
+
+	# Try weapon-specific sounds first
+	if weapon_type != "" and weapon_hit_sounds.has(weapon_type) and not weapon_hit_sounds[weapon_type].is_empty():
+		sounds_to_use = weapon_hit_sounds[weapon_type]
+	# Fallback to generic normal hit sounds
+	elif not normal_hit_sounds.is_empty():
+		sounds_to_use = normal_hit_sounds
+	# Last resort: placeholder
+	else:
+		play_sound(SoundType.HIT_NORMAL, global_pos, volume_db)
+		return
+
+	# Pick random sound variation
+	var sound_stream: AudioStream = sounds_to_use[randi() % sounds_to_use.size()]
+
+	# Create player with pitch randomization
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
+	player.max_polyphony = 4  # Allow some overlap
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play skeleton hurt sound (when skeleton takes damage)
+func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	if not skeleton_hurt_sound:
+		# No fallback - just don't play if not loaded
+		return
+
+	# Create player with slight pitch randomization
+	var player = AudioStreamPlayer2D.new()
+	player.stream = skeleton_hurt_sound
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
+	player.max_polyphony = 3  # Allow some overlap but not too much
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
 
 # ============================================
 # PLACEHOLDER SOUND GENERATORS

@@ -393,7 +393,13 @@ func _physics_process(delta: float) -> void:
 		hold_attack_timer += delta
 		if hold_attack_timer >= hold_attack_interval:
 			hold_attack_timer = 0.0
-			if can_attack:
+
+			# ✨ CRIT WINDOW: Check if holding on enemy in crit window (uncapped speed!)
+			if is_holding_on_crit_window_enemy(mouse_pos):
+				# Handled by crit window logic - no cooldown check needed!
+				pass
+			elif can_attack:
+				# Normal attack - cooldown enforced
 				attempt_attack()
 	
 	# Update debug visualization if enabled
@@ -581,15 +587,15 @@ func check_crit_window_click(event: InputEvent) -> bool:
 	"""Check if clicking on enemy during crit window. Returns true if handled."""
 	var click_pos = get_global_mouse_position()
 	var all_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
-	
+
 	for enemy in all_enemies:
 		if not is_instance_valid(enemy):
 			continue
-		
+
 		# Only handle enemies in crit window
 		if not ("in_crit_window" in enemy and enemy.in_crit_window):
 			continue
-		
+
 		# Check if we clicked on this enemy
 		var enemy_size = 30.0
 		if enemy.has_node("CollisionShape2D"):
@@ -597,9 +603,9 @@ func check_crit_window_click(event: InputEvent) -> bool:
 			if collision.shape is RectangleShape2D:
 				var rect = collision.shape as RectangleShape2D
 				enemy_size = max(rect.size.x, rect.size.y) * enemy.scale.x / 2.0
-		
+
 		var distance = click_pos.distance_to(enemy.global_position)
-		
+
 		# If clicked on this enemy
 		if distance < enemy_size:
 			# Check if we're in attack range
@@ -610,8 +616,29 @@ func check_crit_window_click(event: InputEvent) -> bool:
 			else:
 				print("⚠️ Crit window enemy out of range")
 				return true  # Still handled (prevent normal attack)
-	
+
 	return false  # No crit window enemy clicked
+
+func is_holding_on_crit_window_enemy(mouse_pos: Vector2) -> bool:
+	"""Check if holding mouse on enemy in crit window (for hold-to-attack). Returns true if attack was triggered."""
+
+	# Update attack direction based on mouse
+	attack_direction = (mouse_pos - global_position).normalized()
+
+	# Use the same cone detection as normal attacks
+	var enemies_in_cone = get_enemies_in_cone()
+
+	# Check if any enemy in cone is in crit window
+	for enemy in enemies_in_cone:
+		if not is_instance_valid(enemy):
+			continue
+
+		# Only handle enemies in crit window
+		if "in_crit_window" in enemy and enemy.in_crit_window:
+			handle_crit_window_attack(enemy, mouse_pos)
+			return true  # Triggered attack
+
+	return false  # No crit window enemy in attack cone
 	
 	
 func is_clicking_on_weakpoint(event: InputEvent) -> bool:
@@ -660,31 +687,25 @@ func is_clicking_on_weakpoint(event: InputEvent) -> bool:
 func handle_crit_window_attack(enemy: Node, click_pos: Vector2) -> void:
 	"""Handle attack on enemy body during crit window"""
 
-	# ✨ FIX #2: Simplified - just attack the enemy normally
+	# ✨ CRIT WINDOW: Attack speed is UNCAPPED! No cooldown check!
 	# Weakpoints handle themselves now via is_clicking_on_weakpoint()
 
-	if can_attack:
-		can_attack = false  # Set immediately to prevent spam
+	# Play slash animation toward the enemy
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if character_sprite:
+		var direction_to_enemy = (enemy.global_position - global_position).normalized()
+		var dir_str = get_direction_string(direction_to_enemy)
+		var lpc_dir = convert_to_lpc_direction(dir_str)
+		character_sprite.play_lpc_animation("slash", lpc_dir)
 
-		# Play slash animation toward the enemy
-		var character_sprite = get_node_or_null("CharacterSprite")
-		if character_sprite:
-			var direction_to_enemy = (enemy.global_position - global_position).normalized()
-			var dir_str = get_direction_string(direction_to_enemy)
-			var lpc_dir = convert_to_lpc_direction(dir_str)
-			character_sprite.play_lpc_animation("slash", lpc_dir)
+	# Get chain multiplier for damage calculation
+	var chain_multiplier = ChainManager.get_damage_multiplier()
+	var damage = attack_damage * chain_multiplier
 
-		# Get chain multiplier for damage calculation
-		var chain_multiplier = ChainManager.get_damage_multiplier()
-		var damage = attack_damage * chain_multiplier
-		
-		if "take_damage" in enemy:
-			enemy.take_damage(damage, false)
-		
-		finish_attack_cooldown()
-		print("⚔️ Enemy body hit during crit window (%.1f dmg, %.2fs cooldown)" % [damage, attack_cooldown])
-	else:
-		print("⏱️ Attack on cooldown - ignoring click")
+	if "take_damage" in enemy:
+		enemy.take_damage(damage, false)
+
+	print("⚔️ Enemy body hit during crit window (%.1f dmg, UNCAPPED SPEED!)" % damage)
 
 
 func attempt_attack() -> void:
