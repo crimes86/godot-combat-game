@@ -288,9 +288,9 @@ func play_lpc_animation(anim_name: String, direction: String):
 				var slash_offset = Vector2(0, 0)
 				match direction:
 					"east":  # facing right
-						slash_offset = Vector2(-5, 10)
+						slash_offset = Vector2(-10, 5)
 					"west":  # facing left
-						slash_offset = Vector2(5, 10)
+						slash_offset = Vector2(10, 5)
 					"north":  # facing up
 						slash_offset = Vector2(-10, 0)
 					"south":  # facing down

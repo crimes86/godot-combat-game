@@ -640,6 +640,15 @@ func is_clicking_on_weakpoint(event: InputEvent) -> bool:
 				
 				if distance < weakpoint_radius:
 					print("🎯 Found weakpoint at click position!")
+
+					# Play slash animation toward the weakpoint
+					var character_sprite = get_node_or_null("CharacterSprite")
+					if character_sprite:
+						var direction_to_weakpoint = (weakpoint.global_position - global_position).normalized()
+						var dir_str = get_direction_string(direction_to_weakpoint)
+						var lpc_dir = convert_to_lpc_direction(dir_str)
+						character_sprite.play_lpc_animation("slash", lpc_dir)
+
 					# ✨ FIX: Directly call hit() instead of relying on input_event
 					if weakpoint.has_method("hit"):
 						weakpoint.hit()
@@ -650,13 +659,21 @@ func is_clicking_on_weakpoint(event: InputEvent) -> bool:
 
 func handle_crit_window_attack(enemy: Node, click_pos: Vector2) -> void:
 	"""Handle attack on enemy body during crit window"""
-	
+
 	# ✨ FIX #2: Simplified - just attack the enemy normally
 	# Weakpoints handle themselves now via is_clicking_on_weakpoint()
-	
+
 	if can_attack:
 		can_attack = false  # Set immediately to prevent spam
-		
+
+		# Play slash animation toward the enemy
+		var character_sprite = get_node_or_null("CharacterSprite")
+		if character_sprite:
+			var direction_to_enemy = (enemy.global_position - global_position).normalized()
+			var dir_str = get_direction_string(direction_to_enemy)
+			var lpc_dir = convert_to_lpc_direction(dir_str)
+			character_sprite.play_lpc_animation("slash", lpc_dir)
+
 		# Get chain multiplier for damage calculation
 		var chain_multiplier = ChainManager.get_damage_multiplier()
 		var damage = attack_damage * chain_multiplier
