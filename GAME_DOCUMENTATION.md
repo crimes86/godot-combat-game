@@ -515,6 +515,187 @@ Choose one mechanic based on group size:
 
 ---
 
+### Crit System Implementation
+
+Detailed technical implementation of the critical hit and weakpoint system.
+
+#### Critical Hit Calculation
+
+**Base Formula**:
+```gdscript
+var crit_chance = CharacterStats.get_crit_chance()  # LUCK-based + weapon bonuses
+var is_critical = randf() < crit_chance
+```
+
+**Crit Chance Sources**:
+- Base chance from LUCK stat
+- Weapon modifiers (+2% to +15%)
+- Equipment bonuses (future)
+- Buff effects (future)
+
+**Level Scaling**:
+- Level 10 (LUCK 10): ~1% base crit chance
+- Level 25 (LUCK 58): ~10% base crit chance
+- With weapon bonuses: Up to 25% crit chance
+
+#### Weakpoint Spawning Algorithm
+
+**Sectioned Spawning** (prevents clustering):
+
+```gdscript
+# Divide body into sections
+var sections = ["upper", "mid", "lower"]
+var section_positions = {
+    "upper": [pos1, pos2, pos3, pos4, pos5],      # 5 positions
+    "mid": [pos6, pos7, pos8, pos9, ...],         # 9 positions
+    "lower": [pos15, pos16, pos17]                # 3 positions
+}
+
+# Choose one random position from each section
+for section in sections:
+    var random_pos = section_positions[section].pick_random()
+    spawn_weakpoint(random_pos)
+```
+
+**Spacing Validation**:
+- Minimum 8 pixel spacing at base scale
+- Scaled to 22.4 pixels at 2.8x (crit window scale)
+- Prevents accidental double-clicks
+
+**Weakpoint Count by Player Level**:
+- Levels 1-10: 1 weakpoint
+- Levels 11-20: 2 weakpoints
+- Levels 21+: 3 weakpoints
+
+#### Weakpoint Visual Design
+
+**Progressive Brightening**:
+- Start brightness: 60% (visible but dull)
+- Target brightness: 100% (full brightness)
+- Progress: Based on damage taken (`current_hits / max_hits`)
+
+**Glow System**:
+- Base glow: 30% alpha at start
+- Max glow: 80% alpha at max damage
+- Scale: 1.1x size (tight, close to gem)
+- Color: Themed to weakpoint type (blood red, bone white)
+
+**Shine Layers** (3 layers):
+- Layer 1: 30% → 70% alpha
+- Layer 2: 35% → 90% alpha
+- Layer 3: 15% → 30% alpha
+- Creates depth and dimensionality
+
+**Hit Feedback**:
+- Pulse effect on click (scale tween)
+- Particle burst (mist-like explosion on destruction)
+- Sound effect (glass/bone crack)
+- Combat text showing damage
+
+#### Crit Window Lifecycle
+
+**1. Trigger Phase** (instant):
+```gdscript
+# On critical hit
+spawn_crit_window()
+    - Hide regular weakpoints (if any exist)
+    - Create 1-3 weakpoints based on player level
+    - Position in sectioned locations
+    - Scale up to 2.8x with animation
+    - Start 4 second timer
+```
+
+**2. Active Phase** (0-4 seconds):
+```gdscript
+# While window is active
+- Player clicks weakpoints
+- Each click deals damage + registers with ChainManager
+- Weakpoint destroyed on click
+- Progressive brightening based on damage
+- Combat text shows damage numbers
+```
+
+**3. Expiration Phase** (at 4 seconds):
+```gdscript
+# When timer expires
+if all_weakpoints_destroyed:
+    ChainManager.on_crit_window_completed(true)  # Chain++
+    Play success sound
+    Spawn success particles
+else:
+    ChainManager.on_crit_window_completed(false)  # Chain reset
+    Play failure sound
+    Remaining weakpoints explode (failure effect)
+```
+
+**4. Cleanup Phase**:
+```gdscript
+# After window ends
+- Remove all weakpoint nodes
+- Reset enemy state
+- Resume normal combat
+```
+
+#### Damage Calculation During Crit Window
+
+**Normal Enemy Hit**:
+```gdscript
+var base_damage = attack_damage
+var chain_mult = ChainManager.get_damage_multiplier()
+var final_damage = base_damage * chain_mult
+enemy.take_damage(final_damage, false)
+```
+
+**Weakpoint Hit**:
+```gdscript
+var base_damage = attack_damage
+var chain_mult = ChainManager.get_damage_multiplier()
+var crit_mult = 2.0  # Weakpoint hits deal 2x damage
+var final_damage = base_damage * chain_mult * crit_mult
+weakpoint.take_damage(final_damage)
+```
+
+**Total Multiplier Example** (10x chain, weakpoint hit):
+- Base: 50 damage
+- Chain: 50 × 2.0 = 100 damage
+- Crit: 100 × 2.0 = 200 damage per weakpoint
+- 3 weakpoints = 600 total burst damage
+
+#### Multiplayer Synchronization
+
+**Owner-Only Visibility** (key security feature):
+- Only the player who crits sees the weakpoints
+- Prevents kill-stealing
+- Allows multiple simultaneous crit windows on same target
+- Each player has independent weakpoints
+
+**Server Authority**:
+- Server calculates crit chance (prevents client manipulation)
+- Server generates weakpoint positions (anti-cheat)
+- Server validates all weakpoint clicks (spatial + timing)
+- Server applies damage after validation
+
+**Network Messages** (see Multiplayer Crit/Weakpoint System Design for full details)
+
+#### Performance Optimization
+
+**Object Pooling** (future):
+- Reuse weakpoint nodes instead of instantiate/free
+- Reduces GC pressure during intense combat
+- Target: <5ms per crit window creation
+
+**Particle Culling**:
+- Limit to 10 simultaneous crit windows on screen
+- Reduce particle count when >5 active
+- Maintain 60 FPS with 15 players
+
+**Z-Index Management**:
+- Weakpoints: z_index 400 (always on top)
+- Regular enemies: z_index 0
+- Prevents visual overlap issues
+
+---
+
 ### Weakpoint System
 Optimized weakpoint positions for skeleton enemies:
 
@@ -1242,6 +1423,434 @@ z = 0:   Player, enemies, campfire (game entities)
 - Dynamic item row generation with proper styling
 - Purchase validation (gold, level requirements)
 - Signal-based communication between vendor and UI
+
+---
+
+## Environmental Hazards
+
+### Lava Pools
+
+Dangerous lava pools scattered throughout the wasteland that damage players who get too close.
+
+#### Damage System
+**Script**: `scripts/effects/LavaDamage.gd`
+
+- **Damage Rate**: 15 HP per second
+- **Damage Interval**: Applied every 0.5 seconds (7.5 HP per tick)
+- **Safe Zone**: Outer 40% of pool radius (can walk around edges safely)
+- **Danger Zone**: Inner 60% of pool radius triggers damage
+
+**Detection**:
+- Uses Area2D with CircleShape2D collision
+- Detects players on collision layer 1
+- Continuous damage while player remains in danger zone
+- Instant damage on entry, stops on exit
+
+#### Visual Animation
+**Script**: `scripts/effects/LavaPoolAnimation.gd`
+
+**Layered Structure**:
+- 3 border layers (outer, middle, inner)
+- 10 gradient layers creating depth effect
+- Each layer pulses independently
+
+**Pulsing Animation**:
+- Inner (hotter) layers pulse faster than outer layers
+- Frequency range: 0.5 Hz (outermost) to 1.22 Hz (innermost)
+- ±20% random variation per pool (prevents synchronization)
+- Subtle 3% scale variation (0.97x to 1.03x)
+- Random phase offsets prevent layers from syncing
+
+**Visual Effect**:
+- Creates organic "flowing lava" appearance
+- Each pool looks unique due to randomization
+- Maintains performance with lightweight scaling animations
+
+#### Technical Implementation
+
+**Crater Shape**:
+- Rounded edges using bezier-like curves
+- Multiple overlapping circles create natural roundness
+- Gradient layers provide depth perception
+
+**Collision Detection**:
+```gdscript
+# LavaDamage.gd
+collision_layer = 0  # Don't exist on any layer
+collision_mask = 1   # Detect player on layer 1
+
+# Apply damage every 0.5 seconds
+damage_timer += delta
+if damage_timer >= damage_interval:
+    damage_timer = 0.0
+    apply_lava_damage()
+```
+
+**Performance**:
+- Lightweight CPU-based animation (no shaders)
+- Each pool is independent Node2D
+- Minimal overhead (~10 pools = negligible FPS impact)
+
+#### Placement Strategy
+
+**Zone Distribution**:
+- Zone 1 (Wasteland): 2-3 small pools
+- Zone 2 (Cursed Lands): 4-5 medium pools
+- Zone 3 (Shadow Realm): 6-8 large pools
+- Zone 4 (Castle Approach): 3-4 strategic pools
+
+**Strategic Placement**:
+- Near enemy spawn points (adds combat complexity)
+- Along narrow path sections (creates obstacles)
+- Around ruins (environmental challenge during guardian fights)
+- Never block critical paths completely
+
+---
+
+## Resource Gathering
+
+### Harvestable Trees
+
+Dead wasteland trees that can be chopped for wood, which sells for gold.
+
+#### Core Mechanics
+**Script**: `scripts/environment/HarvestableTree.gd`
+
+**Interaction**:
+- Press **F** when near tree to chop
+- Interaction range: 60 pixel radius around tree trunk
+- Floating prompt appears: "[F] Chop Tree" (light green text)
+- Prompt positioned 10 pixels below player's feet
+
+**Wood Yield** (based on tree size):
+- Small trees (scale < 2.5): 1 wood
+- Medium trees (scale 2.5-4.0): 2 wood
+- Large trees (scale > 4.0): 3 wood
+
+**Resource Value**:
+- Item name: "Dry Log"
+- Description: "Dry wood from a dead wasteland tree. Burns well."
+- Sell value: 12 gold per log
+- Stackable: Yes (max 1000 per stack)
+
+#### Respawn System
+
+**Timing**:
+- Respawn time: 120 seconds (2 minutes)
+- Timer starts immediately after chopping
+- Tree regrows automatically
+
+**Visual States**:
+1. **Alive Tree**: Full appearance with shadow
+2. **Chopping Animation**: Tree fades out, falls upward, stump remains
+3. **Stump**: Bottom 12% of tree sprite with jagged cut effect
+4. **Respawn**: Tree fades back in over 0.5 seconds
+
+#### Stump Generation
+
+**Technical Details**:
+- Extracts bottom 12% of tree texture
+- Adds procedural jagged cut effect to top edge
+- Random splinter depth: 3-7 pixels
+- Brownish coloring: `Color(0.7, 0.6, 0.5)`
+- Shadow remains visible under stump
+
+**Jagged Cut Algorithm**:
+```gdscript
+for x in range(stump_width):
+    var cut_depth = rng.randi_range(3, 7)  # Random splinters
+    for y in range(cut_depth):
+        var fade = 1.0 - (float(y) / float(cut_depth))
+        pixel.a *= fade * rng.randf_range(0.3, 1.0)  # Fade edges
+```
+
+#### Economy Impact
+
+**Income Source**:
+- Alternative to combat for earning gold
+- Safe activity (no combat required)
+- Scales with player effort (more chopping = more gold)
+
+**Balance**:
+- 1 log = 12 gold (vs. 5-20 gold per enemy kill in Zone 1)
+- Medium tree = 24 gold (comparable to 2-3 enemy kills)
+- Respawn time limits farming (can't camp single tree)
+
+**Strategy**:
+- Efficient when traveling between zones
+- Chop trees along path during journey
+- Return to same trees after 2 minutes during grinding
+
+#### Future Enhancements
+
+**Crafting Integration**:
+- Wood used for campfire building (custom spawn points)
+- Craft wooden shields or clubs
+- Build barricades for defensive gameplay
+
+**Tool System**:
+- Better axes = faster chopping
+- Higher quality tools = bonus wood yield
+- Durability system for tools
+
+**Tree Varieties**:
+- Oak, pine, dead trees with different yields
+- Rare trees with special resources
+- Seasonal variations (if day/night cycle added)
+
+---
+
+## Chain/Combo System
+
+### Chain Mechanics
+
+The chain system rewards consecutive successful crit window completions with escalating damage multipliers.
+
+#### Core System
+**Script**: `scripts/systems/chain_manager.gd`
+
+**Chain Building**:
+- Start at 0x multiplier
+- Increase by 1x for each successful crit window (all weakpoints destroyed)
+- Reset to 0x on any failure or timeout
+
+**Damage Multiplier**:
+- Base damage: 1.0x (no chain)
+- Formula: `1.0 + (chain_level * 0.10)` = 10% damage per chain level
+- Example progression:
+  - 1x chain: 1.10x damage (+10%)
+  - 5x chain: 1.50x damage (+50%)
+  - 10x chain: 2.00x damage (+100% = OVERDRIVE!)
+
+**Maximum Chain**: 10x (configurable via `Constants.CHAIN_MAX_LEVEL`)
+
+#### Chain Timeout System
+
+**Timeout Mechanics**:
+- Duration: 4 seconds (configurable via `Constants.CHAIN_TIMEOUT`)
+- Timer starts from last attack registered
+- Resets on any player attack during crit window
+- Chain breaks if no attack within timeout
+
+**Reset Reasons**:
+```gdscript
+enum ResetReason {
+    MANUAL,          # Player manually reset (future: keybind)
+    FAILED_WINDOW,   # Failed to destroy all weakpoints
+    TIMEOUT,         # No attack within timeout period
+    PLAYER_DEATH,    # Player died
+    STAGE_END        # Level/stage ended (future)
+}
+```
+
+#### Overdrive Mode
+
+**Activation**:
+- Triggered at maximum chain (10x)
+- 2.0x total damage multiplier
+- Special visual effects
+- Maximum risk/reward state
+
+**Overdrive Signals**:
+```gdscript
+signal overdrive_activated()  # Emitted when reaching max chain
+```
+
+**Audio Feedback**:
+- Milestone sound every 5 chain levels
+- Special OVERDRIVE sound at max chain
+- Chain broken sound on reset
+
+#### UI Display
+**Script**: `scripts/ui/chain_ui.gd`
+
+**Visual Tiers** (color-coded by chain level):
+- 0x: Gray `Color(0.5, 0.5, 0.5)` - No chain
+- 1-3x: White `Color(1.0, 1.0, 1.0)` - Low chain
+- 4-6x: Yellow `Color(1.0, 1.0, 0.0)` - Medium chain
+- 7-9x: Orange `Color(1.0, 0.5, 0.0)` - High chain
+- 10x: Magenta `Color(1.0, 0.0, 1.0)` - OVERDRIVE!
+
+**Display Format**:
+- Shows "Chain: Nx" where N is current chain level
+- Updates in real-time via signal connections
+- Positioned in top-left corner of screen
+
+#### Integration with Combat
+
+**Crit Window Completion**:
+```gdscript
+# Called when crit window ends
+ChainManager.on_crit_window_completed(all_weakpoints_destroyed)
+
+# If all weakpoints destroyed: chain++
+# If any weakpoint survived: chain reset to 0
+```
+
+**Damage Application**:
+```gdscript
+# In Player.gd or Enemy.gd
+var multiplier = ChainManager.get_damage_multiplier()
+var final_damage = base_damage * multiplier
+```
+
+**Chain Registration**:
+```gdscript
+# Register attack to reset timeout timer
+ChainManager.register_attack()
+```
+
+#### Gameplay Strategy
+
+**Risk vs Reward**:
+- Higher chains = massive damage boost
+- One mistake = lose all progress
+- Creates tension during long fights
+
+**Skill Expression**:
+- Skilled players maintain high chains
+- Rewards precision and focus
+- Punishes mistakes with full reset
+
+**Combat Pacing**:
+- Encourages aggressive play (maintain chain)
+- Discourages hit-and-run tactics (timeout penalty)
+- Creates flow state during combat
+
+#### Multiplayer Considerations
+
+**Per-Player Chains**:
+- Each player has independent chain level
+- No shared chains between party members
+- Allows individual skill expression
+
+**Competitive Element**:
+- Players can compete for highest chain
+- Leaderboards for max chain achieved
+- "Most chains broken" stat tracking (for fun)
+
+**Cooperative Bonus (Future)**:
+- Party-wide chain multiplier
+- Bonus if all party members maintain high chains
+- Encourages coordination
+
+---
+
+## Training Dummy
+
+### Purpose
+
+The training dummy provides a safe, controlled environment for testing combat mechanics, practicing crit windows, and experimenting with chain building.
+
+#### Location & Setup
+**Script**: `scripts/training/TrainingDummy.gd`
+
+**Placement**:
+- Near main campfire (safe zone)
+- Accessible from game start
+- Does not fight back
+
+**Visual Design**:
+- Wooden mannequin appearance
+- Clear target for new players
+- Labeled "Training Dummy"
+
+#### Features
+
+**Invulnerability**:
+- Cannot be killed (infinite HP)
+- Takes damage normally (displays damage numbers)
+- Regenerates after each hit
+- Always available for practice
+
+**Crit Window Testing**:
+- Triggers crit windows on critical hits (same as enemies)
+- Spawns 1-3 weakpoints based on player level
+- 4 second window duration (same as combat)
+- Perfect for practicing weakpoint clicking
+
+**Combat Text Positioning**:
+- Damage numbers spawn 40px behind dummy (away from player)
+- Prevents overlap with weakpoints
+- Same positioning logic as enemies
+
+**Chain Building Practice**:
+- Fully integrates with ChainManager
+- Successful crit completions increase chain
+- Failed windows reset chain
+- Safe environment to learn chain mechanics
+
+#### Use Cases
+
+**New Player Tutorial**:
+1. Learn basic attack mechanics
+2. Understand crit window triggers
+3. Practice clicking weakpoints quickly
+4. Experience chain system safely
+
+**Testing Builds**:
+- Test weapon damage output
+- Verify stat bonuses working
+- Check crit chance calculations
+- Measure DPS over time
+
+**Practicing Combos**:
+- Build chain to 10x safely
+- Practice maintaining chain under pressure
+- Develop muscle memory for weakpoint patterns
+
+**Experimenting with Gear**:
+- Compare weapon damage side-by-side
+- Test armor defense values (future: dummy can attack back)
+- Verify enchantment effects
+
+#### Technical Implementation
+
+**Damage Handling**:
+```gdscript
+func take_damage(damage: float, is_critical: bool = false) -> void:
+    # Display combat text
+    spawn_combat_text(damage)
+
+    # Trigger crit window if critical hit
+    if is_critical and weakpoint_scene:
+        spawn_crit_window()
+
+    # No HP deduction - dummy is invulnerable
+```
+
+**Weakpoint System**:
+- Uses same weakpoint positions as skeleton enemies
+- Same sectioned spawning algorithm
+- Same 8+ pixel spacing rules
+- Identical visual appearance
+
+**Signals**:
+- Connects to ChainManager signals
+- Emits same events as real enemies
+- Fully participates in combat systems
+
+#### Future Enhancements
+
+**Combat Dummy (Advanced)**:
+- Fights back with configurable attack speed
+- Adjustable damage output
+- Practice dodging/kiting
+
+**DPS Meter**:
+- Displays damage over time
+- Shows average DPS
+- Tracks crit rate percentage
+
+**Difficulty Settings**:
+- Easy: Slower weakpoint timers
+- Normal: Standard timers
+- Hard: Faster weakpoint expiration
+
+**Multiple Dummies**:
+- AoE practice dummy (multiple targets)
+- Moving dummy (practice tracking)
+- Boss dummy (simulates boss mechanics)
 
 ---
 
