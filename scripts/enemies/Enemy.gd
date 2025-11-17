@@ -25,7 +25,6 @@ var weakpoints: Array = []
 var weakpoints_destroyed: int = 0
 var num_weakpoints: int = 1  # Will be calculated based on enemy_level in _ready()
 var spam_protection_active: bool = false
-var window_duration: float = 4.0
 var window_timer: Timer = null
 var is_dying: bool = false
 
@@ -414,14 +413,14 @@ func start_crit_window(difficulty: float = 1.0) -> void:
 	spam_protection_active = false
 	print("Weakpoints active immediately!")
 	
-	# Start timer
-	var scaled_duration = window_duration / difficulty
+	# Start timer (fixed 4 second duration)
 	window_timer = Timer.new()
-	window_timer.wait_time = scaled_duration
+	window_timer.wait_time = Constants.CRIT_WINDOW_DURATION  # Always 4 seconds
 	window_timer.one_shot = true
 	window_timer.timeout.connect(_on_window_timeout)
 	add_child(window_timer)
 	window_timer.start()
+	print("⏱️ Crit window timer started: %.1f seconds" % Constants.CRIT_WINDOW_DURATION)
 
 func spawn_weakpoints() -> void:
 	# Calculate weakpoint count based on CURRENT PLAYER level (when crit triggers, not when enemy spawned)
@@ -572,31 +571,44 @@ func _on_weakpoint_hit(weakpoint) -> void:
 
 func _on_weakpoint_destroyed(weakpoint) -> void:
 	weakpoints_destroyed += 1
-	DebugConfig.log_combat("💥 Weakpoint destroyed (%d/%d)" % [weakpoints_destroyed, num_weakpoints])
+	print("🔍 [CRIT WINDOW] Weakpoint destroyed (%d/%d)" % [weakpoints_destroyed, num_weakpoints])
 
 	if weakpoints_destroyed >= num_weakpoints:
-		DebugConfig.log_combat("🎯 All weakpoints destroyed")
-		
+		print("🎯 [CRIT WINDOW] ALL WEAKPOINTS CLEARED - Waiting 0.55s for explosion, then ending window")
+
 		# ✨ NEW: Play victory sound for clearing all weakpoints
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
 			sound_manager.play_sound(sound_manager.SoundType.ALL_WEAKPOINTS_CLEARED, global_position, -2.0)
-		
+
+		# ⏱️ WAIT for weakpoint destruction animation to finish
+		# Shake: 0.3s + pause: 0.05s + explosion: 0.16s = 0.51s
+		# Adding small buffer to ensure explosion completes visually
+		await get_tree().create_timer(0.55).timeout
+		print("🎯 [CRIT WINDOW] Explosion complete - calling end_crit_window()")
 		end_crit_window()
 
 func _on_window_timeout() -> void:
+	# ✨ REMOVED: Don't auto-end window on timeout
+	# Window should only end when:
+	# 1. All weakpoints are destroyed (success)
+	# 2. Enemy dies (window becomes irrelevant)
+	# The timer is kept for future features (e.g., difficulty scaling, visual countdown)
 	if in_crit_window and not is_dying:
-		DebugConfig.log_combat("⏱️ Window timeout")
-		end_crit_window()
+		DebugConfig.log_combat("⏱️ 4-second mark reached - window continues until weakpoints destroyed or enemy dies")
+		# Future: Could add visual indicator that time is up but window remains open
 
 func end_crit_window() -> void:
 	if not in_crit_window or is_dying:
+		if not in_crit_window:
+			print("⚠️ [CRIT WINDOW] end_crit_window() called but already closed - ignoring")
 		return
 
-	DebugConfig.log_combat("Ending crit window")
+	print("🔚 [CRIT WINDOW] ENDING - Setting in_crit_window=false to prevent re-entry")
 
-	# ✨ DON'T set in_crit_window = false yet!
-	# Wait until tween finishes to prevent overlapping crit windows
+	# ✨ CRITICAL: Set flag IMMEDIATELY to prevent re-entry
+	# This prevents end_crit_window() from being called twice (e.g., weakpoints destroyed + timer timeout)
+	in_crit_window = false
 
 	# Stop timer
 	if window_timer and is_instance_valid(window_timer):
@@ -647,10 +659,7 @@ func end_crit_window() -> void:
 
 			print("✅ Enemy sprite scaled back to normal: ", sprite.scale)
 
-	# ✨ NOW it's safe to clear the flag - prevents new crit windows during scale-down
-	in_crit_window = false
-
-	# Emit signal AFTER everything is cleaned up
+	# Emit signal AFTER everything is cleaned up (in_crit_window already set to false at start)
 	crit_window_complete.emit(weakpoints_destroyed)
 
 func die() -> void:

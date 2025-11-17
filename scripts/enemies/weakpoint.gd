@@ -442,17 +442,18 @@ func destroy() -> void:
 		print("⚠️ Weakpoint destroy() called but already destroyed - skipping")
 		return
 
-	print("💀 DESTROY() - Starting destruction sequence")
+	print("🔥 [WEAKPOINT] DESTROY() - Starting destruction sequence")
 	is_destroyed = true
 
 	if sparkle_particles:
 		sparkle_particles.emitting = false
 
-	print("📡 Emitting weakpoint_destroyed signal")
+	print("🔥 [WEAKPOINT] Emitting weakpoint_destroyed signal")
 	weakpoint_destroyed.emit(self)
-	print("✅ Signal emitted successfully")
+	print("🔥 [WEAKPOINT] Signal emitted - waiting for parent to respond")
 
 	# 💥 SHAKE FIRST (building tension)
+	print("🔥 [WEAKPOINT] Starting shake animation (0.3s)")
 	if sprite:
 		var shake_tween = create_tween()
 		shake_tween.set_loops(4)  # Half as long (was 8)
@@ -460,30 +461,36 @@ func destroy() -> void:
 		shake_tween.tween_property(sprite, "position", Vector2(-3, 0), 0.025)
 		shake_tween.tween_property(sprite, "position", Vector2(0, 0), 0.025)
 		await shake_tween.finished
+		print("🔥 [WEAKPOINT] Shake complete")
 
 		# Brief pause before explosion
 		await get_tree().create_timer(0.05).timeout
+		print("🔥 [WEAKPOINT] Pause complete")
 
 	# 💥 PLAY EXPLOSION SOUND (perfectly timed with visual explosion)
+	print("🔥 [WEAKPOINT] Playing explosion sound")
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		sound_manager.play_weakpoint_destroyed_sound(global_position, -3.0)
 
 	# 💥 NOW SPAWN EFFECTS (after shake completes)
-	print("🎆 Spawning destruction particles...")
+	print("🔥 [WEAKPOINT] Spawning destruction particles")
 	spawn_destruction_particles()
 
-	print("💥 Spawning destruction wave...")
+	print("🔥 [WEAKPOINT] Spawning destruction wave")
 	spawn_destruction_wave()
 
 	# 💥 THEN EXPLODE (dramatic release)
+	print("🔥 [WEAKPOINT] Starting explosion fade (0.16s)")
 	if sprite:
 		var explode_tween = create_tween()
 		explode_tween.set_parallel(true)
 		explode_tween.tween_property(sprite, "scale", Vector2(2.0, 2.0), 0.16)
 		explode_tween.tween_property(sprite, "modulate:a", 0.0, 0.16)
 		await explode_tween.finished
+		print("🔥 [WEAKPOINT] Explosion fade complete")
 
+	print("🔥 [WEAKPOINT] Calling queue_free() - destruction complete")
 	queue_free()
 
 func spawn_destruction_wave() -> void:

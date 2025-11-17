@@ -403,37 +403,40 @@ func _on_weakpoint_hit(weakpoint) -> void:
 
 func _on_weakpoint_destroyed(weakpoint) -> void:
 	"""Handle weakpoint destruction - end crit window when all destroyed"""
-	print("🎯 TrainingDummy._on_weakpoint_destroyed() CALLED")
-	print("   - Weakpoint array size: %d" % weakpoints.size())
-
 	# Count how many weakpoints are left
 	var remaining_weakpoints = 0
 	for wp in weakpoints:
 		if is_instance_valid(wp):
-			print("   - Checking weakpoint: is_destroyed=%s" % wp.is_destroyed)
 			if not wp.is_destroyed:
 				remaining_weakpoints += 1
 
-	print("   - Remaining weakpoints: %d" % remaining_weakpoints)
+	print("🔍 [CRIT WINDOW] Weakpoint destroyed. Remaining: %d/%d" % [remaining_weakpoints, weakpoints.size()])
 
 	# If all weakpoints destroyed, end crit window early
 	if remaining_weakpoints == 0:
-		print("✅ All weakpoints destroyed! Ending crit window early")
+		print("🎯 [CRIT WINDOW] ALL WEAKPOINTS CLEARED - Waiting 0.55s for explosion, then ending window")
+		# Wait for final weakpoint explosion to complete
+		await get_tree().create_timer(0.55).timeout
+		print("🎯 [CRIT WINDOW] Explosion complete - calling end_crit_window()")
 		end_crit_window()
-	else:
-		print("⏳ Still have %d weakpoints remaining" % remaining_weakpoints)
 
 func _on_crit_window_timeout() -> void:
-	"""Crit window expired - return to normal"""
-	end_crit_window()
+	"""Crit window timer reached - but window continues until all weakpoints destroyed"""
+	# ✨ REMOVED: Don't auto-end window on timeout
+	# Window should only end when all weakpoints are destroyed
+	# The timer is kept for future features (e.g., visual countdown)
+	print("⏱️ [CRIT WINDOW] 4-second timer expired - window continues until weakpoints destroyed")
 
 func end_crit_window() -> void:
 	"""End crit window and return dummy to normal size"""
 	if not in_crit_window:
+		print("⚠️ [CRIT WINDOW] end_crit_window() called but already closed - ignoring")
 		return
 
-	# ✨ DON'T set in_crit_window = false yet!
-	# Wait until tween finishes to prevent overlapping crit windows
+	print("🔚 [CRIT WINDOW] ENDING - Setting in_crit_window=false to prevent re-entry")
+	# ✨ CRITICAL: Set flag IMMEDIATELY to prevent re-entry
+	# This prevents end_crit_window() from being called twice
+	in_crit_window = false
 
 	# Remove any remaining weakpoints
 	for weakpoint in weakpoints:
@@ -453,13 +456,10 @@ func end_crit_window() -> void:
 		tween.tween_property(sprite, "scale", base_sprite_scale, 0.3)
 		tween.tween_property(self, "z_index", 0, 0.3)
 
-		# ✨ Wait for tween to finish BEFORE clearing the flag
+		# Wait for tween to finish
 		await tween.finished
 
-	# ✨ NOW it's safe to clear the flag - prevents new crit windows during scale-down
-	in_crit_window = false
-
-	# Emit completion signal
+	# Emit completion signal (in_crit_window already set to false at start)
 	emit_signal("crit_window_complete", 0)
 
 ## Debug Visualization (F3)
