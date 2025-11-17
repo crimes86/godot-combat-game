@@ -1,25 +1,32 @@
 extends Node
 class_name CritWindowManager
 
+## Manages crit windows for multiple enemies concurrently
+## Owns all timers, lifecycle, and state - enemies just provide visual hooks
+
 # Which prototype to use
 enum WindowType { ORBITAL_RING, GROWING_SPRITE }
 @export var window_type: WindowType = WindowType.GROWING_SPRITE
 
 # Settings
-@export var window_duration: float = 3.0
-@export var num_beats: int = 3
+@export var window_duration: float = 4.0  # Match Constants.CRIT_WINDOW_DURATION
 @export var time_slow_amount: float = 0.7
 
-# State
-var is_active: bool = false
-var current_target: Node = null
-var beats_hit: int = 0
-var beats_total: int = 0
-var difficulty_multiplier: float = 1.0
-
-# Visuals
-var orbital_ring: Node2D = null
+# State - track MULTIPLE concurrent windows (one per enemy)
+var active_windows: Dictionary = {}  # {enemy_instance: WindowData}
 var original_time_scale: float = 1.0
+
+# Window data for each enemy
+class WindowData:
+	var target: Node
+	var timer: Timer
+	var weakpoints_spawned: int = 0
+	var weakpoints_destroyed: int = 0
+	var difficulty: float = 1.0
+
+	func _init(t: Node, d: float):
+		target = t
+		difficulty = d
 
 signal window_completed(success_ratio: float, total_destroyed: int)
 
@@ -27,101 +34,154 @@ func _ready() -> void:
 	original_time_scale = Engine.time_scale
 
 func start_window(target: Node, difficulty: float = 1.0) -> void:
-	# REMOVED: Don't check is_active - allow multiple concurrent windows
-	# Each enemy manages its own window state
-	
+	"""Start a crit window on the target enemy"""
+	if not is_instance_valid(target):
+		push_error("CritWindowManager: Invalid target for crit window")
+		return
+
+	# Check if target already has an active window
+	if active_windows.has(target):
+		print("⚠️ CritWindowManager: Target already has active window - ignoring")
+		return
+
 	print("=== CRIT WINDOW STARTED on ", target.name, " (", WindowType.keys()[window_type], ", difficulty: ", difficulty, ") ===")
-	
-	# Slow time (client-side) - only do this once if not already slowed
+
+	# Slow time if not already slowed
 	if Engine.time_scale == original_time_scale:
 		Engine.time_scale = time_slow_amount
-	
-	# Start the appropriate visual system
+
+	# Create window data
+	var window_data = WindowData.new(target, difficulty)
+	active_windows[target] = window_data
+
+	# Start the appropriate window type
 	if window_type == WindowType.ORBITAL_RING:
-		start_orbital_ring_window(target, difficulty)
+		_start_orbital_ring_window(target, window_data)
 	else:
-		start_growing_sprite_window(target, difficulty)
+		_start_growing_sprite_window(target, window_data)
 
-func start_orbital_ring_window(target: Node, difficulty: float) -> void:
-	# Create orbital ring visual
-	var ring = preload("res://scenes/ui/orbital_ring.tscn").instantiate()
-	target.add_child(ring)
-	ring.setup(num_beats, window_duration)
-	ring.beat_hit.connect(_on_beat_hit)
-	ring.window_ended.connect(_on_window_ended)
+func _start_orbital_ring_window(target: Node, window_data: WindowData) -> void:
+	"""Legacy orbital ring mode - not currently used"""
+	push_warning("Orbital ring mode not fully supported in refactored version")
 
-func start_growing_sprite_window(target: Node, difficulty: float) -> void:
-	# Tell enemy to start growing sprite mode with weakpoints
-	if target.has_method("start_crit_window"):
-		target.start_crit_window(difficulty)
-		# Connect to THIS specific enemy's signals
-		if not target.weakpoint_hit_success.is_connected(_on_weakpoint_hit):
-			target.weakpoint_hit_success.connect(_on_weakpoint_hit)
-		if not target.crit_window_complete.is_connected(_on_window_ended_weakpoints):
-			target.crit_window_complete.connect(_on_window_ended_weakpoints.bind(target))
+func _start_growing_sprite_window(target: Node, window_data: WindowData) -> void:
+	"""Start growing sprite mode with weakpoints"""
+
+	# Tell target to grow (visual only)
+	if target.has_method("grow_for_crit_window"):
+		target.grow_for_crit_window(window_data.difficulty)
 	else:
-		print("ERROR: Target doesn't have start_crit_window method!")
+		push_error("Target missing grow_for_crit_window() method!")
+		end_window(target, 0)
+		return
 
-func _on_beat_hit(success: bool) -> void:
-	if success:
-		beats_hit += 1
-		print("✓ Beat hit! (", beats_hit, "/", beats_total, ")")
-	else:
-		print("✗ Beat missed!")
+	# Connect to target's signals
+	if target.has_signal("weakpoint_spawned"):
+		if not target.weakpoint_spawned.is_connected(_on_weakpoint_spawned):
+			target.weakpoint_spawned.connect(_on_weakpoint_spawned.bind(target))
 
-func _on_weakpoint_hit() -> void:
-	beats_hit += 1
-	print("✓ Weakpoint hit! (", beats_hit, " total hits)")
+	if target.has_signal("weakpoint_destroyed"):
+		if not target.weakpoint_destroyed.is_connected(_on_weakpoint_destroyed):
+			target.weakpoint_destroyed.connect(_on_weakpoint_destroyed.bind(target))
 
-func _on_window_ended() -> void:
-	# For orbital ring
-	var success_ratio = float(beats_hit) / float(beats_total)
-	print("=== WINDOW COMPLETE: ", beats_hit, "/", beats_total, " ===")
-	
-	cleanup()
-	window_completed.emit(success_ratio, beats_hit)
+	if target.has_signal("died"):
+		if not target.died.is_connected(_on_target_died):
+			target.died.connect(_on_target_died.bind(target))
 
-func _on_window_ended_weakpoints(destroyed_count: int, target: Node) -> void:
-	print("=== WINDOW COMPLETE on ", target.name if is_instance_valid(target) else "destroyed target", ": ", destroyed_count, "/", beats_total, " weakpoints destroyed ===")
-	
-	# Check if any other enemies still have crit windows active
-	# If not, restore time scale
-	var other_windows_active = false
-	for node in get_tree().get_nodes_in_group("enemies"):
-		if node != target and is_instance_valid(node) and node.in_crit_window:
-			other_windows_active = true
-			break
-	
-	if not other_windows_active:
+	# Create and start timer (owned by manager)
+	var timer = Timer.new()
+	timer.wait_time = window_duration
+	timer.one_shot = true
+	timer.timeout.connect(_on_window_timeout.bind(target))
+	add_child(timer)
+	timer.start()
+	window_data.timer = timer
+
+	print("⏱️ CritWindowManager: Window timer started (%.1fs)" % window_duration)
+
+func _on_weakpoint_spawned(target: Node) -> void:
+	"""Track when a weakpoint is spawned"""
+	if not active_windows.has(target):
+		return
+
+	var window_data = active_windows[target]
+	window_data.weakpoints_spawned += 1
+	print("🎯 CritWindowManager: Weakpoint spawned (%d total)" % window_data.weakpoints_spawned)
+
+func _on_weakpoint_destroyed(weakpoint: Node, target: Node) -> void:
+	"""Track when a weakpoint is destroyed"""
+	if not active_windows.has(target):
+		return
+
+	var window_data = active_windows[target]
+	window_data.weakpoints_destroyed += 1
+
+	print("🔍 CritWindowManager: Weakpoint destroyed (%d/%d)" % [window_data.weakpoints_destroyed, window_data.weakpoints_spawned])
+
+	# Check if all weakpoints destroyed
+	if window_data.weakpoints_destroyed >= window_data.weakpoints_spawned:
+		print("🎯 CritWindowManager: ALL WEAKPOINTS CLEARED - ending window")
+		# Small delay to let explosion animation play
+		await get_tree().create_timer(0.55).timeout
+		end_window(target, window_data.weakpoints_destroyed)
+
+func _on_window_timeout(target: Node) -> void:
+	"""Window timer expired - but we don't auto-close, just log"""
+	if not active_windows.has(target):
+		return
+
+	print("⏱️ CritWindowManager: 4-second timer expired for %s - window continues" % target.name)
+	# NOTE: Window only closes when all weakpoints destroyed or enemy dies
+
+func _on_target_died(target: Node) -> void:
+	"""Target died - end window immediately"""
+	if not active_windows.has(target):
+		return
+
+	print("💀 CritWindowManager: Target died - ending window")
+	end_window(target, 0)
+
+func end_window(target: Node, weakpoints_destroyed: int) -> void:
+	"""End a crit window (called when weakpoints cleared or enemy dies)"""
+	if not active_windows.has(target):
+		print("⚠️ CritWindowManager: end_window() called but no active window for target")
+		return
+
+	var window_data = active_windows[target]
+
+	print("🔚 CritWindowManager: ENDING window for %s (%d/%d weakpoints)" % [target.name, weakpoints_destroyed, window_data.weakpoints_spawned])
+
+	# Stop and cleanup timer
+	if window_data.timer and is_instance_valid(window_data.timer):
+		window_data.timer.stop()
+		window_data.timer.queue_free()
+		window_data.timer = null
+
+	# Disconnect signals
+	if is_instance_valid(target):
+		if target.has_signal("weakpoint_spawned") and target.weakpoint_spawned.is_connected(_on_weakpoint_spawned):
+			target.weakpoint_spawned.disconnect(_on_weakpoint_spawned)
+
+		if target.has_signal("weakpoint_destroyed") and target.weakpoint_destroyed.is_connected(_on_weakpoint_destroyed):
+			target.weakpoint_destroyed.disconnect(_on_weakpoint_destroyed)
+
+		if target.has_signal("died") and target.died.is_connected(_on_target_died):
+			target.died.disconnect(_on_target_died)
+
+		# Tell target to shrink back (visual only)
+		if target.has_method("shrink_after_crit_window"):
+			target.shrink_after_crit_window()
+
+	# Remove from active windows
+	active_windows.erase(target)
+
+	# Restore time scale if no more active windows
+	if active_windows.is_empty():
 		Engine.time_scale = original_time_scale
 		print("All crit windows closed - time scale restored")
-	
-	window_completed.emit(float(destroyed_count) / float(beats_total), destroyed_count)
 
-func cleanup() -> void:
-	print("CritWindowManager: Starting cleanup...")
-	
-	# Reset time
-	Engine.time_scale = original_time_scale
-	
-	# Clean up orbital ring
-	if orbital_ring:
-		orbital_ring.queue_free()
-		orbital_ring = null
-	
-	# Disconnect signals
-	if current_target and is_instance_valid(current_target):
-		if current_target.has_signal("beat_hit") and current_target.beat_hit.is_connected(_on_beat_hit):
-			current_target.beat_hit.disconnect(_on_beat_hit)
-		if current_target.has_signal("window_ended") and current_target.window_ended.is_connected(_on_window_ended):
-			current_target.window_ended.disconnect(_on_window_ended)
-		if current_target.has_signal("weakpoint_hit_success") and current_target.weakpoint_hit_success.is_connected(_on_weakpoint_hit):
-			current_target.weakpoint_hit_success.disconnect(_on_weakpoint_hit)
-		if current_target.has_signal("crit_window_complete") and current_target.crit_window_complete.is_connected(_on_window_ended_weakpoints):
-			current_target.crit_window_complete.disconnect(_on_window_ended_weakpoints)
-	
-	# CRITICAL: Reset state
-	current_target = null
-	is_active = false
-	
-	print("CritWindowManager: Cleanup complete! is_active = ", is_active)
+	# Emit completion signal
+	var success_ratio = float(weakpoints_destroyed) / float(max(1, window_data.weakpoints_spawned))
+	window_completed.emit(success_ratio, weakpoints_destroyed)
+
+	print("=== WINDOW COMPLETE on ", target.name if is_instance_valid(target) else "destroyed target", ": ", weakpoints_destroyed, "/", window_data.weakpoints_spawned, " weakpoints destroyed ===")

@@ -24,17 +24,17 @@ var total_damage_dealt: float = 0.0
 var last_damage_time: float = 0.0
 var damage_window: float = 3.0  # DPS calculation window
 
-# Crit window support (same as Enemy)
-var in_crit_window: bool = false
+# Crit window support (minimal - manager owns lifecycle)
+var in_crit_window: bool = false  # Simple flag set by grow/shrink methods
 var original_scale: Vector2 = Vector2.ONE
 var original_modulate: Color = Color.WHITE
-var weakpoints: Array = []
+var weakpoints: Array = []  # Just for visual rendering
 
-# Signals
+# Signals for CritWindowManager
 signal damage_taken(damage: float, is_crit: bool)
-signal weakpoint_hit_success()
-signal crit_window_complete(weakpoints_destroyed: int)
-signal died()
+signal weakpoint_spawned()  # Emitted when a weakpoint is created
+signal weakpoint_destroyed(weakpoint: Node)  # Emitted when a weakpoint is destroyed
+signal died()  # Note: Dummy never actually dies
 
 func _ready() -> void:
 
@@ -245,12 +245,12 @@ func _on_animation_finished() -> void:
 	if sprite and sprite.animation == "spin":
 		sprite.play("idle")
 
-func start_crit_window(difficulty: float = 1.0) -> void:
-	"""Start crit window - dummy version (simpler than Enemy)"""
-	if in_crit_window:
-		return
+func grow_for_crit_window(difficulty: float = 1.0) -> void:
+	"""Visual effect: grow sprite and spawn weakpoints (called by CritWindowManager)"""
+	print("🔍 [CRIT WINDOW] grow_for_crit_window() called (dummy)")
+	print("     Timestamp: ", Time.get_ticks_msec())
 
-	in_crit_window = true
+	in_crit_window = true  # Set flag for local checks
 
 	# Change to subtle white for crit window
 	if sprite:
@@ -260,28 +260,23 @@ func start_crit_window(difficulty: float = 1.0) -> void:
 			get_node("HitFlash").set_base_color(Color(1.0, 1.0, 1.05, 1.0))
 
 	# Scale up animation - ONLY SPRITE, not collision box!
-	# Sprite always starts at Vector2.ONE (base scale)
 	var base_sprite_scale = Vector2.ONE
 	var target_sprite_scale = base_sprite_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
 	if sprite:
+		print("🔍 [SPRITE SCALE] Starting GROW tween (dummy) - current scale: %s, target: %s" % [sprite.scale, target_sprite_scale])
 		var scale_tween = create_tween()
 		scale_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
 		z_index = Constants.CRIT_WINDOW_Z_INDEX
 
 		await scale_tween.finished
+		print("   ✅ [SPRITE SCALE] Sprite GROW animation complete (dummy) - final sprite scale: %s" % sprite.scale)
 	else:
 		print("⚠️ TrainingDummy: No sprite to scale!")
 
-	# Spawn weakpoints (simplified - just spawn 1 for practice)
+	# Spawn weakpoints
 	spawn_weakpoints()
 
-	# Start window timer (4 seconds default)
-	var timer = Timer.new()
-	timer.wait_time = 4.0 / difficulty
-	timer.one_shot = true
-	timer.timeout.connect(_on_crit_window_timeout)
-	add_child(timer)
-	timer.start()
+	print("✅ [CRIT WINDOW] Grow complete, weakpoints active (dummy)")
 
 func spawn_weakpoints() -> void:
 	"""Spawn weakpoints based on player level (1-3 weakpoints, sectioned)"""
@@ -382,12 +377,15 @@ func spawn_weakpoints() -> void:
 		# Random rotation for dynamic look
 		weakpoint.rotation = randf_range(-PI, PI)
 
-		# Connect weakpoint signals
+		# Connect weakpoint signals to LOCAL handler (not manager)
 		weakpoint.weakpoint_hit.connect(_on_weakpoint_hit)
-		weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed)
+		weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed_local)
 
 		add_child(weakpoint)
 		weakpoints.append(weakpoint)
+
+		# Emit signal so CritWindowManager can track it
+		weakpoint_spawned.emit()
 
 func _on_weakpoint_hit(weakpoint) -> void:
 	"""Handle weakpoint being hit - deal damage and show combat text"""
@@ -398,69 +396,54 @@ func _on_weakpoint_hit(weakpoint) -> void:
 	# Deal damage with crit flag
 	take_damage(crit_damage, true)
 
-	# Emit signal for any listeners
-	emit_signal("weakpoint_hit_success")
-
-func _on_weakpoint_destroyed(weakpoint) -> void:
-	"""Handle weakpoint destruction - end crit window when all destroyed"""
-	# Count how many weakpoints are left
-	var remaining_weakpoints = 0
+func _on_weakpoint_destroyed_local(weakpoint) -> void:
+	"""Local handler - just forward to manager and play sound if last one"""
+	# Check if it's the last one and play sound
+	var remaining = 0
 	for wp in weakpoints:
-		if is_instance_valid(wp):
-			if not wp.is_destroyed:
-				remaining_weakpoints += 1
+		if is_instance_valid(wp) and not wp.is_destroyed:
+			remaining += 1
 
-	print("🔍 [CRIT WINDOW] Weakpoint destroyed. Remaining: %d/%d" % [remaining_weakpoints, weakpoints.size()])
+	if remaining == 0:
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound(sound_manager.SoundType.ALL_WEAKPOINTS_CLEARED, global_position, -2.0)
 
-	# If all weakpoints destroyed, end crit window early
-	if remaining_weakpoints == 0:
-		print("🎯 [CRIT WINDOW] ALL WEAKPOINTS CLEARED - Waiting 0.55s for explosion, then ending window")
-		# Wait for final weakpoint explosion to complete
-		await get_tree().create_timer(0.55).timeout
-		print("🎯 [CRIT WINDOW] Explosion complete - calling end_crit_window()")
-		end_crit_window()
+	# Emit signal for manager to handle
+	weakpoint_destroyed.emit(weakpoint)
 
-func _on_crit_window_timeout() -> void:
-	"""Crit window timer reached - but window continues until all weakpoints destroyed"""
-	# ✨ REMOVED: Don't auto-end window on timeout
-	# Window should only end when all weakpoints are destroyed
-	# The timer is kept for future features (e.g., visual countdown)
-	print("⏱️ [CRIT WINDOW] 4-second timer expired - window continues until weakpoints destroyed")
+func shrink_after_crit_window() -> void:
+	"""Visual effect: shrink sprite and cleanup weakpoints (called by CritWindowManager)"""
+	in_crit_window = false  # Clear flag
 
-func end_crit_window() -> void:
-	"""End crit window and return dummy to normal size"""
-	if not in_crit_window:
-		print("⚠️ [CRIT WINDOW] end_crit_window() called but already closed - ignoring")
-		return
-
-	print("🔚 [CRIT WINDOW] ENDING - Setting in_crit_window=false to prevent re-entry")
-	# ✨ CRITICAL: Set flag IMMEDIATELY to prevent re-entry
-	# This prevents end_crit_window() from being called twice
-	in_crit_window = false
-
-	# Remove any remaining weakpoints
+	# Clean weakpoints
 	for weakpoint in weakpoints:
 		if is_instance_valid(weakpoint):
 			weakpoint.queue_free()
 	weakpoints.clear()
 
-	# Return to normal size and color - ONLY SPRITE, not collision box!
+	# Reset HitFlash and colors
+	if has_node("HitFlash"):
+		var hit_flash = get_node("HitFlash")
+		if hit_flash.has_method("reset"):
+			hit_flash.reset()
+		hit_flash.set_base_color(Color.WHITE)
+
+	self.modulate = original_modulate
 	if sprite:
-		sprite.modulate = original_modulate
-		if has_node("HitFlash"):
-			get_node("HitFlash").set_base_color(original_modulate)
+		sprite.modulate = Color.WHITE
 
-		var base_sprite_scale = Vector2.ONE  # Sprite base scale is always ONE
+	# Scale SPRITE back to base
+	if is_instance_valid(self) and sprite:
+		var base_sprite_scale = Vector2.ONE
 		var tween = create_tween()
-		tween.set_parallel(true)
-		tween.tween_property(sprite, "scale", base_sprite_scale, 0.3)
-		tween.tween_property(self, "z_index", 0, 0.3)
+		tween.tween_property(sprite, "scale", base_sprite_scale, 0.25)
+		await get_tree().create_timer(0.26).timeout
 
-		# Wait for tween to finish
-		await tween.finished
-
-	# Emit completion signal (in_crit_window already set to false at start)
-	emit_signal("crit_window_complete", 0)
+		if is_instance_valid(self) and sprite:
+			sprite.scale = base_sprite_scale
+			z_index = 0
+			sprite.modulate = Color.WHITE
 
 ## Debug Visualization (F3)
 func draw_debug_shapes_world(world_container: Node2D) -> Node2D:
