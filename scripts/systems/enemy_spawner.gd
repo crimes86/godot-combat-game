@@ -7,6 +7,7 @@ extends Node2D
 @export var respawn_delay: float = 3.0
 @export var enemy_scene: PackedScene
 @export var max_enemies: int = 4  # Total number of enemies to maintain
+@export var enemy_level: int = 1  # Level for spawned enemies
 
 # Tracking
 var spawn_positions: Array[Vector2] = []
@@ -67,6 +68,10 @@ func spawn_enemy_at(spawn_index: int, is_respawn: bool = false) -> void:
 	
 	var enemy = enemy_scene.instantiate()
 	enemy.global_position = spawn_positions[spawn_index]
+	
+	# Set enemy level
+	if enemy.has_method("set") and enemy_level > 0:
+		enemy.set("enemy_level", enemy_level)
 	
 	# Store spawn index on enemy for tracking
 	enemy.set_meta("spawn_index", spawn_index)

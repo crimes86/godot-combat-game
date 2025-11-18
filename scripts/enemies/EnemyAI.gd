@@ -13,10 +13,10 @@ class_name EnemyAI
 # ═══════════════════════════════════════════════════════════════════════════
 
 ## Patrol (default behavior)
-@export var patrol_speed: float = 30.0
+@export var patrol_speed: float = 50.0
 @export var patrol_radius: float = 100.0
-@export var patrol_pause_min: float = 2.0
-@export var patrol_pause_max: float = 5.0
+@export var patrol_pause_min: float = 0.5
+@export var patrol_pause_max: float = 2.0
 
 ## Aggro System (NEW)
 @export var aggro_range: float = 150.0  # Distance to auto-aggro player (150 patrol, 120 guardians)
@@ -579,7 +579,7 @@ func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
 
 func disengage() -> void:
 	"""Exit combat and return to patrol"""
-	print("🔄 Enemy disengaging from combat - resetting health")
+	print("🔄 Enemy disengaging from combat - resetting health and returning to spawn")
 	is_in_combat = false
 
 	# Regenerate health to full when resetting
@@ -600,9 +600,11 @@ func disengage() -> void:
 		else:
 			push_error("❌ Cannot reset enemy health - invalid max_health: %s" % str(max_hp))
 
-	spawn_position = enemy.global_position  # New patrol center
+	# Return to original spawn position (don't stay where we are!)
+	spawn_position = original_spawn_position
 	pick_new_patrol_target()
 	change_state(State.PATROLLING)
+	print("   🏠 Returning to original spawn at (%.0f, %.0f)" % [original_spawn_position.x, original_spawn_position.y])
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE MANAGEMENT
@@ -639,17 +641,18 @@ func reset_to_patrol() -> void:
 		if not enemy or not is_instance_valid(enemy):
 			print("⚠️  Enemy still not valid, aborting reset")
 			return
-	
+
 	# CRITICAL: Don't reset if enemy is in crit window - let it keep fighting!
 	if enemy.has_method("get") and enemy.get("in_crit_window"):
 		print("⚠️  Enemy in crit window - staying in combat!")
 		return
-	
+
 	is_in_combat = false
-	spawn_position = enemy.global_position
+	# Return to original spawn position (don't stay where we are!)
+	spawn_position = original_spawn_position
 	pick_new_patrol_target()
 	change_state(State.PATROLLING)
-	print("🔄 Enemy reset to patrol mode")
+	print("🔄 Enemy reset to patrol mode, returning to spawn at (%.0f, %.0f)" % [original_spawn_position.x, original_spawn_position.y])
 
 func disengage_to_spawn() -> void:
 	"""Disengage from combat and return to ORIGINAL spawn point (for campfire de-aggro)"""

@@ -20,7 +20,7 @@ class_name RuinsCampfire
 
 # Spawn area constraints
 @export var spawn_min_distance: float = 400.0  # Min distance from ruins to spawn
-@export var spawn_max_distance: float = 1000.0  # Max distance from ruins to spawn
+@export var spawn_max_distance: float = 600.0  # Max distance from ruins to spawn
 @export var avoid_campfire_radius: float = 300.0  # Don't spawn near main campfire
 @export var avoid_path_distance: float = 150.0  # Don't spawn on path
 

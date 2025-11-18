@@ -94,6 +94,10 @@ func open_loot_ui(primary_corpse, nearby_corpses: Array) -> void:
 
 	if total_items == 0:
 		print("💀 No items to loot - auto-closing")
+		# Check if all corpses are now empty (gold was looted, no items)
+		for corpse in corpses_looted:
+			if is_instance_valid(corpse):
+				corpse.check_if_looted_empty()
 		await get_tree().create_timer(0.5).timeout
 		close_ui()
 		return
@@ -149,6 +153,11 @@ func populate_loot_list() -> void:
 		empty_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		loot_list.add_child(empty_label)
+
+		# Check if corpses are fully empty (no gold, no items)
+		for corpse in corpses_looted:
+			if is_instance_valid(corpse):
+				corpse.check_if_looted_empty()
 
 		# Close after showing empty message
 		await get_tree().create_timer(1.0).timeout
