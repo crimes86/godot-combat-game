@@ -2799,12 +2799,8 @@ func _on_corpse_clicked(corpse) -> void:
 	if not is_instance_valid(corpse):
 		return
 
-	print("💀 Corpse clicked at %s" % corpse.global_position)
-
 	# Find all nearby corpses within AOE radius
 	var nearby_corpses = corpse.get_nearby_corpses(CorpseState.AOE_LOOT_RADIUS)
-
-	print("📦 Found %d nearby corpses (AOE radius: %.0f)" % [nearby_corpses.size(), CorpseState.AOE_LOOT_RADIUS])
 
 	# Create and open loot UI
 	var loot_scene = load("res://scenes/ui/loot_body_ui.tscn")
@@ -2813,6 +2809,10 @@ func _on_corpse_clicked(corpse) -> void:
 		return
 
 	var loot_ui = loot_scene.instantiate()
+	if not loot_ui:
+		push_error("❌ Failed to instantiate loot_body_ui!")
+		return
+
 	get_tree().root.add_child(loot_ui)
 
 	# Connect close signal
@@ -2820,5 +2820,3 @@ func _on_corpse_clicked(corpse) -> void:
 
 	# Open with aggregated loot
 	loot_ui.open_loot_ui(corpse, nearby_corpses)
-
-	print("✅ Loot UI opened with %d total corpses" % (nearby_corpses.size() + 1))

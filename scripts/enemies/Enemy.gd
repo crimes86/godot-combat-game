@@ -54,8 +54,8 @@ func _ready() -> void:
 	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))  # Same scaling as XP
 
-	# Debug gold drop calculation
-	DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d" % [enemy_level, gold_drop_base, gold_drop])
+	# Debug gold drop calculation (disabled - too spammy)
+	# DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d" % [enemy_level, gold_drop_base, gold_drop])
 
 	current_health = max_health
 	if health_bar and health_bar.has_method("update_health"):
@@ -729,19 +729,14 @@ func die() -> void:
 		return
 
 	is_dying = true
-	print("\n☠️ ===== ENEMY DEATH =====")
-	print("Enemy: ", name, " (Level ", enemy_level, ")")
 
 	# Grant XP to player
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("gain_experience"):
 		player.gain_experience(xp_reward)
-		print("✨ Granted ", xp_reward, " XP to player")
 
 	# Grant gold to player IMMEDIATELY
-	DebugConfig.debug_log("💰 Dropping %d gold (gold_drop_base=%d, enemy_level=%d)" % [gold_drop, gold_drop_base, enemy_level])
 	CharacterStats.add_gold(gold_drop)
-	DebugConfig.debug_log("💰 Player total gold now: %d" % CharacterStats.gold)
 
 	# Play death sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
@@ -751,7 +746,6 @@ func die() -> void:
 	# Play death animation (hurt animation) and wait for it to complete
 	var anim_sprite = sprite as AnimatedSprite2D
 	if anim_sprite and anim_sprite.sprite_frames and anim_sprite.sprite_frames.has_animation("hurt"):
-		print("🎬 Playing death animation...")
 		anim_sprite.play("hurt")
 		# Wait for the full animation to finish
 		await anim_sprite.animation_finished
@@ -760,25 +754,18 @@ func die() -> void:
 		anim_sprite.stop()
 		var frame_count = anim_sprite.sprite_frames.get_frame_count("hurt")
 		anim_sprite.frame = frame_count - 1
-		print("✅ Death animation complete - frozen on frame ", frame_count - 1)
 	else:
 		# Fallback if animation doesn't exist
-		print("⚠️ No hurt animation, waiting 0.6s...")
 		await get_tree().create_timer(0.6).timeout
 
 	# Generate loot for this corpse
 	corpse_loot = generate_corpse_loot()
-	if corpse_loot.size() > 0:
-		print("📦 Corpse has %d loot item(s)" % corpse_loot.size())
-	else:
-		print("💀 Corpse has no loot")
 
 	# Emit died signal - spawner will respawn immediately
 	died.emit()
 
 	# Transition to corpse state (don't despawn)
 	become_corpse()
-	print("===== CORPSE CREATED =====\n")
 
 ## Debug Visualization
 func draw_debug_shapes(debug_container: Node2D) -> void:
@@ -893,13 +880,11 @@ func generate_corpse_loot() -> Array:
 			if item.get("stackable", false):
 				item["quantity"] = 1
 			loot.append(item)
-			print("  🎲 Rolled loot: %s (%s)" % [item["name"], item["rarity"]])
 
 	return loot
 
 func become_corpse() -> void:
 	"""Transition enemy from living to corpse state"""
-	print("💀 Becoming corpse...")
 	is_corpse = true
 	corpse_creation_time = Time.get_ticks_msec() / 1000.0
 	corpse_state = CorpseState.State.FRESH
@@ -909,34 +894,27 @@ func become_corpse() -> void:
 		var ai = get_node("EnemyAI")
 		ai.set_process(false)
 		ai.set_physics_process(false)
-		print("  ✅ AI disabled")
 
 	# Disable health bar
 	if health_bar:
 		health_bar.visible = false
-		print("  ✅ Health bar hidden")
 
 	# Keep collision for clicking, but change layers
 	# Layer 4 = corpses (separate from living enemies)
 	collision_layer = 8  # 2^3 = layer 4
 	collision_mask = 0   # Don't detect anything
-	print("  ✅ Collision updated to corpse layer")
 
 	# Change groups
 	remove_from_group(Constants.GROUP_ENEMIES)
 	add_to_group("corpses")
-	print("  ✅ Moved to corpses group")
 
 	# Add loot indicator if has items
 	if corpse_loot.size() > 0:
 		add_loot_indicator()
-		print("  ✅ Loot indicator added")
 
 	# Darken sprite slightly
 	if sprite:
 		sprite.modulate = Color(0.8, 0.8, 0.8, 1.0)
-
-	print("💀 Corpse state active - will decay in %.0fs" % CorpseState.CORPSE_DECAY_TIME)
 
 func add_loot_indicator() -> void:
 	"""Add shiny glimmer effect to indicate this corpse has loot (WoW-style)"""
@@ -947,12 +925,12 @@ func add_loot_indicator() -> void:
 	loot_indicator.name = "LootIndicator"
 	loot_indicator.z_index = 10  # Draw on top
 
-	# Create 3-4 small sparkle points around the corpse
+	# Create 3-4 small sparkle points around the corpse (tighter positioning)
 	var sparkle_positions = [
-		Vector2(-20, -25),  # Upper left
-		Vector2(20, -25),   # Upper right
-		Vector2(-15, 5),    # Lower left
-		Vector2(15, 5)      # Lower right
+		Vector2(-10, -20),  # Upper left
+		Vector2(10, -20),   # Upper right
+		Vector2(-8, 0),     # Lower left
+		Vector2(8, 0)       # Lower right
 	]
 
 	for i in range(sparkle_positions.size()):
@@ -1026,7 +1004,6 @@ func process_corpse_decay(delta: float) -> void:
 		if corpse_state == CorpseState.State.FRESH:
 			corpse_state = CorpseState.State.DECAYING
 			update_decay_visual()
-			print("💀 Corpse is now decaying... (%.0fs remaining)" % (CorpseState.CORPSE_DECAY_TIME - elapsed))
 
 func update_decay_visual() -> void:
 	"""Update visual appearance for decaying state"""
@@ -1046,7 +1023,6 @@ func rot_and_despawn() -> void:
 		return  # Already rotting
 
 	corpse_state = CorpseState.State.ROTTED
-	print("💀 Corpse fully rotted - despawning with %d uncollected items" % corpse_loot.size())
 
 	# Fade out animation
 	var tween = create_tween()
@@ -1060,8 +1036,6 @@ func rot_and_despawn() -> void:
 func check_if_looted_empty() -> void:
 	"""Called when items are taken - check if corpse is now empty"""
 	if corpse_loot.is_empty():
-		print("💀 Corpse fully looted - despawning gracefully")
-
 		# Remove loot indicator
 		if loot_indicator:
 			loot_indicator.queue_free()

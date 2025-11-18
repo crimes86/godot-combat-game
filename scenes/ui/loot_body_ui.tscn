@@ -48,11 +48,7 @@ theme_override_constants/margin_bottom = 20
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Header" type="VBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_constants/separation = 5
-
-[node name="TopRow" type="HBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer/Header"]
+[node name="Header" type="HBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
 [node name="TitleLabel" type="Label" parent="Control/Panel/MarginContainer/VBoxContainer/Header"]
@@ -62,17 +58,17 @@ theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(0.8, 1.0, 0.8)
 text = "Looting Body"
 
-[node name="CloseButton" type="Button" parent="Control/Panel/MarginContainer/VBoxContainer/Header"]
-layout_mode = 2
-text = "X"
-flat = true
-
 [node name="GoldLabel" type="Label" parent="Control/Panel/MarginContainer/VBoxContainer/Header"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(1.0, 0.85, 0.0)
 text = "Gold already collected"
 visible = false
+
+[node name="CloseButton" type="Button" parent="Control/Panel/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+text = "X"
+flat = true
 
 [node name="InstructionLabel" type="Label" parent="Control/Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
