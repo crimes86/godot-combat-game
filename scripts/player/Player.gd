@@ -542,6 +542,12 @@ func _input(event: InputEvent) -> void:
 	# Debug mode toggle
 	if event is InputEventKey and event.pressed:
 		match event.keycode:
+			KEY_F6:
+				# Debug: Heal to full health
+				current_health = max_health
+				if health_bar and health_bar.has_method("update_health"):
+					health_bar.update_health(current_health, max_health)
+				print("💚 DEBUG: Healed to full health (%d/%d)" % [current_health, max_health])
 			KEY_G:
 				# Switch gender
 				print("🔄 Switching character gender...")
