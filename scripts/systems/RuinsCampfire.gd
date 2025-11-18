@@ -602,17 +602,13 @@ func _on_interaction_body_exited(body: Node2D) -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F:
-		print("🔑 F key pressed on %s" % name)
-		print("   current_state: %s" % ("CAMPFIRE" if current_state == RuinsState.CAMPFIRE else "RUINS"))
-		print("   player exists: %s" % (player != null and is_instance_valid(player)))
-
+		# Only handle F-key if player is close enough to convert ruins
 		if current_state == RuinsState.RUINS and player:
 			var distance = player.global_position.distance_to(global_position)
-			print("   distance to ruins: %.1f (range: %.1f)" % [distance, convert_range])
 			if distance < convert_range:
+				print("🔑 Converting ruins to campfire!")
 				convert_to_campfire()
-			else:
-				print("   ⚠️ Player too far from ruins!")
+				get_viewport().set_input_as_handled()  # Mark input as handled
 
 # ═══════════════════════════════════════════════════════════════════════════
 # VISUALS

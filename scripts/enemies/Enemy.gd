@@ -604,13 +604,20 @@ func update_loot_proximity() -> void:
 			create_loot_prompt()
 		loot_prompt.visible = true
 		update_loot_prompt_position()
-
-		# Check for F key press
-		if Input.is_key_pressed(KEY_F):
-			open_loot_ui()
 	else:
 		if loot_prompt:
 			loot_prompt.visible = false
+
+func _unhandled_input(event: InputEvent) -> void:
+	"""Handle F-key input for looting (only if not handled by other nodes)"""
+	if not is_corpse:
+		return
+
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
+		if player_in_loot_range and corpse_loot.size() > 0:
+			print("💀 Corpse handling F-key (unhandled input)")
+			open_loot_ui()
+			get_viewport().set_input_as_handled()
 
 func create_loot_prompt() -> void:
 	"""Create [F] Loot prompt above corpse"""
@@ -664,10 +671,13 @@ func update_loot_prompt_position() -> void:
 func open_loot_ui() -> void:
 	"""Open loot UI for this corpse (called when F is pressed)"""
 	if corpse_loot.is_empty():
+		print("💀 No loot, not opening UI")
 		return
 
 	print("💀 Opening loot UI via F-key for corpse at %s" % global_position)
+	print("💀 Signal connections: %d" % corpse_clicked.get_connections().size())
 	corpse_clicked.emit(self)
+	print("💀 Signal emitted!")
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Local handler - just forward to manager"""
@@ -925,12 +935,12 @@ func add_loot_indicator() -> void:
 	loot_indicator.name = "LootIndicator"
 	loot_indicator.z_index = 10  # Draw on top
 
-	# Create 3-4 small sparkle points around the corpse (tighter positioning)
+	# Create 3-4 small sparkle points clustered tightly on the corpse
 	var sparkle_positions = [
-		Vector2(-10, -20),  # Upper left
-		Vector2(10, -20),   # Upper right
-		Vector2(-8, 0),     # Lower left
-		Vector2(8, 0)       # Lower right
+		Vector2(-3, -5),  # Upper left (tight cluster)
+		Vector2(3, -5),   # Upper right (tight cluster)
+		Vector2(-2, 0),   # Lower left (tight cluster)
+		Vector2(2, 0)     # Lower right (tight cluster)
 	]
 
 	for i in range(sparkle_positions.size()):
