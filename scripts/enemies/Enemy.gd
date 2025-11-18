@@ -27,11 +27,13 @@ var is_dying: bool = false
 # Corpse state (lootable body system)
 var is_corpse: bool = false
 var corpse_loot: Array = []  # Generated items for this corpse
+var corpse_gold: int = 0  # Gold that can be looted from this corpse
 var corpse_creation_time: float = 0.0
 var corpse_state: CorpseState.State = CorpseState.State.FRESH
 var loot_indicator: Node2D = null  # Visual glow for lootable corpses
 var player_in_loot_range: bool = false  # Is player close enough to loot?
 var loot_prompt: Label = null  # [F] Loot prompt
+var loot_ui_open: bool = false  # Is the loot UI currently open for this corpse?
 
 # Signals for CritWindowManager
 signal weakpoint_spawned()  # Emitted when a weakpoint is created
@@ -598,8 +600,8 @@ func update_loot_proximity() -> void:
 	var was_in_range = player_in_loot_range
 	player_in_loot_range = distance <= 80.0  # Same range as chest interaction
 
-	# Update prompt visibility
-	if player_in_loot_range and corpse_loot.size() > 0:
+	# Update prompt visibility (show if has gold OR items, and UI not open)
+	if player_in_loot_range and (corpse_gold > 0 or corpse_loot.size() > 0) and not loot_ui_open:
 		if not loot_prompt:
 			create_loot_prompt()
 		loot_prompt.visible = true
@@ -614,7 +616,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
-		if player_in_loot_range and corpse_loot.size() > 0:
+		if player_in_loot_range and (corpse_gold > 0 or corpse_loot.size() > 0):
 			print("💀 Corpse handling F-key (unhandled input)")
 			open_loot_ui()
 			get_viewport().set_input_as_handled()
@@ -670,11 +672,11 @@ func update_loot_prompt_position() -> void:
 
 func open_loot_ui() -> void:
 	"""Open loot UI for this corpse (called when F is pressed)"""
-	if corpse_loot.is_empty():
-		print("💀 No loot, not opening UI")
+	if corpse_gold == 0 and corpse_loot.is_empty():
+		print("💀 No loot or gold, not opening UI")
 		return
 
-	print("💀 Opening loot UI via F-key for corpse at %s" % global_position)
+	print("💀 Opening loot UI via F-key for corpse at %s (Gold: %d, Items: %d)" % [global_position, corpse_gold, corpse_loot.size()])
 	print("💀 Signal connections: %d" % corpse_clicked.get_connections().size())
 	corpse_clicked.emit(self)
 	print("💀 Signal emitted!")
@@ -740,13 +742,14 @@ func die() -> void:
 
 	is_dying = true
 
-	# Grant XP to player
+	# Grant XP to player (immediate reward)
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("gain_experience"):
 		player.gain_experience(xp_reward)
 
-	# Grant gold to player IMMEDIATELY
-	CharacterStats.add_gold(gold_drop)
+	# Store gold in corpse for looting (NOT auto-awarded)
+	corpse_gold = gold_drop
+	print("💀 Storing %d gold in corpse for looting" % corpse_gold)
 
 	# Play death sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
@@ -881,6 +884,7 @@ func generate_corpse_loot() -> Array:
 
 	# Roll for number of items (0-2)
 	var num_items = CorpseState.roll_loot_count()
+	print("💀 Rolled %d loot items for corpse" % num_items)
 
 	# Generate each item
 	for i in range(num_items):
@@ -890,11 +894,13 @@ func generate_corpse_loot() -> Array:
 			if item.get("stackable", false):
 				item["quantity"] = 1
 			loot.append(item)
+			print("   💎 Generated: %s" % item.get("name", "Unknown"))
 
 	return loot
 
 func become_corpse() -> void:
 	"""Transition enemy from living to corpse state"""
+	print("💀 Becoming corpse with %d loot items" % corpse_loot.size())
 	is_corpse = true
 	corpse_creation_time = Time.get_ticks_msec() / 1000.0
 	corpse_state = CorpseState.State.FRESH
@@ -918,9 +924,12 @@ func become_corpse() -> void:
 	remove_from_group(Constants.GROUP_ENEMIES)
 	add_to_group("corpses")
 
-	# Add loot indicator if has items
-	if corpse_loot.size() > 0:
+	# Add loot indicator if has gold OR items
+	if corpse_gold > 0 or corpse_loot.size() > 0:
+		print("   ✨ Adding loot indicator (sparkles) - Gold: %d, Items: %d" % [corpse_gold, corpse_loot.size()])
 		add_loot_indicator()
+	else:
+		print("   ⚫ No loot - no indicator")
 
 	# Darken sprite slightly
 	if sprite:

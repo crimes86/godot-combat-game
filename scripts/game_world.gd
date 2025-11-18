@@ -2796,27 +2796,41 @@ func _on_node_added(node: Node) -> void:
 
 func _on_corpse_clicked(corpse) -> void:
 	"""Handle corpse being clicked - open loot UI with AOE aggregation"""
+	print("🎯 _on_corpse_clicked() HANDLER CALLED!")
 	if not is_instance_valid(corpse):
+		print("❌ Corpse not valid")
 		return
+	print("✅ Corpse is valid, proceeding...")
 
 	# Find all nearby corpses within AOE radius
+	print("📦 Finding nearby corpses...")
 	var nearby_corpses = corpse.get_nearby_corpses(CorpseState.AOE_LOOT_RADIUS)
+	print("📦 Found %d nearby corpses" % nearby_corpses.size())
 
-	# Create and open loot UI
+	# Create and open loot UI (deferred to avoid blocking)
+	print("📦 Starting deferred UI creation...")
+	_create_loot_ui_deferred.call_deferred(corpse, nearby_corpses)
+	print("✅ Deferred call queued")
+
+func _create_loot_ui_deferred(corpse, nearby_corpses: Array) -> void:
+	"""Create loot UI from scene file"""
+	print("📦 Loading loot UI scene...")
+	
 	var loot_scene = load("res://scenes/ui/loot_body_ui.tscn")
 	if not loot_scene:
-		push_error("❌ Failed to load loot_body_ui scene!")
+		push_error("❌ Failed to load scene")
 		return
-
+	print("✅ Scene loaded")
+	
 	var loot_ui = loot_scene.instantiate()
 	if not loot_ui:
-		push_error("❌ Failed to instantiate loot_body_ui!")
+		push_error("❌ Failed to instantiate")
 		return
-
+	print("✅ UI instantiated")
+	
 	get_tree().root.add_child(loot_ui)
-
-	# Connect close signal
+	print("✅ Added to tree")
+	
 	loot_ui.loot_ui_closed.connect(func(): loot_ui.queue_free())
-
-	# Open with aggregated loot
 	loot_ui.open_loot_ui(corpse, nearby_corpses)
+	print("✅ UI opened!")

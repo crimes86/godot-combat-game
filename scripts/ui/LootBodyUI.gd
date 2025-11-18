@@ -9,11 +9,11 @@ signal loot_ui_closed()
 signal item_looted(item: Dictionary, corpse)
 signal all_corpses_looted()
 
-@onready var loot_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/LootContainer/LootList
-@onready var close_button: Button = $Control/Panel/MarginContainer/VBoxContainer/Header/CloseButton
-@onready var take_all_button: Button = $Control/Panel/MarginContainer/VBoxContainer/ButtonContainer/TakeAllButton
-@onready var header_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/TitleLabel
-@onready var gold_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/GoldLabel
+@onready var loot_list: VBoxContainer = $Panel/MarginContainer/VBoxContainer/LootContainer/LootList
+@onready var close_button: Button = $Panel/MarginContainer/VBoxContainer/Header/CloseButton
+@onready var take_all_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonContainer/TakeAllButton
+@onready var header_label: Label = $Panel/MarginContainer/VBoxContainer/Header/TitleLabel
+@onready var gold_label: Label = $Panel/MarginContainer/VBoxContainer/Header/GoldLabel
 
 var corpses_looted = []  # All corpses in AOE
 var total_gold_collected: int = 0
@@ -43,8 +43,28 @@ func open_loot_ui(primary_corpse, nearby_corpses: Array) -> void:
 	# Combine all corpses
 	corpses_looted = [primary_corpse] + nearby_corpses
 
-	# Note: Gold was already awarded immediately on death
-	# We don't need to collect it again
+	# Hide [F] Loot prompts on all corpses while UI is open
+	for corpse in corpses_looted:
+		if is_instance_valid(corpse):
+			corpse.loot_ui_open = true  # Set flag to prevent prompt from showing
+			if corpse.loot_prompt:
+				corpse.loot_prompt.visible = false
+			print("💀 Hiding loot prompt and setting UI open flag for corpse")
+
+	# Calculate total gold from all corpses and AWARD IT IMMEDIATELY
+	total_gold_collected = 0
+	for corpse in corpses_looted:
+		if is_instance_valid(corpse):
+			total_gold_collected += corpse.corpse_gold
+
+	# Award gold immediately when UI opens
+	if total_gold_collected > 0:
+		CharacterStats.add_gold(total_gold_collected)
+		print("💰 Auto-looted %d gold when opening UI" % total_gold_collected)
+		# Clear gold from all corpses
+		for corpse in corpses_looted:
+			if is_instance_valid(corpse):
+				corpse.corpse_gold = 0
 
 	# Update header
 	var corpse_count = corpses_looted.size()
@@ -54,20 +74,44 @@ func open_loot_ui(primary_corpse, nearby_corpses: Array) -> void:
 		else:
 			header_label.text = "Looting %d Bodies" % corpse_count
 
-	# Hide gold label (gold already awarded on death)
+	# Show gold label with total (showing what was just awarded)
 	if gold_label:
-		gold_label.visible = false
+		if total_gold_collected > 0:
+			gold_label.text = "Looted: %d Gold" % total_gold_collected
+			gold_label.visible = true
+		else:
+			gold_label.visible = false
 
-	print("💀 Opening loot body UI with %d corpse(s)" % corpse_count)
+	print("💀 Opening loot body UI with %d corpse(s), %d gold auto-awarded" % [corpse_count, total_gold_collected])
 
 	populate_loot_list()
+
+	# Auto-close if no items left after gold is looted
+	var total_items = 0
+	for corpse in corpses_looted:
+		if is_instance_valid(corpse):
+			total_items += corpse.corpse_loot.size()
+
+	if total_items == 0:
+		print("💀 No items to loot - auto-closing")
+		await get_tree().create_timer(0.5).timeout
+		close_ui()
+		return
+
 	show()
 
 func close_ui() -> void:
 	"""Close the loot UI"""
+	# Clear loot_ui_open flag on all corpses
+	for corpse in corpses_looted:
+		if is_instance_valid(corpse):
+			corpse.loot_ui_open = false
+	
 	hide()
 	loot_ui_closed.emit()
 	print("💀 Loot body UI closed")
+
+	# Prompts will auto-show again via update_loot_proximity if corpses still have loot
 
 func populate_loot_list() -> void:
 	"""Populate the loot list with items from all corpses"""
@@ -214,7 +258,7 @@ func loot_item(corpse, item: Dictionary) -> void:
 		print("❌ Inventory full! Cannot loot %s" % item.get("name", "Unknown"))
 
 func _on_take_all_pressed() -> void:
-	"""Take all items from all corpses"""
+	"""Take all items from all corpses (gold already awarded when UI opened)"""
 	var looted_count = 0
 	var total_count = 0
 
