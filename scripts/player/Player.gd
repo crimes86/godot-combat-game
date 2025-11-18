@@ -1101,9 +1101,10 @@ func create_player_sprite() -> void:
 	# Load weapon textures based on equipped weapon
 	var weapon_slash_tex = null
 	var weapon_walk_tex = null
+	var weapon_type = "sword"  # Default to sword for animation data
 
 	if CharacterStats.equipped_weapon:
-		var weapon_type = CharacterStats.equipped_weapon.weapon_type
+		weapon_type = CharacterStats.equipped_weapon.weapon_type
 		var weapon_path = "res://assets/weapons/" + weapon_type + "/"
 
 		# Try to load weapon sprites
@@ -1118,11 +1119,45 @@ func create_player_sprite() -> void:
 	else:
 		print("👊 No weapon equipped - player is unarmed")
 
-	# Load armor textures based on equipped armor
-	var shirt_walk_tex = null
-	var shirt_slash_tex = null
+	# Load armor textures based on equipped armor (5 layers: boots, pants, shirt, arms, head)
+	print("═══ ARMOR LOADING ═══")
+	var boots_walk_tex = null
+	var boots_slash_tex = null
 	var pants_walk_tex = null
 	var pants_slash_tex = null
+	var shirt_walk_tex = null
+	var shirt_slash_tex = null
+	var arms_walk_tex = null
+	var arms_slash_tex = null
+	var head_walk_tex = null
+	var head_slash_tex = null
+
+	# Check for equipped boots (feet)
+	if CharacterStats.equipped_armor.has("feet") and CharacterStats.equipped_armor["feet"] != null:
+		var boots_armor = CharacterStats.equipped_armor["feet"]
+		var sprite_name = boots_armor.get("sprite_name", "")
+		if sprite_name != "":
+			var boots_path = "res://assets/characters/boots/"
+			if ResourceLoader.exists(boots_path + sprite_name + "_walk.png"):
+				boots_walk_tex = load(boots_path + sprite_name + "_walk.png")
+			if ResourceLoader.exists(boots_path + sprite_name + "_slash.png"):
+				boots_slash_tex = load(boots_path + sprite_name + "_slash.png")
+			print("🥾 Loading boots: %s (sprite: %s)" % [boots_armor["name"], sprite_name])
+			print("   Walk: %s" % ("✅" if boots_walk_tex else "❌"))
+			print("   Slash: %s" % ("✅" if boots_slash_tex else "❌"))
+
+	# Check for equipped leg armor (pants)
+	if CharacterStats.equipped_armor.has("legs") and CharacterStats.equipped_armor["legs"] != null:
+		var leg_armor = CharacterStats.equipped_armor["legs"]
+		var sprite_name = leg_armor.get("sprite_name", "green_pants")
+		var pants_path = "res://assets/characters/pants/"
+		if ResourceLoader.exists(pants_path + sprite_name + "_walk.png"):
+			pants_walk_tex = load(pants_path + sprite_name + "_walk.png")
+		if ResourceLoader.exists(pants_path + sprite_name + "_slash.png"):
+			pants_slash_tex = load(pants_path + sprite_name + "_slash.png")
+		print("👖 Loading leg armor: %s (sprite: %s)" % [leg_armor["name"], sprite_name])
+		print("   Walk: %s" % ("✅" if pants_walk_tex else "❌"))
+		print("   Slash: %s" % ("✅" if pants_slash_tex else "❌"))
 
 	# Check for equipped chest armor (shirt)
 	if CharacterStats.equipped_armor.has("chest") and CharacterStats.equipped_armor["chest"] != null:
@@ -1140,24 +1175,36 @@ func create_player_sprite() -> void:
 		print("   Walk: %s" % ("✅" if shirt_walk_tex else "❌"))
 		print("   Slash: %s" % ("✅" if shirt_slash_tex else "❌"))
 
-	# Check for equipped leg armor (pants)
-	if CharacterStats.equipped_armor.has("legs") and CharacterStats.equipped_armor["legs"] != null:
-		var leg_armor = CharacterStats.equipped_armor["legs"]
-		var sprite_name = leg_armor.get("sprite_name", "green_pants")
-		var pants_path = "res://assets/characters/pants/"
+	# Check for equipped arm armor
+	if CharacterStats.equipped_armor.has("arms") and CharacterStats.equipped_armor["arms"] != null:
+		var arm_armor = CharacterStats.equipped_armor["arms"]
+		var sprite_name = arm_armor.get("sprite_name", "")
+		if sprite_name != "":
+			var arms_path = "res://assets/characters/arms/"
+			if ResourceLoader.exists(arms_path + sprite_name + "_walk.png"):
+				arms_walk_tex = load(arms_path + sprite_name + "_walk.png")
+			if ResourceLoader.exists(arms_path + sprite_name + "_slash.png"):
+				arms_slash_tex = load(arms_path + sprite_name + "_slash.png")
+			print("💪 Loading arm armor: %s (sprite: %s)" % [arm_armor["name"], sprite_name])
+			print("   Walk: %s" % ("✅" if arms_walk_tex else "❌"))
+			print("   Slash: %s" % ("✅" if arms_slash_tex else "❌"))
 
-		# Try to load pants sprites based on sprite_name
-		if ResourceLoader.exists(pants_path + sprite_name + "_walk.png"):
-			pants_walk_tex = load(pants_path + sprite_name + "_walk.png")
-		if ResourceLoader.exists(pants_path + sprite_name + "_slash.png"):
-			pants_slash_tex = load(pants_path + sprite_name + "_slash.png")
+	# Check for equipped head armor
+	if CharacterStats.equipped_armor.has("head") and CharacterStats.equipped_armor["head"] != null:
+		var head_armor = CharacterStats.equipped_armor["head"]
+		var sprite_name = head_armor.get("sprite_name", "")
+		if sprite_name != "":
+			var head_path = "res://assets/characters/head/"
+			if ResourceLoader.exists(head_path + sprite_name + "_walk.png"):
+				head_walk_tex = load(head_path + sprite_name + "_walk.png")
+			if ResourceLoader.exists(head_path + sprite_name + "_slash.png"):
+				head_slash_tex = load(head_path + sprite_name + "_slash.png")
+			print("🪖 Loading head armor: %s (sprite: %s)" % [head_armor["name"], sprite_name])
+			print("   Walk: %s" % ("✅" if head_walk_tex else "❌"))
+			print("   Slash: %s" % ("✅" if head_slash_tex else "❌"))
 
-		print("👖 Loading leg armor: %s (sprite: %s)" % [leg_armor["name"], sprite_name])
-		print("   Walk: %s" % ("✅" if pants_walk_tex else "❌"))
-		print("   Slash: %s" % ("✅" if pants_slash_tex else "❌"))
-
-	# Setup sprite with all layers
-	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, shirt_walk_tex, shirt_slash_tex, pants_walk_tex, pants_slash_tex, weapon_slash_tex, weapon_walk_tex)
+	# Setup sprite with all 5 armor layers
+	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, head_walk_tex, head_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type)
 
 	add_child(character_sprite)
 

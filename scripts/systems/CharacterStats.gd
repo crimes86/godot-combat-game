@@ -48,7 +48,7 @@ var equipped_armor = {
 	"offhand": null,   # Secondary weapon/shield (left hand)
 	"head": null,      # Helmet/helm
 	"chest": null,     # Body armor/vest
-	"hands": null,     # Gloves/gauntlets
+	"arms": null,      # Gloves/gauntlets
 	"legs": null,      # Pants/greaves
 	"feet": null       # Boots
 }
@@ -267,8 +267,12 @@ func add_gold(amount: int) -> void:
 
 func spend_gold(amount: int) -> bool:
 	"""Spend gold (returns false if not enough gold)"""
-	if amount <= 0:
+	if amount < 0:
 		return false
+
+	# Allow free items (amount == 0)
+	if amount == 0:
+		return true
 
 	if gold < amount:
 		print("❌ Not enough gold! Need ", amount, " but only have ", gold)
