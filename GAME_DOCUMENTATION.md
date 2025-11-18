@@ -1856,12 +1856,25 @@ func take_damage(damage: float, is_critical: bool = false) -> void:
 
 ## Next Steps & Planned Features
 
+### Armor System - COMPLETE ✅
+
+**See [ARMOR_SYSTEM.md](ARMOR_SYSTEM.md) for full documentation**
+
+The game has a **fully functional 5-layer modular armor system**:
+- ✅ 5 armor slots (head, chest, arms, legs, feet)
+- ✅ Drag-and-drop equipping via Character Sheet UI
+- ✅ Multi-layer sprite rendering with animation sync
+- ✅ Defense calculation and stat bonuses
+- ✅ **Copper Armor Tier 1** - Complete reference template (13 animations × 5 pieces)
+
+**Copper Armor Set** serves as the base template for all future armor tiers.
+
 ### High Priority
-1. **Armor Equipping System**
-   - Implement armor slots (chest, boots, gloves, helm)
-   - Apply defense bonuses to CharacterStats
-   - Visual feedback when armor is equipped
-   - Inventory management for owned armor
+1. **Additional Armor Tiers**
+   - Bronze armor (Tier 2) for Ruins 2 / Zone 2
+   - Iron armor (Tier 3) for Ruins 3 / Zone 3
+   - Steel/Legendary armor (Tier 4-5) for endgame
+   - Follow Copper Tier 1 template structure
 
 2. **Gold Rewards**
    - Add gold drops from enemies
