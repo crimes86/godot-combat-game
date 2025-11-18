@@ -42,4 +42,4 @@ desktop.ini
 *~
 
 # User-specific settings (optional - some prefer to track these)
-# .claude/settings.local.json
+.claude/settings.local.json
