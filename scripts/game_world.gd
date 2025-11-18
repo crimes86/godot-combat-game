@@ -3,6 +3,9 @@ extends Node2D
 
 const ENEMY_SCENE = preload("res://scenes/enemies/enemy.tscn")
 
+# Multiplayer-ready spawn manager
+var spawn_manager = null  # SpawnManager (type hint removed for compatibility)
+
 const PROP_TEXTURES = {
 	"dead_tree_1": "res://assets/environment/wasteland/dead_tree_1.png",
 	"dead_tree_2": "res://assets/environment/wasteland/dead_tree_2.png",
@@ -85,13 +88,19 @@ func _ready():
 	DebugConfig.log_spawning("✅ GameWorld ready!")
 
 func _process(delta):
-	"""Handle viewport culling for terrain and update particle positions"""
+	"""Handle viewport culling for terrain, update particle positions, and update spawn manager"""
 	terrain_check_timer += delta
 	if terrain_check_timer < TERRAIN_CHECK_INTERVAL:
 		return
 	terrain_check_timer = 0.0
 
 	update_terrain_visibility()
+
+	# Update spawn manager with player positions
+	if spawn_manager:
+		var player = get_tree().get_first_node_in_group("player")
+		if player and is_instance_valid(player):
+			spawn_manager.update_player_positions([player.global_position])
 
 	# Update ambient particles position to follow player
 	var particles = get_node_or_null("AmbientAsh")
@@ -1126,6 +1135,9 @@ func toggle_screenshot_mode():
 func generate_dynamic_elements():
 	"""Generate only the elements that need to be interactive/dynamic"""
 
+	# Populate world with enemies - NOW HANDLED BY SpawnManager in spawn_all_enemies()
+	# populate_world_enemies()  # DISABLED: Using dynamic spawning instead
+
 	# Use existing ScatteredProps node from scene (don't create new one)
 	var scattered_props_node = get_node_or_null("ScatteredProps")
 	if not scattered_props_node:
@@ -1972,64 +1984,417 @@ func create_marker_sprite(marker_data: Dictionary, parent: Node2D) -> bool:
 	return false
 
 func spawn_all_enemies():
-	"""Spawn patrol enemies across all zones with radial scaling"""
-	print("🎯 Spawning patrol enemies...")
+	"""Initialize multiplayer-ready spawn manager with dynamic spawning"""
+	print("🎯 Initializing dynamic enemy spawning system...")
 
-	# Zone 1: Campfire to Ruins 1
-	spawn_zone_1_enemies()
+	# STEP 1: Collect all spawn markers (don't spawn yet)
+	var spawn_markers = collect_spawn_markers()
+	print("   📍 Found %d spawn markers" % spawn_markers.size())
 
-	# TODO: Zone 2, 3, 4 enemies
+	# STEP 2: Create and initialize SpawnManager
+	spawn_manager = SpawnManager.new()
+	spawn_manager.name = "SpawnManager"
+	add_child(spawn_manager)
 
-	print("✅ Enemy spawning complete")
+	# Initialize with spawn markers
+	spawn_manager.initialize(self, spawn_markers)
+
+	# STEP 3: Set initial player position so spawns work on first frame
+	var player = get_tree().get_first_node_in_group("player")
+	if player and is_instance_valid(player):
+		spawn_manager.update_player_positions([player.global_position])
+		print("   👤 Player position registered: (%.0f, %.0f)" % [player.global_position.x, player.global_position.y])
+
+	print("✅ Dynamic spawning system initialized (spawns near player only)")
+	print("   🎮 Enemies will spawn/despawn based on player proximity")
+	print("   💾 Dead/looted enemies won't respawn")
+
+func collect_spawn_markers() -> Array:
+	"""Collect all enemy spawn markers (don't spawn yet - SpawnManager handles that)
+
+	HOW TO USE:
+	1. In Godot editor, add Marker2D nodes as children of GameWorld
+	2. Name them like: 'EnemySpawn_L3' (for level 3)
+	3. Set metadata on the marker:
+	   - 'enemy_level' (int): Enemy level (required)
+	   - 'enemy_type' (String): Optional, defaults to 'skeleton'
+	   - 'aggro_range' (float): Optional aggro radius override
+
+	Example in editor:
+	- Create Marker2D node
+	- Name: EnemySpawn_L1_Noob1
+	- In Inspector > Node > Meta: Add 'enemy_level' = 1
+
+	Returns: Array of spawn marker nodes
+	"""
+	var spawn_markers = []
+
+	print("\n📍 Scanning for enemy spawn markers...")
+
+	# Find all Marker2D children with enemy spawn data
+	# Matches: "EnemySpawn*" or "L<num>_*" (level-prefixed markers from radial pattern tool)
+	for child in get_children():
+		if not (child is Marker2D):
+			continue
+
+		# Check if this is a spawn marker
+		var is_spawn_marker = false
+		if child.name.begins_with("EnemySpawn"):
+			is_spawn_marker = true
+		elif child.name.begins_with("L") and child.name.length() > 1:
+			# Check if second character is a digit (L1_*, L2_*, etc.)
+			var second_char = child.name.substr(1, 1)
+			if second_char.is_valid_int():
+				is_spawn_marker = true
+
+		if not is_spawn_marker:
+			continue
+
+		# Read properties from exported vars (if ManualEnemySpawn) or metadata
+		var level = 1
+		var enemy_type = "skeleton"
+		var aggro_override = 150.0
+
+		# Try reading from exported properties first (ManualEnemySpawn tool script)
+		if child.has_method("get"):
+			if "enemy_level" in child:
+				level = child.get("enemy_level")
+			if "enemy_type" in child:
+				enemy_type = child.get("enemy_type")
+			if "aggro_range" in child:
+				aggro_override = child.get("aggro_range")
+
+		# Fallback to metadata (plain Marker2D)
+		if child.has_meta("enemy_level"):
+			level = child.get_meta("enemy_level", 1)
+		if child.has_meta("enemy_type"):
+			enemy_type = child.get_meta("enemy_type", "skeleton")
+		if child.has_meta("aggro_range"):
+			aggro_override = child.get_meta("aggro_range", 150.0)
+
+		# Store metadata on marker for SpawnManager
+		child.set_meta("enemy_level", level)
+		child.set_meta("enemy_type", enemy_type)
+		child.set_meta("aggro_range", aggro_override)
+
+		spawn_markers.append(child)
+
+	if spawn_markers.is_empty():
+		print("   ⚠️ No spawn markers found! Add Marker2D nodes named 'EnemySpawn_*'")
+	else:
+		print("   ✅ Collected %d spawn markers" % spawn_markers.size())
+
+	return spawn_markers
+
+func analyze_spawn_pattern(children: Array) -> void:
+	"""Analyze manually placed enemy patterns to learn density, level progression, and distribution"""
+	var spawn_data = []
+	var campfire_pos = Vector2(-2000, 0)
+
+	print("\n🔍 Analyzing your spawn pattern...")
+
+	# Collect all manual spawn data
+	for child in children:
+		if child is Marker2D and child.name.begins_with("EnemySpawn"):
+			var level = 1
+			if child.has_method("get") and "enemy_level" in child:
+				level = child.get("enemy_level")
+			else:
+				level = child.get_meta("enemy_level", 1)
+
+			var distance_from_campfire = child.global_position.distance_to(campfire_pos)
+			var distance_from_path = abs(child.global_position.y)  # Approximate distance from y=0 path
+
+			spawn_data.append({
+				"pos": child.global_position,
+				"level": level,
+				"dist_from_campfire": distance_from_campfire,
+				"dist_from_path": distance_from_path
+			})
+
+	if spawn_data.is_empty():
+		return
+
+	# Calculate statistics
+	var total_spawns = spawn_data.size()
+	var avg_level = 0.0
+	var avg_dist_from_campfire = 0.0
+	var avg_dist_from_path = 0.0
+	var min_distance_between = 999999.0
+
+	# Level buckets by distance from campfire
+	var level_by_distance = {}
+
+	for data in spawn_data:
+		avg_level += data["level"]
+		avg_dist_from_campfire += data["dist_from_campfire"]
+		avg_dist_from_path += data["dist_from_path"]
+
+		# Calculate distance buckets (every 500px)
+		var bucket = int(data["dist_from_campfire"] / 500) * 500
+		if not level_by_distance.has(bucket):
+			level_by_distance[bucket] = []
+		level_by_distance[bucket].append(data["level"])
+
+	avg_level /= total_spawns
+	avg_dist_from_campfire /= total_spawns
+	avg_dist_from_path /= total_spawns
+
+	# Calculate minimum distance between spawns
+	for i in range(spawn_data.size()):
+		for j in range(i + 1, spawn_data.size()):
+			var dist = spawn_data[i]["pos"].distance_to(spawn_data[j]["pos"])
+			min_distance_between = min(min_distance_between, dist)
+
+	# Calculate average level per distance bucket
+	var level_progression = {}
+	for bucket in level_by_distance.keys():
+		var levels = level_by_distance[bucket]
+		var sum = 0
+		for level in levels:
+			sum += level
+		level_progression[bucket] = sum / float(levels.size())
+
+	# Print analysis
+	print("   📈 Pattern Analysis:")
+	print("      Total manual spawns: %d" % total_spawns)
+	print("      Avg level: %.1f" % avg_level)
+	print("      Avg distance from campfire: %.0fpx" % avg_dist_from_campfire)
+	print("      Avg distance from path: %.0fpx" % avg_dist_from_path)
+	print("      Min spacing between spawns: %.0fpx" % min_distance_between)
+	print("      Level progression by distance:")
+
+	var sorted_buckets = level_progression.keys()
+	sorted_buckets.sort()
+	for bucket in sorted_buckets:
+		print("         %d-%dpx: Level %.1f (n=%d)" % [bucket, bucket + 500, level_progression[bucket], level_by_distance[bucket].size()])
+
+	# Store pattern data for procedural generation
+	set_meta("spawn_pattern", {
+		"avg_dist_from_path": avg_dist_from_path,
+		"min_spacing": max(min_distance_between, 150.0),  # At least 150px
+		"level_progression": level_progression,
+		"manual_count": total_spawns,
+		"campfire_pos": campfire_pos
+	})
 
 func spawn_zone_1_enemies():
-	"""Spawn Zone 1 patrol enemies along path corridors"""
-	var campfire_pos = Vector2(-2000, 0)
-	var ruins1_pos = Vector2(1200, -2000)
+	"""Spawn Zone 1 patrol enemies - uses learned pattern if available, otherwise uses default"""
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 88888  # Consistent enemy placement
 
 	var total_spawned = 0
 
-	# Main path: Campfire (-2000, 0) to Branch point (~800, 0)
-	total_spawned += spawn_path_corridor(campfire_pos, Vector2(800, 0), 1, 5, 8, rng)
+	# Check if we have a learned pattern from manual placements
+	if has_meta("spawn_pattern"):
+		print("\n🎯 Continuing your spawn pattern...")
+		total_spawned = spawn_pattern_based_enemies(rng)
+	else:
+		# Fallback to old corridor-based spawning
+		var campfire_pos = Vector2(-2000, 0)
+		var ruins1_pos = Vector2(1200, -2000)
+		print("\n🎯 Using default spawn pattern...")
 
-	# Branch path: Branch point to Ruins 1 (1200, -2000)
-	total_spawned += spawn_path_corridor(Vector2(800, 0), ruins1_pos, 5, 10, 12, rng)
+		# Main path: Campfire (-2000, 0) to Branch point (~800, 0)
+		total_spawned += spawn_path_corridor(campfire_pos, Vector2(800, 0), 1, 5, 8, rng)
 
-	print("   Zone 1: Spawned %d patrol enemies (Level 1-10)" % total_spawned)
+		# Branch path: Branch point to Ruins 1 (1200, -2000)
+		total_spawned += spawn_path_corridor(Vector2(800, 0), ruins1_pos, 5, 10, 12, rng)
+
+	print("   Zone 1: Spawned %d procedural patrol enemies" % total_spawned)
+
+func spawn_pattern_based_enemies(rng: RandomNumberGenerator) -> int:
+	"""Spawn enemies based on learned pattern from manual placements"""
+	var pattern = get_meta("spawn_pattern")
+	var campfire_pos = pattern["campfire_pos"]
+	var min_spacing = pattern["min_spacing"]
+	var avg_dist_from_path = pattern["avg_dist_from_path"]
+	var level_progression = pattern["level_progression"]
+	var manual_count = pattern["manual_count"]
+
+	# Get all existing spawn positions (manual + ruins)
+	var existing_positions: Array[Vector2] = []
+	if has_meta("manual_spawn_positions"):
+		existing_positions = get_meta("manual_spawn_positions").duplicate()
+
+	# Ruins exclusion zones
+	const RUINS_POSITIONS = [
+		Vector2(1200, -2000),
+		Vector2(4800, 2200),
+		Vector2(8200, -2200)
+	]
+	const RUINS_EXCLUSION_RADIUS = 450.0
+
+	var spawned = 0
+	var target_total = manual_count * 3  # Spawn 3x the manual count to fill the world
+	const MAX_ATTEMPTS_PER_ENEMY = 100
+
+	print("   🎲 Generating %d enemies based on your pattern..." % (target_total - manual_count))
+	print("   📏 Using spacing: %.0fpx, Path offset: %.0fpx" % [min_spacing, avg_dist_from_path])
+
+	# Calculate world bounds based on manual placements
+	var world_min_x = campfire_pos.x - 500
+	var world_max_x = 1500  # Extend to just before Ruins 1
+	var world_min_y = -2500
+	var world_max_y = 2500
+
+	for i in range(target_total - manual_count):
+		var attempts = 0
+		var valid_spawn = false
+		var spawn_pos = Vector2.ZERO
+		var spawn_level = 1
+
+		while attempts < MAX_ATTEMPTS_PER_ENEMY and not valid_spawn:
+			attempts += 1
+
+			# Generate random position in world bounds
+			spawn_pos = Vector2(
+				rng.randf_range(world_min_x, world_max_x),
+				rng.randf_range(world_min_y, world_max_y)
+			)
+
+			# Calculate distance from campfire to determine level
+			var dist_from_campfire = spawn_pos.distance_to(campfire_pos)
+			var bucket = int(dist_from_campfire / 500) * 500
+
+			# Find appropriate level from learned progression
+			spawn_level = 1
+			if level_progression.has(bucket):
+				spawn_level = int(level_progression[bucket])
+				# Add some variance (±1 level)
+				spawn_level += rng.randi_range(-1, 1)
+				spawn_level = clamp(spawn_level, 1, 10)
+			else:
+				# Interpolate between known buckets
+				var closest_bucket = -1
+				var closest_dist = 999999
+				for known_bucket in level_progression.keys():
+					var dist = abs(bucket - known_bucket)
+					if dist < closest_dist:
+						closest_dist = dist
+						closest_bucket = known_bucket
+				if closest_bucket >= 0:
+					spawn_level = int(level_progression[closest_bucket])
+					# Add distance-based scaling
+					spawn_level += int((bucket - closest_bucket) / 1000.0)
+					spawn_level = clamp(spawn_level, 1, 10)
+
+			# Prefer positions near the learned average distance from path
+			# But allow variance (50% within ±200px, 50% anywhere)
+			if rng.randf() < 0.5:
+				var target_y_offset = avg_dist_from_path * (1 if rng.randf() < 0.5 else -1)
+				target_y_offset += rng.randf_range(-200, 200)
+				spawn_pos.y = target_y_offset
+
+			# Validation checks
+			valid_spawn = true
+
+			# Check ruins exclusion
+			for ruins_pos in RUINS_POSITIONS:
+				if spawn_pos.distance_to(ruins_pos) < RUINS_EXCLUSION_RADIUS:
+					valid_spawn = false
+					break
+
+			# Check spacing from existing spawns
+			if valid_spawn:
+				for existing_pos in existing_positions:
+					if spawn_pos.distance_to(existing_pos) < min_spacing:
+						valid_spawn = false
+						break
+
+		# Spawn if valid position found
+		if valid_spawn:
+			spawn_patrol_enemy(spawn_pos, spawn_level)
+			existing_positions.append(spawn_pos)
+			spawned += 1
+
+	return spawned
 
 func spawn_path_corridor(start: Vector2, end: Vector2, min_level: int, max_level: int, count: int, rng: RandomNumberGenerator) -> int:
 	"""Spawn enemies along a path corridor - dense near path, sparse at edges"""
 	var spawned = 0
 	var path_length = start.distance_to(end)
+	var spawned_positions: Array[Vector2] = []  # Track spawned positions
+	const MIN_SPAWN_DISTANCE = 150.0  # Minimum distance between spawns (increased for better spread)
+
+	# Get manually placed spawn positions to avoid
+	var manual_positions: Array[Vector2] = []
+	if has_meta("manual_spawn_positions"):
+		manual_positions = get_meta("manual_spawn_positions")
+
+	# Ruins exclusion zones (guardian-only areas)
+	const RUINS_POSITIONS = [
+		Vector2(1200, -2000),   # Ruins 1
+		Vector2(4800, 2200),    # Ruins 2
+		Vector2(8200, -2200)    # Ruins 3
+	]
+	const RUINS_EXCLUSION_RADIUS = 450.0  # Block 450px radius around ruins (larger than clearing for safety)
 
 	for i in range(count):
-		# Position along path (0.0 to 1.0)
-		var t = float(i) / float(count - 1) if count > 1 else 0.5
-		var path_point = start.lerp(end, t)
+		var spawn_pos = Vector2.ZERO
+		var valid_position = false
+		var attempts = 0
+		const MAX_ATTEMPTS = 50  # Prevent infinite loops
 
-		# Level scales with distance along path
-		var level = int(lerp(min_level, max_level, t))
+		# Keep trying until we find a valid position
+		while not valid_position and attempts < MAX_ATTEMPTS:
+			attempts += 1
 
-		# Offset perpendicular to path (weighted toward path, sparse at edges)
-		# 70% of enemies within 300px, 30% out to 800px
-		var offset_distance = 0.0
-		if rng.randf() < 0.7:
-			offset_distance = rng.randf_range(200, 500)  # Close to path (visible)
-		else:
-			offset_distance = rng.randf_range(500, 1200)  # Deeper in woods
+			# Position along path (0.0 to 1.0) with randomness to avoid grid pattern
+			var base_t = float(i) / float(count - 1) if count > 1 else 0.5
+			# Add jitter: ±0.15 (30% overlap between spawn zones for natural distribution)
+			var jitter = rng.randf_range(-0.15, 0.15)
+			var t = clamp(base_t + jitter, 0.0, 1.0)
+			var path_point = start.lerp(end, t)
 
-		var offset_side = 1 if rng.randf() < 0.5 else -1  # North or south
+			# Offset perpendicular to path with more variation
+			# 50% close (200-600px), 30% medium (600-1000px), 20% far (1000-1500px)
+			var offset_distance = 0.0
+			var rand_val = rng.randf()
+			if rand_val < 0.5:
+				offset_distance = rng.randf_range(200, 600)  # Close to path
+			elif rand_val < 0.8:
+				offset_distance = rng.randf_range(600, 1000)  # Medium distance
+			else:
+				offset_distance = rng.randf_range(1000, 1500)  # Far from path
 
-		# Calculate perpendicular direction
-		var path_dir = (end - start).normalized()
-		var perpendicular = Vector2(-path_dir.y, path_dir.x) * offset_side
+			var offset_side = 1 if rng.randf() < 0.5 else -1  # North or south
 
-		var spawn_pos = path_point + perpendicular * offset_distance
+			# Calculate perpendicular direction
+			var path_dir = (end - start).normalized()
+			var perpendicular = Vector2(-path_dir.y, path_dir.x) * offset_side
 
-		spawn_patrol_enemy(spawn_pos, level)
-		spawned += 1
+			spawn_pos = path_point + perpendicular * offset_distance
+
+			# Check if position is too close to any ruins (BLOCK RUINS AREAS)
+			valid_position = true
+			for ruins_pos in RUINS_POSITIONS:
+				if spawn_pos.distance_to(ruins_pos) < RUINS_EXCLUSION_RADIUS:
+					valid_position = false
+					break
+
+			# Check if too close to manually placed enemies
+			if valid_position:
+				for manual_pos in manual_positions:
+					if spawn_pos.distance_to(manual_pos) < MIN_SPAWN_DISTANCE:
+						valid_position = false
+						break
+
+			# If not in ruins area or manual areas, check distance to all previously spawned enemies
+			if valid_position:
+				for existing_pos in spawned_positions:
+					if spawn_pos.distance_to(existing_pos) < MIN_SPAWN_DISTANCE:
+						valid_position = false
+						break
+
+		# If we found a valid position (or ran out of attempts), spawn the enemy
+		if valid_position or attempts >= MAX_ATTEMPTS:
+			if attempts >= MAX_ATTEMPTS:
+				print("  ⚠️ Max spawn attempts reached for enemy %d, using last position" % i)
+
+			spawn_patrol_enemy(spawn_pos, int(lerp(min_level, max_level, float(i) / float(count - 1))))
+			spawned_positions.append(spawn_pos)
+			spawned += 1
 
 	return spawned
 
@@ -2834,3 +3199,247 @@ func _create_loot_ui_deferred(corpse, nearby_corpses: Array) -> void:
 	loot_ui.loot_ui_closed.connect(func(): loot_ui.queue_free())
 	loot_ui.open_loot_ui(corpse, nearby_corpses)
 	print("✅ UI opened!")
+func populate_world_enemies() -> void:
+	"""Populate Zone 1 with directional spawning: N/W/S = noob area (1-5), E = progressive (1-10)"""
+	print("\n🦴 Populating Zone 1 with directional spawning...")
+
+	const CAMPFIRE_POS = Vector2(400, 0)
+	const RUINS1_X = 2184  # Zone 1 eastern boundary
+	const WORLD_NORTH = -2000  # Northern world edge
+	const WORLD_SOUTH = 2000   # Southern world edge
+	const WORLD_WEST = -2500   # Western world edge
+	const SAFE_ZONE_RADIUS = 350  # Don't spawn too close to campfire
+	const MIN_DISTANCE_FROM_PATH = 200
+	const RESPAWN_DELAY = 60.0
+
+	var spawners_node = Node2D.new()
+	spawners_node.name = "Zone1EnemySpawners"
+	add_child(spawners_node)
+
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 12345
+	var total_spawned = 0
+
+	# NORTH AREA: Level 1-5 noob farming zone
+	print("  📍 Spawning NORTH area (noob zone, levels 1-5)...")
+	var north_spawned = spawn_noob_area(spawners_node, rng, CAMPFIRE_POS, "north",
+		WORLD_NORTH, SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
+	total_spawned += north_spawned
+	print("     ✅ North: %d enemies" % north_spawned)
+
+	# WEST AREA: Level 1-5 noob farming zone
+	print("  📍 Spawning WEST area (noob zone, levels 1-5)...")
+	var west_spawned = spawn_noob_area(spawners_node, rng, CAMPFIRE_POS, "west",
+		WORLD_WEST, SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
+	total_spawned += west_spawned
+	print("     ✅ West: %d enemies" % west_spawned)
+
+	# SOUTH AREA: Level 1-5 noob farming zone
+	print("  📍 Spawning SOUTH area (noob zone, levels 1-5)...")
+	var south_spawned = spawn_noob_area(spawners_node, rng, CAMPFIRE_POS, "south",
+		WORLD_SOUTH, SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
+	total_spawned += south_spawned
+	print("     ✅ South: %d enemies" % south_spawned)
+
+	# EAST AREA: Progressive Level 1-10 toward Ruins 1
+	print("  📍 Spawning EAST area (progressive zone, levels 1-10)...")
+	var east_spawned = spawn_progressive_east(spawners_node, rng, CAMPFIRE_POS, RUINS1_X,
+		SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
+	total_spawned += east_spawned
+	print("     ✅ East: %d enemies" % east_spawned)
+
+	print("\n✅ Zone 1 populated with %d total enemies" % total_spawned)
+	print("   🧭 North/West/South: Noob areas (Level 1-5)")
+	print("   🧭 East: Progressive difficulty (Level 1-10 → Ruins 1)")
+	print("   📍 Respawn timer: %.0f seconds\n" % RESPAWN_DELAY)
+
+func spawn_noob_area(parent: Node, rng: RandomNumberGenerator, campfire_pos: Vector2,
+					 direction: String, world_edge: float, safe_zone: float,
+					 path_clearance: float, respawn_delay: float) -> int:
+	"""Spawn Level 1-5 enemies in a noob farming area (North/West/South)"""
+	var spawned = 0
+	const ENEMIES_PER_LEVEL = 3  # 3 enemies per level = 15 total per area
+	const SPAWN_ATTEMPTS = 100
+
+	# Spawn 3 enemies each of levels 1, 2, 3, 4, 5
+	for level in range(1, 6):  # Level 1-5
+		for i in range(ENEMIES_PER_LEVEL):
+			for attempt in range(SPAWN_ATTEMPTS):
+				var spawn_pos = generate_position_in_direction(
+					rng, campfire_pos, direction, world_edge, safe_zone
+				)
+
+				# Validate position
+				if not is_valid_spawn_position(spawn_pos, campfire_pos, safe_zone,
+											   path_clearance):
+					continue
+
+				# Valid spawn
+				create_enemy_spawner(parent, spawn_pos, level, 1, respawn_delay)
+				spawned += 1
+				break
+
+	return spawned
+
+func spawn_progressive_east(parent: Node, rng: RandomNumberGenerator, campfire_pos: Vector2,
+							 ruins1_x: float, safe_zone: float, path_clearance: float,
+							 respawn_delay: float) -> int:
+	"""Spawn progressive Level 1-10 enemies going east toward Ruins 1"""
+	var spawned = 0
+	const LEVEL_BANDS = [
+		{"level": 1, "min_x": 400 + 350, "max_x": 600},
+		{"level": 2, "min_x": 600, "max_x": 800},
+		{"level": 3, "min_x": 800, "max_x": 1000},
+		{"level": 4, "min_x": 1000, "max_x": 1200},
+		{"level": 5, "min_x": 1200, "max_x": 1400},
+		{"level": 6, "min_x": 1400, "max_x": 1600},
+		{"level": 7, "min_x": 1600, "max_x": 1800},
+		{"level": 8, "min_x": 1800, "max_x": 2000},
+		{"level": 9, "min_x": 2000, "max_x": 2200},
+		{"level": 10, "min_x": 2200, "max_x": 2400}
+	]
+
+	const ENEMIES_PER_LEVEL = 4  # 4 enemies per level in progression zone
+	const SPAWN_ATTEMPTS = 100
+
+	for band in LEVEL_BANDS:
+		var level = band["level"]
+		var min_x = band["min_x"]
+		var max_x = band["max_x"]
+
+		for i in range(ENEMIES_PER_LEVEL):
+			for attempt in range(SPAWN_ATTEMPTS):
+				# Generate position in this X band, allowing east/northeast/southeast
+				var x = rng.randf_range(min_x, max_x)
+				var y = rng.randf_range(-1000, 1000)  # Spread vertically
+				var spawn_pos = Vector2(x, y)
+
+				# Check if position is actually eastward (not too far north/south)
+				var angle_from_campfire = (spawn_pos - campfire_pos).angle()
+				var degrees = rad_to_deg(angle_from_campfire)
+				if degrees < 0:
+					degrees += 360
+
+				# East/Northeast/Southeast = roughly 315° to 45° (90° total arc)
+				var is_eastward = (degrees >= 315 and degrees <= 360) or (degrees >= 0 and degrees <= 45)
+				if not is_eastward:
+					continue
+
+				# Validate position
+				if not is_valid_spawn_position(spawn_pos, campfire_pos, safe_zone, path_clearance):
+					continue
+
+				# Don't spawn past Ruins 1
+				if spawn_pos.x > 2184:
+					continue
+
+				# Valid spawn
+				create_enemy_spawner(parent, spawn_pos, level, 1, respawn_delay)
+				spawned += 1
+				break
+
+	return spawned
+
+func generate_position_in_direction(rng: RandomNumberGenerator, campfire_pos: Vector2,
+									 direction: String, world_edge: float,
+									 safe_zone: float) -> Vector2:
+	"""Generate a random position in the specified direction from campfire"""
+	var pos = Vector2.ZERO
+
+	match direction:
+		"north":
+			# North of campfire to world edge
+			pos.x = rng.randf_range(campfire_pos.x - 1000, campfire_pos.x + 1000)
+			pos.y = rng.randf_range(world_edge, campfire_pos.y - safe_zone)
+		"west":
+			# West of campfire to world edge
+			pos.x = rng.randf_range(world_edge, campfire_pos.x - safe_zone)
+			pos.y = rng.randf_range(campfire_pos.y - 1000, campfire_pos.y + 1000)
+		"south":
+			# South of campfire to world edge
+			pos.x = rng.randf_range(campfire_pos.x - 1000, campfire_pos.x + 1000)
+			pos.y = rng.randf_range(campfire_pos.y + safe_zone, world_edge)
+
+	return pos
+
+func is_valid_spawn_position(pos: Vector2, campfire_pos: Vector2, safe_zone: float,
+							  path_clearance: float) -> bool:
+	"""Check if spawn position is valid"""
+	# Too close to campfire?
+	if pos.distance_to(campfire_pos) < safe_zone:
+		return false
+
+	# Too close to path?
+	var path_start = campfire_pos
+	var path_end = Vector2(7600, 0)
+	var distance_from_path = point_to_line_distance(pos, path_start, path_end)
+	if distance_from_path < path_clearance:
+		return false
+
+	# In ruins area?
+	if is_in_ruins_area(pos):
+		return false
+
+	return true
+
+func is_in_ruins_area(pos: Vector2) -> bool:
+	"""Check if position is inside any ruins area"""
+	const RUINS_RADIUS = 300  # Don't spawn enemies within ruins
+
+	# Ruins 1 at (2184, -1216)
+	if pos.distance_to(Vector2(2184, -1216)) < RUINS_RADIUS:
+		return true
+
+	# Ruins 2 position (estimate based on zone progression)
+	if pos.distance_to(Vector2(4500, -1500)) < RUINS_RADIUS:
+		return true
+
+	# Ruins 3 position (estimate)
+	if pos.distance_to(Vector2(6500, -800)) < RUINS_RADIUS:
+		return true
+
+	return false
+
+func point_to_line_distance(point: Vector2, line_start: Vector2, line_end: Vector2) -> float:
+	"""Calculate shortest distance from point to line segment"""
+	var line_vec = line_end - line_start
+	var point_vec = point - line_start
+	var line_len_sq = line_vec.length_squared()
+
+	if line_len_sq == 0:
+		return point.distance_to(line_start)
+
+	var t = clamp(point_vec.dot(line_vec) / line_len_sq, 0.0, 1.0)
+	var projection = line_start + t * line_vec
+	return point.distance_to(projection)
+
+func create_enemy_spawner(parent: Node, position: Vector2, level: int, count: int, respawn_delay: float) -> void:
+	"""Create an enemy spawner node at the given position"""
+	var spawner_scene = preload("res://scripts/systems/enemy_spawner.gd")
+	var spawner = Node2D.new()
+	spawner.set_script(spawner_scene)
+	spawner.name = "EnemySpawner_L%d_%d" % [level, randi()]
+	spawner.global_position = position
+
+	# Set spawner properties
+	spawner.set("enemy_scene", ENEMY_SCENE)
+	spawner.set("max_enemies", count)
+	spawner.set("respawn_delay", respawn_delay)
+	spawner.set("enemy_level", level)
+
+	# Create a marker for spawn position
+	var marker = Marker2D.new()
+	marker.global_position = position
+	spawner.add_child(marker)
+
+	parent.add_child(spawner)
+
+	# Wait for spawner to be in tree, then set enemy level
+	await get_tree().process_frame
+
+	# The spawner will spawn enemies, we need to set their level after spawn
+	# Connect to the spawner's enemy creation to set level
+	if spawner.has_method("spawn_enemy_at"):
+		# We'll need to modify the spawned enemy's level
+		# This will be handled by connecting to signals or by modifying enemy_spawner.gd
+		pass

@@ -1054,11 +1054,17 @@ func rot_and_despawn() -> void:
 
 func check_if_looted_empty() -> void:
 	"""Called when items are taken - check if corpse is now empty"""
-	if corpse_loot.is_empty():
+	# Corpse is empty when BOTH gold is 0 AND items are gone
+	if corpse_loot.is_empty() and corpse_gold == 0:
 		# Remove loot indicator
 		if loot_indicator:
 			loot_indicator.queue_free()
 			loot_indicator = null
+
+		# Hide loot prompt
+		if loot_prompt:
+			loot_prompt.queue_free()
+			loot_prompt = null
 
 		# Emit signal
 		corpse_looted_empty.emit(self)
@@ -1075,6 +1081,10 @@ func graceful_despawn() -> void:
 	await tween.finished
 
 	queue_free()
+
+func has_corpse_loot() -> bool:
+	"""Check if corpse has any lootable items or gold remaining (used by SpawnManager)"""
+	return not corpse_loot.is_empty() or corpse_gold > 0
 
 func get_nearby_corpses(radius: float) -> Array:
 	"""Find all corpses within radius for AOE looting"""
