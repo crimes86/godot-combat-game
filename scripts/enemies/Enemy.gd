@@ -231,7 +231,7 @@ func create_skeleton_animation(sprite_frames: SpriteFrames, skeleton_img: Image,
 
 func update_level_display() -> void:
 	"""Show enemy level on sprite"""
-	if enemy_level > 1:
+	if enemy_level >= 1:  # Show for all enemies including level 1
 		# Create level label
 		var level_label = Label.new()
 		level_label.text = "Lv.%d" % enemy_level
@@ -239,7 +239,7 @@ func update_level_display() -> void:
 		level_label.add_theme_color_override("font_color", Color.YELLOW)
 		level_label.add_theme_color_override("font_outline_color", Color.BLACK)
 		level_label.add_theme_constant_override("outline_size", 2)
-		level_label.position = Vector2(-15, -40)
+		level_label.position = Vector2(-15, -55)  # Moved higher to be above health bar
 		level_label.z_index = 500
 		add_child(level_label)
 
