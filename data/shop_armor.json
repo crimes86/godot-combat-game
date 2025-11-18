@@ -55,6 +55,76 @@
 			"quantity": 1,
 			"sprite_name": "green_pants",
 			"rarity": "Uncommon"
+		},
+		{
+			"id": "copper_plate_boots",
+			"name": "Copper Plate Boots",
+			"description": "[TEST] Tier 1 copper-plated boots. Basic protection for your feet.",
+			"slot": "feet",
+			"defense": 5,
+			"type": "armor",
+			"value": 0,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1,
+			"sprite_name": "copper_plate",
+			"rarity": "Common"
+		},
+		{
+			"id": "copper_plate_greaves",
+			"name": "Copper Plate Greaves",
+			"description": "[TEST] Tier 1 copper-plated leg armor. Solid leg protection.",
+			"slot": "legs",
+			"defense": 8,
+			"type": "armor",
+			"value": 0,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1,
+			"sprite_name": "copper_plate",
+			"rarity": "Common"
+		},
+		{
+			"id": "copper_plate_chestguard",
+			"name": "Copper Plate Chestguard",
+			"description": "[TEST] Tier 1 copper-plated chest armor. Sturdy torso protection.",
+			"slot": "chest",
+			"defense": 10,
+			"type": "armor",
+			"value": 0,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1,
+			"sprite_name": "copper_plate",
+			"rarity": "Common"
+		},
+		{
+			"id": "copper_plate_gauntlets",
+			"name": "Copper Plate Gauntlets",
+			"description": "[TEST] Tier 1 copper-plated arm guards. Protects your arms in combat.",
+			"slot": "arms",
+			"defense": 6,
+			"type": "armor",
+			"value": 0,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1,
+			"sprite_name": "copper_plate",
+			"rarity": "Common"
+		},
+		{
+			"id": "copper_plate_helmet",
+			"name": "Copper Plate Helmet",
+			"description": "[TEST] Tier 1 copper-plated helmet. Essential head protection.",
+			"slot": "head",
+			"defense": 7,
+			"type": "armor",
+			"value": 0,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1,
+			"sprite_name": "copper_plate",
+			"rarity": "Common"
 		}
 	]
 }

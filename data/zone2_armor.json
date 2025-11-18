@@ -30,7 +30,7 @@
 			"id": "cursed_gloves",
 			"name": "Cursed Gauntlets",
 			"description": "Reinforced metal gauntlets that hum with dark power.",
-			"slot": "hands",
+			"slot": "arms",
 			"defense": 10,
 			"type": "armor",
 			"value": 100,

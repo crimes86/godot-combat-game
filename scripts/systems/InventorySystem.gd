@@ -8,7 +8,7 @@ extends Node
 # INVENTORY DATA
 # ============================================
 
-const MAX_INVENTORY_SLOTS: int = 4  # Starting with 4 slots (expandable later)
+const MAX_INVENTORY_SLOTS: int = 32  # 8 rows x 4 columns
 
 var inventory_items: Array = []  # Array of item dictionaries
 

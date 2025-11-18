@@ -1,0 +1,114 @@
+{
+  "exportTimestamp": "2025-11-18T03-14-50",
+  "bodyType": "male",
+  "standardAnimations": {
+    "exported": {
+      "spellcast": [
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "thrust": [
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "walk": [
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "slash": [
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "shoot": [
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "hurt": [
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "climb": [
+        "020 legs armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "idle": [
+        "020 legs armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "jump": [
+        "020 legs armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "sit": [
+        "020 legs armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "emote": [
+        "020 legs armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "run": [
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "combat_idle": [
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "backslash": [
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "halfslash": [
+        "060 torso armour plate male copper.png",
+        "130 hat helmet bascinet adult copper.png"
+      ]
+    },
+    "failed": {}
+  },
+  "customAnimations": {
+    "exported": {},
+    "failed": {}
+  },
+  "frameSize": 64,
+  "frameCounts": {
+    "spellcast": 7,
+    "thrust": 8,
+    "walk": 9,
+    "slash": 6,
+    "shoot": 13,
+    "hurt": 6,
+    "climb": 6,
+    "idle": 2,
+    "jump": 5,
+    "sit": 3,
+    "emote": 3,
+    "run": 8,
+    "combat_idle": 2,
+    "backslash": 13,
+    "halfslash": 7
+  }
+}

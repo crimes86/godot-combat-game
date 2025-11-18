@@ -45,7 +45,7 @@ func _setup_data() -> void:
 
 	animation_speeds = {
 		"idle": 4,
-		"slash_oversize": 12
+		"slash_oversize": 60  # Ultra-fast for max AGI spam (6 frames = 0.1s)
 	}
 
 	animation_rows = {

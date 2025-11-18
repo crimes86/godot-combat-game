@@ -174,13 +174,13 @@ func create_equipment_panel(parent: Control) -> void:
 	equipment_vbox.add_child(slots_container)
 
 	# Create equipment slots (weapons first, then armor)
-	var slot_names = ["mainhand", "offhand", "head", "chest", "hands", "legs", "feet"]
+	var slot_names = ["mainhand", "offhand", "head", "chest", "arms", "legs", "feet"]
 	var slot_labels = {
 		"mainhand": "MAIN HAND",
 		"offhand": "OFF HAND",
 		"head": "HEAD",
 		"chest": "CHEST",
-		"hands": "HANDS",
+		"arms": "ARMS",
 		"legs": "LEGS",
 		"feet": "FEET"
 	}

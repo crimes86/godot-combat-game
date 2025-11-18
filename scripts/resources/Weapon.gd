@@ -246,17 +246,22 @@ static func create_mock_artifact(provider: String = "battlenet") -> Weapon:
 static func create_random_drop(player_level: int) -> Weapon:
 	"""Create a random weapon drop appropriate for player level"""
 	var weapon = Weapon.new()
-	
-	# Random name
+
+	# Random weapon type and name
+	var weapon_types = ["sword", "axe", "mace", "spear", "rapier", "dagger"]
+	var type_names = ["Sword", "Axe", "Mace", "Spear", "Rapier", "Dagger"]
+	var type_index = randi() % weapon_types.size()
+
+	weapon.weapon_type = weapon_types[type_index]
+
 	var prefixes = ["Sharp", "Keen", "Heavy", "Light", "Ancient", "Rusty"]
-	var types = ["Sword", "Axe", "Dagger", "Blade"]
-	weapon.weapon_name = prefixes[randi() % prefixes.size()] + " " + types[randi() % types.size()]
-	
+	weapon.weapon_name = prefixes[randi() % prefixes.size()] + " " + type_names[type_index]
+
 	# Scale with player level
 	weapon.base_damage = 5.0 + player_level * 0.8
 	weapon.attack_speed_bonus = randf_range(-0.1, 0.1)
 	weapon.crit_chance_bonus = randf_range(0, 0.05)
-	
+
 	# Random rarity
 	var rarity_roll = randf()
 	if rarity_roll < 0.5:
@@ -267,8 +272,8 @@ static func create_random_drop(player_level: int) -> Weapon:
 		weapon.rarity = Rarity.RARE
 	else:
 		weapon.rarity = Rarity.EPIC
-	
+
 	weapon.required_level = max(1, player_level - 2)
 	weapon.can_trade = true
-	
+
 	return weapon

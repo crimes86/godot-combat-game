@@ -30,7 +30,7 @@
 			"id": "shadow_gloves",
 			"name": "Shadow Grips",
 			"description": "Gauntlets that shimmer like smoke. Your hands barely exist in this realm.",
-			"slot": "hands",
+			"slot": "arms",
 			"defense": 15,
 			"type": "armor",
 			"value": 200,

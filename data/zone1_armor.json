@@ -30,7 +30,7 @@
 			"id": "wasteland_gloves",
 			"name": "Wasteland Gloves",
 			"description": "Tough leather gloves with bone reinforcements. Protect hands during combat.",
-			"slot": "hands",
+			"slot": "arms",
 			"defense": 5,
 			"type": "armor",
 			"value": 25,

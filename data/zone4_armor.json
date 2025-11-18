@@ -32,7 +32,7 @@
 			"id": "abyss_gauntlets",
 			"name": "Abyssal Gauntlets",
 			"description": "Dark iron plate gauntlets that gleam like obsidian. Your strikes carry the weight of the void.",
-			"slot": "hands",
+			"slot": "arms",
 			"defense": 22,
 			"type": "armor",
 			"rarity": "Legendary",
