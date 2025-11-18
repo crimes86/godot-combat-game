@@ -24,11 +24,22 @@ var original_modulate: Color = Color.WHITE  # Store original difficulty color
 var weakpoints: Array = []  # Just for visual rendering
 var is_dying: bool = false
 
+# Corpse state (lootable body system)
+var is_corpse: bool = false
+var corpse_loot: Array = []  # Generated items for this corpse
+var corpse_creation_time: float = 0.0
+var corpse_state: CorpseState.State = CorpseState.State.FRESH
+var loot_indicator: Node2D = null  # Visual glow for lootable corpses
+
 # Signals for CritWindowManager
 signal weakpoint_spawned()  # Emitted when a weakpoint is created
 signal weakpoint_destroyed(weakpoint: Node)  # Emitted when a weakpoint is destroyed
 signal died()  # Emitted when enemy dies
 signal damage_taken(damage: float, is_crit: bool)  # For unified feedback
+
+# Corpse signals
+signal corpse_clicked(corpse)  # Emitted when corpse is clicked for looting
+signal corpse_looted_empty(corpse)  # Emitted when all items taken from corpse
 
 func _ready() -> void:
 	# Set collision layers: enemies on layer 1, detect layers 1 (other entities) and 2 (obstacles like trees)
@@ -229,7 +240,15 @@ func update_level_display() -> void:
 		add_child(level_label)
 
 func _on_click_area_input(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
-	# Let Player handle ALL clicks (including crit window)
+	# If this is a corpse, handle right-click for looting
+	if is_corpse and event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+			# Right-click on corpse - trigger loot UI
+			corpse_clicked.emit(self)
+			get_viewport().set_input_as_handled()
+			return
+
+	# Let Player handle ALL clicks for living enemies (including crit window)
 	# This prevents double-damage bugs where both Player and Enemy handle the same click
 	return
 
@@ -558,6 +577,10 @@ func _process(delta: float) -> void:
 	if in_crit_window and not weakpoints.is_empty():
 		queue_redraw()  # Continuously redraw while weakpoints are active
 
+	# Handle corpse decay
+	if is_corpse:
+		process_corpse_decay(delta)
+
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Local handler - just forward to manager"""
 	print("🔍 [ENEMY] Weakpoint destroyed locally - emitting signal to manager")
@@ -616,51 +639,58 @@ func shrink_after_crit_window() -> void:
 func die() -> void:
 	if is_dying:
 		return
-	
+
 	is_dying = true
-	# print("\n☠️ ===== ENEMY DEATH =====")
-	# print("Enemy name: ", name)
-	# print("Enemy level: ", enemy_level)
-	# print("Position: ", global_position)
-	# print("Health: ", current_health)
-	# print("Is in tree: ", is_inside_tree())
+	print("\n☠️ ===== ENEMY DEATH =====")
+	print("Enemy: ", name, " (Level ", enemy_level, ")")
 
 	# Grant XP to player
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("gain_experience"):
 		player.gain_experience(xp_reward)
-		# print("💰 Granted ", xp_reward, " XP to player")
+		print("✨ Granted ", xp_reward, " XP to player")
 
-	# Grant gold to player
-	DebugConfig.debug_log("💰 Attempting to drop %d gold (gold_drop_base=%d, enemy_level=%d)" % [gold_drop, gold_drop_base, enemy_level])
+	# Grant gold to player IMMEDIATELY
+	DebugConfig.debug_log("💰 Dropping %d gold (gold_drop_base=%d, enemy_level=%d)" % [gold_drop, gold_drop_base, enemy_level])
 	CharacterStats.add_gold(gold_drop)
-	DebugConfig.debug_log("💰 CharacterStats.add_gold() called - Player total gold now: %d" % CharacterStats.gold)
-	
-	# ✨ NEW: Play death sound
+	DebugConfig.debug_log("💰 Player total gold now: %d" % CharacterStats.gold)
+
+	# Play death sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		sound_manager.play_sound(sound_manager.SoundType.ENEMY_DEATH, global_position, -3.0)
-	
-	# ✨ Play death animation (hurt animation) and wait for it to complete
+
+	# Play death animation (hurt animation) and wait for it to complete
 	var anim_sprite = sprite as AnimatedSprite2D
 	if anim_sprite and anim_sprite.sprite_frames and anim_sprite.sprite_frames.has_animation("hurt"):
-		print("   🎬 Playing death animation...")
+		print("🎬 Playing death animation...")
 		anim_sprite.play("hurt")
 		# Wait for the full animation to finish
 		await anim_sprite.animation_finished
-		print("   ✅ Death animation complete")
+
+		# FREEZE on last frame
+		anim_sprite.stop()
+		var frame_count = anim_sprite.sprite_frames.get_frame_count("hurt")
+		anim_sprite.frame = frame_count - 1
+		print("✅ Death animation complete - frozen on frame ", frame_count - 1)
 	else:
 		# Fallback if animation doesn't exist
-		print("   ⚠️ No hurt animation, waiting 0.6s...")
+		print("⚠️ No hurt animation, waiting 0.6s...")
 		await get_tree().create_timer(0.6).timeout
-	
-	# Emit died signal - CritWindowManager will handle cleanup if needed
+
+	# Generate loot for this corpse
+	corpse_loot = generate_corpse_loot()
+	if corpse_loot.size() > 0:
+		print("📦 Corpse has %d loot item(s)" % corpse_loot.size())
+	else:
+		print("💀 Corpse has no loot")
+
+	# Emit died signal - spawner will respawn immediately
 	died.emit()
 
-	# print("Calling queue_free()...")
-	queue_free()
-	# print("Enemy queued for deletion")
-	# print("===== END DEATH =====\n")
+	# Transition to corpse state (don't despawn)
+	become_corpse()
+	print("===== CORPSE CREATED =====\n")
 
 ## Debug Visualization
 func draw_debug_shapes(debug_container: Node2D) -> void:
@@ -734,9 +764,9 @@ func draw_debug_rect_world(center: Vector2, size: Vector2, angle: float, color: 
 	line.width = 2.0
 	line.default_color = color
 	line.z_index = 1000
-	
+
 	var half_size = size / 2.0
-	
+
 	# Create corners
 	var corners = [
 		Vector2(-half_size.x, -half_size.y),
@@ -744,14 +774,198 @@ func draw_debug_rect_world(center: Vector2, size: Vector2, angle: float, color: 
 		Vector2(half_size.x, half_size.y),
 		Vector2(-half_size.x, half_size.y)
 	]
-	
+
 	# Rotate and translate corners
 	for i in range(4):
 		var rotated = corners[i].rotated(angle)
 		line.add_point(center + rotated)
-	
+
 	# Close the rectangle
 	var rotated = corners[0].rotated(angle)
 	line.add_point(center + rotated)
-	
+
 	return line
+
+## ============================================
+## CORPSE SYSTEM
+## ============================================
+
+func generate_corpse_loot() -> Array:
+	"""Generate loot items for this corpse using CorpseState loot tables"""
+	var loot = []
+
+	# Roll for number of items (0-2)
+	var num_items = CorpseState.roll_loot_count()
+
+	# Generate each item
+	for i in range(num_items):
+		var item = CorpseState.roll_loot_item()
+		if not item.is_empty():
+			# Add quantity for stackable items
+			if item.get("stackable", false):
+				item["quantity"] = 1
+			loot.append(item)
+			print("  🎲 Rolled loot: %s (%s)" % [item["name"], item["rarity"]])
+
+	return loot
+
+func become_corpse() -> void:
+	"""Transition enemy from living to corpse state"""
+	print("💀 Becoming corpse...")
+	is_corpse = true
+	corpse_creation_time = Time.get_ticks_msec() / 1000.0
+	corpse_state = CorpseState.State.FRESH
+
+	# Disable AI
+	if has_node("EnemyAI"):
+		var ai = get_node("EnemyAI")
+		ai.set_process(false)
+		ai.set_physics_process(false)
+		print("  ✅ AI disabled")
+
+	# Disable health bar
+	if health_bar:
+		health_bar.visible = false
+		print("  ✅ Health bar hidden")
+
+	# Keep collision for clicking, but change layers
+	# Layer 4 = corpses (separate from living enemies)
+	collision_layer = 8  # 2^3 = layer 4
+	collision_mask = 0   # Don't detect anything
+	print("  ✅ Collision updated to corpse layer")
+
+	# Change groups
+	remove_from_group(Constants.GROUP_ENEMIES)
+	add_to_group("corpses")
+	print("  ✅ Moved to corpses group")
+
+	# Add loot indicator if has items
+	if corpse_loot.size() > 0:
+		add_loot_indicator()
+		print("  ✅ Loot indicator added")
+
+	# Darken sprite slightly
+	if sprite:
+		sprite.modulate = Color(0.8, 0.8, 0.8, 1.0)
+
+	print("💀 Corpse state active - will decay in %.0fs" % CorpseState.CORPSE_DECAY_TIME)
+
+func add_loot_indicator() -> void:
+	"""Add visual glow to indicate this corpse has loot"""
+	if loot_indicator:
+		return  # Already has indicator
+
+	# Create a pulsing glow effect
+	loot_indicator = Node2D.new()
+	loot_indicator.name = "LootIndicator"
+
+	# Create glowing circle
+	var glow = Polygon2D.new()
+	glow.name = "Glow"
+
+	# Create circle polygon
+	var circle_points = PackedVector2Array()
+	var radius = 40.0
+	var num_points = 32
+	for i in range(num_points):
+		var angle = (float(i) / num_points) * TAU
+		circle_points.append(Vector2(cos(angle), sin(angle)) * radius)
+
+	glow.polygon = circle_points
+	glow.color = CorpseState.CORPSE_LOOT_GLOW_COLOR
+	glow.z_index = -1  # Draw behind sprite
+
+	loot_indicator.add_child(glow)
+	add_child(loot_indicator)
+
+	# Animate pulsing
+	var tween = create_tween()
+	tween.set_loops()
+	tween.tween_property(glow, "scale", Vector2(1.2, 1.2), 1.0).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(glow, "scale", Vector2(1.0, 1.0), 1.0).set_ease(Tween.EASE_IN_OUT)
+
+func process_corpse_decay(delta: float) -> void:
+	"""Handle corpse decay over time"""
+	var elapsed = (Time.get_ticks_msec() / 1000.0) - corpse_creation_time
+
+	# Check if fully rotted (5 minutes)
+	if elapsed >= CorpseState.CORPSE_DECAY_TIME:
+		rot_and_despawn()
+		return
+
+	# Check if transitioned to decaying state (after 1 minute)
+	if elapsed >= CorpseState.CORPSE_FRESH_TIME:
+		if corpse_state == CorpseState.State.FRESH:
+			corpse_state = CorpseState.State.DECAYING
+			update_decay_visual()
+			print("💀 Corpse is now decaying... (%.0fs remaining)" % (CorpseState.CORPSE_DECAY_TIME - elapsed))
+
+func update_decay_visual() -> void:
+	"""Update visual appearance for decaying state"""
+	if sprite:
+		# Make more transparent
+		var current_color = sprite.modulate
+		sprite.modulate = Color(
+			current_color.r * CorpseState.DECAY_ALPHA_MULTIPLIER,
+			current_color.g * CorpseState.DECAY_ALPHA_MULTIPLIER,
+			current_color.b * CorpseState.DECAY_ALPHA_MULTIPLIER,
+			0.8  # More transparent
+		)
+
+func rot_and_despawn() -> void:
+	"""Corpse has rotted - fade out and remove"""
+	if corpse_state == CorpseState.State.ROTTED:
+		return  # Already rotting
+
+	corpse_state = CorpseState.State.ROTTED
+	print("💀 Corpse fully rotted - despawning with %d uncollected items" % corpse_loot.size())
+
+	# Fade out animation
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "modulate:a", 0.0, 2.0)
+	tween.tween_property(self, "scale", Vector2(0.8, 0.8), 2.0)
+	await tween.finished
+
+	queue_free()
+
+func check_if_looted_empty() -> void:
+	"""Called when items are taken - check if corpse is now empty"""
+	if corpse_loot.is_empty():
+		print("💀 Corpse fully looted - despawning gracefully")
+
+		# Remove loot indicator
+		if loot_indicator:
+			loot_indicator.queue_free()
+			loot_indicator = null
+
+		# Emit signal
+		corpse_looted_empty.emit(self)
+
+		# Quick fade out
+		graceful_despawn()
+
+func graceful_despawn() -> void:
+	"""Quick fade out for fully looted corpses"""
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "modulate:a", 0.0, 0.5)
+	tween.tween_property(self, "scale", Vector2(0.5, 0.5), 0.5)
+	await tween.finished
+
+	queue_free()
+
+func get_nearby_corpses(radius: float) -> Array:
+	"""Find all corpses within radius for AOE looting"""
+	var nearby = []
+	var all_corpses = get_tree().get_nodes_in_group("corpses")
+
+	for node in all_corpses:
+		if node == self:
+			continue  # Skip self
+
+		# Check if valid corpse and within radius
+		if is_instance_valid(node) and node.global_position.distance_to(global_position) <= radius:
+			nearby.append(node)
+
+	return nearby

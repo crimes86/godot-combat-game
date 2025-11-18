@@ -74,6 +74,9 @@ func _ready():
 	# Set camera limits
 	setup_camera_limits()
 
+	# Setup corpse loot handling
+	setup_corpse_loot_system()
+
 	# Wait for player to be ready, then do initial terrain visibility update
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -2766,3 +2769,56 @@ func create_path_for_baking(viewport: SubViewport, offset: Vector2):
 		var ring_radius = (radius / 4.0) * (ring + 1) + rng.randf_range(-40, 40)
 		var pos = Vector2(-2000, 0) + Vector2(cos(angle) * ring_radius, sin(angle) * ring_radius)
 		create_feathered_area(path_layer, pos + offset, 160, rng, 1.0, 0.06)
+
+## ============================================
+## CORPSE LOOT SYSTEM
+## ============================================
+
+func setup_corpse_loot_system() -> void:
+	"""Setup handlers for corpse looting system"""
+	print("💀 Setting up corpse loot system...")
+
+	# Connect to all existing enemies
+	for enemy in get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES):
+		if enemy.has_signal("corpse_clicked"):
+			enemy.corpse_clicked.connect(_on_corpse_clicked)
+
+	# Use a deferred call to listen for new enemies spawning
+	get_tree().node_added.connect(_on_node_added)
+
+	print("✅ Corpse loot system ready")
+
+func _on_node_added(node: Node) -> void:
+	"""Connect to newly spawned enemies"""
+	if node.is_in_group(Constants.GROUP_ENEMIES):
+		if node.has_signal("corpse_clicked"):
+			node.corpse_clicked.connect(_on_corpse_clicked)
+
+func _on_corpse_clicked(corpse) -> void:
+	"""Handle corpse being clicked - open loot UI with AOE aggregation"""
+	if not is_instance_valid(corpse):
+		return
+
+	print("💀 Corpse clicked at %s" % corpse.global_position)
+
+	# Find all nearby corpses within AOE radius
+	var nearby_corpses = corpse.get_nearby_corpses(CorpseState.AOE_LOOT_RADIUS)
+
+	print("📦 Found %d nearby corpses (AOE radius: %.0f)" % [nearby_corpses.size(), CorpseState.AOE_LOOT_RADIUS])
+
+	# Create and open loot UI
+	var loot_scene = load("res://scenes/ui/loot_body_ui.tscn")
+	if not loot_scene:
+		push_error("❌ Failed to load loot_body_ui scene!")
+		return
+
+	var loot_ui = loot_scene.instantiate()
+	get_tree().root.add_child(loot_ui)
+
+	# Connect close signal
+	loot_ui.loot_ui_closed.connect(func(): loot_ui.queue_free())
+
+	# Open with aggregated loot
+	loot_ui.open_loot_ui(corpse, nearby_corpses)
+
+	print("✅ Loot UI opened with %d total corpses" % (nearby_corpses.size() + 1))

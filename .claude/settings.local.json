@@ -5,7 +5,17 @@
       "Bash(cat:*)",
       "Bash(git restore:*)",
       "Bash(git push)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(du:*)",
+      "Bash(git add:*)",
+      "Bash(find:*)",
+      "Bash(where:*)",
+      "Bash(\"C:\\Users\\kevin\\OneDrive\\fantom\\mmo\\rhythmrpg\\.godot\\.gdignore\")",
+      "Bash(git rm:*)",
+      "Bash(godot --headless --check-only --script:*)",
+      "WebSearch",
+      "Bash(unzip:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

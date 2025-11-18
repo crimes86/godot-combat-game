@@ -106,31 +106,31 @@ func _on_enemy_died(spawn_index: int) -> void:
 	# Check if spawner is still in tree
 	if not is_inside_tree():
 		return
-	
+
 	# Check if already queued for respawn
 	if respawn_queue.has(spawn_index):
 		return
-	
+
 	print("\n☠️  Enemy died at position ", spawn_index)
-	print("⏱️  Respawning in ", respawn_delay, " seconds...")
-	
-	# Remove from tracking
+	print("✨ Corpse will remain for 5 minutes, respawning replacement in ", respawn_delay, " seconds...")
+
+	# Remove from tracking (corpse will remain in world)
 	if enemy_at_position.has(spawn_index):
 		enemy_at_position.erase(spawn_index)
-	
+
 	respawn_queue.append(spawn_index)
-	
-	# Wait and respawn (with safety check)
+
+	# Wait and respawn (corpse persists independently)
 	if is_inside_tree():
 		await get_tree().create_timer(respawn_delay).timeout
 	else:
 		return
-	
+
 	# Double-check we're still in tree after await
 	if not is_inside_tree():
 		return
-	
-	print("✅ Respawning at position ", spawn_index)
+
+	print("✅ Spawning replacement enemy at position ", spawn_index)
 	respawn_queue.erase(spawn_index)
 	spawn_enemy_at(spawn_index, true)  # is_respawn = true
 
