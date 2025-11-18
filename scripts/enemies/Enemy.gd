@@ -30,6 +30,8 @@ var corpse_loot: Array = []  # Generated items for this corpse
 var corpse_creation_time: float = 0.0
 var corpse_state: CorpseState.State = CorpseState.State.FRESH
 var loot_indicator: Node2D = null  # Visual glow for lootable corpses
+var player_in_loot_range: bool = false  # Is player close enough to loot?
+var loot_prompt: Label = null  # [F] Loot prompt
 
 # Signals for CritWindowManager
 signal weakpoint_spawned()  # Emitted when a weakpoint is created
@@ -577,9 +579,95 @@ func _process(delta: float) -> void:
 	if in_crit_window and not weakpoints.is_empty():
 		queue_redraw()  # Continuously redraw while weakpoints are active
 
-	# Handle corpse decay
+	# Handle corpse decay and interaction
 	if is_corpse:
 		process_corpse_decay(delta)
+		update_loot_proximity()
+
+func update_loot_proximity() -> void:
+	"""Check if player is close enough to loot and show/hide prompt"""
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		player_in_loot_range = false
+		if loot_prompt:
+			loot_prompt.visible = false
+		return
+
+	# Check distance to player
+	var distance = global_position.distance_to(player.global_position)
+	var was_in_range = player_in_loot_range
+	player_in_loot_range = distance <= 80.0  # Same range as chest interaction
+
+	# Update prompt visibility
+	if player_in_loot_range and corpse_loot.size() > 0:
+		if not loot_prompt:
+			create_loot_prompt()
+		loot_prompt.visible = true
+		update_loot_prompt_position()
+
+		# Check for F key press
+		if Input.is_key_pressed(KEY_F):
+			open_loot_ui()
+	else:
+		if loot_prompt:
+			loot_prompt.visible = false
+
+func create_loot_prompt() -> void:
+	"""Create [F] Loot prompt above corpse"""
+	if loot_prompt:
+		return
+
+	var canvas = CanvasLayer.new()
+	canvas.name = "LootPromptCanvas"
+	canvas.layer = 50
+	add_child(canvas)
+
+	loot_prompt = Label.new()
+	loot_prompt.name = "LootPrompt"
+	loot_prompt.text = "[F] Loot"
+	loot_prompt.add_theme_font_size_override("font_size", 16)
+	loot_prompt.add_theme_color_override("font_color", Color(1.0, 1.0, 0.8))  # Yellow-white
+	loot_prompt.add_theme_color_override("font_outline_color", Color.BLACK)
+	loot_prompt.add_theme_constant_override("outline_size", 2)
+	loot_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	loot_prompt.visible = false
+	canvas.add_child(loot_prompt)
+
+func update_loot_prompt_position() -> void:
+	"""Update prompt position to stay above corpse"""
+	if not loot_prompt:
+		return
+
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		return
+
+	var viewport_size = get_viewport().get_visible_rect().size
+	var camera = get_viewport().get_camera_2d()
+	if not camera:
+		return
+
+	# Position prompt above corpse
+	var prompt_world_pos = global_position + Vector2(0, -40)
+	var camera_pos = camera.global_position
+	var screen_center = viewport_size / 2
+	var prompt_screen_pos = (prompt_world_pos - camera_pos) * camera.zoom.x + screen_center
+
+	# Center horizontally
+	var screen_x = prompt_screen_pos.x
+	if loot_prompt.size.x > 0:
+		screen_x -= loot_prompt.size.x / 2
+	var screen_y = prompt_screen_pos.y
+
+	loot_prompt.position = Vector2(screen_x, screen_y)
+
+func open_loot_ui() -> void:
+	"""Open loot UI for this corpse (called when F is pressed)"""
+	if corpse_loot.is_empty():
+		return
+
+	print("💀 Opening loot UI via F-key for corpse at %s" % global_position)
+	corpse_clicked.emit(self)
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Local handler - just forward to manager"""
@@ -851,38 +939,78 @@ func become_corpse() -> void:
 	print("💀 Corpse state active - will decay in %.0fs" % CorpseState.CORPSE_DECAY_TIME)
 
 func add_loot_indicator() -> void:
-	"""Add visual glow to indicate this corpse has loot"""
+	"""Add shiny glimmer effect to indicate this corpse has loot (WoW-style)"""
 	if loot_indicator:
 		return  # Already has indicator
 
-	# Create a pulsing glow effect
 	loot_indicator = Node2D.new()
 	loot_indicator.name = "LootIndicator"
+	loot_indicator.z_index = 10  # Draw on top
 
-	# Create glowing circle
-	var glow = Polygon2D.new()
-	glow.name = "Glow"
+	# Create 3-4 small sparkle points around the corpse
+	var sparkle_positions = [
+		Vector2(-20, -25),  # Upper left
+		Vector2(20, -25),   # Upper right
+		Vector2(-15, 5),    # Lower left
+		Vector2(15, 5)      # Lower right
+	]
 
-	# Create circle polygon
-	var circle_points = PackedVector2Array()
-	var radius = 40.0
-	var num_points = 32
-	for i in range(num_points):
-		var angle = (float(i) / num_points) * TAU
-		circle_points.append(Vector2(cos(angle), sin(angle)) * radius)
+	for i in range(sparkle_positions.size()):
+		var sparkle = create_sparkle()
+		sparkle.position = sparkle_positions[i]
+		loot_indicator.add_child(sparkle)
 
-	glow.polygon = circle_points
-	glow.color = CorpseState.CORPSE_LOOT_GLOW_COLOR
-	glow.z_index = -1  # Draw behind sprite
+		# Stagger animation start times for shimmer effect
+		var delay = i * 0.2
+		animate_sparkle(sparkle, delay)
 
-	loot_indicator.add_child(glow)
 	add_child(loot_indicator)
 
-	# Animate pulsing
+func create_sparkle() -> Polygon2D:
+	"""Create a single sparkle (4-pointed star)"""
+	var sparkle = Polygon2D.new()
+
+	# Create 4-pointed star shape
+	var size = 6.0
+	var points = PackedVector2Array([
+		Vector2(0, -size),      # Top point
+		Vector2(-1, -1),        # Inner top-left
+		Vector2(-size, 0),      # Left point
+		Vector2(-1, 1),         # Inner bottom-left
+		Vector2(0, size),       # Bottom point
+		Vector2(1, 1),          # Inner bottom-right
+		Vector2(size, 0),       # Right point
+		Vector2(1, -1)          # Inner top-right
+	])
+
+	sparkle.polygon = points
+	sparkle.color = Color(1.0, 1.0, 0.8, 0.9)  # Bright yellow-white
+
+	return sparkle
+
+func animate_sparkle(sparkle: Polygon2D, delay: float) -> void:
+	"""Animate sparkle with rotation and fade"""
+	# Wait for delay
+	await get_tree().create_timer(delay).timeout
+
+	if not is_instance_valid(sparkle):
+		return
+
+	# Create looping animation
 	var tween = create_tween()
 	tween.set_loops()
-	tween.tween_property(glow, "scale", Vector2(1.2, 1.2), 1.0).set_ease(Tween.EASE_IN_OUT)
-	tween.tween_property(glow, "scale", Vector2(1.0, 1.0), 1.0).set_ease(Tween.EASE_IN_OUT)
+	tween.set_parallel(true)
+
+	# Rotate continuously
+	tween.tween_property(sparkle, "rotation", TAU, 2.0).from(0.0)
+
+	# Pulse opacity
+	tween.tween_property(sparkle, "modulate:a", 0.3, 1.0).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(sparkle, "modulate:a", 1.0, 1.0).set_ease(Tween.EASE_IN_OUT).set_delay(1.0)
+
+	# Slight scale pulse
+	tween.tween_property(sparkle, "scale", Vector2(1.3, 1.3), 1.0).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(sparkle, "scale", Vector2(1.0, 1.0), 1.0).set_ease(Tween.EASE_IN_OUT).set_delay(1.0)
 
 func process_corpse_decay(delta: float) -> void:
 	"""Handle corpse decay over time"""
