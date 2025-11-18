@@ -14,9 +14,10 @@ enum TextType {
 }
 
 var type: TextType = TextType.NORMAL
-var lifetime: float = 1.2
-var float_speed: float = 50.0
+var lifetime: float = 1.0  # Reduced from 1.2 for faster cycling
+var float_speed: float = 100.0  # Increased from 50 for faster scrolling
 var random_offset: Vector2 = Vector2.ZERO
+var arc_offset: Vector2 = Vector2.ZERO  # For fountain/arc pattern
 
 func _ready() -> void:
 	# Make sure text renders above everything
@@ -25,8 +26,13 @@ func _ready() -> void:
 	# Random horizontal offset to prevent overlapping (but NOT for player damage/heal text)
 	# Player damage/heal text should appear at precise positions based on facing direction
 	if type != TextType.DAMAGE and type != TextType.HEAL:
-		random_offset = Vector2(randf_range(-30, 30), randf_range(-10, 10))
+		# Larger spread for better separation (fountain effect)
+		random_offset = Vector2(randf_range(-50, 50), randf_range(-15, 15))
 		position += random_offset
+
+		# Arc offset for fountain pattern (numbers curve outward as they rise)
+		# Direction depends on initial horizontal offset
+		arc_offset = Vector2(random_offset.x * 0.5, 0)  # Continue in same direction
 	
 	# Set up text appearance based on type
 	match type:
@@ -40,7 +46,7 @@ func _ready() -> void:
 			animate_crit()
 		TextType.WEAKPOINT:
 			add_theme_color_override("font_color", Color(1.0, 0.4, 0.0))  # Orange-red
-			add_theme_font_size_override("font_size", 42)
+			add_theme_font_size_override("font_size", 21)  # Half of previous size (was 42)
 			animate_weakpoint()
 		TextType.MISS:
 			add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 0.8))  # Gray
@@ -65,42 +71,49 @@ func _ready() -> void:
 	queue_free()
 
 func animate_normal() -> void:
-	# Simple float up and fade
+	# Arc/fountain pattern - float up and outward, then fade
 	var tween = create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(self, "position", position + Vector2(0, -float_speed), lifetime)
-	tween.tween_property(self, "modulate:a", 0.0, lifetime * 0.7).set_delay(lifetime * 0.3)
+
+	# Move up and outward in an arc (fountain effect)
+	var target_pos = position + Vector2(arc_offset.x, -float_speed)
+	tween.tween_property(self, "position", target_pos, lifetime).set_ease(Tween.EASE_OUT)
+
+	# Faster fade for quicker cycling
+	tween.tween_property(self, "modulate:a", 0.0, lifetime * 0.6).set_delay(lifetime * 0.4)
 
 func animate_crit() -> void:
-	# Bounce in, float up, fade out
+	# Bounce in, arc upward, fade out
 	var tween = create_tween()
-	
+
 	# Initial pop
 	scale = Vector2(0.5, 0.5)
 	tween.tween_property(self, "scale", Vector2(1.3, 1.3), 0.15).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.1)
-	
-	# Float and fade
+
+	# Float up and outward in arc, faster than normal
 	tween.set_parallel(true)
-	tween.tween_property(self, "position", position + Vector2(0, -float_speed * 1.5), lifetime)
+	var target_pos = position + Vector2(arc_offset.x, -float_speed * 1.5)
+	tween.tween_property(self, "position", target_pos, lifetime).set_ease(Tween.EASE_OUT)
 	tween.tween_property(self, "modulate:a", 0.0, lifetime * 0.6).set_delay(lifetime * 0.4)
 
 func animate_weakpoint() -> void:
-	# Explosive entry, longer hang time, dramatic float
+	# Explosive entry, arc upward with fountain effect (now smaller and faster)
 	var tween = create_tween()
-	
-	# Explosive pop
-	scale = Vector2(0.3, 0.3)
-	rotation_degrees = randf_range(-15, 15)
-	
-	tween.tween_property(self, "scale", Vector2(1.5, 1.5), 0.2).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_ELASTIC)
-	tween.tween_property(self, "scale", Vector2(1.2, 1.2), 0.15)
-	tween.tween_property(self, "rotation_degrees", 0.0, 0.3)
-	
-	# Slower float with longer visibility
-	lifetime = 1.5
+
+	# Explosive pop (reduced since text is now smaller)
+	scale = Vector2(0.5, 0.5)
+	rotation_degrees = randf_range(-10, 10)
+
+	tween.tween_property(self, "scale", Vector2(1.2, 1.2), 0.15).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_ELASTIC)
+	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.1)
+	tween.tween_property(self, "rotation_degrees", 0.0, 0.2)
+
+	# Faster float with arc (reduced from 1.5s to 1.2s)
+	lifetime = 1.2
 	tween.set_parallel(true)
-	tween.tween_property(self, "position", position + Vector2(0, -float_speed * 1.2), lifetime)
+	var target_pos = position + Vector2(arc_offset.x, -float_speed * 1.2)
+	tween.tween_property(self, "position", target_pos, lifetime).set_ease(Tween.EASE_OUT)
 	tween.tween_property(self, "modulate:a", 0.0, lifetime * 0.5).set_delay(lifetime * 0.5)
 
 func animate_miss() -> void:
