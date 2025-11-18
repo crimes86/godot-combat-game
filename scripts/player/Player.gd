@@ -400,17 +400,22 @@ func _physics_process(delta: float) -> void:
 	
 	# Handle held attack (continuous attacking while mouse held)
 	if is_mouse_held:
-		hold_attack_timer += delta
-		if hold_attack_timer >= hold_attack_interval:
+		# ❌ BLOCK HOLD ATTACKS when UI is open
+		if is_ui_blocking_input():
+			is_mouse_held = false  # Cancel hold state when UI opens
 			hold_attack_timer = 0.0
+		else:
+			hold_attack_timer += delta
+			if hold_attack_timer >= hold_attack_interval:
+				hold_attack_timer = 0.0
 
-			# ✨ CRIT WINDOW: Check if holding on enemy in crit window (uncapped speed!)
-			if is_holding_on_crit_window_enemy(mouse_pos):
-				# Handled by crit window logic - no cooldown check needed!
-				pass
-			elif can_attack:
-				# Normal attack - cooldown enforced
-				attempt_attack()
+				# ✨ CRIT WINDOW: Check if holding on enemy in crit window (uncapped speed!)
+				if is_holding_on_crit_window_enemy(mouse_pos):
+					# Handled by crit window logic - no cooldown check needed!
+					pass
+				elif can_attack:
+					# Normal attack - cooldown enforced
+					attempt_attack()
 	
 	# Update debug visualization if enabled
 	if debug_mode:
@@ -502,6 +507,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
+				# ❌ BLOCK ATTACKS when clicking inside UI windows
+				if is_ui_blocking_input():
+					print("🚫 UI is open - blocking attack input")
+					return
+				
 				is_mouse_held = true
 				hold_attack_timer = 0.0
 				
@@ -1481,15 +1491,26 @@ func update_camera_zoom(delta: float) -> void:
 	var new_zoom = lerp(current_zoom_value, target_zoom, zoom_speed)
 	camera.zoom = Vector2(new_zoom, new_zoom)
 
-func is_shop_open() -> bool:
-	"""Check if any shop UI is currently open"""
-	# Look for ShopUI in the scene tree
+func is_ui_blocking_input() -> bool:
+	"""Check if any UI is currently open that should block game input"""
 	var root = get_tree().root
 	for child in root.get_children():
-		if child is CanvasLayer and child.has_method("close_shop"):
-			if child.visible:
+		if child is CanvasLayer and child.visible:
+			# Check for specific UI types that should block input
+			if child is ShopUI:
+				return true
+			if child is LootBodyUI:
+				return true
+			if child is ChestLootUI:
+				return true
+			# CharacterUI doesn't have class_name, check by method
+			if child.has_method("toggle_ui"):
 				return true
 	return false
+
+func is_shop_open() -> bool:
+	"""Legacy function - kept for compatibility. Use is_ui_blocking_input() instead"""
+	return is_ui_blocking_input()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DEATH & RESPAWN
