@@ -142,6 +142,37 @@ func animate_heal() -> void:
 	tween.tween_property(self, "position", position + Vector2(0, -float_speed * 0.8), lifetime)
 	tween.tween_property(self, "modulate:a", 0.0, lifetime * 0.5).set_delay(lifetime * 0.5)
 
+## Helper function to calculate position offset based on direction
+static func _get_position_offset_for_direction(direction: Vector2) -> Vector2:
+	"""Calculate spawn position offset based on player's facing direction
+	Used for player damage/heal text positioning
+	Offsets: RIGHT(-25,0), LEFT(25,0), DOWN(0,-30), UP(0,50)"""
+	if direction == Vector2.ZERO:
+		return Vector2.ZERO
+
+	var dir = direction.normalized()
+	var offset = Vector2.ZERO
+
+	# Determine primary facing direction
+	if abs(dir.x) > abs(dir.y):
+		# Horizontal facing (left or right)
+		if dir.x > 0:
+			# Facing RIGHT
+			offset = Vector2(-25, 0)
+		else:
+			# Facing LEFT
+			offset = Vector2(25, 0)
+	else:
+		# Vertical facing (up or down)
+		if dir.y > 0:
+			# Facing DOWN
+			offset = Vector2(0, -30)
+		else:
+			# Facing UP
+			offset = Vector2(0, 50)
+
+	return offset
+
 ## Factory functions for easy spawning
 static func create_normal(damage: float, world_pos: Vector2, parent: Node) -> CombatText:
 	return _create_text(str(int(damage)), TextType.NORMAL, world_pos, parent)
@@ -157,62 +188,14 @@ static func create_miss(world_pos: Vector2, parent: Node) -> CombatText:
 
 static func create_damage(damage: float, world_pos: Vector2, parent: Node, direction: Vector2 = Vector2.ZERO) -> CombatText:
 	# Spawn damage text based on player's facing direction
-	# Adjustments: right(-25x), left(25x), down(0x,-30y), up(0x,50y)
-	var spawn_pos = world_pos
-	if direction != Vector2.ZERO:
-		var dir = direction.normalized()
-		var offset = Vector2.ZERO
-
-		# Determine primary facing direction
-		if abs(dir.x) > abs(dir.y):
-			# Horizontal facing (left or right)
-			if dir.x > 0:
-				# Facing RIGHT
-				offset = Vector2(-25, 0)
-			else:
-				# Facing LEFT
-				offset = Vector2(25, 0)
-		else:
-			# Vertical facing (up or down)
-			if dir.y > 0:
-				# Facing DOWN
-				offset = Vector2(0, -30)
-			else:
-				# Facing UP
-				offset = Vector2(0, 50)
-
-		spawn_pos = world_pos + offset
-
+	var offset = _get_position_offset_for_direction(direction)
+	var spawn_pos = world_pos + offset
 	return _create_text("-" + str(int(damage)), TextType.DAMAGE, spawn_pos, parent)
 
 static func create_heal(amount: float, world_pos: Vector2, parent: Node, direction: Vector2 = Vector2.ZERO) -> CombatText:
 	# Spawn heal text based on player's facing direction (same as damage)
-	# Adjustments: right(-25x), left(25x), down(0x,-30y), up(0x,50y)
-	var spawn_pos = world_pos
-	if direction != Vector2.ZERO:
-		var dir = direction.normalized()
-		var offset = Vector2.ZERO
-
-		# Determine primary facing direction
-		if abs(dir.x) > abs(dir.y):
-			# Horizontal facing (left or right)
-			if dir.x > 0:
-				# Facing RIGHT
-				offset = Vector2(-25, 0)
-			else:
-				# Facing LEFT
-				offset = Vector2(25, 0)
-		else:
-			# Vertical facing (up or down)
-			if dir.y > 0:
-				# Facing DOWN
-				offset = Vector2(0, -30)
-			else:
-				# Facing UP
-				offset = Vector2(0, 50)
-
-		spawn_pos = world_pos + offset
-
+	var offset = _get_position_offset_for_direction(direction)
+	var spawn_pos = world_pos + offset
 	return _create_text("+" + str(int(amount)), TextType.HEAL, spawn_pos, parent)
 
 static func _create_text(damage_text: String, text_type: TextType, world_pos: Vector2, parent: Node) -> CombatText:

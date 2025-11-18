@@ -584,16 +584,21 @@ func disengage() -> void:
 
 	# Regenerate health to full when resetting
 	if enemy.has_method("get") and enemy.has_method("set"):
-		if enemy.get("max_health") != null:
+		var max_hp = enemy.get("max_health")
+
+		# Validate max_health before resetting
+		if max_hp != null and max_hp > 0 and not is_nan(max_hp) and not is_inf(max_hp):
 			var old_health = enemy.get("current_health")
-			enemy.set("current_health", enemy.get("max_health"))
-			print("   💚 Health restored: %.1f -> %.1f" % [old_health, enemy.get("max_health")])
+			enemy.set("current_health", max_hp)
+			print("   💚 Health restored: %.1f -> %.1f" % [old_health, max_hp])
 
 			# Update health bar if it exists
 			if enemy.has_node("HealthBar"):
 				var health_bar = enemy.get_node("HealthBar")
 				if health_bar.has_method("update_health"):
-					health_bar.update_health(enemy.get("current_health"), enemy.get("max_health"))
+					health_bar.update_health(max_hp, max_hp)
+		else:
+			push_error("❌ Cannot reset enemy health - invalid max_health: %s" % str(max_hp))
 
 	spawn_position = enemy.global_position  # New patrol center
 	pick_new_patrol_target()
@@ -662,16 +667,21 @@ func disengage_to_spawn() -> void:
 
 	# Regenerate health to full when resetting
 	if enemy.has_method("get") and enemy.has_method("set"):
-		if enemy.get("max_health") != null:
+		var max_hp = enemy.get("max_health")
+
+		# Validate max_health before resetting
+		if max_hp != null and max_hp > 0 and not is_nan(max_hp) and not is_inf(max_hp):
 			var old_health = enemy.get("current_health")
-			enemy.set("current_health", enemy.get("max_health"))
-			print("   💚 Health restored: %.1f -> %.1f" % [old_health, enemy.get("max_health")])
+			enemy.set("current_health", max_hp)
+			print("   💚 Health restored: %.1f -> %.1f" % [old_health, max_hp])
 
 			# Update health bar if it exists
 			if enemy.has_node("HealthBar"):
 				var health_bar = enemy.get_node("HealthBar")
 				if health_bar.has_method("update_health"):
-					health_bar.update_health(enemy.get("current_health"), enemy.get("max_health"))
+					health_bar.update_health(max_hp, max_hp)
+		else:
+			push_error("❌ Cannot reset enemy health - invalid max_health: %s" % str(max_hp))
 
 	# Reset to ORIGINAL spawn position (not current position)
 	spawn_position = original_spawn_position

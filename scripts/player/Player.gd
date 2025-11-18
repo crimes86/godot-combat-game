@@ -107,7 +107,8 @@ func _ready() -> void:
 	
 	# Set health
 	current_health = max_health
-	health_bar.update_health(current_health, max_health)
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(current_health, max_health)
 	
 	# Add to player group
 	add_to_group(Constants.GROUP_PLAYER)
@@ -333,7 +334,8 @@ func _on_character_level_up(new_level: int) -> void:
 	
 	# Heal to full
 	current_health = max_health
-	health_bar.update_health(current_health, max_health)
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(current_health, max_health)
 	
 	# Visual feedback
 	if screen_shake:
@@ -576,7 +578,8 @@ func _input(event: InputEvent) -> void:
 				CharacterStats.reset_character()
 				update_stats_from_character()
 				current_health = max_health
-				health_bar.update_health(current_health, max_health)
+				if health_bar and health_bar.has_method("update_health"):
+					health_bar.update_health(current_health, max_health)
 				print("Character reset to level 1")
 			
 			KEY_F7:
@@ -924,7 +927,8 @@ func take_damage(amount: float) -> void:
 	if current_health < 0:
 		current_health = 0
 
-	health_bar.update_health(current_health, max_health)
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(current_health, max_health)
 
 	# Spawn damage number behind player (opposite of facing direction)
 	CombatText.create_damage(amount, global_position, get_tree().root, attack_direction)
@@ -944,6 +948,11 @@ func take_damage(amount: float) -> void:
 
 func heal(amount: float) -> void:
 	"""Heal the player by the given amount"""
+	# Validate heal amount
+	if is_nan(amount) or is_inf(amount) or amount <= 0:
+		push_warning("⚠️  Invalid heal amount: %s" % str(amount))
+		return
+
 	if current_health >= max_health:
 		return  # Already at full health
 	
@@ -951,7 +960,8 @@ func heal(amount: float) -> void:
 	current_health += actual_heal
 	
 	# Update health bar
-	health_bar.update_health(current_health, max_health)
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(current_health, max_health)
 
 	# Spawn heal number behind player (opposite of facing direction)
 	CombatText.create_heal(actual_heal, global_position, get_tree().root, attack_direction)
@@ -988,10 +998,13 @@ func process_passive_healing(delta: float) -> void:
 			if current_health < max_health:
 				var actual_heal = min(heal_amount, max_health - current_health)
 				current_health += actual_heal
-				health_bar.update_health(current_health, max_health)
+				if health_bar and health_bar.has_method("update_health"):
+					health_bar.update_health(current_health, max_health)
 
-				# Spawn small heal number (no combat text spam, just visual feedback)
-				CombatText.create_heal(actual_heal, global_position, get_tree().root, attack_direction)
+				# Only show combat text for significant heals (5%+ of max HP) to reduce spam
+				# This means text appears roughly every 2.5 seconds instead of every 1 second
+				if actual_heal >= max_health * 0.05:
+					CombatText.create_heal(actual_heal, global_position, get_tree().root, attack_direction)
 
 				# Quiet log for passive healing
 				if current_health >= max_health:
@@ -1485,7 +1498,8 @@ func die() -> void:
 	
 	# Restore health (but keep XP, level, stats, weapons)
 	current_health = max_health
-	health_bar.update_health(current_health, max_health)
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(current_health, max_health)
 	
 	# Re-enable player controls
 	set_physics_process(true)

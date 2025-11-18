@@ -43,9 +43,10 @@ func _ready() -> void:
 
 	# Debug gold drop calculation
 	DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d" % [enemy_level, gold_drop_base, gold_drop])
-	
+
 	current_health = max_health
-	health_bar.update_health(current_health, max_health)
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(current_health, max_health)
 	original_scale = scale  # For general reference
 
 	# ✨ Store original difficulty color (set by GameWorld)
@@ -257,9 +258,10 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 		var hit_flash = get_node("HitFlash")
 		if hit_flash.has_method("flash"):
 			hit_flash.flash(is_crit)
-	
-	health_bar.update_health(current_health, max_health)
-	
+
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(current_health, max_health)
+
 	# ✨ NEW: Spawn combat text
 	var combat_text_scene = preload("res://scenes/ui/combat_text.tscn")
 	var combat_text = combat_text_scene.instantiate()

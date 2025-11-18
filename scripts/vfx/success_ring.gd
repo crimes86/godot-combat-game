@@ -92,6 +92,23 @@ func _process(delta: float) -> void:
 		glow_alpha = 1.0 - pow((progress - 0.2) / 0.8, 1.5)
 	outer_glow.modulate.a = glow_alpha * 0.5
 
+func _exit_tree() -> void:
+	"""Clean up generated textures and resources"""
+	# Free generated textures to prevent memory leaks
+	if center_flash and center_flash.texture:
+		center_flash.texture = null
+	if shockwave_sprite and shockwave_sprite.texture:
+		shockwave_sprite.texture = null
+	if outer_glow and outer_glow.texture:
+		outer_glow.texture = null
+
+	# Child nodes will be automatically freed by Godot,
+	# but we clear our references for clarity
+	center_flash = null
+	shockwave_sprite = null
+	outer_glow = null
+	particles = null
+
 func _setup_particles() -> void:
 	"""Setup explosive light particles blasting outward"""
 	particles.amount = 25  # Fewer particles
