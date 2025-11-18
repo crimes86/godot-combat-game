@@ -174,6 +174,7 @@ func spawn_skeleton(index: int) -> void:
 	# Connect death signal
 	if skeleton.has_signal("died"):
 		skeleton.died.connect(_on_skeleton_died.bind(skeleton))
+		print("  ✅ Connected 'died' signal for Skeleton %d" % index)
 	else:
 		print("⚠️ Skeleton %d has no 'died' signal" % index)
 
@@ -413,6 +414,7 @@ func respawn_skeleton(data: Dictionary) -> void:
 
 	if skeleton.has_signal("died"):
 		skeleton.died.connect(_on_skeleton_died.bind(skeleton))
+		print("  ✅ Connected 'died' signal for respawned Skeleton %d" % data["index"])
 
 	data["skeleton"] = skeleton
 	data["state"] = SkeletonState.PATROLLING_SPAWN
@@ -426,8 +428,13 @@ func respawn_skeleton(data: Dictionary) -> void:
 
 func _on_skeleton_died(skeleton: Node) -> void:
 	"""Called when a skeleton dies"""
+	print("🔔 RuinsCampfire._on_skeleton_died() TRIGGERED!")
+	print("   Skeleton: %s" % skeleton.name if is_instance_valid(skeleton) else "INVALID")
+	print("   has_killed_skeleton BEFORE: %s" % has_killed_skeleton)
+
 	# Mark that player has killed at least one skeleton
 	has_killed_skeleton = true
+	print("   has_killed_skeleton AFTER: %s" % has_killed_skeleton)
 
 	# Find skeleton data
 	for data in skeleton_data:
@@ -441,7 +448,12 @@ func _on_skeleton_died(skeleton: Node) -> void:
 
 func convert_to_campfire() -> void:
 	"""Convert ruins to campfire"""
+	print("🏛️ convert_to_campfire() called!")
+	print("   current_state: %s" % ("CAMPFIRE" if current_state == RuinsState.CAMPFIRE else "RUINS"))
+	print("   has_killed_skeleton: %s" % has_killed_skeleton)
+
 	if current_state == RuinsState.CAMPFIRE:
+		print("   ⚠️ Already a campfire, ignoring")
 		return
 
 	# Require player to kill at least one skeleton first
@@ -590,10 +602,17 @@ func _on_interaction_body_exited(body: Node2D) -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F:
+		print("🔑 F key pressed on %s" % name)
+		print("   current_state: %s" % ("CAMPFIRE" if current_state == RuinsState.CAMPFIRE else "RUINS"))
+		print("   player exists: %s" % (player != null and is_instance_valid(player)))
+
 		if current_state == RuinsState.RUINS and player:
 			var distance = player.global_position.distance_to(global_position)
+			print("   distance to ruins: %.1f (range: %.1f)" % [distance, convert_range])
 			if distance < convert_range:
 				convert_to_campfire()
+			else:
+				print("   ⚠️ Player too far from ruins!")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # VISUALS

@@ -579,7 +579,22 @@ func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
 
 func disengage() -> void:
 	"""Exit combat and return to patrol"""
+	print("🔄 Enemy disengaging from combat - resetting health")
 	is_in_combat = false
+
+	# Regenerate health to full when resetting
+	if enemy.has_method("get") and enemy.has_method("set"):
+		if enemy.get("max_health") != null:
+			var old_health = enemy.get("current_health")
+			enemy.set("current_health", enemy.get("max_health"))
+			print("   💚 Health restored: %.1f -> %.1f" % [old_health, enemy.get("max_health")])
+
+			# Update health bar if it exists
+			if enemy.has_node("HealthBar"):
+				var health_bar = enemy.get_node("HealthBar")
+				if health_bar.has_method("update_health"):
+					health_bar.update_health(enemy.get("current_health"), enemy.get("max_health"))
+
 	spawn_position = enemy.global_position  # New patrol center
 	pick_new_patrol_target()
 	change_state(State.PATROLLING)
@@ -636,18 +651,32 @@ func disengage_to_spawn() -> void:
 	# Safety check
 	if not enemy or not is_instance_valid(enemy):
 		return
-	
+
 	# CRITICAL: Don't reset if enemy is in crit window - let it keep fighting!
 	if enemy.has_method("get") and enemy.get("in_crit_window"):
 		print("⚠️  Enemy in crit window - staying in combat!")
 		return
-	
+
+	print("🔄 Enemy disengaged - returning to original spawn and resetting health")
 	is_in_combat = false
+
+	# Regenerate health to full when resetting
+	if enemy.has_method("get") and enemy.has_method("set"):
+		if enemy.get("max_health") != null:
+			var old_health = enemy.get("current_health")
+			enemy.set("current_health", enemy.get("max_health"))
+			print("   💚 Health restored: %.1f -> %.1f" % [old_health, enemy.get("max_health")])
+
+			# Update health bar if it exists
+			if enemy.has_node("HealthBar"):
+				var health_bar = enemy.get_node("HealthBar")
+				if health_bar.has_method("update_health"):
+					health_bar.update_health(enemy.get("current_health"), enemy.get("max_health"))
+
 	# Reset to ORIGINAL spawn position (not current position)
 	spawn_position = original_spawn_position
 	pick_new_patrol_target()
 	change_state(State.PATROLLING)
-	print("🔄 Enemy disengaged - returning to original spawn")
 
 func get_state_name() -> String:
 	match current_state:

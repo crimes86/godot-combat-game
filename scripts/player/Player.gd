@@ -28,6 +28,14 @@ var max_health: float = 100.0
 var current_health: float = 100.0
 var is_dead: bool = false  # Prevent multiple death calls
 
+# Passive Healing System (Out-of-Combat Regeneration)
+@export var out_of_combat_delay: float = 5.0  # Seconds after taking damage before healing starts
+@export var passive_heal_rate: float = 0.02   # 2% of max health per second (slower than campfire)
+@export var passive_heal_tick_interval: float = 1.0  # Heal every 1 second
+var time_since_last_damage: float = 0.0
+var is_in_combat: bool = false
+var passive_heal_timer: float = 0.0
+
 # References
 @onready var health_bar: Control = $HealthBar
 @onready var crit_system: Node = $CritSystem
@@ -408,7 +416,10 @@ func _physics_process(delta: float) -> void:
 		if debug_update_timer >= 0.1:  # Update 10 times per second
 			debug_update_timer = 0.0
 			update_debug_visualization()
-	
+
+	# Passive Healing System (Out-of-Combat Regeneration)
+	process_passive_healing(delta)
+
 	# Handle player death
 	if current_health <= 0 and not is_dead:
 		die()
@@ -908,21 +919,25 @@ func _on_attack_animation_finished() -> void:
 func take_damage(amount: float) -> void:
 	print("Player taking %.1f damage (current: %.1f)" % [amount, current_health])
 	current_health -= amount
-	
+
 	# Ensure health doesn't go below 0
 	if current_health < 0:
 		current_health = 0
-	
+
 	health_bar.update_health(current_health, max_health)
 
 	# Spawn damage number behind player (opposite of facing direction)
 	CombatText.create_damage(amount, global_position, get_tree().root, attack_direction)
-	
+
+	# Reset combat timer (entering combat)
+	time_since_last_damage = 0.0
+	is_in_combat = true
+
 	print("Player health now: %.1f / %.1f" % [current_health, max_health])
-	
+
 	# Flash player sprite red when hit
 	flash_player_sprite()
-	
+
 	if current_health <= 0:
 		print("💀 Player death triggered!")
 		die()
@@ -942,6 +957,48 @@ func heal(amount: float) -> void:
 	CombatText.create_heal(actual_heal, global_position, get_tree().root, attack_direction)
 	
 	print("Player healed %.1f HP (now %.1f / %.1f)" % [actual_heal, current_health, max_health])
+
+func process_passive_healing(delta: float) -> void:
+	"""Handle out-of-combat passive health regeneration"""
+	# Don't heal if already at full health or dead
+	if current_health >= max_health or is_dead:
+		return
+
+	# Track time since last damage
+	time_since_last_damage += delta
+
+	# Check if player has been out of combat long enough
+	if time_since_last_damage >= out_of_combat_delay:
+		# Player is out of combat
+		if is_in_combat:
+			is_in_combat = false
+			print("✨ Out of combat - passive healing starting...")
+
+		# Accumulate heal timer
+		passive_heal_timer += delta
+
+		# Heal every tick interval
+		if passive_heal_timer >= passive_heal_tick_interval:
+			passive_heal_timer = 0.0
+
+			# Calculate heal amount (percentage of max health)
+			var heal_amount = max_health * passive_heal_rate * passive_heal_tick_interval
+
+			# Apply heal (will cap at max health and show combat text)
+			if current_health < max_health:
+				var actual_heal = min(heal_amount, max_health - current_health)
+				current_health += actual_heal
+				health_bar.update_health(current_health, max_health)
+
+				# Spawn small heal number (no combat text spam, just visual feedback)
+				CombatText.create_heal(actual_heal, global_position, get_tree().root, attack_direction)
+
+				# Quiet log for passive healing
+				if current_health >= max_health:
+					print("💚 Passive healing complete (%.1f / %.1f)" % [current_health, max_health])
+	else:
+		# Still in combat or recently damaged
+		passive_heal_timer = 0.0
 
 func flash_player_sprite() -> void:
 	"""Flash all player sprite layers red when taking damage"""
@@ -1245,7 +1302,11 @@ func update_debug_visualization() -> void:
 	cone_outline.add_point(Vector2(cos(half_angle), sin(half_angle)) * attack_range)
 	
 	debug_shapes.add_child(cone_outline)
-	
+
+	# Draw combat text spawn position boxes (player damage/heal text)
+	# Shows where red damage and green heal numbers will appear based on facing direction
+	_draw_combat_text_debug_boxes()
+
 	# Draw enemy collision shapes in WORLD SPACE (don't rotate)
 	var parent = get_parent()
 	if parent:
@@ -1256,17 +1317,80 @@ func update_debug_visualization() -> void:
 				if enemy_debug_node:
 					world_debug_nodes.append(enemy_debug_node)
 
+func _draw_combat_text_debug_boxes() -> void:
+	"""Draw persistent boxes showing where player damage/heal text spawns for each direction"""
+	# Box size
+	var box_size = Vector2(30, 30)
+
+	# Calculate offsets for each direction (matching CombatText.gd logic)
+	# Facing RIGHT: (-25, 0)
+	var offset_right = Vector2(-25, 0)
+	# Facing LEFT: (25, 0)
+	var offset_left = Vector2(25, 0)
+	# Facing DOWN: (0, -30)
+	var offset_down = Vector2(0, -30)
+	# Facing UP: (0, 50)
+	var offset_up = Vector2(0, 50)
+
+	# Draw boxes for all 4 directions
+	# RIGHT - Yellow box
+	var box_right = _create_debug_box(offset_right, box_size, Color.YELLOW, "RIGHT")
+	debug_shapes.add_child(box_right)
+
+	# LEFT - Cyan box
+	var box_left = _create_debug_box(offset_left, box_size, Color.CYAN, "LEFT")
+	debug_shapes.add_child(box_left)
+
+	# DOWN - Magenta box
+	var box_down = _create_debug_box(offset_down, box_size, Color.MAGENTA, "DOWN")
+	debug_shapes.add_child(box_down)
+
+	# UP - Green box
+	var box_up = _create_debug_box(offset_up, box_size, Color.GREEN, "UP")
+	debug_shapes.add_child(box_up)
+
+func _create_debug_box(offset: Vector2, size: Vector2, color: Color, label_text: String) -> Node2D:
+	"""Create a colored box with label at the specified offset"""
+	var container = Node2D.new()
+
+	# Draw box outline
+	var box = Line2D.new()
+	box.width = 2.0
+	box.default_color = color
+
+	# Box corners (centered on offset point)
+	var half_size = size / 2
+	box.add_point(offset + Vector2(-half_size.x, -half_size.y))  # Top-left
+	box.add_point(offset + Vector2(half_size.x, -half_size.y))   # Top-right
+	box.add_point(offset + Vector2(half_size.x, half_size.y))    # Bottom-right
+	box.add_point(offset + Vector2(-half_size.x, half_size.y))   # Bottom-left
+	box.add_point(offset + Vector2(-half_size.x, -half_size.y))  # Close the box
+
+	container.add_child(box)
+
+	# Add label
+	var label = Label.new()
+	label.text = label_text
+	label.add_theme_font_size_override("font_size", 10)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 1)
+	label.position = offset + Vector2(-15, half_size.y + 2)  # Below box
+	container.add_child(label)
+
+	return container
+
 func draw_debug_circle(center: Vector2, radius: float, color: Color) -> Line2D:
 	var line = Line2D.new()
 	line.width = 2.0
 	line.default_color = color
-	
+
 	var segments = 32
 	for i in range(segments + 1):
 		var angle = (i * TAU) / segments
 		var point = center + Vector2(cos(angle), sin(angle)) * radius
 		line.add_point(point)
-	
+
 	return line
 
 # ═══════════════════════════════════════════════════════════════════════════

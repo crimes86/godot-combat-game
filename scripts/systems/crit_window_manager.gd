@@ -79,14 +79,23 @@ func _start_growing_sprite_window(target: Node, window_data: WindowData) -> void
 	if target.has_signal("weakpoint_spawned"):
 		if not target.weakpoint_spawned.is_connected(_on_weakpoint_spawned):
 			target.weakpoint_spawned.connect(_on_weakpoint_spawned.bind(target))
+			print("✅ Connected to weakpoint_spawned signal")
+		else:
+			print("⚠️ Already connected to weakpoint_spawned")
 
 	if target.has_signal("weakpoint_destroyed"):
 		if not target.weakpoint_destroyed.is_connected(_on_weakpoint_destroyed):
 			target.weakpoint_destroyed.connect(_on_weakpoint_destroyed.bind(target))
+			print("✅ Connected to weakpoint_destroyed signal")
+		else:
+			print("⚠️ Already connected to weakpoint_destroyed")
 
 	if target.has_signal("died"):
 		if not target.died.is_connected(_on_target_died):
 			target.died.connect(_on_target_died.bind(target))
+			print("✅ Connected to died signal")
+		else:
+			print("⚠️ Already connected to died")
 
 	# Create and start timer (owned by manager)
 	var timer = Timer.new()
@@ -121,9 +130,20 @@ func _on_weakpoint_destroyed(weakpoint: Node, target: Node) -> void:
 	# Check if all weakpoints destroyed
 	if window_data.weakpoints_destroyed >= window_data.weakpoints_spawned:
 		print("🎯 CritWindowManager: ALL WEAKPOINTS CLEARED - ending window")
-		# Small delay to let explosion animation play
-		await get_tree().create_timer(0.55).timeout
+
+		# Spawn success ring effect at player's feet IMMEDIATELY (buff effect!)
+		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+		if player:
+			print("🌟 Spawning success ring at player position: ", player.global_position)
+			_spawn_success_ring_at_position(player.global_position)
+		else:
+			print("⚠️ Could not find player for success ring!")
+
+		# End window immediately (shrink enemy) - all happens at once!
 		end_window(target, window_data.weakpoints_destroyed)
+
+		# Small delay to let explosion animation complete before cleanup
+		await get_tree().create_timer(0.55).timeout
 
 func _on_window_timeout(target: Node) -> void:
 	"""Window timer expired - but we don't auto-close, just log"""
@@ -185,3 +205,14 @@ func end_window(target: Node, weakpoints_destroyed: int) -> void:
 	window_completed.emit(success_ratio, weakpoints_destroyed)
 
 	print("=== WINDOW COMPLETE on ", target.name if is_instance_valid(target) else "destroyed target", ": ", weakpoints_destroyed, "/", window_data.weakpoints_spawned, " weakpoints destroyed ===")
+
+func _spawn_success_ring_at_position(position: Vector2) -> void:
+	"""Spawn a golden success ring effect at specified position"""
+	# Load and instantiate the success ring script
+	const SuccessRingScript = preload("res://scripts/vfx/success_ring.gd")
+	var ring = Node2D.new()
+	ring.set_script(SuccessRingScript)
+	ring.global_position = position
+
+	# Add to scene tree at root level
+	get_tree().root.add_child(ring)

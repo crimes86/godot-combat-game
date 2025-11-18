@@ -4,6 +4,7 @@ class_name TrainingDummy
 ## Training Dummy - Hittable target that spins when hit
 ## Can be attacked by player for combat practice
 ## Displays damage numbers and tracks DPS
+## Updated: 2025-01-17 - Remote PC sync fix
 
 # Stats
 var max_health: float = 999999.0  # Essentially infinite
@@ -216,14 +217,34 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	else:
 		combat_text.type = 0  # TextType.NORMAL
 
-	# Position: spawn behind dummy (opposite side from player)
-	# This keeps damage numbers from overlapping weakpoints/crit windows
+	# Position: spawn based on player's facing direction for better visibility
+	# Adjustments: left(-50x,-50y), right(0x,-50y), up(0x,-50y), down(no adjustment)
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	var spawn_pos = global_position
 	if player:
-		var direction_from_player = (global_position - player.global_position).normalized()
-		# Spawn 40px behind dummy (away from player)
-		spawn_pos = global_position + direction_from_player * 40
+		# Get direction from player to dummy to determine facing
+		var direction_to_dummy = (global_position - player.global_position).normalized()
+
+		# Determine primary facing direction
+		var offset = Vector2.ZERO
+		if abs(direction_to_dummy.x) > abs(direction_to_dummy.y):
+			# Horizontal facing (left or right)
+			if direction_to_dummy.x < 0:
+				# Facing LEFT (dummy to the left of player)
+				offset = Vector2(-50, -50)
+			else:
+				# Facing RIGHT (dummy to the right of player)
+				offset = Vector2(0, -50)
+		else:
+			# Vertical facing (up or down)
+			if direction_to_dummy.y < 0:
+				# Facing UP (dummy above player)
+				offset = Vector2(0, -50)
+			else:
+				# Facing DOWN (dummy below player)
+				offset = Vector2(0, 0)  # Good as is
+
+		spawn_pos = global_position + offset
 
 	combat_text.global_position = spawn_pos
 	get_tree().root.add_child(combat_text)
@@ -397,18 +418,7 @@ func _on_weakpoint_hit(weakpoint) -> void:
 	take_damage(crit_damage, true)
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
-	"""Local handler - just forward to manager and play sound if last one"""
-	# Check if it's the last one and play sound
-	var remaining = 0
-	for wp in weakpoints:
-		if is_instance_valid(wp) and not wp.is_destroyed:
-			remaining += 1
-
-	if remaining == 0:
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			sound_manager.play_sound(sound_manager.SoundType.ALL_WEAKPOINTS_CLEARED, global_position, -2.0)
-
+	"""Local handler - just forward to manager"""
 	# Emit signal for manager to handle
 	weakpoint_destroyed.emit(weakpoint)
 
@@ -416,10 +426,8 @@ func shrink_after_crit_window() -> void:
 	"""Visual effect: shrink sprite and cleanup weakpoints (called by CritWindowManager)"""
 	in_crit_window = false  # Clear flag
 
-	# Clean weakpoints
-	for weakpoint in weakpoints:
-		if is_instance_valid(weakpoint):
-			weakpoint.queue_free()
+	# Don't manually free weakpoints - they will free themselves after their explosion animations
+	# Just clear the array reference
 	weakpoints.clear()
 
 	# Reset HitFlash and colors
