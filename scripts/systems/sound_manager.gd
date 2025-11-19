@@ -44,6 +44,12 @@ var skeleton_death_sounds: Array[AudioStream] = []  # Skeleton bones collapsing 
 var gold_loot_sound: AudioStream = null  # Gold coin jingling
 var crit_window_open_sound: AudioStream = null  # Crystalline chime when crit window opens
 
+# Weapon swing sounds (whoosh sounds when swinging weapons)
+var sword_swing_sounds: Array[AudioStream] = []  # Sword whoosh (2 variations)
+
+# Player sounds
+var player_hurt_sounds: Array[AudioStream] = []  # Player hurt/death grunts (2 variations)
+
 # Weapon-specific hit sounds (organized by weapon type)
 var weapon_hit_sounds: Dictionary = {
 	"sword": [],
@@ -166,6 +172,42 @@ func _load_real_sounds() -> void:
 		print("  ✅ Loaded crit_window_open.wav")
 	else:
 		push_warning("  ⚠️ Failed to load crit_window_open.wav")
+
+	# Load sword swing sounds (whoosh variations)
+	var sword_swing_1 = load("res://assets/sounds/combat/weapon_swings/sword_swing_1.wav")
+	var sword_swing_2 = load("res://assets/sounds/combat/weapon_swings/sword_swing_2.wav")
+
+	if sword_swing_1:
+		sword_swing_sounds.append(sword_swing_1)
+		print("  ✅ Loaded sword_swing_1.wav")
+	else:
+		push_warning("  ⚠️ Failed to load sword_swing_1.wav")
+
+	if sword_swing_2:
+		sword_swing_sounds.append(sword_swing_2)
+		print("  ✅ Loaded sword_swing_2.wav")
+	else:
+		push_warning("  ⚠️ Failed to load sword_swing_2.wav")
+
+	print("  📊 Loaded %d sword swing sound variations" % sword_swing_sounds.size())
+
+	# Load player hurt sounds (grunt/pain sounds)
+	var player_hurt_1 = load("res://assets/sounds/player/player_hurt_1.wav")
+	var player_hurt_2 = load("res://assets/sounds/player/player_hurt_2.wav")
+
+	if player_hurt_1:
+		player_hurt_sounds.append(player_hurt_1)
+		print("  ✅ Loaded player_hurt_1.wav")
+	else:
+		push_warning("  ⚠️ Failed to load player_hurt_1.wav")
+
+	if player_hurt_2:
+		player_hurt_sounds.append(player_hurt_2)
+		print("  ✅ Loaded player_hurt_2.wav")
+	else:
+		push_warning("  ⚠️ Failed to load player_hurt_2.wav")
+
+	print("  📊 Loaded %d player hurt sound variations" % player_hurt_sounds.size())
 
 	# Load weapon-specific hit sounds
 	print("  🗡️ Loading weapon hit sounds...")
@@ -351,6 +393,47 @@ func play_skeleton_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: fl
 	player.volume_db = volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play sword swing sound (random whoosh variation)
+func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0) -> void:
+	if sword_swing_sounds.is_empty():
+		# Fallback to placeholder sound if no real sounds loaded
+		play_sound(SoundType.SWING, global_pos, volume_db)
+		return
+
+	# Pick random sound variation
+	var sound_stream = sword_swing_sounds[randi() % sword_swing_sounds.size()]
+
+	# Create player with slight pitch randomization for variety
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play player hurt sound (random grunt/pain variation)
+func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -3.0) -> void:
+	if player_hurt_sounds.is_empty():
+		# No real sounds loaded, skip (no placeholder for player hurt)
+		return
+
+	# Pick random sound variation
+	var sound_stream = player_hurt_sounds[randi() % player_hurt_sounds.size()]
+
+	# Create player with slight pitch randomization for variety
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
 
 	get_tree().root.add_child(player)

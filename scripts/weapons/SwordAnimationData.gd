@@ -5,7 +5,7 @@ class_name SwordAnimationData
 ## Balanced attack speed - standard baseline
 
 # Animation FPS values
-var slash_fps: float = 60.0  # Ultra-fast for max AGI spam (6 frames = 0.1s)
+var slash_fps: float = 30.0  # Smooth and readable (9 frames with duplicates = 0.3s)
 var walk_fps: float = 10.0   # Normal walk speed
 var idle_fps: float = 4.0    # Slow idle
 

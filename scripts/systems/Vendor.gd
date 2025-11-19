@@ -154,15 +154,46 @@ func setup_blacksmith_sprite() -> void:
 
 	DebugConfig.debug_log("🔨 Blacksmith sprite loaded and animating")
 
-func _physics_process(_delta: float) -> void:
-	# Update interaction prompt visibility and position
+func _physics_process(delta: float) -> void:
+	# Face the campfire when idle (no shop open, no player in range)
+	if animated_sprite and not player_in_range and (not shop_ui or not shop_ui.visible):
+		# Find campfire and face it
+		var campfire = get_tree().get_first_node_in_group("campfire")
+		if campfire:
+			var direction_to_fire = campfire.global_position - global_position
+			# Face the fire based on its position relative to blacksmith
+			if abs(direction_to_fire.x) > 10:  # Only update if significantly offset
+				if direction_to_fire.x > 0:
+					animated_sprite.scale.x = abs(animated_sprite.scale.x)  # Face right
+				else:
+					animated_sprite.scale.x = -abs(animated_sprite.scale.x)  # Face left
+
+	# Subtle idle breathing animation
+	if animated_sprite and (not shop_ui or not shop_ui.visible):
+		var time = Time.get_ticks_msec() / 1000.0
+		var breathe = sin(time * 1.2) * 0.03  # Very subtle breathing
+		animated_sprite.scale.y = 1.0 + breathe
+		# Maintain horizontal flip for facing direction
+		var current_flip = sign(animated_sprite.scale.x)
+		animated_sprite.scale.x = current_flip * (1.0 + breathe * 0.5)  # Slight horizontal breathe too
+
+	# Update interaction prompt visibility and position with fade-in
 	if interaction_prompt:
 		var should_show = player_in_range and (not shop_ui or not shop_ui.visible)
-		if should_show != interaction_prompt.visible:
-			interaction_prompt.visible = should_show
+
+		# Fade in/out smoothly
+		if should_show:
+			interaction_prompt.modulate.a = min(1.0, interaction_prompt.modulate.a + delta * 3.0)  # Fade in over ~0.33s
+			if not interaction_prompt.visible:
+				interaction_prompt.visible = true
+				interaction_prompt.modulate.a = 0.0  # Start fully transparent
+		else:
+			interaction_prompt.modulate.a = max(0.0, interaction_prompt.modulate.a - delta * 5.0)  # Fade out faster
+			if interaction_prompt.modulate.a <= 0.0 and interaction_prompt.visible:
+				interaction_prompt.visible = false
 
 		# Update position every frame when visible
-		if should_show:
+		if interaction_prompt.visible:
 			update_prompt_position()
 
 func _input(event: InputEvent) -> void:

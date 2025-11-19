@@ -153,7 +153,14 @@ func _ready() -> void:
 	if camera:
 		camera.enabled = true
 		camera.zoom = Vector2(target_zoom, target_zoom)
+
+		# Enable audio listener for 2D spatial audio
+		var listener = AudioListener2D.new()
+		listener.name = "AudioListener2D"
+		camera.add_child(listener)
+		listener.make_current()
 		print("📷 Camera zoom system initialized (0.5x - 2.0x)")
+		print("🔊 AudioListener2D enabled for spatial audio")
 	else:
 		push_error("❌ Camera2D not found on player!")
 	
@@ -728,6 +735,16 @@ func handle_crit_window_attack(enemy: Node, click_pos: Vector2) -> void:
 		var lpc_dir = convert_to_lpc_direction(dir_str)
 		character_sprite.play_lpc_animation("slash", lpc_dir)
 
+	# Play weapon swing sound (whoosh)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		# Check if using a sword (for now only swords have swing sounds)
+		if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.weapon_type == "sword":
+			sound_manager.play_sword_swing_sound(global_position, -8.0)
+		elif not CharacterStats.equipped_weapon:
+			# Default to sword swing if no weapon equipped
+			sound_manager.play_sword_swing_sound(global_position, -8.0)
+
 	# Get chain multiplier for damage calculation
 	var chain_multiplier = ChainManager.get_damage_multiplier()
 	var damage = attack_damage * chain_multiplier
@@ -752,6 +769,16 @@ func attempt_attack() -> void:
 		var lpc_dir = convert_to_lpc_direction(dir_str)
 		character_sprite.play_lpc_animation("slash", lpc_dir)
 
+	# Play weapon swing sound (whoosh)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		# Check if using a sword (for now only swords have swing sounds)
+		if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.weapon_type == "sword":
+			sound_manager.play_sword_swing_sound(global_position, -8.0)
+		elif not CharacterStats.equipped_weapon:
+			# Default to sword swing if no weapon equipped
+			sound_manager.play_sword_swing_sound(global_position, -8.0)
+
 	ChainManager.register_attack()
 	
 	var mouse_pos = get_global_mouse_position()
@@ -760,7 +787,7 @@ func attempt_attack() -> void:
 	var enemies_in_cone = get_enemies_in_cone()
 
 	# Sound is now handled by weapon-specific sounds in Enemy.gd
-	var sound_manager = get_node_or_null("/root/SoundManager")
+	# (sound_manager already retrieved above for swing sound)
 
 	if enemies_in_cone.size() > 0:
 		attack_enemies_in_cone(enemies_in_cone)
@@ -962,6 +989,11 @@ func take_damage(amount: float) -> void:
 
 	# Flash player sprite red when hit
 	flash_player_sprite()
+
+	# Play player hurt sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_player_hurt_sound(global_position, -3.0)
 
 	if current_health <= 0:
 		print("💀 Player death triggered!")

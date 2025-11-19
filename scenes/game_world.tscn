@@ -13,7 +13,7 @@
 script = ExtResource("1_0vfqx")
 
 [node name="CanvasModulate" type="CanvasModulate" parent="."]
-color = Color(0.8, 0.8, 0.8, 1)
+color = Color(0.65, 0.65, 0.65, 1)
 
 [node name="Ground" type="ColorRect" parent="."]
 z_index = -10

@@ -1930,6 +1930,10 @@ void fragment() {
 	sprite.z_index = prop_data.get("z_index", -1)
 	sprite.rotation = rotation_val
 
+	# Add varied brightness for age/wear (80-100%)
+	var brightness = prop_data.get("brightness", randf_range(0.8, 1.0))
+	sprite.modulate = Color(brightness, brightness, brightness, 1.0)
+
 	prop_container.add_child(sprite)
 	parent.add_child(prop_container)
 	return true

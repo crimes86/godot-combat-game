@@ -59,6 +59,10 @@ func setup_lpc_sprite(
 
 	sprite_frames = SpriteFrames.new()
 
+	# ✨ Get weapon-specific slash FPS for ALL body parts to sync animations
+	var slash_fps = WeaponAnimationDataFactory.get_slash_fps(weapon_type)
+	print("  ⚡ Using weapon-specific slash FPS for all body parts: %.1f" % slash_fps)
+
 	# Create walk animations using Image.blit_rect() like skeletons do
 	if walk_tex:
 		var walk_img = walk_tex.get_image()
@@ -72,14 +76,14 @@ func setup_lpc_sprite(
 
 		print("  Walk/idle animations created")
 
-	# Create slash animations
+	# Create slash animations (use weapon-specific FPS!)
 	if slash_tex:
 		var slash_img = slash_tex.get_image()
 		print("  Creating slash animations from image...")
 
 		for dir_name in DIRECTION_ROWS.keys():
 			var row = DIRECTION_ROWS[dir_name]
-			create_animation_from_image(slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], 12.0, false, null, 64)
+			create_animation_from_image(slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, null, 64)
 
 		print("  Slash animations created")
 
@@ -114,7 +118,7 @@ func setup_lpc_sprite(
 			var boots_slash_img = boots_slash_tex.get_image()
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(boots_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], 12.0, false, boots_sprite.sprite_frames, 64)
+				create_animation_from_image(boots_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, boots_sprite.sprite_frames, 64)
 
 		add_child(boots_sprite)
 		boots_sprite.visible = true
@@ -142,7 +146,7 @@ func setup_lpc_sprite(
 			var pants_slash_img = pants_slash_tex.get_image()
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(pants_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], 12.0, false, pants_sprite.sprite_frames, 64)
+				create_animation_from_image(pants_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, pants_sprite.sprite_frames, 64)
 
 		add_child(pants_sprite)
 		pants_sprite.visible = true
@@ -170,7 +174,7 @@ func setup_lpc_sprite(
 			var shirt_slash_img = shirt_slash_tex.get_image()
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(shirt_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], 12.0, false, shirt_sprite.sprite_frames, 64)
+				create_animation_from_image(shirt_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, shirt_sprite.sprite_frames, 64)
 
 		add_child(shirt_sprite)
 		shirt_sprite.visible = true
@@ -198,7 +202,7 @@ func setup_lpc_sprite(
 			var arms_slash_img = arms_slash_tex.get_image()
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(arms_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], 12.0, false, arms_sprite.sprite_frames, 64)
+				create_animation_from_image(arms_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, arms_sprite.sprite_frames, 64)
 
 		add_child(arms_sprite)
 		arms_sprite.visible = true
@@ -226,7 +230,7 @@ func setup_lpc_sprite(
 			var head_slash_img = head_slash_tex.get_image()
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(head_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], 12.0, false, head_sprite.sprite_frames, 64)
+				create_animation_from_image(head_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, head_sprite.sprite_frames, 64)
 
 		add_child(head_sprite)
 		head_sprite.visible = true
@@ -254,8 +258,7 @@ func setup_lpc_sprite(
 			print("  📊 Calculated slash tile size: ", slash_tile_size, "x", slash_tile_size)
 			print("  📊 Weapon slash image format: ", weapon_slash_img.get_format())
 
-			# Get weapon-specific slash FPS
-			var slash_fps = WeaponAnimationDataFactory.get_slash_fps(weapon_type)
+			# Weapon slash FPS already set at function scope (line 63)
 			print("  ⚡ Weapon type '%s' slash FPS: %.1f" % [weapon_type, slash_fps])
 
 			for dir_name in DIRECTION_ROWS.keys():
@@ -326,7 +329,15 @@ func create_animation_from_image(img: Image, anim_name: String, row: int, frame_
 	frames.set_animation_loop(anim_name, loop)
 	frames.set_animation_speed(anim_name, fps)
 
-	for frame_idx in frame_indices:
+	# ✨ SMOOTH TIMING FIX: For slash animations, adjust frame sequence for better pacing
+	# Add middle frames twice to prevent rushing, skip last frame duplication to prevent hang
+	var adjusted_indices = frame_indices.duplicate()
+	if anim_name.begins_with("slash_") and not loop and frame_indices.size() == 6:
+		# Original: [0, 1, 2, 3, 4, 5]
+		# Adjusted: [0, 1, 2, 2, 3, 3, 4, 4, 5] - middle frames get more time, smooth acceleration
+		adjusted_indices = [0, 1, 2, 2, 3, 3, 4, 4, 5]
+
+	for frame_idx in adjusted_indices:
 		# Create new image for this frame (using calculated tile_size)
 		var frame_img = Image.create(tile_size, tile_size, false, Image.FORMAT_RGBA8)
 		# Blit the region from the source image

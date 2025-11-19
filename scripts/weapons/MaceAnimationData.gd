@@ -5,7 +5,7 @@ class_name MaceAnimationData
 ## Similar to axe but slightly faster - crushing blows
 
 # Animation FPS values
-var slash_fps: float = 45.0  # Between axe and sword (6 frames = 0.133s)
+var slash_fps: float = 25.0  # Slower than sword for heavy crushing feel (9 frames = 0.36s)
 var walk_fps: float = 9.5    # Moderate walk speed
 var idle_fps: float = 3.5    # Steady idle
 
