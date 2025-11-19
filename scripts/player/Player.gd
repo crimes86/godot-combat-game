@@ -1155,6 +1155,19 @@ func create_player_sprite() -> void:
 	var slash_tex = load("res://assets/characters/" + body_type + "/standard/slash.png")
 	var hurt_tex = load("res://assets/characters/" + body_type + "/standard/hurt.png")
 
+	# Load base head textures (only for female - male has head baked into body)
+	var base_head_walk_tex = null
+	var base_head_slash_tex = null
+	if selected_gender == Gender.FEMALE:
+		var head_path = "res://assets/characters/head_female/standard/"
+		if ResourceLoader.exists(head_path + "walk.png"):
+			base_head_walk_tex = load(head_path + "walk.png")
+		if ResourceLoader.exists(head_path + "slash.png"):
+			base_head_slash_tex = load(head_path + "slash.png")
+		print("👤 Loading female base head")
+		print("   Walk: %s" % ("✅" if base_head_walk_tex else "❌"))
+		print("   Slash: %s" % ("✅" if base_head_slash_tex else "❌"))
+
 	# Load weapon textures based on equipped weapon
 	var weapon_slash_tex = null
 	var weapon_walk_tex = null
@@ -1196,12 +1209,17 @@ func create_player_sprite() -> void:
 		var boots_armor = CharacterStats.equipped_armor["feet"]
 		var sprite_name = boots_armor.get("sprite_name", "")
 		if sprite_name != "":
-			var boots_path = "res://assets/characters/boots/"
+			# Try gender-specific path first, then fall back to gender-neutral
+			var boots_path = "res://assets/characters/boots_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/boots/"
+			# If gender-specific doesn't exist, try gender-neutral
+			if not ResourceLoader.exists(boots_path + sprite_name + "_walk.png"):
+				boots_path = "res://assets/characters/boots/"
+
 			if ResourceLoader.exists(boots_path + sprite_name + "_walk.png"):
 				boots_walk_tex = load(boots_path + sprite_name + "_walk.png")
 			if ResourceLoader.exists(boots_path + sprite_name + "_slash.png"):
 				boots_slash_tex = load(boots_path + sprite_name + "_slash.png")
-			print("🥾 Loading boots: %s (sprite: %s)" % [boots_armor["name"], sprite_name])
+			print("🥾 Loading boots: %s (sprite: %s, path: %s)" % [boots_armor["name"], sprite_name, boots_path])
 			print("   Walk: %s" % ("✅" if boots_walk_tex else "❌"))
 			print("   Slash: %s" % ("✅" if boots_slash_tex else "❌"))
 
@@ -1209,12 +1227,16 @@ func create_player_sprite() -> void:
 	if CharacterStats.equipped_armor.has("legs") and CharacterStats.equipped_armor["legs"] != null:
 		var leg_armor = CharacterStats.equipped_armor["legs"]
 		var sprite_name = leg_armor.get("sprite_name", "green_pants")
-		var pants_path = "res://assets/characters/pants/"
+		# Try gender-specific path first, then fall back to gender-neutral
+		var pants_path = "res://assets/characters/pants_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/pants/"
+		if not ResourceLoader.exists(pants_path + sprite_name + "_walk.png"):
+			pants_path = "res://assets/characters/pants/"
+
 		if ResourceLoader.exists(pants_path + sprite_name + "_walk.png"):
 			pants_walk_tex = load(pants_path + sprite_name + "_walk.png")
 		if ResourceLoader.exists(pants_path + sprite_name + "_slash.png"):
 			pants_slash_tex = load(pants_path + sprite_name + "_slash.png")
-		print("👖 Loading leg armor: %s (sprite: %s)" % [leg_armor["name"], sprite_name])
+		print("👖 Loading leg armor: %s (sprite: %s, path: %s)" % [leg_armor["name"], sprite_name, pants_path])
 		print("   Walk: %s" % ("✅" if pants_walk_tex else "❌"))
 		print("   Slash: %s" % ("✅" if pants_slash_tex else "❌"))
 
@@ -1222,7 +1244,10 @@ func create_player_sprite() -> void:
 	if CharacterStats.equipped_armor.has("chest") and CharacterStats.equipped_armor["chest"] != null:
 		var chest_armor = CharacterStats.equipped_armor["chest"]
 		var sprite_name = chest_armor.get("sprite_name", "white_shirt")
-		var shirt_path = "res://assets/characters/shirt/"
+		# Try gender-specific path first, then fall back to gender-neutral
+		var shirt_path = "res://assets/characters/shirt_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/shirt/"
+		if not ResourceLoader.exists(shirt_path + sprite_name + "_walk.png"):
+			shirt_path = "res://assets/characters/shirt/"
 
 		# Try to load shirt sprites based on sprite_name
 		if ResourceLoader.exists(shirt_path + sprite_name + "_walk.png"):
@@ -1230,7 +1255,7 @@ func create_player_sprite() -> void:
 		if ResourceLoader.exists(shirt_path + sprite_name + "_slash.png"):
 			shirt_slash_tex = load(shirt_path + sprite_name + "_slash.png")
 
-		print("👕 Loading chest armor: %s (sprite: %s)" % [chest_armor["name"], sprite_name])
+		print("👕 Loading chest armor: %s (sprite: %s, path: %s)" % [chest_armor["name"], sprite_name, shirt_path])
 		print("   Walk: %s" % ("✅" if shirt_walk_tex else "❌"))
 		print("   Slash: %s" % ("✅" if shirt_slash_tex else "❌"))
 
@@ -1239,26 +1264,34 @@ func create_player_sprite() -> void:
 		var arm_armor = CharacterStats.equipped_armor["arms"]
 		var sprite_name = arm_armor.get("sprite_name", "")
 		if sprite_name != "":
-			var arms_path = "res://assets/characters/arms/"
+			# Try gender-specific path first, then fall back to gender-neutral
+			var arms_path = "res://assets/characters/arms_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/arms/"
+			if not ResourceLoader.exists(arms_path + sprite_name + "_walk.png"):
+				arms_path = "res://assets/characters/arms/"
+
 			if ResourceLoader.exists(arms_path + sprite_name + "_walk.png"):
 				arms_walk_tex = load(arms_path + sprite_name + "_walk.png")
 			if ResourceLoader.exists(arms_path + sprite_name + "_slash.png"):
 				arms_slash_tex = load(arms_path + sprite_name + "_slash.png")
-			print("💪 Loading arm armor: %s (sprite: %s)" % [arm_armor["name"], sprite_name])
+			print("💪 Loading arm armor: %s (sprite: %s, path: %s)" % [arm_armor["name"], sprite_name, arms_path])
 			print("   Walk: %s" % ("✅" if arms_walk_tex else "❌"))
 			print("   Slash: %s" % ("✅" if arms_slash_tex else "❌"))
 
-	# Check for equipped hand armor (gauntlets)
+	# Check for equipped hand armor (gloves)
 	if CharacterStats.equipped_armor.has("hands") and CharacterStats.equipped_armor["hands"] != null:
 		var hand_armor = CharacterStats.equipped_armor["hands"]
 		var sprite_name = hand_armor.get("sprite_name", "")
 		if sprite_name != "":
-			var hands_path = "res://assets/characters/hands/"
+			# Try gender-specific path first, then fall back to gender-neutral
+			var hands_path = "res://assets/characters/hands_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/hands/"
+			if not ResourceLoader.exists(hands_path + sprite_name + "_walk.png"):
+				hands_path = "res://assets/characters/hands/"
+
 			if ResourceLoader.exists(hands_path + sprite_name + "_walk.png"):
 				hands_walk_tex = load(hands_path + sprite_name + "_walk.png")
 			if ResourceLoader.exists(hands_path + sprite_name + "_slash.png"):
 				hands_slash_tex = load(hands_path + sprite_name + "_slash.png")
-			print("🧤 Loading hand armor: %s (sprite: %s)" % [hand_armor["name"], sprite_name])
+			print("🧤 Loading hand armor: %s (sprite: %s, path: %s)" % [hand_armor["name"], sprite_name, hands_path])
 			print("   Walk: %s" % ("✅" if hands_walk_tex else "❌"))
 			print("   Slash: %s" % ("✅" if hands_slash_tex else "❌"))
 
@@ -1267,17 +1300,35 @@ func create_player_sprite() -> void:
 		var head_armor = CharacterStats.equipped_armor["head"]
 		var sprite_name = head_armor.get("sprite_name", "")
 		if sprite_name != "":
-			var head_path = "res://assets/characters/head/"
+			# Try gender-specific path first, then fall back to gender-neutral
+			var head_path = "res://assets/characters/head_female_armor/" if selected_gender == Gender.FEMALE else "res://assets/characters/head/"
+			if not ResourceLoader.exists(head_path + sprite_name + "_walk.png"):
+				head_path = "res://assets/characters/head/"
+
 			if ResourceLoader.exists(head_path + sprite_name + "_walk.png"):
 				head_walk_tex = load(head_path + sprite_name + "_walk.png")
 			if ResourceLoader.exists(head_path + sprite_name + "_slash.png"):
 				head_slash_tex = load(head_path + sprite_name + "_slash.png")
-			print("🪖 Loading head armor: %s (sprite: %s)" % [head_armor["name"], sprite_name])
+			print("🪖 Loading head armor: %s (sprite: %s, path: %s)" % [head_armor["name"], sprite_name, head_path])
 			print("   Walk: %s" % ("✅" if head_walk_tex else "❌"))
 			print("   Slash: %s" % ("✅" if head_slash_tex else "❌"))
 
-	# Setup sprite with all 6 armor layers
-	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type)
+	# Load hair textures (for both genders)
+	var hair_walk_tex = null
+	var hair_slash_tex = null
+	var hair_type = "hair_male" if selected_gender == Gender.MALE else "hair_female"
+	var hair_path = "res://assets/characters/" + hair_type + "/standard/"
+	if ResourceLoader.exists(hair_path + "walk.png"):
+		hair_walk_tex = load(hair_path + "walk.png")
+	if ResourceLoader.exists(hair_path + "slash.png"):
+		hair_slash_tex = load(hair_path + "slash.png")
+	print("💇 Loading hair: standard %s" % ("male" if selected_gender == Gender.MALE else "female"))
+	print("   Walk: %s" % ("✅" if hair_walk_tex else "❌"))
+	print("   Slash: %s" % ("✅" if hair_slash_tex else "❌"))
+
+	# Setup sprite with all armor layers + base_head + hair
+	var is_female = (selected_gender == Gender.FEMALE)
+	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, base_head_walk_tex, base_head_slash_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, hair_walk_tex, hair_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type, is_female)
 
 	add_child(character_sprite)
 

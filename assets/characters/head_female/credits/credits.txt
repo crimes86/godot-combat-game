@@ -1,0 +1,11 @@
+head/heads/human/female_small/light.png
+	- Note: original head by Redshrike, reduced size head by ElizaWy
+	- Licenses:
+		- OGA-BY 3.0
+		- CC-BY
+	- Authors:
+		- ElizaWy
+		- Stephen Challener (Redshrike)
+	- Links:
+		- 
+

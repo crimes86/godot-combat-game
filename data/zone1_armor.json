@@ -27,9 +27,9 @@
 			"quantity": 1
 		},
 		{
-			"id": "wasteland_gloves",
-			"name": "Wasteland Gloves",
-			"description": "Tough leather gloves with bone reinforcements. Protect hands during combat.",
+			"id": "wasteland_armguards",
+			"name": "Wasteland Armguards",
+			"description": "Tough leather armguards with bone reinforcements. Protect your forearms during combat.",
 			"slot": "arms",
 			"defense": 5,
 			"type": "armor",

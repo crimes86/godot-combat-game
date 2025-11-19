@@ -1426,6 +1426,113 @@ z = 0:   Player, enemies, campfire (game entities)
 
 ---
 
+## Notification System
+
+### NotificationManager (Global Autoload)
+Global notification system for displaying item gain/loss notifications throughout the game with rarity-colored text and smooth cascade animations.
+
+**Location**: `scripts/systems/NotificationManager.gd` (autoload)
+**Scene**: `scenes/ui/item_notification.tscn`
+**Script**: `scripts/ui/ItemNotification.gd`
+
+### Features
+- **Rarity-Based Colors**: Items displayed in color matching their rarity
+- **Cascade Animation**: Notifications smoothly shift upward as new items are gained
+- **Pop-In Effect**: Scale-based pop-in with smooth bounce
+- **Fade-Out**: Clean fade-out after 2 seconds
+- **Queue Management**: Multiple notifications stack gracefully without overlapping
+
+### Rarity Colors
+```gdscript
+COMMON:    Color(0.8, 0.8, 0.8, 1.0)  # Light gray
+UNCOMMON:  Color(0.4, 0.9, 0.4, 1.0)  # Green
+RARE:      Color(0.4, 0.6, 1.0, 1.0)  # Blue
+EPIC:      Color(0.8, 0.4, 1.0, 1.0)  # Purple
+LEGENDARY: Color(1.0, 0.7, 0.2, 1.0)  # Orange/gold
+```
+
+### API Reference
+```gdscript
+# Show item added notification (green indicator for positive action)
+NotificationManager.notify_item_added(item_name: String, quantity: int = 1, rarity: String = "COMMON")
+
+# Show item removed notification (red indicator for negative action)
+NotificationManager.notify_item_removed(item_name: String, quantity: int = 1, rarity: String = "COMMON")
+```
+
+### Usage Examples
+```gdscript
+# Vendor purchase
+NotificationManager.notify_item_added("Copper Plate Helmet", 1, "Common")
+
+# Vendor sell
+NotificationManager.notify_item_removed("Old Sword", 1, "Common")
+
+# Loot pickup
+NotificationManager.notify_item_added("Shadow Armguards", 1, "Epic")
+
+# Inventory drop
+NotificationManager.notify_item_removed("Health Potion", 5, "Common")
+```
+
+### Visual Design
+- **Position**: Centered horizontally, 75% down screen (between player and bottom edge)
+- **Width**: 400px (centered)
+- **Animation Duration**:
+  - Pop-in: 0.25s with bounce easing
+  - Display: 2.0s total lifetime
+  - Fade-out: 0.5s
+- **Cascade Spacing**: 40px vertical spacing between notifications
+
+### Technical Implementation
+**Cascade System**:
+1. When new notification arrives, existing notifications shift upward by 40px
+2. New notification appears at bottom position (0, 0)
+3. Shifting completes before new notification appears (prevents jitter)
+4. On notification expiry, remaining notifications stay in place (no downward shift)
+
+**Performance**:
+- Lightweight Label nodes (minimal overhead)
+- Tween-based animations (Godot optimized)
+- Automatic cleanup when animations complete
+- Queue managed with Array
+
+**Integration Points**:
+- Vendor shop (purchase/sell)
+- Loot system (pickup/drop)
+- Inventory UI (item management)
+- Quest rewards (future)
+- Crafting results (future)
+
+### Configuration
+```gdscript
+# In NotificationManager.gd
+var notification_spacing: float = 40.0  # Vertical spacing between notifications
+# In ItemNotification.gd
+var lifetime: float = 2.0  # How long notification stays visible
+```
+
+**Files**:
+- `scripts/systems/NotificationManager.gd` - Autoload singleton managing notification queue
+- `scripts/ui/ItemNotification.gd` - Individual notification label with animations
+- `scenes/ui/item_notification.tscn` - Notification scene (Label with script)
+- `project.godot` - NotificationManager added to autoload list
+
+### Design Decisions
+**Why No Gold Notifications?**
+- Gold gain/loss already has audio feedback (coin sounds)
+- Prevents notification spam during loot collection
+- Keeps notifications focused on items (more important to track)
+- Gold displayed in UI at all times (less need for notifications)
+
+**Why Centered Position?**
+- Visible but not intrusive
+- Doesn't block combat (above player but below top UI)
+- Easy to glance at without losing focus
+- Consistent positioning for all notifications
+
+---
+
 ## Environmental Hazards
 
 ### Lava Pools

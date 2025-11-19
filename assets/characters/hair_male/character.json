@@ -1,0 +1,26 @@
+{
+  "bodyTypeName": "male",
+  "url": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/#?body=none_Body_color&head=none_Human_male&hair=Buzzcut_dark_brown",
+  "spritesheets": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/spritesheets/",
+  "version": 1,
+  "datetime": "11/19/2025, 1:46:48 PM",
+  "credits": [
+    {
+      "fileName": "hair/buzzcut/adult/dark_brown.png",
+      "licenses": "OGA-BY 3.0",
+      "authors": "ElizaWy",
+      "urls": "https://opengameart.org/content/lpc-hair",
+      "notes": ""
+    }
+  ],
+  "layers": [
+    {
+      "fileName": "hair/buzzcut/adult/dark_brown.png",
+      "zPos": 120,
+      "parentName": "hair",
+      "name": "Buzzcut",
+      "variant": "dark brown",
+      "supportedAnimations": "spellcast,thrust,walk,slash,shoot,hurt,watering,idle,jump,run,sit,emote,climb,combat,1h_slash,1h_backslash,1h_halfslash"
+    }
+  ]
+}

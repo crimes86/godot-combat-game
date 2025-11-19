@@ -48,8 +48,8 @@ var equipped_armor = {
 	"offhand": null,   # Secondary weapon/shield (left hand)
 	"head": null,      # Helmet/helm
 	"chest": null,     # Body armor/vest
-	"arms": null,      # Arm guards/bracers
-	"hands": null,     # Gloves/gauntlets
+	"arms": null,      # Armguards/bracers
+	"hands": null,     # Gloves
 	"legs": null,      # Pants/greaves
 	"feet": null       # Boots
 }

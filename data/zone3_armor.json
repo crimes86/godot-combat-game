@@ -27,9 +27,9 @@
 			"quantity": 1
 		},
 		{
-			"id": "shadow_gloves",
-			"name": "Shadow Grips",
-			"description": "Gauntlets that shimmer like smoke. Your hands barely exist in this realm.",
+			"id": "shadow_armguards",
+			"name": "Shadow Armguards",
+			"description": "Armguards that shimmer like smoke. Your forearms barely exist in this realm.",
 			"slot": "arms",
 			"defense": 15,
 			"type": "armor",

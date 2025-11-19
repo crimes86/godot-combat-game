@@ -24,68 +24,27 @@ A fast-paced action RPG with rhythm-based combat mechanics, featuring a unique c
 ### Primary Documentation
 
 #### [GAME_DOCUMENTATION.md](GAME_DOCUMENTATION.md) - **Main Game Design Document**
-Comprehensive overview of all game systems and mechanics.
-
-**Contents**:
-- World System (12,000x5,000 pixel world, baking, zones)
-- Environment & Props (2,500 props, scattering, shadows)
-- Path System (winding S-curve path with markers)
-- Combat System (zone progression, enemy scaling, boss design)
-- Crit System Implementation (algorithms, formulas, lifecycle)
-- Weakpoint System (sectioned spawning, visual design)
-- Multiplayer Design (scaling, anti-cheat, networking)
-- Ruins System (conversion, guardians, checkpoints)
-- Character System (gender selection, LPC sprites)
-- Campfire System (healing, safe zones, enemy deterrent)
-- Environmental Hazards (lava pools, damage, animation)
-- Resource Gathering (harvestable trees, wood, economy)
-- Chain/Combo System (multipliers, overdrive, timeout)
-- Training Dummy (practice, testing, invulnerability)
-- Vendor & Shop System (blacksmith, currency, item tiers)
-- Healing System Design (friendly targeting, crit heals)
-- Development Roadmap (phases, timeline, milestones)
-- Controls & Debug (keybindings, F3 debug mode)
-- Art Style (pioneer/revenant theme)
-- Technical Notes (async/await, state management, signals)
-
-#### [INVENTORY_SYSTEM.md](INVENTORY_SYSTEM.md) - **Inventory & Loot Documentation**
-Complete guide to item management, loot drops, and treasure systems.
-
-**Contents**:
-- InventorySystem (global singleton, API reference)
-- PickableItem (world items, interaction, auto-pickup)
-- TreasureChest (containers, loot generation, tiers)
-- LootSpawnManager (enemy drops, rarity, tables)
-- ChestLootUI (visual display, collection interface)
-- Integration (combat, economy, quest systems)
-- Configuration (tuning, drop rates, tiers)
-- Future Enhancements (capacity, categories, UI)
-- Debug Commands (testing, console commands)
+Comprehensive overview of all game systems and mechanics including NotificationManager system.
 
 #### [GAME_BALANCE.md](GAME_BALANCE.md) - **Economy & Progression Balance**
 Detailed balance numbers for economy, stats, and progression.
 
-**Contents**:
-- Gold economy (prices, drops, vendor costs)
-- XP progression (level curve, stat allocation)
-- Combat balance (damage, defense, crit rates)
-- Weapon/armor pricing tiers
-- Multiplayer scaling formulas
-- Zone difficulty curves
+### System Documentation (docs/)
 
-### Development Documentation
+#### [docs/INVENTORY_AND_LOOT.md](docs/INVENTORY_AND_LOOT.md)
+Complete guide to inventory management, loot drops, corpse looting, and treasure systems.
 
-#### [DEVELOPMENT.md](DEVELOPMENT.md) - **Development Guidelines**
-Code standards, architecture patterns, and contribution guidelines.
+#### [docs/LPC_GUIDE.md](docs/LPC_GUIDE.md)
+Complete guide to the LPC character system, sprite generation, armor layering, and asset management.
 
-**Contents**:
-- Project structure
-- Coding conventions
-- GDScript best practices
-- Scene organization
-- Asset pipeline
-- Git workflow
-- Testing procedures
+#### [docs/ENEMY_SPAWN_SYSTEM.md](docs/ENEMY_SPAWN_SYSTEM.md)
+Complete guide to spawn location generation and enemy spawning (radial patterns, pattern learning, manual/procedural spawning).
+
+#### [docs/PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md)
+Performance optimization strategies: node caching, view distance culling, throttled updates, particle reduction.
+
+#### [docs/REFACTOR_HISTORY.md](docs/REFACTOR_HISTORY.md)
+Historical documentation of component architecture refactoring (reference only, not integrated).
 
 ---
 
@@ -131,8 +90,13 @@ Code standards, architecture patterns, and contribution guidelines.
 ### Performance Optimization
 - **World Baking**: Pre-rendered background texture (1-5 minute bake, <100ms load)
 - **Dynamic Loading**: Props loaded from JSON at runtime
-- **Object Pooling**: (Future) Reuse weakpoint nodes for performance
-- **Particle Culling**: Limit simultaneous effects for 60 FPS target
+- **Node Caching**: Campfire animations use cached references (no searching per frame)
+- **View Distance Culling**: Enemies invisible beyond 1400px (saves rendering cost)
+- **Throttled Updates**: Enemy checks run at 5fps instead of 60fps for non-critical systems
+- **Particle Reduction**: Optimized particle counts (40% reduction)
+- **Camera Zoom Limit**: 0.75x-2.0x zoom range (prevents map reveal, maintains performance)
+- **Target**: 60 FPS on mid-range laptops ✅
+- See [docs/PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md) for details
 
 ### Multiplayer Ready
 - **Owner-Only Weakpoints**: Each player sees their own crit windows
@@ -141,10 +105,11 @@ Code standards, architecture patterns, and contribution guidelines.
 - **Group Scaling**: Dynamic HP/damage scaling based on player count
 
 ### Code Architecture
-- **Autoloads**: CharacterStats, InventorySystem, ChainManager, LootSpawnManager, SoundManager
+- **Autoloads**: CharacterStats, InventorySystem, ChainManager, LootSpawnManager, SoundManager, NotificationManager
 - **Signal-Based**: Clean communication between systems
 - **State Machines**: Enemy AI, ruins conversion, chain management
 - **Modular Design**: Easy to extend and maintain
+- **Global Notifications**: Item gain/loss notifications with rarity colors and cascade animations
 
 ---
 
@@ -207,12 +172,15 @@ Code standards, architecture patterns, and contribution guidelines.
 - Ruins 1 with 8 guardians
 - Vendor shop with weapons/armor
 - Inventory system with loot drops
+- Armor equipping system (6 slots: head, chest, arms, hands, legs, feet)
+- Global notification system (item gain/loss with rarity colors)
 - Environmental hazards (lava pools)
 - Resource gathering (harvestable trees)
 - Training dummy for practice
 - Character sheet UI
 - Gender selection
 - Sound system with real audio files
+- Performance optimizations (60fps target on laptops)
 
 ### In Progress
 - Ruins 2 & 3 implementation
@@ -221,7 +189,6 @@ Code standards, architecture patterns, and contribution guidelines.
 - Healing system (friendly targeting)
 
 ### Planned Features
-- Armor equipping system
 - Save/load system
 - Multiplayer networking
 - PvP combat
@@ -274,4 +241,4 @@ Code standards, architecture patterns, and contribution guidelines.
 
 ---
 
-This documentation was last updated: 2025-11-16
+This documentation was last updated: 2025-11-19

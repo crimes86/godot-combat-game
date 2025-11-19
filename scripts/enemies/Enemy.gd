@@ -82,26 +82,40 @@ func _ready() -> void:
 	
 	# Create animated skeleton sprite
 	if sprite:
-		# Load ALL sprite sheets - walk, attack, and hurt
-		const SKELETON_WALK_PATH = "res://assets/characters/BODY_skeleton_walk.png"
-		const SKELETON_SLASH_PATH = "res://assets/characters/BODY_skeleton_slash.png"
-		const SKELETON_HURT_PATH = "res://assets/characters/BODY_skeleton_hurt.png"
-		
+		# Check if this is a guardian (uses special armored sprites)
+		var is_guardian = get_meta("is_guardian", false)
+
+		# Load sprite sheets based on enemy type
+		var walk_path: String
+		var slash_path: String
+		var hurt_path: String
+
+		if is_guardian:
+			# Guardian skeletal warriors with copper armor and longsword
+			walk_path = "res://assets/characters/skeletal_guardian/walk_guardian.png"
+			slash_path = "res://assets/characters/skeletal_guardian/slash_guardian.png"
+			hurt_path = ""  # Guardians use same hurt as regular skeletons for now
+		else:
+			# Regular skeleton
+			walk_path = "res://assets/characters/BODY_skeleton_walk.png"
+			slash_path = "res://assets/characters/BODY_skeleton_slash.png"
+			hurt_path = "res://assets/characters/BODY_skeleton_hurt.png"
+
 		var walk_tex: Texture2D = null
 		var slash_tex: Texture2D = null
 		var hurt_tex: Texture2D = null
 
 		# Try to load walking sprite
-		if ResourceLoader.exists(SKELETON_WALK_PATH):
-			walk_tex = ResourceLoader.load(SKELETON_WALK_PATH, "Texture2D")
-		
-		# Try to load attack sprite
-		if ResourceLoader.exists(SKELETON_SLASH_PATH):
-			slash_tex = ResourceLoader.load(SKELETON_SLASH_PATH, "Texture2D")
+		if ResourceLoader.exists(walk_path):
+			walk_tex = ResourceLoader.load(walk_path, "Texture2D")
 
-		# Try to load hurt sprite
-		if ResourceLoader.exists(SKELETON_HURT_PATH):
-			hurt_tex = ResourceLoader.load(SKELETON_HURT_PATH, "Texture2D")
+		# Try to load attack sprite
+		if ResourceLoader.exists(slash_path):
+			slash_tex = ResourceLoader.load(slash_path, "Texture2D")
+
+		# Try to load hurt sprite (optional)
+		if hurt_path != "" and ResourceLoader.exists(hurt_path):
+			hurt_tex = ResourceLoader.load(hurt_path, "Texture2D")
 		
 		if walk_tex:
 			# Store old sprite properties
@@ -897,13 +911,16 @@ func generate_corpse_loot() -> Array:
 	"""Generate loot items for this corpse using CorpseState loot tables"""
 	var loot = []
 
+	# Check if this is a guardian (Ruins skeleton with special loot)
+	var is_guardian = get_meta("is_guardian", false)
+
 	# Roll for number of items (0-2)
 	var num_items = CorpseState.roll_loot_count()
-	print("💀 Rolled %d loot items for corpse" % num_items)
+	print("💀 Rolled %d loot items for %s" % [num_items, "guardian" if is_guardian else "corpse"])
 
 	# Generate each item
 	for i in range(num_items):
-		var item = CorpseState.roll_loot_item()
+		var item = CorpseState.roll_loot_item(is_guardian)
 		if not item.is_empty():
 			# Add quantity for stackable items
 			if item.get("stackable", false):

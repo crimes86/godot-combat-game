@@ -72,10 +72,10 @@ func _ready() -> void:
 	print("   X: %.0f, Y: %.0f" % [global_position.x, global_position.y])
 	print("═══════════════════════════════════════════")
 
-	# Load enemy scene (skeletons)
-	skeleton_scene = load("res://scenes/enemies/enemy.tscn")
+	# Load guardian skeleton scene (armored guardians with special loot)
+	skeleton_scene = load("res://scenes/enemies/guardian_skeleton.tscn")
 	if not skeleton_scene:
-		push_error("❌ Could not load enemy.tscn!")
+		push_error("❌ Could not load guardian_skeleton.tscn!")
 		return
 
 	# Create visuals

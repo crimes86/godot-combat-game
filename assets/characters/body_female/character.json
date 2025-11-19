@@ -1,0 +1,26 @@
+{
+  "bodyTypeName": "female",
+  "url": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/#?body=Body_color_light&head=none_Human_female_small&hair=none_Braid2&sex=female",
+  "spritesheets": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/spritesheets/",
+  "version": 1,
+  "datetime": "11/19/2025, 2:02:55 PM",
+  "credits": [
+    {
+      "fileName": "body/bodies/female/light.png",
+      "licenses": "OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0",
+      "authors": "Benjamin K. Smith (BenCreating),bluecarrot16,TheraHedwig,Evert,MuffinElZangano,Durrani,Pierre Vigier (pvigier),ElizaWy,Matthew Krohn (makrohn),Johannes Sjölund (wulax),Stephen Challener (Redshrike)",
+      "urls": "https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles,https://opengameart.org/content/lpc-medieval-fantasy-character-sprites,https://opengameart.org/content/lpc-ladies,https://opengameart.org/content/lpc-7-womens-shirts,https://opengameart.org/content/lpc-jump-expanded,https://opengameart.org/content/lpc-be-seated,https://opengameart.org/content/lpc-revised-character-basics,https://gitlab.com/vagabondgame/lpc-characters,https://opengameart.org/content/lpc-male-jumping-animation-by-durrani,https://opengameart.org/content/lpc-runcycle-and-diagonal-walkcycle",
+      "notes": "see details at https://opengameart.org/content/lpc-character-bases"
+    }
+  ],
+  "layers": [
+    {
+      "fileName": "body/bodies/female/light.png",
+      "zPos": 10,
+      "parentName": "body",
+      "name": "Body_color",
+      "variant": "light",
+      "supportedAnimations": "spellcast,thrust,walk,slash,shoot,hurt,watering,idle,jump,run,sit,emote,climb,combat,1h_slash,1h_backslash,1h_halfslash"
+    }
+  ]
+}

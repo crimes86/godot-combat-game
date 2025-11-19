@@ -27,9 +27,9 @@
 			"quantity": 1
 		},
 		{
-			"id": "cursed_gloves",
-			"name": "Cursed Gauntlets",
-			"description": "Reinforced metal gauntlets that hum with dark power.",
+			"id": "cursed_armguards",
+			"name": "Cursed Armguards",
+			"description": "Reinforced metal armguards that hum with dark power.",
 			"slot": "arms",
 			"defense": 10,
 			"type": "armor",

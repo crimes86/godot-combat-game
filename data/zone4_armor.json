@@ -29,9 +29,9 @@
 			"quantity": 1
 		},
 		{
-			"id": "abyss_gauntlets",
-			"name": "Abyssal Gauntlets",
-			"description": "Dark iron plate gauntlets that gleam like obsidian. Your strikes carry the weight of the void.",
+			"id": "abyss_armguards",
+			"name": "Abyssal Armguards",
+			"description": "Dark iron plate armguards that gleam like obsidian. Your strikes carry the weight of the void.",
 			"slot": "arms",
 			"defense": 22,
 			"type": "armor",

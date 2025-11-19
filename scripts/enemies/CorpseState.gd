@@ -69,6 +69,64 @@ const SKELETON_LOOT_TABLE = [
 	}
 ]
 
+# Guardian-specific loot table (Ruins 1 skeletal guardians)
+# Drops: Iron Short Sword (equiv to vendor), Copper Boots, Copper Armguards
+# Low drop rates - intended to be a grind
+const GUARDIAN_LOOT_TABLE = [
+	{
+		"id": "iron_short_sword",
+		"name": "Iron Short Sword",
+		"description": "A reliable iron blade. Standard issue for wasteland survivors.",
+		"weapon_type": "sword",
+		"base_damage": 12,
+		"attack_speed": "medium",
+		"crit_chance": 0.071,
+		"required_level": 1,
+		"value": 150,
+		"rarity": "Common",
+		"sprite_path": "res://assets/weapons/longsword.png",
+		"drop_weight": 8,  # 8% chance (low drop rate - grind required)
+		"type": "weapon",
+		"stackable": false
+	},
+	{
+		"id": "copper_plate_boots",
+		"name": "Copper Plate Boots",
+		"description": "Tier 1 copper-plated boots. Basic protection for your feet.",
+		"slot": "feet",
+		"defense": 5,
+		"type": "armor",
+		"value": 0,
+		"rarity": "Common",
+		"sprite_name": "copper_plate",
+		"drop_weight": 12,  # 12% chance
+		"stackable": false
+	},
+	{
+		"id": "copper_plate_armguards",
+		"name": "Copper Plate Armguards",
+		"description": "Tier 1 copper-plated arm guards. Protects your forearms in combat.",
+		"slot": "arms",
+		"defense": 6,
+		"type": "armor",
+		"value": 0,
+		"rarity": "Common",
+		"sprite_name": "copper_plate",
+		"drop_weight": 12,  # 12% chance
+		"stackable": false
+	},
+	{
+		"name": "Bone Shard",
+		"description": "Sharp fragment of bone. Could be useful for crafting.",
+		"value": 5,
+		"rarity": "Common",
+		"drop_weight": 68,  # Fill remaining weight (common drop)
+		"type": "material",
+		"stackable": true,
+		"max_stack": 100
+	}
+]
+
 static func roll_loot_count() -> int:
 	"""Roll how many items this corpse should drop (0-2)"""
 	var roll = randf()
@@ -81,24 +139,26 @@ static func roll_loot_count() -> int:
 
 	return 0  # Fallback
 
-static func roll_loot_item() -> Dictionary:
-	"""Roll a random item from the skeleton loot table"""
-	if SKELETON_LOOT_TABLE.is_empty():
+static func roll_loot_item(is_guardian: bool = false) -> Dictionary:
+	"""Roll a random item from the appropriate loot table"""
+	var loot_table = GUARDIAN_LOOT_TABLE if is_guardian else SKELETON_LOOT_TABLE
+
+	if loot_table.is_empty():
 		return {}
 
 	# Calculate total weight
 	var total_weight = 0
-	for item in SKELETON_LOOT_TABLE:
+	for item in loot_table:
 		total_weight += item.get("drop_weight", 1)
 
 	# Roll for item
 	var roll = randi() % total_weight
 	var cumulative = 0
 
-	for item in SKELETON_LOOT_TABLE:
+	for item in loot_table:
 		cumulative += item.get("drop_weight", 1)
 		if roll < cumulative:
 			return item.duplicate()
 
 	# Fallback to first item
-	return SKELETON_LOOT_TABLE[0].duplicate()
+	return loot_table[0].duplicate()

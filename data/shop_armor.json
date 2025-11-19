@@ -43,9 +43,9 @@
 			"rarity": "Common"
 		},
 		{
-			"id": "copper_plate_spaulders",
-			"name": "Copper Plate Spaulders",
-			"description": "[TEST] Tier 1 copper-plated shoulder guards. Protects your shoulders in combat.",
+			"id": "copper_plate_armguards",
+			"name": "Copper Plate Armguards",
+			"description": "[TEST] Tier 1 copper-plated arm guards. Protects your forearms in combat.",
 			"slot": "arms",
 			"defense": 6,
 			"type": "armor",
