@@ -189,125 +189,125 @@ func create_campfire_visual() -> void:
 	var ember_glow = Color(1.0, 0.3, 0.0, 0.8)          # Glowing embers
 
 	# Bottom logs (stacked on top of coals - teepee formation)
-	# Left log (leaning right) - positioned on coals, 50% thicker
+	# Left log (leaning right) - positioned on coals, 50% thicker, scaled 75%
 	var log_left = Polygon2D.new()
 	log_left.polygon = PackedVector2Array([
-		Vector2(-23, 9),     # Bottom left (moved up 20px from 29)
-		Vector2(-8, -14),    # Top left (moved up 20px from 6)
-		Vector2(-5, -13),    # Top right (moved up 20px from 7)
-		Vector2(-20, 11)     # Bottom right (moved up 20px from 31)
+		Vector2(-17.25, 6.75),   # Bottom left (75% scale)
+		Vector2(-6, -10.5),      # Top left (75% scale)
+		Vector2(-3.75, -9.75),   # Top right (75% scale)
+		Vector2(-15, 8.25)       # Bottom right (75% scale)
 	])
 	log_left.color = log_color
 	log_left.name = "LogLeft"
 	log_left.z_index = -1  # Above coals
 	fire_sprite.add_child(log_left)
 
-	# Left log charred end (50% thicker, moved up 20px)
+	# Left log charred end (50% thicker, moved up 20px, scaled 75%)
 	var log_left_char = Polygon2D.new()
 	log_left_char.polygon = PackedVector2Array([
-		Vector2(-20, 9),     # Moved up 20px from 29
-		Vector2(-17, 7),     # Moved up 20px from 27
-		Vector2(-15, 9),     # Moved up 20px from 29
-		Vector2(-18, 11)     # Moved up 20px from 31
+		Vector2(-15, 6.75),      # 75% scale
+		Vector2(-12.75, 5.25),   # 75% scale
+		Vector2(-11.25, 6.75),   # 75% scale
+		Vector2(-13.5, 8.25)     # 75% scale
 	])
 	log_left_char.color = log_color_burnt
 	log_left_char.z_index = -1
 	fire_sprite.add_child(log_left_char)
 
-	# Left log highlight (thicker, moved up 20px)
+	# Left log highlight (thicker, moved up 20px, scaled 75%)
 	var log_left_highlight = Line2D.new()
-	log_left_highlight.width = 2.25  # 50% thicker (1.5 * 1.5)
+	log_left_highlight.width = 1.69  # 75% of 2.25
 	log_left_highlight.default_color = log_color_light
-	log_left_highlight.add_point(Vector2(-20, 11))   # Moved up 20px from 31
-	log_left_highlight.add_point(Vector2(-5, -13))   # Moved up 20px from 7
+	log_left_highlight.add_point(Vector2(-15, 8.25))    # 75% scale
+	log_left_highlight.add_point(Vector2(-3.75, -9.75)) # 75% scale
 	log_left_highlight.z_index = -1
 	fire_sprite.add_child(log_left_highlight)
 
-	# Right log (leaning left) - 50% thicker
+	# Right log (leaning left) - 50% thicker, scaled 75%
 	var log_right = Polygon2D.new()
 	log_right.polygon = PackedVector2Array([
-		Vector2(23, 9),      # Bottom right (moved up 20px from 29)
-		Vector2(8, -14),     # Top right (moved up 20px from 6)
-		Vector2(5, -13),     # Top left (moved up 20px from 7)
-		Vector2(20, 11)      # Bottom left (moved up 20px from 31)
+		Vector2(17.25, 6.75),   # Bottom right (75% scale)
+		Vector2(6, -10.5),      # Top right (75% scale)
+		Vector2(3.75, -9.75),   # Top left (75% scale)
+		Vector2(15, 8.25)       # Bottom left (75% scale)
 	])
 	log_right.color = log_color
 	log_right.name = "LogRight"
 	log_right.z_index = -1
 	fire_sprite.add_child(log_right)
 
-	# Right log charred end (50% thicker, moved up 20px)
+	# Right log charred end (50% thicker, moved up 20px, scaled 75%)
 	var log_right_char = Polygon2D.new()
 	log_right_char.polygon = PackedVector2Array([
-		Vector2(20, 9),      # Moved up 20px from 29
-		Vector2(17, 7),      # Moved up 20px from 27
-		Vector2(15, 9),      # Moved up 20px from 29
-		Vector2(18, 11)      # Moved up 20px from 31
+		Vector2(15, 6.75),      # 75% scale
+		Vector2(12.75, 5.25),   # 75% scale
+		Vector2(11.25, 6.75),   # 75% scale
+		Vector2(13.5, 8.25)     # 75% scale
 	])
 	log_right_char.color = log_color_burnt
 	log_right_char.z_index = -1
 	fire_sprite.add_child(log_right_char)
 
-	# Right log highlight (thicker, moved up 20px)
+	# Right log highlight (thicker, moved up 20px, scaled 75%)
 	var log_right_highlight = Line2D.new()
-	log_right_highlight.width = 2.25  # 50% thicker (1.5 * 1.5)
+	log_right_highlight.width = 1.69  # 75% of 2.25
 	log_right_highlight.default_color = log_color_light
-	log_right_highlight.add_point(Vector2(20, 11))   # Moved up 20px from 31
-	log_right_highlight.add_point(Vector2(5, -13))   # Moved up 20px from 7
+	log_right_highlight.add_point(Vector2(15, 8.25))    # 75% scale
+	log_right_highlight.add_point(Vector2(3.75, -9.75)) # 75% scale
 	log_right_highlight.z_index = -1
 	fire_sprite.add_child(log_right_highlight)
 
-	# Back center log (50% thicker, moved up 20px)
+	# Back center log (50% thicker, moved up 20px, scaled 75%)
 	var log_back = Polygon2D.new()
 	log_back.polygon = PackedVector2Array([
-		Vector2(-3, 9),     # Bottom left (moved up 20px from 29)
-		Vector2(3, 9),      # Bottom right (moved up 20px from 29)
-		Vector2(4.5, -17),  # Top right (moved up 20px from 3)
-		Vector2(-4.5, -17)  # Top left (moved up 20px from 3)
+		Vector2(-2.25, 6.75),   # Bottom left (75% scale)
+		Vector2(2.25, 6.75),    # Bottom right (75% scale)
+		Vector2(3.375, -12.75), # Top right (75% scale)
+		Vector2(-3.375, -12.75) # Top left (75% scale)
 	])
 	log_back.color = log_color_dark
 	log_back.z_index = -1
 	log_back.name = "LogBack"
 	fire_sprite.add_child(log_back)
 
-	# Back log charred end (moved up 20px, thicker)
+	# Back log charred end (moved up 20px, thicker, scaled 75%)
 	var log_back_char = Polygon2D.new()
 	log_back_char.polygon = PackedVector2Array([
-		Vector2(-3, 9),      # Moved up 20px from 29
-		Vector2(3, 9),       # Moved up 20px from 29
-		Vector2(1.5, 6),     # Moved up 20px from 26
-		Vector2(-1.5, 6)     # Moved up 20px from 26
+		Vector2(-2.25, 6.75),  # 75% scale
+		Vector2(2.25, 6.75),   # 75% scale
+		Vector2(1.125, 4.5),   # 75% scale
+		Vector2(-1.125, 4.5)   # 75% scale
 	])
 	log_back_char.color = log_color_burnt
 	log_back_char.z_index = -1
 	fire_sprite.add_child(log_back_char)
 
-	# Add some smaller broken logs at base (50% thicker, moved up 20px)
+	# Add some smaller broken logs at base (50% thicker, moved up 20px, scaled 75%)
 	for i in range(3):
 		var broken_log = Polygon2D.new()
-		var offset_x = randf_range(-15, 15)
+		var offset_x = randf_range(-11.25, 11.25)  # 75% of -15 to 15
 		broken_log.polygon = PackedVector2Array([
-			Vector2(offset_x - 6, 13),    # Moved up 20px from 33
-			Vector2(offset_x + 6, 13),    # Moved up 20px from 33
-			Vector2(offset_x + 4.5, 11),  # Moved up 20px from 31
-			Vector2(offset_x - 4.5, 11)   # Moved up 20px from 31
+			Vector2(offset_x - 4.5, 9.75),   # 75% scale
+			Vector2(offset_x + 4.5, 9.75),   # 75% scale
+			Vector2(offset_x + 3.375, 8.25), # 75% scale
+			Vector2(offset_x - 3.375, 8.25)  # 75% scale
 		])
 		broken_log.color = log_color_dark
 		broken_log.z_index = -1
 		fire_sprite.add_child(broken_log)
 	
-	# === GLOWING COAL BED === (spread across rockbed, below flames, semi-transparent)
-	# Create coals filling rock circle, below flames so fire is visible
+	# === GLOWING COAL BED === (radiate from fire center, don't touch rocks)
+	# Create coals radiating from center, staying clear of rock ring
 	for i in range(35):  # Reduced count - less cluttered
 		var coal = Polygon2D.new()
-		# Spread across ENTIRE rockbed area (rock ring is ~28px radius)
+		# Radiate from center but stop well before rocks (rock ring is ~28px radius)
 		var angle = randf() * TAU
-		var distance = randf() * 28.0  # Fill entire rock circle radius
+		var distance = randf() * 20.0  # Stop well before rocks (20px < 28px rock radius)
 		var coal_offset = Vector2(cos(angle), sin(angle)) * distance
-		coal_offset.y = abs(coal_offset.y) * 0.4 + randf_range(0, 8)  # Spread y from 0-10 range
+		coal_offset.y = abs(coal_offset.y) * 0.3 + randf_range(0, 6)  # Smaller y spread to avoid edge
 
 		# Size varies - smaller at edges
-		var distance_ratio = distance / 28.0  # 0 at center, 1 at edge
+		var distance_ratio = distance / 22.0  # 0 at center, 1 at edge
 		var coal_size = randf_range(3.0, 5.5) * (1.3 - distance_ratio * 0.5)  # Smaller at edges
 
 		var coal_points = PackedVector2Array()
@@ -509,32 +509,32 @@ func create_fire_particles() -> void:
 				Vector2(offset + base_width, base_y)
 			])
 
-			# Color by layer - darker to brighter (more transparent to see wood)
+			# Color by layer - darker to brighter (very transparent to see wood clearly)
 			var colors = PackedColorArray()
-			if layer == 0:  # Bottom - red/orange (more transparent)
-				colors.append(Color(0.8, 0.2, 0.0, 0.65))
-				colors.append(Color(0.95, 0.4, 0.0, 0.6))
-				colors.append(Color(1.0, 0.55, 0.1, 0.5))
-				colors.append(Color(1.0, 0.7, 0.2, 0.35))
-				colors.append(Color(1.0, 0.55, 0.1, 0.5))
-				colors.append(Color(0.95, 0.4, 0.0, 0.6))
-				colors.append(Color(0.8, 0.2, 0.0, 0.65))
-			elif layer == 1:  # Middle - orange/yellow (more transparent)
-				colors.append(Color(1.0, 0.5, 0.0, 0.6))
-				colors.append(Color(1.0, 0.65, 0.15, 0.55))
-				colors.append(Color(1.0, 0.8, 0.3, 0.5))
-				colors.append(Color(1.0, 0.9, 0.5, 0.35))
-				colors.append(Color(1.0, 0.8, 0.3, 0.5))
-				colors.append(Color(1.0, 0.65, 0.15, 0.55))
-				colors.append(Color(1.0, 0.5, 0.0, 0.6))
-			else:  # Top - yellow/white (more transparent)
-				colors.append(Color(1.0, 0.75, 0.25, 0.55))
-				colors.append(Color(1.0, 0.85, 0.4, 0.5))
-				colors.append(Color(1.0, 0.95, 0.6, 0.4))
-				colors.append(Color(1.0, 1.0, 0.8, 0.3))
-				colors.append(Color(1.0, 0.95, 0.6, 0.4))
-				colors.append(Color(1.0, 0.85, 0.4, 0.5))
-				colors.append(Color(1.0, 0.75, 0.25, 0.55))
+			if layer == 0:  # Bottom - red/orange (very transparent)
+				colors.append(Color(0.8, 0.2, 0.0, 0.45))
+				colors.append(Color(0.95, 0.4, 0.0, 0.4))
+				colors.append(Color(1.0, 0.55, 0.1, 0.35))
+				colors.append(Color(1.0, 0.7, 0.2, 0.25))
+				colors.append(Color(1.0, 0.55, 0.1, 0.35))
+				colors.append(Color(0.95, 0.4, 0.0, 0.4))
+				colors.append(Color(0.8, 0.2, 0.0, 0.45))
+			elif layer == 1:  # Middle - orange/yellow (very transparent)
+				colors.append(Color(1.0, 0.5, 0.0, 0.4))
+				colors.append(Color(1.0, 0.65, 0.15, 0.35))
+				colors.append(Color(1.0, 0.8, 0.3, 0.3))
+				colors.append(Color(1.0, 0.9, 0.5, 0.25))
+				colors.append(Color(1.0, 0.8, 0.3, 0.3))
+				colors.append(Color(1.0, 0.65, 0.15, 0.35))
+				colors.append(Color(1.0, 0.5, 0.0, 0.4))
+			else:  # Top - yellow/white (very transparent)
+				colors.append(Color(1.0, 0.75, 0.25, 0.35))
+				colors.append(Color(1.0, 0.85, 0.4, 0.3))
+				colors.append(Color(1.0, 0.95, 0.6, 0.25))
+				colors.append(Color(1.0, 1.0, 0.8, 0.2))
+				colors.append(Color(1.0, 0.95, 0.6, 0.25))
+				colors.append(Color(1.0, 0.85, 0.4, 0.3))
+				colors.append(Color(1.0, 0.75, 0.25, 0.35))
 
 			flame.vertex_colors = colors
 			flame.name = "Flame_L" + str(layer) + "_" + str(i)
