@@ -63,7 +63,7 @@ func _ready() -> void:
 	current_health = max_health
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
-		health_bar.visible = false  # Start hidden, show when player is within 750px
+		health_bar.visible = false  # Start hidden, show when player is within 375px
 	original_scale = scale  # For general reference
 
 	# ✨ Store original difficulty color (set by GameWorld)
@@ -599,8 +599,8 @@ func _process(delta: float) -> void:
 		if player and is_instance_valid(player):
 			var distance = global_position.distance_to(player.global_position)
 
-			# UI visibility threshold (750px)
-			var should_show_ui = distance <= 750.0
+			# UI visibility threshold (375px) - reduced from 750px to declutter UI
+			var should_show_ui = distance <= 375.0
 			if health_bar:
 				health_bar.visible = should_show_ui
 			if level_label:
