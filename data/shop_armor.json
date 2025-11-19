@@ -125,6 +125,34 @@
 			"quantity": 1,
 			"sprite_name": "copper_plate",
 			"rarity": "Common"
+		},
+		{
+			"id": "chain_armor_hood",
+			"name": "Chain Armor Hood",
+			"description": "A protective hood made with chain armor. Keeps your head safe in battle.",
+			"slot": "head",
+			"defense": 5,
+			"type": "armor",
+			"value": 0,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1,
+			"sprite_name": "chain_armor_hood",
+			"rarity": "Common"
+		},
+		{
+			"id": "robe_hood",
+			"name": "Robe Hood",
+			"description": "A simple cloth hood. Provides minimal protection but keeps you warm.",
+			"slot": "head",
+			"defense": 2,
+			"type": "armor",
+			"value": 0,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1,
+			"sprite_name": "robe_hood",
+			"rarity": "Common"
 		}
 	]
 }

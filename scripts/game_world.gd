@@ -1320,6 +1320,12 @@ func spawn_scattered_props(parent: Node2D):
 			rng.randf_range(-3000 + buffer, 3000 - buffer)
 		)
 
+		# Reduce clutter around campfire by 25%
+		var campfire_pos = Vector2(-2000, 0)
+		if prop_pos.distance_to(campfire_pos) < 600:
+			if rng.randf() < 0.25:  # Skip 25% of props near campfire
+				continue
+
 		# Don't place on the path
 		if is_position_on_path(prop_pos, 100.0):
 			continue
@@ -2545,6 +2551,11 @@ func spawn_ground_cracks(parent: Node2D):
 		var campfire_pos = Vector2(-2000, 0)
 		var on_path = abs(crack_pos.y) < 200  # Near path
 		var near_campfire = crack_pos.distance_to(campfire_pos) < 500  # Near campfire
+
+		# Reduce clutter around campfire by 25%
+		if near_campfire:
+			if rng.randf() < 0.25:  # Skip 25% of cracks near campfire
+				continue
 
 		# 70% chance to skip if not on path or near campfire
 		if not on_path and not near_campfire:

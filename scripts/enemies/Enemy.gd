@@ -16,6 +16,7 @@ var gold_drop: int = 5  # Actual gold dropped
 @onready var health_bar: Control = $HealthBar
 @onready var sprite: CanvasItem = $Sprite2D  # Can be Sprite2D or AnimatedSprite2D
 @onready var click_area: Area2D = $Area2D
+var level_label: Label = null  # Created dynamically in show_level()
 
 # Crit window state (minimal - manager owns lifecycle)
 var in_crit_window: bool = false  # Simple flag set by grow/shrink methods
@@ -62,6 +63,7 @@ func _ready() -> void:
 	current_health = max_health
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
+		health_bar.visible = false  # Start hidden, show when player is within 750px
 	original_scale = scale  # For general reference
 
 	# ✨ Store original difficulty color (set by GameWorld)
@@ -233,7 +235,7 @@ func update_level_display() -> void:
 	"""Show enemy level on sprite"""
 	if enemy_level >= 1:  # Show for all enemies including level 1
 		# Create level label
-		var level_label = Label.new()
+		level_label = Label.new()
 		level_label.text = "Lv.%d" % enemy_level
 		level_label.add_theme_font_size_override("font_size", 12)
 		level_label.add_theme_color_override("font_color", Color.YELLOW)
@@ -241,6 +243,7 @@ func update_level_display() -> void:
 		level_label.add_theme_constant_override("outline_size", 2)
 		level_label.position = Vector2(-15, -55)  # Moved higher to be above health bar
 		level_label.z_index = 500
+		level_label.visible = false  # Start hidden, show when player is within 750px
 		add_child(level_label)
 
 func _on_click_area_input(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
@@ -580,6 +583,18 @@ func _draw() -> void:
 func _process(delta: float) -> void:
 	if in_crit_window and not weakpoints.is_empty():
 		queue_redraw()  # Continuously redraw while weakpoints are active
+
+	# Toggle UI visibility based on player distance (750px threshold)
+	if not is_corpse:  # Only for living enemies
+		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+		if player and is_instance_valid(player):
+			var distance = global_position.distance_to(player.global_position)
+			var should_show = distance <= 750.0
+
+			if health_bar:
+				health_bar.visible = should_show
+			if level_label:
+				level_label.visible = should_show
 
 	# Handle corpse decay and interaction
 	if is_corpse:
