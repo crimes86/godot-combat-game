@@ -165,12 +165,14 @@ func _physics_process(_delta: float) -> void:
 		if should_show:
 			update_prompt_position()
 
-	# Check for F key press when player is in range
-	if player_in_range:
-		if Input.is_physical_key_pressed(KEY_F):
-			# Only open if shop is not already visible
+func _input(event: InputEvent) -> void:
+	# Handle F key press when player is in range (edge-triggered, not polling)
+	if player_in_range and event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F:
+			# Only open if shop is not already visible (close is handled by ShopUI)
 			if not shop_ui or not shop_ui.visible:
 				toggle_shop()
+				get_viewport().set_input_as_handled()
 
 func load_shop_data() -> void:
 	# Load weapons with validation
@@ -269,12 +271,16 @@ func toggle_shop() -> void:
 	if not shop_ui:
 		# Create shop UI if it doesn't exist
 		create_shop_ui()
+		# Face the player when opening shop
+		face_player()
 		shop_ui.open_shop(self)
 	else:
 		# Toggle visibility
 		if shop_ui.visible:
 			shop_ui.close_shop()
 		else:
+			# Face the player when opening shop
+			face_player()
 			shop_ui.open_shop(self)
 
 func create_shop_ui() -> void:
@@ -301,6 +307,8 @@ func create_shop_ui() -> void:
 func _on_shop_closed() -> void:
 	"""Handle shop closed signal"""
 	shop_closed.emit()
+	# Face left (default direction toward campfire) after shop closes
+	face_left()
 
 func _on_item_purchased(item_name: String, price: int) -> void:
 	"""Handle item purchased signal"""
@@ -369,6 +377,31 @@ func purchase_weapon(index: int) -> bool:
 			return false
 
 	return false
+
+func face_player() -> void:
+	"""Turn blacksmith to face the player"""
+	if not animated_sprite:
+		return
+
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		return
+
+	# Calculate direction to player
+	var direction_to_player = player.global_position - global_position
+
+	# Flip sprite based on player's X position relative to blacksmith
+	if direction_to_player.x > 0:
+		# Player is to the right - face right (positive scale)
+		animated_sprite.scale.x = 1
+	else:
+		# Player is to the left - face left (negative scale, flipped)
+		animated_sprite.scale.x = -1
+
+func face_left() -> void:
+	"""Reset blacksmith to face left (default direction toward campfire)"""
+	if animated_sprite:
+		animated_sprite.scale.x = -1  # Flipped = facing left
 
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):

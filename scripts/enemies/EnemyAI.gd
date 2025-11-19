@@ -42,7 +42,8 @@ enum State {
 	PATROLLING,   # Default: peaceful wandering
 	COMBAT,       # Engaged: chasing player
 	ATTACKING,    # In range: striking player
-	RETREATING    # Tactical: backing away
+	RETREATING,   # Tactical: backing away
+	UNSTUCKING    # Recovery: walking backward to get unstuck
 }
 
 var current_state: State = State.PATROLLING
@@ -72,8 +73,15 @@ var retreat_direction: Vector2 = Vector2.ZERO
 # Stuck detection
 var last_position: Vector2 = Vector2.ZERO
 var stuck_timer: float = 0.0
-var stuck_check_interval: float = 5.0  # Check every 5 seconds (longer to avoid false positives)
-var stuck_distance_threshold: float = 10.0  # If moved less than this in 5 seconds, considered stuck
+var stuck_check_interval: float = 2.0  # Check every 2 seconds
+var stuck_distance_threshold: float = 5.0  # If moved less than 5px in 2 seconds while walking, considered stuck
+
+# Unstuck behavior (about-face mechanics)
+var unstuck_state_before: State = State.PATROLLING  # State to return to after unstuck
+var unstuck_original_target: Vector2 = Vector2.ZERO  # Where we were trying to go
+var unstuck_direction: Vector2 = Vector2.ZERO  # Direction to walk while unstucking
+var unstuck_steps_taken: int = 0  # How many steps we've taken
+var unstuck_max_steps: int = 8  # Number of steps to take backward (configurable)
 
 # Sound spam prevention (static across all enemies)
 static var last_attack_sound_time: float = 0.0
@@ -123,7 +131,8 @@ func _ready() -> void:
 	# Create debug label (always created, visibility controlled by player debug mode)
 	create_debug_label()
 
-	print("🤖 Enemy AI initialized - Patrolling (non-aggro)")
+	# Brief init message with enemy name and position
+	print("🤖 %s AI ready at (%.0f, %.0f)" % [enemy.name, enemy.global_position.x, enemy.global_position.y])
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN LOOP
@@ -170,6 +179,61 @@ func _physics_process(delta: float) -> void:
 	else:
 		ai_update_interval = 0.2   # 5 FPS when far away (save performance)
 
+	# ═══════════════════════════════════════════════════════════════
+	# STUCK DETECTION (runs every frame, independent of AI throttling)
+	# ═══════════════════════════════════════════════════════════════
+	# Check for stuck (works in PATROLLING and COMBAT, but not while already unstucking)
+	if current_state != State.UNSTUCKING and current_state != State.ATTACKING and current_state != State.RETREATING:
+		stuck_timer += delta
+		if stuck_timer >= stuck_check_interval:
+			var distance_moved = enemy.global_position.distance_to(last_position)
+
+			# Check if enemy is in walking animation state (trying to move)
+			var is_walking = false
+			var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
+			if anim_sprite and anim_sprite.animation:
+				is_walking = anim_sprite.animation.begins_with("walk_")
+
+			# If walking animation is playing but position hasn't changed = STUCK
+			if distance_moved < stuck_distance_threshold and is_walking:
+				# We're stuck! Start the about-face unstuck maneuver
+				print("⚠️ %s STUCK at (%.0f, %.0f) - walking but only moved %.1fpx in %.1fs" % [
+					enemy.name,
+					enemy.global_position.x,
+					enemy.global_position.y,
+					distance_moved,
+					stuck_check_interval
+				])
+
+				# Store current state and destination to resume later
+				unstuck_state_before = current_state
+				if current_state == State.PATROLLING:
+					unstuck_original_target = patrol_target
+				elif current_state == State.COMBAT and player:
+					unstuck_original_target = player.global_position
+
+				# Calculate about-face direction (opposite of current velocity, with random Y offset)
+				var backward_direction = -enemy.velocity.normalized()
+				var y_offset = randf_range(-0.5, 0.5)  # Random Y component for variation
+				unstuck_direction = (backward_direction + Vector2(0, y_offset)).normalized()
+
+				# Reset unstuck counter
+				unstuck_steps_taken = 0
+
+				print("   🔄 %s: About-face (%d steps), then resume %s" % [enemy.name, unstuck_max_steps, get_state_name()])
+
+				# Enter unstuck state
+				change_state(State.UNSTUCKING)
+			last_position = enemy.global_position
+			stuck_timer = 0.0
+	else:
+		# Reset stuck timer when in states that shouldn't check for stuck
+		stuck_timer = 0.0
+		last_position = enemy.global_position
+
+	# ═══════════════════════════════════════════════════════════════
+	# AI THROTTLING (run AI logic at reduced rate based on distance)
+	# ═══════════════════════════════════════════════════════════════
 	# Only run AI logic at throttled rate (not every frame!)
 	var should_update_ai = ai_update_timer >= ai_update_interval
 	if not should_update_ai:
@@ -188,37 +252,6 @@ func _physics_process(delta: float) -> void:
 			update_debug_label_position()
 		debug_update_timer = 0.0
 
-	# Check for stuck (only when patrolling, not in combat, and not paused)
-	if current_state == State.PATROLLING and not is_in_combat and not is_paused:
-		stuck_timer += delta
-		if stuck_timer >= stuck_check_interval:
-			var distance_moved = enemy.global_position.distance_to(last_position)
-			# Also check if we're actually trying to move (velocity is non-zero)
-			var is_trying_to_move = enemy.velocity.length() > 5.0
-			if distance_moved < stuck_distance_threshold and is_trying_to_move:
-				# We're stuck! Physically move backwards and shift on Y axis
-				print("⚠️ Enemy stuck (moved %.1f in %.1fs), trying to unstick" % [distance_moved, stuck_check_interval])
-
-				# Move backwards (opposite of current velocity direction)
-				var backward_direction = -enemy.velocity.normalized()
-				enemy.global_position += backward_direction * 30.0  # Move back 30 pixels
-
-				# Shift up or down on Y axis randomly
-				var y_shift = randf_range(-40.0, 40.0)
-				enemy.global_position.y += y_shift
-
-				print("  🔄 Moved backwards %.0f pixels, Y shift %.0f" % [30.0, y_shift])
-
-				# Pick a new patrol target
-				pick_new_patrol_target()
-				is_paused = false  # Unpause if we were paused
-			last_position = enemy.global_position
-			stuck_timer = 0.0
-	else:
-		# Reset stuck timer when not actively patrolling
-		stuck_timer = 0.0
-		last_position = enemy.global_position
-
 	# State machine
 	match current_state:
 		State.PATROLLING:
@@ -229,6 +262,8 @@ func _physics_process(delta: float) -> void:
 			process_attacking(delta)
 		State.RETREATING:
 			process_retreating(delta)
+		State.UNSTUCKING:
+			process_unstucking(delta)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PATROLLING STATE (Default - Non-Aggro)
@@ -295,7 +330,7 @@ func process_combat(delta: float) -> void:
 	# Check leashing - if too far from spawn, return home
 	var distance_from_spawn = enemy.global_position.distance_to(spawn_position)
 	if distance_from_spawn > leash_distance:
-		print("🏠 Enemy leashed - too far from home, returning to patrol")
+		print("🏠 %s: Leashed (%.0fpx from spawn)" % [enemy.name, distance_from_spawn])
 		disengage()
 		return
 
@@ -308,7 +343,7 @@ func process_combat(delta: float) -> void:
 
 	# Check if player escaped
 	if distance_to_player > disengage_distance:
-		print("💤 Player escaped - returning to patrol")
+		print("💤 %s: Player escaped (%.0fpx away)" % [enemy.name, distance_to_player])
 		disengage()
 		return
 	
@@ -405,6 +440,41 @@ func process_retreating(delta: float) -> void:
 	enemy.move_and_slide()
 
 # ═══════════════════════════════════════════════════════════════════════════
+# UNSTUCKING STATE (About-Face Recovery)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func process_unstucking(delta: float) -> void:
+	"""Perform about-face maneuver: walk backward, then resume original behavior"""
+
+	# Take a step backward
+	var step_speed = patrol_speed * 0.8  # Slightly slower than patrol
+	enemy.velocity = unstuck_direction * step_speed
+	update_enemy_animation(unstuck_direction)
+	enemy.move_and_slide()
+
+	# Count steps (roughly based on distance traveled)
+	# Each "step" is about 0.1 seconds of movement
+	if state_timer >= unstuck_steps_taken * 0.15:  # 0.15s per step
+		unstuck_steps_taken += 1
+
+	# After enough steps, resume original behavior
+	if unstuck_steps_taken >= unstuck_max_steps:
+		print("   ✅ %s: Unstuck complete, resuming %s" % [enemy.name, get_state_name_for_state(unstuck_state_before)])
+
+		# Resume original state
+		if unstuck_state_before == State.PATROLLING:
+			# Always pick a NEW patrol target after unstuck to avoid walking back into the same obstacle
+			pick_new_patrol_target()
+			change_state(State.PATROLLING)
+
+		elif unstuck_state_before == State.COMBAT:
+			# Resume combat (will automatically chase player)
+			change_state(State.COMBAT)
+		else:
+			# Fallback: return to patrol
+			change_state(State.PATROLLING)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # COMBAT ACTIONS
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -412,9 +482,7 @@ func perform_attack() -> void:
 	"""Attack the player"""
 	if not is_instance_valid(player):
 		return
-	
-	print("💥 Enemy attacks!")
-	
+
 	# Play attack animation
 	var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
 	if anim_sprite and anim_sprite.sprite_frames:
@@ -424,7 +492,7 @@ func perform_attack() -> void:
 		var deg = rad_to_deg(angle)
 		if deg < 0:
 			deg += 360
-		
+
 		# Get direction string
 		var dir_str = "down"
 		if deg >= 315 or deg < 45:
@@ -435,26 +503,24 @@ func perform_attack() -> void:
 			dir_str = "left"
 		else:
 			dir_str = "up"
-		
+
 		# Play attack animation
 		var attack_anim = "attack_" + dir_str
 		if anim_sprite.sprite_frames.has_animation(attack_anim):
-			print("   🎬 Playing attack animation: ", attack_anim)
 			anim_sprite.play(attack_anim)
 			# ✨ FIX: Don't flip! We have dedicated directional attack animations
 			anim_sprite.flip_h = false
-	
+
 	# ✨ Small delay for attack animation to play before dealing damage
 	await get_tree().create_timer(0.2).timeout
-	
+
 	# Deal damage
 	if player.has_method("take_damage"):
 		var damage = attack_damage
 		if enemy.has_method("get") and enemy.get("enemy_level"):
 			damage = attack_damage * pow(1.08, enemy.enemy_level - 1)
-		
+
 		player.take_damage(damage)
-		print("   Dealt %.1f damage to player" % damage)
 	
 	# ✨ FIX: Enhanced visual feedback for attack
 	if enemy:
@@ -490,7 +556,7 @@ func trigger_aggro() -> void:
 	if is_in_combat:
 		return  # Already in combat
 
-	print("👁️ Enemy spotted player - AGGRO!")
+	print("👁️ %s: AGGRO! Spotted player" % enemy.name)
 	is_in_combat = true
 
 	# Play aggro sound (placeholder)
@@ -547,7 +613,7 @@ func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
 
 	# CRITICAL: This is how we enter combat (player attacked us)
 	if not is_in_combat:
-		print("⚔️  Enemy engaged! Player attacked first!")
+		print("⚔️ %s: Engaged! (Player attacked)" % enemy.name)
 		is_in_combat = true
 
 		# Chain aggro - alert nearby allies when attacked!
@@ -573,13 +639,13 @@ func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
 				retreat_direction = (enemy.global_position - player.global_position).normalized()
 			else:
 				retreat_direction = Vector2(randf() * 2 - 1, randf() * 2 - 1).normalized()
-			
-			print("🏃 Enemy retreats!")
+
+			print("🏃 %s: Retreating!" % enemy.name)
 			change_state(State.RETREATING)
 
 func disengage() -> void:
 	"""Exit combat and return to patrol"""
-	print("🔄 Enemy disengaging from combat - resetting health and returning to spawn")
+	print("🔄 %s: Disengaging, resetting health" % enemy.name)
 	is_in_combat = false
 
 	# Regenerate health to full when resetting
@@ -588,9 +654,7 @@ func disengage() -> void:
 
 		# Validate max_health before resetting
 		if max_hp != null and max_hp > 0 and not is_nan(max_hp) and not is_inf(max_hp):
-			var old_health = enemy.get("current_health")
 			enemy.set("current_health", max_hp)
-			print("   💚 Health restored: %.1f -> %.1f" % [old_health, max_hp])
 
 			# Update health bar if it exists
 			if enemy.has_node("HealthBar"):
@@ -604,7 +668,6 @@ func disengage() -> void:
 	spawn_position = original_spawn_position
 	pick_new_patrol_target()
 	change_state(State.PATROLLING)
-	print("   🏠 Returning to original spawn at (%.0f, %.0f)" % [original_spawn_position.x, original_spawn_position.y])
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE MANAGEMENT
@@ -636,15 +699,12 @@ func reset_to_patrol() -> void:
 	"""Reset enemy to patrol mode (called on respawn)"""
 	# Safety check - enemy might not be set yet if called too early
 	if not enemy or not is_instance_valid(enemy):
-		print("⚠️  reset_to_patrol called before enemy reference set, deferring...")
 		await get_tree().process_frame
 		if not enemy or not is_instance_valid(enemy):
-			print("⚠️  Enemy still not valid, aborting reset")
 			return
 
 	# CRITICAL: Don't reset if enemy is in crit window - let it keep fighting!
 	if enemy.has_method("get") and enemy.get("in_crit_window"):
-		print("⚠️  Enemy in crit window - staying in combat!")
 		return
 
 	is_in_combat = false
@@ -652,7 +712,6 @@ func reset_to_patrol() -> void:
 	spawn_position = original_spawn_position
 	pick_new_patrol_target()
 	change_state(State.PATROLLING)
-	print("🔄 Enemy reset to patrol mode, returning to spawn at (%.0f, %.0f)" % [original_spawn_position.x, original_spawn_position.y])
 
 func disengage_to_spawn() -> void:
 	"""Disengage from combat and return to ORIGINAL spawn point (for campfire de-aggro)"""
@@ -662,10 +721,8 @@ func disengage_to_spawn() -> void:
 
 	# CRITICAL: Don't reset if enemy is in crit window - let it keep fighting!
 	if enemy.has_method("get") and enemy.get("in_crit_window"):
-		print("⚠️  Enemy in crit window - staying in combat!")
 		return
 
-	print("🔄 Enemy disengaged - returning to original spawn and resetting health")
 	is_in_combat = false
 
 	# Regenerate health to full when resetting
@@ -674,9 +731,7 @@ func disengage_to_spawn() -> void:
 
 		# Validate max_health before resetting
 		if max_hp != null and max_hp > 0 and not is_nan(max_hp) and not is_inf(max_hp):
-			var old_health = enemy.get("current_health")
 			enemy.set("current_health", max_hp)
-			print("   💚 Health restored: %.1f -> %.1f" % [old_health, max_hp])
 
 			# Update health bar if it exists
 			if enemy.has_node("HealthBar"):
@@ -692,11 +747,15 @@ func disengage_to_spawn() -> void:
 	change_state(State.PATROLLING)
 
 func get_state_name() -> String:
-	match current_state:
+	return get_state_name_for_state(current_state)
+
+func get_state_name_for_state(state: State) -> String:
+	match state:
 		State.PATROLLING: return "PATROLLING"
 		State.COMBAT: return "COMBAT"
 		State.ATTACKING: return "ATTACKING"
 		State.RETREATING: return "RETREATING"
+		State.UNSTUCKING: return "UNSTUCKING"
 	return "UNKNOWN"
 
 func update_enemy_animation(velocity: Vector2) -> void:
