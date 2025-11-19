@@ -200,6 +200,11 @@ func _input(event: InputEvent) -> void:
 	# Handle F key press when player is in range (edge-triggered, not polling)
 	if player_in_range and event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F:
+			# PRIORITY CHECK: If there's a lootable corpse nearby, let the corpse handle it
+			if has_nearby_lootable_corpse():
+				print("💀 Nearby corpse detected - vendor interaction blocked (corpse takes priority)")
+				return  # Don't handle input - let corpse system handle it
+
 			# Only open if shop is not already visible (close is handled by ShopUI)
 			if not shop_ui or not shop_ui.visible:
 				toggle_shop()
@@ -433,6 +438,31 @@ func face_left() -> void:
 	"""Reset blacksmith to face left (default direction toward campfire)"""
 	if animated_sprite:
 		animated_sprite.scale.x = -1  # Flipped = facing left
+
+func has_nearby_lootable_corpse() -> bool:
+	"""Check if there's a lootable corpse near the player (within interaction range)"""
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		return false
+
+	# Get all corpses (enemies that are dead)
+	var enemies = get_tree().get_nodes_in_group("enemies")
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		# Check if enemy is a lootable corpse (dead with loot or gold)
+		if enemy.has("is_alive") and not enemy.is_alive:
+			if enemy.has("corpse_loot") and enemy.has("corpse_gold"):
+				if enemy.corpse_loot.size() > 0 or enemy.corpse_gold > 0:
+					# Check if corpse is within loot range of player
+					var distance_to_player = enemy.global_position.distance_to(player.global_position)
+					var loot_range = enemy.get("corpse_loot_range") if enemy.has("corpse_loot_range") else 80.0
+					if distance_to_player <= loot_range:
+						print("💀 Found lootable corpse at distance %.1f (range: %.1f)" % [distance_to_player, loot_range])
+						return true
+
+	return false
 
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):
