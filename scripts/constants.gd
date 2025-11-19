@@ -64,7 +64,7 @@ const CHAIN_MILESTONE_INTERVAL: int = 5  # Play sound every 5 chain levels
 # Starting Stats
 const STARTING_LEVEL: int = 1
 const STARTING_XP: int = 0
-const STARTING_GOLD: int = 500  # Starting currency (for testing)
+const STARTING_GOLD: int = 0  # Starting currency
 const STARTING_STRENGTH: int = 10
 const STARTING_AGILITY: int = 10
 const STARTING_VITALITY: int = 10

@@ -451,23 +451,16 @@ func has_nearby_lootable_corpse() -> bool:
 		if not is_instance_valid(enemy):
 			continue
 
-		# Skip non-Enemy nodes (like TrainingDummy)
-		if not enemy.has_method("get_script") or enemy.get_script() == null:
-			continue
-
-		# Check if this is an actual Enemy with corpse properties
-		if not "is_alive" in enemy or not "corpse_loot" in enemy or not "corpse_gold" in enemy:
-			continue
-
 		# Check if enemy is a lootable corpse (dead with loot or gold)
-		if not enemy.is_alive:
-			if enemy.corpse_loot.size() > 0 or enemy.corpse_gold > 0:
-				# Check if corpse is within loot range of player
-				var distance_to_player = enemy.global_position.distance_to(player.global_position)
-				var loot_range = enemy.corpse_loot_range if "corpse_loot_range" in enemy else 80.0
-				if distance_to_player <= loot_range:
-					print("💀 Found lootable corpse at distance %.1f (range: %.1f)" % [distance_to_player, loot_range])
-					return true
+		if enemy.has("is_alive") and not enemy.is_alive:
+			if enemy.has("corpse_loot") and enemy.has("corpse_gold"):
+				if enemy.corpse_loot.size() > 0 or enemy.corpse_gold > 0:
+					# Check if corpse is within loot range of player
+					var distance_to_player = enemy.global_position.distance_to(player.global_position)
+					var loot_range = enemy.get("corpse_loot_range") if enemy.has("corpse_loot_range") else 80.0
+					if distance_to_player <= loot_range:
+						print("💀 Found lootable corpse at distance %.1f (range: %.1f)" % [distance_to_player, loot_range])
+						return true
 
 	return false
 
