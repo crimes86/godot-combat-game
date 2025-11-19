@@ -579,17 +579,22 @@ func _process(delta: float) -> void:
 	if in_crit_window and not weakpoints.is_empty():
 		queue_redraw()  # Continuously redraw while weakpoints are active
 
-	# Toggle UI visibility based on player distance (750px threshold)
+	# Toggle UI and enemy visibility based on player distance
 	if not is_corpse:  # Only for living enemies
 		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 		if player and is_instance_valid(player):
 			var distance = global_position.distance_to(player.global_position)
-			var should_show = distance <= 750.0
 
+			# UI visibility threshold (750px)
+			var should_show_ui = distance <= 750.0
 			if health_bar:
-				health_bar.visible = should_show
+				health_bar.visible = should_show_ui
 			if level_label:
-				level_label.visible = should_show
+				level_label.visible = should_show_ui
+
+			# View distance culling (1400px) - hide enemies beyond fog distance
+			var should_show_enemy = distance <= 1400.0
+			visible = should_show_enemy
 
 	# Handle corpse decay and interaction
 	if is_corpse:

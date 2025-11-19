@@ -55,7 +55,7 @@ var debug_label: Label = null  # Display debug info (coordinates, etc.)
 var cone_update_timer: float = 0.0  # Throttle cone color updates (CRITICAL for performance!)
 
 # Camera zoom
-@export var zoom_min: float = 0.5   # Zoom out 2x (see more)
+@export var zoom_min: float = 0.75  # Zoom out 1.33x (limited to prevent map reveal)
 @export var zoom_max: float = 2.0   # Zoom in 2x (close-up)
 @export var zoom_speed: float = 0.1 # How fast zoom transitions
 var target_zoom: float = 1.0

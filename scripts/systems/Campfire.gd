@@ -21,6 +21,10 @@ var heal_timer: float = 0.0
 var heal_interval: float = 1.0  # Heal every 1.0 seconds (aligned with heal sound)
 var heal_pattern_index: int = 0  # Cycles 0,1,2 for tone1,tone1,tone2 pattern
 
+# Performance optimization
+var enemy_check_timer: float = 0.0
+var enemy_check_interval: float = 0.2  # Check enemies every 0.2 seconds instead of every frame
+
 # References
 var player: CharacterBody2D = null
 var warmth_circle: Polygon2D = null
@@ -28,6 +32,11 @@ var fire_sprite: Node2D = null
 var fire_audio: AudioStreamPlayer2D = null
 var healing_audio_1: AudioStreamPlayer2D = null  # First healing tone
 var healing_audio_2: AudioStreamPlayer2D = null  # Second healing tone
+
+# Cached references for animation performance
+var flame_nodes: Array[Polygon2D] = []
+var coal_nodes: Array[Polygon2D] = []
+var fire_light: PointLight2D = null
 
 func _ready() -> void:
 	# Add to campfire group so NPCs can find and face it
@@ -45,8 +54,15 @@ func _ready() -> void:
 	# Create lighting
 	create_fire_light()
 
+	# Cache fire light reference for performance
+	if has_node("FireLight"):
+		fire_light = get_node("FireLight")
+
 	# Create looping fire sound
 	create_fire_audio()
+
+	# Cache flame and coal nodes for animation performance
+	cache_animation_nodes()
 
 	# Create healing tick sound (plays once per heal)
 	create_healing_audio()
@@ -104,8 +120,11 @@ func _physics_process(delta: float) -> void:
 					heal_pattern_index = (heal_pattern_index + 1) % 3
 				heal_timer = 0.0
 
-	# Check enemies near warmth and make them turn away
-	check_enemy_deterrent()
+	# Check enemies near warmth (throttled for performance)
+	enemy_check_timer += delta
+	if enemy_check_timer >= enemy_check_interval:
+		check_enemy_deterrent()
+		enemy_check_timer = 0.0
 
 	# Animate fire
 	animate_fire(delta)
@@ -174,7 +193,7 @@ func create_campfire_visual() -> void:
 		Color(0.30, 0.28, 0.26, 1.0),  # Dark grey
 	]
 
-	# Create 12 rocks in a tighter circle around fire (reduced and tightened)
+	# Create 12 rocks in a tighter circle around fire
 	for i in range(12):
 		var angle = (i * TAU) / 12.0 + randf_range(-0.1, 0.1)
 		var distance = 28.0 + randf_range(-2, 2)
@@ -321,7 +340,7 @@ func create_campfire_visual() -> void:
 	
 	# === GLOWING COAL BED === (radiate from fire center, don't touch rocks)
 	# Create coals radiating from center, staying clear of rock ring
-	for i in range(35):  # Reduced count - less cluttered
+	for i in range(25):  # Reduced count for performance
 		var coal = Polygon2D.new()
 		# Radiate from center but stop well before rocks (rock ring is ~28px radius)
 		var angle = randf() * TAU
@@ -388,11 +407,11 @@ func create_campfire_visual() -> void:
 func create_particle_effects() -> void:
 	"""Add enhanced smoke and ember particle effects for 2x scale campfire"""
 
-	# SMOKE particles - subtle and minimal (3-5 particles)
+	# SMOKE particles - ultra minimal (2-3 particles) for performance
 	var smoke_particles = CPUParticles2D.new()
 	smoke_particles.name = "SmokeParticles"
 	smoke_particles.emitting = true
-	smoke_particles.amount = 4  # Minimal - just 3-5 particles
+	smoke_particles.amount = 3  # Ultra minimal - just 2-3 particles
 	smoke_particles.lifetime = 5.0  # Long lifetime for slow drift
 	smoke_particles.preprocess = 1.0
 
@@ -424,11 +443,11 @@ func create_particle_effects() -> void:
 
 	fire_sprite.add_child(smoke_particles)
 
-	# EMBER particles (bright sparks shooting upward) - significantly more!
+	# EMBER particles (bright sparks shooting upward) - reduced for performance
 	var ember_particles = CPUParticles2D.new()
 	ember_particles.name = "EmberParticles"
 	ember_particles.emitting = true
-	ember_particles.amount = 35  # Much more embers for dramatic effect
+	ember_particles.amount = 20  # Reduced from 35 for performance
 	ember_particles.lifetime = 2.2  # Longer lifetime
 	ember_particles.preprocess = 0.5
 
@@ -463,11 +482,11 @@ func create_particle_effects() -> void:
 
 	fire_sprite.add_child(ember_particles)
 
-	# SPARK particles (quick bright flashes) - new addition
+	# SPARK particles (quick bright flashes) - reduced for performance
 	var spark_particles = CPUParticles2D.new()
 	spark_particles.name = "SparkParticles"
 	spark_particles.emitting = true
-	spark_particles.amount = 25  # Lots of small sparks
+	spark_particles.amount = 15  # Reduced from 25 for performance
 	spark_particles.lifetime = 0.8  # Short-lived quick sparks
 	spark_particles.preprocess = 0.2
 
@@ -755,52 +774,67 @@ func create_healing_audio() -> void:
 	print("   Volume: ", healing_audio_1.volume_db, " dB")
 	print("   Heal interval: ", heal_interval, " seconds")
 
+func cache_animation_nodes() -> void:
+	"""Cache references to animated nodes for performance"""
+	if not fire_sprite:
+		return
+
+	flame_nodes.clear()
+	coal_nodes.clear()
+
+	# Cache all flame and coal nodes once
+	for child in fire_sprite.get_children():
+		if child.name.begins_with("Flame_") and child is Polygon2D:
+			flame_nodes.append(child as Polygon2D)
+		elif child.name.begins_with("Coal") and child is Polygon2D:
+			coal_nodes.append(child as Polygon2D)
+
+	print("🔥 Cached ", flame_nodes.size(), " flames and ", coal_nodes.size(), " coals for animation")
+
 func animate_fire(delta: float) -> void:
-	"""Enhanced flickering animation for fire with scale, position, and color changes"""
+	"""Optimized fire animation using cached references"""
 	if not fire_sprite:
 		return
 
 	var time = Time.get_ticks_msec() / 1000.0
 
-	# Animate flames (flicker and sway)
-	for child in fire_sprite.get_children():
-		if child.name.begins_with("Flame_"):
-			var idx = child.get_index()
-			var speed = 1.0 + idx * 0.15
-			var flicker = sin(time * speed + idx * 1.5)
-			var sway = cos(time * speed * 0.6 + idx * 0.8)
+	# Animate flames using cached array (no string comparisons!)
+	for i in range(flame_nodes.size()):
+		var child = flame_nodes[i]
+		if not is_instance_valid(child):
+			continue
 
-			# Vertical flicker (height variation)
-			child.scale.y = 1.0 + flicker * 0.2
-			# Horizontal sway
-			child.scale.x = 1.0 + sway * 0.1
-			# Opacity flicker
-			child.modulate.a = 0.9 + flicker * 0.1
-			# Position wobble
-			child.position.x = sway * 0.5
+		var speed = 1.0 + i * 0.15
+		var flicker = sin(time * speed + i * 1.5)
+		var sway = cos(time * speed * 0.6 + i * 0.8)
 
-	# Animate coal glow (pulsing)
-	for child in fire_sprite.get_children():
-		if child.name.begins_with("Coal"):
-			var pulse = sin(time * 2.0 + child.get_index() * 0.5)
-			child.modulate = Color(1.0, 1.0, 1.0, 0.9 + pulse * 0.1)
-			var scale_pulse = 1.0 + pulse * 0.05
-			child.scale = Vector2(scale_pulse, scale_pulse)
+		# Vertical flicker (height variation)
+		child.scale.y = 1.0 + flicker * 0.2
+		# Horizontal sway
+		child.scale.x = 1.0 + sway * 0.1
+		# Opacity flicker
+		child.modulate.a = 0.9 + flicker * 0.1
+		# Position wobble
+		child.position.x = sway * 0.5
 
-	# Animate base glow (subtle breathe)
-	for child in fire_sprite.get_children():
-		if child is Polygon2D and "glow" in child.name.to_lower():
-			var breathe = sin(time * 0.8)
-			child.modulate.a = 0.08 + breathe * 0.02  # Very subtle pulse
-	
+	# Animate coal glow using cached array
+	for i in range(coal_nodes.size()):
+		var child = coal_nodes[i]
+		if not is_instance_valid(child):
+			continue
+
+		var pulse = sin(time * 2.0 + i * 0.5)
+		child.modulate = Color(1.0, 1.0, 1.0, 0.9 + pulse * 0.1)
+		var scale_pulse = 1.0 + pulse * 0.05
+		child.scale = Vector2(scale_pulse, scale_pulse)
+
 	# Subtle warmth circle pulse
 	if warmth_circle:
 		var pulse = sin(time * 0.5)
 		warmth_circle.modulate.a = 0.9 + pulse * 0.1
 
-	# Animate fire light (subtle flickering)
-	if has_node("FireLight"):
-		var fire_light = get_node("FireLight")
+	# Animate fire light (subtle flickering) using cached reference
+	if fire_light and is_instance_valid(fire_light):
 		var flicker = sin(time * 2.5) * 0.5 + cos(time * 3.7) * 0.3
 		fire_light.energy = 1.2 + flicker * 0.15  # Subtle flicker between 1.05 and 1.35
 
