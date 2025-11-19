@@ -8,14 +8,16 @@ enum SoundType {
 	# Player sounds
 	SWING,
 	MISS,
-	
-	# Enemy sounds  
+
+	# Enemy sounds
 	HIT_NORMAL,
 	HIT_CRIT,
 	HIT_WEAKPOINT,
 	ENEMY_DEATH,
 	ENEMY_SPAWN,
-	
+	SKELETON_ATTACK,  # Skeleton's menacing cackle when attacking
+	SKELETON_AGGRO,   # Skeleton's menacing cackle when spotting player
+
 	# System sounds
 	CRIT_WINDOW_OPEN,
 	WEAKPOINT_DESTROYED,
@@ -33,6 +35,7 @@ var weakpoint_destroyed_sound: AudioStream = null
 var critical_hit_sound: AudioStream = null
 var normal_hit_sounds: Array[AudioStream] = []  # Generic fallback
 var skeleton_hurt_sound: AudioStream = null
+var skeleton_attack_sound: AudioStream = null  # Skeleton's menacing cackle
 
 # Weapon-specific hit sounds (organized by weapon type)
 var weapon_hit_sounds: Dictionary = {
@@ -118,6 +121,13 @@ func _load_real_sounds() -> void:
 	else:
 		push_warning("  ⚠️ Failed to load skeleton_hurt.wav")
 
+	# Load skeleton attack sound (menacing cackle)
+	skeleton_attack_sound = load("res://assets/sounds/combat/reactions/skeleton_attack.wav")
+	if skeleton_attack_sound:
+		print("  ✅ Loaded skeleton_attack.wav")
+	else:
+		push_warning("  ⚠️ Failed to load skeleton_attack.wav")
+
 	# Load weapon-specific hit sounds
 	print("  🗡️ Loading weapon hit sounds...")
 	_load_weapon_sounds("sword", 4)
@@ -141,14 +151,18 @@ func _generate_all_sounds() -> void:
 	# Player sounds
 	sound_cache[SoundType.SWING] = _generate_swing()
 	sound_cache[SoundType.MISS] = _generate_miss()
-	
+
 	# Enemy sounds
 	sound_cache[SoundType.HIT_NORMAL] = _generate_hit_normal()
 	sound_cache[SoundType.HIT_CRIT] = _generate_hit_crit()
 	sound_cache[SoundType.HIT_WEAKPOINT] = _generate_hit_weakpoint()
 	sound_cache[SoundType.ENEMY_DEATH] = _generate_enemy_death()
 	sound_cache[SoundType.ENEMY_SPAWN] = _generate_enemy_spawn()
-	
+
+	# Skeleton sounds (use real sound if loaded, otherwise generate placeholder)
+	sound_cache[SoundType.SKELETON_ATTACK] = skeleton_attack_sound if skeleton_attack_sound else _generate_skeleton_sound()
+	sound_cache[SoundType.SKELETON_AGGRO] = skeleton_attack_sound if skeleton_attack_sound else _generate_skeleton_sound()
+
 	# System sounds
 	sound_cache[SoundType.CRIT_WINDOW_OPEN] = _generate_crit_window_open()
 	sound_cache[SoundType.WEAKPOINT_DESTROYED] = _generate_weakpoint_destroyed()
@@ -348,6 +362,10 @@ func _generate_chain_milestone() -> AudioStreamWAV:
 func _generate_chain_broken() -> AudioStreamWAV:
 	# Sad descending tone
 	return _create_wav_sweep(400.0, 200.0, 0.3, 0.4)
+
+func _generate_skeleton_sound() -> AudioStreamWAV:
+	# Rattling, dry cackle placeholder (high pitched rattle)
+	return _create_wav_sweep(800.0, 1200.0, 0.3, 0.3)
 
 # ============================================
 # AUDIO GENERATION UTILITIES

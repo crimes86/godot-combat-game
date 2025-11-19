@@ -539,12 +539,12 @@ func perform_attack() -> void:
 		rot_tween.tween_property(enemy, "rotation_degrees", 8, 0.05)
 		rot_tween.tween_property(enemy, "rotation_degrees", 0, 0.05)
 	
-	# Play sound (with spam prevention for multiple attackers)
+	# Play attack sound (menacing skeleton cackle with spam prevention for multiple attackers)
 	var current_time = Time.get_ticks_msec() / 1000.0
 	if current_time - last_attack_sound_time >= attack_sound_cooldown:
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound(sound_manager.SoundType.HIT_NORMAL, enemy.global_position, -8.0)
+			sound_manager.play_sound(sound_manager.SoundType.SKELETON_ATTACK, enemy.global_position, -8.0)
 			last_attack_sound_time = current_time
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -559,10 +559,10 @@ func trigger_aggro() -> void:
 	print("👁️ %s: AGGRO! Spotted player" % enemy.name)
 	is_in_combat = true
 
-	# Play aggro sound (placeholder)
+	# Play aggro sound (menacing skeleton cackle)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound(sound_manager.SoundType.HIT_CRIT, enemy.global_position, -5.0)  # Placeholder
+		sound_manager.play_sound(sound_manager.SoundType.SKELETON_AGGRO, enemy.global_position, -5.0)
 
 	# Chain aggro - alert nearby allies!
 	trigger_chain_aggro()
