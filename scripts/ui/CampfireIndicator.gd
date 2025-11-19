@@ -1,15 +1,15 @@
 extends CanvasLayer
 
 ## Campfire Direction Indicator
-## Shows a subtle arrow pointing toward the campfire when player is far away
+## Shows a subtle arrow pointing toward the nearest campfire when player is far away
 ## Fades in at 500+ units, fully visible at 1000+ units
 
-const CAMPFIRE_POSITION: Vector2 = Vector2.ZERO  # Main spawn campfire location
 const MIN_DISTANCE: float = 500.0   # Start showing indicator
 const MAX_DISTANCE: float = 1000.0  # Fully opaque at this distance
 
 var arrow: Polygon2D = null
 var player: CharacterBody2D = null
+var nearest_campfire: Node2D = null
 
 func _ready() -> void:
 	print("🧭 CampfireIndicator._ready() started")
@@ -56,7 +56,7 @@ func create_arrow_indicator() -> void:
 	print("  🧭 Arrow indicator created")
 
 func _physics_process(_delta: float) -> void:
-	"""Update arrow position and rotation to point toward campfire"""
+	"""Update arrow position and rotation to point toward nearest campfire"""
 
 	if not arrow:
 		return
@@ -68,10 +68,16 @@ func _physics_process(_delta: float) -> void:
 			arrow.color.a = 0.0  # Hide if no player
 			return
 
-	# Calculate distance to campfire
+	# Find nearest campfire
+	var campfire_pos = find_nearest_campfire_position()
+	if campfire_pos == Vector2.ZERO:
+		arrow.color.a = 0.0  # Hide if no campfire found
+		return
+
+	# Calculate distance to nearest campfire
 	var player_pos = player.global_position
-	var direction_to_campfire = (CAMPFIRE_POSITION - player_pos).normalized()
-	var distance = player_pos.distance_to(CAMPFIRE_POSITION)
+	var direction_to_campfire = (campfire_pos - player_pos).normalized()
+	var distance = player_pos.distance_to(campfire_pos)
 
 	# Determine visibility based on distance
 	var alpha = 0.0
@@ -107,3 +113,28 @@ func _physics_process(_delta: float) -> void:
 		var control = arrow.get_parent() as Control
 		if control:
 			control.position = arrow_screen_pos
+
+func find_nearest_campfire_position() -> Vector2:
+	"""Find the position of the nearest campfire to the player"""
+	if not player:
+		return Vector2.ZERO
+
+	var campfires = get_tree().get_nodes_in_group("campfire")
+	if campfires.is_empty():
+		return Vector2.ZERO
+
+	var player_pos = player.global_position
+	var nearest_pos = Vector2.ZERO
+	var nearest_distance = INF
+
+	for campfire in campfires:
+		if not is_instance_valid(campfire):
+			continue
+
+		var distance = player_pos.distance_to(campfire.global_position)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_pos = campfire.global_position
+			nearest_campfire = campfire
+
+	return nearest_pos
