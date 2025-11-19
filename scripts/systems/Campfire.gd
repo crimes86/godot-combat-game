@@ -18,13 +18,16 @@ class_name Campfire
 # State
 var player_in_warmth: bool = false
 var heal_timer: float = 0.0
-var heal_interval: float = 0.5  # Heal every 0.5 seconds
+var heal_interval: float = 1.0  # Heal every 1.0 seconds (aligned with heal sound)
+var heal_pattern_index: int = 0  # Cycles 0,1,2 for tone1,tone1,tone2 pattern
 
 # References
 var player: CharacterBody2D = null
 var warmth_circle: Polygon2D = null
 var fire_sprite: Node2D = null
 var fire_audio: AudioStreamPlayer2D = null
+var healing_audio_1: AudioStreamPlayer2D = null  # First healing tone
+var healing_audio_2: AudioStreamPlayer2D = null  # Second healing tone
 
 func _ready() -> void:
 	# Add to campfire group so NPCs can find and face it
@@ -44,6 +47,9 @@ func _ready() -> void:
 
 	# Create looping fire sound
 	create_fire_audio()
+
+	# Create healing tick sound (plays once per heal)
+	create_healing_audio()
 
 	# Add physical collision so player can't walk through fire
 	add_collision_body()
@@ -76,15 +82,31 @@ func add_collision_body() -> void:
 func _physics_process(delta: float) -> void:
 	# Heal player if in warmth
 	if player_in_warmth and player and is_instance_valid(player):
-		heal_timer += delta
-		if heal_timer >= heal_interval:
-			if player.has_method("heal"):
-				player.heal(heal_rate * heal_interval)
-			heal_timer = 0.0
-	
+		# Check if player needs healing
+		var player_needs_healing = player.current_health < player.max_health
+
+		# Apply healing tick
+		if player_needs_healing:
+			heal_timer += delta
+			if heal_timer >= heal_interval:
+				if player.has_method("heal"):
+					player.heal(heal_rate * heal_interval)
+					# Play healing sound in pattern: tone1, tone1, tone2, repeat
+					if heal_pattern_index < 2:
+						# Play tone 1 for positions 0 and 1
+						if healing_audio_1:
+							healing_audio_1.play()
+					else:
+						# Play tone 2 for position 2
+						if healing_audio_2:
+							healing_audio_2.play()
+					# Advance pattern: 0 -> 1 -> 2 -> 0 -> 1 -> 2 ...
+					heal_pattern_index = (heal_pattern_index + 1) % 3
+				heal_timer = 0.0
+
 	# Check enemies near warmth and make them turn away
 	check_enemy_deterrent()
-	
+
 	# Animate fire
 	animate_fire(delta)
 
@@ -99,6 +121,7 @@ func _on_body_exited(body: Node2D) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_warmth = false
 		player = null
+		heal_pattern_index = 0  # Reset pattern when leaving
 		print("❄️ Player left warmth")
 
 func check_enemy_deterrent() -> void:
@@ -643,7 +666,7 @@ func create_fire_audio() -> void:
 	fire_audio = AudioStreamPlayer2D.new()
 	fire_audio.name = "FireAudio"
 	fire_audio.stream = campfire_sound
-	fire_audio.volume_db = -8.0  # Moderate volume
+	fire_audio.volume_db = -8.0  # Base volume (will be randomized)
 	fire_audio.bus = "Master"
 	fire_audio.autoplay = false
 
@@ -654,10 +677,14 @@ func create_fire_audio() -> void:
 
 	add_child(fire_audio)
 
+	# Connect finished signal to randomize pitch/volume on each loop
+	fire_audio.finished.connect(_on_fire_audio_loop)
+
 	# Wait a frame for node to be in tree
 	await get_tree().process_frame
 
-	# Play manually
+	# Play manually with initial randomization
+	randomize_fire_audio()
 	fire_audio.play()
 
 	print("🔥 Campfire audio loaded and playing (spatial)")
@@ -667,6 +694,66 @@ func create_fire_audio() -> void:
 	print("   Volume: ", fire_audio.volume_db, " dB")
 	print("   Max distance: ", fire_audio.max_distance)
 	print("   Attenuation: ", fire_audio.attenuation)
+	print("   Randomization: pitch ±5%, volume ±1.5dB")
+
+func randomize_fire_audio() -> void:
+	"""Randomly vary pitch and volume to prevent repetitive sound"""
+	if not fire_audio:
+		return
+
+	# Randomize pitch slightly (0.95 to 1.05 = ±5%)
+	fire_audio.pitch_scale = randf_range(0.95, 1.05)
+
+	# Randomize volume slightly (-9.5 to -6.5 dB = ±1.5dB from -8.0)
+	fire_audio.volume_db = randf_range(-9.5, -6.5)
+
+func _on_fire_audio_loop() -> void:
+	"""Called when fire audio finishes - randomize and replay for variation"""
+	if fire_audio:
+		randomize_fire_audio()
+		fire_audio.play()
+
+func create_healing_audio() -> void:
+	"""Create healing tick sounds that play in pattern: tone1, tone1, tone2"""
+	# Load first healing tone
+	var healing_sound_1 = load("res://assets/sounds/ambient/healing_tick_1.mp3")
+	if not healing_sound_1:
+		push_warning("⚠️ Failed to load healing_tick_1.mp3")
+		return
+
+	# Load second healing tone
+	var healing_sound_2 = load("res://assets/sounds/ambient/healing_tick_2.mp3")
+	if not healing_sound_2:
+		push_warning("⚠️ Failed to load healing_tick_2.mp3")
+		return
+
+	# Create first healing audio player
+	healing_audio_1 = AudioStreamPlayer2D.new()
+	healing_audio_1.name = "HealingAudio1"
+	healing_audio_1.stream = healing_sound_1
+	healing_audio_1.volume_db = -6.0  # Slightly louder than fire for prominence
+	healing_audio_1.bus = "Master"
+	healing_audio_1.autoplay = false
+	healing_audio_1.max_distance = warmth_radius * 2.5
+	healing_audio_1.attenuation = 2.0
+	healing_audio_1.panning_strength = 0.8
+	add_child(healing_audio_1)
+
+	# Create second healing audio player
+	healing_audio_2 = AudioStreamPlayer2D.new()
+	healing_audio_2.name = "HealingAudio2"
+	healing_audio_2.stream = healing_sound_2
+	healing_audio_2.volume_db = -6.0
+	healing_audio_2.bus = "Master"
+	healing_audio_2.autoplay = false
+	healing_audio_2.max_distance = warmth_radius * 2.5
+	healing_audio_2.attenuation = 2.0
+	healing_audio_2.panning_strength = 0.8
+	add_child(healing_audio_2)
+
+	print("💚 Healing audio loaded (pattern: tone1, tone1, tone2)")
+	print("   Volume: ", healing_audio_1.volume_db, " dB")
+	print("   Heal interval: ", heal_interval, " seconds")
 
 func animate_fire(delta: float) -> void:
 	"""Enhanced flickering animation for fire with scale, position, and color changes"""
