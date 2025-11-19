@@ -17,11 +17,12 @@ const DIRECTION_ROWS = {
 var current_direction := "south"
 
 # Armor layers (optional) - between body and weapon
-# z-index order: body(0) -> boots(1) -> pants(2) -> shirt(3) -> arms(4) -> head(5) -> weapon(6/-1)
+# z-index order: body(0) -> boots(1) -> pants(2) -> shirt(3) -> arms(4) -> hands(5) -> head(6) -> weapon(7/-1)
 var boots_sprite: AnimatedSprite2D = null
 var pants_sprite: AnimatedSprite2D = null
 var shirt_sprite: AnimatedSprite2D = null
 var arms_sprite: AnimatedSprite2D = null
+var hands_sprite: AnimatedSprite2D = null
 var head_sprite: AnimatedSprite2D = null
 
 # Weapon layer (optional)
@@ -39,6 +40,8 @@ func setup_lpc_sprite(
 	shirt_slash_tex: Texture2D = null,
 	arms_walk_tex: Texture2D = null,
 	arms_slash_tex: Texture2D = null,
+	hands_walk_tex: Texture2D = null,
+	hands_slash_tex: Texture2D = null,
 	head_walk_tex: Texture2D = null,
 	head_slash_tex: Texture2D = null,
 	weapon_slash_tex: Texture2D = null,
@@ -50,10 +53,18 @@ func setup_lpc_sprite(
 	print("  walk_texture: ", walk_tex, " size: ", walk_tex.get_size() if walk_tex else "null")
 	print("  slash_texture: ", slash_tex, " size: ", slash_tex.get_size() if slash_tex else "null")
 	print("  hurt_texture: ", hurt_tex, " size: ", hurt_tex.get_size() if hurt_tex else "null")
-	print("  shirt_walk_tex: ", shirt_walk_tex, " size: ", shirt_walk_tex.get_size() if shirt_walk_tex else "null")
-	print("  shirt_slash_tex: ", shirt_slash_tex, " size: ", shirt_slash_tex.get_size() if shirt_slash_tex else "null")
+	print("  boots_walk_tex: ", boots_walk_tex, " size: ", boots_walk_tex.get_size() if boots_walk_tex else "null")
+	print("  boots_slash_tex: ", boots_slash_tex, " size: ", boots_slash_tex.get_size() if boots_slash_tex else "null")
 	print("  pants_walk_tex: ", pants_walk_tex, " size: ", pants_walk_tex.get_size() if pants_walk_tex else "null")
 	print("  pants_slash_tex: ", pants_slash_tex, " size: ", pants_slash_tex.get_size() if pants_slash_tex else "null")
+	print("  shirt_walk_tex: ", shirt_walk_tex, " size: ", shirt_walk_tex.get_size() if shirt_walk_tex else "null")
+	print("  shirt_slash_tex: ", shirt_slash_tex, " size: ", shirt_slash_tex.get_size() if shirt_slash_tex else "null")
+	print("  arms_walk_tex: ", arms_walk_tex, " size: ", arms_walk_tex.get_size() if arms_walk_tex else "null")
+	print("  arms_slash_tex: ", arms_slash_tex, " size: ", arms_slash_tex.get_size() if arms_slash_tex else "null")
+	print("  hands_walk_tex: ", hands_walk_tex, " size: ", hands_walk_tex.get_size() if hands_walk_tex else "null")
+	print("  hands_slash_tex: ", hands_slash_tex, " size: ", hands_slash_tex.get_size() if hands_slash_tex else "null")
+	print("  head_walk_tex: ", head_walk_tex, " size: ", head_walk_tex.get_size() if head_walk_tex else "null")
+	print("  head_slash_tex: ", head_slash_tex, " size: ", head_slash_tex.get_size() if head_slash_tex else "null")
 	print("  weapon_slash_tex: ", weapon_slash_tex, " path: ", weapon_slash_tex.resource_path if weapon_slash_tex else "null", " size: ", weapon_slash_tex.get_size() if weapon_slash_tex else "null")
 	print("  weapon_walk_tex: ", weapon_walk_tex, " path: ", weapon_walk_tex.resource_path if weapon_walk_tex else "null", " size: ", weapon_walk_tex.get_size() if weapon_walk_tex else "null")
 
@@ -123,7 +134,7 @@ func setup_lpc_sprite(
 		add_child(boots_sprite)
 		boots_sprite.visible = true
 		boots_sprite.play("idle_south")
-		print("  ✅ Boots layer created (z_index=1)")
+		print("  ✅ Boots layer created (z_index=%d, visible=%s, modulate=%s)" % [boots_sprite.z_index, boots_sprite.visible, boots_sprite.modulate])
 
 	# Setup pants layer (z=2 - above boots)
 	if pants_walk_tex or pants_slash_tex:
@@ -151,7 +162,7 @@ func setup_lpc_sprite(
 		add_child(pants_sprite)
 		pants_sprite.visible = true
 		pants_sprite.play("idle_south")
-		print("  ✅ Pants layer created (z_index=2)")
+		print("  ✅ Pants layer created (z_index=%d, visible=%s, modulate=%s)" % [pants_sprite.z_index, pants_sprite.visible, pants_sprite.modulate])
 
 	# Setup shirt layer (z=3 - above pants)
 	if shirt_walk_tex or shirt_slash_tex:
@@ -179,7 +190,7 @@ func setup_lpc_sprite(
 		add_child(shirt_sprite)
 		shirt_sprite.visible = true
 		shirt_sprite.play("idle_south")
-		print("  ✅ Shirt layer created (z_index=3)")
+		print("  ✅ Shirt layer created (z_index=%d, visible=%s, modulate=%s)" % [shirt_sprite.z_index, shirt_sprite.visible, shirt_sprite.modulate])
 
 	# Setup arms layer (z=4 - above shirt)
 	if arms_walk_tex or arms_slash_tex:
@@ -207,15 +218,43 @@ func setup_lpc_sprite(
 		add_child(arms_sprite)
 		arms_sprite.visible = true
 		arms_sprite.play("idle_south")
-		print("  ✅ Arms layer created (z_index=4)")
+		print("  ✅ Arms layer created (z_index=%d, visible=%s, modulate=%s)" % [arms_sprite.z_index, arms_sprite.visible, arms_sprite.modulate])
 
-	# Setup head layer (z=5 - above arms)
+	# Setup hands layer (z=5 - above arms)
+	if hands_walk_tex or hands_slash_tex:
+		print("  🧤 Creating hands layer...")
+		hands_sprite = AnimatedSprite2D.new()
+		hands_sprite.name = "HandsLayer"
+		hands_sprite.centered = true
+		hands_sprite.z_index = 5
+		hands_sprite.sprite_frames = SpriteFrames.new()
+		hands_sprite.modulate = Color(1, 1, 1, 1)
+
+		if hands_walk_tex:
+			var hands_walk_img = hands_walk_tex.get_image()
+			for dir_name in DIRECTION_ROWS.keys():
+				var row = DIRECTION_ROWS[dir_name]
+				create_animation_from_image(hands_walk_img, "walk_" + dir_name, row, 8, [1, 2, 3, 4, 5, 6, 7, 8], 10.0, true, hands_sprite.sprite_frames, 64)
+				create_animation_from_image(hands_walk_img, "idle_" + dir_name, row, 1, [0], 1.0, true, hands_sprite.sprite_frames, 64)
+
+		if hands_slash_tex:
+			var hands_slash_img = hands_slash_tex.get_image()
+			for dir_name in DIRECTION_ROWS.keys():
+				var row = DIRECTION_ROWS[dir_name]
+				create_animation_from_image(hands_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, hands_sprite.sprite_frames, 64)
+
+		add_child(hands_sprite)
+		hands_sprite.visible = true
+		hands_sprite.play("idle_south")
+		print("  ✅ Hands layer created (z_index=%d, visible=%s, modulate=%s)" % [hands_sprite.z_index, hands_sprite.visible, hands_sprite.modulate])
+
+	# Setup head layer (z=6 - above hands)
 	if head_walk_tex or head_slash_tex:
 		print("  🪖 Creating head layer...")
 		head_sprite = AnimatedSprite2D.new()
 		head_sprite.name = "HeadLayer"
 		head_sprite.centered = true
-		head_sprite.z_index = 5
+		head_sprite.z_index = 6
 		head_sprite.sprite_frames = SpriteFrames.new()
 		head_sprite.modulate = Color(1, 1, 1, 1)
 
@@ -235,7 +274,7 @@ func setup_lpc_sprite(
 		add_child(head_sprite)
 		head_sprite.visible = true
 		head_sprite.play("idle_south")
-		print("  ✅ Head layer created (z_index=5)")
+		print("  ✅ Head layer created (z_index=%d, visible=%s, modulate=%s)" % [head_sprite.z_index, head_sprite.visible, head_sprite.modulate])
 
 	# Setup weapon layer if provided
 	if weapon_slash_tex or weapon_walk_tex:
@@ -391,6 +430,12 @@ func play_lpc_animation(anim_name: String, direction: String):
 			arms_sprite.play(anim_key)
 		elif arms_sprite.sprite_frames.has_animation(anim_name):
 			arms_sprite.play(anim_name)
+
+	if hands_sprite:
+		if hands_sprite.sprite_frames.has_animation(anim_key):
+			hands_sprite.play(anim_key)
+		elif hands_sprite.sprite_frames.has_animation(anim_name):
+			hands_sprite.play(anim_name)
 
 	if head_sprite:
 		if head_sprite.sprite_frames.has_animation(anim_key):

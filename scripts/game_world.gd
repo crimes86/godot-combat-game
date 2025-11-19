@@ -1190,6 +1190,9 @@ func generate_dynamic_elements():
 	# Path markers
 	load_path_markers_from_json()
 
+	# Torches along path
+	create_torches_along_path()
+
 	# Enemies
 	spawn_all_enemies()
 
@@ -1992,6 +1995,87 @@ func create_marker_sprite(marker_data: Dictionary, parent: Node2D) -> bool:
 		parent.add_child(sprite)
 		return true
 	return false
+
+func create_torches_along_path():
+	"""Create torches along the path at regular intervals"""
+	# Load path markers data
+	var result = JSONValidator.load_json_file("res://data/path_markers.json")
+	if not result.success:
+		DebugConfig.log_warning("Could not load path markers for torch placement")
+		return
+
+	var data = result.data
+	if not data.has("PathMarkers") or not data["PathMarkers"] is Array:
+		return
+
+	var markers = data["PathMarkers"]
+	if markers.size() < 2:
+		return
+
+	# Create Torches container node
+	var torches_node = Node2D.new()
+	torches_node.name = "Torches"
+	torches_node.z_index = 5  # Above most other elements
+	add_child(torches_node)
+
+	# Extract path positions, starting from campfire
+	var path_positions: Array = []
+	var campfire_pos = Vector2(-2000, 0)
+	path_positions.append(campfire_pos)  # Start path from campfire
+
+	for marker in markers:
+		if marker is Dictionary and marker.has("x") and marker.has("y"):
+			path_positions.append(Vector2(marker["x"], marker["y"]))
+
+	if path_positions.size() < 2:
+		return
+
+	# Calculate total path length first
+	var total_path_length = 0.0
+	for i in range(path_positions.size() - 1):
+		total_path_length += path_positions[i].distance_to(path_positions[i + 1])
+
+	# Determine torch spacing (target 700px average)
+	var base_spacing = 700.0
+	var torch_count = 0
+	var current_distance = 0.0
+	var next_torch_at = base_spacing  # First torch at 700px from start
+
+	# Walk along path and place torches
+	var segment_index = 0
+	var distance_in_segment = 0.0
+
+	while next_torch_at < total_path_length and segment_index < path_positions.size() - 1:
+		var start_pos = path_positions[segment_index]
+		var end_pos = path_positions[segment_index + 1]
+		var segment_length = start_pos.distance_to(end_pos)
+		var segment_end_distance = current_distance + segment_length
+
+		# Place all torches that fall within this segment
+		while next_torch_at <= segment_end_distance and next_torch_at < total_path_length:
+			# Calculate position within this segment
+			var distance_into_segment = next_torch_at - current_distance
+			var t = distance_into_segment / segment_length
+			var torch_pos = start_pos.lerp(end_pos, t)
+
+			# Create torch
+			var torch_script = load("res://scripts/systems/Torch.gd")
+			if torch_script:
+				var torch = Node2D.new()
+				torch.set_script(torch_script)
+				torch.name = "Torch_" + str(torch_count)
+				torch.position = torch_pos
+				torches_node.add_child(torch)
+				torch_count += 1
+
+			# Next torch with slight random variation (640-760px)
+			next_torch_at += randf_range(640.0, 760.0)
+
+		# Move to next segment
+		current_distance = segment_end_distance
+		segment_index += 1
+
+	print("🔥 Created %d torches along %.0fpx path (avg spacing: %.0fpx)" % [torch_count, total_path_length, total_path_length / max(1, torch_count)])
 
 func spawn_all_enemies():
 	"""Initialize multiplayer-ready spawn manager with dynamic spawning"""

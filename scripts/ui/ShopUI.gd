@@ -350,7 +350,13 @@ func purchase_weapon(index: int) -> void:
 	if success:
 		var weapon: Weapon = vendor.weapons_for_sale[index]
 		var price = vendor.get_weapon_price_data(index)
-		show_message("Purchased %s for %d gold!" % [weapon.weapon_name, price], Color.GREEN)
+
+		# Get rarity as string
+		var rarity_str = Weapon.Rarity.keys()[weapon.rarity]
+
+		# Show item added notification
+		NotificationManager.notify_item_added(weapon.weapon_name, 1, rarity_str)
+
 		item_purchased.emit(weapon.weapon_name, price)
 
 		# Play gold loot sound
@@ -376,6 +382,7 @@ func purchase_armor(index: int) -> void:
 	var armor_data = vendor.armor_for_sale[index]
 	var price = armor_data.get("price", 0)
 	var armor_name = armor_data.get("name", "Unknown")
+	var armor_rarity = armor_data.get("rarity", "COMMON")
 
 	# Check gold
 	if not CharacterStats.can_afford(price):
@@ -386,7 +393,10 @@ func purchase_armor(index: int) -> void:
 	if CharacterStats.spend_gold(price):
 		# Add armor to inventory
 		InventorySystem.add_item(armor_data)
-		show_message("Purchased %s for %d gold!" % [armor_name, price], Color.GREEN)
+
+		# Show item added notification
+		NotificationManager.notify_item_added(armor_name, 1, armor_rarity)
+
 		item_purchased.emit(armor_name, price)
 
 		# Play gold loot sound
@@ -619,15 +629,15 @@ func sell_item(slot: int) -> void:
 	var item_value = item.get("value", 0)
 	var quantity = item.get("quantity", 1)
 	var total_value = item_value * quantity
+	var item_rarity = item.get("rarity", "COMMON")
 
 	# Remove from inventory and add gold for entire stack
 	InventorySystem.remove_item(slot)
 	CharacterStats.add_gold(total_value)
 
-	if quantity > 1:
-		show_message("Sold %s x%d for %d gold!" % [item_name, quantity, total_value], Color.GREEN)
-	else:
-		show_message("Sold %s for %d gold!" % [item_name, total_value], Color.GREEN)
+	# Show item removed notification
+	NotificationManager.notify_item_removed(item_name, quantity, item_rarity)
+
 	item_sold.emit(item_name, total_value)
 
 	# Play gold loot sound

@@ -53,7 +53,7 @@ position = Vector2(-2150, 0)
 position = Vector2(-1850, 0)
 
 [node name="EnemySpawn_L1_skeleton" type="Marker2D" parent="."]
-position = Vector2(-1830, -377)
+position = Vector2(-1738, -423)
 script = ExtResource("8_pdbwf")
 metadata/_custom_type_script = "uid://cpclat5rw41t"
 metadata/enemy_level = 1
@@ -61,7 +61,7 @@ metadata/aggro_range = 150.0
 metadata/enemy_type = "skeleton"
 
 [node name="EnemySpawn_L1_skeleton2" type="Marker2D" parent="."]
-position = Vector2(-2150, -396)
+position = Vector2(-2088, -405)
 script = ExtResource("8_pdbwf")
 metadata/_custom_type_script = "uid://cpclat5rw41t"
 metadata/enemy_level = 1
@@ -79,7 +79,7 @@ metadata/aggro_range = 150.0
 metadata/enemy_type = "skeleton"
 
 [node name="EnemySpawn_L1_skeleton4" type="Marker2D" parent="."]
-position = Vector2(-2199, 358.00006)
+position = Vector2(-2233.0002, 459.00006)
 rotation = 1.0471976
 scale = Vector2(0.99999994, 0.99999994)
 script = ExtResource("8_pdbwf")
@@ -89,7 +89,7 @@ metadata/aggro_range = 150.0
 metadata/enemy_type = "skeleton"
 
 [node name="EnemySpawn_L1_skeleton5" type="Marker2D" parent="."]
-position = Vector2(-1612, 152.00006)
+position = Vector2(-1578.0001, 269.00003)
 rotation = 2.6179938
 scale = Vector2(0.99999994, 0.99999994)
 script = ExtResource("8_pdbwf")
@@ -99,7 +99,7 @@ metadata/aggro_range = 150.0
 metadata/enemy_type = "skeleton"
 
 [node name="EnemySpawn_L1_skeleton6" type="Marker2D" parent="."]
-position = Vector2(-2414, 110.99998)
+position = Vector2(-2468.9998, 123.000046)
 rotation = 0.2617994
 scale = Vector2(0.99999994, 0.99999994)
 script = ExtResource("8_pdbwf")
@@ -109,7 +109,7 @@ metadata/aggro_range = 150.0
 metadata/enemy_type = "skeleton"
 
 [node name="EnemySpawn_L1_skeleton7" type="Marker2D" parent="."]
-position = Vector2(-1604.9999, -170.99998)
+position = Vector2(-1476, -208.00003)
 rotation = -2.8797932
 scale = Vector2(0.9999999, 0.9999999)
 script = ExtResource("8_pdbwf")
@@ -119,7 +119,7 @@ metadata/aggro_range = 150.0
 metadata/enemy_type = "skeleton"
 
 [node name="EnemySpawn_L1_skeleton8" type="Marker2D" parent="."]
-position = Vector2(-2381, -202)
+position = Vector2(-2360, -248)
 script = ExtResource("8_pdbwf")
 metadata/_custom_type_script = "uid://cpclat5rw41t"
 metadata/enemy_level = 1
@@ -185,7 +185,7 @@ metadata/aggro_range = 150.0
 metadata/enemy_type = "skeleton"
 
 [node name="EnemySpawn_L1_skeleton15" type="Marker2D" parent="."]
-position = Vector2(-1879, 354)
+position = Vector2(-1847, 466)
 script = ExtResource("8_pdbwf")
 enemy_level = 2
 metadata/_custom_type_script = "uid://cpclat5rw41t"

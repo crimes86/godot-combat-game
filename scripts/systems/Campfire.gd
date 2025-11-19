@@ -163,7 +163,7 @@ func create_campfire_visual() -> void:
 	"""Create enhanced campfire with detailed logs, rocks, and particle effects"""
 	fire_sprite = Node2D.new()
 	fire_sprite.name = "FireSprite"
-	fire_sprite.position = Vector2(0, -10)
+	fire_sprite.position = Vector2(0, -15)  # Raised 5px higher over coals
 	fire_sprite.scale = Vector2(2.0, 2.0)  # Scale up 2x
 	add_child(fire_sprite)
 
@@ -694,18 +694,18 @@ func create_fire_audio() -> void:
 	print("   Volume: ", fire_audio.volume_db, " dB")
 	print("   Max distance: ", fire_audio.max_distance)
 	print("   Attenuation: ", fire_audio.attenuation)
-	print("   Randomization: pitch ±5%, volume ±1.5dB")
+	print("   Randomization: pitch ±10%, volume ±3dB")
 
 func randomize_fire_audio() -> void:
 	"""Randomly vary pitch and volume to prevent repetitive sound"""
 	if not fire_audio:
 		return
 
-	# Randomize pitch slightly (0.95 to 1.05 = ±5%)
-	fire_audio.pitch_scale = randf_range(0.95, 1.05)
+	# Randomize pitch more noticeably (0.90 to 1.10 = ±10%)
+	fire_audio.pitch_scale = randf_range(0.90, 1.10)
 
-	# Randomize volume slightly (-9.5 to -6.5 dB = ±1.5dB from -8.0)
-	fire_audio.volume_db = randf_range(-9.5, -6.5)
+	# Randomize volume more (−11.0 to -5.0 dB = ±3dB from -8.0)
+	fire_audio.volume_db = randf_range(-11.0, -5.0)
 
 func _on_fire_audio_loop() -> void:
 	"""Called when fire audio finishes - randomize and replay for variation"""
@@ -777,7 +777,7 @@ func animate_fire(delta: float) -> void:
 			# Opacity flicker
 			child.modulate.a = 0.9 + flicker * 0.1
 			# Position wobble
-			child.position.x = sway * 1.5
+			child.position.x = sway * 0.5
 
 	# Animate coal glow (pulsing)
 	for child in fire_sprite.get_children():

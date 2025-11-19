@@ -46,6 +46,7 @@ var crit_window_open_sound: AudioStream = null  # Crystalline chime when crit wi
 
 # Weapon swing sounds (whoosh sounds when swinging weapons)
 var sword_swing_sounds: Array[AudioStream] = []  # Sword whoosh (2 variations)
+var unarmed_swing_sounds: Array[AudioStream] = []  # Unarmed/fist whoosh
 
 # Player sounds
 var player_hurt_sounds: Array[AudioStream] = []  # Player hurt/death grunts (2 variations)
@@ -190,6 +191,16 @@ func _load_real_sounds() -> void:
 		push_warning("  ⚠️ Failed to load sword_swing_2.wav")
 
 	print("  📊 Loaded %d sword swing sound variations" % sword_swing_sounds.size())
+
+	# Load unarmed swing sound (fist whoosh)
+	var unarmed_swing = load("res://assets/sounds/combat/unarmed_slash.mp3")
+	if unarmed_swing:
+		unarmed_swing_sounds.append(unarmed_swing)
+		print("  ✅ Loaded unarmed_slash.mp3")
+	else:
+		push_warning("  ⚠️ Failed to load unarmed_slash.mp3")
+
+	print("  📊 Loaded %d unarmed swing sound variations" % unarmed_swing_sounds.size())
 
 	# Load player hurt sounds (grunt/pain sounds)
 	var player_hurt_1 = load("res://assets/sounds/player/player_hurt_1.wav")
@@ -407,6 +418,27 @@ func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 
 	# Pick random sound variation
 	var sound_stream = sword_swing_sounds[randi() % sword_swing_sounds.size()]
+
+	# Create player with slight pitch randomization for variety
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play unarmed swing sound (whoosh when punching/kicking)
+func play_unarmed_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0) -> void:
+	if unarmed_swing_sounds.is_empty():
+		# Fallback to sword swing if no unarmed sounds loaded
+		play_sword_swing_sound(global_pos, volume_db)
+		return
+
+	# Pick random sound variation
+	var sound_stream = unarmed_swing_sounds[randi() % unarmed_swing_sounds.size()]
 
 	# Create player with slight pitch randomization for variety
 	var player = AudioStreamPlayer2D.new()

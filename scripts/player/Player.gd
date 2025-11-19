@@ -738,12 +738,14 @@ func handle_crit_window_attack(enemy: Node, click_pos: Vector2) -> void:
 	# Play weapon swing sound (whoosh)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		# Check if using a sword (for now only swords have swing sounds)
-		if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.weapon_type == "sword":
-			sound_manager.play_sword_swing_sound(global_position, -8.0)
-		elif not CharacterStats.equipped_weapon:
-			# Default to sword swing if no weapon equipped
-			sound_manager.play_sword_swing_sound(global_position, -8.0)
+		# Play weapon-specific swing sound
+		if CharacterStats.equipped_weapon:
+			if CharacterStats.equipped_weapon.weapon_type == "sword":
+				sound_manager.play_sword_swing_sound(global_position, -8.0)
+			# Add more weapon types here as needed
+		else:
+			# No weapon equipped - use unarmed sound
+			sound_manager.play_unarmed_swing_sound(global_position, -8.0)
 
 	# Get chain multiplier for damage calculation
 	var chain_multiplier = ChainManager.get_damage_multiplier()
@@ -772,12 +774,14 @@ func attempt_attack() -> void:
 	# Play weapon swing sound (whoosh)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		# Check if using a sword (for now only swords have swing sounds)
-		if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.weapon_type == "sword":
-			sound_manager.play_sword_swing_sound(global_position, -8.0)
-		elif not CharacterStats.equipped_weapon:
-			# Default to sword swing if no weapon equipped
-			sound_manager.play_sword_swing_sound(global_position, -8.0)
+		# Play weapon-specific swing sound
+		if CharacterStats.equipped_weapon:
+			if CharacterStats.equipped_weapon.weapon_type == "sword":
+				sound_manager.play_sword_swing_sound(global_position, -8.0)
+			# Add more weapon types here as needed
+		else:
+			# No weapon equipped - use unarmed sound
+			sound_manager.play_unarmed_swing_sound(global_position, -8.0)
 
 	ChainManager.register_attack()
 	
@@ -1154,7 +1158,7 @@ func create_player_sprite() -> void:
 	# Load weapon textures based on equipped weapon
 	var weapon_slash_tex = null
 	var weapon_walk_tex = null
-	var weapon_type = "sword"  # Default to sword for animation data
+	var weapon_type = "unarmed"  # Default to unarmed when no weapon equipped
 
 	if CharacterStats.equipped_weapon:
 		weapon_type = CharacterStats.equipped_weapon.weapon_type
@@ -1182,6 +1186,8 @@ func create_player_sprite() -> void:
 	var shirt_slash_tex = null
 	var arms_walk_tex = null
 	var arms_slash_tex = null
+	var hands_walk_tex = null
+	var hands_slash_tex = null
 	var head_walk_tex = null
 	var head_slash_tex = null
 
@@ -1242,6 +1248,20 @@ func create_player_sprite() -> void:
 			print("   Walk: %s" % ("✅" if arms_walk_tex else "❌"))
 			print("   Slash: %s" % ("✅" if arms_slash_tex else "❌"))
 
+	# Check for equipped hand armor (gauntlets)
+	if CharacterStats.equipped_armor.has("hands") and CharacterStats.equipped_armor["hands"] != null:
+		var hand_armor = CharacterStats.equipped_armor["hands"]
+		var sprite_name = hand_armor.get("sprite_name", "")
+		if sprite_name != "":
+			var hands_path = "res://assets/characters/hands/"
+			if ResourceLoader.exists(hands_path + sprite_name + "_walk.png"):
+				hands_walk_tex = load(hands_path + sprite_name + "_walk.png")
+			if ResourceLoader.exists(hands_path + sprite_name + "_slash.png"):
+				hands_slash_tex = load(hands_path + sprite_name + "_slash.png")
+			print("🧤 Loading hand armor: %s (sprite: %s)" % [hand_armor["name"], sprite_name])
+			print("   Walk: %s" % ("✅" if hands_walk_tex else "❌"))
+			print("   Slash: %s" % ("✅" if hands_slash_tex else "❌"))
+
 	# Check for equipped head armor
 	if CharacterStats.equipped_armor.has("head") and CharacterStats.equipped_armor["head"] != null:
 		var head_armor = CharacterStats.equipped_armor["head"]
@@ -1256,8 +1276,8 @@ func create_player_sprite() -> void:
 			print("   Walk: %s" % ("✅" if head_walk_tex else "❌"))
 			print("   Slash: %s" % ("✅" if head_slash_tex else "❌"))
 
-	# Setup sprite with all 5 armor layers
-	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, head_walk_tex, head_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type)
+	# Setup sprite with all 6 armor layers
+	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type)
 
 	add_child(character_sprite)
 

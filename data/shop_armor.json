@@ -1,62 +1,6 @@
 {
 	"armor": [
 		{
-			"id": "white_shirt",
-			"name": "White Shirt",
-			"description": "A clean white shirt. Looks better than those rags you're wearing.",
-			"slot": "chest",
-			"defense": 2,
-			"type": "armor",
-			"value": 25,
-			"can_trade": true,
-			"stackable": false,
-			"quantity": 1,
-			"sprite_name": "white_shirt",
-			"rarity": "Common"
-		},
-		{
-			"id": "green_pants",
-			"name": "Green Pants",
-			"description": "Sturdy green pants. Much better than tattered rags.",
-			"slot": "legs",
-			"defense": 2,
-			"type": "armor",
-			"value": 25,
-			"can_trade": true,
-			"stackable": false,
-			"quantity": 1,
-			"sprite_name": "green_pants",
-			"rarity": "Common"
-		},
-		{
-			"id": "wasteland_chestguard",
-			"name": "Wasteland Chestguard",
-			"description": "Reinforced leather armor scavenged from the ruins. Offers decent protection.",
-			"slot": "chest",
-			"defense": 12,
-			"type": "armor",
-			"value": 60,
-			"can_trade": true,
-			"stackable": false,
-			"quantity": 1,
-			"sprite_name": "white_shirt",
-			"rarity": "Uncommon"
-		},
-		{
-			"id": "wasteland_greaves",
-			"name": "Wasteland Greaves",
-			"description": "Sturdy leg guards made from scavenged materials. Built for survival.",
-			"slot": "legs",
-			"defense": 10,
-			"type": "armor",
-			"value": 50,
-			"can_trade": true,
-			"stackable": false,
-			"quantity": 1,
-			"sprite_name": "green_pants",
-			"rarity": "Uncommon"
-		},
-		{
 			"id": "copper_plate_boots",
 			"name": "Copper Plate Boots",
 			"description": "[TEST] Tier 1 copper-plated boots. Basic protection for your feet.",
@@ -99,9 +43,9 @@
 			"rarity": "Common"
 		},
 		{
-			"id": "copper_plate_gauntlets",
-			"name": "Copper Plate Gauntlets",
-			"description": "[TEST] Tier 1 copper-plated arm guards. Protects your arms in combat.",
+			"id": "copper_plate_spaulders",
+			"name": "Copper Plate Spaulders",
+			"description": "[TEST] Tier 1 copper-plated shoulder guards. Protects your shoulders in combat.",
 			"slot": "arms",
 			"defense": 6,
 			"type": "armor",
@@ -110,6 +54,20 @@
 			"stackable": false,
 			"quantity": 1,
 			"sprite_name": "copper_plate",
+			"rarity": "Common"
+		},
+		{
+			"id": "copper_plate_gloves",
+			"name": "Copper Plate Gloves",
+			"description": "[TEST] Tier 1 copper-plated hand protection. Reinforces your grip and blocks strikes.",
+			"slot": "hands",
+			"defense": 4,
+			"type": "armor",
+			"value": 0,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1,
+			"sprite_name": "copper_gloves",
 			"rarity": "Common"
 		},
 		{

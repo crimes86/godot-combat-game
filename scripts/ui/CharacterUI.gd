@@ -11,7 +11,7 @@ var pending_delete_data: Dictionary = {}
 
 # UI References
 var main_panel: PanelContainer
-var equipment_slots: Dictionary = {}  # slot_name: VBoxContainer (contains CenterContainer with Button + Label)
+var equipment_slots: Dictionary = {}  # slot_name: HBoxContainer (contains slot icon Control + label)
 var inventory_slots: Array[Control] = []  # Changed from Array[Button] to Array[Control]
 var stat_labels: Dictionary = {}  # stat_name: Label
 var character_name_label: Label
@@ -93,12 +93,18 @@ func create_character_ui() -> void:
 	main_panel.name = "CharacterPanel"
 
 	# Center the panel - wider for 3-column layout
-	main_panel.set_anchors_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
+	main_panel.set_anchors_preset(Control.PRESET_CENTER)
 	main_panel.custom_minimum_size = Vector2(1000, 600)
+	main_panel.anchor_left = 0.5
+	main_panel.anchor_top = 0.5
+	main_panel.anchor_right = 0.5
+	main_panel.anchor_bottom = 0.5
 	main_panel.offset_left = -500
 	main_panel.offset_right = 500
 	main_panel.offset_top = -300
 	main_panel.offset_bottom = 300
+	main_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	main_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 
 	# Dark Fantasy Wasteland styling with transparency
 	var panel_style = StyleBoxFlat.new()
@@ -167,20 +173,24 @@ func create_equipment_panel(parent: Control) -> void:
 	var title = create_header_label("Equipment")
 	equipment_vbox.add_child(title)
 
+	# Wrap slots in a CenterContainer to center them independently
+	var slots_center = CenterContainer.new()
+	equipment_vbox.add_child(slots_center)
+
 	# Equipment slots container - CENTERED
 	var slots_container = VBoxContainer.new()
 	slots_container.add_theme_constant_override("separation", 8)
-	slots_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	equipment_vbox.add_child(slots_container)
+	slots_center.add_child(slots_container)
 
 	# Create equipment slots (weapons first, then armor)
-	var slot_names = ["mainhand", "offhand", "head", "chest", "arms", "legs", "feet"]
+	var slot_names = ["mainhand", "offhand", "head", "chest", "arms", "hands", "legs", "feet"]
 	var slot_labels = {
 		"mainhand": "MAIN HAND",
 		"offhand": "OFF HAND",
 		"head": "HEAD",
 		"chest": "CHEST",
 		"arms": "ARMS",
+		"hands": "HANDS",
 		"legs": "LEGS",
 		"feet": "FEET"
 	}
@@ -392,15 +402,11 @@ func create_inventory_panel(parent: Control) -> void:
 	gold_label.add_theme_color_override("font_color", HEADER_COLOR)
 	gold_container.add_child(gold_label)
 
-func create_equipment_slot(slot_name: String, label_text: String) -> VBoxContainer:
+func create_equipment_slot(slot_name: String, label_text: String) -> HBoxContainer:
 	"""Create a single equipment slot button with drag-drop support"""
-	var container = VBoxContainer.new()
-	container.add_theme_constant_override("separation", 4)
-	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	# Button centered in a CenterContainer
-	var button_center = CenterContainer.new()
-	container.add_child(button_center)
+	var container = HBoxContainer.new()
+	container.add_theme_constant_override("separation", 8)
+	container.custom_minimum_size = Vector2(200, 60)  # Fixed width so all slots align
 
 	# Use a Control wrapper for drag-drop support
 	var slot_control = Control.new()
@@ -415,7 +421,7 @@ func create_equipment_slot(slot_name: String, label_text: String) -> VBoxContain
 		Callable(self, "_can_drop_equipment_data").bind(slot_name),
 		Callable(self, "_drop_equipment_data").bind(slot_name)
 	)
-	button_center.add_child(slot_control)
+	container.add_child(slot_control)
 
 	# Add panel for styling
 	var panel = PanelContainer.new()
@@ -445,9 +451,10 @@ func create_equipment_slot(slot_name: String, label_text: String) -> VBoxContain
 	# Connect click event
 	slot_control.gui_input.connect(_on_equipment_slot_gui_input.bind(slot_name))
 
-	# Label centered below button
+	# Label to the right of button
 	var slot_label = create_text_label(label_text, 11)
-	slot_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	slot_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	slot_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	container.add_child(slot_label)
 
 	return container
@@ -707,11 +714,14 @@ func refresh_stats() -> void:
 func refresh_equipment() -> void:
 	"""Update equipment slot displays"""
 	for slot_name in equipment_slots:
-		var slot_container = equipment_slots[slot_name]  # VBoxContainer
-		var button_center = slot_container.get_child(0)  # CenterContainer
-		var slot_control = button_center.get_child(0)  # Control wrapper
+		var slot_container = equipment_slots[slot_name]  # HBoxContainer (new structure)
 
-		# Get the label from the slot control
+		# In the new HBoxContainer layout, the slot_control is the first child
+		var slot_control = slot_container.get_child(0) if slot_container.get_child_count() > 0 else null
+		if not slot_control:
+			continue
+
+		# Get the panel from the slot control
 		var panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
 		if not panel:
 			continue
@@ -1067,9 +1077,8 @@ func _get_equipment_drag_data(at_position: Vector2, slot_name: String) -> Varian
 	preview.modulate = Color(1, 1, 1, 0.8)  # Slightly transparent
 
 	# Get the equipment slot control and set preview on it
-	var slot_container = equipment_slots[slot_name]  # VBoxContainer
-	var button_center = slot_container.get_child(0)  # CenterContainer
-	var slot_control = button_center.get_child(0)  # Control wrapper
+	var slot_container = equipment_slots[slot_name]  # HBoxContainer (new structure)
+	var slot_control = slot_container.get_child(0)  # Control wrapper (first child now)
 	slot_control.set_drag_preview(preview)
 
 	# Return drag data
