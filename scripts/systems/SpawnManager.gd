@@ -27,6 +27,12 @@ class_name SpawnManager
 ## Multiplayer: Scale up (e.g., 75 per player = 150 for 2 players, 225 for 3 players)
 @export var max_active_enemies: int = 75
 
+## Spawn chance per marker (0.0 - 1.0)
+## Only this percentage of spawn markers will be "active" spawners
+## e.g., 0.5 = only 50% of markers can spawn enemies
+## This reduces density while maintaining good coverage
+@export var spawn_chance_per_marker: float = 0.5  # 50% of markers spawn
+
 ## Spawn radius around players (px)
 ## Enemies within this distance will spawn
 ## Should be LARGER than max camera view to prevent pop-in
@@ -92,21 +98,41 @@ func initialize(world: Node, spawn_markers: Array) -> void:
 	print("   Spawn radius: %.0fpx" % spawn_radius)
 	print("   Despawn radius: %.0fpx" % despawn_radius)
 	print("   Update interval: %.2fs (%.0f FPS)" % [update_interval, 1.0 / update_interval])
+	print("   Spawn chance: %.0f%% of markers active" % (spawn_chance_per_marker * 100))
+
+	# RNG for consistent spawn activation
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 88888  # Fixed seed for consistent spawns
 
 	# Build spawn registry from markers
-	for marker in spawn_markers:
+	var active_count = 0
+	for i in range(spawn_markers.size()):
+		var marker = spawn_markers[i]
+
+		# Determine if this marker is "active" (can spawn)
+		# Use marker index + seed for consistent per-marker randomness
+		rng.seed = 88888 + i
+		var is_active = rng.randf() < spawn_chance_per_marker
+
 		var spawn_data = {
 			"position": marker.global_position,
 			"level": marker.get_meta("enemy_level", 1),
 			"type": marker.get_meta("enemy_type", "skeleton"),
 			"aggro_range": marker.get_meta("aggro_range", 150.0),
 			"state": EnemyState.UNSPAWNED,
-			"enemy_instance": null
+			"enemy_instance": null,
+			"is_active": is_active  # Only active markers can spawn
 		}
 		spawn_registry.append(spawn_data)
 
-	print("   📍 Loaded %d spawn points" % spawn_registry.size())
+		if is_active:
+			active_count += 1
+
+	print("   📍 Loaded %d spawn points (%d active, %d inactive)" % [spawn_registry.size(), active_count, spawn_registry.size() - active_count])
 	print("   ═══════════════════════════════════════════════════\n")
+
+	# Print spawn distribution by level
+	print_spawn_distribution()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN UPDATE LOOP
@@ -204,6 +230,10 @@ func collect_spawn_candidates() -> Array:
 
 	for spawn_id in range(spawn_registry.size()):
 		var spawn_data = spawn_registry[spawn_id]
+
+		# Skip if this marker is not active (spawn chance filtering)
+		if not spawn_data.get("is_active", true):  # Default true for backwards compat
+			continue
 
 		# Skip if already spawned
 		if active_enemies.has(spawn_id):
@@ -387,3 +417,24 @@ func print_stats() -> void:
 	print("   Alive: %d" % stats.alive)
 	print("   Dead: %d" % stats.dead)
 	print("   Looted: %d\n" % stats.looted)
+
+func print_spawn_distribution() -> void:
+	"""Print spawn distribution by level"""
+	var by_level = {}
+	var active_by_level = {}
+
+	for spawn_data in spawn_registry:
+		var level = spawn_data.level
+		by_level[level] = by_level.get(level, 0) + 1
+		if spawn_data.get("is_active", true):
+			active_by_level[level] = active_by_level.get(level, 0) + 1
+
+	print("\n📊 SPAWN DISTRIBUTION BY LEVEL:")
+	var levels = by_level.keys()
+	levels.sort()
+	for level in levels:
+		var total = by_level[level]
+		var active = active_by_level.get(level, 0)
+		var pct = (active * 100.0 / total) if total > 0 else 0
+		print("   L%d: %d active / %d total (%.0f%%)" % [level, active, total, pct])
+	print("")
