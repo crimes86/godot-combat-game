@@ -92,16 +92,7 @@ func _on_notification_finished(notification: ItemNotification) -> void:
 	_reposition_notifications()
 
 func _reposition_notifications() -> void:
-	# Smoothly reposition all remaining notifications downward to fill gaps
-	# The oldest notifications should be at the top, newest at bottom (position 0)
-	var shift_duration = 0.25
-
-	for i in range(notification_queue.size()):
-		var notification = notification_queue[i]
-		if is_instance_valid(notification):
-			# Calculate position: index 0 is at the bottom, higher indices move up
-			# Reverse order: last item in queue is at position 0 (bottom)
-			var position_from_bottom = notification_queue.size() - 1 - i
-			var target_y = position_from_bottom * -notification_spacing
-			var tween = create_tween()
-			tween.tween_property(notification, "position:y", target_y, shift_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	# Don't reposition - notifications should stay in place when one expires
+	# They were already positioned correctly when added, and will fade out naturally
+	# This prevents the "shifting down" bug when notifications expire
+	pass
