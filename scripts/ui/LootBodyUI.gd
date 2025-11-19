@@ -61,6 +61,12 @@ func open_loot_ui(primary_corpse, nearby_corpses: Array) -> void:
 	if total_gold_collected > 0:
 		CharacterStats.add_gold(total_gold_collected)
 		print("💰 Auto-looted %d gold when opening UI" % total_gold_collected)
+
+		# Play gold loot sound (once for all corpses looted)
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -5.0)
+
 		# Clear gold from all corpses
 		for corpse in corpses_looted:
 			if is_instance_valid(corpse):

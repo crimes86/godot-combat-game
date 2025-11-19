@@ -381,12 +381,7 @@ func grow_for_crit_window(difficulty: float = 1.0) -> void:
 	DebugConfig.log_combat("🌟 Growing sprite for crit window")
 	DebugConfig.log_combat("   Current scale: %s (original: %s)" % [scale, original_scale])
 	DebugConfig.log_combat("   Current color: %s" % (sprite.modulate if sprite else "no sprite"))
-	
-	# ✨ NEW: Play crit window opening sound
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, global_position, -3.0)
-	
+
 	# ✨ FIX: Override BOTH parent and sprite modulate for SUBTLE white
 	# 50% less bright - more comfortable!
 	self.modulate = Color(1.0, 1.0, 1.0, 1.0)  # Reset parent to neutral
@@ -766,10 +761,10 @@ func die() -> void:
 	corpse_gold = gold_drop
 	print("💀 Storing %d gold in corpse for looting" % corpse_gold)
 
-	# Play death sound
+	# Play death sound (skeleton-specific bone collapse)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound(sound_manager.SoundType.ENEMY_DEATH, global_position, -3.0)
+		sound_manager.play_skeleton_death_sound(global_position, -3.0)
 
 	# Play death animation (hurt animation) and wait for it to complete
 	var anim_sprite = sprite as AnimatedSprite2D

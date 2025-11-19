@@ -836,6 +836,11 @@ func attack_enemies_in_cone(enemies: Array) -> void:
 			var is_crit = crit_system.roll_for_crit()
 			
 			if is_crit:
+				# Play crit window opening sound on successful crit roll
+				var sound_manager = get_node_or_null("/root/SoundManager")
+				if sound_manager:
+					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -3.0)
+
 				# Start crit window
 				crit_window_manager.start_window(enemy)
 				if not crit_window_manager.window_completed.is_connected(_on_crit_window_completed):
