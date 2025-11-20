@@ -9,6 +9,7 @@ class_name Campfire
 # Healing configuration
 @export var heal_rate: float = 5.0  # HP per second
 @export var warmth_radius: float = 150.0  # Healing/deterrent radius
+@export var enable_deterrence: bool = true  # Whether enemies are deterred (false for ruins campfire)
 
 # Visual configuration
 @export var fire_color_inner: Color = Color(1.0, 0.8, 0.2)  # Bright yellow-orange
@@ -20,6 +21,31 @@ var player_in_warmth: bool = false
 var heal_timer: float = 0.0
 var heal_interval: float = 1.0  # Heal every 1.0 seconds (aligned with heal sound)
 var heal_pattern_index: int = 0  # Cycles 0,1,2 for tone1,tone1,tone2 pattern
+
+# Fuel System (NEW - Interactive Campfire Buffs)
+var wood_count: int = 0  # Wood logs for healing buff
+var bone_ember_count: int = 0  # Bone embers for crit chance buff
+const MAX_WOOD: int = 50  # Max wood for full healing buff (+20 HP/s)
+const MAX_BONE_EMBERS: int = 100  # Max bone embers for full crit buff (+16.5%)
+const BASE_HEAL_RATE: float = 5.0  # Base healing (before buffs)
+const MAX_HEAL_BONUS: float = 20.0  # Max bonus healing from wood
+const MAX_CRIT_BONUS: float = 0.165  # Max bonus crit chance from bone embers (16.5%)
+
+# Fuel decay (fires slowly burn down)
+const WOOD_BURN_RATE: float = 1.0 / 90.0  # 1 wood per 90 seconds (50 wood = 75 min)
+const BONE_EMBER_BURN_RATE: float = 1.0 / 45.0  # 1 ember per 45 seconds (100 embers = 75 min)
+var wood_decay_accumulator: float = 0.0
+var bone_ember_decay_accumulator: float = 0.0
+
+# Interaction (Hold-to-fuel system)
+var player_in_interact_range: bool = false
+var interaction_prompt: Label = null
+var is_fueling: bool = false
+var fuel_progress: float = 0.0  # 0.0 to 1.0
+var fuel_time_required: float = 2.0  # 2 seconds to add fuel
+var progress_circle: Node2D = null
+var cancel_grace_timer: float = 0.0  # Prevent immediate cancellation
+var cancel_grace_period: float = 0.15  # 0.15 second grace period
 
 # Performance optimization
 var enemy_check_timer: float = 0.0
@@ -37,6 +63,10 @@ var healing_audio_2: AudioStreamPlayer2D = null  # Second healing tone
 var flame_nodes: Array[Polygon2D] = []
 var coal_nodes: Array[Polygon2D] = []
 var fire_light: PointLight2D = null
+
+# Buff aura visuals
+var heal_aura_ring: Node2D = null  # Visual indicator for healing buff
+var crit_aura_ring: Node2D = null  # Visual indicator for crit buff
 
 func _ready() -> void:
 	# Add to campfire group so NPCs can find and face it
@@ -67,6 +97,15 @@ func _ready() -> void:
 	# Create healing tick sound (plays once per heal)
 	create_healing_audio()
 
+	# Create interaction prompt for adding fuel
+	create_interaction_prompt()
+
+	# Create radial progress circle for hold-to-fuel
+	create_progress_circle()
+
+	# Create buff aura visual indicators
+	create_buff_aura_rings()
+
 	# Add physical collision so player can't walk through fire
 	add_collision_body()
 
@@ -76,7 +115,6 @@ func _ready() -> void:
 		if collision.shape is CircleShape2D:
 			collision.shape.radius = warmth_radius
 
-	print("🔥 Campfire initialized at ", global_position)
 
 func add_collision_body() -> void:
 	"""Add StaticBody2D collision so player can't walk through campfire"""
@@ -93,7 +131,6 @@ func add_collision_body() -> void:
 	collision_shape.shape = shape
 	collision_body.add_child(collision_shape)
 
-	print("   Added collision body to campfire")
 
 func _physics_process(delta: float) -> void:
 	# Heal player if in warmth
@@ -120,11 +157,24 @@ func _physics_process(delta: float) -> void:
 					heal_pattern_index = (heal_pattern_index + 1) % 3
 				heal_timer = 0.0
 
+	# Update interaction prompt position and visibility
+	update_interaction_prompt()
+
+	# Handle hold-to-fuel mechanic
+	handle_fuel_interaction(delta)
+
+	# Apply crit buff to player if in warmth
+	if player_in_warmth and player and is_instance_valid(player):
+		apply_crit_buff_to_player()
+
 	# Check enemies near warmth (throttled for performance)
 	enemy_check_timer += delta
 	if enemy_check_timer >= enemy_check_interval:
 		check_enemy_deterrent()
 		enemy_check_timer = 0.0
+
+	# Fuel decay system (fires slowly burn down)
+	decay_fuel(delta)
 
 	# Animate fire
 	animate_fire(delta)
@@ -134,17 +184,20 @@ func _on_body_entered(body: Node2D) -> void:
 		player = body as CharacterBody2D
 		player_in_warmth = true
 		heal_timer = 0.0
-		print("🔥 Player entered warmth - healing active")
 
 func _on_body_exited(body: Node2D) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_warmth = false
 		player = null
 		heal_pattern_index = 0  # Reset pattern when leaving
-		print("❄️ Player left warmth")
+		CharacterStats.campfire_crit_buff = 0.0  # Clear crit buff
 
 func check_enemy_deterrent() -> void:
 	"""Deter enemies that reach the warmth radius - they get blocked at the edge"""
+	# Skip if deterrence is disabled (e.g., ruins campfire)
+	if not enable_deterrence:
+		return
+
 	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 
 	for enemy in enemies:
@@ -172,11 +225,9 @@ func check_enemy_deterrent() -> void:
 					enemy.velocity = Vector2.ZERO
 					enemy.global_position = edge_position
 
-					# Make them look "frustrated" - small random movements
-					if randf() < 0.05:  # 5% chance per frame to move slightly
-						var random_offset = Vector2(randf_range(-20, 20), randf_range(-20, 20))
-						enemy.global_position += random_offset
-						enemy.global_position = global_position + (enemy.global_position - global_position).normalized() * warmth_radius
+					# Put enemy in DETERRED state (swing at air, then give up)
+					if ai.has_method("enter_deterred_state"):
+						ai.enter_deterred_state()
 
 func create_campfire_visual() -> void:
 	"""Create enhanced campfire with detailed logs, rocks, and particle effects"""
@@ -672,7 +723,6 @@ func create_fire_light() -> void:
 
 	add_child(fire_light)
 
-	print("🔥 Fire light created with texture_scale: ", fire_light.texture_scale)
 
 func create_fire_audio() -> void:
 	"""Create looping campfire crackling sound with spatial audio"""
@@ -706,14 +756,6 @@ func create_fire_audio() -> void:
 	randomize_fire_audio()
 	fire_audio.play()
 
-	print("🔥 Campfire audio loaded and playing (spatial)")
-	print("   Type: ", campfire_sound.get_class())
-	print("   Loop mode: ", campfire_sound.loop_mode if campfire_sound is AudioStreamWAV else "N/A")
-	print("   Playing: ", fire_audio.playing)
-	print("   Volume: ", fire_audio.volume_db, " dB")
-	print("   Max distance: ", fire_audio.max_distance)
-	print("   Attenuation: ", fire_audio.attenuation)
-	print("   Randomization: pitch ±10%, volume ±3dB")
 
 func randomize_fire_audio() -> void:
 	"""Randomly vary pitch and volume to prevent repetitive sound"""
@@ -770,9 +812,6 @@ func create_healing_audio() -> void:
 	healing_audio_2.panning_strength = 0.8
 	add_child(healing_audio_2)
 
-	print("💚 Healing audio loaded (pattern: tone1, tone1, tone2)")
-	print("   Volume: ", healing_audio_1.volume_db, " dB")
-	print("   Heal interval: ", heal_interval, " seconds")
 
 func cache_animation_nodes() -> void:
 	"""Cache references to animated nodes for performance"""
@@ -789,7 +828,6 @@ func cache_animation_nodes() -> void:
 		elif child.name.begins_with("Coal") and child is Polygon2D:
 			coal_nodes.append(child as Polygon2D)
 
-	print("🔥 Cached ", flame_nodes.size(), " flames and ", coal_nodes.size(), " coals for animation")
 
 func animate_fire(delta: float) -> void:
 	"""Optimized fire animation using cached references"""
@@ -838,6 +876,526 @@ func animate_fire(delta: float) -> void:
 		var flicker = sin(time * 2.5) * 0.5 + cos(time * 3.7) * 0.3
 		fire_light.energy = 1.2 + flicker * 0.15  # Subtle flicker between 1.05 and 1.35
 
+	# Animate buff aura indicators
+	animate_buff_auras(delta)
+
+func create_buff_aura_rings() -> void:
+	"""Create visual indicators for heal and crit buffs"""
+	# Create crit aura ring (ghostly blue/white) - LARGER, draw first (bottom layer)
+	# Auras go BELOW flames (which are z_index 1-3), so use z_index 0
+	crit_aura_ring = Node2D.new()
+	crit_aura_ring.name = "CritAuraRing"
+	crit_aura_ring.z_index = 0  # Below flames (1-3), above ground
+	crit_aura_ring.light_mask = 1
+	crit_aura_ring.self_modulate = Color(1, 1, 1, 1)
+	crit_aura_ring.show()
+	crit_aura_ring.position = Vector2.ZERO
+	add_child(crit_aura_ring)
+	crit_aura_ring.draw.connect(_draw_crit_aura)
+
+	print("✅ Created crit aura ring at z_index=0")
+
+	# Create heal aura ring (green/life energy) - SMALLER, draw second (top layer)
+	heal_aura_ring = Node2D.new()
+	heal_aura_ring.name = "HealAuraRing"
+	heal_aura_ring.z_index = 0  # Same as crit, blend with additive mode
+	heal_aura_ring.light_mask = 1
+	heal_aura_ring.self_modulate = Color(1, 1, 1, 1)
+
+	# Set additive blend mode for color mixing
+	var material = CanvasItemMaterial.new()
+	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	heal_aura_ring.material = material
+
+	heal_aura_ring.show()
+	heal_aura_ring.position = Vector2.ZERO
+	add_child(heal_aura_ring)
+	heal_aura_ring.draw.connect(_draw_heal_aura)
+
+	print("✅ Created heal aura ring at z_index=0 with ADDITIVE blend")
+
+func _draw_heal_aura() -> void:
+	"""Draw the healing buff aura - filled transparent green circle"""
+	if not heal_aura_ring or wood_count <= 0:
+		return
+
+	var wood_percent = float(wood_count) / float(MAX_WOOD)
+	var time = Time.get_ticks_msec() / 1000.0
+
+	# Scale from 0 to 300px radius based on fuel (doubled)
+	var max_radius = 300.0  # Was 150, now 2x bigger
+	var current_radius = wood_percent * max_radius
+
+	if current_radius <= 0:
+		return
+
+	# Debug: Only print once when first drawing
+	if wood_count == MAX_WOOD and Engine.get_frames_drawn() % 300 == 0:
+		print("🟢 Drawing GREEN heal aura: radius=%.1f, wood=%d/%d" % [current_radius, wood_count, MAX_WOOD])
+
+	# Create flowing magical edge with noise
+	var segments = 64  # More segments for smooth flow
+	var edge_points = PackedVector2Array()
+
+	# Create wavy flowing edge
+	for i in range(segments + 1):
+		var angle = (float(i) / float(segments)) * TAU
+
+		# Add flowing wave animation to radius
+		var wave1 = sin(angle * 3.0 + time * 2.0) * 5.0
+		var wave2 = cos(angle * 5.0 - time * 1.5) * 3.0
+		var wave3 = sin(angle * 7.0 + time * 3.0) * 2.0
+		var radius_offset = wave1 + wave2 + wave3
+
+		var point_radius = current_radius + radius_offset
+		var point = Vector2(cos(angle), sin(angle)) * point_radius
+		edge_points.append(point)
+
+	# Draw aura with radial fade - brighter at center, fades to transparent at edges
+	# Draw 8 concentric circles for smoother radial gradient
+	for layer in range(7, -1, -1):  # 8 layers, outside-in
+		var layer_percent = float(layer) / 7.0  # 0.0 (center) to 1.0 (edge)
+
+		# Create points for this layer
+		var layer_points = PackedVector2Array()
+		for i in range(segments + 1):
+			var angle = (float(i) / float(segments)) * TAU
+			var wave1 = sin(angle * 3.0 + time * 2.0) * 5.0
+			var wave2 = cos(angle * 5.0 - time * 1.5) * 3.0
+			var wave3 = sin(angle * 7.0 + time * 3.0) * 2.0
+			var radius_offset = wave1 + wave2 + wave3
+			var point_radius = (current_radius * (0.3 + layer_percent * 0.7)) + radius_offset
+			var point = Vector2(cos(angle), sin(angle)) * point_radius
+			layer_points.append(point)
+
+		# Radial fade: subtle at center, transparent at edge
+		var alpha = 0.06 * (1.0 - layer_percent * layer_percent)  # Quadratic fade, more subtle
+		var layer_color = Color(0.0, 1.0, 0.0, alpha)
+		heal_aura_ring.draw_colored_polygon(layer_points, layer_color)
+
+func _draw_crit_aura() -> void:
+	"""Draw the crit buff aura - filled transparent blue circle"""
+	if not crit_aura_ring or bone_ember_count <= 0:
+		return
+
+	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
+	var time = Time.get_ticks_msec() / 1000.0
+
+	# Scale from 0 to 375px radius based on fuel (doubled)
+	var max_radius = 375.0  # Was 187.5, now 2x bigger
+	var current_radius = bone_percent * max_radius
+
+	if current_radius <= 0:
+		return
+
+	# Debug: Only print once when first drawing
+	if bone_ember_count == MAX_BONE_EMBERS and Engine.get_frames_drawn() % 300 == 0:
+		print("🔵 Drawing BLUE crit aura: radius=%.1f, embers=%d/%d" % [current_radius, bone_ember_count, MAX_BONE_EMBERS])
+
+	# Create flowing magical edge with different pattern than heal
+	var segments = 64  # More segments for smooth flow
+	var edge_points = PackedVector2Array()
+
+	# Create wavy flowing edge (different pattern from heal)
+	for i in range(segments + 1):
+		var angle = (float(i) / float(segments)) * TAU
+
+		# Different wave pattern for ghostly effect
+		var wave1 = sin(angle * 4.0 - time * 2.5) * 6.0
+		var wave2 = cos(angle * 6.0 + time * 1.8) * 4.0
+		var wave3 = sin(angle * 8.0 - time * 2.2) * 2.5
+		var radius_offset = wave1 + wave2 + wave3
+
+		var point_radius = current_radius + radius_offset
+		var point = Vector2(cos(angle), sin(angle)) * point_radius
+		edge_points.append(point)
+
+	# Draw aura with radial fade - brighter at center, fades to transparent at edges
+	# Draw 8 concentric circles for smoother radial gradient
+	for layer in range(7, -1, -1):  # 8 layers, outside-in
+		var layer_percent = float(layer) / 7.0  # 0.0 (center) to 1.0 (edge)
+
+		# Create points for this layer
+		var layer_points = PackedVector2Array()
+		for i in range(segments + 1):
+			var angle = (float(i) / float(segments)) * TAU
+			# Different wave pattern for ghostly effect
+			var wave1 = sin(angle * 4.0 - time * 2.5) * 6.0
+			var wave2 = cos(angle * 6.0 + time * 1.8) * 4.0
+			var wave3 = sin(angle * 8.0 - time * 2.2) * 2.5
+			var radius_offset = wave1 + wave2 + wave3
+			var point_radius = (current_radius * (0.3 + layer_percent * 0.7)) + radius_offset
+			var point = Vector2(cos(angle), sin(angle)) * point_radius
+			layer_points.append(point)
+
+		# Radial fade: subtle at center, transparent at edge
+		var alpha = 0.06 * (1.0 - layer_percent * layer_percent)  # Quadratic fade, more subtle
+		var layer_color = Color(0.0, 0.5, 1.0, alpha)  # Cyan-blue
+		crit_aura_ring.draw_colored_polygon(layer_points, layer_color)
+
+func animate_buff_auras(delta: float) -> void:
+	"""Animate the buff aura rings with flowing edges"""
+	# Debug: Print state every 5 seconds
+	if Engine.get_frames_drawn() % 300 == 0:
+		print("🎨 Aura state: wood=%d/%d, embers=%d/%d" % [wood_count, MAX_WOOD, bone_ember_count, MAX_BONE_EMBERS])
+		if heal_aura_ring:
+			print("   Green aura ring exists: visible=%s, alpha=%.2f" % [heal_aura_ring.visible, heal_aura_ring.modulate.a])
+		if crit_aura_ring:
+			print("   Blue aura ring exists: visible=%s, alpha=%.2f" % [crit_aura_ring.visible, crit_aura_ring.modulate.a])
+
+	# Just trigger redraws - the animation is in the draw functions
+	if heal_aura_ring:
+		if wood_count > 0:
+			heal_aura_ring.modulate.a = 1.0
+			heal_aura_ring.queue_redraw()
+		else:
+			heal_aura_ring.modulate.a = 0.0
+
+	if crit_aura_ring:
+		if bone_ember_count > 0:
+			crit_aura_ring.modulate.a = 1.0
+			crit_aura_ring.queue_redraw()
+		else:
+			crit_aura_ring.modulate.a = 0.0
+
 func get_deterrent_radius() -> float:
 	"""Return the radius that deters enemies"""
 	return warmth_radius
+
+# ============================================
+# FUEL SYSTEM - Interactive Campfire Buffs
+# ============================================
+
+func get_current_heal_rate() -> float:
+	"""Calculate current healing rate based on wood fuel"""
+	var heal_buff_percent = float(wood_count) / float(MAX_WOOD)
+	heal_buff_percent = clamp(heal_buff_percent, 0.0, 1.0)
+	var bonus_healing = MAX_HEAL_BONUS * heal_buff_percent
+	return BASE_HEAL_RATE + bonus_healing
+
+func get_current_crit_bonus() -> float:
+	"""Calculate current crit chance bonus based on bone ember fuel"""
+	var crit_buff_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
+	crit_buff_percent = clamp(crit_buff_percent, 0.0, 1.0)
+	return MAX_CRIT_BONUS * crit_buff_percent
+
+func add_wood_fuel(amount: int) -> bool:
+	"""Add wood logs to campfire (returns true if added, false if maxed)"""
+	if wood_count >= MAX_WOOD:
+		return false
+
+	var added = min(amount, MAX_WOOD - wood_count)
+	wood_count += added
+	update_visual_intensity()
+	return true
+
+func add_bone_ember_fuel(amount: int) -> bool:
+	"""Add bone embers to campfire (returns true if added, false if maxed)"""
+	if bone_ember_count >= MAX_BONE_EMBERS:
+		return false
+
+	var added = min(amount, MAX_BONE_EMBERS - bone_ember_count)
+	bone_ember_count += added
+	update_visual_intensity()
+	return true
+
+func update_visual_intensity() -> void:
+	"""Update campfire visual intensity based on fuel levels"""
+	# Update heal rate
+	heal_rate = get_current_heal_rate()
+
+	# Calculate fuel percentages
+	var wood_percent = float(wood_count) / float(MAX_WOOD)
+	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
+
+	# Scale flame size based on wood (0.5x to 1.5x)
+	var flame_scale = 0.5 + (wood_percent * 1.0)
+	for flame in flame_nodes:
+		if is_instance_valid(flame):
+			flame.scale = Vector2(flame_scale, flame_scale)
+
+	# Add ghostly glow to fire light based on bone embers
+	if fire_light and is_instance_valid(fire_light):
+		# Base: warm orange (1.0, 0.7, 0.3)
+		# With bone embers: shift toward ghostly blue-white
+		var ghostly_mix = bone_percent * 0.4  # Max 40% ghostly
+		var r = 1.0
+		var g = lerp(0.7, 0.9, ghostly_mix)  # More green/white
+		var b = lerp(0.3, 0.8, ghostly_mix)  # Much more blue
+		fire_light.color = Color(r, g, b)
+
+		# Increase light intensity with fuel
+		var base_energy = 1.2
+		var bonus_energy = (wood_percent + bone_percent) * 0.3  # Up to +60% brightness
+		fire_light.energy = base_energy + bonus_energy
+
+func get_fuel_status() -> Dictionary:
+	"""Get current fuel levels and buffs for UI"""
+	return {
+		"wood_count": wood_count,
+		"bone_ember_count": bone_ember_count,
+		"max_wood": MAX_WOOD,
+		"max_bone_embers": MAX_BONE_EMBERS,
+		"heal_rate": get_current_heal_rate(),
+		"crit_bonus": get_current_crit_bonus(),
+		"wood_percent": float(wood_count) / float(MAX_WOOD),
+		"bone_percent": float(bone_ember_count) / float(MAX_BONE_EMBERS)
+	}
+
+func create_interaction_prompt() -> void:
+	"""Create Hold [F] Add Fuel prompt near campfire"""
+	var canvas = CanvasLayer.new()
+	canvas.name = "InteractionCanvas"
+	canvas.layer = 50
+	add_child(canvas)
+
+	interaction_prompt = Label.new()
+	interaction_prompt.name = "InteractionPrompt"
+	interaction_prompt.text = "Hold [F] Add Fuel"
+	interaction_prompt.add_theme_font_size_override("font_size", 16)
+	interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))  # Warm orange
+	interaction_prompt.add_theme_color_override("font_outline_color", Color.BLACK)
+	interaction_prompt.add_theme_constant_override("outline_size", 2)
+	interaction_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	interaction_prompt.visible = false
+	canvas.add_child(interaction_prompt)
+
+func update_interaction_prompt() -> void:
+	"""Update prompt visibility and position"""
+	if not interaction_prompt:
+		return
+
+	# Only show if player is near campfire and not currently fueling
+	if not player or not is_instance_valid(player):
+		interaction_prompt.visible = false
+		return
+
+	var distance = player.global_position.distance_to(global_position)
+	player_in_interact_range = distance <= 100.0  # Interact range slightly smaller than warmth radius
+
+	if player_in_interact_range and not is_fueling:
+		interaction_prompt.visible = true
+		# Position prompt above campfire
+		var viewport_size = get_viewport().get_visible_rect().size
+		var camera = get_viewport().get_camera_2d()
+		if camera:
+			var prompt_world_pos = global_position + Vector2(0, -80)
+			var camera_pos = camera.global_position
+			var screen_center = viewport_size / 2
+			var prompt_screen_pos = (prompt_world_pos - camera_pos) * camera.zoom.x + screen_center
+
+			# Center horizontally
+			var screen_x = prompt_screen_pos.x
+			if interaction_prompt.size.x > 0:
+				screen_x -= interaction_prompt.size.x / 2
+			var screen_y = prompt_screen_pos.y
+
+			interaction_prompt.position = Vector2(screen_x, screen_y)
+	else:
+		interaction_prompt.visible = false
+
+func create_progress_circle() -> void:
+	"""Create radial progress indicator for hold-to-fuel"""
+	var canvas = CanvasLayer.new()
+	canvas.name = "ProgressCanvas"
+	canvas.layer = 51  # Above interaction prompt
+	add_child(canvas)
+
+	# Create custom drawable node for radial progress
+	progress_circle = Node2D.new()
+	progress_circle.name = "ProgressCircle"
+	progress_circle.visible = false
+	canvas.add_child(progress_circle)
+
+	# Connect draw function
+	progress_circle.draw.connect(_draw_progress_circle)
+
+func _draw_progress_circle() -> void:
+	"""Draw the radial progress circle with wasteland/fire theme"""
+	if not progress_circle or not is_fueling:
+		return
+
+	# Position circle above campfire
+	var circle_world_pos = global_position + Vector2(0, -80)
+
+	# Convert world position to screen position (CanvasLayer uses screen coordinates)
+	var canvas_transform = get_viewport().get_canvas_transform()
+	var fire_screen_pos = canvas_transform * circle_world_pos
+
+	# === FIRE THEME ===
+	var radius = 25.0
+	var thickness = 4.0
+
+	# Color palette matching campfire theme
+	var bg_color = Color(0.12, 0.10, 0.08, 0.85)  # Dark weathered
+	var border_outer = Color(1.0, 0.6, 0.2, 1.0)  # Warm orange
+	var border_inner = Color(0.08, 0.06, 0.05, 1.0)  # Dark inner shadow
+	var progress_fire = Color(1.0, 0.7, 0.3, 0.95)  # Fire yellow-orange
+	var progress_glow = Color(1.0, 0.9, 0.5, 0.6)  # Bright glow
+
+	# Draw outer shadow (depth effect)
+	progress_circle.draw_circle(fire_screen_pos, radius + 4, Color(0.0, 0.0, 0.0, 0.6))
+
+	# Draw background circle
+	progress_circle.draw_circle(fire_screen_pos, radius, bg_color)
+
+	# Draw inner shadow ring
+	progress_circle.draw_arc(fire_screen_pos, radius - 2, 0, TAU, 48, border_inner, 3.0)
+
+	# Draw progress arc
+	if fuel_progress > 0.0:
+		var angle_from = -PI / 2  # Start from top
+		var angle_to = angle_from + (fuel_progress * TAU)  # Sweep clockwise
+
+		# Draw glow layer first (underneath)
+		var glow_points = 64
+		var glow_arc = PackedVector2Array()
+		glow_arc.append(fire_screen_pos)  # Center point
+		for i in range(glow_points + 1):
+			var t = float(i) / float(glow_points)
+			var angle = lerp(angle_from, angle_to, t)
+			var point = fire_screen_pos + Vector2(cos(angle), sin(angle)) * (radius - 3)
+			glow_arc.append(point)
+		progress_circle.draw_colored_polygon(glow_arc, progress_glow)
+
+		# Draw main progress arc
+		progress_circle.draw_arc(fire_screen_pos, radius - thickness / 2, angle_from, angle_to, 48, progress_fire, thickness)
+
+		# Add inner bright edge
+		var highlight_color = Color(1.0, 1.0, 0.8, 0.9)  # Bright highlight
+		progress_circle.draw_arc(fire_screen_pos, radius - thickness - 1, angle_from, angle_to, 48, highlight_color, 1.5)
+
+	# Draw outer border ring (fire orange)
+	progress_circle.draw_arc(fire_screen_pos, radius + 1, 0, TAU, 48, border_outer, 3.0)
+
+	# Draw inner border ring
+	progress_circle.draw_arc(fire_screen_pos, radius - thickness - 3, 0, TAU, 48, border_inner, 2.0)
+
+func handle_fuel_interaction(delta: float) -> void:
+	"""Handle hold-to-fuel mechanic"""
+	if not player_in_interact_range:
+		# Player left range - cancel immediately
+		if is_fueling:
+			cancel_fueling()
+		return
+
+	var f_is_pressed = Input.is_physical_key_pressed(KEY_F)
+
+	if f_is_pressed:
+		# F is being held - reset grace timer and fuel
+		cancel_grace_timer = 0.0
+
+		if not is_fueling:
+			start_fueling()
+		else:
+			# Increase progress while F is held
+			fuel_progress += delta / fuel_time_required
+
+			# Update progress circle
+			if progress_circle:
+				progress_circle.queue_redraw()
+
+			# Complete fuel when progress reaches 100%
+			if fuel_progress >= 1.0:
+				complete_fueling()
+	else:
+		# F is not pressed - use grace period before cancelling
+		if is_fueling:
+			cancel_grace_timer += delta
+
+			# Only cancel if grace period has elapsed
+			if cancel_grace_timer >= cancel_grace_period:
+				cancel_fueling()
+
+func start_fueling() -> void:
+	"""Start the fueling process"""
+	is_fueling = true
+	fuel_progress = 0.0
+	cancel_grace_timer = 0.0
+
+	if progress_circle:
+		progress_circle.visible = true
+		progress_circle.queue_redraw()
+
+func cancel_fueling() -> void:
+	"""Cancel fueling (F released or player moved away)"""
+	is_fueling = false
+	fuel_progress = 0.0
+
+	if progress_circle:
+		progress_circle.visible = false
+
+func complete_fueling() -> void:
+	"""Complete fueling after progress reaches 100%"""
+	is_fueling = false
+	fuel_progress = 0.0
+
+	if progress_circle:
+		progress_circle.visible = false
+
+	# Add all fuel from inventory
+	attempt_add_fuel_from_inventory()
+
+func attempt_add_fuel_from_inventory() -> void:
+	"""Automatically add all wood and bone embers from player inventory"""
+	# Find Dry Log items in inventory (iterate backwards to avoid index issues)
+	var wood_added = 0
+	for slot_idx in range(InventorySystem.inventory_items.size() - 1, -1, -1):
+		var item = InventorySystem.get_item(slot_idx)
+		if item and item.get("name") == "Dry Log":
+			var quantity = item.get("quantity", 1)
+			if add_wood_fuel(quantity):
+				wood_added += quantity
+				InventorySystem.remove_item(slot_idx)
+			else:
+				print("⚠️ Wood fuel at max capacity, couldn't add %d logs" % quantity)
+
+	# Find Bone Ember items in inventory (iterate backwards to avoid index issues)
+	var bone_added = 0
+	for slot_idx in range(InventorySystem.inventory_items.size() - 1, -1, -1):
+		var item = InventorySystem.get_item(slot_idx)
+		if item and item.get("name") == "Bone Ember":
+			var quantity = item.get("quantity", 1)
+			if add_bone_ember_fuel(quantity):
+				bone_added += quantity
+				InventorySystem.remove_item(slot_idx)
+			else:
+				print("⚠️ Bone ember fuel at max capacity, couldn't add %d embers" % quantity)
+
+	# Debug output
+	print("🔥 Campfire fueled: %d wood logs, %d bone embers added" % [wood_added, bone_added])
+	print("   Current fuel: %d/%d wood, %d/%d embers" % [wood_count, MAX_WOOD, bone_ember_count, MAX_BONE_EMBERS])
+
+func apply_crit_buff_to_player() -> void:
+	"""Apply crit chance buff to player while in campfire warmth"""
+	# Update CharacterStats with current campfire crit buff
+	var crit_bonus = get_current_crit_bonus()
+	CharacterStats.campfire_crit_buff = crit_bonus
+
+func decay_fuel(delta: float) -> void:
+	"""Slowly burn down fuel over time"""
+	# Decay wood (only if we have wood to burn)
+	if wood_count > 0:
+		wood_decay_accumulator += delta * WOOD_BURN_RATE
+		if wood_decay_accumulator >= 1.0:
+			var wood_to_remove = int(wood_decay_accumulator)
+			wood_count = max(0, wood_count - wood_to_remove)
+			wood_decay_accumulator -= wood_to_remove
+			if wood_to_remove > 0:
+				update_visual_intensity()
+
+	# Decay bone embers (only if we have embers to burn)
+	if bone_ember_count > 0:
+		bone_ember_decay_accumulator += delta * BONE_EMBER_BURN_RATE
+		if bone_ember_decay_accumulator >= 1.0:
+			var embers_to_remove = int(bone_ember_decay_accumulator)
+			bone_ember_count = max(0, bone_ember_count - embers_to_remove)
+			bone_ember_decay_accumulator -= embers_to_remove
+			if embers_to_remove > 0:
+				update_visual_intensity()
+
+func get_fuel_level_percent() -> float:
+	"""Get average fuel level as percentage (0.0 to 1.0) for scaling abandonment time"""
+	var wood_percent = float(wood_count) / float(MAX_WOOD)
+	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
+	return (wood_percent + bone_percent) / 2.0

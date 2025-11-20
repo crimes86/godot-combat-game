@@ -614,6 +614,16 @@ func _input(event: InputEvent) -> void:
 				CharacterStats.debug_fix_negative_xp()
 				update_stats_from_character()
 				print("Press F7 to verify XP is fixed")
+			KEY_F10:
+				# DEBUG: Add campfire fuel to inventory (Press F10)
+				var debug_fuel = load("res://scripts/debug/debug_fuel_items.gd")
+				if debug_fuel:
+					var instance = debug_fuel.new()
+					add_child(instance)
+					await instance.add_fuel_to_inventory()
+					# Clean up after async function completes
+					instance.queue_free()
+
 
 			KEY_C:
 				# Toggle character sheet (includes inventory)

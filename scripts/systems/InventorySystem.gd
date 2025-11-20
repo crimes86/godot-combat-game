@@ -11,6 +11,7 @@ extends Node
 const MAX_INVENTORY_SLOTS: int = 32  # 8 rows x 4 columns
 
 var inventory_items: Array = []  # Array of item dictionaries
+var suppress_signals: bool = false  # Flag to suppress signal emissions
 
 # ============================================
 # SIGNALS
@@ -56,8 +57,8 @@ func add_item(item: Dictionary) -> bool:
 				if space_available > 0:
 					var amount_to_add = min(quantity, space_available)
 					existing_item["quantity"] = current_quantity + amount_to_add
-					inventory_changed.emit()
-					print("📦 Stacked +%d %s (now %d in slot %d)" % [amount_to_add, item_name, existing_item["quantity"], i])
+					if not suppress_signals:
+						inventory_changed.emit()
 
 					# If we added everything, we're done
 					if amount_to_add >= quantity:
@@ -73,12 +74,11 @@ func add_item(item: Dictionary) -> bool:
 			var new_item = item.duplicate()
 			new_item["quantity"] = quantity
 			inventory_items[i] = new_item
-			item_added.emit(new_item)
-			inventory_changed.emit()
-			print("📦 Added item to slot %d: %s x%d" % [i, item_name, quantity])
+			if not suppress_signals:
+				item_added.emit(new_item)
+				inventory_changed.emit()
 			return true
 
-	print("❌ Inventory full! Cannot add item: %s" % item_name)
 	return false
 
 func remove_item(slot: int) -> Dictionary:
@@ -91,7 +91,6 @@ func remove_item(slot: int) -> Dictionary:
 		inventory_items[slot] = null
 		item_removed.emit(item, slot)
 		inventory_changed.emit()
-		print("📤 Removed item from slot %d: %s" % [slot, item.get("name", "Unknown")])
 		return item
 
 	return {}
@@ -115,7 +114,6 @@ func set_item(slot: int, item: Dictionary) -> void:
 		inventory_items[slot] = item
 
 	inventory_changed.emit()
-	print("📝 Set slot %d to: %s" % [slot, item.get("name", "Empty") if not item.is_empty() else "Empty"])
 
 func has_empty_slot() -> bool:
 	"""Check if there's any empty slot"""
@@ -146,12 +144,5 @@ func get_gold() -> int:
 
 func print_inventory() -> void:
 	"""Debug: Print all inventory contents"""
-	print("\n═══ INVENTORY ═══")
-	print("Gold: ", get_gold())
 	for i in range(inventory_items.size()):
 		var item = inventory_items[i]
-		if item:
-			print("Slot %d: %s (Value: %d)" % [i, item.get("name", "???"), item.get("value", 0)])
-		else:
-			print("Slot %d: [Empty]" % i)
-	print("═════════════════\n")
