@@ -2035,11 +2035,11 @@ func create_torches_along_path():
 	for i in range(path_positions.size() - 1):
 		total_path_length += path_positions[i].distance_to(path_positions[i + 1])
 
-	# Determine torch spacing (target 700px average)
-	var base_spacing = 700.0
+	# Determine torch spacing (target 933px average - reduced count by 25%)
+	var base_spacing = 933.0
 	var torch_count = 0
 	var current_distance = 0.0
-	var next_torch_at = base_spacing  # First torch at 700px from start
+	var next_torch_at = base_spacing  # First torch at 933px from start
 
 	# Walk along path and place torches
 	var segment_index = 0
@@ -2068,8 +2068,8 @@ func create_torches_along_path():
 				torches_node.add_child(torch)
 				torch_count += 1
 
-			# Next torch with slight random variation (640-760px)
-			next_torch_at += randf_range(640.0, 760.0)
+			# Next torch with slight random variation (853-1013px, 25% fewer torches)
+			next_torch_at += randf_range(853.0, 1013.0)
 
 		# Move to next segment
 		current_distance = segment_end_distance

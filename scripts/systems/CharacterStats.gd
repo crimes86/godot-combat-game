@@ -165,7 +165,7 @@ func get_base_crit_chance() -> float:
 	"""Calculate crit chance from luck + weapon"""
 	# Base formula: 1% at 10 LUCK, +0.6% per point (for rhythm combat)
 	var stat_crit = 0.01 + (luck - 10) * 0.006  # 16% at 35 LUCK (level 25+)
-	
+
 	# Add weapon bonus
 	var weapon_crit = 0.0
 	if equipped_weapon:
@@ -173,6 +173,15 @@ func get_base_crit_chance() -> float:
 
 	# Add campfire buff (from bone embers)
 	var total_crit = stat_crit + weapon_crit + campfire_crit_buff
+
+	# Debug logging for crit calculation
+	if campfire_crit_buff > 0:
+		print("🎯 CRIT CALCULATION:")
+		print("   Luck: %d → Stat Crit: %.1f%%" % [luck, stat_crit * 100])
+		print("   Weapon Crit: %.1f%%" % (weapon_crit * 100))
+		print("   Campfire Buff: %.1f%%" % (campfire_crit_buff * 100))
+		print("   Total (unclamped): %.1f%%" % (total_crit * 100))
+		print("   Total (clamped): %.1f%%" % (clamp(total_crit, 0.01, 0.50) * 100))
 
 	return clamp(total_crit, 0.01, 0.50)  # Min 1%, max 50%
 

@@ -110,13 +110,23 @@ func _process(_delta: float) -> void:
 	update_coal_pulsing()
 
 func _physics_process(delta: float) -> void:
-	# Heal player if in warmth
-	if player_in_warmth and player and is_instance_valid(player):
-		# Check if player needs healing
+	# Heal player based on fuel state:
+	# - No fuel (wood_count == 0): Minimal heal (5 HP/s), no visual aura, uses warmth_radius range
+	# - With fuel (wood_count > 0): Scaled heal (5-25 HP/s), visual aura, uses heal_aura range
+	if player and is_instance_valid(player):
 		var player_needs_healing = player.current_health < player.max_health
+		var should_heal = false
+
+		# Determine if player should receive healing based on fuel state
+		if wood_count == 0:
+			# No fuel: Use old warmth system (minimal heal, warmth_radius range)
+			should_heal = player_in_warmth and player_needs_healing
+		else:
+			# With fuel: Player gets healed if in warmth range (buffed system will scale rate)
+			should_heal = player_in_warmth and player_needs_healing
 
 		# Apply healing tick
-		if player_needs_healing:
+		if should_heal:
 			heal_timer += delta
 			if heal_timer >= heal_interval:
 				if player.has_method("heal"):
@@ -151,7 +161,7 @@ func _physics_process(delta: float) -> void:
 	# Check enemies near warmth (throttled for performance)
 	enemy_check_timer += delta
 	if enemy_check_timer >= enemy_check_interval:
-		check_enemy_deterrent()
+		# Removed: check_enemy_deterrent() - players can kite enemies to fire and fight with healing
 		enemy_check_timer = 0.0
 
 	# Fuel decay system (fires slowly burn down)
@@ -1322,23 +1332,8 @@ func apply_crit_buff_to_player() -> void:
 	CharacterStats.campfire_crit_buff = get_current_crit_buff()
 
 
-func check_enemy_deterrent() -> void:
-	"""Deter enemies from entering campfire warmth (performance optimized)"""
-	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
-
-	for enemy in enemies:
-		if not is_instance_valid(enemy):
-			continue
-
-		var distance = enemy.global_position.distance_to(global_position)
-		if distance <= warmth_radius:
-			# Enemy in warmth - mark as deterred
-			if enemy.has_method("set_deterred"):
-				enemy.set_deterred(true)
-		else:
-			# Enemy outside warmth
-			if enemy.has_method("set_deterred"):
-				enemy.set_deterred(false)
+# REMOVED: check_enemy_deterrent() function
+# Players can now kite enemies to campfire and fight while being healed by auras
 
 
 func decay_fuel(delta: float) -> void:
@@ -1538,8 +1533,14 @@ func update_buff_collision_radius() -> void:
 	var heal_aura_radius = 50.0 + (wood_count * 8.375)  # 50-468.75px
 	var crit_aura_radius = 50.0 + (bone_ember_count * 4.1875)  # 50-468.75px
 
-	# Use the larger of the two auras, but minimum of base warmth_radius (150)
-	var new_radius = max(warmth_radius, max(heal_aura_radius, crit_aura_radius))
+	var new_radius: float
+
+	# If no fuel at all, use warmth_radius (150px) for minimal healing range
+	# Otherwise, use the larger aura radius (visual auras start at 50px with fuel)
+	if wood_count == 0 and bone_ember_count == 0:
+		new_radius = warmth_radius  # 150px - for minimal healing with no visual
+	else:
+		new_radius = max(50.0, max(heal_aura_radius, crit_aura_radius))
 
 	# Update collision shape
 	collision.shape.radius = new_radius
@@ -1565,7 +1566,7 @@ func get_current_crit_buff() -> float:
 	"""Calculate current crit chance buff based on bone ember count"""
 	# Max buff: +16.5% (linear scaling)
 	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
-	return bone_percent * 16.5  # 0-16.5% crit chance
+	return bone_percent * 0.165  # 0-0.165 (0-16.5% crit chance)
 
 func create_fuel_ui() -> void:
 	"""Create UI panel showing current fuel levels and buffs"""

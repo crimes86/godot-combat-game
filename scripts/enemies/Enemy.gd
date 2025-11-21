@@ -273,26 +273,26 @@ func _on_click_area_input(_viewport: Node, event: InputEvent, _shape_idx: int) -
 	# This prevents double-damage bugs where both Player and Enemy handle the same click
 	return
 
-func take_damage(amount: float, is_crit: bool = false) -> void:
+func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = false) -> void:
 	if is_dying:
 		return
-	
+
 	# Validate amount
 	if is_nan(amount) or is_inf(amount) or amount < 0:
 		print("ERROR: Invalid damage amount: ", amount)
 		return
-	
+
 	if current_health <= 0:
 		return
-	
+
 	current_health -= amount
 	current_health = max(current_health, 0.0)
 
-	DebugConfig.log_combat("Enemy hit! Damage: %d (Crit: %s) | Health: %d/%d" % [amount, is_crit, current_health, max_health])
-	
+	DebugConfig.log_combat("Enemy hit! Damage: %d (Crit: %s, Weakpoint: %s) | Health: %d/%d" % [amount, is_crit, is_weakpoint_hit, current_health, max_health])
+
 	# ✨ NEW: Emit signal for player to handle feedback
 	damage_taken.emit(amount, is_crit)
-	
+
 	# ✨ NEW: Trigger hit flash visual feedback
 	if has_node("HitFlash"):
 		var hit_flash = get_node("HitFlash")
@@ -302,54 +302,54 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
 
-	# ✨ NEW: Spawn combat text
+	# ✨ NEW: Spawn combat text centered at 70% of sprite height
 	var combat_text_scene = preload("res://scenes/ui/combat_text.tscn")
 	var combat_text = combat_text_scene.instantiate()
 
 	# Set damage text
 	combat_text.text = str(int(amount))
 
-	# Determine text type - check if this is a weakpoint hit
-	var is_weakpoint = is_crit and in_crit_window
-	if is_weakpoint:
-		combat_text.type = 2  # TextType.WEAKPOINT
+	# Determine text type based on parameters
+	if is_weakpoint_hit:
+		combat_text.type = 2  # TextType.WEAKPOINT (orange)
 	elif is_crit:
-		combat_text.type = 1  # TextType.CRIT
+		combat_text.type = 1  # TextType.CRIT (yellow)
 		# 🔊 Play critical hit sound (non-weakpoint crits only)
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
 			sound_manager.play_critical_hit_sound(global_position, -3.0)
 	else:
-		combat_text.type = 0  # TextType.NORMAL
+		combat_text.type = 0  # TextType.NORMAL (white)
 
-	# Position: spawn based on player's facing direction for better visibility
-	# Adjustments: left(-50x,-50y), right(0x,-50y), up(0x,-50y), down(no adjustment)
-	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-	var spawn_pos = global_position
-	if player:
-		# Get direction from player to enemy to determine facing
-		var direction_to_enemy = (global_position - player.global_position).normalized()
+	# Calculate spawn position at 70% of sprite height (accounting for scale)
+	var sprite_scale = sprite.scale if sprite else Vector2.ONE
+	var sprite_height = 64.0 * sprite_scale.y  # LPC sprites are 64px tall
+	var sprite_pos = sprite.position if sprite else Vector2.ZERO
 
-		# Determine primary facing direction
-		var offset = Vector2.ZERO
-		if abs(direction_to_enemy.x) > abs(direction_to_enemy.y):
-			# Horizontal facing (left or right)
-			if direction_to_enemy.x < 0:
-				# Facing LEFT (enemy to the left of player)
-				offset = Vector2(-50, -50)
-			else:
-				# Facing RIGHT (enemy to the right of player)
-				offset = Vector2(0, -50)
+	# Spawn at 70% height from bottom (30% from top)
+	# Sprite is centered, so top is at -height/2
+	var spawn_y_offset = -(sprite_height * 0.3)  # 30% from top = 70% from bottom
+
+	# Horizontal and vertical offset based on hit type
+	var spawn_x_offset = -50.0  # All damage text starts -50px left
+	if is_weakpoint_hit:
+		# Weakpoints: offset to sides and higher than main column
+		# Alternate between left and right sides
+		if not has_meta("weakpoint_side"):
+			set_meta("weakpoint_side", 1)  # Start with right side
+
+		var side = get_meta("weakpoint_side")
+		if side > 0:
+			# Right side: -30px
+			spawn_x_offset = -30.0
 		else:
-			# Vertical facing (up or down)
-			if direction_to_enemy.y < 0:
-				# Facing UP (enemy above player)
-				offset = Vector2(0, -50)
-			else:
-				# Facing DOWN (enemy below player)
-				offset = Vector2(0, 0)  # Good as is
+			# Left side: -70px
+			spawn_x_offset = -70.0
+		spawn_y_offset -= 25.0  # 25px higher than main column
+		set_meta("weakpoint_side", -side)  # Flip for next hit
 
-		spawn_pos = global_position + offset
+	# Final spawn position: enemy center + sprite offset + calculated offset
+	var spawn_pos = global_position + sprite_pos + Vector2(spawn_x_offset, spawn_y_offset)
 
 	combat_text.global_position = spawn_pos
 	get_tree().root.add_child(combat_text)
@@ -357,7 +357,7 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	# ✨ NEW: Play hit sound
 	# NOTE: Weakpoint sounds are handled in weakpoint.gd directly
 	# Only play sounds here for non-weakpoint hits
-	if not is_weakpoint:
+	if not is_weakpoint_hit:
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
 			# Get player's weapon type for weapon-specific sounds
@@ -451,6 +451,11 @@ func grow_for_crit_window(difficulty: float = 1.0) -> void:
 	print("✅ [CRIT WINDOW] Grow complete, weakpoints active")
 
 func spawn_weakpoints() -> void:
+	# CRITICAL: Don't spawn weakpoints if enemy is already dying/dead
+	if is_dying or is_corpse:
+		print("⚠️ [WEAKPOINT] Enemy is dying/corpse - skipping weakpoint spawn")
+		return
+
 	# Calculate weakpoint count based on CURRENT PLAYER level (when crit triggers, not when enemy spawned)
 	# Level cap is 30, no stat gains past 25
 	var player_level = CharacterStats.level
@@ -542,7 +547,8 @@ func spawn_weakpoints() -> void:
 		# ✨ RANDOM ROTATION for dynamic look!
 		weakpoint.rotation = randf_range(-PI, PI)
 
-		# Connect weakpoint signals - just forward to manager
+		# Connect weakpoint signals - handle damage and forward to manager
+		weakpoint.weakpoint_hit.connect(_on_weakpoint_hit)
 		weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed_local)
 
 		add_child(weakpoint)
@@ -710,6 +716,15 @@ func open_loot_ui() -> void:
 	corpse_clicked.emit(self)
 	print("💀 Signal emitted!")
 
+func _on_weakpoint_hit(weakpoint) -> void:
+	"""Handle weakpoint being hit - deal damage and show combat text"""
+	# Calculate crit damage using player's base damage
+	var base_damage = CharacterStats.get_base_damage()
+	var crit_damage = base_damage * Constants.CRIT_DAMAGE_MULTIPLIER
+
+	# Deal damage with crit flag and weakpoint flag for orange text
+	take_damage(crit_damage, true, true)  # damage, is_crit, is_weakpoint
+
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Local handler - just forward to manager"""
 	print("🔍 [ENEMY] Weakpoint destroyed locally - emitting signal to manager")
@@ -771,10 +786,33 @@ func die() -> void:
 
 	is_dying = true
 
-	# Clean up any active weakpoints to prevent artifacting
+	# CRITICAL: Clean up any active weakpoints to prevent artifacting
+	# Use multiple methods to ensure all weakpoints are destroyed
+	print("💀 [CLEANUP] Enemy dying, cleaning up weakpoints...")
+
+	# Method 1: Clear from array and free
+	var weakpoint_count = weakpoints.size()
+	for weakpoint in weakpoints:
+		if is_instance_valid(weakpoint):
+			print("   - Freeing weakpoint from array: %s" % weakpoint.name)
+			weakpoint.visible = false
+			weakpoint.input_pickable = false
+			weakpoint.monitoring = false
+			weakpoint.monitorable = false
+			weakpoint.queue_free()
+	weakpoints.clear()
+
+	# Method 2: Iterate children and destroy any Weakpoint nodes (catches any missed)
 	for child in get_children():
 		if child is Weakpoint:
+			print("   - Found weakpoint in children (not in array): %s" % child.name)
+			child.visible = false
+			child.input_pickable = false
+			child.monitoring = false
+			child.monitorable = false
 			child.queue_free()
+
+	print("💀 [CLEANUP] Cleaned up %d weakpoints" % weakpoint_count)
 
 	# Grant XP to player (immediate reward)
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)

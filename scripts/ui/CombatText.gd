@@ -25,41 +25,58 @@ func _ready() -> void:
 
 	# Random horizontal offset to prevent overlapping (but NOT for player damage/heal text)
 	# Player damage/heal text should appear at precise positions based on facing direction
-	if type != TextType.DAMAGE and type != TextType.HEAL:
-		# Larger spread for better separation (fountain effect)
-		random_offset = Vector2(randf_range(-50, 50), randf_range(-15, 15))
+	# NORMAL and CRIT: Centered, tight vertical column
+	# WEAKPOINT: Mini stacks on sides, rotated toward corners
+	if type == TextType.WEAKPOINT:
+		# Weakpoints form tight mini-stacks on sides
+		# Spawn already offset by ±25px from Enemy.gd, just add tiny spread
+		random_offset = Vector2(randf_range(-10, 10), 0)  # Very tight horizontal spread
 		position += random_offset
-
-		# Arc offset for fountain pattern (numbers curve outward as they rise)
-		# Direction depends on initial horizontal offset
-		arc_offset = Vector2(random_offset.x * 0.5, 0)  # Continue in same direction
+		# Diagonal arc: move outward AND upward toward corners
+		# Determine side based on current X position (already offset by ±25px)
+		var side_direction = sign(position.x) if position.x != 0 else 1.0
+		arc_offset = Vector2(side_direction * 30, -25)  # Diagonal toward corners
+	elif type == TextType.NORMAL or type == TextType.CRIT:
+		# NORMAL and CRIT: Centered with minimal spread, straight up
+		random_offset = Vector2(randf_range(-15, 15), 0)  # Very tight horizontal spread
+		position += random_offset
+		arc_offset = Vector2.ZERO  # No arc, pure vertical movement
+	elif type != TextType.DAMAGE and type != TextType.HEAL:
+		# Only MISS gets slight random offset
+		random_offset = Vector2(randf_range(-20, 20), randf_range(-10, 10))
+		position += random_offset
+		arc_offset = Vector2.ZERO
+	else:
+		# DAMAGE and HEAL: No offset
+		random_offset = Vector2.ZERO
+		arc_offset = Vector2.ZERO
 	
 	# Set up text appearance based on type
 	match type:
 		TextType.NORMAL:
-			add_theme_color_override("font_color", Color.WHITE)
-			add_theme_font_size_override("font_size", 24)
+			add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))  # Pure white, full opacity
+			add_theme_font_size_override("font_size", 18)  # 24 * 0.75 = 18
 			animate_normal()
 		TextType.CRIT:
-			add_theme_color_override("font_color", Color(1.0, 0.9, 0.0))  # Yellow-gold
-			add_theme_font_size_override("font_size", 36)
+			add_theme_color_override("font_color", Color(1.0, 1.0, 0.2))  # Brighter yellow-gold
+			add_theme_font_size_override("font_size", 27)  # 36 * 0.75 = 27
 			animate_crit()
 		TextType.WEAKPOINT:
-			add_theme_color_override("font_color", Color(1.0, 0.4, 0.0))  # Orange-red
-			add_theme_font_size_override("font_size", 21)  # Half of previous size (was 42)
+			add_theme_color_override("font_color", Color(1.0, 0.3, 0.0))  # Bright red-orange
+			add_theme_font_size_override("font_size", 16)  # 21 * 0.75 ≈ 16
 			animate_weakpoint()
 		TextType.MISS:
-			add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 0.8))  # Gray
-			add_theme_font_size_override("font_size", 20)
+			add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 0.9))  # Brighter gray
+			add_theme_font_size_override("font_size", 15)  # 20 * 0.75 = 15
 			text = "MISS"
 			animate_miss()
 		TextType.DAMAGE:
-			add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))  # Bright red
-			add_theme_font_size_override("font_size", 30)
+			add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))  # Brighter red
+			add_theme_font_size_override("font_size", 23)  # 30 * 0.75 ≈ 23
 			animate_damage()
 		TextType.HEAL:
-			add_theme_color_override("font_color", Color(0.2, 1.0, 0.3))  # Bright green
-			add_theme_font_size_override("font_size", 28)
+			add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))  # Brighter green
+			add_theme_font_size_override("font_size", 21)  # 28 * 0.75 = 21
 			animate_heal()
 	
 	# Add thick black outline for readability
@@ -159,7 +176,7 @@ func animate_heal() -> void:
 static func _get_position_offset_for_direction(direction: Vector2) -> Vector2:
 	"""Calculate spawn position offset based on player's facing direction
 	Used for player damage/heal text positioning
-	Offsets: RIGHT(-25,0), LEFT(25,0), DOWN(0,-30), UP(0,50)"""
+	Offsets: RIGHT(-85,0), LEFT(-5,0), DOWN(0,-30), UP(0,15)"""
 	if direction == Vector2.ZERO:
 		return Vector2.ZERO
 
@@ -170,19 +187,19 @@ static func _get_position_offset_for_direction(direction: Vector2) -> Vector2:
 	if abs(dir.x) > abs(dir.y):
 		# Horizontal facing (left or right)
 		if dir.x > 0:
-			# Facing RIGHT
-			offset = Vector2(-25, 0)
+			# Facing RIGHT - offset left by 85px
+			offset = Vector2(-85, 0)
 		else:
-			# Facing LEFT
-			offset = Vector2(25, 0)
+			# Facing LEFT - offset left by 5px (-10 more from 5 = -5)
+			offset = Vector2(-5, 0)
 	else:
 		# Vertical facing (up or down)
 		if dir.y > 0:
-			# Facing DOWN
+			# Facing DOWN - no change
 			offset = Vector2(0, -30)
 		else:
-			# Facing UP
-			offset = Vector2(0, 50)
+			# Facing UP - offset up by 15 (-15 more from 30 = 15)
+			offset = Vector2(0, 15)
 
 	return offset
 

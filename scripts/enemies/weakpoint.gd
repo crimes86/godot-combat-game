@@ -313,12 +313,25 @@ func start_damage_pulse(progress: float) -> void:
 func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
 	if is_destroyed:
 		return
+
+	# Don't allow hits if parent enemy is dying or a corpse
+	var parent = get_parent()
+	if parent and parent.has_method("get"):
+		if parent.get("is_dying") or parent.get("is_corpse"):
+			return
+
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		hit()
 
 func hit() -> void:
 	if is_destroyed:
 		return
+
+	# Don't allow hits if parent enemy is dying or a corpse
+	var parent = get_parent()
+	if parent and parent.has_method("get"):
+		if parent.get("is_dying") or parent.get("is_corpse"):
+			return
 
 	current_hits += 1
 	weakpoint_hit.emit(self)
@@ -444,6 +457,11 @@ func destroy() -> void:
 
 	print("🔥 [WEAKPOINT] DESTROY() - Starting destruction sequence")
 	is_destroyed = true
+
+	# Immediately disable interaction to prevent further clicks
+	input_pickable = false
+	monitoring = false
+	monitorable = false
 
 	if sparkle_particles:
 		sparkle_particles.emitting = false

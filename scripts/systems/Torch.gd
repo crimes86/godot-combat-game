@@ -145,11 +145,27 @@ func create_torch_light() -> void:
 	torch_light.position = Vector2(0, -15)
 
 	# Bright lighting for path visibility
-	torch_light.energy = 1.4  # Brighter than before
-	torch_light.texture_scale = 2.0  # Larger radius for better coverage
+	torch_light.energy = 1.2  # Warm ambient glow
+	torch_light.texture_scale = 2.5  # Larger radius for better path coverage
 
 	# Warm orange-yellow fire color
 	torch_light.color = Color(1.0, 0.7, 0.3)
+
+	# Create procedural radial gradient texture
+	var img = Image.create(256, 256, false, Image.FORMAT_RGBA8)
+	var center = Vector2(128, 128)
+	var max_radius = 128.0
+
+	for x in range(256):
+		for y in range(256):
+			var dist = Vector2(x, y).distance_to(center)
+			var alpha = 1.0 - clamp(dist / max_radius, 0.0, 1.0)
+			# Smooth falloff curve
+			alpha = alpha * alpha
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
+
+	var texture = ImageTexture.create_from_image(img)
+	torch_light.texture = texture
 
 	# Enable shadows
 	torch_light.shadow_enabled = true

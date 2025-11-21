@@ -201,7 +201,7 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 		if hit_flash.has_method("flash"):
 			hit_flash.flash(is_crit)
 
-	# Spawn combat text (same as Enemy)
+	# Spawn combat text centered at 70% of sprite height (same as Enemy)
 	var combat_text_scene = preload("res://scenes/ui/combat_text.tscn")
 	var combat_text = combat_text_scene.instantiate()
 
@@ -217,34 +217,35 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	else:
 		combat_text.type = 0  # TextType.NORMAL
 
-	# Position: spawn based on player's facing direction for better visibility
-	# Adjustments: left(-50x,-50y), right(0x,-50y), up(0x,-50y), down(no adjustment)
-	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-	var spawn_pos = global_position
-	if player:
-		# Get direction from player to dummy to determine facing
-		var direction_to_dummy = (global_position - player.global_position).normalized()
+	# Calculate spawn position at 70% of sprite height (accounting for scale)
+	var sprite_scale = sprite.scale if sprite else Vector2.ONE
+	var sprite_height = 64.0 * sprite_scale.y  # LPC sprites are 64px tall
+	var sprite_pos = sprite.position if sprite else Vector2.ZERO
 
-		# Determine primary facing direction
-		var offset = Vector2.ZERO
-		if abs(direction_to_dummy.x) > abs(direction_to_dummy.y):
-			# Horizontal facing (left or right)
-			if direction_to_dummy.x < 0:
-				# Facing LEFT (dummy to the left of player)
-				offset = Vector2(-50, -50)
-			else:
-				# Facing RIGHT (dummy to the right of player)
-				offset = Vector2(0, -50)
+	# Spawn at 70% height from bottom (30% from top)
+	# Sprite is centered, so top is at -height/2
+	var spawn_y_offset = -(sprite_height * 0.3)  # 30% from top = 70% from bottom
+
+	# Horizontal and vertical offset based on hit type
+	var spawn_x_offset = -50.0  # All damage text starts -50px left
+	if is_weakpoint:
+		# Weakpoints: offset to sides and higher than main column
+		# Alternate between left and right sides
+		if not has_meta("weakpoint_side"):
+			set_meta("weakpoint_side", 1)  # Start with right side
+
+		var side = get_meta("weakpoint_side")
+		if side > 0:
+			# Right side: -30px
+			spawn_x_offset = -30.0
 		else:
-			# Vertical facing (up or down)
-			if direction_to_dummy.y < 0:
-				# Facing UP (dummy above player)
-				offset = Vector2(0, -50)
-			else:
-				# Facing DOWN (dummy below player)
-				offset = Vector2(0, 0)  # Good as is
+			# Left side: -70px
+			spawn_x_offset = -70.0
+		spawn_y_offset -= 25.0  # 25px higher than main column
+		set_meta("weakpoint_side", -side)  # Flip for next hit
 
-		spawn_pos = global_position + offset
+	# Final spawn position: dummy center + sprite offset + calculated offset
+	var spawn_pos = global_position + sprite_pos + Vector2(spawn_x_offset, spawn_y_offset)
 
 	combat_text.global_position = spawn_pos
 	get_tree().root.add_child(combat_text)
