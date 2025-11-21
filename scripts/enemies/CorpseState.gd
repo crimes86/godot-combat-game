@@ -31,14 +31,15 @@ const LOOT_DROP_CHANCES = {
 # Skeleton-specific loot table
 const SKELETON_LOOT_TABLE = [
 	{
-		"name": "Bone Shard",
-		"description": "Sharp fragment of bone. Could be useful for crafting.",
+		"name": "Bone Ember",
+		"description": "Wasteland bones infused with supernatural heat. Burns with ghostly fire.",
 		"value": 5,
 		"rarity": "Common",
 		"drop_weight": 70,
 		"type": "material",
 		"stackable": true,
-		"max_stack": 100
+		"max_stack": 200,
+		"fuel_type": "bone_ember"  # Used for campfire crit buff
 	},
 	{
 		"name": "Ancient Skull",
@@ -87,6 +88,7 @@ const GUARDIAN_LOOT_TABLE = [
 		"sprite_path": "res://assets/weapons/longsword.png",
 		"drop_weight": 8,  # 8% chance (low drop rate - grind required)
 		"type": "weapon",
+		"slot": "mainhand",  # Required for equipping weapons
 		"stackable": false
 	},
 	{
@@ -116,14 +118,15 @@ const GUARDIAN_LOOT_TABLE = [
 		"stackable": false
 	},
 	{
-		"name": "Bone Shard",
-		"description": "Sharp fragment of bone. Could be useful for crafting.",
+		"name": "Bone Ember",
+		"description": "Wasteland bones infused with supernatural heat. Burns with ghostly fire.",
 		"value": 5,
 		"rarity": "Common",
 		"drop_weight": 68,  # Fill remaining weight (common drop)
 		"type": "material",
 		"stackable": true,
-		"max_stack": 100
+		"max_stack": 200,
+		"fuel_type": "bone_ember"  # Used for campfire crit buff
 	}
 ]
 

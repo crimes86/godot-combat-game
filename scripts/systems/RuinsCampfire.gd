@@ -15,12 +15,13 @@ class_name RuinsCampfire
 @export var skeleton_count: int = 8
 @export var skeleton_respawn_time: float = 60.0  # 1 minute
 @export var convert_range: float = 100.0  # Distance to allow conversion
-@export var abandon_time: float = 120.0  # 2 minutes to consider abandoned
+@export var base_abandon_time: float = 120.0  # 2 minutes (no fuel)
+@export var max_abandon_time: float = 600.0  # 10 minutes (fully fueled)
 @export var patrol_before_ruins_time: float = 5.0  # Patrol for 5s before walking to ruins
 
 # Spawn area constraints
-@export var spawn_min_distance: float = 400.0  # Min distance from ruins to spawn
-@export var spawn_max_distance: float = 600.0  # Max distance from ruins to spawn
+@export var spawn_min_distance: float = 200.0  # Min distance from ruins to spawn (shorter walk)
+@export var spawn_max_distance: float = 350.0  # Max distance from ruins to spawn (closer patrol)
 @export var avoid_campfire_radius: float = 300.0  # Don't spawn near main campfire
 @export var avoid_path_distance: float = 150.0  # Don't spawn on path
 
@@ -177,6 +178,17 @@ func spawn_skeleton(index: int) -> void:
 		print("  ✅ Connected 'died' signal for Skeleton %d" % index)
 	else:
 		print("⚠️ Skeleton %d has no 'died' signal" % index)
+
+	# Connect corpse loot signal to game_world
+	if skeleton.has_signal("corpse_clicked"):
+		var game_world = get_parent()
+		if game_world and game_world.has_method("_on_corpse_clicked"):
+			skeleton.corpse_clicked.connect(game_world._on_corpse_clicked)
+			print("  ✅ Connected 'corpse_clicked' signal for Skeleton %d to game_world" % index)
+		else:
+			push_error("⚠️ Could not find game_world._on_corpse_clicked method!")
+	else:
+		print("⚠️ Skeleton %d has no 'corpse_clicked' signal" % index)
 
 	# Calculate designated guard position around ruins (evenly spaced)
 	var angle = (index / float(skeleton_count)) * TAU
@@ -416,6 +428,13 @@ func respawn_skeleton(data: Dictionary) -> void:
 		skeleton.died.connect(_on_skeleton_died.bind(skeleton))
 		print("  ✅ Connected 'died' signal for respawned Skeleton %d" % data["index"])
 
+	# Connect corpse loot signal to game_world
+	if skeleton.has_signal("corpse_clicked"):
+		var game_world = get_parent()
+		if game_world and game_world.has_method("_on_corpse_clicked"):
+			skeleton.corpse_clicked.connect(game_world._on_corpse_clicked)
+			print("  ✅ Connected 'corpse_clicked' signal for respawned Skeleton %d to game_world" % data["index"])
+
 	data["skeleton"] = skeleton
 	data["state"] = SkeletonState.PATROLLING_SPAWN
 	data["patrol_timer"] = patrol_before_ruins_time
@@ -494,9 +513,17 @@ func convert_to_ruins() -> void:
 
 func check_abandonment(delta: float) -> void:
 	"""Check if player has abandoned the campfire"""
+	# Calculate scaled abandonment time based on fuel levels
+	var current_abandon_time = base_abandon_time
+	if campfire_node and is_instance_valid(campfire_node):
+		if campfire_node.has_method("get_fuel_level_percent"):
+			var fuel_percent = campfire_node.get_fuel_level_percent()
+			# Scale from base_abandon_time to max_abandon_time based on fuel
+			current_abandon_time = base_abandon_time + (max_abandon_time - base_abandon_time) * fuel_percent
+
 	if not player or not is_instance_valid(player):
 		time_since_player_near += delta
-		if time_since_player_near >= abandon_time:
+		if time_since_player_near >= current_abandon_time:
 			convert_to_ruins()
 		return
 
@@ -509,7 +536,7 @@ func check_abandonment(delta: float) -> void:
 	else:
 		# Player is far
 		time_since_player_near += delta
-		if time_since_player_near >= abandon_time:
+		if time_since_player_near >= current_abandon_time:
 			convert_to_ruins()
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -644,6 +671,12 @@ func create_campfire_visual() -> void:
 	if campfire_scene:
 		campfire_node = campfire_scene.instantiate()
 		campfire_node.name = "Campfire"
+
+		# Disable enemy deterrence for ruins campfire (enemies can chase player into it)
+		if "enable_deterrence" in campfire_node:
+			campfire_node.enable_deterrence = false
+			print("  ⚔️ Deterrence disabled - enemies can chase player into ruins campfire")
+
 		add_child(campfire_node)
 		print("  🔥 Campfire visual created")
 	else:

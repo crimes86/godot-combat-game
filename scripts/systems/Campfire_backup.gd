@@ -1,5 +1,5 @@
 extends Area2D
-class_name Campfire
+# class_name Campfire  # DISABLED - conflicts with main Campfire.gd
 
 ## Enhanced Campfire with fuel system, visual intensity scaling, and ground-hugging mystical auras
 ## Features:
@@ -11,7 +11,7 @@ class_name Campfire
 ## - Sparse particle effects from magical coals
 
 # Constants
-const Constants = preload("res://scripts/constants.gd")
+const Constants = preload("res://scripts/utils/Constants.gd")
 
 # Fuel system constants
 const MAX_WOOD: int = 50  # Max wood logs for healing buff
@@ -56,13 +56,12 @@ var healing_audio_2: AudioStreamPlayer2D = null  # Second healing tone
 var flame_nodes: Array[Polygon2D] = []
 var coal_nodes: Array[Polygon2D] = []
 var coal_glow_nodes: Array[Polygon2D] = []  # Glowing coals between rocks and fire
-var coal_brightness_intensity: Array[float] = []  # How bright each coal burns (0.5-1.0)
-var coal_color_preferences: Array[int] = []  # 0=green, 1=blue, 2=orange when both fuels present
 var fire_light: PointLight2D = null
 
 # Ground mist auras
-var heal_mist: Polygon2D = null
-var crit_mist: Polygon2D = null
+var heal_mist: ColorRect = null
+var crit_mist: ColorRect = null
+var mist_canvas: CanvasLayer = null
 
 # Particle systems
 var heal_particles: CPUParticles2D = null
@@ -77,7 +76,7 @@ var player: CharacterBody2D = null
 var fire_sprite: Node2D = null
 
 func _ready() -> void:
-	add_to_group("campfire")
+	add_to_group(Constants.GROUP_CAMPFIRE)
 
 	# Create campfire visuals
 	create_campfire_scene()
@@ -105,9 +104,6 @@ func _ready() -> void:
 
 	print("🔥 Campfire initialized with fuel system")
 
-func _process(_delta: float) -> void:
-	"""Update coal pulsing animation every frame"""
-	update_coal_pulsing()
 
 func _physics_process(delta: float) -> void:
 	# Heal player if in warmth
@@ -216,14 +212,11 @@ func create_campfire_scene() -> void:
 		rock.name = "Rock" + str(i)
 		rock.z_index = -3
 
-		# Random rotation for more natural appearance
-		var rock_rotation = randf_range(0, TAU)
-
 		# Irregular rock shape with smaller sizes
 		var rock_size = randf_range(4.0, 6.5)
 		var rock_points = PackedVector2Array()
 		for j in range(6):
-			var rock_angle = (j * TAU) / 6.0 + rock_rotation  # Apply rotation
+			var rock_angle = (j * TAU) / 6.0
 			var rock_radius = rock_size * randf_range(0.7, 1.0)
 			rock_points.append(rock_pos + Vector2(cos(rock_angle), sin(rock_angle)) * rock_radius)
 		rock.polygon = rock_points
@@ -259,7 +252,7 @@ func create_campfire_scene() -> void:
 	])
 	log_left.color = log_color
 	log_left.name = "LogLeft"
-	log_left.z_index = 1  # Above coals and coal glow, visible in flames
+	log_left.z_index = -1  # Above coals
 	fire_sprite.add_child(log_left)
 
 	# Left log charred end (50% thicker, moved up 20px, scaled 75%)
@@ -271,7 +264,7 @@ func create_campfire_scene() -> void:
 		Vector2(-13.5, 8.25)     # 75% scale
 	])
 	log_left_char.color = log_color_burnt
-	log_left_char.z_index = 1
+	log_left_char.z_index = -1
 	fire_sprite.add_child(log_left_char)
 
 	# Right log (leaning left) - positioned on coals, 50% thicker, scaled 75%
@@ -284,7 +277,7 @@ func create_campfire_scene() -> void:
 	])
 	log_right.color = log_color
 	log_right.name = "LogRight"
-	log_right.z_index = 1  # Above coals and coal glow, visible in flames
+	log_right.z_index = -1
 	fire_sprite.add_child(log_right)
 
 	# Right log charred end (50% thicker, moved up 20px, scaled 75%)
@@ -296,7 +289,7 @@ func create_campfire_scene() -> void:
 		Vector2(13.5, 8.25)      # 75% scale
 	])
 	log_right_char.color = log_color_burnt
-	log_right_char.z_index = 1
+	log_right_char.z_index = -1
 	fire_sprite.add_child(log_right_char)
 
 	# Back log (centered, vertical) - positioned on coals, 50% thicker, scaled 75%
@@ -309,7 +302,7 @@ func create_campfire_scene() -> void:
 	])
 	log_back.color = log_color_dark
 	log_back.name = "LogBack"
-	log_back.z_index = 1  # Above coals and coal glow, visible in flames
+	log_back.z_index = -1
 	fire_sprite.add_child(log_back)
 
 	# Back log charred end (50% thicker, moved up 20px, scaled 75%)
@@ -321,10 +314,10 @@ func create_campfire_scene() -> void:
 		Vector2(3, 6)            # 75% scale
 	])
 	log_back_char.color = log_color_burnt
-	log_back_char.z_index = 1
+	log_back_char.z_index = -1
 	fire_sprite.add_child(log_back_char)
 
-	# Create bone ember coals radiating from center
+	# Create coals radiating from center, staying clear of rock ring
 	for i in range(10):
 		var coal_angle = randf() * TAU
 		var coal_distance = randf_range(5, 20)  # Center cluster
@@ -334,7 +327,7 @@ func create_campfire_scene() -> void:
 		coal.name = "Coal" + str(i)
 		coal.z_index = -2  # Below fire
 
-		# Small irregular bone ember shape
+		# Small irregular coal shape
 		var coal_size = randf_range(2, 4)
 		var coal_points = PackedVector2Array()
 		for j in range(5):
@@ -343,28 +336,14 @@ func create_campfire_scene() -> void:
 			coal_points.append(coal_pos + Vector2(cos(point_angle), sin(point_angle)) * radius)
 		coal.polygon = coal_points
 
-		# Blackened bone ember with red glow (unbuffed state)
-		coal.color = Color(0.15, 0.08, 0.05, 1.0)  # Dark charcoal/bone color
-
-		# Add ultra-thin dark border for grounding
-		var coal_border = Line2D.new()
-		coal_border.width = 0.8
-		coal_border.default_color = Color(0.08, 0.04, 0.02, 0.9)  # Very dark brown-black
-		coal_border.closed = true
-		for point in coal_points:
-			coal_border.add_point(point - coal_pos)  # Make relative to coal position
-		coal.add_child(coal_border)
-
+		# Base orange-red coal color
+		coal.color = Color(1.0, 0.3, 0.0, 1.0)
 		fire_sprite.add_child(coal)
-
-		# Add random brightness intensity for this coal (some burn hotter)
-		coal_brightness_intensity.append(randf_range(0.6, 1.0))  # Varied heat intensity
-		# Mix of green, blue, and orange: 0=green, 1=blue, 2=orange
-		coal_color_preferences.append(i % 3)  # Cycle through 0,1,2,0,1,2...
 
 	# Create light source
 	fire_light = PointLight2D.new()
 	fire_light.enabled = true
+	fire_light.texture = preload("res://assets/textures/light_gradient.png")
 	fire_light.texture_scale = 2.5
 	fire_light.color = Color(1.0, 0.7, 0.3)
 	fire_light.energy = 1.2
@@ -465,7 +444,7 @@ func create_fire_particles() -> void:
 	# AURORA WISPS (magical green/blue/cyan streaks) - only visible when fuel is added
 	var aurora_particles = CPUParticles2D.new()
 	aurora_particles.name = "AuroraParticles"
-	aurora_particles.emitting = false  # Start disabled, only emit when buffed
+	aurora_particles.emitting = true
 	aurora_particles.amount = 15
 	aurora_particles.lifetime = 3.0  # Long-lived magical wisps
 	aurora_particles.preprocess = 1.0
@@ -502,132 +481,87 @@ func create_fire_particles() -> void:
 	fire_sprite.add_child(aurora_particles)
 
 	# GLOWING COALS (between rock ring and fire base) - ambient glow around fire
-	# These sit on the ground filling the interior, slightly smaller than rock ring
-	# Place embers in concentric rings to ensure good coverage
-	var rings = 4  # Number of concentric rings
-	var embers_per_ring = [8, 12, 16, 20]  # More embers in outer rings
-	var glow_index = 0  # Track total glow ember count for color preferences
+	# These sit on the ground in the gap between rocks (~28px) and fire base
+	for i in range(20):
+		var coal_glow = Polygon2D.new()
+		coal_glow.name = "CoalGlow" + str(i)
 
-	for ring in range(rings):
-		var ring_distance = lerp(5.0, 22.0, float(ring) / float(rings - 1))  # Distance for this ring (smaller than 28px rock ring)
-		var num_embers = embers_per_ring[ring]
+		# Position INSIDE rock ring, filling the space between rocks and fire
+		var angle = randf() * TAU
+		var distance = randf_range(12.0, 24.0)  # Inside the 28px rock ring radius
+		var coal_pos = Vector2(cos(angle), sin(angle)) * distance
 
-		for i in range(num_embers):
-			var coal_glow = Polygon2D.new()
-			coal_glow.name = "CoalGlow" + str(ring) + "_" + str(i)
+		# Small irregular coal shapes
+		var coal_size = randf_range(2.5, 4.5)
+		var coal_points = PackedVector2Array()
+		for j in range(5):
+			var point_angle = (j * TAU) / 5.0
+			var radius = coal_size * randf_range(0.7, 1.0)
+			coal_points.append(coal_pos + Vector2(cos(point_angle), sin(point_angle)) * radius)
+		coal_glow.polygon = coal_points
 
-			# Position in ring with some randomness
-			var angle = (float(i) / float(num_embers)) * TAU + randf_range(-0.1, 0.1)
-			var distance = ring_distance + randf_range(-3.0, 3.0)  # Slight distance variation
-			var coal_pos = Vector2(cos(angle), sin(angle)) * distance
-
-			# Varied coal sizes - larger embers in center, smaller toward edges
-			var coal_size = randf_range(3.0, 5.5) - (ring * 0.3)
-			var coal_points = PackedVector2Array()
-			for j in range(5):
-				var point_angle = (j * TAU) / 5.0
-				var radius = coal_size * randf_range(0.7, 1.0)
-				coal_points.append(coal_pos + Vector2(cos(point_angle), sin(point_angle)) * radius)
-			coal_glow.polygon = coal_points
-
-			# Start with red-orange pulsing glow (will be animated in update_visual_intensity)
-			coal_glow.color = Color(0.9, 0.2, 0.05, 0.85)  # Red-orange glow
-			coal_glow.z_index = -2  # Same as main coals
-
-			# Add ultra-thin dark border for grounding
-			var glow_border = Line2D.new()
-			glow_border.width = 0.8
-			glow_border.default_color = Color(0.08, 0.04, 0.02, 0.9)  # Very dark brown-black
-			glow_border.closed = true
-			for point in coal_points:
-				glow_border.add_point(point - coal_pos)  # Make relative to coal position
-			coal_glow.add_child(glow_border)
-
-			fire_sprite.add_child(coal_glow)
-
-			# Add random brightness intensity for this coal glow (some burn hotter)
-			coal_brightness_intensity.append(randf_range(0.6, 1.0))  # Varied heat intensity
-			# Mix of green, blue, and orange: 0=green, 1=blue, 2=orange
-			coal_color_preferences.append(glow_index % 3)  # Cycle through 0,1,2,0,1,2...
-			glow_index += 1
+		# Glowing ember color - orange to red
+		var brightness = randf_range(0.6, 1.0)
+		coal_glow.color = Color(1.0 * brightness, 0.25 * brightness, 0.0, 0.85)
+		coal_glow.z_index = -2  # Same as main coals
+		coal_glow.name = "CoalGlow" + str(i)
+		fire_sprite.add_child(coal_glow)
 
 	# POLYGON FLAMES - Create 3 simple flame layers for natural fire look
 	for layer in range(3):
 		for i in range(3 + layer * 2):  # 3, 5, 7 flames per layer
-			# Skip outer flames on layer 2 (top layer) - only create middle 4
-			if layer == 2 and (i == 0 or i == 1 or i == 6):
-				continue
-
 			var flame = Polygon2D.new()
 			var offset = (i - (1 + layer)) * (8 - layer * 2)  # Tighter as we go up
-			# Base flames: 31.2, 14.25, 8.8 (layer 0 is 20% larger, layer 1 is 25% smaller, layer 2 is 20% shorter)
-			var height = (26 - layer * 7.5) + randf() * 4
-			if layer == 0:  # Bottom layer - 20% larger
-				height = (31.2 - layer * 7.5) + randf() * 4.8
-			elif layer == 1:  # Middle layer - 25% smaller
-				height = 14.25 + randf() * 3.0
-			elif layer == 2:  # Top layer - 20% shorter
-				height = 8.8 + randf() * 1.6
+			# Top layer shorter: 20, 15, 7 (instead of 10)
+			var height = (20 - layer * 5) + randf() * 3
+			if layer == 2:  # Top layer
+				height = 7 + randf() * 2
 			var base_width = (6.0 - layer * 1.5)
-			if layer == 0:  # Bottom layer - 20% wider
-				base_width = 7.2
-			elif layer == 1:  # Middle layer - 25% narrower
-				base_width = 3.375
 
 			# Vary base Y
 			var base_y = 10 - layer * 3 + abs(offset) * 0.15
 
-			# Gentle sway and crown bend
+			# Gentle sway
 			var lean = offset * 0.3
 			var sway = randf_range(-0.4, 0.4)
 
-			# Add outward bend to outermost flames for crown shape
-			var is_outermost = (i == 0 or i == (3 + layer * 2) - 1)
-			var crown_bend = 0.0
-			if is_outermost and layer == 0:  # Bottom layer outer flames
-				crown_bend = 3.0 if i == 0 else -3.0  # Bend outward
-			elif is_outermost and layer == 1:  # Middle layer outer flames
-				crown_bend = 2.0 if i == 0 else -2.0  # Less bend
-			elif is_outermost and layer == 2:  # Top layer outer flames
-				crown_bend = 1.0 if i == 0 else -1.0  # Subtle bend
-
-			# Simple flame shape with crown bend applied
+			# Simple flame shape
 			flame.polygon = PackedVector2Array([
 				Vector2(offset - base_width, base_y),
-				Vector2(offset - base_width * 0.7 + lean * 0.4 + sway + crown_bend * 0.3, -height * 0.5),
-				Vector2(offset - base_width * 0.4 + lean * 0.7 + sway + crown_bend * 0.6, -height * 0.85),
-				Vector2(offset + lean + sway + crown_bend, -height),
-				Vector2(offset + base_width * 0.4 + lean * 0.7 + sway + crown_bend * 0.6, -height * 0.85),
-				Vector2(offset + base_width * 0.7 + lean * 0.4 + sway + crown_bend * 0.3, -height * 0.5),
+				Vector2(offset - base_width * 0.7 + lean * 0.4 + sway, -height * 0.5),
+				Vector2(offset - base_width * 0.4 + lean * 0.7 + sway, -height * 0.85),
+				Vector2(offset + lean + sway, -height),
+				Vector2(offset + base_width * 0.4 + lean * 0.7 + sway, -height * 0.85),
+				Vector2(offset + base_width * 0.7 + lean * 0.4 + sway, -height * 0.5),
 				Vector2(offset + base_width, base_y)
 			])
 
-			# Color by layer - BRIGHTER (increased alpha)
+			# Color by layer - darker to brighter (very transparent to see wood clearly)
 			var colors = PackedColorArray()
-			if layer == 0:  # Bottom - red/orange (brighter)
-				colors.append(Color(0.8, 0.2, 0.0, 0.65))
-				colors.append(Color(0.95, 0.4, 0.0, 0.6))
-				colors.append(Color(1.0, 0.55, 0.1, 0.55))
-				colors.append(Color(1.0, 0.7, 0.2, 0.5))
-				colors.append(Color(1.0, 0.55, 0.1, 0.55))
-				colors.append(Color(0.95, 0.4, 0.0, 0.6))
-				colors.append(Color(0.8, 0.2, 0.0, 0.65))
-			elif layer == 1:  # Middle - orange/yellow (brighter)
-				colors.append(Color(1.0, 0.5, 0.0, 0.6))
-				colors.append(Color(1.0, 0.65, 0.15, 0.55))
-				colors.append(Color(1.0, 0.8, 0.3, 0.5))
-				colors.append(Color(1.0, 0.9, 0.5, 0.45))
-				colors.append(Color(1.0, 0.8, 0.3, 0.5))
-				colors.append(Color(1.0, 0.65, 0.15, 0.55))
-				colors.append(Color(1.0, 0.5, 0.0, 0.6))
-			else:  # Top - yellow/white (25% dimmer)
-				colors.append(Color(1.0, 0.75, 0.25, 0.375))
-				colors.append(Color(1.0, 0.85, 0.4, 0.3375))
-				colors.append(Color(1.0, 0.95, 0.6, 0.3))
-				colors.append(Color(1.0, 1.0, 0.8, 0.2625))
-				colors.append(Color(1.0, 0.95, 0.6, 0.3))
-				colors.append(Color(1.0, 0.85, 0.4, 0.3375))
-				colors.append(Color(1.0, 0.75, 0.25, 0.375))
+			if layer == 0:  # Bottom - red/orange (very transparent)
+				colors.append(Color(0.8, 0.2, 0.0, 0.45))
+				colors.append(Color(0.95, 0.4, 0.0, 0.4))
+				colors.append(Color(1.0, 0.55, 0.1, 0.35))
+				colors.append(Color(1.0, 0.7, 0.2, 0.25))
+				colors.append(Color(1.0, 0.55, 0.1, 0.35))
+				colors.append(Color(0.95, 0.4, 0.0, 0.4))
+				colors.append(Color(0.8, 0.2, 0.0, 0.45))
+			elif layer == 1:  # Middle - orange/yellow (very transparent)
+				colors.append(Color(1.0, 0.5, 0.0, 0.4))
+				colors.append(Color(1.0, 0.65, 0.15, 0.35))
+				colors.append(Color(1.0, 0.8, 0.3, 0.3))
+				colors.append(Color(1.0, 0.9, 0.5, 0.25))
+				colors.append(Color(1.0, 0.8, 0.3, 0.3))
+				colors.append(Color(1.0, 0.65, 0.15, 0.35))
+				colors.append(Color(1.0, 0.5, 0.0, 0.4))
+			else:  # Top - yellow/white (very transparent)
+				colors.append(Color(1.0, 0.75, 0.25, 0.35))
+				colors.append(Color(1.0, 0.85, 0.4, 0.3))
+				colors.append(Color(1.0, 0.95, 0.6, 0.25))
+				colors.append(Color(1.0, 1.0, 0.8, 0.2))
+				colors.append(Color(1.0, 0.95, 0.6, 0.25))
+				colors.append(Color(1.0, 0.85, 0.4, 0.3))
+				colors.append(Color(1.0, 0.75, 0.25, 0.35))
 
 			flame.vertex_colors = colors
 			flame.name = "Flame_" + str(layer) + "_" + str(i)
@@ -639,9 +573,11 @@ func create_fire_particles() -> void:
 
 func setup_audio() -> void:
 	"""Setup audio streams for fire and healing"""
-	# Fire crackling audio (looping) - disabled, audio file not available
+	# Fire crackling audio (looping)
 	fire_audio = AudioStreamPlayer2D.new()
+	fire_audio.stream = preload("res://assets/audio/fire_loop.ogg")
 	fire_audio.volume_db = -8.0
+	fire_audio.autoplay = true
 	fire_audio.max_distance = 500.0
 	fire_audio.attenuation = 2.0
 	fire_audio.panning_strength = 0.8
@@ -692,19 +628,8 @@ func cache_animation_nodes() -> void:
 
 
 func animate_fire(delta: float) -> void:
-	"""Optimized fire animation using cached references - scales with fuel intensity"""
+	"""Optimized fire animation using cached references"""
 	var time = Time.get_ticks_msec() / 1000.0
-
-	# Calculate intensity based on total fuel (more fuel = more intense dancing)
-	var wood_percent = float(wood_count) / float(MAX_WOOD)
-	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
-	var total_fuel_percent = (wood_percent + bone_percent) / 2.0
-
-	# Animation speed scales from 1.0x (no fuel) to 1.875x (max fuel) - 25% slower max
-	var animation_speed = 1.0 + (total_fuel_percent * 0.875)
-
-	# Movement intensity scales from base to 2x with fuel
-	var movement_intensity = 1.0 + total_fuel_percent
 
 	# Animate each cached flame with slight variations
 	for flame in flame_nodes:
@@ -715,21 +640,14 @@ func animate_fire(delta: float) -> void:
 				var layer = int(name_parts[1])
 				var index = int(name_parts[2])
 
-				# Layer-specific phase offsets to desynchronize layers
-				var layer_phase_offset = layer * 2.1  # Each layer starts at different time
-				var index_phase_offset = index * 0.3
-
-				# Different wave speeds for variation - scales with fuel
-				var sway = sin(time * 2.0 * animation_speed + layer_phase_offset + index_phase_offset) * 1.5 * movement_intensity
-				var stretch_y = 1.0 + sin(time * 3.0 * animation_speed + layer_phase_offset * 1.5 + index_phase_offset) * 0.1 * movement_intensity
-
-				# Add X scale variation (expand/contract) for blending effect
-				var expand = 1.0 + sin(time * 2.5 * animation_speed + layer_phase_offset * 0.8 + index_phase_offset + 1.0) * 0.08 * movement_intensity
+				# Different wave speeds for variation
+				var wave_offset = (layer * 0.5) + (index * 0.3)
+				var sway = sin(time * 2.0 + wave_offset) * 1.5
+				var stretch = 1.0 + sin(time * 3.0 + wave_offset) * 0.1
 
 				# Apply transform
 				flame.rotation = sway * 0.03  # Slight rotation
-				flame.scale.y = stretch_y
-				flame.scale.x = expand  # Expand/contract horizontally
+				flame.scale.y = stretch
 
 	# Make coals pulse/glow
 	var pulse = 0.9 + sin(time * 2.0) * 0.1  # Subtle breathing
@@ -741,266 +659,206 @@ func animate_fire(delta: float) -> void:
 
 
 func create_ground_mist_auras() -> void:
-	"""Create simple filled circle auras with low alpha - use light blend to prevent mixing"""
-	# CRIT AURA (Cyan-Blue) - larger, behind heal aura
-	crit_mist = Polygon2D.new()
-	crit_mist.name = "CritAura"
-	crit_mist.z_index = -2  # Same as coals, visible above rocks
-	crit_mist.color = Color(0.0, 0.6, 1.0, 0.07)  # Low alpha cyan (slightly lower)
-	crit_mist.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	crit_mist.material = CanvasItemMaterial.new()
-	crit_mist.material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
-	crit_mist.visible = false
-	fire_sprite.add_child(crit_mist)
+	"""Create subtle ground-hugging mist effects for buffs"""
+	# Create canvas layer below gameplay
+	mist_canvas = CanvasLayer.new()
+	mist_canvas.name = "MistCanvas"
+	mist_canvas.layer = -1
+	add_child(mist_canvas)
 
-	# HEAL AURA (Green) - smaller, in front of crit aura
-	heal_mist = Polygon2D.new()
-	heal_mist.name = "HealAura"
-	heal_mist.z_index = -1  # Above crit aura
-	heal_mist.color = Color(0.0, 1.0, 0.0, 0.05)  # Lower alpha green (lighter)
-	heal_mist.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	heal_mist.material = CanvasItemMaterial.new()
-	heal_mist.material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
-	heal_mist.visible = false
-	fire_sprite.add_child(heal_mist)
+	# HEAL MIST (Green)
+	heal_mist = ColorRect.new()
+	heal_mist.name = "HealMist"
+	heal_mist.size = Vector2(800, 800)
+	heal_mist.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	print("✅ Created simple polygon auras")
+	# Create shader for ground-hugging mist
+	var heal_shader = Shader.new()
+	heal_shader.code = """
+shader_type canvas_item;
+
+uniform float radius : hint_range(0.0, 400.0) = 300.0;
+uniform float inner_radius : hint_range(0.0, 100.0) = 45.0;
+uniform float mist_height : hint_range(0.0, 50.0) = 25.0;
+uniform float time_offset = 0.0;
+uniform vec3 mist_color : source_color = vec3(0.0, 1.0, 0.0);
+uniform float alpha_multiplier : hint_range(0.0, 1.0) = 0.15;
+
+// Simple noise function
+float noise(vec2 p) {
+	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+void fragment() {
+	vec2 center = vec2(400.0, 400.0);
+	vec2 pos = UV * 800.0;
+	float dist = distance(pos, center);
+
+	// Only render in the ring area
+	if (dist < inner_radius || dist > radius) {
+		COLOR = vec4(0.0);
+		return;
+	}
+
+	// Ground-hugging effect: fade based on distance from center vertically
+	float vertical_offset = abs(pos.y - center.y);
+	float height_fade = smoothstep(mist_height, 0.0, vertical_offset);
+
+	// Radial fade from inner to outer
+	float radial_fade = smoothstep(radius, inner_radius + 50.0, dist);
+	radial_fade *= smoothstep(inner_radius, inner_radius + 20.0, dist);
+
+	// Multi-layer flowing noise pattern
+	vec2 noise_coord1 = pos * 0.012 + vec2(time_offset * 0.25, time_offset * 0.15);
+	vec2 noise_coord2 = pos * 0.008 + vec2(-time_offset * 0.18, time_offset * 0.22);
+	float n1 = noise(noise_coord1);
+	float n2 = noise(noise_coord2);
+	float n3 = noise(pos * 0.02 + vec2(time_offset * 0.1));
+
+	float flow = n1 * 0.4 + n2 * 0.3 + n3 * 0.3;
+
+	// Combine fades
+	float final_alpha = height_fade * radial_fade * flow * alpha_multiplier;
+
+	COLOR = vec4(mist_color, final_alpha);
+}
+"""
+
+	var heal_material = ShaderMaterial.new()
+	heal_material.shader = heal_shader
+	heal_mist.material = heal_material
+
+	mist_canvas.add_child(heal_mist)
+
+	# CRIT MIST (Cyan-Blue)
+	crit_mist = ColorRect.new()
+	crit_mist.name = "CritMist"
+	crit_mist.size = Vector2(800, 800)
+	crit_mist.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var crit_shader = Shader.new()
+	crit_shader.code = heal_shader.code  # Same shader, different uniforms
+
+	var crit_material = ShaderMaterial.new()
+	crit_material.shader = crit_shader
+	crit_mist.material = crit_material
+
+	mist_canvas.add_child(crit_mist)
+
+	print("✅ Created ground-hugging mist auras")
 
 
 func update_ground_mist(delta: float) -> void:
-	"""Update aura circles with wavy edges"""
+	"""Update ground mist shader uniforms based on fuel levels"""
 	if not heal_mist or not crit_mist:
 		return
 
+	var time = Time.get_ticks_msec() / 1000.0
 	var wood_percent = float(wood_count) / float(MAX_WOOD)
 	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
 
-	# Calculate radii - both can reach same max size (468.75px) with equal growth rate per item
-	# Growth rate: 8.375px per wood, 4.1875px per ember (both reach 468.75px max)
-	# Heal aura: 50px base + (8.375px * wood_count) → max 468.75px at 50 wood
-	# Crit aura: 50px base + (4.1875px * bone_count) → max 468.75px at 100 embers
-	var heal_radius = 50.0 + (wood_count * 8.375)  # 50-468.75px
-	var crit_radius = 50.0 + (bone_ember_count * 4.1875)  # 50-468.75px
+	# Position mists at campfire location in screen space
+	var viewport_size = get_viewport().get_visible_rect().size
+	var camera = get_viewport().get_camera_2d()
+	if camera:
+		var fire_world_pos = global_position
+		var camera_pos = camera.global_position
+		var screen_center = viewport_size / 2
+		var fire_screen_pos = (fire_world_pos - camera_pos) * camera.zoom.x + screen_center
 
-	# Dynamically set z-index: smaller aura always on top
-	if heal_radius < crit_radius:
-		# Heal is smaller - put it on top
-		heal_mist.z_index = -1
-		crit_mist.z_index = -2
-	else:
-		# Crit is smaller - put it on top
-		crit_mist.z_index = -1
-		heal_mist.z_index = -2
+		heal_mist.position = fire_screen_pos - Vector2(400, 400)
+		crit_mist.position = fire_screen_pos - Vector2(400, 400)
 
-	# Update heal aura (green circle)
-	if wood_count > 0:
-		heal_mist.polygon = create_wavy_circle(heal_radius, 64, 0.0)  # No phase offset
-		heal_mist.visible = true
+	# Update heal mist
+	var heal_mat = heal_mist.material as ShaderMaterial
+	if heal_mat:
+		heal_mat.set_shader_parameter("radius", wood_percent * 300.0)
+		heal_mat.set_shader_parameter("inner_radius", 45.0)
+		heal_mat.set_shader_parameter("mist_height", 25.0)
+		heal_mat.set_shader_parameter("time_offset", time)
+		heal_mat.set_shader_parameter("mist_color", Vector3(0.0, 1.0, 0.0))
+		heal_mat.set_shader_parameter("alpha_multiplier", 0.12 if wood_count > 0 else 0.0)
 
-		# Update heal mist particle emission points to match aura size
-		var heal_mist_particles = fire_sprite.get_node_or_null("HealMistParticles")
-		if heal_mist_particles:
-			heal_mist_particles.emission_points = create_emission_ring(heal_radius, 32)  # Update ring size
-	else:
-		heal_mist.visible = false
+	# Update crit mist
+	var crit_mat = crit_mist.material as ShaderMaterial
+	if crit_mat:
+		crit_mat.set_shader_parameter("radius", bone_percent * 375.0)
+		crit_mat.set_shader_parameter("inner_radius", 55.0)
+		crit_mat.set_shader_parameter("mist_height", 30.0)
+		crit_mat.set_shader_parameter("time_offset", time * 0.8)
+		crit_mat.set_shader_parameter("mist_color", Vector3(0.0, 0.6, 1.0))
+		crit_mat.set_shader_parameter("alpha_multiplier", 0.12 if bone_ember_count > 0 else 0.0)
 
-	# Update crit aura (cyan circle)
-	if bone_ember_count > 0:
-		crit_mist.polygon = create_wavy_circle(crit_radius, 64, 3.14)  # PI offset for autonomy
-		crit_mist.visible = true
-
-		# Update crit mist particle emission points to match aura size
-		var crit_mist_particles = fire_sprite.get_node_or_null("CritMistParticles")
-		if crit_mist_particles:
-			crit_mist_particles.emission_points = create_emission_ring(crit_radius, 32)  # Update ring size
-	else:
-		crit_mist.visible = false
-
-
-func create_wavy_circle(radius: float, segments: int, phase_offset: float) -> PackedVector2Array:
-	"""Create a filled circle with wavy animated edges"""
-	var points = PackedVector2Array()
-	var time = Time.get_ticks_msec() / 1000.0
-
-	# Circle edge points with wave distortion (50% slower animation)
-	for i in range(segments):
-		var angle = (float(i) / segments) * TAU
-		var wave = sin(angle * 3.0 + time * 1.0 + phase_offset) * 8.0  # Changed from 2.0 to 1.0
-		var rad = radius + wave
-		points.append(Vector2(cos(angle) * rad, sin(angle) * rad))
-
-	return points
-
-func create_emission_ring(radius: float, num_points: int) -> PackedVector2Array:
-	"""Create a ring of emission points for even particle distribution"""
-	var points = PackedVector2Array()
-	for i in range(num_points):
-		var angle = (float(i) / num_points) * TAU
-		points.append(Vector2(cos(angle) * radius, sin(angle) * radius))
-	return points
 
 func create_particle_systems() -> void:
-	"""Create heavy particle effects - fuel combusts dramatically creating sparks that simmer to ground"""
-	# GREEN HEALING PARTICLES (combusting wood sparks)
+	"""Create sparse particle effects from magical coals"""
+	# GREEN HEALING PARTICLES (from green coals)
 	heal_particles = CPUParticles2D.new()
 	heal_particles.name = "HealParticles"
 	heal_particles.emitting = true
-	heal_particles.amount = 8  # Base amount (will scale with fuel)
-	heal_particles.lifetime = 8.0  # Very long lifetime to reach edges and +Y axis
-	heal_particles.lifetime_randomness = 0.4  # Some particles live much longer (up to ~11s)
+	heal_particles.amount = 8  # Sparse
+	heal_particles.lifetime = 2.0
 	heal_particles.one_shot = false
 
-	# Emit from narrow column at fire tip
-	heal_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	heal_particles.emission_rect_extents = Vector2(8.0, 2.0)  # Narrow X column at fire tip
-	heal_particles.position = Vector2(0, -20)  # At fire tip height
+	heal_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	heal_particles.emission_sphere_radius = 15.0
 
-	heal_particles.direction = Vector2(0, -1)  # Straight up (12 o'clock)
-	heal_particles.spread = 45.0  # Wider spread - some go sideways/down to cover +Y axis
-	heal_particles.gravity = Vector2(0, 25)  # Moderate gravity for controlled arc
-	heal_particles.initial_velocity_min = 60.0  # Lower velocity - don't shoot too high
-	heal_particles.initial_velocity_max = 90.0
+	heal_particles.direction = Vector2(0, -1)
+	heal_particles.spread = 20.0
+	heal_particles.gravity = Vector2(0, -12)
+	heal_particles.initial_velocity_min = 8.0
+	heal_particles.initial_velocity_max = 18.0
 
-	# Heavy damping to slow them quickly as they rise
-	heal_particles.damping_min = 20.0
-	heal_particles.damping_max = 30.0
-
-	# Strong tangential acceleration to push them sideways (creates mushroom spread)
-	# Negative values push left, positive push right - creates full 360° mushroom
-	heal_particles.tangential_accel_min = -120.0
-	heal_particles.tangential_accel_max = 120.0
-
-	# Start small, grow, then shrink as they simmer down
-	heal_particles.scale_amount_min = 1.5
-	heal_particles.scale_amount_max = 3.0
+	heal_particles.scale_amount_min = 0.8
+	heal_particles.scale_amount_max = 1.5
 	heal_particles.scale_amount_curve = Curve.new()
-	heal_particles.scale_amount_curve.add_point(Vector2(0, 0.3))  # Start small
-	heal_particles.scale_amount_curve.add_point(Vector2(0.2, 1.0))  # Peak size
-	heal_particles.scale_amount_curve.add_point(Vector2(0.7, 0.8))  # Simmer
-	heal_particles.scale_amount_curve.add_point(Vector2(1, 0.0))  # Fade
+	heal_particles.scale_amount_curve.add_point(Vector2(0, 0.5))
+	heal_particles.scale_amount_curve.add_point(Vector2(0.3, 1.0))
+	heal_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
 
 	heal_particles.color_ramp = Gradient.new()
-	heal_particles.color_ramp.add_point(0.0, Color(0.8, 1.0, 0.5, 0.5))  # Bright yellow-green spark (more transparent)
-	heal_particles.color_ramp.add_point(0.12, Color(0.4, 1.0, 0.4, 0.45))  # Green
-	heal_particles.color_ramp.add_point(0.4, Color(0.2, 0.8, 0.2, 0.35))  # Still bright
-	heal_particles.color_ramp.add_point(0.7, Color(0.15, 0.7, 0.15, 0.22))  # Dimming slowly
-	heal_particles.color_ramp.add_point(0.9, Color(0.1, 0.5, 0.1, 0.08))  # Simmering
-	heal_particles.color_ramp.add_point(1.0, Color(0.0, 0.3, 0.0, 0.0))  # Fade to ground
+	heal_particles.color_ramp.add_point(0.0, Color(0.2, 1.0, 0.2, 0.0))
+	heal_particles.color_ramp.add_point(0.2, Color(0.3, 1.0, 0.3, 0.6))
+	heal_particles.color_ramp.add_point(0.7, Color(0.2, 0.8, 0.2, 0.4))
+	heal_particles.color_ramp.add_point(1.0, Color(0.1, 0.5, 0.1, 0.0))
 
 	fire_sprite.add_child(heal_particles)
 	heal_particles.emitting = false  # Start disabled
 
-	# BLUE CRIT PARTICLES (combusting bone ember sparks)
+	# BLUE CRIT PARTICLES (burst pattern from blue coals)
 	crit_particles = CPUParticles2D.new()
 	crit_particles.name = "CritParticles"
 	crit_particles.emitting = true
-	crit_particles.amount = 10  # Base amount (will scale with fuel)
-	crit_particles.lifetime = 8.0  # Very long lifetime to reach edges and +Y axis
-	crit_particles.lifetime_randomness = 0.4  # Some particles live much longer (up to ~11s)
-	crit_particles.explosiveness = 0.2  # Some burst, but continuous
+	crit_particles.amount = 12  # Sparse bursts
+	crit_particles.lifetime = 1.5
+	crit_particles.explosiveness = 0.8  # Burst pattern
 	crit_particles.one_shot = false
 
-	# Emit from narrow column at fire tip
-	crit_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	crit_particles.emission_rect_extents = Vector2(8.0, 2.0)  # Narrow X column at fire tip
-	crit_particles.position = Vector2(0, -20)  # At fire tip height
+	crit_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	crit_particles.emission_sphere_radius = 12.0
 
-	crit_particles.direction = Vector2(0, -1)  # Straight up (12 o'clock)
-	crit_particles.spread = 45.0  # Wider spread - some go sideways/down to cover +Y axis
-	crit_particles.gravity = Vector2(0, 25)  # Moderate gravity for controlled arc
-	crit_particles.initial_velocity_min = 60.0  # Lower velocity - don't shoot too high
-	crit_particles.initial_velocity_max = 90.0
+	crit_particles.spread = 180.0
+	crit_particles.gravity = Vector2(0, -8)
+	crit_particles.initial_velocity_min = 15.0
+	crit_particles.initial_velocity_max = 35.0
 
-	# Heavy damping to slow them quickly as they rise
-	crit_particles.damping_min = 20.0
-	crit_particles.damping_max = 30.0
-
-	# Strong tangential acceleration to push them sideways (creates mushroom spread)
-	# Negative values push left, positive push right - creates full 360° mushroom
-	crit_particles.tangential_accel_min = -120.0
-	crit_particles.tangential_accel_max = 120.0
-
-	# Explosive burst that simmers down
-	crit_particles.scale_amount_min = 1.5
-	crit_particles.scale_amount_max = 3.5
+	crit_particles.scale_amount_min = 0.5
+	crit_particles.scale_amount_max = 1.2
 	crit_particles.scale_amount_curve = Curve.new()
-	crit_particles.scale_amount_curve.add_point(Vector2(0, 0.4))  # Start burst
-	crit_particles.scale_amount_curve.add_point(Vector2(0.15, 1.0))  # Peak explosion
-	crit_particles.scale_amount_curve.add_point(Vector2(0.6, 0.7))  # Simmer
-	crit_particles.scale_amount_curve.add_point(Vector2(1, 0.0))  # Fade
+	crit_particles.scale_amount_curve.add_point(Vector2(0, 1.0))
+	crit_particles.scale_amount_curve.add_point(Vector2(0.4, 0.7))
+	crit_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
 
 	crit_particles.color_ramp = Gradient.new()
-	crit_particles.color_ramp.add_point(0.0, Color(1.0, 1.0, 1.0, 0.6))  # White hot spark (more transparent)
-	crit_particles.color_ramp.add_point(0.1, Color(0.5, 0.9, 1.0, 0.5))  # Bright cyan
-	crit_particles.color_ramp.add_point(0.3, Color(0.2, 0.7, 1.0, 0.4))  # Blue
-	crit_particles.color_ramp.add_point(0.6, Color(0.15, 0.6, 0.95, 0.28))  # Still visible
-	crit_particles.color_ramp.add_point(0.85, Color(0.1, 0.5, 0.8, 0.12))  # Dimming slowly
-	crit_particles.color_ramp.add_point(1.0, Color(0.0, 0.3, 0.6, 0.0))  # Simmer to ground
+	crit_particles.color_ramp.add_point(0.0, Color(0.8, 1.0, 1.0, 1.0))  # Bright cyan
+	crit_particles.color_ramp.add_point(0.3, Color(0.2, 0.8, 1.0, 0.8))
+	crit_particles.color_ramp.add_point(0.7, Color(0.1, 0.5, 0.8, 0.4))
+	crit_particles.color_ramp.add_point(1.0, Color(0.0, 0.3, 0.5, 0.0))
 
 	fire_sprite.add_child(crit_particles)
 	crit_particles.emitting = false  # Start disabled
 
-	# GREEN MIST PARTICLES (rising from heal aura)
-	var heal_mist_particles = CPUParticles2D.new()
-	heal_mist_particles.name = "HealMistParticles"
-	heal_mist_particles.emitting = false  # Start disabled
-	heal_mist_particles.amount = 16  # Doubled from 8
-	heal_mist_particles.lifetime = 3.5
-	heal_mist_particles.one_shot = false
-
-	# Use POINTS emission with ring of points for even distribution
-	heal_mist_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINTS
-	heal_mist_particles.emission_points = create_emission_ring(150.0, 32)  # Even spread
-
-	heal_mist_particles.direction = Vector2(0, -1)
-	heal_mist_particles.spread = 25.0
-	heal_mist_particles.gravity = Vector2(0, -4)
-	heal_mist_particles.initial_velocity_min = 3.0
-	heal_mist_particles.initial_velocity_max = 10.0
-
-	# Even smaller particles (50% of previous scale)
-	heal_mist_particles.scale_amount_min = 1.5
-	heal_mist_particles.scale_amount_max = 2.5
-
-	heal_mist_particles.color_ramp = Gradient.new()
-	heal_mist_particles.color_ramp.add_point(0.0, Color(0.0, 1.0, 0.0, 0.0))
-	heal_mist_particles.color_ramp.add_point(0.15, Color(0.1, 0.9, 0.1, 0.2))
-	heal_mist_particles.color_ramp.add_point(0.5, Color(0.0, 0.7, 0.0, 0.1))
-	heal_mist_particles.color_ramp.add_point(1.0, Color(0.0, 0.4, 0.0, 0.0))
-
-	fire_sprite.add_child(heal_mist_particles)
-
-	# CYAN MIST PARTICLES (rising from crit aura)
-	var crit_mist_particles = CPUParticles2D.new()
-	crit_mist_particles.name = "CritMistParticles"
-	crit_mist_particles.emitting = false  # Start disabled
-	crit_mist_particles.amount = 16  # Doubled from 8
-	crit_mist_particles.lifetime = 3.5
-	crit_mist_particles.one_shot = false
-
-	# Use POINTS emission with ring of points for even distribution
-	crit_mist_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINTS
-	crit_mist_particles.emission_points = create_emission_ring(200.0, 32)  # Even spread
-
-	crit_mist_particles.direction = Vector2(0, -1)
-	crit_mist_particles.spread = 25.0
-	crit_mist_particles.gravity = Vector2(0, -4)
-	crit_mist_particles.initial_velocity_min = 3.0
-	crit_mist_particles.initial_velocity_max = 10.0
-
-	# Even smaller particles (50% of previous scale)
-	crit_mist_particles.scale_amount_min = 1.5
-	crit_mist_particles.scale_amount_max = 2.5
-
-	crit_mist_particles.color_ramp = Gradient.new()
-	crit_mist_particles.color_ramp.add_point(0.0, Color(0.0, 0.6, 1.0, 0.0))
-	crit_mist_particles.color_ramp.add_point(0.15, Color(0.1, 0.8, 1.0, 0.2))
-	crit_mist_particles.color_ramp.add_point(0.5, Color(0.0, 0.6, 0.9, 0.1))
-	crit_mist_particles.color_ramp.add_point(1.0, Color(0.0, 0.3, 0.6, 0.0))
-
-	fire_sprite.add_child(crit_mist_particles)
-
-	print("✅ Created sparse particle systems with mist")
+	print("✅ Created sparse particle systems")
 
 
 func create_interaction_prompt() -> void:
@@ -1078,7 +936,7 @@ func create_progress_circle() -> void:
 	progress_circle.draw.connect(_draw_progress_circle)
 
 func _draw_progress_circle() -> void:
-	"""Draw radial progress indicator with fire theme"""
+	"""Draw radial progress indicator"""
 	if not progress_circle or not is_fueling:
 		return
 
@@ -1093,118 +951,68 @@ func _draw_progress_circle() -> void:
 	var screen_center = viewport_size / 2
 	var screen_pos = (world_pos - camera_pos) * camera.zoom.x + screen_center
 
-	# === FIRE/EMBER THEME ===
-	var radius = 22.5  # Match tree size
-	var thickness = 3.4  # Match tree thickness
+	# Draw background circle
+	progress_circle.draw_arc(screen_pos, 30.0, 0, TAU, 32, Color(0.2, 0.2, 0.2, 0.5), 4.0)
 
-	# Color palette - fire/ember theme
-	var bg_color = Color(0.12, 0.10, 0.08, 0.85)  # Dark weathered leather (same as tree)
-	var border_outer = Color(0.65, 0.25, 0.10, 1.0)  # Ember/burnt orange border
-	var border_inner = Color(0.08, 0.06, 0.05, 1.0)  # Dark inner shadow
-	var progress_fire = Color(1.0, 0.50, 0.15, 0.95)  # Fire orange
-	var progress_glow = Color(1.0, 0.70, 0.30, 0.4)  # Orange glow
-
-	# Draw outer shadow (depth effect)
-	progress_circle.draw_circle(screen_pos, radius + 4, Color(0.0, 0.0, 0.0, 0.6))
-
-	# Draw background circle (dark leather texture)
-	progress_circle.draw_circle(screen_pos, radius, bg_color)
-
-	# Draw inner shadow ring
-	progress_circle.draw_arc(screen_pos, radius - 2, 0, TAU, 48, border_inner, 3.0)
-
-	# Draw progress arc (fire theme with glow)
-	if fuel_progress > 0.0:
-		var angle_from = -PI / 2  # Start from top
-		var angle_to = angle_from + (fuel_progress * TAU)  # Sweep clockwise
-
-		# Draw glow layer first (underneath)
-		var glow_points = PackedVector2Array()
-		var glow_radius = radius + 2
-		for i in range(49):
-			var t = float(i) / 48.0
-			var angle = lerp(angle_from, angle_to, t)
-			glow_points.append(screen_pos + Vector2(cos(angle), sin(angle)) * glow_radius)
-
-		if glow_points.size() > 2:
-			progress_circle.draw_colored_polygon(glow_points, progress_glow)
-
-		# Draw main progress arc (thicker, fire colored)
-		progress_circle.draw_arc(screen_pos, radius - thickness / 2, angle_from, angle_to, 48, progress_fire, thickness)
-
-		# Add inner bright edge for definition
-		var highlight_color = Color(1.0, 0.85, 0.50, 0.8)  # Bright fire highlight
-		progress_circle.draw_arc(screen_pos, radius - thickness - 1, angle_from, angle_to, 48, highlight_color, 1.5)
-
-	# Draw outer border ring (ember/burnt orange)
-	progress_circle.draw_arc(screen_pos, radius + 1, 0, TAU, 48, border_outer, 3.0)
-
-	# Draw inner border ring (darker, for depth)
-	progress_circle.draw_arc(screen_pos, radius - thickness - 3, 0, TAU, 48, border_inner, 2.0)
+	# Draw progress arc
+	var progress_angle = fuel_progress * TAU
+	progress_circle.draw_arc(screen_pos, 30.0, -PI/2, -PI/2 + progress_angle, 32, Color(1.0, 0.8, 0.2), 4.0)
 
 
 func handle_fuel_interaction(delta: float) -> void:
-	"""Handle F press/hold for fuel: tap=1 of each, hold=all"""
+	"""Handle hold-to-fuel mechanic"""
 	if not player_in_interact_range or not player or not is_instance_valid(player):
 		if is_fueling:
 			cancel_fueling()
 		return
 
 	# Check for F key press/hold
-	if Input.is_physical_key_pressed(KEY_F):
+	if Input.is_action_pressed("interact"):
 		if not is_fueling:
-			# Just pressed F - start fueling process
 			start_fueling()
 		else:
-			# Holding F - increment progress
+			# Increment progress
 			fuel_progress += delta / fuel_time_required
-
-			# Only show progress circle after 20% progress (prevents flash on quick tap)
-			if fuel_progress >= 0.2 and progress_circle:
-				if not progress_circle.visible:
-					progress_circle.visible = true
+			if progress_circle:
 				progress_circle.queue_redraw()
 
-			# Complete fueling when progress reaches 100%
+			# Complete fueling
 			if fuel_progress >= 1.0:
-				complete_fueling_all()
+				complete_fueling()
 	else:
-		# F released
+		# F released - cancel if not in grace period
 		if is_fueling:
 			cancel_grace_timer += delta
-			# If released quickly (within grace period), deposit 1 of each
+			# Only cancel if grace period has elapsed
 			if cancel_grace_timer >= cancel_grace_period:
-				# Grace period elapsed - was a tap, not a hold
-				if fuel_progress < 0.2:  # Released before 20% progress = tap
-					attempt_add_single_fuel_from_inventory()
 				cancel_fueling()
 
 func start_fueling() -> void:
-	"""Start the fueling process (check if player has fuel)"""
+	"""Start the fueling process"""
 	# First check if player has any fuel in inventory
 	var has_wood = false
 	var has_bone = false
 
 	for slot_idx in range(InventorySystem.inventory_items.size()):
 		var item = InventorySystem.get_item(slot_idx)
-		if item:
-			if item.get("name") == "Dry Log":
-				has_wood = true
-			if item.get("name") == "Bone Ember":
-				has_bone = true
+		if item and item.get("name") == "Dry Log":
+			has_wood = true
+		if item and item.get("name") == "Bone Ember":
+			has_bone = true
 
 	# If no fuel at all, show notification and don't start fueling
 	if not has_wood and not has_bone:
 		print("⚠️ You have no fuel to add to the campfire!")
-		no_fuel_message_timer = no_fuel_message_duration  # Trigger red message
+		no_fuel_message_timer = no_fuel_message_duration  # Trigger red message for 2 seconds
 		return
 
-	print("✅ Starting fueling process...")
 	is_fueling = true
 	fuel_progress = 0.0
 	cancel_grace_timer = 0.0
 
-	# Don't show progress circle yet - will show after delay in handle_fuel_interaction
+	if progress_circle:
+		progress_circle.visible = true
+		progress_circle.queue_redraw()
 
 func cancel_fueling() -> void:
 	"""Cancel fueling (F released or player moved away)"""
@@ -1216,8 +1024,8 @@ func cancel_fueling() -> void:
 		progress_circle.visible = false
 		progress_circle.queue_redraw()
 
-func complete_fueling_all() -> void:
-	"""Complete fueling and add ALL fuel from inventory"""
+func complete_fueling() -> void:
+	"""Complete fueling and add all fuel from inventory"""
 	is_fueling = false
 	fuel_progress = 0.0
 	cancel_grace_timer = 0.0
@@ -1227,70 +1035,28 @@ func complete_fueling_all() -> void:
 		progress_circle.queue_redraw()
 
 	# Add all fuel from inventory
-	attempt_add_all_fuel_from_inventory()
+	attempt_add_fuel_from_inventory()
 
-func attempt_add_single_fuel_from_inventory() -> void:
-	"""Add 1 of each fuel type from inventory (or whichever is available)"""
-	var wood_slot = -1
-	var bone_slot = -1
+func attempt_add_fuel_from_inventory() -> void:
+	"""Automatically add all wood and bone embers from player inventory"""
+	# First check if player has any fuel in inventory
+	var has_wood = false
+	var has_bone = false
 
-	# Find first slot with each fuel type
 	for slot_idx in range(InventorySystem.inventory_items.size()):
 		var item = InventorySystem.get_item(slot_idx)
-		if item:
-			if item.get("name") == "Dry Log" and wood_slot == -1:
-				wood_slot = slot_idx
-			if item.get("name") == "Bone Ember" and bone_slot == -1:
-				bone_slot = slot_idx
+		if item and item.get("name") == "Dry Log":
+			has_wood = true
+		if item and item.get("name") == "Bone Ember":
+			has_bone = true
 
 	# If no fuel at all, show notification and return
-	if wood_slot == -1 and bone_slot == -1:
+	if not has_wood and not has_bone:
 		print("⚠️ You have no fuel to add to the campfire!")
-		no_fuel_message_timer = no_fuel_message_duration
 		return
 
+	# Find Dry Log items in inventory (iterate backwards to avoid index issues)
 	var wood_added = 0
-	var bone_added = 0
-
-	# Try to add 1 wood
-	if wood_slot != -1:
-		var wood_item = InventorySystem.get_item(wood_slot)
-		if add_wood_fuel(1):
-			wood_added = 1
-			# Decrease quantity or remove item
-			var quantity = wood_item.get("quantity", 1)
-			if quantity > 1:
-				wood_item["quantity"] = quantity - 1
-			else:
-				InventorySystem.remove_item(wood_slot)
-		else:
-			print("⚠️ Wood fuel at max capacity")
-
-	# Try to add 1 bone ember
-	if bone_slot != -1:
-		var bone_item = InventorySystem.get_item(bone_slot)
-		if add_bone_ember_fuel(1):
-			bone_added = 1
-			# Decrease quantity or remove item
-			var quantity = bone_item.get("quantity", 1)
-			if quantity > 1:
-				bone_item["quantity"] = quantity - 1
-			else:
-				InventorySystem.remove_item(bone_slot)
-		else:
-			print("⚠️ Bone ember fuel at max capacity")
-
-	# Debug output
-	if wood_added > 0 or bone_added > 0:
-		print("🔥 Campfire fueled: %d wood log(s), %d bone ember(s) added" % [wood_added, bone_added])
-		print("   Current fuel: %d/%d wood, %d/%d embers" % [wood_count, MAX_WOOD, bone_ember_count, MAX_BONE_EMBERS])
-
-func attempt_add_all_fuel_from_inventory() -> void:
-	"""Add ALL wood and bone embers from player inventory"""
-	var wood_added = 0
-	var bone_added = 0
-
-	# Find all Dry Log items (iterate backwards to avoid index issues)
 	for slot_idx in range(InventorySystem.inventory_items.size() - 1, -1, -1):
 		var item = InventorySystem.get_item(slot_idx)
 		if item and item.get("name") == "Dry Log":
@@ -1299,9 +1065,10 @@ func attempt_add_all_fuel_from_inventory() -> void:
 				wood_added += quantity
 				InventorySystem.remove_item(slot_idx)
 			else:
-				print("⚠️ Wood fuel at max capacity")
+				print("⚠️ Wood fuel at max capacity, couldn't add %d logs" % quantity)
 
-	# Find all Bone Ember items (iterate backwards to avoid index issues)
+	# Find Bone Ember items in inventory (iterate backwards to avoid index issues)
+	var bone_added = 0
 	for slot_idx in range(InventorySystem.inventory_items.size() - 1, -1, -1):
 		var item = InventorySystem.get_item(slot_idx)
 		if item and item.get("name") == "Bone Ember":
@@ -1310,10 +1077,10 @@ func attempt_add_all_fuel_from_inventory() -> void:
 				bone_added += quantity
 				InventorySystem.remove_item(slot_idx)
 			else:
-				print("⚠️ Bone ember fuel at max capacity")
+				print("⚠️ Bone ember fuel at max capacity, couldn't add %d embers" % quantity)
 
 	# Debug output
-	print("🔥 Campfire fueled: %d wood logs, %d bone embers added (ALL)" % [wood_added, bone_added])
+	print("🔥 Campfire fueled: %d wood logs, %d bone embers added" % [wood_added, bone_added])
 	print("   Current fuel: %d/%d wood, %d/%d embers" % [wood_count, MAX_WOOD, bone_ember_count, MAX_BONE_EMBERS])
 
 func apply_crit_buff_to_player() -> void:
@@ -1324,7 +1091,7 @@ func apply_crit_buff_to_player() -> void:
 
 func check_enemy_deterrent() -> void:
 	"""Deter enemies from entering campfire warmth (performance optimized)"""
-	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMY)
 
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
@@ -1391,33 +1158,45 @@ func update_visual_intensity() -> void:
 	var wood_percent = float(wood_count) / float(MAX_WOOD)
 	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
 
-	# Scale the entire fire_sprite (flames, coals, logs, rocks) based on total fuel
+	# Scale flame size based on total fuel (0.5x to 1.75x - 25% bigger at max)
 	var total_fuel_percent = (wood_percent + bone_percent) / 2.0
-	if fire_sprite and is_instance_valid(fire_sprite):
-		# Start at 125% base scale, grow up to 187.5% with max fuel (25% larger overall)
-		var campfire_scale = 1.25 + (total_fuel_percent * 0.625)
-		fire_sprite.scale = Vector2(campfire_scale, campfire_scale)
-
-	# Scale flames vertically with fuel (larger, but same brightness)
-	var flame_scale_y = 1.0 + (total_fuel_percent * 0.5)  # Extra vertical stretch
+	var flame_scale = 0.5 + (total_fuel_percent * 1.25)  # Was 1.0, now 1.25 for 25% bigger
 	for flame in flame_nodes:
 		if is_instance_valid(flame):
-			flame.scale.y = flame_scale_y
+			flame.scale = Vector2(flame_scale, flame_scale)
 
-	# Increase ember and spark particle intensity with fuel
-	var ember_particles = fire_sprite.get_node_or_null("EmberParticles")
-	if ember_particles:
-		# Base amount: 15, scale up to 30 with full fuel
-		ember_particles.amount = int(15 + (total_fuel_percent * 15))
-		# Increase velocity for more dramatic effect
-		ember_particles.initial_velocity_max = 25.0 + (total_fuel_percent * 25.0)  # Up to 50
+	# Update coal colors - BRIGHT SATURATED EMISSIVE for magical source
+	var time = Time.get_ticks_msec() / 1000.0
+	var pulse = 0.9 + sin(time * 2.0) * 0.1  # Subtle pulsing
 
-	var spark_particles = fire_sprite.get_node_or_null("SparkParticles")
-	if spark_particles:
-		# Base amount: 20, scale up to 40 with full fuel
-		spark_particles.amount = int(20 + (total_fuel_percent * 20))
-		# Increase velocity
-		spark_particles.initial_velocity_max = 60.0 + (total_fuel_percent * 40.0)  # Up to 100
+	for coal in coal_nodes:
+		if is_instance_valid(coal):
+			# Base orange-red coal
+			var base_coal_color = Color(1.0, 0.3, 0.0, 1.0)
+			# BRIGHT GREEN from wood fuel (pure saturated)
+			var green_coal_color = Color(0.0, 1.0, 0.0, 1.0) * pulse
+			# BRIGHT CYAN-BLUE from bone embers (vivid saturated)
+			var blue_coal_color = Color(0.0, 0.6, 1.0, 1.0) * pulse
+
+			# Mix colors based on fuel levels - coals are BRIGHTEST element
+			var coal_with_wood = base_coal_color.lerp(green_coal_color, wood_percent * 0.8)
+			var final_coal_color = coal_with_wood.lerp(blue_coal_color, bone_percent * 0.9)
+			coal.color = final_coal_color
+
+	# Update coal glow colors (small embers between rocks and fire)
+	for coal_glow in coal_glow_nodes:
+		if is_instance_valid(coal_glow):
+			# Base orange-red glow
+			var base_glow_color = Color(1.0, 0.25, 0.0, 0.85)
+			# BRIGHT GREEN from wood fuel
+			var green_glow_color = Color(0.3, 1.0, 0.3, 0.9) * pulse
+			# BRIGHT CYAN-BLUE from bone embers
+			var blue_glow_color = Color(0.2, 0.8, 1.0, 0.9) * pulse
+
+			# Mix colors based on fuel levels
+			var glow_with_wood = base_glow_color.lerp(green_glow_color, wood_percent * 0.9)
+			var final_glow_color = glow_with_wood.lerp(blue_glow_color, bone_percent * 1.0)
+			coal_glow.color = final_glow_color
 
 	# Add ghostly glow to fire light based on fuel
 	if fire_light and is_instance_valid(fire_light):
@@ -1436,93 +1215,11 @@ func update_visual_intensity() -> void:
 	# Update collision area to match largest active aura radius
 	update_buff_collision_radius()
 
-	# Enable/disable and scale particle systems based on fuel
+	# Enable/disable particle systems based on fuel
 	if heal_particles:
 		heal_particles.emitting = wood_count > 0
-		if wood_count > 0:
-			# Scale from 8 particles at min to 45 at max fuel
-			heal_particles.amount = int(8 + (wood_percent * 37))
-			# Scale velocity from base to higher
-			heal_particles.initial_velocity_max = 180.0 + (wood_percent * 60.0)  # Up to 240
-
 	if crit_particles:
 		crit_particles.emitting = bone_ember_count > 0
-		if bone_ember_count > 0:
-			# Scale from 10 particles at min to 50 at max fuel
-			crit_particles.amount = int(10 + (bone_percent * 40))
-			# Scale velocity from base to higher
-			crit_particles.initial_velocity_max = 180.0 + (bone_percent * 60.0)  # Up to 240
-
-	# Enable/disable mist particles based on fuel
-	var heal_mist_particles = fire_sprite.get_node_or_null("HealMistParticles")
-	if heal_mist_particles:
-		heal_mist_particles.emitting = wood_count > 0
-	var crit_mist_particles = fire_sprite.get_node_or_null("CritMistParticles")
-	if crit_mist_particles:
-		crit_mist_particles.emitting = bone_ember_count > 0
-
-	# Enable/disable aurora particles based on fuel
-	var aurora_particles = fire_sprite.get_node_or_null("AuroraParticles")
-	if aurora_particles:
-		aurora_particles.emitting = (wood_count > 0 or bone_ember_count > 0)
-
-func update_coal_pulsing() -> void:
-	"""Animate coal pulsing every frame - synchronized breathing with varied intensity"""
-	var time = Time.get_ticks_msec() / 1000.0
-
-	# Synchronized "breathing" pulse - all coals pulse together like a slight breeze
-	# Range from 0.6 to 1.0 so they stay mostly lit, just dimming/brightening
-	var base_pulse = 0.8 + sin(time * 1.5) * 0.2  # Slow synchronized pulse (0.6 to 1.0)
-
-	# Calculate fuel percentages
-	var wood_percent = float(wood_count) / float(MAX_WOOD)
-	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
-
-	# Update main coal colors (first 10 coals)
-	for i in range(coal_nodes.size()):
-		var coal = coal_nodes[i]
-		if not is_instance_valid(coal):
-			continue
-
-		# Get this coal's properties
-		var brightness = coal_brightness_intensity[i]  # How hot this coal burns
-		var color_pref = coal_color_preferences[i]  # 0=green, 1=blue, 2=orange
-
-		# Apply brightness variation to the synchronized pulse
-		# Hotter coals (higher brightness) glow more, cooler coals glow less
-		var coal_pulse = base_pulse * brightness
-
-		# Base charcoal color (dark, almost black)
-		var charcoal_color = Color(0.15, 0.08, 0.05, 1.0)
-
-		# All coals glow red-orange like regular hot coals
-		var glow_color = Color(0.9, 0.35, 0.05, 1.0)  # Red-orange glow
-
-		# Pulse between charcoal and glow color, modulated by coal's brightness
-		coal.color = charcoal_color.lerp(glow_color, coal_pulse)
-
-	# Update coal glow colors (small embers between rocks and fire) - starts at index 10
-	var glow_start_index = 10
-	for i in range(coal_glow_nodes.size()):
-		var coal_glow = coal_glow_nodes[i]
-		if not is_instance_valid(coal_glow):
-			continue
-
-		# Get this coal glow's properties
-		var brightness = coal_brightness_intensity[glow_start_index + i]
-		var color_pref = coal_color_preferences[glow_start_index + i]
-
-		# Apply brightness variation to the synchronized pulse
-		var coal_pulse = base_pulse * brightness
-
-		# Base charcoal color (dark, almost black)
-		var charcoal_color = Color(0.15, 0.08, 0.05, 0.85)
-
-		# All coal glows are red-orange like regular hot coals
-		var glow_color = Color(0.9, 0.35, 0.05, 0.9)  # Red-orange glow
-
-		# Pulse between charcoal and glow color, modulated by coal's brightness
-		coal_glow.color = charcoal_color.lerp(glow_color, coal_pulse)
 
 func update_buff_collision_radius() -> void:
 	"""Update Area2D collision radius to match the largest active buff aura"""
@@ -1533,10 +1230,15 @@ func update_buff_collision_radius() -> void:
 	if not collision.shape is CircleShape2D:
 		return
 
-	# Calculate current aura radii based on fuel levels (same formula as update_ground_mist)
-	# Both can reach same max size (468.75px)
-	var heal_aura_radius = 50.0 + (wood_count * 8.375)  # 50-468.75px
-	var crit_aura_radius = 50.0 + (bone_ember_count * 4.1875)  # 50-468.75px
+	# Calculate current aura radii based on fuel levels
+	var wood_percent = float(wood_count) / float(MAX_WOOD)
+	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
+
+	# Heal aura: scales from 0 to 300px
+	var heal_aura_radius = wood_percent * 300.0
+
+	# Crit aura: scales from 0 to 375px
+	var crit_aura_radius = bone_percent * 375.0
 
 	# Use the larger of the two auras, but minimum of base warmth_radius (150)
 	var new_radius = max(warmth_radius, max(heal_aura_radius, crit_aura_radius))

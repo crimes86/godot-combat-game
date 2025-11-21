@@ -43,7 +43,8 @@ enum State {
 	COMBAT,       # Engaged: chasing player
 	ATTACKING,    # In range: striking player
 	RETREATING,   # Tactical: backing away
-	UNSTUCKING    # Recovery: walking backward to get unstuck
+	UNSTUCKING,   # Recovery: walking backward to get unstuck
+	DETERRED      # At campfire edge: swing at air, then give up
 }
 
 var current_state: State = State.PATROLLING
@@ -70,10 +71,19 @@ var is_in_combat: bool = false  # CRITICAL: Only true after player attacks
 var attack_timer: float = 0.0
 var retreat_direction: Vector2 = Vector2.ZERO
 
+# Deterred state (at campfire edge)
+var deterred_swing_count: int = 0  # How many swings we've done
+var deterred_max_swings: int = 4  # Give up after 4 swings
+var deterred_swing_timer: float = 0.0
+var deterred_swing_interval: float = 1.0  # Swing every 1 second
+
 # Stuck detection
 var last_position: Vector2 = Vector2.ZERO
 var stuck_timer: float = 0.0
 var stuck_check_interval: float = 2.0  # Check every 2 seconds
+
+# Attack concurrency prevention
+var is_performing_attack: bool = false
 var stuck_distance_threshold: float = 5.0  # If moved less than 5px in 2 seconds while walking, considered stuck
 
 # Unstuck behavior (about-face mechanics)
@@ -264,6 +274,8 @@ func _physics_process(delta: float) -> void:
 			process_retreating(delta)
 		State.UNSTUCKING:
 			process_unstucking(delta)
+		State.DETERRED:
+			process_deterred(delta)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PATROLLING STATE (Default - Non-Aggro)
@@ -440,6 +452,80 @@ func process_retreating(delta: float) -> void:
 	enemy.move_and_slide()
 
 # ═══════════════════════════════════════════════════════════════════════════
+# DETERRED STATE (At Campfire Edge - Swing at Air)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func process_deterred(delta: float) -> void:
+	"""Deterred by campfire: swing at air, then give up and return to spawn"""
+
+	# Stop moving - we're stuck at the campfire edge
+	enemy.velocity = Vector2.ZERO
+	enemy.move_and_slide()
+
+	# Don't swing if we're currently playing an attack animation
+	var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
+	if anim_sprite and anim_sprite.is_playing() and anim_sprite.animation.begins_with("attack_"):
+		return  # Wait for current attack animation to finish
+
+	# Swing timer
+	deterred_swing_timer += delta
+
+	# Time to swing again?
+	if deterred_swing_timer >= deterred_swing_interval:
+		deterred_swing_timer = 0.0
+		deterred_swing_count += 1
+
+		# Play fake attack animation (swing at air)
+		perform_fake_attack()
+
+		# Check if we've given up
+		if deterred_swing_count >= deterred_max_swings:
+			print("🔥 %s: Given up after %d swings, returning to spawn" % [enemy.name, deterred_swing_count])
+			disengage_to_spawn()
+
+func perform_fake_attack() -> void:
+	"""Play attack animation without dealing damage (swinging at air)"""
+	if not is_instance_valid(player):
+		return
+	
+	print("💨 %s: Swinging at air (%d/%d)" % [enemy.name, deterred_swing_count, deterred_max_swings])
+	
+	# Play attack animation facing player
+	var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
+	if anim_sprite and anim_sprite.sprite_frames:
+		# Determine direction to player
+		var direction = (player.global_position - enemy.global_position).normalized()
+		var angle = direction.angle()
+		var deg = rad_to_deg(angle)
+		if deg < 0:
+			deg += 360
+		
+		# Get direction string
+		var dir_str = "down"
+		if deg >= 315 or deg < 45:
+			dir_str = "right"
+		elif deg >= 45 and deg < 135:
+			dir_str = "down"
+		elif deg >= 135 and deg < 225:
+			dir_str = "left"
+		else:
+			dir_str = "up"
+		
+		# Play attack animation
+		var attack_anim = "attack_" + dir_str
+		if anim_sprite.sprite_frames.has_animation(attack_anim):
+			anim_sprite.play(attack_anim)
+			anim_sprite.flip_h = false
+	
+	# Play attack sound (same as real attack)
+	var current_time = Time.get_ticks_msec() / 1000.0
+	if current_time - last_attack_sound_time >= attack_sound_cooldown:
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound(sound_manager.SoundType.SKELETON_ATTACK, enemy.global_position, -8.0)
+			last_attack_sound_time = current_time
+
+# ═══════════════════════════════════════════════════════════════════════════
 # UNSTUCKING STATE (About-Face Recovery)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -482,6 +568,12 @@ func perform_attack() -> void:
 	"""Attack the player"""
 	if not is_instance_valid(player):
 		return
+	
+	# CRITICAL: Prevent concurrent attacks (fixes 1000 attack sound bug)
+	if is_performing_attack:
+		return
+	
+	is_performing_attack = true
 
 	# Play attack animation
 	var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
@@ -546,6 +638,9 @@ func perform_attack() -> void:
 		if sound_manager:
 			sound_manager.play_sound(sound_manager.SoundType.SKELETON_ATTACK, enemy.global_position, -8.0)
 			last_attack_sound_time = current_time
+	
+	# Reset attack flag (allow next attack)
+	is_performing_attack = false
 
 # ═══════════════════════════════════════════════════════════════════════════
 # AGGRO SYSTEM
@@ -690,6 +785,10 @@ func change_state(new_state: State) -> void:
 			pass
 		State.RETREATING:
 			pass
+		State.DETERRED:
+			# Reset deterred state variables
+			deterred_swing_count = 0
+			deterred_swing_timer = 0.0
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PUBLIC API
@@ -746,6 +845,19 @@ func disengage_to_spawn() -> void:
 	pick_new_patrol_target()
 	change_state(State.PATROLLING)
 
+func enter_deterred_state() -> void:
+	"""Enter DETERRED state (called by campfire when enemy reaches edge)"""
+	# Only deter if in combat (chasing player)
+	if not is_in_combat:
+		return
+	
+	# Don't interrupt crit windows
+	if enemy and enemy.has_method("get") and enemy.get("in_crit_window"):
+		return
+	
+	print("🔥 %s: Entering DETERRED state (campfire blocked)" % enemy.name)
+	change_state(State.DETERRED)
+
 func get_state_name() -> String:
 	return get_state_name_for_state(current_state)
 
@@ -756,6 +868,7 @@ func get_state_name_for_state(state: State) -> String:
 		State.ATTACKING: return "ATTACKING"
 		State.RETREATING: return "RETREATING"
 		State.UNSTUCKING: return "UNSTUCKING"
+		State.DETERRED: return "DETERRED"
 	return "UNKNOWN"
 
 func update_enemy_animation(velocity: Vector2) -> void:

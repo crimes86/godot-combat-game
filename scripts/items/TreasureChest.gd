@@ -21,12 +21,39 @@ var body_sprite: Polygon2D = null
 
 # Loot table - items that can be found in chests
 const LOOT_TABLE = [
-	{"name": "Ancient Skull", "desc": "A weathered skull from an ancient warrior", "value": 15},
-	{"name": "Old Bones", "desc": "Bones from a long-forgotten battle", "value": 8},
-	{"name": "Broken Sword", "desc": "Fragments of a shattered blade", "value": 25},
-	{"name": "Tarnished Ring", "desc": "An old ring with faded engravings", "value": 40},
-	{"name": "Dusty Gem", "desc": "A gemstone covered in wasteland dust", "value": 60},
-	{"name": "Ancient Coin", "desc": "Currency from a forgotten kingdom", "value": 20}
+	{"name": "Ancient Skull", "desc": "A weathered skull from an ancient warrior", "value": 15, "drop_weight": 30},
+	{"name": "Old Bones", "desc": "Bones from a long-forgotten battle", "value": 8, "drop_weight": 35},
+	{"name": "Broken Sword", "desc": "Fragments of a shattered blade", "value": 25, "drop_weight": 25},
+	{"name": "Tarnished Ring", "desc": "An old ring with faded engravings", "value": 40, "drop_weight": 20},
+	{"name": "Dusty Gem", "desc": "A gemstone covered in wasteland dust", "value": 60, "drop_weight": 15},
+	{"name": "Ancient Coin", "desc": "Currency from a forgotten kingdom", "value": 20, "drop_weight": 25},
+	# Copper Plate Armor Pieces (rare drops from chests)
+	{
+		"id": "copper_plate_greaves",
+		"name": "Copper Plate Greaves",
+		"description": "Tier 1 copper-plated leg armor. Solid leg protection.",
+		"slot": "legs",
+		"defense": 8,
+		"type": "armor",
+		"value": 0,
+		"rarity": "Common",
+		"sprite_name": "copper_plate",
+		"drop_weight": 8,  # 8% chance - rare armor drop
+		"stackable": false
+	},
+	{
+		"id": "copper_plate_helmet",
+		"name": "Copper Plate Helmet",
+		"description": "Tier 1 copper-plated helmet. Essential head protection.",
+		"slot": "head",
+		"defense": 7,
+		"type": "armor",
+		"value": 0,
+		"rarity": "Common",
+		"sprite_name": "copper_plate",
+		"drop_weight": 7,  # 7% chance - rare armor drop
+		"stackable": false
+	}
 ]
 
 func _ready() -> void:
@@ -214,15 +241,39 @@ func open_chest() -> void:
 	create_loot_ui()
 
 func generate_loot() -> void:
-	"""Generate random loot items for the chest"""
+	"""Generate random loot items for the chest using weighted drop rates"""
 	var num_items = randi_range(1, 3)
 	generated_loot.clear()
 
+	# Calculate total weight
+	var total_weight = 0
+	for item in LOOT_TABLE:
+		total_weight += item.get("drop_weight", 1)
+
 	for i in range(num_items):
-		# Pick random item from loot table
-		var item_data = LOOT_TABLE[randi() % LOOT_TABLE.size()].duplicate()
-		generated_loot.append(item_data)
-		print("  ✨ Chest contains: %s (Value: %d gold)" % [item_data["name"], item_data["value"]])
+		# Pick weighted random item from loot table
+		var roll = randi() % total_weight
+		var cumulative = 0
+
+		for item_data in LOOT_TABLE:
+			cumulative += item_data.get("drop_weight", 1)
+			if roll < cumulative:
+				var loot_item = item_data.duplicate()
+				generated_loot.append(loot_item)
+
+				# Log different messages for armor vs vendor trash
+				if loot_item.get("type") == "armor":
+					print("  ⚔️ Chest contains ARMOR: %s (%s, +%d defense)" % [
+						loot_item.get("name", "Unknown"),
+						loot_item.get("slot", "unknown"),
+						loot_item.get("defense", 0)
+					])
+				else:
+					print("  ✨ Chest contains: %s (Value: %d gold)" % [
+						loot_item.get("name", "Unknown"),
+						loot_item.get("value", 0)
+					])
+				break
 
 	print("📦 Chest generated %d items" % generated_loot.size())
 

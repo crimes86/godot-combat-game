@@ -771,6 +771,11 @@ func die() -> void:
 
 	is_dying = true
 
+	# Clean up any active weakpoints to prevent artifacting
+	for child in get_children():
+		if child is Weakpoint:
+			child.queue_free()
+
 	# Grant XP to player (immediate reward)
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("gain_experience"):
@@ -797,7 +802,15 @@ func die() -> void:
 		var frame_count = anim_sprite.sprite_frames.get_frame_count("hurt")
 		anim_sprite.frame = frame_count - 1
 	else:
-		# Fallback if animation doesn't exist
+		# Fallback if animation doesn't exist (e.g., guardians have no hurt animation)
+		# Stop any playing animation and freeze on last frame
+		if anim_sprite:
+			anim_sprite.stop()
+			# Freeze on the last frame of current animation
+			if anim_sprite.sprite_frames and anim_sprite.animation:
+				var frame_count = anim_sprite.sprite_frames.get_frame_count(anim_sprite.animation)
+				if frame_count > 0:
+					anim_sprite.frame = frame_count - 1
 		await get_tree().create_timer(0.6).timeout
 
 	# Generate loot for this corpse
@@ -936,6 +949,15 @@ func become_corpse() -> void:
 	is_corpse = true
 	corpse_creation_time = Time.get_ticks_msec() / 1000.0
 	corpse_state = CorpseState.State.FRESH
+
+	# Clean up any active weakpoints (if enemy died during crit window)
+	if not weakpoints.is_empty():
+		print("   🧹 Cleaning up %d active weakpoints" % weakpoints.size())
+		for wp in weakpoints:
+			if is_instance_valid(wp):
+				wp.queue_free()
+		weakpoints.clear()
+		in_crit_window = false
 
 	# Disable AI
 	if has_node("EnemyAI"):

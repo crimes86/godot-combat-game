@@ -38,7 +38,6 @@ const DEBUFF_COLOR = Color(0.8, 0.3, 0.2, 1.0)  # Rust red for debuffs
 const ANIM_SPEED = 0.1
 
 func _ready() -> void:
-	print("🎨 CharacterUI._ready() started")
 
 	# Set layer above game elements but below shop
 	layer = 95
@@ -60,7 +59,6 @@ func _ready() -> void:
 	# Initial update
 	refresh_all()
 
-	print("🎨 CharacterUI._ready() COMPLETED")
 
 func create_character_ui() -> void:
 	"""Create EverQuest-style character sheet"""
@@ -153,7 +151,6 @@ func create_character_ui() -> void:
 
 	add_child(main_panel)
 
-	print("✅ Character UI created")
 
 func create_equipment_panel(parent: Control) -> void:
 	"""Create middle panel with equipment slots"""
@@ -651,10 +648,7 @@ func toggle_character_ui() -> void:
 	visible = is_visible
 
 	if is_visible:
-		print("📋 Character sheet opened")
 		refresh_all()
-	else:
-		print("📋 Character sheet closed")
 
 func refresh_all() -> void:
 	"""Refresh all UI elements"""
@@ -784,9 +778,6 @@ func refresh_equipment() -> void:
 
 func refresh_inventory() -> void:
 	"""Update inventory slot displays"""
-	print("🔄 CharacterUI: Refreshing inventory...")
-	print("   inventory_slots.size() = %d" % inventory_slots.size())
-	print("   InventorySystem.inventory_items.size() = %d" % InventorySystem.inventory_items.size())
 	for i in range(inventory_slots.size()):
 		var slot_control = inventory_slots[i]
 		var item = InventorySystem.get_item(i)
@@ -794,18 +785,14 @@ func refresh_inventory() -> void:
 		# Get the label from the slot control
 		var panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
 		if not panel:
-			print("  ❌ Slot %d: No panel found" % i)
 			continue
 
 		var label = panel.get_node_or_null("ItemLabel")
 		if not label:
-			print("  ❌ Slot %d: No label found" % i)
 			continue
 
 		if item and item.size() > 0:
 			var item_name = item.get("name", "???")
-			print("  ✅ Slot %d: Found item: %s" % [i, item_name])
-			print("    Setting label text to: '%s'" % item_name)
 			var quantity = item.get("quantity", 1)
 			var is_stackable = item.get("stackable", false)
 
@@ -819,8 +806,6 @@ func refresh_inventory() -> void:
 			var glow_color = get_rarity_glow_color(rarity)
 			var glow_style = create_slot_style(SLOT_BG, glow_color, 3, true)  # Subtle border + glow
 			panel.add_theme_stylebox_override("panel", glow_style)
-
-			print("    Label text set to: '%s' (visible: %s)" % [label.text, label.visible])
 
 			var tooltip = item.get("description", "")
 
@@ -847,7 +832,6 @@ func refresh_inventory() -> void:
 
 			slot_control.tooltip_text = tooltip
 		else:
-			print("  ⬜ Slot %d: Empty" % i)
 			label.text = ""
 			slot_control.tooltip_text = "Empty slot"
 			# Reset to default style when empty
@@ -863,29 +847,21 @@ func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
 			if slot_name == "mainhand" and CharacterStats.equipped_weapon:
 				CharacterStats.unequip_weapon()
 				refresh_all()
-				print("✅ Unequipped weapon (double-click)")
 			else:
 				var armor_item = CharacterStats.equipped_armor[slot_name]
 				if armor_item:
 					if CharacterStats.unequip_armor(slot_name):
 						refresh_all()
-						print("✅ Unequipped %s (double-click)" % armor_item.get("name", "Unknown"))
-				else:
-					print("No armor equipped in %s slot" % slot_name)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			# Special handling for mainhand - check equipped_weapon
 			if slot_name == "mainhand" and CharacterStats.equipped_weapon:
 				CharacterStats.unequip_weapon()
 				refresh_all()
-				print("✅ Unequipped weapon (right-click)")
 			else:
 				var armor_item = CharacterStats.equipped_armor[slot_name]
 				if armor_item:
 					if CharacterStats.unequip_armor(slot_name):
 						refresh_all()
-						print("✅ Unequipped %s (right-click)" % armor_item.get("name", "Unknown"))
-				else:
-					print("No armor equipped in %s slot" % slot_name)
 
 func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 	"""Handle GUI input on inventory slot (double-click or right-click to equip)"""
@@ -906,9 +882,6 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 						# Remove from inventory
 						InventorySystem.remove_item(slot_index)
 						refresh_all()
-						print("✅ Equipped weapon %s (%s)" % [item.get("name", "Unknown"), action])
-					else:
-						print("❌ Failed to create weapon resource for %s" % item.get("name", "Unknown"))
 				# Check if it's armor (has a slot)
 				elif item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
 					# Try to equip armor
@@ -916,12 +889,6 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 						# Remove from inventory
 						InventorySystem.remove_item(slot_index)
 						refresh_all()
-						print("✅ Equipped armor %s (%s)" % [item.get("name", "Unknown"), action])
-				else:
-					print("🖱️ Item not equippable: %s" % item.get("name", "Unknown"))
-			else:
-				print("🖱️ Empty slot %d" % slot_index)
-
 func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	"""Convert a weapon dictionary (from inventory) to a Weapon resource"""
 	var weapon = Weapon.new()
@@ -969,13 +936,10 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 
 func _get_inventory_drag_data(at_position: Vector2, slot_index: int) -> Variant:
 	"""Start dragging an inventory item"""
-	print("🖱️ _get_inventory_drag_data called for slot %d" % slot_index)
 	var item = InventorySystem.get_item(slot_index)
 	if not item or item.is_empty():
-		print("  ❌ No item to drag")
 		return null
 
-	print("  ✅ Starting drag for: %s" % item.get("name", "Item"))
 
 	# Create drag preview
 	var preview = Label.new()
@@ -1005,7 +969,6 @@ func _can_drop_inventory_data(at_position: Vector2, data: Variant, slot_index: i
 
 func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: int) -> void:
 	"""Handle dropping data on an inventory slot"""
-	print("📥 _drop_inventory_data called for slot %d" % slot_index)
 	if not data.has("item"):
 		return
 
@@ -1028,7 +991,6 @@ func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: in
 				InventorySystem.set_item(source_index, target_item)
 
 			refresh_all()
-			print("🔄 Swapped inventory items")
 
 	elif source_type == "equipment":
 		# Move from equipment to inventory
@@ -1038,12 +1000,10 @@ func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: in
 			if source_slot_name == "mainhand" and CharacterStats.equipped_weapon:
 				CharacterStats.unequip_weapon()
 				refresh_all()
-				print("✅ Unequipped %s to inventory" % dragged_item.get("name", "Unknown"))
 			# Unequip armor
 			elif CharacterStats.unequip_armor(source_slot_name):
 				# Item is now in inventory via unequip_armor
 				refresh_all()
-				print("✅ Unequipped %s to inventory" % dragged_item.get("name", "Unknown"))
 
 func _get_equipment_drag_data(at_position: Vector2, slot_name: String) -> Variant:
 	"""Start dragging an equipped item"""
@@ -1121,7 +1081,6 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 	# Validate the drop
 	var item_slot = dragged_item.get("slot", "")
 	if item_slot != slot_name:
-		print("❌ Cannot equip %s in %s slot (requires %s slot)" % [dragged_item.get("name", ""), slot_name, item_slot])
 		return
 
 	if source_type == "inventory":
@@ -1145,10 +1104,6 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 				# Remove from inventory
 				InventorySystem.remove_item(source_index)
 				refresh_all()
-				print("✅ Equipped %s to %s" % [dragged_item.get("name", "Unknown"), slot_name])
-			else:
-				print("❌ Failed to equip %s" % dragged_item.get("name", "Unknown"))
-
 	elif source_type == "equipment":
 		# Swap equipment
 		var source_slot_name = data.get("source_slot_name", "")
@@ -1166,7 +1121,6 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 				CharacterStats.equip_armor(target_item)
 
 			refresh_all()
-			print("🔄 Swapped equipment slots")
 
 # ============================================
 # DROP ZONE (DELETE ITEMS WITH CONFIRMATION)
@@ -1178,31 +1132,25 @@ func _get_drop_zone_drag_data(at_position: Vector2) -> Variant:
 
 func _can_drop_on_drop_zone(at_position: Vector2, data: Variant) -> bool:
 	"""Accept any item drop on drop zone (outside UI panel)"""
-	print("🔍 _can_drop_on_drop_zone called at position: %s" % at_position)
 
 	if not data is Dictionary:
-		print("  ❌ Data is not a Dictionary")
 		return false
 
 	if not data.has("item"):
-		print("  ❌ No item in data")
 		return false
 
 	# Check if drop position is outside the main panel
 	if main_panel:
 		var panel_rect = main_panel.get_global_rect()
 		var is_outside = not panel_rect.has_point(at_position)
-		print("  Drop position: %s, Panel rect: %s, Outside: %s" % [at_position, panel_rect, is_outside])
 		return is_outside
 
 	return false
 
 func _drop_on_drop_zone(at_position: Vector2, data: Dictionary) -> void:
 	"""Handle dropping item outside UI - show confirmation dialog"""
-	print("🗑️ _drop_on_drop_zone called - showing confirmation")
 
 	if not data.has("item"):
-		print("  ❌ No item in data")
 		return
 
 	# Store the deletion data for confirmation
@@ -1215,23 +1163,17 @@ func _drop_on_drop_zone(at_position: Vector2, data: Dictionary) -> void:
 	if dialog:
 		dialog.dialog_text = "Are you sure you want to delete '%s'?" % item_name
 		dialog.popup_centered()
-		print("  ✅ Showing delete confirmation for: %s" % item_name)
-	else:
-		print("  ❌ DeleteConfirmDialog not found!")
 
 func _on_delete_confirmed() -> void:
 	"""Handle deletion confirmation - actually delete the item"""
-	print("✅ Delete confirmed!")
 
 	if pending_delete_data.is_empty():
-		print("  ❌ No pending deletion data")
 		return
 
 	var source_type = pending_delete_data.get("source_type", "")
 	var dragged_item = pending_delete_data.get("item", {})
 	var item_name = dragged_item.get("name", "Unknown")
 
-	print("  Deleting: %s from %s" % [item_name, source_type])
 
 	if source_type == "inventory":
 		# Remove from inventory
@@ -1239,7 +1181,6 @@ func _on_delete_confirmed() -> void:
 		if source_index >= 0:
 			InventorySystem.remove_item(source_index)
 			refresh_all()
-			print("🗑️ Deleted %s from inventory" % item_name)
 
 	elif source_type == "equipment":
 		# Unequip and delete (don't add to inventory)
@@ -1249,7 +1190,6 @@ func _on_delete_confirmed() -> void:
 			CharacterStats.equipped_armor[source_slot_name] = null
 			CharacterStats.armor_unequipped.emit(source_slot_name, {})
 			refresh_all()
-			print("🗑️ Deleted %s from equipment" % item_name)
 
 	# Clear pending data
 	pending_delete_data = {}
@@ -1273,5 +1213,4 @@ func _on_armor_changed(_slot: String, _armor: Dictionary) -> void:
 
 func _on_inventory_changed() -> void:
 	"""Called when inventory changes"""
-	print("📢 CharacterUI._on_inventory_changed() called!")
 	refresh_inventory()

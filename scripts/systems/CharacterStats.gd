@@ -27,6 +27,9 @@ var agility: int = Constants.STARTING_AGILITY    # Affects attack speed
 var vitality: int = Constants.STARTING_VITALITY  # Affects max HP
 var luck: int = Constants.STARTING_LUCK          # Affects crit chance
 
+# Temporary buffs (from campfires, potions, etc.)
+var campfire_crit_buff: float = 0.0  # Bonus crit chance from campfire bone embers
+
 # Starting stats (for reset/new character)
 const STARTING_STRENGTH: int = Constants.STARTING_STRENGTH
 const STARTING_AGILITY: int = Constants.STARTING_AGILITY
@@ -167,8 +170,11 @@ func get_base_crit_chance() -> float:
 	var weapon_crit = 0.0
 	if equipped_weapon:
 		weapon_crit = equipped_weapon.crit_chance_bonus
-	
-	return clamp(stat_crit + weapon_crit, 0.01, 0.50)  # Min 1%, max 50%
+
+	# Add campfire buff (from bone embers)
+	var total_crit = stat_crit + weapon_crit + campfire_crit_buff
+
+	return clamp(total_crit, 0.01, 0.50)  # Min 1%, max 50%
 
 func get_movement_speed() -> float:
 	"""Calculate movement speed (fixed for all levels)"""
