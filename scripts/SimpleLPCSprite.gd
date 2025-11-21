@@ -5,6 +5,9 @@ class_name SimpleLPCSprite
 ## NO SPRITE FLIPPING - uses correct row for each direction
 ## Uses the SAME approach as working Enemy.gd skeleton code
 
+# Isometric Y-scale compression (Diablo-style angled perspective)
+const ISO_Y_SCALE: float = 0.75  # Compress Y-axis by 25% for angled look
+
 # Direction to row mapping (LPC standard)
 const DIRECTION_ROWS = {
 	"north": 0,  # up
@@ -57,6 +60,9 @@ func setup_lpc_sprite(
 ):
 	"""Setup LPC sprite with layered body, armor, and weapon textures"""
 	print("SimpleLPCSprite.setup_lpc_sprite() called")
+
+	# Apply isometric Y-scale compression to base sprite
+	scale.y = ISO_Y_SCALE
 	print("  walk_texture: ", walk_tex, " size: ", walk_tex.get_size() if walk_tex else "null")
 	print("  slash_texture: ", slash_tex, " size: ", slash_tex.get_size() if slash_tex else "null")
 	print("  hurt_texture: ", hurt_tex, " size: ", hurt_tex.get_size() if hurt_tex else "null")
@@ -126,6 +132,7 @@ func setup_lpc_sprite(
 		base_head_sprite.name = "BaseHeadLayer"
 		base_head_sprite.centered = true
 		base_head_sprite.z_index = 1
+		base_head_sprite.scale.y = ISO_Y_SCALE  # Isometric compression
 		base_head_sprite.sprite_frames = SpriteFrames.new()
 		base_head_sprite.modulate = Color(1, 1, 1, 1)
 
@@ -154,6 +161,7 @@ func setup_lpc_sprite(
 		boots_sprite.name = "BootsLayer"
 		boots_sprite.centered = true
 		boots_sprite.z_index = 2
+		boots_sprite.scale.y = ISO_Y_SCALE  # Isometric compression
 		boots_sprite.sprite_frames = SpriteFrames.new()
 		boots_sprite.modulate = Color(1, 1, 1, 1)
 
@@ -182,6 +190,7 @@ func setup_lpc_sprite(
 		pants_sprite.name = "PantsLayer"
 		pants_sprite.centered = true
 		pants_sprite.z_index = 3
+		pants_sprite.scale.y = ISO_Y_SCALE  # Isometric compression
 		pants_sprite.sprite_frames = SpriteFrames.new()
 		pants_sprite.modulate = Color(1, 1, 1, 1)
 
@@ -210,6 +219,7 @@ func setup_lpc_sprite(
 		shirt_sprite.name = "ShirtLayer"
 		shirt_sprite.centered = true
 		shirt_sprite.z_index = 4
+		shirt_sprite.scale.y = ISO_Y_SCALE  # Isometric compression
 		shirt_sprite.sprite_frames = SpriteFrames.new()
 		shirt_sprite.modulate = Color(1, 1, 1, 1)
 
@@ -238,6 +248,7 @@ func setup_lpc_sprite(
 		arms_sprite.name = "ArmsLayer"
 		arms_sprite.centered = true
 		arms_sprite.z_index = 5
+		arms_sprite.scale.y = ISO_Y_SCALE  # Isometric compression
 		arms_sprite.sprite_frames = SpriteFrames.new()
 		arms_sprite.modulate = Color(1, 1, 1, 1)
 
@@ -266,6 +277,7 @@ func setup_lpc_sprite(
 		hands_sprite.name = "HandsLayer"
 		hands_sprite.centered = true
 		hands_sprite.z_index = 6
+		hands_sprite.scale.y = ISO_Y_SCALE  # Isometric compression
 		hands_sprite.sprite_frames = SpriteFrames.new()
 		hands_sprite.modulate = Color(1, 1, 1, 1)
 
@@ -294,6 +306,7 @@ func setup_lpc_sprite(
 		hair_sprite.name = "HairLayer"
 		hair_sprite.centered = true
 		hair_sprite.z_index = 7
+		hair_sprite.scale.y = ISO_Y_SCALE  # Isometric compression
 		hair_sprite.sprite_frames = SpriteFrames.new()
 		hair_sprite.modulate = Color(1, 1, 1, 1)
 
@@ -322,6 +335,7 @@ func setup_lpc_sprite(
 		head_sprite.name = "HeadArmorLayer"
 		head_sprite.centered = true
 		head_sprite.z_index = 8
+		head_sprite.scale.y = ISO_Y_SCALE  # Isometric compression
 		head_sprite.sprite_frames = SpriteFrames.new()
 		head_sprite.modulate = Color(1, 1, 1, 1)
 
@@ -350,6 +364,7 @@ func setup_lpc_sprite(
 		weapon_sprite.name = "WeaponLayer"
 		weapon_sprite.centered = true
 		weapon_sprite.z_index = 9  # Draw weapon on top (above head armor z=8)
+		weapon_sprite.scale.y = ISO_Y_SCALE  # Isometric compression
 		weapon_sprite.sprite_frames = SpriteFrames.new()
 
 		# Don't set a static offset here - we'll adjust it per animation type

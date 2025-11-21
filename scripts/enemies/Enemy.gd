@@ -1,5 +1,8 @@
 extends CharacterBody2D
 
+# Isometric Y-scale compression (Diablo-style angled perspective)
+const ISO_Y_SCALE: float = 0.75  # Compress Y-axis by 25% for angled look
+
 # Enemy stats
 @export var max_health: float = 500.0
 @export var current_health: float = 500.0
@@ -71,9 +74,9 @@ func _ready() -> void:
 	original_modulate = self.modulate
 
 	# ✨ Store sprite's original scale (for crit window scaling)
-	# Sprite always starts at Vector2.ONE, but store it just in case
+	# Apply isometric Y-scale compression
 	if sprite:
-		sprite.scale = Vector2.ONE  # Ensure sprite starts at base scale
+		sprite.scale = Vector2(1.0, ISO_Y_SCALE)  # Apply isometric compression
 
 	# Debug: Check what sprite node we have
 	if not sprite:

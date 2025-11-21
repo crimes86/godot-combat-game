@@ -4,6 +4,9 @@ class_name Vendor
 ## Vendor NPC that sells items to the player
 ## Place near campfire for easy access
 
+# Isometric Y-scale compression (Diablo-style angled perspective)
+const ISO_Y_SCALE: float = 0.75  # Compress Y-axis by 25% for angled look
+
 signal shop_opened()
 signal shop_closed()
 
@@ -120,6 +123,7 @@ func setup_blacksmith_sprite() -> void:
 	animated_sprite.centered = true
 	animated_sprite.z_index = 1
 	animated_sprite.scale.x = -1  # Flip to face left (toward campfire)
+	animated_sprite.scale.y = ISO_Y_SCALE  # Apply isometric compression
 	add_child(animated_sprite)
 
 	# Load blacksmith walk animation (4 frames, 64x64 each)
