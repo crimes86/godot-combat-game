@@ -57,12 +57,12 @@ func update_profile() -> void:
 	# Count lights
 	var light_count = get_all_nodes_of_type(root, PointLight2D).size()
 
-	# Memory usage
-	var static_mem = Performance.get_monitor(Performance.MEMORY_STATIC) / 1024.0 / 1024.0
-	var dynamic_mem = Performance.get_monitor(Performance.MEMORY_DYNAMIC) / 1024.0 / 1024.0
+	# Memory usage (Godot 4 constants)
+	var static_mem = Performance.get_monitor(Performance.MEMORY_STATIC_MAX) / 1024.0 / 1024.0
+	var dynamic_mem = Performance.get_monitor(Performance.MEMORY_MESSAGE_BUFFER_MAX) / 1024.0 / 1024.0
 
 	# Physics
-	var physics_2d_active = Performance.get_monitor(Performance.PHYSICS_2D_ACTIVE_OBJECTS)
+	var physics_2d_active = Performance.get_monitor(Performance.PHYSICS_2D_ACTIVE_BODIES)
 
 	# Draw calls
 	var draw_calls = Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
