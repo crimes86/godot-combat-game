@@ -540,8 +540,9 @@ func create_fire_particles() -> void:
 	# GLOWING COALS (between rock ring and fire base) - ambient glow around fire
 	# These sit on the ground filling the interior, slightly smaller than rock ring
 	# Place embers in concentric rings to ensure good coverage
-	var rings = 4  # Number of concentric rings
-	var embers_per_ring = [8, 12, 16, 20]  # More embers in outer rings
+	# PERFORMANCE: Reduced from 4 rings to 2 rings for 60 FPS
+	var rings = 2  # Number of concentric rings (was 4)
+	var embers_per_ring = [8, 12]  # Reduced from [8, 12, 16, 20]
 	var glow_index = 0  # Track total glow ember count for color preferences
 
 	for ring in range(rings):

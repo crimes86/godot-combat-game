@@ -1323,7 +1323,7 @@ func spawn_scattered_props(parent: Node2D):
 
 	# Cover full world with scattered props with buffer
 	var buffer = 150.0  # Keep small props 150px from edges
-	for i in range(100):  # Optimized for performance (was 250)
+	for i in range(40):  # MASSIVELY reduced from 100 for 60 FPS (was 250)
 		var prop_type = visual_props[rng.randi() % visual_props.size()]
 		var prop_pos = Vector2(
 			rng.randf_range(-5000 + buffer, 13000 - buffer),
@@ -1373,9 +1373,9 @@ func spawn_small_rocks(parent: Node2D):
 
 	var rocks_placed = 0
 
-	# Optimized rock count for performance (was 2400)
+	# Optimized rock count for performance (was 2400, then 800)
 	var buffer = 200.0  # Keep small rocks 200px from edges
-	for i in range(800):  # Reduced for better FPS while still filling bare areas
+	for i in range(200):  # MASSIVELY reduced from 800 for 60 FPS target
 		var rock_pos = Vector2(
 			rng.randf_range(-5000 + buffer, 13000 - buffer),
 			rng.randf_range(-3000 + buffer, 3000 - buffer)
@@ -2631,8 +2631,8 @@ func spawn_ground_cracks(parent: Node2D):
 
 	var cracks_placed = 0
 
-	# Spawn 100 cracks throughout the world (dense population)
-	for i in range(100):
+	# Spawn cracks throughout the world (MASSIVELY reduced for 60 FPS)
+	for i in range(30):  # Reduced from 100
 		var crack_pos = Vector2(
 			rng.randf_range(-4000, 12000),
 			rng.randf_range(-2500, 2500)
