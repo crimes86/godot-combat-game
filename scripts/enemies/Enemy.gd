@@ -17,6 +17,7 @@ var gold_drop: int = 5  # Actual gold dropped
 @onready var sprite: CanvasItem = $Sprite2D  # Can be Sprite2D or AnimatedSprite2D
 @onready var click_area: Area2D = $Area2D
 var level_label: Label = null  # Created dynamically in show_level()
+var shadow_sprite: AnimatedSprite2D = null  # Shadow layer
 
 # Crit window state (minimal - manager owns lifecycle)
 var in_crit_window: bool = false  # Simple flag set by grow/shrink methods
@@ -135,7 +136,7 @@ func _ready() -> void:
 			
 			# Setup skeleton animations from ALL sprite sheets
 			setup_skeleton_animations(anim_sprite, walk_tex, slash_tex, hurt_tex)
-			
+
 			# Verify sprite_frames was set
 			if not anim_sprite.sprite_frames:
 				push_error("❌ Failed to setup sprite_frames!")
@@ -145,6 +146,9 @@ func _ready() -> void:
 			var old_sprite = sprite
 			remove_child(old_sprite)
 			old_sprite.queue_free()
+
+			# Create shadow layer (before adding main sprite)
+			create_shadow_layer()
 
 			add_child(anim_sprite)
 			sprite = anim_sprite
@@ -236,14 +240,70 @@ func create_skeleton_animation(sprite_frames: SpriteFrames, skeleton_img: Image,
 	sprite_frames.add_animation(anim_name)
 	sprite_frames.set_animation_loop(anim_name, loop)
 	sprite_frames.set_animation_speed(anim_name, fps)
-	
+
 	for i in range(frame_count):
 		var frame_idx = start_frame + i
 		var frame_img = Image.create(64, 64, false, Image.FORMAT_RGBA8)
 		frame_img.blit_rect(skeleton_img, Rect2i(frame_idx * 64, row * 64, 64, 64), Vector2i(0, 0))
-		
+
 		var frame_texture = ImageTexture.create_from_image(frame_img)
 		sprite_frames.add_frame(anim_name, frame_texture)
+
+func create_shadow_layer() -> void:
+	"""Create animated shadow layer for skeleton"""
+	# Load shadow textures
+	var shadow_walk_path = "res://assets/characters/shadow/standard/walk.png"
+	var shadow_slash_path = "res://assets/characters/shadow/standard/slash.png"
+
+	if not ResourceLoader.exists(shadow_walk_path):
+		print("⚠️ Shadow sprites not found, skipping shadow layer")
+		return
+
+	var shadow_walk_tex: Texture2D = ResourceLoader.load(shadow_walk_path, "Texture2D")
+	var shadow_slash_tex: Texture2D = null
+	if ResourceLoader.exists(shadow_slash_path):
+		shadow_slash_tex = ResourceLoader.load(shadow_slash_path, "Texture2D")
+
+	# Create shadow sprite
+	shadow_sprite = AnimatedSprite2D.new()
+	shadow_sprite.name = "ShadowLayer"
+	shadow_sprite.centered = true
+	shadow_sprite.z_index = -10  # Below skeleton body
+	shadow_sprite.modulate = Color(1, 1, 1, 0.6)  # Semi-transparent
+
+	# Create sprite frames for shadow
+	var shadow_frames = SpriteFrames.new()
+
+	# Walk animations - 4 rows (UP, LEFT, DOWN, RIGHT), 9 frames each
+	if shadow_walk_tex:
+		var shadow_walk_img = shadow_walk_tex.get_image()
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "walk_up", 0, 9, 8.0)
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "walk_left", 1, 9, 8.0)
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "walk_down", 2, 9, 8.0)
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "walk_right", 3, 9, 8.0)
+
+		# Idle animations - middle frame
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_up", 0, 1, 1.0, true, 4)
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_left", 1, 1, 1.0, true, 4)
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_down", 2, 1, 1.0, true, 4)
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_right", 3, 1, 1.0, true, 4)
+
+	# Attack animations - 6 frames each
+	if shadow_slash_tex:
+		var shadow_slash_img = shadow_slash_tex.get_image()
+		create_skeleton_animation(shadow_frames, shadow_slash_img, "attack_up", 0, 6, 12.0, false)
+		create_skeleton_animation(shadow_frames, shadow_slash_img, "attack_left", 1, 6, 12.0, false)
+		create_skeleton_animation(shadow_frames, shadow_slash_img, "attack_down", 2, 6, 12.0, false)
+		create_skeleton_animation(shadow_frames, shadow_slash_img, "attack_right", 3, 6, 12.0, false)
+
+	shadow_sprite.sprite_frames = shadow_frames
+	add_child(shadow_sprite)
+
+	# Start with idle animation
+	if shadow_sprite.sprite_frames.has_animation("idle_down"):
+		shadow_sprite.play("idle_down")
+
+	print("  ✅ Shadow layer created for skeleton (z_index=%d, opacity=60%%)" % shadow_sprite.z_index)
 
 func update_level_display() -> void:
 	"""Show enemy level on sprite"""

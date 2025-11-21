@@ -18,6 +18,7 @@ var generated_loot: Array = []
 var chest_visual: Node2D = null
 var lid_sprite: Polygon2D = null
 var body_sprite: Polygon2D = null
+var loot_indicator: Node2D = null  # Sparkle effect for unopened chests
 
 # Loot table - items that can be found in chests
 const LOOT_TABLE = [
@@ -79,6 +80,9 @@ func _ready() -> void:
 	# Create interaction prompt
 	create_interaction_prompt()
 
+	# Add sparkle effect for unopened chest
+	add_loot_indicator()
+
 	print("📦 TreasureChest initialized at position %s" % global_position)
 
 func _physics_process(_delta: float) -> void:
@@ -99,6 +103,8 @@ func create_chest_visual() -> void:
 	"""Create a simple treasure chest visual using polygons"""
 	chest_visual = Node2D.new()
 	chest_visual.name = "ChestVisual"
+	# Scale down 25% overall, then stretch lengthwise (X axis)
+	chest_visual.scale = Vector2(0.75 * 1.3, 0.75)  # 25% smaller, 30% longer on X
 	add_child(chest_visual)
 
 	# Chest body (bottom part)
@@ -123,14 +129,14 @@ func create_chest_visual() -> void:
 	body_border.default_color = Color(0.2, 0.1, 0.05, 1.0)  # Dark brown
 	body_sprite.add_child(body_border)
 
-	# Chest lid (top part)
+	# Chest lid (top part) - 25% bigger
 	lid_sprite = Polygon2D.new()
 	lid_sprite.name = "ChestLid"
 	var lid_points = PackedVector2Array([
-		Vector2(-25, -15),   # Bottom left
-		Vector2(25, -15),    # Bottom right
-		Vector2(22, -30),    # Top right
-		Vector2(-22, -30)    # Top left
+		Vector2(-31.25, -15),   # Bottom left (25% wider: -25 * 1.25)
+		Vector2(31.25, -15),    # Bottom right (25% wider: 25 * 1.25)
+		Vector2(27.5, -37.5),   # Top right (25% taller: 22 * 1.25, -30 * 1.25)
+		Vector2(-27.5, -37.5)   # Top left (25% taller: -22 * 1.25, -30 * 1.25)
 	])
 	lid_sprite.polygon = lid_points
 	lid_sprite.color = Color(0.5, 0.3, 0.2, 1.0)  # Lighter brown
@@ -230,6 +236,11 @@ func open_chest() -> void:
 	# Hide interaction prompt
 	if interaction_prompt:
 		interaction_prompt.visible = false
+
+	# Remove sparkle indicator
+	if loot_indicator:
+		loot_indicator.queue_free()
+		loot_indicator = null
 
 	# Animate lid opening
 	animate_lid_opening()
@@ -342,3 +353,77 @@ func _on_body_exited(body: Node2D) -> void:
 	"""Player left interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
+
+func add_loot_indicator() -> void:
+	"""Add shiny glimmer effect to indicate this chest has loot (WoW-style)"""
+	if loot_indicator:
+		return  # Already has indicator
+
+	loot_indicator = Node2D.new()
+	loot_indicator.name = "LootIndicator"
+	loot_indicator.z_index = 10  # Draw on top
+
+	# Create 4 small sparkle points positioned above the chest
+	var sparkle_positions = [
+		Vector2(-8, -45),  # Upper left
+		Vector2(8, -45),   # Upper right
+		Vector2(-6, -40),  # Lower left
+		Vector2(6, -40)    # Lower right
+	]
+
+	for i in range(sparkle_positions.size()):
+		var sparkle = create_sparkle()
+		sparkle.position = sparkle_positions[i]
+		loot_indicator.add_child(sparkle)
+
+		# Stagger animation start times for shimmer effect
+		var delay = i * 0.2
+		animate_sparkle(sparkle, delay)
+
+	add_child(loot_indicator)
+
+func create_sparkle() -> Polygon2D:
+	"""Create a single sparkle (4-pointed star)"""
+	var sparkle = Polygon2D.new()
+
+	# Create 4-pointed star shape
+	var size = 6.0
+	var points = PackedVector2Array([
+		Vector2(0, -size),      # Top point
+		Vector2(1, -1),         # Inner top-right
+		Vector2(size, 0),       # Right point
+		Vector2(1, 1),          # Inner bottom-right
+		Vector2(0, size),       # Bottom point
+		Vector2(-1, 1),         # Inner bottom-left
+		Vector2(-size, 0),      # Left point
+		Vector2(-1, -1)         # Inner top-left
+	])
+
+	sparkle.polygon = points
+	sparkle.color = Color(1.0, 1.0, 0.8, 0.9)  # Bright yellow-white
+
+	return sparkle
+
+func animate_sparkle(sparkle: Polygon2D, delay: float) -> void:
+	"""Animate sparkle with rotation and fade"""
+	# Wait for delay
+	await get_tree().create_timer(delay).timeout
+
+	if not is_instance_valid(sparkle):
+		return
+
+	# Create looping animation
+	var tween = create_tween()
+	tween.set_loops()
+	tween.set_parallel(true)
+
+	# Rotate continuously
+	tween.tween_property(sparkle, "rotation", TAU, 2.0).from(0.0)
+
+	# Pulse opacity
+	tween.tween_property(sparkle, "modulate:a", 0.3, 1.0).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(sparkle, "modulate:a", 1.0, 1.0).set_ease(Tween.EASE_IN_OUT).set_delay(1.0)
+
+	# Slight scale pulse
+	tween.tween_property(sparkle, "scale", Vector2(1.3, 1.3), 1.0).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(sparkle, "scale", Vector2(1.0, 1.0), 1.0).set_ease(Tween.EASE_IN_OUT).set_delay(1.0)

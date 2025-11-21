@@ -16,8 +16,11 @@ const DIRECTION_ROWS = {
 # Current state
 var current_direction := "south"
 
+# Shadow layer (below body)
+var shadow_sprite: AnimatedSprite2D = null
+
 # Armor layers (optional) - between body and weapon
-# z-index order: body(0) -> base_head(1) -> boots(2) -> pants(3) -> shirt(4) -> arms(5) -> hands(6) -> hair(7) -> head_armor(8) -> weapon(9/-1)
+# z-index order: shadow(-10) -> body(0) -> base_head(1) -> boots(2) -> pants(3) -> shirt(4) -> arms(5) -> hands(6) -> hair(7) -> head_armor(8) -> weapon(9/-1)
 var base_head_sprite: AnimatedSprite2D = null  # Female character uses separate head layer
 var boots_sprite: AnimatedSprite2D = null
 var pants_sprite: AnimatedSprite2D = null
@@ -34,6 +37,8 @@ func setup_lpc_sprite(
 	walk_tex: Texture2D,
 	slash_tex: Texture2D = null,
 	hurt_tex: Texture2D = null,
+	shadow_walk_tex: Texture2D = null,
+	shadow_slash_tex: Texture2D = null,
 	base_head_walk_tex: Texture2D = null,
 	base_head_slash_tex: Texture2D = null,
 	boots_walk_tex: Texture2D = null,
@@ -118,6 +123,34 @@ func setup_lpc_sprite(
 	# Debug: List all animations created
 	print("  📋 Animations created: ", sprite_frames.get_animation_names())
 	print("  📊 Total animations: ", sprite_frames.get_animation_names().size())
+
+	# Setup shadow layer (z=-10 - below everything)
+	if shadow_walk_tex or shadow_slash_tex:
+		print("  👤 Creating shadow layer...")
+		shadow_sprite = AnimatedSprite2D.new()
+		shadow_sprite.name = "ShadowLayer"
+		shadow_sprite.centered = true
+		shadow_sprite.z_index = -10
+		shadow_sprite.sprite_frames = SpriteFrames.new()
+		shadow_sprite.modulate = Color(1, 1, 1, 0.6)  # Semi-transparent
+
+		if shadow_walk_tex:
+			var shadow_walk_img = shadow_walk_tex.get_image()
+			for dir_name in DIRECTION_ROWS.keys():
+				var row = DIRECTION_ROWS[dir_name]
+				create_animation_from_image(shadow_walk_img, "walk_" + dir_name, row, 8, [1, 2, 3, 4, 5, 6, 7, 8], 10.0, true, shadow_sprite.sprite_frames, 64)
+				create_animation_from_image(shadow_walk_img, "idle_" + dir_name, row, 1, [0], 1.0, true, shadow_sprite.sprite_frames, 64)
+
+		if shadow_slash_tex:
+			var shadow_slash_img = shadow_slash_tex.get_image()
+			for dir_name in DIRECTION_ROWS.keys():
+				var row = DIRECTION_ROWS[dir_name]
+				create_animation_from_image(shadow_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, shadow_sprite.sprite_frames, 64)
+
+		add_child(shadow_sprite)
+		shadow_sprite.visible = true
+		shadow_sprite.play("idle_south")
+		print("  ✅ Shadow layer created (z_index=%d, visible=%s, modulate=%s)" % [shadow_sprite.z_index, shadow_sprite.visible, shadow_sprite.modulate])
 
 	# Setup base head layer (z=1 - for female characters with separate head)
 	if base_head_walk_tex or base_head_slash_tex:
@@ -472,6 +505,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 		play(anim_name)
 	else:
 		push_warning("Animation not found: " + anim_key)
+
+	# Sync shadow animation with body animation
+	if shadow_sprite:
+		if shadow_sprite.sprite_frames.has_animation(anim_key):
+			shadow_sprite.play(anim_key)
+		elif shadow_sprite.sprite_frames.has_animation(anim_name):
+			shadow_sprite.play(anim_name)
 
 	# Sync armor animations with body animation
 	if base_head_sprite:

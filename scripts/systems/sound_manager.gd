@@ -8,6 +8,7 @@ enum SoundType {
 	# Player sounds
 	SWING,
 	MISS,
+	FOOTSTEP_PLAYER,  # Player footsteps (cloth/leather)
 
 	# Enemy sounds
 	HIT_NORMAL,
@@ -18,6 +19,7 @@ enum SoundType {
 	SKELETON_ATTACK,  # Skeleton's menacing cackle when attacking
 	SKELETON_AGGRO,   # Skeleton's menacing cackle when spotting player
 	SKELETON_DEATH,   # Skeleton bones collapsing (random between 2 variations)
+	FOOTSTEP_SKELETON,  # Skeleton footsteps (bone clacking)
 
 	# System sounds
 	CRIT_WINDOW_OPEN,
@@ -50,6 +52,10 @@ var unarmed_swing_sounds: Array[AudioStream] = []  # Unarmed/fist whoosh
 
 # Player sounds
 var player_hurt_sounds: Array[AudioStream] = []  # Player hurt/death grunts (2 variations)
+var player_footstep_sounds: Array[AudioStream] = []  # Player footsteps (cloth/leather)
+
+# Enemy footstep sounds
+var skeleton_footstep_sounds: Array[AudioStream] = []  # Skeleton bone clacking footsteps
 
 # Weapon-specific hit sounds (organized by weapon type)
 var weapon_hit_sounds: Dictionary = {
@@ -220,6 +226,40 @@ func _load_real_sounds() -> void:
 
 	print("  📊 Loaded %d player hurt sound variations" % player_hurt_sounds.size())
 
+	# Load player footstep sounds
+	var player_step_1 = load("res://assets/sounds/footsteps/player_step_1.wav")
+	var player_step_2 = load("res://assets/sounds/footsteps/player_step_2.wav")
+	var player_step_3 = load("res://assets/sounds/footsteps/player_step_3.wav")
+
+	if player_step_1:
+		player_footstep_sounds.append(player_step_1)
+		print("  ✅ Loaded player_step_1.wav")
+	if player_step_2:
+		player_footstep_sounds.append(player_step_2)
+		print("  ✅ Loaded player_step_2.wav")
+	if player_step_3:
+		player_footstep_sounds.append(player_step_3)
+		print("  ✅ Loaded player_step_3.wav")
+
+	print("  📊 Loaded %d player footstep sound variations" % player_footstep_sounds.size())
+
+	# Load skeleton footstep sounds (same files, will sound different with pitch variation)
+	var skeleton_step_1 = load("res://assets/sounds/footsteps/skeleton_step_1.wav")
+	var skeleton_step_2 = load("res://assets/sounds/footsteps/skeleton_step_2.wav")
+	var skeleton_step_3 = load("res://assets/sounds/footsteps/skeleton_step_3.wav")
+
+	if skeleton_step_1:
+		skeleton_footstep_sounds.append(skeleton_step_1)
+		print("  ✅ Loaded skeleton_step_1.wav")
+	if skeleton_step_2:
+		skeleton_footstep_sounds.append(skeleton_step_2)
+		print("  ✅ Loaded skeleton_step_2.wav")
+	if skeleton_step_3:
+		skeleton_footstep_sounds.append(skeleton_step_3)
+		print("  ✅ Loaded skeleton_step_3.wav")
+
+	print("  📊 Loaded %d skeleton footstep sound variations" % skeleton_footstep_sounds.size())
+
 	# Load weapon-specific hit sounds
 	print("  🗡️ Loading weapon hit sounds...")
 	_load_weapon_sounds("sword", 4)
@@ -265,6 +305,10 @@ func _generate_all_sounds() -> void:
 
 	# UI/Loot sounds (use real sound if loaded, otherwise generate placeholder)
 	sound_cache[SoundType.GOLD_LOOT] = gold_loot_sound if gold_loot_sound else _generate_gold_loot()
+
+	# Footstep sounds (use real sounds if loaded, otherwise generate placeholders)
+	sound_cache[SoundType.FOOTSTEP_PLAYER] = player_footstep_sounds[0] if not player_footstep_sounds.is_empty() else _generate_footstep_soft()
+	sound_cache[SoundType.FOOTSTEP_SKELETON] = skeleton_footstep_sounds[0] if not skeleton_footstep_sounds.is_empty() else _generate_footstep_hard()
 
 ## Play a sound at a specific position in the world
 func play_sound(sound_type: SoundType, global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
@@ -471,6 +515,67 @@ func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 	get_tree().root.add_child(player)
 	player.play()
 
+## Play player footstep sound with distance culling
+func play_player_footstep(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -14.0) -> void:
+	if player_footstep_sounds.is_empty():
+		# Fallback to placeholder
+		play_sound(SoundType.FOOTSTEP_PLAYER, global_pos, volume_db)
+		return
+
+	# Pick random variation
+	var sound_stream = player_footstep_sounds[randi() % player_footstep_sounds.size()]
+
+	# Create player with slight pitch variation
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)
+	player.max_polyphony = 2  # Allow slight overlap
+	player.max_distance = 1500.0  # Distance attenuation
+	player.attenuation = 1.5  # Smooth falloff
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+
+	# Add tiny delay before play to avoid click/pop at start
+	await get_tree().create_timer(0.001).timeout
+	if is_instance_valid(player):
+		player.play()
+
+## Play skeleton footstep sound with distance culling
+func play_skeleton_footstep(global_pos: Vector2, camera_pos: Vector2, volume_db: float = -16.0) -> void:
+	# Distance culling: only play if within 1000px of camera
+	var distance = global_pos.distance_to(camera_pos)
+	if distance > 1000.0:
+		return
+
+	if skeleton_footstep_sounds.is_empty():
+		# Fallback to placeholder
+		play_sound(SoundType.FOOTSTEP_SKELETON, global_pos, volume_db)
+		return
+
+	# Pick random variation
+	var sound_stream = skeleton_footstep_sounds[randi() % skeleton_footstep_sounds.size()]
+
+	# Create player with pitch variation
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.93, 1.07)  # More variation for bone clacking
+	player.max_polyphony = 4  # Allow more overlap for multiple skeletons
+	player.max_distance = 1500.0  # Distance attenuation
+	player.attenuation = 1.5  # Smooth falloff
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+
+	# Add tiny delay before play to avoid click/pop at start
+	await get_tree().create_timer(0.001).timeout
+	if is_instance_valid(player):
+		player.play()
+
 ## Play weakpoint destruction sound (explosive glass/bone shatter finale)
 func play_weakpoint_destroyed_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
 	if not weakpoint_destroyed_sound:
@@ -549,6 +654,14 @@ func _generate_skeleton_sound() -> AudioStreamWAV:
 func _generate_gold_loot() -> AudioStreamWAV:
 	# Bright coin jingling placeholder (high metallic chime)
 	return _create_wav_tone(1200.0, 0.15, 0.4)
+
+func _generate_footstep_soft() -> AudioStreamWAV:
+	# Soft cloth/leather footstep (low thud)
+	return _create_wav_tone(120.0, 0.08, 0.15)
+
+func _generate_footstep_hard() -> AudioStreamWAV:
+	# Hard bone clacking footstep (higher pitch click)
+	return _create_wav_tone(300.0, 0.06, 0.2)
 
 # ============================================
 # AUDIO GENERATION UTILITIES

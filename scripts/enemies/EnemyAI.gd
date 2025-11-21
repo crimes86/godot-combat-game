@@ -93,6 +93,9 @@ var unstuck_max_steps: int = 8  # Number of steps to take backward (configurable
 static var last_attack_sound_time: float = 0.0
 static var attack_sound_cooldown: float = 0.15  # Min 0.15s between attack sounds
 
+# Footstep tracking
+var last_footstep_frame: int = -1  # Track last frame that played footstep
+
 # Performance: Throttle AI updates based on distance from player
 var ai_update_timer: float = 0.0
 var ai_update_interval: float = 0.1  # Default: update AI every 0.1s instead of 60 FPS
@@ -502,12 +505,24 @@ func perform_attack() -> void:
 	"""Attack the player"""
 	if not is_instance_valid(player):
 		return
-	
+
 	# CRITICAL: Prevent concurrent attacks (fixes 1000 attack sound bug)
 	if is_performing_attack:
 		return
-	
+
+	# CRITICAL: Verify enemy still exists before starting attack
+	if not is_instance_valid(enemy):
+		return
+
 	is_performing_attack = true
+
+	# Play attack sound IMMEDIATELY (before animation) with spam prevention
+	var current_time = Time.get_ticks_msec() / 1000.0
+	if current_time - last_attack_sound_time >= attack_sound_cooldown:
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound(sound_manager.SoundType.SKELETON_ATTACK, enemy.global_position, -8.0)
+			last_attack_sound_time = current_time
 
 	# Play attack animation
 	var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
@@ -537,8 +552,17 @@ func perform_attack() -> void:
 			# ✨ FIX: Don't flip! We have dedicated directional attack animations
 			anim_sprite.flip_h = false
 
+			# Sync shadow animation
+			if enemy.shadow_sprite and enemy.shadow_sprite.sprite_frames.has_animation(attack_anim):
+				enemy.shadow_sprite.play(attack_anim)
+
 	# ✨ Small delay for attack animation to play before dealing damage
 	await get_tree().create_timer(0.2).timeout
+
+	# CRITICAL: After await, verify everything still exists
+	if not is_instance_valid(enemy) or not is_instance_valid(player):
+		is_performing_attack = false
+		return
 
 	# Deal damage
 	if player.has_method("take_damage"):
@@ -547,32 +571,24 @@ func perform_attack() -> void:
 			damage = attack_damage * pow(1.08, enemy.enemy_level - 1)
 
 		player.take_damage(damage)
-	
+
 	# ✨ FIX: Enhanced visual feedback for attack
-	if enemy:
+	if is_instance_valid(enemy):
 		var original_scale = enemy.scale
 		var tween = enemy.create_tween()
 		tween.set_parallel(false)  # Sequential animations
-		
+
 		# Bigger scale pulse (30% instead of 15%)
 		tween.tween_property(enemy, "scale", original_scale * 1.3, 0.1)
 		tween.tween_property(enemy, "scale", original_scale, 0.15)
-		
+
 		# Shake/wobble effect
 		var rot_tween = enemy.create_tween()
 		rot_tween.set_parallel(false)
 		rot_tween.tween_property(enemy, "rotation_degrees", -8, 0.05)
 		rot_tween.tween_property(enemy, "rotation_degrees", 8, 0.05)
 		rot_tween.tween_property(enemy, "rotation_degrees", 0, 0.05)
-	
-	# Play attack sound (menacing skeleton cackle with spam prevention for multiple attackers)
-	var current_time = Time.get_ticks_msec() / 1000.0
-	if current_time - last_attack_sound_time >= attack_sound_cooldown:
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			sound_manager.play_sound(sound_manager.SoundType.SKELETON_ATTACK, enemy.global_position, -8.0)
-			last_attack_sound_time = current_time
-	
+
 	# Reset attack flag (allow next attack)
 	is_performing_attack = false
 
@@ -826,11 +842,84 @@ func update_enemy_animation(velocity: Vector2) -> void:
 	if anim_sprite.sprite_frames.has_animation(anim_name):
 		if anim_sprite.animation != anim_name:
 			anim_sprite.play(anim_name)
-		
+
+			# Sync shadow animation
+			if enemy.shadow_sprite and enemy.shadow_sprite.sprite_frames.has_animation(anim_name):
+				enemy.shadow_sprite.play(anim_name)
+
+		# Play footsteps on walk animations (frames 1, 3, 5, 7 of 9-frame walk cycle)
+		if anim_name.begins_with("walk_"):
+			var current_frame = anim_sprite.frame
+			if current_frame in [1, 3, 5, 7] and current_frame != last_footstep_frame:
+				last_footstep_frame = current_frame
+				play_enemy_footstep()
+
 		# ✨ FIX: Don't flip sprites! We have dedicated directional animations.
 		# Each row (up, left, down, right) is pre-drawn facing that direction.
 		# Flipping would make them face the wrong way.
 		anim_sprite.flip_h = false
+
+func play_enemy_footstep() -> void:
+	"""Play skeleton footstep sound and dust puff"""
+	if not enemy or not is_instance_valid(enemy):
+		return
+
+	# Get camera position for distance culling
+	var camera = get_viewport().get_camera_2d()
+	if not camera:
+		return
+
+	var camera_pos = camera.global_position
+
+	# Calculate distance to camera once
+	var distance = enemy.global_position.distance_to(camera_pos)
+
+	# Only play footstep sound for the CLOSEST skeleton within 400px
+	if distance <= 400.0:
+		# Check if this is the closest skeleton
+		var closest_distance = distance
+		var all_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+
+		for other_enemy in all_enemies:
+			if other_enemy == enemy or not is_instance_valid(other_enemy):
+				continue
+
+			var other_distance = other_enemy.global_position.distance_to(camera_pos)
+			if other_distance < closest_distance:
+				# Found a closer skeleton, don't play sound for this one
+				closest_distance = other_distance
+
+		# Only play sound if this is the closest skeleton
+		if closest_distance == distance:
+			var sound_manager = get_node_or_null("/root/SoundManager")
+			if sound_manager:
+				sound_manager.play_skeleton_footstep(enemy.global_position, camera_pos)
+
+	# Only spawn dust if within visual range (1000px)
+	if distance < 1000.0:
+		# Get sprite to determine facing direction
+		var anim_sprite = enemy.sprite as AnimatedSprite2D
+		if not anim_sprite:
+			return
+
+		# Spawn dust puff at skeleton's feet - adjust position based on facing direction
+		var dust_offset = Vector2(0, 25)  # Default: at feet (5px lower than original)
+
+		# Adjust offset based on animation direction
+		if anim_sprite.animation and anim_sprite.animation.begins_with("walk_"):
+			if anim_sprite.animation.ends_with("_up"):
+				dust_offset = Vector2(0, 5)  # In front when facing up (15px forward, 5px lower)
+			elif anim_sprite.animation.ends_with("_down"):
+				dust_offset = Vector2(0, 35)  # In front when facing down (15px forward, 5px lower)
+			elif anim_sprite.animation.ends_with("_right"):
+				dust_offset = Vector2(25, 25)  # In front when facing right (15px forward, 5px lower)
+			elif anim_sprite.animation.ends_with("_left"):
+				dust_offset = Vector2(-25, 25)  # In front when facing left (15px forward, 5px lower)
+
+		var dust = preload("res://scripts/effects/FootstepDust.gd").new()
+		dust.global_position = enemy.global_position + dust_offset
+		get_tree().root.add_child(dust)
+		dust.spawn_dust()
 
 func create_debug_label() -> void:
 	"""Create debug label showing enemy name above head"""

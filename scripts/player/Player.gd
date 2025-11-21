@@ -966,6 +966,42 @@ func finish_attack_cooldown() -> void:
 	await get_tree().create_timer(attack_cooldown).timeout
 	can_attack = true
 
+func _on_sprite_frame_changed() -> void:
+	"""Called when sprite animation frame changes - play footsteps on walk frames"""
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if not character_sprite:
+		return
+
+	# Only play footsteps during walk animations
+	if not character_sprite.animation or not character_sprite.animation.begins_with("walk_"):
+		return
+
+	var frame = character_sprite.frame
+	# Play footstep on foot-down frames (frames 1, 3, 5, 7 of 8-frame walk cycle)
+	if frame in [1, 3, 5, 7]:
+		# Play footstep sound
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_player_footstep(global_position)
+
+		# Spawn dust puff at feet - adjust position based on facing direction
+		var dust_offset = Vector2(0, 25)  # Default: at feet (5px lower than original)
+
+		# Adjust offset based on animation direction
+		if character_sprite.animation.ends_with("_north"):
+			dust_offset = Vector2(0, 5)  # In front of player when facing up (15px forward, 5px lower)
+		elif character_sprite.animation.ends_with("_south"):
+			dust_offset = Vector2(0, 35)  # In front of player when facing down (15px forward, 5px lower)
+		elif character_sprite.animation.ends_with("_east"):
+			dust_offset = Vector2(25, 25)  # In front when facing right (15px forward, 5px lower)
+		elif character_sprite.animation.ends_with("_west"):
+			dust_offset = Vector2(-25, 25)  # In front when facing left (15px forward, 5px lower)
+
+		var dust = preload("res://scripts/effects/FootstepDust.gd").new()
+		dust.global_position = global_position + dust_offset
+		get_tree().root.add_child(dust)
+		dust.spawn_dust()
+
 func _on_attack_animation_finished() -> void:
 	"""Called when attack animation finishes - return to idle"""
 	var character_sprite = get_node_or_null("CharacterSprite")
@@ -1131,25 +1167,6 @@ func create_player_sprite() -> void:
 		placeholder_sprite.visible = false
 		print("  Hidden placeholder sprite")
 
-	# Create shadow
-	var shadow = Sprite2D.new()
-	shadow.name = "Shadow"
-	var shadow_img = Image.create(48, 16, false, Image.FORMAT_RGBA8)
-	for x in range(48):
-		for y in range(16):
-			var dx = (x - 24) / 24.0
-			var dy = (y - 8) / 8.0
-			var dist = dx * dx + dy * dy
-			if dist <= 1.0:
-				var alpha = (1.0 - dist) * 0.4
-				shadow_img.set_pixel(x, y, Color(0, 0, 0, alpha))
-	var shadow_texture = ImageTexture.create_from_image(shadow_img)
-	shadow.texture = shadow_texture
-	shadow.position = Vector2(0, 20)
-	shadow.z_index = -5
-	add_child(shadow)
-	print("  Shadow created")
-
 	# Preload SimpleLPCSprite
 	var SimpleLPCSprite = preload("res://scripts/SimpleLPCSprite.gd")
 
@@ -1164,6 +1181,18 @@ func create_player_sprite() -> void:
 	var walk_tex = load("res://assets/characters/" + body_type + "/standard/walk.png")
 	var slash_tex = load("res://assets/characters/" + body_type + "/standard/slash.png")
 	var hurt_tex = load("res://assets/characters/" + body_type + "/standard/hurt.png")
+
+	# Load shadow textures
+	var shadow_walk_tex = null
+	var shadow_slash_tex = null
+	var shadow_path = "res://assets/characters/shadow/standard/"
+	if ResourceLoader.exists(shadow_path + "walk.png"):
+		shadow_walk_tex = load(shadow_path + "walk.png")
+	if ResourceLoader.exists(shadow_path + "slash.png"):
+		shadow_slash_tex = load(shadow_path + "slash.png")
+	print("👤 Loading shadow sprites")
+	print("   Walk: %s" % ("✅" if shadow_walk_tex else "❌"))
+	print("   Slash: %s" % ("✅" if shadow_slash_tex else "❌"))
 
 	# Load base head textures (only for female - male has head baked into body)
 	var base_head_walk_tex = null
@@ -1336,15 +1365,19 @@ func create_player_sprite() -> void:
 	print("   Walk: %s" % ("✅" if hair_walk_tex else "❌"))
 	print("   Slash: %s" % ("✅" if hair_slash_tex else "❌"))
 
-	# Setup sprite with all armor layers + base_head + hair
+	# Setup sprite with shadow + all armor layers + base_head + hair
 	var is_female = (selected_gender == Gender.FEMALE)
-	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, base_head_walk_tex, base_head_slash_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, hair_walk_tex, hair_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type, is_female)
+	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, shadow_walk_tex, shadow_slash_tex, base_head_walk_tex, base_head_slash_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, hair_walk_tex, hair_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type, is_female)
 
 	add_child(character_sprite)
 
-	# Connect animation_finished signal
+	# Connect animation signals
 	if not character_sprite.animation_finished.is_connected(_on_attack_animation_finished):
 		character_sprite.animation_finished.connect(_on_attack_animation_finished)
+
+	# Connect frame_changed signal for footsteps
+	if not character_sprite.frame_changed.is_connected(_on_sprite_frame_changed):
+		character_sprite.frame_changed.connect(_on_sprite_frame_changed)
 
 	# Debug: List all sprite children
 	print("  🔍 Player children after sprite creation:")
