@@ -903,18 +903,33 @@ func play_enemy_footstep() -> void:
 			return
 
 		# Spawn dust puff at skeleton's feet - adjust position based on facing direction
-		var dust_offset = Vector2(0, 25)  # Default: at feet (5px lower than original)
+		var dust_offset = Vector2(0, 30)  # Default: at feet
+
+		# Check if moving diagonally by examining velocity
+		var is_moving_diagonally = abs(enemy.velocity.x) > 10 and abs(enemy.velocity.y) > 10
 
 		# Adjust offset based on animation direction
 		if anim_sprite.animation and anim_sprite.animation.begins_with("walk_"):
 			if anim_sprite.animation.ends_with("_up"):
-				dust_offset = Vector2(0, 5)  # In front when facing up (15px forward, 5px lower)
+				if is_moving_diagonally:
+					dust_offset = Vector2(0, 5)  # Diagonal up: lower to be visible
+				else:
+					dust_offset = Vector2(0, 15)  # Straight up: lower to be visible
 			elif anim_sprite.animation.ends_with("_down"):
-				dust_offset = Vector2(0, 35)  # In front when facing down (15px forward, 5px lower)
+				if is_moving_diagonally:
+					dust_offset = Vector2(0, 30)  # Diagonal down: lower
+				else:
+					dust_offset = Vector2(0, 40)  # Straight down
 			elif anim_sprite.animation.ends_with("_right"):
-				dust_offset = Vector2(25, 25)  # In front when facing right (15px forward, 5px lower)
+				if is_moving_diagonally:
+					dust_offset = Vector2(15, 25)  # Diagonal right: pull back X, lower Y
+				else:
+					dust_offset = Vector2(10, 30)  # Straight right: pull back X more
 			elif anim_sprite.animation.ends_with("_left"):
-				dust_offset = Vector2(-25, 25)  # In front when facing left (15px forward, 5px lower)
+				if is_moving_diagonally:
+					dust_offset = Vector2(-15, 25)  # Diagonal left: pull back X, lower Y
+				else:
+					dust_offset = Vector2(-10, 30)  # Straight left: pull back X more
 
 		var dust = preload("res://scripts/effects/FootstepDust.gd").new()
 		dust.global_position = enemy.global_position + dust_offset

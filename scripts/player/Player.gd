@@ -988,14 +988,26 @@ func _on_sprite_frame_changed() -> void:
 		var dust_offset = Vector2(0, 25)  # Default: at feet (5px lower than original)
 
 		# Adjust offset based on animation direction
+		# Check current velocity to detect diagonal movement
+		var is_moving_diagonally = abs(velocity.x) > 10 and abs(velocity.y) > 10
+
 		if character_sprite.animation.ends_with("_north"):
-			dust_offset = Vector2(0, 5)  # In front of player when facing up (15px forward, 5px lower)
+			if is_moving_diagonally:
+				dust_offset = Vector2(0, -10)  # Diagonal northwest/northeast: 15px higher
+			else:
+				dust_offset = Vector2(0, 5)  # Straight north
 		elif character_sprite.animation.ends_with("_south"):
-			dust_offset = Vector2(0, 35)  # In front of player when facing down (15px forward, 5px lower)
+			dust_offset = Vector2(0, 35)  # In front of player when facing down
 		elif character_sprite.animation.ends_with("_east"):
-			dust_offset = Vector2(25, 25)  # In front when facing right (15px forward, 5px lower)
+			if is_moving_diagonally:
+				dust_offset = Vector2(25, 10)  # Diagonal northeast/southeast: 15px higher
+			else:
+				dust_offset = Vector2(25, 25)  # Straight east
 		elif character_sprite.animation.ends_with("_west"):
-			dust_offset = Vector2(-25, 25)  # In front when facing left (15px forward, 5px lower)
+			if is_moving_diagonally:
+				dust_offset = Vector2(-25, 10)  # Diagonal northwest/southwest: 15px higher
+			else:
+				dust_offset = Vector2(-25, 25)  # Straight west
 
 		var dust = preload("res://scripts/effects/FootstepDust.gd").new()
 		dust.global_position = global_position + dust_offset
