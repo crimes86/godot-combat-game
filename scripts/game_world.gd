@@ -65,6 +65,13 @@ func _ready():
 	DebugConfig.log_spawning("🗺️ GameWorld initializing (viewport-culled terrain system)...")
 	print("   📌 Press F11 to force regenerate baked terrain")
 
+	# Add performance profiler (press F3 to toggle)
+	var profiler_scene = load("res://scenes/ui/performance_profiler.tscn")
+	if profiler_scene:
+		var profiler = profiler_scene.instantiate()
+		add_child(profiler)
+		print("   📊 Performance profiler loaded (Press F3 to toggle)")
+
 	# Create world boundaries first
 	create_world_boundaries()
 
@@ -2089,6 +2096,13 @@ func spawn_all_enemies():
 	spawn_manager = SpawnManager.new()
 	spawn_manager.name = "SpawnManager"
 	add_child(spawn_manager)
+
+	# Configure spawn manager for performance (50 enemies max, 15% spawn chance)
+	spawn_manager.max_active_enemies = 50  # Reduced from 75 for better performance
+	spawn_manager.spawn_chance_per_marker = 0.15  # Only 15% of markers active (was 0.5 = too many!)
+	spawn_manager.spawn_radius = 1500.0  # Reduced from 2500 to spawn fewer enemies
+	spawn_manager.despawn_radius = 2500.0  # Reduced from 3500
+	spawn_manager.update_interval = 1.0  # Check spawns every 1 second (was 0.2)
 
 	# Initialize with spawn markers
 	spawn_manager.initialize(self, spawn_markers)

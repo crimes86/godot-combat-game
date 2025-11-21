@@ -106,8 +106,34 @@ func _ready() -> void:
 	print("🔥 Campfire initialized with fuel system")
 
 func _process(_delta: float) -> void:
-	"""Update coal pulsing animation every frame"""
+	"""Update coal pulsing animation every frame (only when visible)"""
+	# Performance: Only update visuals when campfire is visible on screen
+	if not is_visible_on_screen():
+		return
+
 	update_coal_pulsing()
+
+func is_visible_on_screen() -> bool:
+	"""Check if campfire is visible in camera viewport"""
+	var camera = get_viewport().get_camera_2d()
+	if not camera:
+		return true  # Assume visible if no camera
+
+	var viewport_size = get_viewport().get_visible_rect().size
+	var camera_pos = camera.global_position
+	var zoom = camera.zoom.x
+
+	# Calculate viewport bounds in world space
+	var half_viewport = (viewport_size / zoom) / 2.0
+	var viewport_rect = Rect2(
+		camera_pos - half_viewport,
+		viewport_size / zoom
+	)
+
+	# Check if campfire position is within viewport (with margin)
+	var margin = 200.0  # Extra margin to start updating before fully visible
+	viewport_rect = viewport_rect.grow(margin)
+	return viewport_rect.has_point(global_position)
 
 func _physics_process(delta: float) -> void:
 	# Heal player based on fuel state:
@@ -399,11 +425,11 @@ func create_campfire_scene() -> void:
 func create_fire_particles() -> void:
 	"""Create enhanced particle effects with embers, sparks, and aurora wisps"""
 
-	# EMBER PARTICLES (orange glowing embers floating up)
+	# EMBER PARTICLES (orange glowing embers floating up) - REDUCED for performance
 	var ember_particles = CPUParticles2D.new()
 	ember_particles.name = "EmberParticles"
 	ember_particles.emitting = true
-	ember_particles.amount = 15
+	ember_particles.amount = 8  # Reduced from 15
 	ember_particles.lifetime = 2.5
 	ember_particles.preprocess = 1.0
 
@@ -436,11 +462,11 @@ func create_fire_particles() -> void:
 
 	fire_sprite.add_child(ember_particles)
 
-	# SPARK PARTICLES (quick bright sparks)
+	# SPARK PARTICLES (quick bright sparks) - REDUCED for performance
 	var spark_particles = CPUParticles2D.new()
 	spark_particles.name = "SparkParticles"
 	spark_particles.emitting = true
-	spark_particles.amount = 20
+	spark_particles.amount = 10  # Reduced from 20
 	spark_particles.lifetime = 0.8
 	spark_particles.explosiveness = 0.3
 
@@ -472,11 +498,11 @@ func create_fire_particles() -> void:
 
 	fire_sprite.add_child(spark_particles)
 
-	# AURORA WISPS (magical green/blue/cyan streaks) - only visible when fuel is added
+	# AURORA WISPS (magical green/blue/cyan streaks) - only visible when fuel is added - REDUCED
 	var aurora_particles = CPUParticles2D.new()
 	aurora_particles.name = "AuroraParticles"
 	aurora_particles.emitting = false  # Start disabled, only emit when buffed
-	aurora_particles.amount = 15
+	aurora_particles.amount = 8  # Reduced from 15
 	aurora_particles.lifetime = 3.0  # Long-lived magical wisps
 	aurora_particles.preprocess = 1.0
 
@@ -649,12 +675,16 @@ func create_fire_particles() -> void:
 
 func setup_audio() -> void:
 	"""Setup audio streams for fire and healing"""
-	# Fire crackling audio (looping) - disabled, audio file not available
+	# Fire crackling audio (looping)
 	fire_audio = AudioStreamPlayer2D.new()
+	fire_audio.stream = load("res://assets/sounds/ambient/campfire_loop.wav")
 	fire_audio.volume_db = -8.0
 	fire_audio.max_distance = 500.0
 	fire_audio.attenuation = 2.0
 	fire_audio.panning_strength = 0.8
+	fire_audio.pitch_scale = randf_range(0.95, 1.05)
+	fire_audio.autoplay = true
+	fire_audio.finished.connect(_on_fire_audio_finished)
 	add_child(fire_audio)
 
 	# Healing audio - tone 1 (C note, 261 Hz)
@@ -680,6 +710,24 @@ func setup_audio() -> void:
 	healing_audio_2.attenuation = 1.5
 	healing_audio_2.panning_strength = 0.8
 	add_child(healing_audio_2)
+
+func _on_fire_audio_finished() -> void:
+	"""Replay fire audio with randomization to prevent repetitive loop"""
+	if not fire_audio or not is_instance_valid(fire_audio):
+		return
+
+	# Randomize pitch (±5%)
+	fire_audio.pitch_scale = randf_range(0.95, 1.05)
+
+	# Randomize volume slightly (±2dB)
+	fire_audio.volume_db = -8.0 + randf_range(-2.0, 2.0)
+
+	# 30% chance to play backwards for variation
+	if randf() < 0.3:
+		fire_audio.pitch_scale *= -1.0
+
+	# Replay the audio
+	fire_audio.play()
 
 
 func cache_animation_nodes() -> void:
@@ -778,8 +826,12 @@ func create_ground_mist_auras() -> void:
 
 
 func update_ground_mist(delta: float) -> void:
-	"""Update aura circles with wavy edges"""
+	"""Update aura circles with wavy edges (throttled for performance)"""
 	if not heal_mist or not crit_mist:
+		return
+
+	# Performance: Only update mist when visible on screen
+	if not is_visible_on_screen():
 		return
 
 	var wood_percent = float(wood_count) / float(MAX_WOOD)

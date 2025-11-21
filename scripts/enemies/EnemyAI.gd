@@ -102,6 +102,12 @@ var ai_update_interval: float = 0.1  # Default: update AI every 0.1s instead of 
 var debug_update_timer: float = 0.0
 var cached_player: CharacterBody2D = null  # Cache player reference
 
+# LOD (Level of Detail) system
+enum LODLevel { FULL, MEDIUM, LOW, PLACEHOLDER, CULLED }
+var current_lod: LODLevel = LODLevel.FULL
+var lod_update_timer: float = 0.0
+var lod_update_interval: float = 1.0  # Check LOD once per second
+
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
 # ═══════════════════════════════════════════════════════════════════════════
@@ -174,19 +180,85 @@ func _physics_process(delta: float) -> void:
 	if cached_player and is_instance_valid(cached_player):
 		distance_to_player = enemy.global_position.distance_to(cached_player.global_position)
 
-	# CRITICAL OPTIMIZATION: Completely disable AI for very distant enemies
-	if not is_in_combat and distance_to_player > 1500:
-		enemy.velocity = Vector2.ZERO
-		enemy.move_and_slide()
-		return  # Skip AI entirely when far away
+	# ═══════════════════════════════════════════════════════════════
+	# LOD (LEVEL OF DETAIL) SYSTEM - Aggressive performance optimization
+	# ═══════════════════════════════════════════════════════════════
+	lod_update_timer += delta
+	if lod_update_timer >= lod_update_interval:
+		lod_update_timer = 0.0
+		update_lod_level(distance_to_player)
 
-	# Dynamic AI update rate based on distance
-	if is_in_combat or distance_to_player < 300:
-		ai_update_interval = 0.05  # 20 FPS when near player or in combat (responsive)
-	elif distance_to_player < 800:
-		ai_update_interval = 0.1   # 10 FPS when medium distance
-	else:
-		ai_update_interval = 0.2   # 5 FPS when far away (save performance)
+	# Apply LOD-based optimizations
+	match current_lod:
+		LODLevel.CULLED:
+			# Beyond 2500px: Completely disabled (not visible)
+			enemy.velocity = Vector2.ZERO
+			enemy.visible = false
+			if sprite:
+				sprite.visible = false
+			if enemy.shadow_sprite:
+				enemy.shadow_sprite.visible = false
+			return  # Skip all processing
+
+		LODLevel.PLACEHOLDER:
+			# 1500-2500px: Minimal "placeholder" state
+			# - Simple idle animation or static sprite
+			# - No AI, no collision, no particles
+			# - Visible but not interactive
+			enemy.velocity = Vector2.ZERO
+			enemy.visible = true
+			if sprite:
+				sprite.visible = true
+				# Show only idle animation
+				var anim_sprite = sprite as AnimatedSprite2D
+				if anim_sprite and anim_sprite.sprite_frames:
+					if not anim_sprite.animation.begins_with("idle_"):
+						anim_sprite.play("idle_down")
+						anim_sprite.speed_scale = 0.5  # Slow animation
+			# Hide shadow in placeholder mode
+			if enemy.shadow_sprite:
+				enemy.shadow_sprite.visible = false
+			return  # Skip AI processing
+
+		LODLevel.LOW:
+			# 1000-1500px: Minimal features
+			# - Basic AI (patrol only, no combat unless already engaged)
+			# - No footsteps, no shadows
+			# - Slow update rate (0.3s)
+			ai_update_interval = 0.3  # 3 FPS
+			if sprite:
+				sprite.visible = true
+			if enemy.shadow_sprite:
+				enemy.shadow_sprite.visible = false
+			# Don't aggro at this distance unless already in combat
+			if not is_in_combat:
+				enemy.velocity = Vector2.ZERO
+				enemy.move_and_slide()
+				return
+
+		LODLevel.MEDIUM:
+			# 500-1000px: Reduced features
+			# - Full AI but slower updates
+			# - Shadows visible but no footstep particles
+			# - Medium update rate (0.15s)
+			ai_update_interval = 0.15  # 6-7 FPS
+			if sprite:
+				sprite.visible = true
+			if enemy.shadow_sprite:
+				enemy.shadow_sprite.visible = true
+
+		LODLevel.FULL:
+			# 0-500px: Full quality
+			# - Full AI, all features enabled
+			# - Fast update rate
+			if is_in_combat or distance_to_player < 300:
+				ai_update_interval = 0.05  # 20 FPS when near or in combat
+			else:
+				ai_update_interval = 0.1   # 10 FPS when close but not in combat
+			if sprite:
+				sprite.visible = true
+			if enemy.shadow_sprite:
+				enemy.shadow_sprite.visible = true
 
 	# ═══════════════════════════════════════════════════════════════
 	# STUCK DETECTION (runs every frame, independent of AI throttling)
@@ -859,9 +931,32 @@ func update_enemy_animation(velocity: Vector2) -> void:
 		# Flipping would make them face the wrong way.
 		anim_sprite.flip_h = false
 
+func update_lod_level(distance: float) -> void:
+	"""Update LOD level based on distance from player"""
+	var new_lod: LODLevel
+
+	if distance > 2500:
+		new_lod = LODLevel.CULLED
+	elif distance > 1500:
+		new_lod = LODLevel.PLACEHOLDER
+	elif distance > 1000:
+		new_lod = LODLevel.LOW
+	elif distance > 500:
+		new_lod = LODLevel.MEDIUM
+	else:
+		new_lod = LODLevel.FULL
+
+	# Only update if LOD changed
+	if new_lod != current_lod:
+		current_lod = new_lod
+
 func play_enemy_footstep() -> void:
 	"""Play skeleton footstep sound and dust puff"""
 	if not enemy or not is_instance_valid(enemy):
+		return
+
+	# Skip footsteps for LOW quality and below
+	if current_lod >= LODLevel.LOW:
 		return
 
 	# Get camera position for distance culling
