@@ -2733,7 +2733,7 @@ func create_ambient_particles():
 	"""Create floating ash/dust particles for atmosphere"""
 	var particles = GPUParticles2D.new()
 	particles.name = "AmbientAsh"
-	particles.z_index = 100  # Above everything
+	particles.z_index = 450  # Above combat effects, below UI/labels
 	particles.amount = 25  # Reduced from 50
 	particles.lifetime = 8.0
 	particles.preprocess = 2.0
