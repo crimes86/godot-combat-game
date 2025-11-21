@@ -6,9 +6,6 @@ class_name TrainingDummy
 ## Displays damage numbers and tracks DPS
 ## Updated: 2025-01-17 - Remote PC sync fix
 
-# Isometric Y-scale compression (Diablo-style angled perspective)
-const ISO_Y_SCALE: float = 0.75  # Compress Y-axis by 25% for angled look
-
 # Stats
 var max_health: float = 999999.0  # Essentially infinite
 var current_health: float = 999999.0
@@ -86,7 +83,6 @@ func create_dummy_sprite() -> void:
 	sprite.name = "Sprite"  # Name it "Sprite" so HitFlash can find it
 	sprite.centered = true
 	sprite.position = Vector2(0, -32)  # Offset up like player/enemies
-	sprite.scale.y = ISO_Y_SCALE  # Apply isometric compression
 	add_child(sprite)
 
 	# Create sprite frames for spin animation

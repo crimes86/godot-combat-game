@@ -564,9 +564,6 @@ func create_fire_particles() -> void:
 	# POLYGON FLAMES - Create 3 simple flame layers for natural fire look
 	for layer in range(3):
 		for i in range(3 + layer * 2):  # 3, 5, 7 flames per layer
-			# Skip one flame on layer 1 (middle layer) - reduce from 5 to 4
-			if layer == 1 and i == 4:
-				continue
 			# Skip outer flames on layer 2 (top layer) - only create middle 4
 			if layer == 2 and (i == 0 or i == 1 or i == 6):
 				continue
@@ -652,17 +649,12 @@ func create_fire_particles() -> void:
 
 func setup_audio() -> void:
 	"""Setup audio streams for fire and healing"""
-	# Fire crackling audio (looping with randomization)
+	# Fire crackling audio (looping) - disabled, audio file not available
 	fire_audio = AudioStreamPlayer2D.new()
-	fire_audio.stream = load("res://assets/sounds/ambient/campfire_loop.wav")
 	fire_audio.volume_db = -8.0
 	fire_audio.max_distance = 500.0
 	fire_audio.attenuation = 2.0
 	fire_audio.panning_strength = 0.8
-	# Randomize pitch slightly each loop to prevent recognizable pattern
-	fire_audio.pitch_scale = randf_range(0.95, 1.05)
-	fire_audio.finished.connect(_on_fire_audio_finished)
-	fire_audio.autoplay = true
 	add_child(fire_audio)
 
 	# Healing audio - tone 1 (C note, 261 Hz)
@@ -689,18 +681,6 @@ func setup_audio() -> void:
 	healing_audio_2.panning_strength = 0.8
 	add_child(healing_audio_2)
 
-func _on_fire_audio_finished() -> void:
-	"""Randomize pitch and direction each loop to prevent recognizable pattern"""
-	if fire_audio and is_instance_valid(fire_audio):
-		# Randomly vary pitch by ±5% and volume by ±2dB
-		var pitch_variation = randf_range(0.95, 1.05)
-		# 30% chance to play backwards
-		if randf() < 0.3:
-			fire_audio.pitch_scale = -pitch_variation  # Negative pitch = reverse playback
-		else:
-			fire_audio.pitch_scale = pitch_variation
-		fire_audio.volume_db = randf_range(-10.0, -6.0)
-		fire_audio.play()
 
 func cache_animation_nodes() -> void:
 	"""Cache references to animated nodes for performance"""
@@ -745,26 +725,16 @@ func animate_fire(delta: float) -> void:
 				var layer = int(name_parts[1])
 				var index = int(name_parts[2])
 
-				# Layer-specific intensity: layer 0 (bottom/large) moves most, layer 2 (top/small) moves least
-				# Layer 0 = 1.0x intensity, Layer 1 = 0.6x, Layer 2 = 0.3x
-				var layer_intensity = 1.0 - (layer * 0.35)
-
 				# Layer-specific phase offsets to desynchronize layers
 				var layer_phase_offset = layer * 2.1  # Each layer starts at different time
 				var index_phase_offset = index * 0.3
 
-				# Different wave speeds for variation - scales with fuel and layer size
-				var sway = sin(time * 2.0 * animation_speed + layer_phase_offset + index_phase_offset) * 1.5 * movement_intensity * layer_intensity
-				var stretch_y = 1.0 + sin(time * 3.0 * animation_speed + layer_phase_offset * 1.5 + index_phase_offset) * 0.1 * movement_intensity * layer_intensity
+				# Different wave speeds for variation - scales with fuel
+				var sway = sin(time * 2.0 * animation_speed + layer_phase_offset + index_phase_offset) * 1.5 * movement_intensity
+				var stretch_y = 1.0 + sin(time * 3.0 * animation_speed + layer_phase_offset * 1.5 + index_phase_offset) * 0.1 * movement_intensity
 
 				# Add X scale variation (expand/contract) for blending effect
-				var expand = 1.0 + sin(time * 2.5 * animation_speed + layer_phase_offset * 0.8 + index_phase_offset + 1.0) * 0.08 * movement_intensity * layer_intensity
-
-				# Layer 0 (bottom/large flames): Rise up when buffed (-5px Y at max fuel)
-				var y_offset = 0.0
-				if layer == 0:
-					y_offset = -5.0 * total_fuel_percent  # Rise up to -5px at max fuel
-				flame.position.y = y_offset
+				var expand = 1.0 + sin(time * 2.5 * animation_speed + layer_phase_offset * 0.8 + index_phase_offset + 1.0) * 0.08 * movement_intensity
 
 				# Apply transform
 				flame.rotation = sway * 0.03  # Slight rotation
@@ -1419,8 +1389,8 @@ func update_visual_intensity() -> void:
 	# Scale the entire fire_sprite (flames, coals, logs, rocks) based on total fuel
 	var total_fuel_percent = (wood_percent + bone_percent) / 2.0
 	if fire_sprite and is_instance_valid(fire_sprite):
-		# Start at 100% base scale, grow up to 140% with max fuel (reduced from 187.5%)
-		var campfire_scale = 1.0 + (total_fuel_percent * 0.4)
+		# Start at 125% base scale, grow up to 187.5% with max fuel (25% larger overall)
+		var campfire_scale = 1.25 + (total_fuel_percent * 0.625)
 		fire_sprite.scale = Vector2(campfire_scale, campfire_scale)
 
 	# Scale flames vertically with fuel (larger, but same brightness)
