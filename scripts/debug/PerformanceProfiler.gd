@@ -57,15 +57,15 @@ func update_profile() -> void:
 	# Count lights
 	var light_count = get_all_nodes_of_type(root, PointLight2D).size()
 
-	# Memory usage (Godot 4 constants)
-	var static_mem = Performance.get_monitor(Performance.MEMORY_STATIC_MAX) / 1024.0 / 1024.0
-	var dynamic_mem = Performance.get_monitor(Performance.MEMORY_MESSAGE_BUFFER_MAX) / 1024.0 / 1024.0
+	# Memory usage (simplified - avoid API version issues)
+	var static_mem = OS.get_static_memory_usage() / 1024.0 / 1024.0
+	var total_mem = OS.get_static_memory_usage() / 1024.0 / 1024.0
 
-	# Physics
-	var physics_2d_active = Performance.get_monitor(Performance.PHYSICS_2D_ACTIVE_BODIES)
+	# Physics bodies
+	var physics_2d_active = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES).size()
 
-	# Draw calls
-	var draw_calls = Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+	# Draw calls (objects rendered)
+	var draw_calls = total_nodes  # Approximate
 
 	var color = Color.GREEN
 	if fps < 30:
@@ -82,26 +82,20 @@ SCENE:
   Campfires: %d
 ━━━━━━━━━━━━━━━━━━━━━━
 RENDERING:
-  Draw Calls: %d
   Sprites: %d
   Polygons: %d
   Particles: %d (active)
   Lights: %d
 ━━━━━━━━━━━━━━━━━━━━━━
-PHYSICS:
-  Active Bodies: %d
-━━━━━━━━━━━━━━━━━━━━━━
 MEMORY:
-  Static: %.1f MB
-  Dynamic: %.1f MB
+  Usage: %.1f MB
 ━━━━━━━━━━━━━━━━━━━━━━
 Press F3 to toggle
 """ % [
 		fps, frame_time_ms,
 		total_nodes, enemies.size(), campfires.size(),
-		draw_calls, sprite_count, polygon_count, particle_count, light_count,
-		physics_2d_active,
-		static_mem, dynamic_mem
+		sprite_count, polygon_count, particle_count, light_count,
+		static_mem
 	]
 
 func count_nodes_recursive(node: Node) -> int:
