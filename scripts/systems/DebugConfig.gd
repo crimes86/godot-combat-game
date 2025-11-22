@@ -4,8 +4,14 @@ extends Node
 ## Centralizes debug flags and logging
 ## Add to project.godot autoloads as "DebugConfig"
 
+## Signal emitted when F3 debug display is toggled
+signal debug_display_toggled(visible: bool)
+
 ## Master debug flag - set to false for production
 @export var ENABLE_DEBUG: bool = true
+
+## F3 Debug display visibility
+var debug_display_visible: bool = false
 
 ## Feature-specific debug flags
 @export var DEBUG_COMBAT: bool = true
@@ -71,9 +77,21 @@ func set_debug_mode(enabled: bool) -> void:
 	ENABLE_DEBUG = enabled
 	debug_log("Debug mode %s" % ("ENABLED" if enabled else "DISABLED"))
 
+func toggle_debug_display() -> void:
+	"""Toggle F3 debug display visibility"""
+	debug_display_visible = !debug_display_visible
+	debug_display_toggled.emit(debug_display_visible)
+	debug_log("Debug display %s" % ("SHOWN" if debug_display_visible else "HIDDEN"))
+
+func _input(event: InputEvent) -> void:
+	"""Listen for F3 key to toggle debug displays"""
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F3:
+		toggle_debug_display()
+
 func _ready() -> void:
 	debug_log("DebugConfig initialized")
 	if ENABLE_DEBUG:
 		debug_log("🐛 Debug mode ENABLED")
 	else:
 		debug_log("🚀 Debug mode DISABLED (production)")
+	debug_log("Press F3 to toggle debug displays")

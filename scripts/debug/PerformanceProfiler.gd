@@ -12,6 +12,7 @@ var sample_count: int = 0
 
 func _ready() -> void:
 	layer = 1001
+	visible = false  # Hidden by default, toggle with F3
 
 	label = Label.new()
 	label.position = Vector2(10, 10)
@@ -21,7 +22,15 @@ func _ready() -> void:
 	label.add_theme_constant_override("outline_size", 3)
 	add_child(label)
 
+	# Connect to DebugConfig signal
+	if DebugConfig:
+		DebugConfig.debug_display_toggled.connect(_on_debug_toggled)
+
 func _process(delta: float) -> void:
+	# Only update profiler when visible (F3 toggled on)
+	if not visible:
+		return
+
 	update_timer += delta
 	if update_timer >= 0.5:
 		update_timer = 0.0
@@ -112,6 +121,6 @@ func get_all_nodes_of_type(node: Node, type) -> Array:
 		result.append_array(get_all_nodes_of_type(child, type))
 	return result
 
-func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F3:
-		visible = !visible
+func _on_debug_toggled(is_visible: bool) -> void:
+	"""Called when F3 debug display is toggled"""
+	visible = is_visible

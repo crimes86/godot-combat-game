@@ -103,8 +103,8 @@ func create_chest_visual() -> void:
 	"""Create a simple treasure chest visual using polygons"""
 	chest_visual = Node2D.new()
 	chest_visual.name = "ChestVisual"
-	# Scale down 25% overall, then stretch lengthwise (X axis)
-	chest_visual.scale = Vector2(0.75 * 1.3, 0.75)  # 25% smaller, 30% longer on X
+	# Scale down 30% overall (0.7), then stretch lengthwise (X axis)
+	chest_visual.scale = Vector2(0.7 * 1.3, 0.7)  # 30% smaller, 30% longer on X
 	add_child(chest_visual)
 
 	# Chest body (bottom part)
@@ -405,25 +405,27 @@ func create_sparkle() -> Polygon2D:
 	return sparkle
 
 func animate_sparkle(sparkle: Polygon2D, delay: float) -> void:
-	"""Animate sparkle with rotation and fade"""
+	"""Animate sparkle floating upward and fading out"""
 	# Wait for delay
 	await get_tree().create_timer(delay).timeout
 
 	if not is_instance_valid(sparkle):
 		return
 
+	# Store initial position
+	var start_pos = sparkle.position
+
 	# Create looping animation
 	var tween = create_tween()
 	tween.set_loops()
-	tween.set_parallel(true)
 
-	# Rotate continuously
-	tween.tween_property(sparkle, "rotation", TAU, 2.0).from(0.0)
+	# Float up and fade out, then reset
+	tween.tween_property(sparkle, "position:y", start_pos.y - 20, 1.5).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(sparkle, "modulate:a", 0.0, 1.5).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(sparkle, "rotation", TAU * 0.5, 1.5)
 
-	# Pulse opacity
-	tween.tween_property(sparkle, "modulate:a", 0.3, 1.0).set_ease(Tween.EASE_IN_OUT)
-	tween.tween_property(sparkle, "modulate:a", 1.0, 1.0).set_ease(Tween.EASE_IN_OUT).set_delay(1.0)
-
-	# Slight scale pulse
-	tween.tween_property(sparkle, "scale", Vector2(1.3, 1.3), 1.0).set_ease(Tween.EASE_IN_OUT)
-	tween.tween_property(sparkle, "scale", Vector2(1.0, 1.0), 1.0).set_ease(Tween.EASE_IN_OUT).set_delay(1.0)
+	# Reset instantly and wait before next cycle
+	tween.tween_property(sparkle, "position:y", start_pos.y, 0.0)
+	tween.parallel().tween_property(sparkle, "modulate:a", 0.9, 0.0)
+	tween.parallel().tween_property(sparkle, "rotation", 0.0, 0.0)
+	tween.tween_interval(0.5)  # Pause before next shimmer

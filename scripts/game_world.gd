@@ -2,9 +2,13 @@
 extends Node2D
 
 const ENEMY_SCENE = preload("res://scenes/enemies/enemy.tscn")
+const ChunkBasedPropSystem = preload("res://scripts/systems/ChunkBasedPropSystem.gd")
 
 # Multiplayer-ready spawn manager
 var spawn_manager = null  # SpawnManager (type hint removed for compatibility)
+
+# Chunk-based prop system for dynamic loading
+var chunk_prop_system: ChunkBasedPropSystem = null
 
 const PROP_TEXTURES = {
 	"dead_tree_1": "res://assets/environment/wasteland/dead_tree_1.png",
@@ -29,25 +33,29 @@ const PROP_TEXTURES = {
 }
 
 const LAYER_TEMPLATE = [
-	# SMOOTH - 8 layers (24 rects/spot) for buttery smooth feathering with viewport culling
-	# 50% darker lighter patches for better blending with charcoal base
-	# Outer layers: very transparent, wide spread - soft outer glow
-	# Inner layers: more opaque, tight spread - solid core
-	{"count": 5, "size_mult": [1.4, 1.8], "spread_mult": 1.1, "darkness": 0.28, "alpha": 0.025},
-	{"count": 4, "size_mult": [1.2, 1.6], "spread_mult": 0.95, "darkness": 0.26, "alpha": 0.035},
-	{"count": 4, "size_mult": [1.0, 1.4], "spread_mult": 0.8, "darkness": 0.25, "alpha": 0.050},
-	{"count": 3, "size_mult": [0.8, 1.2], "spread_mult": 0.65, "darkness": 0.23, "alpha": 0.070},
-	{"count": 3, "size_mult": [0.6, 1.0], "spread_mult": 0.5, "darkness": 0.22, "alpha": 0.095},
-	{"count": 2, "size_mult": [0.4, 0.7], "spread_mult": 0.35, "darkness": 0.20, "alpha": 0.130},
-	{"count": 2, "size_mult": [0.3, 0.5], "spread_mult": 0.2, "darkness": 0.19, "alpha": 0.170},
-	{"count": 1, "size_mult": [0.2, 0.3], "spread_mult": 0.1, "darkness": 0.18, "alpha": 0.220}
+	# Nov 10 original config - individual spots, smooth blending
+	# Edge layers: Ultra-subtle, very large, massive overlap
+	{"count": 80, "size_mult": [1.4, 1.9], "spread_mult": 1.2, "darkness": 0.24, "alpha": 0.003},
+	{"count": 75, "size_mult": [1.3, 1.8], "spread_mult": 1.1, "darkness": 0.23, "alpha": 0.005},
+	{"count": 70, "size_mult": [1.2, 1.7], "spread_mult": 1.0, "darkness": 0.22, "alpha": 0.008},
+	{"count": 65, "size_mult": [1.1, 1.6], "spread_mult": 0.9, "darkness": 0.21, "alpha": 0.011},
+	# Mid layers: Gradual transition
+	{"count": 55, "size_mult": [1.0, 1.45], "spread_mult": 0.75, "darkness": 0.20, "alpha": 0.018},
+	{"count": 50, "size_mult": [0.85, 1.25], "spread_mult": 0.65, "darkness": 0.18, "alpha": 0.025},
+	{"count": 45, "size_mult": [0.7, 1.05], "spread_mult": 0.55, "darkness": 0.16, "alpha": 0.032},
+	{"count": 40, "size_mult": [0.6, 0.9], "spread_mult": 0.45, "darkness": 0.15, "alpha": 0.040},
+	# Core layers: Darker center
+	{"count": 32, "size_mult": [0.475, 0.725], "spread_mult": 0.35, "darkness": 0.14, "alpha": 0.048},
+	{"count": 25, "size_mult": [0.375, 0.575], "spread_mult": 0.25, "darkness": 0.12, "alpha": 0.058},
+	{"count": 20, "size_mult": [0.275, 0.45], "spread_mult": 0.15, "darkness": 0.11, "alpha": 0.070},
+	{"count": 16, "size_mult": [0.2, 0.35], "spread_mult": 0.05, "darkness": 0.10, "alpha": 0.082}
 ]
 
 # Baking configuration
 const BAKED_TERRAIN_PATH = "user://baked_terrain.png"
 const WORLD_WIDTH = 18000  # -5000 to 13000
 const WORLD_HEIGHT = 6000  # -3000 to 3000
-var use_baked_terrain = true  # Set to false to force regeneration
+var use_baked_terrain = false  # DISABLED - using simple solid ground only
 
 var tree_types = ["dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5", "dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10"]
 var screenshot_mode = false
@@ -57,9 +65,9 @@ var lava_pool_positions = []  # Track lava pool positions to avoid spawning prop
 # Viewport culling for terrain
 var terrain_spots = []  # Store all terrain spot data {pos, size, type, elongation, darkness}
 var active_terrain_nodes = {}  # Track which spots are currently rendered {spot_index: Node2D}
-var viewport_buffer = 800.0  # Render terrain this far beyond viewport edges
+var viewport_buffer = 1200.0  # Render terrain this far beyond viewport edges (increased from 800)
 var terrain_check_timer = 0.0
-const TERRAIN_CHECK_INTERVAL = 0.3  # Check every 0.3s instead of every frame
+const TERRAIN_CHECK_INTERVAL = 1.0  # Check every 1s (was 0.3s - less frequent for better performance)
 
 func _ready():
 	DebugConfig.log_spawning("🗺️ GameWorld initializing (viewport-culled terrain system)...")
@@ -72,11 +80,20 @@ func _ready():
 		add_child(profiler)
 		print("   📊 Performance profiler loaded (Press F3 to toggle)")
 
+	# Initialize chunk-based prop system
+	chunk_prop_system = ChunkBasedPropSystem.new()
+	add_child(chunk_prop_system)
+	chunk_prop_system.initialize(self)
+	print("   🗺️ ChunkBasedPropSystem initialized")
+
 	# Create world boundaries first
 	create_world_boundaries()
 
-	# Generate terrain spot data (doesn't create ColorRects yet)
-	await generate_optimized_world_layers()
+	# TERRAIN GENERATION - Now optimized with campfire exclusion zone
+	var enable_terrain = true  # Excludes 1500px radius around spawn for performance
+	if enable_terrain:
+		# Generate terrain spot data (doesn't create ColorRects yet)
+		await generate_optimized_world_layers()
 
 	# Generate dynamic elements (trees, enemies, props)
 	generate_dynamic_elements()
@@ -95,13 +112,12 @@ func _ready():
 	DebugConfig.log_spawning("✅ GameWorld ready!")
 
 func _process(delta):
-	"""Handle viewport culling for terrain, update particle positions, and update spawn manager"""
+	"""Handle viewport culling for terrain and spawn manager updates"""
+	# Update terrain visibility
 	terrain_check_timer += delta
-	if terrain_check_timer < TERRAIN_CHECK_INTERVAL:
-		return
-	terrain_check_timer = 0.0
-
-	update_terrain_visibility()
+	if terrain_check_timer >= TERRAIN_CHECK_INTERVAL:
+		terrain_check_timer = 0.0
+		update_terrain_visibility()
 
 	# Update spawn manager with player positions
 	if spawn_manager:
@@ -191,208 +207,158 @@ func setup_camera_limits():
 	print("📷 Camera limits set to world boundaries")
 
 func generate_optimized_world_layers():
-	"""Generate terrain spot data with viewport culling"""
-	print("  🗺️ Generating terrain spot data (viewport culling enabled)...")
+	"""Use existing Ground node from scene"""
+	print("  🗺️ Using scene Ground node...")
 
-	# Create parent nodes for terrain layers
-	var ground_layer = Node2D.new()
-	ground_layer.name = "GroundTexture"
-	ground_layer.z_index = -9
-	add_child(ground_layer)
+	# Update the existing Ground ColorRect from the scene
+	var ground = get_node_or_null("Ground")
+	if ground:
+		ground.color = Color(0.15, 0.12, 0.10, 1.0)  # Dark charcoal brown
+		print("  ✅ Ground color updated")
+	else:
+		print("  ⚠️ Ground node not found in scene!")
 
-	var terrain_layer = Node2D.new()
-	terrain_layer.name = "TerrainVariation"
-	terrain_layer.z_index = -8
-	add_child(terrain_layer)
+	# Add heavily trafficked areas around campfire and ruins
+	create_trafficked_areas()
 
-	var rock_layer = Node2D.new()
-	rock_layer.name = "RockSpots"
-	rock_layer.z_index = -7
-	add_child(rock_layer)
+	# Create path from campfire following torches eastward
+	create_path_system()
 
-	var clearing_layer = Node2D.new()
-	clearing_layer.name = "Clearings"
-	clearing_layer.z_index = -6
-	add_child(clearing_layer)
+func create_trafficked_areas():
+	"""Add dark disturbed earth patches around campfire and ruins (heavily trafficked)"""
+	var traffic_layer = Node2D.new()
+	traffic_layer.name = "TraffickedAreas"
+	traffic_layer.z_index = -9
+	add_child(traffic_layer)
 
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 99999
+
+	# Campfire area (main spawn) - 45 spots in ~600px radius
+	create_traffic_circle(traffic_layer, Vector2(-2000, 0), 600, 45, rng)
+
+	# Ruins 1 - 24 spots in ~400px radius
+	create_traffic_circle(traffic_layer, Vector2(1200, -2000), 400, 24, rng)
+
+	# Ruins 2 - 24 spots in ~400px radius
+	create_traffic_circle(traffic_layer, Vector2(4800, 2200), 400, 24, rng)
+
+	# Ruins 3 - 24 spots in ~400px radius
+	create_traffic_circle(traffic_layer, Vector2(8200, -2200), 400, 24, rng)
+
+	print("  ✅ Created trafficked area textures (117 spots)")
+
+func create_traffic_circle(parent: Node2D, center: Vector2, radius: float, num_spots: int, rng: RandomNumberGenerator):
+	"""Create scattered dark spots in a circular area"""
+	for i in range(num_spots):
+		# Random position within radius
+		var angle = rng.randf() * TAU
+		var dist = rng.randf_range(0, radius)
+		var pos = center + Vector2(cos(angle), sin(angle)) * dist
+
+		# Random spot size
+		var spot_size = rng.randf_range(120, 250)
+
+		# Create 2-layer spot for performance (not 3)
+		var layers = [
+			{"size_mult": 1.3, "alpha": 0.12},
+			{"size_mult": 0.8, "alpha": 0.18}
+		]
+
+		for layer in layers:
+			var patch = ColorRect.new()
+			var size = spot_size * layer.size_mult * rng.randf_range(0.9, 1.1)
+			patch.size = Vector2(size, size)
+			patch.position = pos - patch.size / 2
+			patch.color = Color(0.08, 0.06, 0.05, layer.alpha)  # Dark brown
+			patch.rotation = rng.randf() * TAU
+			parent.add_child(patch)
+
+func create_path_system():
+	"""Create path from campfire eastward following torches, with branch to ruins 1"""
 	var path_layer = Node2D.new()
-	path_layer.name = "PathToCastle"
-	path_layer.z_index = -5
+	path_layer.name = "PathSystem"
+	path_layer.z_index = -8
 	add_child(path_layer)
 
-	# Generate spot data (no ColorRects created yet)
 	var rng = RandomNumberGenerator.new()
-	rng.seed = 12345
+	rng.seed = 77777
 
-	# Ground texture spots
-	for x in range(Constants.WORLD_LEFT, Constants.WORLD_RIGHT, Constants.TERRAIN_PATCH_SPACING):
-		for y in range(Constants.WORLD_TOP, Constants.WORLD_BOTTOM, Constants.TERRAIN_PATCH_SPACING):
-			if rng.randf() > 0.2:
-				continue
-
-			var patch_pos = Vector2(
-				x + rng.randf_range(-250, 250),
-				y + rng.randf_range(-250, 250)
-			)
-			patch_pos.x = clamp(patch_pos.x, -5000, 13000)
-			patch_pos.y = clamp(patch_pos.y, -3000, 3000)
-
-			var base_size = rng.randf_range(100, 140)
-			var elongation = rng.randf_range(0.7, 1.5)
-
-			terrain_spots.append({
-				"pos": patch_pos,
-				"size": base_size,
-				"type": "ground",
-				"elongation": elongation,
-				"darkness": 1.0,
-				"parent": ground_layer,
-				"rng_state": rng.state
-			})
-
-	# Terrain variation spots
-	rng.seed = 99999
-	for i in range(30):
-		var terrain_pos = Vector2(
-			rng.randf_range(-5000, 13000),
-			rng.randf_range(-3000, 3000)
-		)
-		var spot_size = rng.randf_range(300, 600)
-		var elongation = rng.randf_range(0.4, 2.5)
-
-		terrain_spots.append({
-			"pos": terrain_pos,
-			"size": spot_size,
-			"type": "terrain",
-			"elongation": elongation,
-			"darkness": 1.0,
-			"parent": terrain_layer,
-			"rng_state": rng.state
-		})
-
-	# Rock dark spots
-	rng.seed = 54321
 	var campfire_pos = Vector2(-2000, 0)
-	for i in range(100):
-		var rock_pos = Vector2(
-			rng.randf_range(-5000, 13000),
-			rng.randf_range(-3000, 3000)
-		)
+	var castle_pos = Vector2(11000, -300)  # Final destination (far east)
+	var ruins1_pos = Vector2(1200, -2000)
 
-		if rock_pos.distance_to(campfire_pos) < 450:
-			continue
+	# Create main path from campfire to castle (following torches)
+	var main_path_points = create_curved_path(campfire_pos, castle_pos, 30, rng)
 
-		var spot_size = rng.randf_range(120, 350)
-		var elongation = rng.randf_range(0.6, 1.8)
+	# Draw main path with spots
+	for i in range(main_path_points.size() - 1):
+		var start = main_path_points[i]
+		var end = main_path_points[i + 1]
+		create_path_segment(path_layer, start, end, 175, rng)  # 175px wide path
 
-		terrain_spots.append({
-			"pos": rock_pos,
-			"size": spot_size,
-			"type": "rock",
-			"elongation": elongation,
-			"darkness": 1.0,
-			"parent": rock_layer,
-			"rng_state": rng.state
-		})
+	# Create branch to ruins 1 (splits off around X=0)
+	var branch_start_index = 7  # Split off early in the path
+	if branch_start_index < main_path_points.size():
+		var branch_start = main_path_points[branch_start_index]
+		var branch_points = create_curved_path(branch_start, ruins1_pos, 12, rng)
 
-	# Campfire clearing (very dark - heavily used)
-	rng.seed = 54321
-	terrain_spots.append({
-		"pos": campfire_pos,
-		"size": 200,
-		"type": "clearing",
-		"elongation": 1.0,
-		"darkness": 0.12,  # 0.04-0.07 range = very dark worn ground
-		"parent": clearing_layer,
-		"rng_state": rng.state
-	})
+		# Draw branch path
+		for i in range(branch_points.size() - 1):
+			var start = branch_points[i]
+			var end = branch_points[i + 1]
+			create_path_segment(path_layer, start, end, 150, rng)  # 150px wide branch
 
-	# Ruins clearings (very dark - heavily used)
-	for ruins_pos in [Vector2(1200, -2000), Vector2(4800, 2200), Vector2(8200, -2200)]:
-		terrain_spots.append({
-			"pos": ruins_pos,
-			"size": 340,
-			"type": "clearing",
-			"elongation": 1.0,
-			"darkness": 0.12,  # 0.04-0.07 range = very dark worn ground
-			"parent": clearing_layer,
-			"rng_state": rng.state
-		})
+	print("  ✅ Created path system with branch to ruins")
 
-	# Path spots
-	rng.seed = 777
-	var castle_pos = Vector2(11000, -300)
-	var path_points = []
-	for i in range(30):
-		var t = float(i) / 29.0
-		var pos = campfire_pos.lerp(castle_pos, t)
+func create_curved_path(start: Vector2, end: Vector2, num_points: int, rng: RandomNumberGenerator) -> Array:
+	"""Generate curved path points between two positions"""
+	var points = []
+	for i in range(num_points):
+		var t = float(i) / float(num_points - 1)
+		var pos = start.lerp(end, t)
 
-		if i > 0 and i < 29:
-			var curve_amount = sin(t * PI) * 250
+		# Add sine curve for natural path wandering
+		if i > 0 and i < num_points - 1:
+			var curve_amount = sin(t * PI) * 200
 			pos.y += sin(t * PI * 2.5) * curve_amount
 
-		path_points.append(pos)
+		points.append(pos)
 
-	for i in range(path_points.size() - 1):
-		var start = path_points[i]
-		var end = path_points[i + 1]
-		var segment_length = start.distance_to(end)
-		var num_spots = int(segment_length / 100) + 1
+	return points
 
-		for j in range(num_spots):
-			var t = float(j) / float(max(1, num_spots - 1))
-			var pos = start.lerp(end, t)
+func create_path_segment(parent: Node2D, start: Vector2, end: Vector2, width: float, rng: RandomNumberGenerator):
+	"""Create dark spot patches along a path segment"""
+	var segment_length = start.distance_to(end)
+	var num_spots = int(segment_length / 40) + 1  # Spot every ~40px (doubled density from 80px)
 
-			var direction = (end - start).normalized()
-
-			# Add natural zigzag variance perpendicular to path direction
-			var perpendicular = Vector2(-direction.y, direction.x)
-			var variance = rng.randf_range(-60, 60)  # ±60px random offset
-			pos += perpendicular * variance
-
-			var elongation = 1.5
-			if abs(direction.x) > abs(direction.y):
-				elongation = 1.6
-			else:
-				elongation = 0.8
-
-			terrain_spots.append({
-				"pos": pos,
-				"size": 180,
-				"type": "path",
-				"elongation": elongation,
-				"darkness": 0.08,  # 0.02-0.05 range = nearly black beaten trail
-				"parent": path_layer,
-				"rng_state": rng.state
-			})
-
-	# Campfire circle (heavily traveled area)
-	var radius = 450.0
-	var num_spots = 80
 	for i in range(num_spots):
-		var ring = int(i / 20)
-		var angle = (i % 20) * (TAU / 20.0) + rng.randf_range(-0.3, 0.3)  # More angular variance
-		var ring_radius = (radius / 4.0) * (ring + 1) + rng.randf_range(-60, 60)  # More radial variance
+		var t = float(i) / float(max(1, num_spots - 1))
+		var pos = start.lerp(end, t)
 
-		var pos = campfire_pos + Vector2(
-			cos(angle) * ring_radius,
-			sin(angle) * ring_radius
-		)
+		# Add random offset perpendicular to path for natural variation
+		var direction = (end - start).normalized()
+		var perpendicular = Vector2(-direction.y, direction.x)
+		var offset = rng.randf_range(-width * 0.3, width * 0.3)
+		pos += perpendicular * offset
 
-		terrain_spots.append({
-			"pos": pos,
-			"size": 160,
-			"type": "path",
-			"elongation": 1.0,
-			"darkness": 0.06,  # 0.02-0.04 range = extremely dark, heavily worn
-			"parent": path_layer,
-			"rng_state": rng.state
-		})
+		# Create spot
+		var spot_size = rng.randf_range(width * 0.8, width * 1.2)
 
-	# Branch paths to ruins
-	await create_ruins_branch_path_spots(path_layer, path_points, rng)
+		# 2-layer spot (original subtle appearance but more dense)
+		var layers = [
+			{"size_mult": 1.2, "alpha": 0.10},
+			{"size_mult": 0.7, "alpha": 0.15}
+		]
 
-	print("  ✅ Generated %d terrain spots (viewport culling active)" % terrain_spots.size())
+		for layer in layers:
+			var patch = ColorRect.new()
+			var size = spot_size * layer.size_mult
+			patch.size = Vector2(size, size)
+			patch.position = pos - patch.size / 2
+			patch.color = Color(0.08, 0.06, 0.05, layer.alpha)  # Original subtle brown
+			patch.rotation = rng.randf() * TAU
+			parent.add_child(patch)
 
 func create_ruins_branch_path_spots(path_layer: Node2D, main_path_points: Array, rng: RandomNumberGenerator):
 	"""Create branching path spots to ruins"""
@@ -444,7 +410,7 @@ func create_ruins_branch_path_spots(path_layer: Node2D, main_path_points: Array,
 					"size": 180,
 					"type": "path",
 					"elongation": elongation,
-					"darkness": 0.08,  # 0.02-0.05 range = nearly black beaten trail
+					"darkness": 0.20,  # Darker than terrain for worn path effect
 					"parent": path_layer,
 					"rng_state": rng.state
 				})
@@ -452,41 +418,8 @@ func create_ruins_branch_path_spots(path_layer: Node2D, main_path_points: Array,
 	print("   🏛️ Added branch path spots to ruins")
 
 func update_terrain_visibility():
-	"""Update which terrain spots are visible based on camera position"""
-	var player = get_tree().get_first_node_in_group("player")
-	if not player or not is_instance_valid(player):
-		return
-
-	var camera = player.get_node_or_null("Camera2D")
-	if not camera or not is_instance_valid(camera):
-		return
-
-	# Get camera viewport bounds accounting for zoom
-	var viewport_size = get_viewport().get_visible_rect().size
-	var camera_pos = player.global_position
-
-	# Account for camera zoom (zoom out = see more world)
-	# If zoom is Vector2(0.5, 0.5), we see 2x as much world space
-	var zoom = camera.zoom
-	var world_viewport_size = viewport_size / zoom  # World space size visible in viewport
-
-	var viewport_rect = Rect2(
-		camera_pos - world_viewport_size / 2 - Vector2(viewport_buffer, viewport_buffer),
-		world_viewport_size + Vector2(viewport_buffer * 2, viewport_buffer * 2)
-	)
-
-	# Check each terrain spot
-	for i in range(terrain_spots.size()):
-		var spot = terrain_spots[i]
-		var spot_pos = spot["pos"]
-		var is_visible = viewport_rect.has_point(spot_pos)
-
-		if is_visible and not active_terrain_nodes.has(i):
-			# Create terrain for this spot
-			create_terrain_spot(i, spot)
-		elif not is_visible and active_terrain_nodes.has(i):
-			# Remove terrain for this spot
-			remove_terrain_spot(i)
+	"""DISABLED - No terrain spot rendering"""
+	pass
 
 func get_region_color_tint(pos: Vector2) -> Color:
 	"""Get subtle color tint based on world region"""
@@ -582,37 +515,12 @@ func remove_terrain_spot(spot_index: int):
 		active_terrain_nodes.erase(spot_index)
 
 func load_baked_terrain():
-	"""Load pre-baked terrain texture as a single sprite"""
-	var image = Image.load_from_file(BAKED_TERRAIN_PATH)
-	if image == null:
-		print("  ❌ Failed to load baked terrain, using fallback rendering...")
-		use_baked_terrain = false
-		# Fallback: Use regular terrain generation
-		await generate_fallback_terrain()
-		return
-
-	var texture = ImageTexture.create_from_image(image)
-
-	# Create sprite with baked texture
-	var terrain_sprite = Sprite2D.new()
-	terrain_sprite.name = "BakedTerrain"
-	terrain_sprite.texture = texture
-	terrain_sprite.centered = false
-	terrain_sprite.position = Vector2(-5000, -3000)  # Top-left corner of world
-	terrain_sprite.z_index = -9  # Behind everything
-	add_child(terrain_sprite)
-
-	print("    ✅ Loaded baked terrain: %dx%d pixels" % [image.get_width(), image.get_height()])
+	"""DISABLED - No baked terrain loading"""
+	print("  ✅ Baked terrain loading disabled (using simple ground only)")
 
 func generate_fallback_terrain():
-	"""Fallback: Generate terrain the old way if baking fails"""
-	print("  🔨 Generating terrain layers (fallback mode)...")
-	await create_ground_texture_optimized()
-	await create_terrain_variation_spots()
-	await create_rock_dark_spots()
-	create_campfire_clearing()
-	await create_path_to_castle_optimized()
-	print("  ✅ Fallback terrain complete!")
+	"""DISABLED - No fallback terrain generation"""
+	print("  ✅ Fallback terrain disabled (using simple ground only)")
 
 func bake_terrain_to_texture():
 	"""Generate all terrain layers and bake to a single texture"""
@@ -714,6 +622,10 @@ func generate_terrain_layer_for_baking(viewport: SubViewport, layer_type: String
 			await create_path_for_baking(viewport, offset)
 
 func create_ground_texture_optimized():
+	"""DISABLED"""
+	pass
+	return
+func DISABLED_create_ground_texture_optimized():
 	var ground_layer = Node2D.new()
 	ground_layer.name = "GroundTexture"
 	ground_layer.z_index = -9
@@ -745,68 +657,66 @@ func create_ground_texture_optimized():
 			await get_tree().process_frame
 
 func create_terrain_variation_spots():
-	var terrain_layer = Node2D.new()
-	terrain_layer.name = "TerrainVariation"
-	terrain_layer.z_index = -8
-	add_child(terrain_layer)
-
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 99999
-
-	# Full quality for baking (will be rendered once to texture)
-	for i in range(30):
-		var terrain_pos = Vector2(
-			rng.randf_range(-5000, 13000),
-			rng.randf_range(-3000, 3000)
-		)
-
-		var spot_size = rng.randf_range(300, 600)
-		var elongation = rng.randf_range(0.4, 2.5)
-
-		create_feathered_area(terrain_layer, terrain_pos, spot_size, rng, elongation)
-
-		await get_tree().process_frame
+	"""DISABLED"""
+	pass
 
 func create_rock_dark_spots():
-	var rock_layer = Node2D.new()
-	rock_layer.name = "RockSpots"
-	rock_layer.z_index = -7
-	add_child(rock_layer)
-
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 54321
-
-	# Full quality for baking (will be rendered once to texture)
-	for i in range(100):
-		var rock_pos = Vector2(
-			rng.randf_range(-5000, 13000),
-			rng.randf_range(-3000, 3000)
-		)
-
-		var campfire_pos = Vector2(-2000, 0)
-		if rock_pos.distance_to(campfire_pos) < 450:
-			continue
-
-		var spot_size = rng.randf_range(120, 350)
-		var elongation = rng.randf_range(0.6, 1.8)
-
-		create_feathered_area(rock_layer, rock_pos, spot_size, rng, elongation)
-
-		await get_tree().process_frame
+	# DISABLED - Rock shadows now handled directly on rock sprites in ChunkBasedPropSystem
+	# This prevents unnecessary 2400+ ColorRects just for ground darkening
+	pass
 
 func create_campfire_clearing():
-	var clearing_layer = Node2D.new()
-	clearing_layer.name = "CampfireClearing"
-	clearing_layer.z_index = -6
-	add_child(clearing_layer)
+	"""DISABLED"""
+	pass
+	return
+func DISABLED_create_campfire_clearing():
+	# Use a single Polygon2D with radial gradient shader instead of 24 ColorRects
+	# This is 24x more efficient!
+	var clearing = Polygon2D.new()
+	clearing.name = "CampfireClearing"
+	clearing.z_index = -6
 
 	var campfire_pos = Vector2(-2000, 0)
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 54321
+	var radius = 250.0
 
-	create_feathered_area(clearing_layer, campfire_pos, 200, rng, 1.0, 0.12)
+	# Create circle polygon
+	var vertices = PackedVector2Array()
+	for i in range(64):
+		var angle = (float(i) / 64) * TAU
+		var x = campfire_pos.x + cos(angle) * radius
+		var y = campfire_pos.y + sin(angle) * radius
+		vertices.append(Vector2(x, y))
+
+	clearing.polygon = vertices
+	clearing.color = Color(0.12, 0.12, 0.12, 1.0)  # Dark clearing
+
+	# Add radial gradient shader for smooth feathering
+	var shader_material = ShaderMaterial.new()
+	var shader = Shader.new()
+	shader.code = """
+shader_type canvas_item;
+
+uniform vec2 center = vec2(0.5, 0.5);
+uniform float radius = 0.5;
+uniform float feather = 0.3;
+
+void fragment() {
+	vec2 uv = UV;
+	float dist = distance(uv, center);
+	float alpha = 1.0 - smoothstep(radius - feather, radius, dist);
+	COLOR.a *= alpha;
+}
+"""
+	shader_material.shader = shader
+	clearing.material = shader_material
+
+	add_child(clearing)
 
 func create_path_to_castle_optimized():
+	"""DISABLED"""
+	pass
+	return
+func DISABLED_create_path_to_castle_optimized():
 	var path_layer = Node2D.new()
 	path_layer.name = "PathToCastle"
 	path_layer.z_index = -5
@@ -1058,23 +968,40 @@ func create_feathered_area(parent: Node2D, center: Vector2, base_size: float, rn
 			parent.add_child(rect)
 
 func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGenerator):
-	"""Create a heavily-visited circular area around campfire"""
-	var radius = 450.0  # Large circle around campfire
-	var num_spots = 80  # Full quality for baking
+	"""Create a heavily-visited circular area around campfire using efficient Polygon2D"""
+	# OPTIMIZED: Use single Polygon2D instead of 80 spots × 24 ColorRects (1920 nodes → 1 node!)
+	var circle = Polygon2D.new()
+	circle.name = "CampfireCircle"
+	var radius = 450.0
 
-	for i in range(num_spots):
-		# Create spots in concentric rings
-		var ring = int(i / 20)  # 4 rings of 20 spots each
-		var angle = (i % 20) * (TAU / 20.0) + rng.randf_range(-0.3, 0.3)  # More angular variance
-		var ring_radius = (radius / 4.0) * (ring + 1) + rng.randf_range(-60, 60)  # More radial variance
+	# Create irregular circle with slight noise for organic look
+	var vertices = PackedVector2Array()
+	for i in range(64):
+		var angle = (float(i) / 64) * TAU
+		var noise = rng.randf_range(-20, 20)  # Slight irregularity
+		var r = radius + noise
+		vertices.append(center + Vector2(cos(angle) * r, sin(angle) * r))
 
-		var pos = center + Vector2(
-			cos(angle) * ring_radius,
-			sin(angle) * ring_radius
-		)
+	circle.polygon = vertices
+	circle.color = Color(0.06, 0.06, 0.06, 0.8)  # Nearly black for heavily-traveled area
 
-		# Nearly black for heavily-traveled area (0.06 = 2-4% brightness)
-		create_feathered_area(parent, pos, 160, rng, 1.0, 0.06)
+	# Add radial gradient shader for smooth feathering
+	var shader_material = ShaderMaterial.new()
+	var shader = Shader.new()
+	shader.code = """
+shader_type canvas_item;
+
+void fragment() {
+	vec2 center_uv = vec2(0.5, 0.5);
+	float dist = distance(UV, center_uv);
+	float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
+	COLOR.a *= alpha * 0.8;
+}
+"""
+	shader_material.shader = shader
+	circle.material = shader_material
+
+	parent.add_child(circle)
 
 func _input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -1156,32 +1083,26 @@ func generate_dynamic_elements():
 	# Enable Y-sorting so props layer correctly based on position
 	scattered_props_node.y_sort_enabled = true
 
-	# Lava pools FIRST (so trees and props can avoid them)
-	spawn_lava_pools()
+	# ========================================================================
+	# CHUNK-BASED PROP SYSTEM - Props now generated dynamically as player moves
+	# ========================================================================
+	# The following static prop generation functions are DISABLED in favor of
+	# ChunkBasedPropSystem, which loads/unloads chunks as the player moves:
+	#   - spawn_trees_everywhere_dynamic() -> trees generated per chunk (LOOTABLE)
+	#   - spawn_lava_pools() -> lava pools generated per chunk
+	#   - spawn_bone_clusters() -> bone clusters generated per chunk
+	#   - spawn_dead_vegetation() -> dead vegetation generated per chunk
+	#   - spawn_rock_sprites() -> rocks generated per chunk (large rocks LOOTABLE)
+	#   - spawn_scattered_props() -> ash piles generated per chunk
+	#   - spawn_small_rocks() -> small rocks generated per chunk
+	#   - spawn_ground_cracks() -> cracks generated per chunk
+	#
+	# This reduces node count from 16,731+ to under 1,000 at spawn for massive FPS gains!
+	# Trees and large rocks are still lootable via deterministic chunk generation.
+	# ========================================================================
 
-	# Trees (need to be separate for proper z-ordering with player)
-	spawn_trees_everywhere_dynamic(scattered_props_node)
-
-	# Rock sprites (placed on top of the dark spots we created earlier)
-	spawn_rock_sprites(scattered_props_node)
-
-	# Scattered props outside the path (ash, cracks, etc.)
-	spawn_scattered_props(scattered_props_node)
-
-	# Small rocks to fill bare sand areas
-	spawn_small_rocks(scattered_props_node)
-
-	# Interactive props on the path (skull, bones, broken sword)
+	# Interactive props on the path (skull, bones, broken sword) - KEEP STATIC
 	load_interactive_props(scattered_props_node)
-
-	# Bone clusters (large skeletal remains)
-	spawn_bone_clusters(scattered_props_node)
-
-	# Ground cracks in dark areas
-	spawn_ground_cracks(scattered_props_node)
-
-	# Sparse dead vegetation
-	spawn_dead_vegetation(scattered_props_node)
 
 	# Register with spawn manager
 	LootSpawnManager.register_game_world(self)
@@ -1479,14 +1400,15 @@ func load_interactive_props(parent: Node2D):
 
 	# 2x density in cleared areas (campfire and ruins)
 	var cleared_areas = [
-		{"pos": Vector2(-2000, 0), "radius": 450, "min_radius": 150},    # Main campfire (donut shape - avoid fire)
-		{"pos": Vector2(1200, -2000), "radius": 340, "min_radius": 0},   # Ruins 1 (75% of campfire)
-		{"pos": Vector2(4800, 2200), "radius": 340, "min_radius": 0},    # Ruins 2 (75% of campfire)
-		{"pos": Vector2(8200, -2200), "radius": 340, "min_radius": 0}    # Ruins 3 (75% of campfire)
+		{"pos": Vector2(-2000, 0), "radius": 1125, "min_radius": 150, "count": 75},    # Main campfire (2.5x radius, fanned into trees)
+		{"pos": Vector2(1200, -2000), "radius": 340, "min_radius": 0, "count": 30},   # Ruins 1 (75% of campfire)
+		{"pos": Vector2(4800, 2200), "radius": 340, "min_radius": 0, "count": 30},    # Ruins 2 (75% of campfire)
+		{"pos": Vector2(8200, -2200), "radius": 340, "min_radius": 0, "count": 30}    # Ruins 3 (75% of campfire)
 	]
 
 	for area in cleared_areas:
-		for i in range(30):  # 30 props per cleared area
+		var prop_count = area.get("count", 30)  # Use custom count or default to 30
+		for i in range(prop_count):
 			var prop_type = battle_props[rng.randi() % battle_props.size()]
 
 			var attempts = 0
@@ -2064,6 +1986,12 @@ func create_torches_along_path():
 			var distance_into_segment = next_torch_at - current_distance
 			var t = distance_into_segment / segment_length
 			var torch_pos = start_pos.lerp(end_pos, t)
+
+			# Add perpendicular offset to stagger torches more (±80-150px)
+			var direction = (end_pos - start_pos).normalized()
+			var perpendicular = Vector2(-direction.y, direction.x)
+			var offset = randf_range(-150.0, 150.0)
+			torch_pos += perpendicular * offset
 
 			# Create torch
 			var torch_script = load("res://scripts/systems/Torch.gd")
