@@ -160,16 +160,16 @@ func _physics_process(delta: float) -> void:
 			if heal_timer >= heal_interval:
 				if player.has_method("heal"):
 					player.heal(heal_rate * heal_interval)
-					# Play healing sound in pattern: tone1, tone1, tone2, repeat
+					# Play healing sound in pattern: 6-6-4 (sound 6 twice, then sound 4)
 					if heal_pattern_index < 2:
-						# Play tone 1 for positions 0 and 1
+						# Play sound 6 for positions 0 and 1 (healing_6.mp3)
 						if healing_audio_1:
 							healing_audio_1.play()
 					else:
-						# Play tone 2 for position 2
+						# Play sound 4 for position 2 (healing_4.mp3)
 						if healing_audio_2:
 							healing_audio_2.play()
-					# Advance pattern: 0 -> 1 -> 2 -> 0 -> 1 -> 2 ...
+					# Advance pattern: 0 -> 1 -> 2 -> 0 -> 1 -> 2 ... (6-6-4-6-6-4...)
 					heal_pattern_index = (heal_pattern_index + 1) % 3
 				heal_timer = 0.0
 
@@ -691,47 +691,50 @@ func setup_audio() -> void:
 	fire_audio.finished.connect(_on_fire_audio_finished)
 	add_child(fire_audio)
 
-	# Healing audio - tone 1 (C note, 261 Hz)
+	# Healing audio - sound 6 (plays first two times in pattern: 6-6-4)
 	healing_audio_1 = AudioStreamPlayer2D.new()
-	var gen1 = AudioStreamGenerator.new()
-	gen1.mix_rate = 44100.0
-	gen1.buffer_length = 0.5
-	healing_audio_1.stream = gen1
-	healing_audio_1.volume_db = -15.0
-	healing_audio_1.max_distance = 200.0
+	healing_audio_1.stream = load("res://assets/sounds/player/healing_6.mp3")
+	healing_audio_1.volume_db = -8.0
+	healing_audio_1.max_distance = 300.0
 	healing_audio_1.attenuation = 1.5
 	healing_audio_1.panning_strength = 0.8
 	add_child(healing_audio_1)
 
-	# Healing audio - tone 2 (E note, 329 Hz)
+	# Healing audio - sound 4 (plays third time in pattern: 6-6-4)
 	healing_audio_2 = AudioStreamPlayer2D.new()
-	var gen2 = AudioStreamGenerator.new()
-	gen2.mix_rate = 44100.0
-	gen2.buffer_length = 0.5
-	healing_audio_2.stream = gen2
-	healing_audio_2.volume_db = -15.0
-	healing_audio_2.max_distance = 200.0
+	healing_audio_2.stream = load("res://assets/sounds/player/healing_4.mp3")
+	healing_audio_2.volume_db = -8.0
+	healing_audio_2.max_distance = 300.0
 	healing_audio_2.attenuation = 1.5
 	healing_audio_2.panning_strength = 0.8
 	add_child(healing_audio_2)
 
 func _on_fire_audio_finished() -> void:
-	"""Replay fire audio with randomization to prevent repetitive loop"""
+	"""Replay fire audio with heavy randomization to prevent repetitive loop"""
 	if not fire_audio or not is_instance_valid(fire_audio):
 		return
 
-	# Randomize pitch (±5%)
-	fire_audio.pitch_scale = randf_range(0.95, 1.05)
+	# Much wider pitch variation (±15%) for more variety
+	fire_audio.pitch_scale = randf_range(0.85, 1.15)
 
-	# Randomize volume slightly (±2dB)
-	fire_audio.volume_db = -8.0 + randf_range(-2.0, 2.0)
+	# Wider volume variation (±4dB) for intensity changes
+	fire_audio.volume_db = -8.0 + randf_range(-4.0, 4.0)
 
-	# 30% chance to play backwards for variation
-	if randf() < 0.3:
+	# 40% chance to play backwards for variation
+	if randf() < 0.4:
 		fire_audio.pitch_scale *= -1.0
 
-	# Replay the audio
-	fire_audio.play()
+	# Random start position (0-50% through the clip) to break up patterns
+	var start_position = randf() * 0.5 * fire_audio.stream.get_length()
+
+	# 20% chance for a short silence gap before playing (natural pause)
+	if randf() < 0.2:
+		await get_tree().create_timer(randf_range(0.3, 1.0)).timeout
+		if not is_instance_valid(fire_audio):
+			return
+
+	# Replay the audio from random position
+	fire_audio.play(start_position)
 
 
 func cache_animation_nodes() -> void:
@@ -762,8 +765,8 @@ func animate_fire(delta: float) -> void:
 	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
 	var total_fuel_percent = (wood_percent + bone_percent) / 2.0
 
-	# Animation speed scales from 1.0x (no fuel) to 1.875x (max fuel) - 25% slower max
-	var animation_speed = 1.0 + (total_fuel_percent * 0.875)
+	# Animation speed scales from 2.0x (no fuel) to 3.0x (max fuel) - faster, more lively flames
+	var animation_speed = 2.0 + (total_fuel_percent * 1.0)
 
 	# Movement intensity scales from base to 2x with fuel
 	var movement_intensity = 1.0 + total_fuel_percent

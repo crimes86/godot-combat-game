@@ -12,6 +12,15 @@ var xp_reward: int = 10  # Actual XP granted
 @export var gold_drop_base: int = 5  # Base gold drop, scales with level
 var gold_drop: int = 5  # Actual gold dropped
 
+# LOD (Level of Detail) system for performance
+enum LOD {
+	FULL = 0,      # Full AI, particles, animations (< 400px)
+	MEDIUM = 1,    # Reduced AI update rate (400-800px)
+	MINIMAL = 2,   # Just visible sprite (800-1500px)
+	INVISIBLE = 3  # Beyond view distance (> 1500px)
+}
+var current_lod: int = LOD.FULL
+
 # References
 @onready var health_bar: Control = $HealthBar
 @onready var sprite: CanvasItem = $Sprite2D  # Can be Sprite2D or AnimatedSprite2D
@@ -659,7 +668,7 @@ func _process(delta: float) -> void:
 	if in_crit_window and not weakpoints.is_empty():
 		queue_redraw()  # Continuously redraw while weakpoints are active
 
-	# Toggle UI and enemy visibility based on player distance
+	# Toggle UI based on player distance (visibility handled by LOD system)
 	if not is_corpse:  # Only for living enemies
 		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 		if player and is_instance_valid(player):
@@ -672,14 +681,74 @@ func _process(delta: float) -> void:
 			if level_label:
 				level_label.visible = should_show_ui
 
-			# View distance culling (1400px) - hide enemies beyond fog distance
-			var should_show_enemy = distance <= 1400.0
-			visible = should_show_enemy
-
 	# Handle corpse decay and interaction
 	if is_corpse:
 		process_corpse_decay(delta)
 		update_loot_proximity()
+
+func set_lod_level(lod_level: int) -> void:
+	"""Set Level of Detail for performance optimization"""
+	if current_lod == lod_level:
+		return  # No change
+
+	current_lod = lod_level
+
+	match lod_level:
+		LOD.FULL:  # < 400px - Full detail
+			visible = true
+			set_physics_process(true)
+			set_process(true)
+			# Enable AI if exists
+			if has_node("EnemyAI"):
+				var ai = get_node("EnemyAI")
+				ai.set_physics_process(true)
+				ai.set_process(true)
+			# Enable particles if they exist
+			for child in get_children():
+				if child is GPUParticles2D:
+					child.emitting = true
+
+		LOD.MEDIUM:  # 400-800px - Reduced AI
+			visible = true
+			set_physics_process(true)
+			set_process(true)
+			# Reduce AI update rate (handled by EnemyAI's own LOD if implemented)
+			if has_node("EnemyAI"):
+				var ai = get_node("EnemyAI")
+				ai.set_physics_process(true)
+				ai.set_process(true)
+			# Reduce particles
+			for child in get_children():
+				if child is GPUParticles2D:
+					child.amount = max(1, child.amount / 2)
+
+		LOD.MINIMAL:  # 800-1500px - Just visible
+			visible = true
+			set_physics_process(false)  # No physics
+			set_process(true)  # Keep process for UI updates
+			# Disable AI
+			if has_node("EnemyAI"):
+				var ai = get_node("EnemyAI")
+				ai.set_physics_process(false)
+				ai.set_process(false)
+			# Disable particles
+			for child in get_children():
+				if child is GPUParticles2D:
+					child.emitting = false
+
+		LOD.INVISIBLE:  # > 1500px - Not visible
+			visible = false
+			set_physics_process(false)
+			set_process(false)
+			# Disable AI
+			if has_node("EnemyAI"):
+				var ai = get_node("EnemyAI")
+				ai.set_physics_process(false)
+				ai.set_process(false)
+			# Disable particles
+			for child in get_children():
+				if child is GPUParticles2D:
+					child.emitting = false
 
 func update_loot_proximity() -> void:
 	"""Check if player is close enough to loot and show/hide prompt"""

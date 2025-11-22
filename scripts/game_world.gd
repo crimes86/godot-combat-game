@@ -112,18 +112,12 @@ func _ready():
 	DebugConfig.log_spawning("✅ GameWorld ready!")
 
 func _process(delta):
-	"""Handle viewport culling for terrain and spawn manager updates"""
+	"""Handle viewport culling for terrain"""
 	# Update terrain visibility
 	terrain_check_timer += delta
 	if terrain_check_timer >= TERRAIN_CHECK_INTERVAL:
 		terrain_check_timer = 0.0
 		update_terrain_visibility()
-
-	# Update spawn manager with player positions
-	if spawn_manager:
-		var player = get_tree().get_first_node_in_group("player")
-		if player and is_instance_valid(player):
-			spawn_manager.update_player_positions([player.global_position])
 
 	# Update ambient particles position to follow player
 	var particles = get_node_or_null("AmbientAsh")
@@ -2013,36 +2007,33 @@ func create_torches_along_path():
 	print("🔥 Created %d torches along %.0fpx path (avg spacing: %.0fpx)" % [torch_count, total_path_length, total_path_length / max(1, torch_count)])
 
 func spawn_all_enemies():
-	"""Initialize multiplayer-ready spawn manager with dynamic spawning"""
-	print("🎯 Initializing dynamic enemy spawning system...")
+	"""Initialize chunk-aware spawn manager with dynamic spawning"""
+	print("🎯 Initializing chunk-aware enemy spawning system...")
 
 	# STEP 1: Collect all spawn markers (don't spawn yet)
 	var spawn_markers = collect_spawn_markers()
 	print("   📍 Found %d spawn markers" % spawn_markers.size())
 
-	# STEP 2: Create and initialize SpawnManager
-	spawn_manager = SpawnManager.new()
-	spawn_manager.name = "SpawnManager"
+	# STEP 2: Create and initialize ChunkAwareSpawnManager
+	const ChunkAwareSpawnManager = preload("res://scripts/systems/ChunkAwareSpawnManager.gd")
+	spawn_manager = ChunkAwareSpawnManager.new()
+	spawn_manager.name = "ChunkAwareSpawnManager"
 	add_child(spawn_manager)
 
-	# Configure spawn manager for performance (50 enemies max, 15% spawn chance)
-	spawn_manager.max_active_enemies = 50  # Reduced from 75 for better performance
-	spawn_manager.spawn_chance_per_marker = 0.15  # Only 15% of markers active (was 0.5 = too many!)
-	spawn_manager.spawn_radius = 1500.0  # Reduced from 2500 to spawn fewer enemies
-	spawn_manager.despawn_radius = 2500.0  # Reduced from 3500
-	spawn_manager.update_interval = 1.0  # Check spawns every 1 second (was 0.2)
+	# Configure activation rates per level range
+	spawn_manager.activation_rates = {
+		"L1-3": 0.6,   # 60% of low-level spawns active
+		"L4-7": 0.4,   # 40% of mid-level spawns active
+		"L8-10": 0.3   # 30% of high-level spawns active
+	}
+	spawn_manager.max_active_enemies = 50
 
-	# Initialize with spawn markers
-	spawn_manager.initialize(self, spawn_markers)
+	# Initialize with spawn markers and chunk system
+	spawn_manager.initialize(self, chunk_prop_system, spawn_markers)
 
-	# STEP 3: Set initial player position so spawns work on first frame
-	var player = get_tree().get_first_node_in_group("player")
-	if player and is_instance_valid(player):
-		spawn_manager.update_player_positions([player.global_position])
-		print("   👤 Player position registered: (%.0f, %.0f)" % [player.global_position.x, player.global_position.y])
-
-	print("✅ Dynamic spawning system initialized (spawns near player only)")
-	print("   🎮 Enemies will spawn/despawn based on player proximity")
+	print("✅ Chunk-aware spawning system initialized!")
+	print("   🎮 Enemies spawn/despawn with chunks")
+	print("   🔍 LOD system: Full (< 400px), Medium (400-800px), Minimal (800-1500px)")
 	print("   💾 Dead/looted enemies won't respawn")
 
 func collect_spawn_markers() -> Array:
