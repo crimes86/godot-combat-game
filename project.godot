@@ -27,7 +27,7 @@ NotificationManager="*res://scripts/systems/NotificationManager.gd"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/LPCAnimatedSprite/plugin.cfg")
+enabled=PackedStringArray()
 
 [input]
 
