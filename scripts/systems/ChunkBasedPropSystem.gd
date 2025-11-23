@@ -3,7 +3,7 @@ class_name ChunkBasedPropSystem
 
 ## Chunk-Based Procedural Prop Generation (6 Horizontal Chunks)
 ## World is divided into 6 vertical strips (3000px wide each)
-## Smart loading: current chunk always, neighbors only when within 800px of edges (1-3 chunks total)
+## Smart loading: current chunk always, neighbors only when within 1000px of edges (1-3 chunks total)
 
 const CHUNK_SIZE: float = 3000.0  # Each chunk is 3000px wide (horizontal strips only)
 const LOAD_DISTANCE: float = 4000.0  # Load chunks within this distance
@@ -156,16 +156,16 @@ func update_debug_display() -> void:
 	var world_width = WORLD_MAX.x - WORLD_MIN.x
 	var total_chunks = int(ceil(world_width / CHUNK_SIZE))
 
-	# Check if near edges (800px threshold)
-	const EDGE_THRESHOLD = 800.0
+	# Check if near edges (1000px threshold)
+	const EDGE_THRESHOLD = 1000.0
 	var near_left = dist_to_left_edge < EDGE_THRESHOLD
 	var near_right = dist_to_right_edge < EDGE_THRESHOLD
 
 	debug_label.text = "CHUNK DEBUG (6 Horizontal Chunks)\n"
 	debug_label.text += "Current Chunk: %s\n" % chunk_key
 	debug_label.text += "Position in Chunk: %.0fpx from left edge\n" % pos_in_chunk_x
-	debug_label.text += "Distance to Left Edge: %.0fpx%s\n" % [dist_to_left_edge, " [NEAR]" if near_left else ""]
-	debug_label.text += "Distance to Right Edge: %.0fpx%s\n" % [dist_to_right_edge, " [NEAR]" if near_right else ""]
+	debug_label.text += "Distance to Left Edge: %.0fpx%s\n" % [dist_to_left_edge, " [NEAR <1000px]" if near_left else ""]
+	debug_label.text += "Distance to Right Edge: %.0fpx%s\n" % [dist_to_right_edge, " [NEAR <1000px]" if near_right else ""]
 	debug_label.text += "Loaded Chunks: %d (1-3 based on edges)\n" % loaded_chunks.size()
 	debug_label.text += "Loading Chunks: %d\n" % chunks_being_loaded.size()
 	debug_label.text += "Total World Chunks: %d (horizontal strip)" % total_chunks
@@ -177,7 +177,7 @@ func update_debug_display() -> void:
 		debug_label.position = Vector2(viewport_size.x - 380, 10)  # 380px from right edge for wider text
 
 func update_chunks() -> void:
-	"""Smart chunk loading: current chunk always, neighbors only when near edges (800px threshold)"""
+	"""Smart chunk loading: current chunk always, neighbors only when near edges (1000px threshold)"""
 	var player_pos = player.global_position
 	var player_chunk = get_chunk_key(player_pos)
 
@@ -201,7 +201,7 @@ func update_chunks() -> void:
 	var pos_in_chunk_x = player_pos.x - chunk_origin_x
 
 	# Define edge threshold (load neighbors when within this distance from edge)
-	const EDGE_THRESHOLD = 800.0  # Load neighbor when within 800px of edge
+	const EDGE_THRESHOLD = 1000.0  # Load neighbor when within 1000px of edge
 
 	var dist_to_left_edge = pos_in_chunk_x
 	var dist_to_right_edge = CHUNK_SIZE - pos_in_chunk_x
