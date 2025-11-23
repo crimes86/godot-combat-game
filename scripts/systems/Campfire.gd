@@ -765,8 +765,8 @@ func animate_fire(delta: float) -> void:
 	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
 	var total_fuel_percent = (wood_percent + bone_percent) / 2.0
 
-	# Animation speed scales from 2.0x (no fuel) to 3.0x (max fuel) - faster, more lively flames
-	var animation_speed = 2.0 + (total_fuel_percent * 1.0)
+	# Animation speed scales from 1.0x (no fuel) to 1.75x (max fuel) - noticeably faster but not too fast
+	var animation_speed = 1.0 + (total_fuel_percent * 0.75)
 
 	# Movement intensity scales from base to 2x with fuel
 	var movement_intensity = 1.0 + total_fuel_percent

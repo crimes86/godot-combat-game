@@ -28,9 +28,9 @@ class_name ChunkAwareSpawnManager
 @export var max_active_enemies: int = 50
 
 ## LOD distance thresholds (px from player)
-const LOD_CLOSE: float = 400.0     # Full AI, particles, animations
-const LOD_MEDIUM: float = 800.0    # Reduced AI update rate
-const LOD_FAR: float = 1500.0      # Minimal processing, visible only
+const LOD_CLOSE: float = 1000.0    # Full AI, particles, animations (extended to 1000px)
+const LOD_MEDIUM: float = 1500.0   # Reduced AI update rate
+const LOD_FAR: float = 2000.0      # Minimal processing, visible only
 
 ## Update intervals
 const SPAWN_CHECK_INTERVAL: float = 1.0   # Check spawns every 1s

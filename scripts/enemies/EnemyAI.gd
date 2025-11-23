@@ -93,6 +93,10 @@ var unstuck_max_steps: int = 8  # Number of steps to take backward (configurable
 static var last_attack_sound_time: float = 0.0
 static var attack_sound_cooldown: float = 0.15  # Min 0.15s between attack sounds
 
+# Aggro sound spam prevention (per-enemy, not static)
+var last_aggro_sound_time: float = 0.0
+var aggro_sound_cooldown: float = 3.0  # Min 3.0s between aggro laughs per enemy
+
 # Footstep tracking
 var last_footstep_frame: int = -1  # Track last frame that played footstep
 
@@ -676,10 +680,13 @@ func trigger_aggro() -> void:
 	print("👁️ %s: AGGRO! Spotted player" % enemy.name)
 	is_in_combat = true
 
-	# Play aggro sound (menacing skeleton cackle)
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_sound(sound_manager.SoundType.SKELETON_AGGRO, enemy.global_position, -5.0)
+	# Play aggro sound (menacing skeleton cackle) with spam prevention
+	var current_time = Time.get_ticks_msec() / 1000.0
+	if current_time - last_aggro_sound_time >= aggro_sound_cooldown:
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound(sound_manager.SoundType.SKELETON_AGGRO, enemy.global_position, -5.0)
+		last_aggro_sound_time = current_time
 
 	# Chain aggro - alert nearby allies!
 	trigger_chain_aggro()

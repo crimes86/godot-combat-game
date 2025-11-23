@@ -407,19 +407,38 @@ func create_tree_stump() -> void:
 	var src_y = source_img.get_height() - stump_height
 	stump_img.blit_rect(source_img, Rect2i(0, src_y, source_img.get_width(), stump_height), Vector2i(0, 0))
 
-	# Add jagged cut effect to top edge (make it look chopped/splintered)
+	# Add jagged, imperfect cut effect to top edge (make it look naturally chopped/splintered)
 	var rng = RandomNumberGenerator.new()
 	rng.seed = hash(global_position)  # Use position as seed for consistency
+
+	# Create more imperfect edge with larger chunks and variation
 	for x in range(stump_img.get_width()):
-		# Random jagged variation for top 3-5 rows
-		var cut_depth = rng.randi_range(3, 7)
+		# Much more random variation - some areas cut deep, others shallow
+		# Use noise-like pattern for natural wood grain effect
+		var base_depth = rng.randi_range(2, 12)  # Wider range for more imperfection
+
+		# Add wave pattern to simulate axe swing angle variation
+		var wave_offset = int(sin(float(x) / 8.0) * 4.0)
+		var cut_depth = base_depth + wave_offset
+
+		# Random chance for extra deep splinters or chunks
+		if rng.randf() < 0.15:  # 15% chance for big chunk missing
+			cut_depth += rng.randi_range(5, 10)
+
+		cut_depth = clampi(cut_depth, 2, stump_img.get_height() - 1)
+
 		for y in range(cut_depth):
 			if y < stump_img.get_height():
 				var pixel = stump_img.get_pixel(x, y)
 				if pixel.a > 0:
-					# Gradually fade out pixels near the cut
+					# More aggressive alpha variation for ragged edge
 					var fade = 1.0 - (float(y) / float(cut_depth))
-					pixel.a *= fade * rng.randf_range(0.3, 1.0)
+					# Add extra randomness to create torn wood fiber effect
+					var random_tear = rng.randf_range(0.0, 1.0)
+					if random_tear < 0.4:  # 40% chance to fully remove pixel (torn off)
+						pixel.a = 0.0
+					else:
+						pixel.a *= fade * rng.randf_range(0.2, 0.9)
 					stump_img.set_pixel(x, y, pixel)
 
 	# Create stump sprite at same scale as original tree
