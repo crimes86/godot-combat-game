@@ -1,0 +1,41 @@
+{
+  "bodyTypeName": "female",
+  "url": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/#?body=none_Body_color&head=none_Human_female_small&hair=Braid2_dark_brown&sex=female",
+  "spritesheets": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/spritesheets/",
+  "version": 1,
+  "datetime": "11/19/2025, 2:03:37 PM",
+  "credits": [
+    {
+      "fileName": "hair/braid2/adult/fg/dark_brown.png",
+      "licenses": "CC-BY-SA 3.0,GPL 3.0",
+      "authors": "Yamilian,bluecarrot16",
+      "urls": "https://opengameart.org/content/lpc-heroine,https://opengameart.org/content/lpc-hair",
+      "notes": "(lidia)"
+    },
+    {
+      "fileName": "hair/braid2/adult/bg/dark_brown.png",
+      "licenses": "CC-BY-SA 3.0,GPL 3.0",
+      "authors": "Yamilian,bluecarrot16",
+      "urls": "https://opengameart.org/content/lpc-heroine,https://opengameart.org/content/lpc-hair",
+      "notes": "(lidia)"
+    }
+  ],
+  "layers": [
+    {
+      "fileName": "hair/braid2/adult/bg/dark_brown.png",
+      "zPos": 9,
+      "parentName": "hair",
+      "name": "Braid2",
+      "variant": "dark brown",
+      "supportedAnimations": "spellcast,thrust,walk,slash,shoot,hurt,watering,idle,jump,run,sit,emote,climb,combat,1h_slash,1h_backslash,1h_halfslash"
+    },
+    {
+      "fileName": "hair/braid2/adult/fg/dark_brown.png",
+      "zPos": 120,
+      "parentName": "hair",
+      "name": "Braid2",
+      "variant": "dark brown",
+      "supportedAnimations": "spellcast,thrust,walk,slash,shoot,hurt,watering,idle,jump,run,sit,emote,climb,combat,1h_slash,1h_backslash,1h_halfslash"
+    }
+  ]
+}

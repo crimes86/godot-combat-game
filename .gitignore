@@ -1,0 +1,45 @@
+# Godot 4+ specific ignores
+.godot/
+*.uid
+
+# Godot-specific files to ignore
+*.import
+*.md5
+*.translation
+.import/
+export.cfg
+export_presets.cfg
+.mono/
+data_*/
+
+# Build artifacts
+*.exe
+*.pck
+*.app
+*.dmg
+*.zip
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# User-specific settings (optional - some prefer to track these)
+.claude/settings.local.json

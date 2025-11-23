@@ -1,0 +1,66 @@
+{
+	"zone": "Zone 1: The Wasteland",
+	"theme": "Scavenged leather and bone armor from the wasteland",
+	"armor": [
+		{
+			"id": "wasteland_helm",
+			"name": "Wasteland Helm",
+			"description": "A makeshift helmet fashioned from scavenged metal and leather. Protects against skeleton strikes.",
+			"slot": "head",
+			"defense": 8,
+			"type": "armor",
+			"value": 40,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "wasteland_chest",
+			"name": "Wasteland Chestguard",
+			"description": "Reinforced leather armor scavenged from the ruins. Offers decent protection.",
+			"slot": "chest",
+			"defense": 12,
+			"type": "armor",
+			"value": 60,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "wasteland_armguards",
+			"name": "Wasteland Armguards",
+			"description": "Tough leather armguards with bone reinforcements. Protect your forearms during combat.",
+			"slot": "arms",
+			"defense": 5,
+			"type": "armor",
+			"value": 25,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "wasteland_greaves",
+			"name": "Wasteland Greaves",
+			"description": "Sturdy leg guards made from scavenged materials. Built for survival.",
+			"slot": "legs",
+			"defense": 10,
+			"type": "armor",
+			"value": 50,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		},
+		{
+			"id": "wasteland_boots",
+			"name": "Wasteland Boots",
+			"description": "Worn but reliable boots. Countless survivors have walked this wasteland before you.",
+			"slot": "feet",
+			"defense": 6,
+			"type": "armor",
+			"value": 30,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1
+		}
+	]
+}

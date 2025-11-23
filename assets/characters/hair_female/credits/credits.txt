@@ -1,0 +1,24 @@
+hair/braid2/adult/fg/dark_brown.png
+	- Note: (lidia)
+	- Licenses:
+		- CC-BY-SA 3.0
+		- GPL 3.0
+	- Authors:
+		- Yamilian
+		- bluecarrot16
+	- Links:
+		- https://opengameart.org/content/lpc-heroine
+		- https://opengameart.org/content/lpc-hair
+
+hair/braid2/adult/bg/dark_brown.png
+	- Note: (lidia)
+	- Licenses:
+		- CC-BY-SA 3.0
+		- GPL 3.0
+	- Authors:
+		- Yamilian
+		- bluecarrot16
+	- Links:
+		- https://opengameart.org/content/lpc-heroine
+		- https://opengameart.org/content/lpc-hair
+

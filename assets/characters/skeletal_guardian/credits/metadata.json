@@ -1,0 +1,200 @@
+{
+  "exportTimestamp": "2025-11-19T18-14-42",
+  "bodyType": "male",
+  "standardAnimations": {
+    "exported": {
+      "spellcast": [
+        "010 body bodies skeleton skeleton.png",
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "065 shoulders plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "thrust": [
+        "010 body bodies skeleton skeleton.png",
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "065 shoulders plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "walk": [
+        "009 weapon sword longsword universal_behind longsword.png",
+        "010 body bodies skeleton skeleton.png",
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "065 shoulders plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png",
+        "140 weapon sword longsword longsword.png"
+      ],
+      "slash": [
+        "010 body bodies skeleton skeleton.png",
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "065 shoulders plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "shoot": [
+        "010 body bodies skeleton skeleton.png",
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "065 shoulders plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "hurt": [
+        "009 weapon sword longsword universal_behind longsword.png",
+        "010 body bodies skeleton skeleton.png",
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "065 shoulders plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png",
+        "140 weapon sword longsword longsword.png"
+      ],
+      "climb": [
+        "020 legs armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "idle": [
+        "020 legs armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "jump": [
+        "020 legs armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "sit": [
+        "020 legs armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "emote": [
+        "020 legs armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "run": [
+        "060 torso armour plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "combat_idle": [
+        "060 torso armour plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "backslash": [
+        "060 torso armour plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ],
+      "halfslash": [
+        "060 torso armour plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png"
+      ]
+    },
+    "failed": {}
+  },
+  "customAnimations": {
+    "exported": {
+      "thrust_oversize": [
+        "010 body bodies skeleton skeleton.png",
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "065 shoulders plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png",
+        "0-1 weapon sword longsword attack_thrust behind longsword.png",
+        "150 weapon sword longsword attack_thrust longsword.png"
+      ],
+      "slash_oversize": [
+        "010 body bodies skeleton skeleton.png",
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "065 shoulders plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png",
+        "0-1 weapon sword longsword attack_slash behind longsword.png",
+        "150 weapon sword longsword attack_slash longsword.png"
+      ],
+      "slash_reverse_oversize": [
+        "010 body bodies skeleton skeleton.png",
+        "015 feet armour plate male copper.png",
+        "020 legs armour plate male copper.png",
+        "060 arms armour plate male copper.png",
+        "060 torso armour plate male copper.png",
+        "065 shoulders plate male copper.png",
+        "070 arms gloves male copper.png",
+        "100 head heads skeleton adult skeleton.png",
+        "130 hat helmet bascinet adult copper.png",
+        "0-1 weapon sword longsword attack_slash_reverse behind longsword.png",
+        "150 weapon sword longsword attack_slash_reverse longsword.png"
+      ]
+    },
+    "failed": {}
+  },
+  "frameSize": 64,
+  "frameCounts": {
+    "spellcast": 7,
+    "thrust": 8,
+    "walk": 9,
+    "slash": 6,
+    "shoot": 13,
+    "hurt": 6,
+    "climb": 6,
+    "idle": 2,
+    "jump": 5,
+    "sit": 3,
+    "emote": 3,
+    "run": 8,
+    "combat_idle": 2,
+    "backslash": 13,
+    "halfslash": 7
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "bodyTypeName": "male",
+  "url": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/#?cape=male_red&weapon=scythe&body=skeleton&legs=Armour_copper&armour=Plate_copper&arms=Armour_copper&hat=Bascinet_copper&shoes=Armour_copper",
+  "spritesheets": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/spritesheets/",
+  "version": 1,
+  "datetime": "11/17/2025, 10:14:41 PM",
+  "credits": [
+    {
+      "fileName": "hat/helmet/bascinet/adult/copper.png",
+      "licenses": "OGA-BY 3.0,CC-BY-SA 4.0,CC-BY-SA 3.0,GPL 3.0",
+      "authors": "bluecarrot16,ElizaWy,Sander Frenken (castelonia)",
+      "urls": "https://opengameart.org/content/lpc-realistic-helmet-pack,https://opengameart.org/content/lpc-helmets-mega-pack,https://opengameart.org/content/lpc-expanded-hats-facial-helmets",
+      "notes": ""
+    },
+    {
+      "fileName": "arms/armour/plate/male/copper.png",
+      "licenses": "OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0",
+      "authors": "Michael Whitlock (bigbeargames),Matthew Krohn (makrohn),Johannes Sjölund (wulax)",
+      "urls": "https://opengameart.org/content/lpc-medieval-fantasy-character-sprites,http://opengameart.org/content/lpc-clothing-updates",
+      "notes": "original by wulax, recolors by bigbeargames; adapted to v3 bases and further recolors by bluecarrot16"
+    },
+    {
+      "fileName": "torso/armour/plate/male/copper.png",
+      "licenses": "OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0",
+      "authors": "JaidynReiman, bluecarrot16, Michael Whitlock (bigbeargames), Johannes Sjölund (wulax)",
+      "urls": "https://opengameart.org/content/lpc-medieval-fantasy-character-sprites,https://opengameart.org/content/lpc-combat-armor-for-women",
+      "notes": "original by wulax, recolor by bigbeargames, color reduced to 7 colors and adapted to v3 bases by bluecarrot16, run/jump/sit/climb/revised combat by JaidynReiman"
+    },
+    {
+      "fileName": "legs/armour/plate/male/copper.png",
+      "licenses": "OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0",
+      "authors": "bluecarrot16,JaidynReiman,Michael Whitlock (bigbeargames),Matthew Krohn (makrohn),Johannes Sjölund (wulax)",
+      "urls": "https://opengameart.org/content/lpc-medieval-fantasy-character-sprites",
+      "notes": "reduced to 7 colors an adapted to v3 bases by bluecarrot16, climb/jump/sit/emotes by JaidynReiman"
+    },
+    {
+      "fileName": "feet/armour/plate/male/copper.png",
+      "licenses": "OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0",
+      "authors": "Matthew Krohn (makrohn),Johannes Sjölund (wulax)",
+      "urls": "https://opengameart.org/content/lpc-medieval-fantasy-character-sprites",
+      "notes": "original by wulax, recolors by bigbeargames, edits for v3 base and recolors by bluecarrot16"
+    }
+  ],
+  "layers": [
+    {
+      "fileName": "feet/armour/plate/male/copper.png",
+      "zPos": 15,
+      "parentName": "shoes",
+      "name": "Armour",
+      "variant": "copper",
+      "supportedAnimations": "spellcast,thrust,walk,slash,shoot,hurt,watering"
+    },
+    {
+      "fileName": "legs/armour/plate/male/copper.png",
+      "zPos": 20,
+      "parentName": "legs",
+      "name": "Armour",
+      "variant": "copper",
+      "supportedAnimations": "spellcast,thrust,walk,slash,shoot,hurt,climb,idle,jump,sit,emotes"
+    },
+    {
+      "fileName": "arms/armour/plate/male/copper.png",
+      "zPos": 60,
+      "parentName": "arms",
+      "name": "Armour",
+      "variant": "copper",
+      "supportedAnimations": "spellcast,thrust,walk,slash,shoot,hurt,watering"
+    },
+    {
+      "fileName": "torso/armour/plate/male/copper.png",
+      "zPos": 60,
+      "parentName": "armour",
+      "name": "Plate",
+      "variant": "copper",
+      "supportedAnimations": "spellcast,thrust,walk,slash,shoot,hurt,watering,idle,jump,run,sit,emote,climb,combat,1h_slash,1h_backslash,1h_halfslash"
+    },
+    {
+      "fileName": "hat/helmet/bascinet/adult/copper.png",
+      "zPos": 130,
+      "parentName": "hat",
+      "name": "Bascinet",
+      "variant": "copper",
+      "supportedAnimations": "spellcast,thrust,walk,slash,shoot,hurt,watering,idle,jump,run,sit,emote,climb,combat,1h_slash,1h_backslash,1h_halfslash"
+    }
+  ]
+}
