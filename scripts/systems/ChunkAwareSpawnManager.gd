@@ -266,37 +266,80 @@ func update_spawns() -> void:
 	spawn_enemies_in_loaded_chunks(loaded_chunks)
 
 func spawn_enemies_in_loaded_chunks(loaded_chunks: Array) -> void:
-	"""Spawn enemies in currently loaded chunks"""
+	"""Spawn enemies in currently loaded chunks with fair distribution"""
 	var spawned_count = 0
 
+	# Calculate available spawn slots
+	var available_slots = max_active_enemies - active_enemies.size()
+	if available_slots <= 0:
+		return  # Already at max capacity
+
+	# Count total spawnable enemies per chunk (active, not yet spawned, not dead/looted)
+	var spawnable_per_chunk = {}
+	var total_spawnable = 0
+
 	for chunk_key in loaded_chunks:
-		# Skip if this chunk has no spawn markers
 		if not spawn_registry_by_chunk.has(chunk_key):
 			continue
 
-		# Get spawn data for this chunk
 		var chunk_spawns = spawn_registry_by_chunk[chunk_key]
+		var count = 0
 
 		for spawn_data in chunk_spawns:
-			# Skip if not active (determined by activation rate)
+			# Count only if: active, not already spawned, and not dead/looted
+			if spawn_data.is_active and \
+			   not active_enemies.has(spawn_data.spawn_id) and \
+			   spawn_data.state != EnemyState.DEAD and \
+			   spawn_data.state != EnemyState.LOOTED:
+				count += 1
+
+		if count > 0:
+			spawnable_per_chunk[chunk_key] = count
+			total_spawnable += count
+
+	# If nothing to spawn, exit early
+	if total_spawnable == 0:
+		return
+
+	# Calculate fair budget per chunk (proportional to spawnable enemies)
+	var budget_per_chunk = {}
+	for chunk_key in spawnable_per_chunk.keys():
+		var proportion = float(spawnable_per_chunk[chunk_key]) / float(total_spawnable)
+		budget_per_chunk[chunk_key] = int(ceil(proportion * available_slots))
+
+	# Spawn enemies using per-chunk budgets
+	for chunk_key in loaded_chunks:
+		if not spawn_registry_by_chunk.has(chunk_key):
+			continue
+
+		var chunk_budget = budget_per_chunk.get(chunk_key, 0)
+		if chunk_budget <= 0:
+			continue
+
+		var chunk_spawns = spawn_registry_by_chunk[chunk_key]
+		var chunk_spawned = 0
+
+		for spawn_data in chunk_spawns:
+			# Check all spawn conditions
 			if not spawn_data.is_active:
 				continue
-
-			# Skip if already spawned
 			if active_enemies.has(spawn_data.spawn_id):
 				continue
-
-			# Skip if dead or looted (permanent states)
 			if spawn_data.state == EnemyState.DEAD or spawn_data.state == EnemyState.LOOTED:
 				continue
 
-			# Check global enemy limit
+			# Check chunk budget
+			if chunk_spawned >= chunk_budget:
+				break  # This chunk hit its budget, move to next chunk
+
+			# Check global limit (safety check)
 			if active_enemies.size() >= max_active_enemies:
-				return  # Hit limit, stop spawning
+				break
 
 			# Spawn enemy
 			spawn_enemy(spawn_data)
 			spawned_count += 1
+			chunk_spawned += 1
 
 	# Debug output (only when spawning)
 	if spawned_count > 0:

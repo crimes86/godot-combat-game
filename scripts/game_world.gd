@@ -2026,7 +2026,7 @@ func spawn_all_enemies():
 		"L4-7": 0.4,   # 40% of mid-level spawns active
 		"L8-10": 0.3   # 30% of high-level spawns active
 	}
-	spawn_manager.max_active_enemies = 50
+	spawn_manager.max_active_enemies = 120  # Increased from 50 to allow enemies across all loaded chunks
 
 	# Initialize with spawn markers and chunk system
 	spawn_manager.initialize(self, chunk_prop_system, spawn_markers)
