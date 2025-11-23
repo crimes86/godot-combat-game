@@ -14,6 +14,7 @@ signal shop_closed()
 var weapons_for_sale: Array = []
 var weapon_prices: Array = []  # Parallel array for weapon prices
 var armor_for_sale: Array = []
+var tools_for_sale: Array = []  # Gathering tools (axe, pickaxe, etc)
 var player_in_range: bool = false
 var shop_ui: CanvasLayer = null
 var animated_sprite: AnimatedSprite2D = null
@@ -40,7 +41,7 @@ func _ready() -> void:
 	# Create interaction prompt
 	create_interaction_prompt()
 
-	print("🏪 Vendor '%s' initialized with %d weapons and %d armor pieces" % [vendor_name, weapons_for_sale.size(), armor_for_sale.size()])
+	print("🏪 Vendor '%s' initialized with %d weapons, %d armor pieces, and %d tools" % [vendor_name, weapons_for_sale.size(), armor_for_sale.size(), tools_for_sale.size()])
 	print("   Position: ", global_position)
 	print("   Monitoring: ", monitoring)
 
@@ -259,6 +260,43 @@ func load_shop_data() -> void:
 			DebugConfig.log_error("shop_armor.json missing 'armor' array")
 	else:
 		DebugConfig.log_error("Failed to load shop_armor.json: %s" % armor_result.error)
+
+	# Add starter gathering tools (free for testing)
+	load_starter_tools()
+
+func load_starter_tools() -> void:
+	"""Load starter gathering tools (free for testing, like copper armor)"""
+	var rusty_axe = {
+		"name": "Rusty Axe",
+		"description": "An old, weathered axe. Still sharp enough to chop dead wasteland trees.",
+		"type": "tool",
+		"tool_type": "axe",
+		"value": 10,
+		"price": 0,  # Free for testing
+		"rarity": "COMMON",
+		"stackable": false,
+		"quantity": 1,
+		"efficiency": 1.0,
+		"durability": 100
+	}
+
+	var rusty_pickaxe = {
+		"name": "Rusty Pickaxe",
+		"description": "A worn mining pick. Good for breaking rocks and gathering ore.",
+		"type": "tool",
+		"tool_type": "pickaxe",
+		"value": 10,
+		"price": 0,  # Free for testing
+		"rarity": "COMMON",
+		"stackable": false,
+		"quantity": 1,
+		"efficiency": 1.0,
+		"durability": 100
+	}
+
+	tools_for_sale.append(rusty_axe)
+	tools_for_sale.append(rusty_pickaxe)
+	print("   Loaded 2 starter tools (free for testing)")
 
 func create_weapon_from_data(data: Dictionary) -> Weapon:
 	"""Create a Weapon resource from JSON data"""

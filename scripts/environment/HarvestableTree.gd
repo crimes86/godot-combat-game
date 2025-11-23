@@ -21,6 +21,9 @@ var progress_circle: Node2D = null
 var cancel_grace_timer: float = 0.0  # Prevent immediate cancellation
 var cancel_grace_period: float = 0.15  # 0.15 second grace period
 
+# Cache for performance - only check when player is in range
+var current_prompt_text: String = ""
+
 # Respawn
 var respawn_time: float = 120.0  # 2 minutes to respawn
 var respawn_timer: float = 0.0
@@ -33,6 +36,12 @@ var original_scale: Vector2 = Vector2.ONE
 
 # Resource yield
 var wood_amount: int = 0  # Set based on tree size (1-3 wood)
+
+# Audio - uses TreeAudioManager for shared sounds
+var chop_audio_player: AudioStreamPlayer = null
+var fall_audio_player: AudioStreamPlayer = null
+var last_chop_sound_time: float = 0.0
+var chop_sound_interval: float = 0.6  # Play chop sound every 0.6 seconds
 
 func _ready() -> void:
 	# Find sprite and shadow from children (created by game_world.gd)
@@ -61,6 +70,9 @@ func _ready() -> void:
 	# Create radial progress circle
 	create_progress_circle()
 
+	# Create audio players (sounds are loaded by TreeAudioManager)
+	create_audio_players()
+
 func _physics_process(delta: float) -> void:
 	# Handle respawn timer
 	if is_harvested:
@@ -69,34 +81,75 @@ func _physics_process(delta: float) -> void:
 			respawn_tree()
 		return
 
+	# Only do expensive checks when player is actually in range
+	if not player_in_range:
+		return
+
+	# Check if player has axe ONLY when in range (not when far away - major performance improvement)
+	var has_axe = InventorySystem.has_axe_equipped()
+
 	# Update interaction prompt visibility and position
-	if interaction_prompt:
-		var should_show = player_in_range and not is_harvested and not is_chopping
+	if interaction_prompt and not is_harvested and not is_chopping:
+		var new_prompt_text = ""
+		if has_axe:
+			new_prompt_text = "Hold [F] Chop Tree"
+		else:
+			new_prompt_text = "Need Axe"
+
+		# Only update text and color if it actually changed (avoid expensive theme override calls)
+		if new_prompt_text != current_prompt_text:
+			current_prompt_text = new_prompt_text
+			interaction_prompt.text = new_prompt_text
+			if has_axe:
+				interaction_prompt.add_theme_color_override("font_color", Color(0.8, 1.0, 0.8))  # Light green
+			else:
+				interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))  # Light red
+
+		# Show/hide prompt
+		var should_show = has_axe  # Only show if has axe
+		if not has_axe:
+			should_show = true  # Show "Need Axe" message too
+
 		if should_show != interaction_prompt.visible:
 			interaction_prompt.visible = should_show
 
 		# Update position every frame when visible
-		if should_show:
+		if interaction_prompt.visible:
 			update_prompt_position()
 
 	# Handle hold-to-chop mechanic
-	if player_in_range and not is_harvested:
+	if not is_harvested:
+		# Check axe one more time before allowing chop
+		if not has_axe:
+			# Cancel any ongoing chop if axe was unequipped mid-chop
+			if is_chopping:
+				cancel_chopping()
+			return
+
 		var f_is_pressed = Input.is_physical_key_pressed(KEY_F)
-		
+
 		if f_is_pressed:
 			# F is being held - reset grace timer and chop
 			cancel_grace_timer = 0.0
-			
+
 			if not is_chopping:
 				start_chopping()
 			else:
 				# Increase progress while F is held
 				chop_progress += delta / chop_time_required
-				
+
+				# Track time for periodic chop sounds
+				last_chop_sound_time += delta
+
+				# Play chop sound periodically during chopping
+				if last_chop_sound_time >= chop_sound_interval:
+					play_random_chop_sound()
+					last_chop_sound_time = 0.0
+
 				# Update progress circle
 				if progress_circle:
 					progress_circle.queue_redraw()
-				
+
 				# Complete chop when progress reaches 100%
 				if chop_progress >= 1.0:
 					complete_chop()
@@ -104,7 +157,7 @@ func _physics_process(delta: float) -> void:
 			# F is not pressed - use grace period before cancelling
 			if is_chopping:
 				cancel_grace_timer += delta
-				
+
 				# Only cancel if grace period has elapsed
 				if cancel_grace_timer >= cancel_grace_period:
 					cancel_chopping()
@@ -302,39 +355,47 @@ func start_chopping() -> void:
 	is_chopping = true
 	chop_progress = 0.0
 	cancel_grace_timer = 0.0  # Reset grace timer
-	
+	last_chop_sound_time = 0.0  # Reset sound timer
+
 	if progress_circle:
 		progress_circle.visible = true
 		progress_circle.queue_redraw()
-	
+
 	print("🪓 Started chopping tree")
-	
-	# TODO: Play chopping sound in loop when we have the audio file
+
+	# Play first chop sound immediately
+	play_random_chop_sound()
 
 func cancel_chopping() -> void:
 	"""Cancel chopping (F released or player moved away)"""
 	is_chopping = false
 	chop_progress = 0.0
-	
+
 	if progress_circle:
 		progress_circle.visible = false
-	
+
 	print("🛑 Cancelled chopping")
-	
-	# TODO: Stop chopping sound when we have the audio file
+
+	# Stop any playing chop sound
+	if chop_audio_player and chop_audio_player.playing:
+		chop_audio_player.stop()
 
 func complete_chop() -> void:
 	"""Complete the chop after progress reaches 100%"""
 	is_chopping = false
 	chop_progress = 0.0
-	
+
 	if progress_circle:
 		progress_circle.visible = false
-	
+
 	print("✅ Tree chopped!")
-	
-	# TODO: Play tree fall/completion sound when we have the audio file
-	
+
+	# Stop chopping sound and play tree fall sound
+	if chop_audio_player and chop_audio_player.playing:
+		chop_audio_player.stop()
+
+	play_random_fall_sound()
+
 	# Now actually chop the tree
 	chop_tree()
 
@@ -492,3 +553,35 @@ func _on_body_exited(body: Node2D) -> void:
 	"""Player left interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
+
+func create_audio_players() -> void:
+	"""Create audio players (sounds loaded by TreeAudioManager singleton)"""
+	chop_audio_player = AudioStreamPlayer.new()
+	chop_audio_player.name = "ChopAudioPlayer"
+	chop_audio_player.bus = "SFX"
+	add_child(chop_audio_player)
+
+	fall_audio_player = AudioStreamPlayer.new()
+	fall_audio_player.name = "FallAudioPlayer"
+	fall_audio_player.bus = "SFX"
+	add_child(fall_audio_player)
+
+func play_random_chop_sound() -> void:
+	"""Play a random chopping sound from TreeAudioManager"""
+	if not chop_audio_player:
+		return
+
+	var sound = TreeAudioManager.get_random_chop_sound()
+	if sound:
+		chop_audio_player.stream = sound
+		chop_audio_player.play()
+
+func play_random_fall_sound() -> void:
+	"""Play a random tree falling sound from TreeAudioManager"""
+	if not fall_audio_player:
+		return
+
+	var sound = TreeAudioManager.get_random_fall_sound()
+	if sound:
+		fall_audio_player.stream = sound
+		fall_audio_player.play()

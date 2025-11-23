@@ -624,7 +624,6 @@ func _input(event: InputEvent) -> void:
 					# Clean up after async function completes
 					instance.queue_free()
 
-
 			KEY_C:
 				# Toggle character sheet (includes inventory)
 				if character_ui:

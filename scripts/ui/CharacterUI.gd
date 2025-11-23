@@ -12,6 +12,7 @@ var pending_delete_data: Dictionary = {}
 # UI References
 var main_panel: PanelContainer
 var equipment_slots: Dictionary = {}  # slot_name: HBoxContainer (contains slot icon Control + label)
+var tool_slots: Dictionary = {}  # tool_name: HBoxContainer (axe, pickaxe)
 var inventory_slots: Array[Control] = []  # Changed from Array[Button] to Array[Control]
 var stat_labels: Dictionary = {}  # stat_name: Label
 var character_name_label: Label
@@ -55,6 +56,10 @@ func _ready() -> void:
 	CharacterStats.armor_equipped.connect(_on_armor_changed)
 	CharacterStats.armor_unequipped.connect(_on_armor_changed)
 	InventorySystem.inventory_changed.connect(_on_inventory_changed)
+	InventorySystem.axe_equipped.connect(_on_tool_changed)
+	InventorySystem.axe_unequipped.connect(_on_tool_changed)
+	InventorySystem.pickaxe_equipped.connect(_on_tool_changed)
+	InventorySystem.pickaxe_unequipped.connect(_on_tool_changed)
 
 	# Initial update
 	refresh_all()
@@ -213,6 +218,32 @@ func create_equipment_panel(parent: Control) -> void:
 	defense_label = create_text_label("Defense: 0", 16)
 	defense_label.add_theme_color_override("font_color", HEADER_COLOR)
 	defense_container.add_child(defense_label)
+
+	# Separator before tools
+	var separator_tools = create_styled_separator()
+	equipment_vbox.add_child(separator_tools)
+
+	# Tools section
+	var tools_header = create_header_label("Tools", 16)
+	equipment_vbox.add_child(tools_header)
+
+	# Wrap tool slots in a CenterContainer
+	var tools_center = CenterContainer.new()
+	equipment_vbox.add_child(tools_center)
+
+	# Tool slots container - CENTERED
+	var tools_container = VBoxContainer.new()
+	tools_container.add_theme_constant_override("separation", 8)
+	tools_center.add_child(tools_container)
+
+	# Create tool slots (axe and pickaxe)
+	var axe_slot = create_tool_slot("axe", "AXE")
+	tools_container.add_child(axe_slot)
+	tool_slots["axe"] = axe_slot
+
+	var pickaxe_slot = create_tool_slot("pickaxe", "PICKAXE")
+	tools_container.add_child(pickaxe_slot)
+	tool_slots["pickaxe"] = pickaxe_slot
 
 func create_character_info_panel(parent: Control) -> void:
 	"""Create character info and stats panel (left column)"""
@@ -456,6 +487,63 @@ func create_equipment_slot(slot_name: String, label_text: String) -> HBoxContain
 
 	return container
 
+func create_tool_slot(tool_name: String, label_text: String) -> HBoxContainer:
+	"""Create a single tool slot button with drag-drop support"""
+	var container = HBoxContainer.new()
+	container.add_theme_constant_override("separation", 8)
+	container.custom_minimum_size = Vector2(200, 60)  # Fixed width so all slots align
+
+	# Use a Control wrapper for drag-drop support
+	var slot_control = Control.new()
+	slot_control.name = "Tool_" + tool_name
+	slot_control.custom_minimum_size = Vector2(60, 60)
+	slot_control.set_meta("tool_name", tool_name)
+	slot_control.set_meta("slot_type", "tool")
+
+	# Enable drag-drop
+	slot_control.set_drag_forwarding(
+		Callable(self, "_get_tool_drag_data").bind(tool_name),
+		Callable(self, "_can_drop_tool_data").bind(tool_name),
+		Callable(self, "_drop_tool_data").bind(tool_name)
+	)
+	container.add_child(slot_control)
+
+	# Add panel for styling
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(60, 60)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let parent handle input
+	slot_control.add_child(panel)
+
+	# Wasteland slot styling with deep inset
+	var slot_style_normal = create_slot_style(SLOT_BG, BORDER_INNER, 2)
+	panel.add_theme_stylebox_override("panel", slot_style_normal)
+
+	# Add label for item text
+	var label = Label.new()
+	label.name = "ItemLabel"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 12)  # Larger font
+	label.add_theme_color_override("font_color", Color.WHITE)  # Bright white
+	label.add_theme_color_override("font_outline_color", Color.BLACK)  # Black outline
+	label.add_theme_constant_override("outline_size", 2)  # Outline for contrast
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # Wrap long item names
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_child(label)
+
+	# Connect click event
+	slot_control.gui_input.connect(_on_tool_slot_gui_input.bind(tool_name))
+
+	# Label to the right of button
+	var slot_label = create_text_label(label_text, 11)
+	slot_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	slot_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	container.add_child(slot_label)
+
+	return container
+
 func create_inventory_slot(slot_index: int) -> Control:
 	"""Create a single inventory slot button with drag-drop support"""
 	# Create a custom control for drag-drop
@@ -655,6 +743,7 @@ func refresh_all() -> void:
 	refresh_character_info()
 	refresh_stats()
 	refresh_equipment()
+	refresh_tools()
 	refresh_inventory()
 
 func refresh_character_info() -> void:
@@ -776,6 +865,57 @@ func refresh_equipment() -> void:
 			var default_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 			panel.add_theme_stylebox_override("panel", default_style)
 
+func refresh_tools() -> void:
+	"""Update tool slot displays"""
+	for tool_name in tool_slots:
+		var slot_container = tool_slots[tool_name]  # HBoxContainer
+
+		# Get the slot_control (first child)
+		var slot_control = slot_container.get_child(0) if slot_container.get_child_count() > 0 else null
+		if not slot_control:
+			continue
+
+		# Get the panel from the slot control
+		var panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
+		if not panel:
+			continue
+
+		var label = panel.get_node_or_null("ItemLabel")
+		if not label:
+			continue
+
+		# Get the equipped tool
+		var tool_item = null
+		if tool_name == "axe":
+			tool_item = InventorySystem.get_equipped_axe()
+		elif tool_name == "pickaxe":
+			tool_item = InventorySystem.get_equipped_pickaxe()
+
+		if tool_item and not tool_item.is_empty():
+			label.text = tool_item.get("name", "???")
+
+			# Apply subtle rarity glow to slot border
+			var rarity = tool_item.get("rarity", "COMMON")
+			var glow_color = get_rarity_glow_color(rarity)
+			var glow_style = create_slot_style(SLOT_BG, glow_color, 3, true)  # Subtle border + glow
+			panel.add_theme_stylebox_override("panel", glow_style)
+
+			var tooltip = tool_item.get("description", "")
+
+			# Tool stats
+			if tool_item.has("efficiency"):
+				tooltip += "\nEfficiency: +%d%%" % (tool_item.get("efficiency", 0) * 100)
+			if tool_item.has("durability"):
+				tooltip += "\nDurability: %d" % tool_item.get("durability", 100)
+
+			slot_control.tooltip_text = tooltip
+		else:
+			label.text = ""
+			slot_control.tooltip_text = "Empty " + tool_name + " slot"
+			# Reset to default style when empty
+			var default_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
+			panel.add_theme_stylebox_override("panel", default_style)
+
 func refresh_inventory() -> void:
 	"""Update inventory slot displays"""
 	for i in range(inventory_slots.size()):
@@ -863,6 +1003,25 @@ func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
 					if CharacterStats.unequip_armor(slot_name):
 						refresh_all()
 
+func _on_tool_slot_gui_input(event: InputEvent, tool_name: String) -> void:
+	"""Handle GUI input on tool slot (double-click or right-click to unequip)"""
+	if event is InputEventMouseButton and event.pressed:
+		# Double-click or right-click to unequip
+		if event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
+			if tool_name == "axe":
+				InventorySystem.unequip_axe()
+				refresh_all()
+			elif tool_name == "pickaxe":
+				InventorySystem.unequip_pickaxe()
+				refresh_all()
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			if tool_name == "axe":
+				InventorySystem.unequip_axe()
+				refresh_all()
+			elif tool_name == "pickaxe":
+				InventorySystem.unequip_pickaxe()
+				refresh_all()
+
 func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 	"""Handle GUI input on inventory slot (double-click or right-click to equip)"""
 	if event is InputEventMouseButton and event.pressed:
@@ -873,8 +1032,22 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 			if item and item.size() > 0:
 				var action = "double-click" if event.double_click else "right-click"
 
+				# Check if it's a tool
+				if item.get("type", "") == "tool":
+					var tool_type = item.get("tool_type", "")
+					var equipped = false
+
+					if tool_type == "axe":
+						equipped = InventorySystem.equip_axe(item)
+					elif tool_type == "pickaxe":
+						equipped = InventorySystem.equip_pickaxe(item)
+
+					if equipped:
+						# Remove from inventory
+						InventorySystem.remove_item(slot_index)
+						refresh_all()
 				# Check if it's a weapon
-				if item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
+				elif item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
 					# Convert dict to Weapon resource and equip
 					var weapon = dict_to_weapon(item)
 					if weapon:
@@ -1123,6 +1296,93 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 			refresh_all()
 
 # ============================================
+# TOOL DRAG AND DROP
+# ============================================
+
+func _get_tool_drag_data(at_position: Vector2, tool_name: String) -> Variant:
+	"""Start dragging an equipped tool"""
+	var tool_item = null
+	if tool_name == "axe":
+		tool_item = InventorySystem.get_equipped_axe()
+	elif tool_name == "pickaxe":
+		tool_item = InventorySystem.get_equipped_pickaxe()
+
+	if not tool_item or tool_item.is_empty():
+		return null
+
+	# Create drag preview
+	var preview = Label.new()
+	preview.text = tool_item.get("name", "Tool")
+	preview.add_theme_font_size_override("font_size", 16)
+	preview.add_theme_color_override("font_color", Color.GOLD)
+	preview.modulate = Color(1, 1, 1, 0.8)  # Slightly transparent
+
+	# Get the tool slot control and set preview on it
+	var slot_container = tool_slots[tool_name]  # HBoxContainer
+	var slot_control = slot_container.get_child(0)  # Control wrapper
+	slot_control.set_drag_preview(preview)
+
+	# Return drag data
+	return {
+		"source_type": "tool",
+		"source_tool_name": tool_name,
+		"item": tool_item
+	}
+
+func _can_drop_tool_data(at_position: Vector2, data: Variant, tool_name: String) -> bool:
+	"""Check if data can be dropped on this tool slot"""
+	if not data is Dictionary:
+		return false
+
+	if not data.has("item"):
+		return false
+
+	var item = data.get("item", {})
+
+	# Check if item is a tool
+	if item.get("type", "") != "tool":
+		return false
+
+	# Check if tool type matches this slot
+	var tool_type = item.get("tool_type", "")
+	if tool_type != tool_name:
+		return false
+
+	return true
+
+func _drop_tool_data(at_position: Vector2, data: Dictionary, tool_name: String) -> void:
+	"""Handle dropping data on a tool slot"""
+	if not data.has("item"):
+		return
+
+	var source_type = data.get("source_type", "")
+	var dragged_item = data.get("item", {})
+
+	# Validate the drop
+	var tool_type = dragged_item.get("tool_type", "")
+	if tool_type != tool_name:
+		return
+
+	if source_type == "inventory":
+		# Equip from inventory
+		var source_index = data.get("source_index", -1)
+		if source_index >= 0:
+			var equipped = false
+
+			if tool_name == "axe":
+				equipped = InventorySystem.equip_axe(dragged_item)
+			elif tool_name == "pickaxe":
+				equipped = InventorySystem.equip_pickaxe(dragged_item)
+
+			if equipped:
+				# Remove from inventory
+				InventorySystem.remove_item(source_index)
+				refresh_all()
+	elif source_type == "tool":
+		# Can't swap tools between slots (different types)
+		pass
+
+# ============================================
 # DROP ZONE (DELETE ITEMS WITH CONFIRMATION)
 # ============================================
 
@@ -1191,6 +1451,18 @@ func _on_delete_confirmed() -> void:
 			CharacterStats.armor_unequipped.emit(source_slot_name, {})
 			refresh_all()
 
+	elif source_type == "tool":
+		# Unequip and delete tool (don't add to inventory)
+		var source_tool_name = pending_delete_data.get("source_tool_name", "")
+		if source_tool_name == "axe":
+			InventorySystem.equipped_axe = {}
+			InventorySystem.axe_unequipped.emit({})
+			refresh_all()
+		elif source_tool_name == "pickaxe":
+			InventorySystem.equipped_pickaxe = {}
+			InventorySystem.pickaxe_unequipped.emit({})
+			refresh_all()
+
 	# Clear pending data
 	pending_delete_data = {}
 
@@ -1214,3 +1486,7 @@ func _on_armor_changed(_slot: String, _armor: Dictionary) -> void:
 func _on_inventory_changed() -> void:
 	"""Called when inventory changes"""
 	refresh_inventory()
+
+func _on_tool_changed(_tool: Dictionary) -> void:
+	"""Called when a tool is equipped/unequipped"""
+	refresh_tools()

@@ -13,6 +13,10 @@ const MAX_INVENTORY_SLOTS: int = 32  # 8 rows x 4 columns
 var inventory_items: Array = []  # Array of item dictionaries
 var suppress_signals: bool = false  # Flag to suppress signal emissions
 
+# Tool slots - for gathering tools
+var equipped_axe: Dictionary = {}  # Axe slot for tree chopping
+var equipped_pickaxe: Dictionary = {}  # Pickaxe slot for rock mining
+
 # ============================================
 # SIGNALS
 # ============================================
@@ -20,6 +24,10 @@ var suppress_signals: bool = false  # Flag to suppress signal emissions
 signal inventory_changed()
 signal item_added(item: Dictionary)
 signal item_removed(item: Dictionary, slot: int)
+signal axe_equipped(axe: Dictionary)
+signal axe_unequipped(axe: Dictionary)
+signal pickaxe_equipped(pickaxe: Dictionary)
+signal pickaxe_unequipped(pickaxe: Dictionary)
 
 # ============================================
 # INITIALIZATION
@@ -146,3 +154,99 @@ func print_inventory() -> void:
 	"""Debug: Print all inventory contents"""
 	for i in range(inventory_items.size()):
 		var item = inventory_items[i]
+
+# ============================================
+# TOOL SLOT MANAGEMENT
+# ============================================
+
+func equip_axe(axe: Dictionary) -> bool:
+	"""Equip an axe to the axe slot"""
+	if axe.is_empty():
+		return false
+
+	# Check if it's a valid axe
+	if axe.get("type", "") != "tool" or axe.get("tool_type", "") != "axe":
+		print("⚠️ Cannot equip non-axe item to axe slot")
+		return false
+
+	# If there's already an axe equipped, unequip it first
+	if not equipped_axe.is_empty():
+		if not unequip_axe():
+			return false
+
+	# Equip the new axe
+	equipped_axe = axe.duplicate()
+	axe_equipped.emit(axe)
+	print("🪓 Equipped axe: ", axe.get("name", "Unknown"))
+	return true
+
+func unequip_axe() -> bool:
+	"""Unequip the current axe and add it back to inventory"""
+	if equipped_axe.is_empty():
+		return false
+
+	# Try to add axe back to inventory
+	var axe_copy = equipped_axe.duplicate()
+	if add_item(axe_copy):
+		var old_axe = equipped_axe.duplicate()
+		equipped_axe = {}
+		axe_unequipped.emit(old_axe)
+		print("🪓 Unequipped axe: ", old_axe.get("name", "Unknown"))
+		return true
+	else:
+		print("⚠️ Cannot unequip axe - inventory full")
+		return false
+
+func equip_pickaxe(pickaxe: Dictionary) -> bool:
+	"""Equip a pickaxe to the pickaxe slot"""
+	if pickaxe.is_empty():
+		return false
+
+	# Check if it's a valid pickaxe
+	if pickaxe.get("type", "") != "tool" or pickaxe.get("tool_type", "") != "pickaxe":
+		print("⚠️ Cannot equip non-pickaxe item to pickaxe slot")
+		return false
+
+	# If there's already a pickaxe equipped, unequip it first
+	if not equipped_pickaxe.is_empty():
+		if not unequip_pickaxe():
+			return false
+
+	# Equip the new pickaxe
+	equipped_pickaxe = pickaxe.duplicate()
+	pickaxe_equipped.emit(pickaxe)
+	print("⛏️ Equipped pickaxe: ", pickaxe.get("name", "Unknown"))
+	return true
+
+func unequip_pickaxe() -> bool:
+	"""Unequip the current pickaxe and add it back to inventory"""
+	if equipped_pickaxe.is_empty():
+		return false
+
+	# Try to add pickaxe back to inventory
+	var pickaxe_copy = equipped_pickaxe.duplicate()
+	if add_item(pickaxe_copy):
+		var old_pickaxe = equipped_pickaxe.duplicate()
+		equipped_pickaxe = {}
+		pickaxe_unequipped.emit(old_pickaxe)
+		print("⛏️ Unequipped pickaxe: ", old_pickaxe.get("name", "Unknown"))
+		return true
+	else:
+		print("⚠️ Cannot unequip pickaxe - inventory full")
+		return false
+
+func has_axe_equipped() -> bool:
+	"""Check if an axe is equipped"""
+	return not equipped_axe.is_empty()
+
+func has_pickaxe_equipped() -> bool:
+	"""Check if a pickaxe is equipped"""
+	return not equipped_pickaxe.is_empty()
+
+func get_equipped_axe() -> Dictionary:
+	"""Get the currently equipped axe"""
+	return equipped_axe
+
+func get_equipped_pickaxe() -> Dictionary:
+	"""Get the currently equipped pickaxe"""
+	return equipped_pickaxe

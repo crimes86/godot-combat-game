@@ -23,6 +23,7 @@ const SLOT_BG = Color(0.10, 0.08, 0.06, 0.8)  # Darker leather inset
 @onready var vendor_name_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/VendorName
 @onready var gold_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/GoldLabel
 @onready var weapons_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Weapons/ScrollContainer/WeaponsList
+@onready var tools_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Tools/ScrollContainer/ToolsList
 @onready var armor_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Armor/ScrollContainer/ArmorList
 @onready var sell_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Sell/ScrollContainer/SellList
 @onready var close_button: Button = $Control/Panel/MarginContainer/VBoxContainer/Header/CloseButton
@@ -119,6 +120,7 @@ func open_shop(vendor_node: Vendor) -> void:
 
 	update_gold_display()
 	populate_weapons()
+	populate_tools()
 	populate_armor()
 	populate_sell_items()
 
@@ -152,6 +154,7 @@ func _on_gold_changed(_amount: int, total: int) -> void:
 	# Refresh shop items to update buy button states
 	if vendor and visible:
 		populate_weapons()
+		populate_tools()
 		populate_armor()
 
 func populate_weapons() -> void:
@@ -192,6 +195,38 @@ func populate_weapons() -> void:
 		print("   ✅ Weapon row added to list")
 
 	print("✅ Weapons populated: %d items" % weapons_list.get_child_count())
+
+func populate_tools() -> void:
+	"""Populate the tools list"""
+	if not tools_list:
+		return
+
+	# Clear existing items
+	for child in tools_list.get_children():
+		child.queue_free()
+
+	# Add tool items
+	for i in range(vendor.tools_for_sale.size()):
+		var tool_data = vendor.tools_for_sale[i]
+		var price = tool_data.get("price", 0)
+		var tool_name = tool_data.get("name", "Unknown")
+		var tool_type = tool_data.get("tool_type", "tool").capitalize()
+
+		var item_row = create_item_row(
+			tool_name,
+			tool_data.get("description", ""),
+			price,
+			"Type: %s | Efficiency: %.0f%% | Durability: %d" % [
+				tool_type,
+				tool_data.get("efficiency", 1.0) * 100,
+				tool_data.get("durability", 100)
+			],
+			1,  # Tools have no level requirement
+			get_armor_rarity_color(tool_data.get("rarity", "COMMON")),
+			func(): purchase_tool(i)
+		)
+
+		tools_list.add_child(item_row)
 
 func populate_armor() -> void:
 	"""Populate the armor list"""
@@ -408,6 +443,51 @@ func purchase_armor(index: int) -> void:
 		update_gold_display()
 		populate_armor()
 		populate_sell_items()
+	else:
+		show_message("Cannot purchase this item!", Color.RED)
+
+func purchase_tool(index: int) -> void:
+	"""Attempt to purchase a tool"""
+	if not vendor:
+		return
+
+	if index < 0 or index >= vendor.tools_for_sale.size():
+		return
+
+	var tool_data = vendor.tools_for_sale[index]
+	var price = tool_data.get("price", 0)
+	var tool_name = tool_data.get("name", "Unknown")
+	var tool_rarity = tool_data.get("rarity", "COMMON")
+
+	# Check gold (skip check if item is free)
+	if price > 0 and not CharacterStats.can_afford(price):
+		show_message("Not enough gold!", Color.RED)
+		return
+
+	# Purchase successful
+	if price == 0 or CharacterStats.spend_gold(price):
+		# Add tool to inventory
+		InventorySystem.add_item(tool_data)
+
+		# Show item added notification
+		NotificationManager.notify_item_added(tool_name, 1, tool_rarity)
+
+		item_purchased.emit(tool_name, price)
+
+		# Play gold loot sound
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -5.0)
+
+		# Refresh the UI
+		update_gold_display()
+		populate_tools()
+		populate_sell_items()
+
+		if price == 0:
+			show_message("Took %s (free)!" % tool_name, Color.GREEN)
+		else:
+			show_message("Purchased %s!" % tool_name, Color.GREEN)
 	else:
 		show_message("Cannot purchase this item!", Color.RED)
 
