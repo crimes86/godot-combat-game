@@ -34,7 +34,7 @@ const SLOT_BG = Color(0.10, 0.08, 0.06, 0.8)  # Darker leather inset
 const BUFF_COLOR = Color(0.3, 0.8, 0.3, 1.0)  # Sickly green for buffs
 const DEBUFF_COLOR = Color(0.8, 0.3, 0.2, 1.0)  # Rust red for debuffs
 
-# Animation timing (snappy for rhythm combat)
+# Animation timing (snappy for fast-paced combat)
 const ANIM_SPEED = 0.1
 
 func _ready() -> void:

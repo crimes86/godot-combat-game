@@ -163,7 +163,7 @@ func get_max_health() -> float:
 
 func get_base_crit_chance() -> float:
 	"""Calculate crit chance from luck + weapon"""
-	# Base formula: 1% at 10 LUCK, +0.6% per point (for rhythm combat)
+	# Base formula: 1% at 10 LUCK, +0.6% per point (for fast-paced combat)
 	var stat_crit = 0.01 + (luck - 10) * 0.006  # 16% at 35 LUCK (level 25+)
 
 	# Add weapon bonus

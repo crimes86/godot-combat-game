@@ -8,8 +8,8 @@ from PIL import Image
 import os
 
 # Base path to skeletal guardian animations
-BASE_PATH = r"C:\Users\kevin\OneDrive\fantom\mmo\rhythmrpg\assets\characters\skeletal_guardian\standard"
-OUTPUT_PATH = r"C:\Users\kevin\OneDrive\fantom\mmo\rhythmrpg\assets\characters\skeletal_guardian"
+BASE_PATH = r"C:\Users\kevin\OneDrive\fantom\mmo\wasteland\assets\characters\skeletal_guardian\standard"
+OUTPUT_PATH = r"C:\Users\kevin\OneDrive\fantom\mmo\wasteland\assets\characters\skeletal_guardian"
 
 # Layer order (bottom to top) - numeric prefix determines order
 LAYERS_WALK = [

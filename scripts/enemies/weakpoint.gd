@@ -169,7 +169,7 @@ func calculate_hitbox_radius() -> float:
 	return clamp(radius, min_radius, base_radius)
 
 func start_heartbeat_pulse() -> void:
-	"""Heartbeat pulse - thump-thump rhythm like a vital organ"""
+	"""Heartbeat pulse - thump-thump pattern like a vital organ"""
 	if not sprite or not glow_sprite:
 		return
 

@@ -98,7 +98,7 @@ Slow (Warhammer):  34 dmg × 0.77 = 26.2 DPS | 9.3% × 0.77 = 0.072 crit/sec
 - Mid-tier pricing (400-650g)
 - ALL weapons balanced at ~26 DPS
 - After Zone 2 grinding (450-900g), can buy 1-2 weapons
-- Perfect balance: choice is gameplay feel (fast rhythm vs heavy hits), not power
+- Perfect balance: choice is gameplay feel (fast attacks vs heavy hits), not power
 
 ### Zone 3: Shadow Realm Vendor
 

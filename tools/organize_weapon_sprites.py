@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 
 LPC_ROOT = Path(r"C:\lpc-generator-full\Universal-LPC-Spritesheet-Character-Generator-master\spritesheets\weapon")
-GAME_WEAPONS = Path(r"C:\Users\kevin\OneDrive\fantom\mmo\rhythmrpg\assets\weapons")
+GAME_WEAPONS = Path(r"C:\Users\kevin\OneDrive\fantom\mmo\wasteland\assets\weapons")
 
 # Weapon definitions
 WEAPONS = {

@@ -39,7 +39,7 @@ const CRIT_DAMAGE_MULTIPLIER: float = 2.0  # Weakpoint damage multiplier
 # ============================================
 
 # Enemy Level Scaling Formulas
-const ENEMY_BASE_HEALTH: float = 100.0  # Base health at level 1 (scales for rhythm combat)
+const ENEMY_BASE_HEALTH: float = 100.0  # Base health at level 1 (scales for fast-paced combat)
 const ENEMY_HEALTH_SCALING: float = 1.27  # 27% exponential health growth per level
 const ENEMY_BASE_DAMAGE: float = 5.0  # Base damage at level 1
 const ENEMY_DAMAGE_SCALING: float = 1.11  # 11% exponential damage growth per level

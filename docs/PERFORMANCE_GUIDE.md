@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide documents the performance optimizations implemented in RhythmRPG to achieve smooth 60fps gameplay, especially on lower-end hardware like laptops. The game previously ran at ~20fps on laptops due to inefficient rendering and update loops.
+This guide documents the performance optimizations implemented in Wasteland to achieve smooth 60fps gameplay, especially on lower-end hardware like laptops. The game previously ran at ~20fps on laptops due to inefficient rendering and update loops.
 
 **Performance Goal:** Stable 60fps on mid-range laptops
 

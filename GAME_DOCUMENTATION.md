@@ -1,4 +1,4 @@
-# Rhythm RPG - Game Documentation
+# Wasteland - Game Documentation
 
 ## World System
 
@@ -2693,4 +2693,4 @@ The game has a **fully functional 5-layer modular armor system**:
 
 ---
 
-This documentation reflects the current state of the Rhythm RPG build.
+This documentation reflects the current state of the Wasteland build.

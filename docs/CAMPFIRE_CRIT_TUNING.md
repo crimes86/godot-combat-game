@@ -13,7 +13,7 @@
 
 ### **TOTAL CURRENT CRIT: 13.5%** (6.4% base + 7.1% weapon)
 - This means **~1 crit every 7-8 attacks**
-- Feels: Infrequent crit windows, low rhythm
+- Feels: Infrequent crit windows, low tempo
 
 ---
 
@@ -28,10 +28,10 @@
 
 | Buff Level | Crit Chance | Attacks Per Crit | Feel |
 |-----------|-------------|------------------|------|
-| **No Campfire** | 13.5% | ~7-8 attacks | Lackluster, slow rhythm |
+| **No Campfire** | 13.5% | ~7-8 attacks | Lackluster, slow tempo |
 | **Low Bone Chips (25%)** | 17% | ~6 attacks | Slightly better |
 | **Medium Bone Chips (50%)** | 21% | ~5 attacks | Noticeable improvement |
-| **High Bone Chips (75%)** | 25% | ~4 attacks | Strong rhythm |
+| **High Bone Chips (75%)** | 25% | ~4 attacks | Strong tempo |
 | **Max Bone Chips (100%)** | 30% | ~3-4 attacks | Excellent farming spot |
 
 ### Proposed Buff Values
@@ -137,7 +137,7 @@ Current 13.5% already feels lackluster without buffs, which is perfect. No base 
 
 ### Why +16.5% Max Buff?
 - 30% total crit = 1 crit every ~3 attacks
-- Feels like "excellent farming spot" rhythm
+- Feels like "excellent farming spot" tempo
 - Not too overpowered (still need skill for weakpoints)
 - Leaves room for scaling at higher levels
 

@@ -64,7 +64,7 @@ func _ready():
     save_timer.start()
 
     print("═══════════════════════════════════")
-    print("  RHYTHM RPG SERVER STARTED")
+    print("  WASTELAND SERVER STARTED")
     print("  Port: %d" % SERVER_PORT)
     print("  Max Players: %d" % MAX_PLAYERS)
     print("  Tick Rate: %d Hz" % TICK_RATE)
@@ -470,14 +470,14 @@ CMD ["./server.x86_64", "--dedicated-server"]
 ### Systemd Service (Linux VPS)
 ```ini
 [Unit]
-Description=Rhythm RPG Server
+Description=Wasteland Server
 After=network.target
 
 [Service]
 Type=simple
 User=gameserver
-WorkingDirectory=/opt/rhythmrpg
-ExecStart=/opt/rhythmrpg/server.x86_64 --dedicated-server
+WorkingDirectory=/opt/wasteland
+ExecStart=/opt/wasteland/server.x86_64 --dedicated-server
 Restart=always
 RestartSec=10
 
@@ -488,11 +488,11 @@ WantedBy=multi-user.target
 ### Monitoring & Logs
 ```bash
 # View logs
-journalctl -u rhythmrpg -f
+journalctl -u wasteland -f
 
 # Check status
-systemctl status rhythmrpg
+systemctl status wasteland
 
 # Restart server
-systemctl restart rhythmrpg
+systemctl restart wasteland
 ```

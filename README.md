@@ -1,6 +1,6 @@
-# Rhythm RPG - Documentation Index
+# Wasteland - Documentation Index
 
-A fast-paced action RPG with rhythm-based combat mechanics, featuring a unique critical hit weakpoint system and chain multipliers.
+A fast-paced action RPG featuring a unique critical hit weakpoint system and chain multipliers.
 
 ## Quick Start
 
