@@ -1,0 +1,112 @@
+{
+  "exportTimestamp": "2025-11-24T04-23-04",
+  "bodyType": "male",
+  "standardAnimations": {
+    "exported": {
+      "spellcast": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "thrust": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "walk": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "slash": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "shoot": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "hurt": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "climb": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "idle": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "jump": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "sit": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "emote": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "run": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "watering": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "combat": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "1h_slash": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "1h_backslash": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ],
+      "1h_halfslash": [
+        "101 neutral__light_.png",
+        "140 smash__pickaxe_.png"
+      ]
+    },
+    "failed": {
+      "spellcast": [],
+      "thrust": [],
+      "walk": [],
+      "slash": [],
+      "shoot": [],
+      "hurt": [],
+      "climb": [],
+      "idle": [],
+      "jump": [],
+      "sit": [],
+      "emote": [],
+      "run": [],
+      "watering": [],
+      "combat": [],
+      "1h_slash": [],
+      "1h_backslash": [],
+      "1h_halfslash": []
+    }
+  },
+  "customAnimations": {
+    "exported": {
+      "slash_128": [
+        "140 tool_smash_.png",
+        "140 tool_smash_.png"
+      ],
+      "slash": []
+    },
+    "failed": {
+      "slash": [
+        "101 face_neutral_.png",
+        "140 tool_smash_.png"
+      ]
+    }
+  },
+  "frameSize": 64,
+  "frameCounts": {}
+}

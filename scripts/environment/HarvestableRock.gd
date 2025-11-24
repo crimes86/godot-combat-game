@@ -22,6 +22,8 @@ var cancel_grace_period: float = 0.15  # 0.15 second grace period
 
 # Cache for performance - only check when player is in range
 var current_prompt_text: String = ""
+var prompt_fade_timer: float = 0.0  # Timer to fade out "Requires Pickaxe" message
+var prompt_fade_duration: float = 3.0  # Show message for 3 seconds
 
 # Respawn
 var respawn_time: float = 180.0  # 3 minutes to respawn
@@ -95,7 +97,7 @@ func _physics_process(delta: float) -> void:
 		if has_pickaxe:
 			new_prompt_text = "Hold [F] Mine Rock"
 		else:
-			new_prompt_text = "Need Pickaxe"
+			new_prompt_text = "Requires Pickaxe"  # Changed from "Need Pickaxe"
 
 		# Only update text and color if it actually changed
 		if new_prompt_text != current_prompt_text:
@@ -103,16 +105,38 @@ func _physics_process(delta: float) -> void:
 			interaction_prompt.text = new_prompt_text
 			if has_pickaxe:
 				interaction_prompt.add_theme_color_override("font_color", Color(0.8, 1.0, 0.8))  # Light green
+				prompt_fade_timer = 0.0  # Reset fade timer when showing action prompt
 			else:
 				interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))  # Light red
+				prompt_fade_timer = 0.0  # Start fade timer for "Requires Pickaxe"
 
-		# Show/hide prompt
-		var should_show = has_pickaxe  # Only show if has pickaxe
-		if not has_pickaxe:
-			should_show = true  # Show "Need Pickaxe" message too
+		# Handle fade-out for "Requires Pickaxe" message
+		if not has_pickaxe and interaction_prompt.visible:
+			prompt_fade_timer += delta
+			if prompt_fade_timer >= prompt_fade_duration:
+				# Fade out the message
+				var alpha = 1.0 - ((prompt_fade_timer - prompt_fade_duration) / 1.0)
+				alpha = clamp(alpha, 0.0, 1.0)
+				interaction_prompt.modulate.a = alpha
+
+				# Hide completely after fade
+				if alpha <= 0.0:
+					interaction_prompt.visible = false
+					prompt_fade_timer = 0.0
+			else:
+				interaction_prompt.modulate.a = 1.0  # Full opacity during display time
+		else:
+			interaction_prompt.modulate.a = 1.0  # Reset opacity for action prompts
+
+		# Show/hide prompt logic
+		var should_show = has_pickaxe  # Show if has pickaxe
+		if not has_pickaxe and prompt_fade_timer < (prompt_fade_duration + 1.0):
+			should_show = true  # Show "Requires Pickaxe" until fade complete
 
 		if should_show != interaction_prompt.visible:
 			interaction_prompt.visible = should_show
+			if should_show and not has_pickaxe:
+				prompt_fade_timer = 0.0  # Reset timer when reshowing
 
 		# Update position every frame when visible
 		if interaction_prompt.visible:
@@ -145,6 +169,7 @@ func _physics_process(delta: float) -> void:
 				# Play mine sound periodically during mining
 				if last_mine_sound_time >= mine_sound_interval:
 					play_random_mine_sound()
+					trigger_player_harvest_animation("pickaxe")  # Play animation with each strike
 					last_mine_sound_time = 0.0
 
 				# Update progress circle
@@ -364,6 +389,9 @@ func start_mining() -> void:
 
 	print("⛏️ Started mining rock")
 
+	# Trigger player pickaxe animation
+	trigger_player_harvest_animation("pickaxe")
+
 	# Play first mine sound immediately
 	play_random_mine_sound()
 
@@ -381,6 +409,9 @@ func cancel_mining() -> void:
 	if mine_audio_player and mine_audio_player.playing:
 		mine_audio_player.stop()
 
+	# Return player to idle animation
+	stop_player_harvest_animation()
+
 func complete_mine() -> void:
 	"""Complete the mine after progress reaches 100%"""
 	is_mining = false
@@ -396,6 +427,9 @@ func complete_mine() -> void:
 		mine_audio_player.stop()
 
 	play_random_break_sound()
+
+	# Return player to idle animation
+	stop_player_harvest_animation()
 
 	# Now actually mine the rock
 	mine_rock()
@@ -478,11 +512,16 @@ func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = true
+		prompt_fade_timer = 0.0  # Reset fade timer when entering range
 
 func _on_body_exited(body: Node2D) -> void:
 	"""Player left interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
+		prompt_fade_timer = 0.0  # Reset fade timer when leaving
+		if interaction_prompt:
+			interaction_prompt.visible = false
+			interaction_prompt.modulate.a = 1.0  # Reset opacity
 
 # TODO: Implement when mining sounds are ready
 func play_random_mine_sound() -> void:
@@ -492,3 +531,65 @@ func play_random_mine_sound() -> void:
 func play_random_break_sound() -> void:
 	"""Play a random rock breaking sound"""
 	pass  # Placeholder for future audio
+
+func trigger_player_harvest_animation(tool_type: String) -> void:
+	"""Trigger the player's tool animation for harvesting"""
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		return
+
+	# Get the player's character sprite
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	if not character_sprite:
+		return
+
+	# Get the player's current facing direction from their animation
+	var current_anim = character_sprite.animation
+	var anim_direction = "down"  # Default
+
+	# Extract direction from current animation (e.g., "idle_south" -> "south", "walk_east" -> "east")
+	if current_anim:
+		var parts = current_anim.split("_")
+		if parts.size() >= 2:
+			var lpc_dir = parts[1]  # Get the direction part
+			# Convert from LPC format (north/south/east/west) to simple format (up/down/right/left)
+			match lpc_dir:
+				"north": anim_direction = "up"
+				"south": anim_direction = "down"
+				"east": anim_direction = "right"
+				"west": anim_direction = "left"
+				_: anim_direction = "down"
+
+	# Play the slash animation with the tool
+	if character_sprite.has_method("play_harvest_animation"):
+		character_sprite.play_harvest_animation(tool_type, anim_direction)
+	elif character_sprite.has_method("play"):
+		# Fallback to standard slash animation
+		character_sprite.play("slash_" + anim_direction)
+
+func stop_player_harvest_animation() -> void:
+	"""Stop the player's harvest animation and return to idle"""
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		return
+
+	# Get the player's character sprite
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	if not character_sprite:
+		return
+
+	# Return to idle animation
+	if character_sprite.has_method("stop_harvest_animation"):
+		character_sprite.stop_harvest_animation()
+	elif character_sprite.has_method("play"):
+		# Get current direction from animation name
+		var current_anim = character_sprite.animation
+		var direction = "down"  # Default
+		if "up" in current_anim:
+			direction = "up"
+		elif "left" in current_anim:
+			direction = "left"
+		elif "right" in current_anim:
+			direction = "right"
+
+		character_sprite.play("idle_" + direction)

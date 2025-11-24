@@ -23,6 +23,8 @@ var cancel_grace_period: float = 0.15  # 0.15 second grace period
 
 # Cache for performance - only check when player is in range
 var current_prompt_text: String = ""
+var prompt_fade_timer: float = 0.0  # Timer to fade out "Requires Axe" message
+var prompt_fade_duration: float = 3.0  # Show message for 3 seconds
 
 # Respawn
 var respawn_time: float = 120.0  # 2 minutes to respawn
@@ -41,7 +43,7 @@ var wood_amount: int = 0  # Set based on tree size (1-3 wood)
 var chop_audio_player: AudioStreamPlayer = null
 var fall_audio_player: AudioStreamPlayer = null
 var last_chop_sound_time: float = 0.0
-var chop_sound_interval: float = 0.6  # Play chop sound every 0.6 seconds
+var chop_sound_interval: float = 0.75  # Play chop sound every 0.75 seconds (4 total sounds over 3 seconds)
 
 func _ready() -> void:
 	# Find sprite and shadow from children (created by game_world.gd)
@@ -94,7 +96,7 @@ func _physics_process(delta: float) -> void:
 		if has_axe:
 			new_prompt_text = "Hold [F] Chop Tree"
 		else:
-			new_prompt_text = "Need Axe"
+			new_prompt_text = "Requires Axe"  # Changed from "Need Axe"
 
 		# Only update text and color if it actually changed (avoid expensive theme override calls)
 		if new_prompt_text != current_prompt_text:
@@ -102,16 +104,38 @@ func _physics_process(delta: float) -> void:
 			interaction_prompt.text = new_prompt_text
 			if has_axe:
 				interaction_prompt.add_theme_color_override("font_color", Color(0.8, 1.0, 0.8))  # Light green
+				prompt_fade_timer = 0.0  # Reset fade timer when showing action prompt
 			else:
 				interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))  # Light red
+				prompt_fade_timer = 0.0  # Start fade timer for "Requires Axe"
 
-		# Show/hide prompt
-		var should_show = has_axe  # Only show if has axe
-		if not has_axe:
-			should_show = true  # Show "Need Axe" message too
+		# Handle fade-out for "Requires Axe" message
+		if not has_axe and interaction_prompt.visible:
+			prompt_fade_timer += delta
+			if prompt_fade_timer >= prompt_fade_duration:
+				# Fade out the message
+				var alpha = 1.0 - ((prompt_fade_timer - prompt_fade_duration) / 1.0)
+				alpha = clamp(alpha, 0.0, 1.0)
+				interaction_prompt.modulate.a = alpha
+
+				# Hide completely after fade
+				if alpha <= 0.0:
+					interaction_prompt.visible = false
+					prompt_fade_timer = 0.0
+			else:
+				interaction_prompt.modulate.a = 1.0  # Full opacity during display time
+		else:
+			interaction_prompt.modulate.a = 1.0  # Reset opacity for action prompts
+
+		# Show/hide prompt logic
+		var should_show = has_axe  # Show if has axe
+		if not has_axe and prompt_fade_timer < (prompt_fade_duration + 1.0):
+			should_show = true  # Show "Requires Axe" until fade complete
 
 		if should_show != interaction_prompt.visible:
 			interaction_prompt.visible = should_show
+			if should_show and not has_axe:
+				prompt_fade_timer = 0.0  # Reset timer when reshowing
 
 		# Update position every frame when visible
 		if interaction_prompt.visible:
@@ -144,6 +168,7 @@ func _physics_process(delta: float) -> void:
 				# Play chop sound periodically during chopping
 				if last_chop_sound_time >= chop_sound_interval:
 					play_random_chop_sound()
+					trigger_player_harvest_animation("axe")  # Play animation with each chop
 					last_chop_sound_time = 0.0
 
 				# Update progress circle
@@ -357,11 +382,18 @@ func start_chopping() -> void:
 	cancel_grace_timer = 0.0  # Reset grace timer
 	last_chop_sound_time = 0.0  # Reset sound timer
 
+	# Start harvest animation immediately
+	trigger_player_harvest_animation("axe")
+
 	if progress_circle:
 		progress_circle.visible = true
 		progress_circle.queue_redraw()
 
-	print("🪓 Started chopping tree")
+	print("🪓 Started chopping tree - WITH ANIMATION SUPPORT!")
+	print("🎬 About to trigger axe animation...")
+
+	# Trigger player axe animation
+	trigger_player_harvest_animation("axe")
 
 	# Play first chop sound immediately
 	play_random_chop_sound()
@@ -380,6 +412,9 @@ func cancel_chopping() -> void:
 	if chop_audio_player and chop_audio_player.playing:
 		chop_audio_player.stop()
 
+	# Return player to idle animation
+	stop_player_harvest_animation()
+
 func complete_chop() -> void:
 	"""Complete the chop after progress reaches 100%"""
 	is_chopping = false
@@ -395,6 +430,9 @@ func complete_chop() -> void:
 		chop_audio_player.stop()
 
 	play_random_fall_sound()
+
+	# Return player to idle animation
+	stop_player_harvest_animation()
 
 	# Now actually chop the tree
 	chop_tree()
@@ -548,11 +586,16 @@ func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = true
+		prompt_fade_timer = 0.0  # Reset fade timer when entering range
 
 func _on_body_exited(body: Node2D) -> void:
 	"""Player left interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
+		prompt_fade_timer = 0.0  # Reset fade timer when leaving
+		if interaction_prompt:
+			interaction_prompt.visible = false
+			interaction_prompt.modulate.a = 1.0  # Reset opacity
 
 func create_audio_players() -> void:
 	"""Create audio players (sounds loaded by TreeAudioManager singleton)"""
@@ -585,3 +628,78 @@ func play_random_fall_sound() -> void:
 	if sound:
 		fall_audio_player.stream = sound
 		fall_audio_player.play()
+
+func trigger_player_harvest_animation(tool_type: String) -> void:
+	"""Trigger the player's tool animation for harvesting"""
+	print("🌲 Tree triggering harvest animation for tool: %s" % tool_type)
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		print("   ❌ No player found!")
+		return
+
+	# Get the player's character sprite
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	if not character_sprite:
+		print("   ❌ No CharacterSprite found on player!")
+		return
+	print("   ✅ Found CharacterSprite: %s" % character_sprite)
+
+	# Get the player's current facing direction from their animation
+	var current_anim = character_sprite.animation
+	var anim_direction = "down"  # Default
+
+	# Extract direction from current animation (e.g., "idle_south" -> "south", "walk_east" -> "east")
+	if current_anim:
+		var parts = current_anim.split("_")
+		if parts.size() >= 2:
+			var lpc_dir = parts[1]  # Get the direction part
+			# Convert from LPC format (north/south/east/west) to simple format (up/down/right/left)
+			match lpc_dir:
+				"north": anim_direction = "up"
+				"south": anim_direction = "down"
+				"east": anim_direction = "right"
+				"west": anim_direction = "left"
+				_: anim_direction = "down"
+			print("   Using player's current facing: %s (from animation: %s)" % [anim_direction, current_anim])
+		else:
+			print("   Could not parse direction from animation: %s" % current_anim)
+	else:
+		print("   No current animation, using default: down")
+
+	# Play the slash animation with the tool
+	if character_sprite.has_method("play_harvest_animation"):
+		print("   ➡️ Calling play_harvest_animation(%s, %s)" % [tool_type, anim_direction])
+		character_sprite.play_harvest_animation(tool_type, anim_direction)
+	elif character_sprite.has_method("play"):
+		# Fallback to standard slash animation
+		print("   ➡️ Fallback: Calling play(%s)" % ("slash_" + anim_direction))
+		character_sprite.play("slash_" + anim_direction)
+	else:
+		print("   ❌ CharacterSprite has no play methods!")
+
+func stop_player_harvest_animation() -> void:
+	"""Stop the player's harvest animation and return to idle"""
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		return
+
+	# Get the player's character sprite
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	if not character_sprite:
+		return
+
+	# Return to idle animation
+	if character_sprite.has_method("stop_harvest_animation"):
+		character_sprite.stop_harvest_animation()
+	elif character_sprite.has_method("play"):
+		# Get current direction from animation name
+		var current_anim = character_sprite.animation
+		var direction = "down"  # Default
+		if "up" in current_anim:
+			direction = "up"
+		elif "left" in current_anim:
+			direction = "left"
+		elif "right" in current_anim:
+			direction = "right"
+
+		character_sprite.play("idle_" + direction)
