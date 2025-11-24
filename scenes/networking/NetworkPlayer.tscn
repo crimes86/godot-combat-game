@@ -1,6 +1,11 @@
-[gd_scene load_steps=2 format=3 uid="uid://bnetwork123"]
+[gd_scene load_steps=3 format=3 uid="uid://bnetwork123"]
 
 [ext_resource type="Script" path="res://scripts/networking/NetworkPlayer.gd" id="1_net"]
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/sync = true
 
 [node name="NetworkPlayer" type="Node2D"]
 script = ExtResource("1_net")
@@ -8,8 +13,3 @@ script = ExtResource("1_net")
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_interval = 0.05
 replication_config = SubResource("SceneReplicationConfig_1")
-
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
-properties/0/path = NodePath(".:position")
-properties/0/spawn = true
-properties/0/sync = true

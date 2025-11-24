@@ -3,10 +3,10 @@ extends Node2D
 
 const ENEMY_SCENE = preload("res://scenes/enemies/enemy.tscn")
 const ChunkBasedPropSystem = preload("res://scripts/systems/ChunkBasedPropSystem.gd")
-const NETWORK_PLAYER_SCENE = preload("res://scenes/networking/NetworkPlayer.tscn")
+# NetworkPlayer scene not needed - using regular player.tscn
 
 # Multiplayer variables
-var players = {}  # Dictionary of player_id: NetworkPlayer node
+var players = {}  # Dictionary of player_id: Player node
 var local_player = null
 
 # Multiplayer-ready spawn manager
