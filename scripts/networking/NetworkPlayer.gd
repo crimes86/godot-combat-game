@@ -90,7 +90,7 @@ func _send_position_update():
 	var anim = _get_current_animation()
 	var health = _get_player_health()
 
-	rpc_unreliable("receive_position_update", pos, anim, health)
+	rpc("receive_position_update", pos, anim, health)
 
 @rpc("any_peer", "call_local", "unreliable_ordered")
 func receive_position_update(pos: Vector2, anim: String, health: int):
