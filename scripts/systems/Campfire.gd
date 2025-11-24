@@ -16,8 +16,8 @@ const Constants = preload("res://scripts/constants.gd")
 # Fuel system constants
 const MAX_WOOD: int = 50  # Max wood logs for healing buff
 const MAX_BONE_EMBERS: int = 100  # Max bone embers for crit buff
-const WOOD_BURN_RATE: float = 1.0 / 30.0  # 1 log per 30 seconds (50 logs = 25 min)
-const BONE_EMBER_BURN_RATE: float = 1.0 / 45.0  # 1 ember per 45 seconds (100 embers = 75 min)
+const WOOD_BURN_RATE: float = 1.0 / 3000.0  # 1 log per 3000 seconds (~50 min, 50 logs = ~41 hours)
+const BONE_EMBER_BURN_RATE: float = 1.0 / 4500.0  # 1 ember per 4500 seconds (~75 min, 100 embers = ~125 hours)
 var wood_decay_accumulator: float = 0.0
 var bone_ember_decay_accumulator: float = 0.0
 

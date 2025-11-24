@@ -1,14 +1,25 @@
 extends Control
 # Main menu for multiplayer demo
 
-@onready var name_input = $VBoxContainer/NameContainer/NameInput
-@onready var host_button = $VBoxContainer/HostButton
-@onready var join_button = $VBoxContainer/JoinButton
-@onready var ip_input = $VBoxContainer/JoinContainer/IPInput
-@onready var join_container = $VBoxContainer/JoinContainer
-@onready var status_label = $VBoxContainer/StatusLabel
+@onready var name_input = $MenuPanel/VBoxContainer/NameContainer/NameInput
+@onready var host_button = $MenuPanel/VBoxContainer/HostButton
+@onready var join_button = $MenuPanel/VBoxContainer/JoinButton
+@onready var ip_input = $MenuPanel/VBoxContainer/JoinContainer/IPInput
+@onready var join_container = $MenuPanel/VBoxContainer/JoinContainer
+@onready var status_label = $MenuPanel/VBoxContainer/StatusLabel
 
 func _ready():
+	# Wait for nodes to be ready
+	await get_tree().process_frame
+
+	# Check if nodes exist
+	if not name_input:
+		push_error("name_input not found! Check node path: MenuPanel/VBoxContainer/NameContainer/NameInput")
+		return
+	if not ip_input:
+		push_error("ip_input not found! Check node path: MenuPanel/VBoxContainer/JoinContainer/IPInput")
+		return
+
 	# Set default values
 	name_input.text = "Player" + str(randi() % 1000)
 	ip_input.text = "127.0.0.1"
@@ -16,8 +27,10 @@ func _ready():
 	status_label.text = ""
 
 	# Connect buttons
-	host_button.pressed.connect(_on_host_pressed)
-	join_button.pressed.connect(_on_join_pressed)
+	if host_button:
+		host_button.pressed.connect(_on_host_pressed)
+	if join_button:
+		join_button.pressed.connect(_on_join_pressed)
 
 	# Connect to NetworkManager signals
 	NetworkManager.connected_to_server.connect(_on_connected)

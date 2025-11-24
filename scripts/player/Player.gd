@@ -444,8 +444,15 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	if not character_sprite:
 		return
 
+	# Don't interrupt harvest animations
+	if character_sprite.has_method("is_harvest_active") and character_sprite.is_harvest_active():
+		return
+
 	# Don't interrupt attack animations
 	if character_sprite.animation and character_sprite.animation.begins_with("slash_") and character_sprite.is_playing():
+		# Debug output to see if this is working
+		if randf() < 0.05:  # Only print occasionally to avoid spam
+			print("   🛡️ Preserving slash animation: %s" % character_sprite.animation)
 		return
 
 	# Get direction (down/up/left/right from old system)

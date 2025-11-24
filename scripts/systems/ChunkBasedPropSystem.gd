@@ -621,7 +621,7 @@ func create_rock_with_shadow(pos: Vector2, prop_type: String, container: Node2D,
 	# Create container for rock + shadow
 	var rock_container = Node2D.new()
 	rock_container.global_position = pos
-	rock_container.z_index = -1
+	rock_container.z_index = -1  # Below player, above ground
 
 	# Random scale
 	var scale_var = rng.randf_range(scale_min, scale_max)
@@ -636,6 +636,7 @@ func create_rock_with_shadow(pos: Vector2, prop_type: String, container: Node2D,
 	sprite.scale = Vector2(scale_var, scale_var)
 	sprite.modulate = Color(0.7, 0.7, 0.7, 1.0)
 	sprite.z_index = 0  # Above shadow
+
 	rock_container.add_child(sprite)
 
 	container.add_child(rock_container)
@@ -701,7 +702,7 @@ func create_tree(pos: Vector2, tree_type: String, container: Node2D, rng: Random
 	tree_node.position = pos
 	tree_node.collision_layer = 2  # Layer 2 for obstacles
 	tree_node.collision_mask = 0
-	tree_node.z_index = 1  # Above all ground layers (which are negative)
+	tree_node.z_index = 10  # Above all player layers (player max z=9)
 
 	# Determine tree size (small trees rare - only 10%)
 	var size_roll = rng.randf()
@@ -757,7 +758,7 @@ void fragment() {
 	sprite.centered = true
 	sprite.scale = Vector2(tree_scale, tree_scale)
 	sprite.flip_h = tree_flipped
-	sprite.z_index = 1  # Above all ground layers
+	sprite.z_index = 10  # Above all player layers (player max z=9)
 
 	# Mix of brown dead trees and white birch healing trees (50/50 split)
 	var is_white_birch = rng.randf() < 0.5
@@ -765,10 +766,10 @@ void fragment() {
 
 	if is_white_birch:
 		# White birch tint for magical healing trees
-		sprite.modulate = Color(color_variation * 1.1, color_variation * 1.15, color_variation * 1.2)  # Slight blue-white tint
+		sprite.modulate = Color(color_variation * 1.1, color_variation * 1.15, color_variation * 1.2, 1.0)
 	else:
 		# Brown tint for dead trees
-		sprite.modulate = Color(color_variation, color_variation * 0.7, color_variation * 0.5)
+		sprite.modulate = Color(color_variation, color_variation * 0.7, color_variation * 0.5, 1.0)
 
 	tree_node.add_child(sprite)
 
@@ -853,11 +854,16 @@ func create_lootable_rock(pos: Vector2, rock_type: String, container: Node2D, rn
 	if not texture:
 		return
 
-	# Create rock node with Area2D for interaction
-	var rock_node = Node2D.new()
+	# Create HarvestableRock for mineable rocks
+	var HarvestableRockClass = preload("res://scripts/environment/HarvestableRock.gd")
+	var rock_node = HarvestableRockClass.new()
 	rock_node.name = "Rock_" + rock_id.replace(":", "_")
 	rock_node.global_position = pos
-	rock_node.z_index = -1
+	rock_node.z_index = -1  # Below player, above ground
+
+	# Set collision layers (layer 2 for obstacles)
+	rock_node.collision_layer = 2
+	rock_node.collision_mask = 0
 
 	# Add shadow under rock (3-layer feathering)
 	add_rock_shadow(rock_node, 1.5, rng)  # Base scale for large rocks
@@ -871,20 +877,23 @@ func create_lootable_rock(pos: Vector2, rock_type: String, container: Node2D, rn
 	sprite.scale = Vector2(scale_var, scale_var)
 	sprite.modulate = Color(0.7, 0.7, 0.7, 1.0)
 	sprite.z_index = 0  # Above shadow
+
 	rock_node.add_child(sprite)
 
-	# Create interaction area (for future looting)
-	var area = Area2D.new()
-	area.name = "InteractionArea"
-	area.collision_layer = 0
-	area.collision_mask = 0
-	rock_node.add_child(area)
-
-	var collision = CollisionShape2D.new()
+	# Add collision shape for the rock body
+	var collision_shape = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
-	shape.radius = 40.0
-	collision.shape = shape
-	area.add_child(collision)
+	shape.radius = 30.0 * scale_var  # Scale collision with rock size
+	collision_shape.shape = shape
+	rock_node.add_child(collision_shape)
+
+	# Set ore amount based on rock size
+	if scale_var < 1.4:
+		rock_node.ore_amount = 1  # Small rocks
+	elif scale_var < 1.7:
+		rock_node.ore_amount = 2  # Medium rocks
+	else:
+		rock_node.ore_amount = 3  # Large rocks
 
 	# Store rock ID for harvest tracking
 	rock_node.set_meta("rock_id", rock_id)

@@ -376,7 +376,9 @@ func update_level_display() -> void:
 		level_label.add_theme_color_override("font_color", Color.WHITE)  # Default white
 		level_label.add_theme_color_override("font_outline_color", Color.BLACK)
 		level_label.add_theme_constant_override("outline_size", 2)
-		level_label.position = Vector2(-15, -55)  # Moved higher to be above health bar
+		level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER  # Center the text
+		level_label.position = Vector2(-50, -55)  # Centered above health bar (100px wide label)
+		level_label.custom_minimum_size = Vector2(100, 0)  # Set label width for centering
 		level_label.z_index = 500
 		level_label.visible = false  # Start hidden, show when player is within 800px
 		add_child(level_label)
@@ -744,9 +746,9 @@ func _process(delta: float) -> void:
 
 				# Stack level label above healthbar when both are visible
 				if show_healthbar:
-					level_label.position = Vector2(-15, -70)  # Push up to sit above healthbar
+					level_label.position = Vector2(-50, -62)  # Push up to sit above healthbar with small gap
 				else:
-					level_label.position = Vector2(-15, -55)  # Normal position when alone
+					level_label.position = Vector2(-50, -55)  # Normal position when alone
 
 			# Update healthbar visibility
 			if health_bar:

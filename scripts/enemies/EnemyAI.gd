@@ -62,6 +62,7 @@ var debug_label: Label = null
 # Patrol state
 var spawn_position: Vector2 = Vector2.ZERO
 var original_spawn_position: Vector2 = Vector2.ZERO  # True spawn point (never changes)
+var spawn_chunk: String = ""  # Chunk where enemy spawned (for chunk-based leashing)
 var patrol_target: Vector2 = Vector2.ZERO
 var is_paused: bool = false
 var pause_timer: float = 0.0
@@ -70,6 +71,8 @@ var pause_timer: float = 0.0
 var is_in_combat: bool = false  # CRITICAL: Only true after player attacks
 var attack_timer: float = 0.0
 var retreat_direction: Vector2 = Vector2.ZERO
+var leash_cooldown_timer: float = 0.0  # Prevent immediate re-aggro after leashing
+const LEASH_COOLDOWN_DURATION: float = 3.0  # 3 second cooldown after leashing
 
 # REMOVED: Deterred state variables - players can now fight at campfire with healing
 
@@ -134,6 +137,7 @@ func _ready() -> void:
 	# Store spawn position for patrol
 	spawn_position = enemy.global_position
 	original_spawn_position = enemy.global_position  # Save the TRUE spawn point
+	spawn_chunk = get_chunk_key(enemy.global_position)  # Save spawn chunk for leashing
 	last_position = enemy.global_position  # Initialize stuck detection
 	
 	# Connect to damage signal to detect player attacks
@@ -172,6 +176,7 @@ func _physics_process(delta: float) -> void:
 	# Update timers
 	state_timer += delta
 	attack_timer = max(0, attack_timer - delta)
+	leash_cooldown_timer = max(0, leash_cooldown_timer - delta)
 	ai_update_timer += delta
 
 	# Cache player reference (look up once, reuse for 1 second)
@@ -361,8 +366,8 @@ func process_patrolling(delta: float) -> void:
 		change_state(State.COMBAT)
 		return
 
-	# Check for player in aggro range (auto-aggro)
-	if player and is_instance_valid(player):
+	# Check for player in aggro range (auto-aggro) - but only if not on leash cooldown
+	if player and is_instance_valid(player) and leash_cooldown_timer <= 0:
 		var distance_to_player = enemy.global_position.distance_to(player.global_position)
 		if distance_to_player <= aggro_range:
 			# AGGRO!
@@ -413,10 +418,10 @@ func process_combat(delta: float) -> void:
 		disengage()
 		return
 
-	# Check leashing - if too far from spawn, return home
-	var distance_from_spawn = enemy.global_position.distance_to(spawn_position)
-	if distance_from_spawn > leash_distance:
-		print("🏠 %s: Leashed (%.0fpx from spawn)" % [enemy.name, distance_from_spawn])
+	# Check chunk-based leashing - if player left spawn chunk, disengage
+	var player_chunk = get_chunk_key(player.global_position)
+	if player_chunk != spawn_chunk:
+		print("🏠 %s: Player left spawn chunk (spawn: %s, player: %s) - disengaging" % [enemy.name, spawn_chunk, player_chunk])
 		disengage()
 		return
 
@@ -771,6 +776,7 @@ func disengage() -> void:
 	"""Exit combat and return to patrol"""
 	print("🔄 %s: Disengaging, resetting health" % enemy.name)
 	is_in_combat = false
+	leash_cooldown_timer = LEASH_COOLDOWN_DURATION  # Prevent immediate re-aggro
 
 	# Regenerate health to full when resetting
 	if enemy.has_method("get") and enemy.has_method("set"):
@@ -848,6 +854,7 @@ func disengage_to_spawn() -> void:
 		return
 
 	is_in_combat = false
+	leash_cooldown_timer = LEASH_COOLDOWN_DURATION  # Prevent immediate re-aggro
 
 	# Regenerate health to full when resetting
 	if enemy.has_method("get") and enemy.has_method("set"):
@@ -1074,3 +1081,13 @@ func update_debug_label_position() -> void:
 		var screen_center = viewport_size / 2
 		var relative_pos = (world_pos - camera_pos) * camera.zoom.x + screen_center
 		debug_label.position = relative_pos - debug_label.size / 2
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CHUNK SYSTEM HELPERS
+# ═══════════════════════════════════════════════════════════════════════════
+
+func get_chunk_key(position: Vector2) -> String:
+	"""Get chunk key for a world position (matches ChunkBasedPropSystem)"""
+	const CHUNK_SIZE = 3000.0
+	var chunk_x = int(floor(position.x / CHUNK_SIZE))
+	return "%d,0" % chunk_x  # Y is always 0 (horizontal chunks only)
