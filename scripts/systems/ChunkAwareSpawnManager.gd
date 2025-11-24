@@ -275,8 +275,9 @@ func update_spawns() -> void:
 	if loaded_chunks.is_empty():
 		return
 
-	# STEP 1: Despawn enemies in unloaded chunks
-	despawn_enemies_in_unloaded_chunks(loaded_chunks)
+	# STEP 1: Despawn enemies in unloaded chunks (disabled in multiplayer)
+	if not multiplayer.has_multiplayer_peer():
+		despawn_enemies_in_unloaded_chunks(loaded_chunks)
 
 	# STEP 2: Spawn enemies in loaded chunks
 	spawn_enemies_in_loaded_chunks(loaded_chunks)

@@ -2027,6 +2027,11 @@ func spawn_all_enemies():
 	"""Initialize chunk-aware spawn manager with dynamic spawning"""
 	print("🎯 Initializing chunk-aware enemy spawning system...")
 
+	# In multiplayer, only server manages enemies
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		print("   ⚠️ Client mode - enemy spawning disabled (server handles it)")
+		return
+
 	# STEP 1: Collect all spawn markers (don't spawn yet)
 	var spawn_markers = collect_spawn_markers()
 	print("   📍 Found %d spawn markers" % spawn_markers.size())
