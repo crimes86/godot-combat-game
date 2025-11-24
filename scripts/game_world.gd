@@ -3505,23 +3505,27 @@ func _setup_multiplayer():
 
 	# If we're already connected (came from menu), spawn players
 	if multiplayer.has_multiplayer_peer():
-		print("Multiplayer active - spawning players")
-		_spawn_initial_players()
+		print("Multiplayer active - will spawn players after world loads")
+		# Delay spawn to ensure world is ready
+		call_deferred("_spawn_initial_players")
 
 func _spawn_initial_players():
 	"""Spawn all connected players"""
-	# Always spawn local player first
+	# Only spawn local player
 	var my_id = multiplayer.get_unique_id()
-	spawn_player(my_id)
 
-	# If we're the server, notify others
+	# Check if not already spawned
+	if not players.has(my_id):
+		spawn_player(my_id)
+		print("Initial spawn for player %d" % my_id)
+
+	# Server handles spawning for connected players
 	if multiplayer.is_server():
-		print("Server: Broadcasting player spawn")
-		# Get all connected players from NetworkManager
 		var connected = NetworkManager.get_player_list()
 		for player_id in connected:
-			if player_id != my_id:
+			if player_id != my_id and not players.has(player_id):
 				spawn_player(player_id)
+				print("Server spawning connected player %d" % player_id)
 
 func _on_player_connected(id: int):
 	"""Handle new player connection"""
@@ -3540,6 +3544,7 @@ func _on_player_disconnected(id: int):
 	print("Player %d disconnected - removing" % id)
 	despawn_player(id)
 
+@rpc("authority", "call_local", "reliable")
 func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO):
 	"""Spawn a player (local or remote)"""
 	if players.has(id):
