@@ -44,8 +44,9 @@ func _on_host_pressed():
 	# Try to host
 	status_label.text = "Creating server..."
 	if NetworkManager.host_game():
-		# Server created, load game world
-		_load_game_world()
+		# Don't load immediately, wait for server to be ready
+		status_label.text = "Server created! Loading..."
+		# Server created signal will trigger the load
 	else:
 		status_label.text = "Failed to create server!"
 
@@ -77,6 +78,7 @@ func _on_connection_failed():
 
 func _on_server_created():
 	status_label.text = "Server created! Loading game..."
+	_load_game_world()
 
 func _load_game_world():
 	# Small delay to ensure network is ready
