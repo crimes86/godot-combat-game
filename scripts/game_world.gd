@@ -3,6 +3,11 @@ extends Node2D
 
 const ENEMY_SCENE = preload("res://scenes/enemies/enemy.tscn")
 const ChunkBasedPropSystem = preload("res://scripts/systems/ChunkBasedPropSystem.gd")
+const NETWORK_PLAYER_SCENE = preload("res://scenes/networking/NetworkPlayer.tscn")
+
+# Multiplayer variables
+var players = {}  # Dictionary of player_id: NetworkPlayer node
+var local_player = null
 
 # Multiplayer-ready spawn manager
 var spawn_manager = null  # SpawnManager (type hint removed for compatibility)
@@ -72,6 +77,9 @@ const TERRAIN_CHECK_INTERVAL = 1.0  # Check every 1s (was 0.3s - less frequent f
 func _ready():
 	DebugConfig.log_spawning("🗺️ GameWorld initializing (viewport-culled terrain system)...")
 	print("   📌 Press F11 to force regenerate baked terrain")
+
+	# Initialize multiplayer
+	_setup_multiplayer()
 
 	# Add performance profiler (press F3 to toggle)
 	var profiler_scene = load("res://scenes/ui/performance_profiler.tscn")
@@ -1710,8 +1718,9 @@ void fragment() {
 	parent.add_child(prop_container)
 
 func create_rock_at_position(parent: Node2D, pos: Vector2, rng: RandomNumberGenerator):
-	# Use StaticBody2D for collision
-	var prop_container = StaticBody2D.new()
+	# Use HarvestableRock for mineable rocks
+	var HarvestableRockClass = preload("res://scripts/environment/HarvestableRock.gd")
+	var prop_container = HarvestableRockClass.new()
 	prop_container.name = "rock_large_at_" + str(pos.x) + "_" + str(pos.y)
 	prop_container.position = pos
 	# Set collision layers (layer 2 for obstacles)
@@ -1793,6 +1802,14 @@ void fragment() {
 	# Position collision at center of rock
 	collision_shape.position = Vector2(0, 0)
 	prop_container.add_child(collision_shape)
+
+	# Set ore amount based on rock size (for HarvestableRock)
+	if rock_scale < 2.0:
+		prop_container.ore_amount = 1  # Small rocks
+	elif rock_scale < 2.75:
+		prop_container.ore_amount = 2  # Medium rocks
+	else:
+		prop_container.ore_amount = 3  # Large rocks
 
 	parent.add_child(prop_container)
 
@@ -3475,3 +3492,128 @@ func create_enemy_spawner(parent: Node, position: Vector2, level: int, count: in
 		# We'll need to modify the spawned enemy's level
 		# This will be handled by connecting to signals or by modifying enemy_spawner.gd
 		pass
+
+# ========================
+# MULTIPLAYER FUNCTIONS
+# ========================
+
+func _setup_multiplayer():
+	"""Initialize multiplayer functionality"""
+	# Connect to NetworkManager signals
+	NetworkManager.player_connected.connect(_on_player_connected)
+	NetworkManager.player_disconnected.connect(_on_player_disconnected)
+
+	# If we're already connected (came from menu), spawn players
+	if multiplayer.has_multiplayer_peer():
+		print("Multiplayer active - spawning players")
+		_spawn_initial_players()
+
+func _spawn_initial_players():
+	"""Spawn all connected players"""
+	# Always spawn local player first
+	var my_id = multiplayer.get_unique_id()
+	spawn_player(my_id)
+
+	# If we're the server, notify others
+	if multiplayer.is_server():
+		print("Server: Broadcasting player spawn")
+		# Get all connected players from NetworkManager
+		var connected = NetworkManager.get_player_list()
+		for player_id in connected:
+			if player_id != my_id:
+				spawn_player(player_id)
+
+func _on_player_connected(id: int):
+	"""Handle new player connection"""
+	if not multiplayer.is_server():
+		return
+
+	print("Player %d connected - spawning" % id)
+	spawn_player(id)
+
+	# Tell the new player about existing players
+	for existing_id in players:
+		rpc_id(id, "spawn_player", existing_id)
+
+func _on_player_disconnected(id: int):
+	"""Handle player disconnection"""
+	print("Player %d disconnected - removing" % id)
+	despawn_player(id)
+
+func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO):
+	"""Spawn a player (local or remote)"""
+	if players.has(id):
+		print("Player %d already spawned" % id)
+		return
+
+	# Default spawn position near campfire
+	if spawn_pos == Vector2.ZERO:
+		spawn_pos = get_spawn_point()
+
+	# Instead of using NETWORK_PLAYER_SCENE, use the existing player scene
+	var player_scene = load("res://scenes/player/player.tscn")
+	if not player_scene:
+		push_error("Failed to load player scene!")
+		return
+
+	var player = player_scene.instantiate()
+	player.name = "Player_" + str(id)
+	player.set_multiplayer_authority(id)
+	player.position = spawn_pos
+
+	# Add to scene
+	add_child(player)
+	players[id] = player
+
+	# Setup local vs remote player
+	if id == multiplayer.get_unique_id():
+		# This is our local player
+		local_player = player
+		player.add_to_group("player")  # Important for existing systems
+
+		# Ensure camera is enabled
+		if player.has_node("Camera2D"):
+			player.get_node("Camera2D").enabled = true
+
+		print("Spawned local player at %s" % spawn_pos)
+	else:
+		# Remote player - disable their input and camera
+		if player.has_method("set_physics_process"):
+			player.set_physics_process(false)
+		if player.has_method("set_process_unhandled_input"):
+			player.set_process_unhandled_input(false)
+		if player.has_node("Camera2D"):
+			player.get_node("Camera2D").enabled = false
+
+		print("Spawned remote player %d at %s" % [id, spawn_pos])
+
+@rpc("any_peer", "call_local", "reliable")
+func despawn_player(id: int):
+	"""Remove a player from the game"""
+	if not players.has(id):
+		return
+
+	players[id].queue_free()
+	players.erase(id)
+
+	if local_player and local_player.get_instance_id() == id:
+		local_player = null
+
+func get_spawn_point() -> Vector2:
+	"""Get a random spawn point near the campfire"""
+	# Spawn around campfire with some randomization
+	var angle = randf() * TAU
+	var distance = 200 + randf() * 100
+	return Vector2(cos(angle) * distance, sin(angle) * distance)
+
+func get_spawn_points() -> Array:
+	"""Get all available spawn points"""
+	var points = []
+
+	# Add campfire area spawns
+	for i in range(4):
+		var angle = (TAU / 4) * i
+		var pos = Vector2(cos(angle) * 250, sin(angle) * 250)
+		points.append(pos)
+
+	return points
