@@ -1873,24 +1873,34 @@ func generate_chest_spawn_points():
 
 		LootSpawnManager.add_chest_spawn_point(chest_pos)
 
-	# Generate scattered chests (off the beaten path)
+	# Generate scattered chests (deep in the wilderness, far from path)
 	for i in range(scattered_chest_count):
 		var attempts = 0
 		var chest_pos = Vector2.ZERO
 		while attempts < 50:
-			chest_pos = Vector2(
-				rng.randf_range(-4000, 8000),
-				rng.randf_range(-2000, 2000)
-			)
+			# Spawn chests in the wilderness zones (north or south of the path)
+			# North wilderness: y from -800 to -2000
+			# South wilderness: y from 800 to 2000
+			var in_north = rng.randf() < 0.5
+			if in_north:
+				chest_pos = Vector2(
+					rng.randf_range(-4000, 8000),
+					rng.randf_range(-2000, -800)  # Deep north wilderness
+				)
+			else:
+				chest_pos = Vector2(
+					rng.randf_range(-4000, 8000),
+					rng.randf_range(800, 2000)  # Deep south wilderness
+				)
 
 			# Avoid campfire area
 			var campfire_pos = CAMPFIRE_POS
-			if chest_pos.distance_to(campfire_pos) < 800:
+			if chest_pos.distance_to(campfire_pos) < 1200:
 				attempts += 1
 				continue
 
-			# Avoid main path (chests should be off the beaten track)
-			if is_position_on_path(chest_pos, 300.0):
+			# Avoid main path with larger buffer (chests should be deep in wilderness)
+			if is_position_on_path(chest_pos, 600.0):
 				attempts += 1
 				continue
 
@@ -2870,14 +2880,15 @@ func spawn_training_dummy():
 	print("🎯 Training Dummy spawned at: ", dummy_pos)
 
 func spawn_bone_clusters(parent: Node2D):
-	"""Spawn clusters of bones and skulls to create larger skeletal remains"""
+	"""Spawn clusters of bones and skulls, plus scattered individual bones everywhere"""
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 12121212
 
 	var clusters_placed = 0
+	var scattered_placed = 0
 
-	# Spawn 40 bone clusters throughout the world (dense population)
-	for i in range(40):
+	# PART 1: Spawn 25 dense bone clusters (concentrated skeletal remains)
+	for i in range(25):
 		var cluster_pos = Vector2(
 			rng.randf_range(-4000, 12000),
 			rng.randf_range(-2500, 2500)
@@ -2892,7 +2903,7 @@ func spawn_bone_clusters(parent: Node2D):
 		var on_lava = false
 		for pool in lava_pool_positions:
 			var dist = cluster_pos.distance_to(pool.pos)
-			var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 150  # Larger buffer for clusters
+			var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 150
 			if dist < pool_radius:
 				on_lava = true
 				break
@@ -2919,7 +2930,7 @@ func spawn_bone_clusters(parent: Node2D):
 				"type": bone_type,
 				"x": bone_pos.x,
 				"y": bone_pos.y,
-				"scale": rng.randf_range(0.8, 1.5),  # Larger bones
+				"scale": rng.randf_range(0.8, 1.5),  # Larger bones in clusters
 				"rotation": rng.randf() * TAU,
 				"flip_h": rng.randf() < 0.5,
 				"z_index": 0,
@@ -2929,7 +2940,49 @@ func spawn_bone_clusters(parent: Node2D):
 
 		clusters_placed += 1
 
-	print("💀 Placed ", clusters_placed, " bone clusters (skeletal remains)")
+	# PART 2: Spawn scattered individual bones across the entire world
+	# These fill in the gaps between clusters for a more natural wasteland feel
+	for i in range(80):
+		var bone_pos = Vector2(
+			rng.randf_range(-4000, 12000),
+			rng.randf_range(-2500, 2500)
+		)
+
+		# Avoid campfire area
+		var campfire_pos = CAMPFIRE_POS
+		if bone_pos.distance_to(campfire_pos) < 500:
+			continue
+
+		# Don't place on lava pools
+		var on_lava = false
+		for pool in lava_pool_positions:
+			var dist = bone_pos.distance_to(pool.pos)
+			var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 100
+			if dist < pool_radius:
+				on_lava = true
+				break
+		if on_lava:
+			continue
+
+		# Scattered bones can be anywhere (including near path for battle aftermath feel)
+		var bone_types = ["skull", "bones"]
+		# More bones than skulls for scattered (70% bones, 30% skulls)
+		var bone_type = "bones" if rng.randf() < 0.7 else "skull"
+
+		var prop_data = {
+			"type": bone_type,
+			"x": bone_pos.x,
+			"y": bone_pos.y,
+			"scale": rng.randf_range(0.5, 1.0),  # Smaller scattered bones
+			"rotation": rng.randf() * TAU,
+			"flip_h": rng.randf() < 0.5,
+			"z_index": 0,
+			"id": 9000 + scattered_placed
+		}
+		create_prop_sprite(prop_data, parent)
+		scattered_placed += 1
+
+	print("💀 Placed ", clusters_placed, " bone clusters + ", scattered_placed, " scattered bones")
 
 func spawn_ground_cracks(parent: Node2D):
 	"""Spawn large cracks in the dark ground areas"""

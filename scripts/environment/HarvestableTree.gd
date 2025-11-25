@@ -39,6 +39,17 @@ var original_scale: Vector2 = Vector2.ONE
 # Resource yield
 var wood_amount: int = 0  # Set based on tree size (1-3 wood)
 
+# Loot system for fallen tree
+var tree_loot: Array = []  # Wood items to loot from fallen tree
+var is_fallen: bool = false  # Tree has fallen and can be looted
+var loot_indicator: Node2D = null  # Sparkle effect
+var loot_ui: ChestLootUI = null  # Reuse chest loot UI
+var fade_timer_started: bool = false  # Track if fade timer has started
+
+# Shake effect
+var shake_tween: Tween = null
+var original_sprite_position: Vector2 = Vector2.ZERO
+
 # Audio - uses TreeAudioManager for shared sounds
 var chop_audio_player: AudioStreamPlayer = null
 var fall_audio_player: AudioStreamPlayer = null
@@ -53,6 +64,7 @@ func _ready() -> void:
 	if tree_sprite:
 		original_modulate = tree_sprite.modulate
 		original_scale = tree_sprite.scale
+		original_sprite_position = tree_sprite.position
 
 		# Determine wood amount based on tree size
 		var tree_scale_avg = (tree_sprite.scale.x + tree_sprite.scale.y) / 2.0
@@ -75,9 +87,31 @@ func _ready() -> void:
 	# Create audio players (sounds are loaded by TreeAudioManager)
 	create_audio_players()
 
+func _unhandled_input(event: InputEvent) -> void:
+	"""Handle F-key input for looting fallen tree"""
+	# Only process F key events
+	if not (event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F):
+		return
+
+	# Debug: Always log when F is pressed
+	print("🪵 F key detected - is_fallen: %s, tree_loot.size(): %d, player_in_range: %s" % [is_fallen, tree_loot.size(), player_in_range])
+
+	if not is_fallen:
+		return
+
+	if tree_loot.size() == 0:
+		return
+
+	if not player_in_range:
+		return
+
+	print("🪵 Fallen tree handling F-key press - opening loot UI")
+	open_loot_ui()
+	get_viewport().set_input_as_handled()
+
 func _physics_process(delta: float) -> void:
-	# Handle respawn timer
-	if is_harvested:
+	# Handle respawn timer (only after tree is fully looted and fading)
+	if is_harvested and fade_timer_started:
 		respawn_timer += delta
 		if respawn_timer >= respawn_time:
 			respawn_tree()
@@ -85,6 +119,27 @@ func _physics_process(delta: float) -> void:
 
 	# Only do expensive checks when player is actually in range
 	if not player_in_range:
+		return
+
+	# FALLEN TREE STATE - Player can loot
+	if is_fallen and tree_loot.size() > 0:
+		# Show loot prompt for fallen tree
+		if interaction_prompt and not is_chopping:
+			var new_prompt_text = "[F] Loot Wood"
+			if new_prompt_text != current_prompt_text:
+				current_prompt_text = new_prompt_text
+				interaction_prompt.text = new_prompt_text
+				interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Golden color
+			interaction_prompt.visible = true
+			interaction_prompt.modulate.a = 1.0
+			update_prompt_position()
+		return
+
+	# STANDING TREE STATE - Player can chop
+	if is_harvested or is_fallen:
+		# Tree is down but no loot - hide prompt
+		if interaction_prompt:
+			interaction_prompt.visible = false
 		return
 
 	# Check if player has axe ONLY when in range (not when far away - major performance improvement)
@@ -456,7 +511,9 @@ func chop_tree() -> void:
 	animate_tree_chop()
 
 func spawn_wood_drops() -> void:
-	"""Spawn wood items at tree base"""
+	"""Generate wood loot for the fallen tree (not added to inventory yet)"""
+	tree_loot.clear()
+
 	var wood_item_data = {
 		"name": "Dry Log",
 		"description": "Dry wood from a dead wasteland tree. Burns well.",
@@ -466,27 +523,244 @@ func spawn_wood_drops() -> void:
 		"quantity": 1
 	}
 
-	# Try to add wood to inventory
+	# Generate wood items as loot (player must loot them)
 	for i in range(wood_amount):
-		if not InventorySystem.add_item(wood_item_data.duplicate()):
-			break
+		tree_loot.append(wood_item_data.duplicate())
+
+	print("🪵 Fallen tree has %d logs to loot" % tree_loot.size())
 
 func animate_tree_chop() -> void:
-	"""Animate tree being chopped down and create stump"""
+	"""Animate tree being chopped down - shake, fall to side, wait for loot"""
 	if not tree_sprite:
 		return
 
 	# Create stump from bottom portion of tree before fading out main tree
 	create_tree_stump()
 
-	# Fade out the main tree (top portion)
-	var tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(tree_sprite, "modulate:a", 0.0, 1.0)  # Fully transparent
-	tween.tween_property(tree_sprite, "position:y", tree_sprite.position.y - 100, 1.0)  # Fall upward (tree falls away)
+	# Kill any existing shake tween
+	if shake_tween and shake_tween.is_valid():
+		shake_tween.kill()
 
-	# Keep shadow visible for the stump
-	# Don't fade the shadow anymore - it stays for the stump
+	# Randomly choose fall direction (left or right)
+	var fall_direction = 1.0 if randf() > 0.5 else -1.0
+	var fall_rotation = fall_direction * deg_to_rad(85)  # Almost 90 degrees
+
+	# Calculate fall offset - tree falls sideways and drops down as it rotates
+	# The tree needs to move down as it falls because the pivot is at center
+	var tree_height = 0.0
+	if tree_sprite.texture:
+		tree_height = tree_sprite.texture.get_height() * tree_sprite.scale.y
+	var fall_offset = Vector2(fall_direction * (tree_height * 0.4), tree_height * 0.3)
+
+	# Store the current position before animation
+	var start_position = tree_sprite.position
+
+	# Create fall animation tween
+	var tween = create_tween()
+
+	# Phase 1: Quick shake/wobble before falling (0.3s)
+	tween.tween_property(tree_sprite, "rotation", fall_direction * deg_to_rad(3), 0.08)
+	tween.tween_property(tree_sprite, "rotation", fall_direction * deg_to_rad(-2), 0.07)
+	tween.tween_property(tree_sprite, "rotation", fall_direction * deg_to_rad(5), 0.08)
+	tween.tween_property(tree_sprite, "rotation", 0.0, 0.07)
+
+	# Phase 2: Tree falls to the side (0.5s) - accelerating fall
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.set_ease(Tween.EASE_IN)
+	tween.set_parallel(true)
+	tween.tween_property(tree_sprite, "rotation", fall_rotation, 0.5)
+	tween.tween_property(tree_sprite, "position", start_position + fall_offset, 0.5)
+
+	# Phase 3: Tree hits ground - stay fully visible until looted
+	tween.set_parallel(false)
+	tween.tween_interval(0.3)  # Brief pause after landing
+
+	# After tree lands, mark as fallen and add sparkle effect (no color fade yet)
+	tween.tween_callback(_on_tree_landed.bind(fall_direction, fall_offset, start_position))
+
+	# Create fallen tree shadow after it hits the ground
+	create_fallen_tree_shadow(fall_direction, fall_offset, start_position)
+
+	# Fade original shadow for stump
+	if tree_shadow:
+		var shadow_tween = create_tween()
+		shadow_tween.tween_interval(0.8)  # Wait for tree to fall
+		shadow_tween.tween_property(tree_shadow, "modulate:a", 0.3, 0.5)  # Partial fade for stump shadow
+
+func _on_tree_landed(fall_direction: float, fall_offset: Vector2, start_position: Vector2) -> void:
+	"""Called when tree has finished falling - enable looting"""
+	is_fallen = true
+	fade_timer_started = false
+
+	# Expand the interaction area to cover the fallen trunk
+	expand_interaction_area_for_fallen_tree(fall_direction, fall_offset)
+
+	# Add sparkle effect at the CENTER of the fallen trunk
+	# fall_offset contains the X (horizontal) and Y (vertical drop) of where tree landed
+	# We want sparkles at middle of trunk horizontally, but lower on Y to be on the fallen tree
+	var sparkle_position = Vector2(
+		fall_offset.x * 0.5,  # Halfway along the horizontal fall
+		fall_offset.y + 20    # At the fallen tree's Y position (plus a bit for visibility)
+	)
+	add_loot_indicator(sparkle_position + start_position)
+
+	print("🌲 Tree landed - ready to loot!")
+
+func expand_interaction_area_for_fallen_tree(fall_direction: float, fall_offset: Vector2) -> void:
+	"""Expand the interaction area to cover the entire fallen trunk"""
+	if not interaction_area:
+		return
+
+	# Remove old collision shape
+	for child in interaction_area.get_children():
+		if child is CollisionShape2D:
+			child.queue_free()
+
+	# Create larger collision area that covers both stump and fallen trunk
+	var collision = CollisionShape2D.new()
+	var shape = CapsuleShape2D.new()
+
+	# Make capsule long enough to cover the fallen tree
+	var tree_height = 200.0  # Default
+	if tree_sprite and tree_sprite.texture:
+		tree_height = tree_sprite.texture.get_height() * tree_sprite.scale.y
+
+	shape.radius = 80.0  # Wide enough to easily interact
+	shape.height = tree_height * 0.6  # Cover most of the trunk length
+
+	collision.shape = shape
+	# Rotate capsule to align with fallen tree direction
+	collision.rotation = fall_direction * deg_to_rad(85)
+	# Position at center of fallen trunk
+	collision.position = fall_offset * 0.5 + Vector2(0, 30)
+
+	interaction_area.add_child(collision)
+
+func add_loot_indicator(fallen_position: Vector2) -> void:
+	"""Add shiny glimmer effect to indicate this fallen tree has loot"""
+	if loot_indicator:
+		return  # Already has indicator
+
+	loot_indicator = Node2D.new()
+	loot_indicator.name = "LootIndicator"
+	loot_indicator.z_index = 10  # Draw on top
+	loot_indicator.position = fallen_position
+
+	# Create 4 small sparkle points positioned above the fallen tree
+	var sparkle_positions = [
+		Vector2(-15, -20),
+		Vector2(15, -20),
+		Vector2(-10, -15),
+		Vector2(10, -15)
+	]
+
+	for i in range(sparkle_positions.size()):
+		var sparkle = create_sparkle()
+		sparkle.position = sparkle_positions[i]
+		loot_indicator.add_child(sparkle)
+
+		# Stagger animation start times for shimmer effect
+		animate_sparkle(sparkle, i * 0.2)
+
+	add_child(loot_indicator)
+
+func create_sparkle() -> Polygon2D:
+	"""Create a single sparkle (4-pointed star)"""
+	var sparkle = Polygon2D.new()
+
+	# Create 4-pointed star shape
+	var size = 6.0
+	var points = PackedVector2Array([
+		Vector2(0, -size),      # Top point
+		Vector2(1, -1),         # Inner top-right
+		Vector2(size, 0),       # Right point
+		Vector2(1, 1),          # Inner bottom-right
+		Vector2(0, size),       # Bottom point
+		Vector2(-1, 1),         # Inner bottom-left
+		Vector2(-size, 0),      # Left point
+		Vector2(-1, -1)         # Inner top-left
+	])
+
+	sparkle.polygon = points
+	sparkle.color = Color(1.0, 1.0, 0.8, 0.9)  # Bright yellow-white
+
+	return sparkle
+
+func animate_sparkle(sparkle: Polygon2D, delay: float) -> void:
+	"""Animate sparkle floating upward and fading out"""
+	# Wait for delay
+	await get_tree().create_timer(delay).timeout
+
+	if not is_instance_valid(sparkle):
+		return
+
+	# Store initial position
+	var start_pos = sparkle.position
+
+	# Create looping animation
+	var tween = create_tween()
+	tween.set_loops()
+
+	# Float up and fade out, then reset
+	tween.tween_property(sparkle, "position:y", start_pos.y - 20, 1.5).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(sparkle, "modulate:a", 0.0, 1.5).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(sparkle, "rotation", TAU * 0.5, 1.5)
+
+	# Reset instantly and wait before next cycle
+	tween.tween_property(sparkle, "position:y", start_pos.y, 0.0)
+	tween.parallel().tween_property(sparkle, "modulate:a", 0.9, 0.0)
+	tween.parallel().tween_property(sparkle, "rotation", 0.0, 0.0)
+	tween.tween_interval(0.5)  # Pause before next shimmer
+
+func remove_loot_indicator() -> void:
+	"""Remove the sparkle effect when loot is taken"""
+	if loot_indicator:
+		loot_indicator.queue_free()
+		loot_indicator = null
+
+func create_fallen_tree_shadow(fall_direction: float, fall_offset: Vector2, tree_start_pos: Vector2) -> void:
+	"""Create a simple shadow under the fallen tree trunk"""
+	if not tree_sprite or not tree_sprite.texture:
+		return
+
+	# Create a simple ellipse shadow using a ColorRect with shader or just a dark sprite
+	var shadow_sprite = Sprite2D.new()
+	shadow_sprite.name = "FallenTreeShadow"
+
+	# Create a simple gradient ellipse shadow image
+	var shadow_width = 120
+	var shadow_height = 30
+	var shadow_img = Image.create(shadow_width, shadow_height, false, Image.FORMAT_RGBA8)
+	shadow_img.fill(Color(0, 0, 0, 0))
+
+	# Draw a soft ellipse shadow
+	var center_x = shadow_width / 2.0
+	var center_y = shadow_height / 2.0
+	for x in range(shadow_width):
+		for y in range(shadow_height):
+			# Ellipse distance calculation
+			var dx = (float(x) - center_x) / (shadow_width / 2.0)
+			var dy = (float(y) - center_y) / (shadow_height / 2.0)
+			var dist = sqrt(dx * dx + dy * dy)
+			if dist < 1.0:
+				# Soft falloff from center
+				var alpha = (1.0 - dist) * 0.25  # Max 25% opacity
+				shadow_img.set_pixel(x, y, Color(0.0, 0.0, 0.0, alpha))
+
+	shadow_sprite.texture = ImageTexture.create_from_image(shadow_img)
+	shadow_sprite.centered = true
+	shadow_sprite.scale = tree_sprite.scale * Vector2(1.5, 1.0)  # Scale with tree
+	shadow_sprite.rotation = fall_direction * deg_to_rad(85)  # Match fallen tree rotation
+	shadow_sprite.position = tree_start_pos + fall_offset + Vector2(fall_direction * 20, 25)  # Under the fallen trunk
+	shadow_sprite.z_index = -1  # Behind everything
+	shadow_sprite.modulate = Color(1, 1, 1, 0)  # Start invisible
+
+	add_child(shadow_sprite)
+
+	# Animate shadow appearing after tree lands (stays until tree fades)
+	var shadow_tween = create_tween()
+	shadow_tween.tween_interval(0.8)  # Wait for tree to land
+	shadow_tween.tween_property(shadow_sprite, "modulate:a", 1.0, 0.3)  # Fade in shadow
 
 func create_tree_stump() -> void:
 	"""Create a tree stump from the bottom section of the tree sprite"""
@@ -561,17 +835,33 @@ func respawn_tree() -> void:
 		return
 
 	is_harvested = false
+	is_fallen = false
+	fade_timer_started = false
 	respawn_timer = 0.0
+	tree_loot.clear()
 
 	# Remove stump if it exists
 	var stump = get_node_or_null("TreeStump")
 	if stump:
 		stump.queue_free()
 
+	# Remove fallen tree shadow if it exists
+	var fallen_shadow = get_node_or_null("FallenTreeShadow")
+	if fallen_shadow:
+		fallen_shadow.queue_free()
+
+	# Remove loot indicator if it exists
+	remove_loot_indicator()
+
+	# Restore original interaction area (small circle at trunk base)
+	restore_interaction_area()
+
 	# Restore tree visual
 	if tree_sprite:
-		# Reset position in case it was animated
-		tree_sprite.position = Vector2.ZERO
+		# Reset position and rotation in case it was animated
+		tree_sprite.position = original_sprite_position
+		tree_sprite.rotation = 0.0
+		tree_sprite.modulate = original_modulate
 		var tween = create_tween()
 		tween.set_parallel(true)
 		tween.tween_property(tree_sprite, "modulate:a", original_modulate.a, 0.5)
@@ -581,6 +871,32 @@ func respawn_tree() -> void:
 	if tree_shadow:
 		var tween2 = create_tween()
 		tween2.tween_property(tree_shadow, "modulate:a", 0.6, 0.5)
+
+func restore_interaction_area() -> void:
+	"""Restore the original small interaction area for standing tree"""
+	if not interaction_area:
+		return
+
+	# Remove expanded collision shape
+	for child in interaction_area.get_children():
+		if child is CollisionShape2D:
+			child.queue_free()
+
+	# Create original small circle at trunk base
+	var collision = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	shape.radius = 60.0
+
+	collision.shape = shape
+	# Position at BASE of tree trunk
+	if tree_sprite:
+		collision.position = Vector2(0, 50 * tree_sprite.scale.y)
+	else:
+		collision.position = Vector2(0, 100)
+
+	interaction_area.add_child(collision)
+
+	print("🌲 Tree respawned!")
 
 func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
@@ -610,7 +926,7 @@ func create_audio_players() -> void:
 	add_child(fall_audio_player)
 
 func play_random_chop_sound() -> void:
-	"""Play a random chopping sound from TreeAudioManager"""
+	"""Play a random chopping sound from TreeAudioManager and shake the tree"""
 	if not chop_audio_player:
 		return
 
@@ -618,6 +934,39 @@ func play_random_chop_sound() -> void:
 	if sound:
 		chop_audio_player.stream = sound
 		chop_audio_player.play()
+
+	# Shake the tree on impact
+	shake_tree()
+
+func shake_tree() -> void:
+	"""Apply a quick shake/jitter effect to the tree sprite"""
+	if not tree_sprite:
+		return
+
+	# Kill any existing shake tween
+	if shake_tween and shake_tween.is_valid():
+		shake_tween.kill()
+
+	# Reset to original position first
+	tree_sprite.position = original_sprite_position
+
+	# Create shake tween - trees sway more horizontally (like being hit)
+	shake_tween = create_tween()
+	shake_tween.set_trans(Tween.TRANS_ELASTIC)
+	shake_tween.set_ease(Tween.EASE_OUT)
+
+	var shake_intensity = 4.0  # Pixels to shake (trees shake more than rocks)
+	var shake_duration = 0.1  # Duration per shake
+
+	# Shake sequence: sway right, left, settle (more horizontal for trees)
+	shake_tween.tween_property(tree_sprite, "position",
+		original_sprite_position + Vector2(shake_intensity, -1), shake_duration)
+	shake_tween.tween_property(tree_sprite, "position",
+		original_sprite_position + Vector2(-shake_intensity * 0.7, 0), shake_duration)
+	shake_tween.tween_property(tree_sprite, "position",
+		original_sprite_position + Vector2(shake_intensity * 0.3, 0), shake_duration * 0.7)
+	shake_tween.tween_property(tree_sprite, "position",
+		original_sprite_position, shake_duration * 0.5)
 
 func play_random_fall_sound() -> void:
 	"""Play a random tree falling sound from TreeAudioManager"""
@@ -703,3 +1052,132 @@ func stop_player_harvest_animation() -> void:
 			direction = "right"
 
 		character_sprite.play("idle_" + direction)
+
+func open_loot_ui() -> void:
+	"""Open the loot UI to let player take wood from fallen tree"""
+	print("🪵 open_loot_ui() called - tree_loot size: %d" % tree_loot.size())
+
+	if tree_loot.size() == 0:
+		print("🪵 No loot to show!")
+		return
+
+	# Don't open if already open
+	if loot_ui and is_instance_valid(loot_ui):
+		print("🪵 Loot UI already open!")
+		return
+
+	# Load the chest loot UI scene (reuse it for tree loot)
+	var loot_scene = load("res://scenes/ui/chest_loot_ui.tscn")
+	if not loot_scene:
+		push_error("Failed to load chest loot UI scene!")
+		return
+
+	loot_ui = loot_scene.instantiate()
+	print("🪵 Loot UI instantiated")
+
+	# Add to scene tree
+	get_tree().root.add_child(loot_ui)
+	print("🪵 Loot UI added to scene tree")
+
+	# Connect signals
+	loot_ui.loot_ui_closed.connect(_on_loot_ui_closed)
+	loot_ui.item_looted.connect(_on_item_looted)
+	loot_ui.all_items_looted.connect(_on_all_items_looted)
+
+	# Open with tree loot - pass a copy to avoid reference issues
+	loot_ui.open_chest_ui(null, tree_loot.duplicate())
+
+	print("🪵 Tree loot UI opened with %d items" % tree_loot.size())
+
+func _on_item_looted(item: Dictionary) -> void:
+	"""Handle individual item being looted"""
+	# Find and remove the item from tree_loot
+	for i in range(tree_loot.size()):
+		if tree_loot[i] == item:
+			tree_loot[i] = null
+			break
+
+	# Check if all loot is taken
+	var has_loot = false
+	for loot_item in tree_loot:
+		if loot_item != null:
+			has_loot = true
+			break
+
+	if not has_loot:
+		_on_all_items_looted()
+
+func _on_all_items_looted() -> void:
+	"""Handle all items being looted from tree"""
+	print("🪵 All wood looted from fallen tree!")
+
+	# Clear the loot array
+	tree_loot.clear()
+
+	# Remove sparkle effect
+	remove_loot_indicator()
+
+	# Hide interaction prompt
+	if interaction_prompt:
+		interaction_prompt.visible = false
+
+	# Start the fade out timer
+	start_fade_out()
+
+func _on_loot_ui_closed() -> void:
+	"""Handle loot UI closing"""
+	print("🪵 Tree loot UI closed")
+
+	# Clean up loot UI reference
+	if loot_ui:
+		loot_ui.queue_free()
+		loot_ui = null
+
+	# Check if all loot was taken
+	var has_loot = false
+	for loot_item in tree_loot:
+		if loot_item != null:
+			has_loot = true
+			break
+
+	if not has_loot:
+		_on_all_items_looted()
+
+func start_fade_out() -> void:
+	"""Start the fade out animation after tree has been looted"""
+	if fade_timer_started:
+		return
+
+	fade_timer_started = true
+
+	# Random time before fading (15-45 seconds)
+	var fade_delay = randf_range(15.0, 45.0)
+
+	print("🌲 Tree will fade in %.1f seconds" % fade_delay)
+
+	# Create tween for fade out
+	var fade_tween = create_tween()
+
+	# First: immediately darken/mute the tree now that it's looted
+	if tree_sprite:
+		fade_tween.tween_property(tree_sprite, "modulate", Color(0.5, 0.45, 0.4, 0.7), 1.0)  # Muted color
+
+	# Then wait the random delay
+	fade_tween.tween_interval(fade_delay)
+
+	# Finally: fade out completely
+	if tree_sprite:
+		fade_tween.tween_property(tree_sprite, "modulate:a", 0.0, 1.5)
+
+	# Fade fallen tree shadow
+	var fallen_shadow = get_node_or_null("FallenTreeShadow")
+	if fallen_shadow:
+		var shadow_tween = create_tween()
+		# Darken shadow immediately too
+		shadow_tween.tween_property(fallen_shadow, "modulate:a", 0.5, 1.0)
+		shadow_tween.tween_interval(fade_delay)
+		shadow_tween.tween_property(fallen_shadow, "modulate:a", 0.0, 1.5)
+		shadow_tween.tween_callback(fallen_shadow.queue_free)
+
+	# Start respawn timer after fade completes
+	fade_tween.tween_callback(func(): respawn_timer = 0.0)

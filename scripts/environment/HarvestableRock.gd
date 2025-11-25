@@ -38,11 +38,23 @@ var original_scale: Vector2 = Vector2.ONE
 # Resource yield
 var ore_amount: int = 0  # Set based on rock size (1-3 ore/stone)
 
+# Loot system for mined rock pile
+var rock_loot: Array = []  # Ore items to loot from rock pile
+var is_mined: bool = false  # Rock has been mined and is now a rock pile
+var loot_indicator: Node2D = null  # Sparkle effect
+var loot_ui: ChestLootUI = null  # Reuse chest loot UI
+var fade_timer_started: bool = false  # Track if fade timer has started
+var rock_pile_sprite: Sprite2D = null  # The rubble/rock pile after mining
+
+# Shake effect
+var shake_tween: Tween = null
+var original_sprite_position: Vector2 = Vector2.ZERO
+
 # Audio
 var mine_audio_player: AudioStreamPlayer = null
 var break_audio_player: AudioStreamPlayer = null
-var mine_sounds: Array[AudioStream] = []  # TODO: Add mining sounds
-var break_sounds: Array[AudioStream] = []  # TODO: Add rock break sounds
+var mine_sounds: Array[AudioStream] = []
+var break_sounds: Array[AudioStream] = []
 var last_mine_sound_time: float = 0.0
 var mine_sound_interval: float = 0.8  # Play mine sound every 0.8 seconds
 
@@ -54,6 +66,7 @@ func _ready() -> void:
 	if rock_sprite:
 		original_modulate = rock_sprite.modulate
 		original_scale = rock_sprite.scale
+		original_sprite_position = rock_sprite.position
 
 		# Determine ore amount based on rock size
 		var rock_scale_avg = (rock_sprite.scale.x + rock_sprite.scale.y) / 2.0
@@ -73,12 +86,31 @@ func _ready() -> void:
 	# Create radial progress circle
 	create_progress_circle()
 
-	# TODO: Load audio files when sounds are ready
-	# load_audio_files()
+	# Load audio files
+	load_audio_files()
+
+func _unhandled_input(event: InputEvent) -> void:
+	"""Handle F-key input for looting mined rock pile"""
+	# Only process F key events
+	if not (event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F):
+		return
+
+	if not is_mined:
+		return
+
+	if rock_loot.size() == 0:
+		return
+
+	if not player_in_range:
+		return
+
+	print("�ite Rock pile handling F-key press - opening loot UI")
+	open_loot_ui()
+	get_viewport().set_input_as_handled()
 
 func _physics_process(delta: float) -> void:
-	# Handle respawn timer
-	if is_harvested:
+	# Handle respawn timer (only after rock pile is looted and fading)
+	if is_harvested and fade_timer_started:
 		respawn_timer += delta
 		if respawn_timer >= respawn_time:
 			respawn_rock()
@@ -86,6 +118,26 @@ func _physics_process(delta: float) -> void:
 
 	# Only do expensive checks when player is actually in range
 	if not player_in_range:
+		return
+
+	# MINED ROCK PILE STATE - Player can loot
+	if is_mined and rock_loot.size() > 0:
+		# Show loot prompt for rock pile
+		if interaction_prompt and not is_mining:
+			var new_prompt_text = "[F] Loot Ore"
+			if new_prompt_text != current_prompt_text:
+				current_prompt_text = new_prompt_text
+				interaction_prompt.text = new_prompt_text
+				interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Golden color
+			interaction_prompt.visible = true
+			interaction_prompt.modulate.a = 1.0
+			update_prompt_position()
+		return
+
+	# STANDING ROCK STATE - already mined but no loot
+	if is_harvested or is_mined:
+		if interaction_prompt:
+			interaction_prompt.visible = false
 		return
 
 	# Check if player has pickaxe ONLY when in range (not when far away)
@@ -193,24 +245,31 @@ func _physics_process(delta: float) -> void:
 			cancel_mining()
 
 func create_interaction_area() -> void:
-	"""Create Area2D to detect player proximity"""
+	"""Create Area2D to detect player proximity from any direction (360 degrees)"""
 	interaction_area = Area2D.new()
 	interaction_area.name = "InteractionArea"
 	interaction_area.collision_layer = 0
 	interaction_area.collision_mask = 1  # Detect player on layer 1
 	add_child(interaction_area)
 
-	# Create interaction area around rock
+	# Create interaction area centered on rock sprite
 	var collision = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
-	shape.radius = 60.0  # Reasonable range around rock
+
+	# Scale radius based on rock size for proper 360-degree coverage
+	if rock_sprite:
+		var rock_scale_avg = (rock_sprite.scale.x + rock_sprite.scale.y) / 2.0
+		shape.radius = 80.0 + (rock_scale_avg * 15.0)  # Larger rocks get bigger interaction radius
+	else:
+		shape.radius = 100.0  # Fallback
+
 	collision.shape = shape
 
-	# Position at BASE of rock (where player sees it)
+	# Center the collision on the rock's visual center (slight offset down for sprite anchor)
 	if rock_sprite:
-		collision.position = Vector2(0, 50 * rock_sprite.scale.y)
+		collision.position = Vector2(0, 20 * rock_sprite.scale.y)  # Smaller offset, more centered
 	else:
-		collision.position = Vector2(0, 100)  # Fallback
+		collision.position = Vector2(0, 30)  # Fallback
 
 	interaction_area.add_child(collision)
 
@@ -453,7 +512,9 @@ func mine_rock() -> void:
 	animate_rock_break()
 
 func spawn_ore_drops() -> void:
-	"""Spawn ore/stone items"""
+	"""Generate ore loot for the rock pile (not added to inventory yet)"""
+	rock_loot.clear()
+
 	var ore_item_data = {
 		"name": "Wasteland Ore",
 		"description": "Rough ore from wasteland rocks. Can be refined or sold.",
@@ -465,26 +526,160 @@ func spawn_ore_drops() -> void:
 		"quantity": 1
 	}
 
-	# Try to add ore to inventory
+	# Generate ore items as loot (player must loot them)
 	for i in range(ore_amount):
-		if not InventorySystem.add_item(ore_item_data.duplicate()):
-			break
+		rock_loot.append(ore_item_data.duplicate())
+
+	print("�ite Rock pile has %d ore to loot" % rock_loot.size())
 
 func animate_rock_break() -> void:
-	"""Animate rock breaking and create rubble"""
+	"""Animate rock imploding into a rock pile"""
 	if not rock_sprite:
 		return
 
-	# Fade out the rock
+	# Create the rock pile first (starts invisible, will appear after implode)
+	create_rock_pile()
+
+	# Implode animation - rock shrinks quickly to center
 	var tween = create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(rock_sprite, "modulate:a", 0.0, 1.0)  # Fully transparent
-	tween.tween_property(rock_sprite, "scale", rock_sprite.scale * 0.5, 1.0)  # Shrink
+	tween.tween_property(rock_sprite, "scale", rock_sprite.scale * 0.1, 0.3).set_ease(Tween.EASE_IN)
+	tween.tween_property(rock_sprite, "modulate:a", 0.0, 0.3)
 
-	# Fade shadow too
+	# Fade shadow quickly
 	if rock_shadow:
-		var tween2 = create_tween()
-		tween2.tween_property(rock_shadow, "modulate:a", 0.0, 1.0)
+		var shadow_tween = create_tween()
+		shadow_tween.tween_property(rock_shadow, "modulate:a", 0.2, 0.3)
+
+	# After implode completes, show rock pile and sparkles
+	tween.set_parallel(false)
+	tween.tween_callback(_on_rock_imploded)
+
+func create_rock_pile() -> void:
+	"""Create a rock pile/rubble sprite from the original rock"""
+	if not rock_sprite or not rock_sprite.texture:
+		return
+
+	# Create rock pile sprite - smaller, darker version of original
+	rock_pile_sprite = Sprite2D.new()
+	rock_pile_sprite.name = "RockPile"
+	rock_pile_sprite.texture = rock_sprite.texture
+	rock_pile_sprite.centered = true
+
+	# Make it smaller (30-40% of original) and squashed to look like rubble
+	var pile_scale = original_scale * randf_range(0.3, 0.4)
+	pile_scale.y *= 0.6  # Squash vertically to look like a pile
+	rock_pile_sprite.scale = pile_scale
+
+	# Position at base of where rock was
+	rock_pile_sprite.position = Vector2(0, original_scale.y * 20)
+
+	# Slightly darker/grayer to look like rubble
+	rock_pile_sprite.modulate = Color(0.7, 0.65, 0.6, 0.0)  # Start invisible
+
+	rock_pile_sprite.z_index = rock_sprite.z_index
+
+	add_child(rock_pile_sprite)
+
+func _on_rock_imploded() -> void:
+	"""Called when rock implode animation completes"""
+	is_mined = true
+	fade_timer_started = false
+
+	# Fade in the rock pile
+	if rock_pile_sprite:
+		var pile_tween = create_tween()
+		pile_tween.tween_property(rock_pile_sprite, "modulate:a", 1.0, 0.2)
+
+	# Add sparkle effect on the rock pile
+	add_loot_indicator()
+
+	print("�ite Rock imploded into pile - ready to loot!")
+
+func add_loot_indicator() -> void:
+	"""Add shiny glimmer effect to indicate rock pile has loot"""
+	if loot_indicator:
+		return  # Already has indicator
+
+	loot_indicator = Node2D.new()
+	loot_indicator.name = "LootIndicator"
+	loot_indicator.z_index = 10  # Draw on top
+
+	# Position sparkles on the rock pile
+	var pile_pos = Vector2(0, original_scale.y * 20)
+	loot_indicator.position = pile_pos
+
+	# Create 4 small sparkle points
+	var sparkle_positions = [
+		Vector2(-10, -15),
+		Vector2(10, -15),
+		Vector2(-6, -10),
+		Vector2(6, -10)
+	]
+
+	for i in range(sparkle_positions.size()):
+		var sparkle = create_sparkle()
+		sparkle.position = sparkle_positions[i]
+		loot_indicator.add_child(sparkle)
+
+		# Stagger animation start times for shimmer effect
+		animate_sparkle(sparkle, i * 0.2)
+
+	add_child(loot_indicator)
+
+func create_sparkle() -> Polygon2D:
+	"""Create a single sparkle (4-pointed star)"""
+	var sparkle = Polygon2D.new()
+
+	# Create 4-pointed star shape
+	var size = 6.0
+	var points = PackedVector2Array([
+		Vector2(0, -size),      # Top point
+		Vector2(1, -1),         # Inner top-right
+		Vector2(size, 0),       # Right point
+		Vector2(1, 1),          # Inner bottom-right
+		Vector2(0, size),       # Bottom point
+		Vector2(-1, 1),         # Inner bottom-left
+		Vector2(-size, 0),      # Left point
+		Vector2(-1, -1)         # Inner top-left
+	])
+
+	sparkle.polygon = points
+	sparkle.color = Color(1.0, 1.0, 0.8, 0.9)  # Bright yellow-white
+
+	return sparkle
+
+func animate_sparkle(sparkle: Polygon2D, delay: float) -> void:
+	"""Animate sparkle floating upward and fading out"""
+	# Wait for delay
+	await get_tree().create_timer(delay).timeout
+
+	if not is_instance_valid(sparkle):
+		return
+
+	# Store initial position
+	var start_pos = sparkle.position
+
+	# Create looping animation
+	var tween = create_tween()
+	tween.set_loops()
+
+	# Float up and fade out, then reset
+	tween.tween_property(sparkle, "position:y", start_pos.y - 20, 1.5).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(sparkle, "modulate:a", 0.0, 1.5).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(sparkle, "rotation", TAU * 0.5, 1.5)
+
+	# Reset instantly and wait before next cycle
+	tween.tween_property(sparkle, "position:y", start_pos.y, 0.0)
+	tween.parallel().tween_property(sparkle, "modulate:a", 0.9, 0.0)
+	tween.parallel().tween_property(sparkle, "rotation", 0.0, 0.0)
+	tween.tween_interval(0.5)  # Pause before next shimmer
+
+func remove_loot_indicator() -> void:
+	"""Remove the sparkle effect when loot is taken"""
+	if loot_indicator:
+		loot_indicator.queue_free()
+		loot_indicator = null
 
 func respawn_rock() -> void:
 	"""Respawn the rock after timer completes"""
@@ -492,12 +687,24 @@ func respawn_rock() -> void:
 		return
 
 	is_harvested = false
+	is_mined = false
+	fade_timer_started = false
 	respawn_timer = 0.0
+	rock_loot.clear()
+
+	# Remove rock pile if it exists
+	if rock_pile_sprite:
+		rock_pile_sprite.queue_free()
+		rock_pile_sprite = null
+
+	# Remove loot indicator if it exists
+	remove_loot_indicator()
 
 	# Restore rock visual
 	if rock_sprite:
 		# Reset position and scale
-		rock_sprite.position = Vector2.ZERO
+		rock_sprite.position = original_sprite_position
+		rock_sprite.modulate = original_modulate
 		var tween = create_tween()
 		tween.set_parallel(true)
 		tween.tween_property(rock_sprite, "modulate:a", original_modulate.a, 0.5)
@@ -507,6 +714,8 @@ func respawn_rock() -> void:
 	if rock_shadow:
 		var tween2 = create_tween()
 		tween2.tween_property(rock_shadow, "modulate:a", 0.6, 0.5)
+
+	print("�ite Rock respawned!")
 
 func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
@@ -523,14 +732,100 @@ func _on_body_exited(body: Node2D) -> void:
 			interaction_prompt.visible = false
 			interaction_prompt.modulate.a = 1.0  # Reset opacity
 
-# TODO: Implement when mining sounds are ready
+func load_audio_files() -> void:
+	"""Load mining and break sound effects"""
+	# Create audio players
+	mine_audio_player = AudioStreamPlayer.new()
+	mine_audio_player.name = "MineAudioPlayer"
+	mine_audio_player.bus = "SFX" if AudioServer.get_bus_index("SFX") >= 0 else "Master"
+	add_child(mine_audio_player)
+
+	break_audio_player = AudioStreamPlayer.new()
+	break_audio_player.name = "BreakAudioPlayer"
+	break_audio_player.bus = "SFX" if AudioServer.get_bus_index("SFX") >= 0 else "Master"
+	add_child(break_audio_player)
+
+	# Load strike sounds
+	var strike_paths = [
+		"res://assets/audio/sfx/rock_strike_1.wav",
+		"res://assets/audio/sfx/rock_strike_2.wav",
+		"res://assets/audio/sfx/rock_strike_3.wav",
+		"res://assets/audio/sfx/rock_strike_4.wav"
+	]
+	for path in strike_paths:
+		if ResourceLoader.exists(path):
+			var sound = load(path)
+			if sound:
+				mine_sounds.append(sound)
+
+	# Load break sounds
+	var break_paths = [
+		"res://assets/audio/sfx/rock_break_1.wav",
+		"res://assets/audio/sfx/rock_break_2.wav",
+		"res://assets/audio/sfx/rock_break_3.wav"
+	]
+	for path in break_paths:
+		if ResourceLoader.exists(path):
+			var sound = load(path)
+			if sound:
+				break_sounds.append(sound)
+
+	print("⛏️ Loaded %d mine sounds and %d break sounds" % [mine_sounds.size(), break_sounds.size()])
+
 func play_random_mine_sound() -> void:
-	"""Play a random mining sound"""
-	pass  # Placeholder for future audio
+	"""Play a random mining strike sound and shake the rock"""
+	if mine_sounds.is_empty() or not mine_audio_player:
+		return
+
+	var sound = mine_sounds[randi() % mine_sounds.size()]
+	mine_audio_player.stream = sound
+	mine_audio_player.pitch_scale = randf_range(0.9, 1.1)  # Slight pitch variation
+	mine_audio_player.volume_db = randf_range(-3.0, 0.0)  # Slight volume variation
+	mine_audio_player.play()
+
+	# Shake the rock on impact
+	shake_rock()
+
+func shake_rock() -> void:
+	"""Apply a quick shake/jitter effect to the rock sprite"""
+	if not rock_sprite:
+		return
+
+	# Kill any existing shake tween
+	if shake_tween and shake_tween.is_valid():
+		shake_tween.kill()
+
+	# Reset to original position first
+	rock_sprite.position = original_sprite_position
+
+	# Create shake tween - quick jitter effect
+	shake_tween = create_tween()
+	shake_tween.set_trans(Tween.TRANS_SINE)
+	shake_tween.set_ease(Tween.EASE_OUT)
+
+	var shake_intensity = 3.0  # Pixels to shake
+	var shake_duration = 0.08  # Duration per shake
+
+	# Shake sequence: right, left, right, center
+	shake_tween.tween_property(rock_sprite, "position",
+		original_sprite_position + Vector2(shake_intensity, -shake_intensity * 0.5), shake_duration)
+	shake_tween.tween_property(rock_sprite, "position",
+		original_sprite_position + Vector2(-shake_intensity, shake_intensity * 0.3), shake_duration)
+	shake_tween.tween_property(rock_sprite, "position",
+		original_sprite_position + Vector2(shake_intensity * 0.5, 0), shake_duration * 0.5)
+	shake_tween.tween_property(rock_sprite, "position",
+		original_sprite_position, shake_duration * 0.5)
 
 func play_random_break_sound() -> void:
-	"""Play a random rock breaking sound"""
-	pass  # Placeholder for future audio
+	"""Play a random rock breaking/crumbling sound"""
+	if break_sounds.is_empty() or not break_audio_player:
+		return
+
+	var sound = break_sounds[randi() % break_sounds.size()]
+	break_audio_player.stream = sound
+	break_audio_player.pitch_scale = randf_range(0.95, 1.05)  # Slight pitch variation
+	break_audio_player.volume_db = 0.0
+	break_audio_player.play()
 
 func trigger_player_harvest_animation(tool_type: String) -> void:
 	"""Trigger the player's tool animation for harvesting"""
@@ -593,3 +888,123 @@ func stop_player_harvest_animation() -> void:
 			direction = "right"
 
 		character_sprite.play("idle_" + direction)
+
+func open_loot_ui() -> void:
+	"""Open the loot UI to let player take ore from rock pile"""
+	if rock_loot.size() == 0:
+		return
+
+	# Don't open if already open
+	if loot_ui and is_instance_valid(loot_ui):
+		return
+
+	# Load the chest loot UI scene (reuse it for rock loot)
+	var loot_scene = load("res://scenes/ui/chest_loot_ui.tscn")
+	if not loot_scene:
+		push_error("Failed to load chest loot UI scene!")
+		return
+
+	loot_ui = loot_scene.instantiate()
+
+	# Add to scene tree
+	get_tree().root.add_child(loot_ui)
+
+	# Connect signals
+	loot_ui.loot_ui_closed.connect(_on_loot_ui_closed)
+	loot_ui.item_looted.connect(_on_item_looted)
+	loot_ui.all_items_looted.connect(_on_all_items_looted)
+
+	# Open with rock loot - pass a copy to avoid reference issues
+	loot_ui.open_chest_ui(null, rock_loot.duplicate())
+
+	print("�ite Rock pile loot UI opened with %d items" % rock_loot.size())
+
+func _on_item_looted(item: Dictionary) -> void:
+	"""Handle individual item being looted"""
+	# Find and remove the item from rock_loot
+	for i in range(rock_loot.size()):
+		if rock_loot[i] == item:
+			rock_loot[i] = null
+			break
+
+	# Check if all loot is taken
+	var has_loot = false
+	for loot_item in rock_loot:
+		if loot_item != null:
+			has_loot = true
+			break
+
+	if not has_loot:
+		_on_all_items_looted()
+
+func _on_all_items_looted() -> void:
+	"""Handle all items being looted from rock pile"""
+	print("⛏️ All ore looted from rock pile!")
+
+	# Clear the loot array
+	rock_loot.clear()
+
+	# Remove sparkle effect
+	remove_loot_indicator()
+
+	# Hide interaction prompt
+	if interaction_prompt:
+		interaction_prompt.visible = false
+
+	# Start the fade out timer
+	start_fade_out()
+
+func _on_loot_ui_closed() -> void:
+	"""Handle loot UI closing"""
+	print("⛏️ Rock pile loot UI closed")
+
+	# Clean up loot UI reference
+	if loot_ui:
+		loot_ui.queue_free()
+		loot_ui = null
+
+	# Check if all loot was taken
+	var has_loot = false
+	for loot_item in rock_loot:
+		if loot_item != null:
+			has_loot = true
+			break
+
+	if not has_loot:
+		_on_all_items_looted()
+
+func start_fade_out() -> void:
+	"""Start the fade out animation after rock pile has been looted"""
+	if fade_timer_started:
+		return
+
+	fade_timer_started = true
+
+	# Random time before fading (15-45 seconds)
+	var fade_delay = randf_range(15.0, 45.0)
+
+	print("⛏️ Rock pile will fade in %.1f seconds" % fade_delay)
+
+	# Create tween for fade out
+	var fade_tween = create_tween()
+
+	# First: immediately darken/mute the rock pile now that it's looted
+	if rock_pile_sprite:
+		fade_tween.tween_property(rock_pile_sprite, "modulate", Color(0.4, 0.38, 0.35, 0.6), 1.0)  # Muted color
+
+	# Then wait the random delay
+	fade_tween.tween_interval(fade_delay)
+
+	# Finally: fade out completely
+	if rock_pile_sprite:
+		fade_tween.tween_property(rock_pile_sprite, "modulate:a", 0.0, 1.5)
+
+	# Fade shadow too
+	if rock_shadow:
+		var shadow_tween = create_tween()
+		shadow_tween.tween_property(rock_shadow, "modulate:a", 0.1, 1.0)
+		shadow_tween.tween_interval(fade_delay)
+		shadow_tween.tween_property(rock_shadow, "modulate:a", 0.0, 1.5)
+
+	# Start respawn timer after fade completes
+	fade_tween.tween_callback(func(): respawn_timer = 0.0)

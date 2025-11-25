@@ -1,8 +1,15 @@
-[gd_scene load_steps=4 format=3 uid="uid://c2ui1a8yb4sjg"]
+[gd_scene load_steps=6 format=3 uid="uid://c2ui1a8yb4sjg"]
 
 [ext_resource type="Script" uid="uid://dyi12b6lpp773" path="res://scripts/game_world.gd" id="1_0vfqx"]
 [ext_resource type="PackedScene" uid="uid://campfire001" path="res://scenes/world/campfire.tscn" id="1_ywgp6"]
 [ext_resource type="PackedScene" path="res://scenes/npcs/vendor.tscn" id="6_6c6v5"]
+[ext_resource type="Shader" path="res://shaders/ground_variation.gdshader" id="4_ground"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ground"]
+shader = ExtResource("4_ground")
+shader_parameter/base_color = Color(0.09, 0.085, 0.08, 1)
+shader_parameter/world_scale = 0.00002
+shader_parameter/intensity = 0.4
 
 [node name="GameWorld" type="Node2D"]
 script = ExtResource("1_0vfqx")
@@ -11,6 +18,7 @@ script = ExtResource("1_0vfqx")
 color = Color(0.65, 0.65, 0.65, 1)
 
 [node name="Ground" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_ground")
 z_index = -10
 offset_left = -9000.0
 offset_top = -5000.0

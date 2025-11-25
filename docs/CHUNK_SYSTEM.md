@@ -157,3 +157,124 @@ Both systems support multiplayer:
 - **Server**: Manages chunk loading for all players
 - **Clients**: Receive enemy spawns via RPC
 - **Chunks load**: When ANY player is nearby (not just host)
+
+---
+
+## Future Vision: Dynamic Chunk Expansion
+
+### The Problems This Solves
+
+**1. Login Queue Hell**
+Traditional MMOs with fixed world size hit capacity limits:
+- Server full → players stuck in queue for hours
+- Peak times become unplayable
+- Players quit out of frustration
+- "Sorry, world is full" = lost players
+
+**2. Server Crash Cascade**
+When everyone crams into the same zones:
+- Spawn areas become laggy death traps
+- Server CPU spikes from entity density
+- Physics calculations explode (N² collision checks)
+- Server crashes → everyone disconnected → angry players
+
+**3. Resource Starvation**
+Fixed spawns + too many players = nothing to do:
+- All enemies instantly killed, no respawns available
+- Trees/rocks harvested faster than respawn
+- Chests empty, no loot to find
+- Players standing around waiting = boredom
+
+**4. Griefing & Kill Stealing**
+Overcrowded areas breed toxicity:
+- High-level players camping low-level spawns
+- Kill stealing becomes rampant
+- New players can't progress
+- Community becomes hostile
+
+### The Solution: Population-Based Edge Expansion
+The world dynamically grows and shrinks based on player density:
+
+```
+Low Population (5 players):
+[-1,0][0,0][1,0]  ← 3 chunks, plenty of space
+
+High Population (50 players, crowded center):
+[-2,0][-1,0][0,0][1,0][2,0]  ← 5 chunks, world expanded
+
+Players spread out, density drops:
+[-1,0][0,0][1,0][2,0]  ← 4 chunks, western edge contracted
+```
+
+### How It Would Work
+
+**1. Density Tracking**
+- Server tracks player count per chunk
+- Calculate density: `players_in_chunk / CHUNK_CAPACITY`
+- Threshold example: 15 players per chunk = 100% density
+
+**2. Expansion Trigger**
+When an **edge chunk** exceeds density threshold (e.g., 80%):
+- Generate new chunk beyond that edge
+- New chunk has same props/enemies as existing chunks
+- Enemy levels continue scaling outward (higher levels further from spawn)
+
+```
+[1,0] has 14/15 players (93% density)
+→ Spawn [2,0] to the east
+→ [2,0] has Level 6-8 enemies (harder than [1,0])
+```
+
+**3. Contraction Trigger**
+When an **edge chunk** has zero players for X minutes:
+- Despawn the edge chunk (unload from memory)
+- World contracts back toward center
+- Resources/enemies in that chunk are lost (respawn when chunk regenerates)
+
+**4. Incentive to Spread Out**
+- Crowded chunks = slower respawns, more competition
+- Edge chunks = fresh spawns, less competition, but harder enemies
+- Natural player distribution across the world
+
+### How It Solves Each Problem
+
+**Login Queues → Eliminated**
+- World expands to fit demand
+- No hard player cap needed
+- 1000 players online? World grows to 50+ chunks
+- Everyone gets in, no waiting
+
+**Server Crashes → Prevented**
+- Density thresholds prevent overcrowding
+- Server load distributed across chunks
+- Each chunk has manageable entity count
+- Expansion triggers BEFORE server stress
+
+**Resource Starvation → Impossible**
+- New chunks = fresh spawns
+- Overcrowded chunk triggers expansion
+- Players migrate to new chunks for resources
+- Respawn rates stay healthy
+
+**Griefing → Naturally Discouraged**
+- Edge chunks have harder enemies (level scaling)
+- High-level players pushed to outer chunks
+- New players have protected inner chunks
+- Natural level segregation by distance from spawn
+
+### Benefits
+- **Infinite horizontal scaling** - World grows with population
+- **Self-balancing** - Players naturally spread out
+- **Resource efficiency** - Only load chunks that are needed
+- **Progressive difficulty** - Further from spawn = higher level content
+- **No login queues** - World always has room
+- **Server stability** - Load distributed across chunks
+
+### Technical Requirements
+- Chunk coordinate system already supports infinite range (dictionary-based)
+- Enemy level bands need to extend beyond current hardcoded values
+- Server needs population tracking per chunk
+- Expansion/contraction logic in ChunkAwareSpawnManager
+
+### Not Yet Implemented
+This is a **future vision** - current system uses fixed 6 chunks.
