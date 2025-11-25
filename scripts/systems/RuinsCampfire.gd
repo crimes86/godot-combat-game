@@ -60,7 +60,7 @@ var interaction_prompt: Label = null
 
 # References
 var player: CharacterBody2D = null
-var main_campfire_position: Vector2 = Vector2(-2000, 0)  # Main campfire location
+var main_campfire_position: Vector2 = Vector2(2000, 0)  # Main campfire location (center of chunk 0)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
@@ -91,6 +91,16 @@ func _exit_tree() -> void:
 	# Stop processing immediately to prevent hanging on exit
 	set_physics_process(false)
 	set_process(false)
+
+	# Clean up all guardian skeletons (they're siblings, not children)
+	var cleaned_count = 0
+	for data in skeleton_data:
+		var skeleton = data.get("skeleton")
+		if skeleton and is_instance_valid(skeleton):
+			skeleton.queue_free()
+			cleaned_count += 1
+	skeleton_data.clear()
+	print("🗑️ RuinsCampfire cleaned up %d guardian skeletons" % cleaned_count)
 
 func _physics_process(delta: float) -> void:
 	# Find player if needed
