@@ -14,6 +14,12 @@ class_name Torch
 var fire_sprite: Node2D = null
 var fire_audio: AudioStreamPlayer2D = null
 
+# Performance: throttle animation updates and cache flame nodes
+var animation_timer: float = 0.0
+const ANIMATION_UPDATE_INTERVAL: float = 0.05  # Update 20 times per second
+var flame_nodes: Array = []  # Cache flame children
+var torch_light: PointLight2D = null  # Cache light reference
+
 func _ready() -> void:
 	# Create visual representation
 	create_torch_visual()
@@ -24,7 +30,21 @@ func _ready() -> void:
 	# Create looping fire sound (very quiet for torches)
 	create_fire_audio()
 
+	# Cache flame nodes for performance (avoid iterating children every frame)
+	await get_tree().process_frame
+	if fire_sprite:
+		for child in fire_sprite.get_children():
+			if child.name.begins_with("Flame_"):
+				flame_nodes.append(child)
+	torch_light = get_node_or_null("TorchLight")
+
 func _physics_process(delta: float) -> void:
+	# Throttle animation updates for performance
+	animation_timer += delta
+	if animation_timer < ANIMATION_UPDATE_INTERVAL:
+		return
+	animation_timer = 0.0
+
 	# Animate fire
 	animate_fire(delta)
 
@@ -222,32 +242,32 @@ func _on_fire_audio_loop() -> void:
 		randomize_fire_audio()
 		fire_audio.play()
 
-func animate_fire(delta: float) -> void:
+func animate_fire(_delta: float) -> void:
 	"""Animate torch flames"""
-	if not fire_sprite:
+	if flame_nodes.is_empty():
 		return
 
 	var time = Time.get_ticks_msec() / 1000.0
 
-	# Animate flames (flicker and sway)
-	for child in fire_sprite.get_children():
-		if child.name.begins_with("Flame_"):
-			var idx = child.get_index()
-			var speed = 1.2 + idx * 0.18  # Slightly faster than campfire
-			var flicker = sin(time * speed + idx * 1.5)
-			var sway = cos(time * speed * 0.6 + idx * 0.8)
+	# Animate flames using cached nodes (flicker and sway)
+	for i in range(flame_nodes.size()):
+		var child = flame_nodes[i]
+		if not is_instance_valid(child):
+			continue
+		var speed = 1.2 + i * 0.18  # Slightly faster than campfire
+		var flicker = sin(time * speed + i * 1.5)
+		var sway = cos(time * speed * 0.6 + i * 0.8)
 
-			# Vertical flicker
-			child.scale.y = 1.0 + flicker * 0.25
-			# Horizontal sway
-			child.scale.x = 1.0 + sway * 0.12
-			# Opacity flicker
-			child.modulate.a = 0.85 + flicker * 0.15
-			# Position wobble
-			child.position.x = sway * 0.5
+		# Vertical flicker
+		child.scale.y = 1.0 + flicker * 0.25
+		# Horizontal sway
+		child.scale.x = 1.0 + sway * 0.12
+		# Opacity flicker
+		child.modulate.a = 0.85 + flicker * 0.15
+		# Position wobble
+		child.position.x = sway * 0.5
 
-	# Animate torch light (subtle flickering)
-	if has_node("TorchLight"):
-		var torch_light = get_node("TorchLight")
+	# Animate torch light using cached reference (subtle flickering)
+	if torch_light and is_instance_valid(torch_light):
 		var flicker = sin(time * 2.8) * 0.5 + cos(time * 4.2) * 0.3
 		torch_light.energy = 0.8 + flicker * 0.2  # Flicker between 0.6 and 1.0

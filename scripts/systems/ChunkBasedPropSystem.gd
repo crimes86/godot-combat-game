@@ -21,7 +21,8 @@ const ROCKS_MEDIUM_PER_CHUNK: int = 75  # Medium rocks (decorative)
 const ROCKS_SMALL_PER_CHUNK: int = 60  # Small rocks (decorative)
 const MONSTER_LAVA_POOLS_PER_CHUNK: int = 6  # Giant lava pools (anchor points)
 const LAVA_POOLS_PER_CHUNK: int = 24  # Regular lava pools (some cluster around monsters)
-const BONE_CLUSTERS_PER_CHUNK: int = 9  # Large skeletal remains (decorative)
+const BONE_CLUSTERS_PER_CHUNK: int = 25  # Large skeletal remains (ritual piles)
+const SCATTERED_BONES_PER_CHUNK: int = 80  # Individual bones filling empty space
 const DEAD_VEGETATION_PER_CHUNK: int = 24  # Dead bushes/ash piles (decorative)
 const CRACKS_PER_CHUNK: int = 30  # Ground cracks (visual)
 
@@ -76,6 +77,8 @@ class ChunkData:
 	var monster_lava_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] for monster pools
 	var lava_pool_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] for exclusion
 	var large_rock_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] for rock overlap prevention
+	var all_prop_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] ALL props for bone fill
+	var ritual_sites: Array[Vector2] = []  # Positions of dense bone ritual areas
 
 func _ready() -> void:
 	print("🗺️ ChunkBasedPropSystem initialized - 3 square chunks (%.0fx%.0fpx each)" % [CHUNK_SIZE, CHUNK_SIZE])
@@ -430,6 +433,9 @@ func update_prop_lod() -> void:
 		return
 
 	var player_pos = player.global_position
+	# Pre-calculate squared distances for faster comparison (avoids sqrt)
+	var shadow_dist_sq = LOD_SHADOW_DISTANCE * LOD_SHADOW_DISTANCE
+	var detail_dist_sq = LOD_DETAIL_DISTANCE * LOD_DETAIL_DISTANCE
 
 	# Process each loaded chunk
 	for chunk_key in loaded_chunks.keys():
@@ -442,21 +448,22 @@ func update_prop_lod() -> void:
 			if not is_instance_valid(prop):
 				continue
 
-			var distance = prop.global_position.distance_to(player_pos)
+			# Use squared distance to avoid expensive sqrt
+			var dist_sq = prop.global_position.distance_squared_to(player_pos)
 
 			# Find and toggle shadow visibility
 			var shadow = prop.get_node_or_null("Shadow")
 			if shadow:
-				shadow.visible = distance < LOD_SHADOW_DISTANCE
+				shadow.visible = dist_sq < shadow_dist_sq
 
 			# For lava pools, hide light and particles if far away
 			if prop.name.begins_with("LavaPool") or prop.name.begins_with("MonsterLava"):
+				var show_detail = dist_sq < detail_dist_sq
 				for child in prop.get_children():
 					if child is PointLight2D:
-						child.visible = distance < LOD_DETAIL_DISTANCE
+						child.visible = show_detail
 					elif child is GPUParticles2D:
-						# Stop emitting particles when far away (saves ~720 particles)
-						child.emitting = distance < LOD_DETAIL_DISTANCE
+						child.emitting = show_detail
 
 func start_async_chunk_load(chunk_key: String, is_priority: bool) -> void:
 	"""Start async loading of a chunk (spreads generation across frames)"""
@@ -520,17 +527,21 @@ func create_prop_generation_queue(chunk_key: String) -> Array:
 	for i in range(ROCKS_SMALL_PER_CHUNK):
 		queue.append({"type": "rock_small", "index": i})
 
-	# Bone clusters
-	for i in range(BONE_CLUSTERS_PER_CHUNK):
-		queue.append({"type": "bone_cluster", "index": i})
-
-	# Vegetation
+	# Vegetation (before bones so bones can fill around them too)
 	for i in range(DEAD_VEGETATION_PER_CHUNK):
 		queue.append({"type": "vegetation", "index": i})
 
-	# Cracks (last - can overlap slightly with other props)
+	# Cracks
 	for i in range(CRACKS_PER_CHUNK):
 		queue.append({"type": "crack", "index": i})
+
+	# BONES LAST - fill empty spaces after all other props are placed
+	# Ritual sites (dense bone piles at specific locations)
+	for i in range(BONE_CLUSTERS_PER_CHUNK):
+		queue.append({"type": "ritual_site", "index": i})
+
+	# Scattered bones fill remaining empty space
+	queue.append({"type": "bone_fill", "index": 0})
 
 	return queue
 
@@ -680,6 +691,8 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 
 			var tree_type = TREE_TYPES[rng.randi() % TREE_TYPES.size()]
 			create_tree(tree_pos, tree_type, container, rng, tree_id)
+			# Track position for bone fill (trees have ~80px exclusion)
+			chunk_data.all_prop_positions.append({"pos": tree_pos, "radius": 80.0})
 
 		"rock_large":
 			var rock_id = "%s:rock_large:%d" % [chunk_key, index]
@@ -705,6 +718,7 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 				"pos": rock_pos,
 				"radius": exclusion_radius
 			})
+			chunk_data.all_prop_positions.append({"pos": rock_pos, "radius": exclusion_radius})
 
 			create_lootable_rock(rock_pos, "rock_large", container, rng, rock_id)
 
@@ -722,6 +736,7 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 				return  # Don't spawn medium rocks on top of large rocks
 
 			create_rock_with_shadow(rock_pos, "rock_medium", container, rng, 0.7, 1.3)
+			chunk_data.all_prop_positions.append({"pos": rock_pos, "radius": 40.0})
 
 		"rock_small":
 			var rock_pos = chunk_center + Vector2(
@@ -737,6 +752,7 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 				return  # Don't spawn small rocks on top of large rocks
 
 			create_rock_with_shadow(rock_pos, "rock_small", container, rng, 0.6, 1.0)
+			chunk_data.all_prop_positions.append({"pos": rock_pos, "radius": 25.0})
 
 		"monster_lava_pool":
 			# MONSTER pools - huge lava lakes that serve as anchor points
@@ -844,20 +860,18 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			# Pass pool_size to ensure same size is used for both exclusion and visual
 			create_lava_pool(pool_pos, container, rng, pool_size)
 
-		"bone_cluster":
-			var cluster_pos = chunk_center + Vector2(
-				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
-			)
+		"ritual_site":
+			# Find an empty spot for a dense bone ritual pile
+			var site_pos = find_empty_spot_for_ritual(chunk_center, chunk_data, rng, campfire_pos)
+			if site_pos != Vector2.ZERO:
+				chunk_data.ritual_sites.append(site_pos)
+				create_ritual_bone_pile(site_pos, container, rng)
+				# Mark this area as occupied
+				chunk_data.all_prop_positions.append({"pos": site_pos, "radius": 100.0})
 
-			if not is_in_world_bounds(cluster_pos):
-				return
-			if cluster_pos.distance_to(campfire_pos) < 600:
-				return
-			if is_position_in_lava_pool(cluster_pos, chunk_data):
-				return  # Don't spawn bones in lava pools
-
-			create_bone_cluster(cluster_pos, container, rng)
+		"bone_fill":
+			# Fill empty spaces with scattered bones
+			fill_empty_space_with_bones(chunk_center, chunk_data, container, rng, campfire_pos)
 
 		"vegetation":
 			var veg_pos = chunk_center + Vector2(
@@ -873,6 +887,7 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 				return  # Don't spawn vegetation in lava pools
 
 			create_prop(veg_pos, "ash_pile", container, rng)
+			chunk_data.all_prop_positions.append({"pos": veg_pos, "radius": 30.0})
 
 		"crack":
 			var crack_pos = chunk_center + Vector2(
@@ -1008,7 +1023,8 @@ func add_ground_disturbance(parent_node: Node2D, base_size: float, rng: RandomNu
 		var size = base_size * layer.size_mult * rng.randf_range(0.9, 1.1)
 		patch.size = Vector2(size, size)
 		patch.position = -patch.size / 2 + Vector2(rng.randf_range(-10, 10), rng.randf_range(-10, 10))
-		patch.color = Color(0.08, 0.06, 0.05, layer.alpha)  # Dark brown
+		# Dark charcoal for ground disturbance around props
+		patch.color = Color(0.04, 0.035, 0.03, layer.alpha)
 		patch.z_index = -9  # Just above ground
 		patch.rotation = rng.randf() * TAU
 		parent_node.add_child(patch)
@@ -1097,16 +1113,17 @@ void fragment() {
 	sprite.flip_h = tree_flipped
 	sprite.z_index = 10  # Above all player layers (player max z=9)
 
-	# Mix of brown dead trees and white birch healing trees (50/50 split)
+	# Mix of grey dead trees and pale birch trees (50/50 split)
 	var is_white_birch = rng.randf() < 0.5
-	var color_variation = rng.randf_range(0.9, 1.0)
 
 	if is_white_birch:
-		# White birch tint for magical healing trees
-		sprite.modulate = Color(color_variation * 1.1, color_variation * 1.15, color_variation * 1.2, 1.0)
+		# Pale white/cream birch - high contrast against dark ground
+		var brightness = rng.randf_range(1.4, 1.8)  # Much brighter
+		sprite.modulate = Color(brightness, brightness * 0.98, brightness * 0.92, 1.0)
 	else:
-		# Brown tint for dead trees
-		sprite.modulate = Color(color_variation, color_variation * 0.7, color_variation * 0.5, 1.0)
+		# Grey/silver dead trees - neutral, no brown
+		var grey = rng.randf_range(0.6, 0.85)
+		sprite.modulate = Color(grey, grey, grey, 1.0)
 
 	tree_node.add_child(sprite)
 
@@ -1379,17 +1396,51 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 
 	container.add_child(lava_pool)
 
-func create_bone_cluster(pos: Vector2, container: Node2D, rng: RandomNumberGenerator) -> void:
-	"""Create a cluster of bones and skulls"""
-	var cluster = Node2D.new()
-	cluster.name = "BoneCluster"
-	cluster.position = pos
-	cluster.z_index = -1
+func find_empty_spot_for_ritual(chunk_center: Vector2, chunk_data: ChunkData, rng: RandomNumberGenerator, campfire_pos: Vector2) -> Vector2:
+	"""Find an empty spot away from other props for a ritual bone pile"""
+	for attempt in range(20):
+		var test_pos = chunk_center + Vector2(
+			rng.randf_range(-CHUNK_SIZE / 2 + 100, CHUNK_SIZE / 2 - 100),
+			rng.randf_range(-CHUNK_SIZE / 2 + 100, CHUNK_SIZE / 2 - 100)
+		)
 
-	# Create 3-5 bones/skulls in a cluster
-	var num_bones = rng.randi_range(3, 5)
+		if not is_in_world_bounds(test_pos):
+			continue
+		if test_pos.distance_to(campfire_pos) < 600:
+			continue
+		if is_position_in_lava_pool(test_pos, chunk_data):
+			continue
+
+		# Check against all existing props - need at least 120px clearance for ritual site
+		var too_close = false
+		for prop in chunk_data.all_prop_positions:
+			if test_pos.distance_to(prop.pos) < prop.radius + 80:
+				too_close = true
+				break
+
+		# Also check ritual sites
+		for site in chunk_data.ritual_sites:
+			if test_pos.distance_to(site) < 250:  # Keep ritual sites spread out
+				too_close = true
+				break
+
+		if not too_close:
+			return test_pos
+
+	return Vector2.ZERO  # No valid spot found
+
+func create_ritual_bone_pile(pos: Vector2, container: Node2D, rng: RandomNumberGenerator) -> void:
+	"""Create a dense ritual pile of bones and skulls"""
+	var pile = Node2D.new()
+	pile.name = "RitualBonePile"
+	pile.position = pos
+	pile.z_index = -1
+
+	# Dense pile: 12-20 bones/skulls
+	var num_bones = rng.randi_range(12, 20)
 	for i in range(num_bones):
-		var bone_type = ["bones", "skull"][rng.randi() % 2]
+		# 55% bones, 45% skulls (more skulls in ritual piles)
+		var bone_type = "bones" if rng.randf() < 0.55 else "skull"
 		if not PROP_TEXTURES.has(bone_type):
 			continue
 
@@ -1399,17 +1450,96 @@ func create_bone_cluster(pos: Vector2, container: Node2D, rng: RandomNumberGener
 
 		var sprite = Sprite2D.new()
 		sprite.texture = texture
-		sprite.position = Vector2(
-			rng.randf_range(-30, 30),
-			rng.randf_range(-30, 30)
-		)
+		# Tight cluster radius (15-70px)
+		var angle = rng.randf() * TAU
+		var dist = rng.randf_range(15, 70)
+		sprite.position = Vector2(cos(angle), sin(angle)) * dist
 		sprite.rotation = rng.randf() * TAU
-		sprite.scale = Vector2.ONE * rng.randf_range(0.8, 1.2)
-		sprite.modulate = Color(0.7, 0.7, 0.7, 1.0)
+		sprite.scale = Vector2.ONE * rng.randf_range(0.6, 1.4)
+		# Pale bone color - high contrast
+		var brightness = rng.randf_range(0.8, 1.1)
+		sprite.modulate = Color(brightness, brightness * 0.97, brightness * 0.9, 1.0)
 
-		cluster.add_child(sprite)
+		pile.add_child(sprite)
 
-	container.add_child(cluster)
+	container.add_child(pile)
+
+func fill_empty_space_with_bones(chunk_center: Vector2, chunk_data: ChunkData, container: Node2D, rng: RandomNumberGenerator, campfire_pos: Vector2) -> void:
+	"""Fill empty spaces between props with scattered bones using a grid approach"""
+	var bones_placed = 0
+	var grid_spacing = 150  # Check every 150px
+	var half_chunk = CHUNK_SIZE / 2
+
+	# Iterate through grid positions in the chunk
+	var x = chunk_center.x - half_chunk + 50
+	while x < chunk_center.x + half_chunk - 50:
+		var y = chunk_center.y - half_chunk + 50
+		while y < chunk_center.y + half_chunk - 50:
+			var base_pos = Vector2(x, y)
+
+			# Add some randomness to the grid position
+			var test_pos = base_pos + Vector2(
+				rng.randf_range(-60, 60),
+				rng.randf_range(-60, 60)
+			)
+
+			# Skip if not valid
+			if not is_in_world_bounds(test_pos):
+				y += grid_spacing
+				continue
+			if test_pos.distance_to(campfire_pos) < 500:
+				y += grid_spacing
+				continue
+			if is_position_in_lava_pool(test_pos, chunk_data):
+				y += grid_spacing
+				continue
+
+			# Check if this spot is empty (not too close to props)
+			var is_empty = true
+			var min_distance = 50.0  # Minimum distance from any prop
+
+			for prop in chunk_data.all_prop_positions:
+				var dist = test_pos.distance_to(prop.pos)
+				if dist < prop.radius + 20:  # Too close to prop
+					is_empty = false
+					break
+
+			if is_empty:
+				# Random chance to place bone (60% fill rate)
+				if rng.randf() < 0.6:
+					create_single_bone(test_pos, container, rng)
+					bones_placed += 1
+
+			y += grid_spacing
+		x += grid_spacing
+
+func create_single_bone(pos: Vector2, container: Node2D, rng: RandomNumberGenerator) -> void:
+	"""Create a single scattered pickable bone"""
+	# 80% bones, 20% skulls for scattered
+	var bone_type = "bones" if rng.randf() < 0.8 else "skull"
+	if not PROP_TEXTURES.has(bone_type):
+		return
+
+	var texture = load(PROP_TEXTURES[bone_type]) as Texture2D
+	if not texture:
+		return
+
+	# Create PickableBone instead of plain Sprite2D
+	var PickableBoneClass = preload("res://scripts/items/PickableBone.gd")
+	var bone = PickableBoneClass.new()
+	bone.name = "PickableBone"
+	bone.position = pos
+	bone.z_index = -1
+
+	# Setup visual properties
+	var bone_rotation = rng.randf() * TAU
+	var bone_scale = Vector2.ONE * rng.randf_range(0.35, 0.75)  # Smaller scattered bones
+	var brightness = rng.randf_range(0.7, 0.95)
+	var bone_modulate = Color(brightness, brightness * 0.97, brightness * 0.9, 1.0)
+
+	bone.setup_bone(texture, bone_scale, bone_rotation, bone_modulate)
+
+	container.add_child(bone)
 
 func mark_as_harvested(item_id: String) -> void:
 	"""Mark an item as harvested so it doesn't respawn"""

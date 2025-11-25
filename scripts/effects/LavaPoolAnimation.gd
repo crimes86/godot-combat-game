@@ -8,6 +8,10 @@ var layer_speeds = []  # Pulse speed for each layer
 var layer_offsets = []  # Phase offset for each layer
 var time_offset = 0.0  # Random offset so pools don't sync
 
+# Performance: throttle updates
+var update_timer: float = 0.0
+const UPDATE_INTERVAL: float = 0.1  # Update 10 times per second instead of 60
+
 func _ready():
 	# Add random time offset so each pool flows differently
 	time_offset = randf() * TAU
@@ -39,6 +43,12 @@ func _ready():
 			layer_offsets.append(randf() * TAU)
 
 func _process(delta):
+	# Throttle updates - lava animation doesn't need 60 FPS
+	update_timer += delta
+	if update_timer < UPDATE_INTERVAL:
+		return
+	update_timer = 0.0
+
 	var time = Time.get_ticks_msec() / 1000.0 + time_offset
 
 	# Pulse each gradient layer by scaling it slightly

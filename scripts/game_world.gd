@@ -38,22 +38,22 @@ const PROP_TEXTURES = {
 }
 
 const LAYER_TEMPLATE = [
-	# Nov 10 original config - individual spots, smooth blending
+	# Darker charcoal palette for cleared/trafficked areas
 	# Edge layers: Ultra-subtle, very large, massive overlap
-	{"count": 80, "size_mult": [1.4, 1.9], "spread_mult": 1.2, "darkness": 0.24, "alpha": 0.003},
-	{"count": 75, "size_mult": [1.3, 1.8], "spread_mult": 1.1, "darkness": 0.23, "alpha": 0.005},
-	{"count": 70, "size_mult": [1.2, 1.7], "spread_mult": 1.0, "darkness": 0.22, "alpha": 0.008},
-	{"count": 65, "size_mult": [1.1, 1.6], "spread_mult": 0.9, "darkness": 0.21, "alpha": 0.011},
+	{"count": 80, "size_mult": [1.4, 1.9], "spread_mult": 1.2, "darkness": 0.12, "alpha": 0.004},
+	{"count": 75, "size_mult": [1.3, 1.8], "spread_mult": 1.1, "darkness": 0.11, "alpha": 0.006},
+	{"count": 70, "size_mult": [1.2, 1.7], "spread_mult": 1.0, "darkness": 0.10, "alpha": 0.010},
+	{"count": 65, "size_mult": [1.1, 1.6], "spread_mult": 0.9, "darkness": 0.09, "alpha": 0.014},
 	# Mid layers: Gradual transition
-	{"count": 55, "size_mult": [1.0, 1.45], "spread_mult": 0.75, "darkness": 0.20, "alpha": 0.018},
-	{"count": 50, "size_mult": [0.85, 1.25], "spread_mult": 0.65, "darkness": 0.18, "alpha": 0.025},
-	{"count": 45, "size_mult": [0.7, 1.05], "spread_mult": 0.55, "darkness": 0.16, "alpha": 0.032},
-	{"count": 40, "size_mult": [0.6, 0.9], "spread_mult": 0.45, "darkness": 0.15, "alpha": 0.040},
-	# Core layers: Darker center
-	{"count": 32, "size_mult": [0.475, 0.725], "spread_mult": 0.35, "darkness": 0.14, "alpha": 0.048},
-	{"count": 25, "size_mult": [0.375, 0.575], "spread_mult": 0.25, "darkness": 0.12, "alpha": 0.058},
-	{"count": 20, "size_mult": [0.275, 0.45], "spread_mult": 0.15, "darkness": 0.11, "alpha": 0.070},
-	{"count": 16, "size_mult": [0.2, 0.35], "spread_mult": 0.05, "darkness": 0.10, "alpha": 0.082}
+	{"count": 55, "size_mult": [1.0, 1.45], "spread_mult": 0.75, "darkness": 0.08, "alpha": 0.022},
+	{"count": 50, "size_mult": [0.85, 1.25], "spread_mult": 0.65, "darkness": 0.07, "alpha": 0.030},
+	{"count": 45, "size_mult": [0.7, 1.05], "spread_mult": 0.55, "darkness": 0.065, "alpha": 0.038},
+	{"count": 40, "size_mult": [0.6, 0.9], "spread_mult": 0.45, "darkness": 0.06, "alpha": 0.048},
+	# Core layers: Darkest center (compacted earth)
+	{"count": 32, "size_mult": [0.475, 0.725], "spread_mult": 0.35, "darkness": 0.055, "alpha": 0.058},
+	{"count": 25, "size_mult": [0.375, 0.575], "spread_mult": 0.25, "darkness": 0.05, "alpha": 0.068},
+	{"count": 20, "size_mult": [0.275, 0.45], "spread_mult": 0.15, "darkness": 0.045, "alpha": 0.080},
+	{"count": 16, "size_mult": [0.2, 0.35], "spread_mult": 0.05, "darkness": 0.04, "alpha": 0.095}
 ]
 
 # Baking configuration
@@ -449,7 +449,12 @@ func generate_optimized_world_layers():
 	"""Use existing Ground node from scene"""
 	var ground = get_node_or_null("Ground")
 	if ground:
-		ground.color = Color(0.15, 0.12, 0.10, 1.0)
+		# Dark charcoal base - neutral grey, no brown tint
+		var dark_charcoal = Color(0.07, 0.07, 0.07, 1.0)
+		ground.color = dark_charcoal
+		# Also update shader parameter if using ground shader
+		if ground.material and ground.material is ShaderMaterial:
+			ground.material.set_shader_parameter("base_color", dark_charcoal)
 
 	# Add heavily trafficked areas around campfire and ruins
 	create_trafficked_areas()
@@ -489,8 +494,8 @@ func create_traffic_circle(parent: Node2D, center: Vector2, radius: float, num_s
 
 		# Create 2-layer spot for performance (not 3)
 		var layers = [
-			{"size_mult": 1.3, "alpha": 0.12},
-			{"size_mult": 0.8, "alpha": 0.18}
+			{"size_mult": 1.3, "alpha": 0.15},
+			{"size_mult": 0.8, "alpha": 0.22}
 		]
 
 		for layer in layers:
@@ -498,7 +503,8 @@ func create_traffic_circle(parent: Node2D, center: Vector2, radius: float, num_s
 			var size = spot_size * layer.size_mult * rng.randf_range(0.9, 1.1)
 			patch.size = Vector2(size, size)
 			patch.position = pos - patch.size / 2
-			patch.color = Color(0.08, 0.06, 0.05, layer.alpha)  # Dark brown
+			# Darker charcoal for trafficked areas - worn/compacted ground
+			patch.color = Color(0.04, 0.035, 0.03, layer.alpha)
 			patch.rotation = rng.randf() * TAU
 			parent.add_child(patch)
 
@@ -1308,7 +1314,7 @@ func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGe
 		vertices.append(center + Vector2(cos(angle) * r, sin(angle) * r))
 
 	circle.polygon = vertices
-	circle.color = Color(0.06, 0.06, 0.06, 0.8)  # Nearly black for heavily-traveled area
+	circle.color = Color(0.03, 0.03, 0.03, 0.85)  # Very dark charcoal for heavily-traveled campfire area
 
 	# Add radial gradient shader for smooth feathering
 	var shader_material = ShaderMaterial.new()
@@ -2079,9 +2085,16 @@ void fragment() {
 	sprite.flip_h = tree_flipped
 	sprite.z_index = 0
 
-	# Brown tint for dead trees - adds color to the greyscale world
-	var color_variation = rng.randf_range(0.85, 1.0)
-	sprite.modulate = Color(color_variation, color_variation * 0.7, color_variation * 0.5)
+	# Mix of grey dead trees and pale birch trees
+	var is_white_birch = rng.randf() < 0.5
+	if is_white_birch:
+		# Pale white/cream birch - high contrast against dark ground
+		var brightness = rng.randf_range(1.4, 1.8)
+		sprite.modulate = Color(brightness, brightness * 0.98, brightness * 0.92, 1.0)
+	else:
+		# Grey/silver dead trees - neutral, no brown
+		var grey = rng.randf_range(0.6, 0.85)
+		sprite.modulate = Color(grey, grey, grey, 1.0)
 
 	prop_container.add_child(sprite)
 
@@ -2887,8 +2900,8 @@ func spawn_bone_clusters(parent: Node2D):
 	var clusters_placed = 0
 	var scattered_placed = 0
 
-	# PART 1: Spawn 25 dense bone clusters (concentrated skeletal remains)
-	for i in range(25):
+	# PART 1: Spawn 60 dense bone clusters (ritual piles / skeletal remains)
+	for i in range(60):
 		var cluster_pos = Vector2(
 			rng.randf_range(-4000, 12000),
 			rng.randf_range(-2500, 2500)
@@ -2910,39 +2923,34 @@ func spawn_bone_clusters(parent: Node2D):
 		if on_lava:
 			continue
 
-		# Prefer areas near the path but not on it
-		var distance_from_path = abs(cluster_pos.y)
-		if distance_from_path < 100:  # Too close to path
-			continue
-
-		# Create a cluster of 5-8 bones/skulls
-		var num_items = rng.randi_range(5, 8)
+		# Create a cluster of 8-15 bones/skulls (denser piles)
+		var num_items = rng.randi_range(8, 15)
 		for j in range(num_items):
 			var bone_types = ["skull", "bones"]
 			var bone_type = bone_types[rng.randi() % bone_types.size()]
 
-			# Position within cluster (50-150px radius)
+			# Position within cluster (30-120px radius for tighter piles)
 			var angle = rng.randf() * TAU
-			var distance = rng.randf_range(50, 150)
+			var distance = rng.randf_range(30, 120)
 			var bone_pos = cluster_pos + Vector2(cos(angle), sin(angle)) * distance
 
 			var prop_data = {
 				"type": bone_type,
 				"x": bone_pos.x,
 				"y": bone_pos.y,
-				"scale": rng.randf_range(0.8, 1.5),  # Larger bones in clusters
+				"scale": rng.randf_range(0.7, 1.4),  # Varied sizes in clusters
 				"rotation": rng.randf() * TAU,
 				"flip_h": rng.randf() < 0.5,
 				"z_index": 0,
-				"id": 8000 + clusters_placed * 10 + j
+				"id": 8000 + clusters_placed * 20 + j
 			}
 			create_prop_sprite(prop_data, parent)
 
 		clusters_placed += 1
 
 	# PART 2: Spawn scattered individual bones across the entire world
-	# These fill in the gaps between clusters for a more natural wasteland feel
-	for i in range(80):
+	# Much higher density to fill in empty spaces
+	for i in range(400):
 		var bone_pos = Vector2(
 			rng.randf_range(-4000, 12000),
 			rng.randf_range(-2500, 2500)
@@ -2965,15 +2973,14 @@ func spawn_bone_clusters(parent: Node2D):
 			continue
 
 		# Scattered bones can be anywhere (including near path for battle aftermath feel)
-		var bone_types = ["skull", "bones"]
-		# More bones than skulls for scattered (70% bones, 30% skulls)
-		var bone_type = "bones" if rng.randf() < 0.7 else "skull"
+		# More bones than skulls for scattered (75% bones, 25% skulls)
+		var bone_type = "bones" if rng.randf() < 0.75 else "skull"
 
 		var prop_data = {
 			"type": bone_type,
 			"x": bone_pos.x,
 			"y": bone_pos.y,
-			"scale": rng.randf_range(0.5, 1.0),  # Smaller scattered bones
+			"scale": rng.randf_range(0.4, 0.9),  # Smaller scattered bones
 			"rotation": rng.randf() * TAU,
 			"flip_h": rng.randf() < 0.5,
 			"z_index": 0,

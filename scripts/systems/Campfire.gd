@@ -1094,7 +1094,7 @@ func create_clearing_stumps() -> void:
 	# Create a container for all stumps
 	var stump_container = Node2D.new()
 	stump_container.name = "ClearingStumps"
-	stump_container.z_index = 1  # Same as trees
+	stump_container.z_index = 1
 	add_child(stump_container)
 
 	# Seed RNG with campfire position for deterministic placement
@@ -1113,7 +1113,6 @@ func create_clearing_stumps() -> void:
 		if not tree_texture:
 			continue
 
-		# Simulate full tree setup to get proper stump (like HarvestableTree does)
 		# Use random tree scale (same as ChunkBasedPropSystem)
 		var size_roll = rng.randf()
 		var tree_scale: float
@@ -1124,92 +1123,84 @@ func create_clearing_stumps() -> void:
 		else:
 			tree_scale = rng.randf_range(3.9, 5.2)  # Large trees (45%)
 
-		# Create stump: Take original tree, crop to bottom 11% with curved jagged cut
+		# Create stump: Take original tree, crop to bottom 12%
 		var source_img = tree_texture.get_image()
-		var stump_height = int(source_img.get_height() * 0.11)
+		var stump_height = int(source_img.get_height() * 0.12)
 		var stump_img = Image.create(source_img.get_width(), stump_height, false, Image.FORMAT_RGBA8)
 
 		# Extract bottom portion
 		var src_y = source_img.get_height() - stump_height
 		stump_img.blit_rect(source_img, Rect2i(0, src_y, source_img.get_width(), stump_height), Vector2i(0, 0))
 
-		# Add curved jagged cut effect to top (realistic chopped appearance)
-		var cut_wave_frequency = 0.15  # How wavy the cut is
-		var cut_depth_variation = 8  # Maximum depth of cut variations
+		# Make ALL pixels fully opaque (no transparency)
 		for x in range(stump_img.get_width()):
-			# Create wave pattern for natural curve
-			var wave = sin(float(x) * cut_wave_frequency) * 0.5 + 0.5  # 0.0 to 1.0
-			var base_cut_depth = int(wave * cut_depth_variation) + 3  # Minimum 3 pixels
+			for y in range(stump_img.get_height()):
+				var pixel = stump_img.get_pixel(x, y)
+				if pixel.a > 0.1:
+					pixel.a = 1.0
+					stump_img.set_pixel(x, y, pixel)
 
-			# Add random jaggedness on top of the wave
-			var jagged_variation = rng.randi_range(-2, 3)
-			var total_cut_depth = base_cut_depth + jagged_variation
-
-			# Fade out pixels at the cut line
-			for y in range(max(0, total_cut_depth)):
+		# Add simple jagged top edge (just remove some pixels at very top)
+		for x in range(stump_img.get_width()):
+			var cut_depth = rng.randi_range(0, 3)  # Only 0-3 pixels deep
+			for y in range(cut_depth):
 				if y < stump_img.get_height():
-					var pixel = stump_img.get_pixel(x, y)
-					if pixel.a > 0:
-						# Gradually fade based on depth
-						var fade = 1.0 - (float(y) / float(total_cut_depth))
-						pixel.a *= fade * rng.randf_range(0.2, 0.9)
-						stump_img.set_pixel(x, y, pixel)
+					stump_img.set_pixel(x, y, Color(0, 0, 0, 0))
 
-		# Create stump container (like HarvestableTree does)
-		var stump_node = Node2D.new()
+		# Create stump with collision (StaticBody2D)
+		var stump_node = StaticBody2D.new()
 		stump_node.name = "Stump_%d" % i
 		stump_node.position = stump_pos
-		stump_node.z_index = 1
 
-		# Add oval shadow at base (proper ellipse, not rectangle)
-		# Scale shadow to match 11% stump size
-		var stump_scale_factor = 0.7  # Stumps are 70% of tree size
-		var shadow_width = 45 * (tree_scale / 2.5) * 0.75 * stump_scale_factor * 0.65 * 1.1  # 10% bigger
+		# Add small collision shape for the stump
+		var collision = CollisionShape2D.new()
+		var shape = CircleShape2D.new()
+		shape.radius = 8.0  # Small collision radius
+		collision.shape = shape
+		collision.position = Vector2(0, 5)  # Slightly below center
+		stump_node.add_child(collision)
+
+		var stump_scale = tree_scale * 0.7  # 30% smaller than normal trees
+
+		# Add oval shadow at base of stump
+		var shadow_width = 15.0 + (stump_scale * 8.0)  # Visible shadow scaled with stump
 		var shadow_height = shadow_width * 0.4
-		var shadow_y = (stump_height * stump_scale_factor) - 3  # Move up 3px on Y axis (was -5, now -3)
 
-		# Create oval shadow using Polygon2D
 		var shadow = Polygon2D.new()
 		shadow.name = "Shadow"
 
 		# Generate ellipse points
 		var ellipse_points = PackedVector2Array()
-		var segments = 32  # Smooth circle
+		var segments = 16
 		for j in range(segments):
 			var ellipse_angle = (float(j) / segments) * TAU
-			var x = cos(ellipse_angle) * (shadow_width / 2)
-			var y = sin(ellipse_angle) * (shadow_height / 2)
-			ellipse_points.append(Vector2(x, y))
+			var px = cos(ellipse_angle) * (shadow_width / 2)
+			var py = sin(ellipse_angle) * (shadow_height / 2)
+			ellipse_points.append(Vector2(px, py))
 
 		shadow.polygon = ellipse_points
-		shadow.position = Vector2(0, shadow_y)
-		shadow.color = Color(0, 0, 0, 0.6)
-		shadow.z_index = -4
+		shadow.position = Vector2(0, 4)  # Just below stump center
+		shadow.color = Color(0, 0, 0, 0.4)
+		shadow.z_index = -1
 		stump_node.add_child(shadow)
 
-		# Create stump sprite (scale down 30% from normal tree size)
+		# Create stump sprite
 		var stump_sprite = Sprite2D.new()
 		stump_sprite.name = "StumpSprite"
 		stump_sprite.texture = ImageTexture.create_from_image(stump_img)
 		stump_sprite.centered = true
-		var stump_scale = tree_scale * 0.7  # 30% smaller than normal trees
 		stump_sprite.scale = Vector2(stump_scale, stump_scale)
-		stump_sprite.rotation = 0  # NO rotation - flat on X axis like real stumps
 
-		# Mix of brown and white/grey stumps (50/50 like the real trees)
+		# Mix of brown and white/grey stumps (50/50)
 		var is_white_birch = rng.randf() < 0.5
 		var color_variation = rng.randf_range(0.9, 1.0)
 
 		if is_white_birch:
-			# White/grey birch stump
-			stump_sprite.modulate = Color(color_variation * 0.8, color_variation * 0.85, color_variation * 0.9, 1.0)  # Greyish-white
+			stump_sprite.modulate = Color(color_variation * 0.85, color_variation * 0.9, color_variation * 0.95, 1.0)
 		else:
-			# Brown dead tree stump
-			stump_sprite.modulate = Color(0.7, 0.6, 0.5, 1.0)
+			stump_sprite.modulate = Color(0.75, 0.65, 0.55, 1.0)
 
 		stump_sprite.z_index = 0
-
-		# Position stump right at the shadow (no offset - it's already just the base)
 		stump_sprite.position = Vector2(0, 0)
 
 		stump_node.add_child(stump_sprite)

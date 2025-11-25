@@ -38,6 +38,7 @@ func _process(delta: float) -> void:
 
 func update_fps_display() -> void:
 	var fps = Engine.get_frames_per_second()
+	var frame_time_ms = 1000.0 / max(fps, 1)  # Avoid divide by zero
 
 	# Color-code FPS
 	if fps >= 55:
@@ -47,7 +48,8 @@ func update_fps_display() -> void:
 	else:
 		fps_label.add_theme_color_override("font_color", Color.RED)
 
-	fps_label.text = "FPS: %d" % fps
+	# Show FPS and frame time - frame time reveals true performance even if RDP caps display
+	fps_label.text = "FPS: %d (%.1fms)" % [fps, frame_time_ms]
 
 	# Count total enemies
 	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)

@@ -12,6 +12,10 @@ var current_health: float = 100.0
 var max_health: float = 100.0
 var is_pulsing: bool = false
 
+# Performance: throttle position updates
+var position_update_timer: float = 0.0
+const POSITION_UPDATE_INTERVAL: float = 0.05  # Update position 20 times per second
+
 # 🎨 Health color thresholds - BRIGHT & VIBRANT!
 const COLOR_HEALTHY = Color(0.3, 1.35, 0.45, 1.0)      # Bright vibrant green (50% brighter)
 const COLOR_GOOD = Color(0.9, 1.35, 0.3, 1.0)          # Bright yellow-green (50% brighter)
@@ -124,28 +128,38 @@ func create_pill_capsule_bar() -> void:
 	add_child(flash_panel)
 	damage_flash = flash_panel  # Store reference
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	# Only position once parent is ready
 	if not ready_to_position:
 		return
-	
+
+	# Check if this is the player's healthbar - no throttling for player (causes jitter)
+	var is_player = get_parent() and get_parent().is_in_group("player")
+
+	# Throttle position updates for enemies only (75 health bars * 60 FPS = 4500 updates/sec)
+	if not is_player:
+		position_update_timer += delta
+		if position_update_timer < POSITION_UPDATE_INTERVAL:
+			return
+		position_update_timer = 0.0
+
 	# Position healthbar in world space (doesn't rotate with player)
 	if get_parent() and is_instance_valid(get_parent()):
 		var parent_scale = get_parent().scale.x  # Assume uniform scaling
-		
+
 		# Offset scales with parent - hovering right over character head!
 		# Reduced offset for closer positioning
 		var offset_y = (35 + 4) * parent_scale  # 39 pixels total (was 54)
-		
+
 		# Center healthbar above parent
 		global_position = get_parent().global_position - Vector2(size.x / 2, offset_y)
-		
+
 		# Scale healthbar to match parent (optional - makes it bigger/smaller with enemy)
 		scale = Vector2(parent_scale, parent_scale)
-		
+
 		# Always horizontal
 		rotation = 0.0
-		
+
 		# Show the health bar after first successful positioning
 		if not has_positioned_once:
 			visible = true

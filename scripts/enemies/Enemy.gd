@@ -19,6 +19,13 @@ const LOD_UPDATE_INTERVAL: float = 0.5  # Check LOD every 0.5s
 const LOD_NEAR_DISTANCE: float = 1200.0  # Full detail within this range
 const LOD_FAR_DISTANCE: float = 2500.0  # Minimal detail beyond this range
 
+# Performance: cache player reference and throttle UI updates
+var cached_player: Node = null
+var player_cache_timer: float = 0.0
+const PLAYER_CACHE_INTERVAL: float = 1.0  # Refresh player reference every 1s
+var ui_update_timer: float = 0.0
+const UI_UPDATE_INTERVAL: float = 0.2  # Update UI visibility 5 times per second
+
 # References
 @onready var health_bar: Control = $HealthBar
 @onready var sprite: CanvasItem = $Sprite2D  # Can be Sprite2D or AnimatedSprite2D
@@ -716,11 +723,22 @@ func _process(delta: float) -> void:
 	if in_crit_window and not weakpoints.is_empty():
 		queue_redraw()  # Continuously redraw while weakpoints are active
 
+	# Cache player reference (avoid get_first_node_in_group every frame for 75 enemies)
+	player_cache_timer += delta
+	if player_cache_timer >= PLAYER_CACHE_INTERVAL:
+		player_cache_timer = 0.0
+		cached_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+
 	# Toggle UI based on player distance (visibility handled by LOD system)
 	if not is_corpse:  # Only for living enemies
-		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-		if player and is_instance_valid(player):
-			var distance = global_position.distance_to(player.global_position)
+		# Throttle UI updates - don't need 60 FPS for visibility checks
+		ui_update_timer += delta
+		if ui_update_timer < UI_UPDATE_INTERVAL:
+			return
+		ui_update_timer = 0.0
+
+		if cached_player and is_instance_valid(cached_player):
+			var distance = global_position.distance_to(cached_player.global_position)
 
 			# === LOD SYSTEM ===
 			lod_update_timer += delta
@@ -736,7 +754,7 @@ func _process(delta: float) -> void:
 			if level_label:
 				level_label.visible = show_level_label
 
-				# Update con color based on player level
+				# Update con color based on player level (only when visible)
 				if show_level_label:
 					var player_level = CharacterStats.level
 					var con_color = get_con_color(player_level)
@@ -751,6 +769,7 @@ func _process(delta: float) -> void:
 			# Update healthbar visibility
 			if health_bar:
 				health_bar.visible = show_healthbar
+		return
 
 	# Handle corpse decay and interaction
 	if is_corpse:

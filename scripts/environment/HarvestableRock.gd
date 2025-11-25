@@ -42,7 +42,7 @@ var ore_amount: int = 0  # Set based on rock size (1-3 ore/stone)
 var rock_loot: Array = []  # Ore items to loot from rock pile
 var is_mined: bool = false  # Rock has been mined and is now a rock pile
 var loot_indicator: Node2D = null  # Sparkle effect
-var loot_ui: ChestLootUI = null  # Reuse chest loot UI
+var loot_ui: HarvestLootUI = null  # Mini harvest loot UI
 var fade_timer_started: bool = false  # Track if fade timer has started
 var rock_pile_sprite: Sprite2D = null  # The rubble/rock pile after mining
 
@@ -57,6 +57,12 @@ var mine_sounds: Array[AudioStream] = []
 var break_sounds: Array[AudioStream] = []
 var last_mine_sound_time: float = 0.0
 var mine_sound_interval: float = 0.8  # Play mine sound every 0.8 seconds
+
+# Performance caching
+var cached_has_pickaxe: bool = false
+var pickaxe_check_timer: float = 0.0
+const PICKAXE_CHECK_INTERVAL: float = 0.5  # Only check pickaxe every 0.5 seconds
+var last_drawn_progress: float = -1.0  # Track last drawn progress
 
 func _ready() -> void:
 	# Find sprite and shadow from children (created by game_world.gd)
@@ -104,7 +110,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not player_in_range:
 		return
 
-	print("�ite Rock pile handling F-key press - opening loot UI")
 	open_loot_ui()
 	get_viewport().set_input_as_handled()
 
@@ -140,8 +145,12 @@ func _physics_process(delta: float) -> void:
 			interaction_prompt.visible = false
 		return
 
-	# Check if player has pickaxe ONLY when in range (not when far away)
-	var has_pickaxe = InventorySystem.has_pickaxe_equipped()
+	# Check if player has pickaxe - CACHED for performance (only check every 0.5s)
+	pickaxe_check_timer += delta
+	if pickaxe_check_timer >= PICKAXE_CHECK_INTERVAL:
+		pickaxe_check_timer = 0.0
+		cached_has_pickaxe = InventorySystem.has_pickaxe_equipped()
+	var has_pickaxe = cached_has_pickaxe
 
 	# Update interaction prompt visibility and position
 	if interaction_prompt and not is_harvested and not is_mining:
@@ -224,8 +233,9 @@ func _physics_process(delta: float) -> void:
 					trigger_player_harvest_animation("pickaxe")  # Play animation with each strike
 					last_mine_sound_time = 0.0
 
-				# Update progress circle
-				if progress_circle:
+				# Update progress circle - only redraw if progress changed significantly (every 2%)
+				if progress_circle and abs(mine_progress - last_drawn_progress) >= 0.02:
+					last_drawn_progress = mine_progress
 					progress_circle.queue_redraw()
 
 				# Complete mine when progress reaches 100%
@@ -444,9 +454,8 @@ func start_mining() -> void:
 
 	if progress_circle:
 		progress_circle.visible = true
+		last_drawn_progress = 0.0
 		progress_circle.queue_redraw()
-
-	print("⛏️ Started mining rock")
 
 	# Trigger player pickaxe animation
 	trigger_player_harvest_animation("pickaxe")
@@ -462,8 +471,6 @@ func cancel_mining() -> void:
 	if progress_circle:
 		progress_circle.visible = false
 
-	print("🛑 Cancelled mining")
-
 	# Stop any playing mine sound
 	if mine_audio_player and mine_audio_player.playing:
 		mine_audio_player.stop()
@@ -478,8 +485,6 @@ func complete_mine() -> void:
 
 	if progress_circle:
 		progress_circle.visible = false
-
-	print("✅ Rock mined!")
 
 	# Stop mining sound and play rock break sound
 	if mine_audio_player and mine_audio_player.playing:
@@ -530,30 +535,113 @@ func spawn_ore_drops() -> void:
 	for i in range(ore_amount):
 		rock_loot.append(ore_item_data.duplicate())
 
-	print("�ite Rock pile has %d ore to loot" % rock_loot.size())
 
 func animate_rock_break() -> void:
-	"""Animate rock imploding into a rock pile"""
+	"""Animate rock imploding into a rock pile with fragment burst"""
 	if not rock_sprite:
 		return
 
 	# Create the rock pile first (starts invisible, will appear after implode)
 	create_rock_pile()
 
+	# Spawn rock fragment particles bursting outward
+	spawn_rock_fragments()
+
+	# Quick shake before breaking
+	var shake_tween = create_tween()
+	shake_tween.tween_property(rock_sprite, "position", rock_sprite.position + Vector2(3, 0), 0.03)
+	shake_tween.tween_property(rock_sprite, "position", rock_sprite.position + Vector2(-3, 0), 0.03)
+	shake_tween.tween_property(rock_sprite, "position", rock_sprite.position + Vector2(2, -2), 0.03)
+	shake_tween.tween_property(rock_sprite, "position", rock_sprite.position, 0.03)
+
 	# Implode animation - rock shrinks quickly to center
 	var tween = create_tween()
+	tween.tween_interval(0.1)  # Brief delay for shake
 	tween.set_parallel(true)
-	tween.tween_property(rock_sprite, "scale", rock_sprite.scale * 0.1, 0.3).set_ease(Tween.EASE_IN)
-	tween.tween_property(rock_sprite, "modulate:a", 0.0, 0.3)
+	tween.tween_property(rock_sprite, "scale", rock_sprite.scale * 0.05, 0.2).set_ease(Tween.EASE_IN)
+	tween.tween_property(rock_sprite, "modulate:a", 0.0, 0.2)
 
 	# Fade shadow quickly
 	if rock_shadow:
 		var shadow_tween = create_tween()
-		shadow_tween.tween_property(rock_shadow, "modulate:a", 0.2, 0.3)
+		shadow_tween.tween_property(rock_shadow, "modulate:a", 0.2, 0.25)
 
 	# After implode completes, show rock pile and sparkles
 	tween.set_parallel(false)
 	tween.tween_callback(_on_rock_imploded)
+
+func spawn_rock_fragments() -> void:
+	"""Spawn rock fragments that burst outward from the rock"""
+	var rock_center = rock_sprite.global_position + Vector2(0, original_scale.y * 15)
+	var rock_color = Color(0.5, 0.45, 0.4)  # Grayish brown rock color
+
+	# Create 12-18 fragments
+	var fragment_count = randi_range(12, 18)
+
+	for i in range(fragment_count):
+		var fragment = create_rock_fragment(rock_color)
+		fragment.global_position = rock_center + Vector2(randf_range(-10, 10), randf_range(-10, 10))
+		get_parent().add_child(fragment)
+
+		# Random outward direction
+		var angle = randf() * TAU
+		var speed = randf_range(80, 180)
+		var direction = Vector2(cos(angle), sin(angle))
+
+		# Some fragments go more upward
+		if randf() < 0.4:
+			direction.y = -abs(direction.y) * randf_range(1.2, 2.0)
+
+		# Animate fragment flying out and fading
+		var flight_time = randf_range(0.3, 0.5)
+		var end_pos = fragment.global_position + direction * speed
+
+		var frag_tween = create_tween()
+		frag_tween.set_parallel(true)
+
+		# Move outward with slight arc (gravity)
+		frag_tween.tween_property(fragment, "global_position", end_pos, flight_time).set_ease(Tween.EASE_OUT)
+		frag_tween.tween_property(fragment, "global_position:y", end_pos.y + 30, flight_time).set_ease(Tween.EASE_IN).set_delay(flight_time * 0.5)
+
+		# Rotate while flying
+		var spin = randf_range(-720, 720)
+		frag_tween.tween_property(fragment, "rotation_degrees", spin, flight_time)
+
+		# Scale down and fade out
+		frag_tween.tween_property(fragment, "scale", Vector2(0.3, 0.3), flight_time).set_ease(Tween.EASE_IN)
+		frag_tween.tween_property(fragment, "modulate:a", 0.0, flight_time * 0.8).set_delay(flight_time * 0.2)
+
+		# Clean up
+		frag_tween.set_parallel(false)
+		frag_tween.tween_callback(fragment.queue_free)
+
+func create_rock_fragment(base_color: Color) -> Polygon2D:
+	"""Create a small rock fragment polygon"""
+	var fragment = Polygon2D.new()
+
+	# Random irregular polygon shape (3-5 vertices)
+	var vertex_count = randi_range(3, 5)
+	var points = PackedVector2Array()
+	var size = randf_range(4, 10)
+
+	for i in range(vertex_count):
+		var angle = (float(i) / vertex_count) * TAU + randf_range(-0.3, 0.3)
+		var dist = size * randf_range(0.6, 1.0)
+		points.append(Vector2(cos(angle) * dist, sin(angle) * dist))
+
+	fragment.polygon = points
+
+	# Slightly vary the color
+	fragment.color = Color(
+		base_color.r + randf_range(-0.1, 0.1),
+		base_color.g + randf_range(-0.1, 0.1),
+		base_color.b + randf_range(-0.1, 0.1),
+		1.0
+	)
+
+	fragment.z_index = 5  # Above most things during flight
+
+	return fragment
 
 func create_rock_pile() -> void:
 	"""Create a rock pile/rubble sprite from the original rock"""
@@ -586,6 +674,11 @@ func _on_rock_imploded() -> void:
 	is_mined = true
 	fade_timer_started = false
 
+	# Shrink collision to minimal for the rock pile
+	for child in get_children():
+		if child is CollisionShape2D and child.shape is CircleShape2D:
+			child.shape.radius = 4.0  # Minimal collision for pile
+
 	# Fade in the rock pile
 	if rock_pile_sprite:
 		var pile_tween = create_tween()
@@ -594,7 +687,6 @@ func _on_rock_imploded() -> void:
 	# Add sparkle effect on the rock pile
 	add_loot_indicator()
 
-	print("�ite Rock imploded into pile - ready to loot!")
 
 func add_loot_indicator() -> void:
 	"""Add shiny glimmer effect to indicate rock pile has loot"""
@@ -715,13 +807,16 @@ func respawn_rock() -> void:
 		var tween2 = create_tween()
 		tween2.tween_property(rock_shadow, "modulate:a", 0.6, 0.5)
 
-	print("�ite Rock respawned!")
 
 func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = true
 		prompt_fade_timer = 0.0  # Reset fade timer when entering range
+
+		# Auto-open loot UI if rock is mined and has loot
+		if is_mined and rock_loot.size() > 0:
+			open_loot_ui()
 
 func _on_body_exited(body: Node2D) -> void:
 	"""Player left interaction range"""
@@ -731,6 +826,10 @@ func _on_body_exited(body: Node2D) -> void:
 		if interaction_prompt:
 			interaction_prompt.visible = false
 			interaction_prompt.modulate.a = 1.0  # Reset opacity
+
+		# Close loot UI if open
+		if loot_ui and is_instance_valid(loot_ui):
+			loot_ui.close_ui()
 
 func load_audio_files() -> void:
 	"""Load mining and break sound effects"""
@@ -770,7 +869,6 @@ func load_audio_files() -> void:
 			if sound:
 				break_sounds.append(sound)
 
-	print("⛏️ Loaded %d mine sounds and %d break sounds" % [mine_sounds.size(), break_sounds.size()])
 
 func play_random_mine_sound() -> void:
 	"""Play a random mining strike sound and shake the rock"""
@@ -890,7 +988,7 @@ func stop_player_harvest_animation() -> void:
 		character_sprite.play("idle_" + direction)
 
 func open_loot_ui() -> void:
-	"""Open the loot UI to let player take ore from rock pile"""
+	"""Open the mini loot UI to let player take ore from rock pile"""
 	if rock_loot.size() == 0:
 		return
 
@@ -898,15 +996,8 @@ func open_loot_ui() -> void:
 	if loot_ui and is_instance_valid(loot_ui):
 		return
 
-	# Load the chest loot UI scene (reuse it for rock loot)
-	var loot_scene = load("res://scenes/ui/chest_loot_ui.tscn")
-	if not loot_scene:
-		push_error("Failed to load chest loot UI scene!")
-		return
-
-	loot_ui = loot_scene.instantiate()
-
-	# Add to scene tree
+	# Create the mini harvest loot UI
+	loot_ui = HarvestLootUI.new()
 	get_tree().root.add_child(loot_ui)
 
 	# Connect signals
@@ -914,10 +1005,8 @@ func open_loot_ui() -> void:
 	loot_ui.item_looted.connect(_on_item_looted)
 	loot_ui.all_items_looted.connect(_on_all_items_looted)
 
-	# Open with rock loot - pass a copy to avoid reference issues
-	loot_ui.open_chest_ui(null, rock_loot.duplicate())
-
-	print("�ite Rock pile loot UI opened with %d items" % rock_loot.size())
+	# Open with rock loot
+	loot_ui.open_harvest_ui(rock_loot.duplicate(), "Ore")
 
 func _on_item_looted(item: Dictionary) -> void:
 	"""Handle individual item being looted"""
@@ -939,7 +1028,6 @@ func _on_item_looted(item: Dictionary) -> void:
 
 func _on_all_items_looted() -> void:
 	"""Handle all items being looted from rock pile"""
-	print("⛏️ All ore looted from rock pile!")
 
 	# Clear the loot array
 	rock_loot.clear()
@@ -956,7 +1044,6 @@ func _on_all_items_looted() -> void:
 
 func _on_loot_ui_closed() -> void:
 	"""Handle loot UI closing"""
-	print("⛏️ Rock pile loot UI closed")
 
 	# Clean up loot UI reference
 	if loot_ui:
@@ -983,7 +1070,6 @@ func start_fade_out() -> void:
 	# Random time before fading (15-45 seconds)
 	var fade_delay = randf_range(15.0, 45.0)
 
-	print("⛏️ Rock pile will fade in %.1f seconds" % fade_delay)
 
 	# Create tween for fade out
 	var fade_tween = create_tween()

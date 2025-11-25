@@ -611,35 +611,27 @@ func trigger_aggro() -> void:
 
 func trigger_chain_aggro() -> void:
 	"""Alert nearby enemies to join the fight (creates trains!)"""
-	# Performance: Use Area2D query instead of checking all enemies
-	var space_state = enemy.get_world_2d().direct_space_state
-	var query = PhysicsPointQueryParameters2D.new()
-	query.position = enemy.global_position
-	query.collision_mask = 1  # Layer 1 for enemies
-
-	# Simple proximity check - just get enemies within range
+	# Simple proximity check - get enemies within range
 	var nearby_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 	var checked = 0
+	var my_pos = enemy.global_position
+	var range_squared = chain_aggro_range * chain_aggro_range
 
 	for other_enemy in nearby_enemies:
 		if not is_instance_valid(other_enemy) or other_enemy == enemy:
 			continue
 
 		# Early out if too far (square distance check is faster)
-		var dx = other_enemy.global_position.x - enemy.global_position.x
-		var dy = other_enemy.global_position.y - enemy.global_position.y
-		var dist_squared = dx * dx + dy * dy
-		var range_squared = chain_aggro_range * chain_aggro_range
+		var dist_squared = my_pos.distance_squared_to(other_enemy.global_position)
 
 		if dist_squared <= range_squared:
 			# Alert the nearby enemy's AI
-			if other_enemy.has_node("EnemyAI"):
-				var other_ai = other_enemy.get_node("EnemyAI")
-				if other_ai.has_method("trigger_aggro") and not other_ai.is_in_combat:
-					other_ai.trigger_aggro()
-					checked += 1
-					if checked >= 5:  # Max 5 chain aggros at once
-						break
+			var other_ai = other_enemy.get_node_or_null("EnemyAI")
+			if other_ai and not other_ai.is_in_combat:
+				other_ai.trigger_aggro()
+				checked += 1
+				if checked >= 5:  # Max 5 chain aggros at once
+					break
 
 # ═══════════════════════════════════════════════════════════════════════════
 # EVENT HANDLERS

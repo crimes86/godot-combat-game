@@ -3,7 +3,8 @@ shader_type canvas_item;
 // Ground variation shader - SUBTLE visual interest without additional nodes
 // Designed to be barely noticeable but add texture to flat ground
 
-uniform vec4 base_color : source_color = vec4(0.09, 0.085, 0.08, 1.0);
+// Dark charcoal - neutral grey, no brown/warm tint
+uniform vec4 base_color : source_color = vec4(0.07, 0.07, 0.07, 1.0);
 uniform float world_scale : hint_range(0.0001, 0.01) = 0.001;
 uniform float intensity : hint_range(0.0, 1.0) = 0.3;  // Overall effect strength
 
@@ -48,7 +49,8 @@ void fragment() {
 
     // === LAYER 1: Very subtle large-scale variation (barely visible) ===
     float large_variation = fbm(world_pos * 0.00015, 3);
-    color += (large_variation - 0.5) * vec3(0.008, 0.006, 0.003) * intensity;
+    // Neutral grey variation - no warm tint
+    color += (large_variation - 0.5) * vec3(0.006, 0.006, 0.006) * intensity;
 
     // === LAYER 2: Fine grain texture (small speckles) ===
     float fine_grain = noise(world_pos * 0.008);
@@ -56,7 +58,8 @@ void fragment() {
 
     // === LAYER 3: Medium noise for slight color shifts ===
     float medium_noise = fbm(world_pos * 0.0004, 2);
-    color += (medium_noise - 0.5) * vec3(0.012, 0.008, 0.004) * intensity;
+    // Neutral grey shifts - no warm tint
+    color += (medium_noise - 0.5) * vec3(0.008, 0.008, 0.008) * intensity;
 
     // === LAYER 4: Tiny scattered darker specks ===
     float speck_noise = noise(world_pos * 0.015);
