@@ -331,10 +331,10 @@ When reviewing code for performance:
 **Opportunity:** Implement spatial grid for O(1) neighbor queries
 **Expected Gain:** Scale better with many entities
 
-### LOD (Level of Detail)
-**Current:** All enemies use same detail level
-**Opportunity:** Reduce sprite complexity at distance
-**Expected Gain:** 5-10ms per frame with many enemies
+### Chunk-Based Enemy Culling
+**Current:** Enemies despawn when chunk unloads
+**Status:** Implemented in ChunkAwareSpawnManager.gd
+**Benefit:** Only enemies in loaded chunks exist, automatic cleanup
 
 ### Texture Atlasing
 **Current:** Individual sprite files

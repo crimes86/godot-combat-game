@@ -18,16 +18,15 @@ Shows:
 
 Location: Top-left corner
 
-### 2. Chunk Debug Display (Right Side)
+### 2. Chunk & Enemy Debug (Integrated in Profiler)
 Shows:
-- **Current Chunk**: Grid coordinates (e.g., "-1,0")
-- **Position in Chunk**: XY within 2000×2000 square
-- **Distance to Edge**: Pixels to nearest chunk boundary
-- **Loaded Chunks**: How many chunks in memory
-- **Loading Chunks**: Background chunk generation count
-- **Total World Chunks**: Full world grid size
+- **Current Chunk**: Grid coordinates (e.g., "-1,0") with X position
+- **Distance to Edges**: West/East edge distances (⚠️ if < 1000px)
+- **Loaded Chunks**: List of currently loaded chunks
+- **Enemies Per Chunk**: Count vs target (e.g., "[-1,0]: 58/60")
+- **Total Enemies**: Sum of all active enemies
 
-Location: Top-right corner
+Location: Integrated in the left-side profiler display
 
 ### 3. Player Sprite Debugging
 Shows:
@@ -101,17 +100,34 @@ func _on_debug_toggled(is_visible: bool) -> void:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ PERFORMANCE PROFILER              CHUNK DEBUG                    │
-│ FPS: 60                           Current Chunk: -1,0            │
-│ Frame Time: 16.6ms                Position in Chunk: (850, 1200) │
-│ Total Nodes: 3450                 Distance to Edge: 350px        │
-│ Enemies: 5                        Loaded Chunks: 6               │
-│ Particles: 120                    Loading Chunks: 2              │
-│ Polygons: 850                     Total World Chunks: 27 (9x3)  │
-│ Memory: 256 MB                                                   │
-│                                                                   │
-│                          [Game View]                             │
-│                                                                   │
+│ FPS: 60 (16.6 ms/frame)                                          │
+│ ━━━━━━━━━━━━━━━━━━━━━━                                           │
+│ SCENE:                                                           │
+│   Total Nodes: 1800                                              │
+│   Enemies: 118                                                   │
+│   Campfires: 1                                                   │
+│ ━━━━━━━━━━━━━━━━━━━━━━                                           │
+│ RENDERING:                                                       │
+│   Sprites: 450                                                   │
+│   Polygons: 320                                                  │
+│   Particles: 80 (active)                                         │
+│   Lights: 12                                                     │
+│ ━━━━━━━━━━━━━━━━━━━━━━                                           │
+│ MEMORY:                                                          │
+│   Usage: 128.5 MB                                                │
+│ ━━━━━━━━━━━━━━━━━━━━━━                                           │
+│ CHUNKS:                                                          │
+│   Current: [-1,0] X=-2000                                        │
+│   West Edge: 1000px                                              │
+│   East Edge: 2000px                                              │
+│   Loaded: [-1,0, 0,0]                                           │
+│ ━━━━━━━━━━━━━━━━━━━━━━                                           │
+│ ENEMIES PER CHUNK:                                               │
+│   [-1,0]: 58/60                                                  │
+│   [0,0]: 60/60                                                   │
+│   Total: 118 enemies                                             │
+│ ━━━━━━━━━━━━━━━━━━━━━━                                           │
+│ Press F3 to toggle                                               │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -176,9 +192,16 @@ For production/release builds:
    - Leave F3 toggle functional for bug reports
    - Players can enable if they want performance stats
 
-## Files Modified
+## Visual Debug Overlays
+
+When F3 is enabled, the PerformanceProfiler also draws:
+- **Chunk boundary lines**: Vertical magenta lines at each chunk edge
+- **Chunk labels**: "Chunk X,0" labels at the top of each boundary
+
+These help visualize chunk boundaries while testing.
+
+## Files
 
 - `scripts/systems/DebugConfig.gd` - Central F3 toggle handler
-- `scripts/debug/PerformanceProfiler.gd` - Now hidden by default, F3 toggle
-- `scripts/systems/ChunkBasedPropSystem.gd` - Chunk debug on right side, F3 toggle
+- `scripts/debug/PerformanceProfiler.gd` - Performance stats, chunk info, enemy counts, visual overlays
 - `docs/F3_DEBUG_SYSTEM.md` - This documentation

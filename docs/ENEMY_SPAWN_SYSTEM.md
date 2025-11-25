@@ -1,6 +1,10 @@
 # Enemy Spawn System - Complete Guide
 
-This comprehensive guide covers the complete enemy spawn system, including spawn location generation and enemy spawning mechanics. These systems work together but remain separate in implementation.
+> **Note:** This document covers **editor-time spawn marker generation tools**. For the **runtime chunk-based spawning system**, see [CHUNK_SYSTEM.md](CHUNK_SYSTEM.md).
+>
+> **Current Implementation:** Enemies are spawned per-chunk (60 enemies per 3000px chunk). Manual spawn markers are processed first, then procedural spawning fills in the remainder. Level is determined by X position (see CHUNK_SYSTEM.md for level bands).
+
+This guide covers the spawn location generation tools for creating and organizing enemy spawn markers in the Godot editor.
 
 ---
 

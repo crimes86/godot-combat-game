@@ -14,27 +14,29 @@ The game was loading **15,000+ nodes at spawn**, causing severe FPS drops. Inves
 ### Optimizations Applied
 
 #### 1. Chunk-Based Prop System (scripts/systems/ChunkBasedPropSystem.gd)
-**Impact: 15,000+ nodes → ~500 nodes for props**
+**Impact: 15,000+ nodes → ~800 nodes for props per chunk**
 
-Converted to dynamic chunk loading (2000×2000px chunks):
-- **Trees** (10 per chunk) - Lootable, deterministic generation
-- **Large rocks** (8 per chunk) - Lootable, deterministic generation
-- **Medium/small rocks** (17 per chunk) - Decorative
-- **Lava pools** (2 per chunk) - Visual with 5 gradient layers (reduced from 10)
-- **Bone clusters** (1 per chunk) - Decorative
-- **Dead vegetation** (3 per chunk) - Decorative
-- **Ground cracks** (4 per chunk) - Visual
+Converted to dynamic chunk loading (3000px wide × 6000px tall horizontal chunks):
+- **Trees** (158 per chunk) - Lootable (wood)
+- **Large rocks** (36 per chunk) - Lootable (stone/ore)
+- **Medium rocks** (45 per chunk) - Decorative
+- **Small rocks** (32 per chunk) - Decorative
+- **Lava pools** (9 per chunk) - Visual with light effects
+- **Bone clusters** (5 per chunk) - Decorative
+- **Dead vegetation** (14 per chunk) - Decorative
+- **Ground cracks** (18 per chunk) - Visual
 
 **Features:**
 - Deterministic generation using chunk key as seed
 - Harvest tracking system for lootable resources
 - Automatic chunk loading/unloading based on player position
-- Only 2-3 chunks loaded at spawn
+- 1-3 chunks loaded at any time
+- Async loading (30 props/frame for priority chunks, 15 for background)
 
 **Node Reduction:**
 - Before: All props loaded globally (~12,000 nodes)
-- After: 2-3 chunks loaded (~500 nodes)
-- **Savings: ~11,500 nodes**
+- After: 1-3 chunks loaded (~800-2400 nodes)
+- **Savings: ~10,000+ nodes**
 
 #### 2. Terrain Exclusion Zone (scripts/game_world.gd:238-256)
 **Impact: 1,120 ColorRects saved at spawn**
@@ -168,8 +170,8 @@ Reduced gradient layers from 10 to 5:
    - Optimized campfire clearing to Polygon2D + shader
    - Optimized campfire circle to Polygon2D + shader
 
-3. **docs/CHUNK_SYSTEM_COMPLETE.md**
-   - Full documentation of chunk system
+3. **docs/CHUNK_SYSTEM.md**
+   - Full documentation of chunk system (props + enemies)
 
 ### Performance Monitoring
 
@@ -185,7 +187,8 @@ This shows how many nodes each chunk creates. Typical values:
 
 ### Maintenance Notes
 
-- Chunk size (CHUNK_SIZE = 2000px) can be adjusted for performance
+- Chunk width (CHUNK_SIZE = 3000px) can be adjusted for performance
 - Prop density per chunk can be tuned in ChunkBasedPropSystem.gd
+- Enemy count per chunk (ENEMIES_PER_CHUNK = 60) in ChunkAwareSpawnManager.gd
 - Terrain exclusion radius (1500px) can be increased for more FPS
-- Lava pool layers (5) can be reduced to 3 for more performance
+- Lava pool layers can be reduced for more performance
