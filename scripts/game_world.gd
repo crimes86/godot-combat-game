@@ -75,9 +75,6 @@ var terrain_check_timer = 0.0
 const TERRAIN_CHECK_INTERVAL = 1.0  # Check every 1s (was 0.3s - less frequent for better performance)
 
 func _ready():
-	DebugConfig.log_spawning("🗺️ GameWorld initializing (viewport-culled terrain system)...")
-	print("   📌 Press F11 to force regenerate baked terrain")
-
 	# Initialize multiplayer
 	_setup_multiplayer()
 
@@ -86,13 +83,11 @@ func _ready():
 	if profiler_scene:
 		var profiler = profiler_scene.instantiate()
 		add_child(profiler)
-		print("   📊 Performance profiler loaded (Press F3 to toggle)")
 
 	# Initialize chunk-based prop system
 	chunk_prop_system = ChunkBasedPropSystem.new()
 	add_child(chunk_prop_system)
 	chunk_prop_system.initialize(self)
-	print("   🗺️ ChunkBasedPropSystem initialized")
 
 	# Create world boundaries first
 	create_world_boundaries()
@@ -183,42 +178,28 @@ func create_world_boundaries():
 	right_wall.add_child(right_shape)
 	add_child(right_wall)
 
-	print("🚧 World boundaries created")
-
 func setup_camera_limits():
 	"""Set camera limits to prevent seeing outside world boundaries"""
-	# Wait for player to be in scene tree
 	await get_tree().process_frame
 
 	var player = get_tree().get_first_node_in_group("player")
 	if not player:
-		print("⚠️ Player not found for camera limits")
 		return
 
 	var camera = player.get_node_or_null("Camera2D")
 	if not camera:
-		print("⚠️ Camera2D not found on player")
 		return
 
-	# Set limits to world bounds
 	camera.limit_left = Constants.WORLD_LEFT
 	camera.limit_right = Constants.WORLD_RIGHT
 	camera.limit_top = Constants.WORLD_TOP
 	camera.limit_bottom = Constants.WORLD_BOTTOM
 
-	print("📷 Camera limits set to world boundaries")
-
 func generate_optimized_world_layers():
 	"""Use existing Ground node from scene"""
-	print("  🗺️ Using scene Ground node...")
-
-	# Update the existing Ground ColorRect from the scene
 	var ground = get_node_or_null("Ground")
 	if ground:
-		ground.color = Color(0.15, 0.12, 0.10, 1.0)  # Dark charcoal brown
-		print("  ✅ Ground color updated")
-	else:
-		print("  ⚠️ Ground node not found in scene!")
+		ground.color = Color(0.15, 0.12, 0.10, 1.0)
 
 	# Add heavily trafficked areas around campfire and ruins
 	create_trafficked_areas()
@@ -247,8 +228,6 @@ func create_trafficked_areas():
 
 	# Ruins 3 - 24 spots in ~400px radius
 	create_traffic_circle(traffic_layer, Vector2(8200, -2200), 400, 24, rng)
-
-	print("  ✅ Created trafficked area textures (117 spots)")
 
 func create_traffic_circle(parent: Node2D, center: Vector2, radius: float, num_spots: int, rng: RandomNumberGenerator):
 	"""Create scattered dark spots in a circular area"""
@@ -310,8 +289,6 @@ func create_path_system():
 			var start = branch_points[i]
 			var end = branch_points[i + 1]
 			create_path_segment(path_layer, start, end, 150, rng)  # 150px wide branch
-
-	print("  ✅ Created path system with branch to ruins")
 
 func create_curved_path(start: Vector2, end: Vector2, num_points: int, rng: RandomNumberGenerator) -> Array:
 	"""Generate curved path points between two positions"""
@@ -2024,39 +2001,30 @@ func create_torches_along_path():
 	print("🔥 Created %d torches along %.0fpx path (avg spacing: %.0fpx)" % [torch_count, total_path_length, total_path_length / max(1, torch_count)])
 
 func spawn_all_enemies():
-	"""Initialize chunk-aware spawn manager with dynamic spawning"""
-	print("🎯 Initializing chunk-aware enemy spawning system...")
+	"""Initialize chunk-based enemy spawn manager
 
+	The system supports two spawn modes:
+	1. Manual spawn markers (Marker2D nodes with enemy_level metadata)
+	2. Procedural spawns (fills chunks to target count based on X position level bands)
+
+	Manual markers take priority - procedural spawns fill remaining capacity.
+	"""
 	# In multiplayer, only server manages enemies
 	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
-		print("   ⚠️ Client mode - enemy spawning disabled (server handles it)")
 		return
 
-	# STEP 1: Collect all spawn markers (don't spawn yet)
+	# Collect manual spawn markers from the scene
 	var spawn_markers = collect_spawn_markers()
-	print("   📍 Found %d spawn markers" % spawn_markers.size())
+	print("📍 Found %d manual spawn markers in scene" % spawn_markers.size())
 
-	# STEP 2: Create and initialize ChunkAwareSpawnManager
+	# Create and initialize ChunkAwareSpawnManager
 	const ChunkAwareSpawnManager = preload("res://scripts/systems/ChunkAwareSpawnManager.gd")
 	spawn_manager = ChunkAwareSpawnManager.new()
 	spawn_manager.name = "ChunkAwareSpawnManager"
 	add_child(spawn_manager)
 
-	# Configure activation rates per level range
-	spawn_manager.activation_rates = {
-		"L1-3": 0.3,   # 30% of low-level spawns active
-		"L4-7": 0.4,   # 40% of mid-level spawns active
-		"L8-10": 0.3   # 30% of high-level spawns active
-	}
-	spawn_manager.max_active_enemies = 120  # Increased from 50 to allow enemies across all loaded chunks
-
-	# Initialize with spawn markers and chunk system
+	# Initialize with chunk system and manual markers
 	spawn_manager.initialize(self, chunk_prop_system, spawn_markers)
-
-	print("✅ Chunk-aware spawning system initialized!")
-	print("   🎮 Enemies spawn/despawn with chunks")
-	print("   🔍 LOD system: Full (< 400px), Medium (400-800px), Minimal (800-1500px)")
-	print("   💾 Dead/looted enemies won't respawn")
 
 func collect_spawn_markers() -> Array:
 	"""Collect all enemy spawn markers (don't spawn yet - SpawnManager handles that)
@@ -2077,8 +2045,6 @@ func collect_spawn_markers() -> Array:
 	Returns: Array of spawn marker nodes
 	"""
 	var spawn_markers = []
-
-	print("\n📍 Scanning for enemy spawn markers...")
 
 	# Find all Marker2D children with enemy spawn data
 	# Matches: "EnemySpawn*" or "L<num>_*" (level-prefixed markers from radial pattern tool)
@@ -2128,19 +2094,12 @@ func collect_spawn_markers() -> Array:
 
 		spawn_markers.append(child)
 
-	if spawn_markers.is_empty():
-		print("   ⚠️ No spawn markers found! Add Marker2D nodes named 'EnemySpawn_*'")
-	else:
-		print("   ✅ Collected %d spawn markers" % spawn_markers.size())
-
 	return spawn_markers
 
 func analyze_spawn_pattern(children: Array) -> void:
 	"""Analyze manually placed enemy patterns to learn density, level progression, and distribution"""
 	var spawn_data = []
 	var campfire_pos = Vector2(-2000, 0)
-
-	print("\n🔍 Analyzing your spawn pattern...")
 
 	# Collect all manual spawn data
 	for child in children:
@@ -3195,17 +3154,10 @@ func create_path_for_baking(viewport: SubViewport, offset: Vector2):
 
 func setup_corpse_loot_system() -> void:
 	"""Setup handlers for corpse looting system"""
-	print("💀 Setting up corpse loot system...")
-
-	# Connect to all existing enemies
 	for enemy in get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES):
 		if enemy.has_signal("corpse_clicked"):
 			enemy.corpse_clicked.connect(_on_corpse_clicked)
-
-	# Use a deferred call to listen for new enemies spawning
 	get_tree().node_added.connect(_on_node_added)
-
-	print("✅ Corpse loot system ready")
 
 func _on_node_added(node: Node) -> void:
 	"""Connect to newly spawned enemies"""
@@ -3215,54 +3167,35 @@ func _on_node_added(node: Node) -> void:
 
 func _on_corpse_clicked(corpse) -> void:
 	"""Handle corpse being clicked - open loot UI with AOE aggregation"""
-	print("🎯 _on_corpse_clicked() HANDLER CALLED!")
 	if not is_instance_valid(corpse):
-		print("❌ Corpse not valid")
 		return
-	print("✅ Corpse is valid, proceeding...")
 
-	# Find all nearby corpses within AOE radius
-	print("📦 Finding nearby corpses...")
 	var nearby_corpses = corpse.get_nearby_corpses(CorpseState.AOE_LOOT_RADIUS)
-	print("📦 Found %d nearby corpses" % nearby_corpses.size())
-
-	# Create and open loot UI (deferred to avoid blocking)
-	print("📦 Starting deferred UI creation...")
 	_create_loot_ui_deferred.call_deferred(corpse, nearby_corpses)
-	print("✅ Deferred call queued")
 
 func _create_loot_ui_deferred(corpse, nearby_corpses: Array) -> void:
 	"""Create loot UI from scene file"""
-	print("📦 Loading loot UI scene...")
-	
 	var loot_scene = load("res://scenes/ui/loot_body_ui.tscn")
 	if not loot_scene:
-		push_error("❌ Failed to load scene")
+		push_error("Failed to load loot UI scene")
 		return
-	print("✅ Scene loaded")
-	
+
 	var loot_ui = loot_scene.instantiate()
 	if not loot_ui:
-		push_error("❌ Failed to instantiate")
+		push_error("Failed to instantiate loot UI")
 		return
-	print("✅ UI instantiated")
-	
+
 	get_tree().root.add_child(loot_ui)
-	print("✅ Added to tree")
-	
 	loot_ui.loot_ui_closed.connect(func(): loot_ui.queue_free())
 	loot_ui.open_loot_ui(corpse, nearby_corpses)
-	print("✅ UI opened!")
 func populate_world_enemies() -> void:
 	"""Populate Zone 1 with directional spawning: N/W/S = noob area (1-5), E = progressive (1-10)"""
-	print("\n🦴 Populating Zone 1 with directional spawning...")
-
 	const CAMPFIRE_POS = Vector2(400, 0)
-	const RUINS1_X = 2184  # Zone 1 eastern boundary
-	const WORLD_NORTH = -2000  # Northern world edge
-	const WORLD_SOUTH = 2000   # Southern world edge
-	const WORLD_WEST = -2500   # Western world edge
-	const SAFE_ZONE_RADIUS = 350  # Don't spawn too close to campfire
+	const RUINS1_X = 2184
+	const WORLD_NORTH = -2000
+	const WORLD_SOUTH = 2000
+	const WORLD_WEST = -2500
+	const SAFE_ZONE_RADIUS = 350
 	const MIN_DISTANCE_FROM_PATH = 200
 	const RESPAWN_DELAY = 60.0
 
@@ -3272,40 +3205,12 @@ func populate_world_enemies() -> void:
 
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 12345
-	var total_spawned = 0
 
-	# NORTH AREA: Level 1-5 noob farming zone
-	print("  📍 Spawning NORTH area (noob zone, levels 1-5)...")
-	var north_spawned = spawn_noob_area(spawners_node, rng, CAMPFIRE_POS, "north",
-		WORLD_NORTH, SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
-	total_spawned += north_spawned
-	print("     ✅ North: %d enemies" % north_spawned)
-
-	# WEST AREA: Level 1-5 noob farming zone
-	print("  📍 Spawning WEST area (noob zone, levels 1-5)...")
-	var west_spawned = spawn_noob_area(spawners_node, rng, CAMPFIRE_POS, "west",
-		WORLD_WEST, SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
-	total_spawned += west_spawned
-	print("     ✅ West: %d enemies" % west_spawned)
-
-	# SOUTH AREA: Level 1-5 noob farming zone
-	print("  📍 Spawning SOUTH area (noob zone, levels 1-5)...")
-	var south_spawned = spawn_noob_area(spawners_node, rng, CAMPFIRE_POS, "south",
-		WORLD_SOUTH, SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
-	total_spawned += south_spawned
-	print("     ✅ South: %d enemies" % south_spawned)
-
-	# EAST AREA: Progressive Level 1-10 toward Ruins 1
-	print("  📍 Spawning EAST area (progressive zone, levels 1-10)...")
-	var east_spawned = spawn_progressive_east(spawners_node, rng, CAMPFIRE_POS, RUINS1_X,
-		SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
-	total_spawned += east_spawned
-	print("     ✅ East: %d enemies" % east_spawned)
-
-	print("\n✅ Zone 1 populated with %d total enemies" % total_spawned)
-	print("   🧭 North/West/South: Noob areas (Level 1-5)")
-	print("   🧭 East: Progressive difficulty (Level 1-10 → Ruins 1)")
-	print("   📍 Respawn timer: %.0f seconds\n" % RESPAWN_DELAY)
+	# Spawn all areas
+	spawn_noob_area(spawners_node, rng, CAMPFIRE_POS, "north", WORLD_NORTH, SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
+	spawn_noob_area(spawners_node, rng, CAMPFIRE_POS, "west", WORLD_WEST, SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
+	spawn_noob_area(spawners_node, rng, CAMPFIRE_POS, "south", WORLD_SOUTH, SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
+	spawn_progressive_east(spawners_node, rng, CAMPFIRE_POS, RUINS1_X, SAFE_ZONE_RADIUS, MIN_DISTANCE_FROM_PATH, RESPAWN_DELAY)
 
 func spawn_noob_area(parent: Node, rng: RandomNumberGenerator, campfire_pos: Vector2,
 					 direction: String, world_edge: float, safe_zone: float,
@@ -3504,63 +3409,75 @@ func create_enemy_spawner(parent: Node, position: Vector2, level: int, count: in
 
 func _setup_multiplayer():
 	"""Initialize multiplayer functionality"""
+	print("🔍 [PLAYER DEBUG] _setup_multiplayer() called")
+	print("   has_multiplayer_peer: %s" % multiplayer.has_multiplayer_peer())
+	print("   unique_id: %s" % multiplayer.get_unique_id())
+	print("   is_server: %s" % multiplayer.is_server())
+
 	# Connect to NetworkManager signals
 	NetworkManager.player_connected.connect(_on_player_connected)
 	NetworkManager.player_disconnected.connect(_on_player_disconnected)
 
 	# If we're already connected (came from menu), spawn players
 	if multiplayer.has_multiplayer_peer():
-		print("Multiplayer active - will spawn players after world loads")
-		# Delay spawn to ensure world is ready
+		print("🔍 [PLAYER DEBUG] Multiplayer active - calling _spawn_initial_players deferred")
 		call_deferred("_spawn_initial_players")
 
 func _spawn_initial_players():
 	"""Spawn all connected players"""
-	# Only spawn local player
 	var my_id = multiplayer.get_unique_id()
+	print("🔍 [PLAYER DEBUG] _spawn_initial_players() called, my_id=%d" % my_id)
+	print("   Current players dict: %s" % str(players.keys()))
 
 	# Check if not already spawned
 	if not players.has(my_id):
+		print("🔍 [PLAYER DEBUG] Spawning local player %d" % my_id)
 		spawn_player(my_id)
-		print("Initial spawn for player %d" % my_id)
+	else:
+		print("🔍 [PLAYER DEBUG] Player %d already in dict, skipping spawn" % my_id)
 
 	# Server handles spawning for connected players
 	if multiplayer.is_server():
 		var connected = NetworkManager.get_player_list()
+		print("🔍 [PLAYER DEBUG] Server - connected players: %s" % str(connected))
 		for player_id in connected:
 			if player_id != my_id and not players.has(player_id):
+				print("🔍 [PLAYER DEBUG] Server spawning remote player %d" % player_id)
 				spawn_player(player_id)
-				print("Server spawning connected player %d" % player_id)
 
 func _on_player_connected(id: int):
 	"""Handle new player connection"""
+	print("🔍 [PLAYER DEBUG] _on_player_connected(%d) - is_server=%s" % [id, multiplayer.is_server()])
 	if not multiplayer.is_server():
 		return
 
-	print("Player %d connected - spawning" % id)
 	spawn_player(id)
 
-	# Tell the new player about existing players
+	# Tell the new player about existing players (but NOT themselves!)
 	for existing_id in players:
-		rpc_id(id, "spawn_player", existing_id)
+		if existing_id != id:
+			rpc_id(id, "spawn_player", existing_id)
 
 func _on_player_disconnected(id: int):
 	"""Handle player disconnection"""
-	print("Player %d disconnected - removing" % id)
+	print("🔍 [PLAYER DEBUG] _on_player_disconnected(%d)" % id)
 	despawn_player(id)
 
 @rpc("authority", "call_local", "reliable")
 func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO):
 	"""Spawn a player (local or remote)"""
+	print("🔍 [PLAYER DEBUG] spawn_player(%d) called" % id)
+	print("   Caller: %s" % get_stack()[1] if get_stack().size() > 1 else "unknown")
+	print("   Current players: %s" % str(players.keys()))
+
 	if players.has(id):
-		print("Player %d already spawned" % id)
+		print("🔍 [PLAYER DEBUG] ⚠️ DUPLICATE BLOCKED - Player %d already in dict!" % id)
 		return
 
 	# Default spawn position near campfire
 	if spawn_pos == Vector2.ZERO:
 		spawn_pos = get_spawn_point()
 
-	# Instead of using NETWORK_PLAYER_SCENE, use the existing player scene
 	var player_scene = load("res://scenes/player/player.tscn")
 	if not player_scene:
 		push_error("Failed to load player scene!")
@@ -3571,31 +3488,24 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO):
 	player.set_multiplayer_authority(id)
 	player.position = spawn_pos
 
-	# Add to scene
 	add_child(player)
 	players[id] = player
 
-	# Setup local vs remote player
-	if id == multiplayer.get_unique_id():
-		# This is our local player
-		local_player = player
-		player.add_to_group("player")  # Important for existing systems
+	var is_local = (id == multiplayer.get_unique_id())
+	print("🔍 [PLAYER DEBUG] ✅ Player %d spawned at %s (local=%s)" % [id, spawn_pos, is_local])
 
-		# Ensure camera is enabled
+	if is_local:
+		local_player = player
+		player.add_to_group("player")
 		if player.has_node("Camera2D"):
 			player.get_node("Camera2D").enabled = true
-
-		print("Spawned local player at %s" % spawn_pos)
 	else:
-		# Remote player - disable their input and camera
 		if player.has_method("set_physics_process"):
 			player.set_physics_process(false)
 		if player.has_method("set_process_unhandled_input"):
 			player.set_process_unhandled_input(false)
 		if player.has_node("Camera2D"):
 			player.get_node("Camera2D").enabled = false
-
-		print("Spawned remote player %d at %s" % [id, spawn_pos])
 
 @rpc("any_peer", "call_local", "reliable")
 func despawn_player(id: int):
@@ -3610,11 +3520,14 @@ func despawn_player(id: int):
 		local_player = null
 
 func get_spawn_point() -> Vector2:
-	"""Get a random spawn point near the campfire"""
-	# Spawn around campfire with some randomization
-	var angle = randf() * TAU
-	var distance = 200 + randf() * 100
-	return Vector2(cos(angle) * distance, sin(angle) * distance)
+	"""Get spawn point at campfire, opposite side from blacksmith"""
+	# Campfire is at (-2000, 0), Blacksmith/Vendor is at (-1850, 0) - to the right
+	# Spawn player on the LEFT side of campfire (opposite blacksmith)
+	var campfire_pos = Vector2(-2000, 0)
+	var spawn_offset = Vector2(-150, 0)  # Left of campfire, away from blacksmith
+	# Add slight randomization
+	spawn_offset.y += randf_range(-50, 50)
+	return campfire_pos + spawn_offset
 
 func get_spawn_points() -> Array:
 	"""Get all available spawn points"""

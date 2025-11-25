@@ -49,34 +49,19 @@ func update_fps_display() -> void:
 
 	fps_label.text = "FPS: %d" % fps
 
-	# Count enemies by LOD level
+	# Count total enemies
 	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
-	var lod_counts = {
-		"full": 0,
-		"medium": 0,
-		"low": 0,
-		"placeholder": 0,
-		"culled": 0
-	}
 
-	for enemy in enemies:
-		if not is_instance_valid(enemy):
-			continue
+	# Get chunk count from spawn manager
+	var chunk_count = 0
+	var root = get_tree().root
+	for child in root.get_children():
+		var game_world = child.get_node_or_null("GameWorld")
+		if game_world:
+			var spawn_manager = game_world.get_node_or_null("ChunkAwareSpawnManager")
+			if spawn_manager and spawn_manager.has_method("get_stats"):
+				var stats = spawn_manager.get_stats()
+				chunk_count = stats.total_chunks
+			break
 
-		if enemy.has_node("EnemyAI"):
-			var ai = enemy.get_node("EnemyAI")
-			match ai.current_lod:
-				0: lod_counts["full"] += 1  # FULL
-				1: lod_counts["medium"] += 1  # MEDIUM
-				2: lod_counts["low"] += 1  # LOW
-				3: lod_counts["placeholder"] += 1  # PLACEHOLDER
-				4: lod_counts["culled"] += 1  # CULLED
-
-	stats_label.text = "Enemies: %d | Full:%d Med:%d Low:%d Place:%d Cull:%d" % [
-		enemies.size(),
-		lod_counts["full"],
-		lod_counts["medium"],
-		lod_counts["low"],
-		lod_counts["placeholder"],
-		lod_counts["culled"]
-	]
+	stats_label.text = "Enemies: %d | Chunks: %d" % [enemies.size(), chunk_count]

@@ -1,67 +1,74 @@
 extends Node
 class_name ChunkAwareSpawnManager
 
-## Chunk-Aware Enemy Spawn Manager
+## Chunk-Based Enemy Spawn Manager
 ##
-## Integrates with ChunkBasedPropSystem to spawn enemies only in loaded chunks.
-## Retains manually placed spawn markers from scene, groups them by chunk.
+## Enemies are managed per-chunk, not per-player. Each chunk maintains its own
+## enemy population and spawns/despawns based on chunk load state.
 ##
 ## Features:
-## - Only spawns in active chunks (current + neighbors)
-## - Tunable activation rates per level range
-## - Proximity-based LOD for performance
-## - Preserves state (dead/looted enemies won't respawn)
+## - Each chunk has a target enemy count (ENEMIES_PER_CHUNK)
+## - Enemies spawn when chunk loads, despawn when chunk unloads
+## - Level bands determine enemy levels based on X position
+## - Respawn timer for killed enemies
+## - No player-centric LOD - all enemies in loaded chunks are active
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Spawn activation rates per level range (0.0 - 1.0)
-## Controls what % of markers in each level range will spawn enemies
-@export var activation_rates: Dictionary = {
-	"L1-3": 0.3,   # 30% of low-level spawns active
-	"L4-7": 0.4,   # 40% of mid-level spawns active
-	"L8-10": 0.3   # 30% of high-level spawns active
-}
+## Enemies per chunk (3000px wide)
+const ENEMIES_PER_CHUNK: int = 60
 
-## Maximum active enemies across all chunks
-@export var max_active_enemies: int = 50
+## Chunk size (must match ChunkBasedPropSystem)
+const CHUNK_SIZE: float = 3000.0
 
-## Respawn timer in seconds (0 = no respawn)
-@export var respawn_time: float = 300.0  # 5 minutes (300 seconds)
+## Level bands - enemy level based on X position
+## Progression goes WEST to EAST (negative X to positive X)
+## Campfire spawn is at X=-2000, so west of that is low level, east gets harder
+const LEVEL_BANDS: Array = [
+	# West of spawn (low level wilderness)
+	{"min_x": -99999, "max_x": -2600, "level": 1},  # Far west - level 1
+	# Near spawn (safe-ish area)
+	{"min_x": -2600, "max_x": 400, "level": 1},     # Spawn area - level 1
+	# Progression eastward
+	{"min_x": 400, "max_x": 700, "level": 2},
+	{"min_x": 700, "max_x": 1000, "level": 3},
+	{"min_x": 1000, "max_x": 1300, "level": 4},
+	{"min_x": 1300, "max_x": 1600, "level": 5},
+	{"min_x": 1600, "max_x": 1900, "level": 6},
+	{"min_x": 1900, "max_x": 2200, "level": 7},
+	{"min_x": 2200, "max_x": 2500, "level": 8},
+	{"min_x": 2500, "max_x": 2800, "level": 9},
+	{"min_x": 2800, "max_x": 99999, "level": 10},   # Far east - level 10
+]
 
-## LOD distance thresholds (px from player)
-const LOD_CLOSE: float = 1000.0    # Full AI, particles, animations (extended to 1000px)
-const LOD_MEDIUM: float = 1500.0   # Reduced AI update rate
-const LOD_FAR: float = 2000.0      # Minimal processing, visible only
+## Respawn timer in seconds (0 = no respawn until chunk reload)
+@export var respawn_time: float = 300.0  # 5 minutes
 
-## Update intervals
-const SPAWN_CHECK_INTERVAL: float = 1.0   # Check spawns every 1s
-const LOD_UPDATE_INTERVAL: float = 0.5    # Update LOD every 0.5s
+## Safe zones - no enemies spawn within these areas
+const SAFE_ZONES: Array = [
+	{"pos": Vector2(-2000, 0), "radius": 600.0},  # Campfire spawn
+]
+
+## Ruins areas - no random spawns (guardians spawn separately)
+const RUINS_AREAS: Array = [
+	{"pos": Vector2(2184, -1216), "radius": 350.0},  # Ruins 1
+	{"pos": Vector2(4368, 0), "radius": 350.0},      # Ruins 2
+	{"pos": Vector2(6552, 1216), "radius": 350.0},   # Ruins 3
+]
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Enemy state tracking
-enum EnemyState {
-	UNSPAWNED,  # Not currently active
-	ALIVE,      # Active and alive
-	DEAD,       # Killed but corpse exists
-	LOOTED      # Fully looted, won't respawn
-}
+## Chunk enemy data
+## chunk_key -> ChunkEnemyData
+var chunk_enemies: Dictionary = {}
 
-## Spawn registry - all spawn markers grouped by chunk
-## chunk_key -> Array[SpawnData]
-var spawn_registry_by_chunk: Dictionary = {}
-
-## All spawn data (for global lookups)
-## spawn_id -> SpawnData
-var spawn_registry_global: Dictionary = {}
-
-## Active enemies
-## spawn_id -> Enemy instance
-var active_enemies: Dictionary = {}
+## Manual spawn markers grouped by chunk
+## chunk_key -> Array of {position, level, spawned}
+var manual_spawns_by_chunk: Dictionary = {}
 
 ## Chunk system reference
 var chunk_system: Node = null
@@ -69,504 +76,379 @@ var chunk_system: Node = null
 ## Game world reference
 var game_world: Node = null
 
-## Player reference
-var player: Node = null
+## RNG for spawning (seeded for consistency)
+var spawn_rng: RandomNumberGenerator
 
 ## Update timers
 var spawn_check_timer: float = 0.0
-var lod_update_timer: float = 0.0
-
-## Next spawn ID
-var next_spawn_id: int = 0
+const SPAWN_CHECK_INTERVAL: float = 1.0
 
 # ═══════════════════════════════════════════════════════════════════════════
-# SPAWN DATA CLASS
+# CHUNK ENEMY DATA CLASS
 # ═══════════════════════════════════════════════════════════════════════════
 
-class SpawnData:
-	var spawn_id: int
-	var position: Vector2
-	var level: int
-	var enemy_type: String
-	var aggro_range: float
+class ChunkEnemyData:
 	var chunk_key: String
-	var is_active: bool  # Determined by activation rate
-	var state: int  # EnemyState enum
-	var enemy_instance: Node  # null if unspawned
-	var death_time: float  # Timestamp when enemy died (for respawn timer)
-	var respawn_ready: bool  # Whether enough time has passed to respawn
+	var enemies: Array = []  # Array of enemy instances
+	var dead_enemies: Array = []  # Array of {position, level, death_time}
+	var target_count: int = 0
 
-	func _init(id: int, pos: Vector2, lvl: int, chunk: String):
-		spawn_id = id
-		position = pos
-		level = lvl
-		chunk_key = chunk
-		enemy_type = "skeleton"
-		aggro_range = 150.0
-		is_active = false
-		state = EnemyState.UNSPAWNED
-		enemy_instance = null
-		death_time = 0.0
-		respawn_ready = false
+	func _init(key: String, target: int):
+		chunk_key = key
+		target_count = target
+
+	func get_alive_count() -> int:
+		var count = 0
+		for enemy in enemies:
+			if is_instance_valid(enemy) and not enemy.is_dying and not enemy.is_corpse:
+				count += 1
+		return count
+
+	func cleanup_invalid() -> void:
+		# Remove invalid enemy references
+		var valid_enemies = []
+		for enemy in enemies:
+			if is_instance_valid(enemy):
+				valid_enemies.append(enemy)
+		enemies = valid_enemies
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
 # ═══════════════════════════════════════════════════════════════════════════
 
 func initialize(world: Node, chunk_prop_system: Node, spawn_markers: Array) -> void:
-	"""Initialize spawn manager with game world, chunk system, and spawn markers"""
+	"""Initialize spawn manager with game world, chunk system, and manual spawn markers"""
 	game_world = world
 	chunk_system = chunk_prop_system
 
-	print("\n🌍 ═══════════════════════════════════════════════════")
-	print("   CHUNK-AWARE SPAWN MANAGER INITIALIZATION")
-	print("   ═══════════════════════════════════════════════════")
-	print("   🔧 CODE VERSION: 2025-01-15-DEBUG-v2")  # Unique marker to verify reload
-	print("   Total spawn markers: %d" % spawn_markers.size())
-	print("   Activation rates:")
-	for range_name in activation_rates.keys():
-		print("      %s: %.0f%%" % [range_name, activation_rates[range_name] * 100])
+	# Create seeded RNG for consistent spawns
+	spawn_rng = RandomNumberGenerator.new()
+	spawn_rng.seed = 12345  # Fixed seed for reproducibility
 
-	# RNG for consistent spawn activation
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 88888  # Fixed seed for consistent spawns across runs
-
-	# Group spawn markers by chunk
-	var markers_by_level = {}  # Track counts per level
-
+	# Process manual spawn markers - group by chunk
+	var markers_by_level = {}
 	for marker in spawn_markers:
-		# Create spawn data
-		var spawn_data = create_spawn_data_from_marker(marker, rng)
+		var pos = marker.global_position
+		var level = marker.get_meta("enemy_level", 1)
+		var chunk_key = get_chunk_key(pos)
 
-		# Add to global registry
-		spawn_registry_global[spawn_data.spawn_id] = spawn_data
+		if not manual_spawns_by_chunk.has(chunk_key):
+			manual_spawns_by_chunk[chunk_key] = []
 
-		# Add to chunk registry
-		if not spawn_registry_by_chunk.has(spawn_data.chunk_key):
-			spawn_registry_by_chunk[spawn_data.chunk_key] = []
-		spawn_registry_by_chunk[spawn_data.chunk_key].append(spawn_data)
+		manual_spawns_by_chunk[chunk_key].append({
+			"position": pos,
+			"level": level,
+			"spawned": false
+		})
 
-		# Track level counts
-		if not markers_by_level.has(spawn_data.level):
-			markers_by_level[spawn_data.level] = {"total": 0, "active": 0}
-		markers_by_level[spawn_data.level]["total"] += 1
-		if spawn_data.is_active:
-			markers_by_level[spawn_data.level]["active"] += 1
+		# Track for debug output
+		if not markers_by_level.has(level):
+			markers_by_level[level] = 0
+		markers_by_level[level] += 1
 
-	# Print distribution
-	print("\n   📊 Spawn Distribution by Level:")
-	var levels = markers_by_level.keys()
-	levels.sort()
-	for level in levels:
-		var data = markers_by_level[level]
-		var pct = (data["active"] * 100.0 / data["total"]) if data["total"] > 0 else 0
-		print("      L%d: %d active / %d total (%.0f%%)" % [level, data["active"], data["total"], pct])
-
-	print("\n   📍 Spawn Markers Grouped by Chunk:")
-	var chunk_keys = spawn_registry_by_chunk.keys()
-	chunk_keys.sort()
-	for chunk_key in chunk_keys:
-		var spawns = spawn_registry_by_chunk[chunk_key]
-		var active_count = 0
-		for spawn_data in spawns:
-			if spawn_data.is_active:
-				active_count += 1
-		print("      Chunk %s: %d active / %d total spawns" % [chunk_key, active_count, spawns.size()])
-
+	print("\n🌍 ═══════════════════════════════════════════════════")
+	print("   CHUNK-BASED ENEMY SPAWN MANAGER")
+	print("   ═══════════════════════════════════════════════════")
+	print("   Enemies per chunk: %d (procedural)" % ENEMIES_PER_CHUNK)
+	print("   Manual spawn markers: %d" % spawn_markers.size())
+	if not markers_by_level.is_empty():
+		print("   Manual markers by level:")
+		var levels = markers_by_level.keys()
+		levels.sort()
+		for level in levels:
+			print("      L%d: %d markers" % [level, markers_by_level[level]])
+		print("   Manual markers by chunk:")
+		var chunks = manual_spawns_by_chunk.keys()
+		chunks.sort()
+		for chunk_key in chunks:
+			print("      [%s]: %d markers" % [chunk_key, manual_spawns_by_chunk[chunk_key].size()])
+	print("   Chunk size: %.0fpx" % CHUNK_SIZE)
+	print("   Respawn time: %.0fs" % respawn_time)
+	print("   Level bands: %d zones" % LEVEL_BANDS.size())
 	print("   ═══════════════════════════════════════════════════\n")
-
-func create_spawn_data_from_marker(marker: Node, rng: RandomNumberGenerator) -> SpawnData:
-	"""Create SpawnData from a spawn marker node"""
-	# Extract level
-	var level = 1
-	if marker.has_meta("enemy_level"):
-		level = marker.get_meta("enemy_level")
-	elif marker.has_method("get") and "enemy_level" in marker:
-		level = marker.get("enemy_level")
-
-	# Determine chunk key
-	var chunk_key = get_chunk_key(marker.global_position)
-
-	# Create spawn data
-	var spawn_data = SpawnData.new(next_spawn_id, marker.global_position, level, chunk_key)
-	next_spawn_id += 1
-
-	# Extract optional properties
-	if marker.has_meta("enemy_type"):
-		spawn_data.enemy_type = marker.get_meta("enemy_type")
-	elif marker.has_method("get") and "enemy_type" in marker:
-		spawn_data.enemy_type = marker.get("enemy_type")
-
-	if marker.has_meta("aggro_range"):
-		spawn_data.aggro_range = marker.get_meta("aggro_range")
-	elif marker.has_method("get") and "aggro_range" in marker:
-		spawn_data.aggro_range = marker.get("aggro_range")
-
-	# Determine if this spawn is active based on activation rate
-	var activation_rate = get_activation_rate_for_level(level)
-
-	# Use spawn_id as seed for consistent per-marker randomness
-	rng.seed = 88888 + spawn_data.spawn_id
-	var roll = rng.randf()
-	spawn_data.is_active = roll < activation_rate
-
-	# DEBUG: Log first few spawns to verify activation logic
-	if spawn_data.spawn_id < 5:
-		print("   🎲 Spawn #%d: Level %d, Rate %.0f%%, Roll %.2f, Active: %s" % [
-			spawn_data.spawn_id, level, activation_rate * 100, roll, spawn_data.is_active
-		])
-
-	return spawn_data
-
-func get_activation_rate_for_level(level: int) -> float:
-	"""Get activation rate for a given level"""
-	if level >= 1 and level <= 3:
-		return activation_rates.get("L1-3", 0.6)
-	elif level >= 4 and level <= 7:
-		return activation_rates.get("L4-7", 0.4)
-	elif level >= 8 and level <= 10:
-		return activation_rates.get("L8-10", 0.3)
-	else:
-		return 0.3  # Default for higher levels
-
-func get_chunk_key(world_pos: Vector2) -> String:
-	"""Get chunk key from world position (horizontal only - matches ChunkBasedPropSystem)"""
-	# ChunkBasedPropSystem uses 3000px wide horizontal chunks
-	const CHUNK_SIZE = 3000.0
-	var chunk_x = int(floor(world_pos.x / CHUNK_SIZE))
-	return "%d,0" % chunk_x  # Y is always 0 - world divided horizontally only
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN UPDATE LOOP
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _process(delta: float) -> void:
-	# Get player
-	if not player or not is_instance_valid(player):
-		player = get_tree().get_first_node_in_group("player")
-		if not player:
-			return
+	if not chunk_system:
+		return
 
-	# Check spawns periodically
 	spawn_check_timer += delta
 	if spawn_check_timer >= SPAWN_CHECK_INTERVAL:
 		spawn_check_timer = 0.0
-		update_spawns()
-		check_respawns()  # Check for enemies ready to respawn
+		update_chunk_enemies()
+		check_respawns()
 
-	# Update LOD for active enemies
-	lod_update_timer += delta
-	if lod_update_timer >= LOD_UPDATE_INTERVAL:
-		lod_update_timer = 0.0
-		update_enemy_lod()
-
-# ═══════════════════════════════════════════════════════════════════════════
-# SPAWN LOGIC
-# ═══════════════════════════════════════════════════════════════════════════
-
-func update_spawns() -> void:
-	"""Update spawns based on loaded chunks"""
+func update_chunk_enemies() -> void:
+	"""Sync enemy state with loaded chunks"""
 	if not chunk_system:
 		return
 
-	# Get loaded chunks from chunk system
 	var loaded_chunks = chunk_system.loaded_chunks.keys()
 
-	if loaded_chunks.is_empty():
-		return
+	# Handle newly loaded chunks - spawn enemies
+	for chunk_key in loaded_chunks:
+		if not chunk_enemies.has(chunk_key):
+			on_chunk_loaded(chunk_key)
+		else:
+			# Top up enemies if below target
+			var chunk_data = chunk_enemies[chunk_key]
+			chunk_data.cleanup_invalid()
+			var alive_count = chunk_data.get_alive_count()
+			var needed = chunk_data.target_count - alive_count
+			if needed > 0:
+				spawn_enemies_in_chunk(chunk_key, needed)
 
-	# STEP 1: Despawn enemies in unloaded chunks (disabled in multiplayer)
+	# Handle unloaded chunks - despawn enemies (skip in multiplayer to avoid sync issues)
 	if not multiplayer.has_multiplayer_peer():
-		despawn_enemies_in_unloaded_chunks(loaded_chunks)
+		var chunks_to_remove = []
+		for chunk_key in chunk_enemies.keys():
+			if not loaded_chunks.has(chunk_key):
+				chunks_to_remove.append(chunk_key)
 
-	# STEP 2: Spawn enemies in loaded chunks
-	spawn_enemies_in_loaded_chunks(loaded_chunks)
+		for chunk_key in chunks_to_remove:
+			on_chunk_unloaded(chunk_key)
 
-func spawn_enemies_in_loaded_chunks(loaded_chunks: Array) -> void:
-	"""Spawn enemies in currently loaded chunks with fair distribution"""
-	var spawned_count = 0
+func on_chunk_loaded(chunk_key: String) -> void:
+	"""Called when a chunk is loaded - spawn enemies"""
+	print("📦 Chunk %s loaded - spawning enemies" % chunk_key)
 
-	# Calculate available spawn slots
-	var available_slots = max_active_enemies - active_enemies.size()
-	if available_slots <= 0:
-		return  # Already at max capacity
+	# Create chunk data
+	var chunk_data = ChunkEnemyData.new(chunk_key, ENEMIES_PER_CHUNK)
+	chunk_enemies[chunk_key] = chunk_data
 
-	# Count total spawnable enemies per chunk (active, not yet spawned, not dead/looted)
-	var spawnable_per_chunk = {}
-	var total_spawnable = 0
+	# STEP 1: Spawn from manual markers first (these have priority)
+	var manual_spawned = 0
+	if manual_spawns_by_chunk.has(chunk_key):
+		for spawn_data in manual_spawns_by_chunk[chunk_key]:
+			if spawn_data.spawned:
+				continue  # Already spawned
 
-	for chunk_key in loaded_chunks:
-		if not spawn_registry_by_chunk.has(chunk_key):
-			continue
+			var enemy = spawn_single_enemy(spawn_data.position, spawn_data.level, chunk_key)
+			if enemy:
+				chunk_data.enemies.append(enemy)
+				spawn_data.spawned = true
+				manual_spawned += 1
 
-		var chunk_spawns = spawn_registry_by_chunk[chunk_key]
-		var count = 0
+		if manual_spawned > 0:
+			print("   📍 Spawned %d enemies from manual markers" % manual_spawned)
 
-		for spawn_data in chunk_spawns:
-			# Count only if: active, not already spawned, and not dead/looted
-			if spawn_data.is_active and \
-			   not active_enemies.has(spawn_data.spawn_id) and \
-			   spawn_data.state != EnemyState.DEAD and \
-			   spawn_data.state != EnemyState.LOOTED:
-				count += 1
+	# STEP 2: Fill remaining capacity with procedural spawns
+	var remaining = ENEMIES_PER_CHUNK - chunk_data.enemies.size()
+	if remaining > 0:
+		spawn_enemies_in_chunk(chunk_key, remaining)
 
-		if count > 0:
-			spawnable_per_chunk[chunk_key] = count
-			total_spawnable += count
-
-	# If nothing to spawn, exit early
-	if total_spawnable == 0:
+func on_chunk_unloaded(chunk_key: String) -> void:
+	"""Called when a chunk is unloaded - despawn enemies"""
+	if not chunk_enemies.has(chunk_key):
 		return
 
-	# Calculate fair budget per chunk (proportional to spawnable enemies)
-	var budget_per_chunk = {}
-	for chunk_key in spawnable_per_chunk.keys():
-		var proportion = float(spawnable_per_chunk[chunk_key]) / float(total_spawnable)
-		budget_per_chunk[chunk_key] = int(ceil(proportion * available_slots))
+	print("🗑️ Chunk %s unloaded - despawning enemies" % chunk_key)
 
-	# Spawn enemies using per-chunk budgets
-	for chunk_key in loaded_chunks:
-		if not spawn_registry_by_chunk.has(chunk_key):
+	var chunk_data = chunk_enemies[chunk_key]
+
+	# Despawn all enemies in this chunk
+	for enemy in chunk_data.enemies:
+		if is_instance_valid(enemy):
+			# Don't despawn corpses with loot
+			if enemy.is_corpse and enemy.has_method("has_corpse_loot") and enemy.has_corpse_loot():
+				continue
+			enemy.queue_free()
+
+	chunk_enemies.erase(chunk_key)
+
+	# Reset manual spawn markers so they respawn when chunk reloads
+	if manual_spawns_by_chunk.has(chunk_key):
+		for spawn_data in manual_spawns_by_chunk[chunk_key]:
+			spawn_data.spawned = false
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SPAWNING
+# ═══════════════════════════════════════════════════════════════════════════
+
+func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
+	"""Spawn a specific number of enemies in a chunk"""
+	if not chunk_enemies.has(chunk_key):
+		return
+
+	# In multiplayer, only server spawns
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+
+	var chunk_data = chunk_enemies[chunk_key]
+	var spawned = 0
+	var attempts = 0
+	var max_attempts = count * 10  # 10 attempts per enemy max
+
+	# Parse chunk coordinates
+	var chunk_parts = chunk_key.split(",")
+	var chunk_x = int(chunk_parts[0])
+	var chunk_min_x = chunk_x * CHUNK_SIZE
+	var chunk_max_x = (chunk_x + 1) * CHUNK_SIZE
+
+	# Use chunk-specific seed for consistent spawns
+	var chunk_seed = hash(chunk_key) + chunk_data.enemies.size()
+	spawn_rng.seed = chunk_seed
+
+	while spawned < count and attempts < max_attempts:
+		attempts += 1
+
+		# Generate random position within chunk bounds
+		var spawn_x = spawn_rng.randf_range(chunk_min_x, chunk_max_x)
+		var spawn_y = spawn_rng.randf_range(-2500, 2500)  # World height range
+		var spawn_pos = Vector2(spawn_x, spawn_y)
+
+		# Validate position
+		if not is_valid_spawn_position(spawn_pos):
 			continue
 
-		var chunk_budget = budget_per_chunk.get(chunk_key, 0)
-		if chunk_budget <= 0:
-			continue
+		# Determine level based on X position
+		var level = get_level_for_position(spawn_pos)
 
-		var chunk_spawns = spawn_registry_by_chunk[chunk_key]
-		var chunk_spawned = 0
+		# Spawn the enemy
+		var enemy = spawn_single_enemy(spawn_pos, level, chunk_key)
+		if enemy:
+			chunk_data.enemies.append(enemy)
+			spawned += 1
 
-		for spawn_data in chunk_spawns:
-			# Check all spawn conditions
-			if not spawn_data.is_active:
-				continue
-			if active_enemies.has(spawn_data.spawn_id):
-				continue
-			if spawn_data.state == EnemyState.DEAD or spawn_data.state == EnemyState.LOOTED:
-				continue
+	if spawned > 0:
+		print("✨ Spawned %d enemies in chunk %s (total: %d/%d)" % [
+			spawned, chunk_key, chunk_data.get_alive_count(), chunk_data.target_count
+		])
 
-			# Check chunk budget
-			if chunk_spawned >= chunk_budget:
-				break  # This chunk hit its budget, move to next chunk
-
-			# Check global limit (safety check)
-			if active_enemies.size() >= max_active_enemies:
-				break
-
-			# Spawn enemy
-			spawn_enemy(spawn_data)
-			spawned_count += 1
-			chunk_spawned += 1
-
-	# Debug output (only when spawning)
-	if spawned_count > 0:
-		print("✨ Spawned %d enemies in loaded chunks (active: %d/%d)" % [spawned_count, active_enemies.size(), max_active_enemies])
-
-func despawn_enemies_in_unloaded_chunks(loaded_chunks: Array) -> void:
-	"""Despawn enemies that are in chunks that have been unloaded"""
-	var to_despawn = []
-
-	for spawn_id in active_enemies.keys():
-		var spawn_data = spawn_registry_global[spawn_id]
-
-		# Check if this enemy's chunk is still loaded
-		if not loaded_chunks.has(spawn_data.chunk_key):
-			# Don't despawn dead enemies with lootable corpses
-			if spawn_data.state == EnemyState.DEAD:
-				var enemy = spawn_data.enemy_instance
-				if is_instance_valid(enemy) and enemy.has_method("has_corpse_loot") and enemy.has_corpse_loot():
-					continue  # Keep corpse
-
-			to_despawn.append(spawn_id)
-
-	# Despawn marked enemies
-	for spawn_id in to_despawn:
-		despawn_enemy(spawn_id)
-
-func spawn_enemy(spawn_data: SpawnData) -> void:
-	"""Spawn a single enemy"""
-	# Load enemy scene
+func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
+	"""Spawn a single enemy at position"""
 	var enemy_scene = load("res://scenes/enemies/enemy.tscn")
 	if not enemy_scene:
 		push_error("Failed to load enemy scene!")
-		return
+		return null
 
-	# Instantiate enemy
 	var enemy = enemy_scene.instantiate()
-	enemy.global_position = spawn_data.position
-	enemy.enemy_level = spawn_data.level
+	enemy.global_position = pos
+	enemy.enemy_level = level
+
+	# Generate unique name
+	var enemy_name = "Enemy_%s_%d" % [chunk_key.replace(",", "_"), randi()]
+	enemy.name = enemy_name
 
 	# Add to world
-	game_world.add_child(enemy)
+	game_world.call_deferred("add_child", enemy)
 
-	# Track in active enemies
-	active_enemies[spawn_data.spawn_id] = enemy
-	spawn_data.enemy_instance = enemy
-	spawn_data.state = EnemyState.ALIVE
+	# Connect death signal for respawn tracking
+	if enemy.has_signal("died"):
+		enemy.died.connect(_on_enemy_died.bind(enemy, chunk_key))
 
-	# Connect signals for state tracking
-	connect_enemy_signals(enemy, spawn_data.spawn_id)
-
-	# Connect corpse loot signal (for game_world loot system)
+	# Connect corpse loot signal
 	if enemy.has_signal("corpse_clicked") and game_world.has_method("_on_corpse_clicked"):
-		if not enemy.corpse_clicked.is_connected(game_world._on_corpse_clicked):
-			enemy.corpse_clicked.connect(game_world._on_corpse_clicked)
+		enemy.corpse_clicked.connect(game_world._on_corpse_clicked)
 
-	# Set initial LOD
-	update_enemy_lod_single(enemy, spawn_data.spawn_id)
+	# In multiplayer, sync to clients
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		rpc("client_spawn_enemy", pos, level, enemy_name)
 
-func despawn_enemy(spawn_id: int) -> void:
-	"""Despawn an enemy and preserve its state"""
-	if not active_enemies.has(spawn_id):
+	return enemy
+
+@rpc("authority", "call_local", "reliable")
+func client_spawn_enemy(pos: Vector2, level: int, enemy_name: String) -> void:
+	"""Called by server to spawn enemy on clients"""
+	# Skip if we're the server (already spawned)
+	if multiplayer.is_server():
 		return
 
-	var enemy = active_enemies[spawn_id]
-	var spawn_data = spawn_registry_global[spawn_id]
+	var enemy_scene = load("res://scenes/enemies/enemy.tscn")
+	if not enemy_scene:
+		return
 
-	# Preserve state before despawning
-	if is_instance_valid(enemy):
-		# If enemy is dead, keep state as DEAD
-		# If enemy is alive, mark as UNSPAWNED (can respawn later)
-		if spawn_data.state != EnemyState.DEAD and spawn_data.state != EnemyState.LOOTED:
-			spawn_data.state = EnemyState.UNSPAWNED
+	var enemy = enemy_scene.instantiate()
+	enemy.global_position = pos
+	enemy.enemy_level = level
+	enemy.name = enemy_name
 
-		# Remove from world
-		enemy.queue_free()
+	game_world.call_deferred("add_child", enemy)
 
-	# Remove from active list
-	active_enemies.erase(spawn_id)
-	spawn_data.enemy_instance = null
+func is_valid_spawn_position(pos: Vector2) -> bool:
+	"""Check if position is valid for spawning"""
+	# Check safe zones
+	for zone in SAFE_ZONES:
+		if pos.distance_to(zone.pos) < zone.radius:
+			return false
+
+	# Check ruins areas
+	for ruins in RUINS_AREAS:
+		if pos.distance_to(ruins.pos) < ruins.radius:
+			return false
+
+	# Check world bounds
+	if pos.y < -2800 or pos.y > 2800:
+		return false
+
+	return true
+
+func get_level_for_position(pos: Vector2) -> int:
+	"""Get enemy level based on X position"""
+	for band in LEVEL_BANDS:
+		if pos.x >= band.min_x and pos.x < band.max_x:
+			return band.level
+	return 1  # Default level 1
+
+func get_chunk_key(world_pos: Vector2) -> String:
+	"""Get chunk key from world position"""
+	var chunk_x = int(floor(world_pos.x / CHUNK_SIZE))
+	return "%d,0" % chunk_x
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RESPAWN SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _on_enemy_died(enemy: Node, chunk_key: String) -> void:
+	"""Called when an enemy dies - track for respawn"""
+	if not chunk_enemies.has(chunk_key):
+		return
+
+	var chunk_data = chunk_enemies[chunk_key]
+
+	# Record death for respawn
+	if respawn_time > 0:
+		chunk_data.dead_enemies.append({
+			"position": enemy.global_position,
+			"level": enemy.enemy_level,
+			"death_time": Time.get_ticks_msec() / 1000.0
+		})
 
 func check_respawns() -> void:
-	"""Check for dead enemies ready to respawn"""
+	"""Check for enemies ready to respawn"""
 	if respawn_time <= 0:
-		return  # Respawning disabled
-
-	if not chunk_system:
 		return
 
 	var current_time = Time.get_ticks_msec() / 1000.0
-	var loaded_chunks = chunk_system.loaded_chunks.keys()
-	var respawned_count = 0
 
-	for spawn_data in spawn_registry_global.values():
-		# Only check dead enemies that are active spawn points
-		if spawn_data.state != EnemyState.DEAD:
-			continue
-		if not spawn_data.is_active:
+	for chunk_key in chunk_enemies.keys():
+		var chunk_data = chunk_enemies[chunk_key]
+
+		# Check if chunk is still loaded
+		if not chunk_system.loaded_chunks.has(chunk_key):
 			continue
 
-		# Check if enough time has passed
-		var time_since_death = current_time - spawn_data.death_time
-		if time_since_death < respawn_time:
-			continue
+		# Process dead enemies
+		var still_dead = []
+		for dead_data in chunk_data.dead_enemies:
+			var time_since_death = current_time - dead_data.death_time
 
-		# Check if spawn point's chunk is loaded
-		if not loaded_chunks.has(spawn_data.chunk_key):
-			continue
+			if time_since_death >= respawn_time:
+				# Ready to respawn - spawn new enemy
+				var enemy = spawn_single_enemy(dead_data.position, dead_data.level, chunk_key)
+				if enemy:
+					chunk_data.enemies.append(enemy)
+					print("♻️ Enemy respawned in chunk %s at (%d, %d)" % [
+						chunk_key, int(dead_data.position.x), int(dead_data.position.y)
+					])
+			else:
+				# Not ready yet
+				still_dead.append(dead_data)
 
-		# Check if already spawned
-		if active_enemies.has(spawn_data.spawn_id):
-			continue
-
-		# Check global limit
-		if active_enemies.size() >= max_active_enemies:
-			break
-
-		# Ready to respawn!
-		spawn_data.state = EnemyState.UNSPAWNED
-		spawn_data.respawn_ready = true
-		spawn_enemy(spawn_data)
-		respawned_count += 1
-
-		print("♻️  Enemy respawned at spawn %d (chunk: %s) after %.0f seconds" % [
-			spawn_data.spawn_id,
-			spawn_data.chunk_key,
-			time_since_death
-		])
-
-	if respawned_count > 0:
-		print("♻️  Total respawned: %d enemies" % respawned_count)
-
-# ═══════════════════════════════════════════════════════════════════════════
-# LOD SYSTEM
-# ═══════════════════════════════════════════════════════════════════════════
-
-func update_enemy_lod() -> void:
-	"""Update LOD for all active enemies based on distance to player"""
-	if not player or not is_instance_valid(player):
-		return
-
-	for spawn_id in active_enemies.keys():
-		update_enemy_lod_single(active_enemies[spawn_id], spawn_id)
-
-func update_enemy_lod_single(enemy: Node, spawn_id: int) -> void:
-	"""Update LOD for a single enemy"""
-	if not is_instance_valid(enemy):
-		return
-
-	if not player or not is_instance_valid(player):
-		return
-
-	var distance = enemy.global_position.distance_to(player.global_position)
-
-	# Determine LOD level
-	var lod_level = 0
-	if distance < LOD_CLOSE:
-		lod_level = 0  # FULL
-	elif distance < LOD_MEDIUM:
-		lod_level = 1  # MEDIUM
-	elif distance < LOD_FAR:
-		lod_level = 2  # MINIMAL
-	else:
-		lod_level = 3  # INVISIBLE (beyond chunk view)
-
-	# Apply LOD if enemy has the method
-	if enemy.has_method("set_lod_level"):
-		enemy.set_lod_level(lod_level)
-
-# ═══════════════════════════════════════════════════════════════════════════
-# STATE TRACKING
-# ═══════════════════════════════════════════════════════════════════════════
-
-func connect_enemy_signals(enemy: Node, spawn_id: int) -> void:
-	"""Connect to enemy signals to track state changes"""
-	# Connect death signal
-	if enemy.has_signal("enemy_died"):
-		enemy.enemy_died.connect(_on_enemy_died.bind(spawn_id))
-
-	# Connect loot signal
-	if enemy.has_signal("corpse_looted_empty"):
-		enemy.corpse_looted_empty.connect(_on_enemy_looted.bind(spawn_id))
-
-func _on_enemy_died(enemy: Node, spawn_id: int) -> void:
-	"""Called when enemy dies"""
-	if not spawn_registry_global.has(spawn_id):
-		return
-
-	var spawn_data = spawn_registry_global[spawn_id]
-	spawn_data.state = EnemyState.DEAD
-	spawn_data.death_time = Time.get_ticks_msec() / 1000.0  # Record death time in seconds
-	spawn_data.respawn_ready = false
-
-	if respawn_time > 0:
-		print("💀 Enemy died at spawn %d (chunk: %s, will respawn in %.0f seconds)" % [spawn_id, spawn_data.chunk_key, respawn_time])
-	else:
-		print("💀 Enemy died at spawn %d (chunk: %s, state: DEAD)" % [spawn_id, spawn_data.chunk_key])
-
-func _on_enemy_looted(enemy: Node, spawn_id: int) -> void:
-	"""Called when enemy corpse is fully looted"""
-	if not spawn_registry_global.has(spawn_id):
-		return
-
-	var spawn_data = spawn_registry_global[spawn_id]
-	spawn_data.state = EnemyState.LOOTED
-
-	# Despawn the corpse
-	if active_enemies.has(spawn_id):
-		despawn_enemy(spawn_id)
-
-	print("💰 Enemy looted at spawn %d (chunk: %s, state: LOOTED, won't respawn)" % [spawn_id, spawn_data.chunk_key])
+		chunk_data.dead_enemies = still_dead
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DEBUG & STATS
@@ -575,39 +457,27 @@ func _on_enemy_looted(enemy: Node, spawn_id: int) -> void:
 func get_stats() -> Dictionary:
 	"""Get current spawn manager statistics"""
 	var stats = {
-		"total_spawns": spawn_registry_global.size(),
-		"active_enemies": active_enemies.size(),
-		"unspawned": 0,
-		"alive": 0,
-		"dead": 0,
-		"looted": 0,
-		"loaded_chunks": 0
+		"total_chunks": chunk_enemies.size(),
+		"total_enemies": 0,
+		"enemies_per_chunk": {}
 	}
 
-	for spawn_data in spawn_registry_global.values():
-		match spawn_data.state:
-			EnemyState.UNSPAWNED:
-				stats.unspawned += 1
-			EnemyState.ALIVE:
-				stats.alive += 1
-			EnemyState.DEAD:
-				stats.dead += 1
-			EnemyState.LOOTED:
-				stats.looted += 1
-
-	if chunk_system:
-		stats.loaded_chunks = chunk_system.loaded_chunks.size()
+	for chunk_key in chunk_enemies.keys():
+		var chunk_data = chunk_enemies[chunk_key]
+		chunk_data.cleanup_invalid()
+		var alive = chunk_data.get_alive_count()
+		stats.enemies_per_chunk[chunk_key] = alive
+		stats.total_enemies += alive
 
 	return stats
 
 func print_stats() -> void:
 	"""Print current spawn manager statistics"""
 	var stats = get_stats()
-	print("\n📊 CHUNK-AWARE SPAWN MANAGER STATS:")
-	print("   Loaded chunks: %d" % stats.loaded_chunks)
-	print("   Total spawn points: %d" % stats.total_spawns)
-	print("   Active enemies: %d / %d" % [stats.active_enemies, max_active_enemies])
-	print("   Unspawned: %d" % stats.unspawned)
-	print("   Alive: %d" % stats.alive)
-	print("   Dead: %d" % stats.dead)
-	print("   Looted: %d\n" % stats.looted)
+	print("\n📊 CHUNK-BASED SPAWN MANAGER STATS:")
+	print("   Active chunks: %d" % stats.total_chunks)
+	print("   Total enemies: %d" % stats.total_enemies)
+	print("   Per chunk:")
+	for chunk_key in stats.enemies_per_chunk.keys():
+		print("      [%s]: %d/%d" % [chunk_key, stats.enemies_per_chunk[chunk_key], ENEMIES_PER_CHUNK])
+	print("")

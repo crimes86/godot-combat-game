@@ -12,14 +12,8 @@ var xp_reward: int = 10  # Actual XP granted
 @export var gold_drop_base: int = 5  # Base gold drop, scales with level
 var gold_drop: int = 5  # Actual gold dropped
 
-# LOD (Level of Detail) system for performance
-enum LOD {
-	FULL = 0,      # Full AI, particles, animations (< 400px)
-	MEDIUM = 1,    # Reduced AI update rate (400-800px)
-	MINIMAL = 2,   # Just visible sprite (800-1500px)
-	INVISIBLE = 3  # Beyond view distance (> 1500px)
-}
-var current_lod: int = LOD.FULL
+# LOD tracking (disabled - all enemies render fully in loaded chunks)
+var current_lod: int = 0  # Kept for compatibility, not used
 
 # References
 @onready var health_bar: Control = $HealthBar
@@ -89,7 +83,12 @@ func _ready() -> void:
 	if not sprite:
 		push_error("❌ Enemy sprite is null! Cannot load skeleton animation.")
 		return
-	
+
+	# MULTIPLAYER FIX: Ensure sprite setup runs on all peers
+	# Wait a frame to ensure the node is properly in the scene tree
+	if multiplayer.has_multiplayer_peer():
+		await get_tree().process_frame
+
 	# Create animated skeleton sprite
 	if sprite:
 		# Check if this is a guardian (uses special armored sprites)
@@ -118,10 +117,18 @@ func _ready() -> void:
 		# Try to load walking sprite
 		if ResourceLoader.exists(walk_path):
 			walk_tex = ResourceLoader.load(walk_path, "Texture2D")
+			if not walk_tex:
+				push_error("❌ Failed to load walk texture: %s" % walk_path)
+		else:
+			push_error("❌ Walk texture doesn't exist: %s" % walk_path)
 
 		# Try to load attack sprite
 		if ResourceLoader.exists(slash_path):
 			slash_tex = ResourceLoader.load(slash_path, "Texture2D")
+			if not slash_tex:
+				push_error("❌ Failed to load slash texture: %s" % slash_path)
+		else:
+			push_error("❌ Slash texture doesn't exist: %s" % slash_path)
 
 		# Try to load hurt sprite (optional)
 		if hurt_path != "" and ResourceLoader.exists(hurt_path):
@@ -202,6 +209,24 @@ func _ready() -> void:
 	# Connect click area
 	if click_area:
 		click_area.input_event.connect(_on_click_area_input)
+
+	# FORCE VISIBILITY - Always ensure enemy is visible after initialization
+	visible = true
+	if sprite:
+		sprite.visible = true
+	if shadow_sprite:
+		shadow_sprite.visible = true
+
+	# VISIBILITY DEBUG: Only log enemies near player spawn (within 500px of origin)
+	var dist_from_origin = global_position.length()
+	if dist_from_origin < 500:
+		print("👁️ [VISIBILITY] %s at (%d, %d) dist=%.0f | enemy.visible=%s, sprite=%s, sprite.visible=%s, z=%d" % [
+			name, int(global_position.x), int(global_position.y), dist_from_origin,
+			visible,
+			sprite.get_class() if sprite else "NONE",
+			sprite.visible if sprite else "N/A",
+			z_index
+		])
 
 func setup_skeleton_animations(anim_sprite: AnimatedSprite2D, walk_tex: Texture2D, slash_tex: Texture2D, hurt_tex: Texture2D = null) -> void:
 	"""Setup skeleton animations from separate walk, attack, and hurt sprite sheets"""
@@ -311,8 +336,6 @@ func create_shadow_layer() -> void:
 	# Start with idle animation
 	if shadow_sprite.sprite_frames.has_animation("idle_down"):
 		shadow_sprite.play("idle_down")
-
-	print("  ✅ Shadow layer created for skeleton (z_index=%d, opacity=60%%)" % shadow_sprite.z_index)
 
 func get_enemy_name() -> String:
 	"""Generate enemy name based on level and type"""
@@ -510,31 +533,14 @@ func grow_for_crit_window(difficulty: float = 1.0) -> void:
 		push_warning("Enemy is dying - skipping crit window visual")
 		return
 
-	print("🔍 [CRIT WINDOW] grow_for_crit_window() called")
-	print("     Timestamp: ", Time.get_ticks_msec())
-
 	in_crit_window = true  # Set flag for local checks
 
-	DebugConfig.log_combat("🌟 Growing sprite for crit window")
-	DebugConfig.log_combat("   Current scale: %s (original: %s)" % [scale, original_scale])
-	DebugConfig.log_combat("   Current color: %s" % (sprite.modulate if sprite else "no sprite"))
-
-	# ✨ FIX: Override BOTH parent and sprite modulate for SUBTLE white
-	# 50% less bright - more comfortable!
-	self.modulate = Color(1.0, 1.0, 1.0, 1.0)  # Reset parent to neutral
-	
-	# Change to SUBTLE WHITE for crit window (bone spurs will still pop!)
+	# Reset parent to neutral and change sprite to subtle white for crit window
+	self.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	if sprite:
-		sprite.modulate = Color(1.0, 1.0, 1.05, 1.0)  # Barely brighter than normal (subtle!)
-		print("   ✅ Changed sprite color to SUBTLE WHITE: %s" % sprite.modulate)
-		print("   ✅ Reset parent modulate to neutral: %s" % self.modulate)
-		
-		# Tell HitFlash the new base color
+		sprite.modulate = Color(1.0, 1.0, 1.05, 1.0)  # Barely brighter than normal
 		if has_node("HitFlash"):
 			get_node("HitFlash").set_base_color(Color(1.0, 1.0, 1.05, 1.0))
-			print("   ✅ Told HitFlash about SUBTLE WHITE color")
-	else:
-		print("   ❌ No sprite found!")
 	
 	# ✨ FIX: Check if we're already at target scale (prevents no-grow bug)
 	# Sprite always starts at Vector2.ONE (base scale)
@@ -543,40 +549,24 @@ func grow_for_crit_window(difficulty: float = 1.0) -> void:
 
 	# Check sprite scale, not root node scale (since we only scale sprite now)
 	var current_sprite_scale = sprite.scale if sprite else Vector2.ONE
-	if current_sprite_scale.x >= target_sprite_scale.x * Constants.CRIT_WINDOW_SCALE_THRESHOLD:  # If already 90% of target, skip growth
-		print("   ⚠️ Already at target scale (%s), skipping growth animation" % current_sprite_scale)
-		# Just spawn weakpoints immediately
+	if current_sprite_scale.x >= target_sprite_scale.x * Constants.CRIT_WINDOW_SCALE_THRESHOLD:
+		# Already at target scale, spawn weakpoints immediately
 		spawn_weakpoints()
 	else:
-		print("   Scaling sprite from %s to %s" % [current_sprite_scale, target_sprite_scale])
-
-		# ✨ CHANGED: Only scale the SPRITE, not the collision box!
-		# This prevents collision/pathing issues while still showing visual growth
+		# Scale the sprite (not collision box) for visual growth
 		if sprite:
-			print("🔍 [SPRITE SCALE] Starting GROW tween - current scale: %s, target: %s" % [sprite.scale, target_sprite_scale])
 			var scale_tween = create_tween()
 			scale_tween.set_parallel(false)
 			scale_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
 			z_index = Constants.CRIT_WINDOW_Z_INDEX
-
-			# ✨ NEW: Player can attack during growth animation!
-			# Weakpoints will spawn after growth completes
-
 			await scale_tween.finished
-
-			print("   ✅ [SPRITE SCALE] Sprite GROW animation complete - final sprite scale: %s" % sprite.scale)
-		else:
-			print("   ⚠️ No sprite to scale!")
 
 		# Spawn weakpoints AFTER growth
 		spawn_weakpoints()
 
-	print("✅ [CRIT WINDOW] Grow complete, weakpoints active")
-
 func spawn_weakpoints() -> void:
-	# CRITICAL: Don't spawn weakpoints if enemy is already dying/dead
+	# Don't spawn weakpoints if enemy is already dying/dead
 	if is_dying or is_corpse:
-		print("⚠️ [WEAKPOINT] Enemy is dying/corpse - skipping weakpoint spawn")
 		return
 
 	# Calculate weakpoint count based on CURRENT PLAYER level (when crit triggers, not when enemy spawned)
@@ -738,9 +728,7 @@ func _process(delta: float) -> void:
 
 				# Update con color based on player level
 				if show_level_label:
-					var player_level = player.get("current_level")
-					if player_level == null:
-						player_level = 1
+					var player_level = CharacterStats.level
 					var con_color = get_con_color(player_level)
 					level_label.add_theme_color_override("font_color", con_color)
 
@@ -759,84 +747,10 @@ func _process(delta: float) -> void:
 		process_corpse_decay(delta)
 		update_loot_proximity()
 
-func set_lod_level(lod_level: int) -> void:
-	"""Set Level of Detail for performance optimization"""
-	if current_lod == lod_level:
-		return  # No change
-
-	current_lod = lod_level
-
-	match lod_level:
-		LOD.FULL:  # < 400px - Full detail
-			visible = true
-			set_physics_process(true)
-			set_process(true)
-			# Enable AI if exists
-			if has_node("EnemyAI"):
-				var ai = get_node("EnemyAI")
-				ai.set_physics_process(true)
-				ai.set_process(true)
-			# Enable particles if they exist
-			for child in get_children():
-				if child is GPUParticles2D:
-					child.emitting = true
-
-		LOD.MEDIUM:  # 400-800px - Reduced AI
-			visible = true
-			set_physics_process(true)
-			set_process(true)
-			# Reduce AI update rate (handled by EnemyAI's own LOD if implemented)
-			if has_node("EnemyAI"):
-				var ai = get_node("EnemyAI")
-				ai.set_physics_process(true)
-				ai.set_process(true)
-			# Reduce particles
-			for child in get_children():
-				if child is GPUParticles2D:
-					child.amount = max(1, child.amount / 2)
-
-		LOD.MINIMAL:  # 800-1500px - Just visible
-			visible = true
-			set_physics_process(false)  # No physics
-			set_process(true)  # Keep process for UI updates
-			# Disable AI
-			if has_node("EnemyAI"):
-				var ai = get_node("EnemyAI")
-				ai.set_physics_process(false)
-				ai.set_process(false)
-			# Stop walking animation and switch to idle
-			if sprite is AnimatedSprite2D:
-				var anim_sprite = sprite as AnimatedSprite2D
-				if anim_sprite.animation and anim_sprite.animation.begins_with("walk_"):
-					# Get direction from current animation
-					var direction = anim_sprite.animation.replace("walk_", "")
-					var idle_anim = "idle_" + direction
-					if anim_sprite.sprite_frames.has_animation(idle_anim):
-						anim_sprite.play(idle_anim)
-				# Also stop shadow animation
-				if shadow_sprite and shadow_sprite.animation and shadow_sprite.animation.begins_with("walk_"):
-					var direction = shadow_sprite.animation.replace("walk_", "")
-					var idle_anim = "idle_" + direction
-					if shadow_sprite.sprite_frames.has_animation(idle_anim):
-						shadow_sprite.play(idle_anim)
-			# Disable particles
-			for child in get_children():
-				if child is GPUParticles2D:
-					child.emitting = false
-
-		LOD.INVISIBLE:  # > 1500px - Not visible
-			visible = false
-			set_physics_process(false)
-			set_process(false)
-			# Disable AI
-			if has_node("EnemyAI"):
-				var ai = get_node("EnemyAI")
-				ai.set_physics_process(false)
-				ai.set_process(false)
-			# Disable particles
-			for child in get_children():
-				if child is GPUParticles2D:
-					child.emitting = false
+func set_lod_level(_lod_level: int) -> void:
+	"""LOD system disabled - all enemies in loaded chunks render fully
+	Kept for compatibility with any external calls"""
+	pass
 
 func update_loot_proximity() -> void:
 	"""Check if player is close enough to loot and show/hide prompt"""
@@ -944,26 +858,11 @@ func _on_weakpoint_hit(weakpoint) -> void:
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Local handler - just forward to manager"""
-	print("🔍 [ENEMY] Weakpoint destroyed locally - emitting signal to manager")
-
-	# Play victory sound if it's the last one (manager will know)
-	# We can check locally by counting remaining weakpoints
-	var remaining = 0
-	for wp in weakpoints:
-		if is_instance_valid(wp) and not wp.is_destroyed:
-			remaining += 1
-
-	# Emit signal for manager to handle
 	weakpoint_destroyed.emit(weakpoint)
 
 func shrink_after_crit_window() -> void:
 	"""Visual effect: shrink sprite and cleanup weakpoints (called by CritWindowManager)"""
-	print("🔚 [CRIT WINDOW] shrink_after_crit_window() called")
-
-	in_crit_window = false  # Clear flag
-
-	# Don't manually free weakpoints - they will free themselves after their explosion animations
-	# Just clear the array reference
+	in_crit_window = false
 	weakpoints.clear()
 
 	# Reset HitFlash
@@ -973,29 +872,22 @@ func shrink_after_crit_window() -> void:
 			hit_flash.reset()
 		hit_flash.set_base_color(Color.WHITE)
 
-	# Restore original difficulty color (parent modulate)
+	# Restore original difficulty color
 	self.modulate = original_modulate
-	print("   ✅ Restored parent modulate: %s" % self.modulate)
-
-	# Change sprite back to white (normal enemy color)
 	if sprite:
 		sprite.modulate = Color.WHITE
 
-	# Scale SPRITE back to base (not collision box)
+	# Scale sprite back to base
 	if is_instance_valid(self) and sprite:
 		var base_sprite_scale = Vector2.ONE
-		print("🔍 [SPRITE SCALE] Starting shrink tween - current scale: %s, target: %s" % [sprite.scale, base_sprite_scale])
 		var tween = create_tween()
 		tween.tween_property(sprite, "scale", base_sprite_scale, 0.25)
-
-		# Wait for tween to finish, then FORCE final state
 		await get_tree().create_timer(0.26).timeout
 
 		if is_instance_valid(self) and sprite:
 			sprite.scale = base_sprite_scale
 			z_index = 0
 			sprite.modulate = Color.WHITE
-			print("✅ [SPRITE SCALE] Enemy sprite scaled back to normal: %s" % sprite.scale)
 
 func die() -> void:
 	if is_dying:
@@ -1003,15 +895,9 @@ func die() -> void:
 
 	is_dying = true
 
-	# CRITICAL: Clean up any active weakpoints to prevent artifacting
-	# Use multiple methods to ensure all weakpoints are destroyed
-	print("💀 [CLEANUP] Enemy dying, cleaning up weakpoints...")
-
-	# Method 1: Clear from array and free
-	var weakpoint_count = weakpoints.size()
+	# Clean up any active weakpoints
 	for weakpoint in weakpoints:
 		if is_instance_valid(weakpoint):
-			print("   - Freeing weakpoint from array: %s" % weakpoint.name)
 			weakpoint.visible = false
 			weakpoint.input_pickable = false
 			weakpoint.monitoring = false
@@ -1019,26 +905,22 @@ func die() -> void:
 			weakpoint.queue_free()
 	weakpoints.clear()
 
-	# Method 2: Iterate children and destroy any Weakpoint nodes (catches any missed)
+	# Also check children for any missed weakpoints
 	for child in get_children():
 		if child is Weakpoint:
-			print("   - Found weakpoint in children (not in array): %s" % child.name)
 			child.visible = false
 			child.input_pickable = false
 			child.monitoring = false
 			child.monitorable = false
 			child.queue_free()
 
-	print("💀 [CLEANUP] Cleaned up %d weakpoints" % weakpoint_count)
-
-	# Grant XP to player (immediate reward)
+	# Grant XP to player
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("gain_experience"):
 		player.gain_experience(xp_reward)
 
-	# Store gold in corpse for looting (NOT auto-awarded)
+	# Store gold in corpse for looting
 	corpse_gold = gold_drop
-	print("💀 Storing %d gold in corpse for looting" % corpse_gold)
 
 	# Play death sound (skeleton-specific bone collapse)
 	var sound_manager = get_node_or_null("/root/SoundManager")
@@ -1184,17 +1066,14 @@ func generate_corpse_loot() -> Array:
 
 	# Roll for number of items (0-2)
 	var num_items = CorpseState.roll_loot_count()
-	print("💀 Rolled %d loot items for %s" % [num_items, "guardian" if is_guardian else "corpse"])
 
 	# Generate each item
 	for i in range(num_items):
 		var item = CorpseState.roll_loot_item(is_guardian)
 		if not item.is_empty():
-			# Add quantity for stackable items
 			if item.get("stackable", false):
 				item["quantity"] = 1
 			loot.append(item)
-			print("   💎 Generated: %s" % item.get("name", "Unknown"))
 
 	return loot
 
