@@ -1099,7 +1099,7 @@ metadata/enemy_type = "skeleton"
 metadata/aggro_range = 150.0
 
 [node name="EnemySpawn_L6_skeleton20" type="Marker2D" parent="."]
-position = Vector2(28.072754, 43.27875)
+position = Vector2(420.0, 180.0)
 script = ExtResource("8_pdbwf")
 enemy_level = 6
 metadata/enemy_level = 6
@@ -1171,7 +1171,7 @@ metadata/enemy_type = "skeleton"
 metadata/aggro_range = 150.0
 
 [node name="EnemySpawn_L6_skeleton29" type="Marker2D" parent="."]
-position = Vector2(116.02832, -275.33984)
+position = Vector2(180.0, -420.0)
 script = ExtResource("8_pdbwf")
 enemy_level = 6
 metadata/enemy_level = 6

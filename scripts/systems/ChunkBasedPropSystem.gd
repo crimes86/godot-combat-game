@@ -101,8 +101,10 @@ func create_debug_label() -> void:
 
 func _on_debug_toggled(is_visible: bool) -> void:
 	"""Called when F3 debug display is toggled"""
-	if debug_canvas:
-		debug_canvas.visible = is_visible
+	# Disabled - now integrated into main PerformanceProfiler F3 display
+	# if debug_canvas:
+	# 	debug_canvas.visible = is_visible
+	pass
 
 var chunk_update_timer: float = 0.0
 const CHUNK_UPDATE_INTERVAL: float = 2.0  # Check chunks every 2s (rarely changes - 3000px chunks)
@@ -116,6 +118,13 @@ var debug_label: Label = null
 var debug_canvas: CanvasLayer = null
 
 func _process(delta: float) -> void:
+	# In multiplayer server mode, we need to track all players
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		# Server tracks all players for chunk loading
+		process_multiplayer_chunks(delta)
+		return
+
+	# Single player or client mode - track local player only
 	if not player or not is_instance_valid(player):
 		player = get_tree().get_first_node_in_group("player")
 		return
@@ -132,6 +141,86 @@ func _process(delta: float) -> void:
 	if chunk_update_timer >= CHUNK_UPDATE_INTERVAL:
 		chunk_update_timer = 0.0
 		update_chunks()
+
+func process_multiplayer_chunks(delta: float) -> void:
+	"""Process chunks for all players in multiplayer mode (server only)"""
+	# Continue async chunk loading if in progress
+	process_async_chunk_loading()
+
+	# Only update chunks occasionally
+	chunk_update_timer += delta
+	if chunk_update_timer >= CHUNK_UPDATE_INTERVAL:
+		chunk_update_timer = 0.0
+		update_chunks_for_all_players()
+
+func update_chunks_for_all_players() -> void:
+	"""Update chunks based on all player positions (server only)"""
+	var all_players = get_tree().get_nodes_in_group("player")
+	if all_players.is_empty():
+		return
+
+	var all_chunks_to_load = {}  # Use dict to avoid duplicates
+
+	# Collect chunks needed by all players
+	for player_node in all_players:
+		if not is_instance_valid(player_node):
+			continue
+
+		var player_pos = player_node.global_position
+		var player_chunk = get_chunk_key(player_pos)
+
+		# Always load player's current chunk
+		all_chunks_to_load[player_chunk] = true
+
+		# Parse chunk coordinates
+		var chunk_parts = player_chunk.split(",")
+		var chunk_x = int(chunk_parts[0])
+
+		# Calculate position within chunk
+		var chunk_origin_x = chunk_x * CHUNK_SIZE
+		var pos_in_chunk_x = player_pos.x - chunk_origin_x
+
+		# Define edge threshold (must match single player logic)
+		const EDGE_THRESHOLD = 1000.0
+
+		var dist_to_left_edge = pos_in_chunk_x
+		var dist_to_right_edge = CHUNK_SIZE - pos_in_chunk_x
+
+		# Load adjacent chunks if player is near edges
+		if dist_to_left_edge < EDGE_THRESHOLD:
+			var left_chunk_key = "%d,0" % (chunk_x - 1)
+			var left_chunk_center = get_chunk_center(left_chunk_key)
+			if is_in_world_bounds(left_chunk_center):
+				all_chunks_to_load[left_chunk_key] = true
+
+		if dist_to_right_edge < EDGE_THRESHOLD:
+			var right_chunk_key = "%d,0" % (chunk_x + 1)
+			var right_chunk_center = get_chunk_center(right_chunk_key)
+			if is_in_world_bounds(right_chunk_center):
+				all_chunks_to_load[right_chunk_key] = true
+
+	# Get list of chunks to load
+	var chunks_to_load = all_chunks_to_load.keys()
+
+	# Load new chunks
+	for chunk_key in chunks_to_load:
+		if not loaded_chunks.has(chunk_key) and not chunks_being_loaded.has(chunk_key):
+			start_async_chunk_load(chunk_key, true)  # Priority load for multiplayer
+
+	# Unload distant chunks
+	var chunks_to_unload = []
+	for loaded_chunk_key in loaded_chunks:
+		if not chunks_to_load.has(loaded_chunk_key):
+			chunks_to_unload.append(loaded_chunk_key)
+
+	for chunk_key in chunks_to_unload:
+		unload_chunk(chunk_key)
+
+	# Debug output
+	if chunks_to_load.size() > 0 or chunks_to_unload.size() > 0:
+		print("🌐 Server chunk update - Active: %s, Loading: %d, Unloading: %d" % [
+			chunks_to_load, chunks_to_load.size(), chunks_to_unload.size()
+		])
 
 func update_debug_display() -> void:
 	"""Update the debug label with current chunk info"""
@@ -161,14 +250,40 @@ func update_debug_display() -> void:
 	var near_left = dist_to_left_edge < EDGE_THRESHOLD
 	var near_right = dist_to_right_edge < EDGE_THRESHOLD
 
-	debug_label.text = "CHUNK DEBUG (6 Horizontal Chunks)\n"
-	debug_label.text += "Current Chunk: %s\n" % chunk_key
-	debug_label.text += "Position in Chunk: %.0fpx from left edge\n" % pos_in_chunk_x
-	debug_label.text += "Distance to Left Edge: %.0fpx%s\n" % [dist_to_left_edge, " [NEAR <1000px]" if near_left else ""]
-	debug_label.text += "Distance to Right Edge: %.0fpx%s\n" % [dist_to_right_edge, " [NEAR <1000px]" if near_right else ""]
-	debug_label.text += "Loaded Chunks: %d (1-3 based on edges)\n" % loaded_chunks.size()
-	debug_label.text += "Loading Chunks: %d\n" % chunks_being_loaded.size()
-	debug_label.text += "Total World Chunks: %d (horizontal strip)" % total_chunks
+	# Calculate neighboring chunk info
+	var west_chunk_key = "%d,0" % (chunk_x - 1)
+	var east_chunk_key = "%d,0" % (chunk_x + 1)
+	var west_loaded = loaded_chunks.has(west_chunk_key)
+	var east_loaded = loaded_chunks.has(east_chunk_key)
+
+	debug_label.text = "═══ CHUNK SYSTEM DEBUG ═══\n"
+	debug_label.text += "Chunk Size: %.0fpx wide (vertical columns)\n" % CHUNK_SIZE
+	debug_label.text += "Current Chunk: [%s]\n" % chunk_key
+	debug_label.text += "Player X: %.0f\n" % player_pos.x
+	debug_label.text += "\n"
+	debug_label.text += "── DISTANCES TO EDGES ──\n"
+	debug_label.text += "West Edge: %.0fpx%s\n" % [dist_to_left_edge, " ⚠️NEAR" if near_left else ""]
+	debug_label.text += "East Edge: %.0fpx%s\n" % [dist_to_right_edge, " ⚠️NEAR" if near_right else ""]
+	debug_label.text += "\n"
+	debug_label.text += "── NEIGHBORING CHUNKS ──\n"
+	debug_label.text += "West [%s]: %s\n" % [west_chunk_key, "✓LOADED" if west_loaded else "NOT LOADED"]
+	debug_label.text += "East [%s]: %s\n" % [east_chunk_key, "✓LOADED" if east_loaded else "NOT LOADED"]
+	debug_label.text += "\n"
+	debug_label.text += "── CHUNK BOUNDARIES ──\n"
+	var chunk_start = chunk_x * CHUNK_SIZE
+	var chunk_end = (chunk_x + 1) * CHUNK_SIZE
+	debug_label.text += "Current: X=%d to X=%d\n" % [chunk_start, chunk_end]
+	debug_label.text += "West: X=%d to X=%d\n" % [chunk_start - CHUNK_SIZE, chunk_start]
+	debug_label.text += "East: X=%d to X=%d\n" % [chunk_end, chunk_end + CHUNK_SIZE]
+	debug_label.text += "\n"
+	debug_label.text += "── STATUS ──\n"
+	debug_label.text += "Loaded: %d chunks\n" % loaded_chunks.size()
+	debug_label.text += "Loading: %d chunks\n" % chunks_being_loaded.size()
+	debug_label.text += "Active chunks: "
+	for key in loaded_chunks.keys():
+		debug_label.text += "[%s] " % key
+	debug_label.text += "\n"
+	debug_label.text += "Total World: %d chunks" % total_chunks
 
 	# Position on right side of screen
 	var viewport = get_viewport()
@@ -679,7 +794,7 @@ func add_ground_disturbance(parent_node: Node2D, base_size: float, rng: RandomNu
 func is_in_world_bounds(pos: Vector2) -> bool:
 	"""Check if position is within world boundaries"""
 	return pos.x >= WORLD_MIN.x and pos.x <= WORLD_MAX.x and \
-	       pos.y >= WORLD_MIN.y and pos.y <= WORLD_MAX.y
+		   pos.y >= WORLD_MIN.y and pos.y <= WORLD_MAX.y
 
 func create_tree(pos: Vector2, tree_type: String, container: Node2D, rng: RandomNumberGenerator, tree_id: String) -> void:
 	"""Create a lootable tree with proper scaling and collision"""

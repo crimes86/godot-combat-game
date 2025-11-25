@@ -67,12 +67,6 @@ var main_campfire_position: Vector2 = Vector2(-2000, 0)  # Main campfire locatio
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _ready() -> void:
-	print("═══════════════════════════════════════════")
-	print("🏛️ RUINS INITIALIZED")
-	print("   Location: ", global_position)
-	print("   X: %.0f, Y: %.0f" % [global_position.x, global_position.y])
-	print("═══════════════════════════════════════════")
-
 	# Load guardian skeleton scene (armored guardians with special loot)
 	skeleton_scene = load("res://scenes/enemies/guardian_skeleton.tscn")
 	if not skeleton_scene:
@@ -91,8 +85,6 @@ func _ready() -> void:
 	for i in range(skeleton_count):
 		await spawn_skeleton(i)
 
-	print("✅ RuinsCampfire initialized with %d skeletons" % skeleton_count)
-	print("   Total skeletons tracked: %d" % skeleton_data.size())
 
 func _exit_tree() -> void:
 	"""Clean up when node is removed from tree"""
@@ -133,7 +125,8 @@ func _physics_process(delta: float) -> void:
 						walking_count += 1
 					SkeletonState.GUARDING_RUINS:
 						guarding_count += 1
-		print("📊 Skeleton Status: Patrolling=%d, Walking=%d, Guarding=%d, Dead=%d (Total: %d/%d)" % [patrol_count, walking_count, guarding_count, dead_count, skeleton_data.size() - dead_count, skeleton_count])
+		# Status logging disabled - was spamming console
+		pass
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SKELETON MANAGEMENT
@@ -175,20 +168,12 @@ func spawn_skeleton(index: int) -> void:
 	# Connect death signal
 	if skeleton.has_signal("died"):
 		skeleton.died.connect(_on_skeleton_died.bind(skeleton))
-		print("  ✅ Connected 'died' signal for Skeleton %d" % index)
-	else:
-		print("⚠️ Skeleton %d has no 'died' signal" % index)
 
 	# Connect corpse loot signal to game_world
 	if skeleton.has_signal("corpse_clicked"):
 		var game_world = get_parent()
 		if game_world and game_world.has_method("_on_corpse_clicked"):
 			skeleton.corpse_clicked.connect(game_world._on_corpse_clicked)
-			print("  ✅ Connected 'corpse_clicked' signal for Skeleton %d to game_world" % index)
-		else:
-			push_error("⚠️ Could not find game_world._on_corpse_clicked method!")
-	else:
-		print("⚠️ Skeleton %d has no 'corpse_clicked' signal" % index)
 
 	# Calculate designated guard position around ruins (evenly spaced)
 	var angle = (index / float(skeleton_count)) * TAU
@@ -210,8 +195,6 @@ func spawn_skeleton(index: int) -> void:
 		"stuck_distance_threshold": 30.0  # Must move at least 30 units in 3 seconds
 	}
 	skeleton_data.append(data)
-
-	print("  💀 Skeleton %d spawned at (%.0f, %.0f) - Distance to ruins: %.0f" % [index, spawn_pos.x, spawn_pos.y, spawn_pos.distance_to(global_position)])
 
 func find_valid_spawn_position() -> Vector2:
 	"""Find a random position that avoids campfire and path"""
@@ -290,8 +273,6 @@ func update_skeleton_patrol_spawn(data: Dictionary, delta: float) -> void:
 		# Reset stuck detection for the new state
 		data["stuck_timer"] = 0.0
 		data["last_position"] = skeleton.global_position
-		var dist = skeleton.global_position.distance_to(global_position) if is_instance_valid(skeleton) else 0
-		print("  💀 Skeleton %d heading directly to CAMPFIRE (Distance: %.0f)" % [data["index"], dist])
 		return
 
 	data["patrol_timer"] -= delta
@@ -361,7 +342,6 @@ func update_skeleton_walking_to_ruins(data: Dictionary, delta: float) -> void:
 			ai.patrol_radius = 60.0  # Patrol radius around their spot (increased for more spread)
 			ai.pick_new_patrol_target()
 
-		print("  💀 Skeleton %d arrived at guard position, now patrolling" % data["index"])
 	else:
 		# Override AI's patrol target to go to their guard position
 		if skeleton.has_node("EnemyAI"):
@@ -426,40 +406,22 @@ func respawn_skeleton(data: Dictionary) -> void:
 
 	if skeleton.has_signal("died"):
 		skeleton.died.connect(_on_skeleton_died.bind(skeleton))
-		print("  ✅ Connected 'died' signal for respawned Skeleton %d" % data["index"])
 
 	# Connect corpse loot signal to game_world
 	if skeleton.has_signal("corpse_clicked"):
 		var game_world = get_parent()
 		if game_world and game_world.has_method("_on_corpse_clicked"):
 			skeleton.corpse_clicked.connect(game_world._on_corpse_clicked)
-			print("  ✅ Connected 'corpse_clicked' signal for respawned Skeleton %d to game_world" % data["index"])
 
 	data["skeleton"] = skeleton
 	data["state"] = SkeletonState.PATROLLING_SPAWN
 	data["patrol_timer"] = patrol_before_ruins_time
-	# Keep existing guard_position - it's already in the data dictionary
-	# Reset stuck detection
 	data["last_position"] = spawn_pos
 	data["stuck_timer"] = 0.0
 
-	print("  💀 Skeleton %d respawned at (%.0f, %.0f)" % [data["index"], spawn_pos.x, spawn_pos.y])
-
 func _on_skeleton_died(skeleton: Node) -> void:
 	"""Called when a skeleton dies"""
-	print("🔔 RuinsCampfire._on_skeleton_died() TRIGGERED!")
-	print("   Skeleton: %s" % skeleton.name if is_instance_valid(skeleton) else "INVALID")
-	print("   has_killed_skeleton BEFORE: %s" % has_killed_skeleton)
-
-	# Mark that player has killed at least one skeleton
 	has_killed_skeleton = true
-	print("   has_killed_skeleton AFTER: %s" % has_killed_skeleton)
-
-	# Find skeleton data
-	for data in skeleton_data:
-		if data["skeleton"] == skeleton:
-			print("  ☠️ Skeleton %d died, will respawn in %.0fs" % [data["index"], skeleton_respawn_time])
-			break
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE CONVERSION
@@ -467,20 +429,13 @@ func _on_skeleton_died(skeleton: Node) -> void:
 
 func convert_to_campfire() -> void:
 	"""Convert ruins to campfire"""
-	print("🏛️ convert_to_campfire() called!")
-	print("   current_state: %s" % ("CAMPFIRE" if current_state == RuinsState.CAMPFIRE else "RUINS"))
-	print("   has_killed_skeleton: %s" % has_killed_skeleton)
-
 	if current_state == RuinsState.CAMPFIRE:
-		print("   ⚠️ Already a campfire, ignoring")
 		return
 
 	# Require player to kill at least one skeleton first
 	if not has_killed_skeleton:
-		print("⚔️ Must defeat at least one skeleton guardian to claim the ruins!")
 		return
 
-	print("🔥 Converting ruins to campfire!")
 	current_state = RuinsState.CAMPFIRE
 	player_last_near_time = Time.get_ticks_msec() / 1000.0
 	time_since_player_near = 0.0
@@ -500,7 +455,6 @@ func convert_to_ruins() -> void:
 	if current_state == RuinsState.RUINS:
 		return
 
-	print("🏛️ Converting campfire back to ruins (abandoned)")
 	current_state = RuinsState.RUINS
 
 	# Show ruins, hide campfire
@@ -633,7 +587,6 @@ func _input(event: InputEvent) -> void:
 		if current_state == RuinsState.RUINS and player:
 			var distance = player.global_position.distance_to(global_position)
 			if distance < convert_range:
-				print("🔑 Converting ruins to campfire!")
 				convert_to_campfire()
 				get_viewport().set_input_as_handled()  # Mark input as handled
 
@@ -663,8 +616,6 @@ func create_ruins_visual() -> void:
 	highlight.color = Color(0.6, 0.5, 0.4, 0.2)  # Subtle brown glow
 	ruins_sprite.add_child(highlight)  # Add as child of sprite so it hides with sprite
 
-	print("  🏛️ Ruins visual created")
-
 func create_campfire_visual() -> void:
 	"""Create campfire (reuse existing Campfire scene)"""
 	var campfire_scene = load("res://scenes/world/campfire.tscn")
@@ -675,9 +626,7 @@ func create_campfire_visual() -> void:
 		# Disable enemy deterrence for ruins campfire (enemies can chase player into it)
 		if "enable_deterrence" in campfire_node:
 			campfire_node.enable_deterrence = false
-			print("  ⚔️ Deterrence disabled - enemies can chase player into ruins campfire")
 
 		add_child(campfire_node)
-		print("  🔥 Campfire visual created")
 	else:
 		push_error("❌ Could not load campfire.tscn!")

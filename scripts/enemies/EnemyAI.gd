@@ -154,9 +154,6 @@ func _ready() -> void:
 	# Create debug label (always created, visibility controlled by player debug mode)
 	create_debug_label()
 
-	# Brief init message with enemy name and position
-	print("🤖 %s AI ready at (%.0f, %.0f)" % [enemy.name, enemy.global_position.x, enemy.global_position.y])
-
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN LOOP
 # ═══════════════════════════════════════════════════════════════════════════
@@ -190,84 +187,16 @@ func _physics_process(delta: float) -> void:
 		distance_to_player = enemy.global_position.distance_to(cached_player.global_position)
 
 	# ═══════════════════════════════════════════════════════════════
-	# LOD (LEVEL OF DETAIL) SYSTEM - Aggressive performance optimization
+	# LOD DISABLED - Simplified for debugging
+	# Enemies always run full AI, visibility controlled by Enemy.gd only
 	# ═══════════════════════════════════════════════════════════════
-	lod_update_timer += delta
-	if lod_update_timer >= lod_update_interval:
-		lod_update_timer = 0.0
-		update_lod_level(distance_to_player)
-
-	# Apply LOD-based optimizations
-	match current_lod:
-		LODLevel.CULLED:
-			# Beyond 2500px: Completely disabled (not visible)
-			enemy.velocity = Vector2.ZERO
-			enemy.visible = false
-			if sprite:
-				sprite.visible = false
-			if enemy.shadow_sprite:
-				enemy.shadow_sprite.visible = false
-			return  # Skip all processing
-
-		LODLevel.PLACEHOLDER:
-			# 1500-2500px: Minimal "placeholder" state
-			# - Simple idle animation or static sprite
-			# - No AI, no collision, no particles
-			# - Visible but not interactive
-			enemy.velocity = Vector2.ZERO
-			enemy.visible = true
-			if sprite:
-				sprite.visible = true
-				# Show only idle animation
-				var anim_sprite = sprite as AnimatedSprite2D
-				if anim_sprite and anim_sprite.sprite_frames:
-					if not anim_sprite.animation.begins_with("idle_"):
-						anim_sprite.play("idle_down")
-						anim_sprite.speed_scale = 0.5  # Slow animation
-			# Hide shadow in placeholder mode
-			if enemy.shadow_sprite:
-				enemy.shadow_sprite.visible = false
-			return  # Skip AI processing
-
-		LODLevel.LOW:
-			# 1000-1500px: Minimal features
-			# - Basic AI (patrol only, no combat unless already engaged)
-			# - No footsteps, no shadows
-			# - Slow update rate (0.3s)
-			ai_update_interval = 0.3  # 3 FPS
-			if sprite:
-				sprite.visible = true
-			if enemy.shadow_sprite:
-				enemy.shadow_sprite.visible = false
-			# Don't aggro at this distance unless already in combat
-			if not is_in_combat:
-				enemy.velocity = Vector2.ZERO
-				enemy.move_and_slide()
-				return
-
-		LODLevel.MEDIUM:
-			# 500-1000px: Reduced features
-			# - Full AI but slower updates
-			# - Shadows visible but no footstep particles
-			# - Medium update rate (0.15s)
-			ai_update_interval = 0.15  # 6-7 FPS
-			if sprite:
-				sprite.visible = true
-			if enemy.shadow_sprite:
-				enemy.shadow_sprite.visible = true
-
-		LODLevel.FULL:
-			# 0-500px: Full quality
-			# - Full AI, all features enabled
-			# - Fast update rate
-			if is_in_combat or distance_to_player < 300:
-				ai_update_interval = 0.05  # 20 FPS when near or in combat
-			else:
-				ai_update_interval = 0.1   # 10 FPS when close but not in combat
-			if sprite:
-				sprite.visible = true
-			if enemy.shadow_sprite:
-				enemy.shadow_sprite.visible = true
+	# Adjust AI update rate based on distance (performance only, no visibility changes)
+	if is_in_combat or distance_to_player < 500:
+		ai_update_interval = 0.05  # 20 FPS when near or in combat
+	elif distance_to_player < 1500:
+		ai_update_interval = 0.15  # 6-7 FPS at medium distance
+	else:
+		ai_update_interval = 0.3   # 3 FPS when far away
 
 	# ═══════════════════════════════════════════════════════════════
 	# STUCK DETECTION (runs every frame, independent of AI throttling)
@@ -287,15 +216,6 @@ func _physics_process(delta: float) -> void:
 			# If walking animation is playing but position hasn't changed = STUCK
 			if distance_moved < stuck_distance_threshold and is_walking:
 				# We're stuck! Start the about-face unstuck maneuver
-				print("⚠️ %s STUCK at (%.0f, %.0f) - walking but only moved %.1fpx in %.1fs" % [
-					enemy.name,
-					enemy.global_position.x,
-					enemy.global_position.y,
-					distance_moved,
-					stuck_check_interval
-				])
-
-				# Store current state and destination to resume later
 				unstuck_state_before = current_state
 				if current_state == State.PATROLLING:
 					unstuck_original_target = patrol_target
@@ -304,15 +224,9 @@ func _physics_process(delta: float) -> void:
 
 				# Calculate about-face direction (opposite of current velocity, with random Y offset)
 				var backward_direction = -enemy.velocity.normalized()
-				var y_offset = randf_range(-0.5, 0.5)  # Random Y component for variation
+				var y_offset = randf_range(-0.5, 0.5)
 				unstuck_direction = (backward_direction + Vector2(0, y_offset)).normalized()
-
-				# Reset unstuck counter
 				unstuck_steps_taken = 0
-
-				print("   🔄 %s: About-face (%d steps), then resume %s" % [enemy.name, unstuck_max_steps, get_state_name()])
-
-				# Enter unstuck state
 				change_state(State.UNSTUCKING)
 			last_position = enemy.global_position
 			stuck_timer = 0.0
@@ -421,7 +335,6 @@ func process_combat(delta: float) -> void:
 	# Check chunk-based leashing - if player left spawn chunk, disengage
 	var player_chunk = get_chunk_key(player.global_position)
 	if player_chunk != spawn_chunk:
-		print("🏠 %s: Player left spawn chunk (spawn: %s, player: %s) - disengaging" % [enemy.name, spawn_chunk, player_chunk])
 		disengage()
 		return
 
@@ -430,11 +343,10 @@ func process_combat(delta: float) -> void:
 	# Account for enemy's enlarged size during crit window
 	var effective_attack_range = attack_range
 	if enemy.has_method("get") and enemy.get("in_crit_window"):
-		effective_attack_range = attack_range * 2.0  # 60 * 2 = 120
+		effective_attack_range = attack_range * 2.0
 
 	# Check if player escaped
 	if distance_to_player > disengage_distance:
-		print("💤 %s: Player escaped (%.0fpx away)" % [enemy.name, distance_to_player])
 		disengage()
 		return
 	
@@ -563,8 +475,6 @@ func process_unstucking(delta: float) -> void:
 
 	# After enough steps, resume original behavior
 	if unstuck_steps_taken >= unstuck_max_steps:
-		print("   ✅ %s: Unstuck complete, resuming %s" % [enemy.name, get_state_name_for_state(unstuck_state_before)])
-
 		# Resume original state
 		if unstuck_state_before == State.PATROLLING:
 			# Always pick a NEW patrol target after unstuck to avoid walking back into the same obstacle
@@ -682,7 +592,6 @@ func trigger_aggro() -> void:
 	if is_in_combat:
 		return  # Already in combat
 
-	print("👁️ %s: AGGRO! Spotted player" % enemy.name)
 	is_in_combat = true
 
 	# Play aggro sound (menacing skeleton cackle) with spam prevention
@@ -727,7 +636,6 @@ func trigger_chain_aggro() -> void:
 			if other_enemy.has_node("EnemyAI"):
 				var other_ai = other_enemy.get_node("EnemyAI")
 				if other_ai.has_method("trigger_aggro") and not other_ai.is_in_combat:
-					print("   ⚡ Chain aggro: %s joins the fight!" % other_enemy.name)
 					other_ai.trigger_aggro()
 					checked += 1
 					if checked >= 5:  # Max 5 chain aggros at once
@@ -742,7 +650,6 @@ func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
 
 	# CRITICAL: This is how we enter combat (player attacked us)
 	if not is_in_combat:
-		print("⚔️ %s: Engaged! (Player attacked)" % enemy.name)
 		is_in_combat = true
 
 		# Chain aggro - alert nearby allies when attacked!
@@ -769,12 +676,10 @@ func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
 			else:
 				retreat_direction = Vector2(randf() * 2 - 1, randf() * 2 - 1).normalized()
 
-			print("🏃 %s: Retreating!" % enemy.name)
 			change_state(State.RETREATING)
 
 func disengage() -> void:
 	"""Exit combat and return to patrol"""
-	print("🔄 %s: Disengaging, resetting health" % enemy.name)
 	is_in_combat = false
 	leash_cooldown_timer = LEASH_COOLDOWN_DURATION  # Prevent immediate re-aggro
 
