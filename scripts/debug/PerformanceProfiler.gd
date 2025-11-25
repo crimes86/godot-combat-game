@@ -20,11 +20,11 @@ func _ready() -> void:
 	visible = false  # Hidden by default, toggle with F3
 
 	label = Label.new()
-	label.position = Vector2(10, 10)
 	label.add_theme_font_size_override("font_size", 14)
 	label.add_theme_color_override("font_color", Color.WHITE)
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 3)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	add_child(label)
 
 	# Connect to DebugConfig signal
@@ -56,10 +56,14 @@ func update_profile() -> void:
 	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 	var campfires = get_tree().get_nodes_in_group("campfire")
 
-	# Count particles
+	# Count particles (both CPU and GPU)
 	var particle_count = 0
-	var particles = get_all_nodes_of_type(root, CPUParticles2D)
-	for p in particles:
+	var cpu_particles = get_all_nodes_of_type(root, CPUParticles2D)
+	var gpu_particles = get_all_nodes_of_type(root, GPUParticles2D)
+	for p in cpu_particles:
+		if p.emitting:
+			particle_count += p.amount
+	for p in gpu_particles:
 		if p.emitting:
 			particle_count += p.amount
 
@@ -76,16 +80,12 @@ func update_profile() -> void:
 
 	# Memory usage (simplified - avoid API version issues)
 	var static_mem = OS.get_static_memory_usage() / 1024.0 / 1024.0
-	var total_mem = OS.get_static_memory_usage() / 1024.0 / 1024.0
-
-	# Physics bodies
-	var physics_2d_active = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES).size()
-
-	# Draw calls (objects rendered)
-	var draw_calls = total_nodes  # Approximate
 
 	# Get chunk-based enemy counts
 	var chunk_enemy_info = get_chunk_enemy_info()
+
+	# Get system node breakdown
+	var system_info = get_system_node_breakdown()
 
 	var color = Color.GREEN
 	if fps < 30:
@@ -99,35 +99,112 @@ func update_profile() -> void:
 
 	label.text = """FPS: %d (%.1f ms/frame)
 ━━━━━━━━━━━━━━━━━━━━━━
-SCENE:
-  Total Nodes: %d
-  Enemies: %d
-  Campfires: %d
-━━━━━━━━━━━━━━━━━━━━━━
-RENDERING:
+SCENE TOTALS:
+  Nodes: %d
   Sprites: %d
   Polygons: %d
-  Particles: %d (active)
+  Particles: %d
   Lights: %d
 ━━━━━━━━━━━━━━━━━━━━━━
-MEMORY:
-  Usage: %.1f MB
+SYSTEMS:
+%s
 ━━━━━━━━━━━━━━━━━━━━━━
 CHUNKS:
 %s
 ━━━━━━━━━━━━━━━━━━━━━━
-ENEMIES PER CHUNK:
+ENEMIES:
 %s
 ━━━━━━━━━━━━━━━━━━━━━━
+MEMORY: %.1f MB
 Press F3 to toggle
 """ % [
 		fps, frame_time_ms,
-		total_nodes, enemies.size(), campfires.size(),
-		sprite_count, polygon_count, particle_count, light_count,
-		static_mem,
+		total_nodes, sprite_count, polygon_count, particle_count, light_count,
+		system_info,
 		chunk_info,
-		chunk_enemy_info
+		chunk_enemy_info,
+		static_mem
 	]
+
+	# Position label on right side of screen
+	var viewport = get_viewport()
+	if viewport:
+		var viewport_size = viewport.get_visible_rect().size
+		label.position = Vector2(viewport_size.x - 320, 10)
+
+func get_system_node_breakdown() -> String:
+	"""Get node counts per major system"""
+	var game_world = find_game_world()
+	if not game_world:
+		return "  GameWorld not found"
+
+	var info = ""
+	var accounted_total = 0
+
+	# Collect ALL children with their node counts, sorted by size
+	var child_counts: Array = []
+	for child in game_world.get_children():
+		var child_count = count_nodes_recursive(child)
+		var child_name = child.name
+
+		# Skip enemies (we count them separately by group)
+		if child.is_in_group(Constants.GROUP_ENEMIES):
+			continue
+
+		child_counts.append({"name": child_name, "count": child_count, "node": child})
+
+	# Sort by count descending
+	child_counts.sort_custom(func(a, b): return a.count > b.count)
+
+	# Show top 12 largest children
+	var shown = 0
+	for data in child_counts:
+		if shown >= 12:
+			break
+		if data.count >= 10:  # Only show if 10+ nodes
+			var display_name = data.name
+			if display_name.length() > 14:
+				display_name = display_name.substr(0, 14)
+			info += "  %s: %d\n" % [display_name, data.count]
+			accounted_total += data.count
+			shown += 1
+
+	# Count remaining small children
+	var remaining_count = 0
+	for i in range(shown, child_counts.size()):
+		remaining_count += child_counts[i].count
+	if remaining_count > 0:
+		info += "  (other x%d): %d\n" % [child_counts.size() - shown, remaining_count]
+		accounted_total += remaining_count
+
+	# Enemies (spawned directly under GameWorld)
+	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+	var enemy_nodes = 0
+	for enemy in enemies:
+		enemy_nodes += count_nodes_recursive(enemy)
+	info += "  Enemies(%d): %d\n" % [enemies.size(), enemy_nodes]
+	accounted_total += enemy_nodes
+
+	# Player (may be child of GameWorld in multiplayer)
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		var player_count = count_nodes_recursive(player)
+		# Only add if not already counted as GameWorld child
+		if player.get_parent() != game_world:
+			info += "  Player: %d\n" % player_count
+			accounted_total += player_count
+
+	# Calculate totals
+	var root = get_tree().root
+	var total_nodes = count_nodes_recursive(root)
+	var game_world_total = count_nodes_recursive(game_world)
+	var outside_gw = total_nodes - game_world_total
+
+	info += "  ─────────────\n"
+	info += "  GW Total: %d\n" % game_world_total
+	info += "  Outside GW: %d\n" % outside_gw
+
+	return info
 
 func count_nodes_recursive(node: Node) -> int:
 	var count = 1
@@ -177,12 +254,12 @@ func get_chunk_debug_info() -> String:
 	if not chunk_system:
 		return "  Chunk system not found (searched all paths)"
 
-	const CHUNK_SIZE = 3000.0
+	var CHUNK_SIZE = Constants.CHUNK_SIZE
 	var player_pos = player.global_position
 	var chunk_x = int(floor(player_pos.x / CHUNK_SIZE))
-	var chunk_key = "%d,0" % chunk_x
+	var chunk_key = "%d" % chunk_x
 
-	# Calculate distances
+	# Calculate distances to chunk edges
 	var chunk_origin_x = chunk_x * CHUNK_SIZE
 	var chunk_end_x = chunk_origin_x + CHUNK_SIZE
 	var dist_to_west = player_pos.x - chunk_origin_x
@@ -201,7 +278,7 @@ func get_chunk_debug_info() -> String:
 	return info
 
 func get_chunk_enemy_info() -> String:
-	"""Get enemy count per chunk from spawn manager"""
+	"""Get enemy count per chunk from spawn manager with LOD stats"""
 	# Find spawn manager
 	var game_world = find_game_world()
 	if not game_world:
@@ -230,9 +307,35 @@ func get_chunk_enemy_info() -> String:
 	if info.is_empty():
 		info = "  No chunks loaded"
 	else:
-		info += "  Total: %d enemies" % stats.total_enemies
+		info += "  Total: %d enemies\n" % stats.total_enemies
+
+		# Add LOD stats
+		var lod_stats = get_enemy_lod_stats()
+		info += "  LOD: %d full, %d reduced, %d minimal" % [lod_stats.lod_0, lod_stats.lod_1, lod_stats.lod_2]
 
 	return info
+
+func get_enemy_lod_stats() -> Dictionary:
+	"""Count enemies by LOD level"""
+	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+
+	var lod_0 = 0  # Full detail
+	var lod_1 = 0  # Reduced
+	var lod_2 = 0  # Minimal
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+		# Check the enemy's current_lod if it exists
+		if "current_lod" in enemy:
+			match enemy.current_lod:
+				0: lod_0 += 1
+				1: lod_1 += 1
+				2: lod_2 += 1
+		else:
+			lod_0 += 1  # Default to full if no LOD
+
+	return {"lod_0": lod_0, "lod_1": lod_1, "lod_2": lod_2}
 
 func _on_debug_toggled(is_visible: bool) -> void:
 	"""Called when F3 debug display is toggled"""
@@ -269,33 +372,55 @@ func create_debug_visualizations() -> void:
 
 func clear_debug_visualizations() -> void:
 	"""Remove debug visualization overlays"""
-	if debug_draw_container and is_instance_valid(debug_draw_container):
-		debug_draw_container.queue_free()
-		debug_draw_container = null
+	# Clear chunk boundary lines first
+	for line in chunk_boundary_lines:
+		if is_instance_valid(line):
+			line.queue_free()
 	chunk_boundary_lines.clear()
+
+	# Clear enemy debug circles
+	for circle in enemy_debug_circles:
+		if is_instance_valid(circle):
+			circle.queue_free()
 	enemy_debug_circles.clear()
 
+	# Clear the main debug container and ALL its children
+	if debug_draw_container and is_instance_valid(debug_draw_container):
+		# Explicitly free all children first to avoid orphans
+		for child in debug_draw_container.get_children():
+			if is_instance_valid(child):
+				child.queue_free()
+		debug_draw_container.queue_free()
+		debug_draw_container = null
+
+	# Also clean up any stray debug nodes that might be in GameWorld
+	var game_world = find_game_world()
+	if game_world:
+		for child in game_world.get_children():
+			if child.name == "DebugDrawContainer" or child.name.begins_with("EnemyDebug_"):
+				child.queue_free()
+
 func draw_chunk_boundaries() -> void:
-	"""Draw vertical lines at chunk boundaries"""
+	"""Draw chunk boundaries (both vertical and horizontal for square chunks)"""
 	if not debug_draw_container:
 		return
 
-	const CHUNK_SIZE = 3000.0
-	const WORLD_MIN_X = -5000.0
-	const WORLD_MAX_X = 13000.0
-	const WORLD_MIN_Y = -3000.0
-	const WORLD_MAX_Y = 3000.0
+	var CHUNK_SIZE = Constants.CHUNK_SIZE
+	var WORLD_MIN_X = -Constants.CHUNK_SIZE
+	var WORLD_MAX_X = Constants.CHUNK_SIZE * 2
+	var WORLD_MIN_Y = -Constants.CHUNK_SIZE / 2
+	var WORLD_MAX_Y = Constants.CHUNK_SIZE / 2
 
-	# Calculate chunk boundaries
-	var start_chunk = int(floor(WORLD_MIN_X / CHUNK_SIZE))
-	var end_chunk = int(ceil(WORLD_MAX_X / CHUNK_SIZE))
+	# Draw vertical chunk boundaries
+	var start_chunk_x = int(floor(WORLD_MIN_X / CHUNK_SIZE))
+	var end_chunk_x = int(ceil(WORLD_MAX_X / CHUNK_SIZE))
 
-	for chunk_x in range(start_chunk, end_chunk + 1):
+	for chunk_x in range(start_chunk_x, end_chunk_x + 1):
 		var boundary_x = chunk_x * CHUNK_SIZE
 
 		# Create vertical line at chunk boundary
 		var line = Line2D.new()
-		line.name = "ChunkBoundary_%d" % chunk_x
+		line.name = "ChunkBoundaryV_%d" % chunk_x
 		line.width = 4.0
 		line.default_color = Color(1, 0, 1, 0.7)  # Magenta for visibility
 		line.add_point(Vector2(boundary_x, WORLD_MIN_Y))
@@ -306,14 +431,26 @@ func draw_chunk_boundaries() -> void:
 
 		# Add label showing chunk ID
 		var chunk_label = Label.new()
-		chunk_label.text = "Chunk %d,0" % chunk_x
-		chunk_label.position = Vector2(boundary_x + 50, -2900)
+		chunk_label.text = "Chunk %d" % chunk_x
+		chunk_label.position = Vector2(boundary_x + 50, WORLD_MIN_Y + 50)
 		chunk_label.add_theme_font_size_override("font_size", 24)
 		chunk_label.add_theme_color_override("font_color", Color(1, 0, 1, 1))
 		chunk_label.add_theme_color_override("font_outline_color", Color.BLACK)
 		chunk_label.add_theme_constant_override("outline_size", 4)
 		chunk_label.z_index = 999
 		debug_draw_container.add_child(chunk_label)
+
+	# Draw horizontal world boundaries (top and bottom of world)
+	for boundary_y in [WORLD_MIN_Y, WORLD_MAX_Y]:
+		var line = Line2D.new()
+		line.name = "WorldBoundaryH_%d" % int(boundary_y)
+		line.width = 4.0
+		line.default_color = Color(1, 0.5, 0, 0.7)  # Orange for world bounds
+		line.add_point(Vector2(WORLD_MIN_X, boundary_y))
+		line.add_point(Vector2(WORLD_MAX_X, boundary_y))
+		line.z_index = 999
+		debug_draw_container.add_child(line)
+		chunk_boundary_lines.append(line)
 
 func draw_enemy_debug() -> void:
 	"""Draw debug info around enemies - DISABLED (too spammy with many enemies)"""

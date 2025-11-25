@@ -1,27 +1,35 @@
 extends Node
 class_name ChunkBasedPropSystem
 
-## Chunk-Based Procedural Prop Generation (6 Horizontal Chunks)
-## World is divided into 6 vertical strips (3000px wide each)
-## Smart loading: current chunk always, neighbors only when within 1000px of edges (1-3 chunks total)
+## Chunk-Based Procedural Prop Generation (3 Square Chunks)
+## World is divided into 3 square chunks (8000x8000px each)
+## Chunk -1 (West), Chunk 0 (Origin/Spawn), Chunk +1 (East)
+## Smart loading: current chunk always, neighbors when within 1000px of edges
 
-const CHUNK_SIZE: float = 3000.0  # Each chunk is 3000px wide (horizontal strips only)
-const LOAD_DISTANCE: float = 4000.0  # Load chunks within this distance
-const UNLOAD_DISTANCE: float = 5000.0  # Unload chunks beyond this distance
+# Use Constants singleton for chunk size (single source of truth)
+var CHUNK_SIZE: float:
+	get: return Constants.CHUNK_SIZE
 
-# Prop density per chunk (3000px wide × 6000px tall = 18M px² = half of old 6000×6000 chunks)
-const TREES_PER_CHUNK: int = 158  # Dead trees (lootable - wood) - 35 * 4.5
-const ROCKS_LARGE_PER_CHUNK: int = 36  # Large rocks (lootable - stone/ore) - 8 * 4.5
-const ROCKS_MEDIUM_PER_CHUNK: int = 45  # Medium rocks (decorative) - 10 * 4.5
-const ROCKS_SMALL_PER_CHUNK: int = 32  # Small rocks (decorative) - 7 * 4.5
-const LAVA_POOLS_PER_CHUNK: int = 9  # Lava pools (visual) - 2 * 4.5
-const BONE_CLUSTERS_PER_CHUNK: int = 5  # Large skeletal remains (decorative) - 1 * 4.5
-const DEAD_VEGETATION_PER_CHUNK: int = 14  # Dead bushes/ash piles (decorative) - 3 * 4.5
-const CRACKS_PER_CHUNK: int = 18  # Ground cracks (visual) - 4 * 4.5
+const LOAD_DISTANCE: float = 10000.0  # Load chunks within this distance (doubled)
+const UNLOAD_DISTANCE: float = 12000.0  # Unload chunks beyond this distance (doubled)
 
-# World boundaries (from game_world.gd)
-const WORLD_MIN: Vector2 = Vector2(-5000, -3000)
-const WORLD_MAX: Vector2 = Vector2(13000, 3000)
+# Prop density per chunk (8000x8000 = 64M px², 3x density of original 4000x4000)
+# Targeting ~600 props per chunk (3x previous count for better performance)
+const TREES_PER_CHUNK: int = 210  # Dead trees (lootable - wood)
+const ROCKS_LARGE_PER_CHUNK: int = 48  # Large rocks (lootable - stone/ore)
+const ROCKS_MEDIUM_PER_CHUNK: int = 75  # Medium rocks (decorative)
+const ROCKS_SMALL_PER_CHUNK: int = 60  # Small rocks (decorative)
+const MONSTER_LAVA_POOLS_PER_CHUNK: int = 6  # Giant lava pools (anchor points)
+const LAVA_POOLS_PER_CHUNK: int = 24  # Regular lava pools (some cluster around monsters)
+const BONE_CLUSTERS_PER_CHUNK: int = 9  # Large skeletal remains (decorative)
+const DEAD_VEGETATION_PER_CHUNK: int = 24  # Dead bushes/ash piles (decorative)
+const CRACKS_PER_CHUNK: int = 30  # Ground cracks (visual)
+
+# World boundaries - 3 chunks: -8000 to 16000 X, -4000 to 4000 Y
+var WORLD_MIN: Vector2:
+	get: return Vector2(-Constants.CHUNK_SIZE, -Constants.CHUNK_SIZE / 2)
+var WORLD_MAX: Vector2:
+	get: return Vector2(Constants.CHUNK_SIZE * 2, Constants.CHUNK_SIZE / 2)
 
 # Chunk storage
 var loaded_chunks: Dictionary = {}  # {chunk_key: ChunkData}
@@ -55,15 +63,22 @@ const PROP_TEXTURES = {
 
 const TREE_TYPES = ["dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5", "dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10"]
 
+# Path checking - main path runs along Y=0 with zigzag, branch paths go to ruins
+const PATH_WIDTH: float = 250.0  # Width to avoid for lava pools
+# Campfire position - center of chunk 0
+var CAMPFIRE_POS: Vector2:
+	get: return Vector2(Constants.CHUNK_SIZE / 2, 0)
+
 class ChunkData:
 	var chunk_key: String
 	var props_container: Node2D  # Container for all props in this chunk
 	var is_loaded: bool = false
+	var monster_lava_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] for monster pools
 	var lava_pool_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] for exclusion
 	var large_rock_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] for rock overlap prevention
 
 func _ready() -> void:
-	print("🗺️ ChunkBasedPropSystem initialized - 6 horizontal chunks (%.0fpx wide each)" % CHUNK_SIZE)
+	print("🗺️ ChunkBasedPropSystem initialized - 3 square chunks (%.0fx%.0fpx each)" % [CHUNK_SIZE, CHUNK_SIZE])
 
 	# Create debug label (hidden by default)
 	create_debug_label()
@@ -107,7 +122,7 @@ func _on_debug_toggled(is_visible: bool) -> void:
 	pass
 
 var chunk_update_timer: float = 0.0
-const CHUNK_UPDATE_INTERVAL: float = 2.0  # Check chunks every 2s (rarely changes - 3000px chunks)
+const CHUNK_UPDATE_INTERVAL: float = 0.5  # Check chunks every 0.5s for responsive loading/unloading
 # No preload distance needed - we always keep current + left + right loaded
 
 var current_player_chunk: String = ""  # Track which chunk player is currently in
@@ -116,6 +131,12 @@ var chunks_being_loaded: Dictionary = {}  # {chunk_key: props_remaining} for asy
 # Debug display
 var debug_label: Label = null
 var debug_canvas: CanvasLayer = null
+
+# LOD system for props
+var lod_update_timer: float = 0.0
+const LOD_UPDATE_INTERVAL: float = 1.0  # Update LOD every 1 second
+const LOD_SHADOW_DISTANCE: float = 1500.0  # Hide shadows beyond this distance
+const LOD_DETAIL_DISTANCE: float = 2500.0  # Simplify props beyond this distance
 
 func _process(delta: float) -> void:
 	# In multiplayer server mode, we need to track all players
@@ -141,6 +162,12 @@ func _process(delta: float) -> void:
 	if chunk_update_timer >= CHUNK_UPDATE_INTERVAL:
 		chunk_update_timer = 0.0
 		update_chunks()
+
+	# Update prop LOD (hide shadows/details on distant props)
+	lod_update_timer += delta
+	if lod_update_timer >= LOD_UPDATE_INTERVAL:
+		lod_update_timer = 0.0
+		update_prop_lod()
 
 func process_multiplayer_chunks(delta: float) -> void:
 	"""Process chunks for all players in multiplayer mode (server only)"""
@@ -293,12 +320,16 @@ func update_debug_display() -> void:
 
 func update_chunks() -> void:
 	"""Smart chunk loading: current chunk always, neighbors only when near edges (1000px threshold)"""
+	if not player or not is_instance_valid(player):
+		return
+
 	var player_pos = player.global_position
 	var player_chunk = get_chunk_key(player_pos)
 
 	# Detect chunk change (player entered new chunk)
 	if player_chunk != current_player_chunk:
-		print("🗺️ Player entered new chunk: %s (from %s)" % [player_chunk, current_player_chunk])
+		print("🗺️ Player entered chunk %s (from %s) at pos %s" % [player_chunk, current_player_chunk, player_pos])
+		print("   Currently loaded chunks: %s" % [loaded_chunks.keys()])
 		current_player_chunk = player_chunk
 
 	# Parse current chunk X coordinate
@@ -340,19 +371,21 @@ func update_chunks() -> void:
 		if not loaded_chunks.has(chunk_key) and not chunks_being_loaded.has(chunk_key):
 			start_async_chunk_load(chunk_key, chunk_key == player_chunk)  # Priority for current chunk
 
-	# Unload chunks that are NOT in our keep list (current + left + right)
+	# Unload chunks that are NOT in our keep list (current + neighbors near edges)
 	var chunks_to_unload = []
 	for chunk_key in loaded_chunks.keys():
 		if not chunks_to_load.has(chunk_key):
-			print("🗑️ Unloading chunk %s (not current/left/right)" % chunk_key)
 			chunks_to_unload.append(chunk_key)
+
+	if chunks_to_unload.size() > 0:
+		print("🗑️ Unloading %d chunks: %s (keeping: %s)" % [chunks_to_unload.size(), chunks_to_unload, chunks_to_load])
 
 	for chunk_key in chunks_to_unload:
 		unload_chunk(chunk_key)
 
-	# Only print summary if something changed (chunk load/unload)
-	if chunks_to_unload.size() > 0 or player_chunk != current_player_chunk:
-		print("📦 Chunk summary: %d loaded, %d loading, current=%s" % [loaded_chunks.size(), chunks_being_loaded.size(), player_chunk])
+	# Debug: Always print chunk status when we have multiple chunks loaded
+	if loaded_chunks.size() > 1:
+		print("📦 Chunks loaded: %s | Player in: %s | Keep list: %s" % [loaded_chunks.keys(), player_chunk, chunks_to_load])
 
 func get_chunk_key(world_pos: Vector2) -> String:
 	"""Convert world position to chunk key (horizontal only - Y is always 0)"""
@@ -360,13 +393,14 @@ func get_chunk_key(world_pos: Vector2) -> String:
 	return "%d,0" % chunk_x  # Y is always 0 - world is only divided horizontally
 
 func get_chunk_center(chunk_key: String) -> Vector2:
-	"""Get center position of chunk from key (horizontal chunks span full height)"""
+	"""Get center position of chunk from key (square chunks, Y spans full world height)"""
 	var parts = chunk_key.split(",")
 	var chunk_x = int(parts[0])
-	# Chunks span full height (WORLD_MIN.y to WORLD_MAX.y), so center Y is 0
+	# Square chunks, one row of chunks spanning world height
+	# Center Y is 0 (world goes from -CHUNK_SIZE/2 to CHUNK_SIZE/2)
 	return Vector2(
 		chunk_x * CHUNK_SIZE + CHUNK_SIZE / 2.0,
-		0.0  # Center Y of world (-3000 to 3000)
+		0.0  # Center Y of world
 	)
 
 func get_chunks_in_radius(center: Vector2, radius: float) -> Array[String]:
@@ -390,10 +424,53 @@ func get_chunks_in_radius(center: Vector2, radius: float) -> Array[String]:
 
 	return chunks
 
+func update_prop_lod() -> void:
+	"""Update LOD for all props - hide shadows on distant props to save render calls"""
+	if not player or not is_instance_valid(player):
+		return
+
+	var player_pos = player.global_position
+
+	# Process each loaded chunk
+	for chunk_key in loaded_chunks.keys():
+		var chunk_data = loaded_chunks[chunk_key]
+		if not chunk_data or not chunk_data.props_container:
+			continue
+
+		# Process trees and rocks in this chunk
+		for prop in chunk_data.props_container.get_children():
+			if not is_instance_valid(prop):
+				continue
+
+			var distance = prop.global_position.distance_to(player_pos)
+
+			# Find and toggle shadow visibility
+			var shadow = prop.get_node_or_null("Shadow")
+			if shadow:
+				shadow.visible = distance < LOD_SHADOW_DISTANCE
+
+			# For lava pools, hide light and particles if far away
+			if prop.name.begins_with("LavaPool") or prop.name.begins_with("MonsterLava"):
+				for child in prop.get_children():
+					if child is PointLight2D:
+						child.visible = distance < LOD_DETAIL_DISTANCE
+					elif child is GPUParticles2D:
+						# Stop emitting particles when far away (saves ~720 particles)
+						child.emitting = distance < LOD_DETAIL_DISTANCE
+
 func start_async_chunk_load(chunk_key: String, is_priority: bool) -> void:
 	"""Start async loading of a chunk (spreads generation across frames)"""
 	if loaded_chunks.has(chunk_key) or chunks_being_loaded.has(chunk_key):
 		return
+
+	# Parse chunk ID
+	var chunk_parts = chunk_key.split(",")
+	var chunk_id = int(chunk_parts[0])
+
+	# === PHASE 1: Spawn path and torches IMMEDIATELY (visual continuity) ===
+	# Path appears first so player sees the road extending
+	if game_world and game_world.has_method("spawn_path_for_chunk"):
+		game_world.spawn_path_for_chunk(chunk_id)
 
 	# Create chunk container immediately
 	var chunk_data = ChunkData.new()
@@ -402,7 +479,7 @@ func start_async_chunk_load(chunk_key: String, is_priority: bool) -> void:
 	chunk_data.props_container.name = "Chunk_" + chunk_key
 	game_world.add_child(chunk_data.props_container)
 
-	# Queue for async generation
+	# Queue for async generation (props will load over several frames)
 	chunks_being_loaded[chunk_key] = {
 		"chunk_data": chunk_data,
 		"props_to_generate": create_prop_generation_queue(chunk_key),
@@ -411,15 +488,19 @@ func start_async_chunk_load(chunk_key: String, is_priority: bool) -> void:
 	}
 
 	if is_priority:
-		print("🚀 Priority chunk load started: %s" % chunk_key)
+		print("🚀 Priority chunk load started: %s (path spawned immediately)" % chunk_key)
 	else:
-		print("⏳ Background chunk load started: %s" % chunk_key)
+		print("⏳ Background chunk load started: %s (path spawned immediately)" % chunk_key)
 
 func create_prop_generation_queue(chunk_key: String) -> Array:
 	"""Create a queue of props to generate (in batches for async loading)"""
 	var queue = []
 
-	# IMPORTANT: Lava pools generate FIRST to establish exclusion zones
+	# IMPORTANT: Monster lava pools generate FIRST (largest, anchor points)
+	for i in range(MONSTER_LAVA_POOLS_PER_CHUNK):
+		queue.append({"type": "monster_lava_pool", "index": i})
+
+	# Regular lava pools next (some cluster around monster pools)
 	for i in range(LAVA_POOLS_PER_CHUNK):
 		queue.append({"type": "lava_pool", "index": i})
 
@@ -485,6 +566,13 @@ func process_async_chunk_loading() -> void:
 			print("✅ Chunk %s fully loaded (%d nodes, %dms)" % [chunk_key, node_count, load_time_ms])
 			print("   📊 Exclusions: %d lava pools, %d large rocks | Total chunks: %d" % [chunk_data.lava_pool_positions.size(), chunk_data.large_rock_positions.size(), loaded_chunks.size()])
 
+			# === PHASE 3: Spawn ruins LAST (after all props loaded) ===
+			# Ruins are complex scenes with guardians - spawn after environment is ready
+			var chunk_parts = chunk_key.split(",")
+			var chunk_id = int(chunk_parts[0])
+			if game_world and game_world.has_method("spawn_ruins_for_chunk"):
+				game_world.spawn_ruins_for_chunk(chunk_id)
+
 func is_position_in_lava_pool(pos: Vector2, chunk_data: ChunkData) -> bool:
 	"""Check if a position is inside any lava pool exclusion zone"""
 	for pool_data in chunk_data.lava_pool_positions:
@@ -492,6 +580,56 @@ func is_position_in_lava_pool(pos: Vector2, chunk_data: ChunkData) -> bool:
 		if distance < pool_data.radius:
 			return true
 	return false
+
+func is_position_on_path(pos: Vector2, width: float = PATH_WIDTH) -> bool:
+	"""Check if position is on the main path or branch paths to ruins"""
+	# Main path now runs from world edge to world edge
+	# Zigzag amplitude is ~350px, so path can be anywhere from Y=-350 to Y=350
+
+	# Path extends across entire world (100px buffer from edges)
+	var path_start_x = -Constants.CHUNK_SIZE + 100
+	var path_end_x = Constants.CHUNK_SIZE * 2 - 100
+
+	# Check if near the main horizontal path corridor (Y close to 0)
+	if abs(pos.y) < width + 350:  # 350 is zigzag amplitude
+		# Check if in the full path X range (entire world)
+		if pos.x >= path_start_x and pos.x <= path_end_x:
+			return true
+
+	# Check branch paths to ruins (if RUINS_POSITIONS exists in game_world)
+	if game_world and game_world.get("RUINS_POSITIONS"):
+		for ruins_key in game_world.RUINS_POSITIONS:
+			var ruins_data = game_world.RUINS_POSITIONS[ruins_key]
+			var ruins_pos = ruins_data.position if ruins_data is Dictionary else ruins_data
+			# Branch paths connect from main path to ruins
+			# Estimate branch point on main path (roughly at ruins X ± 400)
+			var branch_x = ruins_pos.x + 400 if ruins_pos.x < 2000 else ruins_pos.x - 400
+			var branch_point = Vector2(branch_x, 0)  # Main path is roughly at Y=0
+			# Check if position is along the line from branch point to ruins
+			var dist_to_path = point_to_line_distance(pos, branch_point, ruins_pos)
+			if dist_to_path < width:
+				# Also check if within the segment bounds (not beyond the line)
+				var to_pos = pos - branch_point
+				var to_ruins = ruins_pos - branch_point
+				if to_ruins.length_squared() > 0:
+					var t = to_pos.dot(to_ruins) / to_ruins.length_squared()
+					if t >= 0 and t <= 1:
+						return true
+
+	return false
+
+func point_to_line_distance(point: Vector2, line_start: Vector2, line_end: Vector2) -> float:
+	"""Calculate perpendicular distance from point to line segment"""
+	var line_vec = line_end - line_start
+	var point_vec = point - line_start
+	var line_length = line_vec.length()
+	if line_length == 0:
+		return point_vec.length()
+	var line_unit = line_vec / line_length
+	var proj_length = point_vec.dot(line_unit)
+	proj_length = clamp(proj_length, 0, line_length)
+	var closest_point = line_start + line_unit * proj_length
+	return point.distance_to(closest_point)
 
 func is_position_on_large_rock(pos: Vector2, chunk_data: ChunkData) -> bool:
 	"""Check if a position overlaps with any large rock"""
@@ -518,7 +656,7 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 		rng.randf()
 
 	var chunk_center = get_chunk_center(chunk_key)
-	var campfire_pos = Vector2(-2000, 0)
+	var campfire_pos = CAMPFIRE_POS
 	var avoid_campfire_radius = 1050.0
 
 	match prop_type:
@@ -527,11 +665,10 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			if harvested_items.has(tree_id):
 				return
 
-			# Horizontal chunks: CHUNK_SIZE wide, full world height tall
-			var world_height = WORLD_MAX.y - WORLD_MIN.y
+			# Square chunks: CHUNK_SIZE x CHUNK_SIZE
 			var tree_pos = chunk_center + Vector2(
 				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-				rng.randf_range(-world_height / 2, world_height / 2)
+				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
 			)
 
 			if not is_in_world_bounds(tree_pos):
@@ -549,10 +686,9 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			if harvested_items.has(rock_id):
 				return
 
-			var world_height = WORLD_MAX.y - WORLD_MIN.y
 			var rock_pos = chunk_center + Vector2(
 				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-				rng.randf_range(-world_height / 2, world_height / 2)
+				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
 			)
 
 			if not is_in_world_bounds(rock_pos):
@@ -573,10 +709,9 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			create_lootable_rock(rock_pos, "rock_large", container, rng, rock_id)
 
 		"rock_medium":
-			var world_height = WORLD_MAX.y - WORLD_MIN.y
 			var rock_pos = chunk_center + Vector2(
 				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-				rng.randf_range(-world_height / 2, world_height / 2)
+				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
 			)
 
 			if not is_in_world_bounds(rock_pos):
@@ -589,10 +724,9 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			create_rock_with_shadow(rock_pos, "rock_medium", container, rng, 0.7, 1.3)
 
 		"rock_small":
-			var world_height = WORLD_MAX.y - WORLD_MIN.y
 			var rock_pos = chunk_center + Vector2(
 				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-				rng.randf_range(-world_height / 2, world_height / 2)
+				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
 			)
 
 			if not is_in_world_bounds(rock_pos):
@@ -604,19 +738,100 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 
 			create_rock_with_shadow(rock_pos, "rock_small", container, rng, 0.6, 1.0)
 
+		"monster_lava_pool":
+			# MONSTER pools - huge lava lakes that serve as anchor points
+			var pool_pos = Vector2.ZERO
+			var found_valid = false
+			for attempt in range(15):
+				pool_pos = chunk_center + Vector2(
+					rng.randf_range(-CHUNK_SIZE / 2 + 400, CHUNK_SIZE / 2 - 400),  # Keep away from edges
+					rng.randf_range(-CHUNK_SIZE / 2 + 400, CHUNK_SIZE / 2 - 400)
+				)
+
+				if not is_in_world_bounds(pool_pos):
+					continue
+				if pool_pos.distance_to(campfire_pos) < 1200:  # Keep further from campfire
+					continue
+				# Don't spawn on paths
+				if is_position_on_path(pool_pos, PATH_WIDTH + 200):  # Extra buffer for monster pools
+					continue
+				# Don't spawn too close to other monster pools
+				var too_close = false
+				for existing in chunk_data.monster_lava_positions:
+					if pool_pos.distance_to(existing.pos) < 800:
+						too_close = true
+						break
+				if too_close:
+					continue
+
+				found_valid = true
+				break
+
+			if not found_valid:
+				return
+
+			# Monster pool size: 250-400px (HUGE)
+			var pool_size = rng.randf_range(250, 400)
+			var exclusion_radius = (pool_size / 2) + 50  # Pool radius + buffer zone
+
+			# Register monster pool position
+			chunk_data.monster_lava_positions.append({
+				"pos": pool_pos,
+				"radius": exclusion_radius
+			})
+			# Also add to regular lava_pool_positions for exclusion checks
+			chunk_data.lava_pool_positions.append({
+				"pos": pool_pos,
+				"radius": exclusion_radius
+			})
+
+			# Create the monster pool
+			create_lava_pool(pool_pos, container, rng, pool_size)
+
 		"lava_pool":
-			var world_height = WORLD_MAX.y - WORLD_MIN.y
-			var pool_pos = chunk_center + Vector2(
-				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-				rng.randf_range(-world_height / 2, world_height / 2)
-			)
+			# Regular lava pools - 50% cluster around monster pools, 50% random
+			var pool_pos = Vector2.ZERO
+			var found_valid = false
+			var cluster_around_monster = rng.randf() < 0.5 and chunk_data.monster_lava_positions.size() > 0
 
-			if not is_in_world_bounds(pool_pos):
-				return
-			if pool_pos.distance_to(campfire_pos) < 800:
+			for attempt in range(10):
+				if cluster_around_monster:
+					# Pick a random monster pool to cluster around
+					var monster = chunk_data.monster_lava_positions[rng.randi() % chunk_data.monster_lava_positions.size()]
+					# Spawn 200-500px away from monster pool center
+					var angle = rng.randf() * TAU
+					var distance = rng.randf_range(200, 500)
+					pool_pos = monster.pos + Vector2(cos(angle), sin(angle)) * distance
+				else:
+					# Random position
+					pool_pos = chunk_center + Vector2(
+						rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
+						rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
+					)
+
+				if not is_in_world_bounds(pool_pos):
+					continue
+				if pool_pos.distance_to(campfire_pos) < 800:
+					continue
+				# Don't spawn lava pools on paths - paths deliberately avoid them!
+				if is_position_on_path(pool_pos, PATH_WIDTH + 100):  # Extra buffer for lava
+					continue
+				# Don't overlap with existing pools
+				var overlaps = false
+				for existing in chunk_data.lava_pool_positions:
+					if pool_pos.distance_to(existing.pos) < existing.radius + 80:
+						overlaps = true
+						break
+				if overlaps:
+					continue
+
+				found_valid = true
+				break
+
+			if not found_valid:
 				return
 
-			# Pre-calculate pool size for exclusion zone (matches create_lava_pool logic)
+			# Regular pool size: 60-150px
 			var pool_size = rng.randf_range(60, 150)
 			var exclusion_radius = (pool_size / 2) + 30  # Pool radius + buffer zone
 
@@ -630,10 +845,9 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			create_lava_pool(pool_pos, container, rng, pool_size)
 
 		"bone_cluster":
-			var world_height = WORLD_MAX.y - WORLD_MIN.y
 			var cluster_pos = chunk_center + Vector2(
 				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-				rng.randf_range(-world_height / 2, world_height / 2)
+				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
 			)
 
 			if not is_in_world_bounds(cluster_pos):
@@ -646,10 +860,9 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			create_bone_cluster(cluster_pos, container, rng)
 
 		"vegetation":
-			var world_height = WORLD_MAX.y - WORLD_MIN.y
 			var veg_pos = chunk_center + Vector2(
 				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-				rng.randf_range(-world_height / 2, world_height / 2)
+				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
 			)
 
 			if not is_in_world_bounds(veg_pos):
@@ -662,10 +875,9 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			create_prop(veg_pos, "ash_pile", container, rng)
 
 		"crack":
-			var world_height = WORLD_MAX.y - WORLD_MIN.y
 			var crack_pos = chunk_center + Vector2(
 				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-				rng.randf_range(-world_height / 2, world_height / 2)
+				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
 			)
 
 			if not is_in_world_bounds(crack_pos):
@@ -689,6 +901,16 @@ func unload_chunk(chunk_key: String) -> void:
 		chunk_data.props_container.queue_free()
 
 	loaded_chunks.erase(chunk_key)
+
+	# Notify game_world to despawn chunk-specific content (path, ruins, torches)
+	var chunk_parts = chunk_key.split(",")
+	var chunk_id = int(chunk_parts[0])
+	if game_world:
+		if game_world.has_method("despawn_path_for_chunk"):
+			game_world.despawn_path_for_chunk(chunk_id)
+		if game_world.has_method("despawn_ruins_for_chunk"):
+			game_world.despawn_ruins_for_chunk(chunk_id)
+
 	print("❌ Unloaded chunk %s (%d remaining)" % [chunk_key, loaded_chunks.size()])
 
 # Old synchronous chunk generation function removed - now using async system (see generate_single_prop)
@@ -763,7 +985,7 @@ func add_rock_shadow(rock_node: Node2D, rock_scale: float, rng: RandomNumberGene
 func add_ground_disturbance(parent_node: Node2D, base_size: float, rng: RandomNumberGenerator, darkness: float = 0.2) -> void:
 	"""Add subtle dark patch to ground for disturbed earth effect"""
 	# Check distance to campfire and reduce alpha if within glow
-	var campfire_pos = Vector2(-2000, 0)
+	var campfire_pos = Vector2(Constants.CHUNK_SIZE / 2, 0)  # Center of chunk 0
 	var distance_to_campfire = parent_node.global_position.distance_to(campfire_pos)
 	var glow_radius = 3000.0  # Campfire glow range
 
@@ -888,63 +1110,8 @@ void fragment() {
 
 	tree_node.add_child(sprite)
 
-	# Add green healing particle shimmer ONLY to white birch trees
-	if is_white_birch:
-		var healing_particles = GPUParticles2D.new()
-		healing_particles.name = "HealingShimmer"
-		healing_particles.amount = int(tree_scale * 3)  # Scale particles with tree size
-		healing_particles.lifetime = rng.randf_range(2.0, 3.0)
-		healing_particles.explosiveness = 0.0
-		healing_particles.randomness = 0.8
-		healing_particles.local_coords = true
-		healing_particles.z_index = 2  # Above tree sprite
-
-		var particle_material = ParticleProcessMaterial.new()
-		particle_material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-		# Emit from upper portion of tree (branches)
-		var branch_width = 40 * tree_scale
-		var branch_height = 80 * tree_scale
-		particle_material.emission_box_extents = Vector3(branch_width, branch_height, 0)
-		particle_material.direction = Vector3(0, -1, 0)
-		particle_material.spread = 25.0
-		particle_material.initial_velocity_min = 8.0
-		particle_material.initial_velocity_max = 15.0
-		particle_material.gravity = Vector3(0, -5, 0)  # Gentle float upward
-		particle_material.scale_min = 0.5
-		particle_material.scale_max = 1.5
-
-		# Green healing color with fade
-		particle_material.color = Color(0.4, 1.0, 0.5, 0.8)  # Bright healing green
-
-		# Fade gradient: bright green -> fade out
-		var shimmer_gradient = Gradient.new()
-		shimmer_gradient.add_point(0.0, Color(0.5, 1.0, 0.6, 0))  # Fade in
-		shimmer_gradient.add_point(0.2, Color(0.4, 1.0, 0.5, 0.7))  # Full brightness
-		shimmer_gradient.add_point(0.7, Color(0.3, 0.8, 0.4, 0.5))  # Dimming
-		shimmer_gradient.add_point(1.0, Color(0.2, 0.6, 0.3, 0))  # Fade out
-		var shimmer_gradient_tex = GradientTexture1D.new()
-		shimmer_gradient_tex.gradient = shimmer_gradient
-		particle_material.color_ramp = shimmer_gradient_tex
-
-		healing_particles.process_material = particle_material
-
-		# Small sparkle texture
-		var sparkle_gradient = Gradient.new()
-		sparkle_gradient.set_color(0, Color(1, 1, 1, 1))
-		sparkle_gradient.set_color(0.6, Color(1, 1, 1, 1))
-		sparkle_gradient.set_color(1, Color(0, 0, 0, 0))
-		var sparkle_texture = GradientTexture2D.new()
-		sparkle_texture.gradient = sparkle_gradient
-		sparkle_texture.width = 3
-		sparkle_texture.height = 3
-		sparkle_texture.fill = GradientTexture2D.FILL_RADIAL
-		sparkle_texture.fill_from = Vector2(0.5, 0.5)
-		healing_particles.texture = sparkle_texture
-
-		# Position particles at branch level (upper part of tree)
-		healing_particles.position = Vector2(0, -30 * tree_scale)
-
-		tree_node.add_child(healing_particles)
+	# Birch tree healing shimmer particles removed for performance
+	# (was ~945 particles across all birch trees)
 
 	# Add collision shape at tree trunk base
 	var collision_shape = CollisionShape2D.new()
@@ -1110,7 +1277,7 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 	inner_border.color = Color(0.04, 0.03, 0.02, 0.7)
 	lava_pool.add_child(inner_border)
 
-	# Create gradient layers from dark red to bright orange (reduced to 5 layers for performance)
+	# Create gradient layers from dark red to bright orange
 	var layer_data = [
 		{"size": 1.00, "color": Color(0.7, 0.15, 0.0, 1.0)},
 		{"size": 0.75, "color": Color(0.9, 0.25, 0.0, 0.7)},
@@ -1161,9 +1328,9 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 
 	lava_pool.add_child(light)
 
-	# Add heat particles (embers rising) - sharper and more defined
+	# Add heat particles (embers rising)
 	var particles = GPUParticles2D.new()
-	particles.amount = int(pool_size / 8)  # More particles for bigger pools
+	particles.amount = int(pool_size / 8)
 	particles.lifetime = 2.5
 	particles.explosiveness = 0.0
 	particles.randomness = 0.7
@@ -1171,43 +1338,38 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 
 	var material = ParticleProcessMaterial.new()
 	material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	# Box emission with elongation to match pool shape
 	var emission_width = (pool_size / 3) * elongation_x
 	var emission_height = (pool_size / 3) * elongation_y
 	material.emission_box_extents = Vector3(emission_width, emission_height, 0)
-	material.direction = Vector3(0, -1, 0)  # Rise upward
-	material.spread = 12.0  # Very tight spread
+	material.direction = Vector3(0, -1, 0)
+	material.spread = 12.0
 	material.initial_velocity_min = 25.0
 	material.initial_velocity_max = 50.0
-	material.gravity = Vector3(0, -28, 0)  # Float upward faster
-	material.scale_min = 1.0  # Smaller, tighter particles
+	material.gravity = Vector3(0, -28, 0)
+	material.scale_min = 1.0
 	material.scale_max = 2.0
+	material.color = Color(1.0, 0.65, 0.1, 1.0)
 
-	# Hot orange embers that fade to red (realistic lava)
-	material.color = Color(1.0, 0.65, 0.1, 1.0)  # Bright orange embers
-
-	# Color over lifetime: bright orange -> red-orange -> red -> fade
 	var particle_gradient = Gradient.new()
-	particle_gradient.add_point(0.0, Color(1.0, 0.7, 0.15, 0))  # Fade in bright orange
-	particle_gradient.add_point(0.08, Color(1.0, 0.65, 0.12, 1))  # Full bright orange
-	particle_gradient.add_point(0.35, Color(1.0, 0.5, 0.08, 1))  # Orange
-	particle_gradient.add_point(0.65, Color(0.95, 0.3, 0.05, 1))  # Red-orange
-	particle_gradient.add_point(1.0, Color(0.6, 0.15, 0.0, 0))  # Fade to dark red
+	particle_gradient.add_point(0.0, Color(1.0, 0.7, 0.15, 0))
+	particle_gradient.add_point(0.08, Color(1.0, 0.65, 0.12, 1))
+	particle_gradient.add_point(0.35, Color(1.0, 0.5, 0.08, 1))
+	particle_gradient.add_point(0.65, Color(0.95, 0.3, 0.05, 1))
+	particle_gradient.add_point(1.0, Color(0.6, 0.15, 0.0, 0))
 	var particle_gradient_tex = GradientTexture1D.new()
 	particle_gradient_tex.gradient = particle_gradient
 	material.color_ramp = particle_gradient_tex
 
 	particles.process_material = material
 
-	# Crisp pixel-art style texture - very small with hard edges
 	var ember_gradient = Gradient.new()
-	ember_gradient.set_color(0, Color(1, 1, 1, 1))  # Solid bright center
-	ember_gradient.set_color(0.7, Color(1, 1, 1, 1))  # Hold solid longer
-	ember_gradient.set_color(0.85, Color(1, 1, 1, 0.5))  # Sharp falloff
-	ember_gradient.set_color(1, Color(0, 0, 0, 0))  # Transparent edge
+	ember_gradient.set_color(0, Color(1, 1, 1, 1))
+	ember_gradient.set_color(0.7, Color(1, 1, 1, 1))
+	ember_gradient.set_color(0.85, Color(1, 1, 1, 0.5))
+	ember_gradient.set_color(1, Color(0, 0, 0, 0))
 	var ember_texture = GradientTexture2D.new()
 	ember_texture.gradient = ember_gradient
-	ember_texture.width = 4  # Tiny = crisp pixel-art look
+	ember_texture.width = 4
 	ember_texture.height = 4
 	ember_texture.fill = GradientTexture2D.FILL_RADIAL
 	ember_texture.fill_from = Vector2(0.5, 0.5)

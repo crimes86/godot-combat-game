@@ -12,8 +12,12 @@ var xp_reward: int = 10  # Actual XP granted
 @export var gold_drop_base: int = 5  # Base gold drop, scales with level
 var gold_drop: int = 5  # Actual gold dropped
 
-# LOD tracking (disabled - all enemies render fully in loaded chunks)
-var current_lod: int = 0  # Kept for compatibility, not used
+# LOD tracking for performance optimization
+var current_lod: int = 0  # 0 = full detail, 1 = reduced, 2 = minimal
+var lod_update_timer: float = 0.0
+const LOD_UPDATE_INTERVAL: float = 0.5  # Check LOD every 0.5s
+const LOD_NEAR_DISTANCE: float = 1200.0  # Full detail within this range
+const LOD_FAR_DISTANCE: float = 2500.0  # Minimal detail beyond this range
 
 # References
 @onready var health_bar: Control = $HealthBar
@@ -718,6 +722,12 @@ func _process(delta: float) -> void:
 		if player and is_instance_valid(player):
 			var distance = global_position.distance_to(player.global_position)
 
+			# === LOD SYSTEM ===
+			lod_update_timer += delta
+			if lod_update_timer >= LOD_UPDATE_INTERVAL:
+				lod_update_timer = 0.0
+				update_lod(distance)
+
 			# Decoupled UI visibility thresholds
 			var show_level_label = distance <= 800.0  # Level shows at 800px
 			var show_healthbar = distance <= 400.0    # Healthbar shows at 400px
@@ -747,10 +757,46 @@ func _process(delta: float) -> void:
 		process_corpse_decay(delta)
 		update_loot_proximity()
 
-func set_lod_level(_lod_level: int) -> void:
-	"""LOD system disabled - all enemies in loaded chunks render fully
-	Kept for compatibility with any external calls"""
-	pass
+func update_lod(distance: float) -> void:
+	"""Update LOD level based on distance to player"""
+	var new_lod: int
+	if distance < LOD_NEAR_DISTANCE:
+		new_lod = 0  # Full detail
+	elif distance < LOD_FAR_DISTANCE:
+		new_lod = 1  # Reduced detail
+	else:
+		new_lod = 2  # Minimal detail
+
+	# Only update if LOD changed
+	if new_lod != current_lod:
+		current_lod = new_lod
+		apply_lod_settings()
+
+func apply_lod_settings() -> void:
+	"""Apply visual settings based on current LOD level"""
+	match current_lod:
+		0:  # Full detail - everything visible and animating
+			if shadow_sprite:
+				shadow_sprite.visible = true
+			if sprite and sprite is AnimatedSprite2D:
+				sprite.speed_scale = 1.0
+			# Enable processing for animations
+			set_process(true)
+		1:  # Reduced detail - hide shadow, slower animations
+			if shadow_sprite:
+				shadow_sprite.visible = false
+			if sprite and sprite is AnimatedSprite2D:
+				sprite.speed_scale = 0.5  # Half speed animations
+		2:  # Minimal detail - no shadow, pause animations
+			if shadow_sprite:
+				shadow_sprite.visible = false
+			if sprite and sprite is AnimatedSprite2D:
+				sprite.speed_scale = 0.0  # Pause animations (shows idle frame)
+
+func set_lod_level(lod_level: int) -> void:
+	"""Set LOD level directly (for external calls)"""
+	current_lod = lod_level
+	apply_lod_settings()
 
 func update_loot_proximity() -> void:
 	"""Check if player is close enough to loot and show/hide prompt"""

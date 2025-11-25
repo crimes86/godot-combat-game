@@ -17,46 +17,52 @@ class_name ChunkAwareSpawnManager
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Enemies per chunk (3000px wide)
-const ENEMIES_PER_CHUNK: int = 60
+## Enemies per chunk (8000x8000px square, reduced for node count optimization)
+const ENEMIES_PER_CHUNK: int = 75
 
-## Chunk size (must match ChunkBasedPropSystem)
-const CHUNK_SIZE: float = 3000.0
+## Chunk size from Constants singleton (single source of truth)
+var CHUNK_SIZE: float:
+	get: return Constants.CHUNK_SIZE
 
-## Level bands - enemy level based on X position
-## Progression goes WEST to EAST (negative X to positive X)
-## Campfire spawn is at X=-2000, so west of that is low level, east gets harder
-const LEVEL_BANDS: Array = [
-	# West of spawn (low level wilderness)
-	{"min_x": -99999, "max_x": -2600, "level": 1},  # Far west - level 1
-	# Near spawn (safe-ish area)
-	{"min_x": -2600, "max_x": 400, "level": 1},     # Spawn area - level 1
-	# Progression eastward
-	{"min_x": 400, "max_x": 700, "level": 2},
-	{"min_x": 700, "max_x": 1000, "level": 3},
-	{"min_x": 1000, "max_x": 1300, "level": 4},
-	{"min_x": 1300, "max_x": 1600, "level": 5},
-	{"min_x": 1600, "max_x": 1900, "level": 6},
-	{"min_x": 1900, "max_x": 2200, "level": 7},
-	{"min_x": 2200, "max_x": 2500, "level": 8},
-	{"min_x": 2500, "max_x": 2800, "level": 9},
-	{"min_x": 2800, "max_x": 99999, "level": 10},   # Far east - level 10
-]
+## Level bands - enemy level based on distance from campfire
+## Campfire is at chunk 0 center (X: CHUNK_SIZE/2)
+## Chunk 0 (spawn): Level 1-3 (near campfire safe, edges harder)
+## Chunk -1 (west): Level 4-7
+## Chunk +1 (east): Level 4-7
+## Updated for 8000px chunks
+var LEVEL_BANDS: Array:
+	get:
+		var cs = Constants.CHUNK_SIZE
+		return [
+			# Chunk 0 - Spawn area (X: 0 to CHUNK_SIZE)
+			# Near campfire (center) is safe, edges get harder
+			{"min_x": cs * 0.125, "max_x": cs * 0.875, "level": 1},     # Central 75% - level 1
+			{"min_x": 0, "max_x": cs * 0.125, "level": 2},              # West edge - level 2
+			{"min_x": cs * 0.875, "max_x": cs, "level": 2},             # East edge - level 2
+			# Chunk -1 - West end chunk (X: -CHUNK_SIZE to 0)
+			{"min_x": -cs * 0.25, "max_x": 0, "level": 3},              # Near chunk 0 border - level 3
+			{"min_x": -cs * 0.625, "max_x": -cs * 0.25, "level": 4},    # Mid chunk -1 - level 4
+			{"min_x": -cs, "max_x": -cs * 0.625, "level": 5},           # Far west - level 5
+			# Chunk +1 - East end chunk (X: CHUNK_SIZE to CHUNK_SIZE*2)
+			{"min_x": cs, "max_x": cs * 1.25, "level": 3},              # Near chunk 0 border - level 3
+			{"min_x": cs * 1.25, "max_x": cs * 1.625, "level": 4},      # Mid chunk +1 - level 4
+			{"min_x": cs * 1.625, "max_x": cs * 2, "level": 5},         # Far east - level 5
+		]
 
 ## Respawn timer in seconds (0 = no respawn until chunk reload)
 @export var respawn_time: float = 300.0  # 5 minutes
 
 ## Safe zones - no enemies spawn within these areas
-const SAFE_ZONES: Array = [
-	{"pos": Vector2(-2000, 0), "radius": 600.0},  # Campfire spawn
-]
+## Campfire is at chunk 0 center (CHUNK_SIZE/2, 0)
+var SAFE_ZONES: Array:
+	get: return [
+		{"pos": Vector2(Constants.CHUNK_SIZE / 2, 0), "radius": 600.0},  # Campfire spawn
+	]
 
 ## Ruins areas - no random spawns (guardians spawn separately)
-const RUINS_AREAS: Array = [
-	{"pos": Vector2(2184, -1216), "radius": 350.0},  # Ruins 1
-	{"pos": Vector2(4368, 0), "radius": 350.0},      # Ruins 2
-	{"pos": Vector2(6552, 1216), "radius": 350.0},   # Ruins 3
-]
+## Dynamically populated from game_world.RUINS_POSITIONS at runtime
+const RUINS_EXCLUSION_RADIUS: float = 350.0
+var ruins_areas: Array = []  # Populated in _ready() from game_world
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE
@@ -124,6 +130,15 @@ func initialize(world: Node, chunk_prop_system: Node, spawn_markers: Array) -> v
 	# Create seeded RNG for consistent spawns
 	spawn_rng = RandomNumberGenerator.new()
 	spawn_rng.seed = 12345  # Fixed seed for reproducibility
+
+	# Populate ruins_areas from game_world's procedurally generated positions
+	ruins_areas.clear()
+	if game_world and game_world.get("RUINS_POSITIONS"):
+		for ruins_key in game_world.RUINS_POSITIONS:
+			var ruins_data = game_world.RUINS_POSITIONS[ruins_key]
+			var pos = ruins_data.position if ruins_data is Dictionary else ruins_data
+			ruins_areas.append({"pos": pos, "radius": RUINS_EXCLUSION_RADIUS})
+		print("🏛️ SpawnManager: Loaded %d ruins exclusion zones" % ruins_areas.size())
 
 	# Process manual spawn markers - group by chunk
 	var markers_by_level = {}
@@ -201,8 +216,10 @@ func update_chunk_enemies() -> void:
 			if needed > 0:
 				spawn_enemies_in_chunk(chunk_key, needed)
 
-	# Handle unloaded chunks - despawn enemies (skip in multiplayer to avoid sync issues)
-	if not multiplayer.has_multiplayer_peer():
+	# Handle unloaded chunks - despawn enemies
+	# In multiplayer, only server handles enemy despawning
+	var should_handle_despawn = not multiplayer.has_multiplayer_peer() or multiplayer.is_server()
+	if should_handle_despawn:
 		var chunks_to_remove = []
 		for chunk_key in chunk_enemies.keys():
 			if not loaded_chunks.has(chunk_key):
@@ -292,17 +309,48 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 	var chunk_seed = hash(chunk_key) + chunk_data.enemies.size()
 	spawn_rng.seed = chunk_seed
 
+	# Get lava pool positions for this chunk (for clustering enemies into "farming spots")
+	var lava_pools = get_lava_pools_in_chunk(chunk_key)
+	print("🔥 Chunk %s has %d lava pools for enemy clustering" % [chunk_key, lava_pools.size()])
+	var cluster_around_lava = lava_pools.size() > 0
+	var lava_cluster_count = int(count * 0.95) if cluster_around_lava else 0  # 95% cluster near lava
+	var lava_clustered = 0
+
 	while spawned < count and attempts < max_attempts:
 		attempts += 1
 
-		# Generate random position within chunk bounds
-		var spawn_x = spawn_rng.randf_range(chunk_min_x, chunk_max_x)
-		var spawn_y = spawn_rng.randf_range(-2500, 2500)  # World height range
-		var spawn_pos = Vector2(spawn_x, spawn_y)
+		var spawn_pos: Vector2
 
-		# Validate position
-		if not is_valid_spawn_position(spawn_pos):
-			continue
+		# World Y bounds (half chunk height)
+		var world_y_min = -Constants.CHUNK_SIZE / 2
+		var world_y_max = Constants.CHUNK_SIZE / 2
+
+		# Spawn enemies tightly clustered around lava pools (farming spots)
+		if lava_clustered < lava_cluster_count and lava_pools.size() > 0:
+			# Pick a random lava pool
+			var pool = lava_pools[spawn_rng.randi() % lava_pools.size()]
+			# Spawn tightly around pool - 80-250px from center (tight farming spot)
+			var angle = spawn_rng.randf() * TAU
+			var distance = spawn_rng.randf_range(80, 250)
+			spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * distance
+
+			# Clamp to chunk bounds
+			spawn_pos.x = clamp(spawn_pos.x, chunk_min_x, chunk_max_x)
+			spawn_pos.y = clamp(spawn_pos.y, world_y_min, world_y_max)
+
+			if is_valid_spawn_position(spawn_pos):
+				lava_clustered += 1
+			else:
+				continue
+		else:
+			# Rare wandering enemies (5%) - patrol between spots
+			var spawn_x = spawn_rng.randf_range(chunk_min_x, chunk_max_x)
+			var spawn_y = spawn_rng.randf_range(world_y_min, world_y_max)
+			spawn_pos = Vector2(spawn_x, spawn_y)
+
+			# Validate position
+			if not is_valid_spawn_position(spawn_pos):
+				continue
 
 		# Determine level based on X position
 		var level = get_level_for_position(spawn_pos)
@@ -375,16 +423,72 @@ func is_valid_spawn_position(pos: Vector2) -> bool:
 		if pos.distance_to(zone.pos) < zone.radius:
 			return false
 
-	# Check ruins areas
-	for ruins in RUINS_AREAS:
+	# Check ruins areas (dynamically populated)
+	for ruins in ruins_areas:
 		if pos.distance_to(ruins.pos) < ruins.radius:
 			return false
 
-	# Check world bounds
-	if pos.y < -2800 or pos.y > 2800:
+	# Check world bounds (Y: -CHUNK_SIZE/2 to CHUNK_SIZE/2)
+	var y_bound = Constants.CHUNK_SIZE / 2
+	if pos.y < -y_bound or pos.y > y_bound:
+		return false
+
+	# Don't spawn enemies on or near the path (100px buffer)
+	if is_position_on_path(pos, 100):
 		return false
 
 	return true
+
+func is_position_on_path(pos: Vector2, buffer: float = 100.0) -> bool:
+	"""Check if position is on the main path or branch paths to ruins"""
+	# Main path runs from world edge to world edge
+	# Zigzag amplitude is ~350px, so path can be anywhere from Y=-350 to Y=350
+	const PATH_WIDTH: float = 250.0
+
+	# Path extends across entire world (100px buffer from edges)
+	var path_start_x = -Constants.CHUNK_SIZE + 100
+	var path_end_x = Constants.CHUNK_SIZE * 2 - 100
+
+	# Check if near the main horizontal path corridor (Y close to 0)
+	if abs(pos.y) < buffer + 350:  # 350 is zigzag amplitude
+		# Check if in the full path X range (entire world)
+		if pos.x >= path_start_x and pos.x <= path_end_x:
+			return true
+
+	# Check branch paths to ruins (if RUINS_POSITIONS exists in game_world)
+	if game_world and game_world.get("RUINS_POSITIONS"):
+		for ruins_key in game_world.RUINS_POSITIONS:
+			var ruins_data = game_world.RUINS_POSITIONS[ruins_key]
+			var ruins_pos = ruins_data.position if ruins_data is Dictionary else ruins_data
+			# Branch paths connect from main path to ruins
+			# Estimate branch point on main path (roughly at ruins X ± 400)
+			var branch_x = ruins_pos.x + 400 if ruins_pos.x < 2000 else ruins_pos.x - 400
+			var branch_point = Vector2(branch_x, 0)  # Main path is roughly at Y=0
+			# Check if position is along the line from branch point to ruins
+			var dist_to_path = point_to_line_distance(pos, branch_point, ruins_pos)
+			if dist_to_path < buffer + PATH_WIDTH:
+				# Also check if within the segment bounds (not beyond the line)
+				var to_pos = pos - branch_point
+				var to_ruins = ruins_pos - branch_point
+				if to_ruins.length_squared() > 0:
+					var t = to_pos.dot(to_ruins) / to_ruins.length_squared()
+					if t >= 0 and t <= 1:
+						return true
+
+	return false
+
+func point_to_line_distance(point: Vector2, line_start: Vector2, line_end: Vector2) -> float:
+	"""Calculate perpendicular distance from point to line segment"""
+	var line_vec = line_end - line_start
+	var point_vec = point - line_start
+	var line_length = line_vec.length()
+	if line_length == 0:
+		return point_vec.length()
+	var line_unit = line_vec / line_length
+	var proj_length = point_vec.dot(line_unit)
+	proj_length = clamp(proj_length, 0, line_length)
+	var closest_point = line_start + line_unit * proj_length
+	return point.distance_to(closest_point)
 
 func get_level_for_position(pos: Vector2) -> int:
 	"""Get enemy level based on X position"""
@@ -397,6 +501,25 @@ func get_chunk_key(world_pos: Vector2) -> String:
 	"""Get chunk key from world position"""
 	var chunk_x = int(floor(world_pos.x / CHUNK_SIZE))
 	return "%d,0" % chunk_x
+
+func get_lava_pools_in_chunk(chunk_key: String) -> Array:
+	"""Get lava pool positions from the chunk prop system"""
+	if not game_world:
+		return []
+
+	# Access chunk_prop_system variable directly (not by node name)
+	if not game_world.get("chunk_prop_system"):
+		return []
+
+	var prop_system = game_world.chunk_prop_system
+	if not prop_system or not prop_system.loaded_chunks.has(chunk_key):
+		return []
+
+	var chunk_data = prop_system.loaded_chunks[chunk_key]
+	if chunk_data and chunk_data.lava_pool_positions:
+		return chunk_data.lava_pool_positions
+
+	return []
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RESPAWN SYSTEM

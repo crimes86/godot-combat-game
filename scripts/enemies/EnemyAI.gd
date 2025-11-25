@@ -151,8 +151,8 @@ func _ready() -> void:
 	pick_new_patrol_target()
 	change_state(State.PATROLLING)
 
-	# Create debug label (always created, visibility controlled by player debug mode)
-	create_debug_label()
+	# Debug label disabled - was causing visual artifacts
+	# create_debug_label()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN LOOP
@@ -248,13 +248,13 @@ func _physics_process(delta: float) -> void:
 	ai_update_timer = 0.0  # Reset timer
 	player = cached_player  # Update player reference
 
-	# Update debug label (only when AI updates, not every frame)
-	debug_update_timer += delta
-	if debug_label and player and debug_update_timer >= 0.5:  # Update label twice per second max
-		debug_label.visible = player.get("debug_mode") == true
-		if debug_label.visible:
-			update_debug_label_position()
-		debug_update_timer = 0.0
+	# Debug label disabled - was causing visual artifacts
+	# debug_update_timer += delta
+	# if debug_label and player and debug_update_timer >= 0.5:
+	# 	debug_label.visible = player.get("debug_mode") == true
+	# 	if debug_label.visible:
+	# 		update_debug_label_position()
+	# 	debug_update_timer = 0.0
 
 	# State machine
 	match current_state:
@@ -993,6 +993,5 @@ func update_debug_label_position() -> void:
 
 func get_chunk_key(position: Vector2) -> String:
 	"""Get chunk key for a world position (matches ChunkBasedPropSystem)"""
-	const CHUNK_SIZE = 3000.0
-	var chunk_x = int(floor(position.x / CHUNK_SIZE))
-	return "%d,0" % chunk_x  # Y is always 0 (horizontal chunks only)
+	var chunk_x = int(floor(position.x / Constants.CHUNK_SIZE))
+	return "%d,0" % chunk_x  # Y is always 0 (single row of square chunks)

@@ -58,9 +58,42 @@ const LAYER_TEMPLATE = [
 
 # Baking configuration
 const BAKED_TERRAIN_PATH = "user://baked_terrain.png"
-const WORLD_WIDTH = 18000  # -5000 to 13000
-const WORLD_HEIGHT = 6000  # -3000 to 3000
+# World dimensions - derived from Constants
+var WORLD_WIDTH: float:
+	get: return Constants.CHUNK_SIZE * 3  # 3 chunks
+var WORLD_HEIGHT: float:
+	get: return Constants.CHUNK_SIZE  # 1 chunk tall
 var use_baked_terrain = false  # DISABLED - using simple solid ground only
+
+# World layout constants - derived from Constants for chunk size
+var CAMPFIRE_POS: Vector2:
+	get: return Vector2(Constants.CHUNK_SIZE / 2, 0)  # Center of chunk 0
+var WORLD_MIN_X: float:
+	get: return -Constants.CHUNK_SIZE
+var WORLD_MAX_X: float:
+	get: return Constants.CHUNK_SIZE * 2
+var WORLD_MIN_Y: float:
+	get: return -Constants.CHUNK_SIZE / 2
+var WORLD_MAX_Y: float:
+	get: return Constants.CHUNK_SIZE / 2
+
+# Ruins configuration - procedurally generated at runtime
+const RUINS_PER_END_CHUNK: int = 2  # 2 ruins per end chunk (-1 and +1)
+const RUINS_MIN_DISTANCE_FROM_EDGE: float = 600.0  # Keep away from world edges
+const RUINS_MIN_DISTANCE_BETWEEN: float = 1500.0  # Minimum spacing between ruins
+const RUINS_PATH_OFFSET_MIN: float = 600.0  # Minimum Y distance from path (Y=0)
+const RUINS_PATH_OFFSET_MAX: float = 1400.0  # Maximum Y distance from path
+
+# Placement patterns for ruins in each chunk
+enum RuinsPattern {
+	BOTH_NORTH,  # Both ruins north of path (Y < 0)
+	BOTH_SOUTH,  # Both ruins south of path (Y > 0)
+	SPLIT        # One north, one south
+}
+
+# Generated ruins positions (populated at runtime)
+var RUINS_POSITIONS: Dictionary = {}
+var ruins_nodes: Array = []  # Track spawned ruins for cleanup
 
 var tree_types = ["dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5", "dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10"]
 var screenshot_mode = false
@@ -91,6 +124,9 @@ func _ready():
 
 	# Create world boundaries first
 	create_world_boundaries()
+
+	# Generate procedural ruins positions and spawn them
+	generate_procedural_ruins()
 
 	# TERRAIN GENERATION - Now optimized with campfire exclusion zone
 	var enable_terrain = true  # Excludes 1500px radius around spawn for performance
@@ -130,53 +166,267 @@ func _process(delta):
 			particles.global_position = player.global_position
 
 func create_world_boundaries():
-	"""Create invisible walls around world to prevent player from going out of bounds"""
-	# World bounds: X: -5000 to 13000, Y: -3000 to 3000
+	"""Create invisible walls and fog edges around world boundaries"""
+	# World bounds: X: -4000 to 8000, Y: -2000 to 2000
+	var world_left = Constants.WORLD_LEFT
+	var world_right = Constants.WORLD_RIGHT
+	var world_top = Constants.WORLD_TOP
+	var world_bottom = Constants.WORLD_BOTTOM
+	var world_width = Constants.WORLD_WIDTH
+	var world_height = Constants.WORLD_HEIGHT
+	var world_center_x = (world_left + world_right) / 2.0
 	var boundary_thickness = Constants.WORLD_BOUNDARY_THICKNESS
 
-	# Top wall
+	# Top wall (north)
 	var top_wall = StaticBody2D.new()
 	top_wall.name = "TopBoundary"
 	var top_shape = CollisionShape2D.new()
 	var top_rect = RectangleShape2D.new()
-	top_rect.size = Vector2(18000 + boundary_thickness * 2, boundary_thickness)
+	top_rect.size = Vector2(world_width + boundary_thickness * 2, boundary_thickness)
 	top_shape.shape = top_rect
-	top_shape.position = Vector2(4000, -3000 - boundary_thickness/2)
+	top_shape.position = Vector2(world_center_x, world_top - boundary_thickness/2)
 	top_wall.add_child(top_shape)
 	add_child(top_wall)
 
-	# Bottom wall
+	# Bottom wall (south)
 	var bottom_wall = StaticBody2D.new()
 	bottom_wall.name = "BottomBoundary"
 	var bottom_shape = CollisionShape2D.new()
 	var bottom_rect = RectangleShape2D.new()
-	bottom_rect.size = Vector2(18000 + boundary_thickness * 2, boundary_thickness)
+	bottom_rect.size = Vector2(world_width + boundary_thickness * 2, boundary_thickness)
 	bottom_shape.shape = bottom_rect
-	bottom_shape.position = Vector2(4000, 3000 + boundary_thickness/2)
+	bottom_shape.position = Vector2(world_center_x, world_bottom + boundary_thickness/2)
 	bottom_wall.add_child(bottom_shape)
 	add_child(bottom_wall)
 
-	# Left wall
+	# Left wall (west)
 	var left_wall = StaticBody2D.new()
 	left_wall.name = "LeftBoundary"
 	var left_shape = CollisionShape2D.new()
 	var left_rect = RectangleShape2D.new()
-	left_rect.size = Vector2(boundary_thickness, 6000)
+	left_rect.size = Vector2(boundary_thickness, world_height)
 	left_shape.shape = left_rect
-	left_shape.position = Vector2(-5000 - boundary_thickness/2, 0)
+	left_shape.position = Vector2(world_left - boundary_thickness/2, 0)
 	left_wall.add_child(left_shape)
 	add_child(left_wall)
 
-	# Right wall
+	# Right wall (east)
 	var right_wall = StaticBody2D.new()
 	right_wall.name = "RightBoundary"
 	var right_shape = CollisionShape2D.new()
 	var right_rect = RectangleShape2D.new()
-	right_rect.size = Vector2(boundary_thickness, 6000)
+	right_rect.size = Vector2(boundary_thickness, world_height)
 	right_shape.shape = right_rect
-	right_shape.position = Vector2(13000 + boundary_thickness/2, 0)
+	right_shape.position = Vector2(world_right + boundary_thickness/2, 0)
 	right_wall.add_child(right_shape)
 	add_child(right_wall)
+
+	# Create fog/shadow edges on north and south borders
+	create_border_fog(world_left, world_right, world_top, world_bottom)
+
+func create_border_fog(world_left: float, world_right: float, world_top: float, world_bottom: float):
+	"""Create gradient fog at north and south world edges"""
+	var fog_container = Node2D.new()
+	fog_container.name = "BorderFog"
+	fog_container.z_index = 100  # Above most things but below UI
+	add_child(fog_container)
+
+	var fog_height = 400.0  # Height of fog gradient
+	var world_width = world_right - world_left
+
+	# North fog (top edge) - fades from dark at edge to transparent
+	var north_fog = ColorRect.new()
+	north_fog.name = "NorthFog"
+	north_fog.size = Vector2(world_width + 2000, fog_height)
+	north_fog.position = Vector2(world_left - 1000, world_top - fog_height)
+	north_fog.color = Color(0, 0, 0, 1)
+	north_fog.z_index = 100
+
+	# Shader for gradient fade
+	var north_shader = ShaderMaterial.new()
+	var shader = Shader.new()
+	shader.code = """
+shader_type canvas_item;
+
+void fragment() {
+	// Fade from opaque at top to transparent at bottom
+	float fade = 1.0 - UV.y;
+	fade = smoothstep(0.0, 1.0, fade);
+	COLOR.a = fade * 0.9;
+}
+"""
+	north_shader.shader = shader
+	north_fog.material = north_shader
+	fog_container.add_child(north_fog)
+
+	# South fog (bottom edge) - fades from transparent at top to dark at bottom
+	var south_fog = ColorRect.new()
+	south_fog.name = "SouthFog"
+	south_fog.size = Vector2(world_width + 2000, fog_height)
+	south_fog.position = Vector2(world_left - 1000, world_bottom)
+	south_fog.color = Color(0, 0, 0, 1)
+	south_fog.z_index = 100
+
+	var south_shader = ShaderMaterial.new()
+	var south_shader_code = Shader.new()
+	south_shader_code.code = """
+shader_type canvas_item;
+
+void fragment() {
+	// Fade from transparent at top to opaque at bottom
+	float fade = UV.y;
+	fade = smoothstep(0.0, 1.0, fade);
+	COLOR.a = fade * 0.9;
+}
+"""
+	south_shader.shader = south_shader_code
+	south_fog.material = south_shader
+	fog_container.add_child(south_fog)
+
+	print("🌫️ Border fog created on north and south edges")
+
+func generate_procedural_ruins():
+	"""Generate ruins POSITIONS procedurally (actual spawning is done per-chunk)"""
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 12345  # Fixed seed for consistent world generation
+
+	# Clear any existing ruins data
+	RUINS_POSITIONS.clear()
+	for ruins in ruins_nodes:
+		if is_instance_valid(ruins):
+			ruins.queue_free()
+	ruins_nodes.clear()
+
+	# Generate ruins positions for chunk -1 (west) and chunk +1 (east)
+	# Note: Ruins are NOT instantiated here - that happens when chunk loads
+	var cs = Constants.CHUNK_SIZE
+	var chunk_configs = [
+		{"chunk_id": -1, "x_min": -cs + 200.0, "x_max": -400.0, "prefix": "west"},
+		{"chunk_id": 1, "x_min": cs + 400.0, "x_max": cs * 2 - 200.0, "prefix": "east"}
+	]
+
+	var guardian_levels = [8, 12, 16, 20]  # Increasing difficulty
+	var level_index = 0
+
+	for config in chunk_configs:
+		# Randomly pick placement pattern for this chunk
+		var pattern = rng.randi() % 3  # 0=BOTH_NORTH, 1=BOTH_SOUTH, 2=SPLIT
+
+		var positions = generate_ruins_positions_for_chunk(
+			config.x_min, config.x_max,
+			pattern, rng
+		)
+
+		# Store ruins positions and metadata (NOT spawned yet)
+		for i in range(positions.size()):
+			var pos = positions[i]
+			var ruins_key = "%s_%d" % [config.prefix, i]
+			RUINS_POSITIONS[ruins_key] = {
+				"position": pos,
+				"chunk_id": config.chunk_id,
+				"guardian_level": guardian_levels[min(level_index, guardian_levels.size() - 1)],
+				"spawned": false
+			}
+			level_index += 1
+
+	print("🏛️ Generated %d procedural ruins positions (will spawn per-chunk)" % RUINS_POSITIONS.size())
+
+func spawn_ruins_for_chunk(chunk_id: int) -> void:
+	"""Spawn ruins that belong to a specific chunk"""
+	var ruins_scene = load("res://scenes/world/ruins_campfire.tscn")
+	if not ruins_scene:
+		push_error("❌ Could not load ruins_campfire.tscn!")
+		return
+
+	for ruins_key in RUINS_POSITIONS.keys():
+		var ruins_data = RUINS_POSITIONS[ruins_key]
+
+		# Skip if not in this chunk or already spawned
+		if ruins_data.chunk_id != chunk_id or ruins_data.spawned:
+			continue
+
+		var pos = ruins_data.position
+		var guardian_level = ruins_data.guardian_level
+
+		# Create ruins instance
+		var ruins = ruins_scene.instantiate()
+		ruins.name = "ProceduralRuins_%s" % ruins_key
+		ruins.position = pos
+
+		# Set guardian level
+		if "guardian_level" in ruins:
+			ruins.guardian_level = guardian_level
+
+		add_child(ruins)
+		ruins_nodes.append(ruins)
+		ruins_data.spawned = true
+
+		print("🏛️ Spawned ruins '%s' at %s (level %d) for chunk %d" % [ruins_key, pos, guardian_level, chunk_id])
+
+func despawn_ruins_for_chunk(chunk_id: int) -> void:
+	"""Despawn ruins that belong to a specific chunk"""
+	var to_remove = []
+
+	for ruins in ruins_nodes:
+		if not is_instance_valid(ruins):
+			to_remove.append(ruins)
+			continue
+
+		# Find which ruins_key this is
+		for ruins_key in RUINS_POSITIONS.keys():
+			var ruins_data = RUINS_POSITIONS[ruins_key]
+			if ruins_data.chunk_id == chunk_id and ruins_data.spawned:
+				if ruins.name == "ProceduralRuins_%s" % ruins_key:
+					print("🗑️ Despawning ruins '%s' for chunk %d" % [ruins_key, chunk_id])
+					ruins.queue_free()
+					to_remove.append(ruins)
+					ruins_data.spawned = false
+					break
+
+	for ruins in to_remove:
+		ruins_nodes.erase(ruins)
+
+func generate_ruins_positions_for_chunk(x_min: float, x_max: float, pattern: int, rng: RandomNumberGenerator) -> Array:
+	"""Generate 2 ruins positions within a chunk based on placement pattern"""
+	var positions = []
+	var y_range_north = Vector2(-RUINS_PATH_OFFSET_MAX, -RUINS_PATH_OFFSET_MIN)  # North of path
+	var y_range_south = Vector2(RUINS_PATH_OFFSET_MIN, RUINS_PATH_OFFSET_MAX)   # South of path
+
+	# Determine Y ranges for each ruins based on pattern
+	var y_ranges = []
+	match pattern:
+		0:  # BOTH_NORTH
+			y_ranges = [y_range_north, y_range_north]
+		1:  # BOTH_SOUTH
+			y_ranges = [y_range_south, y_range_south]
+		2:  # SPLIT
+			y_ranges = [y_range_north, y_range_south]
+
+	# Generate first ruins position
+	var x1 = rng.randf_range(x_min, x_min + (x_max - x_min) * 0.4)  # Left side of chunk
+	var y1 = rng.randf_range(y_ranges[0].x, y_ranges[0].y)
+	positions.append(Vector2(x1, y1))
+
+	# Generate second ruins position (ensure minimum distance)
+	var attempts = 0
+	while attempts < 50:
+		var x2 = rng.randf_range(x_min + (x_max - x_min) * 0.5, x_max)  # Right side of chunk
+		var y2 = rng.randf_range(y_ranges[1].x, y_ranges[1].y)
+		var pos2 = Vector2(x2, y2)
+
+		# Check distance from first ruins
+		if pos2.distance_to(positions[0]) >= RUINS_MIN_DISTANCE_BETWEEN:
+			positions.append(pos2)
+			break
+		attempts += 1
+
+	# Fallback if we couldn't find valid position
+	if positions.size() < 2:
+		var x2 = rng.randf_range(x_min + (x_max - x_min) * 0.6, x_max)
+		var y2 = -y_ranges[1].y if y_ranges[1].y > 0 else y_ranges[1].y  # Flip to opposite side
+		positions.append(Vector2(x2, y2))
+
+	return positions
 
 func setup_camera_limits():
 	"""Set camera limits to prevent seeing outside world boundaries"""
@@ -218,16 +468,13 @@ func create_trafficked_areas():
 	rng.seed = 99999
 
 	# Campfire area (main spawn) - 45 spots in ~600px radius
-	create_traffic_circle(traffic_layer, Vector2(-2000, 0), 600, 45, rng)
+	create_traffic_circle(traffic_layer, CAMPFIRE_POS, 600, 45, rng)
 
-	# Ruins 1 - 24 spots in ~400px radius
-	create_traffic_circle(traffic_layer, Vector2(1200, -2000), 400, 24, rng)
-
-	# Ruins 2 - 24 spots in ~400px radius
-	create_traffic_circle(traffic_layer, Vector2(4800, 2200), 400, 24, rng)
-
-	# Ruins 3 - 24 spots in ~400px radius
-	create_traffic_circle(traffic_layer, Vector2(8200, -2200), 400, 24, rng)
+	# Create traffic circles around all procedurally generated ruins
+	for ruins_key in RUINS_POSITIONS:
+		var ruins_data = RUINS_POSITIONS[ruins_key]
+		var ruins_pos = ruins_data.position if ruins_data is Dictionary else ruins_data
+		create_traffic_circle(traffic_layer, ruins_pos, 400, 24, rng)
 
 func create_traffic_circle(parent: Node2D, center: Vector2, radius: float, num_spots: int, rng: RandomNumberGenerator):
 	"""Create scattered dark spots in a circular area"""
@@ -256,39 +503,144 @@ func create_traffic_circle(parent: Node2D, center: Vector2, radius: float, num_s
 			parent.add_child(patch)
 
 func create_path_system():
-	"""Create path from campfire eastward following torches, with branch to ruins 1"""
-	var path_layer = Node2D.new()
-	path_layer.name = "PathSystem"
-	path_layer.z_index = -8
-	add_child(path_layer)
+	"""Initialize path system container. Actual paths are spawned per-chunk."""
+	# Create main path container (paths will be added as children when chunks load)
+	var path_layer = get_node_or_null("PathSystem")
+	if not path_layer:
+		path_layer = Node2D.new()
+		path_layer.name = "PathSystem"
+		path_layer.z_index = -8
+		add_child(path_layer)
+
+	print("🛤️ Path system container initialized (paths spawn per-chunk)")
+
+# Store generated path points for reuse (torch placement, etc.)
+var chunk_path_points: Dictionary = {}  # {chunk_id: Array of points}
+
+func spawn_path_for_chunk(chunk_id: int) -> void:
+	"""Spawn path segment and torches for a specific chunk"""
+	var path_layer = get_node_or_null("PathSystem")
+	if not path_layer:
+		path_layer = Node2D.new()
+		path_layer.name = "PathSystem"
+		path_layer.z_index = -8
+		add_child(path_layer)
+
+	# Check if path already exists for this chunk
+	var chunk_path_name = "PathChunk_%d" % chunk_id
+	if path_layer.get_node_or_null(chunk_path_name):
+		return  # Already loaded
 
 	var rng = RandomNumberGenerator.new()
-	rng.seed = 77777
+	rng.seed = 77777 + chunk_id  # Different but deterministic seed per chunk
 
-	var campfire_pos = Vector2(-2000, 0)
-	var castle_pos = Vector2(11000, -300)  # Final destination (far east)
-	var ruins1_pos = Vector2(1200, -2000)
+	# Create path container for this chunk
+	var chunk_path = Node2D.new()
+	chunk_path.name = chunk_path_name
+	path_layer.add_child(chunk_path)
 
-	# Create main path from campfire to castle (following torches)
-	var main_path_points = create_curved_path(campfire_pos, castle_pos, 30, rng)
+	# Calculate chunk boundaries
+	var cs = Constants.CHUNK_SIZE
+	var chunk_start_x = chunk_id * cs
+	var chunk_end_x = (chunk_id + 1) * cs
 
-	# Draw main path with spots
-	for i in range(main_path_points.size() - 1):
-		var start = main_path_points[i]
-		var end = main_path_points[i + 1]
-		create_path_segment(path_layer, start, end, 175, rng)  # 175px wide path
+	# Clamp to world boundaries
+	chunk_start_x = clamp(chunk_start_x, -cs, cs * 2)
+	chunk_end_x = clamp(chunk_end_x, -cs, cs * 2)
 
-	# Create branch to ruins 1 (splits off around X=0)
-	var branch_start_index = 7  # Split off early in the path
-	if branch_start_index < main_path_points.size():
-		var branch_start = main_path_points[branch_start_index]
-		var branch_points = create_curved_path(branch_start, ruins1_pos, 12, rng)
+	# Create main path through this chunk
+	var path_start = Vector2(chunk_start_x, 0)
+	var path_end = Vector2(chunk_end_x, 0)
+	var main_path = create_zigzag_path(path_start, path_end, 8, 350, rng)
+	draw_path_from_points(chunk_path, main_path, 175, rng)
 
-		# Draw branch path
-		for i in range(branch_points.size() - 1):
-			var start = branch_points[i]
-			var end = branch_points[i + 1]
-			create_path_segment(path_layer, start, end, 150, rng)  # 150px wide branch
+	# Store path points for torch/enemy systems
+	chunk_path_points[chunk_id] = main_path
+
+	# Create branch paths to ruins in this chunk
+	for ruins_key in RUINS_POSITIONS.keys():
+		var ruins_data = RUINS_POSITIONS[ruins_key]
+		if ruins_data.chunk_id != chunk_id:
+			continue
+
+		var ruins_pos = ruins_data.position
+		# Branch point on main path
+		var branch_x = clamp(ruins_pos.x + (400 if chunk_id < 0 else -400), chunk_start_x + 200, chunk_end_x - 200)
+		var branch_point = Vector2(branch_x, get_path_y_at_x(main_path, branch_x))
+		var ruins_path = create_zigzag_path(branch_point, ruins_pos, 4, 200, rng)
+		draw_path_from_points(chunk_path, ruins_path, 130, rng)
+
+	# Spawn torches along this chunk's path
+	spawn_torches_for_chunk(chunk_id, main_path, chunk_path)
+
+	print("🛤️ Path spawned for chunk %d (X: %.0f to %.0f)" % [chunk_id, chunk_start_x, chunk_end_x])
+
+func despawn_path_for_chunk(chunk_id: int) -> void:
+	"""Despawn path segment and torches for a specific chunk"""
+	var path_layer = get_node_or_null("PathSystem")
+	if not path_layer:
+		return
+
+	var chunk_path_name = "PathChunk_%d" % chunk_id
+	var chunk_path = path_layer.get_node_or_null(chunk_path_name)
+	if chunk_path:
+		print("🗑️ Despawning path for chunk %d" % chunk_id)
+		chunk_path.queue_free()
+
+	# Also despawn torches
+	despawn_torches_for_chunk(chunk_id)
+
+	# Clear stored path points
+	chunk_path_points.erase(chunk_id)
+
+func get_path_y_at_x(path_points: Array, target_x: float) -> float:
+	"""Find the Y coordinate on a path at a given X position (interpolated)"""
+	# Find the two points that bracket the target X
+	for i in range(path_points.size() - 1):
+		var p1 = path_points[i]
+		var p2 = path_points[i + 1]
+
+		# Check if target_x falls between these two points
+		var min_x = min(p1.x, p2.x)
+		var max_x = max(p1.x, p2.x)
+
+		if target_x >= min_x and target_x <= max_x:
+			# Interpolate Y based on X position
+			if abs(p2.x - p1.x) < 0.001:
+				return p1.y  # Avoid division by zero
+			var t = (target_x - p1.x) / (p2.x - p1.x)
+			return lerp(p1.y, p2.y, t)
+
+	# Fallback: return Y=0 if not found
+	return 0.0
+
+func create_zigzag_path(start: Vector2, end: Vector2, num_zigs: int, zig_amplitude: float, rng: RandomNumberGenerator) -> Array:
+	"""Generate a zigzag path between two points"""
+	var points = [start]
+	var direction = (end - start).normalized()
+	var perpendicular = Vector2(-direction.y, direction.x)
+	var total_distance = start.distance_to(end)
+	var segment_length = total_distance / (num_zigs + 1)
+
+	for i in range(1, num_zigs + 1):
+		var t = float(i) / float(num_zigs + 1)
+		var base_pos = start.lerp(end, t)
+
+		# Alternate zigzag direction
+		var zig_direction = 1 if i % 2 == 0 else -1
+		var offset = perpendicular * zig_amplitude * zig_direction * rng.randf_range(0.7, 1.0)
+
+		points.append(base_pos + offset)
+
+	points.append(end)
+	return points
+
+func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: RandomNumberGenerator):
+	"""Draw path segments between all points in array"""
+	for i in range(points.size() - 1):
+		var start = points[i]
+		var end = points[i + 1]
+		create_path_segment(parent, start, end, width, rng)
 
 func create_curved_path(start: Vector2, end: Vector2, num_points: int, rng: RandomNumberGenerator) -> Array:
 	"""Generate curved path points between two positions"""
@@ -406,14 +758,11 @@ func get_region_color_tint(pos: Vector2) -> Color:
 	var tint = Color(1.0, 1.0, 1.0)
 
 	# Ruins regions: Subtle red tint (corruption/dried blood)
-	var ruins1_pos = Vector2(1200, -2000)
-	var ruins2_pos = Vector2(4800, 2200)
-	var ruins3_pos = Vector2(8200, -2200)
-
-	var min_dist_to_ruins = min(
-		pos.distance_to(ruins1_pos),
-		min(pos.distance_to(ruins2_pos), pos.distance_to(ruins3_pos))
-	)
+	var min_dist_to_ruins = INF
+	for ruins_pos in RUINS_POSITIONS.values():
+		var dist = pos.distance_to(ruins_pos)
+		if dist < min_dist_to_ruins:
+			min_dist_to_ruins = dist
 
 	if min_dist_to_ruins < 800:  # Within 800px of any ruins
 		var strength = 1.0 - (min_dist_to_ruins / 800.0)  # Stronger near center
@@ -655,7 +1004,7 @@ func DISABLED_create_campfire_clearing():
 	clearing.name = "CampfireClearing"
 	clearing.z_index = -6
 
-	var campfire_pos = Vector2(-2000, 0)
+	var campfire_pos = CAMPFIRE_POS
 	var radius = 250.0
 
 	# Create circle polygon
@@ -704,7 +1053,7 @@ func DISABLED_create_path_to_castle_optimized():
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 777
 
-	var campfire_pos = Vector2(-2000, 0)
+	var campfire_pos = CAMPFIRE_POS
 	var castle_pos = Vector2(11000, -300)
 
 	# Performance mode: 30 points for smooth gameplay
@@ -900,16 +1249,13 @@ func create_ruins_clearings(rng: RandomNumberGenerator):
 	clearing_layer.z_index = -6
 	add_child(clearing_layer)
 
-	# Clearing at Ruins 1 (1,200, -2,000) - 75% of campfire size (450 * 0.75 = 340)
-	create_feathered_area(clearing_layer, Vector2(1200, -2000), 340, rng, 1.0, 0.12)
+	# Create clearing at each ruins location - 75% of campfire size (450 * 0.75 = 340)
+	for ruins_name in RUINS_POSITIONS:
+		var ruins_data = RUINS_POSITIONS[ruins_name]
+		var ruins_pos = ruins_data.position if ruins_data is Dictionary else ruins_data
+		create_feathered_area(clearing_layer, ruins_pos, 340, rng, 1.0, 0.12)
 
-	# Clearing at Ruins 2 (4,800, 2,200) - 75% of campfire size
-	create_feathered_area(clearing_layer, Vector2(4800, 2200), 340, rng, 1.0, 0.12)
-
-	# Clearing at Ruins 3 (8,200, -2,200) - 75% of campfire size
-	create_feathered_area(clearing_layer, Vector2(8200, -2200), 340, rng, 1.0, 0.12)
-
-	print("🏛️ Created clearings at 3 ruins locations")
+	print("🏛️ Created clearings at %d ruins locations" % RUINS_POSITIONS.size())
 
 func create_feathered_area(parent: Node2D, center: Vector2, base_size: float, rng: RandomNumberGenerator, elongation: float = 1.0, darkness_multiplier: float = 1.0):
 	for layer_data in LAYER_TEMPLATE:
@@ -1136,7 +1482,7 @@ func spawn_trees_everywhere_dynamic(parent: Node2D):
 			tree_pos.y = clamp(tree_pos.y, -3000 + buffer, 3000 - buffer)
 
 			# Avoid campfire area (larger radius to account for large trees and campfire circle)
-			var campfire_pos = Vector2(-2000, 0)
+			var campfire_pos = CAMPFIRE_POS
 			if tree_pos.distance_to(campfire_pos) < 700:
 				continue
 
@@ -1177,7 +1523,7 @@ func spawn_rock_sprites(parent: Node2D):
 			rng.randf_range(-3000 + buffer, 3000 - buffer)
 		)
 
-		var campfire_pos = Vector2(-2000, 0)
+		var campfire_pos = CAMPFIRE_POS
 		if rock_pos.distance_to(campfire_pos) < 450:
 			continue
 
@@ -1231,7 +1577,7 @@ func spawn_scattered_props(parent: Node2D):
 		)
 
 		# Reduce clutter around campfire by 25%
-		var campfire_pos = Vector2(-2000, 0)
+		var campfire_pos = CAMPFIRE_POS
 		if prop_pos.distance_to(campfire_pos) < 600:
 			if rng.randf() < 0.25:  # Skip 25% of props near campfire
 				continue
@@ -1282,7 +1628,7 @@ func spawn_small_rocks(parent: Node2D):
 		)
 
 		# Avoid campfire area
-		var campfire_pos = Vector2(-2000, 0)
+		var campfire_pos = CAMPFIRE_POS
 		if rock_pos.distance_to(campfire_pos) < 450:
 			continue
 
@@ -1452,12 +1798,12 @@ func generate_item_spawn_points():
 		var item_pos = Vector2.ZERO
 		while attempts < 50:
 			item_pos = Vector2(
-				rng.randf_range(-4000, 12000),
-				rng.randf_range(-2500, 2500)
+				rng.randf_range(-4000, 8000),
+				rng.randf_range(-2000, 2000)
 			)
 
 			# Avoid campfire area
-			var campfire_pos = Vector2(-2000, 0)
+			var campfire_pos = CAMPFIRE_POS
 			if item_pos.distance_to(campfire_pos) < 600:
 				attempts += 1
 				continue
@@ -1474,23 +1820,71 @@ func generate_item_spawn_points():
 	print("💎 Generated 75 possible item spawn points")
 
 func generate_chest_spawn_points():
-	"""Generate possible spawn points for chests (5x more than will actually spawn)"""
+	"""Generate possible spawn points for chests - 40% near lava pools, 60% scattered"""
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 55555
 
-	# Generate 50 possible spawn points (LootSpawnManager will spawn 10 at a time)
-	for i in range(50):
-		# Find a random position (avoid campfire, prefer interesting locations)
+	# Get lava pool positions from chunk system
+	var all_lava_pools = []
+	if chunk_prop_system and chunk_prop_system.get("loaded_chunks"):
+		for chunk_key in chunk_prop_system.loaded_chunks:
+			var chunk_data = chunk_prop_system.loaded_chunks[chunk_key]
+			if chunk_data and chunk_data.lava_pool_positions:
+				all_lava_pools.append_array(chunk_data.lava_pool_positions)
+
+	# Also check our local lava_pool_positions if chunk system hasn't loaded yet
+	if all_lava_pools.is_empty() and lava_pool_positions.size() > 0:
+		for pool in lava_pool_positions:
+			all_lava_pools.append({"pos": pool.pos, "radius": pool.size / 2 + 30})
+
+	var lava_pool_chest_count = 20 if all_lava_pools.size() > 0 else 0  # 40% near lava (20 of 50)
+	var scattered_chest_count = 50 - lava_pool_chest_count
+
+	# Generate chests near lava pools (high danger = high reward)
+	for i in range(lava_pool_chest_count):
+		if all_lava_pools.is_empty():
+			break
+
+		var pool = all_lava_pools[rng.randi() % all_lava_pools.size()]
+		var attempts = 0
+		var chest_pos = Vector2.ZERO
+
+		while attempts < 30:
+			# Spawn 200-500px from lava pool center (close but not in lava)
+			var angle = rng.randf() * TAU
+			var distance = rng.randf_range(200, 500)
+			chest_pos = pool.pos + Vector2(cos(angle), sin(angle)) * distance
+
+			# Clamp to world bounds
+			chest_pos.x = clamp(chest_pos.x, -4000, 8000)
+			chest_pos.y = clamp(chest_pos.y, -2000, 2000)
+
+			# Avoid spawning on trees
+			var too_close_to_tree = false
+			for tree_pos in tree_positions:
+				if chest_pos.distance_to(tree_pos) < 100:
+					too_close_to_tree = true
+					break
+			if too_close_to_tree:
+				attempts += 1
+				continue
+
+			break
+
+		LootSpawnManager.add_chest_spawn_point(chest_pos)
+
+	# Generate scattered chests (off the beaten path)
+	for i in range(scattered_chest_count):
 		var attempts = 0
 		var chest_pos = Vector2.ZERO
 		while attempts < 50:
 			chest_pos = Vector2(
-				rng.randf_range(-4000, 12000),
-				rng.randf_range(-2500, 2500)
+				rng.randf_range(-4000, 8000),
+				rng.randf_range(-2000, 2000)
 			)
 
 			# Avoid campfire area
-			var campfire_pos = Vector2(-2000, 0)
+			var campfire_pos = CAMPFIRE_POS
 			if chest_pos.distance_to(campfire_pos) < 800:
 				attempts += 1
 				continue
@@ -1503,7 +1897,7 @@ func generate_chest_spawn_points():
 			# Avoid spawning on trees
 			var too_close_to_tree = false
 			for tree_pos in tree_positions:
-				if chest_pos.distance_to(tree_pos) < 100:  # 100px clearance around trees
+				if chest_pos.distance_to(tree_pos) < 100:
 					too_close_to_tree = true
 					break
 			if too_close_to_tree:
@@ -1513,16 +1907,15 @@ func generate_chest_spawn_points():
 			# Valid position found
 			break
 
-		# Add to spawn manager's pool
 		LootSpawnManager.add_chest_spawn_point(chest_pos)
 
-	print("📦 Generated 50 possible chest spawn points")
+	print("📦 Generated 50 chest spawn points (%d near lava pools, %d scattered)" % [lava_pool_chest_count, scattered_chest_count])
 
 # ===== HELPER FUNCTIONS =====
 
 func is_position_on_path(pos: Vector2, path_width: float = 100.0) -> bool:
 	# Check main path
-	var campfire_pos = Vector2(-2000, 0)
+	var campfire_pos = CAMPFIRE_POS
 	var castle_pos = Vector2(11000, -300)
 
 	if pos.x >= campfire_pos.x and pos.x <= castle_pos.x:
@@ -1914,53 +2307,71 @@ func create_marker_sprite(marker_data: Dictionary, parent: Node2D) -> bool:
 	return false
 
 func create_torches_along_path():
-	"""Create torches along the path at regular intervals"""
-	# Load path markers data
-	var result = JSONValidator.load_json_file("res://data/path_markers.json")
-	if not result.success:
-		DebugConfig.log_warning("Could not load path markers for torch placement")
+	"""Initialize torches container. Actual torches are spawned per-chunk."""
+	# Create main Torches container node (torches will be added as children when chunks load)
+	var torches_node = get_node_or_null("Torches")
+	if not torches_node:
+		torches_node = Node2D.new()
+		torches_node.name = "Torches"
+		torches_node.z_index = 5  # Above most other elements
+		add_child(torches_node)
+
+	print("🔥 Torches container initialized (torches spawn per-chunk)")
+
+func spawn_torches_for_chunk(chunk_id: int, path_points: Array, parent: Node2D) -> void:
+	"""Spawn torches along a chunk's path (called from spawn_path_for_chunk)"""
+	var torches_node = get_node_or_null("Torches")
+	if not torches_node:
+		torches_node = Node2D.new()
+		torches_node.name = "Torches"
+		torches_node.z_index = 5
+		add_child(torches_node)
+
+	# Check if torches already exist
+	var chunk_torches_name = "TorchesChunk_%d" % chunk_id
+	if torches_node.get_node_or_null(chunk_torches_name):
 		return
 
-	var data = result.data
-	if not data.has("PathMarkers") or not data["PathMarkers"] is Array:
+	var rng = RandomNumberGenerator.new()
+	rng.seed = 77777 + chunk_id
+
+	# Create torch container for this chunk
+	var chunk_torches = Node2D.new()
+	chunk_torches.name = chunk_torches_name
+	torches_node.add_child(chunk_torches)
+
+	var torch_count = place_torches_along_path(path_points, chunk_torches, rng)
+	print("🔥 Spawned %d torches for chunk %d" % [torch_count, chunk_id])
+
+func despawn_torches_for_chunk(chunk_id: int) -> void:
+	"""Despawn torches for a specific chunk"""
+	var torches_node = get_node_or_null("Torches")
+	if not torches_node:
 		return
 
-	var markers = data["PathMarkers"]
-	if markers.size() < 2:
-		return
+	var chunk_torches_name = "TorchesChunk_%d" % chunk_id
+	var chunk_torches = torches_node.get_node_or_null(chunk_torches_name)
+	if chunk_torches:
+		chunk_torches.queue_free()
 
-	# Create Torches container node
-	var torches_node = Node2D.new()
-	torches_node.name = "Torches"
-	torches_node.z_index = 5  # Above most other elements
-	add_child(torches_node)
-
-	# Extract path positions, starting from campfire
-	var path_positions: Array = []
-	var campfire_pos = Vector2(-2000, 0)
-	path_positions.append(campfire_pos)  # Start path from campfire
-
-	for marker in markers:
-		if marker is Dictionary and marker.has("x") and marker.has("y"):
-			path_positions.append(Vector2(marker["x"], marker["y"]))
-
+func place_torches_along_path(path_positions: Array, parent: Node2D, rng: RandomNumberGenerator) -> int:
+	"""Place torches along a path, returns count placed"""
 	if path_positions.size() < 2:
-		return
+		return 0
 
-	# Calculate total path length first
+	# Calculate total path length
 	var total_path_length = 0.0
 	for i in range(path_positions.size() - 1):
 		total_path_length += path_positions[i].distance_to(path_positions[i + 1])
 
-	# Determine torch spacing (target 933px average - reduced count by 25%)
-	var base_spacing = 933.0
+	# Torch placement with consistent spacing
+	var base_spacing = 600.0  # Torch every ~600px
 	var torch_count = 0
 	var current_distance = 0.0
-	var next_torch_at = base_spacing  # First torch at 933px from start
+	var next_torch_at = base_spacing
 
 	# Walk along path and place torches
 	var segment_index = 0
-	var distance_in_segment = 0.0
 
 	while next_torch_at < total_path_length and segment_index < path_positions.size() - 1:
 		var start_pos = path_positions[segment_index]
@@ -1968,17 +2379,15 @@ func create_torches_along_path():
 		var segment_length = start_pos.distance_to(end_pos)
 		var segment_end_distance = current_distance + segment_length
 
-		# Place all torches that fall within this segment
 		while next_torch_at <= segment_end_distance and next_torch_at < total_path_length:
-			# Calculate position within this segment
 			var distance_into_segment = next_torch_at - current_distance
 			var t = distance_into_segment / segment_length
 			var torch_pos = start_pos.lerp(end_pos, t)
 
-			# Add perpendicular offset to stagger torches more (±80-150px)
+			# Add perpendicular offset to stagger torches
 			var direction = (end_pos - start_pos).normalized()
 			var perpendicular = Vector2(-direction.y, direction.x)
-			var offset = randf_range(-150.0, 150.0)
+			var offset = rng.randf_range(-180.0, 180.0)
 			torch_pos += perpendicular * offset
 
 			# Create torch
@@ -1988,17 +2397,15 @@ func create_torches_along_path():
 				torch.set_script(torch_script)
 				torch.name = "Torch_" + str(torch_count)
 				torch.position = torch_pos
-				torches_node.add_child(torch)
+				parent.add_child(torch)
 				torch_count += 1
 
-			# Next torch with slight random variation (853-1013px, 25% fewer torches)
-			next_torch_at += randf_range(853.0, 1013.0)
+			next_torch_at += rng.randf_range(500.0, 700.0)
 
-		# Move to next segment
 		current_distance = segment_end_distance
 		segment_index += 1
 
-	print("🔥 Created %d torches along %.0fpx path (avg spacing: %.0fpx)" % [torch_count, total_path_length, total_path_length / max(1, torch_count)])
+	return torch_count
 
 func spawn_all_enemies():
 	"""Initialize chunk-based enemy spawn manager
@@ -2099,7 +2506,7 @@ func collect_spawn_markers() -> Array:
 func analyze_spawn_pattern(children: Array) -> void:
 	"""Analyze manually placed enemy patterns to learn density, level progression, and distribution"""
 	var spawn_data = []
-	var campfire_pos = Vector2(-2000, 0)
+	var campfire_pos = CAMPFIRE_POS
 
 	# Collect all manual spawn data
 	for child in children:
@@ -2199,7 +2606,7 @@ func spawn_zone_1_enemies():
 		total_spawned = spawn_pattern_based_enemies(rng)
 	else:
 		# Fallback to old corridor-based spawning
-		var campfire_pos = Vector2(-2000, 0)
+		var campfire_pos = CAMPFIRE_POS
 		var ruins1_pos = Vector2(1200, -2000)
 		print("\n🎯 Using default spawn pattern...")
 
@@ -2477,7 +2884,7 @@ func spawn_bone_clusters(parent: Node2D):
 		)
 
 		# Avoid campfire area
-		var campfire_pos = Vector2(-2000, 0)
+		var campfire_pos = CAMPFIRE_POS
 		if cluster_pos.distance_to(campfire_pos) < 600:
 			continue
 
@@ -2550,7 +2957,7 @@ func spawn_ground_cracks(parent: Node2D):
 			continue
 
 		# Prefer cracks on the path and near clearings (broken ground)
-		var campfire_pos = Vector2(-2000, 0)
+		var campfire_pos = CAMPFIRE_POS
 		var on_path = abs(crack_pos.y) < 200  # Near path
 		var near_campfire = crack_pos.distance_to(campfire_pos) < 500  # Near campfire
 
@@ -2601,7 +3008,7 @@ func spawn_dead_vegetation(parent: Node2D):
 		)
 
 		# Avoid campfire area
-		var campfire_pos = Vector2(-2000, 0)
+		var campfire_pos = CAMPFIRE_POS
 		if veg_pos.distance_to(campfire_pos) < 600:
 			continue
 
@@ -2729,7 +3136,7 @@ func spawn_lava_pools():
 		)
 
 		# Avoid campfire area
-		var campfire_pos = Vector2(-2000, 0)
+		var campfire_pos = CAMPFIRE_POS
 		if pool_pos.distance_to(campfire_pos) < 800:
 			continue
 
@@ -3076,7 +3483,7 @@ func create_rock_spots_for_baking(viewport: SubViewport, offset: Vector2):
 			rng.randf_range(-3000, 3000)
 		)
 
-		var campfire_pos = Vector2(-2000, 0)
+		var campfire_pos = CAMPFIRE_POS
 		if rock_pos.distance_to(campfire_pos) < 450:
 			continue
 
@@ -3092,7 +3499,7 @@ func create_campfire_clearing_for_baking(viewport: SubViewport, offset: Vector2)
 	clearing_layer.z_index = -6
 	viewport.add_child(clearing_layer)
 
-	var campfire_pos = Vector2(-2000, 0)
+	var campfire_pos = CAMPFIRE_POS
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 54321
 
@@ -3521,22 +3928,22 @@ func despawn_player(id: int):
 
 func get_spawn_point() -> Vector2:
 	"""Get spawn point at campfire, opposite side from blacksmith"""
-	# Campfire is at (-2000, 0), Blacksmith/Vendor is at (-1850, 0) - to the right
+	# Campfire is at chunk 0 center, Blacksmith/Vendor is 150px to the right
 	# Spawn player on the LEFT side of campfire (opposite blacksmith)
-	var campfire_pos = Vector2(-2000, 0)
+	var campfire_pos = CAMPFIRE_POS
 	var spawn_offset = Vector2(-150, 0)  # Left of campfire, away from blacksmith
 	# Add slight randomization
 	spawn_offset.y += randf_range(-50, 50)
 	return campfire_pos + spawn_offset
 
 func get_spawn_points() -> Array:
-	"""Get all available spawn points"""
+	"""Get all available spawn points around campfire"""
 	var points = []
 
-	# Add campfire area spawns
+	# Add campfire area spawns (around CAMPFIRE_POS)
 	for i in range(4):
 		var angle = (TAU / 4) * i
-		var pos = Vector2(cos(angle) * 250, sin(angle) * 250)
-		points.append(pos)
+		var offset = Vector2(cos(angle) * 250, sin(angle) * 250)
+		points.append(CAMPFIRE_POS + offset)
 
 	return points

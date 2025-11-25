@@ -393,6 +393,15 @@ func _physics_process(delta: float) -> void:
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	velocity = input_direction * speed
 	move_and_slide()
+
+	# Clamp player position to world boundaries (with 50px buffer)
+	var x_min = -Constants.CHUNK_SIZE + 50
+	var x_max = Constants.CHUNK_SIZE * 2 - 50
+	var y_min = -Constants.CHUNK_SIZE / 2 + 50
+	var y_max = Constants.CHUNK_SIZE / 2 - 50
+	global_position.x = clamp(global_position.x, x_min, x_max)
+	global_position.y = clamp(global_position.y, y_min, y_max)
+
 	update_facing_direction()
 	
 	# Update LPC animation
@@ -621,6 +630,9 @@ func _input(event: InputEvent) -> void:
 				CharacterStats.debug_fix_negative_xp()
 				update_stats_from_character()
 				print("Press F7 to verify XP is fixed")
+			KEY_F9:
+				# DEBUG: Toggle full map view (zoom out to see entire world)
+				toggle_debug_map_view()
 			KEY_F10:
 				# DEBUG: Add campfire fuel to inventory (Press F10)
 				var debug_fuel = load("res://scripts/debug/debug_fuel_items.gd")
@@ -1548,10 +1560,6 @@ func update_debug_visualization() -> void:
 	
 	debug_shapes.add_child(cone_outline)
 
-	# Draw combat text spawn position boxes (player damage/heal text)
-	# Shows where red damage and green heal numbers will appear based on facing direction
-	_draw_combat_text_debug_boxes()
-
 	# Draw enemy collision shapes in WORLD SPACE (don't rotate)
 	var parent = get_parent()
 	if parent:
@@ -1561,69 +1569,6 @@ func update_debug_visualization() -> void:
 				var enemy_debug_node = enemy.draw_debug_shapes_world(parent)
 				if enemy_debug_node:
 					world_debug_nodes.append(enemy_debug_node)
-
-func _draw_combat_text_debug_boxes() -> void:
-	"""Draw persistent boxes showing where player damage/heal text spawns for each direction"""
-	# Box size
-	var box_size = Vector2(30, 30)
-
-	# Calculate offsets for each direction (matching CombatText.gd logic)
-	# Facing RIGHT: (-25, 0)
-	var offset_right = Vector2(-25, 0)
-	# Facing LEFT: (25, 0)
-	var offset_left = Vector2(25, 0)
-	# Facing DOWN: (0, -30)
-	var offset_down = Vector2(0, -30)
-	# Facing UP: (0, 50)
-	var offset_up = Vector2(0, 50)
-
-	# Draw boxes for all 4 directions
-	# RIGHT - Yellow box
-	var box_right = _create_debug_box(offset_right, box_size, Color.YELLOW, "RIGHT")
-	debug_shapes.add_child(box_right)
-
-	# LEFT - Cyan box
-	var box_left = _create_debug_box(offset_left, box_size, Color.CYAN, "LEFT")
-	debug_shapes.add_child(box_left)
-
-	# DOWN - Magenta box
-	var box_down = _create_debug_box(offset_down, box_size, Color.MAGENTA, "DOWN")
-	debug_shapes.add_child(box_down)
-
-	# UP - Green box
-	var box_up = _create_debug_box(offset_up, box_size, Color.GREEN, "UP")
-	debug_shapes.add_child(box_up)
-
-func _create_debug_box(offset: Vector2, size: Vector2, color: Color, label_text: String) -> Node2D:
-	"""Create a colored box with label at the specified offset"""
-	var container = Node2D.new()
-
-	# Draw box outline
-	var box = Line2D.new()
-	box.width = 2.0
-	box.default_color = color
-
-	# Box corners (centered on offset point)
-	var half_size = size / 2
-	box.add_point(offset + Vector2(-half_size.x, -half_size.y))  # Top-left
-	box.add_point(offset + Vector2(half_size.x, -half_size.y))   # Top-right
-	box.add_point(offset + Vector2(half_size.x, half_size.y))    # Bottom-right
-	box.add_point(offset + Vector2(-half_size.x, half_size.y))   # Bottom-left
-	box.add_point(offset + Vector2(-half_size.x, -half_size.y))  # Close the box
-
-	container.add_child(box)
-
-	# Add label
-	var label = Label.new()
-	label.text = label_text
-	label.add_theme_font_size_override("font_size", 10)
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_outline_color", Color.BLACK)
-	label.add_theme_constant_override("outline_size", 1)
-	label.position = offset + Vector2(-15, half_size.y + 2)  # Below box
-	container.add_child(label)
-
-	return container
 
 func draw_debug_circle(center: Vector2, radius: float, color: Color) -> Line2D:
 	var line = Line2D.new()
@@ -1665,6 +1610,67 @@ func update_camera_zoom(delta: float) -> void:
 	var current_zoom_value = camera.zoom.x
 	var new_zoom = lerp(current_zoom_value, target_zoom, zoom_speed)
 	camera.zoom = Vector2(new_zoom, new_zoom)
+
+# Debug map view state
+var debug_map_view_active: bool = false
+var debug_map_saved_zoom: float = 1.0
+var debug_map_saved_position: Vector2 = Vector2.ZERO
+var debug_map_saved_limits: Dictionary = {}
+
+func toggle_debug_map_view() -> void:
+	"""Toggle between normal view and full map debug view (F9)"""
+	if not camera:
+		print("❌ No camera found!")
+		return
+
+	debug_map_view_active = !debug_map_view_active
+
+	if debug_map_view_active:
+		# Save current state
+		debug_map_saved_zoom = target_zoom
+		debug_map_saved_position = global_position  # Player position (for reference)
+		debug_map_saved_limits = {
+			"left": camera.limit_left,
+			"right": camera.limit_right,
+			"top": camera.limit_top,
+			"bottom": camera.limit_bottom,
+			"offset": camera.offset
+		}
+
+		# Calculate zoom to fit entire world
+		var viewport_size = get_viewport().get_visible_rect().size
+		var world_width = Constants.CHUNK_SIZE * 3  # 3 chunks wide
+		var world_height = Constants.CHUNK_SIZE  # 1 chunk tall
+		var zoom_x = viewport_size.x / world_width
+		var zoom_y = viewport_size.y / world_height
+		var map_zoom = min(zoom_x, zoom_y) * 0.9  # 90% to add margin
+
+		# Disable camera limits for map view
+		camera.limit_left = int(-Constants.CHUNK_SIZE * 2)
+		camera.limit_right = int(Constants.CHUNK_SIZE * 4)
+		camera.limit_top = int(-Constants.CHUNK_SIZE)
+		camera.limit_bottom = int(Constants.CHUNK_SIZE)
+
+		# Use camera offset to view world center WITHOUT moving player
+		# Offset = (world center) - (player position)
+		var world_center = Vector2(Constants.CHUNK_SIZE / 2, 0)  # Center of chunk 0
+		camera.offset = world_center - global_position
+		target_zoom = map_zoom
+		camera.zoom = Vector2(map_zoom, map_zoom)
+
+		print("🗺️ DEBUG MAP VIEW ON - Press F9 to return (zoom: %.3f)" % map_zoom)
+	else:
+		# Restore previous state
+		camera.limit_left = debug_map_saved_limits.get("left", Constants.WORLD_LEFT)
+		camera.limit_right = debug_map_saved_limits.get("right", Constants.WORLD_RIGHT)
+		camera.limit_top = debug_map_saved_limits.get("top", Constants.WORLD_TOP)
+		camera.limit_bottom = debug_map_saved_limits.get("bottom", Constants.WORLD_BOTTOM)
+		camera.offset = debug_map_saved_limits.get("offset", Vector2.ZERO)
+
+		target_zoom = debug_map_saved_zoom
+		camera.zoom = Vector2(target_zoom, target_zoom)
+
+		print("🗺️ DEBUG MAP VIEW OFF - Restored normal view")
 
 func is_ui_blocking_input() -> bool:
 	"""Check if any UI is currently open that should block game input"""
@@ -1735,8 +1741,8 @@ func die() -> void:
 	
 	print("🔄 All enemies deaggroed")
 
-	# Reset player position to campfire spawn point
-	global_position = Vector2(-2000, 0)
+	# Reset player position to campfire spawn point (center of chunk 0)
+	global_position = Vector2(Constants.CHUNK_SIZE / 2, 0)
 	velocity = Vector2.ZERO
 	
 	# Restore health (but keep XP, level, stats, weapons)

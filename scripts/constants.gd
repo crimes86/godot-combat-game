@@ -80,13 +80,17 @@ const STAT_GAIN_CAP_LEVEL: int = 25  # No more stat gains past this level
 # WORLD GENERATION
 # ============================================
 
-# World Boundaries
-const WORLD_LEFT: int = -5000
-const WORLD_RIGHT: int = 13000
-const WORLD_TOP: int = -3000
-const WORLD_BOTTOM: int = 3000
-const WORLD_WIDTH: int = WORLD_RIGHT - WORLD_LEFT  # 18000
-const WORLD_HEIGHT: int = WORLD_BOTTOM - WORLD_TOP  # 6000
+# Chunk System
+const CHUNK_SIZE: float = 8000.0  # Size of each chunk (8000x8000)
+const CHUNK_COUNT: int = 3  # Number of chunks (0, 1, 2)
+
+# World Boundaries (derived from chunk system)
+const WORLD_LEFT: int = -8200  # -CHUNK_SIZE - 200 buffer
+const WORLD_RIGHT: int = 16200  # CHUNK_SIZE * 2 + 200 buffer
+const WORLD_TOP: int = -4200  # -CHUNK_SIZE/2 - 200 buffer
+const WORLD_BOTTOM: int = 4200  # CHUNK_SIZE/2 + 200 buffer
+const WORLD_WIDTH: int = 24000  # CHUNK_SIZE * 3
+const WORLD_HEIGHT: int = 8000  # CHUNK_SIZE
 const WORLD_BOUNDARY_THICKNESS: float = 100.0
 const WORLD_EDGE_BUFFER: float = 300.0  # Keep props away from edges
 
