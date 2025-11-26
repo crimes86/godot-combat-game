@@ -90,8 +90,11 @@ func request_damage(enemy_network_id: int, damage: float, is_crit: bool, is_weak
 		print("NetworkEnemyManager: Suspicious damage amount %f from peer %d" % [damage, multiplayer.get_remote_sender_id()])
 		return
 
-	# Get attacker ID for potential future use (kill credit, etc)
+	# Get attacker ID for kill credit
+	# get_remote_sender_id() returns 0 for local calls, so use server ID (1) in that case
 	var attacker_id = multiplayer.get_remote_sender_id()
+	if attacker_id == 0:
+		attacker_id = 1  # Server's peer ID
 
 	# Apply damage server-side
 	enemy.current_health -= damage
@@ -230,9 +233,12 @@ func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_items: Array
 	enemy.corpse_loot = loot_items
 	enemy.corpse_gold = loot_gold
 
+	# Store killer ID for XP attribution
+	enemy.set_meta("killer_peer_id", killer_id)
+
 	# Call die() which handles:
 	# - Weakpoint cleanup
-	# - XP grant (only for local player who did damage)
+	# - XP grant (only to the player who killed)
 	# - Death animation
 	# - Corpse transition
 	if not enemy.is_dying:
@@ -260,7 +266,10 @@ func _sync_enemy_positions() -> void:
 			positions[id] = {
 				"pos": enemy.global_position,
 				"anim": _get_enemy_animation(enemy),
-				"in_combat": enemy.get("in_crit_window") == true
+				"health": enemy.current_health,
+				"max_health": enemy.max_health,
+				"in_crit_window": enemy.get("in_crit_window") == true,
+				"is_dying": enemy.is_dying
 			}
 
 	if not positions.is_empty():
@@ -278,6 +287,16 @@ func _client_sync_positions(positions: Dictionary) -> void:
 			var data = positions[id]
 			# Interpolate to new position
 			enemy.global_position = enemy.global_position.lerp(data.pos, 0.3)
+
+			# Sync health
+			if data.has("health"):
+				enemy.current_health = data.health
+				if enemy.health_bar and enemy.health_bar.has_method("update_health"):
+					enemy.health_bar.update_health(data.health, data.get("max_health", enemy.max_health))
+
+			# Sync crit window state
+			if data.has("in_crit_window"):
+				enemy.in_crit_window = data.in_crit_window
 
 			# Update animation if enemy has animated sprite
 			var sprite = enemy.get_node_or_null("Sprite")
@@ -318,6 +337,8 @@ func spawn_enemy_on_clients(network_id: int, pos: Vector2, level: int, enemy_nam
 	# Add to world
 	if game_world:
 		game_world.call_deferred("add_child", enemy)
+		# Disable AI on client - position comes from server sync
+		call_deferred("_disable_client_enemy_ai", enemy)
 
 @rpc("authority", "reliable")
 func despawn_enemy_on_clients(network_id: int) -> void:
@@ -326,3 +347,17 @@ func despawn_enemy_on_clients(network_id: int) -> void:
 	if enemy and is_instance_valid(enemy):
 		enemy.queue_free()
 	unregister_enemy(network_id)
+
+func _disable_client_enemy_ai(enemy: Node) -> void:
+	"""Disable AI and physics on client-side enemies (server controls position)."""
+	if not is_instance_valid(enemy):
+		return
+
+	# Disable EnemyAI if present
+	var ai = enemy.get_node_or_null("EnemyAI")
+	if ai:
+		ai.set_process(false)
+		ai.set_physics_process(false)
+
+	# Mark as client-controlled (position from network)
+	enemy.set_meta("is_network_puppet", true)

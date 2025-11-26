@@ -3,6 +3,50 @@
 ## Overview
 Authoritative dedicated server model for persistent world MMO.
 
+> **Implementation Status**: This document contains both **implemented features** (marked ✅) and **planned features** (marked 📋). The current implementation uses Godot's built-in ENet multiplayer with a host-as-server model.
+
+---
+
+## Currently Implemented (Co-op Multiplayer) ✅
+
+### Connection System
+- ENet peer-to-peer with host as authority
+- Host/Join via main menu
+- Default port: 7777
+
+### Player Sync ✅
+- **Position/Animation**: 20Hz updates via `NetworkPlayer.gd`
+- **Appearance**: Full LPC sprite sync (gender, skin, hair, all 6 armor slots, weapon)
+- **Equipment Changes**: Real-time sync when equipping/unequipping
+- **Health**: Synced with position updates
+- **Dash/I-frames**: Server validates damage during dash
+
+### Enemy Sync ✅
+- **Spawning**: Server-authoritative via `NetworkEnemyManager.gd`
+- **Position**: 10Hz sync with interpolation (lerp 0.3)
+- **State**: Health, animation, crit window, dying state
+- **Damage**: Server validates all damage, broadcasts visual feedback
+- **Death**: Server generates loot, attributes XP to killer
+- **AI**: Disabled on clients (puppet mode)
+
+### Chunk System ✅
+- Server loads chunks for ALL players
+- Props load locally on each client
+- Enemies only spawn on server, sync to clients
+
+### What's NOT Implemented Yet
+- ❌ Authentication/accounts (currently anonymous)
+- ❌ Database persistence
+- ❌ PvP combat
+- ❌ Chat system
+- ❌ Loot instancing per player
+- ❌ World state sync (chests, harvestables)
+- ❌ Dedicated headless server
+
+---
+
+## Planned Architecture (Future) 📋
+
 ## Server Types
 
 ### Headless Server (Production)

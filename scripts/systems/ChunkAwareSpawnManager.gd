@@ -232,7 +232,11 @@ func update_chunk_enemies() -> void:
 			on_chunk_unloaded(chunk_key)
 
 func on_chunk_loaded(chunk_key: String) -> void:
-	"""Called when a chunk is loaded - spawn enemies"""
+	"""Called when a chunk is loaded - spawn enemies (server only in multiplayer)"""
+	# In multiplayer, only server spawns enemies
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+
 	print("📦 Chunk %s loaded - spawning enemies" % chunk_key)
 
 	# Create chunk data

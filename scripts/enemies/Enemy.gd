@@ -1010,10 +1010,18 @@ func die() -> void:
 			child.monitorable = false
 			child.queue_free()
 
-	# Grant XP to player
-	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-	if player and player.has_method("gain_experience"):
-		player.gain_experience(xp_reward)
+	# Grant XP to player - in multiplayer, only to the killer
+	var should_grant_xp = true
+	if multiplayer.has_multiplayer_peer():
+		# In multiplayer, only grant XP if we're the killer
+		var killer_id = get_meta("killer_peer_id", -1)
+		var my_peer_id = multiplayer.get_unique_id()
+		should_grant_xp = (killer_id == my_peer_id)
+
+	if should_grant_xp:
+		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+		if player and player.has_method("gain_experience"):
+			player.gain_experience(xp_reward)
 
 	# Store gold in corpse for looting
 	corpse_gold = gold_drop

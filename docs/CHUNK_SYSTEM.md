@@ -153,10 +153,94 @@ ENEMIES PER CHUNK:
 
 ## Multiplayer
 
-Both systems support multiplayer:
-- **Server**: Manages chunk loading for all players
-- **Clients**: Receive enemy spawns via RPC
-- **Chunks load**: When ANY player is nearby (not just host)
+Both systems support multiplayer with server-authoritative architecture.
+
+### Chunk Loading in Multiplayer
+
+**Server (Host):**
+- Tracks ALL connected players' positions
+- Loads chunks needed by ANY player (union of all player chunks)
+- If host is in chunk 0 and client is in chunk 5, server loads both
+- Uses `update_chunks_for_all_players()` to collect chunks for everyone
+
+**Clients:**
+- Load props locally for visual rendering (same chunk logic)
+- Do NOT spawn enemies (receive them via RPC from server)
+- Enemy AI is disabled on clients (positions come from server)
+
+### Enemy Sync System
+
+**Spawning (Server → Clients):**
+```
+Server spawns enemy
+  → NetworkEnemyManager.register_enemy() assigns network_id
+  → spawn_enemy_on_clients.rpc() broadcasts to all clients
+  → Clients instantiate enemy with AI disabled
+  → Clients mark enemy as "network puppet"
+```
+
+**Position Sync (10Hz, Server → Clients):**
+```gdscript
+# Server broadcasts every 100ms:
+{
+  network_id: {
+    "pos": Vector2,        # Global position
+    "anim": String,        # Current animation
+    "health": float,       # Current HP
+    "max_health": float,   # Max HP
+    "in_crit_window": bool,# Crit window active
+    "is_dying": bool       # Death state
+  }
+}
+# Clients interpolate position (lerp 0.3)
+```
+
+**Damage System (Client → Server → All Clients):**
+```
+Player attacks enemy
+  → apply_damage_with_feedback() routes to network
+  → Client: request_damage.rpc_id(1, ...) to server
+  → Server validates (enemy alive, damage sane 0-10000)
+  → Server applies damage, tracks attacker for kill credit
+  → Server broadcasts _client_enemy_damaged to ALL clients
+  → All clients see: hit flash, combat text, health bar update
+```
+
+**Death & XP Attribution:**
+```
+Enemy health <= 0
+  → Server calls _handle_enemy_death(network_id, killer_peer_id)
+  → Server generates loot deterministically
+  → Server broadcasts _client_enemy_died with killer_id, loot
+  → Each client's enemy stores killer_peer_id in metadata
+  → Enemy.die() grants XP ONLY to player whose peer_id matches killer
+```
+
+### LOD (Level of Detail) in Multiplayer
+
+LOD is calculated **per-client** based on local player distance:
+- Each player sees enemies at their own appropriate LOD level
+- Host in chunk 0 sees enemies there at full detail
+- Client in chunk 5 sees their nearby enemies at full detail
+- This is correct behavior - LOD should be relative to viewer
+
+```gdscript
+# Enemy._process() on each client:
+var distance = global_position.distance_to(local_player.global_position)
+if distance < LOD_NEAR_DISTANCE:    # 1200px
+    current_lod = 0  # Full detail
+elif distance < LOD_FAR_DISTANCE:   # 2500px
+    current_lod = 1  # Reduced (no shadow, slow anims)
+else:
+    current_lod = 2  # Minimal (paused anims)
+```
+
+### Key Files
+
+- `scripts/networking/NetworkEnemyManager.gd` - Enemy sync hub (autoload)
+- `scripts/networking/NetworkPlayer.gd` - Player sync wrapper
+- `scripts/systems/ChunkBasedPropSystem.gd` - Prop/chunk loading (multiplayer aware)
+- `scripts/systems/ChunkAwareSpawnManager.gd` - Enemy spawning (server-only in MP)
 
 ---
 
