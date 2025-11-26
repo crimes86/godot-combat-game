@@ -107,6 +107,10 @@ var viewport_buffer = 1200.0  # Render terrain this far beyond viewport edges (i
 var terrain_check_timer = 0.0
 const TERRAIN_CHECK_INTERVAL = 1.0  # Check every 1s (was 0.3s - less frequent for better performance)
 
+# Player position sync (multiplayer)
+var player_sync_timer = 0.0
+const PLAYER_SYNC_INTERVAL = 0.05  # 20Hz - 50ms between syncs
+
 func _ready():
 	# Initialize multiplayer
 	_setup_multiplayer()
@@ -151,7 +155,7 @@ func _ready():
 	DebugConfig.log_spawning("✅ GameWorld ready!")
 
 func _process(delta):
-	"""Handle viewport culling for terrain"""
+	"""Handle viewport culling for terrain and player sync"""
 	# Update terrain visibility
 	terrain_check_timer += delta
 	if terrain_check_timer >= TERRAIN_CHECK_INTERVAL:
@@ -164,6 +168,13 @@ func _process(delta):
 		var player = get_tree().get_first_node_in_group("player")
 		if player and is_instance_valid(player):
 			particles.global_position = player.global_position
+
+	# Sync local player position to other clients (multiplayer)
+	if multiplayer.has_multiplayer_peer():
+		player_sync_timer += delta
+		if player_sync_timer >= PLAYER_SYNC_INTERVAL:
+			player_sync_timer = 0.0
+			_sync_local_player_position()
 
 func create_world_boundaries():
 	"""Create invisible walls and fog edges around world boundaries"""
@@ -3964,7 +3975,12 @@ func _on_player_connected(id: int):
 	# Tell the new player about existing players (but NOT themselves!)
 	for existing_id in players:
 		if existing_id != id:
-			rpc_id(id, "spawn_player", existing_id)
+			# Spawn existing player at their current position
+			var existing_player = players[existing_id]
+			if is_instance_valid(existing_player):
+				rpc_id(id, "spawn_player", existing_id, existing_player.global_position)
+			else:
+				rpc_id(id, "spawn_player", existing_id)
 
 func _on_player_disconnected(id: int):
 	"""Handle player disconnection"""
@@ -4048,3 +4064,61 @@ func get_spawn_points() -> Array:
 		points.append(CAMPFIRE_POS + offset)
 
 	return points
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PLAYER POSITION SYNC (Multiplayer)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _sync_local_player_position():
+	"""Send local player position to all other clients"""
+	if not local_player or not is_instance_valid(local_player):
+		return
+
+	var my_id = multiplayer.get_unique_id()
+	var pos = local_player.global_position
+	var anim = _get_player_animation(local_player)
+	var health = int(local_player.current_health)
+	var is_dashing = local_player.is_dashing if local_player.get("is_dashing") != null else false
+
+	# Broadcast to all peers (unreliable for position - speed matters more than reliability)
+	rpc("_receive_player_position", my_id, pos, anim, health, is_dashing)
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func _receive_player_position(player_id: int, pos: Vector2, anim: String, health: int, is_dashing: bool):
+	"""Receive position update for a remote player"""
+	if player_id == multiplayer.get_unique_id():
+		return  # Ignore our own position updates
+
+	if not players.has(player_id):
+		print("🔄 [SYNC] Player %d not in players dict! Keys: %s" % [player_id, players.keys()])
+		return  # Player not spawned yet
+
+	var player = players[player_id]
+	if not is_instance_valid(player):
+		print("🔄 [SYNC] Player %d invalid instance!" % player_id)
+		return
+
+	# Smoothly interpolate to new position (instead of snapping)
+	player.global_position = player.global_position.lerp(pos, 0.3)
+
+	# Update animation for remote player
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	if character_sprite and character_sprite is AnimatedSprite2D:
+		if character_sprite.animation != anim:
+			character_sprite.play(anim)
+
+	# Update health for remote player
+	player.current_health = health
+	if player.health_bar and player.health_bar.has_method("update_health"):
+		player.health_bar.update_health(health, player.max_health)
+
+	# Handle dash visual effects on remote player
+	if is_dashing and player.has_method("spawn_dash_afterimage"):
+		player.spawn_dash_afterimage()
+
+func _get_player_animation(player: Node) -> String:
+	"""Get current animation name from player"""
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	if character_sprite and character_sprite is AnimatedSprite2D:
+		return character_sprite.animation
+	return "idle_south"

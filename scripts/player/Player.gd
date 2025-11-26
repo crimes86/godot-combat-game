@@ -172,19 +172,24 @@ func _ready() -> void:
 	debug_label.visible = false  # Hidden by default
 	debug_canvas.add_child(debug_label)
 	
-	# Setup camera
+	# Setup camera - only for the local player
 	camera = get_node_or_null("Camera2D")
 	if camera:
-		camera.enabled = true
-		camera.zoom = Vector2(target_zoom, target_zoom)
+		# Only enable camera for local player
+		if is_multiplayer_authority():
+			camera.enabled = true
+			camera.zoom = Vector2(target_zoom, target_zoom)
 
-		# Enable audio listener for 2D spatial audio
-		var listener = AudioListener2D.new()
-		listener.name = "AudioListener2D"
-		camera.add_child(listener)
-		listener.make_current()
-		print("📷 Camera zoom system initialized (0.5x - 2.0x)")
-		print("🔊 AudioListener2D enabled for spatial audio")
+			# Enable audio listener for 2D spatial audio
+			var listener = AudioListener2D.new()
+			listener.name = "AudioListener2D"
+			camera.add_child(listener)
+			listener.make_current()
+			print("📷 Camera zoom system initialized (0.5x - 2.0x)")
+			print("🔊 AudioListener2D enabled for spatial audio")
+		else:
+			# Disable camera for remote players
+			camera.enabled = false
 	else:
 		push_error("❌ Camera2D not found on player!")
 	
@@ -414,6 +419,10 @@ func _on_armor_unequipped(slot: String, armor_item: Dictionary) -> void:
 	create_player_sprite()
 
 func _physics_process(delta: float) -> void:
+	# Only process input for the local player
+	if not is_multiplayer_authority():
+		return
+
 	# Update dash cooldown
 	if dash_cooldown_timer > 0:
 		dash_cooldown_timer -= delta
@@ -569,6 +578,10 @@ func update_facing_direction() -> void:
 	#	cone_visualizer.rotation = target_rotation
 
 func _input(event: InputEvent) -> void:
+	# Only process input for the local player
+	if not is_multiplayer_authority():
+		return
+
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
