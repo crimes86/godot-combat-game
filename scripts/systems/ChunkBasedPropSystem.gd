@@ -1395,6 +1395,27 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 
 	lava_pool.add_child(particles)
 
+	# Add damage area for players walking on lava
+	var damage_area = Area2D.new()
+	damage_area.collision_layer = 0  # Don't exist on any layer
+	damage_area.collision_mask = 1  # Detect layer 1 (player)
+
+	# Add damage script (handles damage + 50% movement slow)
+	var damage_script = load("res://scripts/effects/LavaDamage.gd")
+	if damage_script:
+		damage_area.set_script(damage_script)
+
+	# Create collision shape (60% of pool size so edges are safe to walk on)
+	var collision_shape = CollisionShape2D.new()
+	var circle_shape = CircleShape2D.new()
+	# Use 60% of the smaller dimension to create tight circle
+	var damage_radius = (pool_size / 2) * 0.6 * min(elongation_x, elongation_y)
+	circle_shape.radius = damage_radius
+	collision_shape.shape = circle_shape
+
+	damage_area.add_child(collision_shape)
+	lava_pool.add_child(damage_area)
+
 	container.add_child(lava_pool)
 
 func find_empty_spot_for_ritual(chunk_center: Vector2, chunk_data: ChunkData, rng: RandomNumberGenerator, campfire_pos: Vector2) -> Vector2:

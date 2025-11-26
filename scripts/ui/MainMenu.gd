@@ -1,5 +1,6 @@
 extends Control
-# Main menu for multiplayer demo
+## Main menu for multiplayer demo
+## Stone Gray UI theme matching CharacterUI
 
 @onready var name_input = $MenuPanel/VBoxContainer/NameContainer/NameInput
 @onready var host_button = $MenuPanel/VBoxContainer/HostButton
@@ -7,6 +8,7 @@ extends Control
 @onready var ip_input = $MenuPanel/VBoxContainer/JoinContainer/IPInput
 @onready var join_container = $MenuPanel/VBoxContainer/JoinContainer
 @onready var status_label = $MenuPanel/VBoxContainer/StatusLabel
+@onready var theme_music = $ThemeMusic
 
 func _ready():
 	# Wait for nodes to be ready
@@ -81,6 +83,13 @@ func _on_server_created():
 	_load_game_world()
 
 func _load_game_world():
+	# Fade out music before transitioning
+	if theme_music and theme_music.playing:
+		var fade_tween = create_tween()
+		fade_tween.tween_property(theme_music, "volume_db", -40.0, 0.8)
+		await fade_tween.finished
+		theme_music.stop()
+
 	# Small delay to ensure network is ready
-	await get_tree().create_timer(0.5).timeout
+	await get_tree().create_timer(0.3).timeout
 	get_tree().change_scene_to_file("res://main.tscn")

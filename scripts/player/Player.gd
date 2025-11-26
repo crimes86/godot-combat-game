@@ -77,6 +77,9 @@ var dash_cooldown_timer: float = 0.0
 var dash_direction: Vector2 = Vector2.ZERO
 var dash_invincible: bool = true  # I-frames during dash
 
+# Movement modifiers (for debuffs like lava slow)
+var movement_modifiers: Dictionary = {}  # source_name -> multiplier (0.0-1.0)
+
 # Multiplayer helper methods
 func get_current_animation() -> String:
 	var character_sprite = get_node_or_null("CharacterSprite")
@@ -454,10 +457,13 @@ func _physics_process(delta: float) -> void:
 	# Get input direction (used for movement and animation)
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 
+	# Calculate effective speed with modifiers
+	var effective_speed = speed * get_movement_modifier()
+
 	# Handle dash movement
 	if is_dashing:
 		dash_timer -= delta
-		velocity = dash_direction * speed * dash_speed_multiplier
+		velocity = dash_direction * speed * dash_speed_multiplier  # Dash ignores slow effects
 
 		# Update dash visual effects
 		update_dash_visuals(delta)
@@ -465,7 +471,7 @@ func _physics_process(delta: float) -> void:
 		if dash_timer <= 0:
 			end_dash()
 	else:
-		velocity = input_direction * speed
+		velocity = input_direction * effective_speed
 
 	move_and_slide()
 
@@ -2208,3 +2214,35 @@ func _copy_sprite_layer(source: AnimatedSprite2D, container: Node2D) -> void:
 	layer_sprite.z_index = source.z_index
 	layer_sprite.centered = source.centered
 	container.add_child(layer_sprite)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MOVEMENT MODIFIER SYSTEM (for debuffs like lava slow)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func apply_movement_modifier(source: String, multiplier: float) -> void:
+	"""Apply a movement speed modifier from a named source.
+	multiplier: 0.5 = 50% speed reduction, 0.0 = completely stopped"""
+	movement_modifiers[source] = clamp(multiplier, 0.0, 1.0)
+	print("🦶 Movement modifier applied: %s = %.0f%% speed" % [source, multiplier * 100])
+
+func remove_movement_modifier(source: String) -> void:
+	"""Remove a movement modifier by source name"""
+	if movement_modifiers.has(source):
+		movement_modifiers.erase(source)
+		print("🦶 Movement modifier removed: %s" % source)
+
+func get_movement_modifier() -> float:
+	"""Get the combined movement modifier (multiplies all active modifiers).
+	Returns 1.0 if no modifiers active."""
+	if movement_modifiers.is_empty():
+		return 1.0
+
+	var combined = 1.0
+	for modifier in movement_modifiers.values():
+		combined *= modifier
+	return combined
+
+func clear_all_movement_modifiers() -> void:
+	"""Clear all active movement modifiers (e.g., on death/respawn)"""
+	movement_modifiers.clear()
+	print("🦶 All movement modifiers cleared")
