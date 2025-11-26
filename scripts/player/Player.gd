@@ -103,11 +103,18 @@ func _ready() -> void:
 	print("════════════════════════════════════════")
 	print("")
 	
-	selected_gender = Gender.MALE
-	
+	# Only set default gender if not already set by apply_appearance_data (for remote players)
+	if selected_gender != Gender.FEMALE:
+		selected_gender = Gender.MALE
+
 	# Create player sprite immediately
 	create_player_sprite()
 	print("✨ Player sprite created!")
+
+	# For local player, broadcast appearance to other players after a short delay
+	# (to ensure networking is ready)
+	if is_multiplayer_authority():
+		call_deferred("_broadcast_initial_appearance")
 	
 	# THEN: Initialize everything else
 	
@@ -137,8 +144,9 @@ func _ready() -> void:
 	# Add to player group
 	add_to_group(Constants.GROUP_PLAYER)
 	
-	# Create cone visualizer
-	create_cone_visualizer()
+	# Create cone visualizer - ONLY for local player (others shouldn't see our attack range)
+	if is_multiplayer_authority():
+		create_cone_visualizer()
 	# create_range_indicator()  # Commented out - don't show range circle
 	
 	# Setup screen shake
@@ -150,27 +158,28 @@ func _ready() -> void:
 	attack_feedback = AttackFeedbackSystem.new()
 	add_child(attack_feedback)
 	
-	# Setup debug shapes container
-	debug_shapes = Node2D.new()
-	debug_shapes.name = "DebugShapes"
-	debug_shapes.z_index = 1000
-	add_child(debug_shapes)
+	# Setup debug shapes container - only for local player
+	if is_multiplayer_authority():
+		debug_shapes = Node2D.new()
+		debug_shapes.name = "DebugShapes"
+		debug_shapes.z_index = 1000
+		add_child(debug_shapes)
 
-	# Setup debug label (screen-space coordinates display)
-	var debug_canvas = CanvasLayer.new()
-	debug_canvas.name = "DebugCanvas"
-	debug_canvas.layer = 100  # Draw on top of everything
-	add_child(debug_canvas)
+		# Setup debug label (screen-space coordinates display)
+		var debug_canvas = CanvasLayer.new()
+		debug_canvas.name = "DebugCanvas"
+		debug_canvas.layer = 100  # Draw on top of everything
+		add_child(debug_canvas)
 
-	debug_label = Label.new()
-	debug_label.name = "DebugLabel"
-	debug_label.position = Vector2(10, 10)  # Top-left corner
-	debug_label.add_theme_font_size_override("font_size", 16)
-	debug_label.add_theme_color_override("font_color", Color.WHITE)
-	debug_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	debug_label.add_theme_constant_override("outline_size", 2)
-	debug_label.visible = false  # Hidden by default
-	debug_canvas.add_child(debug_label)
+		debug_label = Label.new()
+		debug_label.name = "DebugLabel"
+		debug_label.position = Vector2(10, 10)  # Top-left corner
+		debug_label.add_theme_font_size_override("font_size", 16)
+		debug_label.add_theme_color_override("font_color", Color.WHITE)
+		debug_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		debug_label.add_theme_constant_override("outline_size", 2)
+		debug_label.visible = false  # Hidden by default
+		debug_canvas.add_child(debug_label)
 	
 	# Setup camera - only for the local player
 	camera = get_node_or_null("Camera2D")
@@ -193,18 +202,21 @@ func _ready() -> void:
 	else:
 		push_error("❌ Camera2D not found on player!")
 	
-	# Connect to CharacterStats signals
-	CharacterStats.level_up.connect(_on_character_level_up)
-	CharacterStats.weapon_equipped.connect(_on_weapon_equipped)
-	CharacterStats.weapon_unequipped.connect(_on_weapon_unequipped)
-	CharacterStats.armor_equipped.connect(_on_armor_equipped)
-	CharacterStats.armor_unequipped.connect(_on_armor_unequipped)
+	# Only connect to CharacterStats and create UI for local player
+	# Remote players don't need these - they get their visuals synced from the network
+	if is_multiplayer_authority():
+		# Connect to CharacterStats signals
+		CharacterStats.level_up.connect(_on_character_level_up)
+		CharacterStats.weapon_equipped.connect(_on_weapon_equipped)
+		CharacterStats.weapon_unequipped.connect(_on_weapon_unequipped)
+		CharacterStats.armor_equipped.connect(_on_armor_equipped)
+		CharacterStats.armor_unequipped.connect(_on_armor_unequipped)
 
-	# Create character UI after this frame
-	call_deferred("create_character_ui")
+		# Create character UI after this frame
+		call_deferred("create_character_ui")
 
-	# Create campfire direction indicator
-	call_deferred("create_campfire_indicator")
+		# Create campfire direction indicator
+		call_deferred("create_campfire_indicator")
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent crash on exit
@@ -391,6 +403,9 @@ func _on_weapon_equipped(weapon) -> void:  # weapon is Weapon type
 	print("🔄 Refreshing player sprite with new weapon...")
 	create_player_sprite()
 
+	# Sync to network
+	_sync_appearance_to_network()
+
 func _on_weapon_unequipped() -> void:
 	"""Called when weapon is unequipped"""
 	print("👊 Weapon unequipped - back to unarmed")
@@ -399,6 +414,9 @@ func _on_weapon_unequipped() -> void:
 	# Refresh player sprite to remove weapon
 	print("🔄 Refreshing player sprite to unarmed...")
 	create_player_sprite()
+
+	# Sync to network
+	_sync_appearance_to_network()
 
 func _on_armor_equipped(slot: String, armor_item: Dictionary) -> void:
 	"""Called when armor is equipped"""
@@ -409,6 +427,9 @@ func _on_armor_equipped(slot: String, armor_item: Dictionary) -> void:
 	print("🔄 Refreshing player sprite with new armor...")
 	create_player_sprite()
 
+	# Sync to network
+	_sync_appearance_to_network()
+
 func _on_armor_unequipped(slot: String, armor_item: Dictionary) -> void:
 	"""Called when armor is unequipped"""
 	print("👕 Armor unequipped from slot %s: %s" % [slot, armor_item["name"]])
@@ -417,6 +438,9 @@ func _on_armor_unequipped(slot: String, armor_item: Dictionary) -> void:
 	# Refresh player sprite to remove armor
 	print("🔄 Refreshing player sprite without armor...")
 	create_player_sprite()
+
+	# Sync to network
+	_sync_appearance_to_network()
 
 func _physics_process(delta: float) -> void:
 	# Only process input for the local player
@@ -627,29 +651,35 @@ func _input(event: InputEvent) -> void:
 					health_bar.update_health(current_health, max_health)
 				print("💚 DEBUG: Healed to full health (%d/%d)" % [current_health, max_health])
 			KEY_G:
-				# Switch gender
+				# Switch gender - only for local player
+				if not is_multiplayer_authority():
+					return
+
 				print("🔄 Switching character gender...")
-				
+
 				# Flag to prevent animation updates during switch
 				var old_process_mode = process_mode
 				set_physics_process(false)  # Stop movement updates during switch
-				
+
 				if selected_gender == Gender.MALE:
 					selected_gender = Gender.FEMALE
 					print("🎭 Target: FEMALE character")
 				else:
 					selected_gender = Gender.MALE
 					print("🎭 Target: MALE character")
-				
+
 				# Recreate sprite and wait for completion
 				await create_player_sprite()
-				
+
 				# Wait one more frame to ensure sprite is ready
 				await get_tree().process_frame
-				
+
 				# Re-enable physics
 				set_physics_process(true)
 				print("✅ Character sprite switched!")
+
+				# Sync gender change to other players
+				_sync_appearance_to_network()
 			
 			KEY_F3:
 				debug_mode = !debug_mode
@@ -1323,8 +1353,17 @@ func create_player_sprite() -> void:
 	var weapon_walk_tex = null
 	var weapon_type = "unarmed"  # Default to unarmed when no weapon equipped
 
-	if CharacterStats.equipped_weapon:
-		weapon_type = CharacterStats.equipped_weapon.weapon_type
+	# For local player, use CharacterStats. For remote players, use stored remote data.
+	var is_local = is_multiplayer_authority()
+	var effective_weapon_type = ""
+
+	if is_local and CharacterStats.equipped_weapon:
+		effective_weapon_type = CharacterStats.equipped_weapon.weapon_type
+	elif not is_local and remote_weapon_type != "":
+		effective_weapon_type = remote_weapon_type
+
+	if effective_weapon_type != "":
+		weapon_type = effective_weapon_type
 		var weapon_path = "res://assets/weapons/" + weapon_type + "/"
 
 		# Try to load weapon sprites
@@ -1333,7 +1372,7 @@ func create_player_sprite() -> void:
 		if ResourceLoader.exists(weapon_path + "walk.png"):
 			weapon_walk_tex = load(weapon_path + "walk.png")
 
-		print("🗡️ Loading weapon sprites for: %s (type: %s)" % [CharacterStats.equipped_weapon.weapon_name, weapon_type])
+		print("🗡️ Loading weapon sprites for type: %s (local=%s)" % [weapon_type, is_local])
 		print("   Slash: %s" % ("✅" if weapon_slash_tex else "❌"))
 		print("   Walk: %s" % ("✅" if weapon_walk_tex else "❌"))
 	else:
@@ -1355,113 +1394,139 @@ func create_player_sprite() -> void:
 	var head_slash_tex = null
 
 	# Check for equipped boots (feet)
-	if CharacterStats.equipped_armor.has("feet") and CharacterStats.equipped_armor["feet"] != null:
+	var feet_sprite_name = ""
+	if is_local and CharacterStats.equipped_armor.has("feet") and CharacterStats.equipped_armor["feet"] != null:
 		var boots_armor = CharacterStats.equipped_armor["feet"]
-		var sprite_name = boots_armor.get("sprite_name", "")
-		if sprite_name != "":
-			# Try gender-specific path first, then fall back to gender-neutral
-			var boots_path = "res://assets/characters/boots_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/boots/"
-			# If gender-specific doesn't exist, try gender-neutral
-			if not ResourceLoader.exists(boots_path + sprite_name + "_walk.png"):
-				boots_path = "res://assets/characters/boots/"
+		feet_sprite_name = boots_armor.get("sprite_name", "")
+	elif not is_local and remote_feet_sprite != "":
+		feet_sprite_name = remote_feet_sprite
 
-			if ResourceLoader.exists(boots_path + sprite_name + "_walk.png"):
-				boots_walk_tex = load(boots_path + sprite_name + "_walk.png")
-			if ResourceLoader.exists(boots_path + sprite_name + "_slash.png"):
-				boots_slash_tex = load(boots_path + sprite_name + "_slash.png")
-			print("🥾 Loading boots: %s (sprite: %s, path: %s)" % [boots_armor["name"], sprite_name, boots_path])
-			print("   Walk: %s" % ("✅" if boots_walk_tex else "❌"))
-			print("   Slash: %s" % ("✅" if boots_slash_tex else "❌"))
+	if feet_sprite_name != "":
+		# Try gender-specific path first, then fall back to gender-neutral
+		var boots_path = "res://assets/characters/boots_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/boots/"
+		# If gender-specific doesn't exist, try gender-neutral
+		if not ResourceLoader.exists(boots_path + feet_sprite_name + "_walk.png"):
+			boots_path = "res://assets/characters/boots/"
+
+		if ResourceLoader.exists(boots_path + feet_sprite_name + "_walk.png"):
+			boots_walk_tex = load(boots_path + feet_sprite_name + "_walk.png")
+		if ResourceLoader.exists(boots_path + feet_sprite_name + "_slash.png"):
+			boots_slash_tex = load(boots_path + feet_sprite_name + "_slash.png")
+		print("🥾 Loading boots: sprite=%s, path=%s (local=%s)" % [feet_sprite_name, boots_path, is_local])
+		print("   Walk: %s" % ("✅" if boots_walk_tex else "❌"))
+		print("   Slash: %s" % ("✅" if boots_slash_tex else "❌"))
 
 	# Check for equipped leg armor (pants)
-	if CharacterStats.equipped_armor.has("legs") and CharacterStats.equipped_armor["legs"] != null:
+	var legs_sprite_name = ""
+	if is_local and CharacterStats.equipped_armor.has("legs") and CharacterStats.equipped_armor["legs"] != null:
 		var leg_armor = CharacterStats.equipped_armor["legs"]
-		var sprite_name = leg_armor.get("sprite_name", "green_pants")
+		legs_sprite_name = leg_armor.get("sprite_name", "green_pants")
+	elif not is_local and remote_legs_sprite != "":
+		legs_sprite_name = remote_legs_sprite
+
+	if legs_sprite_name != "":
 		# Try gender-specific path first, then fall back to gender-neutral
 		var pants_path = "res://assets/characters/pants_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/pants/"
-		if not ResourceLoader.exists(pants_path + sprite_name + "_walk.png"):
+		if not ResourceLoader.exists(pants_path + legs_sprite_name + "_walk.png"):
 			pants_path = "res://assets/characters/pants/"
 
-		if ResourceLoader.exists(pants_path + sprite_name + "_walk.png"):
-			pants_walk_tex = load(pants_path + sprite_name + "_walk.png")
-		if ResourceLoader.exists(pants_path + sprite_name + "_slash.png"):
-			pants_slash_tex = load(pants_path + sprite_name + "_slash.png")
-		print("👖 Loading leg armor: %s (sprite: %s, path: %s)" % [leg_armor["name"], sprite_name, pants_path])
+		if ResourceLoader.exists(pants_path + legs_sprite_name + "_walk.png"):
+			pants_walk_tex = load(pants_path + legs_sprite_name + "_walk.png")
+		if ResourceLoader.exists(pants_path + legs_sprite_name + "_slash.png"):
+			pants_slash_tex = load(pants_path + legs_sprite_name + "_slash.png")
+		print("👖 Loading leg armor: sprite=%s, path=%s (local=%s)" % [legs_sprite_name, pants_path, is_local])
 		print("   Walk: %s" % ("✅" if pants_walk_tex else "❌"))
 		print("   Slash: %s" % ("✅" if pants_slash_tex else "❌"))
 
 	# Check for equipped chest armor (shirt)
-	if CharacterStats.equipped_armor.has("chest") and CharacterStats.equipped_armor["chest"] != null:
+	var chest_sprite_name = ""
+	if is_local and CharacterStats.equipped_armor.has("chest") and CharacterStats.equipped_armor["chest"] != null:
 		var chest_armor = CharacterStats.equipped_armor["chest"]
-		var sprite_name = chest_armor.get("sprite_name", "white_shirt")
+		chest_sprite_name = chest_armor.get("sprite_name", "white_shirt")
+	elif not is_local and remote_chest_sprite != "":
+		chest_sprite_name = remote_chest_sprite
+
+	if chest_sprite_name != "":
 		# Try gender-specific path first, then fall back to gender-neutral
 		var shirt_path = "res://assets/characters/shirt_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/shirt/"
-		if not ResourceLoader.exists(shirt_path + sprite_name + "_walk.png"):
+		if not ResourceLoader.exists(shirt_path + chest_sprite_name + "_walk.png"):
 			shirt_path = "res://assets/characters/shirt/"
 
 		# Try to load shirt sprites based on sprite_name
-		if ResourceLoader.exists(shirt_path + sprite_name + "_walk.png"):
-			shirt_walk_tex = load(shirt_path + sprite_name + "_walk.png")
-		if ResourceLoader.exists(shirt_path + sprite_name + "_slash.png"):
-			shirt_slash_tex = load(shirt_path + sprite_name + "_slash.png")
+		if ResourceLoader.exists(shirt_path + chest_sprite_name + "_walk.png"):
+			shirt_walk_tex = load(shirt_path + chest_sprite_name + "_walk.png")
+		if ResourceLoader.exists(shirt_path + chest_sprite_name + "_slash.png"):
+			shirt_slash_tex = load(shirt_path + chest_sprite_name + "_slash.png")
 
-		print("👕 Loading chest armor: %s (sprite: %s, path: %s)" % [chest_armor["name"], sprite_name, shirt_path])
+		print("👕 Loading chest armor: sprite=%s, path=%s (local=%s)" % [chest_sprite_name, shirt_path, is_local])
 		print("   Walk: %s" % ("✅" if shirt_walk_tex else "❌"))
 		print("   Slash: %s" % ("✅" if shirt_slash_tex else "❌"))
 
 	# Check for equipped arm armor
-	if CharacterStats.equipped_armor.has("arms") and CharacterStats.equipped_armor["arms"] != null:
+	var arms_sprite_name = ""
+	if is_local and CharacterStats.equipped_armor.has("arms") and CharacterStats.equipped_armor["arms"] != null:
 		var arm_armor = CharacterStats.equipped_armor["arms"]
-		var sprite_name = arm_armor.get("sprite_name", "")
-		if sprite_name != "":
-			# Try gender-specific path first, then fall back to gender-neutral
-			var arms_path = "res://assets/characters/arms_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/arms/"
-			if not ResourceLoader.exists(arms_path + sprite_name + "_walk.png"):
-				arms_path = "res://assets/characters/arms/"
+		arms_sprite_name = arm_armor.get("sprite_name", "")
+	elif not is_local and remote_arms_sprite != "":
+		arms_sprite_name = remote_arms_sprite
 
-			if ResourceLoader.exists(arms_path + sprite_name + "_walk.png"):
-				arms_walk_tex = load(arms_path + sprite_name + "_walk.png")
-			if ResourceLoader.exists(arms_path + sprite_name + "_slash.png"):
-				arms_slash_tex = load(arms_path + sprite_name + "_slash.png")
-			print("💪 Loading arm armor: %s (sprite: %s, path: %s)" % [arm_armor["name"], sprite_name, arms_path])
-			print("   Walk: %s" % ("✅" if arms_walk_tex else "❌"))
-			print("   Slash: %s" % ("✅" if arms_slash_tex else "❌"))
+	if arms_sprite_name != "":
+		# Try gender-specific path first, then fall back to gender-neutral
+		var arms_path = "res://assets/characters/arms_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/arms/"
+		if not ResourceLoader.exists(arms_path + arms_sprite_name + "_walk.png"):
+			arms_path = "res://assets/characters/arms/"
+
+		if ResourceLoader.exists(arms_path + arms_sprite_name + "_walk.png"):
+			arms_walk_tex = load(arms_path + arms_sprite_name + "_walk.png")
+		if ResourceLoader.exists(arms_path + arms_sprite_name + "_slash.png"):
+			arms_slash_tex = load(arms_path + arms_sprite_name + "_slash.png")
+		print("💪 Loading arm armor: sprite=%s, path=%s (local=%s)" % [arms_sprite_name, arms_path, is_local])
+		print("   Walk: %s" % ("✅" if arms_walk_tex else "❌"))
+		print("   Slash: %s" % ("✅" if arms_slash_tex else "❌"))
 
 	# Check for equipped hand armor (gloves)
-	if CharacterStats.equipped_armor.has("hands") and CharacterStats.equipped_armor["hands"] != null:
+	var hands_sprite_name = ""
+	if is_local and CharacterStats.equipped_armor.has("hands") and CharacterStats.equipped_armor["hands"] != null:
 		var hand_armor = CharacterStats.equipped_armor["hands"]
-		var sprite_name = hand_armor.get("sprite_name", "")
-		if sprite_name != "":
-			# Try gender-specific path first, then fall back to gender-neutral
-			var hands_path = "res://assets/characters/hands_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/hands/"
-			if not ResourceLoader.exists(hands_path + sprite_name + "_walk.png"):
-				hands_path = "res://assets/characters/hands/"
+		hands_sprite_name = hand_armor.get("sprite_name", "")
+	elif not is_local and remote_hands_sprite != "":
+		hands_sprite_name = remote_hands_sprite
 
-			if ResourceLoader.exists(hands_path + sprite_name + "_walk.png"):
-				hands_walk_tex = load(hands_path + sprite_name + "_walk.png")
-			if ResourceLoader.exists(hands_path + sprite_name + "_slash.png"):
-				hands_slash_tex = load(hands_path + sprite_name + "_slash.png")
-			print("🧤 Loading hand armor: %s (sprite: %s, path: %s)" % [hand_armor["name"], sprite_name, hands_path])
-			print("   Walk: %s" % ("✅" if hands_walk_tex else "❌"))
-			print("   Slash: %s" % ("✅" if hands_slash_tex else "❌"))
+	if hands_sprite_name != "":
+		# Try gender-specific path first, then fall back to gender-neutral
+		var hands_path = "res://assets/characters/hands_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/hands/"
+		if not ResourceLoader.exists(hands_path + hands_sprite_name + "_walk.png"):
+			hands_path = "res://assets/characters/hands/"
+
+		if ResourceLoader.exists(hands_path + hands_sprite_name + "_walk.png"):
+			hands_walk_tex = load(hands_path + hands_sprite_name + "_walk.png")
+		if ResourceLoader.exists(hands_path + hands_sprite_name + "_slash.png"):
+			hands_slash_tex = load(hands_path + hands_sprite_name + "_slash.png")
+		print("🧤 Loading hand armor: sprite=%s, path=%s (local=%s)" % [hands_sprite_name, hands_path, is_local])
+		print("   Walk: %s" % ("✅" if hands_walk_tex else "❌"))
+		print("   Slash: %s" % ("✅" if hands_slash_tex else "❌"))
 
 	# Check for equipped head armor
-	if CharacterStats.equipped_armor.has("head") and CharacterStats.equipped_armor["head"] != null:
+	var head_sprite_name = ""
+	if is_local and CharacterStats.equipped_armor.has("head") and CharacterStats.equipped_armor["head"] != null:
 		var head_armor = CharacterStats.equipped_armor["head"]
-		var sprite_name = head_armor.get("sprite_name", "")
-		if sprite_name != "":
-			# Try gender-specific path first, then fall back to gender-neutral
-			var head_path = "res://assets/characters/head_female_armor/" if selected_gender == Gender.FEMALE else "res://assets/characters/head/"
-			if not ResourceLoader.exists(head_path + sprite_name + "_walk.png"):
-				head_path = "res://assets/characters/head/"
+		head_sprite_name = head_armor.get("sprite_name", "")
+	elif not is_local and remote_head_sprite != "":
+		head_sprite_name = remote_head_sprite
 
-			if ResourceLoader.exists(head_path + sprite_name + "_walk.png"):
-				head_walk_tex = load(head_path + sprite_name + "_walk.png")
-			if ResourceLoader.exists(head_path + sprite_name + "_slash.png"):
-				head_slash_tex = load(head_path + sprite_name + "_slash.png")
-			print("🪖 Loading head armor: %s (sprite: %s, path: %s)" % [head_armor["name"], sprite_name, head_path])
-			print("   Walk: %s" % ("✅" if head_walk_tex else "❌"))
-			print("   Slash: %s" % ("✅" if head_slash_tex else "❌"))
+	if head_sprite_name != "":
+		# Try gender-specific path first, then fall back to gender-neutral
+		var head_path = "res://assets/characters/head_female_armor/" if selected_gender == Gender.FEMALE else "res://assets/characters/head/"
+		if not ResourceLoader.exists(head_path + head_sprite_name + "_walk.png"):
+			head_path = "res://assets/characters/head/"
+
+		if ResourceLoader.exists(head_path + head_sprite_name + "_walk.png"):
+			head_walk_tex = load(head_path + head_sprite_name + "_walk.png")
+		if ResourceLoader.exists(head_path + head_sprite_name + "_slash.png"):
+			head_slash_tex = load(head_path + head_sprite_name + "_slash.png")
+		print("🪖 Loading head armor: sprite=%s, path=%s (local=%s)" % [head_sprite_name, head_path, is_local])
+		print("   Walk: %s" % ("✅" if head_walk_tex else "❌"))
+		print("   Slash: %s" % ("✅" if head_slash_tex else "❌"))
 
 	# Load hair textures (for both genders)
 	var hair_walk_tex = null
@@ -1497,6 +1562,129 @@ func create_player_sprite() -> void:
 			print("    - ", child.name, " (", child.get_class(), ") visible=", child.visible, " z_index=", child.z_index)
 
 	print("  Simple LPC character created")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MULTIPLAYER APPEARANCE SYNC
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Remote player equipment storage (since they don't use CharacterStats singleton)
+var remote_weapon_type: String = ""
+var remote_feet_sprite: String = ""
+var remote_legs_sprite: String = ""
+var remote_chest_sprite: String = ""
+var remote_arms_sprite: String = ""
+var remote_hands_sprite: String = ""
+var remote_head_sprite: String = ""
+
+func _sync_appearance_to_network():
+	"""Send current appearance to all other players"""
+	if not multiplayer.has_multiplayer_peer():
+		return
+
+	var appearance = get_appearance_data()
+	print("🌐 [APPEARANCE] Syncing to network: %s" % str(appearance))
+	rpc("_receive_appearance_update", appearance["gender"], appearance["weapon_type"],
+		appearance["feet_sprite"], appearance["legs_sprite"], appearance["chest_sprite"],
+		appearance["arms_sprite"], appearance["hands_sprite"], appearance["head_sprite"])
+
+func _broadcast_initial_appearance():
+	"""Broadcast appearance after initial spawn (called deferred from _ready)"""
+	# Wait a couple frames to ensure multiplayer is fully set up
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	if multiplayer.has_multiplayer_peer():
+		print("🌐 [APPEARANCE] Broadcasting initial appearance for local player")
+		_sync_appearance_to_network()
+
+@rpc("any_peer", "call_remote", "reliable")
+func _receive_appearance_update(gender_int: int, weapon_type: String, feet_sprite: String, legs_sprite: String, chest_sprite: String, arms_sprite: String, hands_sprite: String, head_sprite: String):
+	"""Receive appearance update from another player"""
+	print("🌐 [APPEARANCE] Received for player %s: gender=%d, weapon=%s, feet=%s, legs=%s, chest=%s, arms=%s, hands=%s, head=%s" % [name, gender_int, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite])
+
+	# Update appearance data
+	selected_gender = Gender.MALE if gender_int == 0 else Gender.FEMALE
+	remote_weapon_type = weapon_type
+	remote_feet_sprite = feet_sprite
+	remote_legs_sprite = legs_sprite
+	remote_chest_sprite = chest_sprite
+	remote_arms_sprite = arms_sprite
+	remote_hands_sprite = hands_sprite
+	remote_head_sprite = head_sprite
+
+	# Recreate sprite with new appearance
+	set_physics_process(false)
+	await create_player_sprite()
+	await get_tree().process_frame
+	set_physics_process(true)
+	print("🌐 [APPEARANCE] Updated remote player %s appearance" % name)
+
+func get_appearance_data() -> Dictionary:
+	"""Get current appearance data for network sync"""
+	var weapon_type = ""
+	var feet_sprite = ""
+	var legs_sprite = ""
+	var chest_sprite = ""
+	var arms_sprite = ""
+	var hands_sprite = ""
+	var head_sprite = ""
+
+	# Get from CharacterStats if this is the local player
+	if is_multiplayer_authority():
+		if CharacterStats.equipped_weapon:
+			weapon_type = CharacterStats.equipped_weapon.weapon_type
+		if CharacterStats.equipped_armor.get("feet"):
+			feet_sprite = CharacterStats.equipped_armor["feet"].get("sprite_name", "")
+		if CharacterStats.equipped_armor.get("legs"):
+			legs_sprite = CharacterStats.equipped_armor["legs"].get("sprite_name", "")
+		if CharacterStats.equipped_armor.get("chest"):
+			chest_sprite = CharacterStats.equipped_armor["chest"].get("sprite_name", "")
+		if CharacterStats.equipped_armor.get("arms"):
+			arms_sprite = CharacterStats.equipped_armor["arms"].get("sprite_name", "")
+		if CharacterStats.equipped_armor.get("hands"):
+			hands_sprite = CharacterStats.equipped_armor["hands"].get("sprite_name", "")
+		if CharacterStats.equipped_armor.get("head"):
+			head_sprite = CharacterStats.equipped_armor["head"].get("sprite_name", "")
+	else:
+		# For remote players, use stored values
+		weapon_type = remote_weapon_type
+		feet_sprite = remote_feet_sprite
+		legs_sprite = remote_legs_sprite
+		chest_sprite = remote_chest_sprite
+		arms_sprite = remote_arms_sprite
+		hands_sprite = remote_hands_sprite
+		head_sprite = remote_head_sprite
+
+	return {
+		"gender": 0 if selected_gender == Gender.MALE else 1,
+		"weapon_type": weapon_type,
+		"feet_sprite": feet_sprite,
+		"legs_sprite": legs_sprite,
+		"chest_sprite": chest_sprite,
+		"arms_sprite": arms_sprite,
+		"hands_sprite": hands_sprite,
+		"head_sprite": head_sprite
+	}
+
+func apply_appearance_data(data: Dictionary):
+	"""Apply appearance data received from network"""
+	if data.has("gender"):
+		selected_gender = Gender.MALE if data["gender"] == 0 else Gender.FEMALE
+	if data.has("weapon_type"):
+		remote_weapon_type = data["weapon_type"]
+	if data.has("feet_sprite"):
+		remote_feet_sprite = data["feet_sprite"]
+	if data.has("legs_sprite"):
+		remote_legs_sprite = data["legs_sprite"]
+	if data.has("chest_sprite"):
+		remote_chest_sprite = data["chest_sprite"]
+	if data.has("arms_sprite"):
+		remote_arms_sprite = data["arms_sprite"]
+	if data.has("hands_sprite"):
+		remote_hands_sprite = data["hands_sprite"]
+	if data.has("head_sprite"):
+		remote_head_sprite = data["head_sprite"]
+	# Note: Caller should call create_player_sprite() after this
 
 # Old animation functions removed - now using SimpleLPCSprite system
 

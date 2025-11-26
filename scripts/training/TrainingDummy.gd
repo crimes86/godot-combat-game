@@ -152,7 +152,7 @@ func _physics_process(delta: float) -> void:
 			is_spinning = false
 			spin_timer = 0.0
 
-func take_damage(amount: float, is_crit: bool = false) -> void:
+func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = false) -> void:
 	"""Handle being hit - spin and show damage"""
 
 	# Validate damage
@@ -177,8 +177,8 @@ func take_damage(amount: float, is_crit: bool = false) -> void:
 	# Play skeleton sounds for testing (same as Enemy)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		# Determine if this is a weakpoint hit
-		var is_weakpoint = is_crit and in_crit_window
+		# Determine if this is a weakpoint hit (use passed parameter or check crit window)
+		var is_weakpoint = is_weakpoint_hit or (is_crit and in_crit_window)
 
 		if not is_weakpoint:
 			# Get player's weapon type for weapon-specific sounds

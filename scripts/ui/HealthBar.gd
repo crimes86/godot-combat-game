@@ -31,10 +31,13 @@ const BAR_HEIGHT = 6.0
 func _ready() -> void:
 	# Create the pill capsule health bar
 	create_pill_capsule_bar()
-	
+
 	# Make healthbar use world space positioning
 	top_level = true
-	
+
+	# Ensure health bar renders above player sprites
+	z_index = 100
+
 	# Hide initially to prevent flashing at wrong position
 	visible = false
 	

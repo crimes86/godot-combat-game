@@ -3945,7 +3945,7 @@ func _setup_multiplayer():
 func _spawn_initial_players():
 	"""Spawn all connected players"""
 	var my_id = multiplayer.get_unique_id()
-	print("🔍 [PLAYER DEBUG] _spawn_initial_players() called, my_id=%d" % my_id)
+	print("🔍 [PLAYER DEBUG] _spawn_initial_players() called, my_id=%d, is_server=%s" % [my_id, multiplayer.is_server()])
 	print("   Current players dict: %s" % str(players.keys()))
 
 	# Check if not already spawned
@@ -3963,6 +3963,48 @@ func _spawn_initial_players():
 			if player_id != my_id and not players.has(player_id):
 				print("🔍 [PLAYER DEBUG] Server spawning remote player %d" % player_id)
 				spawn_player(player_id)
+	else:
+		# Client: Request existing players from server
+		print("🔍 [PLAYER DEBUG] Client - requesting existing players from server")
+		rpc_id(1, "_request_existing_players", my_id)
+
+@rpc("any_peer", "reliable")
+func _request_existing_players(requester_id: int):
+	"""Client requests list of existing players from server"""
+	if not multiplayer.is_server():
+		return
+
+	print("🔍 [PLAYER DEBUG] Server received request for existing players from %d" % requester_id)
+
+	# Send all existing players to the requesting client
+	for existing_id in players:
+		if existing_id != requester_id:
+			var existing_player = players[existing_id]
+			if is_instance_valid(existing_player):
+				# Get full appearance data from player
+				var gender = 0
+				var weapon_type = ""
+				var feet_sprite = ""
+				var legs_sprite = ""
+				var chest_sprite = ""
+				var arms_sprite = ""
+				var hands_sprite = ""
+				var head_sprite = ""
+				if existing_player.has_method("get_appearance_data"):
+					var appearance = existing_player.get_appearance_data()
+					gender = appearance.get("gender", 0)
+					weapon_type = appearance.get("weapon_type", "")
+					feet_sprite = appearance.get("feet_sprite", "")
+					legs_sprite = appearance.get("legs_sprite", "")
+					chest_sprite = appearance.get("chest_sprite", "")
+					arms_sprite = appearance.get("arms_sprite", "")
+					hands_sprite = appearance.get("hands_sprite", "")
+					head_sprite = appearance.get("head_sprite", "")
+				print("🔍 [PLAYER DEBUG] Sending player %d (pos: %s, gender: %d, weapon: %s) to client %d" % [existing_id, existing_player.global_position, gender, weapon_type, requester_id])
+				rpc_id(requester_id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite)
+			else:
+				print("🔍 [PLAYER DEBUG] Sending player %d (default pos) to client %d" % [existing_id, requester_id])
+				rpc_id(requester_id, "spawn_player", existing_id)
 
 func _on_player_connected(id: int):
 	"""Handle new player connection"""
@@ -3973,12 +4015,32 @@ func _on_player_connected(id: int):
 	spawn_player(id)
 
 	# Tell the new player about existing players (but NOT themselves!)
+	# Note: Client will also request this via _request_existing_players as a backup
 	for existing_id in players:
 		if existing_id != id:
-			# Spawn existing player at their current position
+			# Spawn existing player at their current position with full appearance
 			var existing_player = players[existing_id]
 			if is_instance_valid(existing_player):
-				rpc_id(id, "spawn_player", existing_id, existing_player.global_position)
+				var gender = 0
+				var weapon_type = ""
+				var feet_sprite = ""
+				var legs_sprite = ""
+				var chest_sprite = ""
+				var arms_sprite = ""
+				var hands_sprite = ""
+				var head_sprite = ""
+				if existing_player.has_method("get_appearance_data"):
+					var appearance = existing_player.get_appearance_data()
+					gender = appearance.get("gender", 0)
+					weapon_type = appearance.get("weapon_type", "")
+					feet_sprite = appearance.get("feet_sprite", "")
+					legs_sprite = appearance.get("legs_sprite", "")
+					chest_sprite = appearance.get("chest_sprite", "")
+					arms_sprite = appearance.get("arms_sprite", "")
+					hands_sprite = appearance.get("hands_sprite", "")
+					head_sprite = appearance.get("head_sprite", "")
+				print("🔍 [PLAYER DEBUG] Sending existing player %d (gender: %d, weapon: %s) to new client %d" % [existing_id, gender, weapon_type, id])
+				rpc_id(id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite)
 			else:
 				rpc_id(id, "spawn_player", existing_id)
 
@@ -3987,11 +4049,11 @@ func _on_player_disconnected(id: int):
 	print("🔍 [PLAYER DEBUG] _on_player_disconnected(%d)" % id)
 	despawn_player(id)
 
-@rpc("authority", "call_local", "reliable")
-func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO):
+@rpc("any_peer", "call_local", "reliable")
+func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, weapon_type: String = "", feet_sprite: String = "", legs_sprite: String = "", chest_sprite: String = "", arms_sprite: String = "", hands_sprite: String = "", head_sprite: String = ""):
 	"""Spawn a player (local or remote)"""
-	print("🔍 [PLAYER DEBUG] spawn_player(%d) called" % id)
-	print("   Caller: %s" % get_stack()[1] if get_stack().size() > 1 else "unknown")
+	print("🔍 [PLAYER DEBUG] spawn_player(%d) called on peer %d" % [id, multiplayer.get_unique_id()])
+	print("   Appearance: gender=%d, weapon=%s, feet=%s, legs=%s, chest=%s, arms=%s, hands=%s, head=%s" % [gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite])
 	print("   Current players: %s" % str(players.keys()))
 
 	if players.has(id):
@@ -4012,10 +4074,25 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO):
 	player.set_multiplayer_authority(id)
 	player.position = spawn_pos
 
+	# Apply appearance data for remote players BEFORE adding to tree
+	var is_local = (id == multiplayer.get_unique_id())
+	if not is_local:
+		# Set appearance before _ready() runs and creates the sprite
+		if player.has_method("apply_appearance_data"):
+			player.apply_appearance_data({
+				"gender": gender,
+				"weapon_type": weapon_type,
+				"feet_sprite": feet_sprite,
+				"legs_sprite": legs_sprite,
+				"chest_sprite": chest_sprite,
+				"arms_sprite": arms_sprite,
+				"hands_sprite": hands_sprite,
+				"head_sprite": head_sprite
+			})
+
 	add_child(player)
 	players[id] = player
 
-	var is_local = (id == multiplayer.get_unique_id())
 	print("🔍 [PLAYER DEBUG] ✅ Player %d spawned at %s (local=%s)" % [id, spawn_pos, is_local])
 
 	if is_local:
@@ -4030,6 +4107,9 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO):
 			player.set_process_unhandled_input(false)
 		if player.has_node("Camera2D"):
 			player.get_node("Camera2D").enabled = false
+		# Disable collision for remote players to prevent magnet effect
+		player.collision_layer = 0
+		player.collision_mask = 0
 
 @rpc("any_peer", "call_local", "reliable")
 func despawn_player(id: int):
@@ -4083,6 +4163,9 @@ func _sync_local_player_position():
 	# Broadcast to all peers (unreliable for position - speed matters more than reliability)
 	rpc("_receive_player_position", my_id, pos, anim, health, is_dashing)
 
+# Track missing player requests to avoid spamming
+var _missing_player_requests: Dictionary = {}
+
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _receive_player_position(player_id: int, pos: Vector2, anim: String, health: int, is_dashing: bool):
 	"""Receive position update for a remote player"""
@@ -4090,8 +4173,18 @@ func _receive_player_position(player_id: int, pos: Vector2, anim: String, health
 		return  # Ignore our own position updates
 
 	if not players.has(player_id):
-		print("🔄 [SYNC] Player %d not in players dict! Keys: %s" % [player_id, players.keys()])
+		# Only log once per player and request spawn
+		if not _missing_player_requests.has(player_id):
+			print("🔄 [SYNC] Player %d not in players dict! Requesting spawn..." % player_id)
+			_missing_player_requests[player_id] = Time.get_ticks_msec()
+			# Request this player's info from server
+			if not multiplayer.is_server():
+				rpc_id(1, "_request_existing_players", multiplayer.get_unique_id())
 		return  # Player not spawned yet
+
+	# Clear from missing requests if we now have them
+	if _missing_player_requests.has(player_id):
+		_missing_player_requests.erase(player_id)
 
 	var player = players[player_id]
 	if not is_instance_valid(player):
@@ -4102,10 +4195,21 @@ func _receive_player_position(player_id: int, pos: Vector2, anim: String, health
 	player.global_position = player.global_position.lerp(pos, 0.3)
 
 	# Update animation for remote player
+	# Use play_lpc_animation() to sync ALL sprite layers (body, clothes, weapon, etc.)
 	var character_sprite = player.get_node_or_null("CharacterSprite")
 	if character_sprite and character_sprite is AnimatedSprite2D:
 		if character_sprite.animation != anim:
-			character_sprite.play(anim)
+			# Parse animation name to get type and direction (e.g., "walk_south" -> "walk", "south")
+			if character_sprite.has_method("play_lpc_animation"):
+				var parts = anim.split("_")
+				if parts.size() >= 2:
+					var anim_type = parts[0]  # walk, idle, slash
+					var direction = parts[1]  # north, south, east, west
+					character_sprite.play_lpc_animation(anim_type, direction)
+				else:
+					character_sprite.play(anim)
+			else:
+				character_sprite.play(anim)
 
 	# Update health for remote player
 	player.current_health = health
