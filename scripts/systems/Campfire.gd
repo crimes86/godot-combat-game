@@ -1582,6 +1582,10 @@ func track_fuel_for_skeletons(amount: int) -> void:
 
 func spawn_campfire_skeleton() -> void:
 	"""Spawn a skeleton that's attracted to the campfire"""
+	# In multiplayer, only server spawns enemies
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+
 	# Find a random spawn position 800-1200 units away from campfire
 	var spawn_distance = randf_range(800.0, 1200.0)
 	var spawn_angle = randf() * TAU
@@ -1605,7 +1609,11 @@ func spawn_campfire_skeleton() -> void:
 	# game_world._on_node_added() checks group membership to auto-connect corpse_clicked signal
 	skeleton.add_to_group(Constants.GROUP_ENEMIES)
 
-	# Add to scene tree (same approach as ZonedSpawnManager)
+	# Generate unique name for network sync
+	var skeleton_name = "CampfireSkeleton_%d_%d" % [Time.get_ticks_msec(), randi() % 1000]
+	skeleton.name = skeleton_name
+
+	# Add to scene tree
 	# This triggers game_world._on_node_added() which will connect corpse_clicked signal
 	get_tree().root.add_child(skeleton)
 
@@ -1615,7 +1623,10 @@ func spawn_campfire_skeleton() -> void:
 	# Register with NetworkEnemyManager for multiplayer sync
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 	if network_enemy_mgr:
-		network_enemy_mgr.register_enemy(skeleton)
+		var network_id = network_enemy_mgr.register_enemy(skeleton)
+		# Broadcast spawn to clients
+		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+			network_enemy_mgr.spawn_enemy_on_clients.rpc(network_id, spawn_pos, skeleton.enemy_level, skeleton_name)
 
 	print("💀🔥 Spawned campfire skeleton at %s (heading to fire at %s)" % [spawn_pos, global_position])
 

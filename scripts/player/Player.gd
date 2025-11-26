@@ -1039,7 +1039,6 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 				network_enemy_mgr.request_damage.rpc_id(1, enemy_net_id, damage, is_crit, hit_weakpoint)
 			# Visual feedback will be triggered by server broadcast
 			return
-
 	# Single player: apply damage directly
 	enemy.take_damage(damage, is_crit, hit_weakpoint)
 
