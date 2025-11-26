@@ -1,5 +1,8 @@
 extends CharacterBody2D
 
+# Network ID for multiplayer sync
+var network_id: int = -1  # Unique ID assigned by server
+
 # Enemy stats
 @export var max_health: float = 500.0
 @export var current_health: float = 500.0
@@ -933,7 +936,20 @@ func _on_weakpoint_hit(weakpoint) -> void:
 	var base_damage = CharacterStats.get_base_damage()
 	var crit_damage = base_damage * Constants.CRIT_DAMAGE_MULTIPLIER
 
-	# Deal damage with crit flag and weakpoint flag for orange text
+	# In multiplayer, send damage request to server
+	var has_peer = multiplayer.has_multiplayer_peer()
+	if has_peer and network_id >= 0:
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr:
+			if multiplayer.is_server():
+				# Server processes damage directly (no RPC to self)
+				network_enemy_mgr.request_damage(network_id, crit_damage, true, true)
+			else:
+				# Client sends RPC to server
+				network_enemy_mgr.request_damage.rpc_id(1, network_id, crit_damage, true, true)
+			return
+
+	# Single player: deal damage directly with crit flag and weakpoint flag for orange text
 	take_damage(crit_damage, true, true)  # damage, is_crit, is_weakpoint
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
@@ -1030,8 +1046,9 @@ func die() -> void:
 					anim_sprite.frame = frame_count - 1
 		await get_tree().create_timer(0.6).timeout
 
-	# Generate loot for this corpse
-	corpse_loot = generate_corpse_loot()
+	# Generate loot for this corpse (skip if already set by server in multiplayer)
+	if corpse_loot.is_empty():
+		corpse_loot = generate_corpse_loot()
 
 	# Emit died signal - spawner will respawn immediately
 	died.emit()

@@ -827,7 +827,7 @@ func handle_crit_window_attack(enemy: Node, click_pos: Vector2) -> void:
 	var damage = attack_damage * chain_multiplier
 
 	if "take_damage" in enemy:
-		enemy.take_damage(damage, false)
+		apply_damage_with_feedback(enemy, damage, false, false)
 
 	print("⚔️ Enemy body hit during crit window (%.1f dmg, UNCAPPED SPEED!)" % damage)
 
@@ -981,13 +981,29 @@ func _on_enemy_damaged(damage: float, is_crit: bool, enemy: Node) -> void:
 		attack_feedback.trigger_attack_feedback(enemy.global_position, is_crit, false)
 
 func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_weakpoint: bool) -> void:
-	# Apply damage
-	enemy.take_damage(damage, is_crit)
-	
+	# In multiplayer, send damage request to server
+	var has_peer = multiplayer.has_multiplayer_peer()
+	var enemy_net_id = enemy.get("network_id") if enemy.get("network_id") != null else -1
+
+	if has_peer and enemy_net_id >= 0:
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr:
+			if multiplayer.is_server():
+				# Server processes damage directly (no RPC to self)
+				network_enemy_mgr.request_damage(enemy_net_id, damage, is_crit, hit_weakpoint)
+			else:
+				# Client sends RPC to server
+				network_enemy_mgr.request_damage.rpc_id(1, enemy_net_id, damage, is_crit, hit_weakpoint)
+			# Visual feedback will be triggered by server broadcast
+			return
+
+	# Single player: apply damage directly
+	enemy.take_damage(damage, is_crit, hit_weakpoint)
+
 	# Trigger ALL feedback effects
 	if attack_feedback:
 		attack_feedback.trigger_attack_feedback(enemy.global_position, is_crit, hit_weakpoint)
-	
+
 	# Trigger hit flash on enemy
 	if enemy.has_node("HitFlash"):
 		enemy.get_node("HitFlash").flash(is_crit)

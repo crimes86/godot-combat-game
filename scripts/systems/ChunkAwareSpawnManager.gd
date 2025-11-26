@@ -82,6 +82,9 @@ var chunk_system: Node = null
 ## Game world reference
 var game_world: Node = null
 
+## Network enemy manager reference
+var network_enemy_manager: Node = null
+
 ## RNG for spawning (seeded for consistency)
 var spawn_rng: RandomNumberGenerator
 
@@ -384,6 +387,11 @@ func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
 	# Add to world
 	game_world.call_deferred("add_child", enemy)
 
+	# Register with network enemy manager for multiplayer sync
+	var network_id = -1
+	if network_enemy_manager:
+		network_id = network_enemy_manager.register_enemy(enemy)
+
 	# Connect death signal for respawn tracking
 	if enemy.has_signal("died"):
 		enemy.died.connect(_on_enemy_died.bind(enemy, chunk_key))
@@ -392,9 +400,9 @@ func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
 	if enemy.has_signal("corpse_clicked") and game_world.has_method("_on_corpse_clicked"):
 		enemy.corpse_clicked.connect(game_world._on_corpse_clicked)
 
-	# In multiplayer, sync to clients
-	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-		rpc("client_spawn_enemy", pos, level, enemy_name)
+	# In multiplayer, sync to clients via NetworkEnemyManager
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server() and network_enemy_manager:
+		network_enemy_manager.spawn_enemy_on_clients.rpc(network_id, pos, level, enemy_name)
 
 	return enemy
 

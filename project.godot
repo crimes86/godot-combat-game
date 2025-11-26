@@ -27,6 +27,7 @@ LootSpawnManager="*res://scripts/systems/LootSpawnManager.gd"
 NotificationManager="*res://scripts/systems/NotificationManager.gd"
 InteractionManager="*res://scripts/systems/InteractionManager.gd"
 NetworkManager="*res://scripts/networking/NetworkManager.gd"
+NetworkEnemyManager="*res://scripts/networking/NetworkEnemyManager.gd"
 CursorManager="*res://scripts/systems/CursorManager.gd"
 
 [editor_plugins]

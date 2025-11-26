@@ -2487,6 +2487,13 @@ func spawn_all_enemies():
 	spawn_manager.name = "ChunkAwareSpawnManager"
 	add_child(spawn_manager)
 
+	# Hook up NetworkEnemyManager
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	if network_enemy_mgr:
+		spawn_manager.network_enemy_manager = network_enemy_mgr
+		network_enemy_mgr.game_world = self
+		print("🌐 NetworkEnemyManager connected to SpawnManager")
+
 	# Initialize with chunk system and manual markers
 	spawn_manager.initialize(self, chunk_prop_system, spawn_markers)
 

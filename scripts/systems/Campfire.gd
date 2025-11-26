@@ -1612,6 +1612,11 @@ func spawn_campfire_skeleton() -> void:
 	# Track this skeleton
 	campfire_skeletons.append(skeleton)
 
+	# Register with NetworkEnemyManager for multiplayer sync
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	if network_enemy_mgr:
+		network_enemy_mgr.register_enemy(skeleton)
+
 	print("💀🔥 Spawned campfire skeleton at %s (heading to fire at %s)" % [spawn_pos, global_position])
 
 func update_visual_intensity() -> void:
