@@ -817,7 +817,12 @@ func create_tree_stump() -> void:
 	stump_sprite.texture = ImageTexture.create_from_image(stump_img)
 	stump_sprite.centered = true
 	stump_sprite.scale = tree_sprite.scale
-	stump_sprite.modulate = Color(0.75, 0.65, 0.55, 1.0)  # Solid brownish color, fully opaque
+	# Match stump color to original tree color (slightly darker for cut wood look)
+	var stump_color = original_modulate
+	stump_color.r *= 0.85
+	stump_color.g *= 0.8
+	stump_color.b *= 0.75
+	stump_sprite.modulate = stump_color
 
 	# Position stump at base of tree
 	var stump_offset = (source_img.get_height() - stump_height) / 2.0 * tree_sprite.scale.y

@@ -20,6 +20,11 @@ const ANIMATION_UPDATE_INTERVAL: float = 0.05  # Update 20 times per second
 var flame_nodes: Array = []  # Cache flame children
 var torch_light: PointLight2D = null  # Cache light reference
 
+# Day/night light scaling
+const BASE_LIGHT_ENERGY: float = 1.2
+const MIN_LIGHT_ENERGY: float = 0.1  # Subtle glow during bright day
+const MAX_LIGHT_ENERGY: float = 1.6  # Moderate glow at night
+
 func _ready() -> void:
 	# Create visual representation
 	create_torch_visual()
@@ -219,7 +224,23 @@ func animate_fire(_delta: float) -> void:
 
 	var time = Time.get_ticks_msec() / 1000.0
 
+	# Get day/night brightness factor from TimeManager
+	var time_brightness = 1.0  # Default to full brightness
+	if TimeManager and TimeManager.canvas_modulate:
+		time_brightness = TimeManager.get_brightness()
+
+	# Calculate light energy based on time of day
+	# At night (brightness ~0.51), lights should be bright
+	# At day (brightness ~0.99), lights should be dim
+	# Map: 0.51 -> MAX, 0.99 -> MIN
+	var day_factor = inverse_lerp(0.51, 0.99, time_brightness)
+	day_factor = clamp(day_factor, 0.0, 1.0)
+	var target_energy = lerp(MAX_LIGHT_ENERGY, MIN_LIGHT_ENERGY, day_factor)
+
 	# Animate flames using cached nodes (flicker and sway)
+	# At night, boost flame brightness for vibrant glowing effect
+	var flame_brightness_mult = lerp(1.5, 1.0, day_factor)  # 1.5x at night, 1.0x at day
+
 	for i in range(flame_nodes.size()):
 		var child = flame_nodes[i]
 		if not is_instance_valid(child):
@@ -232,12 +253,21 @@ func animate_fire(_delta: float) -> void:
 		child.scale.y = 1.0 + flicker * 0.25
 		# Horizontal sway
 		child.scale.x = 1.0 + sway * 0.12
-		# Opacity flicker
-		child.modulate.a = 0.85 + flicker * 0.15
+		# Opacity flicker - also dim during day, vibrant at night
+		var base_opacity = lerp(1.0, 0.5, day_factor)  # Full opacity at night, dimmer during day
+		child.modulate.a = base_opacity + flicker * 0.15
+		# Boost flame color brightness at night
+		child.modulate.r = flame_brightness_mult
+		child.modulate.g = flame_brightness_mult
+		child.modulate.b = flame_brightness_mult * 0.8  # Keep warm tint
 		# Position wobble
 		child.position.x = sway * 0.5
 
-	# Animate torch light using cached reference (subtle flickering)
+	# Animate torch light using cached reference (subtle flickering + day/night scaling)
 	if torch_light and is_instance_valid(torch_light):
 		var flicker = sin(time * 2.8) * 0.5 + cos(time * 4.2) * 0.3
-		torch_light.energy = 0.8 + flicker * 0.2  # Flicker between 0.6 and 1.0
+		var flicker_amount = target_energy * 0.15  # Flicker proportional to base energy
+		torch_light.energy = target_energy + flicker * flicker_amount
+		# Scale light radius based on time - moderate glow aura at night
+		var base_scale = lerp(2.8, 1.8, day_factor)  # 2.8x at night, 1.8x at day
+		torch_light.texture_scale = base_scale + flicker * 0.15

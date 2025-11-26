@@ -84,6 +84,11 @@ var fire_sprite: Node2D = null
 func _ready() -> void:
 	add_to_group("campfire")
 
+	# Disable scene's default CampfireLight (we create our own fire_light dynamically)
+	var scene_light = get_node_or_null("CampfireLight")
+	if scene_light:
+		scene_light.queue_free()
+
 	# Create campfire visuals
 	create_campfire_scene()
 
@@ -392,11 +397,26 @@ func create_campfire_scene() -> void:
 	# Create light source
 	fire_light = PointLight2D.new()
 	fire_light.enabled = true
-	fire_light.texture_scale = 2.5
-	fire_light.color = Color(1.0, 0.7, 0.3)
-	fire_light.energy = 1.2
+	fire_light.texture_scale = 3.0
+	fire_light.color = Color(1.0, 0.65, 0.25)  # Warm orange
+	fire_light.energy = 1.0  # Moderate base energy
 	fire_light.shadow_enabled = true
 	fire_light.shadow_filter = Light2D.SHADOW_FILTER_PCF5
+	fire_light.blend_mode = Light2D.BLEND_MODE_ADD
+
+	# Create procedural radial gradient texture for visible glow
+	var img = Image.create(256, 256, false, Image.FORMAT_RGBA8)
+	var center = Vector2(128, 128)
+	var max_radius = 128.0
+	for x in range(256):
+		for y in range(256):
+			var dist = Vector2(x, y).distance_to(center)
+			var alpha = 1.0 - clamp(dist / max_radius, 0.0, 1.0)
+			alpha = alpha * alpha  # Smooth falloff
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
+	var texture = ImageTexture.create_from_image(img)
+	fire_light.texture = texture
+
 	fire_sprite.add_child(fire_light)
 
 	# Create simple fire particles
@@ -612,32 +632,32 @@ func create_fire_particles() -> void:
 				Vector2(offset + base_width, base_y)
 			])
 
-			# Color by layer - BRIGHTER (increased alpha)
+			# Color by layer - BRIGHT vibrant flames
 			var colors = PackedColorArray()
-			if layer == 0:  # Bottom - red/orange (brighter)
-				colors.append(Color(0.8, 0.2, 0.0, 0.65))
-				colors.append(Color(0.95, 0.4, 0.0, 0.6))
-				colors.append(Color(1.0, 0.55, 0.1, 0.55))
-				colors.append(Color(1.0, 0.7, 0.2, 0.5))
-				colors.append(Color(1.0, 0.55, 0.1, 0.55))
-				colors.append(Color(0.95, 0.4, 0.0, 0.6))
-				colors.append(Color(0.8, 0.2, 0.0, 0.65))
-			elif layer == 1:  # Middle - orange/yellow (brighter)
-				colors.append(Color(1.0, 0.5, 0.0, 0.6))
-				colors.append(Color(1.0, 0.65, 0.15, 0.55))
-				colors.append(Color(1.0, 0.8, 0.3, 0.5))
-				colors.append(Color(1.0, 0.9, 0.5, 0.45))
-				colors.append(Color(1.0, 0.8, 0.3, 0.5))
-				colors.append(Color(1.0, 0.65, 0.15, 0.55))
-				colors.append(Color(1.0, 0.5, 0.0, 0.6))
-			else:  # Top - yellow/white (25% dimmer)
-				colors.append(Color(1.0, 0.75, 0.25, 0.375))
-				colors.append(Color(1.0, 0.85, 0.4, 0.3375))
-				colors.append(Color(1.0, 0.95, 0.6, 0.3))
-				colors.append(Color(1.0, 1.0, 0.8, 0.2625))
-				colors.append(Color(1.0, 0.95, 0.6, 0.3))
-				colors.append(Color(1.0, 0.85, 0.4, 0.3375))
-				colors.append(Color(1.0, 0.75, 0.25, 0.375))
+			if layer == 0:  # Bottom - red/orange core
+				colors.append(Color(1.0, 0.3, 0.0, 0.95))
+				colors.append(Color(1.0, 0.5, 0.0, 0.9))
+				colors.append(Color(1.0, 0.65, 0.1, 0.85))
+				colors.append(Color(1.0, 0.8, 0.2, 0.8))
+				colors.append(Color(1.0, 0.65, 0.1, 0.85))
+				colors.append(Color(1.0, 0.5, 0.0, 0.9))
+				colors.append(Color(1.0, 0.3, 0.0, 0.95))
+			elif layer == 1:  # Middle - orange/yellow
+				colors.append(Color(1.0, 0.6, 0.0, 0.9))
+				colors.append(Color(1.0, 0.75, 0.15, 0.85))
+				colors.append(Color(1.0, 0.9, 0.3, 0.8))
+				colors.append(Color(1.0, 1.0, 0.5, 0.75))
+				colors.append(Color(1.0, 0.9, 0.3, 0.8))
+				colors.append(Color(1.0, 0.75, 0.15, 0.85))
+				colors.append(Color(1.0, 0.6, 0.0, 0.9))
+			else:  # Top - yellow/white tips
+				colors.append(Color(1.0, 0.85, 0.3, 0.7))
+				colors.append(Color(1.0, 0.95, 0.5, 0.6))
+				colors.append(Color(1.0, 1.0, 0.7, 0.5))
+				colors.append(Color(1.0, 1.0, 0.9, 0.4))
+				colors.append(Color(1.0, 1.0, 0.7, 0.5))
+				colors.append(Color(1.0, 0.95, 0.5, 0.6))
+				colors.append(Color(1.0, 0.85, 0.3, 0.7))
 
 			flame.vertex_colors = colors
 			flame.name = "Flame_" + str(layer) + "_" + str(i)
@@ -1161,14 +1181,25 @@ func create_clearing_stumps() -> void:
 		stump_sprite.centered = true
 		stump_sprite.scale = Vector2(stump_scale, stump_scale)
 
-		# Mix of brown and white/grey stumps (50/50)
-		var is_white_birch = rng.randf() < 0.5
-		var color_variation = rng.randf_range(0.9, 1.0)
-
-		if is_white_birch:
-			stump_sprite.modulate = Color(color_variation * 0.85, color_variation * 0.9, color_variation * 0.95, 1.0)
+		# Mix of stump types: 40% brown oak/maple, 30% white birch, 30% grey/silver
+		var stump_roll = rng.randf()
+		if stump_roll < 0.4:
+			# Brown oak/maple stumps - warm natural wood tones
+			var base_brown = rng.randf_range(0.7, 0.9)
+			stump_sprite.modulate = Color(
+				base_brown,
+				base_brown * rng.randf_range(0.7, 0.85),
+				base_brown * rng.randf_range(0.5, 0.65),
+				1.0
+			)
+		elif stump_roll < 0.7:
+			# White birch stumps - bright cream/white
+			var brightness = rng.randf_range(0.9, 1.0)
+			stump_sprite.modulate = Color(brightness, brightness * 0.98, brightness * 0.94, 1.0)
 		else:
-			stump_sprite.modulate = Color(0.75, 0.65, 0.55, 1.0)
+			# Grey/silver birch stumps
+			var grey = rng.randf_range(0.75, 0.95)
+			stump_sprite.modulate = Color(grey, grey, grey * 1.02, 1.0)
 
 		stump_sprite.z_index = 0
 		stump_sprite.position = Vector2(0, 0)
@@ -1582,10 +1613,23 @@ func track_fuel_for_skeletons(amount: int) -> void:
 
 func spawn_campfire_skeleton() -> void:
 	"""Spawn a skeleton that's attracted to the campfire"""
-	# In multiplayer, only server spawns enemies
+	# In multiplayer, clients request spawn from server
 	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		_request_skeleton_spawn.rpc_id(1)  # Send request to server (peer 1)
 		return
 
+	_do_spawn_campfire_skeleton()
+
+@rpc("any_peer", "reliable")
+func _request_skeleton_spawn() -> void:
+	"""Client requests server to spawn a campfire skeleton"""
+	if not multiplayer.is_server():
+		return
+	print("🌐 Server received skeleton spawn request from peer %d" % multiplayer.get_remote_sender_id())
+	_do_spawn_campfire_skeleton()
+
+func _do_spawn_campfire_skeleton() -> void:
+	"""Actually spawn the skeleton (server only)"""
 	# Find a random spawn position 800-1200 units away from campfire
 	var spawn_distance = randf_range(800.0, 1200.0)
 	var spawn_angle = randf() * TAU
@@ -1676,10 +1720,24 @@ func update_visual_intensity() -> void:
 		var color_b = lerp(0.3, 0.7, bone_percent * 0.5)
 		fire_light.color = Color(color_r, color_g, color_b)
 
-		# Increase light intensity with fuel
+		# Increase light intensity with fuel, adjusted for time of day
 		var base_energy = 1.2
 		var bonus_energy = total_fuel_percent * 0.4  # Up to +40% brightness
-		fire_light.energy = base_energy + bonus_energy
+		var fuel_energy = base_energy + bonus_energy
+
+		# Scale light based on time of day (dim during day, bright at night)
+		var time_brightness = 1.0
+		if TimeManager and TimeManager.canvas_modulate:
+			time_brightness = TimeManager.get_brightness()
+		# Map: night (0.51) -> full energy, day (0.99) -> very dim
+		var day_factor = inverse_lerp(0.51, 0.99, time_brightness)
+		day_factor = clamp(day_factor, 0.0, 1.0)
+		# At night: 1.8x multiplier for warm glow, at day: 0.05x for barely visible
+		var time_multiplier = lerp(1.8, 0.05, day_factor)
+		fire_light.energy = fuel_energy * time_multiplier
+		# Scale light radius - warm glow aura at night, small at day
+		var base_texture_scale = lerp(4.0, 1.5, day_factor)  # 4.0x at night, 1.5x at day
+		fire_light.texture_scale = base_texture_scale
 
 	# Update collision area to match largest active aura radius
 	update_buff_collision_radius()

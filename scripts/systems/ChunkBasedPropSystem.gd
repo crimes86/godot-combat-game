@@ -1127,17 +1127,30 @@ void fragment() {
 	sprite.flip_h = tree_flipped
 	sprite.z_index = 10  # Above all player layers (player max z=9)
 
-	# Mix of grey dead trees and pale birch trees (50/50 split)
-	var is_white_birch = rng.randf() < 0.5
-
-	if is_white_birch:
-		# Pale white/cream birch - high contrast against dark ground
-		var brightness = rng.randf_range(1.4, 1.8)  # Much brighter
-		sprite.modulate = Color(brightness, brightness * 0.98, brightness * 0.92, 1.0)
+	# Mix of tree types: 40% brown oak/maple, 30% white birch, 30% grey/silver
+	var tree_roll = rng.randf()
+	if tree_roll < 0.4:
+		# Brown oak/maple trees - warm natural wood tones
+		var base_brown = rng.randf_range(0.7, 0.9)
+		sprite.modulate = Color(
+			base_brown,                          # Red channel (warm)
+			base_brown * rng.randf_range(0.7, 0.85),  # Green (less = more brown)
+			base_brown * rng.randf_range(0.5, 0.65),  # Blue (least = warm brown)
+			1.0
+		)
+	elif tree_roll < 0.7:
+		# White birch - bright cream/white bark
+		var brightness = rng.randf_range(0.9, 1.0)
+		sprite.modulate = Color(
+			brightness,                    # White-cream
+			brightness * 0.98,             # Slight warm tint
+			brightness * 0.94,             # Cream undertone
+			1.0
+		)
 	else:
-		# Grey/silver dead trees - neutral, no brown
-		var grey = rng.randf_range(0.6, 0.85)
-		sprite.modulate = Color(grey, grey, grey, 1.0)
+		# Grey/silver birch - light silvery grey bark
+		var grey = rng.randf_range(0.75, 0.95)
+		sprite.modulate = Color(grey, grey, grey * 1.02, 1.0)  # Slight cool tint
 
 	tree_node.add_child(sprite)
 

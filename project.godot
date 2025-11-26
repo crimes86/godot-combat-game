@@ -29,6 +29,7 @@ InteractionManager="*res://scripts/systems/InteractionManager.gd"
 NetworkManager="*res://scripts/networking/NetworkManager.gd"
 NetworkEnemyManager="*res://scripts/networking/NetworkEnemyManager.gd"
 CursorManager="*res://scripts/systems/CursorManager.gd"
+TimeManager="*res://scripts/systems/TimeManager.gd"
 
 [editor_plugins]
 

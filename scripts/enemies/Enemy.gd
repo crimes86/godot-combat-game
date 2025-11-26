@@ -1023,8 +1023,9 @@ func die() -> void:
 		if player and player.has_method("gain_experience"):
 			player.gain_experience(xp_reward)
 
-	# Store gold in corpse for looting
-	corpse_gold = gold_drop
+	# Store gold in corpse for looting (skip if already set by server in multiplayer)
+	if corpse_gold == 0:
+		corpse_gold = gold_drop
 
 	# Play death sound (skeleton-specific bone collapse)
 	var sound_manager = get_node_or_null("/root/SoundManager")
@@ -1184,7 +1185,7 @@ func generate_corpse_loot() -> Array:
 
 func become_corpse() -> void:
 	"""Transition enemy from living to corpse state"""
-	print("💀 Becoming corpse with %d loot items" % corpse_loot.size())
+	print("💀 Becoming corpse with %d loot items, %d gold" % [corpse_loot.size(), corpse_gold])
 	is_corpse = true
 	corpse_creation_time = Time.get_ticks_msec() / 1000.0
 	corpse_state = CorpseState.State.FRESH

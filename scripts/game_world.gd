@@ -38,22 +38,22 @@ const PROP_TEXTURES = {
 }
 
 const LAYER_TEMPLATE = [
-	# Darker charcoal palette for cleared/trafficked areas
+	# Subtle palette for cleared/trafficked areas - closer to ground color (0.15)
 	# Edge layers: Ultra-subtle, very large, massive overlap
-	{"count": 80, "size_mult": [1.4, 1.9], "spread_mult": 1.2, "darkness": 0.12, "alpha": 0.004},
-	{"count": 75, "size_mult": [1.3, 1.8], "spread_mult": 1.1, "darkness": 0.11, "alpha": 0.006},
-	{"count": 70, "size_mult": [1.2, 1.7], "spread_mult": 1.0, "darkness": 0.10, "alpha": 0.010},
-	{"count": 65, "size_mult": [1.1, 1.6], "spread_mult": 0.9, "darkness": 0.09, "alpha": 0.014},
+	{"count": 80, "size_mult": [1.4, 1.9], "spread_mult": 1.2, "darkness": 0.14, "alpha": 0.003},
+	{"count": 75, "size_mult": [1.3, 1.8], "spread_mult": 1.1, "darkness": 0.14, "alpha": 0.004},
+	{"count": 70, "size_mult": [1.2, 1.7], "spread_mult": 1.0, "darkness": 0.13, "alpha": 0.006},
+	{"count": 65, "size_mult": [1.1, 1.6], "spread_mult": 0.9, "darkness": 0.13, "alpha": 0.008},
 	# Mid layers: Gradual transition
-	{"count": 55, "size_mult": [1.0, 1.45], "spread_mult": 0.75, "darkness": 0.08, "alpha": 0.022},
-	{"count": 50, "size_mult": [0.85, 1.25], "spread_mult": 0.65, "darkness": 0.07, "alpha": 0.030},
-	{"count": 45, "size_mult": [0.7, 1.05], "spread_mult": 0.55, "darkness": 0.065, "alpha": 0.038},
-	{"count": 40, "size_mult": [0.6, 0.9], "spread_mult": 0.45, "darkness": 0.06, "alpha": 0.048},
-	# Core layers: Darkest center (compacted earth)
-	{"count": 32, "size_mult": [0.475, 0.725], "spread_mult": 0.35, "darkness": 0.055, "alpha": 0.058},
-	{"count": 25, "size_mult": [0.375, 0.575], "spread_mult": 0.25, "darkness": 0.05, "alpha": 0.068},
-	{"count": 20, "size_mult": [0.275, 0.45], "spread_mult": 0.15, "darkness": 0.045, "alpha": 0.080},
-	{"count": 16, "size_mult": [0.2, 0.35], "spread_mult": 0.05, "darkness": 0.04, "alpha": 0.095}
+	{"count": 55, "size_mult": [1.0, 1.45], "spread_mult": 0.75, "darkness": 0.12, "alpha": 0.012},
+	{"count": 50, "size_mult": [0.85, 1.25], "spread_mult": 0.65, "darkness": 0.12, "alpha": 0.016},
+	{"count": 45, "size_mult": [0.7, 1.05], "spread_mult": 0.55, "darkness": 0.11, "alpha": 0.020},
+	{"count": 40, "size_mult": [0.6, 0.9], "spread_mult": 0.45, "darkness": 0.11, "alpha": 0.025},
+	# Core layers: Slightly darker center (compacted earth)
+	{"count": 32, "size_mult": [0.475, 0.725], "spread_mult": 0.35, "darkness": 0.10, "alpha": 0.030},
+	{"count": 25, "size_mult": [0.375, 0.575], "spread_mult": 0.25, "darkness": 0.10, "alpha": 0.035},
+	{"count": 20, "size_mult": [0.275, 0.45], "spread_mult": 0.15, "darkness": 0.09, "alpha": 0.040},
+	{"count": 16, "size_mult": [0.2, 0.35], "spread_mult": 0.05, "darkness": 0.09, "alpha": 0.045}
 ]
 
 # Baking configuration
@@ -111,9 +111,18 @@ const TERRAIN_CHECK_INTERVAL = 1.0  # Check every 1s (was 0.3s - less frequent f
 var player_sync_timer = 0.0
 const PLAYER_SYNC_INTERVAL = 0.05  # 20Hz - 50ms between syncs
 
+# Lava light time-based updates
+var lava_light_timer = 0.0
+const LAVA_LIGHT_UPDATE_INTERVAL = 0.1  # Update 10 times per second
+
 func _ready():
 	# Initialize multiplayer
 	_setup_multiplayer()
+
+	# Connect TimeManager to CanvasModulate for day/night cycle
+	var canvas_modulate = $CanvasModulate
+	if canvas_modulate and TimeManager:
+		TimeManager.set_canvas_modulate(canvas_modulate)
 
 	# Add performance profiler (press F3 to toggle)
 	var profiler_scene = load("res://scenes/ui/performance_profiler.tscn")
@@ -175,6 +184,45 @@ func _process(delta):
 		if player_sync_timer >= PLAYER_SYNC_INTERVAL:
 			player_sync_timer = 0.0
 			_sync_local_player_position()
+
+	# Update lava lights based on time of day
+	lava_light_timer += delta
+	if lava_light_timer >= LAVA_LIGHT_UPDATE_INTERVAL:
+		lava_light_timer = 0.0
+		_update_lava_lights()
+
+func _update_lava_lights():
+	"""Scale lava pool lights based on time of day - bright at night, subtle during day"""
+	# Get time brightness from TimeManager
+	var time_brightness = 1.0
+	if TimeManager and TimeManager.canvas_modulate:
+		time_brightness = TimeManager.get_brightness()
+
+	# Calculate day factor (0 = night, 1 = day)
+	# Night brightness ~0.51, day brightness ~0.99
+	var day_factor = inverse_lerp(0.51, 0.99, time_brightness)
+	day_factor = clamp(day_factor, 0.0, 1.0)
+
+	# Lava should glow bright at night (2.5x), subtle during day (0.8x)
+	var time_multiplier = lerp(2.5, 0.8, day_factor)
+	var scale_multiplier = lerp(1.8, 1.0, day_factor)
+
+	# Update all lava lights in the group
+	for light in get_tree().get_nodes_in_group("lava_lights"):
+		if not is_instance_valid(light):
+			continue
+		if not light is PointLight2D:
+			continue
+
+		var base_energy = light.get_meta("base_energy", 1.5)
+		var base_scale = light.get_meta("base_scale", 2.0)
+
+		# Add subtle flickering
+		var time = Time.get_ticks_msec() / 1000.0
+		var flicker = sin(time * 3.0 + light.get_instance_id() * 0.1) * 0.15
+
+		light.energy = base_energy * time_multiplier * (1.0 + flicker)
+		light.texture_scale = base_scale * scale_multiplier
 
 func create_world_boundaries():
 	"""Create invisible walls and fog edges around world boundaries"""
@@ -499,8 +547,8 @@ func create_traffic_circle(parent: Node2D, center: Vector2, radius: float, num_s
 
 		# Create 2-layer spot for performance (not 3)
 		var layers = [
-			{"size_mult": 1.3, "alpha": 0.15},
-			{"size_mult": 0.8, "alpha": 0.22}
+			{"size_mult": 1.3, "alpha": 0.04},
+			{"size_mult": 0.8, "alpha": 0.06}
 		]
 
 		for layer in layers:
@@ -508,8 +556,8 @@ func create_traffic_circle(parent: Node2D, center: Vector2, radius: float, num_s
 			var size = spot_size * layer.size_mult * rng.randf_range(0.9, 1.1)
 			patch.size = Vector2(size, size)
 			patch.position = pos - patch.size / 2
-			# Darker charcoal for trafficked areas - worn/compacted ground (neutral grey)
-			patch.color = Color(0.03, 0.03, 0.03, layer.alpha)
+			# Very subtle trafficked areas - nearly invisible blending
+			patch.color = Color(0.13, 0.13, 0.14, layer.alpha)
 			patch.rotation = rng.randf() * TAU
 			parent.add_child(patch)
 
@@ -714,10 +762,11 @@ func create_path_segment_avoiding_area(parent: Node2D, start: Vector2, end: Vect
 		var spot_size = rng.randf_range(actual_width * 0.9, actual_width * 1.1)
 
 		# 3-layer spot: soft outer fade, mid worn, beaten center (dark grey path)
+		# Colors at ~60-75% of ground (0.15) for subtle contrast during day
 		var layers = [
-			{"size_mult": 1.6, "alpha": 0.12, "color": Color(0.08, 0.08, 0.09)},  # Soft outer fade
-			{"size_mult": 1.0, "alpha": 0.22, "color": Color(0.06, 0.06, 0.07)},  # Mid worn area
-			{"size_mult": 0.5, "alpha": 0.35, "color": Color(0.05, 0.05, 0.06)}   # Center beaten path (dark grey)
+			{"size_mult": 1.6, "alpha": 0.15, "color": Color(0.11, 0.11, 0.12)},  # Soft outer fade (~73%)
+			{"size_mult": 1.0, "alpha": 0.25, "color": Color(0.10, 0.10, 0.11)},  # Mid worn area (~67%)
+			{"size_mult": 1.0, "alpha": 0.40, "color": Color(0.09, 0.09, 0.10)}   # Center beaten path (~60%)
 		]
 
 		for layer in layers:
@@ -907,7 +956,7 @@ func bake_terrain_to_texture():
 	# Create background color (same as Ground ColorRect)
 	var bg = ColorRect.new()
 	bg.size = Vector2(WORLD_WIDTH, WORLD_HEIGHT)
-	bg.color = Color(0.15, 0.15, 0.17, 1)  # Dark stone grey
+	bg.color = Color(0.25, 0.25, 0.27, 1)  # Dark stone grey
 	bg.position = Vector2.ZERO
 	viewport.add_child(bg)
 
@@ -1054,7 +1103,7 @@ func DISABLED_create_campfire_clearing():
 		vertices.append(Vector2(x, y))
 
 	clearing.polygon = vertices
-	clearing.color = Color(0.12, 0.12, 0.12, 1.0)  # Dark clearing
+	clearing.color = Color(0.14, 0.14, 0.15, 1.0)  # Matches ground, slight variation
 
 	# Add radial gradient shader for smooth feathering
 	var shader_material = ShaderMaterial.new()
@@ -1363,11 +1412,11 @@ func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGe
 			# Spot size - consistent for even coverage
 			var spot_size = rng.randf_range(140, 200)
 
-			# Same 3-layer spot as path for consistent look
+			# Same colors/alpha as path for consistent look
 			var layers = [
-				{"size_mult": 1.6, "alpha": 0.12, "color": Color(0.08, 0.08, 0.08)},
-				{"size_mult": 1.0, "alpha": 0.22, "color": Color(0.06, 0.06, 0.06)},
-				{"size_mult": 0.5, "alpha": 0.35, "color": Color(0.05, 0.05, 0.05)}
+				{"size_mult": 1.6, "alpha": 0.15, "color": Color(0.11, 0.11, 0.12)},
+				{"size_mult": 1.0, "alpha": 0.25, "color": Color(0.10, 0.10, 0.11)},
+				{"size_mult": 1.0, "alpha": 0.40, "color": Color(0.09, 0.09, 0.10)}
 			]
 
 			for layer in layers:
@@ -2130,16 +2179,30 @@ void fragment() {
 	sprite.flip_h = tree_flipped
 	sprite.z_index = 0
 
-	# Mix of grey dead trees and pale birch trees
-	var is_white_birch = rng.randf() < 0.5
-	if is_white_birch:
-		# Pale white/cream birch - high contrast against dark ground
-		var brightness = rng.randf_range(1.4, 1.8)
-		sprite.modulate = Color(brightness, brightness * 0.98, brightness * 0.92, 1.0)
+	# Mix of tree types: 40% brown oak/maple, 30% white birch, 30% grey/silver
+	var tree_roll = rng.randf()
+	if tree_roll < 0.4:
+		# Brown oak/maple trees - warm natural wood tones
+		var base_brown = rng.randf_range(0.7, 0.9)
+		sprite.modulate = Color(
+			base_brown,                          # Red channel (warm)
+			base_brown * rng.randf_range(0.7, 0.85),  # Green (less = more brown)
+			base_brown * rng.randf_range(0.5, 0.65),  # Blue (least = warm brown)
+			1.0
+		)
+	elif tree_roll < 0.7:
+		# White birch - bright cream/white bark
+		var brightness = rng.randf_range(0.9, 1.0)
+		sprite.modulate = Color(
+			brightness,                    # White-cream
+			brightness * 0.98,             # Slight warm tint
+			brightness * 0.94,             # Cream undertone
+			1.0
+		)
 	else:
-		# Grey/silver dead trees - neutral, no brown
-		var grey = rng.randf_range(0.6, 0.85)
-		sprite.modulate = Color(grey, grey, grey, 1.0)
+		# Grey/silver birch - light silvery grey bark
+		var grey = rng.randf_range(0.75, 0.95)
+		sprite.modulate = Color(grey, grey, grey * 1.02, 1.0)  # Slight cool tint
 
 	prop_container.add_child(sprite)
 
@@ -3034,7 +3097,7 @@ func spawn_lava_pools():
 		for crack_i in range(num_cracks):
 			var crack = Line2D.new()
 			crack.width = rng.randf_range(1.5, 3.5)  # Vary crack thickness
-			crack.default_color = Color(0.02, 0.02, 0.02, rng.randf_range(0.6, 0.9))  # Very dark cracks (neutral)
+			crack.default_color = Color(0.03, 0.03, 0.03, rng.randf_range(0.6, 0.9))  # Very dark cracks (neutral)
 			crack.joint_mode = Line2D.LINE_JOINT_SHARP
 			crack.begin_cap_mode = Line2D.LINE_CAP_NONE
 			crack.end_cap_mode = Line2D.LINE_CAP_NONE
@@ -3081,7 +3144,7 @@ func spawn_lava_pools():
 			var y = sin(angle) * radius * elongation_y
 			outer_vertices.append(Vector2(x, y))
 		outer_border.polygon = outer_vertices
-		outer_border.color = Color(0.08, 0.08, 0.08, 0.3)  # Match ground color, very transparent (neutral)
+		outer_border.color = Color(0.13, 0.13, 0.13, 0.3)  # Match ground color, very transparent (neutral)
 		lava_pool.add_child(outer_border)
 
 		# Middle border - medium blend
@@ -3094,7 +3157,7 @@ func spawn_lava_pools():
 			var y = sin(angle) * radius * elongation_y
 			mid_vertices.append(Vector2(x, y))
 		mid_border.polygon = mid_vertices
-		mid_border.color = Color(0.06, 0.06, 0.06, 0.5)  # Darker, semi-transparent (neutral)
+		mid_border.color = Color(0.10, 0.10, 0.10, 0.5)  # Darker, semi-transparent (neutral)
 		lava_pool.add_child(mid_border)
 
 		# Inner border - darkest edge
@@ -3107,7 +3170,7 @@ func spawn_lava_pools():
 			var y = sin(angle) * radius * elongation_y
 			inner_vertices.append(Vector2(x, y))
 		inner_border.polygon = inner_vertices
-		inner_border.color = Color(0.03, 0.03, 0.03, 0.7)  # Very dark, but still transparent (neutral)
+		inner_border.color = Color(0.05, 0.05, 0.05, 0.7)  # Very dark, but still transparent (neutral)
 		lava_pool.add_child(inner_border)
 
 		# Create smooth gradient using 10 layered circles with irregular edges
@@ -3149,14 +3212,18 @@ func spawn_lava_pools():
 
 		# Add PointLight2D for glowing effect (scales with pool size)
 		var light = PointLight2D.new()
+		light.name = "LavaLight"
 		light.enabled = true
 		light.position = Vector2.ZERO
-		light.color = Color(1.0, 0.5, 0.1, 1.0)  # Warm orange glow
-		light.energy = rng.randf_range(1.0, 1.6)  # Vary intensity
+		light.color = Color(1.0, 0.4, 0.05, 1.0)  # Deep orange-red glow
+		light.energy = rng.randf_range(1.2, 1.8)  # Base intensity
 		light.blend_mode = PointLight2D.BLEND_MODE_ADD  # Additive blending for glow
 		light.range_z_min = -10
 		light.range_z_max = 10
 		light.shadow_enabled = false
+
+		# Store base energy for time-based scaling
+		light.set_meta("base_energy", light.energy)
 
 		# Create gradient texture for light falloff
 		var light_gradient = Gradient.new()
@@ -3172,7 +3239,12 @@ func spawn_lava_pools():
 
 		# Scale light based on average of elongation (bigger pools = bigger glow)
 		var avg_elongation = (elongation_x + elongation_y) / 2.0
-		light.texture_scale = (pool_size / 80.0) * avg_elongation
+		var base_scale = (pool_size / 80.0) * avg_elongation
+		light.texture_scale = base_scale
+		light.set_meta("base_scale", base_scale)
+
+		# Add to lava_lights group for time-based updates
+		light.add_to_group("lava_lights")
 
 		lava_pool.add_child(light)
 
@@ -3420,7 +3492,9 @@ func _on_node_added(node: Node) -> void:
 	"""Connect to newly spawned enemies"""
 	if node.is_in_group(Constants.GROUP_ENEMIES):
 		if node.has_signal("corpse_clicked"):
-			node.corpse_clicked.connect(_on_corpse_clicked)
+			if not node.corpse_clicked.is_connected(_on_corpse_clicked):
+				node.corpse_clicked.connect(_on_corpse_clicked)
+				print("🌐 Connected corpse_clicked for: %s" % node.name)
 
 func _on_corpse_clicked(corpse) -> void:
 	"""Handle corpse being clicked - open loot UI with AOE aggregation"""

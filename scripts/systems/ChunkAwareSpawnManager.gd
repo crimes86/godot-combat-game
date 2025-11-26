@@ -130,6 +130,11 @@ func initialize(world: Node, chunk_prop_system: Node, spawn_markers: Array) -> v
 	game_world = world
 	chunk_system = chunk_prop_system
 
+	# Get NetworkEnemyManager autoload for multiplayer sync
+	network_enemy_manager = get_node_or_null("/root/NetworkEnemyManager")
+	if network_enemy_manager:
+		print("🌐 SpawnManager: NetworkEnemyManager connected for multiplayer sync")
+
 	# Create seeded RNG for consistent spawns
 	spawn_rng = RandomNumberGenerator.new()
 	spawn_rng.seed = 12345  # Fixed seed for reproducibility

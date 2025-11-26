@@ -97,7 +97,12 @@ func update_profile() -> void:
 	# Get chunk info
 	var chunk_info = get_chunk_debug_info()
 
+	# Get time info
+	var time_info = get_time_debug_info()
+
 	label.text = """FPS: %d (%.1f ms/frame)
+━━━━━━━━━━━━━━━━━━━━━━
+TIME: %s
 ━━━━━━━━━━━━━━━━━━━━━━
 SCENE TOTALS:
   Nodes: %d
@@ -116,9 +121,10 @@ ENEMIES:
 %s
 ━━━━━━━━━━━━━━━━━━━━━━
 MEMORY: %.1f MB
-Press F3 to toggle
+Press F3 to toggle | F4 advance time
 """ % [
 		fps, frame_time_ms,
+		time_info,
 		total_nodes, sprite_count, polygon_count, particle_count, light_count,
 		system_info,
 		chunk_info,
@@ -494,6 +500,17 @@ func find_game_world() -> Node:
 		if child.name == "GameWorld":
 			return child
 	return null
+
+func get_time_debug_info() -> String:
+	"""Get current game time and period from TimeManager"""
+	if not TimeManager:
+		return "TimeManager not found"
+
+	var time_str = TimeManager.get_time_string()
+	var period = TimeManager.get_period().to_upper()
+	var brightness = TimeManager.get_brightness()
+
+	return "%s (%s) | Brightness: %.0f%%" % [time_str, period, brightness * 100]
 
 func refresh_enemy_debug() -> void:
 	"""Update enemy debug info without recreating chunk boundaries"""

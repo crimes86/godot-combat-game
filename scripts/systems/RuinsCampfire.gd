@@ -57,6 +57,12 @@ var ruins_sprite: Sprite2D = null
 var campfire_node: Node = null
 var interaction_area: Area2D = null
 var interaction_prompt: Label = null
+var ruins_light: PointLight2D = null
+
+# Day/night light scaling
+const BASE_RUINS_LIGHT_ENERGY: float = 0.6
+const MIN_RUINS_LIGHT_ENERGY: float = 0.1  # Subtle during day
+const MAX_RUINS_LIGHT_ENERGY: float = 1.5  # Strong mystical glow at night
 
 # References
 var player: CharacterBody2D = null
@@ -72,6 +78,9 @@ func _ready() -> void:
 	if not skeleton_scene:
 		push_error("❌ Could not load guardian_skeleton.tscn!")
 		return
+
+	# Cache ruins light reference
+	ruins_light = get_node_or_null("RuinsLight")
 
 	# Create visuals
 	create_ruins_visual()
@@ -116,6 +125,9 @@ func _physics_process(delta: float) -> void:
 	# Check for abandonment (only in campfire mode)
 	if current_state == RuinsState.CAMPFIRE:
 		check_abandonment(delta)
+
+	# Update ruins light based on time of day
+	update_ruins_light()
 
 	# Debug: Track skeleton states every 5 seconds
 	if Engine.get_physics_frames() % 300 == 0:  # Every 5 seconds at 60fps
@@ -432,6 +444,24 @@ func respawn_skeleton(data: Dictionary) -> void:
 func _on_skeleton_died(skeleton: Node) -> void:
 	"""Called when a skeleton dies"""
 	has_killed_skeleton = true
+
+func update_ruins_light() -> void:
+	"""Scale ruins light based on time of day"""
+	if not ruins_light or not is_instance_valid(ruins_light):
+		return
+
+	# Get day/night brightness factor from TimeManager
+	var time_brightness = 1.0
+	if TimeManager and TimeManager.canvas_modulate:
+		time_brightness = TimeManager.get_brightness()
+
+	# Map: night (0.51) -> MAX, day (0.99) -> MIN
+	var day_factor = inverse_lerp(0.51, 0.99, time_brightness)
+	day_factor = clamp(day_factor, 0.0, 1.0)
+	ruins_light.energy = lerp(MAX_RUINS_LIGHT_ENERGY, MIN_RUINS_LIGHT_ENERGY, day_factor)
+	# Scale light radius - bigger glow at night
+	var base_texture_scale = lerp(4.5, 2.5, day_factor)  # 4.5x at night, 2.5x at day
+	ruins_light.texture_scale = base_texture_scale
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE CONVERSION

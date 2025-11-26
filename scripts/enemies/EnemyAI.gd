@@ -311,11 +311,23 @@ func process_patrolling(delta: float) -> void:
 		change_state(State.COMBAT)
 		return
 
+	# In multiplayer, find the nearest player for aggro checks
+	var aggro_target = player
+	if multiplayer.has_multiplayer_peer():
+		var nearest_distance: float = INF
+		for p in get_tree().get_nodes_in_group(Constants.GROUP_PLAYER):
+			if is_instance_valid(p):
+				var dist = enemy.global_position.distance_to(p.global_position)
+				if dist < nearest_distance:
+					nearest_distance = dist
+					aggro_target = p
+
 	# Check for player in aggro range (auto-aggro) - but only if not on leash cooldown
-	if player and is_instance_valid(player) and leash_cooldown_timer <= 0:
-		var distance_to_player = enemy.global_position.distance_to(player.global_position)
+	if aggro_target and is_instance_valid(aggro_target) and leash_cooldown_timer <= 0:
+		var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
 		if distance_to_player <= aggro_range:
 			# AGGRO!
+			player = aggro_target  # Update player reference to the one who triggered aggro
 			trigger_aggro()
 			return
 
@@ -359,15 +371,32 @@ func pick_new_patrol_target() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func process_combat(delta: float) -> void:
+	# In multiplayer, find the nearest player instead of relying on cached_player
+	# This ensures enemies chase the correct player (the one who attacked them)
+	if multiplayer.has_multiplayer_peer():
+		var nearest_player: CharacterBody2D = null
+		var nearest_distance: float = INF
+		for p in get_tree().get_nodes_in_group(Constants.GROUP_PLAYER):
+			if is_instance_valid(p):
+				var dist = enemy.global_position.distance_to(p.global_position)
+				if dist < nearest_distance:
+					nearest_distance = dist
+					nearest_player = p
+		player = nearest_player
+
 	if not player or not is_instance_valid(player):
+		print("🤖 %s: DISENGAGE - no valid player" % enemy.name)
 		disengage()
 		return
 
 	# Check chunk-based leashing - if player left spawn chunk, disengage
-	var player_chunk = get_chunk_key(player.global_position)
-	if player_chunk != spawn_chunk:
-		disengage()
-		return
+	# Skip this check in multiplayer - server is authoritative and players may be in different chunks
+	if not multiplayer.has_multiplayer_peer():
+		var player_chunk = get_chunk_key(player.global_position)
+		if player_chunk != spawn_chunk:
+			print("🤖 %s: DISENGAGE - player in chunk %s, enemy spawn chunk %s" % [enemy.name, player_chunk, spawn_chunk])
+			disengage()
+			return
 
 	var distance_to_player = enemy.global_position.distance_to(player.global_position)
 
@@ -413,10 +442,22 @@ func process_combat(delta: float) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func process_attacking(delta: float) -> void:
+	# In multiplayer, find the nearest player
+	if multiplayer.has_multiplayer_peer():
+		var nearest_player: CharacterBody2D = null
+		var nearest_distance: float = INF
+		for p in get_tree().get_nodes_in_group(Constants.GROUP_PLAYER):
+			if is_instance_valid(p):
+				var dist = enemy.global_position.distance_to(p.global_position)
+				if dist < nearest_distance:
+					nearest_distance = dist
+					nearest_player = p
+		player = nearest_player
+
 	if not player or not is_instance_valid(player):
 		disengage()
 		return
-	
+
 	var distance_to_player = enemy.global_position.distance_to(player.global_position)
 	
 	# Account for enemy's enlarged size during crit window
@@ -542,10 +583,22 @@ func process_campfire_attracted(delta: float) -> void:
 		change_state(State.COMBAT)
 		return
 
+	# In multiplayer, find the nearest player for aggro checks
+	var aggro_target = player
+	if multiplayer.has_multiplayer_peer():
+		var nearest_distance: float = INF
+		for p in get_tree().get_nodes_in_group(Constants.GROUP_PLAYER):
+			if is_instance_valid(p):
+				var dist = enemy.global_position.distance_to(p.global_position)
+				if dist < nearest_distance:
+					nearest_distance = dist
+					aggro_target = p
+
 	# Check for player in aggro range (auto-aggro) - campfire skeletons still aggro
-	if player and is_instance_valid(player) and leash_cooldown_timer <= 0:
-		var distance_to_player = enemy.global_position.distance_to(player.global_position)
+	if aggro_target and is_instance_valid(aggro_target) and leash_cooldown_timer <= 0:
+		var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
 		if distance_to_player <= aggro_range:
+			player = aggro_target  # Update player reference
 			trigger_aggro()
 			return
 
@@ -731,18 +784,23 @@ func trigger_chain_aggro() -> void:
 
 func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
 	"""Called when enemy takes damage - this triggers combat!"""
+	print("🤖 EnemyAI._on_enemy_damaged: %s took %.1f damage, is_in_combat=%s, state=%s" % [
+		enemy.name, damage, is_in_combat, State.keys()[current_state]
+	])
 
 	# CRITICAL: This is how we enter combat (player attacked us)
+	print("🤖 EnemyAI: %s (instance=%d) checking combat, is_in_combat=%s" % [enemy.name, get_instance_id(), is_in_combat])
 	if not is_in_combat:
 		is_in_combat = true
+		print("🤖 EnemyAI: %s entering combat! is_in_combat now = %s" % [enemy.name, is_in_combat])
 
 		# Chain aggro - alert nearby allies when attacked!
 		trigger_chain_aggro()
 
-		# Enter combat immediately
-		if current_state == State.PATROLLING:
+		# Enter combat immediately - from ANY non-combat state
+		if current_state != State.COMBAT and current_state != State.ATTACKING:
 			change_state(State.COMBAT)
-	
+			print("🤖 EnemyAI: %s changed to COMBAT state" % enemy.name)
 	# Already in combat - chance to retreat
 	elif current_state != State.RETREATING:
 		# Don't retreat during crit window - stand and fight!

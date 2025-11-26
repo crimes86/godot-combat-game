@@ -687,11 +687,6 @@ func _input(event: InputEvent) -> void:
 				debug_update_timer = 0.0  # Reset timer
 				update_debug_visualization()  # Immediate update
 			
-			KEY_F4:
-				# Add 1 level
-				CharacterStats.debug_add_levels(1)
-				print("Added 1 level (now level ", CharacterStats.level, ")")
-			
 			KEY_F5:
 				# Add 5 levels
 				CharacterStats.debug_add_levels(5)
