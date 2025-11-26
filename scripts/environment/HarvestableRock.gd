@@ -125,18 +125,24 @@ func _physics_process(delta: float) -> void:
 	if not player_in_range:
 		return
 
+	# Check if we're the active interactable
+	var is_active = InteractionManager.is_active_interactable(self)
+
 	# MINED ROCK PILE STATE - Player can loot
 	if is_mined and rock_loot.size() > 0:
-		# Show loot prompt for rock pile
+		# Show loot prompt for rock pile (only if active)
 		if interaction_prompt and not is_mining:
-			var new_prompt_text = "[F] Loot Ore"
-			if new_prompt_text != current_prompt_text:
-				current_prompt_text = new_prompt_text
-				interaction_prompt.text = new_prompt_text
-				interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Golden color
-			interaction_prompt.visible = true
-			interaction_prompt.modulate.a = 1.0
-			update_prompt_position()
+			if is_active:
+				var new_prompt_text = "[F] Loot Ore"
+				if new_prompt_text != current_prompt_text:
+					current_prompt_text = new_prompt_text
+					interaction_prompt.text = new_prompt_text
+					interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Golden color
+				interaction_prompt.visible = true
+				interaction_prompt.modulate.a = 1.0
+				update_prompt_position()
+			else:
+				interaction_prompt.visible = false
 		return
 
 	# STANDING ROCK STATE - already mined but no loot
@@ -152,24 +158,27 @@ func _physics_process(delta: float) -> void:
 		cached_has_pickaxe = InventorySystem.has_pickaxe_equipped()
 	var has_pickaxe = cached_has_pickaxe
 
-	# Update interaction prompt visibility and position
+	# Update interaction prompt visibility and position (only if active interactable)
 	if interaction_prompt and not is_harvested and not is_mining:
-		var new_prompt_text = ""
-		if has_pickaxe:
-			new_prompt_text = "Hold [F] Mine Rock"
+		if not is_active:
+			interaction_prompt.visible = false
 		else:
-			new_prompt_text = "Requires Pickaxe"  # Changed from "Need Pickaxe"
-
-		# Only update text and color if it actually changed
-		if new_prompt_text != current_prompt_text:
-			current_prompt_text = new_prompt_text
-			interaction_prompt.text = new_prompt_text
+			var new_prompt_text = ""
 			if has_pickaxe:
-				interaction_prompt.add_theme_color_override("font_color", Color(0.8, 1.0, 0.8))  # Light green
-				prompt_fade_timer = 0.0  # Reset fade timer when showing action prompt
+				new_prompt_text = "Hold [F] Mine Rock"
 			else:
-				interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))  # Light red
-				prompt_fade_timer = 0.0  # Start fade timer for "Requires Pickaxe"
+				new_prompt_text = "Requires Pickaxe"  # Changed from "Need Pickaxe"
+
+			# Only update text and color if it actually changed
+			if new_prompt_text != current_prompt_text:
+				current_prompt_text = new_prompt_text
+				interaction_prompt.text = new_prompt_text
+				if has_pickaxe:
+					interaction_prompt.add_theme_color_override("font_color", Color(0.8, 1.0, 0.8))  # Light green
+					prompt_fade_timer = 0.0  # Reset fade timer when showing action prompt
+				else:
+					interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))  # Light red
+					prompt_fade_timer = 0.0  # Start fade timer for "Requires Pickaxe"
 
 		# Handle fade-out for "Requires Pickaxe" message
 		if not has_pickaxe and interaction_prompt.visible:
@@ -814,6 +823,10 @@ func _on_body_entered(body: Node2D) -> void:
 		player_in_range = true
 		prompt_fade_timer = 0.0  # Reset fade timer when entering range
 
+		# Register with InteractionManager
+		var distance = global_position.distance_to(body.global_position)
+		InteractionManager.register_interactable(self, InteractionManager.InteractionType.HARVESTABLE, distance)
+
 		# Immediately check pickaxe status when entering range (don't wait for cache timer)
 		cached_has_pickaxe = InventorySystem.has_pickaxe_equipped()
 		pickaxe_check_timer = 0.0  # Reset cache timer
@@ -827,6 +840,10 @@ func _on_body_exited(body: Node2D) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
 		prompt_fade_timer = 0.0  # Reset fade timer when leaving
+
+		# Unregister from InteractionManager
+		InteractionManager.unregister_interactable(self)
+
 		if interaction_prompt:
 			interaction_prompt.visible = false
 			interaction_prompt.modulate.a = 1.0  # Reset opacity

@@ -95,7 +95,7 @@ var unstuck_max_steps: int = 8  # Number of steps to take backward (configurable
 
 # Sound spam prevention (static across all enemies)
 static var last_attack_sound_time: float = 0.0
-static var attack_sound_cooldown: float = 0.15  # Min 0.15s between attack sounds
+static var attack_sound_cooldown: float = 0.4  # Min 0.4s between attack sounds (prevents audio stacking)
 
 # Aggro sound spam prevention (per-enemy, not static)
 var last_aggro_sound_time: float = 0.0
@@ -605,13 +605,10 @@ func perform_attack() -> void:
 
 	is_performing_attack = true
 
-	# Play attack sound IMMEDIATELY (before animation) with spam prevention
-	var current_time = Time.get_ticks_msec() / 1000.0
-	if current_time - last_attack_sound_time >= attack_sound_cooldown:
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			sound_manager.play_sound(sound_manager.SoundType.SKELETON_ATTACK, enemy.global_position, -8.0)
-			last_attack_sound_time = current_time
+	# Play attack sound (sound manager handles preventing overlap)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_skeleton_attack_sound(enemy.global_position, -8.0)
 
 	# Play attack animation
 	var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
@@ -692,13 +689,10 @@ func trigger_aggro() -> void:
 
 	is_in_combat = true
 
-	# Play aggro sound (menacing skeleton cackle) with spam prevention
-	var current_time = Time.get_ticks_msec() / 1000.0
-	if current_time - last_aggro_sound_time >= aggro_sound_cooldown:
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			sound_manager.play_sound(sound_manager.SoundType.SKELETON_AGGRO, enemy.global_position, -5.0)
-		last_aggro_sound_time = current_time
+	# Play aggro sound (sound manager handles preventing overlap)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_skeleton_aggro_sound(enemy.global_position, -5.0)
 
 	# Chain aggro - alert nearby allies!
 	trigger_chain_aggro()

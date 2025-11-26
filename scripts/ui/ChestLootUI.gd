@@ -74,7 +74,7 @@ func close_ui() -> void:
 	print("📦 Chest loot UI closed")
 
 func populate_loot_list() -> void:
-	"""Populate the loot list with items"""
+	"""Populate the loot list with item icon slots"""
 	if not loot_list:
 		return
 
@@ -82,17 +82,19 @@ func populate_loot_list() -> void:
 	for child in loot_list.get_children():
 		child.queue_free()
 
-	# Add loot items
+	# Create a grid container for icon slots
+	var grid = GridContainer.new()
+	grid.columns = 4  # 4 items per row
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	loot_list.add_child(grid)
+
+	# Add loot items as icon slots
 	for i in range(chest_loot.size()):
 		var item = chest_loot[i]
 		if item:  # Skip null items (already looted)
-			var item_row = create_loot_item_row(
-				item.get("name", "Unknown"),
-				item.get("desc", item.get("description", "")),
-				item.get("value", 0),
-				func(): loot_item(i)
-			)
-			loot_list.add_child(item_row)
+			var item_slot = create_loot_item_row(item, func(): loot_item(i))
+			grid.add_child(item_slot)
 
 	# Show message if all items looted
 	if chest_loot.filter(func(item): return item != null).size() == 0:
@@ -107,58 +109,91 @@ func populate_loot_list() -> void:
 		await get_tree().create_timer(1.0).timeout
 		close_ui()
 
-func create_loot_item_row(item_name: String, description: String, value: int, on_loot: Callable) -> PanelContainer:
-	"""Create a row for a loot item"""
-	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 70)
+func create_loot_item_row(item: Dictionary, on_loot: Callable) -> Control:
+	"""Create a compact icon slot for a loot item with hoverable tooltip"""
+	var item_name = item.get("name", "Unknown")
+	var description = item.get("desc", item.get("description", ""))
+	var value = item.get("value", 0)
+	var rarity = item.get("rarity", "common")
 
-	# Add background with steel gray border
+	# Get rarity color for border
+	var rarity_color = get_rarity_color(rarity)
+
+	# Use Button as the slot (handles click and has built-in styling)
+	var slot_button = Button.new()
+	slot_button.custom_minimum_size = Vector2(56, 56)
+	slot_button.text = get_item_icon_text(item)
+	slot_button.clip_text = true  # Clip text that doesn't fit
+	slot_button.add_theme_font_size_override("font_size", 10)
+	slot_button.add_theme_color_override("font_color", rarity_color)
+	slot_button.add_theme_color_override("font_hover_color", Color.WHITE)
+
+	# Style the button
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.12, 0.14, 0.6)  # Dark stone
-	style.border_width_left = 4
-	style.border_color = Color(0.55, 0.58, 0.62)  # Steel gray
+	style.bg_color = Color(0.15, 0.15, 0.18, 0.9)
+	style.border_color = rarity_color
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
 	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
 	style.corner_radius_bottom_left = 4
-	panel.add_theme_stylebox_override("panel", style)
+	style.corner_radius_bottom_right = 4
+	slot_button.add_theme_stylebox_override("normal", style)
 
-	var hbox = HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 10)
-	panel.add_child(hbox)
+	# Hover style
+	var hover_style = style.duplicate()
+	hover_style.bg_color = Color(0.25, 0.25, 0.30, 0.95)
+	slot_button.add_theme_stylebox_override("hover", hover_style)
 
-	# Left side - Item info
-	var vbox = VBoxContainer.new()
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hbox.add_child(vbox)
+	# Pressed style
+	var pressed_style = style.duplicate()
+	pressed_style.bg_color = Color(0.1, 0.1, 0.12, 0.95)
+	slot_button.add_theme_stylebox_override("pressed", pressed_style)
 
-	# Item name
-	var name_label = Label.new()
-	name_label.text = item_name
-	name_label.add_theme_font_size_override("font_size", 18)
-	name_label.add_theme_color_override("font_color", Color(0.85, 0.88, 0.92))  # Silver text
-	vbox.add_child(name_label)
+	# Build tooltip text
+	var tooltip = "%s\n%s" % [item_name, description]
+	if value > 0:
+		tooltip += "\nValue: 🪙 %d" % value
+	slot_button.tooltip_text = tooltip
 
-	# Description
-	var desc_label = Label.new()
-	desc_label.text = description
-	desc_label.add_theme_font_size_override("font_size", 12)
-	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
-	vbox.add_child(desc_label)
+	# Connect click
+	slot_button.pressed.connect(on_loot)
 
-	# Value
-	var value_label = Label.new()
-	value_label.text = "Value: %d gold" % value
-	value_label.add_theme_font_size_override("font_size", 12)
-	value_label.add_theme_color_override("font_color", Color.GOLD)
-	vbox.add_child(value_label)
+	return slot_button
 
-	# Right side - Loot button
-	var loot_button = Button.new()
-	loot_button.text = "LOOT"
-	loot_button.custom_minimum_size = Vector2(80, 50)
-	loot_button.pressed.connect(on_loot)
-	hbox.add_child(loot_button)
+func get_rarity_color(rarity: String) -> Color:
+	"""Get color based on item rarity"""
+	match rarity.to_lower():
+		"common":
+			return Color(0.6, 0.6, 0.6)  # Gray
+		"uncommon":
+			return Color(0.2, 0.8, 0.2)  # Green
+		"rare":
+			return Color(0.2, 0.4, 1.0)  # Blue
+		"epic":
+			return Color(0.6, 0.2, 0.8)  # Purple
+		"legendary":
+			return Color(1.0, 0.5, 0.0)  # Orange
+		_:
+			return Color(0.6, 0.6, 0.6)  # Default gray
 
-	return panel
+func get_item_icon_text(item: Dictionary) -> String:
+	"""Get short display text for item icon"""
+	var item_type = item.get("type", "")
+	var slot = item.get("slot", "")
+	var name = item.get("name", "?")
+
+	# Return abbreviated name (first 6 chars or full short name)
+	if name.length() <= 8:
+		return name
+	else:
+		# Get first word or abbreviate
+		var words = name.split(" ")
+		if words.size() > 1:
+			return words[0].substr(0, 6)
+		return name.substr(0, 6)
 
 func loot_item(index: int) -> void:
 	"""Loot a specific item from the chest"""
@@ -171,7 +206,13 @@ func loot_item(index: int) -> void:
 
 	# Try to add to inventory
 	if InventorySystem.add_item(item):
-		print("✨ Looted: %s" % item.get("name", "Unknown"))
+		var item_name = item.get("name", "Unknown")
+		var item_rarity = item.get("rarity", "Common")
+		print("✨ Looted: %s" % item_name)
+
+		# Show notification (plays pickup sound)
+		NotificationManager.notify_item_added(item_name, 1, item_rarity)
+
 		item_looted.emit(item)
 
 		# Mark as looted (set to null)
@@ -184,19 +225,45 @@ func loot_item(index: int) -> void:
 
 func _on_take_all_pressed() -> void:
 	"""Take all items from the chest"""
-	var looted_count = 0
-
+	# Collect items to loot first
+	var items_to_loot: Array = []
 	for i in range(chest_loot.size()):
 		var item = chest_loot[i]
-		if item:  # Skip already looted items
-			if InventorySystem.add_item(item):
-				looted_count += 1
-				item_looted.emit(item)
-				chest_loot[i] = null
-			else:
-				print("❌ Inventory full! Looted %d of %d items" % [looted_count, chest_loot.size()])
-				populate_loot_list()
-				return
+		if item:
+			items_to_loot.append({"index": i, "item": item})
+
+	if items_to_loot.is_empty():
+		populate_loot_list()
+		return
+
+	# Loot items with staggered notifications
+	_loot_items_staggered(items_to_loot)
+
+func _loot_items_staggered(items_to_loot: Array) -> void:
+	"""Loot items one by one with slight delay for cascading effect"""
+	var looted_count = 0
+
+	for entry in items_to_loot:
+		var i = entry["index"]
+		var item = entry["item"]
+
+		if InventorySystem.add_item(item):
+			var item_name = item.get("name", "Unknown")
+			var item_rarity = item.get("rarity", "Common")
+
+			# Show notification (plays pickup sound)
+			NotificationManager.notify_item_added(item_name, 1, item_rarity)
+
+			looted_count += 1
+			item_looted.emit(item)
+			chest_loot[i] = null
+
+			# Small delay between each notification for cascade effect
+			await get_tree().create_timer(0.12).timeout
+		else:
+			print("❌ Inventory full! Looted %d of %d items" % [looted_count, items_to_loot.size()])
+			populate_loot_list()
+			return
 
 	if looted_count > 0:
 		print("✨ Looted all %d items from chest" % looted_count)

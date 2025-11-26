@@ -42,6 +42,11 @@ func notify_item_added(item_name: String, quantity: int = 1, rarity: String = "C
 	notification.setup_item_added(item_name, quantity, rarity)
 	_show_notification(notification)
 
+	# Play item pickup sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -5.0)
+
 ## Show an item removed notification
 func notify_item_removed(item_name: String, quantity: int = 1, rarity: String = "COMMON") -> void:
 	var notification = _create_notification()
@@ -54,24 +59,18 @@ func _create_notification() -> ItemNotification:
 	return notification
 
 func _show_notification(notification: ItemNotification) -> void:
-	# First, shift all existing notifications upward to make room
-	var shift_duration = 0.25  # How long the shift takes
+	# Shift all existing notifications upward to make room (animated)
+	var shift_duration = 0.15  # Quick shift
 
-	if notification_queue.size() > 0:
-		# Calculate new positions for existing notifications (they move up one slot)
-		for i in range(notification_queue.size()):
-			var existing_notification = notification_queue[i]
-			if is_instance_valid(existing_notification):
-				# Move up by one notification_spacing
-				var current_y = existing_notification.position.y
-				var new_y = current_y - notification_spacing
-				var tween = create_tween()
-				tween.tween_property(existing_notification, "position:y", new_y, shift_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	for i in range(notification_queue.size()):
+		var existing_notification = notification_queue[i]
+		if is_instance_valid(existing_notification):
+			# Move up by one notification_spacing
+			var new_y = -(notification_queue.size() - i) * notification_spacing
+			var tween = create_tween()
+			tween.tween_property(existing_notification, "position:y", new_y, shift_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
-		# Wait for shift to complete before adding new notification
-		await get_tree().create_timer(shift_duration).timeout
-
-	# Now add the new notification at the bottom (position 0)
+	# Add the new notification at the bottom (position 0) immediately
 	notification_queue.append(notification)
 	notification.position = Vector2(0, 0)
 	notification_container.add_child(notification)

@@ -30,6 +30,8 @@ enum SoundType {
 
 	# UI/Loot sounds
 	GOLD_LOOT,  # Gold coin jingling (looting corpses, shop transactions)
+	ITEM_PICKUP,  # Satisfying item pickup sound (inventory notification)
+	CHEST_OPEN,  # Treasure chest opening sound
 
 	# Environment sounds
 	FIRE_FUEL_ADD  # Fire magic sound when adding fuel to campfire
@@ -37,6 +39,9 @@ enum SoundType {
 
 # Cache for generated sounds
 var sound_cache: Dictionary = {}
+
+# Active skeleton sound player (only one skeleton sound at a time - attack OR aggro)
+var active_skeleton_sound_player: AudioStreamPlayer2D = null
 
 # Real sound file variations (for randomization)
 var weakpoint_sounds: Array[AudioStream] = []
@@ -47,6 +52,8 @@ var skeleton_hurt_sound: AudioStream = null
 var skeleton_attack_sound: AudioStream = null  # Skeleton's menacing cackle
 var skeleton_death_sounds: Array[AudioStream] = []  # Skeleton bones collapsing (2 variations)
 var gold_loot_sound: AudioStream = null  # Gold coin jingling
+var item_pickup_sound: AudioStream = null  # Satisfying item pickup sound
+var chest_open_sound: AudioStream = null  # Treasure chest opening sound
 var crit_window_open_sound: AudioStream = null  # Crystalline chime when crit window opens
 var fire_fuel_add_sound: AudioStream = null  # Fire magic sound when adding fuel
 
@@ -176,6 +183,20 @@ func _load_real_sounds() -> void:
 		print("  ✅ Loaded gold_loot.wav")
 	else:
 		push_warning("  ⚠️ Failed to load gold_loot.wav")
+
+	# Load item pickup sound (satisfying pickup)
+	item_pickup_sound = load("res://assets/sounds/ui/item_pickup.wav")
+	if item_pickup_sound:
+		print("  ✅ Loaded item_pickup.wav")
+	else:
+		push_warning("  ⚠️ Failed to load item_pickup.wav")
+
+	# Load chest open sound
+	chest_open_sound = load("res://assets/sounds/ui/chest_open.wav")
+	if chest_open_sound:
+		print("  ✅ Loaded chest_open.wav")
+	else:
+		push_warning("  ⚠️ Failed to load chest_open.wav")
 
 	# Load crit window open sound (crystalline chime)
 	crit_window_open_sound = load("res://assets/sounds/combat/crit_window_open.wav")
@@ -316,6 +337,8 @@ func _generate_all_sounds() -> void:
 
 	# UI/Loot sounds (use real sound if loaded, otherwise generate placeholder)
 	sound_cache[SoundType.GOLD_LOOT] = gold_loot_sound if gold_loot_sound else _generate_gold_loot()
+	sound_cache[SoundType.ITEM_PICKUP] = item_pickup_sound if item_pickup_sound else _generate_item_pickup()
+	sound_cache[SoundType.CHEST_OPEN] = chest_open_sound if chest_open_sound else _generate_chest_open()
 
 	# Environment sounds
 	sound_cache[SoundType.FIRE_FUEL_ADD] = fire_fuel_add_sound if fire_fuel_add_sound else _generate_fire_fuel_add()
@@ -445,6 +468,33 @@ func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 
 	get_tree().root.add_child(player)
 	player.play()
+
+## Play skeleton sound (attack or aggro) - only one at a time, no overlap
+func play_skeleton_attack_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
+	_play_skeleton_sound(global_pos, volume_db)
+
+## Play skeleton aggro sound - uses same single-player system as attack
+func play_skeleton_aggro_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0) -> void:
+	_play_skeleton_sound(global_pos, volume_db)
+
+func _play_skeleton_sound(global_pos: Vector2, volume_db: float) -> void:
+	# If a skeleton sound is already playing, don't play another
+	if is_instance_valid(active_skeleton_sound_player) and active_skeleton_sound_player.playing:
+		return
+
+	if not skeleton_attack_sound:
+		return
+
+	# Create or reuse the sound player
+	if not is_instance_valid(active_skeleton_sound_player):
+		active_skeleton_sound_player = AudioStreamPlayer2D.new()
+		active_skeleton_sound_player.stream = skeleton_attack_sound
+		get_tree().root.add_child(active_skeleton_sound_player)
+
+	active_skeleton_sound_player.volume_db = volume_db
+	active_skeleton_sound_player.global_position = global_pos
+	active_skeleton_sound_player.pitch_scale = randf_range(0.95, 1.05)
+	active_skeleton_sound_player.play()
 
 ## Play skeleton death sound (random between 2 bone collapse variations)
 func play_skeleton_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
@@ -696,6 +746,14 @@ func _generate_skeleton_sound() -> AudioStreamWAV:
 func _generate_gold_loot() -> AudioStreamWAV:
 	# Bright coin jingling placeholder (high metallic chime)
 	return _create_wav_tone(1200.0, 0.15, 0.4)
+
+func _generate_item_pickup() -> AudioStreamWAV:
+	# Satisfying pickup placeholder (soft pouch thud with shimmer)
+	return _create_wav_sweep(400.0, 600.0, 0.2, 0.3)
+
+func _generate_chest_open() -> AudioStreamWAV:
+	# Chest opening placeholder (creaky wood sound)
+	return _create_wav_sweep(150.0, 300.0, 0.5, 0.4)
 
 func _generate_footstep_soft() -> AudioStreamWAV:
 	# Soft cloth/leather footstep (low thud)

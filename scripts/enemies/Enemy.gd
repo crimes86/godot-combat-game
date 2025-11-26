@@ -824,6 +824,8 @@ func update_loot_proximity() -> void:
 		player_in_loot_range = false
 		if loot_prompt:
 			loot_prompt.visible = false
+		# Unregister if we were in range
+		InteractionManager.unregister_interactable(self)
 		return
 
 	# Check distance to player
@@ -831,8 +833,21 @@ func update_loot_proximity() -> void:
 	var was_in_range = player_in_loot_range
 	player_in_loot_range = distance <= 80.0  # Same range as chest interaction
 
-	# Update prompt visibility (show if has gold OR items, and UI not open)
-	if player_in_loot_range and (corpse_gold > 0 or corpse_loot.size() > 0) and not loot_ui_open:
+	# Register/unregister with InteractionManager
+	if player_in_loot_range and (corpse_gold > 0 or corpse_loot.size() > 0):
+		if not was_in_range:
+			InteractionManager.register_interactable(self, InteractionManager.InteractionType.LOOT_BODY, distance)
+		else:
+			# Update distance
+			InteractionManager.register_interactable(self, InteractionManager.InteractionType.LOOT_BODY, distance)
+	elif was_in_range:
+		InteractionManager.unregister_interactable(self)
+
+	# Check if we're the active interactable
+	var is_active = InteractionManager.is_active_interactable(self)
+
+	# Update prompt visibility (show if has gold OR items, UI not open, AND we're active)
+	if player_in_loot_range and (corpse_gold > 0 or corpse_loot.size() > 0) and not loot_ui_open and is_active:
 		if not loot_prompt:
 			create_loot_prompt()
 		loot_prompt.visible = true

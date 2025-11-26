@@ -25,6 +25,7 @@ InventorySystem="*res://scripts/systems/InventorySystem.gd"
 TreeAudioManager="*res://scripts/systems/TreeAudioManager.gd"
 LootSpawnManager="*res://scripts/systems/LootSpawnManager.gd"
 NotificationManager="*res://scripts/systems/NotificationManager.gd"
+InteractionManager="*res://scripts/systems/InteractionManager.gd"
 NetworkManager="*res://scripts/networking/NetworkManager.gd"
 
 [editor_plugins]

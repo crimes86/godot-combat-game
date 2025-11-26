@@ -21,19 +21,19 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -200.0
+offset_left = -140.0
 offset_top = 60.0
-offset_right = 200.0
-offset_bottom = 320.0
+offset_right = 140.0
+offset_bottom = 60.0
 grow_horizontal = 2
 grow_vertical = 2
 
 [node name="MarginContainer" type="MarginContainer" parent="Control/Panel"]
 layout_mode = 2
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 20
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 20
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Control/Panel/MarginContainer"]
 layout_mode = 2
@@ -45,8 +45,9 @@ layout_mode = 2
 [node name="TitleLabel" type="Label" parent="Control/Panel/MarginContainer/VBoxContainer/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 18
 text = "Treasure Chest"
+horizontal_alignment = 1
 
 [node name="CloseButton" type="Button" parent="Control/Panel/MarginContainer/VBoxContainer/Header"]
 layout_mode = 2
@@ -55,19 +56,16 @@ flat = true
 
 [node name="InstructionLabel" type="Label" parent="Control/Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
-text = "Click items to loot or press F to take all"
+theme_override_font_sizes/font_size = 12
+text = "Click to loot, hover for details"
 horizontal_alignment = 1
 
-[node name="LootContainer" type="ScrollContainer" parent="Control/Panel/MarginContainer/VBoxContainer"]
+[node name="LootContainer" type="CenterContainer" parent="Control/Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-size_flags_vertical = 3
 
 [node name="LootList" type="VBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer/LootContainer"]
 layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/separation = 10
+theme_override_constants/separation = 8
 
 [node name="ButtonContainer" type="HBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2

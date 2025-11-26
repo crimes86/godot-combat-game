@@ -180,7 +180,9 @@ func _physics_process(delta: float) -> void:
 
 	# Update interaction prompt visibility and position with fade-in
 	if interaction_prompt:
-		var should_show = player_in_range and (not shop_ui or not shop_ui.visible)
+		# Only show if we're the active interactable AND player is in range AND shop is closed
+		var is_active = InteractionManager.is_active_interactable(self)
+		var should_show = player_in_range and is_active and (not shop_ui or not shop_ui.visible)
 
 		# Fade in/out smoothly
 		if should_show:
@@ -199,12 +201,9 @@ func _physics_process(delta: float) -> void:
 
 func _input(event: InputEvent) -> void:
 	# Handle F key press when player is in range (edge-triggered, not polling)
-	if player_in_range and event is InputEventKey and event.pressed and not event.echo:
+	# Only respond if we're the active interactable
+	if player_in_range and InteractionManager.is_active_interactable(self) and event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F:
-			# PRIORITY CHECK: If there's a lootable corpse nearby, let the corpse handle it
-			if has_nearby_lootable_corpse():
-				print("💀 Nearby corpse detected - vendor interaction blocked (corpse takes priority)")
-				return  # Don't handle input - let corpse system handle it
 
 			# Only open if shop is not already visible (close is handled by ShopUI)
 			if not shop_ui or not shop_ui.visible:
@@ -512,11 +511,16 @@ func has_nearby_lootable_corpse() -> bool:
 func _on_body_entered(body: Node) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = true
+		# Register with InteractionManager
+		var distance = global_position.distance_to(body.global_position)
+		InteractionManager.register_interactable(self, InteractionManager.InteractionType.NPC, distance)
 		print("💬 %s: %s (Press F to shop)" % [vendor_name, greeting_text])
 
 func _on_body_exited(body: Node) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
+		# Unregister from InteractionManager
+		InteractionManager.unregister_interactable(self)
 		print("👋 Player left vendor area")
 
 		# Close shop if player leaves

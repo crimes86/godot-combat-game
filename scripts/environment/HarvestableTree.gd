@@ -123,18 +123,24 @@ func _physics_process(delta: float) -> void:
 	if not player_in_range:
 		return
 
+	# Check if we're the active interactable
+	var is_active = InteractionManager.is_active_interactable(self)
+
 	# FALLEN TREE STATE - Player can loot
 	if is_fallen and tree_loot.size() > 0:
-		# Show loot prompt for fallen tree
+		# Show loot prompt for fallen tree (only if active)
 		if interaction_prompt and not is_chopping:
-			var new_prompt_text = "[F] Loot Wood"
-			if new_prompt_text != current_prompt_text:
-				current_prompt_text = new_prompt_text
-				interaction_prompt.text = new_prompt_text
-				interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Golden color
-			interaction_prompt.visible = true
-			interaction_prompt.modulate.a = 1.0
-			update_prompt_position()
+			if is_active:
+				var new_prompt_text = "[F] Loot Wood"
+				if new_prompt_text != current_prompt_text:
+					current_prompt_text = new_prompt_text
+					interaction_prompt.text = new_prompt_text
+					interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Golden color
+				interaction_prompt.visible = true
+				interaction_prompt.modulate.a = 1.0
+				update_prompt_position()
+			else:
+				interaction_prompt.visible = false
 		return
 
 	# STANDING TREE STATE - Player can chop
@@ -151,24 +157,27 @@ func _physics_process(delta: float) -> void:
 		cached_has_axe = InventorySystem.has_axe_equipped()
 	var has_axe = cached_has_axe
 
-	# Update interaction prompt visibility and position
+	# Update interaction prompt visibility and position (only if active interactable)
 	if interaction_prompt and not is_harvested and not is_chopping:
-		var new_prompt_text = ""
-		if has_axe:
-			new_prompt_text = "Hold [F] Chop Tree"
+		if not is_active:
+			interaction_prompt.visible = false
 		else:
-			new_prompt_text = "Requires Axe"  # Changed from "Need Axe"
-
-		# Only update text and color if it actually changed (avoid expensive theme override calls)
-		if new_prompt_text != current_prompt_text:
-			current_prompt_text = new_prompt_text
-			interaction_prompt.text = new_prompt_text
+			var new_prompt_text = ""
 			if has_axe:
-				interaction_prompt.add_theme_color_override("font_color", Color(0.8, 1.0, 0.8))  # Light green
-				prompt_fade_timer = 0.0  # Reset fade timer when showing action prompt
+				new_prompt_text = "Hold [F] Chop Tree"
 			else:
-				interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))  # Light red
-				prompt_fade_timer = 0.0  # Start fade timer for "Requires Axe"
+				new_prompt_text = "Requires Axe"  # Changed from "Need Axe"
+
+			# Only update text and color if it actually changed (avoid expensive theme override calls)
+			if new_prompt_text != current_prompt_text:
+				current_prompt_text = new_prompt_text
+				interaction_prompt.text = new_prompt_text
+				if has_axe:
+					interaction_prompt.add_theme_color_override("font_color", Color(0.8, 1.0, 0.8))  # Light green
+					prompt_fade_timer = 0.0  # Reset fade timer when showing action prompt
+				else:
+					interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))  # Light red
+					prompt_fade_timer = 0.0  # Start fade timer for "Requires Axe"
 
 		# Handle fade-out for "Requires Axe" message
 		if not has_axe and interaction_prompt.visible:
@@ -900,6 +909,10 @@ func _on_body_entered(body: Node2D) -> void:
 		player_in_range = true
 		prompt_fade_timer = 0.0  # Reset fade timer when entering range
 
+		# Register with InteractionManager
+		var distance = global_position.distance_to(body.global_position)
+		InteractionManager.register_interactable(self, InteractionManager.InteractionType.HARVESTABLE, distance)
+
 		# Immediately check axe status when entering range (don't wait for cache timer)
 		cached_has_axe = InventorySystem.has_axe_equipped()
 		axe_check_timer = 0.0  # Reset cache timer
@@ -913,6 +926,10 @@ func _on_body_exited(body: Node2D) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
 		prompt_fade_timer = 0.0  # Reset fade timer when leaving
+
+		# Unregister from InteractionManager
+		InteractionManager.unregister_interactable(self)
+
 		if interaction_prompt:
 			interaction_prompt.visible = false
 			interaction_prompt.modulate.a = 1.0  # Reset opacity

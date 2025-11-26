@@ -1206,9 +1206,21 @@ func update_interaction_prompt() -> void:
 		return
 
 	var distance = player.global_position.distance_to(global_position)
+	var was_in_range = player_in_interact_range
 	player_in_interact_range = distance <= 100.0  # Interact range slightly smaller than warmth radius
 
-	if player_in_interact_range and not is_fueling:
+	# Register/unregister with InteractionManager
+	if player_in_interact_range and not was_in_range:
+		InteractionManager.register_interactable(self, InteractionManager.InteractionType.CAMPFIRE, distance)
+	elif not player_in_interact_range and was_in_range:
+		InteractionManager.unregister_interactable(self)
+	elif player_in_interact_range:
+		# Update distance
+		InteractionManager.register_interactable(self, InteractionManager.InteractionType.CAMPFIRE, distance)
+
+	# Only show prompt if we're the active interactable
+	var is_active = InteractionManager.is_active_interactable(self)
+	if player_in_interact_range and is_active and not is_fueling:
 		# Check if we should show "no fuel" message
 		if no_fuel_message_timer > 0.0:
 			interaction_prompt.text = "Acquire bone embers or dry logs first"
@@ -1320,7 +1332,8 @@ func _draw_progress_circle() -> void:
 
 func handle_fuel_interaction(delta: float) -> void:
 	"""Handle F press/hold for fuel: tap=1 of each, hold=all"""
-	if not player_in_interact_range or not player or not is_instance_valid(player):
+	# Only respond if we're the active interactable
+	if not player_in_interact_range or not player or not is_instance_valid(player) or not InteractionManager.is_active_interactable(self):
 		if is_fueling:
 			cancel_fueling()
 		return

@@ -38,16 +38,19 @@ func _ready() -> void:
 	print("💎 PickableItem '%s' initialized at position %s" % [item_name, global_position])
 
 func _physics_process(_delta: float) -> void:
+	# Check if we're the active interactable
+	var is_active = InteractionManager.is_active_interactable(self)
+
 	# Update interaction prompt visibility
 	if interaction_prompt:
-		if player_in_range and not is_picked_up:
+		if player_in_range and not is_picked_up and is_active:
 			interaction_prompt.visible = true
 			update_prompt_position()
 		else:
 			interaction_prompt.visible = false
 
-	# Check for F key press when player is in range (use is_physical_key_pressed to get just-pressed)
-	if player_in_range and not is_picked_up:
+	# Check for F key press when player is in range AND we're active
+	if player_in_range and not is_picked_up and is_active:
 		if Input.is_physical_key_pressed(KEY_F):
 			pick_up_item()
 
@@ -145,12 +148,17 @@ func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = true
+		# Register with InteractionManager
+		var distance = global_position.distance_to(body.global_position)
+		InteractionManager.register_interactable(self, InteractionManager.InteractionType.PICKABLE_ITEM, distance)
 		print("👤 Player entered range of %s" % item_name)
 
 func _on_body_exited(body: Node2D) -> void:
 	"""Player left interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
+		# Unregister from InteractionManager
+		InteractionManager.unregister_interactable(self)
 		print("👤 Player left range of %s" % item_name)
 
 # ===== SETUP HELPERS =====

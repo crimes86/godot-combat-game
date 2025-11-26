@@ -89,11 +89,13 @@ metadata/_tab_index = 0
 [node name="ScrollContainer" type="ScrollContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Weapons"]
 layout_mode = 2
 
-[node name="WeaponsList" type="VBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Weapons/ScrollContainer"]
+[node name="WeaponsList" type="GridContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Weapons/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 10
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 4
 
 [node name="Tools" type="MarginContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer"]
 visible = false
@@ -107,11 +109,13 @@ metadata/_tab_index = 1
 [node name="ScrollContainer" type="ScrollContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Tools"]
 layout_mode = 2
 
-[node name="ToolsList" type="VBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Tools/ScrollContainer"]
+[node name="ToolsList" type="GridContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Tools/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 10
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 4
 
 [node name="Armor" type="MarginContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer"]
 visible = false
@@ -125,11 +129,13 @@ metadata/_tab_index = 2
 [node name="ScrollContainer" type="ScrollContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Armor"]
 layout_mode = 2
 
-[node name="ArmorList" type="VBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Armor/ScrollContainer"]
+[node name="ArmorList" type="GridContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Armor/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 10
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 4
 
 [node name="Sell" type="MarginContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer"]
 visible = false
@@ -143,8 +149,10 @@ metadata/_tab_index = 3
 [node name="ScrollContainer" type="ScrollContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Sell"]
 layout_mode = 2
 
-[node name="SellList" type="VBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Sell/ScrollContainer"]
+[node name="SellList" type="GridContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Sell/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 10
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 4

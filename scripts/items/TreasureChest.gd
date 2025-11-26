@@ -86,16 +86,19 @@ func _ready() -> void:
 	print("📦 TreasureChest initialized at position %s" % global_position)
 
 func _physics_process(_delta: float) -> void:
-	# Update interaction prompt visibility
+	# Check if we're the active interactable
+	var is_active = InteractionManager.is_active_interactable(self)
+
+	# Update interaction prompt visibility (only show if active)
 	if interaction_prompt:
-		if player_in_range and not is_opened:
+		if player_in_range and not is_opened and is_active:
 			interaction_prompt.visible = true
 			update_prompt_position()
 		else:
 			interaction_prompt.visible = false
 
-	# Check for F key press when player is in range
-	if player_in_range and not is_opened:
+	# Check for F key press when player is in range AND we're active
+	if player_in_range and not is_opened and is_active:
 		if Input.is_key_pressed(KEY_F):
 			open_chest()
 
@@ -233,6 +236,11 @@ func open_chest() -> void:
 	is_opened = true
 	print("📦 Opening treasure chest at position %s" % global_position)
 
+	# Play chest open sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_sound(sound_manager.SoundType.CHEST_OPEN, global_position, -3.0)
+
 	# Hide interaction prompt
 	if interaction_prompt:
 		interaction_prompt.visible = false
@@ -348,11 +356,16 @@ func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = true
+		# Register with InteractionManager
+		var distance = global_position.distance_to(body.global_position)
+		InteractionManager.register_interactable(self, InteractionManager.InteractionType.TREASURE_CHEST, distance)
 
 func _on_body_exited(body: Node2D) -> void:
 	"""Player left interaction range"""
 	if body.is_in_group(Constants.GROUP_PLAYER):
 		player_in_range = false
+		# Unregister from InteractionManager
+		InteractionManager.unregister_interactable(self)
 
 func add_loot_indicator() -> void:
 	"""Add shiny glimmer effect to indicate this chest has loot (WoW-style)"""
