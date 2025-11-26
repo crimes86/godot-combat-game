@@ -170,17 +170,26 @@ func _physics_process(delta: float) -> void:
 			if heal_timer >= heal_interval:
 				if player.has_method("heal"):
 					player.heal(heal_rate * heal_interval)
-					# Play healing sound in pattern: 6-6-4 (sound 6 twice, then sound 4)
-					if heal_pattern_index < 2:
-						# Play sound 6 for positions 0 and 1 (healing_6.mp3)
-						if healing_audio_1:
-							healing_audio_1.play()
-					else:
-						# Play sound 4 for position 2 (healing_4.mp3)
-						if healing_audio_2:
-							healing_audio_2.play()
-					# Advance pattern: 0 -> 1 -> 2 -> 0 -> 1 -> 2 ... (6-6-4-6-6-4...)
-					heal_pattern_index = (heal_pattern_index + 1) % 3
+					# Only play healing sound if this is the LOCAL player
+					# In multiplayer, check if player's authority matches our peer ID
+					var is_local_player = true
+					if multiplayer.has_multiplayer_peer():
+						var local_peer_id = multiplayer.get_unique_id()
+						var player_authority = player.get_multiplayer_authority() if player.has_method("get_multiplayer_authority") else 1
+						is_local_player = (player_authority == local_peer_id)
+
+					if is_local_player:
+						# Play healing sound in pattern: 6-6-4 (sound 6 twice, then sound 4)
+						if heal_pattern_index < 2:
+							# Play sound 6 for positions 0 and 1 (healing_6.mp3)
+							if healing_audio_1:
+								healing_audio_1.play()
+						else:
+							# Play sound 4 for position 2 (healing_4.mp3)
+							if healing_audio_2:
+								healing_audio_2.play()
+						# Advance pattern: 0 -> 1 -> 2 -> 0 -> 1 -> 2 ... (6-6-4-6-6-4...)
+						heal_pattern_index = (heal_pattern_index + 1) % 3
 				heal_timer = 0.0
 
 	# Update no fuel message timer

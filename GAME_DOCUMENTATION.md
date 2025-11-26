@@ -661,21 +661,25 @@ weakpoint.take_damage(final_damage)
 - Crit: 100 × 2.0 = 200 damage per weakpoint
 - 3 weakpoints = 600 total burst damage
 
-#### Multiplayer Synchronization
+#### Multiplayer Synchronization ✅ IMPLEMENTED
 
-**Owner-Only Visibility** (key security feature):
-- Only the player who crits sees the weakpoints
-- Prevents kill-stealing
-- Allows multiple simultaneous crit windows on same target
-- Each player has independent weakpoints
+**All-Client Visibility** (current implementation):
+- All clients see weakpoints when any player triggers a crit
+- Server broadcasts weakpoint positions to all connected clients
+- Enables cooperative gameplay where players can see each other's crit windows
 
-**Server Authority**:
-- Server calculates crit chance (prevents client manipulation)
-- Server generates weakpoint positions (anti-cheat)
-- Server validates all weakpoint clicks (spatial + timing)
-- Server applies damage after validation
+**Server Authority** ✅:
+- Server rolls for crits (`_server_roll_for_crit()` in NetworkEnemyManager)
+- Server generates weakpoint positions and broadcasts via `broadcast_crit_window_start()`
+- Server validates all weakpoint hits via `request_weakpoint_hit()` RPC
+- Server applies damage and broadcasts results to all clients
 
-**Network Messages** (see Multiplayer Crit/Weakpoint System Design for full details)
+**Key RPC Functions** (in NetworkEnemyManager.gd):
+- `request_attack()` - Client requests attack, server rolls crit
+- `broadcast_crit_window_start()` - Server → all clients: start crit window
+- `request_weakpoint_hit()` - Client → server: report weakpoint click
+- `_client_weakpoint_hit()` - Server → all clients: sync weakpoint destruction
+- `_client_enemy_damaged()` - Server → all clients: sync damage/health/sounds
 
 #### Performance Optimization
 
@@ -716,9 +720,9 @@ Optimized weakpoint positions for skeleton enemies:
 
 **Tool**: Use `scenes/tools/weakpoint_positioner.tscn` for visual editing of weakpoint positions.
 
-### Multiplayer Crit/Weakpoint System Design
+### Multiplayer Crit/Weakpoint System Design ✅ IMPLEMENTED
 
-**Design Philosophy**: Owner-only weakpoint visibility for fair PvP/PvE and optimal performance
+**Current Implementation**: All-client visibility with server-authoritative crit rolls and damage
 
 #### Weakpoint Ownership Model
 
@@ -1004,100 +1008,98 @@ func track_weakpoint_attempt(player_id: int, success: bool):
 
 #### Implementation Roadmap
 
-**Phase 1: Multiplayer Foundation** (Current: Single-player working)
-- Add Godot's built-in multiplayer (RPC/NetworkMultiplayerENet)
-- Implement server authority for combat
-- Add `owner_player_id` to weakpoint nodes
-- Network crit trigger events
+**Phase 1: Multiplayer Foundation** ✅ COMPLETED
+- Add Godot's built-in multiplayer (RPC/NetworkMultiplayerENet) ✅
+- Implement server authority for combat ✅
+- Add `network_id` to enemy and TrainingDummy nodes ✅
+- Network attack and damage events ✅
 
-**Phase 2: Crit Window Synchronization**
-- Server generates weakpoint positions (server-authoritative)
-- Send positions only to owner
-- Validate all weakpoint hits server-side
-- Broadcast crit window notifications (for visual effects)
+**Phase 2: Crit Window Synchronization** ✅ COMPLETED
+- Server generates weakpoint positions (server-authoritative) ✅
+- Server rolls for crits (`_server_roll_for_crit()` in NetworkEnemyManager) ✅
+- Broadcast weakpoint positions to all clients (`broadcast_crit_window_start()`) ✅
+- Clients spawn weakpoints at server-provided positions ✅
+- Server validates all weakpoint hits (`request_weakpoint_hit()`) ✅
+- Broadcast weakpoint destruction to sync visual effects ✅
 
-**Phase 3: Anti-Cheat Implementation**
+**Phase 3: Anti-Cheat Implementation** (Planned)
 - Rate limiting system
 - Pattern analysis for bot detection
 - Spatial validation
 - Success rate monitoring
 - Admin tools for reviewing flagged players
 
-**Phase 4: Optimization**
+**Phase 4: Optimization** (Planned)
 - Spatial partitioning for network events
 - Message batching (send every 50ms, not instantly)
 - Client-side prediction for smooth gameplay
 - Object pooling for weakpoint nodes
 - Particle effect culling
 
-**Phase 5: Testing & Tuning**
+**Phase 5: Testing & Tuning** (Planned)
 - Stress test with 5, 10, 15, 25 players
 - Measure network bandwidth and latency
 - Tune anti-cheat thresholds
 - Balance PvP crit window difficulty
 - Optimize render performance
 
-#### Code Structure Changes
+#### Code Structure (Implemented)
 
-**Minimal changes to existing code!**
-
-**Current (Single-Player)**:
+**NetworkEnemyManager.gd** - Central multiplayer coordinator:
 ```gdscript
-# Enemy.gd
-func spawn_weakpoints():
-    for i in range(num_weakpoints):
-        var weakpoint = weakpoint_scene.instantiate()
-        weakpoint.position = chosen_positions[i]
-        add_child(weakpoint)
+# Server-side attack handling with crit roll
+@rpc("any_peer", "reliable")
+func request_attack(enemy_network_id: int, damage: float) -> void:
+    var is_crit = _server_roll_for_crit(attacker_id)
+    if is_crit:
+        var crit_window_mgr = _get_server_crit_window_manager()
+        crit_window_mgr.start_window(enemy)  # Triggers spawn_weakpoints()
+
+# Broadcast crit window to all clients
+func broadcast_crit_window_start(enemy_network_id: int, weakpoint_positions: Array):
+    rpc("_client_crit_window_start", enemy_network_id, serialized_positions)
+
+# Client receives and spawns weakpoints
+@rpc("authority", "call_local", "reliable")
+func _client_crit_window_start(enemy_network_id: int, serialized_positions: Array):
+    enemy.grow_for_crit_window_client(weakpoint_positions)
 ```
 
-**Future (Multiplayer)**:
+**Enemy.gd** - Server spawns, broadcasts positions:
 ```gdscript
-# Enemy.gd (Server)
-func spawn_weakpoints(owner_player_id: int):
-    # Server generates positions
-    var positions = generate_weakpoint_positions()
+func spawn_weakpoints() -> void:
+    # ... generate positions ...
+    # In multiplayer, broadcast to clients
+    if multiplayer.is_server() and network_id >= 0:
+        network_enemy_mgr.broadcast_crit_window_start(network_id, chosen_positions)
 
-    # Send only to owner
-    rpc_id(owner_player_id, "_receive_weakpoints", positions, window_id)
-
-    # Track server-side
-    register_crit_window(owner_player_id, get_instance_id(), positions)
-
-# Enemy.gd (Client)
-@rpc("authority", "call_remote")
-func _receive_weakpoints(positions: Array, window_id: int):
-    # Only spawn if we own this window
-    for pos in positions:
-        var weakpoint = weakpoint_scene.instantiate()
-        weakpoint.position = pos
-        weakpoint.owner_id = multiplayer.get_unique_id()
-        weakpoint.window_id = window_id
-        add_child(weakpoint)
+func grow_for_crit_window_client(weakpoint_positions: Array) -> void:
+    # Client-side: grow sprite and spawn weakpoints at server positions
+    spawn_weakpoints_at_positions(weakpoint_positions)
 ```
 
-**Weakpoint Click** (Multiplayer):
+**weakpoint.gd** - Client reports hits to server:
 ```gdscript
-# weakpoint.gd
-func _on_input_event(viewport, event, shape_idx):
-    if event is InputEventMouseButton and event.pressed:
-        # Send to server for validation
-        rpc_id(1, "_validate_weakpoint_hit",
-               multiplayer.get_unique_id(),
-               owner_id,
-               get_parent().get_instance_id(),
-               window_id,
-               weakpoint_index,
-               event.position)
+func _on_input(event):
+    if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+        _report_hit_to_server()  # Send to server for validation
+    else:
+        hit()  # Server/single player: process directly
 
-# Server validates
-@rpc("any_peer", "call_remote")
-func _validate_weakpoint_hit(player_id, owner_id, target_id, window_id, index, pos):
-    if validate_weakpoint_hit(player_id, window_id, target_id, index, pos):
-        # Valid! Apply damage
-        apply_crit_damage(target_id, player_id)
-        # Notify all clients
-        rpc("_weakpoint_destroyed", window_id, index)
+func _report_hit_to_server():
+    var weakpoint_index = find_self_in_parent_array()
+    network_enemy_mgr.request_weakpoint_hit.rpc_id(1, enemy_net_id, weakpoint_index)
+```
+
+**NetworkEnemyManager.gd** - Weakpoint hit validation:
+```gdscript
+@rpc("any_peer", "reliable")
+func request_weakpoint_hit(enemy_network_id: int, weakpoint_index: int):
+    # Server validates and processes hit
+    weakpoint.hit()
+    # Broadcast destruction to all clients
+    for peer_id in multiplayer.get_peers():
+        _client_weakpoint_hit.rpc_id(peer_id, enemy_network_id, weakpoint_index, is_destroyed)
 ```
 
 #### Security Considerations

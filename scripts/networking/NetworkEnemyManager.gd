@@ -68,6 +68,116 @@ func get_enemy(network_id: int) -> Node:
 	return enemies.get(network_id, null)
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ATTACK SYSTEM (Server Authoritative - handles crit rolls)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@rpc("any_peer", "reliable")
+func request_attack(enemy_network_id: int, damage: float) -> void:
+	"""Client requests to attack an enemy. Server rolls for crit and handles result."""
+	if not multiplayer.is_server():
+		return
+
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		print("🌐 NetworkEnemyManager: Invalid enemy ID %d for attack" % enemy_network_id)
+		return
+
+	# Validate enemy is alive and not already in crit window
+	if enemy.is_dying or enemy.is_corpse:
+		return
+
+	var attacker_id = multiplayer.get_remote_sender_id()
+	if attacker_id == 0:
+		attacker_id = 1  # Server's peer ID
+
+	# Check if enemy already in crit window
+	var enemy_in_crit = false
+	if "in_crit_window" in enemy:
+		enemy_in_crit = enemy.in_crit_window
+
+	if enemy_in_crit:
+		# Enemy already in crit window - just apply normal damage
+		print("🌐 Server: Enemy already in crit window, applying normal damage")
+		_apply_damage_internal(enemy_network_id, damage, false, false, attacker_id)
+		return
+
+	# Roll for crit on server side (use attacking player's crit system if available)
+	var is_crit = _server_roll_for_crit(attacker_id)
+
+	if is_crit:
+		print("🌐 Server: CRIT rolled for player %d on enemy %d!" % [attacker_id, enemy_network_id])
+		# Start crit window on server (this will broadcast to clients via Enemy.spawn_weakpoints)
+		# Find CritWindowManager from the server's player (it's a child node, not an autoload)
+		var crit_window_mgr = _get_server_crit_window_manager()
+		if crit_window_mgr:
+			crit_window_mgr.start_window(enemy)
+
+			# Play crit window opening sound
+			var sound_manager = get_node_or_null("/root/SoundManager")
+			if sound_manager:
+				sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -3.0)
+		else:
+			# Fallback: just apply damage if crit window manager not available
+			print("⚠️ CritWindowManager not found, applying crit damage directly")
+			_apply_damage_internal(enemy_network_id, damage * 2.0, true, false, attacker_id)
+	else:
+		# Normal attack
+		_apply_damage_internal(enemy_network_id, damage, false, false, attacker_id)
+
+func _get_server_crit_window_manager() -> Node:
+	"""Find the CritWindowManager from the server's player."""
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player in players:
+		# On server, use the first player's CritWindowManager (server's player)
+		var crit_mgr = player.get_node_or_null("CritWindowManager")
+		if crit_mgr:
+			return crit_mgr
+	return null
+
+func _server_roll_for_crit(attacker_peer_id: int) -> bool:
+	"""Server rolls for crit on behalf of a player."""
+	# Try to find the attacking player's crit system
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player in players:
+		var player_peer_id = 1  # Default to server
+		if player.has_method("get_multiplayer_authority"):
+			player_peer_id = player.get_multiplayer_authority()
+		elif player.has_meta("peer_id"):
+			player_peer_id = player.get_meta("peer_id")
+
+		if player_peer_id == attacker_peer_id:
+			# Found the attacking player
+			var crit_system = player.get_node_or_null("CritSystem")
+			if crit_system and crit_system.has_method("roll_for_crit"):
+				print("🌐 Server: Rolling crit for player %d using their CritSystem" % attacker_peer_id)
+				return crit_system.roll_for_crit()
+
+	# Fallback: use base crit chance (5%)
+	var base_crit_chance = 0.05
+	if CharacterStats:
+		base_crit_chance = CharacterStats.get_base_crit_chance()
+	var roll = randf()
+	print("🌐 Server: Crit roll (fallback) for player %d: %.4f vs %.2f%%" % [attacker_peer_id, roll, base_crit_chance * 100])
+	return roll < base_crit_chance
+
+func _apply_damage_internal(enemy_network_id: int, damage: float, is_crit: bool, is_weakpoint: bool, attacker_id: int) -> void:
+	"""Internal damage application (server only)."""
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		return
+
+	# Apply damage server-side
+	enemy.current_health -= damage
+	enemy.current_health = max(enemy.current_health, 0.0)
+
+	# Broadcast damage to all clients for visual feedback (include attacker_id so only attacker plays sounds)
+	rpc("_client_enemy_damaged", enemy_network_id, damage, enemy.current_health, enemy.max_health, is_crit, is_weakpoint, attacker_id)
+
+	# Check for death
+	if enemy.current_health <= 0:
+		_handle_enemy_death(enemy_network_id, attacker_id)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # DAMAGE SYSTEM (Server Authoritative)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -101,16 +211,17 @@ func request_damage(enemy_network_id: int, damage: float, is_crit: bool, is_weak
 	enemy.current_health -= damage
 	enemy.current_health = max(enemy.current_health, 0.0)
 
-	# Broadcast damage to all clients for visual feedback
-	rpc("_client_enemy_damaged", enemy_network_id, damage, enemy.current_health, enemy.max_health, is_crit, is_weakpoint)
+	# Broadcast damage to all clients for visual feedback (include attacker_id so only attacker plays sounds)
+	rpc("_client_enemy_damaged", enemy_network_id, damage, enemy.current_health, enemy.max_health, is_crit, is_weakpoint, attacker_id)
 
 	# Check for death
 	if enemy.current_health <= 0:
 		_handle_enemy_death(enemy_network_id, attacker_id)
 
 @rpc("authority", "call_local", "reliable")
-func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: float, max_health: float, is_crit: bool, is_weakpoint: bool) -> void:
+func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: float, max_health: float, is_crit: bool, is_weakpoint: bool, attacker_id: int = 0) -> void:
 	"""Server broadcasts damage to all clients for visual feedback."""
+	print("🔊 _client_enemy_damaged() called (is_server=%s, enemy_id=%d, damage=%.1f, attacker=%d)" % [multiplayer.is_server(), enemy_network_id, damage, attacker_id])
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
 		return
@@ -135,8 +246,12 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 	# Spawn combat text
 	_spawn_combat_text(enemy, damage, is_crit, is_weakpoint)
 
-	# Play hit sounds
-	_play_hit_sounds(enemy, is_crit, is_weakpoint)
+	# Play hit sounds (only for the attacker to avoid duplicates when testing locally)
+	_play_hit_sounds(enemy, is_crit, is_weakpoint, attacker_id)
+
+	# Trigger spin animation on TrainingDummy
+	if enemy.has_method("trigger_spin"):
+		enemy.trigger_spin()
 
 	# Emit damage signal for any listeners (triggers AI aggro on server)
 	if multiplayer.is_server():
@@ -185,7 +300,7 @@ func _spawn_combat_text(enemy: Node, damage: float, is_crit: bool, is_weakpoint:
 	combat_text.global_position = enemy.global_position + sprite_pos + Vector2(spawn_x_offset, spawn_y_offset)
 	enemy.get_tree().root.add_child(combat_text)
 
-func _play_hit_sounds(enemy: Node, is_crit: bool, is_weakpoint: bool) -> void:
+func _play_hit_sounds(enemy: Node, is_crit: bool, is_weakpoint: bool, _attacker_id: int = 0) -> void:
 	"""Play appropriate hit sounds."""
 	if is_weakpoint:
 		return  # Weakpoint sounds handled in weakpoint.gd
@@ -353,10 +468,8 @@ func spawn_enemy_on_clients(network_id: int, pos: Vector2, level: int, enemy_nam
 	# Register locally
 	enemies[network_id] = enemy
 
-	# Add to world - try game_world first, fallback to finding it or using root
-	var target_parent = game_world
-	if not target_parent:
-		target_parent = get_tree().root.get_node_or_null("GameWorld")
+	# Add to world - use helper to find GameWorld
+	var target_parent = _find_game_world()
 	if not target_parent:
 		target_parent = get_tree().root
 
@@ -372,17 +485,94 @@ func despawn_enemy_on_clients(network_id: int) -> void:
 		enemy.queue_free()
 	unregister_enemy(network_id)
 
+@rpc("authority", "call_local", "reliable")
+func spawn_training_dummy_on_clients(network_id: int, pos: Vector2) -> void:
+	"""Server tells clients to spawn the training dummy."""
+	if multiplayer.is_server():
+		return  # Server already spawned
+
+	var dummy_scene = load("res://scenes/training/training_dummy.tscn")
+	if not dummy_scene:
+		print("🌐 Client: ERROR - Could not load training_dummy.tscn")
+		return
+
+	var dummy = dummy_scene.instantiate()
+	dummy.global_position = pos
+	dummy.name = "TrainingDummy"
+	dummy.network_id = network_id
+
+	# Register locally
+	enemies[network_id] = dummy
+
+	# Add to world
+	var target_parent = _find_game_world()
+	if not target_parent:
+		target_parent = get_tree().root
+
+	target_parent.call_deferred("add_child", dummy)
+	print("🌐 Client: Training Dummy spawned at %s (network_id=%d)" % [pos, network_id])
+
+func _find_game_world() -> Node:
+	"""Find GameWorld node (works on both server and client)."""
+	# Try cached reference first
+	if game_world and is_instance_valid(game_world):
+		return game_world
+
+	# Try common paths - the main scene node name might vary
+	var root = get_tree().root
+
+	# Path 1: /root/main/GameWorld (common structure)
+	var gw = root.get_node_or_null("main/GameWorld")
+	if gw:
+		game_world = gw  # Cache it
+		return gw
+
+	# Path 2: /root/GameWorld (direct child)
+	gw = root.get_node_or_null("GameWorld")
+	if gw:
+		game_world = gw
+		return gw
+
+	# Path 3: Search all children of root for GameWorld
+	for child in root.get_children():
+		# Check if this child IS GameWorld
+		if child.name == "GameWorld":
+			game_world = child
+			return child
+		# Check if this child HAS a GameWorld child
+		var potential_gw = child.get_node_or_null("GameWorld")
+		if potential_gw:
+			game_world = potential_gw
+			return potential_gw
+		# Also check if it has a Node2D child named GameWorld (scene instance)
+		for grandchild in child.get_children():
+			if grandchild.name == "GameWorld":
+				game_world = grandchild
+				return grandchild
+
+	# Debug: print what's under root if we can't find it
+	print("🌐 _find_game_world: WARNING - GameWorld not found! Root children:")
+	for child in root.get_children():
+		print("   - %s (%s)" % [child.name, child.get_class()])
+		for gc in child.get_children():
+			if gc.name.contains("World") or gc.name.contains("Game"):
+				print("     - %s (%s)" % [gc.name, gc.get_class()])
+
+	return null
+
 func _setup_client_enemy(enemy: Node) -> void:
 	"""Setup client-side enemy: connect signals and disable AI."""
 	if not is_instance_valid(enemy):
 		return
 
 	# Connect corpse_clicked signal for loot UI (game_world handles the UI)
-	var gw = game_world if game_world else get_tree().root.get_node_or_null("GameWorld")
+	var gw = _find_game_world()
 	if gw and gw.has_method("_on_corpse_clicked"):
-		if not enemy.corpse_clicked.is_connected(gw._on_corpse_clicked):
+		if enemy.has_signal("corpse_clicked") and not enemy.corpse_clicked.is_connected(gw._on_corpse_clicked):
 			enemy.corpse_clicked.connect(gw._on_corpse_clicked)
 			print("🌐 Client: Connected corpse_clicked for: %s" % enemy.name)
+	else:
+		print("🌐 Client: WARNING - Could not find GameWorld for corpse_clicked signal (gw=%s)" % gw)
 
 	# Disable AI (server controls position)
 	_disable_client_enemy_ai(enemy)
@@ -422,6 +612,189 @@ func _on_peer_connected(peer_id: int) -> void:
 		if enemy.is_corpse or enemy.is_dying:
 			continue  # Don't sync dead/dying enemies
 
-		# Send spawn command to this specific peer
-		spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name)
-		print("   → Synced enemy %s (id=%d) at %s" % [enemy.name, network_id, enemy.global_position])
+		# Check if this is a TrainingDummy (different spawn RPC)
+		if enemy is TrainingDummy:
+			spawn_training_dummy_on_clients.rpc_id(peer_id, network_id, enemy.global_position)
+			print("   → Synced TrainingDummy (id=%d) at %s" % [network_id, enemy.global_position])
+		else:
+			# Regular enemy
+			spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name)
+			print("   → Synced enemy %s (id=%d) at %s" % [enemy.name, network_id, enemy.global_position])
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CRIT WINDOW SYNC (Server -> Clients)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func broadcast_crit_window_start(enemy_network_id: int, weakpoint_positions: Array) -> void:
+	"""Server broadcasts crit window start to all clients."""
+	if not multiplayer.is_server():
+		return
+
+	# Convert Vector2 array to serializable format (array of dictionaries)
+	var serialized_positions = []
+	for pos in weakpoint_positions:
+		serialized_positions.append({"x": pos.x, "y": pos.y})
+
+	print("🌐 NetworkEnemyManager: Broadcasting crit window for enemy %d (positions: %s)" % [enemy_network_id, serialized_positions])
+	rpc("_client_crit_window_start", enemy_network_id, serialized_positions)
+
+@rpc("authority", "call_local", "reliable")
+func _client_crit_window_start(enemy_network_id: int, serialized_positions: Array) -> void:
+	"""Client receives crit window start - spawn weakpoints locally."""
+	if multiplayer.is_server():
+		return  # Server already has weakpoints
+
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		print("🌐 Client: Cannot start crit window - enemy %d not found" % enemy_network_id)
+		return
+
+	# Convert serialized positions back to Vector2 array
+	var weakpoint_positions = []
+	for pos_dict in serialized_positions:
+		weakpoint_positions.append(Vector2(pos_dict.x, pos_dict.y))
+
+	print("🌐 Client: Crit window started for enemy %d with %d weakpoints" % [enemy_network_id, weakpoint_positions.size()])
+
+	# Play crit window opening sound on client
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -3.0)
+
+	# Grow sprite for crit window visuals
+	enemy.in_crit_window = true
+	if enemy.has_method("grow_for_crit_window_client"):
+		enemy.grow_for_crit_window_client(weakpoint_positions)
+	elif enemy.has_method("spawn_weakpoints_at_positions"):
+		enemy.spawn_weakpoints_at_positions(weakpoint_positions)
+
+func broadcast_crit_window_end(enemy_network_id: int) -> void:
+	"""Server broadcasts crit window end to all clients."""
+	if not multiplayer.is_server():
+		return
+	rpc("_client_crit_window_end", enemy_network_id)
+
+@rpc("authority", "call_local", "reliable")
+func _client_crit_window_end(enemy_network_id: int) -> void:
+	"""Client receives crit window end - cleanup weakpoints."""
+	if multiplayer.is_server():
+		return  # Server handles its own cleanup
+
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		return
+
+	print("🌐 Client: Crit window ended for enemy %d" % enemy_network_id)
+	enemy.in_crit_window = false
+	if enemy.has_method("shrink_after_crit_window"):
+		enemy.shrink_after_crit_window()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PLAYER DAMAGE SYNC (Server -> Clients)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func deal_damage_to_player(target_peer_id: int, damage: float) -> void:
+	"""Server tells a specific client to take damage."""
+	if not multiplayer.is_server():
+		return
+
+	# If target is server (peer_id 1), apply locally
+	if target_peer_id == 1:
+		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+		if player and player.has_method("take_damage"):
+			player.take_damage(damage)
+	else:
+		# Send to specific client
+		_client_take_damage.rpc_id(target_peer_id, damage)
+
+@rpc("authority", "reliable")
+func _client_take_damage(damage: float) -> void:
+	"""Client receives damage from server (enemy attack)."""
+	# Find local player and apply damage
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player in players:
+		# Find the player that belongs to this client
+		if player.has_method("take_damage"):
+			# In multiplayer, each client has their own local player
+			if player.get_multiplayer_authority() == multiplayer.get_unique_id() or not multiplayer.has_multiplayer_peer():
+				print("🌐 Client: Taking %.1f damage from enemy attack" % damage)
+				player.take_damage(damage)
+				return
+
+	# Fallback: just damage first player found
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if player and player.has_method("take_damage"):
+		print("🌐 Client: Taking %.1f damage (fallback)" % damage)
+		player.take_damage(damage)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# WEAKPOINT SYNC (Clients report hits, server broadcasts destruction)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@rpc("any_peer", "reliable")
+func request_weakpoint_hit(enemy_network_id: int, weakpoint_index: int) -> void:
+	"""Client reports hitting a weakpoint. Server validates and broadcasts destruction if needed."""
+	if not multiplayer.is_server():
+		return
+
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		print("🌐 Server: Weakpoint hit - invalid enemy %d" % enemy_network_id)
+		return
+
+	if not enemy.in_crit_window:
+		print("🌐 Server: Weakpoint hit rejected - enemy not in crit window")
+		return
+
+	# Find the weakpoint on the server's enemy
+	if weakpoint_index < 0 or weakpoint_index >= enemy.weakpoints.size():
+		print("🌐 Server: Invalid weakpoint index %d (enemy has %d)" % [weakpoint_index, enemy.weakpoints.size()])
+		return
+
+	var weakpoint = enemy.weakpoints[weakpoint_index]
+	if not is_instance_valid(weakpoint) or weakpoint.is_destroyed:
+		print("🌐 Server: Weakpoint %d already destroyed" % weakpoint_index)
+		return
+
+	# Hit the server's weakpoint
+	print("🌐 Server: Weakpoint %d hit on enemy %d" % [weakpoint_index, enemy_network_id])
+	weakpoint.hit()
+	var is_destroyed_now = weakpoint.is_destroyed
+
+	# Broadcast hit to all clients (INCLUDING the sender so they sync destruction state)
+	for peer_id in multiplayer.get_peers():
+		_client_weakpoint_hit.rpc_id(peer_id, enemy_network_id, weakpoint_index, is_destroyed_now)
+
+@rpc("authority", "reliable")
+func _client_weakpoint_hit(enemy_network_id: int, weakpoint_index: int, is_destroyed: bool = false) -> void:
+	"""Server broadcasts that a weakpoint was hit (for visual sync on all clients)."""
+	if multiplayer.is_server():
+		return
+
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		return
+
+	if weakpoint_index < 0 or weakpoint_index >= enemy.weakpoints.size():
+		print("🌐 Client: Weakpoint %d - invalid index (have %d)" % [weakpoint_index, enemy.weakpoints.size()])
+		return
+
+	var weakpoint = enemy.weakpoints[weakpoint_index]
+	if not is_instance_valid(weakpoint):
+		print("🌐 Client: Weakpoint %d - instance invalid" % weakpoint_index)
+		return
+
+	if is_destroyed:
+		# Server says this weakpoint is destroyed - force destruction on client
+		if not weakpoint.is_destroyed:
+			print("🌐 Client: Weakpoint %d DESTROYED (synced from server)" % weakpoint_index)
+			weakpoint.destroy()  # Call destroy directly instead of hit()
+	elif not weakpoint.is_destroyed:
+		# Just a hit, not destruction - use visual feedback only (don't track hit count)
+		print("🌐 Client: Weakpoint %d hit (synced from server)" % weakpoint_index)
+		if weakpoint.has_method("_play_hit_feedback_only"):
+			weakpoint._play_hit_feedback_only()
+		else:
+			# Fallback if method doesn't exist - but this shouldn't call hit()
+			# as that would increment local count
+			pass

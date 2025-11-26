@@ -423,6 +423,7 @@ func play_critical_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 
 ## Play normal hit sound (for regular non-crit hits)
 func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0, weapon_type: String = "") -> void:
+	print("🔊 SoundManager.play_normal_hit_sound() called (weapon=%s)" % weapon_type)
 	var sounds_to_use = []  # Untyped to avoid type mismatch with Dictionary values
 
 	# Try weapon-specific sounds first
@@ -453,6 +454,7 @@ func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float 
 
 ## Play skeleton hurt sound (when skeleton takes damage)
 func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	print("🔊 SoundManager.play_skeleton_hurt_sound() called")
 	if not skeleton_hurt_sound:
 		# No fallback - just don't play if not loaded
 		return
@@ -540,6 +542,7 @@ func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 
 ## Play unarmed swing sound (whoosh when punching/kicking)
 func play_unarmed_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0) -> void:
+	print("🔊 SoundManager.play_unarmed_swing_sound() called")
 	if unarmed_swing_sounds.is_empty():
 		# Fallback to sword swing if no unarmed sounds loaded
 		play_sword_swing_sound(global_pos, volume_db)

@@ -41,6 +41,7 @@ var in_crit_window: bool = false  # Simple flag set by grow/shrink methods
 var original_scale: Vector2 = Vector2.ONE
 var original_modulate: Color = Color.WHITE  # Store original difficulty color
 var weakpoints: Array = []  # Just for visual rendering
+var _grow_tween: Tween = null  # Track grow tween so shrink can wait for it
 var is_dying: bool = false
 
 # Corpse state (lootable body system)
@@ -474,10 +475,8 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 		combat_text.type = 2  # TextType.WEAKPOINT (orange)
 	elif is_crit:
 		combat_text.type = 1  # TextType.CRIT (yellow)
-		# 🔊 Play critical hit sound (non-weakpoint crits only)
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			sound_manager.play_critical_hit_sound(global_position, -3.0)
+		# NOTE: Critical hit sound is now handled by NetworkEnemyManager._play_hit_sounds()
+		# in multiplayer, or in the else branch below for single player
 	else:
 		combat_text.type = 0  # TextType.NORMAL (white)
 
@@ -514,10 +513,12 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	combat_text.global_position = spawn_pos
 	get_tree().root.add_child(combat_text)
 	
-	# ✨ NEW: Play hit sound
-	# NOTE: Weakpoint sounds are handled in weakpoint.gd directly
-	# Only play sounds here for non-weakpoint hits
-	if not is_weakpoint_hit:
+	# ✨ Play hit sound
+	# NOTE: In multiplayer, NetworkEnemyManager._client_enemy_damaged() handles ALL hit sounds
+	# via _play_hit_sounds(). We only play sounds here in single player to avoid duplicates.
+	# Weakpoint sounds are handled in weakpoint.gd directly (separate system).
+	var has_peer = multiplayer.has_multiplayer_peer()
+	if not is_weakpoint_hit and not has_peer:
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
 			# Get player's weapon type for weapon-specific sounds
@@ -526,8 +527,7 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 				weapon_type = CharacterStats.equipped_weapon.weapon_type
 
 			if is_crit:
-				# Critical hit sound already played above at line 286
-				pass
+				sound_manager.play_critical_hit_sound(global_position, -3.0)
 			else:
 				sound_manager.play_normal_hit_sound(global_position, -8.0, weapon_type)
 
@@ -683,10 +683,71 @@ func spawn_weakpoints() -> void:
 
 		# Emit signal so CritWindowManager can track it
 		weakpoint_spawned.emit()
-	
-	# 🔍 DEBUG: Show all possible positions on the blown-up sprite
-	# print("🔍 DEBUG: Spawned weakpoints, triggering debug visualization")
-	# queue_redraw()  # Trigger _draw() to show debug circles
+
+	# In multiplayer, broadcast weakpoint positions to clients
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server() and network_id >= 0:
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr:
+			print("🌐 Server: Broadcasting crit window start for enemy %d with %d weakpoints" % [network_id, chosen_positions.size()])
+			network_enemy_mgr.broadcast_crit_window_start(network_id, chosen_positions)
+		else:
+			print("🌐 Server: ERROR - NetworkEnemyManager not found!")
+	elif multiplayer.has_multiplayer_peer():
+		print("🌐 Crit window on client-side enemy (network_id=%d, is_server=%s)" % [network_id, multiplayer.is_server()])
+
+func grow_for_crit_window_client(weakpoint_positions: Array) -> void:
+	"""Client-side crit window: grow sprite and spawn weakpoints at given positions."""
+	print("🌐 Enemy.grow_for_crit_window_client() called with %d positions" % weakpoint_positions.size())
+
+	if is_dying or is_corpse:
+		print("🌐 Enemy is dying/corpse, skipping crit window")
+		return
+
+	in_crit_window = true
+
+	# Grow the sprite like server does
+	if sprite:
+		var base_sprite_scale = Vector2.ONE
+		var target_sprite_scale = base_sprite_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
+		# Kill any existing grow tween before starting new one
+		if _grow_tween and _grow_tween.is_valid():
+			_grow_tween.kill()
+		_grow_tween = create_tween()
+		_grow_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
+		z_index = Constants.CRIT_WINDOW_Z_INDEX
+		print("🌐 Client: Growing sprite to scale %s" % target_sprite_scale)
+
+		# Wait for grow animation to complete before spawning weakpoints
+		await _grow_tween.finished
+		print("🌐 Client: Grow animation complete, spawning weakpoints")
+
+	# Spawn weakpoints at the positions sent by server
+	spawn_weakpoints_at_positions(weakpoint_positions)
+
+func spawn_weakpoints_at_positions(positions: Array) -> void:
+	"""Spawn weakpoints at specific positions (used by clients)."""
+	if is_dying or is_corpse:
+		return
+
+	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR
+
+	for pos in positions:
+		var weakpoint_scene = preload("res://scenes/enemies/weakpoint.tscn")
+		var weakpoint = weakpoint_scene.instantiate()
+
+		weakpoint.color_theme = "bone"
+		weakpoint.position = pos
+		weakpoint.scale = Vector2(counter_scale, counter_scale) * 3.0
+		weakpoint.rotation = randf_range(-PI, PI)
+
+		# Connect weakpoint signals
+		weakpoint.weakpoint_hit.connect(_on_weakpoint_hit)
+		weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed_local)
+
+		add_child(weakpoint)
+		weakpoints.append(weakpoint)
+
+	print("🌐 Client: Spawned %d weakpoints at server positions" % positions.size())
 
 # 🔍 DEBUG VISUALIZATION - Shows where all 17 positions are!
 func _draw() -> void:
@@ -936,7 +997,7 @@ func _on_weakpoint_hit(weakpoint) -> void:
 	var base_damage = CharacterStats.get_base_damage()
 	var crit_damage = base_damage * Constants.CRIT_DAMAGE_MULTIPLIER
 
-	# In multiplayer, send damage request to server
+	# In multiplayer, damage handling depends on whether we're server or client
 	var has_peer = multiplayer.has_multiplayer_peer()
 	if has_peer and network_id >= 0:
 		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
@@ -944,9 +1005,9 @@ func _on_weakpoint_hit(weakpoint) -> void:
 			if multiplayer.is_server():
 				# Server processes damage directly (no RPC to self)
 				network_enemy_mgr.request_damage(network_id, crit_damage, true, true)
-			else:
-				# Client sends RPC to server
-				network_enemy_mgr.request_damage.rpc_id(1, network_id, crit_damage, true, true)
+			# NOTE: Clients do NOT send request_damage here - they already sent
+			# request_weakpoint_hit from the weakpoint itself, which triggers
+			# the server's _on_weakpoint_hit. This prevents double damage.
 			return
 
 	# Single player: deal damage directly with crit flag and weakpoint flag for orange text
@@ -956,10 +1017,23 @@ func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Local handler - just forward to manager"""
 	weakpoint_destroyed.emit(weakpoint)
 
+func _clear_weakpoints_delayed() -> void:
+	"""Client-side: Clear weakpoints array after a delay to allow destruction RPCs to arrive"""
+	await get_tree().create_timer(0.5).timeout
+	if is_instance_valid(self):
+		weakpoints.clear()
+
 func shrink_after_crit_window() -> void:
 	"""Visual effect: shrink sprite and cleanup weakpoints (called by CritWindowManager)"""
 	in_crit_window = false
-	weakpoints.clear()
+	# On CLIENT: Don't clear weakpoints array immediately - the destruction RPC may still be
+	# in transit. Let weakpoints free themselves after their destruction animations.
+	# On SERVER: Clear array since we've already processed all destruction locally.
+	if multiplayer.is_server():
+		weakpoints.clear()
+	else:
+		# Client: Clear array after a delay to allow destruction RPCs to arrive
+		_clear_weakpoints_delayed()
 
 	# Reset HitFlash
 	if has_node("HitFlash"):
@@ -972,6 +1046,14 @@ func shrink_after_crit_window() -> void:
 	self.modulate = original_modulate
 	if sprite:
 		sprite.modulate = Color.WHITE
+
+	# Wait for grow tween to finish first (client may receive shrink before grow completes)
+	if _grow_tween and _grow_tween.is_valid():
+		await _grow_tween.finished
+		_grow_tween = null
+
+	# Wait for weakpoint explosion animation to complete (~0.5s shake + explosion)
+	await get_tree().create_timer(0.55).timeout
 
 	# Scale sprite back to base
 	if is_instance_valid(self) and sprite:

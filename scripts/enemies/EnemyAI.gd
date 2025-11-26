@@ -704,12 +704,30 @@ func perform_attack() -> void:
 		return
 
 	# Deal damage
-	if player.has_method("take_damage"):
-		var damage = attack_damage
-		if enemy.has_method("get") and enemy.get("enemy_level"):
-			damage = attack_damage * pow(1.08, enemy.enemy_level - 1)
+	var damage = attack_damage
+	if enemy.has_method("get") and enemy.get("enemy_level"):
+		damage = attack_damage * pow(1.08, enemy.enemy_level - 1)
 
-		player.take_damage(damage)
+	# In multiplayer, route damage through NetworkEnemyManager
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		# Find which peer owns this player
+		var target_peer_id = 1  # Default to server
+		if player.has_method("get_multiplayer_authority"):
+			target_peer_id = player.get_multiplayer_authority()
+		elif player.has_meta("peer_id"):
+			target_peer_id = player.get_meta("peer_id")
+
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr:
+			network_enemy_mgr.deal_damage_to_player(target_peer_id, damage)
+		else:
+			# Fallback: direct damage (only works for local player)
+			if player.has_method("take_damage"):
+				player.take_damage(damage)
+	else:
+		# Single player or client (shouldn't happen - AI only runs on server)
+		if player.has_method("take_damage"):
+			player.take_damage(damage)
 
 	# ✨ FIX: Enhanced visual feedback for attack
 	if is_instance_valid(enemy):

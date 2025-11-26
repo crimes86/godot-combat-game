@@ -192,6 +192,15 @@ func end_window(target: Node, weakpoints_destroyed: int) -> void:
 		if target.has_method("shrink_after_crit_window"):
 			target.shrink_after_crit_window()
 
+		# In multiplayer, broadcast crit window end to clients
+		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+			var enemy_net_id = target.get("network_id") if target.get("network_id") != null else -1
+			if enemy_net_id >= 0:
+				var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+				if network_enemy_mgr:
+					print("🌐 Server: Broadcasting crit window end for enemy %d" % enemy_net_id)
+					network_enemy_mgr.broadcast_crit_window_end(enemy_net_id)
+
 	# Remove from active windows
 	active_windows.erase(target)
 

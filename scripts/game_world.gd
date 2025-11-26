@@ -2733,6 +2733,11 @@ func analyze_spawn_pattern(children: Array) -> void:
 
 func spawn_training_dummy():
 	"""Spawn a training dummy near the campfire for combat practice"""
+	# In multiplayer, only server spawns - clients receive via RPC
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		print("🎯 Training Dummy: Client skipping spawn (server will sync)")
+		return
+
 	const DUMMY_SCENE = preload("res://scenes/training/training_dummy.tscn")
 
 	# Spawn dummy north of campfire (negative Y = north)
@@ -2742,6 +2747,15 @@ func spawn_training_dummy():
 	dummy.global_position = dummy_pos
 	dummy.name = "TrainingDummy"
 	add_child(dummy)
+
+	# Register with NetworkEnemyManager for multiplayer sync
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	if network_enemy_mgr:
+		var network_id = network_enemy_mgr.register_enemy(dummy)
+		# Broadcast spawn to clients
+		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+			network_enemy_mgr.spawn_training_dummy_on_clients.rpc(network_id, dummy_pos)
+			print("🎯 Training Dummy registered with network_id: ", network_id)
 
 	print("🎯 Training Dummy spawned at: ", dummy_pos)
 

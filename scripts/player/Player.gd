@@ -826,13 +826,45 @@ func is_clicking_on_weakpoint(event: InputEvent) -> bool:
 						var lpc_dir = convert_to_lpc_direction(dir_str)
 						character_sprite.play_lpc_animation("slash", lpc_dir)
 
-					# ✨ FIX: Directly call hit() instead of relying on input_event
-					if weakpoint.has_method("hit"):
-						weakpoint.hit()
-						print("💥 Manually triggered weakpoint hit!")
+					# Directly trigger the weakpoint hit logic since Area2D input_event
+					# may not fire reliably (especially on client-spawned weakpoints)
+					if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+						# Client: report hit to server
+						if weakpoint.has_method("_report_hit_to_server"):
+							weakpoint._report_hit_to_server()
+					else:
+						# Server/single player: hit directly
+						if weakpoint.has_method("hit"):
+							weakpoint.hit()
 					return true
 	
 	return false
+
+func _report_weakpoint_hit_to_server(enemy: Node, weakpoint: Node) -> void:
+	"""Client reports weakpoint hit to server via NetworkEnemyManager."""
+	var enemy_net_id = enemy.get("network_id") if enemy.get("network_id") != null else -1
+	if enemy_net_id < 0:
+		print("⚠️ Player: Enemy has no network_id, cannot report weakpoint hit")
+		return
+
+	# Find weakpoint index in enemy's weakpoints array
+	var weakpoint_index = -1
+	if "weakpoints" in enemy:
+		for i in range(enemy.weakpoints.size()):
+			if enemy.weakpoints[i] == weakpoint:
+				weakpoint_index = i
+				break
+
+	if weakpoint_index < 0:
+		print("⚠️ Player: Could not find weakpoint in enemy's array")
+		return
+
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	if network_enemy_mgr:
+		print("🌐 Client: Reporting weakpoint %d hit on enemy %d to server" % [weakpoint_index, enemy_net_id])
+		network_enemy_mgr.request_weakpoint_hit.rpc_id(1, enemy_net_id, weakpoint_index)
+	else:
+		print("⚠️ Player: NetworkEnemyManager not found")
 
 func handle_crit_window_attack(enemy: Node, click_pos: Vector2) -> void:
 	"""Handle attack on enemy body during crit window"""
@@ -887,6 +919,7 @@ func attempt_attack() -> void:
 	# Play weapon swing sound (whoosh)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
+		print("🔊 Player.attempt_attack() playing SWING sound")
 		# Play weapon-specific swing sound
 		if CharacterStats.equipped_weapon:
 			if CharacterStats.equipped_weapon.weapon_type == "sword":
@@ -960,38 +993,54 @@ func get_enemies_in_cone() -> Array:
 
 func attack_enemies_in_cone(enemies: Array) -> void:
 	var chain_multiplier = ChainManager.get_damage_multiplier()
-	
+	var has_peer = multiplayer.has_multiplayer_peer()
+	var is_server = multiplayer.is_server()
+
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
 			continue
-		
+
 		# Connect to enemy signals
 		connect_enemy_signals(enemy)
-		
+
 		# ✨ FIX: Don't roll for crit if enemy is already in a crit window!
 		var enemy_already_in_crit_window = false
 		if "in_crit_window" in enemy:
 			enemy_already_in_crit_window = enemy.in_crit_window
-		
+
 		var damage = attack_damage * chain_multiplier
-		
+
 		# Only roll for NEW crit if enemy is NOT already in a crit window
 		if not enemy_already_in_crit_window:
-			var is_crit = crit_system.roll_for_crit()
-			
-			if is_crit:
-				# Play crit window opening sound on successful crit roll
-				var sound_manager = get_node_or_null("/root/SoundManager")
-				if sound_manager:
-					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -3.0)
-
-				# Start crit window
-				crit_window_manager.start_window(enemy)
-				if not crit_window_manager.window_completed.is_connected(_on_crit_window_completed):
-					crit_window_manager.window_completed.connect(_on_crit_window_completed.bind(enemy))
+			# In multiplayer, only SERVER rolls for crits - clients send attack requests
+			# Server will broadcast crit windows to clients via RPC
+			if has_peer and not is_server:
+				# Client: send attack request to server (server handles crit rolls)
+				var enemy_net_id = enemy.get("network_id") if enemy.get("network_id") != null else -1
+				if enemy_net_id >= 0:
+					var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+					if network_enemy_mgr:
+						print("🌐 Client: Sending attack request to server (enemy_id=%d, damage=%.1f)" % [enemy_net_id, damage])
+						network_enemy_mgr.request_attack.rpc_id(1, enemy_net_id, damage)
+				else:
+					print("⚠️ Client: Enemy has no network_id, cannot attack")
 			else:
-				# Normal attack
-				apply_damage_with_feedback(enemy, damage, false, false)
+				# Server or single player: roll for crit locally
+				var is_crit = crit_system.roll_for_crit()
+
+				if is_crit:
+					# Play crit window opening sound on successful crit roll
+					var sound_manager = get_node_or_null("/root/SoundManager")
+					if sound_manager:
+						sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -3.0)
+
+					# Start crit window (server broadcasts to clients via Enemy.spawn_weakpoints)
+					crit_window_manager.start_window(enemy)
+					if not crit_window_manager.window_completed.is_connected(_on_crit_window_completed):
+						crit_window_manager.window_completed.connect(_on_crit_window_completed.bind(enemy))
+				else:
+					# Normal attack
+					apply_damage_with_feedback(enemy, damage, false, false)
 		else:
 			# Enemy already in crit window - just do normal damage (don't roll for new crit)
 			print("⚠️ Enemy already in crit window, applying normal damage (no new crit roll)")
