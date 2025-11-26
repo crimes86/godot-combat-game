@@ -343,7 +343,7 @@ func hit() -> void:
 		# Layer skeleton hurt sound for extra impact
 		sound_manager.play_skeleton_hurt_sound(global_position, -10.0)
 
-	# 🩸 IMPACT feedback - rapid expand/contract with progressive brightening
+	# 🩸 IMPACT feedback - shake with progressive brightening
 	if sprite:
 		var colors = theme_colors[color_theme]
 		var progress = float(current_hits) / float(max_hits)
@@ -358,16 +358,22 @@ func hit() -> void:
 		var flash_color = colors["flash"] * (1.0 + progress * 0.5)  # Get brighter each hit
 		sprite.color = flash_color
 
-		# ✨ RAPID EXPAND/CONTRACT (2.0x) - snappy feedback
-		var flash_tween = create_tween()
-		flash_tween.set_parallel(true)
+		# ✨ SHAKE on hit - intensity increases with damage
+		var shake_intensity = 2.0 + (progress * 3.0)  # 2-5 pixels based on damage
+		var shake_tween = create_tween()
+		shake_tween.set_trans(Tween.TRANS_SINE)
 
-		# Return to progressively brighter base color
-		flash_tween.tween_property(sprite, "color", target_color, 0.06)
+		# Quick shake sequence (6 shakes, ~0.12s total)
+		shake_tween.tween_property(sprite, "position", Vector2(shake_intensity, 0), 0.02)
+		shake_tween.tween_property(sprite, "position", Vector2(-shake_intensity, 0), 0.02)
+		shake_tween.tween_property(sprite, "position", Vector2(0, shake_intensity * 0.7), 0.02)
+		shake_tween.tween_property(sprite, "position", Vector2(0, -shake_intensity * 0.7), 0.02)
+		shake_tween.tween_property(sprite, "position", Vector2(shake_intensity * 0.5, 0), 0.02)
+		shake_tween.tween_property(sprite, "position", Vector2(0, 0), 0.02)  # Return to center
 
-		# Rapid 2.0x expand then contract - dramatic feedback
-		sprite.scale = Vector2(2.0, 2.0)
-		flash_tween.tween_property(sprite, "scale", Vector2(1.0, 1.0), 0.06).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		# Color flash back to target (parallel with shake)
+		var color_tween = create_tween()
+		color_tween.tween_property(sprite, "color", target_color, 0.1)
 
 		# ✨ GLOW GROWS - increases with damage (30% to 80%)
 		if glow_sprite:
@@ -377,7 +383,7 @@ func hit() -> void:
 			# Target glow alpha increases with progress
 			var target_glow = colors["glow"]
 			target_glow.a = 0.3 + (progress * 0.5)  # 0.3 to 0.8
-			flash_tween.tween_property(glow_sprite, "color", target_glow, 0.06)
+			color_tween.tween_property(glow_sprite, "color", target_glow, 0.1)
 
 		# ✨ SHINE LAYERS GET BRIGHTER (start at 30-35%, grow to target)
 		for i in range(shine_layers.size()):
@@ -387,7 +393,7 @@ func hit() -> void:
 			var target_alpha = start_alphas[i] + (progress * (target_alphas[i] - start_alphas[i]))
 			var shine_color = shine.color
 			shine_color.a = target_alpha
-			flash_tween.tween_property(shine, "color", shine_color, 0.06)
+			color_tween.tween_property(shine, "color", shine_color, 0.1)
 
 		# ✨ ADD CRACKS - increasingly dense as hits increase
 		add_crack(progress)
@@ -638,58 +644,40 @@ func spawn_destruction_particles() -> void:
 	var blood_spray = CPUParticles2D.new()
 	blood_spray.emitting = false
 	blood_spray.one_shot = true
-	blood_spray.explosiveness = 0.95  # Slight randomness for natural look
-	blood_spray.amount = 100  # Very high density for mist-like cloud
+	blood_spray.explosiveness = 1.0  # All at once
+	blood_spray.amount = 50  # Reduced 30%
 	blood_spray.randomness = 0.4  # More chaos for mist effect
 	blood_spray.lifetime = 0.4  # Quick dissipation like mist
 	blood_spray.local_coords = false
 	blood_spray.global_position = global_position
 
-	blood_spray.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	blood_spray.emission_sphere_radius = 0.5  # Very tight spawn - burst from center
+	blood_spray.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINT  # Spawn from exact center
 
-	# ✨ SMOOTH MIST PARTICLES - tiny soft circles
-	var img_size = 8  # Slightly larger for smoother circles
-	var img = Image.create(img_size, img_size, false, Image.FORMAT_RGBA8)
-	img.fill(Color.TRANSPARENT)
+	# ✨ TINY SHARP PARTICLES - single pixel dots
+	var img = Image.create(2, 2, false, Image.FORMAT_RGBA8)
 	var particle_color = colors["particle_base"]
-	var center = Vector2(img_size / 2.0, img_size / 2.0)
-
-	# Create smooth circular mist particles
-	for x in range(img_size):
-		for y in range(img_size):
-			var pos = Vector2(x, y)
-			var to_center = pos - center
-			var dist = to_center.length()
-			var max_dist = (img_size / 2.0) - 0.5  # Slightly smaller for clean edges
-
-			if dist < max_dist:
-				# Smooth radial gradient for round mist particles
-				var alpha = 1.0 - (dist / max_dist)
-				alpha = pow(alpha, 0.6)  # Softer gradient = smoother circles
-
-				var final_color = particle_color
-				final_color.a = alpha
-				img.set_pixel(x, y, final_color)
+	img.fill(particle_color)
 
 	var tex = ImageTexture.create_from_image(img)
 	blood_spray.texture = tex
 
 	blood_spray.direction = Vector2(0, 0)
 	blood_spray.spread = 180.0
-	# ✨ DENSE BURST - thick concentrated explosion
-	blood_spray.initial_velocity_min = 80.0  # Slower for more concentrated
-	blood_spray.initial_velocity_max = 130.0
-	blood_spray.gravity = Vector2(0, 120)  # Heavier fall keeps them close
+	# ✨ VIOLENT BURST - explode out then stop
+	blood_spray.initial_velocity_min = 150.0
+	blood_spray.initial_velocity_max = 220.0
+	blood_spray.gravity = Vector2(0, 0)
+	blood_spray.damping_min = 8.0  # Heavy damping - stops quickly
+	blood_spray.damping_max = 12.0
 
-	blood_spray.scale_amount_min = 2.0  # Compensate for 8px texture
-	blood_spray.scale_amount_max = 3.5  # Small smooth mist particles
+	blood_spray.scale_amount_min = 1.0  # Bigger
+	blood_spray.scale_amount_max = 1.8
 
-	# Scale variation - expand then dissipate like mist
+	# Scale variation - stay visible then fade at the end
 	var scale_curve = Curve.new()
-	scale_curve.add_point(Vector2(0, 0.8))  # Start small
-	scale_curve.add_point(Vector2(0.2, 1.2))  # Expand quickly (mist puffing out)
-	scale_curve.add_point(Vector2(1, 0.2))  # Shrink to nothing (dissipate)
+	scale_curve.add_point(Vector2(0, 1.0))  # Start full size
+	scale_curve.add_point(Vector2(0.7, 0.8))  # Stay mostly visible
+	scale_curve.add_point(Vector2(1, 0.0))  # Shrink to nothing at end
 	blood_spray.scale_amount_curve = scale_curve
 
 	# Color variation based on theme
@@ -719,40 +707,31 @@ func spawn_destruction_particles() -> void:
 	chunks.emitting = false
 	chunks.one_shot = true
 	chunks.explosiveness = 1.0
-	chunks.amount = 4  # Minimal chunks
+	chunks.amount = 7  # Reduced 30%
 	chunks.lifetime = 0.5
 	chunks.local_coords = false
 	chunks.global_position = global_position
 
-	chunks.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	chunks.emission_sphere_radius = 6.0  # Tight spread
+	chunks.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINT  # Spawn from exact center
 
-	# Create circular gradient texture for droplets/fragments (larger, more opaque)
-	var chunk_img = Image.create(12, 12, false, Image.FORMAT_RGBA8)
-	chunk_img.fill(Color.TRANSPARENT)
-	var chunk_center = Vector2(6, 6)
+	# Create tiny chunk texture
+	var chunk_img = Image.create(2, 2, false, Image.FORMAT_RGBA8)
 	var chunk_color = colors["particle_dark"]
-	for x in range(12):
-		for y in range(12):
-			var dist = chunk_center.distance_to(Vector2(x, y))
-			if dist < 6.0:
-				# Slightly irregular droplet/fragment shape
-				var alpha = 1.0 - (dist / 6.0)
-				alpha = pow(alpha, 0.8)  # More solid center
-				var pixel_color = chunk_color
-				pixel_color.a = alpha * 0.9
-				chunk_img.set_pixel(x, y, pixel_color)
+	chunk_img.fill(chunk_color)
 	var chunk_tex = ImageTexture.create_from_image(chunk_img)
 	chunks.texture = chunk_tex
 
 	chunks.direction = Vector2(0, 0)
 	chunks.spread = 180.0
-	chunks.initial_velocity_min = 25.0  # Slower velocity
-	chunks.initial_velocity_max = 50.0
-	chunks.gravity = Vector2(0, 150)
+	# ✨ VIOLENT BURST - explode out then stop
+	chunks.initial_velocity_min = 100.0
+	chunks.initial_velocity_max = 160.0
+	chunks.gravity = Vector2(0, 0)
+	chunks.damping_min = 6.0  # Heavy damping - stops quickly
+	chunks.damping_max = 10.0
 
-	chunks.scale_amount_min = 1.5  # Blood droplets
-	chunks.scale_amount_max = 3.0
+	chunks.scale_amount_min = 1.5  # Bigger chunks
+	chunks.scale_amount_max = 2.5
 
 	# Color gradient: darker chunks/fragments that fade
 	var chunk_gradient = Gradient.new()
@@ -762,13 +741,13 @@ func spawn_destruction_particles() -> void:
 	var chunk_fade = colors["particle_dark"] * 0.5
 	chunk_fade.a = 0
 	chunk_gradient.add_point(0.0, chunk_bright)
-	chunk_gradient.add_point(0.5, chunk_mid)
+	chunk_gradient.add_point(0.6, chunk_mid)  # Stay visible longer
 	chunk_gradient.add_point(1.0, chunk_fade)
 	chunks.color_ramp = chunk_gradient
 
-	# Gentle rotation for natural droplet motion
-	chunks.angular_velocity_min = -180.0
-	chunks.angular_velocity_max = 180.0
+	# Fast rotation for violent explosion
+	chunks.angular_velocity_min = -360.0
+	chunks.angular_velocity_max = 360.0
 
 	# HIGH Z-INDEX to render in front of enemy/dummy sprites
 	chunks.z_index = 400

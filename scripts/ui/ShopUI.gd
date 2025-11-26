@@ -253,77 +253,94 @@ func populate_armor() -> void:
 		armor_list.add_child(item_row)
 
 func create_item_row(item_name: String, description: String, price: int, stats: String, req_level: int, color: Color, on_buy: Callable) -> Button:
-	"""Create a square button slot for shop item - hover for tooltip"""
+	"""Create a button slot for shop item - hover for tooltip"""
 	var slot_button = Button.new()
-	slot_button.custom_minimum_size = Vector2(168, 80)  # Wide rectangle for name + price
+	slot_button.custom_minimum_size = Vector2(140, 60)  # Compact size
 	slot_button.clip_text = true
 
-	# Display name and price
+	# Display name and price on separate lines, centered
 	var price_text = "🪙 %d" % price if price > 0 else "FREE"
 	slot_button.text = "%s\n%s" % [item_name, price_text]
+	slot_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	# Set tooltip with full stat card info
 	slot_button.tooltip_text = "%s\n%s\n%s" % [item_name, description, stats]
 
+	# Text styling - larger, readable font
+	slot_button.add_theme_font_size_override("font_size", 14)
+	slot_button.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+	slot_button.add_theme_color_override("font_hover_color", Color.WHITE)
+	slot_button.add_theme_color_override("font_disabled_color", Color(0.5, 0.5, 0.5))
+
 	# Style the button with rarity border
 	var btn_normal = StyleBoxFlat.new()
 	btn_normal.bg_color = ITEM_BG_COLOR
-	btn_normal.border_width_left = 3
-	btn_normal.border_width_right = 3
-	btn_normal.border_width_top = 3
-	btn_normal.border_width_bottom = 3
+	btn_normal.border_width_left = 2
+	btn_normal.border_width_right = 2
+	btn_normal.border_width_top = 2
+	btn_normal.border_width_bottom = 2
 	btn_normal.border_color = color  # Rarity color border
-	btn_normal.corner_radius_top_left = 6
-	btn_normal.corner_radius_top_right = 6
-	btn_normal.corner_radius_bottom_left = 6
-	btn_normal.corner_radius_bottom_right = 6
+	btn_normal.corner_radius_top_left = 4
+	btn_normal.corner_radius_top_right = 4
+	btn_normal.corner_radius_bottom_left = 4
+	btn_normal.corner_radius_bottom_right = 4
+	btn_normal.content_margin_left = 8
+	btn_normal.content_margin_right = 8
+	btn_normal.content_margin_top = 6
+	btn_normal.content_margin_bottom = 6
 
 	var btn_hover = StyleBoxFlat.new()
 	btn_hover.bg_color = Color(0.18, 0.18, 0.22, 1.0)  # Lighter on hover
-	btn_hover.border_width_left = 3
-	btn_hover.border_width_right = 3
-	btn_hover.border_width_top = 3
-	btn_hover.border_width_bottom = 3
+	btn_hover.border_width_left = 2
+	btn_hover.border_width_right = 2
+	btn_hover.border_width_top = 2
+	btn_hover.border_width_bottom = 2
 	btn_hover.border_color = Color(color.r + 0.2, color.g + 0.2, color.b + 0.2, 1.0)  # Brighter border
-	btn_hover.corner_radius_top_left = 6
-	btn_hover.corner_radius_top_right = 6
-	btn_hover.corner_radius_bottom_left = 6
-	btn_hover.corner_radius_bottom_right = 6
+	btn_hover.corner_radius_top_left = 4
+	btn_hover.corner_radius_top_right = 4
+	btn_hover.corner_radius_bottom_left = 4
+	btn_hover.corner_radius_bottom_right = 4
+	btn_hover.content_margin_left = 8
+	btn_hover.content_margin_right = 8
+	btn_hover.content_margin_top = 6
+	btn_hover.content_margin_bottom = 6
 
 	var btn_pressed = StyleBoxFlat.new()
 	btn_pressed.bg_color = Color(0.06, 0.06, 0.08, 1.0)  # Darker when pressed
-	btn_pressed.border_width_left = 3
-	btn_pressed.border_width_right = 3
-	btn_pressed.border_width_top = 3
-	btn_pressed.border_width_bottom = 3
+	btn_pressed.border_width_left = 2
+	btn_pressed.border_width_right = 2
+	btn_pressed.border_width_top = 2
+	btn_pressed.border_width_bottom = 2
 	btn_pressed.border_color = color
-	btn_pressed.corner_radius_top_left = 6
-	btn_pressed.corner_radius_top_right = 6
-	btn_pressed.corner_radius_bottom_left = 6
-	btn_pressed.corner_radius_bottom_right = 6
+	btn_pressed.content_margin_left = 8
+	btn_pressed.content_margin_right = 8
+	btn_pressed.content_margin_top = 6
+	btn_pressed.content_margin_bottom = 6
+	btn_pressed.corner_radius_top_left = 4
+	btn_pressed.corner_radius_top_right = 4
+	btn_pressed.corner_radius_bottom_left = 4
+	btn_pressed.corner_radius_bottom_right = 4
 
 	var btn_disabled = StyleBoxFlat.new()
 	btn_disabled.bg_color = Color(0.05, 0.05, 0.06, 0.8)  # Dimmed when disabled
-	btn_disabled.border_width_left = 3
-	btn_disabled.border_width_right = 3
-	btn_disabled.border_width_top = 3
-	btn_disabled.border_width_bottom = 3
+	btn_disabled.border_width_left = 2
+	btn_disabled.border_width_right = 2
+	btn_disabled.border_width_top = 2
+	btn_disabled.border_width_bottom = 2
 	btn_disabled.border_color = Color(color.r * 0.5, color.g * 0.5, color.b * 0.5, 0.6)
-	btn_disabled.corner_radius_top_left = 6
-	btn_disabled.corner_radius_top_right = 6
-	btn_disabled.corner_radius_bottom_left = 6
-	btn_disabled.corner_radius_bottom_right = 6
+	btn_disabled.corner_radius_top_left = 4
+	btn_disabled.corner_radius_top_right = 4
+	btn_disabled.corner_radius_bottom_left = 4
+	btn_disabled.corner_radius_bottom_right = 4
+	btn_disabled.content_margin_left = 8
+	btn_disabled.content_margin_right = 8
+	btn_disabled.content_margin_top = 6
+	btn_disabled.content_margin_bottom = 6
 
 	slot_button.add_theme_stylebox_override("normal", btn_normal)
 	slot_button.add_theme_stylebox_override("hover", btn_hover)
 	slot_button.add_theme_stylebox_override("pressed", btn_pressed)
 	slot_button.add_theme_stylebox_override("disabled", btn_disabled)
-
-	# Text styling
-	slot_button.add_theme_font_size_override("font_size", 12)
-	slot_button.add_theme_color_override("font_color", TEXT_COLOR)
-	slot_button.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
-	slot_button.add_theme_color_override("font_disabled_color", Color(0.5, 0.5, 0.5))
 
 	# Only check gold - no level requirement for purchasing
 	var can_buy = CharacterStats.can_afford(price)

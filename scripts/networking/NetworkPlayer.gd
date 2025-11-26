@@ -17,6 +17,7 @@ var sync_animation: String = "idle_down"
 var sync_health: int = 100
 var sync_max_health: int = 100
 var sync_level: int = 1
+var sync_is_dashing: bool = false  # Track dash state for i-frame validation
 
 # Network interpolation
 var last_sync_time: float = 0.0
@@ -89,17 +90,23 @@ func _send_position_update():
 	var pos = player_instance.global_position
 	var anim = _get_current_animation()
 	var health = _get_player_health()
+	var dashing = _is_player_dashing()
 
-	rpc("receive_position_update", pos, anim, health)
+	rpc("receive_position_update", pos, anim, health, dashing)
 
 @rpc("any_peer", "call_local", "unreliable_ordered")
-func receive_position_update(pos: Vector2, anim: String, health: int):
+func receive_position_update(pos: Vector2, anim: String, health: int, dashing: bool = false):
 	if is_local:
 		return  # Ignore our own updates
 
 	sync_position = pos
 	sync_animation = anim
 	sync_health = health
+	sync_is_dashing = dashing
+
+	# Trigger dash visuals on remote player if they're dashing
+	if dashing and player_instance:
+		_show_remote_dash_effects()
 
 # Combat synchronization
 func take_damage(amount: int, attacker_id: int):
@@ -112,6 +119,11 @@ func take_damage(amount: int, attacker_id: int):
 func request_damage(target_id: int, amount: int, attacker_id: int):
 	# Only server processes damage
 	if not multiplayer.is_server():
+		return
+
+	# Server-side i-frame validation: check if target is dashing
+	if sync_is_dashing and target_id == player_id:
+		print("Server: Damage blocked - player %d is dashing (i-frames)" % target_id)
 		return
 
 	# Validate and apply damage
@@ -210,3 +222,38 @@ func get_player_position() -> Vector2:
 	if player_instance:
 		return player_instance.global_position
 	return Vector2.ZERO
+
+func _is_player_dashing() -> bool:
+	"""Check if local player is currently dashing"""
+	if player_instance:
+		if player_instance.has_method("is_invincible"):
+			return player_instance.is_invincible()
+		elif player_instance.get("is_dashing") != null:
+			return player_instance.is_dashing
+	return false
+
+func _show_remote_dash_effects():
+	"""Show dash visual effects for remote players"""
+	if not player_instance:
+		return
+
+	# Use the player's spawn_dash_afterimage if available
+	if player_instance.has_method("spawn_dash_afterimage"):
+		player_instance.spawn_dash_afterimage()
+		return
+
+	# Fallback: spawn basic afterimage
+	var character_sprite = player_instance.get_node_or_null("CharacterSprite")
+	if character_sprite and character_sprite.sprite_frames:
+		var afterimage = Sprite2D.new()
+		afterimage.texture = character_sprite.sprite_frames.get_frame_texture(character_sprite.animation, character_sprite.frame)
+		afterimage.global_position = player_instance.global_position + character_sprite.position
+		afterimage.modulate = Color(0.5, 0.7, 1.0, 0.5)  # Blue-tinted
+		afterimage.z_index = -1
+
+		get_tree().root.add_child(afterimage)
+
+		# Fade out
+		var tween = afterimage.create_tween()
+		tween.tween_property(afterimage, "modulate:a", 0.0, 0.15)
+		tween.tween_callback(afterimage.queue_free)

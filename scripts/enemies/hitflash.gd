@@ -34,8 +34,8 @@ func flash(is_critical: bool = false) -> void:
 	# - Multiple rapid hits occur
 	var restore_color = base_color
 	
-	# Flash color (bright white or yellow)
-	var flash_color = Color(5, 5, 5, 1) if not is_critical else Color(5, 4, 1, 1)
+	# Flash color (bright white for normal, red for crit/weakpoint)
+	var flash_color = Color(5, 5, 5, 1) if not is_critical else Color(5, 1, 1, 1)
 	
 	# Instant flash
 	sprite.modulate = flash_color

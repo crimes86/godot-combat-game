@@ -2916,8 +2916,8 @@ func spawn_training_dummy():
 	"""Spawn a training dummy near the campfire for combat practice"""
 	const DUMMY_SCENE = preload("res://scenes/training/training_dummy.tscn")
 
-	# Spawn dummy south of campfire (campfire is at -2000, 0)
-	var dummy_pos = Vector2(-2000, 180)  # South of campfire in cleared area
+	# Spawn dummy north of campfire (negative Y = north)
+	var dummy_pos = CAMPFIRE_POS + Vector2(0, -180)  # North of campfire in cleared area
 
 	var dummy = DUMMY_SCENE.instantiate()
 	dummy.global_position = dummy_pos

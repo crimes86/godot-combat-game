@@ -67,6 +67,30 @@ var character_ui: CanvasLayer = null
 # Campfire Direction Indicator
 var campfire_indicator: CanvasLayer = null
 
+# Dash/Dodge System
+var is_dashing: bool = false
+var dash_cooldown: float = 1.5  # Seconds between dashes
+var dash_duration: float = 0.2  # How long the dash lasts
+var dash_speed_multiplier: float = 3.0  # Speed boost during dash (reduced 25%)
+var dash_timer: float = 0.0
+var dash_cooldown_timer: float = 0.0
+var dash_direction: Vector2 = Vector2.ZERO
+var dash_invincible: bool = true  # I-frames during dash
+
+# Multiplayer helper methods
+func get_current_animation() -> String:
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if character_sprite and character_sprite.animation:
+		return character_sprite.animation
+	return "idle_south"
+
+func get_health() -> int:
+	return int(current_health)
+
+func is_invincible() -> bool:
+	"""Check if player is currently invincible (for server damage validation)"""
+	return is_dashing and dash_invincible
+
 func _ready() -> void:
 	print("🎮 Player._ready() started")
 	
@@ -390,14 +414,32 @@ func _on_armor_unequipped(slot: String, armor_item: Dictionary) -> void:
 	create_player_sprite()
 
 func _physics_process(delta: float) -> void:
+	# Update dash cooldown
+	if dash_cooldown_timer > 0:
+		dash_cooldown_timer -= delta
+
+	# Get input direction (used for movement and animation)
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	velocity = input_direction * speed
+
+	# Handle dash movement
+	if is_dashing:
+		dash_timer -= delta
+		velocity = dash_direction * speed * dash_speed_multiplier
+
+		# Update dash visual effects
+		update_dash_visuals(delta)
+
+		if dash_timer <= 0:
+			end_dash()
+	else:
+		velocity = input_direction * speed
+
 	move_and_slide()
 
 	# Clamp player position to world boundaries (with 50px buffer)
 	var x_min = -Constants.CHUNK_SIZE + 50
 	var x_max = Constants.CHUNK_SIZE * 2 - 50
-	var y_min = -Constants.CHUNK_SIZE / 2 + 50
+	var y_min = -Constants.CHUNK_SIZE / 2 + 50 
 	var y_max = Constants.CHUNK_SIZE / 2 - 50
 	global_position.x = clamp(global_position.x, x_min, x_max)
 	global_position.y = clamp(global_position.y, y_min, y_max)
@@ -647,6 +689,11 @@ func _input(event: InputEvent) -> void:
 				# Toggle character sheet (includes inventory)
 				if character_ui:
 					character_ui.toggle_character_ui()
+
+			KEY_SPACE:
+				# Dash/dodge
+				if not is_dashing and dash_cooldown_timer <= 0:
+					start_dash()
 
 func check_crit_window_click(event: InputEvent) -> bool:
 	"""Check if clicking on enemy during crit window. Returns true if handled."""
@@ -1048,6 +1095,11 @@ func _on_attack_animation_finished() -> void:
 	character_sprite.play_lpc_animation("idle", lpc_dir)
 
 func take_damage(amount: float) -> void:
+	# I-frames during dash
+	if is_dashing and dash_invincible:
+		print("💨 Damage dodged! (dashing)")
+		return
+
 	print("Player taking %.1f damage (current: %.1f)" % [amount, current_health])
 	current_health -= amount
 
@@ -1420,43 +1472,40 @@ func create_player_sprite() -> void:
 # Old animation functions removed - now using SimpleLPCSprite system
 
 func create_cone_visualizer() -> void:
-	"""Create visual cone showing attack area"""
+	"""Create subtle cone outline showing attack area"""
 	# Remove old visualizer if it exists
 	if cone_visualizer:
 		cone_visualizer.queue_free()
 
+	# Use a very subtle filled cone with low opacity
 	cone_visualizer = Polygon2D.new()
 	cone_visualizer.name = "ConeVisualizer"
-	
-	# Set color all at once (Color is a value type, not a reference!)
-	cone_visualizer.color = Color(1.0, 0.0, 0.0, 1.0)  # Red, 100% opaque
-	cone_visualizer.z_index = 1  # In front of player
+	cone_visualizer.color = Color(0.5, 0.5, 0.5, 0.04)  # Extremely faint gray
+	cone_visualizer.z_index = -1  # Behind player
 	cone_visualizer.visible = true
-	
+
 	# Create cone shape points
 	var points = PackedVector2Array()
-	var segments = 32
+	var segments = 16  # Fewer segments for subtle look
 	var cone_half_angle_rad = deg_to_rad(attack_cone_angle / 2.0)
-	
+
 	# Start at player position (origin)
 	points.append(Vector2.ZERO)
-	
+
 	# Create arc from -half_angle to +half_angle
 	for i in range(segments + 1):
 		var t = float(i) / float(segments)
 		var angle = lerp(-cone_half_angle_rad, cone_half_angle_rad, t)
 		var point = Vector2(cos(angle), sin(angle)) * attack_range
 		points.append(point)
-	
+
 	# Close the cone back to center
 	points.append(Vector2.ZERO)
-	
+
 	cone_visualizer.polygon = points
 	add_child(cone_visualizer)
-	cone_visualizer.queue_redraw()
-	
-	print("✅ Cone visualizer created (angle: %.0f°, range: %.0f)" % [attack_cone_angle, attack_range])
-	print("   🔴 Should be BRIGHT RED and visible!")
+
+	print("✅ Cone visualizer created (subtle outline, angle: %.0f°, range: %.0f)" % [attack_cone_angle, attack_range])
 	
 func create_range_indicator() -> void:
 	"""Create visual indicator for attack range"""
@@ -1493,21 +1542,7 @@ func update_cone_visualizer() -> void:
 	var direction_to_mouse = (mouse_pos - global_position).normalized()
 	cone_visualizer.rotation = direction_to_mouse.angle()
 
-	# THROTTLED: Only update color every 0.1s instead of 60 FPS (10x performance boost!)
-	# get_enemies_in_cone() is VERY expensive (checks all enemies in scene)
-	# Color update doesn't need to be 60 FPS - 10 FPS is plenty
-	cone_update_timer += get_physics_process_delta_time()
-	if cone_update_timer >= 0.1:  # Update 10 times per second
-		cone_update_timer = 0.0
-
-		# Update color based on enemies in cone
-		var enemies_in_range = get_enemies_in_cone()
-		if enemies_in_range.size() > 0:
-			# Bright green when enemies are targetable (35% alpha = VISIBLE)
-			cone_visualizer.color = Color(0.2, 1.0, 0.2, 0.35)
-		else:
-			# Light gray when no enemies (25% alpha = VISIBLE)
-			cone_visualizer.color = Color(0.6, 0.6, 0.7, 0.25)
+	# Color is now constant - no need to update based on enemies
 
 func update_debug_visualization() -> void:
 	if not debug_shapes:
@@ -1790,3 +1825,126 @@ func create_campfire_indicator() -> void:
 	# Wait one frame for _ready() to complete
 	await get_tree().process_frame
 	print("🧭 Campfire indicator initialized")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DASH/DODGE SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════
+
+func start_dash() -> void:
+	"""Initiate a dash/dodge roll"""
+	if is_dashing or dash_cooldown_timer > 0:
+		return
+
+	# Get dash direction from input, or mouse direction if standing still
+	var input_dir = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	if input_dir.length() > 0.1:
+		dash_direction = input_dir.normalized()
+	else:
+		# Dash toward mouse cursor if no movement input
+		dash_direction = (get_global_mouse_position() - global_position).normalized()
+
+	is_dashing = true
+	dash_timer = dash_duration
+	dash_cooldown_timer = dash_cooldown
+
+	print("💨 Dash started! Direction: %s" % dash_direction)
+
+	# Visual effects
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if character_sprite:
+		# Speed up animation during dash
+		character_sprite.speed_scale = 3.0
+
+		# Squash and stretch effect (subtle flatten in perpendicular direction)
+		var stretch_scale = Vector2(1.15, 0.85) if abs(dash_direction.x) > abs(dash_direction.y) else Vector2(0.85, 1.15)
+		character_sprite.scale = stretch_scale
+
+	# Spawn initial dust puff
+	spawn_dash_dust()
+
+	# Spawn afterimages
+	spawn_dash_afterimage()
+
+	# Play dash sound (reuse footstep or create whoosh)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		# Use a quick whoosh sound - we can use unarmed swing as placeholder
+		sound_manager.play_unarmed_swing_sound(global_position, -5.0)
+
+func end_dash() -> void:
+	"""End the dash and restore normal state"""
+	is_dashing = false
+	dash_direction = Vector2.ZERO
+
+	# Restore sprite
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if character_sprite:
+		character_sprite.speed_scale = 1.0
+		character_sprite.scale = Vector2.ONE
+
+	# Spawn ending dust puff
+	spawn_dash_dust()
+
+	print("💨 Dash ended!")
+
+func update_dash_visuals(delta: float) -> void:
+	"""Update visual effects during dash"""
+	# Spawn afterimages periodically during dash
+	if randf() < 0.15:  # ~9 afterimages per second at 60fps
+		spawn_dash_afterimage()
+
+func spawn_dash_dust() -> void:
+	"""Spawn dust puff effect at player's feet"""
+	var dust = preload("res://scripts/effects/FootstepDust.gd").new()
+	dust.global_position = global_position + Vector2(0, 20)  # At feet
+	get_tree().root.add_child(dust)
+	dust.spawn_dust()
+
+	# Spawn a second dust for more impact
+	var dust2 = preload("res://scripts/effects/FootstepDust.gd").new()
+	dust2.global_position = global_position + Vector2(randf_range(-10, 10), 20)
+	get_tree().root.add_child(dust2)
+	dust2.spawn_dust()
+
+func spawn_dash_afterimage() -> void:
+	"""Spawn a fading afterimage of the player with all equipped gear"""
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if not character_sprite:
+		return
+
+	# Create container for all afterimage layers
+	var afterimage_container = Node2D.new()
+	afterimage_container.global_position = global_position + character_sprite.position
+	afterimage_container.scale = character_sprite.scale
+	afterimage_container.modulate = Color(0.5, 0.7, 1.0, 0.6)  # Blue-tinted, semi-transparent
+	afterimage_container.z_index = -1  # Behind player
+
+	# Copy all sprite layers from CharacterSprite (body, armor, weapon, etc.)
+	# The CharacterSprite has child AnimatedSprite2D nodes for each layer
+	_copy_sprite_layer(character_sprite, afterimage_container)  # Main body
+
+	# Copy child layers (shadow, armor, weapon, etc.)
+	for child in character_sprite.get_children():
+		if child is AnimatedSprite2D:
+			_copy_sprite_layer(child, afterimage_container)
+
+	get_tree().root.add_child(afterimage_container)
+
+	# Fade out and remove
+	var tween = afterimage_container.create_tween()
+	tween.tween_property(afterimage_container, "modulate:a", 0.0, 0.15)
+	tween.tween_callback(afterimage_container.queue_free)
+
+func _copy_sprite_layer(source: AnimatedSprite2D, container: Node2D) -> void:
+	"""Copy a single sprite layer to the afterimage container"""
+	if not source.sprite_frames or not source.animation:
+		return
+	if not source.sprite_frames.has_animation(source.animation):
+		return
+
+	var layer_sprite = Sprite2D.new()
+	layer_sprite.texture = source.sprite_frames.get_frame_texture(source.animation, source.frame)
+	layer_sprite.position = source.position
+	layer_sprite.z_index = source.z_index
+	layer_sprite.centered = source.centered
+	container.add_child(layer_sprite)
