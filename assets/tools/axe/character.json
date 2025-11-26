@@ -1,0 +1,130 @@
+{
+  "version": 2,
+  "bodyType": "male",
+  "selections": {
+    "expression": {
+      "itemId": "face_neutral",
+      "variant": "light",
+      "name": "Neutral (light)"
+    },
+    "weapon": {
+      "itemId": "tool_smash",
+      "variant": "axe",
+      "name": "Smash (axe)"
+    }
+  },
+  "selectedAnimation": "walk",
+  "showTransparencyGrid": true,
+  "applyTransparencyMask": false,
+  "matchBodyColorEnabled": true,
+  "compactDisplay": false,
+  "enabledLicenses": {
+    "CC0": true,
+    "CC-BY-SA": true,
+    "CC-BY": true,
+    "OGA-BY": true,
+    "GPL": true
+  },
+  "enabledAnimations": {
+    "spellcast": false,
+    "thrust": false,
+    "walk": false,
+    "slash": false,
+    "shoot": false,
+    "hurt": false,
+    "climb": false,
+    "idle": false,
+    "jump": false,
+    "sit": false,
+    "emote": false,
+    "run": false,
+    "watering": false,
+    "combat": false,
+    "1h_slash": false,
+    "1h_backslash": false,
+    "1h_halfslash": false
+  },
+  "url": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/#sex=male&expression=Neutral_light&weapon=Smash_axe",
+  "layers": [
+    {
+      "itemId": "face_neutral",
+      "variant": "light",
+      "zPos": 101,
+      "layerNum": 1,
+      "yPos": 0,
+      "isCustom": false,
+      "fileName": "head/faces/undefined/neutral/spellcast/light.png",
+      "supportedAnimations": [
+        "spellcast",
+        "thrust",
+        "walk",
+        "slash",
+        "shoot",
+        "hurt",
+        "climb",
+        "idle",
+        "jump",
+        "sit",
+        "emote",
+        "run",
+        "combat_idle",
+        "backslash",
+        "halfslash"
+      ]
+    },
+    {
+      "itemId": "tool_smash",
+      "variant": "axe",
+      "zPos": 140,
+      "layerNum": 1,
+      "yPos": 0,
+      "isCustom": false,
+      "fileName": "tools/smash/universal/male/spellcast/axe.png",
+      "supportedAnimations": [
+        "spellcast",
+        "thrust",
+        "walk",
+        "slash",
+        "shoot",
+        "hurt"
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "fileName": "head/faces/undefined/neutral/walk/light.png",
+      "file": "head/faces",
+      "notes": "Original by Redshrike, Expressions by ElizaWy, mapped to all frames by JaidynReiman",
+      "authors": [
+        "JaidynReiman",
+        "ElizaWy",
+        "Stephen Challener (Redshrike)"
+      ],
+      "licenses": [
+        "OGA-BY 3.0"
+      ],
+      "urls": [
+        "https://github.com/ElizaWy/LPC/tree/main/Characters/Head",
+        "https://opengameart.org/content/ulpc-expanded-expressions"
+      ]
+    },
+    {
+      "fileName": "tools/smash/universal/male/walk/axe.png",
+      "file": "tools/smash",
+      "notes": "",
+      "authors": [
+        "bluecarrot16",
+        "Pierre Vigier (pvigier)",
+        "Tuomo Untinen (reemax)",
+        "Johannes Sjölund (wulax)",
+        "and Inboxninja"
+      ],
+      "licenses": [
+        "CC-BY-SA 3.0"
+      ],
+      "urls": [
+        "https://opengameart.org/content/lpc-hand-tools"
+      ]
+    }
+  ]
+}

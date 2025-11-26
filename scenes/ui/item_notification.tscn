@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://dpfox8sjvq2kj"]
+
+[ext_resource type="Script" path="res://scripts/ui/ItemNotification.gd" id="1_item_notification"]
+
+[node name="ItemNotification" type="Label"]
+offset_right = 300.0
+offset_bottom = 40.0
+horizontal_alignment = 1
+vertical_alignment = 1
+script = ExtResource("1_item_notification")

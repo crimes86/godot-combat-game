@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b14h3anifrikk"]
+
+[ext_resource type="Script" uid="uid://wa44ieii3ulf" path="res://scripts/ui/OrbitalRing.gd" id="1_iiuc5"]
+
+[node name="OrbitalRing" type="Node2D"]
+script = ExtResource("1_iiuc5")

@@ -1,0 +1,9 @@
+hair/buzzcut/adult/dark_brown.png
+	- Note: 
+	- Licenses:
+		- OGA-BY 3.0
+	- Authors:
+		- ElizaWy
+	- Links:
+		- https://opengameart.org/content/lpc-hair
+

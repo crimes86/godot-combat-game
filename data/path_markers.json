@@ -1,0 +1,154 @@
+{
+  "PathMarkers": [
+    {
+      "id": 1,
+      "x": 400,
+      "y": 0,
+      "type": "rock_small"
+    },
+    {
+      "id": 2,
+      "x": 883,
+      "y": -83,
+      "type": "rock_small"
+    },
+    {
+      "id": 3,
+      "x": 1366,
+      "y": -376,
+      "type": "rock_small"
+    },
+    {
+      "id": 4,
+      "x": 1850,
+      "y": -63,
+      "type": "rock_small"
+    },
+    {
+      "id": 5,
+      "x": 2333,
+      "y": 220,
+      "type": "rock_small"
+    },
+    {
+      "id": 6,
+      "x": 2816,
+      "y": 222,
+      "type": "rock_small"
+    },
+    {
+      "id": 7,
+      "x": 3300,
+      "y": -133,
+      "type": "rock_small"
+    },
+    {
+      "id": 8,
+      "x": 3783,
+      "y": 1,
+      "type": "rock_small"
+    },
+    {
+      "id": 9,
+      "x": 4266,
+      "y": 300,
+      "type": "rock_small"
+    },
+    {
+      "id": 10,
+      "x": 4750,
+      "y": 99,
+      "type": "rock_small"
+    },
+    {
+      "id": 11,
+      "x": 5233,
+      "y": -60,
+      "type": "rock_small"
+    },
+    {
+      "id": 12,
+      "x": 5716,
+      "y": -179,
+      "type": "rock_small"
+    },
+    {
+      "id": 13,
+      "x": 6200,
+      "y": -251,
+      "type": "rock_small"
+    },
+    {
+      "id": 14,
+      "x": 6683,
+      "y": -194,
+      "type": "rock_small"
+    },
+    {
+      "id": 15,
+      "x": 7166,
+      "y": -219,
+      "type": "rock_small"
+    },
+    {
+      "id": 16,
+      "x": 7650,
+      "y": 286,
+      "type": "rock_small"
+    },
+    {
+      "id": 17,
+      "x": 8133,
+      "y": -149,
+      "type": "rock_small"
+    },
+    {
+      "id": 18,
+      "x": 8616,
+      "y": -10,
+      "type": "rock_small"
+    },
+    {
+      "id": 19,
+      "x": 9100,
+      "y": 12,
+      "type": "rock_small"
+    },
+    {
+      "id": 20,
+      "x": 9583,
+      "y": 130,
+      "type": "rock_small"
+    },
+    {
+      "id": 21,
+      "x": 10066,
+      "y": -225,
+      "type": "rock_small"
+    },
+    {
+      "id": 22,
+      "x": 10550,
+      "y": 89,
+      "type": "rock_small"
+    },
+    {
+      "id": 23,
+      "x": 11033,
+      "y": -36,
+      "type": "rock_small"
+    },
+    {
+      "id": 24,
+      "x": 11516,
+      "y": -13,
+      "type": "rock_small"
+    },
+    {
+      "id": 25,
+      "x": 12000,
+      "y": 0,
+      "type": "rock_small"
+    }
+  ]
+}

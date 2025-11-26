@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cgxm36u0xasjc"]
+
+[ext_resource type="Script" uid="uid://borjsnaniwwwx" path="res://scripts/enemies/weakpoint.gd" id="1_jgs5l"]
+
+[node name="Weakpoint" type="Area2D"]
+script = ExtResource("1_jgs5l")

@@ -1,0 +1,26 @@
+{
+  "bodyTypeName": "male",
+  "url": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/#?body=none_Body_color&head=Human_female_small_light&hair=none_Braid2&sex=male",
+  "spritesheets": "https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/spritesheets/",
+  "version": 1,
+  "datetime": "11/19/2025, 2:01:47 PM",
+  "credits": [
+    {
+      "fileName": "head/heads/human/female_small/light.png",
+      "licenses": "OGA-BY 3.0,CC-BY",
+      "authors": "ElizaWy,Stephen Challener (Redshrike)",
+      "urls": "",
+      "notes": "original head by Redshrike, reduced size head by ElizaWy"
+    }
+  ],
+  "layers": [
+    {
+      "fileName": "head/heads/human/female_small/light.png",
+      "zPos": 100,
+      "parentName": "head",
+      "name": "Human_female_small",
+      "variant": "light",
+      "supportedAnimations": "spellcast,thrust,walk,slash,shoot,hurt,watering,idle,jump,run,sit,emote,climb,combat,1h_slash,1h_backslash,1h_halfslash"
+    }
+  ]
+}
