@@ -1038,7 +1038,7 @@ func add_ground_disturbance(parent_node: Node2D, base_size: float, rng: RandomNu
 	var size = base_size * rng.randf_range(0.9, 1.1)
 	patch.size = Vector2(size, size)
 	patch.position = -patch.size / 2
-	patch.color = Color(0.04, 0.035, 0.03, darkness * 0.5 * alpha_multiplier)
+	patch.color = Color(0.03, 0.03, 0.03, darkness * 0.5 * alpha_multiplier)
 	patch.z_index = -9
 	patch.rotation = rng.randf() * TAU
 	parent_node.add_child(patch)
@@ -1244,7 +1244,7 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 	for crack_i in range(num_cracks):
 		var crack = Line2D.new()
 		crack.width = rng.randf_range(1.5, 3.5)
-		crack.default_color = Color(0.02, 0.015, 0.01, rng.randf_range(0.6, 0.9))
+		crack.default_color = Color(0.02, 0.02, 0.02, rng.randf_range(0.6, 0.9))
 		crack.joint_mode = Line2D.LINE_JOINT_SHARP
 		crack.antialiased = false
 
@@ -1281,7 +1281,7 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 		var y = sin(angle) * radius * elongation_y
 		border_vertices.append(Vector2(x, y))
 	border.polygon = border_vertices
-	border.color = Color(0.05, 0.04, 0.03, 0.6)
+	border.color = Color(0.04, 0.04, 0.04, 0.6)
 	lava_pool.add_child(border)
 
 	# Reduced gradient layers (3 instead of 5)

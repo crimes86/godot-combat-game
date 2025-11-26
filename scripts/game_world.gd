@@ -446,15 +446,8 @@ func setup_camera_limits():
 	camera.limit_bottom = Constants.WORLD_BOTTOM
 
 func generate_optimized_world_layers():
-	"""Use existing Ground node from scene"""
-	var ground = get_node_or_null("Ground")
-	if ground:
-		# Dark charcoal base - neutral grey, no brown tint
-		var dark_charcoal = Color(0.07, 0.07, 0.07, 1.0)
-		ground.color = dark_charcoal
-		# Also update shader parameter if using ground shader
-		if ground.material and ground.material is ShaderMaterial:
-			ground.material.set_shader_parameter("base_color", dark_charcoal)
+	"""Use existing Ground node from scene - don't override colors set in tscn"""
+	# Ground color is now set in game_world.tscn - no runtime override needed
 
 	# Add heavily trafficked areas around campfire and ruins
 	create_trafficked_areas()
@@ -463,7 +456,8 @@ func generate_optimized_world_layers():
 	create_path_system()
 
 func create_trafficked_areas():
-	"""Add dark disturbed earth patches around campfire and ruins (heavily trafficked)"""
+	"""Add dark disturbed earth patches around ruins (heavily trafficked)
+	   Note: Campfire area is handled by spawn_path_for_chunk() in chunk 0"""
 	var traffic_layer = Node2D.new()
 	traffic_layer.name = "TraffickedAreas"
 	traffic_layer.z_index = -9
@@ -472,8 +466,8 @@ func create_trafficked_areas():
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 99999
 
-	# Campfire area (main spawn) - 45 spots in ~600px radius
-	create_traffic_circle(traffic_layer, CAMPFIRE_POS, 600, 45, rng)
+	# Campfire area is now handled by spawn_path_for_chunk() with create_campfire_circle()
+	# This prevents double-layering and ensures consistent appearance with the path
 
 	# Create traffic circles around all procedurally generated ruins
 	for ruins_key in RUINS_POSITIONS:
@@ -503,8 +497,8 @@ func create_traffic_circle(parent: Node2D, center: Vector2, radius: float, num_s
 			var size = spot_size * layer.size_mult * rng.randf_range(0.9, 1.1)
 			patch.size = Vector2(size, size)
 			patch.position = pos - patch.size / 2
-			# Darker charcoal for trafficked areas - worn/compacted ground
-			patch.color = Color(0.04, 0.035, 0.03, layer.alpha)
+			# Darker charcoal for trafficked areas - worn/compacted ground (neutral grey)
+			patch.color = Color(0.03, 0.03, 0.03, layer.alpha)
 			patch.rotation = rng.randf() * TAU
 			parent.add_child(patch)
 
@@ -558,7 +552,17 @@ func spawn_path_for_chunk(chunk_id: int) -> void:
 	var path_start = Vector2(chunk_start_x, 0)
 	var path_end = Vector2(chunk_end_x, 0)
 	var main_path = create_zigzag_path(path_start, path_end, 8, 350, rng)
-	draw_path_from_points(chunk_path, main_path, 175, rng)
+
+	# For chunk 0, skip drawing path spots within campfire circle radius
+	# to avoid double-layering (campfire circle will cover this area)
+	var campfire_pos = CAMPFIRE_POS
+	var campfire_radius = 500.0
+	if chunk_id == 0:
+		draw_path_from_points_avoiding_area(chunk_path, main_path, 175, rng, campfire_pos, campfire_radius)
+		# Create campfire circle (only in chunk 0)
+		create_campfire_circle(chunk_path, campfire_pos, rng)
+	else:
+		draw_path_from_points(chunk_path, main_path, 175, rng)
 
 	# Store path points for torch/enemy systems
 	chunk_path_points[chunk_id] = main_path
@@ -648,6 +652,13 @@ func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: Ran
 		var end = points[i + 1]
 		create_path_segment(parent, start, end, width, rng)
 
+func draw_path_from_points_avoiding_area(parent: Node2D, points: Array, width: float, rng: RandomNumberGenerator, avoid_center: Vector2, avoid_radius: float):
+	"""Draw path segments between all points, skipping spots within avoid area"""
+	for i in range(points.size() - 1):
+		var start = points[i]
+		var end = points[i + 1]
+		create_path_segment_avoiding_area(parent, start, end, width, rng, avoid_center, avoid_radius)
+
 func create_curved_path(start: Vector2, end: Vector2, num_points: int, rng: RandomNumberGenerator) -> Array:
 	"""Generate curved path points between two positions"""
 	var points = []
@@ -665,9 +676,14 @@ func create_curved_path(start: Vector2, end: Vector2, num_points: int, rng: Rand
 	return points
 
 func create_path_segment(parent: Node2D, start: Vector2, end: Vector2, width: float, rng: RandomNumberGenerator):
-	"""Create dark spot patches along a path segment"""
+	"""Create worn dirt path with visible beaten trail"""
+	create_path_segment_avoiding_area(parent, start, end, width, rng, Vector2.ZERO, 0.0)
+
+func create_path_segment_avoiding_area(parent: Node2D, start: Vector2, end: Vector2, width: float, rng: RandomNumberGenerator, avoid_center: Vector2, avoid_radius: float):
+	"""Create worn dirt path with visible beaten trail, skipping spots within avoid area"""
 	var segment_length = start.distance_to(end)
-	var num_spots = int(segment_length / 40) + 1  # Spot every ~40px (doubled density from 80px)
+	var actual_width = width * 1.5  # 50% wider path
+	var num_spots = int(segment_length / 35) + 1
 
 	for i in range(num_spots):
 		var t = float(i) / float(max(1, num_spots - 1))
@@ -676,16 +692,21 @@ func create_path_segment(parent: Node2D, start: Vector2, end: Vector2, width: fl
 		# Add random offset perpendicular to path for natural variation
 		var direction = (end - start).normalized()
 		var perpendicular = Vector2(-direction.y, direction.x)
-		var offset = rng.randf_range(-width * 0.3, width * 0.3)
+		var offset = rng.randf_range(-actual_width * 0.35, actual_width * 0.35)
 		pos += perpendicular * offset
 
-		# Create spot
-		var spot_size = rng.randf_range(width * 0.8, width * 1.2)
+		# Skip spots within avoid area (campfire circle)
+		if avoid_radius > 0 and pos.distance_to(avoid_center) < avoid_radius:
+			continue
 
-		# 2-layer spot (original subtle appearance but more dense)
+		# Create spot
+		var spot_size = rng.randf_range(actual_width * 0.9, actual_width * 1.1)
+
+		# 3-layer spot: soft outer fade, mid worn, beaten center (dark grey path)
 		var layers = [
-			{"size_mult": 1.2, "alpha": 0.10},
-			{"size_mult": 0.7, "alpha": 0.15}
+			{"size_mult": 1.6, "alpha": 0.12, "color": Color(0.08, 0.08, 0.09)},  # Soft outer fade
+			{"size_mult": 1.0, "alpha": 0.22, "color": Color(0.06, 0.06, 0.07)},  # Mid worn area
+			{"size_mult": 0.5, "alpha": 0.35, "color": Color(0.05, 0.05, 0.06)}   # Center beaten path (dark grey)
 		]
 
 		for layer in layers:
@@ -693,7 +714,7 @@ func create_path_segment(parent: Node2D, start: Vector2, end: Vector2, width: fl
 			var size = spot_size * layer.size_mult
 			patch.size = Vector2(size, size)
 			patch.position = pos - patch.size / 2
-			patch.color = Color(0.08, 0.06, 0.05, layer.alpha)  # Original subtle brown
+			patch.color = Color(layer.color.r, layer.color.g, layer.color.b, layer.alpha)
 			patch.rotation = rng.randf() * TAU
 			parent.add_child(patch)
 
@@ -875,7 +896,7 @@ func bake_terrain_to_texture():
 	# Create background color (same as Ground ColorRect)
 	var bg = ColorRect.new()
 	bg.size = Vector2(WORLD_WIDTH, WORLD_HEIGHT)
-	bg.color = Color(0.40997362, 0.33598864, 0.27249303, 1)  # Same brown as Ground
+	bg.color = Color(0.15, 0.15, 0.17, 1)  # Dark stone grey
 	bg.position = Vector2.ZERO
 	viewport.add_child(bg)
 
@@ -1299,40 +1320,53 @@ func create_feathered_area(parent: Node2D, center: Vector2, base_size: float, rn
 			parent.add_child(rect)
 
 func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGenerator):
-	"""Create a heavily-visited circular area around campfire using efficient Polygon2D"""
-	# OPTIMIZED: Use single Polygon2D instead of 80 spots × 24 ColorRects (1920 nodes → 1 node!)
-	var circle = Polygon2D.new()
-	circle.name = "CampfireCircle"
+	"""Create a heavily-visited circular area around campfire using same spot layering as path"""
 	var radius = 450.0
 
-	# Create irregular circle with slight noise for organic look
-	var vertices = PackedVector2Array()
-	for i in range(64):
-		var angle = (float(i) / 64) * TAU
-		var noise = rng.randf_range(-20, 20)  # Slight irregularity
-		var r = radius + noise
-		vertices.append(center + Vector2(cos(angle) * r, sin(angle) * r))
+	# Use concentric rings with proper spot counts (more spots in outer rings)
+	# Ring 0 (center): small radius, few spots
+	# Ring N (outer): large radius, many spots
+	var rings = [
+		{"radius": 60, "spots": 4},
+		{"radius": 120, "spots": 8},
+		{"radius": 180, "spots": 12},
+		{"radius": 240, "spots": 16},
+		{"radius": 300, "spots": 20},
+		{"radius": 360, "spots": 24},
+		{"radius": 420, "spots": 28},
+	]
 
-	circle.polygon = vertices
-	circle.color = Color(0.03, 0.03, 0.03, 0.85)  # Very dark charcoal for heavily-traveled campfire area
+	for ring_data in rings:
+		var ring_radius = ring_data.radius
+		var num_spots = ring_data.spots
+		var angle_offset = rng.randf() * TAU  # Random starting angle per ring
 
-	# Add radial gradient shader for smooth feathering
-	var shader_material = ShaderMaterial.new()
-	var shader = Shader.new()
-	shader.code = """
-shader_type canvas_item;
+		for i in range(num_spots):
+			var angle = (float(i) / float(num_spots)) * TAU + angle_offset
+			var dist = ring_radius + rng.randf_range(-20, 20)  # Small radial variation
+			var pos = center + Vector2(cos(angle), sin(angle)) * dist
 
-void fragment() {
-	vec2 center_uv = vec2(0.5, 0.5);
-	float dist = distance(UV, center_uv);
-	float alpha = 1.0 - smoothstep(0.3, 0.5, dist);
-	COLOR.a *= alpha * 0.8;
-}
-"""
-	shader_material.shader = shader
-	circle.material = shader_material
+			# Small random scatter
+			pos += Vector2(rng.randf_range(-15, 15), rng.randf_range(-15, 15))
 
-	parent.add_child(circle)
+			# Spot size - consistent for even coverage
+			var spot_size = rng.randf_range(140, 200)
+
+			# Same 3-layer spot as path for consistent look
+			var layers = [
+				{"size_mult": 1.6, "alpha": 0.12, "color": Color(0.08, 0.08, 0.08)},
+				{"size_mult": 1.0, "alpha": 0.22, "color": Color(0.06, 0.06, 0.06)},
+				{"size_mult": 0.5, "alpha": 0.35, "color": Color(0.05, 0.05, 0.05)}
+			]
+
+			for layer in layers:
+				var patch = ColorRect.new()
+				var size = spot_size * layer.size_mult
+				patch.size = Vector2(size, size)
+				patch.position = pos - patch.size / 2
+				patch.color = Color(layer.color.r, layer.color.g, layer.color.b, layer.alpha)
+				patch.rotation = rng.randf() * TAU
+				parent.add_child(patch)
 
 func _input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -3244,7 +3278,7 @@ func spawn_lava_pools():
 		for crack_i in range(num_cracks):
 			var crack = Line2D.new()
 			crack.width = rng.randf_range(1.5, 3.5)  # Vary crack thickness
-			crack.default_color = Color(0.02, 0.015, 0.01, rng.randf_range(0.6, 0.9))  # Very dark cracks
+			crack.default_color = Color(0.02, 0.02, 0.02, rng.randf_range(0.6, 0.9))  # Very dark cracks (neutral)
 			crack.joint_mode = Line2D.LINE_JOINT_SHARP
 			crack.begin_cap_mode = Line2D.LINE_CAP_NONE
 			crack.end_cap_mode = Line2D.LINE_CAP_NONE
@@ -3291,7 +3325,7 @@ func spawn_lava_pools():
 			var y = sin(angle) * radius * elongation_y
 			outer_vertices.append(Vector2(x, y))
 		outer_border.polygon = outer_vertices
-		outer_border.color = Color(0.09, 0.085, 0.08, 0.3)  # Match ground color, very transparent
+		outer_border.color = Color(0.08, 0.08, 0.08, 0.3)  # Match ground color, very transparent (neutral)
 		lava_pool.add_child(outer_border)
 
 		# Middle border - medium blend
@@ -3304,7 +3338,7 @@ func spawn_lava_pools():
 			var y = sin(angle) * radius * elongation_y
 			mid_vertices.append(Vector2(x, y))
 		mid_border.polygon = mid_vertices
-		mid_border.color = Color(0.07, 0.06, 0.055, 0.5)  # Darker, semi-transparent
+		mid_border.color = Color(0.06, 0.06, 0.06, 0.5)  # Darker, semi-transparent (neutral)
 		lava_pool.add_child(mid_border)
 
 		# Inner border - darkest edge
@@ -3317,7 +3351,7 @@ func spawn_lava_pools():
 			var y = sin(angle) * radius * elongation_y
 			inner_vertices.append(Vector2(x, y))
 		inner_border.polygon = inner_vertices
-		inner_border.color = Color(0.04, 0.03, 0.02, 0.7)  # Very dark, but still transparent
+		inner_border.color = Color(0.03, 0.03, 0.03, 0.7)  # Very dark, but still transparent (neutral)
 		lava_pool.add_child(inner_border)
 
 		# Create smooth gradient using 10 layered circles with irregular edges

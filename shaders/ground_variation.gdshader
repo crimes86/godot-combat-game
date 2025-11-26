@@ -3,8 +3,8 @@ shader_type canvas_item;
 // Ground variation shader - SUBTLE visual interest without additional nodes
 // Designed to be barely noticeable but add texture to flat ground
 
-// Dark charcoal - neutral grey, no brown/warm tint
-uniform vec4 base_color : source_color = vec4(0.07, 0.07, 0.07, 1.0);
+// Dark stone grey - cool tint to counteract any warm bleed
+uniform vec4 base_color : source_color = vec4(0.15, 0.15, 0.17, 1.0);
 uniform float world_scale : hint_range(0.0001, 0.01) = 0.001;
 uniform float intensity : hint_range(0.0, 1.0) = 0.3;  // Overall effect strength
 
