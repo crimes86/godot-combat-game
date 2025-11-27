@@ -5,12 +5,14 @@ extends Control
 @onready var fill: Control = null
 @onready var damage_flash: Control = null
 @onready var glow: Control = null
+var name_label: Label = null
 
 var ready_to_position: bool = false
 var has_positioned_once: bool = false
 var current_health: float = 100.0
 var max_health: float = 100.0
 var is_pulsing: bool = false
+var player_name: String = ""
 
 # Performance: throttle position updates
 var position_update_timer: float = 0.0
@@ -130,6 +132,20 @@ func create_pill_capsule_bar() -> void:
 	
 	add_child(flash_panel)
 	damage_flash = flash_panel  # Store reference
+
+	# 📛 NAME LABEL (above health bar) - for players
+	name_label = Label.new()
+	name_label.name = "NameLabel"
+	name_label.text = ""
+	name_label.add_theme_font_size_override("font_size", 11)
+	name_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1.0))
+	name_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
+	name_label.add_theme_constant_override("outline_size", 2)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.position = Vector2(-25, -16)  # Centered above health bar
+	name_label.custom_minimum_size = Vector2(100, 0)
+	name_label.visible = false  # Hidden until name is set
+	add_child(name_label)
 
 func _process(delta: float) -> void:
 	# Only position once parent is ready
@@ -284,7 +300,7 @@ func pulse_critical() -> void:
 func stop_critical_pulse() -> void:
 	"""Stop the critical health pulse"""
 	is_pulsing = false
-	
+
 	if glow:
 		var glow_style = glow.get_theme_stylebox("panel")
 		if glow_style:
@@ -293,3 +309,15 @@ func stop_critical_pulse() -> void:
 			var normal_color = Color(current_color.r, current_color.g, current_color.b, 0.3)
 			stop_tween.tween_property(glow_style, "bg_color", normal_color, 0.3)
 			stop_tween.parallel().tween_property(glow, "scale", Vector2(1.0, 1.0), 0.3)
+
+func set_player_name(new_name: String) -> void:
+	"""Set the player name to display above the health bar"""
+	player_name = new_name
+	if name_label:
+		name_label.text = new_name
+		name_label.visible = not new_name.is_empty()
+
+func set_name_color(color: Color) -> void:
+	"""Set the name label color (e.g., different for guests vs authenticated)"""
+	if name_label:
+		name_label.add_theme_color_override("font_color", color)

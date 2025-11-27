@@ -63,9 +63,18 @@ func _ready():
 
 		print("Spawned remote player: %s (ID: %d)" % [player_name, player_id])
 
-	# Set player name label if it exists
-	if player_instance.has_node("NameLabel"):
-		player_instance.get_node("NameLabel").text = player_name
+	# Set player name on health bar
+	if player_instance.has_node("HealthBar"):
+		var hb = player_instance.get_node("HealthBar")
+		if hb.has_method("set_player_name"):
+			hb.set_player_name(player_name)
+		# Set name color based on guest status
+		if hb.has_method("set_name_color"):
+			var is_player_guest = NetworkManager.is_player_guest(player_id) if multiplayer.is_server() else false
+			if is_player_guest:
+				hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
+			else:
+				hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
 
 func _physics_process(delta):
 	if not player_instance:
@@ -259,10 +268,19 @@ func _get_random_spawn_point() -> Vector2:
 	var distance = 200 + randf() * 100
 	return Vector2(cos(angle) * distance, sin(angle) * distance)
 
-func set_player_name_display(name: String):
-	player_name = name
-	if player_instance and player_instance.has_node("NameLabel"):
-		player_instance.get_node("NameLabel").text = name
+func set_player_name_display(new_name: String, is_guest_player: bool = false):
+	player_name = new_name
+	# Update health bar name label
+	if player_instance and player_instance.has_node("HealthBar"):
+		var hb = player_instance.get_node("HealthBar")
+		if hb.has_method("set_player_name"):
+			hb.set_player_name(new_name)
+		# Set name color based on guest status
+		if hb.has_method("set_name_color"):
+			if is_guest_player:
+				hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
+			else:
+				hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
 
 func get_player_position() -> Vector2:
 	if player_instance:

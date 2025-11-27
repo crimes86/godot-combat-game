@@ -205,5 +205,151 @@ offset_left = -120.0
 offset_top = -30.0
 theme_override_colors/font_color = Color(0.35, 0.38, 0.42, 1)
 theme_override_font_sizes/font_size = 12
-text = "v0.2 Multiplayer"
+text = "v0.3 Auth"
 horizontal_alignment = 2
+
+[node name="AuthPanel" type="Panel" parent="."]
+visible = false
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -210.0
+offset_right = 200.0
+offset_bottom = 210.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="AuthPanel"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 25.0
+offset_top = 20.0
+offset_right = -25.0
+offset_bottom = -20.0
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="AuthPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 24
+text = "Authentication"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="AuthPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="UsernameContainer" type="HBoxContainer" parent="AuthPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="UsernameLabel" type="Label" parent="AuthPanel/VBoxContainer/UsernameContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+text = "Username:"
+vertical_alignment = 1
+
+[node name="UsernameInput" type="LineEdit" parent="AuthPanel/VBoxContainer/UsernameContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_colors/font_placeholder_color = Color(0.4, 0.4, 0.45, 1)
+theme_override_colors/caret_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("StyleBoxFlat_input")
+placeholder_text = "3-16 characters"
+max_length = 16
+
+[node name="PasswordContainer" type="HBoxContainer" parent="AuthPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="PasswordLabel" type="Label" parent="AuthPanel/VBoxContainer/PasswordContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(90, 0)
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+text = "Password:"
+vertical_alignment = 1
+
+[node name="PasswordInput" type="LineEdit" parent="AuthPanel/VBoxContainer/PasswordContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_colors/font_placeholder_color = Color(0.4, 0.4, 0.45, 1)
+theme_override_colors/caret_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("StyleBoxFlat_input")
+placeholder_text = "4+ characters"
+max_length = 64
+secret = true
+
+[node name="HSeparator2" type="HSeparator" parent="AuthPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LoginButton" type="Button" parent="AuthPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_focus_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
+theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_panel")
+theme_override_styles/focus = SubResource("StyleBoxFlat_panel")
+text = "LOGIN"
+
+[node name="RegisterButton" type="Button" parent="AuthPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_focus_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
+theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_panel")
+theme_override_styles/focus = SubResource("StyleBoxFlat_panel")
+text = "REGISTER"
+
+[node name="GuestButton" type="Button" parent="AuthPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+theme_override_colors/font_color = Color(0.7, 0.75, 0.7, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.9, 0.85, 1)
+theme_override_colors/font_pressed_color = Color(0.6, 0.65, 0.6, 1)
+theme_override_colors/font_focus_color = Color(0.7, 0.75, 0.7, 1)
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
+theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_panel")
+theme_override_styles/focus = SubResource("StyleBoxFlat_panel")
+text = "PLAY AS GUEST"
+
+[node name="AuthStatusLabel" type="Label" parent="AuthPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 20)
+theme_override_colors/font_color = Color(1, 0.6, 0.5, 1)
+theme_override_font_sizes/font_size = 12
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="BackButton" type="Button" parent="AuthPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 32)
+theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
+theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_pressed_color = Color(0.45, 0.48, 0.52, 1)
+theme_override_colors/font_focus_color = Color(0.55, 0.58, 0.62, 1)
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
+theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_panel")
+theme_override_styles/focus = SubResource("StyleBoxFlat_panel")
+text = "< Back"

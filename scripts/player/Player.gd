@@ -169,6 +169,17 @@ func _ready() -> void:
 		current_health = max_health
 		if health_bar and health_bar.has_method("update_health"):
 			health_bar.update_health(current_health, max_health)
+
+		# Set player name on health bar from NetworkManager
+		if health_bar and health_bar.has_method("set_player_name"):
+			var network_manager = get_node_or_null("/root/NetworkManager")
+			if network_manager:
+				health_bar.set_player_name(network_manager.player_name)
+				# Use different color for guests vs authenticated players
+				if network_manager.is_guest:
+					health_bar.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
+				else:
+					health_bar.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
 	else:
 		# Remote player - start with default values, will be updated via network sync
 		max_health = 100

@@ -280,8 +280,13 @@ func loot_item(corpse, item: Dictionary) -> void:
 
 	# Try to add to inventory
 	if InventorySystem.add_item(item):
-		print("✨ Looted: %s from corpse" % item.get("name", "Unknown"))
+		var item_name = item.get("name", "Unknown")
+		var item_rarity = item.get("rarity", "Common")
+		print("✨ Looted: %s from corpse" % item_name)
 		item_looted.emit(item, corpse)
+
+		# Show notification and play pickup sound
+		NotificationManager.notify_item_added(item_name, 1, item_rarity)
 
 		# Remove from corpse's loot array
 		corpse.corpse_loot.erase(item)
@@ -304,30 +309,47 @@ func _on_take_all_pressed() -> void:
 		if is_instance_valid(corpse):
 			total_count += corpse.corpse_loot.size()
 
-	# Loot all items
+	# Collect all items to loot first
+	var all_items_to_loot: Array = []
 	for corpse in corpses_looted:
 		if not is_instance_valid(corpse):
 			continue
+		for item in corpse.corpse_loot:
+			if item:
+				all_items_to_loot.append({"item": item, "corpse": corpse})
 
-		# Make a copy of the array since we'll be modifying it
-		var items_to_loot = corpse.corpse_loot.duplicate()
+	# Loot items with staggered notifications for cascade effect
+	for entry in all_items_to_loot:
+		var item = entry["item"]
+		var corpse = entry["corpse"]
 
-		for item in items_to_loot:
-			if item:  # Skip null items
-				if InventorySystem.add_item(item):
-					looted_count += 1
-					item_looted.emit(item, corpse)
-					corpse.corpse_loot.erase(item)
-				else:
-					print("❌ Inventory full! Looted %d of %d items" % [looted_count, total_count])
-					# Check which corpses are empty
-					for c in corpses_looted:
-						if is_instance_valid(c):
-							c.check_if_looted_empty()
-					populate_loot_list()
-					return
+		if not is_instance_valid(corpse):
+			continue
 
-		# Check if this corpse is now empty
+		if InventorySystem.add_item(item):
+			var item_name = item.get("name", "Unknown")
+			var item_rarity = item.get("rarity", "Common")
+
+			looted_count += 1
+			item_looted.emit(item, corpse)
+			corpse.corpse_loot.erase(item)
+
+			# Show notification and play pickup sound
+			NotificationManager.notify_item_added(item_name, 1, item_rarity)
+
+			# Small delay between each notification for cascade effect
+			await get_tree().create_timer(0.12).timeout
+		else:
+			print("❌ Inventory full! Looted %d of %d items" % [looted_count, total_count])
+			# Check which corpses are empty
+			for c in corpses_looted:
+				if is_instance_valid(c):
+					c.check_if_looted_empty()
+			populate_loot_list()
+			return
+
+	# Check all corpses if empty
+	for corpse in corpses_looted:
 		if is_instance_valid(corpse):
 			corpse.check_if_looted_empty()
 

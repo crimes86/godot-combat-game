@@ -34,11 +34,24 @@ Authoritative dedicated server model for persistent world MMO.
 - Props load locally on each client
 - Enemies only spawn on server, sync to clients
 
+### Authentication ✅
+- Username/password registration and login
+- SHA-256 password hashing with per-user salt
+- Guest mode (play without account, no persistence)
+- Rate limiting to prevent brute force attacks (5 attempts/minute)
+- JSON file storage for player accounts (`user://players.json`)
+- Host authenticates locally before starting server
+- Clients authenticate via RPC to server
+- Player names displayed above health bars (cyan for authenticated, gray-green for guests)
+
+### Chat System ✅
+- Real-time multiplayer chat
+- Messages broadcast to all connected players
+- Chat UI with Enter to send, Escape to close
+
 ### What's NOT Implemented Yet
-- ❌ Authentication/accounts (currently anonymous)
-- ❌ Database persistence
+- ❌ Full database persistence (inventory/equipment saving)
 - ❌ PvP combat
-- ❌ Chat system
 - ❌ Loot instancing per player
 - ❌ World state sync (chests, harvestables)
 - ❌ Dedicated headless server

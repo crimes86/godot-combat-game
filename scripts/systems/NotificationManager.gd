@@ -42,10 +42,10 @@ func notify_item_added(item_name: String, quantity: int = 1, rarity: String = "C
 	notification.setup_item_added(item_name, quantity, rarity)
 	_show_notification(notification)
 
-	# Play item pickup sound
+	# Play item pickup sound (0 dB for satisfying feedback)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -10.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, 0.0)
 
 ## Show an item removed notification
 func notify_item_removed(item_name: String, quantity: int = 1, rarity: String = "COMMON") -> void:

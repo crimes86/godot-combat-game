@@ -499,12 +499,18 @@ func play_sound_2d(sound_type: SoundType, volume_db: float = 0.0) -> void:
 	if not sound_cache.has(sound_type):
 		push_error("Sound type not found: ", sound_type)
 		return
-	
+
+	var stream = sound_cache[sound_type]
+	if not stream:
+		push_warning("Sound stream is null for type: ", sound_type)
+		return
+
 	var player = AudioStreamPlayer.new()
-	player.stream = sound_cache[sound_type]
+	player.stream = stream
 	player.volume_db = volume_db
+	player.bus = "Master"  # Use Master bus for UI sounds
 	player.finished.connect(player.queue_free)
-	
+
 	get_tree().root.add_child(player)
 	player.play()
 

@@ -136,34 +136,46 @@ func update_display() -> void:
 
 func _on_take_pressed() -> void:
 	"""Take all items"""
-	var looted_count = 0
-	var items_by_name = {}  # Track quantities for notification batching
-
+	# Collect items to loot first
+	var items_to_loot: Array = []
 	for i in range(harvest_loot.size()):
 		var item = harvest_loot[i]
 		if item:
-			if InventorySystem.add_item(item):
-				looted_count += 1
-				item_looted.emit(item)
-				harvest_loot[i] = null
+			items_to_loot.append({"index": i, "item": item})
 
-				# Track for notification
-				var item_name = item.get("name", "Resource")
-				var quantity = item.get("quantity", 1)
-				var rarity = item.get("rarity", "COMMON")
-				if items_by_name.has(item_name):
-					items_by_name[item_name].quantity += quantity
-				else:
-					items_by_name[item_name] = {"quantity": quantity, "rarity": rarity}
-			else:
-				# Inventory full
-				update_display()
-				return
+	if items_to_loot.is_empty():
+		close_ui()
+		return
 
-	# Show inventory notifications for looted items
-	for item_name in items_by_name:
-		var data = items_by_name[item_name]
-		NotificationManager.notify_item_added(item_name, data.quantity, data.rarity.to_upper())
+	# Loot items with staggered notifications for cascade effect
+	_loot_items_staggered(items_to_loot)
+
+func _loot_items_staggered(items_to_loot: Array) -> void:
+	"""Loot items one by one with slight delay for cascading effect"""
+	var looted_count = 0
+
+	for entry in items_to_loot:
+		var i = entry["index"]
+		var item = entry["item"]
+
+		if InventorySystem.add_item(item):
+			var item_name = item.get("name", "Resource")
+			var item_rarity = item.get("rarity", "COMMON")
+
+			looted_count += 1
+			item_looted.emit(item)
+			harvest_loot[i] = null
+
+			# Show notification and play pickup sound
+			NotificationManager.notify_item_added(item_name, 1, item_rarity.to_upper())
+
+			# Small delay between each notification for cascade effect
+			await get_tree().create_timer(0.12).timeout
+		else:
+			# Inventory full
+			print("❌ Inventory full! Looted %d of %d items" % [looted_count, items_to_loot.size()])
+			update_display()
+			return
 
 	if looted_count > 0:
 		all_items_looted.emit()

@@ -3474,11 +3474,21 @@ func _request_existing_players(requester_id: int):
 					arms_sprite = appearance.get("arms_sprite", "")
 					hands_sprite = appearance.get("hands_sprite", "")
 					head_sprite = appearance.get("head_sprite", "")
-				print("🔍 [PLAYER DEBUG] Sending player %d (pos: %s, gender: %d, weapon: %s) to client %d" % [existing_id, existing_player.global_position, gender, weapon_type, requester_id])
-				rpc_id(requester_id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite)
+				# Get player name and guest status from NetworkManager
+				var p_name = NetworkManager.player_name if existing_id == 1 else ""
+				var p_is_guest = NetworkManager.is_player_guest(existing_id)
+				if NetworkManager.authenticated_players.has(existing_id):
+					p_name = NetworkManager.authenticated_players[existing_id].username
+				print("🔍 [PLAYER DEBUG] Sending player %d (pos: %s, gender: %d, weapon: %s, name: %s) to client %d" % [existing_id, existing_player.global_position, gender, weapon_type, p_name, requester_id])
+				rpc_id(requester_id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, p_name, p_is_guest)
 			else:
 				print("🔍 [PLAYER DEBUG] Sending player %d (default pos) to client %d" % [existing_id, requester_id])
-				rpc_id(requester_id, "spawn_player", existing_id)
+				var p_name2 = ""
+				var p_is_guest2 = true
+				if NetworkManager.authenticated_players.has(existing_id):
+					p_name2 = NetworkManager.authenticated_players[existing_id].username
+					p_is_guest2 = NetworkManager.authenticated_players[existing_id].is_guest
+				rpc_id(requester_id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", p_name2, p_is_guest2)
 
 func _on_player_connected(id: int):
 	"""Handle new player connection"""
@@ -3513,10 +3523,20 @@ func _on_player_connected(id: int):
 					arms_sprite = appearance.get("arms_sprite", "")
 					hands_sprite = appearance.get("hands_sprite", "")
 					head_sprite = appearance.get("head_sprite", "")
-				print("🔍 [PLAYER DEBUG] Sending existing player %d (gender: %d, weapon: %s) to new client %d" % [existing_id, gender, weapon_type, id])
-				rpc_id(id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite)
+				# Get player name and guest status from NetworkManager
+				var p_name = NetworkManager.player_name if existing_id == 1 else ""
+				var p_is_guest = NetworkManager.is_player_guest(existing_id)
+				if NetworkManager.authenticated_players.has(existing_id):
+					p_name = NetworkManager.authenticated_players[existing_id].username
+				print("🔍 [PLAYER DEBUG] Sending existing player %d (gender: %d, weapon: %s, name: %s) to new client %d" % [existing_id, gender, weapon_type, p_name, id])
+				rpc_id(id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, p_name, p_is_guest)
 			else:
-				rpc_id(id, "spawn_player", existing_id)
+				var p_name2 = ""
+				var p_is_guest2 = true
+				if NetworkManager.authenticated_players.has(existing_id):
+					p_name2 = NetworkManager.authenticated_players[existing_id].username
+					p_is_guest2 = NetworkManager.authenticated_players[existing_id].is_guest
+				rpc_id(id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", p_name2, p_is_guest2)
 
 func _on_player_disconnected(id: int):
 	"""Handle player disconnection"""
@@ -3524,10 +3544,11 @@ func _on_player_disconnected(id: int):
 	despawn_player(id)
 
 @rpc("any_peer", "call_local", "reliable")
-func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, weapon_type: String = "", feet_sprite: String = "", legs_sprite: String = "", chest_sprite: String = "", arms_sprite: String = "", hands_sprite: String = "", head_sprite: String = ""):
+func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, weapon_type: String = "", feet_sprite: String = "", legs_sprite: String = "", chest_sprite: String = "", arms_sprite: String = "", hands_sprite: String = "", head_sprite: String = "", display_name: String = "", is_guest_player: bool = false):
 	"""Spawn a player (local or remote)"""
 	print("🔍 [PLAYER DEBUG] spawn_player(%d) called on peer %d" % [id, multiplayer.get_unique_id()])
 	print("   Appearance: gender=%d, weapon=%s, feet=%s, legs=%s, chest=%s, arms=%s, hands=%s, head=%s" % [gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite])
+	print("   Name: %s (guest=%s)" % [display_name, is_guest_player])
 	print("   Current players: %s" % str(players.keys()))
 
 	if players.has(id):
@@ -3585,6 +3606,17 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 		# Disable collision for remote players to prevent magnet effect
 		player.collision_layer = 0
 		player.collision_mask = 0
+
+		# Set player name on health bar for remote players
+		if display_name != "" and player.has_node("HealthBar"):
+			var hb = player.get_node("HealthBar")
+			if hb.has_method("set_player_name"):
+				hb.set_player_name(display_name)
+			if hb.has_method("set_name_color"):
+				if is_guest_player:
+					hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
+				else:
+					hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
 
 @rpc("any_peer", "call_local", "reliable")
 func despawn_player(id: int):
