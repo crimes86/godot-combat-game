@@ -34,6 +34,7 @@ var damage_window: float = 3.0  # DPS calculation window
 
 # Crit window support (minimal - manager owns lifecycle)
 var in_crit_window: bool = false  # Simple flag set by grow/shrink methods
+var _crit_window_transitioning: bool = false  # Lock during grow/shrink async operations
 var original_scale: Vector2 = Vector2.ONE
 var original_modulate: Color = Color.WHITE
 var weakpoints: Array = []  # Just for visual rendering
@@ -41,7 +42,7 @@ var _grow_tween: Tween = null  # Track grow tween so shrink can wait for it
 
 # Signals for CritWindowManager
 signal damage_taken(damage: float, is_crit: bool)
-signal weakpoint_spawned()  # Emitted when a weakpoint is created
+signal weakpoint_spawned(weakpoint: Node)  # Emitted when a weakpoint is created
 signal weakpoint_destroyed(weakpoint: Node)  # Emitted when a weakpoint is destroyed
 signal died()  # Note: Dummy never actually dies
 
@@ -279,11 +280,13 @@ func _on_animation_finished() -> void:
 	if sprite and sprite.animation == "spin":
 		sprite.play("idle")
 
-func grow_for_crit_window(difficulty: float = 1.0) -> void:
+func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 	"""Visual effect: grow sprite and spawn weakpoints (called by CritWindowManager)"""
-	print("🔍 [CRIT WINDOW] grow_for_crit_window() called (dummy)")
-	print("     Timestamp: ", Time.get_ticks_msec())
+	# Guard: Don't start if already in window or currently transitioning
+	if in_crit_window or _crit_window_transitioning:
+		return
 
+	_crit_window_transitioning = true  # Lock during async grow
 	in_crit_window = true  # Set flag for local checks
 
 	# Change to subtle white for crit window
@@ -297,20 +300,33 @@ func grow_for_crit_window(difficulty: float = 1.0) -> void:
 	var base_sprite_scale = Vector2.ONE
 	var target_sprite_scale = base_sprite_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
 	if sprite:
-		print("🔍 [SPRITE SCALE] Starting GROW tween (dummy) - current scale: %s, target: %s" % [sprite.scale, target_sprite_scale])
-		var scale_tween = create_tween()
-		scale_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
+		_grow_tween = create_tween()
+		_grow_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
 		z_index = Constants.CRIT_WINDOW_Z_INDEX
 
-		await scale_tween.finished
-		print("   ✅ [SPRITE SCALE] Sprite GROW animation complete (dummy) - final sprite scale: %s" % sprite.scale)
+		await _grow_tween.finished
+		_grow_tween = null
+
+	# Spawn weakpoints (check we weren't interrupted)
+	if in_crit_window and is_instance_valid(self):
+		spawn_weakpoints()
+
+	_crit_window_transitioning = false  # Unlock after grow complete
+
+func get_crit_window_weakpoint_count() -> int:
+	"""Returns the number of weakpoints for this crit window (used for server validation)"""
+	# If weakpoints already spawned, return actual count
+	if weakpoints.size() > 0:
+		return weakpoints.size()
+
+	# Otherwise calculate based on player level
+	var player_level = CharacterStats.level
+	if player_level >= 21:
+		return 3  # Level 21+: All 3 weakpoints
+	elif player_level >= 11:
+		return 2  # Level 11-20: 2 weakpoints
 	else:
-		print("⚠️ TrainingDummy: No sprite to scale!")
-
-	# Spawn weakpoints
-	spawn_weakpoints()
-
-	print("✅ [CRIT WINDOW] Grow complete, weakpoints active (dummy)")
+		return 1  # Level 1-10: 1 weakpoint
 
 func spawn_weakpoints() -> void:
 	"""Spawn weakpoints based on player level (1-3 weakpoints, sectioned)"""
@@ -395,12 +411,10 @@ func spawn_weakpoints() -> void:
 	# Spawn weakpoints at chosen positions
 	_spawn_weakpoints_internal(chosen_positions)
 
-	# In multiplayer, broadcast weakpoint positions to clients
-	if multiplayer.has_multiplayer_peer() and multiplayer.is_server() and network_id >= 0:
-		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-		if network_enemy_mgr:
-			print("🌐 Server: Broadcasting crit window start for TrainingDummy %d with %d weakpoints" % [network_id, chosen_positions.size()])
-			network_enemy_mgr.broadcast_crit_window_start(network_id, chosen_positions)
+	# CLIENT-INDEPENDENT: Each player's crit window is LOCAL
+	# No broadcasting needed - NetworkEnemyManager notifies specific player to start their local window
+	if multiplayer.has_multiplayer_peer():
+		print("🌐 Crit window spawned locally (network_id=%d, is_server=%s, %d weakpoints)" % [network_id, multiplayer.is_server(), chosen_positions.size()])
 
 func _spawn_weakpoints_internal(positions: Array) -> void:
 	"""Internal helper to spawn weakpoints at given positions."""
@@ -430,37 +444,10 @@ func _spawn_weakpoints_internal(positions: Array) -> void:
 		weakpoints.append(weakpoint)
 
 		# Emit signal so CritWindowManager can track it
-		weakpoint_spawned.emit()
+		weakpoint_spawned.emit(weakpoint)
 
-func grow_for_crit_window_client(weakpoint_positions: Array) -> void:
-	"""Client-side crit window: grow sprite and spawn weakpoints at given positions."""
-	print("🌐 TrainingDummy.grow_for_crit_window_client() called with %d positions" % weakpoint_positions.size())
-
-	in_crit_window = true
-
-	# Grow the sprite like server does
-	if sprite:
-		var base_sprite_scale = Vector2.ONE
-		var target_sprite_scale = base_sprite_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
-		# Kill any existing grow tween before starting new one
-		if _grow_tween and _grow_tween.is_valid():
-			_grow_tween.kill()
-		_grow_tween = create_tween()
-		_grow_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
-		z_index = Constants.CRIT_WINDOW_Z_INDEX
-		print("🌐 Client: Growing TrainingDummy sprite to scale %s" % target_sprite_scale)
-
-		# Wait for grow animation to complete before spawning weakpoints
-		await _grow_tween.finished
-		print("🌐 Client: Grow animation complete, spawning weakpoints")
-
-	# Spawn weakpoints at the positions sent by server
-	spawn_weakpoints_at_positions(weakpoint_positions)
-
-func spawn_weakpoints_at_positions(positions: Array) -> void:
-	"""Spawn weakpoints at specific positions (used by clients)."""
-	print("🌐 TrainingDummy: Spawning %d weakpoints at server positions" % positions.size())
-	_spawn_weakpoints_internal(positions)
+# NOTE: grow_for_crit_window_client() and spawn_weakpoints_at_positions() were removed
+# Client-independent crit windows now use the regular grow_for_crit_window() via CritWindowManager
 
 func _on_weakpoint_hit(weakpoint) -> void:
 	"""Handle weakpoint being hit - deal damage and show combat text"""
@@ -468,20 +455,31 @@ func _on_weakpoint_hit(weakpoint) -> void:
 	var base_damage = CharacterStats.get_base_damage()
 	var crit_damage = base_damage * Constants.CRIT_DAMAGE_MULTIPLIER
 
-	# In multiplayer, damage handling depends on whether we're server or client
+	# CLIENT-PREDICTED: In multiplayer, weakpoint damage is tracked locally during
+	# the crit window and reported to server at window end via CritWindowManager.
+	# Visual feedback (combat text, sounds) happens immediately for responsiveness.
 	var has_peer = multiplayer.has_multiplayer_peer()
 	if has_peer and network_id >= 0:
-		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-		if network_enemy_mgr:
-			if multiplayer.is_server():
-				# Server processes damage directly
-				network_enemy_mgr.request_damage(network_id, crit_damage, true, true)
-			# NOTE: Clients do NOT send request_damage here - they already sent
-			# request_weakpoint_hit from the weakpoint itself
-			return
+		# Don't apply damage to dummy directly in multiplayer - CritWindowManager handles
+		# reporting to server at window end. But DO show visual feedback locally!
+		_spawn_weakpoint_combat_text(weakpoint, crit_damage)
+		return
 
 	# Single player: deal damage directly with crit flag
 	take_damage(crit_damage, true, true)
+
+func _spawn_weakpoint_combat_text(weakpoint, damage: float) -> void:
+	"""Spawn combat text for weakpoint hit (used in multiplayer for instant feedback)"""
+	var combat_text_scene = preload("res://scenes/ui/combat_text.tscn")
+	var combat_text = combat_text_scene.instantiate()
+
+	combat_text.text = str(int(damage))
+	combat_text.type = 2  # TextType.WEAKPOINT (orange/red)
+
+	# Position at weakpoint location
+	var spawn_pos = weakpoint.global_position if is_instance_valid(weakpoint) else global_position
+	combat_text.global_position = spawn_pos + Vector2(randf_range(-10, 10), randf_range(-20, 0))
+	get_tree().root.add_child(combat_text)
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Local handler - just forward to manager"""
@@ -496,6 +494,12 @@ func _clear_weakpoints_delayed() -> void:
 
 func shrink_after_crit_window() -> void:
 	"""Visual effect: shrink sprite and cleanup weakpoints (called by CritWindowManager)"""
+	# Guard: Don't shrink if not in crit window
+	if not in_crit_window:
+		return
+
+	# Mark as transitioning during async shrink
+	_crit_window_transitioning = true
 	in_crit_window = false  # Clear flag
 
 	# On CLIENT: Don't clear weakpoints array immediately - the destruction RPC may still be
@@ -518,25 +522,27 @@ func shrink_after_crit_window() -> void:
 	if sprite:
 		sprite.modulate = Color.WHITE
 
-	# Wait for grow tween to finish first (client may receive shrink before grow completes)
+	# Kill grow tween if still running (we're ending the window)
 	if _grow_tween and _grow_tween.is_valid():
-		await _grow_tween.finished
+		_grow_tween.kill()
 		_grow_tween = null
 
 	# Wait for weakpoint explosion animation to complete (~0.5s shake + explosion)
 	await get_tree().create_timer(0.55).timeout
 
-	# Scale SPRITE back to base
+	# Scale SPRITE back to base (check we're still valid)
 	if is_instance_valid(self) and sprite:
 		var base_sprite_scale = Vector2.ONE
 		var tween = create_tween()
 		tween.tween_property(sprite, "scale", base_sprite_scale, 0.25)
-		await get_tree().create_timer(0.26).timeout
+		await tween.finished
 
 		if is_instance_valid(self) and sprite:
 			sprite.scale = base_sprite_scale
 			z_index = 0
 			sprite.modulate = Color.WHITE
+
+	_crit_window_transitioning = false  # Unlock after shrink complete
 
 ## Debug Visualization (F3)
 func draw_debug_shapes_world(world_container: Node2D) -> Node2D:

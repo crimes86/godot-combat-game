@@ -38,6 +38,7 @@ var shadow_sprite: AnimatedSprite2D = null  # Shadow layer
 
 # Crit window state (minimal - manager owns lifecycle)
 var in_crit_window: bool = false  # Simple flag set by grow/shrink methods
+var _crit_window_transitioning: bool = false  # Lock during grow/shrink async operations
 var original_scale: Vector2 = Vector2.ONE
 var original_modulate: Color = Color.WHITE  # Store original difficulty color
 var weakpoints: Array = []  # Just for visual rendering
@@ -56,7 +57,7 @@ var loot_prompt: Label = null  # [F] Loot prompt
 var loot_ui_open: bool = false  # Is the loot UI currently open for this corpse?
 
 # Signals for CritWindowManager
-signal weakpoint_spawned()  # Emitted when a weakpoint is created
+signal weakpoint_spawned(weakpoint: Node)  # Emitted when a weakpoint is created
 signal weakpoint_destroyed(weakpoint: Node)  # Emitted when a weakpoint is destroyed
 signal died()  # Emitted when enemy dies
 signal damage_taken(damage: float, is_crit: bool)  # For unified feedback
@@ -541,12 +542,13 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	if current_health <= 0:
 		die()
 
-func grow_for_crit_window(difficulty: float = 1.0) -> void:
+func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 	"""Visual effect: grow sprite and spawn weakpoints (called by CritWindowManager)"""
-	if is_dying:
-		push_warning("Enemy is dying - skipping crit window visual")
+	# Guard: Don't start if dying, already in window, or currently transitioning
+	if is_dying or in_crit_window or _crit_window_transitioning:
 		return
 
+	_crit_window_transitioning = true  # Lock during async grow
 	in_crit_window = true  # Set flag for local checks
 
 	# Reset parent to neutral and change sprite to subtle white for crit window
@@ -555,8 +557,7 @@ func grow_for_crit_window(difficulty: float = 1.0) -> void:
 		sprite.modulate = Color(1.0, 1.0, 1.05, 1.0)  # Barely brighter than normal
 		if has_node("HitFlash"):
 			get_node("HitFlash").set_base_color(Color(1.0, 1.0, 1.05, 1.0))
-	
-	# ✨ FIX: Check if we're already at target scale (prevents no-grow bug)
+
 	# Sprite always starts at Vector2.ONE (base scale)
 	var base_sprite_scale = Vector2.ONE
 	var target_sprite_scale = base_sprite_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
@@ -569,14 +570,33 @@ func grow_for_crit_window(difficulty: float = 1.0) -> void:
 	else:
 		# Scale the sprite (not collision box) for visual growth
 		if sprite:
-			var scale_tween = create_tween()
-			scale_tween.set_parallel(false)
-			scale_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
+			_grow_tween = create_tween()
+			_grow_tween.set_parallel(false)
+			_grow_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
 			z_index = Constants.CRIT_WINDOW_Z_INDEX
-			await scale_tween.finished
+			await _grow_tween.finished
+			_grow_tween = null
 
-		# Spawn weakpoints AFTER growth
-		spawn_weakpoints()
+		# Spawn weakpoints AFTER growth (check we weren't interrupted)
+		if in_crit_window and is_instance_valid(self):
+			spawn_weakpoints()
+
+	_crit_window_transitioning = false  # Unlock after grow complete
+
+func get_crit_window_weakpoint_count() -> int:
+	"""Returns the number of weakpoints for this crit window (used for server validation)"""
+	# If weakpoints already spawned, return actual count
+	if weakpoints.size() > 0:
+		return weakpoints.size()
+
+	# Otherwise calculate based on player level
+	var player_level = CharacterStats.level
+	if player_level >= 21:
+		return 3  # Level 21+: All 3 weakpoints
+	elif player_level >= 11:
+		return 2  # Level 11-20: 2 weakpoints
+	else:
+		return 1  # Level 1-10: 1 weakpoint
 
 func spawn_weakpoints() -> void:
 	# Don't spawn weakpoints if enemy is already dying/dead
@@ -682,72 +702,13 @@ func spawn_weakpoints() -> void:
 		weakpoints.append(weakpoint)
 
 		# Emit signal so CritWindowManager can track it
-		weakpoint_spawned.emit()
+		weakpoint_spawned.emit(weakpoint)
 
-	# In multiplayer, broadcast weakpoint positions to clients
-	if multiplayer.has_multiplayer_peer() and multiplayer.is_server() and network_id >= 0:
-		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-		if network_enemy_mgr:
-			print("🌐 Server: Broadcasting crit window start for enemy %d with %d weakpoints" % [network_id, chosen_positions.size()])
-			network_enemy_mgr.broadcast_crit_window_start(network_id, chosen_positions)
-		else:
-			print("🌐 Server: ERROR - NetworkEnemyManager not found!")
-	elif multiplayer.has_multiplayer_peer():
-		print("🌐 Crit window on client-side enemy (network_id=%d, is_server=%s)" % [network_id, multiplayer.is_server()])
+	# CLIENT-INDEPENDENT: Each player's crit window is LOCAL
+	# No broadcasting needed - NetworkEnemyManager notifies specific player to start their local window
 
-func grow_for_crit_window_client(weakpoint_positions: Array) -> void:
-	"""Client-side crit window: grow sprite and spawn weakpoints at given positions."""
-	print("🌐 Enemy.grow_for_crit_window_client() called with %d positions" % weakpoint_positions.size())
-
-	if is_dying or is_corpse:
-		print("🌐 Enemy is dying/corpse, skipping crit window")
-		return
-
-	in_crit_window = true
-
-	# Grow the sprite like server does
-	if sprite:
-		var base_sprite_scale = Vector2.ONE
-		var target_sprite_scale = base_sprite_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
-		# Kill any existing grow tween before starting new one
-		if _grow_tween and _grow_tween.is_valid():
-			_grow_tween.kill()
-		_grow_tween = create_tween()
-		_grow_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
-		z_index = Constants.CRIT_WINDOW_Z_INDEX
-		print("🌐 Client: Growing sprite to scale %s" % target_sprite_scale)
-
-		# Wait for grow animation to complete before spawning weakpoints
-		await _grow_tween.finished
-		print("🌐 Client: Grow animation complete, spawning weakpoints")
-
-	# Spawn weakpoints at the positions sent by server
-	spawn_weakpoints_at_positions(weakpoint_positions)
-
-func spawn_weakpoints_at_positions(positions: Array) -> void:
-	"""Spawn weakpoints at specific positions (used by clients)."""
-	if is_dying or is_corpse:
-		return
-
-	var counter_scale = 1.0 / Constants.WEAKPOINT_COUNTER_SCALE_DIVISOR
-
-	for pos in positions:
-		var weakpoint_scene = preload("res://scenes/enemies/weakpoint.tscn")
-		var weakpoint = weakpoint_scene.instantiate()
-
-		weakpoint.color_theme = "bone"
-		weakpoint.position = pos
-		weakpoint.scale = Vector2(counter_scale, counter_scale) * 3.0
-		weakpoint.rotation = randf_range(-PI, PI)
-
-		# Connect weakpoint signals
-		weakpoint.weakpoint_hit.connect(_on_weakpoint_hit)
-		weakpoint.weakpoint_destroyed.connect(_on_weakpoint_destroyed_local)
-
-		add_child(weakpoint)
-		weakpoints.append(weakpoint)
-
-	print("🌐 Client: Spawned %d weakpoints at server positions" % positions.size())
+# NOTE: grow_for_crit_window_client() and spawn_weakpoints_at_positions() were removed
+# Client-independent crit windows now use the regular grow_for_crit_window() via CritWindowManager
 
 # 🔍 DEBUG VISUALIZATION - Shows where all 17 positions are!
 func _draw() -> void:
@@ -997,21 +958,31 @@ func _on_weakpoint_hit(weakpoint) -> void:
 	var base_damage = CharacterStats.get_base_damage()
 	var crit_damage = base_damage * Constants.CRIT_DAMAGE_MULTIPLIER
 
-	# In multiplayer, damage handling depends on whether we're server or client
+	# CLIENT-PREDICTED: In multiplayer, weakpoint damage is tracked locally during
+	# the crit window and reported to server at window end via CritWindowManager.
+	# Visual feedback (combat text, sounds) happens immediately for responsiveness.
 	var has_peer = multiplayer.has_multiplayer_peer()
 	if has_peer and network_id >= 0:
-		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-		if network_enemy_mgr:
-			if multiplayer.is_server():
-				# Server processes damage directly (no RPC to self)
-				network_enemy_mgr.request_damage(network_id, crit_damage, true, true)
-			# NOTE: Clients do NOT send request_damage here - they already sent
-			# request_weakpoint_hit from the weakpoint itself, which triggers
-			# the server's _on_weakpoint_hit. This prevents double damage.
-			return
+		# Don't apply damage to enemy directly in multiplayer - CritWindowManager handles
+		# reporting to server at window end. But DO show visual feedback locally!
+		_spawn_weakpoint_combat_text(weakpoint, crit_damage)
+		return
 
 	# Single player: deal damage directly with crit flag and weakpoint flag for orange text
 	take_damage(crit_damage, true, true)  # damage, is_crit, is_weakpoint
+
+func _spawn_weakpoint_combat_text(weakpoint, damage: float) -> void:
+	"""Spawn combat text for weakpoint hit (used in multiplayer for instant feedback)"""
+	var combat_text_scene = preload("res://scenes/ui/combat_text.tscn")
+	var combat_text = combat_text_scene.instantiate()
+
+	combat_text.text = str(int(damage))
+	combat_text.type = 2  # TextType.WEAKPOINT (orange/red)
+
+	# Position at weakpoint location
+	var spawn_pos = weakpoint.global_position if is_instance_valid(weakpoint) else global_position
+	combat_text.global_position = spawn_pos + Vector2(randf_range(-10, 10), randf_range(-20, 0))
+	get_tree().root.add_child(combat_text)
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Local handler - just forward to manager"""
@@ -1025,7 +996,14 @@ func _clear_weakpoints_delayed() -> void:
 
 func shrink_after_crit_window() -> void:
 	"""Visual effect: shrink sprite and cleanup weakpoints (called by CritWindowManager)"""
+	# Guard: Don't shrink if not in crit window or already shrinking
+	if not in_crit_window:
+		return
+
+	# Mark as transitioning during async shrink
+	_crit_window_transitioning = true
 	in_crit_window = false
+
 	# On CLIENT: Don't clear weakpoints array immediately - the destruction RPC may still be
 	# in transit. Let weakpoints free themselves after their destruction animations.
 	# On SERVER: Clear array since we've already processed all destruction locally.
@@ -1049,23 +1027,25 @@ func shrink_after_crit_window() -> void:
 
 	# Wait for grow tween to finish first (client may receive shrink before grow completes)
 	if _grow_tween and _grow_tween.is_valid():
-		await _grow_tween.finished
+		_grow_tween.kill()  # Kill instead of waiting - we're ending the window
 		_grow_tween = null
 
 	# Wait for weakpoint explosion animation to complete (~0.5s shake + explosion)
 	await get_tree().create_timer(0.55).timeout
 
-	# Scale sprite back to base
-	if is_instance_valid(self) and sprite:
+	# Scale sprite back to base (check we're still valid)
+	if is_instance_valid(self) and sprite and not is_dying:
 		var base_sprite_scale = Vector2.ONE
 		var tween = create_tween()
 		tween.tween_property(sprite, "scale", base_sprite_scale, 0.25)
-		await get_tree().create_timer(0.26).timeout
+		await tween.finished
 
 		if is_instance_valid(self) and sprite:
 			sprite.scale = base_sprite_scale
 			z_index = 0
 			sprite.modulate = Color.WHITE
+
+	_crit_window_transitioning = false  # Unlock after shrink complete
 
 func die() -> void:
 	if is_dying:
@@ -1267,14 +1247,12 @@ func generate_corpse_loot() -> Array:
 
 func become_corpse() -> void:
 	"""Transition enemy from living to corpse state"""
-	print("💀 Becoming corpse with %d loot items, %d gold" % [corpse_loot.size(), corpse_gold])
 	is_corpse = true
 	corpse_creation_time = Time.get_ticks_msec() / 1000.0
 	corpse_state = CorpseState.State.FRESH
 
 	# Clean up any active weakpoints (if enemy died during crit window)
 	if not weakpoints.is_empty():
-		print("   🧹 Cleaning up %d active weakpoints" % weakpoints.size())
 		for wp in weakpoints:
 			if is_instance_valid(wp):
 				wp.queue_free()

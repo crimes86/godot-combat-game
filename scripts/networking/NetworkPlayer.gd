@@ -31,6 +31,10 @@ func _ready():
 	player_instance = player_scene.instantiate()
 	add_child(player_instance)
 
+	# IMPORTANT: Set multiplayer authority on the player instance too
+	# so that is_multiplayer_authority() works correctly inside Player.gd
+	player_instance.set_multiplayer_authority(player_id)
+
 	# Setup based on ownership
 	if is_multiplayer_authority():
 		# This is our player
@@ -82,6 +86,10 @@ func _physics_process(delta):
 		# Update animation if changed
 		if player_instance.has_method("play_animation"):
 			player_instance.play_animation(sync_animation)
+		else:
+			# Debug: This shouldn't happen anymore
+			if randf() < 0.01:
+				print("⚠️ [%s] player_instance missing play_animation method!" % name)
 
 func _send_position_update():
 	if not player_instance:
@@ -90,19 +98,38 @@ func _send_position_update():
 	var pos = player_instance.global_position
 	var anim = _get_current_animation()
 	var health = _get_player_health()
+	var max_hp = _get_player_max_health()
 	var dashing = _is_player_dashing()
 
-	rpc("receive_position_update", pos, anim, health, dashing)
+	rpc("receive_position_update", pos, anim, health, max_hp, dashing)
 
 @rpc("any_peer", "call_local", "unreliable_ordered")
-func receive_position_update(pos: Vector2, anim: String, health: int, dashing: bool = false):
+func receive_position_update(pos: Vector2, anim: String, health: int, max_hp: int = 100, dashing: bool = false):
 	if is_local:
 		return  # Ignore our own updates
+
+	# Debug: Log what we're receiving
+	if randf() < 0.02:  # Only log occasionally to avoid spam
+		print("🌐 [%s] Received anim: %s from peer" % [name, anim])
 
 	sync_position = pos
 	sync_animation = anim
 	sync_health = health
+	sync_max_health = max_hp
 	sync_is_dashing = dashing
+
+	# Update remote player's healthbar with synced values
+	if player_instance:
+		# Update the player instance's health values for display
+		if player_instance.get("current_health") != null:
+			player_instance.current_health = health
+		if player_instance.get("max_health") != null:
+			player_instance.max_health = max_hp
+		# Update the healthbar visual
+		if player_instance.has_node("HealthBar"):
+			var hb = player_instance.get_node("HealthBar")
+			if hb.has_method("update_health"):
+				hb.update_health(health, max_hp)
 
 	# Trigger dash visuals on remote player if they're dashing
 	if dashing and player_instance:
@@ -199,6 +226,12 @@ func _get_player_health() -> int:
 		elif player_instance.get("health") != null:
 			return player_instance.health
 	return sync_health
+
+func _get_player_max_health() -> int:
+	if player_instance:
+		if player_instance.get("max_health") != null:
+			return player_instance.max_health
+	return sync_max_health
 
 func _get_random_spawn_point() -> Vector2:
 	# Get spawn points from game world

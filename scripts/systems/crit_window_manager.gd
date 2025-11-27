@@ -8,8 +8,7 @@ class_name CritWindowManager
 enum WindowType { ORBITAL_RING, GROWING_SPRITE }
 @export var window_type: WindowType = WindowType.GROWING_SPRITE
 
-# Settings
-@export var window_duration: float = 4.0  # Match Constants.CRIT_WINDOW_DURATION
+# Settings - use Constants for authoritative values
 @export var time_slow_amount: float = 0.7
 
 # State - track MULTIPLE concurrent windows (one per enemy)
@@ -22,7 +21,10 @@ class WindowData:
 	var timer: Timer
 	var weakpoints_spawned: int = 0
 	var weakpoints_destroyed: int = 0
+	var total_damage_dealt: int = 0  # Track for server validation
 	var difficulty: float = 1.0
+	var damage_per_hit: int = 0  # Calculated at window start
+	var weakpoint_refs: Array = []  # Track weakpoint references for damage collection
 
 	func _init(t: Node, d: float):
 		target = t
@@ -41,14 +43,12 @@ func start_window(target: Node, difficulty: float = 1.0) -> void:
 
 	# Check if target already has an active window
 	if active_windows.has(target):
-		print("⚠️ CritWindowManager: Target already has active window - ignoring")
 		return
 
-	print("=== CRIT WINDOW STARTED on ", target.name, " (", WindowType.keys()[window_type], ", difficulty: ", difficulty, ") ===")
-
-	# Slow time if not already slowed
-	if Engine.time_scale == original_time_scale:
-		Engine.time_scale = time_slow_amount
+	# NOTE: Time scaling disabled for multiplayer compatibility
+	# Engine.time_scale is local to each machine and causes desync
+	# if Engine.time_scale == original_time_scale:
+	#     Engine.time_scale = time_slow_amount
 
 	# Create window data
 	var window_data = WindowData.new(target, difficulty)
@@ -67,7 +67,38 @@ func _start_orbital_ring_window(target: Node, window_data: WindowData) -> void:
 func _start_growing_sprite_window(target: Node, window_data: WindowData) -> void:
 	"""Start growing sprite mode with weakpoints"""
 
-	# Tell target to grow (visual only)
+	# Calculate damage per hit for this window (used for client tracking)
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if player:
+		var base_damage = player.get("attack_damage") if player.get("attack_damage") != null else 10
+		var crit_mult = Constants.CRIT_DAMAGE_MULTIPLIER if "CRIT_DAMAGE_MULTIPLIER" in Constants else 2.0
+		window_data.damage_per_hit = int(base_damage * crit_mult)
+
+	# ✨ FIX: Connect signals BEFORE calling grow_for_crit_window()
+	# This prevents race condition where weakpoints spawn before signals are connected
+	if target.has_signal("weakpoint_spawned"):
+		if not target.weakpoint_spawned.is_connected(_on_weakpoint_spawned):
+			target.weakpoint_spawned.connect(_on_weakpoint_spawned.bind(target, window_data))
+
+	if target.has_signal("weakpoint_destroyed"):
+		if not target.weakpoint_destroyed.is_connected(_on_weakpoint_destroyed):
+			target.weakpoint_destroyed.connect(_on_weakpoint_destroyed.bind(target))
+
+	if target.has_signal("died"):
+		if not target.died.is_connected(_on_target_died):
+			target.died.connect(_on_target_died.bind(target))
+
+	# Create and start timer (owned by manager) BEFORE grow starts
+	# Use authoritative duration from Constants
+	var timer = Timer.new()
+	timer.wait_time = Constants.CRIT_WINDOW_DURATION
+	timer.one_shot = true
+	timer.timeout.connect(_on_window_timeout.bind(target))
+	add_child(timer)
+	timer.start()
+	window_data.timer = timer
+
+	# Tell target to grow (visual only) - signals already connected
 	if target.has_method("grow_for_crit_window"):
 		target.grow_for_crit_window(window_data.difficulty)
 	else:
@@ -75,47 +106,17 @@ func _start_growing_sprite_window(target: Node, window_data: WindowData) -> void
 		end_window(target, 0)
 		return
 
-	# Connect to target's signals
-	if target.has_signal("weakpoint_spawned"):
-		if not target.weakpoint_spawned.is_connected(_on_weakpoint_spawned):
-			target.weakpoint_spawned.connect(_on_weakpoint_spawned.bind(target))
-			print("✅ Connected to weakpoint_spawned signal")
-		else:
-			print("⚠️ Already connected to weakpoint_spawned")
-
-	if target.has_signal("weakpoint_destroyed"):
-		if not target.weakpoint_destroyed.is_connected(_on_weakpoint_destroyed):
-			target.weakpoint_destroyed.connect(_on_weakpoint_destroyed.bind(target))
-			print("✅ Connected to weakpoint_destroyed signal")
-		else:
-			print("⚠️ Already connected to weakpoint_destroyed")
-
-	if target.has_signal("died"):
-		if not target.died.is_connected(_on_target_died):
-			target.died.connect(_on_target_died.bind(target))
-			print("✅ Connected to died signal")
-		else:
-			print("⚠️ Already connected to died")
-
-	# Create and start timer (owned by manager)
-	var timer = Timer.new()
-	timer.wait_time = window_duration
-	timer.one_shot = true
-	timer.timeout.connect(_on_window_timeout.bind(target))
-	add_child(timer)
-	timer.start()
-	window_data.timer = timer
-
-	print("⏱️ CritWindowManager: Window timer started (%.1fs)" % window_duration)
-
-func _on_weakpoint_spawned(target: Node) -> void:
-	"""Track when a weakpoint is spawned"""
+func _on_weakpoint_spawned(weakpoint: Node, target: Node, window_data: WindowData) -> void:
+	"""Track when a weakpoint is spawned and configure it for client-predicted hits"""
 	if not active_windows.has(target):
 		return
 
-	var window_data = active_windows[target]
 	window_data.weakpoints_spawned += 1
-	print("🎯 CritWindowManager: Weakpoint spawned (%d total)" % window_data.weakpoints_spawned)
+	window_data.weakpoint_refs.append(weakpoint)
+
+	# Set damage per hit on the weakpoint for client-side tracking
+	if weakpoint.has_method("set_damage_per_hit"):
+		weakpoint.set_damage_per_hit(window_data.damage_per_hit)
 
 func _on_weakpoint_destroyed(weakpoint: Node, target: Node) -> void:
 	"""Track when a weakpoint is destroyed"""
@@ -125,19 +126,12 @@ func _on_weakpoint_destroyed(weakpoint: Node, target: Node) -> void:
 	var window_data = active_windows[target]
 	window_data.weakpoints_destroyed += 1
 
-	print("🔍 CritWindowManager: Weakpoint destroyed (%d/%d)" % [window_data.weakpoints_destroyed, window_data.weakpoints_spawned])
-
 	# Check if all weakpoints destroyed
 	if window_data.weakpoints_destroyed >= window_data.weakpoints_spawned:
-		print("🎯 CritWindowManager: ALL WEAKPOINTS CLEARED - ending window")
-
 		# Spawn success ring effect at player's feet IMMEDIATELY (buff effect!)
 		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 		if player:
-			print("🌟 Spawning success ring at player position: ", player.global_position)
 			_spawn_success_ring_at_position(player.global_position)
-		else:
-			print("⚠️ Could not find player for success ring!")
 
 		# End window immediately (shrink enemy) - all happens at once!
 		end_window(target, window_data.weakpoints_destroyed)
@@ -146,30 +140,52 @@ func _on_weakpoint_destroyed(weakpoint: Node, target: Node) -> void:
 		await get_tree().create_timer(0.55).timeout
 
 func _on_window_timeout(target: Node) -> void:
-	"""Window timer expired - but we don't auto-close, just log"""
+	"""Window timer expired - force close the window and cleanup remaining weakpoints"""
 	if not active_windows.has(target):
 		return
 
-	print("⏱️ CritWindowManager: 4-second timer expired for %s - window continues" % target.name)
-	# NOTE: Window only closes when all weakpoints destroyed or enemy dies
+	var window_data = active_windows[target]
+
+	# Force-destroy any remaining weakpoints before ending window
+	_cleanup_remaining_weakpoints(target, window_data)
+
+	# End the window with however many weakpoints were destroyed
+	end_window(target, window_data.weakpoints_destroyed)
+
+func _cleanup_remaining_weakpoints(target: Node, window_data: WindowData) -> void:
+	"""Force cleanup any remaining weakpoints when window times out"""
+	if not is_instance_valid(target):
+		return
+
+	# Clear weakpoints from the target's array
+	if "weakpoints" in target:
+		for wp in target.weakpoints:
+			if is_instance_valid(wp):
+				# Disable interaction immediately
+				if wp.has_method("set") and "input_pickable" in wp:
+					wp.input_pickable = false
+				# Queue for deletion
+				wp.queue_free()
+		target.weakpoints.clear()
+
+	# Also clear our refs
+	window_data.weakpoint_refs.clear()
 
 func _on_target_died(target: Node) -> void:
 	"""Target died - end window immediately"""
 	if not active_windows.has(target):
 		return
-
-	print("💀 CritWindowManager: Target died - ending window")
 	end_window(target, 0)
 
 func end_window(target: Node, weakpoints_destroyed: int) -> void:
 	"""End a crit window (called when weakpoints cleared or enemy dies)"""
 	if not active_windows.has(target):
-		print("⚠️ CritWindowManager: end_window() called but no active window for target")
 		return
 
 	var window_data = active_windows[target]
 
-	print("🔚 CritWindowManager: ENDING window for %s (%d/%d weakpoints)" % [target.name, weakpoints_destroyed, window_data.weakpoints_spawned])
+	# Collect total damage from all weakpoints (client-side tracking)
+	var total_damage = _collect_total_damage(window_data)
 
 	# Stop and cleanup timer
 	if window_data.timer and is_instance_valid(window_data.timer):
@@ -192,28 +208,53 @@ func end_window(target: Node, weakpoints_destroyed: int) -> void:
 		if target.has_method("shrink_after_crit_window"):
 			target.shrink_after_crit_window()
 
-		# In multiplayer, broadcast crit window end to clients
-		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-			var enemy_net_id = target.get("network_id") if target.get("network_id") != null else -1
-			if enemy_net_id >= 0:
-				var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-				if network_enemy_mgr:
-					print("🌐 Server: Broadcasting crit window end for enemy %d" % enemy_net_id)
-					network_enemy_mgr.broadcast_crit_window_end(enemy_net_id)
+	# Report results to server (client-predicted system)
+	_report_window_results(target, weakpoints_destroyed, total_damage)
 
 	# Remove from active windows
 	active_windows.erase(target)
 
-	# Restore time scale if no more active windows
-	if active_windows.is_empty():
-		Engine.time_scale = original_time_scale
-		print("All crit windows closed - time scale restored")
+	# NOTE: Time scaling disabled for multiplayer compatibility
+	# if active_windows.is_empty():
+	#     Engine.time_scale = original_time_scale
 
 	# Emit completion signal
 	var success_ratio = float(weakpoints_destroyed) / float(max(1, window_data.weakpoints_spawned))
 	window_completed.emit(success_ratio, weakpoints_destroyed)
 
-	print("=== WINDOW COMPLETE on ", target.name if is_instance_valid(target) else "destroyed target", ": ", weakpoints_destroyed, "/", window_data.weakpoints_spawned, " weakpoints destroyed ===")
+func _collect_total_damage(window_data: WindowData) -> int:
+	"""Collect total damage dealt from all weakpoints in this window"""
+	var total = 0
+	for wp in window_data.weakpoint_refs:
+		if is_instance_valid(wp) and wp.has_method("get_damage_dealt"):
+			total += wp.get_damage_dealt()
+	return total
+
+func _report_window_results(target: Node, weakpoints_destroyed: int, total_damage: int) -> void:
+	"""Report crit window results to server for validation"""
+	if not multiplayer.has_multiplayer_peer():
+		# Single player - apply damage directly
+		if is_instance_valid(target) and target.has_method("take_damage"):
+			target.take_damage(total_damage)
+		return
+
+	var enemy_net_id = -1
+	if is_instance_valid(target):
+		enemy_net_id = target.get("network_id") if target.get("network_id") != null else -1
+
+	if enemy_net_id < 0:
+		return
+
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	if not network_enemy_mgr:
+		return
+
+	if multiplayer.is_server():
+		# Server processes directly (no RPC needed)
+		network_enemy_mgr.process_crit_window_result(enemy_net_id, weakpoints_destroyed, total_damage, multiplayer.get_unique_id())
+	else:
+		# Client reports to server
+		network_enemy_mgr.report_crit_window_result.rpc_id(1, enemy_net_id, weakpoints_destroyed, total_damage)
 
 func _spawn_success_ring_at_position(position: Vector2) -> void:
 	"""Spawn a golden success ring effect at specified position"""

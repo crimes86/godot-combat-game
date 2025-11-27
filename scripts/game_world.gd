@@ -3713,8 +3713,9 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 		if player.has_node("Camera2D"):
 			player.get_node("Camera2D").enabled = true
 	else:
-		if player.has_method("set_physics_process"):
-			player.set_physics_process(false)
+		# Disable processing for remote players - they are updated via RPC in _receive_player_position
+		player.set_physics_process(false)
+		player.set_process(false)
 		if player.has_method("set_process_unhandled_input"):
 			player.set_process_unhandled_input(false)
 		if player.has_node("Camera2D"):
@@ -3772,6 +3773,7 @@ func _sync_local_player_position():
 	var health = int(local_player.current_health)
 	var is_dashing = local_player.is_dashing if local_player.get("is_dashing") != null else false
 
+
 	# Broadcast to all peers (unreliable for position - speed matters more than reliability)
 	rpc("_receive_player_position", my_id, pos, anim, health, is_dashing)
 
@@ -3781,6 +3783,7 @@ var _missing_player_requests: Dictionary = {}
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _receive_player_position(player_id: int, pos: Vector2, anim: String, health: int, is_dashing: bool):
 	"""Receive position update for a remote player"""
+
 	if player_id == multiplayer.get_unique_id():
 		return  # Ignore our own position updates
 

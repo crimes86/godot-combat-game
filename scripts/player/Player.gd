@@ -54,6 +54,9 @@ var debug_update_timer: float = 0.0  # Throttle debug updates
 var debug_label: Label = null  # Display debug info (coordinates, etc.)
 var cone_update_timer: float = 0.0  # Throttle cone color updates (CRITICAL for performance!)
 
+# Debug flag for weakpoint interaction troubleshooting (set to true to enable detailed logging)
+var debug_weakpoint_clicks: bool = false
+
 # Camera zoom
 @export var zoom_min: float = 0.75  # Zoom out 1.33x (limited to prevent map reveal)
 @export var zoom_max: float = 2.0   # Zoom in 2x (close-up)
@@ -87,6 +90,25 @@ func get_current_animation() -> String:
 		return character_sprite.animation
 	return "idle_south"
 
+func play_animation(anim_name: String) -> void:
+	"""Play animation by full name (for network sync of remote players).
+	Animation format: 'action_direction' e.g. 'walk_south', 'idle_north', 'slash_east'"""
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if not character_sprite:
+		return
+
+	# Parse the animation name to extract action and direction
+	# Format: "action_direction" e.g. "walk_south", "idle_north"
+	var parts = anim_name.rsplit("_", true, 1)  # Split from right, max 1 split
+	if parts.size() == 2:
+		var action = parts[0]
+		var direction = parts[1]
+		if character_sprite.has_method("play_lpc_animation"):
+			character_sprite.play_lpc_animation(action, direction)
+	elif character_sprite.sprite_frames and character_sprite.sprite_frames.has_animation(anim_name):
+		# Fallback: play directly if it's a valid animation name
+		character_sprite.play(anim_name)
+
 func get_health() -> int:
 	return int(current_health)
 
@@ -96,7 +118,7 @@ func is_invincible() -> bool:
 
 func _ready() -> void:
 	print("🎮 Player._ready() started")
-	
+
 	# AUTO-SELECT MALE (can switch to female by pressing F key during gameplay)
 	print("")
 	print("════════════════════════════════════════")
@@ -120,29 +142,33 @@ func _ready() -> void:
 		call_deferred("_broadcast_initial_appearance")
 	
 	# THEN: Initialize everything else
-	
-	# 🔧 DEBUG: Print initial cooldown values
-	print("═══ PLAYER COOLDOWN DEBUG ═══")
-	print("cooldown_override: ", cooldown_override)
-	print("Initial attack_cooldown: ", attack_cooldown)
-	
-	# Initialize stats from CharacterStats
-	update_stats_from_character()
-	
-	print("After update - attack_cooldown: ", attack_cooldown)
-	print("CharacterStats AGI: ", CharacterStats.agility)
-	print("CharacterStats.get_attack_cooldown(): ", CharacterStats.get_attack_cooldown())
-	print("═══════════════════════════")
-	
-	
 
-	
-	
-	
-	# Set health
-	current_health = max_health
-	if health_bar and health_bar.has_method("update_health"):
-		health_bar.update_health(current_health, max_health)
+	# Initialize stats from CharacterStats - ONLY for local player
+	# Remote players get their stats from network sync, not from local CharacterStats
+	if is_multiplayer_authority():
+		# 🔧 DEBUG: Print initial cooldown values
+		print("═══ PLAYER COOLDOWN DEBUG ═══")
+		print("cooldown_override: ", cooldown_override)
+		print("Initial attack_cooldown: ", attack_cooldown)
+
+		# Initialize stats from CharacterStats
+		update_stats_from_character()
+
+		print("After update - attack_cooldown: ", attack_cooldown)
+		print("CharacterStats AGI: ", CharacterStats.agility)
+		print("CharacterStats.get_attack_cooldown(): ", CharacterStats.get_attack_cooldown())
+		print("═══════════════════════════")
+
+		# Set health
+		current_health = max_health
+		if health_bar and health_bar.has_method("update_health"):
+			health_bar.update_health(current_health, max_health)
+	else:
+		# Remote player - start with default values, will be updated via network sync
+		max_health = 100
+		current_health = 100
+		if health_bar and health_bar.has_method("update_health"):
+			health_bar.update_health(current_health, max_health)
 	
 	# Add to player group
 	add_to_group(Constants.GROUP_PLAYER)
@@ -446,7 +472,7 @@ func _on_armor_unequipped(slot: String, armor_item: Dictionary) -> void:
 	_sync_appearance_to_network()
 
 func _physics_process(delta: float) -> void:
-	# Only process input for the local player
+	# Only process for local player
 	if not is_multiplayer_authority():
 		return
 
@@ -617,15 +643,13 @@ func _input(event: InputEvent) -> void:
 			if event.pressed:
 				# ❌ BLOCK ATTACKS when clicking inside UI windows
 				if is_ui_blocking_input():
-					print("🚫 UI is open - blocking attack input")
 					return
-				
+
 				is_mouse_held = true
 				hold_attack_timer = 0.0
-				
+
 				# ✨ FIX #1: Check if clicking on weakpoint FIRST
 				if is_clicking_on_weakpoint(event):
-					print("🎯 Clicking on weakpoint - skipping player attack")
 					return  # Let the weakpoint handle it!
 				
 				# ✨ FIX #2: Try crit window click on enemy body
@@ -797,32 +821,52 @@ func is_holding_on_crit_window_enemy(mouse_pos: Vector2) -> bool:
 	return false  # No crit window enemy in attack cone
 	
 	
-func is_clicking_on_weakpoint(event: InputEvent) -> bool:
+func is_clicking_on_weakpoint(_event: InputEvent) -> bool:
 	"""Check if clicking on weakpoint and trigger it directly"""
 	var click_pos = get_global_mouse_position()
 	var all_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
-	
+
+	if debug_weakpoint_clicks:
+		print("[WP_DEBUG] Checking %d enemies for weakpoint click at %s" % [all_enemies.size(), click_pos])
+
 	for enemy in all_enemies:
 		if not is_instance_valid(enemy):
 			continue
-		
+
 		# Only check enemies in crit window
-		if not ("in_crit_window" in enemy and enemy.in_crit_window):
+		var has_crit_prop = "in_crit_window" in enemy
+		var crit_val = enemy.in_crit_window if has_crit_prop else false
+
+		if debug_weakpoint_clicks:
+			print("[WP_DEBUG] Enemy %s: has_crit=%s, in_crit=%s" % [enemy.name, has_crit_prop, crit_val])
+
+		if not crit_val:
 			continue
-		
+
 		# Check if any weakpoint is at the click position
 		if "weakpoints" in enemy:
+			if debug_weakpoint_clicks:
+				print("[WP_DEBUG] Enemy %s has %d weakpoints" % [enemy.name, enemy.weakpoints.size()])
+
 			for weakpoint in enemy.weakpoints:
 				if not is_instance_valid(weakpoint):
+					if debug_weakpoint_clicks:
+						print("[WP_DEBUG] Weakpoint invalid, skipping")
 					continue
 				if "is_destroyed" in weakpoint and weakpoint.is_destroyed:
+					if debug_weakpoint_clicks:
+						print("[WP_DEBUG] Weakpoint destroyed, skipping")
 					continue
-				
+
 				var distance = click_pos.distance_to(weakpoint.global_position)
 				var weakpoint_radius = 28 * weakpoint.scale.x
-				
+
+				if debug_weakpoint_clicks:
+					print("[WP_DEBUG] Weakpoint at %s, dist=%.1f, radius=%.1f" % [weakpoint.global_position, distance, weakpoint_radius])
+
 				if distance < weakpoint_radius:
-					print("🎯 Found weakpoint at click position!")
+					if debug_weakpoint_clicks:
+						print("[WP_DEBUG] HIT! Calling weakpoint.hit()")
 
 					# Play slash animation toward the weakpoint
 					var character_sprite = get_node_or_null("CharacterSprite")
@@ -832,45 +876,16 @@ func is_clicking_on_weakpoint(event: InputEvent) -> bool:
 						var lpc_dir = convert_to_lpc_direction(dir_str)
 						character_sprite.play_lpc_animation("slash", lpc_dir)
 
-					# Directly trigger the weakpoint hit logic since Area2D input_event
-					# may not fire reliably (especially on client-spawned weakpoints)
-					if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
-						# Client: report hit to server
-						if weakpoint.has_method("_report_hit_to_server"):
-							weakpoint._report_hit_to_server()
-					else:
-						# Server/single player: hit directly
-						if weakpoint.has_method("hit"):
-							weakpoint.hit()
+					# CLIENT-PREDICTED: Call hit() directly for instant feedback
+					# Server validates total damage at crit window end
+					if weakpoint.has_method("hit"):
+						weakpoint.hit()
 					return true
-	
+
 	return false
 
-func _report_weakpoint_hit_to_server(enemy: Node, weakpoint: Node) -> void:
-	"""Client reports weakpoint hit to server via NetworkEnemyManager."""
-	var enemy_net_id = enemy.get("network_id") if enemy.get("network_id") != null else -1
-	if enemy_net_id < 0:
-		print("⚠️ Player: Enemy has no network_id, cannot report weakpoint hit")
-		return
-
-	# Find weakpoint index in enemy's weakpoints array
-	var weakpoint_index = -1
-	if "weakpoints" in enemy:
-		for i in range(enemy.weakpoints.size()):
-			if enemy.weakpoints[i] == weakpoint:
-				weakpoint_index = i
-				break
-
-	if weakpoint_index < 0:
-		print("⚠️ Player: Could not find weakpoint in enemy's array")
-		return
-
-	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-	if network_enemy_mgr:
-		print("🌐 Client: Reporting weakpoint %d hit on enemy %d to server" % [weakpoint_index, enemy_net_id])
-		network_enemy_mgr.request_weakpoint_hit.rpc_id(1, enemy_net_id, weakpoint_index)
-	else:
-		print("⚠️ Player: NetworkEnemyManager not found")
+# NOTE: _report_weakpoint_hit_to_server() was removed - client-predicted system now tracks
+# damage locally and reports total at crit window end via CritWindowManager
 
 func handle_crit_window_attack(enemy: Node, click_pos: Vector2) -> void:
 	"""Handle attack on enemy body during crit window"""
@@ -1070,6 +1085,11 @@ func _on_weakpoint_hit(enemy: Node) -> void:
 
 func _on_enemy_damaged(damage: float, is_crit: bool, enemy: Node) -> void:
 	# Enemy took damage - trigger feedback
+	# NOTE: In multiplayer, attack feedback is handled by NetworkEnemyManager._trigger_attack_feedback_for_attacker
+	# to ensure only the attacker sees particles (not all players)
+	if multiplayer.has_multiplayer_peer():
+		return  # Multiplayer handles this centrally
+
 	if attack_feedback:
 		attack_feedback.trigger_attack_feedback(enemy.global_position, is_crit, false)
 
@@ -1141,6 +1161,10 @@ func finish_attack_cooldown() -> void:
 
 func _on_sprite_frame_changed() -> void:
 	"""Called when sprite animation frame changes - play footsteps on walk frames"""
+	# Only process for local player
+	if not is_multiplayer_authority():
+		return
+
 	var character_sprite = get_node_or_null("CharacterSprite")
 	if not character_sprite:
 		return
@@ -1189,6 +1213,10 @@ func _on_sprite_frame_changed() -> void:
 
 func _on_attack_animation_finished() -> void:
 	"""Called when attack animation finishes - return to idle"""
+	# Only process for local player
+	if not is_multiplayer_authority():
+		return
+
 	var character_sprite = get_node_or_null("CharacterSprite")
 	if not character_sprite:
 		return

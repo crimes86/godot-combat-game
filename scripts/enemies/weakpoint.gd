@@ -36,6 +36,11 @@ var theme_colors = {
 
 signal weakpoint_hit(weakpoint)
 signal weakpoint_destroyed(weakpoint)
+signal weakpoint_destroyed_local(weakpoint)  # Client-side tracking for crit window
+
+# Track damage dealt for server validation
+var damage_per_hit: int = 0  # Set by crit_window_manager
+var total_damage_dealt: int = 0
 
 func _ready() -> void:
 	z_index = 300
@@ -310,6 +315,14 @@ func start_damage_pulse(progress: float) -> void:
 	pulse_tween.parallel().tween_property(glow_sprite, "scale", Vector2(pulse_scale, pulse_scale), 0.3)
 	pulse_tween.tween_property(glow_sprite, "scale", Vector2(base_scale, base_scale), 0.3)
 
+func get_damage_dealt() -> int:
+	"""Returns total damage dealt to this weakpoint (for server validation)"""
+	return total_damage_dealt
+
+func set_damage_per_hit(damage: int) -> void:
+	"""Set the damage value per hit (called by crit_window_manager)"""
+	damage_per_hit = damage
+
 func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
 	if is_destroyed:
 		return
@@ -321,90 +334,9 @@ func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
 			return
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		print("🎯 Weakpoint clicked! (is_server=%s, has_peer=%s)" % [multiplayer.is_server(), multiplayer.has_multiplayer_peer()])
-		# In multiplayer, report hit to server (server handles authoritative hit)
-		if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
-			_report_hit_to_server()
-		else:
-			hit()
-
-func _report_hit_to_server() -> void:
-	"""Client reports this weakpoint hit to the server."""
-	print("🎯 _report_hit_to_server() called")
-	var parent = get_parent()
-	if not parent:
-		print("⚠️ Weakpoint: No parent!")
-		return
-
-	print("🎯 Parent: %s (type: %s)" % [parent.name, parent.get_class()])
-	var enemy_net_id = parent.get("network_id") if parent.get("network_id") != null else -1
-	print("🎯 Parent network_id: %d" % enemy_net_id)
-	if enemy_net_id < 0:
-		print("⚠️ Weakpoint: Parent enemy has no network_id")
-		return
-
-	# Find our index in the parent's weakpoints array
-	var weakpoint_index = -1
-	if "weakpoints" in parent:
-		var weakpoints_array = parent.weakpoints
-		print("🎯 Parent has %d weakpoints in array" % weakpoints_array.size())
-		for i in range(weakpoints_array.size()):
-			if weakpoints_array[i] == self:
-				weakpoint_index = i
-				break
-	else:
-		print("⚠️ Weakpoint: Parent has no 'weakpoints' property")
-
-	if weakpoint_index < 0:
-		print("⚠️ Weakpoint: Could not find self in parent's weakpoints array")
-		return
-
-	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-	if network_enemy_mgr:
-		print("🌐 Client: Reporting weakpoint %d hit on enemy %d" % [weakpoint_index, enemy_net_id])
-		network_enemy_mgr.request_weakpoint_hit.rpc_id(1, enemy_net_id, weakpoint_index)
-	else:
-		print("⚠️ Weakpoint: NetworkEnemyManager not found!")
-		# DON'T play local feedback - server will broadcast _client_weakpoint_hit back to us
-		# which will play the feedback. Playing here would cause duplicate sounds.
-
-func _play_hit_feedback_only() -> void:
-	"""Play hit feedback (sound, shake, flash) WITHOUT incrementing hit count or triggering destroy.
-	Used by clients who report hits to server but don't track state locally."""
-	if is_destroyed:
-		return
-
-	print("🎨 Client: Playing visual feedback only (server will confirm hit)")
-
-	# Play sounds
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_weakpoint_sound(global_position, -8.0)
-		sound_manager.play_skeleton_hurt_sound(global_position, -10.0)
-
-	# Visual feedback - use a simple shake without progress tracking
-	if sprite:
-		var colors = theme_colors[color_theme]
-
-		# Flash effect
-		var flash_color = colors["flash"]
-		sprite.color = flash_color
-
-		# Quick shake
-		var shake_intensity = 3.0
-		var shake_tween = create_tween()
-		shake_tween.set_trans(Tween.TRANS_SINE)
-		shake_tween.tween_property(sprite, "position", Vector2(shake_intensity, 0), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(-shake_intensity, 0), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(0, shake_intensity * 0.7), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(0, -shake_intensity * 0.7), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(0, 0), 0.02)
-
-		# Color flash back to base
-		var base_color = colors["base"] * 0.6
-		base_color.a = colors["base"].a
-		var color_tween = create_tween()
-		color_tween.tween_property(sprite, "color", base_color, 0.1)
+		# CLIENT-PREDICTED: All weakpoint interaction is local for instant feedback
+		# Server validates total damage at crit window end
+		hit()
 
 func hit() -> void:
 	if is_destroyed:
@@ -417,6 +349,11 @@ func hit() -> void:
 			return
 
 	current_hits += 1
+
+	# Track damage dealt for server validation at window end
+	if damage_per_hit > 0:
+		total_damage_dealt += damage_per_hit
+
 	weakpoint_hit.emit(self)
 
 	# 🔊 Play satisfying bone-crack sound (randomized with pitch variation)
@@ -484,17 +421,10 @@ func hit() -> void:
 		# 💫 PULSING GLOW - grows stronger with more damage
 		start_damage_pulse(progress)
 
-	print("💥 Weakpoint hit: %d/%d" % [current_hits, max_hits])
 	if current_hits >= max_hits:
-		# In multiplayer client mode, let the server handle destruction
-		# (server's weakpoint will trigger destroy() when its count reaches max)
-		if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
-			print("🔥 Client: Weakpoint ready for destruction (server will confirm)")
-			# Still do visual destruction locally for responsiveness
-			destroy()
-		else:
-			print("🔥 DESTROYING WEAKPOINT!")
-			destroy()
+		# CLIENT-PREDICTED: Destroy locally for instant feedback
+		# Server validates total damage at crit window end
+		destroy()
 
 func spawn_hit_number() -> void:
 	"""Show HIT indicator"""
@@ -550,7 +480,6 @@ func destroy() -> void:
 	if is_destroyed:
 		return
 
-	print("🔥 [WEAKPOINT] DESTROY()")
 	is_destroyed = true
 
 	# Immediately disable interaction to prevent further clicks
@@ -561,12 +490,10 @@ func destroy() -> void:
 	if sparkle_particles:
 		sparkle_particles.emitting = false
 
-	print("🔥 [WEAKPOINT] Emitting weakpoint_destroyed signal")
 	weakpoint_destroyed.emit(self)
-	print("🔥 [WEAKPOINT] Signal emitted - waiting for parent to respond")
+	weakpoint_destroyed_local.emit(self)  # For crit window client-side tracking
 
 	# 💥 SHAKE FIRST (building tension)
-	print("🔥 [WEAKPOINT] Starting shake animation (0.3s)")
 	if sprite:
 		var shake_tween = create_tween()
 		shake_tween.set_loops(4)  # Half as long (was 8)
@@ -574,56 +501,41 @@ func destroy() -> void:
 		shake_tween.tween_property(sprite, "position", Vector2(-3, 0), 0.025)
 		shake_tween.tween_property(sprite, "position", Vector2(0, 0), 0.025)
 		await shake_tween.finished
-		print("🔥 [WEAKPOINT] Shake complete")
 
 		# Brief pause before explosion
 		await get_tree().create_timer(0.05).timeout
-		print("🔥 [WEAKPOINT] Pause complete")
 
 	# 💥 PLAY EXPLOSION SOUND (perfectly timed with visual explosion)
-	print("🔥 [WEAKPOINT] Playing explosion sound")
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		sound_manager.play_weakpoint_destroyed_sound(global_position, -3.0)
 
 	# 💥 NOW SPAWN EFFECTS (after shake completes)
-	print("🔥 [WEAKPOINT] Spawning destruction particles")
 	spawn_destruction_particles()
-
-	print("🔥 [WEAKPOINT] Spawning destruction wave")
 	spawn_destruction_wave()
 
 	# 💥 THEN EXPLODE (dramatic release)
-	print("🔥 [WEAKPOINT] Starting explosion fade (0.16s)")
 	if sprite:
 		var explode_tween = create_tween()
 		explode_tween.set_parallel(true)
 		explode_tween.tween_property(sprite, "scale", Vector2(2.0, 2.0), 0.16)
 		explode_tween.tween_property(sprite, "modulate:a", 0.0, 0.16)
 		await explode_tween.finished
-		print("🔥 [WEAKPOINT] Explosion fade complete")
 
-	print("🔥 [WEAKPOINT] Calling queue_free() - destruction complete")
 	queue_free()
 
 func spawn_destruction_wave() -> void:
 	"""💥 EXPLOSIVE SHOCKWAVES (blood or bone)"""
-	print("   💢 spawn_destruction_wave() called")
-
 	# Get world container to avoid parent scaling issues
 	var world = get_tree().current_scene
 	if not world:
-		print("   ❌ ERROR: Could not find current scene!")
 		return
-
-	print("   ✅ Found world scene (%s), spawning waves at position: %s" % [world.name, global_position])
 
 	var colors = theme_colors[color_theme]
 
 	for i in range(2):  # Just 2 waves
-		# ✨ FIX: Check if weakpoint still exists before continuing
+		# Check if weakpoint still exists before continuing
 		if not is_instance_valid(self):
-			print("   ⚠️ Weakpoint destroyed during wave spawn, aborting")
 			return
 
 		await get_tree().create_timer(i * 0.05).timeout
@@ -641,7 +553,6 @@ func spawn_destruction_wave() -> void:
 
 		ring.global_position = global_position
 		world.add_child(ring)
-		print("   💥 Shockwave ring %d added to world" % (i + 1))
 
 		# ✨ FIX: Create a SceneTreeTween on the world instead of the weakpoint
 		# This ensures the tween survives even if the weakpoint is destroyed
@@ -665,11 +576,10 @@ func spawn_destruction_wave() -> void:
 				ring.queue_free()
 		)
 
-		# ✨ FIX: Failsafe timer - ensure ring is ALWAYS cleaned up after max duration
+		# Failsafe timer - ensure ring is ALWAYS cleaned up after max duration
 		var cleanup_timer = world.get_tree().create_timer(0.5)
 		cleanup_timer.timeout.connect(func():
 			if is_instance_valid(ring):
-				print("   🧹 Failsafe cleanup: removing orphaned ring")
 				ring.queue_free()
 		)
 
@@ -717,15 +627,10 @@ func spawn_crack_particles() -> void:
 
 func spawn_destruction_particles() -> void:
 	"""💥 DRAMATIC EXPLOSION when weakpoint destroyed (blood or bone fragments)"""
-	print("   🩸 spawn_destruction_particles() called")
-
 	# Get world container to avoid parent scaling issues
 	var world = get_tree().current_scene
 	if not world:
-		print("   ❌ ERROR: Could not find current scene!")
 		return
-
-	print("   ✅ Found world scene (%s), spawning particles at position: %s" % [world.name, global_position])
 
 	var colors = theme_colors[color_theme]
 
@@ -789,7 +694,6 @@ func spawn_destruction_particles() -> void:
 
 	world.add_child(blood_spray)
 	blood_spray.emitting = true
-	print("   🎨 Blood spray particles added to world and emitting!")
 
 	# 💀 DARK BLOOD CHUNKS - slower, heavier pieces
 	var chunks = CPUParticles2D.new()
@@ -843,7 +747,6 @@ func spawn_destruction_particles() -> void:
 
 	world.add_child(chunks)
 	chunks.emitting = true
-	print("   💀 Blood chunks added to world and emitting!")
 
 	await get_tree().create_timer(0.5).timeout  # Quick cleanup for mist effect
 	if is_instance_valid(blood_spray):

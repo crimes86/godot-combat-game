@@ -170,14 +170,18 @@ func _process(delta: float) -> void:
 
 func update_health(current: float, maximum: float) -> void:
 	"""✨ JUICY health update with smooth animation and color transitions"""
-	
+
 	var previous_health = current_health
 	current_health = current
 	max_health = maximum
-	
-	# Calculate health percentage
-	var health_percent = (current_health / max_health) * 100.0
-	
+
+	# Safety: ensure max_health is valid
+	if max_health <= 0:
+		max_health = 100.0
+
+	# Calculate health percentage (clamped 0-100)
+	var health_percent = clampf((current_health / max_health) * 100.0, 0.0, 100.0)
+
 	# 🎨 Determine color based on health percentage
 	var target_color: Color
 	if health_percent > 60.0:
@@ -188,10 +192,10 @@ func update_health(current: float, maximum: float) -> void:
 		target_color = COLOR_WARNING  # Orange
 	else:
 		target_color = COLOR_CRITICAL  # Red
-	
-	# 📏 Calculate fill width
+
+	# 📏 Calculate fill width (clamped to BAR_WIDTH to prevent overflow)
 	var target_width = (current_health / max_health) * BAR_WIDTH
-	target_width = max(0.0, target_width)  # Ensure never negative
+	target_width = clampf(target_width, 0.0, BAR_WIDTH)  # Never exceed bar bounds
 	
 	# ✨ Smooth tween for bar width
 	var tween = create_tween()
