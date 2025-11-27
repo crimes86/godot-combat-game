@@ -678,10 +678,10 @@ func create_fire_particles() -> void:
 
 func setup_audio() -> void:
 	"""Setup audio streams for fire and healing"""
-	# Fire crackling audio (looping)
+	# Fire crackling audio (looping) - ambient level
 	fire_audio = AudioStreamPlayer2D.new()
 	fire_audio.stream = load("res://assets/sounds/ambient/campfire_loop.wav")
-	fire_audio.volume_db = -8.0
+	fire_audio.volume_db = -18.0
 	fire_audio.max_distance = 500.0
 	fire_audio.attenuation = 2.0
 	fire_audio.panning_strength = 0.8
@@ -693,7 +693,7 @@ func setup_audio() -> void:
 	# Healing audio - sound 6 (plays first two times in pattern: 6-6-4)
 	healing_audio_1 = AudioStreamPlayer2D.new()
 	healing_audio_1.stream = load("res://assets/sounds/player/healing_6.mp3")
-	healing_audio_1.volume_db = -8.0
+	healing_audio_1.volume_db = -12.0
 	healing_audio_1.max_distance = 300.0
 	healing_audio_1.attenuation = 1.5
 	healing_audio_1.panning_strength = 0.8
@@ -702,7 +702,7 @@ func setup_audio() -> void:
 	# Healing audio - sound 4 (plays third time in pattern: 6-6-4)
 	healing_audio_2 = AudioStreamPlayer2D.new()
 	healing_audio_2.stream = load("res://assets/sounds/player/healing_4.mp3")
-	healing_audio_2.volume_db = -8.0
+	healing_audio_2.volume_db = -12.0
 	healing_audio_2.max_distance = 300.0
 	healing_audio_2.attenuation = 1.5
 	healing_audio_2.panning_strength = 0.8
@@ -716,8 +716,8 @@ func _on_fire_audio_finished() -> void:
 	# Much wider pitch variation (±15%) for more variety
 	fire_audio.pitch_scale = randf_range(0.85, 1.15)
 
-	# Wider volume variation (±4dB) for intensity changes
-	fire_audio.volume_db = -8.0 + randf_range(-4.0, 4.0)
+	# Wider volume variation (±4dB) for intensity changes - ambient level
+	fire_audio.volume_db = -18.0 + randf_range(-4.0, 4.0)
 
 	# 40% chance to play backwards for variation
 	if randf() < 0.4:
@@ -1583,7 +1583,7 @@ func add_wood_fuel(amount: int, enhanced_sound: bool = false) -> bool:
 	# Play fire fuel sound (even if wasting fuel)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_fire_fuel_sound(global_position, -5.0, enhanced_sound)
+		sound_manager.play_fire_fuel_sound(global_position, -12.0, enhanced_sound)
 
 	return true
 
@@ -1601,7 +1601,7 @@ func add_bone_ember_fuel(amount: int, enhanced_sound: bool = false) -> bool:
 	# Play fire fuel sound (even if wasting fuel)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_fire_fuel_sound(global_position, -5.0, enhanced_sound)
+		sound_manager.play_fire_fuel_sound(global_position, -12.0, enhanced_sound)
 
 	return true
 

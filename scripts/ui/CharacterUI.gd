@@ -986,21 +986,25 @@ func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
 			# Special handling for mainhand - check equipped_weapon
 			if slot_name == "mainhand" and CharacterStats.equipped_weapon:
 				CharacterStats.unequip_weapon()
+				SoundManager.play_equip_sound()  # Unequip sound
 				refresh_all()
 			else:
 				var armor_item = CharacterStats.equipped_armor[slot_name]
 				if armor_item:
 					if CharacterStats.unequip_armor(slot_name):
+						SoundManager.play_equip_sound()  # Unequip sound
 						refresh_all()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			# Special handling for mainhand - check equipped_weapon
 			if slot_name == "mainhand" and CharacterStats.equipped_weapon:
 				CharacterStats.unequip_weapon()
+				SoundManager.play_equip_sound()  # Unequip sound
 				refresh_all()
 			else:
 				var armor_item = CharacterStats.equipped_armor[slot_name]
 				if armor_item:
 					if CharacterStats.unequip_armor(slot_name):
+						SoundManager.play_equip_sound()  # Unequip sound
 						refresh_all()
 
 func _on_tool_slot_gui_input(event: InputEvent, tool_name: String) -> void:
@@ -1010,16 +1014,20 @@ func _on_tool_slot_gui_input(event: InputEvent, tool_name: String) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
 			if tool_name == "axe":
 				InventorySystem.unequip_axe()
+				SoundManager.play_equip_sound()  # Unequip sound
 				refresh_all()
 			elif tool_name == "pickaxe":
 				InventorySystem.unequip_pickaxe()
+				SoundManager.play_equip_sound()  # Unequip sound
 				refresh_all()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			if tool_name == "axe":
 				InventorySystem.unequip_axe()
+				SoundManager.play_equip_sound()  # Unequip sound
 				refresh_all()
 			elif tool_name == "pickaxe":
 				InventorySystem.unequip_pickaxe()
+				SoundManager.play_equip_sound()  # Unequip sound
 				refresh_all()
 
 func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
@@ -1045,6 +1053,7 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 					if equipped:
 						# Remove from inventory
 						InventorySystem.remove_item(slot_index)
+						SoundManager.play_equip_sound()  # Equip sound
 						refresh_all()
 				# Check if it's a weapon
 				elif item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
@@ -1054,6 +1063,7 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 						CharacterStats.equip_weapon(weapon)
 						# Remove from inventory
 						InventorySystem.remove_item(slot_index)
+						SoundManager.play_equip_sound()  # Equip sound
 						refresh_all()
 				# Check if it's armor (has a slot)
 				elif item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
@@ -1061,6 +1071,7 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 					if CharacterStats.equip_armor(item):
 						# Remove from inventory
 						InventorySystem.remove_item(slot_index)
+						SoundManager.play_equip_sound()  # Equip sound
 						refresh_all()
 func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	"""Convert a weapon dictionary (from inventory) to a Weapon resource"""
@@ -1163,6 +1174,9 @@ func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: in
 			if target_item and not target_item.is_empty():
 				InventorySystem.set_item(source_index, target_item)
 
+			# Play inventory move sound
+			SoundManager.play_inventory_move_sound()
+
 			refresh_all()
 
 	elif source_type == "equipment":
@@ -1172,10 +1186,12 @@ func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: in
 			# Special handling for mainhand weapon
 			if source_slot_name == "mainhand" and CharacterStats.equipped_weapon:
 				CharacterStats.unequip_weapon()
+				SoundManager.play_equip_sound()  # Unequip sound
 				refresh_all()
 			# Unequip armor
 			elif CharacterStats.unequip_armor(source_slot_name):
 				# Item is now in inventory via unequip_armor
+				SoundManager.play_equip_sound()  # Unequip sound
 				refresh_all()
 
 func _get_equipment_drag_data(at_position: Vector2, slot_name: String) -> Variant:
@@ -1276,6 +1292,7 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 			if equipped:
 				# Remove from inventory
 				InventorySystem.remove_item(source_index)
+				SoundManager.play_equip_sound()  # Equip sound
 				refresh_all()
 	elif source_type == "equipment":
 		# Swap equipment
@@ -1377,6 +1394,7 @@ func _drop_tool_data(at_position: Vector2, data: Dictionary, tool_name: String) 
 			if equipped:
 				# Remove from inventory
 				InventorySystem.remove_item(source_index)
+				SoundManager.play_equip_sound()  # Equip sound
 				refresh_all()
 	elif source_type == "tool":
 		# Can't swap tools between slots (different types)

@@ -137,7 +137,7 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 				# Play crit window opening sound on server
 				var sound_manager = get_node_or_null("/root/SoundManager")
 				if sound_manager:
-					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -3.0)
+					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
 			else:
 				# Fallback: just apply damage if crit window manager not available
 				print("⚠️ CritWindowManager not found, applying crit damage directly")
@@ -359,11 +359,11 @@ func _play_hit_sounds(enemy: Node, is_crit: bool, is_weakpoint: bool, _attacker_
 		weapon_type = CharacterStats.equipped_weapon.weapon_type
 
 	if is_crit:
-		sound_manager.play_critical_hit_sound(enemy.global_position, -3.0)
+		sound_manager.play_critical_hit_sound(enemy.global_position, -6.0)
 	else:
-		sound_manager.play_normal_hit_sound(enemy.global_position, -8.0, weapon_type)
+		sound_manager.play_normal_hit_sound(enemy.global_position, -10.0, weapon_type)
 
-	sound_manager.play_skeleton_hurt_sound(enemy.global_position, -8.0)
+	sound_manager.play_skeleton_hurt_sound(enemy.global_position, -12.0)
 
 func _trigger_attack_feedback_for_attacker(enemy: Node, is_crit: bool, is_weakpoint: bool, attacker_id: int) -> void:
 	"""Trigger attack particle feedback only for the player who attacked."""
@@ -711,7 +711,7 @@ func _client_start_local_crit_window(enemy_network_id: int) -> void:
 	# Play crit window opening sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager and enemy.is_inside_tree():
-		sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -3.0)
+		sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
 
 	# Find the local player's CritWindowManager
 	var all_players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)

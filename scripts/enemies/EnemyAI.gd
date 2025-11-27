@@ -661,7 +661,7 @@ func perform_attack() -> void:
 	# Play attack sound (sound manager handles preventing overlap)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_skeleton_attack_sound(enemy.global_position, -8.0)
+		sound_manager.play_skeleton_attack_sound(enemy.global_position, -10.0)
 
 	# Play attack animation
 	var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
@@ -763,7 +763,7 @@ func trigger_aggro() -> void:
 	# Play aggro sound (sound manager handles preventing overlap)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_skeleton_aggro_sound(enemy.global_position, -5.0)
+		sound_manager.play_skeleton_aggro_sound(enemy.global_position, -10.0)
 
 	# Chain aggro - alert nearby allies!
 	trigger_chain_aggro()

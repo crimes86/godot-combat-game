@@ -899,7 +899,7 @@ func play_random_mine_sound() -> void:
 	var sound = mine_sounds[randi() % mine_sounds.size()]
 	mine_audio_player.stream = sound
 	mine_audio_player.pitch_scale = randf_range(0.9, 1.1)  # Slight pitch variation
-	mine_audio_player.volume_db = randf_range(-3.0, 0.0)  # Slight volume variation
+	mine_audio_player.volume_db = randf_range(-10.0, -6.0)  # Combat-level volume
 	mine_audio_player.play()
 
 	# Shake the rock on impact
@@ -943,7 +943,7 @@ func play_random_break_sound() -> void:
 	var sound = break_sounds[randi() % break_sounds.size()]
 	break_audio_player.stream = sound
 	break_audio_player.pitch_scale = randf_range(0.95, 1.05)  # Slight pitch variation
-	break_audio_player.volume_db = 0.0
+	break_audio_player.volume_db = -6.0  # Louder for important feedback
 	break_audio_player.play()
 
 func trigger_player_harvest_animation(tool_type: String) -> void:

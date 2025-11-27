@@ -225,6 +225,12 @@ func _ready() -> void:
 			listener.make_current()
 			print("📷 Camera zoom system initialized (0.5x - 2.0x)")
 			print("🔊 AudioListener2D enabled for spatial audio")
+
+			# Start background music
+			var sound_manager = get_node_or_null("/root/SoundManager")
+			if sound_manager and sound_manager.has_method("play_game_music"):
+				sound_manager.play_game_music(-15.0)  # Background level
+				print("🎵 Game music started")
 		else:
 			# Disable camera for remote players
 			camera.enabled = false
@@ -421,7 +427,7 @@ func _on_character_level_up(new_level: int) -> void:
 	# Play sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_MILESTONE, -2.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_MILESTONE, -8.0)
 
 func _on_weapon_equipped(weapon) -> void:  # weapon is Weapon type
 	"""Called when weapon is equipped"""
@@ -906,12 +912,11 @@ func handle_crit_window_attack(enemy: Node, click_pos: Vector2) -> void:
 	if sound_manager:
 		# Play weapon-specific swing sound
 		if CharacterStats.equipped_weapon:
-			if CharacterStats.equipped_weapon.weapon_type == "sword":
-				sound_manager.play_sword_swing_sound(global_position, -8.0)
-			# Add more weapon types here as needed
+			# Use sword swing sound for all weapon types (universal whoosh)
+			sound_manager.play_sword_swing_sound(global_position, -10.0)
 		else:
 			# No weapon equipped - use unarmed sound
-			sound_manager.play_unarmed_swing_sound(global_position, -8.0)
+			sound_manager.play_unarmed_swing_sound(global_position, -10.0)
 
 	# Get chain multiplier for damage calculation
 	var chain_multiplier = ChainManager.get_damage_multiplier()
@@ -940,15 +945,13 @@ func attempt_attack() -> void:
 	# Play weapon swing sound (whoosh)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		print("🔊 Player.attempt_attack() playing SWING sound")
 		# Play weapon-specific swing sound
 		if CharacterStats.equipped_weapon:
-			if CharacterStats.equipped_weapon.weapon_type == "sword":
-				sound_manager.play_sword_swing_sound(global_position, -8.0)
-			# Add more weapon types here as needed
+			# Use sword swing sound for all weapon types (universal whoosh)
+			sound_manager.play_sword_swing_sound(global_position, -10.0)
 		else:
 			# No weapon equipped - use unarmed sound
-			sound_manager.play_unarmed_swing_sound(global_position, -8.0)
+			sound_manager.play_unarmed_swing_sound(global_position, -10.0)
 
 	ChainManager.register_attack()
 	
@@ -964,9 +967,7 @@ func attempt_attack() -> void:
 		attack_enemies_in_cone(enemies_in_cone)
 		finish_attack_cooldown()
 	else:
-		# ✨ NEW: Play miss sound when no enemies hit
-		if sound_manager:
-			sound_manager.play_sound(sound_manager.SoundType.MISS, global_position, -10.0)
+		# Swing sound already played above - no additional miss sound needed
 		finish_attack_cooldown()
 
 func get_enemies_in_cone() -> Array:
@@ -1053,7 +1054,7 @@ func attack_enemies_in_cone(enemies: Array) -> void:
 					# Play crit window opening sound on successful crit roll
 					var sound_manager = get_node_or_null("/root/SoundManager")
 					if sound_manager:
-						sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -3.0)
+						sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
 
 					# Start crit window (server broadcasts to clients via Enemy.spawn_weakpoints)
 					crit_window_manager.start_window(enemy)

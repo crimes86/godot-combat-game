@@ -239,7 +239,7 @@ func open_chest() -> void:
 	# Play chest open sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound(sound_manager.SoundType.CHEST_OPEN, global_position, -3.0)
+		sound_manager.play_sound(sound_manager.SoundType.CHEST_OPEN, global_position, -8.0)
 
 	# Hide interaction prompt
 	if interaction_prompt:

@@ -181,7 +181,7 @@ func create_fire_audio() -> void:
 	fire_audio = AudioStreamPlayer2D.new()
 	fire_audio.name = "FireAudio"
 	fire_audio.stream = campfire_sound
-	fire_audio.volume_db = -18.0  # Much quieter than campfire (-8.0)
+	fire_audio.volume_db = -22.0  # Quieter ambient level for torches
 	fire_audio.bus = "Master"
 	fire_audio.autoplay = false
 
@@ -208,8 +208,8 @@ func randomize_fire_audio() -> void:
 	# Randomize pitch (±5%)
 	fire_audio.pitch_scale = randf_range(0.95, 1.05)
 
-	# Randomize volume slightly
-	fire_audio.volume_db = randf_range(-19.5, -16.5)
+	# Randomize volume slightly - ambient level
+	fire_audio.volume_db = randf_range(-24.0, -20.0)
 
 func _on_fire_audio_loop() -> void:
 	"""Called when fire audio finishes"""

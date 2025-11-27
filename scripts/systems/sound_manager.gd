@@ -32,6 +32,8 @@ enum SoundType {
 	GOLD_LOOT,  # Gold coin jingling (looting corpses, shop transactions)
 	ITEM_PICKUP,  # Satisfying item pickup sound (inventory notification)
 	CHEST_OPEN,  # Treasure chest opening sound
+	INVENTORY_MOVE,  # Moving items around inventory slots
+	EQUIP_ITEM,  # Equipping/unequipping gear
 
 	# Environment sounds
 	FIRE_FUEL_ADD  # Fire magic sound when adding fuel to campfire
@@ -54,6 +56,8 @@ var skeleton_death_sounds: Array[AudioStream] = []  # Skeleton bones collapsing 
 var gold_loot_sound: AudioStream = null  # Gold coin jingling
 var item_pickup_sound: AudioStream = null  # Satisfying item pickup sound
 var chest_open_sound: AudioStream = null  # Treasure chest opening sound
+var inventory_move_sound: AudioStream = null  # Moving items in inventory
+var equip_item_sound: AudioStream = null  # Equipping/unequipping gear
 var crit_window_open_sound: AudioStream = null  # Crystalline chime when crit window opens
 var fire_fuel_add_sound: AudioStream = null  # Fire magic sound when adding fuel
 
@@ -75,6 +79,13 @@ var weapon_hit_sounds: Dictionary = {
 	"spear": [],
 	"dagger": []
 }
+
+# Background music playlist
+var music_tracks: Array[AudioStream] = []
+var current_track_index: int = 0
+var music_player: AudioStreamPlayer = null
+var music_volume_db: float = -15.0  # Store target volume for playlist
+const MUSIC_FADE_DURATION: float = 2.0  # Seconds to fade in/out
 
 func _ready() -> void:
 	# Load real sound files first
@@ -198,6 +209,20 @@ func _load_real_sounds() -> void:
 	else:
 		push_warning("  ⚠️ Failed to load chest_open.wav")
 
+	# Load inventory move sound (dragging items between slots)
+	inventory_move_sound = load("res://assets/audio/sfx/inventory_move.wav")
+	if inventory_move_sound:
+		print("  ✅ Loaded inventory_move.wav")
+	else:
+		push_warning("  ⚠️ Failed to load inventory_move.wav")
+
+	# Load equip item sound (equipping/unequipping gear)
+	equip_item_sound = load("res://assets/audio/sfx/equip_item.wav")
+	if equip_item_sound:
+		print("  ✅ Loaded equip_item.wav")
+	else:
+		push_warning("  ⚠️ Failed to load equip_item.wav")
+
 	# Load crit window open sound (crystalline chime)
 	crit_window_open_sound = load("res://assets/sounds/combat/crit_window_open.wav")
 	if crit_window_open_sound:
@@ -300,6 +325,20 @@ func _load_real_sounds() -> void:
 	# _load_weapon_sounds("spear", 4)
 	print("  📊 Loaded weapon sounds: sword=%d" % weapon_hit_sounds["sword"].size())
 
+	# Load background music playlist
+	print("  🎵 Loading background music playlist...")
+	var track1 = load("res://assets/audio/music/game_loop.mp3")
+	if track1:
+		music_tracks.append(track1)
+		print("  ✅ Loaded game_loop.mp3 (Track 1: The Raven's Shadow)")
+
+	var track2 = load("res://assets/audio/music/game_loop_2.mp3")
+	if track2:
+		music_tracks.append(track2)
+		print("  ✅ Loaded game_loop_2.mp3 (Track 2: The Wasteland's Whisper)")
+
+	print("  📊 Loaded %d music tracks" % music_tracks.size())
+
 func _load_weapon_sounds(weapon_type: String, count: int) -> void:
 	"""Load weapon-specific hit sounds"""
 	for i in range(1, count + 1):
@@ -339,6 +378,8 @@ func _generate_all_sounds() -> void:
 	sound_cache[SoundType.GOLD_LOOT] = gold_loot_sound if gold_loot_sound else _generate_gold_loot()
 	sound_cache[SoundType.ITEM_PICKUP] = item_pickup_sound if item_pickup_sound else _generate_item_pickup()
 	sound_cache[SoundType.CHEST_OPEN] = chest_open_sound if chest_open_sound else _generate_chest_open()
+	sound_cache[SoundType.INVENTORY_MOVE] = inventory_move_sound if inventory_move_sound else _generate_inventory_move()
+	sound_cache[SoundType.EQUIP_ITEM] = equip_item_sound if equip_item_sound else _generate_equip_item()
 
 	# Environment sounds
 	sound_cache[SoundType.FIRE_FUEL_ADD] = fire_fuel_add_sound if fire_fuel_add_sound else _generate_fire_fuel_add()
@@ -423,18 +464,19 @@ func play_critical_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 
 ## Play normal hit sound (for regular non-crit hits)
 func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0, weapon_type: String = "") -> void:
-	print("🔊 SoundManager.play_normal_hit_sound() called (weapon=%s)" % weapon_type)
 	var sounds_to_use = []  # Untyped to avoid type mismatch with Dictionary values
 
 	# Try weapon-specific sounds first
 	if weapon_type != "" and weapon_hit_sounds.has(weapon_type) and not weapon_hit_sounds[weapon_type].is_empty():
 		sounds_to_use = weapon_hit_sounds[weapon_type]
+	# Fallback to sword hit sounds if we have them (better than generic)
+	elif not weapon_hit_sounds["sword"].is_empty():
+		sounds_to_use = weapon_hit_sounds["sword"]
 	# Fallback to generic normal hit sounds
 	elif not normal_hit_sounds.is_empty():
 		sounds_to_use = normal_hit_sounds
-	# Last resort: placeholder
+	# Last resort: don't play anything (no placeholder boop)
 	else:
-		play_sound(SoundType.HIT_NORMAL, global_pos, volume_db)
 		return
 
 	# Pick random sound variation
@@ -454,7 +496,6 @@ func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float 
 
 ## Play skeleton hurt sound (when skeleton takes damage)
 func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
-	print("🔊 SoundManager.play_skeleton_hurt_sound() called")
 	if not skeleton_hurt_sound:
 		# No fallback - just don't play if not loaded
 		return
@@ -472,11 +513,11 @@ func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 	player.play()
 
 ## Play skeleton sound (attack or aggro) - only one at a time, no overlap
-func play_skeleton_attack_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
+func play_skeleton_attack_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
 	_play_skeleton_sound(global_pos, volume_db)
 
 ## Play skeleton aggro sound - uses same single-player system as attack
-func play_skeleton_aggro_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0) -> void:
+func play_skeleton_aggro_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
 	_play_skeleton_sound(global_pos, volume_db)
 
 func _play_skeleton_sound(global_pos: Vector2, volume_db: float) -> void:
@@ -520,7 +561,7 @@ func play_skeleton_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: fl
 	player.play()
 
 ## Play sword swing sound (random whoosh variation)
-func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0) -> void:
+func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
 	if sword_swing_sounds.is_empty():
 		# Fallback to placeholder sound if no real sounds loaded
 		play_sound(SoundType.SWING, global_pos, volume_db)
@@ -541,8 +582,7 @@ func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 	player.play()
 
 ## Play unarmed swing sound (whoosh when punching/kicking)
-func play_unarmed_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0) -> void:
-	print("🔊 SoundManager.play_unarmed_swing_sound() called")
+func play_unarmed_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
 	if unarmed_swing_sounds.is_empty():
 		# Fallback to sword swing if no unarmed sounds loaded
 		play_sword_swing_sound(global_pos, volume_db)
@@ -563,7 +603,7 @@ func play_unarmed_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 	player.play()
 
 ## Play player hurt sound (random grunt/pain variation)
-func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -3.0) -> void:
+func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
 	if player_hurt_sounds.is_empty():
 		# No real sounds loaded, skip (no placeholder for player hurt)
 		return
@@ -583,7 +623,7 @@ func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 	player.play()
 
 ## Play player footstep sound with distance culling
-func play_player_footstep(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -14.0) -> void:
+func play_player_footstep(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -18.0) -> void:
 	if player_footstep_sounds.is_empty():
 		# Fallback to placeholder
 		play_sound(SoundType.FOOTSTEP_PLAYER, global_pos, volume_db)
@@ -611,7 +651,7 @@ func play_player_footstep(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 		player.play()
 
 ## Play skeleton footstep sound with distance culling
-func play_skeleton_footstep(global_pos: Vector2, camera_pos: Vector2, volume_db: float = -16.0) -> void:
+func play_skeleton_footstep(global_pos: Vector2, camera_pos: Vector2, volume_db: float = -20.0) -> void:
 	# Distance culling: only play if within 1000px of camera
 	var distance = global_pos.distance_to(camera_pos)
 	if distance > 1000.0:
@@ -645,7 +685,7 @@ func play_skeleton_footstep(global_pos: Vector2, camera_pos: Vector2, volume_db:
 
 ## Play fire fuel add sound (spammable magic whoosh when adding fuel to campfire)
 ## enhanced = true for slightly louder/higher pitch when holding F
-func play_fire_fuel_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0, enhanced: bool = false) -> void:
+func play_fire_fuel_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -12.0, enhanced: bool = false) -> void:
 	if not fire_fuel_add_sound:
 		# Fallback to placeholder
 		play_sound(SoundType.FIRE_FUEL_ADD, global_pos, volume_db)
@@ -666,6 +706,38 @@ func play_fire_fuel_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 		player.volume_db = volume_db
 		player.pitch_scale = randf_range(0.95, 1.05)
 
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play inventory move sound (dragging items between slots)
+func play_inventory_move_sound(volume_db: float = -10.0) -> void:
+	if not inventory_move_sound:
+		# Fallback to placeholder
+		play_sound_2d(SoundType.INVENTORY_MOVE, volume_db)
+		return
+
+	var player = AudioStreamPlayer.new()
+	player.stream = inventory_move_sound
+	player.volume_db = volume_db
+	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play equip item sound (equipping/unequipping gear)
+func play_equip_sound(volume_db: float = -10.0) -> void:
+	if not equip_item_sound:
+		# Fallback to placeholder
+		play_sound_2d(SoundType.EQUIP_ITEM, volume_db)
+		return
+
+	var player = AudioStreamPlayer.new()
+	player.stream = equip_item_sound
+	player.volume_db = volume_db
+	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
 
 	get_tree().root.add_child(player)
@@ -758,6 +830,14 @@ func _generate_chest_open() -> AudioStreamWAV:
 	# Chest opening placeholder (creaky wood sound)
 	return _create_wav_sweep(150.0, 300.0, 0.5, 0.4)
 
+func _generate_inventory_move() -> AudioStreamWAV:
+	# Inventory move placeholder (soft cloth/leather rustle)
+	return _create_wav_tone(250.0, 0.1, 0.25)
+
+func _generate_equip_item() -> AudioStreamWAV:
+	# Equip item placeholder (leather strap with metal click)
+	return _create_wav_sweep(200.0, 400.0, 0.2, 0.35)
+
 func _generate_footstep_soft() -> AudioStreamWAV:
 	# Soft cloth/leather footstep (low thud)
 	return _create_wav_tone(120.0, 0.08, 0.15)
@@ -831,16 +911,93 @@ func _create_wav_sweep(start_freq: float, end_freq: float, duration: float, volu
 
 func _pack_samples(samples: PackedVector2Array) -> PackedByteArray:
 	var bytes = PackedByteArray()
-	
+
 	for sample in samples:
 		# Convert -1.0 to 1.0 range to 16-bit integer
 		var left = int(clamp(sample.x, -1.0, 1.0) * 32767)
 		var right = int(clamp(sample.y, -1.0, 1.0) * 32767)
-		
+
 		# Pack as 16-bit little-endian
 		bytes.append(left & 0xFF)
 		bytes.append((left >> 8) & 0xFF)
 		bytes.append(right & 0xFF)
 		bytes.append((right >> 8) & 0xFF)
-	
+
 	return bytes
+
+# ============================================
+# BACKGROUND MUSIC
+# ============================================
+
+## Start playing the game music playlist
+func play_game_music(volume_db: float = -15.0) -> void:
+	if music_tracks.is_empty():
+		push_warning("No music tracks loaded!")
+		return
+
+	music_volume_db = volume_db
+	current_track_index = 0
+
+	# Create music player if needed
+	if not music_player:
+		music_player = AudioStreamPlayer.new()
+		add_child(music_player)
+		# Connect finished signal to play next track
+		music_player.finished.connect(_on_music_track_finished)
+
+	# Don't restart if already playing
+	if music_player.playing:
+		return
+
+	_play_current_track()
+
+func _play_current_track() -> void:
+	"""Play the current track in the playlist"""
+	if music_tracks.is_empty() or not music_player:
+		return
+
+	var track = music_tracks[current_track_index]
+	music_player.stream = track
+	music_player.volume_db = music_volume_db
+
+	# Don't loop individual tracks - let playlist handle advancement
+	if track is AudioStreamMP3:
+		(track as AudioStreamMP3).loop = false
+	elif track is AudioStreamOggVorbis:
+		(track as AudioStreamOggVorbis).loop = false
+	elif track is AudioStreamWAV:
+		(track as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_DISABLED
+
+	print("🎵 Now playing track %d/%d (%.0fs)" % [current_track_index + 1, music_tracks.size(), track.get_length()])
+	music_player.play()
+
+func _on_music_track_finished() -> void:
+	"""Called when a track finishes - advance to next track"""
+	current_track_index = (current_track_index + 1) % music_tracks.size()
+	_play_current_track()
+
+## Stop the game music with fade-out
+func stop_game_music() -> void:
+	if not music_player or not music_player.playing:
+		return
+
+	var tween = create_tween()
+	tween.tween_property(music_player, "volume_db", -40.0, MUSIC_FADE_DURATION)
+	tween.tween_callback(music_player.stop)
+
+## Check if game music is currently playing
+func is_game_music_playing() -> bool:
+	return music_player and music_player.playing
+
+## Set game music volume (for settings)
+func set_music_volume(volume_db: float) -> void:
+	music_volume_db = volume_db
+	if music_player:
+		music_player.volume_db = volume_db
+
+## Skip to next track in playlist
+func skip_music_track() -> void:
+	if music_tracks.size() <= 1:
+		return
+	current_track_index = (current_track_index + 1) % music_tracks.size()
+	_play_current_track()

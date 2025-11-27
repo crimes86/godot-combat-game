@@ -201,12 +201,12 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 
 				# Play hit sound
 				if is_crit:
-					sound_manager.play_critical_hit_sound(global_position, -8.0)
+					sound_manager.play_critical_hit_sound(global_position, -6.0)
 				else:
-					sound_manager.play_normal_hit_sound(global_position, -8.0, weapon_type)
+					sound_manager.play_normal_hit_sound(global_position, -10.0, weapon_type)
 
 			# Play skeleton hurt reaction sound (for all hit types)
-			sound_manager.play_skeleton_hurt_sound(global_position, -8.0)
+			sound_manager.play_skeleton_hurt_sound(global_position, -12.0)
 
 	# Trigger hit flash visual feedback
 	if has_node("HitFlash"):

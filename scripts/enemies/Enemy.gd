@@ -529,12 +529,12 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 				weapon_type = CharacterStats.equipped_weapon.weapon_type
 
 			if is_crit:
-				sound_manager.play_critical_hit_sound(global_position, -3.0)
+				sound_manager.play_critical_hit_sound(global_position, -6.0)
 			else:
-				sound_manager.play_normal_hit_sound(global_position, -8.0, weapon_type)
+				sound_manager.play_normal_hit_sound(global_position, -10.0, weapon_type)
 
 			# Play skeleton hurt reaction sound (for all hit types)
-			sound_manager.play_skeleton_hurt_sound(global_position, -8.0)
+			sound_manager.play_skeleton_hurt_sound(global_position, -12.0)
 	
 	# ✨ NEW: Trigger hit flash locally (always works)
 	if has_node("HitFlash"):
@@ -1090,7 +1090,7 @@ func die() -> void:
 	# Play death sound (skeleton-specific bone collapse)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_skeleton_death_sound(global_position, -3.0)
+		sound_manager.play_skeleton_death_sound(global_position, -8.0)
 
 	# Play death animation (hurt animation) and wait for it to complete
 	var anim_sprite = sprite as AnimatedSprite2D

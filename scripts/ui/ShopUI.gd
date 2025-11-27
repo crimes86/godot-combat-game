@@ -372,7 +372,7 @@ func purchase_weapon(index: int) -> void:
 		# Play gold loot sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -5.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
 
 		# Refresh the UI
 		update_gold_display()
@@ -412,7 +412,7 @@ func purchase_armor(index: int) -> void:
 		# Play gold loot sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -5.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
 
 		# Refresh the UI
 		update_gold_display()
@@ -452,7 +452,7 @@ func purchase_tool(index: int) -> void:
 		# Play gold loot sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -5.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
 
 		# Refresh the UI
 		update_gold_display()
@@ -643,7 +643,7 @@ func sell_item(slot: int) -> void:
 	# Play gold loot sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -5.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
 
 	# Refresh the UI
 	update_gold_display()

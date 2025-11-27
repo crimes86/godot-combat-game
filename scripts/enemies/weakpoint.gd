@@ -361,7 +361,7 @@ func hit() -> void:
 	if sound_manager:
 		sound_manager.play_weakpoint_sound(global_position, -8.0)
 		# Layer skeleton hurt sound for extra impact
-		sound_manager.play_skeleton_hurt_sound(global_position, -10.0)
+		sound_manager.play_skeleton_hurt_sound(global_position, -14.0)
 
 	# 🩸 IMPACT feedback - shake with progressive brightening
 	if sprite:
@@ -508,7 +508,7 @@ func destroy() -> void:
 	# 💥 PLAY EXPLOSION SOUND (perfectly timed with visual explosion)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_weakpoint_destroyed_sound(global_position, -3.0)
+		sound_manager.play_weakpoint_destroyed_sound(global_position, -6.0)
 
 	# 💥 NOW SPAWN EFFECTS (after shake completes)
 	spawn_destruction_particles()

@@ -54,7 +54,7 @@ func increase_chain() -> void:
 		# ✨ NEW: Play milestone sound at every 5 chain levels or at max
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager and (current_chain % Constants.CHAIN_MILESTONE_INTERVAL == 0 or current_chain == max_chain_level):
-			sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_MILESTONE, -6.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_MILESTONE, -8.0)
 
 		if current_chain == max_chain_level:
 			DebugConfig.log_combat("🔥 OVERDRIVE! Maximum chain reached! 🔥")
@@ -69,7 +69,7 @@ func reset_chain(reason: ResetReason = ResetReason.MANUAL) -> void:
 		# ✨ NEW: Play chain broken sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_BROKEN, -4.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_BROKEN, -8.0)
 		
 		current_chain = 0
 		chain_reset.emit(ResetReason.keys()[reason])
