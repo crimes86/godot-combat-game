@@ -276,6 +276,9 @@ func _ready() -> void:
 		# Create inventory UI (separate from character sheet)
 		call_deferred("create_inventory_ui")
 
+		# Show spawn hints for new players
+		call_deferred("create_spawn_hints")
+
 func _exit_tree() -> void:
 	# Disconnect signals to prevent crash on exit
 	if CharacterStats.level_up.is_connected(_on_character_level_up):
@@ -790,8 +793,8 @@ func _input(event: InputEvent) -> void:
 				if character_ui:
 					character_ui.toggle_character_ui()
 
-			KEY_I:
-				# Toggle inventory
+			KEY_I, KEY_B:
+				# Toggle inventory (I or B)
 				if inventory_ui:
 					inventory_ui.toggle_ui()
 
@@ -799,6 +802,34 @@ func _input(event: InputEvent) -> void:
 				# Dash/dodge
 				if not is_dashing and dash_cooldown_timer <= 0:
 					start_dash()
+
+			KEY_ESCAPE:
+				# Toggle help/hints menu - only if no other UI is open
+				var any_ui_open = false
+
+				# Check if character sheet is open
+				if character_ui and character_ui.visible:
+					any_ui_open = true
+
+				# Check if inventory is open
+				if inventory_ui and inventory_ui.visible:
+					any_ui_open = true
+
+				# Check if shop is open (look for ShopUI in scene)
+				var shop_ui = get_tree().get_first_node_in_group("shop_ui")
+				if shop_ui and shop_ui.visible:
+					any_ui_open = true
+
+				# Check if any loot UI is open
+				var loot_uis = get_tree().get_nodes_in_group("loot_ui")
+				for loot_ui in loot_uis:
+					if is_instance_valid(loot_ui) and loot_ui.visible:
+						any_ui_open = true
+						break
+
+				# Only toggle hints if no other UI is open
+				if not any_ui_open:
+					toggle_spawn_hints()
 
 func check_crit_window_click(event: InputEvent) -> bool:
 	"""Check if clicking on enemy during crit window. Returns true if handled."""
@@ -2192,6 +2223,188 @@ func create_inventory_ui() -> void:
 
 	print("📦 Inventory UI added to scene tree")
 	print("   In tree: ", inventory_ui.is_inside_tree())
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SPAWN HINTS OVERLAY
+# ═══════════════════════════════════════════════════════════════════════════
+
+var spawn_hints_overlay: CanvasLayer = null
+var has_talked_to_blacksmith: bool = false
+
+func create_spawn_hints() -> void:
+	"""Create and show spawn hints overlay for new players"""
+	print("📋 Creating spawn hints overlay")
+
+	spawn_hints_overlay = CanvasLayer.new()
+	spawn_hints_overlay.name = "SpawnHintsOverlay"
+	spawn_hints_overlay.layer = 50  # Above game, below menus
+
+	# Full-screen Control to enable anchors
+	var full_rect = Control.new()
+	full_rect.name = "FullRect"
+	full_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	full_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	spawn_hints_overlay.add_child(full_rect)
+
+	# Main container - dead center on screen (center mass on player)
+	var container = PanelContainer.new()
+	container.name = "HintsPanel"
+	container.set_anchors_preset(Control.PRESET_CENTER)
+	container.anchor_left = 0.5
+	container.anchor_right = 0.5
+	container.anchor_top = 0.5
+	container.anchor_bottom = 0.5
+	container.offset_left = -130
+	container.offset_right = 130
+	container.offset_top = -110
+	container.offset_bottom = 110
+	container.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	container.grow_vertical = Control.GROW_DIRECTION_BOTH
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Style the panel
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.08, 0.10, 0.85)
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.35, 0.38, 0.42, 0.8)
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	container.add_theme_stylebox_override("panel", style)
+
+	full_rect.add_child(container)
+
+	# Margin inside panel
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 15)
+	margin.add_theme_constant_override("margin_right", 15)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	container.add_child(margin)
+
+	# VBox for hint rows
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(vbox)
+
+	# Title
+	var title = Label.new()
+	title.text = "CONTROLS"
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))  # Gold
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	# Separator
+	var sep = HSeparator.new()
+	sep.add_theme_constant_override("separation", 8)
+	vbox.add_child(sep)
+
+	# Hint rows
+	var hints = [
+		["WASD", "Move"],
+		["Left Click", "Attack"],
+		["Space", "Dodge"],
+		["C", "Character Sheet"],
+		["I / B", "Inventory"],
+		["F", "Interact / Loot"],
+		["Enter", "Chat"],
+	]
+
+	for hint in hints:
+		var row = HBoxContainer.new()
+
+		var key_label = Label.new()
+		key_label.text = hint[0]
+		key_label.add_theme_font_size_override("font_size", 14)
+		key_label.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))  # Cyan keys
+		key_label.custom_minimum_size = Vector2(90, 0)
+		row.add_child(key_label)
+
+		var action_label = Label.new()
+		action_label.text = hint[1]
+		action_label.add_theme_font_size_override("font_size", 14)
+		action_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+		row.add_child(action_label)
+
+		vbox.add_child(row)
+
+	# Objective hint at bottom (only if player hasn't talked to blacksmith yet)
+	if not has_talked_to_blacksmith:
+		var obj_sep = HSeparator.new()
+		obj_sep.name = "ObjectiveSeparator"
+		obj_sep.add_theme_constant_override("separation", 8)
+		vbox.add_child(obj_sep)
+
+		var objective = Label.new()
+		objective.name = "ObjectiveLabel"
+		objective.text = "Talk to the Blacksmith!"
+		objective.add_theme_font_size_override("font_size", 14)
+		objective.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))  # Yellow
+		objective.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vbox.add_child(objective)
+
+	# ESC to close hint at bottom
+	var esc_sep = HSeparator.new()
+	esc_sep.add_theme_constant_override("separation", 8)
+	vbox.add_child(esc_sep)
+
+	var esc_hint = Label.new()
+	esc_hint.text = "ESC to close"
+	esc_hint.add_theme_font_size_override("font_size", 12)
+	esc_hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))  # Gray
+	esc_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(esc_hint)
+
+	get_tree().root.add_child(spawn_hints_overlay)
+	print("📋 Spawn hints overlay added to scene tree - Press ESC to toggle")
+
+func dismiss_spawn_hints() -> void:
+	"""Manually dismiss spawn hints early (called when talking to blacksmith)"""
+	has_talked_to_blacksmith = true
+
+	if spawn_hints_overlay and is_instance_valid(spawn_hints_overlay):
+		var container = spawn_hints_overlay.get_node_or_null("FullRect/HintsPanel")
+		if container:
+			var tween = create_tween()
+			tween.tween_property(container, "modulate:a", 0.0, 0.3)
+			await tween.finished
+			# Destroy and recreate without the objective next time
+			spawn_hints_overlay.queue_free()
+			spawn_hints_overlay = null
+
+func toggle_spawn_hints() -> void:
+	"""Toggle spawn hints visibility with ESC"""
+	# Play sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_character_sheet_sound"):
+		sound_manager.play_character_sheet_sound()
+
+	if not spawn_hints_overlay or not is_instance_valid(spawn_hints_overlay):
+		# Recreate if it was destroyed
+		create_spawn_hints()
+		return
+
+	var container = spawn_hints_overlay.get_node_or_null("FullRect/HintsPanel")
+	if not container:
+		return
+
+	if container.visible:
+		# Fade out
+		var tween = create_tween()
+		tween.tween_property(container, "modulate:a", 0.0, 0.2)
+		await tween.finished
+		container.visible = false
+	else:
+		# Fade in
+		container.visible = true
+		container.modulate.a = 0.0
+		var tween = create_tween()
+		tween.tween_property(container, "modulate:a", 1.0, 0.2)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DASH/DODGE SYSTEM

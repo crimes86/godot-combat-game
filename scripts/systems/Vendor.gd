@@ -19,6 +19,8 @@ var player_in_range: bool = false
 var shop_ui: CanvasLayer = null
 var animated_sprite: AnimatedSprite2D = null
 var interaction_prompt: Label = null
+var quest_indicator: Label = null  # Floating "!" above head
+var has_talked_to_player: bool = false  # Track if player has interacted
 
 func _ready() -> void:
 	print("🏪 Vendor '%s' starting initialization..." % vendor_name)
@@ -40,6 +42,9 @@ func _ready() -> void:
 
 	# Create interaction prompt
 	create_interaction_prompt()
+
+	# Create quest indicator (floating "!")
+	create_quest_indicator()
 
 	print("🏪 Vendor '%s' initialized with %d weapons, %d armor pieces, and %d tools" % [vendor_name, weapons_for_sale.size(), armor_for_sale.size(), tools_for_sale.size()])
 	print("   Position: ", global_position)
@@ -84,6 +89,43 @@ func create_interaction_prompt() -> void:
 	canvas.add_child(interaction_prompt)
 
 	print("   Interaction prompt created")
+
+func create_quest_indicator() -> void:
+	"""Create floating '!' indicator above blacksmith name tag to attract attention"""
+	quest_indicator = Label.new()
+	quest_indicator.name = "QuestIndicator"
+	quest_indicator.text = "!"
+	quest_indicator.add_theme_font_size_override("font_size", 28)
+	quest_indicator.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))  # Golden yellow
+	quest_indicator.add_theme_color_override("font_outline_color", Color(0.3, 0.2, 0.0))
+	quest_indicator.add_theme_constant_override("outline_size", 3)
+	quest_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	quest_indicator.position = Vector2(-8, -85)  # Above the name tag
+	quest_indicator.z_index = 100
+	add_child(quest_indicator)
+
+	# Start bobbing animation
+	_start_quest_indicator_animation()
+
+func _start_quest_indicator_animation() -> void:
+	"""Animate the quest indicator with a gentle bob"""
+	if not quest_indicator or not is_instance_valid(quest_indicator):
+		return
+
+	var tween = create_tween()
+	tween.set_loops()  # Loop forever
+	tween.tween_property(quest_indicator, "position:y", -90.0, 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(quest_indicator, "position:y", -80.0, 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+func hide_quest_indicator() -> void:
+	"""Hide the quest indicator after player has talked to blacksmith"""
+	if quest_indicator and is_instance_valid(quest_indicator):
+		var tween = create_tween()
+		tween.tween_property(quest_indicator, "modulate:a", 0.0, 0.5)
+		tween.tween_callback(func():
+			if quest_indicator:
+				quest_indicator.visible = false
+		)
 
 func update_prompt_position() -> void:
 	"""Update prompt position to 30 pixels below player's feet"""
@@ -347,6 +389,7 @@ func toggle_shop() -> void:
 		# Face the player when opening shop
 		face_player()
 		shop_ui.open_shop(self)
+		_on_first_interaction()
 	else:
 		# Toggle visibility
 		if shop_ui.visible:
@@ -355,6 +398,22 @@ func toggle_shop() -> void:
 			# Face the player when opening shop
 			face_player()
 			shop_ui.open_shop(self)
+			_on_first_interaction()
+
+func _on_first_interaction() -> void:
+	"""Handle first-time player interaction with blacksmith"""
+	if has_talked_to_player:
+		return
+
+	has_talked_to_player = true
+
+	# Hide the quest indicator "!"
+	hide_quest_indicator()
+
+	# Dismiss spawn hints on the player
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if player and player.has_method("dismiss_spawn_hints"):
+		player.dismiss_spawn_hints()
 
 func create_shop_ui() -> void:
 	"""Create the shop UI dynamically"""
