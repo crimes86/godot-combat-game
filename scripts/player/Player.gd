@@ -2060,12 +2060,18 @@ func die() -> void:
 	if is_dead:
 		print("⚠️  Already dead, ignoring duplicate die() call")
 		return
-	
+
 	is_dead = true
 	print("\n💀 ===== PLAYER DEATH =====")
 	print("Position: ", global_position)
 	print("Remaining health: ", current_health)
-	
+
+	# Play death sound (gender-specific)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		var is_female = (selected_gender == Gender.FEMALE)
+		sound_manager.play_player_death_sound(global_position, is_female, -4.0)
+
 	# Disable player controls during death
 	set_physics_process(false)
 	
@@ -2215,11 +2221,10 @@ func start_dash() -> void:
 	# Spawn afterimages
 	spawn_dash_afterimage()
 
-	# Play dash sound (reuse footstep or create whoosh)
+	# Play dash/dodge whoosh sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		# Use a quick whoosh sound - we can use unarmed swing as placeholder
-		sound_manager.play_unarmed_swing_sound(global_position, -5.0)
+		sound_manager.play_dodge_sound(global_position, -8.0)
 
 func end_dash() -> void:
 	"""End the dash and restore normal state"""

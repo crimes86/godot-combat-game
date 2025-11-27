@@ -34,9 +34,13 @@ enum SoundType {
 	CHEST_OPEN,  # Treasure chest opening sound
 	INVENTORY_MOVE,  # Moving items around inventory slots
 	EQUIP_ITEM,  # Equipping/unequipping gear
+	BUTTON_CLICK,  # UI button click sound
 
 	# Environment sounds
-	FIRE_FUEL_ADD  # Fire magic sound when adding fuel to campfire
+	FIRE_FUEL_ADD,  # Fire magic sound when adding fuel to campfire
+
+	# Movement sounds
+	DODGE  # Dodge/dash whoosh sound
 }
 
 # Cache for generated sounds
@@ -52,12 +56,17 @@ var critical_hit_sound: AudioStream = null
 var normal_hit_sounds: Array[AudioStream] = []  # Generic fallback
 var skeleton_hurt_sound: AudioStream = null
 var skeleton_attack_sound: AudioStream = null  # Skeleton's menacing cackle
+var skeleton_aggro_sounds: Array[AudioStream] = []  # Skeleton aggro sounds (2 variations)
 var skeleton_death_sounds: Array[AudioStream] = []  # Skeleton bones collapsing (2 variations)
 var gold_loot_sound: AudioStream = null  # Gold coin jingling
 var item_pickup_sound: AudioStream = null  # Satisfying item pickup sound
 var chest_open_sound: AudioStream = null  # Treasure chest opening sound
 var inventory_move_sound: AudioStream = null  # Moving items in inventory
 var equip_item_sound: AudioStream = null  # Equipping/unequipping gear
+var button_click_sound: AudioStream = null  # UI button click sound
+var button_hover_sound: AudioStream = null  # UI button hover sound
+var inventory_open_sound: AudioStream = null  # Inventory bag open/close sound
+var character_sheet_sound: AudioStream = null  # Character sheet open/close sound
 var crit_window_open_sound: AudioStream = null  # Crystalline chime when crit window opens
 var fire_fuel_add_sound: AudioStream = null  # Fire magic sound when adding fuel
 
@@ -68,9 +77,14 @@ var unarmed_swing_sounds: Array[AudioStream] = []  # Unarmed/fist whoosh
 # Player sounds
 var player_hurt_sounds: Array[AudioStream] = []  # Player hurt/death grunts (2 variations)
 var player_footstep_sounds: Array[AudioStream] = []  # Player footsteps (cloth/leather)
+var player_death_male_sound: AudioStream = null  # Male death sound
+var player_death_female_sound: AudioStream = null  # Female death sound
 
 # Enemy footstep sounds
 var skeleton_footstep_sounds: Array[AudioStream] = []  # Skeleton bone clacking footsteps
+
+# Dodge/dash sounds
+var dodge_sounds: Array[AudioStream] = []  # Dodge whoosh sounds (2 variations)
 
 # Weapon-specific hit sounds (organized by weapon type)
 var weapon_hit_sounds: Dictionary = {
@@ -170,6 +184,24 @@ func _load_real_sounds() -> void:
 	else:
 		push_warning("  ⚠️ Failed to load skeleton_attack.wav")
 
+	# Load skeleton aggro sounds (when skeleton spots player - 2 variations)
+	var skeleton_aggro_1 = load("res://assets/sounds/combat/reactions/skeleton_aggro_1.wav")
+	var skeleton_aggro_2 = load("res://assets/sounds/combat/reactions/skeleton_aggro_2.wav")
+
+	if skeleton_aggro_1:
+		skeleton_aggro_sounds.append(skeleton_aggro_1)
+		print("  ✅ Loaded skeleton_aggro_1.wav")
+	else:
+		push_warning("  ⚠️ Failed to load skeleton_aggro_1.wav")
+
+	if skeleton_aggro_2:
+		skeleton_aggro_sounds.append(skeleton_aggro_2)
+		print("  ✅ Loaded skeleton_aggro_2.wav")
+	else:
+		push_warning("  ⚠️ Failed to load skeleton_aggro_2.wav")
+
+	print("  📊 Loaded %d skeleton aggro sound variations" % skeleton_aggro_sounds.size())
+
 	# Load skeleton death sounds (bones collapsing - 2 variations)
 	var skeleton_death_1 = load("res://assets/sounds/combat/reactions/skeleton_death_1.wav")
 	var skeleton_death_2 = load("res://assets/sounds/combat/reactions/skeleton_death_2.wav")
@@ -222,6 +254,34 @@ func _load_real_sounds() -> void:
 		print("  ✅ Loaded equip_item.wav")
 	else:
 		push_warning("  ⚠️ Failed to load equip_item.wav")
+
+	# Load button click sound (UI interactions)
+	button_click_sound = load("res://assets/sounds/ui/button_click.wav")
+	if button_click_sound:
+		print("  ✅ Loaded button_click.wav")
+	else:
+		push_warning("  ⚠️ Failed to load button_click.wav")
+
+	# Load button hover sound (UI interactions)
+	button_hover_sound = load("res://assets/sounds/ui/button_hover.wav")
+	if button_hover_sound:
+		print("  ✅ Loaded button_hover.wav")
+	else:
+		push_warning("  ⚠️ Failed to load button_hover.wav")
+
+	# Load inventory open sound (bag open/close)
+	inventory_open_sound = load("res://assets/sounds/ui/inventory_open.wav")
+	if inventory_open_sound:
+		print("  ✅ Loaded inventory_open.wav")
+	else:
+		push_warning("  ⚠️ Failed to load inventory_open.wav")
+
+	# Load character sheet sound (paper rustling)
+	character_sheet_sound = load("res://assets/sounds/ui/character_sheet_open.wav")
+	if character_sheet_sound:
+		print("  ✅ Loaded character_sheet_open.wav")
+	else:
+		push_warning("  ⚠️ Failed to load character_sheet_open.wav")
 
 	# Load crit window open sound (crystalline chime)
 	crit_window_open_sound = load("res://assets/sounds/combat/crit_window_open.wav")
@@ -283,6 +343,19 @@ func _load_real_sounds() -> void:
 
 	print("  📊 Loaded %d player hurt sound variations" % player_hurt_sounds.size())
 
+	# Load player death sounds (gender-specific)
+	player_death_male_sound = load("res://assets/sounds/player/player_death_male.wav")
+	if player_death_male_sound:
+		print("  ✅ Loaded player_death_male.wav")
+	else:
+		push_warning("  ⚠️ Failed to load player_death_male.wav")
+
+	player_death_female_sound = load("res://assets/sounds/player/player_death_female.wav")
+	if player_death_female_sound:
+		print("  ✅ Loaded player_death_female.wav")
+	else:
+		push_warning("  ⚠️ Failed to load player_death_female.wav")
+
 	# Load player footstep sounds
 	var player_step_1 = load("res://assets/sounds/footsteps/player_step_1.wav")
 	var player_step_2 = load("res://assets/sounds/footsteps/player_step_2.wav")
@@ -316,6 +389,24 @@ func _load_real_sounds() -> void:
 		print("  ✅ Loaded skeleton_step_3.wav")
 
 	print("  📊 Loaded %d skeleton footstep sound variations" % skeleton_footstep_sounds.size())
+
+	# Load dodge/dash sounds
+	var dodge_1 = load("res://assets/audio/sfx/dodge_1.wav")
+	var dodge_2 = load("res://assets/audio/sfx/dodge_2.wav")
+
+	if dodge_1:
+		dodge_sounds.append(dodge_1)
+		print("  ✅ Loaded dodge_1.wav")
+	else:
+		push_warning("  ⚠️ Failed to load dodge_1.wav")
+
+	if dodge_2:
+		dodge_sounds.append(dodge_2)
+		print("  ✅ Loaded dodge_2.wav")
+	else:
+		push_warning("  ⚠️ Failed to load dodge_2.wav")
+
+	print("  📊 Loaded %d dodge sound variations" % dodge_sounds.size())
 
 	# Load weapon-specific hit sounds
 	print("  🗡️ Loading weapon hit sounds...")
@@ -512,28 +603,35 @@ func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 	get_tree().root.add_child(player)
 	player.play()
 
-## Play skeleton sound (attack or aggro) - only one at a time, no overlap
+## Play skeleton attack sound - only one skeleton sound at a time, no overlap
 func play_skeleton_attack_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
-	_play_skeleton_sound(global_pos, volume_db)
+	_play_skeleton_sound(skeleton_attack_sound, global_pos, volume_db)
 
-## Play skeleton aggro sound - uses same single-player system as attack
+## Play skeleton aggro sound (when skeleton spots player) - uses dedicated aggro sounds
 func play_skeleton_aggro_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
-	_play_skeleton_sound(global_pos, volume_db)
+	if skeleton_aggro_sounds.is_empty():
+		# Fallback to attack sound if no aggro sounds loaded
+		_play_skeleton_sound(skeleton_attack_sound, global_pos, volume_db)
+		return
 
-func _play_skeleton_sound(global_pos: Vector2, volume_db: float) -> void:
+	# Pick random aggro sound variation
+	var sound = skeleton_aggro_sounds[randi() % skeleton_aggro_sounds.size()]
+	_play_skeleton_sound(sound, global_pos, volume_db)
+
+func _play_skeleton_sound(sound: AudioStream, global_pos: Vector2, volume_db: float) -> void:
 	# If a skeleton sound is already playing, don't play another
 	if is_instance_valid(active_skeleton_sound_player) and active_skeleton_sound_player.playing:
 		return
 
-	if not skeleton_attack_sound:
+	if not sound:
 		return
 
 	# Create or reuse the sound player
 	if not is_instance_valid(active_skeleton_sound_player):
 		active_skeleton_sound_player = AudioStreamPlayer2D.new()
-		active_skeleton_sound_player.stream = skeleton_attack_sound
 		get_tree().root.add_child(active_skeleton_sound_player)
 
+	active_skeleton_sound_player.stream = sound
 	active_skeleton_sound_player.volume_db = volume_db
 	active_skeleton_sound_player.global_position = global_pos
 	active_skeleton_sound_player.pitch_scale = randf_range(0.95, 1.05)
@@ -617,6 +715,27 @@ func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 	player.volume_db = volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play player death sound (gender-specific)
+## is_female: true for female character, false for male
+func play_player_death_sound(global_pos: Vector2 = Vector2.ZERO, is_female: bool = false, volume_db: float = -4.0) -> void:
+	var sound_stream = player_death_female_sound if is_female else player_death_male_sound
+
+	if not sound_stream:
+		# Fallback to hurt sound if death sound not loaded
+		play_player_hurt_sound(global_pos, volume_db)
+		return
+
+	# Create player - no pitch randomization for dramatic death sound
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = 1.0  # Keep original pitch for impact
 	player.finished.connect(player.queue_free)
 
 	get_tree().root.add_child(player)
@@ -711,6 +830,39 @@ func play_fire_fuel_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 	get_tree().root.add_child(player)
 	player.play()
 
+## Play dodge/dash sound (whoosh when evading)
+## dodge_2.wav is a 3-second clip so we speed it up with pitch_scale
+func play_dodge_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
+	if dodge_sounds.is_empty():
+		# Fallback to unarmed swing if no dodge sounds loaded
+		play_unarmed_swing_sound(global_pos, volume_db)
+		return
+
+	# Pick random variation
+	var sound_index = randi() % dodge_sounds.size()
+	var sound_stream = dodge_sounds[sound_index]
+
+	# Create player with pitch variation
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+
+	# dodge_2.wav (index 1) is a 3-second clip - speed it up to ~0.5 seconds
+	# dodge_1.wav (index 0) is already quick - use normal pitch with slight variation
+	if sound_index == 1:
+		# Speed up the long clip: pitch_scale 2.5-3.0 makes it ~1 second
+		player.pitch_scale = randf_range(2.5, 3.0)
+	else:
+		# Normal pitch with subtle variation
+		player.pitch_scale = randf_range(0.95, 1.05)
+
+	player.max_polyphony = 2  # Allow slight overlap
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
 ## Play inventory move sound (dragging items between slots)
 func play_inventory_move_sound(volume_db: float = -10.0) -> void:
 	if not inventory_move_sound:
@@ -738,6 +890,64 @@ func play_equip_sound(volume_db: float = -10.0) -> void:
 	player.stream = equip_item_sound
 	player.volume_db = volume_db
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play button click sound (UI interactions)
+func play_button_click_sound(volume_db: float = -8.0) -> void:
+	if not button_click_sound:
+		# No fallback - just skip if not loaded
+		return
+
+	var player = AudioStreamPlayer.new()
+	player.stream = button_click_sound
+	player.volume_db = volume_db
+	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play button hover sound (UI interactions)
+func play_button_hover_sound(volume_db: float = -15.0) -> void:
+	if not button_hover_sound:
+		# No fallback - just skip if not loaded
+		return
+
+	var player = AudioStreamPlayer.new()
+	player.stream = button_hover_sound
+	player.volume_db = volume_db
+	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play inventory open/close sound (leather pouch)
+func play_inventory_open_sound(volume_db: float = -10.0) -> void:
+	if not inventory_open_sound:
+		return
+
+	var player = AudioStreamPlayer.new()
+	player.stream = inventory_open_sound
+	player.volume_db = volume_db
+	player.pitch_scale = randf_range(0.97, 1.03)
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play character sheet open/close sound (paper rustling)
+func play_character_sheet_sound(volume_db: float = -10.0) -> void:
+	if not character_sheet_sound:
+		return
+
+	var player = AudioStreamPlayer.new()
+	player.stream = character_sheet_sound
+	player.volume_db = volume_db
+	player.pitch_scale = randf_range(0.97, 1.03)
 	player.finished.connect(player.queue_free)
 
 	get_tree().root.add_child(player)

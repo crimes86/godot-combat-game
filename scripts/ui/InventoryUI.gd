@@ -310,6 +310,11 @@ func toggle_ui() -> void:
 	is_visible = !is_visible
 	visible = is_visible
 
+	# Play inventory open/close sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_inventory_open_sound()
+
 	if is_visible:
 		refresh_all()
 

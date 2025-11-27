@@ -31,15 +31,27 @@ func _ready():
 	# Connect buttons
 	if host_button:
 		host_button.pressed.connect(_on_host_pressed)
+		host_button.mouse_entered.connect(_on_button_hover)
 	if join_button:
 		join_button.pressed.connect(_on_join_pressed)
+		join_button.mouse_entered.connect(_on_button_hover)
 
 	# Connect to NetworkManager signals
 	NetworkManager.connected_to_server.connect(_on_connected)
 	NetworkManager.connection_failed.connect(_on_connection_failed)
 	NetworkManager.server_created.connect(_on_server_created)
 
+func _on_button_hover():
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_button_hover_sound()
+
 func _on_host_pressed():
+	# Play button click sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_button_click_sound()
+
 	# Set player name
 	NetworkManager.set_player_name(name_input.text)
 
@@ -53,6 +65,11 @@ func _on_host_pressed():
 		status_label.text = "Failed to create server!"
 
 func _on_join_pressed():
+	# Play button click sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_button_click_sound()
+
 	if not join_container.visible:
 		# Show IP input
 		join_container.visible = true
