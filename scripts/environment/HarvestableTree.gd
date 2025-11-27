@@ -608,10 +608,11 @@ func _on_tree_landed(fall_direction: float, fall_offset: Vector2, start_position
 	# Expand the interaction area to cover the fallen trunk
 	expand_interaction_area_for_fallen_tree(fall_direction, fall_offset)
 
-	# Add sparkle effect at the CENTER of the fallen trunk
-	# Tree rotates around base, so trunk center is offset horizontally
+	# Add sparkle effect at the CENTER MASS of the fallen trunk (lower trunk, not branches)
+	# Tree rotates around base, so center mass is about 20-25% out from base (thicker trunk area)
+	# The tip/branches are at 100%, so 0.2 puts sparkles on the solid trunk portion
 	var sparkle_position = Vector2(
-		fall_direction * tree_height * 0.35,  # Trunk center in fall direction
+		fall_direction * tree_height * 0.2,  # Center mass of trunk (not tip/branches)
 		tree_height * 0.5  # Match interaction area Y position
 	)
 	add_loot_indicator(sparkle_position)
@@ -734,24 +735,36 @@ func create_fallen_tree_shadow(fall_direction: float, fall_offset: Vector2, tree
 	if not tree_sprite or not tree_sprite.texture:
 		return
 
+	# Get tree dimensions for shadow sizing
+	var tex_height = tree_sprite.texture.get_height()
+	var tex_width = tree_sprite.texture.get_width()
+	var tree_height_scaled = tex_height * tree_sprite.scale.y
+	var tree_width_scaled = tex_width * tree_sprite.scale.x
+
 	# Create a simple ellipse shadow using a ColorRect with shader or just a dark sprite
 	var shadow_sprite = Sprite2D.new()
 	shadow_sprite.name = "FallenTreeShadow"
 
-	# Create a simple gradient ellipse shadow image
-	var shadow_width = 120
-	var shadow_height = 30
-	var shadow_img = Image.create(shadow_width, shadow_height, false, Image.FORMAT_RGBA8)
+	# Create an elongated shadow for the fallen trunk (long and narrow)
+	# Shadow should be oriented horizontally since tree falls sideways
+	var shadow_length = int(tree_height_scaled * 0.7)  # Length matches trunk
+	var shadow_width = int(tree_width_scaled * 0.4)  # Width is narrower
+
+	# Ensure minimum sizes
+	shadow_length = max(shadow_length, 80)
+	shadow_width = max(shadow_width, 20)
+
+	var shadow_img = Image.create(shadow_length, shadow_width, false, Image.FORMAT_RGBA8)
 	shadow_img.fill(Color(0, 0, 0, 0))
 
 	# Draw a soft ellipse shadow
-	var center_x = shadow_width / 2.0
-	var center_y = shadow_height / 2.0
-	for x in range(shadow_width):
-		for y in range(shadow_height):
+	var center_x = shadow_length / 2.0
+	var center_y = shadow_width / 2.0
+	for x in range(shadow_length):
+		for y in range(shadow_width):
 			# Ellipse distance calculation
-			var dx = (float(x) - center_x) / (shadow_width / 2.0)
-			var dy = (float(y) - center_y) / (shadow_height / 2.0)
+			var dx = (float(x) - center_x) / (shadow_length / 2.0)
+			var dy = (float(y) - center_y) / (shadow_width / 2.0)
 			var dist = sqrt(dx * dx + dy * dy)
 			if dist < 1.0:
 				# Soft falloff from center
@@ -760,9 +773,17 @@ func create_fallen_tree_shadow(fall_direction: float, fall_offset: Vector2, tree
 
 	shadow_sprite.texture = ImageTexture.create_from_image(shadow_img)
 	shadow_sprite.centered = true
-	shadow_sprite.scale = tree_sprite.scale * Vector2(1.5, 1.0)  # Scale with tree
-	shadow_sprite.rotation = fall_direction * deg_to_rad(85)  # Match fallen tree rotation
-	shadow_sprite.position = tree_start_pos + fall_offset + Vector2(fall_direction * 20, 25)  # Under the fallen trunk
+
+	# Shadow is already created horizontally oriented (long on X axis)
+	# No rotation needed - just position it under the fallen trunk
+	shadow_sprite.rotation = 0.0
+
+	# Position shadow at center of fallen trunk
+	# Tree falls from its base, so trunk center is half the tree height in fall direction
+	var trunk_center_x = fall_direction * tree_height_scaled * 0.4
+	var trunk_y = tree_start_pos.y + 20  # Slightly below ground level for shadow
+	shadow_sprite.position = Vector2(trunk_center_x, trunk_y)
+
 	shadow_sprite.z_index = -1  # Behind everything
 	shadow_sprite.modulate = Color(1, 1, 1, 0)  # Start invisible
 

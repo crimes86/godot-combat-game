@@ -406,9 +406,9 @@ func create_campfire_scene() -> void:
 	# Create light source
 	fire_light = PointLight2D.new()
 	fire_light.enabled = true
-	fire_light.texture_scale = 3.0
+	fire_light.texture_scale = 6.0  # Larger glow radius
 	fire_light.color = Color(1.0, 0.65, 0.25)  # Warm orange
-	fire_light.energy = 1.0  # Moderate base energy
+	fire_light.energy = 1.5  # Brighter base energy
 	fire_light.shadow_enabled = true
 	fire_light.shadow_filter = Light2D.SHADOW_FILTER_PCF5
 	fire_light.blend_mode = Light2D.BLEND_MODE_ADD
@@ -1730,8 +1730,8 @@ func update_visual_intensity() -> void:
 		fire_light.color = Color(color_r, color_g, color_b)
 
 		# Increase light intensity with fuel, adjusted for time of day
-		var base_energy = 1.2
-		var bonus_energy = total_fuel_percent * 0.4  # Up to +40% brightness
+		var base_energy = 1.8
+		var bonus_energy = total_fuel_percent * 0.6  # Up to +60% brightness
 		var fuel_energy = base_energy + bonus_energy
 
 		# Scale light based on time of day (dim during day, bright at night)
@@ -1741,11 +1741,11 @@ func update_visual_intensity() -> void:
 		# Map: night (0.51) -> full energy, day (0.99) -> very dim
 		var day_factor = inverse_lerp(0.51, 0.99, time_brightness)
 		day_factor = clamp(day_factor, 0.0, 1.0)
-		# At night: 1.8x multiplier for warm glow, at day: 0.05x for barely visible
-		var time_multiplier = lerp(1.8, 0.05, day_factor)
+		# At night: 2.2x multiplier for warm glow, at day: 0.08x for barely visible
+		var time_multiplier = lerp(2.2, 0.08, day_factor)
 		fire_light.energy = fuel_energy * time_multiplier
-		# Scale light radius - warm glow aura at night, small at day
-		var base_texture_scale = lerp(4.0, 1.5, day_factor)  # 4.0x at night, 1.5x at day
+		# Scale light radius - larger warm glow aura at night, small at day
+		var base_texture_scale = lerp(8.0, 2.5, day_factor)  # 8.0x at night, 2.5x at day
 		fire_light.texture_scale = base_texture_scale
 
 	# Update collision area to match largest active aura radius
