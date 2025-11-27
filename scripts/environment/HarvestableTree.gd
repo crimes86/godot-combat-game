@@ -62,6 +62,10 @@ var axe_check_timer: float = 0.0
 const AXE_CHECK_INTERVAL: float = 0.5  # Only check axe every 0.5 seconds
 var last_drawn_progress: float = -1.0  # Track last drawn progress to avoid unnecessary redraws
 
+# Network sync
+var network_chop_progress_timer: float = 0.0
+const NETWORK_PROGRESS_SYNC_INTERVAL: float = 0.25  # Sync progress every 0.25s
+
 func _ready() -> void:
 	# Find sprite and shadow from children (created by game_world.gd)
 	tree_sprite = get_node_or_null("Sprite")
@@ -245,6 +249,9 @@ func _physics_process(delta: float) -> void:
 				if progress_circle and abs(chop_progress - last_drawn_progress) >= 0.02:
 					last_drawn_progress = chop_progress
 					progress_circle.queue_redraw()
+
+				# Network sync - periodically send progress to other players
+				sync_chop_progress_network()
 
 				# Complete chop when progress reaches 100%
 				if chop_progress >= 1.0:
@@ -452,6 +459,7 @@ func start_chopping() -> void:
 	chop_progress = 0.0
 	cancel_grace_timer = 0.0  # Reset grace timer
 	last_chop_sound_time = 0.0  # Reset sound timer
+	network_chop_progress_timer = 0.0  # Reset network timer
 
 	# Start harvest animation immediately
 	trigger_player_harvest_animation("axe")
@@ -463,6 +471,9 @@ func start_chopping() -> void:
 
 	# Play first chop sound immediately
 	play_random_chop_sound()
+
+	# Network sync - notify other players we started chopping
+	request_start_chopping()
 
 func cancel_chopping() -> void:
 	"""Cancel chopping (F released or player moved away)"""
@@ -495,6 +506,9 @@ func complete_chop() -> void:
 
 	# Return player to idle animation
 	stop_player_harvest_animation()
+
+	# Network sync - notify other players the chop is complete
+	request_complete_chop()
 
 	# Now actually chop the tree
 	chop_tree()
@@ -1129,6 +1143,9 @@ func _on_item_looted(item: Dictionary) -> void:
 func _on_all_items_looted() -> void:
 	"""Handle all items being looted from tree"""
 
+	# Network sync - notify other players loot was taken
+	request_loot_taken()
+
 	# Clear the loot array
 	tree_loot.clear()
 
@@ -1197,3 +1214,223 @@ func start_fade_out() -> void:
 
 	# Start respawn timer after fade completes
 	fade_tween.tween_callback(func(): respawn_timer = 0.0)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MULTIPLAYER: Network Sync for Harvesting
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _get_network_id() -> String:
+	"""Get the network ID for this tree"""
+	return get_meta("network_id", "")
+
+func _is_multiplayer_active() -> bool:
+	"""Check if multiplayer is active"""
+	return multiplayer.has_multiplayer_peer()
+
+func _is_server() -> bool:
+	"""Check if this is the server"""
+	return multiplayer.is_server()
+
+# === REQUEST METHODS (Client -> Server) ===
+
+func request_start_chopping() -> void:
+	"""Client requests to start chopping - server validates and broadcasts"""
+	var network_id = _get_network_id()
+	if network_id.is_empty():
+		return
+
+	if _is_multiplayer_active() and not _is_server():
+		# Client sends request to server
+		_request_start_chopping_rpc.rpc_id(1, network_id)
+	else:
+		# Server or single player - start directly and broadcast
+		_broadcast_start_chopping(network_id)
+
+func request_complete_chop() -> void:
+	"""Client requests to complete chopping - server validates and broadcasts"""
+	var network_id = _get_network_id()
+	if network_id.is_empty():
+		return
+
+	if _is_multiplayer_active() and not _is_server():
+		_request_complete_chop_rpc.rpc_id(1, network_id)
+	else:
+		_broadcast_complete_chop(network_id)
+
+func request_loot_taken() -> void:
+	"""Client requests loot taken - server validates and broadcasts"""
+	var network_id = _get_network_id()
+	if network_id.is_empty():
+		return
+
+	if _is_multiplayer_active() and not _is_server():
+		_request_loot_taken_rpc.rpc_id(1, network_id)
+	else:
+		_broadcast_loot_taken(network_id)
+
+# === SERVER RPC HANDLERS (Client -> Server) ===
+
+@rpc("any_peer", "reliable")
+func _request_start_chopping_rpc(network_id: String) -> void:
+	"""Server receives start chopping request from client"""
+	if not _is_server():
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	print("🪓 Server: Tree %s chop started (requested by peer %d)" % [network_id, peer_id])
+	_broadcast_start_chopping(network_id)
+
+@rpc("any_peer", "reliable")
+func _request_complete_chop_rpc(network_id: String) -> void:
+	"""Server receives complete chop request from client"""
+	if not _is_server():
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	print("🪓 Server: Tree %s chop completed (requested by peer %d)" % [network_id, peer_id])
+	_broadcast_complete_chop(network_id)
+
+@rpc("any_peer", "reliable")
+func _request_loot_taken_rpc(network_id: String) -> void:
+	"""Server receives loot taken request from client"""
+	if not _is_server():
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	print("🪓 Server: Tree %s loot taken (requested by peer %d)" % [network_id, peer_id])
+	_broadcast_loot_taken(network_id)
+
+# === BROADCAST METHODS (Server -> All Clients) ===
+
+func _broadcast_start_chopping(network_id: String) -> void:
+	"""Server broadcasts start chopping to all clients"""
+	if _is_multiplayer_active():
+		_sync_start_chopping.rpc(network_id)
+
+func _broadcast_complete_chop(network_id: String) -> void:
+	"""Server broadcasts chop completion to all clients"""
+	if _is_multiplayer_active():
+		_sync_complete_chop.rpc(network_id)
+
+func _broadcast_loot_taken(network_id: String) -> void:
+	"""Server broadcasts loot taken to all clients"""
+	if _is_multiplayer_active():
+		_sync_loot_taken.rpc(network_id)
+
+# === SYNC RPC HANDLERS (Server -> All Clients) ===
+
+@rpc("authority", "call_local", "reliable")
+func _sync_start_chopping(network_id: String) -> void:
+	"""All clients receive start chopping notification"""
+	# Only apply if this is NOT the tree being chopped locally by us
+	if is_chopping:
+		return  # Already chopping locally, don't double-apply
+
+	print("🪓 [Sync] Tree %s chop started (remote)" % network_id)
+
+	# Visual feedback for remote player chopping
+	is_chopping = true
+	chop_progress = 0.0
+	play_random_chop_sound()
+
+@rpc("authority", "call_local", "reliable")
+func _sync_complete_chop(network_id: String) -> void:
+	"""All clients receive chop completion notification"""
+	print("🪓 [Sync] Tree %s chop completed" % network_id)
+
+	# Stop local chopping state
+	is_chopping = false
+	chop_progress = 0.0
+
+	if progress_circle:
+		progress_circle.visible = false
+
+	# Play fall sound
+	play_random_fall_sound()
+
+	# Skip if already harvested
+	if is_harvested:
+		return
+
+	# Perform the tree chop (visual effects, loot generation)
+	chop_tree()
+
+	# Update harvested state in ChunkBasedPropSystem
+	var prop_system = get_node_or_null("/root/ChunkBasedPropSystem")
+	if prop_system:
+		prop_system.harvestable_states[network_id] = {
+			"is_harvested": true,
+			"is_fallen": true,
+			"has_loot": tree_loot.size() > 0
+		}
+
+@rpc("authority", "call_local", "reliable")
+func _sync_loot_taken(network_id: String) -> void:
+	"""All clients receive loot taken notification"""
+	print("🪓 [Sync] Tree %s loot taken" % network_id)
+
+	# Clear loot
+	tree_loot.clear()
+
+	# Remove sparkle effect
+	remove_loot_indicator()
+
+	# Hide interaction prompt
+	if interaction_prompt:
+		interaction_prompt.visible = false
+
+	# Start fade out
+	start_fade_out()
+
+	# Update harvested state
+	var prop_system = get_node_or_null("/root/ChunkBasedPropSystem")
+	if prop_system:
+		prop_system.harvestable_states[network_id] = {
+			"is_harvested": true,
+			"is_fallen": true,
+			"has_loot": false
+		}
+		# Also mark in harvested_items so it doesn't respawn on chunk reload
+		prop_system.mark_as_harvested(network_id)
+
+# === SYNC PROGRESS (For visual feedback) ===
+
+func sync_chop_progress_network() -> void:
+	"""Periodically sync chop progress to other players for visual feedback"""
+	if not _is_multiplayer_active():
+		return
+
+	network_chop_progress_timer += get_physics_process_delta_time()
+	if network_chop_progress_timer >= NETWORK_PROGRESS_SYNC_INTERVAL:
+		network_chop_progress_timer = 0.0
+
+		var network_id = _get_network_id()
+		if not network_id.is_empty() and is_chopping:
+			if _is_server():
+				_sync_chop_progress.rpc(network_id, chop_progress)
+			else:
+				_send_chop_progress_to_server.rpc_id(1, network_id, chop_progress)
+
+@rpc("any_peer", "unreliable")
+func _send_chop_progress_to_server(network_id: String, progress: float) -> void:
+	"""Client sends progress to server, server relays to others"""
+	if not _is_server():
+		return
+	# Relay to all clients except sender
+	var sender = multiplayer.get_remote_sender_id()
+	for peer_id in multiplayer.get_peers():
+		if peer_id != sender:
+			_sync_chop_progress.rpc_id(peer_id, network_id, progress)
+
+@rpc("authority", "call_remote", "unreliable")
+func _sync_chop_progress(network_id: String, progress: float) -> void:
+	"""Receive chop progress from another player"""
+	# Only update if we're not the one chopping
+	if is_chopping:
+		return
+
+	# Visual feedback - shake tree and play sound
+	if progress > chop_progress + 0.1:
+		play_random_chop_sound()
+
+	chop_progress = progress

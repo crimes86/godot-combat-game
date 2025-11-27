@@ -240,21 +240,23 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	var spawn_y_offset = -(sprite_height * 0.3)  # 30% from top = 70% from bottom
 
 	# Horizontal and vertical offset based on hit type
-	var spawn_x_offset = -50.0  # All damage text starts -50px left
+	# NORMAL/CRIT: Centered above dummy (x=0)
+	# WEAKPOINT: Flanking on left/right sides
+	var spawn_x_offset = 0.0  # Normal/crit damage centered
 	if is_weakpoint:
-		# Weakpoints: offset to sides and higher than main column
+		# Weakpoints: offset to sides (flanking the main column)
 		# Alternate between left and right sides
 		if not has_meta("weakpoint_side"):
 			set_meta("weakpoint_side", 1)  # Start with right side
 
 		var side = get_meta("weakpoint_side")
 		if side > 0:
-			# Right side: -30px
-			spawn_x_offset = -30.0
+			# Right side: +40px
+			spawn_x_offset = 40.0
 		else:
-			# Left side: -70px
-			spawn_x_offset = -70.0
-		spawn_y_offset -= 25.0  # 25px higher than main column
+			# Left side: -40px
+			spawn_x_offset = -40.0
+		spawn_y_offset -= 15.0  # Slightly higher than main column
 		set_meta("weakpoint_side", -side)  # Flip for next hit
 
 	# Final spawn position: dummy center + sprite offset + calculated offset
@@ -463,6 +465,10 @@ func _on_weakpoint_hit(weakpoint) -> void:
 		# Don't apply damage to dummy directly in multiplayer - CritWindowManager handles
 		# reporting to server at window end. But DO show visual feedback locally!
 		_spawn_weakpoint_combat_text(weakpoint, crit_damage)
+
+		# ✨ FIX: Trigger hit flash for weakpoint hits in multiplayer (was missing!)
+		if has_node("HitFlash"):
+			get_node("HitFlash").flash(true)  # true = crit/weakpoint flash (red)
 		return
 
 	# Single player: deal damage directly with crit flag

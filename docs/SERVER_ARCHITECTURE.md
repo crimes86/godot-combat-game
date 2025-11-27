@@ -49,11 +49,27 @@ Authoritative dedicated server model for persistent world MMO.
 - Messages broadcast to all connected players
 - Chat UI with Enter to send, Escape to close
 
+### World State Sync ✅
+- **Treasure Chests**: Server-authoritative spawning and opening
+  - Chests spawn with unique network IDs
+  - When client opens chest, request goes to server
+  - Server generates loot and broadcasts to all clients
+  - All players see chest open animation
+  - Loot UI only shows for player who opened it
+  - New clients receive all existing chest states on connect
+- **Pickable Items**: Server-authoritative spawning and pickup
+  - Items spawn with unique network IDs
+  - When client picks up item, server validates and broadcasts removal
+  - All clients see item disappear
+  - New clients receive all existing items on connect
+- **Respawning**: Server handles all respawn timers
+  - Chests: 1-5 minute respawn at new random location
+  - Items: 45 seconds - 3 minute respawn at new random location
+
 ### What's NOT Implemented Yet
 - ❌ Full database persistence (inventory/equipment saving)
 - ❌ PvP combat
-- ❌ Loot instancing per player
-- ❌ World state sync (chests, harvestables)
+- ❌ Harvestable sync (trees, rocks) - currently local only
 - ❌ Dedicated headless server
 
 ---

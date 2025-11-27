@@ -64,6 +64,10 @@ var pickaxe_check_timer: float = 0.0
 const PICKAXE_CHECK_INTERVAL: float = 0.5  # Only check pickaxe every 0.5 seconds
 var last_drawn_progress: float = -1.0  # Track last drawn progress
 
+# Network sync
+var network_mine_progress_timer: float = 0.0
+const NETWORK_PROGRESS_SYNC_INTERVAL: float = 0.25  # Sync progress every 0.25s
+
 func _ready() -> void:
 	# Find sprite and shadow from children (created by game_world.gd)
 	rock_sprite = get_node_or_null("Sprite")
@@ -246,6 +250,9 @@ func _physics_process(delta: float) -> void:
 				if progress_circle and abs(mine_progress - last_drawn_progress) >= 0.02:
 					last_drawn_progress = mine_progress
 					progress_circle.queue_redraw()
+
+				# Network sync - periodically send progress to other players
+				sync_mine_progress_network()
 
 				# Complete mine when progress reaches 100%
 				if mine_progress >= 1.0:
@@ -460,6 +467,7 @@ func start_mining() -> void:
 	mine_progress = 0.0
 	cancel_grace_timer = 0.0  # Reset grace timer
 	last_mine_sound_time = 0.0  # Reset sound timer
+	network_mine_progress_timer = 0.0  # Reset network timer
 
 	if progress_circle:
 		progress_circle.visible = true
@@ -471,6 +479,9 @@ func start_mining() -> void:
 
 	# Play first mine sound immediately
 	play_random_mine_sound()
+
+	# Network sync - notify other players we started mining
+	request_start_mining()
 
 func cancel_mining() -> void:
 	"""Cancel mining (F released or player moved away)"""
@@ -503,6 +514,9 @@ func complete_mine() -> void:
 
 	# Return player to idle animation
 	stop_player_harvest_animation()
+
+	# Network sync - notify other players the mine is complete
+	request_complete_mine()
 
 	# Now actually mine the rock
 	mine_rock()
@@ -1050,6 +1064,9 @@ func _on_item_looted(item: Dictionary) -> void:
 func _on_all_items_looted() -> void:
 	"""Handle all items being looted from rock pile"""
 
+	# Network sync - notify other players loot was taken
+	request_loot_taken()
+
 	# Clear the loot array
 	rock_loot.clear()
 
@@ -1115,3 +1132,223 @@ func start_fade_out() -> void:
 
 	# Start respawn timer after fade completes
 	fade_tween.tween_callback(func(): respawn_timer = 0.0)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MULTIPLAYER: Network Sync for Mining
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _get_network_id() -> String:
+	"""Get the network ID for this rock"""
+	return get_meta("network_id", "")
+
+func _is_multiplayer_active() -> bool:
+	"""Check if multiplayer is active"""
+	return multiplayer.has_multiplayer_peer()
+
+func _is_server() -> bool:
+	"""Check if this is the server"""
+	return multiplayer.is_server()
+
+# === REQUEST METHODS (Client -> Server) ===
+
+func request_start_mining() -> void:
+	"""Client requests to start mining - server validates and broadcasts"""
+	var network_id = _get_network_id()
+	if network_id.is_empty():
+		return
+
+	if _is_multiplayer_active() and not _is_server():
+		# Client sends request to server
+		_request_start_mining_rpc.rpc_id(1, network_id)
+	else:
+		# Server or single player - start directly and broadcast
+		_broadcast_start_mining(network_id)
+
+func request_complete_mine() -> void:
+	"""Client requests to complete mining - server validates and broadcasts"""
+	var network_id = _get_network_id()
+	if network_id.is_empty():
+		return
+
+	if _is_multiplayer_active() and not _is_server():
+		_request_complete_mine_rpc.rpc_id(1, network_id)
+	else:
+		_broadcast_complete_mine(network_id)
+
+func request_loot_taken() -> void:
+	"""Client requests loot taken - server validates and broadcasts"""
+	var network_id = _get_network_id()
+	if network_id.is_empty():
+		return
+
+	if _is_multiplayer_active() and not _is_server():
+		_request_loot_taken_rpc.rpc_id(1, network_id)
+	else:
+		_broadcast_loot_taken(network_id)
+
+# === SERVER RPC HANDLERS (Client -> Server) ===
+
+@rpc("any_peer", "reliable")
+func _request_start_mining_rpc(network_id: String) -> void:
+	"""Server receives start mining request from client"""
+	if not _is_server():
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	print("⛏️ Server: Rock %s mine started (requested by peer %d)" % [network_id, peer_id])
+	_broadcast_start_mining(network_id)
+
+@rpc("any_peer", "reliable")
+func _request_complete_mine_rpc(network_id: String) -> void:
+	"""Server receives complete mine request from client"""
+	if not _is_server():
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	print("⛏️ Server: Rock %s mine completed (requested by peer %d)" % [network_id, peer_id])
+	_broadcast_complete_mine(network_id)
+
+@rpc("any_peer", "reliable")
+func _request_loot_taken_rpc(network_id: String) -> void:
+	"""Server receives loot taken request from client"""
+	if not _is_server():
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	print("⛏️ Server: Rock %s loot taken (requested by peer %d)" % [network_id, peer_id])
+	_broadcast_loot_taken(network_id)
+
+# === BROADCAST METHODS (Server -> All Clients) ===
+
+func _broadcast_start_mining(network_id: String) -> void:
+	"""Server broadcasts start mining to all clients"""
+	if _is_multiplayer_active():
+		_sync_start_mining.rpc(network_id)
+
+func _broadcast_complete_mine(network_id: String) -> void:
+	"""Server broadcasts mine completion to all clients"""
+	if _is_multiplayer_active():
+		_sync_complete_mine.rpc(network_id)
+
+func _broadcast_loot_taken(network_id: String) -> void:
+	"""Server broadcasts loot taken to all clients"""
+	if _is_multiplayer_active():
+		_sync_loot_taken.rpc(network_id)
+
+# === SYNC RPC HANDLERS (Server -> All Clients) ===
+
+@rpc("authority", "call_local", "reliable")
+func _sync_start_mining(network_id: String) -> void:
+	"""All clients receive start mining notification"""
+	# Only apply if this is NOT the rock being mined locally by us
+	if is_mining:
+		return  # Already mining locally, don't double-apply
+
+	print("⛏️ [Sync] Rock %s mine started (remote)" % network_id)
+
+	# Visual feedback for remote player mining
+	is_mining = true
+	mine_progress = 0.0
+	play_random_mine_sound()
+
+@rpc("authority", "call_local", "reliable")
+func _sync_complete_mine(network_id: String) -> void:
+	"""All clients receive mine completion notification"""
+	print("⛏️ [Sync] Rock %s mine completed" % network_id)
+
+	# Stop local mining state
+	is_mining = false
+	mine_progress = 0.0
+
+	if progress_circle:
+		progress_circle.visible = false
+
+	# Play break sound
+	play_random_break_sound()
+
+	# Skip if already harvested
+	if is_harvested:
+		return
+
+	# Perform the rock mine (visual effects, loot generation)
+	mine_rock()
+
+	# Update harvested state in ChunkBasedPropSystem
+	var prop_system = get_node_or_null("/root/ChunkBasedPropSystem")
+	if prop_system:
+		prop_system.harvestable_states[network_id] = {
+			"is_harvested": true,
+			"is_mined": true,
+			"has_loot": rock_loot.size() > 0
+		}
+
+@rpc("authority", "call_local", "reliable")
+func _sync_loot_taken(network_id: String) -> void:
+	"""All clients receive loot taken notification"""
+	print("⛏️ [Sync] Rock %s loot taken" % network_id)
+
+	# Clear loot
+	rock_loot.clear()
+
+	# Remove sparkle effect
+	remove_loot_indicator()
+
+	# Hide interaction prompt
+	if interaction_prompt:
+		interaction_prompt.visible = false
+
+	# Start fade out
+	start_fade_out()
+
+	# Update harvested state
+	var prop_system = get_node_or_null("/root/ChunkBasedPropSystem")
+	if prop_system:
+		prop_system.harvestable_states[network_id] = {
+			"is_harvested": true,
+			"is_mined": true,
+			"has_loot": false
+		}
+		# Also mark in harvested_items so it doesn't respawn on chunk reload
+		prop_system.mark_as_harvested(network_id)
+
+# === SYNC PROGRESS (For visual feedback) ===
+
+func sync_mine_progress_network() -> void:
+	"""Periodically sync mine progress to other players for visual feedback"""
+	if not _is_multiplayer_active():
+		return
+
+	network_mine_progress_timer += get_physics_process_delta_time()
+	if network_mine_progress_timer >= NETWORK_PROGRESS_SYNC_INTERVAL:
+		network_mine_progress_timer = 0.0
+
+		var network_id = _get_network_id()
+		if not network_id.is_empty() and is_mining:
+			if _is_server():
+				_sync_mine_progress.rpc(network_id, mine_progress)
+			else:
+				_send_mine_progress_to_server.rpc_id(1, network_id, mine_progress)
+
+@rpc("any_peer", "unreliable")
+func _send_mine_progress_to_server(network_id: String, progress: float) -> void:
+	"""Client sends progress to server, server relays to others"""
+	if not _is_server():
+		return
+	# Relay to all clients except sender
+	var sender = multiplayer.get_remote_sender_id()
+	for peer_id in multiplayer.get_peers():
+		if peer_id != sender:
+			_sync_mine_progress.rpc_id(peer_id, network_id, progress)
+
+@rpc("authority", "call_remote", "unreliable")
+func _sync_mine_progress(network_id: String, progress: float) -> void:
+	"""Receive mine progress from another player"""
+	# Only update if we're not the one mining
+	if is_mining:
+		return
+
+	# Visual feedback - shake rock and play sound
+	if progress > mine_progress + 0.1:
+		play_random_mine_sound()
+
+	mine_progress = progress

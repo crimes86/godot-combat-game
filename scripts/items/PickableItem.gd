@@ -118,31 +118,46 @@ func pick_up_item() -> void:
 		"quantity": item_quantity
 	}
 
-	# Try to add to inventory
-	if InventorySystem.add_item(item_data):
-		is_picked_up = true
-		print("✨ Player picked up: %s (Value: %d gold)" % [item_name, item_value])
-
-		# Notify spawn manager
-		if has_node("/root/LootSpawnManager"):
-			get_node("/root/LootSpawnManager").on_item_looted()
-
-		# Hide interaction prompt
-		if interaction_prompt:
-			interaction_prompt.visible = false
-
-		# Play pickup animation/effect (fade out and scale up)
-		if sprite:
-			var tween = create_tween()
-			tween.set_parallel(true)
-			tween.tween_property(sprite, "modulate:a", 0.0, 0.3)
-			tween.tween_property(sprite, "scale", sprite.scale * 1.5, 0.3)
-			await tween.finished
-
-		# Remove from world
-		queue_free()
-	else:
+	# Try to add to inventory (local player only)
+	if not InventorySystem.add_item(item_data):
 		print("❌ Inventory full! Cannot pick up %s" % item_name)
+		return
+
+	is_picked_up = true
+	print("✨ Player picked up: %s (Value: %d gold)" % [item_name, item_value])
+
+	# Check if we need to go through network sync
+	var network_id = get_meta("network_id", -1)
+	if network_id != -1 and multiplayer.has_multiplayer_peer():
+		# Go through LootSpawnManager for network sync
+		var loot_manager = get_node_or_null("/root/LootSpawnManager")
+		if loot_manager:
+			loot_manager.request_pickup_item(self)
+			# Don't queue_free here - LootSpawnManager will handle removal
+			# Just hide locally for now
+			if interaction_prompt:
+				interaction_prompt.visible = false
+			visible = false
+			return
+
+	# Single player - notify spawn manager and remove
+	if has_node("/root/LootSpawnManager"):
+		get_node("/root/LootSpawnManager").on_item_looted()
+
+	# Hide interaction prompt
+	if interaction_prompt:
+		interaction_prompt.visible = false
+
+	# Play pickup animation/effect (fade out and scale up)
+	if sprite:
+		var tween = create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(sprite, "modulate:a", 0.0, 0.3)
+		tween.tween_property(sprite, "scale", sprite.scale * 1.5, 0.3)
+		await tween.finished
+
+	# Remove from world
+	queue_free()
 
 func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""

@@ -116,6 +116,9 @@ var lava_light_timer = 0.0
 const LAVA_LIGHT_UPDATE_INTERVAL = 0.1  # Update 10 times per second
 
 func _ready():
+	# Add to group so LootSpawnManager can find us on clients
+	add_to_group("game_world")
+
 	# Initialize multiplayer
 	_setup_multiplayer()
 

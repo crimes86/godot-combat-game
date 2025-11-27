@@ -44,12 +44,14 @@ func create_inventory_ui() -> void:
 	"""Create standalone inventory window"""
 
 	# Create full-screen drop zone for deletion (sits behind everything)
+	# IMPORTANT: Use MOUSE_FILTER_IGNORE so it doesn't block input to other UIs (like CharacterUI)
+	# The drag-drop forwarding still works with IGNORE - it only affects regular mouse events
 	var drop_zone = Control.new()
 	drop_zone.name = "FullScreenDropZone"
 	drop_zone.set_anchors_preset(Control.PRESET_FULL_RECT)
-	drop_zone.mouse_filter = Control.MOUSE_FILTER_PASS
+	drop_zone.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# Enable drag-drop on the drop zone
+	# Enable drag-drop on the drop zone (works even with MOUSE_FILTER_IGNORE)
 	drop_zone.set_drag_forwarding(
 		Callable(self, "_get_drop_zone_drag_data"),
 		Callable(self, "_can_drop_on_drop_zone"),
@@ -167,6 +169,7 @@ func create_inventory_slot(slot_index: int) -> Control:
 	var slot_control = Control.new()
 	slot_control.name = "InvSlot_" + str(slot_index)
 	slot_control.custom_minimum_size = Vector2(70, 70)
+	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP  # Ensure we receive input
 	slot_control.set_meta("slot_index", slot_index)
 	slot_control.set_meta("slot_type", "inventory")
 
@@ -387,10 +390,13 @@ func refresh_inventory() -> void:
 func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 	"""Handle GUI input on inventory slot (double-click or right-click to equip)"""
 	if event is InputEventMouseButton and event.pressed:
+		print("🖱️ Inventory slot %d clicked - button: %d, double_click: %s" % [slot_index, event.button_index, event.double_click])
 		if (event.button_index == MOUSE_BUTTON_LEFT and event.double_click) or event.button_index == MOUSE_BUTTON_RIGHT:
 			var item = InventorySystem.get_item(slot_index)
+			print("   Item in slot: %s" % (item if item else "empty"))
 
 			if item and item.size() > 0:
+				print("   Item type: '%s', slot: '%s'" % [item.get("type", ""), item.get("slot", "")])
 				# Check if it's a tool
 				if item.get("type", "") == "tool":
 					var tool_type = item.get("tool_type", "")
@@ -409,6 +415,12 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 				elif item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
 					var weapon = dict_to_weapon(item)
 					if weapon:
+						# If there's already a weapon equipped, unequip it first
+						if CharacterStats.equipped_weapon:
+							print("⚔️ Swapping weapons - unequipping %s first" % CharacterStats.equipped_weapon.weapon_name)
+							if not CharacterStats.unequip_weapon():
+								print("❌ Cannot swap weapons - inventory full!")
+								return
 						CharacterStats.equip_weapon(weapon)
 						InventorySystem.remove_item(slot_index)
 						SoundManager.play_equip_sound()
@@ -464,10 +476,13 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 
 func _get_inventory_drag_data(at_position: Vector2, slot_index: int) -> Variant:
 	"""Start dragging an inventory item"""
+	print("🎯 _get_inventory_drag_data called for slot %d" % slot_index)
 	var item = InventorySystem.get_item(slot_index)
 	if not item or item.is_empty():
+		print("   No item in slot, returning null")
 		return null
 
+	print("   Starting drag for: %s" % item.get("name", "Unknown"))
 	var preview = Label.new()
 	preview.text = item.get("name", "Item")
 	preview.add_theme_font_size_override("font_size", 16)

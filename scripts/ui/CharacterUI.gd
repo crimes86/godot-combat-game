@@ -48,6 +48,8 @@ func _ready() -> void:
 	CharacterStats.experience_gained.connect(_on_xp_changed)
 	CharacterStats.armor_equipped.connect(_on_armor_changed)
 	CharacterStats.armor_unequipped.connect(_on_armor_changed)
+	CharacterStats.weapon_equipped.connect(_on_weapon_changed)
+	CharacterStats.weapon_unequipped.connect(_on_weapon_changed)
 	InventorySystem.axe_equipped.connect(_on_tool_changed)
 	InventorySystem.axe_unequipped.connect(_on_tool_changed)
 	InventorySystem.pickaxe_equipped.connect(_on_tool_changed)
@@ -347,6 +349,7 @@ func create_equipment_slot(slot_name: String, label_text: String) -> HBoxContain
 	var slot_control = Control.new()
 	slot_control.name = "Equip_" + slot_name
 	slot_control.custom_minimum_size = Vector2(60, 60)
+	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP  # Ensure we receive input
 	slot_control.set_meta("slot_name", slot_name)
 	slot_control.set_meta("slot_type", "equipment")
 
@@ -404,6 +407,7 @@ func create_tool_slot(tool_name: String, label_text: String) -> HBoxContainer:
 	var slot_control = Control.new()
 	slot_control.name = "Tool_" + tool_name
 	slot_control.custom_minimum_size = Vector2(60, 60)
+	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP  # Ensure we receive input
 	slot_control.set_meta("tool_name", tool_name)
 	slot_control.set_meta("slot_type", "tool")
 
@@ -781,13 +785,18 @@ func refresh_tools() -> void:
 func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
 	"""Handle GUI input on equipment slot (double-click or right-click to unequip)"""
 	if event is InputEventMouseButton and event.pressed:
+		print("🖱️ Equipment slot '%s' clicked - button: %d, double_click: %s" % [slot_name, event.button_index, event.double_click])
+		print("   CharacterStats.equipped_weapon: %s" % (CharacterStats.equipped_weapon.weapon_name if CharacterStats.equipped_weapon else "null"))
 		# Double-click or right-click to unequip
 		if event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
 			# Special handling for mainhand - check equipped_weapon
 			if slot_name == "mainhand" and CharacterStats.equipped_weapon:
-				CharacterStats.unequip_weapon()
-				SoundManager.play_equip_sound()  # Unequip sound
-				refresh_all()
+				print("🔄 Attempting to unequip weapon: %s" % CharacterStats.equipped_weapon.weapon_name)
+				if CharacterStats.unequip_weapon():
+					SoundManager.play_equip_sound()  # Unequip sound
+					refresh_all()
+				else:
+					print("❌ Failed to unequip weapon (inventory full?)")
 			else:
 				var armor_item = CharacterStats.equipped_armor[slot_name]
 				if armor_item:
@@ -797,9 +806,12 @@ func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			# Special handling for mainhand - check equipped_weapon
 			if slot_name == "mainhand" and CharacterStats.equipped_weapon:
-				CharacterStats.unequip_weapon()
-				SoundManager.play_equip_sound()  # Unequip sound
-				refresh_all()
+				print("🔄 Attempting to unequip weapon: %s" % CharacterStats.equipped_weapon.weapon_name)
+				if CharacterStats.unequip_weapon():
+					SoundManager.play_equip_sound()  # Unequip sound
+					refresh_all()
+				else:
+					print("❌ Failed to unequip weapon (inventory full?)")
 			else:
 				var armor_item = CharacterStats.equipped_armor[slot_name]
 				if armor_item:
@@ -958,6 +970,12 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 
 			# Check if it's a weapon
 			if dragged_item.get("type", "") == "weapon" and slot_name == "mainhand":
+				# If there's already a weapon equipped, unequip it first
+				if CharacterStats.equipped_weapon:
+					print("⚔️ Swapping weapons - unequipping %s first" % CharacterStats.equipped_weapon.weapon_name)
+					if not CharacterStats.unequip_weapon():
+						print("❌ Cannot swap weapons - inventory full!")
+						return
 				# Convert dict to Weapon resource and equip
 				var weapon = dict_to_weapon(dragged_item)
 				if weapon:
@@ -1092,6 +1110,11 @@ func _on_xp_changed(_amount: int, _total: int) -> void:
 
 func _on_armor_changed(_slot: String, _armor: Dictionary) -> void:
 	"""Called when armor is equipped/unequipped"""
+	refresh_all()
+
+func _on_weapon_changed(_weapon = null) -> void:
+	"""Called when weapon is equipped/unequipped"""
+	print("🔄 CharacterUI: Weapon changed, refreshing...")
 	refresh_all()
 
 func _on_tool_changed(_tool: Dictionary) -> void:

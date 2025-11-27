@@ -45,6 +45,10 @@ var game_world: Node = null
 # Harvested items tracking (so they don't respawn)
 var harvested_items: Dictionary = {}  # {unique_id: true} where unique_id = "chunk_key:prop_type:index"
 
+# Network sync for harvestables
+var harvestables_by_id: Dictionary = {}  # {tree_id or rock_id: HarvestableTree/Rock node}
+var harvestable_states: Dictionary = {}  # {id: {is_harvested, is_fallen/is_mined, has_loot}} for sync
+
 # Prop textures (from game_world.gd)
 const PROP_TEXTURES = {
 	"dead_tree_1": "res://assets/environment/wasteland/dead_tree_1.png",
@@ -97,6 +101,9 @@ func _ready() -> void:
 	# Connect to DebugConfig F3 toggle
 	if DebugConfig:
 		DebugConfig.debug_display_toggled.connect(_on_debug_toggled)
+
+	# Listen for new peer connections to sync harvestable state
+	multiplayer.peer_connected.connect(_on_peer_connected)
 
 func initialize(world: Node) -> void:
 	game_world = world
@@ -1168,8 +1175,12 @@ void fragment() {
 	# Store tree ID for harvest tracking
 	tree_node.set_meta("tree_id", tree_id)
 	tree_node.set_meta("lootable_type", "tree")
+	tree_node.set_meta("network_id", tree_id)  # Use tree_id as network ID
 
 	container.add_child(tree_node)
+
+	# Track for network sync
+	harvestables_by_id[tree_id] = tree_node
 
 func create_lootable_rock(pos: Vector2, rock_type: String, container: Node2D, rng: RandomNumberGenerator, rock_id: String) -> void:
 	"""Create a lootable rock"""
@@ -1224,8 +1235,12 @@ func create_lootable_rock(pos: Vector2, rock_type: String, container: Node2D, rn
 	# Store rock ID for harvest tracking
 	rock_node.set_meta("rock_id", rock_id)
 	rock_node.set_meta("lootable_type", "rock")
+	rock_node.set_meta("network_id", rock_id)  # Use rock_id as network ID
 
 	container.add_child(rock_node)
+
+	# Track for network sync
+	harvestables_by_id[rock_id] = rock_node
 
 func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerator, preset_pool_size: float = -1.0) -> void:
 	"""Create a lava pool - optimized version with fewer nodes"""
@@ -1837,6 +1852,86 @@ func mark_as_harvested(item_id: String) -> void:
 	"""Mark an item as harvested so it doesn't respawn"""
 	harvested_items[item_id] = true
 	print("🪓 Harvested: %s" % item_id)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MULTIPLAYER: Sync Harvestable State to New Players
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _on_peer_connected(peer_id: int) -> void:
+	"""When a new peer connects, send them all harvested states."""
+	if not multiplayer.is_server():
+		return
+
+	# Small delay to let the client fully initialize and load chunks
+	await get_tree().create_timer(1.0).timeout
+	sync_harvestable_state_to_peer(peer_id)
+
+func sync_harvestable_state_to_peer(peer_id: int) -> void:
+	"""Send all current harvestable states to a newly connected client"""
+	if not multiplayer.is_server():
+		return
+
+	print("🌲 Syncing harvestable state to peer %d (%d states tracked)" % [peer_id, harvestable_states.size()])
+
+	# Sync all harvested items (so they don't respawn on client)
+	for item_id in harvested_items.keys():
+		_sync_harvested_item.rpc_id(peer_id, item_id)
+
+	# Sync detailed states for items that may be mid-harvest
+	for harvestable_id in harvestable_states.keys():
+		var state = harvestable_states[harvestable_id]
+		_sync_harvestable_state.rpc_id(peer_id, harvestable_id, state)
+
+@rpc("authority", "call_remote", "reliable")
+func _sync_harvested_item(item_id: String) -> void:
+	"""Client receives notice that an item is harvested"""
+	harvested_items[item_id] = true
+	print("🌲 [Client] Received harvested state: %s" % item_id)
+
+	# Find and update the harvestable if it exists
+	var harvestable = harvestables_by_id.get(item_id)
+	if harvestable and is_instance_valid(harvestable):
+		# Apply harvested state
+		if harvestable is HarvestableTree:
+			if not harvestable.is_harvested:
+				harvestable.is_harvested = true
+				harvestable.is_fallen = true
+				harvestable.tree_loot.clear()
+				# Hide the tree sprite
+				if harvestable.tree_sprite:
+					harvestable.tree_sprite.modulate.a = 0.0
+		elif harvestable is HarvestableRock:
+			if not harvestable.is_harvested:
+				harvestable.is_harvested = true
+				harvestable.is_mined = true
+				harvestable.rock_loot.clear()
+				# Hide the rock sprite
+				if harvestable.rock_sprite:
+					harvestable.rock_sprite.modulate.a = 0.0
+
+@rpc("authority", "call_remote", "reliable")
+func _sync_harvestable_state(harvestable_id: String, state: Dictionary) -> void:
+	"""Client receives detailed state for a harvestable"""
+	harvestable_states[harvestable_id] = state
+	print("🌲 [Client] Received harvestable state: %s = %s" % [harvestable_id, state])
+
+	var harvestable = harvestables_by_id.get(harvestable_id)
+	if not harvestable or not is_instance_valid(harvestable):
+		return
+
+	# Apply state
+	if harvestable is HarvestableTree:
+		harvestable.is_harvested = state.get("is_harvested", false)
+		harvestable.is_fallen = state.get("is_fallen", false)
+		if not state.get("has_loot", true):
+			harvestable.tree_loot.clear()
+			harvestable.remove_loot_indicator()
+	elif harvestable is HarvestableRock:
+		harvestable.is_harvested = state.get("is_harvested", false)
+		harvestable.is_mined = state.get("is_mined", false)
+		if not state.get("has_loot", true):
+			harvestable.rock_loot.clear()
+			harvestable.remove_loot_indicator()
 
 func count_nodes_recursive(node: Node) -> int:
 	"""Count total nodes in a node tree"""

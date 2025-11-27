@@ -492,21 +492,23 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	var spawn_y_offset = -(sprite_height * 0.3)  # 30% from top = 70% from bottom
 
 	# Horizontal and vertical offset based on hit type
-	var spawn_x_offset = -50.0  # All damage text starts -50px left
+	# NORMAL/CRIT: Centered above enemy (x=0)
+	# WEAKPOINT: Flanking on left/right sides
+	var spawn_x_offset = 0.0  # Normal/crit damage centered
 	if is_weakpoint_hit:
-		# Weakpoints: offset to sides and higher than main column
+		# Weakpoints: offset to sides (flanking the main column)
 		# Alternate between left and right sides
 		if not has_meta("weakpoint_side"):
 			set_meta("weakpoint_side", 1)  # Start with right side
 
 		var side = get_meta("weakpoint_side")
 		if side > 0:
-			# Right side: -30px
-			spawn_x_offset = -30.0
+			# Right side: +40px
+			spawn_x_offset = 40.0
 		else:
-			# Left side: -70px
-			spawn_x_offset = -70.0
-		spawn_y_offset -= 25.0  # 25px higher than main column
+			# Left side: -40px
+			spawn_x_offset = -40.0
+		spawn_y_offset -= 15.0  # Slightly higher than main column
 		set_meta("weakpoint_side", -side)  # Flip for next hit
 
 	# Final spawn position: enemy center + sprite offset + calculated offset
@@ -964,6 +966,10 @@ func _on_weakpoint_hit(weakpoint) -> void:
 		# Don't apply damage to enemy directly in multiplayer - CritWindowManager handles
 		# reporting to server at window end. But DO show visual feedback locally!
 		_spawn_weakpoint_combat_text(weakpoint, crit_damage)
+
+		# ✨ FIX: Trigger hit flash for weakpoint hits in multiplayer (was missing!)
+		if has_node("HitFlash"):
+			get_node("HitFlash").flash(true)  # true = crit/weakpoint flash (red)
 		return
 
 	# Single player: deal damage directly with crit flag and weakpoint flag for orange text
@@ -1116,8 +1122,17 @@ func die() -> void:
 		await get_tree().create_timer(0.6).timeout
 
 	# Generate loot for this corpse (skip if already set by server in multiplayer)
+	var has_peer = multiplayer.has_multiplayer_peer()
 	if corpse_loot.is_empty():
+		if has_peer:
+			print("⚠️ [%s] Enemy %s corpse_loot is EMPTY in multiplayer - generating local loot (this may cause desync!)" % [
+				"Server" if multiplayer.is_server() else "Client", name
+			])
 		corpse_loot = generate_corpse_loot()
+	else:
+		print("✅ [%s] Enemy %s corpse_loot already has %d items (from server)" % [
+			"Server" if multiplayer.is_server() else "Client", name, corpse_loot.size()
+		])
 
 	# Emit died signal - spawner will respawn immediately
 	died.emit()

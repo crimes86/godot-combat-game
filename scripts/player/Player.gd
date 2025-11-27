@@ -2065,28 +2065,49 @@ func toggle_debug_map_view() -> void:
 		print("🗺️ DEBUG MAP VIEW OFF - Restored normal view")
 
 func is_ui_blocking_input() -> bool:
-	"""Check if any UI is currently open that should block game input"""
+	"""Check if mouse click is over a UI element that should block game input"""
 	# Check if chat is focused (blocks movement/attack while typing)
 	if chat_ui and chat_ui.has_method("is_chat_focused") and chat_ui.is_chat_focused():
 		return true
 
-	# Check if inventory UI is open
-	if inventory_ui and inventory_ui.visible:
-		return true
+	# Get mouse position for UI hit testing
+	var mouse_pos = get_viewport().get_mouse_position()
 
-	# Check if character UI is open
+	# Check if inventory UI is open AND mouse is over it
+	if inventory_ui and inventory_ui.visible:
+		if _is_mouse_over_canvas_layer(inventory_ui, mouse_pos):
+			return true
+
+	# Check if character UI is open AND mouse is over it
 	if character_ui and character_ui.visible:
-		return true
+		if _is_mouse_over_canvas_layer(character_ui, mouse_pos):
+			return true
 
 	var root = get_tree().root
 	for child in root.get_children():
 		if child is CanvasLayer and child.visible:
 			# Check for specific UI types that should block input
 			if child is ShopUI:
+				# Shop always blocks (modal dialog)
 				return true
 			if child is LootBodyUI:
+				# Loot UI always blocks (modal dialog)
 				return true
 			if child is ChestLootUI:
+				# Chest loot always blocks (modal dialog)
+				return true
+	return false
+
+func _is_mouse_over_canvas_layer(canvas_layer: CanvasLayer, mouse_pos: Vector2) -> bool:
+	"""Check if mouse position is within any Control child of a CanvasLayer"""
+	if not canvas_layer or not canvas_layer.visible:
+		return false
+
+	# Find Control children and check if mouse is over any of them
+	for child in canvas_layer.get_children():
+		if child is Control and child.visible:
+			var rect = child.get_global_rect()
+			if rect.has_point(mouse_pos):
 				return true
 	return false
 
