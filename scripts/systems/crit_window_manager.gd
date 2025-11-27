@@ -4,16 +4,8 @@ class_name CritWindowManager
 ## Manages crit windows for multiple enemies concurrently
 ## Owns all timers, lifecycle, and state - enemies just provide visual hooks
 
-# Which prototype to use
-enum WindowType { ORBITAL_RING, GROWING_SPRITE }
-@export var window_type: WindowType = WindowType.GROWING_SPRITE
-
-# Settings - use Constants for authoritative values
-@export var time_slow_amount: float = 0.7
-
 # State - track MULTIPLE concurrent windows (one per enemy)
 var active_windows: Dictionary = {}  # {enemy_instance: WindowData}
-var original_time_scale: float = 1.0
 
 # Window data for each enemy
 class WindowData:
@@ -32,9 +24,6 @@ class WindowData:
 
 signal window_completed(success_ratio: float, total_destroyed: int)
 
-func _ready() -> void:
-	original_time_scale = Engine.time_scale
-
 func start_window(target: Node, difficulty: float = 1.0) -> void:
 	"""Start a crit window on the target enemy"""
 	if not is_instance_valid(target):
@@ -45,24 +34,12 @@ func start_window(target: Node, difficulty: float = 1.0) -> void:
 	if active_windows.has(target):
 		return
 
-	# NOTE: Time scaling disabled for multiplayer compatibility
-	# Engine.time_scale is local to each machine and causes desync
-	# if Engine.time_scale == original_time_scale:
-	#     Engine.time_scale = time_slow_amount
-
 	# Create window data
 	var window_data = WindowData.new(target, difficulty)
 	active_windows[target] = window_data
 
-	# Start the appropriate window type
-	if window_type == WindowType.ORBITAL_RING:
-		_start_orbital_ring_window(target, window_data)
-	else:
-		_start_growing_sprite_window(target, window_data)
-
-func _start_orbital_ring_window(target: Node, window_data: WindowData) -> void:
-	"""Legacy orbital ring mode - not currently used"""
-	push_warning("Orbital ring mode not fully supported in refactored version")
+	# Start the growing sprite crit window
+	_start_growing_sprite_window(target, window_data)
 
 func _start_growing_sprite_window(target: Node, window_data: WindowData) -> void:
 	"""Start growing sprite mode with weakpoints"""
@@ -213,10 +190,6 @@ func end_window(target: Node, weakpoints_destroyed: int) -> void:
 
 	# Remove from active windows
 	active_windows.erase(target)
-
-	# NOTE: Time scaling disabled for multiplayer compatibility
-	# if active_windows.is_empty():
-	#     Engine.time_scale = original_time_scale
 
 	# Emit completion signal
 	var success_ratio = float(weakpoints_destroyed) / float(max(1, window_data.weakpoints_spawned))

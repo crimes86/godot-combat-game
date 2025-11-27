@@ -1037,162 +1037,24 @@ func generate_terrain_layer_for_baking(viewport: SubViewport, layer_type: String
 			await create_path_for_baking(viewport, offset)
 
 func create_ground_texture_optimized():
-	"""DISABLED"""
+	# DISABLED - Ground texture now baked into terrain image
 	pass
-	return
-func DISABLED_create_ground_texture_optimized():
-	var ground_layer = Node2D.new()
-	ground_layer.name = "GroundTexture"
-	ground_layer.z_index = -9
-	add_child(ground_layer)
-
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 12345
-
-	# Performance mode: 900px spacing for smooth gameplay
-	# Cover full world bounds
-	for x in range(Constants.WORLD_LEFT, Constants.WORLD_RIGHT, Constants.TERRAIN_PATCH_SPACING):
-		for y in range(Constants.WORLD_TOP, Constants.WORLD_BOTTOM, Constants.TERRAIN_PATCH_SPACING):
-			if rng.randf() > 0.2:  # 80% coverage (doubled from 40%)
-				continue
-
-			var patch_pos = Vector2(
-				x + rng.randf_range(-250, 250),
-				y + rng.randf_range(-250, 250)
-			)
-
-			# Clamp to world boundaries
-			patch_pos.x = clamp(patch_pos.x, -5000, 13000)
-			patch_pos.y = clamp(patch_pos.y, -3000, 3000)
-
-			var base_size = rng.randf_range(100, 140)
-			var elongation = rng.randf_range(0.7, 1.5)
-			create_feathered_area(ground_layer, patch_pos, base_size, rng, elongation)
-
-			await get_tree().process_frame
 
 func create_terrain_variation_spots():
-	"""DISABLED"""
+	# DISABLED - Terrain variation now baked into terrain image
 	pass
 
 func create_rock_dark_spots():
 	# DISABLED - Rock shadows now handled directly on rock sprites in ChunkBasedPropSystem
-	# This prevents unnecessary 2400+ ColorRects just for ground darkening
 	pass
 
 func create_campfire_clearing():
-	"""DISABLED"""
+	# DISABLED - Campfire clearing now baked into terrain image
 	pass
-	return
-func DISABLED_create_campfire_clearing():
-	# Use a single Polygon2D with radial gradient shader instead of 24 ColorRects
-	# This is 24x more efficient!
-	var clearing = Polygon2D.new()
-	clearing.name = "CampfireClearing"
-	clearing.z_index = -6
-
-	var campfire_pos = CAMPFIRE_POS
-	var radius = 250.0
-
-	# Create circle polygon
-	var vertices = PackedVector2Array()
-	for i in range(64):
-		var angle = (float(i) / 64) * TAU
-		var x = campfire_pos.x + cos(angle) * radius
-		var y = campfire_pos.y + sin(angle) * radius
-		vertices.append(Vector2(x, y))
-
-	clearing.polygon = vertices
-	clearing.color = Color(0.14, 0.14, 0.15, 1.0)  # Matches ground, slight variation
-
-	# Add radial gradient shader for smooth feathering
-	var shader_material = ShaderMaterial.new()
-	var shader = Shader.new()
-	shader.code = """
-shader_type canvas_item;
-
-uniform vec2 center = vec2(0.5, 0.5);
-uniform float radius = 0.5;
-uniform float feather = 0.3;
-
-void fragment() {
-	vec2 uv = UV;
-	float dist = distance(uv, center);
-	float alpha = 1.0 - smoothstep(radius - feather, radius, dist);
-	COLOR.a *= alpha;
-}
-"""
-	shader_material.shader = shader
-	clearing.material = shader_material
-
-	add_child(clearing)
 
 func create_path_to_castle_optimized():
-	"""DISABLED"""
+	# DISABLED - Path now baked into terrain image
 	pass
-	return
-func DISABLED_create_path_to_castle_optimized():
-	var path_layer = Node2D.new()
-	path_layer.name = "PathToCastle"
-	path_layer.z_index = -5
-	add_child(path_layer)
-
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 777
-
-	var campfire_pos = CAMPFIRE_POS
-	var castle_pos = Vector2(11000, -300)
-
-	# Performance mode: 30 points for smooth gameplay
-	var path_points = []
-	for i in range(30):
-		var t = float(i) / 29.0
-		var pos = campfire_pos.lerp(castle_pos, t)
-
-		if i > 0 and i < 29:
-			var curve_amount = sin(t * PI) * 250
-			pos.y += sin(t * PI * 2.5) * curve_amount
-
-		path_points.append(pos)
-
-	for i in range(path_points.size() - 1):
-		var start = path_points[i]
-		var end = path_points[i + 1]
-		var segment_length = start.distance_to(end)
-
-		# Performance mode: 100px spacing for smooth gameplay
-		var num_spots = int(segment_length / 100) + 1
-
-		for j in range(num_spots):
-			var t = float(j) / float(max(1, num_spots - 1))
-			var pos = start.lerp(end, t)
-
-			var direction = (end - start).normalized()
-
-			# Add natural zigzag variance perpendicular to path direction
-			var perpendicular = Vector2(-direction.y, direction.x)
-			var variance = rng.randf_range(-60, 60)  # ±60px random offset
-			pos += perpendicular * variance
-
-			var elongation = 1.5
-			if abs(direction.x) > abs(direction.y):
-				elongation = 1.6
-			else:
-				elongation = 0.8
-
-			# Make path nearly black for worn/beaten appearance (0.08 = 2-5% brightness)
-			create_feathered_area(path_layer, pos, 180, rng, elongation, 0.08)
-
-		await get_tree().process_frame
-
-	# Create heavily-visited circle around campfire
-	create_campfire_circle(path_layer, campfire_pos, rng)
-
-	# Create branch paths that lead to ruins
-	await create_ruins_branch_paths(path_layer, path_points, rng)
-
-	# Create clearings at each ruins
-	create_ruins_clearings(rng)
 
 func create_branch_paths(path_layer: Node2D, main_path_points: Array, rng: RandomNumberGenerator):
 	"""Create branching paths that fork off main path to dead ends"""

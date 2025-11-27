@@ -22,10 +22,8 @@ const LOD_UPDATE_INTERVAL: float = 0.5  # Check LOD every 0.5s
 const LOD_NEAR_DISTANCE: float = 1200.0  # Full detail within this range
 const LOD_FAR_DISTANCE: float = 2500.0  # Minimal detail beyond this range
 
-# Performance: cache player reference and throttle UI updates
+# Performance: cache player reference (set once at ready, not refreshed every second)
 var cached_player: Node = null
-var player_cache_timer: float = 0.0
-const PLAYER_CACHE_INTERVAL: float = 1.0  # Refresh player reference every 1s
 var ui_update_timer: float = 0.0
 const UI_UPDATE_INTERVAL: float = 0.2  # Update UI visibility 5 times per second
 
@@ -232,6 +230,9 @@ func _ready() -> void:
 		sprite.visible = true
 	if shadow_sprite:
 		shadow_sprite.visible = true
+
+	# Cache player reference once (player rarely changes during gameplay)
+	cached_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 
 	# VISIBILITY DEBUG: Only log enemies near player spawn (within 500px of origin)
 	var dist_from_origin = global_position.length()
@@ -748,12 +749,6 @@ func _process(delta: float) -> void:
 	if in_crit_window and not weakpoints.is_empty():
 		queue_redraw()  # Continuously redraw while weakpoints are active
 
-	# Cache player reference (avoid get_first_node_in_group every frame for 75 enemies)
-	player_cache_timer += delta
-	if player_cache_timer >= PLAYER_CACHE_INTERVAL:
-		player_cache_timer = 0.0
-		cached_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-
 	# Toggle UI based on player distance (visibility handled by LOD system)
 	if not is_corpse:  # Only for living enemies
 		# Throttle UI updates - don't need 60 FPS for visibility checks
@@ -844,7 +839,10 @@ func set_lod_level(lod_level: int) -> void:
 
 func update_loot_proximity() -> void:
 	"""Check if player is close enough to loot and show/hide prompt"""
-	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	# Use cached player reference (falls back to lookup if cache is stale)
+	if not cached_player or not is_instance_valid(cached_player):
+		cached_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	var player = cached_player
 	if not player:
 		player_in_loot_range = false
 		if loot_prompt:
@@ -1128,11 +1126,6 @@ func die() -> void:
 	become_corpse()
 
 ## Debug Visualization
-func draw_debug_shapes(debug_container: Node2D) -> void:
-	# OLD VERSION - draws in player space (rotates)
-	# Kept for backwards compatibility but not used
-	pass
-
 func draw_debug_shapes_world(world_container: Node2D) -> Node2D:
 	# NEW VERSION - draws in world space (doesn't rotate)
 	# RETURNS the container node for proper cleanup tracking

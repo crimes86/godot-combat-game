@@ -8,7 +8,7 @@ extends Node
 # - Position updates to clients
 
 # Enemy registry: network_id -> Enemy node
-var enemies: Dictionary = {}
+var enemies: Dictionary = {}  # Dictionary[int, Node]
 var next_enemy_id: int = 1
 
 # Position sync rate
@@ -17,6 +17,10 @@ var position_sync_timer: float = 0.0
 
 # Reference to game world
 var game_world: Node = null
+
+# Attack cooldown tracking (server-side anti-cheat)
+var attack_cooldowns: Dictionary = {}  # Dictionary[int, int] - peer_id -> last_attack_time_msec
+const ATTACK_COOLDOWN_MS: int = 400  # Minimum ms between attacks (slightly less than client cooldown for latency)
 
 func _ready():
 	# Will be initialized by game_world
@@ -79,16 +83,32 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
-		print("🌐 NetworkEnemyManager: Invalid enemy ID %d for attack" % enemy_network_id)
+		push_warning("NetworkEnemyManager: Invalid enemy ID %d for attack" % enemy_network_id)
 		return
 
 	# Validate enemy is alive and not already in crit window
 	if enemy.is_dying or enemy.is_corpse:
 		return
 
+	# SECURITY: Get actual sender ID (cannot be spoofed)
 	var attacker_id = multiplayer.get_remote_sender_id()
 	if attacker_id == 0:
 		attacker_id = 1  # Server's peer ID
+
+	# SECURITY: Attack cooldown check (anti-spam)
+	var current_time = Time.get_ticks_msec()
+	if attack_cooldowns.has(attacker_id):
+		var time_since_last = current_time - attack_cooldowns[attacker_id]
+		if time_since_last < ATTACK_COOLDOWN_MS:
+			push_warning("Anti-cheat: Player %d attacking too fast (%d ms)" % [attacker_id, time_since_last])
+			return
+	attack_cooldowns[attacker_id] = current_time
+
+	# SECURITY: Validate damage is within reasonable bounds for player's level
+	var max_base_damage = _get_max_player_damage(attacker_id)
+	if damage <= 0 or damage > max_base_damage * 1.5:  # Allow 50% buffer for variance
+		push_warning("Anti-cheat: Player %d reported suspicious damage %.1f (max expected: %.1f)" % [attacker_id, damage, max_base_damage])
+		damage = clampf(damage, 1.0, max_base_damage)
 
 	# Check if enemy already in crit window
 	var enemy_in_crit = false
@@ -197,23 +217,39 @@ func request_damage(enemy_network_id: int, damage: float, is_crit: bool, is_weak
 
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
-		print("🌐 NetworkEnemyManager: Invalid enemy ID %d" % enemy_network_id)
+		push_warning("NetworkEnemyManager: Invalid enemy ID %d" % enemy_network_id)
 		return
 
 	# Validate enemy is alive
 	if enemy.is_dying or enemy.is_corpse:
 		return
 
-	# Validate damage amount (basic sanity check)
-	if damage <= 0 or damage > 10000:
-		print("NetworkEnemyManager: Suspicious damage amount %f from peer %d" % [damage, multiplayer.get_remote_sender_id()])
-		return
-
-	# Get attacker ID for kill credit
-	# get_remote_sender_id() returns 0 for local calls, so use server ID (1) in that case
+	# SECURITY: Get actual sender ID (cannot be spoofed)
 	var attacker_id = multiplayer.get_remote_sender_id()
 	if attacker_id == 0:
-		attacker_id = 1  # Server'sasas peer ID
+		attacker_id = 1  # Server's peer ID
+
+	# SECURITY: Attack cooldown check (anti-spam) - share cooldown with request_attack
+	var current_time = Time.get_ticks_msec()
+	if attack_cooldowns.has(attacker_id):
+		var time_since_last = current_time - attack_cooldowns[attacker_id]
+		if time_since_last < ATTACK_COOLDOWN_MS:
+			push_warning("Anti-cheat: Player %d dealing damage too fast (%d ms)" % [attacker_id, time_since_last])
+			return
+	attack_cooldowns[attacker_id] = current_time
+
+	# SECURITY: Validate damage amount based on player's actual stats
+	var max_expected_damage = _get_max_player_damage(attacker_id)
+	if is_crit:
+		max_expected_damage *= 2.5  # Crit multiplier + buffer
+	if is_weakpoint:
+		max_expected_damage *= 2.5  # Weakpoint multiplier + buffer
+
+	if damage <= 0 or damage > max_expected_damage:
+		push_warning("Anti-cheat: Player %d suspicious damage %.1f (max: %.1f, crit: %s, wp: %s)" % [
+			attacker_id, damage, max_expected_damage, is_crit, is_weakpoint
+		])
+		damage = clampf(damage, 1.0, max_expected_damage)
 
 	# Apply damage server-side
 	enemy.current_health -= damage
@@ -859,3 +895,23 @@ func _get_weakpoint_count_for_level(player_level: int) -> int:
 		return 2  # Level 11-20: 2 weakpoints
 	else:
 		return 1  # Level 1-10: 1 weakpoint
+
+func _get_max_player_damage(attacker_peer_id: int) -> float:
+	"""Get the maximum expected base damage for a player (for anti-cheat validation)."""
+	var base_damage: float = 15.0  # Default base damage
+
+	# Try to find the attacking player's actual damage stat
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player in players:
+		var player_peer_id = 1
+		if player.has_method("get_multiplayer_authority"):
+			player_peer_id = player.get_multiplayer_authority()
+
+		if player_peer_id == attacker_peer_id:
+			if player.get("attack_damage") != null:
+				base_damage = player.attack_damage
+			break
+
+	# Add generous buffer for weapon variance, buffs, etc.
+	# Max realistic damage at high level with best gear is ~150-200
+	return maxf(base_damage * 2.0, 300.0)  # At least 300 to avoid false positives

@@ -8,8 +8,8 @@ class_name NetworkPlayer
 @export var is_local: bool = false
 
 # Reference to the actual Player scene
-var player_instance = null
-var player_scene = preload("res://scenes/player/player.tscn")
+var player_instance: Node = null
+var player_scene: PackedScene = preload("res://scenes/player/player.tscn")
 
 # Sync variables
 var sync_position: Vector2 = Vector2.ZERO
@@ -147,6 +147,19 @@ func request_damage(target_id: int, amount: int, attacker_id: int):
 	# Only server processes damage
 	if not multiplayer.is_server():
 		return
+
+	# SECURITY: Validate attacker_id matches actual sender (prevent spoofing)
+	var actual_sender = multiplayer.get_remote_sender_id()
+	if actual_sender == 0:
+		actual_sender = 1  # Server's peer ID
+	if attacker_id != actual_sender:
+		push_warning("Anti-cheat: Player %d tried to spoof damage as player %d" % [actual_sender, attacker_id])
+		attacker_id = actual_sender  # Use real sender ID
+
+	# SECURITY: Validate damage amount (prevent one-shot kills)
+	if amount <= 0 or amount > 500:
+		push_warning("Anti-cheat: Invalid PvP damage amount %d from player %d" % [amount, attacker_id])
+		amount = clampi(amount, 1, 500)
 
 	# Server-side i-frame validation: check if target is dashing
 	if sync_is_dashing and target_id == player_id:
