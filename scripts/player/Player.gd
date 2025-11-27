@@ -70,6 +70,12 @@ var character_ui: CanvasLayer = null
 # Campfire Direction Indicator
 var campfire_indicator: CanvasLayer = null
 
+# Chat UI
+var chat_ui: CanvasLayer = null
+
+# Inventory UI (separate from character sheet)
+var inventory_ui: CanvasLayer = null
+
 # Dash/Dodge System
 var is_dashing: bool = false
 var dash_cooldown: float = 1.5  # Seconds between dashes
@@ -252,6 +258,12 @@ func _ready() -> void:
 
 		# Create campfire direction indicator
 		call_deferred("create_campfire_indicator")
+
+		# Create chat UI
+		call_deferred("create_chat_ui")
+
+		# Create inventory UI (separate from character sheet)
+		call_deferred("create_inventory_ui")
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent crash on exit
@@ -487,7 +499,10 @@ func _physics_process(delta: float) -> void:
 		dash_cooldown_timer -= delta
 
 	# Get input direction (used for movement and animation)
-	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	# Block movement input when chat is focused
+	var input_direction := Vector2.ZERO
+	if not (chat_ui and chat_ui.has_method("is_chat_focused") and chat_ui.is_chat_focused()):
+		input_direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 
 	# Calculate effective speed with modifiers
 	var effective_speed = speed * get_movement_modifier()
@@ -760,9 +775,14 @@ func _input(event: InputEvent) -> void:
 					instance.queue_free()
 
 			KEY_C:
-				# Toggle character sheet (includes inventory)
+				# Toggle character sheet
 				if character_ui:
 					character_ui.toggle_character_ui()
+
+			KEY_I:
+				# Toggle inventory
+				if inventory_ui:
+					inventory_ui.toggle_ui()
 
 			KEY_SPACE:
 				# Dash/dodge
@@ -2004,6 +2024,18 @@ func toggle_debug_map_view() -> void:
 
 func is_ui_blocking_input() -> bool:
 	"""Check if any UI is currently open that should block game input"""
+	# Check if chat is focused (blocks movement/attack while typing)
+	if chat_ui and chat_ui.has_method("is_chat_focused") and chat_ui.is_chat_focused():
+		return true
+
+	# Check if inventory UI is open
+	if inventory_ui and inventory_ui.visible:
+		return true
+
+	# Check if character UI is open
+	if character_ui and character_ui.visible:
+		return true
+
 	var root = get_tree().root
 	for child in root.get_children():
 		if child is CanvasLayer and child.visible:
@@ -2013,9 +2045,6 @@ func is_ui_blocking_input() -> bool:
 			if child is LootBodyUI:
 				return true
 			if child is ChestLootUI:
-				return true
-			# CharacterUI doesn't have class_name, check by method
-			if child.has_method("toggle_ui"):
 				return true
 	return false
 
@@ -2120,6 +2149,32 @@ func create_campfire_indicator() -> void:
 	# Wait one frame for _ready() to complete
 	await get_tree().process_frame
 	print("🧭 Campfire indicator initialized")
+
+func create_chat_ui() -> void:
+	"""Create and add chat UI to scene tree"""
+	print("🏗️ Player.create_chat_ui() called (deferred)")
+	var ChatUIScript = load("res://scripts/ui/ChatUI.gd")
+	chat_ui = ChatUIScript.new()
+	chat_ui.name = "ChatUI"
+
+	# Add to scene tree
+	get_tree().root.add_child(chat_ui)
+
+	print("💬 Chat UI added to scene tree")
+	print("   In tree: ", chat_ui.is_inside_tree())
+
+func create_inventory_ui() -> void:
+	"""Create and add inventory UI to scene tree"""
+	print("🏗️ Player.create_inventory_ui() called (deferred)")
+	var InventoryUIScript = load("res://scripts/ui/InventoryUI.gd")
+	inventory_ui = InventoryUIScript.new()
+	inventory_ui.name = "InventoryUI"
+
+	# Add to scene tree
+	get_tree().root.add_child(inventory_ui)
+
+	print("📦 Inventory UI added to scene tree")
+	print("   In tree: ", inventory_ui.is_inside_tree())
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DASH/DODGE SYSTEM

@@ -1,0 +1,589 @@
+extends CanvasLayer
+
+## Inventory UI - Standalone inventory window
+## Stone Gray UI theme matching CharacterUI
+## Press I to toggle
+
+var is_visible: bool = false
+
+# Pending deletion data (for confirmation dialog)
+var pending_delete_data: Dictionary = {}
+
+# UI References
+var main_panel: PanelContainer
+var inventory_slots: Array[Control] = []
+var gold_label: Label
+
+# Stone Gray UI Palette (matching CharacterUI)
+const BG_COLOR = Color(0.12, 0.12, 0.14, 0.75)  # Dark stone gray (transparent for combat)
+const BORDER_COLOR = Color(0.35, 0.38, 0.42, 1.0)  # Steel gray border
+const BORDER_INNER = Color(0.06, 0.06, 0.08, 1.0)  # Dark inner shadow
+const ACCENT_COLOR = Color(0.55, 0.58, 0.62, 1.0)  # Light steel accent
+const TEXT_COLOR = Color(0.92, 0.92, 0.94, 1.0)  # Clean white text
+const HEADER_COLOR = Color(0.75, 0.78, 0.82, 1.0)  # Silver headers
+const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
+
+func _ready() -> void:
+	# Set layer above game elements but below shop
+	layer = 95
+
+	# Start hidden
+	visible = false
+
+	# Create UI
+	create_inventory_ui()
+
+	# Connect to signals
+	CharacterStats.gold_changed.connect(_on_gold_changed)
+	InventorySystem.inventory_changed.connect(_on_inventory_changed)
+
+	# Initial update
+	refresh_all()
+
+func create_inventory_ui() -> void:
+	"""Create standalone inventory window"""
+
+	# Create full-screen drop zone for deletion (sits behind everything)
+	var drop_zone = Control.new()
+	drop_zone.name = "FullScreenDropZone"
+	drop_zone.set_anchors_preset(Control.PRESET_FULL_RECT)
+	drop_zone.mouse_filter = Control.MOUSE_FILTER_PASS
+
+	# Enable drag-drop on the drop zone
+	drop_zone.set_drag_forwarding(
+		Callable(self, "_get_drop_zone_drag_data"),
+		Callable(self, "_can_drop_on_drop_zone"),
+		Callable(self, "_drop_on_drop_zone")
+	)
+
+	add_child(drop_zone)
+
+	# Create confirmation dialog for deletion
+	var delete_dialog = ConfirmationDialog.new()
+	delete_dialog.name = "DeleteConfirmDialog"
+	delete_dialog.title = "Delete Item"
+	delete_dialog.dialog_text = "Are you sure you want to delete this item?"
+	delete_dialog.confirmed.connect(_on_delete_confirmed)
+	add_child(delete_dialog)
+
+	# Main panel container - positioned at right side of screen
+	main_panel = PanelContainer.new()
+	main_panel.name = "InventoryPanel"
+
+	# Position on right side
+	main_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	main_panel.custom_minimum_size = Vector2(350, 450)
+	main_panel.anchor_left = 1.0
+	main_panel.anchor_top = 0.5
+	main_panel.anchor_right = 1.0
+	main_panel.anchor_bottom = 0.5
+	main_panel.offset_left = -370
+	main_panel.offset_right = -20
+	main_panel.offset_top = -225
+	main_panel.offset_bottom = 225
+
+	# Dark Fantasy Wasteland styling with transparency
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = BG_COLOR
+	panel_style.border_width_left = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = BORDER_COLOR
+	panel_style.corner_radius_top_left = 8
+	panel_style.corner_radius_top_right = 8
+	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_bottom_right = 8
+	panel_style.shadow_size = 12
+	panel_style.shadow_color = Color(0, 0, 0, 0.8)
+	panel_style.shadow_offset = Vector2(0, 6)
+
+	main_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# Main layout with padding
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 15)
+	margin.add_theme_constant_override("margin_right", 15)
+	margin.add_theme_constant_override("margin_top", 15)
+	margin.add_theme_constant_override("margin_bottom", 15)
+	main_panel.add_child(margin)
+
+	var main_vbox = VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(main_vbox)
+
+	# Title
+	var title = create_header_label("Inventory")
+	main_vbox.add_child(title)
+
+	# Inventory grid panel
+	var inv_panel = PanelContainer.new()
+	inv_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var inv_style = create_inner_panel_style()
+	inv_panel.add_theme_stylebox_override("panel", inv_style)
+	main_vbox.add_child(inv_panel)
+
+	var inv_vbox = VBoxContainer.new()
+	inv_vbox.add_theme_constant_override("separation", 12)
+	inv_panel.add_child(inv_vbox)
+
+	# Center the inventory grid
+	var inv_center = CenterContainer.new()
+	inv_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	inv_vbox.add_child(inv_center)
+
+	# Inventory grid (4 columns)
+	var inv_grid = GridContainer.new()
+	inv_grid.columns = 4
+	inv_grid.add_theme_constant_override("h_separation", 8)
+	inv_grid.add_theme_constant_override("v_separation", 8)
+	inv_center.add_child(inv_grid)
+
+	# Create inventory slots
+	for i in range(InventorySystem.MAX_INVENTORY_SLOTS):
+		var slot_button = create_inventory_slot(i)
+		inv_grid.add_child(slot_button)
+		inventory_slots.append(slot_button)
+
+	# Gold display at bottom
+	var separator_gold = create_styled_separator()
+	main_vbox.add_child(separator_gold)
+
+	var gold_container = HBoxContainer.new()
+	gold_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	main_vbox.add_child(gold_container)
+
+	var gold_icon = create_text_label("💰", 18)
+	gold_container.add_child(gold_icon)
+
+	gold_label = create_text_label("0 Gold", 18)
+	gold_label.add_theme_color_override("font_color", HEADER_COLOR)
+	gold_container.add_child(gold_label)
+
+	add_child(main_panel)
+
+func create_inventory_slot(slot_index: int) -> Control:
+	"""Create a single inventory slot button with drag-drop support"""
+	var slot_control = Control.new()
+	slot_control.name = "InvSlot_" + str(slot_index)
+	slot_control.custom_minimum_size = Vector2(70, 70)
+	slot_control.set_meta("slot_index", slot_index)
+	slot_control.set_meta("slot_type", "inventory")
+
+	# Enable drag-drop
+	slot_control.set_drag_forwarding(
+		Callable(self, "_get_inventory_drag_data").bind(slot_index),
+		Callable(self, "_can_drop_inventory_data").bind(slot_index),
+		Callable(self, "_drop_inventory_data").bind(slot_index)
+	)
+
+	# Add panel for styling
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(70, 70)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot_control.add_child(panel)
+
+	var slot_style_normal = create_slot_style(SLOT_BG, BORDER_INNER, 2)
+	panel.add_theme_stylebox_override("panel", slot_style_normal)
+
+	# Add label for item text
+	var label = Label.new()
+	label.name = "ItemLabel"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 2)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_child(label)
+
+	# Connect click event
+	slot_control.gui_input.connect(_on_inventory_slot_gui_input.bind(slot_index))
+
+	return slot_control
+
+func create_header_label(text: String, size: int = 18) -> Label:
+	"""Create a header label"""
+	var label = Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", HEADER_COLOR)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return label
+
+func create_text_label(text: String, size: int = 14) -> Label:
+	"""Create a standard text label"""
+	var label = Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", TEXT_COLOR)
+	return label
+
+func create_styled_separator() -> Control:
+	"""Create a styled separator line"""
+	var separator_container = MarginContainer.new()
+	separator_container.add_theme_constant_override("margin_top", 8)
+	separator_container.add_theme_constant_override("margin_bottom", 8)
+	separator_container.add_theme_constant_override("margin_left", 20)
+	separator_container.add_theme_constant_override("margin_right", 20)
+
+	var separator = HSeparator.new()
+	separator.custom_minimum_size = Vector2(0, 2)
+
+	var sep_style = StyleBoxFlat.new()
+	sep_style.bg_color = BORDER_COLOR
+	sep_style.content_margin_top = 1
+	sep_style.content_margin_bottom = 1
+	separator.add_theme_stylebox_override("separator", sep_style)
+
+	separator_container.add_child(separator)
+	return separator_container
+
+func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, border_width: int = 2, use_glow: bool = false) -> StyleBoxFlat:
+	"""Create style for inventory slots"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = bg_color
+	style.border_width_left = border_width
+	style.border_width_right = border_width
+	style.border_width_top = border_width
+	style.border_width_bottom = border_width
+	style.border_color = border_color
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+
+	if use_glow and border_color != BORDER_INNER:
+		style.shadow_size = 3
+		style.shadow_color = Color(border_color.r, border_color.g, border_color.b, 0.3)
+	else:
+		style.shadow_size = 3
+		style.shadow_color = BORDER_INNER
+
+	return style
+
+func create_inner_panel_style() -> StyleBoxFlat:
+	"""Create style for inner panels"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = SLOT_BG
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = BORDER_INNER
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.shadow_size = 4
+	style.shadow_color = Color(0, 0, 0, 0.5)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	return style
+
+func get_rarity_glow_color(rarity_str: String) -> Color:
+	"""Get glow color for item rarity"""
+	match rarity_str.to_upper():
+		"COMMON":
+			return Color(0.6, 0.6, 0.6, 0.9)
+		"UNCOMMON":
+			return Color(0.4, 0.8, 0.4, 1.0)
+		"RARE":
+			return Color(0.4, 0.5, 0.9, 1.0)
+		"EPIC":
+			return Color(0.7, 0.4, 0.9, 1.0)
+		"LEGENDARY":
+			return Color(0.9, 0.6, 0.2, 1.0)
+		"ARTIFACT":
+			return Color(0.9, 0.8, 0.3, 1.0)
+		_:
+			return BORDER_INNER
+
+func toggle_ui() -> void:
+	"""Toggle inventory UI visibility"""
+	is_visible = !is_visible
+	visible = is_visible
+
+	if is_visible:
+		refresh_all()
+
+func refresh_all() -> void:
+	"""Refresh all UI elements"""
+	refresh_inventory()
+	refresh_gold()
+
+func refresh_gold() -> void:
+	"""Update gold display"""
+	if gold_label:
+		gold_label.text = "%d Gold" % CharacterStats.gold
+
+func refresh_inventory() -> void:
+	"""Update inventory slot displays"""
+	for i in range(inventory_slots.size()):
+		var slot_control = inventory_slots[i]
+		var item = InventorySystem.get_item(i)
+
+		var panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
+		if not panel:
+			continue
+
+		var label = panel.get_node_or_null("ItemLabel")
+		if not label:
+			continue
+
+		if item and item.size() > 0:
+			var item_name = item.get("name", "???")
+			var quantity = item.get("quantity", 1)
+			var is_stackable = item.get("stackable", false)
+
+			if is_stackable and quantity > 1:
+				label.text = "%s x%d" % [item_name, quantity]
+			else:
+				label.text = item_name
+
+			var rarity = item.get("rarity", "COMMON")
+			var glow_color = get_rarity_glow_color(rarity)
+			var glow_style = create_slot_style(SLOT_BG, glow_color, 3, true)
+			panel.add_theme_stylebox_override("panel", glow_style)
+
+			var tooltip = item.get("description", "")
+
+			if item.get("type") == "weapon":
+				if item.has("base_damage"):
+					tooltip += "\nDamage: +%.1f" % item.get("base_damage", 0)
+				if item.has("attack_speed_bonus"):
+					var speed_bonus = item.get("attack_speed_bonus", 0.0)
+					if speed_bonus != 0:
+						tooltip += "\nAttack Speed: %+.1f%%" % (speed_bonus * 100)
+				if item.has("crit_chance_bonus"):
+					var crit_bonus = item.get("crit_chance_bonus", 0.0)
+					if crit_bonus != 0:
+						tooltip += "\nCrit Chance: +%.1f%%" % (crit_bonus * 100)
+
+			if item.has("defense"):
+				tooltip += "\nDefense: +%d" % item.get("defense", 0)
+
+			if item.has("value"):
+				tooltip += "\nValue: %d gold" % item.get("value", 0)
+
+			slot_control.tooltip_text = tooltip
+		else:
+			label.text = ""
+			slot_control.tooltip_text = "Empty slot"
+			var default_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
+			panel.add_theme_stylebox_override("panel", default_style)
+
+func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
+	"""Handle GUI input on inventory slot (double-click or right-click to equip)"""
+	if event is InputEventMouseButton and event.pressed:
+		if (event.button_index == MOUSE_BUTTON_LEFT and event.double_click) or event.button_index == MOUSE_BUTTON_RIGHT:
+			var item = InventorySystem.get_item(slot_index)
+
+			if item and item.size() > 0:
+				# Check if it's a tool
+				if item.get("type", "") == "tool":
+					var tool_type = item.get("tool_type", "")
+					var equipped = false
+
+					if tool_type == "axe":
+						equipped = InventorySystem.equip_axe(item)
+					elif tool_type == "pickaxe":
+						equipped = InventorySystem.equip_pickaxe(item)
+
+					if equipped:
+						InventorySystem.remove_item(slot_index)
+						SoundManager.play_equip_sound()
+						refresh_all()
+				# Check if it's a weapon
+				elif item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
+					var weapon = dict_to_weapon(item)
+					if weapon:
+						CharacterStats.equip_weapon(weapon)
+						InventorySystem.remove_item(slot_index)
+						SoundManager.play_equip_sound()
+						refresh_all()
+				# Check if it's armor
+				elif item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
+					if CharacterStats.equip_armor(item):
+						InventorySystem.remove_item(slot_index)
+						SoundManager.play_equip_sound()
+						refresh_all()
+
+func dict_to_weapon(item_dict: Dictionary) -> Weapon:
+	"""Convert a weapon dictionary to a Weapon resource"""
+	var weapon = Weapon.new()
+
+	weapon.weapon_name = item_dict.get("name", "Unknown")
+	weapon.weapon_type = item_dict.get("weapon_type", "sword")
+	weapon.damage_type = "unified"
+	weapon.description = item_dict.get("description", "")
+	weapon.base_damage = item_dict.get("base_damage", 5.0)
+
+	var attack_speed_category = item_dict.get("attack_speed", "medium")
+	match attack_speed_category:
+		"fast":
+			weapon.attack_speed_bonus = -0.30
+		"slow":
+			weapon.attack_speed_bonus = 0.30
+		_:
+			weapon.attack_speed_bonus = 0.0
+
+	weapon.crit_chance_bonus = item_dict.get("crit_chance", 0.0)
+	weapon.required_level = item_dict.get("required_level", 1)
+	weapon.can_trade = item_dict.get("can_trade", true)
+
+	var rarity_str = item_dict.get("rarity", "COMMON").to_upper()
+	match rarity_str:
+		"COMMON":
+			weapon.rarity = Weapon.Rarity.COMMON
+		"UNCOMMON":
+			weapon.rarity = Weapon.Rarity.UNCOMMON
+		"RARE":
+			weapon.rarity = Weapon.Rarity.RARE
+		"EPIC":
+			weapon.rarity = Weapon.Rarity.EPIC
+		"LEGENDARY":
+			weapon.rarity = Weapon.Rarity.LEGENDARY
+
+	return weapon
+
+# ============================================
+# DRAG AND DROP FUNCTIONS
+# ============================================
+
+func _get_inventory_drag_data(at_position: Vector2, slot_index: int) -> Variant:
+	"""Start dragging an inventory item"""
+	var item = InventorySystem.get_item(slot_index)
+	if not item or item.is_empty():
+		return null
+
+	var preview = Label.new()
+	preview.text = item.get("name", "Item")
+	preview.add_theme_font_size_override("font_size", 16)
+	preview.add_theme_color_override("font_color", Color.GOLD)
+	preview.modulate = Color(1, 1, 1, 0.8)
+
+	var slot_control = inventory_slots[slot_index]
+	slot_control.set_drag_preview(preview)
+
+	return {
+		"source_type": "inventory",
+		"source_index": slot_index,
+		"item": item,
+		"source_ui": "inventory_ui"
+	}
+
+func _can_drop_inventory_data(at_position: Vector2, data: Variant, slot_index: int) -> bool:
+	"""Check if data can be dropped on this inventory slot"""
+	if not data is Dictionary:
+		return false
+	return data.has("item")
+
+func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: int) -> void:
+	"""Handle dropping data on an inventory slot"""
+	if not data.has("item"):
+		return
+
+	var source_type = data.get("source_type", "")
+	var source_index = data.get("source_index", -1)
+	var dragged_item = data.get("item", {})
+
+	if source_type == "inventory":
+		# Swap inventory items
+		if source_index != slot_index:
+			var target_item = InventorySystem.get_item(slot_index)
+
+			InventorySystem.set_item(source_index, {})
+			InventorySystem.set_item(slot_index, {})
+
+			InventorySystem.set_item(slot_index, dragged_item)
+			if target_item and not target_item.is_empty():
+				InventorySystem.set_item(source_index, target_item)
+
+			SoundManager.play_inventory_move_sound()
+			refresh_all()
+
+	elif source_type == "equipment":
+		# Move from equipment to inventory
+		var source_slot_name = data.get("source_slot_name", "")
+		if source_slot_name:
+			if source_slot_name == "mainhand" and CharacterStats.equipped_weapon:
+				CharacterStats.unequip_weapon()
+				SoundManager.play_equip_sound()
+				refresh_all()
+			elif CharacterStats.unequip_armor(source_slot_name):
+				SoundManager.play_equip_sound()
+				refresh_all()
+
+	elif source_type == "tool":
+		# Move from tool slot to inventory
+		var source_tool_name = data.get("source_tool_name", "")
+		if source_tool_name == "axe":
+			InventorySystem.unequip_axe()
+			SoundManager.play_equip_sound()
+			refresh_all()
+		elif source_tool_name == "pickaxe":
+			InventorySystem.unequip_pickaxe()
+			SoundManager.play_equip_sound()
+			refresh_all()
+
+# ============================================
+# DROP ZONE (DELETE ITEMS WITH CONFIRMATION)
+# ============================================
+
+func _get_drop_zone_drag_data(at_position: Vector2) -> Variant:
+	return null
+
+func _can_drop_on_drop_zone(at_position: Vector2, data: Variant) -> bool:
+	if not data is Dictionary:
+		return false
+
+	if not data.has("item"):
+		return false
+
+	if main_panel:
+		var panel_rect = main_panel.get_global_rect()
+		var is_outside = not panel_rect.has_point(at_position)
+		return is_outside
+
+	return false
+
+func _drop_on_drop_zone(at_position: Vector2, data: Dictionary) -> void:
+	if not data.has("item"):
+		return
+
+	pending_delete_data = data
+
+	var item_name = data.get("item", {}).get("name", "Unknown")
+
+	var dialog = get_node_or_null("DeleteConfirmDialog")
+	if dialog:
+		dialog.dialog_text = "Are you sure you want to delete '%s'?" % item_name
+		dialog.popup_centered()
+
+func _on_delete_confirmed() -> void:
+	if pending_delete_data.is_empty():
+		return
+
+	var source_type = pending_delete_data.get("source_type", "")
+	var dragged_item = pending_delete_data.get("item", {})
+
+	if source_type == "inventory":
+		var source_index = pending_delete_data.get("source_index", -1)
+		if source_index >= 0:
+			InventorySystem.remove_item(source_index)
+			refresh_all()
+
+	pending_delete_data = {}
+
+func _on_gold_changed(_amount: int, _total: int) -> void:
+	refresh_gold()
+
+func _on_inventory_changed() -> void:
+	refresh_inventory()

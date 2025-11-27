@@ -6,6 +6,7 @@ signal player_disconnected(id)
 signal connected_to_server
 signal connection_failed
 signal server_created
+signal chat_message_received(sender_name: String, message: String, sender_id: int)
 
 const DEFAULT_PORT = 7000
 const MAX_PLAYERS = 4
@@ -181,3 +182,52 @@ func set_player_name(name: String):
 				rpc("update_player_list", connected_players)
 			else:
 				rpc_id(1, "register_player", my_id, name)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CHAT SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════
+
+func send_chat_message(message: String) -> void:
+	"""Send a chat message to all players"""
+	if not peer or not multiplayer.has_multiplayer_peer():
+		return
+
+	# Sanitize message
+	message = message.strip_edges()
+	if message.is_empty() or message.length() > 200:
+		return
+
+	var my_id = multiplayer.get_unique_id()
+	var my_name = player_name
+
+	# If we're the host, broadcast directly
+	if is_host:
+		rpc("receive_chat_broadcast", my_name, message, my_id)
+		# Also emit locally for host's UI
+		chat_message_received.emit(my_name, message, my_id)
+	else:
+		# Send to server for relay
+		rpc_id(1, "relay_chat_message", my_name, message)
+
+@rpc("any_peer", "reliable")
+func relay_chat_message(sender_name: String, message: String) -> void:
+	"""Server receives message from client and broadcasts to all"""
+	if not is_host:
+		return
+
+	var sender_id = multiplayer.get_remote_sender_id()
+
+	# Sanitize
+	message = message.strip_edges()
+	if message.is_empty() or message.length() > 200:
+		return
+
+	# Broadcast to all players (including sender)
+	rpc("receive_chat_broadcast", sender_name, message, sender_id)
+	# Emit for host's local UI
+	chat_message_received.emit(sender_name, message, sender_id)
+
+@rpc("authority", "reliable", "call_remote")
+func receive_chat_broadcast(sender_name: String, message: String, sender_id: int) -> void:
+	"""All clients receive broadcasted chat message"""
+	chat_message_received.emit(sender_name, message, sender_id)

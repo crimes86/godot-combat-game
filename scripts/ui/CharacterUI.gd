@@ -1,24 +1,18 @@
 extends CanvasLayer
 
-## Character UI - EverQuest-style unified character sheet
-## Combines character info, stats, equipment, and inventory in one window
-## Press C to toggle
+## Character UI - Character sheet with stats and equipment
+## Press C to toggle (Inventory is separate - press I)
 
 var is_visible: bool = false
-
-# Pending deletion data (for confirmation dialog)
-var pending_delete_data: Dictionary = {}
 
 # UI References
 var main_panel: PanelContainer
 var equipment_slots: Dictionary = {}  # slot_name: HBoxContainer (contains slot icon Control + label)
 var tool_slots: Dictionary = {}  # tool_name: HBoxContainer (axe, pickaxe)
-var inventory_slots: Array[Control] = []  # Changed from Array[Button] to Array[Control]
 var stat_labels: Dictionary = {}  # stat_name: Label
 var character_name_label: Label
 var level_label: Label
 var xp_bar: ProgressBar
-var gold_label: Label
 var hp_label: Label
 var defense_label: Label
 
@@ -52,10 +46,8 @@ func _ready() -> void:
 	# Connect to signals
 	CharacterStats.level_up.connect(_on_stats_changed)
 	CharacterStats.experience_gained.connect(_on_xp_changed)
-	CharacterStats.gold_changed.connect(_on_gold_changed)
 	CharacterStats.armor_equipped.connect(_on_armor_changed)
 	CharacterStats.armor_unequipped.connect(_on_armor_changed)
-	InventorySystem.inventory_changed.connect(_on_inventory_changed)
 	InventorySystem.axe_equipped.connect(_on_tool_changed)
 	InventorySystem.axe_unequipped.connect(_on_tool_changed)
 	InventorySystem.pickaxe_equipped.connect(_on_tool_changed)
@@ -66,44 +58,21 @@ func _ready() -> void:
 
 
 func create_character_ui() -> void:
-	"""Create EverQuest-style character sheet"""
+	"""Create character sheet with stats and equipment (2 columns)"""
 
-	# Create full-screen drop zone for deletion (sits behind everything)
-	var drop_zone = Control.new()
-	drop_zone.name = "FullScreenDropZone"
-	drop_zone.set_anchors_preset(Control.PRESET_FULL_RECT)
-	drop_zone.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass clicks but receive drag events
-
-	# Enable drag-drop on the drop zone
-	drop_zone.set_drag_forwarding(
-		Callable(self, "_get_drop_zone_drag_data"),
-		Callable(self, "_can_drop_on_drop_zone"),
-		Callable(self, "_drop_on_drop_zone")
-	)
-
-	add_child(drop_zone)
-
-	# Create confirmation dialog for deletion
-	var delete_dialog = ConfirmationDialog.new()
-	delete_dialog.name = "DeleteConfirmDialog"
-	delete_dialog.title = "Delete Item"
-	delete_dialog.dialog_text = "Are you sure you want to delete this item?"
-	delete_dialog.confirmed.connect(_on_delete_confirmed)
-	add_child(delete_dialog)
-
-	# Main panel container - centered (wider for 3 columns)
+	# Main panel container - centered (narrower for 2 columns)
 	main_panel = PanelContainer.new()
 	main_panel.name = "CharacterPanel"
 
-	# Center the panel - wider for 3-column layout
+	# Center the panel - 2-column layout
 	main_panel.set_anchors_preset(Control.PRESET_CENTER)
-	main_panel.custom_minimum_size = Vector2(1000, 600)
+	main_panel.custom_minimum_size = Vector2(620, 600)
 	main_panel.anchor_left = 0.5
 	main_panel.anchor_top = 0.5
 	main_panel.anchor_right = 0.5
 	main_panel.anchor_bottom = 0.5
-	main_panel.offset_left = -500
-	main_panel.offset_right = 500
+	main_panel.offset_left = -310
+	main_panel.offset_right = 310
 	main_panel.offset_top = -300
 	main_panel.offset_bottom = 300
 	main_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -131,9 +100,7 @@ func create_character_ui() -> void:
 
 	main_panel.add_theme_stylebox_override("panel", panel_style)
 
-	# Don't enable drag-drop on main panel - we'll use a full-screen drop zone instead
-
-	# Main horizontal layout (3 columns: Stats | Equipment | Inventory) with padding
+	# Main horizontal layout (2 columns: Stats | Equipment) with padding
 	var margin = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 15)
 	margin.add_theme_constant_override("margin_right", 15)
@@ -145,14 +112,11 @@ func create_character_ui() -> void:
 	main_hbox.add_theme_constant_override("separation", 15)
 	margin.add_child(main_hbox)
 
-	# LEFT COLUMN: Character info + stats (NO inventory/gold)
+	# LEFT COLUMN: Character info + stats
 	create_character_info_panel(main_hbox)
 
-	# MIDDLE COLUMN: Equipment slots
+	# RIGHT COLUMN: Equipment slots
 	create_equipment_panel(main_hbox)
-
-	# RIGHT COLUMN: Inventory + Gold
-	create_inventory_panel(main_hbox)
 
 	add_child(main_panel)
 
@@ -373,63 +337,6 @@ func create_character_info_panel(parent: Control) -> void:
 		derived_grid.add_child(value_label)
 		stat_labels[derived_name.to_lower().replace(" ", "_")] = value_label
 
-	# No gold display here - moved to inventory panel
-
-func create_inventory_panel(parent: Control) -> void:
-	"""Create inventory grid + gold display (right column)"""
-	var inv_panel = PanelContainer.new()
-	inv_panel.custom_minimum_size = Vector2(320, 0)
-	inv_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	var inv_style = create_inner_panel_style()
-	inv_panel.add_theme_stylebox_override("panel", inv_style)
-	parent.add_child(inv_panel)
-
-	var inv_vbox = VBoxContainer.new()
-	inv_vbox.add_theme_constant_override("separation", 12)
-	inv_panel.add_child(inv_vbox)
-
-	# Title
-	var title = create_header_label("Inventory", 16)
-	inv_vbox.add_child(title)
-
-	# Center the inventory grid
-	var inv_center = CenterContainer.new()
-	inv_vbox.add_child(inv_center)
-
-	# Inventory grid (4 slots for now, expandable)
-	var inv_grid = GridContainer.new()
-	inv_grid.columns = 4
-	inv_grid.add_theme_constant_override("h_separation", 8)
-	inv_grid.add_theme_constant_override("v_separation", 8)
-	inv_center.add_child(inv_grid)
-
-	# Create inventory slots
-	for i in range(InventorySystem.MAX_INVENTORY_SLOTS):
-		var slot_button = create_inventory_slot(i)
-		inv_grid.add_child(slot_button)
-		inventory_slots.append(slot_button)
-
-	# Add spacer to push gold to bottom
-	var spacer = Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	inv_vbox.add_child(spacer)
-
-	# Gold display at bottom
-	var separator_gold = create_styled_separator()
-	inv_vbox.add_child(separator_gold)
-
-	var gold_container = HBoxContainer.new()
-	gold_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	inv_vbox.add_child(gold_container)
-
-	var gold_icon = create_text_label("💰", 18)
-	gold_container.add_child(gold_icon)
-
-	gold_label = create_text_label("0 Gold", 18)
-	gold_label.add_theme_color_override("font_color", HEADER_COLOR)
-	gold_container.add_child(gold_label)
-
 func create_equipment_slot(slot_name: String, label_text: String) -> HBoxContainer:
 	"""Create a single equipment slot button with drag-drop support"""
 	var container = HBoxContainer.new()
@@ -543,52 +450,6 @@ func create_tool_slot(tool_name: String, label_text: String) -> HBoxContainer:
 	container.add_child(slot_label)
 
 	return container
-
-func create_inventory_slot(slot_index: int) -> Control:
-	"""Create a single inventory slot button with drag-drop support"""
-	# Create a custom control for drag-drop
-	var slot_control = Control.new()
-	slot_control.name = "InvSlot_" + str(slot_index)
-	slot_control.custom_minimum_size = Vector2(70, 70)
-	slot_control.set_meta("slot_index", slot_index)
-	slot_control.set_meta("slot_type", "inventory")
-
-	# Enable drag-drop
-	slot_control.set_drag_forwarding(
-		Callable(self, "_get_inventory_drag_data").bind(slot_index),
-		Callable(self, "_can_drop_inventory_data").bind(slot_index),
-		Callable(self, "_drop_inventory_data").bind(slot_index)
-	)
-
-	# Add panel for styling
-	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(70, 70)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let parent handle input
-	slot_control.add_child(panel)
-
-	# Wasteland slot styling with deep inset
-	var slot_style_normal = create_slot_style(SLOT_BG, BORDER_INNER, 2)
-	panel.add_theme_stylebox_override("panel", slot_style_normal)
-
-	# Add label for item text
-	var label = Label.new()
-	label.name = "ItemLabel"
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 14)  # Larger font
-	label.add_theme_color_override("font_color", Color.WHITE)  # Bright white
-	label.add_theme_color_override("font_outline_color", Color.BLACK)  # Black outline
-	label.add_theme_constant_override("outline_size", 2)  # Outline for contrast
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # Wrap long item names
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_child(label)
-
-	# Connect click event
-	slot_control.gui_input.connect(_on_inventory_slot_gui_input.bind(slot_index))
-
-	return slot_control
 
 func create_stat_row(stat_name: String) -> HBoxContainer:
 	"""Create a row for displaying a stat with tooltip"""
@@ -744,7 +605,6 @@ func refresh_all() -> void:
 	refresh_stats()
 	refresh_equipment()
 	refresh_tools()
-	refresh_inventory()
 
 func refresh_character_info() -> void:
 	"""Update character name, level, HP, XP, gold"""
@@ -767,9 +627,6 @@ func refresh_character_info() -> void:
 		if CharacterStats.experience_to_next_level > 0:
 			xp_percent = float(CharacterStats.experience) / float(CharacterStats.experience_to_next_level) * 100.0
 		xp_bar.value = xp_percent
-
-	if gold_label:
-		gold_label.text = "%d Gold" % CharacterStats.gold
 
 func refresh_stats() -> void:
 	"""Update all stat displays"""
@@ -916,68 +773,6 @@ func refresh_tools() -> void:
 			var default_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 			panel.add_theme_stylebox_override("panel", default_style)
 
-func refresh_inventory() -> void:
-	"""Update inventory slot displays"""
-	for i in range(inventory_slots.size()):
-		var slot_control = inventory_slots[i]
-		var item = InventorySystem.get_item(i)
-
-		# Get the label from the slot control
-		var panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
-		if not panel:
-			continue
-
-		var label = panel.get_node_or_null("ItemLabel")
-		if not label:
-			continue
-
-		if item and item.size() > 0:
-			var item_name = item.get("name", "???")
-			var quantity = item.get("quantity", 1)
-			var is_stackable = item.get("stackable", false)
-
-			if is_stackable and quantity > 1:
-				label.text = "%s x%d" % [item_name, quantity]
-			else:
-				label.text = item_name
-
-			# Apply subtle rarity glow to slot border
-			var rarity = item.get("rarity", "COMMON")
-			var glow_color = get_rarity_glow_color(rarity)
-			var glow_style = create_slot_style(SLOT_BG, glow_color, 3, true)  # Subtle border + glow
-			panel.add_theme_stylebox_override("panel", glow_style)
-
-			var tooltip = item.get("description", "")
-
-			# Weapon stats
-			if item.get("type") == "weapon":
-				if item.has("base_damage"):
-					tooltip += "\nDamage: +%.1f" % item.get("base_damage", 0)
-				if item.has("attack_speed_bonus"):
-					var speed_bonus = item.get("attack_speed_bonus", 0.0)
-					if speed_bonus != 0:
-						tooltip += "\nAttack Speed: %+.1f%%" % (speed_bonus * 100)
-				if item.has("crit_chance_bonus"):
-					var crit_bonus = item.get("crit_chance_bonus", 0.0)
-					if crit_bonus != 0:
-						tooltip += "\nCrit Chance: +%.1f%%" % (crit_bonus * 100)
-
-			# Armor stats
-			if item.has("defense"):
-				tooltip += "\nDefense: +%d" % item.get("defense", 0)
-
-			# Value
-			if item.has("value"):
-				tooltip += "\nValue: %d gold" % item.get("value", 0)
-
-			slot_control.tooltip_text = tooltip
-		else:
-			label.text = ""
-			slot_control.tooltip_text = "Empty slot"
-			# Reset to default style when empty
-			var default_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
-			panel.add_theme_stylebox_override("panel", default_style)
-
 func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
 	"""Handle GUI input on equipment slot (double-click or right-click to unequip)"""
 	if event is InputEventMouseButton and event.pressed:
@@ -1030,75 +825,33 @@ func _on_tool_slot_gui_input(event: InputEvent, tool_name: String) -> void:
 				SoundManager.play_equip_sound()  # Unequip sound
 				refresh_all()
 
-func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
-	"""Handle GUI input on inventory slot (double-click or right-click to equip)"""
-	if event is InputEventMouseButton and event.pressed:
-		# Double-click or right-click to equip
-		if (event.button_index == MOUSE_BUTTON_LEFT and event.double_click) or event.button_index == MOUSE_BUTTON_RIGHT:
-			var item = InventorySystem.get_item(slot_index)
+# ============================================
+# DRAG AND DROP FUNCTIONS
+# ============================================
 
-			if item and item.size() > 0:
-				var action = "double-click" if event.double_click else "right-click"
-
-				# Check if it's a tool
-				if item.get("type", "") == "tool":
-					var tool_type = item.get("tool_type", "")
-					var equipped = false
-
-					if tool_type == "axe":
-						equipped = InventorySystem.equip_axe(item)
-					elif tool_type == "pickaxe":
-						equipped = InventorySystem.equip_pickaxe(item)
-
-					if equipped:
-						# Remove from inventory
-						InventorySystem.remove_item(slot_index)
-						SoundManager.play_equip_sound()  # Equip sound
-						refresh_all()
-				# Check if it's a weapon
-				elif item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
-					# Convert dict to Weapon resource and equip
-					var weapon = dict_to_weapon(item)
-					if weapon:
-						CharacterStats.equip_weapon(weapon)
-						# Remove from inventory
-						InventorySystem.remove_item(slot_index)
-						SoundManager.play_equip_sound()  # Equip sound
-						refresh_all()
-				# Check if it's armor (has a slot)
-				elif item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
-					# Try to equip armor
-					if CharacterStats.equip_armor(item):
-						# Remove from inventory
-						InventorySystem.remove_item(slot_index)
-						SoundManager.play_equip_sound()  # Equip sound
-						refresh_all()
 func dict_to_weapon(item_dict: Dictionary) -> Weapon:
-	"""Convert a weapon dictionary (from inventory) to a Weapon resource"""
+	"""Convert a weapon dictionary to a Weapon resource"""
 	var weapon = Weapon.new()
 
 	weapon.weapon_name = item_dict.get("name", "Unknown")
 	weapon.weapon_type = item_dict.get("weapon_type", "sword")
-	weapon.damage_type = "unified"  # Unified damage system
+	weapon.damage_type = "unified"
 	weapon.description = item_dict.get("description", "")
 	weapon.base_damage = item_dict.get("base_damage", 5.0)
 
-	# Convert attack_speed category to numeric multiplier
 	var attack_speed_category = item_dict.get("attack_speed", "medium")
 	match attack_speed_category:
 		"fast":
-			weapon.attack_speed_bonus = -0.30  # 30% faster
+			weapon.attack_speed_bonus = -0.30
 		"slow":
-			weapon.attack_speed_bonus = 0.30   # 30% slower
-		_:  # "medium" or any other value
+			weapon.attack_speed_bonus = 0.30
+		_:
 			weapon.attack_speed_bonus = 0.0
 
-	# Crit chance
 	weapon.crit_chance_bonus = item_dict.get("crit_chance", 0.0)
 	weapon.required_level = item_dict.get("required_level", 1)
 	weapon.can_trade = item_dict.get("can_trade", true)
 
-	# Set rarity
 	var rarity_str = item_dict.get("rarity", "COMMON").to_upper()
 	match rarity_str:
 		"COMMON":
@@ -1113,86 +866,6 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 			weapon.rarity = Weapon.Rarity.LEGENDARY
 
 	return weapon
-
-# ============================================
-# DRAG AND DROP FUNCTIONS
-# ============================================
-
-func _get_inventory_drag_data(at_position: Vector2, slot_index: int) -> Variant:
-	"""Start dragging an inventory item"""
-	var item = InventorySystem.get_item(slot_index)
-	if not item or item.is_empty():
-		return null
-
-
-	# Create drag preview
-	var preview = Label.new()
-	preview.text = item.get("name", "Item")
-	preview.add_theme_font_size_override("font_size", 16)
-	preview.add_theme_color_override("font_color", Color.GOLD)
-	preview.modulate = Color(1, 1, 1, 0.8)  # Slightly transparent
-
-	# Get the slot control and set preview on it
-	var slot_control = inventory_slots[slot_index]
-	slot_control.set_drag_preview(preview)
-
-	# Return drag data
-	return {
-		"source_type": "inventory",
-		"source_index": slot_index,
-		"item": item
-	}
-
-func _can_drop_inventory_data(at_position: Vector2, data: Variant, slot_index: int) -> bool:
-	"""Check if data can be dropped on this inventory slot"""
-	if not data is Dictionary:
-		return false
-
-	# Can always drop items into inventory
-	return data.has("item")
-
-func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: int) -> void:
-	"""Handle dropping data on an inventory slot"""
-	if not data.has("item"):
-		return
-
-	var source_type = data.get("source_type", "")
-	var source_index = data.get("source_index", -1)
-	var dragged_item = data.get("item", {})
-
-	if source_type == "inventory":
-		# Swap inventory items
-		if source_index != slot_index:
-			var target_item = InventorySystem.get_item(slot_index)
-
-			# Remove both items
-			InventorySystem.set_item(source_index, {})
-			InventorySystem.set_item(slot_index, {})
-
-			# Swap them
-			InventorySystem.set_item(slot_index, dragged_item)
-			if target_item and not target_item.is_empty():
-				InventorySystem.set_item(source_index, target_item)
-
-			# Play inventory move sound
-			SoundManager.play_inventory_move_sound()
-
-			refresh_all()
-
-	elif source_type == "equipment":
-		# Move from equipment to inventory
-		var source_slot_name = data.get("source_slot_name", "")
-		if source_slot_name:
-			# Special handling for mainhand weapon
-			if source_slot_name == "mainhand" and CharacterStats.equipped_weapon:
-				CharacterStats.unequip_weapon()
-				SoundManager.play_equip_sound()  # Unequip sound
-				refresh_all()
-			# Unequip armor
-			elif CharacterStats.unequip_armor(source_slot_name):
-				# Item is now in inventory via unequip_armor
-				SoundManager.play_equip_sound()  # Unequip sound
-				refresh_all()
 
 func _get_equipment_drag_data(at_position: Vector2, slot_name: String) -> Variant:
 	"""Start dragging an equipped item"""
@@ -1401,88 +1074,8 @@ func _drop_tool_data(at_position: Vector2, data: Dictionary, tool_name: String) 
 		pass
 
 # ============================================
-# DROP ZONE (DELETE ITEMS WITH CONFIRMATION)
+# SIGNAL HANDLERS
 # ============================================
-
-func _get_drop_zone_drag_data(at_position: Vector2) -> Variant:
-	"""Drop zone can't be dragged"""
-	return null
-
-func _can_drop_on_drop_zone(at_position: Vector2, data: Variant) -> bool:
-	"""Accept any item drop on drop zone (outside UI panel)"""
-
-	if not data is Dictionary:
-		return false
-
-	if not data.has("item"):
-		return false
-
-	# Check if drop position is outside the main panel
-	if main_panel:
-		var panel_rect = main_panel.get_global_rect()
-		var is_outside = not panel_rect.has_point(at_position)
-		return is_outside
-
-	return false
-
-func _drop_on_drop_zone(at_position: Vector2, data: Dictionary) -> void:
-	"""Handle dropping item outside UI - show confirmation dialog"""
-
-	if not data.has("item"):
-		return
-
-	# Store the deletion data for confirmation
-	pending_delete_data = data
-
-	var item_name = data.get("item", {}).get("name", "Unknown")
-
-	# Show confirmation dialog
-	var dialog = get_node_or_null("DeleteConfirmDialog")
-	if dialog:
-		dialog.dialog_text = "Are you sure you want to delete '%s'?" % item_name
-		dialog.popup_centered()
-
-func _on_delete_confirmed() -> void:
-	"""Handle deletion confirmation - actually delete the item"""
-
-	if pending_delete_data.is_empty():
-		return
-
-	var source_type = pending_delete_data.get("source_type", "")
-	var dragged_item = pending_delete_data.get("item", {})
-	var item_name = dragged_item.get("name", "Unknown")
-
-
-	if source_type == "inventory":
-		# Remove from inventory
-		var source_index = pending_delete_data.get("source_index", -1)
-		if source_index >= 0:
-			InventorySystem.remove_item(source_index)
-			refresh_all()
-
-	elif source_type == "equipment":
-		# Unequip and delete (don't add to inventory)
-		var source_slot_name = pending_delete_data.get("source_slot_name", "")
-		if source_slot_name:
-			# Directly remove from equipped_armor without adding to inventory
-			CharacterStats.equipped_armor[source_slot_name] = null
-			CharacterStats.armor_unequipped.emit(source_slot_name, {})
-			refresh_all()
-
-	elif source_type == "tool":
-		# Unequip and delete tool (don't add to inventory)
-		var source_tool_name = pending_delete_data.get("source_tool_name", "")
-		if source_tool_name == "axe":
-			InventorySystem.equipped_axe = {}
-			InventorySystem.axe_unequipped.emit({})
-			refresh_all()
-		elif source_tool_name == "pickaxe":
-			InventorySystem.equipped_pickaxe = {}
-			InventorySystem.pickaxe_unequipped.emit({})
-			refresh_all()
-
-	# Clear pending data
-	pending_delete_data = {}
 
 func _on_stats_changed(_level: int = 0) -> void:
 	"""Called when character stats change"""
@@ -1492,18 +1085,9 @@ func _on_xp_changed(_amount: int, _total: int) -> void:
 	"""Called when XP changes"""
 	refresh_character_info()
 
-func _on_gold_changed(_amount: int, _total: int) -> void:
-	"""Called when gold changes"""
-	if gold_label:
-		gold_label.text = "%d Gold" % _total
-
 func _on_armor_changed(_slot: String, _armor: Dictionary) -> void:
 	"""Called when armor is equipped/unequipped"""
 	refresh_all()
-
-func _on_inventory_changed() -> void:
-	"""Called when inventory changes"""
-	refresh_inventory()
 
 func _on_tool_changed(_tool: Dictionary) -> void:
 	"""Called when a tool is equipped/unequipped"""
