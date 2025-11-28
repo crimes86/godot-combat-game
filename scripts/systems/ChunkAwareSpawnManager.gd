@@ -469,14 +469,16 @@ func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
 		return null
 
 	var enemy = enemy_scene.instantiate()
-	enemy.global_position = pos
+	# Use position (not global_position) since we're setting before add_child
+	# global_position doesn't work correctly before node is in the scene tree
+	enemy.position = pos
 	enemy.enemy_level = level
 
 	# Generate unique name
 	var enemy_name = "Enemy_%s_%d" % [chunk_key.replace(",", "_"), randi()]
 	enemy.name = enemy_name
 
-	# Add to world
+	# Add to world (game_world is at origin, so position = global_position)
 	game_world.call_deferred("add_child", enemy)
 
 	# Register with network enemy manager for multiplayer sync
