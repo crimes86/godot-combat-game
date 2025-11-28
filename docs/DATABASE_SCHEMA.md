@@ -240,3 +240,42 @@ WHERE is_online = 1 AND last_login < ?;
 - SQLite file copied every hour to `backups/server_data_YYYYMMDD_HHMMSS.db`
 - Keep last 24 backups (1 per hour)
 - Keep daily snapshots for 7 days
+
+## Chat Admin Commands
+
+The host can use admin commands in the chat (press Enter) to manage player accounts.
+
+### Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show all available admin commands |
+| `/accounts` | List all registered accounts with levels |
+| `/select <username>` | Select an account to edit |
+| `/info` | Show details of selected account |
+| `/setpos <x> <y>` | Set player's world position |
+| `/resetpos` | Reset position to campfire spawn (0,0) |
+| `/setgold <amount>` | Set player's gold amount |
+| `/setlevel <1-30>` | Set player's level |
+| `/setstats <str> <agi> <vit> <luck>` | Set player's base stats |
+| `/ban` | Ban the selected account |
+| `/unban` | Unban the selected account |
+| `/forceoffline` | Reset is_online flag (fixes stuck logins) |
+| `/delete` | Permanently delete selected account |
+
+### Usage Example
+
+```
+/accounts                    # List all accounts
+/select PlayerOne           # Select "PlayerOne"
+/info                       # View their stats
+/setgold 5000              # Give them 5000 gold
+/setlevel 15               # Set to level 15
+/resetpos                  # Move to campfire
+```
+
+### Implementation
+
+Admin commands are handled in `scripts/ui/ChatUI.gd` in the `_handle_admin_command()` function. Commands modify data directly in `DatabaseManager.players_data` and call `DatabaseManager.save_database()` to persist changes.
+
+**Security Note**: Admin commands only work for the game host. The DatabaseManager is only initialized on the server/host.

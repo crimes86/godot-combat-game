@@ -105,11 +105,12 @@ Historical documentation of component architecture refactoring (reference only, 
 - **Group Scaling**: Dynamic HP/damage scaling based on player count
 
 ### Code Architecture
-- **Autoloads**: CharacterStats, InventorySystem, ChainManager, LootSpawnManager, SoundManager, NotificationManager
+- **Autoloads**: CharacterStats, InventorySystem, ChainManager, LootSpawnManager, SoundManager, NotificationManager, ItemIconGenerator, DatabaseManager
 - **Signal-Based**: Clean communication between systems
 - **State Machines**: Enemy AI, ruins conversion, chain management
 - **Modular Design**: Easy to extend and maintain
 - **Global Notifications**: Item gain/loss notifications with rarity colors and cascade animations
+- **Procedural Icons**: ItemIconGenerator creates icons for weapons, armor, tools, and materials
 
 ---
 
@@ -119,14 +120,32 @@ Historical documentation of component architecture refactoring (reference only, 
 - **WASD**: Move
 - **Mouse**: Aim
 - **Left Click**: Attack
+- **Space**: Dodge roll
 - **Mouse Wheel**: Zoom camera
-- **E**: Interact (vendor, ruins, trees)
-- **F**: Toggle character gender
+- **C**: Character sheet
+- **I / B**: Inventory
+- **F**: Interact / Loot
+- **Enter**: Chat
+- **ESC**: Close UI windows
 - **F3**: Debug mode
 - **F4**: Add 1 level (debug)
 - **F5**: Add 5 levels (debug)
 - **F12**: Screenshot mode
-- **ESC**: Close shop
+
+### Chat Admin Commands
+Type these in chat (press Enter) when hosting a game:
+- **/help**: Show all admin commands
+- **/accounts**: List all registered accounts
+- **/select \<username\>**: Select account to edit
+- **/info**: Show selected account details
+- **/setpos \<x\> \<y\>**: Set player position
+- **/resetpos**: Reset to campfire spawn
+- **/setgold \<amount\>**: Set gold amount
+- **/setlevel \<1-30\>**: Set player level
+- **/setstats \<str\> \<agi\> \<vit\> \<luck\>**: Set base stats
+- **/ban** / **/unban**: Toggle account ban
+- **/forceoffline**: Fix stuck login state
+- **/delete**: Delete selected account
 
 ### File Locations
 
@@ -146,7 +165,11 @@ Historical documentation of component architecture refactoring (reference only, 
 - `scripts/systems/ChainManager.gd` - Chain multiplier system
 - `scripts/systems/InventorySystem.gd` - Global inventory
 - `scripts/systems/LootSpawnManager.gd` - Enemy loot tables
-- `scripts/ui/CharacterUI.gd` - Character sheet UI
+- `scripts/systems/ItemIconGenerator.gd` - Procedural item icons
+- `scripts/systems/DatabaseManager.gd` - Player data persistence
+- `scripts/ui/CharacterUI.gd` - Character sheet UI (C key)
+- `scripts/ui/InventoryUI.gd` - Inventory window (I/B key)
+- `scripts/ui/ChatUI.gd` - Multiplayer chat with admin commands
 - `scripts/ui/ShopUI.gd` - Vendor shop interface
 
 **Data**:
@@ -168,18 +191,24 @@ Historical documentation of component architecture refactoring (reference only, 
 - Core combat with click-based attacking
 - Critical hit system with weakpoint windows
 - Chain multiplier system (0-10x)
+- Dodge roll with i-frames
 - 4-zone world with winding path
 - Ruins 1 with 8 guardians
 - Vendor shop with weapons/armor
-- Inventory system with loot drops
+- Inventory system with loot drops and procedural icons
 - Armor equipping system (6 slots: head, chest, arms, hands, legs, feet)
+- Tool equipping (axe, pickaxe)
 - Global notification system (item gain/loss with rarity colors)
 - Environmental hazards (lava pools)
-- Resource gathering (harvestable trees)
+- Resource gathering (harvestable trees and rocks)
+- Campfire with fuel system (bone embers, dry logs)
 - Training dummy for practice
-- Character sheet UI
+- Character sheet UI with paperdoll equipment display
+- Separate inventory UI with drag-drop support
+- Multiplayer chat system with admin commands
+- Player authentication and database persistence
 - Gender selection
-- Sound system with real audio files
+- Sound system with background music playlist
 - Performance optimizations (60fps target on laptops)
 
 ### In Progress
@@ -189,8 +218,6 @@ Historical documentation of component architecture refactoring (reference only, 
 - Healing system (friendly targeting)
 
 ### Planned Features
-- Save/load system
-- Multiplayer networking
 - PvP combat
 - Quest system
 - Crafting system
@@ -241,4 +268,4 @@ Historical documentation of component architecture refactoring (reference only, 
 
 ---
 
-This documentation was last updated: 2025-11-19
+This documentation was last updated: 2025-11-28
