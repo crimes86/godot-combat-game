@@ -3,12 +3,19 @@ extends Node
 ## Uses JSON file storage for simplicity (no external SQLite plugin required)
 
 signal database_ready
+signal player_data_saved(username: String)
+signal auto_save_triggered
 
 const PLAYERS_FILE = "user://players.json"
 const SALT_LENGTH = 32
+const AUTO_SAVE_INTERVAL: float = 120.0  # 2 minutes
 
 var players_data: Dictionary = {}  # username -> player data
 var is_initialized: bool = false
+
+# Auto-save system
+var auto_save_timer: Timer = null
+var current_username: String = ""  # Username of currently logged-in local player
 
 func _ready() -> void:
 	# Only initialize on server/host
@@ -149,7 +156,7 @@ func create_account(username: String, password: String) -> Dictionary:
 		# Current state
 		"current_hp": 100.0,
 		"max_hp": 100.0,
-		"position_x": -2000.0,
+		"position_x": 0.0,  # 0,0 = use default spawn point near campfire
 		"position_y": 0.0,
 		"current_phase": 1,
 
@@ -325,3 +332,165 @@ func record_login_attempt(peer_id: int, success: bool) -> void:
 func clear_rate_limit(peer_id: int) -> void:
 	"""Clear rate limit for a peer (call on disconnect)"""
 	login_attempts.erase(peer_id)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AUTO-SAVE SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════
+
+func start_auto_save(username: String) -> void:
+	"""Start auto-save timer for the current player session"""
+	current_username = username
+
+	if not auto_save_timer:
+		auto_save_timer = Timer.new()
+		auto_save_timer.name = "AutoSaveTimer"
+		auto_save_timer.one_shot = false
+		auto_save_timer.timeout.connect(_on_auto_save_timeout)
+		add_child(auto_save_timer)
+
+	auto_save_timer.start(AUTO_SAVE_INTERVAL)
+	print("📀 [DatabaseManager] Auto-save started (every %.0f seconds) for: %s" % [AUTO_SAVE_INTERVAL, username])
+
+func stop_auto_save() -> void:
+	"""Stop auto-save timer"""
+	if auto_save_timer:
+		auto_save_timer.stop()
+
+	# Final save before stopping
+	if current_username != "":
+		print("📀 [DatabaseManager] Final save before stopping auto-save for: %s" % current_username)
+		save_current_player_state()
+
+	current_username = ""
+
+func _on_auto_save_timeout() -> void:
+	"""Called every AUTO_SAVE_INTERVAL seconds"""
+	if current_username != "":
+		print("📀 [DatabaseManager] Auto-save triggered...")
+		if save_current_player_state():
+			auto_save_triggered.emit()
+			# Show notification to player
+			if NotificationManager:
+				NotificationManager.show_notification("Game saved", "INFO")
+
+func save_current_player_state() -> bool:
+	"""Save the current player's full game state using serialization from systems"""
+	if current_username.is_empty():
+		push_warning("[DatabaseManager] Cannot save - no current user")
+		return false
+
+	if not players_data.has(current_username):
+		push_error("[DatabaseManager] Cannot save - player not found: %s" % current_username)
+		return false
+
+	# Get current player node for position
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+
+	# Build save data from systems
+	var save_data = {}
+
+	# Position (from player node)
+	if player and is_instance_valid(player):
+		save_data["position_x"] = player.global_position.x
+		save_data["position_y"] = player.global_position.y
+		save_data["current_hp"] = player.current_health if player.has_method("get") else player.get("current_health")
+
+	# Character stats (level, xp, gold, attributes, equipment, kills, achievements, playtime)
+	var stats_data = CharacterStats.get_save_data()
+	save_data["level"] = stats_data.get("level", 1)
+	save_data["xp"] = stats_data.get("experience", 0)
+	save_data["gold"] = stats_data.get("gold", 100)
+	save_data["strength"] = stats_data.get("strength", 10)
+	save_data["agility"] = stats_data.get("agility", 10)
+	save_data["vitality"] = stats_data.get("vitality", 10)
+	save_data["luck"] = stats_data.get("luck", 10)
+	save_data["character_stats"] = JSON.stringify(stats_data)  # Full blob for complex data
+
+	# Inventory
+	var inv_data = InventorySystem.get_save_data()
+	save_data["inventory"] = JSON.stringify(inv_data)
+
+	# Playtime
+	save_data["total_playtime_seconds"] = stats_data.get("total_playtime", 0)
+
+	# Update database entry
+	for key in save_data:
+		players_data[current_username][key] = save_data[key]
+
+	# Save to disk
+	if save_database():
+		player_data_saved.emit(current_username)
+		print("📀 [DatabaseManager] Saved player state: %s (Level %d, Gold %d)" % [
+			current_username,
+			save_data.get("level", 1),
+			save_data.get("gold", 0)
+		])
+		return true
+
+	return false
+
+func apply_player_data_to_systems(username: String, player: Node = null) -> void:
+	"""Load saved data and apply it to game systems (InventorySystem, CharacterStats, player position)"""
+	if not players_data.has(username):
+		push_warning("[DatabaseManager] No saved data for: %s" % username)
+		return
+
+	var data = players_data[username]
+
+	# Apply inventory
+	var inv_json = data.get("inventory", "")
+	if inv_json is String and not inv_json.is_empty():
+		var inv_data = JSON.parse_string(inv_json)
+		if inv_data:
+			InventorySystem.load_save_data(inv_data)
+			print("📦 [DatabaseManager] Loaded inventory for: %s" % username)
+
+	# Apply character stats (full blob first, then individual fields as fallback)
+	var stats_json = data.get("character_stats", "")
+	if stats_json is String and not stats_json.is_empty():
+		var stats_data = JSON.parse_string(stats_json)
+		if stats_data:
+			CharacterStats.load_save_data(stats_data)
+			print("📊 [DatabaseManager] Loaded character stats for: %s" % username)
+	else:
+		# Fallback: load individual fields if full blob not available
+		var fallback_stats = {
+			"level": data.get("level", 1),
+			"experience": data.get("xp", 0),
+			"gold": data.get("gold", 100),
+			"strength": data.get("strength", 10),
+			"agility": data.get("agility", 10),
+			"vitality": data.get("vitality", 10),
+			"luck": data.get("luck", 10),
+			"total_playtime": data.get("total_playtime_seconds", 0)
+		}
+		CharacterStats.load_save_data(fallback_stats)
+
+	# Apply position to player node if provided
+	if player and is_instance_valid(player):
+		var pos_x = data.get("position_x", 0.0)
+		var pos_y = data.get("position_y", 0.0)
+
+		# Only apply non-zero positions (0,0 likely means new character or default)
+		if pos_x != 0.0 or pos_y != 0.0:
+			player.global_position = Vector2(pos_x, pos_y)
+			print("📍 [DatabaseManager] Restored position: (%.0f, %.0f)" % [pos_x, pos_y])
+
+		# Apply HP if player has health
+		var saved_hp = data.get("current_hp", -1)
+		if saved_hp > 0 and player.has_method("set_health"):
+			player.set_health(saved_hp)
+		elif saved_hp > 0 and "current_health" in player:
+			player.current_health = saved_hp
+
+	print("✅ [DatabaseManager] Applied saved data for: %s" % username)
+
+func get_saved_position(username: String) -> Vector2:
+	"""Get saved position for a player (for spawn location)"""
+	if not players_data.has(username):
+		return Vector2.ZERO
+
+	var data = players_data[username]
+	var pos_x = data.get("position_x", 0.0)
+	var pos_y = data.get("position_y", 0.0)
+	return Vector2(pos_x, pos_y)

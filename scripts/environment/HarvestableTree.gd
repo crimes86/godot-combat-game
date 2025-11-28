@@ -539,9 +539,12 @@ func spawn_wood_drops() -> void:
 		"name": "Dry Log",
 		"description": "Dry wood from a dead wasteland tree. Burns well.",
 		"value": 12,
+		"type": "material",
+		"rarity": "Common",
 		"stackable": true,
 		"max_stack": 1000,
-		"quantity": 1
+		"quantity": 1,
+		"fuel_type": "wood"
 	}
 
 	# Generate wood items as loot (player must loot them)

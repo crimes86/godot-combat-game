@@ -34,8 +34,8 @@ const ANIM_SPEED = 0.1
 
 func _ready() -> void:
 
-	# Set layer above game elements but below shop
-	layer = 95
+	# Set layer above game prompts (campfire hints are at 100)
+	layer = 110
 
 	# Start hidden
 	visible = false
@@ -58,6 +58,11 @@ func _ready() -> void:
 	# Initial update
 	refresh_all()
 
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_ESCAPE and is_visible:
+			toggle_character_ui()
+			get_viewport().set_input_as_handled()
 
 func create_character_ui() -> void:
 	"""Create character sheet with stats and equipment (2 columns)"""
@@ -124,9 +129,9 @@ func create_character_ui() -> void:
 
 
 func create_equipment_panel(parent: Control) -> void:
-	"""Create middle panel with equipment slots"""
+	"""Create equipment panel with body-shaped paperdoll layout"""
 	var equipment_panel = PanelContainer.new()
-	equipment_panel.custom_minimum_size = Vector2(280, 0)
+	equipment_panel.custom_minimum_size = Vector2(320, 0)
 	equipment_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 	var equip_style = create_inner_panel_style()
@@ -134,54 +139,85 @@ func create_equipment_panel(parent: Control) -> void:
 	parent.add_child(equipment_panel)
 
 	var equipment_vbox = VBoxContainer.new()
-	equipment_vbox.add_theme_constant_override("separation", 12)
+	equipment_vbox.add_theme_constant_override("separation", 2)
 	equipment_panel.add_child(equipment_vbox)
 
 	# Title
 	var title = create_header_label("Equipment")
 	equipment_vbox.add_child(title)
 
-	# Wrap slots in a CenterContainer to center them independently
-	var slots_center = CenterContainer.new()
-	equipment_vbox.add_child(slots_center)
+	# Body-shaped grid layout for equipment
+	# Layout:
+	#        [HEAD]
+	#   [MH] [CHEST] [OH]
+	#        [ARMS]
+	#       [HANDS]
+	#        [LEGS]
+	#        [FEET]
 
-	# Equipment slots container - CENTERED
-	var slots_container = VBoxContainer.new()
-	slots_container.add_theme_constant_override("separation", 8)
-	slots_center.add_child(slots_container)
+	# Row 1: Head (centered)
+	var row1 = CenterContainer.new()
+	equipment_vbox.add_child(row1)
+	var head_slot = create_equipment_slot_compact("head", "Head")
+	row1.add_child(head_slot)
+	equipment_slots["head"] = head_slot
 
-	# Create equipment slots (weapons first, then armor)
-	var slot_names = ["mainhand", "offhand", "head", "chest", "arms", "hands", "legs", "feet"]
-	var slot_labels = {
-		"mainhand": "MAIN HAND",
-		"offhand": "OFF HAND",
-		"head": "HEAD",
-		"chest": "CHEST",
-		"arms": "ARMS",
-		"hands": "HANDS",
-		"legs": "LEGS",
-		"feet": "FEET"
-	}
+	# Row 2: Mainhand - Chest - Offhand (horizontal row)
+	var row2_center = CenterContainer.new()
+	equipment_vbox.add_child(row2_center)
 
-	for slot in slot_names:
-		var slot_button = create_equipment_slot(slot, slot_labels[slot])
-		slots_container.add_child(slot_button)
-		equipment_slots[slot] = slot_button
+	var row2 = HBoxContainer.new()
+	row2.add_theme_constant_override("separation", 4)
+	row2_center.add_child(row2)
 
-	# Add spacer
-	var spacer = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 10)
-	equipment_vbox.add_child(spacer)
+	var mainhand_slot = create_equipment_slot_compact("mainhand", "Main")
+	row2.add_child(mainhand_slot)
+	equipment_slots["mainhand"] = mainhand_slot
+
+	var chest_slot = create_equipment_slot_compact("chest", "Chest")
+	row2.add_child(chest_slot)
+	equipment_slots["chest"] = chest_slot
+
+	var offhand_slot = create_equipment_slot_compact("offhand", "Off")
+	row2.add_child(offhand_slot)
+	equipment_slots["offhand"] = offhand_slot
+
+	# Row 3: Arms (centered)
+	var row3 = CenterContainer.new()
+	equipment_vbox.add_child(row3)
+	var arms_slot = create_equipment_slot_compact("arms", "Arms")
+	row3.add_child(arms_slot)
+	equipment_slots["arms"] = arms_slot
+
+	# Row 4: Hands (centered)
+	var row4 = CenterContainer.new()
+	equipment_vbox.add_child(row4)
+	var hands_slot = create_equipment_slot_compact("hands", "Hands")
+	row4.add_child(hands_slot)
+	equipment_slots["hands"] = hands_slot
+
+	# Row 5: Legs + Feet side by side (smaller items)
+	var row5_center = CenterContainer.new()
+	equipment_vbox.add_child(row5_center)
+
+	var row5 = HBoxContainer.new()
+	row5.add_theme_constant_override("separation", 4)
+	row5_center.add_child(row5)
+
+	var legs_slot = create_equipment_slot_compact("legs", "Legs")
+	row5.add_child(legs_slot)
+	equipment_slots["legs"] = legs_slot
+
+	var feet_slot = create_equipment_slot_compact("feet", "Feet")
+	row5.add_child(feet_slot)
+	equipment_slots["feet"] = feet_slot
 
 	# Defense total
 	var defense_container = HBoxContainer.new()
 	defense_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	equipment_vbox.add_child(defense_container)
 
-	var defense_icon = create_text_label("🛡️", 18)
-	defense_container.add_child(defense_icon)
-
-	defense_label = create_text_label("Defense: 0", 16)
+	defense_label = create_text_label("Defense: 0", 14)
 	defense_label.add_theme_color_override("font_color", HEADER_COLOR)
 	defense_container.add_child(defense_label)
 
@@ -189,26 +225,21 @@ func create_equipment_panel(parent: Control) -> void:
 	var separator_tools = create_styled_separator()
 	equipment_vbox.add_child(separator_tools)
 
-	# Tools section
-	var tools_header = create_header_label("Tools", 16)
+	# Tools section - horizontal layout
+	var tools_header = create_header_label("Tools", 14)
 	equipment_vbox.add_child(tools_header)
 
-	# Wrap tool slots in a CenterContainer
-	var tools_center = CenterContainer.new()
-	equipment_vbox.add_child(tools_center)
+	var tools_row = HBoxContainer.new()
+	tools_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	tools_row.add_theme_constant_override("separation", 12)
+	equipment_vbox.add_child(tools_row)
 
-	# Tool slots container - CENTERED
-	var tools_container = VBoxContainer.new()
-	tools_container.add_theme_constant_override("separation", 8)
-	tools_center.add_child(tools_container)
-
-	# Create tool slots (axe and pickaxe)
-	var axe_slot = create_tool_slot("axe", "AXE")
-	tools_container.add_child(axe_slot)
+	var axe_slot = create_equipment_slot_compact("axe", "Axe", true)
+	tools_row.add_child(axe_slot)
 	tool_slots["axe"] = axe_slot
 
-	var pickaxe_slot = create_tool_slot("pickaxe", "PICKAXE")
-	tools_container.add_child(pickaxe_slot)
+	var pickaxe_slot = create_equipment_slot_compact("pickaxe", "Pick", true)
+	tools_row.add_child(pickaxe_slot)
 	tool_slots["pickaxe"] = pickaxe_slot
 
 func create_character_info_panel(parent: Control) -> void:
@@ -339,8 +370,96 @@ func create_character_info_panel(parent: Control) -> void:
 		derived_grid.add_child(value_label)
 		stat_labels[derived_name.to_lower().replace(" ", "_")] = value_label
 
+func create_equipment_slot_compact(slot_name: String, label_text: String, is_tool: bool = false) -> Control:
+	"""Create a compact equipment slot with small icon + text label below"""
+	# Main container - vertical layout with icon box and label
+	var container = VBoxContainer.new()
+	container.add_theme_constant_override("separation", 2)
+	container.custom_minimum_size = Vector2(70, 70)
+	container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+	# Slot control wrapper for drag-drop
+	var slot_control = Control.new()
+	slot_control.name = "Slot_" + slot_name
+	slot_control.custom_minimum_size = Vector2(50, 50)
+	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP
+	slot_control.set_meta("slot_name", slot_name)
+	slot_control.set_meta("slot_type", "tool" if is_tool else "equipment")
+
+	# Enable drag-drop based on type
+	if is_tool:
+		slot_control.set_drag_forwarding(
+			Callable(self, "_get_tool_drag_data").bind(slot_name),
+			Callable(self, "_can_drop_tool_data").bind(slot_name),
+			Callable(self, "_drop_tool_data").bind(slot_name)
+		)
+		slot_control.gui_input.connect(_on_tool_slot_gui_input.bind(slot_name))
+	else:
+		slot_control.set_drag_forwarding(
+			Callable(self, "_get_equipment_drag_data").bind(slot_name),
+			Callable(self, "_can_drop_equipment_data").bind(slot_name),
+			Callable(self, "_drop_equipment_data").bind(slot_name)
+		)
+		slot_control.gui_input.connect(_on_equipment_slot_gui_input.bind(slot_name))
+
+	# Panel for slot styling
+	var panel = PanelContainer.new()
+	panel.name = "SlotPanel"
+	panel.custom_minimum_size = Vector2(50, 50)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot_control.add_child(panel)
+
+	var slot_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
+	panel.add_theme_stylebox_override("panel", slot_style)
+
+	# Center for icon
+	var icon_center = CenterContainer.new()
+	icon_center.name = "CenterContainer"
+	icon_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(icon_center)
+
+	# Small icon (scaled to fit slot)
+	var icon = TextureRect.new()
+	icon.name = "ItemIcon"
+	icon.custom_minimum_size = Vector2(32, 32)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.visible = false
+	icon_center.add_child(icon)
+
+	# Item name label (hidden when empty, shown below icon)
+	var item_label = Label.new()
+	item_label.name = "ItemLabel"
+	item_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	item_label.add_theme_font_size_override("font_size", 8)
+	item_label.add_theme_color_override("font_color", Color.WHITE)
+	item_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	item_label.add_theme_constant_override("outline_size", 1)
+	item_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	item_label.visible = false
+	icon_center.add_child(item_label)
+
+	# Center the slot control
+	var slot_center = CenterContainer.new()
+	slot_center.add_child(slot_control)
+	container.add_child(slot_center)
+
+	# Slot type label below (always visible)
+	var type_label = Label.new()
+	type_label.name = "SlotTypeLabel"
+	type_label.text = label_text
+	type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	type_label.add_theme_font_size_override("font_size", 9)
+	type_label.add_theme_color_override("font_color", ACCENT_COLOR)
+	type_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(type_label)
+
+	return container
+
 func create_equipment_slot(slot_name: String, label_text: String) -> HBoxContainer:
-	"""Create a single equipment slot button with drag-drop support"""
+	"""Create a single equipment slot button with drag-drop support (legacy)"""
 	var container = HBoxContainer.new()
 	container.add_theme_constant_override("separation", 8)
 	container.custom_minimum_size = Vector2(200, 60)  # Fixed width so all slots align
@@ -371,20 +490,45 @@ func create_equipment_slot(slot_name: String, label_text: String) -> HBoxContain
 	var slot_style_normal = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 	panel.add_theme_stylebox_override("panel", slot_style_normal)
 
-	# Add label for item text
+	# Center container for icon and label
+	var center = CenterContainer.new()
+	center.name = "CenterContainer"
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(center)
+
+	# VBox to stack icon and label
+	var vbox = VBoxContainer.new()
+	vbox.name = "VBoxContainer"
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_theme_constant_override("separation", 1)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	center.add_child(vbox)
+
+	# Add icon texture rect
+	var icon = TextureRect.new()
+	icon.name = "ItemIcon"
+	icon.custom_minimum_size = Vector2(40, 40)
+	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.visible = false  # Hidden until we have an icon
+	vbox.add_child(icon)
+
+	# Add label for item text (fallback when no icon)
 	var label = Label.new()
 	label.name = "ItemLabel"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 12)  # Larger font
-	label.add_theme_color_override("font_color", Color.WHITE)  # Bright white
-	label.add_theme_color_override("font_outline_color", Color.BLACK)  # Black outline
-	label.add_theme_constant_override("outline_size", 2)  # Outline for contrast
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # Wrap long item names
+	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 2)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_child(label)
+	label.clip_text = true
+	label.custom_minimum_size = Vector2(56, 0)  # Limit width to slot size
+	vbox.add_child(label)
 
 	# Connect click event
 	slot_control.gui_input.connect(_on_equipment_slot_gui_input.bind(slot_name))
@@ -429,20 +573,45 @@ func create_tool_slot(tool_name: String, label_text: String) -> HBoxContainer:
 	var slot_style_normal = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 	panel.add_theme_stylebox_override("panel", slot_style_normal)
 
-	# Add label for item text
+	# Center container for icon and label
+	var center = CenterContainer.new()
+	center.name = "CenterContainer"
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(center)
+
+	# VBox to stack icon and label
+	var vbox = VBoxContainer.new()
+	vbox.name = "VBoxContainer"
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_theme_constant_override("separation", 1)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	center.add_child(vbox)
+
+	# Add icon texture rect
+	var icon = TextureRect.new()
+	icon.name = "ItemIcon"
+	icon.custom_minimum_size = Vector2(40, 40)
+	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.visible = false  # Hidden until we have an icon
+	vbox.add_child(icon)
+
+	# Add label for item text (fallback when no icon)
 	var label = Label.new()
 	label.name = "ItemLabel"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 12)  # Larger font
-	label.add_theme_color_override("font_color", Color.WHITE)  # Bright white
-	label.add_theme_color_override("font_outline_color", Color.BLACK)  # Black outline
-	label.add_theme_constant_override("outline_size", 2)  # Outline for contrast
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # Wrap long item names
+	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 2)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_child(label)
+	label.clip_text = true
+	label.custom_minimum_size = Vector2(56, 0)  # Limit width to slot size
+	vbox.add_child(label)
 
 	# Connect click event
 	slot_control.gui_input.connect(_on_tool_slot_gui_input.bind(tool_name))
@@ -663,19 +832,26 @@ func refresh_stats() -> void:
 func refresh_equipment() -> void:
 	"""Update equipment slot displays"""
 	for slot_name in equipment_slots:
-		var slot_container = equipment_slots[slot_name]  # HBoxContainer (new structure)
+		var slot_container = equipment_slots[slot_name]
 
-		# In the new HBoxContainer layout, the slot_control is the first child
-		var slot_control = slot_container.get_child(0) if slot_container.get_child_count() > 0 else null
+		# Find the slot_control and panel using recursive search (works for both old and new layouts)
+		var slot_control = _find_node_by_prefix(slot_container, "Slot_")
+		if not slot_control:
+			slot_control = _find_node_by_prefix(slot_container, "Equip_")
 		if not slot_control:
 			continue
 
-		# Get the panel from the slot control
-		var panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
+		# Find panel
+		var panel = slot_control.get_node_or_null("SlotPanel")
+		if not panel:
+			panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
 		if not panel:
 			continue
 
-		var label = panel.get_node_or_null("ItemLabel")
+		# Get icon and label nodes
+		var icon_rect: TextureRect = _find_node_recursive(slot_container, "ItemIcon")
+		var label: Label = _find_node_recursive(slot_container, "ItemLabel")
+
 		if not label:
 			continue
 
@@ -688,6 +864,8 @@ func refresh_equipment() -> void:
 				"name": weapon.weapon_name,
 				"description": weapon.description,
 				"type": "weapon",
+				"weapon_type": weapon.weapon_type,
+				"slot": "mainhand",
 				"base_damage": weapon.base_damage,
 				"attack_speed_bonus": weapon.attack_speed_bonus,
 				"crit_chance_bonus": weapon.crit_chance_bonus,
@@ -697,7 +875,23 @@ func refresh_equipment() -> void:
 			armor_item = CharacterStats.equipped_armor[slot_name]
 
 		if armor_item:
-			label.text = armor_item.get("name", "???")
+			# Try to get icon from ItemIconGenerator
+			var icon_texture: Texture2D = null
+			if ItemIconGenerator:
+				icon_texture = ItemIconGenerator.get_item_icon(armor_item)
+
+			if icon_texture and icon_rect:
+				# We have an icon - show it and hide label
+				icon_rect.texture = icon_texture
+				icon_rect.visible = true
+				label.visible = false
+				label.text = ""
+			else:
+				# No icon - show text name
+				if icon_rect:
+					icon_rect.visible = false
+				label.visible = true
+				label.text = armor_item.get("name", "???")
 
 			# Apply subtle rarity glow to slot border
 			var rarity = armor_item.get("rarity", "COMMON")
@@ -725,6 +919,11 @@ func refresh_equipment() -> void:
 
 			slot_control.tooltip_text = tooltip
 		else:
+			# Empty slot
+			if icon_rect:
+				icon_rect.texture = null
+				icon_rect.visible = false
+			label.visible = false
 			label.text = ""
 			slot_control.tooltip_text = "Empty " + slot_name + " slot"
 			# Reset to default style when empty
@@ -734,19 +933,26 @@ func refresh_equipment() -> void:
 func refresh_tools() -> void:
 	"""Update tool slot displays"""
 	for tool_name in tool_slots:
-		var slot_container = tool_slots[tool_name]  # HBoxContainer
+		var slot_container = tool_slots[tool_name]  # VBoxContainer (compact slot)
 
-		# Get the slot_control (first child)
-		var slot_control = slot_container.get_child(0) if slot_container.get_child_count() > 0 else null
+		# Find the slot_control using recursive search (works for both old and new layouts)
+		var slot_control = _find_node_by_prefix(slot_container, "Slot_")
+		if not slot_control:
+			slot_control = _find_node_by_prefix(slot_container, "Tool_")
 		if not slot_control:
 			continue
 
-		# Get the panel from the slot control
-		var panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
+		# Find panel
+		var panel = slot_control.get_node_or_null("SlotPanel")
+		if not panel:
+			panel = slot_control.get_child(0) if slot_control.get_child_count() > 0 else null
 		if not panel:
 			continue
 
-		var label = panel.get_node_or_null("ItemLabel")
+		# Get icon and label nodes using recursive search
+		var icon_rect: TextureRect = _find_node_recursive(slot_container, "ItemIcon")
+		var label: Label = _find_node_recursive(slot_container, "ItemLabel")
+
 		if not label:
 			continue
 
@@ -758,7 +964,23 @@ func refresh_tools() -> void:
 			tool_item = InventorySystem.get_equipped_pickaxe()
 
 		if tool_item and not tool_item.is_empty():
-			label.text = tool_item.get("name", "???")
+			# Try to get icon from ItemIconGenerator
+			var icon_texture: Texture2D = null
+			if ItemIconGenerator:
+				icon_texture = ItemIconGenerator.get_item_icon(tool_item)
+
+			if icon_texture and icon_rect:
+				# We have an icon - show it and hide label
+				icon_rect.texture = icon_texture
+				icon_rect.visible = true
+				label.visible = false
+				label.text = ""
+			else:
+				# No icon - show text name
+				if icon_rect:
+					icon_rect.visible = false
+				label.visible = true
+				label.text = tool_item.get("name", "???")
 
 			# Apply subtle rarity glow to slot border
 			var rarity = tool_item.get("rarity", "COMMON")
@@ -776,6 +998,11 @@ func refresh_tools() -> void:
 
 			slot_control.tooltip_text = tooltip
 		else:
+			# Empty slot
+			if icon_rect:
+				icon_rect.texture = null
+				icon_rect.visible = false
+			label.visible = false
 			label.text = ""
 			slot_control.tooltip_text = "Empty " + tool_name + " slot"
 			# Reset to default style when empty
@@ -916,9 +1143,12 @@ func _get_equipment_drag_data(at_position: Vector2, slot_name: String) -> Varian
 	preview.modulate = Color(1, 1, 1, 0.8)  # Slightly transparent
 
 	# Get the equipment slot control and set preview on it
-	var slot_container = equipment_slots[slot_name]  # HBoxContainer (new structure)
-	var slot_control = slot_container.get_child(0)  # Control wrapper (first child now)
-	slot_control.set_drag_preview(preview)
+	var slot_container = equipment_slots[slot_name]  # VBoxContainer (compact slot)
+	var slot_control = _find_node_by_prefix(slot_container, "Slot_")
+	if not slot_control:
+		slot_control = _find_node_by_prefix(slot_container, "Equip_")
+	if slot_control:
+		slot_control.set_drag_preview(preview)
 
 	# Return drag data
 	return {
@@ -1031,9 +1261,12 @@ func _get_tool_drag_data(at_position: Vector2, tool_name: String) -> Variant:
 	preview.modulate = Color(1, 1, 1, 0.8)  # Slightly transparent
 
 	# Get the tool slot control and set preview on it
-	var slot_container = tool_slots[tool_name]  # HBoxContainer
-	var slot_control = slot_container.get_child(0)  # Control wrapper
-	slot_control.set_drag_preview(preview)
+	var slot_container = tool_slots[tool_name]  # VBoxContainer (compact slot)
+	var slot_control = _find_node_by_prefix(slot_container, "Slot_")
+	if not slot_control:
+		slot_control = _find_node_by_prefix(slot_container, "Tool_")
+	if slot_control:
+		slot_control.set_drag_preview(preview)
 
 	# Return drag data
 	return {
@@ -1120,3 +1353,23 @@ func _on_weapon_changed(_weapon = null) -> void:
 func _on_tool_changed(_tool: Dictionary) -> void:
 	"""Called when a tool is equipped/unequipped"""
 	refresh_tools()
+
+func _find_node_recursive(parent: Node, node_name: String) -> Node:
+	"""Recursively search for a node by name"""
+	for child in parent.get_children():
+		if child.name == node_name:
+			return child
+		var found = _find_node_recursive(child, node_name)
+		if found:
+			return found
+	return null
+
+func _find_node_by_prefix(parent: Node, prefix: String) -> Node:
+	"""Recursively search for a node whose name starts with prefix"""
+	for child in parent.get_children():
+		if child.name.begins_with(prefix):
+			return child
+		var found = _find_node_by_prefix(child, prefix)
+		if found:
+			return found
+	return null

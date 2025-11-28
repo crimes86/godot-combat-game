@@ -27,10 +27,12 @@ LootSpawnManager="*res://scripts/systems/LootSpawnManager.gd"
 NotificationManager="*res://scripts/systems/NotificationManager.gd"
 InteractionManager="*res://scripts/systems/InteractionManager.gd"
 DatabaseManager="*res://scripts/systems/DatabaseManager.gd"
+AccountAdmin="*res://scripts/ui/AccountAdminPanel.gd"
 NetworkManager="*res://scripts/networking/NetworkManager.gd"
 NetworkEnemyManager="*res://scripts/networking/NetworkEnemyManager.gd"
 CursorManager="*res://scripts/systems/CursorManager.gd"
 TimeManager="*res://scripts/systems/TimeManager.gd"
+ItemIconGenerator="*res://scripts/systems/ItemIconGenerator.gd"
 
 [editor_plugins]
 

@@ -1071,10 +1071,10 @@ func create_particle_systems() -> void:
 	print("✅ Created sparse particle systems with mist")
 
 func create_clearing_stumps() -> void:
-	"""Create ~40 tree stumps around the campfire clearing to show it was cleared by chopping"""
-	var stump_count = 40
-	var clearing_inner_radius = 400.0  # Start at 400px from campfire
-	var clearing_outer_radius = 1000.0  # Expanded radius for more stumps
+	"""Create tree stumps around the campfire clearing to show it was cleared by chopping"""
+	var stump_count = 18  # Stumps around clearing edge
+	var clearing_inner_radius = 180.0  # Start just outside campfire area
+	var clearing_outer_radius = 700.0  # Spread out to edge of clearing
 
 	# Available tree textures
 	var tree_textures = [
@@ -1222,7 +1222,7 @@ func create_interaction_prompt() -> void:
 	"""Create UI prompt for fuel interaction"""
 	var canvas = CanvasLayer.new()
 	canvas.name = "InteractionCanvas"
-	canvas.layer = 100  # Top layer
+	canvas.layer = 40  # Below hints panel (50) and UI windows (110)
 	add_child(canvas)
 
 	interaction_prompt = Label.new()
@@ -1293,7 +1293,7 @@ func create_progress_circle() -> void:
 	"""Create radial progress indicator for hold-to-fuel"""
 	var canvas = CanvasLayer.new()
 	canvas.name = "ProgressCanvas"
-	canvas.layer = 100
+	canvas.layer = 40  # Below hints panel (50) and UI windows (110)
 	add_child(canvas)
 
 	progress_circle = Node2D.new()
@@ -1901,7 +1901,7 @@ func create_fuel_ui() -> void:
 	"""Create UI panel showing current fuel levels and buffs"""
 	var canvas = CanvasLayer.new()
 	canvas.name = "FuelUICanvas"
-	canvas.layer = 100
+	canvas.layer = 40  # Below hints panel (50) and UI windows (110)
 	add_child(canvas)
 
 	# This will be implemented with CampfireFuelUI scene

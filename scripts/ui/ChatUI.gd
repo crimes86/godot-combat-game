@@ -34,8 +34,8 @@ var messages: Array[Dictionary] = []
 var network_manager = null
 
 func _ready() -> void:
-	# Set layer above game but below important UI
-	layer = 90
+	# Set layer above game prompts (campfire hints are at 100)
+	layer = 110
 
 	# Create UI
 	create_chat_ui()
@@ -51,9 +51,19 @@ func _ready() -> void:
 	add_system_message("Welcome! Press Enter to chat.")
 
 func _input(event: InputEvent) -> void:
+	# Don't process input if admin panel is open
+	var admin_panel = get_node_or_null("/root/AccountAdmin")
+	if admin_panel and admin_panel.is_visible:
+		return
+
 	# Toggle chat focus with Enter key
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
+			# Don't capture Enter if another UI element has focus
+			var focused = get_viewport().gui_get_focus_owner()
+			if focused and focused != input_field:
+				return  # Let the focused control handle it
+
 			if not is_input_focused:
 				focus_input()
 				get_viewport().set_input_as_handled()
@@ -74,17 +84,25 @@ func create_chat_ui() -> void:
 	chat_panel = PanelContainer.new()
 	chat_panel.name = "ChatPanel"
 
-	# Position at bottom-left
+	# Position at bottom-left (larger size)
 	chat_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	chat_panel.custom_minimum_size = Vector2(400, 200)
+	chat_panel.custom_minimum_size = Vector2(570, 320)
 	chat_panel.anchor_left = 0.0
 	chat_panel.anchor_top = 1.0
 	chat_panel.anchor_right = 0.0
 	chat_panel.anchor_bottom = 1.0
 	chat_panel.offset_left = 10
-	chat_panel.offset_right = 410
-	chat_panel.offset_top = -210
+	chat_panel.offset_right = 580
+	chat_panel.offset_top = -330
 	chat_panel.offset_bottom = -10
+
+	# Enable mouse detection for hover fade effect
+	chat_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	chat_panel.mouse_entered.connect(_on_chat_mouse_entered)
+	chat_panel.mouse_exited.connect(_on_chat_mouse_exited)
+
+	# Start faded out
+	chat_panel.modulate.a = 0.3
 
 	# Apply stone gray styling
 	var panel_style = StyleBoxFlat.new()
@@ -121,7 +139,7 @@ func create_chat_ui() -> void:
 	var header = Label.new()
 	header.text = "CHAT"
 	header.add_theme_color_override("font_color", HEADER_COLOR)
-	header.add_theme_font_size_override("font_size", 12)
+	header.add_theme_font_size_override("font_size", 14)
 	vbox.add_child(header)
 
 	# Message scroll container
@@ -177,7 +195,7 @@ func create_chat_ui() -> void:
 	input_field.add_theme_stylebox_override("normal", input_style)
 	input_field.add_theme_color_override("font_color", TEXT_COLOR)
 	input_field.add_theme_color_override("font_placeholder_color", ACCENT_COLOR)
-	input_field.add_theme_font_size_override("font_size", 13)
+	input_field.add_theme_font_size_override("font_size", 14)
 
 	# Focus style
 	var focus_style = input_style.duplicate()
@@ -231,12 +249,14 @@ func focus_input() -> void:
 	if input_field:
 		input_field.grab_focus()
 		is_input_focused = true
+		_fade_to(1.0)  # Show fully when typing
 
 func unfocus_input() -> void:
 	"""Remove focus from chat input"""
 	if input_field:
 		input_field.release_focus()
 		is_input_focused = false
+		_fade_to(0.3)  # Fade back out when done typing
 
 func send_message() -> void:
 	"""Send the current message"""
@@ -245,6 +265,14 @@ func send_message() -> void:
 
 	var text = input_field.text.strip_edges()
 	if text.is_empty():
+		return
+
+	# Clear input first
+	input_field.text = ""
+
+	# Check for admin commands (start with /)
+	if text.begins_with("/"):
+		_handle_admin_command(text.substr(1))  # Remove the /
 		return
 
 	# Get player name
@@ -261,9 +289,6 @@ func send_message() -> void:
 	else:
 		# Single player - just show locally
 		add_chat_message(sender_name, text, true)
-
-	# Clear input
-	input_field.text = ""
 
 	# Emit signal
 	chat_message_sent.emit(text)
@@ -290,7 +315,7 @@ func add_chat_message(sender: String, text: String, is_local: bool = false) -> v
 	msg_label.fit_content = true
 	msg_label.scroll_active = false
 	msg_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	msg_label.add_theme_font_size_override("normal_font_size", 12)
+	msg_label.add_theme_font_size_override("normal_font_size", 14)
 
 	# Format message with color
 	var name_color = LOCAL_COLOR if is_local else TEXT_COLOR
@@ -311,7 +336,7 @@ func add_system_message(text: String) -> void:
 	msg_label.fit_content = true
 	msg_label.scroll_active = false
 	msg_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	msg_label.add_theme_font_size_override("normal_font_size", 11)
+	msg_label.add_theme_font_size_override("normal_font_size", 13)
 
 	var color_hex = SYSTEM_COLOR.to_html(false)
 	msg_label.text = "[color=#%s][i]%s[/i][/color]" % [color_hex, text]
@@ -357,3 +382,231 @@ func _on_chat_message_received(sender_name: String, message: String, sender_id: 
 func is_chat_focused() -> bool:
 	"""Check if chat input is currently focused (for disabling game input)"""
 	return is_input_focused
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ADMIN COMMANDS (type /help for list)
+# ═══════════════════════════════════════════════════════════════════════════
+
+var _selected_account: String = ""  # For account commands
+
+func _handle_admin_command(cmd: String) -> void:
+	"""Process admin commands starting with /"""
+	var parts = cmd.strip_edges().split(" ", false)
+	if parts.is_empty():
+		return
+
+	var command = parts[0].to_lower()
+	var args = parts.slice(1)
+
+	match command:
+		"help":
+			_cmd_help()
+		"accounts":
+			_cmd_accounts()
+		"select":
+			_cmd_select(args)
+		"info":
+			_cmd_info()
+		"setpos":
+			_cmd_setpos(args)
+		"resetpos":
+			_cmd_resetpos()
+		"setgold":
+			_cmd_setgold(args)
+		"setlevel":
+			_cmd_setlevel(args)
+		"setstats":
+			_cmd_setstats(args)
+		"ban":
+			_cmd_ban(true)
+		"unban":
+			_cmd_ban(false)
+		"forceoffline":
+			_cmd_force_offline()
+		"delete":
+			_cmd_delete()
+		_:
+			add_system_message("Unknown command: /%s (type /help)" % command)
+
+func _cmd_help() -> void:
+	add_system_message("=== Admin Commands ===")
+	add_system_message("/accounts - List all accounts")
+	add_system_message("/select <username> - Select account to edit")
+	add_system_message("/info - Show selected account details")
+	add_system_message("/setpos <x> <y> - Set position")
+	add_system_message("/resetpos - Reset to campfire (0,0)")
+	add_system_message("/setgold <amount> - Set gold")
+	add_system_message("/setlevel <1-30> - Set level")
+	add_system_message("/setstats <str> <agi> <vit> <luck>")
+	add_system_message("/ban /unban - Toggle ban")
+	add_system_message("/forceoffline - Fix stuck login")
+	add_system_message("/delete - Delete selected account")
+
+func _cmd_accounts() -> void:
+	if not DatabaseManager or not DatabaseManager.is_initialized:
+		add_system_message("[Error] Database not initialized. Host a game first.")
+		return
+
+	add_system_message("=== Accounts ===")
+	for username in DatabaseManager.players_data.keys():
+		var data = DatabaseManager.players_data[username]
+		var level = data.get("level", 1)
+		var online = " [ONLINE]" if data.get("is_online", false) else ""
+		add_system_message("  %s (Lv.%d)%s" % [username, level, online])
+	add_system_message("Total: %d accounts" % DatabaseManager.players_data.size())
+
+func _cmd_select(args: Array) -> void:
+	if args.is_empty():
+		add_system_message("[Error] Usage: /select <username>")
+		return
+
+	var username = args[0]
+	if not DatabaseManager or not DatabaseManager.players_data.has(username):
+		add_system_message("[Error] Account not found: %s" % username)
+		return
+
+	_selected_account = username
+	add_system_message("Selected: %s" % username)
+	_cmd_info()
+
+func _cmd_info() -> void:
+	if _selected_account.is_empty():
+		add_system_message("[Error] No account selected. Use /select <username>")
+		return
+
+	if not DatabaseManager.players_data.has(_selected_account):
+		add_system_message("[Error] Account not found: %s" % _selected_account)
+		_selected_account = ""
+		return
+
+	var data = DatabaseManager.players_data[_selected_account]
+	add_system_message("=== %s ===" % _selected_account)
+	add_system_message("Level: %d | Gold: %d" % [data.get("level", 1), data.get("gold", 0)])
+	add_system_message("Stats: STR %d | AGI %d | VIT %d | LUCK %d" % [
+		data.get("strength", 10), data.get("agility", 10),
+		data.get("vitality", 10), data.get("luck", 10)
+	])
+	add_system_message("Position: (%.0f, %.0f)" % [data.get("position_x", 0), data.get("position_y", 0)])
+	add_system_message("Status: %s%s" % [
+		"ONLINE" if data.get("is_online", false) else "Offline",
+		" | BANNED" if data.get("is_banned", false) else ""
+	])
+
+func _cmd_setpos(args: Array) -> void:
+	if _selected_account.is_empty():
+		add_system_message("[Error] No account selected. Use /select <username>")
+		return
+	if args.size() < 2:
+		add_system_message("[Error] Usage: /setpos <x> <y>")
+		return
+
+	var x = float(args[0])
+	var y = float(args[1])
+	DatabaseManager.players_data[_selected_account]["position_x"] = x
+	DatabaseManager.players_data[_selected_account]["position_y"] = y
+	DatabaseManager.save_database()
+	add_system_message("Set %s position to (%.0f, %.0f)" % [_selected_account, x, y])
+
+func _cmd_resetpos() -> void:
+	if _selected_account.is_empty():
+		add_system_message("[Error] No account selected. Use /select <username>")
+		return
+
+	DatabaseManager.players_data[_selected_account]["position_x"] = 0.0
+	DatabaseManager.players_data[_selected_account]["position_y"] = 0.0
+	DatabaseManager.save_database()
+	add_system_message("Reset %s position to campfire spawn" % _selected_account)
+
+func _cmd_setgold(args: Array) -> void:
+	if _selected_account.is_empty():
+		add_system_message("[Error] No account selected. Use /select <username>")
+		return
+	if args.is_empty():
+		add_system_message("[Error] Usage: /setgold <amount>")
+		return
+
+	var amount = int(args[0])
+	DatabaseManager.players_data[_selected_account]["gold"] = amount
+	DatabaseManager.save_database()
+	add_system_message("Set %s gold to %d" % [_selected_account, amount])
+
+func _cmd_setlevel(args: Array) -> void:
+	if _selected_account.is_empty():
+		add_system_message("[Error] No account selected. Use /select <username>")
+		return
+	if args.is_empty():
+		add_system_message("[Error] Usage: /setlevel <level>")
+		return
+
+	var level = clampi(int(args[0]), 1, 30)
+	DatabaseManager.players_data[_selected_account]["level"] = level
+	DatabaseManager.save_database()
+	add_system_message("Set %s level to %d" % [_selected_account, level])
+
+func _cmd_setstats(args: Array) -> void:
+	if _selected_account.is_empty():
+		add_system_message("[Error] No account selected. Use /select <username>")
+		return
+	if args.size() < 4:
+		add_system_message("[Error] Usage: /setstats <str> <agi> <vit> <luck>")
+		return
+
+	var data = DatabaseManager.players_data[_selected_account]
+	data["strength"] = int(args[0])
+	data["agility"] = int(args[1])
+	data["vitality"] = int(args[2])
+	data["luck"] = int(args[3])
+	DatabaseManager.save_database()
+	add_system_message("Updated %s stats" % _selected_account)
+
+func _cmd_ban(ban: bool) -> void:
+	if _selected_account.is_empty():
+		add_system_message("[Error] No account selected. Use /select <username>")
+		return
+
+	DatabaseManager.players_data[_selected_account]["is_banned"] = ban
+	DatabaseManager.save_database()
+	add_system_message("%s account: %s" % ["Banned" if ban else "Unbanned", _selected_account])
+
+func _cmd_force_offline() -> void:
+	if _selected_account.is_empty():
+		add_system_message("[Error] No account selected. Use /select <username>")
+		return
+
+	DatabaseManager.players_data[_selected_account]["is_online"] = false
+	DatabaseManager.save_database()
+	add_system_message("Forced %s offline" % _selected_account)
+
+func _cmd_delete() -> void:
+	if _selected_account.is_empty():
+		add_system_message("[Error] No account selected. Use /select <username>")
+		return
+
+	var username = _selected_account
+	DatabaseManager.players_data.erase(username)
+	DatabaseManager.save_database()
+	_selected_account = ""
+	add_system_message("Deleted account: %s" % username)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HOVER FADE EFFECT
+# ═══════════════════════════════════════════════════════════════════════════
+
+var _fade_tween: Tween = null
+
+func _on_chat_mouse_entered() -> void:
+	"""Fade in when mouse hovers over chat"""
+	_fade_to(1.0)
+
+func _on_chat_mouse_exited() -> void:
+	"""Fade out when mouse leaves chat (unless input is focused)"""
+	if not is_input_focused:
+		_fade_to(0.3)
+
+func _fade_to(target_alpha: float) -> void:
+	"""Smoothly fade chat panel to target alpha"""
+	if _fade_tween:
+		_fade_tween.kill()
+
+	_fade_tween = create_tween()
+	_fade_tween.tween_property(chat_panel, "modulate:a", target_alpha, 0.2)

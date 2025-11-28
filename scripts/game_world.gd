@@ -3428,7 +3428,24 @@ func _spawn_initial_players():
 	# Check if not already spawned
 	if not players.has(my_id):
 		print("🔍 [PLAYER DEBUG] Spawning local player %d" % my_id)
-		spawn_player(my_id)
+
+		# Get saved position for authenticated players
+		var saved_pos = Vector2.ZERO
+		if not NetworkManager.is_guest and DatabaseManager:
+			var username = NetworkManager.local_player_data.get("username", "")
+			if not username.is_empty():
+				saved_pos = DatabaseManager.get_saved_position(username)
+				if saved_pos != Vector2.ZERO:
+					print("📍 [PLAYER DEBUG] Restoring saved position: %s" % saved_pos)
+
+		spawn_player(my_id, saved_pos)
+
+		# Apply saved data to game systems after player spawns
+		if not NetworkManager.is_guest and DatabaseManager:
+			var username = NetworkManager.local_player_data.get("username", "")
+			if not username.is_empty() and players.has(my_id):
+				# Defer to ensure player is fully ready
+				call_deferred("_apply_saved_data_to_player", username, my_id)
 	else:
 		print("🔍 [PLAYER DEBUG] Player %d already in dict, skipping spawn" % my_id)
 
@@ -3654,6 +3671,21 @@ func get_spawn_points() -> Array:
 		points.append(CAMPFIRE_POS + offset)
 
 	return points
+
+func _apply_saved_data_to_player(username: String, player_id: int) -> void:
+	"""Apply saved inventory, stats, and equipment to the player after spawn"""
+	if not players.has(player_id):
+		push_warning("[game_world] Cannot apply saved data - player %d not found" % player_id)
+		return
+
+	var player = players[player_id]
+	if not is_instance_valid(player):
+		return
+
+	# Apply saved data to game systems
+	if DatabaseManager:
+		DatabaseManager.apply_player_data_to_systems(username, player)
+		print("✅ [game_world] Applied saved data for player: %s" % username)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PLAYER POSITION SYNC (Multiplayer)

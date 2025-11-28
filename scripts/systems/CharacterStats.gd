@@ -30,6 +30,15 @@ var luck: int = Constants.STARTING_LUCK          # Affects crit chance
 # Temporary buffs (from campfires, potions, etc.)
 var campfire_crit_buff: float = 0.0  # Bonus crit chance from campfire bone embers
 
+# ============================================
+# PERSISTENT TRACKING (for Database)
+# ============================================
+
+var kill_counts: Dictionary = {}  # enemy_type -> count
+var achievements: Array = []  # List of unlocked achievement IDs
+var total_playtime: float = 0.0  # Total seconds played (persisted)
+var session_start_time: float = 0.0  # Start of current session (not persisted)
+
 # Starting stats (for reset/new character)
 const STARTING_STRENGTH: int = Constants.STARTING_STRENGTH
 const STARTING_AGILITY: int = Constants.STARTING_AGILITY
@@ -491,33 +500,154 @@ func reset_character() -> void:
 	print("Character reset to level 1 (unarmed)")
 
 # ============================================
-# SAVE / LOAD (Future)
+# SAVE / LOAD (Database Persistence)
 # ============================================
 
 func get_save_data() -> Dictionary:
 	"""Returns dictionary of all character data for saving"""
+	# Update playtime before saving
+	update_total_playtime()
+
+	# Serialize equipped weapon if exists
+	var weapon_data = {}
+	if equipped_weapon:
+		weapon_data = {
+			"weapon_name": equipped_weapon.weapon_name,
+			"weapon_type": equipped_weapon.weapon_type,
+			"base_damage": equipped_weapon.base_damage,
+			"attack_speed_bonus": equipped_weapon.attack_speed_bonus,
+			"crit_chance_bonus": equipped_weapon.crit_chance_bonus,
+			"required_level": equipped_weapon.required_level,
+			"rarity": equipped_weapon.rarity,
+			"can_trade": equipped_weapon.can_trade,
+			"description": equipped_weapon.description
+		}
+
 	return {
+		# Core progression
 		"level": level,
 		"experience": experience,
 		"experience_to_next_level": experience_to_next_level,
+		"gold": gold,
+
+		# Attributes
 		"strength": strength,
 		"agility": agility,
 		"vitality": vitality,
 		"luck": luck,
-		# Weapon data would go here
+
+		# Equipment
+		"equipped_weapon": weapon_data,
+		"equipped_armor": equipped_armor.duplicate(true),
+
+		# Tracking stats
+		"kill_counts": kill_counts.duplicate(),
+		"achievements": achievements.duplicate(),
+		"total_playtime": total_playtime,
+
+		"version": 1  # For future migration
 	}
 
 func load_save_data(data: Dictionary) -> void:
 	"""Load character data from saved dictionary"""
+	# Core progression
 	level = data.get("level", Constants.STARTING_LEVEL)
 	experience = data.get("experience", Constants.STARTING_XP)
 	experience_to_next_level = data.get("experience_to_next_level", Constants.BASE_XP_REQUIREMENT)
+	gold = data.get("gold", Constants.STARTING_GOLD)
+
+	# Attributes
 	strength = data.get("strength", STARTING_STRENGTH)
 	agility = data.get("agility", STARTING_AGILITY)
 	vitality = data.get("vitality", STARTING_VITALITY)
 	luck = data.get("luck", STARTING_LUCK)
-	
-	print("Character data loaded: Level ", level)
+
+	# Tracking stats
+	kill_counts = data.get("kill_counts", {})
+	achievements = data.get("achievements", [])
+	total_playtime = data.get("total_playtime", 0.0)
+
+	# Equipped weapon (recreate Weapon resource from saved data)
+	var weapon_data = data.get("equipped_weapon", {})
+	if not weapon_data.is_empty():
+		var Weapon = load("res://scripts/resources/Weapon.gd")
+		var weapon = Weapon.new()
+		weapon.weapon_name = weapon_data.get("weapon_name", "Unknown")
+		weapon.weapon_type = weapon_data.get("weapon_type", "sword")
+		weapon.base_damage = weapon_data.get("base_damage", 1.0)
+		weapon.attack_speed_bonus = weapon_data.get("attack_speed_bonus", 0.0)
+		weapon.crit_chance_bonus = weapon_data.get("crit_chance_bonus", 0.0)
+		weapon.required_level = weapon_data.get("required_level", 1)
+		weapon.rarity = weapon_data.get("rarity", 0)
+		weapon.can_trade = weapon_data.get("can_trade", true)
+		weapon.description = weapon_data.get("description", "")
+		equipped_weapon = weapon
+	else:
+		equipped_weapon = null
+
+	# Equipped armor
+	var armor_data = data.get("equipped_armor", {})
+	if not armor_data.is_empty():
+		for slot in armor_data:
+			if slot in equipped_armor and armor_data[slot] != null:
+				equipped_armor[slot] = armor_data[slot].duplicate() if armor_data[slot] is Dictionary else armor_data[slot]
+			else:
+				equipped_armor[slot] = null
+	else:
+		# Reset to starting clothes if no armor saved
+		_equip_starting_clothes()
+
+	# Start session timer
+	start_session()
+
+	print("📊 Character data loaded: Level %d, Gold %d, Playtime %.0fs" % [level, gold, total_playtime])
+
+# ============================================
+# PLAYTIME & KILL TRACKING
+# ============================================
+
+func start_session() -> void:
+	"""Start tracking playtime for this session"""
+	session_start_time = Time.get_unix_time_from_system()
+
+func get_session_playtime() -> float:
+	"""Get seconds played in current session"""
+	if session_start_time <= 0:
+		return 0.0
+	return Time.get_unix_time_from_system() - session_start_time
+
+func update_total_playtime() -> void:
+	"""Add current session time to total (call before saving)"""
+	if session_start_time > 0:
+		total_playtime += get_session_playtime()
+		session_start_time = Time.get_unix_time_from_system()  # Reset for next save
+
+func record_kill(enemy_type: String) -> void:
+	"""Record a kill of specific enemy type"""
+	kill_counts[enemy_type] = kill_counts.get(enemy_type, 0) + 1
+
+func get_kill_count(enemy_type: String) -> int:
+	"""Get kill count for specific enemy type"""
+	return kill_counts.get(enemy_type, 0)
+
+func get_total_kills() -> int:
+	"""Get total kills across all enemy types"""
+	var total = 0
+	for count in kill_counts.values():
+		total += count
+	return total
+
+func unlock_achievement(achievement_id: String) -> bool:
+	"""Unlock an achievement (returns false if already unlocked)"""
+	if achievement_id in achievements:
+		return false
+	achievements.append(achievement_id)
+	print("🏆 Achievement unlocked: %s" % achievement_id)
+	return true
+
+func has_achievement(achievement_id: String) -> bool:
+	"""Check if achievement is unlocked"""
+	return achievement_id in achievements
 
 # ============================================
 # DEBUG / TESTING

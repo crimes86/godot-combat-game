@@ -24,8 +24,8 @@ const HEADER_COLOR = Color(0.75, 0.78, 0.82, 1.0)  # Silver headers
 const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
 
 func _ready() -> void:
-	# Set layer above game elements but below shop
-	layer = 95
+	# Set layer above game prompts (campfire hints are at 100)
+	layer = 110
 
 	# Start hidden
 	visible = false
@@ -39,6 +39,12 @@ func _ready() -> void:
 
 	# Initial update
 	refresh_all()
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_ESCAPE and is_visible:
+			toggle_ui()
+			get_viewport().set_input_as_handled()
 
 func create_inventory_ui() -> void:
 	"""Create standalone inventory window"""
@@ -68,78 +74,61 @@ func create_inventory_ui() -> void:
 	delete_dialog.confirmed.connect(_on_delete_confirmed)
 	add_child(delete_dialog)
 
-	# Main panel container - positioned at right side of screen
+	# Main panel container - positioned at bottom-right corner
 	main_panel = PanelContainer.new()
 	main_panel.name = "InventoryPanel"
 
-	# Position on right side
-	main_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	main_panel.custom_minimum_size = Vector2(350, 450)
+	# Position at bottom-right - use custom_minimum_size and anchor to bottom-right
+	# The panel will grow upward from the bottom-right corner
+	main_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	main_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN  # Grow left from right edge
+	main_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN    # Grow up from bottom edge
 	main_panel.anchor_left = 1.0
-	main_panel.anchor_top = 0.5
+	main_panel.anchor_top = 1.0
 	main_panel.anchor_right = 1.0
-	main_panel.anchor_bottom = 0.5
-	main_panel.offset_left = -370
-	main_panel.offset_right = -20
-	main_panel.offset_top = -225
-	main_panel.offset_bottom = 225
+	main_panel.anchor_bottom = 1.0
+	# Position from bottom-right corner with padding
+	main_panel.offset_left = -270
+	main_panel.offset_right = -10
+	main_panel.offset_top = 0   # Will be determined by content size + grow direction
+	main_panel.offset_bottom = -10  # 10px from bottom edge
 
 	# Dark Fantasy Wasteland styling with transparency
 	var panel_style = StyleBoxFlat.new()
 	panel_style.bg_color = BG_COLOR
-	panel_style.border_width_left = 3
-	panel_style.border_width_right = 3
-	panel_style.border_width_top = 3
-	panel_style.border_width_bottom = 3
+	panel_style.border_width_left = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_bottom = 2
 	panel_style.border_color = BORDER_COLOR
-	panel_style.corner_radius_top_left = 8
-	panel_style.corner_radius_top_right = 8
-	panel_style.corner_radius_bottom_left = 8
-	panel_style.corner_radius_bottom_right = 8
-	panel_style.shadow_size = 12
-	panel_style.shadow_color = Color(0, 0, 0, 0.8)
-	panel_style.shadow_offset = Vector2(0, 6)
+	panel_style.corner_radius_top_left = 6
+	panel_style.corner_radius_top_right = 6
+	panel_style.corner_radius_bottom_left = 6
+	panel_style.corner_radius_bottom_right = 6
+	panel_style.shadow_size = 8
+	panel_style.shadow_color = Color(0, 0, 0, 0.6)
+	panel_style.shadow_offset = Vector2(0, 4)
 
 	main_panel.add_theme_stylebox_override("panel", panel_style)
 
 	# Main layout with padding
 	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 15)
-	margin.add_theme_constant_override("margin_right", 15)
-	margin.add_theme_constant_override("margin_top", 15)
-	margin.add_theme_constant_override("margin_bottom", 15)
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
 	main_panel.add_child(margin)
 
 	var main_vbox = VBoxContainer.new()
-	main_vbox.add_theme_constant_override("separation", 12)
+	main_vbox.add_theme_constant_override("separation", 8)
 	margin.add_child(main_vbox)
 
-	# Title
-	var title = create_header_label("Inventory")
-	main_vbox.add_child(title)
-
-	# Inventory grid panel
-	var inv_panel = PanelContainer.new()
-	inv_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var inv_style = create_inner_panel_style()
-	inv_panel.add_theme_stylebox_override("panel", inv_style)
-	main_vbox.add_child(inv_panel)
-
-	var inv_vbox = VBoxContainer.new()
-	inv_vbox.add_theme_constant_override("separation", 12)
-	inv_panel.add_child(inv_vbox)
-
-	# Center the inventory grid
-	var inv_center = CenterContainer.new()
-	inv_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	inv_vbox.add_child(inv_center)
-
-	# Inventory grid (4 columns)
+	# Inventory grid (4 columns) - no inner panel, just the grid
 	var inv_grid = GridContainer.new()
 	inv_grid.columns = 4
-	inv_grid.add_theme_constant_override("h_separation", 8)
-	inv_grid.add_theme_constant_override("v_separation", 8)
-	inv_center.add_child(inv_grid)
+	inv_grid.add_theme_constant_override("h_separation", 4)
+	inv_grid.add_theme_constant_override("v_separation", 4)
+	main_vbox.add_child(inv_grid)
 
 	# Create inventory slots
 	for i in range(InventorySystem.MAX_INVENTORY_SLOTS):
@@ -147,18 +136,16 @@ func create_inventory_ui() -> void:
 		inv_grid.add_child(slot_button)
 		inventory_slots.append(slot_button)
 
-	# Gold display at bottom
-	var separator_gold = create_styled_separator()
-	main_vbox.add_child(separator_gold)
-
+	# Gold display at bottom - just icon and number
 	var gold_container = HBoxContainer.new()
 	gold_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	gold_container.add_theme_constant_override("separation", 4)
 	main_vbox.add_child(gold_container)
 
-	var gold_icon = create_text_label("💰", 18)
+	var gold_icon = create_text_label("💰", 16)
 	gold_container.add_child(gold_icon)
 
-	gold_label = create_text_label("0 Gold", 18)
+	gold_label = create_text_label("0", 16)
 	gold_label.add_theme_color_override("font_color", HEADER_COLOR)
 	gold_container.add_child(gold_label)
 
@@ -168,7 +155,7 @@ func create_inventory_slot(slot_index: int) -> Control:
 	"""Create a single inventory slot button with drag-drop support"""
 	var slot_control = Control.new()
 	slot_control.name = "InvSlot_" + str(slot_index)
-	slot_control.custom_minimum_size = Vector2(70, 70)
+	slot_control.custom_minimum_size = Vector2(56, 56)
 	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP  # Ensure we receive input
 	slot_control.set_meta("slot_index", slot_index)
 	slot_control.set_meta("slot_type", "inventory")
@@ -182,27 +169,60 @@ func create_inventory_slot(slot_index: int) -> Control:
 
 	# Add panel for styling
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(70, 70)
+	panel.custom_minimum_size = Vector2(56, 56)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot_control.add_child(panel)
 
 	var slot_style_normal = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 	panel.add_theme_stylebox_override("panel", slot_style_normal)
 
-	# Add label for item text
+	# Center container for icon
+	var center = CenterContainer.new()
+	center.name = "CenterContainer"
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(center)
+
+	# Add icon texture rect (scaled to fit)
+	var icon = TextureRect.new()
+	icon.name = "ItemIcon"
+	icon.custom_minimum_size = Vector2(32, 32)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.visible = false  # Hidden until we have an icon
+	center.add_child(icon)
+
+	# Add label for item text (fallback when no icon)
 	var label = Label.new()
 	label.name = "ItemLabel"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_font_size_override("font_size", 9)
 	label.add_theme_color_override("font_color", Color.WHITE)
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 2)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_child(label)
+	center.add_child(label)
+
+	# Stack count label (bottom-right corner)
+	var stack_label = Label.new()
+	stack_label.name = "StackLabel"
+	stack_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	stack_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	stack_label.add_theme_font_size_override("font_size", 10)
+	stack_label.add_theme_color_override("font_color", Color.WHITE)
+	stack_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	stack_label.add_theme_constant_override("outline_size", 2)
+	stack_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	stack_label.offset_left = -30
+	stack_label.offset_top = -16
+	stack_label.offset_right = -2
+	stack_label.offset_bottom = -2
+	stack_label.visible = false
+	panel.add_child(stack_label)
 
 	# Connect click event
 	slot_control.gui_input.connect(_on_inventory_slot_gui_input.bind(slot_index))
@@ -329,7 +349,7 @@ func refresh_all() -> void:
 func refresh_gold() -> void:
 	"""Update gold display"""
 	if gold_label:
-		gold_label.text = "%d Gold" % CharacterStats.gold
+		gold_label.text = "%d" % CharacterStats.gold
 
 func refresh_inventory() -> void:
 	"""Update inventory slot displays"""
@@ -341,8 +361,30 @@ func refresh_inventory() -> void:
 		if not panel:
 			continue
 
-		var label = panel.get_node_or_null("ItemLabel")
+		# Get icon, label, and stack label nodes
+		var icon_rect: TextureRect = null
+		var label: Label = null
+		var stack_label: Label = null
+
+		# Try new structure: Panel > CenterContainer > ItemIcon/ItemLabel
+		var center = panel.get_node_or_null("CenterContainer")
+		if center:
+			icon_rect = center.get_node_or_null("ItemIcon")
+			label = center.get_node_or_null("ItemLabel")
+
+		# Stack label is directly under panel
+		stack_label = panel.get_node_or_null("StackLabel")
+
+		# Fallback: search recursively
 		if not label:
+			label = _find_node_recursive(panel, "ItemLabel")
+		if not icon_rect:
+			icon_rect = _find_node_recursive(panel, "ItemIcon")
+		if not stack_label:
+			stack_label = _find_node_recursive(panel, "StackLabel")
+
+		if not label:
+			print("⚠️ InventoryUI: Could not find ItemLabel in slot %d" % i)
 			continue
 
 		if item and item.size() > 0:
@@ -350,17 +392,47 @@ func refresh_inventory() -> void:
 			var quantity = item.get("quantity", 1)
 			var is_stackable = item.get("stackable", false)
 
-			if is_stackable and quantity > 1:
-				label.text = "%s x%d" % [item_name, quantity]
+			# Try to get icon from ItemIconGenerator
+			var icon_texture: Texture2D = null
+			if ItemIconGenerator:
+				icon_texture = ItemIconGenerator.get_item_icon(item)
+
+			if icon_texture and icon_rect:
+				# We have an icon - show it
+				icon_rect.texture = icon_texture
+				icon_rect.visible = true
+				label.visible = false
+				label.text = ""
+				# Show stack count in bottom-right corner
+				if stack_label:
+					if is_stackable and quantity > 1:
+						stack_label.visible = true
+						stack_label.text = "x%d" % quantity
+					else:
+						stack_label.visible = false
+						stack_label.text = ""
 			else:
-				label.text = item_name
+				# No icon - show text name
+				if icon_rect:
+					icon_rect.visible = false
+				label.visible = true
+				if is_stackable and quantity > 1:
+					label.text = "%s\nx%d" % [item_name, quantity]
+				else:
+					label.text = item_name
+				if stack_label:
+					stack_label.visible = false
 
 			var rarity = item.get("rarity", "COMMON")
 			var glow_color = get_rarity_glow_color(rarity)
 			var glow_style = create_slot_style(SLOT_BG, glow_color, 3, true)
 			panel.add_theme_stylebox_override("panel", glow_style)
 
-			var tooltip = item.get("description", "")
+			# Build tooltip with item name first
+			var tooltip = "[%s]\n" % item_name
+			var desc = item.get("description", "")
+			if desc:
+				tooltip += desc
 
 			if item.get("type") == "weapon":
 				if item.has("base_damage"):
@@ -382,6 +454,13 @@ func refresh_inventory() -> void:
 
 			slot_control.tooltip_text = tooltip
 		else:
+			# Empty slot
+			if icon_rect:
+				icon_rect.texture = null
+				icon_rect.visible = false
+			if stack_label:
+				stack_label.visible = false
+			label.visible = false
 			label.text = ""
 			slot_control.tooltip_text = "Empty slot"
 			var default_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
@@ -607,3 +686,13 @@ func _on_gold_changed(_amount: int, _total: int) -> void:
 
 func _on_inventory_changed() -> void:
 	refresh_inventory()
+
+func _find_node_recursive(parent: Node, node_name: String) -> Node:
+	"""Recursively search for a node by name"""
+	for child in parent.get_children():
+		if child.name == node_name:
+			return child
+		var found = _find_node_recursive(child, node_name)
+		if found:
+			return found
+	return null

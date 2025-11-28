@@ -56,20 +56,34 @@ func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}) -> b
 
 		# Add host to player list
 		var host_id = multiplayer.get_unique_id()
+		var host_is_guest = host_player_data.is_empty()
+
+		# Use username from player_data if authenticated, otherwise use random player_name
+		var display_name = player_name
+		if not host_is_guest:
+			display_name = host_player_data.get("character_name", host_player_data.get("username", player_name))
+			player_name = display_name  # Update player_name to match authenticated name
+
 		connected_players[host_id] = {
-			"name": player_name,
+			"name": display_name,
 			"ready": true
 		}
 
 		# Store host's auth info
-		var host_is_guest = host_player_data.is_empty()
 		authenticated_players[host_id] = {
-			"username": player_name if host_is_guest else host_player_data.get("username", player_name),
+			"username": display_name if host_is_guest else host_player_data.get("username", player_name),
 			"player_data": host_player_data,
 			"is_guest": host_is_guest
 		}
 		local_player_data = host_player_data
 		is_guest = host_is_guest
+
+		# Start auto-save for host if not guest
+		if not host_is_guest and DatabaseManager:
+			var username = host_player_data.get("username", "")
+			if not username.is_empty():
+				DatabaseManager.start_auto_save(username)
+				CharacterStats.start_session()
 
 		print("Server created on port %d (ID: %d)" % [port, host_id])
 		server_created.emit()
@@ -94,11 +108,14 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> bool:
 
 # Close connection
 func close_connection():
-	# Save player data before disconnecting (if authenticated and not guest)
+	# Stop auto-save and do final save before disconnecting (if authenticated and not guest)
 	if is_authenticated and not is_guest and not local_player_data.is_empty():
 		var username = local_player_data.get("username", "")
 		if not username.is_empty() and DatabaseManager:
+			# stop_auto_save() does final save internally
+			DatabaseManager.stop_auto_save()
 			DatabaseManager.logout_player(username)
+			print("📀 [NetworkManager] Saved and logged out: %s" % username)
 
 	if peer:
 		peer.close()
@@ -477,6 +494,15 @@ func receive_login_response(success: bool, error: String, player_data: Dictionar
 		is_guest = player_data.get("id", 0) < 0  # Negative ID = guest
 		local_player_data = player_data
 		player_name = player_data.get("character_name", player_data.get("username", "Player"))
+
+		# Start auto-save for non-guest players
+		if not is_guest and DatabaseManager:
+			var username = player_data.get("username", "")
+			if not username.is_empty():
+				DatabaseManager.start_auto_save(username)
+				# Start session playtime tracking
+				CharacterStats.start_session()
+
 		login_success.emit(player_data)
 		print("Login successful! Playing as: %s" % player_name)
 	else:

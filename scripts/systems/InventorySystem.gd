@@ -250,3 +250,71 @@ func get_equipped_axe() -> Dictionary:
 func get_equipped_pickaxe() -> Dictionary:
 	"""Get the currently equipped pickaxe"""
 	return equipped_pickaxe
+
+# ============================================
+# SAVE/LOAD DATA (for Database Persistence)
+# ============================================
+
+func get_save_data() -> Dictionary:
+	"""Serialize inventory state for database storage"""
+	# Convert inventory to saveable format (filter out nulls, keep indices)
+	var items_data: Array = []
+	for i in range(inventory_items.size()):
+		if inventory_items[i] != null:
+			items_data.append({
+				"slot": i,
+				"item": inventory_items[i].duplicate()
+			})
+
+	return {
+		"items": items_data,
+		"equipped_axe": equipped_axe.duplicate() if not equipped_axe.is_empty() else {},
+		"equipped_pickaxe": equipped_pickaxe.duplicate() if not equipped_pickaxe.is_empty() else {},
+		"version": 1  # For future migration
+	}
+
+func load_save_data(data: Dictionary) -> void:
+	"""Restore inventory state from database"""
+	if data.is_empty():
+		return
+
+	# Suppress signals during bulk load
+	suppress_signals = true
+
+	# Clear current inventory
+	for i in range(inventory_items.size()):
+		inventory_items[i] = null
+	equipped_axe = {}
+	equipped_pickaxe = {}
+
+	# Restore items to their slots
+	var items_data = data.get("items", [])
+	for item_entry in items_data:
+		var slot = item_entry.get("slot", -1)
+		var item = item_entry.get("item", {})
+		if slot >= 0 and slot < inventory_items.size() and not item.is_empty():
+			inventory_items[slot] = item.duplicate()
+
+	# Restore equipped tools
+	var saved_axe = data.get("equipped_axe", {})
+	if not saved_axe.is_empty():
+		equipped_axe = saved_axe.duplicate()
+
+	var saved_pickaxe = data.get("equipped_pickaxe", {})
+	if not saved_pickaxe.is_empty():
+		equipped_pickaxe = saved_pickaxe.duplicate()
+
+	# Re-enable signals and emit change
+	suppress_signals = false
+	inventory_changed.emit()
+	print("📦 Inventory loaded from save data")
+
+func clear_inventory() -> void:
+	"""Clear all inventory data (for new character or reset)"""
+	suppress_signals = true
+	for i in range(inventory_items.size()):
+		inventory_items[i] = null
+	equipped_axe = {}
+	equipped_pickaxe = {}
+	suppress_signals = false
+	inventory_changed.emit()
