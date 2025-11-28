@@ -66,8 +66,15 @@ Authoritative dedicated server model for persistent world MMO.
   - Chests: 1-5 minute respawn at new random location
   - Items: 45 seconds - 3 minute respawn at new random location
 
+### Database Persistence ✅
+- **Auto-save**: Every 2 minutes for all authenticated players
+- **Host**: Saves locally to `user://players.json`
+- **Clients**: Sync state to server via RPC, server saves to database
+- **On disconnect**: Final save for both host and clients
+- **Saved data**: Position, HP, level, XP, gold, stats, inventory, equipment, playtime
+- **Server-side validation**: Sanity checks on level (1-100), gold (0-999M)
+
 ### What's NOT Implemented Yet
-- ❌ Full database persistence (inventory/equipment saving)
 - ❌ PvP combat
 - ❌ Harvestable sync (trees, rocks) - currently local only
 - ❌ Dedicated headless server

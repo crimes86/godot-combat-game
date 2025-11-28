@@ -75,8 +75,12 @@ var crit_particles: CPUParticles2D = null
 
 # Campfire size/range
 var warmth_radius: float = 150.0  # Healing/buff radius (smaller)
-var player_in_warmth: bool = false
-var player: CharacterBody2D = null
+var player_in_warmth: bool = false  # True if LOCAL player is in warmth
+var player: CharacterBody2D = null  # Reference to LOCAL player only
+
+# Multi-player tracking: Dictionary of players in warmth for healing
+# Key: player node, Value: {heal_timer: float, in_warmth: bool}
+var players_in_warmth: Dictionary = {}
 
 # Visual elements
 var fire_sprite: Node2D = null
@@ -149,48 +153,10 @@ func is_visible_on_screen() -> bool:
 	return viewport_rect.has_point(global_position)
 
 func _physics_process(delta: float) -> void:
-	# Heal player based on fuel state:
-	# - No fuel (wood_count == 0): Minimal heal (5 HP/s), no visual aura, uses warmth_radius range
-	# - With fuel (wood_count > 0): Scaled heal (5-25 HP/s), visual aura, uses heal_aura range
-	if player and is_instance_valid(player):
-		var player_needs_healing = player.current_health < player.max_health
-		var should_heal = false
-
-		# Determine if player should receive healing based on fuel state
-		if wood_count == 0:
-			# No fuel: Use old warmth system (minimal heal, warmth_radius range)
-			should_heal = player_in_warmth and player_needs_healing
-		else:
-			# With fuel: Player gets healed if in warmth range (buffed system will scale rate)
-			should_heal = player_in_warmth and player_needs_healing
-
-		# Apply healing tick
-		if should_heal:
-			heal_timer += delta
-			if heal_timer >= heal_interval:
-				if player.has_method("heal"):
-					player.heal(heal_rate * heal_interval)
-					# Only play healing sound if this is the LOCAL player
-					# In multiplayer, check if player's authority matches our peer ID
-					var is_local_player = true
-					if multiplayer.has_multiplayer_peer():
-						var local_peer_id = multiplayer.get_unique_id()
-						var player_authority = player.get_multiplayer_authority() if player.has_method("get_multiplayer_authority") else 1
-						is_local_player = (player_authority == local_peer_id)
-
-					if is_local_player:
-						# Play healing sound in pattern: 6-6-4 (sound 6 twice, then sound 4)
-						if heal_pattern_index < 2:
-							# Play sound 6 for positions 0 and 1 (healing_6.mp3)
-							if healing_audio_1:
-								healing_audio_1.play()
-						else:
-							# Play sound 4 for position 2 (healing_4.mp3)
-							if healing_audio_2:
-								healing_audio_2.play()
-						# Advance pattern: 0 -> 1 -> 2 -> 0 -> 1 -> 2 ... (6-6-4-6-6-4...)
-						heal_pattern_index = (heal_pattern_index + 1) % 3
-				heal_timer = 0.0
+	# Heal ALL players in warmth based on fuel state:
+	# - No fuel (wood_count == 0): Minimal heal (5 HP/s)
+	# - With fuel (wood_count > 0): Scaled heal (5-25 HP/s)
+	_heal_all_players_in_warmth(delta)
 
 	# Update no fuel message timer
 	if no_fuel_message_timer > 0.0:
@@ -223,15 +189,77 @@ func _physics_process(delta: float) -> void:
 
 func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):
-		player = body as CharacterBody2D
-		player_in_warmth = true
+		# Track this player in warmth
+		players_in_warmth[body] = {"heal_timer": 0.0, "in_warmth": true}
+
+		# Check if this is the LOCAL player (for UI/sound effects)
+		var is_local = _is_local_player(body)
+		if is_local:
+			player = body as CharacterBody2D
+			player_in_warmth = true
 
 func _on_body_exited(body: Node2D) -> void:
 	if body.is_in_group(Constants.GROUP_PLAYER):
-		player_in_warmth = false
-		# Clear crit buff when player leaves
-		if player and is_instance_valid(player):
+		# Remove from tracking
+		if players_in_warmth.has(body):
+			players_in_warmth.erase(body)
+
+		# Check if this is the LOCAL player
+		var is_local = _is_local_player(body)
+		if is_local:
+			player_in_warmth = false
+			# Clear crit buff only for LOCAL player
 			CharacterStats.campfire_crit_buff = 0.0
+
+func _is_local_player(body: Node2D) -> bool:
+	"""Check if body is the local player (handles multiplayer)"""
+	if not multiplayer.has_multiplayer_peer():
+		return true  # Single player - always local
+
+	var local_peer_id = multiplayer.get_unique_id()
+	var player_authority = body.get_multiplayer_authority() if body.has_method("get_multiplayer_authority") else 1
+	return player_authority == local_peer_id
+
+func _heal_all_players_in_warmth(delta: float) -> void:
+	"""Heal all players currently in campfire warmth - independent per player"""
+	# Clean up invalid player references
+	var to_remove = []
+	for p in players_in_warmth.keys():
+		if not is_instance_valid(p):
+			to_remove.append(p)
+	for p in to_remove:
+		players_in_warmth.erase(p)
+
+	# Process healing for each player in warmth
+	for p in players_in_warmth.keys():
+		if not is_instance_valid(p):
+			continue
+
+		var player_data = players_in_warmth[p]
+		var player_needs_healing = p.current_health < p.max_health if "current_health" in p and "max_health" in p else false
+
+		if not player_needs_healing:
+			continue
+
+		# Update this player's heal timer
+		player_data.heal_timer += delta
+		if player_data.heal_timer >= heal_interval:
+			player_data.heal_timer = 0.0
+
+			# Apply healing
+			if p.has_method("heal"):
+				p.heal(heal_rate * heal_interval)
+
+				# Only play healing sound for LOCAL player
+				if _is_local_player(p):
+					# Play healing sound in pattern: 6-6-4 (sound 6 twice, then sound 4)
+					if heal_pattern_index < 2:
+						if healing_audio_1:
+							healing_audio_1.play()
+					else:
+						if healing_audio_2:
+							healing_audio_2.play()
+					heal_pattern_index = (heal_pattern_index + 1) % 3
 
 
 func add_collision_body() -> void:

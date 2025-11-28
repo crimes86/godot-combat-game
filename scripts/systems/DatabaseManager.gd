@@ -366,12 +366,21 @@ func stop_auto_save() -> void:
 func _on_auto_save_timeout() -> void:
 	"""Called every AUTO_SAVE_INTERVAL seconds"""
 	if current_username != "":
-		print("📀 [DatabaseManager] Auto-save triggered...")
-		if save_current_player_state():
+		# Check if we're a client - sync to server instead of local save
+		if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host and not NetworkManager.is_guest:
+			# Client: sync state to server for persistence
+			NetworkManager.client_sync_state()
 			auto_save_triggered.emit()
-			# Show notification to player
+			print("📀 [DatabaseManager] Synced state to server")
 			if NotificationManager:
-				NotificationManager.show_notification("Game saved", "INFO")
+				NotificationManager.show_notification("Progress synced", "INFO")
+		else:
+			# Host or single player: save locally
+			print("📀 [DatabaseManager] Auto-save triggered...")
+			if save_current_player_state():
+				auto_save_triggered.emit()
+				if NotificationManager:
+					NotificationManager.show_notification("Game saved", "INFO")
 
 func save_current_player_state() -> bool:
 	"""Save the current player's full game state using serialization from systems"""

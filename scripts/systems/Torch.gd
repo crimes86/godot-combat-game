@@ -82,7 +82,7 @@ func create_torch_visual() -> void:
 	create_fire_particles()
 
 func create_fire_particles() -> void:
-	"""Create small layered polygon flames for torch"""
+	"""Create small layered polygon flames for torch - bright like campfire"""
 	# Create 2 flame layers (simpler than campfire)
 	for layer in range(2):
 		for i in range(2 + layer * 2):  # 2, 4 flames per layer
@@ -109,24 +109,24 @@ func create_fire_particles() -> void:
 				Vector2(offset + base_width, base_y)
 			])
 
-			# Color by layer - bright, vibrant flames for visibility
+			# Color by layer - BRIGHT flames matching campfire intensity
 			var colors = PackedColorArray()
-			if layer == 0:  # Bottom - bright red/orange
-				colors.append(Color(1.0, 0.3, 0.0, 0.9))
-				colors.append(Color(1.0, 0.5, 0.1, 0.85))
-				colors.append(Color(1.0, 0.65, 0.2, 0.8))
-				colors.append(Color(1.0, 0.8, 0.3, 0.7))
-				colors.append(Color(1.0, 0.65, 0.2, 0.8))
-				colors.append(Color(1.0, 0.5, 0.1, 0.85))
-				colors.append(Color(1.0, 0.3, 0.0, 0.9))
-			else:  # Top - bright yellow/white
-				colors.append(Color(1.0, 0.85, 0.4, 0.85))
-				colors.append(Color(1.0, 0.9, 0.5, 0.8))
-				colors.append(Color(1.0, 0.95, 0.7, 0.75))
-				colors.append(Color(1.0, 1.0, 0.9, 0.7))
-				colors.append(Color(1.0, 0.95, 0.7, 0.75))
-				colors.append(Color(1.0, 0.9, 0.5, 0.8))
-				colors.append(Color(1.0, 0.85, 0.4, 0.85))
+			if layer == 0:  # Bottom - bright red/orange core (campfire style)
+				colors.append(Color(1.0, 0.3, 0.0, 0.95))
+				colors.append(Color(1.0, 0.5, 0.0, 0.92))
+				colors.append(Color(1.0, 0.65, 0.1, 0.88))
+				colors.append(Color(1.0, 0.8, 0.2, 0.85))
+				colors.append(Color(1.0, 0.65, 0.1, 0.88))
+				colors.append(Color(1.0, 0.5, 0.0, 0.92))
+				colors.append(Color(1.0, 0.3, 0.0, 0.95))
+			else:  # Top - bright yellow/white tips (campfire style)
+				colors.append(Color(1.0, 0.75, 0.15, 0.9))
+				colors.append(Color(1.0, 0.9, 0.3, 0.85))
+				colors.append(Color(1.0, 1.0, 0.5, 0.8))
+				colors.append(Color(1.0, 1.0, 0.75, 0.75))
+				colors.append(Color(1.0, 1.0, 0.5, 0.8))
+				colors.append(Color(1.0, 0.9, 0.3, 0.85))
+				colors.append(Color(1.0, 0.75, 0.15, 0.9))
 
 			flame.vertex_colors = colors
 			flame.name = "Flame_L" + str(layer) + "_" + str(i)
@@ -218,7 +218,7 @@ func _on_fire_audio_loop() -> void:
 		fire_audio.play()
 
 func animate_fire(_delta: float) -> void:
-	"""Animate torch flames"""
+	"""Animate torch flames - bright like campfire"""
 	if flame_nodes.is_empty():
 		return
 
@@ -238,8 +238,8 @@ func animate_fire(_delta: float) -> void:
 	var target_energy = lerp(MAX_LIGHT_ENERGY, MIN_LIGHT_ENERGY, day_factor)
 
 	# Animate flames using cached nodes (flicker and sway)
-	# At night, boost flame brightness for vibrant glowing effect
-	var flame_brightness_mult = lerp(1.5, 1.0, day_factor)  # 1.5x at night, 1.0x at day
+	# Keep flames consistently bright (like campfire) - only boost slightly at night
+	var flame_brightness_mult = lerp(1.3, 1.0, day_factor)  # 1.3x at night, 1.0x at day (subtle)
 
 	for i in range(flame_nodes.size()):
 		var child = flame_nodes[i]
@@ -253,13 +253,13 @@ func animate_fire(_delta: float) -> void:
 		child.scale.y = 1.0 + flicker * 0.25
 		# Horizontal sway
 		child.scale.x = 1.0 + sway * 0.12
-		# Opacity flicker - also dim during day, vibrant at night
-		var base_opacity = lerp(1.0, 0.5, day_factor)  # Full opacity at night, dimmer during day
-		child.modulate.a = base_opacity + flicker * 0.15
-		# Boost flame color brightness at night
+		# Keep flames bright at all times (like campfire) - no day dimming
+		# Subtle flicker in opacity only
+		child.modulate.a = 1.0 + flicker * 0.1
+		# Flame color stays bright - slight boost at night
 		child.modulate.r = flame_brightness_mult
 		child.modulate.g = flame_brightness_mult
-		child.modulate.b = flame_brightness_mult * 0.8  # Keep warm tint
+		child.modulate.b = flame_brightness_mult * 0.85  # Keep warm tint
 		# Position wobble
 		child.position.x = sway * 0.5
 

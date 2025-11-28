@@ -468,12 +468,49 @@ func update_ruins_light() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func convert_to_campfire() -> void:
-	"""Convert ruins to campfire"""
+	"""Convert ruins to campfire - initiates multiplayer sync if needed"""
 	if current_state == RuinsState.CAMPFIRE:
 		return
 
 	# Require player to kill at least one skeleton first
 	if not has_killed_skeleton:
+		return
+
+	# In multiplayer, sync the conversion to all players
+	if multiplayer.has_multiplayer_peer():
+		if multiplayer.is_server():
+			# Server: perform conversion and broadcast to clients
+			_do_convert_to_campfire()
+			_sync_convert_to_campfire.rpc()
+		else:
+			# Client: request server to convert
+			_request_convert_to_campfire.rpc_id(1)
+	else:
+		# Single player: just convert
+		_do_convert_to_campfire()
+
+@rpc("any_peer", "reliable")
+func _request_convert_to_campfire() -> void:
+	"""Client requests server to convert ruins to campfire"""
+	if not multiplayer.is_server():
+		return
+
+	# Validate that this client has killed a skeleton (server tracks this)
+	# For now, trust the client since has_killed_skeleton is set by _on_skeleton_died
+	if not has_killed_skeleton:
+		return
+
+	_do_convert_to_campfire()
+	_sync_convert_to_campfire.rpc()
+
+@rpc("authority", "reliable", "call_local")
+func _sync_convert_to_campfire() -> void:
+	"""Server broadcasts campfire conversion to all clients"""
+	_do_convert_to_campfire()
+
+func _do_convert_to_campfire() -> void:
+	"""Actually perform the conversion (called on all peers)"""
+	if current_state == RuinsState.CAMPFIRE:
 		return
 
 	current_state = RuinsState.CAMPFIRE
@@ -490,8 +527,28 @@ func convert_to_campfire() -> void:
 	if interaction_prompt:
 		interaction_prompt.visible = false
 
+	print("🏛️➡️🔥 Ruins converted to campfire at %s" % global_position)
+
 func convert_to_ruins() -> void:
-	"""Convert campfire back to ruins"""
+	"""Convert campfire back to ruins - initiates multiplayer sync if needed"""
+	if current_state == RuinsState.RUINS:
+		return
+
+	# In multiplayer, only server can trigger reversion (abandonment check)
+	if multiplayer.has_multiplayer_peer():
+		if multiplayer.is_server():
+			_do_convert_to_ruins()
+			_sync_convert_to_ruins.rpc()
+	else:
+		_do_convert_to_ruins()
+
+@rpc("authority", "reliable", "call_local")
+func _sync_convert_to_ruins() -> void:
+	"""Server broadcasts ruins reversion to all clients"""
+	_do_convert_to_ruins()
+
+func _do_convert_to_ruins() -> void:
+	"""Actually perform the reversion (called on all peers)"""
 	if current_state == RuinsState.RUINS:
 		return
 
@@ -505,8 +562,10 @@ func convert_to_ruins() -> void:
 		campfire_node.queue_free()
 		campfire_node = null
 
+	print("🔥➡️🏛️ Campfire reverted to ruins at %s" % global_position)
+
 func check_abandonment(delta: float) -> void:
-	"""Check if player has abandoned the campfire"""
+	"""Check if ALL players have abandoned the campfire (multiplayer aware)"""
 	# Calculate scaled abandonment time based on fuel levels
 	var current_abandon_time = base_abandon_time
 	if campfire_node and is_instance_valid(campfire_node):
@@ -515,20 +574,23 @@ func check_abandonment(delta: float) -> void:
 			# Scale from base_abandon_time to max_abandon_time based on fuel
 			current_abandon_time = base_abandon_time + (max_abandon_time - base_abandon_time) * fuel_percent
 
-	if not player or not is_instance_valid(player):
-		time_since_player_near += delta
-		if time_since_player_near >= current_abandon_time:
-			convert_to_ruins()
-		return
+	# Check if ANY player is near the campfire
+	var any_player_near = false
+	var all_players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
 
-	var distance = player.global_position.distance_to(global_position)
+	for p in all_players:
+		if is_instance_valid(p):
+			var distance = p.global_position.distance_to(global_position)
+			if distance < convert_range * 2.0:  # Twice the convert range
+				any_player_near = true
+				break
 
-	if distance < convert_range * 2.0:  # Twice the convert range
-		# Player is near
+	if any_player_near:
+		# At least one player is near
 		player_last_near_time = Time.get_ticks_msec() / 1000.0
 		time_since_player_near = 0.0
 	else:
-		# Player is far
+		# No players near
 		time_since_player_near += delta
 		if time_since_player_near >= current_abandon_time:
 			convert_to_ruins()

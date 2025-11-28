@@ -29,6 +29,11 @@ var is_authenticated: bool = false  # Client-side: are we authenticated?
 var is_guest: bool = false  # Client-side: are we playing as guest?
 var local_player_data: Dictionary = {}  # Client-side: our player data from server
 
+# Server-side: Track client player states for persistence (server only)
+var _client_player_states: Dictionary = {}  # peer_id -> {position, inventory, stats, etc.}
+var _server_save_timer: Timer = null
+const SERVER_SAVE_INTERVAL: float = 120.0  # Save all connected players every 2 minutes
+
 func _ready():
 	# Set this as singleton
 	set_process(false)
@@ -85,6 +90,9 @@ func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}) -> b
 				DatabaseManager.start_auto_save(username)
 				CharacterStats.start_session()
 
+		# Start server-side save timer for all connected clients
+		_start_server_save_timer()
+
 		print("Server created on port %d (ID: %d)" % [port, host_id])
 		server_created.emit()
 		return true
@@ -108,10 +116,19 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> bool:
 
 # Close connection
 func close_connection():
+	# If we're the server, save all connected players first
+	if is_host:
+		save_all_players()
+		_stop_server_save_timer()
+		_client_player_states.clear()
+
 	# Stop auto-save and do final save before disconnecting (if authenticated and not guest)
 	if is_authenticated and not is_guest and not local_player_data.is_empty():
 		var username = local_player_data.get("username", "")
 		if not username.is_empty() and DatabaseManager:
+			# If we're a client, sync our state to server one last time before disconnecting
+			if not is_host:
+				client_sync_state()
 			# stop_auto_save() does final save internally
 			DatabaseManager.stop_auto_save()
 			DatabaseManager.logout_player(username)
@@ -149,10 +166,16 @@ func _on_player_disconnected(id: int):
 		var auth_info = authenticated_players[id]
 		if not auth_info.is_guest and DatabaseManager:
 			var username = auth_info.username
-			# TODO: Save player state before logout
+			# Save player state before logout using cached state
+			if _client_player_states.has(id):
+				var state = _client_player_states[id]
+				DatabaseManager.save_player_data(username, state)
+				print("📀 [NetworkManager] Saved disconnecting player: %s" % username)
+				_client_player_states.erase(id)
 			DatabaseManager.logout_player(username)
 		authenticated_players.erase(id)
-		DatabaseManager.clear_rate_limit(id)
+		if DatabaseManager:
+			DatabaseManager.clear_rate_limit(id)
 
 	if connected_players.has(id):
 		connected_players.erase(id)
@@ -537,3 +560,148 @@ func is_player_guest(peer_id: int) -> bool:
 	if authenticated_players.has(peer_id):
 		return authenticated_players[peer_id].is_guest
 	return true  # Assume guest if not found
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SERVER-SIDE PLAYER PERSISTENCE
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _start_server_save_timer() -> void:
+	"""Start the server's periodic save timer for all connected players (server-only)"""
+	if not is_host:
+		return
+
+	if _server_save_timer:
+		_server_save_timer.stop()
+		_server_save_timer.queue_free()
+
+	_server_save_timer = Timer.new()
+	_server_save_timer.name = "ServerSaveTimer"
+	_server_save_timer.one_shot = false
+	_server_save_timer.timeout.connect(_on_server_save_timer)
+	add_child(_server_save_timer)
+	_server_save_timer.start(SERVER_SAVE_INTERVAL)
+	print("📀 [NetworkManager] Server save timer started (every %.0fs)" % SERVER_SAVE_INTERVAL)
+
+func _stop_server_save_timer() -> void:
+	"""Stop the server save timer"""
+	if _server_save_timer:
+		_server_save_timer.stop()
+		_server_save_timer.queue_free()
+		_server_save_timer = null
+
+func _on_server_save_timer() -> void:
+	"""Periodic save of all connected authenticated players (server-only)"""
+	if not is_host or not DatabaseManager:
+		return
+
+	var saved_count = 0
+	for peer_id in authenticated_players:
+		var auth_info = authenticated_players[peer_id]
+		if auth_info.is_guest:
+			continue
+
+		var username = auth_info.username
+		if _client_player_states.has(peer_id):
+			var state = _client_player_states[peer_id]
+			if DatabaseManager.save_player_data(username, state):
+				saved_count += 1
+
+	if saved_count > 0:
+		print("📀 [NetworkManager] Server auto-saved %d player(s)" % saved_count)
+
+func save_all_players() -> void:
+	"""Force save all connected authenticated players (server-only)"""
+	if not is_host:
+		return
+	_on_server_save_timer()
+
+# --- Client → Server: Sync player state ---
+
+@rpc("any_peer", "reliable")
+func sync_player_state_to_server(state_data: Dictionary) -> void:
+	"""Client sends their current state to server for persistence"""
+	if not is_host:
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+
+	# Only accept from authenticated non-guest players
+	if not authenticated_players.has(peer_id):
+		return
+	if authenticated_players[peer_id].is_guest:
+		return
+
+	# Validate state data has expected fields
+	if not _validate_player_state(state_data):
+		push_warning("[NetworkManager] Invalid state data from peer %d" % peer_id)
+		return
+
+	# Store the state
+	_client_player_states[peer_id] = state_data
+	# print("📀 [NetworkManager] Received state from peer %d" % peer_id)  # Uncomment for debug
+
+func _validate_player_state(state: Dictionary) -> bool:
+	"""Validate that player state has reasonable values"""
+	# Check required fields exist
+	var required = ["position_x", "position_y", "level", "gold"]
+	for field in required:
+		if not state.has(field):
+			return false
+
+	# Sanity checks
+	var level = state.get("level", 0)
+	if level < 1 or level > 100:
+		return false
+
+	var gold = state.get("gold", -1)
+	if gold < 0 or gold > 999999999:
+		return false
+
+	return true
+
+# --- Called by game systems to sync state to server ---
+
+func client_sync_state() -> void:
+	"""Client calls this to sync their state to the server"""
+	if is_host or is_guest or not is_authenticated:
+		return
+
+	if not peer or not multiplayer.has_multiplayer_peer():
+		return
+
+	# Build state from local systems
+	var state = _build_local_player_state()
+	if not state.is_empty():
+		rpc_id(1, "sync_player_state_to_server", state)
+
+func _build_local_player_state() -> Dictionary:
+	"""Build current player state from local game systems"""
+	var state = {}
+
+	# Get player position
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if player and is_instance_valid(player):
+		state["position_x"] = player.global_position.x
+		state["position_y"] = player.global_position.y
+		if "current_health" in player:
+			state["current_hp"] = player.current_health
+
+	# Get stats from CharacterStats
+	var stats_data = CharacterStats.get_save_data()
+	state["level"] = stats_data.get("level", 1)
+	state["xp"] = stats_data.get("experience", 0)
+	state["gold"] = stats_data.get("gold", 100)
+	state["strength"] = stats_data.get("strength", 10)
+	state["agility"] = stats_data.get("agility", 10)
+	state["vitality"] = stats_data.get("vitality", 10)
+	state["luck"] = stats_data.get("luck", 10)
+	state["character_stats"] = JSON.stringify(stats_data)
+
+	# Get inventory
+	var inv_data = InventorySystem.get_save_data()
+	state["inventory"] = JSON.stringify(inv_data)
+
+	# Playtime
+	state["total_playtime_seconds"] = stats_data.get("total_playtime", 0)
+
+	return state
