@@ -17,8 +17,8 @@ class_name ChunkAwareSpawnManager
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Enemies per chunk (8000x8000px square, reduced for node count optimization)
-const ENEMIES_PER_CHUNK: int = 75
+## Enemies per chunk (balanced for gameplay density around lava/ritual sites)
+const ENEMIES_PER_CHUNK: int = 120
 
 ## Chunk size from Constants singleton (single source of truth)
 var CHUNK_SIZE: float:
@@ -321,51 +321,130 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 	var chunk_seed = hash(chunk_key) + chunk_data.enemies.size()
 	spawn_rng.seed = chunk_seed
 
-	# Get lava pool positions for this chunk (for clustering enemies into "farming spots")
-	var lava_pools = get_lava_pools_in_chunk(chunk_key)
-	print("🔥 Chunk %s has %d lava pools for enemy clustering" % [chunk_key, lava_pools.size()])
-	var cluster_around_lava = lava_pools.size() > 0
-	var lava_cluster_count = int(count * 0.95) if cluster_around_lava else 0  # 95% cluster near lava
-	var lava_clustered = 0
+	# Get spawn anchor points from the prop system
+	var lava_data = get_lava_pools_in_chunk(chunk_key)
+	var monster_pools = lava_data.monster   # Large lake pools (high level cores)
+	var regular_pools = lava_data.regular   # Small isolated pools (low level)
+	var ritual_sites = get_ritual_sites_in_chunk(chunk_key)
+
+	var total_lava = monster_pools.size() + regular_pools.size()
+	print("💀 Chunk %s spawn anchors: %d monster lakes, %d regular pools, %d ritual sites" % [
+		chunk_key, monster_pools.size(), regular_pools.size(), ritual_sites.size()
+	])
+
+	# Distribution: 40% at monster lakes, 25% at regular pools, 25% at ritual sites, 10% patrol
+	var has_anchors = total_lava > 0 or ritual_sites.size() > 0
+	var monster_count = int(count * 0.40) if monster_pools.size() > 0 else 0
+	var regular_count = int(count * 0.25) if regular_pools.size() > 0 else 0
+	var ritual_count = int(count * 0.25) if ritual_sites.size() > 0 else 0
+	var wander_count = count - monster_count - regular_count - ritual_count
+
+	# Redistribute if some anchor types are missing
+	if not has_anchors:
+		wander_count = count
+		monster_count = 0
+		regular_count = 0
+		ritual_count = 0
+	elif monster_pools.size() == 0:
+		regular_count += monster_count / 2
+		ritual_count += monster_count / 2
+		monster_count = 0
+	elif regular_pools.size() == 0:
+		monster_count += regular_count
+		regular_count = 0
+	elif ritual_sites.size() == 0:
+		monster_count += ritual_count / 2
+		regular_count += ritual_count / 2
+		ritual_count = 0
+
+	var monster_spawned = 0
+	var regular_spawned = 0
+	var ritual_spawned = 0
+
+	# World Y bounds (half chunk height)
+	var world_y_min = -Constants.CHUNK_SIZE / 2
+	var world_y_max = Constants.CHUNK_SIZE / 2
 
 	while spawned < count and attempts < max_attempts:
 		attempts += 1
 
 		var spawn_pos: Vector2
+		var level: int = 1
 
-		# World Y bounds (half chunk height)
-		var world_y_min = -Constants.CHUNK_SIZE / 2
-		var world_y_max = Constants.CHUNK_SIZE / 2
+		# Phase 1: Monster lake pools (40%) - Level scaling by distance from center
+		# Edge = Level 1-3, Core/Center = Level 4-6
+		if monster_spawned < monster_count and monster_pools.size() > 0:
+			var pool = monster_pools[spawn_rng.randi() % monster_pools.size()]
 
-		# Spawn enemies tightly clustered around lava pools (farming spots)
-		if lava_clustered < lava_cluster_count and lava_pools.size() > 0:
-			# Pick a random lava pool
-			var pool = lava_pools[spawn_rng.randi() % lava_pools.size()]
-			# Spawn tightly around pool - 80-250px from center (tight farming spot)
+			# Decide spawn zone: 60% edge (low level), 40% core (high level)
+			var spawn_at_edge = spawn_rng.randf() < 0.6
 			var angle = spawn_rng.randf() * TAU
-			var distance = spawn_rng.randf_range(80, 250)
-			spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * distance
+
+			if spawn_at_edge:
+				# Edge spawn: just outside pool radius (Level 1-3)
+				var edge_dist = pool.radius + spawn_rng.randf_range(20, 100)
+				spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * edge_dist
+				level = spawn_rng.randi_range(1, 3)
+			else:
+				# Core spawn: closer to center but not IN the lava (Level 4-6)
+				# Spawn between 40-80% of pool radius (inner ring)
+				var core_dist = pool.radius * spawn_rng.randf_range(0.4, 0.8)
+				spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * core_dist
+				level = spawn_rng.randi_range(4, 6)
 
 			# Clamp to chunk bounds
 			spawn_pos.x = clamp(spawn_pos.x, chunk_min_x, chunk_max_x)
 			spawn_pos.y = clamp(spawn_pos.y, world_y_min, world_y_max)
 
 			if is_valid_spawn_position(spawn_pos):
-				lava_clustered += 1
+				monster_spawned += 1
 			else:
 				continue
+
+		# Phase 2: Regular small pools (25%) - Low level only (1-3)
+		elif regular_spawned < regular_count and regular_pools.size() > 0:
+			var pool = regular_pools[spawn_rng.randi() % regular_pools.size()]
+			# Spawn at the edge of small pools
+			var angle = spawn_rng.randf() * TAU
+			var edge_dist = pool.radius + spawn_rng.randf_range(15, 60)
+			spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * edge_dist
+			level = spawn_rng.randi_range(1, 3)  # Always low level at small pools
+
+			# Clamp to chunk bounds
+			spawn_pos.x = clamp(spawn_pos.x, chunk_min_x, chunk_max_x)
+			spawn_pos.y = clamp(spawn_pos.y, world_y_min, world_y_max)
+
+			if is_valid_spawn_position(spawn_pos):
+				regular_spawned += 1
+			else:
+				continue
+
+		# Phase 3: Ritual bone sites (25%) - Random levels (thematic: unknown ancient dead)
+		elif ritual_spawned < ritual_count and ritual_sites.size() > 0:
+			var site = ritual_sites[spawn_rng.randi() % ritual_sites.size()]
+			var angle = spawn_rng.randf() * TAU
+			var distance = spawn_rng.randf_range(30, 120)
+			spawn_pos = site + Vector2(cos(angle), sin(angle)) * distance
+			level = spawn_rng.randi_range(1, 5)  # Random mix of levels
+
+			# Clamp to chunk bounds
+			spawn_pos.x = clamp(spawn_pos.x, chunk_min_x, chunk_max_x)
+			spawn_pos.y = clamp(spawn_pos.y, world_y_min, world_y_max)
+
+			if is_valid_spawn_position(spawn_pos):
+				ritual_spawned += 1
+			else:
+				continue
+
+		# Phase 4: Wandering patrol skeletons (10%)
 		else:
-			# Rare wandering enemies (5%) - patrol between spots
 			var spawn_x = spawn_rng.randf_range(chunk_min_x, chunk_max_x)
 			var spawn_y = spawn_rng.randf_range(world_y_min, world_y_max)
 			spawn_pos = Vector2(spawn_x, spawn_y)
+			level = get_level_for_position(spawn_pos)  # Use zone-based levels for patrols
 
-			# Validate position
 			if not is_valid_spawn_position(spawn_pos):
 				continue
-
-		# Determine level based on X position
-		var level = get_level_for_position(spawn_pos)
 
 		# Spawn the enemy
 		var enemy = spawn_single_enemy(spawn_pos, level, chunk_key)
@@ -374,8 +453,12 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			spawned += 1
 
 	if spawned > 0:
+		var patrol_count = spawned - monster_spawned - regular_spawned - ritual_spawned
 		print("✨ Spawned %d enemies in chunk %s (total: %d/%d)" % [
 			spawned, chunk_key, chunk_data.get_alive_count(), chunk_data.target_count
+		])
+		print("   📍 Monster lakes: %d (L1-6), Regular pools: %d (L1-3), Ritual sites: %d (L1-5), Patrol: %d" % [
+			monster_spawned, regular_spawned, ritual_spawned, patrol_count
 		])
 
 func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
@@ -519,8 +602,51 @@ func get_chunk_key(world_pos: Vector2) -> String:
 	var chunk_x = int(floor(world_pos.x / CHUNK_SIZE))
 	return "%d,0" % chunk_x
 
-func get_lava_pools_in_chunk(chunk_key: String) -> Array:
-	"""Get lava pool positions from the chunk prop system"""
+func get_lava_pools_in_chunk(chunk_key: String) -> Dictionary:
+	"""Get lava pool positions from the chunk prop system, separated by type"""
+	var result = {"monster": [], "regular": [], "all": []}
+
+	if not game_world:
+		return result
+
+	# Access chunk_prop_system variable directly (not by node name)
+	if not game_world.get("chunk_prop_system"):
+		return result
+
+	var prop_system = game_world.chunk_prop_system
+	if not prop_system or not prop_system.loaded_chunks.has(chunk_key):
+		return result
+
+	var chunk_data = prop_system.loaded_chunks[chunk_key]
+	if not chunk_data:
+		return result
+
+	# Get monster (large lake) pools
+	if chunk_data.monster_lava_positions:
+		result.monster = chunk_data.monster_lava_positions
+
+	# Get all pools (includes monster pools)
+	if chunk_data.lava_pool_positions:
+		result.all = chunk_data.lava_pool_positions
+
+		# Regular pools = all pools minus monster pools
+		var monster_positions = []
+		for m in result.monster:
+			monster_positions.append(m.pos)
+
+		for pool in chunk_data.lava_pool_positions:
+			var is_monster = false
+			for m_pos in monster_positions:
+				if pool.pos.distance_to(m_pos) < 10:  # Same position = monster pool
+					is_monster = true
+					break
+			if not is_monster:
+				result.regular.append(pool)
+
+	return result
+
+func get_ritual_sites_in_chunk(chunk_key: String) -> Array:
+	"""Get ritual bone site positions from the chunk prop system"""
 	if not game_world:
 		return []
 
@@ -533,8 +659,8 @@ func get_lava_pools_in_chunk(chunk_key: String) -> Array:
 		return []
 
 	var chunk_data = prop_system.loaded_chunks[chunk_key]
-	if chunk_data and chunk_data.lava_pool_positions:
-		return chunk_data.lava_pool_positions
+	if chunk_data and chunk_data.ritual_sites:
+		return chunk_data.ritual_sites
 
 	return []
 
