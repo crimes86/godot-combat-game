@@ -53,7 +53,8 @@ func _on_peer_connected(peer_id: int) -> void:
 
 	# Wait longer to let the client fully initialize game_world
 	# (needs to load terrain, generate elements, etc.)
-	await get_tree().create_timer(2.0).timeout
+	# Increased from 2.0s to 3.0s for slower clients
+	await get_tree().create_timer(3.0).timeout
 	sync_world_state_to_peer(peer_id)
 
 func _process(delta: float) -> void:
@@ -177,6 +178,19 @@ func _create_chest_at(network_id: int, spawn_pos: Vector2) -> void:
 func _spawn_chest_on_clients(network_id: int, spawn_pos: Vector2) -> void:
 	"""Client receives chest spawn from server"""
 	print("📦 [Client] Spawning chest #%d at %s" % [network_id, spawn_pos])
+
+	# Ensure game_world is available
+	if not game_world:
+		game_world = get_tree().get_first_node_in_group("game_world")
+	if not game_world:
+		# Try waiting a bit for game_world to be ready
+		print("📦 [Client] game_world not found, waiting...")
+		await get_tree().create_timer(0.5).timeout
+		game_world = get_tree().get_first_node_in_group("game_world")
+		if not game_world:
+			push_error("📦 [Client] game_world still not found after wait!")
+			return
+
 	_create_chest_at(network_id, spawn_pos)
 
 func spawn_random_item() -> void:

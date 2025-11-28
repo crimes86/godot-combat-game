@@ -124,33 +124,30 @@ func pick_up_bone() -> void:
 	# Create item data
 	var item_data = BONE_EMBER_ITEM.duplicate()
 
-	# Try to add to inventory
-	if InventorySystem.add_item(item_data):
-		is_picked_up = true
-
-		# Emit signal so chunk system can clean up tracking
-		bone_picked_up.emit(self)
-
-		# Show inventory notification
-		NotificationManager.notify_item_added("Bone Ember", 1, "COMMON")
-
-		# Hide interaction prompt
-		if interaction_prompt:
-			interaction_prompt.visible = false
-
-		# Play pickup animation (fade out and scale up)
-		if sprite:
-			var tween = create_tween()
-			tween.set_parallel(true)
-			tween.tween_property(sprite, "modulate:a", 0.0, 0.25)
-			tween.tween_property(sprite, "scale", sprite.scale * 1.3, 0.25)
-			await tween.finished
-
-		# Remove from world
-		queue_free()
-	else:
+	# Try to add to inventory (local player only)
+	if not InventorySystem.add_item(item_data):
 		# Inventory full - could show message but bones are common so just ignore
-		pass
+		return
+
+	is_picked_up = true
+
+	# Show inventory notification
+	NotificationManager.notify_item_added("Bone Ember", 1, "COMMON")
+
+	# Check if we need network sync
+	var network_id = get_meta("network_id", "")
+	if network_id != "" and multiplayer.has_multiplayer_peer():
+		# Go through network sync - request server to remove bone for all players
+		if multiplayer.is_server():
+			# Server - broadcast removal to all clients
+			_sync_bone_picked_up.rpc(network_id)
+		else:
+			# Client - request server to broadcast
+			_request_pickup_bone.rpc_id(1, network_id)
+		return
+
+	# Single player - just remove locally
+	_remove_bone_locally()
 
 func _on_body_entered(body: Node2D) -> void:
 	"""Player entered interaction range"""
@@ -179,3 +176,53 @@ func setup_bone(texture: Texture2D, bone_scale: Vector2, bone_rotation: float, b
 	sprite.scale = bone_scale
 	sprite.modulate = bone_modulate
 	add_child(sprite)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MULTIPLAYER: Network Sync for Bone Pickup
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _remove_bone_locally() -> void:
+	"""Remove bone from world with animation"""
+	# Emit signal so chunk system can clean up tracking
+	bone_picked_up.emit(self)
+
+	# Hide interaction prompt
+	if interaction_prompt:
+		interaction_prompt.visible = false
+
+	# Play pickup animation (fade out and scale up)
+	if sprite:
+		var tween = create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(sprite, "modulate:a", 0.0, 0.25)
+		tween.tween_property(sprite, "scale", sprite.scale * 1.3, 0.25)
+		await tween.finished
+
+	# Remove from world
+	queue_free()
+
+@rpc("any_peer", "reliable")
+func _request_pickup_bone(network_id: String) -> void:
+	"""Client requests bone pickup - server validates and broadcasts"""
+	if not multiplayer.is_server():
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	print("🦴 Server: Bone %s picked up (requested by peer %d)" % [network_id, peer_id])
+
+	# Broadcast to all clients (including the one who requested)
+	_sync_bone_picked_up.rpc(network_id)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_bone_picked_up(network_id: String) -> void:
+	"""All clients receive bone pickup notification"""
+	print("🦴 [Sync] Bone %s picked up" % network_id)
+
+	# Find the bone by network_id and remove it
+	var prop_system = get_node_or_null("/root/ChunkBasedPropSystem")
+	if prop_system:
+		# Mark as harvested so it doesn't respawn
+		prop_system.mark_as_harvested(network_id)
+
+	# Remove this bone locally
+	_remove_bone_locally()

@@ -187,6 +187,22 @@ func player_joined(id: int, player_info: Dictionary):
 	connected_players[id] = player_info
 	print("Player %s joined the game" % player_info.name)
 
+	# ✨ FIX: Update health bar name label for this player on all clients
+	var game_world = get_tree().get_first_node_in_group("game_world")
+	if game_world and game_world.players.has(id):
+		var player = game_world.players[id]
+		if is_instance_valid(player) and player.has_node("HealthBar"):
+			var hb = player.get_node("HealthBar")
+			if hb.has_method("set_player_name"):
+				hb.set_player_name(player_info.name)
+			# Set color based on guest status
+			var is_guest_player = authenticated_players.has(id) and authenticated_players[id].is_guest
+			if hb.has_method("set_name_color"):
+				if is_guest_player:
+					hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
+				else:
+					hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
+
 @rpc("authority", "reliable")
 func player_left(id: int):
 	if connected_players.has(id):

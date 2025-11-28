@@ -1742,11 +1742,20 @@ func spawn_pickable_bone(bone_data: Dictionary, container: Node2D) -> Node2D:
 	if not texture:
 		return null
 
+	# Generate network_id if not already set (for multiplayer sync)
+	if not bone_data.has("network_id"):
+		bone_data["network_id"] = "bone_%d_%d" % [int(bone_data.pos.x), int(bone_data.pos.y)]
+
+	# Check if already harvested
+	if harvested_items.has(bone_data.network_id):
+		return null
+
 	var PickableBoneClass = preload("res://scripts/items/PickableBone.gd")
 	var bone = PickableBoneClass.new()
-	bone.name = "PickableBone"
+	bone.name = "PickableBone_%s" % bone_data.network_id
 	bone.position = bone_data.pos
 	bone.z_index = -1
+	bone.set_meta("network_id", bone_data.network_id)
 
 	bone.setup_bone(texture, bone_data.scale, bone_data.rotation, bone_data.modulate)
 
