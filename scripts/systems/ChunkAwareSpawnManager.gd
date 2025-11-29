@@ -332,29 +332,52 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		chunk_key, monster_pools.size(), regular_pools.size(), ritual_sites.size()
 	])
 
-	# Distribution: 40% at monster lakes, 25% at regular pools, 25% at ritual sites, 10% patrol
+	# Distribution: 45% at monster lakes, 30% at regular pools, 25% at ritual sites
+	# All skeletons MUST be anchored to a landmark (no random wandering)
 	var has_anchors = total_lava > 0 or ritual_sites.size() > 0
-	var monster_count = int(count * 0.40) if monster_pools.size() > 0 else 0
-	var regular_count = int(count * 0.25) if regular_pools.size() > 0 else 0
+	var monster_count = int(count * 0.45) if monster_pools.size() > 0 else 0
+	var regular_count = int(count * 0.30) if regular_pools.size() > 0 else 0
 	var ritual_count = int(count * 0.25) if ritual_sites.size() > 0 else 0
-	var wander_count = count - monster_count - regular_count - ritual_count
 
-	# Redistribute if some anchor types are missing
+	# Redistribute if some anchor types are missing - spread to available anchors
 	if not has_anchors:
-		wander_count = count
+		# No anchors at all - skip spawning in this chunk
+		print("⚠️ Chunk %s has no spawn anchors, skipping enemy spawns" % chunk_key)
+		return
+
+	# Calculate remainder and distribute to available anchor types
+	var remainder = count - monster_count - regular_count - ritual_count
+	if remainder > 0:
+		if monster_pools.size() > 0:
+			monster_count += remainder
+		elif regular_pools.size() > 0:
+			regular_count += remainder
+		elif ritual_sites.size() > 0:
+			ritual_count += remainder
+
+	# Handle missing anchor types by redistributing
+	if monster_pools.size() == 0 and monster_count > 0:
+		if regular_pools.size() > 0 and ritual_sites.size() > 0:
+			regular_count += monster_count / 2
+			ritual_count += monster_count - monster_count / 2
+		elif regular_pools.size() > 0:
+			regular_count += monster_count
+		elif ritual_sites.size() > 0:
+			ritual_count += monster_count
 		monster_count = 0
+
+	if regular_pools.size() == 0 and regular_count > 0:
+		if monster_pools.size() > 0:
+			monster_count += regular_count
+		elif ritual_sites.size() > 0:
+			ritual_count += regular_count
 		regular_count = 0
-		ritual_count = 0
-	elif monster_pools.size() == 0:
-		regular_count += monster_count / 2
-		ritual_count += monster_count / 2
-		monster_count = 0
-	elif regular_pools.size() == 0:
-		monster_count += regular_count
-		regular_count = 0
-	elif ritual_sites.size() == 0:
-		monster_count += ritual_count / 2
-		regular_count += ritual_count / 2
+
+	if ritual_sites.size() == 0 and ritual_count > 0:
+		if monster_pools.size() > 0:
+			monster_count += ritual_count
+		elif regular_pools.size() > 0:
+			regular_count += ritual_count
 		ritual_count = 0
 
 	var monster_spawned = 0
@@ -436,15 +459,10 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			else:
 				continue
 
-		# Phase 4: Wandering patrol skeletons (10%)
+		# No more phases - all skeletons must be anchored
 		else:
-			var spawn_x = spawn_rng.randf_range(chunk_min_x, chunk_max_x)
-			var spawn_y = spawn_rng.randf_range(world_y_min, world_y_max)
-			spawn_pos = Vector2(spawn_x, spawn_y)
-			level = get_level_for_position(spawn_pos)  # Use zone-based levels for patrols
-
-			if not is_valid_spawn_position(spawn_pos):
-				continue
+			# All anchor quotas filled, break out
+			break
 
 		# Spawn the enemy
 		var enemy = spawn_single_enemy(spawn_pos, level, chunk_key)
@@ -453,12 +471,11 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			spawned += 1
 
 	if spawned > 0:
-		var patrol_count = spawned - monster_spawned - regular_spawned - ritual_spawned
 		print("✨ Spawned %d enemies in chunk %s (total: %d/%d)" % [
 			spawned, chunk_key, chunk_data.get_alive_count(), chunk_data.target_count
 		])
-		print("   📍 Monster lakes: %d (L1-6), Regular pools: %d (L1-3), Ritual sites: %d (L1-5), Patrol: %d" % [
-			monster_spawned, regular_spawned, ritual_spawned, patrol_count
+		print("   📍 Monster lakes: %d (L1-6), Regular pools: %d (L1-3), Ritual sites: %d (L1-5)" % [
+			monster_spawned, regular_spawned, ritual_spawned
 		])
 
 func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
@@ -469,17 +486,18 @@ func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
 		return null
 
 	var enemy = enemy_scene.instantiate()
-	# Use position (not global_position) since we're setting before add_child
-	# global_position doesn't work correctly before node is in the scene tree
-	enemy.position = pos
 	enemy.enemy_level = level
 
 	# Generate unique name
 	var enemy_name = "Enemy_%s_%d" % [chunk_key.replace(",", "_"), randi()]
 	enemy.name = enemy_name
 
-	# Add to world (game_world is at origin, so position = global_position)
-	game_world.call_deferred("add_child", enemy)
+	# Set position BEFORE adding to tree, so _ready() sees the correct position
+	# Use 'position' (local) since game_world is at origin, this equals global_position
+	enemy.position = pos
+
+	# Add to world - _ready() will run and see the correct position
+	game_world.add_child(enemy)
 
 	# Register with network enemy manager for multiplayer sync
 	var network_id = -1

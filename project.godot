@@ -33,6 +33,9 @@ NetworkEnemyManager="*res://scripts/networking/NetworkEnemyManager.gd"
 CursorManager="*res://scripts/systems/CursorManager.gd"
 TimeManager="*res://scripts/systems/TimeManager.gd"
 ItemIconGenerator="*res://scripts/systems/ItemIconGenerator.gd"
+GroupManager="*res://scripts/systems/GroupManager.gd"
+GroupUI="*res://scripts/ui/GroupUI.gd"
+GroupInvitePopup="*res://scripts/ui/GroupInvitePopup.gd"
 
 [editor_plugins]
 

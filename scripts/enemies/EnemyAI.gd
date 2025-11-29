@@ -127,25 +127,33 @@ var lod_update_interval: float = 1.0  # Check LOD once per second
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _ready() -> void:
-	await get_tree().process_frame
-
 	enemy = get_parent() as CharacterBody2D
 	if not enemy:
 		push_error("EnemyAI must be child of CharacterBody2D!")
 		return
 
-	# Get references
+	# Get references IMMEDIATELY (before await)
 	# Check for "Sprite" first (AnimatedSprite2D), then "Sprite2D" (fallback)
 	if enemy.has_node("Sprite"):
 		sprite = enemy.get_node("Sprite")
 	elif enemy.has_node("Sprite2D"):
 		sprite = enemy.get_node("Sprite2D")
 
-	# Store spawn position for patrol
-	spawn_position = enemy.global_position
-	original_spawn_position = enemy.global_position  # Save the TRUE spawn point
-	spawn_chunk = get_chunk_key(enemy.global_position)  # Save spawn chunk for leashing
-	last_position = enemy.global_position  # Initialize stuck detection
+	# Store spawn position IMMEDIATELY (before await frame delays it)
+	# Use enemy.position (local) since global_position may not be ready yet
+	# game_world is at origin so position == global_position
+	spawn_position = enemy.position
+	original_spawn_position = enemy.position  # Save the TRUE spawn point
+	spawn_chunk = get_chunk_key(enemy.position)  # Save spawn chunk for leashing
+	last_position = enemy.position  # Initialize stuck detection
+
+	# CRITICAL: Set initial patrol_target BEFORE await, otherwise _physics_process
+	# runs with patrol_target=(0,0) and skeleton walks toward world origin!
+	patrol_target = spawn_position  # Start at spawn position (pick_new_patrol_target called later)
+
+
+	# Wait one frame for other systems to initialize
+	await get_tree().process_frame
 
 	# Connect to damage signal to detect player attacks
 	if enemy.has_signal("damage_taken"):
@@ -174,6 +182,9 @@ func _ready() -> void:
 		pick_new_patrol_target()
 		change_state(State.PATROLLING)
 
+	# Mark as initialized - physics can now run
+	_initialized = true
+
 	# Debug label disabled - was causing visual artifacts
 	# create_debug_label()
 
@@ -181,9 +192,21 @@ func _ready() -> void:
 # MAIN LOOP
 # ═══════════════════════════════════════════════════════════════════════════
 
+var _initialized: bool = false
+
 func _physics_process(delta: float) -> void:
 	if not enemy or not is_instance_valid(enemy):
 		return
+
+	# Don't process physics until fully initialized
+	if not _initialized:
+		enemy.velocity = Vector2.ZERO
+		return
+
+	# FIX: Cap velocity to prevent runaway speeds from collision sliding
+	var max_speed = 150.0
+	if enemy.velocity.length() > max_speed:
+		enemy.velocity = enemy.velocity.normalized() * max_speed
 
 	# Only stop movement if THIS enemy is dying
 	# Crit window: enemy should keep fighting while player shoots weakpoints!

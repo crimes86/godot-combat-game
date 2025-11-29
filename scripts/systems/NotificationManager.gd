@@ -10,6 +10,7 @@ signal notification_created(notification: ItemNotification)
 var notification_queue: Array[ItemNotification] = []
 var notification_container: Control = null
 var notification_spacing: float = 40.0  # Vertical spacing between stacked notifications
+const MAX_VISIBLE_NOTIFICATIONS: int = 4  # Maximum notifications visible at once
 
 func _ready() -> void:
 	# Create a CanvasLayer to display notifications on top of everything
@@ -59,6 +60,10 @@ func _create_notification() -> ItemNotification:
 	return notification
 
 func _show_notification(notification: ItemNotification) -> void:
+	# If we're at max capacity, push out the oldest notification
+	if notification_queue.size() >= MAX_VISIBLE_NOTIFICATIONS:
+		_push_out_oldest()
+
 	# Shift all existing notifications upward to make room (animated)
 	var shift_duration = 0.15  # Quick shift
 
@@ -80,6 +85,30 @@ func _show_notification(notification: ItemNotification) -> void:
 
 	# Emit signal
 	notification_created.emit(notification)
+
+func _push_out_oldest() -> void:
+	"""Push the oldest notification up and fade it out quickly to make room."""
+	if notification_queue.is_empty():
+		return
+
+	var oldest = notification_queue[0]
+	if not is_instance_valid(oldest):
+		notification_queue.remove_at(0)
+		return
+
+	# Remove from queue immediately
+	notification_queue.remove_at(0)
+
+	# Animate it pushing up and fading out
+	var push_tween = create_tween()
+	push_tween.set_parallel(true)
+	# Push up by one more spacing
+	push_tween.tween_property(oldest, "position:y", oldest.position.y - notification_spacing, 0.2).set_ease(Tween.EASE_OUT)
+	# Fade out quickly
+	push_tween.tween_property(oldest, "modulate:a", 0.0, 0.2).set_ease(Tween.EASE_IN)
+
+	# Delete after animation
+	push_tween.chain().tween_callback(oldest.queue_free)
 
 func _on_notification_finished(notification: ItemNotification) -> void:
 	# Remove from queue

@@ -148,7 +148,7 @@ func spawn_random_chest() -> void:
 	print("📦 Spawned chest #%d at %s (active: %d/%d)" % [network_id, spawn_pos, active_chests.size(), MAX_ACTIVE_CHESTS])
 
 func _create_chest_at(network_id: int, spawn_pos: Vector2) -> void:
-	"""Create a chest locally (called on server and clients)"""
+	"""Create a chest locally (called own server and clients)"""
 	# Ensure we have a reference to game_world
 	if not game_world:
 		game_world = get_tree().get_first_node_in_group("game_world")

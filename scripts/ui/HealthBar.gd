@@ -142,8 +142,10 @@ func create_pill_capsule_bar() -> void:
 	name_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
 	name_label.add_theme_constant_override("outline_size", 2)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.position = Vector2(-25, -16)  # Centered above health bar
-	name_label.custom_minimum_size = Vector2(100, 0)
+	# Position centered above the health bar (bar is 50px wide, so center is at 25)
+	# Label is 150px wide, so offset by -50 to center it (25 - 75 = -50)
+	name_label.position = Vector2(-50, -16)
+	name_label.custom_minimum_size = Vector2(150, 14)
 	name_label.visible = false  # Hidden until name is set
 	add_child(name_label)
 
@@ -312,10 +314,16 @@ func stop_critical_pulse() -> void:
 
 func set_player_name(new_name: String) -> void:
 	"""Set the player name to display above the health bar"""
+	print("🏷️ [HEALTHBAR] set_player_name('%s') called, name_label=%s" % [new_name, name_label])
 	player_name = new_name
 	if name_label:
 		name_label.text = new_name
 		name_label.visible = not new_name.is_empty()
+		print("🏷️ [HEALTHBAR] Label set: text='%s', visible=%s, position=%s, size=%s" % [
+			name_label.text, name_label.visible, name_label.position, name_label.size
+		])
+	else:
+		print("❌ [HEALTHBAR] name_label is null!")
 
 func set_name_color(color: Color) -> void:
 	"""Set the name label color (e.g., different for guests vs authenticated)"""

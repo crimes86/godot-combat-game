@@ -27,6 +27,34 @@ var cached_player: Node = null
 var ui_update_timer: float = 0.0
 const UI_UPDATE_INTERVAL: float = 0.2  # Update UI visibility 5 times per second
 
+func _get_local_player() -> Node:
+	"""Get the local player (handles both single and multiplayer)."""
+	# If cached player is still valid and is the local player, use it
+	if cached_player and is_instance_valid(cached_player):
+		if not multiplayer.has_multiplayer_peer():
+			return cached_player
+		if cached_player.is_multiplayer_authority():
+			return cached_player
+
+	# Find the local player
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player in players:
+		if not multiplayer.has_multiplayer_peer():
+			# Single player - just use first player
+			cached_player = player
+			return player
+		if player.is_multiplayer_authority():
+			# Multiplayer - find the one we control
+			cached_player = player
+			return player
+
+	# Fallback to first player
+	if players.size() > 0:
+		cached_player = players[0]
+		return players[0]
+
+	return null
+
 # References
 @onready var health_bar: Control = $HealthBar
 @onready var sprite: CanvasItem = $Sprite2D  # Can be Sprite2D or AnimatedSprite2D
@@ -231,8 +259,8 @@ func _ready() -> void:
 	if shadow_sprite:
 		shadow_sprite.visible = true
 
-	# Cache player reference once (player rarely changes during gameplay)
-	cached_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	# Cache local player reference (handles multiplayer correctly)
+	cached_player = _get_local_player()
 
 	# VISIBILITY DEBUG: Only log enemies near player spawn (within 500px of origin)
 	var dist_from_origin = global_position.length()
@@ -841,10 +869,8 @@ func set_lod_level(lod_level: int) -> void:
 
 func update_loot_proximity() -> void:
 	"""Check if player is close enough to loot and show/hide prompt"""
-	# Use cached player reference (falls back to lookup if cache is stale)
-	if not cached_player or not is_instance_valid(cached_player):
-		cached_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-	var player = cached_player
+	# Use local player (handles multiplayer correctly)
+	var player = _get_local_player()
 	if not player:
 		player_in_loot_range = false
 		if loot_prompt:

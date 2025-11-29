@@ -3413,6 +3413,7 @@ func _setup_multiplayer():
 	# Connect to NetworkManager signals
 	NetworkManager.player_connected.connect(_on_player_connected)
 	NetworkManager.player_disconnected.connect(_on_player_disconnected)
+	NetworkManager.player_authenticated.connect(_on_player_authenticated)
 
 	# If we're already connected (came from menu), spawn players
 	if multiplayer.has_multiplayer_peer():
@@ -3456,7 +3457,13 @@ func _spawn_initial_players():
 		for player_id in connected:
 			if player_id != my_id and not players.has(player_id):
 				print("🔍 [PLAYER DEBUG] Server spawning remote player %d" % player_id)
-				spawn_player(player_id)
+				# Get player name from connected_players
+				var player_info = NetworkManager.connected_players.get(player_id, {})
+				var player_name = player_info.get("name", "")
+				var is_guest = false
+				if NetworkManager.authenticated_players.has(player_id):
+					is_guest = NetworkManager.authenticated_players[player_id].get("is_guest", false)
+				spawn_player(player_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", player_name, is_guest)
 	else:
 		# Client: Request existing players from server
 		print("🔍 [PLAYER DEBUG] Client - requesting existing players from server")
@@ -3511,12 +3518,22 @@ func _request_existing_players(requester_id: int):
 				rpc_id(requester_id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", p_name2, p_is_guest2)
 
 func _on_player_connected(id: int):
-	"""Handle new player connection"""
-	print("🔍 [PLAYER DEBUG] _on_player_connected(%d) - is_server=%s" % [id, multiplayer.is_server()])
+	"""Handle new player connection - DON'T spawn yet, wait for authentication"""
+	print("🔍 [PLAYER DEBUG] _on_player_connected(%d) - is_server=%s (waiting for auth before spawn)" % [id, multiplayer.is_server()])
+	# Don't spawn here - wait for _on_player_authenticated
+
+func _on_player_authenticated(id: int, player_name: String):
+	"""Handle player authentication complete - NOW spawn the player"""
+	print("🔍 [PLAYER DEBUG] _on_player_authenticated(%d, '%s') - is_server=%s" % [id, player_name, multiplayer.is_server()])
 	if not multiplayer.is_server():
 		return
 
-	spawn_player(id)
+	# Now spawn the authenticated player with their name
+	var is_guest = false
+	if NetworkManager.authenticated_players.has(id):
+		is_guest = NetworkManager.authenticated_players[id].get("is_guest", false)
+
+	spawn_player(id, Vector2.ZERO, 0, "", "", "", "", "", "", "", player_name, is_guest)
 
 	# Tell the new player about existing players (but NOT themselves!)
 	# Note: Client will also request this via _request_existing_players as a backup
@@ -3615,6 +3632,20 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 		player.add_to_group("player")
 		if player.has_node("Camera2D"):
 			player.get_node("Camera2D").enabled = true
+		# Set local player's name on health bar
+		var local_name = display_name
+		if local_name == "":
+			local_name = NetworkManager.player_name if NetworkManager else "Player"
+		if player.has_node("HealthBar"):
+			var hb = player.get_node("HealthBar")
+			if hb.has_method("set_player_name"):
+				hb.set_player_name(local_name)
+			if hb.has_method("set_name_color"):
+				var is_guest = NetworkManager.is_guest if NetworkManager else false
+				if is_guest:
+					hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
+				else:
+					hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
 	else:
 		# Disable processing for remote players - they are updated via RPC in _receive_player_position
 		player.set_physics_process(false)

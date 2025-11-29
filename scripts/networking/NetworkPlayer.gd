@@ -21,7 +21,9 @@ var sync_is_dashing: bool = false  # Track dash state for i-frame validation
 
 # Network interpolation
 var last_sync_time: float = 0.0
-var interpolation_speed: float = 10.0
+var interpolation_speed: float = 15.0  # Increased for smoother movement
+var target_position: Vector2 = Vector2.ZERO  # Target position to interpolate toward
+var calculated_move_speed: float = 200.0  # Calculated speed based on distance/time
 
 func _ready():
 	name = "Player_" + str(player_id)
@@ -53,6 +55,9 @@ func _ready():
 		player_instance.set_process(false)
 		player_instance.set_physics_process(false)
 
+		# Initialize target position to current position (avoid interpolating from origin)
+		target_position = player_instance.global_position
+
 		# Disable camera for remote players
 		if player_instance.has_node("Camera2D"):
 			player_instance.get_node("Camera2D").enabled = false
@@ -81,16 +86,31 @@ func _physics_process(delta):
 		return
 
 	if is_local:
-		# Send our position to others
-		if Time.get_ticks_msec() - last_sync_time > 50:  # 20Hz update rate
+		# Send our position to others at 30Hz for smoother remote player movement
+		if Time.get_ticks_msec() - last_sync_time > 33:  # 30Hz update rate (was 20Hz)
 			_send_position_update()
 			last_sync_time = Time.get_ticks_msec()
 	else:
-		# Interpolate to received position
-		player_instance.global_position = player_instance.global_position.lerp(
-			sync_position,
-			interpolation_speed * delta
-		)
+		# Smooth interpolation toward target position
+		var current_pos = player_instance.global_position
+		var distance = current_pos.distance_to(target_position)
+
+		if distance < 1.0:
+			# Close enough, snap to target
+			player_instance.global_position = target_position
+		elif distance > 500.0:
+			# Too far (likely teleport/respawn), snap immediately
+			player_instance.global_position = target_position
+		else:
+			# Smooth movement at calculated speed
+			var speed = clampf(calculated_move_speed, 100.0, 600.0)
+			var move_distance = speed * delta
+
+			if move_distance >= distance:
+				player_instance.global_position = target_position
+			else:
+				var direction = (target_position - current_pos).normalized()
+				player_instance.global_position = current_pos + direction * move_distance
 
 		# Update animation if changed
 		if player_instance.has_method("play_animation"):
@@ -117,10 +137,17 @@ func receive_position_update(pos: Vector2, anim: String, health: int, max_hp: in
 	if is_local:
 		return  # Ignore our own updates
 
-	# Debug: Log what we're receiving
-	if randf() < 0.02:  # Only log occasionally to avoid spam
-		print("🌐 [%s] Received anim: %s from peer" % [name, anim])
+	# Calculate interpolation speed based on distance between updates
+	# This ensures smooth movement that reaches target before next update
+	if player_instance:
+		var old_target = target_position if target_position != Vector2.ZERO else player_instance.global_position
+		var distance = old_target.distance_to(pos)
+		# At 30Hz, updates arrive every ~33ms. Move at speed to cover distance in ~25ms (75% of interval)
+		var target_time = 0.025
+		calculated_move_speed = distance / target_time if target_time > 0 else 200.0
 
+	# Set target position for interpolation
+	target_position = pos
 	sync_position = pos
 	sync_animation = anim
 	sync_health = health

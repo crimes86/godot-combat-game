@@ -73,26 +73,29 @@ func open_loot_ui(primary_corpse, nearby_corpses: Array) -> void:
 				corpse.loot_prompt.visible = false
 			print("💀 Hiding loot prompt and setting UI open flag for corpse")
 
-	# Calculate total gold from all corpses and AWARD IT IMMEDIATELY
+	# Calculate total gold from all corpses and request loot via network
 	total_gold_collected = 0
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var is_multiplayer = multiplayer.has_multiplayer_peer()
+
 	for corpse in corpses_looted:
-		if is_instance_valid(corpse):
+		if is_instance_valid(corpse) and corpse.corpse_gold > 0:
 			total_gold_collected += corpse.corpse_gold
 
-	# Award gold immediately when UI opens
-	if total_gold_collected > 0:
-		CharacterStats.add_gold(total_gold_collected)
-		print("💰 Auto-looted %d gold when opening UI" % total_gold_collected)
+			# In multiplayer, request gold loot through server
+			if is_multiplayer and network_enemy_mgr and corpse.network_id > 0:
+				network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+			else:
+				# Single player - award directly
+				CharacterStats.add_gold(corpse.corpse_gold)
+				corpse.corpse_gold = 0
 
-		# Play gold loot sound (once for all corpses looted)
+	# Play gold loot sound if we got gold (in multiplayer, sound plays via RPC callback)
+	if total_gold_collected > 0 and not is_multiplayer:
+		print("💰 Auto-looted %d gold when opening UI" % total_gold_collected)
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
 			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
-
-		# Clear gold from all corpses
-		for corpse in corpses_looted:
-			if is_instance_valid(corpse):
-				corpse.corpse_gold = 0
 
 	# Update header
 	var corpse_count = corpses_looted.size()
@@ -273,52 +276,74 @@ func loot_item(corpse, item: Dictionary) -> void:
 		populate_loot_list()
 		return
 
-	if not corpse.corpse_loot.has(item):
+	# Find item index in corpse loot
+	var item_index = -1
+	for i in range(corpse.corpse_loot.size()):
+		if corpse.corpse_loot[i] == item:
+			item_index = i
+			break
+
+	if item_index == -1:
 		print("❌ Item no longer in corpse loot")
 		populate_loot_list()
 		return
 
-	# Try to add to inventory
-	if InventorySystem.add_item(item):
-		var item_name = item.get("name", "Unknown")
-		var item_rarity = item.get("rarity", "Common")
-		print("✨ Looted: %s from corpse" % item_name)
-		item_looted.emit(item, corpse)
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var is_multiplayer = multiplayer.has_multiplayer_peer()
 
-		# Show notification and play pickup sound
-		NotificationManager.notify_item_added(item_name, 1, item_rarity)
-
-		# Remove from corpse's loot array
-		corpse.corpse_loot.erase(item)
-
-		# Check if corpse is now empty
-		corpse.check_if_looted_empty()
-
-		# Refresh the list
+	# In multiplayer, request item loot through server
+	if is_multiplayer and network_enemy_mgr and corpse.network_id > 0:
+		network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, item_index)
+		# Server will handle inventory add and broadcast removal
+		# Refresh list after small delay to allow RPC to process
+		await get_tree().create_timer(0.1).timeout
 		populate_loot_list()
 	else:
-		print("❌ Inventory full! Cannot loot %s" % item.get("name", "Unknown"))
+		# Single player - handle directly
+		if InventorySystem.add_item(item):
+			var item_name = item.get("name", "Unknown")
+			var item_rarity = item.get("rarity", "Common")
+			print("✨ Looted: %s from corpse" % item_name)
+			item_looted.emit(item, corpse)
+
+			# Show notification and play pickup sound
+			NotificationManager.notify_item_added(item_name, 1, item_rarity)
+
+			# Remove from corpse's loot array
+			corpse.corpse_loot.erase(item)
+
+			# Check if corpse is now empty
+			corpse.check_if_looted_empty()
+
+			# Refresh the list
+			populate_loot_list()
+		else:
+			print("❌ Inventory full! Cannot loot %s" % item.get("name", "Unknown"))
 
 func _on_take_all_pressed() -> void:
 	"""Take all items from all corpses (gold already awarded when UI opened)"""
 	var looted_count = 0
 	var total_count = 0
 
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var is_multiplayer = multiplayer.has_multiplayer_peer()
+
 	# Count total items
 	for corpse in corpses_looted:
 		if is_instance_valid(corpse):
 			total_count += corpse.corpse_loot.size()
 
-	# Collect all items to loot first
+	# Collect all items to loot first (with their indices for network sync)
 	var all_items_to_loot: Array = []
 	for corpse in corpses_looted:
 		if not is_instance_valid(corpse):
 			continue
-		for item in corpse.corpse_loot:
+		for i in range(corpse.corpse_loot.size()):
+			var item = corpse.corpse_loot[i]
 			if item:
-				all_items_to_loot.append({"item": item, "corpse": corpse})
+				all_items_to_loot.append({"item": item, "corpse": corpse, "index": i})
 
-	# Loot items with staggered notifications for cascade effect
+	# Loot items - in multiplayer we request each from server
 	for entry in all_items_to_loot:
 		var item = entry["item"]
 		var corpse = entry["corpse"]
@@ -326,27 +351,35 @@ func _on_take_all_pressed() -> void:
 		if not is_instance_valid(corpse):
 			continue
 
-		if InventorySystem.add_item(item):
-			var item_name = item.get("name", "Unknown")
-			var item_rarity = item.get("rarity", "Common")
-
+		if is_multiplayer and network_enemy_mgr and corpse.network_id > 0:
+			# In multiplayer, always request from index 0 since items shift after each removal
+			network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, 0)
 			looted_count += 1
-			item_looted.emit(item, corpse)
-			corpse.corpse_loot.erase(item)
-
-			# Show notification and play pickup sound
-			NotificationManager.notify_item_added(item_name, 1, item_rarity)
-
-			# Small delay between each notification for cascade effect
-			await get_tree().create_timer(0.12).timeout
+			# Small delay to allow server to process and broadcast
+			await get_tree().create_timer(0.15).timeout
 		else:
-			print("❌ Inventory full! Looted %d of %d items" % [looted_count, total_count])
-			# Check which corpses are empty
-			for c in corpses_looted:
-				if is_instance_valid(c):
-					c.check_if_looted_empty()
-			populate_loot_list()
-			return
+			# Single player - handle directly
+			if InventorySystem.add_item(item):
+				var item_name = item.get("name", "Unknown")
+				var item_rarity = item.get("rarity", "Common")
+
+				looted_count += 1
+				item_looted.emit(item, corpse)
+				corpse.corpse_loot.erase(item)
+
+				# Show notification and play pickup sound
+				NotificationManager.notify_item_added(item_name, 1, item_rarity)
+
+				# Small delay between each notification for cascade effect
+				await get_tree().create_timer(0.12).timeout
+			else:
+				print("❌ Inventory full! Looted %d of %d items" % [looted_count, total_count])
+				# Check which corpses are empty
+				for c in corpses_looted:
+					if is_instance_valid(c):
+						c.check_if_looted_empty()
+				populate_loot_list()
+				return
 
 	# Check all corpses if empty
 	for corpse in corpses_looted:

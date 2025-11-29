@@ -12,8 +12,12 @@ var enemies: Dictionary = {}  # Dictionary[int, Node]
 var next_enemy_id: int = 1
 
 # Position sync rate
-const POSITION_SYNC_RATE: float = 0.1  # 10Hz
+const POSITION_SYNC_RATE: float = 0.05  # 20Hz (was 10Hz - increased for smoother movement)
 var position_sync_timer: float = 0.0
+
+# Client-side interpolation data for smooth movement
+var enemy_target_positions: Dictionary = {}  # network_id -> target position
+var enemy_interpolation_speeds: Dictionary = {}  # network_id -> calculated speed
 
 # Reference to game world
 var game_world: Node = null
@@ -31,14 +35,44 @@ func _process(delta):
 	if not multiplayer.has_multiplayer_peer():
 		return
 
-	if not multiplayer.is_server():
-		return
+	if multiplayer.is_server():
+		# Periodically sync enemy positions to clients
+		position_sync_timer += delta
+		if position_sync_timer >= POSITION_SYNC_RATE:
+			position_sync_timer = 0.0
+			_sync_enemy_positions()
+	else:
+		# Client: smoothly interpolate enemies toward their target positions
+		_interpolate_enemy_positions(delta)
 
-	# Periodically sync enemy positions to clients
-	position_sync_timer += delta
-	if position_sync_timer >= POSITION_SYNC_RATE:
-		position_sync_timer = 0.0
-		_sync_enemy_positions()
+func _interpolate_enemy_positions(delta: float) -> void:
+	"""Client-side smooth interpolation of enemy positions."""
+	for id in enemy_target_positions:
+		var enemy = get_enemy(id)
+		if not enemy or not is_instance_valid(enemy):
+			continue
+
+		var target_pos = enemy_target_positions[id]
+		var current_pos = enemy.global_position
+		var distance = current_pos.distance_to(target_pos)
+
+		# If very close, snap to target
+		if distance < 1.0:
+			enemy.global_position = target_pos
+			continue
+
+		# Get interpolation speed (calculated when we receive network update)
+		var speed = enemy_interpolation_speeds.get(id, 150.0)
+		# Clamp speed to reasonable range (prevent teleporting on lag spikes)
+		speed = clampf(speed, 50.0, 400.0)
+
+		# Move toward target at calculated speed
+		var move_distance = speed * delta
+		if move_distance >= distance:
+			enemy.global_position = target_pos
+		else:
+			var direction = (target_pos - current_pos).normalized()
+			enemy.global_position = current_pos + direction * move_distance
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ENEMY REGISTRATION (Server Only)
@@ -497,8 +531,17 @@ func _client_sync_positions(positions: Dictionary) -> void:
 		var enemy = get_enemy(id)
 		if enemy and is_instance_valid(enemy):
 			var data = positions[id]
-			# Interpolate to new position
-			enemy.global_position = enemy.global_position.lerp(data.pos, 0.3)
+
+			# Store target position for smooth interpolation in _process
+			var old_target = enemy_target_positions.get(id, enemy.global_position)
+			enemy_target_positions[id] = data.pos
+
+			# Calculate interpolation speed based on distance and sync rate
+			# This ensures we reach the target before next update arrives
+			var distance = old_target.distance_to(data.pos)
+			# Move at speed that covers distance in ~80% of sync interval (allows for jitter)
+			var target_time = POSITION_SYNC_RATE * 0.8
+			enemy_interpolation_speeds[id] = distance / target_time if target_time > 0 else 200.0
 
 			# Sync health
 			if data.has("health"):
@@ -930,3 +973,111 @@ func _get_max_player_damage(attacker_peer_id: int) -> float:
 	# Add generous buffer for weapon variance, buffs, etc.
 	# Max realistic damage at high level with best gear is ~150-200
 	return maxf(base_damage * 2.0, 300.0)  # At least 300 to avoid false positives
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LOOT SYNC (Server Authoritative)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@rpc("any_peer", "reliable")
+func request_loot_gold(enemy_network_id: int) -> void:
+	"""Client requests to loot gold from a corpse. Server validates and broadcasts."""
+	if not multiplayer.is_server():
+		return
+
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		return
+
+	if not enemy.is_corpse:
+		return
+
+	var looter_id = multiplayer.get_remote_sender_id()
+	if looter_id == 0:
+		looter_id = 1
+
+	var gold = enemy.corpse_gold
+	if gold <= 0:
+		return
+
+	# Clear gold on server
+	enemy.corpse_gold = 0
+
+	# Broadcast to all clients to clear gold display
+	rpc("_client_gold_looted", enemy_network_id, looter_id, gold)
+
+@rpc("authority", "call_local", "reliable")
+func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int) -> void:
+	"""Server broadcasts that gold was looted from a corpse."""
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		return
+
+	# Clear gold on this client
+	enemy.corpse_gold = 0
+
+	# Only the looter gets the gold added to their stats
+	if multiplayer.get_unique_id() == looter_id:
+		CharacterStats.add_gold(gold_amount)
+		print("💰 You looted %d gold" % gold_amount)
+
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+
+	# Check if corpse is now fully empty
+	enemy.check_if_looted_empty()
+
+@rpc("any_peer", "reliable")
+func request_loot_item(enemy_network_id: int, item_index: int) -> void:
+	"""Client requests to loot an item from a corpse. Server validates and broadcasts."""
+	if not multiplayer.is_server():
+		return
+
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		return
+
+	if not enemy.is_corpse:
+		return
+
+	var looter_id = multiplayer.get_remote_sender_id()
+	if looter_id == 0:
+		looter_id = 1
+
+	# Validate item index
+	if item_index < 0 or item_index >= enemy.corpse_loot.size():
+		return
+
+	var item = enemy.corpse_loot[item_index]
+	if not item:
+		return
+
+	# Remove item from server's corpse loot
+	enemy.corpse_loot.remove_at(item_index)
+
+	# Broadcast to all clients
+	rpc("_client_item_looted", enemy_network_id, looter_id, item_index, item)
+
+@rpc("authority", "call_local", "reliable")
+func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int, item: Dictionary) -> void:
+	"""Server broadcasts that an item was looted from a corpse."""
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		return
+
+	# Remove item from local corpse loot (if still there - might already be removed)
+	if item_index < enemy.corpse_loot.size():
+		enemy.corpse_loot.remove_at(item_index)
+
+	# Only the looter gets the item added to their inventory
+	if multiplayer.get_unique_id() == looter_id:
+		if InventorySystem.add_item(item):
+			var item_name = item.get("name", "Unknown")
+			var item_rarity = item.get("rarity", "Common")
+			print("✨ Looted: %s from corpse" % item_name)
+			NotificationManager.notify_item_added(item_name, 1, item_rarity)
+		else:
+			print("❌ Inventory full! Cannot loot %s" % item.get("name", "Unknown"))
+
+	# Check if corpse is now fully empty
+	enemy.check_if_looted_empty()
