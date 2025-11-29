@@ -10,6 +10,14 @@ class_name Campfire
 ## - Subtle ground-hugging mist effect (ankle-height)
 ## - Sparse particle effects from magical coals
 
+## Community vs Competitive Campfires:
+## - Community campfires (is_community_campfire = true): Any player can add fuel to a shared pool,
+##   and ALL players in warmth radius receive healing and crit buffs. Used for spawn/home areas.
+## - Competitive campfires (is_community_campfire = false): Ownership-based system where only
+##   the owning group benefits from the fire. Used for ruins and contested areas.
+
+@export var is_community_campfire: bool = false  # If true, all players can fuel and benefit (home/spawn campfires)
+
 # Constants
 const Constants = preload("res://scripts/constants.gd")
 
@@ -46,6 +54,7 @@ var bone_ember_count: int = 0
 var group_fuel_pools: Dictionary = {}
 const SOLO_POOL_KEY: int = -1  # Key for solo/ungrouped players
 const NO_OWNER: int = -999  # Key for unowned campfire
+const COMMUNITY_POOL_KEY: int = -2  # Key for shared community campfire pool
 
 # Campfire ownership system - only one group can own and benefit from a campfire at a time
 var owner_pool_key: int = NO_OWNER  # The group/player that owns this campfire
@@ -57,6 +66,7 @@ var release_timer_ui: Control = null  # UI showing time until release
 
 # Skeleton spawning from fuel (every 5 fuel items spawns a skeleton)
 const FUEL_PER_SKELETON: int = 5
+const MAX_CAMPFIRE_SKELETONS: int = 10  # Maximum active skeletons per campfire
 var cumulative_fuel_added: int = 0  # Tracks total fuel for skeleton spawning
 var campfire_skeletons: Array = []  # Track skeletons spawned by this campfire
 
@@ -185,12 +195,14 @@ func _physics_process(delta: float) -> void:
 	# Handle hold-to-fuel mechanic
 	handle_fuel_interaction(delta)
 
-	# Apply crit buff to player if in warmth AND local player is an owner
+	# Apply crit buff to player if in warmth
+	# - Community campfires: ALL players get crit buff
+	# - Competitive campfires: Only owners get crit buff
 	if player_in_warmth and player and is_instance_valid(player):
-		if _is_local_player_owner():
+		if is_community_campfire or _is_local_player_owner():
 			apply_crit_buff_to_player()
 		else:
-			# Clear crit buff if not an owner
+			# Clear crit buff if not an owner (competitive campfire)
 			CharacterStats.campfire_crit_buff = 0.0
 
 	# Check enemies near warmth (throttled for performance)
@@ -242,8 +254,9 @@ func _is_local_player(body: Node2D) -> bool:
 	return player_authority == local_peer_id
 
 func _heal_all_players_in_warmth(delta: float) -> void:
-	"""Heal all players currently in campfire warmth - only owners get healed.
-	Each player heals based on their group's fuel pool if they own the campfire."""
+	"""Heal all players currently in campfire warmth.
+	- Community campfires: ALL players in warmth get healed using shared fuel pool.
+	- Competitive campfires: Only owners get healed using their group's fuel pool."""
 	# Clean up invalid player references
 	var to_remove = []
 	for p in players_in_warmth.keys():
@@ -257,8 +270,9 @@ func _heal_all_players_in_warmth(delta: float) -> void:
 		if not is_instance_valid(p):
 			continue
 
-		# Only heal players who are owners of this campfire
-		if not _is_player_owner(p):
+		# For competitive campfires, only heal players who are owners
+		# For community campfires, heal ALL players in warmth
+		if not is_community_campfire and not _is_player_owner(p):
 			continue
 
 		var player_data = players_in_warmth[p]
@@ -1731,7 +1745,11 @@ func _update_ownership_timer(delta: float) -> void:
 				_release_ownership()
 
 func _get_owner_fuel_pool() -> Dictionary:
-	"""Get the fuel pool of the current owner (for aura drawing)."""
+	"""Get the fuel pool for aura drawing.
+	- Community campfires: Always use the shared community pool.
+	- Competitive campfires: Use the current owner's pool."""
+	if is_community_campfire:
+		return _get_or_create_fuel_pool(COMMUNITY_POOL_KEY)
 	if owner_pool_key == NO_OWNER:
 		return {"wood": 0, "bone_embers": 0, "wood_decay": 0.0, "ember_decay": 0.0}
 	var pool = _get_or_create_fuel_pool(owner_pool_key)
@@ -1765,11 +1783,19 @@ func _sync_fuel_state_to_clients() -> void:
 	if not multiplayer.has_multiplayer_peer() or not multiplayer.is_server():
 		return
 
-	if owner_pool_key == NO_OWNER:
-		return
+	# Determine which pool to sync
+	var pool_key_to_sync: int
+	if is_community_campfire:
+		# Community campfires always sync the shared pool
+		pool_key_to_sync = COMMUNITY_POOL_KEY
+	else:
+		# Competitive campfires sync the owner's pool
+		if owner_pool_key == NO_OWNER:
+			return
+		pool_key_to_sync = owner_pool_key
 
-	var pool = _get_or_create_fuel_pool(owner_pool_key)
-	_sync_fuel_to_clients.rpc(owner_pool_key, pool.wood, pool.bone_embers)
+	var pool = _get_or_create_fuel_pool(pool_key_to_sync)
+	_sync_fuel_to_clients.rpc(pool_key_to_sync, pool.wood, pool.bone_embers)
 
 func _create_release_timer_ui() -> void:
 	"""Create the UI element showing time until campfire becomes free."""
@@ -1869,30 +1895,54 @@ func _get_fuel_pool_for_player(player_node: Node) -> Dictionary:
 	return _get_or_create_fuel_pool(SOLO_POOL_KEY)
 
 func get_wood_count_for_player() -> int:
-	"""Get wood count for the local player's fuel pool."""
-	var pool = _get_or_create_fuel_pool(_get_player_fuel_pool_key())
+	"""Get wood count for the campfire's relevant fuel pool.
+	- Community campfires: Returns shared pool count.
+	- Competitive campfires: Returns local player's pool count."""
+	var pool: Dictionary
+	if is_community_campfire:
+		pool = _get_or_create_fuel_pool(COMMUNITY_POOL_KEY)
+	else:
+		pool = _get_or_create_fuel_pool(_get_player_fuel_pool_key())
 	return pool.wood
 
 func get_bone_ember_count_for_player() -> int:
-	"""Get bone ember count for the local player's fuel pool."""
-	var pool = _get_or_create_fuel_pool(_get_player_fuel_pool_key())
+	"""Get bone ember count for the campfire's relevant fuel pool.
+	- Community campfires: Returns shared pool count.
+	- Competitive campfires: Returns local player's pool count."""
+	var pool: Dictionary
+	if is_community_campfire:
+		pool = _get_or_create_fuel_pool(COMMUNITY_POOL_KEY)
+	else:
+		pool = _get_or_create_fuel_pool(_get_player_fuel_pool_key())
 	return pool.bone_embers
 
 func apply_crit_buff_to_player() -> void:
 	"""Apply crit chance buff to player while in campfire warmth.
-	Uses the player's group fuel pool for buff calculation."""
+	Uses community pool for community campfires, player's group pool otherwise."""
 	CharacterStats.campfire_crit_buff = get_current_crit_buff_for_player()
 
 func get_current_crit_buff_for_player() -> float:
-	"""Get crit buff based on the local player's fuel pool."""
-	var pool = _get_or_create_fuel_pool(_get_player_fuel_pool_key())
+	"""Get crit buff based on the campfire's fuel pool.
+	- Community campfires: Uses shared pool.
+	- Competitive campfires: Uses local player's group pool."""
+	var pool: Dictionary
+	if is_community_campfire:
+		pool = _get_or_create_fuel_pool(COMMUNITY_POOL_KEY)
+	else:
+		pool = _get_or_create_fuel_pool(_get_player_fuel_pool_key())
 	var bone_percent = float(pool.bone_embers) / float(MAX_BONE_EMBERS)
 	return bone_percent * 0.165  # 0-16.5% bonus crit chance
 
 func get_heal_rate_for_player(player_node: Node) -> float:
 	"""Get healing rate for a specific player based on their fuel pool.
+	- Community campfires: Uses shared pool for ALL players.
+	- Competitive campfires: Uses player's group pool.
 	Base: 5 HP/s, Max: 25 HP/s (linear scaling with wood)."""
-	var pool = _get_fuel_pool_for_player(player_node)
+	var pool: Dictionary
+	if is_community_campfire:
+		pool = _get_or_create_fuel_pool(COMMUNITY_POOL_KEY)
+	else:
+		pool = _get_fuel_pool_for_player(player_node)
 	if pool.wood > 0:
 		var wood_percent = float(pool.wood) / float(MAX_WOOD)
 		return 5.0 + (wood_percent * 20.0)  # 5 + (0-20) = 5-25 HP/s
@@ -1900,18 +1950,26 @@ func get_heal_rate_for_player(player_node: Node) -> float:
 		return 5.0
 
 func add_wood_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> bool:
-	"""Add wood fuel to the local player's fuel pool.
-	Claims ownership if campfire is unowned. Fails if owned by another group."""
-	var pool_key = _get_player_fuel_pool_key()
+	"""Add wood fuel to the campfire.
+	- Community campfires: Uses shared pool, anyone can add fuel.
+	- Competitive campfires: Uses player's group pool, claims ownership if unowned."""
+	var pool_key: int
 
-	# Check ownership - can only add fuel if unowned or we own it
-	if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
-		# Campfire owned by someone else - can't add fuel
-		return false
+	if is_community_campfire:
+		# Community campfires use a shared pool - anyone can add fuel
+		pool_key = COMMUNITY_POOL_KEY
+	else:
+		# Competitive campfires use player's group pool
+		pool_key = _get_player_fuel_pool_key()
 
-	# Claim ownership if unowned
-	if owner_pool_key == NO_OWNER:
-		_claim_ownership()
+		# Check ownership - can only add fuel if unowned or we own it
+		if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
+			# Campfire owned by someone else - can't add fuel
+			return false
+
+		# Claim ownership if unowned
+		if owner_pool_key == NO_OWNER:
+			_claim_ownership()
 
 	var pool = _get_or_create_fuel_pool(pool_key)
 
@@ -1932,18 +1990,26 @@ func add_wood_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> bool:
 	return added > 0
 
 func add_bone_ember_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> bool:
-	"""Add bone ember fuel to the local player's fuel pool.
-	Claims ownership if campfire is unowned. Fails if owned by another group."""
-	var pool_key = _get_player_fuel_pool_key()
+	"""Add bone ember fuel to the campfire.
+	- Community campfires: Uses shared pool, anyone can add fuel.
+	- Competitive campfires: Uses player's group pool, claims ownership if unowned."""
+	var pool_key: int
 
-	# Check ownership - can only add fuel if unowned or we own it
-	if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
-		# Campfire owned by someone else - can't add fuel
-		return false
+	if is_community_campfire:
+		# Community campfires use a shared pool - anyone can add fuel
+		pool_key = COMMUNITY_POOL_KEY
+	else:
+		# Competitive campfires use player's group pool
+		pool_key = _get_player_fuel_pool_key()
 
-	# Claim ownership if unowned
-	if owner_pool_key == NO_OWNER:
-		_claim_ownership()
+		# Check ownership - can only add fuel if unowned or we own it
+		if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
+			# Campfire owned by someone else - can't add fuel
+			return false
+
+		# Claim ownership if unowned
+		if owner_pool_key == NO_OWNER:
+			_claim_ownership()
 
 	var pool = _get_or_create_fuel_pool(pool_key)
 
@@ -2061,19 +2127,46 @@ func decay_fuel(delta: float) -> void:
 
 
 func add_wood_fuel(amount: int, enhanced_sound: bool = false) -> bool:
-	"""Add wood fuel (increases healing rate) - uses group fuel pool system.
-	Claims ownership if campfire is unowned. Fails if owned by another group."""
-	var pool_key = _get_player_fuel_pool_key()
+	"""Add wood fuel (increases healing rate).
+	- Community campfires: Uses shared pool, anyone can add fuel.
+	- Competitive campfires: Uses group fuel pool, claims ownership if unowned.
+	In multiplayer, this requests the server to add fuel."""
 
-	# Check ownership - can only add fuel if unowned or we own it
-	if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
-		# Campfire owned by someone else - can't add fuel
-		print("🔥 Cannot add fuel - campfire owned by another group")
-		return false
+	# In multiplayer, route through server for proper sync
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		_request_add_wood_fuel.rpc_id(1, amount, enhanced_sound)
+		return true  # Assume success, server will sync back
 
-	# Claim ownership if unowned
-	if owner_pool_key == NO_OWNER:
-		_claim_ownership()
+	# Server or single player - process locally
+	return _server_add_wood_fuel(amount, enhanced_sound)
+
+@rpc("any_peer", "reliable")
+func _request_add_wood_fuel(amount: int, enhanced_sound: bool) -> void:
+	"""Client requests server to add wood fuel."""
+	if not multiplayer.is_server():
+		return
+	_server_add_wood_fuel(amount, enhanced_sound)
+
+func _server_add_wood_fuel(amount: int, enhanced_sound: bool) -> bool:
+	"""Server-side wood fuel addition with sync to all clients."""
+	var pool_key: int
+
+	if is_community_campfire:
+		# Community campfires use a shared pool - anyone can add fuel
+		pool_key = COMMUNITY_POOL_KEY
+	else:
+		# Competitive campfires use player's group pool
+		pool_key = _get_player_fuel_pool_key()
+
+		# Check ownership - can only add fuel if unowned or we own it
+		if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
+			# Campfire owned by someone else - can't add fuel
+			print("🔥 Cannot add fuel - campfire owned by another group")
+			return false
+
+		# Claim ownership if unowned
+		if owner_pool_key == NO_OWNER:
+			_claim_ownership()
 
 	var pool = _get_or_create_fuel_pool(pool_key)
 
@@ -2088,27 +2181,64 @@ func add_wood_fuel(amount: int, enhanced_sound: bool = false) -> bool:
 	# Track cumulative fuel for skeleton spawning (all fuel counts, even wasted)
 	track_fuel_for_skeletons(amount)
 
-	# Play fire fuel sound (even if wasting fuel)
+	# Play fire fuel sound on all clients
+	if multiplayer.has_multiplayer_peer():
+		_play_fuel_sound.rpc(enhanced_sound)
+	else:
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_fire_fuel_sound(global_position, -12.0, enhanced_sound)
+
+	return true
+
+@rpc("any_peer", "call_local", "reliable")
+func _play_fuel_sound(enhanced_sound: bool) -> void:
+	"""Play fuel sound on all clients."""
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		sound_manager.play_fire_fuel_sound(global_position, -12.0, enhanced_sound)
 
-	return true
-
 func add_bone_ember_fuel(amount: int, enhanced_sound: bool = false) -> bool:
-	"""Add bone ember fuel (increases crit chance) - uses group fuel pool system.
-	Claims ownership if campfire is unowned. Fails if owned by another group."""
-	var pool_key = _get_player_fuel_pool_key()
+	"""Add bone ember fuel (increases crit chance).
+	- Community campfires: Uses shared pool, anyone can add fuel.
+	- Competitive campfires: Uses group fuel pool, claims ownership if unowned.
+	In multiplayer, this requests the server to add fuel."""
 
-	# Check ownership - can only add fuel if unowned or we own it
-	if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
-		# Campfire owned by someone else - can't add fuel
-		print("🔥 Cannot add fuel - campfire owned by another group")
-		return false
+	# In multiplayer, route through server for proper sync
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		_request_add_bone_ember_fuel.rpc_id(1, amount, enhanced_sound)
+		return true  # Assume success, server will sync back
 
-	# Claim ownership if unowned
-	if owner_pool_key == NO_OWNER:
-		_claim_ownership()
+	# Server or single player - process locally
+	return _server_add_bone_ember_fuel(amount, enhanced_sound)
+
+@rpc("any_peer", "reliable")
+func _request_add_bone_ember_fuel(amount: int, enhanced_sound: bool) -> void:
+	"""Client requests server to add bone ember fuel."""
+	if not multiplayer.is_server():
+		return
+	_server_add_bone_ember_fuel(amount, enhanced_sound)
+
+func _server_add_bone_ember_fuel(amount: int, enhanced_sound: bool) -> bool:
+	"""Server-side bone ember fuel addition with sync to all clients."""
+	var pool_key: int
+
+	if is_community_campfire:
+		# Community campfires use a shared pool - anyone can add fuel
+		pool_key = COMMUNITY_POOL_KEY
+	else:
+		# Competitive campfires use player's group pool
+		pool_key = _get_player_fuel_pool_key()
+
+		# Check ownership - can only add fuel if unowned or we own it
+		if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
+			# Campfire owned by someone else - can't add fuel
+			print("🔥 Cannot add fuel - campfire owned by another group")
+			return false
+
+		# Claim ownership if unowned
+		if owner_pool_key == NO_OWNER:
+			_claim_ownership()
 
 	var pool = _get_or_create_fuel_pool(pool_key)
 
@@ -2123,10 +2253,13 @@ func add_bone_ember_fuel(amount: int, enhanced_sound: bool = false) -> bool:
 	# Track cumulative fuel for skeleton spawning (all fuel counts, even wasted)
 	track_fuel_for_skeletons(amount)
 
-	# Play fire fuel sound (even if wasting fuel)
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_fire_fuel_sound(global_position, -12.0, enhanced_sound)
+	# Play fire fuel sound on all clients
+	if multiplayer.has_multiplayer_peer():
+		_play_fuel_sound.rpc(enhanced_sound)
+	else:
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_fire_fuel_sound(global_position, -12.0, enhanced_sound)
 
 	return true
 
@@ -2164,6 +2297,14 @@ func _request_skeleton_spawn() -> void:
 
 func _do_spawn_campfire_skeleton() -> void:
 	"""Actually spawn the skeleton (server only)"""
+	# Clean up dead/invalid skeletons from tracking array
+	_cleanup_dead_skeletons()
+
+	# Check if we're at the skeleton cap
+	if campfire_skeletons.size() >= MAX_CAMPFIRE_SKELETONS:
+		print("🔥💀 Campfire at max skeletons (%d), not spawning more" % MAX_CAMPFIRE_SKELETONS)
+		return
+
 	# Find a random spawn position 800-1200 units away from campfire
 	var spawn_distance = randf_range(800.0, 1200.0)
 	var spawn_angle = randf() * TAU
@@ -2206,16 +2347,29 @@ func _do_spawn_campfire_skeleton() -> void:
 		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 			network_enemy_mgr.spawn_enemy_on_clients.rpc(network_id, spawn_pos, skeleton.enemy_level, skeleton_name)
 
-	print("💀🔥 Spawned campfire skeleton at %s (heading to fire at %s)" % [spawn_pos, global_position])
+	print("💀🔥 Spawned campfire skeleton at %s (%d/%d active)" % [spawn_pos, campfire_skeletons.size(), MAX_CAMPFIRE_SKELETONS])
+
+func _cleanup_dead_skeletons() -> void:
+	"""Remove dead or invalid skeletons from tracking array"""
+	var valid_skeletons: Array = []
+	for skeleton in campfire_skeletons:
+		if is_instance_valid(skeleton) and not skeleton.is_corpse:
+			valid_skeletons.append(skeleton)
+	campfire_skeletons = valid_skeletons
 
 func update_visual_intensity() -> void:
 	"""Update campfire visual intensity based on fuel levels"""
-	# Update heal rate
-	heal_rate = get_current_heal_rate()
+	# Get the correct fuel pool for visuals
+	var pool = _get_owner_fuel_pool()
+	var current_wood = pool.wood
+	var current_bone_embers = pool.bone_embers
 
-	# Calculate fuel percentages
-	var wood_percent = float(wood_count) / float(MAX_WOOD)
-	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
+	# Update heal rate (based on pool)
+	heal_rate = 5.0 + (float(current_wood) / float(MAX_WOOD) * 20.0)
+
+	# Calculate fuel percentages from the pool
+	var wood_percent = float(current_wood) / float(MAX_WOOD)
+	var bone_percent = float(current_bone_embers) / float(MAX_BONE_EMBERS)
 
 	# Scale the entire fire_sprite (flames, coals, logs, rocks) based on total fuel
 	var total_fuel_percent = (wood_percent + bone_percent) / 2.0
@@ -2401,9 +2555,10 @@ func update_buff_collision_radius() -> void:
 
 func get_fuel_status() -> Dictionary:
 	"""Get current fuel levels and buffs for UI"""
+	var pool = _get_owner_fuel_pool()
 	return {
-		"wood_count": wood_count,
-		"bone_ember_count": bone_ember_count,
+		"wood_count": pool.wood,
+		"bone_ember_count": pool.bone_embers,
 		"max_wood": MAX_WOOD,
 		"max_bone_embers": MAX_BONE_EMBERS,
 		"heal_rate": heal_rate,
@@ -2411,9 +2566,11 @@ func get_fuel_status() -> Dictionary:
 	}
 
 func get_current_heal_rate() -> float:
-	"""Calculate current heal rate based on wood count"""
+	"""Calculate current heal rate based on wood count from the fuel pool"""
+	# Get the correct fuel pool
+	var pool = _get_owner_fuel_pool()
 	# Base: 5 HP/s, Max: 25 HP/s (linear scaling)
-	var wood_percent = float(wood_count) / float(MAX_WOOD)
+	var wood_percent = float(pool.wood) / float(MAX_WOOD)
 	return 5.0 + (wood_percent * 20.0)  # 5 + (0-20) = 5-25 HP/s
 
 func get_current_crit_buff() -> float:

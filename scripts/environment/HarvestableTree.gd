@@ -97,6 +97,23 @@ func _ready() -> void:
 	# Create audio players (sounds are loaded by TreeAudioManager)
 	create_audio_players()
 
+func _exit_tree() -> void:
+	"""Clean up when tree is removed from scene tree"""
+	# Cancel chopping to hide progress circle
+	if is_chopping:
+		is_chopping = false
+		chop_progress = 0.0
+		if progress_circle:
+			progress_circle.visible = false
+
+	# Unregister from InteractionManager
+	InteractionManager.unregister_interactable(self)
+
+	# Close loot UI if open
+	if loot_ui and is_instance_valid(loot_ui):
+		loot_ui.close_ui()
+		loot_ui = null
+
 func _unhandled_input(event: InputEvent) -> void:
 	"""Handle F-key input for looting fallen tree"""
 	# Only process F key events

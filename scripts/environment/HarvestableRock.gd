@@ -99,6 +99,23 @@ func _ready() -> void:
 	# Load audio files
 	load_audio_files()
 
+func _exit_tree() -> void:
+	"""Clean up when rock is removed from scene tree"""
+	# Cancel mining to hide progress circle
+	if is_mining:
+		is_mining = false
+		mine_progress = 0.0
+		if progress_circle:
+			progress_circle.visible = false
+
+	# Unregister from InteractionManager
+	InteractionManager.unregister_interactable(self)
+
+	# Close loot UI if open
+	if loot_ui and is_instance_valid(loot_ui):
+		loot_ui.close_ui()
+		loot_ui = null
+
 func _unhandled_input(event: InputEvent) -> void:
 	"""Handle F-key input for looting mined rock pile"""
 	# Only process F key events

@@ -86,6 +86,16 @@ var skeleton_footstep_sounds: Array[AudioStream] = []  # Skeleton bone clacking 
 # Dodge/dash sounds
 var dodge_sounds: Array[AudioStream] = []  # Dodge whoosh sounds (2 variations)
 
+# Healing staff sounds
+var healing_staff_cast_sound: AudioStream = null  # Initial cast (spawns aura + fires projectile)
+var healing_staff_impact_sound: AudioStream = null  # Projectile landing explosion (second pulse)
+
+# Environment damage sounds
+var lava_burn_sound: AudioStream = null  # Fire damage when player stands in lava
+
+# Player progression sounds
+var level_up_sound: AudioStream = null  # Celebratory level up fanfare
+
 # Weapon-specific hit sounds (organized by weapon type)
 var weapon_hit_sounds: Dictionary = {
 	"sword": [],
@@ -429,6 +439,36 @@ func _load_real_sounds() -> void:
 		print("  ✅ Loaded game_loop_2.mp3 (Track 2: The Wasteland's Whisper)")
 
 	print("  📊 Loaded %d music tracks" % music_tracks.size())
+
+	# Load healing staff sounds
+	print("  💚 Loading healing staff sounds...")
+	healing_staff_cast_sound = load("res://assets/sounds/player/healing_staff_cast.wav")
+	if healing_staff_cast_sound:
+		print("  ✅ Loaded healing_staff_cast.wav")
+	else:
+		push_warning("  ⚠️ Failed to load healing_staff_cast.wav")
+
+	healing_staff_impact_sound = load("res://assets/sounds/player/healing_staff_impact.wav")
+	if healing_staff_impact_sound:
+		print("  ✅ Loaded healing_staff_impact.wav")
+	else:
+		push_warning("  ⚠️ Failed to load healing_staff_impact.wav")
+
+	# Load environment damage sounds
+	print("  🔥 Loading environment damage sounds...")
+	lava_burn_sound = load("res://assets/sounds/combat/lava_burn.wav")
+	if lava_burn_sound:
+		print("  ✅ Loaded lava_burn.wav")
+	else:
+		push_warning("  ⚠️ Failed to load lava_burn.wav")
+
+	# Load player progression sounds
+	print("  🎉 Loading player progression sounds...")
+	level_up_sound = load("res://assets/sounds/player/level_up.wav")
+	if level_up_sound:
+		print("  ✅ Loaded level_up.wav")
+	else:
+		push_warning("  ⚠️ Failed to load level_up.wav")
 
 func _load_weapon_sounds(weapon_type: String, count: int) -> void:
 	"""Load weapon-specific hit sounds"""
@@ -973,6 +1013,75 @@ func play_weakpoint_destroyed_sound(global_pos: Vector2 = Vector2.ZERO, volume_d
 	player.global_position = global_pos
 	player.pitch_scale = 1.0  # Keep original pitch for maximum impact
 	player.max_polyphony = 2  # Allow slight overlap in case of rapid weakpoint destruction
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play healing staff cast sound (initial click - spawns aura + fires projectile)
+func play_healing_cast_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0) -> void:
+	if not healing_staff_cast_sound:
+		push_warning("Healing staff cast sound not loaded")
+		return
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = healing_staff_cast_sound
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)  # Slight variation
+	player.max_distance = 800.0
+	player.attenuation = 1.0
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play healing staff impact sound (projectile landing - second pulse explosion)
+func play_healing_impact_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -3.0) -> void:
+	if not healing_staff_impact_sound:
+		push_warning("Healing staff impact sound not loaded")
+		return
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = healing_staff_impact_sound
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)  # Slight variation
+	player.max_distance = 800.0
+	player.attenuation = 1.0
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play lava burn damage sound (fire damage when stepping in lava)
+func play_lava_burn_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
+	if not lava_burn_sound:
+		push_warning("Lava burn sound not loaded")
+		return
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = lava_burn_sound
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.9, 1.1)  # Slight variation for variety
+	player.max_distance = 600.0
+	player.attenuation = 1.2
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play level up sound (celebratory fanfare when player levels up)
+func play_level_up_sound(volume_db: float = -4.0) -> void:
+	if not level_up_sound:
+		push_warning("Level up sound not loaded")
+		return
+
+	# Use non-positional audio so it plays at full volume regardless of camera position
+	var player = AudioStreamPlayer.new()
+	player.stream = level_up_sound
+	player.volume_db = volume_db
 	player.finished.connect(player.queue_free)
 
 	get_tree().root.add_child(player)

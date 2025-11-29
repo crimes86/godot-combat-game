@@ -92,6 +92,13 @@ signal damage_taken(damage: float, is_crit: bool)  # For unified feedback
 signal corpse_clicked(corpse)  # Emitted when corpse is clicked for looting
 signal corpse_looted_empty(corpse)  # Emitted when all items taken from corpse
 
+func _exit_tree() -> void:
+	# Unregister from NetworkEnemyManager when freed to prevent "freed instance" crashes
+	if network_id > 0:
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr:
+			network_enemy_mgr.unregister_enemy(network_id)
+
 func _ready() -> void:
 	# Set collision layers: enemies on layer 1, detect layers 1 (other entities) and 2 (obstacles like trees)
 	collision_layer = 1
@@ -974,9 +981,18 @@ func open_loot_ui() -> void:
 		return
 
 	print("💀 Opening loot UI via F-key for corpse at %s (Gold: %d, Items: %d)" % [global_position, corpse_gold, corpse_loot.size()])
-	print("💀 Signal connections: %d" % corpse_clicked.get_connections().size())
-	corpse_clicked.emit(self)
-	print("💀 Signal emitted!")
+
+	# Check if signal is connected
+	var connection_count = corpse_clicked.get_connections().size()
+	print("💀 Signal connections: %d" % connection_count)
+
+	if connection_count > 0:
+		corpse_clicked.emit(self)
+		print("💀 Signal emitted!")
+	else:
+		# Fallback: directly create loot UI if signal not connected
+		print("💀 No signal connections - creating loot UI directly")
+		_create_loot_ui_fallback()
 
 func _on_weakpoint_hit(weakpoint) -> void:
 	"""Handle weakpoint being hit - deal damage and show combat text"""
@@ -1130,6 +1146,8 @@ func die() -> void:
 		anim_sprite.play("hurt")
 		# Wait for the full animation to finish
 		await anim_sprite.animation_finished
+		if not is_instance_valid(self):
+			return
 
 		# FREEZE on last frame
 		anim_sprite.stop()
@@ -1146,6 +1164,8 @@ func die() -> void:
 				if frame_count > 0:
 					anim_sprite.frame = frame_count - 1
 		await get_tree().create_timer(0.6).timeout
+		if not is_instance_valid(self):
+			return
 
 	# Generate loot for this corpse (skip if already set by server in multiplayer)
 	var has_peer = multiplayer.has_multiplayer_peer()
@@ -1440,7 +1460,8 @@ func rot_and_despawn() -> void:
 	tween.tween_property(self, "scale", Vector2(0.8, 0.8), 2.0)
 	await tween.finished
 
-	queue_free()
+	if is_instance_valid(self):
+		queue_free()
 
 func check_if_looted_empty() -> void:
 	"""Called when items are taken - check if corpse is now empty"""
@@ -1470,7 +1491,8 @@ func graceful_despawn() -> void:
 	tween.tween_property(self, "scale", Vector2(0.5, 0.5), 0.5)
 	await tween.finished
 
-	queue_free()
+	if is_instance_valid(self):
+		queue_free()
 
 func has_corpse_loot() -> bool:
 	"""Check if corpse has any lootable items or gold remaining (used by SpawnManager)"""
@@ -1490,3 +1512,23 @@ func get_nearby_corpses(radius: float) -> Array:
 			nearby.append(node)
 
 	return nearby
+
+func _create_loot_ui_fallback() -> void:
+	"""Create loot UI directly when corpse_clicked signal isn't connected.
+	This handles edge cases where enemies die before signal connection happens."""
+	var nearby_corpses = get_nearby_corpses(CorpseState.AOE_LOOT_RADIUS)
+
+	# Load and create loot UI
+	var loot_scene = load("res://scenes/ui/loot_body_ui.tscn")
+	if not loot_scene:
+		push_error("Failed to load loot UI scene")
+		return
+
+	var loot_ui = loot_scene.instantiate()
+	if not loot_ui:
+		push_error("Failed to instantiate loot UI")
+		return
+
+	get_tree().root.add_child(loot_ui)
+	loot_ui.loot_ui_closed.connect(func(): loot_ui.queue_free())
+	loot_ui.open_loot_ui(self, nearby_corpses)

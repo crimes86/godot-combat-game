@@ -444,28 +444,32 @@ func gain_experience(amount: int) -> void:
 func _on_character_level_up(new_level: int) -> void:
 	"""Called when character levels up"""
 	print("🎉 Player reached level ", new_level, "!")
-	
+
 	# Update all stats
 	update_stats_from_character()
-	
+
 	# Heal to full
 	current_health = max_health
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
-	
+
 	# Visual feedback
 	if screen_shake:
 		screen_shake.add_trauma(0.3)
-	
-	# Play sound
+
+	# Play level up sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_MILESTONE, -8.0)
+	if sound_manager and sound_manager.has_method("play_level_up_sound"):
+		sound_manager.play_level_up_sound(-4.0)
 
 func _on_weapon_equipped(weapon) -> void:  # weapon is Weapon type
 	"""Called when weapon is equipped"""
 	print("⚔️ Weapon equipped: ", weapon.weapon_name)
 	update_stats_from_character()
+
+	# Reset attack state - ensures player can attack after switching weapons
+	# This prevents being stuck in can_attack=false if switched during cooldown
+	can_attack = true
 
 	# Refresh player sprite to show the new weapon
 	print("🔄 Refreshing player sprite with new weapon...")
@@ -481,6 +485,10 @@ func _on_weapon_unequipped() -> void:
 	"""Called when weapon is unequipped"""
 	print("👊 Weapon unequipped - back to unarmed")
 	update_stats_from_character()
+
+	# Reset attack state - ensures player can attack after switching weapons
+	# This prevents being stuck in can_attack=false if unequipped during cooldown
+	can_attack = true
 
 	# Refresh player sprite to remove weapon
 	print("🔄 Refreshing player sprite to unarmed...")
@@ -1419,6 +1427,10 @@ func _spawn_heal_projectile(target_pos: Vector2, radius: float, heal_amount: flo
 			var allies = self_ref.get_allies_in_radius(target, rad)
 			if allies.size() > 0:
 				self_ref.heal_allies(allies, heal * 0.5)  # Second pulse heals 50% of original
+			# Play healing impact sound (second pulse explosion)
+			var sound_manager = self_ref.get_node_or_null("/root/SoundManager")
+			if sound_manager and sound_manager.has_method("play_healing_impact_sound"):
+				sound_manager.play_healing_impact_sound(target, -3.0)
 		projectile.queue_free()
 	)
 
