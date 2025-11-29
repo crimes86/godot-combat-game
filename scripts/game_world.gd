@@ -9,6 +9,10 @@ const ChunkBasedPropSystem = preload("res://scripts/systems/ChunkBasedPropSystem
 var players = {}  # Dictionary of player_id: Player node
 var local_player = null
 
+func get_player_by_peer_id(peer_id: int) -> Node:
+	"""Get player node by their peer ID. Returns null if not found."""
+	return players.get(peer_id, null)
+
 # Multiplayer-ready spawn manager
 var spawn_manager = null  # SpawnManager (type hint removed for compatibility)
 

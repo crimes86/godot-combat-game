@@ -381,6 +381,12 @@ func unequip_weapon() -> bool:
 		"quantity": 1
 	}
 
+	# Add healing weapon properties if applicable
+	if equipped_weapon.attack_mode != "melee":
+		weapon_dict["attack_mode"] = equipped_weapon.attack_mode
+		weapon_dict["healing_power"] = equipped_weapon.healing_power
+		weapon_dict["heal_radius"] = equipped_weapon.heal_radius
+
 	# Add back to inventory
 	if InventorySystem.add_item(weapon_dict):
 		equipped_weapon = null

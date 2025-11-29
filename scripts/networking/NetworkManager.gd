@@ -761,3 +761,32 @@ func _build_local_player_state() -> Dictionary:
 	state["total_playtime_seconds"] = stats_data.get("total_playtime", 0)
 
 	return state
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PLAYER HEALING SYSTEM (Healing Staff)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@rpc("any_peer", "reliable")
+func request_player_heal(target_peer_id: int, heal_amount: float) -> void:
+	"""Client requests to heal another player. Server validates and applies.
+	Currently allows healing ANY player globally (friendly healing enabled).
+	PvP damage is restricted separately."""
+	if not multiplayer.is_server():
+		return
+
+	var healer_peer_id = multiplayer.get_remote_sender_id()
+
+	# NOTE: Friendly healing is globally allowed for now
+	# When PvP system is implemented, can add faction/group checks here
+	# Players can heal anyone - encourages cooperative gameplay
+
+	# Clamp heal amount to prevent exploits
+	heal_amount = clampf(heal_amount, 1.0, 500.0)
+
+	# Find target player and apply heal
+	var game_world = get_node_or_null("/root/GameWorld")
+	if game_world:
+		var target_player = game_world.get_player_by_peer_id(target_peer_id)
+		if target_player and target_player.has_method("heal"):
+			target_player.heal(heal_amount)
+			print("💚 Server: Player %d healed player %d for %.1f" % [healer_peer_id, target_peer_id, heal_amount])

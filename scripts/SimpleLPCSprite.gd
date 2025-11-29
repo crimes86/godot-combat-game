@@ -16,6 +16,17 @@ const DIRECTION_ROWS = {
 # Current state
 var current_direction := "south"
 
+# Helper to detect attack animation frame count from image width
+# Thrust = 8 frames (512px), Slash = 6 frames (384px)
+static func get_attack_frame_count(img: Image) -> int:
+	return 8 if img.get_width() >= 500 else 6
+
+static func get_attack_frame_indices(num_frames: int) -> Array:
+	var indices = []
+	for i in range(num_frames):
+		indices.append(i)
+	return indices
+
 # Shadow layer (below body)
 var shadow_sprite: AnimatedSprite2D = null
 
@@ -32,6 +43,37 @@ var hair_sprite: AnimatedSprite2D = null
 
 # Weapon layer (optional)
 var weapon_sprite: AnimatedSprite2D = null
+
+# Frame sync - ensures all layers play at exactly the same frame
+func _process(_delta: float) -> void:
+	# Sync all child layer sprites to match body frame and animation
+	# This prevents drift between independently playing AnimatedSprite2Ds
+	var body_frame = frame
+	var body_anim = animation
+
+	_sync_layer(shadow_sprite, body_anim, body_frame)
+	_sync_layer(base_head_sprite, body_anim, body_frame)
+	_sync_layer(boots_sprite, body_anim, body_frame)
+	_sync_layer(pants_sprite, body_anim, body_frame)
+	_sync_layer(shirt_sprite, body_anim, body_frame)
+	_sync_layer(arms_sprite, body_anim, body_frame)
+	_sync_layer(hands_sprite, body_anim, body_frame)
+	_sync_layer(head_sprite, body_anim, body_frame)
+	_sync_layer(hair_sprite, body_anim, body_frame)
+	# Note: weapon_sprite intentionally NOT synced - may have different frame count (oversize)
+
+func _sync_layer(layer: AnimatedSprite2D, target_anim: StringName, target_frame: int) -> void:
+	if not layer:
+		return
+	# Only sync if layer has the same animation
+	if layer.sprite_frames and layer.sprite_frames.has_animation(target_anim):
+		if layer.animation != target_anim:
+			layer.play(target_anim)
+		# Clamp frame to layer's actual frame count
+		var layer_frame_count = layer.sprite_frames.get_frame_count(target_anim)
+		var safe_frame = mini(target_frame, layer_frame_count - 1)
+		if layer.frame != safe_frame:
+			layer.frame = safe_frame
 
 func setup_lpc_sprite(
 	walk_tex: Texture2D,
@@ -103,16 +145,26 @@ func setup_lpc_sprite(
 
 		print("  Walk/idle animations created")
 
-	# Create slash animations (use weapon-specific FPS!)
+	# Create slash/thrust animations (use weapon-specific FPS!)
+	# IMPORTANT: Store body frame count to sync all layers
+	var body_attack_frames = 6  # Default to slash
 	if slash_tex:
 		var slash_img = slash_tex.get_image()
-		print("  Creating slash animations from image...")
+		var slash_size = slash_img.get_size()
+
+		# Detect frame count: thrust has 8 frames (512px wide), slash has 6 frames (384px wide)
+		body_attack_frames = 8 if slash_size.x >= 500 else 6
+		var frame_indices = []
+		for i in range(body_attack_frames):
+			frame_indices.append(i)
+
+		print("  Creating attack animations (%d frames) from image..." % body_attack_frames)
 
 		for dir_name in DIRECTION_ROWS.keys():
 			var row = DIRECTION_ROWS[dir_name]
-			create_animation_from_image(slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, null, 64)
+			create_animation_from_image(slash_img, "slash_" + dir_name, row, body_attack_frames, frame_indices, slash_fps, false, null, 64)
 
-		print("  Slash animations created")
+		print("  Attack animations created")
 
 	# Create hurt animation (single direction - south/row 2)
 	if hurt_tex:
@@ -143,9 +195,10 @@ func setup_lpc_sprite(
 
 		if shadow_slash_tex:
 			var shadow_slash_img = shadow_slash_tex.get_image()
+			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(shadow_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, shadow_sprite.sprite_frames, 64)
+				create_animation_from_image(shadow_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, shadow_sprite.sprite_frames, 64)
 
 		add_child(shadow_sprite)
 		shadow_sprite.visible = true
@@ -171,9 +224,10 @@ func setup_lpc_sprite(
 
 		if base_head_slash_tex:
 			var base_head_slash_img = base_head_slash_tex.get_image()
+			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(base_head_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, base_head_sprite.sprite_frames, 64)
+				create_animation_from_image(base_head_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, base_head_sprite.sprite_frames, 64)
 
 		add_child(base_head_sprite)
 		base_head_sprite.visible = true
@@ -199,9 +253,10 @@ func setup_lpc_sprite(
 
 		if boots_slash_tex:
 			var boots_slash_img = boots_slash_tex.get_image()
+			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(boots_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, boots_sprite.sprite_frames, 64)
+				create_animation_from_image(boots_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, boots_sprite.sprite_frames, 64)
 
 		add_child(boots_sprite)
 		boots_sprite.visible = true
@@ -227,9 +282,10 @@ func setup_lpc_sprite(
 
 		if pants_slash_tex:
 			var pants_slash_img = pants_slash_tex.get_image()
+			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(pants_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, pants_sprite.sprite_frames, 64)
+				create_animation_from_image(pants_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, pants_sprite.sprite_frames, 64)
 
 		add_child(pants_sprite)
 		pants_sprite.visible = true
@@ -255,9 +311,10 @@ func setup_lpc_sprite(
 
 		if shirt_slash_tex:
 			var shirt_slash_img = shirt_slash_tex.get_image()
+			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(shirt_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, shirt_sprite.sprite_frames, 64)
+				create_animation_from_image(shirt_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, shirt_sprite.sprite_frames, 64)
 
 		add_child(shirt_sprite)
 		shirt_sprite.visible = true
@@ -283,9 +340,10 @@ func setup_lpc_sprite(
 
 		if arms_slash_tex:
 			var arms_slash_img = arms_slash_tex.get_image()
+			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(arms_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, arms_sprite.sprite_frames, 64)
+				create_animation_from_image(arms_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, arms_sprite.sprite_frames, 64)
 
 		add_child(arms_sprite)
 		arms_sprite.visible = true
@@ -311,9 +369,10 @@ func setup_lpc_sprite(
 
 		if hands_slash_tex:
 			var hands_slash_img = hands_slash_tex.get_image()
+			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(hands_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, hands_sprite.sprite_frames, 64)
+				create_animation_from_image(hands_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, hands_sprite.sprite_frames, 64)
 
 		add_child(hands_sprite)
 		hands_sprite.visible = true
@@ -339,9 +398,10 @@ func setup_lpc_sprite(
 
 		if hair_slash_tex:
 			var hair_slash_img = hair_slash_tex.get_image()
+			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(hair_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, hair_sprite.sprite_frames, 64)
+				create_animation_from_image(hair_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, hair_sprite.sprite_frames, 64)
 
 		add_child(hair_sprite)
 		hair_sprite.visible = true
@@ -367,9 +427,10 @@ func setup_lpc_sprite(
 
 		if head_slash_tex:
 			var head_slash_img = head_slash_tex.get_image()
+			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(head_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, head_sprite.sprite_frames, 64)
+				create_animation_from_image(head_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, head_sprite.sprite_frames, 64)
 
 		add_child(head_sprite)
 		head_sprite.visible = true
@@ -391,47 +452,33 @@ func setup_lpc_sprite(
 		if weapon_slash_tex:
 			var weapon_slash_img = weapon_slash_tex.get_image()
 			var slash_size = weapon_slash_img.get_size()
-			# Calculate tile size: width / 6 frames (LPC standard)
-			var slash_tile_size = int(slash_size.x / 6)
-			print("  📊 Weapon slash image size: ", slash_size)
-			print("  📊 Calculated slash tile size: ", slash_tile_size, "x", slash_tile_size)
-			print("  📊 Weapon slash image format: ", weapon_slash_img.get_format())
 
-			# Weapon slash FPS already set at function scope (line 63)
-			print("  ⚡ Weapon type '%s' slash FPS: %.1f" % [weapon_type, slash_fps])
+			# Staff uses thrust animation (8 frames), other weapons use slash (6 frames)
+			var num_attack_frames = 8 if weapon_type == "staff" else 6
+			var slash_tile_size = int(slash_size.x / num_attack_frames)
+
+			# Build frame indices based on frame count
+			var frame_indices = []
+			for i in range(num_attack_frames):
+				frame_indices.append(i)
 
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(weapon_slash_img, "slash_" + dir_name, row, 6, [0, 1, 2, 3, 4, 5], slash_fps, false, weapon_sprite.sprite_frames, slash_tile_size)
-
-			# DEBUG: Test if first frame of slash_south has any visible pixels
-			var test_frame = weapon_sprite.sprite_frames.get_frame_texture("slash_south", 0)
-			if test_frame:
-				var test_img = test_frame.get_image()
-				print("  🔍 Testing slash_south frame 0: size=", test_img.get_size())
-				# Check a few pixels to see if they're transparent
-				var pixel_check = []
-				for x in [32, 64, 96, 128, 160]:
-					for y in [32, 64, 96, 128, 160]:
-						if x < test_img.get_width() and y < test_img.get_height():
-							var pixel = test_img.get_pixel(x, y)
-							if pixel.a > 0.1:  # Not fully transparent
-								pixel_check.append("(%d,%d):visible" % [x, y])
-				print("  🔍 Visible pixels found: ", pixel_check)
+				create_animation_from_image(weapon_slash_img, "slash_" + dir_name, row, num_attack_frames, frame_indices, slash_fps, false, weapon_sprite.sprite_frames, slash_tile_size)
 
 		# Add walk animations if provided
 		if weapon_walk_tex:
 			var weapon_walk_img = weapon_walk_tex.get_image()
 			var walk_size = weapon_walk_img.get_size()
-			# Calculate tile size: width / 9 frames (walk has 9 frames)
-			var walk_tile_size = int(walk_size.x / 9)
-			print("  📊 Weapon walk image size: ", walk_size)
-			print("  📊 Calculated walk tile size: ", walk_tile_size, "x", walk_tile_size)
+
+			# LPC walk sprites are always 9 columns x 4 rows with 64x64 tiles
+			# Some exports may have extra blank columns (e.g., 832px = 13 cols with 4 blank)
+			# Always use 64px tile size for proper alignment
+			var walk_tile_size = 64
 
 			# Get weapon-specific walk and idle FPS
 			var walk_fps = WeaponAnimationDataFactory.get_walk_fps(weapon_type)
 			var idle_fps = WeaponAnimationDataFactory.get_idle_fps(weapon_type)
-			print("  ⚡ Weapon type '%s' walk FPS: %.1f, idle FPS: %.1f" % [weapon_type, walk_fps, idle_fps])
 
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
@@ -468,6 +515,9 @@ func create_animation_from_image(img: Image, anim_name: String, row: int, frame_
 	frames.set_animation_loop(anim_name, loop)
 	frames.set_animation_speed(anim_name, fps)
 
+	# Calculate how many frames the source image actually has
+	var actual_frame_count = img.get_width() / tile_size
+
 	# ✨ SMOOTH TIMING FIX: For slash animations, adjust frame sequence for better pacing
 	# Add middle frames twice to prevent rushing, skip last frame duplication to prevent hang
 	var adjusted_indices = frame_indices.duplicate()
@@ -477,10 +527,12 @@ func create_animation_from_image(img: Image, anim_name: String, row: int, frame_
 		adjusted_indices = [0, 1, 2, 2, 3, 3, 4, 4, 5]
 
 	for frame_idx in adjusted_indices:
+		# Clamp frame index to actual available frames (prevents reading garbage beyond image)
+		var safe_frame_idx = mini(frame_idx, actual_frame_count - 1)
 		# Create new image for this frame (using calculated tile_size)
 		var frame_img = Image.create(tile_size, tile_size, false, Image.FORMAT_RGBA8)
 		# Blit the region from the source image
-		frame_img.blit_rect(img, Rect2i(frame_idx * tile_size, row * tile_size, tile_size, tile_size), Vector2i(0, 0))
+		frame_img.blit_rect(img, Rect2i(safe_frame_idx * tile_size, row * tile_size, tile_size, tile_size), Vector2i(0, 0))
 		# Convert to texture
 		var frame_texture = ImageTexture.create_from_image(frame_img)
 		# Add to sprite frames
@@ -493,19 +545,12 @@ func play_lpc_animation(anim_name: String, direction: String):
 	# Check if this animation has directions
 	var anim_key = anim_name + "_" + direction
 
-	if anim_name == "slash":
-		print("🗡️ SLASH ANIMATION REQUESTED: key='%s'" % anim_key)
-		# Slow down slash animation during harvest for visibility
-		if is_harvesting:
-			sprite_frames.set_animation_speed(anim_key, 8.0)  # Slower for harvest
-			print("  🐌 Slowing slash to 8 FPS for harvest")
-		else:
-			sprite_frames.set_animation_speed(anim_key, 30.0)  # Normal speed
+	# NOTE: Animation speeds are set during setup_lpc_sprite() and should NOT be modified here
+	# All layers must use the same FPS that was set during creation (weapon-specific)
+	# Previously this code was overriding FPS to 30 which caused desync with armor layers
 
 	if sprite_frames and sprite_frames.has_animation(anim_key):
 		play(anim_key)
-		if anim_name == "slash":
-			print("  ✅ Body playing slash: %s (FPS: %.1f)" % [anim_key, sprite_frames.get_animation_speed(anim_key)])
 	elif sprite_frames and sprite_frames.has_animation(anim_name):
 		# Animation without directions (like hurt)
 		play(anim_name)
@@ -601,7 +646,8 @@ func play_lpc_animation(anim_name: String, direction: String):
 				weapon_sprite.offset = slash_offset
 				print("  ✅ Weapon playing slash: %s (visible=%s, z=%d, offset=%s)" % [anim_key, weapon_sprite.visible, weapon_sprite.z_index, weapon_sprite.offset])
 			else:
-				weapon_sprite.offset = Vector2(0, 0)  # Normal position for walk/idle
+				# Walk/idle animations - weapon sprites should align with character
+				weapon_sprite.offset = Vector2(0, 0)
 		elif weapon_sprite.sprite_frames.has_animation(anim_name):
 			# Animation without directions (like hurt)
 			weapon_sprite.play(anim_name)

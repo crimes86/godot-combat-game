@@ -177,22 +177,37 @@ func populate_weapons() -> void:
 
 		print("   Adding weapon: %s (price: %d)" % [weapon.weapon_name, price])
 
-		var item_row = create_item_row(
-			weapon.weapon_name,
-			weapon.description,
-			price,
-			"Dmg: %.1f | Crit: +%.1f%% | Spd: %+.1f%%" % [
+		# Build stats string based on weapon type
+		var stats: String
+		if weapon.is_healing_weapon():
+			stats = "Heal: %.1f | Radius: %.0f" % [weapon.get_total_healing(), weapon.heal_radius]
+		else:
+			stats = "Dmg: %.1f | Crit: +%.1f%% | Spd: %+.1f%%" % [
 				weapon.base_damage,
 				weapon.crit_chance_bonus * 100,
 				weapon.attack_speed_bonus * 100
-			],
+			]
+
+		# Create item data dict for icon generation
+		var item_data = {
+			"type": "weapon",
+			"weapon_type": weapon.weapon_type,
+			"name": weapon.weapon_name
+		}
+
+		var item_slot = create_item_slot_with_icon(
+			weapon.weapon_name,
+			weapon.description,
+			price,
+			stats,
 			weapon.required_level,
 			get_rarity_color(weapon.rarity),
+			item_data,
 			func(): purchase_weapon(i)
 		)
 
-		weapons_list.add_child(item_row)
-		print("   ✅ Weapon row added to list")
+		weapons_list.add_child(item_slot)
+		print("   ✅ Weapon slot added to list")
 
 	print("✅ Weapons populated: %d items" % weapons_list.get_child_count())
 
@@ -212,7 +227,11 @@ func populate_tools() -> void:
 		var tool_name = tool_data.get("name", "Unknown")
 		var tool_type = tool_data.get("tool_type", "tool").capitalize()
 
-		var item_row = create_item_row(
+		# Create item data dict for icon generation
+		var item_data = tool_data.duplicate()
+		item_data["type"] = "tool"
+
+		var item_slot = create_item_slot_with_icon(
 			tool_name,
 			tool_data.get("description", ""),
 			price,
@@ -223,10 +242,11 @@ func populate_tools() -> void:
 			],
 			1,  # Tools have no level requirement
 			get_armor_rarity_color(tool_data.get("rarity", "COMMON")),
+			item_data,
 			func(): purchase_tool(i)
 		)
 
-		tools_list.add_child(item_row)
+		tools_list.add_child(item_slot)
 
 func populate_armor() -> void:
 	"""Populate the armor list"""
@@ -240,17 +260,23 @@ func populate_armor() -> void:
 	# Add armor items
 	for i in range(vendor.armor_for_sale.size()):
 		var armor_data = vendor.armor_for_sale[i]
-		var item_row = create_item_row(
+
+		# Create item data dict for icon generation
+		var item_data = armor_data.duplicate()
+		item_data["type"] = "armor"
+
+		var item_slot = create_item_slot_with_icon(
 			armor_data.get("name", "Unknown"),
 			armor_data.get("description", ""),
 			armor_data.get("price", 0),
 			"Defense: +%d | Slot: %s" % [armor_data.get("defense", 0), armor_data.get("slot", "").capitalize()],
 			armor_data.get("required_level", 1),
 			get_armor_rarity_color(armor_data.get("rarity", "COMMON")),
+			item_data,
 			func(): purchase_armor(i)
 		)
 
-		armor_list.add_child(item_row)
+		armor_list.add_child(item_slot)
 
 func create_item_row(item_name: String, description: String, price: int, stats: String, req_level: int, color: Color, on_buy: Callable) -> Button:
 	"""Create a button slot for shop item - hover for tooltip"""
@@ -349,6 +375,103 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	slot_button.pressed.connect(on_buy)
 
 	return slot_button
+
+func create_item_slot_with_icon(item_name: String, description: String, price: int, stats: String, req_level: int, color: Color, item_data: Dictionary, on_buy: Callable) -> PanelContainer:
+	"""Create a shop slot with icon, name, and price - click to buy, hover for tooltip"""
+	var slot_size = Vector2(80, 90)  # Square slot with room for price
+
+	# Main container
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = slot_size
+
+	# Style the panel with rarity border
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = ITEM_BG_COLOR
+	panel_style.border_width_left = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_bottom = 2
+	panel_style.border_color = color  # Rarity color border
+	panel_style.corner_radius_top_left = 4
+	panel_style.corner_radius_top_right = 4
+	panel_style.corner_radius_bottom_left = 4
+	panel_style.corner_radius_bottom_right = 4
+	panel.add_theme_stylebox_override("panel", panel_style)
+
+	# VBox for icon + price
+	var vbox = VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 2)
+	panel.add_child(vbox)
+
+	# Icon container (centered)
+	var icon_container = CenterContainer.new()
+	icon_container.custom_minimum_size = Vector2(64, 54)
+	vbox.add_child(icon_container)
+
+	# Try to get icon from ItemIconGenerator
+	var icon_texture: Texture2D = null
+	if ItemIconGenerator:
+		icon_texture = ItemIconGenerator.get_item_icon(item_data)
+
+	if icon_texture:
+		var icon = TextureRect.new()
+		icon.texture = icon_texture
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.custom_minimum_size = Vector2(48, 48)
+		icon_container.add_child(icon)
+	else:
+		# Fallback: show item type as text
+		var fallback_label = Label.new()
+		fallback_label.text = item_data.get("weapon_type", item_data.get("type", "?")).substr(0, 3).to_upper()
+		fallback_label.add_theme_font_size_override("font_size", 16)
+		fallback_label.add_theme_color_override("font_color", color)
+		fallback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		icon_container.add_child(fallback_label)
+
+	# Price label
+	var price_label = Label.new()
+	var price_text = "🪙 %d" % price if price > 0 else "FREE"
+	price_label.text = price_text
+	price_label.add_theme_font_size_override("font_size", 11)
+	price_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5) if price > 0 else Color(0.5, 0.9, 0.5))
+	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(price_label)
+
+	# Clickable overlay button (invisible but handles clicks)
+	var click_button = Button.new()
+	click_button.flat = true
+	click_button.custom_minimum_size = slot_size
+	click_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+	# Build rich tooltip
+	click_button.tooltip_text = "[%s]\n%s\n\n%s" % [item_name, description, stats]
+
+	# Check if player can afford
+	var can_buy = CharacterStats.can_afford(price)
+	click_button.disabled = not can_buy
+
+	if not can_buy:
+		# Dim the panel when can't afford
+		panel.modulate = Color(0.5, 0.5, 0.5, 0.8)
+
+	click_button.pressed.connect(on_buy)
+
+	# Add button on top of panel
+	panel.add_child(click_button)
+
+	# Hover effects
+	click_button.mouse_entered.connect(func():
+		if can_buy:
+			panel_style.bg_color = Color(0.18, 0.18, 0.22, 1.0)
+			panel_style.border_color = Color(color.r + 0.2, color.g + 0.2, color.b + 0.2, 1.0)
+	)
+	click_button.mouse_exited.connect(func():
+		panel_style.bg_color = ITEM_BG_COLOR
+		panel_style.border_color = color
+	)
+
+	return panel
 
 func purchase_weapon(index: int) -> void:
 	"""Attempt to purchase a weapon"""

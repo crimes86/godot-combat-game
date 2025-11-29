@@ -23,6 +23,14 @@ class_name Weapon
 @export var crit_chance_bonus: float = 0.0   # 0.10 = +10% crit chance
 
 # ============================================
+# ATTACK MODE (melee vs ranged/healing)
+# ============================================
+
+@export var attack_mode: String = "melee"  # "melee", "ranged_heal", "ranged_damage"
+@export var healing_power: float = 0.0  # Base healing for support weapons
+@export var heal_radius: float = 80.0  # Radius of healing circle for ranged_heal weapons
+
+# ============================================
 # REQUIREMENTS
 # ============================================
 
@@ -89,12 +97,30 @@ func get_rarity_color() -> Color:
 func get_total_damage() -> float:
 	"""Returns total damage including artifact bonuses"""
 	var damage = base_damage
-	
+
 	# Artifact scaling
 	if is_artifact:
 		damage += artifact_level * 2.0
-	
+
 	return damage
+
+func get_total_healing() -> float:
+	"""Returns total healing power including artifact bonuses"""
+	var heal = healing_power
+
+	# Artifact scaling for healing
+	if is_artifact:
+		heal += artifact_level * 1.5
+
+	return heal
+
+func is_healing_weapon() -> bool:
+	"""Check if this weapon heals allies instead of damaging enemies"""
+	return attack_mode == "ranged_heal"
+
+func is_ranged_weapon() -> bool:
+	"""Check if this weapon uses ranged targeting (cursor-based)"""
+	return attack_mode in ["ranged_heal", "ranged_damage"]
 
 func get_display_name() -> String:
 	"""Returns formatted display name with rarity color"""
@@ -110,8 +136,12 @@ func get_tooltip_text() -> String:
 	"""Generate tooltip text for UI"""
 	var text = "[b]%s[/b]\n" % weapon_name
 	text += "[color=#888888]%s[/color]\n\n" % get_rarity_name()
-	
-	text += "Damage: +%.1f\n" % get_total_damage()
+
+	if is_healing_weapon():
+		text += "Healing: +%.1f\n" % get_total_healing()
+		text += "Heal Radius: %.0f\n" % heal_radius
+	else:
+		text += "Damage: +%.1f\n" % get_total_damage()
 	
 	if attack_speed_bonus != 0:
 		var speed_text = "faster" if attack_speed_bonus < 0 else "slower"
@@ -193,6 +223,25 @@ static func create_starter_weapon() -> Weapon:
 	weapon.rarity = Rarity.COMMON
 	weapon.can_trade = false
 	weapon.required_level = 1
+	return weapon
+
+static func create_healing_staff(player_level: int = 1) -> Weapon:
+	"""Create a basic healing staff"""
+	var weapon = Weapon.new()
+	weapon.weapon_name = "Healing Staff"
+	weapon.weapon_type = "staff"
+	weapon.damage_type = "magic"
+	weapon.description = "Channel restorative energy to heal allies."
+	weapon.attack_mode = "ranged_heal"
+	weapon.healing_power = 10.0 + player_level * 0.5
+	weapon.heal_radius = 80.0
+	weapon.base_damage = 0.0  # Healing weapons don't deal damage
+	weapon.attack_speed_bonus = 0.0
+	weapon.crit_chance_bonus = 0.0
+	weapon.rarity = Rarity.COMMON
+	weapon.can_trade = true
+	weapon.required_level = 1
+	weapon.weapon_color = Color(0.4, 1.0, 0.5)  # Green tint
 	return weapon
 
 static func create_mock_artifact(provider: String = "battlenet") -> Weapon:

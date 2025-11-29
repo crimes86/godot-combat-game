@@ -47,6 +47,8 @@ var attack_feedback: AttackFeedbackSystem = null
 
 # Visual feedback
 var cone_visualizer: Polygon2D = null
+var circle_visualizer: Node2D = null  # Ranged weapon targeting circle (at cursor)
+var _last_heal_pulse_time: float = 0.0  # Rate limit heal pulse visuals
 var debug_mode: bool = false
 var debug_shapes: Node2D = null
 var world_debug_nodes: Array = []  # Track world-space debug nodes for cleanup
@@ -292,6 +294,11 @@ func _exit_tree() -> void:
 	if CharacterStats.armor_unequipped.is_connected(_on_armor_unequipped):
 		CharacterStats.armor_unequipped.disconnect(_on_armor_unequipped)
 
+	# Clean up circle visualizer (it's parented to root, not player)
+	if circle_visualizer and is_instance_valid(circle_visualizer):
+		circle_visualizer.queue_free()
+		circle_visualizer = null
+
 func _create_gender_selection_ui() -> void:
 	"""Create and show the gender selection UI - blocks until selection made"""
 	print("🎭 Creating gender selection UI...")
@@ -464,6 +471,9 @@ func _on_weapon_equipped(weapon) -> void:  # weapon is Weapon type
 	print("🔄 Refreshing player sprite with new weapon...")
 	create_player_sprite()
 
+	# Switch visualizer based on weapon type (cone for melee, circle for ranged)
+	switch_visualizer_mode()
+
 	# Sync to network
 	_sync_appearance_to_network()
 
@@ -475,6 +485,9 @@ func _on_weapon_unequipped() -> void:
 	# Refresh player sprite to remove weapon
 	print("🔄 Refreshing player sprite to unarmed...")
 	create_player_sprite()
+
+	# Switch back to melee visualizer (cone)
+	switch_visualizer_mode()
 
 	# Sync to network
 	_sync_appearance_to_network()
@@ -549,14 +562,15 @@ func _physics_process(delta: float) -> void:
 	# Update LPC animation
 	update_lpc_animation(input_direction)
 	
-	# Update cone visualizer (now handles rotation AND color)
+	# Update visualizers based on weapon type
 	update_cone_visualizer()
+	update_circle_visualizer()
 	
 	# Update attack direction for combat
 	var mouse_pos = get_global_mouse_position()
 	attack_direction = (mouse_pos - global_position).normalized()
 	
-	# Handle held attack (continuous attacking while mouse held)
+	# Handle held attack (continuous attacking/healing while mouse held)
 	if is_mouse_held:
 		# ❌ BLOCK HOLD ATTACKS when UI is open
 		if is_ui_blocking_input():
@@ -567,13 +581,20 @@ func _physics_process(delta: float) -> void:
 			if hold_attack_timer >= hold_attack_interval:
 				hold_attack_timer = 0.0
 
-				# ✨ CRIT WINDOW: Check if holding on enemy in crit window (uncapped speed!)
-				if is_holding_on_crit_window_enemy(mouse_pos):
-					# Handled by crit window logic - no cooldown check needed!
-					pass
-				elif can_attack:
-					# Normal attack - cooldown enforced
-					attempt_attack()
+				# Check if using healing weapon
+				if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_healing_weapon():
+					# Healing staff - continuous healing
+					if can_attack:
+						attempt_heal()
+				else:
+					# Melee weapon - normal attack logic
+					# ✨ CRIT WINDOW: Check if holding on enemy in crit window (uncapped speed!)
+					if is_holding_on_crit_window_enemy(mouse_pos):
+						# Handled by crit window logic - no cooldown check needed!
+						pass
+					elif can_attack:
+						# Normal attack - cooldown enforced
+						attempt_attack()
 	
 	# Update debug visualization if enabled
 	if debug_mode:
@@ -581,6 +602,20 @@ func _physics_process(delta: float) -> void:
 		if debug_update_timer >= 0.1:  # Update 10 times per second
 			debug_update_timer = 0.0
 			update_debug_visualization()
+
+	# Periodic node count check for debugging memory leaks
+	_debug_node_check_timer += delta
+	if _debug_node_check_timer >= 5.0:  # Every 5 seconds
+		_debug_node_check_timer = 0.0
+		var root_children = get_tree().root.get_child_count()
+		var heal_pulses = get_tree().get_nodes_in_group("heal_pulse").size() if get_tree().has_group("heal_pulse") else 0
+		# Count HealPulse nodes directly
+		var pulse_count = 0
+		for child in get_tree().root.get_children():
+			if child.name.begins_with("HealPulse"):
+				pulse_count += 1
+		if pulse_count > 0 or _heal_pulse_count > 0:
+			print("🔍 DEBUG: Root children=%d, HealPulse nodes=%d, _heal_pulse_count=%d" % [root_children, pulse_count, _heal_pulse_count])
 
 	# Passive Healing System (Out-of-Combat Regeneration)
 	process_passive_healing(delta)
@@ -601,9 +636,6 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 
 	# Don't interrupt attack animations
 	if character_sprite.animation and character_sprite.animation.begins_with("slash_") and character_sprite.is_playing():
-		# Debug output to see if this is working
-		if randf() < 0.05:  # Only print occasionally to avoid spam
-			print("   🛡️ Preserving slash animation: %s" % character_sprite.animation)
 		return
 
 	# Get direction (down/up/left/right from old system)
@@ -683,16 +715,22 @@ func _input(event: InputEvent) -> void:
 				is_mouse_held = true
 				hold_attack_timer = 0.0
 
-				# ✨ FIX #1: Check if clicking on weakpoint FIRST
-				if is_clicking_on_weakpoint(event):
-					return  # Let the weakpoint handle it!
-				
-				# ✨ FIX #2: Try crit window click on enemy body
-				if check_crit_window_click(event):
-					return  # Handled crit window attack
-				
-				# Normal attack
-				attempt_attack()
+				# Check if using a healing weapon
+				if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_healing_weapon():
+					# Healing staff - attempt heal instead of attack
+					attempt_heal()
+				else:
+					# Melee/damage weapon - normal attack flow
+					# ✨ FIX #1: Check if clicking on weakpoint FIRST
+					if is_clicking_on_weakpoint(event):
+						return  # Let the weakpoint handle it!
+
+					# ✨ FIX #2: Try crit window click on enemy body
+					if check_crit_window_click(event):
+						return  # Handled crit window attack
+
+					# Normal attack
+					attempt_attack()
 			else:
 				# Mouse released - stop hold state
 				is_mouse_held = false
@@ -793,6 +831,10 @@ func _input(event: InputEvent) -> void:
 					# Clean up after async function completes
 					instance.queue_free()
 
+			KEY_F12:
+				# DEBUG: Toggle between melee weapon and healing staff
+				_debug_toggle_healing_staff()
+
 			KEY_C:
 				# Toggle character sheet
 				if character_ui:
@@ -835,6 +877,31 @@ func _input(event: InputEvent) -> void:
 				# Only toggle hints if no other UI is open
 				if not any_ui_open:
 					toggle_spawn_hints()
+
+var _debug_melee_backup: Weapon = null  # Store melee weapon when switching to healing staff
+
+func _debug_toggle_healing_staff() -> void:
+	"""DEBUG: Toggle between current weapon and healing staff for testing."""
+	if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_healing_weapon():
+		# Switch back to melee
+		if _debug_melee_backup:
+			CharacterStats.equipped_weapon = _debug_melee_backup
+			print("🗡️ DEBUG: Switched back to melee weapon: %s" % _debug_melee_backup.weapon_name)
+		else:
+			CharacterStats.equipped_weapon = Weapon.create_starter_weapon()
+			print("🗡️ DEBUG: Switched to default melee weapon")
+		_debug_melee_backup = null
+	else:
+		# Switch to healing staff
+		_debug_melee_backup = CharacterStats.equipped_weapon
+		CharacterStats.equipped_weapon = Weapon.create_healing_staff(CharacterStats.level)
+		print("💚 DEBUG: Equipped Healing Staff (radius: %.0f, healing: %.1f)" % [
+			CharacterStats.equipped_weapon.heal_radius,
+			CharacterStats.equipped_weapon.get_total_healing()
+		])
+
+	# Update visualizers
+	switch_visualizer_mode()
 
 func check_crit_window_click(event: InputEvent) -> bool:
 	"""Check if clicking on enemy during crit window. Returns true if handled."""
@@ -1079,6 +1146,376 @@ func get_enemies_in_cone() -> Array:
 			enemies_in_cone.append(enemy)
 	
 	return enemies_in_cone
+
+# ============================================
+# HEALING STAFF - RANGED HEALING SYSTEM
+# ============================================
+
+func get_allies_in_radius(center_pos: Vector2, radius: float) -> Array:
+	"""Get all friendly players within a circular radius around a point.
+	Used for healing staff targeting. Includes self for self-healing."""
+	var allies_in_radius = []
+	var all_players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+
+	for player_node in all_players:
+		if not is_instance_valid(player_node):
+			continue
+
+		# Check if player is within radius
+		var distance = center_pos.distance_to(player_node.global_position)
+		if distance <= radius:
+			# Check if friendly (includes self for self-healing)
+			if player_node == self or _is_friendly_player(player_node):
+				allies_in_radius.append(player_node)
+
+	return allies_in_radius
+
+func _is_friendly_player(player_node: Node) -> bool:
+	"""Check if a player is friendly for healing purposes.
+	Currently allows healing ALL players globally (PvP healing allowed).
+	PvP damage will be restricted separately when implemented."""
+	# For now, all players are friendly for healing purposes
+	# This allows healers to help anyone, which encourages cooperative play
+	# When PvP is implemented, this can check faction/group membership
+	return true
+
+func attempt_heal() -> void:
+	"""Attempt to heal allies at cursor position with healing staff."""
+	if not can_attack:
+		return
+
+	# Verify we have a healing weapon equipped
+	if not CharacterStats.equipped_weapon or not CharacterStats.equipped_weapon.is_healing_weapon():
+		return
+
+	can_attack = false
+
+	var weapon = CharacterStats.equipped_weapon
+	var mouse_pos = get_global_mouse_position()
+	var heal_radius = weapon.heal_radius
+
+	# Get allies in the healing circle
+	var allies = get_allies_in_radius(mouse_pos, heal_radius)
+
+	# Calculate healing amount
+	var base_heal = weapon.get_total_healing()
+	# Add stat scaling (could use a new stat, for now use a fraction of strength)
+	var stat_bonus = (CharacterStats.strength - 10) * 0.3
+	var heal_amount = base_heal + stat_bonus
+
+	# Play cast animation (use slash for now - could add dedicated cast animation later)
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if character_sprite:
+		var dir_str = get_direction_string(attack_direction)
+		var lpc_dir = convert_to_lpc_direction(dir_str)
+		character_sprite.play_lpc_animation("slash", lpc_dir)
+
+	# Show initial heal circle indicator and spawn first pulse
+	_spawn_heal_pulse(mouse_pos, heal_radius)
+
+	# Fire healing projectile from staff to target - triggers second pulse on arrival
+	_spawn_heal_projectile(mouse_pos, heal_radius, heal_amount)
+
+	# Play healing cast sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_healing_cast_sound"):
+		sound_manager.play_healing_cast_sound(global_position, -5.0)
+
+	if allies.size() > 0:
+		heal_allies(allies, heal_amount)
+
+	finish_attack_cooldown()
+
+func heal_allies(allies: Array, heal_amount: float) -> void:
+	"""Apply healing to all allies in the array. Healer sees all heal numbers."""
+	for ally in allies:
+		if not is_instance_valid(ally):
+			continue
+
+		# In multiplayer, send heal request to server
+		var has_peer = multiplayer.has_multiplayer_peer()
+		var is_server = multiplayer.is_server()
+
+		if has_peer and not is_server:
+			# Client: request heal through server
+			var ally_peer_id = ally.get_multiplayer_authority()
+			var network_manager = get_node_or_null("/root/NetworkManager")
+			if network_manager and network_manager.has_method("request_player_heal"):
+				network_manager.request_player_heal.rpc_id(1, ally_peer_id, heal_amount)
+		else:
+			# Server or single player: apply heal directly
+			if ally.has_method("heal"):
+				ally.heal(heal_amount)
+
+		# Healer always sees heal text for allies they healed
+		CombatText.create_heal(heal_amount, ally.global_position, get_tree().root, Vector2.ZERO)
+
+func _spawn_heal_pulse(center_pos: Vector2, radius: float, skip_rate_limit: bool = false) -> void:
+	"""Spawn a green pulse effect at the healing location. Broadcast to all players."""
+	# Rate limit pulse visuals to prevent spam (max 4 per second for double-pulse effect)
+	var current_time = Time.get_ticks_msec() / 1000.0
+	if not skip_rate_limit and current_time - _last_heal_pulse_time < 0.25:
+		return  # Skip visual if too soon
+	_last_heal_pulse_time = current_time
+
+	# Always spawn locally for the healer
+	_create_heal_pulse_visual(center_pos, radius)
+
+	# In multiplayer, broadcast to other players
+	var has_peer = multiplayer.has_multiplayer_peer()
+	if has_peer:
+		if multiplayer.is_server():
+			# Server: broadcast to all clients (excluding self since we already spawned)
+			rpc("_remote_spawn_heal_pulse", center_pos, radius)
+		else:
+			# Client: request server to broadcast to everyone else
+			rpc_id(1, "_request_heal_pulse", center_pos, radius)
+
+@rpc("any_peer", "reliable")
+func _request_heal_pulse(center_pos: Vector2, radius: float) -> void:
+	"""Client requests server to broadcast heal pulse to all players."""
+	if not multiplayer.is_server():
+		return
+	var sender_id = multiplayer.get_remote_sender_id()
+	# Spawn on server
+	_create_heal_pulse_visual(center_pos, radius)
+	# Broadcast to all clients except the original sender (they already have it)
+	for peer_id in multiplayer.get_peers():
+		if peer_id != sender_id:
+			rpc_id(peer_id, "_remote_spawn_heal_pulse", center_pos, radius)
+
+@rpc("authority", "reliable")
+func _remote_spawn_heal_pulse(center_pos: Vector2, radius: float) -> void:
+	"""Server broadcasts heal pulse to clients."""
+	_create_heal_pulse_visual(center_pos, radius)
+
+var _heal_pulse_count: int = 0  # Debug: track active pulses
+var _debug_node_check_timer: float = 0.0  # Periodic node count check
+
+func _create_heal_pulse_visual(center_pos: Vector2, radius: float) -> void:
+	"""Create the actual visual pulse effect."""
+	# Safety check - don't create if tree is not available
+	if not is_inside_tree():
+		return
+
+	# Debug: Track pulse count
+	_heal_pulse_count += 1
+	if _heal_pulse_count > 5:
+		push_warning("⚠️ HEAL PULSE COUNT HIGH: %d active pulses!" % _heal_pulse_count)
+
+	var pulse = Node2D.new()
+	pulse.name = "HealPulse"
+	pulse.global_position = center_pos
+	pulse.z_index = -1
+
+	# Create filled circle
+	var circle = Polygon2D.new()
+	circle.name = "PulseCircle"
+	circle.color = Color(0.4, 1.0, 0.5, 0.3)  # Bright green, semi-transparent
+
+	# Build circle polygon
+	var points = PackedVector2Array()
+	var segments = 32
+	for i in range(segments + 1):
+		var angle = (float(i) / float(segments)) * TAU
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+	circle.polygon = points
+
+	pulse.add_child(circle)
+	get_tree().root.add_child(pulse)
+
+	# Animate the pulse: expand slightly and fade out
+	var tween = pulse.create_tween()
+	if tween:
+		tween.set_parallel(true)
+
+		# Scale up slightly
+		tween.tween_property(pulse, "scale", Vector2(1.3, 1.3), 0.4).set_ease(Tween.EASE_OUT)
+
+		# Fade out
+		tween.tween_property(circle, "color:a", 0.0, 0.4).set_ease(Tween.EASE_OUT)
+
+		# Clean up after animation - use lambda to decrement counter
+		tween.chain().tween_callback(func():
+			_heal_pulse_count -= 1
+			pulse.queue_free()
+		)
+	else:
+		# Fallback: just free immediately if tween failed
+		_heal_pulse_count -= 1
+		pulse.queue_free()
+
+func _spawn_heal_projectile(target_pos: Vector2, radius: float, heal_amount: float) -> void:
+	"""Spawn a healing projectile that travels from staff to target, then explodes."""
+	if not is_inside_tree():
+		return
+
+	# Calculate start position (staff tip, offset from player center based on facing direction)
+	var staff_offset = attack_direction.normalized() * 20.0  # Staff extends ~20px from center
+	var start_pos = global_position + staff_offset + Vector2(0, -16)  # Adjust for sprite height
+
+	# Create the projectile node
+	var projectile = Node2D.new()
+	projectile.name = "HealProjectile"
+	projectile.global_position = start_pos
+	projectile.z_index = 10
+
+	# Create glowing orb (main projectile body)
+	var orb = Polygon2D.new()
+	orb.name = "Orb"
+	orb.color = Color(0.5, 1.0, 0.6, 0.9)  # Bright healing green
+	var orb_points = PackedVector2Array()
+	var orb_radius = 6.0
+	for i in range(12):
+		var angle = (float(i) / 12.0) * TAU
+		orb_points.append(Vector2(cos(angle), sin(angle)) * orb_radius)
+	orb.polygon = orb_points
+	projectile.add_child(orb)
+
+	# Create inner glow (brighter core)
+	var core = Polygon2D.new()
+	core.name = "Core"
+	core.color = Color(0.8, 1.0, 0.9, 1.0)  # Bright white-green core
+	var core_points = PackedVector2Array()
+	var core_radius = 3.0
+	for i in range(8):
+		var angle = (float(i) / 8.0) * TAU
+		core_points.append(Vector2(cos(angle), sin(angle)) * core_radius)
+	core.polygon = core_points
+	projectile.add_child(core)
+
+	# Create trailing mist particles (simple circles that follow)
+	var trail_container = Node2D.new()
+	trail_container.name = "Trail"
+	projectile.add_child(trail_container)
+
+	get_tree().root.add_child(projectile)
+
+	# Calculate travel time based on distance (speed: ~400 pixels/sec)
+	var distance = start_pos.distance_to(target_pos)
+	var travel_time = clampf(distance / 400.0, 0.15, 0.6)  # Min 0.15s, max 0.6s
+
+	# Animate projectile flight
+	var tween = projectile.create_tween()
+
+	# Move to target with slight arc (ease out for "magic" feel)
+	tween.tween_property(projectile, "global_position", target_pos, travel_time).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+
+	# Pulse the orb size slightly during flight
+	tween.parallel().tween_property(orb, "scale", Vector2(1.2, 1.2), travel_time * 0.5).set_ease(Tween.EASE_IN_OUT)
+	tween.parallel().tween_property(orb, "scale", Vector2(1.0, 1.0), travel_time * 0.5).set_ease(Tween.EASE_IN_OUT).set_delay(travel_time * 0.5)
+
+	# On arrival: trigger mist explosion and second heal pulse
+	var self_ref = self
+	var target = target_pos
+	var rad = radius
+	var heal = heal_amount
+	tween.tween_callback(func():
+		if is_instance_valid(self_ref) and self_ref.is_inside_tree():
+			self_ref._spawn_mist_explosion(target, rad)
+			# Second heal pulse with slight delay for visual impact
+			self_ref._spawn_heal_pulse(target, rad)
+			# Apply second round of healing to allies in radius
+			var allies = self_ref.get_allies_in_radius(target, rad)
+			if allies.size() > 0:
+				self_ref.heal_allies(allies, heal * 0.5)  # Second pulse heals 50% of original
+		projectile.queue_free()
+	)
+
+func _spawn_mist_explosion(center_pos: Vector2, radius: float) -> void:
+	"""Create a refined healing burst effect at the target location."""
+	if not is_inside_tree():
+		return
+
+	var effect = Node2D.new()
+	effect.name = "HealBurst"
+	effect.global_position = center_pos
+	effect.z_index = 5
+
+	# Central flash - bright burst at impact point
+	var flash = Polygon2D.new()
+	flash.name = "Flash"
+	var flash_points = PackedVector2Array()
+	var flash_radius = 12.0
+	for i in range(16):
+		var angle = (float(i) / 16.0) * TAU
+		flash_points.append(Vector2(cos(angle), sin(angle)) * flash_radius)
+	flash.polygon = flash_points
+	flash.color = Color(0.7, 1.0, 0.8, 0.8)  # Bright white-green
+	flash.scale = Vector2(0.3, 0.3)
+	effect.add_child(flash)
+
+	# Soft ring that expands outward
+	var ring = Polygon2D.new()
+	ring.name = "Ring"
+	var ring_points_outer = PackedVector2Array()
+	var ring_points_inner = PackedVector2Array()
+	var ring_segments = 32
+	var ring_thickness = 4.0
+	var ring_radius = 8.0
+	# Build ring as a series of quads
+	for i in range(ring_segments + 1):
+		var angle = (float(i) / float(ring_segments)) * TAU
+		ring_points_outer.append(Vector2(cos(angle), sin(angle)) * ring_radius)
+		ring_points_inner.append(Vector2(cos(angle), sin(angle)) * (ring_radius - ring_thickness))
+	# Combine for polygon (outer ring then inner ring reversed)
+	var ring_poly = PackedVector2Array()
+	for p in ring_points_outer:
+		ring_poly.append(p)
+	for i in range(ring_points_inner.size() - 1, -1, -1):
+		ring_poly.append(ring_points_inner[i])
+	ring.polygon = ring_poly
+	ring.color = Color(0.5, 1.0, 0.6, 0.6)
+	effect.add_child(ring)
+
+	# Small sparkle particles - clean circular dots
+	var sparkle_count = 8
+	var sparkles: Array[Polygon2D] = []
+	for i in range(sparkle_count):
+		var sparkle = Polygon2D.new()
+		var angle = (float(i) / float(sparkle_count)) * TAU
+
+		# Clean circular shape
+		var sparkle_points = PackedVector2Array()
+		var sparkle_size = 3.0
+		for j in range(8):
+			var s_angle = (float(j) / 8.0) * TAU
+			sparkle_points.append(Vector2(cos(s_angle), sin(s_angle)) * sparkle_size)
+		sparkle.polygon = sparkle_points
+		sparkle.color = Color(0.6, 1.0, 0.7, 0.7)
+		sparkle.position = Vector2.ZERO
+		sparkle.set_meta("angle", angle)
+		sparkle.set_meta("target_dist", radius * 0.5)
+		effect.add_child(sparkle)
+		sparkles.append(sparkle)
+
+	get_tree().root.add_child(effect)
+
+	# Animate everything
+	var tween = effect.create_tween()
+	tween.set_parallel(true)
+
+	# Flash: quick scale up then fade
+	tween.tween_property(flash, "scale", Vector2(2.0, 2.0), 0.15).set_ease(Tween.EASE_OUT)
+	tween.tween_property(flash, "color:a", 0.0, 0.2).set_ease(Tween.EASE_IN)
+
+	# Ring: expand outward and fade
+	tween.tween_property(ring, "scale", Vector2(radius / 8.0, radius / 8.0), 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CIRC)
+	tween.tween_property(ring, "color:a", 0.0, 0.35).set_ease(Tween.EASE_IN)
+
+	# Sparkles: radiate outward and fade
+	for sparkle in sparkles:
+		var s_angle = sparkle.get_meta("angle")
+		var s_dist = sparkle.get_meta("target_dist")
+		var target_pos = Vector2(cos(s_angle), sin(s_angle)) * s_dist
+		tween.tween_property(sparkle, "position", target_pos, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(sparkle, "color:a", 0.0, 0.35).set_ease(Tween.EASE_IN).set_delay(0.1)
+		tween.tween_property(sparkle, "scale", Vector2(0.3, 0.3), 0.35).set_ease(Tween.EASE_IN)
+
+	# Clean up
+	tween.chain().tween_callback(func():
+		effect.queue_free()
+	)
 
 func attack_enemies_in_cone(enemies: Array) -> void:
 	var chain_multiplier = ChainManager.get_damage_multiplier()
@@ -1432,26 +1869,43 @@ func flash_player_sprite() -> void:
 # WEAPON SYSTEM REMOVED - To be reimplemented from scratch
 
 func create_player_sprite() -> void:
-	print("Creating simple LPC sprite system")
+	print("═══════════════════════════════════════════════════════════")
+	print("🎭 CREATE_PLAYER_SPRITE called on: %s (authority=%d, is_local=%s)" % [name, get_multiplayer_authority(), is_multiplayer_authority()])
+	print("═══════════════════════════════════════════════════════════")
+
+	# DEBUG: List ALL children before cleanup
+	print("  📋 Children BEFORE cleanup:")
+	for child in get_children():
+		var type_name = child.get_class()
+		var visible_str = " (visible)" if child.get("visible") == true else " (hidden)" if child.get("visible") == false else ""
+		print("    - %s [%s]%s" % [child.name, type_name, visible_str])
 
 	# Remove old sprites if they exist (for weapon equip/unequip)
 	var old_character_sprite = get_node_or_null("CharacterSprite")
 	if old_character_sprite:
-		print("  Removing old CharacterSprite")
+		print("  🗑️ Removing old CharacterSprite (had %d children)" % old_character_sprite.get_child_count())
 		remove_child(old_character_sprite)
 		old_character_sprite.queue_free()
 
 	var old_shadow = get_node_or_null("Shadow")
 	if old_shadow:
-		print("  Removing old Shadow")
+		print("  🗑️ Removing old Shadow")
 		remove_child(old_shadow)
 		old_shadow.queue_free()
 
-	# Hide the placeholder Sprite2D from the scene
+	# Hide AND remove the placeholder Sprite2D from the scene
 	var placeholder_sprite = get_node_or_null("Sprite2D")
 	if placeholder_sprite:
+		print("  🗑️ Removing placeholder Sprite2D")
 		placeholder_sprite.visible = false
-		print("  Hidden placeholder sprite")
+		remove_child(placeholder_sprite)
+		placeholder_sprite.queue_free()
+
+	# DEBUG: List ALL children after cleanup
+	print("  📋 Children AFTER cleanup:")
+	for child in get_children():
+		var type_name = child.get_class()
+		print("    - %s [%s]" % [child.name, type_name])
 
 	# Preload SimpleLPCSprite
 	var SimpleLPCSprite = preload("res://scripts/SimpleLPCSprite.gd")
@@ -1462,11 +1916,25 @@ func create_player_sprite() -> void:
 	character_sprite.position = Vector2(0, -8)
 	character_sprite.centered = true
 
+	# For local player, use CharacterStats. For remote players, use stored remote data.
+	var is_local = is_multiplayer_authority()
+
 	# Load textures
 	var body_type = "body_male" if selected_gender == Gender.MALE else "body_female"
 	var walk_tex = load("res://assets/characters/" + body_type + "/standard/walk.png")
-	var slash_tex = load("res://assets/characters/" + body_type + "/standard/slash.png")
 	var hurt_tex = load("res://assets/characters/" + body_type + "/standard/hurt.png")
+
+	# Determine attack animation type based on weapon
+	# Staff uses thrust animation, all other weapons use slash
+	var uses_thrust = false
+	if is_local and CharacterStats.equipped_weapon:
+		uses_thrust = CharacterStats.equipped_weapon.weapon_type == "staff"
+	elif not is_local and remote_weapon_type == "staff":
+		uses_thrust = true
+
+	var attack_anim_name = "thrust" if uses_thrust else "slash"
+	var attack_tex_path = "res://assets/characters/" + body_type + "/standard/" + attack_anim_name + ".png"
+	var slash_tex = load(attack_tex_path) if ResourceLoader.exists(attack_tex_path) else load("res://assets/characters/" + body_type + "/standard/slash.png")
 
 	# Load shadow textures
 	var shadow_walk_tex = null
@@ -1474,32 +1942,28 @@ func create_player_sprite() -> void:
 	var shadow_path = "res://assets/characters/shadow/standard/"
 	if ResourceLoader.exists(shadow_path + "walk.png"):
 		shadow_walk_tex = load(shadow_path + "walk.png")
-	if ResourceLoader.exists(shadow_path + "slash.png"):
+	var shadow_attack_path = shadow_path + attack_anim_name + ".png"
+	if ResourceLoader.exists(shadow_attack_path):
+		shadow_slash_tex = load(shadow_attack_path)
+	elif ResourceLoader.exists(shadow_path + "slash.png"):
 		shadow_slash_tex = load(shadow_path + "slash.png")
-	print("👤 Loading shadow sprites")
-	print("   Walk: %s" % ("✅" if shadow_walk_tex else "❌"))
-	print("   Slash: %s" % ("✅" if shadow_slash_tex else "❌"))
 
-	# Load base head textures (only for female - male has head baked into body)
+	# Load base head textures (separate head layer for both genders)
 	var base_head_walk_tex = null
 	var base_head_slash_tex = null
-	if selected_gender == Gender.FEMALE:
-		var head_path = "res://assets/characters/head_female/standard/"
-		if ResourceLoader.exists(head_path + "walk.png"):
-			base_head_walk_tex = load(head_path + "walk.png")
-		if ResourceLoader.exists(head_path + "slash.png"):
-			base_head_slash_tex = load(head_path + "slash.png")
-		print("👤 Loading female base head")
-		print("   Walk: %s" % ("✅" if base_head_walk_tex else "❌"))
-		print("   Slash: %s" % ("✅" if base_head_slash_tex else "❌"))
+	var head_path = "res://assets/characters/head_female/standard/" if selected_gender == Gender.FEMALE else "res://assets/characters/head_male/standard/"
+	if ResourceLoader.exists(head_path + "walk.png"):
+		base_head_walk_tex = load(head_path + "walk.png")
+	var head_attack_path = head_path + attack_anim_name + ".png"
+	if ResourceLoader.exists(head_attack_path):
+		base_head_slash_tex = load(head_attack_path)
+	elif ResourceLoader.exists(head_path + "slash.png"):
+		base_head_slash_tex = load(head_path + "slash.png")
 
 	# Load weapon textures based on equipped weapon
 	var weapon_slash_tex = null
 	var weapon_walk_tex = null
 	var weapon_type = "unarmed"  # Default to unarmed when no weapon equipped
-
-	# For local player, use CharacterStats. For remote players, use stored remote data.
-	var is_local = is_multiplayer_authority()
 	var effective_weapon_type = ""
 
 	if is_local and CharacterStats.equipped_weapon:
@@ -1512,19 +1976,27 @@ func create_player_sprite() -> void:
 		var weapon_path = "res://assets/weapons/" + weapon_type + "/"
 
 		# Try to load weapon sprites
-		if ResourceLoader.exists(weapon_path + "slash.png"):
-			weapon_slash_tex = load(weapon_path + "slash.png")
+		# Staff uses thrust_oversize animation instead of slash
+		if weapon_type == "staff":
+			if ResourceLoader.exists(weapon_path + "thrust_oversize.png"):
+				weapon_slash_tex = load(weapon_path + "thrust_oversize.png")
+		else:
+			if ResourceLoader.exists(weapon_path + "slash.png"):
+				weapon_slash_tex = load(weapon_path + "slash.png")
+
 		if ResourceLoader.exists(weapon_path + "walk.png"):
 			weapon_walk_tex = load(weapon_path + "walk.png")
 
 		print("🗡️ Loading weapon sprites for type: %s (local=%s)" % [weapon_type, is_local])
-		print("   Slash: %s" % ("✅" if weapon_slash_tex else "❌"))
+		print("   Attack: %s" % ("✅" if weapon_slash_tex else "❌"))
 		print("   Walk: %s" % ("✅" if weapon_walk_tex else "❌"))
 	else:
 		print("👊 No weapon equipped - player is unarmed")
 
 	# Load armor textures based on equipped armor (5 layers: boots, pants, shirt, arms, head)
 	print("═══ ARMOR LOADING ═══")
+	# Use thrust or slash suffix based on weapon type
+	var attack_suffix = "_thrust" if uses_thrust else "_slash"
 	var boots_walk_tex = null
 	var boots_slash_tex = null
 	var pants_walk_tex = null
@@ -1555,11 +2027,11 @@ func create_player_sprite() -> void:
 
 		if ResourceLoader.exists(boots_path + feet_sprite_name + "_walk.png"):
 			boots_walk_tex = load(boots_path + feet_sprite_name + "_walk.png")
-		if ResourceLoader.exists(boots_path + feet_sprite_name + "_slash.png"):
+		# Try thrust first if using staff, fall back to slash
+		if ResourceLoader.exists(boots_path + feet_sprite_name + attack_suffix + ".png"):
+			boots_slash_tex = load(boots_path + feet_sprite_name + attack_suffix + ".png")
+		elif ResourceLoader.exists(boots_path + feet_sprite_name + "_slash.png"):
 			boots_slash_tex = load(boots_path + feet_sprite_name + "_slash.png")
-		print("🥾 Loading boots: sprite=%s, path=%s (local=%s)" % [feet_sprite_name, boots_path, is_local])
-		print("   Walk: %s" % ("✅" if boots_walk_tex else "❌"))
-		print("   Slash: %s" % ("✅" if boots_slash_tex else "❌"))
 
 	# Check for equipped leg armor (pants)
 	var legs_sprite_name = ""
@@ -1577,11 +2049,11 @@ func create_player_sprite() -> void:
 
 		if ResourceLoader.exists(pants_path + legs_sprite_name + "_walk.png"):
 			pants_walk_tex = load(pants_path + legs_sprite_name + "_walk.png")
-		if ResourceLoader.exists(pants_path + legs_sprite_name + "_slash.png"):
+		# Try thrust first if using staff, fall back to slash
+		if ResourceLoader.exists(pants_path + legs_sprite_name + attack_suffix + ".png"):
+			pants_slash_tex = load(pants_path + legs_sprite_name + attack_suffix + ".png")
+		elif ResourceLoader.exists(pants_path + legs_sprite_name + "_slash.png"):
 			pants_slash_tex = load(pants_path + legs_sprite_name + "_slash.png")
-		print("👖 Loading leg armor: sprite=%s, path=%s (local=%s)" % [legs_sprite_name, pants_path, is_local])
-		print("   Walk: %s" % ("✅" if pants_walk_tex else "❌"))
-		print("   Slash: %s" % ("✅" if pants_slash_tex else "❌"))
 
 	# Check for equipped chest armor (shirt)
 	var chest_sprite_name = ""
@@ -1600,12 +2072,11 @@ func create_player_sprite() -> void:
 		# Try to load shirt sprites based on sprite_name
 		if ResourceLoader.exists(shirt_path + chest_sprite_name + "_walk.png"):
 			shirt_walk_tex = load(shirt_path + chest_sprite_name + "_walk.png")
-		if ResourceLoader.exists(shirt_path + chest_sprite_name + "_slash.png"):
+		# Try thrust first if using staff, fall back to slash
+		if ResourceLoader.exists(shirt_path + chest_sprite_name + attack_suffix + ".png"):
+			shirt_slash_tex = load(shirt_path + chest_sprite_name + attack_suffix + ".png")
+		elif ResourceLoader.exists(shirt_path + chest_sprite_name + "_slash.png"):
 			shirt_slash_tex = load(shirt_path + chest_sprite_name + "_slash.png")
-
-		print("👕 Loading chest armor: sprite=%s, path=%s (local=%s)" % [chest_sprite_name, shirt_path, is_local])
-		print("   Walk: %s" % ("✅" if shirt_walk_tex else "❌"))
-		print("   Slash: %s" % ("✅" if shirt_slash_tex else "❌"))
 
 	# Check for equipped arm armor
 	var arms_sprite_name = ""
@@ -1623,11 +2094,11 @@ func create_player_sprite() -> void:
 
 		if ResourceLoader.exists(arms_path + arms_sprite_name + "_walk.png"):
 			arms_walk_tex = load(arms_path + arms_sprite_name + "_walk.png")
-		if ResourceLoader.exists(arms_path + arms_sprite_name + "_slash.png"):
+		# Try thrust first if using staff, fall back to slash
+		if ResourceLoader.exists(arms_path + arms_sprite_name + attack_suffix + ".png"):
+			arms_slash_tex = load(arms_path + arms_sprite_name + attack_suffix + ".png")
+		elif ResourceLoader.exists(arms_path + arms_sprite_name + "_slash.png"):
 			arms_slash_tex = load(arms_path + arms_sprite_name + "_slash.png")
-		print("💪 Loading arm armor: sprite=%s, path=%s (local=%s)" % [arms_sprite_name, arms_path, is_local])
-		print("   Walk: %s" % ("✅" if arms_walk_tex else "❌"))
-		print("   Slash: %s" % ("✅" if arms_slash_tex else "❌"))
 
 	# Check for equipped hand armor (gloves)
 	var hands_sprite_name = ""
@@ -1645,11 +2116,11 @@ func create_player_sprite() -> void:
 
 		if ResourceLoader.exists(hands_path + hands_sprite_name + "_walk.png"):
 			hands_walk_tex = load(hands_path + hands_sprite_name + "_walk.png")
-		if ResourceLoader.exists(hands_path + hands_sprite_name + "_slash.png"):
+		# Try thrust first if using staff, fall back to slash
+		if ResourceLoader.exists(hands_path + hands_sprite_name + attack_suffix + ".png"):
+			hands_slash_tex = load(hands_path + hands_sprite_name + attack_suffix + ".png")
+		elif ResourceLoader.exists(hands_path + hands_sprite_name + "_slash.png"):
 			hands_slash_tex = load(hands_path + hands_sprite_name + "_slash.png")
-		print("🧤 Loading hand armor: sprite=%s, path=%s (local=%s)" % [hands_sprite_name, hands_path, is_local])
-		print("   Walk: %s" % ("✅" if hands_walk_tex else "❌"))
-		print("   Slash: %s" % ("✅" if hands_slash_tex else "❌"))
 
 	# Check for equipped head armor
 	var head_sprite_name = ""
@@ -1661,17 +2132,17 @@ func create_player_sprite() -> void:
 
 	if head_sprite_name != "":
 		# Try gender-specific path first, then fall back to gender-neutral
-		var head_path = "res://assets/characters/head_female_armor/" if selected_gender == Gender.FEMALE else "res://assets/characters/head/"
-		if not ResourceLoader.exists(head_path + head_sprite_name + "_walk.png"):
-			head_path = "res://assets/characters/head/"
+		var head_armor_path = "res://assets/characters/head_female_armor/" if selected_gender == Gender.FEMALE else "res://assets/characters/head/"
+		if not ResourceLoader.exists(head_armor_path + head_sprite_name + "_walk.png"):
+			head_armor_path = "res://assets/characters/head/"
 
-		if ResourceLoader.exists(head_path + head_sprite_name + "_walk.png"):
-			head_walk_tex = load(head_path + head_sprite_name + "_walk.png")
-		if ResourceLoader.exists(head_path + head_sprite_name + "_slash.png"):
-			head_slash_tex = load(head_path + head_sprite_name + "_slash.png")
-		print("🪖 Loading head armor: sprite=%s, path=%s (local=%s)" % [head_sprite_name, head_path, is_local])
-		print("   Walk: %s" % ("✅" if head_walk_tex else "❌"))
-		print("   Slash: %s" % ("✅" if head_slash_tex else "❌"))
+		if ResourceLoader.exists(head_armor_path + head_sprite_name + "_walk.png"):
+			head_walk_tex = load(head_armor_path + head_sprite_name + "_walk.png")
+		# Try thrust first if using staff, fall back to slash
+		if ResourceLoader.exists(head_armor_path + head_sprite_name + attack_suffix + ".png"):
+			head_slash_tex = load(head_armor_path + head_sprite_name + attack_suffix + ".png")
+		elif ResourceLoader.exists(head_armor_path + head_sprite_name + "_slash.png"):
+			head_slash_tex = load(head_armor_path + head_sprite_name + "_slash.png")
 
 	# Load hair textures (for both genders)
 	var hair_walk_tex = null
@@ -1680,11 +2151,12 @@ func create_player_sprite() -> void:
 	var hair_path = "res://assets/characters/" + hair_type + "/standard/"
 	if ResourceLoader.exists(hair_path + "walk.png"):
 		hair_walk_tex = load(hair_path + "walk.png")
-	if ResourceLoader.exists(hair_path + "slash.png"):
+	# Try thrust first if using staff, fall back to slash
+	var hair_attack_path = hair_path + attack_anim_name + ".png"
+	if ResourceLoader.exists(hair_attack_path):
+		hair_slash_tex = load(hair_attack_path)
+	elif ResourceLoader.exists(hair_path + "slash.png"):
 		hair_slash_tex = load(hair_path + "slash.png")
-	print("💇 Loading hair: standard %s" % ("male" if selected_gender == Gender.MALE else "female"))
-	print("   Walk: %s" % ("✅" if hair_walk_tex else "❌"))
-	print("   Slash: %s" % ("✅" if hair_slash_tex else "❌"))
 
 	# Setup sprite with shadow + all armor layers + base_head + hair
 	var is_female = (selected_gender == Gender.FEMALE)
@@ -1700,13 +2172,23 @@ func create_player_sprite() -> void:
 	if not character_sprite.frame_changed.is_connected(_on_sprite_frame_changed):
 		character_sprite.frame_changed.connect(_on_sprite_frame_changed)
 
-	# Debug: List all sprite children
-	print("  🔍 Player children after sprite creation:")
+	# DEBUG: List ALL player children after sprite creation
+	print("  📋 Player children AFTER sprite creation:")
 	for child in get_children():
-		if child is Sprite2D or child is AnimatedSprite2D:
-			print("    - ", child.name, " (", child.get_class(), ") visible=", child.visible, " z_index=", child.z_index)
+		var type_name = child.get_class()
+		var visible_str = " (visible)" if child.get("visible") == true else " (hidden)" if child.get("visible") == false else ""
+		print("    - %s [%s]%s" % [child.name, type_name, visible_str])
+		# If it's the CharacterSprite, list its children too
+		if child.name == "CharacterSprite":
+			print("      └── CharacterSprite has %d children:" % child.get_child_count())
+			for subchild in child.get_children():
+				var sub_type = subchild.get_class()
+				var sub_visible = " (visible)" if subchild.get("visible") == true else " (hidden)" if subchild.get("visible") == false else ""
+				print("          - %s [%s]%s" % [subchild.name, sub_type, sub_visible])
 
-	print("  Simple LPC character created")
+	print("═══════════════════════════════════════════════════════════")
+	print("✅ CREATE_PLAYER_SPRITE complete for: %s" % name)
+	print("═══════════════════════════════════════════════════════════")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MULTIPLAYER APPEARANCE SYNC
@@ -1899,12 +2381,102 @@ func update_cone_visualizer() -> void:
 	if not cone_visualizer:
 		return
 
+	# Hide cone if using ranged weapon
+	var is_ranged = CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_ranged_weapon()
+	cone_visualizer.visible = not is_ranged
+
+	if is_ranged:
+		return  # Don't update rotation if hidden
+
 	# ALWAYS rotate cone to face mouse cursor (cheap, needs to be smooth)
 	var mouse_pos = get_global_mouse_position()
 	var direction_to_mouse = (mouse_pos - global_position).normalized()
 	cone_visualizer.rotation = direction_to_mouse.angle()
 
 	# Color is now constant - no need to update based on enemies
+
+# ============================================
+# RANGED WEAPON CIRCLE VISUALIZER
+# ============================================
+
+func create_circle_visualizer() -> void:
+	"""Create targeting circle for ranged weapons (healing staff, etc.)
+	This circle follows the mouse cursor and shows the heal/attack radius."""
+	# Clean up existing visualizer if any
+	if circle_visualizer and is_instance_valid(circle_visualizer):
+		circle_visualizer.queue_free()
+	circle_visualizer = null
+
+	# Create a Node2D to hold the circle (will be positioned at cursor)
+	circle_visualizer = Node2D.new()
+	circle_visualizer.name = "CircleVisualizer"
+	circle_visualizer.z_index = -1  # Behind characters
+
+	# Create the filled circle using Polygon2D
+	var circle_fill = Polygon2D.new()
+	circle_fill.name = "CircleFill"
+	circle_fill.color = Color(0.4, 1.0, 0.5, 0.04)  # Faint green (same opacity as melee cone)
+
+	# Get radius from equipped weapon or use default
+	var radius = 80.0
+	if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_healing_weapon():
+		radius = CharacterStats.equipped_weapon.heal_radius
+
+	# Create circle points
+	var points = PackedVector2Array()
+	var segments = 32
+	for i in range(segments + 1):
+		var angle = (float(i) / float(segments)) * TAU
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+
+	circle_fill.polygon = points
+	circle_visualizer.add_child(circle_fill)
+
+	# Add to scene tree root so it stays in world space at cursor position
+	get_tree().root.add_child(circle_visualizer)
+	circle_visualizer.visible = false  # Hidden until we have a ranged weapon
+
+	# Debug print removed - was spamming logs
+
+func update_circle_visualizer() -> void:
+	"""Update circle visualizer position to follow mouse cursor."""
+	# Safety check for invalid visualizer
+	if not circle_visualizer or not is_instance_valid(circle_visualizer):
+		circle_visualizer = null
+		return
+
+	# Check if we should show circle (ranged weapon equipped)
+	var should_show = false
+	if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_ranged_weapon():
+		should_show = true
+
+	circle_visualizer.visible = should_show
+
+	if should_show:
+		# Position at mouse cursor
+		circle_visualizer.global_position = get_global_mouse_position()
+
+func _rebuild_circle_polygon(circle_fill: Polygon2D, radius: float) -> void:
+	"""Rebuild the circle polygon with a new radius."""
+	var points = PackedVector2Array()
+	var segments = 32
+	for i in range(segments + 1):
+		var angle = (float(i) / float(segments)) * TAU
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+	circle_fill.polygon = points
+
+func switch_visualizer_mode() -> void:
+	"""Switch between cone (melee) and circle (ranged) visualizers based on equipped weapon."""
+	var is_ranged = CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_ranged_weapon()
+
+	if cone_visualizer:
+		cone_visualizer.visible = not is_ranged
+
+	if is_ranged and not circle_visualizer:
+		create_circle_visualizer()
+
+	if circle_visualizer:
+		circle_visualizer.visible = is_ranged
 
 func update_debug_visualization() -> void:
 	if not debug_shapes:
@@ -2091,16 +2663,16 @@ func is_ui_blocking_input() -> bool:
 	var root = get_tree().root
 	for child in root.get_children():
 		if child is CanvasLayer and child.visible:
-			# Check for specific UI types that should block input
+			# Check for specific UI types that should block input when mouse is over them
 			if child is ShopUI:
-				# Shop always blocks (modal dialog)
-				return true
+				if _is_mouse_over_canvas_layer(child, mouse_pos):
+					return true
 			if child is LootBodyUI:
-				# Loot UI always blocks (modal dialog)
-				return true
+				if _is_mouse_over_canvas_layer(child, mouse_pos):
+					return true
 			if child is ChestLootUI:
-				# Chest loot always blocks (modal dialog)
-				return true
+				if _is_mouse_over_canvas_layer(child, mouse_pos):
+					return true
 	return false
 
 func _is_mouse_over_canvas_layer(canvas_layer: CanvasLayer, mouse_pos: Vector2) -> bool:

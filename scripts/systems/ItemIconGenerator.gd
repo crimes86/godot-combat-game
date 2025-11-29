@@ -123,6 +123,12 @@ func _get_sprite_path(item_type: String, sprite_name: String, item: Dictionary) 
 			# For daggers with "standard" subfolder
 			if weapon_type == "dagger":
 				return "res://assets/weapons/dagger/standard/slash.png"
+			# Staff uses walk sprite for cleaner icon (idle pose shows staff upright)
+			if weapon_type == "staff":
+				return "res://assets/weapons/staff/walk.png"
+			# Mace uses walk sprite - slash.png is oversize (192x192) which breaks 64x64 extraction
+			if weapon_type == "mace":
+				return "res://assets/weapons/mace/walk.png"
 			return "res://assets/weapons/%s/slash.png" % weapon_type
 		"tool":
 			# Tools use the format: assets/tools/{tool_type}/walk.png
@@ -152,25 +158,16 @@ func _generate_icon_from_sprite(sprite_path: String, direction: int = DIR_DOWN, 
 	var frame_width = FRAME_SIZE
 	var frame_height = FRAME_SIZE
 
-	# Detect layout based on sprite sheet dimensions
-	# Walk sprites: 9 columns, 4 rows
-	# Slash/attack sprites: 6 columns, 4 rows
-	var num_rows = 4  # Always 4 directions
+	# LPC sprites always use 64x64 tiles regardless of sheet dimensions
+	# Some exports may have extra blank columns but tiles are always 64x64
+	frame_width = 64
+	frame_height = 64
 
-	# Check if it's a slash sprite (weapon) - 6 columns
-	# Note: tools use walk.png which has 9 columns
-	if "slash" in sprite_path:
-		var num_cols = 6
-		frame_width = sheet_width / num_cols
-		frame_height = sheet_height / num_rows
-	else:
-		# Walk sprite - 9 columns (armor, tools, etc.)
-		var num_cols = 9
-		frame_width = sheet_width / num_cols
-		frame_height = sheet_height / num_rows
+	# Use idle frame (frame 0) for all weapons
+	var frame_col = IDLE_FRAME
 
-	# Extract frame at specified direction row (column 0 for idle)
-	var src_x = IDLE_FRAME * frame_width
+	# Extract frame at specified direction row
+	var src_x = frame_col * frame_width
 	var src_y = direction * frame_height
 
 	# Make sure we don't go out of bounds
@@ -181,6 +178,8 @@ func _generate_icon_from_sprite(sprite_path: String, direction: int = DIR_DOWN, 
 	# Create new image for the icon
 	var icon_img = Image.create(frame_width, frame_height, false, Image.FORMAT_RGBA8)
 	icon_img.blit_rect(img, Rect2i(src_x, src_y, frame_width, frame_height), Vector2i(0, 0))
+
+	# Staff uses walk sprite which is already correctly oriented, no rotation needed
 
 	# For hands and feet, crop to just the right side (single glove/boot looks cleaner)
 	if slot in ["hands", "feet"]:
@@ -198,6 +197,20 @@ func _generate_icon_from_sprite(sprite_path: String, direction: int = DIR_DOWN, 
 	# Create texture from image
 	var icon_texture = ImageTexture.create_from_image(icon_img)
 	return icon_texture
+
+func _rotate_image_90_cw(img: Image) -> Image:
+	"""Rotate an image 90 degrees clockwise"""
+	var width = img.get_width()
+	var height = img.get_height()
+	var rotated = Image.create(height, width, false, Image.FORMAT_RGBA8)
+
+	for y in range(height):
+		for x in range(width):
+			var pixel = img.get_pixel(x, y)
+			# 90 degrees clockwise: (x, y) -> (height - 1 - y, x)
+			rotated.set_pixel(height - 1 - y, x, pixel)
+
+	return rotated
 
 func _auto_crop_image(img: Image) -> Image:
 	"""Crop transparent edges from image to focus on the actual content"""

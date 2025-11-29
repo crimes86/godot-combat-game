@@ -349,6 +349,11 @@ func create_weapon_from_data(data: Dictionary) -> Weapon:
 	weapon.description = data.get("description", "")
 	weapon.base_damage = data.get("base_damage", 5.0)
 
+	# Healing weapon properties
+	weapon.attack_mode = data.get("attack_mode", "melee")
+	weapon.healing_power = data.get("healing_power", 0.0)
+	weapon.heal_radius = data.get("heal_radius", 80.0)
+
 	# Convert attack_speed category to numeric multiplier
 	# fast = -0.30 (30% faster), medium = 0.0, slow = +0.30 (30% slower)
 	var attack_speed_category = data.get("attack_speed", "medium")
@@ -461,11 +466,11 @@ func weapon_to_dict(weapon: Weapon, price: int) -> Dictionary:
 	elif weapon.attack_speed_bonus > 0.15:
 		attack_speed_category = "slow"
 
-	return {
+	var result = {
 		"name": weapon.weapon_name,
 		"description": weapon.description,
 		"type": "weapon",
-		"weapon_type": weapon.weapon_type,  # Visual type (club, sword, etc)
+		"weapon_type": weapon.weapon_type,  # Visual type (club, sword, staff, etc)
 		"base_damage": weapon.base_damage,
 		"attack_speed": attack_speed_category,  # Converted from numeric to category
 		"crit_chance": weapon.crit_chance_bonus,  # Renamed for consistency
@@ -477,6 +482,14 @@ func weapon_to_dict(weapon: Weapon, price: int) -> Dictionary:
 		"stackable": false,
 		"quantity": 1
 	}
+
+	# Add healing weapon properties if applicable
+	if weapon.attack_mode != "melee":
+		result["attack_mode"] = weapon.attack_mode
+		result["healing_power"] = weapon.healing_power
+		result["heal_radius"] = weapon.heal_radius
+
+	return result
 
 func purchase_weapon(index: int) -> bool:
 	"""Attempt to purchase a weapon by index"""

@@ -30,6 +30,8 @@ static func get_animation_data_for_weapon_type(weapon_type: String) -> Resource:
 			return RapierAnimationData.new()
 		"dagger":
 			return DaggerAnimationData.new()
+		"staff":
+			return StaffAnimationData.new()
 		_:
 			# Default to sword for unknown weapon types
 			push_warning("Unknown weapon type '%s', defaulting to sword animation data" % weapon_type)

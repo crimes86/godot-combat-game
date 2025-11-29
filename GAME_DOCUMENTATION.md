@@ -1487,13 +1487,41 @@ Campfires can be claimed by a player or group. Only owners receive buffs, but ev
 
 ### Shop Inventory
 
-**Weapons** (6 available):
-1. Wooden Club - 0 gold (Dmg: 3.0) - Common
-2. Iron Sword - 100 gold (Dmg: 8.0, +2% crit) - Common, Lv 3
-3. Steel Blade - 300 gold (Dmg: 15.0, +5% crit, -5% speed) - Uncommon, Lv 6
-4. Battle Axe - 600 gold (Dmg: 25.0, +8% crit, +15% speed) - Uncommon, Lv 10
-5. Mithril Sword - 1200 gold (Dmg: 35.0, +10% crit, -15% speed) - Rare, Lv 15
-6. Dragon Slayer - 2500 gold (Dmg: 50.0, +15% crit, -10% speed) - Epic, Lv 20
+**Weapons** (7 available):
+1. Morning Star - 0 gold (Dmg: 4.0) - Common (starter melee)
+2. Healing Staff - 0 gold (Heal: 15.0) - Common (starter healer)
+3. Rusty Dagger - 50 gold (Dmg: 8.0, fast) - Common, Lv 1
+4. Iron Short Sword - 150 gold (Dmg: 12.0) - Common, Lv 1
+5. Bone Mace - 180 gold (Dmg: 12.0) - Common, Lv 1
+6. Bronze Spear - 250 gold (Dmg: 12.0) - Uncommon, Lv 1
+7. Steel Longsword - 400 gold (Dmg: 26.0) - Uncommon, Lv 5
+
+### Healing Staff System
+
+The Healing Staff is a support weapon that heals allies instead of dealing damage:
+
+**Mechanics**:
+- Click to create a healing circle at cursor position
+- Heals all friendly players within the circle radius (80px)
+- Uses **thrust animation** (8 frames) instead of slash (6 frames)
+- Double-pulse effect: instant heal + delayed heal when projectile arrives
+
+**Visual Effects**:
+1. **First Pulse**: Green healing circle appears at cursor
+2. **Heal Projectile**: Glowing green orb fires from staff to target
+3. **Impact Burst**: Central flash + expanding ring + sparkle particles
+4. **Second Pulse**: Follow-up heal circle (50% healing power)
+
+**Stats**:
+- Base Healing: 15 HP per pulse (+ stat scaling from Strength)
+- Heal Radius: 80 pixels
+- Self-healing: Yes (healer is included in heal radius)
+- Attack Speed: Medium (14 FPS animation)
+
+**Technical Notes**:
+- Staff sprites use `thrust_oversize.png` (192x192 tiles, 8 frames)
+- Body/armor layers require matching `_thrust.png` sprites
+- LPC standard: thrust = 8 frames, slash = 6 frames
 
 **Armor** (7 available):
 1. Leather Vest - 50 gold (+5 Def)

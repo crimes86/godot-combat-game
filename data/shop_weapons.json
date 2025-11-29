@@ -1,9 +1,9 @@
 {
 	"weapons": [
 		{
-			"id": "wooden_mace",
-			"name": "Wooden Mace",
-			"description": "A crude mace made from scrap wood. Better than bare fists, but barely.",
+			"id": "morning_star",
+			"name": "Morning Star",
+			"description": "A spiked iron ball on a wooden handle. Crude but effective against the undead.",
 			"weapon_type": "mace",
 			"base_damage": 4,
 			"attack_speed": "medium",
@@ -11,7 +11,7 @@
 			"required_level": 1,
 			"price": 0,
 			"rarity": "Common",
-			"sprite_path": "res://assets/weapons/mace.png",
+			"sprite_path": "res://assets/weapons/mace/walk.png",
 			"zone": 1,
 			"notes": "Intentionally weak starter weapon - encourages buying first upgrade"
 		},
@@ -144,6 +144,24 @@
 			"zone": 4,
 			"drop_only": true,
 			"notes": "Legendary drop - higher crit than normal fast weapons"
+		},
+		{
+			"id": "healing_staff",
+			"name": "Healing Staff",
+			"description": "Channel restorative energy to heal nearby allies. Click to create a healing circle at your cursor.",
+			"weapon_type": "staff",
+			"attack_mode": "ranged_heal",
+			"healing_power": 15,
+			"heal_radius": 80,
+			"base_damage": 0,
+			"attack_speed": "medium",
+			"crit_chance": 0.0,
+			"required_level": 1,
+			"price": 0,
+			"rarity": "Common",
+			"sprite_path": "res://assets/weapons/staff/thrust.png",
+			"zone": 1,
+			"notes": "Starter healing weapon - heals group members within circle radius"
 		}
 	]
 }
