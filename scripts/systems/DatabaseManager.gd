@@ -324,8 +324,8 @@ func record_login_attempt(peer_id: int, success: bool) -> void:
 	login_attempts[peer_id].last_attempt = now
 
 	if success:
-		# Reset on successful login
-		login_attempts[peer_id].count = 0
+		# SECURITY FIX: Clear entry entirely on success to prevent memory leak
+		login_attempts.erase(peer_id)
 	else:
 		login_attempts[peer_id].count += 1
 

@@ -768,25 +768,45 @@ func _build_local_player_state() -> Dictionary:
 
 @rpc("any_peer", "reliable")
 func request_player_heal(target_peer_id: int, heal_amount: float) -> void:
-	"""Client requests to heal another player. Server validates and applies.
-	Currently allows healing ANY player globally (friendly healing enabled).
-	PvP damage is restricted separately."""
+	"""Client requests to heal another player. Server validates and applies."""
 	if not multiplayer.is_server():
 		return
 
 	var healer_peer_id = multiplayer.get_remote_sender_id()
 
-	# NOTE: Friendly healing is globally allowed for now
-	# When PvP system is implemented, can add faction/group checks here
-	# Players can heal anyone - encourages cooperative gameplay
+	# SECURITY: Validate healer is authenticated
+	if not authenticated_players.has(healer_peer_id):
+		push_warning("Anti-cheat: Unauthenticated peer %d tried to heal" % healer_peer_id)
+		return
 
-	# Clamp heal amount to prevent exploits
-	heal_amount = clampf(heal_amount, 1.0, 500.0)
+	# SECURITY: Get healer's player node and validate they have a healing weapon
+	var game_world = get_node_or_null("/root/GameWorld")
+	if not game_world:
+		return
+
+	var healer_player = game_world.get_player_by_peer_id(healer_peer_id)
+	if not healer_player or not is_instance_valid(healer_player):
+		return
+
+	# Validate healer has a healing staff equipped
+	var has_healing_weapon = false
+	var max_heal_amount = 100.0  # Default cap
+	if healer_player.has_method("get_equipped_weapon"):
+		var weapon = healer_player.get_equipped_weapon()
+		if weapon and weapon.has_method("is_healing_weapon") and weapon.is_healing_weapon():
+			has_healing_weapon = true
+			if weapon.has_method("get_total_healing"):
+				max_heal_amount = weapon.get_total_healing() * 1.5  # Allow 50% buffer for stat scaling
+
+	if not has_healing_weapon:
+		push_warning("Anti-cheat: Player %d tried to heal without healing weapon" % healer_peer_id)
+		return
+
+	# SECURITY: Clamp heal amount to weapon's max (prevents arbitrary heal exploits)
+	heal_amount = clampf(heal_amount, 1.0, max_heal_amount)
 
 	# Find target player and apply heal
-	var game_world = get_node_or_null("/root/GameWorld")
-	if game_world:
-		var target_player = game_world.get_player_by_peer_id(target_peer_id)
-		if target_player and target_player.has_method("heal"):
-			target_player.heal(heal_amount)
-			print("💚 Server: Player %d healed player %d for %.1f" % [healer_peer_id, target_peer_id, heal_amount])
+	var target_player = game_world.get_player_by_peer_id(target_peer_id)
+	if target_player and is_instance_valid(target_player) and target_player.has_method("heal"):
+		target_player.heal(heal_amount)
+		print("💚 Server: Player %d healed player %d for %.1f" % [healer_peer_id, target_peer_id, heal_amount])

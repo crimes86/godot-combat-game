@@ -24,12 +24,17 @@ var game_world: Node = null
 
 # Attack cooldown tracking (server-side anti-cheat)
 var attack_cooldowns: Dictionary = {}  # Dictionary[int, int] - peer_id -> last_attack_time_msec
-const ATTACK_COOLDOWN_MS: int = 80  # Minimum ms between attacks (slightly less than client's 100ms for latency tolerance)
+const ATTACK_COOLDOWN_MS: int = 90  # Minimum ms between attacks (tightened from 80ms, client uses 100ms)
 
 func _ready():
 	# Will be initialized by game_world
-	# Listen for new peer connections to sync existing enemies
+	# Listen for peer connections to sync existing enemies and cleanup on disconnect
 	multiplayer.peer_connected.connect(_on_peer_connected)
+	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+
+func _on_peer_disconnected(peer_id: int) -> void:
+	"""Clean up attack cooldown tracking when a player disconnects"""
+	attack_cooldowns.erase(peer_id)
 
 func _process(delta):
 	if not multiplayer.has_multiplayer_peer():
