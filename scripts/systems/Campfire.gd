@@ -1238,7 +1238,11 @@ func create_clearing_stumps() -> void:
 			ellipse_points.append(Vector2(px, py))
 
 		shadow.polygon = ellipse_points
-		shadow.position = Vector2(0, 4)  # Just below stump center
+		# Shadow Y offset: base 7px, +3px extra for large stumps (tree_scale >= 3.9)
+		var shadow_y_offset = 7.0
+		if tree_scale >= 3.9:
+			shadow_y_offset = 10.0  # Large stumps need more offset
+		shadow.position = Vector2(0, shadow_y_offset)
 		shadow.color = Color(0, 0, 0, 0.4)
 		shadow.z_index = -1
 		stump_node.add_child(shadow)

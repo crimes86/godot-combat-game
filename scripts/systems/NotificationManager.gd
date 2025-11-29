@@ -54,6 +54,13 @@ func notify_item_removed(item_name: String, quantity: int = 1, rarity: String = 
 	notification.setup_item_removed(item_name, quantity, rarity)
 	_show_notification(notification)
 
+## Show a generic text notification (for system messages like "Game saved")
+## type: "INFO", "SUCCESS", "WARNING", "ERROR"
+func show_notification(message: String, type: String = "INFO") -> void:
+	var notification = _create_notification()
+	notification.setup_system_message(message, type)
+	_show_notification(notification)
+
 func _create_notification() -> ItemNotification:
 	var notification_scene = preload("res://scenes/ui/item_notification.tscn")
 	var notification = notification_scene.instantiate() as ItemNotification

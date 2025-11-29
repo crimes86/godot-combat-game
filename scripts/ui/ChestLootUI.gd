@@ -211,7 +211,8 @@ func loot_item(index: int) -> void:
 		print("✨ Looted: %s" % item_name)
 
 		# Show notification (plays pickup sound)
-		NotificationManager.notify_item_added(item_name, 1, item_rarity)
+		if NotificationManager and is_instance_valid(NotificationManager):
+			NotificationManager.notify_item_added(item_name, 1, item_rarity)
 
 		item_looted.emit(item)
 
@@ -252,7 +253,8 @@ func _loot_items_staggered(items_to_loot: Array) -> void:
 			var item_rarity = item.get("rarity", "Common")
 
 			# Show notification (plays pickup sound)
-			NotificationManager.notify_item_added(item_name, 1, item_rarity)
+			if NotificationManager and is_instance_valid(NotificationManager):
+				NotificationManager.notify_item_added(item_name, 1, item_rarity)
 
 			looted_count += 1
 			item_looted.emit(item)
@@ -260,6 +262,8 @@ func _loot_items_staggered(items_to_loot: Array) -> void:
 
 			# Small delay between each notification for cascade effect
 			await get_tree().create_timer(0.12).timeout
+			if not is_instance_valid(self):
+				return  # UI was closed during await
 		else:
 			print("❌ Inventory full! Looted %d of %d items" % [looted_count, items_to_loot.size()])
 			populate_loot_list()

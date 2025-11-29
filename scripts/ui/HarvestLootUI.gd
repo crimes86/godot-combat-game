@@ -167,10 +167,13 @@ func _loot_items_staggered(items_to_loot: Array) -> void:
 			harvest_loot[i] = null
 
 			# Show notification and play pickup sound
-			NotificationManager.notify_item_added(item_name, 1, item_rarity.to_upper())
+			if NotificationManager and is_instance_valid(NotificationManager):
+				NotificationManager.notify_item_added(item_name, 1, item_rarity.to_upper())
 
 			# Small delay between each notification for cascade effect
 			await get_tree().create_timer(0.12).timeout
+			if not is_instance_valid(self):
+				return  # UI was closed during await
 		else:
 			# Inventory full
 			print("❌ Inventory full! Looted %d of %d items" % [looted_count, items_to_loot.size()])

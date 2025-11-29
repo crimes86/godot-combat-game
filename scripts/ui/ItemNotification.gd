@@ -8,7 +8,8 @@ signal notification_finished()
 
 enum NotificationType {
 	ITEM_ADDED,      # Green with rarity color
-	ITEM_REMOVED     # Red text
+	ITEM_REMOVED,    # Red text
+	SYSTEM_MESSAGE   # Plain text for system notifications
 }
 
 var notification_type: NotificationType = NotificationType.ITEM_ADDED
@@ -69,6 +70,25 @@ func setup_item_removed(item_name: String, quantity: int, rarity: String) -> voi
 	# Red for removed items
 	add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
 	add_theme_font_size_override("font_size", 20)
+
+func setup_system_message(message: String, msg_type: String) -> void:
+	notification_type = NotificationType.SYSTEM_MESSAGE
+	text = message
+
+	# Color based on message type
+	var color: Color
+	match msg_type.to_upper():
+		"SUCCESS":
+			color = Color(0.4, 0.9, 0.4, 1.0)  # Green
+		"WARNING":
+			color = Color(1.0, 0.8, 0.2, 1.0)  # Yellow
+		"ERROR":
+			color = Color(1.0, 0.3, 0.3, 1.0)  # Red
+		_:  # INFO and default
+			color = Color(0.8, 0.8, 0.8, 1.0)  # Light gray
+
+	add_theme_color_override("font_color", color)
+	add_theme_font_size_override("font_size", 18)
 
 func animate() -> void:
 	# Simple smooth pop-in animation

@@ -37,7 +37,7 @@ func _ready():
 
 	# Set defaults
 	name_input.text = "Player" + str(randi() % 1000)
-	ip_input.text = "127.0.0.1"
+	ip_input.text = "192.168.28.211"
 	join_container.visible = false
 	status_label.text = ""
 

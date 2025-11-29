@@ -297,6 +297,8 @@ func loot_item(corpse, item: Dictionary) -> void:
 		# Server will handle inventory add and broadcast removal
 		# Refresh list after small delay to allow RPC to process
 		await get_tree().create_timer(0.1).timeout
+		if not is_instance_valid(self):
+			return  # UI was closed during await
 		populate_loot_list()
 	else:
 		# Single player - handle directly
@@ -307,7 +309,8 @@ func loot_item(corpse, item: Dictionary) -> void:
 			item_looted.emit(item, corpse)
 
 			# Show notification and play pickup sound
-			NotificationManager.notify_item_added(item_name, 1, item_rarity)
+			if NotificationManager and is_instance_valid(NotificationManager):
+				NotificationManager.notify_item_added(item_name, 1, item_rarity)
 
 			# Remove from corpse's loot array
 			corpse.corpse_loot.erase(item)
@@ -357,6 +360,8 @@ func _on_take_all_pressed() -> void:
 			looted_count += 1
 			# Small delay to allow server to process and broadcast
 			await get_tree().create_timer(0.15).timeout
+			if not is_instance_valid(self):
+				return  # UI was closed during await
 		else:
 			# Single player - handle directly
 			if InventorySystem.add_item(item):
@@ -368,10 +373,13 @@ func _on_take_all_pressed() -> void:
 				corpse.corpse_loot.erase(item)
 
 				# Show notification and play pickup sound
-				NotificationManager.notify_item_added(item_name, 1, item_rarity)
+				if NotificationManager and is_instance_valid(NotificationManager):
+					NotificationManager.notify_item_added(item_name, 1, item_rarity)
 
 				# Small delay between each notification for cascade effect
 				await get_tree().create_timer(0.12).timeout
+				if not is_instance_valid(self):
+					return  # UI was closed during await
 			else:
 				print("❌ Inventory full! Looted %d of %d items" % [looted_count, total_count])
 				# Check which corpses are empty
