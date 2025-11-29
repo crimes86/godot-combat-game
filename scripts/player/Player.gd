@@ -708,6 +708,11 @@ func _input(event: InputEvent) -> void:
 	
 	# Debug mode toggle
 	if event is InputEventKey and event.pressed:
+		# Block most game keys while typing in chat (allow F-keys for debug)
+		var is_f_key = event.keycode >= KEY_F1 and event.keycode <= KEY_F12
+		if not is_f_key and chat_ui and chat_ui.has_method("is_chat_focused") and chat_ui.is_chat_focused():
+			return
+
 		match event.keycode:
 			KEY_F6:
 				# Debug: Heal to full health

@@ -43,7 +43,7 @@ func _ready() -> void:
 	# Connect to network manager
 	network_manager = get_node_or_null("/root/NetworkManager")
 	if network_manager:
-		network_manager.player_connected.connect(_on_player_connected)
+		network_manager.player_authenticated.connect(_on_player_authenticated)
 		network_manager.player_disconnected.connect(_on_player_disconnected)
 		network_manager.chat_message_received.connect(_on_chat_message_received)
 
@@ -364,10 +364,8 @@ func _on_send_pressed() -> void:
 	send_message()
 	focus_input()
 
-func _on_player_connected(id: int) -> void:
-	var player_info = network_manager.connected_players.get(id, {})
-	var name = player_info.get("name", "Player%d" % id)
-	add_system_message("%s joined the game." % name)
+func _on_player_authenticated(id: int, player_name: String) -> void:
+	add_system_message("%s joined the game." % player_name)
 
 func _on_player_disconnected(id: int) -> void:
 	add_system_message("A player disconnected.")
@@ -401,6 +399,26 @@ func _handle_admin_command(cmd: String) -> void:
 	match command:
 		"help":
 			_cmd_help()
+		# Group commands
+		"invite":
+			_cmd_group_invite(args)
+		"accept":
+			_cmd_group_accept()
+		"decline":
+			_cmd_group_decline()
+		"kick":
+			_cmd_group_kick(args)
+		"leave", "leavegroup":
+			_cmd_group_leave()
+		"promote":
+			_cmd_group_promote(args)
+		"disband":
+			_cmd_group_disband()
+		"group", "party":
+			_cmd_group_info()
+		"players", "who":
+			_cmd_players()
+		# Admin commands
 		"accounts":
 			_cmd_accounts()
 		"select":
@@ -428,7 +446,140 @@ func _handle_admin_command(cmd: String) -> void:
 		_:
 			add_system_message("Unknown command: /%s (type /help)" % command)
 
+# ═══════════════════════════════════════════════════════════════════════════
+# GROUP COMMANDS
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _cmd_group_invite(args: Array) -> void:
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager:
+		add_system_message("[Error] Group system not available.")
+		return
+
+	var target_name = " ".join(args) if args.size() > 0 else ""
+	var result = group_manager.cmd_invite(target_name)
+	add_system_message(result)
+
+func _cmd_group_accept() -> void:
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager:
+		add_system_message("[Error] Group system not available.")
+		return
+
+	var result = group_manager.cmd_accept()
+	add_system_message(result)
+
+func _cmd_group_decline() -> void:
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager:
+		add_system_message("[Error] Group system not available.")
+		return
+
+	var result = group_manager.cmd_decline()
+	add_system_message(result)
+
+func _cmd_group_leave() -> void:
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager:
+		add_system_message("[Error] Group system not available.")
+		return
+
+	var result = group_manager.cmd_leave()
+	add_system_message(result)
+
+func _cmd_group_kick(args: Array) -> void:
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager:
+		add_system_message("[Error] Group system not available.")
+		return
+
+	var target_name = " ".join(args) if args.size() > 0 else ""
+	var result = group_manager.cmd_kick(target_name)
+	add_system_message(result)
+
+func _cmd_group_promote(args: Array) -> void:
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager:
+		add_system_message("[Error] Group system not available.")
+		return
+
+	var target_name = " ".join(args) if args.size() > 0 else ""
+	var result = group_manager.cmd_promote(target_name)
+	add_system_message(result)
+
+func _cmd_group_disband() -> void:
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager:
+		add_system_message("[Error] Group system not available.")
+		return
+
+	var result = group_manager.cmd_disband()
+	add_system_message(result)
+
+func _cmd_group_info() -> void:
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager:
+		add_system_message("[Error] Group system not available.")
+		return
+
+	if not group_manager.has_group():
+		add_system_message("You are not in a group.")
+		return
+
+	add_system_message("=== Group Info ===")
+	var leader_name = group_manager.get_member_name(group_manager.group_leader)
+	add_system_message("Leader: %s" % leader_name)
+	add_system_message("Members (%d/%d):" % [group_manager.group_members.size(), group_manager.MAX_GROUP_SIZE])
+	for member_id in group_manager.group_members:
+		var name = group_manager.get_member_name(member_id)
+		var is_leader = member_id == group_manager.group_leader
+		var is_you = member_id == multiplayer.get_unique_id()
+		var suffix = ""
+		if is_leader:
+			suffix = " [Leader]"
+		if is_you:
+			suffix += " (You)"
+		add_system_message("  - %s%s" % [name, suffix])
+
+func _cmd_players() -> void:
+	"""List all connected players - useful for /invite"""
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if not network_manager:
+		add_system_message("[Error] Not connected.")
+		return
+
+	var players = network_manager.connected_players
+	if players.is_empty():
+		add_system_message("No players connected.")
+		return
+
+	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+	add_system_message("=== Online Players (%d) ===" % players.size())
+	for peer_id in players:
+		var player_info = players[peer_id]
+		var name = player_info.get("name", "Unknown")
+		var is_you = peer_id == my_id
+		if is_you:
+			add_system_message("  %s (You)" % name)
+		else:
+			add_system_message("  %s" % name)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HELP COMMAND
+# ═══════════════════════════════════════════════════════════════════════════
+
 func _cmd_help() -> void:
+	add_system_message("=== General Commands ===")
+	add_system_message("/players - List online players")
+	add_system_message("=== Group Commands ===")
+	add_system_message("/invite <player> - Invite to group")
+	add_system_message("/accept - Accept group invite")
+	add_system_message("/decline - Decline group invite")
+	add_system_message("/leave - Leave current group")
+	add_system_message("/kick <player> - Kick from group (leader)")
+	add_system_message("/promote <player> - Promote to leader")
+	add_system_message("/disband - Disband group (leader)")
+	add_system_message("/group - Show group info")
 	add_system_message("=== Admin Commands ===")
 	add_system_message("/accounts - List all accounts")
 	add_system_message("/select <username> - Select account to edit")

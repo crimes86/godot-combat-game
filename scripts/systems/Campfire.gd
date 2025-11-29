@@ -37,9 +37,23 @@ var no_fuel_message_duration: float = 2.0  # Show message for 2 seconds
 var enemy_check_timer: float = 0.0
 var enemy_check_interval: float = 0.2  # Check enemies every 0.2 seconds instead of every frame
 
-# Fuel state
+# Fuel state (legacy - for ungrouped/solo players)
 var wood_count: int = 0
 var bone_ember_count: int = 0
+
+# Group fuel pools - each group has separate fuel that only they benefit from
+# Key: group_leader_id (int), Value: {wood: int, bone_embers: int, wood_decay: float, ember_decay: float}
+var group_fuel_pools: Dictionary = {}
+const SOLO_POOL_KEY: int = -1  # Key for solo/ungrouped players
+const NO_OWNER: int = -999  # Key for unowned campfire
+
+# Campfire ownership system - only one group can own and benefit from a campfire at a time
+var owner_pool_key: int = NO_OWNER  # The group/player that owns this campfire
+var owner_group_members: Array = []  # Peer IDs of all members in the owning group
+const RELEASE_TIMER_DURATION: float = 60.0  # Seconds until campfire becomes free when no owners nearby
+var release_timer: float = 0.0  # Current countdown (0 = not counting)
+var is_releasing: bool = false  # True when countdown is active
+var release_timer_ui: Control = null  # UI showing time until release
 
 # Skeleton spawning from fuel (every 5 fuel items spawns a skeleton)
 const FUEL_PER_SKELETON: int = 5
@@ -153,6 +167,9 @@ func is_visible_on_screen() -> bool:
 	return viewport_rect.has_point(global_position)
 
 func _physics_process(delta: float) -> void:
+	# Check ownership release timer
+	_update_ownership_timer(delta)
+
 	# Heal ALL players in warmth based on fuel state:
 	# - No fuel (wood_count == 0): Minimal heal (5 HP/s)
 	# - With fuel (wood_count > 0): Scaled heal (5-25 HP/s)
@@ -168,9 +185,13 @@ func _physics_process(delta: float) -> void:
 	# Handle hold-to-fuel mechanic
 	handle_fuel_interaction(delta)
 
-	# Apply crit buff to player if in warmth
+	# Apply crit buff to player if in warmth AND local player is an owner
 	if player_in_warmth and player and is_instance_valid(player):
-		apply_crit_buff_to_player()
+		if _is_local_player_owner():
+			apply_crit_buff_to_player()
+		else:
+			# Clear crit buff if not an owner
+			CharacterStats.campfire_crit_buff = 0.0
 
 	# Check enemies near warmth (throttled for performance)
 	enemy_check_timer += delta
@@ -221,7 +242,8 @@ func _is_local_player(body: Node2D) -> bool:
 	return player_authority == local_peer_id
 
 func _heal_all_players_in_warmth(delta: float) -> void:
-	"""Heal all players currently in campfire warmth - independent per player"""
+	"""Heal all players currently in campfire warmth - only owners get healed.
+	Each player heals based on their group's fuel pool if they own the campfire."""
 	# Clean up invalid player references
 	var to_remove = []
 	for p in players_in_warmth.keys():
@@ -235,6 +257,10 @@ func _heal_all_players_in_warmth(delta: float) -> void:
 		if not is_instance_valid(p):
 			continue
 
+		# Only heal players who are owners of this campfire
+		if not _is_player_owner(p):
+			continue
+
 		var player_data = players_in_warmth[p]
 		var player_needs_healing = p.current_health < p.max_health if "current_health" in p and "max_health" in p else false
 
@@ -246,9 +272,12 @@ func _heal_all_players_in_warmth(delta: float) -> void:
 		if player_data.heal_timer >= heal_interval:
 			player_data.heal_timer = 0.0
 
-			# Apply healing
+			# Get healing rate based on this player's fuel pool
+			var player_heal_rate = get_heal_rate_for_player(p)
+
+			# Apply healing using this player's pool rate
 			if p.has_method("heal"):
-				p.heal(heal_rate * heal_interval)
+				p.heal(player_heal_rate * heal_interval)
 
 				# Only play healing sound for LOCAL player
 				if _is_local_player(p):
@@ -860,7 +889,8 @@ func create_ground_mist_auras() -> void:
 
 
 func update_ground_mist(delta: float) -> void:
-	"""Update aura circles with wavy edges (throttled for performance)"""
+	"""Update aura circles with wavy edges (throttled for performance).
+	Auras are drawn based on the OWNER's fuel pool so everyone can see them."""
 	if not heal_mist or not crit_mist:
 		return
 
@@ -868,15 +898,17 @@ func update_ground_mist(delta: float) -> void:
 	if not is_visible_on_screen():
 		return
 
-	var wood_percent = float(wood_count) / float(MAX_WOOD)
-	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
+	# Get fuel counts from the OWNER's pool (so everyone sees the same auras)
+	var owner_pool = _get_owner_fuel_pool()
+	var owner_wood = owner_pool.wood
+	var owner_bone_embers = owner_pool.bone_embers
 
 	# Calculate radii - both can reach same max size (468.75px) with equal growth rate per item
 	# Growth rate: 8.375px per wood, 4.1875px per ember (both reach 468.75px max)
 	# Heal aura: 50px base + (8.375px * wood_count) → max 468.75px at 50 wood
 	# Crit aura: 50px base + (4.1875px * bone_count) → max 468.75px at 100 embers
-	var heal_radius = 50.0 + (wood_count * 8.375)  # 50-468.75px
-	var crit_radius = 50.0 + (bone_ember_count * 4.1875)  # 50-468.75px
+	var heal_radius = 50.0 + (owner_wood * 8.375)  # 50-468.75px
+	var crit_radius = 50.0 + (owner_bone_embers * 4.1875)  # 50-468.75px
 
 	# Dynamically set z-index: smaller aura always on top
 	if heal_radius < crit_radius:
@@ -889,7 +921,7 @@ func update_ground_mist(delta: float) -> void:
 		heal_mist.z_index = -2
 
 	# Update heal aura (green circle)
-	if wood_count > 0:
+	if owner_wood > 0:
 		heal_mist.polygon = create_wavy_circle(heal_radius, 64, 0.0)  # No phase offset
 		heal_mist.visible = true
 
@@ -901,7 +933,7 @@ func update_ground_mist(delta: float) -> void:
 		heal_mist.visible = false
 
 	# Update crit aura (cyan circle)
-	if bone_ember_count > 0:
+	if owner_bone_embers > 0:
 		crit_mist.polygon = create_wavy_circle(crit_radius, 64, 3.14)  # PI offset for autonomy
 		crit_mist.visible = true
 
@@ -1566,10 +1598,435 @@ func attempt_add_all_fuel_from_inventory() -> void:
 	print("🔥 Campfire fueled: %d wood logs, %d bone embers added (ALL)" % [wood_added, bone_added])
 	print("   Current fuel: %d/%d wood, %d/%d embers" % [wood_count, MAX_WOOD, bone_ember_count, MAX_BONE_EMBERS])
 
+# ═══════════════════════════════════════════════════════════════════════════
+# CAMPFIRE OWNERSHIP SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _is_local_player_owner() -> bool:
+	"""Check if the local player is part of the owning group."""
+	if owner_pool_key == NO_OWNER:
+		return false
+	var my_pool_key = _get_player_fuel_pool_key()
+	return my_pool_key == owner_pool_key
+
+func _is_player_owner(player_node: Node) -> bool:
+	"""Check if a specific player node is part of the owning group."""
+	if owner_pool_key == NO_OWNER:
+		return false
+
+	# Get player's peer ID
+	var player_peer_id = 1
+	if player_node.has_method("get_multiplayer_authority"):
+		player_peer_id = player_node.get_multiplayer_authority()
+
+	return player_peer_id in owner_group_members
+
+func _claim_ownership() -> void:
+	"""Claim ownership of this campfire for the local player's group."""
+	var pool_key = _get_player_fuel_pool_key()
+	owner_pool_key = pool_key
+	_update_owner_group_members()
+	is_releasing = false
+	release_timer = 0.0
+	_update_release_timer_ui()
+	print("🔥 Campfire claimed by pool_key: %d, owner_members: %s" % [pool_key, owner_group_members])
+
+	# Sync ownership to all clients
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_ownership_to_clients.rpc(owner_pool_key, owner_group_members)
+
+func _release_ownership() -> void:
+	"""Release ownership of this campfire, making it claimable."""
+	print("🔥 Campfire released from pool_key: %d" % owner_pool_key)
+	owner_pool_key = NO_OWNER
+	owner_group_members.clear()
+	is_releasing = false
+	release_timer = 0.0
+	_update_release_timer_ui()
+
+	# Sync release to all clients
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_ownership_to_clients.rpc(NO_OWNER, [])
+
+func _update_owner_group_members() -> void:
+	"""Update the list of peer IDs in the owning group."""
+	owner_group_members.clear()
+	if owner_pool_key == NO_OWNER:
+		return
+
+	if owner_pool_key == SOLO_POOL_KEY:
+		# Solo player - just add their peer ID
+		var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+		owner_group_members.append(my_id)
+	else:
+		# Group - get all members from GroupManager
+		var group_manager = get_node_or_null("/root/GroupManager")
+		if group_manager and group_manager.has_group():
+			owner_group_members = group_manager.group_members.duplicate()
+
+func _is_any_owner_nearby() -> bool:
+	"""Check if any owner group member is within the aura radius.
+	Uses the larger of heal/crit aura so players can fight at edge of their buffs."""
+	if owner_pool_key == NO_OWNER:
+		return false
+
+	# Calculate the ownership radius based on the owner's fuel (larger of heal/crit auras)
+	var owner_pool = _get_owner_fuel_pool()
+	var heal_radius = 50.0 + (owner_pool.wood * 8.375)
+	var crit_radius = 50.0 + (owner_pool.bone_embers * 4.1875)
+	var ownership_radius = max(heal_radius, crit_radius)
+	# Ensure minimum radius is at least warmth_radius
+	ownership_radius = max(ownership_radius, warmth_radius)
+
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player_node in players:
+		if not is_instance_valid(player_node):
+			continue
+
+		# Get player's peer ID
+		var player_peer_id = 1
+		if player_node.has_method("get_multiplayer_authority"):
+			player_peer_id = player_node.get_multiplayer_authority()
+
+		# Check if this player is an owner
+		if player_peer_id in owner_group_members:
+			# Check if within ownership radius (aura edge)
+			var distance = global_position.distance_to(player_node.global_position)
+			if distance <= ownership_radius:
+				return true
+
+	return false
+
+func _update_ownership_timer(delta: float) -> void:
+	"""Update the ownership release timer."""
+	if owner_pool_key == NO_OWNER:
+		return
+
+	# Refresh owner group members periodically (in case group changed)
+	_update_owner_group_members()
+
+	var any_owner_nearby = _is_any_owner_nearby()
+
+	if any_owner_nearby:
+		# Owner is nearby - stop/reset the release timer
+		if is_releasing:
+			is_releasing = false
+			release_timer = 0.0
+			_update_release_timer_ui()
+	else:
+		# No owners nearby - start or continue the release timer
+		if not is_releasing:
+			is_releasing = true
+			release_timer = RELEASE_TIMER_DURATION
+			_update_release_timer_ui()
+		else:
+			release_timer -= delta
+			_update_release_timer_ui()
+
+			if release_timer <= 0.0:
+				_release_ownership()
+
+func _get_owner_fuel_pool() -> Dictionary:
+	"""Get the fuel pool of the current owner (for aura drawing)."""
+	if owner_pool_key == NO_OWNER:
+		return {"wood": 0, "bone_embers": 0, "wood_decay": 0.0, "ember_decay": 0.0}
+	var pool = _get_or_create_fuel_pool(owner_pool_key)
+	return pool
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NETWORK SYNC FOR CAMPFIRE OWNERSHIP AND FUEL
+# ═══════════════════════════════════════════════════════════════════════════
+
+@rpc("authority", "call_local", "reliable")
+func _sync_ownership_to_clients(new_owner_pool_key: int, new_owner_members: Array) -> void:
+	"""Receive ownership sync from server."""
+	owner_pool_key = new_owner_pool_key
+	owner_group_members = new_owner_members.duplicate()
+	is_releasing = false
+	release_timer = 0.0
+	_update_release_timer_ui()
+	print("🔥 [CLIENT] Ownership synced: pool_key=%d, members=%s" % [owner_pool_key, owner_group_members])
+
+@rpc("authority", "call_local", "reliable")
+func _sync_fuel_to_clients(pool_key: int, wood: int, bone_embers: int) -> void:
+	"""Receive fuel state sync from server."""
+	var pool = _get_or_create_fuel_pool(pool_key)
+	pool.wood = wood
+	pool.bone_embers = bone_embers
+	update_visual_intensity()
+	print("🔥 [CLIENT] Fuel synced for pool %d: wood=%d, embers=%d" % [pool_key, wood, bone_embers])
+
+func _sync_fuel_state_to_clients() -> void:
+	"""Server broadcasts current fuel state to all clients."""
+	if not multiplayer.has_multiplayer_peer() or not multiplayer.is_server():
+		return
+
+	if owner_pool_key == NO_OWNER:
+		return
+
+	var pool = _get_or_create_fuel_pool(owner_pool_key)
+	_sync_fuel_to_clients.rpc(owner_pool_key, pool.wood, pool.bone_embers)
+
+func _create_release_timer_ui() -> void:
+	"""Create the UI element showing time until campfire becomes free."""
+	if release_timer_ui:
+		return  # Already created
+
+	release_timer_ui = Control.new()
+	release_timer_ui.name = "ReleaseTimerUI"
+	release_timer_ui.z_index = 100
+	add_child(release_timer_ui)
+
+	# Background panel
+	var panel = Panel.new()
+	panel.name = "Panel"
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.1, 0.1, 0.12, 0.85)
+	style.border_color = Color(0.8, 0.4, 0.1, 1.0)  # Orange border for warning
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+	panel.add_theme_stylebox_override("panel", style)
+	panel.position = Vector2(-60, -80)  # Above campfire
+	panel.size = Vector2(120, 40)
+	release_timer_ui.add_child(panel)
+
+	# Timer label
+	var label = Label.new()
+	label.name = "TimerLabel"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.3, 1.0))
+	label.position = Vector2(0, 0)
+	label.size = Vector2(120, 40)
+	label.text = "Releasing: 60s"
+	panel.add_child(label)
+
+	release_timer_ui.visible = false
+
+func _update_release_timer_ui() -> void:
+	"""Update the release timer UI display."""
+	if not release_timer_ui:
+		_create_release_timer_ui()
+
+	if is_releasing and release_timer > 0.0:
+		release_timer_ui.visible = true
+		var label = release_timer_ui.get_node_or_null("Panel/TimerLabel")
+		if label:
+			var seconds = int(ceil(release_timer))
+			label.text = "Releasing: %ds" % seconds
+	else:
+		release_timer_ui.visible = false
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GROUP FUEL POOL MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _get_player_fuel_pool_key() -> int:
+	"""Get the fuel pool key for the local player.
+	Returns group_leader_id if in a group, or SOLO_POOL_KEY (-1) if solo."""
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if group_manager and group_manager.has_group():
+		return group_manager.group_leader
+	return SOLO_POOL_KEY
+
+func _get_or_create_fuel_pool(pool_key: int) -> Dictionary:
+	"""Get or create a fuel pool for the given key."""
+	if not group_fuel_pools.has(pool_key):
+		group_fuel_pools[pool_key] = {
+			"wood": 0,
+			"bone_embers": 0,
+			"wood_decay": 0.0,
+			"ember_decay": 0.0
+		}
+	return group_fuel_pools[pool_key]
+
+func _get_fuel_pool_for_player(player_node: Node) -> Dictionary:
+	"""Get the appropriate fuel pool for a specific player."""
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager:
+		return _get_or_create_fuel_pool(SOLO_POOL_KEY)
+
+	# Get player's peer ID
+	var player_peer_id = 1
+	if player_node.has_method("get_multiplayer_authority"):
+		player_peer_id = player_node.get_multiplayer_authority()
+
+	# Check if this player is in a group
+	if group_manager.is_group_member(player_peer_id):
+		return _get_or_create_fuel_pool(group_manager.group_leader)
+
+	return _get_or_create_fuel_pool(SOLO_POOL_KEY)
+
+func get_wood_count_for_player() -> int:
+	"""Get wood count for the local player's fuel pool."""
+	var pool = _get_or_create_fuel_pool(_get_player_fuel_pool_key())
+	return pool.wood
+
+func get_bone_ember_count_for_player() -> int:
+	"""Get bone ember count for the local player's fuel pool."""
+	var pool = _get_or_create_fuel_pool(_get_player_fuel_pool_key())
+	return pool.bone_embers
+
 func apply_crit_buff_to_player() -> void:
-	"""Apply crit chance buff to player while in campfire warmth"""
-	# Update CharacterStats with current campfire crit buff
-	CharacterStats.campfire_crit_buff = get_current_crit_buff()
+	"""Apply crit chance buff to player while in campfire warmth.
+	Uses the player's group fuel pool for buff calculation."""
+	CharacterStats.campfire_crit_buff = get_current_crit_buff_for_player()
+
+func get_current_crit_buff_for_player() -> float:
+	"""Get crit buff based on the local player's fuel pool."""
+	var pool = _get_or_create_fuel_pool(_get_player_fuel_pool_key())
+	var bone_percent = float(pool.bone_embers) / float(MAX_BONE_EMBERS)
+	return bone_percent * 0.165  # 0-16.5% bonus crit chance
+
+func get_heal_rate_for_player(player_node: Node) -> float:
+	"""Get healing rate for a specific player based on their fuel pool.
+	Base: 5 HP/s, Max: 25 HP/s (linear scaling with wood)."""
+	var pool = _get_fuel_pool_for_player(player_node)
+	if pool.wood > 0:
+		var wood_percent = float(pool.wood) / float(MAX_WOOD)
+		return 5.0 + (wood_percent * 20.0)  # 5 + (0-20) = 5-25 HP/s
+	else:
+		return 5.0
+
+func add_wood_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> bool:
+	"""Add wood fuel to the local player's fuel pool.
+	Claims ownership if campfire is unowned. Fails if owned by another group."""
+	var pool_key = _get_player_fuel_pool_key()
+
+	# Check ownership - can only add fuel if unowned or we own it
+	if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
+		# Campfire owned by someone else - can't add fuel
+		return false
+
+	# Claim ownership if unowned
+	if owner_pool_key == NO_OWNER:
+		_claim_ownership()
+
+	var pool = _get_or_create_fuel_pool(pool_key)
+
+	var added = min(amount, MAX_WOOD - pool.wood)
+	if added > 0:
+		pool.wood += added
+		update_visual_intensity()
+
+	# Track cumulative fuel for skeleton spawning
+	track_fuel_for_skeletons(amount)
+
+	# Play sound
+	if added > 0:
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_fire_fuel_sound(global_position, -12.0, enhanced_sound)
+
+	return added > 0
+
+func add_bone_ember_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> bool:
+	"""Add bone ember fuel to the local player's fuel pool.
+	Claims ownership if campfire is unowned. Fails if owned by another group."""
+	var pool_key = _get_player_fuel_pool_key()
+
+	# Check ownership - can only add fuel if unowned or we own it
+	if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
+		# Campfire owned by someone else - can't add fuel
+		return false
+
+	# Claim ownership if unowned
+	if owner_pool_key == NO_OWNER:
+		_claim_ownership()
+
+	var pool = _get_or_create_fuel_pool(pool_key)
+
+	var added = min(amount, MAX_BONE_EMBERS - pool.bone_embers)
+	if added > 0:
+		pool.bone_embers += added
+		update_visual_intensity()
+
+	# Track cumulative fuel for skeleton spawning
+	track_fuel_for_skeletons(amount)
+
+	# Play sound
+	if added > 0:
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_fire_fuel_sound(global_position, -12.0, enhanced_sound)
+
+	return added > 0
+
+func decay_group_fuel_pools(delta: float) -> void:
+	"""Decay fuel in all group pools over time."""
+	var pools_to_remove: Array[int] = []
+
+	for pool_key in group_fuel_pools:
+		var pool = group_fuel_pools[pool_key]
+
+		# Decay wood
+		if pool.wood > 0:
+			pool.wood_decay += delta * WOOD_BURN_RATE
+			if pool.wood_decay >= 1.0:
+				var wood_to_remove = int(pool.wood_decay)
+				pool.wood = max(0, pool.wood - wood_to_remove)
+				pool.wood_decay -= float(wood_to_remove)
+
+		# Decay bone embers
+		if pool.bone_embers > 0:
+			pool.ember_decay += delta * BONE_EMBER_BURN_RATE
+			if pool.ember_decay >= 1.0:
+				var embers_to_remove = int(pool.ember_decay)
+				pool.bone_embers = max(0, pool.bone_embers - embers_to_remove)
+				pool.ember_decay -= float(embers_to_remove)
+
+		# Mark empty pools for cleanup (except solo pool)
+		if pool_key != SOLO_POOL_KEY and pool.wood == 0 and pool.bone_embers == 0:
+			pools_to_remove.append(pool_key)
+
+	# Clean up empty group pools
+	for key in pools_to_remove:
+		group_fuel_pools.erase(key)
+
+func merge_solo_fuel_to_group(group_leader_id: int) -> void:
+	"""Merge the local player's solo fuel into a group pool when joining.
+	Called when a player joins a group to transfer their campfire progress."""
+	if not group_fuel_pools.has(SOLO_POOL_KEY):
+		return  # No solo fuel to merge
+
+	var solo_pool = group_fuel_pools[SOLO_POOL_KEY]
+	if solo_pool.wood == 0 and solo_pool.bone_embers == 0:
+		return  # Nothing to merge
+
+	# Get or create the group pool
+	var group_pool = _get_or_create_fuel_pool(group_leader_id)
+
+	# Merge fuel (capped at max)
+	var wood_to_add = min(solo_pool.wood, MAX_WOOD - group_pool.wood)
+	var embers_to_add = min(solo_pool.bone_embers, MAX_BONE_EMBERS - group_pool.bone_embers)
+
+	group_pool.wood += wood_to_add
+	group_pool.bone_embers += embers_to_add
+
+	# Clear solo pool
+	solo_pool.wood = 0
+	solo_pool.bone_embers = 0
+
+	if wood_to_add > 0 or embers_to_add > 0:
+		print("🔥 Merged solo fuel into group: +%d wood, +%d embers" % [wood_to_add, embers_to_add])
+		update_visual_intensity()
+
+func on_player_joined_group(group_leader_id: int) -> void:
+	"""Called when the local player joins a group - merges their solo fuel."""
+	merge_solo_fuel_to_group(group_leader_id)
+
+func on_player_left_group() -> void:
+	"""Called when the local player leaves a group - their contribution stays with group."""
+	# Fuel stays with the group - this is intentional game design
+	# (you contributed to the group fire, it doesn't come back when you leave)
+	pass
 
 
 # REMOVED: check_enemy_deterrent() function
@@ -1577,8 +2034,11 @@ func apply_crit_buff_to_player() -> void:
 
 
 func decay_fuel(delta: float) -> void:
-	"""Slowly burn through fuel over time"""
-	# Decay wood
+	"""Slowly burn through fuel over time - handles both legacy and group pools"""
+	# Decay all group fuel pools
+	decay_group_fuel_pools(delta)
+
+	# Legacy decay for backwards compatibility (solo pool uses group system now)
 	if wood_count > 0:
 		wood_decay_accumulator += delta * WOOD_BURN_RATE
 		if wood_decay_accumulator >= 1.0:
@@ -1587,7 +2047,6 @@ func decay_fuel(delta: float) -> void:
 			wood_decay_accumulator -= float(wood_to_remove)
 			update_visual_intensity()
 
-	# Decay bone embers
 	if bone_ember_count > 0:
 		bone_ember_decay_accumulator += delta * BONE_EMBER_BURN_RATE
 		if bone_ember_decay_accumulator >= 1.0:
@@ -1598,12 +2057,29 @@ func decay_fuel(delta: float) -> void:
 
 
 func add_wood_fuel(amount: int, enhanced_sound: bool = false) -> bool:
-	"""Add wood fuel (increases healing rate) - no hard cap, can waste fuel"""
+	"""Add wood fuel (increases healing rate) - uses group fuel pool system.
+	Claims ownership if campfire is unowned. Fails if owned by another group."""
+	var pool_key = _get_player_fuel_pool_key()
+
+	# Check ownership - can only add fuel if unowned or we own it
+	if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
+		# Campfire owned by someone else - can't add fuel
+		print("🔥 Cannot add fuel - campfire owned by another group")
+		return false
+
+	# Claim ownership if unowned
+	if owner_pool_key == NO_OWNER:
+		_claim_ownership()
+
+	var pool = _get_or_create_fuel_pool(pool_key)
+
 	# Add fuel up to max (excess is wasted but still consumed)
-	var added = min(amount, MAX_WOOD - wood_count)
+	var added = min(amount, MAX_WOOD - pool.wood)
 	if added > 0:
-		wood_count += added
+		pool.wood += added
 		update_visual_intensity()
+		# Sync fuel state to all clients
+		_sync_fuel_state_to_clients()
 
 	# Track cumulative fuel for skeleton spawning (all fuel counts, even wasted)
 	track_fuel_for_skeletons(amount)
@@ -1616,12 +2092,29 @@ func add_wood_fuel(amount: int, enhanced_sound: bool = false) -> bool:
 	return true
 
 func add_bone_ember_fuel(amount: int, enhanced_sound: bool = false) -> bool:
-	"""Add bone ember fuel (increases crit chance) - no hard cap, can waste fuel"""
+	"""Add bone ember fuel (increases crit chance) - uses group fuel pool system.
+	Claims ownership if campfire is unowned. Fails if owned by another group."""
+	var pool_key = _get_player_fuel_pool_key()
+
+	# Check ownership - can only add fuel if unowned or we own it
+	if owner_pool_key != NO_OWNER and owner_pool_key != pool_key:
+		# Campfire owned by someone else - can't add fuel
+		print("🔥 Cannot add fuel - campfire owned by another group")
+		return false
+
+	# Claim ownership if unowned
+	if owner_pool_key == NO_OWNER:
+		_claim_ownership()
+
+	var pool = _get_or_create_fuel_pool(pool_key)
+
 	# Add fuel up to max (excess is wasted but still consumed)
-	var added = min(amount, MAX_BONE_EMBERS - bone_ember_count)
+	var added = min(amount, MAX_BONE_EMBERS - pool.bone_embers)
 	if added > 0:
-		bone_ember_count += added
+		pool.bone_embers += added
 		update_visual_intensity()
+		# Sync fuel state to all clients
+		_sync_fuel_state_to_clients()
 
 	# Track cumulative fuel for skeleton spawning (all fuel counts, even wasted)
 	track_fuel_for_skeletons(amount)
@@ -1920,10 +2413,9 @@ func get_current_heal_rate() -> float:
 	return 5.0 + (wood_percent * 20.0)  # 5 + (0-20) = 5-25 HP/s
 
 func get_current_crit_buff() -> float:
-	"""Calculate current crit chance buff based on bone ember count"""
-	# Max buff: +16.5% (linear scaling)
-	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
-	return bone_percent * 0.165  # 0-0.165 (0-16.5% crit chance)
+	"""Calculate current crit chance buff based on bone ember count.
+	Uses the local player's group fuel pool."""
+	return get_current_crit_buff_for_player()
 
 func create_fuel_ui() -> void:
 	"""Create UI panel showing current fuel levels and buffs"""

@@ -3,6 +3,7 @@ extends Node
 
 signal player_connected(id)
 signal player_disconnected(id)
+signal player_authenticated(id: int, player_name: String)  # Fires when player is fully joined with name
 signal connected_to_server
 signal connection_failed
 signal server_created
@@ -225,23 +226,67 @@ func update_player_list(players: Dictionary):
 @rpc("authority", "reliable")
 func player_joined(id: int, player_info: Dictionary):
 	connected_players[id] = player_info
-	print("Player %s joined the game" % player_info.name)
+	var player_name = player_info.get("name", "Player%d" % id)
+	print("Player %s joined the game" % player_name)
+
+	# Emit signal for UI (ChatUI uses this for "joined the game" message)
+	player_authenticated.emit(id, player_name)
 
 	# ✨ FIX: Update health bar name label for this player on all clients
+	# Use call_deferred to ensure player is spawned first
+	call_deferred("_update_player_name_label", id, player_name)
+
+var _name_update_retries: Dictionary = {}  # peer_id -> retry count
+
+func _update_player_name_label(id: int, player_name: String) -> void:
+	"""Deferred update of player name label after spawn completes"""
+	print("🏷️ [NAME DEBUG] _update_player_name_label called: id=%d, name='%s'" % [id, player_name])
+
 	var game_world = get_tree().get_first_node_in_group("game_world")
+	print("🏷️ [NAME DEBUG] game_world found: %s" % (game_world != null))
+
+	if game_world:
+		print("🏷️ [NAME DEBUG] game_world.players keys: %s" % str(game_world.players.keys()))
+		print("🏷️ [NAME DEBUG] Looking for player id %d in players dict" % id)
+
 	if game_world and game_world.players.has(id):
 		var player = game_world.players[id]
-		if is_instance_valid(player) and player.has_node("HealthBar"):
-			var hb = player.get_node("HealthBar")
-			if hb.has_method("set_player_name"):
-				hb.set_player_name(player_info.name)
-			# Set color based on guest status
-			var is_guest_player = authenticated_players.has(id) and authenticated_players[id].is_guest
-			if hb.has_method("set_name_color"):
-				if is_guest_player:
-					hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
+		print("🏷️ [NAME DEBUG] Found player node: %s, valid: %s" % [player, is_instance_valid(player)])
+
+		if is_instance_valid(player):
+			print("🏷️ [NAME DEBUG] Player has HealthBar: %s" % player.has_node("HealthBar"))
+
+			if player.has_node("HealthBar"):
+				var hb = player.get_node("HealthBar")
+				print("🏷️ [NAME DEBUG] HealthBar node: %s" % hb)
+
+				if hb.has_method("set_player_name"):
+					hb.set_player_name(player_name)
+					print("✅ [NAME DEBUG] Set player name '%s' for peer %d" % [player_name, id])
 				else:
-					hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
+					print("❌ [NAME DEBUG] HealthBar doesn't have set_player_name method!")
+
+				# Set color based on guest status
+				var is_guest_player = authenticated_players.has(id) and authenticated_players[id].get("is_guest", false)
+				if hb.has_method("set_name_color"):
+					if is_guest_player:
+						hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
+					else:
+						hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
+
+				# Clear retry counter on success
+				_name_update_retries.erase(id)
+				return
+
+	# Player not spawned yet, retry with limit
+	var retries = _name_update_retries.get(id, 0)
+	if retries < 60:  # Try for ~1 second (60 frames)
+		_name_update_retries[id] = retries + 1
+		print("🏷️ [NAME DEBUG] Player %d not ready, retry %d/60" % [id, retries + 1])
+		call_deferred("_update_player_name_label", id, player_name)
+	else:
+		print("❌ [NAME DEBUG] Failed to set name for player %d after 60 retries" % id)
+		_name_update_retries.erase(id)
 
 @rpc("authority", "reliable")
 func player_left(id: int):
@@ -414,8 +459,14 @@ func handle_login_request(username: String, password_hash: String) -> void:
 			"ready": true
 		}
 
-		# Notify all players
+		# Notify all players (clients)
 		rpc("player_joined", peer_id, connected_players[peer_id])
+
+		# CRITICAL: Emit player_authenticated signal on the SERVER so game_world can spawn the player
+		# The rpc("player_joined") only runs on clients, not on the server itself!
+		var auth_player_name = connected_players[peer_id].get("name", "Player%d" % peer_id)
+		print("🏷️ [SERVER] Emitting player_authenticated for peer %d: '%s'" % [peer_id, auth_player_name])
+		player_authenticated.emit(peer_id, auth_player_name)
 
 		# Send success to client
 		rpc_id(peer_id, "receive_login_response", true, "", result.player_data)
@@ -500,8 +551,13 @@ func handle_guest_request(guest_name: String) -> void:
 		"ready": true
 	}
 
-	# Notify all players
+	# Notify all players (clients)
 	rpc("player_joined", peer_id, connected_players[peer_id])
+
+	# CRITICAL: Emit player_authenticated signal on the SERVER so game_world can spawn the player
+	# The rpc("player_joined") only runs on clients, not on the server itself!
+	print("🏷️ [SERVER] Emitting player_authenticated for guest peer %d: '%s'" % [peer_id, guest_name])
+	player_authenticated.emit(peer_id, guest_name)
 
 	# Send success to client
 	rpc_id(peer_id, "receive_login_response", true, "", guest_data)
