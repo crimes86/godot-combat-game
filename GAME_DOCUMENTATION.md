@@ -1306,6 +1306,85 @@ Type in chat when hosting a multiplayer game:
 - **/forceoffline**: Fix stuck login state
 - **/delete**: Delete selected account
 
+### Group Commands
+Type in chat to manage your party/group:
+- **/invite <player>**: Invite a player to your group
+- **/accept**: Accept pending group invite
+- **/decline**: Decline pending group invite
+- **/kick <player>**: Leader kicks a player from group
+- **/leave**: Leave the current group
+- **/promote <player>**: Leader promotes someone else to leader
+- **/disband**: Leader disbands the entire group
+
+---
+
+## Group System
+
+### Overview
+Groups allow players to share campfire buffs and coordinate gameplay. Maximum group size is 40 players.
+
+### GroupUI (Raid Frames)
+- **Position**: Left side of screen below Level/XP display
+- **Style**: WoW-style raid frames with Stone Gray theme
+- **Features**:
+  - Compact frames (120x40px) showing player name and health bar
+  - Gold star (★) indicator for group leader
+  - Cyan border highlight for your own frame
+  - Health bar color changes: Green (>60%) → Yellow (30-60%) → Red (<30%)
+  - Real-time health updates for all group members
+
+### Group Mechanics
+- **Creation**: Automatically created when first invite is accepted
+- **Leadership**: Creator becomes leader, can promote others
+- **Invites**: 60-second timeout on pending invites
+- **Campfire Sharing**: Group members share campfire ownership and buffs
+
+### Files
+- `scripts/systems/GroupManager.gd` - Group state and commands
+- `scripts/ui/GroupUI.gd` - Raid frame display
+- `scripts/ui/GroupInvitePopup.gd` - Invite notification
+
+---
+
+## Campfire Ownership System
+
+### Overview
+Campfires can be claimed by a player or group. Only owners receive buffs, but everyone can see the auras (threat indicator for PvP scenarios).
+
+### Claiming Ownership
+- **First Fuel**: The first player to add fuel (wood or bone embers) claims ownership
+- **Solo Players**: Claimed by individual peer ID
+- **Groups**: Claimed by group (all members become owners)
+- **New Members**: When invited to a group that owns a campfire, new members gain ownership
+
+### Ownership Benefits (Owners Only)
+- **Healing**: 5-25 HP/s based on wood fuel (5 base + 20 max at 50 wood)
+- **Crit Buff**: 0-16.5% bonus crit chance based on bone embers (100 embers = max)
+
+### Aura Visibility (Everyone)
+- **Heal Aura**: Green circle, radius scales with wood (50-468px)
+- **Crit Aura**: Orange/cyan circle, radius scales with bone embers (50-468px)
+- All players see the owner's aura size (visual threat assessment)
+
+### Release Timer
+- **Trigger**: Starts when NO owner is within the aura radius
+- **Duration**: 60 seconds countdown
+- **UI**: Orange "Releasing: XXs" indicator above campfire
+- **Cancellation**: Any owner returning to aura radius stops timer
+- **Release**: Campfire becomes unowned, fuel preserved for next claimer
+
+### Fuel System
+- **Wood**: Max 50, increases heal rate
+- **Bone Embers**: Max 100, increases crit buff
+- **Decay**: Very slow (wood: 1/3000s, embers: 1/4500s)
+- **Network Sync**: Ownership and fuel synced to all clients
+
+### Strategic Implications
+- Groups can claim ruins campfires as farming spots
+- Approaching players see large auras = heavily buffed defenders
+- Kill/chase away owners → 60s timer → claim their buffed campfire
+- Fuel preserved on takeover (instant buff access)
+
 ---
 
 ## Art Style
