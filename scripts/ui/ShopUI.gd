@@ -125,6 +125,7 @@ func open_shop(vendor_node: Vendor) -> void:
 	populate_armor()
 	populate_sell_items()
 	populate_quests()
+	update_quests_tab_indicator()
 
 	# Hide armor tab if vendor doesn't sell armor
 	if tab_container and vendor.armor_for_sale.is_empty():
@@ -975,8 +976,9 @@ func _on_accept_quest(quest_id: String) -> void:
 		if sound_manager:
 			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
 
-		# Refresh the list
+		# Refresh the list and tab indicator
 		populate_quests()
+		update_quests_tab_indicator()
 	else:
 		show_message("Cannot accept quest - max quests reached!", Color.RED)
 
@@ -997,12 +999,52 @@ func _on_turn_in_quest(quest_id: String) -> void:
 		if sound_manager and sound_manager.has_method("play_sound_2d"):
 			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -5.0)
 
-		# Refresh the list and gold display
+		# Refresh the list, gold display, and tab indicator
 		update_gold_display()
 		populate_quests()
+		update_quests_tab_indicator()
 	else:
 		show_message("Cannot turn in quest!", Color.RED)
 
 func _on_close_pressed() -> void:
 	"""Handle close button press"""
 	close_shop()
+
+func update_quests_tab_indicator() -> void:
+	"""Update the Quests tab title with !/? indicator based on available/complete quests"""
+	if not tab_container:
+		return
+
+	# Find the Quests tab index
+	var quests_tab_idx = -1
+	for i in range(tab_container.get_tab_count()):
+		if tab_container.get_tab_title(i).begins_with("Quests"):
+			quests_tab_idx = i
+			break
+
+	if quests_tab_idx == -1:
+		return
+
+	# Check for available and completable quests
+	var has_turn_in = false
+	var has_available = false
+
+	if has_node("/root/QuestManager"):
+		var qm = get_node("/root/QuestManager")
+		var giver = vendor.vendor_name.to_lower() if vendor else "blacksmith"
+
+		var completed_quests = qm.get_completed_quests(giver)
+		var available_quests = qm.get_available_quests(giver)
+
+		has_turn_in = completed_quests.size() > 0
+		has_available = available_quests.size() > 0
+
+	# Update tab title with indicator
+	# Priority: ? (turn-in) > ! (available) > none
+	var tab_title = "Quests"
+	if has_turn_in:
+		tab_title = "Quests ?"  # Gold ? for turn-in
+	elif has_available:
+		tab_title = "Quests !"  # Gold ! for available
+
+	tab_container.set_tab_title(quests_tab_idx, tab_title)
