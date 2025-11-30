@@ -92,6 +92,7 @@ var fire_light: PointLight2D = null
 # Ground mist auras
 var heal_mist: Polygon2D = null
 var crit_mist: Polygon2D = null
+var warmth_aura: Polygon2D = null  # Always-visible base healing aura (orange/amber)
 
 # Particle systems
 var heal_particles: CPUParticles2D = null
@@ -764,19 +765,19 @@ func setup_audio() -> void:
 	fire_audio.finished.connect(_on_fire_audio_finished)
 	add_child(fire_audio)
 
-	# Healing audio - sound 6 (plays first two times in pattern: 6-6-4)
+	# Healing audio - uses same sounds as healing staff for consistency
 	healing_audio_1 = AudioStreamPlayer2D.new()
-	healing_audio_1.stream = load("res://assets/sounds/player/healing_6.mp3")
-	healing_audio_1.volume_db = -12.0
+	healing_audio_1.stream = load("res://assets/sounds/player/healing_staff_cast.wav")
+	healing_audio_1.volume_db = -10.0
 	healing_audio_1.max_distance = 300.0
 	healing_audio_1.attenuation = 1.5
 	healing_audio_1.panning_strength = 0.8
 	add_child(healing_audio_1)
 
-	# Healing audio - sound 4 (plays third time in pattern: 6-6-4)
+	# Healing audio - alternate sound (impact) for variety in pattern
 	healing_audio_2 = AudioStreamPlayer2D.new()
-	healing_audio_2.stream = load("res://assets/sounds/player/healing_4.mp3")
-	healing_audio_2.volume_db = -12.0
+	healing_audio_2.stream = load("res://assets/sounds/player/healing_staff_impact.wav")
+	healing_audio_2.volume_db = -10.0
 	healing_audio_2.max_distance = 300.0
 	healing_audio_2.attenuation = 1.5
 	healing_audio_2.panning_strength = 0.8
@@ -885,10 +886,24 @@ func animate_fire(delta: float) -> void:
 
 func create_ground_mist_auras() -> void:
 	"""Create simple filled circle auras with additive blend so fire glow shows through"""
-	# CRIT AURA (Cyan-Blue) - larger, behind heal aura
+	# WARMTH AURA (Orange/Amber) - always visible, shows base healing radius
+	# This is the default healing that's always active regardless of fuel
+	warmth_aura = Polygon2D.new()
+	warmth_aura.name = "WarmthAura"
+	warmth_aura.z_index = -3  # Behind all other auras
+	warmth_aura.color = Color(1.0, 0.5, 0.1, 0.08)  # Soft orange/amber, subtle
+	warmth_aura.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	warmth_aura.material = CanvasItemMaterial.new()
+	warmth_aura.material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	warmth_aura.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	warmth_aura.polygon = create_wavy_circle(warmth_radius, 48, 0.0)  # Fixed size: 150px
+	warmth_aura.visible = true  # Always visible
+	fire_sprite.add_child(warmth_aura)
+
+	# CRIT AURA (Cyan-Blue) - fuel-based, grows with bone embers
 	crit_mist = Polygon2D.new()
 	crit_mist.name = "CritAura"
-	crit_mist.z_index = -2  # Same as coals, visible above rocks
+	crit_mist.z_index = -2  # Above warmth, below heal
 	crit_mist.color = Color(0.0, 0.6, 1.0, 0.12)  # Slightly higher alpha for additive blend
 	crit_mist.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	crit_mist.material = CanvasItemMaterial.new()
@@ -897,7 +912,7 @@ func create_ground_mist_auras() -> void:
 	crit_mist.visible = false
 	fire_sprite.add_child(crit_mist)
 
-	# HEAL AURA (Green) - smaller, in front of crit aura
+	# HEAL AURA (Green) - fuel-based, grows with wood
 	heal_mist = Polygon2D.new()
 	heal_mist.name = "HealAura"
 	heal_mist.z_index = -1  # Above crit aura
@@ -909,7 +924,7 @@ func create_ground_mist_auras() -> void:
 	heal_mist.visible = false
 	fire_sprite.add_child(heal_mist)
 
-	print("✅ Created simple polygon auras")
+	print("✅ Created simple polygon auras (including warmth aura)")
 
 
 func update_ground_mist(delta: float) -> void:
@@ -921,6 +936,15 @@ func update_ground_mist(delta: float) -> void:
 	# Performance: Only update mist when visible on screen
 	if not is_visible_on_screen():
 		return
+
+	# Update warmth aura with gentle breathing animation (always visible)
+	if warmth_aura and is_instance_valid(warmth_aura):
+		var time = Time.get_ticks_msec() / 1000.0
+		# Gentle pulse: radius varies by ±5px, alpha varies slightly
+		var pulse_radius = warmth_radius + sin(time * 1.5) * 5.0
+		var pulse_alpha = 0.08 + sin(time * 2.0) * 0.02  # 0.06 to 0.10
+		warmth_aura.polygon = create_wavy_circle(pulse_radius, 48, time * 0.5)
+		warmth_aura.color = Color(1.0, 0.5, 0.1, pulse_alpha)
 
 	# Get fuel counts from the OWNER's pool (so everyone sees the same auras)
 	var owner_pool = _get_owner_fuel_pool()

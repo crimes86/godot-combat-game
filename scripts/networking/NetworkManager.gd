@@ -17,7 +17,7 @@ signal register_failed(error: String)
 signal authentication_required()  # Emitted when client connects and needs to auth
 
 const DEFAULT_PORT = 7000
-const MAX_PLAYERS = 4
+const MAX_PLAYERS = 50  # Target for 3-chunk playtest (single instance)
 
 var peer = null
 var connected_players = {}

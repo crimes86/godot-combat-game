@@ -15,6 +15,12 @@ var next_enemy_id: int = 1
 const POSITION_SYNC_RATE: float = 0.05  # 20Hz (was 10Hz - increased for smoother movement)
 var position_sync_timer: float = 0.0
 
+# Interest Management - only sync enemies near each player (reduces bandwidth ~80%)
+const SYNC_RADIUS_FULL: float = 1500.0      # Full 20Hz sync for nearby enemies
+const SYNC_RADIUS_REDUCED: float = 3000.0   # 5Hz sync for mid-range enemies
+const SYNC_RADIUS_MAX: float = 4000.0       # Beyond this, don't sync at all
+var reduced_sync_counter: int = 0           # Counter to throttle reduced-rate syncs
+
 # Client-side interpolation data for smooth movement
 var enemy_target_positions: Dictionary = {}  # network_id -> target position
 var enemy_interpolation_speeds: Dictionary = {}  # network_id -> calculated speed
@@ -26,6 +32,10 @@ var game_world: Node = null
 var attack_cooldowns: Dictionary = {}  # Dictionary[int, int] - peer_id -> last_attack_time_msec
 const ATTACK_COOLDOWN_MS: int = 90  # Minimum ms between attacks (tightened from 80ms, client uses 100ms)
 
+# Tutorial crit tracking (server-side) - tracks hits per player on training dummy
+var tutorial_dummy_hits: Dictionary = {}  # Dictionary[int, int] - peer_id -> hit_count
+const TUTORIAL_FORCE_CRIT_HITS: int = 5  # Force crit after this many hits on dummy during tutorial
+
 func _ready():
 	# Will be initialized by game_world
 	# Listen for peer connections to sync existing enemies and cleanup on disconnect
@@ -35,6 +45,7 @@ func _ready():
 func _on_peer_disconnected(peer_id: int) -> void:
 	"""Clean up attack cooldown tracking when a player disconnects"""
 	attack_cooldowns.erase(peer_id)
+	tutorial_dummy_hits.erase(peer_id)
 
 func _process(delta):
 	if not multiplayer.has_multiplayer_peer():
@@ -169,8 +180,23 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 		_apply_damage_internal(enemy_network_id, damage, false, false, attacker_id)
 		return
 
+	# Check if this is a training dummy - track tutorial hits for forced crit
+	var is_training_dummy = enemy.is_in_group("training_dummy")
+	if is_training_dummy:
+		if not tutorial_dummy_hits.has(attacker_id):
+			tutorial_dummy_hits[attacker_id] = 0
+		tutorial_dummy_hits[attacker_id] += 1
+
 	# Roll for crit on server side (use attacking player's crit system if available)
-	var is_crit = _server_roll_for_crit(attacker_id)
+	# Force crit on training dummy after enough hits during tutorial
+	var is_crit = false
+	if is_training_dummy and tutorial_dummy_hits.get(attacker_id, 0) >= TUTORIAL_FORCE_CRIT_HITS:
+		# Force crit for tutorial
+		is_crit = true
+		tutorial_dummy_hits[attacker_id] = 0  # Reset for next crit window
+		print("🎯 Server: FORCED CRIT for tutorial (player %d hit dummy %d times)" % [attacker_id, TUTORIAL_FORCE_CRIT_HITS])
+	else:
+		is_crit = _server_roll_for_crit(attacker_id, is_training_dummy)
 
 	if is_crit:
 		print("🌐 Server: CRIT rolled for player %d on enemy %d!" % [attacker_id, enemy_network_id])
@@ -208,14 +234,15 @@ func _get_server_crit_window_manager() -> Node:
 			return crit_mgr
 	return null
 
-func _server_roll_for_crit(attacker_peer_id: int) -> bool:
+func _server_roll_for_crit(attacker_peer_id: int, is_training_dummy: bool = false) -> bool:
 	"""Server rolls for crit on behalf of a player."""
 	# NOTE: We can't use CharacterStats here because it's the SERVER's stats, not the attacker's
 	# For fairness, use a fixed base crit chance for all multiplayer rolls
 	# The pity system runs locally on each client anyway
 
 	# Base crit chance for multiplayer (5% default, same as level 1 player)
-	var base_crit_chance = 0.05
+	# Training dummy has higher crit chance (15%) to help with tutorial progression
+	var base_crit_chance = 0.15 if is_training_dummy else 0.05
 
 	# If the attacker is the server player, use their actual crit system
 	if attacker_peer_id == 1:
@@ -452,8 +479,15 @@ func _handle_enemy_death(enemy_network_id: int, killer_id: int) -> void:
 	# Generate loot server-side (deterministic from this point)
 	var loot_data = _generate_loot(enemy)
 
-	# Broadcast death to all clients
-	rpc("_client_enemy_died", enemy_network_id, killer_id, loot_data.items, loot_data.gold)
+	# Serialize loot items to JSON string for reliable RPC transmission
+	# Godot's RPC has issues with Array[Dictionary] serialization
+	var loot_json = JSON.stringify(loot_data.items)
+	print("🌐 Server: Sending death for enemy #%d with %d items, json length: %d" % [
+		enemy_network_id, loot_data.items.size(), loot_json.length()
+	])
+
+	# Broadcast death to all clients (loot as JSON string)
+	rpc("_client_enemy_died", enemy_network_id, killer_id, loot_json, loot_data.gold)
 
 func _generate_loot(enemy: Node) -> Dictionary:
 	"""Generate loot for enemy corpse. Server only."""
@@ -472,18 +506,29 @@ func _generate_loot(enemy: Node) -> Dictionary:
 	return {"items": items, "gold": gold}
 
 @rpc("authority", "call_local", "reliable")
-func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_items: Array, loot_gold: int) -> void:
+func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_json: String, loot_gold: int) -> void:
 	"""Server broadcasts enemy death to all clients."""
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
 		return
 
 	var is_server = multiplayer.is_server()
-	print("💀 [%s] Enemy #%d died - received %d loot items, %d gold" % [
+
+	# Deserialize loot items from JSON string
+	var loot_items: Array = []
+	if loot_json.length() > 0:
+		var parsed = JSON.parse_string(loot_json)
+		if parsed is Array:
+			loot_items = parsed
+		else:
+			push_warning("Failed to parse loot JSON: %s" % loot_json)
+
+	print("💀 [%s] Enemy #%d died - received %d loot items, %d gold (json len: %d)" % [
 		"Server" if is_server else "Client",
 		enemy_network_id,
 		loot_items.size(),
-		loot_gold
+		loot_gold,
+		loot_json.length()
 	])
 
 	# Set loot (generated by server) - must happen BEFORE die() to override local generation
@@ -551,26 +596,81 @@ func _on_enemy_died(enemy_network_id: int) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _sync_enemy_positions() -> void:
-	"""Send position updates for all active enemies."""
+	"""Send position updates using Interest Management - only nearby enemies per player."""
 	if enemies.is_empty():
 		return
 
-	# Build position data
-	var positions = {}
+	# Increment reduced sync counter (for 5Hz throttling of mid-range enemies)
+	reduced_sync_counter = (reduced_sync_counter + 1) % 4  # Every 4th tick = 5Hz
+	var include_reduced_range = (reduced_sync_counter == 0)
+
+	# Get all players on server
+	var all_players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	if all_players.is_empty():
+		return
+
+	# Build a mapping of peer_id -> player_position
+	var player_positions: Dictionary = {}  # peer_id -> Vector2
+	for player in all_players:
+		if not is_instance_valid(player):
+			continue
+		var peer_id = player.get_multiplayer_authority()
+		player_positions[peer_id] = player.global_position
+
+	# Pre-compute all enemy data once (avoid redundant work)
+	var all_enemy_data: Dictionary = {}  # enemy_id -> {data, pos}
 	for id in enemies:
 		var enemy = enemies[id]
 		if is_instance_valid(enemy) and not enemy.is_corpse:
-			positions[id] = {
-				"pos": enemy.global_position,
-				"anim": _get_enemy_animation(enemy),
-				"health": enemy.current_health,
-				"max_health": enemy.max_health,
-				# NOTE: in_crit_window is NOT synced - crit windows are per-player/local only
-				"is_dying": enemy.is_dying
+			all_enemy_data[id] = {
+				"data": {
+					"pos": enemy.global_position,
+					"anim": _get_enemy_animation(enemy),
+					"health": enemy.current_health,
+					"max_health": enemy.max_health,
+					"is_dying": enemy.is_dying
+				},
+				"world_pos": enemy.global_position
 			}
 
-	if not positions.is_empty():
-		rpc("_client_sync_positions", positions)
+	# Send filtered updates to each player based on distance
+	for peer_id in player_positions:
+		var player_pos = player_positions[peer_id]
+		var positions_for_player: Dictionary = {}
+
+		for enemy_id in all_enemy_data:
+			var enemy_info = all_enemy_data[enemy_id]
+			var distance = player_pos.distance_to(enemy_info.world_pos)
+
+			# Full sync for nearby enemies (every tick = 20Hz)
+			if distance <= SYNC_RADIUS_FULL:
+				positions_for_player[enemy_id] = enemy_info.data
+			# Reduced sync for mid-range enemies (every 4th tick = 5Hz)
+			elif distance <= SYNC_RADIUS_REDUCED and include_reduced_range:
+				positions_for_player[enemy_id] = enemy_info.data
+			# Beyond SYNC_RADIUS_MAX: don't sync at all (client doesn't need it)
+
+		# Send to this specific player if they have any nearby enemies
+		if not positions_for_player.is_empty():
+			_client_sync_positions.rpc_id(peer_id, positions_for_player)
+
+	# Debug: Log sync stats occasionally (every ~5 seconds)
+	if reduced_sync_counter == 0 and randf() < 0.05:  # ~5% chance each reduced tick
+		var total_enemies = all_enemy_data.size()
+		var avg_synced = 0
+		for peer_id in player_positions:
+			var player_pos = player_positions[peer_id]
+			var count = 0
+			for enemy_id in all_enemy_data:
+				if player_pos.distance_to(all_enemy_data[enemy_id].world_pos) <= SYNC_RADIUS_REDUCED:
+					count += 1
+			avg_synced += count
+		if player_positions.size() > 0:
+			avg_synced = avg_synced / player_positions.size()
+		print("📡 [Interest Mgmt] %d players, %d total enemies, avg %.0f synced/player (%.0f%% reduction)" % [
+			player_positions.size(), total_enemies, avg_synced,
+			100.0 * (1.0 - float(avg_synced) / max(total_enemies, 1))
+		])
 
 @rpc("authority", "unreliable_ordered")
 func _client_sync_positions(positions: Dictionary) -> void:
@@ -1109,15 +1209,28 @@ func request_loot_item(enemy_network_id: int, item_index: int) -> void:
 	# Remove item from server's corpse loot
 	enemy.corpse_loot.remove_at(item_index)
 
+	# Serialize item to JSON for reliable RPC transmission
+	var item_json = JSON.stringify(item)
+
 	# Broadcast to all clients (including server via call_local)
-	_client_item_looted.rpc(enemy_network_id, looter_id, item_index, item)
+	_client_item_looted.rpc(enemy_network_id, looter_id, item_index, item_json)
 
 @rpc("authority", "call_local", "reliable")
-func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int, item: Dictionary) -> void:
+func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int, item_json: String) -> void:
 	"""Server broadcasts that an item was looted from a corpse."""
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
 		return
+
+	# Deserialize item from JSON
+	var item: Dictionary = {}
+	if item_json.length() > 0:
+		var parsed = JSON.parse_string(item_json)
+		if parsed is Dictionary:
+			item = parsed
+		else:
+			push_warning("Failed to parse item JSON: %s" % item_json)
+			return
 
 	# Remove item from local corpse loot (clients only - server already removed in request_loot_item)
 	# This prevents double-removal on server due to call_local

@@ -2,19 +2,28 @@
 
 ## World System
 
-### World Dimensions
-- **World Size**: 12000x5000 pixels
-- **World Bounds**: X: -3000 to 9000, Y: -2500 to 2500
-- **Ground Coverage**: Extends from -5000 to 13000 x, -3000 to 3000 y (18,000 x 6,000 pixels)
+### Chunk-Based Architecture
+The game uses a 3-chunk horizontal world system for scalable multiplayer (up to 50 players per instance).
+
+**Chunk Layout:**
+- **Chunk Size**: 8000x8000 pixels each
+- **Total World**: 24000x8000 pixels (3 chunks wide × 1 chunk tall)
+- **World Bounds**: X: -8200 to 16200, Y: -4200 to 4200
+
+| Chunk | X Range | Content | Enemy Levels |
+|-------|---------|---------|--------------|
+| **Chunk -1** (West) | -8000 to 0 | Ruins (Level 8-20 guardians), Level 3-5 roaming | 3, 4, 5 |
+| **Chunk 0** (Center) | 0 to 8000 | Campfire, Blacksmith, Training Dummy | 1, 2 |
+| **Chunk +1** (East) | 8000 to 16000 | Ruins (Level 8-20 guardians), Level 3-5 roaming | 3, 4, 5 |
 
 ### Key Positions
 | Element | Position | Description |
 |---------|----------|-------------|
-| **Campfire** | (400, 0) | Player spawn point and safe zone |
-| **Ruins** | (2184, -1216) | Ruins farming spot with 8 skeleton guardians |
-| **Castle** | (7600, 0) | Journey destination / Boss zone |
-| **Player Spawn** | (400, 0) | At campfire |
-| **Journey Distance** | 7,200 pixels | Campfire to castle horizontal travel |
+| **Campfire** | (4000, 0) | Player spawn point, safe zone, center of Chunk 0 |
+| **Blacksmith** | Near campfire | Vendor for weapons, armor, quests |
+| **Training Dummy** | Near campfire | Tutorial combat target |
+| **Ruins** | Procedural in Chunk -1 and +1 | 2 per end chunk, 8 guardians each |
+| **Player Spawn** | (4000, 0) | At campfire in Chunk 0 center |
 
 ### World Baking System
 The game uses a pre-baked world texture system for optimal performance:
@@ -80,72 +89,53 @@ The path creates an S-curve through the wasteland, winding north and south:
 
 ## Combat System
 
-### Enemy Progression & Zone Design
+### Enemy Progression & Chunk-Based Level Scaling
 
-**Journey**: 7,200 pixels from Campfire (400, 0) to Castle (7,600, 0)
+**Current Implementation**: Horizontal chunk-based progression with ruins as mini-dungeons.
 
-#### Zone-Based Level Scaling
+#### Level Band System (per X position)
 
-**Zone 1: The Wasteland** (Campfire → Ruins 1: ~2,000px)
-- **Roaming enemies**: Levels 1, 3, 5, 7 (scattered along path)
-- **Ruins 1 guardians**: 8x Level 8 skeletons
-- **Player expected level**: 1-10
-- **Theme**: Tutorial area, learn combat mechanics
-- **Enemy type**: Basic Skeletons (white bone, light gear)
+Enemy levels are determined by distance from the campfire (center of Chunk 0):
 
-**Zone 2: The Cursed Lands** (Ruins 1 → Ruins 2: ~2,200px)
-- **Roaming enemies**: Levels 9, 11, 13, 15 (more frequent spawns)
-- **Ruins 2 guardians**: 8x Level 16 skeletons
-- **Player expected level**: 10-18
-- **Theme**: Difficulty ramps up, need better gear
-- **Enemy type**: Armored Skeletons (gray metal, shields)
+**Chunk 0 (Spawn Area - X: 0 to 8000)**
+| X Range | Enemy Level | Description |
+|---------|-------------|-------------|
+| 1000-7000 (75% center) | Level 1 | Safe tutorial zone around campfire |
+| 0-1000 (west edge) | Level 2 | Slightly harder at chunk borders |
+| 7000-8000 (east edge) | Level 2 | Slightly harder at chunk borders |
 
-**Zone 3: The Shadow Realm** (Ruins 2 → Ruins 3: ~2,000px)
-- **Roaming enemies**: Levels 17, 19, 21, 23 (dense spawns)
-- **Ruins 3 guardians**: 8x Level 24 skeletons
-- **Player expected level**: 18-26
-- **Theme**: Late game, need max stats soon
-- **Enemy type**: Shadow Skeletons (dark purple, faster attacks)
+**Chunk -1 (West - X: -8000 to 0)**
+| X Range | Enemy Level | Description |
+|---------|-------------|-------------|
+| -2000 to 0 | Level 3 | Near Chunk 0 border |
+| -5000 to -2000 | Level 4 | Mid-chunk |
+| -8000 to -5000 | Level 5 | Far west edge |
 
-**Zone 4: Castle Approach** (Ruins 3 → Castle: ~1,000px)
-- **Elite guards**: 3-4 encounters with levels 26, 28, 30
-- **Door guardians**: 2x Level 30 (must defeat to unlock boss)
-- **Player expected level**: 25-30 (max stats + good gear)
-- **Theme**: Gauntlet before boss, prove you're ready
-- **Enemy type**: Royal Guards (golden trim, elite warriors)
+**Chunk +1 (East - X: 8000 to 16000)**
+| X Range | Enemy Level | Description |
+|---------|-------------|-------------|
+| 8000 to 10000 | Level 3 | Near Chunk 0 border |
+| 10000 to 13000 | Level 4 | Mid-chunk |
+| 13000 to 16000 | Level 5 | Far east edge |
 
-**Boss Zone: Castle Interior**
-- **Boss**: Level 33 (Necromancer King / Shadow Lord)
-- **Mechanics**: 2-phase fight or summon system
-- **Requires**: Level 25+ stats + upgraded weapons/armor
-- **Rewards**: 2,000-5,000 gold, guaranteed legendary weapon (Level 33-35)
+#### Ruins & Guardian System
 
-#### Enemy Placement Formula
+Each end chunk (Chunk -1 and Chunk +1) contains **2 procedurally-placed ruins**:
+- **8 skeleton guardians** per ruins, circling the structure
+- **Guardian levels**: 8, 12, 16, 20 (increasing per ruins)
+- **Minimum spacing**: 1500px between ruins
+- **Path offset**: 600-1400px north or south of center path (Y=0)
 
-**Smooth progression**: Every ~300px = +1 enemy level
+**Ruins Placement Patterns** (per chunk):
+- Both North: Both ruins placed Y < 0
+- Both South: Both ruins placed Y > 0
+- Split: One north, one south
 
-| Position | Enemy Level | Type |
-|----------|-------------|------|
-| 400 | Level 1 | Campfire (safe zone) |
-| 700 | Level 1 | Roaming skeleton |
-| 1000 | Level 2 | Roaming skeleton |
-| 1300 | Level 3 | Roaming skeleton |
-| 1600 | Level 5 | Roaming skeleton |
-| 1900 | Level 7 | Roaming skeleton |
-| **2184** | **Level 8** | **Ruins 1 Guardians (8x)** |
-| 2500 | Level 9 | Roaming skeleton |
-| 3000 | Level 11 | Roaming skeleton |
-| 3500 | Level 13 | Roaming skeleton |
-| 4000 | Level 15 | Roaming skeleton |
-| **4200** | **Level 16** | **Ruins 2 Guardians (8x)** |
-| 4700 | Level 18 | Roaming skeleton |
-| 5200 | Level 20 | Roaming skeleton |
-| 5700 | Level 22 | Roaming skeleton |
-| **6000** | **Level 24** | **Ruins 3 Guardians (8x)** |
-| 6400 | Level 26 | Elite guard |
-| 6800 | Level 28 | Elite guard |
-| 7200 | Level 30 | Door Guardians (2x) |
-| **7600** | **Level 33** | **BOSS (Necromancer King)** |
+#### Enemy Density
+
+**Per Chunk**: 120 enemies (procedural + manual spawn markers)
+**Total World**: 360 enemies across 3 chunks
+**Respawn Time**: 300 seconds (5 minutes)
 
 #### Roaming vs Stationary Behavior
 
@@ -698,6 +688,30 @@ weakpoint.take_damage(final_damage)
 - Regular enemies: z_index 0
 - Prevents visual overlap issues
 
+#### Interest Management (Network Scalability) ✅ IMPLEMENTED
+
+For 50-player scalability, enemy position sync uses distance-based filtering per player:
+
+**Sync Radius Tiers:**
+| Radius | Sync Rate | Description |
+|--------|-----------|-------------|
+| 0-1500px | 20Hz | Full sync for nearby enemies (combat range) |
+| 1500-3000px | 5Hz | Reduced sync for mid-range (visible but not fighting) |
+| 3000-4000px | Never | No sync (outside viewport, enemies exist server-side only) |
+
+**Bandwidth Savings:**
+- Without Interest Management: 360 enemies × 50 players = 18,000 position updates/tick
+- With Interest Management: ~40 enemies × 50 players = 2,000 updates/tick (~89% reduction)
+
+**Implementation** (NetworkEnemyManager.gd):
+```gdscript
+const SYNC_RADIUS_FULL: float = 1500.0      # Full 20Hz sync
+const SYNC_RADIUS_REDUCED: float = 3000.0   # 5Hz reduced sync
+const SYNC_RADIUS_MAX: float = 4000.0       # Beyond = no sync
+```
+
+Each tick, server builds per-player enemy lists filtered by distance, sending individual RPCs instead of broadcasting all enemy positions to all clients.
+
 ---
 
 ### Weakpoint System
@@ -1200,16 +1214,26 @@ At game start, players choose between:
 ## Campfire System
 
 ### Main Campfire
-- **Position**: (400, 0) - left side near spawn
-- **Warmth Radius**: 150 units
-- **Healing Rate**: 5 HP every 0.5 seconds while in warmth
-- **Visual**: Animated flickering flames with warm glow circle
+- **Position**: (4000, 0) - center of Chunk 0
+- **Warmth Radius**: 150 units (base healing, always active)
+- **Healing Rate**: 5 HP every 0.5 seconds while in warmth radius
+- **Sounds**: Uses healing staff sounds (healing_staff_cast.wav, healing_staff_impact.wav)
+
+### Visual Auras (layered, z-index order)
+| Aura | Radius | Color | Visibility | Z-Index |
+|------|--------|-------|------------|---------|
+| **Warmth** | 150px (fixed) | Orange/amber (α 0.06-0.10) | Always visible | -3 |
+| **Heal** | Scales with fuel | Green | When fueled | -2 |
+| **Crit** | Scales with fuel | Cyan | When fueled (50%+ fuel) | -1 |
+
+**Warmth Aura Animation**: Gentle breathing effect (±5px radius pulse, alpha oscillation)
 
 ### Ruins Campfire
-- **Position**: (2184, -1216) - converted from ruins
+- **Position**: Procedurally generated in Chunk -1 and Chunk +1
+- **Count**: 2 ruins per end chunk (4 total)
+- **Guardians**: 8 skeleton guardians per ruins (levels 8, 12, 16, 20)
 - **Requires**: Kill at least 1 skeleton guardian to activate
 - **Abandonment Timer**: 2 minutes → reverts to ruins
-- **Skeleton Behavior**: Spawn directly instead of patrolling first
 
 ### Enemy Deterrent
 - Enemies blocked at campfire edge during combat
@@ -1268,6 +1292,11 @@ z = 0:   Player, enemies, campfire (game entities)
 - **Tree shadows**: Proper oval shadows that connect to tree base
 - **Campfire deterrent**: Enemies block at edge instead of retreating
 - **Debug labels**: Enemy names show above heads when F3 is on
+
+### Multiplayer Fixes (Recent)
+- **Loot Sync**: Godot 4 RPC cannot serialize `Array[Dictionary]` - fixed by JSON.stringify() on send, JSON.parse_string() on receive (NetworkEnemyManager.gd)
+- **Tutorial Crit**: Clients weren't getting crits on training dummy - added forced crit after 5 hits and increased dummy crit chance to 15%
+- **Interest Management**: Added distance-based enemy sync filtering for 50-player scalability (89% bandwidth reduction)
 
 ---
 
@@ -2041,6 +2070,13 @@ The training dummy provides a safe, controlled environment for testing combat me
 - Spawns 1-3 weakpoints based on player level
 - 4 second window duration (same as combat)
 - Perfect for practicing weakpoint clicking
+
+**Tutorial Crit Guarantee** ✅ IMPLEMENTED:
+- Training dummy has 15% crit chance (vs 5% normal)
+- Server tracks hits per player on dummy
+- After 5 hits without a crit, next hit is **forced crit**
+- Ensures new players always experience crit system during tutorial
+- Hit counter resets after forced crit triggers
 
 **Combat Text Positioning**:
 - Damage numbers spawn 40px behind dummy (away from player)
