@@ -94,7 +94,7 @@ func create_interaction_prompt() -> void:
 	print("   Interaction prompt created")
 
 func create_quest_indicator() -> void:
-	"""Create floating '!' indicator above blacksmith name tag to attract attention"""
+	"""Create floating '!' or '?' indicator above blacksmith name tag to attract attention"""
 	quest_indicator = Label.new()
 	quest_indicator.name = "QuestIndicator"
 	quest_indicator.text = "!"
@@ -109,6 +109,49 @@ func create_quest_indicator() -> void:
 
 	# Start bobbing animation
 	_start_quest_indicator_animation()
+
+	# Connect to QuestManager signals for indicator updates
+	call_deferred("_connect_quest_signals")
+
+func _connect_quest_signals() -> void:
+	"""Connect to QuestManager for indicator updates"""
+	if has_node("/root/QuestManager"):
+		var qm = get_node("/root/QuestManager")
+		qm.active_quests_changed.connect(_update_quest_indicator)
+		qm.quests_loaded.connect(_update_quest_indicator)
+		# Initial update
+		_update_quest_indicator()
+
+func _update_quest_indicator() -> void:
+	"""Update quest indicator based on quest state: ? for turn-in, ! for available"""
+	if not quest_indicator or not is_instance_valid(quest_indicator):
+		return
+
+	if not has_node("/root/QuestManager"):
+		return
+
+	var qm = get_node("/root/QuestManager")
+	var giver = vendor_name.to_lower()
+
+	# Check for quests ready to turn in first (priority)
+	if qm.has_completed_quests(giver):
+		quest_indicator.text = "?"
+		quest_indicator.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))  # Bright gold
+		quest_indicator.visible = true
+		quest_indicator.modulate.a = 1.0
+		return
+
+	# Check for available quests
+	if qm.has_available_quests(giver):
+		quest_indicator.text = "!"
+		quest_indicator.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))  # Gold
+		quest_indicator.visible = true
+		quest_indicator.modulate.a = 1.0
+		return
+
+	# No quests - hide indicator (but don't hide on first visit before talking)
+	if has_talked_to_player:
+		quest_indicator.visible = false
 
 func _start_quest_indicator_animation() -> void:
 	"""Animate the quest indicator with a gentle bob"""

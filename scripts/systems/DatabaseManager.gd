@@ -258,7 +258,8 @@ func save_player_data(username: String, data: Dictionary) -> bool:
 		"current_hp", "max_hp",
 		"position_x", "position_y", "current_phase",
 		"inventory", "equipment", "appearance",
-		"total_playtime_seconds"
+		"total_playtime_seconds",
+		"quests"
 	]
 
 	for field in allowed_fields:

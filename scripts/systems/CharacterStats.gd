@@ -529,6 +529,12 @@ func get_save_data() -> Dictionary:
 			"description": equipped_weapon.description
 		}
 
+	# Get quest data if QuestManager exists
+	var quest_data = {}
+	if has_node("/root/QuestManager"):
+		var quest_manager = get_node("/root/QuestManager")
+		quest_data = quest_manager.get_save_data()
+
 	return {
 		# Core progression
 		"level": level,
@@ -550,6 +556,9 @@ func get_save_data() -> Dictionary:
 		"kill_counts": kill_counts.duplicate(),
 		"achievements": achievements.duplicate(),
 		"total_playtime": total_playtime,
+
+		# Quest progress
+		"quests": quest_data,
 
 		"version": 1  # For future migration
 	}
@@ -605,6 +614,12 @@ func load_save_data(data: Dictionary) -> void:
 
 	# Start session timer
 	start_session()
+
+	# Load quest progress if QuestManager exists
+	var quest_data = data.get("quests", {})
+	if not quest_data.is_empty() and has_node("/root/QuestManager"):
+		var quest_manager = get_node("/root/QuestManager")
+		quest_manager.load_save_data(quest_data)
 
 	print("📊 Character data loaded: Level %d, Gold %d, Playtime %.0fs" % [level, gold, total_playtime])
 

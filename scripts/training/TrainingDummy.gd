@@ -40,6 +40,12 @@ var original_modulate: Color = Color.WHITE
 var weakpoints: Array = []  # Just for visual rendering
 var _grow_tween: Tween = null  # Track grow tween so shrink can wait for it
 
+# Tutorial arrow indicator
+var tutorial_arrow: Node2D = null
+var arrow_visible: bool = false
+var arrow_tween: Tween = null
+var arrow_flash_tween: Tween = null
+
 # Signals for CritWindowManager
 signal damage_taken(damage: float, is_crit: bool)
 signal weakpoint_spawned(weakpoint: Node)  # Emitted when a weakpoint is created
@@ -74,6 +80,9 @@ func _ready() -> void:
 	original_scale = scale
 	await get_tree().process_frame
 	original_modulate = self.modulate
+
+	# Create tutorial arrow indicator (shown during ATTACK_DUMMY step)
+	create_tutorial_arrow()
 
 func create_dummy_sprite() -> void:
 	"""Create animated sprite from dummy spritesheet"""
@@ -155,6 +164,114 @@ func create_hit_flash() -> void:
 	hit_flash.name = "HitFlash"
 	hit_flash.set_script(HIT_FLASH_SCRIPT)
 	add_child(hit_flash)
+
+func create_tutorial_arrow() -> void:
+	"""Create flashing arrow indicator above dummy for tutorial"""
+	tutorial_arrow = Node2D.new()
+	tutorial_arrow.name = "TutorialArrow"
+	tutorial_arrow.position = Vector2(0, -100)  # Above the dummy sprite
+	tutorial_arrow.z_index = 200
+	tutorial_arrow.visible = false
+	add_child(tutorial_arrow)
+
+	# Create arrow shape using a Polygon2D (downward pointing arrow)
+	var arrow_polygon = Polygon2D.new()
+	arrow_polygon.name = "ArrowShape"
+	# Arrow pointing down: triangle with a stem
+	arrow_polygon.polygon = PackedVector2Array([
+		Vector2(0, 20),      # Bottom point (arrow tip)
+		Vector2(-15, 0),     # Left wing
+		Vector2(-6, 0),      # Left inner
+		Vector2(-6, -20),    # Left stem top
+		Vector2(6, -20),     # Right stem top
+		Vector2(6, 0),       # Right inner
+		Vector2(15, 0),      # Right wing
+	])
+	arrow_polygon.color = Color(1.0, 0.9, 0.2, 1.0)  # Gold/yellow color
+	tutorial_arrow.add_child(arrow_polygon)
+
+	# Add outline for visibility
+	var outline = Line2D.new()
+	outline.name = "ArrowOutline"
+	outline.points = PackedVector2Array([
+		Vector2(0, 20),
+		Vector2(-15, 0),
+		Vector2(-6, 0),
+		Vector2(-6, -20),
+		Vector2(6, -20),
+		Vector2(6, 0),
+		Vector2(15, 0),
+		Vector2(0, 20),  # Close the shape
+	])
+	outline.width = 2.0
+	outline.default_color = Color(0.3, 0.2, 0.0, 1.0)  # Dark gold outline
+	tutorial_arrow.add_child(outline)
+
+	# Connect to TutorialManager signals to show/hide arrow
+	if TutorialManager:
+		TutorialManager.tutorial_step_completed.connect(_on_tutorial_step_changed)
+		# Check if already in ATTACK_DUMMY step when spawned
+		if TutorialManager.is_tutorial_active() and TutorialManager.current_step == TutorialManager.TutorialStep.ATTACK_DUMMY:
+			call_deferred("show_tutorial_arrow")
+
+func _on_tutorial_step_changed(completed_step: int) -> void:
+	"""Handle tutorial step changes to show/hide arrow"""
+	if not TutorialManager:
+		return
+
+	var current_step = TutorialManager.current_step
+
+	# Show arrow during ATTACK_DUMMY step (step 2)
+	if current_step == TutorialManager.TutorialStep.ATTACK_DUMMY:
+		show_tutorial_arrow()
+	else:
+		hide_tutorial_arrow()
+
+func show_tutorial_arrow() -> void:
+	"""Show and animate the tutorial arrow"""
+	if not tutorial_arrow or not is_instance_valid(tutorial_arrow):
+		return
+
+	tutorial_arrow.visible = true
+	arrow_visible = true
+
+	# Start bobbing and flashing animation
+	_start_arrow_animation()
+
+func hide_tutorial_arrow() -> void:
+	"""Hide the tutorial arrow"""
+	if not tutorial_arrow or not is_instance_valid(tutorial_arrow):
+		return
+
+	tutorial_arrow.visible = false
+	arrow_visible = false
+
+	# Stop animations
+	if arrow_tween and arrow_tween.is_valid():
+		arrow_tween.kill()
+		arrow_tween = null
+	if arrow_flash_tween and arrow_flash_tween.is_valid():
+		arrow_flash_tween.kill()
+		arrow_flash_tween = null
+
+func _start_arrow_animation() -> void:
+	"""Start the bobbing and flashing animation for the arrow"""
+	if arrow_tween and arrow_tween.is_valid():
+		arrow_tween.kill()
+	if arrow_flash_tween and arrow_flash_tween.is_valid():
+		arrow_flash_tween.kill()
+
+	# Create looping tween for bob
+	arrow_tween = create_tween().set_loops()
+
+	# Bob up and down
+	arrow_tween.tween_property(tutorial_arrow, "position:y", -90.0, 0.4).set_ease(Tween.EASE_IN_OUT)
+	arrow_tween.tween_property(tutorial_arrow, "position:y", -100.0, 0.4).set_ease(Tween.EASE_IN_OUT)
+
+	# Create separate tween for the flash effect
+	arrow_flash_tween = create_tween().set_loops()
+	arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 0.4, 0.3)
+	arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 1.0, 0.3)
 
 func _physics_process(delta: float) -> void:
 	# Handle spin animation timing

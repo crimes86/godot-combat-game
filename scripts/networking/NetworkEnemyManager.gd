@@ -512,6 +512,35 @@ func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_items: Array
 	if not enemy.is_dying:
 		enemy.die()
 
+	# Track kill for quest objectives (local player only)
+	var local_peer_id = multiplayer.get_unique_id()
+	if killer_id == local_peer_id:
+		_track_quest_kill(enemy)
+
+func _track_quest_kill(enemy: Node) -> void:
+	"""Notify QuestManager of enemy kill for quest tracking"""
+	if not has_node("/root/QuestManager"):
+		return
+
+	var qm = get_node("/root/QuestManager")
+
+	# Get enemy type (e.g., "skeleton")
+	var enemy_type = "skeleton"  # Default
+	if enemy.has_method("get_enemy_type"):
+		enemy_type = enemy.get_enemy_type()
+	elif "enemy_type" in enemy:
+		enemy_type = enemy.enemy_type
+
+	# Get enemy level
+	var enemy_level = 1
+	if "level" in enemy:
+		enemy_level = enemy.level
+
+	# Check if it's a guardian
+	var is_guardian = enemy.name.contains("Guardian") or (enemy.has_meta("is_guardian") and enemy.get_meta("is_guardian"))
+
+	qm.on_enemy_killed(enemy_type, enemy_level, is_guardian)
+
 func _on_enemy_died(enemy_network_id: int) -> void:
 	"""Called when enemy dies (connected in register_enemy)."""
 	# Death is now handled through _handle_enemy_death

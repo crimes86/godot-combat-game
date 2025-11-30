@@ -29,6 +29,9 @@ const BONE_EMBER_ITEM = {
 }
 
 func _ready() -> void:
+	# Add to group for network sync lookup
+	add_to_group("pickable_bones")
+
 	# Set up Area2D
 	collision_layer = 0
 	collision_mask = 1  # Detect player on layer 1
@@ -224,5 +227,14 @@ func _sync_bone_picked_up(network_id: String) -> void:
 		# Mark as harvested so it doesn't respawn
 		prop_system.mark_as_harvested(network_id)
 
-	# Remove this bone locally
-	_remove_bone_locally()
+	# Find and remove the bone with this network_id on this client
+	# We need to search for it since 'self' is only valid on the originating machine
+	var bones = get_tree().get_nodes_in_group("pickable_bones")
+	for bone in bones:
+		if bone.get_meta("network_id", "") == network_id:
+			bone._remove_bone_locally()
+			return
+
+	# Fallback: if this IS the bone that was picked up (on originating machine), remove self
+	if get_meta("network_id", "") == network_id:
+		_remove_bone_locally()

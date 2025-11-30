@@ -26,6 +26,7 @@ const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
 @onready var tools_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Tools/ScrollContainer/ToolsList
 @onready var armor_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Armor/ScrollContainer/ArmorList
 @onready var sell_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Sell/ScrollContainer/SellList
+@onready var quests_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Quests/ScrollContainer/QuestsList
 @onready var close_button: Button = $Control/Panel/MarginContainer/VBoxContainer/Header/CloseButton
 @onready var message_label: Label = $Control/Panel/MarginContainer/VBoxContainer/MessageLabel
 @onready var tab_container: TabContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer
@@ -123,6 +124,7 @@ func open_shop(vendor_node: Vendor) -> void:
 	populate_tools()
 	populate_armor()
 	populate_sell_items()
+	populate_quests()
 
 	# Hide armor tab if vendor doesn't sell armor
 	if tab_container and vendor.armor_for_sale.is_empty():
@@ -771,6 +773,235 @@ func sell_item(slot: int) -> void:
 	# Refresh the UI
 	update_gold_display()
 	populate_sell_items()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# QUESTS TAB
+# ═══════════════════════════════════════════════════════════════════════════
+
+const QUEST_AVAILABLE_COLOR = Color(1.0, 0.85, 0.2)  # Gold (existing !)
+const QUEST_COMPLETE_COLOR = Color(1.0, 0.9, 0.3)    # Bright gold
+const QUEST_LOCKED_COLOR = Color(0.4, 0.4, 0.45)     # Dim gray
+
+func populate_quests() -> void:
+	"""Populate the quests list with available and completable quests"""
+	if not quests_list:
+		return
+
+	# Clear existing items
+	for child in quests_list.get_children():
+		child.queue_free()
+
+	# Check if QuestManager exists
+	if not has_node("/root/QuestManager"):
+		var no_quests = Label.new()
+		no_quests.text = "Quest system not available"
+		no_quests.add_theme_font_size_override("font_size", 16)
+		no_quests.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		no_quests.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		quests_list.add_child(no_quests)
+		return
+
+	var qm = get_node("/root/QuestManager")
+	var giver = vendor.vendor_name.to_lower() if vendor else "blacksmith"
+
+	# Get quests ready for turn-in
+	var completed_quests = qm.get_completed_quests(giver)
+	var available_quests = qm.get_available_quests(giver)
+
+	# Show completed quests first (ready for turn-in)
+	if completed_quests.size() > 0:
+		var turn_in_header = Label.new()
+		turn_in_header.text = "READY TO TURN IN"
+		turn_in_header.add_theme_font_size_override("font_size", 14)
+		turn_in_header.add_theme_color_override("font_color", QUEST_COMPLETE_COLOR)
+		quests_list.add_child(turn_in_header)
+
+		for quest in completed_quests:
+			var card = create_quest_card(quest, true)
+			quests_list.add_child(card)
+
+		# Separator
+		var sep = HSeparator.new()
+		sep.add_theme_constant_override("separation", 8)
+		quests_list.add_child(sep)
+
+	# Show available quests
+	if available_quests.size() > 0:
+		var avail_header = Label.new()
+		avail_header.text = "AVAILABLE QUESTS"
+		avail_header.add_theme_font_size_override("font_size", 14)
+		avail_header.add_theme_color_override("font_color", QUEST_AVAILABLE_COLOR)
+		quests_list.add_child(avail_header)
+
+		for quest in available_quests:
+			var card = create_quest_card(quest, false)
+			quests_list.add_child(card)
+
+	# No quests message
+	if completed_quests.is_empty() and available_quests.is_empty():
+		var no_quests = Label.new()
+		no_quests.text = "No quests available.\nLevel up to unlock more!"
+		no_quests.add_theme_font_size_override("font_size", 16)
+		no_quests.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		no_quests.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		quests_list.add_child(no_quests)
+
+func create_quest_card(quest: Dictionary, is_complete: bool) -> PanelContainer:
+	"""Create a quest card with description and accept/turn-in button"""
+	var quest_id = quest.get("id", "")
+	var card = PanelContainer.new()
+	card.custom_minimum_size = Vector2(0, 100)
+
+	# Style the card
+	var card_style = StyleBoxFlat.new()
+	card_style.bg_color = ITEM_BG_COLOR
+	card_style.border_width_left = 2
+	card_style.border_width_right = 2
+	card_style.border_width_top = 2
+	card_style.border_width_bottom = 2
+	card_style.border_color = QUEST_COMPLETE_COLOR if is_complete else QUEST_AVAILABLE_COLOR
+	card_style.corner_radius_top_left = 6
+	card_style.corner_radius_top_right = 6
+	card_style.corner_radius_bottom_left = 6
+	card_style.corner_radius_bottom_right = 6
+	card_style.content_margin_left = 12
+	card_style.content_margin_right = 12
+	card_style.content_margin_top = 8
+	card_style.content_margin_bottom = 8
+	card.add_theme_stylebox_override("panel", card_style)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	card.add_child(vbox)
+
+	# Quest name with indicator
+	var name_hbox = HBoxContainer.new()
+	vbox.add_child(name_hbox)
+
+	var indicator = Label.new()
+	indicator.text = "[?] " if is_complete else "[!] "
+	indicator.add_theme_font_size_override("font_size", 16)
+	indicator.add_theme_color_override("font_color", QUEST_COMPLETE_COLOR if is_complete else QUEST_AVAILABLE_COLOR)
+	name_hbox.add_child(indicator)
+
+	var name_label = Label.new()
+	name_label.text = quest.get("name", "Unknown Quest")
+	name_label.add_theme_font_size_override("font_size", 16)
+	name_label.add_theme_color_override("font_color", TEXT_COLOR)
+	name_hbox.add_child(name_label)
+
+	# Description
+	var desc_label = Label.new()
+	desc_label.text = quest.get("description", "")
+	desc_label.add_theme_font_size_override("font_size", 12)
+	desc_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.72))
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(desc_label)
+
+	# Objectives (for available quests)
+	if not is_complete:
+		var objectives = quest.get("objectives", [])
+		for obj in objectives:
+			var obj_label = Label.new()
+			obj_label.text = "  \u2022 %s (0/%d)" % [obj.get("desc", ""), obj.get("count", 1)]
+			obj_label.add_theme_font_size_override("font_size", 11)
+			obj_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.62))
+			vbox.add_child(obj_label)
+
+	# Rewards and button row
+	var bottom_hbox = HBoxContainer.new()
+	bottom_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(bottom_hbox)
+
+	var rewards_label = Label.new()
+	var xp_reward = quest.get("xp_reward", 0)
+	var gold_reward = quest.get("gold_reward", 0)
+	rewards_label.text = "Reward: %d XP" % xp_reward
+	if gold_reward > 0:
+		rewards_label.text += ", %d Gold" % gold_reward
+	rewards_label.add_theme_font_size_override("font_size", 12)
+	rewards_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5))
+	rewards_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom_hbox.add_child(rewards_label)
+
+	# Action button
+	var action_btn = Button.new()
+	action_btn.text = "TURN IN" if is_complete else "ACCEPT"
+	action_btn.add_theme_font_size_override("font_size", 12)
+
+	# Style button
+	var btn_style = StyleBoxFlat.new()
+	btn_style.bg_color = Color(0.3, 0.5, 0.3, 1.0) if is_complete else Color(0.3, 0.4, 0.5, 1.0)
+	btn_style.border_width_left = 1
+	btn_style.border_width_right = 1
+	btn_style.border_width_top = 1
+	btn_style.border_width_bottom = 1
+	btn_style.border_color = QUEST_COMPLETE_COLOR if is_complete else QUEST_AVAILABLE_COLOR
+	btn_style.corner_radius_top_left = 4
+	btn_style.corner_radius_top_right = 4
+	btn_style.corner_radius_bottom_left = 4
+	btn_style.corner_radius_bottom_right = 4
+	btn_style.content_margin_left = 12
+	btn_style.content_margin_right = 12
+	btn_style.content_margin_top = 4
+	btn_style.content_margin_bottom = 4
+	action_btn.add_theme_stylebox_override("normal", btn_style)
+
+	var btn_hover = btn_style.duplicate()
+	btn_hover.bg_color = Color(0.4, 0.6, 0.4, 1.0) if is_complete else Color(0.4, 0.5, 0.6, 1.0)
+	action_btn.add_theme_stylebox_override("hover", btn_hover)
+
+	if is_complete:
+		action_btn.pressed.connect(func(): _on_turn_in_quest(quest_id))
+	else:
+		action_btn.pressed.connect(func(): _on_accept_quest(quest_id))
+
+	bottom_hbox.add_child(action_btn)
+
+	return card
+
+func _on_accept_quest(quest_id: String) -> void:
+	"""Handle quest accept button"""
+	if not has_node("/root/QuestManager"):
+		return
+
+	var qm = get_node("/root/QuestManager")
+	if qm.accept_quest(quest_id):
+		var quest = qm.get_quest(quest_id)
+		show_message("Quest accepted: %s" % quest.get("name", ""), Color(0.5, 0.9, 0.5))
+
+		# Play sound
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+
+		# Refresh the list
+		populate_quests()
+	else:
+		show_message("Cannot accept quest - max quests reached!", Color.RED)
+
+func _on_turn_in_quest(quest_id: String) -> void:
+	"""Handle quest turn-in button"""
+	if not has_node("/root/QuestManager"):
+		return
+
+	var qm = get_node("/root/QuestManager")
+	if qm.turn_in_quest(quest_id):
+		var quest = qm.get_quest(quest_id)
+		var xp = quest.get("xp_reward", 0)
+		var gold = quest.get("gold_reward", 0)
+		show_message("Quest complete! +%d XP, +%d Gold" % [xp, gold], Color(1.0, 0.85, 0.2))
+
+		# Play level up type sound or gold sound
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager and sound_manager.has_method("play_sound_2d"):
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -5.0)
+
+		# Refresh the list and gold display
+		update_gold_display()
+		populate_quests()
+	else:
+		show_message("Cannot turn in quest!", Color.RED)
 
 func _on_close_pressed() -> void:
 	"""Handle close button press"""

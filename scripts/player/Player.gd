@@ -557,10 +557,25 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 
+	# Tutorial boundary - restrict player to safe zone until tutorial complete
+	if TutorialManager and TutorialManager.is_tutorial_active():
+		var tutorial_step = TutorialManager.current_step
+		# During early tutorial steps, keep player near campfire/dummy/blacksmith
+		if tutorial_step < TutorialManager.TutorialStep.KILL_SKELETON:
+			var campfire_pos = Vector2(Constants.CHUNK_SIZE / 2, 0)  # Center of chunk 0
+			var tutorial_radius = 500.0  # Enough for campfire, dummy, and blacksmith
+			var distance_from_center = global_position.distance_to(campfire_pos)
+
+			if distance_from_center > tutorial_radius:
+				# Push player back inside boundary
+				var direction_to_center = (campfire_pos - global_position).normalized()
+				global_position = campfire_pos - direction_to_center * tutorial_radius
+				velocity = Vector2.ZERO
+
 	# Clamp player position to world boundaries (with 50px buffer)
 	var x_min = -Constants.CHUNK_SIZE + 50
 	var x_max = Constants.CHUNK_SIZE * 2 - 50
-	var y_min = -Constants.CHUNK_SIZE / 2 + 50 
+	var y_min = -Constants.CHUNK_SIZE / 2 + 50
 	var y_max = Constants.CHUNK_SIZE / 2 - 50
 	global_position.x = clamp(global_position.x, x_min, x_max)
 	global_position.y = clamp(global_position.y, y_min, y_max)

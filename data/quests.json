@@ -1,0 +1,214 @@
+{
+	"quests": [
+		{
+			"id": "fuel_the_flame",
+			"name": "Fuel the Flame",
+			"description": "The campfire needs fuel. Collect Bone Embers from skeleton corpses scattered around the wasteland.",
+			"tier": 1,
+			"level_req": 1,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "collect", "target": "Bone Ember", "count": 5, "desc": "Collect Bone Embers"}
+			],
+			"xp_reward": 150,
+			"gold_reward": 25,
+			"prereq": null
+		},
+		{
+			"id": "first_blood",
+			"name": "First Blood",
+			"description": "The wasteland is crawling with skeletons. Put a few back in the ground where they belong.",
+			"tier": 1,
+			"level_req": 1,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "kill", "target": "skeleton", "count": 3, "desc": "Kill skeletons"}
+			],
+			"xp_reward": 200,
+			"gold_reward": 30,
+			"prereq": null
+		},
+		{
+			"id": "warming_glow",
+			"name": "Warming Glow",
+			"description": "Keep the campfire burning strong. Add fuel to stoke the flames and earn its protective warmth.",
+			"tier": 1,
+			"level_req": 2,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "fuel_campfire", "target": "", "count": 10, "desc": "Add fuel to campfire"}
+			],
+			"xp_reward": 250,
+			"gold_reward": 35,
+			"prereq": "fuel_the_flame"
+		},
+		{
+			"id": "bone_collector",
+			"name": "Bone Collector",
+			"description": "Bone Embers are valuable fuel. Gather a larger stockpile to keep the fires burning through the long nights.",
+			"tier": 1,
+			"level_req": 2,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "collect", "target": "Bone Ember", "count": 10, "desc": "Collect Bone Embers"}
+			],
+			"xp_reward": 300,
+			"gold_reward": 40,
+			"prereq": "fuel_the_flame"
+		},
+		{
+			"id": "skeleton_slayer",
+			"name": "Skeleton Slayer",
+			"description": "Prove your worth as a warrior. The undead hordes won't clear themselves.",
+			"tier": 1,
+			"level_req": 3,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "kill", "target": "skeleton", "count": 10, "desc": "Kill skeletons"}
+			],
+			"xp_reward": 400,
+			"gold_reward": 50,
+			"prereq": "first_blood"
+		},
+		{
+			"id": "the_burning_wastes",
+			"name": "The Burning Wastes",
+			"description": "Venture beyond the safety of the campfire. Seek out the lava pools that dot the wasteland - but mind your step.",
+			"tier": 2,
+			"level_req": 4,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "explore", "target": "lava_pool", "count": 1, "desc": "Discover a lava pool"}
+			],
+			"xp_reward": 450,
+			"gold_reward": 60,
+			"prereq": "skeleton_slayer"
+		},
+		{
+			"id": "veteran_hunter",
+			"name": "Veteran Hunter",
+			"description": "The skeletons grow stronger the further you venture from the campfire. Hunt the more powerful ones.",
+			"tier": 2,
+			"level_req": 4,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "kill", "target": "skeleton", "count": 10, "min_level": 4, "desc": "Kill level 4+ skeletons"}
+			],
+			"xp_reward": 500,
+			"gold_reward": 70,
+			"prereq": "skeleton_slayer"
+		},
+		{
+			"id": "skull_seeker",
+			"name": "Skull Seeker",
+			"description": "Ancient Skulls hold power from ages past. Find them among the remains of fallen champions.",
+			"tier": 2,
+			"level_req": 5,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "collect", "target": "Ancient Skull", "count": 3, "desc": "Collect Ancient Skulls"}
+			],
+			"xp_reward": 600,
+			"gold_reward": 80,
+			"prereq": "the_burning_wastes"
+		},
+		{
+			"id": "wasteland_scavenger",
+			"name": "Wasteland Scavenger",
+			"description": "A true survivor never passes up useful materials. Amass a fortune in Bone Embers.",
+			"tier": 2,
+			"level_req": 5,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "collect", "target": "Bone Ember", "count": 25, "desc": "Collect Bone Embers"}
+			],
+			"xp_reward": 550,
+			"gold_reward": 75,
+			"prereq": "bone_collector"
+		},
+		{
+			"id": "fire_keeper",
+			"name": "Fire Keeper",
+			"description": "The campfire is our sanctuary. Keep it blazing bright to ward off the darkness.",
+			"tier": 2,
+			"level_req": 6,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "fuel_campfire", "target": "", "count": 30, "desc": "Add fuel to campfire"}
+			],
+			"xp_reward": 700,
+			"gold_reward": 90,
+			"prereq": "warming_glow"
+		},
+		{
+			"id": "ancient_ruins",
+			"name": "Ancient Ruins",
+			"description": "Rumors speak of ancient ruins at the edge of the wasteland. Find them, if you dare.",
+			"tier": 3,
+			"level_req": 7,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "explore", "target": "ruins", "count": 1, "desc": "Discover the ancient ruins"}
+			],
+			"xp_reward": 800,
+			"gold_reward": 100,
+			"prereq": "the_burning_wastes"
+		},
+		{
+			"id": "guardian_slayer",
+			"name": "Guardian Slayer",
+			"description": "The ruins are protected by powerful guardians - elite skeletons bound to defend their domain. Destroy them.",
+			"tier": 3,
+			"level_req": 7,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "kill", "target": "skeleton", "count": 5, "is_guardian": true, "desc": "Kill guardian skeletons"}
+			],
+			"xp_reward": 1000,
+			"gold_reward": 120,
+			"prereq": "ancient_ruins"
+		},
+		{
+			"id": "claim_the_ruins",
+			"name": "Claim the Ruins",
+			"description": "The ruins contain an ancient hearth. Convert it to a new campfire to expand our territory.",
+			"tier": 3,
+			"level_req": 8,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "convert_ruins", "target": "", "count": 1, "desc": "Convert ruins to campfire"}
+			],
+			"xp_reward": 1200,
+			"gold_reward": 150,
+			"prereq": "guardian_slayer"
+		},
+		{
+			"id": "guardians_bane",
+			"name": "Guardian's Bane",
+			"description": "Become the terror of the ruins. No guardian shall stand before you.",
+			"tier": 3,
+			"level_req": 9,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "kill", "target": "skeleton", "count": 15, "is_guardian": true, "desc": "Kill guardian skeletons"}
+			],
+			"xp_reward": 1500,
+			"gold_reward": 200,
+			"prereq": "guardian_slayer"
+		},
+		{
+			"id": "lichs_secret",
+			"name": "Lich's Secret",
+			"description": "Legend tells of a Lich who once ruled these lands. Find the Lich's Finger Bone - a rare artifact of immense power.",
+			"tier": 3,
+			"level_req": 10,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "collect", "target": "Lich's Finger Bone", "count": 1, "desc": "Find the Lich's Finger Bone"}
+			],
+			"xp_reward": 2000,
+			"gold_reward": 300,
+			"prereq": "guardians_bane"
+		}
+	]
+}

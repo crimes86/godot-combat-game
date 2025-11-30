@@ -37,6 +37,8 @@ GroupManager="*res://scripts/systems/GroupManager.gd"
 GroupUI="*res://scripts/ui/GroupUI.gd"
 GroupInvitePopup="*res://scripts/ui/GroupInvitePopup.gd"
 TutorialManager="*res://scripts/systems/TutorialManager.gd"
+QuestManager="*res://scripts/systems/QuestManager.gd"
+QuestTrackerUI="*res://scripts/ui/QuestTrackerUI.gd"
 
 [editor_plugins]
 

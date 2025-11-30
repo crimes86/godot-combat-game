@@ -2144,6 +2144,9 @@ func add_wood_fuel(amount: int, enhanced_sound: bool = false) -> bool:
 	- Competitive campfires: Uses group fuel pool, claims ownership if unowned.
 	In multiplayer, this requests the server to add fuel."""
 
+	# Track fuel for quest objectives (local player adding fuel)
+	_track_quest_fuel(amount)
+
 	# In multiplayer, route through server for proper sync
 	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
 		_request_add_wood_fuel.rpc_id(1, amount, enhanced_sound)
@@ -2216,6 +2219,9 @@ func add_bone_ember_fuel(amount: int, enhanced_sound: bool = false) -> bool:
 	- Competitive campfires: Uses group fuel pool, claims ownership if unowned.
 	In multiplayer, this requests the server to add fuel."""
 
+	# Track fuel for quest objectives (local player adding fuel)
+	_track_quest_fuel(amount)
+
 	# In multiplayer, route through server for proper sync
 	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
 		_request_add_bone_ember_fuel.rpc_id(1, amount, enhanced_sound)
@@ -2274,6 +2280,14 @@ func _server_add_bone_ember_fuel(amount: int, enhanced_sound: bool) -> bool:
 			sound_manager.play_fire_fuel_sound(global_position, -12.0, enhanced_sound)
 
 	return true
+
+func _track_quest_fuel(amount: int) -> void:
+	"""Notify QuestManager of fuel added for quest tracking"""
+	if not has_node("/root/QuestManager"):
+		return
+
+	var qm = get_node("/root/QuestManager")
+	qm.on_campfire_fueled(amount)
 
 func track_fuel_for_skeletons(amount: int) -> void:
 	"""Track cumulative fuel and spawn skeletons every 5 items"""

@@ -66,6 +66,10 @@ func add_item(item: Dictionary) -> bool:
 					var amount_to_add = min(quantity, space_available)
 					existing_item["quantity"] = current_quantity + amount_to_add
 					if not suppress_signals:
+						# Emit item_added with the amount that was added (for quest tracking)
+						var added_item = item.duplicate()
+						added_item["quantity"] = amount_to_add
+						item_added.emit(added_item)
 						inventory_changed.emit()
 
 					# If we added everything, we're done

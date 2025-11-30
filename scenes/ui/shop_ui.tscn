@@ -156,3 +156,21 @@ size_flags_vertical = 3
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
 columns = 4
+
+[node name="Quests" type="MarginContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 4
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Quests"]
+layout_mode = 2
+
+[node name="QuestsList" type="VBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Quests/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
