@@ -276,15 +276,23 @@ func loot_item(corpse, item: Dictionary) -> void:
 		populate_loot_list()
 		return
 
-	# Find item index in corpse loot
+	# Find item index in corpse loot by matching properties (not reference)
+	# This is needed because items may have been duplicated via RPC serialization
 	var item_index = -1
+	var item_name = item.get("name", "")
+	var item_type = item.get("type", "")
+	var item_rarity = item.get("rarity", "")
+
 	for i in range(corpse.corpse_loot.size()):
-		if corpse.corpse_loot[i] == item:
+		var corpse_item = corpse.corpse_loot[i]
+		if corpse_item and corpse_item.get("name", "") == item_name and \
+		   corpse_item.get("type", "") == item_type and \
+		   corpse_item.get("rarity", "") == item_rarity:
 			item_index = i
 			break
 
 	if item_index == -1:
-		print("❌ Item no longer in corpse loot")
+		print("❌ Item '%s' no longer in corpse loot (corpse has %d items)" % [item_name, corpse.corpse_loot.size()])
 		populate_loot_list()
 		return
 
@@ -303,8 +311,6 @@ func loot_item(corpse, item: Dictionary) -> void:
 	else:
 		# Single player - handle directly
 		if InventorySystem.add_item(item):
-			var item_name = item.get("name", "Unknown")
-			var item_rarity = item.get("rarity", "Common")
 			print("✨ Looted: %s from corpse" % item_name)
 			item_looted.emit(item, corpse)
 
@@ -321,7 +327,7 @@ func loot_item(corpse, item: Dictionary) -> void:
 			# Refresh the list
 			populate_loot_list()
 		else:
-			print("❌ Inventory full! Cannot loot %s" % item.get("name", "Unknown"))
+			print("❌ Inventory full! Cannot loot %s" % item_name)
 
 func _on_take_all_pressed() -> void:
 	"""Take all items from all corpses (gold already awarded when UI opened)"""

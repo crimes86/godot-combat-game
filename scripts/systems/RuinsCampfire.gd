@@ -729,6 +729,11 @@ func create_campfire_visual() -> void:
 		if "enable_deterrence" in campfire_node:
 			campfire_node.enable_deterrence = false
 
+		# Ruins campfires are COMPETITIVE (ownership-based), not community
+		# Override the scene default since campfire.tscn is set to community for home campfire
+		if "is_community_campfire" in campfire_node:
+			campfire_node.is_community_campfire = false
+
 		add_child(campfire_node)
 	else:
 		push_error("❌ Could not load campfire.tscn!")

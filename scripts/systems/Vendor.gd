@@ -25,6 +25,9 @@ var has_talked_to_player: bool = false  # Track if player has interacted
 func _ready() -> void:
 	print("🏪 Vendor '%s' starting initialization..." % vendor_name)
 
+	# Add to vendor group for tutorial system
+	add_to_group("vendor")
+
 	# Create animated blacksmith sprite
 	setup_blacksmith_sprite()
 
@@ -419,6 +422,10 @@ func _on_first_interaction() -> void:
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("dismiss_spawn_hints"):
 		player.dismiss_spawn_hints()
+
+	# Tutorial: notify TutorialManager of blacksmith visit
+	if TutorialManager and TutorialManager.is_tutorial_active():
+		TutorialManager.on_blacksmith_visited()
 
 func create_shop_ui() -> void:
 	"""Create the shop UI dynamically"""

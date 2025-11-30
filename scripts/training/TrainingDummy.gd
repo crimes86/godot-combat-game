@@ -51,6 +51,9 @@ func _ready() -> void:
 	# Add to enemies group so player can target it
 	add_to_group(Constants.GROUP_ENEMIES)
 
+	# Add to training_dummy group for tutorial system
+	add_to_group("training_dummy")
+
 	# Set collision layers (same as enemies)
 	collision_layer = 1
 	collision_mask = 0  # Doesn't need to detect anything
@@ -183,6 +186,19 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	# Emit signal for player feedback (damage numbers)
 	damage_taken.emit(amount, is_crit)
 
+	# Tutorial: notify TutorialManager of dummy hit
+	if TutorialManager:
+		# Note: keys() index offset by 1 since INACTIVE = -1
+		var step_name = TutorialManager.TutorialStep.keys()[TutorialManager.current_step + 1] if TutorialManager.current_step >= -1 else "UNKNOWN"
+		print("📚 [Dummy] TutorialManager exists, is_tutorial_active: %s, current_step: %s" % [TutorialManager.is_tutorial_active(), step_name])
+		if TutorialManager.is_tutorial_active():
+			TutorialManager.on_dummy_hit(is_crit)
+			# Check if this was a weakpoint hit during tutorial
+			if is_weakpoint_hit:
+				TutorialManager.on_weakpoint_hit()
+	else:
+		print("📚 [Dummy] TutorialManager is null!")
+
 	# Play skeleton sounds for testing (same as Enemy)
 	# NOTE: In multiplayer, NetworkEnemyManager._client_enemy_damaged() handles ALL hit sounds
 	# via _play_hit_sounds(). We only play sounds here in single player to avoid duplicates.
@@ -312,6 +328,10 @@ func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 	# Spawn weakpoints (check we weren't interrupted)
 	if in_crit_window and is_instance_valid(self):
 		spawn_weakpoints()
+
+		# Tutorial: notify TutorialManager of crit window opening
+		if TutorialManager and TutorialManager.is_tutorial_active():
+			TutorialManager.on_crit_window_opened()
 
 	_crit_window_transitioning = false  # Unlock after grow complete
 

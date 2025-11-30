@@ -36,6 +36,7 @@ ItemIconGenerator="*res://scripts/systems/ItemIconGenerator.gd"
 GroupManager="*res://scripts/systems/GroupManager.gd"
 GroupUI="*res://scripts/ui/GroupUI.gd"
 GroupInvitePopup="*res://scripts/ui/GroupInvitePopup.gd"
+TutorialManager="*res://scripts/systems/TutorialManager.gd"
 
 [editor_plugins]
 

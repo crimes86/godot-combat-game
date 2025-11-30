@@ -542,6 +542,10 @@ func chop_tree() -> void:
 	if interaction_prompt:
 		interaction_prompt.visible = false
 
+	# Disable the parent tree's large collision shape (added by game_world.gd)
+	# The stump will have its own small collision
+	_disable_tree_collision()
+
 	# Spawn wood items
 	spawn_wood_drops()
 
@@ -895,6 +899,21 @@ func create_tree_stump() -> void:
 
 	add_child(stump_node)
 
+func _disable_tree_collision() -> void:
+	"""Disable the parent tree's collision shape when chopped.
+	The stump will have its own small collision."""
+	# Find and disable CollisionShape2D children that are direct children of this StaticBody2D
+	# (not children of InteractionArea or TreeStump)
+	for child in get_children():
+		if child is CollisionShape2D:
+			child.disabled = true
+
+func _enable_tree_collision() -> void:
+	"""Re-enable the parent tree's collision shape when respawned."""
+	for child in get_children():
+		if child is CollisionShape2D:
+			child.disabled = false
+
 func respawn_tree() -> void:
 	"""Respawn the tree after timer completes"""
 	if not is_harvested:
@@ -919,6 +938,9 @@ func respawn_tree() -> void:
 	# Remove loot indicator if it exists
 	remove_loot_indicator()
 
+	# Re-enable the parent tree's collision
+	_enable_tree_collision()
+
 	# Restore original interaction area (small circle at trunk base)
 	restore_interaction_area()
 
@@ -928,6 +950,8 @@ func respawn_tree() -> void:
 		tree_sprite.position = original_sprite_position
 		tree_sprite.rotation = 0.0
 		tree_sprite.modulate = original_modulate
+		# Reset the offset that was changed during falling animation
+		tree_sprite.offset = Vector2.ZERO
 		var tween = create_tween()
 		tween.set_parallel(true)
 		tween.tween_property(tree_sprite, "modulate:a", original_modulate.a, 0.5)

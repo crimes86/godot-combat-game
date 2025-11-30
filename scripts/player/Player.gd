@@ -803,10 +803,11 @@ func _input(event: InputEvent) -> void:
 				debug_update_timer = 0.0  # Reset timer
 				update_debug_visualization()  # Immediate update
 			
-			KEY_F5:
-				# Add 5 levels
-				CharacterStats.debug_add_levels(5)
-				print("Added 5 levels (now level ", CharacterStats.level, ")")
+			# KEY_F5 debug level-up disabled for playtesting
+			# KEY_F5:
+			# 	# Add 5 levels
+			# 	CharacterStats.debug_add_levels(5)
+			# 	print("Added 5 levels (now level ", CharacterStats.level, ")")
 			
 			KEY_F6:
 				# Reset to level 1
@@ -829,15 +830,16 @@ func _input(event: InputEvent) -> void:
 			KEY_F9:
 				# DEBUG: Toggle full map view (zoom out to see entire world)
 				toggle_debug_map_view()
-			KEY_F10:
-				# DEBUG: Add campfire fuel to inventory (Press F10)
-				var debug_fuel = load("res://scripts/debug/debug_fuel_items.gd")
-				if debug_fuel:
-					var instance = debug_fuel.new()
-					add_child(instance)
-					await instance.add_fuel_to_inventory()
-					# Clean up after async function completes
-					instance.queue_free()
+			# KEY_F10 debug fuel disabled for playtesting
+			# KEY_F10:
+			# 	# DEBUG: Add campfire fuel to inventory (Press F10)
+			# 	var debug_fuel = load("res://scripts/debug/debug_fuel_items.gd")
+			# 	if debug_fuel:
+			# 		var instance = debug_fuel.new()
+			# 		add_child(instance)
+			# 		await instance.add_fuel_to_inventory()
+			# 		# Clean up after async function completes
+			# 		instance.queue_free()
 
 			KEY_F12:
 				# DEBUG: Toggle between melee weapon and healing staff

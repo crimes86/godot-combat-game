@@ -794,6 +794,10 @@ func _process(delta: float) -> void:
 			return
 		ui_update_timer = 0.0
 
+		# Refresh cached_player if null or invalid (needed for multiplayer clients)
+		if not cached_player or not is_instance_valid(cached_player):
+			cached_player = _get_local_player()
+
 		if cached_player and is_instance_valid(cached_player):
 			var distance = global_position.distance_to(cached_player.global_position)
 
@@ -1099,6 +1103,27 @@ func die() -> void:
 
 	is_dying = true
 
+	# If dying during crit window, reset sprite scale immediately
+	if in_crit_window or _crit_window_transitioning:
+		in_crit_window = false
+		_crit_window_transitioning = false
+		# Kill any active grow tween
+		if _grow_tween and _grow_tween.is_valid():
+			_grow_tween.kill()
+			_grow_tween = null
+		# Reset sprite to normal scale
+		if sprite:
+			sprite.scale = Vector2.ONE
+			sprite.modulate = Color.WHITE
+		# Reset z_index
+		z_index = 0
+		self.modulate = Color.WHITE
+		# Reset HitFlash base color
+		if has_node("HitFlash"):
+			var hit_flash = get_node("HitFlash")
+			if hit_flash.has_method("set_base_color"):
+				hit_flash.set_base_color(Color.WHITE)
+
 	# Clean up any active weakpoints
 	for weakpoint in weakpoints:
 		if is_instance_valid(weakpoint):
@@ -1182,6 +1207,10 @@ func die() -> void:
 
 	# Emit died signal - spawner will respawn immediately
 	died.emit()
+
+	# Tutorial: notify TutorialManager of skeleton kill
+	if TutorialManager and TutorialManager.is_tutorial_active():
+		TutorialManager.on_skeleton_killed()
 
 	# Transition to corpse state (don't despawn)
 	become_corpse()
@@ -1312,6 +1341,11 @@ func become_corpse() -> void:
 				wp.queue_free()
 		weakpoints.clear()
 		in_crit_window = false
+
+	# Ensure sprite is reset to normal scale (in case died during crit window)
+	if sprite:
+		sprite.scale = Vector2.ONE
+	z_index = 0
 
 	# Disable AI
 	if has_node("EnemyAI"):

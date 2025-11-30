@@ -176,7 +176,8 @@ func create_account(username: String, password: String) -> Dictionary:
 
 		# Flags
 		"is_online": false,
-		"is_banned": false
+		"is_banned": false,
+		"tutorial_completed": false
 	}
 
 	# Store in database
@@ -503,3 +504,24 @@ func get_saved_position(username: String) -> Vector2:
 	var pos_x = data.get("position_x", 0.0)
 	var pos_y = data.get("position_y", 0.0)
 	return Vector2(pos_x, pos_y)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TUTORIAL TRACKING
+# ═══════════════════════════════════════════════════════════════════════════
+
+func has_completed_tutorial(username: String = "") -> bool:
+	"""Check if player has completed the tutorial"""
+	var user = username if not username.is_empty() else current_username
+	if user.is_empty() or not players_data.has(user):
+		return false
+	return players_data[user].get("tutorial_completed", false)
+
+func set_tutorial_completed(username: String = "") -> void:
+	"""Mark tutorial as completed for a player"""
+	var user = username if not username.is_empty() else current_username
+	if user.is_empty() or not players_data.has(user):
+		return
+
+	players_data[user]["tutorial_completed"] = true
+	save_database()
+	print("📚 [DatabaseManager] Tutorial completed for: %s" % user)

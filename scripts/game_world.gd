@@ -2628,6 +2628,51 @@ func spawn_training_dummy():
 
 	print("🎯 Training Dummy spawned at: ", dummy_pos)
 
+	# Spawn starter skeletons near the clearing for tutorial
+	spawn_tutorial_skeletons()
+
+func spawn_tutorial_skeletons():
+	"""Spawn a few level 1-2 skeletons just outside the campfire clearing for new players"""
+	# In multiplayer, only server spawns
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+
+	const ENEMY_SCENE = preload("res://scenes/enemies/enemy.tscn")
+	var campfire_pos = CAMPFIRE_POS
+
+	# Spawn positions in a ring just outside the safe zone (600 radius)
+	# Place them at 650-750 radius so they're visible but not in the clearing
+	var spawn_positions = [
+		# Level 1 skeletons (4 total, spread around)
+		{"offset": Vector2(700, -100), "level": 1},   # East-north
+		{"offset": Vector2(700, 100), "level": 1},    # East-south
+		{"offset": Vector2(-700, 0), "level": 1},     # West
+		{"offset": Vector2(0, 650), "level": 1},      # South
+		# Level 2 skeletons (2 total, slightly further)
+		{"offset": Vector2(800, -300), "level": 2},   # East-north far
+		{"offset": Vector2(-750, -200), "level": 2},  # West-north
+	]
+
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var spawned_count = 0
+
+	for spawn_data in spawn_positions:
+		var spawn_pos = campfire_pos + spawn_data.offset
+
+		var enemy = ENEMY_SCENE.instantiate()
+		enemy.global_position = spawn_pos
+		enemy.enemy_level = spawn_data.level
+		enemy.name = "TutorialSkeleton_%d" % spawned_count
+		add_child(enemy)
+
+		# Register with NetworkEnemyManager for multiplayer sync
+		if network_enemy_mgr:
+			network_enemy_mgr.register_enemy(enemy)
+
+		spawned_count += 1
+
+	print("💀 Spawned %d tutorial skeletons around campfire clearing" % spawned_count)
+
 func spawn_bone_clusters(parent: Node2D):
 	"""Spawn clusters of bones and skulls, plus scattered individual bones everywhere"""
 	var rng = RandomNumberGenerator.new()
@@ -3451,6 +3496,10 @@ func _spawn_initial_players():
 			if not username.is_empty() and players.has(my_id):
 				# Defer to ensure player is fully ready
 				call_deferred("_apply_saved_data_to_player", username, my_id)
+		else:
+			# Guest player - still show tutorial
+			print("📚 [Tutorial] Guest player detected, starting tutorial...")
+			call_deferred("_start_guest_tutorial", my_id)
 	else:
 		print("🔍 [PLAYER DEBUG] Player %d already in dict, skipping spawn" % my_id)
 
@@ -3721,6 +3770,43 @@ func _apply_saved_data_to_player(username: String, player_id: int) -> void:
 	if DatabaseManager:
 		DatabaseManager.apply_player_data_to_systems(username, player)
 		print("✅ [game_world] Applied saved data for player: %s" % username)
+
+		# Start tutorial for new players who haven't completed it
+		var tutorial_done = DatabaseManager.has_completed_tutorial(username)
+		print("📚 [Tutorial] Checking tutorial for %s - completed: %s" % [username, tutorial_done])
+		if not tutorial_done:
+			print("📚 [Tutorial] Starting tutorial in 1 second...")
+			# Small delay to let player fully load
+			await get_tree().create_timer(1.0).timeout
+			print("📚 [Tutorial] Timer done, TutorialManager exists: %s, player valid: %s" % [TutorialManager != null, is_instance_valid(player)])
+			if TutorialManager and is_instance_valid(player):
+				print("📚 [Tutorial] Calling start_tutorial()")
+				TutorialManager.start_tutorial(player)
+				TutorialManager.tutorial_completed.connect(func():
+					DatabaseManager.set_tutorial_completed(username)
+				, CONNECT_ONE_SHOT)
+			else:
+				print("📚 [Tutorial] ERROR - TutorialManager or player invalid!")
+
+func _start_guest_tutorial(player_id: int) -> void:
+	"""Start tutorial for guest players (no database tracking)"""
+	if not players.has(player_id):
+		print("📚 [Tutorial] Guest tutorial - player not found")
+		return
+
+	var player = players[player_id]
+	if not is_instance_valid(player):
+		print("📚 [Tutorial] Guest tutorial - player invalid")
+		return
+
+	print("📚 [Tutorial] Starting guest tutorial in 1 second...")
+	await get_tree().create_timer(1.0).timeout
+
+	if TutorialManager and is_instance_valid(player):
+		print("📚 [Tutorial] Calling start_tutorial() for guest")
+		TutorialManager.start_tutorial(player)
+	else:
+		print("📚 [Tutorial] ERROR - TutorialManager or player invalid for guest!")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PLAYER POSITION SYNC (Multiplayer)

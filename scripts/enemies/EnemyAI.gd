@@ -20,7 +20,7 @@ class_name EnemyAI
 
 ## Aggro System (NEW)
 @export var aggro_range: float = 150.0  # Distance to auto-aggro player (150 patrol, 120 guardians)
-@export var leash_distance: float = 800.0  # Max distance from spawn before returning
+@export var leash_distance: float = 3000.0  # Max distance from spawn before returning (large for kiting to campfire)
 @export var chain_aggro_range: float = 100.0  # Nearby allies aggro too (creates trains!)
 
 ## Combat (triggered by player attack OR aggro)
@@ -28,7 +28,7 @@ class_name EnemyAI
 @export var attack_range: float = 60.0
 @export var attack_cooldown: float = 1.5
 @export var attack_damage: float = 10.0
-@export var disengage_distance: float = 600.0  # Return to patrol if too far
+@export var disengage_distance: float = 2500.0  # Return to patrol if player too far (large for kiting)
 
 ## Behavior
 @export var retreat_chance: float = 0.25  # 25% chance on hit
@@ -139,21 +139,17 @@ func _ready() -> void:
 	elif enemy.has_node("Sprite2D"):
 		sprite = enemy.get_node("Sprite2D")
 
-	# Store spawn position IMMEDIATELY (before await frame delays it)
-	# Use enemy.position (local) since global_position may not be ready yet
-	# game_world is at origin so position == global_position
-	spawn_position = enemy.position
-	original_spawn_position = enemy.position  # Save the TRUE spawn point
-	spawn_chunk = get_chunk_key(enemy.position)  # Save spawn chunk for leashing
-	last_position = enemy.position  # Initialize stuck detection
-
-	# CRITICAL: Set initial patrol_target BEFORE await, otherwise _physics_process
-	# runs with patrol_target=(0,0) and skeleton walks toward world origin!
-	patrol_target = spawn_position  # Start at spawn position (pick_new_patrol_target called later)
-
-
-	# Wait one frame for other systems to initialize
+	# Wait one frame for node to be fully in scene tree with correct global_position
 	await get_tree().process_frame
+
+	# Now store spawn position using global_position (which is now valid after await)
+	spawn_position = enemy.global_position
+	original_spawn_position = enemy.global_position  # Save the TRUE spawn point
+	spawn_chunk = get_chunk_key(enemy.global_position)  # Save spawn chunk for leashing
+	last_position = enemy.global_position  # Initialize stuck detection
+
+	# Set initial patrol_target to spawn position
+	patrol_target = spawn_position
 
 	# Connect to damage signal to detect player attacks
 	if enemy.has_signal("damage_taken"):

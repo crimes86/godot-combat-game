@@ -107,8 +107,17 @@ func unregister_enemy(network_id: int) -> void:
 		enemies.erase(network_id)
 
 func get_enemy(network_id: int) -> Node:
-	"""Get enemy by network ID."""
-	return enemies.get(network_id, null)
+	"""Get enemy by network ID. Returns null if enemy is freed or doesn't exist."""
+	if not enemies.has(network_id):
+		return null
+
+	# Check validity before returning - use is_instance_valid on the dictionary value directly
+	if not is_instance_valid(enemies[network_id]):
+		# Clean up freed enemy from dictionary
+		enemies.erase(network_id)
+		return null
+
+	return enemies[network_id]
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ATTACK SYSTEM (Server Authoritative - handles crit rolls)
@@ -316,6 +325,14 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 
 	# Update local health
 	enemy.current_health = new_health
+
+	# Tutorial: Notify TutorialManager if this is the training dummy
+	if enemy.is_in_group("training_dummy"):
+		var tutorial_mgr = get_node_or_null("/root/TutorialManager")
+		if tutorial_mgr and tutorial_mgr.is_tutorial_active():
+			tutorial_mgr.on_dummy_hit(is_crit)
+			if is_weakpoint:
+				tutorial_mgr.on_weakpoint_hit()
 
 	# Trigger visual feedback (hit flash, combat text, sounds)
 	if enemy.has_node("HitFlash"):
@@ -727,6 +744,9 @@ func _on_peer_connected(peer_id: int) -> void:
 	# Small delay to let client fully initialize
 	await get_tree().create_timer(0.5).timeout
 
+	# Check if we're still valid after await
+	if not is_instance_valid(self):
+		return
 
 	for network_id in enemies:
 		var enemy = enemies[network_id]
@@ -983,7 +1003,7 @@ func _get_max_player_damage(attacker_peer_id: int) -> float:
 # LOOT SYNC (Server Authoritative)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func request_loot_gold(enemy_network_id: int) -> void:
 	"""Client requests to loot gold from a corpse. Server validates and broadcasts."""
 	if not multiplayer.is_server():
@@ -998,7 +1018,7 @@ func request_loot_gold(enemy_network_id: int) -> void:
 
 	var looter_id = multiplayer.get_remote_sender_id()
 	if looter_id == 0:
-		looter_id = 1
+		looter_id = 1  # Server is looting
 
 	var gold = enemy.corpse_gold
 	if gold <= 0:
@@ -1007,8 +1027,8 @@ func request_loot_gold(enemy_network_id: int) -> void:
 	# Clear gold on server
 	enemy.corpse_gold = 0
 
-	# Broadcast to all clients to clear gold display
-	rpc("_client_gold_looted", enemy_network_id, looter_id, gold)
+	# Broadcast to all clients (including server via call_local)
+	_client_gold_looted.rpc(enemy_network_id, looter_id, gold)
 
 @rpc("authority", "call_local", "reliable")
 func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int) -> void:
@@ -1032,7 +1052,7 @@ func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int
 	# Check if corpse is now fully empty
 	enemy.check_if_looted_empty()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func request_loot_item(enemy_network_id: int, item_index: int) -> void:
 	"""Client requests to loot an item from a corpse. Server validates and broadcasts."""
 	if not multiplayer.is_server():
@@ -1047,7 +1067,7 @@ func request_loot_item(enemy_network_id: int, item_index: int) -> void:
 
 	var looter_id = multiplayer.get_remote_sender_id()
 	if looter_id == 0:
-		looter_id = 1
+		looter_id = 1  # Server is looting
 
 	# Validate item index
 	if item_index < 0 or item_index >= enemy.corpse_loot.size():
@@ -1060,8 +1080,8 @@ func request_loot_item(enemy_network_id: int, item_index: int) -> void:
 	# Remove item from server's corpse loot
 	enemy.corpse_loot.remove_at(item_index)
 
-	# Broadcast to all clients
-	rpc("_client_item_looted", enemy_network_id, looter_id, item_index, item)
+	# Broadcast to all clients (including server via call_local)
+	_client_item_looted.rpc(enemy_network_id, looter_id, item_index, item)
 
 @rpc("authority", "call_local", "reliable")
 func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int, item: Dictionary) -> void:
@@ -1070,9 +1090,11 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 	if not enemy or not is_instance_valid(enemy):
 		return
 
-	# Remove item from local corpse loot (if still there - might already be removed)
-	if item_index < enemy.corpse_loot.size():
-		enemy.corpse_loot.remove_at(item_index)
+	# Remove item from local corpse loot (clients only - server already removed in request_loot_item)
+	# This prevents double-removal on server due to call_local
+	if not multiplayer.is_server():
+		if item_index < enemy.corpse_loot.size():
+			enemy.corpse_loot.remove_at(item_index)
 
 	# Only the looter gets the item added to their inventory
 	if multiplayer.get_unique_id() == looter_id:

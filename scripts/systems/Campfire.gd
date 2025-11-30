@@ -498,6 +498,9 @@ func create_campfire_scene() -> void:
 	fire_light.texture = texture
 
 	fire_sprite.add_child(fire_light)
+	print("🔥💡 [LIGHT INIT] Created fire_light: enabled=%s, energy=%.2f, texture_scale=%.2f, color=%s" % [
+		fire_light.enabled, fire_light.energy, fire_light.texture_scale, fire_light.color
+	])
 
 	# Create simple fire particles
 	create_fire_particles()
@@ -830,9 +833,14 @@ func animate_fire(delta: float) -> void:
 	"""Optimized fire animation using cached references - scales with fuel intensity"""
 	var time = Time.get_ticks_msec() / 1000.0
 
+	# Get fuel from the correct pool
+	var pool = _get_owner_fuel_pool()
+	var current_wood = pool.wood
+	var current_bone_embers = pool.bone_embers
+
 	# Calculate intensity based on total fuel (more fuel = more intense but subtle)
-	var wood_percent = float(wood_count) / float(MAX_WOOD)
-	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
+	var wood_percent = float(current_wood) / float(MAX_WOOD)
+	var bone_percent = float(current_bone_embers) / float(MAX_BONE_EMBERS)
 	var total_fuel_percent = (wood_percent + bone_percent) / 2.0
 
 	# Animation speed scales from 1.0x (no fuel) to 1.3x (max fuel) - subtle increase
@@ -876,15 +884,16 @@ func animate_fire(delta: float) -> void:
 
 
 func create_ground_mist_auras() -> void:
-	"""Create simple filled circle auras with low alpha - use light blend to prevent mixing"""
+	"""Create simple filled circle auras with additive blend so fire glow shows through"""
 	# CRIT AURA (Cyan-Blue) - larger, behind heal aura
 	crit_mist = Polygon2D.new()
 	crit_mist.name = "CritAura"
 	crit_mist.z_index = -2  # Same as coals, visible above rocks
-	crit_mist.color = Color(0.0, 0.6, 1.0, 0.07)  # Low alpha cyan (slightly lower)
+	crit_mist.color = Color(0.0, 0.6, 1.0, 0.12)  # Slightly higher alpha for additive blend
 	crit_mist.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	crit_mist.material = CanvasItemMaterial.new()
 	crit_mist.material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	crit_mist.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD  # Additive: fire glow shows through
 	crit_mist.visible = false
 	fire_sprite.add_child(crit_mist)
 
@@ -892,10 +901,11 @@ func create_ground_mist_auras() -> void:
 	heal_mist = Polygon2D.new()
 	heal_mist.name = "HealAura"
 	heal_mist.z_index = -1  # Above crit aura
-	heal_mist.color = Color(0.0, 1.0, 0.0, 0.05)  # Lower alpha green (lighter)
+	heal_mist.color = Color(0.0, 1.0, 0.0, 0.10)  # Slightly higher alpha for additive blend
 	heal_mist.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	heal_mist.material = CanvasItemMaterial.new()
 	heal_mist.material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	heal_mist.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD  # Additive: fire glow shows through
 	heal_mist.visible = false
 	fire_sprite.add_child(heal_mist)
 
@@ -1584,8 +1594,9 @@ func attempt_add_single_fuel_from_inventory() -> void:
 
 	# Debug output
 	if wood_added > 0 or bone_added > 0:
+		var pool = _get_owner_fuel_pool()
 		print("🔥 Campfire fueled: %d wood log(s), %d bone ember(s) added" % [wood_added, bone_added])
-		print("   Current fuel: %d/%d wood, %d/%d embers" % [wood_count, MAX_WOOD, bone_ember_count, MAX_BONE_EMBERS])
+		print("   Current fuel: %d/%d wood, %d/%d embers" % [pool.wood, MAX_WOOD, pool.bone_embers, MAX_BONE_EMBERS])
 
 func attempt_add_all_fuel_from_inventory() -> void:
 	"""Add ALL wood and bone embers from player inventory"""
@@ -1613,8 +1624,9 @@ func attempt_add_all_fuel_from_inventory() -> void:
 			InventorySystem.remove_item(slot_idx)
 
 	# Debug output
+	var pool = _get_owner_fuel_pool()
 	print("🔥 Campfire fueled: %d wood logs, %d bone embers added (ALL)" % [wood_added, bone_added])
-	print("   Current fuel: %d/%d wood, %d/%d embers" % [wood_count, MAX_WOOD, bone_ember_count, MAX_BONE_EMBERS])
+	print("   Current fuel: %d/%d wood, %d/%d embers" % [pool.wood, MAX_WOOD, pool.bone_embers, MAX_BONE_EMBERS])
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CAMPFIRE OWNERSHIP SYSTEM
@@ -2408,40 +2420,53 @@ func update_visual_intensity() -> void:
 		var color_b = lerp(0.3, 0.7, bone_percent * 0.5)
 		fire_light.color = Color(color_r, color_g, color_b)
 
-		# Increase light intensity with fuel, adjusted for time of day
-		var base_energy = 1.8
-		var bonus_energy = total_fuel_percent * 0.6  # Up to +60% brightness
-		var fuel_energy = base_energy + bonus_energy
+		# Base light energy and scale - always visible
+		var base_energy = 1.5
+		var base_texture_scale = 6.0
 
-		# Scale light based on time of day (dim during day, bright at night)
+		# Add bonus from fuel
+		var fuel_bonus_energy = total_fuel_percent * 0.8  # Up to +80% brightness with fuel
+		var fuel_bonus_scale = total_fuel_percent * 2.0  # Up to +2.0 scale with fuel
+
+		# Scale light based on time of day (brighter at night)
 		var time_brightness = 1.0
 		if TimeManager and TimeManager.canvas_modulate:
 			time_brightness = TimeManager.get_brightness()
-		# Map: night (0.51) -> full energy, day (0.99) -> very dim
+		# Map: night (0.51) -> extra glow, day (0.99) -> base glow
 		var day_factor = inverse_lerp(0.51, 0.99, time_brightness)
 		day_factor = clamp(day_factor, 0.0, 1.0)
-		# At night: 2.2x multiplier for warm glow, at day: 0.08x for barely visible
-		var time_multiplier = lerp(2.2, 0.08, day_factor)
-		fire_light.energy = fuel_energy * time_multiplier
-		# Scale light radius - larger warm glow aura at night, small at day
-		var base_texture_scale = lerp(8.0, 2.5, day_factor)  # 8.0x at night, 2.5x at day
-		fire_light.texture_scale = base_texture_scale
+		# At night: 1.5x multiplier for extra warmth, at day: 1.0x (keep base visible)
+		var time_multiplier = lerp(1.5, 1.0, day_factor)
+
+		fire_light.energy = (base_energy + fuel_bonus_energy) * time_multiplier
+		fire_light.texture_scale = base_texture_scale + fuel_bonus_scale + (1.0 - day_factor) * 2.0  # Extra radius at night
+
+		# DEBUG: Track fire light state
+		print("🔥💡 [LIGHT DEBUG] enabled=%s, energy=%.2f, texture_scale=%.2f, color=%s" % [
+			fire_light.enabled, fire_light.energy, fire_light.texture_scale, fire_light.color
+		])
+		print("🔥💡 [LIGHT DEBUG] time_brightness=%.2f, day_factor=%.2f, time_mult=%.2f" % [
+			time_brightness, day_factor, time_multiplier
+		])
+		print("🔥💡 [LIGHT DEBUG] wood=%d, bone=%d, wood_pct=%.2f, bone_pct=%.2f" % [
+			current_wood, current_bone_embers, wood_percent, bone_percent
+		])
 
 	# Update collision area to match largest active aura radius
 	update_buff_collision_radius()
 
 	# Enable/disable and scale particle systems based on fuel
 	if heal_particles:
-		heal_particles.emitting = wood_count > 0
-		if wood_count > 0:
+		heal_particles.emitting = current_wood > 0
+		if current_wood > 0:
 			# Scale from 8 particles at min to 45 at max fuel
 			heal_particles.amount = int(8 + (wood_percent * 37))
 			# Scale velocity from base to higher
 			heal_particles.initial_velocity_max = 180.0 + (wood_percent * 60.0)  # Up to 240
 
 	if crit_particles:
-		crit_particles.emitting = bone_ember_count > 0
-		if bone_ember_count > 0:
+		crit_particles.emitting = current_bone_embers > 0
+		if current_bone_embers > 0:
 			# Scale from 10 particles at min to 50 at max fuel
 			crit_particles.amount = int(10 + (bone_percent * 40))
 			# Scale velocity from base to higher
@@ -2450,15 +2475,15 @@ func update_visual_intensity() -> void:
 	# Enable/disable mist particles based on fuel
 	var heal_mist_particles = fire_sprite.get_node_or_null("HealMistParticles")
 	if heal_mist_particles:
-		heal_mist_particles.emitting = wood_count > 0
+		heal_mist_particles.emitting = current_wood > 0
 	var crit_mist_particles = fire_sprite.get_node_or_null("CritMistParticles")
 	if crit_mist_particles:
-		crit_mist_particles.emitting = bone_ember_count > 0
+		crit_mist_particles.emitting = current_bone_embers > 0
 
 	# Enable/disable aurora particles based on fuel
 	var aurora_particles = fire_sprite.get_node_or_null("AuroraParticles")
 	if aurora_particles:
-		aurora_particles.emitting = (wood_count > 0 or bone_ember_count > 0)
+		aurora_particles.emitting = (current_wood > 0 or current_bone_embers > 0)
 
 func update_coal_pulsing() -> void:
 	"""Animate coal pulsing every frame - synchronized breathing with varied intensity"""
@@ -2468,9 +2493,14 @@ func update_coal_pulsing() -> void:
 	# Range from 0.6 to 1.0 so they stay mostly lit, just dimming/brightening
 	var base_pulse = 0.8 + sin(time * 1.5) * 0.2  # Slow synchronized pulse (0.6 to 1.0)
 
+	# Get fuel from the correct pool
+	var pool = _get_owner_fuel_pool()
+	var current_wood = pool.wood
+	var current_bone_embers = pool.bone_embers
+
 	# Calculate fuel percentages
-	var wood_percent = float(wood_count) / float(MAX_WOOD)
-	var bone_percent = float(bone_ember_count) / float(MAX_BONE_EMBERS)
+	var wood_percent = float(current_wood) / float(MAX_WOOD)
+	var bone_percent = float(current_bone_embers) / float(MAX_BONE_EMBERS)
 
 	# Update main coal colors
 	for i in range(coal_nodes.size()):
@@ -2536,16 +2566,21 @@ func update_buff_collision_radius() -> void:
 	if not collision.shape is CircleShape2D:
 		return
 
+	# Get the correct fuel pool for collision radius calculation
+	var pool = _get_owner_fuel_pool()
+	var current_wood = pool.wood
+	var current_bone_embers = pool.bone_embers
+
 	# Calculate current aura radii based on fuel levels (same formula as update_ground_mist)
 	# Both can reach same max size (468.75px)
-	var heal_aura_radius = 50.0 + (wood_count * 8.375)  # 50-468.75px
-	var crit_aura_radius = 50.0 + (bone_ember_count * 4.1875)  # 50-468.75px
+	var heal_aura_radius = 50.0 + (current_wood * 8.375)  # 50-468.75px
+	var crit_aura_radius = 50.0 + (current_bone_embers * 4.1875)  # 50-468.75px
 
 	var new_radius: float
 
 	# If no fuel at all, use warmth_radius (150px) for minimal healing range
 	# Otherwise, use the larger aura radius (visual auras start at 50px with fuel)
-	if wood_count == 0 and bone_ember_count == 0:
+	if current_wood == 0 and current_bone_embers == 0:
 		new_radius = warmth_radius  # 150px - for minimal healing with no visual
 	else:
 		new_radius = max(50.0, max(heal_aura_radius, crit_aura_radius))
