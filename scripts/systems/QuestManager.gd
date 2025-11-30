@@ -154,6 +154,10 @@ func accept_quest(quest_id: String) -> bool:
 	quest_accepted.emit(quest_id)
 	active_quests_changed.emit()
 
+	# Notify tutorial system
+	if TutorialManager and TutorialManager.is_tutorial_active():
+		TutorialManager.on_quest_accepted()
+
 	print("📜 Quest accepted: %s" % quest.get("name", quest_id))
 	return true
 

@@ -27,6 +27,9 @@ func _ready() -> void:
 	# Set layer above game prompts (campfire hints are at 100)
 	layer = 110
 
+	# Add to group for tutorial system to find
+	add_to_group("inventory_ui")
+
 	# Start hidden
 	visible = false
 
@@ -340,6 +343,13 @@ func toggle_ui() -> void:
 
 	if is_visible:
 		refresh_all()
+		# Notify tutorial system
+		if TutorialManager:
+			TutorialManager.on_inventory_opened()
+	else:
+		# Notify tutorial system inventory closed
+		if TutorialManager:
+			TutorialManager.on_inventory_closed()
 
 func refresh_all() -> void:
 	"""Refresh all UI elements"""
@@ -504,12 +514,18 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 						InventorySystem.remove_item(slot_index)
 						SoundManager.play_equip_sound()
 						refresh_all()
+						# Notify tutorial system
+						if TutorialManager:
+							TutorialManager.on_item_equipped(item)
 				# Check if it's armor
 				elif item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
 					if CharacterStats.equip_armor(item):
 						InventorySystem.remove_item(slot_index)
 						SoundManager.play_equip_sound()
 						refresh_all()
+						# Notify tutorial system
+						if TutorialManager:
+							TutorialManager.on_item_equipped(item)
 
 func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	"""Convert a weapon dictionary to a Weapon resource"""

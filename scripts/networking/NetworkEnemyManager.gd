@@ -1121,9 +1121,21 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 
 	# Remove item from local corpse loot (clients only - server already removed in request_loot_item)
 	# This prevents double-removal on server due to call_local
+	# Use item matching instead of index to handle sync issues
 	if not multiplayer.is_server():
-		if item_index < enemy.corpse_loot.size():
-			enemy.corpse_loot.remove_at(item_index)
+		var item_name = item.get("name", "")
+		var item_type = item.get("type", "")
+		var removed = false
+		for i in range(enemy.corpse_loot.size()):
+			var corpse_item = enemy.corpse_loot[i]
+			if corpse_item and corpse_item.get("name", "") == item_name and \
+			   corpse_item.get("type", "") == item_type:
+				enemy.corpse_loot.remove_at(i)
+				removed = true
+				print("🗑️ Client: Removed '%s' from corpse loot (matched by name)" % item_name)
+				break
+		if not removed:
+			print("⚠️ Client: Could not find '%s' in corpse loot to remove" % item_name)
 
 	# Only the looter gets the item added to their inventory
 	if multiplayer.get_unique_id() == looter_id:

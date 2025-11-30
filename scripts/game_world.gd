@@ -3735,13 +3735,14 @@ func despawn_player(id: int):
 		local_player = null
 
 func get_spawn_point() -> Vector2:
-	"""Get spawn point at campfire, opposite side from blacksmith"""
-	# Campfire is at chunk 0 center, Blacksmith/Vendor is 150px to the right
-	# Spawn player on the LEFT side of campfire (opposite blacksmith)
+	"""Get spawn point south of campfire, away from the training dummy"""
+	# Campfire is at chunk 0 center
+	# Training Dummy is 180px NORTH of campfire
+	# Spawn player SOUTH of campfire so "walk to dummy" feels deliberate
 	var campfire_pos = CAMPFIRE_POS
-	var spawn_offset = Vector2(-150, 0)  # Left of campfire, away from blacksmith
+	var spawn_offset = Vector2(0, 200)  # South of campfire (positive Y = south)
 	# Add slight randomization
-	spawn_offset.y += randf_range(-50, 50)
+	spawn_offset.x += randf_range(-50, 50)
 	return campfire_pos + spawn_offset
 
 func get_spawn_points() -> Array:

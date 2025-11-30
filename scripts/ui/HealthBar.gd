@@ -13,6 +13,7 @@ var current_health: float = 100.0
 var max_health: float = 100.0
 var is_pulsing: bool = false
 var player_name: String = ""
+var custom_offset_y: float = -1.0  # Custom offset override (-1 = use default)
 
 # Performance: throttle position updates
 var position_update_timer: float = 0.0
@@ -169,8 +170,15 @@ func _process(delta: float) -> void:
 		var parent_scale = get_parent().scale.x  # Assume uniform scaling
 
 		# Offset scales with parent - hovering right over character head!
-		# Reduced offset for closer positioning
-		var offset_y = (35 + 4) * parent_scale  # 39 pixels total (was 54)
+		# For enemies: position above name label (name at -42, healthbar above it)
+		# For players: position closer to head
+		var offset_y: float
+		if custom_offset_y > 0:
+			offset_y = custom_offset_y * parent_scale  # Use custom offset if set
+		elif is_player:
+			offset_y = (35 + 4) * parent_scale  # 39 pixels for players
+		else:
+			offset_y = 52 * parent_scale  # 52 pixels for enemies (above name label at -42)
 
 		# Center healthbar above parent
 		global_position = get_parent().global_position - Vector2(size.x / 2, offset_y)
@@ -329,3 +337,7 @@ func set_name_color(color: Color) -> void:
 	"""Set the name label color (e.g., different for guests vs authenticated)"""
 	if name_label:
 		name_label.add_theme_color_override("font_color", color)
+
+func set_custom_offset(offset: float) -> void:
+	"""Set a custom Y offset for positioning (for non-standard entities like Training Dummy)"""
+	custom_offset_y = offset

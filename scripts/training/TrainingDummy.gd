@@ -13,9 +13,11 @@ var network_id: int = -1
 var is_dying: bool = false
 var is_corpse: bool = false
 
-# Stats
-var max_health: float = 999999.0  # Essentially infinite
-var current_health: float = 999999.0
+# Stats - Training dummy has more health than regular skeletons but regenerates
+var max_health: float = 2000.0  # More than a skeleton (~500) so players can practice
+var current_health: float = 2000.0
+var regen_threshold: float = 0.25  # Regen when below 25% health
+var is_regenerating: bool = false
 
 # References
 var sprite: AnimatedSprite2D = null
@@ -46,6 +48,9 @@ var arrow_visible: bool = false
 var arrow_tween: Tween = null
 var arrow_flash_tween: Tween = null
 
+# Name label (like enemies)
+var name_label: Label = null
+
 # Signals for CritWindowManager
 signal damage_taken(damage: float, is_crit: bool)
 signal weakpoint_spawned(weakpoint: Node)  # Emitted when a weakpoint is created
@@ -75,6 +80,9 @@ func _ready() -> void:
 
 	# Create hit flash for visual feedback
 	create_hit_flash()
+
+	# Create name label
+	create_name_label()
 
 	# Store original scale and modulate for crit window
 	original_scale = scale
@@ -151,10 +159,38 @@ func create_click_area() -> void:
 	click_area.add_child(collision)
 
 func create_health_bar() -> void:
-	"""Create simple health bar (optional for dummy)"""
-	# For now, skip health bar - just show damage numbers
-	# Could add a DPS display here later
-	pass
+	"""Create health bar for the training dummy"""
+	var health_bar_scene = load("res://scenes/ui/health_bar.tscn")
+	if health_bar_scene:
+		health_bar = health_bar_scene.instantiate()
+		health_bar.name = "HealthBar"
+		add_child(health_bar)
+
+		# Set custom offset for training dummy (taller than skeletons)
+		# HealthBar uses offset_y of 52 for non-players, but dummy needs ~80
+		if health_bar.has_method("set_custom_offset"):
+			health_bar.set_custom_offset(80.0)
+
+		# Initialize health display
+		if health_bar.has_method("update_health"):
+			health_bar.update_health(current_health, max_health)
+
+		print("🎯 Training Dummy health bar created")
+
+func create_name_label() -> void:
+	"""Create name label above the dummy (like enemies have)"""
+	name_label = Label.new()
+	name_label.name = "NameLabel"
+	name_label.text = "Training Dummy"
+	name_label.add_theme_font_size_override("font_size", 12)
+	name_label.add_theme_color_override("font_color", Color.WHITE)
+	name_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	name_label.add_theme_constant_override("outline_size", 2)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.position = Vector2(-50, -70)  # Above the dummy sprite head (sprite at -32, head around -60)
+	name_label.custom_minimum_size = Vector2(100, 0)  # Set label width for centering
+	name_label.z_index = 500
+	add_child(name_label)
 
 func create_hit_flash() -> void:
 	"""Create HitFlash node for visual feedback"""
@@ -169,9 +205,10 @@ func create_tutorial_arrow() -> void:
 	"""Create flashing arrow indicator above dummy for tutorial"""
 	tutorial_arrow = Node2D.new()
 	tutorial_arrow.name = "TutorialArrow"
-	tutorial_arrow.position = Vector2(0, -100)  # Above the dummy sprite
+	tutorial_arrow.position = Vector2(0, -110)  # Above the dummy sprite
 	tutorial_arrow.z_index = 200
 	tutorial_arrow.visible = false
+	tutorial_arrow.scale = Vector2(1.5, 1.5)  # 50% larger
 	add_child(tutorial_arrow)
 
 	# Create arrow shape using a Polygon2D (downward pointing arrow)
@@ -187,7 +224,7 @@ func create_tutorial_arrow() -> void:
 		Vector2(6, 0),       # Right inner
 		Vector2(15, 0),      # Right wing
 	])
-	arrow_polygon.color = Color(1.0, 0.9, 0.2, 1.0)  # Gold/yellow color
+	arrow_polygon.color = Color(0.2, 1.0, 0.2, 1.0)  # Bright green (default)
 	tutorial_arrow.add_child(arrow_polygon)
 
 	# Add outline for visibility
@@ -203,16 +240,20 @@ func create_tutorial_arrow() -> void:
 		Vector2(15, 0),
 		Vector2(0, 20),  # Close the shape
 	])
-	outline.width = 2.0
-	outline.default_color = Color(0.3, 0.2, 0.0, 1.0)  # Dark gold outline
+	outline.width = 3.0
+	outline.default_color = Color(0.0, 0.3, 0.0, 1.0)  # Dark green outline
 	tutorial_arrow.add_child(outline)
 
 	# Connect to TutorialManager signals to show/hide arrow
 	if TutorialManager:
 		TutorialManager.tutorial_step_completed.connect(_on_tutorial_step_changed)
-		# Check if already in ATTACK_DUMMY step when spawned
-		if TutorialManager.is_tutorial_active() and TutorialManager.current_step == TutorialManager.TutorialStep.ATTACK_DUMMY:
-			call_deferred("show_tutorial_arrow")
+		# Check if already in a tutorial step that shows arrow when spawned
+		if TutorialManager.is_tutorial_active():
+			var step = TutorialManager.current_step
+			if step == TutorialManager.TutorialStep.FIND_DUMMY:
+				call_deferred("show_tutorial_arrow_green")
+			elif step == TutorialManager.TutorialStep.ATTACK_DUMMY or step == TutorialManager.TutorialStep.CRIT_WINDOW:
+				call_deferred("show_tutorial_arrow_red")
 
 func _on_tutorial_step_changed(completed_step: int) -> void:
 	"""Handle tutorial step changes to show/hide arrow"""
@@ -221,16 +262,50 @@ func _on_tutorial_step_changed(completed_step: int) -> void:
 
 	var current_step = TutorialManager.current_step
 
-	# Show arrow during ATTACK_DUMMY step (step 2)
-	if current_step == TutorialManager.TutorialStep.ATTACK_DUMMY:
-		show_tutorial_arrow()
+	# Show green arrow during FIND_DUMMY step
+	if current_step == TutorialManager.TutorialStep.FIND_DUMMY:
+		show_tutorial_arrow_green()
+	# Show red arrow during ATTACK_DUMMY and CRIT_WINDOW steps
+	elif current_step == TutorialManager.TutorialStep.ATTACK_DUMMY or current_step == TutorialManager.TutorialStep.CRIT_WINDOW:
+		show_tutorial_arrow_red()
+	# HIT_WEAKPOINT step - arrow will be moved to weakpoint by spawn_weakpoints()
+	elif current_step == TutorialManager.TutorialStep.HIT_WEAKPOINT:
+		# Arrow is already pointing at weakpoint, keep it visible
+		pass
 	else:
 		hide_tutorial_arrow()
 
-func show_tutorial_arrow() -> void:
-	"""Show and animate the tutorial arrow"""
+func show_tutorial_arrow_green() -> void:
+	"""Show bright green flashing arrow (FIND_DUMMY step)"""
 	if not tutorial_arrow or not is_instance_valid(tutorial_arrow):
 		return
+
+	# Set arrow color to bright green
+	var arrow_shape = tutorial_arrow.get_node_or_null("ArrowShape")
+	var arrow_outline = tutorial_arrow.get_node_or_null("ArrowOutline")
+	if arrow_shape:
+		arrow_shape.color = Color(0.2, 1.0, 0.2, 1.0)  # Bright green
+	if arrow_outline:
+		arrow_outline.default_color = Color(0.0, 0.4, 0.0, 1.0)  # Dark green outline
+
+	tutorial_arrow.visible = true
+	arrow_visible = true
+
+	# Start bobbing and flashing animation
+	_start_arrow_animation()
+
+func show_tutorial_arrow_red() -> void:
+	"""Show bright red flashing arrow (ATTACK_DUMMY step)"""
+	if not tutorial_arrow or not is_instance_valid(tutorial_arrow):
+		return
+
+	# Set arrow color to bright red
+	var arrow_shape = tutorial_arrow.get_node_or_null("ArrowShape")
+	var arrow_outline = tutorial_arrow.get_node_or_null("ArrowOutline")
+	if arrow_shape:
+		arrow_shape.color = Color(1.0, 0.2, 0.2, 1.0)  # Bright red
+	if arrow_outline:
+		arrow_outline.default_color = Color(0.4, 0.0, 0.0, 1.0)  # Dark red outline
 
 	tutorial_arrow.visible = true
 	arrow_visible = true
@@ -254,6 +329,51 @@ func hide_tutorial_arrow() -> void:
 		arrow_flash_tween.kill()
 		arrow_flash_tween = null
 
+func point_arrow_at_weakpoint(weakpoint_pos: Vector2) -> void:
+	"""Move and rotate arrow to point at a weakpoint (for HIT_WEAKPOINT tutorial step)"""
+	if not tutorial_arrow or not is_instance_valid(tutorial_arrow):
+		return
+
+	# Stop existing animations
+	if arrow_tween and arrow_tween.is_valid():
+		arrow_tween.kill()
+	if arrow_flash_tween and arrow_flash_tween.is_valid():
+		arrow_flash_tween.kill()
+
+	# Set arrow color to bright gold/yellow for weakpoint
+	var arrow_shape = tutorial_arrow.get_node_or_null("ArrowShape")
+	var arrow_outline = tutorial_arrow.get_node_or_null("ArrowOutline")
+	if arrow_shape:
+		arrow_shape.color = Color(1.0, 0.85, 0.0, 1.0)  # Bright gold
+	if arrow_outline:
+		arrow_outline.default_color = Color(0.4, 0.3, 0.0, 1.0)  # Dark gold outline
+
+	# Position arrow to the right of the weakpoint, pointing left at it
+	# Weakpoint pos is in local space (relative to dummy)
+	tutorial_arrow.position = Vector2(weakpoint_pos.x + 50, weakpoint_pos.y)
+	tutorial_arrow.rotation = PI / 2  # Rotate 90 degrees to point left (arrow tip faces left)
+
+	tutorial_arrow.visible = true
+	arrow_visible = true
+
+	# Start a side-to-side bob animation instead of up-down
+	arrow_tween = create_tween().set_loops()
+	arrow_tween.tween_property(tutorial_arrow, "position:x", weakpoint_pos.x + 40, 0.3).set_ease(Tween.EASE_IN_OUT)
+	arrow_tween.tween_property(tutorial_arrow, "position:x", weakpoint_pos.x + 55, 0.3).set_ease(Tween.EASE_IN_OUT)
+
+	# Flash animation
+	arrow_flash_tween = create_tween().set_loops()
+	arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 0.3, 0.2)
+	arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 1.0, 0.2)
+
+func reset_arrow_position() -> void:
+	"""Reset arrow to default position above dummy"""
+	if not tutorial_arrow or not is_instance_valid(tutorial_arrow):
+		return
+
+	tutorial_arrow.position = Vector2(0, -110)
+	tutorial_arrow.rotation = 0
+
 func _start_arrow_animation() -> void:
 	"""Start the bobbing and flashing animation for the arrow"""
 	if arrow_tween and arrow_tween.is_valid():
@@ -265,13 +385,13 @@ func _start_arrow_animation() -> void:
 	arrow_tween = create_tween().set_loops()
 
 	# Bob up and down
-	arrow_tween.tween_property(tutorial_arrow, "position:y", -90.0, 0.4).set_ease(Tween.EASE_IN_OUT)
 	arrow_tween.tween_property(tutorial_arrow, "position:y", -100.0, 0.4).set_ease(Tween.EASE_IN_OUT)
+	arrow_tween.tween_property(tutorial_arrow, "position:y", -120.0, 0.4).set_ease(Tween.EASE_IN_OUT)
 
 	# Create separate tween for the flash effect
 	arrow_flash_tween = create_tween().set_loops()
-	arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 0.4, 0.3)
-	arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 1.0, 0.3)
+	arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 0.3, 0.25)
+	arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 1.0, 0.25)
 
 func _physics_process(delta: float) -> void:
 	# Handle spin animation timing
@@ -297,8 +417,17 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 		total_damage_dealt += amount
 	last_damage_time = current_time
 
-	# Don't actually reduce health (infinite HP)
-	# current_health stays at max
+	# Actually reduce health (dummy has real HP but regenerates)
+	current_health -= amount
+	current_health = max(current_health, 0.0)
+
+	# Update health bar
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(current_health, max_health)
+
+	# Check for regeneration trigger (below 25% health)
+	if not is_regenerating and current_health <= max_health * regen_threshold:
+		trigger_regeneration()
 
 	# Emit signal for player feedback (damage numbers)
 	damage_taken.emit(amount, is_crit)
@@ -409,6 +538,30 @@ func trigger_spin() -> void:
 	is_spinning = true
 	spin_timer = 0.0
 	sprite.play("spin")
+
+func trigger_regeneration() -> void:
+	"""Regenerate to full health with visual feedback"""
+	is_regenerating = true
+	print("🎯 Training Dummy regenerating...")
+
+	# Flash green to indicate healing
+	if sprite:
+		var regen_tween = create_tween()
+		# Flash green
+		regen_tween.tween_property(sprite, "modulate", Color(0.5, 1.0, 0.5, 1.0), 0.3)
+		regen_tween.tween_property(sprite, "modulate", Color.WHITE, 0.3)
+		# Wait for flash
+		await regen_tween.finished
+
+	# Restore health to full
+	current_health = max_health
+
+	# Update health bar
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(current_health, max_health)
+
+	is_regenerating = false
+	print("🎯 Training Dummy regenerated to full health!")
 
 func _on_animation_finished() -> void:
 	"""When spin animation completes, return to idle"""
@@ -550,6 +703,11 @@ func spawn_weakpoints() -> void:
 	# Spawn weakpoints at chosen positions
 	_spawn_weakpoints_internal(chosen_positions)
 
+	# During tutorial, point arrow at first weakpoint
+	if TutorialManager and TutorialManager.is_tutorial_active():
+		if chosen_positions.size() > 0:
+			point_arrow_at_weakpoint(chosen_positions[0])
+
 	# CLIENT-INDEPENDENT: Each player's crit window is LOCAL
 	# No broadcasting needed - NetworkEnemyManager notifies specific player to start their local window
 	if multiplayer.has_multiplayer_peer():
@@ -640,6 +798,10 @@ func shrink_after_crit_window() -> void:
 	# Guard: Don't shrink if not in crit window
 	if not in_crit_window:
 		return
+
+	# Reset tutorial arrow to default position (above dummy) and hide it
+	reset_arrow_position()
+	hide_tutorial_arrow()
 
 	# Mark as transitioning during async shrink
 	_crit_window_transitioning = true

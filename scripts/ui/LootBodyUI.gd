@@ -283,11 +283,20 @@ func loot_item(corpse, item: Dictionary) -> void:
 	var item_type = item.get("type", "")
 	var item_rarity = item.get("rarity", "")
 
+	print("🔍 Looking for item: name='%s' type='%s' rarity='%s'" % [item_name, item_type, item_rarity])
+	print("🔍 Corpse has %d items in loot array" % corpse.corpse_loot.size())
+
 	for i in range(corpse.corpse_loot.size()):
 		var corpse_item = corpse.corpse_loot[i]
-		if corpse_item and corpse_item.get("name", "") == item_name and \
-		   corpse_item.get("type", "") == item_type and \
-		   corpse_item.get("rarity", "") == item_rarity:
+		if corpse_item:
+			print("   [%d] name='%s' type='%s' rarity='%s'" % [
+				i,
+				corpse_item.get("name", ""),
+				corpse_item.get("type", ""),
+				corpse_item.get("rarity", "")
+			])
+		# Match by name only to be more lenient with sync issues
+		if corpse_item and corpse_item.get("name", "") == item_name:
 			item_index = i
 			break
 

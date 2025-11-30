@@ -37,6 +37,9 @@ func _ready() -> void:
 	print("🏪 ShopUI initialized")
 	hide()
 
+	# Add to group for tutorial system to find
+	add_to_group("shop_ui")
+
 	# Apply modern styling to main panel
 	apply_modern_styling()
 
@@ -59,6 +62,10 @@ func _ready() -> void:
 		close_button.pressed.connect(_on_close_pressed)
 	else:
 		push_warning("ShopUI: close_button not found")
+
+	# Connect tab changes for tutorial system
+	if tab_container:
+		tab_container.tab_changed.connect(_on_tab_changed)
 
 	# Connect to gold changes for auto-update
 	CharacterStats.gold_changed.connect(_on_gold_changed)
@@ -138,12 +145,21 @@ func open_shop(vendor_node: Vendor) -> void:
 
 	show()
 
+	# Notify tutorial system that shop opened (for ACCEPT_QUEST step persistence)
+	if TutorialManager and TutorialManager.is_tutorial_active():
+		TutorialManager.on_shop_opened()
+
 	print("🏪 Shop UI opened for: %s" % vendor.vendor_name)
 
 func close_shop() -> void:
 	"""Close the shop"""
 	hide()
 	shop_closed.emit()
+
+	# Notify tutorial system that shop closed
+	if TutorialManager and TutorialManager.is_tutorial_active():
+		TutorialManager.on_shop_closed()
+
 	print("🏪 Shop UI closed")
 
 func update_gold_display() -> void:
@@ -805,12 +821,26 @@ func populate_quests() -> void:
 	var qm = get_node("/root/QuestManager")
 	var giver = vendor.vendor_name.to_lower() if vendor else "blacksmith"
 
-	# Get quests ready for turn-in
+	# Get quests ready for turn-in, available, and in-progress
 	var completed_quests = qm.get_completed_quests(giver)
 	var available_quests = qm.get_available_quests(giver)
+	var active_quests = qm.get_active_quests()  # All active quests (in progress)
+
+	# Filter active quests to only show ones from this vendor that aren't complete
+	var in_progress_quests = []
+	for quest in active_quests:
+		var quest_giver = quest.get("giver", "").to_lower()
+		if quest_giver == giver:
+			var quest_id = quest.get("id", "")
+			var state = qm.get_quest_state(quest_id)
+			if state == qm.QuestState.ACTIVE:  # Only in-progress, not complete
+				in_progress_quests.append(quest)
+
+	var has_content = false
 
 	# Show completed quests first (ready for turn-in)
 	if completed_quests.size() > 0:
+		has_content = true
 		var turn_in_header = Label.new()
 		turn_in_header.text = "READY TO TURN IN"
 		turn_in_header.add_theme_font_size_override("font_size", 14)
@@ -826,8 +856,27 @@ func populate_quests() -> void:
 		sep.add_theme_constant_override("separation", 8)
 		quests_list.add_child(sep)
 
+	# Show in-progress quests
+	if in_progress_quests.size() > 0:
+		has_content = true
+		var progress_header = Label.new()
+		progress_header.text = "IN PROGRESS"
+		progress_header.add_theme_font_size_override("font_size", 14)
+		progress_header.add_theme_color_override("font_color", Color(0.6, 0.75, 0.9))  # Light blue
+		quests_list.add_child(progress_header)
+
+		for quest in in_progress_quests:
+			var card = create_quest_progress_card(quest)
+			quests_list.add_child(card)
+
+		# Separator
+		var sep = HSeparator.new()
+		sep.add_theme_constant_override("separation", 8)
+		quests_list.add_child(sep)
+
 	# Show available quests
 	if available_quests.size() > 0:
+		has_content = true
 		var avail_header = Label.new()
 		avail_header.text = "AVAILABLE QUESTS"
 		avail_header.add_theme_font_size_override("font_size", 14)
@@ -838,8 +887,8 @@ func populate_quests() -> void:
 			var card = create_quest_card(quest, false)
 			quests_list.add_child(card)
 
-	# No quests message
-	if completed_quests.is_empty() and available_quests.is_empty():
+	# No quests message - only if nothing to show at all
+	if not has_content:
 		var no_quests = Label.new()
 		no_quests.text = "No quests available.\nLevel up to unlock more!"
 		no_quests.add_theme_font_size_override("font_size", 16)
@@ -961,6 +1010,63 @@ func create_quest_card(quest: Dictionary, is_complete: bool) -> PanelContainer:
 
 	return card
 
+func create_quest_progress_card(quest: Dictionary) -> PanelContainer:
+	"""Create a quest card showing current progress (no action button)"""
+	var quest_id = quest.get("id", "")
+	var qm = get_node("/root/QuestManager")
+
+	var card = PanelContainer.new()
+	card.custom_minimum_size = Vector2(0, 80)
+
+	# Style the card with light blue border for in-progress
+	var card_style = StyleBoxFlat.new()
+	card_style.bg_color = ITEM_BG_COLOR
+	card_style.border_width_left = 2
+	card_style.border_width_right = 2
+	card_style.border_width_top = 2
+	card_style.border_width_bottom = 2
+	card_style.border_color = Color(0.5, 0.65, 0.85)  # Light blue
+	card_style.corner_radius_top_left = 6
+	card_style.corner_radius_top_right = 6
+	card_style.corner_radius_bottom_left = 6
+	card_style.corner_radius_bottom_right = 6
+	card_style.content_margin_left = 12
+	card_style.content_margin_right = 12
+	card_style.content_margin_top = 8
+	card_style.content_margin_bottom = 8
+	card.add_theme_stylebox_override("panel", card_style)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	card.add_child(vbox)
+
+	# Quest name
+	var name_label = Label.new()
+	name_label.text = quest.get("name", "Unknown Quest")
+	name_label.add_theme_font_size_override("font_size", 15)
+	name_label.add_theme_color_override("font_color", TEXT_COLOR)
+	vbox.add_child(name_label)
+
+	# Objectives with progress
+	var objectives = quest.get("objectives", [])
+	for i in range(objectives.size()):
+		var obj = objectives[i]
+		var current = qm.get_objective_progress(quest_id, i)
+		var required = obj.get("count", 1)
+		var is_obj_complete = current >= required
+
+		var obj_label = Label.new()
+		if is_obj_complete:
+			obj_label.text = "  \u2713 %s: %d/%d" % [obj.get("desc", ""), current, required]
+			obj_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))  # Gold
+		else:
+			obj_label.text = "  \u2022 %s: %d/%d" % [obj.get("desc", ""), current, required]
+			obj_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.72))
+		obj_label.add_theme_font_size_override("font_size", 12)
+		vbox.add_child(obj_label)
+
+	return card
+
 func _on_accept_quest(quest_id: String) -> void:
 	"""Handle quest accept button"""
 	if not has_node("/root/QuestManager"):
@@ -1010,15 +1116,29 @@ func _on_close_pressed() -> void:
 	"""Handle close button press"""
 	close_shop()
 
+func _on_tab_changed(tab_idx: int) -> void:
+	"""Handle tab changes - notify tutorial system if waiting for Quests tab"""
+	if not tab_container:
+		return
+
+	var tab_title = tab_container.get_tab_title(tab_idx)
+	print("🏪 Tab changed to: %s (idx %d)" % [tab_title, tab_idx])
+
+	# Notify tutorial system if we clicked on Quests tab
+	if tab_title.begins_with("Quests"):
+		if TutorialManager and TutorialManager.is_tutorial_active():
+			TutorialManager.on_quests_tab_selected()
+
 func update_quests_tab_indicator() -> void:
-	"""Update the Quests tab title with !/? indicator based on available/complete quests"""
+	"""Update the Quests tab title with indicator based on available/complete quests"""
 	if not tab_container:
 		return
 
 	# Find the Quests tab index
 	var quests_tab_idx = -1
 	for i in range(tab_container.get_tab_count()):
-		if tab_container.get_tab_title(i).begins_with("Quests"):
+		var title = tab_container.get_tab_title(i)
+		if title.begins_with("Quests"):
 			quests_tab_idx = i
 			break
 
@@ -1039,12 +1159,12 @@ func update_quests_tab_indicator() -> void:
 		has_turn_in = completed_quests.size() > 0
 		has_available = available_quests.size() > 0
 
-	# Update tab title with indicator
+	# Simple approach: just change the tab title text
 	# Priority: ? (turn-in) > ! (available) > none
 	var tab_title = "Quests"
 	if has_turn_in:
-		tab_title = "Quests ?"  # Gold ? for turn-in
+		tab_title = "Quests (?)"  # Ready to turn in
 	elif has_available:
-		tab_title = "Quests !"  # Gold ! for available
+		tab_title = "Quests (!)"  # New quests available
 
 	tab_container.set_tab_title(quests_tab_idx, tab_title)

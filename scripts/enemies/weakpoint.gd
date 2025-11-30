@@ -46,6 +46,9 @@ func _ready() -> void:
 	z_index = 300
 	input_pickable = true
 
+	# Add to weakpoints group for cursor detection
+	add_to_group("weakpoints")
+
 	var colors = theme_colors[color_theme]
 
 	# 💎 HIGH-FIDELITY GEM/GLASS - Starts visible, brightens as it cracks

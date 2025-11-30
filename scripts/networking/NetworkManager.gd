@@ -808,5 +808,28 @@ func request_player_heal(target_peer_id: int, heal_amount: float) -> void:
 	# Find target player and apply heal
 	var target_player = game_world.get_player_by_peer_id(target_peer_id)
 	if target_player and is_instance_valid(target_player) and target_player.has_method("heal"):
+		# Apply heal on server
 		target_player.heal(heal_amount)
 		print("💚 Server: Player %d healed player %d for %.1f" % [healer_peer_id, target_peer_id, heal_amount])
+
+		# Sync health to the target player's client
+		if target_peer_id != 1:  # Don't RPC to server (already updated locally)
+			_sync_player_health.rpc_id(target_peer_id, target_player.current_health, target_player.max_health)
+
+@rpc("authority", "reliable")
+func _sync_player_health(current_hp: float, max_hp: float) -> void:
+	"""Server syncs health to client after healing."""
+	var local_player = _get_local_player()
+	if local_player and is_instance_valid(local_player):
+		local_player.current_health = current_hp
+		local_player.max_health = max_hp
+		if local_player.health_bar and local_player.health_bar.has_method("update_health"):
+			local_player.health_bar.update_health(current_hp, max_hp)
+		print("💚 Client: Health synced to %.1f/%.1f" % [current_hp, max_hp])
+
+func _get_local_player() -> Node:
+	"""Get the local player node."""
+	var game_world = get_node_or_null("/root/GameWorld")
+	if game_world:
+		return game_world.get_player_by_peer_id(multiplayer.get_unique_id())
+	return null

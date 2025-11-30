@@ -22,6 +22,11 @@ var interaction_prompt: Label = null
 var quest_indicator: Label = null  # Floating "!" above head
 var has_talked_to_player: bool = false  # Track if player has interacted
 
+# Tutorial arrow indicator
+var tutorial_arrow: Polygon2D = null
+var tutorial_arrow_tween: Tween = null
+var tutorial_arrow_flash_tween: Tween = null
+
 func _ready() -> void:
 	print("🏪 Vendor '%s' starting initialization..." % vendor_name)
 
@@ -648,3 +653,114 @@ func _on_body_exited(body: Node) -> void:
 		# Close shop if player leaves
 		if shop_ui and shop_ui.visible:
 			shop_ui.close_shop()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TUTORIAL ARROW INDICATOR
+# ═══════════════════════════════════════════════════════════════════════════
+
+func create_tutorial_arrow() -> void:
+	"""Create flashing arrow indicator above blacksmith for tutorial"""
+	if tutorial_arrow and is_instance_valid(tutorial_arrow):
+		return  # Already exists
+
+	tutorial_arrow = Polygon2D.new()
+	tutorial_arrow.name = "TutorialArrow"
+
+	# Big downward-pointing arrow
+	var arrow_size = 20.0
+	tutorial_arrow.polygon = PackedVector2Array([
+		Vector2(0, arrow_size),           # Tip (bottom, pointing down)
+		Vector2(-arrow_size * 0.7, 0),    # Top left
+		Vector2(-arrow_size * 0.25, 0),   # Inner top left
+		Vector2(-arrow_size * 0.25, -arrow_size * 0.6),  # Tail top left
+		Vector2(arrow_size * 0.25, -arrow_size * 0.6),   # Tail top right
+		Vector2(arrow_size * 0.25, 0),    # Inner top right
+		Vector2(arrow_size * 0.7, 0),     # Top right
+	])
+
+	# Bright green color
+	tutorial_arrow.color = Color(0.2, 1.0, 0.3, 1.0)
+
+	# Position above blacksmith (above the quest indicator)
+	tutorial_arrow.position = Vector2(0, -110)
+	tutorial_arrow.z_index = 150
+
+	# Add outline for visibility
+	var outline = Line2D.new()
+	outline.name = "Outline"
+	outline.points = PackedVector2Array([
+		Vector2(0, arrow_size),
+		Vector2(-arrow_size * 0.7, 0),
+		Vector2(-arrow_size * 0.25, 0),
+		Vector2(-arrow_size * 0.25, -arrow_size * 0.6),
+		Vector2(arrow_size * 0.25, -arrow_size * 0.6),
+		Vector2(arrow_size * 0.25, 0),
+		Vector2(arrow_size * 0.7, 0),
+		Vector2(0, arrow_size)
+	])
+	outline.width = 3.0
+	outline.default_color = Color(0.0, 0.3, 0.0, 1.0)  # Dark green outline
+	tutorial_arrow.add_child(outline)
+
+	tutorial_arrow.visible = false
+	add_child(tutorial_arrow)
+
+func show_tutorial_arrow() -> void:
+	"""Show the big green flashing arrow above blacksmith"""
+	if not tutorial_arrow or not is_instance_valid(tutorial_arrow):
+		create_tutorial_arrow()
+
+	if not tutorial_arrow:
+		return
+
+	tutorial_arrow.visible = true
+	tutorial_arrow.color = Color(0.2, 1.0, 0.3, 1.0)  # Bright green
+
+	# Start bobbing animation
+	_start_tutorial_arrow_bob()
+
+	# Start flashing animation
+	_start_tutorial_arrow_flash()
+
+	print("🏪 [Vendor] Showing tutorial arrow")
+
+func hide_tutorial_arrow() -> void:
+	"""Hide the tutorial arrow"""
+	# Stop tweens
+	if tutorial_arrow_tween and tutorial_arrow_tween.is_valid():
+		tutorial_arrow_tween.kill()
+		tutorial_arrow_tween = null
+
+	if tutorial_arrow_flash_tween and tutorial_arrow_flash_tween.is_valid():
+		tutorial_arrow_flash_tween.kill()
+		tutorial_arrow_flash_tween = null
+
+	if tutorial_arrow and is_instance_valid(tutorial_arrow):
+		tutorial_arrow.visible = false
+
+	print("🏪 [Vendor] Hiding tutorial arrow")
+
+func _start_tutorial_arrow_bob() -> void:
+	"""Start bobbing animation for tutorial arrow"""
+	if tutorial_arrow_tween and tutorial_arrow_tween.is_valid():
+		tutorial_arrow_tween.kill()
+
+	if not tutorial_arrow or not is_instance_valid(tutorial_arrow):
+		return
+
+	var base_y = -110.0
+	tutorial_arrow_tween = create_tween().set_loops()
+	tutorial_arrow_tween.tween_property(tutorial_arrow, "position:y", base_y + 10, 0.4).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tutorial_arrow_tween.tween_property(tutorial_arrow, "position:y", base_y, 0.4).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+func _start_tutorial_arrow_flash() -> void:
+	"""Start flashing animation for tutorial arrow"""
+	if tutorial_arrow_flash_tween and tutorial_arrow_flash_tween.is_valid():
+		tutorial_arrow_flash_tween.kill()
+
+	if not tutorial_arrow or not is_instance_valid(tutorial_arrow):
+		return
+
+	tutorial_arrow_flash_tween = create_tween().set_loops()
+	tutorial_arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 0.3, 0.25)
+	tutorial_arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 1.0, 0.25)

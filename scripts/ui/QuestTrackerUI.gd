@@ -14,12 +14,17 @@ const PROGRESS_BG = Color(0.08, 0.08, 0.10, 0.8)
 const PROGRESS_FILL = Color(0.4, 0.6, 0.3, 1.0)
 
 const MAX_VISIBLE_QUESTS = 3
-const TRACKER_WIDTH = 220
-const QUEST_ENTRY_HEIGHT = 50
-const OBJECTIVE_HEIGHT = 20
+const TRACKER_WIDTH = 280
+const QUEST_ENTRY_HEIGHT = 60
+const OBJECTIVE_HEIGHT = 24
 const IDLE_ALPHA = 0.3  # Transparency when not hovered
 const HOVER_ALPHA = 1.0  # Full opacity when hovered
 const TUTORIAL_COLOR = Color(0.4, 0.8, 1.0, 1.0)  # Light blue for tutorial
+
+# Font sizes
+const HEADER_FONT_SIZE = 18
+const QUEST_NAME_FONT_SIZE = 16
+const OBJECTIVE_FONT_SIZE = 14
 
 var main_panel: PanelContainer
 var quest_container: VBoxContainer
@@ -114,7 +119,7 @@ func _create_ui() -> void:
 	header_label = Label.new()
 	header_label.name = "Header"
 	header_label.text = "QUESTS"
-	header_label.add_theme_font_size_override("font_size", 14)
+	header_label.add_theme_font_size_override("font_size", HEADER_FONT_SIZE)
 	header_label.add_theme_color_override("font_color", HEADER_COLOR)
 	header_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(header_label)
@@ -179,7 +184,7 @@ func _refresh_tracker() -> void:
 			if active_quests.size() > MAX_VISIBLE_QUESTS:
 				var more_label = Label.new()
 				more_label.text = "+%d more..." % (active_quests.size() - MAX_VISIBLE_QUESTS)
-				more_label.add_theme_font_size_override("font_size", 11)
+				more_label.add_theme_font_size_override("font_size", OBJECTIVE_FONT_SIZE)
 				more_label.add_theme_color_override("font_color", OBJECTIVE_COLOR)
 				more_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				quest_container.add_child(more_label)
@@ -204,7 +209,7 @@ func _create_quest_entry(quest: Dictionary) -> VBoxContainer:
 	var name_label = Label.new()
 	name_label.name = "QuestName"
 	name_label.text = quest.get("name", "Unknown Quest")
-	name_label.add_theme_font_size_override("font_size", 13)
+	name_label.add_theme_font_size_override("font_size", QUEST_NAME_FONT_SIZE)
 
 	if is_complete:
 		name_label.add_theme_color_override("font_color", COMPLETE_COLOR)
@@ -238,7 +243,7 @@ func _create_objective_entry(quest_id: String, obj_index: int, objective: Dictio
 	# Bullet/checkmark
 	var bullet = Label.new()
 	bullet.text = "  \u2713 " if is_complete else "  \u2022 "  # ✓ or •
-	bullet.add_theme_font_size_override("font_size", 11)
+	bullet.add_theme_font_size_override("font_size", OBJECTIVE_FONT_SIZE)
 	bullet.add_theme_color_override("font_color", COMPLETE_COLOR if is_complete else OBJECTIVE_COLOR)
 	hbox.add_child(bullet)
 
@@ -246,7 +251,7 @@ func _create_objective_entry(quest_id: String, obj_index: int, objective: Dictio
 	var desc_label = Label.new()
 	desc_label.name = "Description"
 	desc_label.text = "%s: %d/%d" % [objective.get("desc", ""), current, required]
-	desc_label.add_theme_font_size_override("font_size", 11)
+	desc_label.add_theme_font_size_override("font_size", OBJECTIVE_FONT_SIZE)
 	desc_label.add_theme_color_override("font_color", COMPLETE_COLOR if is_complete else OBJECTIVE_COLOR)
 	desc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	desc_label.clip_text = true
@@ -350,7 +355,7 @@ func _create_tutorial_entry() -> void:
 	var name_label = Label.new()
 	name_label.name = "TutorialName"
 	name_label.text = "TUTORIAL"
-	name_label.add_theme_font_size_override("font_size", 13)
+	name_label.add_theme_font_size_override("font_size", QUEST_NAME_FONT_SIZE)
 	name_label.add_theme_color_override("font_color", TUTORIAL_COLOR)
 	tutorial_entry.add_child(name_label)
 

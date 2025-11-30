@@ -21,7 +21,8 @@ enum TutorialStep {
 	HIT_WEAKPOINT = 4,   # Click the weakpoint
 	KILL_SKELETON = 5,   # Find and kill a real skeleton
 	VISIT_BLACKSMITH = 6, # Talk to blacksmith to gear up
-	COMPLETE = 7
+	ACCEPT_QUEST = 7,    # Accept first quest from blacksmith
+	COMPLETE = 8
 }
 
 var current_step: TutorialStep = TutorialStep.INACTIVE
@@ -38,9 +39,27 @@ var crit_window_seen: bool = false
 var weakpoint_hit: bool = false
 var skeleton_killed: bool = false
 var blacksmith_visited: bool = false
+var quest_accepted: bool = false
 var step_transitioning: bool = false  # Prevent multiple transitions
 var healing_hint_shown: bool = false  # Track if we've shown the campfire healing hint
 var skeleton_engaged: bool = false  # Track if player has engaged with a skeleton
+
+# UI arrow indicators (for pointing at UI elements like tabs/buttons)
+var ui_arrow: Control = null
+var ui_arrow_tween: Tween = null
+var waiting_for_quests_tab: bool = false
+var waiting_for_accept_button: bool = false
+
+# Mini-tutorial: Equip item helper
+var equip_mini_tutorial_active: bool = false
+var equip_mini_tutorial_shown: bool = false  # Only show once per session
+var equip_hint_label: Label = null
+var equip_hint_tween: Tween = null
+var equip_arrow: Control = null
+var equip_arrow_tween: Tween = null
+var pending_equip_item: Dictionary = {}  # The item we're waiting for them to equip
+var waiting_for_bag_open: bool = false
+var waiting_for_item_equip: bool = false
 
 # UI colors
 const BG_COLOR = Color(0.0, 0.0, 0.0, 0.85)
@@ -50,7 +69,18 @@ const SUCCESS_COLOR = Color(0.3, 1.0, 0.3, 1.0)  # Green
 
 func _ready() -> void:
 	# Don't auto-start - wait for start_tutorial() call
-	pass
+	# Connect to inventory system to detect equippable items
+	call_deferred("_connect_inventory_signals")
+
+func _connect_inventory_signals() -> void:
+	"""Connect to inventory system for equip mini-tutorial"""
+	if InventorySystem and not InventorySystem.item_added.is_connected(_on_inventory_item_added):
+		InventorySystem.item_added.connect(_on_inventory_item_added)
+		print("📚 [Tutorial] Connected to InventorySystem.item_added")
+
+func _on_inventory_item_added(item: Dictionary) -> void:
+	"""Called when any item is added to inventory"""
+	on_equippable_item_received(item)
 
 func _process(delta: float) -> void:
 	if current_step == TutorialStep.INACTIVE or current_step == TutorialStep.COMPLETE:
@@ -76,6 +106,8 @@ func _process(delta: float) -> void:
 			check_player_needs_healing()
 		TutorialStep.VISIT_BLACKSMITH:
 			check_blacksmith_visited()
+		TutorialStep.ACCEPT_QUEST:
+			check_quest_accepted()
 
 func _input(event: InputEvent) -> void:
 	if current_step != TutorialStep.MOVEMENT:
@@ -153,6 +185,8 @@ func advance_to_step(step: TutorialStep) -> void:
 			show_kill_skeleton_tutorial()
 		TutorialStep.VISIT_BLACKSMITH:
 			show_blacksmith_tutorial()
+		TutorialStep.ACCEPT_QUEST:
+			show_accept_quest_tutorial()
 		TutorialStep.COMPLETE:
 			complete_tutorial()
 
@@ -219,8 +253,9 @@ func show_crit_window_tutorial() -> void:
 	show_click_indicator()
 
 func show_weakpoint_tutorial() -> void:
-	"""Step 5: Click the weakpoint"""
+	"""Step 5: Click the weakpoint - crit window started, no more click spam"""
 	clear_prompt()
+	clear_click_indicator()  # Explicitly clear LEFT CLICK indicator when entering crit window
 	clear_feedback_label()
 
 	prompt_label.text = "DESTROY THE WEAKPOINT!"
@@ -233,6 +268,8 @@ func show_weakpoint_tutorial() -> void:
 func show_kill_skeleton_tutorial() -> void:
 	"""Step 6: Kill a real skeleton"""
 	clear_prompt()
+	clear_click_indicator()  # Explicitly clear click indicator from attack steps
+	clear_feedback_label()   # Clear any remaining feedback
 	prompt_label.add_theme_color_override("font_color", TEXT_COLOR)
 
 	prompt_label.text = "Now find and defeat a Skeleton!"
@@ -244,17 +281,54 @@ func show_kill_skeleton_tutorial() -> void:
 func show_blacksmith_tutorial() -> void:
 	"""Step 7: Visit the blacksmith"""
 	clear_prompt()
+	clear_click_indicator()  # Explicitly clear LEFT CLICK from earlier steps
+	clear_feedback_label()   # Clear any remaining feedback
 
-	prompt_label.text = "Talk to the Blacksmith to get gear!"
+	prompt_label.text = "Press [F] to talk to the Blacksmith!"
 	prompt_label.visible = true
 
 	# Show arrow to blacksmith
 	show_arrow_to_target(get_blacksmith_position())
 
+	# Show big green arrow on the blacksmith itself
+	var blacksmith = get_tree().get_first_node_in_group("vendor")
+	if blacksmith and blacksmith.has_method("show_tutorial_arrow"):
+		blacksmith.show_tutorial_arrow()
+
+func show_accept_quest_tutorial() -> void:
+	"""Step 8: Accept first quest from blacksmith"""
+	clear_prompt()
+	clear_arrow()
+
+	# Hide the blacksmith tutorial arrow
+	var blacksmith = get_tree().get_first_node_in_group("vendor")
+	if blacksmith and blacksmith.has_method("hide_tutorial_arrow"):
+		blacksmith.hide_tutorial_arrow()
+
+	prompt_label.text = "Click the Quests tab!"
+	prompt_label.add_theme_color_override("font_color", HIGHLIGHT_COLOR)
+	prompt_label.visible = true
+
+	# Flash the prompt for attention
+	start_prompt_flash()
+
+	# Start waiting for quests tab to be clicked
+	waiting_for_quests_tab = true
+	waiting_for_accept_button = false
+
+	# Show arrow pointing to Quests tab (delay to let shop UI fully render)
+	await get_tree().create_timer(0.15).timeout
+	if not is_instance_valid(self):
+		return
+	show_ui_arrow_to_quests_tab()
+
 func show_completion_message() -> void:
 	"""Show tutorial complete message"""
 	clear_prompt()
 	clear_arrow()
+	clear_ui_arrow()
+	waiting_for_quests_tab = false
+	waiting_for_accept_button = false
 
 	prompt_label.text = "Tutorial Complete! Good luck, adventurer!"
 	prompt_label.add_theme_color_override("font_color", SUCCESS_COLOR)
@@ -357,6 +431,11 @@ func check_blacksmith_visited() -> void:
 	# This is triggered externally via on_blacksmith_visited()
 	pass
 
+func check_quest_accepted() -> void:
+	"""Check if player accepted a quest"""
+	# This is triggered externally via on_quest_accepted()
+	pass
+
 # ═══════════════════════════════════════════════════════════════════════════
 # EXTERNAL EVENT HANDLERS (called by other systems)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -415,6 +494,19 @@ func on_blacksmith_visited() -> void:
 		return
 
 	blacksmith_visited = true
+	advance_to_step(TutorialStep.ACCEPT_QUEST)
+
+func on_quest_accepted() -> void:
+	"""Called when player accepts their first quest"""
+	if current_step != TutorialStep.ACCEPT_QUEST:
+		return
+
+	# Clear UI arrow and flags
+	clear_ui_arrow()
+	waiting_for_quests_tab = false
+	waiting_for_accept_button = false
+
+	quest_accepted = true
 	advance_to_step(TutorialStep.COMPLETE)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -588,13 +680,261 @@ func update_arrow_indicator() -> void:
 
 	arrow_indicator.set("player_position", player.global_position)
 
+	# For KILL_SKELETON step, continuously update target to nearest skeleton
+	if current_step == TutorialStep.KILL_SKELETON and not healing_hint_shown:
+		var nearest_skeleton = get_nearest_skeleton_position()
+		if nearest_skeleton != Vector2.ZERO:
+			arrow_indicator.set("target_position", nearest_skeleton)
+
 func clear_arrow() -> void:
 	"""Hide the arrow indicator"""
 	if arrow_indicator and is_instance_valid(arrow_indicator):
 		arrow_indicator.visible = false
 
+# ═══════════════════════════════════════════════════════════════════════════
+# UI ARROW INDICATOR (for pointing at UI elements)
+# ═══════════════════════════════════════════════════════════════════════════
+
+var ui_arrow_canvas: CanvasLayer = null  # Separate canvas for UI arrow
+
+func create_ui_arrow() -> void:
+	"""Create a UI arrow indicator that points at UI elements"""
+	if ui_arrow and is_instance_valid(ui_arrow):
+		return  # Already exists
+
+	# Create dedicated canvas layer for UI arrow (above ShopUI which is ~100)
+	if not ui_arrow_canvas or not is_instance_valid(ui_arrow_canvas):
+		ui_arrow_canvas = CanvasLayer.new()
+		ui_arrow_canvas.name = "UIArrowCanvas"
+		ui_arrow_canvas.layer = 200  # Above all other UI
+		get_tree().root.add_child(ui_arrow_canvas)
+
+	ui_arrow = Control.new()
+	ui_arrow.name = "UIArrow"
+	ui_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Create arrow polygon (pointing down)
+	var arrow_poly = Polygon2D.new()
+	arrow_poly.name = "ArrowPoly"
+	# Arrow shape pointing DOWN (will be positioned above target)
+	arrow_poly.polygon = PackedVector2Array([
+		Vector2(0, 20),    # Tip (bottom)
+		Vector2(-12, 0),   # Top left
+		Vector2(-5, 0),    # Inner top left
+		Vector2(-5, -15),  # Tail top left
+		Vector2(5, -15),   # Tail top right
+		Vector2(5, 0),     # Inner top right
+		Vector2(12, 0)     # Top right
+	])
+	arrow_poly.color = HIGHLIGHT_COLOR
+	arrow_poly.position = Vector2(0, 0)
+	ui_arrow.add_child(arrow_poly)
+
+	# Add outline for visibility
+	var outline = Line2D.new()
+	outline.name = "Outline"
+	outline.points = PackedVector2Array([
+		Vector2(0, 20), Vector2(-12, 0), Vector2(-5, 0),
+		Vector2(-5, -15), Vector2(5, -15), Vector2(5, 0),
+		Vector2(12, 0), Vector2(0, 20)
+	])
+	outline.width = 2.0
+	outline.default_color = Color.BLACK
+	ui_arrow.add_child(outline)
+
+	ui_arrow.visible = false
+	ui_arrow_canvas.add_child(ui_arrow)
+
+func show_ui_arrow_to_quests_tab() -> void:
+	"""Show UI arrow pointing to the Quests tab in ShopUI"""
+	create_ui_arrow()
+
+	# Find the ShopUI and its tab container
+	var shop_ui = get_tree().get_first_node_in_group("shop_ui")
+	if not shop_ui:
+		# Try finding by class
+		for node in get_tree().root.get_children():
+			if node is CanvasLayer and node.name == "ShopUI":
+				shop_ui = node
+				break
+
+	if not shop_ui:
+		print("📚 [Tutorial] ShopUI not found for arrow")
+		return
+
+	var tab_container = shop_ui.get_node_or_null("Control/Panel/MarginContainer/VBoxContainer/TabContainer")
+	if not tab_container:
+		print("📚 [Tutorial] TabContainer not found")
+		return
+
+	# Find the Quests tab index
+	var quests_tab_idx = -1
+	for i in range(tab_container.get_tab_count()):
+		var title = tab_container.get_tab_title(i)
+		if title.begins_with("Quests"):
+			quests_tab_idx = i
+			break
+
+	if quests_tab_idx == -1:
+		print("📚 [Tutorial] Quests tab not found")
+		return
+
+	# Get the tab bar and find the tab button position
+	var tab_bar = tab_container.get_tab_bar()
+	if tab_bar:
+		var tab_rect = tab_bar.get_tab_rect(quests_tab_idx)
+
+		# Use get_screen_position() which accounts for CanvasLayer transforms
+		var tab_bar_screen_pos = tab_bar.get_screen_position()
+		var tab_center = tab_bar_screen_pos + tab_rect.position + Vector2(tab_rect.size.x / 2, 0)
+
+		# Position arrow above the tab
+		# The arrow tip points down at y=20, so offset to place tip just above tab
+		ui_arrow.position = tab_center + Vector2(0, -25)
+		ui_arrow.visible = true
+
+		# Start bouncing animation
+		start_ui_arrow_bounce()
+
+		print("📚 [Tutorial] Showing arrow to Quests tab at %s (tab_bar_screen_pos=%s, tab_rect=%s)" % [ui_arrow.position, tab_bar_screen_pos, tab_rect])
+
+func show_ui_arrow_to_accept_button() -> void:
+	"""Show UI arrow pointing to the first Accept button in the Quests tab"""
+	create_ui_arrow()
+
+	var shop_ui = get_tree().get_first_node_in_group("shop_ui")
+	if not shop_ui:
+		for node in get_tree().root.get_children():
+			if node is CanvasLayer and node.name == "ShopUI":
+				shop_ui = node
+				break
+
+	if not shop_ui:
+		return
+
+	var quests_list = shop_ui.get_node_or_null("Control/Panel/MarginContainer/VBoxContainer/TabContainer/Quests/ScrollContainer/QuestsList")
+	if not quests_list:
+		print("📚 [Tutorial] QuestsList not found")
+		return
+
+	# Find the first Accept button
+	for child in quests_list.get_children():
+		if child is PanelContainer:
+			var accept_btn = find_accept_button(child)
+			if accept_btn and accept_btn.visible and accept_btn.text == "ACCEPT":
+				# Use get_screen_position() which accounts for CanvasLayer transforms
+				var btn_screen_pos = accept_btn.get_screen_position()
+				var btn_center = btn_screen_pos + accept_btn.size / 2
+				ui_arrow.position = btn_center + Vector2(0, -40)
+				ui_arrow.visible = true
+				start_ui_arrow_bounce()
+				print("📚 [Tutorial] Showing arrow to Accept button at %s" % ui_arrow.position)
+				return
+
+	print("📚 [Tutorial] No Accept button found")
+
+func find_accept_button(node: Node) -> Button:
+	"""Recursively find an Accept button in the node tree"""
+	if node is Button and node.text == "ACCEPT":
+		return node
+	for child in node.get_children():
+		var result = find_accept_button(child)
+		if result:
+			return result
+	return null
+
+func start_ui_arrow_bounce() -> void:
+	"""Start bouncing animation for UI arrow"""
+	if ui_arrow_tween and ui_arrow_tween.is_valid():
+		ui_arrow_tween.kill()
+
+	if not ui_arrow or not is_instance_valid(ui_arrow):
+		return
+
+	var start_y = ui_arrow.position.y
+	ui_arrow_tween = create_tween().set_loops()
+	ui_arrow_tween.tween_property(ui_arrow, "position:y", start_y + 8, 0.4).set_ease(Tween.EASE_IN_OUT)
+	ui_arrow_tween.tween_property(ui_arrow, "position:y", start_y, 0.4).set_ease(Tween.EASE_IN_OUT)
+
+func clear_ui_arrow() -> void:
+	"""Hide and clean up UI arrow"""
+	if ui_arrow_tween and ui_arrow_tween.is_valid():
+		ui_arrow_tween.kill()
+		ui_arrow_tween = null
+
+	if ui_arrow and is_instance_valid(ui_arrow):
+		ui_arrow.queue_free()
+		ui_arrow = null
+
+	if ui_arrow_canvas and is_instance_valid(ui_arrow_canvas):
+		ui_arrow_canvas.queue_free()
+		ui_arrow_canvas = null
+
+func on_quests_tab_selected() -> void:
+	"""Called when user clicks on the Quests tab during tutorial"""
+	if current_step != TutorialStep.ACCEPT_QUEST:
+		return
+	if not waiting_for_quests_tab:
+		return
+
+	waiting_for_quests_tab = false
+	waiting_for_accept_button = true
+
+	# Update prompt
+	prompt_label.text = "Click ACCEPT on a quest!"
+
+	# Move arrow to Accept button (with small delay for tab to render)
+	await get_tree().create_timer(0.2).timeout
+	if not is_instance_valid(self):
+		return
+	show_ui_arrow_to_accept_button()
+
+	print("📚 [Tutorial] Quests tab selected, now pointing to Accept button")
+
+func on_shop_opened() -> void:
+	"""Called when player opens the shop UI - re-show tutorial guidance if needed"""
+	if current_step != TutorialStep.ACCEPT_QUEST:
+		return
+
+	print("📚 [Tutorial] Shop opened during ACCEPT_QUEST step")
+
+	# Re-show the appropriate arrow based on where they are in the step
+	if waiting_for_quests_tab:
+		# They need to click the Quests tab
+		prompt_label.text = "Click the Quests tab!"
+		prompt_label.visible = true
+		start_prompt_flash()
+		# Small delay for shop UI to render
+		await get_tree().create_timer(0.2).timeout
+		if not is_instance_valid(self):
+			return
+		show_ui_arrow_to_quests_tab()
+	elif waiting_for_accept_button:
+		# They need to click Accept
+		prompt_label.text = "Click ACCEPT on a quest!"
+		prompt_label.visible = true
+		start_prompt_flash()
+		await get_tree().create_timer(0.2).timeout
+		if not is_instance_valid(self):
+			return
+		show_ui_arrow_to_accept_button()
+
+func on_shop_closed() -> void:
+	"""Called when player closes the shop UI"""
+	if current_step != TutorialStep.ACCEPT_QUEST:
+		return
+
+	# Hide the UI arrow when shop closes
+	clear_ui_arrow()
+	print("📚 [Tutorial] Shop closed during ACCEPT_QUEST step")
+
+var click_indicator_tween: Tween = null
+
 func show_click_indicator() -> void:
 	"""Show a click/mouse indicator"""
+	# Clear existing first
+	clear_click_indicator()
+
 	var click_label = Label.new()
 	click_label.name = "ClickIndicator"
 	click_label.text = "🖱️ LEFT CLICK"
@@ -614,10 +954,28 @@ func show_click_indicator() -> void:
 
 	tutorial_ui.add_child(click_label)
 
-	# Pulse animation
-	var tween = create_tween().set_loops()
-	tween.tween_property(click_label, "modulate:a", 0.5, 0.5)
-	tween.tween_property(click_label, "modulate:a", 1.0, 0.5)
+	# Pulse animation - store the tween so we can kill it later
+	click_indicator_tween = create_tween().set_loops()
+	click_indicator_tween.tween_property(click_label, "modulate:a", 0.5, 0.5)
+	click_indicator_tween.tween_property(click_label, "modulate:a", 1.0, 0.5)
+
+func clear_click_indicator() -> void:
+	"""Clear the click indicator and its tween"""
+	# Kill the tween first
+	if click_indicator_tween and click_indicator_tween.is_valid():
+		click_indicator_tween.kill()
+	click_indicator_tween = null
+
+	# Remove all click indicators immediately (not queue_free to avoid race conditions)
+	if tutorial_ui and is_instance_valid(tutorial_ui):
+		var to_remove = []
+		for child in tutorial_ui.get_children():
+			if child.name == "ClickIndicator":
+				to_remove.append(child)
+		for child in to_remove:
+			child.get_parent().remove_child(child)
+			child.queue_free()
+			print("📚 [Tutorial] Cleared ClickIndicator")
 
 var feedback_label: Label = null
 var prompt_flash_tween: Tween = null
@@ -704,12 +1062,16 @@ func clear_feedback_label() -> void:
 func clear_prompt() -> void:
 	"""Clear click indicator and other temporary UI"""
 	stop_prompt_flash()
-	var click_indicator = tutorial_ui.get_node_or_null("ClickIndicator")
-	if click_indicator:
-		click_indicator.queue_free()
+	clear_click_indicator()  # Properly kill tween and free node
 
 func cleanup_tutorial_ui() -> void:
 	"""Remove all tutorial UI"""
+	clear_ui_arrow()
+
+	if ui_arrow and is_instance_valid(ui_arrow):
+		ui_arrow.queue_free()
+		ui_arrow = null
+
 	if tutorial_ui and is_instance_valid(tutorial_ui):
 		tutorial_ui.queue_free()
 		tutorial_ui = null
@@ -717,6 +1079,290 @@ func cleanup_tutorial_ui() -> void:
 	if arrow_indicator and is_instance_valid(arrow_indicator):
 		arrow_indicator.queue_free()
 		arrow_indicator = null
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MINI-TUTORIAL: EQUIP ITEM HELPER
+# ═══════════════════════════════════════════════════════════════════════════
+
+func on_equippable_item_received(item: Dictionary) -> void:
+	"""Called when player receives an equippable item (weapon/armor)"""
+	# Only show once per session and if not already active
+	if equip_mini_tutorial_shown or equip_mini_tutorial_active:
+		return
+
+	# Check if item is equippable
+	var item_type = item.get("type", "")
+	if item_type not in ["weapon", "armor", "helmet", "boots", "gloves", "legs", "chest"]:
+		return
+
+	print("📚 [MiniTutorial] Equippable item received: %s" % item.get("name", "Unknown"))
+
+	pending_equip_item = item
+	equip_mini_tutorial_active = true
+	waiting_for_bag_open = true
+	waiting_for_item_equip = false
+
+	# Show "Press B to Open Bag!" hint in bottom right
+	show_open_bag_hint()
+
+func show_open_bag_hint() -> void:
+	"""Show flashing hint to open bag in bottom right corner"""
+	# Create hint label if needed
+	if equip_hint_label and is_instance_valid(equip_hint_label):
+		equip_hint_label.queue_free()
+
+	equip_hint_label = Label.new()
+	equip_hint_label.name = "EquipHintLabel"
+	equip_hint_label.text = "Press [B] to Open Bag!"
+	equip_hint_label.add_theme_font_size_override("font_size", 24)
+	equip_hint_label.add_theme_color_override("font_color", HIGHLIGHT_COLOR)
+	equip_hint_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	equip_hint_label.add_theme_constant_override("outline_size", 3)
+	equip_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+	# Position in bottom right (where inventory UI is)
+	equip_hint_label.anchor_left = 1.0
+	equip_hint_label.anchor_right = 1.0
+	equip_hint_label.anchor_top = 1.0
+	equip_hint_label.anchor_bottom = 1.0
+	equip_hint_label.offset_left = -300
+	equip_hint_label.offset_right = -20
+	equip_hint_label.offset_top = -120
+	equip_hint_label.offset_bottom = -90
+
+	# Add to a canvas layer so it's always visible
+	var canvas = CanvasLayer.new()
+	canvas.name = "EquipHintCanvas"
+	canvas.layer = 60
+	get_tree().root.add_child(canvas)
+	canvas.add_child(equip_hint_label)
+
+	# Start flashing animation
+	if equip_hint_tween and equip_hint_tween.is_valid():
+		equip_hint_tween.kill()
+	equip_hint_tween = create_tween().set_loops()
+	equip_hint_tween.tween_property(equip_hint_label, "modulate:a", 0.3, 0.5)
+	equip_hint_tween.tween_property(equip_hint_label, "modulate:a", 1.0, 0.5)
+
+	print("📚 [MiniTutorial] Showing 'Press B to Open Bag!' hint")
+
+func on_inventory_opened() -> void:
+	"""Called when player opens their inventory/bag"""
+	if not equip_mini_tutorial_active or not waiting_for_bag_open:
+		return
+
+	waiting_for_bag_open = false
+	waiting_for_item_equip = true
+
+	# Hide the bag hint
+	clear_equip_hint_label()
+
+	# Show arrow pointing to the item in inventory
+	# Small delay to let inventory UI render
+	await get_tree().create_timer(0.3).timeout
+	if not is_instance_valid(self):
+		return
+	show_equip_item_arrow()
+
+func show_equip_item_arrow() -> void:
+	"""Show arrow pointing to the equippable item in inventory"""
+	# Find InventoryUI
+	var inventory_ui = get_tree().get_first_node_in_group("inventory_ui")
+	if not inventory_ui:
+		for node in get_tree().root.get_children():
+			if node.name == "InventoryUI" or (node is CanvasLayer and node.get_node_or_null("Panel")):
+				inventory_ui = node
+				break
+
+	if not inventory_ui:
+		print("📚 [MiniTutorial] InventoryUI not found")
+		end_equip_mini_tutorial()
+		return
+
+	# Create equip arrow if needed
+	if equip_arrow and is_instance_valid(equip_arrow):
+		equip_arrow.queue_free()
+
+	# Create arrow canvas layer
+	var canvas = CanvasLayer.new()
+	canvas.name = "EquipArrowCanvas"
+	canvas.layer = 70  # Above inventory UI
+	get_tree().root.add_child(canvas)
+
+	equip_arrow = Control.new()
+	equip_arrow.name = "EquipArrow"
+	equip_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Create arrow polygon (pointing right towards item)
+	var arrow_poly = Polygon2D.new()
+	arrow_poly.name = "ArrowPoly"
+	# Arrow shape pointing RIGHT
+	arrow_poly.polygon = PackedVector2Array([
+		Vector2(20, 0),    # Tip (right)
+		Vector2(0, -12),   # Top left
+		Vector2(0, -5),    # Inner top
+		Vector2(-15, -5),  # Tail top
+		Vector2(-15, 5),   # Tail bottom
+		Vector2(0, 5),     # Inner bottom
+		Vector2(0, 12)     # Bottom left
+	])
+	arrow_poly.color = SUCCESS_COLOR  # Green arrow
+	equip_arrow.add_child(arrow_poly)
+
+	# Add outline
+	var outline = Line2D.new()
+	outline.points = PackedVector2Array([
+		Vector2(20, 0), Vector2(0, -12), Vector2(0, -5),
+		Vector2(-15, -5), Vector2(-15, 5), Vector2(0, 5),
+		Vector2(0, 12), Vector2(20, 0)
+	])
+	outline.width = 2.0
+	outline.default_color = Color.BLACK
+	equip_arrow.add_child(outline)
+
+	# Add label next to arrow
+	var label = Label.new()
+	label.name = "EquipLabel"
+	var item_name = pending_equip_item.get("name", "item")
+	label.text = "Right-click to equip!"
+	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_color_override("font_color", SUCCESS_COLOR)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 2)
+	label.position = Vector2(-150, -10)
+	equip_arrow.add_child(label)
+
+	canvas.add_child(equip_arrow)
+
+	# Find the item slot in inventory
+	var item_slot_pos = find_item_slot_position(inventory_ui, pending_equip_item)
+	if item_slot_pos != Vector2.ZERO:
+		equip_arrow.global_position = item_slot_pos + Vector2(-40, 0)  # Left of the slot
+	else:
+		# Fallback position - center-ish of inventory
+		equip_arrow.global_position = Vector2(800, 400)
+
+	equip_arrow.visible = true
+
+	# Start bounce animation
+	if equip_arrow_tween and equip_arrow_tween.is_valid():
+		equip_arrow_tween.kill()
+	var start_x = equip_arrow.position.x
+	equip_arrow_tween = create_tween().set_loops()
+	equip_arrow_tween.tween_property(equip_arrow, "position:x", start_x + 8, 0.4).set_ease(Tween.EASE_IN_OUT)
+	equip_arrow_tween.tween_property(equip_arrow, "position:x", start_x, 0.4).set_ease(Tween.EASE_IN_OUT)
+
+	print("📚 [MiniTutorial] Showing equip arrow for: %s" % item_name)
+
+func find_item_slot_position(inventory_ui: Node, item: Dictionary) -> Vector2:
+	"""Find the position of an item slot in the inventory UI"""
+	var item_name = item.get("name", "")
+	if item_name.is_empty():
+		return Vector2.ZERO
+
+	# Look for item slots/grid in the inventory
+	var slots_container = inventory_ui.get_node_or_null("Panel/MarginContainer/VBoxContainer/InventoryGrid")
+	if not slots_container:
+		slots_container = inventory_ui.get_node_or_null("Panel/InventoryGrid")
+	if not slots_container:
+		# Try to find any GridContainer
+		slots_container = find_grid_container(inventory_ui)
+
+	if not slots_container:
+		print("📚 [MiniTutorial] Could not find inventory grid")
+		return Vector2.ZERO
+
+	# Search through slots for matching item
+	for slot in slots_container.get_children():
+		# Check if this slot has our item
+		var slot_item = slot.get("item") if slot.has_method("get") else null
+		if slot_item == null and slot.has_meta("item"):
+			slot_item = slot.get_meta("item")
+
+		# Also check by label text
+		var label = slot.get_node_or_null("Label")
+		if label and label.text == item_name:
+			return slot.global_position + slot.size / 2
+
+		if slot_item and slot_item.get("name", "") == item_name:
+			return slot.global_position + slot.size / 2
+
+	# If we can't find exact item, point to first occupied slot
+	for slot in slots_container.get_children():
+		if slot.visible and slot.size.x > 0:
+			return slot.global_position + slot.size / 2
+
+	return Vector2.ZERO
+
+func find_grid_container(node: Node) -> GridContainer:
+	"""Recursively find a GridContainer"""
+	if node is GridContainer:
+		return node
+	for child in node.get_children():
+		var result = find_grid_container(child)
+		if result:
+			return result
+	return null
+
+func on_item_equipped(item: Dictionary) -> void:
+	"""Called when player equips an item"""
+	if not equip_mini_tutorial_active:
+		return
+
+	print("📚 [MiniTutorial] Item equipped: %s" % item.get("name", "Unknown"))
+	end_equip_mini_tutorial()
+
+func on_inventory_closed() -> void:
+	"""Called when player closes inventory without equipping"""
+	if not equip_mini_tutorial_active:
+		return
+
+	# If they closed without equipping, clear arrow but keep mini-tutorial ready
+	clear_equip_arrow()
+	waiting_for_bag_open = true
+	waiting_for_item_equip = false
+
+	# Show the bag hint again
+	show_open_bag_hint()
+
+func end_equip_mini_tutorial() -> void:
+	"""End the equip mini-tutorial"""
+	equip_mini_tutorial_active = false
+	equip_mini_tutorial_shown = true
+	waiting_for_bag_open = false
+	waiting_for_item_equip = false
+	pending_equip_item = {}
+
+	clear_equip_hint_label()
+	clear_equip_arrow()
+
+	print("📚 [MiniTutorial] Equip tutorial complete!")
+
+func clear_equip_hint_label() -> void:
+	"""Clear the 'Press B' hint label"""
+	if equip_hint_tween and equip_hint_tween.is_valid():
+		equip_hint_tween.kill()
+		equip_hint_tween = null
+
+	if equip_hint_label and is_instance_valid(equip_hint_label):
+		var canvas = equip_hint_label.get_parent()
+		equip_hint_label.queue_free()
+		equip_hint_label = null
+		if canvas and canvas.name == "EquipHintCanvas":
+			canvas.queue_free()
+
+func clear_equip_arrow() -> void:
+	"""Clear the equip arrow"""
+	if equip_arrow_tween and equip_arrow_tween.is_valid():
+		equip_arrow_tween.kill()
+		equip_arrow_tween = null
+
+	if equip_arrow and is_instance_valid(equip_arrow):
+		var canvas = equip_arrow.get_parent()
+		equip_arrow.queue_free()
+		equip_arrow = null
+		if canvas and canvas.name == "EquipArrowCanvas":
+			canvas.queue_free()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # WORLD POSITION HELPERS

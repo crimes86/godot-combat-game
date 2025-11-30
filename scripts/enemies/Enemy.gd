@@ -452,7 +452,7 @@ func update_level_display() -> void:
 		level_label.add_theme_color_override("font_outline_color", Color.BLACK)
 		level_label.add_theme_constant_override("outline_size", 2)
 		level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER  # Center the text
-		level_label.position = Vector2(-50, -55)  # Centered above health bar (100px wide label)
+		level_label.position = Vector2(-50, -42)  # Directly above enemy head (close to head)
 		level_label.custom_minimum_size = Vector2(100, 0)  # Set label width for centering
 		level_label.z_index = 500
 		level_label.visible = false  # Start hidden, show when player is within 800px
@@ -811,7 +811,8 @@ func _process(delta: float) -> void:
 			var show_level_label = distance <= 800.0  # Level shows at 800px
 			var show_healthbar = distance <= 400.0    # Healthbar shows at 400px
 
-			# Update level label visibility, position, and con color
+			# Update level label visibility and con color
+			# Name stays close to head (-48), healthbar appears above it (-58 in HealthBar.gd)
 			if level_label:
 				level_label.visible = show_level_label
 
@@ -821,13 +822,7 @@ func _process(delta: float) -> void:
 					var con_color = get_con_color(player_level)
 					level_label.add_theme_color_override("font_color", con_color)
 
-				# Stack level label above healthbar when both are visible
-				if show_healthbar:
-					level_label.position = Vector2(-50, -62)  # Push up to sit above healthbar with small gap
-				else:
-					level_label.position = Vector2(-50, -55)  # Normal position when alone
-
-			# Update healthbar visibility
+			# Update healthbar visibility (position is handled by HealthBar.gd)
 			if health_bar:
 				health_bar.visible = show_healthbar
 		return
