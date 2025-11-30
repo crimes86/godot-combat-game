@@ -4,11 +4,15 @@ extends Label
 ## Shows current chain level with color-coded tiers
 
 func _ready() -> void:
+	# Hide chain UI until system is fully implemented
+	visible = false
+	return
+
 	# Connect to ChainManager signals
 	ChainManager.chain_increased.connect(_on_chain_increased)
 	ChainManager.chain_reset.connect(_on_chain_reset)
 	ChainManager.overdrive_activated.connect(_on_overdrive_activated)
-	
+
 	# Initial display
 	update_display()
 

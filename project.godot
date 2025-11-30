@@ -16,6 +16,7 @@ config/features=PackedStringArray("4.5", "Forward Plus")
 
 [autoload]
 
+ServerRunner="*res://scripts/ServerRunner.gd"
 Constants="*res://scripts/constants.gd"
 DebugConfig="*res://scripts/systems/DebugConfig.gd"
 ChainManager="*res://scripts/systems/chain_manager.gd"
@@ -39,6 +40,7 @@ GroupInvitePopup="*res://scripts/ui/GroupInvitePopup.gd"
 TutorialManager="*res://scripts/systems/TutorialManager.gd"
 QuestManager="*res://scripts/systems/QuestManager.gd"
 QuestTrackerUI="*res://scripts/ui/QuestTrackerUI.gd"
+BugReportUI="*res://scripts/ui/BugReportUI.gd"
 
 [editor_plugins]
 

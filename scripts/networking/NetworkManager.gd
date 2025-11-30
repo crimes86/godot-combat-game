@@ -8,6 +8,7 @@ signal connected_to_server
 signal connection_failed
 signal server_created
 signal chat_message_received(sender_name: String, message: String, sender_id: int)
+signal version_mismatch(server_version: String, client_version: String)  # Emitted on client when versions differ
 
 # Authentication signals
 signal login_success(player_data: Dictionary)
@@ -18,6 +19,10 @@ signal authentication_required()  # Emitted when client connects and needs to au
 
 const DEFAULT_PORT = 7000
 const MAX_PLAYERS = 50  # Target for 3-chunk playtest (single instance)
+
+# Version for client/server compatibility checking
+# INCREMENT THIS when making breaking network changes (RPC signatures, data formats, etc.)
+const NETWORK_VERSION = "0.1.0"
 
 var peer = null
 var connected_players = {}
@@ -153,8 +158,8 @@ func _on_player_connected(id: int):
 
 	if is_host:
 		# Don't add to player list yet - wait for authentication
-		# Tell the client they need to authenticate
-		rpc_id(id, "request_authentication")
+		# Send version info along with auth request
+		rpc_id(id, "request_authentication_with_version", NETWORK_VERSION)
 
 	player_connected.emit(id)
 
@@ -376,8 +381,22 @@ func receive_chat_broadcast(sender_name: String, message: String, sender_id: int
 
 @rpc("authority", "reliable")
 func request_authentication() -> void:
-	"""Server tells client to authenticate"""
-	print("Server requested authentication")
+	"""Server tells client to authenticate (legacy - no version check)"""
+	print("Server requested authentication (legacy, no version)")
+	authentication_required.emit()
+
+@rpc("authority", "reliable")
+func request_authentication_with_version(server_version: String) -> void:
+	"""Server tells client to authenticate, with version check"""
+	print("Server requested authentication (server version: %s, client version: %s)" % [server_version, NETWORK_VERSION])
+
+	if server_version != NETWORK_VERSION:
+		push_warning("⚠️ VERSION MISMATCH! Server: %s, Client: %s" % [server_version, NETWORK_VERSION])
+		push_warning("   Network errors may occur. Consider updating client or server.")
+		version_mismatch.emit(server_version, NETWORK_VERSION)
+	else:
+		print("✅ Version match: %s" % NETWORK_VERSION)
+
 	authentication_required.emit()
 
 # --- Client-side auth functions ---

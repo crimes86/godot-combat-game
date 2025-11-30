@@ -794,9 +794,10 @@ func _on_fire_audio_finished() -> void:
 	# Wider volume variation (±4dB) for intensity changes - ambient level
 	fire_audio.volume_db = -18.0 + randf_range(-4.0, 4.0)
 
-	# 40% chance to play backwards for variation
+	# 40% chance for lower pitch variation (simulates different fire intensity)
+	# Note: Godot doesn't support negative pitch (reverse playback), so we use lower pitch instead
 	if randf() < 0.4:
-		fire_audio.pitch_scale *= -1.0
+		fire_audio.pitch_scale = randf_range(0.7, 0.85)
 
 	# Random start position (0-50% through the clip) to break up patterns
 	var start_position = randf() * 0.5 * fire_audio.stream.get_length()

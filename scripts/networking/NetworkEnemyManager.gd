@@ -635,6 +635,10 @@ func _sync_enemy_positions() -> void:
 
 	# Send filtered updates to each player based on distance
 	for peer_id in player_positions:
+		# Skip server (peer_id 1) - server doesn't need to RPC to itself
+		if peer_id == 1:
+			continue
+
 		var player_pos = player_positions[peer_id]
 		var positions_for_player: Dictionary = {}
 

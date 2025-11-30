@@ -76,6 +76,7 @@ func _ready():
 	NetworkManager.login_failed.connect(_on_login_failed)
 	NetworkManager.register_success.connect(_on_register_success)
 	NetworkManager.register_failed.connect(_on_register_failed)
+	NetworkManager.version_mismatch.connect(_on_version_mismatch)
 
 func _on_button_hover():
 	var sound_manager = get_node_or_null("/root/SoundManager")
@@ -135,6 +136,11 @@ func _on_connection_failed():
 func _on_server_created():
 	status_label.text = "Server created! Loading game..."
 	_load_game_world()
+
+func _on_version_mismatch(server_version: String, client_version: String):
+	"""Warn user about client/server version mismatch"""
+	status_label.text = "⚠️ VERSION MISMATCH!\nServer: %s | Client: %s\nErrors may occur." % [server_version, client_version]
+	status_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.2))  # Orange warning
 
 # ═══════════════════════════════════════════════════════════════════════════
 # AUTHENTICATION UI

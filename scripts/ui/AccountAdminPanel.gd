@@ -169,6 +169,11 @@ func _refresh_account_list() -> void:
 	info_label.text = ""
 	selected_username = ""
 
+	# Admin panel only works on server (security - clients shouldn't access DB directly)
+	if not NetworkManager.is_server():
+		_log("[color=yellow]Admin panel is server-only.[/color]\n\nTo manage accounts:\n1. SSH into your VPS\n2. Or host locally and use F2")
+		return
+
 	if not DatabaseManager or not DatabaseManager.is_initialized:
 		_log("[color=red]Database not initialized. Host a game first.[/color]")
 		return
