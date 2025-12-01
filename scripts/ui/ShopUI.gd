@@ -21,7 +21,7 @@ const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
 
 @onready var main_panel: PanelContainer = $Control/Panel
 @onready var vendor_name_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/VendorName
-@onready var gold_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/GoldLabel
+@onready var gold_label: Label = $Control/GoldLabel
 @onready var weapons_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Weapons/ScrollContainer/WeaponsList
 @onready var tools_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Tools/ScrollContainer/ToolsList
 @onready var armor_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Armor/ScrollContainer/ArmorList
@@ -32,10 +32,14 @@ const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
 @onready var tab_container: TabContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer
 
 var vendor: Vendor = null
+var quest_message_label: Label = null  # Message label inside Quests tab
 
 func _ready() -> void:
 	print("🏪 ShopUI initialized")
 	hide()
+
+	# Set layer to 100 (below inventory at 105, above game prompts)
+	layer = 100
 
 	# Add to group for tutorial system to find
 	add_to_group("shop_ui")
@@ -66,6 +70,9 @@ func _ready() -> void:
 	# Connect tab changes for tutorial system
 	if tab_container:
 		tab_container.tab_changed.connect(_on_tab_changed)
+
+	# Create quest message label inside Quests tab (at bottom of tab content)
+	_create_quest_message_label()
 
 	# Connect to gold changes for auto-update
 	CharacterStats.gold_changed.connect(_on_gold_changed)
@@ -606,7 +613,7 @@ func purchase_tool(index: int) -> void:
 		show_message("Cannot purchase this item!", Color.RED)
 
 func show_message(text: String, color: Color) -> void:
-	"""Show a temporary message to the player"""
+	"""Show a temporary message to the player (top of shop UI)"""
 	if not message_label:
 		return
 
@@ -618,6 +625,46 @@ func show_message(text: String, color: Color) -> void:
 	await get_tree().create_timer(3.0).timeout
 	if message_label:
 		message_label.hide()
+
+func _create_quest_message_label() -> void:
+	"""Create a message label above the shop window for quest feedback"""
+	var control = get_node_or_null("Control")
+	if not control:
+		return
+
+	# Create message label positioned above the shop panel
+	quest_message_label = Label.new()
+	quest_message_label.name = "QuestMessageLabel"
+	quest_message_label.visible = false
+	quest_message_label.add_theme_font_size_override("font_size", 18)
+	quest_message_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	quest_message_label.add_theme_constant_override("outline_size", 3)
+	quest_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	# Position above the panel (panel is centered with offset_top = -300)
+	quest_message_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	quest_message_label.anchor_top = 0.5
+	quest_message_label.anchor_bottom = 0.5
+	quest_message_label.offset_top = -330  # Above the panel's top edge (-300 - 30)
+	quest_message_label.offset_bottom = -305
+	quest_message_label.offset_left = -300
+	quest_message_label.offset_right = 300
+
+	control.add_child(quest_message_label)
+
+func show_quest_message(text: String, color: Color) -> void:
+	"""Show a temporary message in the Quests tab area"""
+	if not quest_message_label:
+		return
+
+	quest_message_label.text = text
+	quest_message_label.add_theme_color_override("font_color", color)
+	quest_message_label.show()
+
+	# Hide after 3 seconds
+	await get_tree().create_timer(3.0).timeout
+	if quest_message_label and is_instance_valid(quest_message_label):
+		quest_message_label.hide()
 
 func get_rarity_color(rarity: Weapon.Rarity) -> Color:
 	"""Get muted glow color for weapon rarity (visible but not overwhelming)"""
@@ -900,106 +947,153 @@ func create_quest_card(quest: Dictionary, is_complete: bool) -> PanelContainer:
 	"""Create a quest card with description and accept/turn-in button"""
 	var quest_id = quest.get("id", "")
 	var card = PanelContainer.new()
-	card.custom_minimum_size = Vector2(0, 100)
+	card.custom_minimum_size = Vector2(0, 120)
 
-	# Style the card
+	# Style the card with enhanced visuals
 	var card_style = StyleBoxFlat.new()
-	card_style.bg_color = ITEM_BG_COLOR
-	card_style.border_width_left = 2
-	card_style.border_width_right = 2
-	card_style.border_width_top = 2
-	card_style.border_width_bottom = 2
+	card_style.bg_color = Color(0.10, 0.10, 0.12, 0.95)  # Slightly lighter background
+	card_style.border_width_left = 3
+	card_style.border_width_right = 3
+	card_style.border_width_top = 3
+	card_style.border_width_bottom = 3
 	card_style.border_color = QUEST_COMPLETE_COLOR if is_complete else QUEST_AVAILABLE_COLOR
-	card_style.corner_radius_top_left = 6
-	card_style.corner_radius_top_right = 6
-	card_style.corner_radius_bottom_left = 6
-	card_style.corner_radius_bottom_right = 6
-	card_style.content_margin_left = 12
-	card_style.content_margin_right = 12
-	card_style.content_margin_top = 8
-	card_style.content_margin_bottom = 8
+	card_style.corner_radius_top_left = 8
+	card_style.corner_radius_top_right = 8
+	card_style.corner_radius_bottom_left = 8
+	card_style.corner_radius_bottom_right = 8
+	card_style.content_margin_left = 16
+	card_style.content_margin_right = 16
+	card_style.content_margin_top = 12
+	card_style.content_margin_bottom = 12
+	card_style.shadow_size = 4
+	card_style.shadow_color = Color(0, 0, 0, 0.4)
+	card_style.shadow_offset = Vector2(0, 2)
 	card.add_theme_stylebox_override("panel", card_style)
 
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", 8)
 	card.add_child(vbox)
 
-	# Quest name with indicator
+	# Quest name with indicator - larger and bolder
 	var name_hbox = HBoxContainer.new()
+	name_hbox.add_theme_constant_override("separation", 8)
 	vbox.add_child(name_hbox)
 
 	var indicator = Label.new()
-	indicator.text = "[?] " if is_complete else "[!] "
-	indicator.add_theme_font_size_override("font_size", 16)
+	indicator.text = "?" if is_complete else "!"
+	indicator.add_theme_font_size_override("font_size", 22)
 	indicator.add_theme_color_override("font_color", QUEST_COMPLETE_COLOR if is_complete else QUEST_AVAILABLE_COLOR)
+	indicator.add_theme_color_override("font_outline_color", Color.BLACK)
+	indicator.add_theme_constant_override("outline_size", 2)
 	name_hbox.add_child(indicator)
 
 	var name_label = Label.new()
 	name_label.text = quest.get("name", "Unknown Quest")
-	name_label.add_theme_font_size_override("font_size", 16)
+	name_label.add_theme_font_size_override("font_size", 18)
 	name_label.add_theme_color_override("font_color", TEXT_COLOR)
+	name_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	name_label.add_theme_constant_override("outline_size", 1)
 	name_hbox.add_child(name_label)
 
-	# Description
+	# Description with better styling
 	var desc_label = Label.new()
 	desc_label.text = quest.get("description", "")
-	desc_label.add_theme_font_size_override("font_size", 12)
-	desc_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.72))
+	desc_label.add_theme_font_size_override("font_size", 13)
+	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.82))
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(desc_label)
 
-	# Objectives (for available quests)
+	# Objectives (for available quests) - in styled container
 	if not is_complete:
 		var objectives = quest.get("objectives", [])
-		for obj in objectives:
-			var obj_label = Label.new()
-			obj_label.text = "  \u2022 %s (0/%d)" % [obj.get("desc", ""), obj.get("count", 1)]
-			obj_label.add_theme_font_size_override("font_size", 11)
-			obj_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.62))
-			vbox.add_child(obj_label)
+		if objectives.size() > 0:
+			var obj_container = VBoxContainer.new()
+			obj_container.add_theme_constant_override("separation", 4)
+			vbox.add_child(obj_container)
 
-	# Rewards and button row
+			for obj in objectives:
+				var obj_hbox = HBoxContainer.new()
+				obj_hbox.add_theme_constant_override("separation", 6)
+				obj_container.add_child(obj_hbox)
+
+				var bullet = Label.new()
+				bullet.text = "▸"
+				bullet.add_theme_font_size_override("font_size", 12)
+				bullet.add_theme_color_override("font_color", QUEST_AVAILABLE_COLOR)
+				obj_hbox.add_child(bullet)
+
+				var obj_label = Label.new()
+				obj_label.text = "%s (0/%d)" % [obj.get("desc", ""), obj.get("count", 1)]
+				obj_label.add_theme_font_size_override("font_size", 12)
+				obj_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.72))
+				obj_hbox.add_child(obj_label)
+
+	# Separator line
+	var sep = HSeparator.new()
+	sep.add_theme_constant_override("separation", 4)
+	sep.add_theme_stylebox_override("separator", StyleBoxLine.new())
+	vbox.add_child(sep)
+
+	# Rewards and button row - with icons
 	var bottom_hbox = HBoxContainer.new()
 	bottom_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom_hbox.add_theme_constant_override("separation", 16)
 	vbox.add_child(bottom_hbox)
 
-	var rewards_label = Label.new()
+	var rewards_hbox = HBoxContainer.new()
+	rewards_hbox.add_theme_constant_override("separation", 12)
+	rewards_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom_hbox.add_child(rewards_hbox)
+
 	var xp_reward = quest.get("xp_reward", 0)
 	var gold_reward = quest.get("gold_reward", 0)
-	rewards_label.text = "Reward: %d XP" % xp_reward
+
+	# XP reward with icon
+	var xp_label = Label.new()
+	xp_label.text = "⭐ %d XP" % xp_reward
+	xp_label.add_theme_font_size_override("font_size", 14)
+	xp_label.add_theme_color_override("font_color", Color(0.5, 0.8, 1.0))  # Light blue for XP
+	rewards_hbox.add_child(xp_label)
+
+	# Gold reward with icon
 	if gold_reward > 0:
-		rewards_label.text += ", %d Gold" % gold_reward
-	rewards_label.add_theme_font_size_override("font_size", 12)
-	rewards_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5))
-	rewards_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bottom_hbox.add_child(rewards_label)
+		var gold_label = Label.new()
+		gold_label.text = "🪙 %d" % gold_reward
+		gold_label.add_theme_font_size_override("font_size", 14)
+		gold_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Gold color
+		rewards_hbox.add_child(gold_label)
 
-	# Action button
+	# Action button - more prominent
 	var action_btn = Button.new()
-	action_btn.text = "TURN IN" if is_complete else "ACCEPT"
-	action_btn.add_theme_font_size_override("font_size", 12)
+	action_btn.text = "✓ TURN IN" if is_complete else "► ACCEPT"
+	action_btn.add_theme_font_size_override("font_size", 14)
+	action_btn.custom_minimum_size = Vector2(100, 32)
 
-	# Style button
+	# Style button with gradient effect
 	var btn_style = StyleBoxFlat.new()
-	btn_style.bg_color = Color(0.3, 0.5, 0.3, 1.0) if is_complete else Color(0.3, 0.4, 0.5, 1.0)
-	btn_style.border_width_left = 1
-	btn_style.border_width_right = 1
-	btn_style.border_width_top = 1
-	btn_style.border_width_bottom = 1
+	btn_style.bg_color = Color(0.25, 0.5, 0.25, 1.0) if is_complete else Color(0.25, 0.35, 0.5, 1.0)
+	btn_style.border_width_left = 2
+	btn_style.border_width_right = 2
+	btn_style.border_width_top = 2
+	btn_style.border_width_bottom = 2
 	btn_style.border_color = QUEST_COMPLETE_COLOR if is_complete else QUEST_AVAILABLE_COLOR
-	btn_style.corner_radius_top_left = 4
-	btn_style.corner_radius_top_right = 4
-	btn_style.corner_radius_bottom_left = 4
-	btn_style.corner_radius_bottom_right = 4
-	btn_style.content_margin_left = 12
-	btn_style.content_margin_right = 12
-	btn_style.content_margin_top = 4
-	btn_style.content_margin_bottom = 4
+	btn_style.corner_radius_top_left = 6
+	btn_style.corner_radius_top_right = 6
+	btn_style.corner_radius_bottom_left = 6
+	btn_style.corner_radius_bottom_right = 6
+	btn_style.content_margin_left = 16
+	btn_style.content_margin_right = 16
+	btn_style.content_margin_top = 6
+	btn_style.content_margin_bottom = 6
 	action_btn.add_theme_stylebox_override("normal", btn_style)
 
 	var btn_hover = btn_style.duplicate()
-	btn_hover.bg_color = Color(0.4, 0.6, 0.4, 1.0) if is_complete else Color(0.4, 0.5, 0.6, 1.0)
+	btn_hover.bg_color = Color(0.35, 0.6, 0.35, 1.0) if is_complete else Color(0.35, 0.45, 0.6, 1.0)
+	btn_hover.border_color = Color(1.0, 1.0, 1.0, 0.8)
 	action_btn.add_theme_stylebox_override("hover", btn_hover)
+
+	action_btn.add_theme_color_override("font_color", Color.WHITE)
+	action_btn.add_theme_color_override("font_hover_color", Color.WHITE)
 
 	if is_complete:
 		action_btn.pressed.connect(func(): _on_turn_in_quest(quest_id))
@@ -1016,54 +1110,91 @@ func create_quest_progress_card(quest: Dictionary) -> PanelContainer:
 	var qm = get_node("/root/QuestManager")
 
 	var card = PanelContainer.new()
-	card.custom_minimum_size = Vector2(0, 80)
+	card.custom_minimum_size = Vector2(0, 100)
 
 	# Style the card with light blue border for in-progress
 	var card_style = StyleBoxFlat.new()
-	card_style.bg_color = ITEM_BG_COLOR
-	card_style.border_width_left = 2
-	card_style.border_width_right = 2
-	card_style.border_width_top = 2
-	card_style.border_width_bottom = 2
+	card_style.bg_color = Color(0.10, 0.10, 0.12, 0.95)
+	card_style.border_width_left = 3
+	card_style.border_width_right = 3
+	card_style.border_width_top = 3
+	card_style.border_width_bottom = 3
 	card_style.border_color = Color(0.5, 0.65, 0.85)  # Light blue
-	card_style.corner_radius_top_left = 6
-	card_style.corner_radius_top_right = 6
-	card_style.corner_radius_bottom_left = 6
-	card_style.corner_radius_bottom_right = 6
-	card_style.content_margin_left = 12
-	card_style.content_margin_right = 12
-	card_style.content_margin_top = 8
-	card_style.content_margin_bottom = 8
+	card_style.corner_radius_top_left = 8
+	card_style.corner_radius_top_right = 8
+	card_style.corner_radius_bottom_left = 8
+	card_style.corner_radius_bottom_right = 8
+	card_style.content_margin_left = 16
+	card_style.content_margin_right = 16
+	card_style.content_margin_top = 12
+	card_style.content_margin_bottom = 12
+	card_style.shadow_size = 4
+	card_style.shadow_color = Color(0, 0, 0, 0.4)
+	card_style.shadow_offset = Vector2(0, 2)
 	card.add_theme_stylebox_override("panel", card_style)
 
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", 8)
 	card.add_child(vbox)
 
-	# Quest name
+	# Quest name with in-progress indicator
+	var name_hbox = HBoxContainer.new()
+	name_hbox.add_theme_constant_override("separation", 8)
+	vbox.add_child(name_hbox)
+
+	var indicator = Label.new()
+	indicator.text = "◐"  # Half-filled circle for in-progress
+	indicator.add_theme_font_size_override("font_size", 18)
+	indicator.add_theme_color_override("font_color", Color(0.5, 0.65, 0.85))
+	name_hbox.add_child(indicator)
+
 	var name_label = Label.new()
 	name_label.text = quest.get("name", "Unknown Quest")
-	name_label.add_theme_font_size_override("font_size", 15)
+	name_label.add_theme_font_size_override("font_size", 17)
 	name_label.add_theme_color_override("font_color", TEXT_COLOR)
-	vbox.add_child(name_label)
+	name_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	name_label.add_theme_constant_override("outline_size", 1)
+	name_hbox.add_child(name_label)
 
-	# Objectives with progress
+	# Objectives with progress - styled list
 	var objectives = quest.get("objectives", [])
+	var obj_container = VBoxContainer.new()
+	obj_container.add_theme_constant_override("separation", 6)
+	vbox.add_child(obj_container)
+
 	for i in range(objectives.size()):
 		var obj = objectives[i]
 		var current = qm.get_objective_progress(quest_id, i)
 		var required = obj.get("count", 1)
 		var is_obj_complete = current >= required
+		var progress_pct = float(current) / float(required) if required > 0 else 0.0
 
+		var obj_hbox = HBoxContainer.new()
+		obj_hbox.add_theme_constant_override("separation", 8)
+		obj_container.add_child(obj_hbox)
+
+		# Checkmark or bullet
+		var bullet = Label.new()
+		bullet.text = "✓" if is_obj_complete else "▸"
+		bullet.add_theme_font_size_override("font_size", 13)
+		bullet.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4) if is_obj_complete else Color(0.5, 0.65, 0.85))
+		obj_hbox.add_child(bullet)
+
+		# Objective text with progress
 		var obj_label = Label.new()
-		if is_obj_complete:
-			obj_label.text = "  \u2713 %s: %d/%d" % [obj.get("desc", ""), current, required]
-			obj_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))  # Gold
-		else:
-			obj_label.text = "  \u2022 %s: %d/%d" % [obj.get("desc", ""), current, required]
-			obj_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.72))
-		obj_label.add_theme_font_size_override("font_size", 12)
-		vbox.add_child(obj_label)
+		obj_label.text = "%s: %d/%d" % [obj.get("desc", ""), current, required]
+		obj_label.add_theme_font_size_override("font_size", 13)
+		obj_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4) if is_obj_complete else Color(0.75, 0.75, 0.78))
+		obj_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		obj_hbox.add_child(obj_label)
+
+		# Progress percentage
+		if not is_obj_complete:
+			var pct_label = Label.new()
+			pct_label.text = "(%d%%)" % int(progress_pct * 100)
+			pct_label.add_theme_font_size_override("font_size", 11)
+			pct_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.62))
+			obj_hbox.add_child(pct_label)
 
 	return card
 
@@ -1075,7 +1206,7 @@ func _on_accept_quest(quest_id: String) -> void:
 	var qm = get_node("/root/QuestManager")
 	if qm.accept_quest(quest_id):
 		var quest = qm.get_quest(quest_id)
-		show_message("Quest accepted: %s" % quest.get("name", ""), Color(0.5, 0.9, 0.5))
+		show_quest_message("Quest accepted: %s" % quest.get("name", ""), Color(0.5, 0.9, 0.5))
 
 		# Play sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
@@ -1086,7 +1217,7 @@ func _on_accept_quest(quest_id: String) -> void:
 		populate_quests()
 		update_quests_tab_indicator()
 	else:
-		show_message("Cannot accept quest - max quests reached!", Color.RED)
+		show_quest_message("Cannot accept quest - max quests reached!", Color.RED)
 
 func _on_turn_in_quest(quest_id: String) -> void:
 	"""Handle quest turn-in button"""
@@ -1098,7 +1229,7 @@ func _on_turn_in_quest(quest_id: String) -> void:
 		var quest = qm.get_quest(quest_id)
 		var xp = quest.get("xp_reward", 0)
 		var gold = quest.get("gold_reward", 0)
-		show_message("Quest complete! +%d XP, +%d Gold" % [xp, gold], Color(1.0, 0.85, 0.2))
+		show_quest_message("Quest complete! +%d XP, +🪙 %d" % [xp, gold], Color(1.0, 0.85, 0.2))
 
 		# Play level up type sound or gold sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
@@ -1110,7 +1241,7 @@ func _on_turn_in_quest(quest_id: String) -> void:
 		populate_quests()
 		update_quests_tab_indicator()
 	else:
-		show_message("Cannot turn in quest!", Color.RED)
+		show_quest_message("Cannot turn in quest!", Color.RED)
 
 func _on_close_pressed() -> void:
 	"""Handle close button press"""

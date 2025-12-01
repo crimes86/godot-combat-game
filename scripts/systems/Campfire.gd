@@ -892,7 +892,7 @@ func create_ground_mist_auras() -> void:
 	warmth_aura = Polygon2D.new()
 	warmth_aura.name = "WarmthAura"
 	warmth_aura.z_index = -3  # Behind all other auras
-	warmth_aura.color = Color(1.0, 0.5, 0.1, 0.08)  # Soft orange/amber, subtle
+	warmth_aura.color = Color(1.0, 0.5, 0.1, 0.05)  # Soft orange/amber, subtle
 	warmth_aura.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	warmth_aura.material = CanvasItemMaterial.new()
 	warmth_aura.material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
@@ -943,7 +943,7 @@ func update_ground_mist(delta: float) -> void:
 		var time = Time.get_ticks_msec() / 1000.0
 		# Gentle pulse: radius varies by ±5px, alpha varies slightly
 		var pulse_radius = warmth_radius + sin(time * 1.5) * 5.0
-		var pulse_alpha = 0.08 + sin(time * 2.0) * 0.02  # 0.06 to 0.10
+		var pulse_alpha = 0.05 + sin(time * 2.0) * 0.015  # 0.035 to 0.065
 		warmth_aura.polygon = create_wavy_circle(pulse_radius, 48, time * 0.5)
 		warmth_aura.color = Color(1.0, 0.5, 0.1, pulse_alpha)
 

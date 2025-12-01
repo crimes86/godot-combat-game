@@ -27,51 +27,52 @@ func trigger_attack_feedback(target_position: Vector2, is_critical: bool = false
 	# 2. Screen shake (extra for weakpoint hits)
 	trigger_screen_shake(is_critical, hit_weakpoint)
 
-## Spawn particle slash
+## Spawn blood splatter effect at target
 func spawn_particle_slash(target_position: Vector2, is_critical: bool) -> void:
-	# Calculate direction
+	# Calculate direction from player to target (blood splatters away from hit)
 	var direction = (target_position - player.global_position).normalized()
-	
-	# Create particles
-	var slash = CPUParticles2D.new()
-	slash.global_position = player.global_position
-	slash.rotation = direction.angle()
-	
+
+	# Create blood splatter particles at enemy position
+	var blood = CPUParticles2D.new()
+	blood.global_position = target_position
+	blood.rotation = direction.angle()
+
 	# Configure based on crit
 	if is_critical:
-		# Gold critical particles
-		slash.amount = 40
-		slash.color = Color(1, 0.9, 0.3, 1)
-		slash.scale_amount_min = 3.0
-		slash.scale_amount_max = 6.0
-		slash.initial_velocity_min = 100.0
-		slash.initial_velocity_max = 150.0
+		# More dramatic gold/yellow sparks for crits (keep crits special)
+		blood.amount = 12
+		blood.color = Color(1, 0.85, 0.2, 1)  # Golden sparks
+		blood.scale_amount_min = 2.0
+		blood.scale_amount_max = 4.0
+		blood.initial_velocity_min = 60.0
+		blood.initial_velocity_max = 100.0
 	else:
-		# White normal particles
-		slash.amount = 25
-		slash.color = Color(1, 1, 1, 1)
-		slash.scale_amount_min = 2.0
-		slash.scale_amount_max = 4.0
-		slash.initial_velocity_min = 80.0
-		slash.initial_velocity_max = 120.0
-	
-	# Common properties
-	slash.emitting = true
-	slash.one_shot = true
-	slash.lifetime = 0.25  # Fast animation
-	slash.speed_scale = 4.0  # Very fast
-	slash.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	slash.emission_sphere_radius = 10.0
-	slash.spread = 45.0
-	slash.gravity = Vector2.ZERO
-	
+		# Dark red blood splatter for normal hits
+		blood.amount = 8
+		blood.color = Color(0.6, 0.05, 0.05, 0.9)  # Dark blood red
+		blood.scale_amount_min = 1.5
+		blood.scale_amount_max = 3.0
+		blood.initial_velocity_min = 40.0
+		blood.initial_velocity_max = 80.0
+
+	# Common properties - particles spray away from player
+	blood.emitting = true
+	blood.one_shot = true
+	blood.lifetime = 0.3
+	blood.speed_scale = 2.5
+	blood.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINT
+	blood.spread = 60.0  # Wider spread for splatter effect
+	blood.gravity = Vector2(0, 150)  # Slight downward gravity for realism
+	blood.damping_min = 50.0
+	blood.damping_max = 100.0  # Slow down quickly
+
 	# Add to scene
-	player.get_parent().add_child(slash)
-	
+	player.get_parent().add_child(blood)
+
 	# Quick cleanup
-	await player.get_tree().create_timer(0.3).timeout
-	if is_instance_valid(slash):
-		slash.queue_free()
+	await player.get_tree().create_timer(0.5).timeout
+	if is_instance_valid(blood):
+		blood.queue_free()
 
 ## Trigger screen shake
 func trigger_screen_shake(is_critical: bool, hit_weakpoint: bool) -> void:

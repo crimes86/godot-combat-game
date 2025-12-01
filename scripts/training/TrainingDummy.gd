@@ -69,6 +69,9 @@ func _ready() -> void:
 	collision_layer = 1
 	collision_mask = 0  # Doesn't need to detect anything
 
+	# Create shadow first (so it's behind everything)
+	create_shadow()
+
 	# Create sprite
 	create_dummy_sprite()
 
@@ -167,9 +170,9 @@ func create_health_bar() -> void:
 		add_child(health_bar)
 
 		# Set custom offset for training dummy (taller than skeletons)
-		# HealthBar uses offset_y of 52 for non-players, but dummy needs ~80
+		# HealthBar uses offset_y of 52 for non-players, but dummy needs ~85
 		if health_bar.has_method("set_custom_offset"):
-			health_bar.set_custom_offset(80.0)
+			health_bar.set_custom_offset(85.0)
 
 		# Initialize health display
 		if health_bar.has_method("update_health"):
@@ -187,10 +190,44 @@ func create_name_label() -> void:
 	name_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	name_label.add_theme_constant_override("outline_size", 2)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.position = Vector2(-50, -70)  # Above the dummy sprite head (sprite at -32, head around -60)
+	name_label.position = Vector2(-50, -73)  # Below health bar with spacing (moved up 5px)
 	name_label.custom_minimum_size = Vector2(100, 0)  # Set label width for centering
 	name_label.z_index = 500
 	add_child(name_label)
+
+func create_shadow() -> void:
+	"""Create simple dark oval shadow at base of dummy (similar to trees)"""
+	var shadow = ColorRect.new()
+	shadow.name = "Shadow"
+	var shadow_width = 40.0
+	var shadow_height = shadow_width * 0.4  # Oval shape
+	shadow.size = Vector2(shadow_width, shadow_height)
+	# Position at bottom of dummy sprite (sprite center at y=-32, feet at y=0)
+	shadow.position = Vector2(-shadow_width / 2, -15)  # At feet level, moved up 10px
+	shadow.color = Color(0, 0, 0, 0.5)  # Semi-transparent shadow
+	shadow.z_index = -4  # Below dummy
+
+	# Apply oval shader with soft gradient falloff
+	var shader_material = ShaderMaterial.new()
+	var shader = Shader.new()
+	shader.code = """
+shader_type canvas_item;
+
+void fragment() {
+	vec2 uv = UV * 2.0 - 1.0;  // Convert to -1 to 1 range
+	float dist = length(uv);  // Distance from center
+	if (dist > 1.0) {
+		discard;  // Make it circular
+	}
+	// Soft gradient falloff at edges
+	float alpha = 1.0 - smoothstep(0.5, 1.0, dist);
+	COLOR.a *= alpha;
+}
+"""
+	shader_material.shader = shader
+	shadow.material = shader_material
+
+	add_child(shadow)
 
 func create_hit_flash() -> void:
 	"""Create HitFlash node for visual feedback"""
@@ -589,7 +626,25 @@ func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 	var target_sprite_scale = base_sprite_scale * Constants.CRIT_WINDOW_SCALE_MULTIPLIER
 	if sprite:
 		_grow_tween = create_tween()
+		_grow_tween.set_parallel(true)  # Run all tweens in parallel
 		_grow_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
+
+		# Adjust health bar and name label positions to stay above the growing sprite
+		# Sprite center is at y=-32, grows from 64px to 64*2.8=179px
+		# Top of grown sprite: -32 - (179/2) = -122
+		# Need health bar and label to move up proportionally
+		var scale_factor = Constants.CRIT_WINDOW_SCALE_MULTIPLIER
+		var base_health_offset = 85.0
+		var grown_health_offset = base_health_offset + (64.0 * (scale_factor - 1.0) * 0.5)  # ~142
+
+		if health_bar and health_bar.has_method("set_custom_offset"):
+			health_bar.set_custom_offset(grown_health_offset)
+
+		if name_label:
+			var base_label_y = -73.0
+			var grown_label_y = base_label_y - (64.0 * (scale_factor - 1.0) * 0.5)  # Move up
+			_grow_tween.tween_property(name_label, "position:y", grown_label_y, Constants.CRIT_WINDOW_SCALE_DURATION)
+
 		z_index = Constants.CRIT_WINDOW_Z_INDEX
 
 		await _grow_tween.finished
@@ -835,11 +890,20 @@ func shrink_after_crit_window() -> void:
 	# Wait for weakpoint explosion animation to complete (~0.5s shake + explosion)
 	await get_tree().create_timer(0.55).timeout
 
-	# Scale SPRITE back to base (check we're still valid)
+	# Scale SPRITE back to base and reset health bar/label positions (check we're still valid)
 	if is_instance_valid(self) and sprite:
 		var base_sprite_scale = Vector2.ONE
 		var tween = create_tween()
+		tween.set_parallel(true)  # Run all tweens in parallel
 		tween.tween_property(sprite, "scale", base_sprite_scale, 0.25)
+
+		# Reset health bar and name label to original positions
+		if health_bar and health_bar.has_method("set_custom_offset"):
+			health_bar.set_custom_offset(85.0)  # Original offset
+
+		if name_label:
+			tween.tween_property(name_label, "position:y", -73.0, 0.25)  # Original position
+
 		await tween.finished
 
 		if is_instance_valid(self) and sprite:

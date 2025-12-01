@@ -147,7 +147,7 @@ theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_panel")
 theme_override_styles/focus = SubResource("StyleBoxFlat_panel")
-text = "JOIN GAME"
+text = "PLAY"
 
 [node name="JoinContainer" type="HBoxContainer" parent="MenuPanel/VBoxContainer"]
 visible = false
@@ -190,9 +190,7 @@ offset_right = 350.0
 offset_bottom = 70.0
 theme_override_colors/font_color = Color(0.45, 0.48, 0.52, 1)
 theme_override_font_sizes/font_size = 13
-text = "Host: Creates a server on port 7000
-Join: Connect to host's IP address (use Hamachi for internet play)
-Press C for Character Sheet • Press I for Inventory"
+text = "Press C for Character Sheet • Press I for Inventory"
 horizontal_alignment = 1
 vertical_alignment = 1
 

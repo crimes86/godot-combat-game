@@ -119,16 +119,26 @@ func create_quest_indicator() -> void:
 	call_deferred("_connect_quest_signals")
 
 func _connect_quest_signals() -> void:
-	"""Connect to QuestManager for indicator updates"""
+	"""Connect to QuestManager and TutorialManager for indicator updates"""
 	if has_node("/root/QuestManager"):
 		var qm = get_node("/root/QuestManager")
 		qm.active_quests_changed.connect(_update_quest_indicator)
 		qm.quests_loaded.connect(_update_quest_indicator)
-		# Initial update
-		_update_quest_indicator()
+
+	# Connect to TutorialManager to refresh indicator when tutorial steps change
+	if TutorialManager:
+		TutorialManager.tutorial_step_completed.connect(_on_tutorial_step_changed)
+
+	# Initial update
+	_update_quest_indicator()
+
+func _on_tutorial_step_changed(_completed_step: int) -> void:
+	"""Refresh quest indicator when tutorial progresses"""
+	_update_quest_indicator()
 
 func _update_quest_indicator() -> void:
-	"""Update quest indicator based on quest state: ? for turn-in, ! for available"""
+	"""Update quest indicator based on quest state: ? for turn-in, ! for available
+	During tutorial: Only show ! when it's actually the VISIT_BLACKSMITH step"""
 	if not quest_indicator or not is_instance_valid(quest_indicator):
 		return
 
@@ -138,7 +148,7 @@ func _update_quest_indicator() -> void:
 	var qm = get_node("/root/QuestManager")
 	var giver = vendor_name.to_lower()
 
-	# Check for quests ready to turn in first (priority)
+	# Check for quests ready to turn in first (priority) - always show
 	if qm.has_completed_quests(giver):
 		quest_indicator.text = "?"
 		quest_indicator.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))  # Bright gold
@@ -148,15 +158,24 @@ func _update_quest_indicator() -> void:
 
 	# Check for available quests
 	if qm.has_available_quests(giver):
+		# During tutorial, only show ! when it's the VISIT_BLACKSMITH step
+		if TutorialManager and TutorialManager.is_tutorial_active():
+			var tutorial_step = TutorialManager.current_step
+			# TutorialStep.VISIT_BLACKSMITH = 6
+			if tutorial_step < 6:
+				# Tutorial is active but not yet at blacksmith step - hide indicator
+				quest_indicator.visible = false
+				return
+
+		# Show available quest indicator
 		quest_indicator.text = "!"
 		quest_indicator.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))  # Gold
 		quest_indicator.visible = true
 		quest_indicator.modulate.a = 1.0
 		return
 
-	# No quests - hide indicator (but don't hide on first visit before talking)
-	if has_talked_to_player:
-		quest_indicator.visible = false
+	# No quests - hide indicator
+	quest_indicator.visible = false
 
 func _start_quest_indicator_animation() -> void:
 	"""Animate the quest indicator with a gentle bob"""

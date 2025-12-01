@@ -278,8 +278,8 @@ func _ready() -> void:
 		# Create inventory UI (separate from character sheet)
 		call_deferred("create_inventory_ui")
 
-		# Show spawn hints for new players
-		call_deferred("create_spawn_hints")
+		# NOTE: Spawn hints no longer auto-show on launch (tutorial system handles new player guidance)
+		# Controls menu is still accessible via ESC when no other menus are open
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent crash on exit
@@ -767,22 +767,25 @@ func _input(event: InputEvent) -> void:
 			if not is_shop_open():
 				zoom_out()
 	
-	# Debug mode toggle
+	# Debug mode toggle (debug builds only)
 	if event is InputEventKey and event.pressed:
 		# Block most game keys while typing in chat (allow F-keys for debug)
 		var is_f_key = event.keycode >= KEY_F1 and event.keycode <= KEY_F12
 		if not is_f_key and chat_ui and chat_ui.has_method("is_chat_focused") and chat_ui.is_chat_focused():
 			return
 
+		# Debug keys only available in editor or debug builds
+		var is_dev_build = OS.has_feature("editor") or OS.is_debug_build()
+
 		match event.keycode:
-			KEY_F6:
+			KEY_F6 when is_dev_build:
 				# Debug: Heal to full health
 				current_health = max_health
 				if health_bar and health_bar.has_method("update_health"):
 					health_bar.update_health(current_health, max_health)
 				print("💚 DEBUG: Healed to full health (%d/%d)" % [current_health, max_health])
-			KEY_G:
-				# Switch gender - only for local player
+			KEY_G when is_dev_build:
+				# Switch gender - only for local player (debug only)
 				if not is_multiplayer_authority():
 					return
 
@@ -811,20 +814,20 @@ func _input(event: InputEvent) -> void:
 
 				# Sync gender change to other players
 				_sync_appearance_to_network()
-			
-			KEY_F3:
+
+			KEY_F3 when is_dev_build:
 				debug_mode = !debug_mode
 				print("Debug mode: ", "ON" if debug_mode else "OFF")
 				debug_update_timer = 0.0  # Reset timer
 				update_debug_visualization()  # Immediate update
-			
+
 			# KEY_F5 debug level-up disabled for playtesting
 			# KEY_F5:
 			# 	# Add 5 levels
 			# 	CharacterStats.debug_add_levels(5)
 			# 	print("Added 5 levels (now level ", CharacterStats.level, ")")
-			
-			KEY_F6:
+
+			KEY_F6 when is_dev_build:
 				# Reset to level 1
 				CharacterStats.reset_character()
 				update_stats_from_character()
@@ -832,17 +835,18 @@ func _input(event: InputEvent) -> void:
 				if health_bar and health_bar.has_method("update_health"):
 					health_bar.update_health(current_health, max_health)
 				print("Character reset to level 1")
-			
-			KEY_F7:
+
+			KEY_F7 when is_dev_build:
 				# Print all stats
 				CharacterStats.print_stats()
-			
-			KEY_F8:
+
+			KEY_F8 when is_dev_build:
 				# Fix negative XP
 				CharacterStats.debug_fix_negative_xp()
 				update_stats_from_character()
 				print("Press F7 to verify XP is fixed")
-			KEY_F9:
+
+			KEY_F9 when is_dev_build:
 				# DEBUG: Toggle full map view (zoom out to see entire world)
 				toggle_debug_map_view()
 			# KEY_F10 debug fuel disabled for playtesting
@@ -856,7 +860,7 @@ func _input(event: InputEvent) -> void:
 			# 		# Clean up after async function completes
 			# 		instance.queue_free()
 
-			KEY_F12:
+			KEY_F12 when is_dev_build:
 				# DEBUG: Toggle between melee weapon and healing staff
 				_debug_toggle_healing_staff()
 
@@ -1141,33 +1145,20 @@ func get_enemies_in_cone() -> Array:
 	for enemy in all_enemies:
 		if not is_instance_valid(enemy):
 			continue
-		
-		# Get enemy size for more forgiving detection
-		var enemy_radius = 30.0  # Approximate enemy size
-		if enemy.has_node("CollisionShape2D"):
-			var collision = enemy.get_node("CollisionShape2D")
-			if collision.shape is RectangleShape2D:
-				var rect = collision.shape as RectangleShape2D
-				enemy_radius = max(rect.size.x, rect.size.y) * enemy.scale.x / 2.0
-		
-		# Check distance to enemy edge (not just center)
+
+		# Check distance to enemy center - must be within attack range
 		var distance_to_center = global_position.distance_to(enemy.global_position)
-		var distance_to_edge = distance_to_center - enemy_radius
-		
-		# If enemy edge is beyond attack range, skip
-		if distance_to_edge > attack_range:
+
+		# If enemy center is beyond attack range, skip
+		if distance_to_center > attack_range:
 			continue
-		
-		# Check if enemy overlaps cone angle
-		# We check the angle to the enemy center
+
+		# Check if enemy is within cone angle
 		var to_enemy = (enemy.global_position - global_position).normalized()
 		var angle_diff = forward_direction.angle_to(to_enemy)
-		
-		# Add enemy radius as angular tolerance for more forgiving detection
-		var angular_tolerance = atan2(enemy_radius, distance_to_center)
-		
-		# Enemy is in cone if angle difference is within tolerance
-		if abs(angle_diff) <= cone_half_angle_rad + angular_tolerance:
+
+		# Enemy is in cone if angle difference is within half-angle
+		if abs(angle_diff) <= cone_half_angle_rad:
 			enemies_in_cone.append(enemy)
 	
 	return enemies_in_cone
@@ -2710,8 +2701,13 @@ func _is_mouse_over_canvas_layer(canvas_layer: CanvasLayer, mouse_pos: Vector2) 
 		return false
 
 	# Find Control children and check if mouse is over any of them
+	# Only check controls with MOUSE_FILTER_STOP (blocks input) - skip PASS and IGNORE
 	for child in canvas_layer.get_children():
 		if child is Control and child.visible:
+			# Only block for controls that stop mouse input (actual UI panels)
+			# Skip MOUSE_FILTER_IGNORE and MOUSE_FILTER_PASS (like full-screen drop zones)
+			if child.mouse_filter != Control.MOUSE_FILTER_STOP:
+				continue
 			var rect = child.get_global_rect()
 			if rect.has_point(mouse_pos):
 				return true
@@ -2734,6 +2730,15 @@ func die() -> void:
 	print("\n💀 ===== PLAYER DEATH =====")
 	print("Position: ", global_position)
 	print("Remaining health: ", current_health)
+
+	# Close any open loot UIs on death
+	for child in get_tree().root.get_children():
+		if child is LootBodyUI and child.visible:
+			child.close_ui()
+			print("   📦 Closed LootBodyUI on death")
+		elif child is ChestLootUI and child.visible:
+			child.close_ui()
+			print("   📦 Closed ChestLootUI on death")
 
 	# Play death sound (gender-specific)
 	var sound_manager = get_node_or_null("/root/SoundManager")

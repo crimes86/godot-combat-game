@@ -84,7 +84,11 @@ func toggle_debug_display() -> void:
 	debug_log("Debug display %s" % ("SHOWN" if debug_display_visible else "HIDDEN"))
 
 func _input(event: InputEvent) -> void:
-	"""Listen for F3 key to toggle debug displays"""
+	"""Listen for F3 key to toggle debug displays (debug builds only)"""
+	# Only allow in editor or debug builds
+	if not (OS.has_feature("editor") or OS.is_debug_build()):
+		return
+
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F3:
 		toggle_debug_display()
 

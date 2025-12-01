@@ -2,6 +2,9 @@ extends Control
 ## Main menu with authentication system
 ## Stone Gray UI theme matching CharacterUI
 
+# Server configuration
+const PRODUCTION_SERVER_IP = "167.99.55.245"
+
 # Main menu nodes
 @onready var name_input = $MenuPanel/VBoxContainer/NameContainer/NameInput
 @onready var host_button = $MenuPanel/VBoxContainer/HostButton
@@ -10,6 +13,9 @@ extends Control
 @onready var join_container = $MenuPanel/VBoxContainer/JoinContainer
 @onready var status_label = $MenuPanel/VBoxContainer/StatusLabel
 @onready var theme_music = $ThemeMusic
+
+# Dev mode state
+var is_dev_mode: bool = false
 
 # Auth UI nodes
 @onready var auth_panel = $AuthPanel
@@ -30,6 +36,9 @@ var pending_host_player_data: Dictionary = {}  # Store auth data when hosting
 func _ready():
 	await get_tree().process_frame
 
+	# Dev mode only available in editor or debug builds (not production exports)
+	is_dev_mode = OS.has_feature("editor") or OS.is_debug_build()
+
 	# Check required nodes
 	if not name_input or not ip_input:
 		push_error("MainMenu: Required nodes not found!")
@@ -37,7 +46,7 @@ func _ready():
 
 	# Set defaults
 	name_input.text = "Player" + str(randi() % 1000)
-	ip_input.text = "192.168.28.211"
+	ip_input.text = PRODUCTION_SERVER_IP  # Always use production server
 	join_container.visible = false
 	status_label.text = ""
 
@@ -45,10 +54,15 @@ func _ready():
 	if auth_panel:
 		auth_panel.visible = false
 
-	# Connect main menu buttons
+	# Hide host button unless in dev mode
 	if host_button:
-		host_button.pressed.connect(_on_host_pressed)
-		host_button.mouse_entered.connect(_on_button_hover)
+		if is_dev_mode:
+			host_button.pressed.connect(_on_host_pressed)
+			host_button.mouse_entered.connect(_on_button_hover)
+			host_button.text = "HOST (DEV)"
+		else:
+			host_button.visible = false
+
 	if join_button:
 		join_button.pressed.connect(_on_join_pressed)
 		join_button.mouse_entered.connect(_on_button_hover)
@@ -105,23 +119,27 @@ func _on_host_pressed():
 func _on_join_pressed():
 	_play_click_sound()
 
-	if not join_container.visible:
-		# Show IP input
-		join_container.visible = true
-		join_button.text = "Connect"
-	else:
-		# Try to connect
-		NetworkManager.set_player_name(name_input.text)
-		pending_ip = ip_input.text
-		status_label.text = "Connecting to %s..." % pending_ip
-		current_state = MenuState.JOINING
+	# In dev mode, allow custom IP input
+	if is_dev_mode:
+		if not join_container.visible:
+			# Show IP input for dev mode
+			join_container.visible = true
+			join_button.text = "Connect"
+			return
 
-		if NetworkManager.join_game(pending_ip):
+	# Connect to server (production IP or dev mode custom IP)
+	NetworkManager.set_player_name(name_input.text)
+	pending_ip = ip_input.text if is_dev_mode else PRODUCTION_SERVER_IP
+	status_label.text = "Connecting to server..."
+	current_state = MenuState.JOINING
+
+	if NetworkManager.join_game(pending_ip):
+		if host_button:
 			host_button.disabled = true
-			join_button.disabled = true
-		else:
-			status_label.text = "Failed to connect!"
-			current_state = MenuState.MAIN
+		join_button.disabled = true
+	else:
+		status_label.text = "Failed to connect!"
+		current_state = MenuState.MAIN
 
 func _on_connected():
 	status_label.text = "Connected! Waiting for server..."

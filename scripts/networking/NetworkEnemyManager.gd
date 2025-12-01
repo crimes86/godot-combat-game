@@ -1189,41 +1189,58 @@ func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int
 func request_loot_item(enemy_network_id: int, item_index: int) -> void:
 	"""Client requests to loot an item from a corpse. Server validates and broadcasts."""
 	if not multiplayer.is_server():
+		print("📦 request_loot_item: Not server, ignoring")
 		return
+
+	print("📦 Server: request_loot_item for enemy=%d, index=%d" % [enemy_network_id, item_index])
 
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
+		print("❌ Server: Enemy not found")
 		return
 
 	if not enemy.is_corpse:
+		print("❌ Server: Enemy is not a corpse")
 		return
 
 	var looter_id = multiplayer.get_remote_sender_id()
 	if looter_id == 0:
 		looter_id = 1  # Server is looting
 
+	print("📦 Server: Looter ID = %d, corpse has %d items" % [looter_id, enemy.corpse_loot.size()])
+
 	# Validate item index
 	if item_index < 0 or item_index >= enemy.corpse_loot.size():
+		print("❌ Server: Invalid item index %d (corpse has %d items)" % [item_index, enemy.corpse_loot.size()])
 		return
 
 	var item = enemy.corpse_loot[item_index]
 	if not item:
+		print("❌ Server: Item at index %d is null" % item_index)
 		return
+
+	var item_name = item.get("name", "Unknown")
+	print("📦 Server: Looting '%s' from corpse" % item_name)
 
 	# Remove item from server's corpse loot
 	enemy.corpse_loot.remove_at(item_index)
+	print("📦 Server: Removed item, corpse now has %d items" % enemy.corpse_loot.size())
 
 	# Serialize item to JSON for reliable RPC transmission
 	var item_json = JSON.stringify(item)
 
 	# Broadcast to all clients (including server via call_local)
+	print("📦 Server: Broadcasting _client_item_looted to all peers")
 	_client_item_looted.rpc(enemy_network_id, looter_id, item_index, item_json)
 
 @rpc("authority", "call_local", "reliable")
 func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int, item_json: String) -> void:
 	"""Server broadcasts that an item was looted from a corpse."""
+	print("📦 _client_item_looted received: enemy=%d, looter=%d, index=%d" % [enemy_network_id, looter_id, item_index])
+
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
+		print("❌ _client_item_looted: Enemy not found or invalid")
 		return
 
 	# Deserialize item from JSON
@@ -1236,33 +1253,36 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 			push_warning("Failed to parse item JSON: %s" % item_json)
 			return
 
-	# Remove item from local corpse loot (clients only - server already removed in request_loot_item)
-	# This prevents double-removal on server due to call_local
-	# Use item matching instead of index to handle sync issues
+	var item_name = item.get("name", "")
+
+	# Remove item from local corpse loot
+	# For server: already removed in request_loot_item, skip removal but still process inventory
+	# For clients: need to remove from local corpse
 	if not multiplayer.is_server():
-		var item_name = item.get("name", "")
 		var item_type = item.get("type", "")
 		var removed = false
+		print("📦 Client removing item '%s' from corpse (has %d items)" % [item_name, enemy.corpse_loot.size()])
 		for i in range(enemy.corpse_loot.size()):
 			var corpse_item = enemy.corpse_loot[i]
-			if corpse_item and corpse_item.get("name", "") == item_name and \
-			   corpse_item.get("type", "") == item_type:
+			if corpse_item:
+				print("   [%d] '%s' type='%s'" % [i, corpse_item.get("name", ""), corpse_item.get("type", "")])
+			if corpse_item and corpse_item.get("name", "") == item_name:
 				enemy.corpse_loot.remove_at(i)
 				removed = true
-				print("🗑️ Client: Removed '%s' from corpse loot (matched by name)" % item_name)
+				print("🗑️ Client: Removed '%s' from corpse loot at index %d" % [item_name, i])
 				break
 		if not removed:
 			print("⚠️ Client: Could not find '%s' in corpse loot to remove" % item_name)
+		print("📦 Client corpse now has %d items" % enemy.corpse_loot.size())
 
 	# Only the looter gets the item added to their inventory
 	if multiplayer.get_unique_id() == looter_id:
 		if InventorySystem.add_item(item):
-			var item_name = item.get("name", "Unknown")
 			var item_rarity = item.get("rarity", "Common")
 			print("✨ Looted: %s from corpse" % item_name)
 			NotificationManager.notify_item_added(item_name, 1, item_rarity)
 		else:
-			print("❌ Inventory full! Cannot loot %s" % item.get("name", "Unknown"))
+			print("❌ Inventory full! Cannot loot %s" % item_name)
 
 	# Check if corpse is now fully empty
 	enemy.check_if_looted_empty()

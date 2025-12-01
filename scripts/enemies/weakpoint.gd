@@ -49,6 +49,11 @@ func _ready() -> void:
 	# Add to weakpoints group for cursor detection
 	add_to_group("weakpoints")
 
+	# Make weakpoints unaffected by scene lights (always show true colors)
+	var unshaded_material = CanvasItemMaterial.new()
+	unshaded_material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = unshaded_material
+
 	var colors = theme_colors[color_theme]
 
 	# 💎 HIGH-FIDELITY GEM/GLASS - Starts visible, brightens as it cracks

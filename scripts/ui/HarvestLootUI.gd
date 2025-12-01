@@ -27,18 +27,18 @@ func create_ui() -> void:
 	control.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(control)
 
-	# Panel container - positioned below player's feet (center of screen + offset down)
+	# Panel container - positioned on right side of screen, vertically centered
 	panel = PanelContainer.new()
 	panel.name = "Panel"
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.anchor_left = 0.5
+	panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	panel.anchor_left = 1.0
 	panel.anchor_top = 0.5
-	panel.anchor_right = 0.5
+	panel.anchor_right = 1.0
 	panel.anchor_bottom = 0.5
-	panel.offset_left = -150
-	panel.offset_right = 150
-	panel.offset_top = 60
-	panel.offset_bottom = 140
+	panel.offset_left = -340
+	panel.offset_right = -20
+	panel.offset_top = -50
+	panel.offset_bottom = 50
 
 	# Style the panel (stone gray theme)
 	var style = StyleBoxFlat.new()

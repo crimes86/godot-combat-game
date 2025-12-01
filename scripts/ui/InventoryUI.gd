@@ -25,7 +25,8 @@ const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
 
 func _ready() -> void:
 	# Set layer above game prompts (campfire hints are at 100)
-	layer = 110
+	# Use layer 105 so inventory can coexist with shop UI which may use similar layers
+	layer = 105
 
 	# Add to group for tutorial system to find
 	add_to_group("inventory_ui")
@@ -52,22 +53,9 @@ func _input(event: InputEvent) -> void:
 func create_inventory_ui() -> void:
 	"""Create standalone inventory window"""
 
-	# Create full-screen drop zone for deletion (sits behind everything)
-	# IMPORTANT: Use MOUSE_FILTER_IGNORE so it doesn't block input to other UIs (like CharacterUI)
-	# The drag-drop forwarding still works with IGNORE - it only affects regular mouse events
-	var drop_zone = Control.new()
-	drop_zone.name = "FullScreenDropZone"
-	drop_zone.set_anchors_preset(Control.PRESET_FULL_RECT)
-	drop_zone.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	# Enable drag-drop on the drop zone (works even with MOUSE_FILTER_IGNORE)
-	drop_zone.set_drag_forwarding(
-		Callable(self, "_get_drop_zone_drag_data"),
-		Callable(self, "_can_drop_on_drop_zone"),
-		Callable(self, "_drop_on_drop_zone")
-	)
-
-	add_child(drop_zone)
+	# NOTE: We no longer use a full-screen drop zone as it blocks input to other UIs
+	# (like ShopUI) due to CanvasLayer input priority. Instead, we handle item deletion
+	# by detecting drops outside the inventory panel directly on the panel itself.
 
 	# Create confirmation dialog for deletion
 	var delete_dialog = ConfirmationDialog.new()
@@ -145,7 +133,7 @@ func create_inventory_ui() -> void:
 	gold_container.add_theme_constant_override("separation", 4)
 	main_vbox.add_child(gold_container)
 
-	var gold_icon = create_text_label("💰", 16)
+	var gold_icon = create_text_label("🪙", 16)  # Standardized coin icon
 	gold_container.add_child(gold_icon)
 
 	gold_label = create_text_label("0", 16)
@@ -460,7 +448,7 @@ func refresh_inventory() -> void:
 				tooltip += "\nDefense: +%d" % item.get("defense", 0)
 
 			if item.has("value"):
-				tooltip += "\nValue: %d gold" % item.get("value", 0)
+				tooltip += "\nValue: 🪙 %d" % item.get("value", 0)
 
 			slot_control.tooltip_text = tooltip
 		else:
@@ -580,6 +568,7 @@ func _get_inventory_drag_data(at_position: Vector2, slot_index: int) -> Variant:
 	var item = InventorySystem.get_item(slot_index)
 	if not item or item.is_empty():
 		print("   No item in slot, returning null")
+		_current_drag_data = null
 		return null
 
 	print("   Starting drag for: %s" % item.get("name", "Unknown"))
@@ -592,12 +581,17 @@ func _get_inventory_drag_data(at_position: Vector2, slot_index: int) -> Variant:
 	var slot_control = inventory_slots[slot_index]
 	slot_control.set_drag_preview(preview)
 
-	return {
+	var drag_data = {
 		"source_type": "inventory",
 		"source_index": slot_index,
 		"item": item,
 		"source_ui": "inventory_ui"
 	}
+
+	# Store for deletion detection when drag ends
+	_current_drag_data = drag_data
+
+	return drag_data
 
 func _can_drop_inventory_data(at_position: Vector2, data: Variant, slot_index: int) -> bool:
 	"""Check if data can be dropped on this inventory slot"""
@@ -609,6 +603,9 @@ func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: in
 	"""Handle dropping data on an inventory slot"""
 	if not data.has("item"):
 		return
+
+	# Clear drag data since this is a valid drop
+	_current_drag_data = null
 
 	var source_type = data.get("source_type", "")
 	var source_index = data.get("source_index", -1)
@@ -654,30 +651,42 @@ func _drop_inventory_data(at_position: Vector2, data: Dictionary, slot_index: in
 			refresh_all()
 
 # ============================================
-# DROP ZONE (DELETE ITEMS WITH CONFIRMATION)
+# ITEM DELETION (DROP OUTSIDE PANEL)
 # ============================================
 
-func _get_drop_zone_drag_data(at_position: Vector2) -> Variant:
-	return null
+# Track the current drag data for deletion detection
+var _current_drag_data: Variant = null
 
-func _can_drop_on_drop_zone(at_position: Vector2, data: Variant) -> bool:
-	if not data is Dictionary:
-		return false
+func _notification(what: int) -> void:
+	# Detect when drag ends to check if item was dropped outside panel
+	if what == NOTIFICATION_DRAG_END:
+		_on_drag_ended()
 
-	if not data.has("item"):
-		return false
-
-	if main_panel:
-		var panel_rect = main_panel.get_global_rect()
-		var is_outside = not panel_rect.has_point(at_position)
-		return is_outside
-
-	return false
-
-func _drop_on_drop_zone(at_position: Vector2, data: Dictionary) -> void:
-	if not data.has("item"):
+func _on_drag_ended() -> void:
+	"""Called when any drag operation ends - check if we should delete an item"""
+	if not is_visible or not _current_drag_data:
+		_current_drag_data = null
 		return
 
+	var data = _current_drag_data
+	_current_drag_data = null
+
+	# Only handle inventory items from this UI
+	if not data is Dictionary or not data.has("item"):
+		return
+	if data.get("source_ui") != "inventory_ui":
+		return
+
+	# Check if mouse is outside the inventory panel
+	var mouse_pos = get_viewport().get_mouse_position()
+	if main_panel:
+		var panel_rect = main_panel.get_global_rect()
+		if not panel_rect.has_point(mouse_pos):
+			# Dropped outside - prompt for deletion
+			_prompt_delete_item(data)
+
+func _prompt_delete_item(data: Dictionary) -> void:
+	"""Show confirmation dialog for item deletion"""
 	pending_delete_data = data
 
 	var item_name = data.get("item", {}).get("name", "Unknown")
