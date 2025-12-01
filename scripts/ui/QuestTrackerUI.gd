@@ -41,8 +41,9 @@ var tutorial_steps: Array = [
 	{"name": "Attack", "desc": "Click to attack dummy"},
 	{"name": "Crit Window", "desc": "Keep attacking..."},
 	{"name": "Hit Weakpoint", "desc": "Destroy weakpoints (0/3)"},
-	{"name": "Kill Skeleton", "desc": "Defeat a skeleton"},
 	{"name": "Visit Blacksmith", "desc": "Talk to Blacksmith"},
+	{"name": "Accept Quest", "desc": "Accept a quest"},
+	{"name": "Kill Skeleton", "desc": "Defeat a skeleton"},
 ]
 
 func _ready() -> void:

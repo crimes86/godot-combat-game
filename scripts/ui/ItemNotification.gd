@@ -9,6 +9,7 @@ signal notification_finished()
 enum NotificationType {
 	ITEM_ADDED,      # Green with rarity color
 	ITEM_REMOVED,    # Red text
+	GOLD_ADDED,      # Gold color for currency
 	SYSTEM_MESSAGE   # Plain text for system notifications
 }
 
@@ -69,6 +70,13 @@ func setup_item_removed(item_name: String, quantity: int, rarity: String) -> voi
 
 	# Red for removed items
 	add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	add_theme_font_size_override("font_size", 20)
+
+func setup_gold_added(amount: int) -> void:
+	notification_type = NotificationType.GOLD_ADDED
+	text = "+ %d G" % amount
+	# Gold color
+	add_theme_color_override("font_color", Color(1.0, 0.85, 0.2, 1.0))
 	add_theme_font_size_override("font_size", 20)
 
 func setup_system_message(message: String, msg_type: String) -> void:

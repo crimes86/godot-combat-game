@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://shop_ui_001"]
+[gd_scene load_steps=3 format=3 uid="uid://shop_ui_001"]
 
 [ext_resource type="Script" path="res://scripts/ui/ShopUI.gd" id="1_shop"]
+[ext_resource type="Texture2D" uid="uid://gold_coins_icon" path="res://assets/icons/gold_coins.png" id="2_gold"]
 
 [node name="ShopUI" type="CanvasLayer"]
 process_mode = 3
@@ -171,7 +172,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 12
 
-[node name="GoldLabel" type="Label" parent="Control"]
+[node name="GoldContainer" type="HBoxContainer" parent="Control"]
 layout_mode = 1
 anchors_preset = 3
 anchor_left = 0.5
@@ -184,6 +185,16 @@ offset_right = 390.0
 offset_bottom = 280.0
 grow_horizontal = 0
 grow_vertical = 0
+alignment = 2
+theme_override_constants/separation = 4
+
+[node name="GoldIcon" type="TextureRect" parent="Control/GoldContainer"]
+layout_mode = 2
+texture = ExtResource("2_gold")
+stretch_mode = 5
+
+[node name="GoldLabel" type="Label" parent="Control/GoldContainer"]
+layout_mode = 2
 theme_override_font_sizes/font_size = 18
-text = "🪙 0"
+text = "0"
 horizontal_alignment = 2

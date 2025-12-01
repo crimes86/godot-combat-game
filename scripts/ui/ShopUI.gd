@@ -21,7 +21,7 @@ const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
 
 @onready var main_panel: PanelContainer = $Control/Panel
 @onready var vendor_name_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/VendorName
-@onready var gold_label: Label = $Control/GoldLabel
+@onready var gold_label: Label = $Control/GoldContainer/GoldLabel
 @onready var weapons_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Weapons/ScrollContainer/WeaponsList
 @onready var tools_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Tools/ScrollContainer/ToolsList
 @onready var armor_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Armor/ScrollContainer/ArmorList
@@ -170,9 +170,9 @@ func close_shop() -> void:
 	print("🏪 Shop UI closed")
 
 func update_gold_display() -> void:
-	"""Update the gold display with coin icon"""
+	"""Update the gold display (icon is in scene, just update number)"""
 	if gold_label:
-		gold_label.text = "🪙 %d" % CharacterStats.gold
+		gold_label.text = "%d" % CharacterStats.gold
 
 func _on_gold_changed(_amount: int, total: int) -> void:
 	"""Auto-update gold display and refresh shop when gold changes"""
@@ -311,7 +311,7 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	slot_button.clip_text = true
 
 	# Display name and price on separate lines, centered
-	var price_text = "🪙 %d" % price if price > 0 else "FREE"
+	var price_text = "%d G" % price if price > 0 else "FREE"
 	slot_button.text = "%s\n%s" % [item_name, price_text]
 	slot_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 
@@ -457,7 +457,7 @@ func create_item_slot_with_icon(item_name: String, description: String, price: i
 
 	# Price label
 	var price_label = Label.new()
-	var price_text = "🪙 %d" % price if price > 0 else "FREE"
+	var price_text = "%d G" % price if price > 0 else "FREE"
 	price_label.text = price_text
 	price_label.add_theme_font_size_override("font_size", 11)
 	price_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5) if price > 0 else Color(0.5, 0.9, 0.5))
@@ -810,7 +810,7 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 
 	# Price label (sell value)
 	var price_label = Label.new()
-	price_label.text = "🪙 %d" % total_value
+	price_label.text = "%d G" % total_value
 	price_label.add_theme_font_size_override("font_size", 11)
 	price_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5))
 	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -826,9 +826,9 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 	var tooltip = "[%s]" % item_name
 	if item_desc:
 		tooltip += "\n%s" % item_desc
-	tooltip += "\n\nSell for 🪙 %d" % total_value
+	tooltip += "\n\nSell for %d G" % total_value
 	if quantity > 1:
-		tooltip += " (🪙 %d each)" % item_value
+		tooltip += " (%d G each)" % item_value
 	click_button.tooltip_text = tooltip
 
 	click_button.pressed.connect(func(): sell_item(slot_index))
@@ -1100,11 +1100,19 @@ func create_quest_card(quest: Dictionary, is_complete: bool) -> PanelContainer:
 
 	# Gold reward with icon
 	if gold_reward > 0:
-		var gold_label = Label.new()
-		gold_label.text = "🪙 %d" % gold_reward
-		gold_label.add_theme_font_size_override("font_size", 14)
-		gold_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Gold color
-		rewards_hbox.add_child(gold_label)
+		var gold_hbox = HBoxContainer.new()
+		gold_hbox.add_theme_constant_override("separation", 4)
+		var gold_icon = TextureRect.new()
+		gold_icon.texture = preload("res://assets/icons/gold_coins.png")
+		gold_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		gold_icon.custom_minimum_size = Vector2(16, 16)
+		gold_hbox.add_child(gold_icon)
+		var gold_amount_label = Label.new()
+		gold_amount_label.text = "%d" % gold_reward
+		gold_amount_label.add_theme_font_size_override("font_size", 14)
+		gold_amount_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))  # Gold color
+		gold_hbox.add_child(gold_amount_label)
+		rewards_hbox.add_child(gold_hbox)
 
 	# Action button - more prominent
 	var action_btn = Button.new()
@@ -1272,7 +1280,7 @@ func _on_turn_in_quest(quest_id: String) -> void:
 		var quest = qm.get_quest(quest_id)
 		var xp = quest.get("xp_reward", 0)
 		var gold = quest.get("gold_reward", 0)
-		show_quest_message("Quest complete! +%d XP, +🪙 %d" % [xp, gold], Color(1.0, 0.85, 0.2))
+		show_quest_message("Quest complete! +%d XP, +%d G" % [xp, gold], Color(1.0, 0.85, 0.2))
 
 		# Play level up type sound or gold sound
 		var sound_manager = get_node_or_null("/root/SoundManager")

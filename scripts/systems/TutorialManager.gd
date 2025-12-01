@@ -6,8 +6,9 @@ extends Node
 ## 2. Walk to training dummy
 ## 3. Click to attack dummy until crit window
 ## 4. Click weakpoint during crit window
-## 5. Kill a skeleton
-## 6. Talk to blacksmith
+## 5. Talk to blacksmith
+## 6. Accept first quest
+## 7. Kill a skeleton (final step)
 
 signal tutorial_completed
 signal tutorial_step_completed(step: int)
@@ -19,9 +20,9 @@ enum TutorialStep {
 	ATTACK_DUMMY = 2,    # Click to attack
 	CRIT_WINDOW = 3,     # Wait for crit window
 	HIT_WEAKPOINT = 4,   # Click the weakpoint
-	KILL_SKELETON = 5,   # Find and kill a real skeleton
-	VISIT_BLACKSMITH = 6, # Talk to blacksmith to gear up
-	ACCEPT_QUEST = 7,    # Accept first quest from blacksmith
+	VISIT_BLACKSMITH = 5, # Talk to blacksmith to gear up
+	ACCEPT_QUEST = 6,    # Accept first quest from blacksmith
+	KILL_SKELETON = 7,   # Find and kill a real skeleton (final combat step)
 	COMPLETE = 8
 }
 
@@ -497,15 +498,7 @@ func on_weakpoint_hit() -> void:
 		# All 3 weakpoints destroyed!
 		show_hit_feedback("WEAKPOINTS COMPLETE!", SUCCESS_COLOR)
 		await get_tree().create_timer(1.5).timeout
-		advance_to_step(TutorialStep.KILL_SKELETON)
-
-func on_skeleton_killed() -> void:
-	"""Called when player kills a skeleton"""
-	if current_step != TutorialStep.KILL_SKELETON:
-		return
-
-	skeleton_killed = true
-	advance_to_step(TutorialStep.VISIT_BLACKSMITH)
+		advance_to_step(TutorialStep.VISIT_BLACKSMITH)
 
 func on_blacksmith_visited() -> void:
 	"""Called when player talks to blacksmith"""
@@ -526,6 +519,14 @@ func on_quest_accepted() -> void:
 	waiting_for_accept_button = false
 
 	quest_accepted = true
+	advance_to_step(TutorialStep.KILL_SKELETON)
+
+func on_skeleton_killed() -> void:
+	"""Called when player kills a skeleton"""
+	if current_step != TutorialStep.KILL_SKELETON:
+		return
+
+	skeleton_killed = true
 	advance_to_step(TutorialStep.COMPLETE)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1266,7 +1267,7 @@ func show_equip_item_arrow() -> void:
 	# Create arrow canvas layer
 	var canvas = CanvasLayer.new()
 	canvas.name = "EquipArrowCanvas"
-	canvas.layer = 70  # Above inventory UI
+	canvas.layer = 150  # Above inventory UI (105) and other game UI
 	get_tree().root.add_child(canvas)
 
 	equip_arrow = Control.new()
@@ -1300,7 +1301,7 @@ func show_equip_item_arrow() -> void:
 	outline.default_color = Color.BLACK
 	equip_arrow.add_child(outline)
 
-	# Add label next to arrow
+	# Add label above arrow (centered)
 	var label = Label.new()
 	label.name = "EquipLabel"
 	var item_name = pending_equip_item.get("name", "item")
@@ -1309,7 +1310,8 @@ func show_equip_item_arrow() -> void:
 	label.add_theme_color_override("font_color", SUCCESS_COLOR)
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 2)
-	label.position = Vector2(-150, -10)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.position = Vector2(-70, -30)  # Above the arrow, roughly centered
 	equip_arrow.add_child(label)
 
 	canvas.add_child(equip_arrow)
@@ -1317,10 +1319,12 @@ func show_equip_item_arrow() -> void:
 	# Find the item slot in inventory
 	var item_slot_pos = find_item_slot_position(inventory_ui, pending_equip_item)
 	if item_slot_pos != Vector2.ZERO:
-		equip_arrow.global_position = item_slot_pos + Vector2(-40, 0)  # Left of the slot
+		equip_arrow.global_position = item_slot_pos + Vector2(-45, 0)  # Left of the slot
+		print("📚 [MiniTutorial] Arrow positioned at: %s (slot was at %s)" % [equip_arrow.global_position, item_slot_pos])
 	else:
-		# Fallback position - center-ish of inventory
-		equip_arrow.global_position = Vector2(800, 400)
+		# Fallback position - right side of screen where inventory is
+		equip_arrow.global_position = Vector2(1350, 450)
+		print("📚 [MiniTutorial] Using fallback arrow position")
 
 	equip_arrow.visible = true
 
@@ -1337,41 +1341,37 @@ func show_equip_item_arrow() -> void:
 func find_item_slot_position(inventory_ui: Node, item: Dictionary) -> Vector2:
 	"""Find the position of an item slot in the inventory UI"""
 	var item_name = item.get("name", "")
-	if item_name.is_empty():
-		return Vector2.ZERO
 
-	# Look for item slots/grid in the inventory
-	var slots_container = inventory_ui.get_node_or_null("Panel/MarginContainer/VBoxContainer/InventoryGrid")
-	if not slots_container:
-		slots_container = inventory_ui.get_node_or_null("Panel/InventoryGrid")
-	if not slots_container:
-		# Try to find any GridContainer
-		slots_container = find_grid_container(inventory_ui)
+	# InventoryUI has a public inventory_slots array we can use directly
+	if "inventory_slots" in inventory_ui:
+		var slots = inventory_ui.inventory_slots
+		if slots and slots.size() > 0:
+			# Search for our specific item using InventorySystem
+			for i in range(slots.size()):
+				var slot = slots[i]
+				var slot_item = InventorySystem.get_item(i) if InventorySystem else null
+				if slot_item and slot_item.get("name", "") == item_name:
+					print("📚 [MiniTutorial] Found item '%s' at slot %d" % [item_name, i])
+					# Get global position - slot is a Control inside the CanvasLayer
+					var slot_rect = slot.get_global_rect()
+					return slot_rect.position + slot_rect.size / 2
 
-	if not slots_container:
-		print("📚 [MiniTutorial] Could not find inventory grid")
-		return Vector2.ZERO
+			# If no exact match, find first occupied slot
+			for i in range(slots.size()):
+				var slot = slots[i]
+				var slot_item = InventorySystem.get_item(i) if InventorySystem else null
+				if slot_item and slot_item.size() > 0:
+					print("📚 [MiniTutorial] Using first occupied slot %d" % i)
+					var slot_rect = slot.get_global_rect()
+					return slot_rect.position + slot_rect.size / 2
 
-	# Search through slots for matching item
-	for slot in slots_container.get_children():
-		# Check if this slot has our item
-		var slot_item = slot.get("item") if slot.has_method("get") else null
-		if slot_item == null and slot.has_meta("item"):
-			slot_item = slot.get_meta("item")
+			# Fallback to first slot
+			var first_slot = slots[0]
+			print("📚 [MiniTutorial] Using first slot as fallback")
+			var slot_rect = first_slot.get_global_rect()
+			return slot_rect.position + slot_rect.size / 2
 
-		# Also check by label text
-		var label = slot.get_node_or_null("Label")
-		if label and label.text == item_name:
-			return slot.global_position + slot.size / 2
-
-		if slot_item and slot_item.get("name", "") == item_name:
-			return slot.global_position + slot.size / 2
-
-	# If we can't find exact item, point to first occupied slot
-	for slot in slots_container.get_children():
-		if slot.visible and slot.size.x > 0:
-			return slot.global_position + slot.size / 2
-
+	print("📚 [MiniTutorial] Could not access inventory_slots")
 	return Vector2.ZERO
 
 func find_grid_container(node: Node) -> GridContainer:

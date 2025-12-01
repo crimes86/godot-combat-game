@@ -133,7 +133,10 @@ func create_inventory_ui() -> void:
 	gold_container.add_theme_constant_override("separation", 4)
 	main_vbox.add_child(gold_container)
 
-	var gold_icon = create_text_label("🪙", 16)  # Standardized coin icon
+	var gold_icon = TextureRect.new()
+	gold_icon.texture = preload("res://assets/icons/gold_coins.png")
+	gold_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	gold_icon.custom_minimum_size = Vector2(16, 16)
 	gold_container.add_child(gold_icon)
 
 	gold_label = create_text_label("0", 16)
@@ -448,7 +451,7 @@ func refresh_inventory() -> void:
 				tooltip += "\nDefense: +%d" % item.get("defense", 0)
 
 			if item.has("value"):
-				tooltip += "\nValue: 🪙 %d" % item.get("value", 0)
+				tooltip += "\nValue: %d G" % item.get("value", 0)
 
 			slot_control.tooltip_text = tooltip
 		else:

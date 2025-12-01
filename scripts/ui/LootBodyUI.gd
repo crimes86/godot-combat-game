@@ -139,25 +139,66 @@ func populate_loot_grid() -> void:
 
 	var total_slots = 0
 
-	# First, add gold slots for each corpse that has gold
+	# Combine gold from all corpses into one slot
+	var combined_gold = 0
+	var gold_corpses: Array = []  # Track which corpses have gold
 	for corpse in corpses_looted:
 		if not is_instance_valid(corpse):
 			continue
 		if corpse.corpse_gold > 0:
-			var gold_slot = create_gold_slot(corpse.corpse_gold, corpse)
-			loot_grid.add_child(gold_slot)
-			total_slots += 1
+			combined_gold += corpse.corpse_gold
+			gold_corpses.append(corpse)
 
-	# Then add item slots
+	if combined_gold > 0:
+		var gold_slot = create_combined_gold_slot(combined_gold, gold_corpses)
+		loot_grid.add_child(gold_slot)
+		total_slots += 1
+
+	# Collect and stack items by name
+	# Dictionary: item_name -> { "items": [item_refs], "corpses": [corpse_refs], "total_qty": int }
+	var stacked_items: Dictionary = {}
 	for corpse in corpses_looted:
 		if not is_instance_valid(corpse):
 			continue
-
 		for item in corpse.corpse_loot:
-			if item:  # Skip null items (already looted)
-				var slot = create_loot_slot(item, corpse)
-				loot_grid.add_child(slot)
-				total_slots += 1
+			if not item:
+				continue
+			var item_name = item.get("name", "Unknown")
+			var is_stackable = item.get("stackable", false)
+			var item_qty = item.get("quantity", 1)
+
+			# Stack if stackable, otherwise keep separate
+			if is_stackable and stacked_items.has(item_name):
+				stacked_items[item_name]["items"].append(item)
+				stacked_items[item_name]["corpses"].append(corpse)
+				stacked_items[item_name]["total_qty"] += item_qty
+			else:
+				# New stack or non-stackable item
+				var key = item_name if is_stackable else "%s_%d" % [item_name, stacked_items.size()]
+				stacked_items[key] = {
+					"items": [item],
+					"corpses": [corpse],
+					"total_qty": item_qty,
+					"base_item": item
+				}
+
+	# Create slots for stacked/individual items
+	for key in stacked_items:
+		var stack_data = stacked_items[key]
+		var base_item = stack_data["base_item"]
+		var total_qty = stack_data["total_qty"]
+		var items = stack_data["items"]
+		var corpses = stack_data["corpses"]
+
+		if items.size() > 1 or total_qty > 1:
+			# Stacked item - show combined
+			var slot = create_stacked_loot_slot(base_item, total_qty, items, corpses)
+			loot_grid.add_child(slot)
+		else:
+			# Single item
+			var slot = create_loot_slot(base_item, corpses[0])
+			loot_grid.add_child(slot)
+		total_slots += 1
 
 	# Add empty slots to reach minimum (always show at least MIN_SLOTS)
 	while total_slots < MIN_SLOTS:
@@ -267,7 +308,7 @@ func create_loot_slot(item: Dictionary, source_corpse) -> Control:
 		tooltip += "Defense: +%d\n" % item.get("defense", 0)
 
 	if item.has("value"):
-		tooltip += "Value: 🪙 %d\n" % item.get("value", 0)
+		tooltip += "Value: %d G\n" % item.get("value", 0)
 
 	tooltip += "\nClick to loot"
 	slot_control.tooltip_text = tooltip
@@ -324,13 +365,12 @@ func create_gold_slot(gold_amount: int, source_corpse) -> Control:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(center)
 
-	# Gold icon label (using emoji like inventory/shop)
-	var gold_icon = Label.new()
+	# Gold icon using texture
+	var gold_icon = TextureRect.new()
 	gold_icon.name = "GoldIcon"
-	gold_icon.text = "🪙"
-	gold_icon.add_theme_font_size_override("font_size", 28)
-	gold_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	gold_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	gold_icon.texture = preload("res://assets/icons/gold_coins.png")
+	gold_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	gold_icon.custom_minimum_size = Vector2(32, 32)
 	gold_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(gold_icon)
 
@@ -342,6 +382,249 @@ func create_gold_slot(gold_amount: int, source_corpse) -> Control:
 	slot_control.gui_input.connect(_on_gold_slot_input.bind(slot_control))
 
 	return slot_control
+
+func create_combined_gold_slot(total_gold: int, gold_corpses: Array) -> Control:
+	"""Create a single gold slot that represents gold from multiple corpses"""
+	var slot_control = Control.new()
+	slot_control.custom_minimum_size = SLOT_SIZE
+	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Store combined gold data
+	slot_control.set_meta("is_gold", true)
+	slot_control.set_meta("is_combined_gold", true)
+	slot_control.set_meta("gold_amount", total_gold)
+	slot_control.set_meta("gold_corpses", gold_corpses)
+
+	# Gold uses a warm golden border color
+	var gold_border_color = Color(1.0, 0.85, 0.0, 1.0)
+
+	# Add panel for styling with gold glow
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = SLOT_SIZE
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot_control.add_child(panel)
+
+	var slot_style = create_slot_style(SLOT_BG, gold_border_color, 3, true)
+	panel.add_theme_stylebox_override("panel", slot_style)
+
+	# Center container for icon
+	var center = CenterContainer.new()
+	center.name = "CenterContainer"
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(center)
+
+	# Gold icon using texture
+	var gold_icon = TextureRect.new()
+	gold_icon.name = "GoldIcon"
+	gold_icon.texture = preload("res://assets/icons/gold_coins.png")
+	gold_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	gold_icon.custom_minimum_size = Vector2(32, 32)
+	gold_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.add_child(gold_icon)
+
+	# Add amount label in corner
+	var amount_label = Label.new()
+	amount_label.name = "AmountLabel"
+	amount_label.text = str(total_gold)
+	amount_label.add_theme_font_size_override("font_size", 12)
+	amount_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+	amount_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	amount_label.add_theme_constant_override("outline_size", 2)
+	amount_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	amount_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	amount_label.offset_left = -40
+	amount_label.offset_right = -4
+	amount_label.offset_top = -18
+	amount_label.offset_bottom = -2
+	panel.add_child(amount_label)
+
+	# Build tooltip
+	var tooltip = "Gold: %d\n\nClick to loot all" % total_gold
+	slot_control.tooltip_text = tooltip
+
+	# Connect click to loot all gold
+	slot_control.gui_input.connect(_on_combined_gold_slot_input.bind(slot_control))
+
+	return slot_control
+
+func create_stacked_loot_slot(base_item: Dictionary, total_qty: int, items: Array, corpses: Array) -> Control:
+	"""Create a slot for stacked items from multiple corpses"""
+	var slot_control = Control.new()
+	slot_control.custom_minimum_size = SLOT_SIZE
+	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Store stacked item data
+	slot_control.set_meta("is_stacked", true)
+	slot_control.set_meta("base_item", base_item)
+	slot_control.set_meta("total_qty", total_qty)
+	slot_control.set_meta("items", items)
+	slot_control.set_meta("corpses", corpses)
+
+	var item_name = base_item.get("name", "Unknown")
+	var item_rarity = base_item.get("rarity", "Common")
+
+	# Get rarity color
+	var rarity_color = get_rarity_color(item_rarity)
+
+	# Add panel with rarity border
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = SLOT_SIZE
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot_control.add_child(panel)
+
+	var slot_style = create_slot_style(SLOT_BG, rarity_color, 2, item_rarity.to_upper() in ["RARE", "EPIC", "LEGENDARY"])
+	panel.add_theme_stylebox_override("panel", slot_style)
+
+	# Center container for icon/text
+	var center = CenterContainer.new()
+	center.name = "CenterContainer"
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(center)
+
+	# Try to get item icon
+	var icon_texture: Texture2D = null
+	if ItemIconGenerator:
+		icon_texture = ItemIconGenerator.get_item_icon(base_item)
+
+	if icon_texture:
+		var icon_rect = TextureRect.new()
+		icon_rect.name = "ItemIcon"
+		icon_rect.texture = icon_texture
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.custom_minimum_size = Vector2(40, 40)
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		center.add_child(icon_rect)
+	else:
+		var label = Label.new()
+		label.name = "ItemLabel"
+		label.text = item_name
+		label.add_theme_font_size_override("font_size", 10)
+		label.add_theme_color_override("font_color", rarity_color)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.custom_minimum_size = Vector2(SLOT_SIZE.x - 8, SLOT_SIZE.y - 8)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		center.add_child(label)
+
+	# Add stack count label
+	var stack_label = Label.new()
+	stack_label.name = "StackLabel"
+	stack_label.text = "x%d" % total_qty
+	stack_label.add_theme_font_size_override("font_size", 11)
+	stack_label.add_theme_color_override("font_color", Color.WHITE)
+	stack_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	stack_label.add_theme_constant_override("outline_size", 2)
+	stack_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	stack_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	stack_label.offset_left = -35
+	stack_label.offset_right = -4
+	stack_label.offset_top = -16
+	stack_label.offset_bottom = -2
+	panel.add_child(stack_label)
+
+	# Build tooltip
+	var tooltip = "[%s] %s" % [item_rarity, item_name]
+	tooltip += "\nQuantity: %d" % total_qty
+	tooltip += "\n\nClick to loot all"
+	slot_control.tooltip_text = tooltip
+
+	# Connect click
+	slot_control.gui_input.connect(_on_stacked_loot_slot_input.bind(slot_control))
+
+	return slot_control
+
+func _on_combined_gold_slot_input(event: InputEvent, slot: Control) -> void:
+	"""Handle click on combined gold slot to loot all gold"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var gold_corpses = slot.get_meta("gold_corpses") as Array
+		loot_all_gold(gold_corpses)
+
+func _on_stacked_loot_slot_input(event: InputEvent, slot: Control) -> void:
+	"""Handle click on stacked item slot to loot all of that item"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var items = slot.get_meta("items") as Array
+		var corpses = slot.get_meta("corpses") as Array
+		loot_stacked_items(items, corpses)
+
+func loot_all_gold(gold_corpses: Array) -> void:
+	"""Loot gold from all corpses in the array"""
+	var total_gold = 0
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var is_multiplayer = multiplayer.has_multiplayer_peer()
+
+	for corpse in gold_corpses:
+		if not is_instance_valid(corpse) or corpse.corpse_gold <= 0:
+			continue
+
+		if is_multiplayer and network_enemy_mgr and corpse.network_id > 0:
+			network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+		else:
+			total_gold += corpse.corpse_gold
+			CharacterStats.add_gold(corpse.corpse_gold)
+			corpse.corpse_gold = 0
+
+	if total_gold > 0 and not is_multiplayer:
+		print("💰 Looted %d gold from %d corpses" % [total_gold, gold_corpses.size()])
+		# Show gold notification
+		if NotificationManager and is_instance_valid(NotificationManager):
+			NotificationManager.notify_gold_added(total_gold)
+		# Play gold sound
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+
+	# Check if corpses are empty and refresh
+	for corpse in gold_corpses:
+		if is_instance_valid(corpse):
+			corpse.check_if_looted_empty()
+
+	populate_loot_grid()
+
+func loot_stacked_items(items: Array, corpses: Array) -> void:
+	"""Loot all items in a stack from their respective corpses"""
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var is_multiplayer = multiplayer.has_multiplayer_peer()
+	var looted_count = 0
+
+	for i in range(items.size()):
+		var item = items[i]
+		var corpse = corpses[i]
+
+		if not is_instance_valid(corpse) or not item:
+			continue
+
+		var item_name = item.get("name", "Unknown")
+		var item_rarity = item.get("rarity", "Common")
+		var item_qty = item.get("quantity", 1)
+
+		if is_multiplayer and network_enemy_mgr and corpse.network_id > 0:
+			var item_index = corpse.corpse_loot.find(item)
+			if item_index >= 0:
+				network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, item_index)
+		else:
+			if InventorySystem.add_item(item):
+				looted_count += item_qty
+				corpse.corpse_loot.erase(item)
+
+				# Show notification for first item only (stacked)
+				if i == 0 and NotificationManager and is_instance_valid(NotificationManager):
+					var total_qty = 0
+					for it in items:
+						total_qty += it.get("quantity", 1)
+					NotificationManager.notify_item_added(item_name, total_qty, item_rarity)
+			else:
+				print("❌ Inventory full!")
+				break
+
+	# Check if corpses are empty and refresh
+	for corpse in corpses:
+		if is_instance_valid(corpse):
+			corpse.check_if_looted_empty()
+
+	populate_loot_grid()
 
 func _on_gold_slot_input(event: InputEvent, slot: Control) -> void:
 	"""Handle click on gold slot to loot the gold"""
@@ -376,8 +659,13 @@ func loot_gold(corpse, gold_amount: int) -> void:
 		populate_loot_grid()
 	else:
 		# Single player - award directly
-		CharacterStats.add_gold(corpse.corpse_gold)
-		print("💰 Looted %d gold" % corpse.corpse_gold)
+		var looted_gold = corpse.corpse_gold
+		CharacterStats.add_gold(looted_gold)
+		print("💰 Looted %d gold" % looted_gold)
+
+		# Show gold notification
+		if NotificationManager and is_instance_valid(NotificationManager):
+			NotificationManager.notify_gold_added(looted_gold)
 
 		# Play gold loot sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
@@ -494,8 +782,11 @@ func loot_item(corpse, item: Dictionary) -> void:
 			item_looted.emit(item, corpse)
 
 			# Show notification and play pickup sound
+			print("📢 Showing loot notification for: %s (rarity: %s)" % [item_name, item_rarity])
 			if NotificationManager and is_instance_valid(NotificationManager):
 				NotificationManager.notify_item_added(item_name, 1, item_rarity)
+			else:
+				print("❌ NotificationManager not available!")
 
 			# Remove from corpse's loot array
 			corpse.corpse_loot.erase(item)
@@ -528,9 +819,12 @@ func _on_take_all_pressed() -> void:
 				CharacterStats.add_gold(corpse.corpse_gold)
 				corpse.corpse_gold = 0
 
-	# Play gold sound if we looted gold
+	# Play gold sound and show notification if we looted gold
 	if total_gold > 0 and not is_multiplayer:
 		print("💰 Looted %d total gold" % total_gold)
+		# Show gold notification
+		if NotificationManager and is_instance_valid(NotificationManager):
+			NotificationManager.notify_gold_added(total_gold)
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
 			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
@@ -572,8 +866,11 @@ func _on_take_all_pressed() -> void:
 				corpse.corpse_loot.erase(item)
 
 				# Show notification and play pickup sound
+				print("📢 Showing loot notification (Take All) for: %s (rarity: %s)" % [item_name, item_rarity])
 				if NotificationManager and is_instance_valid(NotificationManager):
 					NotificationManager.notify_item_added(item_name, 1, item_rarity)
+				else:
+					print("❌ NotificationManager not available!")
 
 				# Small delay between each notification for cascade effect
 				await get_tree().create_timer(0.12).timeout

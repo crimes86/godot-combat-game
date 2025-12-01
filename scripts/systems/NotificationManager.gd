@@ -16,7 +16,7 @@ func _ready() -> void:
 	# Create a CanvasLayer to display notifications on top of everything
 	var canvas_layer = CanvasLayer.new()
 	canvas_layer.name = "NotificationCanvas"
-	canvas_layer.layer = 100  # High layer to appear above most UI
+	canvas_layer.layer = 200  # Above all game UI (shop=100, inventory=105, chat=110, etc.)
 	add_child(canvas_layer)
 
 	# Create container for notifications (centered horizontally, positioned between player and bottom of screen)
@@ -39,9 +39,11 @@ func _ready() -> void:
 ## Show an item added notification
 ## rarity: "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"
 func notify_item_added(item_name: String, quantity: int = 1, rarity: String = "COMMON") -> void:
+	print("📢 NotificationManager.notify_item_added: %s x%d (%s)" % [item_name, quantity, rarity])
 	var notification = _create_notification()
 	notification.setup_item_added(item_name, quantity, rarity)
 	_show_notification(notification)
+	print("   → Notification created and shown")
 
 	# Play item pickup sound (0 dB for satisfying feedback)
 	var sound_manager = get_node_or_null("/root/SoundManager")
@@ -52,6 +54,14 @@ func notify_item_added(item_name: String, quantity: int = 1, rarity: String = "C
 func notify_item_removed(item_name: String, quantity: int = 1, rarity: String = "COMMON") -> void:
 	var notification = _create_notification()
 	notification.setup_item_removed(item_name, quantity, rarity)
+	_show_notification(notification)
+
+## Show a gold added notification
+func notify_gold_added(amount: int) -> void:
+	if amount <= 0:
+		return
+	var notification = _create_notification()
+	notification.setup_gold_added(amount)
 	_show_notification(notification)
 
 ## Show a generic text notification (for system messages like "Game saved")

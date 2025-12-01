@@ -199,7 +199,7 @@ func create_loot_slot(item: Dictionary, index: int) -> Control:
 		tooltip += "Defense: +%d\n" % item.get("defense", 0)
 
 	if item.has("value"):
-		tooltip += "Value: 🪙 %d\n" % item.get("value", 0)
+		tooltip += "Value: %d G\n" % item.get("value", 0)
 
 	tooltip += "\nClick to loot"
 	slot_control.tooltip_text = tooltip
