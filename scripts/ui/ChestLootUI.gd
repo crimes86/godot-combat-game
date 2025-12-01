@@ -2,18 +2,26 @@ extends CanvasLayer
 class_name ChestLootUI
 
 ## Chest Loot UI for interactive looting
-## Displays chest contents and allows player to pick items individually or take all
+## Displays chest contents with icon-based grid (like LootBodyUI)
 
 signal loot_ui_closed()
 signal item_looted(item: Dictionary)
 signal all_items_looted()
 
-@onready var loot_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/LootContainer/LootList
-@onready var close_button: Button = $Control/Panel/MarginContainer/VBoxContainer/Header/CloseButton
-@onready var take_all_button: Button = $Control/Panel/MarginContainer/VBoxContainer/ButtonContainer/TakeAllButton
+@onready var close_button: Button = $Panel/MarginContainer/VBoxContainer/Header/CloseButton
+@onready var take_all_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonContainer/TakeAllButton
+@onready var loot_grid: GridContainer = $Panel/MarginContainer/VBoxContainer/LootGrid
 
 var chest_loot: Array = []  # Items available in the chest
 var chest_owner: TreasureChest = null
+
+# UI Style constants (matching LootBodyUI)
+const SLOT_SIZE = Vector2(52, 52)
+const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)
+const BORDER_INNER = Color(0.06, 0.06, 0.08, 1.0)
+const BORDER_COLOR = Color(0.35, 0.38, 0.42, 1.0)
+const GRID_COLUMNS = 3
+const MIN_SLOTS = 3
 
 func _ready() -> void:
 	print("📦 ChestLootUI initialized")
@@ -28,9 +36,12 @@ func _ready() -> void:
 	if take_all_button:
 		take_all_button.pressed.connect(_on_take_all_pressed)
 
+	if loot_grid:
+		loot_grid.columns = GRID_COLUMNS
+
 func apply_panel_style() -> void:
 	"""Apply standardized stone gray theme to panel"""
-	var panel = get_node_or_null("Control/Panel")
+	var panel = get_node_or_null("Panel")
 	if not panel:
 		return
 
@@ -64,7 +75,7 @@ func open_chest_ui(chest: TreasureChest, loot_items: Array) -> void:
 
 	print("📦 Opening chest loot UI with %d items" % chest_loot.size())
 
-	populate_loot_list()
+	populate_loot_grid()
 	show()
 
 func close_ui() -> void:
@@ -73,127 +84,192 @@ func close_ui() -> void:
 	loot_ui_closed.emit()
 	print("📦 Chest loot UI closed")
 
-func populate_loot_list() -> void:
-	"""Populate the loot list with item icon slots"""
-	if not loot_list:
+func populate_loot_grid() -> void:
+	"""Populate the loot grid with icon slots"""
+	if not loot_grid:
 		return
 
 	# Clear existing items
-	for child in loot_list.get_children():
+	for child in loot_grid.get_children():
 		child.queue_free()
 
-	# Create a grid container for icon slots
-	var grid = GridContainer.new()
-	grid.columns = 4  # 4 items per row
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-	loot_list.add_child(grid)
+	var total_slots = 0
 
 	# Add loot items as icon slots
 	for i in range(chest_loot.size()):
 		var item = chest_loot[i]
 		if item:  # Skip null items (already looted)
-			var item_slot = create_loot_item_row(item, func(): loot_item(i))
-			grid.add_child(item_slot)
+			var slot = create_loot_slot(item, i)
+			loot_grid.add_child(slot)
+			total_slots += 1
 
-	# Show message if all items looted
-	if chest_loot.filter(func(item): return item != null).size() == 0:
-		var empty_label = Label.new()
-		empty_label.text = "Chest is empty"
-		empty_label.add_theme_font_size_override("font_size", 16)
-		empty_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		loot_list.add_child(empty_label)
+	# Add empty slots to reach minimum
+	while total_slots < MIN_SLOTS:
+		var empty_slot = create_empty_slot()
+		loot_grid.add_child(empty_slot)
+		total_slots += 1
 
-		# Close after showing empty message
-		await get_tree().create_timer(1.0).timeout
+	# If everything was looted, close after brief delay
+	var actual_loot_count = chest_loot.filter(func(item): return item != null).size()
+	if actual_loot_count == 0:
+		await get_tree().create_timer(0.5).timeout
 		close_ui()
 
-func create_loot_item_row(item: Dictionary, on_loot: Callable) -> Control:
-	"""Create a compact icon slot for a loot item with hoverable tooltip"""
-	var item_name = item.get("name", "Unknown")
-	var description = item.get("desc", item.get("description", ""))
-	var value = item.get("value", 0)
-	var rarity = item.get("rarity", "common")
+func create_loot_slot(item: Dictionary, index: int) -> Control:
+	"""Create an icon-based slot for a loot item (click to loot)"""
+	var slot_control = Control.new()
+	slot_control.custom_minimum_size = SLOT_SIZE
+	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	# Get rarity color for border
+	# Store item data and index
+	slot_control.set_meta("item_data", item)
+	slot_control.set_meta("item_index", index)
+
+	# Get rarity for border color
+	var rarity = item.get("rarity", "Common")
 	var rarity_color = get_rarity_color(rarity)
 
-	# Use Button as the slot (handles click and has built-in styling)
-	var slot_button = Button.new()
-	slot_button.custom_minimum_size = Vector2(56, 56)
-	slot_button.text = get_item_icon_text(item)
-	slot_button.clip_text = true  # Clip text that doesn't fit
-	slot_button.add_theme_font_size_override("font_size", 10)
-	slot_button.add_theme_color_override("font_color", rarity_color)
-	slot_button.add_theme_color_override("font_hover_color", Color.WHITE)
+	# Add panel for styling with rarity glow
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = SLOT_SIZE
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot_control.add_child(panel)
 
-	# Style the button
+	var slot_style = create_slot_style(SLOT_BG, rarity_color, 3, true)
+	panel.add_theme_stylebox_override("panel", slot_style)
+
+	# Center container for icon
+	var center = CenterContainer.new()
+	center.name = "CenterContainer"
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(center)
+
+	# Add icon texture rect
+	var icon = TextureRect.new()
+	icon.name = "ItemIcon"
+	icon.custom_minimum_size = Vector2(40, 40)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.add_child(icon)
+
+	# Try to get icon from ItemIconGenerator
+	if ItemIconGenerator:
+		var icon_texture = ItemIconGenerator.get_item_icon(item)
+		if icon_texture:
+			icon.texture = icon_texture
+
+	# Fallback label if no icon
+	var label = Label.new()
+	label.name = "ItemLabel"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 2)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.visible = (icon.texture == null)
+	if label.visible:
+		label.text = item.get("name", "???")
+	center.add_child(label)
+
+	# Build tooltip with item info
+	var item_name = item.get("name", "Unknown")
+	var tooltip = "[%s] %s\n" % [rarity, item_name]
+	var desc = item.get("description", item.get("desc", ""))
+	if desc:
+		tooltip += desc + "\n"
+
+	if item.get("type") == "weapon":
+		if item.has("base_damage"):
+			tooltip += "Damage: +%.1f\n" % item.get("base_damage", 0)
+		if item.has("attack_speed_bonus"):
+			var speed_bonus = item.get("attack_speed_bonus", 0.0)
+			if speed_bonus != 0:
+				tooltip += "Attack Speed: %+.1f%%\n" % (speed_bonus * 100)
+		if item.has("crit_chance_bonus"):
+			var crit_bonus = item.get("crit_chance_bonus", 0.0)
+			if crit_bonus != 0:
+				tooltip += "Crit Chance: +%.1f%%\n" % (crit_bonus * 100)
+
+	if item.has("defense"):
+		tooltip += "Defense: +%d\n" % item.get("defense", 0)
+
+	if item.has("value"):
+		tooltip += "Value: 🪙 %d\n" % item.get("value", 0)
+
+	tooltip += "\nClick to loot"
+	slot_control.tooltip_text = tooltip
+
+	# Connect click to loot
+	slot_control.gui_input.connect(_on_loot_slot_input.bind(slot_control))
+
+	return slot_control
+
+func create_empty_slot() -> Control:
+	"""Create an empty placeholder slot"""
+	var slot_control = Control.new()
+	slot_control.custom_minimum_size = SLOT_SIZE
+	slot_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Add panel for styling (dimmed empty slot)
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = SLOT_SIZE
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot_control.add_child(panel)
+
+	var slot_style = create_slot_style(Color(0.05, 0.05, 0.07, 0.5), BORDER_INNER, 1, false)
+	panel.add_theme_stylebox_override("panel", slot_style)
+
+	return slot_control
+
+func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, border_width: int = 2, use_glow: bool = false) -> StyleBoxFlat:
+	"""Create style for loot slots"""
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.15, 0.18, 0.9)
-	style.border_color = rarity_color
-	style.border_width_left = 2
-	style.border_width_right = 2
-	style.border_width_top = 2
-	style.border_width_bottom = 2
+	style.bg_color = bg_color
+	style.border_width_left = border_width
+	style.border_width_right = border_width
+	style.border_width_top = border_width
+	style.border_width_bottom = border_width
+	style.border_color = border_color
 	style.corner_radius_top_left = 4
 	style.corner_radius_top_right = 4
 	style.corner_radius_bottom_left = 4
 	style.corner_radius_bottom_right = 4
-	slot_button.add_theme_stylebox_override("normal", style)
 
-	# Hover style
-	var hover_style = style.duplicate()
-	hover_style.bg_color = Color(0.25, 0.25, 0.30, 0.95)
-	slot_button.add_theme_stylebox_override("hover", hover_style)
+	if use_glow and border_color != BORDER_INNER:
+		style.shadow_size = 3
+		style.shadow_color = Color(border_color.r, border_color.g, border_color.b, 0.3)
+	else:
+		style.shadow_size = 3
+		style.shadow_color = BORDER_INNER
 
-	# Pressed style
-	var pressed_style = style.duplicate()
-	pressed_style.bg_color = Color(0.1, 0.1, 0.12, 0.95)
-	slot_button.add_theme_stylebox_override("pressed", pressed_style)
+	return style
 
-	# Build tooltip text
-	var tooltip = "%s\n%s" % [item_name, description]
-	if value > 0:
-		tooltip += "\nValue: 🪙 %d" % value
-	slot_button.tooltip_text = tooltip
-
-	# Connect click
-	slot_button.pressed.connect(on_loot)
-
-	return slot_button
+func _on_loot_slot_input(event: InputEvent, slot: Control) -> void:
+	"""Handle click on loot slot to loot the item"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var index = slot.get_meta("item_index")
+		loot_item(index)
 
 func get_rarity_color(rarity: String) -> Color:
 	"""Get color based on item rarity"""
-	match rarity.to_lower():
-		"common":
-			return Color(0.6, 0.6, 0.6)  # Gray
-		"uncommon":
-			return Color(0.2, 0.8, 0.2)  # Green
-		"rare":
-			return Color(0.2, 0.4, 1.0)  # Blue
-		"epic":
-			return Color(0.6, 0.2, 0.8)  # Purple
-		"legendary":
-			return Color(1.0, 0.5, 0.0)  # Orange
+	match rarity.to_upper():
+		"COMMON":
+			return Color(0.6, 0.6, 0.6, 0.9)
+		"UNCOMMON":
+			return Color(0.4, 0.8, 0.4, 1.0)
+		"RARE":
+			return Color(0.4, 0.5, 0.9, 1.0)
+		"EPIC":
+			return Color(0.7, 0.4, 0.9, 1.0)
+		"LEGENDARY":
+			return Color(0.9, 0.6, 0.2, 1.0)
 		_:
-			return Color(0.6, 0.6, 0.6)  # Default gray
-
-func get_item_icon_text(item: Dictionary) -> String:
-	"""Get short display text for item icon"""
-	var item_type = item.get("type", "")
-	var slot = item.get("slot", "")
-	var name = item.get("name", "?")
-
-	# Return abbreviated name (first 6 chars or full short name)
-	if name.length() <= 8:
-		return name
-	else:
-		# Get first word or abbreviate
-		var words = name.split(" ")
-		if words.size() > 1:
-			return words[0].substr(0, 6)
-		return name.substr(0, 6)
+			return BORDER_INNER
 
 func loot_item(index: int) -> void:
 	"""Loot a specific item from the chest"""
@@ -220,7 +296,7 @@ func loot_item(index: int) -> void:
 		chest_loot[index] = null
 
 		# Refresh the list
-		populate_loot_list()
+		populate_loot_grid()
 	else:
 		print("❌ Inventory full! Cannot loot %s" % item.get("name", "Unknown"))
 
@@ -234,7 +310,7 @@ func _on_take_all_pressed() -> void:
 			items_to_loot.append({"index": i, "item": item})
 
 	if items_to_loot.is_empty():
-		populate_loot_list()
+		populate_loot_grid()
 		return
 
 	# Loot items with staggered notifications
@@ -266,7 +342,7 @@ func _loot_items_staggered(items_to_loot: Array) -> void:
 				return  # UI was closed during await
 		else:
 			print("❌ Inventory full! Looted %d of %d items" % [looted_count, items_to_loot.size()])
-			populate_loot_list()
+			populate_loot_grid()
 			return
 
 	if looted_count > 0:
@@ -274,7 +350,7 @@ func _loot_items_staggered(items_to_loot: Array) -> void:
 		all_items_looted.emit()
 
 	# Refresh and close
-	populate_loot_list()
+	populate_loot_grid()
 
 func _on_close_pressed() -> void:
 	"""Handle close button press"""

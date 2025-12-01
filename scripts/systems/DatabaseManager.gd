@@ -494,6 +494,16 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 		elif saved_hp > 0 and "current_health" in player:
 			player.current_health = saved_hp
 
+		# Refresh player sprite to show loaded equipment
+		if player.has_method("create_player_sprite"):
+			print("👕 [DatabaseManager] Refreshing player sprite with loaded equipment...")
+			player.create_player_sprite()
+
+		# Refresh player stats (attack speed, damage, etc.) from loaded equipment
+		if player.has_method("update_stats_from_character"):
+			print("⚔️ [DatabaseManager] Refreshing player stats with loaded equipment...")
+			player.update_stats_from_character()
+
 	print("✅ [DatabaseManager] Applied saved data for: %s" % username)
 
 func get_saved_position(username: String) -> Vector2:

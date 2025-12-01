@@ -44,7 +44,7 @@ BugReportUI="*res://scripts/ui/BugReportUI.gd"
 
 [editor_plugins]
 
-enabled=PackedStringArray()
+enabled=PackedStringArray("res://addons/version_generator/plugin.cfg")
 
 [input]
 

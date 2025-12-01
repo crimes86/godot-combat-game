@@ -281,6 +281,11 @@ func _ready() -> void:
 		# NOTE: Spawn hints no longer auto-show on launch (tutorial system handles new player guidance)
 		# Controls menu is still accessible via ESC when no other menus are open
 
+		# Create tutorial blackout if in tutorial and connect to updates
+		call_deferred("update_tutorial_blackout")
+		if TutorialManager:
+			TutorialManager.tutorial_step_completed.connect(_on_tutorial_step_for_blackout)
+
 func _exit_tree() -> void:
 	# Disconnect signals to prevent crash on exit
 	if CharacterStats.level_up.is_connected(_on_character_level_up):
@@ -1542,6 +1547,11 @@ func attack_enemies_in_cone(enemies: Array) -> void:
 	var has_peer = multiplayer.has_multiplayer_peer()
 	var is_server = multiplayer.is_server()
 
+	# Enter combat when attacking enemies
+	if enemies.size() > 0:
+		time_since_last_damage = 0.0
+		is_in_combat = true
+
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
 			continue
@@ -1573,6 +1583,17 @@ func attack_enemies_in_cone(enemies: Array) -> void:
 			else:
 				# Server or single player: roll for crit locally
 				var is_crit = crit_system.roll_for_crit()
+
+				# Tutorial: force crit on training dummy after enough hits
+				var is_training_dummy = enemy.is_in_group("training_dummy")
+				if is_training_dummy and TutorialManager and TutorialManager.is_tutorial_active():
+					tutorial_dummy_hits += 1
+					if not is_crit and tutorial_dummy_hits >= TUTORIAL_FORCE_CRIT_HITS:
+						is_crit = true
+						tutorial_dummy_hits = 0  # Reset for next crit window
+						print("🎯 FORCED CRIT for tutorial (hit dummy %d times)" % TUTORIAL_FORCE_CRIT_HITS)
+					elif is_crit:
+						tutorial_dummy_hits = 0  # Reset on natural crit
 
 				if is_crit:
 					# Play crit window opening sound on successful crit roll
@@ -1816,11 +1837,11 @@ func heal(amount: float) -> void:
 
 func process_passive_healing(delta: float) -> void:
 	"""Handle out-of-combat passive health regeneration"""
-	# Don't heal if already at full health or dead
-	if current_health >= max_health or is_dead:
+	# Don't process if dead
+	if is_dead:
 		return
 
-	# Track time since last damage
+	# Always track time since last damage (for combat state)
 	time_since_last_damage += delta
 
 	# Check if player has been out of combat long enough
@@ -1828,36 +1849,37 @@ func process_passive_healing(delta: float) -> void:
 		# Player is out of combat
 		if is_in_combat:
 			is_in_combat = false
-			print("✨ Out of combat - passive healing starting...")
+			print("✨ Out of combat")
 
-		# Accumulate heal timer
-		passive_heal_timer += delta
+	# Don't heal if already at full health
+	if current_health >= max_health:
+		return
 
-		# Heal every tick interval
-		if passive_heal_timer >= passive_heal_tick_interval:
-			passive_heal_timer = 0.0
+	# Accumulate heal timer
+	passive_heal_timer += delta
 
-			# Calculate heal amount (percentage of max health)
-			var heal_amount = max_health * passive_heal_rate * passive_heal_tick_interval
-
-			# Apply heal (will cap at max health and show combat text)
-			if current_health < max_health:
-				var actual_heal = min(heal_amount, max_health - current_health)
-				current_health += actual_heal
-				if health_bar and health_bar.has_method("update_health"):
-					health_bar.update_health(current_health, max_health)
-
-				# Only show combat text for significant heals (5%+ of max HP) to reduce spam
-				# This means text appears roughly every 2.5 seconds instead of every 1 second
-				if actual_heal >= max_health * 0.05:
-					CombatText.create_heal(actual_heal, global_position, get_tree().root, attack_direction)
-
-				# Quiet log for passive healing
-				if current_health >= max_health:
-					print("💚 Passive healing complete (%.1f / %.1f)" % [current_health, max_health])
-	else:
-		# Still in combat or recently damaged
+	# Heal every tick interval
+	if passive_heal_timer >= passive_heal_tick_interval:
 		passive_heal_timer = 0.0
+
+		# Calculate heal amount (percentage of max health)
+		var heal_amount = max_health * passive_heal_rate * passive_heal_tick_interval
+
+		# Apply heal (will cap at max health and show combat text)
+		if current_health < max_health:
+			var actual_heal = min(heal_amount, max_health - current_health)
+			current_health += actual_heal
+			if health_bar and health_bar.has_method("update_health"):
+				health_bar.update_health(current_health, max_health)
+
+			# Only show combat text for significant heals (5%+ of max HP) to reduce spam
+			# This means text appears roughly every 2.5 seconds instead of every 1 second
+			if actual_heal >= max_health * 0.05:
+				CombatText.create_heal(actual_heal, global_position, get_tree().root, attack_direction)
+
+			# Quiet log for passive healing
+			if current_health >= max_health:
+				print("💚 Passive healing complete (%.1f / %.1f)" % [current_health, max_health])
 
 func flash_player_sprite() -> void:
 	"""Flash all player sprite layers red when taking damage"""
@@ -2680,6 +2702,14 @@ func is_ui_blocking_input() -> bool:
 		if _is_mouse_over_canvas_layer(character_ui, mouse_pos):
 			return true
 
+	# Check if ESC menu (spawn hints overlay) is open AND mouse is over it
+	if spawn_hints_overlay and is_instance_valid(spawn_hints_overlay):
+		var hints_panel = spawn_hints_overlay.get_node_or_null("FullRect/HintsPanel")
+		if hints_panel and hints_panel.visible:
+			var rect = hints_panel.get_global_rect()
+			if rect.has_point(mouse_pos):
+				return true
+
 	var root = get_tree().root
 	for child in root.get_children():
 		if child is CanvasLayer and child.visible:
@@ -2965,20 +2995,58 @@ func create_spawn_hints() -> void:
 
 		vbox.add_child(row)
 
-	# Objective hint at bottom (only if player hasn't talked to blacksmith yet)
-	if not has_talked_to_blacksmith:
-		var obj_sep = HSeparator.new()
-		obj_sep.name = "ObjectiveSeparator"
-		obj_sep.add_theme_constant_override("separation", 8)
-		vbox.add_child(obj_sep)
+	# SOUND section
+	var sound_sep = HSeparator.new()
+	sound_sep.add_theme_constant_override("separation", 8)
+	vbox.add_child(sound_sep)
 
-		var objective = Label.new()
-		objective.name = "ObjectiveLabel"
-		objective.text = "Talk to the Blacksmith!"
-		objective.add_theme_font_size_override("font_size", 14)
-		objective.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))  # Yellow
-		objective.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(objective)
+	var sound_title = Label.new()
+	sound_title.text = "SOUND"
+	sound_title.add_theme_font_size_override("font_size", 16)
+	sound_title.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))  # Gold
+	sound_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(sound_title)
+
+	# SFX mute row
+	var sfx_row = HBoxContainer.new()
+	sfx_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var sfx_label = Label.new()
+	sfx_label.text = "SFX"
+	sfx_label.add_theme_font_size_override("font_size", 14)
+	sfx_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	sfx_label.custom_minimum_size = Vector2(50, 0)
+	sfx_row.add_child(sfx_label)
+
+	var sfx_button = Button.new()
+	sfx_button.name = "SFXMuteButton"
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	var sfx_muted = sound_manager.sfx_muted if sound_manager else false
+	sfx_button.text = "MUTED" if sfx_muted else "ON"
+	sfx_button.add_theme_font_size_override("font_size", 12)
+	sfx_button.custom_minimum_size = Vector2(60, 24)
+	sfx_button.pressed.connect(_on_sfx_mute_pressed.bind(sfx_button))
+	sfx_row.add_child(sfx_button)
+	vbox.add_child(sfx_row)
+
+	# Music mute row
+	var music_row = HBoxContainer.new()
+	music_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var music_label = Label.new()
+	music_label.text = "Music"
+	music_label.add_theme_font_size_override("font_size", 14)
+	music_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	music_label.custom_minimum_size = Vector2(50, 0)
+	music_row.add_child(music_label)
+
+	var music_button = Button.new()
+	music_button.name = "MusicMuteButton"
+	var music_muted = sound_manager.music_muted if sound_manager else false
+	music_button.text = "MUTED" if music_muted else "ON"
+	music_button.add_theme_font_size_override("font_size", 12)
+	music_button.custom_minimum_size = Vector2(60, 24)
+	music_button.pressed.connect(_on_music_mute_pressed.bind(music_button))
+	music_row.add_child(music_button)
+	vbox.add_child(music_row)
 
 	# ESC to close hint at bottom
 	var esc_sep = HSeparator.new()
@@ -2994,6 +3062,20 @@ func create_spawn_hints() -> void:
 
 	get_tree().root.add_child(spawn_hints_overlay)
 	print("📋 Spawn hints overlay added to scene tree - Press ESC to toggle")
+
+func _on_sfx_mute_pressed(button: Button) -> void:
+	"""Toggle SFX mute state"""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.toggle_sfx_mute()
+		button.text = "MUTED" if sound_manager.sfx_muted else "ON"
+
+func _on_music_mute_pressed(button: Button) -> void:
+	"""Toggle music mute state"""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.toggle_music_mute()
+		button.text = "MUTED" if sound_manager.music_muted else "ON"
 
 func dismiss_spawn_hints() -> void:
 	"""Manually dismiss spawn hints early (called when talking to blacksmith)"""
@@ -3037,6 +3119,113 @@ func toggle_spawn_hints() -> void:
 		container.modulate.a = 0.0
 		var tween = create_tween()
 		tween.tween_property(container, "modulate:a", 1.0, 0.2)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TUTORIAL BLACKOUT OVERLAY
+# ═══════════════════════════════════════════════════════════════════════════
+
+var tutorial_blackout: Node2D = null
+const TUTORIAL_CENTER = Vector2(4000, 0)  # Constants.CHUNK_SIZE / 2, 0
+const TUTORIAL_RADIUS = 500.0
+# Blackout fade is handled in TutorialBlackoutVisual inner class
+
+# Tutorial forced crit tracking (single player)
+var tutorial_dummy_hits: int = 0
+const TUTORIAL_FORCE_CRIT_HITS: int = 5  # Force crit after this many hits on dummy during tutorial
+
+func create_tutorial_blackout() -> void:
+	"""Create a blackout effect that hides the world outside the tutorial area"""
+	if tutorial_blackout and is_instance_valid(tutorial_blackout):
+		return  # Already exists
+
+	tutorial_blackout = Node2D.new()
+	tutorial_blackout.name = "TutorialBlackout"
+	tutorial_blackout.z_index = 100  # Above most things but below UI
+
+	# Create the blackout using a custom draw
+	var blackout_visual = TutorialBlackoutVisual.new()
+	blackout_visual.center = TUTORIAL_CENTER
+	blackout_visual.inner_radius = TUTORIAL_RADIUS
+	tutorial_blackout.add_child(blackout_visual)
+
+	# Add to scene (not as child of player so it doesn't move)
+	get_tree().root.call_deferred("add_child", tutorial_blackout)
+	print("🌑 Tutorial blackout created")
+
+func remove_tutorial_blackout() -> void:
+	"""Remove the blackout when tutorial advances past the locked area"""
+	if tutorial_blackout and is_instance_valid(tutorial_blackout):
+		# Fade out
+		var tween = create_tween()
+		tween.tween_property(tutorial_blackout, "modulate:a", 0.0, 1.0)
+		await tween.finished
+		if tutorial_blackout and is_instance_valid(tutorial_blackout):
+			tutorial_blackout.queue_free()
+			tutorial_blackout = null
+		print("🌑 Tutorial blackout removed")
+
+func update_tutorial_blackout() -> void:
+	"""Check if blackout should be shown/hidden based on tutorial state"""
+	if not TutorialManager:
+		return
+
+	var should_show_blackout = TutorialManager.is_tutorial_active() and TutorialManager.current_step < TutorialManager.TutorialStep.KILL_SKELETON
+
+	if should_show_blackout and not tutorial_blackout:
+		create_tutorial_blackout()
+	elif not should_show_blackout and tutorial_blackout:
+		remove_tutorial_blackout()
+
+func _on_tutorial_step_for_blackout(_completed_step: int) -> void:
+	"""Called when tutorial step completes - check if blackout should be removed"""
+	update_tutorial_blackout()
+
+# Inner class for the blackout visual
+class TutorialBlackoutVisual extends Node2D:
+	var center: Vector2 = Vector2(4000, 0)
+	var inner_radius: float = 400.0  # Clear area around tutorial
+	var fade_width: float = 100.0    # Short fade distance for sharp edge
+
+	func _draw() -> void:
+		# Draw dark overlay everywhere EXCEPT the tutorial circle
+		# Use radial segments extending from the circle edge outward
+		var outer_radius = inner_radius + fade_width
+		var far = 5000.0  # How far out to draw (covers visible area)
+		var dark_alpha = 0.88  # Very dark but not completely black
+		var segments = 48  # Number of pie slices
+
+		# Draw fade rings from inner to outer radius
+		var num_rings = 10
+		var ring_width = fade_width / num_rings
+
+		for i in range(num_rings):
+			var r1 = inner_radius + i * ring_width
+			var r2 = inner_radius + (i + 1) * ring_width
+			var t = float(i + 1) / float(num_rings)
+			var alpha = t * t * dark_alpha  # Quadratic ease-in
+
+			for j in range(segments):
+				var angle1 = j * TAU / segments
+				var angle2 = (j + 1) * TAU / segments
+
+				var p1 = center + Vector2(cos(angle1), sin(angle1)) * r1
+				var p2 = center + Vector2(cos(angle2), sin(angle2)) * r1
+				var p3 = center + Vector2(cos(angle2), sin(angle2)) * r2
+				var p4 = center + Vector2(cos(angle1), sin(angle1)) * r2
+
+				draw_colored_polygon([p1, p2, p3, p4], Color(0, 0, 0, alpha))
+
+		# Draw solid dark triangles from outer_radius to far edge (pie slices)
+		for j in range(segments):
+			var angle1 = j * TAU / segments
+			var angle2 = (j + 1) * TAU / segments
+
+			var p1 = center + Vector2(cos(angle1), sin(angle1)) * outer_radius
+			var p2 = center + Vector2(cos(angle2), sin(angle2)) * outer_radius
+			var p3 = center + Vector2(cos(angle2), sin(angle2)) * far
+			var p4 = center + Vector2(cos(angle1), sin(angle1)) * far
+
+			draw_colored_polygon([p1, p2, p3, p4], Color(0, 0, 0, dark_alpha))
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DASH/DODGE SYSTEM

@@ -33,10 +33,12 @@ var key_prompts: Dictionary = {}  # Track which keys are shown
 var player: Node = null
 
 # Tracking for step completion
-var keys_pressed: Dictionary = {"w": false, "a": false, "s": false, "d": false}
+var keys_pressed: Dictionary = {"w": false, "a": false, "s": false, "d": false, "space": false}
 var dummy_hits: int = 0
 var crit_window_seen: bool = false
 var weakpoint_hit: bool = false
+var weakpoints_destroyed: int = 0  # Track total weakpoints destroyed on dummy (need 3)
+const REQUIRED_WEAKPOINTS: int = 3  # Must destroy this many weakpoints before advancing
 var skeleton_killed: bool = false
 var blacksmith_visited: bool = false
 var quest_accepted: bool = false
@@ -113,7 +115,7 @@ func _input(event: InputEvent) -> void:
 	if current_step != TutorialStep.MOVEMENT:
 		return
 
-	# Track WASD presses
+	# Track WASD + SPACE presses
 	if event is InputEventKey and event.pressed:
 		match event.keycode:
 			KEY_W:
@@ -128,6 +130,9 @@ func _input(event: InputEvent) -> void:
 			KEY_D:
 				keys_pressed["d"] = true
 				update_key_prompt("D", true)
+			KEY_SPACE:
+				keys_pressed["space"] = true
+				update_key_prompt("SPACE", true)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PUBLIC API
@@ -246,7 +251,9 @@ func show_crit_window_tutorial() -> void:
 	"""Step 4: Wait for crit window"""
 	clear_prompt()
 
-	prompt_label.text = "Keep attacking! Watch for it to GLOW..."
+	# Show progress toward 3 weakpoints
+	var progress_text = "(%d/%d) " % [weakpoints_destroyed, REQUIRED_WEAKPOINTS]
+	prompt_label.text = progress_text + "Keep attacking! Watch for it to GLOW..."
 	prompt_label.visible = true
 
 	# Keep showing click indicator and feedback
@@ -258,7 +265,9 @@ func show_weakpoint_tutorial() -> void:
 	clear_click_indicator()  # Explicitly clear LEFT CLICK indicator when entering crit window
 	clear_feedback_label()
 
-	prompt_label.text = "DESTROY THE WEAKPOINT!"
+	# Show which weakpoint this is
+	var next_weakpoint = weakpoints_destroyed + 1
+	prompt_label.text = "DESTROY THE WEAKPOINT! (%d/%d)" % [next_weakpoint, REQUIRED_WEAKPOINTS]
 	prompt_label.add_theme_color_override("font_color", HIGHLIGHT_COLOR)
 	prompt_label.visible = true
 
@@ -339,10 +348,10 @@ func show_completion_message() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func check_movement_complete() -> void:
-	"""Check if player has pressed all WASD keys"""
+	"""Check if player has pressed all WASD keys and SPACE"""
 	if step_transitioning:
 		return
-	if keys_pressed["w"] and keys_pressed["a"] and keys_pressed["s"] and keys_pressed["d"]:
+	if keys_pressed["w"] and keys_pressed["a"] and keys_pressed["s"] and keys_pressed["d"] and keys_pressed["space"]:
 		step_transitioning = true
 		# Small delay to let them see success
 		await get_tree().create_timer(0.5).timeout
@@ -472,13 +481,23 @@ func on_weakpoint_hit() -> void:
 	if current_step != TutorialStep.HIT_WEAKPOINT:
 		return
 
-	# Show big feedback for weakpoint destruction
-	show_hit_feedback("WEAKPOINT DESTROYED!", HIGHLIGHT_COLOR)
-
+	weakpoints_destroyed += 1
 	weakpoint_hit = true
-	# Small delay to let them see the feedback
-	await get_tree().create_timer(1.0).timeout
-	advance_to_step(TutorialStep.KILL_SKELETON)
+
+	# Show progress feedback
+	if weakpoints_destroyed < REQUIRED_WEAKPOINTS:
+		show_hit_feedback("WEAKPOINT %d/%d!" % [weakpoints_destroyed, REQUIRED_WEAKPOINTS], HIGHLIGHT_COLOR)
+		# Small delay then go back to fishing for another crit
+		await get_tree().create_timer(1.0).timeout
+		# Reset for next crit window cycle
+		dummy_hits = 0
+		crit_window_seen = false
+		advance_to_step(TutorialStep.CRIT_WINDOW)
+	else:
+		# All 3 weakpoints destroyed!
+		show_hit_feedback("WEAKPOINTS COMPLETE!", SUCCESS_COLOR)
+		await get_tree().create_timer(1.5).timeout
+		advance_to_step(TutorialStep.KILL_SKELETON)
 
 func on_skeleton_killed() -> void:
 	"""Called when player kills a skeleton"""
@@ -559,7 +578,7 @@ func create_tutorial_ui() -> void:
 	create_arrow_indicator()
 
 func create_wasd_display() -> void:
-	"""Create visual WASD key display"""
+	"""Create visual WASD key display with SPACE for dodge"""
 	var wasd_container = Control.new()
 	wasd_container.name = "WASDDisplay"
 	wasd_container.anchor_left = 0.5
@@ -569,7 +588,7 @@ func create_wasd_display() -> void:
 	wasd_container.offset_left = -100
 	wasd_container.offset_right = 100
 	wasd_container.offset_top = -80
-	wasd_container.offset_bottom = 80
+	wasd_container.offset_bottom = 120
 	tutorial_ui.add_child(wasd_container)
 
 	# Create individual key displays
@@ -584,6 +603,10 @@ func create_wasd_display() -> void:
 	create_key_display(wasd_container, "S", Vector2(key_size + key_gap, key_size + key_gap), key_size)
 	# D key (right)
 	create_key_display(wasd_container, "D", Vector2((key_size + key_gap) * 2, key_size + key_gap), key_size)
+
+	# SPACE bar for dodge (below WASD, wider key)
+	var space_y = (key_size + key_gap) * 2 + 10  # Below the ASD row with extra gap
+	create_space_key_display(wasd_container, Vector2(0, space_y), key_size)
 
 func create_key_display(parent: Control, key: String, pos: Vector2, size: int) -> void:
 	"""Create a single key display"""
@@ -621,6 +644,46 @@ func create_key_display(parent: Control, key: String, pos: Vector2, size: int) -
 
 	parent.add_child(panel)
 	key_prompts[key] = panel
+
+func create_space_key_display(parent: Control, pos: Vector2, key_size: int) -> void:
+	"""Create the SPACE bar display for dash"""
+	var space_width = key_size * 3 + 10  # Wide space bar spanning all 3 columns
+	var space_height = 40
+
+	var panel = Panel.new()
+	panel.name = "Key_SPACE"
+	panel.position = pos
+	panel.size = Vector2(space_width, space_height)
+
+	# Style the panel
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.2, 0.2, 0.9)
+	style.border_color = Color(0.5, 0.5, 0.5, 1.0)
+	style.border_width_left = 3
+	style.border_width_right = 3
+	style.border_width_top = 3
+	style.border_width_bottom = 3
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+	panel.add_theme_stylebox_override("panel", style)
+
+	# Label showing "SPACE - Dash"
+	var label = Label.new()
+	label.text = "SPACE - Dash"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_color_override("font_color", TEXT_COLOR)
+	label.anchor_left = 0
+	label.anchor_right = 1
+	label.anchor_top = 0
+	label.anchor_bottom = 1
+	panel.add_child(label)
+
+	parent.add_child(panel)
+	key_prompts["SPACE"] = panel
 
 func update_key_prompt(key: String, pressed: bool) -> void:
 	"""Update a key display to show it was pressed"""
@@ -929,12 +992,25 @@ func on_shop_closed() -> void:
 	print("📚 [Tutorial] Shop closed during ACCEPT_QUEST step")
 
 var click_indicator_tween: Tween = null
+var click_indicator_world: Node2D = null  # World-space click indicator
 
 func show_click_indicator() -> void:
-	"""Show a click/mouse indicator"""
+	"""Show a click/mouse indicator above the training dummy (world space)"""
 	# Clear existing first
 	clear_click_indicator()
 
+	# Get dummy position to place indicator above it
+	var dummy_pos = get_training_dummy_position()
+	if dummy_pos == Vector2.ZERO:
+		return
+
+	# Create world-space container
+	click_indicator_world = Node2D.new()
+	click_indicator_world.name = "ClickIndicatorWorld"
+	click_indicator_world.global_position = dummy_pos + Vector2(0, -170)  # Above the arrow (which is above dummy)
+	click_indicator_world.z_index = 100
+
+	# Create the label as a child
 	var click_label = Label.new()
 	click_label.name = "ClickIndicator"
 	click_label.text = "🖱️ LEFT CLICK"
@@ -944,15 +1020,14 @@ func show_click_indicator() -> void:
 	click_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	click_label.add_theme_constant_override("outline_size", 3)
 
-	click_label.anchor_left = 0.5
-	click_label.anchor_right = 0.5
-	click_label.anchor_top = 0.5
-	click_label.offset_left = -100
-	click_label.offset_right = 100
-	click_label.offset_top = 50
-	click_label.offset_bottom = 90
+	# Center the label on the position
+	click_label.position = Vector2(-100, -20)
+	click_label.size = Vector2(200, 40)
 
-	tutorial_ui.add_child(click_label)
+	click_indicator_world.add_child(click_label)
+
+	# Add to game world (not UI layer)
+	get_tree().root.add_child(click_indicator_world)
 
 	# Pulse animation - store the tween so we can kill it later
 	click_indicator_tween = create_tween().set_loops()
@@ -961,6 +1036,11 @@ func show_click_indicator() -> void:
 
 func clear_click_indicator() -> void:
 	"""Clear the click indicator and its tween"""
+	# Clean up world-space indicator
+	if click_indicator_world and is_instance_valid(click_indicator_world):
+		click_indicator_world.queue_free()
+		click_indicator_world = null
+
 	# Kill the tween first
 	if click_indicator_tween and click_indicator_tween.is_valid():
 		click_indicator_tween.kill()

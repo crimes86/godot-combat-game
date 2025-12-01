@@ -14,7 +14,7 @@ const PROGRESS_BG = Color(0.08, 0.08, 0.10, 0.8)
 const PROGRESS_FILL = Color(0.4, 0.6, 0.3, 1.0)
 
 const MAX_VISIBLE_QUESTS = 3
-const TRACKER_WIDTH = 280
+const TRACKER_WIDTH = 320  # Wider to fit larger tutorial text
 const QUEST_ENTRY_HEIGHT = 60
 const OBJECTIVE_HEIGHT = 24
 const IDLE_ALPHA = 0.3  # Transparency when not hovered
@@ -25,6 +25,7 @@ const TUTORIAL_COLOR = Color(0.4, 0.8, 1.0, 1.0)  # Light blue for tutorial
 const HEADER_FONT_SIZE = 18
 const QUEST_NAME_FONT_SIZE = 16
 const OBJECTIVE_FONT_SIZE = 14
+const TUTORIAL_FONT_SIZE = 16  # Larger for readability
 
 var main_panel: PanelContainer
 var quest_container: VBoxContainer
@@ -39,7 +40,7 @@ var tutorial_steps: Array = [
 	{"name": "Find Dummy", "desc": "Walk to Training Dummy"},
 	{"name": "Attack", "desc": "Click to attack dummy"},
 	{"name": "Crit Window", "desc": "Keep attacking..."},
-	{"name": "Hit Weakpoint", "desc": "Destroy the weakpoint"},
+	{"name": "Hit Weakpoint", "desc": "Destroy weakpoints (0/3)"},
 	{"name": "Kill Skeleton", "desc": "Defeat a skeleton"},
 	{"name": "Visit Blacksmith", "desc": "Talk to Blacksmith"},
 ]
@@ -361,10 +362,16 @@ func _create_tutorial_entry() -> void:
 
 	# Show steps - completed ones with checkmarks, current one highlighted
 	for i in range(tutorial_steps.size()):
-		var step_data = tutorial_steps[i]
+		var step_data = tutorial_steps[i].duplicate()  # Copy so we can modify
 		var step_enum_value = i  # TutorialStep enum starts at 0 for MOVEMENT
 		var is_complete = current_step > step_enum_value
 		var is_current = current_step == step_enum_value
+
+		# Dynamically update weakpoint step description with current progress
+		if step_enum_value == TutorialManager.TutorialStep.HIT_WEAKPOINT:
+			var destroyed = TutorialManager.weakpoints_destroyed
+			var required = TutorialManager.REQUIRED_WEAKPOINTS
+			step_data["desc"] = "Destroy weakpoints (%d/%d)" % [destroyed, required]
 
 		var step_entry = _create_tutorial_step_entry(step_data, is_complete, is_current)
 		tutorial_entry.add_child(step_entry)
@@ -393,14 +400,14 @@ func _create_tutorial_step_entry(step_data: Dictionary, is_complete: bool, is_cu
 	else:
 		bullet.text = "  \u2022 "  # •
 		bullet.add_theme_color_override("font_color", OBJECTIVE_COLOR)
-	bullet.add_theme_font_size_override("font_size", 11)
+	bullet.add_theme_font_size_override("font_size", TUTORIAL_FONT_SIZE)
 	hbox.add_child(bullet)
 
 	# Description
 	var desc_label = Label.new()
 	desc_label.name = "Description"
 	desc_label.text = step_data.get("desc", "")
-	desc_label.add_theme_font_size_override("font_size", 11)
+	desc_label.add_theme_font_size_override("font_size", TUTORIAL_FONT_SIZE)
 
 	if is_complete:
 		desc_label.add_theme_color_override("font_color", COMPLETE_COLOR)

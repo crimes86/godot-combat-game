@@ -71,6 +71,13 @@ var weakpoints: Array = []  # Just for visual rendering
 var _grow_tween: Tween = null  # Track grow tween so shrink can wait for it
 var is_dying: bool = false
 
+# Tutorial: show red arrow pointing at weakpoints for first 3 crit windows on skeletons
+static var skeleton_crit_windows_triggered: int = 0  # Global count of crit windows triggered on skeletons
+const TUTORIAL_ARROW_CRIT_WINDOWS: int = 3  # Show arrow for first N crit windows
+var tutorial_arrow: Node2D = null  # Arrow indicator for this enemy
+var arrow_tween: Tween = null
+var arrow_flash_tween: Tween = null
+
 # Corpse state (lootable body system)
 var is_corpse: bool = false
 var corpse_loot: Array = []  # Generated items for this corpse
@@ -742,6 +749,11 @@ func spawn_weakpoints() -> void:
 		# Emit signal so CritWindowManager can track it
 		weakpoint_spawned.emit(weakpoint)
 
+	# Tutorial: Show red arrow pointing at first weakpoint for the first N crit windows
+	skeleton_crit_windows_triggered += 1
+	if skeleton_crit_windows_triggered <= TUTORIAL_ARROW_CRIT_WINDOWS and chosen_positions.size() > 0:
+		create_and_show_weakpoint_arrow(chosen_positions[0])
+
 	# CLIENT-INDEPENDENT: Each player's crit window is LOCAL
 	# No broadcasting needed - NetworkEnemyManager notifies specific player to start their local window
 
@@ -1091,6 +1103,88 @@ func shrink_after_crit_window() -> void:
 			sprite.modulate = Color.WHITE
 
 	_crit_window_transitioning = false  # Unlock after shrink complete
+
+	# Clean up tutorial arrow when crit window ends
+	clear_tutorial_arrow()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TUTORIAL WEAKPOINT ARROW (for first 3 crit windows on skeletons)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func create_and_show_weakpoint_arrow(weakpoint_pos: Vector2) -> void:
+	"""Create and show a red flashing arrow pointing at the weakpoint"""
+	# Clear any existing arrow first
+	clear_tutorial_arrow()
+
+	# Create arrow container
+	tutorial_arrow = Node2D.new()
+	tutorial_arrow.name = "WeakpointArrow"
+	tutorial_arrow.z_index = 200
+
+	# Create arrow shape using a Polygon2D (pointing left)
+	var arrow_polygon = Polygon2D.new()
+	arrow_polygon.name = "ArrowShape"
+	# Arrow pointing left (will be positioned to the right of weakpoint)
+	arrow_polygon.polygon = PackedVector2Array([
+		Vector2(-20, 0),     # Left point (arrow tip)
+		Vector2(0, -15),     # Top wing
+		Vector2(0, -6),      # Top inner
+		Vector2(20, -6),     # Right stem top
+		Vector2(20, 6),      # Right stem bottom
+		Vector2(0, 6),       # Bottom inner
+		Vector2(0, 15),      # Bottom wing
+	])
+	arrow_polygon.color = Color(1.0, 0.2, 0.2, 1.0)  # Bright red
+	tutorial_arrow.add_child(arrow_polygon)
+
+	# Add outline for visibility
+	var outline = Line2D.new()
+	outline.name = "ArrowOutline"
+	outline.points = PackedVector2Array([
+		Vector2(-20, 0),
+		Vector2(0, -15),
+		Vector2(0, -6),
+		Vector2(20, -6),
+		Vector2(20, 6),
+		Vector2(0, 6),
+		Vector2(0, 15),
+		Vector2(-20, 0),  # Close the shape
+	])
+	outline.width = 3.0
+	outline.default_color = Color(0.4, 0.0, 0.0, 1.0)  # Dark red outline
+	tutorial_arrow.add_child(outline)
+
+	# Position arrow to the right of the weakpoint
+	tutorial_arrow.position = Vector2(weakpoint_pos.x + 50, weakpoint_pos.y)
+	tutorial_arrow.scale = Vector2(1.2, 1.2)  # Slightly larger
+
+	add_child(tutorial_arrow)
+
+	# Start side-to-side bob animation
+	arrow_tween = create_tween().set_loops()
+	arrow_tween.tween_property(tutorial_arrow, "position:x", weakpoint_pos.x + 40, 0.3).set_ease(Tween.EASE_IN_OUT)
+	arrow_tween.tween_property(tutorial_arrow, "position:x", weakpoint_pos.x + 55, 0.3).set_ease(Tween.EASE_IN_OUT)
+
+	# Flash animation
+	arrow_flash_tween = create_tween().set_loops()
+	arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 0.3, 0.2)
+	arrow_flash_tween.tween_property(tutorial_arrow, "modulate:a", 1.0, 0.2)
+
+func clear_tutorial_arrow() -> void:
+	"""Remove the tutorial arrow"""
+	# Kill tweens
+	if arrow_tween and arrow_tween.is_valid():
+		arrow_tween.kill()
+	arrow_tween = null
+
+	if arrow_flash_tween and arrow_flash_tween.is_valid():
+		arrow_flash_tween.kill()
+	arrow_flash_tween = null
+
+	# Remove arrow
+	if tutorial_arrow and is_instance_valid(tutorial_arrow):
+		tutorial_arrow.queue_free()
+		tutorial_arrow = null
 
 func die() -> void:
 	if is_dying:

@@ -845,11 +845,11 @@ func animate_fire(delta: float) -> void:
 	var bone_percent = float(current_bone_embers) / float(MAX_BONE_EMBERS)
 	var total_fuel_percent = (wood_percent + bone_percent) / 2.0
 
-	# Animation speed scales from 1.0x (no fuel) to 1.3x (max fuel) - subtle increase
-	var animation_speed = 1.0 + (total_fuel_percent * 0.3)
+	# Animation speed scales from 1.3x (no fuel) to 1.8x (max fuel) - more alive feeling
+	var animation_speed = 1.3 + (total_fuel_percent * 0.5)
 
 	# Movement intensity scales modestly - flames stay grounded, not balloon-like
-	var movement_intensity = 1.0 + (total_fuel_percent * 0.4)
+	var movement_intensity = 1.0 + (total_fuel_percent * 0.5)
 
 	# Animate each cached flame with slight variations
 	for flame in flame_nodes:
@@ -864,15 +864,15 @@ func animate_fire(delta: float) -> void:
 				var layer_phase_offset = layer * 2.1  # Each layer starts at different time
 				var index_phase_offset = index * 0.3
 
-				# Subtle sway - reduced amplitude for natural fire look
-				var sway = sin(time * 2.0 * animation_speed + layer_phase_offset + index_phase_offset) * 0.6 * movement_intensity
-				var stretch_y = 1.0 + sin(time * 3.0 * animation_speed + layer_phase_offset * 1.5 + index_phase_offset) * 0.05 * movement_intensity
+				# Livelier sway - increased amplitude for active fire look
+				var sway = sin(time * 2.5 * animation_speed + layer_phase_offset + index_phase_offset) * 0.8 * movement_intensity
+				var stretch_y = 1.0 + sin(time * 3.5 * animation_speed + layer_phase_offset * 1.5 + index_phase_offset) * 0.07 * movement_intensity
 
-				# Subtle X scale variation (expand/contract)
-				var expand = 1.0 + sin(time * 2.5 * animation_speed + layer_phase_offset * 0.8 + index_phase_offset + 1.0) * 0.03 * movement_intensity
+				# More dynamic X scale variation (expand/contract)
+				var expand = 1.0 + sin(time * 3.0 * animation_speed + layer_phase_offset * 0.8 + index_phase_offset + 1.0) * 0.04 * movement_intensity
 
-				# Apply transform - very subtle rotation
-				flame.rotation = sway * 0.015
+				# Apply transform - slightly more rotation
+				flame.rotation = sway * 0.02
 				flame.scale.y = stretch_y
 				flame.scale.x = expand
 
@@ -938,14 +938,13 @@ func update_ground_mist(delta: float) -> void:
 	if not is_visible_on_screen():
 		return
 
-	# Update warmth aura with gentle breathing animation (always visible)
+	# Update warmth aura with flickering fire-like pulse animation (always visible)
 	if warmth_aura and is_instance_valid(warmth_aura):
 		var time = Time.get_ticks_msec() / 1000.0
-		# Gentle pulse: radius varies by ±5px, alpha varies slightly
-		var pulse_radius = warmth_radius + sin(time * 1.5) * 5.0
-		var pulse_alpha = 0.05 + sin(time * 2.0) * 0.015  # 0.035 to 0.065
-		warmth_aura.polygon = create_wavy_circle(pulse_radius, 48, time * 0.5)
-		warmth_aura.color = Color(1.0, 0.5, 0.1, pulse_alpha)
+		# Alpha flickers to match flame animation speeds
+		var alpha_flicker = 0.03 + sin(time * 3.25) * 0.012 + sin(time * 4.5) * 0.008
+		warmth_aura.polygon = create_fire_pulse_circle(warmth_radius, 48, time)
+		warmth_aura.color = Color(1.0, 0.5, 0.1, alpha_flicker)
 
 	# Get fuel counts from the OWNER's pool (so everyone sees the same auras)
 	var owner_pool = _get_owner_fuel_pool()
@@ -1004,6 +1003,27 @@ func create_wavy_circle(radius: float, segments: int, phase_offset: float) -> Pa
 		var angle = (float(i) / segments) * TAU
 		var wave = sin(angle * 3.0 + time * 1.0 + phase_offset) * 8.0  # Changed from 2.0 to 1.0
 		var rad = radius + wave
+		points.append(Vector2(cos(angle) * rad, sin(angle) * rad))
+
+	return points
+
+func create_fire_pulse_circle(radius: float, segments: int, time: float) -> PackedVector2Array:
+	"""Create a circle that pulses outward like flickering fire - no rotation, matches flame speed"""
+	var points = PackedVector2Array()
+
+	# Global pulse - matches flame animation speeds (2.5x, 3.0x, 3.5x base)
+	var pulse1 = sin(time * 3.25) * 10.0  # Primary pulse - matches flame sway
+	var pulse2 = sin(time * 4.5) * 6.0   # Secondary pulse - matches flame stretch
+	var pulse3 = sin(time * 3.9) * 4.0   # Tertiary pulse - matches flame expand
+	var global_pulse = pulse1 + pulse2 + pulse3
+
+	# Create circle with static irregular edge (like fire shape) + global pulse
+	for i in range(segments):
+		var angle = (float(i) / segments) * TAU
+		# Static flame shape - fixed bumps that don't rotate
+		var flame_shape = sin(angle * 4.0) * 6.0 + sin(angle * 7.0) * 3.0
+		# Add the global pulse to make it breathe
+		var rad = radius + flame_shape + global_pulse
 		points.append(Vector2(cos(angle) * rad, sin(angle) * rad))
 
 	return points
@@ -1374,14 +1394,14 @@ func update_interaction_prompt() -> void:
 	# Only show prompt if we're the active interactable
 	var is_active = InteractionManager.is_active_interactable(self)
 	if player_in_interact_range and is_active and not is_fueling:
-		# Check if we should show "no fuel" message
-		if no_fuel_message_timer > 0.0:
-			interaction_prompt.text = "Acquire bone embers or dry logs first"
-			interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))  # Red
-		else:
-			interaction_prompt.text = "Hold [F] Add Fuel"
-			interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))  # Warm orange
+		# Check if player has any fuel items - only show prompt if they do
+		var has_fuel = player_has_fuel_items()
+		if not has_fuel:
+			interaction_prompt.visible = false
+			return
 
+		interaction_prompt.text = "Hold [F] Add Fuel"
+		interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))  # Warm orange
 		interaction_prompt.visible = true
 		# Position prompt above campfire
 		var viewport_size = get_viewport().get_visible_rect().size
@@ -1569,6 +1589,16 @@ func complete_fueling_all() -> void:
 
 	# Add all fuel from inventory
 	attempt_add_all_fuel_from_inventory()
+
+func player_has_fuel_items() -> bool:
+	"""Check if player has any fuel items (Dry Log or Bone Ember) in inventory"""
+	for slot_idx in range(InventorySystem.inventory_items.size()):
+		var item = InventorySystem.get_item(slot_idx)
+		if item:
+			var item_name = item.get("name", "")
+			if item_name == "Dry Log" or item_name == "Bone Ember":
+				return true
+	return false
 
 func attempt_add_single_fuel_from_inventory() -> void:
 	"""Add 1 of each fuel type from inventory (or whichever is available)"""

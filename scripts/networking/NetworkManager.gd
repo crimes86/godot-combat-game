@@ -21,8 +21,29 @@ const DEFAULT_PORT = 7000
 const MAX_PLAYERS = 50  # Target for 3-chunk playtest (single instance)
 
 # Version for client/server compatibility checking
-# INCREMENT THIS when making breaking network changes (RPC signatures, data formats, etc.)
-const NETWORK_VERSION = "0.1.0"
+# Auto-generated from git commit hash - no manual incrementing needed
+var NETWORK_VERSION: String = ""
+
+func _get_git_commit_hash() -> String:
+	"""Get current git commit hash for version identification"""
+	# Try to read from bundled file first (for exported builds)
+	if FileAccess.file_exists("res://version.txt"):
+		var file = FileAccess.open("res://version.txt", FileAccess.READ)
+		if file:
+			var version = file.get_line().strip_edges()
+			file.close()
+			if version.length() > 0:
+				return version
+
+	# Fallback: try to get from git directly (works in editor)
+	if OS.has_feature("editor"):
+		var output = []
+		var exit_code = OS.execute("git", ["rev-parse", "--short", "HEAD"], output, true)
+		if exit_code == 0 and output.size() > 0:
+			return output[0].strip_edges()
+
+	# Last fallback
+	return "unknown"
 
 var peer = null
 var connected_players = {}
@@ -43,6 +64,10 @@ const SERVER_SAVE_INTERVAL: float = 120.0  # Save all connected players every 2 
 func _ready():
 	# Set this as singleton
 	set_process(false)
+
+	# Initialize version from git commit hash
+	NETWORK_VERSION = _get_git_commit_hash()
+	print("NetworkManager: Version %s" % NETWORK_VERSION)
 
 	# Connect multiplayer signals
 	multiplayer.peer_connected.connect(_on_player_connected)
@@ -392,8 +417,11 @@ func request_authentication_with_version(server_version: String) -> void:
 
 	if server_version != NETWORK_VERSION:
 		push_warning("⚠️ VERSION MISMATCH! Server: %s, Client: %s" % [server_version, NETWORK_VERSION])
-		push_warning("   Network errors may occur. Consider updating client or server.")
+		push_warning("   Connection blocked - client must update.")
 		version_mismatch.emit(server_version, NETWORK_VERSION)
+		# Block connection - don't allow authentication to proceed
+		close_connection()
+		return
 	else:
 		print("✅ Version match: %s" % NETWORK_VERSION)
 

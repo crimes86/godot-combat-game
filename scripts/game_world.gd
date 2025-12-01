@@ -2208,9 +2208,20 @@ func create_prop_sprite(prop_data: Dictionary, parent: Node2D) -> bool:
 	shadow.name = "Shadow"
 	var shadow_width = 20 * scale_val
 	var shadow_height = shadow_width * 0.4  # Oval shape
-	shadow.size = Vector2(shadow_width, shadow_height)
 	var shadow_y = (24 * scale_val / 4) - 3  # Moved up 5px from previous position
-	shadow.position = Vector2(-shadow_width/2 + 2, shadow_y)
+	var shadow_x_offset = -shadow_width/2 + 2
+
+	# Custom shadow for broken_sword - elongated to match sword shape
+	if prop_type == "broken_sword":
+		shadow_width = 32 * scale_val  # Longer shadow for sword
+		shadow_height = 8 * scale_val   # Thinner shadow
+		shadow_y = 2 * scale_val        # Position under the sword blade
+		# Flip shadow offset based on sword orientation
+		var is_flipped = prop_data.get("flip_h", false)
+		shadow_x_offset = 19 * scale_val if is_flipped else -19 * scale_val
+
+	shadow.size = Vector2(shadow_width, shadow_height)
+	shadow.position = Vector2(shadow_x_offset, shadow_y)
 	shadow.color = Color(0, 0, 0, 0.6)  # Darker shadow
 	shadow.z_index = -4  # Above ground layers, below props
 

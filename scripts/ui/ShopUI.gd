@@ -699,7 +699,7 @@ func get_armor_rarity_color(rarity_str: String) -> Color:
 			return BORDER_INNER  # Default to dark border
 
 func populate_sell_items() -> void:
-	"""Populate the sell list with inventory items"""
+	"""Populate the sell list with inventory items using icon grid"""
 	if not sell_list:
 		return
 
@@ -713,22 +713,8 @@ func populate_sell_items() -> void:
 		var item = InventorySystem.inventory_items[i]
 		if item:  # Skip null/empty slots
 			has_items = true
-			var item_name = item.get("name", "Unknown")
-			var item_desc = item.get("description", "")
-			var item_value = item.get("value", 0)
-			var quantity = item.get("quantity", 1)
-			var total_value = item_value * quantity
-
-			var item_row = create_sell_item_row(
-				item_name,
-				item_desc,
-				item_value,
-				quantity,
-				total_value,
-				func(): sell_item(i)
-			)
-
-			sell_list.add_child(item_row)
+			var item_slot = create_sell_item_slot(item, i)
+			sell_list.add_child(item_slot)
 
 	# Show message if inventory is empty
 	if not has_items:
@@ -739,71 +725,128 @@ func populate_sell_items() -> void:
 		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		sell_list.add_child(empty_label)
 
-func create_sell_item_row(item_name: String, description: String, unit_value: int, quantity: int, total_value: int, on_sell: Callable) -> Button:
-	"""Create a square button slot for sell item - click to sell"""
-	var slot_button = Button.new()
-	slot_button.custom_minimum_size = Vector2(168, 80)  # Match buy item size
-	slot_button.clip_text = true
+func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelContainer:
+	"""Create a sell slot with icon, quantity badge, and price - click to sell"""
+	var slot_size = Vector2(80, 90)  # Match buy item size
 
-	# Display name with quantity and sell value
-	var name_text = item_name
+	var item_name = item_data.get("name", "Unknown")
+	var item_desc = item_data.get("description", "")
+	var item_value = item_data.get("value", 0)
+	var quantity = item_data.get("quantity", 1)
+	var total_value = item_value * quantity
+	var item_rarity = item_data.get("rarity", "COMMON")
+
+	# Get rarity color (use string version since inventory items store rarity as string)
+	var rarity_color = get_armor_rarity_color(item_rarity)
+
+	# Main container
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = slot_size
+
+	# Style the panel with rarity border
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = ITEM_BG_COLOR
+	panel_style.border_width_left = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_bottom = 2
+	panel_style.border_color = rarity_color
+	panel_style.corner_radius_top_left = 4
+	panel_style.corner_radius_top_right = 4
+	panel_style.corner_radius_bottom_left = 4
+	panel_style.corner_radius_bottom_right = 4
+	panel.add_theme_stylebox_override("panel", panel_style)
+
+	# VBox for icon + price
+	var vbox = VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 2)
+	panel.add_child(vbox)
+
+	# Icon container (centered)
+	var icon_container = CenterContainer.new()
+	icon_container.custom_minimum_size = Vector2(64, 54)
+	vbox.add_child(icon_container)
+
+	# Try to get icon from ItemIconGenerator
+	var icon_texture: Texture2D = null
+	if ItemIconGenerator:
+		icon_texture = ItemIconGenerator.get_item_icon(item_data)
+
+	if icon_texture:
+		var icon = TextureRect.new()
+		icon.texture = icon_texture
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.custom_minimum_size = Vector2(48, 48)
+		icon_container.add_child(icon)
+	else:
+		# Fallback: show item type as text
+		var fallback_label = Label.new()
+		var type_text = item_data.get("weapon_type", item_data.get("type", "?"))
+		if type_text is String:
+			fallback_label.text = type_text.substr(0, 3).to_upper()
+		else:
+			fallback_label.text = "???"
+		fallback_label.add_theme_font_size_override("font_size", 16)
+		fallback_label.add_theme_color_override("font_color", rarity_color)
+		fallback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		icon_container.add_child(fallback_label)
+
+	# Quantity badge (top-right corner) if more than 1
 	if quantity > 1:
-		name_text = "%s x%d" % [item_name, quantity]
-	var value_text = "🪙 %d" % total_value
-	slot_button.text = "%s\n%s" % [name_text, value_text]
+		var qty_label = Label.new()
+		qty_label.text = "x%d" % quantity
+		qty_label.add_theme_font_size_override("font_size", 10)
+		qty_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+		qty_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		qty_label.add_theme_constant_override("outline_size", 2)
+		qty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		qty_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		qty_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		qty_label.offset_left = -30
+		qty_label.offset_right = -4
+		qty_label.offset_top = 2
+		panel.add_child(qty_label)
 
-	# Set tooltip with description
-	slot_button.tooltip_text = "%s\n%s\nSell for 🪙 %d" % [item_name, description, total_value]
+	# Price label (sell value)
+	var price_label = Label.new()
+	price_label.text = "🪙 %d" % total_value
+	price_label.add_theme_font_size_override("font_size", 11)
+	price_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5))
+	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(price_label)
 
-	# Style the button with gold border (sell items)
-	var btn_normal = StyleBoxFlat.new()
-	btn_normal.bg_color = ITEM_BG_COLOR
-	btn_normal.border_width_left = 3
-	btn_normal.border_width_right = 3
-	btn_normal.border_width_top = 3
-	btn_normal.border_width_bottom = 3
-	btn_normal.border_color = ACCENT_COLOR  # Gold border for sell items
-	btn_normal.corner_radius_top_left = 6
-	btn_normal.corner_radius_top_right = 6
-	btn_normal.corner_radius_bottom_left = 6
-	btn_normal.corner_radius_bottom_right = 6
+	# Clickable overlay button (invisible but handles clicks)
+	var click_button = Button.new()
+	click_button.flat = true
+	click_button.custom_minimum_size = slot_size
+	click_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	var btn_hover = StyleBoxFlat.new()
-	btn_hover.bg_color = Color(0.18, 0.18, 0.22, 1.0)  # Lighter on hover
-	btn_hover.border_width_left = 3
-	btn_hover.border_width_right = 3
-	btn_hover.border_width_top = 3
-	btn_hover.border_width_bottom = 3
-	btn_hover.border_color = Color(0.85, 0.75, 0.55, 1.0)  # Brighter gold
-	btn_hover.corner_radius_top_left = 6
-	btn_hover.corner_radius_top_right = 6
-	btn_hover.corner_radius_bottom_left = 6
-	btn_hover.corner_radius_bottom_right = 6
+	# Build tooltip
+	var tooltip = "[%s]" % item_name
+	if item_desc:
+		tooltip += "\n%s" % item_desc
+	tooltip += "\n\nSell for 🪙 %d" % total_value
+	if quantity > 1:
+		tooltip += " (🪙 %d each)" % item_value
+	click_button.tooltip_text = tooltip
 
-	var btn_pressed = StyleBoxFlat.new()
-	btn_pressed.bg_color = Color(0.06, 0.06, 0.08, 1.0)  # Darker when pressed
-	btn_pressed.border_width_left = 3
-	btn_pressed.border_width_right = 3
-	btn_pressed.border_width_top = 3
-	btn_pressed.border_width_bottom = 3
-	btn_pressed.border_color = ACCENT_COLOR
-	btn_pressed.corner_radius_top_left = 6
-	btn_pressed.corner_radius_top_right = 6
-	btn_pressed.corner_radius_bottom_left = 6
-	btn_pressed.corner_radius_bottom_right = 6
+	click_button.pressed.connect(func(): sell_item(slot_index))
 
-	slot_button.add_theme_stylebox_override("normal", btn_normal)
-	slot_button.add_theme_stylebox_override("hover", btn_hover)
-	slot_button.add_theme_stylebox_override("pressed", btn_pressed)
+	# Add button on top of panel
+	panel.add_child(click_button)
 
-	# Text styling
-	slot_button.add_theme_font_size_override("font_size", 12)
-	slot_button.add_theme_color_override("font_color", TEXT_COLOR)
-	slot_button.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
+	# Hover effects
+	click_button.mouse_entered.connect(func():
+		panel_style.bg_color = Color(0.18, 0.18, 0.22, 1.0)
+		panel_style.border_color = Color(rarity_color.r + 0.2, rarity_color.g + 0.2, rarity_color.b + 0.2, 1.0)
+	)
+	click_button.mouse_exited.connect(func():
+		panel_style.bg_color = ITEM_BG_COLOR
+		panel_style.border_color = rarity_color
+	)
 
-	slot_button.pressed.connect(on_sell)
-
-	return slot_button
+	return panel
 
 func sell_item(slot: int) -> void:
 	"""Sell an item from inventory (entire stack if stackable)"""
@@ -998,7 +1041,7 @@ func create_quest_card(quest: Dictionary, is_complete: bool) -> PanelContainer:
 	# Description with better styling
 	var desc_label = Label.new()
 	desc_label.text = quest.get("description", "")
-	desc_label.add_theme_font_size_override("font_size", 13)
+	desc_label.add_theme_font_size_override("font_size", 14)
 	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.82))
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(desc_label)
@@ -1008,24 +1051,24 @@ func create_quest_card(quest: Dictionary, is_complete: bool) -> PanelContainer:
 		var objectives = quest.get("objectives", [])
 		if objectives.size() > 0:
 			var obj_container = VBoxContainer.new()
-			obj_container.add_theme_constant_override("separation", 4)
+			obj_container.add_theme_constant_override("separation", 6)
 			vbox.add_child(obj_container)
 
 			for obj in objectives:
 				var obj_hbox = HBoxContainer.new()
-				obj_hbox.add_theme_constant_override("separation", 6)
+				obj_hbox.add_theme_constant_override("separation", 8)
 				obj_container.add_child(obj_hbox)
 
 				var bullet = Label.new()
 				bullet.text = "▸"
-				bullet.add_theme_font_size_override("font_size", 12)
+				bullet.add_theme_font_size_override("font_size", 15)
 				bullet.add_theme_color_override("font_color", QUEST_AVAILABLE_COLOR)
 				obj_hbox.add_child(bullet)
 
 				var obj_label = Label.new()
 				obj_label.text = "%s (0/%d)" % [obj.get("desc", ""), obj.get("count", 1)]
-				obj_label.add_theme_font_size_override("font_size", 12)
-				obj_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.72))
+				obj_label.add_theme_font_size_override("font_size", 15)
+				obj_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.82))
 				obj_hbox.add_child(obj_label)
 
 	# Separator line
@@ -1176,15 +1219,15 @@ func create_quest_progress_card(quest: Dictionary) -> PanelContainer:
 		# Checkmark or bullet
 		var bullet = Label.new()
 		bullet.text = "✓" if is_obj_complete else "▸"
-		bullet.add_theme_font_size_override("font_size", 13)
+		bullet.add_theme_font_size_override("font_size", 16)
 		bullet.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4) if is_obj_complete else Color(0.5, 0.65, 0.85))
 		obj_hbox.add_child(bullet)
 
 		# Objective text with progress
 		var obj_label = Label.new()
 		obj_label.text = "%s: %d/%d" % [obj.get("desc", ""), current, required]
-		obj_label.add_theme_font_size_override("font_size", 13)
-		obj_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4) if is_obj_complete else Color(0.75, 0.75, 0.78))
+		obj_label.add_theme_font_size_override("font_size", 15)
+		obj_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4) if is_obj_complete else Color(0.85, 0.85, 0.88))
 		obj_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		obj_hbox.add_child(obj_label)
 
@@ -1192,8 +1235,8 @@ func create_quest_progress_card(quest: Dictionary) -> PanelContainer:
 		if not is_obj_complete:
 			var pct_label = Label.new()
 			pct_label.text = "(%d%%)" % int(progress_pct * 100)
-			pct_label.add_theme_font_size_override("font_size", 11)
-			pct_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.62))
+			pct_label.add_theme_font_size_override("font_size", 14)
+			pct_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.85))
 			obj_hbox.add_child(pct_label)
 
 	return card

@@ -11,21 +11,19 @@ signal all_corpses_looted()
 
 @onready var close_button: Button = $Panel/MarginContainer/VBoxContainer/Header/CloseButton
 @onready var take_all_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonContainer/TakeAllButton
-@onready var header_label: Label = $Panel/MarginContainer/VBoxContainer/Header/TitleLabel
-@onready var gold_label: Label = $Panel/MarginContainer/VBoxContainer/Header/GoldLabel
 
 # Grid container for icon-based loot slots (created dynamically)
 var loot_grid: GridContainer = null
 
 var corpses_looted = []  # All corpses in AOE
-var total_gold_collected: int = 0
 
 # UI Style constants (matching InventoryUI)
-const SLOT_SIZE = Vector2(56, 56)
+const SLOT_SIZE = Vector2(52, 52)  # Slightly smaller slots
 const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)
 const BORDER_INNER = Color(0.06, 0.06, 0.08, 1.0)
 const BORDER_COLOR = Color(0.35, 0.38, 0.42, 1.0)
-const GRID_COLUMNS = 4
+const GRID_COLUMNS = 3  # 3 columns for compact layout
+const MIN_SLOTS = 3  # Always show at least 3 slots
 
 func _ready() -> void:
 	print("💀 LootBodyUI initialized")
@@ -63,23 +61,10 @@ func apply_panel_style() -> void:
 	panel.add_theme_stylebox_override("panel", style)
 
 func _create_loot_grid() -> void:
-	"""Create the grid container for loot icons"""
-	var loot_container = get_node_or_null("Panel/MarginContainer/VBoxContainer/LootContainer")
-	if not loot_container:
-		return
-
-	# Remove old VBoxContainer LootList if it exists
-	var old_list = loot_container.get_node_or_null("LootList")
-	if old_list:
-		old_list.queue_free()
-
-	# Create grid container
-	loot_grid = GridContainer.new()
-	loot_grid.name = "LootGrid"
-	loot_grid.columns = GRID_COLUMNS
-	loot_grid.add_theme_constant_override("h_separation", 4)
-	loot_grid.add_theme_constant_override("v_separation", 4)
-	loot_container.add_child(loot_grid)
+	"""Get reference to the loot grid from scene"""
+	loot_grid = get_node_or_null("Panel/MarginContainer/VBoxContainer/LootGrid")
+	if loot_grid:
+		loot_grid.columns = GRID_COLUMNS
 
 func _input(event: InputEvent) -> void:
 	# Allow ESC to close or F to take all items
@@ -104,59 +89,21 @@ func open_loot_ui(primary_corpse, nearby_corpses: Array) -> void:
 				corpse.loot_prompt.visible = false
 			print("💀 Hiding loot prompt and setting UI open flag for corpse")
 
-	# Calculate total gold from all corpses and request loot via network
-	total_gold_collected = 0
-	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-	var is_multiplayer = multiplayer.has_multiplayer_peer()
-
-	for corpse in corpses_looted:
-		if is_instance_valid(corpse) and corpse.corpse_gold > 0:
-			total_gold_collected += corpse.corpse_gold
-
-			# In multiplayer, request gold loot through server
-			if is_multiplayer and network_enemy_mgr and corpse.network_id > 0:
-				network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
-			else:
-				# Single player - award directly
-				CharacterStats.add_gold(corpse.corpse_gold)
-				corpse.corpse_gold = 0
-
-	# Play gold loot sound if we got gold (in multiplayer, sound plays via RPC callback)
-	if total_gold_collected > 0 and not is_multiplayer:
-		print("💰 Auto-looted %d gold when opening UI" % total_gold_collected)
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
-
-	# Update header
 	var corpse_count = corpses_looted.size()
-	if header_label:
-		if corpse_count == 1:
-			header_label.text = "Looting Body"
-		else:
-			header_label.text = "Looting %d Bodies" % corpse_count
-
-	# Show gold label with total (showing what was just awarded)
-	if gold_label:
-		if total_gold_collected > 0:
-			gold_label.text = "+🪙 %d" % total_gold_collected
-			gold_label.visible = true
-		else:
-			gold_label.visible = false
-
-	print("💀 Opening loot body UI with %d corpse(s), %d gold auto-awarded" % [corpse_count, total_gold_collected])
+	print("💀 Opening loot body UI with %d corpse(s)" % corpse_count)
 
 	populate_loot_grid()
 
-	# Auto-close if no items left after gold is looted
+	# Auto-close if nothing to loot (no items and no gold)
 	var total_items = 0
+	var total_gold = 0
 	for corpse in corpses_looted:
 		if is_instance_valid(corpse):
 			total_items += corpse.corpse_loot.size()
+			total_gold += corpse.corpse_gold
 
-	if total_items == 0:
-		print("💀 No items to loot - auto-closing")
-		# Check if all corpses are now empty (gold was looted, no items)
+	if total_items == 0 and total_gold == 0:
+		print("💀 No items or gold to loot - auto-closing")
 		for corpse in corpses_looted:
 			if is_instance_valid(corpse):
 				corpse.check_if_looted_empty()
@@ -180,7 +127,7 @@ func close_ui() -> void:
 	# Prompts will auto-show again via update_loot_proximity if corpses still have loot
 
 func populate_loot_grid() -> void:
-	"""Populate the loot grid with icon slots from all corpses"""
+	"""Populate the loot grid with icon slots from all corpses (including gold)"""
 	if not loot_grid:
 		_create_loot_grid()
 	if not loot_grid:
@@ -190,8 +137,18 @@ func populate_loot_grid() -> void:
 	for child in loot_grid.get_children():
 		child.queue_free()
 
-	# Collect all items from all corpses
-	var total_items = 0
+	var total_slots = 0
+
+	# First, add gold slots for each corpse that has gold
+	for corpse in corpses_looted:
+		if not is_instance_valid(corpse):
+			continue
+		if corpse.corpse_gold > 0:
+			var gold_slot = create_gold_slot(corpse.corpse_gold, corpse)
+			loot_grid.add_child(gold_slot)
+			total_slots += 1
+
+	# Then add item slots
 	for corpse in corpses_looted:
 		if not is_instance_valid(corpse):
 			continue
@@ -200,24 +157,30 @@ func populate_loot_grid() -> void:
 			if item:  # Skip null items (already looted)
 				var slot = create_loot_slot(item, corpse)
 				loot_grid.add_child(slot)
-				total_items += 1
+				total_slots += 1
 
-	# Show message if all items looted
-	if total_items == 0:
-		var empty_label = Label.new()
-		empty_label.text = "No loot remaining"
-		empty_label.add_theme_font_size_override("font_size", 14)
-		empty_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		loot_grid.add_child(empty_label)
+	# Add empty slots to reach minimum (always show at least MIN_SLOTS)
+	while total_slots < MIN_SLOTS:
+		var empty_slot = create_empty_slot()
+		loot_grid.add_child(empty_slot)
+		total_slots += 1
 
-		# Check if corpses are fully empty (no gold, no items)
+	# If everything was looted, close after brief delay
+	var actual_loot_count = 0
+	for corpse in corpses_looted:
+		if is_instance_valid(corpse):
+			actual_loot_count += corpse.corpse_loot.size()
+			if corpse.corpse_gold > 0:
+				actual_loot_count += 1
+
+	if actual_loot_count == 0:
+		# Check if corpses are fully empty
 		for corpse in corpses_looted:
 			if is_instance_valid(corpse):
 				corpse.check_if_looted_empty()
 
-		# Close after showing empty message
-		await get_tree().create_timer(1.0).timeout
+		# Close after showing empty state
+		await get_tree().create_timer(0.5).timeout
 		close_ui()
 
 func create_loot_slot(item: Dictionary, source_corpse) -> Control:
@@ -313,6 +276,121 @@ func create_loot_slot(item: Dictionary, source_corpse) -> Control:
 	slot_control.gui_input.connect(_on_loot_slot_input.bind(slot_control))
 
 	return slot_control
+
+func create_empty_slot() -> Control:
+	"""Create an empty placeholder slot"""
+	var slot_control = Control.new()
+	slot_control.custom_minimum_size = SLOT_SIZE
+	slot_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Add panel for styling (dimmed empty slot)
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = SLOT_SIZE
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot_control.add_child(panel)
+
+	var slot_style = create_slot_style(Color(0.05, 0.05, 0.07, 0.5), BORDER_INNER, 1, false)
+	panel.add_theme_stylebox_override("panel", slot_style)
+
+	return slot_control
+
+func create_gold_slot(gold_amount: int, source_corpse) -> Control:
+	"""Create a clickable gold slot icon (click to loot gold)"""
+	var slot_control = Control.new()
+	slot_control.custom_minimum_size = SLOT_SIZE
+	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Store gold data and corpse reference
+	slot_control.set_meta("is_gold", true)
+	slot_control.set_meta("gold_amount", gold_amount)
+	slot_control.set_meta("source_corpse", source_corpse)
+
+	# Gold uses a warm golden border color
+	var gold_border_color = Color(1.0, 0.85, 0.0, 1.0)  # Bright gold
+
+	# Add panel for styling with gold glow
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = SLOT_SIZE
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot_control.add_child(panel)
+
+	var slot_style = create_slot_style(SLOT_BG, gold_border_color, 3, true)
+	panel.add_theme_stylebox_override("panel", slot_style)
+
+	# Center container for icon
+	var center = CenterContainer.new()
+	center.name = "CenterContainer"
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(center)
+
+	# Gold icon label (using emoji like inventory/shop)
+	var gold_icon = Label.new()
+	gold_icon.name = "GoldIcon"
+	gold_icon.text = "🪙"
+	gold_icon.add_theme_font_size_override("font_size", 28)
+	gold_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	gold_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	gold_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.add_child(gold_icon)
+
+	# Build tooltip
+	var tooltip = "Gold: %d\n\nClick to loot" % gold_amount
+	slot_control.tooltip_text = tooltip
+
+	# Connect click to loot gold
+	slot_control.gui_input.connect(_on_gold_slot_input.bind(slot_control))
+
+	return slot_control
+
+func _on_gold_slot_input(event: InputEvent, slot: Control) -> void:
+	"""Handle click on gold slot to loot the gold"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var gold_amount = slot.get_meta("gold_amount")
+		var corpse = slot.get_meta("source_corpse")
+		if gold_amount > 0 and is_instance_valid(corpse):
+			loot_gold(corpse, gold_amount)
+
+func loot_gold(corpse, gold_amount: int) -> void:
+	"""Loot gold from a corpse"""
+	if not is_instance_valid(corpse):
+		print("❌ Corpse no longer valid")
+		populate_loot_grid()
+		return
+
+	if corpse.corpse_gold <= 0:
+		print("❌ No gold left on corpse")
+		populate_loot_grid()
+		return
+
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var is_multiplayer = multiplayer.has_multiplayer_peer()
+
+	# In multiplayer, request gold loot through server
+	if is_multiplayer and network_enemy_mgr and corpse.network_id > 0:
+		network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+		# Server will handle gold award and broadcast
+		await get_tree().create_timer(0.1).timeout
+		if not is_instance_valid(self):
+			return
+		populate_loot_grid()
+	else:
+		# Single player - award directly
+		CharacterStats.add_gold(corpse.corpse_gold)
+		print("💰 Looted %d gold" % corpse.corpse_gold)
+
+		# Play gold loot sound
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+
+		corpse.corpse_gold = 0
+
+		# Check if corpse is now empty
+		corpse.check_if_looted_empty()
+
+		# Refresh the grid
+		populate_loot_grid()
 
 func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, border_width: int = 2, use_glow: bool = false) -> StyleBoxFlat:
 	"""Create style for loot slots (matching InventoryUI)"""
@@ -431,19 +509,33 @@ func loot_item(corpse, item: Dictionary) -> void:
 			print("❌ Inventory full! Cannot loot %s" % item_name)
 
 func _on_take_all_pressed() -> void:
-	"""Take all items from all corpses (gold already awarded when UI opened)"""
+	"""Take all gold and items from all corpses"""
 	var looted_count = 0
-	var total_count = 0
+	var total_gold = 0
 
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 	var is_multiplayer = multiplayer.has_multiplayer_peer()
 
-	# Count total items
+	# First, loot all gold from all corpses
 	for corpse in corpses_looted:
-		if is_instance_valid(corpse):
-			total_count += corpse.corpse_loot.size()
+		if not is_instance_valid(corpse):
+			continue
+		if corpse.corpse_gold > 0:
+			total_gold += corpse.corpse_gold
+			if is_multiplayer and network_enemy_mgr and corpse.network_id > 0:
+				network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+			else:
+				CharacterStats.add_gold(corpse.corpse_gold)
+				corpse.corpse_gold = 0
 
-	# Collect all items to loot first (with their indices for network sync)
+	# Play gold sound if we looted gold
+	if total_gold > 0 and not is_multiplayer:
+		print("💰 Looted %d total gold" % total_gold)
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+
+	# Collect all items to loot (with their indices for network sync)
 	var all_items_to_loot: Array = []
 	for corpse in corpses_looted:
 		if not is_instance_valid(corpse):
@@ -488,7 +580,7 @@ func _on_take_all_pressed() -> void:
 				if not is_instance_valid(self):
 					return  # UI was closed during await
 			else:
-				print("❌ Inventory full! Looted %d of %d items" % [looted_count, total_count])
+				print("❌ Inventory full! Looted %d items" % looted_count)
 				# Check which corpses are empty
 				for c in corpses_looted:
 					if is_instance_valid(c):
@@ -501,8 +593,8 @@ func _on_take_all_pressed() -> void:
 		if is_instance_valid(corpse):
 			corpse.check_if_looted_empty()
 
-	if looted_count > 0:
-		print("✨ Looted all %d items from %d corpse(s)" % [looted_count, corpses_looted.size()])
+	if looted_count > 0 or total_gold > 0:
+		print("✨ Looted all: %d gold, %d items from %d corpse(s)" % [total_gold, looted_count, corpses_looted.size()])
 		all_corpses_looted.emit()
 
 	# Refresh and potentially close

@@ -118,18 +118,13 @@ func _get_sprite_path(item_type: String, sprite_name: String, item: Dictionary) 
 				"arms":
 					return "res://assets/characters/arms/%s_walk.png" % sprite_name
 		"weapon":
-			# Weapons use the format: assets/weapons/{weapon_type}/slash.png
+			# Weapons use walk.png for cleaner icons (consistent 64x64 tiles)
 			var weapon_type = item.get("weapon_type", "sword")
 			# For daggers with "standard" subfolder
 			if weapon_type == "dagger":
-				return "res://assets/weapons/dagger/standard/slash.png"
-			# Staff uses walk sprite for cleaner icon (idle pose shows staff upright)
-			if weapon_type == "staff":
-				return "res://assets/weapons/staff/walk.png"
-			# Mace uses walk sprite - slash.png is oversize (192x192) which breaks 64x64 extraction
-			if weapon_type == "mace":
-				return "res://assets/weapons/mace/walk.png"
-			return "res://assets/weapons/%s/slash.png" % weapon_type
+				return "res://assets/weapons/dagger/standard/walk.png"
+			# All weapons use walk sprite for consistent icon extraction
+			return "res://assets/weapons/%s/walk.png" % weapon_type
 		"tool":
 			# Tools use the format: assets/tools/{tool_type}/walk.png
 			var tool_type = item.get("tool_type", "")

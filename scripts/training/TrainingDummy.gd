@@ -16,8 +16,20 @@ var is_corpse: bool = false
 # Stats - Training dummy has more health than regular skeletons but regenerates
 var max_health: float = 2000.0  # More than a skeleton (~500) so players can practice
 var current_health: float = 2000.0
-var regen_threshold: float = 0.25  # Regen when below 25% health
+var regen_threshold: float = 0.15  # Start fighting back when below 15% health
 var is_regenerating: bool = false
+
+# "Fighting back" regeneration - dramatic comeback when low HP
+var fightback_active: bool = false
+var fightback_pulse_count: int = 0
+const FIGHTBACK_PULSES: int = 5  # Number of "struggle" pulses before full regen
+const MIN_HEALTH_PERCENT: float = 0.05  # Never drop below 5% health
+
+# Enemy-like properties to prevent crashes (dummy can't actually die)
+var gold_drop: int = 0  # No gold from training dummy
+var corpse_loot: Array = []  # No loot from training dummy
+var corpse_gold: int = 0  # No gold from training dummy corpse
+var enemy_level: int = 1  # Dummy is level 1
 
 # References
 var sprite: AnimatedSprite2D = null
@@ -377,13 +389,13 @@ func point_arrow_at_weakpoint(weakpoint_pos: Vector2) -> void:
 	if arrow_flash_tween and arrow_flash_tween.is_valid():
 		arrow_flash_tween.kill()
 
-	# Set arrow color to bright gold/yellow for weakpoint
+	# Set arrow color to bright red for weakpoint
 	var arrow_shape = tutorial_arrow.get_node_or_null("ArrowShape")
 	var arrow_outline = tutorial_arrow.get_node_or_null("ArrowOutline")
 	if arrow_shape:
-		arrow_shape.color = Color(1.0, 0.85, 0.0, 1.0)  # Bright gold
+		arrow_shape.color = Color(1.0, 0.2, 0.2, 1.0)  # Bright red
 	if arrow_outline:
-		arrow_outline.default_color = Color(0.4, 0.3, 0.0, 1.0)  # Dark gold outline
+		arrow_outline.default_color = Color(0.4, 0.0, 0.0, 1.0)  # Dark red outline
 
 	# Position arrow to the right of the weakpoint, pointing left at it
 	# Weakpoint pos is in local space (relative to dummy)
@@ -455,16 +467,18 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	last_damage_time = current_time
 
 	# Actually reduce health (dummy has real HP but regenerates)
+	# Clamp to minimum health - dummy can NEVER die
+	var min_health = max_health * MIN_HEALTH_PERCENT
 	current_health -= amount
-	current_health = max(current_health, 0.0)
+	current_health = max(current_health, min_health)
 
 	# Update health bar
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
 
-	# Check for regeneration trigger (below 25% health)
-	if not is_regenerating and current_health <= max_health * regen_threshold:
-		trigger_regeneration()
+	# Check for "fighting back" trigger (below 15% health)
+	if not fightback_active and not is_regenerating and current_health <= max_health * regen_threshold:
+		trigger_fightback()
 
 	# Emit signal for player feedback (damage numbers)
 	damage_taken.emit(amount, is_crit)
@@ -576,29 +590,84 @@ func trigger_spin() -> void:
 	spin_timer = 0.0
 	sprite.play("spin")
 
-func trigger_regeneration() -> void:
-	"""Regenerate to full health with visual feedback"""
+func trigger_fightback() -> void:
+	"""Dramatic 'fighting back' sequence - dummy struggles then regenerates"""
+	fightback_active = true
 	is_regenerating = true
-	print("🎯 Training Dummy regenerating...")
+	fightback_pulse_count = 0
+	print("🎯 Training Dummy fighting back!")
 
-	# Flash green to indicate healing
-	if sprite:
-		var regen_tween = create_tween()
-		# Flash green
-		regen_tween.tween_property(sprite, "modulate", Color(0.5, 1.0, 0.5, 1.0), 0.3)
-		regen_tween.tween_property(sprite, "modulate", Color.WHITE, 0.3)
-		# Wait for flash
-		await regen_tween.finished
+	# Phase 1: Struggle pulses - red flashes with small health gains
+	for i in range(FIGHTBACK_PULSES):
+		if not is_instance_valid(self):
+			return
 
-	# Restore health to full
-	current_health = max_health
+		fightback_pulse_count = i + 1
 
-	# Update health bar
-	if health_bar and health_bar.has_method("update_health"):
-		health_bar.update_health(current_health, max_health)
+		# Red angry flash
+		if sprite:
+			var pulse_tween = create_tween()
+			pulse_tween.tween_property(sprite, "modulate", Color(1.0, 0.3, 0.3, 1.0), 0.1)
+			pulse_tween.tween_property(sprite, "modulate", Color(1.0, 0.6, 0.6, 1.0), 0.15)
+			await pulse_tween.finished
 
+		# Small health bump during struggle (fighting back!)
+		var heal_amount = max_health * 0.08  # 8% per pulse
+		current_health = min(current_health + heal_amount, max_health * 0.5)  # Cap at 50% during struggle
+
+		# Update health bar
+		if health_bar and health_bar.has_method("update_health"):
+			health_bar.update_health(current_health, max_health)
+
+		# Spin on each pulse
+		trigger_spin()
+
+		# Wait between pulses
+		await get_tree().create_timer(0.25).timeout
+
+	# Phase 2: Victory surge - rapid full regeneration with green glow
+	if sprite and is_instance_valid(self):
+		print("🎯 Training Dummy surging to full health!")
+
+		# Bright green victory glow
+		var surge_tween = create_tween()
+		surge_tween.tween_property(sprite, "modulate", Color(0.3, 1.0, 0.3, 1.0), 0.2)
+
+		# Rapidly restore health with visual ticks
+		var health_steps = 10
+		var health_per_step = (max_health - current_health) / health_steps
+		for j in range(health_steps):
+			if not is_instance_valid(self):
+				return
+			current_health = min(current_health + health_per_step, max_health)
+			if health_bar and health_bar.has_method("update_health"):
+				health_bar.update_health(current_health, max_health)
+			await get_tree().create_timer(0.05).timeout
+
+		# Ensure full health
+		current_health = max_health
+		if health_bar and health_bar.has_method("update_health"):
+			health_bar.update_health(current_health, max_health)
+
+		# Fade back to normal
+		var fade_tween = create_tween()
+		fade_tween.tween_property(sprite, "modulate", Color.WHITE, 0.4)
+		await fade_tween.finished
+
+	fightback_active = false
 	is_regenerating = false
 	print("🎯 Training Dummy regenerated to full health!")
+
+func die() -> void:
+	"""Training dummy can't die - trigger fightback instead"""
+	print("🎯 Training Dummy refuses to die! Triggering fightback...")
+	# Reset to minimum health and trigger fightback
+	var min_health = max_health * MIN_HEALTH_PERCENT
+	current_health = min_health
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(current_health, max_health)
+	if not fightback_active and not is_regenerating:
+		trigger_fightback()
 
 func _on_animation_finished() -> void:
 	"""When spin animation completes, return to idle"""

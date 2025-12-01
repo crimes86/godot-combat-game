@@ -156,9 +156,15 @@ func _on_server_created():
 	_load_game_world()
 
 func _on_version_mismatch(server_version: String, client_version: String):
-	"""Warn user about client/server version mismatch"""
-	status_label.text = "⚠️ VERSION MISMATCH!\nServer: %s | Client: %s\nErrors may occur." % [server_version, client_version]
-	status_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.2))  # Orange warning
+	"""Block connection due to version mismatch"""
+	status_label.text = "UPDATE REQUIRED\nYour version: %s\nServer version: %s\n\nPlease download the latest version." % [client_version, server_version]
+	status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))  # Red error
+
+	# Re-enable buttons so player can retry after updating
+	if host_button:
+		host_button.disabled = false
+	join_button.disabled = false
+	current_state = MenuState.MAIN
 
 # ═══════════════════════════════════════════════════════════════════════════
 # AUTHENTICATION UI

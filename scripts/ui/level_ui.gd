@@ -11,21 +11,22 @@ extends CanvasLayer
 @onready var stats_label: Label = $Control/StatsPanel/MarginContainer/StatsLabel
 
 var show_stats: bool = false
-var combat_indicator: Label = null  # IN COMBAT indicator
+var combat_border: Control = null  # Red pulsing border for combat
 var combat_tween: Tween = null  # Store tween for cleanup
 var fps_label: Label = null  # FPS counter for debugging
 var fps_update_timer: float = 0.0
+var is_in_combat: bool = false  # Track combat state
 
 func _ready() -> void:
 	# Connect to CharacterStats signals
 	CharacterStats.level_up.connect(_on_level_up)
 	CharacterStats.experience_gained.connect(_on_xp_gained)
 
-	# Create combat indicator
-	create_combat_indicator()
+	# Create combat border effect
+	create_combat_border()
 
-	# Create FPS counter
-	create_fps_counter()
+	# NOTE: FPS counter removed - use F3 debug overlay instead
+	# create_fps_counter()
 
 	# Initial update
 	update_display()
@@ -34,24 +35,55 @@ func _ready() -> void:
 	if stats_panel:
 		stats_panel.visible = false
 
-func create_combat_indicator() -> void:
-	"""Create the IN COMBAT indicator label"""
-	combat_indicator = Label.new()
-	combat_indicator.name = "CombatIndicator"
-	combat_indicator.text = "⚔️ IN COMBAT"
-	combat_indicator.add_theme_font_size_override("font_size", 24)
-	combat_indicator.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))  # Red
-	combat_indicator.add_theme_color_override("font_outline_color", Color.BLACK)
-	combat_indicator.add_theme_constant_override("outline_size", 3)
-	combat_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+func create_combat_border() -> void:
+	"""Create a red pulsing border around the screen for combat state"""
+	combat_border = Control.new()
+	combat_border.name = "CombatBorder"
+	combat_border.set_anchors_preset(Control.PRESET_FULL_RECT)
+	combat_border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	combat_border.visible = false  # Hidden by default
 
-	# Position below XP bar
-	combat_indicator.position = Vector2(20, 120)
-	combat_indicator.size = Vector2(300, 40)
-	combat_indicator.visible = false  # Hidden by default
+	# Custom drawing for the border
+	combat_border.set_script(CombatBorderScript)
 
 	# Add to Control node
-	$Control.add_child(combat_indicator)
+	$Control.add_child(combat_border)
+
+# Inner class for combat border drawing
+class CombatBorderScript extends Control:
+	var border_alpha: float = 0.6
+	var border_thickness: float = 4.0
+	var border_color: Color = Color(0.9, 0.15, 0.1, 1.0)  # Deep red
+
+	func _draw() -> void:
+		var rect = get_rect()
+		var color = Color(border_color.r, border_color.g, border_color.b, border_alpha)
+
+		# Draw 4 rectangles for the border (top, bottom, left, right)
+		# Top border
+		draw_rect(Rect2(0, 0, rect.size.x, border_thickness), color)
+		# Bottom border
+		draw_rect(Rect2(0, rect.size.y - border_thickness, rect.size.x, border_thickness), color)
+		# Left border
+		draw_rect(Rect2(0, 0, border_thickness, rect.size.y), color)
+		# Right border
+		draw_rect(Rect2(rect.size.x - border_thickness, 0, border_thickness, rect.size.y), color)
+
+		# Add subtle inner glow (second thinner border, slightly transparent)
+		var glow_thickness = 8.0
+		var glow_color = Color(border_color.r, border_color.g, border_color.b, border_alpha * 0.3)
+		# Top glow
+		draw_rect(Rect2(0, border_thickness, rect.size.x, glow_thickness), glow_color)
+		# Bottom glow
+		draw_rect(Rect2(0, rect.size.y - border_thickness - glow_thickness, rect.size.x, glow_thickness), glow_color)
+		# Left glow
+		draw_rect(Rect2(border_thickness, 0, glow_thickness, rect.size.y), glow_color)
+		# Right glow
+		draw_rect(Rect2(rect.size.x - border_thickness - glow_thickness, 0, glow_thickness, rect.size.y), glow_color)
+
+	func set_pulse_alpha(alpha: float) -> void:
+		border_alpha = alpha
+		queue_redraw()
 
 func create_fps_counter() -> void:
 	"""Create FPS counter for performance debugging"""
@@ -90,7 +122,7 @@ func _process(delta: float) -> void:
 		fps_update_timer = 0.0
 
 	# Check combat status
-	if not combat_indicator or not is_instance_valid(combat_indicator):
+	if not combat_border or not is_instance_valid(combat_border):
 		return
 
 	# Performance: Only check combat status every 0.2s, not every frame
@@ -99,29 +131,19 @@ func _process(delta: float) -> void:
 		return
 	combat_check_timer = 0.0
 
-	var in_combat = is_player_in_combat()
-	if in_combat != combat_indicator.visible:
-		combat_indicator.visible = in_combat
+	var now_in_combat = is_player_in_combat()
+	if now_in_combat != is_in_combat:
+		is_in_combat = now_in_combat
+		combat_border.visible = is_in_combat
 
-		# Pulse effect when entering combat
-		if in_combat:
-			# Kill previous tween if it exists
-			if combat_tween and combat_tween.is_valid():
-				combat_tween.kill()
-
-			combat_tween = create_tween()
-			combat_tween.set_loops(0)  # Infinite
-			combat_tween.tween_property(combat_indicator, "modulate:a", 0.5, 0.5)
-			combat_tween.tween_property(combat_indicator, "modulate:a", 1.0, 0.5)
+		# Heartbeat pulse effect when in combat
+		if is_in_combat:
+			start_combat_heartbeat()
 		else:
-			# Exiting combat - kill tween
-			if combat_tween and combat_tween.is_valid():
-				combat_tween.kill()
-				combat_tween = null
-			combat_indicator.modulate.a = 1.0  # Reset alpha
+			stop_combat_heartbeat()
 
 func is_player_in_combat() -> bool:
-	"""Check if any enemy is in combat with the player"""
+	"""Check if player is in combat (being attacked or attacking)"""
 	# Safety check - don't run during tree exit
 	if not is_inside_tree():
 		return false
@@ -130,6 +152,11 @@ func is_player_in_combat() -> bool:
 	if not player or not is_instance_valid(player):
 		return false
 
+	# Primary check: Player's own combat state (set when taking damage)
+	if player.get("is_in_combat"):
+		return true
+
+	# Secondary check: Any enemy actively in combat with player
 	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
@@ -142,6 +169,43 @@ func is_player_in_combat() -> bool:
 				return true
 
 	return false
+
+func start_combat_heartbeat() -> void:
+	"""Start the heartbeat pulsing effect on the combat border"""
+	stop_combat_heartbeat()  # Clear any existing
+
+	if not combat_border or not is_instance_valid(combat_border):
+		return
+
+	# Heartbeat pattern: quick pulse, pause, quick pulse, longer pause
+	combat_tween = create_tween()
+	combat_tween.set_loops(0)  # Infinite
+
+	# First beat (strong)
+	combat_tween.tween_method(_set_border_alpha, 0.4, 0.8, 0.15)
+	combat_tween.tween_method(_set_border_alpha, 0.8, 0.4, 0.15)
+	# Short pause
+	combat_tween.tween_interval(0.1)
+	# Second beat (slightly weaker)
+	combat_tween.tween_method(_set_border_alpha, 0.4, 0.65, 0.12)
+	combat_tween.tween_method(_set_border_alpha, 0.65, 0.4, 0.12)
+	# Longer pause before next heartbeat
+	combat_tween.tween_interval(0.6)
+
+func stop_combat_heartbeat() -> void:
+	"""Stop the heartbeat effect"""
+	if combat_tween and combat_tween.is_valid():
+		combat_tween.kill()
+		combat_tween = null
+
+	# Reset border alpha
+	if combat_border and is_instance_valid(combat_border):
+		_set_border_alpha(0.6)
+
+func _set_border_alpha(alpha: float) -> void:
+	"""Set the combat border alpha for pulsing effect"""
+	if combat_border and is_instance_valid(combat_border) and combat_border.has_method("set_pulse_alpha"):
+		combat_border.set_pulse_alpha(alpha)
 
 func _input(event: InputEvent) -> void:
 	# Toggle stats panel with F8 (dev builds only)

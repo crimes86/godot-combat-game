@@ -59,6 +59,11 @@ var SAFE_ZONES: Array:
 		{"pos": Vector2(Constants.CHUNK_SIZE / 2, 0), "radius": 600.0},  # Campfire spawn
 	]
 
+## Tutorial zone - enemies within this radius of campfire are always level 1
+const TUTORIAL_ZONE_RADIUS: float = 1200.0
+var CAMPFIRE_POSITION: Vector2:
+	get: return Vector2(Constants.CHUNK_SIZE / 2, 0)
+
 ## Ruins areas - no random spawns (guardians spawn separately)
 ## Dynamically populated from game_world.RUINS_POSITIONS at runtime
 const RUINS_EXCLUSION_RADIUS: float = 350.0
@@ -612,6 +617,10 @@ func point_to_line_distance(point: Vector2, line_start: Vector2, line_end: Vecto
 
 func get_level_for_position(pos: Vector2) -> int:
 	"""Get enemy level based on X position"""
+	# Tutorial zone: enemies near campfire are always level 1
+	if pos.distance_to(CAMPFIRE_POSITION) <= TUTORIAL_ZONE_RADIUS:
+		return 1
+
 	for band in LEVEL_BANDS:
 		if pos.x >= band.min_x and pos.x < band.max_x:
 			return band.level

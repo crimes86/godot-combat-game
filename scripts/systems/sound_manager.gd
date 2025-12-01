@@ -111,6 +111,10 @@ var music_player: AudioStreamPlayer = null
 var music_volume_db: float = -15.0  # Store target volume for playlist
 const MUSIC_FADE_DURATION: float = 2.0  # Seconds to fade in/out
 
+# Mute state
+var sfx_muted: bool = false
+var music_muted: bool = false
+
 func _ready() -> void:
 	# Load real sound files first
 	print("🔊 Loading real sound files...")
@@ -521,21 +525,25 @@ func _generate_all_sounds() -> void:
 
 ## Play a sound at a specific position in the world
 func play_sound(sound_type: SoundType, global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	if sfx_muted:
+		return
 	if not sound_cache.has(sound_type):
 		push_error("Sound type not found: ", sound_type)
 		return
-	
+
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_cache[sound_type]
 	player.volume_db = volume_db
 	player.global_position = global_pos
 	player.finished.connect(player.queue_free)
-	
+
 	get_tree().root.add_child(player)
 	player.play()
 
 ## Play a sound without 2D positioning (UI sounds, etc)
 func play_sound_2d(sound_type: SoundType, volume_db: float = 0.0) -> void:
+	if sfx_muted:
+		return
 	if not sound_cache.has(sound_type):
 		push_error("Sound type not found: ", sound_type)
 		return
@@ -560,6 +568,8 @@ func get_sound(sound_type: SoundType) -> AudioStream:
 
 ## Play a random weakpoint hit sound with pitch variation (for satisfying spam-clicking)
 func play_weakpoint_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	if sfx_muted:
+		return
 	if weakpoint_sounds.is_empty():
 		# Fallback to placeholder sound if no real sounds loaded
 		play_sound(SoundType.HIT_WEAKPOINT, global_pos, volume_db)
@@ -582,6 +592,8 @@ func play_weakpoint_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 
 ## Play critical hit sound (for non-weakpoint critical hits)
 func play_critical_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	if sfx_muted:
+		return
 	if not critical_hit_sound:
 		# Fallback to placeholder sound if no real sound loaded
 		play_sound(SoundType.HIT_CRIT, global_pos, volume_db)
@@ -601,6 +613,8 @@ func play_critical_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 
 ## Play normal hit sound (for regular non-crit hits)
 func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0, weapon_type: String = "") -> void:
+	if sfx_muted:
+		return
 	var sounds_to_use = []  # Untyped to avoid type mismatch with Dictionary values
 
 	# Try weapon-specific sounds first
@@ -633,6 +647,8 @@ func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float 
 
 ## Play skeleton hurt sound (when skeleton takes damage)
 func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	if sfx_muted:
+		return
 	if not skeleton_hurt_sound:
 		# No fallback - just don't play if not loaded
 		return
@@ -651,10 +667,14 @@ func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 
 ## Play skeleton attack sound - only one skeleton sound at a time, no overlap
 func play_skeleton_attack_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
+	if sfx_muted:
+		return
 	_play_skeleton_sound(skeleton_attack_sound, global_pos, volume_db)
 
 ## Play skeleton aggro sound (when skeleton spots player) - uses dedicated aggro sounds
 func play_skeleton_aggro_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
+	if sfx_muted:
+		return
 	if skeleton_aggro_sounds.is_empty():
 		# Fallback to attack sound if no aggro sounds loaded
 		_play_skeleton_sound(skeleton_attack_sound, global_pos, volume_db)
@@ -685,6 +705,8 @@ func _play_skeleton_sound(sound: AudioStream, global_pos: Vector2, volume_db: fl
 
 ## Play skeleton death sound (random between 2 bone collapse variations)
 func play_skeleton_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	if sfx_muted:
+		return
 	if skeleton_death_sounds.is_empty():
 		# Fallback to placeholder sound if no real sounds loaded
 		play_sound(SoundType.SKELETON_DEATH, global_pos, volume_db)
@@ -706,6 +728,8 @@ func play_skeleton_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: fl
 
 ## Play sword swing sound (random whoosh variation)
 func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
+	if sfx_muted:
+		return
 	if sword_swing_sounds.is_empty():
 		# Fallback to placeholder sound if no real sounds loaded
 		play_sound(SoundType.SWING, global_pos, volume_db)
@@ -727,6 +751,8 @@ func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 
 ## Play unarmed swing sound (whoosh when punching/kicking)
 func play_unarmed_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:
+	if sfx_muted:
+		return
 	if unarmed_swing_sounds.is_empty():
 		# Fallback to sword swing if no unarmed sounds loaded
 		play_sword_swing_sound(global_pos, volume_db)
@@ -748,6 +774,8 @@ func play_unarmed_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 
 ## Play player hurt sound (random grunt/pain variation)
 func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
+	if sfx_muted:
+		return
 	if player_hurt_sounds.is_empty():
 		# No real sounds loaded, skip (no placeholder for player hurt)
 		return
@@ -769,6 +797,8 @@ func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 ## Play player death sound (gender-specific)
 ## is_female: true for female character, false for male
 func play_player_death_sound(global_pos: Vector2 = Vector2.ZERO, is_female: bool = false, volume_db: float = -4.0) -> void:
+	if sfx_muted:
+		return
 	var sound_stream = player_death_female_sound if is_female else player_death_male_sound
 
 	if not sound_stream:
@@ -789,6 +819,8 @@ func play_player_death_sound(global_pos: Vector2 = Vector2.ZERO, is_female: bool
 
 ## Play player footstep sound with distance culling
 func play_player_footstep(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -18.0) -> void:
+	if sfx_muted:
+		return
 	if player_footstep_sounds.is_empty():
 		# Fallback to placeholder
 		play_sound(SoundType.FOOTSTEP_PLAYER, global_pos, volume_db)
@@ -817,6 +849,8 @@ func play_player_footstep(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 
 ## Play skeleton footstep sound with distance culling
 func play_skeleton_footstep(global_pos: Vector2, camera_pos: Vector2, volume_db: float = -20.0) -> void:
+	if sfx_muted:
+		return
 	# Distance culling: only play if within 1000px of camera
 	var distance = global_pos.distance_to(camera_pos)
 	if distance > 1000.0:
@@ -851,6 +885,8 @@ func play_skeleton_footstep(global_pos: Vector2, camera_pos: Vector2, volume_db:
 ## Play fire fuel add sound (spammable magic whoosh when adding fuel to campfire)
 ## enhanced = true for slightly louder/higher pitch when holding F
 func play_fire_fuel_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -12.0, enhanced: bool = false) -> void:
+	if sfx_muted:
+		return
 	if not fire_fuel_add_sound:
 		# Fallback to placeholder
 		play_sound(SoundType.FIRE_FUEL_ADD, global_pos, volume_db)
@@ -879,6 +915,8 @@ func play_fire_fuel_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 ## Play dodge/dash sound (whoosh when evading)
 ## dodge_2.wav is a 3-second clip so we speed it up with pitch_scale
 func play_dodge_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
+	if sfx_muted:
+		return
 	if dodge_sounds.is_empty():
 		# Fallback to unarmed swing if no dodge sounds loaded
 		play_unarmed_swing_sound(global_pos, volume_db)
@@ -911,6 +949,8 @@ func play_dodge_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.
 
 ## Play inventory move sound (dragging items between slots)
 func play_inventory_move_sound(volume_db: float = -10.0) -> void:
+	if sfx_muted:
+		return
 	if not inventory_move_sound:
 		# Fallback to placeholder
 		play_sound_2d(SoundType.INVENTORY_MOVE, volume_db)
@@ -927,6 +967,8 @@ func play_inventory_move_sound(volume_db: float = -10.0) -> void:
 
 ## Play equip item sound (equipping/unequipping gear)
 func play_equip_sound(volume_db: float = -10.0) -> void:
+	if sfx_muted:
+		return
 	if not equip_item_sound:
 		# Fallback to placeholder
 		play_sound_2d(SoundType.EQUIP_ITEM, volume_db)
@@ -943,6 +985,8 @@ func play_equip_sound(volume_db: float = -10.0) -> void:
 
 ## Play button click sound (UI interactions)
 func play_button_click_sound(volume_db: float = -8.0) -> void:
+	if sfx_muted:
+		return
 	if not button_click_sound:
 		# No fallback - just skip if not loaded
 		return
@@ -958,6 +1002,8 @@ func play_button_click_sound(volume_db: float = -8.0) -> void:
 
 ## Play button hover sound (UI interactions)
 func play_button_hover_sound(volume_db: float = -15.0) -> void:
+	if sfx_muted:
+		return
 	if not button_hover_sound:
 		# No fallback - just skip if not loaded
 		return
@@ -973,6 +1019,8 @@ func play_button_hover_sound(volume_db: float = -15.0) -> void:
 
 ## Play inventory open/close sound (leather pouch)
 func play_inventory_open_sound(volume_db: float = -10.0) -> void:
+	if sfx_muted:
+		return
 	if not inventory_open_sound:
 		return
 
@@ -987,6 +1035,8 @@ func play_inventory_open_sound(volume_db: float = -10.0) -> void:
 
 ## Play character sheet open/close sound (paper rustling)
 func play_character_sheet_sound(volume_db: float = -10.0) -> void:
+	if sfx_muted:
+		return
 	if not character_sheet_sound:
 		return
 
@@ -1001,6 +1051,8 @@ func play_character_sheet_sound(volume_db: float = -10.0) -> void:
 
 ## Play weakpoint destruction sound (explosive glass/bone shatter finale)
 func play_weakpoint_destroyed_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
+	if sfx_muted:
+		return
 	if not weakpoint_destroyed_sound:
 		# Fallback to placeholder sound if no real sound loaded
 		play_sound(SoundType.WEAKPOINT_DESTROYED, global_pos, volume_db)
@@ -1020,6 +1072,8 @@ func play_weakpoint_destroyed_sound(global_pos: Vector2 = Vector2.ZERO, volume_d
 
 ## Play healing staff cast sound (initial click - spawns aura + fires projectile)
 func play_healing_cast_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -5.0) -> void:
+	if sfx_muted:
+		return
 	if not healing_staff_cast_sound:
 		push_warning("Healing staff cast sound not loaded")
 		return
@@ -1038,6 +1092,8 @@ func play_healing_cast_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 
 ## Play healing staff impact sound (projectile landing - second pulse explosion)
 func play_healing_impact_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -3.0) -> void:
+	if sfx_muted:
+		return
 	if not healing_staff_impact_sound:
 		push_warning("Healing staff impact sound not loaded")
 		return
@@ -1056,6 +1112,8 @@ func play_healing_impact_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: fl
 
 ## Play lava burn damage sound (fire damage when stepping in lava)
 func play_lava_burn_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
+	if sfx_muted:
+		return
 	if not lava_burn_sound:
 		push_warning("Lava burn sound not loaded")
 		return
@@ -1074,6 +1132,8 @@ func play_lava_burn_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 
 ## Play level up sound (celebratory fanfare when player levels up)
 func play_level_up_sound(volume_db: float = -4.0) -> void:
+	if sfx_muted:
+		return
 	if not level_up_sound:
 		push_warning("Level up sound not loaded")
 		return
@@ -1283,7 +1343,8 @@ func _play_current_track() -> void:
 
 	var track = music_tracks[current_track_index]
 	music_player.stream = track
-	music_player.volume_db = music_volume_db
+	# Respect mute state when changing tracks
+	music_player.volume_db = -80.0 if music_muted else music_volume_db
 
 	# Don't loop individual tracks - let playlist handle advancement
 	if track is AudioStreamMP3:
@@ -1326,3 +1387,22 @@ func skip_music_track() -> void:
 		return
 	current_track_index = (current_track_index + 1) % music_tracks.size()
 	_play_current_track()
+
+# ============================================
+# MUTE CONTROLS
+# ============================================
+
+## Toggle SFX mute state
+func toggle_sfx_mute() -> void:
+	sfx_muted = not sfx_muted
+	print("🔊 SFX %s" % ("MUTED" if sfx_muted else "ON"))
+
+## Toggle music mute state
+func toggle_music_mute() -> void:
+	music_muted = not music_muted
+	if music_player:
+		if music_muted:
+			music_player.volume_db = -80.0  # Effectively silent
+		else:
+			music_player.volume_db = music_volume_db
+	print("🎵 Music %s" % ("MUTED" if music_muted else "ON"))
