@@ -26,8 +26,10 @@ func _input(event: InputEvent) -> void:
 			return
 
 	if event is InputEventKey and event.pressed and not event.echo:
-		# F2 toggles panel
+		# F2 toggles panel (dev builds only)
 		if event.keycode == KEY_F2:
+			if not (OS.has_feature("editor") or OS.is_debug_build()):
+				return
 			toggle_panel()
 			get_viewport().set_input_as_handled()
 			return

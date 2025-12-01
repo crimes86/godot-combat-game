@@ -144,8 +144,11 @@ func is_player_in_combat() -> bool:
 	return false
 
 func _input(event: InputEvent) -> void:
-	# Toggle stats panel with F8
+	# Toggle stats panel with F8 (dev builds only)
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F8:
+		# Only allow in editor or debug builds
+		if not (OS.has_feature("editor") or OS.is_debug_build()):
+			return
 		show_stats = !show_stats
 		if stats_panel:
 			stats_panel.visible = show_stats

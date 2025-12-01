@@ -42,8 +42,11 @@ func _ready():
 	print("TimeManager: Press F4 to advance time by 1 hour (debug)")
 
 func _input(event: InputEvent):
-	# F4 advances time by 1 hour for testing day/night cycle (server only, or singleplayer)
+	# F4 advances time by 1 hour for testing day/night cycle (dev builds only, server only)
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F4:
+		# Only allow in editor or debug builds
+		if not (OS.has_feature("editor") or OS.is_debug_build()):
+			return
 		if _is_server_or_singleplayer():
 			advance_time(1.0)  # Advance 1 hour
 			print("TimeManager: Time advanced to %s (%s)" % [get_time_string(), get_period()])

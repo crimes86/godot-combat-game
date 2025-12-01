@@ -1302,7 +1302,9 @@ func _input(event):
 		if event.keycode == KEY_F12:
 			toggle_screenshot_mode()
 		elif event.keycode == KEY_F11:
-			regenerate_baked_terrain()
+			# Only allow terrain regeneration in dev builds
+			if OS.has_feature("editor") or OS.is_debug_build():
+				regenerate_baked_terrain()
 
 func regenerate_baked_terrain():
 	"""Force regeneration of baked terrain texture (F11)"""
