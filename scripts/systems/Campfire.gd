@@ -198,9 +198,9 @@ func _physics_process(delta: float) -> void:
 
 	# Apply crit buff to player if in warmth
 	# - Community campfires: ALL players get crit buff
-	# - Competitive campfires: Only owners get crit buff
+	# - Competitive campfires: Only owners get crit buff (or anyone if unclaimed)
 	if player_in_warmth and player and is_instance_valid(player):
-		if is_community_campfire or _is_local_player_owner():
+		if is_community_campfire or owner_pool_key == NO_OWNER or _is_local_player_owner():
 			apply_crit_buff_to_player()
 		else:
 			# Clear crit buff if not an owner (competitive campfire)
@@ -257,7 +257,8 @@ func _is_local_player(body: Node2D) -> bool:
 func _heal_all_players_in_warmth(delta: float) -> void:
 	"""Heal all players currently in campfire warmth.
 	- Community campfires: ALL players in warmth get healed using shared fuel pool.
-	- Competitive campfires: Only owners get healed using their group's fuel pool."""
+	- Competitive campfires: Only owners get healed using their group's fuel pool.
+	- Unclaimed campfires: Anyone gets minimal healing (incentivizes claiming)."""
 	# Clean up invalid player references
 	var to_remove = []
 	for p in players_in_warmth.keys():
@@ -271,9 +272,11 @@ func _heal_all_players_in_warmth(delta: float) -> void:
 		if not is_instance_valid(p):
 			continue
 
-		# For competitive campfires, only heal players who are owners
-		# For community campfires, heal ALL players in warmth
-		if not is_community_campfire and not _is_player_owner(p):
+		# For competitive campfires:
+		# - If unclaimed (owner_pool_key == NO_OWNER), anyone gets minimal healing
+		# - If claimed, only owners get healed
+		# For community campfires: heal ALL players in warmth
+		if not is_community_campfire and owner_pool_key != NO_OWNER and not _is_player_owner(p):
 			continue
 
 		var player_data = players_in_warmth[p]

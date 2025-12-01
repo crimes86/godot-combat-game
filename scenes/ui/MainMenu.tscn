@@ -180,6 +180,45 @@ text = ""
 horizontal_alignment = 1
 autowrap_mode = 2
 
+[node name="BottomButtons" type="HBoxContainer" parent="."]
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -200.0
+offset_top = -80.0
+offset_right = 200.0
+offset_bottom = -40.0
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="SettingsButton" type="Button" parent="BottomButtons"]
+layout_mode = 2
+custom_minimum_size = Vector2(110, 36)
+theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
+theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_pressed_color = Color(0.45, 0.48, 0.52, 1)
+theme_override_font_sizes/font_size = 14
+text = "Settings"
+
+[node name="CreditsButton" type="Button" parent="BottomButtons"]
+layout_mode = 2
+custom_minimum_size = Vector2(110, 36)
+theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
+theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_pressed_color = Color(0.45, 0.48, 0.52, 1)
+theme_override_font_sizes/font_size = 14
+text = "Credits"
+
+[node name="ExitButton" type="Button" parent="BottomButtons"]
+layout_mode = 2
+custom_minimum_size = Vector2(110, 36)
+theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
+theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_pressed_color = Color(0.45, 0.48, 0.52, 1)
+theme_override_font_sizes/font_size = 14
+text = "Exit"
+
 [node name="Instructions" type="Label" parent="."]
 anchor_left = 0.5
 anchor_top = 0.88
@@ -193,6 +232,7 @@ theme_override_font_sizes/font_size = 13
 text = "Press C for Character Sheet • Press I for Inventory"
 horizontal_alignment = 1
 vertical_alignment = 1
+visible = false
 
 [node name="VersionLabel" type="Label" parent="."]
 anchor_left = 1.0
@@ -350,4 +390,240 @@ theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_panel")
 theme_override_styles/focus = SubResource("StyleBoxFlat_panel")
+text = "< Back"
+
+[node name="SettingsPanel" type="Panel" parent="."]
+visible = false
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -200.0
+offset_right = 250.0
+offset_bottom = 200.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SettingsPanel"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 25.0
+offset_top = 20.0
+offset_right = -25.0
+offset_bottom = -20.0
+theme_override_constants/separation = 15
+
+[node name="TitleLabel" type="Label" parent="SettingsPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 24
+text = "Settings"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="SettingsPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MasterVolumeContainer" type="HBoxContainer" parent="SettingsPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="MasterVolumeLabel" type="Label" parent="SettingsPanel/VBoxContainer/MasterVolumeContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(130, 0)
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+text = "Master Volume:"
+vertical_alignment = 1
+
+[node name="MasterVolumeSlider" type="HSlider" parent="SettingsPanel/VBoxContainer/MasterVolumeContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 100.0
+value = 80.0
+
+[node name="MasterVolumeValue" type="Label" parent="SettingsPanel/VBoxContainer/MasterVolumeContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(40, 0)
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 14
+text = "80%"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="MusicVolumeContainer" type="HBoxContainer" parent="SettingsPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="MusicVolumeLabel" type="Label" parent="SettingsPanel/VBoxContainer/MusicVolumeContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(130, 0)
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+text = "Music Volume:"
+vertical_alignment = 1
+
+[node name="MusicVolumeSlider" type="HSlider" parent="SettingsPanel/VBoxContainer/MusicVolumeContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 100.0
+value = 70.0
+
+[node name="MusicVolumeValue" type="Label" parent="SettingsPanel/VBoxContainer/MusicVolumeContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(40, 0)
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 14
+text = "70%"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="SFXVolumeContainer" type="HBoxContainer" parent="SettingsPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="SFXVolumeLabel" type="Label" parent="SettingsPanel/VBoxContainer/SFXVolumeContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(130, 0)
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+text = "SFX Volume:"
+vertical_alignment = 1
+
+[node name="SFXVolumeSlider" type="HSlider" parent="SettingsPanel/VBoxContainer/SFXVolumeContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 100.0
+value = 80.0
+
+[node name="SFXVolumeValue" type="Label" parent="SettingsPanel/VBoxContainer/SFXVolumeContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(40, 0)
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 14
+text = "80%"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="HSeparator2" type="HSeparator" parent="SettingsPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FullscreenContainer" type="HBoxContainer" parent="SettingsPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="FullscreenLabel" type="Label" parent="SettingsPanel/VBoxContainer/FullscreenContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(130, 0)
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+text = "Fullscreen:"
+vertical_alignment = 1
+
+[node name="FullscreenCheck" type="CheckButton" parent="SettingsPanel/VBoxContainer/FullscreenContainer"]
+layout_mode = 2
+
+[node name="VSyncContainer" type="HBoxContainer" parent="SettingsPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="VSyncLabel" type="Label" parent="SettingsPanel/VBoxContainer/VSyncContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(130, 0)
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+text = "VSync:"
+vertical_alignment = 1
+
+[node name="VSyncCheck" type="CheckButton" parent="SettingsPanel/VBoxContainer/VSyncContainer"]
+layout_mode = 2
+button_pressed = true
+
+[node name="Spacer" type="Control" parent="SettingsPanel/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SettingsBackButton" type="Button" parent="SettingsPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
+theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
+theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
+text = "< Back"
+
+[node name="CreditsPanel" type="Panel" parent="."]
+visible = false
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -250.0
+offset_right = 300.0
+offset_bottom = 250.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CreditsPanel"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 25.0
+offset_top = 20.0
+offset_right = -25.0
+offset_bottom = -20.0
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="CreditsPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 24
+text = "Credits"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CreditsPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ScrollContainer" type="ScrollContainer" parent="CreditsPanel/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CreditsText" type="RichTextLabel" parent="CreditsPanel/VBoxContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "[center][b]WASTELAND[/b]
+A Multiplayer Combat Game
+
+[b]Development[/b]
+Game Design & Programming
+
+[b]Art Assets[/b]
+LPC (Liberated Pixel Cup) sprite sheets
+OpenGameArt.org contributors
+
+[b]Audio[/b]
+Music and sound effects from various
+Creative Commons sources
+
+[b]Special Thanks[/b]
+The Godot Engine community
+All playtesters and supporters
+
+[b]Engine[/b]
+Made with Godot Engine 4.x
+https://godotengine.org
+
+[i]Thank you for playing![/i][/center]"
+fit_content = true
+
+[node name="CreditsBackButton" type="Button" parent="CreditsPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
+theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
+theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
 text = "< Back"

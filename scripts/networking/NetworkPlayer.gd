@@ -284,7 +284,7 @@ func _get_player_max_health() -> int:
 
 func _get_random_spawn_point() -> Vector2:
 	# Get spawn points from game world
-	var game_world = get_node("/root/GameWorld")
+	var game_world = get_node_or_null("/root/GameWorld")
 	if game_world and game_world.has_method("get_spawn_points"):
 		var points = game_world.get_spawn_points()
 		if points.size() > 0:

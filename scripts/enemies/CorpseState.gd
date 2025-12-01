@@ -163,5 +163,7 @@ static func roll_loot_item(is_guardian: bool = false) -> Dictionary:
 		if roll < cumulative:
 			return item.duplicate()
 
-	# Fallback to first item
-	return loot_table[0].duplicate()
+	# Fallback to first item (should never reach here, but safety check)
+	if loot_table.size() > 0:
+		return loot_table[0].duplicate()
+	return {}

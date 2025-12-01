@@ -10,6 +10,14 @@ const PLAYERS_FILE = "user://players.json"
 const SALT_LENGTH = 32
 const AUTO_SAVE_INTERVAL: float = 120.0  # 2 minutes
 
+# Schema validation bounds
+const MAX_LEVEL: int = 30
+const MAX_GOLD: int = 999999999
+const MAX_STAT: int = 999
+const MAX_POSITION: float = 50000.0
+const MAX_XP: int = 999999999
+const MAX_PLAYTIME: int = 999999999  # ~31 years in seconds
+
 var players_data: Dictionary = {}  # username -> player data
 var is_initialized: bool = false
 
@@ -37,13 +45,13 @@ func initialize_database() -> bool:
 			var parse_result = json.parse(json_string)
 			if parse_result == OK:
 				players_data = json.data
-				print("[DatabaseManager] Loaded %d player accounts" % players_data.size())
+				LogManager.info("Loaded %d player accounts" % players_data.size(), "database")
 			else:
 				push_error("[DatabaseManager] Failed to parse players file")
 				players_data = {}
 	else:
 		players_data = {}
-		print("[DatabaseManager] Created new players database")
+		LogManager.info("Created new players database", "database")
 
 	is_initialized = true
 	database_ready.emit()
@@ -60,6 +68,110 @@ func save_database() -> bool:
 	file.store_string(json_string)
 	file.close()
 	return true
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SCHEMA VALIDATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+func validate_player_data(data: Dictionary) -> Dictionary:
+	"""Validate and sanitize player data. Returns sanitized data with valid values."""
+	var sanitized = data.duplicate(true)  # Deep copy
+	var issues: Array[String] = []
+
+	# Validate level (1-30)
+	if sanitized.has("level"):
+		var level = sanitized["level"]
+		if not (level is int or level is float) or level < 1 or level > MAX_LEVEL:
+			issues.append("Invalid level %s, clamping to valid range" % str(level))
+			sanitized["level"] = clampi(int(level) if level is int or level is float else 1, 1, MAX_LEVEL)
+
+	# Validate gold (0 - MAX_GOLD)
+	if sanitized.has("gold"):
+		var gold = sanitized["gold"]
+		if not (gold is int or gold is float) or gold < 0 or gold > MAX_GOLD:
+			issues.append("Invalid gold %s, clamping to valid range" % str(gold))
+			sanitized["gold"] = clampi(int(gold) if gold is int or gold is float else 0, 0, MAX_GOLD)
+
+	# Validate stats (1 - MAX_STAT)
+	for stat_name in ["strength", "agility", "vitality", "luck"]:
+		if sanitized.has(stat_name):
+			var stat = sanitized[stat_name]
+			if not (stat is int or stat is float) or stat < 1 or stat > MAX_STAT:
+				issues.append("Invalid %s %s, clamping to valid range" % [stat_name, str(stat)])
+				sanitized[stat_name] = clampi(int(stat) if stat is int or stat is float else 10, 1, MAX_STAT)
+
+	# Validate position (-MAX_POSITION to MAX_POSITION)
+	for pos_name in ["position_x", "position_y"]:
+		if sanitized.has(pos_name):
+			var pos = sanitized[pos_name]
+			if not (pos is int or pos is float) or absf(float(pos)) > MAX_POSITION:
+				issues.append("Invalid %s %s, clamping to valid range" % [pos_name, str(pos)])
+				sanitized[pos_name] = clampf(float(pos) if pos is int or pos is float else 0.0, -MAX_POSITION, MAX_POSITION)
+
+	# Validate XP (0 - MAX_XP)
+	if sanitized.has("xp"):
+		var xp = sanitized["xp"]
+		if not (xp is int or xp is float) or xp < 0 or xp > MAX_XP:
+			issues.append("Invalid xp %s, clamping to valid range" % str(xp))
+			sanitized["xp"] = clampi(int(xp) if xp is int or xp is float else 0, 0, MAX_XP)
+
+	# Validate playtime (0 - MAX_PLAYTIME)
+	if sanitized.has("total_playtime_seconds"):
+		var playtime = sanitized["total_playtime_seconds"]
+		if not (playtime is int or playtime is float) or playtime < 0 or playtime > MAX_PLAYTIME:
+			issues.append("Invalid playtime %s, clamping to valid range" % str(playtime))
+			sanitized["total_playtime_seconds"] = clampi(int(playtime) if playtime is int or playtime is float else 0, 0, MAX_PLAYTIME)
+
+	# Validate HP (0 - reasonable max based on level)
+	if sanitized.has("current_hp"):
+		var hp = sanitized["current_hp"]
+		var max_reasonable_hp = 500.0 + (sanitized.get("level", 1) * 50) + (sanitized.get("vitality", 10) * 20)
+		if not (hp is int or hp is float) or hp < 0 or hp > max_reasonable_hp:
+			issues.append("Invalid HP %s, clamping to valid range" % str(hp))
+			sanitized["current_hp"] = clampf(float(hp) if hp is int or hp is float else max_reasonable_hp, 0, max_reasonable_hp)
+
+	# Validate boolean fields
+	for bool_field in ["is_online", "is_banned", "tutorial_completed"]:
+		if sanitized.has(bool_field) and not sanitized[bool_field] is bool:
+			issues.append("Invalid %s type, converting to bool" % bool_field)
+			sanitized[bool_field] = bool(sanitized[bool_field])
+
+	# Log validation issues if any
+	if issues.size() > 0:
+		push_warning("[DatabaseManager] Data validation issues: %s" % ", ".join(issues))
+
+	return sanitized
+
+func validate_inventory_data(inv_data) -> Variant:
+	"""Validate inventory data structure. Returns null if invalid, sanitized data otherwise."""
+	if not inv_data is Dictionary:
+		push_warning("[DatabaseManager] Invalid inventory data type: %s" % typeof(inv_data))
+		return null
+
+	# Check for required structure
+	if not inv_data.has("items"):
+		push_warning("[DatabaseManager] Inventory missing 'items' array")
+		return null
+
+	if not inv_data["items"] is Array:
+		push_warning("[DatabaseManager] Inventory 'items' is not an array")
+		return null
+
+	# Validate each item has minimum required fields
+	var valid_items: Array = []
+	for item in inv_data["items"]:
+		if item == null:
+			valid_items.append(null)  # Empty slot
+			continue
+		if not item is Dictionary:
+			push_warning("[DatabaseManager] Invalid item in inventory, skipping")
+			valid_items.append(null)
+			continue
+		# Item looks valid, keep it
+		valid_items.append(item)
+
+	inv_data["items"] = valid_items
+	return inv_data
 
 # ═══════════════════════════════════════════════════════════════════════════
 # AUTHENTICATION
@@ -185,7 +297,7 @@ func create_account(username: String, password: String) -> Dictionary:
 
 	# Save to disk
 	if save_database():
-		print("[DatabaseManager] Created account: %s (ID: %d)" % [username, player_id])
+		LogManager.info("Created account: %s (ID: %d)" % [username, player_id], "database")
 		return {"success": true, "error": "", "player_id": player_id}
 	else:
 		# Rollback
@@ -229,7 +341,7 @@ func authenticate(username: String, password: String) -> Dictionary:
 	player_data["is_online"] = true
 	save_database()
 
-	print("[DatabaseManager] Player authenticated: %s" % found_username)
+	LogManager.info("Player authenticated: %s" % found_username, "database")
 
 	# Return copy without sensitive data
 	var safe_data = player_data.duplicate(true)
@@ -243,7 +355,7 @@ func logout_player(username: String) -> void:
 	if players_data.has(username):
 		players_data[username]["is_online"] = false
 		save_database()
-		print("[DatabaseManager] Player logged out: %s" % username)
+		LogManager.info("Player logged out: %s" % username, "database")
 
 func save_player_data(username: String, data: Dictionary) -> bool:
 	"""Save player's current game state"""
@@ -283,7 +395,7 @@ func reset_all_online_status() -> void:
 	for username in players_data.keys():
 		players_data[username]["is_online"] = false
 	save_database()
-	print("[DatabaseManager] Reset online status for all players")
+	LogManager.info("Reset online status for all players", "database")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RATE LIMITING (prevent brute force)
@@ -351,7 +463,7 @@ func start_auto_save(username: String) -> void:
 		add_child(auto_save_timer)
 
 	auto_save_timer.start(AUTO_SAVE_INTERVAL)
-	print("📀 [DatabaseManager] Auto-save started (every %.0f seconds) for: %s" % [AUTO_SAVE_INTERVAL, username])
+	LogManager.info("Auto-save started (every %.0fs) for: %s" % [AUTO_SAVE_INTERVAL, username], "database")
 
 func stop_auto_save() -> void:
 	"""Stop auto-save timer"""
@@ -360,7 +472,7 @@ func stop_auto_save() -> void:
 
 	# Final save before stopping
 	if current_username != "":
-		print("📀 [DatabaseManager] Final save before stopping auto-save for: %s" % current_username)
+		LogManager.info("Final save before stopping auto-save for: %s" % current_username, "database")
 		save_current_player_state()
 
 	current_username = ""
@@ -373,12 +485,12 @@ func _on_auto_save_timeout() -> void:
 			# Client: sync state to server for persistence
 			NetworkManager.client_sync_state()
 			auto_save_triggered.emit()
-			print("📀 [DatabaseManager] Synced state to server")
+			LogManager.debug("Synced state to server", "database")
 			if NotificationManager and is_instance_valid(NotificationManager):
 				NotificationManager.show_notification("Progress synced", "INFO")
 		else:
 			# Host or single player: save locally
-			print("📀 [DatabaseManager] Auto-save triggered...")
+			LogManager.debug("Auto-save triggered...", "database")
 			if save_current_player_state():
 				auto_save_triggered.emit()
 				if NotificationManager and is_instance_valid(NotificationManager):
@@ -431,11 +543,11 @@ func save_current_player_state() -> bool:
 	# Save to disk
 	if save_database():
 		player_data_saved.emit(current_username)
-		print("📀 [DatabaseManager] Saved player state: %s (Level %d, Gold %d)" % [
+		LogManager.debug("Saved player state: %s (Level %d, Gold %d)" % [
 			current_username,
 			save_data.get("level", 1),
 			save_data.get("gold", 0)
-		])
+		], "database")
 		return true
 
 	return false
@@ -446,15 +558,26 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 		push_warning("[DatabaseManager] No saved data for: %s" % username)
 		return
 
-	var data = players_data[username]
+	# Validate and sanitize player data before applying
+	var raw_data = players_data[username]
+	var data = validate_player_data(raw_data)
 
-	# Apply inventory
+	# Update stored data with sanitized version if different
+	if data != raw_data:
+		players_data[username] = data
+		LogManager.info("Sanitized data for: %s" % username, "database")
+
+	# Apply inventory (with validation)
 	var inv_json = data.get("inventory", "")
 	if inv_json is String and not inv_json.is_empty():
 		var inv_data = JSON.parse_string(inv_json)
 		if inv_data:
-			InventorySystem.load_save_data(inv_data)
-			print("📦 [DatabaseManager] Loaded inventory for: %s" % username)
+			var validated_inv = validate_inventory_data(inv_data)
+			if validated_inv:
+				InventorySystem.load_save_data(validated_inv)
+				LogManager.debug("Loaded inventory for: %s" % username, "inventory")
+			else:
+				push_warning("[DatabaseManager] Invalid inventory data for: %s, starting fresh" % username)
 
 	# Apply character stats (full blob first, then individual fields as fallback)
 	var stats_json = data.get("character_stats", "")
@@ -462,9 +585,9 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 		var stats_data = JSON.parse_string(stats_json)
 		if stats_data:
 			CharacterStats.load_save_data(stats_data)
-			print("📊 [DatabaseManager] Loaded character stats for: %s" % username)
+			LogManager.debug("Loaded character stats for: %s" % username, "database")
 	else:
-		# Fallback: load individual fields if full blob not available
+		# Fallback: load individual fields if full blob not available (already validated)
 		var fallback_stats = {
 			"level": data.get("level", 1),
 			"experience": data.get("xp", 0),
@@ -485,7 +608,7 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 		# Only apply non-zero positions (0,0 likely means new character or default)
 		if pos_x != 0.0 or pos_y != 0.0:
 			player.global_position = Vector2(pos_x, pos_y)
-			print("📍 [DatabaseManager] Restored position: (%.0f, %.0f)" % [pos_x, pos_y])
+			LogManager.debug("Restored position: (%.0f, %.0f)" % [pos_x, pos_y], "player")
 
 		# Apply HP if player has health
 		var saved_hp = data.get("current_hp", -1)
@@ -496,15 +619,15 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 
 		# Refresh player sprite to show loaded equipment
 		if player.has_method("create_player_sprite"):
-			print("👕 [DatabaseManager] Refreshing player sprite with loaded equipment...")
+			LogManager.debug("Refreshing player sprite with loaded equipment", "player")
 			player.create_player_sprite()
 
 		# Refresh player stats (attack speed, damage, etc.) from loaded equipment
 		if player.has_method("update_stats_from_character"):
-			print("⚔️ [DatabaseManager] Refreshing player stats with loaded equipment...")
+			LogManager.debug("Refreshing player stats with loaded equipment", "player")
 			player.update_stats_from_character()
 
-	print("✅ [DatabaseManager] Applied saved data for: %s" % username)
+	LogManager.info("Applied saved data for: %s" % username, "database")
 
 func get_saved_position(username: String) -> Vector2:
 	"""Get saved position for a player (for spawn location)"""
@@ -535,4 +658,4 @@ func set_tutorial_completed(username: String = "") -> void:
 
 	players_data[user]["tutorial_completed"] = true
 	save_database()
-	print("📚 [DatabaseManager] Tutorial completed for: %s" % user)
+	LogManager.info("Tutorial completed for: %s" % user, "tutorial")

@@ -50,7 +50,7 @@ var fade_timer_started: bool = false  # Track if fade timer has started
 var shake_tween: Tween = null
 var original_sprite_position: Vector2 = Vector2.ZERO
 
-# Audio - uses TreeAudioManager for shared sounds
+# Audio - uses SoundManager for shared sounds
 var chop_audio_player: AudioStreamPlayer = null
 var fall_audio_player: AudioStreamPlayer = null
 var last_chop_sound_time: float = 0.0
@@ -94,7 +94,7 @@ func _ready() -> void:
 	# Create radial progress circle
 	create_progress_circle()
 
-	# Create audio players (sounds are loaded by TreeAudioManager)
+	# Create audio players (sounds are loaded by SoundManager)
 	create_audio_players()
 
 func _exit_tree() -> void:
@@ -1023,7 +1023,7 @@ func _on_body_exited(body: Node2D) -> void:
 			loot_ui.close_ui()
 
 func create_audio_players() -> void:
-	"""Create audio players (sounds loaded by TreeAudioManager singleton)"""
+	"""Create audio players (sounds loaded by SoundManager singleton)"""
 	chop_audio_player = AudioStreamPlayer.new()
 	chop_audio_player.name = "ChopAudioPlayer"
 	chop_audio_player.bus = "SFX"
@@ -1035,11 +1035,11 @@ func create_audio_players() -> void:
 	add_child(fall_audio_player)
 
 func play_random_chop_sound() -> void:
-	"""Play a random chopping sound from TreeAudioManager and shake the tree"""
+	"""Play a random chopping sound from SoundManager and shake the tree"""
 	if not chop_audio_player:
 		return
 
-	var sound = TreeAudioManager.get_random_chop_sound()
+	var sound = SoundManager.get_random_chop_sound()
 	if sound:
 		chop_audio_player.stream = sound
 		chop_audio_player.play()
@@ -1078,11 +1078,11 @@ func shake_tree() -> void:
 		original_sprite_position, shake_duration * 0.5)
 
 func play_random_fall_sound() -> void:
-	"""Play a random tree falling sound from TreeAudioManager"""
+	"""Play a random tree falling sound from SoundManager"""
 	if not fall_audio_player:
 		return
 
-	var sound = TreeAudioManager.get_random_fall_sound()
+	var sound = SoundManager.get_random_fall_sound()
 	if sound:
 		fall_audio_player.stream = sound
 		fall_audio_player.play()

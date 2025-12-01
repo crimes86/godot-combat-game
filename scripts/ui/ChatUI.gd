@@ -387,6 +387,43 @@ func is_chat_focused() -> bool:
 
 var _selected_account: String = ""  # For account commands
 
+# Admin command security - only server host can use admin commands
+const ADMIN_COMMANDS: Array[String] = [
+	"accounts", "select", "info", "setpos", "resetpos",
+	"setgold", "setlevel", "setstats", "ban", "unban",
+	"forceoffline", "delete"
+]
+
+# Input validation bounds
+const MAX_GOLD: int = 999999999
+const MIN_GOLD: int = 0
+const MAX_LEVEL: int = 30
+const MIN_LEVEL: int = 1
+const MAX_STAT: int = 999
+const MIN_STAT: int = 1
+const MAX_POSITION: float = 50000.0
+const MIN_POSITION: float = -50000.0
+
+func _is_admin() -> bool:
+	"""Check if current user has admin privileges (must be server host)"""
+	if not multiplayer:
+		return false
+	# Only the server (peer_id 1) or host can use admin commands
+	if multiplayer.is_server():
+		return true
+	# In single player or when hosting, peer_id is 1
+	if multiplayer.get_unique_id() == 1:
+		return true
+	return false
+
+func _require_admin(command: String) -> bool:
+	"""Check admin permission and show error if not authorized"""
+	if not _is_admin():
+		add_system_message("[Error] Admin commands require server host privileges")
+		add_system_message("Only the server host can use /%s" % command)
+		return false
+	return true
+
 func _handle_admin_command(cmd: String) -> void:
 	"""Process admin commands starting with /"""
 	var parts = cmd.strip_edges().split(" ", false)
@@ -396,10 +433,15 @@ func _handle_admin_command(cmd: String) -> void:
 	var command = parts[0].to_lower()
 	var args = parts.slice(1)
 
+	# Check admin permission for admin-only commands
+	if command in ADMIN_COMMANDS:
+		if not _require_admin(command):
+			return
+
 	match command:
 		"help":
 			_cmd_help()
-		# Group commands
+		# Group commands (available to all players)
 		"invite":
 			_cmd_group_invite(args)
 		"accept":
@@ -418,7 +460,7 @@ func _handle_admin_command(cmd: String) -> void:
 			_cmd_group_info()
 		"players", "who":
 			_cmd_players()
-		# Admin commands
+		# Admin commands (server host only - checked above)
 		"accounts":
 			_cmd_accounts()
 		"select":
@@ -651,8 +693,13 @@ func _cmd_setpos(args: Array) -> void:
 		add_system_message("[Error] Usage: /setpos <x> <y>")
 		return
 
-	var x = float(args[0])
-	var y = float(args[1])
+	# Validate numeric input
+	if not args[0].is_valid_float() or not args[1].is_valid_float():
+		add_system_message("[Error] Position must be numeric values")
+		return
+
+	var x = clampf(float(args[0]), MIN_POSITION, MAX_POSITION)
+	var y = clampf(float(args[1]), MIN_POSITION, MAX_POSITION)
 	DatabaseManager.players_data[_selected_account]["position_x"] = x
 	DatabaseManager.players_data[_selected_account]["position_y"] = y
 	DatabaseManager.save_database()
@@ -676,7 +723,12 @@ func _cmd_setgold(args: Array) -> void:
 		add_system_message("[Error] Usage: /setgold <amount>")
 		return
 
-	var amount = int(args[0])
+	# Validate numeric input
+	if not args[0].is_valid_int():
+		add_system_message("[Error] Gold amount must be a whole number")
+		return
+
+	var amount = clampi(int(args[0]), MIN_GOLD, MAX_GOLD)
 	DatabaseManager.players_data[_selected_account]["gold"] = amount
 	DatabaseManager.save_database()
 	add_system_message("Set %s gold to %d" % [_selected_account, amount])
@@ -689,7 +741,12 @@ func _cmd_setlevel(args: Array) -> void:
 		add_system_message("[Error] Usage: /setlevel <level>")
 		return
 
-	var level = clampi(int(args[0]), 1, 30)
+	# Validate numeric input
+	if not args[0].is_valid_int():
+		add_system_message("[Error] Level must be a whole number")
+		return
+
+	var level = clampi(int(args[0]), MIN_LEVEL, MAX_LEVEL)
 	DatabaseManager.players_data[_selected_account]["level"] = level
 	DatabaseManager.save_database()
 	add_system_message("Set %s level to %d" % [_selected_account, level])
@@ -702,13 +759,19 @@ func _cmd_setstats(args: Array) -> void:
 		add_system_message("[Error] Usage: /setstats <str> <agi> <vit> <luck>")
 		return
 
+	# Validate numeric inputs
+	for i in range(4):
+		if not args[i].is_valid_int():
+			add_system_message("[Error] All stats must be whole numbers")
+			return
+
 	var data = DatabaseManager.players_data[_selected_account]
-	data["strength"] = int(args[0])
-	data["agility"] = int(args[1])
-	data["vitality"] = int(args[2])
-	data["luck"] = int(args[3])
+	data["strength"] = clampi(int(args[0]), MIN_STAT, MAX_STAT)
+	data["agility"] = clampi(int(args[1]), MIN_STAT, MAX_STAT)
+	data["vitality"] = clampi(int(args[2]), MIN_STAT, MAX_STAT)
+	data["luck"] = clampi(int(args[3]), MIN_STAT, MAX_STAT)
 	DatabaseManager.save_database()
-	add_system_message("Updated %s stats" % _selected_account)
+	add_system_message("Updated %s stats (clamped to %d-%d)" % [_selected_account, MIN_STAT, MAX_STAT])
 
 func _cmd_ban(ban: bool) -> void:
 	if _selected_account.is_empty():

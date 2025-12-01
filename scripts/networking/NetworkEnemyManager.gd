@@ -32,6 +32,15 @@ var game_world: Node = null
 var attack_cooldowns: Dictionary = {}  # Dictionary[int, int] - peer_id -> last_attack_time_msec
 const ATTACK_COOLDOWN_MS: int = 90  # Minimum ms between attacks (tightened from 80ms, client uses 100ms)
 
+# Anti-cheat violation tracking with exponential backoff
+var violation_counts: Dictionary = {}  # Dictionary[int, int] - peer_id -> violation_count
+var violation_cooldowns: Dictionary = {}  # Dictionary[int, int] - peer_id -> cooldown_until_msec
+const VIOLATION_THRESHOLD_WARN: int = 3  # Warn after this many violations
+const VIOLATION_THRESHOLD_TIMEOUT: int = 5  # Start timeout after this many
+const VIOLATION_THRESHOLD_KICK: int = 10  # Kick after this many
+const BASE_TIMEOUT_MS: int = 1000  # Base timeout (1 second)
+const MAX_TIMEOUT_MS: int = 60000  # Max timeout (60 seconds)
+
 # Tutorial crit tracking (server-side) - tracks hits per player on training dummy
 var tutorial_dummy_hits: Dictionary = {}  # Dictionary[int, int] - peer_id -> hit_count
 const TUTORIAL_FORCE_CRIT_HITS: int = 5  # Force crit after this many hits on dummy during tutorial
@@ -43,9 +52,61 @@ func _ready():
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
 func _on_peer_disconnected(peer_id: int) -> void:
-	"""Clean up attack cooldown tracking when a player disconnects"""
+	"""Clean up attack cooldown and violation tracking when a player disconnects"""
 	attack_cooldowns.erase(peer_id)
 	tutorial_dummy_hits.erase(peer_id)
+	violation_counts.erase(peer_id)
+	violation_cooldowns.erase(peer_id)
+
+func _record_violation(peer_id: int, violation_type: String) -> bool:
+	"""Record an anti-cheat violation and apply exponential backoff.
+	Returns true if the action should be blocked, false if just warned."""
+	var current_time = Time.get_ticks_msec()
+
+	# Initialize if first violation
+	if not violation_counts.has(peer_id):
+		violation_counts[peer_id] = 0
+
+	# Increment violation count
+	violation_counts[peer_id] += 1
+	var count = violation_counts[peer_id]
+
+	# Log the violation
+	push_warning("Anti-cheat: Player %d violation #%d: %s" % [peer_id, count, violation_type])
+
+	# Check if player is in timeout
+	if violation_cooldowns.has(peer_id):
+		if current_time < violation_cooldowns[peer_id]:
+			var remaining = (violation_cooldowns[peer_id] - current_time) / 1000.0
+			push_warning("Anti-cheat: Player %d in timeout (%.1fs remaining)" % [peer_id, remaining])
+			return true  # Block action
+
+	# Apply escalating consequences
+	if count >= VIOLATION_THRESHOLD_KICK:
+		push_error("Anti-cheat: Player %d exceeded violation limit (%d), should be kicked" % [peer_id, count])
+		# Note: Actual kick would need NetworkManager integration
+		# For now, apply max timeout
+		violation_cooldowns[peer_id] = current_time + MAX_TIMEOUT_MS
+		return true
+
+	if count >= VIOLATION_THRESHOLD_TIMEOUT:
+		# Calculate exponential backoff: BASE * 2^(violations - threshold)
+		var backoff_multiplier = 1 << (count - VIOLATION_THRESHOLD_TIMEOUT)  # 2^n
+		var timeout_ms = mini(BASE_TIMEOUT_MS * backoff_multiplier, MAX_TIMEOUT_MS)
+		violation_cooldowns[peer_id] = current_time + timeout_ms
+		push_warning("Anti-cheat: Player %d timed out for %d ms" % [peer_id, timeout_ms])
+		return true
+
+	if count >= VIOLATION_THRESHOLD_WARN:
+		push_warning("Anti-cheat: Player %d has %d violations (kick at %d)" % [peer_id, count, VIOLATION_THRESHOLD_KICK])
+
+	return false  # Allow action but recorded violation
+
+func _is_player_timed_out(peer_id: int) -> bool:
+	"""Check if a player is currently in anti-cheat timeout"""
+	if not violation_cooldowns.has(peer_id):
+		return false
+	return Time.get_ticks_msec() < violation_cooldowns[peer_id]
 
 func _process(delta):
 	if not multiplayer.has_multiplayer_peer():
@@ -154,19 +215,24 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 	if attacker_id == 0:
 		attacker_id = 1  # Server's peer ID
 
-	# SECURITY: Attack cooldown check (anti-spam)
+	# SECURITY: Check if player is in anti-cheat timeout
+	if _is_player_timed_out(attacker_id):
+		return  # Silently ignore requests during timeout
+
+	# SECURITY: Attack cooldown check (anti-spam) with violation tracking
 	var current_time = Time.get_ticks_msec()
 	if attack_cooldowns.has(attacker_id):
 		var time_since_last = current_time - attack_cooldowns[attacker_id]
 		if time_since_last < ATTACK_COOLDOWN_MS:
-			push_warning("Anti-cheat: Player %d attacking too fast (%d ms)" % [attacker_id, time_since_last])
-			return
+			if _record_violation(attacker_id, "attacking too fast (%d ms)" % time_since_last):
+				return  # Blocked due to timeout
+			return  # Still block this specific attack
 	attack_cooldowns[attacker_id] = current_time
 
 	# SECURITY: Validate damage is within reasonable bounds for player's level
 	var max_base_damage = _get_max_player_damage(attacker_id)
 	if damage <= 0 or damage > max_base_damage * 1.5:  # Allow 50% buffer for variance
-		push_warning("Anti-cheat: Player %d reported suspicious damage %.1f (max expected: %.1f)" % [attacker_id, damage, max_base_damage])
+		_record_violation(attacker_id, "suspicious damage %.1f (max: %.1f)" % [damage, max_base_damage])
 		damage = clampf(damage, 1.0, max_base_damage)
 
 	# Check if enemy already in crit window
@@ -176,7 +242,7 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 
 	if enemy_in_crit:
 		# Enemy already in crit window - just apply normal damage
-		print("🌐 Server: Enemy already in crit window, applying normal damage")
+		LogManager.debug("Enemy already in crit window, applying normal damage", "combat")
 		_apply_damage_internal(enemy_network_id, damage, false, false, attacker_id)
 		return
 
@@ -194,12 +260,12 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 		# Force crit for tutorial
 		is_crit = true
 		tutorial_dummy_hits[attacker_id] = 0  # Reset for next crit window
-		print("🎯 Server: FORCED CRIT for tutorial (player %d hit dummy %d times)" % [attacker_id, TUTORIAL_FORCE_CRIT_HITS])
+		LogManager.debug("FORCED CRIT for tutorial (player %d hit dummy %d times)" % [attacker_id, TUTORIAL_FORCE_CRIT_HITS], "tutorial")
 	else:
 		is_crit = _server_roll_for_crit(attacker_id, is_training_dummy)
 
 	if is_crit:
-		print("🌐 Server: CRIT rolled for player %d on enemy %d!" % [attacker_id, enemy_network_id])
+		LogManager.debug("CRIT rolled for player %d on enemy %d!" % [attacker_id, enemy_network_id], "combat")
 
 		# CLIENT-INDEPENDENT CRIT WINDOWS: Only the attacker sees weakpoints
 		if attacker_id == 1:
@@ -214,7 +280,7 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
 			else:
 				# Fallback: just apply damage if crit window manager not available
-				print("⚠️ CritWindowManager not found, applying crit damage directly")
+				LogManager.warn("CritWindowManager not found, applying crit damage directly", "combat")
 				_apply_damage_internal(enemy_network_id, damage * 2.0, true, false, attacker_id)
 		else:
 			# Client player triggered crit - notify them to start LOCAL crit window
@@ -304,13 +370,18 @@ func request_damage(enemy_network_id: int, damage: float, is_crit: bool, is_weak
 	if attacker_id == 0:
 		attacker_id = 1  # Server's peer ID
 
+	# SECURITY: Check if player is in anti-cheat timeout
+	if _is_player_timed_out(attacker_id):
+		return  # Silently ignore requests during timeout
+
 	# SECURITY: Attack cooldown check (anti-spam) - share cooldown with request_attack
 	var current_time = Time.get_ticks_msec()
 	if attack_cooldowns.has(attacker_id):
 		var time_since_last = current_time - attack_cooldowns[attacker_id]
 		if time_since_last < ATTACK_COOLDOWN_MS:
-			push_warning("Anti-cheat: Player %d dealing damage too fast (%d ms)" % [attacker_id, time_since_last])
-			return
+			if _record_violation(attacker_id, "dealing damage too fast (%d ms)" % time_since_last):
+				return  # Blocked due to timeout
+			return  # Still block this specific action
 	attack_cooldowns[attacker_id] = current_time
 
 	# SECURITY: Validate damage amount based on player's actual stats
@@ -321,8 +392,8 @@ func request_damage(enemy_network_id: int, damage: float, is_crit: bool, is_weak
 		max_expected_damage *= 2.5  # Weakpoint multiplier + buffer
 
 	if damage <= 0 or damage > max_expected_damage:
-		push_warning("Anti-cheat: Player %d suspicious damage %.1f (max: %.1f, crit: %s, wp: %s)" % [
-			attacker_id, damage, max_expected_damage, is_crit, is_weakpoint
+		_record_violation(attacker_id, "suspicious damage %.1f (max: %.1f, crit: %s, wp: %s)" % [
+			damage, max_expected_damage, is_crit, is_weakpoint
 		])
 		damage = clampf(damage, 1.0, max_expected_damage)
 
@@ -482,9 +553,9 @@ func _handle_enemy_death(enemy_network_id: int, killer_id: int) -> void:
 	# Serialize loot items to JSON string for reliable RPC transmission
 	# Godot's RPC has issues with Array[Dictionary] serialization
 	var loot_json = JSON.stringify(loot_data.items)
-	print("🌐 Server: Sending death for enemy #%d with %d items, json length: %d" % [
+	LogManager.debug("Sending death for enemy #%d with %d items, json length: %d" % [
 		enemy_network_id, loot_data.items.size(), loot_json.length()
-	])
+	], "loot")
 
 	# Broadcast death to all clients (loot as JSON string)
 	rpc("_client_enemy_died", enemy_network_id, killer_id, loot_json, loot_data.gold)
@@ -521,25 +592,25 @@ func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_json: String
 		if parsed is Array:
 			loot_items = parsed
 		else:
-			push_warning("Failed to parse loot JSON: %s" % loot_json)
+			LogManager.warn("Failed to parse loot JSON: %s" % loot_json, "loot")
 
-	print("💀 [%s] Enemy #%d died - received %d loot items, %d gold (json len: %d)" % [
+	LogManager.debug("[%s] Enemy #%d died - received %d loot items, %d gold (json len: %d)" % [
 		"Server" if is_server else "Client",
 		enemy_network_id,
 		loot_items.size(),
 		loot_gold,
 		loot_json.length()
-	])
+	], "loot")
 
 	# Set loot (generated by server) - must happen BEFORE die() to override local generation
 	enemy.corpse_loot = loot_items
 	enemy.corpse_gold = loot_gold
 
 	# Debug: verify loot was set correctly
-	print("💀 [%s] Verified enemy.corpse_loot has %d items after assignment" % [
+	LogManager.debug("[%s] Verified enemy.corpse_loot has %d items after assignment" % [
 		"Server" if is_server else "Client",
 		enemy.corpse_loot.size()
-	])
+	], "loot")
 
 	# Store killer ID for XP attribution
 	enemy.set_meta("killer_peer_id", killer_id)
@@ -671,10 +742,10 @@ func _sync_enemy_positions() -> void:
 			avg_synced += count
 		if player_positions.size() > 0:
 			avg_synced = avg_synced / player_positions.size()
-		print("📡 [Interest Mgmt] %d players, %d total enemies, avg %.0f synced/player (%.0f%% reduction)" % [
+		LogManager.debug("[Interest Mgmt] %d players, %d total enemies, avg %.0f synced/player (%.0f%% reduction)" % [
 			player_positions.size(), total_enemies, avg_synced,
 			100.0 * (1.0 - float(avg_synced) / max(total_enemies, 1))
-		])
+		], "network")
 
 @rpc("authority", "unreliable_ordered")
 func _client_sync_positions(positions: Dictionary) -> void:
@@ -768,7 +839,7 @@ func spawn_training_dummy_on_clients(network_id: int, pos: Vector2) -> void:
 
 	var dummy_scene = load("res://scenes/training/training_dummy.tscn")
 	if not dummy_scene:
-		print("🌐 Client: ERROR - Could not load training_dummy.tscn")
+		LogManager.error("Could not load training_dummy.tscn", "network")
 		return
 
 	var dummy = dummy_scene.instantiate()
@@ -1028,9 +1099,7 @@ func process_crit_window_result(enemy_network_id: int, weakpoints_destroyed: int
 
 	# Anti-cheat: Check if reported weakpoints exceeds what player should have
 	if weakpoints_destroyed > expected_weakpoints:
-		push_warning("Anti-cheat: Player %d reported %d weakpoints but should have max %d (level-based)" % [
-			attacker_id, weakpoints_destroyed, expected_weakpoints
-		])
+		_record_violation(attacker_id, "reported %d weakpoints (max: %d)" % [weakpoints_destroyed, expected_weakpoints])
 		# Clamp to expected value
 		weakpoints_destroyed = expected_weakpoints
 
@@ -1176,7 +1245,7 @@ func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int
 	# Only the looter gets the gold added to their stats
 	if multiplayer.get_unique_id() == looter_id:
 		CharacterStats.add_gold(gold_amount)
-		print("💰 You looted %d gold" % gold_amount)
+		LogManager.info("You looted %d gold" % gold_amount, "loot")
 
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
@@ -1189,58 +1258,58 @@ func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int
 func request_loot_item(enemy_network_id: int, item_index: int) -> void:
 	"""Client requests to loot an item from a corpse. Server validates and broadcasts."""
 	if not multiplayer.is_server():
-		print("📦 request_loot_item: Not server, ignoring")
+		LogManager.debug("request_loot_item: Not server, ignoring", "loot")
 		return
 
-	print("📦 Server: request_loot_item for enemy=%d, index=%d" % [enemy_network_id, item_index])
+	LogManager.debug("request_loot_item for enemy=%d, index=%d" % [enemy_network_id, item_index], "loot")
 
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
-		print("❌ Server: Enemy not found")
+		LogManager.debug("Enemy not found for loot request", "loot")
 		return
 
 	if not enemy.is_corpse:
-		print("❌ Server: Enemy is not a corpse")
+		LogManager.debug("Enemy is not a corpse for loot request", "loot")
 		return
 
 	var looter_id = multiplayer.get_remote_sender_id()
 	if looter_id == 0:
 		looter_id = 1  # Server is looting
 
-	print("📦 Server: Looter ID = %d, corpse has %d items" % [looter_id, enemy.corpse_loot.size()])
+	LogManager.debug("Looter ID = %d, corpse has %d items" % [looter_id, enemy.corpse_loot.size()], "loot")
 
 	# Validate item index
 	if item_index < 0 or item_index >= enemy.corpse_loot.size():
-		print("❌ Server: Invalid item index %d (corpse has %d items)" % [item_index, enemy.corpse_loot.size()])
+		LogManager.debug("Invalid item index %d (corpse has %d items)" % [item_index, enemy.corpse_loot.size()], "loot")
 		return
 
 	var item = enemy.corpse_loot[item_index]
 	if not item:
-		print("❌ Server: Item at index %d is null" % item_index)
+		LogManager.debug("Item at index %d is null" % item_index, "loot")
 		return
 
 	var item_name = item.get("name", "Unknown")
-	print("📦 Server: Looting '%s' from corpse" % item_name)
+	LogManager.debug("Looting '%s' from corpse" % item_name, "loot")
 
 	# Remove item from server's corpse loot
 	enemy.corpse_loot.remove_at(item_index)
-	print("📦 Server: Removed item, corpse now has %d items" % enemy.corpse_loot.size())
+	LogManager.debug("Removed item, corpse now has %d items" % enemy.corpse_loot.size(), "loot")
 
 	# Serialize item to JSON for reliable RPC transmission
 	var item_json = JSON.stringify(item)
 
 	# Broadcast to all clients (including server via call_local)
-	print("📦 Server: Broadcasting _client_item_looted to all peers")
+	LogManager.debug("Broadcasting _client_item_looted to all peers", "loot")
 	_client_item_looted.rpc(enemy_network_id, looter_id, item_index, item_json)
 
 @rpc("authority", "call_local", "reliable")
 func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int, item_json: String) -> void:
 	"""Server broadcasts that an item was looted from a corpse."""
-	print("📦 _client_item_looted received: enemy=%d, looter=%d, index=%d" % [enemy_network_id, looter_id, item_index])
+	LogManager.debug("_client_item_looted received: enemy=%d, looter=%d, index=%d" % [enemy_network_id, looter_id, item_index], "loot")
 
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
-		print("❌ _client_item_looted: Enemy not found or invalid")
+		LogManager.debug("_client_item_looted: Enemy not found or invalid", "loot")
 		return
 
 	# Deserialize item from JSON
@@ -1250,7 +1319,7 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 		if parsed is Dictionary:
 			item = parsed
 		else:
-			push_warning("Failed to parse item JSON: %s" % item_json)
+			LogManager.warn("Failed to parse item JSON: %s" % item_json, "loot")
 			return
 
 	var item_name = item.get("name", "")
@@ -1261,28 +1330,28 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 	if not multiplayer.is_server():
 		var item_type = item.get("type", "")
 		var removed = false
-		print("📦 Client removing item '%s' from corpse (has %d items)" % [item_name, enemy.corpse_loot.size()])
+		LogManager.debug("Client removing item '%s' from corpse (has %d items)" % [item_name, enemy.corpse_loot.size()], "loot")
 		for i in range(enemy.corpse_loot.size()):
 			var corpse_item = enemy.corpse_loot[i]
 			if corpse_item:
-				print("   [%d] '%s' type='%s'" % [i, corpse_item.get("name", ""), corpse_item.get("type", "")])
+				LogManager.debug("   [%d] '%s' type='%s'" % [i, corpse_item.get("name", ""), corpse_item.get("type", "")], "loot")
 			if corpse_item and corpse_item.get("name", "") == item_name:
 				enemy.corpse_loot.remove_at(i)
 				removed = true
-				print("🗑️ Client: Removed '%s' from corpse loot at index %d" % [item_name, i])
+				LogManager.debug("Removed '%s' from corpse loot at index %d" % [item_name, i], "loot")
 				break
 		if not removed:
-			print("⚠️ Client: Could not find '%s' in corpse loot to remove" % item_name)
-		print("📦 Client corpse now has %d items" % enemy.corpse_loot.size())
+			LogManager.warn("Could not find '%s' in corpse loot to remove" % item_name, "loot")
+		LogManager.debug("Client corpse now has %d items" % enemy.corpse_loot.size(), "loot")
 
 	# Only the looter gets the item added to their inventory
 	if multiplayer.get_unique_id() == looter_id:
 		if InventorySystem.add_item(item):
 			var item_rarity = item.get("rarity", "Common")
-			print("✨ Looted: %s from corpse" % item_name)
+			LogManager.info("Looted: %s from corpse" % item_name, "loot")
 			NotificationManager.notify_item_added(item_name, 1, item_rarity)
 		else:
-			print("❌ Inventory full! Cannot loot %s" % item_name)
+			LogManager.warn("Inventory full! Cannot loot %s" % item_name, "inventory")
 
 	# Check if corpse is now fully empty
 	enemy.check_if_looted_empty()
