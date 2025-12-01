@@ -8,10 +8,10 @@ func _ready() -> void:
 	visible = false
 	return
 
-	# Connect to ChainManager signals
-	ChainManager.chain_increased.connect(_on_chain_increased)
-	ChainManager.chain_reset.connect(_on_chain_reset)
-	ChainManager.overdrive_activated.connect(_on_overdrive_activated)
+	# Connect to CharacterStats chain signals (merged from ChainManager)
+	CharacterStats.chain_increased.connect(_on_chain_increased)
+	CharacterStats.chain_reset.connect(_on_chain_reset)
+	CharacterStats.overdrive_activated.connect(_on_overdrive_activated)
 
 	# Initial display
 	update_display()
@@ -28,7 +28,7 @@ func _on_overdrive_activated() -> void:
 	# Optional: Add special OVERDRIVE animation/effects
 
 func update_display() -> void:
-	var level = ChainManager.get_chain_level()
+	var level = CharacterStats.get_chain_level()
 	
 	if level == 0:
 		text = "Chain: 0x"

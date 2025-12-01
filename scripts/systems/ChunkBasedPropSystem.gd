@@ -98,9 +98,9 @@ func _ready() -> void:
 	# Create debug label (hidden by default)
 	create_debug_label()
 
-	# Connect to DebugConfig F3 toggle
-	if DebugConfig:
-		DebugConfig.debug_display_toggled.connect(_on_debug_toggled)
+	# Connect to Constants F3 toggle
+	if Constants:
+		Constants.debug_display_toggled.connect(_on_debug_toggled)
 
 	# Listen for new peer connections to sync harvestable state
 	multiplayer.peer_connected.connect(_on_peer_connected)

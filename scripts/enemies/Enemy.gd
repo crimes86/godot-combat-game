@@ -118,7 +118,7 @@ func _ready() -> void:
 	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))  # Same scaling as XP
 
 	# Debug gold drop calculation (disabled - too spammy)
-	# DebugConfig.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d" % [enemy_level, gold_drop_base, gold_drop])
+	# Constants.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d" % [enemy_level, gold_drop_base, gold_drop])
 
 	current_health = max_health
 	if health_bar and health_bar.has_method("update_health"):
@@ -493,7 +493,7 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	current_health -= amount
 	current_health = max(current_health, 0.0)
 
-	DebugConfig.log_combat("Enemy hit! Damage: %d (Crit: %s, Weakpoint: %s) | Health: %d/%d" % [amount, is_crit, is_weakpoint_hit, current_health, max_health])
+	Constants.log_combat("Enemy hit! Damage: %d (Crit: %s, Weakpoint: %s) | Health: %d/%d" % [amount, is_crit, is_weakpoint_hit, current_health, max_health])
 
 	# ✨ NEW: Emit signal for player to handle feedback
 	damage_taken.emit(amount, is_crit)

@@ -27,9 +27,9 @@ func _ready() -> void:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	add_child(label)
 
-	# Connect to DebugConfig signal
-	if DebugConfig:
-		DebugConfig.debug_display_toggled.connect(_on_debug_toggled)
+	# Connect to Constants debug signal
+	if Constants:
+		Constants.debug_display_toggled.connect(_on_debug_toggled)
 
 func _process(delta: float) -> void:
 	# Only update profiler when visible (F3 toggled on)

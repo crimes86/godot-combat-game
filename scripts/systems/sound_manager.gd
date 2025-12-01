@@ -96,6 +96,10 @@ var lava_burn_sound: AudioStream = null  # Fire damage when player stands in lav
 # Player progression sounds
 var level_up_sound: AudioStream = null  # Celebratory level up fanfare
 
+# Tree chopping/falling sounds (from TreeAudioManager)
+var tree_chop_sounds: Array[AudioStream] = []
+var tree_fall_sounds: Array[AudioStream] = []
+
 # Weapon-specific hit sounds (organized by weapon type)
 var weapon_hit_sounds: Dictionary = {
 	"sword": [],
@@ -473,6 +477,36 @@ func _load_real_sounds() -> void:
 		print("  ✅ Loaded level_up.wav")
 	else:
 		push_warning("  ⚠️ Failed to load level_up.wav")
+
+	# Load tree chopping/falling sounds (shared by all trees)
+	print("  🌲 Loading tree sounds...")
+	var chop_paths = [
+		"res://assets/sounds/tree/chop_1.wav",
+		"res://assets/sounds/tree/chop_2.wav",
+		"res://assets/sounds/tree/chop_3.wav"
+	]
+	for path in chop_paths:
+		var stream = load(path)
+		if stream:
+			tree_chop_sounds.append(stream)
+			print("  ✅ Loaded %s" % path.get_file())
+		else:
+			push_warning("  ⚠️ Failed to load %s" % path)
+
+	var fall_paths = [
+		"res://assets/sounds/tree/tree_fall_1.wav",
+		"res://assets/sounds/tree/tree_fall_2.wav",
+		"res://assets/sounds/tree/tree_fall_3.wav"
+	]
+	for path in fall_paths:
+		var stream = load(path)
+		if stream:
+			tree_fall_sounds.append(stream)
+			print("  ✅ Loaded %s" % path.get_file())
+		else:
+			push_warning("  ⚠️ Failed to load %s" % path)
+
+	print("  📊 Loaded %d tree chop sounds and %d tree fall sounds (shared by all trees)" % [tree_chop_sounds.size(), tree_fall_sounds.size()])
 
 func _load_weapon_sounds(weapon_type: String, count: int) -> void:
 	"""Load weapon-specific hit sounds"""
@@ -1406,3 +1440,19 @@ func toggle_music_mute() -> void:
 		else:
 			music_player.volume_db = music_volume_db
 	print("🎵 Music %s" % ("MUTED" if music_muted else "ON"))
+
+# ============================================
+# TREE SOUNDS (from TreeAudioManager)
+# ============================================
+
+## Get a random tree chopping sound
+func get_random_chop_sound() -> AudioStream:
+	if tree_chop_sounds.is_empty():
+		return null
+	return tree_chop_sounds[randi() % tree_chop_sounds.size()]
+
+## Get a random tree falling sound
+func get_random_fall_sound() -> AudioStream:
+	if tree_fall_sounds.is_empty():
+		return null
+	return tree_fall_sounds[randi() % tree_fall_sounds.size()]

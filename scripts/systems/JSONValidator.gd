@@ -8,13 +8,13 @@ class_name JSONValidator
 static func load_json_file(file_path: String) -> Dictionary:
 	# Check if file exists
 	if not FileAccess.file_exists(file_path):
-		DebugConfig.log_error("JSON file not found: %s" % file_path)
+		Constants.log_error("JSON file not found: %s" % file_path)
 		return {"success": false, "error": "FILE_NOT_FOUND", "data": null}
 
 	# Open file
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
-		DebugConfig.log_error("Failed to open JSON file: %s (Error: %d)" % [file_path, FileAccess.get_open_error()])
+		Constants.log_error("Failed to open JSON file: %s (Error: %d)" % [file_path, FileAccess.get_open_error()])
 		return {"success": false, "error": "FILE_OPEN_FAILED", "data": null}
 
 	# Read content
@@ -23,7 +23,7 @@ static func load_json_file(file_path: String) -> Dictionary:
 
 	# Check if empty
 	if content.is_empty():
-		DebugConfig.log_error("JSON file is empty: %s" % file_path)
+		Constants.log_error("JSON file is empty: %s" % file_path)
 		return {"success": false, "error": "FILE_EMPTY", "data": null}
 
 	# Parse JSON
@@ -33,7 +33,7 @@ static func load_json_file(file_path: String) -> Dictionary:
 	if parse_result != OK:
 		var error_line = json.get_error_line()
 		var error_msg = json.get_error_message()
-		DebugConfig.log_error("JSON parse error in %s at line %d: %s" % [file_path, error_line, error_msg])
+		Constants.log_error("JSON parse error in %s at line %d: %s" % [file_path, error_line, error_msg])
 		return {"success": false, "error": "PARSE_ERROR", "error_line": error_line, "error_message": error_msg, "data": null}
 
 	# Success
@@ -43,7 +43,7 @@ static func load_json_file(file_path: String) -> Dictionary:
 static func validate_required_fields(data: Dictionary, required_fields: Array, context: String = "data") -> bool:
 	for field in required_fields:
 		if not data.has(field):
-			DebugConfig.log_error("Missing required field '%s' in %s" % [field, context])
+			Constants.log_error("Missing required field '%s' in %s" % [field, context])
 			return false
 	return true
 
@@ -71,7 +71,7 @@ static func validate_field_types(data: Dictionary, field_types: Dictionary, cont
 					type_matches = actual_value is Dictionary
 
 			if not type_matches:
-				DebugConfig.log_error("Field '%s' in %s has wrong type (expected: %s)" % [field_name, context, type_string(expected_type)])
+				Constants.log_error("Field '%s' in %s has wrong type (expected: %s)" % [field_name, context, type_string(expected_type)])
 				return false
 
 	return true
@@ -84,7 +84,7 @@ static func get_safe_value(data: Dictionary, key: String, default_value):
 		if typeof(value) == typeof(default_value):
 			return value
 		else:
-			DebugConfig.log_warning("Field '%s' has wrong type, using default: %s" % [key, str(default_value)])
+			Constants.log_warning("Field '%s' has wrong type, using default: %s" % [key, str(default_value)])
 			return default_value
 	return default_value
 

@@ -126,6 +126,9 @@ func _ready():
 	# Initialize multiplayer
 	_setup_multiplayer()
 
+	# Restore UI autoloads that were hidden when returning to main menu
+	_restore_ui_autoloads()
+
 	# Connect TimeManager to CanvasModulate for day/night cycle
 	var canvas_modulate = $CanvasModulate
 	if canvas_modulate and TimeManager:
@@ -168,7 +171,7 @@ func _ready():
 	await get_tree().process_frame
 	update_terrain_visibility()
 
-	DebugConfig.log_spawning("✅ GameWorld ready!")
+	Constants.log_spawning("✅ GameWorld ready!")
 
 func _process(delta):
 	"""Handle viewport culling for terrain and player sync"""
@@ -2275,17 +2278,17 @@ func load_path_markers_from_json():
 	# Load path markers with validation
 	var result = JSONValidator.load_json_file("res://data/path_markers.json")
 	if not result.success:
-		DebugConfig.log_error("Failed to load path_markers.json: %s" % result.error)
+		Constants.log_error("Failed to load path_markers.json: %s" % result.error)
 		return
 
 	var data = result.data
 	if not data.has("PathMarkers"):
-		DebugConfig.log_error("path_markers.json missing 'PathMarkers' array")
+		Constants.log_error("path_markers.json missing 'PathMarkers' array")
 		return
 
 	var markers = data["PathMarkers"]
 	if not markers is Array:
-		DebugConfig.log_error("PathMarkers in path_markers.json is not an array")
+		Constants.log_error("PathMarkers in path_markers.json is not an array")
 		return
 
 	# Use existing PathMarkers node from scene (don't create new one)
@@ -2302,7 +2305,7 @@ func load_path_markers_from_json():
 			if JSONValidator.validate_required_fields(marker, ["id", "x", "y"], "path marker"):
 				create_marker_sprite(marker, path_markers_node)
 		else:
-			DebugConfig.log_warning("Invalid path marker entry (not a Dictionary)")
+			Constants.log_warning("Invalid path marker entry (not a Dictionary)")
 
 func create_marker_sprite(marker_data: Dictionary, parent: Node2D) -> bool:
 	var sprite = Sprite2D.new()
@@ -3460,6 +3463,25 @@ func _create_loot_ui_deferred(corpse, nearby_corpses: Array) -> void:
 	get_tree().root.add_child(loot_ui)
 	loot_ui.loot_ui_closed.connect(func(): loot_ui.queue_free())
 	loot_ui.open_loot_ui(corpse, nearby_corpses)
+
+# ========================
+# UI RESTORATION
+# ========================
+
+func _restore_ui_autoloads():
+	"""Restore UI autoloads that were hidden when returning to main menu"""
+	# These are hidden in NetworkManager._return_to_main_menu()
+	if QuestTrackerUI:
+		QuestTrackerUI.visible = true
+	if GroupUI:
+		GroupUI.visible = true
+		# Note: invite popup visibility is managed internally by GroupUI
+	if BugReportUI:
+		BugReportUI.visible = true
+	if NotificationManager:
+		var notif_canvas = NotificationManager.get_node_or_null("NotificationCanvas")
+		if notif_canvas:
+			notif_canvas.visible = true
 
 # ========================
 # MULTIPLAYER FUNCTIONS

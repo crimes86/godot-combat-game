@@ -45,6 +45,9 @@ var passive_heal_timer: float = 0.0
 var screen_shake: ScreenShake = null
 var attack_feedback: AttackFeedbackSystem = null
 
+# Combat subsystem (handles attacks, healing, crit windows)
+var combat_system: PlayerCombat = null
+
 # Visual feedback
 var cone_visualizer: Polygon2D = null
 var circle_visualizer: Node2D = null  # Ranged weapon targeting circle (at cursor)
@@ -55,9 +58,6 @@ var world_debug_nodes: Array = []  # Track world-space debug nodes for cleanup
 var debug_update_timer: float = 0.0  # Throttle debug updates
 var debug_label: Label = null  # Display debug info (coordinates, etc.)
 var cone_update_timer: float = 0.0  # Throttle cone color updates (CRITICAL for performance!)
-
-# Debug flag for weakpoint interaction troubleshooting (set to true to enable detailed logging)
-var debug_weakpoint_clicks: bool = false
 
 # Camera zoom
 @export var zoom_min: float = 0.75  # Zoom out 1.33x (limited to prevent map reveal)
@@ -90,6 +90,9 @@ var dash_invincible: bool = true  # I-frames during dash
 
 # Movement modifiers (for debuffs like lava slow)
 var movement_modifiers: Dictionary = {}  # source_name -> multiplier (0.0-1.0)
+
+# Movement subsystem (handles dash, speed modifiers)
+var movement_system: PlayerMovement = null
 
 # Multiplayer helper methods
 func get_current_animation() -> String:
@@ -201,11 +204,23 @@ func _ready() -> void:
 	screen_shake = ScreenShake.new()
 	screen_shake.name = "ScreenShake"
 	add_child(screen_shake)
+
+	# Initialize movement subsystem
+	movement_system = PlayerMovement.new(self)
+	movement_system.set_base_speed(speed)
 	
 	# Setup attack feedback system
 	attack_feedback = AttackFeedbackSystem.new()
 	add_child(attack_feedback)
-	
+
+	# Initialize combat subsystem
+	combat_system = PlayerCombat.new(self)
+	combat_system.crit_system = crit_system
+	combat_system.crit_window_manager = crit_window_manager
+	combat_system.screen_shake = screen_shake
+	combat_system.attack_feedback = attack_feedback
+	combat_system.update_stats(attack_damage, attack_cooldown, attack_range, attack_cone_angle)
+
 	# Setup debug shapes container - only for local player
 	if is_multiplayer_authority():
 		debug_shapes = Node2D.new()
@@ -417,6 +432,9 @@ func update_stats_from_character() -> void:
 		speed = CharacterStats.get_movement_speed()
 	else:
 		speed = speed_override
+	# Sync with movement subsystem
+	if movement_system:
+		movement_system.set_base_speed(speed)
 	
 	# Update attack damage
 	if damage_override < 0:
@@ -433,6 +451,10 @@ func update_stats_from_character() -> void:
 	# Update crit system base chance (preserves pity progress)
 	if crit_system:
 		crit_system.on_weapon_changed()
+
+	# Sync with combat subsystem
+	if combat_system:
+		combat_system.update_stats(attack_damage, attack_cooldown, attack_range, attack_cone_angle)
 
 	print("📊 Player stats updated:")
 	print("  Level: ", CharacterStats.level)
@@ -534,31 +556,21 @@ func _physics_process(delta: float) -> void:
 	if not is_multiplayer_authority():
 		return
 
-	# Update dash cooldown
-	if dash_cooldown_timer > 0:
-		dash_cooldown_timer -= delta
-
 	# Get input direction (used for movement and animation)
 	# Block movement input when chat is focused
 	var input_direction := Vector2.ZERO
 	if not (chat_ui and chat_ui.has_method("is_chat_focused") and chat_ui.is_chat_focused()):
 		input_direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 
-	# Calculate effective speed with modifiers
-	var effective_speed = speed * get_movement_modifier()
-
-	# Handle dash movement
-	if is_dashing:
-		dash_timer -= delta
-		velocity = dash_direction * speed * dash_speed_multiplier  # Dash ignores slow effects
-
-		# Update dash visual effects
-		update_dash_visuals(delta)
-
-		if dash_timer <= 0:
-			end_dash()
+	# Use movement subsystem for velocity calculation (handles dash, speed modifiers)
+	if movement_system:
+		velocity = movement_system.process_movement(delta, input_direction)
+		# Sync dash state from subsystem to player (needed for network sync and invincibility)
+		is_dashing = movement_system.is_dashing
+		dash_direction = movement_system.dash_direction
 	else:
-		velocity = input_direction * effective_speed
+		# Fallback if subsystem not initialized
+		velocity = input_direction * speed
 
 	move_and_slide()
 
@@ -577,13 +589,17 @@ func _physics_process(delta: float) -> void:
 				global_position = campfire_pos - direction_to_center * tutorial_radius
 				velocity = Vector2.ZERO
 
-	# Clamp player position to world boundaries (with 50px buffer)
-	var x_min = -Constants.CHUNK_SIZE + 50
-	var x_max = Constants.CHUNK_SIZE * 2 - 50
-	var y_min = -Constants.CHUNK_SIZE / 2 + 50
-	var y_max = Constants.CHUNK_SIZE / 2 - 50
-	global_position.x = clamp(global_position.x, x_min, x_max)
-	global_position.y = clamp(global_position.y, y_min, y_max)
+	# Clamp player position to world boundaries
+	if movement_system:
+		global_position = movement_system.clamp_to_world_bounds(global_position)
+	else:
+		# Fallback
+		var x_min = -Constants.CHUNK_SIZE + 50
+		var x_max = Constants.CHUNK_SIZE * 2 - 50
+		var y_min = -Constants.CHUNK_SIZE / 2 + 50
+		var y_max = Constants.CHUNK_SIZE / 2 - 50
+		global_position.x = clamp(global_position.x, x_min, x_max)
+		global_position.y = clamp(global_position.y, y_min, y_max)
 
 	update_facing_direction()
 	
@@ -597,32 +613,23 @@ func _physics_process(delta: float) -> void:
 	# Update attack direction for combat
 	var mouse_pos = get_global_mouse_position()
 	attack_direction = (mouse_pos - global_position).normalized()
-	
+	# Sync attack direction to combat subsystem
+	if combat_system:
+		combat_system.attack_direction = attack_direction
+
 	# Handle held attack (continuous attacking/healing while mouse held)
 	if is_mouse_held:
 		# ❌ BLOCK HOLD ATTACKS when UI is open
 		if is_ui_blocking_input():
 			is_mouse_held = false  # Cancel hold state when UI opens
 			hold_attack_timer = 0.0
+			if combat_system:
+				combat_system.is_mouse_held = false
+				combat_system.hold_attack_timer = 0.0
 		else:
-			hold_attack_timer += delta
-			if hold_attack_timer >= hold_attack_interval:
-				hold_attack_timer = 0.0
-
-				# Check if using healing weapon
-				if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_healing_weapon():
-					# Healing staff - continuous healing
-					if can_attack:
-						attempt_heal()
-				else:
-					# Melee weapon - normal attack logic
-					# ✨ CRIT WINDOW: Check if holding on enemy in crit window (uncapped speed!)
-					if is_holding_on_crit_window_enemy(mouse_pos):
-						# Handled by crit window logic - no cooldown check needed!
-						pass
-					elif can_attack:
-						# Normal attack - cooldown enforced
-						attempt_attack()
+			# Combat subsystem handles held attack logic
+			if combat_system:
+				combat_system.process_held_attack(delta, mouse_pos)
 	
 	# Update debug visualization if enabled
 	if debug_mode:
@@ -647,6 +654,9 @@ func _physics_process(delta: float) -> void:
 
 	# Passive Healing System (Out-of-Combat Regeneration)
 	process_passive_healing(delta)
+
+	# Process logout timer
+	_process_logout_timer(delta, input_direction)
 
 	# Handle player death
 	if current_health <= 0 and not is_dead:
@@ -743,26 +753,19 @@ func _input(event: InputEvent) -> void:
 				is_mouse_held = true
 				hold_attack_timer = 0.0
 
-				# Check if using a healing weapon
-				if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_healing_weapon():
-					# Healing staff - attempt heal instead of attack
-					attempt_heal()
-				else:
-					# Melee/damage weapon - normal attack flow
-					# ✨ FIX #1: Check if clicking on weakpoint FIRST
-					if is_clicking_on_weakpoint(event):
-						return  # Let the weakpoint handle it!
-
-					# ✨ FIX #2: Try crit window click on enemy body
-					if check_crit_window_click(event):
-						return  # Handled crit window attack
-
-					# Normal attack
-					attempt_attack()
+				# Combat subsystem handles all attack logic
+				if combat_system:
+					combat_system.is_mouse_held = true
+					combat_system.hold_attack_timer = 0.0
+					var mouse_pos = get_global_mouse_position()
+					combat_system.on_mouse_pressed(mouse_pos)
 			else:
 				# Mouse released - stop hold state
 				is_mouse_held = false
 				hold_attack_timer = 0.0
+				# Sync to combat subsystem
+				if combat_system:
+					combat_system.on_mouse_released()
 		
 		# ✨ FIX: CAMERA ZOOM - Mouse wheel handling (disabled when shop is open)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
@@ -880,9 +883,14 @@ func _input(event: InputEvent) -> void:
 					inventory_ui.toggle_ui()
 
 			KEY_SPACE:
-				# Dash/dodge
-				if not is_dashing and dash_cooldown_timer <= 0:
-					start_dash()
+				# Dash/dodge - use movement subsystem
+				if movement_system and movement_system.can_dash():
+					var input_dir = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+					movement_system.start_dash(input_dir, get_global_mouse_position())
+				elif not movement_system:
+					# Fallback to old system
+					if not is_dashing and dash_cooldown_timer <= 0:
+						start_dash()
 
 			KEY_ESCAPE:
 				# Toggle help/hints menu - only if no other UI is open
@@ -907,6 +915,12 @@ func _input(event: InputEvent) -> void:
 					if is_instance_valid(loot_ui) and loot_ui.visible:
 						any_ui_open = true
 						break
+
+				# Check if GameMenu settings/credits panel is open
+				var game_menu = get_node_or_null("/root/main/GameMenu")
+				if game_menu and game_menu.is_open:
+					# Let GameMenu handle its own ESC
+					return
 
 				# Only toggle hints if no other UI is open
 				if not any_ui_open:
@@ -937,236 +951,9 @@ func _debug_toggle_healing_staff() -> void:
 	# Update visualizers
 	switch_visualizer_mode()
 
-func check_crit_window_click(event: InputEvent) -> bool:
-	"""Check if clicking on enemy during crit window. Returns true if handled."""
-	var click_pos = get_global_mouse_position()
-	var all_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
-
-	for enemy in all_enemies:
-		if not is_instance_valid(enemy):
-			continue
-
-		# Only handle enemies in crit window
-		if not ("in_crit_window" in enemy and enemy.in_crit_window):
-			continue
-
-		# Check if we clicked on this enemy
-		var enemy_size = 30.0
-		if enemy.has_node("CollisionShape2D"):
-			var collision = enemy.get_node("CollisionShape2D")
-			if collision.shape is RectangleShape2D:
-				var rect = collision.shape as RectangleShape2D
-				enemy_size = max(rect.size.x, rect.size.y) * enemy.scale.x / 2.0
-
-		var distance = click_pos.distance_to(enemy.global_position)
-
-		# If clicked on this enemy
-		if distance < enemy_size:
-			# Check if we're in attack range
-			var distance_to_edge = global_position.distance_to(enemy.global_position) - enemy_size
-			if distance_to_edge <= attack_range + Constants.PLAYER_ATTACK_RANGE_BUFFER:
-				handle_crit_window_attack(enemy, click_pos)
-				return true  # Handled the click
-			else:
-				print("⚠️ Crit window enemy out of range")
-				return true  # Still handled (prevent normal attack)
-
-	return false  # No crit window enemy clicked
-
-func is_holding_on_crit_window_enemy(mouse_pos: Vector2) -> bool:
-	"""Check if holding mouse on enemy in crit window (for hold-to-attack). Returns true if attack was triggered."""
-
-	# Update attack direction based on mouse
-	attack_direction = (mouse_pos - global_position).normalized()
-
-	# Use the same cone detection as normal attacks
-	var enemies_in_cone = get_enemies_in_cone()
-
-	# Check if any enemy in cone is in crit window
-	for enemy in enemies_in_cone:
-		if not is_instance_valid(enemy):
-			continue
-
-		# Only handle enemies in crit window
-		if "in_crit_window" in enemy and enemy.in_crit_window:
-			handle_crit_window_attack(enemy, mouse_pos)
-			return true  # Triggered attack
-
-	return false  # No crit window enemy in attack cone
-	
-	
-func is_clicking_on_weakpoint(_event: InputEvent) -> bool:
-	"""Check if clicking on weakpoint and trigger it directly"""
-	var click_pos = get_global_mouse_position()
-	var all_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
-
-	if debug_weakpoint_clicks:
-		print("[WP_DEBUG] Checking %d enemies for weakpoint click at %s" % [all_enemies.size(), click_pos])
-
-	for enemy in all_enemies:
-		if not is_instance_valid(enemy):
-			continue
-
-		# Only check enemies in crit window
-		var has_crit_prop = "in_crit_window" in enemy
-		var crit_val = enemy.in_crit_window if has_crit_prop else false
-
-		if debug_weakpoint_clicks:
-			print("[WP_DEBUG] Enemy %s: has_crit=%s, in_crit=%s" % [enemy.name, has_crit_prop, crit_val])
-
-		if not crit_val:
-			continue
-
-		# Check if any weakpoint is at the click position
-		if "weakpoints" in enemy:
-			if debug_weakpoint_clicks:
-				print("[WP_DEBUG] Enemy %s has %d weakpoints" % [enemy.name, enemy.weakpoints.size()])
-
-			for weakpoint in enemy.weakpoints:
-				if not is_instance_valid(weakpoint):
-					if debug_weakpoint_clicks:
-						print("[WP_DEBUG] Weakpoint invalid, skipping")
-					continue
-				if "is_destroyed" in weakpoint and weakpoint.is_destroyed:
-					if debug_weakpoint_clicks:
-						print("[WP_DEBUG] Weakpoint destroyed, skipping")
-					continue
-
-				var distance = click_pos.distance_to(weakpoint.global_position)
-				var weakpoint_radius = 28 * weakpoint.scale.x
-
-				if debug_weakpoint_clicks:
-					print("[WP_DEBUG] Weakpoint at %s, dist=%.1f, radius=%.1f" % [weakpoint.global_position, distance, weakpoint_radius])
-
-				if distance < weakpoint_radius:
-					if debug_weakpoint_clicks:
-						print("[WP_DEBUG] HIT! Calling weakpoint.hit()")
-
-					# Play slash animation toward the weakpoint
-					var character_sprite = get_node_or_null("CharacterSprite")
-					if character_sprite:
-						var direction_to_weakpoint = (weakpoint.global_position - global_position).normalized()
-						var dir_str = get_direction_string(direction_to_weakpoint)
-						var lpc_dir = convert_to_lpc_direction(dir_str)
-						character_sprite.play_lpc_animation("slash", lpc_dir)
-
-					# CLIENT-PREDICTED: Call hit() directly for instant feedback
-					# Server validates total damage at crit window end
-					if weakpoint.has_method("hit"):
-						weakpoint.hit()
-					return true
-
-	return false
-
-# NOTE: _report_weakpoint_hit_to_server() was removed - client-predicted system now tracks
-# damage locally and reports total at crit window end via CritWindowManager
-
-func handle_crit_window_attack(enemy: Node, click_pos: Vector2) -> void:
-	"""Handle attack on enemy body during crit window"""
-
-	# ✨ CRIT WINDOW: Attack speed is UNCAPPED! No cooldown check!
-	# Weakpoints handle themselves now via is_clicking_on_weakpoint()
-
-	# Play slash animation toward the enemy
-	var character_sprite = get_node_or_null("CharacterSprite")
-	if character_sprite:
-		var direction_to_enemy = (enemy.global_position - global_position).normalized()
-		var dir_str = get_direction_string(direction_to_enemy)
-		var lpc_dir = convert_to_lpc_direction(dir_str)
-		character_sprite.play_lpc_animation("slash", lpc_dir)
-
-	# Play weapon swing sound (whoosh)
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		# Play weapon-specific swing sound
-		if CharacterStats.equipped_weapon:
-			# Use sword swing sound for all weapon types (universal whoosh)
-			sound_manager.play_sword_swing_sound(global_position, -10.0)
-		else:
-			# No weapon equipped - use unarmed sound
-			sound_manager.play_unarmed_swing_sound(global_position, -10.0)
-
-	# Get chain multiplier for damage calculation
-	var chain_multiplier = ChainManager.get_damage_multiplier()
-	var damage = attack_damage * chain_multiplier
-
-	if "take_damage" in enemy:
-		apply_damage_with_feedback(enemy, damage, false, false)
-
-	print("⚔️ Enemy body hit during crit window (%.1f dmg, UNCAPPED SPEED!)" % damage)
-
-
-func attempt_attack() -> void:
-	# 🔧 FIX: Set flag IMMEDIATELY to prevent spam clicks from racing through
-	if not can_attack:
-		return
-	
-	can_attack = false  # Set immediately, before any other code!
-
-	# Play attack animation
-	var character_sprite = get_node_or_null("CharacterSprite")
-	if character_sprite:
-		var dir_str = get_direction_string(attack_direction)
-		var lpc_dir = convert_to_lpc_direction(dir_str)
-		character_sprite.play_lpc_animation("slash", lpc_dir)
-
-	# Play weapon swing sound (whoosh)
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		# Play weapon-specific swing sound
-		if CharacterStats.equipped_weapon:
-			# Use sword swing sound for all weapon types (universal whoosh)
-			sound_manager.play_sword_swing_sound(global_position, -10.0)
-		else:
-			# No weapon equipped - use unarmed sound
-			sound_manager.play_unarmed_swing_sound(global_position, -10.0)
-
-	ChainManager.register_attack()
-	
-	var mouse_pos = get_global_mouse_position()
-	attack_direction = (mouse_pos - global_position).normalized()
-	
-	var enemies_in_cone = get_enemies_in_cone()
-
-	# Sound is now handled by weapon-specific sounds in Enemy.gd
-	# (sound_manager already retrieved above for swing sound)
-
-	if enemies_in_cone.size() > 0:
-		attack_enemies_in_cone(enemies_in_cone)
-		finish_attack_cooldown()
-	else:
-		# Swing sound already played above - no additional miss sound needed
-		finish_attack_cooldown()
-
-func get_enemies_in_cone() -> Array:
-	var enemies_in_cone = []
-	var all_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
-	var cone_half_angle_rad = deg_to_rad(attack_cone_angle / 2.0)
-	
-	# ✨ ISOMETRIC STYLE: Use attack_direction since player doesn't rotate
-	# The cone visual rotates to face attack_direction, so detection matches
-	var forward_direction = attack_direction
-	
-	for enemy in all_enemies:
-		if not is_instance_valid(enemy):
-			continue
-
-		# Check distance to enemy center - must be within attack range
-		var distance_to_center = global_position.distance_to(enemy.global_position)
-
-		# If enemy center is beyond attack range, skip
-		if distance_to_center > attack_range:
-			continue
-
-		# Check if enemy is within cone angle
-		var to_enemy = (enemy.global_position - global_position).normalized()
-		var angle_diff = forward_direction.angle_to(to_enemy)
-
-		# Enemy is in cone if angle difference is within half-angle
-		if abs(angle_diff) <= cone_half_angle_rad:
-			enemies_in_cone.append(enemy)
-	
-	return enemies_in_cone
+# NOTE: Combat functions moved to PlayerCombat subsystem:
+# - check_crit_window_click, is_holding_on_crit_window_enemy, is_clicking_on_weakpoint
+# - handle_crit_window_attack, attempt_attack, get_enemies_in_cone, attack_enemies_in_cone
 
 # ============================================
 # HEALING STAFF - RANGED HEALING SYSTEM
@@ -1542,76 +1329,7 @@ func _spawn_mist_explosion(center_pos: Vector2, radius: float) -> void:
 		effect.queue_free()
 	)
 
-func attack_enemies_in_cone(enemies: Array) -> void:
-	var chain_multiplier = ChainManager.get_damage_multiplier()
-	var has_peer = multiplayer.has_multiplayer_peer()
-	var is_server = multiplayer.is_server()
-
-	# Enter combat when attacking enemies
-	if enemies.size() > 0:
-		time_since_last_damage = 0.0
-		is_in_combat = true
-
-	for enemy in enemies:
-		if not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
-			continue
-
-		# Connect to enemy signals
-		connect_enemy_signals(enemy)
-
-		# ✨ FIX: Don't roll for crit if enemy is already in a crit window!
-		var enemy_already_in_crit_window = false
-		if "in_crit_window" in enemy:
-			enemy_already_in_crit_window = enemy.in_crit_window
-
-		var damage = attack_damage * chain_multiplier
-
-		# Only roll for NEW crit if enemy is NOT already in a crit window
-		if not enemy_already_in_crit_window:
-			# In multiplayer, only SERVER rolls for crits - clients send attack requests
-			# Server will broadcast crit windows to clients via RPC
-			if has_peer and not is_server:
-				# Client: send attack request to server (server handles crit rolls)
-				var enemy_net_id = enemy.get("network_id") if enemy.get("network_id") != null else -1
-				if enemy_net_id >= 0:
-					var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-					if network_enemy_mgr:
-						print("🌐 Client: Sending attack request to server (enemy_id=%d, damage=%.1f)" % [enemy_net_id, damage])
-						network_enemy_mgr.request_attack.rpc_id(1, enemy_net_id, damage)
-				else:
-					print("⚠️ Client: Enemy has no network_id, cannot attack")
-			else:
-				# Server or single player: roll for crit locally
-				var is_crit = crit_system.roll_for_crit()
-
-				# Tutorial: force crit on training dummy after enough hits
-				var is_training_dummy = enemy.is_in_group("training_dummy")
-				if is_training_dummy and TutorialManager and TutorialManager.is_tutorial_active():
-					tutorial_dummy_hits += 1
-					if not is_crit and tutorial_dummy_hits >= TUTORIAL_FORCE_CRIT_HITS:
-						is_crit = true
-						tutorial_dummy_hits = 0  # Reset for next crit window
-						print("🎯 FORCED CRIT for tutorial (hit dummy %d times)" % TUTORIAL_FORCE_CRIT_HITS)
-					elif is_crit:
-						tutorial_dummy_hits = 0  # Reset on natural crit
-
-				if is_crit:
-					# Play crit window opening sound on successful crit roll
-					var sound_manager = get_node_or_null("/root/SoundManager")
-					if sound_manager:
-						sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
-
-					# Start crit window (server broadcasts to clients via Enemy.spawn_weakpoints)
-					crit_window_manager.start_window(enemy)
-					if not crit_window_manager.window_completed.is_connected(_on_crit_window_completed):
-						crit_window_manager.window_completed.connect(_on_crit_window_completed.bind(enemy))
-				else:
-					# Normal attack
-					apply_damage_with_feedback(enemy, damage, false, false)
-		else:
-			# Enemy already in crit window - just do normal damage (don't roll for new crit)
-			print("⚠️ Enemy already in crit window, applying normal damage (no new crit roll)")
-			apply_damage_with_feedback(enemy, damage, false, false)
+# NOTE: attack_enemies_in_cone moved to PlayerCombat subsystem
 
 func connect_enemy_signals(enemy: Node) -> void:
 	# Connect to weakpoint hit signal
@@ -1676,17 +1394,17 @@ func _on_crit_window_completed(success_ratio: float, total_destroyed: int, enemy
 	
 	# Update chain
 	if all_destroyed:
-		ChainManager.on_crit_window_completed(true)
+		CharacterStats.on_crit_window_completed(true)
 	elif enemy_died:
 		print("⚡ Chain maintained (enemy died)")
 	else:
-		ChainManager.on_crit_window_completed(false)
-	
+		CharacterStats.on_crit_window_completed(false)
+
 	# Calculate and apply damage
 	if is_nan(success_ratio) or is_inf(success_ratio):
 		success_ratio = 0.0
-	
-	var chain_multiplier = ChainManager.get_damage_multiplier()
+
+	var chain_multiplier = CharacterStats.get_damage_multiplier()
 	var base_crit_damage = attack_damage * 2.0
 	var multiplier = 1.0 + success_ratio
 	var final_damage = base_crit_damage * multiplier * chain_multiplier
@@ -1781,6 +1499,12 @@ func take_damage(amount: float) -> void:
 	if is_dashing and dash_invincible:
 		print("💨 Damage dodged! (dashing)")
 		return
+
+	# Cancel logout if taking damage (combat logging prevention)
+	if logout_timer_active:
+		_cancel_logout()
+		if NotificationManager:
+			NotificationManager.show_notification("Logout cancelled - you took damage!", "WARNING")
 
 	print("Player taking %.1f damage (current: %.1f)" % [amount, current_health])
 	current_health -= amount
@@ -2893,6 +2617,12 @@ func create_inventory_ui() -> void:
 var spawn_hints_overlay: CanvasLayer = null
 var has_talked_to_blacksmith: bool = false
 
+# Logout timer system
+var logout_timer_overlay: CanvasLayer = null
+var logout_timer_active: bool = false
+var logout_time_remaining: float = 0.0
+const LOGOUT_TIMER_DURATION: float = 10.0  # 10 seconds to logout
+
 func create_spawn_hints() -> void:
 	"""Create and show spawn hints overlay for new players"""
 	print("📋 Creating spawn hints overlay")
@@ -3007,28 +2737,46 @@ func create_spawn_hints() -> void:
 	sound_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(sound_title)
 
-	# SFX mute row
-	var sfx_row = HBoxContainer.new()
-	sfx_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	var sfx_label = Label.new()
-	sfx_label.text = "SFX"
-	sfx_label.add_theme_font_size_override("font_size", 14)
-	sfx_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
-	sfx_label.custom_minimum_size = Vector2(50, 0)
-	sfx_row.add_child(sfx_label)
+	# Load saved settings
+	var config = ConfigFile.new()
+	var saved_master = 80.0
+	var saved_music = 70.0
+	var saved_sfx = 80.0
+	if config.load("user://settings.cfg") == OK:
+		saved_master = config.get_value("audio", "master_volume", 80.0)
+		saved_music = config.get_value("audio", "music_volume", 70.0)
+		saved_sfx = config.get_value("audio", "sfx_volume", 80.0)
 
-	var sfx_button = Button.new()
-	sfx_button.name = "SFXMuteButton"
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	var sfx_muted = sound_manager.sfx_muted if sound_manager else false
-	sfx_button.text = "MUTED" if sfx_muted else "ON"
-	sfx_button.add_theme_font_size_override("font_size", 12)
-	sfx_button.custom_minimum_size = Vector2(60, 24)
-	sfx_button.pressed.connect(_on_sfx_mute_pressed.bind(sfx_button))
-	sfx_row.add_child(sfx_button)
-	vbox.add_child(sfx_row)
+	# Master Volume row
+	var master_row = HBoxContainer.new()
+	master_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var master_label = Label.new()
+	master_label.text = "Master"
+	master_label.add_theme_font_size_override("font_size", 14)
+	master_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	master_label.custom_minimum_size = Vector2(50, 0)
+	master_row.add_child(master_label)
 
-	# Music mute row
+	var master_slider = HSlider.new()
+	master_slider.name = "MasterVolumeSlider"
+	master_slider.min_value = 0.0
+	master_slider.max_value = 100.0
+	master_slider.step = 1.0
+	master_slider.value = saved_master
+	master_slider.custom_minimum_size = Vector2(100, 20)
+	master_slider.value_changed.connect(_on_master_volume_changed)
+	master_row.add_child(master_slider)
+
+	var master_value = Label.new()
+	master_value.name = "MasterVolumeValue"
+	master_value.text = "%d%%" % int(saved_master)
+	master_value.add_theme_font_size_override("font_size", 12)
+	master_value.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	master_value.custom_minimum_size = Vector2(35, 0)
+	master_row.add_child(master_value)
+	vbox.add_child(master_row)
+
+	# Music Volume row
 	var music_row = HBoxContainer.new()
 	music_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	var music_label = Label.new()
@@ -3038,15 +2786,90 @@ func create_spawn_hints() -> void:
 	music_label.custom_minimum_size = Vector2(50, 0)
 	music_row.add_child(music_label)
 
-	var music_button = Button.new()
-	music_button.name = "MusicMuteButton"
-	var music_muted = sound_manager.music_muted if sound_manager else false
-	music_button.text = "MUTED" if music_muted else "ON"
-	music_button.add_theme_font_size_override("font_size", 12)
-	music_button.custom_minimum_size = Vector2(60, 24)
-	music_button.pressed.connect(_on_music_mute_pressed.bind(music_button))
-	music_row.add_child(music_button)
+	var music_slider = HSlider.new()
+	music_slider.name = "MusicVolumeSlider"
+	music_slider.min_value = 0.0
+	music_slider.max_value = 100.0
+	music_slider.step = 1.0
+	music_slider.value = saved_music
+	music_slider.custom_minimum_size = Vector2(100, 20)
+	music_slider.value_changed.connect(_on_music_volume_changed)
+	music_row.add_child(music_slider)
+
+	var music_value = Label.new()
+	music_value.name = "MusicVolumeValue"
+	music_value.text = "%d%%" % int(saved_music)
+	music_value.add_theme_font_size_override("font_size", 12)
+	music_value.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	music_value.custom_minimum_size = Vector2(35, 0)
+	music_row.add_child(music_value)
 	vbox.add_child(music_row)
+
+	# SFX Volume row
+	var sfx_row = HBoxContainer.new()
+	sfx_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var sfx_label = Label.new()
+	sfx_label.text = "SFX"
+	sfx_label.add_theme_font_size_override("font_size", 14)
+	sfx_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	sfx_label.custom_minimum_size = Vector2(50, 0)
+	sfx_row.add_child(sfx_label)
+
+	var sfx_slider = HSlider.new()
+	sfx_slider.name = "SFXVolumeSlider"
+	sfx_slider.min_value = 0.0
+	sfx_slider.max_value = 100.0
+	sfx_slider.step = 1.0
+	sfx_slider.value = saved_sfx
+	sfx_slider.custom_minimum_size = Vector2(100, 20)
+	sfx_slider.value_changed.connect(_on_sfx_volume_changed)
+	sfx_row.add_child(sfx_slider)
+
+	var sfx_value = Label.new()
+	sfx_value.name = "SFXVolumeValue"
+	sfx_value.text = "%d%%" % int(saved_sfx)
+	sfx_value.add_theme_font_size_override("font_size", 12)
+	sfx_value.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	sfx_value.custom_minimum_size = Vector2(35, 0)
+	sfx_row.add_child(sfx_value)
+	vbox.add_child(sfx_row)
+
+	# MENU section
+	var menu_sep = HSeparator.new()
+	menu_sep.add_theme_constant_override("separation", 8)
+	vbox.add_child(menu_sep)
+
+	var menu_title = Label.new()
+	menu_title.text = "MENU"
+	menu_title.add_theme_font_size_override("font_size", 16)
+	menu_title.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))  # Gold
+	menu_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(menu_title)
+
+	# Menu buttons container
+	var menu_buttons = HBoxContainer.new()
+	menu_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	menu_buttons.add_theme_constant_override("separation", 8)
+	vbox.add_child(menu_buttons)
+
+	# Credits button
+	var credits_button = Button.new()
+	credits_button.name = "CreditsButton"
+	credits_button.text = "Credits"
+	credits_button.add_theme_font_size_override("font_size", 12)
+	credits_button.custom_minimum_size = Vector2(70, 26)
+	credits_button.pressed.connect(_on_menu_credits_pressed)
+	menu_buttons.add_child(credits_button)
+
+	# Disconnect button
+	var disconnect_button = Button.new()
+	disconnect_button.name = "DisconnectButton"
+	disconnect_button.text = "Disconnect"
+	disconnect_button.add_theme_font_size_override("font_size", 12)
+	disconnect_button.add_theme_color_override("font_color", Color(1, 0.6, 0.5))
+	disconnect_button.custom_minimum_size = Vector2(80, 26)
+	disconnect_button.pressed.connect(_on_menu_disconnect_pressed)
+	menu_buttons.add_child(disconnect_button)
 
 	# ESC to close hint at bottom
 	var esc_sep = HSeparator.new()
@@ -3063,19 +2886,264 @@ func create_spawn_hints() -> void:
 	get_tree().root.add_child(spawn_hints_overlay)
 	print("📋 Spawn hints overlay added to scene tree - Press ESC to toggle")
 
-func _on_sfx_mute_pressed(button: Button) -> void:
-	"""Toggle SFX mute state"""
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.toggle_sfx_mute()
-		button.text = "MUTED" if sound_manager.sfx_muted else "ON"
+func _find_node_by_name(root: Node, node_name: String) -> Node:
+	"""Recursively find a node by name"""
+	if root.name == node_name:
+		return root
+	for child in root.get_children():
+		var found = _find_node_by_name(child, node_name)
+		if found:
+			return found
+	return null
 
-func _on_music_mute_pressed(button: Button) -> void:
-	"""Toggle music mute state"""
+func _on_master_volume_changed(value: float) -> void:
+	"""Handle master volume slider change"""
+	# Update label
+	if spawn_hints_overlay and is_instance_valid(spawn_hints_overlay):
+		var label = _find_node_by_name(spawn_hints_overlay, "MasterVolumeValue")
+		if label:
+			label.text = "%d%%" % int(value)
+
+	# Apply volume
+	var db = lerp(-40.0, 0.0, value / 100.0)
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), db)
+	_save_sound_settings()
+
+func _on_music_volume_changed(value: float) -> void:
+	"""Handle music volume slider change"""
+	# Update label
+	if spawn_hints_overlay and is_instance_valid(spawn_hints_overlay):
+		var label = _find_node_by_name(spawn_hints_overlay, "MusicVolumeValue")
+		if label:
+			label.text = "%d%%" % int(value)
+
+	# Apply volume
+	var db = lerp(-40.0, 0.0, value / 100.0)
+	var music_bus = AudioServer.get_bus_index("Music")
+	if music_bus >= 0:
+		AudioServer.set_bus_volume_db(music_bus, db)
+	_save_sound_settings()
+
+func _on_sfx_volume_changed(value: float) -> void:
+	"""Handle SFX volume slider change"""
+	# Update label
+	if spawn_hints_overlay and is_instance_valid(spawn_hints_overlay):
+		var label = _find_node_by_name(spawn_hints_overlay, "SFXVolumeValue")
+		if label:
+			label.text = "%d%%" % int(value)
+
+	# Apply volume
+	var db = lerp(-40.0, 0.0, value / 100.0)
+	var sfx_bus = AudioServer.get_bus_index("SFX")
+	if sfx_bus >= 0:
+		AudioServer.set_bus_volume_db(sfx_bus, db)
 	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.toggle_music_mute()
-		button.text = "MUTED" if sound_manager.music_muted else "ON"
+	if sound_manager and sound_manager.has_method("set_sfx_volume"):
+		sound_manager.set_sfx_volume(value / 100.0)
+	_save_sound_settings()
+
+func _save_sound_settings() -> void:
+	"""Save sound settings to config file"""
+	if not spawn_hints_overlay or not is_instance_valid(spawn_hints_overlay):
+		return
+
+	var config = ConfigFile.new()
+	config.load("user://settings.cfg")  # Load existing to preserve other settings
+
+	# Find sliders and save their values
+	var master_slider = _find_node_by_name(spawn_hints_overlay, "MasterVolumeSlider")
+	var music_slider = _find_node_by_name(spawn_hints_overlay, "MusicVolumeSlider")
+	var sfx_slider = _find_node_by_name(spawn_hints_overlay, "SFXVolumeSlider")
+
+	if master_slider:
+		config.set_value("audio", "master_volume", master_slider.value)
+	if music_slider:
+		config.set_value("audio", "music_volume", music_slider.value)
+	if sfx_slider:
+		config.set_value("audio", "sfx_volume", sfx_slider.value)
+
+	config.save("user://settings.cfg")
+
+func _on_menu_credits_pressed() -> void:
+	"""Open credits panel from ESC menu"""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_button_click_sound"):
+		sound_manager.play_button_click_sound()
+
+	# Hide spawn hints and open GameMenu credits
+	toggle_spawn_hints()
+	var game_menu = get_node_or_null("/root/main/GameMenu")
+	if game_menu and game_menu.has_method("open_credits"):
+		game_menu.open_credits()
+
+func _on_menu_disconnect_pressed() -> void:
+	"""Start logout timer - prevents combat logging"""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_button_click_sound"):
+		sound_manager.play_button_click_sound()
+
+	# Close spawn hints overlay
+	if spawn_hints_overlay and is_instance_valid(spawn_hints_overlay):
+		spawn_hints_overlay.queue_free()
+		spawn_hints_overlay = null
+
+	# Start logout timer instead of immediate disconnect
+	_start_logout_timer()
+
+func _start_logout_timer() -> void:
+	"""Create and show logout timer UI"""
+	if logout_timer_active:
+		return  # Already logging out
+
+	logout_timer_active = true
+	logout_time_remaining = LOGOUT_TIMER_DURATION
+
+	# Create overlay
+	logout_timer_overlay = CanvasLayer.new()
+	logout_timer_overlay.name = "LogoutTimerOverlay"
+	logout_timer_overlay.layer = 150  # Above everything
+
+	# Semi-transparent background
+	var bg = ColorRect.new()
+	bg.name = "Background"
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0, 0, 0, 0.6)
+	logout_timer_overlay.add_child(bg)
+
+	# Center container
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	logout_timer_overlay.add_child(center)
+
+	# Panel
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(300, 150)
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.12, 0.12, 0.14, 0.95)
+	style.border_width_left = 3
+	style.border_width_right = 3
+	style.border_width_top = 3
+	style.border_width_bottom = 3
+	style.border_color = Color(0.8, 0.4, 0.2, 1)  # Orange border
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+
+	# VBox for content
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 15)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(vbox)
+
+	# Margin
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+
+	var inner_vbox = VBoxContainer.new()
+	inner_vbox.add_theme_constant_override("separation", 15)
+	inner_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	margin.add_child(inner_vbox)
+
+	# Title
+	var title = Label.new()
+	title.text = "LOGGING OUT"
+	title.add_theme_font_size_override("font_size", 20)
+	title.add_theme_color_override("font_color", Color(0.9, 0.6, 0.3))  # Orange
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inner_vbox.add_child(title)
+
+	# Timer label
+	var timer_label = Label.new()
+	timer_label.name = "TimerLabel"
+	timer_label.text = "10"
+	timer_label.add_theme_font_size_override("font_size", 36)
+	timer_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inner_vbox.add_child(timer_label)
+
+	# Info text
+	var info = Label.new()
+	info.text = "Stay still to logout safely\nMoving will cancel"
+	info.add_theme_font_size_override("font_size", 12)
+	info.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inner_vbox.add_child(info)
+
+	# Cancel button
+	var cancel_btn = Button.new()
+	cancel_btn.name = "CancelButton"
+	cancel_btn.text = "Cancel"
+	cancel_btn.custom_minimum_size = Vector2(100, 35)
+	cancel_btn.add_theme_font_size_override("font_size", 14)
+	cancel_btn.pressed.connect(_cancel_logout)
+	inner_vbox.add_child(cancel_btn)
+
+	get_tree().root.add_child(logout_timer_overlay)
+
+func _cancel_logout() -> void:
+	"""Cancel the logout timer"""
+	logout_timer_active = false
+	logout_time_remaining = 0.0
+
+	if logout_timer_overlay and is_instance_valid(logout_timer_overlay):
+		logout_timer_overlay.queue_free()
+		logout_timer_overlay = null
+
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_button_click_sound"):
+		sound_manager.play_button_click_sound()
+
+func _complete_logout() -> void:
+	"""Actually disconnect after timer completes"""
+	logout_timer_active = false
+
+	# Clean up logout overlay
+	if logout_timer_overlay and is_instance_valid(logout_timer_overlay):
+		logout_timer_overlay.queue_free()
+		logout_timer_overlay = null
+
+	# Save sound settings before leaving
+	_save_sound_settings()
+
+	# Close connection and return to main menu
+	if NetworkManager:
+		NetworkManager.close_connection()
+
+	var tree = get_tree()
+	if tree:
+		tree.change_scene_to_file("res://scenes/ui/MainMenu.tscn")
+
+func _process_logout_timer(delta: float, input_direction: Vector2) -> void:
+	"""Process logout countdown - cancel if player moves or takes damage"""
+	if not logout_timer_active:
+		return
+
+	# Cancel if player is moving
+	if input_direction.length() > 0.1:
+		_cancel_logout()
+		if NotificationManager:
+			NotificationManager.show_notification("Logout cancelled - you moved!", "WARNING")
+		return
+
+	# Decrement timer
+	logout_time_remaining -= delta
+
+	# Update timer display
+	if logout_timer_overlay and is_instance_valid(logout_timer_overlay):
+		var timer_label = _find_node_by_name(logout_timer_overlay, "TimerLabel")
+		if timer_label:
+			timer_label.text = str(ceili(logout_time_remaining))
+
+	# Check if timer completed
+	if logout_time_remaining <= 0:
+		_complete_logout()
 
 func dismiss_spawn_hints() -> void:
 	"""Manually dismiss spawn hints early (called when talking to blacksmith)"""
@@ -3128,10 +3196,7 @@ var tutorial_blackout: Node2D = null
 const TUTORIAL_CENTER = Vector2(4000, 0)  # Constants.CHUNK_SIZE / 2, 0
 const TUTORIAL_RADIUS = 500.0
 # Blackout fade is handled in TutorialBlackoutVisual inner class
-
-# Tutorial forced crit tracking (single player)
-var tutorial_dummy_hits: int = 0
-const TUTORIAL_FORCE_CRIT_HITS: int = 5  # Force crit after this many hits on dummy during tutorial
+# NOTE: tutorial_dummy_hits and TUTORIAL_FORCE_CRIT_HITS moved to PlayerCombat
 
 func create_tutorial_blackout() -> void:
 	"""Create a blackout effect that hides the world outside the tutorial area"""
@@ -3323,9 +3388,12 @@ func spawn_dash_afterimage() -> void:
 	# The CharacterSprite has child AnimatedSprite2D nodes for each layer
 	_copy_sprite_layer(character_sprite, afterimage_container)  # Main body
 
-	# Copy child layers (shadow, armor, weapon, etc.)
+	# Copy child layers (armor, weapon, etc.) - skip shadow layer
 	for child in character_sprite.get_children():
 		if child is AnimatedSprite2D:
+			# Skip shadow layer - shadows look weird on afterimages
+			if child.name == "ShadowLayer":
+				continue
 			_copy_sprite_layer(child, afterimage_container)
 
 	get_tree().root.add_child(afterimage_container)
@@ -3356,11 +3424,19 @@ func _copy_sprite_layer(source: AnimatedSprite2D, container: Node2D) -> void:
 func apply_movement_modifier(source: String, multiplier: float) -> void:
 	"""Apply a movement speed modifier from a named source.
 	multiplier: 0.5 = 50% speed reduction, 0.0 = completely stopped"""
+	# Sync with movement subsystem
+	if movement_system:
+		movement_system.add_movement_modifier(source, multiplier)
+	# Keep local copy for fallback/compatibility
 	movement_modifiers[source] = clamp(multiplier, 0.0, 1.0)
 	print("🦶 Movement modifier applied: %s = %.0f%% speed" % [source, multiplier * 100])
 
 func remove_movement_modifier(source: String) -> void:
 	"""Remove a movement modifier by source name"""
+	# Sync with movement subsystem
+	if movement_system:
+		movement_system.remove_movement_modifier(source)
+	# Keep local copy for fallback/compatibility
 	if movement_modifiers.has(source):
 		movement_modifiers.erase(source)
 		print("🦶 Movement modifier removed: %s" % source)
@@ -3368,6 +3444,10 @@ func remove_movement_modifier(source: String) -> void:
 func get_movement_modifier() -> float:
 	"""Get the combined movement modifier (multiplies all active modifiers).
 	Returns 1.0 if no modifiers active."""
+	# Use movement subsystem if available
+	if movement_system:
+		return movement_system.get_movement_modifier()
+	# Fallback to local calculation
 	if movement_modifiers.is_empty():
 		return 1.0
 
@@ -3378,5 +3458,9 @@ func get_movement_modifier() -> float:
 
 func clear_all_movement_modifiers() -> void:
 	"""Clear all active movement modifiers (e.g., on death/respawn)"""
+	# Sync with movement subsystem
+	if movement_system:
+		movement_system.clear_movement_modifiers()
+	# Keep local copy for fallback/compatibility
 	movement_modifiers.clear()
 	print("🦶 All movement modifiers cleared")

@@ -13,17 +13,16 @@ config_version=5
 config/name="wasteland"
 run/main_scene="res://scenes/ui/MainMenu.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
+config/icon="res://icon.svg"
 
 [autoload]
 
 ServerRunner="*res://scripts/ServerRunner.gd"
 Constants="*res://scripts/constants.gd"
-DebugConfig="*res://scripts/systems/DebugConfig.gd"
-ChainManager="*res://scripts/systems/chain_manager.gd"
+LogManager="*res://scripts/systems/LogManager.gd"
 SoundManager="*res://scripts/systems/sound_manager.gd"
 CharacterStats="*res://scripts/systems/CharacterStats.gd"
 InventorySystem="*res://scripts/systems/InventorySystem.gd"
-TreeAudioManager="*res://scripts/systems/TreeAudioManager.gd"
 LootSpawnManager="*res://scripts/systems/LootSpawnManager.gd"
 NotificationManager="*res://scripts/systems/NotificationManager.gd"
 InteractionManager="*res://scripts/systems/InteractionManager.gd"
@@ -36,11 +35,17 @@ TimeManager="*res://scripts/systems/TimeManager.gd"
 ItemIconGenerator="*res://scripts/systems/ItemIconGenerator.gd"
 GroupManager="*res://scripts/systems/GroupManager.gd"
 GroupUI="*res://scripts/ui/GroupUI.gd"
-GroupInvitePopup="*res://scripts/ui/GroupInvitePopup.gd"
 TutorialManager="*res://scripts/systems/TutorialManager.gd"
 QuestManager="*res://scripts/systems/QuestManager.gd"
 QuestTrackerUI="*res://scripts/ui/QuestTrackerUI.gd"
 BugReportUI="*res://scripts/ui/BugReportUI.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 
 [editor_plugins]
 

@@ -239,12 +239,12 @@ func setup_blacksmith_sprite() -> void:
 	var sprite_path = "res://assets/characters/lpc/blacksmith/blacksmith_walk.png"
 
 	if not ResourceLoader.exists(sprite_path):
-		DebugConfig.log_warning("Blacksmith sprite not found: %s" % sprite_path)
+		Constants.log_warning("Blacksmith sprite not found: %s" % sprite_path)
 		return
 
 	var texture = ResourceLoader.load(sprite_path, "Texture2D")
 	if not texture:
-		DebugConfig.log_error("Failed to load blacksmith sprite")
+		Constants.log_error("Failed to load blacksmith sprite")
 		return
 
 	# Create sprite frames with single frame (stationary blacksmith)
@@ -265,7 +265,7 @@ func setup_blacksmith_sprite() -> void:
 	animated_sprite.sprite_frames = sprite_frames
 	animated_sprite.play("idle")
 
-	DebugConfig.debug_log("🔨 Blacksmith sprite loaded and animating")
+	Constants.debug_log("🔨 Blacksmith sprite loaded and animating")
 
 func _physics_process(delta: float) -> void:
 	# Face the campfire when idle (no shop open, no player in range)
@@ -349,11 +349,11 @@ func load_shop_data() -> void:
 							weapon_prices.append(price)
 							print("   Loaded weapon: %s (zone %d, price: %d)" % [weapon.weapon_name, weapon_zone, price])
 				else:
-					DebugConfig.log_warning("Invalid weapon entry in shop_weapons.json (not a Dictionary)")
+					Constants.log_warning("Invalid weapon entry in shop_weapons.json (not a Dictionary)")
 		else:
-			DebugConfig.log_error("shop_weapons.json missing 'weapons' array")
+			Constants.log_error("shop_weapons.json missing 'weapons' array")
 	else:
-		DebugConfig.log_error("Failed to load shop_weapons.json: %s" % weapons_result.error)
+		Constants.log_error("Failed to load shop_weapons.json: %s" % weapons_result.error)
 
 	# Load armor with validation
 	var armor_result = JSONValidator.load_json_file("res://data/shop_armor.json")
@@ -366,11 +366,11 @@ func load_shop_data() -> void:
 					if JSONValidator.validate_required_fields(armor_data, ["name", "slot"], "armor"):
 						armor_for_sale.append(armor_data)
 				else:
-					DebugConfig.log_warning("Invalid armor entry in shop_armor.json (not a Dictionary)")
+					Constants.log_warning("Invalid armor entry in shop_armor.json (not a Dictionary)")
 		else:
-			DebugConfig.log_error("shop_armor.json missing 'armor' array")
+			Constants.log_error("shop_armor.json missing 'armor' array")
 	else:
-		DebugConfig.log_error("Failed to load shop_armor.json: %s" % armor_result.error)
+		Constants.log_error("Failed to load shop_armor.json: %s" % armor_result.error)
 
 	# Add starter gathering tools (free for testing)
 	load_starter_tools()

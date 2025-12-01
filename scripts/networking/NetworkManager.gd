@@ -67,7 +67,7 @@ func _ready():
 
 	# Initialize version from git commit hash
 	NETWORK_VERSION = _get_git_commit_hash()
-	print("NetworkManager: Version %s" % NETWORK_VERSION)
+	LogManager.info("Version %s" % NETWORK_VERSION, "network")
 
 	# Connect multiplayer signals
 	multiplayer.peer_connected.connect(_on_player_connected)
@@ -124,11 +124,11 @@ func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}) -> b
 		# Start server-side save timer for all connected clients
 		_start_server_save_timer()
 
-		print("Server created on port %d (ID: %d)" % [port, host_id])
+		LogManager.info("Server created on port %d (ID: %d)" % [port, host_id], "network")
 		server_created.emit()
 		return true
 	else:
-		print("Failed to create server: %s" % error_string(error))
+		LogManager.error("Failed to create server: %s" % error_string(error), "network")
 		return false
 
 # Join a game server
@@ -139,10 +139,10 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> bool:
 	if error == OK:
 		multiplayer.multiplayer_peer = peer
 		is_host = false
-		print("Connecting to %s:%d..." % [address, port])
+		LogManager.info("Connecting to %s:%d..." % [address, port], "network")
 		return true
 	else:
-		print("Failed to create client: %s" % error_string(error))
+		LogManager.error("Failed to create client: %s" % error_string(error), "network")
 		return false
 
 # Close connection
@@ -163,7 +163,10 @@ func close_connection():
 			# stop_auto_save() does final save internally
 			DatabaseManager.stop_auto_save()
 			DatabaseManager.logout_player(username)
-			print("📀 [NetworkManager] Saved and logged out: %s" % username)
+			LogManager.info("Saved and logged out: %s" % username, "database")
+
+	# Hide all game UI autoloads before scene change
+	_hide_game_ui()
 
 	if peer:
 		peer.close()
@@ -175,11 +178,41 @@ func close_connection():
 		is_authenticated = false
 		is_guest = false
 		local_player_data = {}
-		print("Connection closed")
+		LogManager.info("Connection closed", "network")
+
+func _hide_game_ui():
+	"""Hide all game UI autoloads when disconnecting"""
+	# Hide GroupUI (CanvasLayer autoload) - also hides invite popup
+	if GroupUI:
+		GroupUI.visible = false
+		GroupUI._hide_popup()  # Hide invite popup too
+	# Hide QuestTrackerUI (CanvasLayer autoload)
+	if QuestTrackerUI:
+		QuestTrackerUI.visible = false
+	# Hide BugReportUI (CanvasLayer autoload)
+	if BugReportUI:
+		BugReportUI.visible = false
+	# Hide AccountAdmin (CanvasLayer autoload)
+	if AccountAdmin:
+		AccountAdmin.visible = false
+	# Hide NotificationManager canvas layer (Node autoload with CanvasLayer child)
+	if NotificationManager:
+		var notif_canvas = NotificationManager.get_node_or_null("NotificationCanvas")
+		if notif_canvas:
+			notif_canvas.visible = false
+	# Hide TutorialManager UI elements (Node autoload with CanvasLayer children)
+	if TutorialManager:
+		if TutorialManager.get("tutorial_ui") and TutorialManager.tutorial_ui:
+			TutorialManager.tutorial_ui.visible = false
+		if TutorialManager.get("ui_arrow_canvas") and TutorialManager.ui_arrow_canvas:
+			TutorialManager.ui_arrow_canvas.visible = false
+	# Hide CursorManager UI (may have custom cursor visible)
+	if CursorManager and CursorManager.has_method("reset_cursor"):
+		CursorManager.reset_cursor()
 
 # Called when a player connects (server only)
 func _on_player_connected(id: int):
-	print("Player connected: %d (awaiting authentication)" % id)
+	LogManager.info("Player connected: %d (awaiting authentication)" % id, "network")
 
 	if is_host:
 		# Don't add to player list yet - wait for authentication
@@ -190,7 +223,7 @@ func _on_player_connected(id: int):
 
 # Called when a player disconnects
 func _on_player_disconnected(id: int):
-	print("Player disconnected: %d" % id)
+	LogManager.info("Player disconnected: %d" % id, "network")
 
 	# Handle logout for authenticated players (server-side)
 	if is_host and authenticated_players.has(id):
@@ -201,7 +234,7 @@ func _on_player_disconnected(id: int):
 			if _client_player_states.has(id):
 				var state = _client_player_states[id]
 				DatabaseManager.save_player_data(username, state)
-				print("📀 [NetworkManager] Saved disconnecting player: %s" % username)
+				LogManager.info("Saved disconnecting player: %s" % username, "database")
 				_client_player_states.erase(id)
 			DatabaseManager.logout_player(username)
 		authenticated_players.erase(id)
@@ -219,13 +252,13 @@ func _on_player_disconnected(id: int):
 
 # Called when we connect to server (client only)
 func _on_connected_to_server():
-	print("Connected to server! Waiting for authentication request...")
+	LogManager.info("Connected to server! Waiting for authentication request...", "network")
 	# Don't register yet - wait for server to request authentication
 	connected_to_server.emit()
 
 # Called when connection fails (client only)
 func _on_connection_failed():
-	print("Connection failed!")
+	LogManager.error("Connection failed!", "network")
 	connection_failed.emit()
 	close_connection()
 
@@ -246,18 +279,18 @@ func register_player(id: int, name: String):
 @rpc("authority", "reliable")
 func receive_player_list(players: Dictionary):
 	connected_players = players
-	print("Received player list: %s" % players)
+	LogManager.debug("Received player list: %s" % players, "network")
 
 @rpc("authority", "reliable")
 func update_player_list(players: Dictionary):
 	connected_players = players
-	print("Updated player list: %s" % players)
+	LogManager.debug("Updated player list: %s" % players, "network")
 
 @rpc("authority", "reliable")
 func player_joined(id: int, player_info: Dictionary):
 	connected_players[id] = player_info
 	var player_name = player_info.get("name", "Player%d" % id)
-	print("Player %s joined the game" % player_name)
+	LogManager.info("Player %s joined the game" % player_name, "player")
 
 	# Emit signal for UI (ChatUI uses this for "joined the game" message)
 	player_authenticated.emit(id, player_name)
@@ -270,31 +303,31 @@ var _name_update_retries: Dictionary = {}  # peer_id -> retry count
 
 func _update_player_name_label(id: int, player_name: String) -> void:
 	"""Deferred update of player name label after spawn completes"""
-	print("🏷️ [NAME DEBUG] _update_player_name_label called: id=%d, name='%s'" % [id, player_name])
+	LogManager.debug("_update_player_name_label called: id=%d, name='%s'" % [id, player_name], "player")
 
 	var game_world = get_tree().get_first_node_in_group("game_world")
-	print("🏷️ [NAME DEBUG] game_world found: %s" % (game_world != null))
+	LogManager.debug("game_world found: %s" % (game_world != null), "player")
 
 	if game_world:
-		print("🏷️ [NAME DEBUG] game_world.players keys: %s" % str(game_world.players.keys()))
-		print("🏷️ [NAME DEBUG] Looking for player id %d in players dict" % id)
+		LogManager.debug("game_world.players keys: %s" % str(game_world.players.keys()), "player")
+		LogManager.debug("Looking for player id %d in players dict" % id, "player")
 
 	if game_world and game_world.players.has(id):
 		var player = game_world.players[id]
-		print("🏷️ [NAME DEBUG] Found player node: %s, valid: %s" % [player, is_instance_valid(player)])
+		LogManager.debug("Found player node: %s, valid: %s" % [player, is_instance_valid(player)], "player")
 
 		if is_instance_valid(player):
-			print("🏷️ [NAME DEBUG] Player has HealthBar: %s" % player.has_node("HealthBar"))
+			LogManager.debug("Player has HealthBar: %s" % player.has_node("HealthBar"), "player")
 
 			if player.has_node("HealthBar"):
 				var hb = player.get_node("HealthBar")
-				print("🏷️ [NAME DEBUG] HealthBar node: %s" % hb)
+				LogManager.debug("HealthBar node: %s" % hb, "player")
 
 				if hb.has_method("set_player_name"):
 					hb.set_player_name(player_name)
-					print("✅ [NAME DEBUG] Set player name '%s' for peer %d" % [player_name, id])
+					LogManager.debug("Set player name '%s' for peer %d" % [player_name, id], "player")
 				else:
-					print("❌ [NAME DEBUG] HealthBar doesn't have set_player_name method!")
+					LogManager.warn("HealthBar doesn't have set_player_name method!", "player")
 
 				# Set color based on guest status
 				var is_guest_player = authenticated_players.has(id) and authenticated_players[id].get("is_guest", false)
@@ -312,16 +345,16 @@ func _update_player_name_label(id: int, player_name: String) -> void:
 	var retries = _name_update_retries.get(id, 0)
 	if retries < 60:  # Try for ~1 second (60 frames)
 		_name_update_retries[id] = retries + 1
-		print("🏷️ [NAME DEBUG] Player %d not ready, retry %d/60" % [id, retries + 1])
+		LogManager.debug("Player %d not ready, retry %d/60" % [id, retries + 1], "player")
 		call_deferred("_update_player_name_label", id, player_name)
 	else:
-		print("❌ [NAME DEBUG] Failed to set name for player %d after 60 retries" % id)
+		LogManager.warn("Failed to set name for player %d after 60 retries" % id, "player")
 		_name_update_retries.erase(id)
 
 @rpc("authority", "reliable")
 func player_left(id: int):
 	if connected_players.has(id):
-		print("Player %s left the game" % connected_players[id].name)
+		LogManager.info("Player %s left the game" % connected_players[id].name, "player")
 		connected_players.erase(id)
 
 # Utility functions
@@ -407,23 +440,27 @@ func receive_chat_broadcast(sender_name: String, message: String, sender_id: int
 @rpc("authority", "reliable")
 func request_authentication() -> void:
 	"""Server tells client to authenticate (legacy - no version check)"""
-	print("Server requested authentication (legacy, no version)")
+	LogManager.info("Server requested authentication (legacy, no version)", "network")
 	authentication_required.emit()
 
 @rpc("authority", "reliable")
 func request_authentication_with_version(server_version: String) -> void:
 	"""Server tells client to authenticate, with version check"""
-	print("Server requested authentication (server version: %s, client version: %s)" % [server_version, NETWORK_VERSION])
+	LogManager.info("Server requested authentication (server version: %s, client version: %s)" % [server_version, NETWORK_VERSION], "network")
 
-	if server_version != NETWORK_VERSION:
-		push_warning("⚠️ VERSION MISMATCH! Server: %s, Client: %s" % [server_version, NETWORK_VERSION])
-		push_warning("   Connection blocked - client must update.")
+	# In dev mode (editor or debug builds), skip version check for local testing
+	var is_dev_mode = OS.has_feature("editor") or OS.is_debug_build()
+
+	if server_version != NETWORK_VERSION and not is_dev_mode:
+		LogManager.warn("VERSION MISMATCH! Server: %s, Client: %s - connection blocked" % [server_version, NETWORK_VERSION], "network")
 		version_mismatch.emit(server_version, NETWORK_VERSION)
 		# Block connection - don't allow authentication to proceed
 		close_connection()
 		return
+	elif server_version != NETWORK_VERSION:
+		LogManager.warn("VERSION MISMATCH (dev mode - allowing): Server: %s, Client: %s" % [server_version, NETWORK_VERSION], "network")
 	else:
-		print("✅ Version match: %s" % NETWORK_VERSION)
+		LogManager.info("Version match: %s" % NETWORK_VERSION, "network")
 
 	authentication_required.emit()
 
@@ -512,15 +549,15 @@ func handle_login_request(username: String, password_hash: String) -> void:
 		# CRITICAL: Emit player_authenticated signal on the SERVER so game_world can spawn the player
 		# The rpc("player_joined") only runs on clients, not on the server itself!
 		var auth_player_name = connected_players[peer_id].get("name", "Player%d" % peer_id)
-		print("🏷️ [SERVER] Emitting player_authenticated for peer %d: '%s'" % [peer_id, auth_player_name])
+		LogManager.debug("Emitting player_authenticated for peer %d: '%s'" % [peer_id, auth_player_name], "network")
 		player_authenticated.emit(peer_id, auth_player_name)
 
 		# Send success to client
 		rpc_id(peer_id, "receive_login_response", true, "", result.player_data)
-		print("Player %s (peer %d) logged in successfully" % [username, peer_id])
+		LogManager.info("Player %s (peer %d) logged in successfully" % [username, peer_id], "player")
 	else:
 		rpc_id(peer_id, "receive_login_response", false, result.error, {})
-		print("Login failed for peer %d: %s" % [peer_id, result.error])
+		LogManager.warn("Login failed for peer %d: %s" % [peer_id, result.error], "network")
 
 @rpc("any_peer", "reliable")
 func handle_register_request(username: String, password_hash: String) -> void:
@@ -539,10 +576,10 @@ func handle_register_request(username: String, password_hash: String) -> void:
 
 	if result.success:
 		rpc_id(peer_id, "receive_register_response", true, "")
-		print("Account created: %s (peer %d)" % [username, peer_id])
+		LogManager.info("Account created: %s (peer %d)" % [username, peer_id], "database")
 	else:
 		rpc_id(peer_id, "receive_register_response", false, result.error)
-		print("Registration failed for peer %d: %s" % [peer_id, result.error])
+		LogManager.warn("Registration failed for peer %d: %s" % [peer_id, result.error], "network")
 
 @rpc("any_peer", "reliable")
 func handle_guest_request(guest_name: String) -> void:
@@ -603,12 +640,12 @@ func handle_guest_request(guest_name: String) -> void:
 
 	# CRITICAL: Emit player_authenticated signal on the SERVER so game_world can spawn the player
 	# The rpc("player_joined") only runs on clients, not on the server itself!
-	print("🏷️ [SERVER] Emitting player_authenticated for guest peer %d: '%s'" % [peer_id, guest_name])
+	LogManager.debug("Emitting player_authenticated for guest peer %d: '%s'" % [peer_id, guest_name], "network")
 	player_authenticated.emit(peer_id, guest_name)
 
 	# Send success to client
 	rpc_id(peer_id, "receive_login_response", true, "", guest_data)
-	print("Guest %s (peer %d) joined" % [guest_name, peer_id])
+	LogManager.info("Guest %s (peer %d) joined" % [guest_name, peer_id], "player")
 
 # --- Client-side auth response handlers ---
 
@@ -630,21 +667,21 @@ func receive_login_response(success: bool, error: String, player_data: Dictionar
 				CharacterStats.start_session()
 
 		login_success.emit(player_data)
-		print("Login successful! Playing as: %s" % player_name)
+		LogManager.info("Login successful! Playing as: %s" % player_name, "player")
 	else:
 		is_authenticated = false
 		login_failed.emit(error)
-		print("Login failed: %s" % error)
+		LogManager.warn("Login failed: %s" % error, "network")
 
 @rpc("authority", "reliable")
 func receive_register_response(success: bool, error: String) -> void:
 	"""Client receives registration response from server"""
 	if success:
 		register_success.emit()
-		print("Registration successful!")
+		LogManager.info("Registration successful!", "database")
 	else:
 		register_failed.emit(error)
-		print("Registration failed: %s" % error)
+		LogManager.warn("Registration failed: %s" % error, "network")
 
 # --- Utility functions for auth ---
 
@@ -683,7 +720,7 @@ func _start_server_save_timer() -> void:
 	_server_save_timer.timeout.connect(_on_server_save_timer)
 	add_child(_server_save_timer)
 	_server_save_timer.start(SERVER_SAVE_INTERVAL)
-	print("📀 [NetworkManager] Server save timer started (every %.0fs)" % SERVER_SAVE_INTERVAL)
+	LogManager.info("Server save timer started (every %.0fs)" % SERVER_SAVE_INTERVAL, "database")
 
 func _stop_server_save_timer() -> void:
 	"""Stop the server save timer"""
@@ -710,7 +747,7 @@ func _on_server_save_timer() -> void:
 				saved_count += 1
 
 	if saved_count > 0:
-		print("📀 [NetworkManager] Server auto-saved %d player(s)" % saved_count)
+		LogManager.info("Server auto-saved %d player(s)" % saved_count, "database")
 
 func save_all_players() -> void:
 	"""Force save all connected authenticated players (server-only)"""
@@ -857,7 +894,7 @@ func request_player_heal(target_peer_id: int, heal_amount: float) -> void:
 	if target_player and is_instance_valid(target_player) and target_player.has_method("heal"):
 		# Apply heal on server
 		target_player.heal(heal_amount)
-		print("💚 Server: Player %d healed player %d for %.1f" % [healer_peer_id, target_peer_id, heal_amount])
+		LogManager.debug("Player %d healed player %d for %.1f" % [healer_peer_id, target_peer_id, heal_amount], "combat")
 
 		# Sync health to the target player's client
 		if target_peer_id != 1:  # Don't RPC to server (already updated locally)
@@ -872,7 +909,7 @@ func _sync_player_health(current_hp: float, max_hp: float) -> void:
 		local_player.max_health = max_hp
 		if local_player.health_bar and local_player.health_bar.has_method("update_health"):
 			local_player.health_bar.update_health(current_hp, max_hp)
-		print("💚 Client: Health synced to %.1f/%.1f" % [current_hp, max_hp])
+		LogManager.debug("Health synced to %.1f/%.1f" % [current_hp, max_hp], "combat")
 
 func _get_local_player() -> Node:
 	"""Get the local player node."""

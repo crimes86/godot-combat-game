@@ -34,10 +34,10 @@ signal pickaxe_unequipped(pickaxe: Dictionary)
 # ============================================
 
 func _ready() -> void:
-	DebugConfig.debug_log("═══════════════════════════════════════")
-	DebugConfig.debug_log("InventorySystem initialized")
-	DebugConfig.debug_log("Max slots: %d" % MAX_INVENTORY_SLOTS)
-	DebugConfig.debug_log("═══════════════════════════════════════")
+	Constants.debug_log("═══════════════════════════════════════")
+	Constants.debug_log("InventorySystem initialized")
+	Constants.debug_log("Max slots: %d" % MAX_INVENTORY_SLOTS)
+	Constants.debug_log("═══════════════════════════════════════")
 
 	# Initialize empty inventory
 	for i in range(MAX_INVENTORY_SLOTS):

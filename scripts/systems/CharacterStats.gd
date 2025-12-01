@@ -79,16 +79,44 @@ signal armor_equipped(slot: String, armor_item: Dictionary)
 signal armor_unequipped(slot: String, armor_item: Dictionary)
 signal gold_changed(amount: int, total: int)  # amount can be positive (gain) or negative (spend)
 
+# Chain system signals (merged from ChainManager)
+signal chain_increased(new_level: int)
+signal chain_reset(reason: String)
+signal overdrive_activated()
+
+# ============================================
+# CHAIN SYSTEM (merged from ChainManager)
+# ============================================
+
+# Chain settings
+var chain_damage_per_level: float = Constants.CHAIN_DAMAGE_PER_LEVEL
+var chain_max_level: int = Constants.CHAIN_MAX_LEVEL
+var chain_timeout: float = Constants.CHAIN_TIMEOUT
+
+# Chain reset reasons
+enum ChainResetReason {
+	MANUAL,          # Player manually reset
+	FAILED_WINDOW,   # Failed a crit window
+	TIMEOUT,         # Chain timeout expired
+	PLAYER_DEATH,    # Player died
+	STAGE_END        # Level/stage ended
+}
+
+# Chain state
+var current_chain: int = 0
+var last_attack_time: float = 0.0
+
 # ============================================
 # INITIALIZATION
 # ============================================
 
 func _ready() -> void:
-	DebugConfig.debug_log("═══════════════════════════════════════")
-	DebugConfig.debug_log("CharacterStats System Initialized")
-	DebugConfig.debug_log("Level: %d" % level)
-	DebugConfig.debug_log("Stats: STR:%d AGI:%d VIT:%d LUCK:%d" % [strength, agility, vitality, luck])
-	DebugConfig.debug_log("═══════════════════════════════════════")
+	Constants.debug_log("═══════════════════════════════════════")
+	Constants.debug_log("CharacterStats System Initialized")
+	Constants.debug_log("Level: %d" % level)
+	Constants.debug_log("Stats: STR:%d AGI:%d VIT:%d LUCK:%d" % [strength, agility, vitality, luck])
+	Constants.debug_log("Chain system: signals chain_increased, chain_reset, overdrive_activated")
+	Constants.debug_log("═══════════════════════════════════════")
 
 	# Start unarmed - player must buy/equip weapons
 	equipped_weapon = null
@@ -96,6 +124,13 @@ func _ready() -> void:
 
 	# Equip default starting clothes (non-removable)
 	_equip_starting_clothes()
+
+func _process(delta: float) -> void:
+	# Chain timeout check
+	if current_chain > 0:
+		var time_since_attack = Time.get_ticks_msec() / 1000.0 - last_attack_time
+		if time_since_attack >= chain_timeout:
+			reset_chain(ChainResetReason.TIMEOUT)
 
 func _equip_starting_clothes() -> void:
 	"""Equip default shirt and pants - minimal value, no stats"""
@@ -729,3 +764,61 @@ func print_stats() -> void:
 	if equipped_weapon:
 		print("Equipped: ", equipped_weapon.weapon_name)
 	print("═══════════════════════\n")
+
+# ============================================
+# CHAIN SYSTEM METHODS (merged from ChainManager)
+# ============================================
+
+func register_attack() -> void:
+	"""Register an attack for chain timeout tracking"""
+	last_attack_time = Time.get_ticks_msec() / 1000.0
+
+func on_crit_window_completed(all_weakpoints_destroyed: bool) -> void:
+	"""Called when a crit window ends"""
+	if all_weakpoints_destroyed:
+		increase_chain()
+	else:
+		reset_chain(ChainResetReason.FAILED_WINDOW)
+
+func increase_chain() -> void:
+	"""Increase the chain level"""
+	if current_chain < chain_max_level:
+		current_chain += 1
+		Constants.log_combat("⚡ Chain increased to %dx" % current_chain)
+		chain_increased.emit(current_chain)
+
+		# Play milestone sound at every 5 chain levels or at max
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager and (current_chain % Constants.CHAIN_MILESTONE_INTERVAL == 0 or current_chain == chain_max_level):
+			sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_MILESTONE, -8.0)
+
+		if current_chain == chain_max_level:
+			Constants.log_combat("🔥 OVERDRIVE! Maximum chain reached! 🔥")
+			overdrive_activated.emit()
+	else:
+		Constants.log_combat("⚡ Chain at maximum (%dx)" % chain_max_level)
+
+func reset_chain(reason: ChainResetReason = ChainResetReason.MANUAL) -> void:
+	"""Reset the chain to zero"""
+	if current_chain > 0:
+		Constants.log_combat("💔 Chain reset from %dx (%s)" % [current_chain, ChainResetReason.keys()[reason]])
+
+		# Play chain broken sound
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_BROKEN, -8.0)
+
+		current_chain = 0
+		chain_reset.emit(ChainResetReason.keys()[reason])
+
+func get_damage_multiplier() -> float:
+	"""Get damage multiplier from current chain level"""
+	return 1.0 + (current_chain * (chain_damage_per_level / 100.0))
+
+func get_chain_level() -> int:
+	"""Get current chain level"""
+	return current_chain
+
+func is_overdrive() -> bool:
+	"""Check if at max chain (overdrive mode)"""
+	return current_chain >= chain_max_level

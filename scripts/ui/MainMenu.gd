@@ -27,6 +27,27 @@ var is_dev_mode: bool = false
 @onready var auth_status_label = $AuthPanel/VBoxContainer/AuthStatusLabel
 @onready var auth_back_button = $AuthPanel/VBoxContainer/BackButton
 
+# Bottom buttons
+@onready var settings_button = $BottomButtons/SettingsButton
+@onready var credits_button = $BottomButtons/CreditsButton
+@onready var exit_button = $BottomButtons/ExitButton
+
+# Settings panel nodes
+@onready var settings_panel = $SettingsPanel
+@onready var master_volume_slider = $SettingsPanel/VBoxContainer/MasterVolumeContainer/MasterVolumeSlider
+@onready var master_volume_value = $SettingsPanel/VBoxContainer/MasterVolumeContainer/MasterVolumeValue
+@onready var music_volume_slider = $SettingsPanel/VBoxContainer/MusicVolumeContainer/MusicVolumeSlider
+@onready var music_volume_value = $SettingsPanel/VBoxContainer/MusicVolumeContainer/MusicVolumeValue
+@onready var sfx_volume_slider = $SettingsPanel/VBoxContainer/SFXVolumeContainer/SFXVolumeSlider
+@onready var sfx_volume_value = $SettingsPanel/VBoxContainer/SFXVolumeContainer/SFXVolumeValue
+@onready var fullscreen_check = $SettingsPanel/VBoxContainer/FullscreenContainer/FullscreenCheck
+@onready var vsync_check = $SettingsPanel/VBoxContainer/VSyncContainer/VSyncCheck
+@onready var settings_back_button = $SettingsPanel/VBoxContainer/SettingsBackButton
+
+# Credits panel nodes
+@onready var credits_panel = $CreditsPanel
+@onready var credits_back_button = $CreditsPanel/VBoxContainer/CreditsBackButton
+
 # State
 enum MenuState { MAIN, HOSTING, JOINING, AUTH_FOR_HOST, AUTH_FOR_JOIN }
 var current_state: MenuState = MenuState.MAIN
@@ -35,6 +56,9 @@ var pending_host_player_data: Dictionary = {}  # Store auth data when hosting
 
 func _ready():
 	await get_tree().process_frame
+
+	# Ensure all game UI autoloads are hidden when returning to main menu
+	_reset_game_ui()
 
 	# Dev mode only available in editor or debug builds (not production exports)
 	is_dev_mode = OS.has_feature("editor") or OS.is_debug_build()
@@ -80,6 +104,46 @@ func _ready():
 	if auth_back_button:
 		auth_back_button.pressed.connect(_on_auth_back_pressed)
 		auth_back_button.mouse_entered.connect(_on_button_hover)
+
+	# Connect bottom buttons (Settings, Credits, Exit)
+	if settings_button:
+		settings_button.pressed.connect(_on_settings_pressed)
+		settings_button.mouse_entered.connect(_on_button_hover)
+	if credits_button:
+		credits_button.pressed.connect(_on_credits_pressed)
+		credits_button.mouse_entered.connect(_on_button_hover)
+	if exit_button:
+		exit_button.pressed.connect(_on_exit_pressed)
+		exit_button.mouse_entered.connect(_on_button_hover)
+
+	# Connect settings panel controls
+	if settings_back_button:
+		settings_back_button.pressed.connect(_on_settings_back_pressed)
+		settings_back_button.mouse_entered.connect(_on_button_hover)
+	if master_volume_slider:
+		master_volume_slider.value_changed.connect(_on_master_volume_changed)
+	if music_volume_slider:
+		music_volume_slider.value_changed.connect(_on_music_volume_changed)
+	if sfx_volume_slider:
+		sfx_volume_slider.value_changed.connect(_on_sfx_volume_changed)
+	if fullscreen_check:
+		fullscreen_check.toggled.connect(_on_fullscreen_toggled)
+	if vsync_check:
+		vsync_check.toggled.connect(_on_vsync_toggled)
+
+	# Connect credits panel
+	if credits_back_button:
+		credits_back_button.pressed.connect(_on_credits_back_pressed)
+		credits_back_button.mouse_entered.connect(_on_button_hover)
+
+	# Hide settings and credits panels initially
+	if settings_panel:
+		settings_panel.visible = false
+	if credits_panel:
+		credits_panel.visible = false
+
+	# Initialize settings from current state
+	_load_settings()
 
 	# Connect NetworkManager signals
 	NetworkManager.connected_to_server.connect(_on_connected)
@@ -421,3 +485,180 @@ func _load_game_world():
 	# Small delay to ensure network is ready
 	await get_tree().create_timer(0.3).timeout
 	get_tree().change_scene_to_file("res://main.tscn")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SETTINGS, CREDITS, EXIT
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _on_settings_pressed():
+	_play_click_sound()
+	_set_menu_panel_visible(false)
+	if settings_panel:
+		settings_panel.visible = true
+
+func _on_settings_back_pressed():
+	_play_click_sound()
+	if settings_panel:
+		settings_panel.visible = false
+	_set_menu_panel_visible(true)
+	_save_settings()
+
+func _on_credits_pressed():
+	_play_click_sound()
+	_set_menu_panel_visible(false)
+	if credits_panel:
+		credits_panel.visible = true
+
+func _on_credits_back_pressed():
+	_play_click_sound()
+	if credits_panel:
+		credits_panel.visible = false
+	_set_menu_panel_visible(true)
+
+func _on_exit_pressed():
+	_play_click_sound()
+	# Save settings before exiting
+	_save_settings()
+	get_tree().quit()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SETTINGS CONTROLS
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _on_master_volume_changed(value: float):
+	if master_volume_value:
+		master_volume_value.text = "%d%%" % int(value)
+	# Convert 0-100 to dB (0 = -40dB, 100 = 0dB)
+	var db = lerp(-40.0, 0.0, value / 100.0)
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), db)
+
+func _on_music_volume_changed(value: float):
+	if music_volume_value:
+		music_volume_value.text = "%d%%" % int(value)
+	# Apply to theme music and music bus if exists
+	var db = lerp(-40.0, 0.0, value / 100.0)
+	if theme_music:
+		theme_music.volume_db = db + 10.0  # Offset since base is -10
+	# Try to set Music bus if it exists
+	var music_bus = AudioServer.get_bus_index("Music")
+	if music_bus >= 0:
+		AudioServer.set_bus_volume_db(music_bus, db)
+
+func _on_sfx_volume_changed(value: float):
+	if sfx_volume_value:
+		sfx_volume_value.text = "%d%%" % int(value)
+	# Apply to SFX bus if it exists
+	var db = lerp(-40.0, 0.0, value / 100.0)
+	var sfx_bus = AudioServer.get_bus_index("SFX")
+	if sfx_bus >= 0:
+		AudioServer.set_bus_volume_db(sfx_bus, db)
+	# Also update SoundManager if available
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("set_sfx_volume"):
+		sound_manager.set_sfx_volume(value / 100.0)
+
+func _on_fullscreen_toggled(enabled: bool):
+	if enabled:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+func _on_vsync_toggled(enabled: bool):
+	if enabled:
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+	else:
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+
+func _load_settings():
+	"""Load settings from config file or use defaults"""
+	var config = ConfigFile.new()
+	var err = config.load("user://settings.cfg")
+
+	if err == OK:
+		# Load saved values
+		if master_volume_slider:
+			master_volume_slider.value = config.get_value("audio", "master_volume", 80.0)
+		if music_volume_slider:
+			music_volume_slider.value = config.get_value("audio", "music_volume", 70.0)
+		if sfx_volume_slider:
+			sfx_volume_slider.value = config.get_value("audio", "sfx_volume", 80.0)
+		if fullscreen_check:
+			fullscreen_check.button_pressed = config.get_value("display", "fullscreen", false)
+		if vsync_check:
+			vsync_check.button_pressed = config.get_value("display", "vsync", true)
+	else:
+		# Apply defaults
+		if master_volume_slider:
+			_on_master_volume_changed(master_volume_slider.value)
+		if music_volume_slider:
+			_on_music_volume_changed(music_volume_slider.value)
+		if sfx_volume_slider:
+			_on_sfx_volume_changed(sfx_volume_slider.value)
+
+	# Apply current fullscreen/vsync state
+	if fullscreen_check:
+		var is_fullscreen = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+		fullscreen_check.button_pressed = is_fullscreen
+	if vsync_check:
+		var is_vsync = DisplayServer.window_get_vsync_mode() != DisplayServer.VSYNC_DISABLED
+		vsync_check.button_pressed = is_vsync
+
+func _save_settings():
+	"""Save settings to config file"""
+	var config = ConfigFile.new()
+
+	if master_volume_slider:
+		config.set_value("audio", "master_volume", master_volume_slider.value)
+	if music_volume_slider:
+		config.set_value("audio", "music_volume", music_volume_slider.value)
+	if sfx_volume_slider:
+		config.set_value("audio", "sfx_volume", sfx_volume_slider.value)
+	if fullscreen_check:
+		config.set_value("display", "fullscreen", fullscreen_check.button_pressed)
+	if vsync_check:
+		config.set_value("display", "vsync", vsync_check.button_pressed)
+
+	config.save("user://settings.cfg")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GAME UI RESET (called when returning from game)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _reset_game_ui():
+	"""Hide all game UI autoloads when returning to main menu"""
+	# Hide GroupUI (CanvasLayer autoload) - also hides invite popup
+	if GroupUI:
+		GroupUI.visible = false
+		GroupUI._hide_popup()  # Hide invite popup too
+	# Hide QuestTrackerUI (CanvasLayer autoload)
+	if QuestTrackerUI:
+		QuestTrackerUI.visible = false
+	# Hide BugReportUI (CanvasLayer autoload)
+	if BugReportUI:
+		BugReportUI.visible = false
+	# Hide AccountAdmin (CanvasLayer autoload)
+	if AccountAdmin:
+		AccountAdmin.visible = false
+	# Hide NotificationManager canvas layer
+	if NotificationManager:
+		var notif_canvas = NotificationManager.get_node_or_null("NotificationCanvas")
+		if notif_canvas:
+			notif_canvas.visible = false
+	# Hide TutorialManager UI elements
+	if TutorialManager:
+		if TutorialManager.get("tutorial_ui") and TutorialManager.tutorial_ui:
+			TutorialManager.tutorial_ui.visible = false
+		if TutorialManager.get("ui_arrow_canvas") and TutorialManager.ui_arrow_canvas:
+			TutorialManager.ui_arrow_canvas.visible = false
+	# Reset CursorManager
+	if CursorManager and CursorManager.has_method("reset_cursor"):
+		CursorManager.reset_cursor()
+
+	# Clean up any orphaned game overlays (logout timer, spawn hints, tutorial blackout, etc.)
+	var root = get_tree().root
+	var nodes_to_remove: Array[Node] = []
+	for child in root.get_children():
+		if child.name in ["LogoutTimerOverlay", "SpawnHintsOverlay", "GameMenu", "TutorialBlackout"]:
+			nodes_to_remove.append(child)
+	for node in nodes_to_remove:
+		node.queue_free()
