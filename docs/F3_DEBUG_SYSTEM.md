@@ -44,15 +44,18 @@ Shows:
 
 ## How It Works
 
-### DebugConfig Autoload
+### Constants Autoload (Debug System)
 
-The `DebugConfig.gd` autoload acts as the central hub:
+The `Constants.gd` autoload handles debug toggling (merged from DebugConfig):
 
 ```gdscript
-# In DebugConfig.gd
+# In Constants.gd
 signal debug_display_toggled(visible: bool)
 
 func _input(event: InputEvent) -> void:
+    # Only allow in editor or debug builds
+    if not (OS.has_feature("editor") or OS.is_debug_build()):
+        return
     if event is InputEventKey and event.pressed and event.keycode == KEY_F3:
         toggle_debug_display()
 
@@ -69,8 +72,8 @@ Each debug system connects to the `debug_display_toggled` signal:
 # In PerformanceProfiler.gd
 func _ready() -> void:
     visible = false  # Hidden by default
-    if DebugConfig:
-        DebugConfig.debug_display_toggled.connect(_on_debug_toggled)
+    if Constants:
+        Constants.debug_display_toggled.connect(_on_debug_toggled)
 
 func _on_debug_toggled(is_visible: bool) -> void:
     visible = is_visible
@@ -80,8 +83,8 @@ func _on_debug_toggled(is_visible: bool) -> void:
 # In ChunkBasedPropSystem.gd
 func _ready() -> void:
     create_debug_label()  # Creates but hides by default
-    if DebugConfig:
-        DebugConfig.debug_display_toggled.connect(_on_debug_toggled)
+    if Constants:
+        Constants.debug_display_toggled.connect(_on_debug_toggled)
 
 func _on_debug_toggled(is_visible: bool) -> void:
     if debug_canvas:
@@ -160,10 +163,10 @@ func _ready() -> void:
     my_debug_ui.visible = false
 ```
 
-2. **Connect to DebugConfig signal**
+2. **Connect to Constants debug signal**
 ```gdscript
-    if DebugConfig:
-        DebugConfig.debug_display_toggled.connect(_on_debug_toggled)
+    if Constants:
+        Constants.debug_display_toggled.connect(_on_debug_toggled)
 ```
 
 3. **Handle toggle**
@@ -178,17 +181,17 @@ That's it! Your system now toggles with F3.
 
 For production/release builds:
 
-1. **Option 1**: Remove debug systems entirely
-   - Comment out debug display creation
-   - Saves memory and CPU
+1. **F3 is automatically disabled** in release builds
+   - The `_input()` handler checks `OS.has_feature("editor") or OS.is_debug_build()`
+   - Only works in editor or debug exports
 
-2. **Option 2**: Disable DebugConfig
+2. **Option**: Disable debug entirely
    ```gdscript
-   # In DebugConfig.gd
+   # In Constants.gd
    @export var ENABLE_DEBUG: bool = false
    ```
 
-3. **Option 3**: Keep but hide
+3. **Option**: Keep but hide
    - Leave F3 toggle functional for bug reports
    - Players can enable if they want performance stats
 
@@ -202,6 +205,6 @@ These help visualize chunk boundaries while testing.
 
 ## Files
 
-- `scripts/systems/DebugConfig.gd` - Central F3 toggle handler
+- `scripts/constants.gd` - Central F3 toggle handler (debug system merged into Constants)
 - `scripts/debug/PerformanceProfiler.gd` - Performance stats, chunk info, enemy counts, visual overlays
 - `docs/F3_DEBUG_SYSTEM.md` - This documentation

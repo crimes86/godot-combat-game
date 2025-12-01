@@ -93,7 +93,7 @@ func _validate_is_leader(peer_id: int) -> bool:
 
 #### 8. Excessive Debug Logging
 **Files:** `Player.gd` (100+ print statements), `NetworkManager.gd`
-**Recommendation:** Replace with `DebugConfig.debug_log()` calls with configurable levels
+**Status:** RESOLVED - Now using `LogManager` with configurable verbosity levels
 
 #### 9. Over-engineered Name Update Retry System
 **File:** `scripts/networking/NetworkManager.gd:237-289`

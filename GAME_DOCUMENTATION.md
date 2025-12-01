@@ -599,7 +599,7 @@ spawn_crit_window()
 ```gdscript
 # While window is active
 - Player clicks weakpoints
-- Each click deals damage + registers with ChainManager
+- Each click deals damage + registers with CharacterStats
 - Weakpoint destroyed on click
 - Progressive brightening based on damage
 - Combat text shows damage numbers
@@ -609,11 +609,11 @@ spawn_crit_window()
 ```gdscript
 # When timer expires
 if all_weakpoints_destroyed:
-    ChainManager.on_crit_window_completed(true)  # Chain++
+    CharacterStats.on_crit_window_completed(true)  # Chain++
     Play success sound
     Spawn success particles
 else:
-    ChainManager.on_crit_window_completed(false)  # Chain reset
+    CharacterStats.on_crit_window_completed(false)  # Chain reset
     Play failure sound
     Remaining weakpoints explode (failure effect)
 ```
@@ -631,7 +631,7 @@ else:
 **Normal Enemy Hit**:
 ```gdscript
 var base_damage = attack_damage
-var chain_mult = ChainManager.get_damage_multiplier()
+var chain_mult = CharacterStats.get_damage_multiplier()
 var final_damage = base_damage * chain_mult
 enemy.take_damage(final_damage, false)
 ```
@@ -639,7 +639,7 @@ enemy.take_damage(final_damage, false)
 **Weakpoint Hit**:
 ```gdscript
 var base_damage = attack_damage
-var chain_mult = ChainManager.get_damage_multiplier()
+var chain_mult = CharacterStats.get_damage_multiplier()
 var crit_mult = 2.0  # Weakpoint hits deal 2x damage
 var final_damage = base_damage * chain_mult * crit_mult
 weakpoint.take_damage(final_damage)
@@ -1370,8 +1370,7 @@ Groups allow players to share campfire buffs and coordinate gameplay. Maximum gr
 
 ### Files
 - `scripts/systems/GroupManager.gd` - Group state and commands
-- `scripts/ui/GroupUI.gd` - Raid frame display
-- `scripts/ui/GroupInvitePopup.gd` - Invite notification
+- `scripts/ui/GroupUI.gd` - Raid frame display and invite popup (merged)
 
 ---
 
@@ -1909,7 +1908,7 @@ for x in range(stump_width):
 The chain system rewards consecutive successful crit window completions with escalating damage multipliers.
 
 #### Core System
-**Script**: `scripts/systems/chain_manager.gd`
+**Script**: `scripts/systems/CharacterStats.gd` (chain system merged into CharacterStats)
 
 **Chain Building**:
 - Start at 0x multiplier
@@ -1983,7 +1982,7 @@ signal overdrive_activated()  # Emitted when reaching max chain
 **Crit Window Completion**:
 ```gdscript
 # Called when crit window ends
-ChainManager.on_crit_window_completed(all_weakpoints_destroyed)
+CharacterStats.on_crit_window_completed(all_weakpoints_destroyed)
 
 # If all weakpoints destroyed: chain++
 # If any weakpoint survived: chain reset to 0
@@ -1992,14 +1991,14 @@ ChainManager.on_crit_window_completed(all_weakpoints_destroyed)
 **Damage Application**:
 ```gdscript
 # In Player.gd or Enemy.gd
-var multiplier = ChainManager.get_damage_multiplier()
+var multiplier = CharacterStats.get_damage_multiplier()
 var final_damage = base_damage * multiplier
 ```
 
 **Chain Registration**:
 ```gdscript
 # Register attack to reset timeout timer
-ChainManager.register_attack()
+CharacterStats.register_attack()
 ```
 
 #### Gameplay Strategy
@@ -2084,7 +2083,7 @@ The training dummy provides a safe, controlled environment for testing combat me
 - Same positioning logic as enemies
 
 **Chain Building Practice**:
-- Fully integrates with ChainManager
+- Fully integrates with CharacterStats
 - Successful crit completions increase chain
 - Failed windows reset chain
 - Safe environment to learn chain mechanics
@@ -2135,7 +2134,7 @@ func take_damage(damage: float, is_critical: bool = false) -> void:
 - Identical visual appearance
 
 **Signals**:
-- Connects to ChainManager signals
+- Connects to CharacterStats signals
 - Emits same events as real enemies
 - Fully participates in combat systems
 

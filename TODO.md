@@ -50,8 +50,8 @@
   - CharacterStats.gd:378
 
 ## Pending - Architecture
-- [ ] Reduce autoloads from 24 to ~8 core systems
-- [ ] Create EventBus for decoupled system communication
+- [x] Reduce autoloads from 26 to 22 (consolidated DebugConfig, TreeAudioManager, GroupInvitePopup, ChainManager)
+- [ ] Create EventBus for decoupled system communication (optional/future)
 
 ## Pending - Testing
 - [ ] Add unit tests for CharacterStats, InventorySystem, Weapon

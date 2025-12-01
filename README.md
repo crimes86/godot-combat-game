@@ -105,12 +105,13 @@ Historical documentation of component architecture refactoring (reference only, 
 - **Group Scaling**: Dynamic HP/damage scaling based on player count
 
 ### Code Architecture
-- **Autoloads**: CharacterStats, InventorySystem, ChainManager, LootSpawnManager, SoundManager, NotificationManager, ItemIconGenerator, DatabaseManager
+- **22 Autoloads**: Core systems including Constants, CharacterStats (with chain system), InventorySystem, SoundManager, NotificationManager, NetworkManager, DatabaseManager, and more
 - **Signal-Based**: Clean communication between systems
 - **State Machines**: Enemy AI, ruins conversion, chain management
 - **Modular Design**: Easy to extend and maintain
 - **Global Notifications**: Item gain/loss notifications with rarity colors and cascade animations
 - **Procedural Icons**: ItemIconGenerator creates icons for weapons, armor, tools, and materials
+- **Centralized Logging**: LogManager with toggleable verbosity levels
 
 ---
 
@@ -127,10 +128,11 @@ Historical documentation of component architecture refactoring (reference only, 
 - **F**: Interact / Loot
 - **Enter**: Chat
 - **ESC**: Close UI windows
-- **F3**: Debug mode
-- **F4**: Add 1 level (debug)
-- **F5**: Add 5 levels (debug)
-- **F12**: Screenshot mode
+- **F1**: Bug report (submit feedback)
+- **F2**: Admin panel (host only)
+- **F3**: Debug overlay (dev builds only)
+- **F4**: Advance time 1 hour (dev builds only)
+- **ESC**: In-game menu (Settings, Credits, Disconnect)
 
 ### Chat Admin Commands
 Type these in chat (press Enter) when hosting a game:
@@ -162,15 +164,19 @@ Type these in chat (press Enter) when hosting a game:
 - `scripts/player/Player.gd` - Player controller
 - `scripts/enemies/Enemy.gd` - Enemy AI and combat
 - `scripts/enemies/weakpoint.gd` - Crit window weakpoints
-- `scripts/systems/ChainManager.gd` - Chain multiplier system
+- `scripts/systems/CharacterStats.gd` - Stats, equipment, and chain multiplier system
 - `scripts/systems/InventorySystem.gd` - Global inventory
 - `scripts/systems/LootSpawnManager.gd` - Enemy loot tables
 - `scripts/systems/ItemIconGenerator.gd` - Procedural item icons
 - `scripts/systems/DatabaseManager.gd` - Player data persistence
+- `scripts/systems/LogManager.gd` - Centralized logging with verbosity levels
+- `scripts/systems/SoundManager.gd` - Audio system (music, SFX, tree sounds)
 - `scripts/ui/CharacterUI.gd` - Character sheet UI (C key)
 - `scripts/ui/InventoryUI.gd` - Inventory window (I/B key)
 - `scripts/ui/ChatUI.gd` - Multiplayer chat with admin commands
 - `scripts/ui/ShopUI.gd` - Vendor shop interface
+- `scripts/ui/GroupUI.gd` - Party frames and invite popup
+- `scripts/ui/GameMenu.gd` - In-game ESC menu
 
 **Data**:
 - `prop_placements.json` - 2,500 prop positions
@@ -268,4 +274,4 @@ Type these in chat (press Enter) when hosting a game:
 
 ---
 
-This documentation was last updated: 2025-11-28
+This documentation was last updated: 2025-12-01
