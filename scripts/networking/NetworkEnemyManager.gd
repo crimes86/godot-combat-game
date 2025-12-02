@@ -1247,6 +1247,10 @@ func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int
 		CharacterStats.add_gold(gold_amount)
 		LogManager.info("You looted %d gold" % gold_amount, "loot")
 
+		# Show gold notification
+		if NotificationManager and is_instance_valid(NotificationManager):
+			NotificationManager.notify_gold_added(gold_amount)
+
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
 			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)

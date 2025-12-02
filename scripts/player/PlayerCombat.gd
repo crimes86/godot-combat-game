@@ -360,6 +360,10 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 	if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
 		attack_feedback.spawn_damage_number(enemy.global_position, damage, is_crit, hit_weakpoint)
 
+	# Blood splatter particles at enemy position
+	if attack_feedback and attack_feedback.has_method("trigger_attack_feedback"):
+		attack_feedback.trigger_attack_feedback(enemy.global_position, is_crit, hit_weakpoint)
+
 	# Screen shake on crit
 	if is_crit and screen_shake:
 		screen_shake.add_trauma(0.2)

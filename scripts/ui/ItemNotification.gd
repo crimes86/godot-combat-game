@@ -74,7 +74,7 @@ func setup_item_removed(item_name: String, quantity: int, rarity: String) -> voi
 
 func setup_gold_added(amount: int) -> void:
 	notification_type = NotificationType.GOLD_ADDED
-	text = "+ %d G" % amount
+	text = "+%d Gold" % amount
 	# Gold color
 	add_theme_color_override("font_color", Color(1.0, 0.85, 0.2, 1.0))
 	add_theme_font_size_override("font_size", 20)

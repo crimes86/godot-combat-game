@@ -477,6 +477,10 @@ func toggle_shop() -> void:
 
 func _on_first_interaction() -> void:
 	"""Handle first-time player interaction with blacksmith"""
+	# Tutorial: notify TutorialManager of blacksmith visit (every time, not just first)
+	if TutorialManager and TutorialManager.is_tutorial_active():
+		TutorialManager.on_blacksmith_visited()
+
 	if has_talked_to_player:
 		return
 
@@ -489,10 +493,6 @@ func _on_first_interaction() -> void:
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("dismiss_spawn_hints"):
 		player.dismiss_spawn_hints()
-
-	# Tutorial: notify TutorialManager of blacksmith visit
-	if TutorialManager and TutorialManager.is_tutorial_active():
-		TutorialManager.on_blacksmith_visited()
 
 func create_shop_ui() -> void:
 	"""Create the shop UI dynamically"""

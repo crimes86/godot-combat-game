@@ -111,6 +111,11 @@ func open_loot_ui(primary_corpse, nearby_corpses: Array) -> void:
 		close_ui()
 		return
 
+	# Play corpse rummaging sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_sound_2d(sound_manager.SoundType.CORPSE_LOOT, -8.0)
+
 	show()
 
 func close_ui() -> void:
@@ -566,7 +571,7 @@ func loot_all_gold(gold_corpses: Array) -> void:
 			CharacterStats.add_gold(corpse.corpse_gold)
 			corpse.corpse_gold = 0
 
-	if total_gold > 0 and not is_multiplayer:
+	if total_gold > 0:
 		print("💰 Looted %d gold from %d corpses" % [total_gold, gold_corpses.size()])
 		# Show gold notification
 		if NotificationManager and is_instance_valid(NotificationManager):
@@ -650,7 +655,7 @@ func loot_gold(corpse, gold_amount: int) -> void:
 	var is_multiplayer = multiplayer.has_multiplayer_peer()
 
 	# In multiplayer, request gold loot through server
-	if is_multiplayer and network_enemy_mgr and corpse.network_id > 0:
+	if is_multiplayer and network_enemy_mgr and "network_id" in corpse and corpse.network_id > 0:
 		network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
 		# Server will handle gold award and broadcast
 		await get_tree().create_timer(0.1).timeout
@@ -801,6 +806,7 @@ func loot_item(corpse, item: Dictionary) -> void:
 
 func _on_take_all_pressed() -> void:
 	"""Take all gold and items from all corpses"""
+	_play_click_sound()
 	var looted_count = 0
 	var total_gold = 0
 
@@ -820,7 +826,7 @@ func _on_take_all_pressed() -> void:
 				corpse.corpse_gold = 0
 
 	# Play gold sound and show notification if we looted gold
-	if total_gold > 0 and not is_multiplayer:
+	if total_gold > 0:
 		print("💰 Looted %d total gold" % total_gold)
 		# Show gold notification
 		if NotificationManager and is_instance_valid(NotificationManager):
@@ -899,4 +905,11 @@ func _on_take_all_pressed() -> void:
 
 func _on_close_pressed() -> void:
 	"""Handle close button press"""
+	_play_click_sound()
 	close_ui()
+
+func _play_click_sound() -> void:
+	"""Play button click sound"""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_button_click_sound"):
+		sound_manager.play_button_click_sound()

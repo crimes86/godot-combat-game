@@ -45,10 +45,10 @@ func notify_item_added(item_name: String, quantity: int = 1, rarity: String = "C
 	_show_notification(notification)
 	print("   → Notification created and shown")
 
-	# Play item pickup sound (0 dB for satisfying feedback)
+	# Play item pickup sound (-8.0 dB to avoid overwhelming when looting multiple items)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, 0.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -8.0)
 
 ## Show an item removed notification
 func notify_item_removed(item_name: String, quantity: int = 1, rarity: String = "COMMON") -> void:
@@ -58,6 +58,7 @@ func notify_item_removed(item_name: String, quantity: int = 1, rarity: String = 
 
 ## Show a gold added notification
 func notify_gold_added(amount: int) -> void:
+	print("📢 NotificationManager.notify_gold_added: %d gold" % amount)
 	if amount <= 0:
 		return
 	var notification = _create_notification()

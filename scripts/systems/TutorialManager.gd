@@ -85,6 +85,11 @@ func _connect_inventory_signals() -> void:
 		InventorySystem.item_added.connect(_on_inventory_item_added)
 		print("📚 [Tutorial] Connected to InventorySystem.item_added")
 
+func _exit_tree() -> void:
+	# Disconnect signals to prevent memory leaks
+	if InventorySystem and InventorySystem.item_added.is_connected(_on_inventory_item_added):
+		InventorySystem.item_added.disconnect(_on_inventory_item_added)
+
 func _on_inventory_item_added(item: Dictionary) -> void:
 	"""Called when any item is added to inventory"""
 	on_equippable_item_received(item)
@@ -312,6 +317,12 @@ func show_kill_skeleton_tutorial() -> void:
 
 func show_blacksmith_tutorial() -> void:
 	"""Step 7: Visit the blacksmith"""
+	# If player already talked to blacksmith, skip this step
+	if blacksmith_visited:
+		print("📚 [Tutorial] Blacksmith already visited, skipping to ACCEPT_QUEST")
+		advance_to_step(TutorialStep.ACCEPT_QUEST)
+		return
+
 	clear_prompt()
 	clear_click_indicator()  # Explicitly clear LEFT CLICK from earlier steps
 	clear_feedback_label()   # Clear any remaining feedback
@@ -329,6 +340,12 @@ func show_blacksmith_tutorial() -> void:
 
 func show_accept_quest_tutorial() -> void:
 	"""Step 8: Accept first quest from blacksmith"""
+	# If player already accepted a quest, skip this step
+	if quest_accepted:
+		print("📚 [Tutorial] Quest already accepted, skipping to KILL_SKELETON")
+		advance_to_step(TutorialStep.KILL_SKELETON)
+		return
+
 	clear_prompt()
 	clear_arrow()
 
@@ -337,16 +354,12 @@ func show_accept_quest_tutorial() -> void:
 	if blacksmith and blacksmith.has_method("hide_tutorial_arrow"):
 		blacksmith.hide_tutorial_arrow()
 
-	prompt_label.text = "Click the Quests tab!"
+	prompt_label.text = "Accept a quest from the Quests tab!"
 	prompt_label.add_theme_color_override("font_color", HIGHLIGHT_COLOR)
 	prompt_label.visible = true
 
 	# Flash the prompt for attention
 	start_prompt_flash()
-
-	# Start waiting for quests tab to be clicked
-	waiting_for_quests_tab = true
-	waiting_for_accept_button = false
 
 	# Show arrow pointing to Quests tab (delay to let shop UI fully render)
 	await get_tree().create_timer(0.15).timeout
@@ -524,24 +537,40 @@ func on_weakpoint_hit() -> void:
 
 func on_blacksmith_visited() -> void:
 	"""Called when player talks to blacksmith"""
-	if current_step != TutorialStep.VISIT_BLACKSMITH:
+	print("📚 [Tutorial] on_blacksmith_visited() called, current_step: %s" % TutorialStep.keys()[current_step + 1])
+
+	# Only set the flag if we're on or past the VISIT_BLACKSMITH step
+	# This prevents early shop visits from skipping the blacksmith tutorial step
+	if current_step >= TutorialStep.VISIT_BLACKSMITH:
+		blacksmith_visited = true
+		print("📚 [Tutorial] Setting blacksmith_visited = true")
+
+	# If we're past this step already, ignore
+	if current_step > TutorialStep.VISIT_BLACKSMITH:
+		print("📚 [Tutorial] Already past VISIT_BLACKSMITH, ignoring")
 		return
 
-	blacksmith_visited = true
-	advance_to_step(TutorialStep.ACCEPT_QUEST)
+	# If we're on this step, advance
+	if current_step == TutorialStep.VISIT_BLACKSMITH:
+		print("📚 [Tutorial] On VISIT_BLACKSMITH step, advancing to ACCEPT_QUEST")
+		advance_to_step(TutorialStep.ACCEPT_QUEST)
 
 func on_quest_accepted() -> void:
 	"""Called when player accepts their first quest"""
-	if current_step != TutorialStep.ACCEPT_QUEST:
-		return
+	quest_accepted = true
 
-	# Clear UI arrow and flags
+	# Clear UI arrow and flags regardless of step
 	clear_ui_arrow()
 	waiting_for_quests_tab = false
 	waiting_for_accept_button = false
 
-	quest_accepted = true
-	advance_to_step(TutorialStep.KILL_SKELETON)
+	# If we're past this step already, ignore
+	if current_step > TutorialStep.ACCEPT_QUEST:
+		return
+
+	# If we're on this step, advance
+	if current_step == TutorialStep.ACCEPT_QUEST:
+		advance_to_step(TutorialStep.KILL_SKELETON)
 
 func on_skeleton_killed() -> void:
 	"""Called when player kills a skeleton"""
@@ -984,26 +1013,16 @@ func on_shop_opened() -> void:
 
 	print("📚 [Tutorial] Shop opened during ACCEPT_QUEST step")
 
-	# Re-show the appropriate arrow based on where they are in the step
-	if waiting_for_quests_tab:
-		# They need to click the Quests tab
-		prompt_label.text = "Click the Quests tab!"
-		prompt_label.visible = true
-		start_prompt_flash()
-		# Small delay for shop UI to render
-		await get_tree().create_timer(0.2).timeout
-		if not is_instance_valid(self):
-			return
-		show_ui_arrow_to_quests_tab()
-	elif waiting_for_accept_button:
-		# They need to click Accept
-		prompt_label.text = "Click ACCEPT on a quest!"
-		prompt_label.visible = true
-		start_prompt_flash()
-		await get_tree().create_timer(0.2).timeout
-		if not is_instance_valid(self):
-			return
-		show_ui_arrow_to_accept_button()
+	# Small delay for shop UI to render
+	await get_tree().create_timer(0.2).timeout
+	if not is_instance_valid(self):
+		return
+
+	# Show arrow pointing to Quests tab
+	prompt_label.text = "Accept a quest from the Quests tab!"
+	prompt_label.visible = true
+	start_prompt_flash()
+	show_ui_arrow_to_quests_tab()
 
 func on_shop_closed() -> void:
 	"""Called when player closes the shop UI"""
@@ -1013,6 +1032,26 @@ func on_shop_closed() -> void:
 	# Hide the UI arrow when shop closes
 	clear_ui_arrow()
 	print("📚 [Tutorial] Shop closed during ACCEPT_QUEST step")
+
+func _is_quests_tab_selected() -> bool:
+	"""Check if the Quests tab is currently selected in the ShopUI"""
+	var shop_ui = get_tree().get_first_node_in_group("shop_ui")
+	if not shop_ui:
+		for node in get_tree().root.get_children():
+			if node is CanvasLayer and node.name == "ShopUI":
+				shop_ui = node
+				break
+
+	if not shop_ui:
+		return false
+
+	var tab_container = shop_ui.get_node_or_null("Control/Panel/MarginContainer/VBoxContainer/TabContainer")
+	if not tab_container:
+		return false
+
+	var current_tab_idx = tab_container.current_tab
+	var current_tab_title = tab_container.get_tab_title(current_tab_idx)
+	return current_tab_title.begins_with("Quests")
 
 var click_indicator_tween: Tween = null
 var click_indicator_world: Node2D = null  # World-space click indicator

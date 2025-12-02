@@ -32,6 +32,10 @@ enum SoundType {
 	GOLD_LOOT,  # Gold coin jingling (looting corpses, shop transactions)
 	ITEM_PICKUP,  # Satisfying item pickup sound (inventory notification)
 	CHEST_OPEN,  # Treasure chest opening sound
+	CORPSE_LOOT,  # Rummaging through corpse when opening loot UI
+	BLACKSMITH_OPEN,  # Opening blacksmith/vendor UI
+	QUEST_ACCEPT,  # Accepting a new quest
+	QUEST_TURN_IN,  # Turning in completed quest
 	INVENTORY_MOVE,  # Moving items around inventory slots
 	EQUIP_ITEM,  # Equipping/unequipping gear
 	BUTTON_CLICK,  # UI button click sound
@@ -61,6 +65,10 @@ var skeleton_death_sounds: Array[AudioStream] = []  # Skeleton bones collapsing 
 var gold_loot_sound: AudioStream = null  # Gold coin jingling
 var item_pickup_sound: AudioStream = null  # Satisfying item pickup sound
 var chest_open_sound: AudioStream = null  # Treasure chest opening sound
+var corpse_loot_sound: AudioStream = null  # Rummaging through corpse
+var blacksmith_open_sound: AudioStream = null  # Blacksmith/vendor UI open
+var quest_accept_sound: AudioStream = null  # Quest accept sound
+var quest_turn_in_sound: AudioStream = null  # Quest turn in sound
 var inventory_move_sound: AudioStream = null  # Moving items in inventory
 var equip_item_sound: AudioStream = null  # Equipping/unequipping gear
 var button_click_sound: AudioStream = null  # UI button click sound
@@ -235,6 +243,33 @@ func _load_real_sounds() -> void:
 		print("  ✅ Loaded chest_open.wav")
 	else:
 		push_warning("  ⚠️ Failed to load chest_open.wav")
+
+	# Load corpse loot sound (rummaging through dead enemy)
+	corpse_loot_sound = load("res://assets/sounds/ui/corpse_loot.wav")
+	if corpse_loot_sound:
+		print("  ✅ Loaded corpse_loot.wav")
+	else:
+		push_warning("  ⚠️ Failed to load corpse_loot.wav")
+
+	# Load blacksmith open sound (vendor UI)
+	blacksmith_open_sound = load("res://assets/sounds/ui/blacksmith_open.wav")
+	if blacksmith_open_sound:
+		print("  ✅ Loaded blacksmith_open.wav")
+	else:
+		push_warning("  ⚠️ Failed to load blacksmith_open.wav")
+
+	# Load quest sounds
+	quest_accept_sound = load("res://assets/sounds/ui/quest_accept.wav")
+	if quest_accept_sound:
+		print("  ✅ Loaded quest_accept.wav")
+	else:
+		push_warning("  ⚠️ Failed to load quest_accept.wav")
+
+	quest_turn_in_sound = load("res://assets/sounds/ui/quest_turn_in.wav")
+	if quest_turn_in_sound:
+		print("  ✅ Loaded quest_turn_in.wav")
+	else:
+		push_warning("  ⚠️ Failed to load quest_turn_in.wav")
 
 	# Load inventory move sound (dragging items between slots)
 	inventory_move_sound = load("res://assets/audio/sfx/inventory_move.wav")
@@ -526,6 +561,10 @@ func _generate_all_sounds() -> void:
 	sound_cache[SoundType.GOLD_LOOT] = gold_loot_sound if gold_loot_sound else _generate_gold_loot()
 	sound_cache[SoundType.ITEM_PICKUP] = item_pickup_sound if item_pickup_sound else _generate_item_pickup()
 	sound_cache[SoundType.CHEST_OPEN] = chest_open_sound if chest_open_sound else _generate_chest_open()
+	sound_cache[SoundType.CORPSE_LOOT] = corpse_loot_sound if corpse_loot_sound else _generate_chest_open()  # Fallback to chest sound
+	sound_cache[SoundType.BLACKSMITH_OPEN] = blacksmith_open_sound if blacksmith_open_sound else _generate_chest_open()  # Fallback to chest sound
+	sound_cache[SoundType.QUEST_ACCEPT] = quest_accept_sound if quest_accept_sound else _generate_gold_loot()  # Fallback
+	sound_cache[SoundType.QUEST_TURN_IN] = quest_turn_in_sound if quest_turn_in_sound else _generate_gold_loot()  # Fallback
 	sound_cache[SoundType.INVENTORY_MOVE] = inventory_move_sound if inventory_move_sound else _generate_inventory_move()
 	sound_cache[SoundType.EQUIP_ITEM] = equip_item_sound if equip_item_sound else _generate_equip_item()
 
