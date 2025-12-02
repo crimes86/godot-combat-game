@@ -267,21 +267,18 @@ func attempt_attack() -> void:
 		character_sprite.play_lpc_animation("slash", lpc_dir)
 
 	# Get enemies in attack cone
+	# Play weapon swing sound (whoosh) - plays immediately on attack
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		if CharacterStats.equipped_weapon:
+			sound_manager.play_sword_swing_sound(player.global_position, -10.0)
+		else:
+			sound_manager.play_unarmed_swing_sound(player.global_position, -10.0)
+
 	var enemies = get_enemies_in_cone()
 
 	if enemies.size() > 0:
 		attack_enemies_in_cone(enemies)
-
-	# Play weapon swing sound (whoosh)
-	var sound_manager = player.get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		# Play weapon-specific swing sound
-		if CharacterStats.equipped_weapon:
-			# Use sword swing sound for all weapon types (universal whoosh)
-			sound_manager.play_sword_swing_sound(player.global_position, -10.0)
-		else:
-			# Unarmed swing
-			sound_manager.play_unarmed_swing_sound(player.global_position, -10.0)
 
 	# Start cooldown timer
 	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
@@ -367,13 +364,20 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 	if is_crit and screen_shake:
 		screen_shake.add_trauma(0.2)
 
-	# Hit sound
+	# Hit sound (delayed slightly so swing whoosh plays first)
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		if is_crit:
-			sound_manager.play_critical_hit_sound(enemy.global_position, -6.0)
-		else:
-			sound_manager.play_normal_hit_sound(enemy.global_position, -10.0)
+		var weapon_type = "unarmed"
+		if CharacterStats.equipped_weapon:
+			weapon_type = CharacterStats.equipped_weapon.weapon_type
+		var hit_pos = enemy.global_position
+		var tree = player.get_tree()
+		tree.create_timer(0.1).timeout.connect(func():
+			if is_crit:
+				sound_manager.play_critical_hit_sound(hit_pos, -6.0)
+			else:
+				sound_manager.play_normal_hit_sound(hit_pos, -10.0, weapon_type)
+		)
 
 func finish_attack_cooldown() -> void:
 	"""Reset attack cooldown"""

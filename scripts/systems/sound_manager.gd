@@ -54,7 +54,7 @@ var weakpoint_sounds: Array[AudioStream] = []
 var weakpoint_destroyed_sound: AudioStream = null
 var critical_hit_sound: AudioStream = null
 var normal_hit_sounds: Array[AudioStream] = []  # Generic fallback
-var skeleton_hurt_sound: AudioStream = null
+var skeleton_hurt_sounds: Array[AudioStream] = []  # Skeleton hurt sounds (multiple variations)
 var skeleton_attack_sound: AudioStream = null  # Skeleton's menacing cackle
 var skeleton_aggro_sounds: Array[AudioStream] = []  # Skeleton aggro sounds (2 variations)
 var skeleton_death_sounds: Array[AudioStream] = []  # Skeleton bones collapsing (2 variations)
@@ -105,7 +105,8 @@ var weapon_hit_sounds: Dictionary = {
 	"sword": [],
 	"mace": [],
 	"spear": [],
-	"dagger": []
+	"dagger": [],
+	"unarmed": []
 }
 
 # Background music playlist
@@ -132,27 +133,13 @@ func _ready() -> void:
 func _load_real_sounds() -> void:
 	"""Load real sound files for combat effects"""
 	# Load weakpoint hit sounds (devastating bone crunch sounds)
-	var weakpoint_1 = load("res://assets/sounds/combat/hits/weakpoint_hit_1.wav")
-	var weakpoint_2 = load("res://assets/sounds/combat/hits/weakpoint_hit_2.wav")
-	var weakpoint_3 = load("res://assets/sounds/combat/hits/weakpoint_hit_3.wav")
-
-	if weakpoint_1:
-		weakpoint_sounds.append(weakpoint_1)
-		print("  ✅ Loaded weakpoint_hit_1.wav")
-	else:
-		push_warning("  ⚠️ Failed to load weakpoint_hit_1.wav")
-
-	if weakpoint_2:
-		weakpoint_sounds.append(weakpoint_2)
-		print("  ✅ Loaded weakpoint_hit_2.wav")
-	else:
-		push_warning("  ⚠️ Failed to load weakpoint_hit_2.wav")
-
-	if weakpoint_3:
-		weakpoint_sounds.append(weakpoint_3)
-		print("  ✅ Loaded weakpoint_hit_3.wav")
-	else:
-		push_warning("  ⚠️ Failed to load weakpoint_hit_3.wav")
+	for i in range(1, 7):
+		var weakpoint = load("res://assets/sounds/combat/hits/weakpoint_hit_%d.wav" % i)
+		if weakpoint:
+			weakpoint_sounds.append(weakpoint)
+			print("  ✅ Loaded weakpoint_hit_%d.wav" % i)
+		else:
+			push_warning("  ⚠️ Failed to load weakpoint_hit_%d.wav" % i)
 
 	print("  📊 Loaded %d weakpoint sound variations" % weakpoint_sounds.size())
 
@@ -188,12 +175,16 @@ func _load_real_sounds() -> void:
 
 	print("  📊 Loaded %d normal hit sound variations" % normal_hit_sounds.size())
 
-	# Load skeleton hurt sound
-	skeleton_hurt_sound = load("res://assets/sounds/combat/reactions/skeleton_hurt.wav")
-	if skeleton_hurt_sound:
-		print("  ✅ Loaded skeleton_hurt.wav")
-	else:
-		push_warning("  ⚠️ Failed to load skeleton_hurt.wav")
+	# Load skeleton hurt sounds (multiple variations)
+	for i in range(1, 5):
+		var skeleton_hurt = load("res://assets/sounds/combat/reactions/skeleton_hurt_%d.wav" % i)
+		if skeleton_hurt:
+			skeleton_hurt_sounds.append(skeleton_hurt)
+			print("  ✅ Loaded skeleton_hurt_%d.wav" % i)
+		else:
+			push_warning("  ⚠️ Failed to load skeleton_hurt_%d.wav" % i)
+
+	print("  📊 Loaded %d skeleton hurt sound variations" % skeleton_hurt_sounds.size())
 
 	# Load skeleton attack sound (menacing cackle)
 	skeleton_attack_sound = load("res://assets/sounds/combat/reactions/skeleton_attack.wav")
@@ -202,39 +193,25 @@ func _load_real_sounds() -> void:
 	else:
 		push_warning("  ⚠️ Failed to load skeleton_attack.wav")
 
-	# Load skeleton aggro sounds (when skeleton spots player - 2 variations)
-	var skeleton_aggro_1 = load("res://assets/sounds/combat/reactions/skeleton_aggro_1.wav")
-	var skeleton_aggro_2 = load("res://assets/sounds/combat/reactions/skeleton_aggro_2.wav")
-
-	if skeleton_aggro_1:
-		skeleton_aggro_sounds.append(skeleton_aggro_1)
-		print("  ✅ Loaded skeleton_aggro_1.wav")
-	else:
-		push_warning("  ⚠️ Failed to load skeleton_aggro_1.wav")
-
-	if skeleton_aggro_2:
-		skeleton_aggro_sounds.append(skeleton_aggro_2)
-		print("  ✅ Loaded skeleton_aggro_2.wav")
-	else:
-		push_warning("  ⚠️ Failed to load skeleton_aggro_2.wav")
+	# Load skeleton aggro sounds (when skeleton spots player - 3 variations)
+	for i in range(1, 4):
+		var skeleton_aggro = load("res://assets/sounds/combat/reactions/skeleton_aggro_%d.wav" % i)
+		if skeleton_aggro:
+			skeleton_aggro_sounds.append(skeleton_aggro)
+			print("  ✅ Loaded skeleton_aggro_%d.wav" % i)
+		else:
+			push_warning("  ⚠️ Failed to load skeleton_aggro_%d.wav" % i)
 
 	print("  📊 Loaded %d skeleton aggro sound variations" % skeleton_aggro_sounds.size())
 
-	# Load skeleton death sounds (bones collapsing - 2 variations)
-	var skeleton_death_1 = load("res://assets/sounds/combat/reactions/skeleton_death_1.wav")
-	var skeleton_death_2 = load("res://assets/sounds/combat/reactions/skeleton_death_2.wav")
-
-	if skeleton_death_1:
-		skeleton_death_sounds.append(skeleton_death_1)
-		print("  ✅ Loaded skeleton_death_1.wav")
-	else:
-		push_warning("  ⚠️ Failed to load skeleton_death_1.wav")
-
-	if skeleton_death_2:
-		skeleton_death_sounds.append(skeleton_death_2)
-		print("  ✅ Loaded skeleton_death_2.wav")
-	else:
-		push_warning("  ⚠️ Failed to load skeleton_death_2.wav")
+	# Load skeleton death sounds (bones collapsing - 3 variations)
+	for i in range(1, 4):
+		var skeleton_death = load("res://assets/sounds/combat/reactions/skeleton_death_%d.wav" % i)
+		if skeleton_death:
+			skeleton_death_sounds.append(skeleton_death)
+			print("  ✅ Loaded skeleton_death_%d.wav" % i)
+		else:
+			push_warning("  ⚠️ Failed to load skeleton_death_%d.wav" % i)
 
 	print("  📊 Loaded %d skeleton death sound variations" % skeleton_death_sounds.size())
 
@@ -333,13 +310,14 @@ func _load_real_sounds() -> void:
 
 	print("  📊 Loaded %d sword swing sound variations" % sword_swing_sounds.size())
 
-	# Load unarmed swing sound (fist whoosh)
-	var unarmed_swing = load("res://assets/sounds/combat/unarmed_slash.mp3")
-	if unarmed_swing:
-		unarmed_swing_sounds.append(unarmed_swing)
-		print("  ✅ Loaded unarmed_slash.mp3")
-	else:
-		push_warning("  ⚠️ Failed to load unarmed_slash.mp3")
+	# Load unarmed swing sounds (fist whoosh variations)
+	for i in range(1, 4):
+		var unarmed_swing = load("res://assets/sounds/combat/weapon_swings/unarmed_swing_%d.wav" % i)
+		if unarmed_swing:
+			unarmed_swing_sounds.append(unarmed_swing)
+			print("  ✅ Loaded unarmed_swing_%d.wav" % i)
+		else:
+			push_warning("  ⚠️ Failed to load unarmed_swing_%d.wav" % i)
 
 	print("  📊 Loaded %d unarmed swing sound variations" % unarmed_swing_sounds.size())
 
@@ -429,10 +407,11 @@ func _load_real_sounds() -> void:
 	# Load weapon-specific hit sounds
 	print("  🗡️ Loading weapon hit sounds...")
 	_load_weapon_sounds("sword", 4)
+	_load_weapon_sounds("unarmed", 3)
 	# More weapon types can be added here later:
 	# _load_weapon_sounds("mace", 4)
 	# _load_weapon_sounds("spear", 4)
-	print("  📊 Loaded weapon sounds: sword=%d" % weapon_hit_sounds["sword"].size())
+	print("  📊 Loaded weapon sounds: sword=%d, unarmed=%d" % [weapon_hit_sounds["sword"].size(), weapon_hit_sounds["unarmed"].size()])
 
 	# Load background music playlist
 	print("  🎵 Loading background music playlist...")
@@ -683,13 +662,16 @@ func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float 
 func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
 	if sfx_muted:
 		return
-	if not skeleton_hurt_sound:
+	if skeleton_hurt_sounds.is_empty():
 		# No fallback - just don't play if not loaded
 		return
 
+	# Pick random hurt sound variation
+	var sound_stream = skeleton_hurt_sounds[randi() % skeleton_hurt_sounds.size()]
+
 	# Create player with slight pitch randomization
 	var player = AudioStreamPlayer2D.new()
-	player.stream = skeleton_hurt_sound
+	player.stream = sound_stream
 	player.volume_db = volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
