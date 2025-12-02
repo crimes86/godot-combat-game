@@ -680,64 +680,65 @@ func play_harvest_animation(tool_type: String, direction: String) -> void:
 
 	print("   Converted direction: %s -> %s" % [direction, lpc_direction])
 
-	# Play slash animation on the MAIN body sprite (not hiding it anymore)
-	var slash_anim = "slash_" + lpc_direction
+	# Use reversed "chop_" animation for harvesting (swing starts high, ends low)
+	var chop_anim = "chop_" + lpc_direction
+	var slash_anim = "slash_" + lpc_direction  # Source animation
 
-	# RESTART slash animation on the main body for fresh swing
-	if sprite_frames.has_animation(slash_anim):
-		stop()  # Stop current animation
-		frame = 0  # Reset to first frame
-		play(slash_anim)  # Play fresh
-		print("   Restarting body slash: %s" % slash_anim)
+	# Create chop animation if it doesn't exist (reversed slash)
+	_ensure_chop_animation(sprite_frames, slash_anim, chop_anim)
 
-	# Animate ALL clothing layers - RESTART each for sync
-	if base_head_sprite and base_head_sprite.sprite_frames.has_animation(slash_anim):
-		base_head_sprite.stop()
-		base_head_sprite.frame = 0
-		base_head_sprite.play(slash_anim)
+	# RESTART chop animation on the main body for fresh swing
+	if sprite_frames.has_animation(chop_anim):
+		stop()
+		frame = 0
+		play(chop_anim)
+		print("   Restarting body chop: %s" % chop_anim)
 
-	if boots_sprite and boots_sprite.sprite_frames.has_animation(slash_anim):
-		boots_sprite.stop()
-		boots_sprite.frame = 0
-		boots_sprite.play(slash_anim)
+	# Animate ALL clothing layers with chop animation
+	_play_layer_chop(base_head_sprite, slash_anim, chop_anim)
+	_play_layer_chop(boots_sprite, slash_anim, chop_anim)
+	_play_layer_chop(pants_sprite, slash_anim, chop_anim)
+	_play_layer_chop(shirt_sprite, slash_anim, chop_anim)
+	_play_layer_chop(arms_sprite, slash_anim, chop_anim)
+	_play_layer_chop(hands_sprite, slash_anim, chop_anim)
+	_play_layer_chop(hair_sprite, slash_anim, chop_anim)
+	_play_layer_chop(head_sprite, slash_anim, chop_anim)
+	_play_layer_chop(shadow_sprite, slash_anim, chop_anim)
 
-	if pants_sprite and pants_sprite.sprite_frames.has_animation(slash_anim):
-		pants_sprite.stop()
-		pants_sprite.frame = 0
-		pants_sprite.play(slash_anim)
+	# Play the tool sprite overlay (axe/pickaxe)
+	_play_harvest_tool(tool_type, lpc_direction)
 
-	if shirt_sprite and shirt_sprite.sprite_frames.has_animation(slash_anim):
-		shirt_sprite.stop()
-		shirt_sprite.frame = 0
-		shirt_sprite.play(slash_anim)
+func _ensure_chop_animation(frames: SpriteFrames, slash_anim: String, chop_anim: String) -> void:
+	"""Create reversed chop animation from slash animation if it doesn't exist"""
+	if frames.has_animation(chop_anim):
+		return
+	if not frames.has_animation(slash_anim):
+		return
 
-	if arms_sprite and arms_sprite.sprite_frames.has_animation(slash_anim):
-		arms_sprite.stop()
-		arms_sprite.frame = 0
-		arms_sprite.play(slash_anim)
+	# Create new animation with reversed frames
+	frames.add_animation(chop_anim)
+	frames.set_animation_loop(chop_anim, false)
+	frames.set_animation_speed(chop_anim, frames.get_animation_speed(slash_anim))
 
-	if hands_sprite and hands_sprite.sprite_frames.has_animation(slash_anim):
-		hands_sprite.stop()
-		hands_sprite.frame = 0
-		hands_sprite.play(slash_anim)
+	# Copy frames in reverse order
+	var frame_count = frames.get_frame_count(slash_anim)
+	for i in range(frame_count - 1, -1, -1):
+		var tex = frames.get_frame_texture(slash_anim, i)
+		var duration = frames.get_frame_duration(slash_anim, i)
+		frames.add_frame(chop_anim, tex, duration)
 
-	if hair_sprite and hair_sprite.sprite_frames.has_animation(slash_anim):
-		hair_sprite.stop()
-		hair_sprite.frame = 0
-		hair_sprite.play(slash_anim)
+func _play_layer_chop(layer: AnimatedSprite2D, slash_anim: String, chop_anim: String) -> void:
+	"""Play chop animation on a layer, creating it if needed"""
+	if not layer or not layer.sprite_frames:
+		return
+	_ensure_chop_animation(layer.sprite_frames, slash_anim, chop_anim)
+	if layer.sprite_frames.has_animation(chop_anim):
+		layer.stop()
+		layer.frame = 0
+		layer.play(chop_anim)
 
-	if head_sprite and head_sprite.sprite_frames.has_animation(slash_anim):
-		head_sprite.stop()
-		head_sprite.frame = 0
-		head_sprite.play(slash_anim)
-
-	# Also animate the shadow to match - RESTART it too
-	if shadow_sprite and shadow_sprite.sprite_frames.has_animation(slash_anim):
-		shadow_sprite.stop()
-		shadow_sprite.frame = 0
-		shadow_sprite.play(slash_anim)
-
-	# Now overlay the tool sprite on top, similar to how weapons work
+func _play_harvest_tool(tool_type: String, lpc_direction: String) -> void:
+	"""Play the tool sprite animation (axe/pickaxe overlay)"""
 	# Hide regular weapon if present
 	if weapon_sprite:
 		weapon_sprite.visible = false
@@ -759,6 +760,9 @@ func play_harvest_animation(tool_type: String, direction: String) -> void:
 
 		# Add as child of SimpleLPCSprite (same as weapon)
 		add_child(harvest_tool_sprite)
+
+		# Connect animation_finished to hide tool when swing completes
+		harvest_tool_sprite.animation_finished.connect(_on_harvest_tool_animation_finished)
 		print("   Created harvest tool sprite as child of SimpleLPCSprite")
 
 	# Use the ACTUAL tool sprites from the custom/slash_128 folder
@@ -783,108 +787,41 @@ func play_harvest_animation(tool_type: String, direction: String) -> void:
 	var tool_img = tool_tex.get_image()
 	print("   Loaded tool texture: %s" % tool_img.get_size())
 
-	# Parse tool spritesheet - different formats based on source
-	var sheet_width = tool_img.get_width()
-	var sheet_height = tool_img.get_height()
+	# 768x512 sheet = 6 columns x 4 rows at 128x128 per frame
+	var num_frames = 6
+	var tile_size = 128
+	var row = DIRECTION_ROWS[lpc_direction]
 
-	# Determine frame size based on the tool source
-	var frame_width = 128  # Default to 128x128 for custom tool sprites
-	var frame_height = 128
-	var frames_per_row = 6  # Custom tool sprites have 6 frames per row
-
-	# Check if this is the custom tool format (768x512 with 6 128x128 frames per row)
-	if "custom/slash_128" in tool_path:
-		frame_width = 128
-		frame_height = 128
-		frames_per_row = 6
-		print("   Using custom tool format: 128x128 frames")
-	else:
-		# Fallback weapon format
-		frame_width = 192  # Weapon slash sprites are 192x192
-		frame_height = 192
-		frames_per_row = 6
-		print("   Using weapon format: 192x192 frames")
-
-	print("   Sheet dimensions: %dx%d" % [sheet_width, sheet_height])
-	print("   Frame size: %dx%d" % [frame_width, frame_height])
-	print("   Frames per row: %d" % frames_per_row)
-
-	# Map direction to row (use lpc_direction here)
-	var row = 2  # Default to south
-	match lpc_direction:
-		"north":
-			row = 0
-		"west":
-			row = 1
-		"south":
-			row = 2
-		"east":
-			row = 3
-
-	# Create animation for this direction (use same naming as weapon: slash_direction)
-	var anim_name = "slash_" + lpc_direction
+	# Create animation using same method as weapons
+	# Reverse frame order for chopping motion (start high, swing down)
+	var anim_name = tool_type + "_slash_" + lpc_direction
 	if not harvest_tool_sprite.sprite_frames.has_animation(anim_name):
-		# Animation should complete in ~0.6 seconds to finish before next chop (0.75s interval)
-		# 6 frames at 10 FPS = 0.6 seconds
-		create_animation_from_image(tool_img, anim_name, row, 6, [0, 1, 2, 3, 4, 5],
-			10.0, false, harvest_tool_sprite.sprite_frames, frame_width)
-		print("   Created tool animation: %s" % anim_name)
-
-		# Debug: Check if first frame has content
-		var test_frame = harvest_tool_sprite.sprite_frames.get_frame_texture(anim_name, 0)
-		if test_frame:
-			var test_img = test_frame.get_image()
-			var has_pixels = false
-			for y in range(0, test_img.get_height(), 8):
-				for x in range(0, test_img.get_width(), 8):
-					if test_img.get_pixel(x, y).a > 0.1:
-						has_pixels = true
-						break
-				if has_pixels:
-					break
-			print("   Frame 0 has visible content: %s" % has_pixels)
-	else:
-		print("   Animation %s already exists, reusing" % anim_name)
+		create_animation_from_image(tool_img, anim_name, row, num_frames, [5, 4, 3, 2, 1, 0], 10.0, false, harvest_tool_sprite.sprite_frames, tile_size)
+		print("   Created tool animation: %s (row %d)" % [anim_name, row])
 
 	# Hide regular weapon
 	if weapon_sprite:
 		weapon_sprite.visible = false
 
-	# Play tool animation - FORCE RESTART for fresh swing each time
+	# Play tool animation
 	if harvest_tool_sprite.sprite_frames.has_animation(anim_name):
-		harvest_tool_sprite.visible = true
-
-		# CRITICAL: Stop and restart animation to ensure it plays from beginning
 		harvest_tool_sprite.stop()
-		harvest_tool_sprite.frame = 0  # Reset to first frame
+		harvest_tool_sprite.frame = 0
+		harvest_tool_sprite.visible = true
 		harvest_tool_sprite.play(anim_name)
 
-		# Adjust positioning based on direction (similar to weapon offsets)
-		var tool_offset = Vector2(0, 0)
-		match lpc_direction:
-			"east":  # facing right
-				tool_offset = Vector2(-10, 5)
-				harvest_tool_sprite.z_index = 20
-			"west":  # facing left
-				tool_offset = Vector2(10, 5)
-				harvest_tool_sprite.z_index = 20
-			"north":  # facing up
-				tool_offset = Vector2(-10, 0)
-				harvest_tool_sprite.z_index = -1  # Behind player when facing up
-			"south":  # facing down
-				tool_offset = Vector2(-5, 5)
-				harvest_tool_sprite.z_index = 20  # In front when facing down
-			_:
-				harvest_tool_sprite.z_index = 20
+		# Z-index: behind player when facing north, in front otherwise
+		harvest_tool_sprite.z_index = -1 if lpc_direction == "north" else 20
+		print("   Playing tool: %s" % anim_name)
 
-		harvest_tool_sprite.offset = tool_offset
+func _on_harvest_tool_animation_finished() -> void:
+	"""Called when harvest tool swing animation completes - hide tool until next swing"""
+	if harvest_tool_sprite:
+		harvest_tool_sprite.visible = false
 
-		print("   Tool sprite restarting: %s (frame=%d, visible=%s, z=%d)" % [
-			anim_name, harvest_tool_sprite.frame, harvest_tool_sprite.visible, harvest_tool_sprite.z_index
-		])
-	else:
-		print("   ERROR: Tool animation not found: %s" % anim_name)
-		print("   Available: %s" % harvest_tool_sprite.sprite_frames.get_animation_names())
+	# Safety: If no longer harvesting, restore weapon visibility
+	if not is_harvesting and weapon_sprite:
+		weapon_sprite.visible = true
 
 func stop_harvest_animation() -> void:
 	"""Stop harvest animation and hide tool"""

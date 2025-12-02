@@ -2,8 +2,8 @@ extends Node2D
 class_name RuinsCampfire
 
 ## 🏛️ Ruins Campfire - Convertible Farming Spot
-## - Starts as ruins with 8 skeleton spawns
-## - Skeletons patrol then walk to ruins
+## - Starts as ruins with 6 skeleton spawns
+## - Skeletons patrol sporadically across the ruins area
 ## - Player can convert ruins to campfire when in range
 ## - Reverts to ruins if abandoned for 2+ minutes
 ## - Skeleton spawning continues regardless of state
@@ -12,7 +12,7 @@ class_name RuinsCampfire
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-@export var skeleton_count: int = 8
+@export var skeleton_count: int = 6
 @export var skeleton_respawn_time: float = 60.0  # 1 minute
 @export var convert_range: float = 100.0  # Distance to allow conversion
 @export var base_abandon_time: float = 120.0  # 2 minutes (no fuel)
@@ -26,7 +26,8 @@ class_name RuinsCampfire
 @export var avoid_path_distance: float = 150.0  # Don't spawn on path
 
 # Guardian configuration
-@export var guardian_level: int = 10  # Level of skeleton guardians
+@export var guardian_min_level: int = 7  # Min level of skeleton guardians
+@export var guardian_max_level: int = 10  # Max level of skeleton guardians
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE
@@ -169,7 +170,7 @@ func spawn_skeleton(index: int) -> void:
 
 	skeleton.global_position = spawn_pos
 	skeleton.name = "RuinsSkeleton_" + str(index)
-	skeleton.enemy_level = guardian_level  # Set guardian level
+	skeleton.enemy_level = randi_range(guardian_min_level, guardian_max_level)  # Random level 7-10
 
 	# Add to world (parent is the game world)
 	get_parent().add_child(skeleton)
@@ -197,9 +198,17 @@ func spawn_skeleton(index: int) -> void:
 		if game_world and game_world.has_method("_on_corpse_clicked"):
 			skeleton.corpse_clicked.connect(game_world._on_corpse_clicked)
 
-	# Calculate designated guard position around ruins (evenly spaced)
-	var angle = (index / float(skeleton_count)) * TAU
-	var guard_distance = 180.0  # Distance from ruins center (increased for more spread)
+	# Register with NetworkEnemyManager for loot system
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	if network_enemy_mgr:
+		var network_id = network_enemy_mgr.register_enemy(skeleton)
+		# Broadcast spawn to clients in multiplayer
+		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+			network_enemy_mgr.spawn_enemy_on_clients.rpc(network_id, spawn_pos, skeleton.enemy_level, skeleton.name)
+
+	# Calculate random guard position sporadically across the ruins area
+	var angle = randf() * TAU  # Random angle
+	var guard_distance = randf_range(80.0, 200.0)  # Random distance from center (some close, some far)
 	var guard_position = global_position + Vector2(cos(angle), sin(angle)) * guard_distance
 
 	# Store skeleton data
@@ -414,7 +423,7 @@ func respawn_skeleton(data: Dictionary) -> void:
 	var skeleton = skeleton_scene.instantiate()
 	skeleton.global_position = spawn_pos
 	skeleton.name = "RuinsSkeleton_" + str(data["index"])
-	skeleton.enemy_level = guardian_level  # Set guardian level
+	skeleton.enemy_level = randi_range(guardian_min_level, guardian_max_level)  # Random level 7-10
 
 	get_parent().add_child(skeleton)
 
@@ -434,6 +443,14 @@ func respawn_skeleton(data: Dictionary) -> void:
 		var game_world = get_parent()
 		if game_world and game_world.has_method("_on_corpse_clicked"):
 			skeleton.corpse_clicked.connect(game_world._on_corpse_clicked)
+
+	# Register with NetworkEnemyManager for loot system
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	if network_enemy_mgr:
+		var network_id = network_enemy_mgr.register_enemy(skeleton)
+		# Broadcast spawn to clients in multiplayer
+		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+			network_enemy_mgr.spawn_enemy_on_clients.rpc(network_id, spawn_pos, skeleton.enemy_level, skeleton.name)
 
 	data["skeleton"] = skeleton
 	data["state"] = SkeletonState.PATROLLING_SPAWN

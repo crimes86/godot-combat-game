@@ -56,7 +56,7 @@ var break_audio_player: AudioStreamPlayer = null
 var mine_sounds: Array[AudioStream] = []
 var break_sounds: Array[AudioStream] = []
 var last_mine_sound_time: float = 0.0
-var mine_sound_interval: float = 0.8  # Play mine sound every 0.8 seconds
+var mine_sound_interval: float = 0.5  # Play mine sound every 0.5 seconds (matches pickaxe swing)
 
 # Performance caching
 var cached_has_pickaxe: bool = false
@@ -101,12 +101,13 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	"""Clean up when rock is removed from scene tree"""
-	# Cancel mining to hide progress circle
+	# Cancel mining to hide progress circle and restore player state
 	if is_mining:
 		is_mining = false
 		mine_progress = 0.0
 		if progress_circle:
 			progress_circle.visible = false
+		stop_player_harvest_animation()
 
 	# Unregister from InteractionManager
 	InteractionManager.unregister_interactable(self)
@@ -872,6 +873,14 @@ func _on_body_exited(body: Node2D) -> void:
 		player_in_range = false
 		prompt_fade_timer = 0.0  # Reset fade timer when leaving
 
+		# Cancel mining if in progress
+		if is_mining:
+			is_mining = false
+			mine_progress = 0.0
+			if progress_circle:
+				progress_circle.visible = false
+			stop_player_harvest_animation()
+
 		# Unregister from InteractionManager
 		InteractionManager.unregister_interactable(self)
 
@@ -930,7 +939,7 @@ func play_random_mine_sound() -> void:
 	var sound = mine_sounds[randi() % mine_sounds.size()]
 	mine_audio_player.stream = sound
 	mine_audio_player.pitch_scale = randf_range(0.9, 1.1)  # Slight pitch variation
-	mine_audio_player.volume_db = randf_range(-10.0, -6.0)  # Combat-level volume
+	mine_audio_player.volume_db = -8.0  # Match tree chop volume
 	mine_audio_player.play()
 
 	# Shake the rock on impact

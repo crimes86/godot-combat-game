@@ -99,12 +99,13 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	"""Clean up when tree is removed from scene tree"""
-	# Cancel chopping to hide progress circle
+	# Cancel chopping to hide progress circle and restore player state
 	if is_chopping:
 		is_chopping = false
 		chop_progress = 0.0
 		if progress_circle:
 			progress_circle.visible = false
+		stop_player_harvest_animation()
 
 	# Unregister from InteractionManager
 	InteractionManager.unregister_interactable(self)
@@ -1011,6 +1012,14 @@ func _on_body_exited(body: Node2D) -> void:
 		player_in_range = false
 		prompt_fade_timer = 0.0  # Reset fade timer when leaving
 
+		# Cancel chopping if in progress
+		if is_chopping:
+			is_chopping = false
+			chop_progress = 0.0
+			if progress_circle:
+				progress_circle.visible = false
+			stop_player_harvest_animation()
+
 		# Unregister from InteractionManager
 		InteractionManager.unregister_interactable(self)
 
@@ -1027,11 +1036,13 @@ func create_audio_players() -> void:
 	chop_audio_player = AudioStreamPlayer.new()
 	chop_audio_player.name = "ChopAudioPlayer"
 	chop_audio_player.bus = "SFX"
+	chop_audio_player.volume_db = -8.0  # Reduce chop volume
 	add_child(chop_audio_player)
 
 	fall_audio_player = AudioStreamPlayer.new()
 	fall_audio_player.name = "FallAudioPlayer"
 	fall_audio_player.bus = "SFX"
+	fall_audio_player.volume_db = -8.0  # Reduce fall volume
 	add_child(fall_audio_player)
 
 func play_random_chop_sound() -> void:

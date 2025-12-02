@@ -2403,6 +2403,9 @@ func _do_spawn_campfire_skeleton() -> void:
 	var skeleton = enemy_scene.instantiate()
 	skeleton.global_position = spawn_pos
 
+	# Set random level 1-6 for home campfire skeletons
+	skeleton.enemy_level = randi_range(1, 6)
+
 	# Mark this skeleton as campfire-attracted (set meta BEFORE adding to tree)
 	skeleton.set_meta("campfire_target", self)
 	skeleton.set_meta("campfire_spawn_time", Time.get_ticks_msec())

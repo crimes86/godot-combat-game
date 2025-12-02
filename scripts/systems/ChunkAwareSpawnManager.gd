@@ -26,31 +26,39 @@ var CHUNK_SIZE: float:
 
 ## Level bands - enemy level based on distance from campfire
 ## Campfire is at chunk 0 center (X: CHUNK_SIZE/2)
-## Chunk 0 (spawn): Level 1-3 (near campfire safe, edges harder)
-## Chunk -1 (west): Level 4-7
-## Chunk +1 (east): Level 4-7
+## Chunk 0 (spawn): Level 1-6 (near campfire safe, edges harder)
+## Chunk -1 (west): Level 6-10 (ruins/farming area)
+## Chunk +1 (east): Level 6-10 (ruins/farming area)
 ## Updated for 8000px chunks
 var LEVEL_BANDS: Array:
 	get:
 		var cs = Constants.CHUNK_SIZE
 		return [
 			# Chunk 0 - Spawn area (X: 0 to CHUNK_SIZE)
-			# Near campfire (center) is safe, edges get harder
-			{"min_x": cs * 0.125, "max_x": cs * 0.875, "level": 1},     # Central 75% - level 1
-			{"min_x": 0, "max_x": cs * 0.125, "level": 2},              # West edge - level 2
-			{"min_x": cs * 0.875, "max_x": cs, "level": 2},             # East edge - level 2
-			# Chunk -1 - West end chunk (X: -CHUNK_SIZE to 0)
-			{"min_x": -cs * 0.25, "max_x": 0, "level": 3},              # Near chunk 0 border - level 3
-			{"min_x": -cs * 0.625, "max_x": -cs * 0.25, "level": 4},    # Mid chunk -1 - level 4
-			{"min_x": -cs, "max_x": -cs * 0.625, "level": 5},           # Far west - level 5
-			# Chunk +1 - East end chunk (X: CHUNK_SIZE to CHUNK_SIZE*2)
-			{"min_x": cs, "max_x": cs * 1.25, "level": 3},              # Near chunk 0 border - level 3
-			{"min_x": cs * 1.25, "max_x": cs * 1.625, "level": 4},      # Mid chunk +1 - level 4
-			{"min_x": cs * 1.625, "max_x": cs * 2, "level": 5},         # Far east - level 5
+			# Near campfire (center) is safe, edges get progressively harder
+			{"min_x": cs * 0.4, "max_x": cs * 0.6, "level": 1},         # Central 20% - level 1 (campfire)
+			{"min_x": cs * 0.3, "max_x": cs * 0.4, "level": 2},         # Inner ring west - level 2
+			{"min_x": cs * 0.6, "max_x": cs * 0.7, "level": 2},         # Inner ring east - level 2
+			{"min_x": cs * 0.2, "max_x": cs * 0.3, "level": 3},         # Mid ring west - level 3
+			{"min_x": cs * 0.7, "max_x": cs * 0.8, "level": 3},         # Mid ring east - level 3
+			{"min_x": cs * 0.1, "max_x": cs * 0.2, "level": 4},         # Outer ring west - level 4
+			{"min_x": cs * 0.8, "max_x": cs * 0.9, "level": 4},         # Outer ring east - level 4
+			{"min_x": 0, "max_x": cs * 0.1, "level": 5},                # West edge - level 5
+			{"min_x": cs * 0.9, "max_x": cs, "level": 5},               # East edge - level 5
+			# Chunk -1 - West end chunk (X: -CHUNK_SIZE to 0) - Ruins farming area
+			{"min_x": -cs * 0.25, "max_x": 0, "level": 6},              # Near chunk 0 border - level 6
+			{"min_x": -cs * 0.5, "max_x": -cs * 0.25, "level": 7},      # Mid-near - level 7
+			{"min_x": -cs * 0.75, "max_x": -cs * 0.5, "level": 8},      # Mid-far - level 8
+			{"min_x": -cs, "max_x": -cs * 0.75, "level": 9},            # Far west - level 9
+			# Chunk +1 - East end chunk (X: CHUNK_SIZE to CHUNK_SIZE*2) - Ruins farming area
+			{"min_x": cs, "max_x": cs * 1.25, "level": 6},              # Near chunk 0 border - level 6
+			{"min_x": cs * 1.25, "max_x": cs * 1.5, "level": 7},        # Mid-near - level 7
+			{"min_x": cs * 1.5, "max_x": cs * 1.75, "level": 8},        # Mid-far - level 8
+			{"min_x": cs * 1.75, "max_x": cs * 2, "level": 9},          # Far east - level 9
 		]
 
 ## Respawn timer in seconds (0 = no respawn until chunk reload)
-@export var respawn_time: float = 300.0  # 5 minutes
+@export var respawn_time: float = 90.0  # 90 seconds
 
 ## Safe zones - no enemies spawn within these areas
 ## Campfire is at chunk 0 center (CHUNK_SIZE/2, 0)
