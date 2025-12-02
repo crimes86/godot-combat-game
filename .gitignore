@@ -35,6 +35,9 @@ desktop.ini
 *.log
 *.tmp
 *.temp
+stderr.txt
+stdout.txt
+_ul-*
 
 # Backup files
 *.bak
