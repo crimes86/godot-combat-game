@@ -20,6 +20,12 @@
 - [x] UI: Add in-game ESC menu (Settings, Credits, Disconnect)
 - [x] UI: Fix dark screen after disconnect (TutorialBlackout cleanup)
 - [x] UI: Add 10-second logout timer with cancel on move/damage
+- [x] UI: Add resolution toggle in settings (main menu + in-game ESC menu)
+- [x] UI: Disable resolution dropdown when in fullscreen mode
+- [x] UI: Fix Bug Report cancel button, add X close button
+- [x] UI: Fix tutorial skip to clean up all elements (blackout, arrows, indicators)
+- [x] UI: Add "Quit Now" button to logout timer (exits game immediately)
+- [x] UI: Add Alpha Build indicator with version and F1 bug report button
 
 ## Pending - Bugs to Investigate
 - [x] Gold icon showing placeholder instead of 🪙 emoji (replaced with gold_coins.png texture)
@@ -43,7 +49,7 @@
   - Created scripts/world/WorldPropSpawner.gd (trees, rocks, bones, props)
   - NOTE: game_world.gd still has original code - managers available for gradual adoption
 - [x] Consolidate 7 weapon animation data files into single template (WeaponAnimationData.gd)
-- [ ] Create UITheme.gd singleton for shared color constants
+- [x] Create UITheme.gd singleton for shared color constants
 - [ ] Add signal disconnects in _exit_tree() to prevent memory leaks
 - [ ] Resolve TODO comments:
   - CharacterUI.gd:790

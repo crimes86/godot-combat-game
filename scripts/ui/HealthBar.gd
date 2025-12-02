@@ -19,11 +19,15 @@ var custom_offset_y: float = -1.0  # Custom offset override (-1 = use default)
 var position_update_timer: float = 0.0
 const POSITION_UPDATE_INTERVAL: float = 0.05  # Update position 20 times per second
 
-# 🎨 Health color thresholds - BRIGHT & VIBRANT!
-const COLOR_HEALTHY = Color(0.3, 1.35, 0.45, 1.0)      # Bright vibrant green (50% brighter)
-const COLOR_GOOD = Color(0.9, 1.35, 0.3, 1.0)          # Bright yellow-green (50% brighter)
-const COLOR_WARNING = Color(1.4, 1.05, 0.15, 1.0)      # Bright orange (50% brighter)
-const COLOR_CRITICAL = Color(1.4, 0.3, 0.2, 1.0)       # Bright red (50% brighter)
+# 🎨 Health color thresholds - use UITheme singleton
+var COLOR_HEALTHY: Color:
+	get: return UITheme.HP_HEALTHY
+var COLOR_GOOD: Color:
+	get: return UITheme.HP_GOOD
+var COLOR_WARNING: Color:
+	get: return UITheme.HP_WARNING
+var COLOR_CRITICAL: Color:
+	get: return UITheme.HP_CRITICAL
 const COLOR_BACKGROUND = Color(0.15, 0.15, 0.15, 0.9)  # Dark gray (stays same for contrast)
 const COLOR_FLASH = Color(2.0, 2.0, 2.0, 1.0)          # Even brighter white flash!
 

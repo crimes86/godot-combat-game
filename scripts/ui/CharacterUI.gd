@@ -16,18 +16,30 @@ var xp_bar: ProgressBar
 var hp_label: Label
 var defense_label: Label
 
-# Stone Gray UI Palette
-const BG_COLOR = Color(0.12, 0.12, 0.14, 0.75)  # Dark stone gray (transparent for combat)
-const BORDER_COLOR = Color(0.35, 0.38, 0.42, 1.0)  # Steel gray border
-const BORDER_INNER = Color(0.06, 0.06, 0.08, 1.0)  # Dark inner shadow
-const ACCENT_COLOR = Color(0.55, 0.58, 0.62, 1.0)  # Light steel accent
-const TEXT_COLOR = Color(0.92, 0.92, 0.94, 1.0)  # Clean white text
-const HEADER_COLOR = Color(0.75, 0.78, 0.82, 1.0)  # Silver headers
-const HP_COLOR = Color(0.85, 0.20, 0.15, 1.0)  # Blood red (keep for visibility)
-const XP_COLOR = Color(0.40, 0.55, 0.70, 1.0)  # Muted steel blue (keep)
-const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
-const BUFF_COLOR = Color(0.3, 0.8, 0.3, 1.0)  # Green for buffs (keep)
-const DEBUFF_COLOR = Color(0.8, 0.3, 0.2, 1.0)  # Red for debuffs (keep)
+# UI colors - use UITheme singleton for consistency
+# Local aliases for convenience
+var BG_COLOR: Color:
+	get: return UITheme.BG_COLOR_TRANSPARENT
+var BORDER_COLOR: Color:
+	get: return UITheme.BORDER_COLOR
+var BORDER_INNER: Color:
+	get: return UITheme.BORDER_INNER
+var ACCENT_COLOR: Color:
+	get: return UITheme.ACCENT_COLOR
+var TEXT_COLOR: Color:
+	get: return UITheme.TEXT_COLOR
+var HEADER_COLOR: Color:
+	get: return UITheme.HEADER_COLOR
+var HP_COLOR: Color:
+	get: return UITheme.HP_COLOR
+var XP_COLOR: Color:
+	get: return UITheme.XP_COLOR
+var SLOT_BG: Color:
+	get: return UITheme.SLOT_BG
+var BUFF_COLOR: Color:
+	get: return UITheme.BUFF_COLOR
+var DEBUFF_COLOR: Color:
+	get: return UITheme.DEBUFF_COLOR
 
 # Animation timing (snappy for fast-paced combat)
 const ANIM_SPEED = 0.1
@@ -750,19 +762,19 @@ func get_rarity_glow_color(rarity_str: String) -> Color:
 	"""Get subtle glow color for item rarity (muted but visible)"""
 	match rarity_str.to_upper():
 		"COMMON":
-			return Color(0.6, 0.6, 0.6, 0.9)  # Subtle grey
+			return UITheme.RARITY_COMMON
 		"UNCOMMON":
-			return Color(0.4, 0.8, 0.4, 1.0)  # Muted green
+			return UITheme.RARITY_UNCOMMON
 		"RARE":
-			return Color(0.4, 0.5, 0.9, 1.0)  # Muted blue
+			return UITheme.RARITY_RARE
 		"EPIC":
-			return Color(0.7, 0.4, 0.9, 1.0)  # Muted purple
+			return UITheme.RARITY_EPIC
 		"LEGENDARY":
-			return Color(0.9, 0.6, 0.2, 1.0)  # Muted orange
+			return UITheme.RARITY_LEGENDARY
 		"ARTIFACT":
-			return Color(0.9, 0.8, 0.3, 1.0)  # Muted gold
+			return UITheme.RARITY_MYTHIC
 		_:
-			return BORDER_INNER  # Default to dark border
+			return UITheme.BORDER_INNER
 
 func toggle_character_ui() -> void:
 	"""Toggle character UI visibility"""

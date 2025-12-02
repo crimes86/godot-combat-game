@@ -64,11 +64,15 @@ var pending_equip_item: Dictionary = {}  # The item we're waiting for them to eq
 var waiting_for_bag_open: bool = false
 var waiting_for_item_equip: bool = false
 
-# UI colors
-const BG_COLOR = Color(0.0, 0.0, 0.0, 0.85)
-const TEXT_COLOR = Color(1.0, 1.0, 1.0, 1.0)
-const HIGHLIGHT_COLOR = Color(1.0, 0.9, 0.3, 1.0)  # Gold/yellow
-const SUCCESS_COLOR = Color(0.3, 1.0, 0.3, 1.0)  # Green
+# UI colors - use UITheme singleton
+var BG_COLOR: Color:
+	get: return Color(0.0, 0.0, 0.0, 0.85)  # Tutorial uses solid black bg
+var TEXT_COLOR: Color:
+	get: return UITheme.TEXT_COLOR
+var HIGHLIGHT_COLOR: Color:
+	get: return UITheme.HIGHLIGHT_COLOR
+var SUCCESS_COLOR: Color:
+	get: return UITheme.SUCCESS_COLOR
 
 func _ready() -> void:
 	# Don't auto-start - wait for start_tutorial() call

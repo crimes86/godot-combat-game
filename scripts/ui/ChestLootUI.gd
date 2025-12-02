@@ -17,11 +17,16 @@ var chest_owner: TreasureChest = null
 
 # UI Style constants (matching LootBodyUI)
 const SLOT_SIZE = Vector2(52, 52)
-const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)
-const BORDER_INNER = Color(0.06, 0.06, 0.08, 1.0)
-const BORDER_COLOR = Color(0.35, 0.38, 0.42, 1.0)
 const GRID_COLUMNS = 3
 const MIN_SLOTS = 3
+
+# UI colors - use UITheme singleton
+var SLOT_BG: Color:
+	get: return UITheme.SLOT_BG
+var BORDER_INNER: Color:
+	get: return UITheme.BORDER_INNER
+var BORDER_COLOR: Color:
+	get: return UITheme.BORDER_COLOR
 
 func _ready() -> void:
 	print("📦 ChestLootUI initialized")
@@ -259,17 +264,17 @@ func get_rarity_color(rarity: String) -> Color:
 	"""Get color based on item rarity"""
 	match rarity.to_upper():
 		"COMMON":
-			return Color(0.6, 0.6, 0.6, 0.9)
+			return UITheme.RARITY_COMMON
 		"UNCOMMON":
-			return Color(0.4, 0.8, 0.4, 1.0)
+			return UITheme.RARITY_UNCOMMON
 		"RARE":
-			return Color(0.4, 0.5, 0.9, 1.0)
+			return UITheme.RARITY_RARE
 		"EPIC":
-			return Color(0.7, 0.4, 0.9, 1.0)
+			return UITheme.RARITY_EPIC
 		"LEGENDARY":
-			return Color(0.9, 0.6, 0.2, 1.0)
+			return UITheme.RARITY_LEGENDARY
 		_:
-			return BORDER_INNER
+			return UITheme.BORDER_INNER
 
 func loot_item(index: int) -> void:
 	"""Loot a specific item from the chest"""

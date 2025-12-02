@@ -74,7 +74,7 @@ func _create_ui() -> void:
 
 	# Style - dark theme
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.12, 0.15, 0.95)
+	style.bg_color = UITheme.BG_COLOR
 	style.border_color = Color(0.8, 0.4, 0.4)  # Reddish border for bug report
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(8)
@@ -258,7 +258,7 @@ func _create_indicator() -> void:
 	alpha_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	alpha_label.text = "ALPHA BUILD"
 	alpha_label.add_theme_font_size_override("font_size", 15)
-	alpha_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.3, 0.9))  # Orange/gold
+	alpha_label.add_theme_color_override("font_color", UITheme.WARNING_COLOR)
 	vbox.add_child(alpha_label)
 
 	# Version label
@@ -272,7 +272,7 @@ func _create_indicator() -> void:
 			version_str = version_str.substr(0, 7)
 	version_label.text = version_str
 	version_label.add_theme_font_size_override("font_size", 12)
-	version_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.8))
+	version_label.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
 	vbox.add_child(version_label)
 
 	# F1 bug report button/hint
@@ -284,11 +284,11 @@ func _create_indicator() -> void:
 	f1_btn.pressed.connect(toggle_panel)
 	# Style the button
 	var btn_style = StyleBoxFlat.new()
-	btn_style.bg_color = Color(0.6, 0.3, 0.3, 0.7)
+	btn_style.bg_color = UITheme.BTN_DANGER
 	btn_style.set_corner_radius_all(3)
 	f1_btn.add_theme_stylebox_override("normal", btn_style)
 	var btn_hover = StyleBoxFlat.new()
-	btn_hover.bg_color = Color(0.7, 0.4, 0.4, 0.9)
+	btn_hover.bg_color = UITheme.BTN_DANGER_HOVER
 	btn_hover.set_corner_radius_all(3)
 	f1_btn.add_theme_stylebox_override("hover", btn_hover)
 	vbox.add_child(f1_btn)

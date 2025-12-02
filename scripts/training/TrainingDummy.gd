@@ -497,30 +497,28 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	else:
 		print("📚 [Dummy] TutorialManager is null!")
 
-	# Play skeleton sounds for testing (same as Enemy)
-	# NOTE: In multiplayer, NetworkEnemyManager._client_enemy_damaged() handles ALL hit sounds
-	# via _play_hit_sounds(). We only play sounds here in single player to avoid duplicates.
-	var has_peer = multiplayer.has_multiplayer_peer()
-	if not has_peer:
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			# Determine if this is a weakpoint hit (use passed parameter or check crit window)
-			var is_weakpoint = is_weakpoint_hit or (is_crit and in_crit_window)
+	# Play sounds for dummy hits (dummy is not managed by NetworkEnemyManager, so always play locally)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		# Determine if this is a weakpoint hit (use passed parameter or check crit window)
+		var is_weakpoint = is_weakpoint_hit or (is_crit and in_crit_window)
 
+		# Get player's weapon type for weapon-specific sounds
+		var weapon_type = "unarmed"
+		if CharacterStats.equipped_weapon:
+			weapon_type = CharacterStats.equipped_weapon.weapon_type
+
+		# Play hit + hurt sounds (delayed to let swing sound play first)
+		var hit_pos = global_position
+		get_tree().create_timer(0.1).timeout.connect(func():
 			if not is_weakpoint:
-				# Get player's weapon type for weapon-specific sounds
-				var weapon_type = ""
-				if CharacterStats.equipped_weapon:
-					weapon_type = CharacterStats.equipped_weapon.weapon_type
-
-				# Play hit sound
 				if is_crit:
-					sound_manager.play_critical_hit_sound(global_position, -6.0)
+					sound_manager.play_critical_hit_sound(hit_pos, -6.0)
 				else:
-					sound_manager.play_normal_hit_sound(global_position, -10.0, weapon_type)
-
-			# Play skeleton hurt reaction sound (for all hit types)
-			sound_manager.play_skeleton_hurt_sound(global_position, -12.0)
+					sound_manager.play_normal_hit_sound(hit_pos, -10.0, weapon_type)
+			# Hurt sound plays with the hit
+			sound_manager.play_skeleton_hurt_sound(hit_pos, -12.0)
+		)
 
 	# Trigger hit flash visual feedback
 	if has_node("HitFlash"):

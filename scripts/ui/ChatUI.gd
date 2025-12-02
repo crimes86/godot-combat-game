@@ -15,16 +15,25 @@ var message_list: VBoxContainer
 var input_field: LineEdit
 var send_button: Button
 
-# Stone Gray UI Palette (matching CharacterUI)
-const BG_COLOR = Color(0.12, 0.12, 0.14, 0.85)  # Dark stone gray
-const BORDER_COLOR = Color(0.35, 0.38, 0.42, 1.0)  # Steel gray border
-const BORDER_INNER = Color(0.06, 0.06, 0.08, 1.0)  # Dark inner shadow
-const ACCENT_COLOR = Color(0.55, 0.58, 0.62, 1.0)  # Light steel accent
-const TEXT_COLOR = Color(0.92, 0.92, 0.94, 1.0)  # Clean white text
-const HEADER_COLOR = Color(0.75, 0.78, 0.82, 1.0)  # Silver headers
-const INPUT_BG = Color(0.08, 0.08, 0.10, 0.9)  # Dark stone inset
-const SYSTEM_COLOR = Color(0.6, 0.7, 0.9, 1.0)  # Blue-ish for system messages
-const LOCAL_COLOR = Color(0.9, 0.85, 0.5, 1.0)  # Gold for local player
+# UI colors - use UITheme singleton for consistency
+var BG_COLOR: Color:
+	get: return UITheme.BG_COLOR
+var BORDER_COLOR: Color:
+	get: return UITheme.BORDER_COLOR
+var BORDER_INNER: Color:
+	get: return UITheme.BORDER_INNER
+var ACCENT_COLOR: Color:
+	get: return UITheme.ACCENT_COLOR
+var TEXT_COLOR: Color:
+	get: return UITheme.TEXT_COLOR
+var HEADER_COLOR: Color:
+	get: return UITheme.HEADER_COLOR
+var INPUT_BG: Color:
+	get: return UITheme.INPUT_BG
+var SYSTEM_COLOR: Color:
+	get: return UITheme.CHAT_SYSTEM
+var LOCAL_COLOR: Color:
+	get: return UITheme.CHAT_LOCAL
 
 # Chat history
 var max_messages: int = 50
