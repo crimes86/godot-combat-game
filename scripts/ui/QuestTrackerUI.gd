@@ -13,7 +13,6 @@ const COMPLETE_COLOR = Color(1.0, 0.85, 0.2, 1.0)  # Gold for complete
 const PROGRESS_BG = Color(0.08, 0.08, 0.10, 0.8)
 const PROGRESS_FILL = Color(0.4, 0.6, 0.3, 1.0)
 
-const MAX_VISIBLE_QUESTS = 3
 const TRACKER_WIDTH = 320  # Wider to fit larger tutorial text
 const QUEST_ENTRY_HEIGHT = 60
 const OBJECTIVE_HEIGHT = 24
@@ -47,7 +46,7 @@ var tutorial_steps: Array = [
 ]
 
 func _ready() -> void:
-	layer = 10  # Above game, below menus
+	layer = 5  # Above game, below inventory (105) and other menus
 	_create_ui()
 
 	# Connect to QuestManager signals
@@ -88,18 +87,17 @@ func _exit_tree() -> void:
 
 func _create_ui() -> void:
 	"""Build the quest tracker UI"""
-	# Main container - anchored to top-right
+	# Main container - anchored to top-right, extends to bottom of screen
 	var control = Control.new()
 	control.name = "TrackerControl"
-	control.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	control.anchor_left = 1.0
 	control.anchor_right = 1.0
 	control.anchor_top = 0.0
-	control.anchor_bottom = 0.0
+	control.anchor_bottom = 1.0  # Extend to bottom of screen
 	control.offset_left = -TRACKER_WIDTH - 10
 	control.offset_right = -10
 	control.offset_top = 80  # Below any top UI elements
-	control.offset_bottom = 400
+	control.offset_bottom = -10  # Small margin from bottom
 	add_child(control)
 
 	# Main panel with styling
@@ -183,30 +181,18 @@ func _refresh_tracker() -> void:
 		_create_tutorial_entry()
 		has_content = true
 
-	# Show quests from QuestManager
+	# Show quests from QuestManager - show ALL active quests
 	if has_node("/root/QuestManager"):
 		var qm = get_node("/root/QuestManager")
 		var active_quests = qm.get_active_quests()
 
 		if not active_quests.is_empty():
 			has_content = true
-			# Create entries for visible quests (up to MAX_VISIBLE_QUESTS)
-			var visible_count = min(active_quests.size(), MAX_VISIBLE_QUESTS)
-			for i in range(visible_count):
-				var quest = active_quests[i]
+			# Create entries for ALL active quests
+			for quest in active_quests:
 				var entry = _create_quest_entry(quest)
 				quest_container.add_child(entry)
 				quest_entries.append(entry)
-
-			# Show count if more quests than visible
-			if active_quests.size() > MAX_VISIBLE_QUESTS:
-				var more_label = Label.new()
-				more_label.text = "+%d more..." % (active_quests.size() - MAX_VISIBLE_QUESTS)
-				more_label.add_theme_font_size_override("font_size", OBJECTIVE_FONT_SIZE)
-				more_label.add_theme_color_override("font_color", OBJECTIVE_COLOR)
-				more_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-				quest_container.add_child(more_label)
-				quest_entries.append(more_label)
 
 	# Show/hide panel based on content
 	main_panel.visible = has_content

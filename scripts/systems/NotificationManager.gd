@@ -12,6 +12,11 @@ var notification_container: Control = null
 var notification_spacing: float = 40.0  # Vertical spacing between stacked notifications
 const MAX_VISIBLE_NOTIFICATIONS: int = 4  # Maximum notifications visible at once
 
+## Pending notifications queue for staggered display
+var pending_notifications: Array = []  # Array of {type, data} dicts
+var is_processing_queue: bool = false
+const STAGGER_DELAY: float = 0.12  # Delay between each notification
+
 func _ready() -> void:
 	# Create a CanvasLayer to display notifications on top of everything
 	var canvas_layer = CanvasLayer.new()
@@ -40,37 +45,90 @@ func _ready() -> void:
 ## rarity: "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"
 func notify_item_added(item_name: String, quantity: int = 1, rarity: String = "COMMON") -> void:
 	print("📢 NotificationManager.notify_item_added: %s x%d (%s)" % [item_name, quantity, rarity])
-	var notification = _create_notification()
-	notification.setup_item_added(item_name, quantity, rarity)
-	_show_notification(notification)
-	print("   → Notification created and shown")
-
-	# Play item pickup sound (-8.0 dB to avoid overwhelming when looting multiple items)
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -8.0)
+	_queue_notification({
+		"type": "item_added",
+		"item_name": item_name,
+		"quantity": quantity,
+		"rarity": rarity
+	})
 
 ## Show an item removed notification
 func notify_item_removed(item_name: String, quantity: int = 1, rarity: String = "COMMON") -> void:
-	var notification = _create_notification()
-	notification.setup_item_removed(item_name, quantity, rarity)
-	_show_notification(notification)
+	_queue_notification({
+		"type": "item_removed",
+		"item_name": item_name,
+		"quantity": quantity,
+		"rarity": rarity
+	})
 
 ## Show a gold added notification
 func notify_gold_added(amount: int) -> void:
 	print("📢 NotificationManager.notify_gold_added: %d gold" % amount)
 	if amount <= 0:
 		return
-	var notification = _create_notification()
-	notification.setup_gold_added(amount)
-	_show_notification(notification)
+	_queue_notification({
+		"type": "gold_added",
+		"amount": amount
+	})
 
 ## Show a generic text notification (for system messages like "Game saved")
 ## type: "INFO", "SUCCESS", "WARNING", "ERROR"
 func show_notification(message: String, type: String = "INFO") -> void:
+	_queue_notification({
+		"type": "system",
+		"message": message,
+		"msg_type": type
+	})
+
+## Queue a notification for staggered display
+func _queue_notification(data: Dictionary) -> void:
+	pending_notifications.append(data)
+	print("📋 Queued notification (queue size: %d, processing: %s)" % [pending_notifications.size(), is_processing_queue])
+	if not is_processing_queue:
+		_start_processing_queue()
+
+## Start processing the queue (async)
+func _start_processing_queue() -> void:
+	if is_processing_queue:
+		return
+	is_processing_queue = true
+	_process_next_notification()
+
+## Process next notification in queue with delay
+func _process_next_notification() -> void:
+	if pending_notifications.is_empty():
+		is_processing_queue = false
+		print("📋 Queue empty, done processing")
+		return
+
+	var data = pending_notifications.pop_front()
+	print("📋 Processing notification: %s (remaining: %d)" % [data.get("type", "unknown"), pending_notifications.size()])
+
+	# Create and show the notification based on type
 	var notification = _create_notification()
-	notification.setup_system_message(message, type)
+	match data.type:
+		"item_added":
+			notification.setup_item_added(data.item_name, data.quantity, data.rarity)
+			# Play item pickup sound
+			var sound_manager = get_node_or_null("/root/SoundManager")
+			if sound_manager:
+				sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -8.0)
+		"item_removed":
+			notification.setup_item_removed(data.item_name, data.quantity, data.rarity)
+		"gold_added":
+			notification.setup_gold_added(data.amount)
+		"system":
+			notification.setup_system_message(data.message, data.msg_type)
+
 	_show_notification(notification)
+
+	# Schedule next notification with delay
+	if not pending_notifications.is_empty():
+		await get_tree().create_timer(STAGGER_DELAY).timeout
+		_process_next_notification()
+	else:
+		is_processing_queue = false
+		print("📋 Queue empty, done processing")
 
 func _create_notification() -> ItemNotification:
 	var notification_scene = preload("res://scenes/ui/item_notification.tscn")
