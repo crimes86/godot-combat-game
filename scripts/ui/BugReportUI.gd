@@ -13,6 +13,9 @@ var status_label: Label
 
 var is_visible: bool = false
 
+# Static indicator in upper left
+var indicator_container: Control = null
+
 # Bug categories
 const CATEGORIES = [
 	"Gameplay",
@@ -30,20 +33,27 @@ func _ready() -> void:
 	layer = 100
 	visible = false
 	_create_ui()
+	_create_indicator()
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		# F1 toggles bug report panel
-		if event.keycode == KEY_F1:
-			toggle_panel()
-			get_viewport().set_input_as_handled()
-			return
+	# Only handle keyboard events
+	if not event is InputEventKey:
+		return
+	if not event.pressed or event.echo:
+		return
 
-		# ESC closes panel
-		if is_visible and event.keycode == KEY_ESCAPE:
-			toggle_panel()
-			get_viewport().set_input_as_handled()
-			return
+	# F1 toggles bug report panel
+	if event.keycode == KEY_F1:
+		toggle_panel()
+		get_viewport().set_input_as_handled()
+		return
+
+	# ESC closes panel (only if visible)
+	if is_visible and event.keycode == KEY_ESCAPE:
+		is_visible = false
+		visible = false
+		get_viewport().set_input_as_handled()
+		return
 
 func toggle_panel() -> void:
 	is_visible = not is_visible
@@ -52,8 +62,10 @@ func toggle_panel() -> void:
 	if is_visible:
 		_clear_form()
 		title_input.grab_focus()
-		# Pause game input while reporting
-		get_tree().paused = false  # Don't pause, just capture input
+	else:
+		var focused = get_viewport().gui_get_focus_owner()
+		if focused:
+			focused.release_focus()
 
 func _create_ui() -> void:
 	# Main panel
@@ -81,13 +93,45 @@ func _create_ui() -> void:
 	vbox.add_theme_constant_override("separation", 12)
 	panel.add_child(vbox)
 
+	# Title row with close button
+	var title_row = HBoxContainer.new()
+	title_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(title_row)
+
+	# Spacer to center title
+	var left_spacer = Control.new()
+	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(left_spacer)
+
 	# Title
 	var title = Label.new()
-	title.text = "🐛 Bug Report (F1 to close)"
+	title.text = "🐛 Bug Report"
 	title.add_theme_font_size_override("font_size", 22)
 	title.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
+	title_row.add_child(title)
+
+	# Spacer to push X button to right
+	var right_spacer = Control.new()
+	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(right_spacer)
+
+	# Close button (X)
+	var close_button = Button.new()
+	close_button.text = "✕"
+	close_button.add_theme_font_size_override("font_size", 18)
+	close_button.custom_minimum_size = Vector2(30, 30)
+	close_button.focus_mode = Control.FOCUS_NONE  # Don't steal focus, just click
+	close_button.pressed.connect(_on_cancel_pressed)
+	# Style the X button
+	var close_style = StyleBoxFlat.new()
+	close_style.bg_color = Color(0.5, 0.2, 0.2, 0.8)
+	close_style.set_corner_radius_all(4)
+	close_button.add_theme_stylebox_override("normal", close_style)
+	var close_hover = StyleBoxFlat.new()
+	close_hover.bg_color = Color(0.7, 0.3, 0.3, 0.9)
+	close_hover.set_corner_radius_all(4)
+	close_button.add_theme_stylebox_override("hover", close_hover)
+	title_row.add_child(close_button)
 
 	# Subtitle
 	var subtitle = Label.new()
@@ -161,12 +205,14 @@ func _create_ui() -> void:
 	cancel_button = Button.new()
 	cancel_button.text = "Cancel"
 	cancel_button.custom_minimum_size = Vector2(100, 35)
+	cancel_button.focus_mode = Control.FOCUS_NONE  # Don't steal focus, just click
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	btn_hbox.add_child(cancel_button)
 
 	submit_button = Button.new()
 	submit_button.text = "Submit Report"
 	submit_button.custom_minimum_size = Vector2(140, 35)
+	submit_button.focus_mode = Control.FOCUS_NONE  # Don't steal focus, just click
 	submit_button.pressed.connect(_on_submit_pressed)
 	btn_hbox.add_child(submit_button)
 
@@ -176,6 +222,77 @@ func _create_ui() -> void:
 	submit_style.set_corner_radius_all(4)
 	submit_button.add_theme_stylebox_override("normal", submit_style)
 
+func _create_indicator() -> void:
+	"""Create static indicator in upper left corner showing alpha build + F1 hint"""
+	# Create a separate CanvasLayer for the indicator so it's always visible
+	var indicator_layer = CanvasLayer.new()
+	indicator_layer.name = "IndicatorLayer"
+	indicator_layer.layer = 90  # Below bug report panel but above game
+	add_child(indicator_layer)
+
+	# Container for the indicator
+	indicator_container = Control.new()
+	indicator_container.name = "IndicatorContainer"
+	indicator_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	indicator_layer.add_child(indicator_container)
+
+	# Background panel
+	var bg_panel = PanelContainer.new()
+	bg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bg_style = StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.0, 0.0, 0.0, 0.5)
+	bg_style.set_corner_radius_all(4)
+	bg_style.set_content_margin_all(6)
+	bg_panel.add_theme_stylebox_override("panel", bg_style)
+	bg_panel.position = Vector2(10, 10)
+	indicator_container.add_child(bg_panel)
+
+	# VBox for content
+	var vbox = VBoxContainer.new()
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_theme_constant_override("separation", 2)
+	bg_panel.add_child(vbox)
+
+	# Alpha build label
+	var alpha_label = Label.new()
+	alpha_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	alpha_label.text = "ALPHA BUILD"
+	alpha_label.add_theme_font_size_override("font_size", 15)
+	alpha_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.3, 0.9))  # Orange/gold
+	vbox.add_child(alpha_label)
+
+	# Version label
+	var version_label = Label.new()
+	version_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var version_str = "v???"
+	if NetworkManager and NetworkManager.NETWORK_VERSION != "":
+		version_str = NetworkManager.NETWORK_VERSION
+		# Truncate long git hashes
+		if version_str.length() > 8:
+			version_str = version_str.substr(0, 7)
+	version_label.text = version_str
+	version_label.add_theme_font_size_override("font_size", 12)
+	version_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.8))
+	vbox.add_child(version_label)
+
+	# F1 bug report button/hint
+	var f1_btn = Button.new()
+	f1_btn.name = "F1Button"
+	f1_btn.text = "F1 - Report Bug"
+	f1_btn.add_theme_font_size_override("font_size", 14)
+	f1_btn.custom_minimum_size = Vector2(120, 28)
+	f1_btn.pressed.connect(toggle_panel)
+	# Style the button
+	var btn_style = StyleBoxFlat.new()
+	btn_style.bg_color = Color(0.6, 0.3, 0.3, 0.7)
+	btn_style.set_corner_radius_all(3)
+	f1_btn.add_theme_stylebox_override("normal", btn_style)
+	var btn_hover = StyleBoxFlat.new()
+	btn_hover.bg_color = Color(0.7, 0.4, 0.4, 0.9)
+	btn_hover.set_corner_radius_all(3)
+	f1_btn.add_theme_stylebox_override("hover", btn_hover)
+	vbox.add_child(f1_btn)
+
 func _clear_form() -> void:
 	title_input.text = ""
 	description_input.text = ""
@@ -184,7 +301,11 @@ func _clear_form() -> void:
 	submit_button.disabled = false
 
 func _on_cancel_pressed() -> void:
-	toggle_panel()
+	is_visible = false
+	visible = false
+	var focused = get_viewport().gui_get_focus_owner()
+	if focused:
+		focused.release_focus()
 
 func _on_submit_pressed() -> void:
 	var bug_title = title_input.text.strip_edges()

@@ -42,7 +42,17 @@ var is_dev_mode: bool = false
 @onready var sfx_volume_value = $SettingsPanel/VBoxContainer/SFXVolumeContainer/SFXVolumeValue
 @onready var fullscreen_check = $SettingsPanel/VBoxContainer/FullscreenContainer/FullscreenCheck
 @onready var vsync_check = $SettingsPanel/VBoxContainer/VSyncContainer/VSyncCheck
+@onready var resolution_option = $SettingsPanel/VBoxContainer/ResolutionContainer/ResolutionOption
 @onready var settings_back_button = $SettingsPanel/VBoxContainer/SettingsBackButton
+
+# Resolution presets (width x height)
+const RESOLUTIONS = [
+	Vector2i(1280, 720),   # 720p (default)
+	Vector2i(1366, 768),   # Common laptop
+	Vector2i(1600, 900),   # 900p
+	Vector2i(1920, 1080),  # 1080p
+	Vector2i(2560, 1440),  # 1440p
+]
 
 # Credits panel nodes
 @onready var credits_panel = $CreditsPanel
@@ -130,6 +140,9 @@ func _ready():
 		fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 	if vsync_check:
 		vsync_check.toggled.connect(_on_vsync_toggled)
+	if resolution_option:
+		_setup_resolution_options()
+		resolution_option.item_selected.connect(_on_resolution_selected)
 
 	# Connect credits panel
 	if credits_back_button:
@@ -560,14 +573,69 @@ func _on_sfx_volume_changed(value: float):
 func _on_fullscreen_toggled(enabled: bool):
 	if enabled:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		# Disable resolution dropdown in fullscreen (doesn't apply)
+		if resolution_option:
+			resolution_option.disabled = true
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		# Re-enable resolution dropdown
+		if resolution_option:
+			resolution_option.disabled = false
+		# Apply saved resolution when exiting fullscreen
+		var config = ConfigFile.new()
+		if config.load("user://settings.cfg") == OK:
+			var res_index = config.get_value("display", "resolution_index", 0)
+			if res_index >= 0 and res_index < RESOLUTIONS.size():
+				DisplayServer.window_set_size(RESOLUTIONS[res_index])
 
 func _on_vsync_toggled(enabled: bool):
 	if enabled:
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 	else:
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+
+func _setup_resolution_options():
+	"""Populate resolution dropdown with presets"""
+	if not resolution_option:
+		return
+	resolution_option.clear()
+	for i in range(RESOLUTIONS.size()):
+		var res = RESOLUTIONS[i]
+		resolution_option.add_item("%dx%d" % [res.x, res.y], i)
+
+	# Select current resolution or closest match
+	var current_size = DisplayServer.window_get_size()
+	var best_match = 0
+	var best_diff = INF
+	for i in range(RESOLUTIONS.size()):
+		var res = RESOLUTIONS[i]
+		var diff = abs(res.x - current_size.x) + abs(res.y - current_size.y)
+		if diff < best_diff:
+			best_diff = diff
+			best_match = i
+	resolution_option.select(best_match)
+
+func _on_resolution_selected(index: int):
+	"""Apply selected resolution (only applies in windowed mode)"""
+	if index < 0 or index >= RESOLUTIONS.size():
+		return
+
+	# Save the setting
+	var config = ConfigFile.new()
+	config.load("user://settings.cfg")
+	config.set_value("display", "resolution_index", index)
+	config.save("user://settings.cfg")
+
+	# Only apply if not in fullscreen
+	var window_mode = DisplayServer.window_get_mode()
+	if window_mode == DisplayServer.WINDOW_MODE_FULLSCREEN:
+		return  # Resolution doesn't apply in fullscreen
+
+	# Must be in windowed mode to resize (handles maximized)
+	if window_mode != DisplayServer.WINDOW_MODE_WINDOWED:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+	DisplayServer.window_set_size(RESOLUTIONS[index])
 
 func _load_settings():
 	"""Load settings from config file or use defaults"""
@@ -586,6 +654,11 @@ func _load_settings():
 			fullscreen_check.button_pressed = config.get_value("display", "fullscreen", false)
 		if vsync_check:
 			vsync_check.button_pressed = config.get_value("display", "vsync", true)
+		# Load resolution
+		var saved_res_index = config.get_value("display", "resolution_index", 0)
+		if resolution_option and saved_res_index >= 0 and saved_res_index < RESOLUTIONS.size():
+			resolution_option.select(saved_res_index)
+			_on_resolution_selected(saved_res_index)
 	else:
 		# Apply defaults
 		if master_volume_slider:
@@ -617,6 +690,8 @@ func _save_settings():
 		config.set_value("display", "fullscreen", fullscreen_check.button_pressed)
 	if vsync_check:
 		config.set_value("display", "vsync", vsync_check.button_pressed)
+	if resolution_option:
+		config.set_value("display", "resolution_index", resolution_option.selected)
 
 	config.save("user://settings.cfg")
 

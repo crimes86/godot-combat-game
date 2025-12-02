@@ -296,6 +296,7 @@ func create_tutorial_arrow() -> void:
 	# Connect to TutorialManager signals to show/hide arrow
 	if TutorialManager:
 		TutorialManager.tutorial_step_completed.connect(_on_tutorial_step_changed)
+		TutorialManager.tutorial_completed.connect(hide_tutorial_arrow)
 		# Check if already in a tutorial step that shows arrow when spawned
 		if TutorialManager.is_tutorial_active():
 			var step = TutorialManager.current_step

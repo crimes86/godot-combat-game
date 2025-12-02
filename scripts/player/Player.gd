@@ -151,7 +151,9 @@ func _ready() -> void:
 	# (to ensure networking is ready)
 	if is_multiplayer_authority():
 		call_deferred("_broadcast_initial_appearance")
-	
+		# Apply saved display settings (resolution, fullscreen)
+		call_deferred("_apply_saved_display_settings")
+
 	# THEN: Initialize everything else
 
 	# Initialize stats from CharacterStats - ONLY for local player
@@ -300,6 +302,7 @@ func _ready() -> void:
 		call_deferred("update_tutorial_blackout")
 		if TutorialManager:
 			TutorialManager.tutorial_step_completed.connect(_on_tutorial_step_for_blackout)
+			TutorialManager.tutorial_completed.connect(_on_tutorial_completed_for_blackout)
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent crash on exit
@@ -2834,6 +2837,73 @@ func create_spawn_hints() -> void:
 	sfx_row.add_child(sfx_value)
 	vbox.add_child(sfx_row)
 
+	# DISPLAY section
+	var display_sep = HSeparator.new()
+	display_sep.add_theme_constant_override("separation", 8)
+	vbox.add_child(display_sep)
+
+	var display_title = Label.new()
+	display_title.text = "DISPLAY"
+	display_title.add_theme_font_size_override("font_size", 16)
+	display_title.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))  # Gold
+	display_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(display_title)
+
+	# Resolution row
+	var res_row = HBoxContainer.new()
+	res_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var res_label = Label.new()
+	res_label.text = "Resolution"
+	res_label.add_theme_font_size_override("font_size", 14)
+	res_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	res_label.custom_minimum_size = Vector2(70, 0)
+	res_row.add_child(res_label)
+
+	var res_option = OptionButton.new()
+	res_option.name = "ResolutionOption"
+	res_option.add_theme_font_size_override("font_size", 12)
+	res_option.custom_minimum_size = Vector2(110, 26)
+	# Add resolution options
+	var resolutions = [
+		Vector2i(1280, 720),
+		Vector2i(1366, 768),
+		Vector2i(1600, 900),
+		Vector2i(1920, 1080),
+		Vector2i(2560, 1440),
+	]
+	for i in range(resolutions.size()):
+		var res = resolutions[i]
+		res_option.add_item("%dx%d" % [res.x, res.y], i)
+	# Select saved resolution from config
+	var res_config = ConfigFile.new()
+	var saved_res_index = 0
+	if res_config.load("user://settings.cfg") == OK:
+		saved_res_index = res_config.get_value("display", "resolution_index", 0)
+	res_option.select(saved_res_index)
+	res_option.item_selected.connect(_on_resolution_selected)
+	# Disable if in fullscreen (resolution doesn't apply)
+	if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN:
+		res_option.disabled = true
+	res_row.add_child(res_option)
+	vbox.add_child(res_row)
+
+	# Fullscreen row
+	var fs_row = HBoxContainer.new()
+	fs_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var fs_label = Label.new()
+	fs_label.text = "Fullscreen"
+	fs_label.add_theme_font_size_override("font_size", 14)
+	fs_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	fs_label.custom_minimum_size = Vector2(70, 0)
+	fs_row.add_child(fs_label)
+
+	var fs_check = CheckButton.new()
+	fs_check.name = "FullscreenCheck"
+	fs_check.button_pressed = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+	fs_check.toggled.connect(_on_fullscreen_toggled.bind(res_option))
+	fs_row.add_child(fs_check)
+	vbox.add_child(fs_row)
+
 	# MENU section
 	var menu_sep = HSeparator.new()
 	menu_sep.add_theme_constant_override("separation", 8)
@@ -2964,6 +3034,92 @@ func _save_sound_settings() -> void:
 
 	config.save("user://settings.cfg")
 
+func _apply_saved_display_settings() -> void:
+	"""Apply saved display settings when entering game"""
+	var config = ConfigFile.new()
+	if config.load("user://settings.cfg") != OK:
+		return
+
+	var resolutions = [
+		Vector2i(1280, 720),
+		Vector2i(1366, 768),
+		Vector2i(1600, 900),
+		Vector2i(1920, 1080),
+		Vector2i(2560, 1440),
+	]
+
+	# Apply resolution
+	var res_index = config.get_value("display", "resolution_index", 0)
+	if res_index >= 0 and res_index < resolutions.size():
+		DisplayServer.window_set_size(resolutions[res_index])
+
+	# Apply fullscreen setting
+	var fullscreen = config.get_value("display", "fullscreen", false)
+	if fullscreen:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	# Don't force windowed mode - let the resolution handler do that if needed
+
+func _on_resolution_selected(index: int) -> void:
+	"""Handle resolution dropdown change (only applies in windowed mode)"""
+	var resolutions = [
+		Vector2i(1280, 720),
+		Vector2i(1366, 768),
+		Vector2i(1600, 900),
+		Vector2i(1920, 1080),
+		Vector2i(2560, 1440),
+	]
+	if index < 0 or index >= resolutions.size():
+		return
+
+	# Save setting regardless of current mode
+	var config = ConfigFile.new()
+	config.load("user://settings.cfg")
+	config.set_value("display", "resolution_index", index)
+	config.save("user://settings.cfg")
+
+	# Only apply if in windowed mode
+	var window_mode = DisplayServer.window_get_mode()
+	if window_mode == DisplayServer.WINDOW_MODE_FULLSCREEN:
+		return  # Resolution doesn't apply in fullscreen
+
+	# Must be in windowed mode to resize (handles maximized)
+	if window_mode != DisplayServer.WINDOW_MODE_WINDOWED:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+	DisplayServer.window_set_size(resolutions[index])
+
+func _on_fullscreen_toggled(enabled: bool, res_option: OptionButton = null) -> void:
+	"""Handle fullscreen toggle"""
+	if enabled:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		# Disable resolution dropdown (doesn't apply in fullscreen)
+		if res_option:
+			res_option.disabled = true
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		# Enable resolution dropdown
+		if res_option:
+			res_option.disabled = false
+		# Apply saved resolution when exiting fullscreen
+		var resolutions = [
+			Vector2i(1280, 720),
+			Vector2i(1366, 768),
+			Vector2i(1600, 900),
+			Vector2i(1920, 1080),
+			Vector2i(2560, 1440),
+		]
+		var config_temp = ConfigFile.new()
+		if config_temp.load("user://settings.cfg") == OK:
+			var res_index = config_temp.get_value("display", "resolution_index", 0)
+			if res_index >= 0 and res_index < resolutions.size():
+				DisplayServer.window_set_size(resolutions[res_index])
+
+	# Save setting
+	var config = ConfigFile.new()
+	config.load("user://settings.cfg")
+	config.set_value("display", "fullscreen", enabled)
+	config.save("user://settings.cfg")
+
 func _on_menu_credits_pressed() -> void:
 	"""Open credits panel from ESC menu"""
 	var sound_manager = get_node_or_null("/root/SoundManager")
@@ -3017,7 +3173,7 @@ func _start_logout_timer() -> void:
 
 	# Panel
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(300, 150)
+	panel.custom_minimum_size = Vector2(320, 200)
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.12, 0.12, 0.14, 0.95)
 	style.border_width_left = 3
@@ -3076,6 +3232,12 @@ func _start_logout_timer() -> void:
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inner_vbox.add_child(info)
 
+	# Button row
+	var btn_row = HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 10)
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	inner_vbox.add_child(btn_row)
+
 	# Cancel button
 	var cancel_btn = Button.new()
 	cancel_btn.name = "CancelButton"
@@ -3083,7 +3245,34 @@ func _start_logout_timer() -> void:
 	cancel_btn.custom_minimum_size = Vector2(100, 35)
 	cancel_btn.add_theme_font_size_override("font_size", 14)
 	cancel_btn.pressed.connect(_cancel_logout)
-	inner_vbox.add_child(cancel_btn)
+	btn_row.add_child(cancel_btn)
+
+	# Quit Now button - exits immediately but character stays for full 10s
+	var quit_btn = Button.new()
+	quit_btn.name = "QuitNowButton"
+	quit_btn.text = "Quit Now"
+	quit_btn.custom_minimum_size = Vector2(100, 35)
+	quit_btn.add_theme_font_size_override("font_size", 14)
+	quit_btn.pressed.connect(_quit_now)
+	btn_row.add_child(quit_btn)
+
+	# Style quit button with warning color
+	var quit_style = StyleBoxFlat.new()
+	quit_style.bg_color = Color(0.5, 0.25, 0.1, 1.0)  # Dark orange
+	quit_style.set_corner_radius_all(4)
+	quit_btn.add_theme_stylebox_override("normal", quit_style)
+	var quit_hover = StyleBoxFlat.new()
+	quit_hover.bg_color = Color(0.6, 0.35, 0.15, 1.0)  # Lighter orange
+	quit_hover.set_corner_radius_all(4)
+	quit_btn.add_theme_stylebox_override("hover", quit_hover)
+
+	# Warning text about quit now
+	var warning = Label.new()
+	warning.text = "Quit Now: You stay in-game for 10s"
+	warning.add_theme_font_size_override("font_size", 10)
+	warning.add_theme_color_override("font_color", Color(0.8, 0.5, 0.3))  # Orange warning
+	warning.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inner_vbox.add_child(warning)
 
 	get_tree().root.add_child(logout_timer_overlay)
 
@@ -3099,6 +3288,19 @@ func _cancel_logout() -> void:
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("play_button_click_sound"):
 		sound_manager.play_button_click_sound()
+
+func _quit_now() -> void:
+	"""Quit game immediately - client exits but character stays in-game for full 10s"""
+	# Save sound settings before leaving
+	_save_sound_settings()
+
+	# Disconnect immediately - server will keep character for 10s
+	# (Server-side logout timer continues even after client disconnects)
+	if NetworkManager:
+		NetworkManager.close_connection()
+
+	# Exit the game completely
+	get_tree().quit()
 
 func _complete_logout() -> void:
 	"""Actually disconnect after timer completes"""
@@ -3244,6 +3446,10 @@ func update_tutorial_blackout() -> void:
 func _on_tutorial_step_for_blackout(_completed_step: int) -> void:
 	"""Called when tutorial step completes - check if blackout should be removed"""
 	update_tutorial_blackout()
+
+func _on_tutorial_completed_for_blackout() -> void:
+	"""Called when tutorial is completed (including skip) - remove blackout immediately"""
+	remove_tutorial_blackout()
 
 # Inner class for the blackout visual
 class TutorialBlackoutVisual extends Node2D:

@@ -151,9 +151,27 @@ func start_tutorial(player_node: Node) -> void:
 	advance_to_step(TutorialStep.MOVEMENT)
 
 func skip_tutorial() -> void:
-	"""Skip the entire tutorial"""
+	"""Skip the entire tutorial - clean up ALL tutorial elements"""
 	current_step = TutorialStep.COMPLETE
+
+	# Clear all tutorial visual elements
+	clear_key_prompts()        # WASD display
+	clear_arrow()              # World arrow indicator
+	clear_click_indicator()    # LEFT CLICK indicator
+	clear_feedback_label()     # GOOD!/CRITICAL feedback
+	clear_ui_arrow()           # UI arrow pointing to tabs/buttons
+	stop_prompt_flash()        # Stop any flashing animations
+
+	# Clear equip mini-tutorial if active
+	end_equip_mini_tutorial()
+
+	# Clear the main tutorial UI
 	cleanup_tutorial_ui()
+
+	# Reset tracking flags
+	waiting_for_quests_tab = false
+	waiting_for_accept_button = false
+
 	tutorial_completed.emit()
 	print("📚 Tutorial skipped")
 

@@ -28,8 +28,9 @@
 - [x] Ruins campfire aura not healing (fixed: unclaimed campfires now heal anyone)
 
 ## Pending - Polish
-- [ ] Consolidate all asset credits from subdirectories into one file
-- [ ] Add proper LICENSE file (currently placeholder)
+- [x] Consolidate all asset credits from subdirectories into one file (CREDITS.md)
+- [x] Add proper LICENSE file (proprietary license)
+- [x] Fix resolution scaling (1280x720 with "keep" aspect ratio)
 - [ ] Test on multiple resolutions (720p, 1080p, 1440p)
 
 ## Pending - Tech Debt
