@@ -84,6 +84,19 @@ func _connect_signals() -> void:
 		group_manager.invite_received.connect(_on_invite_received)
 		group_manager.invite_expired.connect(_on_invite_expired)
 
+func _exit_tree() -> void:
+	# Disconnect signals to prevent memory leaks
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if group_manager:
+		if group_manager.group_updated.is_connected(_on_group_updated):
+			group_manager.group_updated.disconnect(_on_group_updated)
+		if group_manager.group_disbanded.is_connected(_on_group_disbanded):
+			group_manager.group_disbanded.disconnect(_on_group_disbanded)
+		if group_manager.invite_received.is_connected(_on_invite_received):
+			group_manager.invite_received.disconnect(_on_invite_received)
+		if group_manager.invite_expired.is_connected(_on_invite_expired):
+			group_manager.invite_expired.disconnect(_on_invite_expired)
+
 func _process(delta: float) -> void:
 	"""Update health bars and invite popup timer."""
 	# Update member health if group frames visible

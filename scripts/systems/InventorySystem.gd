@@ -107,6 +107,29 @@ func remove_item(slot: int) -> Dictionary:
 
 	return {}
 
+func reduce_quantity(slot: int, amount: int) -> int:
+	"""Reduce quantity of stackable item at slot. Returns amount actually removed."""
+	if slot < 0 or slot >= inventory_items.size():
+		return 0
+
+	var item = inventory_items[slot]
+	if not item:
+		return 0
+
+	var current_qty = item.get("quantity", 1)
+	var to_remove = min(amount, current_qty)
+
+	if to_remove >= current_qty:
+		# Remove entire stack
+		inventory_items[slot] = null
+		item_removed.emit(item, slot)
+	else:
+		# Reduce quantity
+		item["quantity"] = current_qty - to_remove
+
+	inventory_changed.emit()
+	return to_remove
+
 func get_item(slot: int) -> Dictionary:
 	"""Get item at specific slot (returns null if empty)"""
 	if slot < 0 or slot >= inventory_items.size():

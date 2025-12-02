@@ -545,6 +545,7 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	weapon.crit_chance_bonus = item_dict.get("crit_chance", 0.0)
 	weapon.required_level = item_dict.get("required_level", 1)
 	weapon.can_trade = item_dict.get("can_trade", true)
+	weapon.sell_value = item_dict.get("value", 0)
 
 	var rarity_str = item_dict.get("rarity", "COMMON").to_upper()
 	match rarity_str:

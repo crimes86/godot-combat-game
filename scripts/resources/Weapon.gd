@@ -31,11 +31,12 @@ class_name Weapon
 @export var heal_radius: float = 80.0  # Radius of healing circle for ranged_heal weapons
 
 # ============================================
-# REQUIREMENTS
+# REQUIREMENTS & VALUE
 # ============================================
 
 @export var required_level: int = 1
 @export var can_trade: bool = true
+@export var sell_value: int = 0  # Gold value when selling (typically 50% of purchase price)
 
 # ============================================
 # ARTIFACT PROPERTIES

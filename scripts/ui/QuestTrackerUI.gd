@@ -70,6 +70,22 @@ func _connect_signals() -> void:
 	# Initial refresh
 	_refresh_tracker()
 
+func _exit_tree() -> void:
+	# Disconnect signals to prevent memory leaks
+	if has_node("/root/QuestManager"):
+		var qm = get_node("/root/QuestManager")
+		if qm.active_quests_changed.is_connected(_refresh_tracker):
+			qm.active_quests_changed.disconnect(_refresh_tracker)
+		if qm.quest_progress_updated.is_connected(_on_progress_updated):
+			qm.quest_progress_updated.disconnect(_on_progress_updated)
+		if qm.quests_loaded.is_connected(_refresh_tracker):
+			qm.quests_loaded.disconnect(_refresh_tracker)
+	if TutorialManager:
+		if TutorialManager.tutorial_step_completed.is_connected(_on_tutorial_step_completed):
+			TutorialManager.tutorial_step_completed.disconnect(_on_tutorial_step_completed)
+		if TutorialManager.tutorial_completed.is_connected(_on_tutorial_completed):
+			TutorialManager.tutorial_completed.disconnect(_on_tutorial_completed)
+
 func _create_ui() -> void:
 	"""Build the quest tracker UI"""
 	# Main container - anchored to top-right

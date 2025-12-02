@@ -37,7 +37,7 @@
 - [x] Consolidate all asset credits from subdirectories into one file (CREDITS.md)
 - [x] Add proper LICENSE file (proprietary license)
 - [x] Fix resolution scaling (1280x720 with "keep" aspect ratio)
-- [ ] Test on multiple resolutions (720p, 1080p, 1440p)
+- [x] Test on multiple resolutions (720p, 1080p, 1440p)
 
 ## Pending - Tech Debt
 - [x] Split Player.gd into subsystems (Movement, Combat, Healing, Input) - created helper classes
@@ -50,11 +50,13 @@
   - NOTE: game_world.gd still has original code - managers available for gradual adoption
 - [x] Consolidate 7 weapon animation data files into single template (WeaponAnimationData.gd)
 - [x] Create UITheme.gd singleton for shared color constants
-- [ ] Add signal disconnects in _exit_tree() to prevent memory leaks
-- [ ] Resolve TODO comments:
-  - CharacterUI.gd:790
-  - CampfireFuelUI.gd:312
-  - CharacterStats.gd:378
+- [x] Add signal disconnects in _exit_tree() to prevent memory leaks
+- [x] Resolve TODO comments:
+  - CharacterUI.gd - Fixed: Use NetworkManager.player_name instead of hardcoded "Adventurer"
+  - CampfireFuelUI.gd - Fixed: Implemented custom fuel amount adding with InventorySystem.reduce_quantity()
+  - CharacterStats.gd:378 - Not a TODO (was section header, line numbers shifted)
+  - CharacterStats.gd - Fixed: Use equipped_weapon.sell_value instead of hardcoded 0
+  - Note: 1 minor TODO remains (crit sync to server) - deferred as future feature
 
 ## Pending - Architecture
 - [x] Reduce autoloads from 26 to 22 (consolidated DebugConfig, TreeAudioManager, GroupInvitePopup, ChainManager)

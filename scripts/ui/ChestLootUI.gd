@@ -307,6 +307,7 @@ func loot_item(index: int) -> void:
 
 func _on_take_all_pressed() -> void:
 	"""Take all items from the chest"""
+	_play_click_sound()
 	# Collect items to loot first
 	var items_to_loot: Array = []
 	for i in range(chest_loot.size()):
@@ -359,4 +360,11 @@ func _loot_items_staggered(items_to_loot: Array) -> void:
 
 func _on_close_pressed() -> void:
 	"""Handle close button press"""
+	_play_click_sound()
 	close_ui()
+
+func _play_click_sound() -> void:
+	"""Play button click sound"""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_button_click_sound"):
+		sound_manager.play_button_click_sound()

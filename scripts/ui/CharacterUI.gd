@@ -70,6 +70,29 @@ func _ready() -> void:
 	# Initial update
 	refresh_all()
 
+func _exit_tree() -> void:
+	# Disconnect signals to prevent memory leaks
+	if CharacterStats.level_up.is_connected(_on_stats_changed):
+		CharacterStats.level_up.disconnect(_on_stats_changed)
+	if CharacterStats.experience_gained.is_connected(_on_xp_changed):
+		CharacterStats.experience_gained.disconnect(_on_xp_changed)
+	if CharacterStats.armor_equipped.is_connected(_on_armor_changed):
+		CharacterStats.armor_equipped.disconnect(_on_armor_changed)
+	if CharacterStats.armor_unequipped.is_connected(_on_armor_changed):
+		CharacterStats.armor_unequipped.disconnect(_on_armor_changed)
+	if CharacterStats.weapon_equipped.is_connected(_on_weapon_changed):
+		CharacterStats.weapon_equipped.disconnect(_on_weapon_changed)
+	if CharacterStats.weapon_unequipped.is_connected(_on_weapon_changed):
+		CharacterStats.weapon_unequipped.disconnect(_on_weapon_changed)
+	if InventorySystem.axe_equipped.is_connected(_on_tool_changed):
+		InventorySystem.axe_equipped.disconnect(_on_tool_changed)
+	if InventorySystem.axe_unequipped.is_connected(_on_tool_changed):
+		InventorySystem.axe_unequipped.disconnect(_on_tool_changed)
+	if InventorySystem.pickaxe_equipped.is_connected(_on_tool_changed):
+		InventorySystem.pickaxe_equipped.disconnect(_on_tool_changed)
+	if InventorySystem.pickaxe_unequipped.is_connected(_on_tool_changed):
+		InventorySystem.pickaxe_unequipped.disconnect(_on_tool_changed)
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE and is_visible:
@@ -799,7 +822,10 @@ func refresh_all() -> void:
 func refresh_character_info() -> void:
 	"""Update character name, level, HP, XP, gold"""
 	if character_name_label:
-		character_name_label.text = "Adventurer"  # TODO: Add character name to CharacterStats
+		var player_name = "Adventurer"
+		if NetworkManager and NetworkManager.player_name != "":
+			player_name = NetworkManager.player_name
+		character_name_label.text = player_name
 
 	if level_label:
 		level_label.text = "Level " + str(CharacterStats.level)
@@ -1107,6 +1133,7 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	weapon.crit_chance_bonus = item_dict.get("crit_chance", 0.0)
 	weapon.required_level = item_dict.get("required_level", 1)
 	weapon.can_trade = item_dict.get("can_trade", true)
+	weapon.sell_value = item_dict.get("value", 0)
 
 	var rarity_str = item_dict.get("rarity", "COMMON").to_upper()
 	match rarity_str:

@@ -301,6 +301,7 @@ func _clear_form() -> void:
 	submit_button.disabled = false
 
 func _on_cancel_pressed() -> void:
+	_play_click_sound()
 	is_visible = false
 	visible = false
 	var focused = get_viewport().gui_get_focus_owner()
@@ -308,6 +309,7 @@ func _on_cancel_pressed() -> void:
 		focused.release_focus()
 
 func _on_submit_pressed() -> void:
+	_play_click_sound()
 	var bug_title = title_input.text.strip_edges()
 	var bug_desc = description_input.text.strip_edges()
 	var bug_category = CATEGORIES[category_dropdown.selected]
@@ -398,3 +400,9 @@ func _save_bug_report(report: Dictionary) -> void:
 		file.store_string(JSON.stringify(reports, "\t"))
 		file.close()
 		print("🐛 Bug report #%d saved: %s" % [report.id, report.title])
+
+func _play_click_sound() -> void:
+	"""Play button click sound"""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_button_click_sound"):
+		sound_manager.play_button_click_sound()

@@ -59,6 +59,16 @@ func _ready() -> void:
 	# Add system welcome message
 	add_system_message("Welcome! Press Enter to chat.")
 
+func _exit_tree() -> void:
+	# Disconnect signals to prevent memory leaks
+	if network_manager:
+		if network_manager.player_authenticated.is_connected(_on_player_authenticated):
+			network_manager.player_authenticated.disconnect(_on_player_authenticated)
+		if network_manager.player_disconnected.is_connected(_on_player_disconnected):
+			network_manager.player_disconnected.disconnect(_on_player_disconnected)
+		if network_manager.chat_message_received.is_connected(_on_chat_message_received):
+			network_manager.chat_message_received.disconnect(_on_chat_message_received)
+
 func _input(event: InputEvent) -> void:
 	# Don't process input if admin panel is open
 	var admin_panel = get_node_or_null("/root/AccountAdmin")

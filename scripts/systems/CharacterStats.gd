@@ -410,7 +410,7 @@ func unequip_weapon() -> bool:
 		"crit_chance": equipped_weapon.crit_chance_bonus,
 		"required_level": equipped_weapon.required_level,
 		"rarity": Weapon.Rarity.keys()[equipped_weapon.rarity],
-		"value": 0,  # TODO: Store original purchase price
+		"value": equipped_weapon.sell_value,
 		"can_trade": equipped_weapon.can_trade,
 		"stackable": false,
 		"quantity": 1

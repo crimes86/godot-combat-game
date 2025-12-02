@@ -150,6 +150,11 @@ func open_shop(vendor_node: Vendor) -> void:
 			if tab_container.current_tab == 1:  # Armor tab index
 				tab_container.current_tab = 0  # Switch to Weapons
 
+	# Play blacksmith open sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_sound_2d(sound_manager.SoundType.BLACKSMITH_OPEN, -6.0)
+
 	show()
 
 	# Notify tutorial system that shop opened (for ACCEPT_QUEST step persistence)
@@ -1259,10 +1264,10 @@ func _on_accept_quest(quest_id: String) -> void:
 		var quest = qm.get_quest(quest_id)
 		show_quest_message("Quest accepted: %s" % quest.get("name", ""), Color(0.5, 0.9, 0.5))
 
-		# Play sound
+		# Play quest accept sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.QUEST_ACCEPT, -6.0)
 
 		# Refresh the list and tab indicator
 		populate_quests()
@@ -1282,10 +1287,10 @@ func _on_turn_in_quest(quest_id: String) -> void:
 		var gold = quest.get("gold_reward", 0)
 		show_quest_message("Quest complete! +%d XP, +%d G" % [xp, gold], Color(1.0, 0.85, 0.2))
 
-		# Play level up type sound or gold sound
+		# Play quest turn in sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager and sound_manager.has_method("play_sound_2d"):
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -5.0)
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.QUEST_TURN_IN, -6.0)
 
 		# Refresh the list, gold display, and tab indicator
 		update_gold_display()
@@ -1296,10 +1301,12 @@ func _on_turn_in_quest(quest_id: String) -> void:
 
 func _on_close_pressed() -> void:
 	"""Handle close button press"""
+	_play_click_sound()
 	close_shop()
 
 func _on_tab_changed(tab_idx: int) -> void:
 	"""Handle tab changes - notify tutorial system if waiting for Quests tab"""
+	_play_click_sound()
 	if not tab_container:
 		return
 
@@ -1350,3 +1357,9 @@ func update_quests_tab_indicator() -> void:
 		tab_title = "Quests (!)"  # New quests available
 
 	tab_container.set_tab_title(quests_tab_idx, tab_title)
+
+func _play_click_sound() -> void:
+	"""Play button click sound"""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_button_click_sound"):
+		sound_manager.play_button_click_sound()

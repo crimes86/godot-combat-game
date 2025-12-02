@@ -309,7 +309,35 @@ func _on_add_custom() -> void:
 	var wood_to_add = int(wood_input.value)
 	var embers_to_add = int(bone_input.value)
 
-	# TODO: Implement custom amount adding (need to modify Campfire.gd to support partial adds)
+	# Add wood
+	if wood_to_add > 0:
+		var wood_remaining = wood_to_add
+		for slot_idx in range(InventorySystem.inventory_items.size()):
+			if wood_remaining <= 0:
+				break
+			var item = InventorySystem.get_item(slot_idx)
+			if item and item.get("name") == "Dry Log":
+				var qty = item.get("quantity", 1)
+				var take = min(qty, wood_remaining)
+				if campfire.add_wood_fuel(take):
+					InventorySystem.reduce_quantity(slot_idx, take)
+					wood_remaining -= take
+
+	# Add embers
+	if embers_to_add > 0:
+		var embers_remaining = embers_to_add
+		for slot_idx in range(InventorySystem.inventory_items.size()):
+			if embers_remaining <= 0:
+				break
+			var item = InventorySystem.get_item(slot_idx)
+			if item and item.get("name") == "Bone Ember":
+				var qty = item.get("quantity", 1)
+				var take = min(qty, embers_remaining)
+				if campfire.add_bone_ember_fuel(take):
+					InventorySystem.reduce_quantity(slot_idx, take)
+					embers_remaining -= take
+
+	update_display()
 
 func _on_close_pressed() -> void:
 	visible = false

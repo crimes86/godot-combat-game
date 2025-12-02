@@ -305,6 +305,14 @@ func create_tutorial_arrow() -> void:
 			elif step == TutorialManager.TutorialStep.ATTACK_DUMMY or step == TutorialManager.TutorialStep.CRIT_WINDOW:
 				call_deferred("show_tutorial_arrow_red")
 
+func _exit_tree() -> void:
+	# Disconnect signals to prevent memory leaks
+	if TutorialManager:
+		if TutorialManager.tutorial_step_completed.is_connected(_on_tutorial_step_changed):
+			TutorialManager.tutorial_step_completed.disconnect(_on_tutorial_step_changed)
+		if TutorialManager.tutorial_completed.is_connected(hide_tutorial_arrow):
+			TutorialManager.tutorial_completed.disconnect(hide_tutorial_arrow)
+
 func _on_tutorial_step_changed(completed_step: int) -> void:
 	"""Handle tutorial step changes to show/hide arrow"""
 	if not TutorialManager:

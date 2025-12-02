@@ -2437,6 +2437,11 @@ func is_ui_blocking_input() -> bool:
 			if rect.has_point(mouse_pos):
 				return true
 
+	# Check if any UI control has focus (text input, etc.)
+	var focused = get_viewport().gui_get_focus_owner()
+	if focused:
+		return true
+
 	var root = get_tree().root
 	for child in root.get_children():
 		if child is CanvasLayer and child.visible:
@@ -2450,6 +2455,12 @@ func is_ui_blocking_input() -> bool:
 			if child is ChestLootUI:
 				if _is_mouse_over_canvas_layer(child, mouse_pos):
 					return true
+			# Check for any CanvasLayer with a visible PanelContainer (generic UI panels like BugReportUI)
+			for panel in child.get_children():
+				if panel is PanelContainer and panel.visible:
+					var rect = panel.get_global_rect()
+					if rect.has_point(mouse_pos):
+						return true
 	return false
 
 func _is_mouse_over_canvas_layer(canvas_layer: CanvasLayer, mouse_pos: Vector2) -> bool:
