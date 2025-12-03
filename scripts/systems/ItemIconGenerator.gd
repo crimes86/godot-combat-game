@@ -59,6 +59,17 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 			icon_cache[cache_key] = icon
 		return icon
 
+	# Handle placeables with procedural icons
+	if item_type == "placeable":
+		var placeable_type = item.get("placeable_type", "")
+		var cache_key = "placeable:%s" % placeable_type
+		if icon_cache.has(cache_key):
+			return icon_cache[cache_key]
+		var icon = _generate_placeable_icon(placeable_type, item)
+		if icon:
+			icon_cache[cache_key] = icon
+		return icon
+
 	# Determine the sprite path based on item type
 	var sprite_path = _get_sprite_path(item_type, sprite_name, item)
 	if sprite_path.is_empty():
@@ -132,6 +143,15 @@ func _get_sprite_path(item_type: String, sprite_name: String, item: Dictionary) 
 				return "res://assets/tools/axe/walk.png"
 			elif tool_type == "pickaxe":
 				return "res://assets/tools/pickaxe/walk.png"
+		"placeable":
+			# Placeables use direct sprite_path or have a specific icon
+			var sprite_path = item.get("sprite_path", "")
+			if sprite_path != "":
+				return sprite_path
+			# Fallback for known placeables
+			var placeable_type = item.get("placeable_type", "")
+			if placeable_type == "campfire":
+				return "res://assets/ui/icons/campfire_kit.png"
 
 	return ""
 
@@ -552,3 +572,88 @@ func _get_rarity_color(rarity: String) -> Color:
 			return Color(1.0, 0.6, 0.1, 1.0)
 		_:
 			return Color(0.6, 0.6, 0.6, 1.0)
+
+func _generate_placeable_icon(placeable_type: String, item: Dictionary) -> ImageTexture:
+	"""Generate a procedural icon for placeable items"""
+	var size = 32
+	var img = Image.create(size, size, false, Image.FORMAT_RGBA8)
+
+	match placeable_type:
+		"campfire":
+			_draw_campfire_kit(img, size)
+		_:
+			# Generic placeable icon
+			_draw_generic_placeable(img, size)
+
+	return ImageTexture.create_from_image(img)
+
+func _draw_campfire_kit(img: Image, size: int) -> void:
+	"""Draw a campfire kit icon - logs and flames"""
+	var brown = Color(0.55, 0.35, 0.2, 1.0)
+	var dark_brown = Color(0.35, 0.22, 0.12, 1.0)
+	var orange = Color(1.0, 0.5, 0.1, 1.0)
+	var yellow = Color(1.0, 0.8, 0.2, 1.0)
+	var red = Color(0.9, 0.2, 0.1, 1.0)
+	var center = size / 2
+
+	# Draw crossed logs at bottom
+	# Log 1 (diagonal left-to-right)
+	for i in range(-8, 9):
+		var x = center + i
+		var y = size - 10 + abs(i) / 3
+		if x >= 0 and x < size and y >= 0 and y < size:
+			img.set_pixel(x, y, brown)
+			if y + 1 < size:
+				img.set_pixel(x, y + 1, dark_brown)
+
+	# Log 2 (diagonal right-to-left)
+	for i in range(-8, 9):
+		var x = center + i
+		var y = size - 10 - abs(i) / 3 + 4
+		if x >= 0 and x < size and y >= 0 and y < size:
+			img.set_pixel(x, y, brown)
+			if y + 1 < size:
+				img.set_pixel(x, y + 1, dark_brown)
+
+	# Draw flames (triangular flame shapes)
+	# Outer orange glow
+	for y in range(4, size - 10):
+		for x in range(center - 6, center + 7):
+			var dist_y = float(y - 4) / (size - 14)
+			var width = int(6 * (1.0 - dist_y))
+			if abs(x - center) <= width:
+				var flame_intensity = 1.0 - dist_y * 0.7
+				img.set_pixel(x, y, Color(orange.r, orange.g * flame_intensity, orange.b * flame_intensity * 0.5, 1.0))
+
+	# Inner yellow core
+	for y in range(8, size - 12):
+		for x in range(center - 3, center + 4):
+			var dist_y = float(y - 8) / (size - 20)
+			var width = int(3 * (1.0 - dist_y))
+			if abs(x - center) <= width:
+				img.set_pixel(x, y, yellow)
+
+	# Red tips at top
+	img.set_pixel(center, 4, red)
+	img.set_pixel(center, 5, red)
+	img.set_pixel(center - 2, 7, red)
+	img.set_pixel(center + 2, 7, red)
+
+func _draw_generic_placeable(img: Image, size: int) -> void:
+	"""Draw a generic placeable icon (box shape)"""
+	var brown = Color(0.5, 0.4, 0.3, 1.0)
+	var dark = Color(0.3, 0.25, 0.2, 1.0)
+	var center = size / 2
+
+	# Simple box/crate shape
+	for y in range(8, size - 6):
+		for x in range(6, size - 6):
+			img.set_pixel(x, y, brown)
+
+	# Border
+	for x in range(6, size - 6):
+		img.set_pixel(x, 8, dark)
+		img.set_pixel(x, size - 7, dark)
+	for y in range(8, size - 6):
+		img.set_pixel(6, y, dark)
+		img.set_pixel(size - 7, y, dark)

@@ -46,6 +46,11 @@ func _on_body_entered(body):
 			var sprite = body.get_node("CharacterSprite")
 			sprite.modulate = Color(1.0, 0.7, 0.5, 1.0)
 
+		# Notify QuestManager - "explore lava_pool" objective
+		var quest_manager = get_node_or_null("/root/QuestManager")
+		if quest_manager and quest_manager.has_method("on_location_discovered"):
+			quest_manager.on_location_discovered("lava_pool")
+
 func _on_body_exited(body):
 	if body.is_in_group("player"):
 		players_in_lava.erase(body)

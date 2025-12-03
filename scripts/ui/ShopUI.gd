@@ -208,6 +208,9 @@ func populate_weapons() -> void:
 
 		print("   Adding weapon: %s (price: %d)" % [weapon.weapon_name, price])
 
+		# Check if player already owns this weapon
+		var already_owned = _player_owns_weapon(weapon.weapon_name)
+
 		# Build stats string based on weapon type
 		var stats: String
 		if weapon.is_healing_weapon():
@@ -226,7 +229,7 @@ func populate_weapons() -> void:
 			"name": weapon.weapon_name
 		}
 
-		var item_slot = create_item_slot_with_icon(
+		var item_slot = create_shop_slot_with_owned_check(
 			weapon.weapon_name,
 			weapon.description,
 			price,
@@ -234,7 +237,8 @@ func populate_weapons() -> void:
 			weapon.required_level,
 			get_rarity_color(weapon.rarity),
 			item_data,
-			func(): purchase_weapon(i)
+			func(): purchase_weapon(i),
+			already_owned
 		)
 
 		weapons_list.add_child(item_slot)
@@ -256,13 +260,17 @@ func populate_tools() -> void:
 		var tool_data = vendor.tools_for_sale[i]
 		var price = tool_data.get("price", 0)
 		var tool_name = tool_data.get("name", "Unknown")
-		var tool_type = tool_data.get("tool_type", "tool").capitalize()
+		var tool_type_raw = tool_data.get("tool_type", "tool")
+		var tool_type = tool_type_raw.capitalize()
+
+		# Check if player already owns this tool
+		var already_owned = _player_owns_tool(tool_name, tool_type_raw)
 
 		# Create item data dict for icon generation
 		var item_data = tool_data.duplicate()
 		item_data["type"] = "tool"
 
-		var item_slot = create_item_slot_with_icon(
+		var item_slot = create_shop_slot_with_owned_check(
 			tool_name,
 			tool_data.get("description", ""),
 			price,
@@ -274,7 +282,8 @@ func populate_tools() -> void:
 			1,  # Tools have no level requirement
 			get_armor_rarity_color(tool_data.get("rarity", "COMMON")),
 			item_data,
-			func(): purchase_tool(i)
+			func(): purchase_tool(i),
+			already_owned
 		)
 
 		tools_list.add_child(item_slot)
@@ -291,23 +300,72 @@ func populate_armor() -> void:
 	# Add armor items
 	for i in range(vendor.armor_for_sale.size()):
 		var armor_data = vendor.armor_for_sale[i]
+		var armor_name = armor_data.get("name", "Unknown")
+
+		# Check if player already owns this armor (in inventory or equipped)
+		var already_owned = _player_owns_armor(armor_name, armor_data.get("slot", ""))
 
 		# Create item data dict for icon generation
 		var item_data = armor_data.duplicate()
 		item_data["type"] = "armor"
 
-		var item_slot = create_item_slot_with_icon(
-			armor_data.get("name", "Unknown"),
+		var item_slot = create_shop_slot_with_owned_check(
+			armor_name,
 			armor_data.get("description", ""),
 			armor_data.get("price", 0),
 			"Defense: +%d | Slot: %s" % [armor_data.get("defense", 0), armor_data.get("slot", "").capitalize()],
 			armor_data.get("required_level", 1),
 			get_armor_rarity_color(armor_data.get("rarity", "COMMON")),
 			item_data,
-			func(): purchase_armor(i)
+			func(): purchase_armor(i),
+			already_owned
 		)
 
 		armor_list.add_child(item_slot)
+
+func _player_owns_armor(armor_name: String, armor_slot: String) -> bool:
+	"""Check if player already owns this armor piece (in inventory or equipped)"""
+	# Check inventory
+	if InventorySystem.has_item_by_name(armor_name):
+		return true
+
+	# Check equipped armor slot
+	if armor_slot and CharacterStats.equipped_armor.has(armor_slot):
+		var equipped = CharacterStats.equipped_armor[armor_slot]
+		if equipped and equipped.get("name", "") == armor_name:
+			return true
+
+	return false
+
+func _player_owns_weapon(weapon_name: String) -> bool:
+	"""Check if player already owns this weapon (in inventory or equipped)"""
+	# Check inventory
+	if InventorySystem.has_item_by_name(weapon_name):
+		return true
+
+	# Check equipped weapon
+	if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.weapon_name == weapon_name:
+		return true
+
+	return false
+
+func _player_owns_tool(tool_name: String, tool_type: String) -> bool:
+	"""Check if player already owns this tool (in inventory or equipped)"""
+	# Check inventory
+	if InventorySystem.has_item_by_name(tool_name):
+		return true
+
+	# Check equipped tool slots
+	if tool_type == "axe" and InventorySystem.has_axe_equipped():
+		var equipped = InventorySystem.get_equipped_axe()
+		if equipped.get("name", "") == tool_name:
+			return true
+	elif tool_type == "pickaxe" and InventorySystem.has_pickaxe_equipped():
+		var equipped = InventorySystem.get_equipped_pickaxe()
+		if equipped.get("name", "") == tool_name:
+			return true
+
+	return false
 
 func create_item_row(item_name: String, description: String, price: int, stats: String, req_level: int, color: Color, on_buy: Callable) -> Button:
 	"""Create a button slot for shop item - hover for tooltip"""
@@ -504,15 +562,134 @@ func create_item_slot_with_icon(item_name: String, description: String, price: i
 
 	return panel
 
+func create_shop_slot_with_owned_check(item_name: String, description: String, price: int, stats: String, req_level: int, color: Color, item_data: Dictionary, on_buy: Callable, already_owned: bool) -> PanelContainer:
+	"""Create a shop slot - shows 'Owned' if player already has this item"""
+	var slot_size = Vector2(80, 90)
+
+	# Main container
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = slot_size
+
+	# Style the panel with rarity border
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = ITEM_BG_COLOR
+	panel_style.border_width_left = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_bottom = 2
+	panel_style.border_color = color  # Rarity color border
+	panel_style.corner_radius_top_left = 4
+	panel_style.corner_radius_top_right = 4
+	panel_style.corner_radius_bottom_left = 4
+	panel_style.corner_radius_bottom_right = 4
+	panel.add_theme_stylebox_override("panel", panel_style)
+
+	# VBox for icon + price
+	var vbox = VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 2)
+	panel.add_child(vbox)
+
+	# Icon container (centered)
+	var icon_container = CenterContainer.new()
+	icon_container.custom_minimum_size = Vector2(64, 54)
+	vbox.add_child(icon_container)
+
+	# Try to get icon from ItemIconGenerator
+	var icon_texture: Texture2D = null
+	if ItemIconGenerator:
+		icon_texture = ItemIconGenerator.get_item_icon(item_data)
+
+	if icon_texture:
+		var icon = TextureRect.new()
+		icon.texture = icon_texture
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.custom_minimum_size = Vector2(48, 48)
+		icon_container.add_child(icon)
+	else:
+		# Fallback: show item type as text
+		var fallback_label = Label.new()
+		var fallback_text = item_data.get("weapon_type", item_data.get("slot", item_data.get("tool_type", "?")))
+		fallback_label.text = fallback_text.substr(0, 3).to_upper() if fallback_text else "???"
+		fallback_label.add_theme_font_size_override("font_size", 16)
+		fallback_label.add_theme_color_override("font_color", color)
+		fallback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		icon_container.add_child(fallback_label)
+
+	# Price label - show "Owned" if already owned
+	var price_label = Label.new()
+	if already_owned:
+		price_label.text = "OWNED"
+		price_label.add_theme_font_size_override("font_size", 10)
+		price_label.add_theme_color_override("font_color", Color(0.4, 0.8, 0.4))  # Green for owned
+	else:
+		var price_text = "%d G" % price if price > 0 else "FREE"
+		price_label.text = price_text
+		price_label.add_theme_font_size_override("font_size", 11)
+		price_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5) if price > 0 else Color(0.5, 0.9, 0.5))
+	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(price_label)
+
+	# Clickable overlay button (invisible but handles clicks)
+	var click_button = Button.new()
+	click_button.flat = true
+	click_button.custom_minimum_size = slot_size
+	click_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+	# Build rich tooltip
+	var tooltip = "[%s]\n%s\n\n%s" % [item_name, description, stats]
+	if already_owned:
+		tooltip += "\n\n(Already owned)"
+	click_button.tooltip_text = tooltip
+
+	# Check if player can buy (must afford AND not already owned)
+	var can_buy = CharacterStats.can_afford(price) and not already_owned
+	click_button.disabled = not can_buy
+
+	if not can_buy:
+		# Dim the panel when can't buy
+		if already_owned:
+			panel.modulate = Color(0.6, 0.6, 0.6, 0.9)  # Slightly less dim for owned
+		else:
+			panel.modulate = Color(0.5, 0.5, 0.5, 0.8)  # Can't afford
+
+	click_button.pressed.connect(on_buy)
+
+	# Add button on top of panel
+	panel.add_child(click_button)
+
+	# Hover effects (only if can buy)
+	click_button.mouse_entered.connect(func():
+		if can_buy:
+			panel_style.bg_color = Color(0.18, 0.18, 0.22, 1.0)
+			panel_style.border_color = Color(color.r + 0.2, color.g + 0.2, color.b + 0.2, 1.0)
+	)
+	click_button.mouse_exited.connect(func():
+		panel_style.bg_color = ITEM_BG_COLOR
+		panel_style.border_color = color
+	)
+
+	return panel
+
 func purchase_weapon(index: int) -> void:
 	"""Attempt to purchase a weapon"""
 	if not vendor:
 		return
 
+	if index < 0 or index >= vendor.weapons_for_sale.size():
+		return
+
+	var weapon: Weapon = vendor.weapons_for_sale[index]
+
+	# Double-check: prevent duplicate purchases (failsafe for rapid clicking)
+	if _player_owns_weapon(weapon.weapon_name):
+		show_message("You already own this weapon!", Color(0.9, 0.7, 0.2))
+		populate_weapons()  # Refresh UI to show "Owned"
+		return
+
 	var success = vendor.purchase_weapon(index)
 
 	if success:
-		var weapon: Weapon = vendor.weapons_for_sale[index]
 		var price = vendor.get_weapon_price_data(index)
 
 		# Get rarity as string
@@ -546,7 +723,14 @@ func purchase_armor(index: int) -> void:
 	var armor_data = vendor.armor_for_sale[index]
 	var price = armor_data.get("price", 0)
 	var armor_name = armor_data.get("name", "Unknown")
+	var armor_slot = armor_data.get("slot", "")
 	var armor_rarity = armor_data.get("rarity", "COMMON")
+
+	# Double-check: prevent duplicate purchases (failsafe for rapid clicking)
+	if _player_owns_armor(armor_name, armor_slot):
+		show_message("You already own this armor!", Color(0.9, 0.7, 0.2))
+		populate_armor()  # Refresh UI to show "Owned"
+		return
 
 	# Check gold
 	if not CharacterStats.can_afford(price):
@@ -586,7 +770,14 @@ func purchase_tool(index: int) -> void:
 	var tool_data = vendor.tools_for_sale[index]
 	var price = tool_data.get("price", 0)
 	var tool_name = tool_data.get("name", "Unknown")
+	var tool_type = tool_data.get("tool_type", "tool")
 	var tool_rarity = tool_data.get("rarity", "COMMON")
+
+	# Double-check: prevent duplicate purchases (failsafe for rapid clicking)
+	if _player_owns_tool(tool_name, tool_type):
+		show_message("You already own this tool!", Color(0.9, 0.7, 0.2))
+		populate_tools()  # Refresh UI to show "Owned"
+		return
 
 	# Check gold (skip check if item is free)
 	if price > 0 and not CharacterStats.can_afford(price):

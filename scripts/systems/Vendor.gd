@@ -405,9 +405,24 @@ func load_starter_tools() -> void:
 		"durability": 100
 	}
 
+	var campfire_kit = {
+		"name": "Campfire Kit",
+		"description": "Portable campfire supplies. Use near ruins to set up a healing camp. Requires fuel to light.",
+		"type": "placeable",
+		"placeable_type": "campfire",
+		"value": 25,
+		"price": 50,  # Costs 50 gold
+		"rarity": "COMMON",
+		"stackable": true,
+		"max_stack": 5,
+		"quantity": 1,
+		"min_ruins_distance": 1000.0  # Must be at least 1000px from ruins
+	}
+
 	tools_for_sale.append(rusty_axe)
 	tools_for_sale.append(rusty_pickaxe)
-	print("   Loaded 2 starter tools (free for testing)")
+	tools_for_sale.append(campfire_kit)
+	print("   Loaded 3 starter tools (2 free, 1 campfire kit)")
 
 func create_weapon_from_data(data: Dictionary) -> Weapon:
 	"""Create a Weapon resource from JSON data"""

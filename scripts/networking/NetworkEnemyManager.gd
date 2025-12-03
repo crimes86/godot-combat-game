@@ -567,10 +567,11 @@ func _generate_loot(enemy: Node) -> Dictionary:
 
 	# Roll for item drops using CorpseState
 	var num_items = CorpseState.roll_loot_count()
-	var is_guardian = enemy.name.contains("Guardian")
+	var is_guardian = enemy.name.contains("Guardian") or enemy.get_meta("is_guardian", false)
+	var enemy_level = enemy.get("enemy_level") if enemy.get("enemy_level") else 1
 
 	for i in range(num_items):
-		var item = CorpseState.roll_loot_item(is_guardian)
+		var item = CorpseState.roll_loot_item(is_guardian, enemy_level)
 		if item:
 			items.append(item)
 

@@ -56,7 +56,7 @@ var break_audio_player: AudioStreamPlayer = null
 var mine_sounds: Array[AudioStream] = []
 var break_sounds: Array[AudioStream] = []
 var last_mine_sound_time: float = 0.0
-var mine_sound_interval: float = 0.5  # Play mine sound every 0.5 seconds (matches pickaxe swing)
+var mine_sound_interval: float = 0.8  # Play mine sound every 0.8 seconds (slower, deliberate mining strikes)
 
 # Performance caching
 var cached_has_pickaxe: bool = false
@@ -189,7 +189,7 @@ func _physics_process(delta: float) -> void:
 			if has_pickaxe:
 				new_prompt_text = "Hold [F] Mine Rock"
 			else:
-				new_prompt_text = "Requires Pickaxe"  # Changed from "Need Pickaxe"
+				new_prompt_text = "Requires Pickaxe Equipped"
 
 			# Only update text and color if it actually changed
 			if new_prompt_text != current_prompt_text:
@@ -553,6 +553,15 @@ func mine_rock() -> void:
 
 	# Spawn ore/stone drops
 	spawn_ore_drops()
+
+	# Grant XP for mining (scales with ore amount)
+	var xp_gain = 8 * ore_amount  # 8-24 XP based on rock size (more than trees since slower)
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if player and player.has_method("gain_experience"):
+		player.gain_experience(xp_gain)
+		# Show XP notification
+		if NotificationManager:
+			NotificationManager.notify_xp_gained(xp_gain, "Mining")
 
 	# Animate rock breaking/fading
 	animate_rock_break()

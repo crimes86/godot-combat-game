@@ -16,7 +16,7 @@ fill_from = Vector2(0.5, 0.5)
 [node name="RuinsCampfire2" type="Node2D"]
 position = Vector2(-1200, 1000)
 script = ExtResource("1_ruins")
-skeleton_count = 8
+skeleton_count = 6
 skeleton_respawn_time = 60.0
 convert_range = 100.0
 base_abandon_time = 120.0

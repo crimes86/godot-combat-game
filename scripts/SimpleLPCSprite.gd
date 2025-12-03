@@ -453,9 +453,16 @@ func setup_lpc_sprite(
 			var weapon_slash_img = weapon_slash_tex.get_image()
 			var slash_size = weapon_slash_img.get_size()
 
-			# Staff uses thrust animation (8 frames), other weapons use slash (6 frames)
-			var num_attack_frames = 8 if weapon_type == "staff" else 6
-			var slash_tile_size = int(slash_size.x / num_attack_frames)
+			# Thrust weapons (staff, spear) use 8 frames, slash weapons use 6 frames
+			var thrust_weapons = ["staff", "spear"]
+			var num_attack_frames = 8 if weapon_type in thrust_weapons else 6
+
+			# Calculate tile size - spear uses 64px tiles (LPC standard), staff uses oversize 192px
+			var slash_tile_size: int
+			if weapon_type == "spear":
+				slash_tile_size = 64  # Spear uses standard 64px LPC tiles
+			else:
+				slash_tile_size = int(slash_size.x / num_attack_frames)
 
 			# Build frame indices based on frame count
 			var frame_indices = []

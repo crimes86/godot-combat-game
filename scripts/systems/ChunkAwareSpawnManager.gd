@@ -60,6 +60,9 @@ var LEVEL_BANDS: Array:
 ## Respawn timer in seconds (0 = no respawn until chunk reload)
 @export var respawn_time: float = 90.0  # 90 seconds
 
+## Minimum spacing between spawned enemies (prevents crowding)
+const MIN_ENEMY_SPACING: float = 80.0
+
 ## Safe zones - no enemies spawn within these areas
 ## Campfire is at chunk 0 center (CHUNK_SIZE/2, 0)
 var SAFE_ZONES: Array:
@@ -322,7 +325,14 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 	var chunk_data = chunk_enemies[chunk_key]
 	var spawned = 0
 	var attempts = 0
-	var max_attempts = count * 10  # 10 attempts per enemy max
+	var max_attempts = count * 15  # 15 attempts per enemy max (more attempts for spacing checks)
+
+	# Track spawn positions in this chunk to enforce minimum spacing
+	var spawn_positions: Array[Vector2] = []
+	# Also consider existing enemies in the chunk
+	for enemy in chunk_data.enemies:
+		if is_instance_valid(enemy):
+			spawn_positions.append(enemy.global_position)
 
 	# Parse chunk coordinates
 	var chunk_parts = chunk_key.split(",")
@@ -417,14 +427,14 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			var angle = spawn_rng.randf() * TAU
 
 			if spawn_at_edge:
-				# Edge spawn: just outside pool radius (Level 1-3)
-				var edge_dist = pool.radius + spawn_rng.randf_range(20, 100)
+				# Edge spawn: further from pool (Level 1-3)
+				var edge_dist = pool.radius + spawn_rng.randf_range(80, 200)
 				spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * edge_dist
 				level = spawn_rng.randi_range(1, 3)
 			else:
-				# Core spawn: closer to center but not IN the lava (Level 4-6)
-				# Spawn between 40-80% of pool radius (inner ring)
-				var core_dist = pool.radius * spawn_rng.randf_range(0.4, 0.8)
+				# Core spawn: just outside the lava edge (Level 4-6)
+				# Spawn just outside pool radius (not inside!)
+				var core_dist = pool.radius + spawn_rng.randf_range(20, 60)
 				spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * core_dist
 				level = spawn_rng.randi_range(4, 6)
 
@@ -432,7 +442,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			spawn_pos.x = clamp(spawn_pos.x, chunk_min_x, chunk_max_x)
 			spawn_pos.y = clamp(spawn_pos.y, world_y_min, world_y_max)
 
-			if is_valid_spawn_position(spawn_pos):
+			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
 				monster_spawned += 1
 			else:
 				continue
@@ -440,9 +450,9 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		# Phase 2: Regular small pools (25%) - Low level only (1-3)
 		elif regular_spawned < regular_count and regular_pools.size() > 0:
 			var pool = regular_pools[spawn_rng.randi() % regular_pools.size()]
-			# Spawn at the edge of small pools
+			# Spawn at the edge of small pools - increased distance range
 			var angle = spawn_rng.randf() * TAU
-			var edge_dist = pool.radius + spawn_rng.randf_range(15, 60)
+			var edge_dist = pool.radius + spawn_rng.randf_range(30, 120)
 			spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * edge_dist
 			level = spawn_rng.randi_range(1, 3)  # Always low level at small pools
 
@@ -450,7 +460,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			spawn_pos.x = clamp(spawn_pos.x, chunk_min_x, chunk_max_x)
 			spawn_pos.y = clamp(spawn_pos.y, world_y_min, world_y_max)
 
-			if is_valid_spawn_position(spawn_pos):
+			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
 				regular_spawned += 1
 			else:
 				continue
@@ -459,7 +469,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		elif ritual_spawned < ritual_count and ritual_sites.size() > 0:
 			var site = ritual_sites[spawn_rng.randi() % ritual_sites.size()]
 			var angle = spawn_rng.randf() * TAU
-			var distance = spawn_rng.randf_range(30, 120)
+			var distance = spawn_rng.randf_range(50, 180)
 			spawn_pos = site + Vector2(cos(angle), sin(angle)) * distance
 			level = spawn_rng.randi_range(1, 5)  # Random mix of levels
 
@@ -467,7 +477,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			spawn_pos.x = clamp(spawn_pos.x, chunk_min_x, chunk_max_x)
 			spawn_pos.y = clamp(spawn_pos.y, world_y_min, world_y_max)
 
-			if is_valid_spawn_position(spawn_pos):
+			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
 				ritual_spawned += 1
 			else:
 				continue
@@ -481,6 +491,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		var enemy = spawn_single_enemy(spawn_pos, level, chunk_key)
 		if enemy:
 			chunk_data.enemies.append(enemy)
+			spawn_positions.append(spawn_pos)  # Track for spacing checks
 			spawned += 1
 
 	if spawned > 0:
@@ -570,6 +581,13 @@ func is_valid_spawn_position(pos: Vector2) -> bool:
 	if is_position_on_path(pos, 100):
 		return false
 
+	return true
+
+func is_position_spaced(pos: Vector2, existing_positions: Array[Vector2]) -> bool:
+	"""Check if position maintains minimum spacing from existing enemies"""
+	for existing_pos in existing_positions:
+		if pos.distance_to(existing_pos) < MIN_ENEMY_SPACING:
+			return false
 	return true
 
 func is_position_on_path(pos: Vector2, buffer: float = 100.0) -> bool:

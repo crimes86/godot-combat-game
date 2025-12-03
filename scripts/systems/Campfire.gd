@@ -17,6 +17,11 @@ class_name Campfire
 ##   the owning group benefits from the fire. Used for ruins and contested areas.
 
 @export var is_community_campfire: bool = false  # If true, all players can fuel and benefit (home/spawn campfires)
+@export var starts_unlit: bool = false  # If true, campfire starts unlit and requires fuel to ignite
+
+# Unlit state - player-placed campfires start unlit
+var is_unlit: bool = false  # True if campfire hasn't been lit yet
+const MIN_FUEL_TO_LIGHT: int = 1  # Minimum wood/embers needed to light the fire
 
 # Constants
 const Constants = preload("res://scripts/constants.gd")
@@ -113,6 +118,10 @@ var fire_sprite: Node2D = null
 func _ready() -> void:
 	add_to_group("campfire")
 
+	# Check if this campfire should start unlit
+	if starts_unlit:
+		is_unlit = true
+
 	# Disable scene's default CampfireLight (we create our own fire_light dynamically)
 	var scene_light = get_node_or_null("CampfireLight")
 	if scene_light:
@@ -142,10 +151,18 @@ func _ready() -> void:
 	# Create particle systems
 	create_particle_systems()
 
-	# Create tree stumps around campfire clearing
-	create_clearing_stumps()
+	# Create tree stumps around campfire clearing (only for non-player-placed campfires)
+	if not starts_unlit:
+		create_clearing_stumps()
 
-	print("🔥 Campfire initialized with fuel system")
+	# If unlit, hide fire visuals
+	if is_unlit:
+		set_unlit_visuals(true)
+
+	if is_unlit:
+		print("🪵 Unlit campfire placed - add fuel to light it!")
+	else:
+		print("🔥 Campfire initialized with fuel system")
 
 func _process(_delta: float) -> void:
 	"""Update coal pulsing animation every frame (only when visible)"""
@@ -259,6 +276,10 @@ func _heal_all_players_in_warmth(delta: float) -> void:
 	- Community campfires: ALL players in warmth get healed using shared fuel pool.
 	- Competitive campfires: Only owners get healed using their group's fuel pool.
 	- Unclaimed campfires: Anyone gets minimal healing (incentivizes claiming)."""
+	# No healing from unlit campfires
+	if is_unlit:
+		return
+
 	# Clean up invalid player references
 	var to_remove = []
 	for p in players_in_warmth.keys():
@@ -1403,8 +1424,12 @@ func update_interaction_prompt() -> void:
 			interaction_prompt.visible = false
 			return
 
-		interaction_prompt.text = "Hold [F] Add Fuel"
-		interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))  # Warm orange
+		if is_unlit:
+			interaction_prompt.text = "Hold [F] Light Fire"
+			interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))  # Orange-red
+		else:
+			interaction_prompt.text = "Hold [F] Add Fuel"
+			interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))  # Warm orange
 		interaction_prompt.visible = true
 		# Position prompt above campfire
 		var viewport_size = get_viewport().get_visible_rect().size
@@ -2048,6 +2073,10 @@ func add_wood_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> bool:
 		pool.wood += added
 		update_visual_intensity()
 
+		# Light the fire if it was unlit
+		if is_unlit:
+			light_campfire()
+
 	# Track cumulative fuel for skeleton spawning
 	track_fuel_for_skeletons(amount)
 
@@ -2087,6 +2116,10 @@ func add_bone_ember_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> b
 	if added > 0:
 		pool.bone_embers += added
 		update_visual_intensity()
+
+		# Light the fire if it was unlit
+		if is_unlit:
+			light_campfire()
 
 	# Track cumulative fuel for skeleton spawning
 	track_fuel_for_skeletons(amount)
@@ -2698,3 +2731,75 @@ func create_fuel_ui() -> void:
 	# This will be implemented with CampfireFuelUI scene
 	# For now, just create the canvas layer
 	print("✅ Fuel UI canvas created (waiting for CampfireFuelUI scene)")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UNLIT CAMPFIRE STATE
+# ═══════════════════════════════════════════════════════════════════════════
+
+func set_unlit(unlit: bool) -> void:
+	"""Set the campfire's unlit state (called when placing)"""
+	is_unlit = unlit
+	if is_unlit:
+		set_unlit_visuals(true)
+
+func set_unlit_visuals(unlit: bool) -> void:
+	"""Show/hide fire visuals based on unlit state"""
+	# Hide flames
+	for flame in flame_nodes:
+		if is_instance_valid(flame):
+			flame.visible = not unlit
+
+	# Hide coals
+	for coal in coal_nodes:
+		if is_instance_valid(coal):
+			coal.visible = not unlit
+
+	# Hide coal glows
+	for glow in coal_glow_nodes:
+		if is_instance_valid(glow):
+			glow.visible = not unlit
+
+	# Hide fire light
+	if fire_light and is_instance_valid(fire_light):
+		fire_light.visible = not unlit
+
+	# Hide mist auras
+	if heal_mist and is_instance_valid(heal_mist):
+		heal_mist.visible = not unlit
+	if crit_mist and is_instance_valid(crit_mist):
+		crit_mist.visible = not unlit
+	if warmth_aura and is_instance_valid(warmth_aura):
+		warmth_aura.visible = not unlit
+
+	# Hide particles
+	if heal_particles and is_instance_valid(heal_particles):
+		heal_particles.emitting = not unlit
+	if crit_particles and is_instance_valid(crit_particles):
+		crit_particles.emitting = not unlit
+
+	# Stop/start fire audio
+	if fire_audio and is_instance_valid(fire_audio):
+		if unlit:
+			fire_audio.stop()
+		else:
+			fire_audio.play()
+
+func light_campfire() -> void:
+	"""Light an unlit campfire (called when fuel is first added)"""
+	if not is_unlit:
+		return
+
+	is_unlit = false
+	set_unlit_visuals(false)
+
+	# Play ignition sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_fire_fuel_sound"):
+		sound_manager.play_fire_fuel_sound(global_position, -8.0, true)
+
+	# Show notification
+	var notification_manager = get_node_or_null("/root/NotificationManager")
+	if notification_manager and notification_manager.has_method("show_notification"):
+		notification_manager.show_notification("Campfire lit!", Color(1.0, 0.7, 0.3))
+
+	print("🔥 Campfire has been lit!")

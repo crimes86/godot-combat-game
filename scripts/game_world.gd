@@ -60,15 +60,11 @@ const LAYER_TEMPLATE = [
 	{"count": 16, "size_mult": [0.2, 0.35], "spread_mult": 0.05, "darkness": 0.09, "alpha": 0.045}
 ]
 
-# Baking configuration
-const BAKED_TERRAIN_PATH = "user://baked_terrain.png"
 # World dimensions - derived from Constants
 var WORLD_WIDTH: float:
 	get: return Constants.CHUNK_SIZE * 3  # 3 chunks
 var WORLD_HEIGHT: float:
 	get: return Constants.CHUNK_SIZE  # 1 chunk tall
-var use_baked_terrain = false  # DISABLED - using simple solid ground only
-
 # World layout constants - derived from Constants for chunk size
 var CAMPFIRE_POS: Vector2:
 	get: return Vector2(Constants.CHUNK_SIZE / 2, 0)  # Center of chunk 0
@@ -402,9 +398,13 @@ func generate_procedural_ruins():
 
 func spawn_ruins_for_chunk(chunk_id: int) -> void:
 	"""Spawn ruins that belong to a specific chunk"""
-	var ruins_scene = load("res://scenes/world/ruins_campfire.tscn")
+	# Use new pool-based spawn point instead of old ruins campfire
+	var ruins_scene = load("res://scenes/world/ruins_spawn_point.tscn")
 	if not ruins_scene:
-		push_error("❌ Could not load ruins_campfire.tscn!")
+		# Fallback to old scene if new one doesn't exist
+		ruins_scene = load("res://scenes/world/ruins_campfire.tscn")
+	if not ruins_scene:
+		push_error("Could not load ruins scene!")
 		return
 
 	for ruins_key in RUINS_POSITIONS.keys():
@@ -422,7 +422,7 @@ func spawn_ruins_for_chunk(chunk_id: int) -> void:
 		ruins.name = "ProceduralRuins_%s" % ruins_key
 		ruins.position = pos
 
-		# Set guardian level
+		# Set guardian level (works for both old and new system)
 		if "guardian_level" in ruins:
 			ruins.guardian_level = guardian_level
 
@@ -430,7 +430,7 @@ func spawn_ruins_for_chunk(chunk_id: int) -> void:
 		ruins_nodes.append(ruins)
 		ruins_data.spawned = true
 
-		print("🏛️ Spawned ruins '%s' at %s (level %d) for chunk %d" % [ruins_key, pos, guardian_level, chunk_id])
+		print("Spawned ruins '%s' at %s (level %d) for chunk %d" % [ruins_key, pos, guardian_level, chunk_id])
 
 func despawn_ruins_for_chunk(chunk_id: int) -> void:
 	"""Despawn ruins that belong to a specific chunk"""
@@ -939,133 +939,6 @@ func remove_terrain_spot(spot_index: int):
 			container.queue_free()
 		active_terrain_nodes.erase(spot_index)
 
-func load_baked_terrain():
-	"""DISABLED - No baked terrain loading"""
-	print("  ✅ Baked terrain loading disabled (using simple ground only)")
-
-func generate_fallback_terrain():
-	"""DISABLED - No fallback terrain generation"""
-	print("  ✅ Fallback terrain disabled (using simple ground only)")
-
-func bake_terrain_to_texture():
-	"""Generate all terrain layers and bake to a single texture"""
-	# Create a SubViewport for offscreen rendering
-	var viewport = SubViewport.new()
-	viewport.size = Vector2i(WORLD_WIDTH, WORLD_HEIGHT)
-	viewport.transparent_bg = false
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS  # ALWAYS while generating
-	add_child(viewport)
-
-	# Create a camera for the viewport (needed for rendering)
-	var camera = Camera2D.new()
-	camera.enabled = true
-	camera.position = Vector2(WORLD_WIDTH / 2, WORLD_HEIGHT / 2)
-	camera.zoom = Vector2.ONE
-	viewport.add_child(camera)
-
-	# Create background color (same as Ground ColorRect)
-	var bg = ColorRect.new()
-	bg.size = Vector2(WORLD_WIDTH, WORLD_HEIGHT)
-	bg.color = Color(0.25, 0.25, 0.27, 1)  # Dark stone grey
-	bg.position = Vector2.ZERO
-	viewport.add_child(bg)
-
-	# Generate all terrain layers into the viewport
-	# NOTE: We offset everything by +5000x, +3000y to work in viewport space (0,0 origin)
-	print("    🔨 Generating ground texture...")
-	await generate_terrain_layer_for_baking(viewport, "ground")
-
-	print("    🔨 Generating terrain variation...")
-	await generate_terrain_layer_for_baking(viewport, "terrain")
-
-	print("    🔨 Generating rock spots...")
-	await generate_terrain_layer_for_baking(viewport, "rocks")
-
-	print("    🔨 Generating campfire clearing...")
-	await generate_terrain_layer_for_baking(viewport, "campfire")
-
-	print("    🔨 Generating path...")
-	await generate_terrain_layer_for_baking(viewport, "path")
-
-	# Switch to DISABLED mode and force one final render
-	print("    ⏳ Finalizing rendering...")
-	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	# Force final render
-	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-	await RenderingServer.frame_post_draw
-	await get_tree().process_frame
-
-	# Get the rendered image with null checks (Godot 4 method)
-	print("    📸 Capturing rendered image...")
-
-	var image = viewport.get_texture().get_image()
-	if image == null:
-		print("    ❌ ERROR: Could not get image from viewport!")
-		print("    ℹ️ Viewport size: %s" % viewport.size)
-		print("    ℹ️ Viewport has texture: %s" % (viewport.get_texture() != null))
-		print("    ℹ️ Using fallback rendering instead...")
-		viewport.queue_free()
-		# Use fallback
-		await generate_fallback_terrain()
-		return
-
-	# Save to disk
-	print("    💾 Saving baked terrain (%dx%d)..." % [image.get_width(), image.get_height()])
-	var err = image.save_png(BAKED_TERRAIN_PATH)
-	if err != OK:
-		print("    ❌ Failed to save baked terrain: ", err)
-		print("    ℹ️ Using fallback rendering instead...")
-		viewport.queue_free()
-		await generate_fallback_terrain()
-		return
-	else:
-		print("    ✅ Baked terrain saved to: ", BAKED_TERRAIN_PATH)
-
-	# Clean up viewport
-	viewport.queue_free()
-
-	# Now load the baked texture
-	load_baked_terrain()
-
-func generate_terrain_layer_for_baking(viewport: SubViewport, layer_type: String):
-	"""Generate a specific terrain layer in viewport space (offset for 0,0 origin)"""
-	var offset = Vector2(5000, 3000)  # Offset to convert world space to viewport space
-
-	match layer_type:
-		"ground":
-			await create_ground_texture_for_baking(viewport, offset)
-		"terrain":
-			await create_terrain_variation_for_baking(viewport, offset)
-		"rocks":
-			await create_rock_spots_for_baking(viewport, offset)
-		"campfire":
-			create_campfire_clearing_for_baking(viewport, offset)
-		"path":
-			await create_path_for_baking(viewport, offset)
-
-func create_ground_texture_optimized():
-	# DISABLED - Ground texture now baked into terrain image
-	pass
-
-func create_terrain_variation_spots():
-	# DISABLED - Terrain variation now baked into terrain image
-	pass
-
-func create_rock_dark_spots():
-	# DISABLED - Rock shadows now handled directly on rock sprites in ChunkBasedPropSystem
-	pass
-
-func create_campfire_clearing():
-	# DISABLED - Campfire clearing now baked into terrain image
-	pass
-
-func create_path_to_castle_optimized():
-	# DISABLED - Path now baked into terrain image
-	pass
-
 func create_branch_paths(path_layer: Node2D, main_path_points: Array, rng: RandomNumberGenerator):
 	"""Create branching paths that fork off main path to dead ends"""
 
@@ -1304,30 +1177,6 @@ func _input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F12:
 			toggle_screenshot_mode()
-		elif event.keycode == KEY_F11:
-			# Only allow terrain regeneration in dev builds
-			if OS.has_feature("editor") or OS.is_debug_build():
-				regenerate_baked_terrain()
-
-func regenerate_baked_terrain():
-	"""Force regeneration of baked terrain texture (F11)"""
-	print("🔄 Regenerating baked terrain...")
-
-	# Delete existing baked file
-	if FileAccess.file_exists(BAKED_TERRAIN_PATH):
-		DirAccess.remove_absolute(BAKED_TERRAIN_PATH)
-		print("   🗑️ Deleted old baked terrain")
-
-	# Delete existing terrain sprite
-	var old_terrain = get_node_or_null("BakedTerrain")
-	if old_terrain:
-		old_terrain.queue_free()
-		print("   🗑️ Removed old terrain sprite")
-
-	# Regenerate
-	print("   🔨 Baking new terrain...")
-	await bake_terrain_to_texture()
-	print("✅ Terrain regenerated! Restart the game to see changes.")
 
 func toggle_screenshot_mode():
 	screenshot_mode = !screenshot_mode
@@ -1578,7 +1427,7 @@ func spawn_scattered_props(parent: Node2D):
 			"scale": rng.randf_range(0.4, 1.5),  # More variety in ash pile sizes
 			"rotation": rng.randf() * TAU,
 			"flip_h": rng.randf() < 0.5,
-			"z_index": 0,  # Same as trees/rocks for proper Y-sorting
+			"z_index": -2,  # Below rocks (0) so ash piles don't render on top
 			"id": 3000 + i
 		}
 		if create_prop_sprite(prop_data, parent):
@@ -1833,6 +1682,11 @@ func generate_chest_spawn_points():
 			chest_pos.x = clamp(chest_pos.x, -4000, 8000)
 			chest_pos.y = clamp(chest_pos.y, -2000, 2000)
 
+			# Avoid spawning inside lava pools
+			if is_position_in_lava(chest_pos, 30.0):
+				attempts += 1
+				continue
+
 			# Avoid spawning on trees
 			var too_close_to_tree = false
 			for tree_pos in tree_positions:
@@ -1878,6 +1732,11 @@ func generate_chest_spawn_points():
 				attempts += 1
 				continue
 
+			# Avoid spawning inside lava pools
+			if is_position_in_lava(chest_pos, 30.0):
+				attempts += 1
+				continue
+
 			# Avoid spawning on trees
 			var too_close_to_tree = false
 			for tree_pos in tree_positions:
@@ -1896,6 +1755,14 @@ func generate_chest_spawn_points():
 	print("📦 Generated 50 chest spawn points (%d near lava pools, %d scattered)" % [lava_pool_chest_count, scattered_chest_count])
 
 # ===== HELPER FUNCTIONS =====
+
+func is_position_in_lava(pos: Vector2, buffer: float = 20.0) -> bool:
+	"""Check if a position is inside or too close to a lava pool"""
+	for pool in lava_pool_positions:
+		var pool_radius = pool.size / 2 + buffer
+		if pos.distance_to(pool.pos) < pool_radius:
+			return true
+	return false
 
 func is_position_on_path(pos: Vector2, path_width: float = 100.0) -> bool:
 	# Check main path
@@ -2216,12 +2083,10 @@ func create_prop_sprite(prop_data: Dictionary, parent: Node2D) -> bool:
 
 	# Custom shadow for broken_sword - elongated to match sword shape
 	if prop_type == "broken_sword":
-		shadow_width = 32 * scale_val  # Longer shadow for sword
-		shadow_height = 8 * scale_val   # Thinner shadow
-		shadow_y = 2 * scale_val        # Position under the sword blade
-		# Flip shadow offset based on sword orientation
-		var is_flipped = prop_data.get("flip_h", false)
-		shadow_x_offset = 19 * scale_val if is_flipped else -19 * scale_val
+		shadow_width = 28 * scale_val  # Shadow length for sword
+		shadow_height = 6 * scale_val   # Thinner shadow
+		shadow_y = 8 * scale_val        # Position below sword
+		shadow_x_offset = -shadow_width / 2  # Center shadow under sword
 
 	shadow.size = Vector2(shadow_width, shadow_height)
 	shadow.position = Vector2(shadow_x_offset, shadow_y)
@@ -2892,7 +2757,7 @@ func spawn_dead_vegetation(parent: Node2D):
 			"scale": rng.randf_range(1.0, 2.0),  # Varied sizes
 			"rotation": 0.0,  # No rotation for vegetation
 			"flip_h": rng.randf() < 0.5,
-			"z_index": 0,
+			"z_index": -2,  # Below rocks (0) so ash piles don't render on top
 			"id": 10000 + i
 		}
 
@@ -3279,147 +3144,6 @@ func spawn_lava_pools():
 		pools_placed += 1
 
 	print("🔥 Placed ", pools_placed, " lava pools with glowing effects")
-
-# ═══════════════════════════════════════════════════════════════════════════
-# TERRAIN BAKING FUNCTIONS (for generating high-quality texture once)
-# ═══════════════════════════════════════════════════════════════════════════
-
-func create_ground_texture_for_baking(viewport: SubViewport, offset: Vector2):
-	"""Generate ground texture in viewport space"""
-	var ground_layer = Node2D.new()
-	ground_layer.name = "GroundTexture"
-	ground_layer.z_index = -9
-	viewport.add_child(ground_layer)
-
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 12345
-
-	for x in range(Constants.WORLD_LEFT, Constants.WORLD_RIGHT, Constants.TERRAIN_PATCH_SPACING):
-		for y in range(Constants.WORLD_TOP, Constants.WORLD_BOTTOM, Constants.TERRAIN_PATCH_SPACING):
-			if rng.randf() > 0.2:
-				continue
-
-			var patch_pos = Vector2(
-				x + rng.randf_range(-250, 250),
-				y + rng.randf_range(-250, 250)
-			)
-
-			patch_pos.x = clamp(patch_pos.x, -5000, 13000)
-			patch_pos.y = clamp(patch_pos.y, -3000, 3000)
-
-			var base_size = rng.randf_range(100, 140)
-			var elongation = rng.randf_range(0.7, 1.5)
-			create_feathered_area(ground_layer, patch_pos + offset, base_size, rng, elongation)
-		await get_tree().process_frame
-
-func create_terrain_variation_for_baking(viewport: SubViewport, offset: Vector2):
-	"""Generate terrain variation in viewport space"""
-	var terrain_layer = Node2D.new()
-	terrain_layer.name = "TerrainVariation"
-	terrain_layer.z_index = -8
-	viewport.add_child(terrain_layer)
-
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 99999
-
-	for i in range(30):
-		var terrain_pos = Vector2(
-			rng.randf_range(-5000, 13000),
-			rng.randf_range(-3000, 3000)
-		)
-
-		var spot_size = rng.randf_range(300, 600)
-		var elongation = rng.randf_range(0.4, 2.5)
-		create_feathered_area(terrain_layer, terrain_pos + offset, spot_size, rng, elongation)
-		await get_tree().process_frame
-
-func create_rock_spots_for_baking(viewport: SubViewport, offset: Vector2):
-	"""Generate rock dark spots in viewport space"""
-	var rock_layer = Node2D.new()
-	rock_layer.name = "RockSpots"
-	rock_layer.z_index = -7
-	viewport.add_child(rock_layer)
-
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 54321
-
-	for i in range(100):
-		var rock_pos = Vector2(
-			rng.randf_range(-5000, 13000),
-			rng.randf_range(-3000, 3000)
-		)
-
-		var campfire_pos = CAMPFIRE_POS
-		if rock_pos.distance_to(campfire_pos) < 450:
-			continue
-
-		var spot_size = rng.randf_range(120, 350)
-		var elongation = rng.randf_range(0.6, 1.8)
-		create_feathered_area(rock_layer, rock_pos + offset, spot_size, rng, elongation)
-		await get_tree().process_frame
-
-func create_campfire_clearing_for_baking(viewport: SubViewport, offset: Vector2):
-	"""Generate campfire clearing in viewport space"""
-	var clearing_layer = Node2D.new()
-	clearing_layer.name = "CampfireClearing"
-	clearing_layer.z_index = -6
-	viewport.add_child(clearing_layer)
-
-	var campfire_pos = CAMPFIRE_POS
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 54321
-
-	create_feathered_area(clearing_layer, campfire_pos + offset, 200, rng, 1.0, 0.12)
-
-	# Ruins clearings
-	create_feathered_area(clearing_layer, Vector2(1200, -2000) + offset, 340, rng, 1.0, 0.12)
-	create_feathered_area(clearing_layer, Vector2(4800, 2200) + offset, 340, rng, 1.0, 0.12)
-	create_feathered_area(clearing_layer, Vector2(8200, -2200) + offset, 340, rng, 1.0, 0.12)
-
-func create_path_for_baking(viewport: SubViewport, offset: Vector2):
-	"""Generate path in viewport space"""
-	var path_layer = Node2D.new()
-	path_layer.name = "PathLayer"
-	path_layer.z_index = -5
-	viewport.add_child(path_layer)
-
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 11111
-
-	# Main path segments
-	var path_points = [
-		Vector2(-2000, 0),
-		Vector2(-800, 0),
-		Vector2(800, 0),
-		Vector2(1200, -2000),
-		Vector2(4800, 2200),
-		Vector2(8200, -2200),
-		Vector2(11000, -300)
-	]
-
-	# Generate path between points
-	for i in range(path_points.size() - 1):
-		var start = path_points[i]
-		var end = path_points[i + 1]
-		var distance = start.distance_to(end)
-		var steps = int(distance / 200.0)
-
-		for j in range(steps):
-			var t = float(j) / float(steps)
-			var pos = start.lerp(end, t)
-			var elongation = rng.randf_range(0.8, 1.6)
-			create_feathered_area(path_layer, pos + offset, 180, rng, elongation, 0.08)
-		await get_tree().process_frame
-
-	# Campfire circle
-	var radius = 450.0
-	var num_spots = 80
-	for i in range(num_spots):
-		var ring = int(i / 20)
-		var angle = (i % 20) * (TAU / 20.0) + rng.randf_range(-0.2, 0.2)
-		var ring_radius = (radius / 4.0) * (ring + 1) + rng.randf_range(-40, 40)
-		var pos = Vector2(-2000, 0) + Vector2(cos(angle) * ring_radius, sin(angle) * ring_radius)
-		create_feathered_area(path_layer, pos + offset, 160, rng, 1.0, 0.06)
 
 ## ============================================
 ## CORPSE LOOT SYSTEM

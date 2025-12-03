@@ -450,7 +450,13 @@ func update_stats_from_character() -> void:
 		attack_cooldown = CharacterStats.get_attack_cooldown()
 	else:
 		attack_cooldown = cooldown_override
-	
+
+	# Update attack range based on weapon type
+	var weapon_type = "unarmed"
+	if CharacterStats.equipped_weapon:
+		weapon_type = CharacterStats.equipped_weapon.weapon_type
+	attack_range = WeaponAnimationData.get_attack_range(weapon_type)
+
 	# Update crit system base chance (preserves pity progress)
 	if crit_system:
 		crit_system.on_weapon_changed()
@@ -459,11 +465,15 @@ func update_stats_from_character() -> void:
 	if combat_system:
 		combat_system.update_stats(attack_damage, attack_cooldown, attack_range, attack_cone_angle)
 
+	# Update cone visualizer to match new range
+	update_cone_visualizer()
+
 	print("📊 Player stats updated:")
 	print("  Level: ", CharacterStats.level)
 	print("  HP: ", max_health)
 	print("  Damage: ", attack_damage)
 	print("  Attack Speed: %.3fs" % attack_cooldown)
+	print("  Attack Range: %.0fpx (%s)" % [attack_range, weapon_type])
 	print("  Crit Chance: %.1f%%" % (crit_system.get_player_base_crit() * 100 if crit_system else 0))
 	print("  Movement Speed: ", speed)
 
@@ -1694,11 +1704,12 @@ func create_player_sprite() -> void:
 	var hurt_tex = load("res://assets/characters/" + body_type + "/standard/hurt.png")
 
 	# Determine attack animation type based on weapon
-	# Staff uses thrust animation, all other weapons use slash
+	# Staff and spear use thrust animation, all other weapons use slash
 	var uses_thrust = false
+	var thrust_weapons = ["staff", "spear"]
 	if is_local and CharacterStats.equipped_weapon:
-		uses_thrust = CharacterStats.equipped_weapon.weapon_type == "staff"
-	elif not is_local and remote_weapon_type == "staff":
+		uses_thrust = CharacterStats.equipped_weapon.weapon_type in thrust_weapons
+	elif not is_local and remote_weapon_type in thrust_weapons:
 		uses_thrust = true
 
 	var attack_anim_name = "thrust" if uses_thrust else "slash"
@@ -1745,10 +1756,13 @@ func create_player_sprite() -> void:
 		var weapon_path = "res://assets/weapons/" + weapon_type + "/"
 
 		# Try to load weapon sprites
-		# Staff uses thrust_oversize animation instead of slash
+		# Staff uses thrust_oversize animation, spear uses thrust, others use slash
 		if weapon_type == "staff":
 			if ResourceLoader.exists(weapon_path + "thrust_oversize.png"):
 				weapon_slash_tex = load(weapon_path + "thrust_oversize.png")
+		elif weapon_type == "spear":
+			if ResourceLoader.exists(weapon_path + "thrust.png"):
+				weapon_slash_tex = load(weapon_path + "thrust.png")
 		else:
 			if ResourceLoader.exists(weapon_path + "slash.png"):
 				weapon_slash_tex = load(weapon_path + "slash.png")
@@ -2146,7 +2160,21 @@ func create_range_indicator() -> void:
 	print("✅ Range indicator created (radius: %.0f)" % radius)
 
 func update_cone_visualizer() -> void:
-	"""Update cone visualizer rotation and color (color throttled for performance)"""
+	"""Update cone visualizer rotation and rebuild if attack_range changed"""
+	# Rebuild cone if attack range changed (e.g. weapon swap)
+	if cone_visualizer:
+		# Check if we need to rebuild by comparing current range
+		# The cone was built with attack_range, so rebuild if different
+		var cone_half_angle_rad = deg_to_rad(attack_cone_angle / 2.0)
+		var expected_outer_point = Vector2(cos(cone_half_angle_rad), sin(cone_half_angle_rad)) * attack_range
+		# Get the last point before closing (index 16 since we have 0=center, 1-17=arc, 18=center)
+		if cone_visualizer.polygon.size() > 2:
+			var actual_point = cone_visualizer.polygon[cone_visualizer.polygon.size() / 2]
+			if abs(actual_point.length() - attack_range) > 1.0:  # Range changed significantly
+				print("🔄 Rebuilding cone visualizer for new range: %.0f" % attack_range)
+				create_cone_visualizer()
+				return
+
 	if not cone_visualizer:
 		return
 
@@ -3456,10 +3484,14 @@ func update_tutorial_blackout() -> void:
 
 func _on_tutorial_step_for_blackout(_completed_step: int) -> void:
 	"""Called when tutorial step completes - check if blackout should be removed"""
+	if not is_instance_valid(self):
+		return
 	update_tutorial_blackout()
 
 func _on_tutorial_completed_for_blackout() -> void:
 	"""Called when tutorial is completed (including skip) - remove blackout immediately"""
+	if not is_instance_valid(self):
+		return
 	remove_tutorial_blackout()
 
 # Inner class for the blackout visual

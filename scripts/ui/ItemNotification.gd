@@ -10,6 +10,7 @@ enum NotificationType {
 	ITEM_ADDED,      # Green with rarity color
 	ITEM_REMOVED,    # Red text
 	GOLD_ADDED,      # Gold color for currency
+	XP_GAINED,       # Purple/blue for XP
 	SYSTEM_MESSAGE   # Plain text for system notifications
 }
 
@@ -77,6 +78,16 @@ func setup_gold_added(amount: int) -> void:
 	text = "+%d Gold" % amount
 	# Gold color
 	add_theme_color_override("font_color", Color(1.0, 0.85, 0.2, 1.0))
+	add_theme_font_size_override("font_size", 20)
+
+func setup_xp_gained(amount: int, source: String = "") -> void:
+	notification_type = NotificationType.XP_GAINED
+	if source != "":
+		text = "+%d XP (%s)" % [amount, source]
+	else:
+		text = "+%d XP" % amount
+	# Cyan/teal color for XP (distinct from gold and items)
+	add_theme_color_override("font_color", Color(0.3, 0.9, 0.95, 1.0))
 	add_theme_font_size_override("font_size", 20)
 
 func setup_system_message(message: String, msg_type: String) -> void:

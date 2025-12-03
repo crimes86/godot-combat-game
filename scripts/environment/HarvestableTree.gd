@@ -188,7 +188,7 @@ func _physics_process(delta: float) -> void:
 			if has_axe:
 				new_prompt_text = "Hold [F] Chop Tree"
 			else:
-				new_prompt_text = "Requires Axe"  # Changed from "Need Axe"
+				new_prompt_text = "Requires Axe Equipped"
 
 			# Only update text and color if it actually changed (avoid expensive theme override calls)
 			if new_prompt_text != current_prompt_text:
@@ -550,6 +550,15 @@ func chop_tree() -> void:
 	# Spawn wood items
 	spawn_wood_drops()
 
+	# Grant XP for chopping (scales with wood amount)
+	var xp_gain = 5 * wood_amount  # 5-15 XP based on tree size
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if player and player.has_method("gain_experience"):
+		player.gain_experience(xp_gain)
+		# Show XP notification
+		if NotificationManager:
+			NotificationManager.notify_xp_gained(xp_gain, "Chopping")
+
 	# Animate tree falling/fading
 	animate_tree_chop()
 
@@ -638,6 +647,10 @@ func _on_tree_landed(fall_direction: float, fall_offset: Vector2, start_position
 	"""Called when tree has finished falling - enable looting"""
 	is_fallen = true
 	fade_timer_started = false
+
+	# Move tree sprite behind player (negative z_index)
+	if tree_sprite:
+		tree_sprite.z_index = -5  # Render under player and most objects
 
 	# Get tree height for positioning
 	var tree_height = 200.0

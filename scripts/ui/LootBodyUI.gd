@@ -428,23 +428,7 @@ func create_combined_gold_slot(total_gold: int, gold_corpses: Array) -> Control:
 	gold_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(gold_icon)
 
-	# Add amount label in corner
-	var amount_label = Label.new()
-	amount_label.name = "AmountLabel"
-	amount_label.text = str(total_gold)
-	amount_label.add_theme_font_size_override("font_size", 12)
-	amount_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
-	amount_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	amount_label.add_theme_constant_override("outline_size", 2)
-	amount_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	amount_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	amount_label.offset_left = -40
-	amount_label.offset_right = -4
-	amount_label.offset_top = -18
-	amount_label.offset_bottom = -2
-	panel.add_child(amount_label)
-
-	# Build tooltip
+	# Build tooltip - amount shown on hover only
 	var tooltip = "Gold: %d\n\nClick to loot all" % total_gold
 	slot_control.tooltip_text = tooltip
 

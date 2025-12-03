@@ -186,9 +186,11 @@ func create_path_segment(parent: Node2D, start: Vector2, end: Vector2, width: fl
 
 func create_path_segment_avoiding_area(parent: Node2D, start: Vector2, end: Vector2, width: float, rng: RandomNumberGenerator, avoid_center: Vector2, avoid_radius: float) -> void:
 	"""Create worn dirt path with visible beaten trail, skipping spots within avoid area"""
+	# OPTIMIZED: 70px spacing (was 35px) and single layer (was 3 layers)
+	# Saves ~1,500 nodes across 2 chunks
 	var segment_length = start.distance_to(end)
 	var actual_width = width * 1.5
-	var num_spots = int(segment_length / 35) + 1
+	var num_spots = int(segment_length / 70) + 1  # 70px spacing (was 35)
 
 	for i in range(num_spots):
 		var t = float(i) / float(max(1, num_spots - 1))
@@ -203,33 +205,25 @@ func create_path_segment_avoiding_area(parent: Node2D, start: Vector2, end: Vect
 		if avoid_radius > 0 and pos.distance_to(avoid_center) < avoid_radius:
 			continue
 
-		var spot_size = rng.randf_range(actual_width * 0.9, actual_width * 1.1)
+		var spot_size = rng.randf_range(actual_width * 1.0, actual_width * 1.3)  # Slightly larger to compensate
 
-		var layers = [
-			{"size_mult": 1.6, "alpha": 0.15, "color": Color(0.11, 0.11, 0.12)},
-			{"size_mult": 1.0, "alpha": 0.25, "color": Color(0.10, 0.10, 0.11)},
-			{"size_mult": 1.0, "alpha": 0.40, "color": Color(0.09, 0.09, 0.10)}
-		]
-
-		for layer in layers:
-			var patch = ColorRect.new()
-			var size = spot_size * layer.size_mult
-			patch.size = Vector2(size, size)
-			patch.position = pos - patch.size / 2
-			patch.color = Color(layer.color.r, layer.color.g, layer.color.b, layer.alpha)
-			patch.rotation = rng.randf() * TAU
-			parent.add_child(patch)
+		# Single layer with blended color (was 3 layers)
+		var patch = ColorRect.new()
+		patch.size = Vector2(spot_size, spot_size)
+		patch.position = pos - patch.size / 2
+		patch.color = Color(0.10, 0.10, 0.11, 0.35)  # Blended color/alpha
+		patch.rotation = rng.randf() * TAU
+		parent.add_child(patch)
 
 func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGenerator) -> void:
 	"""Create a heavily-visited circular area around campfire"""
+	# OPTIMIZED: Fewer rings, fewer spots per ring, single layer (was 3 layers)
+	# Saves ~280 nodes (was 336, now ~56)
 	var rings = [
-		{"radius": 60, "spots": 4},
-		{"radius": 120, "spots": 8},
-		{"radius": 180, "spots": 12},
-		{"radius": 240, "spots": 16},
-		{"radius": 300, "spots": 20},
-		{"radius": 360, "spots": 24},
-		{"radius": 420, "spots": 28},
+		{"radius": 80, "spots": 4},
+		{"radius": 160, "spots": 6},
+		{"radius": 260, "spots": 8},
+		{"radius": 380, "spots": 10},
 	]
 
 	for ring_data in rings:
@@ -239,26 +233,19 @@ func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGe
 
 		for i in range(num_spots):
 			var angle = (float(i) / float(num_spots)) * TAU + angle_offset
-			var dist = ring_radius + rng.randf_range(-20, 20)
+			var dist = ring_radius + rng.randf_range(-30, 30)
 			var pos = center + Vector2(cos(angle), sin(angle)) * dist
-			pos += Vector2(rng.randf_range(-15, 15), rng.randf_range(-15, 15))
+			pos += Vector2(rng.randf_range(-20, 20), rng.randf_range(-20, 20))
 
-			var spot_size = rng.randf_range(140, 200)
+			var spot_size = rng.randf_range(180, 260)  # Larger spots to compensate
 
-			var layers = [
-				{"size_mult": 1.6, "alpha": 0.15, "color": Color(0.11, 0.11, 0.12)},
-				{"size_mult": 1.0, "alpha": 0.25, "color": Color(0.10, 0.10, 0.11)},
-				{"size_mult": 1.0, "alpha": 0.40, "color": Color(0.09, 0.09, 0.10)}
-			]
-
-			for layer in layers:
-				var patch = ColorRect.new()
-				var size = spot_size * layer.size_mult
-				patch.size = Vector2(size, size)
-				patch.position = pos - patch.size / 2
-				patch.color = Color(layer.color.r, layer.color.g, layer.color.b, layer.alpha)
-				patch.rotation = rng.randf() * TAU
-				parent.add_child(patch)
+			# Single layer with blended color (was 3 layers)
+			var patch = ColorRect.new()
+			patch.size = Vector2(spot_size, spot_size)
+			patch.position = pos - patch.size / 2
+			patch.color = Color(0.10, 0.10, 0.11, 0.35)
+			patch.rotation = rng.randf() * TAU
+			parent.add_child(patch)
 
 # ========================================
 # TORCH SYSTEM

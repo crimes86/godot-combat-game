@@ -14,22 +14,22 @@ const LOAD_DISTANCE: float = 10000.0  # Load chunks within this distance (double
 const UNLOAD_DISTANCE: float = 12000.0  # Unload chunks beyond this distance (doubled)
 
 # Prop density per chunk (8000x8000 = 64M px²)
-# OPTIMIZED: Reduced counts for better performance while maintaining visual density
-const TREES_PER_CHUNK: int = 140  # Dead trees (lootable - wood) - reduced from 210
-const ROCKS_LARGE_PER_CHUNK: int = 35  # Large rocks (lootable - stone/ore) - reduced from 48
-const ROCKS_MEDIUM_PER_CHUNK: int = 50  # Medium rocks (decorative) - reduced from 75
-const ROCKS_SMALL_PER_CHUNK: int = 40  # Small rocks (decorative) - reduced from 60
-const MONSTER_LAVA_POOLS_PER_CHUNK: int = 4  # Giant lava pools (anchor points) - reduced from 6
-const LAVA_POOLS_PER_CHUNK: int = 16  # Regular lava pools (some cluster around monsters) - reduced from 24
-const BONE_CLUSTERS_PER_CHUNK: int = 15  # Large skeletal remains (ritual piles) - reduced from 25
-const SCATTERED_BONES_PER_CHUNK: int = 80  # Individual bones filling empty space (grid-based)
+# OPTIMIZED: Aggressively reduced for multiplayer performance (~10k node target for 2 chunks)
+const TREES_PER_CHUNK: int = 90  # Dead trees (lootable - wood) - reduced from 140
+const ROCKS_LARGE_PER_CHUNK: int = 30  # Large rocks (lootable - stone/ore) - reduced from 35
+const ROCKS_MEDIUM_PER_CHUNK: int = 30  # Medium rocks (decorative) - reduced from 50
+const ROCKS_SMALL_PER_CHUNK: int = 25  # Small rocks (decorative) - reduced from 40
+const MONSTER_LAVA_POOLS_PER_CHUNK: int = 3  # Giant lava pools (anchor points) - reduced from 4
+const LAVA_POOLS_PER_CHUNK: int = 10  # Regular lava pools (some cluster around monsters) - reduced from 16
+const BONE_CLUSTERS_PER_CHUNK: int = 8  # Large skeletal remains (ritual piles) - reduced from 15
+const SCATTERED_BONES_PER_CHUNK: int = 35  # Individual bones filling empty space - reduced from 80
 
 # Bone optimization settings
-const PICKABLE_BONE_PERCENTAGE: float = 0.15  # 15% of bones are pickable (interactive) - tune as needed
+const PICKABLE_BONE_PERCENTAGE: float = 0.15  # 15% of bones are pickable (interactive)
 const BONE_PROXIMITY_LOAD_DISTANCE: float = 2000.0  # Only load pickable bones within this distance
 const BONE_PROXIMITY_CHECK_INTERVAL: float = 1.0  # How often to check proximity for bone loading
-const DEAD_VEGETATION_PER_CHUNK: int = 24  # Dead bushes/ash piles (decorative)
-const CRACKS_PER_CHUNK: int = 30  # Ground cracks (visual)
+const DEAD_VEGETATION_PER_CHUNK: int = 12  # Dead bushes/ash piles (decorative) - reduced from 24
+const CRACKS_PER_CHUNK: int = 15  # Ground cracks (visual) - reduced from 30
 
 # World boundaries - 3 chunks: -8000 to 16000 X, -4000 to 4000 Y
 var WORLD_MIN: Vector2:
@@ -973,9 +973,11 @@ func create_prop(pos: Vector2, prop_type: String, container: Node2D, rng: Random
 	sprite.texture = texture
 	sprite.global_position = pos
 
-	# Cracks should be at bottom layer, everything else at -1
+	# Cracks at bottom layer, ash piles below rocks, everything else at -1
 	if prop_type.begins_with("ground_crack"):
 		sprite.z_index = -9  # Bottom layer (on ground, under everything)
+	elif prop_type == "ash_pile":
+		sprite.z_index = -2  # Below rocks (0) so ash piles don't render on top
 	else:
 		sprite.z_index = -1  # Normal prop layer
 

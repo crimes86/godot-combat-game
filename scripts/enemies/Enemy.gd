@@ -61,6 +61,7 @@ func _get_local_player() -> Node:
 @onready var click_area: Area2D = $Area2D
 var level_label: Label = null  # Created dynamically in show_level()
 var shadow_sprite: AnimatedSprite2D = null  # Shadow layer
+var equipment_sprites: Array[AnimatedSprite2D] = []  # Equipment layers (boots, gloves, helmet)
 
 # Crit window state (minimal - manager owns lifecycle)
 var in_crit_window: bool = false  # Simple flag set by grow/shrink methods
@@ -117,8 +118,15 @@ func _ready() -> void:
 	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))  # Same scaling as XP
 
-	# Debug gold drop calculation (disabled - too spammy)
-	# Constants.debug_log("💰 Enemy initialized - Level: %d, gold_drop_base: %d, gold_drop: %d" % [enemy_level, gold_drop_base, gold_drop])
+	# Guardian skeleton buffs - ruins guardians are tougher than regular skeletons
+	# Designed for healer+tank duo to be optimal, solo is rough but doable
+	var is_guardian = get_meta("is_guardian", false)
+	if is_guardian:
+		max_health *= 1.75  # 75% more HP - fights last longer, need sustained healing
+		base_damage *= 1.5  # 50% more damage - pressures tank, rewards having a healer
+		xp_reward = int(xp_reward * 1.5)  # 50% more XP - worth the challenge
+		gold_drop = int(gold_drop * 1.5)  # 50% more gold
+		# Note: Guardians also have faster attacks and movement (set in EnemyAI.gd)
 
 	current_health = max_health
 	if health_bar and health_bar.has_method("update_health"):
@@ -148,20 +156,20 @@ func _ready() -> void:
 	# Create animated skeleton sprite
 	if sprite:
 		# Check if this is a guardian (uses special armored sprites)
-		var is_guardian = get_meta("is_guardian", false)
+		# Note: is_guardian already declared above for stat buffs
 
 		# Load sprite sheets based on enemy type
 		var walk_path: String
 		var slash_path: String
 		var hurt_path: String
 
-		if is_guardian:
-			# Guardian skeletal warriors with copper armor and longsword
+		if is_guardian and enemy_level >= 10:
+			# Level 10 guardians: Full copper plate armor (pre-baked sprite)
 			walk_path = "res://assets/characters/skeletal_guardian/walk_guardian.png"
 			slash_path = "res://assets/characters/skeletal_guardian/slash_guardian.png"
-			hurt_path = ""  # Guardians use same hurt as regular skeletons for now
+			hurt_path = "res://assets/characters/BODY_skeleton_hurt.png"
 		else:
-			# Regular skeleton
+			# Regular skeleton body (level 7-9 guardians use equipment layers)
 			walk_path = "res://assets/characters/BODY_skeleton_walk.png"
 			slash_path = "res://assets/characters/BODY_skeleton_slash.png"
 			hurt_path = "res://assets/characters/BODY_skeleton_hurt.png"
@@ -225,11 +233,18 @@ func _ready() -> void:
 			add_child(anim_sprite)
 			sprite = anim_sprite
 
-			# Verify animation exists before playing
-			if anim_sprite.sprite_frames.has_animation("idle_down"):
+			# Create equipment layers based on enemy level
+			create_equipment_layers()
+
+			# Play random idle direction for natural look
+			var idle_directions = ["idle_up", "idle_down", "idle_left", "idle_right"]
+			var random_idle = idle_directions[randi() % idle_directions.size()]
+			if anim_sprite.sprite_frames.has_animation(random_idle):
+				anim_sprite.play(random_idle)
+			elif anim_sprite.sprite_frames.has_animation("idle_down"):
 				anim_sprite.play("idle_down")
 			else:
-				push_error("❌ idle_down animation not found!")
+				push_error("❌ idle animations not found!")
 
 			# ✨ FIX: Refresh HitFlash sprite reference after conversion
 			if has_node("HitFlash"):
@@ -324,6 +339,9 @@ func setup_skeleton_animations(anim_sprite: AnimatedSprite2D, walk_tex: Texture2
 		# Hurt animation - 1 row, 6 frames (getting hit and falling)
 		create_skeleton_animation(sprite_frames, hurt_img, "hurt", 0, 6, 10.0, false)
 
+		# Dead animation - last frame of hurt (lying on ground)
+		create_skeleton_animation(sprite_frames, hurt_img, "dead", 0, 1, 1.0, true, 5)  # Frame 5 = final fallen pose
+
 	anim_sprite.sprite_frames = sprite_frames
 
 func create_skeleton_animation(sprite_frames: SpriteFrames, skeleton_img: Image, anim_name: String, row: int, frame_count: int, fps: float, loop: bool = true, start_frame: int = 0) -> void:
@@ -395,6 +413,189 @@ func create_shadow_layer() -> void:
 	# Start with idle animation
 	if shadow_sprite.sprite_frames.has_animation("idle_down"):
 		shadow_sprite.play("idle_down")
+
+func create_equipment_layers() -> void:
+	"""Create equipment layers based on enemy level"""
+	equipment_sprites.clear()
+
+	var is_guardian = get_meta("is_guardian", false)
+
+	# Equipment config based on enemy type and level
+	var equipment_to_add: Array[String] = []
+	var always_has_weapon: bool = false
+
+	if is_guardian:
+		# Guardian equipment varies by level
+		if enemy_level >= 10:
+			# Level 10: Full copper plate (pre-baked in sprite), just add weapon
+			always_has_weapon = true
+		elif enemy_level >= 9:
+			# Level 9: boots + gloves + helmet + weapon
+			equipment_to_add.append("boots")
+			equipment_to_add.append("gloves")
+			equipment_to_add.append("helmet")
+			always_has_weapon = true
+		else:
+			# Level 7-8: boots + gloves + weapon
+			equipment_to_add.append("boots")
+			equipment_to_add.append("gloves")
+			always_has_weapon = true
+	else:
+		# Regular skeleton equipment (level 1-6)
+		if enemy_level >= 4:
+			equipment_to_add.append("boots")
+		if enemy_level >= 5:
+			equipment_to_add.append("helmet")
+		if enemy_level >= 6:
+			equipment_to_add.append("gloves")
+
+	# Create each equipment layer
+	for equip_name in equipment_to_add:
+		var equip_sprite = create_equipment_sprite(equip_name)
+		if equip_sprite:
+			equipment_sprites.append(equip_sprite)
+			add_child(equip_sprite)
+
+	# Weapon handling
+	if always_has_weapon or randf() < 0.25:
+		# Guardians always have weapon, regular skeletons 25% chance
+		var weapons = ["sword", "mace"]
+		var weapon_name = weapons[randi() % weapons.size()]
+		var weapon_sprite = create_weapon_sprite(weapon_name)
+		if weapon_sprite:
+			equipment_sprites.append(weapon_sprite)
+			add_child(weapon_sprite)
+
+func create_equipment_sprite(equip_name: String) -> AnimatedSprite2D:
+	"""Create an animated sprite for a piece of equipment"""
+	var walk_path = "res://assets/characters/equipment/%s_walk.png" % equip_name
+	var slash_path = "res://assets/characters/equipment/%s_slash.png" % equip_name
+
+	if not ResourceLoader.exists(walk_path):
+		return null
+
+	var walk_tex: Texture2D = ResourceLoader.load(walk_path, "Texture2D")
+	var slash_tex: Texture2D = null
+	if ResourceLoader.exists(slash_path):
+		slash_tex = ResourceLoader.load(slash_path, "Texture2D")
+
+	if not walk_tex:
+		return null
+
+	var equip_sprite = AnimatedSprite2D.new()
+	equip_sprite.name = "Equipment_" + equip_name
+	equip_sprite.centered = true
+	equip_sprite.z_index = 1  # Above skeleton body
+
+	# Create sprite frames
+	var equip_frames = SpriteFrames.new()
+	var walk_img = walk_tex.get_image()
+
+	# Walk animations - 4 rows, 9 frames each
+	create_skeleton_animation(equip_frames, walk_img, "walk_up", 0, 9, 8.0)
+	create_skeleton_animation(equip_frames, walk_img, "walk_left", 1, 9, 8.0)
+	create_skeleton_animation(equip_frames, walk_img, "walk_down", 2, 9, 8.0)
+	create_skeleton_animation(equip_frames, walk_img, "walk_right", 3, 9, 8.0)
+
+	# Idle animations - middle frame
+	create_skeleton_animation(equip_frames, walk_img, "idle_up", 0, 1, 1.0, true, 4)
+	create_skeleton_animation(equip_frames, walk_img, "idle_left", 1, 1, 1.0, true, 4)
+	create_skeleton_animation(equip_frames, walk_img, "idle_down", 2, 1, 1.0, true, 4)
+	create_skeleton_animation(equip_frames, walk_img, "idle_right", 3, 1, 1.0, true, 4)
+
+	# Attack animations - 6 frames each
+	if slash_tex:
+		var slash_img = slash_tex.get_image()
+		create_skeleton_animation(equip_frames, slash_img, "attack_up", 0, 6, 12.0, false)
+		create_skeleton_animation(equip_frames, slash_img, "attack_left", 1, 6, 12.0, false)
+		create_skeleton_animation(equip_frames, slash_img, "attack_down", 2, 6, 12.0, false)
+		create_skeleton_animation(equip_frames, slash_img, "attack_right", 3, 6, 12.0, false)
+
+	equip_sprite.sprite_frames = equip_frames
+	return equip_sprite
+
+func create_weapon_sprite(weapon_name: String) -> AnimatedSprite2D:
+	"""Create an animated sprite for a weapon"""
+	var walk_path = "res://assets/weapons/%s/walk.png" % weapon_name
+	var slash_path = "res://assets/weapons/%s/slash.png" % weapon_name
+
+	if not ResourceLoader.exists(walk_path):
+		return null
+
+	var walk_tex: Texture2D = ResourceLoader.load(walk_path, "Texture2D")
+	var slash_tex: Texture2D = null
+	if ResourceLoader.exists(slash_path):
+		slash_tex = ResourceLoader.load(slash_path, "Texture2D")
+
+	if not walk_tex:
+		return null
+
+	var weapon_sprite = AnimatedSprite2D.new()
+	weapon_sprite.name = "Weapon_" + weapon_name
+	weapon_sprite.centered = true
+	weapon_sprite.z_index = 2  # Above equipment and skeleton body
+
+	# Create sprite frames
+	var weapon_frames = SpriteFrames.new()
+	var walk_img = walk_tex.get_image()
+
+	# Walk animations - 4 rows, 9 frames each (64x64)
+	create_skeleton_animation(weapon_frames, walk_img, "walk_up", 0, 9, 8.0)
+	create_skeleton_animation(weapon_frames, walk_img, "walk_left", 1, 9, 8.0)
+	create_skeleton_animation(weapon_frames, walk_img, "walk_down", 2, 9, 8.0)
+	create_skeleton_animation(weapon_frames, walk_img, "walk_right", 3, 9, 8.0)
+
+	# Idle animations - middle frame (64x64)
+	create_skeleton_animation(weapon_frames, walk_img, "idle_up", 0, 1, 1.0, true, 4)
+	create_skeleton_animation(weapon_frames, walk_img, "idle_left", 1, 1, 1.0, true, 4)
+	create_skeleton_animation(weapon_frames, walk_img, "idle_down", 2, 1, 1.0, true, 4)
+	create_skeleton_animation(weapon_frames, walk_img, "idle_right", 3, 1, 1.0, true, 4)
+
+	# Attack animations - 6 frames each (192x192 oversize, scaled down)
+	if slash_tex:
+		var slash_img = slash_tex.get_image()
+		create_oversize_weapon_animation(weapon_frames, slash_img, "attack_up", 0, 6, 12.0, false)
+		create_oversize_weapon_animation(weapon_frames, slash_img, "attack_left", 1, 6, 12.0, false)
+		create_oversize_weapon_animation(weapon_frames, slash_img, "attack_down", 2, 6, 12.0, false)
+		create_oversize_weapon_animation(weapon_frames, slash_img, "attack_right", 3, 6, 12.0, false)
+
+	weapon_sprite.sprite_frames = weapon_frames
+	return weapon_sprite
+
+func create_oversize_weapon_animation(sprite_frames: SpriteFrames, img: Image, anim_name: String, row: int, frame_count: int, fps: float, loop: bool = true) -> void:
+	"""Create animation from oversize weapon spritesheet (192x192 frames, scaled to 64x64)"""
+	sprite_frames.add_animation(anim_name)
+	sprite_frames.set_animation_loop(anim_name, loop)
+	sprite_frames.set_animation_speed(anim_name, fps)
+
+	const OVERSIZE_FRAME = 192
+	const TARGET_SIZE = 64
+
+	for i in range(frame_count):
+		var frame_img = Image.create(OVERSIZE_FRAME, OVERSIZE_FRAME, false, Image.FORMAT_RGBA8)
+		frame_img.blit_rect(img, Rect2i(i * OVERSIZE_FRAME, row * OVERSIZE_FRAME, OVERSIZE_FRAME, OVERSIZE_FRAME), Vector2i(0, 0))
+
+		# Scale down to 64x64 to match skeleton size
+		frame_img.resize(TARGET_SIZE, TARGET_SIZE, Image.INTERPOLATE_NEAREST)
+
+		var frame_texture = ImageTexture.create_from_image(frame_img)
+		sprite_frames.add_frame(anim_name, frame_texture)
+
+func sync_equipment_animations() -> void:
+	"""Sync all equipment layers to match the main sprite's animation"""
+	if not sprite or not sprite is AnimatedSprite2D:
+		return
+
+	var main_sprite = sprite as AnimatedSprite2D
+	var current_anim = main_sprite.animation
+	var current_frame = main_sprite.frame
+
+	for equip_sprite in equipment_sprites:
+		if is_instance_valid(equip_sprite) and equip_sprite.sprite_frames:
+			if equip_sprite.sprite_frames.has_animation(current_anim):
+				if equip_sprite.animation != current_anim:
+					equip_sprite.play(current_anim)
+				equip_sprite.frame = current_frame
 
 func get_enemy_name() -> String:
 	"""Generate enemy name based on level and type"""
@@ -797,6 +998,10 @@ func _draw() -> void:
 func _process(delta: float) -> void:
 	if in_crit_window and not weakpoints.is_empty():
 		queue_redraw()  # Continuously redraw while weakpoints are active
+
+	# Sync equipment animations with main sprite
+	if equipment_sprites.size() > 0:
+		sync_equipment_animations()
 
 	# Toggle UI based on player distance (visibility handled by LOD system)
 	if not is_corpse:  # Only for living enemies
@@ -1244,6 +1449,9 @@ func die() -> void:
 		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 		if player and player.has_method("gain_experience"):
 			player.gain_experience(xp_reward)
+			# Show XP notification
+			if NotificationManager:
+				NotificationManager.notify_xp_gained(xp_reward, "L%d Kill" % enemy_level)
 
 	# Store gold in corpse for looting (skip if already set by server in multiplayer)
 	if corpse_gold == 0:
@@ -1300,6 +1508,11 @@ func die() -> void:
 	# Tutorial: notify TutorialManager of skeleton kill
 	if TutorialManager and TutorialManager.is_tutorial_active():
 		TutorialManager.on_skeleton_killed()
+
+	# Quest: notify QuestManager of enemy kill
+	if QuestManager:
+		var is_guardian = get_meta("is_guardian", false)
+		QuestManager.on_enemy_killed("skeleton", enemy_level, is_guardian)
 
 	# Transition to corpse state (don't despawn)
 	become_corpse()
@@ -1409,7 +1622,7 @@ func generate_corpse_loot() -> Array:
 
 	# Generate each item
 	for i in range(num_items):
-		var item = CorpseState.roll_loot_item(is_guardian)
+		var item = CorpseState.roll_loot_item(is_guardian, enemy_level)
 		if not item.is_empty():
 			if item.get("stackable", false):
 				item["quantity"] = 1
@@ -1462,9 +1675,21 @@ func become_corpse() -> void:
 	else:
 		print("   ⚫ No loot - no indicator")
 
-	# Darken sprite slightly
-	if sprite:
-		sprite.modulate = Color(0.8, 0.8, 0.8, 1.0)
+	# Play dead animation and darken sprite
+	if sprite and sprite is AnimatedSprite2D:
+		var anim_sprite = sprite as AnimatedSprite2D
+		if anim_sprite.sprite_frames and anim_sprite.sprite_frames.has_animation("dead"):
+			anim_sprite.play("dead")
+		sprite.modulate = Color(0.7, 0.7, 0.7, 1.0)  # Darken corpse
+
+	# Hide equipment on corpse (they fall off / look messy)
+	for equip in equipment_sprites:
+		if is_instance_valid(equip):
+			equip.visible = false
+
+	# Hide shadow for corpse
+	if shadow_sprite:
+		shadow_sprite.visible = false
 
 func add_loot_indicator() -> void:
 	"""Add shiny glimmer effect to indicate this corpse has loot (WoW-style)"""
@@ -1607,11 +1832,22 @@ func check_if_looted_empty() -> void:
 		graceful_despawn()
 
 func graceful_despawn() -> void:
-	"""Quick fade out for fully looted corpses"""
+	"""Gradual fade out for fully looted corpses - smooth UX for mass looting"""
+	# Disable any remaining interactions
+	if has_node("Area2D"):
+		var area = get_node("Area2D")
+		area.monitoring = false
+		area.monitorable = false
+
+	# Fade out over 1.5 seconds with easing for smooth feel
 	var tween = create_tween()
+	tween.set_ease(Tween.EASE_IN)
+	tween.set_trans(Tween.TRANS_QUAD)
 	tween.set_parallel(true)
-	tween.tween_property(self, "modulate:a", 0.0, 0.5)
-	tween.tween_property(self, "scale", Vector2(0.5, 0.5), 0.5)
+	tween.tween_property(self, "modulate:a", 0.0, 1.5)
+	tween.tween_property(self, "scale", Vector2(0.7, 0.7), 1.5)
+	# Sink slightly into the ground
+	tween.tween_property(self, "position:y", position.y + 10, 1.5)
 	await tween.finished
 
 	if is_instance_valid(self):

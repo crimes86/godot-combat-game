@@ -70,8 +70,8 @@ const SKELETON_LOOT_TABLE = [
 	}
 ]
 
-# Guardian-specific loot table (Ruins 1 skeletal guardians)
-# Drops: Iron Short Sword (equiv to vendor), Copper Boots, Copper Armguards
+# Guardian-specific loot table (Level 7-9 ruins guardians)
+# Drops: Iron Short Sword, Copper Boots, Copper Armguards
 # Low drop rates - intended to be a grind
 const GUARDIAN_LOOT_TABLE = [
 	{
@@ -130,6 +130,91 @@ const GUARDIAN_LOOT_TABLE = [
 	}
 ]
 
+# Level 10 Guardian loot table - can drop full copper plate set
+# These are the elite guardians with full armor, higher chance for gear
+const GUARDIAN_ELITE_LOOT_TABLE = [
+	{
+		"id": "iron_short_sword",
+		"name": "Iron Short Sword",
+		"description": "A reliable iron blade. Standard issue for wasteland survivors.",
+		"weapon_type": "sword",
+		"base_damage": 12,
+		"attack_speed": "medium",
+		"crit_chance": 0.071,
+		"required_level": 1,
+		"value": 150,
+		"rarity": "Common",
+		"sprite_path": "res://assets/weapons/longsword.png",
+		"drop_weight": 6,
+		"type": "weapon",
+		"slot": "mainhand",
+		"stackable": false
+	},
+	{
+		"id": "copper_plate_boots",
+		"name": "Copper Plate Boots",
+		"description": "Tier 1 copper-plated boots. Basic protection for your feet.",
+		"slot": "feet",
+		"defense": 5,
+		"type": "armor",
+		"value": 0,
+		"rarity": "Common",
+		"sprite_name": "copper_plate",
+		"drop_weight": 8,
+		"stackable": false
+	},
+	{
+		"id": "copper_plate_armguards",
+		"name": "Copper Plate Armguards",
+		"description": "Tier 1 copper-plated arm guards. Protects your forearms in combat.",
+		"slot": "arms",
+		"defense": 6,
+		"type": "armor",
+		"value": 0,
+		"rarity": "Common",
+		"sprite_name": "copper_plate",
+		"drop_weight": 8,
+		"stackable": false
+	},
+	{
+		"id": "copper_plate_greaves",
+		"name": "Copper Plate Greaves",
+		"description": "Tier 1 copper-plated leg armor. Solid leg protection.",
+		"slot": "legs",
+		"defense": 8,
+		"type": "armor",
+		"value": 0,
+		"rarity": "Common",
+		"sprite_name": "copper_plate",
+		"drop_weight": 6,  # Rarer - only level 10 drops
+		"stackable": false
+	},
+	{
+		"id": "copper_plate_helmet",
+		"name": "Copper Plate Helmet",
+		"description": "Tier 1 copper-plated helmet. Essential head protection.",
+		"slot": "head",
+		"defense": 7,
+		"type": "armor",
+		"value": 0,
+		"rarity": "Common",
+		"sprite_name": "copper_plate",
+		"drop_weight": 6,  # Rarer - only level 10 drops
+		"stackable": false
+	},
+	{
+		"name": "Bone Ember",
+		"description": "Wasteland bones infused with supernatural heat. Burns with ghostly fire.",
+		"value": 5,
+		"rarity": "Common",
+		"drop_weight": 66,  # Fill remaining weight
+		"type": "material",
+		"stackable": true,
+		"max_stack": 200,
+		"fuel_type": "bone_ember"
+	}
+]
+
 static func roll_loot_count() -> int:
 	"""Roll how many items this corpse should drop (0-2)"""
 	var roll = randf()
@@ -142,9 +227,18 @@ static func roll_loot_count() -> int:
 
 	return 0  # Fallback
 
-static func roll_loot_item(is_guardian: bool = false) -> Dictionary:
+static func roll_loot_item(is_guardian: bool = false, enemy_level: int = 1) -> Dictionary:
 	"""Roll a random item from the appropriate loot table"""
-	var loot_table = GUARDIAN_LOOT_TABLE if is_guardian else SKELETON_LOOT_TABLE
+	var loot_table: Array
+
+	if is_guardian:
+		# Level 10 guardians use elite table with full copper plate drops
+		if enemy_level >= 10:
+			loot_table = GUARDIAN_ELITE_LOOT_TABLE
+		else:
+			loot_table = GUARDIAN_LOOT_TABLE
+	else:
+		loot_table = SKELETON_LOOT_TABLE
 
 	if loot_table.is_empty():
 		return {}

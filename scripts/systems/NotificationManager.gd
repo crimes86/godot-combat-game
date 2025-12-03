@@ -71,6 +71,17 @@ func notify_gold_added(amount: int) -> void:
 		"amount": amount
 	})
 
+## Show an XP gained notification
+func notify_xp_gained(amount: int, source: String = "") -> void:
+	print("📢 NotificationManager.notify_xp_gained: %d XP from %s" % [amount, source])
+	if amount <= 0:
+		return
+	_queue_notification({
+		"type": "xp_gained",
+		"amount": amount,
+		"source": source
+	})
+
 ## Show a generic text notification (for system messages like "Game saved")
 ## type: "INFO", "SUCCESS", "WARNING", "ERROR"
 func show_notification(message: String, type: String = "INFO") -> void:
@@ -117,6 +128,8 @@ func _process_next_notification() -> void:
 			notification.setup_item_removed(data.item_name, data.quantity, data.rarity)
 		"gold_added":
 			notification.setup_gold_added(data.amount)
+		"xp_gained":
+			notification.setup_xp_gained(data.amount, data.source)
 		"system":
 			notification.setup_system_message(data.message, data.msg_type)
 

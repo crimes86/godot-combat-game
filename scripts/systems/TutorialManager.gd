@@ -762,9 +762,10 @@ func update_key_prompt(key: String, pressed: bool) -> void:
 
 func clear_key_prompts() -> void:
 	"""Remove WASD display"""
-	var wasd_display = tutorial_ui.get_node_or_null("WASDDisplay")
-	if wasd_display:
-		wasd_display.queue_free()
+	if tutorial_ui and is_instance_valid(tutorial_ui):
+		var wasd_display = tutorial_ui.get_node_or_null("WASDDisplay")
+		if wasd_display:
+			wasd_display.queue_free()
 	key_prompts.clear()
 
 func create_arrow_indicator() -> void:

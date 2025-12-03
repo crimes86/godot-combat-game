@@ -165,6 +165,13 @@ func get_item_count() -> int:
 			count += 1
 	return count
 
+func has_item_by_name(item_name: String) -> bool:
+	"""Check if inventory contains an item with the given name"""
+	for item in inventory_items:
+		if item != null and item.get("name", "") == item_name:
+			return true
+	return false
+
 # ============================================
 # GOLD ACCESS (Proxy to CharacterStats)
 # ============================================

@@ -34,6 +34,9 @@ class_name EnemyAI
 @export var retreat_chance: float = 0.25  # 25% chance on hit
 @export var retreat_duration: float = 0.8
 
+## Avoidance (stop and pick new target when blocked)
+@export var separation_radius: float = 40.0  # Distance to detect blocking enemies
+
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE MACHINE
 # ═══════════════════════════════════════════════════════════════════════════
@@ -109,6 +112,7 @@ var aggro_sound_cooldown: float = 3.0  # Min 3.0s between aggro laughs per enemy
 
 # Footstep tracking
 var last_footstep_frame: int = -1  # Track last frame that played footstep
+var last_facing_direction: String = ""  # Track last direction for idle (random on spawn)
 
 # Performance: Throttle AI updates based on distance from player
 var ai_update_timer: float = 0.0
@@ -157,6 +161,12 @@ func _ready() -> void:
 
 	# Fixed speed (no level scaling - equipment may add bonuses later)
 	# Note: combat_speed and patrol_speed use @export defaults (100.0 and 30.0)
+
+	# Guardian skeleton combat buffs - faster attacks, slightly faster movement
+	var is_guardian = enemy.get_meta("is_guardian", false)
+	if is_guardian:
+		attack_cooldown *= 0.75  # 25% faster attacks (1.5s -> 1.125s)
+		combat_speed *= 1.15  # 15% faster chase speed - harder to kite
 
 	# Check if this is a campfire-spawned skeleton (has meta data from Campfire.gd)
 	if enemy.has_meta("is_campfire_skeleton") and enemy.get_meta("is_campfire_skeleton"):
@@ -372,18 +382,61 @@ func process_patrolling(delta: float) -> void:
 		enemy.velocity = Vector2.ZERO
 		update_enemy_animation(Vector2.ZERO)
 	else:
-		# Move toward target
-		var direction = (patrol_target - enemy.global_position).normalized()
-		enemy.velocity = direction * patrol_speed
-		update_enemy_animation(direction)
+		# Check if another enemy is blocking our path
+		if is_path_blocked_by_enemy():
+			# Pick a new patrol target instead of pushing
+			pick_new_patrol_target()
+			enemy.velocity = Vector2.ZERO
+			update_enemy_animation(Vector2.ZERO)
+		# Check if path would cross lava
+		elif is_path_crossing_lava(enemy.global_position, patrol_target):
+			# Pick a new patrol target to avoid lava
+			pick_new_patrol_target()
+			enemy.velocity = Vector2.ZERO
+			update_enemy_animation(Vector2.ZERO)
+		else:
+			# Move toward target
+			var direction = (patrol_target - enemy.global_position).normalized()
+			enemy.velocity = direction * patrol_speed
+			update_enemy_animation(direction)
 
 	enemy.move_and_slide()
 
 func pick_new_patrol_target() -> void:
-	"""Pick a random point within patrol_radius of spawn"""
-	var angle = randf() * TAU
-	var distance = randf() * patrol_radius
-	patrol_target = spawn_position + Vector2(cos(angle), sin(angle)) * distance
+	"""Pick a random point within patrol_radius of spawn, avoiding lava pools"""
+	var max_attempts = 5
+	for _i in range(max_attempts):
+		var angle = randf() * TAU
+		var distance = randf() * patrol_radius
+		var candidate = spawn_position + Vector2(cos(angle), sin(angle)) * distance
+
+		# Check if candidate is inside a lava pool
+		if not is_position_in_lava(candidate):
+			patrol_target = candidate
+			return
+
+	# Fallback: stay at spawn position if all attempts hit lava
+	patrol_target = spawn_position
+
+func is_path_blocked_by_enemy() -> bool:
+	"""Check if another enemy is directly in our path to the patrol target"""
+	var direction_to_target = (patrol_target - enemy.global_position).normalized()
+
+	for other_enemy in get_tree().get_nodes_in_group("enemies"):
+		if other_enemy == enemy or not is_instance_valid(other_enemy):
+			continue
+		if other_enemy.is_dying or other_enemy.is_corpse:
+			continue
+
+		var distance = enemy.global_position.distance_to(other_enemy.global_position)
+		if distance < separation_radius:
+			# Check if this enemy is roughly in our path (within 60 degree cone)
+			var direction_to_other = (other_enemy.global_position - enemy.global_position).normalized()
+			var dot = direction_to_target.dot(direction_to_other)
+			if dot > 0.5:  # Within ~60 degree cone ahead
+				return true
+
+	return false
 
 # ═══════════════════════════════════════════════════════════════════════════
 # COMBAT STATE (Chasing Player)
@@ -407,6 +460,17 @@ func process_combat(delta: float) -> void:
 		print("🤖 %s: DISENGAGE - no valid player" % enemy.name)
 		disengage()
 		return
+
+	# Guardian leashing - can't be kited too far from spawn point
+	# Forces players to fight near their campfire, not infinitely kite
+	var is_guardian = enemy.get_meta("is_guardian", false)
+	if is_guardian:
+		var distance_from_spawn = enemy.global_position.distance_to(original_spawn_position)
+		var guardian_leash_distance = 600.0  # Can't be pulled more than 600px from spawn
+		if distance_from_spawn > guardian_leash_distance:
+			print("🤖 %s: DISENGAGE - guardian too far from spawn (%.0f > %.0f)" % [enemy.name, distance_from_spawn, guardian_leash_distance])
+			disengage()
+			return
 
 	# Check chunk-based leashing - if player left spawn chunk, disengage
 	# Skip this check in multiplayer - server is authoritative and players may be in different chunks
@@ -441,6 +505,27 @@ func process_combat(delta: float) -> void:
 	# Slow enemy during crit window (60% slow for easier weakpoint targeting)
 	if enemy.has_method("get") and enemy.get("in_crit_window"):
 		speed *= 0.4  # 60% slow
+
+	# Check if next position would be in lava - try to go around
+	var next_pos = enemy.global_position + direction * speed * 0.1  # Look ahead 0.1 seconds
+	if is_position_in_lava(next_pos):
+		# Try perpendicular directions to go around the lava
+		var perpendicular_right = Vector2(-direction.y, direction.x)
+		var perpendicular_left = Vector2(direction.y, -direction.x)
+
+		var right_pos = enemy.global_position + perpendicular_right * speed * 0.1
+		var left_pos = enemy.global_position + perpendicular_left * speed * 0.1
+
+		if not is_position_in_lava(right_pos):
+			direction = (direction + perpendicular_right).normalized()
+		elif not is_position_in_lava(left_pos):
+			direction = (direction + perpendicular_left).normalized()
+		else:
+			# Both sides blocked, stop and wait
+			enemy.velocity = Vector2.ZERO
+			update_enemy_animation(Vector2.ZERO)
+			enemy.move_and_slide()
+			return
 
 	enemy.velocity = direction * speed
 	update_enemy_animation(direction)
@@ -987,7 +1072,7 @@ func update_enemy_animation(velocity: Vector2) -> void:
 		return
 	
 	var is_moving = velocity.length() > 0.1
-	
+
 	# Get direction
 	var dir_str = "down"  # default
 	if is_moving:
@@ -995,7 +1080,7 @@ func update_enemy_animation(velocity: Vector2) -> void:
 		var deg = rad_to_deg(angle)
 		if deg < 0:
 			deg += 360
-		
+
 		# 4 directions only for enemies
 		if deg >= 315 or deg < 45:
 			dir_str = "right"
@@ -1005,6 +1090,18 @@ func update_enemy_animation(velocity: Vector2) -> void:
 			dir_str = "left"
 		else:
 			dir_str = "up"
+
+		# Remember facing direction for when we stop
+		last_facing_direction = dir_str
+	else:
+		# Use last facing direction when idle, or random if never moved
+		if last_facing_direction != "":
+			dir_str = last_facing_direction
+		elif last_facing_direction == "":
+			# First idle - pick random direction
+			var directions = ["up", "down", "left", "right"]
+			last_facing_direction = directions[randi() % directions.size()]
+			dir_str = last_facing_direction
 	
 	# Play appropriate animation
 	var prefix = "walk_" if is_moving else "idle_"
@@ -1175,3 +1272,49 @@ func get_chunk_key(position: Vector2) -> String:
 	"""Get chunk key for a world position (matches ChunkBasedPropSystem)"""
 	var chunk_x = int(floor(position.x / Constants.CHUNK_SIZE))
 	return "%d,0" % chunk_x  # Y is always 0 (single row of square chunks)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LAVA POOL AVOIDANCE
+# ═══════════════════════════════════════════════════════════════════════════
+
+func is_position_in_lava(pos: Vector2) -> bool:
+	"""Check if a position is inside any lava pool"""
+	var spawn_manager = get_node_or_null("/root/GameWorld/ChunkAwareSpawnManager")
+	if not spawn_manager:
+		return false
+
+	# Access lava_pools from ChunkAwareSpawnManager
+	if spawn_manager.has_method("get") or "lava_pools" in spawn_manager:
+		var pools = spawn_manager.lava_pools
+		for pool in pools:
+			var dist = pos.distance_to(pool.center)
+			if dist < pool.radius:
+				return true
+
+	return false
+
+func is_path_crossing_lava(from_pos: Vector2, to_pos: Vector2) -> bool:
+	"""Check if a path would cross through a lava pool"""
+	var spawn_manager = get_node_or_null("/root/GameWorld/ChunkAwareSpawnManager")
+	if not spawn_manager:
+		return false
+
+	if not "lava_pools" in spawn_manager:
+		return false
+
+	var pools = spawn_manager.lava_pools
+	var direction = (to_pos - from_pos).normalized()
+	var distance = from_pos.distance_to(to_pos)
+
+	# Check points along the path
+	var check_interval = 50.0  # Check every 50 pixels
+	var steps = int(distance / check_interval) + 1
+
+	for i in range(steps):
+		var check_pos = from_pos + direction * (i * check_interval)
+		for pool in pools:
+			var dist_to_pool = check_pos.distance_to(pool.center)
+			if dist_to_pool < pool.radius:
+				return true
+
+	return false

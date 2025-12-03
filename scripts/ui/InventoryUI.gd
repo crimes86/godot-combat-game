@@ -468,7 +468,7 @@ func refresh_inventory() -> void:
 			panel.add_theme_stylebox_override("panel", default_style)
 
 func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
-	"""Handle GUI input on inventory slot (double-click or right-click to equip)"""
+	"""Handle GUI input on inventory slot (double-click or right-click to equip/use)"""
 	if event is InputEventMouseButton and event.pressed:
 		print("🖱️ Inventory slot %d clicked - button: %d, double_click: %s" % [slot_index, event.button_index, event.double_click])
 		if (event.button_index == MOUSE_BUTTON_LEFT and event.double_click) or event.button_index == MOUSE_BUTTON_RIGHT:
@@ -477,6 +477,12 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 
 			if item and item.size() > 0:
 				print("   Item type: '%s', slot: '%s'" % [item.get("type", ""), item.get("slot", "")])
+
+				# Check if it's a placeable item (like Campfire Kit)
+				if item.get("type", "") == "placeable":
+					use_placeable_item(item, slot_index)
+					return
+
 				# Check if it's a tool
 				if item.get("type", "") == "tool":
 					var tool_type = item.get("tool_type", "")
@@ -730,3 +736,102 @@ func _find_node_recursive(parent: Node, node_name: String) -> Node:
 		if found:
 			return found
 	return null
+
+# ============================================
+# PLACEABLE ITEMS (Campfire Kit, etc)
+# ============================================
+
+func use_placeable_item(item: Dictionary, slot_index: int) -> void:
+	"""Use a placeable item like Campfire Kit"""
+	var placeable_type = item.get("placeable_type", "")
+
+	if placeable_type == "campfire":
+		place_campfire(item, slot_index)
+	else:
+		print("⚠️ Unknown placeable type: %s" % placeable_type)
+
+func place_campfire(item: Dictionary, slot_index: int) -> void:
+	"""Place a campfire at the player's location"""
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		print("❌ Cannot place campfire - no player found")
+		return
+
+	var player_pos = player.global_position
+	var min_distance = item.get("min_ruins_distance", 1000.0)
+
+	# Check distance from all ruins
+	var game_world = get_tree().get_first_node_in_group("game_world")
+	if not game_world:
+		game_world = get_node_or_null("/root/GameWorld")
+
+	if game_world and game_world.has_method("get") and "RUINS_POSITIONS" in game_world:
+		var ruins_positions = game_world.RUINS_POSITIONS
+		for ruins_key in ruins_positions:
+			var ruins_data = ruins_positions[ruins_key]
+			var ruins_pos = ruins_data.position if ruins_data is Dictionary else ruins_data
+			var distance = player_pos.distance_to(ruins_pos)
+			if distance < min_distance:
+				print("❌ Too close to ruins! Must be at least %.0f pixels away (currently %.0f)" % [min_distance, distance])
+				_show_placement_error("Too close to ruins! Move at least %.0f pixels away." % min_distance)
+				return
+
+	# Check distance from home campfire (can't place too close to spawn)
+	var home_campfire_pos = Vector2(2000, 0)  # Default home campfire position
+	var home_distance = player_pos.distance_to(home_campfire_pos)
+	if home_distance < 500:
+		print("❌ Too close to home campfire!")
+		_show_placement_error("Too close to home campfire!")
+		return
+
+	# All checks passed - place the campfire
+	var campfire_scene = load("res://scenes/world/placeable_campfire.tscn")
+	if not campfire_scene:
+		# Fallback to regular campfire scene if placeable doesn't exist
+		campfire_scene = load("res://scenes/world/campfire.tscn")
+
+	if not campfire_scene:
+		print("❌ Could not load campfire scene!")
+		return
+
+	var campfire = campfire_scene.instantiate()
+	campfire.global_position = player_pos
+	campfire.name = "PlayerCampfire_%d" % Time.get_ticks_msec()
+
+	# Mark as player-placed campfire (not community, starts unlit)
+	if "is_community_campfire" in campfire:
+		campfire.is_community_campfire = false
+	if "starts_unlit" in campfire:
+		campfire.starts_unlit = true
+	if campfire.has_method("set_unlit"):
+		campfire.set_unlit(true)
+
+	# Add to world
+	if game_world:
+		game_world.add_child(campfire)
+	else:
+		get_tree().root.add_child(campfire)
+
+	# Consume the item
+	var quantity = item.get("quantity", 1)
+	if quantity > 1:
+		item["quantity"] = quantity - 1
+		InventorySystem.set_item(slot_index, item)
+	else:
+		InventorySystem.remove_item(slot_index)
+
+	# Close inventory
+	toggle_ui()
+
+	# Play placement sound
+	SoundManager.play_ui_click()
+
+	print("🔥 Placed campfire at %s" % player_pos)
+
+func _show_placement_error(message: String) -> void:
+	"""Show a temporary error message for placement failures"""
+	var notification_manager = get_node_or_null("/root/NotificationManager")
+	if notification_manager and notification_manager.has_method("show_notification"):
+		notification_manager.show_notification(message, Color.RED)
+	else:
+		print("⚠️ %s" % message)

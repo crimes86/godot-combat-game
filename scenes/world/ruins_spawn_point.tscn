@@ -1,6 +1,6 @@
-[gd_scene load_steps=4 format=3 uid="uid://ruins_campfire_003"]
+[gd_scene load_steps=4 format=3 uid="uid://ruins_spawn_point_001"]
 
-[ext_resource type="Script" path="res://scripts/systems/RuinsCampfire.gd" id="1_ruins"]
+[ext_resource type="Script" path="res://scripts/systems/RuinsSpawnPoint.gd" id="1_ruins"]
 
 [sub_resource type="Gradient" id="Gradient_light"]
 offsets = PackedFloat32Array(0, 1)
@@ -13,20 +13,14 @@ height = 512
 fill = 1
 fill_from = Vector2(0.5, 0.5)
 
-[node name="RuinsCampfire3" type="Node2D"]
-position = Vector2(5200, -1000)
+[node name="RuinsSpawnPoint" type="Node2D"]
 script = ExtResource("1_ruins")
-skeleton_count = 6
-skeleton_respawn_time = 60.0
-convert_range = 100.0
-base_abandon_time = 120.0
-max_abandon_time = 600.0
-patrol_before_ruins_time = 5.0
-spawn_min_distance = 200.0
-spawn_max_distance = 350.0
-avoid_campfire_radius = 300.0
-avoid_path_distance = 150.0
-guardian_level = 26
+pool_capacity = 12
+spawn_interval = 18.0
+patrol_inner_radius = 300.0
+patrol_outer_radius = 400.0
+guardian_min_level = 7
+guardian_max_level = 10
 
 [node name="RuinsLight" type="PointLight2D" parent="."]
 enabled = true

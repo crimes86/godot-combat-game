@@ -20,14 +20,15 @@ class_name RuinsCampfire
 @export var patrol_before_ruins_time: float = 5.0  # Patrol for 5s before walking to ruins
 
 # Spawn area constraints
-@export var spawn_min_distance: float = 200.0  # Min distance from ruins to spawn (shorter walk)
-@export var spawn_max_distance: float = 350.0  # Max distance from ruins to spawn (closer patrol)
+@export var spawn_min_distance: float = 150.0  # Min distance from ruins to spawn
+@export var spawn_max_distance: float = 400.0  # Max distance from ruins to spawn (wider patrol ring)
 @export var avoid_campfire_radius: float = 300.0  # Don't spawn near main campfire
 @export var avoid_path_distance: float = 150.0  # Don't spawn on path
 
 # Guardian configuration
 @export var guardian_min_level: int = 7  # Min level of skeleton guardians
 @export var guardian_max_level: int = 10  # Max level of skeleton guardians
+@export var min_guardian_spacing: float = 100.0  # Minimum distance between guardians
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE
@@ -156,12 +157,29 @@ func _physics_process(delta: float) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func spawn_skeleton(index: int) -> void:
-	"""Spawn a skeleton at a random valid location"""
+	"""Spawn a skeleton at its designated approach position (walks straight to guard spot)"""
 	if not skeleton_scene:
 		push_error("❌ Skeleton scene not loaded!")
 		return
 
-	var spawn_pos = find_valid_spawn_position()
+	# Fixed guard spots around the ruins - each guardian gets a distinct position
+	# Arranged like a hexagon around the ruins center (~200px out)
+	var guard_spots = [
+		Vector2(0, -200),    # North
+		Vector2(175, -100),  # Northeast
+		Vector2(175, 100),   # Southeast
+		Vector2(0, 200),     # South
+		Vector2(-175, 100),  # Southwest
+		Vector2(-175, -100), # Northwest
+	]
+	var guard_offset = guard_spots[index % guard_spots.size()]
+	var guard_position = global_position + guard_offset
+
+	# Spawn further out in the same direction as guard spot (so they walk straight in)
+	# This prevents paths from crossing
+	# Guard spots are ~200px out, spawn at 700px out in same direction
+	var spawn_direction = guard_offset.normalized()
+	var spawn_pos = global_position + spawn_direction * 700.0  # 700px out from ruins center
 
 	var skeleton = skeleton_scene.instantiate()
 	if not skeleton:
@@ -206,11 +224,6 @@ func spawn_skeleton(index: int) -> void:
 		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 			network_enemy_mgr.spawn_enemy_on_clients.rpc(network_id, spawn_pos, skeleton.enemy_level, skeleton.name)
 
-	# Calculate random guard position sporadically across the ruins area
-	var angle = randf() * TAU  # Random angle
-	var guard_distance = randf_range(80.0, 200.0)  # Random distance from center (some close, some far)
-	var guard_position = global_position + Vector2(cos(angle), sin(angle)) * guard_distance
-
 	# Store skeleton data
 	var data = {
 		"skeleton": skeleton,
@@ -228,14 +241,14 @@ func spawn_skeleton(index: int) -> void:
 	skeleton_data.append(data)
 
 func find_valid_spawn_position() -> Vector2:
-	"""Find a random position that avoids campfire and path"""
-	var max_attempts = 50
+	"""Find a random position that avoids campfire, path, and other guardians"""
+	var max_attempts = 80
 	var attempts = 0
 
 	while attempts < max_attempts:
 		attempts += 1
 
-		# Random position around ruins
+		# Random position around ruins - increased distance range for better spread
 		var angle = randf() * TAU
 		var distance = randf_range(spawn_min_distance, spawn_max_distance)
 		var pos = global_position + Vector2(cos(angle), sin(angle)) * distance
@@ -249,12 +262,30 @@ func find_valid_spawn_position() -> Vector2:
 		if abs(pos.y) < avoid_path_distance:
 			continue
 
+		# Check spacing against existing guardians
+		var too_close = false
+		for data in skeleton_data:
+			var skeleton = data.get("skeleton")
+			if is_instance_valid(skeleton) and not skeleton.is_dying and not skeleton.is_corpse:
+				if pos.distance_to(skeleton.global_position) < min_guardian_spacing:
+					too_close = true
+					break
+			# Also check spawn positions for dead/respawning skeletons
+			var spawn_pos = data.get("spawn_position")
+			if spawn_pos and pos.distance_to(spawn_pos) < min_guardian_spacing:
+				too_close = true
+				break
+
+		if too_close:
+			continue
+
 		# Valid position found
 		return pos
 
-	# Fallback: just spawn somewhere
-	var fallback_angle = randf() * TAU
-	return global_position + Vector2(cos(fallback_angle), sin(fallback_angle)) * spawn_min_distance
+	# Fallback: use evenly distributed angle based on skeleton count
+	var existing_count = skeleton_data.size()
+	var fallback_angle = (existing_count * TAU / skeleton_count) + randf_range(-0.3, 0.3)
+	return global_position + Vector2(cos(fallback_angle), sin(fallback_angle)) * spawn_max_distance
 
 func update_skeletons(delta: float) -> void:
 	"""Update all skeleton AI states and respawn timers"""
@@ -384,14 +415,16 @@ func update_skeleton_walking_to_ruins(data: Dictionary, delta: float) -> void:
 			# Make sure AI is in patrol state and actively moving
 			if ai.current_state != ai.State.PATROLLING:
 				ai.change_state(ai.State.PATROLLING)
-			ai.patrol_target = guard_pos
-			ai.is_paused = false  # Make sure not paused
 
-			# If we're very close to patrol_target (within 10 units), pick a new one
-			# This prevents the AI from thinking it's "done" and stopping
-			var dist_to_target = skeleton.global_position.distance_to(ai.patrol_target)
-			if dist_to_target < 10.0:
+			# Only set patrol target if not blocked by another skeleton
+			# This lets the AI's avoidance system work
+			if not ai.is_path_blocked_by_enemy():
 				ai.patrol_target = guard_pos
+				ai.is_paused = false  # Make sure not paused
+			else:
+				# Blocked - let skeleton pause briefly before trying again
+				ai.is_paused = true
+				ai.pause_timer = randf_range(0.5, 1.5)
 
 func update_skeleton_guarding_ruins(data: Dictionary, delta: float) -> void:
 	"""Skeleton patrols around their designated guard spot"""
