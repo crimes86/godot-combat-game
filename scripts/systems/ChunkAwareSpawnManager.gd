@@ -752,24 +752,64 @@ func check_respawns() -> void:
 		if not chunk_system.loaded_chunks.has(chunk_key):
 			continue
 
+		# Build list of existing enemy positions for spacing check
+		var existing_positions: Array[Vector2] = []
+		for existing_enemy in chunk_data.enemies:
+			if is_instance_valid(existing_enemy) and not existing_enemy.is_corpse:
+				existing_positions.append(existing_enemy.global_position)
+
 		# Process dead enemies
 		var still_dead = []
 		for dead_data in chunk_data.dead_enemies:
 			var time_since_death = current_time - dead_data.death_time
 
 			if time_since_death >= respawn_time:
-				# Ready to respawn - spawn new enemy
-				var enemy = spawn_single_enemy(dead_data.position, dead_data.level, chunk_key)
-				if enemy:
-					chunk_data.enemies.append(enemy)
-					print("♻️ Enemy respawned in chunk %s at (%d, %d)" % [
-						chunk_key, int(dead_data.position.x), int(dead_data.position.y)
-					])
+				# Find a valid respawn position (original or offset if blocked)
+				var respawn_pos = find_spaced_respawn_position(dead_data.position, existing_positions)
+
+				if respawn_pos != Vector2.ZERO:
+					var enemy = spawn_single_enemy(respawn_pos, dead_data.level, chunk_key)
+					if enemy:
+						chunk_data.enemies.append(enemy)
+						existing_positions.append(respawn_pos)  # Track for next respawn in same batch
+						print("♻️ Enemy respawned in chunk %s at (%d, %d)" % [
+							chunk_key, int(respawn_pos.x), int(respawn_pos.y)
+						])
+				else:
+					# Couldn't find valid position, delay respawn
+					dead_data.death_time = current_time - respawn_time + 5.0  # Try again in 5 seconds
+					still_dead.append(dead_data)
 			else:
 				# Not ready yet
 				still_dead.append(dead_data)
 
 		chunk_data.dead_enemies = still_dead
+
+func find_spaced_respawn_position(original_pos: Vector2, existing_positions: Array[Vector2]) -> Vector2:
+	"""Find a respawn position that maintains spacing from existing enemies"""
+	# First try the original position
+	if is_position_spaced(original_pos, existing_positions):
+		return original_pos
+
+	# Try offset positions in a spiral pattern
+	var offsets = [
+		Vector2(MIN_ENEMY_SPACING, 0),
+		Vector2(-MIN_ENEMY_SPACING, 0),
+		Vector2(0, MIN_ENEMY_SPACING),
+		Vector2(0, -MIN_ENEMY_SPACING),
+		Vector2(MIN_ENEMY_SPACING, MIN_ENEMY_SPACING),
+		Vector2(-MIN_ENEMY_SPACING, MIN_ENEMY_SPACING),
+		Vector2(MIN_ENEMY_SPACING, -MIN_ENEMY_SPACING),
+		Vector2(-MIN_ENEMY_SPACING, -MIN_ENEMY_SPACING),
+	]
+
+	for offset in offsets:
+		var candidate = original_pos + offset
+		if is_valid_spawn_position(candidate) and is_position_spaced(candidate, existing_positions):
+			return candidate
+
+	# No valid position found
+	return Vector2.ZERO
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DEBUG & STATS

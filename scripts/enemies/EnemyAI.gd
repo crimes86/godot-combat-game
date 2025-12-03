@@ -382,23 +382,27 @@ func process_patrolling(delta: float) -> void:
 		enemy.velocity = Vector2.ZERO
 		update_enemy_animation(Vector2.ZERO)
 	else:
+		# Calculate separation force from nearby enemies (push apart if too close)
+		var separation_force = get_separation_force()
+
 		# Check if another enemy is blocking our path
 		if is_path_blocked_by_enemy():
 			# Pick a new patrol target instead of pushing
 			pick_new_patrol_target()
-			enemy.velocity = Vector2.ZERO
-			update_enemy_animation(Vector2.ZERO)
+			enemy.velocity = separation_force * patrol_speed  # Still apply separation
+			update_enemy_animation(separation_force if separation_force.length() > 0.1 else Vector2.ZERO)
 		# Check if path would cross lava
 		elif is_path_crossing_lava(enemy.global_position, patrol_target):
 			# Pick a new patrol target to avoid lava
 			pick_new_patrol_target()
-			enemy.velocity = Vector2.ZERO
-			update_enemy_animation(Vector2.ZERO)
+			enemy.velocity = separation_force * patrol_speed
+			update_enemy_animation(separation_force if separation_force.length() > 0.1 else Vector2.ZERO)
 		else:
-			# Move toward target
+			# Move toward target with separation
 			var direction = (patrol_target - enemy.global_position).normalized()
-			enemy.velocity = direction * patrol_speed
-			update_enemy_animation(direction)
+			var combined_direction = (direction + separation_force * 0.5).normalized()
+			enemy.velocity = combined_direction * patrol_speed
+			update_enemy_animation(combined_direction)
 
 	enemy.move_and_slide()
 
@@ -437,6 +441,27 @@ func is_path_blocked_by_enemy() -> bool:
 				return true
 
 	return false
+
+func get_separation_force() -> Vector2:
+	"""Calculate a force pushing away from nearby enemies (prevents stacking)"""
+	var force = Vector2.ZERO
+	var overlap_radius = separation_radius * 1.5  # Slightly larger than blocking radius
+
+	for other_enemy in get_tree().get_nodes_in_group("enemies"):
+		if other_enemy == enemy or not is_instance_valid(other_enemy):
+			continue
+		if other_enemy.is_dying or other_enemy.is_corpse:
+			continue
+
+		var to_other = other_enemy.global_position - enemy.global_position
+		var distance = to_other.length()
+
+		if distance < overlap_radius and distance > 0.1:
+			# Push away from the other enemy, stronger when closer
+			var strength = 1.0 - (distance / overlap_radius)
+			force -= to_other.normalized() * strength
+
+	return force.normalized() if force.length() > 0.1 else Vector2.ZERO
 
 # ═══════════════════════════════════════════════════════════════════════════
 # COMBAT STATE (Chasing Player)

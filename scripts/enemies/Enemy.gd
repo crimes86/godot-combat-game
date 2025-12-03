@@ -316,11 +316,11 @@ func setup_skeleton_animations(anim_sprite: AnimatedSprite2D, walk_tex: Texture2
 		create_skeleton_animation(sprite_frames, walk_img, "walk_down", 2, 9, 8.0)
 		create_skeleton_animation(sprite_frames, walk_img, "walk_right", 3, 9, 8.0)
 
-		# Idle animations - use middle frame (frame 4 of 9) for neutral pose
-		create_skeleton_animation(sprite_frames, walk_img, "idle_up", 0, 1, 1.0, true, 4)
-		create_skeleton_animation(sprite_frames, walk_img, "idle_left", 1, 1, 1.0, true, 4)
-		create_skeleton_animation(sprite_frames, walk_img, "idle_down", 2, 1, 1.0, true, 4)
-		create_skeleton_animation(sprite_frames, walk_img, "idle_right", 3, 1, 1.0, true, 4)
+		# Idle animations - frame 0 for all directions (neutral standing pose)
+		create_skeleton_animation(sprite_frames, walk_img, "idle_up", 0, 1, 1.0, true, 0)
+		create_skeleton_animation(sprite_frames, walk_img, "idle_left", 1, 1, 1.0, true, 0)
+		create_skeleton_animation(sprite_frames, walk_img, "idle_down", 2, 1, 1.0, true, 0)
+		create_skeleton_animation(sprite_frames, walk_img, "idle_right", 3, 1, 1.0, true, 0)
 
 	# Setup ATTACK animations from slash texture (6 frames per row)
 	if slash_tex:
@@ -393,11 +393,11 @@ func create_shadow_layer() -> void:
 		create_skeleton_animation(shadow_frames, shadow_walk_img, "walk_down", 2, 9, 8.0)
 		create_skeleton_animation(shadow_frames, shadow_walk_img, "walk_right", 3, 9, 8.0)
 
-		# Idle animations - middle frame
-		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_up", 0, 1, 1.0, true, 4)
-		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_left", 1, 1, 1.0, true, 4)
-		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_down", 2, 1, 1.0, true, 4)
-		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_right", 3, 1, 1.0, true, 4)
+		# Idle animations - frame 0 for all directions (neutral standing pose)
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_up", 0, 1, 1.0, true, 0)
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_left", 1, 1, 1.0, true, 0)
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_down", 2, 1, 1.0, true, 0)
+		create_skeleton_animation(shadow_frames, shadow_walk_img, "idle_right", 3, 1, 1.0, true, 0)
 
 	# Attack animations - 6 frames each
 	if shadow_slash_tex:
@@ -497,11 +497,11 @@ func create_equipment_sprite(equip_name: String) -> AnimatedSprite2D:
 	create_skeleton_animation(equip_frames, walk_img, "walk_down", 2, 9, 8.0)
 	create_skeleton_animation(equip_frames, walk_img, "walk_right", 3, 9, 8.0)
 
-	# Idle animations - middle frame
-	create_skeleton_animation(equip_frames, walk_img, "idle_up", 0, 1, 1.0, true, 4)
-	create_skeleton_animation(equip_frames, walk_img, "idle_left", 1, 1, 1.0, true, 4)
-	create_skeleton_animation(equip_frames, walk_img, "idle_down", 2, 1, 1.0, true, 4)
-	create_skeleton_animation(equip_frames, walk_img, "idle_right", 3, 1, 1.0, true, 4)
+	# Idle animations - frame 0 for all directions (neutral standing pose)
+	create_skeleton_animation(equip_frames, walk_img, "idle_up", 0, 1, 1.0, true, 0)
+	create_skeleton_animation(equip_frames, walk_img, "idle_left", 1, 1, 1.0, true, 0)
+	create_skeleton_animation(equip_frames, walk_img, "idle_down", 2, 1, 1.0, true, 0)
+	create_skeleton_animation(equip_frames, walk_img, "idle_right", 3, 1, 1.0, true, 0)
 
 	# Attack animations - 6 frames each
 	if slash_tex:
@@ -545,11 +545,11 @@ func create_weapon_sprite(weapon_name: String) -> AnimatedSprite2D:
 	create_skeleton_animation(weapon_frames, walk_img, "walk_down", 2, 9, 8.0)
 	create_skeleton_animation(weapon_frames, walk_img, "walk_right", 3, 9, 8.0)
 
-	# Idle animations - middle frame (64x64)
-	create_skeleton_animation(weapon_frames, walk_img, "idle_up", 0, 1, 1.0, true, 4)
-	create_skeleton_animation(weapon_frames, walk_img, "idle_left", 1, 1, 1.0, true, 4)
-	create_skeleton_animation(weapon_frames, walk_img, "idle_down", 2, 1, 1.0, true, 4)
-	create_skeleton_animation(weapon_frames, walk_img, "idle_right", 3, 1, 1.0, true, 4)
+	# Idle animations - frame 0 for all directions (64x64, neutral standing pose)
+	create_skeleton_animation(weapon_frames, walk_img, "idle_up", 0, 1, 1.0, true, 0)
+	create_skeleton_animation(weapon_frames, walk_img, "idle_left", 1, 1, 1.0, true, 0)
+	create_skeleton_animation(weapon_frames, walk_img, "idle_down", 2, 1, 1.0, true, 0)
+	create_skeleton_animation(weapon_frames, walk_img, "idle_right", 3, 1, 1.0, true, 0)
 
 	# Attack animations - 6 frames each (192x192 oversize, scaled down)
 	if slash_tex:

@@ -502,7 +502,7 @@ func create_campfire_scene() -> void:
 	# Create light source
 	fire_light = PointLight2D.new()
 	fire_light.enabled = true
-	fire_light.texture_scale = 6.0  # Larger glow radius
+	fire_light.texture_scale = 6.0  # Large ambient glow for immersion
 	fire_light.color = Color(1.0, 0.65, 0.25)  # Warm orange
 	fire_light.energy = 1.5  # Brighter base energy
 	fire_light.shadow_enabled = true
@@ -911,17 +911,17 @@ func animate_fire(delta: float) -> void:
 
 func create_ground_mist_auras() -> void:
 	"""Create simple filled circle auras with additive blend so fire glow shows through"""
-	# WARMTH AURA (Orange/Amber) - always visible, shows base healing radius
-	# This is the default healing that's always active regardless of fuel
+	# WARMTH AURA (Orange/Amber) - tight visual glow around fire (decoupled from healing radius)
+	var visual_aura_radius = 26.0  # Tight glow around fire, NOT tied to healing
 	warmth_aura = Polygon2D.new()
 	warmth_aura.name = "WarmthAura"
 	warmth_aura.z_index = -3  # Behind all other auras
-	warmth_aura.color = Color(1.0, 0.5, 0.1, 0.05)  # Soft orange/amber, subtle
+	warmth_aura.color = Color(1.0, 0.5, 0.1, 0.08)  # Soft orange/amber, slightly more visible
 	warmth_aura.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	warmth_aura.material = CanvasItemMaterial.new()
 	warmth_aura.material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	warmth_aura.material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	warmth_aura.polygon = create_wavy_circle(warmth_radius, 48, 0.0)  # Fixed size: 150px
+	warmth_aura.polygon = create_wavy_circle(visual_aura_radius, 48, 0.0)  # Tight 40px
 	warmth_aura.visible = true  # Always visible
 	fire_sprite.add_child(warmth_aura)
 
@@ -966,8 +966,9 @@ func update_ground_mist(delta: float) -> void:
 	if warmth_aura and is_instance_valid(warmth_aura):
 		var time = Time.get_ticks_msec() / 1000.0
 		# Alpha flickers to match flame animation speeds
-		var alpha_flicker = 0.03 + sin(time * 3.25) * 0.012 + sin(time * 4.5) * 0.008
-		warmth_aura.polygon = create_fire_pulse_circle(warmth_radius, 48, time)
+		var alpha_flicker = 0.05 + sin(time * 3.25) * 0.015 + sin(time * 4.5) * 0.01
+		var visual_aura_radius = 26.0  # Tight glow, decoupled from healing
+		warmth_aura.polygon = create_fire_pulse_circle(visual_aura_radius, 48, time)
 		warmth_aura.color = Color(1.0, 0.5, 0.1, alpha_flicker)
 
 	# Get fuel counts from the OWNER's pool (so everyone sees the same auras)

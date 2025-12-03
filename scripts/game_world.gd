@@ -81,8 +81,8 @@ var WORLD_MAX_Y: float:
 const RUINS_PER_END_CHUNK: int = 2  # 2 ruins per end chunk (-1 and +1)
 const RUINS_MIN_DISTANCE_FROM_EDGE: float = 600.0  # Keep away from world edges
 const RUINS_MIN_DISTANCE_BETWEEN: float = 1500.0  # Minimum spacing between ruins
-const RUINS_PATH_OFFSET_MIN: float = 600.0  # Minimum Y distance from path (Y=0)
-const RUINS_PATH_OFFSET_MAX: float = 1400.0  # Maximum Y distance from path
+const RUINS_PATH_OFFSET_MIN: float = 2500.0  # Minimum Y distance from path (pushed to edges)
+const RUINS_PATH_OFFSET_MAX: float = 3500.0  # Maximum Y distance from path (near world edge)
 
 # Placement patterns for ruins in each chunk
 enum RuinsPattern {
@@ -518,8 +518,8 @@ func generate_optimized_world_layers():
 	"""Use existing Ground node from scene - don't override colors set in tscn"""
 	# Ground color is now set in game_world.tscn - no runtime override needed
 
-	# Add heavily trafficked areas around campfire and ruins
-	create_trafficked_areas()
+	# Trafficked areas now handled by path system (Line2D paths + clearings)
+	# create_trafficked_areas()  # Disabled - no longer needed
 
 	# Create path from campfire following torches eastward
 	create_path_system()
@@ -617,37 +617,54 @@ func spawn_path_for_chunk(chunk_id: int) -> void:
 	chunk_start_x = clamp(chunk_start_x, -cs, cs * 2)
 	chunk_end_x = clamp(chunk_end_x, -cs, cs * 2)
 
-	# Create main path through this chunk
-	var path_start = Vector2(chunk_start_x, 0)
-	var path_end = Vector2(chunk_end_x, 0)
-	var main_path = create_zigzag_path(path_start, path_end, 8, 350, rng)
+	# For chunk 0, split path around campfire clearing
+	var main_path: Array = []
+	var clearing_radius = 400.0
 
-	# For chunk 0, skip drawing path spots within campfire circle radius
-	# to avoid double-layering (campfire circle will cover this area)
-	var campfire_pos = CAMPFIRE_POS
-	var campfire_radius = 500.0
 	if chunk_id == 0:
-		draw_path_from_points_avoiding_area(chunk_path, main_path, 175, rng, campfire_pos, campfire_radius)
-		# Create campfire circle (only in chunk 0)
-		create_campfire_circle(chunk_path, campfire_pos, rng)
+		# Paths extend well into clearing so they blend naturally
+		var overlap = 200.0
+
+		# Left path: chunk start to inside clearing
+		var left_end = Vector2(CAMPFIRE_POS.x - clearing_radius + overlap, CAMPFIRE_POS.y)
+		var left_path = create_zigzag_path(Vector2(chunk_start_x, 0), left_end, 8, 250, rng)
+		draw_path_from_points(chunk_path, left_path, 260, rng)
+
+		# Right path: inside clearing to chunk end
+		var right_start = Vector2(CAMPFIRE_POS.x + clearing_radius - overlap, CAMPFIRE_POS.y)
+		var right_path = create_zigzag_path(right_start, Vector2(chunk_end_x, 0), 8, 250, rng)
+		draw_path_from_points(chunk_path, right_path, 260, rng)
+
+		# Draw campfire clearing LAST (on top) to cover path ends cleanly
+		create_campfire_circle(chunk_path, CAMPFIRE_POS, rng)
+
+		# Combine for torch placement
+		main_path = left_path + right_path
 	else:
-		draw_path_from_points(chunk_path, main_path, 175, rng)
+		# Other chunks: single continuous path
+		var path_start = Vector2(chunk_start_x, 0)
+		var path_end = Vector2(chunk_end_x, 0)
+		main_path = create_zigzag_path(path_start, path_end, 8, 250, rng)
+
+		# Draw branch paths FIRST (so they render UNDER the main path)
+		for ruins_key in RUINS_POSITIONS.keys():
+			var ruins_data = RUINS_POSITIONS[ruins_key]
+			if ruins_data.chunk_id != chunk_id:
+				continue
+
+			var ruins_pos = ruins_data.position
+			# Branch point on main path - find where to connect
+			var branch_x = clamp(ruins_pos.x + (400 if chunk_id < 0 else -400), chunk_start_x + 200, chunk_end_x - 200)
+			var branch_point = Vector2(branch_x, get_path_y_at_x(main_path, branch_x))
+			var ruins_path = create_zigzag_path(branch_point, ruins_pos, 6, 200, rng)
+			draw_path_from_points(chunk_path, ruins_path, 195, rng)
+			print("🛤️ Branch path to %s at %s" % [ruins_key, ruins_pos])
+
+		# Draw main path LAST (on top of branch paths)
+		draw_path_from_points(chunk_path, main_path, 260, rng)
 
 	# Store path points for torch/enemy systems
 	chunk_path_points[chunk_id] = main_path
-
-	# Create branch paths to ruins in this chunk
-	for ruins_key in RUINS_POSITIONS.keys():
-		var ruins_data = RUINS_POSITIONS[ruins_key]
-		if ruins_data.chunk_id != chunk_id:
-			continue
-
-		var ruins_pos = ruins_data.position
-		# Branch point on main path
-		var branch_x = clamp(ruins_pos.x + (400 if chunk_id < 0 else -400), chunk_start_x + 200, chunk_end_x - 200)
-		var branch_point = Vector2(branch_x, get_path_y_at_x(main_path, branch_x))
-		var ruins_path = create_zigzag_path(branch_point, ruins_pos, 4, 200, rng)
-		draw_path_from_points(chunk_path, ruins_path, 130, rng)
 
 	# Spawn torches along this chunk's path
 	spawn_torches_for_chunk(chunk_id, main_path, chunk_path)
@@ -693,40 +710,111 @@ func get_path_y_at_x(path_points: Array, target_x: float) -> float:
 	# Fallback: return Y=0 if not found
 	return 0.0
 
-func create_zigzag_path(start: Vector2, end: Vector2, num_zigs: int, zig_amplitude: float, rng: RandomNumberGenerator) -> Array:
-	"""Generate a zigzag path between two points"""
-	var points = [start]
+func create_zigzag_path(start: Vector2, end: Vector2, _num_zigs: int, zig_amplitude: float, rng: RandomNumberGenerator) -> Array:
+	"""Generate a meandering zig-zag path between two points"""
+	var points: Array = []
+	var total_distance = start.distance_to(end)
 	var direction = (end - start).normalized()
 	var perpendicular = Vector2(-direction.y, direction.x)
-	var total_distance = start.distance_to(end)
-	var segment_length = total_distance / (num_zigs + 1)
 
-	for i in range(1, num_zigs + 1):
-		var t = float(i) / float(num_zigs + 1)
+	# More points for detailed meandering (every ~300px)
+	var num_points = int(total_distance / 300) + 2
+	num_points = clamp(num_points, 6, 30)
+
+	# Multiple overlapping waves for organic zig-zag
+	var wave1_freq = rng.randf_range(3.0, 4.5)  # Primary zig-zag
+	var wave2_freq = rng.randf_range(6.0, 8.0)  # Secondary wobble
+	var phase1 = rng.randf() * TAU
+	var phase2 = rng.randf() * TAU
+
+	for i in range(num_points + 1):
+		var t = float(i) / float(num_points)
 		var base_pos = start.lerp(end, t)
 
-		# Alternate zigzag direction
-		var zig_direction = 1 if i % 2 == 0 else -1
-		var offset = perpendicular * zig_amplitude * zig_direction * rng.randf_range(0.7, 1.0)
+		# Taper at ends so path connects cleanly
+		var taper = sin(t * PI)
 
-		points.append(base_pos + offset)
+		# Primary zig-zag wave (strong)
+		var wave1 = sin(t * wave1_freq * PI + phase1)
+		# Secondary smaller wave for organic feel
+		var wave2 = sin(t * wave2_freq * PI + phase2) * 0.3
 
-	points.append(end)
+		# Combined offset with full amplitude
+		var offset = (wave1 + wave2) * zig_amplitude * taper
+
+		# Random noise for organic variation (subtle)
+		var noise = rng.randf_range(-20, 20) * taper
+
+		var final_offset = perpendicular * (offset + noise)
+		points.append(base_pos + final_offset)
+
 	return points
 
 func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: RandomNumberGenerator):
-	"""Draw path segments between all points in array"""
-	for i in range(points.size() - 1):
-		var start = points[i]
-		var end = points[i + 1]
-		create_path_segment(parent, start, end, width, rng)
+	"""Draw path with textured/organic edges using overlapping lines"""
+	if points.size() < 2:
+		return
+
+	# Consistent path color - single shade
+	const PATH_COLOR = Color(0.06, 0.06, 0.07, 0.55)
+
+	# Create multiple overlapping lines for soft edges (tightened fade)
+	var layers = [
+		{"width_mult": 1.85, "alpha": 0.35, "noise": 8},   # Outer fade (tightened 50%)
+		{"width_mult": 1.5, "alpha": 0.5, "noise": 5},     # Core path
+	]
+
+	for layer in layers:
+		var line = Line2D.new()
+		line.width = width * layer.width_mult
+		line.default_color = Color(PATH_COLOR.r, PATH_COLOR.g, PATH_COLOR.b, layer.alpha)
+		line.joint_mode = Line2D.LINE_JOINT_ROUND
+		line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+		line.end_cap_mode = Line2D.LINE_CAP_ROUND
+		line.antialiased = true
+
+		# Add points with noise for organic edges
+		for i in range(points.size()):
+			var point = points[i]
+			var noise_amount = layer.noise
+			# Reduce noise at endpoints for clean connections
+			if i == 0 or i == points.size() - 1:
+				noise_amount *= 0.3
+			var noisy_point = point + Vector2(
+				rng.randf_range(-noise_amount, noise_amount),
+				rng.randf_range(-noise_amount, noise_amount)
+			)
+			line.add_point(noisy_point)
+
+		parent.add_child(line)
 
 func draw_path_from_points_avoiding_area(parent: Node2D, points: Array, width: float, rng: RandomNumberGenerator, avoid_center: Vector2, avoid_radius: float):
-	"""Draw path segments between all points, skipping spots within avoid area"""
-	for i in range(points.size() - 1):
-		var start = points[i]
-		var end = points[i + 1]
-		create_path_segment_avoiding_area(parent, start, end, width, rng, avoid_center, avoid_radius)
+	"""Draw path as Line2D, with gap around avoid area"""
+	if points.size() < 2:
+		return
+
+	# If no avoid area, just draw normally
+	if avoid_radius <= 0:
+		draw_path_from_points(parent, points, width, rng)
+		return
+
+	# Split points into segments outside the avoid area
+	var current_segment: Array = []
+
+	for point in points:
+		var in_avoid_area = point.distance_to(avoid_center) < avoid_radius
+
+		if not in_avoid_area:
+			current_segment.append(point)
+		else:
+			# End current segment if it has points
+			if current_segment.size() >= 2:
+				draw_path_from_points(parent, current_segment, width, rng)
+			current_segment = []
+
+	# Draw final segment
+	if current_segment.size() >= 2:
+		draw_path_from_points(parent, current_segment, width, rng)
 
 func create_curved_path(start: Vector2, end: Vector2, num_points: int, rng: RandomNumberGenerator) -> Array:
 	"""Generate curved path points between two positions"""
@@ -743,50 +831,6 @@ func create_curved_path(start: Vector2, end: Vector2, num_points: int, rng: Rand
 		points.append(pos)
 
 	return points
-
-func create_path_segment(parent: Node2D, start: Vector2, end: Vector2, width: float, rng: RandomNumberGenerator):
-	"""Create worn dirt path with visible beaten trail"""
-	create_path_segment_avoiding_area(parent, start, end, width, rng, Vector2.ZERO, 0.0)
-
-func create_path_segment_avoiding_area(parent: Node2D, start: Vector2, end: Vector2, width: float, rng: RandomNumberGenerator, avoid_center: Vector2, avoid_radius: float):
-	"""Create worn dirt path with visible beaten trail, skipping spots within avoid area"""
-	var segment_length = start.distance_to(end)
-	var actual_width = width * 1.5  # 50% wider path
-	var num_spots = int(segment_length / 35) + 1
-
-	for i in range(num_spots):
-		var t = float(i) / float(max(1, num_spots - 1))
-		var pos = start.lerp(end, t)
-
-		# Add random offset perpendicular to path for natural variation
-		var direction = (end - start).normalized()
-		var perpendicular = Vector2(-direction.y, direction.x)
-		var offset = rng.randf_range(-actual_width * 0.35, actual_width * 0.35)
-		pos += perpendicular * offset
-
-		# Skip spots within avoid area (campfire circle)
-		if avoid_radius > 0 and pos.distance_to(avoid_center) < avoid_radius:
-			continue
-
-		# Create spot
-		var spot_size = rng.randf_range(actual_width * 0.9, actual_width * 1.1)
-
-		# 3-layer spot: soft outer fade, mid worn, beaten center (dark grey path)
-		# Colors at ~60-75% of ground (0.15) for subtle contrast during day
-		var layers = [
-			{"size_mult": 1.6, "alpha": 0.15, "color": Color(0.11, 0.11, 0.12)},  # Soft outer fade (~73%)
-			{"size_mult": 1.0, "alpha": 0.25, "color": Color(0.10, 0.10, 0.11)},  # Mid worn area (~67%)
-			{"size_mult": 1.0, "alpha": 0.40, "color": Color(0.09, 0.09, 0.10)}   # Center beaten path (~60%)
-		]
-
-		for layer in layers:
-			var patch = ColorRect.new()
-			var size = spot_size * layer.size_mult
-			patch.size = Vector2(size, size)
-			patch.position = pos - patch.size / 2
-			patch.color = Color(layer.color.r, layer.color.g, layer.color.b, layer.alpha)
-			patch.rotation = rng.randf() * TAU
-			parent.add_child(patch)
 
 func create_ruins_branch_path_spots(path_layer: Node2D, main_path_points: Array, rng: RandomNumberGenerator):
 	"""Create branching path spots to ruins"""
@@ -1125,53 +1169,80 @@ func create_feathered_area(parent: Node2D, center: Vector2, base_size: float, rn
 			parent.add_child(rect)
 
 func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGenerator):
-	"""Create a heavily-visited circular area around campfire using same spot layering as path"""
-	var radius = 450.0
+	"""Create worn circular clearing around campfire with soft fade edge"""
+	var clearing_radius = 400.0
 
-	# Use concentric rings with proper spot counts (more spots in outer rings)
-	# Ring 0 (center): small radius, few spots
-	# Ring N (outer): large radius, many spots
-	var rings = [
-		{"radius": 60, "spots": 4},
-		{"radius": 120, "spots": 8},
-		{"radius": 180, "spots": 12},
-		{"radius": 240, "spots": 16},
-		{"radius": 300, "spots": 20},
-		{"radius": 360, "spots": 24},
-		{"radius": 420, "spots": 28},
-	]
+	# Generate base shape points (reused for both layers)
+	var num_points = 32
+	var base_points = []
+	for i in range(num_points):
+		var angle = (float(i) / float(num_points)) * TAU
+		var wobble = sin(angle * 2) * 15 + cos(angle * 3) * 10
+		var noise = rng.randf_range(-10, 10)
+		base_points.append({"angle": angle, "wobble": wobble, "noise": noise})
 
-	for ring_data in rings:
-		var ring_radius = ring_data.radius
-		var num_spots = ring_data.spots
-		var angle_offset = rng.randf() * TAU  # Random starting angle per ring
+	# Outer fade layer (larger, semi-transparent) - drawn first
+	var outer_polygon = Polygon2D.new()
+	outer_polygon.position = center
+	var outer_points = PackedVector2Array()
+	var outer_radius = clearing_radius + 40  # 25% bigger fade
+	for p in base_points:
+		var point_radius = outer_radius + p.wobble + p.noise
+		outer_points.append(Vector2(cos(p.angle), sin(p.angle)) * point_radius)
+	outer_polygon.polygon = outer_points
+	outer_polygon.color = Color(0.05, 0.05, 0.06, 0.35)  # Darker than path
+	outer_polygon.antialiased = true
+	parent.add_child(outer_polygon)
 
-		for i in range(num_spots):
-			var angle = (float(i) / float(num_spots)) * TAU + angle_offset
-			var dist = ring_radius + rng.randf_range(-20, 20)  # Small radial variation
-			var pos = center + Vector2(cos(angle), sin(angle)) * dist
+	# Main clearing polygon (opaque) - drawn on top
+	var polygon = Polygon2D.new()
+	polygon.position = center
+	var points = PackedVector2Array()
+	for p in base_points:
+		var point_radius = clearing_radius + p.wobble + p.noise
+		points.append(Vector2(cos(p.angle), sin(p.angle)) * point_radius)
+	polygon.polygon = points
+	polygon.color = Color(0.05, 0.05, 0.06, 1.0)  # Slightly darker than path (0.06)
+	polygon.antialiased = true
+	parent.add_child(polygon)
 
-			# Small random scatter
-			pos += Vector2(rng.randf_range(-15, 15), rng.randf_range(-15, 15))
+	# Add scattered bones/skulls as decoration on the clearing
+	add_campfire_decorations(parent, center, clearing_radius, rng)
 
-			# Spot size - consistent for even coverage
-			var spot_size = rng.randf_range(140, 200)
+func add_campfire_decorations(parent: Node2D, center: Vector2, clearing_radius: float, rng: RandomNumberGenerator):
+	"""Add scattered bones, skulls around the campfire clearing"""
+	var bone_texture = load("res://assets/environment/wasteland/bones.png") as Texture2D
+	var skull_texture = load("res://assets/environment/wasteland/skull.png") as Texture2D
 
-			# Same colors/alpha as path for consistent look
-			var layers = [
-				{"size_mult": 1.6, "alpha": 0.15, "color": Color(0.11, 0.11, 0.12)},
-				{"size_mult": 1.0, "alpha": 0.25, "color": Color(0.10, 0.10, 0.11)},
-				{"size_mult": 1.0, "alpha": 0.40, "color": Color(0.09, 0.09, 0.10)}
-			]
+	if not bone_texture:
+		return
 
-			for layer in layers:
-				var patch = ColorRect.new()
-				var size = spot_size * layer.size_mult
-				patch.size = Vector2(size, size)
-				patch.position = pos - patch.size / 2
-				patch.color = Color(layer.color.r, layer.color.g, layer.color.b, layer.alpha)
-				patch.rotation = rng.randf() * TAU
-				parent.add_child(patch)
+	# Scatter 10-15 bones/skulls around the clearing (not too close to center campfire)
+	var num_decorations = rng.randi_range(10, 15)
+	var min_dist = 120.0  # Keep away from campfire center
+	var max_dist = clearing_radius - 50.0  # Stay within clearing
+
+	for i in range(num_decorations):
+		var angle = rng.randf() * TAU
+		var dist = rng.randf_range(min_dist, max_dist)
+		var pos = center + Vector2(cos(angle), sin(angle)) * dist
+
+		# 75% bones, 25% skulls
+		var is_skull = rng.randf() < 0.25
+		var texture = skull_texture if is_skull and skull_texture else bone_texture
+
+		var sprite = Sprite2D.new()
+		sprite.texture = texture
+		sprite.global_position = pos
+		sprite.rotation = rng.randf() * TAU
+		sprite.scale = Vector2.ONE * rng.randf_range(0.5, 0.9)
+
+		# Brighter so visible on dark clearing
+		var brightness = rng.randf_range(0.75, 1.0)
+		sprite.modulate = Color(brightness, brightness * 0.95, brightness * 0.88, 1.0)
+
+		sprite.z_index = 1  # Above clearing polygon (which is 0)
+		parent.add_child(sprite)
 
 func _input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -2491,7 +2562,7 @@ func spawn_training_dummy():
 	const DUMMY_SCENE = preload("res://scenes/training/training_dummy.tscn")
 
 	# Spawn dummy north of campfire (negative Y = north)
-	var dummy_pos = CAMPFIRE_POS + Vector2(0, -180)  # North of campfire in cleared area
+	var dummy_pos = CAMPFIRE_POS + Vector2(0, -280)  # North of campfire in cleared area
 
 	var dummy = DUMMY_SCENE.instantiate()
 	dummy.global_position = dummy_pos
