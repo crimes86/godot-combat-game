@@ -63,6 +63,11 @@ var LEVEL_BANDS: Array:
 ## Minimum spacing between spawned enemies (prevents crowding)
 const MIN_ENEMY_SPACING: float = 80.0
 
+## Wolf pack configuration
+const WOLVES_PER_PACK_MIN: int = 3
+const WOLVES_PER_PACK_MAX: int = 5
+const WOLF_PACK_SPREAD: float = 150.0  # How far wolves spread from pack center
+
 ## Safe zones - no enemies spawn within these areas
 ## Campfire is at chunk 0 center (CHUNK_SIZE/2, 0)
 var SAFE_ZONES: Array:
@@ -465,22 +470,12 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			else:
 				continue
 
-		# Phase 3: Ritual bone sites (25%) - Random levels (thematic: unknown ancient dead)
+		# Phase 3: Ritual bone sites - Wolf packs spawn here instead of skeletons
+		# Wolves spawn as packs with level based on chunk
 		elif ritual_spawned < ritual_count and ritual_sites.size() > 0:
-			var site = ritual_sites[spawn_rng.randi() % ritual_sites.size()]
-			var angle = spawn_rng.randf() * TAU
-			var distance = spawn_rng.randf_range(50, 180)
-			spawn_pos = site + Vector2(cos(angle), sin(angle)) * distance
-			level = spawn_rng.randi_range(1, 5)  # Random mix of levels
-
-			# Clamp to chunk bounds
-			spawn_pos.x = clamp(spawn_pos.x, chunk_min_x, chunk_max_x)
-			spawn_pos.y = clamp(spawn_pos.y, world_y_min, world_y_max)
-
-			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
-				ritual_spawned += 1
-			else:
-				continue
+			# Skip individual skeleton spawns at ritual sites - wolves are spawned separately
+			ritual_spawned = ritual_count  # Mark as complete, wolves handled below
+			continue
 
 		# No more phases - all skeletons must be anchored
 		else:
@@ -494,12 +489,31 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			spawn_positions.append(spawn_pos)  # Track for spacing checks
 			spawned += 1
 
-	if spawned > 0:
-		print("✨ Spawned %d enemies in chunk %s (total: %d/%d)" % [
-			spawned, chunk_key, chunk_data.get_alive_count(), chunk_data.target_count
+	# Spawn wolf packs at ritual sites (separate from skeleton spawning)
+	# Ritual sites now have size info: {pos: Vector2, size: int (1-3)}
+	var wolves_spawned = 0
+	if ritual_sites.size() > 0:
+		for site in ritual_sites:
+			# Handle both old format (Vector2) and new format (Dictionary with pos/size)
+			var site_pos: Vector2
+			var site_size: int = 2  # Default medium
+			if site is Dictionary:
+				site_pos = site.pos
+				site_size = site.get("size", 2)
+			else:
+				site_pos = site  # Old format compatibility
+
+			var wolves = spawn_wolf_pack(site_pos, chunk_key, chunk_x, site_size)
+			for wolf in wolves:
+				chunk_data.enemies.append(wolf)
+				wolves_spawned += 1
+
+	if spawned > 0 or wolves_spawned > 0:
+		print("✨ Spawned %d skeletons + %d wolves in chunk %s (total: %d)" % [
+			spawned, wolves_spawned, chunk_key, chunk_data.get_alive_count()
 		])
-		print("   📍 Monster lakes: %d (L1-6), Regular pools: %d (L1-3), Ritual sites: %d (L1-5)" % [
-			monster_spawned, regular_spawned, ritual_spawned
+		print("   📍 Monster lakes: %d (L1-6), Regular pools: %d (L1-3), Wolf packs: %d" % [
+			monster_spawned, regular_spawned, wolves_spawned
 		])
 
 func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
@@ -541,6 +555,162 @@ func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
 		network_enemy_manager.spawn_enemy_on_clients.rpc(network_id, pos, level, enemy_name)
 
 	return enemy
+
+func spawn_wolf_pack(center_pos: Vector2, chunk_key: String, chunk_x: int, site_size: int = 2) -> Array:
+	"""Spawn a pack of wolves at a ritual site with level based on chunk and size based on site"""
+	var wolves: Array = []
+
+	# Determine level range based on chunk
+	var min_level: int
+	var max_level: int
+
+	if chunk_x == 0:
+		# Noob chunk: mix of low and mid level packs
+		# 50% chance for levels 1-3, 50% chance for levels 3-6
+		if spawn_rng.randf() < 0.5:
+			min_level = 1
+			max_level = 3
+		else:
+			min_level = 3
+			max_level = 6
+	else:
+		# Edge chunks (-1, +1): higher level packs 6-10
+		min_level = 6
+		max_level = 10
+
+	# Determine pack size based on ritual site size
+	# Size 1 (small): 3-4 wolves
+	# Size 2 (medium): 4-5 wolves
+	# Size 3 (large): 5-7 wolves
+	var pack_size: int
+	match site_size:
+		1:
+			pack_size = spawn_rng.randi_range(3, 4)
+		2:
+			pack_size = spawn_rng.randi_range(4, 5)
+		3:
+			pack_size = spawn_rng.randi_range(5, 7)
+		_:
+			pack_size = spawn_rng.randi_range(WOLVES_PER_PACK_MIN, WOLVES_PER_PACK_MAX)
+
+	# Generate unique pack ID
+	var pack_id = "pack_%s_%d" % [chunk_key.replace(",", "_"), randi()]
+
+	# Pick a consistent level for the pack (with slight variation)
+	var base_level = spawn_rng.randi_range(min_level, max_level)
+
+	# Track positions for spacing
+	var pack_positions: Array[Vector2] = []
+
+	for i in range(pack_size):
+		# First wolf is alpha
+		var is_alpha = (i == 0)
+
+		# Find position for this wolf
+		var wolf_pos: Vector2
+		var attempts = 0
+		var max_attempts = 10
+
+		while attempts < max_attempts:
+			attempts += 1
+			if is_alpha:
+				# Alpha at center with small offset
+				wolf_pos = center_pos + Vector2(
+					spawn_rng.randf_range(-30, 30),
+					spawn_rng.randf_range(-30, 30)
+				)
+			else:
+				# Pack members spread around alpha
+				var angle = spawn_rng.randf() * TAU
+				var distance = spawn_rng.randf_range(60, WOLF_PACK_SPREAD)
+				wolf_pos = center_pos + Vector2(cos(angle), sin(angle)) * distance
+
+			# Check spacing from other pack members
+			var spaced = true
+			for existing_pos in pack_positions:
+				if wolf_pos.distance_to(existing_pos) < 50:  # Closer spacing within pack
+					spaced = false
+					break
+
+			if spaced and is_valid_spawn_position(wolf_pos):
+				break
+
+		# Determine wolf level (alpha is always at max, others vary slightly)
+		var wolf_level: int
+		if is_alpha:
+			wolf_level = base_level
+		else:
+			wolf_level = max(1, base_level + spawn_rng.randi_range(-1, 0))  # Slightly lower than alpha
+
+		# Spawn the wolf
+		var wolf = spawn_single_wolf(wolf_pos, wolf_level, chunk_key, pack_id, is_alpha)
+		if wolf:
+			wolves.append(wolf)
+			pack_positions.append(wolf_pos)
+
+	if wolves.size() > 0:
+		print("🐺 Spawned wolf pack '%s' with %d wolves (L%d-%d) at ritual site" % [
+			pack_id, wolves.size(), min_level, max_level
+		])
+
+	return wolves
+
+
+func spawn_single_wolf(pos: Vector2, level: int, chunk_key: String, pack_id: String, is_alpha: bool) -> Node:
+	"""Spawn a single wolf at position"""
+	var wolf_scene = load("res://scenes/enemies/wolf.tscn")
+	if not wolf_scene:
+		push_error("Failed to load wolf scene!")
+		return null
+
+	var wolf = wolf_scene.instantiate()
+	wolf.enemy_level = level
+	wolf.pack_id = pack_id
+	wolf.pack_alpha = is_alpha
+
+	# Generate unique name
+	var wolf_name = "Wolf_%s_%d" % [chunk_key.replace(",", "_"), randi()]
+	wolf.name = wolf_name
+
+	# Set position BEFORE adding to tree
+	wolf.position = pos
+
+	# Add to world
+	game_world.add_child(wolf)
+
+	# Register with network enemy manager for multiplayer sync
+	if network_enemy_manager:
+		network_enemy_manager.register_enemy(wolf)
+
+	# Connect death signal for respawn tracking
+	if wolf.has_signal("died"):
+		wolf.died.connect(_on_wolf_died.bind(wolf, chunk_key, pack_id))
+
+	# Connect corpse loot signal
+	if wolf.has_signal("corpse_clicked") and game_world.has_method("_on_corpse_clicked"):
+		wolf.corpse_clicked.connect(game_world._on_corpse_clicked)
+
+	return wolf
+
+
+func _on_wolf_died(wolf: Node, chunk_key: String, pack_id: String) -> void:
+	"""Called when a wolf dies - track for pack respawn"""
+	if not chunk_enemies.has(chunk_key):
+		return
+
+	var chunk_data = chunk_enemies[chunk_key]
+
+	# Record death for respawn (wolves respawn as packs)
+	if respawn_time > 0:
+		chunk_data.dead_enemies.append({
+			"position": wolf.global_position,
+			"level": wolf.enemy_level,
+			"death_time": Time.get_ticks_msec() / 1000.0,
+			"enemy_type": "wolf",
+			"pack_id": pack_id,
+			"is_alpha": wolf.pack_alpha
+		})
+
 
 @rpc("authority", "call_local", "reliable")
 func client_spawn_enemy(pos: Vector2, level: int, enemy_name: String) -> void:

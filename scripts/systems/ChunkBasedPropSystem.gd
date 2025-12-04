@@ -15,8 +15,8 @@ const UNLOAD_DISTANCE: float = 12000.0  # Unload chunks beyond this distance (do
 
 # Prop density per chunk (8000x8000 = 64M px²)
 # OPTIMIZED: Aggressively reduced for multiplayer performance (~10k node target for 2 chunks)
-const TREES_PER_CHUNK: int = 90  # Dead trees (lootable - wood) - reduced from 140
-const ROCKS_LARGE_PER_CHUNK: int = 30  # Large rocks (lootable - stone/ore) - reduced from 35
+const TREES_PER_CHUNK: int = 180  # Dead trees (lootable - wood) - doubled from 90
+const ROCKS_LARGE_PER_CHUNK: int = 60  # Large rocks (lootable - stone/ore) - doubled from 30
 const ROCKS_MEDIUM_PER_CHUNK: int = 30  # Medium rocks (decorative) - reduced from 50
 const ROCKS_SMALL_PER_CHUNK: int = 25  # Small rocks (decorative) - reduced from 40
 const MONSTER_LAVA_POOLS_PER_CHUNK: int = 3  # Giant lava pools (anchor points) - reduced from 4
@@ -86,8 +86,9 @@ class ChunkData:
 	var monster_lava_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] for monster pools
 	var lava_pool_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] for exclusion
 	var large_rock_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] for rock overlap prevention
+	var tree_positions: Array[Vector2] = []  # Tree positions for spacing enforcement
 	var all_prop_positions: Array[Dictionary] = []  # [{pos: Vector2, radius: float}] ALL props for bone fill
-	var ritual_sites: Array[Vector2] = []  # Positions of dense bone ritual areas
+	var ritual_sites: Array[Dictionary] = []  # {pos: Vector2, size: int} - dense bone ritual areas
 	# Bone optimization: store deferred pickable bones (spawn when player is near)
 	var deferred_pickable_bones: Array[Dictionary] = []  # [{pos, texture, scale, rotation, modulate}]
 	var active_pickable_bones: Array[Node2D] = []  # Currently spawned pickable bones
@@ -708,22 +709,55 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			if harvested_items.has(tree_id):
 				return
 
-			# Square chunks: CHUNK_SIZE x CHUNK_SIZE
-			var tree_pos = chunk_center + Vector2(
-				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
-				rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
-			)
+			# Try multiple positions to find valid spot (better distribution)
+			const MIN_TREE_SPACING = 180.0  # Minimum distance between trees
+			const MAX_ATTEMPTS = 15
 
-			if not is_in_world_bounds(tree_pos):
-				return
-			if tree_pos.distance_to(campfire_pos) < avoid_campfire_radius:
-				return
-			if is_position_in_lava_pool(tree_pos, chunk_data):
-				return  # Don't spawn trees in lava pools
+			var tree_pos = Vector2.ZERO
+			var found_valid = false
+
+			for _attempt in range(MAX_ATTEMPTS):
+				# Square chunks: CHUNK_SIZE x CHUNK_SIZE (no edge buffer - fill to edges)
+				tree_pos = chunk_center + Vector2(
+					rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2),
+					rng.randf_range(-CHUNK_SIZE / 2, CHUNK_SIZE / 2)
+				)
+
+				# Check world bounds
+				if not is_in_world_bounds(tree_pos):
+					continue
+
+				# Avoid campfire area
+				if tree_pos.distance_to(campfire_pos) < avoid_campfire_radius:
+					continue
+
+				# Avoid lava pools
+				if is_position_in_lava_pool(tree_pos, chunk_data):
+					continue
+
+				# Avoid main path (keeps paths visually clear)
+				if is_position_on_path(tree_pos, PATH_WIDTH + 50):
+					continue
+
+				# Check minimum spacing from other trees (prevents clustering)
+				var too_close = false
+				for existing_tree in chunk_data.tree_positions:
+					if tree_pos.distance_to(existing_tree) < MIN_TREE_SPACING:
+						too_close = true
+						break
+				if too_close:
+					continue
+
+				found_valid = true
+				break
+
+			if not found_valid:
+				return  # Couldn't find valid position after all attempts
 
 			var tree_type = TREE_TYPES[rng.randi() % TREE_TYPES.size()]
 			create_tree(tree_pos, tree_type, container, rng, tree_id)
-			# Track position for bone fill (trees have ~80px exclusion)
+			# Track position for spacing and bone fill
+			chunk_data.tree_positions.append(tree_pos)
 			chunk_data.all_prop_positions.append({"pos": tree_pos, "radius": 80.0})
 
 		"rock_large":
@@ -896,10 +930,13 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			# Find an empty spot for a dense bone ritual pile
 			var site_pos = find_empty_spot_for_ritual(chunk_center, chunk_data, rng, campfire_pos)
 			if site_pos != Vector2.ZERO:
-				chunk_data.ritual_sites.append(site_pos)
-				create_ritual_bone_pile(site_pos, container, rng)
-				# Mark this area as occupied
-				chunk_data.all_prop_positions.append({"pos": site_pos, "radius": 100.0})
+				# Random size: 1=small (3-4 wolves), 2=medium (4-5), 3=large (5-7)
+				var site_size = rng.randi_range(1, 3)
+				chunk_data.ritual_sites.append({"pos": site_pos, "size": site_size})
+				create_ritual_bone_pile(site_pos, container, rng, site_size)
+				# Mark this area as occupied (larger sites have bigger radius)
+				var site_radius = 80.0 + site_size * 20.0
+				chunk_data.all_prop_positions.append({"pos": site_pos, "radius": site_radius})
 
 		"bone_fill":
 			# Fill empty spaces with scattered bones
@@ -1444,7 +1481,7 @@ func find_empty_spot_for_ritual(chunk_center: Vector2, chunk_data: ChunkData, rn
 
 		# Also check ritual sites
 		for site in chunk_data.ritual_sites:
-			if test_pos.distance_to(site) < 250:  # Keep ritual sites spread out
+			if test_pos.distance_to(site.pos) < 250:  # Keep ritual sites spread out
 				too_close = true
 				break
 
@@ -1453,15 +1490,30 @@ func find_empty_spot_for_ritual(chunk_center: Vector2, chunk_data: ChunkData, rn
 
 	return Vector2.ZERO  # No valid spot found
 
-func create_ritual_bone_pile(pos: Vector2, container: Node2D, rng: RandomNumberGenerator) -> void:
-	"""Create a dense ritual pile of bones and skulls"""
+func create_ritual_bone_pile(pos: Vector2, container: Node2D, rng: RandomNumberGenerator, site_size: int = 2) -> void:
+	"""Create a dense ritual pile of bones and skulls. Size: 1=small, 2=medium, 3=large"""
 	var pile = Node2D.new()
 	pile.name = "RitualBonePile"
 	pile.position = pos
 	pile.z_index = -1
 
-	# Dense pile: 6-10 bones/skulls (reduced from 12-20 for performance)
-	var num_bones = rng.randi_range(6, 10)
+	# Bone count based on size: small=4-6, medium=6-10, large=10-15
+	var num_bones: int
+	var cluster_radius: float
+	match site_size:
+		1:  # Small
+			num_bones = rng.randi_range(4, 6)
+			cluster_radius = 50.0
+		2:  # Medium
+			num_bones = rng.randi_range(6, 10)
+			cluster_radius = 70.0
+		3:  # Large
+			num_bones = rng.randi_range(10, 15)
+			cluster_radius = 100.0
+		_:
+			num_bones = rng.randi_range(6, 10)
+			cluster_radius = 70.0
+
 	for i in range(num_bones):
 		# 55% bones, 45% skulls (more skulls in ritual piles)
 		var bone_type = "bones" if rng.randf() < 0.55 else "skull"
@@ -1474,9 +1526,9 @@ func create_ritual_bone_pile(pos: Vector2, container: Node2D, rng: RandomNumberG
 
 		var sprite = Sprite2D.new()
 		sprite.texture = texture
-		# Tight cluster radius (15-70px)
+		# Cluster radius based on size
 		var angle = rng.randf() * TAU
-		var dist = rng.randf_range(15, 70)
+		var dist = rng.randf_range(15, cluster_radius)
 		sprite.position = Vector2(cos(angle), sin(angle)) * dist
 		sprite.rotation = rng.randf() * TAU
 		sprite.scale = Vector2.ONE * rng.randf_range(0.6, 1.4)
