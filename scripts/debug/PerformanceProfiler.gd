@@ -704,14 +704,11 @@ func get_wolf_pack_info() -> String:
 
 		if wolf.get("pack_alpha"):
 			packs[pack_id].alpha = wolf
-			var roaming = wolf.get("is_roaming_pack")
-			packs[pack_id].roaming = roaming if roaming != null else false
-			var state = wolf.get("_patrol_state")
-			packs[pack_id].state = state if state != null else "idle"
-			var target = wolf.get("_patrol_target")
-			packs[pack_id].target = target if target != null else Vector2.ZERO
-			var spd = wolf.get("_patrol_speed")
-			packs[pack_id].speed = spd if spd != null else 0.0
+			packs[pack_id].roaming = false  # Simplified - no more roaming
+			var is_moving = wolf.get("_pack_is_moving")
+			packs[pack_id].state = "moving" if is_moving else "idle"
+			packs[pack_id].target = Vector2.ZERO
+			packs[pack_id].speed = 100.0 if is_moving else 0.0
 			var howling = wolf.get("_is_howling")
 			packs[pack_id].is_howling = howling if howling != null else false
 
@@ -769,16 +766,16 @@ func draw_wolf_pack_patrol_paths() -> void:
 		if not is_instance_valid(wolf):
 			continue
 
-		# Only draw for roaming pack alphas that are patrolling
-		if not wolf.get("pack_alpha") or not wolf.get("is_roaming_pack"):
+		# Only draw for moving pack alphas
+		if not wolf.get("pack_alpha"):
 			continue
 
-		var patrol_state = wolf.get("_patrol_state")
-		if patrol_state != "patrolling":
+		var is_moving = wolf.get("_pack_is_moving")
+		if not is_moving:
 			continue
 
-		var patrol_target = wolf.get("_patrol_target")
-		if patrol_target == null or patrol_target == Vector2.ZERO:
+		var move_dir = wolf.get("_pack_move_direction")
+		if move_dir == null or move_dir == Vector2.ZERO:
 			continue
 
 		var wolf_pos = wolf.global_position
@@ -786,44 +783,20 @@ func draw_wolf_pack_patrol_paths() -> void:
 		if pack_id == null:
 			pack_id = "unknown"
 
-		# Draw line from wolf to patrol target
+		# Single line with arrow built-in (reduces node count)
+		var direction_end = wolf_pos + move_dir * 80.0
+		var arrow_angle = move_dir.angle()
+		var arrow_size = 12.0
+
 		var line = Line2D.new()
 		line.name = "WolfPatrol_%s" % pack_id
 		line.width = 3.0
-		line.default_color = Color(0.6, 0.3, 0.1, 0.7)  # Brown color for wolf patrol
+		line.default_color = Color(0.7, 0.4, 0.1, 0.8)
 		line.add_point(wolf_pos)
-		line.add_point(patrol_target)
+		line.add_point(direction_end)
+		# Arrow head points
+		line.add_point(direction_end + Vector2.from_angle(arrow_angle + PI * 0.75) * arrow_size)
+		line.add_point(direction_end)
+		line.add_point(direction_end + Vector2.from_angle(arrow_angle - PI * 0.75) * arrow_size)
 		line.z_index = 997
 		debug_draw_container.add_child(line)
-
-		# Draw target marker (X)
-		var marker_size = 15.0
-		var marker1 = Line2D.new()
-		marker1.name = "WolfPatrol_%s_X1" % pack_id
-		marker1.width = 3.0
-		marker1.default_color = Color(0.8, 0.4, 0.1, 0.9)
-		marker1.add_point(patrol_target + Vector2(-marker_size, -marker_size))
-		marker1.add_point(patrol_target + Vector2(marker_size, marker_size))
-		marker1.z_index = 998
-		debug_draw_container.add_child(marker1)
-
-		var marker2 = Line2D.new()
-		marker2.name = "WolfPatrol_%s_X2" % pack_id
-		marker2.width = 3.0
-		marker2.default_color = Color(0.8, 0.4, 0.1, 0.9)
-		marker2.add_point(patrol_target + Vector2(marker_size, -marker_size))
-		marker2.add_point(patrol_target + Vector2(-marker_size, marker_size))
-		marker2.z_index = 998
-		debug_draw_container.add_child(marker2)
-
-		# Draw label at target
-		var label = Label.new()
-		label.name = "WolfPatrol_%s_Label" % pack_id
-		label.text = "🐺 %s" % pack_id.substr(0, 6)
-		label.position = patrol_target + Vector2(-30, -30)
-		label.add_theme_font_size_override("font_size", 12)
-		label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
-		label.add_theme_color_override("font_outline_color", Color.BLACK)
-		label.add_theme_constant_override("outline_size", 2)
-		label.z_index = 999
-		debug_draw_container.add_child(label)

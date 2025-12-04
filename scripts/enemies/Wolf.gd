@@ -1139,14 +1139,12 @@ const AMBIENT_HOWL_INTERVAL_MIN: float = 30.0  # Min seconds between ambient how
 const AMBIENT_HOWL_INTERVAL_MAX: float = 90.0  # Max seconds between ambient howl attempts
 const AMBIENT_HOWL_CHANCE: float = 0.15  # 15% chance when timer fires (only pack alphas)
 
-# Pack roaming/patrol constants
-const ROAMING_PACK_CHANCE: float = 0.25  # 25% of packs will roam
-const PATROL_REST_MIN: float = 30.0  # Min seconds resting at a site before patrol
-const PATROL_REST_MAX: float = 90.0  # Max seconds resting
-const PATROL_SPEED_WALK: float = 100.0  # Trotting speed
-const PATROL_SPEED_RUN: float = 160.0  # Running speed (occasional bursts)
-const PATROL_RUN_CHANCE: float = 0.3  # 30% chance to run instead of trot
-const FORMATION_SPACING: float = 60.0  # Distance between pack members in formation
+# Pack behavior constants (SIMPLIFIED)
+const PACK_FOLLOW_DISTANCE: float = 120.0  # Followers stay within this distance of alpha
+const PACK_TELEPORT_DISTANCE: float = 300.0  # If further than this, teleport to alpha
+const PACK_MOVE_SPEED: float = 100.0  # Pack movement speed
+const PACK_DIRECTION_CHANGE_MIN: float = 5.0  # Min seconds before alpha changes direction
+const PACK_DIRECTION_CHANGE_MAX: float = 15.0  # Max seconds before alpha changes direction
 
 var target_player: Node = null
 var attack_cooldown: float = 0.0
@@ -1163,15 +1161,11 @@ var _is_wandering: bool = false
 var _wander_stuck_timer: float = 0.0  # Timeout if can't reach target
 var _ambient_howl_timer: float = 0.0  # Timer for ambient howls while idling
 
-# Pack roaming state (only meaningful for pack alphas)
-var is_roaming_pack: bool = false  # This pack roams between ritual sites
-var _patrol_state: String = "resting"  # "resting", "patrolling", "arriving"
-var _patrol_target: Vector2 = Vector2.ZERO  # Current patrol destination
-var _patrol_rest_timer: float = 0.0  # Time until next patrol
-var _patrol_speed: float = PATROL_SPEED_WALK  # Current patrol speed
-var _home_ritual_site: Vector2 = Vector2.ZERO  # Original ritual site position
-var _formation_index: int = -1  # Position in pack formation (0 = alpha, 1-6 = followers)
+# Simple pack state
 var _pack_alpha_ref: Wolf = null  # Reference to pack alpha (for followers)
+var _pack_move_direction: Vector2 = Vector2.ZERO  # Current movement direction (alpha only)
+var _pack_direction_timer: float = 0.0  # Time until next direction change (alpha only)
+var _pack_is_moving: bool = false  # Is the pack currently moving?
 
 
 func _init_ai_variation() -> void:
@@ -1182,17 +1176,12 @@ func _init_ai_variation() -> void:
 	# Vary detection range slightly (±20px)
 	_detection_range = BASE_DETECTION_RANGE + rng.randf_range(-20, 20)
 
-	# Random AI update offset (0-0.5s) to desync thinking
-	_ai_offset = rng.randf_range(0, 0.5)
-
 	# Randomize starting animation frame
 	_current_frame = rng.randi_range(0, 4)
 
-	# Pack alphas decide if this is a roaming pack
+	# Pack alphas start with a random direction timer
 	if pack_alpha:
-		is_roaming_pack = randf() < ROAMING_PACK_CHANCE
-		if is_roaming_pack:
-			_patrol_rest_timer = randf_range(PATROL_REST_MIN, PATROL_REST_MAX)
+		_pack_direction_timer = randf_range(PACK_DIRECTION_CHANGE_MIN, PACK_DIRECTION_CHANGE_MAX)
 
 	# Random initial wander timer
 	_wander_timer = rng.randf_range(0, WANDER_INTERVAL_MAX)
@@ -1208,7 +1197,6 @@ func _set_spawn_position() -> void:
 	"""Set spawn position after node is fully in tree with correct position"""
 	_spawn_position = global_position
 	_wander_target = _spawn_position  # Start at spawn
-	_home_ritual_site = global_position  # Remember home for roaming packs
 
 
 func _physics_process(delta: float) -> void:
@@ -1274,7 +1262,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _do_wander_behavior(delta: float) -> void:
-	"""Wander around spawn point when not chasing player"""
+	"""Simplified wander/pack behavior - wolves stay together naturally"""
 	# Don't wander until spawn position is set
 	if _spawn_position == Vector2.ZERO:
 		velocity = Vector2.ZERO
@@ -1285,43 +1273,124 @@ func _do_wander_behavior(delta: float) -> void:
 		_ambient_howl_timer -= delta
 		if _ambient_howl_timer <= 0:
 			_ambient_howl_timer = randf_range(AMBIENT_HOWL_INTERVAL_MIN, AMBIENT_HOWL_INTERVAL_MAX)
-			# Roll chance and attempt howl (SoundManager handles cooldown/diminishing returns)
 			if randf() < AMBIENT_HOWL_CHANCE:
-				# Pick howl type - Alpha Dire always uses alpha, pack alphas randomly pick
-				var howl_type: String
-				if is_alpha_dire_wolf:
-					howl_type = "alpha"
-				else:
-					# Randomly pick between distant (60%), pack (40%) for variety
-					howl_type = "pack" if randf() < 0.4 else "distant"
+				var howl_type = "alpha" if is_alpha_dire_wolf else ("pack" if randf() < 0.4 else "distant")
 				_try_spawn_howl(howl_type)
 
-	# === PACK PATROL BEHAVIOR ===
-	# Pack alphas of roaming packs handle patrol logic
-	if pack_alpha and is_roaming_pack:
-		_do_patrol_behavior(delta)
-		# If patrolling, skip normal wander
-		if _patrol_state == "patrolling":
-			return
-
-	# Pack members follow their alpha when patrolling
-	if _pack_alpha_ref and is_instance_valid(_pack_alpha_ref) and _pack_alpha_ref._patrol_state == "patrolling":
-		_follow_alpha_in_formation(delta)
+	# === PACK ALPHA BEHAVIOR ===
+	if pack_alpha:
+		_do_alpha_wander(delta)
 		return
 
-	# === NORMAL WANDER BEHAVIOR ===
-	# Pick new wander target when timer expires
+	# === PACK FOLLOWER BEHAVIOR ===
+	if _pack_alpha_ref and is_instance_valid(_pack_alpha_ref):
+		_do_follower_behavior(delta)
+		return
+
+	# === SOLO WOLF WANDER (no pack) ===
+	_do_solo_wander(delta)
+
+
+func _do_alpha_wander(delta: float) -> void:
+	"""Alpha wolf picks random directions and leads the pack"""
+	_pack_direction_timer -= delta
+
+	# Time to pick a new direction or stop
+	if _pack_direction_timer <= 0:
+		_pack_direction_timer = randf_range(PACK_DIRECTION_CHANGE_MIN, PACK_DIRECTION_CHANGE_MAX)
+
+		# 40% chance to rest, 60% chance to move in new direction
+		if randf() < 0.4:
+			_pack_is_moving = false
+			_pack_move_direction = Vector2.ZERO
+		else:
+			_pack_is_moving = true
+			# Pick random direction, biased to stay near spawn
+			var to_spawn = (_spawn_position - global_position)
+			var dist_from_spawn = to_spawn.length()
+
+			if dist_from_spawn > WANDER_RADIUS * 2:
+				# Too far from spawn, head back
+				_pack_move_direction = to_spawn.normalized()
+			else:
+				# Random direction with slight bias toward spawn
+				var random_angle = randf() * TAU
+				var random_dir = Vector2(cos(random_angle), sin(random_angle))
+				if dist_from_spawn > WANDER_RADIUS:
+					# Blend toward spawn
+					_pack_move_direction = (random_dir + to_spawn.normalized() * 0.5).normalized()
+				else:
+					_pack_move_direction = random_dir
+
+	# Move or idle
+	if _pack_is_moving and _pack_move_direction != Vector2.ZERO:
+		velocity = _pack_move_direction * PACK_MOVE_SPEED
+		is_running = false
+		move_and_slide()
+		update_animation_for_direction(_pack_move_direction)
+	else:
+		velocity = Vector2.ZERO
+		update_animation_for_direction(Vector2.ZERO)
+
+
+func _do_follower_behavior(delta: float) -> void:
+	"""Followers simply stay near the alpha - teleport if too far"""
+	var alpha = _pack_alpha_ref
+	var dist_to_alpha = global_position.distance_to(alpha.global_position)
+
+	# Teleport if way too far (prevents getting stuck/lost)
+	if dist_to_alpha > PACK_TELEPORT_DISTANCE:
+		_teleport_near_alpha()
+		return
+
+	# If close enough, match alpha's behavior
+	if dist_to_alpha < PACK_FOLLOW_DISTANCE:
+		# Stay with pack - move same direction as alpha or idle
+		if alpha._pack_is_moving and alpha._pack_move_direction != Vector2.ZERO:
+			# Add slight random offset to avoid stacking
+			var offset_dir = alpha._pack_move_direction.rotated(randf_range(-0.3, 0.3))
+			velocity = offset_dir * PACK_MOVE_SPEED * randf_range(0.9, 1.1)
+			is_running = false
+			move_and_slide()
+			update_animation_for_direction(offset_dir)
+		else:
+			velocity = Vector2.ZERO
+			update_animation_for_direction(Vector2.ZERO)
+	else:
+		# Too far - move toward alpha
+		var direction = (alpha.global_position - global_position).normalized()
+		# Move faster when catching up
+		var catch_up_speed = PACK_MOVE_SPEED * 1.3
+		velocity = direction * catch_up_speed
+		is_running = false
+		move_and_slide()
+		update_animation_for_direction(direction)
+
+
+func _teleport_near_alpha() -> void:
+	"""Teleport follower to a random position near the alpha"""
+	if not _pack_alpha_ref or not is_instance_valid(_pack_alpha_ref):
+		return
+
+	var alpha_pos = _pack_alpha_ref.global_position
+	var random_offset = Vector2(randf_range(-80, 80), randf_range(-80, 80))
+	global_position = alpha_pos + random_offset
+	velocity = Vector2.ZERO
+
+
+func _do_solo_wander(delta: float) -> void:
+	"""Simple wander for wolves without a pack"""
+	_wander_timer -= delta
+
 	if _wander_timer <= 0:
 		_wander_timer = randf_range(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX)
 
-		# 30% chance to stop and idle, 70% chance to pick new wander point
 		if randf() < 0.3:
 			_is_wandering = false
 			_wander_target = Vector2.ZERO
 		else:
 			_is_wandering = true
-			_wander_stuck_timer = 0.0  # Reset stuck timer for new target
-			# Pick random point within wander radius of spawn
+			_wander_stuck_timer = 0.0
 			var angle = randf() * TAU
 			var dist = randf_range(50, WANDER_RADIUS)
 			_wander_target = _spawn_position + Vector2(cos(angle), sin(angle)) * dist
@@ -1329,9 +1398,8 @@ func _do_wander_behavior(delta: float) -> void:
 	if _is_wandering and _wander_target != Vector2.ZERO:
 		var dist_to_target = global_position.distance_to(_wander_target)
 
-		# Check if stuck trying to reach target
 		_wander_stuck_timer += delta
-		if _wander_stuck_timer > 3.0:  # Give up after 3 seconds
+		if _wander_stuck_timer > 3.0:
 			_is_wandering = false
 			_wander_target = Vector2.ZERO
 			_wander_stuck_timer = 0.0
@@ -1339,231 +1407,27 @@ func _do_wander_behavior(delta: float) -> void:
 			return
 
 		if dist_to_target > 20:
-			# Move toward wander target
 			var direction = (_wander_target - global_position).normalized()
-			velocity = direction * BASE_SPEED * 0.4  # Slow wander speed
+			velocity = direction * BASE_SPEED * 0.4
 			move_and_slide()
 			update_animation_for_direction(direction)
 		else:
-			# Reached target, stop
 			_is_wandering = false
 			_wander_stuck_timer = 0.0
 			velocity = Vector2.ZERO
 			update_animation_for_direction(Vector2.ZERO)
 	else:
-		# Idle
 		velocity = Vector2.ZERO
 		update_animation_for_direction(Vector2.ZERO)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PACK ROAMING/PATROL BEHAVIOR
+# PACK SETUP (simplified)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-func setup_pack_formation(alpha: Wolf, index: int) -> void:
-	"""Called by spawner to set up pack formation references"""
+func setup_pack_formation(alpha: Wolf, _index: int) -> void:
+	"""Called by spawner to link follower to alpha"""
 	_pack_alpha_ref = alpha
-	_formation_index = index
-	# Inherit roaming status from alpha
-	if alpha and alpha.is_roaming_pack:
-		is_roaming_pack = true
-
-
-func _do_patrol_behavior(delta: float) -> void:
-	"""Handle pack patrol behavior (only for roaming pack alphas)"""
-	if not pack_alpha or not is_roaming_pack:
-		return
-
-	match _patrol_state:
-		"resting":
-			# Count down rest timer
-			_patrol_rest_timer -= delta
-			if _patrol_rest_timer <= 0:
-				# Time to patrol! Find a destination
-				_start_patrol()
-
-		"patrolling":
-			# Move toward patrol target
-			var dist_to_target = global_position.distance_to(_patrol_target)
-
-			if dist_to_target < 100:
-				# Arrived at destination
-				_patrol_state = "arriving"
-				_patrol_rest_timer = randf_range(PATROL_REST_MIN, PATROL_REST_MAX)
-				_spawn_position = _patrol_target  # Update spawn position for wandering
-				# Maybe howl on arrival
-				if randf() < 0.4:
-					_try_spawn_howl("pack")
-			else:
-				# Check if pack members are falling behind - alpha waits for stragglers
-				var should_wait = _check_pack_stragglers()
-
-				if should_wait:
-					# Pause and wait for pack to regroup
-					velocity = Vector2.ZERO
-					update_animation_for_direction(Vector2.ZERO)
-				else:
-					# Keep moving toward target
-					var direction = (_patrol_target - global_position).normalized()
-					velocity = direction * _patrol_speed
-					is_running = _patrol_speed > PATROL_SPEED_WALK
-					move_and_slide()
-					update_animation_for_direction(direction)
-
-		"arriving":
-			# Brief settling period, then back to resting
-			_patrol_rest_timer -= delta
-			if _patrol_rest_timer <= 0:
-				_patrol_state = "resting"
-				_patrol_rest_timer = randf_range(PATROL_REST_MIN, PATROL_REST_MAX)
-
-
-func _start_patrol() -> void:
-	"""Begin a patrol to another ritual site"""
-	var destination = _find_patrol_destination()
-	if destination == Vector2.ZERO:
-		# No valid destination, stay put
-		_patrol_rest_timer = randf_range(PATROL_REST_MIN, PATROL_REST_MAX)
-		return
-
-	_patrol_target = destination
-	_patrol_state = "patrolling"
-
-	# Decide speed - 30% chance to run
-	if randf() < PATROL_RUN_CHANCE:
-		_patrol_speed = PATROL_SPEED_RUN
-	else:
-		_patrol_speed = PATROL_SPEED_WALK
-
-	# Howl to signal pack movement
-	if randf() < 0.5:
-		_try_spawn_howl("distant")
-
-
-func _find_patrol_destination() -> Vector2:
-	"""Find another ritual site to patrol to.
-	STRONGLY prefers sites on the opposite side of the path (Y=0) to create danger for travelers."""
-	# Get all wolves and find other pack alphas (they mark ritual sites)
-	var cross_path_sites: Array[Vector2] = []  # Sites that require crossing the path
-	var same_side_sites: Array[Vector2] = []   # Fallback sites on same side
-	var my_pos = global_position
-	var my_side = sign(my_pos.y)  # Which side of path we're on (path is at Y=0)
-
-	# Patrol range - must be long enough to cross the path to other ritual sites
-	const MIN_PATROL_DIST: float = 400.0   # Don't patrol to super close sites
-	const MAX_PATROL_DIST: float = 8000.0  # Can patrol across entire chunk width
-
-	for wolf in get_tree().get_nodes_in_group("wolves"):
-		if not is_instance_valid(wolf) or wolf == self:
-			continue
-		if wolf.pack_alpha and wolf.pack_id != pack_id:
-			# This is another pack's alpha - their spawn position is a ritual site
-			var site_pos = wolf._spawn_position if wolf._spawn_position != Vector2.ZERO else wolf.global_position
-			# Only consider sites within patrol range
-			var dist = my_pos.distance_to(site_pos)
-			if dist > MIN_PATROL_DIST and dist < MAX_PATROL_DIST:
-				# Check if this site is on the opposite side of the path
-				var site_side = sign(site_pos.y)
-				if site_side != my_side and site_side != 0 and my_side != 0:
-					# This site requires crossing the path - PREFERRED!
-					cross_path_sites.append(site_pos)
-				else:
-					# Same side of path - fallback only
-					same_side_sites.append(site_pos)
-
-	# Strongly prefer cross-path destinations (90% chance if available)
-	if not cross_path_sites.is_empty():
-		if same_side_sites.is_empty() or randf() < 0.9:
-			return cross_path_sites[randi() % cross_path_sites.size()]
-
-	# Fall back to same-side sites
-	if not same_side_sites.is_empty():
-		return same_side_sites[randi() % same_side_sites.size()]
-
-	# No good destinations, maybe return home (if it's across the path)
-	if _home_ritual_site != Vector2.ZERO and my_pos.distance_to(_home_ritual_site) > 300:
-		return _home_ritual_site
-
-	return Vector2.ZERO
-
-
-func _follow_alpha_in_formation(delta: float) -> void:
-	"""Pack members follow their alpha in formation"""
-	if not _pack_alpha_ref or not is_instance_valid(_pack_alpha_ref):
-		return
-
-	# Only follow if alpha is patrolling
-	if _pack_alpha_ref._patrol_state != "patrolling":
-		return
-
-	# Calculate formation position behind alpha
-	var alpha_pos = _pack_alpha_ref.global_position
-	var alpha_velocity = _pack_alpha_ref.velocity
-
-	# Get formation offset based on index (V-formation)
-	var formation_offset = _get_formation_offset(_formation_index, alpha_velocity)
-	var target_pos = alpha_pos + formation_offset
-
-	var dist_to_target = global_position.distance_to(target_pos)
-
-	if dist_to_target > 20:
-		var direction = (target_pos - global_position).normalized()
-		# Match alpha's speed with slight variation
-		var speed = _pack_alpha_ref._patrol_speed * randf_range(0.95, 1.05)
-		# Speed up if falling behind
-		if dist_to_target > FORMATION_SPACING * 2:
-			speed *= 1.3
-		velocity = direction * speed
-		is_running = speed > PATROL_SPEED_WALK
-		move_and_slide()
-		update_animation_for_direction(direction)
-	else:
-		velocity = Vector2.ZERO
-
-
-func _get_formation_offset(index: int, leader_velocity: Vector2) -> Vector2:
-	"""Get position offset for V-formation behind leader"""
-	if leader_velocity.length() < 10:
-		# Leader not moving, spread out in circle
-		var angle = (index - 1) * (TAU / 6)
-		return Vector2(cos(angle), sin(angle)) * FORMATION_SPACING
-
-	# V-formation behind leader
-	var back_dir = -leader_velocity.normalized()
-	var side_dir = back_dir.rotated(PI / 2)
-
-	# Alternate left/right in V shape
-	var row = (index + 1) / 2  # 1,1,2,2,3,3...
-	var side = 1 if index % 2 == 1 else -1  # Left, right, left, right...
-
-	var back_offset = back_dir * (FORMATION_SPACING * row * 0.8)
-	var side_offset = side_dir * (FORMATION_SPACING * row * 0.5 * side)
-
-	return back_offset + side_offset
-
-
-func _check_pack_stragglers() -> bool:
-	"""Check if any pack members are too far behind - alpha should wait for them"""
-	if not pack_alpha:
-		return false  # Only alpha checks for stragglers
-
-	const MAX_STRAGGLER_DISTANCE: float = 350.0  # If any member is this far, wait
-
-	# Find all wolves in our pack
-	for wolf in get_tree().get_nodes_in_group("wolves"):
-		if not is_instance_valid(wolf) or wolf == self:
-			continue
-		if wolf.pack_id != pack_id:
-			continue
-		if wolf.is_dying or wolf.is_corpse:
-			continue
-
-		# Check distance from alpha (us) to this pack member
-		var dist = global_position.distance_to(wolf.global_position)
-		if dist > MAX_STRAGGLER_DISTANCE:
-			return true  # Someone is too far behind, wait for them
-
-	return false  # Pack is together, keep moving
 
 
 func _trigger_chain_aggro() -> void:

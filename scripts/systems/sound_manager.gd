@@ -91,6 +91,27 @@ var player_death_female_sound: AudioStream = null  # Female death sound
 # Enemy footstep sounds
 var skeleton_footstep_sounds: Array[AudioStream] = []  # Skeleton bone clacking footsteps
 
+# Wolf sounds
+var wolf_aggro_sounds: Array[AudioStream] = []  # Wolf growl/snarl when spotting player
+var wolf_attack_sounds: Array[AudioStream] = []  # Wolf bite attack sounds
+var wolf_hurt_sounds: Array[AudioStream] = []  # Wolf pain yelp/whimper
+var wolf_death_sounds: Array[AudioStream] = []  # Wolf death whimper
+var wolf_footstep_sounds: Array[AudioStream] = []  # Wolf paw footsteps (walk)
+var wolf_run_sounds: Array[AudioStream] = []  # Wolf running footsteps
+var wolf_howl_distant_sound: AudioStream = null  # Single wolf howl
+var wolf_howl_pack_sound: AudioStream = null  # Pack howl chorus
+var wolf_howl_alpha_sound: AudioStream = null  # Alpha wolf howl
+
+# Wolf howl cooldown system (prevents spam, creates atmosphere)
+var _last_howl_time: float = -999.0
+var _recent_howl_times: Array[float] = []
+const HOWL_GLOBAL_COOLDOWN: float = 45.0  # Min seconds between ANY wolf howl
+const HOWL_DIMINISHING_WINDOW: float = 120.0  # Window for tracking recent howls
+const HOWL_MAX_IN_WINDOW: int = 3  # Max howls allowed in window
+
+# Active wolf sound player (only one wolf vocalization at a time)
+var active_wolf_sound_player: AudioStreamPlayer2D = null
+
 # Dodge/dash sounds
 var dodge_sounds: Array[AudioStream] = []  # Dodge whoosh sounds (2 variations)
 
@@ -420,6 +441,87 @@ func _load_real_sounds() -> void:
 		print("  ✅ Loaded skeleton_step_3.wav")
 
 	print("  📊 Loaded %d skeleton footstep sound variations" % skeleton_footstep_sounds.size())
+
+	# Load wolf sounds
+	print("  🐺 Loading wolf sounds...")
+
+	# Wolf aggro sounds (growl/snarl when spotting player)
+	for i in range(1, 4):
+		var wolf_aggro = load("res://assets/sounds/combat/reactions/wolf_aggro_%d.wav" % i)
+		if wolf_aggro:
+			wolf_aggro_sounds.append(wolf_aggro)
+			print("    ✅ Loaded wolf_aggro_%d.wav" % i)
+		else:
+			push_warning("    ⚠️ Failed to load wolf_aggro_%d.wav" % i)
+
+	# Wolf attack sounds (bite)
+	for i in range(1, 4):
+		var wolf_attack = load("res://assets/sounds/combat/reactions/wolf_attack_%d.wav" % i)
+		if wolf_attack:
+			wolf_attack_sounds.append(wolf_attack)
+			print("    ✅ Loaded wolf_attack_%d.wav" % i)
+		else:
+			push_warning("    ⚠️ Failed to load wolf_attack_%d.wav" % i)
+
+	# Wolf hurt sounds (yelp/whimper)
+	for i in range(1, 6):
+		var wolf_hurt = load("res://assets/sounds/combat/reactions/wolf_hurt_%d.wav" % i)
+		if wolf_hurt:
+			wolf_hurt_sounds.append(wolf_hurt)
+			print("    ✅ Loaded wolf_hurt_%d.wav" % i)
+		else:
+			push_warning("    ⚠️ Failed to load wolf_hurt_%d.wav" % i)
+
+	# Wolf death sounds
+	for i in range(1, 3):
+		var wolf_death = load("res://assets/sounds/combat/reactions/wolf_death_%d.wav" % i)
+		if wolf_death:
+			wolf_death_sounds.append(wolf_death)
+			print("    ✅ Loaded wolf_death_%d.wav" % i)
+		else:
+			push_warning("    ⚠️ Failed to load wolf_death_%d.wav" % i)
+
+	# Wolf footstep sounds (walk/trot)
+	for i in range(1, 4):
+		var wolf_step = load("res://assets/sounds/footsteps/wolf_step_%d.wav" % i)
+		if wolf_step:
+			wolf_footstep_sounds.append(wolf_step)
+			print("    ✅ Loaded wolf_step_%d.wav" % i)
+		else:
+			push_warning("    ⚠️ Failed to load wolf_step_%d.wav" % i)
+
+	# Wolf running footstep sounds
+	for i in range(1, 3):
+		var wolf_run = load("res://assets/sounds/footsteps/wolf_run_%d.wav" % i)
+		if wolf_run:
+			wolf_run_sounds.append(wolf_run)
+			print("    ✅ Loaded wolf_run_%d.wav" % i)
+		else:
+			push_warning("    ⚠️ Failed to load wolf_run_%d.wav" % i)
+
+	# Wolf howl sounds (ambient)
+	wolf_howl_distant_sound = load("res://assets/sounds/ambient/wolf_howl_distant.wav")
+	if wolf_howl_distant_sound:
+		print("    ✅ Loaded wolf_howl_distant.wav")
+	else:
+		push_warning("    ⚠️ Failed to load wolf_howl_distant.wav")
+
+	wolf_howl_pack_sound = load("res://assets/sounds/ambient/wolf_howl_pack.wav")
+	if wolf_howl_pack_sound:
+		print("    ✅ Loaded wolf_howl_pack.wav")
+	else:
+		push_warning("    ⚠️ Failed to load wolf_howl_pack.wav")
+
+	wolf_howl_alpha_sound = load("res://assets/sounds/ambient/wolf_howl_alpha.wav")
+	if wolf_howl_alpha_sound:
+		print("    ✅ Loaded wolf_howl_alpha.wav")
+	else:
+		push_warning("    ⚠️ Failed to load wolf_howl_alpha.wav")
+
+	print("  📊 Loaded wolf sounds: aggro=%d, attack=%d, hurt=%d, death=%d, steps=%d, run=%d" % [
+		wolf_aggro_sounds.size(), wolf_attack_sounds.size(), wolf_hurt_sounds.size(),
+		wolf_death_sounds.size(), wolf_footstep_sounds.size(), wolf_run_sounds.size()
+	])
 
 	# Load dodge/dash sounds
 	var dodge_1 = load("res://assets/audio/sfx/dodge_1.wav")
@@ -780,6 +882,244 @@ func play_skeleton_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: fl
 
 	get_tree().root.add_child(player)
 	player.play()
+
+# ============================================
+# WOLF SOUNDS
+# ============================================
+
+## Play wolf hurt sound (when wolf takes damage)
+func play_wolf_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
+	if sfx_muted:
+		return
+	if wolf_hurt_sounds.is_empty():
+		return
+
+	var sound_stream = wolf_hurt_sounds[randi() % wolf_hurt_sounds.size()]
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)
+	player.max_polyphony = 3
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play wolf attack sound (bite) - only one wolf vocalization at a time
+func play_wolf_attack_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
+	if sfx_muted:
+		return
+	if wolf_attack_sounds.is_empty():
+		return
+
+	var sound = wolf_attack_sounds[randi() % wolf_attack_sounds.size()]
+	_play_wolf_vocalization(sound, global_pos, volume_db)
+
+## Play wolf aggro sound (when wolf spots player) - only one wolf vocalization at a time
+func play_wolf_aggro_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
+	if sfx_muted:
+		return
+	if wolf_aggro_sounds.is_empty():
+		return
+
+	var sound = wolf_aggro_sounds[randi() % wolf_aggro_sounds.size()]
+	_play_wolf_vocalization(sound, global_pos, volume_db)
+
+## Play wolf death sound
+func play_wolf_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -4.0) -> void:
+	if sfx_muted:
+		return
+	if wolf_death_sounds.is_empty():
+		return
+
+	var sound_stream = wolf_death_sounds[randi() % wolf_death_sounds.size()]
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Internal: Play wolf vocalization (ensures only one at a time)
+func _play_wolf_vocalization(sound: AudioStream, global_pos: Vector2, volume_db: float) -> void:
+	if is_instance_valid(active_wolf_sound_player) and active_wolf_sound_player.playing:
+		return
+
+	if not sound:
+		return
+
+	if not is_instance_valid(active_wolf_sound_player):
+		active_wolf_sound_player = AudioStreamPlayer2D.new()
+		get_tree().root.add_child(active_wolf_sound_player)
+
+	active_wolf_sound_player.stream = sound
+	active_wolf_sound_player.volume_db = volume_db
+	active_wolf_sound_player.global_position = global_pos
+	active_wolf_sound_player.pitch_scale = randf_range(0.93, 1.07)
+	active_wolf_sound_player.play()
+
+## Play wolf footstep sound with distance culling
+func play_wolf_footstep(global_pos: Vector2, camera_pos: Vector2, is_running: bool = false, volume_db: float = -18.0) -> void:
+	if sfx_muted:
+		return
+	# Distance culling
+	var distance = global_pos.distance_to(camera_pos)
+	if distance > 800.0:
+		return
+
+	var sounds_to_use = wolf_run_sounds if is_running else wolf_footstep_sounds
+	if sounds_to_use.is_empty():
+		return
+
+	var sound_stream = sounds_to_use[randi() % sounds_to_use.size()]
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.93, 1.07)
+	player.max_polyphony = 4
+	player.max_distance = 1200.0
+	player.attenuation = 1.5
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+
+	await get_tree().create_timer(0.001).timeout
+	if is_instance_valid(player):
+		player.play()
+
+## Try to play ambient wolf howl (respects cooldown/diminishing returns)
+## howl_type: "distant", "pack", or "alpha"
+## Returns true if howl was played, false if on cooldown
+## Uses spatial audio from closest alpha wolf to player for directional effect
+func try_play_wolf_howl(_global_pos: Vector2 = Vector2.ZERO, howl_type: String = "distant", volume_db: float = -10.0) -> bool:
+	if sfx_muted:
+		return false
+
+	var current_time = Time.get_ticks_msec() / 1000.0
+
+	# Check global cooldown
+	if current_time - _last_howl_time < HOWL_GLOBAL_COOLDOWN:
+		print("🐺 Howl blocked by cooldown (%.1fs remaining)" % (HOWL_GLOBAL_COOLDOWN - (current_time - _last_howl_time)))
+		return false
+
+	# Clean old entries and check diminishing returns
+	var new_times: Array[float] = []
+	for t in _recent_howl_times:
+		if current_time - t < HOWL_DIMINISHING_WINDOW:
+			new_times.append(t)
+	_recent_howl_times = new_times
+
+	if _recent_howl_times.size() >= HOWL_MAX_IN_WINDOW:
+		print("🐺 Howl blocked by diminishing returns (%d/%d in window)" % [_recent_howl_times.size(), HOWL_MAX_IN_WINDOW])
+		return false
+
+	# Select howl sound
+	var howl_sound: AudioStream = null
+	match howl_type:
+		"pack":
+			howl_sound = wolf_howl_pack_sound
+		"alpha":
+			howl_sound = wolf_howl_alpha_sound
+		_:
+			howl_sound = wolf_howl_distant_sound
+
+	if not howl_sound:
+		print("🐺 Howl sound not loaded for type: %s" % howl_type)
+		return false
+
+	# Record howl time
+	_last_howl_time = current_time
+	_recent_howl_times.append(current_time)
+
+	# Find closest alpha wolf to player for spatial positioning
+	var howl_pos = _find_closest_alpha_wolf_position()
+	var distance_to_player = 0.0
+
+	if howl_pos != Vector2.ZERO:
+		var player_node = get_tree().get_first_node_in_group("player")
+		if player_node:
+			distance_to_player = howl_pos.distance_to(player_node.global_position)
+
+	# Play the howl with spatial audio (very large range for atmosphere)
+	var player = AudioStreamPlayer2D.new()
+	player.stream = howl_sound
+	player.volume_db = volume_db
+	player.pitch_scale = randf_range(0.95, 1.05)
+	player.max_distance = 8000.0  # Huge range - heard across the map
+	player.attenuation = 0.3  # Very slow falloff
+	player.global_position = howl_pos if howl_pos != Vector2.ZERO else _global_pos
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+	print("🐺🌙 Wolf howl played (%s) from pos %s (%.0fpx from player) - cooldown: %.0fs" % [howl_type, howl_pos, distance_to_player, HOWL_GLOBAL_COOLDOWN])
+	return true
+
+
+## Find the closest pack alpha or alpha dire wolf to the player
+func _find_closest_alpha_wolf_position() -> Vector2:
+	var player_node = get_tree().get_first_node_in_group("player")
+	if not player_node:
+		return Vector2.ZERO
+
+	var player_pos = player_node.global_position
+	var closest_pos = Vector2.ZERO
+	var closest_dist = INF
+
+	# Search for wolves
+	for wolf in get_tree().get_nodes_in_group("wolves"):
+		if not is_instance_valid(wolf):
+			continue
+		# Check if pack_alpha or is_alpha_dire_wolf
+		if wolf.get("pack_alpha") == true or wolf.get("is_alpha_dire_wolf") == true:
+			var dist = player_pos.distance_to(wolf.global_position)
+			if dist < closest_dist:
+				closest_dist = dist
+				closest_pos = wolf.global_position
+
+	return closest_pos
+
+## Force play wolf howl (ignores cooldown - use sparingly for special events)
+## Uses spatial audio from closest alpha wolf
+func force_play_wolf_howl(_global_pos: Vector2 = Vector2.ZERO, howl_type: String = "distant", volume_db: float = -10.0) -> void:
+	if sfx_muted:
+		return
+
+	var howl_sound: AudioStream = null
+	match howl_type:
+		"pack":
+			howl_sound = wolf_howl_pack_sound
+		"alpha":
+			howl_sound = wolf_howl_alpha_sound
+		_:
+			howl_sound = wolf_howl_distant_sound
+
+	if not howl_sound:
+		return
+
+	var howl_pos = _find_closest_alpha_wolf_position()
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = howl_sound
+	player.volume_db = volume_db
+	player.pitch_scale = randf_range(0.95, 1.05)
+	player.max_distance = 8000.0
+	player.attenuation = 0.3
+	player.global_position = howl_pos if howl_pos != Vector2.ZERO else _global_pos
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+	print("🐺🌙 Wolf howl FORCED (%s) from %s" % [howl_type, howl_pos])
 
 ## Play sword swing sound (random whoosh variation)
 func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -10.0) -> void:

@@ -34,6 +34,9 @@ const BONE_EMBER_BURN_RATE: float = 1.0 / 4500.0  # 1 ember per 4500 seconds (~7
 var wood_decay_accumulator: float = 0.0
 var bone_ember_decay_accumulator: float = 0.0
 
+# Visual scale for fire elements (1.0 = default, 1.5 = 50% bigger)
+const FIRE_VISUAL_SCALE: float = 1.5
+
 # Interaction (Hold-to-fuel system)
 var player_in_interact_range: bool = false
 var interaction_prompt: Label = null
@@ -363,7 +366,7 @@ func create_campfire_scene() -> void:
 	# Create 8 rocks in a tighter circle around fire (reduced from 12)
 	for i in range(8):
 		var angle = (i * TAU) / 8.0 + randf_range(-0.1, 0.1)
-		var distance = 28.0 + randf_range(-2, 2)
+		var distance = (28.0 + randf_range(-2, 2)) * FIRE_VISUAL_SCALE
 		var rock_pos = Vector2(cos(angle), sin(angle)) * distance
 
 		var rock = Polygon2D.new()
@@ -374,7 +377,7 @@ func create_campfire_scene() -> void:
 		var rock_rotation = randf_range(0, TAU)
 
 		# Irregular rock shape with smaller sizes
-		var rock_size = randf_range(4.0, 6.5)
+		var rock_size = randf_range(4.0, 6.5) * FIRE_VISUAL_SCALE
 		var rock_points = PackedVector2Array()
 		for j in range(6):
 			var rock_angle = (j * TAU) / 6.0 + rock_rotation  # Apply rotation
@@ -398,10 +401,10 @@ func create_campfire_scene() -> void:
 	# Left log (leaning right) - positioned on coals, 50% thicker, scaled 75%
 	var log_left = Polygon2D.new()
 	log_left.polygon = PackedVector2Array([
-		Vector2(-17.25, 6.75),   # Bottom left (75% scale)
-		Vector2(-6, -10.5),      # Top left (75% scale)
-		Vector2(-3.75, -9.75),   # Top right (75% scale)
-		Vector2(-15, 8.25)       # Bottom right (75% scale)
+		Vector2(-17.25, 6.75) * FIRE_VISUAL_SCALE,   # Bottom left
+		Vector2(-6, -10.5) * FIRE_VISUAL_SCALE,      # Top left
+		Vector2(-3.75, -9.75) * FIRE_VISUAL_SCALE,   # Top right
+		Vector2(-15, 8.25) * FIRE_VISUAL_SCALE       # Bottom right
 	])
 	log_left.color = log_color
 	log_left.name = "LogLeft"
@@ -411,10 +414,10 @@ func create_campfire_scene() -> void:
 	# Left log charred end (50% thicker, moved up 20px, scaled 75%)
 	var log_left_char = Polygon2D.new()
 	log_left_char.polygon = PackedVector2Array([
-		Vector2(-15, 6.75),      # 75% scale
-		Vector2(-12.75, 5.25),   # 75% scale
-		Vector2(-11.25, 6.75),   # 75% scale
-		Vector2(-13.5, 8.25)     # 75% scale
+		Vector2(-15, 6.75) * FIRE_VISUAL_SCALE,
+		Vector2(-12.75, 5.25) * FIRE_VISUAL_SCALE,
+		Vector2(-11.25, 6.75) * FIRE_VISUAL_SCALE,
+		Vector2(-13.5, 8.25) * FIRE_VISUAL_SCALE
 	])
 	log_left_char.color = log_color_burnt
 	log_left_char.z_index = 1
@@ -423,10 +426,10 @@ func create_campfire_scene() -> void:
 	# Right log (leaning left) - positioned on coals, 50% thicker, scaled 75%
 	var log_right = Polygon2D.new()
 	log_right.polygon = PackedVector2Array([
-		Vector2(15, 8.25),       # Bottom left (75% scale)
-		Vector2(3.75, -9.75),    # Top left (75% scale)
-		Vector2(6, -10.5),       # Top right (75% scale)
-		Vector2(17.25, 6.75)     # Bottom right (75% scale)
+		Vector2(15, 8.25) * FIRE_VISUAL_SCALE,       # Bottom left
+		Vector2(3.75, -9.75) * FIRE_VISUAL_SCALE,    # Top left
+		Vector2(6, -10.5) * FIRE_VISUAL_SCALE,       # Top right
+		Vector2(17.25, 6.75) * FIRE_VISUAL_SCALE     # Bottom right
 	])
 	log_right.color = log_color
 	log_right.name = "LogRight"
@@ -436,10 +439,10 @@ func create_campfire_scene() -> void:
 	# Right log charred end (50% thicker, moved up 20px, scaled 75%)
 	var log_right_char = Polygon2D.new()
 	log_right_char.polygon = PackedVector2Array([
-		Vector2(11.25, 6.75),    # 75% scale
-		Vector2(12.75, 5.25),    # 75% scale
-		Vector2(15, 6.75),       # 75% scale
-		Vector2(13.5, 8.25)      # 75% scale
+		Vector2(11.25, 6.75) * FIRE_VISUAL_SCALE,
+		Vector2(12.75, 5.25) * FIRE_VISUAL_SCALE,
+		Vector2(15, 6.75) * FIRE_VISUAL_SCALE,
+		Vector2(13.5, 8.25) * FIRE_VISUAL_SCALE
 	])
 	log_right_char.color = log_color_burnt
 	log_right_char.z_index = 1
@@ -448,10 +451,10 @@ func create_campfire_scene() -> void:
 	# Back log (centered, vertical) - positioned on coals, 50% thicker, scaled 75%
 	var log_back = Polygon2D.new()
 	log_back.polygon = PackedVector2Array([
-		Vector2(-3, 6),          # Bottom left (75% scale)
-		Vector2(-1.5, -12),      # Top left (75% scale)
-		Vector2(1.5, -12),       # Top right (75% scale)
-		Vector2(3, 6)            # Bottom right (75% scale)
+		Vector2(-3, 6) * FIRE_VISUAL_SCALE,          # Bottom left
+		Vector2(-1.5, -12) * FIRE_VISUAL_SCALE,      # Top left
+		Vector2(1.5, -12) * FIRE_VISUAL_SCALE,       # Top right
+		Vector2(3, 6) * FIRE_VISUAL_SCALE            # Bottom right
 	])
 	log_back.color = log_color_dark
 	log_back.name = "LogBack"
@@ -461,10 +464,10 @@ func create_campfire_scene() -> void:
 	# Back log charred end (50% thicker, moved up 20px, scaled 75%)
 	var log_back_char = Polygon2D.new()
 	log_back_char.polygon = PackedVector2Array([
-		Vector2(-3, 6),          # 75% scale
-		Vector2(-1.5, 4.5),      # 75% scale
-		Vector2(1.5, 4.5),       # 75% scale
-		Vector2(3, 6)            # 75% scale
+		Vector2(-3, 6) * FIRE_VISUAL_SCALE,
+		Vector2(-1.5, 4.5) * FIRE_VISUAL_SCALE,
+		Vector2(1.5, 4.5) * FIRE_VISUAL_SCALE,
+		Vector2(3, 6) * FIRE_VISUAL_SCALE
 	])
 	log_back_char.color = log_color_burnt
 	log_back_char.z_index = 1
@@ -473,7 +476,7 @@ func create_campfire_scene() -> void:
 	# Create bone ember coals radiating from center (reduced from 10 to 5)
 	for i in range(5):
 		var coal_angle = randf() * TAU
-		var coal_distance = randf_range(5, 20)  # Center cluster
+		var coal_distance = randf_range(5, 20) * FIRE_VISUAL_SCALE  # Center cluster
 		var coal_pos = Vector2(cos(coal_angle), sin(coal_angle)) * coal_distance
 
 		var coal = Polygon2D.new()
@@ -481,7 +484,7 @@ func create_campfire_scene() -> void:
 		coal.z_index = -2  # Below fire
 
 		# Small irregular bone ember shape
-		var coal_size = randf_range(2, 4)
+		var coal_size = randf_range(2, 4) * FIRE_VISUAL_SCALE
 		var coal_points = PackedVector2Array()
 		for j in range(5):
 			var point_angle = (j * TAU) / 5.0
@@ -502,7 +505,7 @@ func create_campfire_scene() -> void:
 	# Create light source
 	fire_light = PointLight2D.new()
 	fire_light.enabled = true
-	fire_light.texture_scale = 6.0  # Large ambient glow for immersion
+	fire_light.texture_scale = 6.0 * FIRE_VISUAL_SCALE  # Large ambient glow for immersion
 	fire_light.color = Color(1.0, 0.65, 0.25)  # Warm orange
 	fire_light.energy = 1.5  # Brighter base energy
 	fire_light.shadow_enabled = true
@@ -554,7 +557,7 @@ func create_fire_particles() -> void:
 
 	# Ember appearance
 	ember_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	ember_particles.emission_sphere_radius = 10.0
+	ember_particles.emission_sphere_radius = 10.0 * FIRE_VISUAL_SCALE
 
 	# Ember movement - slow float upward
 	ember_particles.direction = Vector2(0, -1)
@@ -591,7 +594,7 @@ func create_fire_particles() -> void:
 
 	# Spark appearance - burst from center
 	spark_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	spark_particles.emission_sphere_radius = 8.0
+	spark_particles.emission_sphere_radius = 8.0 * FIRE_VISUAL_SCALE
 
 	# Spark movement - quick burst in all directions
 	spark_particles.spread = 180.0
@@ -627,7 +630,7 @@ func create_fire_particles() -> void:
 
 	# Aurora appearance - rise from fire
 	aurora_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	aurora_particles.emission_sphere_radius = 15.0
+	aurora_particles.emission_sphere_radius = 15.0 * FIRE_VISUAL_SCALE
 
 	# Aurora movement - slow graceful rise
 	aurora_particles.direction = Vector2(0, -1)
@@ -667,11 +670,11 @@ func create_fire_particles() -> void:
 
 		# Position in ring with some randomness
 		var angle = (float(i) / float(num_glow_embers)) * TAU + randf_range(-0.1, 0.1)
-		var distance = randf_range(8.0, 20.0)
+		var distance = randf_range(8.0, 20.0) * FIRE_VISUAL_SCALE
 		var coal_pos = Vector2(cos(angle), sin(angle)) * distance
 
 		# Varied coal sizes
-		var coal_size = randf_range(3.0, 5.5)
+		var coal_size = randf_range(3.0, 5.5) * FIRE_VISUAL_SCALE
 		var coal_points = PackedVector2Array()
 		for j in range(5):
 			var point_angle = (j * TAU) / 5.0
@@ -697,37 +700,37 @@ func create_fire_particles() -> void:
 				continue
 
 			var flame = Polygon2D.new()
-			var offset = (i - (1 + layer)) * (8 - layer * 2)  # Tighter as we go up
+			var offset = (i - (1 + layer)) * (8 - layer * 2) * FIRE_VISUAL_SCALE  # Tighter as we go up
 			# Base flames: 31.2, 14.25, 8.8 (layer 0 is 20% larger, layer 1 is 25% smaller, layer 2 is 20% shorter)
-			var height = (26 - layer * 7.5) + randf() * 4
+			var height = ((26 - layer * 7.5) + randf() * 4) * FIRE_VISUAL_SCALE
 			if layer == 0:  # Bottom layer - 20% larger
-				height = (31.2 - layer * 7.5) + randf() * 4.8
+				height = ((31.2 - layer * 7.5) + randf() * 4.8) * FIRE_VISUAL_SCALE
 			elif layer == 1:  # Middle layer - 25% smaller
-				height = 14.25 + randf() * 3.0
+				height = (14.25 + randf() * 3.0) * FIRE_VISUAL_SCALE
 			elif layer == 2:  # Top layer - 20% shorter
-				height = 8.8 + randf() * 1.6
-			var base_width = (6.0 - layer * 1.5)
+				height = (8.8 + randf() * 1.6) * FIRE_VISUAL_SCALE
+			var base_width = (6.0 - layer * 1.5) * FIRE_VISUAL_SCALE
 			if layer == 0:  # Bottom layer - 20% wider
-				base_width = 7.2
+				base_width = 7.2 * FIRE_VISUAL_SCALE
 			elif layer == 1:  # Middle layer - 25% narrower
-				base_width = 3.375
+				base_width = 3.375 * FIRE_VISUAL_SCALE
 
 			# Vary base Y
-			var base_y = 10 - layer * 3 + abs(offset) * 0.15
+			var base_y = (10 - layer * 3 + abs(offset / FIRE_VISUAL_SCALE) * 0.15) * FIRE_VISUAL_SCALE
 
 			# Gentle sway and crown bend
 			var lean = offset * 0.3
-			var sway = randf_range(-0.4, 0.4)
+			var sway = randf_range(-0.4, 0.4) * FIRE_VISUAL_SCALE
 
 			# Add outward bend to outermost flames for crown shape
 			var is_outermost = (i == 0 or i == (3 + layer * 2) - 1)
 			var crown_bend = 0.0
 			if is_outermost and layer == 0:  # Bottom layer outer flames
-				crown_bend = 3.0 if i == 0 else -3.0  # Bend outward
+				crown_bend = (3.0 if i == 0 else -3.0) * FIRE_VISUAL_SCALE  # Bend outward
 			elif is_outermost and layer == 1:  # Middle layer outer flames
-				crown_bend = 2.0 if i == 0 else -2.0  # Less bend
+				crown_bend = (2.0 if i == 0 else -2.0) * FIRE_VISUAL_SCALE  # Less bend
 			elif is_outermost and layer == 2:  # Top layer outer flames
-				crown_bend = 1.0 if i == 0 else -1.0  # Subtle bend
+				crown_bend = (1.0 if i == 0 else -1.0) * FIRE_VISUAL_SCALE  # Subtle bend
 
 			# Simple flame shape with crown bend applied
 			flame.polygon = PackedVector2Array([
@@ -912,7 +915,7 @@ func animate_fire(delta: float) -> void:
 func create_ground_mist_auras() -> void:
 	"""Create simple filled circle auras with additive blend so fire glow shows through"""
 	# WARMTH AURA (Orange/Amber) - tight visual glow around fire (decoupled from healing radius)
-	var visual_aura_radius = 26.0  # Tight glow around fire, NOT tied to healing
+	var visual_aura_radius = 26.0 * FIRE_VISUAL_SCALE  # Tight glow around fire, NOT tied to healing
 	warmth_aura = Polygon2D.new()
 	warmth_aura.name = "WarmthAura"
 	warmth_aura.z_index = -3  # Behind all other auras
@@ -2531,11 +2534,11 @@ func update_visual_intensity() -> void:
 
 		# Base light energy and scale - always visible
 		var base_energy = 1.5
-		var base_texture_scale = 6.0
+		var base_texture_scale = 6.0 * FIRE_VISUAL_SCALE
 
 		# Add bonus from fuel
 		var fuel_bonus_energy = total_fuel_percent * 0.8  # Up to +80% brightness with fuel
-		var fuel_bonus_scale = total_fuel_percent * 2.0  # Up to +2.0 scale with fuel
+		var fuel_bonus_scale = total_fuel_percent * 2.0 * FIRE_VISUAL_SCALE  # Up to +2.0 scale with fuel
 
 		# Scale light based on time of day (brighter at night)
 		var time_brightness = 1.0

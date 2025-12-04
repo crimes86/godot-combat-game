@@ -665,9 +665,8 @@ func spawn_wolf_pack(center_pos: Vector2, chunk_key: String, chunk_x: int, site_
 				follower.setup_pack_formation(alpha, i)
 
 	if wolves.size() > 0:
-		var roaming_status = " (ROAMING)" if wolves[0].is_roaming_pack else ""
-		print("🐺 Spawned wolf pack '%s' with %d wolves (L%d-%d) at ritual site%s" % [
-			pack_id, wolves.size(), min_level, max_level, roaming_status
+		print("🐺 Spawned wolf pack '%s' with %d wolves (L%d-%d) at ritual site" % [
+			pack_id, wolves.size(), min_level, max_level
 		])
 
 	return wolves
