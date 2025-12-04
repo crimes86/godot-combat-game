@@ -42,6 +42,8 @@ var duel_opponent_id: int = -1
 var has_safe_aura: bool = false
 var duel_aura_node: Node2D = null
 var safe_aura_node: Node2D = null
+var blood_color: Color = Color(0.6, 0.05, 0.05, 0.9)  # Dark blood red (used for PvP hit effects)
+var pvp_weakpoints: Array = []  # Weakpoints spawned during PvP duels
 
 # References
 @onready var health_bar: Control = $HealthBar
@@ -1588,6 +1590,10 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 	# Flash player sprite red when hit
 	flash_player_sprite()
 
+	# Spawn blood splash particles (especially for PvP)
+	if source_type == "player":
+		spawn_blood_splash(source_player_id)
+
 	# Play player hurt sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
@@ -1628,6 +1634,60 @@ func heal(amount: float, source_type: String = "self") -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 # PVP DUEL STATE FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════
+
+func spawn_blood_splash(attacker_id: int) -> void:
+	"""Spawn blood splash particles when taking PvP damage"""
+	# Get attacker position to calculate splash direction
+	var attacker_pos = global_position + Vector2.LEFT * 50  # Default direction if attacker not found
+
+	if DuelManager:
+		var attacker_node = DuelManager._get_player_node(attacker_id)
+		if attacker_node:
+			attacker_pos = attacker_node.global_position
+
+	# Calculate direction away from attacker (blood splatters away from hit)
+	var direction = (global_position - attacker_pos).normalized()
+
+	# Create blood splatter particles
+	var blood = CPUParticles2D.new()
+	blood.global_position = global_position
+	blood.rotation = direction.angle()
+
+	# Use player's blood color
+	blood.amount = 10
+	blood.color = blood_color
+	blood.scale_amount_min = 1.5
+	blood.scale_amount_max = 3.0
+	blood.initial_velocity_min = 50.0
+	blood.initial_velocity_max = 90.0
+
+	# Particle properties
+	blood.emitting = true
+	blood.one_shot = true
+	blood.lifetime = 0.35
+	blood.speed_scale = 2.5
+	blood.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINT
+	blood.spread = 55.0  # Spray pattern
+	blood.gravity = Vector2(0, 180)  # Blood falls down
+	blood.damping_min = 60.0
+	blood.damping_max = 120.0
+
+	# Fade out gradient
+	var gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1, 1, 1, 1))
+	gradient.add_point(0.6, Color(1, 1, 1, 0.8))
+	gradient.add_point(1.0, Color(1, 1, 1, 0))
+	blood.color_ramp = gradient
+
+	# Add to world
+	get_parent().add_child(blood)
+
+	# Cleanup after particles finish
+	var timer = get_tree().create_timer(0.6)
+	timer.timeout.connect(func():
+		if is_instance_valid(blood):
+			blood.queue_free()
+	)
 
 func enter_duel_state(opponent_id: int) -> void:
 	"""Called by DuelManager when duel starts"""

@@ -211,9 +211,10 @@ func apply_damage(target_id: int, amount: int, attacker_id: int):
 		return
 
 	if player_instance and player_instance.has_method("take_damage"):
-		player_instance.take_damage(amount)
+		# Pass source info for duel system - PvP damage from another player
+		player_instance.take_damage(amount, "player", attacker_id)
 
-		# Check for death
+		# Check for death (only if not in duel - duel uses 1 HP threshold)
 		if _get_player_health() <= 0:
 			rpc("handle_death", player_id, attacker_id)
 

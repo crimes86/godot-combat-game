@@ -280,6 +280,21 @@ func attempt_attack() -> void:
 	if enemies.size() > 0:
 		attack_enemies_in_cone(enemies)
 
+	# PvP: Attack players in cone during duel
+	if player.is_dueling:
+		var players_hit = get_players_in_cone()
+		print("[PvP] In duel, found %d players in cone (opponent_id: %d)" % [players_hit.size(), player.duel_opponent_id])
+		if players_hit.size() > 0:
+			attack_players_in_cone(players_hit)
+		else:
+			# Debug: Check why no players found
+			var all_players = player.get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+			print("[PvP] Total players in group: %d" % all_players.size())
+			for p in all_players:
+				if p != player:
+					var dist = player.global_position.distance_to(p.global_position)
+					print("[PvP]   Other player at dist=%.1f (attack_range=%.1f)" % [dist, attack_range])
+
 	# Start cooldown timer
 	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
 
@@ -305,6 +320,121 @@ func get_enemies_in_cone() -> Array:
 			enemies_in_range.append(enemy)
 
 	return enemies_in_range
+
+func get_players_in_cone() -> Array:
+	"""Get other players within attack cone (for PvP dueling)"""
+	var players_in_range = []
+	var all_players = player.get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+
+	for other_player in all_players:
+		if not is_instance_valid(other_player):
+			continue
+
+		# Skip self
+		if other_player == player:
+			continue
+
+		# Check distance
+		var distance = player.global_position.distance_to(other_player.global_position)
+		if distance > attack_range:
+			continue
+
+		# Check angle (cone)
+		var to_player = (other_player.global_position - player.global_position).normalized()
+		var angle_diff = abs(attack_direction.angle_to(to_player))
+
+		if angle_diff <= attack_cone_angle / 2.0:
+			players_in_range.append(other_player)
+
+	return players_in_range
+
+func attack_players_in_cone(target_players: Array) -> void:
+	"""Deal damage to players in attack cone (PvP)"""
+	var my_peer_id = player.get_tree().get_multiplayer().get_unique_id()
+	print("[PvP] attack_players_in_cone called with %d targets" % target_players.size())
+
+	for target_player in target_players:
+		if not is_instance_valid(target_player):
+			print("[PvP]   Target invalid, skipping")
+			continue
+
+		# Only attack duel opponent during a duel
+		if player.is_dueling:
+			var target_id = _get_player_peer_id(target_player)
+			print("[PvP]   target_id=%d, duel_opponent_id=%d" % [target_id, player.duel_opponent_id])
+			if target_id != player.duel_opponent_id:
+				print("[PvP]   Skipping - not duel opponent")
+				continue  # Skip non-opponent players
+
+		print("[PvP]   Attacking target!")
+
+		# Calculate damage (no crits for PvP currently)
+		var final_damage = attack_damage
+
+		# Send PvP damage through network
+		_send_pvp_damage(target_player, int(final_damage))
+
+		# Visual feedback for attacker
+		if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
+			attack_feedback.spawn_damage_number(target_player.global_position, final_damage, false, false)
+
+		# Hit sound
+		var sound_manager = player.get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			var weapon_type = "unarmed"
+			if CharacterStats.equipped_weapon:
+				weapon_type = CharacterStats.equipped_weapon.weapon_type
+			sound_manager.play_normal_hit_sound(target_player.global_position, -10.0, weapon_type)
+
+func _get_player_peer_id(target_player: Node) -> int:
+	"""Get the peer ID for a player node using multiple methods"""
+	# Method 1: Check if player has multiplayer authority set
+	if target_player.get_multiplayer_authority() > 0:
+		return target_player.get_multiplayer_authority()
+
+	# Method 2: Check parent for NetworkPlayer with player_id
+	var parent = target_player.get_parent()
+	if parent and parent.get("player_id") != null:
+		return parent.player_id
+
+	# Method 3: Extract from parent name (Player_XXXXX)
+	if parent and parent.name.begins_with("Player_"):
+		var id_str = parent.name.substr(7)
+		if id_str.is_valid_int():
+			return int(id_str)
+
+	# Method 4: Search in Players container for matching player_instance
+	var players_container = player.get_node_or_null("/root/GameWorld/Players")
+	if players_container:
+		for network_player in players_container.get_children():
+			if network_player.get("player_instance") == target_player:
+				if network_player.get("player_id") != null:
+					return network_player.player_id
+
+	return -1
+
+func _send_pvp_damage(target_player: Node, damage: int) -> void:
+	"""Send PvP damage request to server via DuelManager"""
+	var target_peer_id = _get_player_peer_id(target_player)
+
+	if target_peer_id < 0:
+		print("[PvP] Cannot find target peer ID for damage")
+		return
+
+	var duel_manager = player.get_node_or_null("/root/DuelManager")
+	if not duel_manager:
+		print("[PvP] DuelManager not found")
+		return
+
+	# Send damage request through DuelManager
+	if player.get_tree().get_multiplayer().is_server():
+		# Server processes directly - call the RPC locally
+		duel_manager.request_pvp_damage(target_peer_id, damage)
+	else:
+		# Client sends RPC to server
+		duel_manager.request_pvp_damage.rpc_id(1, target_peer_id, damage)
+
+	print("[PvP] Sent damage request: %d to player %d" % [damage, target_peer_id])
 
 func attack_enemies_in_cone(enemies: Array) -> void:
 	"""Deal damage to enemies in attack cone"""

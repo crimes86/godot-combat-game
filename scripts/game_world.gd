@@ -794,15 +794,15 @@ func spawn_path_for_chunk(chunk_id: int) -> void:
 		# Paths extend well into clearing so they blend naturally
 		var overlap = 200.0
 
-		# Left path: chunk start to inside clearing
+		# Left path: chunk start to inside clearing (clip to chunk boundary)
 		var left_end = Vector2(CAMPFIRE_POS.x - clearing_radius + overlap, CAMPFIRE_POS.y)
 		var left_path = create_zigzag_path(Vector2(chunk_start_x, 0), left_end, 8, 250, rng)
-		draw_path_from_points(chunk_path, left_path, 260, rng)
+		draw_path_from_points(chunk_path, left_path, 260, rng, chunk_start_x, INF)
 
-		# Right path: inside clearing to chunk end
+		# Right path: inside clearing to chunk end (clip to chunk boundary)
 		var right_start = Vector2(CAMPFIRE_POS.x + clearing_radius - overlap, CAMPFIRE_POS.y)
 		var right_path = create_zigzag_path(right_start, Vector2(chunk_end_x, 0), 8, 250, rng)
-		draw_path_from_points(chunk_path, right_path, 260, rng)
+		draw_path_from_points(chunk_path, right_path, 260, rng, -INF, chunk_end_x)
 
 		# Draw campfire clearing LAST (on top) to cover path ends cleanly
 		create_campfire_circle(chunk_path, CAMPFIRE_POS, rng)
@@ -810,7 +810,7 @@ func spawn_path_for_chunk(chunk_id: int) -> void:
 		# Combine for torch placement
 		main_path = left_path + right_path
 	else:
-		# Other chunks: single continuous path
+		# Other chunks: single continuous path with hard edges at chunk boundaries
 		var path_start = Vector2(chunk_start_x, 0)
 		var path_end = Vector2(chunk_end_x, 0)
 		main_path = create_zigzag_path(path_start, path_end, 8, 250, rng)
@@ -832,11 +832,11 @@ func spawn_path_for_chunk(chunk_id: int) -> void:
 			var branch_start = Vector2(branch_x, main_path_y + y_direction * 200)
 
 			var ruins_path = create_zigzag_path(branch_start, ruins_pos, 6, 200, rng)
-			draw_path_from_points(chunk_path, ruins_path, 195, rng)
+			draw_path_from_points(chunk_path, ruins_path, 195, rng)  # Branch paths don't need clipping
 			print("🛤️ Branch path to %s at %s" % [ruins_key, ruins_pos])
 
-		# Draw main path LAST (on top of branch paths)
-		draw_path_from_points(chunk_path, main_path, 260, rng)
+		# Draw main path LAST (on top of branch paths) - clip to chunk boundaries
+		draw_path_from_points(chunk_path, main_path, 260, rng, chunk_start_x, chunk_end_x)
 
 	# Store path points for torch/enemy systems
 	chunk_path_points[chunk_id] = main_path
@@ -925,9 +925,55 @@ func create_zigzag_path(start: Vector2, end: Vector2, _num_zigs: int, zig_amplit
 
 	return points
 
-func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: RandomNumberGenerator):
-	"""Draw path with textured/organic edges using overlapping lines"""
+func _catmull_rom_interpolate(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
+	"""Catmull-Rom spline interpolation between p1 and p2"""
+	var t2 = t * t
+	var t3 = t2 * t
+	return 0.5 * (
+		(2.0 * p1) +
+		(-p0 + p2) * t +
+		(2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 +
+		(-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3
+	)
+
+func _smooth_path_points(points: Array, subdivisions: int = 4) -> Array:
+	"""Smooth path using Catmull-Rom spline interpolation"""
 	if points.size() < 2:
+		return points
+
+	var smoothed: Array = []
+
+	for i in range(points.size() - 1):
+		# Get 4 control points for Catmull-Rom (handle edges by duplicating)
+		var p0 = points[max(0, i - 1)]
+		var p1 = points[i]
+		var p2 = points[min(points.size() - 1, i + 1)]
+		var p3 = points[min(points.size() - 1, i + 2)]
+
+		# Add interpolated points
+		for j in range(subdivisions):
+			var t = float(j) / float(subdivisions)
+			smoothed.append(_catmull_rom_interpolate(p0, p1, p2, p3, t))
+
+	# Add final point
+	smoothed.append(points[points.size() - 1])
+	return smoothed
+
+func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: RandomNumberGenerator, clip_min_x: float = -INF, clip_max_x: float = INF):
+	"""Draw path with textured/organic edges using overlapping lines.
+	Optional clip_min_x/clip_max_x create hard edges at chunk boundaries."""
+	if points.size() < 2:
+		return
+
+	# Smooth the path using Catmull-Rom splines for natural curves
+	var smooth_points = _smooth_path_points(points, 5)
+
+	# Clip points to chunk boundaries if specified
+	var has_clipping = clip_min_x > -INF or clip_max_x < INF
+	if has_clipping:
+		smooth_points = _clip_path_to_bounds(smooth_points, clip_min_x, clip_max_x)
+
+	if smooth_points.size() < 2:
 		return
 
 	# Consistent path color - single shade
@@ -935,8 +981,8 @@ func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: Ran
 
 	# Create multiple overlapping lines for soft edges (tightened fade)
 	var layers = [
-		{"width_mult": 1.85, "alpha": 0.6, "noise": 8},    # Outer fade
-		{"width_mult": 1.5, "alpha": 0.85, "noise": 5},    # Core path
+		{"width_mult": 1.85, "alpha": 0.6, "noise": 4},    # Outer fade (reduced noise for smooth edges)
+		{"width_mult": 1.5, "alpha": 0.85, "noise": 2},    # Core path (minimal noise)
 	]
 
 	for layer in layers:
@@ -944,17 +990,25 @@ func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: Ran
 		line.width = width * layer.width_mult
 		line.default_color = Color(PATH_COLOR.r, PATH_COLOR.g, PATH_COLOR.b, layer.alpha)
 		line.joint_mode = Line2D.LINE_JOINT_ROUND
-		line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-		line.end_cap_mode = Line2D.LINE_CAP_ROUND
+		# Use square caps at chunk boundaries for hard edges
+		if has_clipping:
+			line.begin_cap_mode = Line2D.LINE_CAP_BOX
+			line.end_cap_mode = Line2D.LINE_CAP_BOX
+		else:
+			line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+			line.end_cap_mode = Line2D.LINE_CAP_ROUND
 		line.antialiased = true
 
-		# Add points with noise for organic edges
-		for i in range(points.size()):
-			var point = points[i]
+		# Add smoothed points with subtle noise for organic edges
+		for i in range(smooth_points.size()):
+			var point = smooth_points[i]
 			var noise_amount = layer.noise
-			# Reduce noise at endpoints for clean connections
-			if i == 0 or i == points.size() - 1:
-				noise_amount *= 0.3
+			# No noise at endpoints for hard chunk edges
+			if i == 0 or i == smooth_points.size() - 1:
+				if has_clipping:
+					noise_amount = 0  # Hard edge - no noise
+				else:
+					noise_amount *= 0.3
 			var noisy_point = point + Vector2(
 				rng.randf_range(-noise_amount, noise_amount),
 				rng.randf_range(-noise_amount, noise_amount)
@@ -962,6 +1016,49 @@ func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: Ran
 			line.add_point(noisy_point)
 
 		parent.add_child(line)
+
+func _clip_path_to_bounds(points: Array, min_x: float, max_x: float) -> Array:
+	"""Clip path points to X boundaries, creating hard edges at chunk borders."""
+	var clipped: Array = []
+
+	for i in range(points.size()):
+		var point = points[i]
+
+		# Skip points outside bounds entirely
+		if point.x < min_x or point.x > max_x:
+			# But if we're crossing a boundary, add an edge point
+			if clipped.size() > 0 and i > 0:
+				var prev = points[i - 1]
+				if prev.x >= min_x and prev.x <= max_x:
+					# Interpolate to find exact boundary crossing
+					if point.x < min_x:
+						var t = (min_x - prev.x) / (point.x - prev.x)
+						clipped.append(Vector2(min_x, lerp(prev.y, point.y, t)))
+					elif point.x > max_x:
+						var t = (max_x - prev.x) / (point.x - prev.x)
+						clipped.append(Vector2(max_x, lerp(prev.y, point.y, t)))
+			continue
+
+		# If this point is inside but previous was outside, add entry point
+		if clipped.size() == 0 and i > 0:
+			var prev = points[i - 1]
+			if prev.x < min_x:
+				var t = (min_x - prev.x) / (point.x - prev.x)
+				clipped.append(Vector2(min_x, lerp(prev.y, point.y, t)))
+			elif prev.x > max_x:
+				var t = (max_x - prev.x) / (point.x - prev.x)
+				clipped.append(Vector2(max_x, lerp(prev.y, point.y, t)))
+
+		clipped.append(point)
+
+	# Ensure first and last points are exactly on boundary
+	if clipped.size() >= 2:
+		if clipped[0].x > min_x and min_x > -INF:
+			clipped[0].x = min_x
+		if clipped[clipped.size() - 1].x < max_x and max_x < INF:
+			clipped[clipped.size() - 1].x = max_x
+
+	return clipped
 
 func draw_path_from_points_avoiding_area(parent: Node2D, points: Array, width: float, rng: RandomNumberGenerator, avoid_center: Vector2, avoid_radius: float):
 	"""Draw path as Line2D, with gap around avoid area"""

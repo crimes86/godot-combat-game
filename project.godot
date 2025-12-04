@@ -40,6 +40,7 @@ TutorialManager="*res://scripts/systems/TutorialManager.gd"
 QuestManager="*res://scripts/systems/QuestManager.gd"
 QuestTrackerUI="*res://scripts/ui/QuestTrackerUI.gd"
 BugReportUI="*res://scripts/ui/BugReportUI.gd"
+DuelManager="*res://scripts/systems/DuelManager.gd"
 
 [display]
 

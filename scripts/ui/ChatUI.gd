@@ -479,6 +479,13 @@ func _handle_admin_command(cmd: String) -> void:
 			_cmd_group_info()
 		"players", "who":
 			_cmd_players()
+		# Duel commands
+		"duel":
+			_cmd_duel(args)
+		"acceptduel":
+			_cmd_duel_accept()
+		"declineduel":
+			_cmd_duel_decline()
 		# Admin commands (server host only - checked above)
 		"accounts":
 			_cmd_accounts()
@@ -603,27 +610,167 @@ func _cmd_group_info() -> void:
 		add_system_message("  - %s%s" % [name, suffix])
 
 func _cmd_players() -> void:
-	"""List all connected players - useful for /invite"""
-	var network_manager = get_node_or_null("/root/NetworkManager")
-	if not network_manager:
-		add_system_message("[Error] Not connected.")
-		return
-
-	var players = network_manager.connected_players
-	if players.is_empty():
-		add_system_message("No players connected.")
-		return
-
+	"""List all connected players - useful for /invite and /duel"""
 	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
-	add_system_message("=== Online Players (%d) ===" % players.size())
-	for peer_id in players:
-		var player_info = players[peer_id]
-		var name = player_info.get("name", "Unknown")
+	var found_players: Dictionary = {}  # peer_id -> name
+
+	# Try NetworkManager connected_players first
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if network_manager:
+		for peer_id in network_manager.connected_players:
+			var player_info = network_manager.connected_players[peer_id]
+			found_players[peer_id] = player_info.get("name", "Player%d" % peer_id)
+
+	# Also search player nodes in scene (fallback for sync issues)
+	var tree = get_tree()
+	if tree:
+		for node in tree.get_nodes_in_group("player"):
+			var peer_id = node.get_multiplayer_authority()
+			if not found_players.has(peer_id):
+				var health_bar = node.get_node_or_null("HealthBar")
+				if health_bar:
+					var name_label = health_bar.get_node_or_null("NameLabel")
+					if name_label:
+						found_players[peer_id] = name_label.text
+
+		for node in tree.get_nodes_in_group("players"):
+			var peer_id = node.get_multiplayer_authority()
+			if not found_players.has(peer_id):
+				var health_bar = node.get_node_or_null("HealthBar")
+				if health_bar:
+					var name_label = health_bar.get_node_or_null("NameLabel")
+					if name_label:
+						found_players[peer_id] = name_label.text
+
+	if found_players.is_empty():
+		add_system_message("No players found.")
+		return
+
+	add_system_message("=== Online Players (%d) ===" % found_players.size())
+	for peer_id in found_players:
+		var name = found_players[peer_id]
 		var is_you = peer_id == my_id
 		if is_you:
 			add_system_message("  %s (You)" % name)
 		else:
 			add_system_message("  %s" % name)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DUEL COMMANDS
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _cmd_duel(args: Array) -> void:
+	"""Request a duel with another player"""
+	if args.is_empty():
+		add_system_message("Usage: /duel <player name>")
+		return
+
+	if not DuelManager:
+		add_system_message("[Error] Duel system not available.")
+		return
+
+	var target_name = " ".join(args)  # Support names with spaces
+	var target_id = _find_player_by_name(target_name)
+
+	if target_id == -1:
+		add_system_message("[Error] Player '%s' not found." % target_name)
+		add_system_message("Use /players to see online players.")
+		return
+
+	var result = DuelManager.request_duel(target_id)
+	if result.success:
+		add_system_message(result.message)
+	else:
+		add_system_message("[Error] %s" % result.message)
+
+func _cmd_duel_accept() -> void:
+	"""Accept a pending duel request"""
+	if not DuelManager:
+		add_system_message("[Error] Duel system not available.")
+		return
+
+	if not DuelManager.has_pending_request():
+		add_system_message("[Error] No pending duel request.")
+		return
+
+	var result = DuelManager.accept_duel()
+	if result.success:
+		add_system_message(result.message)
+	else:
+		add_system_message("[Error] %s" % result.message)
+
+func _cmd_duel_decline() -> void:
+	"""Decline a pending duel request"""
+	if not DuelManager:
+		add_system_message("[Error] Duel system not available.")
+		return
+
+	if not DuelManager.has_pending_request():
+		add_system_message("[Error] No pending duel request.")
+		return
+
+	var result = DuelManager.decline_duel()
+	if result.success:
+		add_system_message(result.message)
+	else:
+		add_system_message("[Error] %s" % result.message)
+
+func _find_player_by_name(search_name: String) -> int:
+	"""Find player peer ID by name (case-insensitive partial match)"""
+	var search_lower = search_name.to_lower()
+	print("[Duel] Searching for player: '%s'" % search_name)
+
+	# First try NetworkManager connected_players
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if network_manager:
+		print("[Duel] connected_players: %s" % str(network_manager.connected_players))
+		for peer_id in network_manager.connected_players:
+			var player_info = network_manager.connected_players[peer_id]
+			var name = player_info.get("name", "").to_lower()
+			if name == search_lower or name.begins_with(search_lower):
+				print("[Duel] Found in connected_players: %d" % peer_id)
+				return peer_id
+
+	# Fallback: search actual player nodes in scene
+	var tree = get_tree()
+	if tree:
+		# Search all Player_* nodes directly
+		for node in tree.get_nodes_in_group("player"):
+			print("[Duel] Checking 'player' group node: %s (auth=%d)" % [node.name, node.get_multiplayer_authority()])
+			var health_bar = node.get_node_or_null("HealthBar")
+			if health_bar:
+				var name_label = health_bar.get_node_or_null("NameLabel")
+				if name_label:
+					print("[Duel]   HealthBar name: '%s'" % name_label.text)
+					if name_label.text.to_lower().begins_with(search_lower):
+						return node.get_multiplayer_authority()
+
+		for node in tree.get_nodes_in_group("players"):
+			print("[Duel] Checking 'players' group node: %s (auth=%d)" % [node.name, node.get_multiplayer_authority()])
+			var health_bar = node.get_node_or_null("HealthBar")
+			if health_bar:
+				var name_label = health_bar.get_node_or_null("NameLabel")
+				if name_label:
+					print("[Duel]   HealthBar name: '%s'" % name_label.text)
+					if name_label.text.to_lower().begins_with(search_lower):
+						return node.get_multiplayer_authority()
+
+		# Last resort: search by node name pattern Player_*
+		var world = tree.current_scene
+		if world:
+			for child in world.get_children():
+				if child.name.begins_with("Player_"):
+					print("[Duel] Found Player_ node: %s (auth=%d)" % [child.name, child.get_multiplayer_authority()])
+					var health_bar = child.get_node_or_null("HealthBar")
+					if health_bar:
+						var name_label = health_bar.get_node_or_null("NameLabel")
+						if name_label:
+							print("[Duel]   HealthBar name: '%s'" % name_label.text)
+							if name_label.text.to_lower().begins_with(search_lower):
+								return child.get_multiplayer_authority()
+
+	print("[Duel] Player not found!")
+	return -1
 
 # ═══════════════════════════════════════════════════════════════════════════
 # HELP COMMAND
@@ -632,6 +779,10 @@ func _cmd_players() -> void:
 func _cmd_help() -> void:
 	add_system_message("=== General Commands ===")
 	add_system_message("/players - List online players")
+	add_system_message("=== Duel Commands ===")
+	add_system_message("/duel <player> - Challenge to a duel")
+	add_system_message("/acceptduel - Accept duel request")
+	add_system_message("/declineduel - Decline duel request")
 	add_system_message("=== Group Commands ===")
 	add_system_message("/invite <player> - Invite to group")
 	add_system_message("/accept - Accept group invite")
