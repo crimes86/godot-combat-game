@@ -6,7 +6,7 @@ shader_type canvas_item;
 // Dark stone grey - cool tint to counteract any warm bleed
 uniform vec4 base_color : source_color = vec4(0.15, 0.15, 0.17, 1.0);
 uniform float world_scale : hint_range(0.0001, 0.01) = 0.001;
-uniform float intensity : hint_range(0.0, 1.0) = 0.3;  // Overall effect strength
+uniform float intensity : hint_range(0.0, 1.0) = 0.75;  // Overall effect strength
 
 // Noise functions
 float hash(vec2 p) {
@@ -61,18 +61,18 @@ void fragment() {
     // Neutral grey shifts - no warm tint
     color += (medium_noise - 0.5) * vec3(0.008, 0.008, 0.008) * intensity;
 
-    // === LAYER 4: Tiny scattered darker specks ===
+    // === LAYER 4: Tiny scattered darker specks (boosted) ===
     float speck_noise = noise(world_pos * 0.015);
-    float specks = smoothstep(0.7, 0.8, speck_noise) * 0.02 * intensity;
+    float specks = smoothstep(0.6, 0.75, speck_noise) * 0.035 * intensity;
     color -= specks;
 
-    // === LAYER 5: Very faint lighter dust patches ===
+    // === LAYER 5: Very faint lighter dust patches (reduced) ===
     float dust_noise = fbm(world_pos * 0.0003 + vec2(100.0, 200.0), 2);
-    float dust = smoothstep(0.55, 0.65, dust_noise) * 0.015 * intensity;
+    float dust = smoothstep(0.6, 0.7, dust_noise) * 0.008 * intensity;
     color += dust;
 
-    // Clamp to valid range (keep close to base color)
-    color = clamp(color, base_color.rgb - vec3(0.03), base_color.rgb + vec3(0.04));
+    // Clamp to valid range (allow darker, limit lighter)
+    color = clamp(color, base_color.rgb - vec3(0.05), base_color.rgb + vec3(0.02));
 
     COLOR = vec4(color, 1.0);
 }

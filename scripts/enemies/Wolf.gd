@@ -153,6 +153,13 @@ func _ready() -> void:
 	# Start with idle animation
 	play_animation("idle_down")
 
+	# Pack alpha wolves have a chance to howl on spawn (not alpha dire - they have their own)
+	if pack_alpha and not is_alpha_dire_wolf:
+		if randf() < 0.15:  # 15% chance for pack alpha
+			# Pick between distant and pack howl for variety
+			var howl_type = "pack" if randf() < 0.4 else "distant"
+			call_deferred("_try_spawn_howl", howl_type)
+
 
 func apply_level_scaling() -> void:
 	"""Scale stats based on enemy level - uses Constants like skeletons"""
@@ -197,11 +204,50 @@ func _become_alpha_dire_wolf() -> void:
 	# Darker appearance (applied after sprite setup)
 	call_deferred("_apply_alpha_dire_appearance")
 
+	# Alpha Dire Wolf howl on spawn (50% chance, uses alpha howl)
+	if randf() < 0.5:
+		call_deferred("_try_spawn_howl", "alpha")
+
 
 func _apply_alpha_dire_appearance() -> void:
 	"""Apply dark tint to Alpha Dire Wolf"""
 	if sprite:
 		sprite.modulate = Color(0.4, 0.35, 0.5, 1.0)  # Dark purple-gray tint
+
+
+func _try_spawn_howl(howl_type: String = "distant") -> void:
+	"""Try to play a howl on spawn (respects cooldown system)"""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("try_play_wolf_howl"):
+		var played = sound_manager.try_play_wolf_howl(global_position, howl_type, -8.0)
+		# Play howl animation if sound was played (not blocked by cooldown)
+		if played:
+			_play_howl_animation()
+
+
+var _is_howling: bool = false
+
+func _play_howl_animation() -> void:
+	"""Play the howl animation (head up, mouth open)"""
+	if _is_howling or is_dying or is_corpse:
+		return
+
+	_is_howling = true
+	_is_idle = false  # Make sure animation plays
+
+	# Set to howl animation
+	_set_animation_type("howl")
+	_current_frame = 0
+	_update_sprite_region()
+
+	# Hold howl pose for duration of sound (~2-3 seconds for the visual)
+	await get_tree().create_timer(2.5).timeout
+
+	if is_instance_valid(self) and not is_dying:
+		_is_howling = false
+		# Return to idle/walk
+		_set_animation_type("walk")
+		_is_idle = true  # Pause on idle frame
 
 
 func setup_sprite() -> void:
@@ -211,7 +257,6 @@ func setup_sprite() -> void:
 		var tex = load(WOLF_SPRITES[dir_name]) as Texture2D
 		if tex:
 			_wolf_textures[dir_name] = tex
-			print("🐺 Loaded wolf-%s.png: %s" % [dir_name, tex.get_size()])
 		else:
 			push_error("Failed to load wolf sprite: " + WOLF_SPRITES[dir_name])
 
@@ -374,23 +419,27 @@ func setup_health_bar() -> void:
 	if health_bar.has_method("set_custom_offset"):
 		health_bar.set_custom_offset(45.0)
 
-	# Set the wolf name
+	# Set the wolf name (no level indicator)
 	var wolf_name = "Dire Wolf"
 	if is_alpha_dire_wolf:
 		wolf_name = "Alpha Dire Wolf"
 	elif pack_alpha:
 		wolf_name = "⍺ Dire Wolf"
 
-	# Add level to name
-	wolf_name = "%s L%d" % [wolf_name, enemy_level]
-
 	if health_bar.has_method("set_player_name"):
 		health_bar.set_player_name(wolf_name)
 
-	# Set name color based on level
-	var name_color = get_level_color(enemy_level)
+	# Set name color using con system (based on player level difference)
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	var player_level = 1
+	if player and player.has_method("get_level"):
+		player_level = player.get_level()
+	elif CharacterStats:
+		player_level = CharacterStats.level
+
+	var name_color = get_con_color(player_level)
 	if is_alpha_dire_wolf:
-		name_color = Color(0.8, 0.4, 1.0)  # Purple for rare
+		name_color = Color(0.8, 0.4, 1.0)  # Purple for rare (overrides con)
 	if health_bar.has_method("set_name_color"):
 		health_bar.set_name_color(name_color)
 
@@ -401,14 +450,33 @@ func setup_health_bar() -> void:
 	health_bar.visible = false  # Hidden until damaged
 
 
-func get_level_color(level: int) -> Color:
-	"""Get color for level display"""
-	match level:
-		1, 2: return Color(0.4, 0.8, 0.4)  # Green - easy
-		3, 4: return Color(0.8, 0.8, 0.2)  # Yellow - medium
-		5, 6: return Color(0.9, 0.5, 0.1)  # Orange - challenging
-		7, 8: return Color(0.9, 0.2, 0.2)  # Red - hard
-		_: return Color(0.8, 0.1, 0.8)     # Purple - elite (9+)
+func get_con_color(player_level: int) -> Color:
+	"""Get con (consider) color based on level difference with player
+	Classic MMO con system:
+	- Gray: 6+ levels below (trivial)
+	- Green: 3-5 levels below (easy)
+	- Blue: 1-2 levels below (moderate)
+	- White: Same level (even match)
+	- Yellow: 1-2 levels above (challenging)
+	- Orange: 3-4 levels above (difficult)
+	- Red: 5+ levels above (deadly)
+	"""
+	var level_diff = enemy_level - player_level
+
+	if level_diff <= -6:
+		return Color(0.6, 0.6, 0.6)  # Gray (trivial)
+	elif level_diff <= -3:
+		return Color(0.2, 1.0, 0.2)  # Green (easy)
+	elif level_diff <= -1:
+		return Color(0.4, 0.6, 1.0)  # Blue (moderate)
+	elif level_diff == 0:
+		return Color(1.0, 1.0, 1.0)  # White (even)
+	elif level_diff <= 2:
+		return Color(1.0, 1.0, 0.0)  # Yellow (challenging)
+	elif level_diff <= 4:
+		return Color(1.0, 0.6, 0.0)  # Orange (difficult)
+	else:
+		return Color(1.0, 0.2, 0.2)  # Red (deadly)
 
 
 func setup_click_area() -> void:
@@ -518,6 +586,11 @@ func take_damage(damage: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	# Spawn combat text
 	_spawn_combat_text(damage, is_crit, is_weakpoint_hit)
 
+	# Play wolf hurt sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_wolf_hurt_sound(global_position, -6.0)
+
 	if current_health <= 0:
 		die()
 
@@ -588,10 +661,10 @@ func die() -> void:
 	if corpse_gold == 0:
 		corpse_gold = gold_drop
 
-	# Play death sound
+	# Play wolf death sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_skeleton_death_sound(global_position, -8.0)
+		sound_manager.play_wolf_death_sound(global_position, -4.0)
 
 	# Play death animation - keep _is_idle false so it animates
 	_is_idle = false
@@ -880,21 +953,15 @@ func graceful_despawn() -> void:
 func open_loot_ui() -> void:
 	"""Open loot UI for this corpse"""
 	if corpse_gold == 0 and corpse_loot.is_empty():
-		print("🐺 No loot or gold, not opening UI")
 		return
-
-	print("🐺 Opening loot UI via F-key for wolf corpse (Gold: %d, Items: %d)" % [corpse_gold, corpse_loot.size()])
 
 	# Check if signal is connected
 	var connection_count = corpse_clicked.get_connections().size()
-	print("🐺 Signal connections: %d" % connection_count)
 
 	if connection_count > 0:
 		corpse_clicked.emit(self)
-		print("🐺 Signal emitted!")
 	else:
 		# Fallback: directly create loot UI if signal not connected
-		print("🐺 No signal connections - attempting direct UI creation")
 		var game_world = get_tree().current_scene
 		if game_world and game_world.has_method("_on_corpse_clicked"):
 			game_world._on_corpse_clicked(self)
@@ -1068,6 +1135,18 @@ const CHAIN_AGGRO_RANGE: float = 150.0  # Pack alerts nearby wolves (skeleton: 1
 const WANDER_RADIUS: float = 150.0  # How far wolves wander from spawn
 const WANDER_INTERVAL_MIN: float = 2.0  # Min time between wander direction changes
 const WANDER_INTERVAL_MAX: float = 5.0  # Max time between wander direction changes
+const AMBIENT_HOWL_INTERVAL_MIN: float = 30.0  # Min seconds between ambient howl attempts
+const AMBIENT_HOWL_INTERVAL_MAX: float = 90.0  # Max seconds between ambient howl attempts
+const AMBIENT_HOWL_CHANCE: float = 0.15  # 15% chance when timer fires (only pack alphas)
+
+# Pack roaming/patrol constants
+const ROAMING_PACK_CHANCE: float = 0.25  # 25% of packs will roam
+const PATROL_REST_MIN: float = 30.0  # Min seconds resting at a site before patrol
+const PATROL_REST_MAX: float = 90.0  # Max seconds resting
+const PATROL_SPEED_WALK: float = 100.0  # Trotting speed
+const PATROL_SPEED_RUN: float = 160.0  # Running speed (occasional bursts)
+const PATROL_RUN_CHANCE: float = 0.3  # 30% chance to run instead of trot
+const FORMATION_SPACING: float = 60.0  # Distance between pack members in formation
 
 var target_player: Node = null
 var attack_cooldown: float = 0.0
@@ -1082,6 +1161,17 @@ var _wander_target: Vector2 = Vector2.ZERO
 var _wander_timer: float = 0.0
 var _is_wandering: bool = false
 var _wander_stuck_timer: float = 0.0  # Timeout if can't reach target
+var _ambient_howl_timer: float = 0.0  # Timer for ambient howls while idling
+
+# Pack roaming state (only meaningful for pack alphas)
+var is_roaming_pack: bool = false  # This pack roams between ritual sites
+var _patrol_state: String = "resting"  # "resting", "patrolling", "arriving"
+var _patrol_target: Vector2 = Vector2.ZERO  # Current patrol destination
+var _patrol_rest_timer: float = 0.0  # Time until next patrol
+var _patrol_speed: float = PATROL_SPEED_WALK  # Current patrol speed
+var _home_ritual_site: Vector2 = Vector2.ZERO  # Original ritual site position
+var _formation_index: int = -1  # Position in pack formation (0 = alpha, 1-6 = followers)
+var _pack_alpha_ref: Wolf = null  # Reference to pack alpha (for followers)
 
 
 func _init_ai_variation() -> void:
@@ -1098,8 +1188,17 @@ func _init_ai_variation() -> void:
 	# Randomize starting animation frame
 	_current_frame = rng.randi_range(0, 4)
 
+	# Pack alphas decide if this is a roaming pack
+	if pack_alpha:
+		is_roaming_pack = randf() < ROAMING_PACK_CHANCE
+		if is_roaming_pack:
+			_patrol_rest_timer = randf_range(PATROL_REST_MIN, PATROL_REST_MAX)
+
 	# Random initial wander timer
 	_wander_timer = rng.randf_range(0, WANDER_INTERVAL_MAX)
+
+	# Random initial ambient howl timer (staggered so wolves don't all howl at once)
+	_ambient_howl_timer = rng.randf_range(AMBIENT_HOWL_INTERVAL_MIN, AMBIENT_HOWL_INTERVAL_MAX)
 
 	# Store spawn position for wandering (deferred to ensure position is set)
 	call_deferred("_set_spawn_position")
@@ -1109,10 +1208,16 @@ func _set_spawn_position() -> void:
 	"""Set spawn position after node is fully in tree with correct position"""
 	_spawn_position = global_position
 	_wander_target = _spawn_position  # Start at spawn
+	_home_ritual_site = global_position  # Remember home for roaming packs
 
 
 func _physics_process(delta: float) -> void:
 	if is_dying or is_corpse:
+		return
+
+	# Don't move while howling
+	if _is_howling:
+		velocity = Vector2.ZERO
 		return
 
 	# Update attack cooldown
@@ -1175,6 +1280,36 @@ func _do_wander_behavior(delta: float) -> void:
 		velocity = Vector2.ZERO
 		return
 
+	# Ambient howl check (only pack alphas howl while wandering)
+	if pack_alpha or is_alpha_dire_wolf:
+		_ambient_howl_timer -= delta
+		if _ambient_howl_timer <= 0:
+			_ambient_howl_timer = randf_range(AMBIENT_HOWL_INTERVAL_MIN, AMBIENT_HOWL_INTERVAL_MAX)
+			# Roll chance and attempt howl (SoundManager handles cooldown/diminishing returns)
+			if randf() < AMBIENT_HOWL_CHANCE:
+				# Pick howl type - Alpha Dire always uses alpha, pack alphas randomly pick
+				var howl_type: String
+				if is_alpha_dire_wolf:
+					howl_type = "alpha"
+				else:
+					# Randomly pick between distant (60%), pack (40%) for variety
+					howl_type = "pack" if randf() < 0.4 else "distant"
+				_try_spawn_howl(howl_type)
+
+	# === PACK PATROL BEHAVIOR ===
+	# Pack alphas of roaming packs handle patrol logic
+	if pack_alpha and is_roaming_pack:
+		_do_patrol_behavior(delta)
+		# If patrolling, skip normal wander
+		if _patrol_state == "patrolling":
+			return
+
+	# Pack members follow their alpha when patrolling
+	if _pack_alpha_ref and is_instance_valid(_pack_alpha_ref) and _pack_alpha_ref._patrol_state == "patrolling":
+		_follow_alpha_in_formation(delta)
+		return
+
+	# === NORMAL WANDER BEHAVIOR ===
 	# Pick new wander target when timer expires
 	if _wander_timer <= 0:
 		_wander_timer = randf_range(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX)
@@ -1221,11 +1356,226 @@ func _do_wander_behavior(delta: float) -> void:
 		update_animation_for_direction(Vector2.ZERO)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# PACK ROAMING/PATROL BEHAVIOR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func setup_pack_formation(alpha: Wolf, index: int) -> void:
+	"""Called by spawner to set up pack formation references"""
+	_pack_alpha_ref = alpha
+	_formation_index = index
+	# Inherit roaming status from alpha
+	if alpha and alpha.is_roaming_pack:
+		is_roaming_pack = true
+
+
+func _do_patrol_behavior(delta: float) -> void:
+	"""Handle pack patrol behavior (only for roaming pack alphas)"""
+	if not pack_alpha or not is_roaming_pack:
+		return
+
+	match _patrol_state:
+		"resting":
+			# Count down rest timer
+			_patrol_rest_timer -= delta
+			if _patrol_rest_timer <= 0:
+				# Time to patrol! Find a destination
+				_start_patrol()
+
+		"patrolling":
+			# Move toward patrol target
+			var dist_to_target = global_position.distance_to(_patrol_target)
+
+			if dist_to_target < 100:
+				# Arrived at destination
+				_patrol_state = "arriving"
+				_patrol_rest_timer = randf_range(PATROL_REST_MIN, PATROL_REST_MAX)
+				_spawn_position = _patrol_target  # Update spawn position for wandering
+				# Maybe howl on arrival
+				if randf() < 0.4:
+					_try_spawn_howl("pack")
+			else:
+				# Check if pack members are falling behind - alpha waits for stragglers
+				var should_wait = _check_pack_stragglers()
+
+				if should_wait:
+					# Pause and wait for pack to regroup
+					velocity = Vector2.ZERO
+					update_animation_for_direction(Vector2.ZERO)
+				else:
+					# Keep moving toward target
+					var direction = (_patrol_target - global_position).normalized()
+					velocity = direction * _patrol_speed
+					is_running = _patrol_speed > PATROL_SPEED_WALK
+					move_and_slide()
+					update_animation_for_direction(direction)
+
+		"arriving":
+			# Brief settling period, then back to resting
+			_patrol_rest_timer -= delta
+			if _patrol_rest_timer <= 0:
+				_patrol_state = "resting"
+				_patrol_rest_timer = randf_range(PATROL_REST_MIN, PATROL_REST_MAX)
+
+
+func _start_patrol() -> void:
+	"""Begin a patrol to another ritual site"""
+	var destination = _find_patrol_destination()
+	if destination == Vector2.ZERO:
+		# No valid destination, stay put
+		_patrol_rest_timer = randf_range(PATROL_REST_MIN, PATROL_REST_MAX)
+		return
+
+	_patrol_target = destination
+	_patrol_state = "patrolling"
+
+	# Decide speed - 30% chance to run
+	if randf() < PATROL_RUN_CHANCE:
+		_patrol_speed = PATROL_SPEED_RUN
+	else:
+		_patrol_speed = PATROL_SPEED_WALK
+
+	# Howl to signal pack movement
+	if randf() < 0.5:
+		_try_spawn_howl("distant")
+
+
+func _find_patrol_destination() -> Vector2:
+	"""Find another ritual site to patrol to.
+	STRONGLY prefers sites on the opposite side of the path (Y=0) to create danger for travelers."""
+	# Get all wolves and find other pack alphas (they mark ritual sites)
+	var cross_path_sites: Array[Vector2] = []  # Sites that require crossing the path
+	var same_side_sites: Array[Vector2] = []   # Fallback sites on same side
+	var my_pos = global_position
+	var my_side = sign(my_pos.y)  # Which side of path we're on (path is at Y=0)
+
+	# Patrol range - must be long enough to cross the path to other ritual sites
+	const MIN_PATROL_DIST: float = 400.0   # Don't patrol to super close sites
+	const MAX_PATROL_DIST: float = 8000.0  # Can patrol across entire chunk width
+
+	for wolf in get_tree().get_nodes_in_group("wolves"):
+		if not is_instance_valid(wolf) or wolf == self:
+			continue
+		if wolf.pack_alpha and wolf.pack_id != pack_id:
+			# This is another pack's alpha - their spawn position is a ritual site
+			var site_pos = wolf._spawn_position if wolf._spawn_position != Vector2.ZERO else wolf.global_position
+			# Only consider sites within patrol range
+			var dist = my_pos.distance_to(site_pos)
+			if dist > MIN_PATROL_DIST and dist < MAX_PATROL_DIST:
+				# Check if this site is on the opposite side of the path
+				var site_side = sign(site_pos.y)
+				if site_side != my_side and site_side != 0 and my_side != 0:
+					# This site requires crossing the path - PREFERRED!
+					cross_path_sites.append(site_pos)
+				else:
+					# Same side of path - fallback only
+					same_side_sites.append(site_pos)
+
+	# Strongly prefer cross-path destinations (90% chance if available)
+	if not cross_path_sites.is_empty():
+		if same_side_sites.is_empty() or randf() < 0.9:
+			return cross_path_sites[randi() % cross_path_sites.size()]
+
+	# Fall back to same-side sites
+	if not same_side_sites.is_empty():
+		return same_side_sites[randi() % same_side_sites.size()]
+
+	# No good destinations, maybe return home (if it's across the path)
+	if _home_ritual_site != Vector2.ZERO and my_pos.distance_to(_home_ritual_site) > 300:
+		return _home_ritual_site
+
+	return Vector2.ZERO
+
+
+func _follow_alpha_in_formation(delta: float) -> void:
+	"""Pack members follow their alpha in formation"""
+	if not _pack_alpha_ref or not is_instance_valid(_pack_alpha_ref):
+		return
+
+	# Only follow if alpha is patrolling
+	if _pack_alpha_ref._patrol_state != "patrolling":
+		return
+
+	# Calculate formation position behind alpha
+	var alpha_pos = _pack_alpha_ref.global_position
+	var alpha_velocity = _pack_alpha_ref.velocity
+
+	# Get formation offset based on index (V-formation)
+	var formation_offset = _get_formation_offset(_formation_index, alpha_velocity)
+	var target_pos = alpha_pos + formation_offset
+
+	var dist_to_target = global_position.distance_to(target_pos)
+
+	if dist_to_target > 20:
+		var direction = (target_pos - global_position).normalized()
+		# Match alpha's speed with slight variation
+		var speed = _pack_alpha_ref._patrol_speed * randf_range(0.95, 1.05)
+		# Speed up if falling behind
+		if dist_to_target > FORMATION_SPACING * 2:
+			speed *= 1.3
+		velocity = direction * speed
+		is_running = speed > PATROL_SPEED_WALK
+		move_and_slide()
+		update_animation_for_direction(direction)
+	else:
+		velocity = Vector2.ZERO
+
+
+func _get_formation_offset(index: int, leader_velocity: Vector2) -> Vector2:
+	"""Get position offset for V-formation behind leader"""
+	if leader_velocity.length() < 10:
+		# Leader not moving, spread out in circle
+		var angle = (index - 1) * (TAU / 6)
+		return Vector2(cos(angle), sin(angle)) * FORMATION_SPACING
+
+	# V-formation behind leader
+	var back_dir = -leader_velocity.normalized()
+	var side_dir = back_dir.rotated(PI / 2)
+
+	# Alternate left/right in V shape
+	var row = (index + 1) / 2  # 1,1,2,2,3,3...
+	var side = 1 if index % 2 == 1 else -1  # Left, right, left, right...
+
+	var back_offset = back_dir * (FORMATION_SPACING * row * 0.8)
+	var side_offset = side_dir * (FORMATION_SPACING * row * 0.5 * side)
+
+	return back_offset + side_offset
+
+
+func _check_pack_stragglers() -> bool:
+	"""Check if any pack members are too far behind - alpha should wait for them"""
+	if not pack_alpha:
+		return false  # Only alpha checks for stragglers
+
+	const MAX_STRAGGLER_DISTANCE: float = 350.0  # If any member is this far, wait
+
+	# Find all wolves in our pack
+	for wolf in get_tree().get_nodes_in_group("wolves"):
+		if not is_instance_valid(wolf) or wolf == self:
+			continue
+		if wolf.pack_id != pack_id:
+			continue
+		if wolf.is_dying or wolf.is_corpse:
+			continue
+
+		# Check distance from alpha (us) to this pack member
+		var dist = global_position.distance_to(wolf.global_position)
+		if dist > MAX_STRAGGLER_DISTANCE:
+			return true  # Someone is too far behind, wait for them
+
+	return false  # Pack is together, keep moving
+
+
 func _trigger_chain_aggro() -> void:
 	"""Alert nearby pack members when this wolf detects a player"""
 	if _has_alerted_pack:
 		return
 	_has_alerted_pack = true
+
+	# Play wolf aggro sound (growl/snarl)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_wolf_aggro_sound(global_position, -8.0)
 
 	var range_squared = CHAIN_AGGRO_RANGE * CHAIN_AGGRO_RANGE
 	var alerted = 0
@@ -1260,6 +1610,11 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 		attack_anim = "attack_right" if direction.x > 0 else "attack_left"
 
 	play_animation(attack_anim)
+
+	# Play wolf attack sound (bite)
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_wolf_attack_sound(global_position, -8.0)
 
 	# Deal damage after a short delay (sync with animation)
 	await get_tree().create_timer(0.3).timeout

@@ -36,6 +36,13 @@ var time_since_last_damage: float = 0.0
 var is_in_combat: bool = false
 var passive_heal_timer: float = 0.0
 
+# PvP Duel System
+var is_dueling: bool = false
+var duel_opponent_id: int = -1
+var has_safe_aura: bool = false
+var duel_aura_node: Node2D = null
+var safe_aura_node: Node2D = null
+
 # References
 @onready var health_bar: Control = $HealthBar
 @onready var crit_system: Node = $CritSystem
@@ -66,6 +73,13 @@ var cone_update_timer: float = 0.0  # Throttle cone color updates (CRITICAL for 
 var target_zoom: float = 1.0
 var camera: Camera2D = null
 
+# Debug zoom (unrestricted when F3 is active)
+const DEBUG_ZOOM_MIN: float = 0.05  # Can zoom way out in debug mode
+const DEBUG_ZOOM_MAX: float = 5.0   # Can zoom way in in debug mode
+var normal_zoom_min: float = 0.75   # Store normal limits to restore
+var normal_zoom_max: float = 2.0
+var debug_zoom_active: bool = false
+
 # Character UI
 var character_ui: CanvasLayer = null
 
@@ -77,6 +91,11 @@ var chat_ui: CanvasLayer = null
 
 # Inventory UI (separate from character sheet)
 var inventory_ui: CanvasLayer = null
+
+# Duel UI components
+var duel_request_popup: CanvasLayer = null
+var duel_countdown_ui: CanvasLayer = null
+var duel_result_ui: CanvasLayer = null
 
 # Dash/Dodge System
 var is_dashing: bool = false
@@ -262,6 +281,10 @@ func _ready() -> void:
 			print("📷 Camera zoom system initialized (0.5x - 2.0x)")
 			print("🔊 AudioListener2D enabled for spatial audio")
 
+			# Connect to debug toggle for unrestricted zoom
+			if Constants:
+				Constants.debug_display_toggled.connect(_on_debug_zoom_toggled)
+
 			# Start background music
 			var sound_manager = get_node_or_null("/root/SoundManager")
 			if sound_manager and sound_manager.has_method("play_game_music"):
@@ -294,6 +317,9 @@ func _ready() -> void:
 
 		# Create inventory UI (separate from character sheet)
 		call_deferred("create_inventory_ui")
+
+		# Create duel UI components
+		call_deferred("create_duel_ui")
 
 		# NOTE: Spawn hints no longer auto-show on launch (tutorial system handles new player guidance)
 		# Controls menu is still accessible via ESC when no other menus are open
@@ -1507,10 +1533,31 @@ func _on_attack_animation_finished() -> void:
 	var lpc_dir = convert_to_lpc_direction(dir_str)
 	character_sprite.play_lpc_animation("idle", lpc_dir)
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, source_type: String = "pve", source_player_id: int = -1) -> void:
 	# I-frames during dash
 	if is_dashing and dash_invincible:
-		print("💨 Damage dodged! (dashing)")
+		print("Damage dodged! (dashing)")
+		return
+
+	# DUEL ISOLATION: Only duel opponent can damage me during a duel
+	if is_dueling:
+		if source_type != "player" or source_player_id != duel_opponent_id:
+			return  # Ignore non-duel-opponent damage
+
+		# Check for duel end condition (1 HP threshold)
+		if current_health - amount <= 1:
+			current_health = 1
+			if health_bar and health_bar.has_method("update_health"):
+				health_bar.update_health(current_health, max_health)
+			CombatText.create_damage(amount, global_position, get_tree().root, attack_direction)
+			flash_player_sprite()
+			# Report loss to DuelManager
+			if DuelManager:
+				DuelManager.report_duel_loss()
+			return
+
+	# SAFE AURA: Block player damage post-duel
+	if has_safe_aura and source_type == "player":
 		return
 
 	# Cancel logout if taking damage (combat logging prevention)
@@ -1547,30 +1594,138 @@ func take_damage(amount: float) -> void:
 		sound_manager.play_player_hurt_sound(global_position, -3.0)
 
 	if current_health <= 0:
-		print("💀 Player death triggered!")
+		print("Player death triggered!")
 		die()
 
-func heal(amount: float) -> void:
-	"""Heal the player by the given amount"""
+func heal(amount: float, source_type: String = "self") -> void:
+	"""Heal the player by the given amount
+	source_type: 'self' (potions), 'player' (ally heals), 'campfire', 'passive'"""
+	# During duel: block outside player healing (campfire/ally heals blocked)
+	# Self-heals (potions) are allowed
+	if is_dueling and source_type in ["player", "campfire"]:
+		return
+
 	# Validate heal amount
 	if is_nan(amount) or is_inf(amount) or amount <= 0:
-		push_warning("⚠️  Invalid heal amount: %s" % str(amount))
+		push_warning("Invalid heal amount: %s" % str(amount))
 		return
 
 	if current_health >= max_health:
 		return  # Already at full health
-	
+
 	var actual_heal = min(amount, max_health - current_health)
 	current_health += actual_heal
-	
+
 	# Update health bar
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
 
 	# Spawn heal number behind player (opposite of facing direction)
 	CombatText.create_heal(actual_heal, global_position, get_tree().root, attack_direction)
-	
+
 	print("Player healed %.1f HP (now %.1f / %.1f)" % [actual_heal, current_health, max_health])
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PVP DUEL STATE FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════
+
+func enter_duel_state(opponent_id: int) -> void:
+	"""Called by DuelManager when duel starts"""
+	is_dueling = true
+	duel_opponent_id = opponent_id
+	_create_duel_aura()
+	print("Entered duel state vs player %d" % opponent_id)
+
+func exit_duel_state() -> void:
+	"""Called by DuelManager when duel ends"""
+	is_dueling = false
+	duel_opponent_id = -1
+	_remove_duel_aura()
+	print("Exited duel state")
+
+func apply_safe_aura() -> void:
+	"""Called by DuelManager after duel ends - 10 second protection"""
+	has_safe_aura = true
+	_create_safe_aura()
+	print("Safe aura applied")
+
+func remove_safe_aura() -> void:
+	"""Called by DuelManager when safe aura expires"""
+	has_safe_aura = false
+	_remove_safe_aura_visual()
+	print("Safe aura removed")
+
+func _create_duel_aura() -> void:
+	"""Create red pulsing aura for duel state"""
+	if duel_aura_node:
+		return  # Already exists
+
+	duel_aura_node = Node2D.new()
+	duel_aura_node.name = "DuelAura"
+	duel_aura_node.z_index = -1  # Behind player
+
+	# Create pulsing red circle
+	var circle = _create_aura_circle(Color(1.0, 0.3, 0.2, 0.4), 28.0)
+	duel_aura_node.add_child(circle)
+
+	add_child(duel_aura_node)
+	_start_aura_pulse(duel_aura_node, Color(1.0, 0.3, 0.2, 0.4), Color(1.0, 0.5, 0.3, 0.6))
+
+func _remove_duel_aura() -> void:
+	"""Remove duel aura visual"""
+	if duel_aura_node and is_instance_valid(duel_aura_node):
+		duel_aura_node.queue_free()
+		duel_aura_node = null
+
+func _create_safe_aura() -> void:
+	"""Create golden pulsing aura for safe state"""
+	if safe_aura_node:
+		return  # Already exists
+
+	safe_aura_node = Node2D.new()
+	safe_aura_node.name = "SafeAura"
+	safe_aura_node.z_index = -1  # Behind player
+
+	# Create pulsing golden circle
+	var circle = _create_aura_circle(Color(1.0, 0.85, 0.3, 0.35), 32.0)
+	safe_aura_node.add_child(circle)
+
+	add_child(safe_aura_node)
+	_start_aura_pulse(safe_aura_node, Color(1.0, 0.85, 0.3, 0.35), Color(1.0, 0.95, 0.5, 0.5))
+
+func _remove_safe_aura_visual() -> void:
+	"""Remove safe aura visual"""
+	if safe_aura_node and is_instance_valid(safe_aura_node):
+		safe_aura_node.queue_free()
+		safe_aura_node = null
+
+func _create_aura_circle(color: Color, radius: float) -> Polygon2D:
+	"""Create a circular aura polygon"""
+	var circle = Polygon2D.new()
+	var points: PackedVector2Array = []
+	var segments = 24
+
+	for i in range(segments):
+		var angle = (float(i) / segments) * TAU
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+
+	circle.polygon = points
+	circle.color = color
+	return circle
+
+func _start_aura_pulse(aura_node: Node2D, color_min: Color, color_max: Color) -> void:
+	"""Start pulsing animation on aura"""
+	if not aura_node or not is_instance_valid(aura_node):
+		return
+
+	var circle = aura_node.get_child(0) as Polygon2D
+	if not circle:
+		return
+
+	# Create looping tween for pulse effect
+	var tween = create_tween().set_loops()
+	tween.tween_property(circle, "color", color_max, 0.6).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(circle, "color", color_min, 0.6).set_ease(Tween.EASE_IN_OUT)
 
 func process_passive_healing(delta: float) -> void:
 	"""Handle out-of-combat passive health regeneration"""
@@ -2377,6 +2532,28 @@ func update_camera_zoom(delta: float) -> void:
 	var new_zoom = lerp(current_zoom_value, target_zoom, zoom_speed)
 	camera.zoom = Vector2(new_zoom, new_zoom)
 
+func _on_debug_zoom_toggled(is_debug_visible: bool) -> void:
+	"""Toggle between normal and unrestricted zoom limits when F3 debug is toggled"""
+	debug_zoom_active = is_debug_visible
+
+	if is_debug_visible:
+		# Save current normal limits and switch to debug (unrestricted) limits
+		normal_zoom_min = zoom_min
+		normal_zoom_max = zoom_max
+		zoom_min = DEBUG_ZOOM_MIN
+		zoom_max = DEBUG_ZOOM_MAX
+		print("📷 Debug zoom ENABLED (%.2fx - %.1fx)" % [DEBUG_ZOOM_MIN, DEBUG_ZOOM_MAX])
+	else:
+		# Restore normal zoom limits
+		zoom_min = normal_zoom_min
+		zoom_max = normal_zoom_max
+		# Clamp current zoom to normal limits if it's outside them
+		if target_zoom < zoom_min or target_zoom > zoom_max:
+			target_zoom = clamp(target_zoom, zoom_min, zoom_max)
+			if camera:
+				camera.zoom = Vector2(target_zoom, target_zoom)
+		print("📷 Debug zoom DISABLED (%.2fx - %.1fx)" % [zoom_min, zoom_max])
+
 # Debug map view state
 var debug_map_view_active: bool = false
 var debug_map_saved_zoom: float = 1.0
@@ -2649,8 +2826,32 @@ func create_inventory_ui() -> void:
 	# Add to scene tree
 	get_tree().root.add_child(inventory_ui)
 
-	print("📦 Inventory UI added to scene tree")
+	print("Inventory UI added to scene tree")
 	print("   In tree: ", inventory_ui.is_inside_tree())
+
+func create_duel_ui() -> void:
+	"""Create and add duel UI components to scene tree"""
+	print("Creating duel UI components (deferred)")
+
+	# Load and instantiate duel request popup
+	var DuelRequestPopupScene = load("res://scenes/ui/DuelRequestPopup.tscn")
+	if DuelRequestPopupScene:
+		duel_request_popup = DuelRequestPopupScene.instantiate()
+		get_tree().root.add_child(duel_request_popup)
+
+	# Load and instantiate duel countdown UI
+	var DuelCountdownUIScene = load("res://scenes/ui/DuelCountdownUI.tscn")
+	if DuelCountdownUIScene:
+		duel_countdown_ui = DuelCountdownUIScene.instantiate()
+		get_tree().root.add_child(duel_countdown_ui)
+
+	# Load and instantiate duel result UI
+	var DuelResultUIScene = load("res://scenes/ui/DuelResultUI.tscn")
+	if DuelResultUIScene:
+		duel_result_ui = DuelResultUIScene.instantiate()
+		get_tree().root.add_child(duel_result_ui)
+
+	print("Duel UI components added to scene tree")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SPAWN HINTS OVERLAY

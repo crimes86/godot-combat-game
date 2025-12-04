@@ -21,7 +21,8 @@ const ROCKS_MEDIUM_PER_CHUNK: int = 30  # Medium rocks (decorative) - reduced fr
 const ROCKS_SMALL_PER_CHUNK: int = 25  # Small rocks (decorative) - reduced from 40
 const MONSTER_LAVA_POOLS_PER_CHUNK: int = 3  # Giant lava pools (anchor points) - reduced from 4
 const LAVA_POOLS_PER_CHUNK: int = 10  # Regular lava pools (some cluster around monsters) - reduced from 16
-const BONE_CLUSTERS_PER_CHUNK: int = 8  # Large skeletal remains (ritual piles) - reduced from 15
+const BLISTER_POOLS_PER_CHUNK: int = 45  # Small scattered "blister" pools to fill empty gaps
+const BONE_CLUSTERS_PER_CHUNK: int = 16  # Large skeletal remains (ritual piles) - doubled for density
 const SCATTERED_BONES_PER_CHUNK: int = 35  # Individual bones filling empty space - reduced from 80
 
 # Bone optimization settings
@@ -135,10 +136,8 @@ func create_debug_label() -> void:
 
 func _on_debug_toggled(is_visible: bool) -> void:
 	"""Called when F3 debug display is toggled"""
-	# Disabled - now integrated into main PerformanceProfiler F3 display
-	# if debug_canvas:
-	# 	debug_canvas.visible = is_visible
-	pass
+	# Highlight bones when debug is active
+	highlight_bones_debug(is_visible)
 
 var chunk_update_timer: float = 0.0
 const CHUNK_UPDATE_INTERVAL: float = 0.5  # Check chunks every 0.5s for responsive loading/unloading
@@ -542,6 +541,10 @@ func create_prop_generation_queue(chunk_key: String) -> Array:
 	for i in range(LAVA_POOLS_PER_CHUNK):
 		queue.append({"type": "lava_pool", "index": i})
 
+	# Blister pools - small scattered pools to fill empty gaps
+	for i in range(BLISTER_POOLS_PER_CHUNK):
+		queue.append({"type": "blister_pool", "index": i})
+
 	# Trees (after lava pools to avoid spawning inside them)
 	for i in range(TREES_PER_CHUNK):
 		queue.append({"type": "tree", "index": i})
@@ -924,6 +927,51 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			})
 
 			# Pass pool_size to ensure same size is used for both exclusion and visual
+			create_lava_pool(pool_pos, container, rng, pool_size)
+
+		"blister_pool":
+			# Small scattered "blister" pools - completely random placement to fill gaps
+			var pool_pos = Vector2.ZERO
+			var found_valid = false
+
+			for attempt in range(15):
+				# Pure random placement across the chunk
+				pool_pos = chunk_center + Vector2(
+					rng.randf_range(-CHUNK_SIZE / 2 + 50, CHUNK_SIZE / 2 - 50),
+					rng.randf_range(-CHUNK_SIZE / 2 + 50, CHUNK_SIZE / 2 - 50)
+				)
+
+				if not is_in_world_bounds(pool_pos):
+					continue
+				if pool_pos.distance_to(campfire_pos) < 600:
+					continue
+				# Don't spawn on paths
+				if is_position_on_path(pool_pos, PATH_WIDTH + 80):
+					continue
+				# Don't overlap with existing pools (smaller buffer for blisters)
+				var overlaps = false
+				for existing in chunk_data.lava_pool_positions:
+					if pool_pos.distance_to(existing.pos) < existing.radius + 60:
+						overlaps = true
+						break
+				if overlaps:
+					continue
+
+				found_valid = true
+				break
+
+			if not found_valid:
+				return
+
+			# Blister pools are small: 30-60px
+			var pool_size = rng.randf_range(30, 60)
+			var exclusion_radius = (pool_size / 2) + 20
+
+			chunk_data.lava_pool_positions.append({
+				"pos": pool_pos,
+				"radius": exclusion_radius
+			})
+
 			create_lava_pool(pool_pos, container, rng, pool_size)
 
 		"ritual_site":
@@ -1457,9 +1505,75 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 
 	container.add_child(lava_pool)
 
+func find_guaranteed_ritual_spot(chunk_center: Vector2, chunk_data: ChunkData, rng: RandomNumberGenerator, campfire_pos: Vector2, target_zone: String) -> Vector2:
+	"""Find a ritual spot in a guaranteed zone (upper_mid or lower_mid).
+	Ensures ritual sites spawn in the middle of upper and lower halves."""
+
+	const RITUAL_SITE_RADIUS: float = 120.0
+
+	# Target Y ranges for upper/lower middle zones
+	var y_min: float
+	var y_max: float
+	match target_zone:
+		"upper_mid":
+			y_min = 1500.0   # Middle-ish of upper half (Y 0 to 4000)
+			y_max = 3000.0
+		"lower_mid":
+			y_min = -3000.0  # Middle-ish of lower half (Y -4000 to 0)
+			y_max = -1500.0
+		_:
+			return Vector2.ZERO
+
+	for attempt in range(40):
+		var test_pos = Vector2(
+			chunk_center.x + rng.randf_range(-CHUNK_SIZE / 2 + 200, CHUNK_SIZE / 2 - 200),
+			rng.randf_range(y_min, y_max)
+		)
+
+		if not is_in_world_bounds(test_pos):
+			continue
+		if test_pos.distance_to(campfire_pos) < 600:
+			continue
+
+		# Must NOT be inside or too close to any lava pool
+		var too_close_to_lava = false
+		for pool in chunk_data.lava_pool_positions:
+			var dist_to_pool = test_pos.distance_to(pool.pos)
+			if dist_to_pool < pool.radius + RITUAL_SITE_RADIUS:
+				too_close_to_lava = true
+				break
+		if too_close_to_lava:
+			continue
+
+		# Must be OFF the path
+		if is_position_on_path(test_pos, PATH_WIDTH + 150):
+			continue
+
+		# Check against existing props
+		var too_close = false
+		for prop in chunk_data.all_prop_positions:
+			if test_pos.distance_to(prop.pos) < prop.radius + 80:
+				too_close = true
+				break
+
+		# Also check ritual sites
+		for site in chunk_data.ritual_sites:
+			if test_pos.distance_to(site.pos) < 250:
+				too_close = true
+				break
+
+		if not too_close:
+			return test_pos
+
+	return Vector2.ZERO
+
 func find_empty_spot_for_ritual(chunk_center: Vector2, chunk_data: ChunkData, rng: RandomNumberGenerator, campfire_pos: Vector2) -> Vector2:
-	"""Find an empty spot away from other props for a ritual bone pile"""
-	for attempt in range(20):
+	"""Find an empty spot away from other props for a ritual bone pile.
+	Ritual sites must be OFF the path and NOT inside lava pools. Spread throughout the world."""
+
+	const RITUAL_SITE_RADIUS: float = 120.0   # Ritual site bone spread radius + buffer
+
+	for attempt in range(30):
 		var test_pos = chunk_center + Vector2(
 			rng.randf_range(-CHUNK_SIZE / 2 + 100, CHUNK_SIZE / 2 - 100),
 			rng.randf_range(-CHUNK_SIZE / 2 + 100, CHUNK_SIZE / 2 - 100)
@@ -1469,7 +1583,20 @@ func find_empty_spot_for_ritual(chunk_center: Vector2, chunk_data: ChunkData, rn
 			continue
 		if test_pos.distance_to(campfire_pos) < 600:
 			continue
-		if is_position_in_lava_pool(test_pos, chunk_data):
+
+		# Must NOT be inside or too close to any lava pool
+		var too_close_to_lava = false
+		for pool in chunk_data.lava_pool_positions:
+			var dist_to_pool = test_pos.distance_to(pool.pos)
+			# Must be outside pool radius + ritual radius + buffer
+			if dist_to_pool < pool.radius + RITUAL_SITE_RADIUS:
+				too_close_to_lava = true
+				break
+		if too_close_to_lava:
+			continue
+
+		# Ritual sites must be OFF the path - wolves cross the path to roam
+		if is_position_on_path(test_pos, PATH_WIDTH + 150):
 			continue
 
 		# Check against all existing props - need at least 120px clearance for ritual site
@@ -2038,3 +2165,61 @@ func get_prop_stats() -> Dictionary:
 				stats.other += 1
 
 	return stats
+
+# Store original modulates for restoration
+var _bone_original_modulates: Dictionary = {}
+
+func highlight_bones_debug(enabled: bool) -> void:
+	"""Highlight all bones for debugging.
+	CYAN = ChunkBasedPropSystem ritual bone piles (wolves spawn here)
+	GREEN = ChunkBasedPropSystem scattered/static bones
+	RED = game_world.gd bones (NO wolves - from load_interactive_props)"""
+
+	# === CHUNK BASED PROP SYSTEM BONES ===
+	for chunk_key in loaded_chunks.keys():
+		var chunk_data = loaded_chunks[chunk_key]
+		if not chunk_data or not is_instance_valid(chunk_data.props_container):
+			continue
+
+		for child in chunk_data.props_container.get_children():
+			# Ritual bone piles (dense clusters with wolves)
+			if child.name == "RitualBonePile":
+				for sprite in child.get_children():
+					if sprite is Sprite2D:
+						_set_bone_highlight(sprite, enabled, Color.CYAN)
+
+			# Static/scattered bones from ChunkBasedPropSystem
+			elif child.name == "StaticBone":
+				if child is Sprite2D:
+					_set_bone_highlight(child, enabled, Color.GREEN)
+
+	# === GAME_WORLD.GD BONES (ScatteredProps node) ===
+	# These are bones from load_interactive_props() - NO wolves spawn here!
+	if game_world and is_instance_valid(game_world):
+		var scattered_props = game_world.get_node_or_null("ScatteredProps")
+		if scattered_props:
+			for child in scattered_props.get_children():
+				# Bones/skulls from create_prop_sprite: named "bones_123" or "skull_456"
+				if child.name.begins_with("bones_") or child.name.begins_with("skull_"):
+					# The actual sprite is a child
+					for subchild in child.get_children():
+						if subchild is Sprite2D and subchild.name != "Shadow":
+							_set_bone_highlight(subchild, enabled, Color.RED)
+
+	# Clear stored modulates when disabling
+	if not enabled:
+		_bone_original_modulates.clear()
+
+	if enabled:
+		print("🦴 DEBUG: CYAN=ritual sites (wolves), GREEN=chunk scattered, RED=game_world (NO wolves)")
+
+func _set_bone_highlight(sprite: Sprite2D, enabled: bool, color: Color) -> void:
+	"""Helper to set/restore bone highlight color"""
+	var key = str(sprite.get_instance_id())
+	if enabled:
+		if not _bone_original_modulates.has(key):
+			_bone_original_modulates[key] = sprite.modulate
+		sprite.modulate = color
+	else:
+		if _bone_original_modulates.has(key):
+			sprite.modulate = _bone_original_modulates[key]

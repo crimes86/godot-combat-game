@@ -931,12 +931,12 @@ func draw_path_from_points(parent: Node2D, points: Array, width: float, rng: Ran
 		return
 
 	# Consistent path color - single shade
-	const PATH_COLOR = Color(0.06, 0.06, 0.07, 0.55)
+	const PATH_COLOR = Color(0.06, 0.06, 0.07, 0.85)
 
 	# Create multiple overlapping lines for soft edges (tightened fade)
 	var layers = [
-		{"width_mult": 1.85, "alpha": 0.35, "noise": 8},   # Outer fade (tightened 50%)
-		{"width_mult": 1.5, "alpha": 0.5, "noise": 5},     # Core path
+		{"width_mult": 1.85, "alpha": 0.6, "noise": 8},    # Outer fade
+		{"width_mult": 1.5, "alpha": 0.85, "noise": 5},    # Core path
 	]
 
 	for layer in layers:
@@ -1792,68 +1792,10 @@ func load_interactive_props(parent: Node2D):
 			create_prop_sprite(prop_data, parent)
 			props_placed += 1
 
-	# 2x density in cleared areas (campfire and ruins)
-	var cleared_areas = [
-		{"pos": Vector2(-2000, 0), "radius": 1125, "min_radius": 150, "count": 75},    # Main campfire (2.5x radius, fanned into trees)
-		{"pos": Vector2(1200, -2000), "radius": 340, "min_radius": 0, "count": 30},   # Ruins 1 (75% of campfire)
-		{"pos": Vector2(4800, 2200), "radius": 340, "min_radius": 0, "count": 30},    # Ruins 2 (75% of campfire)
-		{"pos": Vector2(8200, -2200), "radius": 340, "min_radius": 0, "count": 30}    # Ruins 3 (75% of campfire)
-	]
+	# NOTE: Dense bone clusters in cleared areas REMOVED - ChunkBasedPropSystem
+	# now handles ritual bone piles with wolf pack spawning
 
-	for area in cleared_areas:
-		var prop_count = area.get("count", 30)  # Use custom count or default to 30
-		for i in range(prop_count):
-			var prop_type = battle_props[rng.randi() % battle_props.size()]
-
-			var attempts = 0
-			var prop_pos = Vector2.ZERO
-			var valid_position = false
-			while attempts < 50:
-				# Random position within the cleared area
-				# Use sqrt for uniform distribution in annulus/circle (spreads props more evenly)
-				var angle = rng.randf() * TAU
-				var min_r = area.get("min_radius", 0)
-				var max_r = area["radius"]
-				# For annulus (donut): interpolate between min and max radius using sqrt for uniform distribution
-				var distance = sqrt(rng.randf() * (max_r * max_r - min_r * min_r) + min_r * min_r)
-				prop_pos = area["pos"] + Vector2(cos(angle), sin(angle)) * distance
-
-				# Check if not too close to trees
-				var too_close_to_tree = false
-				for tree_pos in tree_positions:
-					if prop_pos.distance_to(tree_pos) < 100:  # 100px clearance around trees
-						too_close_to_tree = true
-						break
-
-				# Check if not on lava pool
-				var on_lava = false
-				for pool in lava_pool_positions:
-					var dist = prop_pos.distance_to(pool.pos)
-					var pool_radius = (pool.size / 2) * max(pool.elongation_x, pool.elongation_y) + 30
-					if dist < pool_radius:
-						on_lava = true
-						break
-
-				if not too_close_to_tree and not on_lava:
-					valid_position = true
-					break
-				attempts += 1
-
-			if valid_position:
-				var prop_data = {
-					"type": prop_type,
-					"x": prop_pos.x,
-					"y": prop_pos.y,
-					"scale": rng.randf_range(0.5, 1.2),
-					"rotation": rng.randf() * TAU,
-					"flip_h": rng.randf() < 0.5,
-					"z_index": 0,
-					"id": 3000 + props_placed
-				}
-				create_prop_sprite(prop_data, parent)
-				props_placed += 1
-
-	print("⚔️ Placed ", props_placed, " battle props (skulls, bones, swords)")
+	print("⚔️ Placed ", props_placed, " path battle props (skulls, bones, swords)")
 
 func generate_item_spawn_points():
 	"""Generate possible spawn points for items (5x more than will actually spawn)"""
@@ -2771,16 +2713,25 @@ func spawn_tutorial_skeletons():
 	var campfire_pos = CAMPFIRE_POS
 
 	# Spawn positions in a ring just outside the safe zone (600 radius)
-	# Place them at 650-750 radius so they're visible but not in the clearing
+	# Place them at 650-850 radius so they're visible but not in the clearing
 	var spawn_positions = [
-		# Level 1 skeletons (4 total, spread around)
+		# Level 1 skeletons (10 total, spread around) - noob practice targets
 		{"offset": Vector2(700, -100), "level": 1},   # East-north
 		{"offset": Vector2(700, 100), "level": 1},    # East-south
+		{"offset": Vector2(720, 0), "level": 1},      # East center
 		{"offset": Vector2(-700, 0), "level": 1},     # West
-		{"offset": Vector2(0, 650), "level": 1},      # South
-		# Level 2 skeletons (2 total, slightly further)
+		{"offset": Vector2(-680, 150), "level": 1},   # West-south
+		{"offset": Vector2(-680, -150), "level": 1},  # West-north
+		{"offset": Vector2(0, 680), "level": 1},      # South
+		{"offset": Vector2(200, 660), "level": 1},    # South-east
+		{"offset": Vector2(-200, 660), "level": 1},   # South-west
+		{"offset": Vector2(0, -700), "level": 1},     # North
+		# Level 2 skeletons (5 total, slightly further)
 		{"offset": Vector2(800, -300), "level": 2},   # East-north far
+		{"offset": Vector2(800, 300), "level": 2},    # East-south far
 		{"offset": Vector2(-750, -200), "level": 2},  # West-north
+		{"offset": Vector2(-750, 200), "level": 2},   # West-south
+		{"offset": Vector2(0, -800), "level": 2},     # North far
 	]
 
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")

@@ -90,6 +90,9 @@ func update_profile() -> void:
 	# Get prop stats (trees, rocks)
 	var prop_info = get_prop_stats_info()
 
+	# Get wolf pack info
+	var wolf_pack_info = get_wolf_pack_info()
+
 	var color = Color.GREEN
 	if fps < 30:
 		color = Color.RED
@@ -126,6 +129,9 @@ CHUNKS:
 ENEMIES:
 %s
 ━━━━━━━━━━━━━━━━━━━━━━
+WOLF PACKS:
+%s
+━━━━━━━━━━━━━━━━━━━━━━
 MEMORY: %.1f MB
 Press F3 to toggle | F4 advance time
 """ % [
@@ -136,6 +142,7 @@ Press F3 to toggle | F4 advance time
 		system_info,
 		chunk_info,
 		chunk_enemy_info,
+		wolf_pack_info,
 		static_mem
 	]
 
@@ -660,3 +667,163 @@ func refresh_enemy_debug() -> void:
 
 	# Redraw enemy debug info at new positions
 	draw_enemy_debug()
+
+	# Redraw wolf pack patrol paths
+	draw_wolf_pack_patrol_paths()
+
+
+func get_wolf_pack_info() -> String:
+	"""Get wolf pack patrol/roaming debug info"""
+	var wolves = get_tree().get_nodes_in_group("wolves")
+	if wolves.is_empty():
+		return "  No wolves"
+
+	# Find pack alphas and their states
+	var packs: Dictionary = {}  # pack_id -> {alpha: Wolf, members: int, roaming: bool, state: String}
+
+	for wolf in wolves:
+		if not is_instance_valid(wolf):
+			continue
+
+		var pack_id = wolf.get("pack_id")
+		if not pack_id:
+			continue
+
+		if not packs.has(pack_id):
+			packs[pack_id] = {
+				"alpha": null,
+				"members": 0,
+				"roaming": false,
+				"state": "idle",
+				"target": Vector2.ZERO,
+				"speed": 0.0,
+				"is_howling": false
+			}
+
+		packs[pack_id].members += 1
+
+		if wolf.get("pack_alpha"):
+			packs[pack_id].alpha = wolf
+			var roaming = wolf.get("is_roaming_pack")
+			packs[pack_id].roaming = roaming if roaming != null else false
+			var state = wolf.get("_patrol_state")
+			packs[pack_id].state = state if state != null else "idle"
+			var target = wolf.get("_patrol_target")
+			packs[pack_id].target = target if target != null else Vector2.ZERO
+			var spd = wolf.get("_patrol_speed")
+			packs[pack_id].speed = spd if spd != null else 0.0
+			var howling = wolf.get("_is_howling")
+			packs[pack_id].is_howling = howling if howling != null else false
+
+	var total_packs = packs.size()
+	var roaming_packs = 0
+	var patrolling_now = 0
+
+	for pack_data in packs.values():
+		if pack_data.roaming:
+			roaming_packs += 1
+		if pack_data.state == "patrolling":
+			patrolling_now += 1
+
+	var info = "  Total: %d packs (%d wolves)\n" % [total_packs, wolves.size()]
+	info += "  Roaming: %d | Patrolling: %d\n" % [roaming_packs, patrolling_now]
+
+	# Show details for roaming packs
+	if roaming_packs > 0:
+		info += "  ─────────────\n"
+		for pack_id in packs:
+			var pack_data = packs[pack_id]
+			if not pack_data.roaming:
+				continue
+
+			var state_icon = ""
+			match pack_data.state:
+				"resting": state_icon = "💤"
+				"patrolling": state_icon = "🏃" if pack_data.speed > 120 else "🚶"
+				"arriving": state_icon = "🏕️"
+
+			var howl_icon = "🐺" if pack_data.is_howling else ""
+
+			if pack_data.state == "patrolling" and pack_data.alpha:
+				var dist = pack_data.alpha.global_position.distance_to(pack_data.target)
+				info += "  %s %s%.0fpx %s\n" % [state_icon, pack_id.substr(0, 8), dist, howl_icon]
+			else:
+				info += "  %s %s %s\n" % [state_icon, pack_id.substr(0, 8), howl_icon]
+
+	return info
+
+
+func draw_wolf_pack_patrol_paths() -> void:
+	"""Draw patrol paths for roaming wolf packs"""
+	if not debug_draw_container or not is_instance_valid(debug_draw_container):
+		return
+
+	# Remove old patrol path nodes
+	for node in debug_draw_container.get_children():
+		if node.name.begins_with("WolfPatrol_"):
+			node.queue_free()
+
+	var wolves = get_tree().get_nodes_in_group("wolves")
+
+	for wolf in wolves:
+		if not is_instance_valid(wolf):
+			continue
+
+		# Only draw for roaming pack alphas that are patrolling
+		if not wolf.get("pack_alpha") or not wolf.get("is_roaming_pack"):
+			continue
+
+		var patrol_state = wolf.get("_patrol_state")
+		if patrol_state != "patrolling":
+			continue
+
+		var patrol_target = wolf.get("_patrol_target")
+		if patrol_target == null or patrol_target == Vector2.ZERO:
+			continue
+
+		var wolf_pos = wolf.global_position
+		var pack_id = wolf.get("pack_id")
+		if pack_id == null:
+			pack_id = "unknown"
+
+		# Draw line from wolf to patrol target
+		var line = Line2D.new()
+		line.name = "WolfPatrol_%s" % pack_id
+		line.width = 3.0
+		line.default_color = Color(0.6, 0.3, 0.1, 0.7)  # Brown color for wolf patrol
+		line.add_point(wolf_pos)
+		line.add_point(patrol_target)
+		line.z_index = 997
+		debug_draw_container.add_child(line)
+
+		# Draw target marker (X)
+		var marker_size = 15.0
+		var marker1 = Line2D.new()
+		marker1.name = "WolfPatrol_%s_X1" % pack_id
+		marker1.width = 3.0
+		marker1.default_color = Color(0.8, 0.4, 0.1, 0.9)
+		marker1.add_point(patrol_target + Vector2(-marker_size, -marker_size))
+		marker1.add_point(patrol_target + Vector2(marker_size, marker_size))
+		marker1.z_index = 998
+		debug_draw_container.add_child(marker1)
+
+		var marker2 = Line2D.new()
+		marker2.name = "WolfPatrol_%s_X2" % pack_id
+		marker2.width = 3.0
+		marker2.default_color = Color(0.8, 0.4, 0.1, 0.9)
+		marker2.add_point(patrol_target + Vector2(marker_size, -marker_size))
+		marker2.add_point(patrol_target + Vector2(-marker_size, marker_size))
+		marker2.z_index = 998
+		debug_draw_container.add_child(marker2)
+
+		# Draw label at target
+		var label = Label.new()
+		label.name = "WolfPatrol_%s_Label" % pack_id
+		label.text = "🐺 %s" % pack_id.substr(0, 6)
+		label.position = patrol_target + Vector2(-30, -30)
+		label.add_theme_font_size_override("font_size", 12)
+		label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
+		label.add_theme_color_override("font_outline_color", Color.BLACK)
+		label.add_theme_constant_override("outline_size", 2)
+		label.z_index = 999
+		debug_draw_container.add_child(label)

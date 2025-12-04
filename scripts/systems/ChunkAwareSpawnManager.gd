@@ -66,7 +66,7 @@ const MIN_ENEMY_SPACING: float = 80.0
 ## Wolf pack configuration
 const WOLVES_PER_PACK_MIN: int = 3
 const WOLVES_PER_PACK_MAX: int = 5
-const WOLF_PACK_SPREAD: float = 150.0  # How far wolves spread from pack center
+const WOLF_PACK_SPREAD: float = 220.0  # How far wolves spread from pack center (loosened for natural look)
 
 ## Safe zones - no enemies spawn within these areas
 ## Campfire is at chunk 0 center (CHUNK_SIZE/2, 0)
@@ -491,9 +491,16 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 
 	# Spawn wolf packs at ritual sites (separate from skeleton spawning)
 	# Ritual sites now have size info: {pos: Vector2, size: int (1-3)}
+	# Only spawn wolves at first 8 sites (not all ritual sites have packs)
+	const MAX_WOLF_PACKS_PER_CHUNK: int = 8
 	var wolves_spawned = 0
+	var packs_spawned = 0
 	if ritual_sites.size() > 0:
 		for site in ritual_sites:
+			# Limit wolf packs per chunk
+			if packs_spawned >= MAX_WOLF_PACKS_PER_CHUNK:
+				break
+
 			# Handle both old format (Vector2) and new format (Dictionary with pos/size)
 			var site_pos: Vector2
 			var site_size: int = 2  # Default medium
@@ -507,6 +514,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			for wolf in wolves:
 				chunk_data.enemies.append(wolf)
 				wolves_spawned += 1
+			packs_spawned += 1
 
 	if spawned > 0 or wolves_spawned > 0:
 		print("✨ Spawned %d skeletons + %d wolves in chunk %s (total: %d)" % [
@@ -620,15 +628,15 @@ func spawn_wolf_pack(center_pos: Vector2, chunk_key: String, chunk_x: int, site_
 					spawn_rng.randf_range(-30, 30)
 				)
 			else:
-				# Pack members spread around alpha
+				# Pack members spread around alpha (loosened spacing for natural look)
 				var angle = spawn_rng.randf() * TAU
-				var distance = spawn_rng.randf_range(60, WOLF_PACK_SPREAD)
+				var distance = spawn_rng.randf_range(100, WOLF_PACK_SPREAD)
 				wolf_pos = center_pos + Vector2(cos(angle), sin(angle)) * distance
 
-			# Check spacing from other pack members
+			# Check spacing from other pack members (loosened from 50 to 80)
 			var spaced = true
 			for existing_pos in pack_positions:
-				if wolf_pos.distance_to(existing_pos) < 50:  # Closer spacing within pack
+				if wolf_pos.distance_to(existing_pos) < 80:
 					spaced = false
 					break
 
@@ -648,9 +656,18 @@ func spawn_wolf_pack(center_pos: Vector2, chunk_key: String, chunk_x: int, site_
 			wolves.append(wolf)
 			pack_positions.append(wolf_pos)
 
+	# Set up pack formation references (alpha is first wolf)
+	if wolves.size() > 1:
+		var alpha = wolves[0]
+		for i in range(1, wolves.size()):
+			var follower = wolves[i]
+			if follower.has_method("setup_pack_formation"):
+				follower.setup_pack_formation(alpha, i)
+
 	if wolves.size() > 0:
-		print("🐺 Spawned wolf pack '%s' with %d wolves (L%d-%d) at ritual site" % [
-			pack_id, wolves.size(), min_level, max_level
+		var roaming_status = " (ROAMING)" if wolves[0].is_roaming_pack else ""
+		print("🐺 Spawned wolf pack '%s' with %d wolves (L%d-%d) at ritual site%s" % [
+			pack_id, wolves.size(), min_level, max_level, roaming_status
 		])
 
 	return wolves
