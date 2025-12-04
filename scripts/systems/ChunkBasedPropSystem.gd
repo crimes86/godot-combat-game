@@ -1503,6 +1503,31 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 	damage_area.add_child(collision_shape)
 	lava_pool.add_child(damage_area)
 
+	# Add discovery zone for large pools (monster pools 200+) - triggers quest without needing to step in lava
+	if pool_size >= 200:
+		var discovery_area = Area2D.new()
+		discovery_area.name = "DiscoveryZone"
+		discovery_area.collision_layer = 0
+		discovery_area.collision_mask = 1  # Detect player
+
+		var discovery_shape = CollisionShape2D.new()
+		var discovery_circle = CircleShape2D.new()
+		# Discovery radius is pool radius + 80px buffer (can discover from the edge)
+		discovery_circle.radius = (pool_size / 2) + 80
+		discovery_shape.shape = discovery_circle
+
+		discovery_area.add_child(discovery_shape)
+		lava_pool.add_child(discovery_area)
+
+		# Connect discovery signal
+		discovery_area.body_entered.connect(func(body):
+			if body.is_in_group("player"):
+				var quest_manager = discovery_area.get_node_or_null("/root/QuestManager")
+				if quest_manager and quest_manager.has_method("on_location_discovered"):
+					quest_manager.on_location_discovered("lava_pool")
+					print("🔥 Discovered lava pool!")
+		)
+
 	container.add_child(lava_pool)
 
 func find_guaranteed_ritual_spot(chunk_center: Vector2, chunk_data: ChunkData, rng: RandomNumberGenerator, campfire_pos: Vector2, target_zone: String) -> Vector2:

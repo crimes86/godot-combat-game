@@ -824,7 +824,7 @@ func place_campfire(item: Dictionary, slot_index: int) -> void:
 	toggle_ui()
 
 	# Play placement sound
-	SoundManager.play_ui_click()
+	SoundManager.play_button_click_sound()
 
 	print("🔥 Placed campfire at %s" % player_pos)
 

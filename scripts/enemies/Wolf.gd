@@ -1140,11 +1140,13 @@ const AMBIENT_HOWL_INTERVAL_MAX: float = 90.0  # Max seconds between ambient how
 const AMBIENT_HOWL_CHANCE: float = 0.15  # 15% chance when timer fires (only pack alphas)
 
 # Pack behavior constants (SIMPLIFIED)
-const PACK_FOLLOW_DISTANCE: float = 120.0  # Followers stay within this distance of alpha
-const PACK_TELEPORT_DISTANCE: float = 300.0  # If further than this, teleport to alpha
+const PACK_FOLLOW_DISTANCE: float = 180.0  # Followers stay within this distance of alpha (wider spread)
+const PACK_TELEPORT_DISTANCE: float = 400.0  # If further than this, teleport to alpha
 const PACK_MOVE_SPEED: float = 100.0  # Pack movement speed
 const PACK_DIRECTION_CHANGE_MIN: float = 5.0  # Min seconds before alpha changes direction
 const PACK_DIRECTION_CHANGE_MAX: float = 15.0  # Max seconds before alpha changes direction
+const PACK_SEPARATION_DISTANCE: float = 80.0  # Min distance between pack members (increased)
+const PACK_SEPARATION_FORCE: float = 120.0  # How strongly wolves push apart (increased)
 
 var target_player: Node = null
 var attack_cooldown: float = 0.0
@@ -1167,6 +1169,12 @@ var _pack_move_direction: Vector2 = Vector2.ZERO  # Current movement direction (
 var _pack_direction_timer: float = 0.0  # Time until next direction change (alpha only)
 var _pack_is_moving: bool = false  # Is the pack currently moving?
 
+# Per-wolf individuality (makes pack feel organic, not robotic)
+var _individual_speed_mult: float = 1.0  # Each wolf moves slightly different speed
+var _individual_direction_offset: float = 0.0  # Each wolf wanders slightly off-course
+var _individual_pause_timer: float = 0.0  # Wolves occasionally pause independently
+var _individual_pause_chance: float = 0.0  # How likely to pause (varies per wolf)
+
 
 func _init_ai_variation() -> void:
 	"""Initialize per-wolf AI variation to desync pack behavior"""
@@ -1188,6 +1196,12 @@ func _init_ai_variation() -> void:
 
 	# Random initial ambient howl timer (staggered so wolves don't all howl at once)
 	_ambient_howl_timer = rng.randf_range(AMBIENT_HOWL_INTERVAL_MIN, AMBIENT_HOWL_INTERVAL_MAX)
+
+	# Per-wolf individuality - each wolf has its own personality
+	_individual_speed_mult = rng.randf_range(0.7, 1.15)  # Some wolves faster/slower
+	_individual_direction_offset = rng.randf_range(-0.6, 0.6)  # Wander off-course slightly
+	_individual_pause_chance = rng.randf_range(0.02, 0.08)  # 2-8% chance to pause each update
+	_individual_pause_timer = rng.randf_range(0, 2.0)  # Stagger initial pauses
 
 	# Store spawn position for wandering (deferred to ensure position is set)
 	call_deferred("_set_spawn_position")
@@ -1322,19 +1336,28 @@ func _do_alpha_wander(delta: float) -> void:
 				else:
 					_pack_move_direction = random_dir
 
+	# Calculate separation force (alpha also avoids clumping)
+	var separation = _calculate_separation_force()
+
 	# Move or idle
 	if _pack_is_moving and _pack_move_direction != Vector2.ZERO:
-		velocity = _pack_move_direction * PACK_MOVE_SPEED
+		velocity = _pack_move_direction * PACK_MOVE_SPEED + separation
 		is_running = false
 		move_and_slide()
-		update_animation_for_direction(_pack_move_direction)
+		update_animation_for_direction(velocity.normalized() if velocity.length() > 10 else _pack_move_direction)
 	else:
-		velocity = Vector2.ZERO
-		update_animation_for_direction(Vector2.ZERO)
+		# Even when idle, apply separation
+		if separation.length() > 5:
+			velocity = separation
+			move_and_slide()
+			update_animation_for_direction(separation.normalized())
+		else:
+			velocity = Vector2.ZERO
+			update_animation_for_direction(Vector2.ZERO)
 
 
 func _do_follower_behavior(delta: float) -> void:
-	"""Followers simply stay near the alpha - teleport if too far"""
+	"""Followers stay near alpha but move with individual personality"""
 	var alpha = _pack_alpha_ref
 	var dist_to_alpha = global_position.distance_to(alpha.global_position)
 
@@ -1343,38 +1366,116 @@ func _do_follower_behavior(delta: float) -> void:
 		_teleport_near_alpha()
 		return
 
-	# If close enough, match alpha's behavior
-	if dist_to_alpha < PACK_FOLLOW_DISTANCE:
-		# Stay with pack - move same direction as alpha or idle
-		if alpha._pack_is_moving and alpha._pack_move_direction != Vector2.ZERO:
-			# Add slight random offset to avoid stacking
-			var offset_dir = alpha._pack_move_direction.rotated(randf_range(-0.3, 0.3))
-			velocity = offset_dir * PACK_MOVE_SPEED * randf_range(0.9, 1.1)
-			is_running = false
-			move_and_slide()
-			update_animation_for_direction(offset_dir)
-		else:
+	# Individual pause behavior - wolves occasionally stop to sniff/look around
+	_individual_pause_timer -= delta
+	if _individual_pause_timer <= 0:
+		# Roll for pause
+		if randf() < _individual_pause_chance:
+			_individual_pause_timer = randf_range(1.0, 3.0)  # Pause for 1-3 seconds
 			velocity = Vector2.ZERO
 			update_animation_for_direction(Vector2.ZERO)
+			return
+		else:
+			_individual_pause_timer = randf_range(0.5, 1.5)  # Check again soon
+
+	# Calculate separation force from nearby wolves
+	var separation = _calculate_separation_force()
+
+	# If close enough, loosely follow alpha's behavior
+	if dist_to_alpha < PACK_FOLLOW_DISTANCE:
+		# Stay with pack - move in similar direction as alpha (but not identical)
+		if alpha._pack_is_moving and alpha._pack_move_direction != Vector2.ZERO:
+			# Each wolf has its own direction offset (persistent personality)
+			var my_direction = alpha._pack_move_direction.rotated(_individual_direction_offset)
+			# Add additional random drift that changes over time
+			my_direction = my_direction.rotated(randf_range(-0.2, 0.2))
+
+			# Each wolf moves at its own speed
+			var my_speed = PACK_MOVE_SPEED * _individual_speed_mult
+			var base_velocity = my_direction * my_speed
+
+			# Apply separation force
+			velocity = base_velocity + separation
+			is_running = false
+			move_and_slide()
+			update_animation_for_direction(velocity.normalized() if velocity.length() > 10 else my_direction)
+		else:
+			# Pack is resting - apply separation to spread out, maybe wander a tiny bit
+			if separation.length() > 5:
+				velocity = separation
+				move_and_slide()
+				update_animation_for_direction(separation.normalized())
+			elif randf() < 0.01:  # 1% chance to do a small independent wander
+				var random_dir = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
+				velocity = random_dir * PACK_MOVE_SPEED * 0.3
+				move_and_slide()
+				update_animation_for_direction(random_dir)
+			else:
+				velocity = Vector2.ZERO
+				update_animation_for_direction(Vector2.ZERO)
 	else:
-		# Too far - move toward alpha
+		# Too far - move toward alpha (but at individual speed)
 		var direction = (alpha.global_position - global_position).normalized()
-		# Move faster when catching up
-		var catch_up_speed = PACK_MOVE_SPEED * 1.3
-		velocity = direction * catch_up_speed
+		# Add slight wander to catching up
+		direction = direction.rotated(randf_range(-0.15, 0.15))
+		var catch_up_speed = PACK_MOVE_SPEED * 1.2 * _individual_speed_mult
+		velocity = direction * catch_up_speed + separation * 0.5
 		is_running = false
 		move_and_slide()
-		update_animation_for_direction(direction)
+		update_animation_for_direction(velocity.normalized())
+
+
+func _calculate_separation_force() -> Vector2:
+	"""Calculate force to push this wolf away from nearby pack members"""
+	var separation = Vector2.ZERO
+
+	for other in get_tree().get_nodes_in_group("wolves"):
+		if other == self or not is_instance_valid(other):
+			continue
+		if other.is_dying or other.is_corpse:
+			continue
+
+		var to_other = other.global_position - global_position
+		var dist = to_other.length()
+
+		if dist < PACK_SEPARATION_DISTANCE and dist > 0:
+			# Push away from nearby wolf - stronger when closer
+			var push_strength = (PACK_SEPARATION_DISTANCE - dist) / PACK_SEPARATION_DISTANCE
+			separation -= to_other.normalized() * PACK_SEPARATION_FORCE * push_strength
+
+	return separation
 
 
 func _teleport_near_alpha() -> void:
-	"""Teleport follower to a random position near the alpha"""
+	"""Teleport follower to a random position near the alpha, avoiding other wolves"""
 	if not _pack_alpha_ref or not is_instance_valid(_pack_alpha_ref):
 		return
 
 	var alpha_pos = _pack_alpha_ref.global_position
-	var random_offset = Vector2(randf_range(-80, 80), randf_range(-80, 80))
-	global_position = alpha_pos + random_offset
+
+	# Try to find a position that doesn't overlap other wolves
+	var best_pos = alpha_pos
+	var best_min_dist = 0.0
+
+	for _attempt in range(8):  # Try up to 8 random positions
+		var angle = randf() * TAU
+		var dist = randf_range(80, 150)  # Wider spread (was 60-100)
+		var test_pos = alpha_pos + Vector2(cos(angle), sin(angle)) * dist
+
+		# Check distance to all other wolves
+		var min_dist_to_others = INF
+		for other in get_tree().get_nodes_in_group("wolves"):
+			if other == self or not is_instance_valid(other):
+				continue
+			var d = test_pos.distance_to(other.global_position)
+			min_dist_to_others = min(min_dist_to_others, d)
+
+		# Keep this position if it's the most spaced out
+		if min_dist_to_others > best_min_dist:
+			best_min_dist = min_dist_to_others
+			best_pos = test_pos
+
+	global_position = best_pos
 	velocity = Vector2.ZERO
 
 

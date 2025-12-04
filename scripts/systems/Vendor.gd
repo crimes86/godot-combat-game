@@ -411,7 +411,7 @@ func load_starter_tools() -> void:
 		"type": "placeable",
 		"placeable_type": "campfire",
 		"value": 25,
-		"price": 50,  # Costs 50 gold
+		"price": 0,  # Free for testing
 		"rarity": "COMMON",
 		"stackable": true,
 		"max_stack": 5,
