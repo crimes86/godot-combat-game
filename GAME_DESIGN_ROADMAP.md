@@ -355,7 +355,9 @@ class ChunkOwnership:
 - [x] Group system (40 players)
 - [x] Campfire ownership mechanics
 - [x] Healing staff (support role)
-- [ ] Vendor quest framework
+- [x] Quest system framework (tutorial + progression quests)
+- [x] PvP duel system (consensual 1v1 combat)
+- [x] Wolf enemies with pack behavior
 - [ ] Basic base template (Tier 1 Camp)
 
 ### Phase 2: Economy
@@ -371,7 +373,8 @@ class ChunkOwnership:
 - [ ] Base migration system
 
 ### Phase 4: PvP & Sieges
-- [ ] PvP flagging system
+- [x] PvP duel system (consensual 1v1) - see docs/PVP_DUEL_SYSTEM.md
+- [ ] PvP flagging system (open world)
 - [ ] Siege declaration and windows
 - [ ] Defense structures
 - [ ] World Trees (Tier 4)

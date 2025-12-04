@@ -43,8 +43,14 @@ Complete guide to spawn location generation and enemy spawning (radial patterns,
 #### [docs/PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md)
 Performance optimization strategies: node caching, view distance culling, throttled updates, particle reduction.
 
-#### [docs/REFACTOR_HISTORY.md](docs/REFACTOR_HISTORY.md)
-Historical documentation of component architecture refactoring (reference only, not integrated).
+#### [docs/PVP_DUEL_SYSTEM.md](docs/PVP_DUEL_SYSTEM.md)
+Complete PvP duel system implementation - consensual 1v1 combat with `/duel` command.
+
+#### [docs/PLAYER_CORPSE_SYSTEM.md](docs/PLAYER_CORPSE_SYSTEM.md)
+Design spec for EverQuest-style corpse runs (NOT YET IMPLEMENTED).
+
+#### [docs/SETTLEMENT_SYSTEM_SPEC.md](docs/SETTLEMENT_SYSTEM_SPEC.md)
+Design spec for guild base building and siege system (NOT YET IMPLEMENTED).
 
 ---
 
@@ -134,8 +140,11 @@ Historical documentation of component architecture refactoring (reference only, 
 - **F4**: Advance time 1 hour (dev builds only)
 - **ESC**: In-game menu (Settings, Credits, Disconnect)
 
-### Chat Admin Commands
-Type these in chat (press Enter) when hosting a game:
+### Chat Commands
+Type these in chat (press Enter):
+- **/duel \<PlayerName\>**: Challenge player to a 1v1 duel
+
+### Chat Admin Commands (Host Only)
 - **/help**: Show all admin commands
 - **/accounts**: List all registered accounts
 - **/select \<username\>**: Select account to edit
@@ -219,15 +228,21 @@ Type these in chat (press Enter) when hosting a game:
 
 ### In Progress
 - Ruins 2 & 3 implementation
-- Roaming enemies along path
 - Boss fight (Level 33 Necromancer King)
-- Healing system (friendly targeting)
+- Player corpse/death system
+
+### Recently Added
+- **PvP Duel System** - Consensual 1v1 duels with `/duel` command
+- **Wolf Enemies** - Pack-based AI with howling and pursuit behavior
+- **Group/Party System** - Up to 40 players, shared XP, party frames
+- **Quest System** - Tutorial and progression quests with tracker UI
+- **Harvest Tools** - Axe and pickaxe for gathering resources
 
 ### Planned Features
-- PvP combat
-- Quest system
+- Base building system
+- Settlement sieges
 - Crafting system
-- Additional zones/bosses
+- Additional biomes (Cursed Lands, Shadow Realm)
 
 ---
 
@@ -274,4 +289,4 @@ Type these in chat (press Enter) when hosting a game:
 
 ---
 
-This documentation was last updated: 2025-12-01
+This documentation was last updated: 2025-12-04

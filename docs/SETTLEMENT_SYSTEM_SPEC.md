@@ -1,5 +1,11 @@
 # Settlement System Design Spec
 
+## Status: ⏳ NOT YET IMPLEMENTED
+
+This is a design specification document. The system has not been built yet.
+
+---
+
 ## Overview
 
 A guild-shared base system inspired by Shadowbane sieges and WoW garrisons. Players gather resources in the world, return to their settlement to deposit/craft, and defend it from other players during siege windows.

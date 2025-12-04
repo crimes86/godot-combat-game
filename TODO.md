@@ -1,5 +1,12 @@
 # WASTELAND - Remaining Tasks
 
+## Recently Completed Features
+- [x] PvP Duel System - consensual 1v1 combat with `/duel` command
+- [x] Wolf Enemies - pack behavior, howling mechanics
+- [x] Quest System - tutorial and progression quests with tracker UI
+- [x] Group/Party System - 40 players, shared XP, raid frames
+- [x] Harvest Tools - axe and pickaxe for resource gathering
+
 ## Completed This Session
 - [x] CRITICAL: Add Windows export preset to export_presets.cfg
 - [x] CRITICAL: Configure default resolution (1280x720) in project.godot
@@ -64,3 +71,10 @@
 
 ## Pending - Testing
 - [ ] Add unit tests for CharacterStats, InventorySystem, Weapon
+
+## Pending - Major Features (Designed, Not Implemented)
+- [ ] Player Corpse System - EverQuest-style corpse runs (see docs/PLAYER_CORPSE_SYSTEM.md)
+- [ ] Settlement/Base Building - guild bases with sieges (see docs/SETTLEMENT_SYSTEM_SPEC.md)
+- [ ] PvP Weakpoints - clickable weakpoints during duels (like enemy crit windows)
+- [ ] Additional Biomes - Cursed Lands, Shadow Realm, Void Wastes
+- [ ] Ranked Dueling - ELO/ladder system

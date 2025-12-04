@@ -1,5 +1,11 @@
 # Player Corpse System - Implementation Spec
 
+## Status: ⏳ NOT YET IMPLEMENTED
+
+This is a design specification document. The system has not been built yet.
+
+---
+
 ## Overview
 
 Classic EverQuest-style corpse system. When a player dies:

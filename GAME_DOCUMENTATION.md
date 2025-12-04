@@ -1191,6 +1191,39 @@ func log_suspicious_activity(player_id: int, reason: String):
 
 ---
 
+## Wolf Enemies
+
+### Overview
+Wolves are pack-based enemies that roam in groups and coordinate attacks. They feature unique howling mechanics and pursuit behavior.
+
+### Pack Behavior
+- **Pack Size**: 2-4 wolves per pack
+- **Formation**: Wolves maintain loose formation while patrolling
+- **Howling**: When one wolf spots prey, it howls to alert packmates
+- **Coordinated Attack**: Pack members converge on target together
+
+### Wolf AI States
+1. **PATROLLING**: Roaming in pack formation
+2. **HOWLING**: Alert call when player spotted (brief pause)
+3. **PURSUING**: Chasing target with pack
+4. **ATTACKING**: Melee attack range
+5. **RETREATING**: Low health flee behavior
+
+### Combat Stats
+- **Base Speed**: Faster than skeletons, slower than player sprint
+- **Attack Pattern**: Quick lunging bites
+- **Pack Bonus**: Damage increases with nearby packmates
+
+### Loot
+- Wolves drop bones for the bone generation system
+- Higher level wolves drop better quality bones
+
+### Files
+- `scripts/enemies/Wolf.gd` - Wolf AI and pack behavior
+- `scenes/enemies/wolf.tscn` - Wolf enemy scene
+
+---
+
 ## Character System
 
 ### Gender Selection
@@ -1371,6 +1404,39 @@ Groups allow players to share campfire buffs and coordinate gameplay. Maximum gr
 ### Files
 - `scripts/systems/GroupManager.gd` - Group state and commands
 - `scripts/ui/GroupUI.gd` - Raid frame display and invite popup (merged)
+
+---
+
+## PvP Duel System
+
+### Overview
+Consensual 1v1 dueling system. Players challenge each other via `/duel PlayerName` command.
+
+### How to Duel
+1. Open chat (Enter key)
+2. Type `/duel PlayerName`
+3. Target player receives Accept/Decline popup
+4. If accepted, 3-2-1 countdown begins
+5. Fight until one player reaches 1 HP
+6. Both players receive 10-second safe aura protection
+
+### Duel Rules
+- **Damage Isolation**: Only duel opponent can damage you during duel
+- **Non-Lethal**: Duel ends at 1 HP, no death
+- **Self-Heals Allowed**: Potions work during duel
+- **External Heals Blocked**: Campfire/ally heals blocked during duel
+- **Safe Aura**: 10 seconds of PvP immunity after duel ends
+
+### Visual Indicators
+- **Red Pulsing Aura**: Player is in active duel
+- **Green Pulsing Aura**: Player has safe aura (post-duel protection)
+
+### Files
+- `scripts/systems/DuelManager.gd` - Duel state and network RPCs
+- `scripts/ui/DuelRequestPopup.gd` - Accept/Decline UI
+- `scripts/ui/DuelCountdownUI.gd` - 3-2-1 countdown
+- `scripts/ui/DuelResultUI.gd` - Victory/Defeat announcement
+- See `docs/PVP_DUEL_SYSTEM.md` for full implementation details
 
 ---
 
@@ -2208,9 +2274,10 @@ The game has a **fully functional 5-layer modular armor system**:
    - Consumable items (potions, food)
    - Inventory UI with tabs
 
-6. **Quest System**
-   - Tutorial quests near campfire
+6. **Quest System** - ✅ IMPLEMENTED
+   - Tutorial quests with tracker UI
    - Kill X enemies quests
+   - Progression-based unlocks
    - Reach castle quest
    - Convert ruins quest
    - Quest rewards (gold, items, XP)
@@ -2244,12 +2311,18 @@ The game has a **fully functional 5-layer modular armor system**:
 
 ### Long-term Features
 11. **Multiplayer/Social**
+    - ✅ Group/Party system (40 players)
     - Trading between players
     - Shared vendor shops
     - Player marketplace
-    - Co-op combat
 
-12. **Advanced Systems**
+12. **PvP Systems**
+    - ✅ Consensual duel system (`/duel` command)
+    - Open world PvP flagging
+    - Base/settlement sieges
+    - Ranked dueling / ELO system
+
+13. **Advanced Systems**
     - Crafting system
     - Enchanting/upgrading equipment
     - Rare/legendary item drops from enemies
