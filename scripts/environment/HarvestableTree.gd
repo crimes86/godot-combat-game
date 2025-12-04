@@ -50,11 +50,13 @@ var fade_timer_started: bool = false  # Track if fade timer has started
 var shake_tween: Tween = null
 var original_sprite_position: Vector2 = Vector2.ZERO
 
-# Audio - uses SoundManager for shared sounds
-var chop_audio_player: AudioStreamPlayer = null
-var fall_audio_player: AudioStreamPlayer = null
+# Audio timing - uses SoundManager for pooled audio (no per-tree AudioStreamPlayers)
 var last_chop_sound_time: float = 0.0
 var chop_sound_interval: float = 0.75  # Play chop sound every 0.75 seconds (4 total sounds over 3 seconds)
+
+# UI creation state - deferred until player enters range to save nodes
+var ui_created: bool = false
+var interaction_canvas: CanvasLayer = null  # Shared canvas for prompt + progress
 
 # Performance caching
 var cached_has_axe: bool = false
@@ -85,17 +87,11 @@ func _ready() -> void:
 		else:
 			wood_amount = 3  # Large trees
 
-	# Create interaction area
+	# Create interaction area (always needed for proximity detection)
 	create_interaction_area()
 
-	# Create interaction prompt
-	create_interaction_prompt()
-	
-	# Create radial progress circle
-	create_progress_circle()
-
-	# Create audio players (sounds are loaded by SoundManager)
-	create_audio_players()
+	# NOTE: UI elements (prompt, progress circle) are deferred until player enters range
+	# Audio is handled by SoundManager (no per-tree AudioStreamPlayers needed)
 
 func _exit_tree() -> void:
 	"""Clean up when tree is removed from scene tree"""
@@ -114,6 +110,12 @@ func _exit_tree() -> void:
 	if loot_ui and is_instance_valid(loot_ui):
 		loot_ui.close_ui()
 		loot_ui = null
+
+	# Clean up deferred UI if created
+	if interaction_canvas and is_instance_valid(interaction_canvas):
+		interaction_canvas.queue_free()
+		interaction_canvas = null
+		ui_created = false
 
 func _unhandled_input(event: InputEvent) -> void:
 	"""Handle F-key input for looting fallen tree"""
@@ -313,14 +315,20 @@ func create_interaction_area() -> void:
 	interaction_area.body_entered.connect(_on_body_entered)
 	interaction_area.body_exited.connect(_on_body_exited)
 
-func create_interaction_prompt() -> void:
-	"""Create floating [F] prompt above tree"""
-	# Use CanvasLayer like PickableItem does (Labels need to be in UI tree)
-	var canvas = CanvasLayer.new()
-	canvas.name = "InteractionCanvas"
-	canvas.layer = 50
-	add_child(canvas)
+func create_deferred_ui() -> void:
+	"""Create UI elements when player first enters range (deferred for performance)"""
+	if ui_created:
+		return
 
+	ui_created = true
+
+	# Create single shared CanvasLayer for both prompt and progress circle
+	interaction_canvas = CanvasLayer.new()
+	interaction_canvas.name = "TreeUICanvas"
+	interaction_canvas.layer = 50
+	add_child(interaction_canvas)
+
+	# Create interaction prompt
 	interaction_prompt = Label.new()
 	interaction_prompt.name = "InteractionPrompt"
 	interaction_prompt.text = "Hold [F] Chop Tree"
@@ -330,7 +338,21 @@ func create_interaction_prompt() -> void:
 	interaction_prompt.add_theme_constant_override("outline_size", 2)
 	interaction_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	interaction_prompt.visible = false
-	canvas.add_child(interaction_prompt)
+	interaction_canvas.add_child(interaction_prompt)
+
+	# Create radial progress circle
+	progress_circle = Node2D.new()
+	progress_circle.name = "ProgressCircle"
+	progress_circle.visible = false
+	progress_circle.z_index = 1  # Render above prompt
+	interaction_canvas.add_child(progress_circle)
+
+	# Connect draw function
+	progress_circle.draw.connect(_draw_progress_circle)
+
+func create_interaction_prompt() -> void:
+	"""DEPRECATED: UI is now created on-demand via create_deferred_ui()"""
+	pass
 
 func update_prompt_position() -> void:
 	"""Update prompt position to 10 pixels below player's feet"""
@@ -362,20 +384,8 @@ func update_prompt_position() -> void:
 	interaction_prompt.position = Vector2(screen_x, screen_y)
 
 func create_progress_circle() -> void:
-	"""Create radial progress indicator for hold-to-chop"""
-	var canvas = CanvasLayer.new()
-	canvas.name = "ProgressCanvas"
-	canvas.layer = 51  # Above interaction prompt
-	add_child(canvas)
-	
-	# Create custom drawable node for radial progress
-	progress_circle = Node2D.new()
-	progress_circle.name = "ProgressCircle"
-	progress_circle.visible = false
-	canvas.add_child(progress_circle)
-	
-	# Connect draw function
-	progress_circle.draw.connect(_draw_progress_circle)
+	"""DEPRECATED: UI is now created on-demand via create_deferred_ui()"""
+	pass
 
 func _draw_progress_circle() -> void:
 	"""Draw the radial progress circle with wasteland theme"""
@@ -501,10 +511,6 @@ func cancel_chopping() -> void:
 	if progress_circle:
 		progress_circle.visible = false
 
-	# Stop any playing chop sound
-	if chop_audio_player and chop_audio_player.playing:
-		chop_audio_player.stop()
-
 	# Return player to idle animation
 	stop_player_harvest_animation()
 
@@ -516,10 +522,7 @@ func complete_chop() -> void:
 	if progress_circle:
 		progress_circle.visible = false
 
-	# Stop chopping sound and play tree fall sound
-	if chop_audio_player and chop_audio_player.playing:
-		chop_audio_player.stop()
-
+	# Play tree fall sound via SoundManager
 	play_random_fall_sound()
 
 	# Return player to idle animation
@@ -1007,6 +1010,9 @@ func _on_body_entered(body: Node2D) -> void:
 		player_in_range = true
 		prompt_fade_timer = 0.0  # Reset fade timer when entering range
 
+		# Create UI elements on first interaction (deferred for performance)
+		create_deferred_ui()
+
 		# Register with InteractionManager
 		var distance = global_position.distance_to(body.global_position)
 		InteractionManager.register_interactable(self, InteractionManager.InteractionType.HARVESTABLE, distance)
@@ -1044,29 +1050,9 @@ func _on_body_exited(body: Node2D) -> void:
 		if loot_ui and is_instance_valid(loot_ui):
 			loot_ui.close_ui()
 
-func create_audio_players() -> void:
-	"""Create audio players (sounds loaded by SoundManager singleton)"""
-	chop_audio_player = AudioStreamPlayer.new()
-	chop_audio_player.name = "ChopAudioPlayer"
-	chop_audio_player.bus = "SFX"
-	chop_audio_player.volume_db = -8.0  # Reduce chop volume
-	add_child(chop_audio_player)
-
-	fall_audio_player = AudioStreamPlayer.new()
-	fall_audio_player.name = "FallAudioPlayer"
-	fall_audio_player.bus = "SFX"
-	fall_audio_player.volume_db = -8.0  # Reduce fall volume
-	add_child(fall_audio_player)
-
 func play_random_chop_sound() -> void:
-	"""Play a random chopping sound from SoundManager and shake the tree"""
-	if not chop_audio_player:
-		return
-
-	var sound = SoundManager.get_random_chop_sound()
-	if sound:
-		chop_audio_player.stream = sound
-		chop_audio_player.play()
+	"""Play a random chopping sound via SoundManager and shake the tree"""
+	SoundManager.play_tree_chop_sound(global_position)
 
 	# Shake the tree on impact
 	shake_tree()
@@ -1102,14 +1088,8 @@ func shake_tree() -> void:
 		original_sprite_position, shake_duration * 0.5)
 
 func play_random_fall_sound() -> void:
-	"""Play a random tree falling sound from SoundManager"""
-	if not fall_audio_player:
-		return
-
-	var sound = SoundManager.get_random_fall_sound()
-	if sound:
-		fall_audio_player.stream = sound
-		fall_audio_player.play()
+	"""Play a random tree falling sound via SoundManager"""
+	SoundManager.play_tree_fall_sound(global_position)
 
 func trigger_player_harvest_animation(tool_type: String) -> void:
 	"""Trigger the player's tool animation for harvesting"""

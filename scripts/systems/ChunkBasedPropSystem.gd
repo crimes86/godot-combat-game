@@ -607,12 +607,14 @@ func process_async_chunk_loading() -> void:
 			print("✅ Chunk %s fully loaded (%d nodes, %dms)" % [chunk_key, node_count, load_time_ms])
 			print("   📊 Exclusions: %d lava pools, %d large rocks | Total chunks: %d" % [chunk_data.lava_pool_positions.size(), chunk_data.large_rock_positions.size(), loaded_chunks.size()])
 
-			# === PHASE 3: Spawn ruins LAST (after all props loaded) ===
-			# Ruins are complex scenes with guardians - spawn after environment is ready
+			# === PHASE 3: Spawn POIs LAST (after all props loaded) ===
+			# POIs are complex scenes - spawn after environment is ready
 			var chunk_parts = chunk_key.split(",")
 			var chunk_id = int(chunk_parts[0])
 			if game_world and game_world.has_method("spawn_ruins_for_chunk"):
 				game_world.spawn_ruins_for_chunk(chunk_id)
+			if game_world and game_world.has_method("spawn_pois_for_chunk"):
+				game_world.spawn_pois_for_chunk(chunk_id)
 
 func is_position_in_lava_pool(pos: Vector2, chunk_data: ChunkData) -> bool:
 	"""Check if a position is inside any lava pool exclusion zone"""
@@ -947,7 +949,7 @@ func unload_chunk(chunk_key: String) -> void:
 
 	loaded_chunks.erase(chunk_key)
 
-	# Notify game_world to despawn chunk-specific content (path, ruins, torches)
+	# Notify game_world to despawn chunk-specific content (path, ruins, POIs, torches)
 	var chunk_parts = chunk_key.split(",")
 	var chunk_id = int(chunk_parts[0])
 	if game_world:
@@ -955,6 +957,8 @@ func unload_chunk(chunk_key: String) -> void:
 			game_world.despawn_path_for_chunk(chunk_id)
 		if game_world.has_method("despawn_ruins_for_chunk"):
 			game_world.despawn_ruins_for_chunk(chunk_id)
+		if game_world.has_method("despawn_pois_for_chunk"):
+			game_world.despawn_pois_for_chunk(chunk_id)
 
 	print("❌ Unloaded chunk %s (%d remaining)" % [chunk_key, loaded_chunks.size()])
 
@@ -1029,28 +1033,9 @@ func add_rock_shadow(rock_node: Node2D, rock_scale: float, rng: RandomNumberGene
 	"""Add dark disturbed earth patch under rock"""
 	add_ground_disturbance(rock_node, rock_scale * 50, rng, 0.25)
 
-func add_ground_disturbance(parent_node: Node2D, base_size: float, rng: RandomNumberGenerator, darkness: float = 0.2) -> void:
-	"""Add subtle dark patch to ground for disturbed earth effect - single node version"""
-	# Check distance to campfire and reduce alpha if within glow
-	var campfire_pos = Vector2(Constants.CHUNK_SIZE / 2, 0)  # Center of chunk 0
-	var distance_to_campfire = parent_node.global_position.distance_to(campfire_pos)
-	var glow_radius = 3000.0  # Campfire glow range
-
-	# Calculate alpha reduction based on distance (closer = lighter)
-	var alpha_multiplier = 1.0
-	if distance_to_campfire < glow_radius:
-		var fade = distance_to_campfire / glow_radius
-		alpha_multiplier = lerp(0.3, 1.0, fade)
-
-	# Single shadow patch (optimized from 3 layers)
-	var patch = ColorRect.new()
-	var size = base_size * rng.randf_range(0.9, 1.1)
-	patch.size = Vector2(size, size)
-	patch.position = -patch.size / 2
-	patch.color = Color(0.03, 0.03, 0.03, darkness * 0.5 * alpha_multiplier)
-	patch.z_index = -9
-	patch.rotation = rng.randf() * TAU
-	parent_node.add_child(patch)
+func add_ground_disturbance(_parent_node: Node2D, _base_size: float, _rng: RandomNumberGenerator, _darkness: float = 0.2) -> void:
+	"""DISABLED - Old terrain alteration before shader. Now using shader for ground effects."""
+	pass
 
 func is_in_world_bounds(pos: Vector2) -> bool:
 	"""Check if position is within world boundaries"""
@@ -1953,3 +1938,51 @@ func count_nodes_recursive(node: Node) -> int:
 
 func get_loaded_chunk_count() -> int:
 	return loaded_chunks.size()
+
+func get_prop_stats() -> Dictionary:
+	"""Get detailed prop statistics for debug display"""
+	var stats = {
+		"trees": 0,
+		"tree_nodes": 0,
+		"rocks_large": 0,
+		"rocks_medium": 0,
+		"rocks_small": 0,
+		"rock_nodes": 0,
+		"lava_pools": 0,
+		"bones": 0,
+		"other": 0,
+		"total_props": 0,
+		"total_nodes": 0,
+		"chunks_loaded": loaded_chunks.size()
+	}
+
+	for chunk_key in loaded_chunks.keys():
+		var chunk_data = loaded_chunks[chunk_key]
+		if not chunk_data or not is_instance_valid(chunk_data.props_container):
+			continue
+
+		for child in chunk_data.props_container.get_children():
+			var child_name = child.name
+			var child_nodes = count_nodes_recursive(child)
+			stats.total_nodes += child_nodes
+			stats.total_props += 1
+
+			if child_name.begins_with("Tree_"):
+				stats.trees += 1
+				stats.tree_nodes += child_nodes
+			elif child_name.begins_with("Rock_"):
+				stats.rock_nodes += child_nodes
+				if "large" in child_name.to_lower():
+					stats.rocks_large += 1
+				elif "medium" in child_name.to_lower():
+					stats.rocks_medium += 1
+				else:
+					stats.rocks_small += 1
+			elif child_name.begins_with("Lava") or child_name.begins_with("Monster"):
+				stats.lava_pools += 1
+			elif child_name.begins_with("Bone") or child_name.begins_with("Skull"):
+				stats.bones += 1
+			else:
+				stats.other += 1
+
+	return stats

@@ -95,6 +95,9 @@ enum RuinsPattern {
 var RUINS_POSITIONS: Dictionary = {}
 var ruins_nodes: Array = []  # Track spawned ruins for cleanup
 
+# POI Manager - handles quadrant-based POI generation for edge chunks
+var poi_manager: POIManager = null
+
 var tree_types = ["dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5", "dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10"]
 var screenshot_mode = false
 var tree_positions = []  # Track tree positions to avoid spawning small rocks on them
@@ -351,10 +354,7 @@ void fragment() {
 	print("🌫️ Border fog created on north and south edges")
 
 func generate_procedural_ruins():
-	"""Generate ruins POSITIONS procedurally (actual spawning is done per-chunk)"""
-	var rng = RandomNumberGenerator.new()
-	rng.seed = 12345  # Fixed seed for consistent world generation
-
+	"""Generate POI positions using POIManager (ruins, settlements, etc.)"""
 	# Clear any existing ruins data
 	RUINS_POSITIONS.clear()
 	for ruins in ruins_nodes:
@@ -362,39 +362,30 @@ func generate_procedural_ruins():
 			ruins.queue_free()
 	ruins_nodes.clear()
 
-	# Generate ruins positions for chunk -1 (west) and chunk +1 (east)
-	# Note: Ruins are NOT instantiated here - that happens when chunk loads
-	var cs = Constants.CHUNK_SIZE
-	var chunk_configs = [
-		{"chunk_id": -1, "x_min": -cs + 200.0, "x_max": -400.0, "prefix": "west"},
-		{"chunk_id": 1, "x_min": cs + 400.0, "x_max": cs * 2 - 200.0, "prefix": "east"}
-	]
+	# Initialize POI Manager
+	poi_manager = POIManager.new()
+	poi_manager.name = "POIManager"
+	add_child(poi_manager)
+	poi_manager.initialize(self)
 
+	# Convert POI ruins data to RUINS_POSITIONS for backward compatibility
 	var guardian_levels = [8, 12, 16, 20]  # Increasing difficulty
 	var level_index = 0
 
-	for config in chunk_configs:
-		# Randomly pick placement pattern for this chunk
-		var pattern = rng.randi() % 3  # 0=BOTH_NORTH, 1=BOTH_SOUTH, 2=SPLIT
+	var ruins_pois = poi_manager.get_ruins()
+	for poi in ruins_pois:
+		var chunk_prefix = "west" if poi.chunk_id == -1 else "east"
+		var ruins_key = "%s_%d" % [chunk_prefix, level_index % 2]
 
-		var positions = generate_ruins_positions_for_chunk(
-			config.x_min, config.x_max,
-			pattern, rng
-		)
+		RUINS_POSITIONS[ruins_key] = {
+			"position": poi.position,
+			"chunk_id": poi.chunk_id,
+			"guardian_level": guardian_levels[min(level_index, guardian_levels.size() - 1)],
+			"spawned": false
+		}
+		level_index += 1
 
-		# Store ruins positions and metadata (NOT spawned yet)
-		for i in range(positions.size()):
-			var pos = positions[i]
-			var ruins_key = "%s_%d" % [config.prefix, i]
-			RUINS_POSITIONS[ruins_key] = {
-				"position": pos,
-				"chunk_id": config.chunk_id,
-				"guardian_level": guardian_levels[min(level_index, guardian_levels.size() - 1)],
-				"spawned": false
-			}
-			level_index += 1
-
-	print("🏛️ Generated %d procedural ruins positions (will spawn per-chunk)" % RUINS_POSITIONS.size())
+	print("🏛️ POI System: Generated %d ruins positions (will spawn per-chunk)" % RUINS_POSITIONS.size())
 
 func spawn_ruins_for_chunk(chunk_id: int) -> void:
 	"""Spawn ruins that belong to a specific chunk"""
@@ -454,6 +445,184 @@ func despawn_ruins_for_chunk(chunk_id: int) -> void:
 
 	for ruins in to_remove:
 		ruins_nodes.erase(ruins)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# POI SPAWNING - Settlements, Monster Dens, Resource Nodes, etc.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+var settlement_nodes: Array = []  # Track spawned settlement plots
+
+func spawn_pois_for_chunk(chunk_id: int) -> void:
+	"""Spawn all POI types for a chunk (settlements, monster dens, etc.)"""
+	if not poi_manager:
+		return
+
+	var pois = poi_manager.get_pois_for_chunk(chunk_id)
+	for poi in pois:
+		if poi.spawned:
+			continue
+
+		match poi.type:
+			"settlement_plot":
+				spawn_settlement_plot(poi)
+			"monster_lava_lake":
+				spawn_monster_lava_lake(poi)
+			"resource_node":
+				spawn_resource_node(poi)
+			"monster_den":
+				spawn_monster_den(poi)
+			"ancient_shrine":
+				spawn_ancient_shrine(poi)
+			# "ruins" handled by spawn_ruins_for_chunk for backward compatibility
+
+
+func spawn_settlement_plot(poi: Dictionary) -> void:
+	"""Spawn an unclaimed settlement plot visual"""
+	var plot = Node2D.new()
+	plot.name = "SettlementPlot_%d_%d" % [poi.chunk_id, poi.quadrant]
+	plot.position = poi.position
+
+	# Create clearing polygon (darker area)
+	var clearing = Polygon2D.new()
+	clearing.name = "Clearing"
+	var radius = poi.radius
+	var points = PackedVector2Array()
+	for i in range(32):
+		var angle = i * TAU / 32
+		var wobble = sin(angle * 3) * 20 + cos(angle * 5) * 15
+		points.append(Vector2(cos(angle), sin(angle)) * (radius + wobble))
+	clearing.polygon = points
+	clearing.color = Color(0.04, 0.04, 0.05, 0.8)
+	clearing.z_index = -5
+	plot.add_child(clearing)
+
+	# Add scattered foundation stones
+	var stone_texture = load("res://assets/environment/wasteland/rock_small.png")
+	if stone_texture:
+		var rng = RandomNumberGenerator.new()
+		rng.seed = hash(poi.position)
+
+		for i in range(8):
+			var stone = Sprite2D.new()
+			stone.texture = stone_texture
+			var angle = rng.randf() * TAU
+			var dist = rng.randf_range(radius * 0.3, radius * 0.8)
+			stone.position = Vector2(cos(angle), sin(angle)) * dist
+			stone.rotation = rng.randf() * TAU
+			stone.scale = Vector2(0.8, 0.8) * rng.randf_range(0.6, 1.2)
+			stone.modulate = Color(0.6, 0.6, 0.55, 0.9)  # Weathered grey
+			stone.z_index = -4
+			plot.add_child(stone)
+
+	# Add signpost
+	var signpost = _create_settlement_signpost(poi)
+	plot.add_child(signpost)
+
+	# Add faint boundary markers (corner posts)
+	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		var post = _create_boundary_post(corner * radius * 0.9)
+		plot.add_child(post)
+
+	add_child(plot)
+	settlement_nodes.append(plot)
+	poi.spawned = true
+
+	print("🏕️ Spawned settlement plot at %s (chunk %d)" % [poi.position, poi.chunk_id])
+
+
+func _create_settlement_signpost(poi: Dictionary) -> Node2D:
+	"""Create a signpost indicating unclaimed settlement"""
+	var signpost = Node2D.new()
+	signpost.name = "Signpost"
+	signpost.position = Vector2(0, -poi.radius * 0.5)  # North of center
+
+	# Post (simple rectangle)
+	var post = ColorRect.new()
+	post.size = Vector2(8, 60)
+	post.position = Vector2(-4, -60)
+	post.color = Color(0.35, 0.25, 0.15)  # Wood brown
+	signpost.add_child(post)
+
+	# Sign board
+	var board = ColorRect.new()
+	board.size = Vector2(80, 30)
+	board.position = Vector2(-40, -70)
+	board.color = Color(0.4, 0.3, 0.2)  # Lighter wood
+	signpost.add_child(board)
+
+	# Text label
+	var label = Label.new()
+	label.text = "Unclaimed"
+	label.position = Vector2(-35, -68)
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	signpost.add_child(label)
+
+	return signpost
+
+
+func _create_boundary_post(pos: Vector2) -> ColorRect:
+	"""Create a faint boundary post at corner of settlement"""
+	var post = ColorRect.new()
+	post.name = "BoundaryPost"
+	post.size = Vector2(6, 20)
+	post.position = pos + Vector2(-3, -20)
+	post.color = Color(0.3, 0.25, 0.2, 0.5)  # Faded wood
+	return post
+
+
+func spawn_monster_lava_lake(poi: Dictionary) -> void:
+	"""Spawn a large monster-inhabited lava lake"""
+	# TODO: Implement giant lava lake with elite spawns
+	poi.spawned = true
+	print("🌋 [PLACEHOLDER] Monster lava lake at %s" % poi.position)
+
+
+func spawn_resource_node(poi: Dictionary) -> void:
+	"""Spawn a dense resource gathering area"""
+	# TODO: Implement dense tree/rock cluster
+	poi.spawned = true
+	print("⛏️ [PLACEHOLDER] Resource node at %s" % poi.position)
+
+
+func spawn_monster_den(poi: Dictionary) -> void:
+	"""Spawn an elite monster encampment"""
+	# TODO: Implement monster den with elite enemies
+	poi.spawned = true
+	print("👹 [PLACEHOLDER] Monster den at %s" % poi.position)
+
+
+func spawn_ancient_shrine(poi: Dictionary) -> void:
+	"""Spawn a buff altar / lore location"""
+	# TODO: Implement shrine with interaction
+	poi.spawned = true
+	print("⛩️ [PLACEHOLDER] Ancient shrine at %s" % poi.position)
+
+
+func despawn_pois_for_chunk(chunk_id: int) -> void:
+	"""Despawn all POIs for a chunk"""
+	if not poi_manager:
+		return
+
+	var to_remove = []
+	for node in settlement_nodes:
+		if not is_instance_valid(node):
+			to_remove.append(node)
+			continue
+
+		# Check if this POI belongs to the chunk being unloaded
+		var pois = poi_manager.get_pois_for_chunk(chunk_id)
+		for poi in pois:
+			if poi.spawned and node.position.distance_to(poi.position) < 50:
+				node.queue_free()
+				to_remove.append(node)
+				poi.spawned = false
+				break
+
+	for node in to_remove:
+		settlement_nodes.erase(node)
+
 
 func generate_ruins_positions_for_chunk(x_min: float, x_max: float, pattern: int, rng: RandomNumberGenerator) -> Array:
 	"""Generate 2 ruins positions within a chunk based on placement pattern"""
@@ -655,8 +824,14 @@ func spawn_path_for_chunk(chunk_id: int) -> void:
 			var ruins_pos = ruins_data.position
 			# Branch point on main path - find where to connect
 			var branch_x = clamp(ruins_pos.x + (400 if chunk_id < 0 else -400), chunk_start_x + 200, chunk_end_x - 200)
-			var branch_point = Vector2(branch_x, get_path_y_at_x(main_path, branch_x))
-			var ruins_path = create_zigzag_path(branch_point, ruins_pos, 6, 200, rng)
+			var main_path_y = get_path_y_at_x(main_path, branch_x)
+
+			# Start branch path OFFSET from main path to avoid overlap blob
+			# Move start point 200px towards the ruins (in Y direction)
+			var y_direction = sign(ruins_pos.y - main_path_y)
+			var branch_start = Vector2(branch_x, main_path_y + y_direction * 200)
+
+			var ruins_path = create_zigzag_path(branch_start, ruins_pos, 6, 200, rng)
 			draw_path_from_points(chunk_path, ruins_path, 195, rng)
 			print("🛤️ Branch path to %s at %s" % [ruins_key, ruins_pos])
 
@@ -1190,7 +1365,7 @@ func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGe
 		var point_radius = outer_radius + p.wobble + p.noise
 		outer_points.append(Vector2(cos(p.angle), sin(p.angle)) * point_radius)
 	outer_polygon.polygon = outer_points
-	outer_polygon.color = Color(0.05, 0.05, 0.06, 0.35)  # Darker than path
+	outer_polygon.color = Color(0.055, 0.055, 0.065, 0.35)  # Between path and old clearing
 	outer_polygon.antialiased = true
 	parent.add_child(outer_polygon)
 
@@ -1202,7 +1377,7 @@ func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGe
 		var point_radius = clearing_radius + p.wobble + p.noise
 		points.append(Vector2(cos(p.angle), sin(p.angle)) * point_radius)
 	polygon.polygon = points
-	polygon.color = Color(0.05, 0.05, 0.06, 1.0)  # Slightly darker than path (0.06)
+	polygon.color = Color(0.055, 0.055, 0.065, 1.0)  # Lighter than before, still darker than path (0.06)
 	polygon.antialiased = true
 	parent.add_child(polygon)
 
@@ -2211,6 +2386,9 @@ func get_safe_rotation(prop_type: String, requested_rotation: float) -> float:
 			return requested_rotation
 
 func load_path_markers_from_json():
+	# DISABLED - These were debug markers (yellow rocks) used during path development
+	return
+
 	# Load path markers with validation
 	var result = JSONValidator.load_json_file("res://data/path_markers.json")
 	if not result.success:

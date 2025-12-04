@@ -1477,3 +1477,42 @@ func get_random_fall_sound() -> AudioStream:
 	if tree_fall_sounds.is_empty():
 		return null
 	return tree_fall_sounds[randi() % tree_fall_sounds.size()]
+
+## Play tree chop sound at position (uses pooled audio - no per-tree AudioStreamPlayers needed)
+func play_tree_chop_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
+	if sfx_muted:
+		return
+	var sound = get_random_chop_sound()
+	if not sound:
+		return
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)
+	player.max_polyphony = 4
+	player.bus = "SFX"
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play tree fall sound at position (uses pooled audio - no per-tree AudioStreamPlayers needed)
+func play_tree_fall_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.0) -> void:
+	if sfx_muted:
+		return
+	var sound = get_random_fall_sound()
+	if not sound:
+		return
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound
+	player.volume_db = volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.97, 1.03)
+	player.bus = "SFX"
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()

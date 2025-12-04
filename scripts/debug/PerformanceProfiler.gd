@@ -87,6 +87,9 @@ func update_profile() -> void:
 	# Get system node breakdown
 	var system_info = get_system_node_breakdown()
 
+	# Get prop stats (trees, rocks)
+	var prop_info = get_prop_stats_info()
+
 	var color = Color.GREEN
 	if fps < 30:
 		color = Color.RED
@@ -111,6 +114,9 @@ SCENE TOTALS:
   Particles: %d
   Lights: %d
 ━━━━━━━━━━━━━━━━━━━━━━
+PROPS (all chunks):
+%s
+━━━━━━━━━━━━━━━━━━━━━━
 SYSTEMS:
 %s
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -126,6 +132,7 @@ Press F3 to toggle | F4 advance time
 		fps, frame_time_ms,
 		time_info,
 		total_nodes, sprite_count, polygon_count, particle_count, light_count,
+		prop_info,
 		system_info,
 		chunk_info,
 		chunk_enemy_info,
@@ -373,6 +380,9 @@ func create_debug_visualizations() -> void:
 	# Draw chunk boundaries
 	draw_chunk_boundaries()
 
+	# Draw POI quadrants and markers
+	draw_poi_debug()
+
 	# Draw enemy debug info
 	draw_enemy_debug()
 
@@ -458,6 +468,104 @@ func draw_chunk_boundaries() -> void:
 		debug_draw_container.add_child(line)
 		chunk_boundary_lines.append(line)
 
+func draw_poi_debug() -> void:
+	"""Draw POI quadrant boundaries and POI markers for edge chunks"""
+	if not debug_draw_container:
+		return
+
+	var game_world = find_game_world()
+	if not game_world or not game_world.poi_manager:
+		return
+
+	var CHUNK_SIZE = Constants.CHUNK_SIZE
+	var HALF_CHUNK = CHUNK_SIZE / 2.0
+	var QUARTER_CHUNK = CHUNK_SIZE / 4.0
+
+	# Edge chunks: -1 and +1
+	var edge_chunks = [-1, 1]
+
+	for chunk_id in edge_chunks:
+		var chunk_start_x = chunk_id * CHUNK_SIZE
+
+		# Draw quadrant divider lines (cyan, dashed effect)
+		# Vertical divider (splits NW/SW from NE/SE)
+		var v_line = Line2D.new()
+		v_line.name = "QuadrantV_Chunk%d" % chunk_id
+		v_line.width = 2.0
+		v_line.default_color = Color(0, 1, 1, 0.5)  # Cyan
+		v_line.add_point(Vector2(chunk_start_x + HALF_CHUNK, -HALF_CHUNK))
+		v_line.add_point(Vector2(chunk_start_x + HALF_CHUNK, HALF_CHUNK))
+		v_line.z_index = 998
+		debug_draw_container.add_child(v_line)
+
+		# Horizontal divider (splits NW/NE from SW/SE)
+		var h_line = Line2D.new()
+		h_line.name = "QuadrantH_Chunk%d" % chunk_id
+		h_line.width = 2.0
+		h_line.default_color = Color(0, 1, 1, 0.5)  # Cyan
+		h_line.add_point(Vector2(chunk_start_x, 0))
+		h_line.add_point(Vector2(chunk_start_x + CHUNK_SIZE, 0))
+		h_line.z_index = 998
+		debug_draw_container.add_child(h_line)
+
+		# Add quadrant labels
+		var quadrant_positions = {
+			"NW": Vector2(chunk_start_x + QUARTER_CHUNK, -QUARTER_CHUNK),
+			"NE": Vector2(chunk_start_x + QUARTER_CHUNK * 3, -QUARTER_CHUNK),
+			"SW": Vector2(chunk_start_x + QUARTER_CHUNK, QUARTER_CHUNK),
+			"SE": Vector2(chunk_start_x + QUARTER_CHUNK * 3, QUARTER_CHUNK),
+		}
+
+		for quad_name in quadrant_positions:
+			var pos = quadrant_positions[quad_name]
+			var label = Label.new()
+			label.text = quad_name
+			label.position = pos + Vector2(-15, -300)  # Offset to top of quadrant
+			label.add_theme_font_size_override("font_size", 18)
+			label.add_theme_color_override("font_color", Color(0, 1, 1, 0.7))
+			label.add_theme_color_override("font_outline_color", Color.BLACK)
+			label.add_theme_constant_override("outline_size", 3)
+			label.z_index = 999
+			debug_draw_container.add_child(label)
+
+	# Draw POI markers
+	var pois_by_type_color = {
+		"settlement_plot": Color(0, 1, 0, 0.8),      # Green
+		"ruins": Color(0.8, 0.5, 0, 0.8),            # Orange
+		"monster_lava_lake": Color(1, 0, 0, 0.8),   # Red
+		"resource_node": Color(0, 0.7, 1, 0.8),     # Light blue
+		"monster_den": Color(0.8, 0, 0.8, 0.8),     # Purple
+		"ancient_shrine": Color(1, 1, 0, 0.8),      # Yellow
+	}
+
+	for chunk_id in edge_chunks:
+		var pois = game_world.poi_manager.get_pois_for_chunk(chunk_id)
+		for poi in pois:
+			var color = pois_by_type_color.get(poi.type, Color.WHITE)
+
+			# Draw circle for POI
+			draw_circle_outline(poi.position, poi.radius, color, "POI_%s_%d" % [poi.type, poi.quadrant])
+
+			# Draw POI label
+			var label = Label.new()
+			label.text = poi.type.replace("_", " ").capitalize()
+			label.position = poi.position + Vector2(-60, -poi.radius - 25)
+			label.add_theme_font_size_override("font_size", 14)
+			label.add_theme_color_override("font_color", color)
+			label.add_theme_color_override("font_outline_color", Color.BLACK)
+			label.add_theme_constant_override("outline_size", 3)
+			label.z_index = 999
+			debug_draw_container.add_child(label)
+
+			# Draw center dot
+			var dot = ColorRect.new()
+			dot.size = Vector2(10, 10)
+			dot.position = poi.position - Vector2(5, 5)
+			dot.color = color
+			dot.z_index = 999
+			debug_draw_container.add_child(dot)
+
+
 func draw_enemy_debug() -> void:
 	"""Draw debug info around enemies - DISABLED (too spammy with many enemies)"""
 	# Enemy debug labels disabled - with 100+ enemies it creates too much visual noise
@@ -511,6 +619,32 @@ func get_time_debug_info() -> String:
 	var brightness = TimeManager.get_brightness()
 
 	return "%s (%s) | Brightness: %.0f%%" % [time_str, period, brightness * 100]
+
+func get_prop_stats_info() -> String:
+	"""Get prop statistics from ChunkBasedPropSystem"""
+	var game_world = find_game_world()
+	if not game_world:
+		return "  GameWorld not found"
+
+	var chunk_system = game_world.get_node_or_null("ChunkBasedPropSystem")
+	if not chunk_system:
+		# Try property access
+		if game_world.get("chunk_prop_system"):
+			chunk_system = game_world.chunk_prop_system
+
+	if not chunk_system or not chunk_system.has_method("get_prop_stats"):
+		return "  PropSystem not found"
+
+	var stats = chunk_system.get_prop_stats()
+
+	var info = "  Trees: %d (%d nodes)\n" % [stats.trees, stats.tree_nodes]
+	info += "  Rocks: %d L, %d M, %d S (%d nodes)\n" % [
+		stats.rocks_large, stats.rocks_medium, stats.rocks_small, stats.rock_nodes
+	]
+	info += "  Lava: %d | Bones: %d | Other: %d\n" % [stats.lava_pools, stats.bones, stats.other]
+	info += "  Total: %d props, %d nodes" % [stats.total_props, stats.total_nodes]
+
+	return info
 
 func refresh_enemy_debug() -> void:
 	"""Update enemy debug info without recreating chunk boundaries"""
