@@ -82,6 +82,10 @@ var normal_zoom_min: float = 0.75   # Store normal limits to restore
 var normal_zoom_max: float = 2.0
 var debug_zoom_active: bool = false
 
+# Mobile controls
+var mobile_controls: CanvasLayer = null
+var _mobile_aim_active: bool = false  # Track if mobile aim touch is active
+
 # Character UI
 var character_ui: CanvasLayer = null
 
@@ -244,6 +248,18 @@ func _ready() -> void:
 	combat_system.attack_feedback = attack_feedback
 	combat_system.update_stats(attack_damage, attack_cooldown, attack_range, attack_cone_angle)
 
+	# Register with GameInput and setup mobile controls if needed
+	if is_multiplayer_authority():
+		GameInput.set_player(self)
+		if GameInput.is_mobile():
+			_setup_mobile_controls()
+		# Connect mobile signals
+		if MobileInput:
+			MobileInput.pinch_zoom.connect(apply_pinch_zoom)
+			MobileInput.dash_pressed.connect(_on_mobile_dash_pressed)
+			MobileInput.inventory_pressed.connect(_on_mobile_inventory_pressed)
+			MobileInput.character_pressed.connect(_on_mobile_character_pressed)
+
 	# Setup debug shapes container - only for local player
 	if is_multiplayer_authority():
 		debug_shapes = Node2D.new()
@@ -349,6 +365,30 @@ func _exit_tree() -> void:
 	if circle_visualizer and is_instance_valid(circle_visualizer):
 		circle_visualizer.queue_free()
 		circle_visualizer = null
+
+	# Clean up mobile controls
+	if mobile_controls and is_instance_valid(mobile_controls):
+		mobile_controls.queue_free()
+		mobile_controls = null
+
+	# Disconnect mobile signals
+	if MobileInput:
+		if MobileInput.pinch_zoom.is_connected(apply_pinch_zoom):
+			MobileInput.pinch_zoom.disconnect(apply_pinch_zoom)
+		if MobileInput.dash_pressed.is_connected(_on_mobile_dash_pressed):
+			MobileInput.dash_pressed.disconnect(_on_mobile_dash_pressed)
+
+
+func _setup_mobile_controls() -> void:
+	"""Set up mobile touch controls UI."""
+	var mobile_controls_scene = load("res://scenes/mobile/MobileControls.tscn")
+	if mobile_controls_scene:
+		mobile_controls = mobile_controls_scene.instantiate()
+		get_tree().root.add_child(mobile_controls)
+		print("[Player] Mobile controls initialized")
+	else:
+		push_warning("[Player] Failed to load MobileControls.tscn")
+
 
 func _create_gender_selection_ui() -> void:
 	"""Create and show the gender selection UI - blocks until selection made"""
@@ -601,7 +641,7 @@ func _physics_process(delta: float) -> void:
 	# Block movement input when chat is focused
 	var input_direction := Vector2.ZERO
 	if not (chat_ui and chat_ui.has_method("is_chat_focused") and chat_ui.is_chat_focused()):
-		input_direction = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+		input_direction = GameInput.get_movement()
 
 	# Use movement subsystem for velocity calculation (handles dash, speed modifiers)
 	if movement_system:
@@ -652,14 +692,15 @@ func _physics_process(delta: float) -> void:
 	update_circle_visualizer()
 	
 	# Update attack direction for combat
-	var mouse_pos = get_global_mouse_position()
-	attack_direction = (mouse_pos - global_position).normalized()
+	var aim_pos := GameInput.get_aim_position()
+	attack_direction = GameInput.get_aim_direction()
 	# Sync attack direction to combat subsystem
 	if combat_system:
 		combat_system.attack_direction = attack_direction
 
-	# Handle held attack (continuous attacking/healing while mouse held)
-	if is_mouse_held:
+	# Handle held attack (continuous attacking/healing while mouse or touch held)
+	var is_attack_held = is_mouse_held or GameInput.is_attack_held()
+	if is_attack_held:
 		# ❌ BLOCK HOLD ATTACKS when UI is open
 		if is_ui_blocking_input():
 			is_mouse_held = false  # Cancel hold state when UI opens
@@ -670,7 +711,7 @@ func _physics_process(delta: float) -> void:
 		else:
 			# Combat subsystem handles held attack logic
 			if combat_system:
-				combat_system.process_held_attack(delta, mouse_pos)
+				combat_system.process_held_attack(delta, aim_pos)
 	
 	# Update debug visualization if enabled
 	if debug_mode:
@@ -764,9 +805,7 @@ func convert_to_lpc_direction(dir_string: String) -> String:
 		_: return "south"
 
 func update_facing_direction() -> void:
-	var mouse_pos = get_global_mouse_position()
-	var direction_to_mouse = (mouse_pos - global_position).normalized()
-	attack_direction = direction_to_mouse
+	attack_direction = GameInput.get_aim_direction()
 
 	# ✨ ISOMETRIC STYLE: Flip sprite instead of rotating player
 	# Player node stays at 0 rotation, sprite flips left/right
@@ -815,7 +854,26 @@ func _input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
 			if not is_shop_open():
 				zoom_out()
-	
+
+	# Mobile touch-to-aim input (mirrors mouse behavior)
+	if event is InputEventScreenTouch and GameInput.is_mobile():
+		if MobileInput.is_in_aim_zone(event.position):
+			var world_pos = MobileInput.screen_to_world(event.position)
+			if event.pressed:
+				# Touch started in aim zone - trigger attack
+				if is_ui_blocking_input():
+					return
+
+				# Trigger initial attack (same as mouse press)
+				if combat_system:
+					combat_system.is_mouse_held = true
+					combat_system.hold_attack_timer = 0.0
+					combat_system.on_mouse_pressed(world_pos)
+			else:
+				# Touch ended - stop held attack
+				if combat_system:
+					combat_system.on_mouse_released()
+
 	# Debug mode toggle (debug builds only)
 	if event is InputEventKey and event.pressed:
 		# Block most game keys while typing in chat (allow F-keys for debug)
@@ -827,6 +885,20 @@ func _input(event: InputEvent) -> void:
 		var is_dev_build = OS.has_feature("editor") or OS.is_debug_build()
 
 		match event.keycode:
+			KEY_F5 when is_dev_build:
+				# Toggle mobile input mode for testing
+				var was_mobile = GameInput.is_mobile()
+				GameInput.toggle_mobile_mode()
+				if was_mobile:
+					# Switched to desktop
+					if mobile_controls and is_instance_valid(mobile_controls):
+						mobile_controls.queue_free()
+						mobile_controls = null
+					print("📱 DEBUG: Mobile mode DISABLED - using mouse/keyboard")
+				else:
+					# Switched to mobile
+					_setup_mobile_controls()
+					print("📱 DEBUG: Mobile mode ENABLED - using touch controls")
 			KEY_F6 when is_dev_build:
 				# Debug: Heal to full health
 				current_health = max_health
@@ -2394,10 +2466,9 @@ func update_cone_visualizer() -> void:
 	if is_ranged:
 		return  # Don't update rotation if hidden
 
-	# ALWAYS rotate cone to face mouse cursor (cheap, needs to be smooth)
-	var mouse_pos = get_global_mouse_position()
-	var direction_to_mouse = (mouse_pos - global_position).normalized()
-	cone_visualizer.rotation = direction_to_mouse.angle()
+	# ALWAYS rotate cone to face aim position (mouse or touch)
+	var direction_to_aim = GameInput.get_aim_direction()
+	cone_visualizer.rotation = direction_to_aim.angle()
 
 	# Color is now constant - no need to update based on enemies
 
@@ -2445,7 +2516,7 @@ func create_circle_visualizer() -> void:
 	# Debug print removed - was spamming logs
 
 func update_circle_visualizer() -> void:
-	"""Update circle visualizer position to follow mouse cursor."""
+	"""Update circle visualizer position to follow aim position (mouse or touch)."""
 	# Safety check for invalid visualizer
 	if not circle_visualizer or not is_instance_valid(circle_visualizer):
 		circle_visualizer = null
@@ -2459,8 +2530,8 @@ func update_circle_visualizer() -> void:
 	circle_visualizer.visible = should_show
 
 	if should_show:
-		# Position at mouse cursor
-		circle_visualizer.global_position = get_global_mouse_position()
+		# Position at aim position (touch or mouse)
+		circle_visualizer.global_position = GameInput.get_aim_position()
 
 func _rebuild_circle_polygon(circle_fill: Polygon2D, radius: float) -> void:
 	"""Rebuild the circle polygon with a new radius."""
@@ -2575,6 +2646,40 @@ func zoom_out() -> void:
 	if camera:
 		camera.zoom = Vector2(target_zoom, target_zoom)
 		print("📷 Zoom: %.1fx" % target_zoom)
+
+
+func apply_pinch_zoom(zoom_delta: float) -> void:
+	"""Apply zoom from pinch gesture. Positive = zoom in, negative = zoom out."""
+	if is_shop_open():
+		return  # Don't zoom while shop is open
+	target_zoom = clamp(target_zoom + zoom_delta, zoom_min, zoom_max)
+	if camera:
+		camera.zoom = Vector2(target_zoom, target_zoom)
+
+
+func _on_mobile_dash_pressed() -> void:
+	"""Handle dash button press from mobile controls."""
+	if movement_system and movement_system.can_dash():
+		var input_dir = GameInput.get_movement()
+		var aim_pos = GameInput.get_aim_position()
+		movement_system.start_dash(input_dir, aim_pos)
+	elif not movement_system:
+		# Fallback to old system
+		if not is_dashing and dash_cooldown_timer <= 0:
+			start_dash()
+
+
+func _on_mobile_inventory_pressed() -> void:
+	"""Handle inventory button press from mobile controls."""
+	if inventory_ui:
+		inventory_ui.toggle_ui()
+
+
+func _on_mobile_character_pressed() -> void:
+	"""Handle character button press from mobile controls."""
+	if character_ui:
+		character_ui.toggle_character_ui()
+
 
 func update_camera_zoom(delta: float) -> void:
 	"""Smoothly interpolate camera zoom to target"""

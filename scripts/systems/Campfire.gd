@@ -1543,8 +1543,8 @@ func handle_fuel_interaction(delta: float) -> void:
 			cancel_fueling()
 		return
 
-	# Check for F key press/hold
-	if Input.is_physical_key_pressed(KEY_F):
+	# Check for F key press/hold (or mobile interact)
+	if Input.is_physical_key_pressed(KEY_F) or GameInput.is_interact_just_pressed():
 		if not is_fueling:
 			# Just pressed F - start fueling process
 			start_fueling()

@@ -49,9 +49,9 @@ func _physics_process(_delta: float) -> void:
 		else:
 			interaction_prompt.visible = false
 
-	# Check for F key press when player is in range AND we're active
+	# Check for interact input when player is in range AND we're active
 	if player_in_range and not is_picked_up and is_active:
-		if Input.is_physical_key_pressed(KEY_F):
+		if Input.is_physical_key_pressed(KEY_F) or GameInput.is_interact_just_pressed():
 			pick_up_item()
 
 func create_interaction_prompt() -> void:

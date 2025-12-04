@@ -243,7 +243,7 @@ func _physics_process(delta: float) -> void:
 				cancel_mining()
 			return
 
-		var f_is_pressed = Input.is_physical_key_pressed(KEY_F)
+		var f_is_pressed = Input.is_physical_key_pressed(KEY_F) or GameInput.is_interact_just_pressed()
 
 		if f_is_pressed:
 			# F is being held - reset grace timer and mine

@@ -43,6 +43,10 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 
+	# Connect mobile interact signal
+	if MobileInput:
+		MobileInput.interact_pressed.connect(_on_mobile_interact)
+
 	print("   Signals connected")
 
 	# Load shop inventory
@@ -321,6 +325,12 @@ func _input(event: InputEvent) -> void:
 			if not shop_ui or not shop_ui.visible:
 				toggle_shop()
 				get_viewport().set_input_as_handled()
+
+func _on_mobile_interact() -> void:
+	"""Handle mobile interact button press"""
+	if player_in_range and InteractionManager.is_active_interactable(self):
+		if not shop_ui or not shop_ui.visible:
+			toggle_shop()
 
 func load_shop_data() -> void:
 	# Load weapons with validation
