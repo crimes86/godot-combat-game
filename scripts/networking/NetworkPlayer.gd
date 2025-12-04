@@ -192,10 +192,17 @@ func request_damage(target_id: int, amount: int, attacker_id: int):
 		push_warning("Anti-cheat: Player %d tried to spoof damage as player %d" % [actual_sender, attacker_id])
 		attacker_id = actual_sender  # Use real sender ID
 
-	# SECURITY: Validate damage amount (prevent one-shot kills)
-	if amount <= 0 or amount > 500:
-		push_warning("Anti-cheat: Invalid PvP damage amount %d from player %d" % [amount, attacker_id])
-		amount = clampi(amount, 1, 500)
+	# SECURITY: Validate sender is authenticated
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if network_manager and not network_manager.is_player_authenticated(actual_sender):
+		push_warning("Anti-cheat: Unauthenticated peer %d tried to deal damage" % actual_sender)
+		return
+
+	# SECURITY: Validate damage amount against player's actual stats
+	var max_damage = _get_max_pvp_damage(attacker_id)
+	if amount <= 0 or amount > max_damage:
+		push_warning("Anti-cheat: Invalid PvP damage amount %d from player %d (max expected: %d)" % [amount, attacker_id, max_damage])
+		amount = clampi(amount, 1, max_damage)
 
 	# Server-side i-frame validation: check if target is dashing
 	if sync_is_dashing and target_id == player_id:
@@ -243,6 +250,20 @@ func request_respawn():
 @rpc("any_peer", "call_local", "reliable")
 func server_respawn_player(respawn_player_id: int):
 	if not multiplayer.is_server():
+		return
+
+	# SECURITY: Validate sender is requesting their own respawn
+	var actual_sender = multiplayer.get_remote_sender_id()
+	if actual_sender == 0:
+		actual_sender = 1  # Server's peer ID
+	if respawn_player_id != actual_sender:
+		push_warning("Anti-cheat: Player %d tried to respawn player %d" % [actual_sender, respawn_player_id])
+		return
+
+	# SECURITY: Validate sender is authenticated
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if network_manager and not network_manager.is_player_authenticated(actual_sender):
+		push_warning("Anti-cheat: Unauthenticated peer %d tried to respawn" % actual_sender)
 		return
 
 	# Find a spawn point
@@ -349,3 +370,23 @@ func _show_remote_dash_effects():
 		var tween = afterimage.create_tween()
 		tween.tween_property(afterimage, "modulate:a", 0.0, 0.15)
 		tween.tween_callback(afterimage.queue_free)
+
+func _get_max_pvp_damage(attacker_peer_id: int) -> int:
+	"""Get maximum expected PvP damage for a player based on their actual stats."""
+	var base_damage: float = 15.0  # Default base damage
+
+	# Try to find the attacking player's actual damage stat
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player in players:
+		var player_peer_id = 1
+		if player.has_method("get_multiplayer_authority"):
+			player_peer_id = player.get_multiplayer_authority()
+
+		if player_peer_id == attacker_peer_id:
+			if player.get("attack_damage") != null:
+				base_damage = player.attack_damage
+			break
+
+	# Add buffer for weapon variance, combo multipliers, etc.
+	# Max realistic damage with best gear and max combo is ~150-200 base * 2x combo = 400
+	return int(maxf(base_damage * 3.0, 200.0))  # 3x multiplier minimum 200

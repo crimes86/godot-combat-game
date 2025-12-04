@@ -21,6 +21,7 @@ var lod_update_timer: float = 0.0
 const LOD_UPDATE_INTERVAL: float = 0.5  # Check LOD every 0.5s
 const LOD_NEAR_DISTANCE: float = 1200.0  # Full detail within this range
 const LOD_FAR_DISTANCE: float = 2500.0  # Minimal detail beyond this range
+const LOOT_BODY_UI_SCENE: PackedScene = preload("res://scenes/ui/loot_body_ui.tscn")
 
 # Performance: cache player reference (set once at ready, not refreshed every second)
 var cached_player: Node = null
@@ -1877,13 +1878,8 @@ func _create_loot_ui_fallback() -> void:
 	This handles edge cases where enemies die before signal connection happens."""
 	var nearby_corpses = get_nearby_corpses(CorpseState.AOE_LOOT_RADIUS)
 
-	# Load and create loot UI
-	var loot_scene = load("res://scenes/ui/loot_body_ui.tscn")
-	if not loot_scene:
-		push_error("Failed to load loot UI scene")
-		return
-
-	var loot_ui = loot_scene.instantiate()
+	# Create loot UI from preloaded scene
+	var loot_ui = LOOT_BODY_UI_SCENE.instantiate()
 	if not loot_ui:
 		push_error("Failed to instantiate loot UI")
 		return

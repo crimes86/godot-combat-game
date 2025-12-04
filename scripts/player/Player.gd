@@ -870,12 +870,6 @@ func _input(event: InputEvent) -> void:
 				debug_update_timer = 0.0  # Reset timer
 				update_debug_visualization()  # Immediate update
 
-			# KEY_F5 debug level-up disabled for playtesting
-			# KEY_F5:
-			# 	# Add 5 levels
-			# 	CharacterStats.debug_add_levels(5)
-			# 	print("Added 5 levels (now level ", CharacterStats.level, ")")
-
 			KEY_F6 when is_dev_build:
 				# Reset to level 1
 				CharacterStats.reset_character()

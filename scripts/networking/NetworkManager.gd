@@ -56,6 +56,10 @@ var is_authenticated: bool = false  # Client-side: are we authenticated?
 var is_guest: bool = false  # Client-side: are we playing as guest?
 var local_player_data: Dictionary = {}  # Client-side: our player data from server
 
+# Rate limiting for chat messages (server only)
+var _chat_rate_limits: Dictionary = {}  # peer_id -> last_message_time_msec
+const CHAT_RATE_LIMIT_MS: int = 500  # Minimum 500ms between messages
+
 # Server-side: Track client player states for persistence (server only)
 var _client_player_states: Dictionary = {}  # peer_id -> {position, inventory, stats, etc.}
 var _server_save_timer: Timer = null
@@ -240,6 +244,8 @@ func _on_player_disconnected(id: int):
 		authenticated_players.erase(id)
 		if DatabaseManager:
 			DatabaseManager.clear_rate_limit(id)
+		# Clean up chat rate limit tracking
+		_chat_rate_limits.erase(id)
 
 	if connected_players.has(id):
 		connected_players.erase(id)
@@ -264,17 +270,28 @@ func _on_connection_failed():
 
 # RPC Functions
 @rpc("any_peer", "reliable")
-func register_player(id: int, name: String):
+func register_player(_id: int, name: String):
 	if not is_host:
 		return
 
-	connected_players[id] = {
-		"name": name,
-		"ready": false
-	}
+	# SECURITY: Use actual sender ID, not client-provided ID
+	var sender_id = multiplayer.get_remote_sender_id()
 
-	# Update all players
-	rpc("update_player_list", connected_players)
+	# SECURITY: Only authenticated players can update their info
+	if not authenticated_players.has(sender_id):
+		LogManager.warn("register_player rejected: peer %d not authenticated" % sender_id, "security")
+		return
+
+	# Sanitize name
+	name = name.strip_edges()
+	if name.is_empty() or name.length() > 16:
+		return
+
+	# Update only the sender's own entry
+	if connected_players.has(sender_id):
+		connected_players[sender_id].name = name
+		# Update all players
+		rpc("update_player_list", connected_players)
 
 @rpc("authority", "reliable")
 func receive_player_list(players: Dictionary):
@@ -411,22 +428,38 @@ func send_chat_message(message: String) -> void:
 		rpc_id(1, "relay_chat_message", my_name, message)
 
 @rpc("any_peer", "reliable")
-func relay_chat_message(sender_name: String, message: String) -> void:
+func relay_chat_message(_sender_name: String, message: String) -> void:
 	"""Server receives message from client and broadcasts to all"""
 	if not is_host:
 		return
 
 	var sender_id = multiplayer.get_remote_sender_id()
 
-	# Sanitize
+	# SECURITY: Validate sender is authenticated and get their ACTUAL name
+	# Do NOT trust client-sent sender_name (could be spoofed)
+	if not authenticated_players.has(sender_id):
+		LogManager.warn("Chat rejected: peer %d not authenticated" % sender_id, "security")
+		return
+
+	# SECURITY: Rate limit chat messages (prevent spam/flood)
+	var current_time = Time.get_ticks_msec()
+	var last_message_time = _chat_rate_limits.get(sender_id, 0)
+	if current_time - last_message_time < CHAT_RATE_LIMIT_MS:
+		LogManager.debug("Chat rate limited: peer %d (too fast)" % sender_id, "security")
+		return
+	_chat_rate_limits[sender_id] = current_time
+
+	var actual_name = connected_players.get(sender_id, {}).get("name", "Unknown")
+
+	# Sanitize message
 	message = message.strip_edges()
 	if message.is_empty() or message.length() > 200:
 		return
 
-	# Broadcast to all players (including sender)
-	rpc("receive_chat_broadcast", sender_name, message, sender_id)
+	# Broadcast to all players using verified sender name
+	rpc("receive_chat_broadcast", actual_name, message, sender_id)
 	# Emit for host's local UI
-	chat_message_received.emit(sender_name, message, sender_id)
+	chat_message_received.emit(actual_name, message, sender_id)
 
 @rpc("authority", "reliable", "call_remote")
 func receive_chat_broadcast(sender_name: String, message: String, sender_id: int) -> void:
@@ -581,6 +614,23 @@ func handle_register_request(username: String, password_hash: String) -> void:
 		rpc_id(peer_id, "receive_register_response", false, result.error)
 		LogManager.warn("Registration failed for peer %d: %s" % [peer_id, result.error], "network")
 
+func _sanitize_guest_name(raw_name: String) -> String:
+	"""Sanitize guest name: only allow alphanumeric and underscore, limit length"""
+	var sanitized = ""
+	raw_name = raw_name.strip_edges()
+
+	for i in range(mini(raw_name.length(), 16)):
+		var c = raw_name[i]
+		var code = c.unicode_at(0)
+		# Allow A-Z, a-z, 0-9, underscore
+		if (code >= 65 and code <= 90) or (code >= 97 and code <= 122) or (code >= 48 and code <= 57) or code == 95:
+			sanitized += c
+
+	if sanitized.is_empty():
+		sanitized = "Guest_%d" % (randi() % 10000)
+
+	return sanitized
+
 @rpc("any_peer", "reliable")
 func handle_guest_request(guest_name: String) -> void:
 	"""Server handles guest login request"""
@@ -589,10 +639,8 @@ func handle_guest_request(guest_name: String) -> void:
 
 	var peer_id = multiplayer.get_remote_sender_id()
 
-	# Sanitize guest name
-	guest_name = guest_name.strip_edges()
-	if guest_name.is_empty() or guest_name.length() > 16:
-		guest_name = "Guest_%d" % (randi() % 10000)
+	# SECURITY: Sanitize guest name (remove special chars, control chars, etc.)
+	guest_name = _sanitize_guest_name(guest_name)
 
 	# Check for duplicate names among connected players
 	for pid in connected_players:
@@ -788,11 +836,26 @@ func _validate_player_state(state: Dictionary) -> bool:
 		if not state.has(field):
 			return false
 
-	# Sanity checks
+	# Position bounds validation (prevent teleport exploits)
+	const MAX_WORLD_COORD: float = 100000.0
+	var pos_x = state.get("position_x", 0.0)
+	var pos_y = state.get("position_y", 0.0)
+
+	# Check for NaN/INF and reasonable bounds
+	if not is_finite(pos_x) or not is_finite(pos_y):
+		LogManager.warn("Invalid position: NaN/INF detected", "security")
+		return false
+
+	if absf(pos_x) > MAX_WORLD_COORD or absf(pos_y) > MAX_WORLD_COORD:
+		LogManager.warn("Invalid position: out of bounds (%f, %f)" % [pos_x, pos_y], "security")
+		return false
+
+	# Level sanity check
 	var level = state.get("level", 0)
 	if level < 1 or level > 100:
 		return false
 
+	# Gold sanity check
 	var gold = state.get("gold", -1)
 	if gold < 0 or gold > 999999999:
 		return false

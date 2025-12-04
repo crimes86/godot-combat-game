@@ -35,7 +35,8 @@ class_name EnemyAI
 @export var retreat_duration: float = 0.8
 
 ## Avoidance (stop and pick new target when blocked)
-@export var separation_radius: float = 40.0  # Distance to detect blocking enemies
+@export var separation_radius: float = 60.0  # Distance to detect blocking enemies (increased)
+@export var separation_force_strength: float = 100.0  # How strongly skeletons push apart
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE MACHINE
@@ -61,7 +62,13 @@ var state_timer: float = 0.0
 var enemy: CharacterBody2D = null
 var player: CharacterBody2D = null
 var sprite: CanvasItem = null  # ✨ Changed from Sprite2D to support AnimatedSprite2D too
+var anim_sprite: AnimatedSprite2D = null  # Cached AnimatedSprite2D reference
+var health_bar_node: Control = null  # Cached HealthBar reference
 var debug_label: Label = null
+
+# Cached autoload references (set once in _ready)
+var _sound_manager: Node = null
+var _network_enemy_mgr: Node = null
 
 # Patrol state
 var spawn_position: Vector2 = Vector2.ZERO
@@ -84,6 +91,8 @@ const LEASH_COOLDOWN_DURATION: float = 3.0  # 3 second cooldown after leashing
 var last_position: Vector2 = Vector2.ZERO
 var stuck_timer: float = 0.0
 var stuck_check_interval: float = 2.0  # Check every 2 seconds
+var last_velocity_direction: Vector2 = Vector2.ZERO  # Track velocity direction for sliding detection
+var same_direction_timer: float = 0.0  # Track how long we've been sliding same direction
 
 # Attack concurrency prevention
 var is_performing_attack: bool = false
@@ -119,6 +128,10 @@ var ai_update_timer: float = 0.0
 var ai_update_interval: float = 0.1  # Default: update AI every 0.1s instead of 60 FPS
 var debug_update_timer: float = 0.0
 var cached_player: CharacterBody2D = null  # Cache player reference
+var cached_players: Array = []  # Cache all player references (for multiplayer)
+var cached_enemies: Array = []  # Cache nearby enemies for separation calculations
+var cache_refresh_timer: float = 0.0
+const CACHE_REFRESH_INTERVAL: float = 0.5  # Refresh caches every 0.5 seconds
 
 # LOD (Level of Detail) system
 enum LODLevel { FULL, MEDIUM, LOW, PLACEHOLDER, CULLED }
@@ -140,8 +153,16 @@ func _ready() -> void:
 	# Check for "Sprite" first (AnimatedSprite2D), then "Sprite2D" (fallback)
 	if enemy.has_node("Sprite"):
 		sprite = enemy.get_node("Sprite")
+		anim_sprite = sprite as AnimatedSprite2D
 	elif enemy.has_node("Sprite2D"):
 		sprite = enemy.get_node("Sprite2D")
+
+	# Cache HealthBar reference
+	health_bar_node = enemy.get_node_or_null("HealthBar")
+
+	# Cache autoload references
+	_sound_manager = get_node_or_null("/root/SoundManager")
+	_network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 
 	# Wait one frame for node to be fully in scene tree with correct global_position
 	await get_tree().process_frame
@@ -176,11 +197,9 @@ func _ready() -> void:
 
 		# Start in CAMPFIRE_ATTRACTED state - head toward the fire
 		if campfire_target and is_instance_valid(campfire_target):
-			print("💀🔥 Campfire skeleton AI initialized - heading to campfire at %s" % campfire_target.global_position)
 			change_state(State.CAMPFIRE_ATTRACTED)
 		else:
 			# No valid campfire target, just patrol normally
-			print("💀🔥 Campfire skeleton AI - no valid campfire target, patrolling")
 			pick_new_patrol_target()
 			change_state(State.PATROLLING)
 	else:
@@ -199,6 +218,11 @@ func _ready() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 var _initialized: bool = false
+
+func _refresh_caches() -> void:
+	"""Refresh cached player and enemy lists (called periodically, not every frame)"""
+	cached_players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	cached_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 
 func _physics_process(delta: float) -> void:
 	if not enemy or not is_instance_valid(enemy):
@@ -227,25 +251,36 @@ func _physics_process(delta: float) -> void:
 	attack_timer = max(0, attack_timer - delta)
 	leash_cooldown_timer = max(0, leash_cooldown_timer - delta)
 	ai_update_timer += delta
+	cache_refresh_timer += delta
 
-	# Cache player reference (look up once, reuse for 1 second)
+	# Periodically refresh player/enemy caches (not every frame)
+	if cache_refresh_timer >= CACHE_REFRESH_INTERVAL:
+		cache_refresh_timer = 0.0
+		_refresh_caches()
+
+	# Cache player reference (look up once, reuse)
 	if not cached_player or not is_instance_valid(cached_player):
-		cached_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+		if cached_players.size() > 0:
+			cached_player = cached_players[0]
+		else:
+			cached_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 		player = cached_player
 
-	# Calculate distance-based update rate
-	var distance_to_player = 999999.0
+	# Calculate distance-based update rate (using squared distance to avoid sqrt)
+	var distance_sq_to_player = 999999.0 * 999999.0
 	if cached_player and is_instance_valid(cached_player):
-		distance_to_player = enemy.global_position.distance_to(cached_player.global_position)
+		distance_sq_to_player = enemy.global_position.distance_squared_to(cached_player.global_position)
 
 	# ═══════════════════════════════════════════════════════════════
 	# LOD DISABLED - Simplified for debugging
 	# Enemies always run full AI, visibility controlled by Enemy.gd only
 	# ═══════════════════════════════════════════════════════════════
 	# Adjust AI update rate based on distance (performance only, no visibility changes)
-	if is_in_combat or distance_to_player < 500:
+	const NEAR_DISTANCE_SQ = 500.0 * 500.0  # 250000
+	const MED_DISTANCE_SQ = 1500.0 * 1500.0  # 2250000
+	if is_in_combat or distance_sq_to_player < NEAR_DISTANCE_SQ:
 		ai_update_interval = 0.05  # 20 FPS when near or in combat
-	elif distance_to_player < 1500:
+	elif distance_sq_to_player < MED_DISTANCE_SQ:
 		ai_update_interval = 0.15  # 6-7 FPS at medium distance
 	else:
 		ai_update_interval = 0.3   # 3 FPS when far away
@@ -256,12 +291,32 @@ func _physics_process(delta: float) -> void:
 	# Check for stuck (works in PATROLLING and COMBAT, but not while already unstucking)
 	if current_state != State.UNSTUCKING and current_state != State.ATTACKING and current_state != State.RETREATING:
 		stuck_timer += delta
+
+		# Detect Y-axis sliding (moving but only in one direction, not toward target)
+		if enemy.velocity.length() > 10:
+			var current_dir = enemy.velocity.normalized()
+			# Check if we're sliding perpendicular to our intended direction
+			if current_state == State.PATROLLING and patrol_target != Vector2.ZERO:
+				var intended_dir = (patrol_target - enemy.global_position).normalized()
+				var dot = current_dir.dot(intended_dir)
+				# If we're moving mostly perpendicular to target (sliding), count it
+				if abs(dot) < 0.3:
+					same_direction_timer += delta
+					if same_direction_timer > 1.5:  # Sliding for 1.5 seconds
+						# Pick a new target to break out of the slide
+						pick_new_patrol_target()
+						same_direction_timer = 0.0
+				else:
+					same_direction_timer = 0.0
+			last_velocity_direction = current_dir
+		else:
+			same_direction_timer = 0.0
+
 		if stuck_timer >= stuck_check_interval:
 			var distance_moved = enemy.global_position.distance_to(last_position)
 
 			# Check if enemy is in walking animation state (trying to move)
 			var is_walking = false
-			var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
 			if anim_sprite and anim_sprite.animation:
 				is_walking = anim_sprite.animation.begins_with("walk_")
 
@@ -285,6 +340,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		# Reset stuck timer when in states that shouldn't check for stuck
 		stuck_timer = 0.0
+		same_direction_timer = 0.0
 		last_position = enemy.global_position
 
 	# ═══════════════════════════════════════════════════════════════
@@ -344,7 +400,7 @@ func process_patrolling(delta: float) -> void:
 	var aggro_target = player
 	if multiplayer.has_multiplayer_peer():
 		var nearest_distance: float = INF
-		for p in get_tree().get_nodes_in_group(Constants.GROUP_PLAYER):
+		for p in cached_players:
 			if is_instance_valid(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_distance:
@@ -360,14 +416,23 @@ func process_patrolling(delta: float) -> void:
 			trigger_aggro()
 			return
 
+	# Calculate separation force from nearby enemies (always check, even when paused)
+	var separation_force = get_separation_force()
+
 	# Handle patrol pause
 	if is_paused:
 		pause_timer -= delta
 		if pause_timer <= 0:
 			is_paused = false
 			pick_new_patrol_target()
-		enemy.velocity = Vector2.ZERO
-		update_enemy_animation(Vector2.ZERO)
+
+		# Even when paused, apply separation if too close to another skeleton
+		if separation_force.length() > 0.3:
+			enemy.velocity = separation_force * separation_force_strength
+			update_enemy_animation(separation_force)
+		else:
+			enemy.velocity = Vector2.ZERO
+			update_enemy_animation(Vector2.ZERO)
 
 		enemy.move_and_slide()
 		return
@@ -379,66 +444,109 @@ func process_patrolling(delta: float) -> void:
 		# Reached target - pause
 		is_paused = true
 		pause_timer = randf_range(patrol_pause_min, patrol_pause_max)
-		enemy.velocity = Vector2.ZERO
-		update_enemy_animation(Vector2.ZERO)
+		# Still apply separation even when reaching target
+		if separation_force.length() > 0.3:
+			enemy.velocity = separation_force * separation_force_strength
+			update_enemy_animation(separation_force)
+		else:
+			enemy.velocity = Vector2.ZERO
+			update_enemy_animation(Vector2.ZERO)
 	else:
-		# Calculate separation force from nearby enemies (push apart if too close)
-		var separation_force = get_separation_force()
-
 		# Check if another enemy is blocking our path
 		if is_path_blocked_by_enemy():
-			# Pick a new patrol target instead of pushing
+			# Pick a new patrol target instead of pushing through
 			pick_new_patrol_target()
-			enemy.velocity = separation_force * patrol_speed  # Still apply separation
-			update_enemy_animation(separation_force if separation_force.length() > 0.1 else Vector2.ZERO)
+			# Apply separation force while picking new target
+			if separation_force.length() > 0.1:
+				enemy.velocity = separation_force * separation_force_strength
+				update_enemy_animation(separation_force)
+			else:
+				enemy.velocity = Vector2.ZERO
+				update_enemy_animation(Vector2.ZERO)
 		# Check if path would cross lava
 		elif is_path_crossing_lava(enemy.global_position, patrol_target):
 			# Pick a new patrol target to avoid lava
 			pick_new_patrol_target()
-			enemy.velocity = separation_force * patrol_speed
+			enemy.velocity = separation_force * separation_force_strength
 			update_enemy_animation(separation_force if separation_force.length() > 0.1 else Vector2.ZERO)
 		else:
-			# Move toward target with separation
+			# Move toward target with separation - separation takes priority when close
 			var direction = (patrol_target - enemy.global_position).normalized()
-			var combined_direction = (direction + separation_force * 0.5).normalized()
-			enemy.velocity = combined_direction * patrol_speed
-			update_enemy_animation(combined_direction)
+			if separation_force.length() > 0.5:
+				# Strong separation needed - prioritize getting apart
+				var combined_direction = (direction * 0.3 + separation_force * 0.7).normalized()
+				enemy.velocity = combined_direction * patrol_speed
+				update_enemy_animation(combined_direction)
+			else:
+				# Normal patrolling with mild separation
+				var combined_direction = (direction + separation_force * 0.3).normalized()
+				enemy.velocity = combined_direction * patrol_speed
+				update_enemy_animation(combined_direction)
 
 	enemy.move_and_slide()
 
 func pick_new_patrol_target() -> void:
-	"""Pick a random point within patrol_radius of spawn, avoiding lava pools"""
-	var max_attempts = 5
+	"""Pick a random point within patrol_radius of spawn, avoiding lava pools and other enemies"""
+	var max_attempts = 8
+	var best_target = spawn_position
+	var best_min_distance = 0.0
+
 	for _i in range(max_attempts):
 		var angle = randf() * TAU
 		var distance = randf() * patrol_radius
 		var candidate = spawn_position + Vector2(cos(angle), sin(angle)) * distance
 
 		# Check if candidate is inside a lava pool
-		if not is_position_in_lava(candidate):
-			patrol_target = candidate
-			return
+		if is_position_in_lava(candidate):
+			continue
 
-	# Fallback: stay at spawn position if all attempts hit lava
-	patrol_target = spawn_position
+		# Check distance to other enemies' patrol targets to avoid convergence
+		var min_dist_to_others = INF
+		for other_enemy in cached_enemies:
+			if other_enemy == enemy or not is_instance_valid(other_enemy):
+				continue
+			if other_enemy.is_dying or other_enemy.is_corpse:
+				continue
+
+			var other_ai = other_enemy.get_node_or_null("EnemyAI")
+			if other_ai:
+				var dist_to_target = candidate.distance_to(other_ai.patrol_target)
+				var dist_to_enemy = candidate.distance_to(other_enemy.global_position)
+				min_dist_to_others = min(min_dist_to_others, min(dist_to_target, dist_to_enemy))
+
+		# Keep the target that's most spread out from others
+		if min_dist_to_others > best_min_distance:
+			best_min_distance = min_dist_to_others
+			best_target = candidate
+
+	patrol_target = best_target
 
 func is_path_blocked_by_enemy() -> bool:
 	"""Check if another enemy is directly in our path to the patrol target"""
 	var direction_to_target = (patrol_target - enemy.global_position).normalized()
 
-	for other_enemy in get_tree().get_nodes_in_group("enemies"):
+	for other_enemy in cached_enemies:
 		if other_enemy == enemy or not is_instance_valid(other_enemy):
 			continue
 		if other_enemy.is_dying or other_enemy.is_corpse:
 			continue
 
 		var distance = enemy.global_position.distance_to(other_enemy.global_position)
-		if distance < separation_radius:
-			# Check if this enemy is roughly in our path (within 60 degree cone)
+		# Check at larger range for early detection
+		if distance < separation_radius * 1.5:
+			# Check if this enemy is roughly in our path (within 90 degree cone)
 			var direction_to_other = (other_enemy.global_position - enemy.global_position).normalized()
 			var dot = direction_to_target.dot(direction_to_other)
-			if dot > 0.5:  # Within ~60 degree cone ahead
+			if dot > 0.3:  # Within ~70 degree cone ahead (was 0.5/60 degrees)
 				return true
+			# Also check if we're facing each other (collision course)
+			if distance < separation_radius:
+				var other_ai = other_enemy.get_node_or_null("EnemyAI")
+				if other_ai and other_ai.current_state == State.PATROLLING:
+					var other_direction = (other_ai.patrol_target - other_enemy.global_position).normalized()
+					var facing_each_other = direction_to_target.dot(-other_direction) > 0.5
+					if facing_each_other:
+						return true
 
 	return false
 
@@ -446,22 +554,38 @@ func get_separation_force() -> Vector2:
 	"""Calculate a force pushing away from nearby enemies (prevents stacking)"""
 	var force = Vector2.ZERO
 	var overlap_radius = separation_radius * 1.5  # Slightly larger than blocking radius
+	var overlap_radius_sq = overlap_radius * overlap_radius
 
-	for other_enemy in get_tree().get_nodes_in_group("enemies"):
+	for other_enemy in cached_enemies:
 		if other_enemy == enemy or not is_instance_valid(other_enemy):
 			continue
 		if other_enemy.is_dying or other_enemy.is_corpse:
 			continue
 
 		var to_other = other_enemy.global_position - enemy.global_position
-		var distance = to_other.length()
+		var distance_sq = to_other.length_squared()
 
-		if distance < overlap_radius and distance > 0.1:
-			# Push away from the other enemy, stronger when closer
+		# Early out if too far (avoids sqrt for distant enemies)
+		if distance_sq >= overlap_radius_sq:
+			continue
+
+		if distance_sq > 0.01:  # 0.1 squared
+			# Within overlap range - calculate actual distance for strength
+			var distance = sqrt(distance_sq)
 			var strength = 1.0 - (distance / overlap_radius)
+			strength = strength * strength  # Square for aggressive close-range separation
 			force -= to_other.normalized() * strength
+		else:
+			# Nearly on top of each other - push in random direction
+			var random_dir = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
+			force += random_dir * 2.0
 
-	return force.normalized() if force.length() > 0.1 else Vector2.ZERO
+	# Return scaled force (not just normalized) for more aggressive separation
+	var force_len_sq = force.length_squared()
+	if force_len_sq > 0.01:  # 0.1 squared
+		var force_len = sqrt(force_len_sq)
+		return force.normalized() * minf(force_len, 1.5)  # Cap at 1.5x strength
+	return Vector2.ZERO
 
 # ═══════════════════════════════════════════════════════════════════════════
 # COMBAT STATE (Chasing Player)
@@ -473,7 +597,7 @@ func process_combat(delta: float) -> void:
 	if multiplayer.has_multiplayer_peer():
 		var nearest_player: CharacterBody2D = null
 		var nearest_distance: float = INF
-		for p in get_tree().get_nodes_in_group(Constants.GROUP_PLAYER):
+		for p in cached_players:
 			if is_instance_valid(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_distance:
@@ -482,7 +606,6 @@ func process_combat(delta: float) -> void:
 		player = nearest_player
 
 	if not player or not is_instance_valid(player):
-		print("🤖 %s: DISENGAGE - no valid player" % enemy.name)
 		disengage()
 		return
 
@@ -493,7 +616,6 @@ func process_combat(delta: float) -> void:
 		var distance_from_spawn = enemy.global_position.distance_to(original_spawn_position)
 		var guardian_leash_distance = 600.0  # Can't be pulled more than 600px from spawn
 		if distance_from_spawn > guardian_leash_distance:
-			print("🤖 %s: DISENGAGE - guardian too far from spawn (%.0f > %.0f)" % [enemy.name, distance_from_spawn, guardian_leash_distance])
 			disengage()
 			return
 
@@ -502,7 +624,6 @@ func process_combat(delta: float) -> void:
 	if not multiplayer.has_multiplayer_peer():
 		var player_chunk = get_chunk_key(player.global_position)
 		if player_chunk != spawn_chunk:
-			print("🤖 %s: DISENGAGE - player in chunk %s, enemy spawn chunk %s" % [enemy.name, player_chunk, spawn_chunk])
 			disengage()
 			return
 
@@ -531,6 +652,9 @@ func process_combat(delta: float) -> void:
 	if enemy.has_method("get") and enemy.get("in_crit_window"):
 		speed *= 0.4  # 60% slow
 
+	# Get separation force from other enemies (prevent stacking during chase)
+	var separation_force = get_separation_force()
+
 	# Check if next position would be in lava - try to go around
 	var next_pos = enemy.global_position + direction * speed * 0.1  # Look ahead 0.1 seconds
 	if is_position_in_lava(next_pos):
@@ -551,6 +675,11 @@ func process_combat(delta: float) -> void:
 			update_enemy_animation(Vector2.ZERO)
 			enemy.move_and_slide()
 			return
+
+	# Apply separation force during combat (prevents stacking on player)
+	if separation_force.length() > 0.3:
+		# Blend chase direction with separation (separation less important during chase)
+		direction = (direction * 0.7 + separation_force * 0.3).normalized()
 
 	enemy.velocity = direction * speed
 	update_enemy_animation(direction)
@@ -575,7 +704,7 @@ func process_attacking(delta: float) -> void:
 	if multiplayer.has_multiplayer_peer():
 		var nearest_player: CharacterBody2D = null
 		var nearest_distance: float = INF
-		for p in get_tree().get_nodes_in_group(Constants.GROUP_PLAYER):
+		for p in cached_players:
 			if is_instance_valid(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_distance:
@@ -606,7 +735,6 @@ func process_attacking(delta: float) -> void:
 	enemy.velocity = Vector2.ZERO
 
 	# ✨ FIX: Don't override attack animation if it's playing
-	var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
 	var is_playing_attack = false
 	if anim_sprite:
 		is_playing_attack = anim_sprite.animation.begins_with("attack_") and anim_sprite.is_playing()
@@ -716,7 +844,7 @@ func process_campfire_attracted(delta: float) -> void:
 	var aggro_target = player
 	if multiplayer.has_multiplayer_peer():
 		var nearest_distance: float = INF
-		for p in get_tree().get_nodes_in_group(Constants.GROUP_PLAYER):
+		for p in cached_players:
 			if is_instance_valid(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_distance:
@@ -788,12 +916,10 @@ func perform_attack() -> void:
 	is_performing_attack = true
 
 	# Play attack sound (sound manager handles preventing overlap)
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_skeleton_attack_sound(enemy.global_position, -10.0)
+	if _sound_manager:
+		_sound_manager.play_skeleton_attack_sound(enemy.global_position, -10.0)
 
 	# Play attack animation
-	var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
 	if anim_sprite and anim_sprite.sprite_frames:
 		# Determine direction to player
 		var direction = (player.global_position - enemy.global_position).normalized()
@@ -846,9 +972,8 @@ func perform_attack() -> void:
 		elif player.has_meta("peer_id"):
 			target_peer_id = player.get_meta("peer_id")
 
-		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-		if network_enemy_mgr:
-			network_enemy_mgr.deal_damage_to_player(target_peer_id, damage)
+		if _network_enemy_mgr:
+			_network_enemy_mgr.deal_damage_to_player(target_peer_id, damage)
 		else:
 			# Fallback: direct damage (only works for local player)
 			if player.has_method("take_damage"):
@@ -858,22 +983,25 @@ func perform_attack() -> void:
 		if player.has_method("take_damage"):
 			player.take_damage(damage)
 
-	# ✨ FIX: Enhanced visual feedback for attack
+	# ✨ FIX: Enhanced visual feedback for attack (single tween for performance)
 	if is_instance_valid(enemy):
 		var original_scale = enemy.scale
 		var tween = enemy.create_tween()
-		tween.set_parallel(false)  # Sequential animations
 
-		# Bigger scale pulse (30% instead of 15%)
+		# Scale pulse and rotation shake run in parallel
+		tween.set_parallel(true)
+
+		# Scale track: pulse to 1.3x then back
 		tween.tween_property(enemy, "scale", original_scale * 1.3, 0.1)
-		tween.tween_property(enemy, "scale", original_scale, 0.15)
 
-		# Shake/wobble effect
-		var rot_tween = enemy.create_tween()
-		rot_tween.set_parallel(false)
-		rot_tween.tween_property(enemy, "rotation_degrees", -8, 0.05)
-		rot_tween.tween_property(enemy, "rotation_degrees", 8, 0.05)
-		rot_tween.tween_property(enemy, "rotation_degrees", 0, 0.05)
+		# Rotation track: quick shake (-8, +8, 0) - chain with set_parallel(false) for rotation sequence
+		tween.chain().set_parallel(false)
+		tween.tween_property(enemy, "rotation_degrees", -8, 0.05)
+		tween.tween_property(enemy, "rotation_degrees", 8, 0.05)
+		tween.tween_property(enemy, "rotation_degrees", 0, 0.05)
+
+		# Scale back to original (after initial scale up)
+		tween.parallel().tween_property(enemy, "scale", original_scale, 0.15).set_delay(0.1)
 
 	# Reset attack flag (allow next attack)
 	is_performing_attack = false
@@ -890,9 +1018,8 @@ func trigger_aggro() -> void:
 	is_in_combat = true
 
 	# Play aggro sound (sound manager handles preventing overlap)
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_skeleton_aggro_sound(enemy.global_position, -10.0)
+	if _sound_manager:
+		_sound_manager.play_skeleton_aggro_sound(enemy.global_position, -10.0)
 
 	# Chain aggro - alert nearby allies!
 	trigger_chain_aggro()
@@ -903,13 +1030,12 @@ func trigger_aggro() -> void:
 
 func trigger_chain_aggro() -> void:
 	"""Alert nearby enemies to join the fight (creates trains!)"""
-	# Simple proximity check - get enemies within range
-	var nearby_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+	# Use cached enemies for proximity check
 	var checked = 0
 	var my_pos = enemy.global_position
 	var range_squared = chain_aggro_range * chain_aggro_range
 
-	for other_enemy in nearby_enemies:
+	for other_enemy in cached_enemies:
 		if not is_instance_valid(other_enemy) or other_enemy == enemy:
 			continue
 
@@ -929,17 +1055,10 @@ func trigger_chain_aggro() -> void:
 # EVENT HANDLERS
 # ═══════════════════════════════════════════════════════════════════════════
 
-func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
+func _on_enemy_damaged(_damage: float, is_crit: bool) -> void:
 	"""Called when enemy takes damage - this triggers combat!"""
-	print("🤖 EnemyAI._on_enemy_damaged: %s took %.1f damage, is_in_combat=%s, state=%s" % [
-		enemy.name, damage, is_in_combat, State.keys()[current_state]
-	])
-
-	# CRITICAL: This is how we enter combat (player attacked us)
-	print("🤖 EnemyAI: %s (instance=%d) checking combat, is_in_combat=%s" % [enemy.name, get_instance_id(), is_in_combat])
 	if not is_in_combat:
 		is_in_combat = true
-		print("🤖 EnemyAI: %s entering combat! is_in_combat now = %s" % [enemy.name, is_in_combat])
 
 		# Chain aggro - alert nearby allies when attacked!
 		trigger_chain_aggro()
@@ -947,7 +1066,6 @@ func _on_enemy_damaged(damage: float, is_crit: bool) -> void:
 		# Enter combat immediately - from ANY non-combat state
 		if current_state != State.COMBAT and current_state != State.ATTACKING:
 			change_state(State.COMBAT)
-			print("🤖 EnemyAI: %s changed to COMBAT state" % enemy.name)
 	# Already in combat - chance to retreat
 	elif current_state != State.RETREATING:
 		# Don't retreat during crit window - stand and fight!
@@ -982,9 +1100,8 @@ func disengage() -> void:
 
 			# Update health bar if it exists
 			if enemy.has_node("HealthBar"):
-				var health_bar = enemy.get_node("HealthBar")
-				if health_bar.has_method("update_health"):
-					health_bar.update_health(max_hp, max_hp)
+				if health_bar_node and health_bar_node.has_method("update_health"):
+					health_bar_node.update_health(max_hp, max_hp)
 		else:
 			push_error("❌ Cannot reset enemy health - invalid max_health: %s" % str(max_hp))
 
@@ -1060,9 +1177,8 @@ func disengage_to_spawn() -> void:
 
 			# Update health bar if it exists
 			if enemy.has_node("HealthBar"):
-				var health_bar = enemy.get_node("HealthBar")
-				if health_bar.has_method("update_health"):
-					health_bar.update_health(max_hp, max_hp)
+				if health_bar_node and health_bar_node.has_method("update_health"):
+					health_bar_node.update_health(max_hp, max_hp)
 		else:
 			push_error("❌ Cannot reset enemy health - invalid max_health: %s" % str(max_hp))
 
@@ -1088,7 +1204,6 @@ func get_state_name_for_state(state: State) -> String:
 
 func update_enemy_animation(velocity: Vector2) -> void:
 	"""Update enemy animation based on movement"""
-	var anim_sprite = enemy.get_node_or_null("Sprite") as AnimatedSprite2D
 	if not anim_sprite or not anim_sprite.sprite_frames:
 		return
 	
@@ -1194,9 +1309,8 @@ func play_enemy_footstep() -> void:
 	if distance <= 400.0:
 		# Check if this is the closest skeleton
 		var closest_distance = distance
-		var all_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 
-		for other_enemy in all_enemies:
+		for other_enemy in cached_enemies:
 			if other_enemy == enemy or not is_instance_valid(other_enemy):
 				continue
 
@@ -1207,9 +1321,8 @@ func play_enemy_footstep() -> void:
 
 		# Only play sound if this is the closest skeleton
 		if closest_distance == distance:
-			var sound_manager = get_node_or_null("/root/SoundManager")
-			if sound_manager:
-				sound_manager.play_skeleton_footstep(enemy.global_position, camera_pos)
+			if _sound_manager:
+				_sound_manager.play_skeleton_footstep(enemy.global_position, camera_pos)
 
 	# Only spawn dust if within visual range (1000px)
 	if distance < 1000.0:

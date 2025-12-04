@@ -709,32 +709,6 @@ func has_achievement(achievement_id: String) -> bool:
 # DEBUG / TESTING
 # ============================================
 
-func debug_add_levels(count: int) -> void:
-	"""Add levels instantly for testing (without XP penalties)"""
-	for i in range(count):
-		# Check if we're at max level
-		if level >= Constants.MAX_LEVEL:
-			print("⚠️  Cannot add more levels - MAX LEVEL ", Constants.MAX_LEVEL, " reached!")
-			return
-
-		# Grant enough XP to level up cleanly (prevents negative XP)
-		var xp_needed = experience_to_next_level - experience
-		if xp_needed > 0:
-			experience += xp_needed
-		level_up_character()
-
-func debug_set_level(target_level: int) -> void:
-	"""Set character to specific level"""
-	# Clamp target level to max
-	var clamped_level = min(target_level, Constants.MAX_LEVEL)
-	if target_level > Constants.MAX_LEVEL:
-		print("⚠️  Target level ", target_level, " exceeds MAX_LEVEL ", Constants.MAX_LEVEL)
-		print("   Setting to MAX_LEVEL instead")
-
-	reset_character()
-	while level < clamped_level:
-		level_up_character()
-
 func debug_fix_negative_xp() -> void:
 	"""Fix negative XP from old debug leveling"""
 	if experience < 0:

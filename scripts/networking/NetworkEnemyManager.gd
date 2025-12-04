@@ -45,6 +45,77 @@ const MAX_TIMEOUT_MS: int = 60000  # Max timeout (60 seconds)
 var tutorial_dummy_hits: Dictionary = {}  # Dictionary[int, int] - peer_id -> hit_count
 const TUTORIAL_FORCE_CRIT_HITS: int = 5  # Force crit after this many hits on dummy during tutorial
 
+# Valid item rarities and types for validation
+const VALID_RARITIES: Array = ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
+const VALID_ITEM_TYPES: Array = ["weapon", "armor", "consumable", "material", "bone", "key_item", "misc"]
+
+func _validate_loot_item(item: Dictionary) -> Dictionary:
+	"""Validate and sanitize a loot item. Returns empty dict if invalid."""
+	if not item is Dictionary:
+		return {}
+
+	# Required fields
+	var name = item.get("name", "")
+	if not name is String or name.is_empty() or name.length() > 64:
+		LogManager.warn("Invalid item: missing or invalid name", "security")
+		return {}
+
+	var type = item.get("type", "misc")
+	if not type is String or type not in VALID_ITEM_TYPES:
+		type = "misc"
+
+	# Sanitize and validate item
+	var sanitized: Dictionary = {
+		"name": name.strip_edges().substr(0, 64),
+		"type": type
+	}
+
+	# Optional fields with validation
+	var rarity = item.get("rarity", "Common")
+	if rarity is String and rarity in VALID_RARITIES:
+		sanitized["rarity"] = rarity
+	else:
+		sanitized["rarity"] = "Common"
+
+	# Numeric fields with clamping
+	if item.has("damage"):
+		var damage = item.get("damage", 0)
+		if damage is float or damage is int:
+			sanitized["damage"] = clampi(int(damage), 0, 9999)
+
+	if item.has("defense"):
+		var defense = item.get("defense", 0)
+		if defense is float or defense is int:
+			sanitized["defense"] = clampi(int(defense), 0, 9999)
+
+	if item.has("value"):
+		var value = item.get("value", 0)
+		if value is float or value is int:
+			sanitized["value"] = clampi(int(value), 0, 999999)
+
+	if item.has("quantity"):
+		var quantity = item.get("quantity", 1)
+		if quantity is float or quantity is int:
+			sanitized["quantity"] = clampi(int(quantity), 1, 999)
+
+	# Copy through other safe fields
+	for key in ["description", "sprite_path", "weapon_type", "slot"]:
+		if item.has(key) and item[key] is String:
+			sanitized[key] = item[key].substr(0, 256)
+
+	return sanitized
+
+func _validate_loot_array(items: Array) -> Array:
+	"""Validate and sanitize an array of loot items."""
+	var validated: Array = []
+	for item in items:
+		var valid_item = _validate_loot_item(item)
+		if not valid_item.is_empty():
+			validated.append(valid_item)
+		if validated.size() >= 20:  # Max 20 items from one enemy
+			break
+	return validated
+
 func _ready():
 	# Will be initialized by game_world
 	# Listen for peer connections to sync existing enemies and cleanup on disconnect
@@ -586,12 +657,13 @@ func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_json: String
 
 	var is_server = multiplayer.is_server()
 
-	# Deserialize loot items from JSON string
+	# Deserialize and validate loot items from JSON string
 	var loot_items: Array = []
 	if loot_json.length() > 0:
 		var parsed = JSON.parse_string(loot_json)
 		if parsed is Array:
-			loot_items = parsed
+			# SECURITY: Validate all loot items before using
+			loot_items = _validate_loot_array(parsed)
 		else:
 			LogManager.warn("Failed to parse loot JSON: %s" % loot_json, "loot")
 
@@ -1317,12 +1389,15 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 		LogManager.debug("_client_item_looted: Enemy not found or invalid", "loot")
 		return
 
-	# Deserialize item from JSON
+	# Deserialize and validate item from JSON
 	var item: Dictionary = {}
 	if item_json.length() > 0:
 		var parsed = JSON.parse_string(item_json)
 		if parsed is Dictionary:
-			item = parsed
+			item = _validate_loot_item(parsed)
+			if item.is_empty():
+				LogManager.warn("Invalid item data rejected in _client_item_looted", "security")
+				return
 		else:
 			LogManager.warn("Failed to parse item JSON: %s" % item_json, "loot")
 			return

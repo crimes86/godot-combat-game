@@ -618,10 +618,11 @@ func request_pvp_damage(target_id: int, damage: int) -> void:
 		print("[PvP] Damage rejected: target %d is not attacker's opponent %d" % [target_id, opponent_id])
 		return
 
-	# Validate damage amount
-	if damage <= 0 or damage > 500:
-		push_warning("Anti-cheat: Invalid PvP damage %d from player %d" % [damage, attacker_id])
-		damage = clampi(damage, 1, 500)
+	# Validate damage amount against player's actual stats
+	var max_damage = _get_max_pvp_damage(attacker_id)
+	if damage <= 0 or damage > max_damage:
+		push_warning("Anti-cheat: Invalid PvP damage %d from player %d (max expected: %d)" % [damage, attacker_id, max_damage])
+		damage = clampi(damage, 1, max_damage)
 
 	# Check if target is dashing (i-frames)
 	var target_player = _get_player_node(target_id)
@@ -650,3 +651,20 @@ func apply_pvp_damage(target_id: int, damage: int, attacker_id: int) -> void:
 	if my_id == target_id and target_player.has_method("take_damage"):
 		target_player.take_damage(damage, "player", attacker_id)
 		print("[PvP] Applied %d damage to self from player %d" % [damage, attacker_id])
+
+# ============================================
+# DAMAGE VALIDATION HELPERS
+# ============================================
+
+func _get_max_pvp_damage(attacker_peer_id: int) -> int:
+	"""Get maximum expected PvP damage for a player based on their actual stats."""
+	var base_damage: float = 15.0  # Default base damage
+
+	# Try to find the attacking player's actual damage stat
+	var attacker = _get_player_node(attacker_peer_id)
+	if attacker and attacker.get("attack_damage") != null:
+		base_damage = attacker.attack_damage
+
+	# Add buffer for weapon variance, combo multipliers, etc.
+	# Max realistic damage with best gear and max combo is ~150-200 base * 2x combo = 400
+	return int(maxf(base_damage * 3.0, 200.0))  # 3x multiplier minimum 200
