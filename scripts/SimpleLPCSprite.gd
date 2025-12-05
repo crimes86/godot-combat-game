@@ -43,6 +43,7 @@ var hair_sprite: AnimatedSprite2D = null
 
 # Weapon layer (optional)
 var weapon_sprite: AnimatedSprite2D = null
+var current_weapon_type: String = "sword"  # Track weapon type for offset calculations
 
 # Frame sync - ensures all layers play at exactly the same frame
 func _process(_delta: float) -> void:
@@ -127,6 +128,7 @@ func setup_lpc_sprite(
 	print("  weapon_walk_tex: ", weapon_walk_tex, " path: ", weapon_walk_tex.resource_path if weapon_walk_tex else "null", " size: ", weapon_walk_tex.get_size() if weapon_walk_tex else "null")
 
 	sprite_frames = SpriteFrames.new()
+	current_weapon_type = weapon_type  # Store for offset calculations
 
 	# ✨ Get weapon-specific slash FPS for ALL body parts to sync animations
 	var slash_fps = WeaponAnimationDataFactory.get_slash_fps(weapon_type)
@@ -636,22 +638,26 @@ func play_lpc_animation(anim_name: String, direction: String):
 			# When facing north (up), draw weapon behind character
 			weapon_sprite.z_index = -1 if direction == "north" else 9
 
-			# Adjust offset based on animation type
-			# Slash animations (192x192) need to be pulled closer to center based on direction
+			# Adjust offset based on animation type and weapon
+			# Oversize weapons (192x192 like staff) need offsets, standard weapons (64x64) don't
 			if anim_name == "slash":
-				# Direction-specific offsets to pull weapon toward player body
 				var slash_offset = Vector2(0, 0)
-				match direction:
-					"east":  # facing right
-						slash_offset = Vector2(-10, 5)
-					"west":  # facing left
-						slash_offset = Vector2(10, 5)
-					"north":  # facing up
-						slash_offset = Vector2(-10, 0)
-					"south":  # facing down
-						slash_offset = Vector2(-5, 5)
+
+				# Only apply offsets for oversize weapons (staff uses 192x192 tiles)
+				if current_weapon_type == "staff":
+					match direction:
+						"east":  # facing right
+							slash_offset = Vector2(-10, 5)
+						"west":  # facing left
+							slash_offset = Vector2(10, 5)
+						"north":  # facing up
+							slash_offset = Vector2(-10, 0)
+						"south":  # facing down
+							slash_offset = Vector2(-5, 5)
+				# Spear and other standard 64x64 weapons use no offset
+
 				weapon_sprite.offset = slash_offset
-				print("  ✅ Weapon playing slash: %s (visible=%s, z=%d, offset=%s)" % [anim_key, weapon_sprite.visible, weapon_sprite.z_index, weapon_sprite.offset])
+				print("  ✅ Weapon playing slash: %s (visible=%s, z=%d, offset=%s, type=%s)" % [anim_key, weapon_sprite.visible, weapon_sprite.z_index, weapon_sprite.offset, current_weapon_type])
 			else:
 				# Walk/idle animations - weapon sprites should align with character
 				weapon_sprite.offset = Vector2(0, 0)

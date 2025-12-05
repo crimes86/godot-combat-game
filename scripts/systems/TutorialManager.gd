@@ -244,16 +244,14 @@ func show_movement_tutorial() -> void:
 	# Show big WASD keys on screen
 	create_wasd_display()
 
-	prompt_label.text = "Use WASD to move around!"
-	prompt_label.visible = true
+	set_prompt_text("Use WASD to move around!")
 
 func show_find_dummy_tutorial() -> void:
 	"""Step 2: Guide to training dummy"""
 	clear_prompt()
 	clear_key_prompts()
 
-	prompt_label.text = "Walk to the Training Dummy!"
-	prompt_label.visible = true
+	set_prompt_text("Walk to the Training Dummy!")
 
 	# Show arrow pointing to dummy
 	show_arrow_to_target(get_training_dummy_position())
@@ -263,8 +261,7 @@ func show_attack_dummy_tutorial() -> void:
 	clear_prompt()
 	clear_arrow()
 
-	prompt_label.text = "Aim ON your enemies and LEFT-CLICK to ATTACK!"
-	prompt_label.visible = true
+	set_prompt_text("Aim ON your enemies and LEFT-CLICK to ATTACK!")
 
 	# Make the prompt flash slowly
 	start_prompt_flash()
@@ -281,8 +278,7 @@ func show_crit_window_tutorial() -> void:
 
 	# Show progress toward 3 weakpoints
 	var progress_text = "(%d/%d) " % [weakpoints_destroyed, REQUIRED_WEAKPOINTS]
-	prompt_label.text = progress_text + "Keep attacking! Watch for it to GLOW..."
-	prompt_label.visible = true
+	set_prompt_text(progress_text + "Keep attacking! Watch for it to GLOW...")
 
 	# Keep showing click indicator and feedback
 	show_click_indicator()
@@ -295,9 +291,7 @@ func show_weakpoint_tutorial() -> void:
 
 	# Show which weakpoint this is
 	var next_weakpoint = weakpoints_destroyed + 1
-	prompt_label.text = "DESTROY THE WEAKPOINT! (%d/%d)" % [next_weakpoint, REQUIRED_WEAKPOINTS]
-	prompt_label.add_theme_color_override("font_color", HIGHLIGHT_COLOR)
-	prompt_label.visible = true
+	set_prompt_text("DESTROY THE WEAKPOINT! (%d/%d)" % [next_weakpoint, REQUIRED_WEAKPOINTS], HIGHLIGHT_COLOR)
 
 	# Show arrow pointing to dummy (where weakpoint is)
 	show_arrow_to_target(get_training_dummy_position())
@@ -307,10 +301,8 @@ func show_kill_skeleton_tutorial() -> void:
 	clear_prompt()
 	clear_click_indicator()  # Explicitly clear click indicator from attack steps
 	clear_feedback_label()   # Clear any remaining feedback
-	prompt_label.add_theme_color_override("font_color", TEXT_COLOR)
 
-	prompt_label.text = "Now find and defeat a Skeleton!"
-	prompt_label.visible = true
+	set_prompt_text("Now find and defeat a Skeleton!")
 
 	# Show arrow to nearest skeleton
 	show_arrow_to_target(get_nearest_skeleton_position())
@@ -327,8 +319,7 @@ func show_blacksmith_tutorial() -> void:
 	clear_click_indicator()  # Explicitly clear LEFT CLICK from earlier steps
 	clear_feedback_label()   # Clear any remaining feedback
 
-	prompt_label.text = "Press [F] to talk to the Blacksmith!"
-	prompt_label.visible = true
+	set_prompt_text("Press [F] to talk to the Blacksmith!")
 
 	# Show arrow to blacksmith
 	show_arrow_to_target(get_blacksmith_position())
@@ -354,9 +345,7 @@ func show_accept_quest_tutorial() -> void:
 	if blacksmith and blacksmith.has_method("hide_tutorial_arrow"):
 		blacksmith.hide_tutorial_arrow()
 
-	prompt_label.text = "Accept a quest from the Quests tab!"
-	prompt_label.add_theme_color_override("font_color", HIGHLIGHT_COLOR)
-	prompt_label.visible = true
+	set_prompt_text("Accept a quest from the Quests tab!", HIGHLIGHT_COLOR)
 
 	# Flash the prompt for attention
 	start_prompt_flash()
@@ -375,9 +364,7 @@ func show_completion_message() -> void:
 	waiting_for_quests_tab = false
 	waiting_for_accept_button = false
 
-	prompt_label.text = "Tutorial Complete! Good luck, adventurer!"
-	prompt_label.add_theme_color_override("font_color", SUCCESS_COLOR)
-	prompt_label.visible = true
+	set_prompt_text("Tutorial Complete! Good luck, adventurer!", SUCCESS_COLOR)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STEP COMPLETION CHECKS
@@ -459,8 +446,7 @@ func check_player_needs_healing() -> void:
 func show_healing_hint() -> void:
 	"""Show hint to heal at campfire"""
 	# Update prompt text
-	prompt_label.text = "Heal near the Campfire!"
-	prompt_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4, 1.0))  # Red-ish for urgency
+	set_prompt_text("Heal near the Campfire!", Color(1.0, 0.4, 0.4, 1.0))  # Red-ish for urgency
 
 	# Point arrow to campfire
 	var campfire_pos = Vector2(Constants.CHUNK_SIZE / 2, 0)  # CAMPFIRE_POS
@@ -997,7 +983,7 @@ func on_quests_tab_selected() -> void:
 	waiting_for_accept_button = true
 
 	# Update prompt
-	prompt_label.text = "Click ACCEPT on a quest!"
+	set_prompt_text("Click ACCEPT on a quest!")
 
 	# Move arrow to Accept button (with small delay for tab to render)
 	await get_tree().create_timer(0.2).timeout
@@ -1020,8 +1006,7 @@ func on_shop_opened() -> void:
 		return
 
 	# Show arrow pointing to Quests tab
-	prompt_label.text = "Accept a quest from the Quests tab!"
-	prompt_label.visible = true
+	set_prompt_text("Accept a quest from the Quests tab!")
 	start_prompt_flash()
 	show_ui_arrow_to_quests_tab()
 
@@ -1207,6 +1192,16 @@ func clear_prompt() -> void:
 	stop_prompt_flash()
 	clear_click_indicator()  # Properly kill tween and free node
 
+
+func set_prompt_text(text: String, color: Color = TEXT_COLOR) -> void:
+	"""Safely set prompt label text with null check"""
+	if not prompt_label or not is_instance_valid(prompt_label):
+		return
+	prompt_label.text = text
+	prompt_label.add_theme_color_override("font_color", color)
+	prompt_label.visible = true
+
+
 func cleanup_tutorial_ui() -> void:
 	"""Remove all tutorial UI"""
 	clear_ui_arrow()
@@ -1218,6 +1213,7 @@ func cleanup_tutorial_ui() -> void:
 	if tutorial_ui and is_instance_valid(tutorial_ui):
 		tutorial_ui.queue_free()
 		tutorial_ui = null
+		prompt_label = null  # Child of tutorial_ui, now invalid
 
 	if arrow_indicator and is_instance_valid(arrow_indicator):
 		arrow_indicator.queue_free()

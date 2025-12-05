@@ -46,7 +46,7 @@ const WEAPON_DATA = {
 		"range_mult": 1.0  # Standard range (100px)
 	},
 	"spear": {
-		"slash_fps": 55.0,  # Thrusting (6 frames = 0.109s)
+		"slash_fps": 15.0,  # Thrusting (8 frames = 0.53s)
 		"walk_fps": 10.5,
 		"idle_fps": 4.5,
 		"style": "thrusting",
