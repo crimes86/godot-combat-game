@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://corpse_player_001"]
+
+[ext_resource type="Script" path="res://scripts/world/PlayerCorpse.gd" id="1_corpse"]
+
+[node name="PlayerCorpse" type="CharacterBody2D"]
+script = ExtResource("1_corpse")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+visible = false

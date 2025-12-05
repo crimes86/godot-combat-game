@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://corpse_loot_ui_001"]
+
+[ext_resource type="Script" path="res://scripts/ui/PlayerCorpseLootUI.gd" id="1"]
+
+[node name="PlayerCorpseLootUI" type="CanvasLayer"]
+process_mode = 3
+script = ExtResource("1")

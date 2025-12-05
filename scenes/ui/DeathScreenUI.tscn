@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://death_screen_ui_001"]
+
+[ext_resource type="Script" path="res://scripts/ui/DeathScreenUI.gd" id="1"]
+
+[node name="DeathScreenUI" type="CanvasLayer"]
+layer = 100
+process_mode = 3
+script = ExtResource("1")

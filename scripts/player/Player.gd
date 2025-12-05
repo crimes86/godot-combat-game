@@ -2859,8 +2859,9 @@ func die() -> void:
 		return
 
 	is_dead = true
+	var death_position = global_position
 	print("\n💀 ===== PLAYER DEATH =====")
-	print("Position: ", global_position)
+	print("Position: ", death_position)
 	print("Remaining health: ", current_health)
 
 	# Close any open loot UIs on death
@@ -2880,7 +2881,7 @@ func die() -> void:
 
 	# Disable player controls during death
 	set_physics_process(false)
-	
+
 	# ✨ Play death animation (hurt animation) and wait for it to complete
 	var anim_sprite = get_node_or_null("PlayerSprite") as AnimatedSprite2D
 	if anim_sprite and anim_sprite.sprite_frames:
@@ -2888,7 +2889,7 @@ func die() -> void:
 			print("   🎬 Playing death (hurt) animation...")
 			anim_sprite.stop()  # Stop any current animation
 			anim_sprite.play("hurt")
-			
+
 			# Wait for the animation to finish OR timeout after 1 second
 			var timer = get_tree().create_timer(1.0)
 			await anim_sprite.animation_finished
@@ -2901,35 +2902,141 @@ func die() -> void:
 		# Fallback if animation doesn't exist
 		print("   ⚠️ No AnimatedSprite2D or sprite_frames found, waiting 0.5s...")
 		await get_tree().create_timer(0.5).timeout
-	
-	# Deaggro ALL enemies
+
+	# === SPAWN CORPSE WITH ALL LOOT ===
+	var corpse_scene = load("res://scenes/world/PlayerCorpse.tscn")
+	if corpse_scene:
+		var corpse = corpse_scene.instantiate()
+		corpse.initialize(self, death_position)
+		get_tree().current_scene.add_child(corpse)
+		_active_corpses.append(corpse)
+		print("   💀 Spawned player corpse at %s" % death_position)
+
+	# === HIDE PLAYER AND MAKE UNTARGETABLE ===
+	# Hide player sprite so only corpse is visible
+	var char_sprite = get_node_or_null("CharacterSprite")
+	if char_sprite:
+		char_sprite.visible = false
+	# Also hide health bar
+	if health_bar:
+		health_bar.visible = false
+	# Hide attack cone visualizer
+	var cone = get_node_or_null("ConeVisualizer")
+	if cone:
+		cone.visible = false
+	# Cancel combat state (removes red border)
+	is_in_combat = false
+	# Remove from player group so enemies can't target
+	remove_from_group("player")
+	# Disable collision
+	collision_layer = 0
+	collision_mask = 0
+	print("   👻 Player hidden and untargetable")
+
+	# === APPLY XP PENALTY ===
+	var xp_lost = CharacterStats.apply_death_xp_penalty()
+	print("   📉 Lost %d XP" % xp_lost)
+
+	# === DEAGGRO ALL ENEMIES IMMEDIATELY ===
+	# Do this before showing death screen so player doesn't hear attacks
 	var all_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 	for enemy in all_enemies:
 		if enemy.has_node("EnemyAI"):
 			var ai = enemy.get_node("EnemyAI")
 			if ai.has_method("reset_to_patrol"):
 				ai.reset_to_patrol()
-	
+			# Also clear their target directly
+			if "current_target" in ai:
+				ai.current_target = null
 	print("🔄 All enemies deaggroed")
 
+	# === SHOW DEATH SCREEN ===
+	var death_screen = _get_or_create_death_screen()
+	if death_screen:
+		death_screen.show_death_screen(xp_lost, death_position)
+		print("   💀 Death screen shown - waiting for respawn...")
+		await death_screen.respawn_requested
+		print("   ✅ Respawn requested!")
+
+	# === STRIP PLAYER OF EVERYTHING ===
+	# Clear inventory (saved to corpse already)
+	InventorySystem.clear_all()
+
+	# Clear all equipment and reset to default clothes
+	CharacterStats.clear_all_equipment()
+	CharacterStats.reset_equipment_to_default()
+
 	# Reset player position to campfire spawn point (center of chunk 0)
-	global_position = Vector2(Constants.CHUNK_SIZE / 2, 0)
+	global_position = _get_bind_point()
 	velocity = Vector2.ZERO
-	
-	# Restore health (but keep XP, level, stats, weapons)
+
+	# === RESTORE PLAYER VISIBILITY AND TARGETING ===
+	# Re-add to player group so systems can find us
+	if not is_in_group("player"):
+		add_to_group("player")
+	# Restore collision (layer 1 = player)
+	collision_layer = 1
+	collision_mask = 1
+	# Show health bar
+	if health_bar:
+		health_bar.visible = true
+	# Show attack cone visualizer
+	var cone_vis = get_node_or_null("ConeVisualizer")
+	if cone_vis:
+		cone_vis.visible = true
+
+	# Restore health
 	current_health = max_health
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
-	
+
+	# Note: Player visuals will update automatically through CharacterStats signals
+	# when reset_equipment_to_default() equips the starter clothes
+
 	# Re-enable player controls
 	set_physics_process(true)
-	
+
 	# Reset death flag
 	is_dead = false
-	
-	print("✨ Player respawned at origin")
-	print("   Stats preserved: Level %d, XP: %d" % [CharacterStats.level, CharacterStats.experience])
+
+	print("✨ Player respawned at bind point")
+	print("   XP lost: %d (now at %d)" % [xp_lost, CharacterStats.experience])
+	print("   Equipment: Default clothes only")
+	print("   Gold: 0 (on corpse)")
 	print("===== END PLAYER DEATH =====\n")
+
+# Track player's corpses
+var _active_corpses: Array = []
+
+# Death screen reference
+var _death_screen: DeathScreenUI = null
+
+func _get_or_create_death_screen() -> DeathScreenUI:
+	"""Get existing death screen or create a new one"""
+	if _death_screen and is_instance_valid(_death_screen):
+		return _death_screen
+
+	# Check if one already exists in the scene
+	_death_screen = get_tree().root.get_node_or_null("DeathScreenUI") as DeathScreenUI
+	if _death_screen:
+		return _death_screen
+
+	# Create new death screen
+	var death_screen_scene = load("res://scenes/ui/DeathScreenUI.tscn")
+	if death_screen_scene:
+		_death_screen = death_screen_scene.instantiate()
+		get_tree().root.add_child(_death_screen)
+		print("   💀 Created DeathScreenUI")
+		return _death_screen
+
+	push_error("Failed to load DeathScreenUI scene!")
+	return null
+
+func _get_bind_point() -> Vector2:
+	"""Get respawn location - home campfire or default spawn"""
+	# TODO: Check for bound campfire location
+	# For now, default to chunk 0 center (starting area)
+	return Vector2(Constants.CHUNK_SIZE / 2, 0)
 
 func create_character_ui() -> void:
 	"""Create and add character UI to scene tree"""

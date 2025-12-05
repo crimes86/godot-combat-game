@@ -135,7 +135,7 @@ func _process(delta: float) -> void:
 func _equip_starting_clothes() -> void:
 	"""Equip default shirt and pants - minimal value, no stats"""
 	# Default white shirt (chest slot)
-	equipped_armor["chest"] = {
+	var shirt = {
 		"name": "Tattered Shirt",
 		"description": "A worn white shirt. Better than nothing.",
 		"type": "armor",
@@ -148,9 +148,11 @@ func _equip_starting_clothes() -> void:
 		"quantity": 1,
 		"sprite_name": "white_shirt"  # Sprite to use for rendering
 	}
+	equipped_armor["chest"] = shirt
+	armor_equipped.emit("chest", shirt)
 
 	# Default green pants (legs slot)
-	equipped_armor["legs"] = {
+	var pants = {
 		"name": "Tattered Pants",
 		"description": "Worn pants. At least you're not naked.",
 		"type": "armor",
@@ -163,6 +165,8 @@ func _equip_starting_clothes() -> void:
 		"quantity": 1,
 		"sprite_name": "green_pants"  # Sprite to use for rendering
 	}
+	equipped_armor["legs"] = pants
+	armor_equipped.emit("legs", pants)
 
 	print("👕 Equipped starting clothes: Tattered Shirt, Tattered Pants")
 
@@ -529,7 +533,7 @@ func reset_character() -> void:
 	level = Constants.STARTING_LEVEL
 	experience = Constants.STARTING_XP
 	experience_to_next_level = Constants.BASE_XP_REQUIREMENT
-	
+
 	strength = STARTING_STRENGTH
 	agility = STARTING_AGILITY
 	vitality = STARTING_VITALITY
@@ -539,6 +543,112 @@ func reset_character() -> void:
 	equipped_weapon = null
 
 	print("Character reset to level 1 (unarmed)")
+
+# ============================================
+# CORPSE SYSTEM HELPERS
+# ============================================
+
+func get_armor_snapshot() -> Dictionary:
+	"""Get deep copy of all equipped armor for corpse system"""
+	var snapshot = {}
+	for slot in equipped_armor:
+		if equipped_armor[slot]:
+			snapshot[slot] = equipped_armor[slot].duplicate(true)
+		else:
+			snapshot[slot] = null
+	return snapshot
+
+func get_weapon_as_dict() -> Dictionary:
+	"""Convert equipped weapon to dictionary for corpse storage"""
+	if not equipped_weapon:
+		return {}
+
+	var weapon_dict = {
+		"name": equipped_weapon.weapon_name,
+		"description": equipped_weapon.description,
+		"type": "weapon",
+		"slot": "mainhand",
+		"weapon_type": equipped_weapon.weapon_type,
+		"base_damage": equipped_weapon.base_damage,
+		"attack_speed": _speed_bonus_to_category(equipped_weapon.attack_speed_bonus),
+		"attack_speed_bonus": equipped_weapon.attack_speed_bonus,
+		"crit_chance": equipped_weapon.crit_chance_bonus,
+		"crit_chance_bonus": equipped_weapon.crit_chance_bonus,
+		"required_level": equipped_weapon.required_level,
+		"rarity": Weapon.Rarity.keys()[equipped_weapon.rarity],
+		"value": equipped_weapon.sell_value,
+		"can_trade": equipped_weapon.can_trade,
+		"stackable": false,
+		"quantity": 1
+	}
+
+	# Add healing weapon properties if applicable
+	if equipped_weapon.attack_mode != "melee":
+		weapon_dict["attack_mode"] = equipped_weapon.attack_mode
+		weapon_dict["healing_power"] = equipped_weapon.healing_power
+		weapon_dict["heal_radius"] = equipped_weapon.heal_radius
+
+	return weapon_dict
+
+func reset_equipment_to_default() -> void:
+	"""Reset all armor slots to default clothes (death/reset)"""
+	# Clear all slots first
+	for slot in equipped_armor:
+		equipped_armor[slot] = null
+
+	# Clear weapon
+	equipped_weapon = null
+
+	# Re-equip starting clothes
+	_equip_starting_clothes()
+
+	print("🔄 Equipment reset to default clothes")
+
+func clear_all_equipment() -> void:
+	"""Remove all equipment without re-equipping defaults (for corpse snapshot)"""
+	for slot in equipped_armor:
+		if equipped_armor[slot] != null:
+			armor_unequipped.emit(slot, equipped_armor[slot])
+			equipped_armor[slot] = null
+
+	if equipped_weapon:
+		weapon_unequipped.emit()
+		equipped_weapon = null
+
+	# Reset gold
+	gold = 0
+
+	print("💀 All equipment cleared (death)")
+
+func apply_death_xp_penalty() -> int:
+	"""Apply XP penalty on death. Returns amount of XP lost."""
+	const DEATH_XP_PENALTY_PERCENT: float = 0.10  # 10% of current level XP
+
+	# Calculate XP needed for current level range
+	var xp_for_current_level = get_xp_for_level(level)
+	var xp_for_next_level = get_xp_for_level(level + 1)
+	var level_xp_range = xp_for_next_level - xp_for_current_level
+
+	# Calculate penalty (10% of level range)
+	var xp_penalty = int(level_xp_range * DEATH_XP_PENALTY_PERCENT)
+
+	# Apply penalty (can't go below current level threshold)
+	var new_xp = max(xp_for_current_level, experience - xp_penalty)
+	var actual_loss = experience - new_xp
+	experience = new_xp
+
+	print("💀 Death XP penalty: lost %d XP (now at %d)" % [actual_loss, experience])
+	return actual_loss
+
+func get_xp_for_level(target_level: int) -> int:
+	"""Get total XP required to reach a specific level"""
+	if target_level <= 1:
+		return 0
+	# Same formula used in add_experience
+	var total_xp = 0
+	for lvl in range(1, target_level):
+		total_xp += int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, lvl - 1))
+	return total_xp
 
 # ============================================
 # SAVE / LOAD (Database Persistence)

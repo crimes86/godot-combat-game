@@ -181,6 +181,36 @@ func get_gold() -> int:
 	return CharacterStats.gold
 
 # ============================================
+# CORPSE SYSTEM HELPERS
+# ============================================
+
+func get_full_snapshot() -> Array:
+	"""Get deep copy of entire inventory for corpse system"""
+	var snapshot = []
+	for item in inventory_items:
+		if item:
+			snapshot.append(item.duplicate(true))
+		else:
+			snapshot.append(null)
+	return snapshot
+
+func clear_all() -> void:
+	"""Clear entire inventory (death)"""
+	for i in range(inventory_items.size()):
+		inventory_items[i] = null
+
+	# Clear tool slots too
+	equipped_axe = {}
+	equipped_pickaxe = {}
+
+	inventory_changed.emit()
+	print("💀 Inventory cleared (death)")
+
+func has_space() -> bool:
+	"""Check if there's room for at least one more item"""
+	return has_empty_slot()
+
+# ============================================
 # DEBUG
 # ============================================
 

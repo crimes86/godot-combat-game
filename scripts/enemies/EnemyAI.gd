@@ -149,8 +149,17 @@ func _ready() -> void:
 		push_error("EnemyAI must be child of CharacterBody2D!")
 		return
 
-	# Get references IMMEDIATELY (before await)
-	# Check for "Sprite" first (AnimatedSprite2D), then "Sprite2D" (fallback)
+	# Cache autoload references (safe to do immediately)
+	_sound_manager = get_node_or_null("/root/SoundManager")
+	_network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+
+	# Wait one frame for node to be fully in scene tree with correct global_position
+	# AND for Enemy._ready() to finish converting Sprite2D to AnimatedSprite2D
+	await get_tree().process_frame
+
+	# Get sprite references AFTER await (Enemy._ready() has now completed setup)
+	# Note: anim_sprite may still be null here if Enemy._ready() hasn't converted Sprite2D yet
+	# The lazy re-fetch in update_enemy_animation() handles this case
 	if enemy.has_node("Sprite"):
 		sprite = enemy.get_node("Sprite")
 		anim_sprite = sprite as AnimatedSprite2D
@@ -159,13 +168,6 @@ func _ready() -> void:
 
 	# Cache HealthBar reference
 	health_bar_node = enemy.get_node_or_null("HealthBar")
-
-	# Cache autoload references
-	_sound_manager = get_node_or_null("/root/SoundManager")
-	_network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-
-	# Wait one frame for node to be fully in scene tree with correct global_position
-	await get_tree().process_frame
 
 	# Now store spawn position using global_position (which is now valid after await)
 	spawn_position = enemy.global_position
@@ -314,6 +316,11 @@ func _physics_process(delta: float) -> void:
 
 		if stuck_timer >= stuck_check_interval:
 			var distance_moved = enemy.global_position.distance_to(last_position)
+
+			# Lazy re-fetch anim_sprite if needed
+			if not anim_sprite and enemy and is_instance_valid(enemy) and enemy.has_node("Sprite"):
+				sprite = enemy.get_node("Sprite")
+				anim_sprite = sprite as AnimatedSprite2D
 
 			# Check if enemy is in walking animation state (trying to move)
 			var is_walking = false
@@ -734,7 +741,12 @@ func process_attacking(delta: float) -> void:
 	# Stop moving
 	enemy.velocity = Vector2.ZERO
 
-	# ✨ FIX: Don't override attack animation if it's playing
+	# Lazy re-fetch anim_sprite if needed
+	if not anim_sprite and enemy and is_instance_valid(enemy) and enemy.has_node("Sprite"):
+		sprite = enemy.get_node("Sprite")
+		anim_sprite = sprite as AnimatedSprite2D
+
+	# Don't override attack animation if it's playing
 	var is_playing_attack = false
 	if anim_sprite:
 		is_playing_attack = anim_sprite.animation.begins_with("attack_") and anim_sprite.is_playing()
@@ -919,6 +931,12 @@ func perform_attack() -> void:
 	if _sound_manager:
 		_sound_manager.play_skeleton_attack_sound(enemy.global_position, -10.0)
 
+	# Lazy re-fetch anim_sprite if needed
+	if not anim_sprite and enemy and is_instance_valid(enemy):
+		if enemy.has_node("Sprite"):
+			sprite = enemy.get_node("Sprite")
+			anim_sprite = sprite as AnimatedSprite2D
+
 	# Play attack animation
 	if anim_sprite and anim_sprite.sprite_frames:
 		# Determine direction to player
@@ -943,7 +961,7 @@ func perform_attack() -> void:
 		var attack_anim = "attack_" + dir_str
 		if anim_sprite.sprite_frames.has_animation(attack_anim):
 			anim_sprite.play(attack_anim)
-			# ✨ FIX: Don't flip! We have dedicated directional attack animations
+			# Don't flip - we have dedicated directional attack animations
 			anim_sprite.flip_h = false
 
 			# Sync shadow animation
@@ -1204,13 +1222,20 @@ func get_state_name_for_state(state: State) -> String:
 
 func update_enemy_animation(velocity: Vector2) -> void:
 	"""Update enemy animation based on movement"""
+	# Lazy re-fetch: if anim_sprite is null, try to get it from enemy.sprite
+	# This handles timing where EnemyAI._ready() runs before Enemy._ready() converts Sprite2D to AnimatedSprite2D
+	if not anim_sprite and enemy and is_instance_valid(enemy):
+		if enemy.has_node("Sprite"):
+			sprite = enemy.get_node("Sprite")
+			anim_sprite = sprite as AnimatedSprite2D
+
 	if not anim_sprite or not anim_sprite.sprite_frames:
 		return
-	
+
 	# ✨ FIX: Don't interrupt attack animations
 	if anim_sprite.animation.begins_with("attack_") and anim_sprite.is_playing():
 		return
-	
+
 	var is_moving = velocity.length() > 0.1
 
 	# Get direction
@@ -1246,7 +1271,7 @@ func update_enemy_animation(velocity: Vector2) -> void:
 	# Play appropriate animation
 	var prefix = "walk_" if is_moving else "idle_"
 	var anim_name = prefix + dir_str
-	
+
 	if anim_sprite.sprite_frames.has_animation(anim_name):
 		if anim_sprite.animation != anim_name:
 			anim_sprite.play(anim_name)
@@ -1255,17 +1280,15 @@ func update_enemy_animation(velocity: Vector2) -> void:
 			if enemy.shadow_sprite and enemy.shadow_sprite.sprite_frames.has_animation(anim_name):
 				enemy.shadow_sprite.play(anim_name)
 
-		# Play footsteps on walk animations (frames 1, 3, 5, 7 of 9-frame walk cycle)
-		if anim_name.begins_with("walk_"):
-			var current_frame = anim_sprite.frame
-			if current_frame in [1, 3, 5, 7] and current_frame != last_footstep_frame:
-				last_footstep_frame = current_frame
-				play_enemy_footstep()
+	# Play footsteps on walk animations (frames 1, 3, 5, 7 of 9-frame walk cycle)
+	if anim_sprite.animation.begins_with("walk_"):
+		var current_frame = anim_sprite.frame
+		if current_frame in [1, 3, 5, 7] and current_frame != last_footstep_frame:
+			last_footstep_frame = current_frame
+			play_enemy_footstep()
 
-		# ✨ FIX: Don't flip sprites! We have dedicated directional animations.
-		# Each row (up, left, down, right) is pre-drawn facing that direction.
-		# Flipping would make them face the wrong way.
-		anim_sprite.flip_h = false
+	# Don't flip sprites - we have dedicated directional animations
+	anim_sprite.flip_h = false
 
 func update_lod_level(distance: float) -> void:
 	"""Update LOD level based on distance from player"""

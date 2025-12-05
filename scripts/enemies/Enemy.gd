@@ -564,21 +564,23 @@ func create_weapon_sprite(weapon_name: String) -> AnimatedSprite2D:
 	return weapon_sprite
 
 func create_oversize_weapon_animation(sprite_frames: SpriteFrames, img: Image, anim_name: String, row: int, frame_count: int, fps: float, loop: bool = true) -> void:
-	"""Create animation from oversize weapon spritesheet (192x192 frames, scaled to 64x64)"""
+	"""Create animation from oversize weapon spritesheet (192x192 frames)
+
+	LPC oversize weapon sprites are designed to overlay on the character at full size.
+	The weapon swings wide beyond the 64x64 body frame, so we keep 192x192 dimensions.
+	Since both body and weapon sprites use centered=true, they align correctly.
+	"""
 	sprite_frames.add_animation(anim_name)
 	sprite_frames.set_animation_loop(anim_name, loop)
 	sprite_frames.set_animation_speed(anim_name, fps)
 
 	const OVERSIZE_FRAME = 192
-	const TARGET_SIZE = 64
 
 	for i in range(frame_count):
 		var frame_img = Image.create(OVERSIZE_FRAME, OVERSIZE_FRAME, false, Image.FORMAT_RGBA8)
 		frame_img.blit_rect(img, Rect2i(i * OVERSIZE_FRAME, row * OVERSIZE_FRAME, OVERSIZE_FRAME, OVERSIZE_FRAME), Vector2i(0, 0))
 
-		# Scale down to 64x64 to match skeleton size
-		frame_img.resize(TARGET_SIZE, TARGET_SIZE, Image.INTERPOLATE_NEAREST)
-
+		# Keep at 192x192 - LPC oversize weapons are designed to overlay at full size
 		var frame_texture = ImageTexture.create_from_image(frame_img)
 		sprite_frames.add_frame(anim_name, frame_texture)
 

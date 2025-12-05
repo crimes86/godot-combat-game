@@ -547,11 +547,29 @@ func update_animation_for_direction(direction: Vector2) -> void:
 	# Moving - resume animation
 	_is_idle = false
 
-	# Determine facing direction
-	if abs(direction.x) > abs(direction.y):
-		current_direction = "right" if direction.x > 0 else "left"
+	# Determine facing direction with hysteresis to prevent diagonal flickering
+	# Only change direction if the new axis is significantly stronger (30% threshold)
+	var abs_x = abs(direction.x)
+	var abs_y = abs(direction.y)
+	var threshold = 1.3  # 30% stronger to switch
+
+	var new_direction: String
+	var is_currently_horizontal = current_direction in ["left", "right"]
+
+	if is_currently_horizontal:
+		# Currently facing left/right - only switch to up/down if y is significantly larger
+		if abs_y > abs_x * threshold:
+			new_direction = "down" if direction.y > 0 else "up"
+		else:
+			new_direction = "right" if direction.x > 0 else "left"
 	else:
-		current_direction = "down" if direction.y > 0 else "up"
+		# Currently facing up/down - only switch to left/right if x is significantly larger
+		if abs_x > abs_y * threshold:
+			new_direction = "right" if direction.x > 0 else "left"
+		else:
+			new_direction = "down" if direction.y > 0 else "up"
+
+	current_direction = new_direction
 
 	# Set direction (swaps sprite sheet)
 	_set_direction(current_direction)
