@@ -611,6 +611,12 @@ func play_lpc_animation(anim_name: String, direction: String):
 		elif hands_sprite.sprite_frames.has_animation(anim_name):
 			hands_sprite.play(anim_name)
 
+		# Adjust hands z-index: on top of weapon when idle facing east/west
+		if anim_name == "idle" and direction in ["east", "west"]:
+			hands_sprite.z_index = 10  # Above weapon (z=9)
+		else:
+			hands_sprite.z_index = 6  # Default position
+
 	if head_sprite:
 		if head_sprite.sprite_frames.has_animation(anim_key):
 			head_sprite.play(anim_key)
@@ -635,8 +641,15 @@ func play_lpc_animation(anim_name: String, direction: String):
 		if weapon_sprite.sprite_frames.has_animation(anim_key):
 			weapon_sprite.play(anim_key)
 			weapon_sprite.visible = true
-			# When facing north (up), draw weapon behind character
-			weapon_sprite.z_index = -1 if direction == "north" else 9
+			# Adjust weapon z-index based on direction and animation
+			if direction == "north":
+				weapon_sprite.z_index = -1  # Behind character when facing up
+			elif anim_name == "walk" and current_weapon_type == "spear" and direction in ["east", "west"]:
+				weapon_sprite.z_index = -1  # Spear goes under body when walking sideways
+			elif anim_name == "idle" and direction in ["east", "west"]:
+				weapon_sprite.z_index = -1  # Weapon behind hands when idle facing sideways
+			else:
+				weapon_sprite.z_index = 9  # On top normally
 
 			# Adjust offset based on animation type and weapon
 			# Oversize weapons (192x192 like staff) need offsets, standard weapons (64x64) don't
