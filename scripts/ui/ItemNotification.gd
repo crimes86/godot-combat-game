@@ -28,7 +28,7 @@ const RARITY_COLORS = {
 }
 
 func _ready() -> void:
-	# Center alignment
+	# Center alignment for below-player display
 	horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	# Add thick black outline for readability
@@ -110,7 +110,7 @@ func setup_system_message(message: String, msg_type: String) -> void:
 	add_theme_font_size_override("font_size", 18)
 
 func animate() -> void:
-	# Simple smooth pop-in animation
+	# Pop-in animation for below-player notifications
 	var tween = create_tween()
 
 	# Initial state - small and transparent
@@ -118,16 +118,17 @@ func animate() -> void:
 	modulate.a = 0.0
 
 	# Pop in with smooth bounce
-	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.25).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	tween.parallel().tween_property(self, "modulate:a", 1.0, 0.2)
+	tween.set_parallel(true)
+	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.2).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(self, "modulate:a", 1.0, 0.15)
 
 	# Mark animation done after pop-in completes
 	await tween.finished
 	initial_animation_done = true
 
 	# Wait for lifetime, then fade out
-	await get_tree().create_timer(lifetime - 0.5).timeout
+	await get_tree().create_timer(lifetime - 0.4).timeout
 
 	# Fade out smoothly
 	var fade_tween = create_tween()
-	fade_tween.tween_property(self, "modulate:a", 0.0, 0.5).set_ease(Tween.EASE_IN)
+	fade_tween.tween_property(self, "modulate:a", 0.0, 0.4).set_ease(Tween.EASE_IN)

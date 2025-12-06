@@ -173,7 +173,7 @@ func create_torch_light() -> void:
 
 func create_fire_audio() -> void:
 	"""Create very quiet looping fire sound for torch"""
-	var campfire_sound = load("res://assets/sounds/ambient/campfire_loop.wav")
+	var campfire_sound = load("res://assets/audio/sfx/ambient/campfire_loop.wav")
 	if not campfire_sound:
 		return
 

@@ -246,23 +246,52 @@ func cmd_disband() -> String:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _find_player_by_name(target_name: String) -> int:
-	"""Find a player's peer ID by their name."""
-	var network_manager = get_node_or_null("/root/NetworkManager")
-	if not network_manager:
+	"""Find a player's peer ID by their name.
+	Searches scene tree player nodes (same as /players command) for reliability."""
+	var search_lower = target_name.to_lower().strip_edges()
+
+	if search_lower.is_empty():
 		return -1
 
-	target_name = target_name.to_lower().strip_edges()
+	print("🔍 Looking for player: '%s'" % search_lower)
 
-	print("🔍 Looking for player: '%s'" % target_name)
-	print("🔍 Connected players: %s" % str(network_manager.connected_players))
+	var tree = get_tree()
+	if not tree:
+		return -1
 
-	for peer_id in network_manager.connected_players:
-		var player_info = network_manager.connected_players[peer_id]
-		var player_name = player_info.get("name", "").to_lower().strip_edges()
-		print("🔍 Checking peer %d: '%s'" % [peer_id, player_name])
-		if player_name == target_name:
-			return peer_id
+	# Search player nodes in scene tree (matches /players command output)
+	for node in tree.get_nodes_in_group("player"):
+		var health_bar = node.get_node_or_null("HealthBar")
+		if health_bar:
+			var name_label = health_bar.get_node_or_null("NameLabel")
+			if name_label:
+				var node_name = name_label.text.to_lower().strip_edges()
+				print("🔍 Checking player node: '%s' (auth=%d)" % [name_label.text, node.get_multiplayer_authority()])
+				if node_name == search_lower or node_name.begins_with(search_lower):
+					return node.get_multiplayer_authority()
 
+	# Also check "players" group (remote players)
+	for node in tree.get_nodes_in_group("players"):
+		var health_bar = node.get_node_or_null("HealthBar")
+		if health_bar:
+			var name_label = health_bar.get_node_or_null("NameLabel")
+			if name_label:
+				var node_name = name_label.text.to_lower().strip_edges()
+				print("🔍 Checking remote player: '%s' (auth=%d)" % [name_label.text, node.get_multiplayer_authority()])
+				if node_name == search_lower or node_name.begins_with(search_lower):
+					return node.get_multiplayer_authority()
+
+	# Fallback: check connected_players dictionary
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if network_manager:
+		print("🔍 Fallback: checking connected_players: %s" % str(network_manager.connected_players))
+		for peer_id in network_manager.connected_players:
+			var player_info = network_manager.connected_players[peer_id]
+			var player_name = player_info.get("name", "").to_lower().strip_edges()
+			if player_name == search_lower or player_name.begins_with(search_lower):
+				return peer_id
+
+	print("🔍 Player not found!")
 	return -1
 
 func _find_group_member_by_name(target_name: String) -> int:

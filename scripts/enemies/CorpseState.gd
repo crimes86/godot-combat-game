@@ -85,7 +85,7 @@ const GUARDIAN_LOOT_TABLE = [
 		"required_level": 1,
 		"value": 150,
 		"rarity": "Common",
-		"sprite_path": "res://assets/weapons/longsword.png",
+		"sprite_path": "res://assets/equipment/weapons/longsword.png",
 		"drop_weight": 8,  # 8% chance (low drop rate - grind required)
 		"type": "weapon",
 		"slot": "mainhand",  # Required for equipping weapons
@@ -144,7 +144,7 @@ const GUARDIAN_ELITE_LOOT_TABLE = [
 		"required_level": 1,
 		"value": 150,
 		"rarity": "Common",
-		"sprite_path": "res://assets/weapons/longsword.png",
+		"sprite_path": "res://assets/equipment/weapons/longsword.png",
 		"drop_weight": 6,
 		"type": "weapon",
 		"slot": "mainhand",

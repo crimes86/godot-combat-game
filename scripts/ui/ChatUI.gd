@@ -343,10 +343,8 @@ func add_chat_message(sender: String, text: String, is_local: bool = false) -> v
 
 	message_list.add_child(msg_label)
 
-	# Scroll to bottom
-	await get_tree().process_frame
-	if message_container:
-		message_container.scroll_vertical = int(message_container.get_v_scroll_bar().max_value)
+	# Scroll to bottom after layout updates
+	_scroll_to_bottom()
 
 func add_system_message(text: String) -> void:
 	"""Add a system message (server announcements, join/leave, etc.)"""
@@ -362,10 +360,22 @@ func add_system_message(text: String) -> void:
 
 	message_list.add_child(msg_label)
 
-	# Scroll to bottom
+	# Scroll to bottom after layout updates
+	_scroll_to_bottom()
+
+func _scroll_to_bottom() -> void:
+	"""Scroll chat to bottom after layout updates - needs multiple frames for RichTextLabel sizing"""
+	if not message_container:
+		return
+
+	# Wait for two frames to ensure RichTextLabel has finished sizing
 	await get_tree().process_frame
-	if message_container:
-		message_container.scroll_vertical = int(message_container.get_v_scroll_bar().max_value)
+	await get_tree().process_frame
+
+	if is_instance_valid(message_container):
+		var scrollbar = message_container.get_v_scroll_bar()
+		if scrollbar:
+			message_container.scroll_vertical = int(scrollbar.max_value)
 
 # Signal callbacks
 func _on_input_focus_entered() -> void:

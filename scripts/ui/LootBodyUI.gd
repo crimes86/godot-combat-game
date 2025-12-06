@@ -24,6 +24,7 @@ const BORDER_INNER = Color(0.06, 0.06, 0.08, 1.0)
 const BORDER_COLOR = Color(0.35, 0.38, 0.42, 1.0)
 const GRID_COLUMNS = 3  # 3 columns for compact layout
 const MIN_SLOTS = 3  # Always show at least 3 slots
+const LOOT_RANGE = 150.0  # Max distance to loot corpses
 
 func _ready() -> void:
 	print("💀 LootBodyUI initialized")
@@ -65,6 +66,29 @@ func _create_loot_grid() -> void:
 	loot_grid = get_node_or_null("Panel/MarginContainer/VBoxContainer/LootGrid")
 	if loot_grid:
 		loot_grid.columns = GRID_COLUMNS
+
+func _process(_delta: float) -> void:
+	"""Check if player is still in range of corpses"""
+	if not visible:
+		return
+
+	# Get player position
+	var player = get_tree().get_first_node_in_group("player")
+	if not player:
+		return
+
+	# Check if player is in range of any corpse
+	var in_range = false
+	for corpse in corpses_looted:
+		if is_instance_valid(corpse):
+			var distance = player.global_position.distance_to(corpse.global_position)
+			if distance <= LOOT_RANGE:
+				in_range = true
+				break
+
+	# Auto-close if out of range
+	if not in_range:
+		close_ui()
 
 func _input(event: InputEvent) -> void:
 	# Allow ESC to close or F to take all items
@@ -541,6 +565,7 @@ func _on_stacked_loot_slot_input(event: InputEvent, slot: Control) -> void:
 func loot_all_gold(gold_corpses: Array) -> void:
 	"""Loot gold from all corpses in the array via server"""
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var has_peer = multiplayer.has_multiplayer_peer()
 
 	# Request gold loot from server for each corpse
 	# NetworkEnemyManager._client_gold_looted handles notification and sound
@@ -548,7 +573,11 @@ func loot_all_gold(gold_corpses: Array) -> void:
 		if not is_instance_valid(corpse) or corpse.corpse_gold <= 0:
 			continue
 		if network_enemy_mgr and corpse.network_id > 0:
-			network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+			if has_peer:
+				network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+			else:
+				# Single player: call directly
+				network_enemy_mgr.request_loot_gold(corpse.network_id)
 
 	# Check if corpses are empty and refresh
 	for corpse in gold_corpses:
@@ -560,6 +589,7 @@ func loot_all_gold(gold_corpses: Array) -> void:
 func loot_stacked_items(items: Array, corpses: Array) -> void:
 	"""Loot all items in a stack from their respective corpses via server"""
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var has_peer = multiplayer.has_multiplayer_peer()
 
 	# Request each item loot from server
 	# NetworkEnemyManager._client_item_looted handles notification
@@ -573,7 +603,11 @@ func loot_stacked_items(items: Array, corpses: Array) -> void:
 		if network_enemy_mgr and corpse.network_id > 0:
 			var item_index = corpse.corpse_loot.find(item)
 			if item_index >= 0:
-				network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, item_index)
+				if has_peer:
+					network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, item_index)
+				else:
+					# Single player: call directly
+					network_enemy_mgr.request_loot_item(corpse.network_id, item_index)
 
 	# Check if corpses are empty and refresh
 	for corpse in corpses:
@@ -603,11 +637,16 @@ func loot_gold(corpse, gold_amount: int) -> void:
 		return
 
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var has_peer = multiplayer.has_multiplayer_peer()
 
 	# Request gold loot through server
 	# NetworkEnemyManager._client_gold_looted handles notification and sound
 	if network_enemy_mgr and "network_id" in corpse and corpse.network_id > 0:
-		network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+		if has_peer:
+			network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+		else:
+			# Single player: call directly
+			network_enemy_mgr.request_loot_gold(corpse.network_id)
 		# Small delay for server to process before refreshing UI
 		await get_tree().create_timer(0.1).timeout
 		if not is_instance_valid(self):
@@ -698,11 +737,16 @@ func loot_item(corpse, item: Dictionary) -> void:
 		return
 
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var has_peer = multiplayer.has_multiplayer_peer()
 
 	# Request item loot through server
 	# NetworkEnemyManager._client_item_looted handles notification
 	if network_enemy_mgr and corpse.network_id > 0:
-		network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, item_index)
+		if has_peer:
+			network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, item_index)
+		else:
+			# Single player: call directly
+			network_enemy_mgr.request_loot_item(corpse.network_id, item_index)
 		# Server will handle inventory add and broadcast removal
 		# Refresh list after small delay to allow RPC to process
 		await get_tree().create_timer(0.1).timeout
@@ -717,6 +761,7 @@ func _on_take_all_pressed() -> void:
 	var total_gold = 0
 
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+	var has_peer = multiplayer.has_multiplayer_peer()
 
 	# Loot all gold from all corpses via server
 	# NetworkEnemyManager._client_gold_looted handles notification and sound
@@ -726,7 +771,11 @@ func _on_take_all_pressed() -> void:
 		if corpse.corpse_gold > 0:
 			total_gold += corpse.corpse_gold
 			if network_enemy_mgr and corpse.network_id > 0:
-				network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+				if has_peer:
+					network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+				else:
+					# Single player: call directly
+					network_enemy_mgr.request_loot_gold(corpse.network_id)
 
 	if total_gold > 0:
 		print("💰 Looted %d total gold" % total_gold)
@@ -750,7 +799,11 @@ func _on_take_all_pressed() -> void:
 			continue
 
 		if network_enemy_mgr and corpse.network_id > 0:
-			network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, 0)
+			if has_peer:
+				network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, 0)
+			else:
+				# Single player: call directly
+				network_enemy_mgr.request_loot_item(corpse.network_id, 0)
 			looted_count += 1
 			# Small delay to allow server to process and broadcast
 			await get_tree().create_timer(0.15).timeout

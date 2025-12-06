@@ -672,8 +672,10 @@ func die() -> void:
 		if player and player.has_method("gain_experience"):
 			player.gain_experience(xp_reward)
 			print("🐺 Wolf killed! Granting %d XP" % xp_reward)
-			if NotificationManager and NotificationManager.has_method("notify_xp_gained"):
-				NotificationManager.notify_xp_gained(xp_reward, "L%d %s" % [enemy_level, get_display_name()])
+			# Show world-space XP text floating up from mob
+			var game_world = get_tree().get_first_node_in_group("game_world")
+			if game_world:
+				CombatText.create_xp(xp_reward, global_position, game_world)
 
 	# Store gold in corpse
 	if corpse_gold == 0:

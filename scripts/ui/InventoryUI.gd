@@ -806,6 +806,15 @@ func place_campfire(item: Dictionary, slot_index: int) -> void:
 	if campfire.has_method("set_unlit"):
 		campfire.set_unlit(true)
 
+	# Mark as player-placed (allows owner to extinguish with X)
+	if "is_player_placed" in campfire:
+		campfire.is_player_placed = true
+	if "placer_peer_id" in campfire:
+		var peer_id = 1
+		if multiplayer.has_multiplayer_peer():
+			peer_id = multiplayer.get_unique_id()
+		campfire.placer_peer_id = peer_id
+
 	# Add to world
 	if game_world:
 		game_world.add_child(campfire)
@@ -832,6 +841,6 @@ func _show_placement_error(message: String) -> void:
 	"""Show a temporary error message for placement failures"""
 	var notification_manager = get_node_or_null("/root/NotificationManager")
 	if notification_manager and notification_manager.has_method("show_notification"):
-		notification_manager.show_notification(message, Color.RED)
+		notification_manager.show_notification(message, "ERROR")
 	else:
 		print("⚠️ %s" % message)

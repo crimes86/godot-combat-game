@@ -625,14 +625,15 @@ func process_combat(delta: float) -> void:
 		if distance_from_spawn > guardian_leash_distance:
 			disengage()
 			return
-
-	# Check chunk-based leashing - if player left spawn chunk, disengage
-	# Skip this check in multiplayer - server is authoritative and players may be in different chunks
-	if not multiplayer.has_multiplayer_peer():
-		var player_chunk = get_chunk_key(player.global_position)
-		if player_chunk != spawn_chunk:
-			disengage()
-			return
+		# Guardians use distance-based leashing only, skip chunk-based leashing
+	else:
+		# Check chunk-based leashing - if player left spawn chunk, disengage
+		# Skip this check in multiplayer - server is authoritative and players may be in different chunks
+		if not multiplayer.has_multiplayer_peer():
+			var player_chunk = get_chunk_key(player.global_position)
+			if player_chunk != spawn_chunk:
+				disengage()
+				return
 
 	var distance_to_player = enemy.global_position.distance_to(player.global_position)
 

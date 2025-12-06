@@ -14,7 +14,7 @@
 
 ## Overview
 
-The Wasteland inventory and loot system manages item collection, storage, and distribution across multiple subsystems. It features a global inventory accessible throughout the game, pickable items in the world, treasure chests with randomized loot, a sophisticated enemy loot drop system, and an interactive corpse looting experience.
+The Dreadland inventory and loot system manages item collection, storage, and distribution across multiple subsystems. It features a global inventory accessible throughout the game, pickable items in the world, treasure chests with randomized loot, a sophisticated enemy loot drop system, and an interactive corpse looting experience.
 
 ### Key Features
 - **Global Inventory**: Persistent storage for items and gold

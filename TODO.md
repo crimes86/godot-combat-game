@@ -1,6 +1,8 @@
-# WASTELAND - Remaining Tasks
+# DREADLAND - Remaining Tasks
 
 ## Recently Completed Features
+- [x] Player Corpse System - EverQuest-style corpse runs with loot recovery
+- [x] Death Screen UI - minimalist banner with XP lost, coordinates, respawn timer
 - [x] PvP Duel System - consensual 1v1 combat with `/duel` command
 - [x] Wolf Enemies - pack behavior, howling mechanics
 - [x] Quest System - tutorial and progression quests with tracker UI
@@ -73,7 +75,6 @@
 - [ ] Add unit tests for CharacterStats, InventorySystem, Weapon
 
 ## Pending - Major Features (Designed, Not Implemented)
-- [ ] Player Corpse System - EverQuest-style corpse runs (see docs/PLAYER_CORPSE_SYSTEM.md)
 - [ ] Settlement/Base Building - guild bases with sieges (see docs/SETTLEMENT_SYSTEM_SPEC.md)
 - [ ] PvP Weakpoints - clickable weakpoints during duels (like enemy crit windows)
 - [ ] Additional Biomes - Cursed Lands, Shadow Realm, Void Wastes

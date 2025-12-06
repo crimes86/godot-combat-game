@@ -133,16 +133,16 @@ func _get_sprite_path(item_type: String, sprite_name: String, item: Dictionary) 
 			var weapon_type = item.get("weapon_type", "sword")
 			# For daggers with "standard" subfolder
 			if weapon_type == "dagger":
-				return "res://assets/weapons/dagger/standard/walk.png"
+				return "res://assets/equipment/weapons/dagger/standard/walk.png"
 			# All weapons use walk sprite for consistent icon extraction
-			return "res://assets/weapons/%s/walk.png" % weapon_type
+			return "res://assets/equipment/weapons/%s/walk.png" % weapon_type
 		"tool":
 			# Tools use the format: assets/tools/{tool_type}/walk.png
 			var tool_type = item.get("tool_type", "")
 			if tool_type == "axe":
-				return "res://assets/tools/axe/walk.png"
+				return "res://assets/equipment/tools/axe/walk.png"
 			elif tool_type == "pickaxe":
-				return "res://assets/tools/pickaxe/walk.png"
+				return "res://assets/equipment/tools/pickaxe/walk.png"
 		"placeable":
 			# Placeables use direct sprite_path or have a specific icon
 			var sprite_path = item.get("sprite_path", "")

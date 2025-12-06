@@ -1,5 +1,10 @@
 extends CharacterBody2D
 
+## REFACTOR NOTE (Dec 2024): Asset paths reorganized
+## - Weapons moved to: res://assets/equipment/weapons/
+## - Clothing layers remain at: res://assets/characters/pants/, shirt/, etc.
+## - If weapon sprites fail to load, check paths at equipment/weapons/[type]/
+
 # Character Gender Selection
 enum Gender { MALE, FEMALE }
 var selected_gender: Gender = Gender.MALE  # Will be set at game start
@@ -2034,7 +2039,7 @@ func create_player_sprite() -> void:
 
 	if effective_weapon_type != "":
 		weapon_type = effective_weapon_type
-		var weapon_path = "res://assets/weapons/" + weapon_type + "/"
+		var weapon_path = "res://assets/equipment/weapons/" + weapon_type + "/"
 
 		# Try to load weapon sprites
 		# Staff uses thrust_oversize animation, spear uses thrust, others use slash

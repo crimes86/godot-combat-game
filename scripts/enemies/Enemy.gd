@@ -517,8 +517,8 @@ func create_equipment_sprite(equip_name: String) -> AnimatedSprite2D:
 
 func create_weapon_sprite(weapon_name: String) -> AnimatedSprite2D:
 	"""Create an animated sprite for a weapon"""
-	var walk_path = "res://assets/weapons/%s/walk.png" % weapon_name
-	var slash_path = "res://assets/weapons/%s/slash.png" % weapon_name
+	var walk_path = "res://assets/equipment/weapons/%s/walk.png" % weapon_name
+	var slash_path = "res://assets/equipment/weapons/%s/slash.png" % weapon_name
 
 	if not ResourceLoader.exists(walk_path):
 		return null
@@ -1452,9 +1452,10 @@ func die() -> void:
 		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 		if player and player.has_method("gain_experience"):
 			player.gain_experience(xp_reward)
-			# Show XP notification
-			if NotificationManager:
-				NotificationManager.notify_xp_gained(xp_reward, "L%d Kill" % enemy_level)
+			# Show world-space XP text floating up from mob
+			var game_world = get_tree().get_first_node_in_group("game_world")
+			if game_world:
+				CombatText.create_xp(xp_reward, global_position, game_world)
 
 	# Store gold in corpse for looting (skip if already set by server in multiplayer)
 	if corpse_gold == 0:

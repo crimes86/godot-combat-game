@@ -98,8 +98,17 @@ func _validate_loot_item(item: Dictionary) -> Dictionary:
 		if quantity is float or quantity is int:
 			sanitized["quantity"] = clampi(int(quantity), 1, 999)
 
+	# Stacking fields (important for inventory management)
+	if item.has("stackable"):
+		sanitized["stackable"] = bool(item.get("stackable", false))
+
+	if item.has("max_stack"):
+		var max_stack = item.get("max_stack", 1)
+		if max_stack is float or max_stack is int:
+			sanitized["max_stack"] = clampi(int(max_stack), 1, 999)
+
 	# Copy through other safe fields
-	for key in ["description", "sprite_path", "weapon_type", "slot"]:
+	for key in ["description", "sprite_path", "weapon_type", "slot", "fuel_type", "sprite_name", "id"]:
 		if item.has(key) and item[key] is String:
 			sanitized[key] = item[key].substr(0, 256)
 
@@ -1320,9 +1329,10 @@ func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int
 		CharacterStats.add_gold(gold_amount)
 		LogManager.info("You looted %d gold" % gold_amount, "loot")
 
-		# Show gold notification
-		if NotificationManager and is_instance_valid(NotificationManager):
-			NotificationManager.notify_gold_added(gold_amount)
+		# Show world-space gold text floating up from corpse
+		var game_world = get_tree().get_first_node_in_group("game_world")
+		if game_world and is_instance_valid(enemy):
+			CombatText.create_gold(gold_amount, enemy.global_position, game_world)
 
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:

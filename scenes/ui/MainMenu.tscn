@@ -60,7 +60,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
 theme_override_font_sizes/font_size = 56
-text = "WASTELAND"
+text = "DREADLAND"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -610,7 +610,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 bbcode_enabled = true
-text = "[center][b]WASTELAND[/b]
+text = "[center][b]DREADLAND[/b]
 A Multiplayer Combat Game
 
 [b]Development[/b]

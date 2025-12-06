@@ -2,6 +2,12 @@ extends AnimatedSprite2D
 class_name SimpleLPCSprite
 
 ## Simple LPC sprite handler with row-based directions
+##
+## REFACTOR NOTE (Dec 2024): Asset paths reorganized
+## - Equipment moved to: res://assets/equipment/weapons/, tools/, armor/
+## - Starter clothes remain at: res://assets/characters/pants/, shirt/, etc.
+## - If armor sprites fail to load, check _extract_armor_path() handles the path format
+## - Potential issues: armor tier files moved from armor/zone1/ to equipment/armor/tier1/
 ## NO SPRITE FLIPPING - uses correct row for each direction
 ## Uses the SAME approach as working Enemy.gd skeleton code
 
@@ -44,6 +50,18 @@ var hair_sprite: AnimatedSprite2D = null
 # Weapon layer (optional)
 var weapon_sprite: AnimatedSprite2D = null
 var current_weapon_type: String = "sword"  # Track weapon type for offset calculations
+
+# Harvest animation support - track if we need slash-based chop
+var uses_thrust_animation: bool = false  # True if body uses 8-frame thrust
+var body_type_path: String = ""  # e.g. "body_male" for loading slash.png during harvest
+
+# Store armor texture paths for loading slash.png during harvest
+var pants_armor_path: String = ""  # e.g. "legs/green_pants"
+var shirt_armor_path: String = ""  # e.g. "chest/white_shirt"
+var boots_armor_path: String = ""
+var arms_armor_path: String = ""
+var hands_armor_path: String = ""
+var head_armor_path: String = ""  # Head armor (helmets)
 
 # Frame sync - ensures all layers play at exactly the same frame
 func _process(_delta: float) -> void:
@@ -129,6 +147,45 @@ func setup_lpc_sprite(
 
 	sprite_frames = SpriteFrames.new()
 	current_weapon_type = weapon_type  # Store for offset calculations
+
+	# Detect if we're using thrust animation (8 frames) vs slash (6 frames)
+	# This affects harvest/chop animation - we need slash-based chop for proper swing
+	if slash_tex:
+		var tex_width = slash_tex.get_width()
+		uses_thrust_animation = tex_width >= 500  # 512px = 8 frames (thrust), 384px = 6 frames (slash)
+		# Extract body type from texture path for loading slash.png during harvest
+		var res_path = slash_tex.resource_path
+		if "/body_" in res_path:
+			var start = res_path.find("/body_") + 1
+			var end = res_path.find("/", start)
+			if end > start:
+				body_type_path = res_path.substr(start, end - start)
+
+	# Extract armor paths for harvest animation (need to load slash.png during chop)
+	if pants_slash_tex:
+		var pants_res_path = pants_slash_tex.resource_path
+		pants_armor_path = _extract_armor_path(pants_res_path)
+		print("  📦 Pants texture path: %s -> extracted: '%s'" % [pants_res_path, pants_armor_path])
+	if shirt_slash_tex:
+		var shirt_res_path = shirt_slash_tex.resource_path
+		shirt_armor_path = _extract_armor_path(shirt_res_path)
+		print("  📦 Shirt texture path: %s -> extracted: '%s'" % [shirt_res_path, shirt_armor_path])
+	if boots_slash_tex:
+		boots_armor_path = _extract_armor_path(boots_slash_tex.resource_path)
+		if boots_armor_path != "":
+			print("  📦 Detected boots armor path: %s" % boots_armor_path)
+	if arms_slash_tex:
+		arms_armor_path = _extract_armor_path(arms_slash_tex.resource_path)
+		if arms_armor_path != "":
+			print("  📦 Detected arms armor path: %s" % arms_armor_path)
+	if hands_slash_tex:
+		hands_armor_path = _extract_armor_path(hands_slash_tex.resource_path)
+		if hands_armor_path != "":
+			print("  📦 Detected hands armor path: %s" % hands_armor_path)
+	if head_slash_tex:
+		head_armor_path = _extract_armor_path(head_slash_tex.resource_path)
+		if head_armor_path != "":
+			print("  📦 Detected head armor path: %s" % head_armor_path)
 
 	# ✨ Get weapon-specific slash FPS for ALL body parts to sync animations
 	var slash_fps = WeaponAnimationDataFactory.get_slash_fps(weapon_type)
@@ -693,7 +750,8 @@ var is_harvesting: bool = false
 
 func play_harvest_animation(tool_type: String, direction: String) -> void:
 	"""Play harvest animation with specific tool (axe/pickaxe)"""
-	print("🪓 Playing harvest animation: tool=%s, direction=%s" % [tool_type, direction])
+	print("🪓 Playing harvest animation: tool=%s, direction=%s, uses_thrust=%s" % [tool_type, direction, uses_thrust_animation])
+	print("   DEBUG body_type_path: '%s'" % body_type_path)
 	is_harvesting = true
 
 	# Convert direction from old format (up/down/left/right) to LPC format (north/south/west/east)
@@ -710,29 +768,134 @@ func play_harvest_animation(tool_type: String, direction: String) -> void:
 	var chop_anim = "chop_" + lpc_direction
 	var slash_anim = "slash_" + lpc_direction  # Source animation
 
-	# Create chop animation if it doesn't exist (reversed slash)
-	_ensure_chop_animation(sprite_frames, slash_anim, chop_anim)
+	# If using thrust animation, create slash-based chop from actual slash.png
+	# This gives proper top-to-bottom swing motion instead of reversed thrust
+	if uses_thrust_animation and body_type_path != "":
+		print("   DEBUG: Using slash-based chop for thrust weapon")
+		_ensure_slash_based_chop(sprite_frames, chop_anim, lpc_direction, body_type_path)
+		# Also create slash-based chop for character layers (shadow, head, hair)
+		_ensure_layer_slash_chop(shadow_sprite, chop_anim, lpc_direction, "shadow")
+		_ensure_layer_slash_chop(base_head_sprite, chop_anim, lpc_direction, "head_male" if body_type_path == "body_male" else "head_female")
+		_ensure_layer_slash_chop(hair_sprite, chop_anim, lpc_direction, "hair_male" if body_type_path == "body_male" else "hair_female")
+		# Armor layers need actual slash.png loaded from armor folders (not reversed thrust)
+		_ensure_armor_slash_chop(boots_sprite, chop_anim, lpc_direction, boots_armor_path)
+		_ensure_armor_slash_chop(pants_sprite, chop_anim, lpc_direction, pants_armor_path)
+		_ensure_armor_slash_chop(shirt_sprite, chop_anim, lpc_direction, shirt_armor_path)
+		_ensure_armor_slash_chop(arms_sprite, chop_anim, lpc_direction, arms_armor_path)
+		_ensure_armor_slash_chop(hands_sprite, chop_anim, lpc_direction, hands_armor_path)
+		_ensure_armor_slash_chop(head_sprite, chop_anim, lpc_direction, head_armor_path)
+		# Debug: Print frame counts for all layers
+		print("   DEBUG frame counts:")
+		print("     body chop: %d frames" % sprite_frames.get_frame_count(chop_anim) if sprite_frames.has_animation(chop_anim) else "     body chop: NOT FOUND")
+		if shadow_sprite and shadow_sprite.sprite_frames and shadow_sprite.sprite_frames.has_animation(chop_anim):
+			print("     shadow chop: %d frames" % shadow_sprite.sprite_frames.get_frame_count(chop_anim))
+		if base_head_sprite and base_head_sprite.sprite_frames and base_head_sprite.sprite_frames.has_animation(chop_anim):
+			print("     base_head chop: %d frames" % base_head_sprite.sprite_frames.get_frame_count(chop_anim))
+		if boots_sprite and boots_sprite.sprite_frames and boots_sprite.sprite_frames.has_animation(chop_anim):
+			print("     boots chop: %d frames" % boots_sprite.sprite_frames.get_frame_count(chop_anim))
+		if pants_sprite and pants_sprite.sprite_frames and pants_sprite.sprite_frames.has_animation(chop_anim):
+			print("     pants chop: %d frames" % pants_sprite.sprite_frames.get_frame_count(chop_anim))
+		if shirt_sprite and shirt_sprite.sprite_frames and shirt_sprite.sprite_frames.has_animation(chop_anim):
+			print("     shirt chop: %d frames" % shirt_sprite.sprite_frames.get_frame_count(chop_anim))
+		if arms_sprite and arms_sprite.sprite_frames and arms_sprite.sprite_frames.has_animation(chop_anim):
+			print("     arms chop: %d frames" % arms_sprite.sprite_frames.get_frame_count(chop_anim))
+		if hands_sprite and hands_sprite.sprite_frames and hands_sprite.sprite_frames.has_animation(chop_anim):
+			print("     hands chop: %d frames" % hands_sprite.sprite_frames.get_frame_count(chop_anim))
+		if hair_sprite and hair_sprite.sprite_frames and hair_sprite.sprite_frames.has_animation(chop_anim):
+			print("     hair chop: %d frames" % hair_sprite.sprite_frames.get_frame_count(chop_anim))
+		if head_sprite and head_sprite.sprite_frames and head_sprite.sprite_frames.has_animation(chop_anim):
+			print("     head_armor chop: %d frames" % head_sprite.sprite_frames.get_frame_count(chop_anim))
+	else:
+		# Create chop animation if it doesn't exist (reversed slash)
+		_ensure_chop_animation(sprite_frames, slash_anim, chop_anim)
+		# Animate ALL clothing layers with chop animation
+		_play_layer_chop(base_head_sprite, slash_anim, chop_anim)
+		_play_layer_chop(boots_sprite, slash_anim, chop_anim)
+		_play_layer_chop(pants_sprite, slash_anim, chop_anim)
+		_play_layer_chop(shirt_sprite, slash_anim, chop_anim)
+		_play_layer_chop(arms_sprite, slash_anim, chop_anim)
+		_play_layer_chop(hands_sprite, slash_anim, chop_anim)
+		_play_layer_chop(hair_sprite, slash_anim, chop_anim)
+		_play_layer_chop(head_sprite, slash_anim, chop_anim)
+		_play_layer_chop(shadow_sprite, slash_anim, chop_anim)
 
 	# RESTART chop animation on the main body for fresh swing
 	if sprite_frames.has_animation(chop_anim):
 		stop()
 		frame = 0
 		play(chop_anim)
-		print("   Restarting body chop: %s" % chop_anim)
+		print("   Playing body chop: %s" % chop_anim)
 
-	# Animate ALL clothing layers with chop animation
-	_play_layer_chop(base_head_sprite, slash_anim, chop_anim)
-	_play_layer_chop(boots_sprite, slash_anim, chop_anim)
-	_play_layer_chop(pants_sprite, slash_anim, chop_anim)
-	_play_layer_chop(shirt_sprite, slash_anim, chop_anim)
-	_play_layer_chop(arms_sprite, slash_anim, chop_anim)
-	_play_layer_chop(hands_sprite, slash_anim, chop_anim)
-	_play_layer_chop(hair_sprite, slash_anim, chop_anim)
-	_play_layer_chop(head_sprite, slash_anim, chop_anim)
-	_play_layer_chop(shadow_sprite, slash_anim, chop_anim)
+	# Play chop on layers that have it (created above)
+	if uses_thrust_animation:
+		_play_layer_if_has_anim(shadow_sprite, chop_anim)
+		_play_layer_if_has_anim(base_head_sprite, chop_anim)
+		_play_layer_if_has_anim(hair_sprite, chop_anim)
+		# Also play chop on armor layers
+		_play_layer_if_has_anim(boots_sprite, chop_anim)
+		_play_layer_if_has_anim(pants_sprite, chop_anim)
+		_play_layer_if_has_anim(shirt_sprite, chop_anim)
+		_play_layer_if_has_anim(arms_sprite, chop_anim)
+		_play_layer_if_has_anim(hands_sprite, chop_anim)
+		_play_layer_if_has_anim(head_sprite, chop_anim)
 
 	# Play the tool sprite overlay (axe/pickaxe)
 	_play_harvest_tool(tool_type, lpc_direction)
+
+	# Debug: Print what each layer is actually playing
+	print("   DEBUG: Layer states after chop setup:")
+	print("     ALL CHILDREN of SimpleLPCSprite:")
+	for child in get_children():
+		if child is AnimatedSprite2D:
+			print("       - %s: anim=%s, visible=%s, z=%d" % [child.name, child.animation, child.visible, child.z_index])
+		else:
+			print("       - %s: type=%s, visible=%s" % [child.name, child.get_class(), child.visible if "visible" in child else "N/A"])
+	print("     body: anim=%s, frame=%d, visible=%s, z=%d" % [animation, frame, visible, z_index])
+	if shadow_sprite:
+		print("     shadow: anim=%s, frame=%d, visible=%s, z=%d" % [shadow_sprite.animation, shadow_sprite.frame, shadow_sprite.visible, shadow_sprite.z_index])
+	if base_head_sprite:
+		print("     base_head: anim=%s, frame=%d, visible=%s, z=%d" % [base_head_sprite.animation, base_head_sprite.frame, base_head_sprite.visible, base_head_sprite.z_index])
+	if boots_sprite:
+		print("     boots: anim=%s, frame=%d, visible=%s, z=%d" % [boots_sprite.animation, boots_sprite.frame, boots_sprite.visible, boots_sprite.z_index])
+	if pants_sprite:
+		print("     pants: anim=%s, frame=%d, visible=%s, z=%d" % [pants_sprite.animation, pants_sprite.frame, pants_sprite.visible, pants_sprite.z_index])
+	if shirt_sprite:
+		print("     shirt: anim=%s, frame=%d, visible=%s, z=%d" % [shirt_sprite.animation, shirt_sprite.frame, shirt_sprite.visible, shirt_sprite.z_index])
+	if arms_sprite:
+		print("     arms: anim=%s, frame=%d, visible=%s, z=%d" % [arms_sprite.animation, arms_sprite.frame, arms_sprite.visible, arms_sprite.z_index])
+	if hands_sprite:
+		print("     hands: anim=%s, frame=%d, visible=%s, z=%d" % [hands_sprite.animation, hands_sprite.frame, hands_sprite.visible, hands_sprite.z_index])
+	if hair_sprite:
+		print("     hair: anim=%s, frame=%d, visible=%s, z=%d" % [hair_sprite.animation, hair_sprite.frame, hair_sprite.visible, hair_sprite.z_index])
+	if head_sprite:
+		print("     head_armor: anim=%s, frame=%d, visible=%s, z=%d" % [head_sprite.animation, head_sprite.frame, head_sprite.visible, head_sprite.z_index])
+	if weapon_sprite:
+		print("     weapon: visible=%s, z=%d" % [weapon_sprite.visible, weapon_sprite.z_index])
+
+func _extract_armor_path(resource_path: String) -> String:
+	"""Extract armor path from full texture path"""
+	# Handle standard armor paths: res://assets/equipment/armor/legs/green_pants/standard/thrust.png -> armor:legs/green_pants
+	if "/armor/" in resource_path:
+		var start = resource_path.find("/armor/") + 7  # Skip "/armor/"
+		var end = resource_path.find("/standard/", start)
+		if end > start:
+			return "armor:" + resource_path.substr(start, end - start)
+
+	# Handle starter clothes paths: res://assets/characters/pants/green_pants_thrust.png -> chars:pants/green_pants
+	if "/characters/" in resource_path:
+		# Extract folder and item name from path like: /characters/pants/green_pants_thrust.png
+		var start = resource_path.find("/characters/") + 12  # Skip "/characters/"
+		var end = resource_path.rfind("/")  # Find last /
+		if end > start:
+			var folder = resource_path.substr(start, end - start)  # e.g., "pants"
+			# Extract item name from filename (before _walk/_slash/_thrust suffix)
+			var filename = resource_path.get_file().get_basename()  # e.g., "green_pants_thrust"
+			for suffix in ["_walk", "_slash", "_thrust", "_hurt"]:
+				if filename.ends_with(suffix):
+					filename = filename.substr(0, filename.length() - suffix.length())
+					break
+			return "chars:" + folder + "/" + filename  # e.g., "chars:pants/green_pants"
+	return ""
 
 func _ensure_chop_animation(frames: SpriteFrames, slash_anim: String, chop_anim: String) -> void:
 	"""Create reversed chop animation from slash animation if it doesn't exist"""
@@ -762,6 +925,129 @@ func _play_layer_chop(layer: AnimatedSprite2D, slash_anim: String, chop_anim: St
 		layer.stop()
 		layer.frame = 0
 		layer.play(chop_anim)
+
+func _ensure_slash_based_chop(frames: SpriteFrames, chop_anim: String, lpc_direction: String, asset_folder: String) -> void:
+	"""Create chop animation from slash.png (not thrust) for proper top-to-bottom swing"""
+	if frames.has_animation(chop_anim):
+		return
+
+	var slash_path = "res://assets/characters/" + asset_folder + "/standard/slash.png"
+	if not ResourceLoader.exists(slash_path):
+		print("   ⚠️ Slash texture not found: %s" % slash_path)
+		return
+
+	var slash_tex = load(slash_path)
+	var slash_img = slash_tex.get_image()
+	var row = DIRECTION_ROWS[lpc_direction]
+
+	print("   🪓 Creating slash-based chop from: %s" % slash_path)
+
+	# Slash has 6 frames, create reversed animation for top-to-bottom swing
+	frames.add_animation(chop_anim)
+	frames.set_animation_loop(chop_anim, false)
+	frames.set_animation_speed(chop_anim, 15.0)
+
+	var tile_size = 64
+	for frame_idx in [5, 4, 3, 2, 1, 0]:
+		var frame_img = Image.create(tile_size, tile_size, false, Image.FORMAT_RGBA8)
+		frame_img.blit_rect(slash_img, Rect2i(frame_idx * tile_size, row * tile_size, tile_size, tile_size), Vector2i(0, 0))
+		var frame_texture = ImageTexture.create_from_image(frame_img)
+		frames.add_frame(chop_anim, frame_texture)
+
+func _ensure_layer_slash_chop(layer: AnimatedSprite2D, chop_anim: String, lpc_direction: String, asset_folder: String) -> void:
+	"""Create slash-based chop animation for a layer sprite (characters folder)"""
+	if not layer or not layer.sprite_frames:
+		return
+	if layer.sprite_frames.has_animation(chop_anim):
+		return
+
+	var slash_path = "res://assets/characters/" + asset_folder + "/standard/slash.png"
+	if not ResourceLoader.exists(slash_path):
+		# No slash.png for this layer, skip
+		return
+
+	var slash_tex = load(slash_path)
+	var slash_img = slash_tex.get_image()
+	var row = DIRECTION_ROWS[lpc_direction]
+
+	# Create reversed slash animation
+	layer.sprite_frames.add_animation(chop_anim)
+	layer.sprite_frames.set_animation_loop(chop_anim, false)
+	layer.sprite_frames.set_animation_speed(chop_anim, 15.0)
+
+	var tile_size = 64
+	for frame_idx in [5, 4, 3, 2, 1, 0]:
+		var frame_img = Image.create(tile_size, tile_size, false, Image.FORMAT_RGBA8)
+		frame_img.blit_rect(slash_img, Rect2i(frame_idx * tile_size, row * tile_size, tile_size, tile_size), Vector2i(0, 0))
+		var frame_texture = ImageTexture.create_from_image(frame_img)
+		layer.sprite_frames.add_frame(chop_anim, frame_texture)
+
+func _ensure_armor_slash_chop(layer: AnimatedSprite2D, chop_anim: String, lpc_direction: String, armor_path: String) -> void:
+	"""Create slash-based chop animation for an armor layer (loads from armor or characters folder)"""
+	if not layer or not layer.sprite_frames:
+		return
+	if layer.sprite_frames.has_animation(chop_anim):
+		return
+	if armor_path == "":
+		return
+
+	# Build path based on source type (armor: or chars:)
+	var slash_path: String
+	if armor_path.begins_with("armor:"):
+		# Standard armor: res://assets/equipment/armor/legs/green_pants/standard/slash.png
+		var sub_path = armor_path.substr(6)  # Remove "armor:" prefix
+		slash_path = "res://assets/equipment/armor/" + sub_path + "/standard/slash.png"
+	elif armor_path.begins_with("chars:"):
+		# Starter clothes: res://assets/characters/pants/green_pants_slash.png
+		var sub_path = armor_path.substr(6)  # Remove "chars:" prefix
+		# sub_path is like "pants/green_pants" -> need "pants/green_pants_slash.png"
+		var parts = sub_path.split("/")
+		if parts.size() >= 2:
+			slash_path = "res://assets/characters/" + parts[0] + "/" + parts[1] + "_slash.png"
+		else:
+			print("   ⚠️ Invalid chars path format: %s" % armor_path)
+			return
+	else:
+		# Legacy format without prefix - assume armor folder
+		slash_path = "res://assets/equipment/armor/" + armor_path + "/standard/slash.png"
+
+	if not ResourceLoader.exists(slash_path):
+		print("   ⚠️ Slash texture not found: %s" % slash_path)
+		return
+
+	var slash_tex = load(slash_path)
+	var slash_img = slash_tex.get_image()
+	var row = DIRECTION_ROWS[lpc_direction]
+
+	# Check if this is actually 6-frame slash (384px) or 8-frame thrust (512px)
+	var tex_width = slash_img.get_width()
+	if tex_width >= 500:
+		# This is thrust.png, not slash.png - skip (we want actual 6-frame slash)
+		print("   ⚠️ Slash texture is thrust format (8 frames), skipping: %s" % slash_path)
+		return
+
+	print("   ✅ Loading slash texture: %s (6 frames)" % slash_path)
+
+	# Create reversed slash animation
+	layer.sprite_frames.add_animation(chop_anim)
+	layer.sprite_frames.set_animation_loop(chop_anim, false)
+	layer.sprite_frames.set_animation_speed(chop_anim, 15.0)
+
+	var tile_size = 64
+	for frame_idx in [5, 4, 3, 2, 1, 0]:
+		var frame_img = Image.create(tile_size, tile_size, false, Image.FORMAT_RGBA8)
+		frame_img.blit_rect(slash_img, Rect2i(frame_idx * tile_size, row * tile_size, tile_size, tile_size), Vector2i(0, 0))
+		var frame_texture = ImageTexture.create_from_image(frame_img)
+		layer.sprite_frames.add_frame(chop_anim, frame_texture)
+
+func _play_layer_if_has_anim(layer: AnimatedSprite2D, anim_name: String) -> void:
+	"""Play animation on layer if it exists"""
+	if not layer or not layer.sprite_frames:
+		return
+	if layer.sprite_frames.has_animation(anim_name):
+		layer.stop()
+		layer.frame = 0
+		layer.play(anim_name)
 
 func _play_harvest_tool(tool_type: String, lpc_direction: String) -> void:
 	"""Play the tool sprite animation (axe/pickaxe overlay)"""
@@ -794,9 +1080,9 @@ func _play_harvest_tool(tool_type: String, lpc_direction: String) -> void:
 	# Use the ACTUAL tool sprites from the custom/slash_128 folder
 	var tool_path: String
 	if tool_type == "axe":
-		tool_path = "res://assets/tools/axe/custom/slash_128/140 tool_smash_.png"
+		tool_path = "res://assets/equipment/tools/axe/custom/slash_128/140 tool_smash_.png"
 	else:  # pickaxe
-		tool_path = "res://assets/tools/pickaxe/custom/slash_128/140 tool_smash_.png"
+		tool_path = "res://assets/equipment/tools/pickaxe/custom/slash_128/140 tool_smash_.png"
 
 	print("   Loading tool animation from: %s" % tool_path)
 
@@ -804,9 +1090,9 @@ func _play_harvest_tool(tool_type: String, lpc_direction: String) -> void:
 		print("   ⚠️ Tool sprite not found at: %s" % tool_path)
 		# Fallback to using weapon sprites as placeholder
 		if tool_type == "axe":
-			tool_path = "res://assets/weapons/mace/slash.png"
+			tool_path = "res://assets/equipment/weapons/mace/slash.png"
 		else:
-			tool_path = "res://assets/weapons/sword/slash.png"
+			tool_path = "res://assets/equipment/weapons/sword/slash.png"
 		print("   Falling back to weapon sprite: %s" % tool_path)
 
 	var tool_tex = load(tool_path)

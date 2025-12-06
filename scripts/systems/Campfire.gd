@@ -21,6 +21,10 @@ class_name Campfire
 
 # Unlit state - player-placed campfires start unlit
 var is_unlit: bool = false  # True if campfire hasn't been lit yet
+
+# Player-placed campfire tracking (can be extinguished by owner)
+var is_player_placed: bool = false  # Set to true when placed from inventory
+var placer_peer_id: int = -1  # The peer ID of the player who placed this campfire
 const MIN_FUEL_TO_LIGHT: int = 1  # Minimum wood/embers needed to light the fire
 
 # Constants
@@ -215,6 +219,9 @@ func _physics_process(delta: float) -> void:
 
 	# Handle hold-to-fuel mechanic
 	handle_fuel_interaction(delta)
+
+	# Handle X key to extinguish (owner only, player-placed campfires only)
+	handle_extinguish_input()
 
 	# Apply crit buff to player if in warmth
 	# - Community campfires: ALL players get crit buff
@@ -782,7 +789,7 @@ func setup_audio() -> void:
 	"""Setup audio streams for fire and healing"""
 	# Fire crackling audio (looping) - ambient level
 	fire_audio = AudioStreamPlayer2D.new()
-	fire_audio.stream = load("res://assets/sounds/ambient/campfire_loop.wav")
+	fire_audio.stream = load("res://assets/audio/sfx/ambient/campfire_loop.wav")
 	fire_audio.volume_db = -18.0
 	fire_audio.max_distance = 500.0
 	fire_audio.attenuation = 2.0
@@ -794,7 +801,7 @@ func setup_audio() -> void:
 
 	# Healing audio - uses same sounds as healing staff for consistency
 	healing_audio_1 = AudioStreamPlayer2D.new()
-	healing_audio_1.stream = load("res://assets/sounds/player/healing_staff_cast.wav")
+	healing_audio_1.stream = load("res://assets/audio/sfx/player/healing_staff_cast.wav")
 	healing_audio_1.volume_db = -10.0
 	healing_audio_1.max_distance = 300.0
 	healing_audio_1.attenuation = 1.5
@@ -803,7 +810,7 @@ func setup_audio() -> void:
 
 	# Healing audio - alternate sound (impact) for variety in pattern
 	healing_audio_2 = AudioStreamPlayer2D.new()
-	healing_audio_2.stream = load("res://assets/sounds/player/healing_staff_impact.wav")
+	healing_audio_2.stream = load("res://assets/audio/sfx/player/healing_staff_impact.wav")
 	healing_audio_2.volume_db = -10.0
 	healing_audio_2.max_distance = 300.0
 	healing_audio_2.attenuation = 1.5
@@ -1422,18 +1429,37 @@ func update_interaction_prompt() -> void:
 	# Only show prompt if we're the active interactable
 	var is_active = InteractionManager.is_active_interactable(self)
 	if player_in_interact_range and is_active and not is_fueling:
-		# Check if player has any fuel items - only show prompt if they do
+		# Check if player has any fuel items
 		var has_fuel = player_has_fuel_items()
-		if not has_fuel:
+
+		# Check if player can extinguish this campfire
+		var can_extinguish = _can_local_player_extinguish()
+
+		# If no fuel and can't extinguish, hide prompt
+		if not has_fuel and not can_extinguish:
 			interaction_prompt.visible = false
 			return
 
-		if is_unlit:
-			interaction_prompt.text = "Hold [F] Light Fire"
+		# Build prompt text
+		var prompt_parts: Array[String] = []
+
+		if has_fuel:
+			if is_unlit:
+				prompt_parts.append("Hold [F] Light Fire")
+			else:
+				prompt_parts.append("Hold [F] Add Fuel")
+
+		if can_extinguish:
+			prompt_parts.append("[X] Extinguish")
+
+		interaction_prompt.text = "  ".join(prompt_parts)
+
+		# Set color based on primary action
+		if has_fuel and is_unlit:
 			interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))  # Orange-red
 		else:
-			interaction_prompt.text = "Hold [F] Add Fuel"
 			interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))  # Warm orange
+
 		interaction_prompt.visible = true
 		# Position prompt above campfire
 		var viewport_size = get_viewport().get_visible_rect().size
@@ -1609,6 +1635,89 @@ func cancel_fueling() -> void:
 		progress_circle.visible = false
 		progress_circle.queue_redraw()
 
+# ═══════════════════════════════════════════════════════════════════════════
+# EXTINGUISH CAMPFIRE (Owner only, player-placed only)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func handle_extinguish_input() -> void:
+	"""Handle X key press to extinguish campfire (owner only)"""
+	# Only process if player is in interact range and this is the active interactable
+	if not player_in_interact_range or not player or not is_instance_valid(player):
+		return
+	if not InteractionManager.is_active_interactable(self):
+		return
+
+	# Check for X key press
+	if Input.is_physical_key_pressed(KEY_X):
+		attempt_extinguish()
+
+var _extinguish_key_was_pressed: bool = false  # Prevent repeated extinguish attempts
+
+func attempt_extinguish() -> void:
+	"""Attempt to extinguish the campfire (with validation)"""
+	# Prevent repeated calls while key is held
+	if _extinguish_key_was_pressed:
+		return
+	_extinguish_key_was_pressed = true
+
+	# Reset on next frame when key is released
+	await get_tree().process_frame
+	if not Input.is_physical_key_pressed(KEY_X):
+		_extinguish_key_was_pressed = false
+
+	# Can't extinguish community campfires (pre-placed in world)
+	if is_community_campfire:
+		print("❌ Cannot extinguish community campfires")
+		if NotificationManager and is_instance_valid(NotificationManager):
+			NotificationManager.show_notification("Cannot extinguish community campfire", "ERROR")
+		return
+
+	# Must be the owner to extinguish
+	if not _is_local_player_owner() and owner_pool_key != NO_OWNER:
+		print("❌ Only the campfire owner can extinguish it")
+		if NotificationManager and is_instance_valid(NotificationManager):
+			NotificationManager.show_notification("Only the owner can extinguish this campfire", "ERROR")
+		return
+
+	# If unclaimed but player-placed, check if this player placed it
+	if is_player_placed and placer_peer_id != -1:
+		var my_peer_id = 1
+		if multiplayer.has_multiplayer_peer():
+			my_peer_id = multiplayer.get_unique_id()
+		if placer_peer_id != my_peer_id:
+			print("❌ Only the player who placed this campfire can extinguish it")
+			if NotificationManager and is_instance_valid(NotificationManager):
+				NotificationManager.show_notification("Only the placer can extinguish this campfire", "ERROR")
+			return
+
+	# All checks passed - extinguish the campfire
+	extinguish_campfire()
+
+func extinguish_campfire() -> void:
+	"""Extinguish and remove the campfire"""
+	print("🔥💨 Campfire extinguished by owner")
+
+	# Notify player
+	if NotificationManager and is_instance_valid(NotificationManager):
+		NotificationManager.show_notification("Campfire extinguished", "INFO")
+
+	# Stop audio
+	if fire_audio and is_instance_valid(fire_audio):
+		fire_audio.stop()
+
+	# Sync to other clients in multiplayer
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_extinguish.rpc()
+
+	# Remove the campfire
+	queue_free()
+
+@rpc("authority", "call_remote", "reliable")
+func _sync_extinguish() -> void:
+	"""Sync campfire removal to clients"""
+	print("🔥💨 [CLIENT] Campfire extinguished (synced)")
+	queue_free()
+
 func complete_fueling_all() -> void:
 	"""Complete fueling and add ALL fuel from inventory"""
 	is_fueling = false
@@ -1725,6 +1834,27 @@ func _is_local_player_owner() -> bool:
 		return false
 	var my_pool_key = _get_player_fuel_pool_key()
 	return my_pool_key == owner_pool_key
+
+func _can_local_player_extinguish() -> bool:
+	"""Check if the local player can extinguish this campfire."""
+	# Can't extinguish community campfires
+	if is_community_campfire:
+		return false
+
+	# Owner can always extinguish
+	if _is_local_player_owner():
+		return true
+
+	# If unclaimed but player-placed, check if this player placed it
+	if is_player_placed and placer_peer_id != -1:
+		var my_peer_id = 1
+		if multiplayer.has_multiplayer_peer():
+			my_peer_id = multiplayer.get_unique_id()
+		return placer_peer_id == my_peer_id
+
+	# If unclaimed and not player-placed, anyone nearby could claim/extinguish
+	# But we'll be conservative - only allow if it was player-placed
+	return false
 
 func _is_player_owner(player_node: Node) -> bool:
 	"""Check if a specific player node is part of the owning group."""
@@ -2285,6 +2415,11 @@ func _server_add_wood_fuel(amount: int, enhanced_sound: bool) -> bool:
 	if added > 0:
 		pool.wood += added
 		update_visual_intensity()
+
+		# Light the fire if it was unlit
+		if is_unlit:
+			light_campfire()
+
 		# Sync fuel state to all clients
 		_sync_fuel_state_to_clients()
 
@@ -2360,6 +2495,11 @@ func _server_add_bone_ember_fuel(amount: int, enhanced_sound: bool) -> bool:
 	if added > 0:
 		pool.bone_embers += added
 		update_visual_intensity()
+
+		# Light the fire if it was unlit
+		if is_unlit:
+			light_campfire()
+
 		# Sync fuel state to all clients
 		_sync_fuel_state_to_clients()
 
@@ -2804,6 +2944,4 @@ func light_campfire() -> void:
 	# Show notification
 	var notification_manager = get_node_or_null("/root/NotificationManager")
 	if notification_manager and notification_manager.has_method("show_notification"):
-		notification_manager.show_notification("Campfire lit!", Color(1.0, 0.7, 0.3))
-
-	print("🔥 Campfire has been lit!")
+		notification_manager.show_notification("Campfire lit!", "SUCCESS")

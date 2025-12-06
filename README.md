@@ -1,4 +1,4 @@
-# Wasteland - Documentation Index
+# Dreadland - Documentation Index
 
 A fast-paced action RPG featuring a unique critical hit weakpoint system and chain multipliers.
 
@@ -47,7 +47,10 @@ Performance optimization strategies: node caching, view distance culling, thrott
 Complete PvP duel system implementation - consensual 1v1 combat with `/duel` command.
 
 #### [docs/PLAYER_CORPSE_SYSTEM.md](docs/PLAYER_CORPSE_SYSTEM.md)
-Design spec for EverQuest-style corpse runs (NOT YET IMPLEMENTED).
+EverQuest-style corpse runs - player corpse spawns on death with equipment for recovery.
+
+#### [docs/ITCH_RELEASE_GUIDE.md](docs/ITCH_RELEASE_GUIDE.md)
+Complete guide for itch.io release - export settings, checklist, page setup, and release notes.
 
 #### [docs/SETTLEMENT_SYSTEM_SPEC.md](docs/SETTLEMENT_SYSTEM_SPEC.md)
 Design spec for guild base building and siege system (NOT YET IMPLEMENTED).
@@ -229,9 +232,9 @@ Type these in chat (press Enter):
 ### In Progress
 - Ruins 2 & 3 implementation
 - Boss fight (Level 33 Necromancer King)
-- Player corpse/death system
 
 ### Recently Added
+- **Player Corpse System** - EverQuest-style death with corpse loot recovery
 - **PvP Duel System** - Consensual 1v1 duels with `/duel` command
 - **Wolf Enemies** - Pack-based AI with howling and pursuit behavior
 - **Group/Party System** - Up to 40 players, shared XP, party frames

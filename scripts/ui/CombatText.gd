@@ -10,7 +10,9 @@ enum TextType {
 	WEAKPOINT, # Orange-red text, largest with explosion feel
 	MISS,      # Gray "MISS" text, smaller
 	DAMAGE,    # Red text for player taking damage
-	HEAL       # Green text for player gaining health
+	HEAL,      # Green text for player gaining health
+	XP,        # Cyan text for XP gain (world-space, near mob)
+	GOLD       # Gold text for gold pickup (world-space, near mob)
 }
 
 var type: TextType = TextType.NORMAL
@@ -78,7 +80,15 @@ func _ready() -> void:
 			add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))  # Brighter green
 			add_theme_font_size_override("font_size", 21)  # 28 * 0.75 = 21
 			animate_heal()
-	
+		TextType.XP:
+			add_theme_color_override("font_color", Color(0.3, 0.9, 0.95))  # Cyan/teal
+			add_theme_font_size_override("font_size", 20)
+			animate_xp()
+		TextType.GOLD:
+			add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))  # Gold
+			add_theme_font_size_override("font_size", 18)
+			animate_gold()
+
 	# Add thick black outline for readability
 	add_theme_color_override("font_outline_color", Color.BLACK)
 	add_theme_constant_override("outline_size", 3)
@@ -161,16 +171,47 @@ func animate_damage() -> void:
 func animate_heal() -> void:
 	# Gentle, uplifting animation for healing
 	var tween = create_tween()
-	
+
 	# Gentle pulse
 	scale = Vector2(0.7, 0.7)
 	tween.tween_property(self, "scale", Vector2(1.1, 1.1), 0.15).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.1)
-	
+
 	# Slower float with sparkle feel
 	tween.set_parallel(true)
 	tween.tween_property(self, "position", position + Vector2(0, -float_speed * 0.8), lifetime)
 	tween.tween_property(self, "modulate:a", 0.0, lifetime * 0.5).set_delay(lifetime * 0.5)
+
+func animate_xp() -> void:
+	# XP floats up from mob death with satisfying pop
+	lifetime = 1.5
+	var tween = create_tween()
+
+	# Pop in effect
+	scale = Vector2(0.3, 0.3)
+	tween.tween_property(self, "scale", Vector2(1.2, 1.2), 0.12).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.08)
+
+	# Float up smoothly
+	tween.set_parallel(true)
+	tween.tween_property(self, "position", position + Vector2(0, -float_speed * 1.3), lifetime).set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "modulate:a", 0.0, lifetime * 0.4).set_delay(lifetime * 0.6)
+
+func animate_gold() -> void:
+	# Gold floats up with slight arc, appears below XP
+	lifetime = 1.3
+	var tween = create_tween()
+
+	# Smaller pop
+	scale = Vector2(0.4, 0.4)
+	tween.tween_property(self, "scale", Vector2(1.1, 1.1), 0.1).set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.08)
+
+	# Float up with slight horizontal drift
+	var drift = randf_range(-15, 15)
+	tween.set_parallel(true)
+	tween.tween_property(self, "position", position + Vector2(drift, -float_speed * 1.0), lifetime).set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "modulate:a", 0.0, lifetime * 0.4).set_delay(lifetime * 0.6)
 
 ## Helper function to calculate position offset based on direction
 static func _get_position_offset_for_direction(direction: Vector2) -> Vector2:
@@ -227,6 +268,16 @@ static func create_heal(amount: float, world_pos: Vector2, parent: Node, directi
 	var offset = _get_position_offset_for_direction(direction)
 	var spawn_pos = world_pos + offset
 	return _create_text("+" + str(int(amount)), TextType.HEAL, spawn_pos, parent)
+
+static func create_xp(amount: int, world_pos: Vector2, parent: Node) -> CombatText:
+	# XP text spawns above the mob's death position
+	var spawn_pos = world_pos + Vector2(0, -40)  # Offset above mob center
+	return _create_text("+%d XP" % amount, TextType.XP, spawn_pos, parent)
+
+static func create_gold(amount: int, world_pos: Vector2, parent: Node) -> CombatText:
+	# Gold text spawns slightly below XP
+	var spawn_pos = world_pos + Vector2(0, -20)  # Offset above mob center, below XP
+	return _create_text("+%d Gold" % amount, TextType.GOLD, spawn_pos, parent)
 
 static func _create_text(damage_text: String, text_type: TextType, world_pos: Vector2, parent: Node) -> CombatText:
 	var combat_text = preload("res://scenes/ui/combat_text.tscn").instantiate() as CombatText

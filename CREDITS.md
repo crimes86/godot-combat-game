@@ -1,4 +1,4 @@
-# WASTELAND - Credits & Attribution
+# DREADLAND - Credits & Attribution
 
 ## Development
 

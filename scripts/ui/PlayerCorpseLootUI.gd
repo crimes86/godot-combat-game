@@ -18,6 +18,7 @@ const SLOT_SIZE = Vector2(48, 48)
 const ICON_SIZE = Vector2(32, 32)
 const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)
 const BORDER_COLOR = Color(0.35, 0.38, 0.42, 1.0)
+const LOOT_RANGE = 150.0  # Max distance to loot corpses
 
 # Dynamic UI elements
 var panel: PanelContainer
@@ -33,6 +34,22 @@ var close_button: Button
 func _ready() -> void:
 	_build_ui()
 	hide()
+
+func _process(_delta: float) -> void:
+	"""Check if player is still in range of corpse"""
+	if not visible or not current_corpse:
+		return
+
+	# Get player position
+	var player = get_tree().get_first_node_in_group("player")
+	if not player:
+		return
+
+	# Check distance to corpse
+	if is_instance_valid(current_corpse):
+		var distance = player.global_position.distance_to(current_corpse.global_position)
+		if distance > LOOT_RANGE:
+			close_ui()
 
 func _build_ui() -> void:
 	"""Build the UI programmatically"""

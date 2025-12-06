@@ -24,19 +24,19 @@ func _ready() -> void:
 	canvas_layer.layer = 200  # Above all game UI (shop=100, inventory=105, chat=110, etc.)
 	add_child(canvas_layer)
 
-	# Create container for notifications (centered horizontally, positioned between player and bottom of screen)
+	# Create container for notifications (below player, above action bar area)
 	notification_container = Control.new()
 	notification_container.name = "NotificationContainer"
 	notification_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	notification_container.anchor_left = 0.5
 	notification_container.anchor_right = 0.5
-	notification_container.anchor_top = 0.75  # 75% down the screen (between player and bottom)
-	notification_container.anchor_bottom = 0.75
+	notification_container.anchor_top = 0.68  # Below player feet (~68% down)
+	notification_container.anchor_bottom = 0.68
 	notification_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	notification_container.grow_vertical = Control.GROW_DIRECTION_END
-	notification_container.offset_left = -200  # Half of width for centering
-	notification_container.offset_right = 200  # Half of width for centering
-	notification_container.custom_minimum_size = Vector2(400, 0)
+	notification_container.offset_left = -150
+	notification_container.offset_right = 150
+	notification_container.custom_minimum_size = Vector2(300, 0)
 	canvas_layer.add_child(notification_container)
 
 	print("✅ NotificationManager initialized")
@@ -153,18 +153,18 @@ func _show_notification(notification: ItemNotification) -> void:
 	if notification_queue.size() >= MAX_VISIBLE_NOTIFICATIONS:
 		_push_out_oldest()
 
-	# Shift all existing notifications upward to make room (animated)
+	# Shift all existing notifications downward to make room (animated)
 	var shift_duration = 0.15  # Quick shift
 
 	for i in range(notification_queue.size()):
 		var existing_notification = notification_queue[i]
 		if is_instance_valid(existing_notification):
-			# Move up by one notification_spacing
-			var new_y = -(notification_queue.size() - i) * notification_spacing
+			# Move down by one notification_spacing (positive Y = down)
+			var new_y = (notification_queue.size() - i) * notification_spacing
 			var tween = create_tween()
 			tween.tween_property(existing_notification, "position:y", new_y, shift_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
-	# Add the new notification at the bottom (position 0) immediately
+	# Add the new notification at the top (position 0) immediately
 	notification_queue.append(notification)
 	notification.position = Vector2(0, 0)
 	notification_container.add_child(notification)
@@ -176,7 +176,7 @@ func _show_notification(notification: ItemNotification) -> void:
 	notification_created.emit(notification)
 
 func _push_out_oldest() -> void:
-	"""Push the oldest notification up and fade it out quickly to make room."""
+	"""Push the oldest notification down and fade it out quickly to make room."""
 	if notification_queue.is_empty():
 		return
 
@@ -188,12 +188,10 @@ func _push_out_oldest() -> void:
 	# Remove from queue immediately
 	notification_queue.remove_at(0)
 
-	# Animate it pushing up and fading out
+	# Animate it fading out and shrinking
 	var push_tween = create_tween()
 	push_tween.set_parallel(true)
-	# Push up by one more spacing
-	push_tween.tween_property(oldest, "position:y", oldest.position.y - notification_spacing, 0.2).set_ease(Tween.EASE_OUT)
-	# Fade out quickly
+	push_tween.tween_property(oldest, "scale", Vector2(0.8, 0.8), 0.2).set_ease(Tween.EASE_IN)
 	push_tween.tween_property(oldest, "modulate:a", 0.0, 0.2).set_ease(Tween.EASE_IN)
 
 	# Delete after animation

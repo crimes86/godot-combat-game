@@ -8,12 +8,12 @@ func _run() -> void:
 	print("🔧 Fixing footstep audio pops...")
 
 	var files = [
-		"res://assets/sounds/footsteps/player_step_1.wav",
-		"res://assets/sounds/footsteps/player_step_2.wav",
-		"res://assets/sounds/footsteps/player_step_3.wav",
-		"res://assets/sounds/footsteps/skeleton_step_1.wav",
-		"res://assets/sounds/footsteps/skeleton_step_2.wav",
-		"res://assets/sounds/footsteps/skeleton_step_3.wav",
+		"res://assets/audio/sfx/footsteps/player_step_1.wav",
+		"res://assets/audio/sfx/footsteps/player_step_2.wav",
+		"res://assets/audio/sfx/footsteps/player_step_3.wav",
+		"res://assets/audio/sfx/footsteps/skeleton_step_1.wav",
+		"res://assets/audio/sfx/footsteps/skeleton_step_2.wav",
+		"res://assets/audio/sfx/footsteps/skeleton_step_3.wav",
 	]
 
 	for file_path in files:

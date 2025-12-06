@@ -2,6 +2,11 @@ extends Node
 
 ## Sound Manager - Generates placeholder sounds and manages audio playback
 ## Replace placeholder sounds with real audio files later by updating the respective AudioStream resources
+##
+## REFACTOR NOTE (Dec 2024): Audio paths reorganized
+## - All sounds moved from assets/sounds/ to assets/audio/sfx/
+## - Music remains at assets/audio/music/
+## - If sounds fail to load, verify files exist at new paths in assets/audio/sfx/
 
 # Sound Types
 enum SoundType {
@@ -163,7 +168,7 @@ func _load_real_sounds() -> void:
 	"""Load real sound files for combat effects"""
 	# Load weakpoint hit sounds (devastating bone crunch sounds)
 	for i in range(1, 7):
-		var weakpoint = load("res://assets/sounds/combat/hits/weakpoint_hit_%d.wav" % i)
+		var weakpoint = load("res://assets/audio/sfx/combat/hits/weakpoint_hit_%d.wav" % i)
 		if weakpoint:
 			weakpoint_sounds.append(weakpoint)
 			print("  ✅ Loaded weakpoint_hit_%d.wav" % i)
@@ -173,22 +178,22 @@ func _load_real_sounds() -> void:
 	print("  📊 Loaded %d weakpoint sound variations" % weakpoint_sounds.size())
 
 	# Load weakpoint destruction sound
-	weakpoint_destroyed_sound = load("res://assets/sounds/combat/hits/weakpoint_destroyed.wav")
+	weakpoint_destroyed_sound = load("res://assets/audio/sfx/combat/hits/weakpoint_destroyed.wav")
 	if weakpoint_destroyed_sound:
 		print("  ✅ Loaded weakpoint_destroyed.wav")
 	else:
 		push_warning("  ⚠️ Failed to load weakpoint_destroyed.wav")
 
 	# Load critical hit sound (for non-weakpoint crits)
-	critical_hit_sound = load("res://assets/sounds/combat/hits/critical_hit.wav")
+	critical_hit_sound = load("res://assets/audio/sfx/combat/hits/critical_hit.wav")
 	if critical_hit_sound:
 		print("  ✅ Loaded critical_hit.wav")
 	else:
 		push_warning("  ⚠️ Failed to load critical_hit.wav")
 
 	# Load normal hit sounds
-	var normal_hit_1 = load("res://assets/sounds/combat/hits/normal_hit_1.wav")
-	var normal_hit_2 = load("res://assets/sounds/combat/hits/normal_hit_2.wav")
+	var normal_hit_1 = load("res://assets/audio/sfx/combat/hits/normal_hit_1.wav")
+	var normal_hit_2 = load("res://assets/audio/sfx/combat/hits/normal_hit_2.wav")
 
 	if normal_hit_1:
 		normal_hit_sounds.append(normal_hit_1)
@@ -206,7 +211,7 @@ func _load_real_sounds() -> void:
 
 	# Load skeleton hurt sounds (multiple variations)
 	for i in range(1, 5):
-		var skeleton_hurt = load("res://assets/sounds/combat/reactions/skeleton_hurt_%d.wav" % i)
+		var skeleton_hurt = load("res://assets/audio/sfx/combat/reactions/skeleton_hurt_%d.wav" % i)
 		if skeleton_hurt:
 			skeleton_hurt_sounds.append(skeleton_hurt)
 			print("  ✅ Loaded skeleton_hurt_%d.wav" % i)
@@ -216,7 +221,7 @@ func _load_real_sounds() -> void:
 	print("  📊 Loaded %d skeleton hurt sound variations" % skeleton_hurt_sounds.size())
 
 	# Load skeleton attack sound (menacing cackle)
-	skeleton_attack_sound = load("res://assets/sounds/combat/reactions/skeleton_attack.wav")
+	skeleton_attack_sound = load("res://assets/audio/sfx/combat/reactions/skeleton_attack.wav")
 	if skeleton_attack_sound:
 		print("  ✅ Loaded skeleton_attack.wav")
 	else:
@@ -224,7 +229,7 @@ func _load_real_sounds() -> void:
 
 	# Load skeleton aggro sounds (when skeleton spots player - 3 variations)
 	for i in range(1, 4):
-		var skeleton_aggro = load("res://assets/sounds/combat/reactions/skeleton_aggro_%d.wav" % i)
+		var skeleton_aggro = load("res://assets/audio/sfx/combat/reactions/skeleton_aggro_%d.wav" % i)
 		if skeleton_aggro:
 			skeleton_aggro_sounds.append(skeleton_aggro)
 			print("  ✅ Loaded skeleton_aggro_%d.wav" % i)
@@ -235,7 +240,7 @@ func _load_real_sounds() -> void:
 
 	# Load skeleton death sounds (bones collapsing - 3 variations)
 	for i in range(1, 4):
-		var skeleton_death = load("res://assets/sounds/combat/reactions/skeleton_death_%d.wav" % i)
+		var skeleton_death = load("res://assets/audio/sfx/combat/reactions/skeleton_death_%d.wav" % i)
 		if skeleton_death:
 			skeleton_death_sounds.append(skeleton_death)
 			print("  ✅ Loaded skeleton_death_%d.wav" % i)
@@ -245,48 +250,48 @@ func _load_real_sounds() -> void:
 	print("  📊 Loaded %d skeleton death sound variations" % skeleton_death_sounds.size())
 
 	# Load gold loot sound (coin jingling)
-	gold_loot_sound = load("res://assets/sounds/ui/gold_loot.wav")
+	gold_loot_sound = load("res://assets/audio/sfx/ui/gold_loot.wav")
 	if gold_loot_sound:
 		print("  ✅ Loaded gold_loot.wav")
 	else:
 		push_warning("  ⚠️ Failed to load gold_loot.wav")
 
 	# Load item pickup sound (satisfying pickup)
-	item_pickup_sound = load("res://assets/sounds/ui/item_pickup.wav")
+	item_pickup_sound = load("res://assets/audio/sfx/ui/item_pickup.wav")
 	if item_pickup_sound:
 		print("  ✅ Loaded item_pickup.wav")
 	else:
 		push_warning("  ⚠️ Failed to load item_pickup.wav")
 
 	# Load chest open sound
-	chest_open_sound = load("res://assets/sounds/ui/chest_open.wav")
+	chest_open_sound = load("res://assets/audio/sfx/ui/chest_open.wav")
 	if chest_open_sound:
 		print("  ✅ Loaded chest_open.wav")
 	else:
 		push_warning("  ⚠️ Failed to load chest_open.wav")
 
 	# Load corpse loot sound (rummaging through dead enemy)
-	corpse_loot_sound = load("res://assets/sounds/ui/corpse_loot.wav")
+	corpse_loot_sound = load("res://assets/audio/sfx/ui/corpse_loot.wav")
 	if corpse_loot_sound:
 		print("  ✅ Loaded corpse_loot.wav")
 	else:
 		push_warning("  ⚠️ Failed to load corpse_loot.wav")
 
 	# Load blacksmith open sound (vendor UI)
-	blacksmith_open_sound = load("res://assets/sounds/ui/blacksmith_open.wav")
+	blacksmith_open_sound = load("res://assets/audio/sfx/ui/blacksmith_open.wav")
 	if blacksmith_open_sound:
 		print("  ✅ Loaded blacksmith_open.wav")
 	else:
 		push_warning("  ⚠️ Failed to load blacksmith_open.wav")
 
 	# Load quest sounds
-	quest_accept_sound = load("res://assets/sounds/ui/quest_accept.wav")
+	quest_accept_sound = load("res://assets/audio/sfx/ui/quest_accept.wav")
 	if quest_accept_sound:
 		print("  ✅ Loaded quest_accept.wav")
 	else:
 		push_warning("  ⚠️ Failed to load quest_accept.wav")
 
-	quest_turn_in_sound = load("res://assets/sounds/ui/quest_turn_in.wav")
+	quest_turn_in_sound = load("res://assets/audio/sfx/ui/quest_turn_in.wav")
 	if quest_turn_in_sound:
 		print("  ✅ Loaded quest_turn_in.wav")
 	else:
@@ -307,50 +312,50 @@ func _load_real_sounds() -> void:
 		push_warning("  ⚠️ Failed to load equip_item.wav")
 
 	# Load button click sound (UI interactions)
-	button_click_sound = load("res://assets/sounds/ui/button_click.wav")
+	button_click_sound = load("res://assets/audio/sfx/ui/button_click.wav")
 	if button_click_sound:
 		print("  ✅ Loaded button_click.wav")
 	else:
 		push_warning("  ⚠️ Failed to load button_click.wav")
 
 	# Load button hover sound (UI interactions)
-	button_hover_sound = load("res://assets/sounds/ui/button_hover.wav")
+	button_hover_sound = load("res://assets/audio/sfx/ui/button_hover.wav")
 	if button_hover_sound:
 		print("  ✅ Loaded button_hover.wav")
 	else:
 		push_warning("  ⚠️ Failed to load button_hover.wav")
 
 	# Load inventory open sound (bag open/close)
-	inventory_open_sound = load("res://assets/sounds/ui/inventory_open.wav")
+	inventory_open_sound = load("res://assets/audio/sfx/ui/inventory_open.wav")
 	if inventory_open_sound:
 		print("  ✅ Loaded inventory_open.wav")
 	else:
 		push_warning("  ⚠️ Failed to load inventory_open.wav")
 
 	# Load character sheet sound (paper rustling)
-	character_sheet_sound = load("res://assets/sounds/ui/character_sheet_open.wav")
+	character_sheet_sound = load("res://assets/audio/sfx/ui/character_sheet_open.wav")
 	if character_sheet_sound:
 		print("  ✅ Loaded character_sheet_open.wav")
 	else:
 		push_warning("  ⚠️ Failed to load character_sheet_open.wav")
 
 	# Load crit window open sound (crystalline chime)
-	crit_window_open_sound = load("res://assets/sounds/combat/crit_window_open.wav")
+	crit_window_open_sound = load("res://assets/audio/sfx/combat/crit_window_open.wav")
 	if crit_window_open_sound:
 		print("  ✅ Loaded crit_window_open.wav")
 	else:
 		push_warning("  ⚠️ Failed to load crit_window_open.wav")
 
 	# Load fire fuel add sound (fire magic)
-	fire_fuel_add_sound = load("res://assets/sounds/ambient/fire_fuel_add.mp3")
+	fire_fuel_add_sound = load("res://assets/audio/sfx/ambient/fire_fuel_add.mp3")
 	if fire_fuel_add_sound:
 		print("  ✅ Loaded fire_fuel_add.mp3")
 	else:
 		push_warning("  ⚠️ Failed to load fire_fuel_add.mp3")
 
 	# Load sword swing sounds (whoosh variations)
-	var sword_swing_1 = load("res://assets/sounds/combat/weapon_swings/sword_swing_1.wav")
-	var sword_swing_2 = load("res://assets/sounds/combat/weapon_swings/sword_swing_2.wav")
+	var sword_swing_1 = load("res://assets/audio/sfx/combat/weapon_swings/sword_swing_1.wav")
+	var sword_swing_2 = load("res://assets/audio/sfx/combat/weapon_swings/sword_swing_2.wav")
 
 	if sword_swing_1:
 		sword_swing_sounds.append(sword_swing_1)
@@ -368,7 +373,7 @@ func _load_real_sounds() -> void:
 
 	# Load unarmed swing sounds (fist whoosh variations)
 	for i in range(1, 4):
-		var unarmed_swing = load("res://assets/sounds/combat/weapon_swings/unarmed_swing_%d.wav" % i)
+		var unarmed_swing = load("res://assets/audio/sfx/combat/weapon_swings/unarmed_swing_%d.wav" % i)
 		if unarmed_swing:
 			unarmed_swing_sounds.append(unarmed_swing)
 			print("  ✅ Loaded unarmed_swing_%d.wav" % i)
@@ -378,8 +383,8 @@ func _load_real_sounds() -> void:
 	print("  📊 Loaded %d unarmed swing sound variations" % unarmed_swing_sounds.size())
 
 	# Load player hurt sounds (grunt/pain sounds)
-	var player_hurt_1 = load("res://assets/sounds/player/player_hurt_1.wav")
-	var player_hurt_2 = load("res://assets/sounds/player/player_hurt_2.wav")
+	var player_hurt_1 = load("res://assets/audio/sfx/player/player_hurt_1.wav")
+	var player_hurt_2 = load("res://assets/audio/sfx/player/player_hurt_2.wav")
 
 	if player_hurt_1:
 		player_hurt_sounds.append(player_hurt_1)
@@ -396,22 +401,22 @@ func _load_real_sounds() -> void:
 	print("  📊 Loaded %d player hurt sound variations" % player_hurt_sounds.size())
 
 	# Load player death sounds (gender-specific)
-	player_death_male_sound = load("res://assets/sounds/player/player_death_male.wav")
+	player_death_male_sound = load("res://assets/audio/sfx/player/player_death_male.wav")
 	if player_death_male_sound:
 		print("  ✅ Loaded player_death_male.wav")
 	else:
 		push_warning("  ⚠️ Failed to load player_death_male.wav")
 
-	player_death_female_sound = load("res://assets/sounds/player/player_death_female.wav")
+	player_death_female_sound = load("res://assets/audio/sfx/player/player_death_female.wav")
 	if player_death_female_sound:
 		print("  ✅ Loaded player_death_female.wav")
 	else:
 		push_warning("  ⚠️ Failed to load player_death_female.wav")
 
 	# Load player footstep sounds
-	var player_step_1 = load("res://assets/sounds/footsteps/player_step_1.wav")
-	var player_step_2 = load("res://assets/sounds/footsteps/player_step_2.wav")
-	var player_step_3 = load("res://assets/sounds/footsteps/player_step_3.wav")
+	var player_step_1 = load("res://assets/audio/sfx/footsteps/player_step_1.wav")
+	var player_step_2 = load("res://assets/audio/sfx/footsteps/player_step_2.wav")
+	var player_step_3 = load("res://assets/audio/sfx/footsteps/player_step_3.wav")
 
 	if player_step_1:
 		player_footstep_sounds.append(player_step_1)
@@ -426,9 +431,9 @@ func _load_real_sounds() -> void:
 	print("  📊 Loaded %d player footstep sound variations" % player_footstep_sounds.size())
 
 	# Load skeleton footstep sounds (same files, will sound different with pitch variation)
-	var skeleton_step_1 = load("res://assets/sounds/footsteps/skeleton_step_1.wav")
-	var skeleton_step_2 = load("res://assets/sounds/footsteps/skeleton_step_2.wav")
-	var skeleton_step_3 = load("res://assets/sounds/footsteps/skeleton_step_3.wav")
+	var skeleton_step_1 = load("res://assets/audio/sfx/footsteps/skeleton_step_1.wav")
+	var skeleton_step_2 = load("res://assets/audio/sfx/footsteps/skeleton_step_2.wav")
+	var skeleton_step_3 = load("res://assets/audio/sfx/footsteps/skeleton_step_3.wav")
 
 	if skeleton_step_1:
 		skeleton_footstep_sounds.append(skeleton_step_1)
@@ -447,7 +452,7 @@ func _load_real_sounds() -> void:
 
 	# Wolf aggro sounds (growl/snarl when spotting player)
 	for i in range(1, 4):
-		var wolf_aggro = load("res://assets/sounds/combat/reactions/wolf_aggro_%d.wav" % i)
+		var wolf_aggro = load("res://assets/audio/sfx/combat/reactions/wolf_aggro_%d.wav" % i)
 		if wolf_aggro:
 			wolf_aggro_sounds.append(wolf_aggro)
 			print("    ✅ Loaded wolf_aggro_%d.wav" % i)
@@ -456,7 +461,7 @@ func _load_real_sounds() -> void:
 
 	# Wolf attack sounds (bite)
 	for i in range(1, 4):
-		var wolf_attack = load("res://assets/sounds/combat/reactions/wolf_attack_%d.wav" % i)
+		var wolf_attack = load("res://assets/audio/sfx/combat/reactions/wolf_attack_%d.wav" % i)
 		if wolf_attack:
 			wolf_attack_sounds.append(wolf_attack)
 			print("    ✅ Loaded wolf_attack_%d.wav" % i)
@@ -465,7 +470,7 @@ func _load_real_sounds() -> void:
 
 	# Wolf hurt sounds (yelp/whimper)
 	for i in range(1, 6):
-		var wolf_hurt = load("res://assets/sounds/combat/reactions/wolf_hurt_%d.wav" % i)
+		var wolf_hurt = load("res://assets/audio/sfx/combat/reactions/wolf_hurt_%d.wav" % i)
 		if wolf_hurt:
 			wolf_hurt_sounds.append(wolf_hurt)
 			print("    ✅ Loaded wolf_hurt_%d.wav" % i)
@@ -474,7 +479,7 @@ func _load_real_sounds() -> void:
 
 	# Wolf death sounds
 	for i in range(1, 3):
-		var wolf_death = load("res://assets/sounds/combat/reactions/wolf_death_%d.wav" % i)
+		var wolf_death = load("res://assets/audio/sfx/combat/reactions/wolf_death_%d.wav" % i)
 		if wolf_death:
 			wolf_death_sounds.append(wolf_death)
 			print("    ✅ Loaded wolf_death_%d.wav" % i)
@@ -483,7 +488,7 @@ func _load_real_sounds() -> void:
 
 	# Wolf footstep sounds (walk/trot)
 	for i in range(1, 4):
-		var wolf_step = load("res://assets/sounds/footsteps/wolf_step_%d.wav" % i)
+		var wolf_step = load("res://assets/audio/sfx/footsteps/wolf_step_%d.wav" % i)
 		if wolf_step:
 			wolf_footstep_sounds.append(wolf_step)
 			print("    ✅ Loaded wolf_step_%d.wav" % i)
@@ -492,7 +497,7 @@ func _load_real_sounds() -> void:
 
 	# Wolf running footstep sounds
 	for i in range(1, 3):
-		var wolf_run = load("res://assets/sounds/footsteps/wolf_run_%d.wav" % i)
+		var wolf_run = load("res://assets/audio/sfx/footsteps/wolf_run_%d.wav" % i)
 		if wolf_run:
 			wolf_run_sounds.append(wolf_run)
 			print("    ✅ Loaded wolf_run_%d.wav" % i)
@@ -500,19 +505,19 @@ func _load_real_sounds() -> void:
 			push_warning("    ⚠️ Failed to load wolf_run_%d.wav" % i)
 
 	# Wolf howl sounds (ambient)
-	wolf_howl_distant_sound = load("res://assets/sounds/ambient/wolf_howl_distant.wav")
+	wolf_howl_distant_sound = load("res://assets/audio/sfx/ambient/wolf_howl_distant.wav")
 	if wolf_howl_distant_sound:
 		print("    ✅ Loaded wolf_howl_distant.wav")
 	else:
 		push_warning("    ⚠️ Failed to load wolf_howl_distant.wav")
 
-	wolf_howl_pack_sound = load("res://assets/sounds/ambient/wolf_howl_pack.wav")
+	wolf_howl_pack_sound = load("res://assets/audio/sfx/ambient/wolf_howl_pack.wav")
 	if wolf_howl_pack_sound:
 		print("    ✅ Loaded wolf_howl_pack.wav")
 	else:
 		push_warning("    ⚠️ Failed to load wolf_howl_pack.wav")
 
-	wolf_howl_alpha_sound = load("res://assets/sounds/ambient/wolf_howl_alpha.wav")
+	wolf_howl_alpha_sound = load("res://assets/audio/sfx/ambient/wolf_howl_alpha.wav")
 	if wolf_howl_alpha_sound:
 		print("    ✅ Loaded wolf_howl_alpha.wav")
 	else:
@@ -566,13 +571,13 @@ func _load_real_sounds() -> void:
 
 	# Load healing staff sounds
 	print("  💚 Loading healing staff sounds...")
-	healing_staff_cast_sound = load("res://assets/sounds/player/healing_staff_cast.wav")
+	healing_staff_cast_sound = load("res://assets/audio/sfx/player/healing_staff_cast.wav")
 	if healing_staff_cast_sound:
 		print("  ✅ Loaded healing_staff_cast.wav")
 	else:
 		push_warning("  ⚠️ Failed to load healing_staff_cast.wav")
 
-	healing_staff_impact_sound = load("res://assets/sounds/player/healing_staff_impact.wav")
+	healing_staff_impact_sound = load("res://assets/audio/sfx/player/healing_staff_impact.wav")
 	if healing_staff_impact_sound:
 		print("  ✅ Loaded healing_staff_impact.wav")
 	else:
@@ -580,7 +585,7 @@ func _load_real_sounds() -> void:
 
 	# Load environment damage sounds
 	print("  🔥 Loading environment damage sounds...")
-	lava_burn_sound = load("res://assets/sounds/combat/lava_burn.wav")
+	lava_burn_sound = load("res://assets/audio/sfx/combat/lava_burn.wav")
 	if lava_burn_sound:
 		print("  ✅ Loaded lava_burn.wav")
 	else:
@@ -588,7 +593,7 @@ func _load_real_sounds() -> void:
 
 	# Load player progression sounds
 	print("  🎉 Loading player progression sounds...")
-	level_up_sound = load("res://assets/sounds/player/level_up.wav")
+	level_up_sound = load("res://assets/audio/sfx/player/level_up.wav")
 	if level_up_sound:
 		print("  ✅ Loaded level_up.wav")
 	else:
@@ -597,9 +602,9 @@ func _load_real_sounds() -> void:
 	# Load tree chopping/falling sounds (shared by all trees)
 	print("  🌲 Loading tree sounds...")
 	var chop_paths = [
-		"res://assets/sounds/tree/chop_1.wav",
-		"res://assets/sounds/tree/chop_2.wav",
-		"res://assets/sounds/tree/chop_3.wav"
+		"res://assets/audio/sfx/tree/chop_1.wav",
+		"res://assets/audio/sfx/tree/chop_2.wav",
+		"res://assets/audio/sfx/tree/chop_3.wav"
 	]
 	for path in chop_paths:
 		var stream = load(path)
@@ -610,9 +615,9 @@ func _load_real_sounds() -> void:
 			push_warning("  ⚠️ Failed to load %s" % path)
 
 	var fall_paths = [
-		"res://assets/sounds/tree/tree_fall_1.wav",
-		"res://assets/sounds/tree/tree_fall_2.wav",
-		"res://assets/sounds/tree/tree_fall_3.wav"
+		"res://assets/audio/sfx/tree/tree_fall_1.wav",
+		"res://assets/audio/sfx/tree/tree_fall_2.wav",
+		"res://assets/audio/sfx/tree/tree_fall_3.wav"
 	]
 	for path in fall_paths:
 		var stream = load(path)
@@ -627,7 +632,7 @@ func _load_real_sounds() -> void:
 func _load_weapon_sounds(weapon_type: String, count: int) -> void:
 	"""Load weapon-specific hit sounds"""
 	for i in range(1, count + 1):
-		var sound_path = "res://assets/sounds/combat/weapons/%s/%s_hit_%d.wav" % [weapon_type, weapon_type, i]
+		var sound_path = "res://assets/audio/sfx/combat/weapons/%s/%s_hit_%d.wav" % [weapon_type, weapon_type, i]
 		var sound = load(sound_path)
 		if sound:
 			weapon_hit_sounds[weapon_type].append(sound)

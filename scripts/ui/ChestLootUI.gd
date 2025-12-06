@@ -19,6 +19,7 @@ var chest_owner: TreasureChest = null
 const SLOT_SIZE = Vector2(52, 52)
 const GRID_COLUMNS = 3
 const MIN_SLOTS = 3
+const LOOT_RANGE = 150.0  # Max distance to loot chest
 
 # UI colors - use UITheme singleton
 var SLOT_BG: Color:
@@ -43,6 +44,22 @@ func _ready() -> void:
 
 	if loot_grid:
 		loot_grid.columns = GRID_COLUMNS
+
+func _process(_delta: float) -> void:
+	"""Check if player is still in range of chest"""
+	if not visible or not chest_owner:
+		return
+
+	# Get player position
+	var player = get_tree().get_first_node_in_group("player")
+	if not player:
+		return
+
+	# Check distance to chest
+	if is_instance_valid(chest_owner):
+		var distance = player.global_position.distance_to(chest_owner.global_position)
+		if distance > LOOT_RANGE:
+			close_ui()
 
 func apply_panel_style() -> void:
 	"""Apply standardized stone gray theme to panel"""

@@ -559,9 +559,10 @@ func mine_rock() -> void:
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("gain_experience"):
 		player.gain_experience(xp_gain)
-		# Show XP notification
-		if NotificationManager:
-			NotificationManager.notify_xp_gained(xp_gain, "Mining")
+		# Show world-space XP text floating up from rock
+		var game_world = get_tree().get_first_node_in_group("game_world")
+		if game_world:
+			CombatText.create_xp(xp_gain, global_position, game_world)
 
 	# Animate rock breaking/fading
 	animate_rock_break()
