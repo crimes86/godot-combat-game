@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a1215"/>
+      <stop offset="100%" stop-color="#0d1a1f"/>
+    </linearGradient>
+    <linearGradient id="silhouetteGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00ffff" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#00ffff" stop-opacity="0.15"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="50" fill="url(#avatarGrad)"/>
+
+  <!-- Subtle grid pattern -->
+  <g opacity="0.08" stroke="#00ffff" stroke-width="0.5" fill="none">
+    <line x1="0" y1="25" x2="100" y2="25"/>
+    <line x1="0" y1="50" x2="100" y2="50"/>
+    <line x1="0" y1="75" x2="100" y2="75"/>
+    <line x1="25" y1="0" x2="25" y2="100"/>
+    <line x1="50" y1="0" x2="50" y2="100"/>
+    <line x1="75" y1="0" x2="75" y2="100"/>
+  </g>
+
+  <!-- User silhouette -->
+  <g fill="url(#silhouetteGrad)">
+    <!-- Head -->
+    <circle cx="50" cy="35" r="16"/>
+    <!-- Body/shoulders -->
+    <path d="M50 55 C30 55 18 70 18 90 L18 100 L82 100 L82 90 C82 70 70 55 50 55 Z"/>
+  </g>
+
+  <!-- Neon outline glow -->
+  <g fill="none" stroke="#00ffff" stroke-width="1.5" opacity="0.6">
+    <circle cx="50" cy="35" r="16"/>
+    <path d="M50 55 C30 55 18 70 18 90 L18 100 L82 100 L82 90 C82 70 70 55 50 55 Z"/>
+  </g>
+
+  <!-- Question mark accent -->
+  <text x="50" y="42" text-anchor="middle" font-family="monospace" font-size="18" font-weight="bold" fill="#00ffff" opacity="0.5">?</text>
+</svg>

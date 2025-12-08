@@ -45,6 +45,9 @@ MobileInput="*res://scripts/mobile/MobileInput.gd"
 GameInput="*res://scripts/systems/GameInput.gd"
 MantleAuth="*res://scripts/systems/MantleAuth.gd"
 MantleCosmetics="*res://scripts/systems/MantleCosmetics.gd"
+ForgeItemDB="*res://scripts/systems/ForgeItemDB.gd"
+ForgeItemManager="*res://scripts/systems/ForgeItemManager.gd"
+ForgeVisualEffects="*res://scripts/systems/ForgeVisualEffects.gd"
 
 [display]
 

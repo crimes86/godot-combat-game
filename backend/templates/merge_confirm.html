@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Merge Accounts – Mantle</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .merge-wrapper {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .merge-card {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      padding: 2rem;
+      background: linear-gradient(180deg, rgba(20,25,30,0.95) 0%, rgba(8,10,14,0.98) 100%);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(0,255,255,0.25);
+      border-radius: 16px;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        inset 0 0 40px rgba(0,255,255,0.03),
+        0 4px 0 rgba(0,0,0,0.3),
+        0 8px 20px rgba(0,0,0,0.4),
+        0 0 30px rgba(0,255,255,0.1);
+      overflow: hidden;
+    }
+
+    /* Circuit pattern */
+    .merge-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%2300ffff;stroke-width:0.5;opacity:0.08%7D.pad%7Bfill:%2300ffff;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,25 L25,25 L25,50 L50,50'/%3E%3Cpath class='trace' d='M75,0 L75,25 L100,25'/%3E%3Cpath class='trace' d='M0,75 L35,75 L35,100'/%3E%3Ccircle class='pad' cx='25' cy='25' r='2'/%3E%3Ccircle class='pad' cx='50' cy='50' r='2'/%3E%3C/svg%3E");
+      background-size: 100px 100px;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+      border-radius: inherit;
+    }
+
+    .merge-card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Icon */
+    .merge-icon {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .merge-icon svg {
+      width: 64px;
+      height: 64px;
+      filter: drop-shadow(0 0 15px rgba(255,200,50,0.6));
+    }
+
+    /* Title */
+    .merge-title {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.3rem;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(0,255,255,0.5);
+    }
+
+    .merge-subtitle {
+      color: #888;
+      font-size: 0.85rem;
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Account boxes */
+    .accounts-visual {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .account-box {
+      padding: 1rem;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(100,100,100,0.3);
+      border-radius: 10px;
+      text-align: center;
+      min-width: 120px;
+    }
+    .account-box.current {
+      border-color: rgba(0,255,255,0.4);
+      box-shadow: 0 0 15px rgba(0,255,255,0.15);
+    }
+    .account-box.other {
+      border-color: rgba(255,200,50,0.4);
+      box-shadow: 0 0 15px rgba(255,200,50,0.15);
+    }
+
+    .account-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 0.5rem;
+    }
+    .account-box.current .account-label { color: var(--neon); }
+    .account-box.other .account-label { color: #ffcc33; }
+
+    .account-name {
+      color: #fff;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: bold;
+    }
+
+    .merge-arrow {
+      color: #666;
+      font-size: 1.5rem;
+    }
+
+    /* Info box */
+    .merge-info {
+      padding: 1rem;
+      background: rgba(0,255,255,0.05);
+      border: 1px solid rgba(0,255,255,0.2);
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+    .merge-info-title {
+      color: var(--neon);
+      font-size: 0.75rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 0.5rem;
+    }
+    .merge-info-text {
+      color: #aaa;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    /* Conflict warning */
+    .conflict-box {
+      padding: 1rem;
+      background: rgba(255,50,50,0.1);
+      border: 1px solid rgba(255,100,100,0.4);
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+    .conflict-title {
+      color: #ff6666;
+      font-size: 0.8rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 0.5rem;
+    }
+    .conflict-text {
+      color: #ccc;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    .conflict-list {
+      margin: 0.5rem 0 0 1rem;
+      padding: 0;
+      color: #ff8888;
+    }
+    .conflict-list li {
+      margin: 0.25rem 0;
+    }
+
+    /* Buttons */
+    .merge-actions {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 0.9rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      text-align: center;
+    }
+
+    .btn-confirm {
+      background: linear-gradient(180deg, rgba(0,200,150,0.8) 0%, rgba(0,150,100,0.9) 100%);
+      color: #fff;
+      box-shadow: 0 0 15px rgba(0,200,150,0.3);
+    }
+    .btn-confirm:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 0 25px rgba(0,200,150,0.5);
+    }
+    .btn-confirm:disabled {
+      background: rgba(80,80,80,0.5);
+      color: #666;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    .btn-cancel {
+      background: rgba(60,60,60,0.6);
+      color: #aaa;
+      border: 1px solid rgba(100,100,100,0.3);
+    }
+    .btn-cancel:hover {
+      background: rgba(80,80,80,0.6);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="merge-wrapper">
+    <div class="merge-card">
+      <!-- Icon -->
+      <div class="merge-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#ffcc33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- Two paths merging into one -->
+          <path d="M6 3v6"/>
+          <path d="M18 3v6"/>
+          <path d="M6 9c0 3 3 4 6 4s6-1 6-4"/>
+          <path d="M12 13v8"/>
+          <!-- Arrow head -->
+          <path d="M9 18l3 3 3-3"/>
+        </svg>
+      </div>
+
+      <!-- Title -->
+      <h1 class="merge-title">Merge Accounts?</h1>
+      <p class="merge-subtitle">This {{ target_provider|capitalize }} account belongs to another user</p>
+
+      <!-- Visual -->
+      <div class="accounts-visual">
+        <div class="account-box other">
+          <div class="account-label">Their Account</div>
+          <div class="account-name">{{ other_username }}</div>
+        </div>
+        <div class="merge-arrow">→</div>
+        <div class="account-box current">
+          <div class="account-label">Your Account</div>
+          <div class="account-name">You</div>
+        </div>
+      </div>
+
+      <!-- Info -->
+      <div class="merge-info">
+        <div class="merge-info-title">What happens?</div>
+        <div class="merge-info-text">
+          All linked accounts from <strong>{{ other_username }}</strong> will be transferred to you.
+          Their profile will be deleted.
+        </div>
+      </div>
+
+      {% if conflicts and conflicts|length > 0 %}
+      <!-- Conflict Warning -->
+      <div class="conflict-box">
+        <div class="conflict-title">Cannot Merge</div>
+        <div class="conflict-text">
+          Both accounts have these providers linked:
+          <ul class="conflict-list">
+            {% for provider in conflicts %}
+            <li>{{ provider|capitalize }}</li>
+            {% endfor %}
+          </ul>
+          Unclaim one first, then try again.
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Actions -->
+      <form action="/merge-confirm" method="post" class="merge-actions">
+        <input type="hidden" name="other_user_id" value="{{ other_user_id }}">
+        <input type="hidden" name="target_provider" value="{{ target_provider }}">
+        <input type="hidden" name="current_user_id" value="{{ current_user_id }}">
+        <a href="/dashboard" class="btn btn-cancel">Cancel</a>
+        <button type="submit" class="btn btn-confirm" {% if conflicts and conflicts|length > 0 %}disabled{% endif %}>
+          Merge
+        </button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

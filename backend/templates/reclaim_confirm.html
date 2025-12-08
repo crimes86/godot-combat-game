@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Claim Provider – Mantle</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .reclaim-wrapper {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .reclaim-card {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      padding: 2rem;
+      background: linear-gradient(180deg, rgba(20,25,30,0.95) 0%, rgba(8,10,14,0.98) 100%);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,180,50,0.3);
+      border-radius: 16px;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        inset 0 0 40px rgba(255,180,50,0.03),
+        0 4px 0 rgba(0,0,0,0.3),
+        0 8px 20px rgba(0,0,0,0.4),
+        0 0 30px rgba(255,180,50,0.15);
+      overflow: hidden;
+    }
+
+    /* Circuit pattern */
+    .reclaim-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%23ffaa00;stroke-width:0.5;opacity:0.08%7D.pad%7Bfill:%23ffaa00;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,25 L25,25 L25,50 L50,50'/%3E%3Cpath class='trace' d='M75,0 L75,25 L100,25'/%3E%3Cpath class='trace' d='M0,75 L35,75 L35,100'/%3E%3Ccircle class='pad' cx='25' cy='25' r='2'/%3E%3Ccircle class='pad' cx='50' cy='50' r='2'/%3E%3C/svg%3E");
+      background-size: 100px 100px;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+      border-radius: inherit;
+    }
+
+    .reclaim-card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Icon */
+    .reclaim-icon {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .reclaim-icon svg {
+      width: 64px;
+      height: 64px;
+      filter: drop-shadow(0 0 15px rgba(255,180,50,0.6));
+    }
+
+    /* Title */
+    .reclaim-title {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.3rem;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(255,180,50,0.5);
+    }
+
+    .reclaim-subtitle {
+      color: #888;
+      font-size: 0.85rem;
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Provider badge */
+    .provider-badge-large {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,180,50,0.3);
+      border-radius: 10px;
+      margin-bottom: 1.5rem;
+    }
+    .provider-badge-large img {
+      width: 32px;
+      height: 32px;
+    }
+    .provider-badge-large span {
+      color: #fff;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1rem;
+      font-weight: bold;
+    }
+
+    /* Info boxes */
+    .info-box {
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+    .info-box.warning {
+      background: rgba(255,180,50,0.1);
+      border: 1px solid rgba(255,180,50,0.3);
+    }
+    .info-box.neutral {
+      background: rgba(100,100,100,0.15);
+      border: 1px solid rgba(100,100,100,0.3);
+    }
+
+    .info-title {
+      font-size: 0.75rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 0.5rem;
+    }
+    .info-box.warning .info-title { color: #ffcc66; }
+    .info-box.neutral .info-title { color: #888; }
+
+    .info-text {
+      color: #bbb;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    .info-text strong {
+      color: #fff;
+    }
+
+    /* Buttons */
+    .reclaim-actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 0.9rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      text-align: center;
+    }
+
+    .btn-confirm {
+      background: linear-gradient(180deg, rgba(255,180,50,0.8) 0%, rgba(200,140,30,0.9) 100%);
+      color: #000;
+      box-shadow: 0 0 15px rgba(255,180,50,0.3);
+    }
+    .btn-confirm:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 25px rgba(255,180,50,0.5);
+    }
+
+    .btn-cancel {
+      background: rgba(60,60,60,0.6);
+      color: #aaa;
+      border: 1px solid rgba(100,100,100,0.3);
+    }
+    .btn-cancel:hover {
+      background: rgba(80,80,80,0.6);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="reclaim-wrapper">
+    <div class="reclaim-card">
+      <!-- Icon - transfer/claim symbol -->
+      <div class="reclaim-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#ffaa33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- Unlinked chain becoming linked -->
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+      </div>
+
+      <!-- Title -->
+      <h1 class="reclaim-title">Claim Provider?</h1>
+      <p class="reclaim-subtitle">This {{ provider_display }} account was unlinked by another user</p>
+
+      <!-- Provider being claimed -->
+      <div class="provider-badge-large">
+        <img src="/static/icons/{{ provider_name }}.svg" alt="{{ provider_display }}" />
+        <span>{{ provider_display }}</span>
+      </div>
+
+      <!-- Warning -->
+      <div class="info-box warning">
+        <div class="info-title">Previously Synced</div>
+        <div class="info-text">
+          This {{ provider_display }} was linked to <strong>{{ other_username }}</strong> and achievements were already synced.
+          Those achievements are <strong>consumed</strong> and credited to their Mantle.
+        </div>
+      </div>
+
+      <!-- What happens -->
+      <div class="info-box neutral">
+        <div class="info-title">What you get</div>
+        <div class="info-text">
+          <strong>Already synced achievements:</strong> Display only (no Mantle points)<br/>
+          <strong>NEW achievements you earn:</strong> Full credit to your Mantle!
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <form action="/reclaim-confirm" method="post" class="reclaim-actions">
+        <input type="hidden" name="provider_name" value="{{ provider_name }}">
+        <input type="hidden" name="provider_user_id" value="{{ provider_user_id }}">
+        <input type="hidden" name="current_user_id" value="{{ current_user_id }}">
+        {% if access_token %}
+        <input type="hidden" name="access_token" value="{{ access_token }}">
+        {% endif %}
+        <a href="/dashboard" class="btn btn-cancel">Cancel</a>
+        <button type="submit" class="btn btn-confirm">Claim</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

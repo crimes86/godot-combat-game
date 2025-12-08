@@ -23,7 +23,8 @@ extends Node
 
 enum ItemRarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 enum ItemType { WEAPON, ARMOR_HEAD, ARMOR_CHEST, ARMOR_LEGS, ARMOR_HANDS, ARMOR_FEET, CAPE, SHIELD, ACCESSORY, EMOTE, TITLE }
-enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, BOW, GREATSWORD, KATANA, SCYTHE }
+# WeaponClass: Core (SWORD-RAPIER have animation data), Extended (rest fall back to core)
+enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, RAPIER, GREATSWORD, KATANA, SABER, SCIMITAR, HALBERD, PIKE, TRIDENT, FLAIL, SCYTHE, BOW, CROSSBOW }
 
 # Base paths for forged items (separate from regular loot)
 const FORGED_ITEMS_BASE = "res://assets/equipment/forged/"

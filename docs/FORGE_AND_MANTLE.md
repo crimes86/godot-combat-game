@@ -195,131 +195,387 @@ Response:
 
 ---
 
-## Dynamic Rarity Effects
+## Forged Item Stats (Backend-Computed)
 
-The new API fields enable **procedurally-generated unique effects** on forged items based on achievement metadata. This creates differentiation even among items of the same base type.
+Stats are computed **once at forge time** by the backend, not at runtime in Godot. This ensures consistency and allows on-chain storage of item properties.
 
-### Effect Generation System
+### ForgedAchievement Schema (Backend)
 
-Each forged item can have unique modifiers based on the source achievement:
+```python
+class ForgedAchievement(Base):
+    # Existing fields
+    token_id = Column(String)
+    tx_hash = Column(String)
+    achievement_id = Column(Integer, ForeignKey)
+    forged_at = Column(DateTime)
 
-#### 1. Effort Score Effects (0-100)
+    # Item identity (computed at forge time)
+    item_id = Column(String(64))          # Maps to ForgeItemDB: "coiled_sword"
+    item_type = Column(String(32))        # "weapon", "armor", "shield", "accessory"
+    item_name = Column(String(128))       # Display name: "Ancient Coiled Sword"
+    item_rarity = Column(String(16))      # From achievement.rarity_tier
 
-| Score Range | Effect Tier | Example Modifiers |
-|-------------|-------------|-------------------|
-| 0-20 | Minor | +1% damage, subtle glow |
-| 21-40 | Standard | +2% damage, visible particles |
-| 41-60 | Enhanced | +3% damage, aura effect |
-| 61-80 | Superior | +5% damage, trail effect |
-| 81-100 | Exceptional | +7% damage, unique VFX |
+    # Visual properties (computed from effort_score + game theme)
+    effect_name = Column(String(32))      # "ember_trail", "void_particles"
+    effect_intensity = Column(Float)      # 0.0-1.0 (from effort_score/100)
+    glow_color = Column(String(7))        # "#ff6a00" (hex from game theme)
 
-#### 2. Hidden Achievement Bonus
+    # Bonus metadata (for display)
+    effort_tier = Column(String(16))      # "Exceptional", "Superior", etc.
+    vintage_years = Column(Integer)       # Years since unlock
+    is_secret = Column(Boolean)           # From achievement.hidden
+```
 
-Items forged from hidden/secret achievements receive:
-- **"Secrets Keeper"** suffix
-- Purple particle overlay
-- +10% to base effect intensity
+### Effect Calculation Rules (Backend)
 
-#### 3. Vintage Bonus (unlocked_at)
+| Field | Calculation |
+|-------|-------------|
+| `effect_intensity` | `effort_score / 100` (0.0 - 1.0) |
+| `effort_tier` | "Exceptional" (81+), "Superior" (61+), "Enhanced" (41+), "Standard" (21+), "Minor" (0+) |
+| `vintage_years` | `(now - unlocked_at).years` |
+| `item_name` | `"{prefix} {base_name}"` where prefix = "Ancient" (7y+) or "Veteran's" (3y+) |
+| `effect_name` | From game theme mapping by `app_id` |
+| `glow_color` | From game theme mapping by `app_id` |
 
-Items from achievements unlocked long ago gain:
-- **Age calculation:** `years_since_unlock = (now - unlocked_at) / 365`
-- **"Veteran's"** prefix for 3+ years old
-- **"Ancient"** prefix for 7+ years old
-- +1% effect per year (capped at +10%)
+### API Response: GET /api/me/forged-items
 
-#### 4. Game-Specific Effects
-
-Use `app_id` and `game_name` to apply thematic effects:
-
-```gdscript
-const GAME_THEMES = {
-    "730": {"name": "Counter-Strike 2", "effect": "tactical_glow", "color": Color.ORANGE},
-    "1245620": {"name": "Elden Ring", "effect": "erdtree_blessing", "color": Color.GOLD},
-    "374320": {"name": "Dark Souls III", "effect": "ember_trail", "color": Color("#ff6a00")},
-    "413150": {"name": "Stardew Valley", "effect": "nature_sparkle", "color": Color.GREEN},
-    "1145360": {"name": "Hades", "effect": "underworld_flame", "color": Color.RED},
+```json
+{
+  "forged_items": [
+    {
+      "token_id": "0xabc123...",
+      "item_id": "coiled_sword",
+      "item_type": "weapon",
+      "item_name": "Ancient Coiled Sword",
+      "item_rarity": "Legendary",
+      "effect_name": "ember_trail",
+      "effect_intensity": 0.95,
+      "glow_color": "#ff6a00",
+      "effort_tier": "Exceptional",
+      "vintage_years": 6,
+      "is_secret": false,
+      "forged_at": "2024-12-08T15:30:00Z"
+    }
+  ]
 }
 ```
 
-### Implementation Example
+### Godot Architecture (Simplified)
 
-```gdscript
-## ForgeEffectGenerator.gd - Generate unique effects from achievement data
+```
+ForgeItemManager.gd
+├── fetch_forged_items()     # GET /api/me/forged-items
+├── claim_forge()            # POST /api/forge/claim
+├── get_forged_item(id)      # Lookup from cache
+└── has_forged_item(id)      # Ownership check
 
-func generate_item_effects(achievement: Dictionary, base_item: Dictionary) -> Dictionary:
-    var effects = base_item.get("effects", []).duplicate()
-    var modifiers = {}
+ForgeVisualEffects.gd
+├── apply_effects_to_entity()  # Renders effect_name at effect_intensity
+└── EFFECT_CONFIGS             # Maps effect_name → particle/glow settings
+```
 
-    # 1. Effort score bonus
-    var effort = achievement.get("effort_score", 0.0)
-    var effort_tier = _get_effort_tier(effort)
-    modifiers["damage_bonus"] = effort_tier.damage_bonus
-    if effort_tier.effect:
-        effects.append(effort_tier.effect)
+Godot does **no computation** - it just displays pre-computed data from the backend.
 
-    # 2. Hidden achievement bonus
-    if achievement.get("hidden", false):
-        effects.append("secrets_keeper_aura")
-        modifiers["effect_intensity"] = 1.1  # +10%
+---
 
-    # 3. Vintage bonus
-    var unlocked_at = achievement.get("unlocked_at", "")
-    if unlocked_at:
-        var years = _calculate_years_since(unlocked_at)
-        if years >= 3:
-            modifiers["vintage_bonus"] = min(years, 10)  # +1% per year, max 10%
-            modifiers["prefix"] = "Ancient" if years >= 7 else "Veteran's"
+## Backend Standardization Guide
 
-    # 4. Game theme
-    var app_id = achievement.get("app_id", "")
-    if app_id in GAME_THEMES:
-        var theme = GAME_THEMES[app_id]
-        effects.append(theme.effect)
-        modifiers["theme_color"] = theme.color
+This section defines all enums, types, and constants the backend must use to match Godot's existing systems.
 
-    return {
-        "effects": effects,
-        "modifiers": modifiers,
-        "effort_score": effort,
-        "is_hidden": achievement.get("hidden", false),
-        "game_name": achievement.get("game_name", "Unknown")
+### Weapon Types (CRITICAL)
+
+The backend **must** use these exact string values for `weapon_type`. These map to LPC sprite folders and animation data.
+
+**Source:** [LPC Spritesheet Generator](https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/)
+
+#### Currently Implemented (have animation data)
+
+| weapon_type | Style | Speed | Range | Notes |
+|-------------|-------|-------|-------|-------|
+| `sword` | balanced | medium | 100px | Default/fallback, longswords |
+| `dagger` | fast | ultra-fast | 75px | High attack speed |
+| `axe` | heavy | slow | 110px | High damage, includes waraxe |
+| `mace` | crushing | medium | 100px | Aliases: `club`, `hammer`, `warhammer` |
+| `spear` | thrusting | medium | 140px | Longest reach |
+| `rapier` | precise | fast | 115px | Precision strikes |
+| `staff` | casting | medium | 125px | Magic/healing weapons |
+
+#### Extended Types (for Forge items)
+
+| weapon_type | Style | Speed | Range | Notes |
+|-------------|-------|-------|-------|-------|
+| `greatsword` | heavy | slow | 120px | Two-handed swords |
+| `katana` | precise | fast | 110px | Curved Japanese sword |
+| `saber` | precise | fast | 105px | Curved cavalry sword |
+| `scimitar` | precise | fast | 105px | Curved Middle-Eastern sword |
+| `halberd` | heavy | slow | 145px | Ornate polearm, axe+spear |
+| `pike` | thrusting | slow | 150px | Extra-long spear |
+| `flail` | crushing | medium | 95px | Chain weapon |
+| `scythe` | heavy | slow | 130px | Farming/reaper weapon |
+| `bow` | ranged | medium | N/A | Standard bow |
+| `crossbow` | ranged | slow | N/A | Mechanical ranged |
+| `trident` | thrusting | medium | 135px | Three-pronged polearm |
+
+#### Complete Python Enum
+
+```python
+class WeaponType(str, Enum):
+    # Core weapons (have animation data in Godot)
+    SWORD = "sword"
+    DAGGER = "dagger"
+    AXE = "axe"
+    MACE = "mace"
+    SPEAR = "spear"
+    RAPIER = "rapier"
+    STAFF = "staff"
+
+    # Extended weapons (for Forge system)
+    GREATSWORD = "greatsword"
+    KATANA = "katana"
+    SABER = "saber"
+    SCIMITAR = "scimitar"
+    HALBERD = "halberd"
+    PIKE = "pike"
+    FLAIL = "flail"
+    SCYTHE = "scythe"
+    BOW = "bow"
+    CROSSBOW = "crossbow"
+    TRIDENT = "trident"
+
+# Aliases that map to base types (for animation data)
+WEAPON_ALIASES = {
+    "club": "mace",
+    "hammer": "mace",
+    "warhammer": "mace",
+    "longsword": "sword",
+    "waraxe": "axe",
+}
+```
+
+#### Animation Fallbacks
+
+Extended weapons fall back to core weapon animations:
+
+| Extended Type | Falls Back To |
+|---------------|---------------|
+| `greatsword` | `sword` |
+| `katana` | `sword` |
+| `saber` | `sword` |
+| `scimitar` | `sword` |
+| `halberd` | `spear` |
+| `pike` | `spear` |
+| `trident` | `spear` |
+| `flail` | `mace` |
+| `scythe` | `spear` |
+| `bow` | `staff` |
+| `crossbow` | `staff` |
+
+### Item Types
+
+| item_type | Description | Has Sprites |
+|-----------|-------------|-------------|
+| `weapon` | Equippable weapon | Yes (walk/slash/thrust/hurt) |
+| `armor_head` | Helmets, crowns, hats | Yes |
+| `armor_chest` | Body armor, robes | Yes |
+| `armor_legs` | Pants, greaves | Yes |
+| `armor_hands` | Gloves, gauntlets | Yes |
+| `armor_feet` | Boots, shoes | Yes |
+| `cape` | Back slot capes/cloaks | Yes |
+| `shield` | Off-hand shields | Yes (walk only) |
+| `accessory` | Non-visual items | Icon only |
+| `emote` | Unlockable emotes | No |
+| `title` | Display titles | No |
+
+**Python Enum:**
+```python
+class ItemType(str, Enum):
+    WEAPON = "weapon"
+    ARMOR_HEAD = "armor_head"
+    ARMOR_CHEST = "armor_chest"
+    ARMOR_LEGS = "armor_legs"
+    ARMOR_HANDS = "armor_hands"
+    ARMOR_FEET = "armor_feet"
+    CAPE = "cape"
+    SHIELD = "shield"
+    ACCESSORY = "accessory"
+    EMOTE = "emote"
+    TITLE = "title"
+```
+
+### Equipment Slots
+
+| slot | Description | Can Equip |
+|------|-------------|-----------|
+| `mainhand` | Primary weapon | Weapons |
+| `offhand` | Secondary/shield | Shields, some weapons |
+| `head` | Head slot | armor_head |
+| `chest` | Torso slot | armor_chest |
+| `hands` | Hand slot | armor_hands |
+| `legs` | Leg slot | armor_legs |
+| `feet` | Foot slot | armor_feet |
+
+### Item Rarity
+
+| rarity | Unlock % Range | Color (hex) |
+|--------|---------------|-------------|
+| `common` | 40%+ | `#999999` (gray) |
+| `uncommon` | 15-40% | `#33CC33` (green) |
+| `rare` | 5-15% | `#3399FF` (blue) |
+| `epic` | 1-5% | `#B34DCC` (purple) |
+| `legendary` | <1% | `#FF8000` (orange) |
+
+**Python Enum:**
+```python
+class ItemRarity(str, Enum):
+    COMMON = "common"
+    UNCOMMON = "uncommon"
+    RARE = "rare"
+    EPIC = "epic"
+    LEGENDARY = "legendary"
+```
+
+### Visual Effect Names
+
+These are the valid `effect_name` values the backend can assign. Godot's `ForgeVisualEffects.gd` renders these.
+
+**Effort/Tier Effects:**
+- `exceptional_aura` - Orange pulsing aura (effort 81+)
+- `superior_trail` - Purple trail (effort 61-80)
+- `enhanced_glow` - Blue glow (effort 41-60)
+- `standard_particles` - Green particles (effort 21-40)
+
+**Game Theme Effects (assign based on `app_id`):**
+
+| Game | app_id | Recommended Effects |
+|------|--------|---------------------|
+| Elden Ring | `1245620` | `erdtree_blessing`, `golden_sparkle`, `moonlight_aura`, `gravity_particles` |
+| Dark Souls 3 | `374320` | `ember_trail`, `ember_glow`, `flame_idle_glow`, `wolf_blood_aura` |
+| Hollow Knight | `367520` | `void_particles`, `void_trail`, `void_aura`, `shadow_tendrils` |
+| Hades | `1145360` | `underworld_flame`, `blood_red_glow`, `infernal_glow`, `divine_glow` |
+| Stardew Valley | `413150` | `nature_sparkle`, `golden_sparkle`, `stardust_trail`, `healing_aura` |
+| Terraria | `105600` | `terra_beam`, `green_glow`, `eerie_glow` |
+| Sekiro | `814380` | `crimson_slash`, `death_kanji`, `blood_mist` |
+| Witcher 3 | `292030` | `silver_gleam`, `wolf_school_glow`, `danger_sense` |
+
+**All Valid Effect Names:**
+```python
+VALID_EFFECTS = [
+    # Effort tier
+    "exceptional_aura", "superior_trail", "enhanced_glow", "standard_particles",
+    # Secret/hidden
+    "secrets_keeper_aura",
+    # Vintage
+    "ancient_aura", "vintage_glow", "aged_shimmer",
+    # Prestige
+    "prestige_glow",
+    # FromSoftware
+    "erdtree_blessing", "ember_trail", "crimson_slash", "golden_sparkle",
+    "ember_glow", "wolf_blood_aura", "lightning_crackle", "storm_particles",
+    "flame_idle_glow", "heat_distortion", "moonlight_aura", "gravity_particles",
+    "golden_leaves", "light_rays", "scarlet_rot_trail", "flower_petals",
+    # Hollow Knight
+    "void_particles", "void_trail", "void_aura", "shadow_tendrils",
+    "dark_burst", "shadow_dash",
+    # Hades
+    "underworld_flame", "blood_red_glow", "infernal_glow", "divine_glow",
+    "laurel_particles",
+    # Stardew
+    "nature_sparkle", "stardust_trail", "healing_aura", "pixel_sparkle",
+    "retro_trail",
+    # Terraria
+    "terra_beam", "green_glow", "sword_projectile", "eerie_glow",
+    # Witcher
+    "silver_gleam", "wolf_school_glow", "danger_sense",
+    # Sekiro
+    "death_kanji", "blood_mist",
+    # Discord
+    "discord_sparkle",
+    # Generic
+    "purple_glow",
+]
+```
+
+### Glow Colors by Game Theme
+
+Backend should map `app_id` to theme colors:
+
+```python
+GAME_THEME_COLORS = {
+    "1245620": "#FFD700",  # Elden Ring - Gold
+    "374320": "#FF6A00",   # Dark Souls 3 - Ember orange
+    "367520": "#1A0033",   # Hollow Knight - Void purple
+    "1145360": "#FF4444",  # Hades - Blood red
+    "413150": "#66FF66",   # Stardew Valley - Nature green
+    "105600": "#00FF80",   # Terraria - Terra green
+    "814380": "#CC0000",   # Sekiro - Crimson
+    "292030": "#E6B833",   # Witcher 3 - Medallion amber
+}
+```
+
+### Complete ForgedAchievement Example
+
+```python
+class ForgedAchievement(Base):
+    __tablename__ = "forged_achievements"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    achievement_id = Column(Integer, ForeignKey("achievements.id"))
+
+    # Blockchain
+    token_id = Column(String(66))
+    tx_hash = Column(String(66))
+    forged_at = Column(DateTime, default=datetime.utcnow)
+
+    # Item identity (from ForgeItemDB mapping)
+    item_id = Column(String(64))           # "coiled_sword"
+    item_type = Column(String(32))         # "weapon"
+    weapon_type = Column(String(32))       # "sword" (nullable for non-weapons)
+    item_name = Column(String(128))        # "Ancient Coiled Sword"
+    item_rarity = Column(String(16))       # "legendary"
+
+    # Visual properties (computed at forge time)
+    effect_name = Column(String(32))       # "ember_trail"
+    effect_intensity = Column(Float)       # 0.95
+    glow_color = Column(String(7))         # "#FF6A00"
+
+    # Display metadata
+    effort_tier = Column(String(16))       # "Exceptional"
+    vintage_years = Column(Integer)        # 6
+    is_secret = Column(Boolean)            # False
+
+    # Source achievement info (denormalized for display)
+    achievement_name = Column(String(128)) # "The Dark Soul"
+    game_name = Column(String(128))        # "Dark Souls III"
+    app_id = Column(String(32))            # "374320"
+```
+
+### API Response Contract
+
+```json
+GET /api/me/forged-items
+
+{
+  "forged_items": [
+    {
+      "token_id": "0xabc123...",
+      "item_id": "coiled_sword",
+      "item_type": "weapon",
+      "weapon_type": "sword",
+      "item_name": "Ancient Coiled Sword",
+      "item_rarity": "legendary",
+      "effect_name": "ember_trail",
+      "effect_intensity": 0.95,
+      "glow_color": "#FF6A00",
+      "effort_tier": "Exceptional",
+      "vintage_years": 6,
+      "is_secret": false,
+      "achievement_name": "The Dark Soul",
+      "game_name": "Dark Souls III",
+      "forged_at": "2024-12-08T15:30:00Z"
     }
-
-func _get_effort_tier(score: float) -> Dictionary:
-    if score >= 81:
-        return {"damage_bonus": 7, "effect": "exceptional_aura"}
-    elif score >= 61:
-        return {"damage_bonus": 5, "effect": "superior_trail"}
-    elif score >= 41:
-        return {"damage_bonus": 3, "effect": "enhanced_glow"}
-    elif score >= 21:
-        return {"damage_bonus": 2, "effect": "standard_particles"}
-    else:
-        return {"damage_bonus": 1, "effect": null}
-```
-
-### UI Display
-
-Show unique modifiers in the Forge detail panel:
-
-```
-+--------------------------------------------------+
-|  COILED SWORD                                    |
-|  Legendary Weapon                                |
-|--------------------------------------------------|
-|  Source: Dark Souls III                          |
-|  Achievement: The Dark Soul (100% Completion)    |
-|                                                  |
-|  UNIQUE MODIFIERS:                               |
-|  * Effort Score: 95/100 (Exceptional)            |
-|    +7% Base Damage                               |
-|  * Vintage: Unlocked 6 years ago                 |
-|    +6% Bonus, "Veteran's" prefix                 |
-|  * Game Theme: Ember Trail effect                |
-|                                                  |
-|  Effects: ember_trail, exceptional_aura          |
-+--------------------------------------------------+
+  ]
+}
 ```
 
 ---

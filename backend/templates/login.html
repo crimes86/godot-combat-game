@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login – Mantle</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    /* Login page specific styles - matching dashboard theme */
+
+    /* MANTLE Neon Sign */
+    .neon-sign-container {
+      position: relative;
+      margin: 0 auto 2rem;
+      padding: 1.5rem 2rem;
+      text-align: center;
+    }
+
+    .neon-sign {
+      position: relative;
+      display: inline-block;
+      margin: 0 auto;
+    }
+
+    .neon-text {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 4rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: #fff;
+      text-shadow:
+        /* Inner glow */
+        0 0 5px #fff,
+        0 0 10px #fff,
+        /* Cyan neon glow */
+        0 0 20px #0ff,
+        0 0 40px #0ff,
+        0 0 60px #0ff,
+        0 0 80px #0ff,
+        /* Outer bloom */
+        0 0 100px #0ff,
+        0 0 150px rgba(0,255,255,0.5);
+      animation: neonFlicker 3s infinite;
+    }
+
+    /* Neon tube backing effect */
+    .neon-backing {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: calc(100% + 40px);
+      height: calc(100% + 20px);
+      background: linear-gradient(180deg,
+        rgba(0,20,25,0.9) 0%,
+        rgba(0,10,15,0.95) 100%);
+      border: 2px solid rgba(0,255,255,0.3);
+      border-radius: 8px;
+      box-shadow:
+        inset 0 0 30px rgba(0,255,255,0.1),
+        0 0 20px rgba(0,0,0,0.5);
+      z-index: -1;
+    }
+
+    /* Tube mounting brackets */
+    .neon-bracket {
+      position: absolute;
+      width: 8px;
+      height: 24px;
+      background: linear-gradient(180deg, #333 0%, #1a1a1a 100%);
+      border-radius: 2px;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.1),
+        0 2px 4px rgba(0,0,0,0.5);
+    }
+    .neon-bracket.left { left: -4px; top: 50%; transform: translateY(-50%); }
+    .neon-bracket.right { right: -4px; top: 50%; transform: translateY(-50%); }
+
+    /* Subtle flicker animation */
+    @keyframes neonFlicker {
+      0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+        text-shadow:
+          0 0 5px #fff,
+          0 0 10px #fff,
+          0 0 20px #0ff,
+          0 0 40px #0ff,
+          0 0 60px #0ff,
+          0 0 80px #0ff,
+          0 0 100px #0ff,
+          0 0 150px rgba(0,255,255,0.5);
+        opacity: 1;
+      }
+      20%, 24%, 55% {
+        text-shadow:
+          0 0 2px #fff,
+          0 0 5px #fff,
+          0 0 10px #0ff,
+          0 0 20px #0ff,
+          0 0 30px #0ff;
+        opacity: 0.9;
+      }
+    }
+
+    /* Trophy/achievement icon accent */
+    .neon-icon {
+      position: absolute;
+      top: -30px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50px;
+      height: 50px;
+      filter: drop-shadow(0 0 10px #0ff) drop-shadow(0 0 20px #0ff);
+      animation: iconPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes iconPulse {
+      0%, 100% {
+        filter: drop-shadow(0 0 10px #0ff) drop-shadow(0 0 20px #0ff);
+        transform: translateX(-50%) scale(1);
+      }
+      50% {
+        filter: drop-shadow(0 0 15px #0ff) drop-shadow(0 0 30px #0ff) drop-shadow(0 0 40px rgba(0,255,255,0.5));
+        transform: translateX(-50%) scale(1.05);
+      }
+    }
+
+    /* Reflection effect */
+    .neon-reflection {
+      position: absolute;
+      bottom: -40px;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background: linear-gradient(180deg,
+        rgba(0,255,255,0.15) 0%,
+        transparent 100%);
+      filter: blur(4px);
+      transform: scaleY(-0.3) translateY(-100%);
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    /* Wire/cable decoration */
+    .neon-wire {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 2px;
+      height: 20px;
+      background: linear-gradient(180deg, #333 0%, #1a1a1a 100%);
+    }
+
+    .login-wrapper {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .login-card {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      padding: 2.5rem;
+      /* Glassmorphism background */
+      background: linear-gradient(180deg, rgba(20,25,30,0.95) 0%, rgba(8,10,14,0.98) 100%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(0,255,255,0.25);
+      border-radius: 16px;
+      /* 3D depth effect */
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        inset 0 0 40px rgba(0,255,255,0.03),
+        0 4px 0 rgba(0,0,0,0.3),
+        0 8px 20px rgba(0,0,0,0.4),
+        0 0 30px rgba(0,255,255,0.1);
+      overflow: hidden;
+    }
+
+    /* Circuit pattern overlay */
+    .login-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%2300ffff;stroke-width:0.5;opacity:0.08%7D.pad%7Bfill:%2300ffff;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,25 L25,25 L25,50 L50,50'/%3E%3Cpath class='trace' d='M75,0 L75,25 L100,25'/%3E%3Cpath class='trace' d='M0,75 L35,75 L35,100'/%3E%3Cpath class='trace' d='M60,60 L60,100'/%3E%3Cpath class='trace' d='M85,50 L100,50'/%3E%3Ccircle class='pad' cx='25' cy='25' r='2'/%3E%3Ccircle class='pad' cx='50' cy='50' r='2'/%3E%3Ccircle class='pad' cx='75' cy='25' r='1.5'/%3E%3Ccircle class='pad' cx='35' cy='75' r='1.5'/%3E%3C/svg%3E");
+      background-size: 100px 100px;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+      border-radius: inherit;
+    }
+
+    .login-card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Title */
+    .login-title {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.1rem;
+      color: var(--neon);
+      text-align: center;
+      margin-bottom: 1.5rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(0,255,255,0.5);
+    }
+
+    /* Provider buttons */
+    .provider-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .provider-btn {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.9rem 1.2rem;
+      background: linear-gradient(180deg, rgba(30,35,40,0.9) 0%, rgba(15,18,22,0.95) 100%);
+      border: 1px solid rgba(80,80,80,0.3);
+      border-radius: 10px;
+      text-decoration: none;
+      color: #fff;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.95rem;
+      transition: all 0.25s ease;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .provider-btn:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.1),
+        0 6px 16px rgba(0,0,0,0.4),
+        0 0 20px rgba(var(--btn-rgb), 0.3);
+      border-color: var(--btn-color);
+    }
+
+    .provider-btn img {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+    }
+
+    .provider-btn span {
+      flex: 1;
+    }
+
+    .provider-btn .provider-tag {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      background: rgba(var(--btn-rgb), 0.2);
+      color: var(--btn-color);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Provider-specific colors */
+    .provider-btn[data-provider="steam"] {
+      --btn-color: #1b9bd7;
+      --btn-rgb: 27,155,215;
+    }
+    .provider-btn[data-provider="battlenet"] {
+      --btn-color: #ffb932;
+      --btn-rgb: 255,185,50;
+    }
+    .provider-btn[data-provider="xbox"] {
+      --btn-color: #107c10;
+      --btn-rgb: 16,124,16;
+    }
+    .provider-btn[data-provider="playstation"] {
+      --btn-color: #003791;
+      --btn-rgb: 0,55,145;
+    }
+    .provider-btn[data-provider="discord"] {
+      --btn-color: #5865F2;
+      --btn-rgb: 88,101,242;
+    }
+    .provider-btn[data-provider="twitch"] {
+      --btn-color: #9146FF;
+      --btn-rgb: 145,70,255;
+    }
+    .provider-btn[data-provider="google"] {
+      --btn-color: #4285F4;
+      --btn-rgb: 66,133,244;
+    }
+    .provider-btn[data-provider="github"] {
+      --btn-color: #8b949e;
+      --btn-rgb: 139,148,158;
+    }
+
+    .provider-btn:hover img {
+      filter: brightness(1.2) drop-shadow(0 0 6px var(--btn-color));
+    }
+
+    /* Guest notice */
+    .guest-notice {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: rgba(255,200,50,0.1);
+      border: 1px solid rgba(255,200,50,0.3);
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .guest-notice-title {
+      color: #ffcc33;
+      font-size: 0.85rem;
+      font-weight: bold;
+      margin-bottom: 0.3rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .guest-notice-text {
+      color: #999;
+      font-size: 0.8rem;
+      line-height: 1.4;
+    }
+
+    /* Divider */
+    .login-divider {
+      display: flex;
+      align-items: center;
+      margin: 1.5rem 0;
+      color: #555;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .login-divider::before,
+    .login-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(0,255,255,0.3), transparent);
+    }
+
+    .login-divider span {
+      padding: 0 1rem;
+    }
+
+    /* Section headers */
+    .provider-section-title {
+      font-size: 0.7rem;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 0.5rem;
+      padding-left: 0.2rem;
+    }
+
+    /* Footer */
+    .login-footer {
+      margin-top: 2rem;
+      text-align: center;
+      color: #555;
+      font-size: 0.75rem;
+    }
+
+    .login-footer a {
+      color: var(--neon);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-card">
+      <!-- MANTLE Neon Sign -->
+      <div class="neon-sign-container">
+        <div class="neon-wire"></div>
+        <div class="neon-sign">
+          <div class="neon-backing"></div>
+          <div class="neon-bracket left"></div>
+          <div class="neon-bracket right"></div>
+          <span class="neon-text">MANTLE</span>
+        </div>
+        <div class="neon-reflection"></div>
+      </div>
+
+      {% if beta_gate %}
+      <!-- Beta Access Gate -->
+      <div class="login-title">Closed Beta</div>
+      <div style="text-align: center; margin-bottom: 1.5rem;">
+        <p style="color: #888; font-size: 0.95rem; margin-bottom: 1rem;">
+          Mantle is currently in closed beta testing.
+        </p>
+        <p style="color: #666; font-size: 0.85rem;">
+          Enter your access code to continue.
+        </p>
+      </div>
+
+      <form action="/beta-access" method="POST" style="max-width: 300px; margin: 0 auto;">
+        <div style="margin-bottom: 1rem;">
+          <input
+            type="text"
+            name="access_code"
+            placeholder="Enter access code"
+            autocomplete="off"
+            style="
+              width: 100%;
+              padding: 14px 18px;
+              background: rgba(0, 255, 255, 0.05);
+              border: 2px solid rgba(0, 255, 255, 0.3);
+              border-radius: 8px;
+              color: #fff;
+              font-family: 'Roboto Mono', monospace;
+              font-size: 1rem;
+              text-align: center;
+              letter-spacing: 2px;
+              outline: none;
+              transition: border-color 0.2s, box-shadow 0.2s;
+            "
+            onfocus="this.style.borderColor='var(--neon)'; this.style.boxShadow='0 0 15px rgba(0,255,255,0.3)';"
+            onblur="this.style.borderColor='rgba(0,255,255,0.3)'; this.style.boxShadow='none';"
+          />
+        </div>
+        {% if beta_error %}
+        <div style="
+          color: #f66;
+          font-size: 0.85rem;
+          text-align: center;
+          margin-bottom: 1rem;
+          padding: 8px;
+          background: rgba(255, 100, 100, 0.1);
+          border-radius: 4px;
+        ">
+          {{ beta_error }}
+        </div>
+        {% endif %}
+        <button
+          type="submit"
+          style="
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(180deg, rgba(0, 255, 255, 0.2) 0%, rgba(0, 255, 255, 0.1) 100%);
+            border: 2px solid var(--neon);
+            border-radius: 8px;
+            color: var(--neon);
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+          "
+          onmouseover="this.style.background='rgba(0,255,255,0.15)'; this.style.boxShadow='0 0 20px rgba(0,255,255,0.4)';"
+          onmouseout="this.style.background='linear-gradient(180deg, rgba(0,255,255,0.2) 0%, rgba(0,255,255,0.1) 100%)'; this.style.boxShadow='none';"
+        >
+          Enter Beta
+        </button>
+      </form>
+
+      <div style="text-align: center; margin-top: 2rem;">
+        <p style="color: #555; font-size: 0.8rem;">
+          Don't have a code? Join our
+          <a href="#" style="color: var(--neon); text-decoration: none;">Discord</a>
+          for updates.
+        </p>
+      </div>
+
+      {% else %}
+      <!-- Normal Login Flow -->
+      <!-- Title -->
+      <div class="login-title">Connect Your Gaming Accounts</div>
+
+      <!-- Provider section: Gaming -->
+      <div class="provider-section-title">Gaming Platforms</div>
+      <div class="provider-grid">
+        {% for provider in all_providers %}
+          {% if provider.name in ['steam', 'battlenet', 'xbox', 'playstation', 'epic', 'gog'] %}
+          <a
+            href="/auth/{{ provider.name }}/login{% if device_code %}?device_code={{ device_code }}{% endif %}"
+            class="provider-btn"
+            data-provider="{{ provider.name }}"
+          >
+            <img src="/static/icons/{{ provider.name }}.svg" alt="{{ provider.display_name }}" onerror="this.src='/static/icons/{{ provider.name }}.png'" />
+            <span>{{ provider.display_name }}</span>
+            <span class="provider-tag">Achievements</span>
+          </a>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      <!-- Check if there are social providers enabled -->
+      {% set social_providers = [] %}
+      {% for provider in all_providers %}
+        {% if provider.name in ['discord', 'twitch', 'google', 'github', 'twitter', 'reddit', 'spotify'] %}
+          {% set _ = social_providers.append(provider) %}
+        {% endif %}
+      {% endfor %}
+
+      {% if social_providers %}
+      <div class="login-divider"><span>or</span></div>
+
+      <!-- Provider section: Social -->
+      <div class="provider-section-title">Social Login</div>
+      <div class="provider-grid">
+        {% for provider in all_providers %}
+          {% if provider.name in ['discord', 'twitch', 'google', 'github', 'twitter', 'reddit', 'spotify'] %}
+          <a
+            href="/auth/{{ provider.name }}/login{% if device_code %}?device_code={{ device_code }}{% endif %}"
+            class="provider-btn"
+            data-provider="{{ provider.name }}"
+          >
+            <img src="/static/icons/{{ provider.name }}.svg" alt="{{ provider.display_name }}" onerror="this.src='/static/icons/{{ provider.name }}.png'" />
+            <span>{{ provider.display_name }}</span>
+            <span class="provider-tag">Login Only</span>
+          </a>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Guest notice -->
+      <div class="guest-notice">
+        <div class="guest-notice-title">Playing as Guest?</div>
+        <div class="guest-notice-text">
+          You can play without logging in, but your progress won't be saved
+          and you won't earn Mantle achievements.
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Footer -->
+      <div class="login-footer">
+        &copy; 2025 Mantle. All rights reserved.
+      </div>
+    </div>
+  </div>
+</body>
+</html>

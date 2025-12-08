@@ -70,8 +70,24 @@ const WEAPON_DATA = {
 
 # Aliases for weapon types that share animation data
 const WEAPON_ALIASES = {
+	# Direct aliases
 	"club": "mace",
 	"hammer": "mace",
+	"warhammer": "mace",
+	"longsword": "sword",
+	"waraxe": "axe",
+	# Extended weapon fallbacks (for Forge items)
+	"greatsword": "sword",
+	"katana": "sword",
+	"saber": "sword",
+	"scimitar": "sword",
+	"halberd": "spear",
+	"pike": "spear",
+	"trident": "spear",
+	"flail": "mace",
+	"scythe": "spear",
+	"bow": "staff",
+	"crossbow": "staff",
 }
 
 static func get_data(weapon_type: String) -> Dictionary:

@@ -1,0 +1,62 @@
+<svg width="600" height="150" viewBox="0 0 600 150" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="neon-grey" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#999" flood-opacity="1"></feDropShadow>
+    </filter>
+    <filter id="neon-green" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#0f0" flood-opacity="1"></feDropShadow>
+    </filter>
+    <filter id="neon-blue" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#0af" flood-opacity="1"></feDropShadow>
+    </filter>
+    <filter id="neon-purple" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#a0f" flood-opacity="1"></feDropShadow>
+    </filter>
+    <filter id="neon-orange" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#fa0" flood-opacity="1"></feDropShadow>
+    </filter>
+    <style>
+      .chevron {
+        fill: none;
+        stroke-width: 4;
+        stroke-linejoin: round;
+      }
+    </style>
+  </defs>
+
+  <!-- Common - Grey -->
+  <g transform="translate(30,30)" filter="url(#neon-grey)">
+    <path class="chevron" stroke="#999" d="M0 80 L40 40 L80 80"></path>
+    <path class="chevron" stroke="#bbb" d="M10 60 L40 30 L70 60"></path>
+    <path class="chevron" stroke="#ddd" d="M20 40 L40 20 L60 40"></path>
+  </g>
+
+  <!-- Uncommon - Green -->
+  <g transform="translate(150,30)" filter="url(#neon-green)">
+    <path class="chevron" stroke="#0a0" d="M0 80 L40 40 L80 80"></path>
+    <path class="chevron" stroke="#0f0" d="M10 60 L40 30 L70 60"></path>
+    <path class="chevron" stroke="#8f8" d="M20 40 L40 20 L60 40"></path>
+  </g>
+
+  <!-- Rare - Blue -->
+  <g transform="translate(270,30)" filter="url(#neon-blue)">
+    <path class="chevron" stroke="#0066cc" d="M0 80 L40 40 L80 80"></path>
+    <path class="chevron" stroke="#00aaff" d="M10 60 L40 30 L70 60"></path>
+    <path class="chevron" stroke="#99ddff" d="M20 40 L40 20 L60 40"></path>
+  </g>
+
+  <!-- Epic - Purple -->
+  <g transform="translate(390,30)" filter="url(#neon-purple)">
+    <path class="chevron" stroke="#7700aa" d="M0 80 L40 40 L80 80"></path>
+    <path class="chevron" stroke="#aa00ff" d="M10 60 L40 30 L70 60"></path>
+    <path class="chevron" stroke="#cc99ff" d="M20 40 L40 20 L60 40"></path>
+  </g>
+
+  <!-- Legendary - Orange -->
+  <g transform="translate(510,30)" filter="url(#neon-orange)">
+    <path class="chevron" stroke="#aa5500" d="M0 80 L40 40 L80 80"></path>
+    <path class="chevron" stroke="#ffaa00" d="M10 60 L40 30 L70 60"></path>
+    <path class="chevron" stroke="#ffdd99" d="M20 40 L40 20 L60 40"></path>
+  </g>
+
+</svg>

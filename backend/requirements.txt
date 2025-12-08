@@ -1,0 +1,33 @@
+# Core framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+starlette==0.41.3
+
+# Database
+sqlalchemy==2.0.36
+alembic==1.14.0
+
+# Templates
+jinja2==3.1.4
+
+# HTTP client (for API calls to Steam, Battle.net, etc.)
+httpx==0.28.1
+
+# OAuth
+authlib==1.3.2
+
+# Environment
+python-dotenv==1.0.1
+
+# Security
+itsdangerous==2.2.0
+
+# Database drivers (uncomment the one you need)
+# psycopg2-binary==2.9.10  # PostgreSQL
+# For SQLite, no extra driver needed
+
+# Wallet/Blockchain (optional - for forging achievements)
+# Uncomment these to enable wallet connection and NFT forging
+# web3==6.15.1
+# siwe==4.0.0
+# eth-account==0.11.0

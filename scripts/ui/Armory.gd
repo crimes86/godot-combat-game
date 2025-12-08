@@ -205,6 +205,15 @@ func _ready() -> void:
 			print("[Armory] Profile data already available, refreshing...")
 			call_deferred("_on_profile_updated", {})
 
+	# Listen for forged items loaded to refresh forge display
+	if ForgeItemManager:
+		if not ForgeItemManager.forged_items_loaded.is_connected(_on_forged_items_loaded):
+			ForgeItemManager.forged_items_loaded.connect(_on_forged_items_loaded)
+		# If already loaded, refresh now
+		if ForgeItemManager.is_loaded():
+			print("[Armory] Forged items already loaded, refreshing forge...")
+			call_deferred("_refresh_forge_content")
+
 	# Start entrance animations after a brief delay
 	await get_tree().create_timer(0.1).timeout
 	_play_entrance_animations()
@@ -219,6 +228,19 @@ func _on_profile_updated(_data: Dictionary) -> void:
 	_setup_ui_for_state()
 	_apply_font_to_all(self)
 	print("[Armory] UI refreshed with new profile data")
+
+func _on_forged_items_loaded(items: Array) -> void:
+	"""Called when ForgeItemManager finishes loading forged items"""
+	print("[Armory] ═══════════════════════════════════════")
+	print("[Armory] Forged items loaded: %d total" % items.size())
+	_refresh_forge_content()
+	print("[Armory] ═══════════════════════════════════════")
+
+func _refresh_forge_content() -> void:
+	"""Refresh the forge tab content to update ownership status"""
+	if _forge_content_container:
+		print("[Forge] Refreshing forge tab: %s" % _forge_current_tab)
+		_switch_forge_tab(_forge_current_tab)
 
 func _setup_font() -> void:
 	# Use SystemFont which works on all platforms
@@ -980,9 +1002,9 @@ func _on_forge_sort_pressed(sort_id: String) -> void:
 	_switch_forge_tab(_forge_current_tab)
 
 func _build_forge_detail_panel() -> Control:
-	"""Build the item detail panel at bottom of forge"""
+	"""Build the item detail panel at bottom of forge - Enhanced with effect metadata"""
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 80)
+	panel.custom_minimum_size = Vector2(0, 120)  # Taller to fit new content
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.04, 0.04, 0.05, 0.95)
 	style.border_color = BORDER_GLOW.darkened(0.3)
@@ -1033,7 +1055,7 @@ func _build_forge_detail_panel() -> Control:
 	icon_placeholder.add_theme_color_override("font_color", TEXT_DIM)
 	icon_center.add_child(icon_placeholder)
 
-	# Item details
+	# Item details - main info column
 	var details_vbox = VBoxContainer.new()
 	details_vbox.name = "DetailInfo"
 	details_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1072,6 +1094,79 @@ func _build_forge_detail_panel() -> Control:
 	lore_label.visible = false
 	details_vbox.add_child(lore_label)
 
+	# === NEW: Unique Modifiers Section ===
+	var modifiers_section = VBoxContainer.new()
+	modifiers_section.name = "ModifiersSection"
+	modifiers_section.add_theme_constant_override("separation", 4)
+	modifiers_section.visible = false
+	hbox.add_child(modifiers_section)
+
+	# Effort Score with progress bar
+	var effort_container = VBoxContainer.new()
+	effort_container.name = "EffortContainer"
+	effort_container.add_theme_constant_override("separation", 2)
+	modifiers_section.add_child(effort_container)
+
+	var effort_header = HBoxContainer.new()
+	effort_header.add_theme_constant_override("separation", 4)
+	effort_container.add_child(effort_header)
+
+	var effort_label = Label.new()
+	effort_label.name = "EffortLabel"
+	effort_label.text = "EFFORT"
+	effort_label.add_theme_font_size_override("font_size", FONT_TINY - 2)
+	effort_label.add_theme_color_override("font_color", TEXT_DIM)
+	effort_header.add_child(effort_label)
+
+	var effort_value = Label.new()
+	effort_value.name = "EffortValue"
+	effort_value.text = ""
+	effort_value.add_theme_font_size_override("font_size", FONT_TINY - 2)
+	effort_value.add_theme_color_override("font_color", MANTLE_CYAN)
+	effort_header.add_child(effort_value)
+
+	var effort_bar = ProgressBar.new()
+	effort_bar.name = "EffortBar"
+	effort_bar.custom_minimum_size = Vector2(80, 8)
+	effort_bar.max_value = 100
+	effort_bar.value = 0
+	effort_bar.show_percentage = false
+	var effort_bar_style = StyleBoxFlat.new()
+	effort_bar_style.bg_color = Color(0.1, 0.1, 0.12)
+	effort_bar_style.set_corner_radius_all(2)
+	effort_bar.add_theme_stylebox_override("background", effort_bar_style)
+	var effort_fill_style = StyleBoxFlat.new()
+	effort_fill_style.bg_color = MANTLE_CYAN
+	effort_fill_style.set_corner_radius_all(2)
+	effort_bar.add_theme_stylebox_override("fill", effort_fill_style)
+	effort_container.add_child(effort_bar)
+
+	# Badges row (Vintage, Secret, Ultra-Rare)
+	var badges_row = HBoxContainer.new()
+	badges_row.name = "BadgesRow"
+	badges_row.add_theme_constant_override("separation", 6)
+	modifiers_section.add_child(badges_row)
+
+	# Vintage badge
+	var vintage_badge = _create_modifier_badge("VintageBadge", "VETERAN", Color(0.8, 0.6, 0.2))
+	badges_row.add_child(vintage_badge)
+
+	# Secret badge
+	var secret_badge = _create_modifier_badge("SecretBadge", "SECRET", Color(0.6, 0.3, 0.8))
+	badges_row.add_child(secret_badge)
+
+	# Ultra-rare badge
+	var rare_badge = _create_modifier_badge("UltraRareBadge", "RARE", Color(0.9, 0.4, 0.1))
+	badges_row.add_child(rare_badge)
+
+	# Damage bonus display
+	var bonus_label = Label.new()
+	bonus_label.name = "BonusLabel"
+	bonus_label.text = ""
+	bonus_label.add_theme_font_size_override("font_size", FONT_TINY - 2)
+	bonus_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
+	modifiers_section.add_child(bonus_label)
+
 	# Preview button container (right side)
 	var preview_vbox = VBoxContainer.new()
 	preview_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1090,7 +1185,7 @@ func _build_forge_detail_panel() -> Control:
 
 	var preview_hint = Label.new()
 	preview_hint.name = "PreviewHint"
-	preview_hint.text = "👁"
+	preview_hint.text = ""
 	preview_hint.add_theme_font_size_override("font_size", FONT_TINY)
 	preview_hint.add_theme_color_override("font_color", TEXT_DIM)
 	preview_hint.visible = false
@@ -1098,6 +1193,28 @@ func _build_forge_detail_panel() -> Control:
 
 	_forge_detail_panel = panel
 	return panel
+
+func _create_modifier_badge(badge_name: String, text: String, color: Color) -> PanelContainer:
+	"""Create a small badge for displaying modifiers"""
+	var badge = PanelContainer.new()
+	badge.name = badge_name
+	badge.visible = false  # Hidden by default
+	var badge_style = StyleBoxFlat.new()
+	badge_style.bg_color = Color(color.r, color.g, color.b, 0.2)
+	badge_style.border_color = color.darkened(0.2)
+	badge_style.set_border_width_all(1)
+	badge_style.set_corner_radius_all(3)
+	badge_style.set_content_margin_all(2)
+	badge.add_theme_stylebox_override("panel", badge_style)
+
+	var label = Label.new()
+	label.name = "BadgeText"
+	label.text = text
+	label.add_theme_font_size_override("font_size", FONT_TINY - 4)
+	label.add_theme_color_override("font_color", color)
+	badge.add_child(label)
+
+	return badge
 
 func _style_preview_button(btn: Button) -> void:
 	"""Style the preview button"""
@@ -1133,7 +1250,7 @@ func _on_preview_pressed() -> void:
 		tween.tween_property(preview_btn, "modulate", Color.WHITE, 0.2)
 
 func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
-	"""Update the forge detail panel with item info"""
+	"""Update the forge detail panel with item info (pre-computed from backend)"""
 	if not _forge_detail_panel:
 		return
 
@@ -1146,6 +1263,15 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 	var icon_container = _forge_detail_panel.find_child("DetailIcon", true, false)
 	var preview_btn = _forge_detail_panel.find_child("PreviewButton", true, false)
 
+	# Modifier UI elements (display pre-computed data)
+	var modifiers_section = _forge_detail_panel.find_child("ModifiersSection", true, false)
+	var effort_bar = _forge_detail_panel.find_child("EffortBar", true, false)
+	var effort_value = _forge_detail_panel.find_child("EffortValue", true, false)
+	var vintage_badge = _forge_detail_panel.find_child("VintageBadge", true, false)
+	var secret_badge = _forge_detail_panel.find_child("SecretBadge", true, false)
+	var rare_badge = _forge_detail_panel.find_child("UltraRareBadge", true, false)
+	var bonus_label = _forge_detail_panel.find_child("BonusLabel", true, false)
+
 	if item.is_empty():
 		_forge_selected_item = {}
 		if name_label: name_label.text = "Hover over an item"
@@ -1153,6 +1279,7 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 		if unlock_label: unlock_label.text = "Select an item to see details"
 		if lore_label: lore_label.visible = false
 		if preview_btn: preview_btn.visible = false
+		if modifiers_section: modifiers_section.visible = false
 		if icon_label:
 			icon_label.text = "?"
 			icon_label.add_theme_color_override("font_color", TEXT_DIM)
@@ -1161,23 +1288,25 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 			icon_texture.visible = false
 		return
 
-	# Store selected item for preview
 	_forge_selected_item = item
 
-	var rarity = item.get("rarity", "Common")
+	# Get item properties (works with both catalog items and forged items)
+	var item_name = item.get("item_name", item.get("name", "Unknown"))
+	var rarity = item.get("item_rarity", item.get("rarity", "Common"))
+	var game_name = item.get("game", "???")
 	var rarity_color = RARITY_COLORS.get(rarity, Color.GRAY)
 
 	if name_label:
-		name_label.text = item.get("name", "Unknown")
+		name_label.text = item_name
 		name_label.add_theme_color_override("font_color", rarity_color if is_owned else rarity_color.darkened(0.3))
 
 	if rarity_label:
-		rarity_label.text = "%s • %s" % [rarity, item.get("game", "???")]
+		rarity_label.text = "%s • %s" % [rarity, game_name]
 		rarity_label.add_theme_color_override("font_color", rarity_color.darkened(0.2))
 
 	if unlock_label:
 		if is_owned:
-			unlock_label.text = "✓ UNLOCKED - Claim at Blacksmith's Forge"
+			unlock_label.text = "✓ FORGED - Equip at Blacksmith"
 			unlock_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
 		else:
 			unlock_label.text = "🔒 HOW TO UNLOCK: Link %s → Complete \"%s\"" % [item.get("game", "???"), item.get("achievement", "???")]
@@ -1227,7 +1356,94 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 	# Show preview button for owned items
 	if preview_btn:
 		preview_btn.visible = is_owned
-		preview_btn.text = "PREVIEW" if is_owned else ""
+		preview_btn.text = "EQUIP" if is_owned else ""
+
+	# === Update Modifiers Section (pre-computed from backend) ===
+	_update_modifiers_display(item, modifiers_section, effort_bar, effort_value,
+		vintage_badge, secret_badge, rare_badge, bonus_label, is_owned)
+
+func _update_modifiers_display(item: Dictionary, modifiers_section: Control,
+		effort_bar: ProgressBar, effort_value: Label, vintage_badge: PanelContainer,
+		secret_badge: PanelContainer, rare_badge: PanelContainer, bonus_label: Label,
+		is_owned: bool) -> void:
+	"""Update the modifiers display section using pre-computed item data from backend"""
+	# Hide section if not owned (forged items have pre-computed stats)
+	if not is_owned:
+		if modifiers_section: modifiers_section.visible = false
+		return
+
+	# Check if item has pre-computed stats (from backend)
+	var has_stats = item.has("effect_intensity") or item.has("effort_tier")
+	if not has_stats:
+		if modifiers_section: modifiers_section.visible = false
+		return
+
+	if modifiers_section: modifiers_section.visible = true
+
+	# Update effort/intensity display (from backend's effect_intensity)
+	var intensity = item.get("effect_intensity", 0.0) * 100  # Convert 0-1 to 0-100
+	var effort_tier = item.get("effort_tier", "")
+	if effort_bar:
+		effort_bar.value = intensity
+		var fill_color = _get_effort_color(intensity)
+		var fill_style = effort_bar.get_theme_stylebox("fill").duplicate()
+		if fill_style is StyleBoxFlat:
+			fill_style.bg_color = fill_color
+			effort_bar.add_theme_stylebox_override("fill", fill_style)
+
+	if effort_value:
+		effort_value.text = "%d%% (%s)" % [int(intensity), effort_tier] if effort_tier else "%d%%" % int(intensity)
+		effort_value.add_theme_color_override("font_color", _get_effort_color(intensity))
+
+	# Update vintage badge (from backend's vintage_years)
+	if vintage_badge:
+		var vintage_years = item.get("vintage_years", 0)
+		if vintage_years >= 3:
+			vintage_badge.visible = true
+			var badge_text = vintage_badge.find_child("BadgeText", true, false)
+			var prefix = "ANCIENT" if vintage_years >= 7 else "VETERAN"
+			if badge_text:
+				badge_text.text = "%s (%dy)" % [prefix, vintage_years]
+		else:
+			vintage_badge.visible = false
+
+	# Update secret badge (from backend's is_secret)
+	if secret_badge:
+		secret_badge.visible = item.get("is_secret", false)
+
+	# Update ultra-rare badge (item_rarity == "Legendary" or "Epic")
+	if rare_badge:
+		var rarity = item.get("item_rarity", item.get("rarity", ""))
+		rare_badge.visible = rarity in ["Legendary", "Epic"]
+
+	# Update stat bonus label (from backend's stat_primary)
+	if bonus_label:
+		var stat_primary = item.get("stat_primary", 0.0)
+		var effect_name = item.get("effect_name", "")
+
+		if stat_primary > 0 or effect_name != "":
+			var parts = []
+			if stat_primary > 0:
+				parts.append("+%.0f%% intensity" % (stat_primary * 100))
+			if effect_name != "":
+				parts.append(effect_name.replace("_", " ").capitalize())
+			bonus_label.text = " | ".join(parts)
+			bonus_label.visible = true
+		else:
+			bonus_label.visible = false
+
+func _get_effort_color(score: float) -> Color:
+	"""Get color based on effort/intensity score"""
+	if score >= 81:
+		return Color(1.0, 0.5, 0.0)  # Orange - Exceptional
+	elif score >= 61:
+		return Color(0.7, 0.3, 0.9)  # Purple - Superior
+	elif score >= 41:
+		return Color(0.2, 0.6, 1.0)  # Blue - Enhanced
+	elif score >= 21:
+		return Color(0.2, 0.8, 0.2)  # Green - Standard
+	else:
+		return Color(0.6, 0.6, 0.6)  # Gray - Minor
 
 func _on_forge_tab_pressed(tab_id: String) -> void:
 	"""Handle forge tab switch"""
@@ -1285,18 +1501,22 @@ func _build_forge_all_content() -> Control:
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(grid)
 
-	# Get owned items for ownership check
+	# Get owned items for ownership check (backend uses item_id)
 	var owned_items = _get_owned_forge_items()
 	var owned_ids = []
 	for owned in owned_items:
-		owned_ids.append(owned.get("id", ""))
+		# Backend forged items use "item_id", FORGE_CATALOG uses "id"
+		var oid = owned.get("item_id", owned.get("id", ""))
+		if oid != "":
+			owned_ids.append(oid)
 
 	# Sort catalog based on current sort setting
 	var sorted_items = _sort_items(FORGE_CATALOG.duplicate())
 
 	# Add all catalog items with correct ownership status
 	for item in sorted_items:
-		var is_item_owned = item.get("id", "") in owned_ids
+		var item_id = item.get("id", "")
+		var is_item_owned = item_id in owned_ids
 		var item_card = _create_forge_item_card(item, is_item_owned)
 		grid.add_child(item_card)
 
@@ -1462,17 +1682,16 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 	# Lock overlay for unowned items - bottom right corner
 	if not is_owned:
 		var lock_bg = ColorRect.new()
-		lock_bg.color = Color(0, 0, 0, 0.6)
-		lock_bg.custom_minimum_size = Vector2(20, 20)
-		lock_bg.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		lock_bg.position = Vector2(-20, -20)
+		lock_bg.color = Color(0, 0, 0, 0.7)
+		lock_bg.custom_minimum_size = Vector2(18, 18)
+		lock_bg.size = Vector2(18, 18)
+		lock_bg.position = Vector2(50, 50)  # Bottom-right of 70x70 container
 		icon_container.add_child(lock_bg)
 
 		var lock_label = Label.new()
 		lock_label.text = "🔒"
-		lock_label.add_theme_font_size_override("font_size", 14)
-		lock_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		lock_label.position = Vector2(-18, -20)
+		lock_label.add_theme_font_size_override("font_size", 12)
+		lock_label.position = Vector2(51, 48)  # Centered in lock_bg
 		icon_container.add_child(lock_label)
 	elif item.get("is_new", false):
 		# NEW badge for recently forged items - top right corner
@@ -1501,23 +1720,20 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 		pulse_tween.tween_property(new_badge, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_IN_OUT)
 	else:
 		# Checkmark badge for owned items - bottom right corner (ready to claim)
+		var check_bg = ColorRect.new()
+		check_bg.color = Color(0.1, 0.3, 0.1, 0.9)
+		check_bg.custom_minimum_size = Vector2(16, 16)
+		check_bg.size = Vector2(16, 16)
+		check_bg.position = Vector2(52, 52)  # Bottom-right of 70x70 container
+		icon_container.add_child(check_bg)
+
 		var claim_badge = Label.new()
 		claim_badge.name = "ClaimBadge"
 		claim_badge.text = "✓"
-		claim_badge.add_theme_font_size_override("font_size", 12)
+		claim_badge.add_theme_font_size_override("font_size", 11)
 		claim_badge.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))  # Green checkmark
-		claim_badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		claim_badge.position = Vector2(-16, -18)
+		claim_badge.position = Vector2(54, 50)  # Centered in check_bg
 		icon_container.add_child(claim_badge)
-
-		# Small backing circle for visibility
-		var check_bg = ColorRect.new()
-		check_bg.color = Color(0.1, 0.2, 0.1, 0.9)
-		check_bg.custom_minimum_size = Vector2(16, 16)
-		check_bg.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		check_bg.position = Vector2(-18, -18)
-		check_bg.z_index = -1
-		icon_container.add_child(check_bg)
 
 	# Rich tooltip with lore
 	var lore = item.get("lore", "")
@@ -1643,26 +1859,16 @@ func _sort_items(items: Array) -> Array:
 	return sorted_items
 
 func _get_owned_forge_items() -> Array:
-	"""Get list of forge items the player has unlocked (from profile)"""
-	# TODO: Integrate with actual profile data
-	# For now, return items based on linked providers as a demo
-	var owned = []
-	if profile.has("providers"):
-		for provider in profile.providers:
-			var provider_name = provider.get("provider_name", "")
-			# Demo: unlock some items based on provider
-			for item in FORGE_CATALOG:
-				var game = item.get("game", "").to_lower()
-				if provider_name == "steam" and ("dark souls" in game or "terraria" in game or "hollow knight" in game or "hades" in game or "witcher" in game or "stardew" in game):
-					if item not in owned:
-						owned.append(item)
-				elif provider_name == "battlenet" and "elden ring" in game:
-					if item not in owned:
-						owned.append(item)
-				elif provider_name == "xbox" and "sekiro" in game:
-					if item not in owned:
-						owned.append(item)
-	return owned
+	"""Get list of forge items the player owns (from backend)"""
+	# Get forged items from ForgeItemManager (pre-computed by backend)
+	if ForgeItemManager and ForgeItemManager.is_loaded():
+		var forged = ForgeItemManager.get_all_forged_items()
+		print("[Forge] Owned items from backend: %d" % forged.size())
+		return forged
+
+	# Not loaded yet - return empty
+	print("[Forge] Forged items not loaded yet")
+	return []
 
 func _get_current_tier_name() -> String:
 	"""Get current tier name from profile"""

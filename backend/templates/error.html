@@ -1,0 +1,110 @@
+<!-- templates/error.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Error - Mantle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Rajdhani', sans-serif;
+      color: #e0e0e0;
+    }
+
+    .error-container {
+      text-align: center;
+      padding: 60px 40px;
+      background: rgba(20, 20, 35, 0.9);
+      border: 1px solid rgba(255, 60, 60, 0.3);
+      border-radius: 16px;
+      box-shadow:
+        0 0 40px rgba(255, 60, 60, 0.15),
+        inset 0 0 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+      margin: 20px;
+    }
+
+    .error-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      filter: drop-shadow(0 0 20px rgba(255, 60, 60, 0.5));
+    }
+
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: #ff4444;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      margin-bottom: 20px;
+      text-shadow:
+        0 0 10px rgba(255, 68, 68, 0.5),
+        0 0 20px rgba(255, 68, 68, 0.3);
+    }
+
+    .error-message {
+      font-size: 16px;
+      color: #aaa;
+      line-height: 1.6;
+      margin-bottom: 30px;
+      padding: 15px 20px;
+      background: rgba(255, 60, 60, 0.1);
+      border-left: 3px solid #ff4444;
+      border-radius: 0 8px 8px 0;
+      text-align: left;
+    }
+
+    .back-button {
+      display: inline-block;
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #00c8ff 0%, #0080ff 100%);
+      color: #fff;
+      text-decoration: none;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      box-shadow: 0 0 20px rgba(0, 200, 255, 0.3);
+    }
+
+    .back-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 30px rgba(0, 200, 255, 0.5);
+    }
+
+    .mantle-logo {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      color: #00c8ff;
+      letter-spacing: 4px;
+      margin-top: 30px;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <div class="error-icon">⚠</div>
+    <h1>Something Went Wrong</h1>
+    <p class="error-message">{{ message }}</p>
+    <a href="/dashboard" class="back-button">Go to Dashboard</a>
+    <div class="mantle-logo">MANTLE</div>
+  </div>
+</body>
+</html>

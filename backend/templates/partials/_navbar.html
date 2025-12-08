@@ -1,0 +1,103 @@
+<nav class="navbar">
+  <div class="navbar-left">
+    <!-- MANTLE mini neon sign -->
+    <a href="/dashboard" class="neon-sign-mini">
+      <span class="neon-text-mini">MANTLE</span>
+    </a>
+
+    <!-- Show user info only when logged in -->
+    {% if local_user_id %}
+      <span class="navbar-user">
+        <span class="user-id">{{ local_user_id }}</span>
+        {% if country_code %}
+          <span class="user-flag">{{ country_code }}</span>
+        {% endif %}
+      </span>
+    {% endif %}
+  </div>
+
+<div class="navbar-center">
+  {% for provider in all_providers %}
+    {% if local_user_id and provider.name in user_linked_providers %}
+      <!-- Linked provider - just display -->
+      <div class="nav-provider active" data-provider="{{ provider.name }}" title="{{ provider.display_name }} (connected)">
+        <img
+          src="/static/icons/{{ provider.name }}.svg"
+          alt="{{ provider.display_name }}"
+          class="provider-icon"
+        />
+      </div>
+    {% elif provider.enabled %}
+      {% if provider.name == 'psn' %}
+        <!-- PSN uses token input modal instead of OAuth -->
+        <div class="nav-provider" data-provider="psn" title="Connect PlayStation" onclick="showPsnModal()" style="cursor:pointer;">
+          <img
+            src="/static/icons/psn.svg"
+            alt="Connect PlayStation"
+            class="provider-icon"
+          />
+          <span class="connect-indicator">+</span>
+        </div>
+      {% else %}
+        <!-- Unlinked provider - clickable to connect -->
+        <a href="/auth/{{ provider.name }}/login" class="nav-provider" data-provider="{{ provider.name }}" title="Connect {{ provider.display_name }}">
+          <img
+            src="/static/icons/{{ provider.name }}.svg"
+            alt="Connect {{ provider.display_name }}"
+            class="provider-icon"
+          />
+          <span class="connect-indicator">+</span>
+        </a>
+      {% endif %}
+    {% else %}
+      <!-- Coming soon provider - not clickable -->
+      <div class="nav-provider coming-soon" data-provider="{{ provider.name }}" title="{{ provider.display_name }} (coming soon)">
+        <img
+          src="/static/icons/{{ provider.name }}.svg"
+          alt="{{ provider.display_name }}"
+          class="provider-icon"
+        />
+        <span class="coming-soon-indicator">⏳</span>
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+
+  <div class="navbar-right">
+    {% if local_user_id %}
+      <!-- Friends Icon with Pending Badge -->
+      <a href="#friends-section" class="navbar-friends" title="Friends" style="position:relative; display:flex; align-items:center; margin-right:16px; color:#00c8ff; text-decoration:none;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 4px rgba(0,200,255,0.5));">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        <span id="navbar-pending-badge" style="display:none; position:absolute; top:-6px; right:-8px; background:#ff4444; color:#fff; font-size:10px; font-weight:bold; padding:2px 5px; border-radius:8px; min-width:14px; text-align:center;"></span>
+      </a>
+
+      <form action="/logout" method="post">
+        <button type="submit" class="logout-button">Logout</button>
+      </form>
+    {% endif %}
+  </div>
+</nav>
+
+<script>
+// Load pending friend count for navbar badge
+(function() {
+  if (!document.getElementById('navbar-pending-badge')) return;
+
+  fetch('/api/friends/pending')
+    .then(r => r.json())
+    .then(data => {
+      const badge = document.getElementById('navbar-pending-badge');
+      if (data.count > 0) {
+        badge.textContent = data.count;
+        badge.style.display = 'block';
+      }
+    })
+    .catch(() => {});
+})();
+</script>

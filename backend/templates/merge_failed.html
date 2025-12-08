@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Error – Mantle</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    .error-wrapper {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .error-card {
+      position: relative;
+      width: 100%;
+      max-width: 420px;
+      padding: 2rem;
+      background: linear-gradient(180deg, rgba(20,25,30,0.95) 0%, rgba(8,10,14,0.98) 100%);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,100,100,0.3);
+      border-radius: 16px;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        inset 0 0 40px rgba(255,50,50,0.03),
+        0 4px 0 rgba(0,0,0,0.3),
+        0 8px 20px rgba(0,0,0,0.4),
+        0 0 30px rgba(255,50,50,0.1);
+      overflow: hidden;
+      text-align: center;
+    }
+
+    /* Circuit pattern */
+    .error-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%23ff6666;stroke-width:0.5;opacity:0.06%7D.pad%7Bfill:%23ff6666;opacity:0.08%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,25 L25,25 L25,50 L50,50'/%3E%3Cpath class='trace' d='M75,0 L75,25 L100,25'/%3E%3Cpath class='trace' d='M0,75 L35,75 L35,100'/%3E%3Ccircle class='pad' cx='25' cy='25' r='2'/%3E%3Ccircle class='pad' cx='50' cy='50' r='2'/%3E%3C/svg%3E");
+      background-size: 100px 100px;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+      border-radius: inherit;
+    }
+
+    .error-card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Icon */
+    .error-icon {
+      margin-bottom: 1.5rem;
+    }
+    .error-icon svg {
+      width: 56px;
+      height: 56px;
+      filter: drop-shadow(0 0 15px rgba(255,100,100,0.6));
+    }
+
+    /* Title */
+    .error-title {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.2rem;
+      color: #ff6666;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    /* Message */
+    .error-message {
+      color: #aaa;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Button */
+    .btn-back {
+      display: inline-block;
+      padding: 0.9rem 2rem;
+      background: rgba(60,60,60,0.6);
+      border: 1px solid rgba(100,100,100,0.3);
+      border-radius: 8px;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #aaa;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .btn-back:hover {
+      background: rgba(80,80,80,0.6);
+      color: #fff;
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+  <div class="error-wrapper">
+    <div class="error-card">
+      <!-- Icon -->
+      <div class="error-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#ff6666" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="15" y1="9" x2="9" y2="15"/>
+          <line x1="9" y1="9" x2="15" y2="15"/>
+        </svg>
+      </div>
+
+      <!-- Title -->
+      <h1 class="error-title">Something Went Wrong</h1>
+
+      <!-- Message -->
+      <p class="error-message">{{ message }}</p>
+
+      <!-- Button -->
+      <a href="/dashboard" class="btn-back">Back to Dashboard</a>
+    </div>
+  </div>
+</body>
+</html>
