@@ -150,6 +150,11 @@ var music_player: AudioStreamPlayer = null
 var music_volume_db: float = -15.0  # Store target volume for playlist
 const MUSIC_FADE_DURATION: float = 2.0  # Seconds to fade in/out
 
+# Special music tracks (for transitions and events)
+var transition_music: AudioStream = null  # Scene transition music
+var claimsequence_music: AudioStream = null  # Reward claim sequence music
+var special_music_player: AudioStreamPlayer = null  # Player for special music
+
 # Mute state
 var sfx_muted: bool = false
 var music_muted: bool = false
@@ -557,17 +562,31 @@ func _load_real_sounds() -> void:
 
 	# Load background music playlist
 	print("  🎵 Loading background music playlist...")
-	var track1 = load("res://assets/audio/music/game_loop.mp3")
+	var track1 = load("res://assets/audio/music/game_loop.ogg")
 	if track1:
 		music_tracks.append(track1)
-		print("  ✅ Loaded game_loop.mp3 (Track 1: The Raven's Shadow)")
+		print("  ✅ Loaded game_loop.ogg (Track 1: The Raven's Shadow)")
 
-	var track2 = load("res://assets/audio/music/game_loop_2.mp3")
+	var track2 = load("res://assets/audio/music/game_loop_2.ogg")
 	if track2:
 		music_tracks.append(track2)
-		print("  ✅ Loaded game_loop_2.mp3 (Track 2: The Wasteland's Whisper)")
+		print("  ✅ Loaded game_loop_2.ogg (Track 2: The Wasteland's Whisper)")
 
 	print("  📊 Loaded %d music tracks" % music_tracks.size())
+
+	# Load special music tracks (transitions, events)
+	print("  🎬 Loading special music tracks...")
+	transition_music = load("res://assets/audio/music/transition.ogg")
+	if transition_music:
+		print("  ✅ Loaded transition.ogg (Call to the Horizon)")
+	else:
+		push_warning("  ⚠️ Failed to load transition.ogg")
+
+	claimsequence_music = load("res://assets/audio/music/claimsequence.ogg")
+	if claimsequence_music:
+		print("  ✅ Loaded claimsequence.ogg (Treasure Unveiled)")
+	else:
+		push_warning("  ⚠️ Failed to load claimsequence.ogg")
 
 	# Load healing staff sounds
 	print("  💚 Loading healing staff sounds...")
@@ -1806,6 +1825,74 @@ func toggle_music_mute() -> void:
 		else:
 			music_player.volume_db = music_volume_db
 	print("🎵 Music %s" % ("MUTED" if music_muted else "ON"))
+
+# ============================================
+# SPECIAL MUSIC (transitions, events)
+# ============================================
+
+## Ensure special music player exists
+func _ensure_special_music_player() -> void:
+	if not special_music_player:
+		special_music_player = AudioStreamPlayer.new()
+		special_music_player.bus = "Music"
+		add_child(special_music_player)
+
+## Play transition music (for scene changes)
+## Optionally fades out current game music first
+func play_transition_music(volume_db: float = -10.0, fade_out_game_music: bool = true) -> void:
+	if not transition_music:
+		push_warning("Transition music not loaded")
+		return
+
+	_ensure_special_music_player()
+
+	# Fade out game music if playing
+	if fade_out_game_music and music_player and music_player.playing:
+		var tween = create_tween()
+		tween.tween_property(music_player, "volume_db", -40.0, 0.5)
+		tween.tween_callback(music_player.stop)
+
+	# Play transition music
+	special_music_player.stream = transition_music
+	special_music_player.volume_db = volume_db if not music_muted else -80.0
+	special_music_player.play()
+	print("🎬 Playing transition music")
+
+## Play claim sequence music (for rewards, unlocks)
+func play_claimsequence_music(volume_db: float = -10.0, fade_out_game_music: bool = true) -> void:
+	if not claimsequence_music:
+		push_warning("Claim sequence music not loaded")
+		return
+
+	_ensure_special_music_player()
+
+	# Fade out game music if playing
+	if fade_out_game_music and music_player and music_player.playing:
+		var tween = create_tween()
+		tween.tween_property(music_player, "volume_db", -40.0, 0.5)
+		tween.tween_callback(music_player.stop)
+
+	# Play claim sequence music
+	special_music_player.stream = claimsequence_music
+	special_music_player.volume_db = volume_db if not music_muted else -80.0
+	special_music_player.play()
+	print("🎁 Playing claim sequence music")
+
+## Stop special music with optional fade
+func stop_special_music(fade_duration: float = 1.0) -> void:
+	if not special_music_player or not special_music_player.playing:
+		return
+
+	if fade_duration > 0:
+		var tween = create_tween()
+		tween.tween_property(special_music_player, "volume_db", -40.0, fade_duration)
+		tween.tween_callback(special_music_player.stop)
+	else:
+		special_music_player.stop()
+
+## Check if special music is playing
+func is_special_music_playing() -> bool:
+	return special_music_player and special_music_player.playing
 
 # ============================================
 # TREE SOUNDS (from TreeAudioManager)
