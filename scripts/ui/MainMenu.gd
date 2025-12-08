@@ -1,9 +1,41 @@
 extends Control
 ## Main menu with authentication system
-## Stone Gray UI theme matching CharacterUI
+## Mantle-inspired cyberpunk UI theme
 
 # Server configuration
 const PRODUCTION_SERVER_IP = "167.99.55.245"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MANTLE THEME COLORS (matching the web dashboard)
+# ═══════════════════════════════════════════════════════════════════════════
+const MANTLE_BG_DARK = Color(0.04, 0.04, 0.06, 0.98)  # Near black
+const MANTLE_BG_PANEL = Color(0.06, 0.08, 0.10, 0.95)  # Dark panel
+const MANTLE_ACCENT_CYAN = Color(0.0, 0.8, 0.9, 1.0)  # Cyan glow
+const MANTLE_ACCENT_GOLD = Color(0.9, 0.7, 0.2, 1.0)  # Gold accent
+const MANTLE_BORDER_GLOW = Color(0.0, 0.6, 0.7, 0.6)  # Border glow
+const MANTLE_TEXT_PRIMARY = Color(0.9, 0.92, 0.94, 1.0)  # White text
+const MANTLE_TEXT_SECONDARY = Color(0.5, 0.55, 0.6, 1.0)  # Gray text
+
+# Tier colors matching Mantle dashboard
+const TIER_COLORS = {
+	"initiate": Color(0.4, 0.4, 0.4),
+	"bronze": Color(0.8, 0.5, 0.2),
+	"silver": Color(0.75, 0.75, 0.75),
+	"gold": Color(1.0, 0.84, 0.0),
+	"platinum": Color(0.7, 0.85, 0.9),  # Light cyan/silver
+	"diamond": Color(0.7, 0.95, 1.0),   # Bright cyan
+	"legendary": Color(1.0, 0.4, 0.0),  # Orange
+	"mythic": Color(1.0, 0.0, 1.0)      # Magenta
+}
+
+# Rarity colors for achievement breakdown
+const RARITY_COLORS = {
+	"common": Color(0.5, 0.5, 0.5),     # Gray
+	"uncommon": Color(0.2, 0.8, 0.2),   # Green
+	"rare": Color(0.2, 0.6, 1.0),       # Blue
+	"epic": Color(0.7, 0.3, 0.9),       # Purple
+	"legendary": Color(1.0, 0.8, 0.0)   # Gold
+}
 
 # Main menu nodes
 @onready var name_input = $MenuPanel/VBoxContainer/NameContainer/NameInput
@@ -12,6 +44,7 @@ const PRODUCTION_SERVER_IP = "167.99.55.245"
 @onready var ip_input = $MenuPanel/VBoxContainer/JoinContainer/IPInput
 @onready var join_container = $MenuPanel/VBoxContainer/JoinContainer
 @onready var status_label = $MenuPanel/VBoxContainer/StatusLabel
+var cancel_connect_button: Button = null
 @onready var theme_music = $ThemeMusic
 
 # Dev mode state
@@ -59,10 +92,11 @@ const RESOLUTIONS = [
 @onready var credits_back_button = $CreditsPanel/VBoxContainer/CreditsBackButton
 
 # State
-enum MenuState { MAIN, HOSTING, JOINING, AUTH_FOR_HOST, AUTH_FOR_JOIN }
+enum MenuState { MAIN, MANTLE_SCREEN, HOSTING, JOINING, AUTH_FOR_HOST, AUTH_FOR_JOIN }
 var current_state: MenuState = MenuState.MAIN
 var pending_ip: String = ""
 var pending_host_player_data: Dictionary = {}  # Store auth data when hosting
+var pending_action: String = ""  # "host" or "join" - what to do after Mantle screen
 
 func _ready():
 	await get_tree().process_frame
@@ -77,6 +111,9 @@ func _ready():
 	if not name_input or not ip_input:
 		push_error("MainMenu: Required nodes not found!")
 		return
+
+	# Apply cyberpunk styling to all panels
+	_apply_cyberpunk_theme()
 
 	# Set defaults
 	name_input.text = "Player" + str(randi() % 1000)
@@ -100,6 +137,9 @@ func _ready():
 	if join_button:
 		join_button.pressed.connect(_on_join_pressed)
 		join_button.mouse_entered.connect(_on_button_hover)
+
+	# Create cancel connection button (hidden by default)
+	_create_cancel_connect_button()
 
 	# Connect auth buttons
 	if login_button:
@@ -169,6 +209,22 @@ func _ready():
 	NetworkManager.register_failed.connect(_on_register_failed)
 	NetworkManager.version_mismatch.connect(_on_version_mismatch)
 
+	# Setup Mantle integration (Link Gaming Accounts)
+	_setup_mantle_integration()
+
+	# Check if user is already authenticated (saved token)
+	if MantleAuth and MantleAuth.is_logged_in():
+		# Already logged in - go straight to Armory
+		LogManager.info("User already authenticated, transitioning to Armory", "mantle")
+		_set_menu_panel_visible(false)
+		await get_tree().create_timer(0.5).timeout  # Brief delay for scene to fully load
+		_transition_to_armory()
+	else:
+		# IMPORTANT: Show Mantle panel FIRST (authenticate before playing)
+		# Hide the normal menu panel and show Mantle panel on startup
+		_set_menu_panel_visible(false)
+		_show_mantle_panel()
+
 func _on_button_hover():
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
@@ -178,6 +234,299 @@ func _play_click_sound():
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		sound_manager.play_button_click_sound()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CYBERPUNK THEME STYLING
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _apply_cyberpunk_theme():
+	"""Apply Mantle-style cyberpunk theme to all panels"""
+	# Create full-screen dark background
+	_create_theme_background()
+
+	# Style all panels
+	_style_menu_panel()
+	_style_auth_panel()
+	_style_settings_panel()
+	_style_credits_panel()
+
+	# Style bottom buttons
+	_style_bottom_buttons()
+
+func _create_theme_background():
+	"""Create the dark atmospheric background for the entire menu"""
+	var bg = ColorRect.new()
+	bg.name = "ThemeBackground"
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = MANTLE_BG_DARK
+	bg.z_index = -10  # Behind everything
+	add_child(bg)
+	move_child(bg, 0)
+
+func _style_menu_panel():
+	"""Style the main menu panel with cyberpunk aesthetic"""
+	var menu_panel = get_node_or_null("MenuPanel")
+	if not menu_panel:
+		return
+
+	# Apply panel style
+	var style = _create_panel_style()
+	menu_panel.add_theme_stylebox_override("panel", style)
+
+	# Add corner decorations
+	_add_corner_decorations(menu_panel)
+
+	# Style the title if exists
+	var title_label = menu_panel.get_node_or_null("VBoxContainer/TitleLabel")
+	if title_label:
+		title_label.add_theme_font_size_override("font_size", 32)
+		title_label.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+
+	# Style text inputs
+	_style_input_fields(menu_panel)
+
+	# Style all buttons in the menu panel
+	_style_panel_buttons(menu_panel)
+
+	# Style status label
+	if status_label:
+		status_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+
+func _style_auth_panel():
+	"""Style the authentication panel with cyberpunk aesthetic"""
+	if not auth_panel:
+		return
+
+	# Apply panel style
+	var style = _create_panel_style()
+	auth_panel.add_theme_stylebox_override("panel", style)
+
+	# Add corner decorations
+	_add_corner_decorations(auth_panel)
+
+	# Style text inputs
+	_style_input_fields(auth_panel)
+
+	# Style all buttons
+	_style_panel_buttons(auth_panel)
+
+	# Style status label
+	if auth_status_label:
+		auth_status_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+
+func _style_settings_panel():
+	"""Style the settings panel with cyberpunk aesthetic"""
+	if not settings_panel:
+		return
+
+	# Apply panel style
+	var style = _create_panel_style()
+	settings_panel.add_theme_stylebox_override("panel", style)
+
+	# Add corner decorations
+	_add_corner_decorations(settings_panel)
+
+	# Style the title
+	var title = settings_panel.get_node_or_null("VBoxContainer/SettingsTitle")
+	if title:
+		title.add_theme_font_size_override("font_size", 28)
+		title.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+
+	# Style all labels
+	_style_panel_labels(settings_panel)
+
+	# Style sliders
+	_style_sliders(settings_panel)
+
+	# Style checkboxes
+	_style_checkboxes(settings_panel)
+
+	# Style option button
+	if resolution_option:
+		_style_option_button(resolution_option)
+
+	# Style back button
+	if settings_back_button:
+		_style_mantle_button(settings_back_button, MANTLE_ACCENT_CYAN, false)
+
+func _style_credits_panel():
+	"""Style the credits panel with cyberpunk aesthetic"""
+	if not credits_panel:
+		return
+
+	# Apply panel style
+	var style = _create_panel_style()
+	credits_panel.add_theme_stylebox_override("panel", style)
+
+	# Add corner decorations
+	_add_corner_decorations(credits_panel)
+
+	# Style all labels
+	_style_panel_labels(credits_panel)
+
+	# Style back button
+	if credits_back_button:
+		_style_mantle_button(credits_back_button, MANTLE_ACCENT_CYAN, false)
+
+func _style_bottom_buttons():
+	"""Style the bottom row of buttons (Settings, Credits, Exit)"""
+	if settings_button:
+		_style_mantle_button(settings_button, MANTLE_TEXT_SECONDARY, false)
+	if credits_button:
+		_style_mantle_button(credits_button, MANTLE_TEXT_SECONDARY, false)
+	if exit_button:
+		_style_mantle_button(exit_button, Color(0.8, 0.3, 0.3), false)
+
+func _create_panel_style() -> StyleBoxFlat:
+	"""Create the standard cyberpunk panel style"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = MANTLE_BG_PANEL
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = MANTLE_BORDER_GLOW
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+	style.shadow_size = 20
+	style.shadow_color = Color(0, 0.5, 0.6, 0.25)
+	style.content_margin_left = 20
+	style.content_margin_right = 20
+	style.content_margin_top = 20
+	style.content_margin_bottom = 20
+	return style
+
+func _style_input_fields(parent: Node):
+	"""Style all LineEdit inputs in a panel"""
+	for child in parent.get_children():
+		if child is LineEdit:
+			_style_line_edit(child)
+		elif child.get_child_count() > 0:
+			_style_input_fields(child)
+
+func _style_line_edit(input: LineEdit):
+	"""Apply cyberpunk style to a LineEdit"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.02, 0.03, 0.04, 0.9)
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 2
+	style.border_color = MANTLE_BORDER_GLOW
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 5
+	style.content_margin_bottom = 5
+
+	var style_focus = style.duplicate()
+	style_focus.border_color = MANTLE_ACCENT_CYAN
+	style_focus.shadow_size = 5
+	style_focus.shadow_color = Color(0, 0.6, 0.7, 0.3)
+
+	input.add_theme_stylebox_override("normal", style)
+	input.add_theme_stylebox_override("focus", style_focus)
+	input.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+	input.add_theme_color_override("font_placeholder_color", MANTLE_TEXT_SECONDARY)
+	input.add_theme_color_override("caret_color", MANTLE_ACCENT_CYAN)
+	input.add_theme_color_override("selection_color", Color(0, 0.5, 0.6, 0.4))
+
+func _style_panel_buttons(parent: Node):
+	"""Style all buttons in a panel"""
+	for child in parent.get_children():
+		if child is Button and not child is CheckBox:
+			# Determine if it's a primary action button
+			var is_primary = child.name in ["HostButton", "JoinButton", "LoginButton", "RegisterButton", "GuestButton"]
+			var accent = MANTLE_ACCENT_CYAN if is_primary else MANTLE_TEXT_SECONDARY
+			_style_mantle_button(child, accent, is_primary)
+		elif child.get_child_count() > 0:
+			_style_panel_buttons(child)
+
+func _style_panel_labels(parent: Node):
+	"""Style all labels in a panel"""
+	for child in parent.get_children():
+		if child is Label:
+			# Don't override if already colored (like status labels)
+			if not child.has_theme_color_override("font_color"):
+				child.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+		elif child.get_child_count() > 0:
+			_style_panel_labels(child)
+
+func _style_sliders(parent: Node):
+	"""Style all sliders in a panel"""
+	for child in parent.get_children():
+		if child is HSlider:
+			_style_slider(child)
+		elif child.get_child_count() > 0:
+			_style_sliders(child)
+
+func _style_slider(slider: HSlider):
+	"""Apply cyberpunk style to a slider"""
+	# Grabber (the handle)
+	var grabber_style = StyleBoxFlat.new()
+	grabber_style.bg_color = MANTLE_ACCENT_CYAN
+	grabber_style.corner_radius_top_left = 4
+	grabber_style.corner_radius_top_right = 4
+	grabber_style.corner_radius_bottom_left = 4
+	grabber_style.corner_radius_bottom_right = 4
+
+	# Track (background)
+	var track_style = StyleBoxFlat.new()
+	track_style.bg_color = Color(0.1, 0.12, 0.14, 0.8)
+	track_style.corner_radius_top_left = 2
+	track_style.corner_radius_top_right = 2
+	track_style.corner_radius_bottom_left = 2
+	track_style.corner_radius_bottom_right = 2
+
+	# Filled portion
+	var fill_style = StyleBoxFlat.new()
+	fill_style.bg_color = Color(0, 0.5, 0.6, 0.8)
+	fill_style.corner_radius_top_left = 2
+	fill_style.corner_radius_top_right = 2
+	fill_style.corner_radius_bottom_left = 2
+	fill_style.corner_radius_bottom_right = 2
+
+	slider.add_theme_stylebox_override("grabber_area", fill_style)
+	slider.add_theme_stylebox_override("grabber_area_highlight", fill_style)
+	slider.add_theme_stylebox_override("slider", track_style)
+
+func _style_checkboxes(parent: Node):
+	"""Style all checkboxes in a panel"""
+	for child in parent.get_children():
+		if child is CheckBox:
+			child.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+			child.add_theme_color_override("font_hover_color", MANTLE_ACCENT_CYAN)
+		elif child.get_child_count() > 0:
+			_style_checkboxes(child)
+
+func _style_option_button(option: OptionButton):
+	"""Apply cyberpunk style to an OptionButton"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.06, 0.08, 0.9)
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.border_color = MANTLE_BORDER_GLOW
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+
+	var style_hover = style.duplicate()
+	style_hover.border_color = MANTLE_ACCENT_CYAN
+
+	option.add_theme_stylebox_override("normal", style)
+	option.add_theme_stylebox_override("hover", style_hover)
+	option.add_theme_stylebox_override("pressed", style_hover)
+	option.add_theme_stylebox_override("focus", style_hover)
+	option.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+	option.add_theme_color_override("font_hover_color", MANTLE_ACCENT_CYAN)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN MENU ACTIONS
@@ -204,9 +553,11 @@ func _on_join_pressed():
 			join_button.text = "Connect"
 			return
 
-	# Connect to server (production IP or dev mode custom IP)
+	# Set player name
 	NetworkManager.set_player_name(name_input.text)
 	pending_ip = ip_input.text if is_dev_mode else PRODUCTION_SERVER_IP
+
+	# Connect to server (Mantle auth already happened at startup)
 	status_label.text = "Connecting to server..."
 	current_state = MenuState.JOINING
 
@@ -214,12 +565,14 @@ func _on_join_pressed():
 		if host_button:
 			host_button.disabled = true
 		join_button.disabled = true
+		_show_cancel_button()
 	else:
 		status_label.text = "Failed to connect!"
 		current_state = MenuState.MAIN
 
 func _on_connected():
 	status_label.text = "Connected! Waiting for server..."
+	_hide_cancel_button()
 	# Don't load game yet - wait for authentication
 
 func _on_connection_failed():
@@ -227,6 +580,7 @@ func _on_connection_failed():
 	host_button.disabled = false
 	join_button.disabled = false
 	current_state = MenuState.MAIN
+	_hide_cancel_button()
 
 func _on_server_created():
 	status_label.text = "Server created! Loading game..."
@@ -242,6 +596,64 @@ func _on_version_mismatch(server_version: String, client_version: String):
 		host_button.disabled = false
 	join_button.disabled = false
 	current_state = MenuState.MAIN
+	_hide_cancel_button()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CANCEL CONNECTION BUTTON
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _create_cancel_connect_button() -> void:
+	"""Create the cancel button for aborting connection attempts"""
+	cancel_connect_button = Button.new()
+	cancel_connect_button.text = "Cancel"
+	cancel_connect_button.custom_minimum_size = Vector2(100, 36)
+	cancel_connect_button.visible = false
+	cancel_connect_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+
+	# Style to match the theme
+	cancel_connect_button.add_theme_font_size_override("font_size", 14)
+	cancel_connect_button.add_theme_color_override("font_color", Color(0.9, 0.6, 0.5))
+	cancel_connect_button.add_theme_color_override("font_hover_color", Color(1.0, 0.7, 0.6))
+
+	# Add after status label in the VBoxContainer
+	var vbox = status_label.get_parent()
+	var status_index = status_label.get_index()
+	vbox.add_child(cancel_connect_button)
+	vbox.move_child(cancel_connect_button, status_index + 1)
+
+	cancel_connect_button.pressed.connect(_on_cancel_connect_pressed)
+	cancel_connect_button.mouse_entered.connect(_on_button_hover)
+
+func _show_cancel_button() -> void:
+	"""Show the cancel button during connection"""
+	if cancel_connect_button:
+		cancel_connect_button.visible = true
+
+func _hide_cancel_button() -> void:
+	"""Hide the cancel button"""
+	if cancel_connect_button:
+		cancel_connect_button.visible = false
+
+func _on_cancel_connect_pressed() -> void:
+	"""Cancel the connection attempt"""
+	_play_click_sound()
+
+	# Disconnect from network
+	if NetworkManager:
+		NetworkManager.close_connection()
+
+	# Reset UI state
+	status_label.text = "Connection cancelled"
+	if host_button:
+		host_button.disabled = false
+	join_button.disabled = false
+	current_state = MenuState.MAIN
+	_hide_cancel_button()
+
+	# Clear status after a moment
+	await get_tree().create_timer(1.5).timeout
+	if current_state == MenuState.MAIN:
+		status_label.text = ""
 
 # ═══════════════════════════════════════════════════════════════════════════
 # AUTHENTICATION UI
@@ -482,6 +894,1212 @@ func _on_register_success():
 func _on_register_failed(error: String):
 	auth_status_label.text = error
 	_set_auth_buttons_enabled(true)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MANTLE INTEGRATION (Link Gaming Accounts Panel)
+# ═══════════════════════════════════════════════════════════════════════════
+
+var mantle_panel: Control = null
+var mantle_status_label: Label = null
+var mantle_link_button: Button = null
+var mantle_skip_button: Button = null
+var mantle_logout_button: Button = null
+var mantle_divider_container: Control = null
+var mantle_provider_icons_container: Control = null
+var mantle_back_button: Button = null
+var _mantle_initialized: bool = false
+var _connecting_dots_timer: Timer = null
+var _connecting_provider_label: String = ""
+var _connecting_dots_count: int = 0
+
+func _setup_mantle_integration():
+	"""Setup Mantle auth integration"""
+	if _mantle_initialized:
+		return
+	_mantle_initialized = true
+
+	# Create the Mantle panel
+	_create_mantle_panel()
+
+	# Connect MantleAuth signals
+	if MantleAuth:
+		MantleAuth.auth_started.connect(_on_mantle_auth_started)
+		MantleAuth.auth_completed.connect(_on_mantle_auth_completed)
+		MantleAuth.auth_failed.connect(_on_mantle_auth_failed)
+		MantleAuth.profile_updated.connect(_on_mantle_profile_updated)
+
+func _create_mantle_panel():
+	"""Create simplified authentication panel - 'Authenticate via' with clickable provider icons"""
+	# Create main container
+	mantle_panel = Control.new()
+	mantle_panel.name = "MantlePanel"
+	mantle_panel.visible = false
+	mantle_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(mantle_panel)
+
+	# Dark background overlay
+	var bg = ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = MANTLE_BG_DARK
+	mantle_panel.add_child(bg)
+
+	# Main card panel with glow border
+	var card = Panel.new()
+	card.name = "MantleCard"
+	card.set_anchors_preset(Control.PRESET_CENTER)
+	card.offset_left = -280
+	card.offset_top = -260
+	card.offset_right = 280
+	card.offset_bottom = 260
+
+	# Create cyberpunk panel style
+	var card_style = StyleBoxFlat.new()
+	card_style.bg_color = MANTLE_BG_PANEL
+	card_style.border_width_left = 2
+	card_style.border_width_right = 2
+	card_style.border_width_top = 2
+	card_style.border_width_bottom = 2
+	card_style.border_color = MANTLE_BORDER_GLOW
+	card_style.corner_radius_top_left = 4
+	card_style.corner_radius_top_right = 4
+	card_style.corner_radius_bottom_left = 4
+	card_style.corner_radius_bottom_right = 4
+	card_style.shadow_size = 20
+	card_style.shadow_color = Color(0, 0.5, 0.6, 0.3)
+	card.add_theme_stylebox_override("panel", card_style)
+	mantle_panel.add_child(card)
+
+	# Add corner decorations
+	_add_corner_decorations(card)
+
+	# Create content container
+	var vbox = VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.offset_left = 40
+	vbox.offset_top = 30
+	vbox.offset_right = -40
+	vbox.offset_bottom = -30
+	vbox.add_theme_constant_override("separation", 16)
+	card.add_child(vbox)
+
+	# MANTLE logo - custom drawn M-mantle with trophy + text
+	var logo_section = VBoxContainer.new()
+	logo_section.add_theme_constant_override("separation", 4)
+	vbox.add_child(logo_section)
+
+	# Custom logo icon (M-mantle with trophy)
+	var logo_icon_container = CenterContainer.new()
+	logo_section.add_child(logo_icon_container)
+	var logo_icon = _create_mantle_logo_icon()
+	logo_icon_container.add_child(logo_icon)
+
+	# "MANTLE" text under the icon
+	var logo_text = Label.new()
+	logo_text.text = "M A N T L E"
+	logo_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	logo_text.add_theme_font_size_override("font_size", 18)
+	logo_text.add_theme_color_override("font_color", MANTLE_ACCENT_CYAN)
+	logo_section.add_child(logo_text)
+
+	# Decorative line under MANTLE
+	var line_container = CenterContainer.new()
+	logo_section.add_child(line_container)
+	var accent_line = ColorRect.new()
+	accent_line.color = MANTLE_ACCENT_CYAN
+	accent_line.custom_minimum_size = Vector2(100, 2)
+	line_container.add_child(accent_line)
+
+	# "Authenticate via" title
+	var title = Label.new()
+	title.text = "LINK YOUR GAMING LEGACY"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+	vbox.add_child(title)
+
+	# Tagline under title
+	var tagline = Label.new()
+	tagline.text = "Your achievements become your appearance.\nA decade of gaming? Look like a legend."
+	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tagline.add_theme_font_size_override("font_size", 14)
+	tagline.add_theme_color_override("font_color", Color(0.6, 0.62, 0.65, 0.9))
+	vbox.add_child(tagline)
+
+	# Status label (shows auth progress)
+	mantle_status_label = Label.new()
+	mantle_status_label.name = "MantleStatusLabel"
+	mantle_status_label.text = ""
+	mantle_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mantle_status_label.add_theme_font_size_override("font_size", 14)
+	mantle_status_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+	mantle_status_label.custom_minimum_size = Vector2(0, 20)
+	vbox.add_child(mantle_status_label)
+
+	# Clickable provider icons row
+	mantle_provider_icons_container = _create_provider_icons_row()
+	vbox.add_child(mantle_provider_icons_container)
+
+	# Horizontal divider with "or" text
+	mantle_divider_container = HBoxContainer.new()
+	mantle_divider_container.name = "DividerContainer"
+	mantle_divider_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	mantle_divider_container.add_theme_constant_override("separation", 15)
+	vbox.add_child(mantle_divider_container)
+
+	# Use Control with fixed size for the lines to prevent expansion
+	var left_line_container = Control.new()
+	left_line_container.custom_minimum_size = Vector2(80, 1)
+	left_line_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mantle_divider_container.add_child(left_line_container)
+	var left_line = ColorRect.new()
+	left_line.color = Color(0.3, 0.32, 0.35, 0.6)
+	left_line.set_anchors_preset(Control.PRESET_FULL_RECT)
+	left_line_container.add_child(left_line)
+
+	var or_label = Label.new()
+	or_label.text = "or"
+	or_label.add_theme_font_size_override("font_size", 14)
+	or_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+	mantle_divider_container.add_child(or_label)
+
+	var right_line_container = Control.new()
+	right_line_container.custom_minimum_size = Vector2(80, 1)
+	right_line_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mantle_divider_container.add_child(right_line_container)
+	var right_line = ColorRect.new()
+	right_line.color = Color(0.3, 0.32, 0.35, 0.6)
+	right_line.set_anchors_preset(Control.PRESET_FULL_RECT)
+	right_line_container.add_child(right_line)
+
+	# Guest button - styled more prominently
+	mantle_skip_button = Button.new()
+	mantle_skip_button.name = "MantleSkipButton"
+	mantle_skip_button.text = "Continue as Guest"
+	mantle_skip_button.custom_minimum_size = Vector2(200, 44)
+	mantle_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_style_guest_button(mantle_skip_button)
+	mantle_skip_button.pressed.connect(_on_mantle_skip_pressed)
+	mantle_skip_button.mouse_entered.connect(_on_button_hover)
+	vbox.add_child(mantle_skip_button)
+
+	# Logout button - small, only visible when logged in
+	mantle_logout_button = Button.new()
+	mantle_logout_button.name = "MantleLogoutButton"
+	mantle_logout_button.text = "Logout"
+	mantle_logout_button.custom_minimum_size = Vector2(80, 28)
+	mantle_logout_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	mantle_logout_button.visible = false  # Hidden until logged in
+	_style_logout_button(mantle_logout_button)
+	mantle_logout_button.pressed.connect(_on_mantle_logout_pressed)
+	mantle_logout_button.mouse_entered.connect(_on_button_hover)
+	vbox.add_child(mantle_logout_button)
+
+	# Remove the old link button reference (no longer used in simplified UI)
+	mantle_link_button = null
+
+func _add_corner_decorations(parent: Control):
+	"""Add cyberpunk corner bracket decorations"""
+	var corner_size = 20
+	var corner_thickness = 2
+	var corner_color = MANTLE_ACCENT_CYAN
+
+	# Top-left corner
+	var tl_h = ColorRect.new()
+	tl_h.color = corner_color
+	tl_h.size = Vector2(corner_size, corner_thickness)
+	tl_h.position = Vector2(0, 0)
+	parent.add_child(tl_h)
+
+	var tl_v = ColorRect.new()
+	tl_v.color = corner_color
+	tl_v.size = Vector2(corner_thickness, corner_size)
+	tl_v.position = Vector2(0, 0)
+	parent.add_child(tl_v)
+
+	# Top-right corner
+	var tr_h = ColorRect.new()
+	tr_h.color = corner_color
+	tr_h.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	tr_h.size = Vector2(corner_size, corner_thickness)
+	tr_h.position = Vector2(-corner_size, 0)
+	parent.add_child(tr_h)
+
+	var tr_v = ColorRect.new()
+	tr_v.color = corner_color
+	tr_v.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	tr_v.size = Vector2(corner_thickness, corner_size)
+	tr_v.position = Vector2(-corner_thickness, 0)
+	parent.add_child(tr_v)
+
+	# Bottom-left corner
+	var bl_h = ColorRect.new()
+	bl_h.color = corner_color
+	bl_h.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	bl_h.size = Vector2(corner_size, corner_thickness)
+	bl_h.position = Vector2(0, -corner_thickness)
+	parent.add_child(bl_h)
+
+	var bl_v = ColorRect.new()
+	bl_v.color = corner_color
+	bl_v.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	bl_v.size = Vector2(corner_thickness, corner_size)
+	bl_v.position = Vector2(0, -corner_size)
+	parent.add_child(bl_v)
+
+	# Bottom-right corner
+	var br_h = ColorRect.new()
+	br_h.color = corner_color
+	br_h.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	br_h.size = Vector2(corner_size, corner_thickness)
+	br_h.position = Vector2(-corner_size, -corner_thickness)
+	parent.add_child(br_h)
+
+	var br_v = ColorRect.new()
+	br_v.color = corner_color
+	br_v.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	br_v.size = Vector2(corner_thickness, corner_size)
+	br_v.position = Vector2(-corner_thickness, -corner_size)
+	parent.add_child(br_v)
+
+# Provider icon configuration
+# Using cdn.simpleicons.org with white color for tinting
+# Xbox is not on Simple Icons CDN so we skip it for now
+const SIMPLEICONS_CDN = "https://cdn.simpleicons.org"
+const PROVIDER_ICONS = {
+	"steam": {"slug": "steam", "color": Color(0.0, 0.85, 1.0), "label": "Steam", "active": true},
+	"battlenet": {"slug": "battledotnet", "color": Color(0.0, 0.8, 1.0), "label": "Battle.net", "active": true},
+	"playstation": {"slug": "playstation", "color": Color(0.0, 0.5, 0.8), "label": "PlayStation", "active": false},
+	"epic": {"slug": "epicgames", "color": Color(0.7, 0.7, 0.75), "label": "Epic", "active": false},
+	"gog": {"slug": "gogdotcom", "color": Color(0.6, 0.3, 0.75), "label": "GOG", "active": false}
+}
+# Note: Xbox removed - not available on Simple Icons CDN
+
+var provider_icon_nodes: Dictionary = {}  # Store references for hover updates
+
+func _create_provider_icons_row() -> Control:
+	"""Create a row of clickable provider icons for authentication"""
+	var main_container = VBoxContainer.new()
+	main_container.name = "ProviderIconsContainer"
+	main_container.add_theme_constant_override("separation", 16)
+
+	# Active providers section
+	var active_section = HBoxContainer.new()
+	active_section.add_theme_constant_override("separation", 30)
+	active_section.alignment = BoxContainer.ALIGNMENT_CENTER
+	main_container.add_child(active_section)
+
+	# Separator and "Coming Soon" section
+	var inactive_section = VBoxContainer.new()
+	inactive_section.add_theme_constant_override("separation", 8)
+	main_container.add_child(inactive_section)
+
+	# "Coming Soon" label
+	var coming_soon_label = Label.new()
+	coming_soon_label.text = "COMING SOON"
+	coming_soon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	coming_soon_label.add_theme_font_size_override("font_size", 12)
+	coming_soon_label.add_theme_color_override("font_color", Color(0.45, 0.45, 0.5, 0.7))
+	inactive_section.add_child(coming_soon_label)
+
+	# Inactive providers row
+	var inactive_row = HBoxContainer.new()
+	inactive_row.add_theme_constant_override("separation", 20)
+	inactive_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	inactive_section.add_child(inactive_row)
+
+	# Display order: active providers first, then inactive
+	var provider_order = ["steam", "battlenet", "playstation", "epic", "gog"]
+
+	# Create button for each provider
+	for provider_key in provider_order:
+		if not PROVIDER_ICONS.has(provider_key):
+			continue
+
+		var icon_data = PROVIDER_ICONS[provider_key]
+		var is_active = icon_data.get("active", false)
+
+		# Choose target container based on active state
+		var target_container = active_section if is_active else inactive_row
+		var icon_size = 56 if is_active else 40  # Larger touch targets for active
+
+		# Button container for the icon
+		var icon_button = Button.new()
+		icon_button.name = provider_key + "_button"
+		icon_button.custom_minimum_size = Vector2(icon_size, icon_size)
+		icon_button.flat = true
+		icon_button.tooltip_text = icon_data["label"]  # Tooltip on hover
+
+		if is_active:
+			icon_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		else:
+			icon_button.mouse_default_cursor_shape = Control.CURSOR_ARROW
+			icon_button.disabled = true
+			icon_button.tooltip_text = icon_data["label"] + " (Coming Soon)"
+
+		# Style the button - active icons get glow background
+		var btn_style = StyleBoxFlat.new()
+		if is_active:
+			btn_style.bg_color = Color(icon_data["color"].r * 0.15, icon_data["color"].g * 0.15, icon_data["color"].b * 0.15, 0.4)
+			btn_style.shadow_size = 8
+			btn_style.shadow_color = Color(icon_data["color"].r, icon_data["color"].g, icon_data["color"].b, 0.3)
+		else:
+			btn_style.bg_color = Color(0, 0, 0, 0)
+		btn_style.corner_radius_top_left = 8
+		btn_style.corner_radius_top_right = 8
+		btn_style.corner_radius_bottom_left = 8
+		btn_style.corner_radius_bottom_right = 8
+
+		var btn_hover = StyleBoxFlat.new()
+		if is_active:
+			btn_hover.bg_color = Color(icon_data["color"].r * 0.25, icon_data["color"].g * 0.25, icon_data["color"].b * 0.25, 0.6)
+			btn_hover.shadow_size = 12
+			btn_hover.shadow_color = Color(icon_data["color"].r, icon_data["color"].g, icon_data["color"].b, 0.5)
+		else:
+			btn_hover.bg_color = Color(0.15, 0.15, 0.2, 0.3)
+		btn_hover.corner_radius_top_left = 8
+		btn_hover.corner_radius_top_right = 8
+		btn_hover.corner_radius_bottom_left = 8
+		btn_hover.corner_radius_bottom_right = 8
+
+		icon_button.add_theme_stylebox_override("normal", btn_style)
+		icon_button.add_theme_stylebox_override("hover", btn_hover)
+		icon_button.add_theme_stylebox_override("pressed", btn_hover)
+		icon_button.add_theme_stylebox_override("focus", btn_style)
+		icon_button.add_theme_stylebox_override("disabled", btn_style)
+
+		# The actual icon texture inside the button
+		var icon = TextureRect.new()
+		icon.name = provider_key + "_icon"
+		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		var padding = 10 if is_active else 8
+		icon.offset_left = padding
+		icon.offset_top = padding
+		icon.offset_right = -padding
+		icon.offset_bottom = -padding
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		# Start invisible for fade-in animation
+		icon.modulate = Color(1, 1, 1, 0)
+
+		icon_button.add_child(icon)
+
+		# Store reference for later updates
+		provider_icon_nodes[provider_key] = {
+			"button": icon_button,
+			"icon": icon,
+			"color": icon_data["color"],
+			"active": is_active
+		}
+
+		# Only connect events for active providers
+		if is_active:
+			icon_button.pressed.connect(_on_provider_clicked.bind(provider_key))
+			icon_button.mouse_entered.connect(_on_provider_icon_hover.bind(provider_key, true))
+			icon_button.mouse_exited.connect(_on_provider_icon_hover.bind(provider_key, false))
+
+		target_container.add_child(icon_button)
+
+		# Load icon from CDN
+		if icon_data.has("slug"):
+			_load_provider_icon_from_cdn(provider_key, icon_data["slug"])
+
+	# Start pulse animation for active icons after a short delay
+	get_tree().create_timer(0.5).timeout.connect(_start_active_icons_pulse)
+
+	return main_container
+
+func _start_active_icons_pulse():
+	"""Start subtle pulse animation on active provider icons"""
+	for provider_key in provider_icon_nodes.keys():
+		var node_data = provider_icon_nodes[provider_key]
+		if not node_data.get("active", false):
+			continue
+
+		var button: Button = node_data.get("button")
+		if not button or not is_instance_valid(button):
+			continue
+
+		# Create looping pulse tween for the button's glow
+		_create_pulse_tween(button, node_data["color"], provider_key)
+
+func _create_pulse_tween(button: Button, brand_color: Color, provider_key: String):
+	"""Create a subtle pulsing glow effect on the button"""
+	var tween = create_tween()
+	tween.set_loops()  # Loop forever
+
+	# Pulse between normal and brighter glow
+	var normal_style = StyleBoxFlat.new()
+	normal_style.bg_color = Color(brand_color.r * 0.15, brand_color.g * 0.15, brand_color.b * 0.15, 0.4)
+	normal_style.shadow_size = 8
+	normal_style.shadow_color = Color(brand_color.r, brand_color.g, brand_color.b, 0.3)
+	normal_style.corner_radius_top_left = 8
+	normal_style.corner_radius_top_right = 8
+	normal_style.corner_radius_bottom_left = 8
+	normal_style.corner_radius_bottom_right = 8
+
+	var bright_style = StyleBoxFlat.new()
+	bright_style.bg_color = Color(brand_color.r * 0.2, brand_color.g * 0.2, brand_color.b * 0.2, 0.5)
+	bright_style.shadow_size = 14
+	bright_style.shadow_color = Color(brand_color.r, brand_color.g, brand_color.b, 0.5)
+	bright_style.corner_radius_top_left = 8
+	bright_style.corner_radius_top_right = 8
+	bright_style.corner_radius_bottom_left = 8
+	bright_style.corner_radius_bottom_right = 8
+
+	# Store reference to stop later if needed
+	provider_icon_nodes[provider_key]["pulse_tween"] = tween
+
+	# Animate shadow_size and shadow_color alpha via property
+	tween.tween_callback(func(): button.add_theme_stylebox_override("normal", bright_style))
+	tween.tween_interval(1.5)
+	tween.tween_callback(func(): button.add_theme_stylebox_override("normal", normal_style))
+	tween.tween_interval(1.5)
+
+func _start_connecting_dots_animation():
+	"""Start the animated dots in 'Connecting to X...' text"""
+	_stop_connecting_dots_animation()
+
+	_connecting_dots_count = 0
+	_connecting_dots_timer = Timer.new()
+	_connecting_dots_timer.wait_time = 0.4
+	_connecting_dots_timer.timeout.connect(_on_connecting_dots_tick)
+	add_child(_connecting_dots_timer)
+	_connecting_dots_timer.start()
+
+	# Initial update
+	_on_connecting_dots_tick()
+
+func _stop_connecting_dots_animation():
+	"""Stop the animated dots timer"""
+	if _connecting_dots_timer:
+		_connecting_dots_timer.stop()
+		_connecting_dots_timer.queue_free()
+		_connecting_dots_timer = null
+
+func _on_connecting_dots_tick():
+	"""Update the connecting text with cycling dots"""
+	_connecting_dots_count = (_connecting_dots_count % 3) + 1
+	var dots = ".".repeat(_connecting_dots_count)
+	# Pad to 3 chars to prevent text shifting
+	dots = dots + " ".repeat(3 - _connecting_dots_count)
+
+	if mantle_status_label and _connecting_provider_label != "":
+		mantle_status_label.text = "Connecting to %s%s" % [_connecting_provider_label, dots]
+
+func _on_provider_clicked(provider_key: String):
+	"""Handle click on provider icon - start OAuth for that provider"""
+	_play_click_sound()
+
+	if mantle_status_label:
+		var label = PROVIDER_ICONS[provider_key].get("label", provider_key)
+		_connecting_provider_label = label
+		_start_connecting_dots_animation()
+		mantle_status_label.add_theme_color_override("font_color", MANTLE_ACCENT_CYAN)
+
+	# Disable all provider buttons during auth
+	for key in provider_icon_nodes.keys():
+		var btn = provider_icon_nodes[key].get("button")
+		if btn:
+			btn.disabled = true
+
+	if mantle_skip_button:
+		mantle_skip_button.disabled = true
+
+	# Start OAuth with the selected provider
+	if MantleAuth:
+		MantleAuth.start_login_with_provider(provider_key)
+	else:
+		_on_mantle_auth_failed("Mantle service not available")
+
+func _load_provider_icon_from_cdn(provider_key: String, slug: String):
+	"""Load provider icon from Simple Icons CDN with white color"""
+	# Request white SVG so we can tint it with modulate
+	var url = "%s/%s/FFFFFF" % [SIMPLEICONS_CDN, slug]
+
+	var http = HTTPRequest.new()
+	add_child(http)
+	http.request_completed.connect(_on_provider_icon_loaded.bind(http, provider_key))
+
+	var error = http.request(url)
+	if error != OK:
+		push_warning("MainMenu: Failed to request icon for %s: %s" % [provider_key, error])
+		http.queue_free()
+
+func _on_provider_icon_loaded(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, http: HTTPRequest, provider_key: String):
+	"""Handle CDN icon response"""
+	http.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		push_warning("MainMenu: Failed to load icon for %s (code: %d)" % [provider_key, response_code])
+		return
+
+	if not provider_icon_nodes.has(provider_key):
+		return
+
+	# Parse SVG data and create texture
+	var svg_string = body.get_string_from_utf8()
+	var image = Image.new()
+
+	# Load SVG at higher resolution for crisp icons
+	var error = image.load_svg_from_string(svg_string, 2.0)  # 2x scale for sharpness
+	if error != OK:
+		push_warning("MainMenu: Failed to parse SVG for %s" % provider_key)
+		return
+
+	# Create texture from image
+	var texture = ImageTexture.create_from_image(image)
+
+	# Apply to icon
+	var node_data = provider_icon_nodes[provider_key]
+	var icon: TextureRect = node_data["icon"]
+	if icon and is_instance_valid(icon):
+		icon.texture = texture
+
+		# Set target color based on active state
+		var target_color: Color
+		if node_data.get("active", false):
+			target_color = node_data["color"]
+		else:
+			# Grayed out for inactive providers
+			target_color = Color(0.4, 0.42, 0.45, 0.6)
+
+		# Fade-in animation
+		var tween = create_tween()
+		tween.tween_property(icon, "modulate", target_color, 0.3).set_ease(Tween.EASE_OUT)
+
+func _on_provider_icon_hover(provider_key: String, hovered: bool):
+	"""Handle provider icon hover - glow brighter (only for active providers)"""
+	if not provider_icon_nodes.has(provider_key):
+		return
+
+	var node_data = provider_icon_nodes[provider_key]
+	var icon: TextureRect = node_data["icon"]
+	var brand_color: Color = node_data["color"]
+
+	# Only active providers have hover effects
+	if not node_data.get("active", false):
+		return
+
+	if hovered:
+		# Glow: brighten the brand color significantly
+		icon.modulate = Color(
+			min(brand_color.r * 1.8, 1.0),
+			min(brand_color.g * 1.8, 1.0),
+			min(brand_color.b * 1.8, 1.0),
+			1.0
+		)
+		_on_button_hover()
+	else:
+		# Return to normal brand color
+		icon.modulate = brand_color
+
+func _is_provider_connected(provider_key: String) -> bool:
+	"""Check if a provider is connected via MantleAuth"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		return false
+
+	# Map of provider key to possible API names
+	var name_variants = {
+		"steam": ["steam"],
+		"xbox": ["xbox", "xbl", "xbox live"],
+		"battlenet": ["battlenet", "battle.net", "blizzard", "bnet"],
+		"playstation": ["playstation", "psn", "playstation network"],
+		"epic": ["epic", "epic games"],
+		"gog": ["gog", "gog.com"]
+	}
+
+	var valid_names = name_variants.get(provider_key, [provider_key])
+
+	# MantleAuth.providers contains connected provider data
+	for provider in MantleAuth.providers:
+		var provider_name = provider.get("provider", "").to_lower().strip_edges()
+		# Also check 'name' field as fallback
+		if provider_name == "":
+			provider_name = provider.get("name", "").to_lower().strip_edges()
+
+		for valid_name in valid_names:
+			if provider_name == valid_name:
+				return true
+
+	return false
+
+func _update_provider_icons_state():
+	"""Update all provider icons based on connection status"""
+	for provider_key in provider_icon_nodes.keys():
+		var node_data = provider_icon_nodes[provider_key]
+		var icon: TextureRect = node_data["icon"]
+		var brand_color: Color = node_data["color"]
+
+		if _is_provider_connected(provider_key):
+			# Connected - show brand color
+			icon.modulate = Color(brand_color.r, brand_color.g, brand_color.b, 1.0)
+		else:
+			# Not connected - dim white
+			icon.modulate = Color(0.5, 0.5, 0.55, 0.7)
+
+func _create_mantle_logo_icon() -> Control:
+	"""Create the Mantle logo icon - M-mantle shape with trophy on top using Line2D"""
+	var container = Control.new()
+	container.name = "MantleLogoIcon"
+	container.custom_minimum_size = Vector2(60, 48)
+
+	var w = 60.0
+	var h = 48.0
+	var cx = w / 2.0
+	var logo_color = MANTLE_ACCENT_CYAN
+	var line_width = 2.5
+
+	# M-Mantle shape dimensions
+	var mantle_top = h * 0.5
+	var mantle_bottom = h * 0.95
+	var outer_width = w * 0.7
+	var inner_width = w * 0.28
+
+	var left_outer = cx - outer_width / 2
+	var left_inner = cx - inner_width / 2
+	var right_outer = cx + outer_width / 2
+	var right_inner = cx + inner_width / 2
+
+	# M-Mantle shape (the shelf/fireplace mantle)
+	var mantle_line = Line2D.new()
+	mantle_line.name = "MantleLine"
+	mantle_line.width = line_width
+	mantle_line.default_color = logo_color
+	mantle_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	mantle_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	mantle_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	mantle_line.add_point(Vector2(left_outer, mantle_bottom))    # Bottom left
+	mantle_line.add_point(Vector2(left_outer, mantle_top))       # Top left outer
+	mantle_line.add_point(Vector2(left_inner, mantle_top))       # Shelf left edge
+	mantle_line.add_point(Vector2(left_inner, mantle_top + 10))  # Shelf inner left (deeper dip)
+	mantle_line.add_point(Vector2(right_inner, mantle_top + 10)) # Shelf inner right (deeper dip)
+	mantle_line.add_point(Vector2(right_inner, mantle_top))      # Shelf right edge
+	mantle_line.add_point(Vector2(right_outer, mantle_top))      # Top right outer
+	mantle_line.add_point(Vector2(right_outer, mantle_bottom))   # Bottom right
+	mantle_line.modulate.a = 0  # Start invisible for animation
+	container.add_child(mantle_line)
+
+	# Trophy sitting on the shelf
+	var trophy_bottom = mantle_top - 2
+	var trophy_top = h * 0.08
+	var trophy_width = w * 0.28
+
+	# Group all trophy parts for easier animation
+	var trophy_group = Control.new()
+	trophy_group.name = "TrophyGroup"
+	trophy_group.modulate.a = 0  # Start invisible
+	container.add_child(trophy_group)
+
+	# Trophy base
+	var trophy_base = Line2D.new()
+	trophy_base.width = line_width
+	trophy_base.default_color = logo_color
+	trophy_base.add_point(Vector2(cx - trophy_width * 0.25, trophy_bottom))
+	trophy_base.add_point(Vector2(cx + trophy_width * 0.25, trophy_bottom))
+	trophy_group.add_child(trophy_base)
+
+	# Trophy stem (goes up into cup)
+	var trophy_stem = Line2D.new()
+	trophy_stem.width = line_width
+	trophy_stem.default_color = logo_color
+	trophy_stem.add_point(Vector2(cx, trophy_bottom))
+	trophy_stem.add_point(Vector2(cx, trophy_bottom - 5))
+	trophy_group.add_child(trophy_stem)
+
+	# Trophy stand - extends down through M to complete the letter (slightly duller)
+	var trophy_stand = Line2D.new()
+	trophy_stand.width = line_width
+	trophy_stand.default_color = Color(logo_color.r * 0.6, logo_color.g * 0.6, logo_color.b * 0.6, 0.7)
+	trophy_stand.add_point(Vector2(cx, trophy_bottom))
+	trophy_stand.add_point(Vector2(cx, mantle_bottom))
+	trophy_group.add_child(trophy_stand)
+
+	# Trophy cup (left side)
+	var cup_left = Line2D.new()
+	cup_left.width = line_width
+	cup_left.default_color = logo_color
+	cup_left.add_point(Vector2(cx - trophy_width * 0.12, trophy_bottom - 5))
+	cup_left.add_point(Vector2(cx - trophy_width * 0.45, trophy_top))
+	trophy_group.add_child(cup_left)
+
+	# Trophy cup (right side)
+	var cup_right = Line2D.new()
+	cup_right.width = line_width
+	cup_right.default_color = logo_color
+	cup_right.add_point(Vector2(cx + trophy_width * 0.12, trophy_bottom - 5))
+	cup_right.add_point(Vector2(cx + trophy_width * 0.45, trophy_top))
+	trophy_group.add_child(cup_right)
+
+	# Trophy rim
+	var cup_rim = Line2D.new()
+	cup_rim.width = line_width
+	cup_rim.default_color = logo_color
+	cup_rim.add_point(Vector2(cx - trophy_width * 0.45, trophy_top))
+	cup_rim.add_point(Vector2(cx + trophy_width * 0.45, trophy_top))
+	trophy_group.add_child(cup_rim)
+
+	# Left handle (simple arc approximation with lines)
+	var handle_left = Line2D.new()
+	handle_left.width = line_width - 0.5
+	handle_left.default_color = logo_color
+	handle_left.add_point(Vector2(cx - trophy_width * 0.45, trophy_top + 2))
+	handle_left.add_point(Vector2(cx - trophy_width * 0.58, trophy_top + 5))
+	handle_left.add_point(Vector2(cx - trophy_width * 0.45, trophy_top + 8))
+	trophy_group.add_child(handle_left)
+
+	# Right handle
+	var handle_right = Line2D.new()
+	handle_right.width = line_width - 0.5
+	handle_right.default_color = logo_color
+	handle_right.add_point(Vector2(cx + trophy_width * 0.45, trophy_top + 2))
+	handle_right.add_point(Vector2(cx + trophy_width * 0.58, trophy_top + 5))
+	handle_right.add_point(Vector2(cx + trophy_width * 0.45, trophy_top + 8))
+	trophy_group.add_child(handle_right)
+
+	# Start animation after a short delay
+	_animate_mantle_logo.call_deferred(mantle_line, trophy_group)
+
+	return container
+
+func _animate_mantle_logo(mantle_line: Line2D, trophy_group: Control):
+	"""Animate the logo: M draws in, then trophy fades in, then subtle pulse"""
+	await get_tree().create_timer(0.3).timeout
+
+	var tween = create_tween()
+
+	# Phase 1: M-mantle fades/draws in
+	tween.tween_property(mantle_line, "modulate:a", 1.0, 0.4).set_ease(Tween.EASE_OUT)
+
+	# Phase 2: Trophy drops in and fades
+	tween.tween_property(trophy_group, "position:y", -3.0, 0.0)  # Start slightly above
+	tween.tween_property(trophy_group, "modulate:a", 1.0, 0.3).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(trophy_group, "position:y", 0.0, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BOUNCE)
+
+	# Phase 3: Subtle glow pulse
+	tween.tween_interval(0.2)
+	tween.tween_property(mantle_line, "modulate", Color(1.3, 1.3, 1.3, 1.0), 0.15)
+	tween.parallel().tween_property(trophy_group, "modulate", Color(1.3, 1.3, 1.3, 1.0), 0.15)
+	tween.tween_property(mantle_line, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+	tween.parallel().tween_property(trophy_group, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+
+func _style_logout_button(button: Button):
+	"""Style the small logout button"""
+	var style_normal = StyleBoxFlat.new()
+	style_normal.bg_color = Color(0.08, 0.08, 0.1, 0.6)
+	style_normal.border_width_bottom = 1
+	style_normal.border_color = Color(0.4, 0.2, 0.2, 0.5)
+	style_normal.corner_radius_top_left = 4
+	style_normal.corner_radius_top_right = 4
+	style_normal.corner_radius_bottom_left = 4
+	style_normal.corner_radius_bottom_right = 4
+
+	var style_hover = style_normal.duplicate()
+	style_hover.bg_color = Color(0.15, 0.08, 0.08, 0.8)
+	style_hover.border_color = Color(0.6, 0.3, 0.3, 0.8)
+
+	button.add_theme_stylebox_override("normal", style_normal)
+	button.add_theme_stylebox_override("hover", style_hover)
+	button.add_theme_stylebox_override("pressed", style_hover)
+	button.add_theme_stylebox_override("focus", style_normal)
+
+	button.add_theme_font_size_override("font_size", 12)
+	button.add_theme_color_override("font_color", Color(0.6, 0.4, 0.4, 0.8))
+	button.add_theme_color_override("font_hover_color", Color(0.9, 0.5, 0.5, 1.0))
+
+func _on_mantle_logout_pressed():
+	"""Handle logout button press"""
+	_play_click_sound()
+
+	if MantleAuth:
+		MantleAuth.logout()
+
+	# Reset UI to logged-out state
+	if mantle_logout_button:
+		mantle_logout_button.visible = false
+
+	if mantle_skip_button:
+		mantle_skip_button.text = "Continue as Guest"
+
+	if mantle_status_label:
+		mantle_status_label.text = "Logged out"
+		mantle_status_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+
+	# Re-enable provider buttons
+	for key in provider_icon_nodes.keys():
+		var node_data = provider_icon_nodes[key]
+		if node_data.get("active", false):
+			var btn = node_data.get("button")
+			if btn:
+				btn.disabled = false
+
+	# Update provider icons to non-connected state
+	_update_provider_icons_state()
+
+func _style_guest_button(button: Button):
+	"""Style the Continue as Guest button"""
+	var style_normal = StyleBoxFlat.new()
+	style_normal.bg_color = Color(0.12, 0.14, 0.16, 0.9)
+	style_normal.border_width_left = 1
+	style_normal.border_width_right = 1
+	style_normal.border_width_top = 1
+	style_normal.border_width_bottom = 1
+	style_normal.border_color = Color(0.35, 0.38, 0.42, 0.7)
+	style_normal.corner_radius_top_left = 6
+	style_normal.corner_radius_top_right = 6
+	style_normal.corner_radius_bottom_left = 6
+	style_normal.corner_radius_bottom_right = 6
+
+	var style_hover = style_normal.duplicate()
+	style_hover.bg_color = Color(0.16, 0.18, 0.22, 0.95)
+	style_hover.border_color = Color(0.5, 0.55, 0.6, 0.9)
+
+	var style_pressed = style_normal.duplicate()
+	style_pressed.bg_color = Color(0.1, 0.12, 0.14, 0.95)
+
+	button.add_theme_stylebox_override("normal", style_normal)
+	button.add_theme_stylebox_override("hover", style_hover)
+	button.add_theme_stylebox_override("pressed", style_pressed)
+	button.add_theme_stylebox_override("focus", style_hover)
+
+	button.add_theme_font_size_override("font_size", 15)
+	button.add_theme_color_override("font_color", Color(0.7, 0.72, 0.75, 0.9))
+	button.add_theme_color_override("font_hover_color", MANTLE_TEXT_PRIMARY)
+
+func _style_mantle_button(button: Button, accent_color: Color, prominent: bool):
+	"""Apply Mantle cyberpunk style to a button"""
+	var style_normal = StyleBoxFlat.new()
+	style_normal.bg_color = Color(0.08, 0.1, 0.12, 0.9) if prominent else Color(0.05, 0.06, 0.08, 0.7)
+	style_normal.border_width_left = 2 if prominent else 1
+	style_normal.border_width_right = 2 if prominent else 1
+	style_normal.border_width_top = 2 if prominent else 1
+	style_normal.border_width_bottom = 2 if prominent else 1
+	style_normal.border_color = accent_color if prominent else Color(0.3, 0.3, 0.35, 0.5)
+	style_normal.corner_radius_top_left = 4
+	style_normal.corner_radius_top_right = 4
+	style_normal.corner_radius_bottom_left = 4
+	style_normal.corner_radius_bottom_right = 4
+	if prominent:
+		style_normal.shadow_size = 8
+		style_normal.shadow_color = Color(accent_color.r, accent_color.g, accent_color.b, 0.3)
+
+	var style_hover = style_normal.duplicate()
+	style_hover.bg_color = Color(0.1, 0.15, 0.18, 0.95) if prominent else Color(0.08, 0.1, 0.12, 0.8)
+	style_hover.border_color = Color(accent_color.r * 1.2, accent_color.g * 1.2, accent_color.b * 1.2, 1.0)
+
+	var style_pressed = style_normal.duplicate()
+	style_pressed.bg_color = Color(0.05, 0.08, 0.1, 0.95)
+
+	button.add_theme_stylebox_override("normal", style_normal)
+	button.add_theme_stylebox_override("hover", style_hover)
+	button.add_theme_stylebox_override("pressed", style_pressed)
+	button.add_theme_stylebox_override("focus", style_hover)
+
+	button.add_theme_font_size_override("font_size", 18 if prominent else 14)
+	button.add_theme_color_override("font_color", accent_color if prominent else MANTLE_TEXT_SECONDARY)
+	button.add_theme_color_override("font_hover_color", Color(1, 1, 1) if prominent else MANTLE_TEXT_PRIMARY)
+
+func _show_mantle_panel():
+	"""Show the Mantle panel for linking gaming accounts"""
+	current_state = MenuState.MANTLE_SCREEN
+
+	# Hide main menu, show mantle panel
+	_set_menu_panel_visible(false)
+	if mantle_panel:
+		mantle_panel.visible = true
+
+	# Update status based on whether already linked
+	_update_mantle_panel_status()
+
+func _hide_mantle_panel():
+	"""Hide the Mantle panel"""
+	if mantle_panel:
+		mantle_panel.visible = false
+
+func _update_mantle_panel_status():
+	"""Update the Mantle panel status display"""
+	if not mantle_status_label:
+		return
+
+	if MantleAuth and MantleAuth.is_logged_in():
+		var tier_name = MantleAuth.mantle_tier.get("name", "Unknown")
+		var tier_color_hex = MantleAuth.mantle_tier.get("color", "#FFFFFF")
+		var provider_count = MantleAuth.providers.size()
+
+		mantle_status_label.text = "Linked as %s\n%s Tier - %d providers connected" % [
+			MantleAuth.username, tier_name, provider_count
+		]
+		var tier_color = Color.from_string(tier_color_hex, Color.WHITE)
+		mantle_status_label.add_theme_color_override("font_color", tier_color)
+
+		if mantle_link_button:
+			mantle_link_button.text = "LINKED - ADD MORE ACCOUNTS"
+
+		if mantle_skip_button:
+			mantle_skip_button.text = "Continue to Game"
+
+		if mantle_logout_button:
+			mantle_logout_button.visible = true
+
+		# Hide provider icons and "or" divider when logged in
+		if mantle_provider_icons_container:
+			mantle_provider_icons_container.visible = false
+		if mantle_divider_container:
+			mantle_divider_container.visible = false
+	else:
+		mantle_status_label.text = ""
+		mantle_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+
+		if mantle_link_button:
+			mantle_link_button.text = "LINK GAMING ACCOUNTS"
+
+		if mantle_skip_button:
+			mantle_skip_button.text = "Continue as Guest"
+
+		if mantle_logout_button:
+			mantle_logout_button.visible = false
+
+		# Show provider icons and "or" divider when logged out
+		if mantle_provider_icons_container:
+			mantle_provider_icons_container.visible = true
+		if mantle_divider_container:
+			mantle_divider_container.visible = true
+
+# _on_mantle_link_pressed removed - now using _on_provider_clicked for each provider icon
+
+func _on_mantle_skip_pressed():
+	"""Skip linking (or continue after linking) and proceed to main menu"""
+	_play_click_sound()
+	_proceed_to_main_menu()
+
+func _proceed_to_main_menu():
+	"""Show main menu with PLAY button after Mantle auth/skip"""
+	_hide_mantle_panel()
+	_set_menu_panel_visible(true)
+	current_state = MenuState.MAIN
+
+	# Update the menu to show Mantle status if linked
+	_update_menu_with_mantle_status()
+
+var mantle_menu_status: Control = null  # Container for tier display in main menu
+
+func _update_menu_with_mantle_status():
+	"""Update main menu to show Mantle tier if linked"""
+	var menu_vbox = get_node_or_null("MenuPanel/VBoxContainer")
+	if not menu_vbox:
+		return
+
+	# Create tier display container if it doesn't exist
+	if not mantle_menu_status:
+		mantle_menu_status = _create_tier_display_widget()
+		menu_vbox.add_child(mantle_menu_status)
+		menu_vbox.move_child(mantle_menu_status, 0)
+
+	# Update the display based on Mantle status
+	_update_tier_display_content()
+
+func _create_tier_display_widget() -> Control:
+	"""Create a fancy tier display widget with glow effects"""
+	var container = VBoxContainer.new()
+	container.name = "MantleTierDisplay"
+	container.add_theme_constant_override("separation", 4)
+
+	# Username label
+	var username_label = Label.new()
+	username_label.name = "UsernameLabel"
+	username_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	username_label.add_theme_font_size_override("font_size", 14)
+	username_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+	container.add_child(username_label)
+
+	# Tier badge container (with glow effect)
+	var badge_container = CenterContainer.new()
+	badge_container.name = "BadgeContainer"
+	container.add_child(badge_container)
+
+	var badge_panel = Panel.new()
+	badge_panel.name = "TierBadge"
+	badge_panel.custom_minimum_size = Vector2(180, 36)
+	badge_container.add_child(badge_panel)
+
+	# Tier label
+	var tier_label = Label.new()
+	tier_label.name = "TierLabel"
+	tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tier_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	tier_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tier_label.add_theme_font_size_override("font_size", 16)
+	badge_panel.add_child(tier_label)
+
+	# Achievement count
+	var ach_label = Label.new()
+	ach_label.name = "AchievementLabel"
+	ach_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ach_label.add_theme_font_size_override("font_size", 12)
+	ach_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+	container.add_child(ach_label)
+
+	# Spacer
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 8)
+	container.add_child(spacer)
+
+	return container
+
+func _update_tier_display_content():
+	"""Update the tier display widget content"""
+	if not mantle_menu_status:
+		return
+
+	var username_label = mantle_menu_status.get_node_or_null("UsernameLabel")
+	var badge_panel = mantle_menu_status.get_node_or_null("BadgeContainer/TierBadge")
+	var tier_label = mantle_menu_status.get_node_or_null("BadgeContainer/TierBadge/TierLabel")
+	var ach_label = mantle_menu_status.get_node_or_null("AchievementLabel")
+
+	if MantleAuth and MantleAuth.is_logged_in():
+		var tier_name = MantleAuth.mantle_tier.get("name", "Unknown")
+		var tier_key = tier_name.to_lower()
+		var tier_color_hex = MantleAuth.mantle_tier.get("color", "#FFFFFF")
+		var tier_color = Color.from_string(tier_color_hex, Color.WHITE)
+		var total_ach = MantleAuth.total_achievements
+		var provider_count = MantleAuth.providers.size()
+
+		# Use our tier colors if available
+		if TIER_COLORS.has(tier_key):
+			tier_color = TIER_COLORS[tier_key]
+
+		# Update username
+		if username_label:
+			username_label.text = MantleAuth.username
+			username_label.visible = true
+
+		# Style the tier badge with glow
+		if badge_panel:
+			var badge_style = StyleBoxFlat.new()
+			badge_style.bg_color = Color(tier_color.r * 0.15, tier_color.g * 0.15, tier_color.b * 0.15, 0.9)
+			badge_style.border_width_left = 2
+			badge_style.border_width_right = 2
+			badge_style.border_width_top = 2
+			badge_style.border_width_bottom = 2
+			badge_style.border_color = tier_color
+			badge_style.corner_radius_top_left = 4
+			badge_style.corner_radius_top_right = 4
+			badge_style.corner_radius_bottom_left = 4
+			badge_style.corner_radius_bottom_right = 4
+			badge_style.shadow_size = 12
+			badge_style.shadow_color = Color(tier_color.r, tier_color.g, tier_color.b, 0.4)
+			badge_panel.add_theme_stylebox_override("panel", badge_style)
+
+		# Update tier label
+		if tier_label:
+			tier_label.text = "%s TIER" % tier_name.to_upper()
+			tier_label.add_theme_color_override("font_color", tier_color)
+
+		# Update achievement count
+		if ach_label:
+			ach_label.text = "%d achievements • %d providers" % [total_ach, provider_count]
+			ach_label.visible = true
+
+		mantle_menu_status.visible = true
+	else:
+		# Guest mode - simple display
+		if username_label:
+			username_label.visible = false
+
+		if badge_panel:
+			var guest_style = StyleBoxFlat.new()
+			guest_style.bg_color = Color(0.08, 0.08, 0.1, 0.8)
+			guest_style.border_width_left = 1
+			guest_style.border_width_right = 1
+			guest_style.border_width_top = 1
+			guest_style.border_width_bottom = 1
+			guest_style.border_color = Color(0.4, 0.4, 0.45, 0.5)
+			guest_style.corner_radius_top_left = 4
+			guest_style.corner_radius_top_right = 4
+			guest_style.corner_radius_bottom_left = 4
+			guest_style.corner_radius_bottom_right = 4
+			badge_panel.add_theme_stylebox_override("panel", guest_style)
+
+		if tier_label:
+			tier_label.text = "GUEST"
+			tier_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+
+		if ach_label:
+			ach_label.text = "Link accounts for cosmetics"
+			ach_label.visible = true
+
+		mantle_menu_status.visible = true
+
+func _on_mantle_auth_started(auth_url: String):
+	"""Browser opened for authentication"""
+	_stop_connecting_dots_animation()
+
+	if mantle_status_label:
+		mantle_status_label.text = "Complete login in your browser...\nWaiting for authentication..."
+		mantle_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.4))
+
+func _on_mantle_auth_completed(user_data: Dictionary):
+	"""Successfully authenticated with Mantle"""
+	_stop_connecting_dots_animation()
+
+	# Show success message briefly
+	if mantle_status_label:
+		var tier_name = user_data.get("mantle", {}).get("name", "Unknown")
+		var tier_color_hex = user_data.get("mantle", {}).get("color", "#FFFFFF")
+		var total_ach = user_data.get("total_achievements", 0)
+		mantle_status_label.text = "Welcome, %s!\n%s Tier - %d achievements\n\nEntering Armory..." % [
+			user_data.get("username", "Player"), tier_name, total_ach
+		]
+		var tier_color = Color.from_string(tier_color_hex, Color.WHITE)
+		mantle_status_label.add_theme_color_override("font_color", tier_color)
+
+	# Update provider icons to show connected state
+	_update_provider_icons_state()
+
+	# Transition to Armory after a brief delay
+	await get_tree().create_timer(1.5).timeout
+	_transition_to_armory()
+
+func _on_mantle_auth_failed(error: String):
+	"""Mantle authentication failed"""
+	_stop_connecting_dots_animation()
+
+	if mantle_status_label:
+		mantle_status_label.text = error
+		mantle_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+
+	# Re-enable all provider buttons
+	for key in provider_icon_nodes.keys():
+		var btn = provider_icon_nodes[key].get("button")
+		if btn:
+			btn.disabled = false
+
+	if mantle_skip_button:
+		mantle_skip_button.disabled = false
+
+func _on_mantle_profile_updated(profile: Dictionary):
+	"""Mantle profile updated with new data"""
+	if current_state == MenuState.MANTLE_SCREEN:
+		_update_mantle_panel_status()
+	# Update provider icons to reflect any newly connected providers
+	_update_provider_icons_state()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ARMORY TRANSITION
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _transition_to_armory():
+	"""Transition to Armory scene after authentication"""
+	LogManager.info("Transitioning to Armory", "mantle")
+
+	# Fade out music slightly (don't stop it)
+	if theme_music and theme_music.playing:
+		var fade_tween = create_tween()
+		fade_tween.tween_property(theme_music, "volume_db", -15.0, 0.5)
+
+	# Load Armory scene
+	get_tree().change_scene_to_file("res://scenes/ui/Armory.tscn")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # GAME LOADING

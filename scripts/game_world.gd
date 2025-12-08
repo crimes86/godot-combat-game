@@ -3755,6 +3755,12 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 					hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
 				else:
 					hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
+			# Apply Mantle tier badge if linked
+			if MantleAuth and MantleAuth.is_logged_in() and hb.has_method("set_mantle_tier"):
+				var tier = MantleAuth.mantle_tier.get("tier", "")
+				hb.set_mantle_tier(tier)
+				# Apply cosmetics to player
+				_apply_mantle_cosmetics(player)
 	else:
 		# Disable processing for remote players - they are updated via RPC in _receive_player_position
 		player.set_physics_process(false)
@@ -3948,3 +3954,30 @@ func _get_player_animation(player: Node) -> String:
 	if character_sprite and character_sprite is AnimatedSprite2D:
 		return character_sprite.animation
 	return "idle_south"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MANTLE COSMETICS INTEGRATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _apply_mantle_cosmetics(player: Node) -> void:
+	"""Apply Mantle tier cosmetics to a player character"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		return
+
+	if not MantleCosmetics:
+		return
+
+	# Get the player's profile and calculate cosmetics
+	var profile = {
+		"mantle": MantleAuth.mantle_tier,
+		"providers": MantleAuth.providers,
+		"achievements": MantleAuth.achievements,
+		"total_achievements": MantleAuth.total_achievements
+	}
+
+	var cosmetics = MantleCosmetics.calculate_cosmetics(profile)
+
+	# Apply cosmetics to the player (instant for now, transformation later)
+	MantleCosmetics.apply_to_character(player, cosmetics, true)
+
+	LogManager.info("Applied Mantle cosmetics: %s tier" % cosmetics.get("tier", "unknown"), "mantle")

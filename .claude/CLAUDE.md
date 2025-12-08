@@ -124,3 +124,25 @@ Key files with path references (check these first):
 2. Place assets in the correct category
 3. Follow LPC naming conventions for sprites
 4. Update relevant loader scripts if paths change
+
+## Forge Icon Standards
+
+When creating or modifying forge icons (`assets/icons/forged/`):
+
+**Spec:** 64x64 PNG, RGBA, centered content, min 4px padding
+
+**Orientation:**
+- Weapons: Diagonal 45°, tip pointing **upper-right**
+- Armor/Shields: Upright, centered
+- Accessories: Natural, centered
+
+**Validation tool:** `assets/icons/forged/icon_standards.py`
+
+```bash
+python icon_standards.py --validate    # Check compliance
+python icon_standards.py --fix         # Auto-center all
+python icon_standards.py --orient weapons/x.png upper-right  # Fix orientation
+python icon_standards.py --preview     # Generate shop grid preview
+```
+
+See `docs/FORGE_ASSET_GENERATION_GUIDE.md` for full details

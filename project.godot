@@ -43,6 +43,8 @@ BugReportUI="*res://scripts/ui/BugReportUI.gd"
 DuelManager="*res://scripts/systems/DuelManager.gd"
 MobileInput="*res://scripts/mobile/MobileInput.gd"
 GameInput="*res://scripts/systems/GameInput.gd"
+MantleAuth="*res://scripts/systems/MantleAuth.gd"
+MantleCosmetics="*res://scripts/systems/MantleCosmetics.gd"
 
 [display]
 

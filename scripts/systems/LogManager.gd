@@ -117,6 +117,10 @@ func warn(message: String, category: String = "default") -> void:
 	_log(LogLevel.WARN, message, category)
 	push_warning(message)  # Also use Godot's warning system
 
+func warning(message: String, category: String = "default") -> void:
+	"""Alias for warn()"""
+	warn(message, category)
+
 func error(message: String, category: String = "default") -> void:
 	"""Log error-level message (failures needing attention)"""
 	_log(LogLevel.ERROR, message, category)

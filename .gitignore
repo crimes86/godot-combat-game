@@ -47,3 +47,6 @@ _ul-*
 # User-specific settings (optional - some prefer to track these)
 .claude/settings.local.json
 nul
+
+# LPC Generator (external tool - not part of project)
+tools/lpc-generator/

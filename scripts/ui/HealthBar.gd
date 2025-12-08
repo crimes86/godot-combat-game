@@ -6,6 +6,8 @@ extends Control
 @onready var damage_flash: Control = null
 @onready var glow: Control = null
 var name_label: Label = null
+var mantle_badge: Control = null  # Mantle tier badge
+var mantle_tier: String = ""  # Current mantle tier
 
 var ready_to_position: bool = false
 var has_positioned_once: bool = false
@@ -153,6 +155,9 @@ func create_pill_capsule_bar() -> void:
 	name_label.custom_minimum_size = Vector2(150, 14)
 	name_label.visible = false  # Hidden until name is set
 	add_child(name_label)
+
+	# 🏆 MANTLE BADGE (tier indicator next to name)
+	_create_mantle_badge()
 
 func _process(delta: float) -> void:
 	# Only position once parent is ready
@@ -345,3 +350,85 @@ func set_name_color(color: Color) -> void:
 func set_custom_offset(offset: float) -> void:
 	"""Set a custom Y offset for positioning (for non-standard entities like Training Dummy)"""
 	custom_offset_y = offset
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MANTLE TIER BADGE SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _create_mantle_badge() -> void:
+	"""Create the Mantle tier badge (diamond/shield shape next to name)"""
+	mantle_badge = Control.new()
+	mantle_badge.name = "MantleBadge"
+	mantle_badge.custom_minimum_size = Vector2(12, 12)
+	mantle_badge.size = Vector2(12, 12)
+	# Position to the right of the name label
+	mantle_badge.position = Vector2(52, -16)  # Right side of name area
+	mantle_badge.visible = false  # Hidden until tier is set
+	add_child(mantle_badge)
+
+	# Create badge background (diamond shape using a rotated square)
+	var badge_bg = Panel.new()
+	badge_bg.name = "BadgeBG"
+	badge_bg.size = Vector2(10, 10)
+	badge_bg.position = Vector2(1, 1)
+	badge_bg.rotation = deg_to_rad(45)
+	badge_bg.pivot_offset = Vector2(5, 5)
+
+	var badge_style = StyleBoxFlat.new()
+	badge_style.bg_color = Color(0.4, 0.4, 0.4, 0.9)  # Default gray
+	badge_style.corner_radius_top_left = 2
+	badge_style.corner_radius_top_right = 2
+	badge_style.corner_radius_bottom_left = 2
+	badge_style.corner_radius_bottom_right = 2
+	badge_style.border_width_left = 1
+	badge_style.border_width_right = 1
+	badge_style.border_width_top = 1
+	badge_style.border_width_bottom = 1
+	badge_style.border_color = Color(0.2, 0.2, 0.2, 1.0)
+	badge_bg.add_theme_stylebox_override("panel", badge_style)
+
+	mantle_badge.add_child(badge_bg)
+
+func set_mantle_tier(tier: String) -> void:
+	"""Set the Mantle tier badge color and visibility"""
+	mantle_tier = tier.to_lower()
+
+	if not mantle_badge:
+		return
+
+	# Get tier color from MantleCosmetics
+	var badge_color = Color(0.4, 0.4, 0.4)  # Default gray
+	var glow_color = Color.TRANSPARENT
+
+	if MantleCosmetics:
+		badge_color = MantleCosmetics.get_tier_badge_color(mantle_tier)
+		glow_color = MantleCosmetics.get_tier_glow_color(mantle_tier)
+
+	# Update badge color
+	var badge_bg = mantle_badge.get_node_or_null("BadgeBG")
+	if badge_bg:
+		var style = badge_bg.get_theme_stylebox("panel")
+		if style:
+			style.bg_color = badge_color
+			# Add border glow for higher tiers
+			if glow_color.a > 0.3:
+				style.border_color = glow_color
+				style.border_width_left = 2
+				style.border_width_right = 2
+				style.border_width_top = 2
+				style.border_width_bottom = 2
+
+	# Show badge if tier is set (hide for guests/initiate)
+	mantle_badge.visible = mantle_tier != "" and mantle_tier != "initiate"
+
+	# Update name color based on tier
+	if name_label and MantleCosmetics and MantleCosmetics.TIER_COSMETICS.has(mantle_tier):
+		var tier_data = MantleCosmetics.TIER_COSMETICS[mantle_tier]
+		var name_color = tier_data.get("badge_color", Color(0.9, 0.9, 0.9))
+		# Slightly desaturate for readability
+		name_color = name_color.lerp(Color.WHITE, 0.3)
+		name_label.add_theme_color_override("font_color", name_color)
+
+func get_mantle_tier() -> String:
+	"""Get the current Mantle tier"""
+	return mantle_tier
