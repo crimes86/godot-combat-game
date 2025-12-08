@@ -19,41 +19,103 @@ A fast-paced action RPG featuring a unique critical hit weakpoint system and cha
 
 ---
 
+## Developer Onboarding
+
+### First Day Setup
+
+1. **Install Godot 4.2+** from [godotengine.org](https://godotengine.org)
+2. **Clone this repo** and open `project.godot` in Godot
+3. **Press F5** to run the game and verify it works
+4. **Press F3** in-game for debug overlay (shows chunk info, enemy counts, FPS)
+
+### Architecture Overview
+
+```
++------------------+     +------------------+     +------------------+
+|   28 Autoloads   |     |   Game World     |     |    UI Layer      |
+|  (Global State)  |---->|  (Scene Tree)    |---->|  (CanvasLayer)   |
++------------------+     +------------------+     +------------------+
+        |                        |                        |
+        v                        v                        v
+  CharacterStats           Player.gd              InventoryUI.gd
+  InventorySystem          Enemy.gd               CharacterUI.gd
+  NetworkManager           ChunkBasedPropSystem   ShopUI.gd
+  DatabaseManager          ChunkAwareSpawnManager ChatUI.gd
+  SoundManager            Campfire.gd             GroupUI.gd
+  DuelManager             PlayerCorpse.gd         GameMenu.gd
+```
+
+### Key Directories
+
+| Directory | Purpose |
+|-----------|---------|
+| `scripts/systems/` | Core autoloads and managers |
+| `scripts/player/` | Player character scripts |
+| `scripts/enemies/` | Enemy AI and behaviors |
+| `scripts/ui/` | All UI components |
+| `scripts/networking/` | Multiplayer sync |
+| `scenes/` | Godot scene files (.tscn) |
+| `assets/` | Sprites, audio, icons |
+| `data/` | JSON configs (weapons, armor, props) |
+
+### Common Tasks
+
+**Add a new weapon:**
+1. Add entry to `data/shop_weapons.json`
+2. Add sprites to `assets/equipment/weapons/<type>/`
+3. Test in Armory or Shop
+
+**Add a new enemy:**
+1. Duplicate `scenes/enemies/enemy.tscn`
+2. Modify `scripts/enemies/Enemy.gd` or create subclass
+3. Register in `ChunkAwareSpawnManager.gd`
+
+**Debug performance:**
+1. Press F3 for in-game overlay
+2. Check `docs/PERFORMANCE.md` for profiling tips
+3. Use Godot's built-in profiler (Debugger -> Profiler)
+
+### Code Conventions
+
+- **Autoloads** are accessed globally: `CharacterStats.level`, `InventorySystem.add_item()`
+- **Signals** for decoupled communication (check `_ready()` for signal connections)
+- **snake_case** for functions/variables, **PascalCase** for classes
+- **GDScript static typing** preferred: `func foo(bar: int) -> String:`
+
+### Reading Order for New Developers
+
+1. This README (you're here!)
+2. `GAME_DOCUMENTATION.md` - Full game systems overview
+3. `docs/CHUNK_AND_SPAWNING.md` - How the world works
+4. `docs/PERFORMANCE.md` - F3 debug and optimization
+5. `.claude/CLAUDE.md` - Asset structure guidelines
+
+---
+
 ## Documentation Files
 
 ### Primary Documentation
 
-#### [GAME_DOCUMENTATION.md](GAME_DOCUMENTATION.md) - **Main Game Design Document**
-Comprehensive overview of all game systems and mechanics including NotificationManager system.
+| Document | Description |
+|----------|-------------|
+| [GAME_DOCUMENTATION.md](GAME_DOCUMENTATION.md) | Main game design document - all systems overview |
+| [GAME_BALANCE.md](GAME_BALANCE.md) | Economy, stats, and progression balance |
+| [TODO.md](TODO.md) | Task tracking and feature status |
 
-#### [GAME_BALANCE.md](GAME_BALANCE.md) - **Economy & Progression Balance**
-Detailed balance numbers for economy, stats, and progression.
+### Technical Documentation (docs/)
 
-### System Documentation (docs/)
-
-#### [docs/INVENTORY_AND_LOOT.md](docs/INVENTORY_AND_LOOT.md)
-Complete guide to inventory management, loot drops, corpse looting, and treasure systems.
-
-#### [docs/LPC_GUIDE.md](docs/LPC_GUIDE.md)
-Complete guide to the LPC character system, sprite generation, armor layering, and asset management.
-
-#### [docs/ENEMY_SPAWN_SYSTEM.md](docs/ENEMY_SPAWN_SYSTEM.md)
-Complete guide to spawn location generation and enemy spawning (radial patterns, pattern learning, manual/procedural spawning).
-
-#### [docs/PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md)
-Performance optimization strategies: node caching, view distance culling, throttled updates, particle reduction.
-
-#### [docs/PVP_DUEL_SYSTEM.md](docs/PVP_DUEL_SYSTEM.md)
-Complete PvP duel system implementation - consensual 1v1 combat with `/duel` command.
-
-#### [docs/PLAYER_CORPSE_SYSTEM.md](docs/PLAYER_CORPSE_SYSTEM.md)
-EverQuest-style corpse runs - player corpse spawns on death with equipment for recovery.
-
-#### [docs/ITCH_RELEASE_GUIDE.md](docs/ITCH_RELEASE_GUIDE.md)
-Complete guide for itch.io release - export settings, checklist, page setup, and release notes.
-
-#### [docs/SETTLEMENT_SYSTEM_SPEC.md](docs/SETTLEMENT_SYSTEM_SPEC.md)
-Design spec for guild base building and siege system (NOT YET IMPLEMENTED).
+| Document | Description |
+|----------|-------------|
+| [docs/CHUNK_AND_SPAWNING.md](docs/CHUNK_AND_SPAWNING.md) | Chunk system, prop generation, enemy spawning, multiplayer sync |
+| [docs/COMBAT_SYSTEMS.md](docs/COMBAT_SYSTEMS.md) | PvP duels, player corpse system, death mechanics |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | F3 debug, optimization, profiling, node management |
+| [docs/INVENTORY_AND_LOOT.md](docs/INVENTORY_AND_LOOT.md) | Inventory, loot drops, treasure systems |
+| [docs/LPC_GUIDE.md](docs/LPC_GUIDE.md) | LPC sprites, armor layering, asset generation |
+| [docs/FORGE_AND_MANTLE.md](docs/FORGE_AND_MANTLE.md) | Mantle integration, forge system, Armory UI |
+| [docs/SERVER_ARCHITECTURE.md](docs/SERVER_ARCHITECTURE.md) | Networking, multiplayer, server authority |
+| [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Player data, persistence, schema design |
+| [docs/ITCH_RELEASE_GUIDE.md](docs/ITCH_RELEASE_GUIDE.md) | Export settings, itch.io publishing |
+| [docs/FUTURE_SPECS.md](docs/FUTURE_SPECS.md) | Settlement, class, vendor systems (NOT YET IMPLEMENTED) |
 
 ---
 
@@ -105,7 +167,7 @@ Design spec for guild base building and siege system (NOT YET IMPLEMENTED).
 - **Particle Reduction**: Optimized particle counts (40% reduction)
 - **Camera Zoom Limit**: 0.75x-2.0x zoom range (prevents map reveal, maintains performance)
 - **Target**: 60 FPS on mid-range laptops ✅
-- See [docs/PERFORMANCE_GUIDE.md](docs/PERFORMANCE_GUIDE.md) for details
+- See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for details
 
 ### Multiplayer Ready
 - **Owner-Only Weakpoints**: Each player sees their own crit windows
@@ -255,19 +317,15 @@ Type these in chat (press Enter):
 - Provide reproduction steps
 - Include error messages and logs
 - Specify Godot version
+- Use F1 in-game to submit bug reports
 
 ### Development Workflow
-1. Read [DEVELOPMENT.md](DEVELOPMENT.md) for code standards
+1. Read `Developer Onboarding` section above
 2. Create feature branch from `master`
-3. Follow existing code conventions
+3. Follow code conventions (snake_case, static typing)
 4. Test thoroughly before committing
 5. Update documentation for new features
-6. Create pull request with detailed description
-
-### Contact
-- Project Repository: [Add GitHub URL]
-- Discord: [Add Discord invite]
-- Email: [Add contact email]
+6. Check `.claude/CLAUDE.md` for asset guidelines
 
 ---
 
@@ -291,4 +349,4 @@ Type these in chat (press Enter):
 
 ---
 
-This documentation was last updated: 2025-12-04
+This documentation was last updated: 2025-12-08

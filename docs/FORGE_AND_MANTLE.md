@@ -126,6 +126,202 @@ Response:
 }
 ```
 
+### Achievements Endpoint
+
+Returns all user achievements with extended metadata for crafting unique rarity effects.
+
+```json
+GET /api/achievements
+
+Response:
+{
+  "total": 42,
+  "total_display": 45,
+  "by_rarity": {
+    "Common": 10,
+    "Uncommon": 15,
+    "Rare": 10,
+    "Epic": 5,
+    "Legendary": 2
+  },
+  "achievements": [
+    {
+      "id": 123,
+      "api_name": "ACH_WIN_100_MATCHES",
+      "app_id": "730",
+      "game_name": "Counter-Strike 2",
+      "display_name": "Centurion",
+      "description": "Win 100 competitive matches",
+      "icon_url": "https://steamcdn-a.akamaihd.net/...",
+      "rarity_tier": "Rare",
+      "effort_score": 65.0,
+      "percent": 8.5,
+      "hidden": false,
+      "provider": "steam",
+      "date_credited": "2024-12-01T15:30:00",
+      "unlocked_at": "2024-11-28T20:15:00",
+      "is_original_claim": true
+    },
+    {
+      "id": 456,
+      "api_name": "EARLY_SUPPORTER",
+      "app_id": "discord",
+      "game_name": "Discord",
+      "display_name": "Early Supporter",
+      "description": "Discord Early Supporter badge",
+      "icon_url": null,
+      "rarity_tier": "Epic",
+      "effort_score": 85.0,
+      "percent": null,
+      "hidden": false,
+      "provider": "discord",
+      "date_credited": "2024-12-08T10:00:00",
+      "unlocked_at": "2024-12-08T10:00:00",
+      "is_original_claim": true
+    }
+  ]
+}
+```
+
+**New Fields (Dec 2024):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `app_id` | String | Game/app identifier for asset mapping (e.g., "730" for CS2) |
+| `game_name` | String | Human-readable game name |
+| `effort_score` | Float | 0-100 difficulty score based on rarity, time investment, skill |
+| `hidden` | Boolean | Whether this was a secret/hidden achievement |
+| `unlocked_at` | DateTime | Original unlock timestamp from provider |
+
+---
+
+## Dynamic Rarity Effects
+
+The new API fields enable **procedurally-generated unique effects** on forged items based on achievement metadata. This creates differentiation even among items of the same base type.
+
+### Effect Generation System
+
+Each forged item can have unique modifiers based on the source achievement:
+
+#### 1. Effort Score Effects (0-100)
+
+| Score Range | Effect Tier | Example Modifiers |
+|-------------|-------------|-------------------|
+| 0-20 | Minor | +1% damage, subtle glow |
+| 21-40 | Standard | +2% damage, visible particles |
+| 41-60 | Enhanced | +3% damage, aura effect |
+| 61-80 | Superior | +5% damage, trail effect |
+| 81-100 | Exceptional | +7% damage, unique VFX |
+
+#### 2. Hidden Achievement Bonus
+
+Items forged from hidden/secret achievements receive:
+- **"Secrets Keeper"** suffix
+- Purple particle overlay
+- +10% to base effect intensity
+
+#### 3. Vintage Bonus (unlocked_at)
+
+Items from achievements unlocked long ago gain:
+- **Age calculation:** `years_since_unlock = (now - unlocked_at) / 365`
+- **"Veteran's"** prefix for 3+ years old
+- **"Ancient"** prefix for 7+ years old
+- +1% effect per year (capped at +10%)
+
+#### 4. Game-Specific Effects
+
+Use `app_id` and `game_name` to apply thematic effects:
+
+```gdscript
+const GAME_THEMES = {
+    "730": {"name": "Counter-Strike 2", "effect": "tactical_glow", "color": Color.ORANGE},
+    "1245620": {"name": "Elden Ring", "effect": "erdtree_blessing", "color": Color.GOLD},
+    "374320": {"name": "Dark Souls III", "effect": "ember_trail", "color": Color("#ff6a00")},
+    "413150": {"name": "Stardew Valley", "effect": "nature_sparkle", "color": Color.GREEN},
+    "1145360": {"name": "Hades", "effect": "underworld_flame", "color": Color.RED},
+}
+```
+
+### Implementation Example
+
+```gdscript
+## ForgeEffectGenerator.gd - Generate unique effects from achievement data
+
+func generate_item_effects(achievement: Dictionary, base_item: Dictionary) -> Dictionary:
+    var effects = base_item.get("effects", []).duplicate()
+    var modifiers = {}
+
+    # 1. Effort score bonus
+    var effort = achievement.get("effort_score", 0.0)
+    var effort_tier = _get_effort_tier(effort)
+    modifiers["damage_bonus"] = effort_tier.damage_bonus
+    if effort_tier.effect:
+        effects.append(effort_tier.effect)
+
+    # 2. Hidden achievement bonus
+    if achievement.get("hidden", false):
+        effects.append("secrets_keeper_aura")
+        modifiers["effect_intensity"] = 1.1  # +10%
+
+    # 3. Vintage bonus
+    var unlocked_at = achievement.get("unlocked_at", "")
+    if unlocked_at:
+        var years = _calculate_years_since(unlocked_at)
+        if years >= 3:
+            modifiers["vintage_bonus"] = min(years, 10)  # +1% per year, max 10%
+            modifiers["prefix"] = "Ancient" if years >= 7 else "Veteran's"
+
+    # 4. Game theme
+    var app_id = achievement.get("app_id", "")
+    if app_id in GAME_THEMES:
+        var theme = GAME_THEMES[app_id]
+        effects.append(theme.effect)
+        modifiers["theme_color"] = theme.color
+
+    return {
+        "effects": effects,
+        "modifiers": modifiers,
+        "effort_score": effort,
+        "is_hidden": achievement.get("hidden", false),
+        "game_name": achievement.get("game_name", "Unknown")
+    }
+
+func _get_effort_tier(score: float) -> Dictionary:
+    if score >= 81:
+        return {"damage_bonus": 7, "effect": "exceptional_aura"}
+    elif score >= 61:
+        return {"damage_bonus": 5, "effect": "superior_trail"}
+    elif score >= 41:
+        return {"damage_bonus": 3, "effect": "enhanced_glow"}
+    elif score >= 21:
+        return {"damage_bonus": 2, "effect": "standard_particles"}
+    else:
+        return {"damage_bonus": 1, "effect": null}
+```
+
+### UI Display
+
+Show unique modifiers in the Forge detail panel:
+
+```
++--------------------------------------------------+
+|  COILED SWORD                                    |
+|  Legendary Weapon                                |
+|--------------------------------------------------|
+|  Source: Dark Souls III                          |
+|  Achievement: The Dark Soul (100% Completion)    |
+|                                                  |
+|  UNIQUE MODIFIERS:                               |
+|  * Effort Score: 95/100 (Exceptional)            |
+|    +7% Base Damage                               |
+|  * Vintage: Unlocked 6 years ago                 |
+|    +6% Bonus, "Veteran's" prefix                 |
+|  * Game Theme: Ember Trail effect                |
+|                                                  |
+|  Effects: ember_trail, exceptional_aura          |
++--------------------------------------------------+
+```
+
 ---
 
 ## Armory Scene
