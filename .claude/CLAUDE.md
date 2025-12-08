@@ -34,6 +34,9 @@ assets/
 │   │   ├── skeleton.png        # Basic skeleton
 │   │   └── zombie.png          # Zombie enemy
 │   ├── skeletal_guardian/      # Elite skeleton variants
+│   ├── armor_tier1/            # Character armor definition data
+│   ├── equipment/              # Player equipment sprites
+│   ├── lpc/                    # LPC character templates (blacksmith, etc.)
 │   │
 │   # STARTER CLOTHES (flat file structure):
 │   ├── pants/                  # green_pants_*.png, copper_plate_*.png
@@ -47,31 +50,46 @@ assets/
 │   ├── hands/
 │   ├── hands_female/
 │   ├── head/                   # Head armor pieces
-│   └── head_female_armor/
+│   ├── head_female_armor/
+│   ├── head_leather_hat/       # Leather hat variants
+│   ├── torso_leather/          # Leather torso armor
+│   └── legs_greenish/          # Green leg variants
 │
 ├── equipment/                  # All equippable items
 │   ├── armor/                  # Armor sets
-│   │   └── tier1/              # Zone 1 armor (copper plate set)
-│   │       ├── chest/copper_plate/standard/
-│   │       ├── legs/copper_plate/standard/
-│   │       └── ...
+│   │   ├── starter/            # Starting armor pieces
+│   │   ├── tier1/              # Zone 1 armor (copper plate set)
+│   │   │   ├── chest/copper_plate/standard/
+│   │   │   ├── legs/copper_plate/standard/
+│   │   │   └── ...
+│   │   └── head/               # Head armor pieces
 │   ├── weapons/                # Combat weapons
 │   │   ├── sword/
 │   │   ├── mace/
 │   │   ├── spear/
 │   │   ├── staff/
-│   │   └── dagger/
+│   │   ├── dagger/
+│   │   ├── halberd/
+│   │   ├── katana/
+│   │   ├── rapier/
+│   │   ├── saber/
+│   │   └── scimitar/
 │   ├── tools/                  # Harvesting tools
 │   │   ├── axe/
 │   │   └── pickaxe/
-│   └── shields/
+│   ├── shields/
+│   └── forged/                 # Forged item icons (from Mantle achievements)
 │
 ├── environment/                # World objects, terrain, props
 │   └── wasteland/              # Zone 1 environment assets
 │
 ├── icons/                      # UI icons for items, abilities
+│   └── forged/                 # Forge system icons
 │
 ├── npcs/                       # Non-enemy NPCs (merchants, quest givers)
+│
+├── sprites/                    # Additional sprite assets
+│   └── lpc/                    # LPC sprite templates
 │
 └── ui/                         # UI elements, frames, buttons
 ```

@@ -75,7 +75,9 @@
 - [ ] Add unit tests for CharacterStats, InventorySystem, Weapon
 
 ## Pending - Major Features (Designed, Not Implemented)
-- [ ] Settlement/Base Building - guild bases with sieges (see docs/SETTLEMENT_SYSTEM_SPEC.md)
+- [ ] Settlement/Base Building - guild bases with sieges (see docs/FUTURE_SPECS.md)
+- [ ] Class System - emergent classes from weapon skills + disciplines (see docs/FUTURE_SPECS.md)
+- [ ] Vendor Progression - quest lines to unlock vendor tiers (see docs/FUTURE_SPECS.md)
 - [ ] PvP Weakpoints - clickable weakpoints during duels (like enemy crit windows)
 - [ ] Additional Biomes - Cursed Lands, Shadow Realm, Void Wastes
 - [ ] Ranked Dueling - ELO/ladder system

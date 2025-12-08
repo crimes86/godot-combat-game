@@ -173,9 +173,13 @@ const FORGE_CATALOG = [
 ]
 
 # Current forge tab
-var _forge_current_tab: String = "catalog"
+var _forge_current_tab: String = "all"
 var _forge_tab_buttons: Dictionary = {}
 var _forge_content_container: Control = null
+
+# Forge filter/sort state
+var _forge_sort_by: String = "rarity"  # rarity, game, type
+var _forge_filter_buttons: Dictionary = {}
 
 
 func _ready() -> void:
@@ -684,24 +688,31 @@ func _create_compact_progress_section() -> Control:
 	bar_panel.add_theme_stylebox_override("panel", bar_style)
 	bar_bg.add_child(bar_panel)
 
-	# Progress fill with glow effect - uses PanelContainer for stylebox
-	var bar_fill = PanelContainer.new()
-	bar_fill.name = "ProgressFill"
-	bar_fill.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bar_fill.offset_top = 3
-	bar_fill.offset_bottom = -3
-	bar_fill.offset_left = 3
-	bar_fill.offset_right = -3
-	bar_fill.pivot_offset = Vector2.ZERO
-	bar_fill.scale.x = 0.0  # Start empty, will be updated by _update_progress_display
+	# Use Godot's built-in ProgressBar for reliable fill rendering
+	var progress_bar = ProgressBar.new()
+	progress_bar.name = "TierProgressBar"
+	progress_bar.set_anchors_preset(Control.PRESET_FULL_RECT)
+	progress_bar.offset_left = 2
+	progress_bar.offset_right = -2
+	progress_bar.offset_top = 2
+	progress_bar.offset_bottom = -2
+	progress_bar.min_value = 0
+	progress_bar.max_value = 100
+	progress_bar.value = 0
+	progress_bar.show_percentage = false
+
+	# Style the background (transparent since bar_panel already has bg)
+	var bg_style = StyleBoxFlat.new()
+	bg_style.bg_color = Color(0, 0, 0, 0)  # Transparent
+	progress_bar.add_theme_stylebox_override("background", bg_style)
+
+	# Style the fill
 	var fill_style = StyleBoxFlat.new()
 	fill_style.bg_color = TIER_COLORS["initiate"]
 	fill_style.set_corner_radius_all(6)
-	fill_style.shadow_size = 8
-	fill_style.shadow_color = TIER_COLORS["initiate"]
-	fill_style.shadow_color.a = 0.5
-	bar_fill.add_theme_stylebox_override("panel", fill_style)
-	bar_bg.add_child(bar_fill)
+	progress_bar.add_theme_stylebox_override("fill", fill_style)
+
+	bar_bg.add_child(progress_bar)
 
 	# Progress text (e.g., "0 / 100")
 	var progress_text = Label.new()
@@ -776,6 +787,92 @@ func _build_forge_column() -> Control:
 	header.add_theme_color_override("font_color", TEXT_PRIMARY)
 	header_row.add_child(header)
 
+	# === PROGRESS HEADER ===
+	var owned_count = _get_owned_forge_items().size()
+	var total_count = FORGE_CATALOG.size()
+	var progress_percent = float(owned_count) / float(total_count) if total_count > 0 else 0.0
+
+	var progress_container = VBoxContainer.new()
+	progress_container.name = "ForgeProgressContainer"
+	progress_container.add_theme_constant_override("separation", 4)
+	vbox.add_child(progress_container)
+
+	# Progress text row
+	var progress_row = HBoxContainer.new()
+	progress_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	progress_row.add_theme_constant_override("separation", 8)
+	progress_container.add_child(progress_row)
+
+	var progress_label = Label.new()
+	progress_label.name = "ForgeProgressLabel"
+	progress_label.text = "%d / %d UNLOCKED" % [owned_count, total_count]
+	progress_label.add_theme_font_size_override("font_size", FONT_CAPTION)
+	progress_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+	progress_row.add_child(progress_label)
+
+	var progress_pct = Label.new()
+	progress_pct.text = "(%d%%)" % int(progress_percent * 100)
+	progress_pct.add_theme_font_size_override("font_size", FONT_CAPTION)
+	progress_pct.add_theme_color_override("font_color", MANTLE_CYAN)
+	progress_row.add_child(progress_pct)
+
+	# Progress bar
+	var progress_bar_bg = PanelContainer.new()
+	progress_bar_bg.name = "ForgeProgressBar"
+	progress_bar_bg.custom_minimum_size = Vector2(0, 8)
+	progress_bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var bar_bg_style = StyleBoxFlat.new()
+	bar_bg_style.bg_color = Color(0.08, 0.08, 0.10)
+	bar_bg_style.set_corner_radius_all(4)
+	progress_bar_bg.add_theme_stylebox_override("panel", bar_bg_style)
+	progress_container.add_child(progress_bar_bg)
+
+	# Progress fill
+	var progress_fill = ColorRect.new()
+	progress_fill.name = "ForgeProgressFill"
+	progress_fill.color = MANTLE_CYAN
+	progress_fill.custom_minimum_size = Vector2(0, 6)
+	progress_fill.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	progress_fill.anchor_left = 0.0
+	progress_fill.anchor_right = progress_percent
+	progress_fill.anchor_top = 0.1
+	progress_fill.anchor_bottom = 0.9
+	progress_fill.offset_left = 2
+	progress_fill.offset_right = -2
+	progress_bar_bg.add_child(progress_fill)
+
+	# Animate progress bar fill on load
+	progress_fill.anchor_right = 0.0
+	var bar_tween = create_tween()
+	bar_tween.set_ease(Tween.EASE_OUT)
+	bar_tween.set_trans(Tween.TRANS_CUBIC)
+	bar_tween.tween_property(progress_fill, "anchor_right", progress_percent, 0.8)
+
+	# === FILTER/SORT BAR ===
+	var filter_row = HBoxContainer.new()
+	filter_row.name = "ForgeFilterBar"
+	filter_row.add_theme_constant_override("separation", 8)
+	filter_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(filter_row)
+
+	var sort_label = Label.new()
+	sort_label.text = "SORT:"
+	sort_label.add_theme_font_size_override("font_size", FONT_TINY)
+	sort_label.add_theme_color_override("font_color", TEXT_DIM)
+	filter_row.add_child(sort_label)
+
+	var sort_options = {"rarity": "Rarity", "game": "Game", "type": "Type"}
+	for sort_id in sort_options:
+		var sort_btn = Button.new()
+		sort_btn.name = "Sort_" + sort_id
+		sort_btn.text = sort_options[sort_id]
+		sort_btn.custom_minimum_size = Vector2(60, 24)
+		sort_btn.pressed.connect(_on_forge_sort_pressed.bind(sort_id))
+		sort_btn.mouse_entered.connect(_play_button_hover_sound)
+		_style_filter_button(sort_btn, sort_id == _forge_sort_by)
+		filter_row.add_child(sort_btn)
+		_forge_filter_buttons[sort_id] = sort_btn
+
 	# === TAB BAR ===
 	var tab_bar = HBoxContainer.new()
 	tab_bar.name = "ForgeTabBar"
@@ -783,9 +880,8 @@ func _build_forge_column() -> Control:
 	tab_bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(tab_bar)
 
-	var tabs = ["catalog", "owned", "equipped"]
-	var owned_count = _get_owned_forge_items().size()
-	var tab_labels = {"catalog": "CATALOG (%d)" % FORGE_CATALOG.size(), "owned": "OWNED (%d)" % owned_count, "equipped": "EQUIPPED"}
+	var tabs = ["all", "unlocked"]
+	var tab_labels = {"all": "ALL (%d)" % total_count, "unlocked": "UNLOCKED (%d)" % owned_count}
 	for tab_id in tabs:
 		var tab_btn = Button.new()
 		tab_btn.name = "Tab_" + tab_id
@@ -793,7 +889,7 @@ func _build_forge_column() -> Control:
 		tab_btn.custom_minimum_size = Vector2(95, 32)  # Wider for counts
 		tab_btn.pressed.connect(_on_forge_tab_pressed.bind(tab_id))
 		tab_btn.mouse_entered.connect(_play_button_hover_sound)  # Add hover sound
-		_style_forge_tab(tab_btn, tab_id == "catalog")  # catalog is default
+		_style_forge_tab(tab_btn, tab_id == "all")  # all is default
 		tab_bar.add_child(tab_btn)
 		_forge_tab_buttons[tab_id] = tab_btn
 
@@ -803,9 +899,9 @@ func _build_forge_column() -> Control:
 	# === CONTENT CONTAINER (switches based on tab) ===
 	_forge_content_container = PanelContainer.new()
 	_forge_content_container.name = "ForgeContent"
-	_forge_content_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Don't expand - fit content
+	_forge_content_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Fit content, don't expand
 	_forge_content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_forge_content_container.custom_minimum_size = Vector2(0, 320)  # Min height for grid
+	_forge_content_container.custom_minimum_size = Vector2(0, 250)  # Reasonable min height for grid
 	var content_style = StyleBoxFlat.new()
 	content_style.bg_color = BG_DARK
 	content_style.set_corner_radius_all(6)
@@ -824,13 +920,8 @@ func _build_forge_column() -> Control:
 	detail_panel.name = "ForgeDetailPanel"
 	vbox.add_child(detail_panel)
 
-	# Spacer to push content up (absorbs remaining space)
-	var bottom_spacer = Control.new()
-	bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(bottom_spacer)
-
-	# Build initial tab content (catalog)
-	_switch_forge_tab("catalog")
+	# Build initial tab content (all)
+	_switch_forge_tab("all")
 
 	# Store references
 	character_preview = wrapper
@@ -856,6 +947,37 @@ func _style_forge_tab(btn: Button, active: bool) -> void:
 	btn.add_theme_stylebox_override("hover", style)
 	btn.add_theme_stylebox_override("pressed", style)
 	btn.add_theme_font_size_override("font_size", FONT_TINY)
+
+func _style_filter_button(btn: Button, active: bool) -> void:
+	"""Style a filter/sort button"""
+	var style = StyleBoxFlat.new()
+	if active:
+		style.bg_color = MANTLE_RED.darkened(0.5)
+		style.border_color = MANTLE_RED
+		btn.add_theme_color_override("font_color", TEXT_PRIMARY)
+	else:
+		style.bg_color = Color(0.06, 0.06, 0.08)
+		style.border_color = Color(0.12, 0.12, 0.14)
+		btn.add_theme_color_override("font_color", TEXT_DIM)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(3)
+	btn.add_theme_stylebox_override("normal", style)
+	btn.add_theme_stylebox_override("hover", style)
+	btn.add_theme_stylebox_override("pressed", style)
+	btn.add_theme_font_size_override("font_size", FONT_TINY - 2)
+
+func _on_forge_sort_pressed(sort_id: String) -> void:
+	"""Handle sort button press"""
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+	if sort_id == _forge_sort_by:
+		return
+	_forge_sort_by = sort_id
+	# Update button styles
+	for sid in _forge_filter_buttons:
+		_style_filter_button(_forge_filter_buttons[sid], sid == sort_id)
+	# Refresh current tab content
+	_switch_forge_tab(_forge_current_tab)
 
 func _build_forge_detail_panel() -> Control:
 	"""Build the item detail panel at bottom of forge"""
@@ -950,8 +1072,65 @@ func _build_forge_detail_panel() -> Control:
 	lore_label.visible = false
 	details_vbox.add_child(lore_label)
 
+	# Preview button container (right side)
+	var preview_vbox = VBoxContainer.new()
+	preview_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	preview_vbox.add_theme_constant_override("separation", 4)
+	hbox.add_child(preview_vbox)
+
+	var preview_btn = Button.new()
+	preview_btn.name = "PreviewButton"
+	preview_btn.text = "PREVIEW"
+	preview_btn.custom_minimum_size = Vector2(70, 32)
+	preview_btn.visible = false  # Hidden until item selected
+	preview_btn.pressed.connect(_on_preview_pressed)
+	preview_btn.mouse_entered.connect(_play_button_hover_sound)
+	_style_preview_button(preview_btn)
+	preview_vbox.add_child(preview_btn)
+
+	var preview_hint = Label.new()
+	preview_hint.name = "PreviewHint"
+	preview_hint.text = "👁"
+	preview_hint.add_theme_font_size_override("font_size", FONT_TINY)
+	preview_hint.add_theme_color_override("font_color", TEXT_DIM)
+	preview_hint.visible = false
+	preview_vbox.add_child(preview_hint)
+
 	_forge_detail_panel = panel
 	return panel
+
+func _style_preview_button(btn: Button) -> void:
+	"""Style the preview button"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.08, 0.10)
+	style.border_color = MANTLE_CYAN.darkened(0.3)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	btn.add_theme_stylebox_override("normal", style)
+
+	var hover_style = style.duplicate()
+	hover_style.bg_color = MANTLE_CYAN.darkened(0.6)
+	hover_style.border_color = MANTLE_CYAN
+	btn.add_theme_stylebox_override("hover", hover_style)
+	btn.add_theme_stylebox_override("pressed", hover_style)
+
+	btn.add_theme_font_size_override("font_size", FONT_TINY - 2)
+	btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	btn.add_theme_color_override("font_hover_color", TEXT_PRIMARY)
+
+func _on_preview_pressed() -> void:
+	"""Handle preview button press - show item on character"""
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+	# TODO: Implement actual preview functionality
+	# For now, show a preview message
+	var preview_btn = _forge_detail_panel.find_child("PreviewButton", true, false) if _forge_detail_panel else null
+	if preview_btn and not _forge_selected_item.is_empty():
+		print("[Armory] Preview item: %s" % _forge_selected_item.get("name", "Unknown"))
+		# Flash button to indicate action
+		var tween = create_tween()
+		tween.tween_property(preview_btn, "modulate", Color(1.5, 1.5, 1.5), 0.1)
+		tween.tween_property(preview_btn, "modulate", Color.WHITE, 0.2)
 
 func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 	"""Update the forge detail panel with item info"""
@@ -965,12 +1144,15 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 	var icon_label = _forge_detail_panel.find_child("IconLabel", true, false)
 	var icon_texture = _forge_detail_panel.find_child("IconTexture", true, false)
 	var icon_container = _forge_detail_panel.find_child("DetailIcon", true, false)
+	var preview_btn = _forge_detail_panel.find_child("PreviewButton", true, false)
 
 	if item.is_empty():
+		_forge_selected_item = {}
 		if name_label: name_label.text = "Hover over an item"
 		if rarity_label: rarity_label.text = ""
 		if unlock_label: unlock_label.text = "Select an item to see details"
 		if lore_label: lore_label.visible = false
+		if preview_btn: preview_btn.visible = false
 		if icon_label:
 			icon_label.text = "?"
 			icon_label.add_theme_color_override("font_color", TEXT_DIM)
@@ -978,6 +1160,9 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 		if icon_texture:
 			icon_texture.visible = false
 		return
+
+	# Store selected item for preview
+	_forge_selected_item = item
 
 	var rarity = item.get("rarity", "Common")
 	var rarity_color = RARITY_COLORS.get(rarity, Color.GRAY)
@@ -992,11 +1177,11 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 
 	if unlock_label:
 		if is_owned:
-			unlock_label.text = "✓ Unlocked"
+			unlock_label.text = "✓ UNLOCKED - Claim at Blacksmith's Forge"
 			unlock_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
 		else:
-			unlock_label.text = "🔒 %s" % item.get("achievement", "???")
-			unlock_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+			unlock_label.text = "🔒 HOW TO UNLOCK: Link %s → Complete \"%s\"" % [item.get("game", "???"), item.get("achievement", "???")]
+			unlock_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))  # Orange for attention
 
 	# Show lore text
 	if lore_label:
@@ -1039,6 +1224,11 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 			style.border_color = rarity_color.darkened(0.3) if is_owned else CARD_BORDER
 			icon_container.add_theme_stylebox_override("panel", style)
 
+	# Show preview button for owned items
+	if preview_btn:
+		preview_btn.visible = is_owned
+		preview_btn.text = "PREVIEW" if is_owned else ""
+
 func _on_forge_tab_pressed(tab_id: String) -> void:
 	"""Handle forge tab switch"""
 	# Play click sound
@@ -1063,19 +1253,17 @@ func _switch_forge_tab(tab_id: String) -> void:
 	# Build new content
 	var content: Control
 	match tab_id:
-		"catalog":
-			content = _build_forge_catalog_content()
-		"owned":
-			content = _build_forge_owned_content()
-		"equipped":
-			content = _build_forge_equipped_content()
+		"all":
+			content = _build_forge_all_content()
+		"unlocked":
+			content = _build_forge_unlocked_content()
 		_:
-			content = _build_forge_catalog_content()
+			content = _build_forge_all_content()
 
 	_forge_content_container.add_child(content)
 
-func _build_forge_catalog_content() -> Control:
-	"""Build the CATALOG tab - shows all available items"""
+func _build_forge_all_content() -> Control:
+	"""Build the ALL tab - shows all available items with lock status"""
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1089,26 +1277,33 @@ func _build_forge_catalog_content() -> Control:
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(margin)
 
-	var flow = HFlowContainer.new()
-	flow.name = "CatalogGrid"
-	flow.add_theme_constant_override("h_separation", 8)
-	flow.add_theme_constant_override("v_separation", 8)
-	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margin.add_child(flow)
+	var grid = GridContainer.new()
+	grid.name = "CatalogGrid"
+	grid.columns = 6  # Fixed 6-column layout
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.add_child(grid)
 
-	# Sort catalog by rarity (Legendary > Epic > Rare > Uncommon > Common)
-	var sorted_items = FORGE_CATALOG.duplicate()
-	sorted_items.sort_custom(_sort_by_rarity)
+	# Get owned items for ownership check
+	var owned_items = _get_owned_forge_items()
+	var owned_ids = []
+	for owned in owned_items:
+		owned_ids.append(owned.get("id", ""))
 
-	# Add all catalog items
+	# Sort catalog based on current sort setting
+	var sorted_items = _sort_items(FORGE_CATALOG.duplicate())
+
+	# Add all catalog items with correct ownership status
 	for item in sorted_items:
-		var item_card = _create_forge_item_card(item, false)  # false = show lock status
-		flow.add_child(item_card)
+		var is_item_owned = item.get("id", "") in owned_ids
+		var item_card = _create_forge_item_card(item, is_item_owned)
+		grid.add_child(item_card)
 
 	return scroll
 
-func _build_forge_owned_content() -> Control:
-	"""Build the OWNED tab - shows unlocked items only"""
+func _build_forge_unlocked_content() -> Control:
+	"""Build the UNLOCKED tab - shows items player has unlocked (claimable at blacksmith)"""
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1123,7 +1318,7 @@ func _build_forge_owned_content() -> Control:
 	scroll.add_child(margin)
 
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
+	vbox.add_theme_constant_override("separation", 8)
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
@@ -1160,7 +1355,7 @@ func _build_forge_owned_content() -> Control:
 
 		# Description
 		var desc_label = Label.new()
-		desc_label.text = "Link your gaming accounts and earn achievements\nto unlock exclusive cosmetic items!"
+		desc_label.text = "Link your gaming accounts and earn achievements\nto unlock exclusive cosmetic items!\n\nUnlocked items can be claimed at the Blacksmith's Forge."
 		desc_label.add_theme_font_size_override("font_size", FONT_CAPTION)
 		desc_label.add_theme_color_override("font_color", TEXT_DIM)
 		desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1172,100 +1367,29 @@ func _build_forge_owned_content() -> Control:
 		bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		empty_container.add_child(bottom_spacer)
 	else:
-		var flow = HFlowContainer.new()
-		flow.add_theme_constant_override("h_separation", 8)
-		flow.add_theme_constant_override("v_separation", 8)
-		flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		vbox.add_child(flow)
+		var grid = GridContainer.new()
+		grid.columns = 6  # Fixed 6-column layout
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		vbox.add_child(grid)
 
-		# Sort by rarity
-		owned_items.sort_custom(_sort_by_rarity)
+		# Sort based on current setting
+		var sorted_owned = _sort_items(owned_items)
 
-		for item in owned_items:
+		for item in sorted_owned:
 			var item_card = _create_forge_item_card(item, true)  # true = owned
-			flow.add_child(item_card)
+			grid.add_child(item_card)
 
 	return scroll
-
-func _build_forge_equipped_content() -> Control:
-	"""Build the EQUIPPED tab - current loadout"""
-	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margin.add_child(vbox)
-
-	# Character preview area
-	var char_area = PanelContainer.new()
-	char_area.custom_minimum_size = Vector2(0, 120)
-	char_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var char_style = StyleBoxFlat.new()
-	char_style.bg_color = Color(0.03, 0.03, 0.04)
-	char_style.set_corner_radius_all(6)
-	char_area.add_theme_stylebox_override("panel", char_style)
-	vbox.add_child(char_area)
-
-	var char_center = CenterContainer.new()
-	char_area.add_child(char_center)
-
-	var char_vbox = VBoxContainer.new()
-	char_vbox.add_theme_constant_override("separation", 4)
-	char_center.add_child(char_vbox)
-
-	var char_icon = Label.new()
-	char_icon.text = "⚔"
-	char_icon.add_theme_font_size_override("font_size", 56)
-	char_icon.add_theme_color_override("font_color", TEXT_DIM)
-	char_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	char_vbox.add_child(char_icon)
-
-	var tier_text = Label.new()
-	tier_text.name = "EquippedTierText"
-	tier_text.text = _get_current_tier_name() + " Gear"
-	tier_text.add_theme_font_size_override("font_size", FONT_BODY)
-	tier_text.add_theme_color_override("font_color", TEXT_SECONDARY)
-	tier_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	char_vbox.add_child(tier_text)
-
-	# Equipment slots header
-	var slots_header = Label.new()
-	slots_header.text = "EQUIPMENT SLOTS"
-	slots_header.add_theme_font_size_override("font_size", FONT_TINY)
-	slots_header.add_theme_color_override("font_color", TEXT_DIM)
-	slots_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(slots_header)
-
-	# 2x3 Equipment Grid
-	var grid_center = CenterContainer.new()
-	grid_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(grid_center)
-
-	var grid = GridContainer.new()
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	grid_center.add_child(grid)
-
-	var slot_names = ["Head", "Chest", "Weapon", "Legs", "Boots", "Accessory"]
-	for slot_name in slot_names:
-		var slot = _create_cosmetic_slot(slot_name)
-		grid.add_child(slot)
-
-	return margin
 
 func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 	"""Create a single forge item card for the grid"""
 	var card = PanelContainer.new()
 	card.name = "ForgeCard_" + item.get("id", "unknown")
-	card.custom_minimum_size = Vector2(64, 64)  # Sized for 4-column layout
-	card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER  # Don't stretch
+	card.custom_minimum_size = Vector2(70, 70)  # Fixed size cards
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # Expand to fill grid cell width
+	card.size_flags_vertical = Control.SIZE_SHRINK_CENTER  # Don't expand height
 	card.mouse_filter = Control.MOUSE_FILTER_STOP  # Capture mouse events
 
 	var rarity_color = RARITY_COLORS.get(item.get("rarity", "Common"), Color.GRAY)
@@ -1308,18 +1432,14 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 		glow_tween.tween_property(style, "shadow_size", 10, 1.5).set_ease(Tween.EASE_IN_OUT)
 		glow_tween.tween_property(style, "shadow_size", 6, 1.5).set_ease(Tween.EASE_IN_OUT)
 
-	# Set pivot for centered scaling
-	card.pivot_offset = Vector2(32, 32)  # Half of minimum size (64/2)
+	# Set pivot for centered scaling (will be updated on hover based on actual size)
+	card.pivot_offset = Vector2(35, 35)  # Half of 70x70
 
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 0)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	card.add_child(vbox)
-
-	# Icon area - sized for 4-column layout
+	# Icon container centered in card
 	var icon_container = CenterContainer.new()
-	icon_container.custom_minimum_size = Vector2(56, 56)  # Smaller for 4 columns
-	vbox.add_child(icon_container)
+	icon_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	icon_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	card.add_child(icon_container)
 
 	# Try to load actual icon
 	var icon_path = item.get("icon", "")
@@ -1328,7 +1448,7 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 		if texture:
 			var icon_rect = TextureRect.new()
 			icon_rect.texture = texture
-			icon_rect.custom_minimum_size = Vector2(72, 72)  # Smaller icons for 4 columns
+			icon_rect.custom_minimum_size = Vector2(70, 70)  # Fill the card
 			icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			if not is_owned:
@@ -1379,6 +1499,25 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 		pulse_tween.set_loops()
 		pulse_tween.tween_property(new_badge, "modulate:a", 0.5, 0.5).set_ease(Tween.EASE_IN_OUT)
 		pulse_tween.tween_property(new_badge, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_IN_OUT)
+	else:
+		# Checkmark badge for owned items - bottom right corner (ready to claim)
+		var claim_badge = Label.new()
+		claim_badge.name = "ClaimBadge"
+		claim_badge.text = "✓"
+		claim_badge.add_theme_font_size_override("font_size", 12)
+		claim_badge.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))  # Green checkmark
+		claim_badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		claim_badge.position = Vector2(-16, -18)
+		icon_container.add_child(claim_badge)
+
+		# Small backing circle for visibility
+		var check_bg = ColorRect.new()
+		check_bg.color = Color(0.1, 0.2, 0.1, 0.9)
+		check_bg.custom_minimum_size = Vector2(16, 16)
+		check_bg.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		check_bg.position = Vector2(-18, -18)
+		check_bg.z_index = -1
+		icon_container.add_child(check_bg)
 
 	# Rich tooltip with lore
 	var lore = item.get("lore", "")
@@ -1390,7 +1529,9 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 		item.get("achievement", "???")
 	]
 	if not is_owned:
-		tooltip += "\n\n🔒 Link %s to unlock" % item.get("game", "this game")
+		tooltip += "\n\n🔒 HOW TO UNLOCK:\nLink %s and complete \"%s\"" % [item.get("game", "this game"), item.get("achievement", "achievement")]
+	else:
+		tooltip += "\n\n✓ UNLOCKED - Claim at Blacksmith's Forge"
 	card.tooltip_text = tooltip
 
 	return card
@@ -1405,7 +1546,7 @@ func _add_fallback_icon(container: Control, item: Dictionary, is_owned: bool) ->
 		"shields": fallback.text = "🛡"
 		"accessories": fallback.text = "💎"
 		_: fallback.text = "?"
-	fallback.add_theme_font_size_override("font_size", 36)  # Sized for 4-column layout
+	fallback.add_theme_font_size_override("font_size", 44)  # Sized for 70x70 cards
 	if is_owned:
 		fallback.add_theme_color_override("font_color", RARITY_COLORS.get(item.get("rarity", "Common"), Color.GRAY))
 	else:
@@ -1424,6 +1565,9 @@ func _on_forge_card_hover(card: PanelContainer, is_hovering: bool) -> void:
 			SoundManager.play_button_hover_sound(-12.0)
 		# Update detail panel
 		_update_forge_detail(item_data, is_owned)
+
+		# Set pivot to center based on actual size for proper scaling
+		card.pivot_offset = card.size / 2.0
 
 		# Create hover style with glow
 		var hover_style = StyleBoxFlat.new()
@@ -1465,6 +1609,38 @@ func _sort_by_rarity(a: Dictionary, b: Dictionary) -> bool:
 	var a_order = rarity_order.get(a.get("rarity", "Common"), 5)
 	var b_order = rarity_order.get(b.get("rarity", "Common"), 5)
 	return a_order < b_order
+
+func _sort_by_game(a: Dictionary, b: Dictionary) -> bool:
+	"""Sort items alphabetically by game name"""
+	return a.get("game", "").to_lower() < b.get("game", "").to_lower()
+
+func _sort_by_type(a: Dictionary, b: Dictionary) -> bool:
+	"""Sort items by category/type"""
+	var type_order = {
+		"weapons": 0,
+		"armor": 1,
+		"shields": 2,
+		"accessories": 3
+	}
+	var a_order = type_order.get(a.get("category", "accessories"), 4)
+	var b_order = type_order.get(b.get("category", "accessories"), 4)
+	if a_order == b_order:
+		return _sort_by_rarity(a, b)  # Secondary sort by rarity
+	return a_order < b_order
+
+func _sort_items(items: Array) -> Array:
+	"""Sort items based on current _forge_sort_by setting"""
+	var sorted_items = items.duplicate()
+	match _forge_sort_by:
+		"rarity":
+			sorted_items.sort_custom(_sort_by_rarity)
+		"game":
+			sorted_items.sort_custom(_sort_by_game)
+		"type":
+			sorted_items.sort_custom(_sort_by_type)
+		_:
+			sorted_items.sort_custom(_sort_by_rarity)
+	return sorted_items
 
 func _get_owned_forge_items() -> Array:
 	"""Get list of forge items the player has unlocked (from profile)"""
@@ -3637,6 +3813,9 @@ func _update_stats_display() -> void:
 	var tier_name = mantle.get("name", "Initiate")
 	var tier_key = mantle.get("tier", "initiate").to_lower()
 	var total = profile.get("total_achievements", 0)
+	# Use effective_score for progress calculation if available (weighted scoring)
+	var effective_score = int(mantle.get("effective_score", total))
+	print("[Armory] Stats display: total_achievements=%d, effective_score=%d, tier=%s" % [total, effective_score, tier_key])
 
 	# Update tier badge
 	_update_tier_badge(tier_key, tier_name)
@@ -3666,8 +3845,8 @@ func _update_stats_display() -> void:
 	# Update rarity breakdown
 	_update_rarity_display()
 
-	# Update progress bar
-	_update_progress_display(total, tier_key)
+	# Update progress bar (use effective_score for accurate tier progress)
+	_update_progress_display(effective_score, tier_key)
 
 	# Update notable achievements
 	_update_achievements_display()
@@ -3797,6 +3976,7 @@ func _update_platforms_display() -> void:
 	for provider in providers:
 		var prov_name: String = ""
 		var prov_count: int = 0
+		var prov_icon_url: String = ""
 
 		# If provider is just a string, it means we only have the name
 		if typeof(provider) == TYPE_STRING:
@@ -3807,7 +3987,10 @@ func _update_platforms_display() -> void:
 			prov_name = str(provider.get("provider_name", provider.get("name", "unknown")))
 
 			# Debug: print all keys to see what's available
-			print("[Armory] Provider %s keys: %s" % [prov_name, provider.keys()])
+			print("[Armory] Provider %s data: %s" % [prov_name, provider])
+
+			# Check for icon URL from backend
+			prov_icon_url = str(provider.get("icon_url", provider.get("logo_url", provider.get("image_url", ""))))
 
 			# Handle multiple possible API formats for count - try all common field names
 			var count_fields = ["tap_contribution", "total_achievements", "total", "count",
@@ -3825,15 +4008,17 @@ func _update_platforms_display() -> void:
 
 		# Add provider badge to platforms row
 		if platforms_row:
-			var badge = _create_provider_badge(prov_name, prov_count)
+			var badge = _create_provider_badge(prov_name, prov_count, prov_icon_url)
 			platforms_row.add_child(badge)
 
-func _create_provider_badge(provider_name: String, count: int) -> Control:
+func _create_provider_badge(provider_name: String, count: int, icon_url: String = "") -> Control:
 	var prov_lower = provider_name.to_lower()
 	var color = PROVIDER_COLORS.get(prov_lower, MANTLE_CYAN)
 	# Handle PSN alias
 	if prov_lower == "psn":
 		color = PROVIDER_COLORS.get("playstation", MANTLE_CYAN)
+	elif prov_lower == "github":
+		color = Color(0.9, 0.9, 0.9)  # GitHub white/gray
 
 	# Vertical layout: icon on top, count below
 	var container = VBoxContainer.new()
@@ -3843,13 +4028,15 @@ func _create_provider_badge(provider_name: String, count: int) -> Control:
 	var icon_wrapper = CenterContainer.new()
 	container.add_child(icon_wrapper)
 
-	# Try to load platform icon texture
+	# Try to load platform icon texture - local paths
 	var icon_path = ""
 	match prov_lower:
 		"steam": icon_path = "res://assets/ui/icons/steam.png"
 		"battlenet", "blizzard": icon_path = "res://assets/ui/icons/battlenet.png"
 		"xbox": icon_path = "res://assets/ui/icons/xbox.png"
 		"playstation", "psn": icon_path = "res://assets/ui/icons/playstation.svg"
+		"discord": icon_path = "res://assets/ui/icons/discord.svg"
+		"github": icon_path = "res://assets/ui/icons/github.svg"
 		"epic": icon_path = "res://assets/ui/icons/epic.svg"
 		"gog": icon_path = "res://assets/ui/icons/gog.svg"
 
@@ -3872,34 +4059,55 @@ func _create_provider_badge(provider_name: String, count: int) -> Control:
 	badge_panel.add_child(badge_content)
 
 	var icon_loaded = false
-	if icon_path != "" and ResourceLoader.exists(icon_path):
-		var texture = load(icon_path)
-		if texture:
-			icon_loaded = true
+
+	# Debug: check local icon path
+	if icon_path != "":
+		var exists = ResourceLoader.exists(icon_path)
+		print("[Armory] Provider %s local icon path: %s (exists: %s)" % [prov_lower, icon_path, exists])
+		if exists:
+			var texture = load(icon_path)
+			if texture:
+				icon_loaded = true
+				var icon_tex = TextureRect.new()
+				icon_tex.texture = texture
+				icon_tex.custom_minimum_size = Vector2(24, 24)
+				icon_tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+				icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				icon_tex.modulate = color
+				badge_content.add_child(icon_tex)
+				print("[Armory] Provider %s loaded local icon successfully" % prov_lower)
+
+	if not icon_loaded:
+		# Try loading from backend URL if provided (PNG/JPG only, not SVG)
+		var can_load_from_url = icon_url != "" and not icon_url.ends_with(".svg") and not ".svg" in icon_url
+
+		if can_load_from_url:
+			# Create placeholder TextureRect that will be updated when URL loads
 			var icon_tex = TextureRect.new()
-			icon_tex.texture = texture
+			icon_tex.name = "ProviderIcon"
 			icon_tex.custom_minimum_size = Vector2(24, 24)
 			icon_tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 			icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			icon_tex.modulate = color
 			badge_content.add_child(icon_tex)
-
-	if not icon_loaded:
-		# Fallback: letter icon
-		var icon_label = Label.new()
-		match prov_lower:
-			"steam": icon_label.text = "S"
-			"battlenet", "blizzard": icon_label.text = "B"
-			"xbox": icon_label.text = "X"
-			"playstation", "psn": icon_label.text = "P"
-			"discord": icon_label.text = "D"
-			"epic": icon_label.text = "E"
-			"gog": icon_label.text = "G"
-			_: icon_label.text = "?"
-		icon_label.add_theme_font_override("font", default_font)
-		icon_label.add_theme_font_size_override("font_size", 18)
-		icon_label.add_theme_color_override("font_color", color)
-		badge_content.add_child(icon_label)
+			_load_provider_icon_from_url(icon_url, icon_tex, color, badge_content, prov_lower)
+		else:
+			# Use letter fallback (no local icon and URL is SVG or missing)
+			var icon_label = Label.new()
+			match prov_lower:
+				"steam": icon_label.text = "S"
+				"battlenet", "blizzard": icon_label.text = "B"
+				"xbox": icon_label.text = "X"
+				"playstation", "psn": icon_label.text = "P"
+				"discord": icon_label.text = "D"
+				"github": icon_label.text = "G"
+				"epic": icon_label.text = "E"
+				"gog": icon_label.text = "G"
+				_: icon_label.text = "?"
+			icon_label.add_theme_font_override("font", default_font)
+			icon_label.add_theme_font_size_override("font_size", 18)
+			icon_label.add_theme_color_override("font_color", color)
+			badge_content.add_child(icon_label)
 
 	# Count below icon - formatted consistently
 	var count_label = Label.new()
@@ -3918,6 +4126,7 @@ func _create_provider_badge(provider_name: String, count: int) -> Control:
 		"xbox": name_label.text = "Xbox"
 		"playstation", "psn": name_label.text = "PSN"
 		"discord": name_label.text = "Discord"
+		"github": name_label.text = "Github"
 		"epic": name_label.text = "Epic"
 		"gog": name_label.text = "GOG"
 		_: name_label.text = provider_name.capitalize()
@@ -3950,6 +4159,101 @@ func _create_provider_badge(provider_name: String, count: int) -> Control:
 	container.tooltip_text = "\n".join(tooltip_lines)
 
 	return container
+
+func _load_provider_icon_from_url(url: String, icon_rect: TextureRect, tint_color: Color, badge_content: CenterContainer, provider_name: String) -> void:
+	"""Asynchronously load a provider icon from a backend URL with letter fallback"""
+	if url == "" or not is_instance_valid(icon_rect):
+		return
+
+	print("[Armory] Loading provider icon from URL: %s" % url)
+
+	var http_request = HTTPRequest.new()
+	http_request.timeout = 10.0
+	add_child(http_request)
+
+	http_request.request_completed.connect(
+		func(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray):
+			http_request.queue_free()
+
+			var load_failed = false
+
+			if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+				print("[Armory] Failed to load icon from URL: %s (result=%d, code=%d)" % [url, result, response_code])
+				load_failed = true
+
+			if not load_failed and not is_instance_valid(icon_rect):
+				return
+
+			if not load_failed:
+				# Try to create an image from the downloaded data
+				var image = Image.new()
+				var err = ERR_INVALID_DATA
+
+				# Try different image formats
+				if url.ends_with(".png") or "png" in url:
+					err = image.load_png_from_buffer(body)
+				elif url.ends_with(".jpg") or url.ends_with(".jpeg") or "jpg" in url:
+					err = image.load_jpg_from_buffer(body)
+				else:
+					# Try PNG first, then JPG
+					err = image.load_png_from_buffer(body)
+					if err != OK:
+						err = image.load_jpg_from_buffer(body)
+
+				if err != OK:
+					print("[Armory] Failed to parse icon image from URL: %s" % url)
+					load_failed = true
+				else:
+					# Create texture and apply to the TextureRect
+					var texture = ImageTexture.create_from_image(image)
+					icon_rect.texture = texture
+					icon_rect.modulate = tint_color
+					print("[Armory] Successfully loaded provider icon from URL: %s" % url)
+
+			# Fallback to letter if loading failed
+			if load_failed and is_instance_valid(icon_rect) and is_instance_valid(badge_content):
+				icon_rect.queue_free()
+				var icon_label = Label.new()
+				var prov_lower = provider_name.to_lower()
+				match prov_lower:
+					"steam": icon_label.text = "S"
+					"battlenet", "blizzard": icon_label.text = "B"
+					"xbox": icon_label.text = "X"
+					"playstation", "psn": icon_label.text = "P"
+					"discord": icon_label.text = "D"
+					"github": icon_label.text = "G"
+					"epic": icon_label.text = "E"
+					"gog": icon_label.text = "G"
+					_: icon_label.text = "?"
+				icon_label.add_theme_font_override("font", default_font)
+				icon_label.add_theme_font_size_override("font_size", 18)
+				icon_label.add_theme_color_override("font_color", tint_color)
+				badge_content.add_child(icon_label)
+	)
+
+	var err = http_request.request(url)
+	if err != OK:
+		print("[Armory] Failed to start HTTP request for icon: %s" % url)
+		http_request.queue_free()
+		# Add letter fallback immediately
+		if is_instance_valid(icon_rect) and is_instance_valid(badge_content):
+			icon_rect.queue_free()
+			var icon_label = Label.new()
+			var prov_lower = provider_name.to_lower()
+			match prov_lower:
+				"steam": icon_label.text = "S"
+				"battlenet", "blizzard": icon_label.text = "B"
+				"xbox": icon_label.text = "X"
+				"playstation", "psn": icon_label.text = "P"
+				"discord": icon_label.text = "D"
+				"github": icon_label.text = "G"
+				"epic": icon_label.text = "E"
+				"gog": icon_label.text = "G"
+				_: icon_label.text = "?"
+			icon_label.add_theme_font_override("font", default_font)
+			icon_label.add_theme_font_size_override("font_size", 18)
+			icon_label.add_theme_color_override("font_color", tint_color)
+			badge_content.add_child(icon_label)
 
 func _add_fallback_letter(icon_container: Control, provider_name: String, color: Color) -> void:
 	"""Add a fallback letter icon when platform image not available"""
@@ -4338,6 +4642,12 @@ func _update_progress_display(total: int, tier_key: String) -> void:
 	if not stats_panel:
 		return
 
+	# Use backend-provided tier thresholds if available
+	var backend_thresholds = MantleAuth.tier_thresholds
+	var tiers_data = backend_thresholds.get("tiers", {})
+	var tier_order = backend_thresholds.get("order", [])
+
+	# Fallback to hardcoded if backend doesn't provide thresholds
 	var thresholds = {
 		"initiate": [0, 100, "Bronze", "bronze"],
 		"bronze": [100, 500, "Silver", "silver"],
@@ -4349,11 +4659,42 @@ func _update_progress_display(total: int, tier_key: String) -> void:
 		"mythic": [7500, 7500, "", "mythic"]
 	}
 
-	var threshold = thresholds.get(tier_key, [0, 100, "Bronze", "bronze"])
-	var tier_start = threshold[0]
-	var tier_end = threshold[1]
-	var next_tier = threshold[2]
-	var next_tier_key = threshold[3]
+	var tier_start = 0
+	var tier_end = 100
+	var next_tier = "Bronze"
+	var next_tier_key = "bronze"
+
+	# Try to use backend thresholds
+	if tiers_data.size() > 0 and tier_order.size() > 0:
+		# Reverse order since backend sends highest first
+		var ordered_tiers = tier_order.duplicate()
+		ordered_tiers.reverse()  # Now: initiate, bronze, silver, ...
+
+		var current_tier_data = tiers_data.get(tier_key, {})
+		tier_start = int(current_tier_data.get("min_score", 0))
+
+		# Find the next tier in order
+		var current_idx = ordered_tiers.find(tier_key)
+		if current_idx >= 0 and current_idx < ordered_tiers.size() - 1:
+			next_tier_key = ordered_tiers[current_idx + 1]
+			var next_tier_data = tiers_data.get(next_tier_key, {})
+			tier_end = int(next_tier_data.get("min_score", tier_start + 100))
+			next_tier = next_tier_data.get("name", next_tier_key.capitalize())
+		else:
+			# At max tier
+			tier_end = tier_start
+			next_tier = ""
+			next_tier_key = tier_key
+
+		print("[Armory] Using backend thresholds: %s (%d) -> %s (%d)" % [tier_key, tier_start, next_tier_key, tier_end])
+	else:
+		# Use fallback hardcoded thresholds
+		var threshold = thresholds.get(tier_key, [0, 100, "Bronze", "bronze"])
+		tier_start = threshold[0]
+		tier_end = threshold[1]
+		next_tier = threshold[2]
+		next_tier_key = threshold[3]
+		print("[Armory] Using fallback thresholds (no backend data)")
 
 	var progress_pct = 0.0
 	if tier_end > tier_start:
@@ -4378,22 +4719,16 @@ func _update_progress_display(total: int, tier_key: String) -> void:
 				next_tier_label.text = next_tier
 				next_tier_label.add_theme_color_override("font_color", TIER_COLORS.get(next_tier_key, Color.GRAY))
 
-		# Update progress bar fill
-		var progress_fill = progress_section.find_child("ProgressFill", true, false)
-		var bar_bg = progress_section.find_child("ProgressBarBG", true, false)
-		if progress_fill and bar_bg:
-			# Use scale.x to control fill width (0.0 = empty, 1.0 = full)
-			progress_fill.scale.x = progress_pct
-			# Update the stylebox color and glow
+		# Update progress bar fill (TierProgressBar)
+		var tier_progress_bar = progress_section.find_child("TierProgressBar", true, false)
+		if tier_progress_bar and tier_progress_bar is ProgressBar:
+			tier_progress_bar.value = progress_pct * 100
 			var tier_color = TIER_COLORS.get(tier_key, Color.GRAY)
 			var fill_style = StyleBoxFlat.new()
 			fill_style.bg_color = tier_color
 			fill_style.set_corner_radius_all(6)
-			fill_style.shadow_size = 8
-			fill_style.shadow_color = tier_color
-			fill_style.shadow_color.a = 0.5
-			progress_fill.add_theme_stylebox_override("panel", fill_style)
-			print("[Armory] Progress bar updated: %d%% (%.2f scale.x)" % [int(progress_pct * 100), progress_pct])
+			tier_progress_bar.add_theme_stylebox_override("fill", fill_style)
+			print("[Armory] Progress bar updated: %d%% [%d in %s tier, range %d-%d]" % [int(progress_pct * 100), total, tier_key, tier_start, tier_end])
 
 		# Update progress text
 		var progress_text = progress_section.find_child("ProgressText", true, false)
@@ -4401,7 +4736,10 @@ func _update_progress_display(total: int, tier_key: String) -> void:
 			if tier_key == "mythic":
 				progress_text.text = "Maximum tier achieved!"
 			else:
-				progress_text.text = "%s / %s to %s" % [_format_number(total), _format_number(tier_end), next_tier]
+				# Show progress within tier: "27 / 2,500 to Mythic"
+				var progress_in_tier = total - tier_start
+				var tier_range = tier_end - tier_start
+				progress_text.text = "%s / %s to %s" % [_format_number(progress_in_tier), _format_number(tier_range), next_tier]
 
 	# Fallback: Update ProgressBar widget if present (old style)
 	var progress_bar = stats_panel.find_child("TierProgressBar", true, false)

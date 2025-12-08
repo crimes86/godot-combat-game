@@ -23,6 +23,7 @@ var mantle_tier: Dictionary = {}
 var providers: Array = []
 var achievements: Array = []
 var by_rarity: Dictionary = {}  # Achievement counts by rarity
+var tier_thresholds: Dictionary = {}  # Tier definitions from backend
 var total_achievements: int = 0
 var is_guest: bool = true
 var is_authenticated: bool = false
@@ -73,6 +74,7 @@ func logout() -> void:
 	providers = []
 	achievements = []
 	by_rarity = {}
+	tier_thresholds = {}
 	total_achievements = 0
 	is_guest = true
 	is_authenticated = false
@@ -298,6 +300,9 @@ func _on_profile_response(result: int, response_code: int, headers: PackedString
 	by_rarity = data.get("by_rarity", {})
 	if by_rarity == null:
 		by_rarity = {}
+	tier_thresholds = data.get("tier_thresholds", {})
+	if tier_thresholds == null:
+		tier_thresholds = {}
 	achievements = data.get("notable_achievements", [])
 	if achievements == null:
 		achievements = []

@@ -114,7 +114,7 @@ Design spec for guild base building and siege system (NOT YET IMPLEMENTED).
 - **Group Scaling**: Dynamic HP/damage scaling based on player count
 
 ### Code Architecture
-- **22 Autoloads**: Core systems including Constants, CharacterStats (with chain system), InventorySystem, SoundManager, NotificationManager, NetworkManager, DatabaseManager, and more
+- **28 Autoloads**: Core systems including Constants, CharacterStats, InventorySystem, SoundManager, NetworkManager, DatabaseManager, DuelManager, MantleAuth, and more
 - **Signal-Based**: Clean communication between systems
 - **State Machines**: Enemy AI, ruins conversion, chain management
 - **Modular Design**: Easy to extend and maintain
@@ -169,20 +169,20 @@ Type these in chat (press Enter):
 - `scenes/enemies/enemy.tscn` - Skeleton enemy
 - `scenes/ui/shop_ui.tscn` - Vendor shop interface
 - `scenes/npcs/vendor.tscn` - Blacksmith NPC
-- `scenes/items/pickable_item.tscn` - World items
-- `scenes/items/treasure_chest.tscn` - Loot containers
 
 **Scripts**:
 - `scripts/player/Player.gd` - Player controller
 - `scripts/enemies/Enemy.gd` - Enemy AI and combat
 - `scripts/enemies/weakpoint.gd` - Crit window weakpoints
+- `scripts/items/PickableItem.gd` - World items (instantiated programmatically)
+- `scripts/items/TreasureChest.gd` - Loot containers (instantiated programmatically)
 - `scripts/systems/CharacterStats.gd` - Stats, equipment, and chain multiplier system
 - `scripts/systems/InventorySystem.gd` - Global inventory
 - `scripts/systems/LootSpawnManager.gd` - Enemy loot tables
 - `scripts/systems/ItemIconGenerator.gd` - Procedural item icons
 - `scripts/systems/DatabaseManager.gd` - Player data persistence
 - `scripts/systems/LogManager.gd` - Centralized logging with verbosity levels
-- `scripts/systems/SoundManager.gd` - Audio system (music, SFX, tree sounds)
+- `scripts/systems/sound_manager.gd` - Audio system (music, SFX, tree sounds)
 - `scripts/ui/CharacterUI.gd` - Character sheet UI (C key)
 - `scripts/ui/InventoryUI.gd` - Inventory window (I/B key)
 - `scripts/ui/ChatUI.gd` - Multiplayer chat with admin commands
@@ -191,15 +191,14 @@ Type these in chat (press Enter):
 - `scripts/ui/GameMenu.gd` - In-game ESC menu
 
 **Data**:
-- `prop_placements.json` - 2,500 prop positions
-- `path_markers.json` - 25 path marker positions
+- `data/prop_placements.json` - Prop positions for world generation
+- `data/path_markers.json` - Path marker positions
 - `data/shop_weapons.json` - Weapon definitions
 - `data/shop_armor.json` - Armor definitions
 
 **Assets**:
-- `assets/environment/baked_world_background.png` - Pre-rendered world
-- `assets/sounds/combat/` - Combat sound effects
-- `assets/sprites/` - Character and enemy sprites
+- `assets/audio/sfx/combat/` - Combat sound effects
+- `assets/characters/` - Character and enemy sprites
 
 ---
 
