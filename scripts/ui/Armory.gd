@@ -305,15 +305,21 @@ func _create_animated_grid_bg() -> Control:
 	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# Grid settings (matching web app: 80px spacing, cyan at 0.05 opacity)
-	var grid_spacing = 60  # Slightly smaller for the panel size
+	var grid_spacing = 80  # Match web app spacing
 	var line_color = Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.04)
 	var line_thickness = 1
+	var lines_created = false
 
-	# We'll add the grid lines when the container is ready
-	container.ready.connect(func():
+	# Use resized signal - fires when container actually gets sized
+	container.resized.connect(func():
+		if lines_created:
+			return
 		var panel_size = container.size
 		if panel_size.x <= 0 or panel_size.y <= 0:
 			return
+
+		lines_created = true
+		print("[Armory] Creating grid lines for size: ", panel_size)
 
 		# Vertical lines
 		var x = grid_spacing
@@ -336,6 +342,8 @@ func _create_animated_grid_bg() -> Control:
 			hline.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			container.add_child(hline)
 			y += grid_spacing
+
+		print("[Armory] Grid lines created: ", container.get_child_count())
 	)
 
 	return container
@@ -781,9 +789,10 @@ func _build_mantle_stats_column() -> Control:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	wrapper.add_child(bg)
 
-	# Animated grid background effect
+	# Animated grid background effect (z_index 10 to render above content)
 	var grid_overlay = _create_animated_grid_bg()
 	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grid_overlay.z_index = 10
 	wrapper.add_child(grid_overlay)
 
 	# Border overlay with cyan glow (matches MainMenu)
@@ -1116,6 +1125,12 @@ func _build_forge_column() -> Control:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	wrapper.add_child(bg)
 
+	# Animated grid background effect
+	var grid_overlay = _create_animated_grid_bg()
+	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grid_overlay.z_index = 10
+	wrapper.add_child(grid_overlay)
+
 	# Border overlay with cyan glow (matches MainMenu)
 	var border = PanelContainer.new()
 	border.name = "ForgeBorder"
@@ -1263,9 +1278,6 @@ func _build_forge_column() -> Control:
 		_style_claim_all_button(claim_all_btn)
 		claim_row.add_child(claim_all_btn)
 
-	# Divider before grid
-	vbox.add_child(_create_section_divider())
-
 	# === CONTENT CONTAINER (switches based on tab) ===
 	_forge_content_container = PanelContainer.new()
 	_forge_content_container.name = "ForgeContent"
@@ -1281,9 +1293,6 @@ func _build_forge_column() -> Control:
 	content_style.shadow_color = SHADOW_GLOW
 	_forge_content_container.add_theme_stylebox_override("panel", content_style)
 	vbox.add_child(_forge_content_container)
-
-	# Divider after content
-	vbox.add_child(_create_section_divider())
 
 	# === ITEM DETAIL PANEL ===
 	var detail_panel = _build_forge_detail_panel()
@@ -2581,6 +2590,12 @@ func _build_dreadland_column() -> Control:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	wrapper.add_child(bg)
 
+	# Animated grid background effect
+	var grid_overlay = _create_animated_grid_bg()
+	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grid_overlay.z_index = 10
+	wrapper.add_child(grid_overlay)
+
 	# Border overlay with cyan glow (matches MainMenu)
 	var border = PanelContainer.new()
 	border.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -2638,9 +2653,6 @@ func _build_dreadland_column() -> Control:
 	game_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_section.add_child(game_subtitle)
 
-	# Divider after title
-	vbox.add_child(_create_section_divider())
-
 	# === CHARACTER PREVIEW SECTION (vertically centered) ===
 	var spacer1a = Control.new()
 	spacer1a.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -2656,9 +2668,6 @@ func _build_dreadland_column() -> Control:
 	var spacer1b = Control.new()
 	spacer1b.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(spacer1b)
-
-	# Divider after character preview
-	vbox.add_child(_create_section_divider())
 
 	# === ACTION BUTTONS SECTION (vertically centered, SWAPPED with game stats) ===
 	var spacer2a = Control.new()
@@ -2718,9 +2727,6 @@ func _build_dreadland_column() -> Control:
 	var spacer2b = Control.new()
 	spacer2b.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(spacer2b)
-
-	# Divider after buttons
-	vbox.add_child(_create_section_divider())
 
 	# === GAME STATS SECTION (vertically centered, SWAPPED from above) ===
 	var spacer3a = Control.new()
