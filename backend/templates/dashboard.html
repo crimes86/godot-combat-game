@@ -1270,6 +1270,11 @@
       z-index: 1;
       transform: translate(-50%, -50%) rotateX(48deg) translateY(24px) !important;
     }
+    /* Fallback for cards 8+ - stack behind card 7 */
+    .card-deck.stacked .provider-cards-container .provider-card:nth-child(n+8) {
+      z-index: 0;
+      transform: translate(-50%, -50%) rotateX(48deg) translateY(28px) !important;
+    }
 
     /* Holographic breathing glow animation - 10-layer half-dollar edge */
     @keyframes cardHoloPulse {
@@ -1313,72 +1318,32 @@
     }
     .card-deck.stacked .provider-card {
       animation: cardHoloPulse 3s ease-in-out infinite;
+      /* Animation delay set dynamically via JS for any card count */
     }
-    .card-deck.stacked .provider-card:nth-child(1) { animation-delay: 0s; }
-    .card-deck.stacked .provider-card:nth-child(2) { animation-delay: 0.35s; }
-    .card-deck.stacked .provider-card:nth-child(3) { animation-delay: 0.7s; }
-    .card-deck.stacked .provider-card:nth-child(4) { animation-delay: 1.05s; }
-    .card-deck.stacked .provider-card:nth-child(5) { animation-delay: 1.4s; }
-    .card-deck.stacked .provider-card:nth-child(6) { animation-delay: 1.75s; }
-    .card-deck.stacked .provider-card:nth-child(7) { animation-delay: 2.1s; }
 
     /* ===== DIGITAL MATERIALIZE ANIMATIONS ===== */
 
-    /* Expanding: Cards materialize into grid with elastic bounce */
-    @keyframes cardMaterialize {
+    /* Simple expand: slide from center to grid positions */
+    @keyframes cardExpand {
       0% {
         opacity: 0;
-        transform: scale(0.3) translateY(40px) rotateX(15deg);
-        filter: blur(12px) brightness(2.5);
-      }
-      40% {
-        opacity: 0;
-        transform: scale(0.3) translateY(40px) rotateX(15deg);
-        filter: blur(12px) brightness(2.5);
-      }
-      60% {
-        opacity: 1;
-        transform: scale(1.12) translateY(-8px) rotateX(-3deg);
-        filter: blur(0) brightness(1.4);
-      }
-      80% {
-        transform: scale(0.96) translateY(3px) rotateX(1deg);
-        filter: blur(0) brightness(1.15);
-      }
-      90% {
-        transform: scale(1.02) translateY(-1px) rotateX(0deg);
+        transform: translateX(var(--from-x, 0px)) translateY(var(--from-y, 0px)) scale(0.5);
       }
       100% {
         opacity: 1;
-        transform: scale(1) translateY(0) perspective(1000px) rotateX(2deg);
-        filter: blur(0) brightness(1);
+        transform: translateX(0) translateY(0) scale(1);
       }
     }
 
-    /* Collapsing: Cards already at center via CSS, just scale down and rise */
-    @keyframes cardCollapseRise {
+    /* Simple collapse: slide from grid positions to center */
+    @keyframes cardCollapse {
       0% {
         opacity: 1;
-        transform: translate(-50%, -50%) scale(1) perspective(1000px) rotateX(2deg);
-        filter: blur(0) brightness(1);
+        transform: translateX(0) translateY(0) scale(1);
       }
-      /* Phase 1: Scale down and start forming stack (0-30%) */
-      30% {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(0.65) perspective(1000px) rotateX(5deg);
-        filter: blur(0) brightness(1.3);
-      }
-      /* Phase 2: Rise up toward Mantle card (30-70%) */
-      70% {
-        opacity: 0.85;
-        transform: translate(-50%, -50%) scale(0.5) translateY(-180px) perspective(1000px) rotateX(12deg);
-        filter: blur(4px) brightness(1.6);
-      }
-      /* Phase 3: Absorb under Mantle card (70-100%) */
       100% {
         opacity: 0;
-        transform: translate(-50%, -50%) scale(0.35) translateY(-320px) perspective(1000px) rotateX(25deg);
-        filter: blur(15px) brightness(2.5);
+        transform: translateX(var(--to-x, 0px)) translateY(var(--to-y, 0px)) scale(0.5);
       }
     }
 
@@ -1412,64 +1377,22 @@
       100% { background: transparent; }
     }
 
-    /* Expanding state */
-    .card-deck.expanding .provider-cards-container {
-      animation: containerFlash 1.2s ease-out;
-    }
-
+    /* Expanding state - simple slide from center to grid */
     .card-deck.expanding .provider-cards-container .provider-card {
-      animation: cardMaterialize 1.1s cubic-bezier(0.34, 1.56, 0.64, 1) both !important;
+      animation: cardExpand 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
     }
 
-    /* Staggered delays for cascade effect - expanding */
-    .card-deck.expanding .provider-cards-container .provider-card:nth-child(1) { animation-delay: 0.0s; }
-    .card-deck.expanding .provider-cards-container .provider-card:nth-child(2) { animation-delay: 0.12s; }
-    .card-deck.expanding .provider-cards-container .provider-card:nth-child(3) { animation-delay: 0.24s; }
-    .card-deck.expanding .provider-cards-container .provider-card:nth-child(4) { animation-delay: 0.36s; }
-    .card-deck.expanding .provider-cards-container .provider-card:nth-child(5) { animation-delay: 0.48s; }
-    .card-deck.expanding .provider-cards-container .provider-card:nth-child(6) { animation-delay: 0.60s; }
-    .card-deck.expanding .provider-cards-container .provider-card:nth-child(7) { animation-delay: 0.72s; }
-
-    /* Collapsing state - cards gather to center then rise */
-    .card-deck.collapsing .provider-cards-container {
-      animation: containerFlash 1.2s ease-out;
-      position: relative;
-      display: block !important;
-      height: 500px;
-      width: 100%;
-    }
-
-    /* All cards become absolute and converge to SAME center point */
+    /* Collapsing state - simple slide from grid to center */
     .card-deck.collapsing .provider-cards-container .provider-card {
-      position: absolute !important;
-      left: 50% !important;
-      top: 200px !important;
-      transform: translate(-50%, -50%) !important;
-      animation: cardCollapseRise 1.4s cubic-bezier(0.4, 0, 0.2, 1) both !important;
+      animation: cardCollapse 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
     }
 
-    /* Very slight stagger for organic feel - all cards nearly together */
-    .card-deck.collapsing .provider-cards-container .provider-card:nth-child(1) { animation-delay: 0.0s; z-index: 7; }
-    .card-deck.collapsing .provider-cards-container .provider-card:nth-child(2) { animation-delay: 0.02s; z-index: 6; }
-    .card-deck.collapsing .provider-cards-container .provider-card:nth-child(3) { animation-delay: 0.04s; z-index: 5; }
-    .card-deck.collapsing .provider-cards-container .provider-card:nth-child(4) { animation-delay: 0.06s; z-index: 4; }
-    .card-deck.collapsing .provider-cards-container .provider-card:nth-child(5) { animation-delay: 0.03s; z-index: 3; }
-    .card-deck.collapsing .provider-cards-container .provider-card:nth-child(6) { animation-delay: 0.05s; z-index: 2; }
-    .card-deck.collapsing .provider-cards-container .provider-card:nth-child(7) { animation-delay: 0.07s; z-index: 1; }
 
     /* Stack appearing state - holographic stack materializes */
     .card-deck.stack-appearing .provider-cards-container .provider-card {
       animation: stackMaterialize 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both !important;
+      /* No stagger - collapse animation handles the visual transition */
     }
-
-    /* Staggered delays for stack materialize */
-    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(1) { animation-delay: 0.0s; }
-    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(2) { animation-delay: 0.05s; }
-    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(3) { animation-delay: 0.1s; }
-    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(4) { animation-delay: 0.15s; }
-    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(5) { animation-delay: 0.2s; }
-    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(6) { animation-delay: 0.25s; }
-    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(7) { animation-delay: 0.3s; }
 
     /* Legacy transitioning class (fallback) */
     .card-deck.transitioning .provider-card {
@@ -1554,6 +1477,11 @@
     .card-deck.stacked .provider-cards-container:hover .provider-card:nth-child(7) {
       transform: translate(-50%, -50%) rotateX(3deg) rotateZ(15deg) translateX(82px) translateY(-12px) !important;
       z-index: 1 !important;
+    }
+    /* Fallback for cards 8+ on hover - fan out further right */
+    .card-deck.stacked .provider-cards-container:hover .provider-card:nth-child(n+8) {
+      transform: translate(-50%, -50%) rotateX(3deg) rotateZ(18deg) translateX(105px) translateY(-15px) !important;
+      z-index: 0 !important;
     }
 
     /* Enhanced glow on fan-out with half-dollar edge */
@@ -3004,27 +2932,91 @@ function toggleCardStack() {
 
   if (cardDeckStacked) {
     // EXPAND: stacked → grid
-    // First add expanding animation class
-    deck.classList.add('expanding');
+    const container = deck.querySelector('.provider-cards-container');
+    const cards = container.querySelectorAll('.provider-card');
 
-    // Switch state
+    // Measure the stacked container's center BEFORE switching states
+    // The stacked container is 140x180px centered under the Mantle card
+    const stackedContainerRect = container.getBoundingClientRect();
+    const stackCenterX = stackedContainerRect.left + stackedContainerRect.width / 2;
+    const stackCenterY = stackedContainerRect.top + stackedContainerRect.height / 2;
+
+    // Switch to expanded state so we can measure grid positions
     deck.classList.remove('stacked');
     deck.classList.add('expanded');
-    cardDeckStacked = false;
 
-    // Clean up after animation completes (1.1s animation + 0.72s max delay + buffer)
-    setTimeout(() => {
-      deck.classList.remove('expanding');
-      cardAnimating = false;
-    }, 2000);
+    // Wait a frame for layout to calculate, then set up animation
+    requestAnimationFrame(() => {
+      // Calculate offset FROM stack center TO each card's grid position
+      cards.forEach((card, index) => {
+        const cardRect = card.getBoundingClientRect();
+        const cardCenterX = cardRect.left + cardRect.width / 2;
+        const cardCenterY = cardRect.top + cardRect.height / 2;
+
+        // Offset from card's grid position back to stack center
+        const fromX = stackCenterX - cardCenterX;
+        const fromY = stackCenterY - cardCenterY;
+
+        card.style.setProperty('--from-x', `${fromX}px`);
+        card.style.setProperty('--from-y', `${fromY}px`);
+        card.style.zIndex = cards.length - index; // First cards on top
+      });
+
+      // Now trigger the animation
+      deck.classList.add('expanding');
+      cardDeckStacked = false;
+
+      // Clean up after animation completes (0.8s)
+      setTimeout(() => {
+        cards.forEach(card => {
+          card.style.removeProperty('--from-x');
+          card.style.removeProperty('--from-y');
+          card.style.zIndex = '';
+        });
+        deck.classList.remove('expanding');
+        cardAnimating = false;
+      }, 900);
+    });
 
   } else {
     // COLLAPSE: grid → stacked (multi-phase animation)
+    // Calculate each card's offset TO center BEFORE adding collapsing class
+    const container = deck.querySelector('.provider-cards-container');
+    const cards = container.querySelectorAll('.provider-card');
+
+    // Find the center point - use container center X, and first card's Y
+    const containerRect = container.getBoundingClientRect();
+    const targetCenterX = containerRect.left + containerRect.width / 2;
+    const firstCardRect = cards[0].getBoundingClientRect();
+    const targetCenterY = firstCardRect.top + firstCardRect.height / 2;
+
+    // Store each card's offset to the center point
+    cards.forEach((card, index) => {
+      const cardRect = card.getBoundingClientRect();
+      const cardCenterX = cardRect.left + cardRect.width / 2;
+      const cardCenterY = cardRect.top + cardRect.height / 2;
+
+      // Calculate offset needed to move this card to the center
+      const toX = targetCenterX - cardCenterX;
+      const toY = targetCenterY - cardCenterY;
+
+      // Store as CSS custom properties
+      card.style.setProperty('--to-x', `${toX}px`);
+      card.style.setProperty('--to-y', `${toY}px`);
+      card.style.zIndex = cards.length - index; // First cards on top when stacking
+    });
+
     // Phase 1-3: Cards gather, rise, and absorb under Mantle card
     deck.classList.add('collapsing');
 
-    // After cards have gathered and risen (1.4s animation)
+    // After collapse animation (0.8s)
     setTimeout(() => {
+      // Clean up custom properties
+      cards.forEach(card => {
+        card.style.removeProperty('--to-x');
+        card.style.removeProperty('--to-y');
+      });
+
       // Remove expanded, add stacked
       deck.classList.remove('expanded', 'collapsing');
       deck.classList.add('stacked');
@@ -3039,7 +3031,7 @@ function toggleCardStack() {
         cardAnimating = false;
       }, 1200); // 0.8s animation + 0.3s max delay + buffer
 
-    }, 1500); // Wait for gather-rise-absorb animation
+    }, 900); // Wait for collapse animation (0.8s)
   }
 
   // Save preference
