@@ -61,6 +61,7 @@ BETA_ACCESS_CODE=<optional - enables beta gate>
 | **Trading & economy system** | `docs/FORGE_ECONOMY_DESIGN.md` |
 | **Provenance & blockchain backing** | `docs/FORGE_PROVENANCE_SYSTEM.md` |
 | **Item effects & abilities** | `docs/FORGE_ITEM_EFFECTS.md` |
+| **Immutable design principles** | `docs/GOLDEN_RULES.md` |
 
 ---
 
