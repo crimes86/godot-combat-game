@@ -55,15 +55,21 @@ def init_oauth_providers():
             continue
 
         # Register with authlib
-        oauth.register(
-            name=name,
-            client_id=client_id,
-            client_secret=client_secret,
-            authorize_url=config.authorize_url,
-            access_token_url=config.token_url,
-            userinfo_endpoint=config.userinfo_url,
-            client_kwargs={"scope": " ".join(config.scopes or [])},
-        )
+        register_kwargs = {
+            "name": name,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "authorize_url": config.authorize_url,
+            "access_token_url": config.token_url,
+            "userinfo_endpoint": config.userinfo_url,
+            "client_kwargs": {"scope": " ".join(config.scopes or [])},
+        }
+
+        # Add OIDC discovery URL if provided (needed for ID token verification)
+        if hasattr(config, 'server_metadata_url') and config.server_metadata_url:
+            register_kwargs["server_metadata_url"] = config.server_metadata_url
+
+        oauth.register(**register_kwargs)
 
         _registered_providers.add(name)
         logger.info(f"Registered OAuth provider: {name}")
@@ -86,6 +92,8 @@ def get_provider_user_id(provider_name: str, token: dict, userinfo: dict) -> Opt
         "twitter": lambda t, u: u.get("data", {}).get("id"),
         "reddit": lambda t, u: u.get("id"),
         "spotify": lambda t, u: u.get("id"),
+        "facebook": lambda t, u: str(u.get("id")),
+        "roblox": lambda t, u: str(u.get("sub") or u.get("id")),
         "battlenet": lambda t, u: str(token.get("sub") or u.get("sub") or u.get("id")),
         "xbox": lambda t, u: u.get("xuid") or u.get("sub"),
         "playstation": lambda t, u: u.get("account_id") or u.get("sub"),
@@ -123,6 +131,8 @@ def get_display_name(provider_name: str, userinfo: dict) -> Optional[str]:
         "twitter": ["data.username", "data.name"],
         "reddit": ["name"],
         "spotify": ["display_name"],
+        "facebook": ["name"],
+        "roblox": ["preferred_username", "name", "nickname"],
         "battlenet": ["battletag"],
         "xbox": ["gamertag"],
         "playstation": ["online_id"],
@@ -165,6 +175,8 @@ def get_avatar_url(provider_name: str, userinfo: dict) -> Optional[str]:
         "twitter": lambda u: u.get("data", {}).get("profile_image_url"),
         "reddit": lambda u: u.get("icon_img", "").split("?")[0] if u.get("icon_img") else None,
         "spotify": lambda u: u.get("images", [{}])[0].get("url") if u.get("images") else None,
+        "facebook": lambda u: f"https://graph.facebook.com/{u['id']}/picture?type=large" if u.get("id") else None,
+        "roblox": lambda u: f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={u.get('sub') or u.get('id')}&size=150x150&format=Png" if (u.get("sub") or u.get("id")) else None,
     }
 
     if provider_name in avatar_fields:

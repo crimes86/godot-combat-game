@@ -46,6 +46,7 @@ var profile: Dictionary = {}
 # Forge detail panel
 var _forge_detail_panel: Control = null
 var _forge_selected_item: Dictionary = {}
+var _forge_selected_card: PanelContainer = null  # Currently selected card in forge grid
 
 # Theme colors - Simplified palette for consistency
 # Background layers
@@ -106,70 +107,89 @@ const PROVIDER_COLORS = {
 	"psn": Color("#006FCD"),  # PSN alias
 	"discord": Color("#5865F2"),
 	"epic": Color("#2a2a2a"),  # Epic Games dark
-	"gog": Color("#a033b8")   # GOG purple
+	"gog": Color("#a033b8"),  # GOG purple
+	"facebook": Color("#1877F2"),  # Facebook blue (official)
+	"roblox": Color("#E2231A")  # Roblox red (official)
 }
 
 # Forge Catalog - All available forge items with real asset data
 # Icons at: res://assets/icons/forged/[category]/[name].png
+# NOTE: IDs must match backend items.json item_id values exactly
 const FORGE_CATALOG = [
-	# === WEAPONS (12) ===
+	# === WEAPONS (14) - Matching backend items.json ===
 	{"id": "coiled_sword", "name": "Coiled Sword", "game": "Dark Souls III", "achievement": "The Dark Soul",
 	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/coiled_sword.png",
 	 "lore": "A twisted blade born from the First Flame. Its embers still smolder with primordial fire."},
-	{"id": "grafted_blade", "name": "Grafted Blade", "game": "Elden Ring", "achievement": "Godrick the Grafted",
-	 "rarity": "Common", "category": "weapons", "icon": "res://assets/icons/forged/weapons/grafted_blade.png",
+	{"id": "farron_greatsword", "name": "Farron Greatsword", "game": "Dark Souls III", "achievement": "Abyss Watchers",
+	 "rarity": "Epic", "category": "weapons", "icon": "res://assets/icons/forged/weapons/farron_greatsword.png",
+	 "lore": "Wielded by those who linked the fire long ago. Paired with a dagger for acrobatic combat."},
+	{"id": "dragonslayer_swordspear", "name": "Dragonslayer Swordspear", "game": "Dark Souls III", "achievement": "Nameless King",
+	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/dragonslayer_swordspear.png",
+	 "lore": "Cross-spear of the exiled god who betrayed his kin to ally with dragons."},
+	{"id": "grafted_blade", "name": "Grafted Blade Greatsword", "game": "Elden Ring", "achievement": "Godrick the Grafted",
+	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/grafted_blade.png",
 	 "lore": "A greatsword made of many weapons grafted together. Symbol of Godrick's obsession."},
 	{"id": "hand_of_malenia", "name": "Hand of Malenia", "game": "Elden Ring", "achievement": "Malenia, Blade of Miquella",
-	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/hand_of_malenia.png",
+	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/hand_of_malenia.png",
 	 "lore": "Prosthetic blade arm of the Scarlet Valkyrie. I am Malenia, and I have never known defeat."},
-	{"id": "mortal_blade", "name": "Mortal Blade", "game": "Sekiro", "achievement": "All Skills",
-	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/mortal_blade.png",
-	 "lore": "The crimson blade that can sever immortality itself. Its edge cuts even the divine."},
+	{"id": "radahns_greatswords", "name": "Starscourge Greatswords", "game": "Elden Ring", "achievement": "Starscourge Radahn",
+	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/radahns_greatswords.png",
+	 "lore": "Twin colossal swords of the Starscourge. He held back the stars for Miquella's sake."},
+	{"id": "moonveil", "name": "Moonveil", "game": "Elden Ring", "achievement": "Legend",
+	 "rarity": "Epic", "category": "weapons", "icon": "res://assets/icons/forged/weapons/moonveil.png",
+	 "lore": "A katana that channels moonlight magic. Imbued with Carian sorcery."},
 	{"id": "pure_nail", "name": "Pure Nail", "game": "Hollow Knight", "achievement": "Completion",
-	 "rarity": "Uncommon", "category": "weapons", "icon": "res://assets/icons/forged/weapons/pure_nail.png",
+	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/pure_nail.png",
 	 "lore": "A perfectly honed nail, forged in Hallownest's pale light."},
+	{"id": "stygian_blade", "name": "Stygian Blade", "game": "Hades", "achievement": "Complete",
+	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/stygian_blade.png",
+	 "lore": "First weapon of Prince Zagreus. Forged in the River Styx itself."},
+	{"id": "adamant_rail", "name": "Adamant Rail", "game": "Hades", "achievement": "Speed Run",
+	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/adamant_rail.png",
+	 "lore": "An exalted weapon of unknown origin. Its mechanisms are beyond mortal understanding."},
 	{"id": "terra_blade", "name": "Terra Blade", "game": "Terraria", "achievement": "Champion of Terraria",
 	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/terra_blade.png",
 	 "lore": "Fused from blades of light and dark. Its projectiles cut through the void itself."},
-	{"id": "stygian_blade", "name": "Stygian Blade", "game": "Hades", "achievement": "Escaped Tartarus",
-	 "rarity": "Common", "category": "weapons", "icon": "res://assets/icons/forged/weapons/stygian_blade.png",
-	 "lore": "First weapon of Prince Zagreus. Forged in the River Styx itself."},
-	{"id": "witcher_silver_sword", "name": "Witcher Silver Sword", "game": "The Witcher 3", "achievement": "Lilac and Gooseberries",
-	 "rarity": "Common", "category": "weapons", "icon": "res://assets/icons/forged/weapons/witcher_silver_sword.png",
-	 "lore": "Silver for monsters. A witcher's specialized tool against the supernatural."},
-	{"id": "gyoubu_spear", "name": "Gyoubu's Spear", "game": "Sekiro", "achievement": "Gyoubu Masataka Oniwa",
-	 "rarity": "Common", "category": "weapons", "icon": "res://assets/icons/forged/weapons/gyoubu_spear.png",
+	{"id": "mortal_blade", "name": "Mortal Blade", "game": "Sekiro", "achievement": "Immortal Severance",
+	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/mortal_blade.png",
+	 "lore": "The crimson blade that can sever immortality itself. Its edge cuts even the divine."},
+	{"id": "gyoubu_spear", "name": "Gyoubu's Broken Horn", "game": "Sekiro", "achievement": "Shura",
+	 "rarity": "Epic", "category": "weapons", "icon": "res://assets/icons/forged/weapons/gyoubu_spear.png",
 	 "lore": "AS I BREATHE, YOU WILL NOT PASS THE CASTLE GATE! The demon general's polearm."},
-	{"id": "farron_greatsword", "name": "Farron Greatsword", "game": "Dark Souls III", "achievement": "Abyss Watchers",
-	 "rarity": "Uncommon", "category": "weapons", "icon": "res://assets/icons/forged/weapons/farron_greatsword.png",
-	 "lore": "Wielded by those who linked the fire long ago. Paired with a dagger for acrobatic combat."},
-	{"id": "radahns_greatswords", "name": "Radahn's Greatswords", "game": "Elden Ring", "achievement": "Starscourge Radahn",
-	 "rarity": "Uncommon", "category": "weapons", "icon": "res://assets/icons/forged/weapons/radahns_greatswords.png",
-	 "lore": "Twin colossal swords of the Starscourge. He held back the stars for Miquella's sake."},
-	{"id": "dragonslayer_swordspear", "name": "Dragonslayer Swordspear", "game": "Dark Souls III", "achievement": "Nameless King",
-	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/dragonslayer_swordspear.png",
-	 "lore": "Cross-spear of the exiled god who betrayed his kin to ally with dragons."},
+	{"id": "witcher_silver_sword", "name": "Witcher's Silver Sword", "game": "The Witcher 3", "achievement": "Geralt the Professional",
+	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/witcher_silver_sword.png",
+	 "lore": "Silver for monsters. A witcher's specialized tool against the supernatural."},
 	# === ARMOR (3) ===
-	{"id": "carian_crown", "name": "Carian Crown", "game": "Elden Ring", "achievement": "Rennala, Queen of the Full Moon",
-	 "rarity": "Uncommon", "category": "armor", "icon": "res://assets/icons/forged/armor/carian_crown.png",
-	 "lore": "Crown of Carian royalty, enchanted by the moon's sorcery."},
-	{"id": "elden_lord", "name": "Elden Lord Crown", "game": "Elden Ring", "achievement": "Elden Ring",
+	{"id": "elden_lord_crown", "name": "Elden Lord's Crown", "game": "Elden Ring", "achievement": "Elden Lord",
 	 "rarity": "Legendary", "category": "armor", "icon": "res://assets/icons/forged/armor/elden_lord.png",
 	 "lore": "Crown of the one who claimed the Elden Ring and became Lord of the Lands Between."},
-	{"id": "straw_hat", "name": "Farmer's Straw Hat", "game": "Stardew Valley", "achievement": "Greenhorn",
-	 "rarity": "Common", "category": "armor", "icon": "res://assets/icons/forged/armor/straw_hat.png",
+	{"id": "carian_crown", "name": "Carian Royal Crown", "game": "Elden Ring", "achievement": "Rennala, Queen of the Full Moon",
+	 "rarity": "Epic", "category": "armor", "icon": "res://assets/icons/forged/armor/carian_crown.png",
+	 "lore": "Crown of Carian royalty, enchanted by the moon's sorcery."},
+	{"id": "straw_hat", "name": "Farmer's Straw Hat", "game": "Stardew Valley", "achievement": "Legend",
+	 "rarity": "Rare", "category": "armor", "icon": "res://assets/icons/forged/armor/straw_hat.png",
 	 "lore": "Simple hat for a simple life. Grandpa would be proud."},
 	# === SHIELDS (1) ===
-	{"id": "eye_shield", "name": "Eye of Cthulhu Shield", "game": "Terraria", "achievement": "Slayer of Worlds",
-	 "rarity": "Common", "category": "shields", "icon": "res://assets/icons/forged/shields/eye_shield.png",
-	 "lore": "Shield forged from the essence of a cosmic horror. It still watches."},
-	# === ACCESSORIES (2) ===
+	{"id": "eye_shield", "name": "Fingerprint Stone Shield", "game": "Elden Ring", "achievement": "Mohg, the Omen",
+	 "rarity": "Epic", "category": "shields", "icon": "res://assets/icons/forged/shields/eye_shield.png",
+	 "lore": "A greatshield bearing a mysterious eye. It watches all who would challenge its bearer."},
+	# === CAPES (1) ===
+	{"id": "shade_cloak", "name": "Shade Cloak", "game": "Hollow Knight", "achievement": "Void",
+	 "rarity": "Epic", "category": "capes", "icon": "res://assets/icons/forged/capes/shade_cloak.png",
+	 "lore": "A cloak woven from pure void. Allows passage through shadow."},
+	# === ACCESSORIES (4) ===
 	{"id": "coiled_sword_fragment", "name": "Coiled Sword Fragment", "game": "Dark Souls III", "achievement": "Iudex Gundyr",
-	 "rarity": "Common", "category": "accessories", "icon": "res://assets/icons/forged/accessories/coiled_sword_fragment.png",
+	 "rarity": "Epic", "category": "accessories", "icon": "res://assets/icons/forged/accessories/coiled_sword_fragment.png",
 	 "lore": "A shard from the First Flame's bonfire. Warps back to the last checkpoint."},
 	{"id": "margits_shackle", "name": "Margit's Shackle", "game": "Elden Ring", "achievement": "Margit, the Fell Omen",
-	 "rarity": "Common", "category": "accessories", "icon": "res://assets/icons/forged/accessories/margits_shackle.png",
+	 "rarity": "Rare", "category": "accessories", "icon": "res://assets/icons/forged/accessories/margits_shackle.png",
 	 "lore": "Put these foolish ambitions to rest. A shackle that binds the omen."},
+	{"id": "discord_nitro_badge", "name": "Nitro Supporter Badge", "game": "Discord", "achievement": "Nitro Subscriber",
+	 "rarity": "Rare", "category": "accessories", "icon": "res://assets/icons/forged/accessories/discord_nitro_badge.png",
+	 "lore": "A badge showing Nitro support. Granted to Discord Nitro subscribers."},
+	{"id": "github_star_badge", "name": "Stargazer Badge", "game": "GitHub", "achievement": "Starstruck",
+	 "rarity": "Rare", "category": "accessories", "icon": "res://assets/icons/forged/accessories/github_star_badge.png",
+	 "lore": "A badge for repository stargazers. Earned by starring many repositories."},
 ]
 
 # Current forge tab
@@ -236,11 +256,11 @@ func _on_forged_items_loaded(items: Array) -> void:
 	_refresh_forge_content()
 	print("[Armory] ═══════════════════════════════════════")
 
-func _refresh_forge_content() -> void:
-	"""Refresh the forge tab content to update ownership status"""
+func _on_forge_data_changed() -> void:
+	"""Called when forge data changes (from ForgeItemManager) to update the grid"""
 	if _forge_content_container:
-		print("[Forge] Refreshing forge tab: %s" % _forge_current_tab)
-		_switch_forge_tab(_forge_current_tab)
+		print("[Forge] Refreshing forge content")
+		_refresh_forge_content()
 
 func _setup_font() -> void:
 	# Use SystemFont which works on all platforms
@@ -265,15 +285,373 @@ func _create_section_divider() -> Control:
 	line.color = Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.2)  # Cyan tinted, more visible
 	line.custom_minimum_size = Vector2(0, 1)
 	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	line.anchor_top = 0.5
-	line.anchor_bottom = 0.5
+	line.anchor_top = 0.0
+	line.anchor_bottom = 0.0
 	line.anchor_left = 0.05  # 5% margin on each side (wider line)
 	line.anchor_right = 0.95
+	line.offset_top = 2
+	line.offset_bottom = 3
+	container.add_child(line)
+
+	return container
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GAMEY UI POLISH - Enhanced visual effects for left column
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _create_animated_grid_bg() -> Control:
+	"""Create a subtle grid pattern overlay matching the web app aesthetic"""
+	var container = Control.new()
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Grid settings (matching web app: 80px spacing, cyan at 0.05 opacity)
+	var grid_spacing = 60  # Slightly smaller for the panel size
+	var line_color = Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.04)
+	var line_thickness = 1
+
+	# We'll add the grid lines when the container is ready
+	container.ready.connect(func():
+		var panel_size = container.size
+		if panel_size.x <= 0 or panel_size.y <= 0:
+			return
+
+		# Vertical lines
+		var x = grid_spacing
+		while x < panel_size.x:
+			var vline = ColorRect.new()
+			vline.color = line_color
+			vline.position = Vector2(x, 0)
+			vline.size = Vector2(line_thickness, panel_size.y)
+			vline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			container.add_child(vline)
+			x += grid_spacing
+
+		# Horizontal lines
+		var y = grid_spacing
+		while y < panel_size.y:
+			var hline = ColorRect.new()
+			hline.color = line_color
+			hline.position = Vector2(0, y)
+			hline.size = Vector2(panel_size.x, line_thickness)
+			hline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			container.add_child(hline)
+			y += grid_spacing
+	)
+
+	return container
+
+func _create_glowing_divider() -> Control:
+	"""Create a subtle horizontal divider - simplified"""
+	var container = Control.new()
+	container.custom_minimum_size = Vector2(0, 12)
+
+	# Simple thin line
+	var line = ColorRect.new()
+	line.color = Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.15)
+	line.custom_minimum_size = Vector2(0, 1)
+	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.anchor_top = 0.5
+	line.anchor_bottom = 0.5
+	line.anchor_left = 0.1
+	line.anchor_right = 0.9
 	line.offset_top = -0.5
 	line.offset_bottom = 0.5
 	container.add_child(line)
 
 	return container
+
+func _create_player_identity_frame() -> Control:
+	"""Create clean player identity section"""
+	var frame = VBoxContainer.new()
+	frame.name = "IdentityFrame"
+	frame.add_theme_constant_override("separation", 8)
+
+	var inner_vbox = VBoxContainer.new()
+	inner_vbox.add_theme_constant_override("separation", 6)
+	frame.add_child(inner_vbox)
+
+	# Player ID (prominent)
+	username_label = Label.new()
+	username_label.name = "UsernameLabel"
+	username_label.text = "Player"
+	username_label.add_theme_font_override("font", default_font)
+	username_label.add_theme_font_size_override("font_size", FONT_H2)
+	username_label.add_theme_color_override("font_color", TEXT_PRIMARY)
+	username_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inner_vbox.add_child(username_label)
+
+	# Tier Badge with pulsing glow
+	var badge_center = CenterContainer.new()
+	inner_vbox.add_child(badge_center)
+	tier_badge = _create_enhanced_tier_badge("initiate")
+	badge_center.add_child(tier_badge)
+
+	return frame
+
+func _create_enhanced_tier_badge(tier_key: String) -> Control:
+	"""Create tier badge with pulsing glow effect"""
+	var container = Control.new()
+	container.name = "TierBadgeContainer"
+	container.custom_minimum_size = Vector2(120, 36)
+
+	var color = TIER_COLORS.get(tier_key, TIER_COLORS["initiate"])
+
+	# Outer glow layer (animated)
+	var glow_panel = PanelContainer.new()
+	glow_panel.name = "BadgeGlow"
+	glow_panel.set_anchors_preset(Control.PRESET_CENTER)
+	glow_panel.offset_left = -60
+	glow_panel.offset_right = 60
+	glow_panel.offset_top = -18
+	glow_panel.offset_bottom = 18
+	var glow_style = StyleBoxFlat.new()
+	glow_style.bg_color = Color(color.r, color.g, color.b, 0.2)
+	glow_style.set_corner_radius_all(8)
+	glow_style.shadow_color = Color(color.r, color.g, color.b, 0.5)
+	glow_style.shadow_size = 16
+	glow_panel.add_theme_stylebox_override("panel", glow_style)
+	container.add_child(glow_panel)
+
+	# Main badge
+	var badge = PanelContainer.new()
+	badge.name = "TierBadgePanel"
+	badge.set_anchors_preset(Control.PRESET_CENTER)
+	badge.offset_left = -55
+	badge.offset_right = 55
+	badge.offset_top = -14
+	badge.offset_bottom = 14
+
+	var style = StyleBoxFlat.new()
+	style.bg_color = color
+	style.set_corner_radius_all(4)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	# Metallic highlight on top edge
+	style.border_color = color.lightened(0.4)
+	style.border_width_top = 2
+	style.border_width_bottom = 0
+	style.border_width_left = 1
+	style.border_width_right = 1
+	badge.add_theme_stylebox_override("panel", style)
+	badge.set_meta("style", style)
+	badge.set_meta("glow_style", glow_style)
+	badge.set_meta("base_color", color)
+	container.add_child(badge)
+
+	tier_label = Label.new()
+	tier_label.name = "TierLabel"
+	tier_label.text = tier_key.to_upper()
+	tier_label.add_theme_font_override("font", default_font)
+	tier_label.add_theme_font_size_override("font_size", FONT_BODY)
+	tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Dark text for light tiers
+	if tier_key in ["gold", "silver", "platinum", "diamond"]:
+		tier_label.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1))
+	else:
+		tier_label.add_theme_color_override("font_color", Color.WHITE)
+	badge.add_child(tier_label)
+
+	# Start pulsing animation
+	_start_badge_pulse(container, color)
+
+	return container
+
+func _start_badge_pulse(badge_container: Control, color: Color) -> void:
+	"""Start subtle pulsing glow animation on tier badge"""
+	var tween = create_tween()
+	tween.set_loops()
+
+	var glow_panel = badge_container.find_child("BadgeGlow", false, false)
+	if glow_panel:
+		# Pulse the shadow size
+		tween.tween_method(func(val: float):
+			var style = glow_panel.get_theme_stylebox("panel") as StyleBoxFlat
+			if style:
+				style.shadow_size = int(val)
+				style.shadow_color = Color(color.r, color.g, color.b, 0.3 + (val - 12) * 0.02)
+		, 12.0, 20.0, 1.5)
+		tween.tween_method(func(val: float):
+			var style = glow_panel.get_theme_stylebox("panel") as StyleBoxFlat
+			if style:
+				style.shadow_size = int(val)
+				style.shadow_color = Color(color.r, color.g, color.b, 0.3 + (val - 12) * 0.02)
+		, 20.0, 12.0, 1.5)
+
+func _create_trophy_plaque() -> Control:
+	"""Create achievement score display - clean version"""
+	var plaque = VBoxContainer.new()
+	plaque.add_theme_constant_override("separation", 4)
+
+	var inner_content = VBoxContainer.new()
+	inner_content.add_theme_constant_override("separation", 0)
+	plaque.add_child(inner_content)
+
+	# Hero number with glow effect container
+	var number_container = CenterContainer.new()
+	number_container.name = "NumberContainer"
+	inner_content.add_child(number_container)
+
+	var number_stack = Control.new()
+	number_stack.custom_minimum_size = Vector2(180, 70)
+	number_container.add_child(number_stack)
+
+	# Glow layer behind number
+	var glow_label = Label.new()
+	glow_label.name = "NumberGlow"
+	glow_label.text = "0"
+	glow_label.add_theme_font_override("font", default_font)
+	glow_label.add_theme_font_size_override("font_size", 64)
+	glow_label.add_theme_color_override("font_color", Color(MANTLE_RED.r, MANTLE_RED.g, MANTLE_RED.b, 0.3))
+	glow_label.set_anchors_preset(Control.PRESET_CENTER)
+	glow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	glow_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	glow_label.offset_left = -90
+	glow_label.offset_right = 90
+	glow_label.offset_top = -35
+	glow_label.offset_bottom = 35
+	number_stack.add_child(glow_label)
+
+	# Main number
+	total_label = Label.new()
+	total_label.name = "TotalLabel"
+	total_label.text = "0"
+	total_label.add_theme_font_override("font", default_font)
+	total_label.add_theme_font_size_override("font_size", 64)
+	total_label.add_theme_color_override("font_color", MANTLE_RED)
+	total_label.set_anchors_preset(Control.PRESET_CENTER)
+	total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	total_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	total_label.offset_left = -90
+	total_label.offset_right = 90
+	total_label.offset_top = -35
+	total_label.offset_bottom = 35
+	number_stack.add_child(total_label)
+
+	# "ACHIEVEMENTS" suffix
+	var suffix_center = CenterContainer.new()
+	inner_content.add_child(suffix_center)
+	var ach_suffix = Label.new()
+	ach_suffix.name = "TotalSuffix"
+	ach_suffix.text = "ACHIEVEMENTS"
+	ach_suffix.add_theme_font_override("font", default_font)
+	ach_suffix.add_theme_font_size_override("font_size", FONT_TINY)
+	ach_suffix.add_theme_color_override("font_color", TEXT_DIM)
+	suffix_center.add_child(ach_suffix)
+
+	return plaque
+
+func _create_enhanced_progress_section() -> Control:
+	"""Enhanced progress bar with tier emblems and glow effects"""
+	var section = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 8)
+
+	# Tier transition row with emblems
+	var tier_row = HBoxContainer.new()
+	tier_row.name = "TierTransitionRow"
+	tier_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	tier_row.add_theme_constant_override("separation", 8)
+	section.add_child(tier_row)
+
+	# Current tier emblem
+	var current_emblem = _create_tier_emblem("initiate", true)
+	current_emblem.name = "CurrentTierEmblem"
+	tier_row.add_child(current_emblem)
+
+	# Arrow with animation potential
+	var arrow_container = CenterContainer.new()
+	tier_row.add_child(arrow_container)
+	var arrow = Label.new()
+	arrow.name = "ProgressArrow"
+	arrow.text = "→"
+	arrow.add_theme_font_override("font", default_font)
+	arrow.add_theme_font_size_override("font_size", FONT_H3)
+	arrow.add_theme_color_override("font_color", Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.6))
+	arrow_container.add_child(arrow)
+
+	# Next tier emblem
+	var next_emblem = _create_tier_emblem("bronze", false)
+	next_emblem.name = "NextTierEmblem"
+	tier_row.add_child(next_emblem)
+
+	# Progress bar - clean version
+	var bar_container = Control.new()
+	bar_container.name = "ProgressBarContainer"
+	bar_container.custom_minimum_size = Vector2(0, 16)
+	bar_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	section.add_child(bar_container)
+
+	# Simple dark background for progress bar
+	var bar_bg = ColorRect.new()
+	bar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bar_bg.color = Color(0.05, 0.06, 0.08)
+	bar_container.add_child(bar_bg)
+
+	# Progress bar
+	var progress_bar = ProgressBar.new()
+	progress_bar.name = "TierProgressBar"
+	progress_bar.set_anchors_preset(Control.PRESET_FULL_RECT)
+	progress_bar.offset_left = 2
+	progress_bar.offset_right = -2
+	progress_bar.offset_top = 2
+	progress_bar.offset_bottom = -2
+	progress_bar.min_value = 0
+	progress_bar.max_value = 100
+	progress_bar.value = 0
+	progress_bar.show_percentage = false
+
+	# Transparent background
+	var bg_style = StyleBoxFlat.new()
+	bg_style.bg_color = Color(0, 0, 0, 0)
+	progress_bar.add_theme_stylebox_override("background", bg_style)
+
+	# Clean fill style
+	var fill_style = StyleBoxFlat.new()
+	fill_style.bg_color = TIER_COLORS["initiate"]
+	fill_style.set_corner_radius_all(4)
+	progress_bar.add_theme_stylebox_override("fill", fill_style)
+	progress_bar.set_meta("fill_style", fill_style)
+
+	bar_container.add_child(progress_bar)
+
+	# Progress text - simple label
+	var progress_center = CenterContainer.new()
+	section.add_child(progress_center)
+
+	var progress_text = Label.new()
+	progress_text.name = "ProgressText"
+	progress_text.text = "0 / 100 to Bronze"
+	progress_text.add_theme_font_override("font", default_font)
+	progress_text.add_theme_font_size_override("font_size", FONT_CAPTION)
+	progress_text.add_theme_color_override("font_color", TEXT_SECONDARY)
+	progress_center.add_child(progress_text)
+
+	return section
+
+func _create_tier_emblem(tier_key: String, is_current: bool) -> Control:
+	"""Create a simple tier label"""
+	var color = TIER_COLORS.get(tier_key, TIER_COLORS["initiate"])
+
+	var label = Label.new()
+	label.name = "EmblemLabel"
+	label.text = tier_key.capitalize()
+	label.add_theme_font_override("font", default_font)
+	label.add_theme_font_size_override("font_size", FONT_BODY)
+	label.add_theme_color_override("font_color", color if is_current else color.darkened(0.3))
+	label.set_meta("tier_key", tier_key)
+
+	return label
+
+func _update_tier_emblem(emblem: Control, tier_key: String, is_current: bool) -> void:
+	"""Update an existing tier emblem with new tier data"""
+	var color = TIER_COLORS.get(tier_key, TIER_COLORS["initiate"])
+
+	# Emblem is now just a Label directly
+	if emblem is Label:
+		emblem.text = tier_key.capitalize()
+		emblem.add_theme_color_override("font_color", color if is_current else color.darkened(0.3))
+		emblem.set_meta("tier_key", tier_key)
 
 func _apply_font_to_all(node: Node) -> void:
 	"""Recursively apply font to all Labels and Buttons"""
@@ -395,13 +773,18 @@ func _build_mantle_stats_column() -> Control:
 	var wrapper = Control.new()
 	wrapper.custom_minimum_size = Vector2(220, 0)
 
-	# Background
+	# Background with subtle gradient
 	var bg = ColorRect.new()
 	bg.name = "LeftColumnBG"
 	bg.color = CARD_BG
 	print("[Armory] LEFT column bg.color set to: ", bg.color)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	wrapper.add_child(bg)
+
+	# Animated grid background effect
+	var grid_overlay = _create_animated_grid_bg()
+	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wrapper.add_child(grid_overlay)
 
 	# Border overlay with cyan glow (matches MainMenu)
 	var border = PanelContainer.new()
@@ -432,62 +815,30 @@ func _build_mantle_stats_column() -> Control:
 	vbox.add_theme_constant_override("separation", 0)  # We'll use spacers instead
 	margin.add_child(vbox)
 
-	# Section Header - more prominent styling
-	var header = Label.new()
-	header.text = "MANTLE STATS"
-	header.add_theme_font_override("font", default_font)
-	header.add_theme_font_size_override("font_size", FONT_CAPTION)
-	header.add_theme_color_override("font_color", MANTLE_CYAN)
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(header)
+	# ═══════════════════════════════════════════════════════════════════════════
+	# PLAYER IDENTITY FRAME - Decorative rank frame around player ID + badge
+	# ═══════════════════════════════════════════════════════════════════════════
+	var identity_frame = _create_player_identity_frame()
+	vbox.add_child(identity_frame)
 
-	# Username (prominent)
-	username_label = Label.new()
-	username_label.text = "Guest"
-	username_label.add_theme_font_override("font", default_font)
-	username_label.add_theme_font_size_override("font_size", FONT_H2)
-	username_label.add_theme_color_override("font_color", TEXT_PRIMARY)
-	username_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(username_label)
+	# ═══════════════════════════════════════════════════════════════════════════
+	# ACHIEVEMENT TROPHY PLAQUE - Hero number with metallic frame
+	# ═══════════════════════════════════════════════════════════════════════════
+	var trophy_plaque = _create_trophy_plaque()
+	trophy_plaque.name = "TrophyPlaque"
+	vbox.add_child(trophy_plaque)
 
-	# Tier Badge (combat ribbon style)
-	var badge_center = CenterContainer.new()
-	vbox.add_child(badge_center)
-	tier_badge = _create_tier_badge("initiate")
-	badge_center.add_child(tier_badge)
-
-	# Flexible spacer
-	var spacer1 = Control.new()
-	spacer1.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(spacer1)
-
-	# Total Achievements - Large hero number
-	total_label = Label.new()
-	total_label.text = "0"
-	total_label.add_theme_font_override("font", default_font)
-	total_label.add_theme_font_size_override("font_size", 64)  # Hero number - larger than H1
-	total_label.add_theme_color_override("font_color", MANTLE_RED)
-	total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(total_label)
-
-	var ach_suffix = Label.new()
-	ach_suffix.name = "TotalSuffix"
-	ach_suffix.text = "ACHIEVEMENTS"
-	ach_suffix.add_theme_font_override("font", default_font)
-	ach_suffix.add_theme_font_size_override("font_size", FONT_TINY)
-	ach_suffix.add_theme_color_override("font_color", TEXT_DIM)
-	ach_suffix.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(ach_suffix)
-
-	# Progress to next tier (taller bar)
-	var progress_section = _create_compact_progress_section()
+	# ═══════════════════════════════════════════════════════════════════════════
+	# TIER PROGRESS - Enhanced progress bar with emblems
+	# ═══════════════════════════════════════════════════════════════════════════
+	var progress_section = _create_enhanced_progress_section()
 	progress_section.name = "ProgressSection"
 	vbox.add_child(progress_section)
 
-	# Flexible spacer
-	var spacer2 = Control.new()
-	spacer2.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(spacer2)
+	# Flexible spacer to distribute sections evenly
+	var spacer1 = Control.new()
+	spacer1.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer1)
 
 	# Connected Providers with names
 	var providers_section = VBoxContainer.new()
@@ -516,8 +867,10 @@ func _build_mantle_stats_column() -> Control:
 	no_platforms.add_theme_color_override("font_color", TEXT_SECONDARY)
 	platforms_row.add_child(no_platforms)
 
-	# Divider between platforms and rarity
-	vbox.add_child(_create_section_divider())
+	# Flexible spacer between platforms and rarity
+	var spacer2 = Control.new()
+	spacer2.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer2)
 
 	# Rarity Breakdown (larger, with labels)
 	var rarity_section = VBoxContainer.new()
@@ -538,10 +891,7 @@ func _build_mantle_stats_column() -> Control:
 	rarity_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	rarity_section.add_child(rarity_row)
 
-	# Divider between rarity and recent unlocks
-	vbox.add_child(_create_section_divider())
-
-	# Flexible spacer
+	# Flexible spacer between rarity and recent unlocks
 	var spacer3 = Control.new()
 	spacer3.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(spacer3)
@@ -571,6 +921,11 @@ func _build_mantle_stats_column() -> Control:
 		ach_row.name = "RecentAch_%d" % i
 		ach_row.visible = false  # Hidden until populated
 		recent_list.add_child(ach_row)
+
+	# Bottom spacer to balance vertical distribution
+	var spacer4 = Control.new()
+	spacer4.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer4)
 
 	# Store reference for tier styling
 	stats_panel = wrapper
@@ -838,84 +1193,77 @@ func _build_forge_column() -> Control:
 	progress_pct.add_theme_color_override("font_color", MANTLE_CYAN)
 	progress_row.add_child(progress_pct)
 
-	# Progress bar
-	var progress_bar_bg = PanelContainer.new()
-	progress_bar_bg.name = "ForgeProgressBar"
-	progress_bar_bg.custom_minimum_size = Vector2(0, 8)
-	progress_bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Progress bar using ProgressBar control (simpler and more reliable)
+	var progress_bar = ProgressBar.new()
+	progress_bar.name = "ForgeProgressBar"
+	progress_bar.custom_minimum_size = Vector2(0, 10)
+	progress_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	progress_bar.max_value = 100
+	progress_bar.value = 0  # Start at 0 for animation
+	progress_bar.show_percentage = false
+
+	# Style the progress bar
 	var bar_bg_style = StyleBoxFlat.new()
 	bar_bg_style.bg_color = Color(0.08, 0.08, 0.10)
 	bar_bg_style.set_corner_radius_all(4)
-	progress_bar_bg.add_theme_stylebox_override("panel", bar_bg_style)
-	progress_container.add_child(progress_bar_bg)
+	progress_bar.add_theme_stylebox_override("background", bar_bg_style)
 
-	# Progress fill
-	var progress_fill = ColorRect.new()
-	progress_fill.name = "ForgeProgressFill"
-	progress_fill.color = MANTLE_CYAN
-	progress_fill.custom_minimum_size = Vector2(0, 6)
-	progress_fill.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	progress_fill.anchor_left = 0.0
-	progress_fill.anchor_right = progress_percent
-	progress_fill.anchor_top = 0.1
-	progress_fill.anchor_bottom = 0.9
-	progress_fill.offset_left = 2
-	progress_fill.offset_right = -2
-	progress_bar_bg.add_child(progress_fill)
+	var bar_fill_style = StyleBoxFlat.new()
+	bar_fill_style.bg_color = MANTLE_CYAN
+	bar_fill_style.set_corner_radius_all(4)
+	progress_bar.add_theme_stylebox_override("fill", bar_fill_style)
+
+	progress_container.add_child(progress_bar)
 
 	# Animate progress bar fill on load
-	progress_fill.anchor_right = 0.0
 	var bar_tween = create_tween()
 	bar_tween.set_ease(Tween.EASE_OUT)
 	bar_tween.set_trans(Tween.TRANS_CUBIC)
-	bar_tween.tween_property(progress_fill, "anchor_right", progress_percent, 0.8)
+	bar_tween.tween_property(progress_bar, "value", progress_percent * 100, 0.8)
 
-	# === FILTER/SORT BAR ===
-	var filter_row = HBoxContainer.new()
-	filter_row.name = "ForgeFilterBar"
-	filter_row.add_theme_constant_override("separation", 8)
-	filter_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(filter_row)
+	# === SORT OPTIONS (centered, clean) ===
+	var sort_row = HBoxContainer.new()
+	sort_row.name = "ForgeSortBar"
+	sort_row.add_theme_constant_override("separation", 6)
+	sort_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(sort_row)
 
 	var sort_label = Label.new()
 	sort_label.text = "SORT:"
 	sort_label.add_theme_font_size_override("font_size", FONT_TINY)
 	sort_label.add_theme_color_override("font_color", TEXT_DIM)
-	filter_row.add_child(sort_label)
+	sort_row.add_child(sort_label)
 
 	var sort_options = {"rarity": "Rarity", "game": "Game", "type": "Type"}
 	for sort_id in sort_options:
 		var sort_btn = Button.new()
 		sort_btn.name = "Sort_" + sort_id
 		sort_btn.text = sort_options[sort_id]
-		sort_btn.custom_minimum_size = Vector2(60, 24)
+		sort_btn.custom_minimum_size = Vector2(65, 26)
 		sort_btn.pressed.connect(_on_forge_sort_pressed.bind(sort_id))
 		sort_btn.mouse_entered.connect(_play_button_hover_sound)
 		_style_filter_button(sort_btn, sort_id == _forge_sort_by)
-		filter_row.add_child(sort_btn)
+		sort_row.add_child(sort_btn)
 		_forge_filter_buttons[sort_id] = sort_btn
 
-	# === TAB BAR ===
-	var tab_bar = HBoxContainer.new()
-	tab_bar.name = "ForgeTabBar"
-	tab_bar.add_theme_constant_override("separation", 4)
-	tab_bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(tab_bar)
+	# === CLAIM ALL ROW (only if items to claim) ===
+	var unclaimed_count = _get_unclaimed_count()
+	if unclaimed_count > 0:
+		var claim_row = HBoxContainer.new()
+		claim_row.name = "ForgeClaimRow"
+		claim_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		vbox.add_child(claim_row)
 
-	var tabs = ["all", "unlocked"]
-	var tab_labels = {"all": "ALL (%d)" % total_count, "unlocked": "UNLOCKED (%d)" % owned_count}
-	for tab_id in tabs:
-		var tab_btn = Button.new()
-		tab_btn.name = "Tab_" + tab_id
-		tab_btn.text = tab_labels[tab_id]
-		tab_btn.custom_minimum_size = Vector2(95, 32)  # Wider for counts
-		tab_btn.pressed.connect(_on_forge_tab_pressed.bind(tab_id))
-		tab_btn.mouse_entered.connect(_play_button_hover_sound)  # Add hover sound
-		_style_forge_tab(tab_btn, tab_id == "all")  # all is default
-		tab_bar.add_child(tab_btn)
-		_forge_tab_buttons[tab_id] = tab_btn
+		var claim_all_btn = Button.new()
+		claim_all_btn.name = "ClaimAllButton"
+		claim_all_btn.text = "CLAIM ALL (%d)" % unclaimed_count
+		claim_all_btn.custom_minimum_size = Vector2(160, 32)
+		claim_all_btn.pressed.connect(_on_claim_all_pressed)
+		claim_all_btn.mouse_entered.connect(_play_button_hover_sound)
+		_style_claim_all_button(claim_all_btn)
+		claim_row.add_child(claim_all_btn)
 
-	# Divider after tabs
+	# Divider before grid
 	vbox.add_child(_create_section_divider())
 
 	# === CONTENT CONTAINER (switches based on tab) ===
@@ -923,7 +1271,7 @@ func _build_forge_column() -> Control:
 	_forge_content_container.name = "ForgeContent"
 	_forge_content_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Fit content, don't expand
 	_forge_content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_forge_content_container.custom_minimum_size = Vector2(0, 250)  # Reasonable min height for grid
+	_forge_content_container.custom_minimum_size = Vector2(0, 336)  # Height for 4 rows (4×70 + 3×8 spacing + 16 margins)
 	var content_style = StyleBoxFlat.new()
 	content_style.bg_color = BG_DARK
 	content_style.set_corner_radius_all(6)
@@ -942,8 +1290,8 @@ func _build_forge_column() -> Control:
 	detail_panel.name = "ForgeDetailPanel"
 	vbox.add_child(detail_panel)
 
-	# Build initial tab content (all)
-	_switch_forge_tab("all")
+	# Build initial forge content (unified view)
+	_refresh_forge_content()
 
 	# Store references
 	character_preview = wrapper
@@ -998,8 +1346,8 @@ func _on_forge_sort_pressed(sort_id: String) -> void:
 	# Update button styles
 	for sid in _forge_filter_buttons:
 		_style_filter_button(_forge_filter_buttons[sid], sid == sort_id)
-	# Refresh current tab content
-	_switch_forge_tab(_forge_current_tab)
+	# Refresh forge content
+	_refresh_forge_content()
 
 func _build_forge_detail_panel() -> Control:
 	"""Build the item detail panel at bottom of forge - Enhanced with effect metadata"""
@@ -1023,10 +1371,12 @@ func _build_forge_detail_panel() -> Control:
 	hbox.add_theme_constant_override("separation", 12)
 	margin.add_child(hbox)
 
-	# Item icon placeholder
+	# Item icon placeholder - fixed square size
 	var icon_container = PanelContainer.new()
 	icon_container.name = "DetailIcon"
-	icon_container.custom_minimum_size = Vector2(64, 64)
+	icon_container.custom_minimum_size = Vector2(80, 80)  # Larger square preview
+	icon_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER  # Don't stretch horizontally
+	icon_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER    # Don't stretch vertically
 	var icon_style = StyleBoxFlat.new()
 	icon_style.bg_color = BG_DARK
 	icon_style.border_color = CARD_BORDER
@@ -1041,8 +1391,8 @@ func _build_forge_detail_panel() -> Control:
 	# TextureRect for actual item icon
 	var icon_texture = TextureRect.new()
 	icon_texture.name = "IconTexture"
-	icon_texture.custom_minimum_size = Vector2(56, 56)
-	icon_texture.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	icon_texture.custom_minimum_size = Vector2(72, 72)  # Slightly smaller than container for padding
+	icon_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE  # Don't auto-expand, use custom_minimum_size
 	icon_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_texture.visible = false
 	icon_center.add_child(icon_texture)
@@ -1064,7 +1414,7 @@ func _build_forge_detail_panel() -> Control:
 
 	var name_label = Label.new()
 	name_label.name = "ItemName"
-	name_label.text = "Hover over an item"
+	name_label.text = "Click an item to select"
 	name_label.add_theme_font_size_override("font_size", FONT_BODY)
 	name_label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	details_vbox.add_child(name_label)
@@ -1167,6 +1517,45 @@ func _build_forge_detail_panel() -> Control:
 	bonus_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
 	modifiers_section.add_child(bonus_label)
 
+	# === NEW: Trading Info Section ===
+	var trading_section = VBoxContainer.new()
+	trading_section.name = "TradingSection"
+	trading_section.add_theme_constant_override("separation", 4)
+	trading_section.visible = false
+	hbox.add_child(trading_section)
+
+	# Census label ("Only X exist")
+	var census_label = Label.new()
+	census_label.name = "CensusLabel"
+	census_label.text = ""
+	census_label.add_theme_font_size_override("font_size", FONT_TINY - 2)
+	census_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3))  # Gold color
+	trading_section.add_child(census_label)
+
+	# Trade status (cooldown indicator)
+	var trade_status_container = HBoxContainer.new()
+	trade_status_container.name = "TradeStatusContainer"
+	trade_status_container.add_theme_constant_override("separation", 4)
+	trading_section.add_child(trade_status_container)
+
+	var trade_icon = Label.new()
+	trade_icon.name = "TradeIcon"
+	trade_icon.text = ""
+	trade_icon.add_theme_font_size_override("font_size", FONT_TINY)
+	trade_status_container.add_child(trade_icon)
+
+	var trade_status = Label.new()
+	trade_status.name = "TradeStatus"
+	trade_status.text = ""
+	trade_status.add_theme_font_size_override("font_size", FONT_TINY - 2)
+	trade_status.add_theme_color_override("font_color", TEXT_SECONDARY)
+	trade_status_container.add_child(trade_status)
+
+	# Trade cooldown badge
+	var cooldown_badge = _create_modifier_badge("CooldownBadge", "ON COOLDOWN", Color(0.8, 0.3, 0.3))
+	cooldown_badge.visible = false
+	trading_section.add_child(cooldown_badge)
+
 	# Preview button container (right side)
 	var preview_vbox = VBoxContainer.new()
 	preview_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1236,18 +1625,61 @@ func _style_preview_button(btn: Button) -> void:
 	btn.add_theme_color_override("font_hover_color", TEXT_PRIMARY)
 
 func _on_preview_pressed() -> void:
-	"""Handle preview button press - show item on character"""
+	"""Claim the selected forged item and add it to player's inventory bag"""
 	if SoundManager:
 		SoundManager.play_button_click_sound(-6.0)
-	# TODO: Implement actual preview functionality
-	# For now, show a preview message
+
+	if _forge_selected_item.is_empty():
+		return
+
+	var item_id = _forge_selected_item.get("id", _forge_selected_item.get("item_id", ""))
+	if item_id == "":
+		print("[Armory] No item_id found for selected item")
+		return
+
 	var preview_btn = _forge_detail_panel.find_child("PreviewButton", true, false) if _forge_detail_panel else null
-	if preview_btn and not _forge_selected_item.is_empty():
-		print("[Armory] Preview item: %s" % _forge_selected_item.get("name", "Unknown"))
-		# Flash button to indicate action
-		var tween = create_tween()
-		tween.tween_property(preview_btn, "modulate", Color(1.5, 1.5, 1.5), 0.1)
-		tween.tween_property(preview_btn, "modulate", Color.WHITE, 0.2)
+
+	# Check if already claimed
+	if ForgeItemManager.is_item_claimed(item_id):
+		print("[Armory] Item already claimed: %s" % item_id)
+		if preview_btn:
+			preview_btn.text = "CLAIMED"
+			preview_btn.disabled = true
+		return
+
+	# Claim the item - adds to inventory
+	var claimed_item = ForgeItemManager.claim_single_item(item_id)
+	if not claimed_item.is_empty():
+		print("[Armory] Successfully claimed: %s -> added to inventory" % claimed_item.get("name", item_id))
+
+		# Visual feedback - green flash
+		if preview_btn:
+			preview_btn.text = "CLAIMED!"
+			preview_btn.disabled = true
+			var tween = create_tween()
+			tween.tween_property(preview_btn, "modulate", Color(0.3, 1.0, 0.4), 0.15)
+			tween.tween_property(preview_btn, "modulate", Color.WHITE, 0.3)
+
+		# Play success sound
+		if SoundManager:
+			SoundManager.play_equip_sound(-6.0)
+
+		# Show notification
+		if NotificationManager:
+			NotificationManager.show_item_notification(
+				claimed_item.get("name", "Forged Item"),
+				claimed_item.get("rarity", "Common")
+			)
+
+		# Refresh the forge grid to update claimed status
+		_refresh_forge_content()
+	else:
+		print("[Armory] Failed to claim item: %s (already claimed or inventory full)" % item_id)
+		# Flash red to indicate failure
+		if preview_btn:
+			var tween = create_tween()
+			tween.tween_property(preview_btn, "modulate", Color(1.0, 0.3, 0.3), 0.15)
+			tween.tween_property(preview_btn, "modulate", Color.WHITE, 0.3)
 
 func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 	"""Update the forge detail panel with item info (pre-computed from backend)"""
@@ -1274,7 +1706,7 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 
 	if item.is_empty():
 		_forge_selected_item = {}
-		if name_label: name_label.text = "Hover over an item"
+		if name_label: name_label.text = "Click an item to select"
 		if rarity_label: rarity_label.text = ""
 		if unlock_label: unlock_label.text = "Select an item to see details"
 		if lore_label: lore_label.visible = false
@@ -1306,8 +1738,14 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 
 	if unlock_label:
 		if is_owned:
-			unlock_label.text = "✓ FORGED - Equip at Blacksmith"
-			unlock_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+			var item_id = item.get("id", item.get("item_id", ""))
+			var already_claimed = ForgeItemManager.is_item_claimed(item_id)
+			if already_claimed:
+				unlock_label.text = "✓ CLAIMED - Check your inventory!"
+				unlock_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+			else:
+				unlock_label.text = "✓ UNLOCKED - Click CLAIM to add to inventory"
+				unlock_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))  # Brighter green for action
 		else:
 			unlock_label.text = "🔒 HOW TO UNLOCK: Link %s → Complete \"%s\"" % [item.get("game", "???"), item.get("achievement", "???")]
 			unlock_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))  # Orange for attention
@@ -1353,14 +1791,32 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 			style.border_color = rarity_color.darkened(0.3) if is_owned else CARD_BORDER
 			icon_container.add_theme_stylebox_override("panel", style)
 
-	# Show preview button for owned items
+	# Show claim button for owned items (check if already claimed)
 	if preview_btn:
 		preview_btn.visible = is_owned
-		preview_btn.text = "EQUIP" if is_owned else ""
+		if is_owned:
+			var item_id = item.get("id", item.get("item_id", ""))
+			var already_claimed = ForgeItemManager.is_item_claimed(item_id)
+			if already_claimed:
+				preview_btn.text = "CLAIMED"
+				preview_btn.disabled = true
+			else:
+				preview_btn.text = "CLAIM"
+				preview_btn.disabled = false
+		else:
+			preview_btn.text = ""
 
 	# === Update Modifiers Section (pre-computed from backend) ===
 	_update_modifiers_display(item, modifiers_section, effort_bar, effort_value,
 		vintage_badge, secret_badge, rare_badge, bonus_label, is_owned)
+
+	# === Update Trading Section ===
+	var trading_section = _forge_detail_panel.find_child("TradingSection", true, false)
+	var census_label = _forge_detail_panel.find_child("CensusLabel", true, false)
+	var trade_icon = _forge_detail_panel.find_child("TradeIcon", true, false)
+	var trade_status = _forge_detail_panel.find_child("TradeStatus", true, false)
+	var cooldown_badge = _forge_detail_panel.find_child("CooldownBadge", true, false)
+	_update_trading_display(item, trading_section, census_label, trade_icon, trade_status, cooldown_badge, is_owned)
 
 func _update_modifiers_display(item: Dictionary, modifiers_section: Control,
 		effort_bar: ProgressBar, effort_value: Label, vintage_badge: PanelContainer,
@@ -1445,41 +1901,115 @@ func _get_effort_color(score: float) -> Color:
 	else:
 		return Color(0.6, 0.6, 0.6)  # Gray - Minor
 
-func _on_forge_tab_pressed(tab_id: String) -> void:
-	"""Handle forge tab switch"""
-	# Play click sound
-	if SoundManager:
-		SoundManager.play_button_click_sound(-6.0)
-	if tab_id == _forge_current_tab:
+func _update_trading_display(item: Dictionary, trading_section: Control,
+		census_label: Label, trade_icon: Label, trade_status: Label,
+		cooldown_badge: PanelContainer, is_owned: bool) -> void:
+	"""Update the trading info section for forged items"""
+	# Always show trading section for forged items (even unowned - shows census)
+	var item_id = item.get("item_id", item.get("id", ""))
+	if item_id == "":
+		if trading_section: trading_section.visible = false
 		return
-	_switch_forge_tab(tab_id)
 
-func _switch_forge_tab(tab_id: String) -> void:
-	"""Switch forge content to the selected tab"""
-	_forge_current_tab = tab_id
+	if trading_section: trading_section.visible = true
 
-	# Update tab button styles
-	for tid in _forge_tab_buttons:
-		_style_forge_tab(_forge_tab_buttons[tid], tid == tab_id)
+	# Update census count ("Only X exist")
+	if census_label:
+		if TradingManager and TradingManager.is_census_loaded():
+			var count = TradingManager.get_item_count(item_id)
+			if count > 0:
+				if count == 1:
+					census_label.text = "Only 1 exists!"
+					census_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.0))  # Orange for unique
+				elif count <= 5:
+					census_label.text = "Only %d exist!" % count
+					census_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3))  # Gold
+				elif count <= 20:
+					census_label.text = "%d in circulation" % count
+					census_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
+				else:
+					census_label.text = "%d forged" % count
+					census_label.add_theme_color_override("font_color", TEXT_DIM)
+				census_label.visible = true
+			else:
+				census_label.text = "None forged yet"
+				census_label.add_theme_color_override("font_color", TEXT_DIM)
+				census_label.visible = true
+		else:
+			census_label.visible = false
+			# Fetch census if not loaded
+			if TradingManager:
+				TradingManager.fetch_census()
+
+	# Trade status (only for owned items)
+	if is_owned:
+		var token_id = item.get("token_id", 0)
+		if token_id > 0 and TradingManager:
+			# Check cooldown
+			TradingManager.check_cooldown_with_cache(token_id, func(data: Dictionary):
+				_update_cooldown_display(data, trade_icon, trade_status, cooldown_badge)
+			)
+		else:
+			if trade_icon: trade_icon.text = ""
+			if trade_status: trade_status.text = "Tradeable"
+			if trade_status: trade_status.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+			if cooldown_badge: cooldown_badge.visible = false
+	else:
+		if trade_icon: trade_icon.text = ""
+		if trade_status: trade_status.text = ""
+		if cooldown_badge: cooldown_badge.visible = false
+
+func _update_cooldown_display(data: Dictionary, trade_icon: Label, trade_status: Label, cooldown_badge: PanelContainer) -> void:
+	"""Update cooldown display based on API response"""
+	var is_tradeable = data.get("tradeable", true)
+
+	if is_tradeable:
+		if trade_icon: trade_icon.text = ""
+		if trade_status:
+			trade_status.text = "Tradeable"
+			trade_status.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+		if cooldown_badge: cooldown_badge.visible = false
+	else:
+		var seconds = data.get("seconds_remaining", 0)
+		var hours = int(seconds / 3600)
+		var mins = int((seconds % 3600) / 60)
+
+		if trade_icon: trade_icon.text = ""
+		if trade_status:
+			if hours > 0:
+				trade_status.text = "Cooldown: %dh %dm" % [hours, mins]
+			else:
+				trade_status.text = "Cooldown: %dm" % mins
+			trade_status.add_theme_color_override("font_color", Color(0.8, 0.4, 0.4))
+
+		if cooldown_badge:
+			cooldown_badge.visible = true
+			var badge_text = cooldown_badge.find_child("BadgeText", true, false)
+			if badge_text:
+				if hours > 0:
+					badge_text.text = "%dh %dm" % [hours, mins]
+				else:
+					badge_text.text = "%dm remaining" % mins
+
+func _refresh_forge_content() -> void:
+	"""Refresh the forge grid content"""
+	if not _forge_content_container:
+		return
 
 	# Clear existing content
 	for child in _forge_content_container.get_children():
 		child.queue_free()
 
-	# Build new content
-	var content: Control
-	match tab_id:
-		"all":
-			content = _build_forge_all_content()
-		"unlocked":
-			content = _build_forge_unlocked_content()
-		_:
-			content = _build_forge_all_content()
-
+	# Build unified content (owned items first, then locked)
+	var content = _build_forge_unified_content()
 	_forge_content_container.add_child(content)
 
-func _build_forge_all_content() -> Control:
-	"""Build the ALL tab - shows all available items with lock status"""
+func _switch_forge_tab(_tab_id: String = "") -> void:
+	"""Legacy wrapper - now just refreshes unified content"""
+	_refresh_forge_content()
+
+func _build_forge_unified_content() -> Control:
+	"""Build unified forge view - unlocked items at top, locked items below"""
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1513,14 +2043,31 @@ func _build_forge_all_content() -> Control:
 	# Sort catalog based on current sort setting
 	var sorted_items = _sort_items(FORGE_CATALOG.duplicate())
 
-	# Add all catalog items with correct ownership status
+	# Separate into owned and locked items
+	var owned_list = []
+	var locked_list = []
 	for item in sorted_items:
 		var item_id = item.get("id", "")
-		var is_item_owned = item_id in owned_ids
-		var item_card = _create_forge_item_card(item, is_item_owned)
+		if item_id in owned_ids:
+			owned_list.append(item)
+		else:
+			locked_list.append(item)
+
+	# Add owned items first (with checkmarks)
+	for item in owned_list:
+		var item_card = _create_forge_item_card(item, true)
+		grid.add_child(item_card)
+
+	# Add locked items after
+	for item in locked_list:
+		var item_card = _create_forge_item_card(item, false)
 		grid.add_child(item_card)
 
 	return scroll
+
+func _build_forge_all_content() -> Control:
+	"""Legacy wrapper - calls unified content"""
+	return _build_forge_unified_content()
 
 func _build_forge_unlocked_content() -> Control:
 	"""Build the UNLOCKED tab - shows items player has unlocked (claimable at blacksmith)"""
@@ -1575,7 +2122,7 @@ func _build_forge_unlocked_content() -> Control:
 
 		# Description
 		var desc_label = Label.new()
-		desc_label.text = "Link your gaming accounts and earn achievements\nto unlock exclusive cosmetic items!\n\nUnlocked items can be claimed at the Blacksmith's Forge."
+		desc_label.text = "Link your gaming accounts and earn achievements\nto unlock exclusive cosmetic items!\n\nUnlocked items can be claimed and added to your inventory."
 		desc_label.add_theme_font_size_override("font_size", FONT_CAPTION)
 		desc_label.add_theme_color_override("font_color", TEXT_DIM)
 		desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1641,9 +2188,11 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 	card.set_meta("rarity_color", rarity_color)
 	card.set_meta("is_high_rarity", is_high_rarity and is_owned)
 
-	# Connect hover signals
+	# Connect hover signals (visual feedback only)
 	card.mouse_entered.connect(_on_forge_card_hover.bind(card, true))
 	card.mouse_exited.connect(_on_forge_card_hover.bind(card, false))
+	# Connect click signal for selection
+	card.gui_input.connect(_on_forge_card_clicked.bind(card))
 
 	# Animated glow for high-rarity owned items
 	if is_high_rarity and is_owned:
@@ -1679,39 +2228,43 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 	else:
 		_add_fallback_icon(icon_container, item, is_owned)
 
+	# Badge overlay layer - Control node won't auto-resize like PanelContainer children
+	# This sits on top of the icon_container and allows absolute positioning
+	var badge_layer = Control.new()
+	badge_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	badge_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Pass clicks through to card
+	card.add_child(badge_layer)
+
 	# Lock overlay for unowned items - bottom right corner
 	if not is_owned:
 		var lock_bg = ColorRect.new()
 		lock_bg.color = Color(0, 0, 0, 0.7)
 		lock_bg.custom_minimum_size = Vector2(18, 18)
 		lock_bg.size = Vector2(18, 18)
-		lock_bg.position = Vector2(50, 50)  # Bottom-right of 70x70 container
-		icon_container.add_child(lock_bg)
+		lock_bg.position = Vector2(50, 50)  # Bottom-right of 70x70 card
+		badge_layer.add_child(lock_bg)
 
 		var lock_label = Label.new()
 		lock_label.text = "🔒"
 		lock_label.add_theme_font_size_override("font_size", 12)
 		lock_label.position = Vector2(51, 48)  # Centered in lock_bg
-		icon_container.add_child(lock_label)
+		badge_layer.add_child(lock_label)
 	elif item.get("is_new", false):
 		# NEW badge for recently forged items - top right corner
+		var badge_bg = ColorRect.new()
+		badge_bg.color = MANTLE_CYAN
+		badge_bg.custom_minimum_size = Vector2(28, 14)
+		badge_bg.size = Vector2(28, 14)
+		badge_bg.position = Vector2(40, 2)  # Top-right of 70x70 card
+		badge_layer.add_child(badge_bg)
+
 		var new_badge = Label.new()
 		new_badge.name = "NewBadge"
 		new_badge.text = "NEW"
 		new_badge.add_theme_font_size_override("font_size", 10)
 		new_badge.add_theme_color_override("font_color", Color.WHITE)
-		new_badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		new_badge.position = Vector2(-28, 2)
-		icon_container.add_child(new_badge)
-
-		# Backing panel for visibility
-		var badge_bg = ColorRect.new()
-		badge_bg.color = MANTLE_CYAN
-		badge_bg.custom_minimum_size = Vector2(28, 14)
-		badge_bg.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		badge_bg.position = Vector2(-30, 0)
-		badge_bg.z_index = -1
-		icon_container.add_child(badge_bg)
+		new_badge.position = Vector2(42, 2)  # Inside badge_bg
+		badge_layer.add_child(new_badge)
 
 		# Pulsing animation for NEW badge
 		var pulse_tween = create_tween()
@@ -1719,21 +2272,21 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 		pulse_tween.tween_property(new_badge, "modulate:a", 0.5, 0.5).set_ease(Tween.EASE_IN_OUT)
 		pulse_tween.tween_property(new_badge, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_IN_OUT)
 	else:
-		# Checkmark badge for owned items - bottom right corner (ready to claim)
+		# Checkmark badge for owned items - bottom LEFT corner
 		var check_bg = ColorRect.new()
 		check_bg.color = Color(0.1, 0.3, 0.1, 0.9)
 		check_bg.custom_minimum_size = Vector2(16, 16)
 		check_bg.size = Vector2(16, 16)
-		check_bg.position = Vector2(52, 52)  # Bottom-right of 70x70 container
-		icon_container.add_child(check_bg)
+		check_bg.position = Vector2(2, 52)  # Bottom-left of 70x70 card
+		badge_layer.add_child(check_bg)
 
 		var claim_badge = Label.new()
 		claim_badge.name = "ClaimBadge"
 		claim_badge.text = "✓"
 		claim_badge.add_theme_font_size_override("font_size", 11)
 		claim_badge.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))  # Green checkmark
-		claim_badge.position = Vector2(54, 50)  # Centered in check_bg
-		icon_container.add_child(claim_badge)
+		claim_badge.position = Vector2(4, 50)  # Inside check_bg
+		badge_layer.add_child(claim_badge)
 
 	# Rich tooltip with lore
 	var lore = item.get("lore", "")
@@ -1747,7 +2300,12 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 	if not is_owned:
 		tooltip += "\n\n🔒 HOW TO UNLOCK:\nLink %s and complete \"%s\"" % [item.get("game", "this game"), item.get("achievement", "achievement")]
 	else:
-		tooltip += "\n\n✓ UNLOCKED - Claim at Blacksmith's Forge"
+		var item_id = item.get("id", item.get("item_id", ""))
+		var already_claimed = ForgeItemManager.is_item_claimed(item_id)
+		if already_claimed:
+			tooltip += "\n\n✓ CLAIMED - Check your inventory!"
+		else:
+			tooltip += "\n\n✓ UNLOCKED - Click to claim"
 	card.tooltip_text = tooltip
 
 	return card
@@ -1770,17 +2328,14 @@ func _add_fallback_icon(container: Control, item: Dictionary, is_owned: bool) ->
 	container.add_child(fallback)
 
 func _on_forge_card_hover(card: PanelContainer, is_hovering: bool) -> void:
-	"""Handle hover effects on forge item cards"""
+	"""Handle hover visual effects on forge item cards (visual only, no selection)"""
 	var rarity_color: Color = card.get_meta("rarity_color", Color.GRAY)
 	var is_owned: bool = card.get_meta("is_owned", false)
-	var item_data: Dictionary = card.get_meta("item_data", {})
 
 	if is_hovering:
 		# Play hover sound
 		if SoundManager:
 			SoundManager.play_button_hover_sound(-12.0)
-		# Update detail panel
-		_update_forge_detail(item_data, is_owned)
 
 		# Set pivot to center based on actual size for proper scaling
 		card.pivot_offset = card.size / 2.0
@@ -1804,14 +2359,48 @@ func _on_forge_card_hover(card: PanelContainer, is_hovering: bool) -> void:
 		var tween = create_tween()
 		tween.tween_property(card, "scale", Vector2(1.05, 1.05), 0.1).set_ease(Tween.EASE_OUT)
 	else:
-		# Restore normal style
+		# Restore normal style (unless this is the selected card)
 		var normal_style: StyleBoxFlat = card.get_meta("normal_style")
-		if normal_style:
+		if normal_style and card != _forge_selected_card:
 			card.add_theme_stylebox_override("panel", normal_style)
 
 		# Scale back
 		var tween = create_tween()
 		tween.tween_property(card, "scale", Vector2(1.0, 1.0), 0.1).set_ease(Tween.EASE_OUT)
+
+func _on_forge_card_clicked(event: InputEvent, card: PanelContainer) -> void:
+	"""Handle click to select a forge item card"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var is_owned: bool = card.get_meta("is_owned", false)
+		var item_data: Dictionary = card.get_meta("item_data", {})
+		var rarity_color: Color = card.get_meta("rarity_color", Color.GRAY)
+
+		# Play click sound
+		if SoundManager:
+			SoundManager.play_button_click_sound(-6.0)
+
+		# Deselect previous card
+		if _forge_selected_card and _forge_selected_card != card:
+			var old_style: StyleBoxFlat = _forge_selected_card.get_meta("normal_style")
+			if old_style:
+				_forge_selected_card.add_theme_stylebox_override("panel", old_style)
+
+		# Mark this card as selected
+		_forge_selected_card = card
+
+		# Apply selected style (bright border)
+		var selected_style = StyleBoxFlat.new()
+		selected_style.bg_color = Color(0.15, 0.15, 0.18) if is_owned else Color(0.08, 0.08, 0.10)
+		selected_style.border_color = rarity_color.lightened(0.2)
+		selected_style.set_border_width_all(3)
+		selected_style.set_corner_radius_all(4)
+		selected_style.set_content_margin_all(1)
+		selected_style.shadow_size = 12
+		selected_style.shadow_color = Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.5)
+		card.add_theme_stylebox_override("panel", selected_style)
+
+		# Update detail panel with selected item
+		_update_forge_detail(item_data, is_owned)
 
 func _sort_by_rarity(a: Dictionary, b: Dictionary) -> bool:
 	"""Sort items by rarity (highest first): Legendary > Epic > Rare > Uncommon > Common"""
@@ -1864,11 +2453,114 @@ func _get_owned_forge_items() -> Array:
 	if ForgeItemManager and ForgeItemManager.is_loaded():
 		var forged = ForgeItemManager.get_all_forged_items()
 		print("[Forge] Owned items from backend: %d" % forged.size())
-		return forged
+
+		# Enrich with catalog data (icon paths, lore, etc.)
+		var enriched = []
+		for item in forged:
+			var item_id = item.get("item_id", "")
+			var catalog_data = _get_catalog_item_by_id(item_id)
+			if catalog_data.size() > 0:
+				# Merge catalog data with backend data (backend takes precedence)
+				var merged = catalog_data.duplicate()
+				merged.merge(item, true)  # Backend overwrites catalog
+				enriched.append(merged)
+			else:
+				# No catalog match - use backend data as-is
+				enriched.append(item)
+
+		return enriched
 
 	# Not loaded yet - return empty
 	print("[Forge] Forged items not loaded yet")
 	return []
+
+func _get_catalog_item_by_id(item_id: String) -> Dictionary:
+	"""Look up an item in FORGE_CATALOG by its id"""
+	for item in FORGE_CATALOG:
+		if item.get("id", "") == item_id:
+			return item
+	return {}
+
+func _get_unclaimed_count() -> int:
+	"""Count how many owned forge items haven't been claimed yet"""
+	var owned = _get_owned_forge_items()
+	var unclaimed = 0
+	for item in owned:
+		var item_id = item.get("id", item.get("item_id", ""))
+		if not ForgeItemManager.is_item_claimed(item_id):
+			unclaimed += 1
+	return unclaimed
+
+func _on_claim_all_pressed() -> void:
+	"""Claim all unclaimed forged items at once"""
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+
+	var owned = _get_owned_forge_items()
+	var claimed_count = 0
+
+	for item in owned:
+		var item_id = item.get("id", item.get("item_id", ""))
+		if item_id == "" or ForgeItemManager.is_item_claimed(item_id):
+			continue
+
+		var claimed_item = ForgeItemManager.claim_single_item(item_id)
+		if not claimed_item.is_empty():
+			claimed_count += 1
+			print("[Armory] Claimed: %s" % claimed_item.get("name", item_id))
+
+	if claimed_count > 0:
+		print("[Armory] Claimed %d items!" % claimed_count)
+		# Play success sound
+		if SoundManager:
+			SoundManager.play_equip_sound(-6.0)
+		# Show notification
+		if NotificationManager:
+			NotificationManager.show_notification("Claimed %d forged items!" % claimed_count)
+		# Refresh forge UI
+		_refresh_forge_content()
+		# Update claim row - hide it or update count
+		_update_claim_all_button()
+	else:
+		print("[Armory] No items to claim")
+
+func _update_claim_all_button() -> void:
+	"""Update or hide the CLAIM ALL button based on remaining unclaimed items"""
+	var claim_row = find_child("ForgeClaimRow", true, false)
+	var claim_btn = find_child("ClaimAllButton", true, false)
+	var unclaimed_count = _get_unclaimed_count()
+
+	if unclaimed_count <= 0:
+		# All claimed - hide the row entirely
+		if claim_row:
+			claim_row.visible = false
+	else:
+		# Still items to claim - update the count
+		if claim_btn:
+			claim_btn.text = "CLAIM ALL (%d)" % unclaimed_count
+		if claim_row:
+			claim_row.visible = true
+
+func _style_claim_all_button(btn: Button) -> void:
+	"""Style the CLAIM ALL button with green accent"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.4, 0.2, 0.9)  # Dark green
+	style.border_color = Color(0.3, 0.8, 0.4)  # Bright green border
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(6)
+	btn.add_theme_stylebox_override("normal", style)
+
+	var hover_style = style.duplicate()
+	hover_style.bg_color = Color(0.2, 0.5, 0.25, 0.95)
+	btn.add_theme_stylebox_override("hover", hover_style)
+
+	var pressed_style = style.duplicate()
+	pressed_style.bg_color = Color(0.1, 0.3, 0.15)
+	btn.add_theme_stylebox_override("pressed", pressed_style)
+
+	btn.add_theme_color_override("font_color", Color.WHITE)
+	btn.add_theme_color_override("font_hover_color", Color(0.9, 1.0, 0.9))
+	btn.add_theme_font_size_override("font_size", FONT_TINY)
 
 func _get_current_tier_name() -> String:
 	"""Get current tier name from profile"""
@@ -3999,18 +4691,18 @@ func _show_guest_ui() -> void:
 	_populate_recent_unlocks()
 
 func _show_new_player_ui() -> void:
-	var username = profile.get("username", "Player")
-	subtitle_label.text = "Welcome, %s" % username
-	username_label.text = username
+	var user_id = profile.get("user_id", 0)
+	subtitle_label.text = "Welcome, Player #%d" % user_id
+	username_label.text = "Player #%d" % user_id
 	logout_button.visible = true
 	_update_stats_display()
 
 func _show_authenticated_ui() -> void:
-	var username = profile.get("username", "Player")
+	var user_id = profile.get("user_id", 0)
 	var mantle = profile.get("mantle", {})
 	var tier = mantle.get("name", "Initiate")
 	subtitle_label.text = "%s Champion" % tier
-	username_label.text = username
+	username_label.text = "Player #%d" % user_id
 	logout_button.visible = true
 	_update_stats_display()
 
@@ -4144,18 +4836,52 @@ func _update_quick_stats() -> void:
 
 func _update_tier_badge(tier_key: String, tier_name: String) -> void:
 	tier_label.text = tier_name.to_upper()
+	var color = TIER_COLORS.get(tier_key, TIER_COLORS["initiate"])
 
-	var badge_panel = tier_badge
-	if badge_panel and badge_panel.has_meta("style"):
-		var style = badge_panel.get_meta("style") as StyleBoxFlat
-		var color = TIER_COLORS.get(tier_key, TIER_COLORS["initiate"])
+	# Update tier label text color
+	if tier_key in ["gold", "silver", "platinum", "diamond"]:
+		tier_label.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1))
+	else:
+		tier_label.add_theme_color_override("font_color", Color.WHITE)
+
+	# Update enhanced badge (new structure with glow)
+	if tier_badge:
+		# Update the main badge panel
+		var badge_panel = tier_badge.find_child("TierBadgePanel", false, false)
+		if badge_panel:
+			var style = StyleBoxFlat.new()
+			style.bg_color = color
+			style.set_corner_radius_all(4)
+			style.content_margin_left = 12
+			style.content_margin_right = 12
+			style.content_margin_top = 4
+			style.content_margin_bottom = 4
+			# Metallic highlight on top edge
+			style.border_color = color.lightened(0.4)
+			style.border_width_top = 2
+			style.border_width_bottom = 0
+			style.border_width_left = 1
+			style.border_width_right = 1
+			badge_panel.add_theme_stylebox_override("panel", style)
+
+		# Update the glow panel
+		var glow_panel = tier_badge.find_child("BadgeGlow", false, false)
+		if glow_panel:
+			var glow_style = StyleBoxFlat.new()
+			glow_style.bg_color = Color(color.r, color.g, color.b, 0.2)
+			glow_style.set_corner_radius_all(8)
+			glow_style.shadow_color = Color(color.r, color.g, color.b, 0.5)
+			glow_style.shadow_size = 16
+			glow_panel.add_theme_stylebox_override("panel", glow_style)
+
+		# Restart the pulse animation with new color
+		_start_badge_pulse(tier_badge, color)
+
+	# Fallback: Old badge structure
+	elif tier_badge and tier_badge.has_meta("style"):
+		var style = tier_badge.get_meta("style") as StyleBoxFlat
 		style.bg_color = color
 		style.shadow_color = Color(color.r, color.g, color.b, 0.4)
-
-		if tier_key in ["gold", "silver", "platinum", "diamond"]:
-			tier_label.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1))
-		else:
-			tier_label.add_theme_color_override("font_color", Color.WHITE)
 
 func _update_platforms_display() -> void:
 	var platforms_row = stats_panel.find_child("PlatformsRow", true, false)
@@ -4235,6 +4961,7 @@ func _create_provider_badge(provider_name: String, count: int, icon_url: String 
 	container.add_child(icon_wrapper)
 
 	# Try to load platform icon texture - local paths
+	# Facebook and Roblox load from backend URL (no local icons)
 	var icon_path = ""
 	match prov_lower:
 		"steam": icon_path = "res://assets/ui/icons/steam.png"
@@ -4309,6 +5036,8 @@ func _create_provider_badge(provider_name: String, count: int, icon_url: String 
 				"github": icon_label.text = "G"
 				"epic": icon_label.text = "E"
 				"gog": icon_label.text = "G"
+				"facebook": icon_label.text = "F"
+				"roblox": icon_label.text = "R"
 				_: icon_label.text = "?"
 			icon_label.add_theme_font_override("font", default_font)
 			icon_label.add_theme_font_size_override("font_size", 18)
@@ -4332,9 +5061,11 @@ func _create_provider_badge(provider_name: String, count: int, icon_url: String 
 		"xbox": name_label.text = "Xbox"
 		"playstation", "psn": name_label.text = "PSN"
 		"discord": name_label.text = "Discord"
-		"github": name_label.text = "Github"
+		"github": name_label.text = "GitHub"
 		"epic": name_label.text = "Epic"
 		"gog": name_label.text = "GOG"
+		"facebook": name_label.text = "Facebook"
+		"roblox": name_label.text = "Roblox"
 		_: name_label.text = provider_name.capitalize()
 	name_label.add_theme_font_override("font", default_font)
 	name_label.add_theme_font_size_override("font_size", FONT_TINY)
@@ -4909,13 +5640,24 @@ func _update_progress_display(total: int, tier_key: String) -> void:
 	# Update compact progress section (new 3-column layout)
 	var progress_section = stats_panel.find_child("ProgressSection", true, false)
 	if progress_section:
-		# Update current tier label
+		# Update current tier emblem (enhanced version)
+		var current_emblem = progress_section.find_child("CurrentTierEmblem", true, false)
+		if current_emblem:
+			_update_tier_emblem(current_emblem, tier_key, true)
+		# Fallback: old label style
 		var current_tier_label = progress_section.find_child("CurrentTierLabel", true, false)
 		if current_tier_label:
 			current_tier_label.text = tier_key.capitalize()
 			current_tier_label.add_theme_color_override("font_color", TIER_COLORS.get(tier_key, Color.GRAY))
 
-		# Update next tier label
+		# Update next tier emblem (enhanced version)
+		var next_emblem = progress_section.find_child("NextTierEmblem", true, false)
+		if next_emblem:
+			if tier_key == "mythic":
+				_update_tier_emblem(next_emblem, "mythic", false)
+			else:
+				_update_tier_emblem(next_emblem, next_tier_key, false)
+		# Fallback: old label style
 		var next_tier_label = progress_section.find_child("NextTierLabel", true, false)
 		if next_tier_label:
 			if tier_key == "mythic":
@@ -4925,14 +5667,19 @@ func _update_progress_display(total: int, tier_key: String) -> void:
 				next_tier_label.text = next_tier
 				next_tier_label.add_theme_color_override("font_color", TIER_COLORS.get(next_tier_key, Color.GRAY))
 
-		# Update progress bar fill (TierProgressBar)
+		# Update progress bar fill (TierProgressBar) with enhanced glow
 		var tier_progress_bar = progress_section.find_child("TierProgressBar", true, false)
 		if tier_progress_bar and tier_progress_bar is ProgressBar:
 			tier_progress_bar.value = progress_pct * 100
 			var tier_color = TIER_COLORS.get(tier_key, Color.GRAY)
 			var fill_style = StyleBoxFlat.new()
 			fill_style.bg_color = tier_color
-			fill_style.set_corner_radius_all(6)
+			fill_style.set_corner_radius_all(8)
+			# Enhanced: Add glow effect
+			fill_style.border_color = tier_color.lightened(0.3)
+			fill_style.border_width_top = 2
+			fill_style.shadow_color = Color(tier_color.r, tier_color.g, tier_color.b, 0.5)
+			fill_style.shadow_size = 6
 			tier_progress_bar.add_theme_stylebox_override("fill", fill_style)
 			print("[Armory] Progress bar updated: %d%% [%d in %s tier, range %d-%d]" % [int(progress_pct * 100), total, tier_key, tier_start, tier_end])
 
@@ -5103,7 +5850,11 @@ func _play_entrance_animations() -> void:
 	_animate_progress_bar()
 
 	# Start tier badge pulse
-	_start_badge_pulse()
+	if tier_badge:
+		var mantle = profile.get("mantle", {})
+		var tier_key = mantle.get("tier", "initiate").to_lower()
+		var color = TIER_COLORS.get(tier_key, TIER_COLORS["initiate"])
+		_start_badge_pulse(tier_badge, color)
 
 	# Add shimmer effect to stats panel
 	_play_shimmer_effect()
@@ -5136,7 +5887,12 @@ func _animate_achievement_count() -> void:
 	_count_tween.tween_method(
 		func(val: float):
 			var count = int(val)
-			total_label.text = _format_number(count)
+			var formatted = _format_number(count)
+			total_label.text = formatted
+			# Also update the glow label if present (enhanced trophy plaque)
+			var glow_label = stats_panel.find_child("NumberGlow", true, false) if stats_panel else null
+			if glow_label:
+				glow_label.text = formatted
 			# Add subtle scale pop at milestones
 			if count > 0 and count % 500 == 0:
 				var pop_tween = create_tween()
@@ -5270,25 +6026,6 @@ func _animate_progress_bar() -> void:
 	_progress_tween.set_ease(Tween.EASE_OUT)
 	_progress_tween.set_trans(Tween.TRANS_CUBIC)
 	_progress_tween.tween_property(progress_fill, "custom_minimum_size:x", target_width, 0.8)
-
-func _start_badge_pulse() -> void:
-	if not tier_badge:
-		return
-
-	var style = tier_badge.get_meta("style") as StyleBoxFlat
-	if not style:
-		return
-
-	# Create pulsing glow effect
-	if _badge_tween:
-		_badge_tween.kill()
-	_badge_tween = create_tween()
-	_badge_tween.set_loops()
-	_badge_tween.tween_property(style, "shadow_size", 8, 1.0).set_ease(Tween.EASE_IN_OUT)
-	_badge_tween.tween_property(style, "shadow_size", 4, 1.0).set_ease(Tween.EASE_IN_OUT)
-
-	# Add horizontal shimmer sweep effect
-	_start_badge_shimmer()
 
 var _badge_shimmer_tween: Tween = null
 

@@ -4,7 +4,16 @@ extends CanvasLayer
 ## Stone Gray UI theme matching CharacterUI
 ## Press I to toggle
 
+# ============================================
+# DEBUG SETTINGS - Set to true to enable verbose logging
+# ============================================
+const DEBUG_FORGED_DISPLAY: bool = false  # Debug forged item display in inventory
+
 var is_visible: bool = false
+
+# Deferred refresh system to prevent race conditions during rapid equip/unequip
+var _needs_refresh: bool = false
+var _refresh_scheduled: bool = false
 
 # Pending deletion data (for confirmation dialog)
 var pending_delete_data: Dictionary = {}
@@ -79,7 +88,8 @@ func create_inventory_ui() -> void:
 	main_panel.anchor_right = 1.0
 	main_panel.anchor_bottom = 1.0
 	# Position from bottom-right corner with padding
-	main_panel.offset_left = -270
+	# 6 columns: 56px*6 slots + 4px*5 gaps + 20px padding + borders = ~400px
+	main_panel.offset_left = -400
 	main_panel.offset_right = -10
 	main_panel.offset_top = 0   # Will be determined by content size + grow direction
 	main_panel.offset_bottom = -10  # 10px from bottom edge
@@ -114,9 +124,10 @@ func create_inventory_ui() -> void:
 	main_vbox.add_theme_constant_override("separation", 8)
 	margin.add_child(main_vbox)
 
-	# Inventory grid (4 columns) - no inner panel, just the grid
+	# Inventory grid (6 columns for square layout) - no inner panel, just the grid
 	var inv_grid = GridContainer.new()
-	inv_grid.columns = 4
+	inv_grid.name = "InventoryGrid"
+	inv_grid.columns = 6
 	inv_grid.add_theme_constant_override("h_separation", 4)
 	inv_grid.add_theme_constant_override("v_separation", 4)
 	main_vbox.add_child(inv_grid)
@@ -177,10 +188,10 @@ func create_inventory_slot(slot_index: int) -> Control:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(center)
 
-	# Add icon texture rect (scaled to fit)
+	# Add icon texture rect (scaled to fit most of the slot)
 	var icon = TextureRect.new()
 	icon.name = "ItemIcon"
-	icon.custom_minimum_size = Vector2(32, 32)
+	icon.custom_minimum_size = Vector2(48, 48)  # Larger icon to fill slot better
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -217,6 +228,21 @@ func create_inventory_slot(slot_index: int) -> Control:
 	stack_label.offset_bottom = -2
 	stack_label.visible = false
 	panel.add_child(stack_label)
+
+	# Forged badge (top-left corner) - shows for forged items
+	# Added to slot_control (not panel) so it's on top of everything
+	var forged_badge = Label.new()
+	forged_badge.name = "ForgedBadge"
+	forged_badge.text = "⚒"  # Anvil/hammer emoji
+	forged_badge.add_theme_font_size_override("font_size", 14)
+	forged_badge.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))  # Gold color
+	forged_badge.add_theme_color_override("font_outline_color", Color.BLACK)
+	forged_badge.add_theme_constant_override("outline_size", 3)
+	forged_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	forged_badge.z_index = 10  # On top of everything
+	forged_badge.position = Vector2(2, 0)  # Top-left with small padding
+	forged_badge.visible = false
+	slot_control.add_child(forged_badge)
 
 	# Connect click event
 	slot_control.gui_input.connect(_on_inventory_slot_gui_input.bind(slot_index))
@@ -388,15 +414,39 @@ func refresh_inventory() -> void:
 			print("⚠️ InventoryUI: Could not find ItemLabel in slot %d" % i)
 			continue
 
+		# IMPORTANT: Reset slot state first to prevent visual artifacts during rapid updates
+		# This ensures we start from a clean state before applying new content
+		if icon_rect:
+			icon_rect.texture = null
+			icon_rect.visible = false
+		label.text = ""
+		label.visible = false
+		if stack_label:
+			stack_label.visible = false
+			stack_label.text = ""
+		var forged_badge = slot_control.get_node_or_null("ForgedBadge")
+		if forged_badge:
+			forged_badge.visible = false
+
 		if item and item.size() > 0:
 			var item_name = item.get("name", "???")
 			var quantity = item.get("quantity", 1)
 			var is_stackable = item.get("stackable", false)
+			var is_forged = item.get("is_forged", false)
+
+			if DEBUG_FORGED_DISPLAY and is_forged:
+				print("[InventoryUI] ────────────────────────────────────")
+				print("[InventoryUI] Slot %d: FORGED item '%s'" % [i, item_name])
+				print("[InventoryUI]   type: %s, weapon_type: %s" % [item.get("type", "?"), item.get("weapon_type", "?")])
+				print("[InventoryUI]   glow_color: %s, rarity: %s" % [item.get("glow_color", "none"), item.get("rarity", "?")])
+				print("[InventoryUI]   effect_name: %s, effort_tier: %s" % [item.get("effect_name", "none"), item.get("effort_tier", "?")])
 
 			# Try to get icon from ItemIconGenerator
 			var icon_texture: Texture2D = null
 			if ItemIconGenerator:
 				icon_texture = ItemIconGenerator.get_item_icon(item)
+				if DEBUG_FORGED_DISPLAY and is_forged:
+					print("[InventoryUI]   Icon loaded: %s" % ("✅ Yes" if icon_texture else "❌ No"))
 
 			if icon_texture and icon_rect:
 				# We have an icon - show it
@@ -425,12 +475,41 @@ func refresh_inventory() -> void:
 					stack_label.visible = false
 
 			var rarity = item.get("rarity", "COMMON")
-			var glow_color = get_rarity_glow_color(rarity)
+			# is_forged already declared above
+
+			# Determine glow color - use custom glow_color for forged items if available
+			var glow_color: Color
+			if is_forged and item.has("glow_color"):
+				var glow_str = item.get("glow_color", "")
+				if DEBUG_FORGED_DISPLAY and is_forged:
+					print("[InventoryUI]   glow_str from item: '%s'" % glow_str)
+				if glow_str.begins_with("#"):
+					glow_color = Color.from_string(glow_str, get_rarity_glow_color(rarity))
+					if DEBUG_FORGED_DISPLAY and is_forged:
+						print("[InventoryUI]   Parsed glow_color: %s" % glow_color)
+				else:
+					glow_color = get_rarity_glow_color(rarity)
+					if DEBUG_FORGED_DISPLAY and is_forged:
+						print("[InventoryUI]   Using rarity glow (no # prefix): %s" % glow_color)
+			else:
+				glow_color = get_rarity_glow_color(rarity)
+				if DEBUG_FORGED_DISPLAY and is_forged:
+					print("[InventoryUI]   Using rarity glow (no glow_color field): %s" % glow_color)
+
 			var glow_style = create_slot_style(SLOT_BG, glow_color, 3, true)
 			panel.add_theme_stylebox_override("panel", glow_style)
 
+			# Show forged badge if applicable (already got reference during reset phase)
+			if forged_badge:
+				forged_badge.visible = is_forged
+				if DEBUG_FORGED_DISPLAY and is_forged:
+					print("[InventoryUI]   ForgedBadge visible: %s" % forged_badge.visible)
+
 			# Build tooltip with item name first
 			var tooltip = "[%s]\n" % item_name
+			if is_forged:
+				tooltip = "[FORGED] %s\n" % item_name
+
 			var desc = item.get("description", "")
 			if desc:
 				tooltip += desc
@@ -453,16 +532,18 @@ func refresh_inventory() -> void:
 			if item.has("value"):
 				tooltip += "\nValue: %d G" % item.get("value", 0)
 
+			# Add forged-specific info
+			if is_forged:
+				var effect_name = item.get("effect_name", "")
+				if effect_name != "":
+					tooltip += "\nEffect: %s" % effect_name
+				var effort_tier = item.get("effort_tier", "")
+				if effort_tier != "":
+					tooltip += "\nTier: %s" % effort_tier
+
 			slot_control.tooltip_text = tooltip
 		else:
-			# Empty slot
-			if icon_rect:
-				icon_rect.texture = null
-				icon_rect.visible = false
-			if stack_label:
-				stack_label.visible = false
-			label.visible = false
-			label.text = ""
+			# Empty slot - most state already reset above, just set tooltip and style
 			slot_control.tooltip_text = "Empty slot"
 			var default_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 			panel.add_theme_stylebox_override("panel", default_style)
@@ -725,7 +806,24 @@ func _on_gold_changed(_amount: int, _total: int) -> void:
 	refresh_gold()
 
 func _on_inventory_changed() -> void:
-	refresh_inventory()
+	# Use deferred refresh to coalesce multiple rapid inventory changes
+	# This prevents race conditions when rapidly equipping/unequipping items
+	_schedule_refresh()
+
+func _schedule_refresh() -> void:
+	"""Schedule a deferred refresh to coalesce rapid updates"""
+	_needs_refresh = true
+	if not _refresh_scheduled:
+		_refresh_scheduled = true
+		# Use call_deferred to process at the end of the current frame
+		call_deferred("_do_deferred_refresh")
+
+func _do_deferred_refresh() -> void:
+	"""Perform the actual refresh after all signals have been processed"""
+	_refresh_scheduled = false
+	if _needs_refresh:
+		_needs_refresh = false
+		refresh_inventory()
 
 func _find_node_recursive(parent: Node, node_name: String) -> Node:
 	"""Recursively search for a node by name"""

@@ -1827,8 +1827,8 @@ func _update_mantle_panel_status():
 		var tier_color_hex = MantleAuth.mantle_tier.get("color", "#FFFFFF")
 		var provider_count = MantleAuth.providers.size()
 
-		mantle_status_label.text = "Linked as %s\n%s Tier - %d providers connected" % [
-			MantleAuth.username, tier_name, provider_count
+		mantle_status_label.text = "Player #%d\n%s Tier - %d providers connected" % [
+			MantleAuth.user_id, tier_name, provider_count
 		]
 		var tier_color = Color.from_string(tier_color_hex, Color.WHITE)
 		mantle_status_label.add_theme_color_override("font_color", tier_color)
@@ -1969,9 +1969,9 @@ func _update_tier_display_content():
 		if TIER_COLORS.has(tier_key):
 			tier_color = TIER_COLORS[tier_key]
 
-		# Update username
+		# Update player number
 		if username_label:
-			username_label.text = MantleAuth.username
+			username_label.text = "Player #%d" % MantleAuth.user_id
 			username_label.visible = true
 
 		# Style the tier badge with glow

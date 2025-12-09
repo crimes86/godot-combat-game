@@ -496,6 +496,21 @@ func _handle_admin_command(cmd: String) -> void:
 			_cmd_duel_accept()
 		"declineduel":
 			_cmd_duel_decline()
+		# Trading commands (requires Mantle auth)
+		"sell", "wts":
+			_cmd_sell(args)
+		"listings", "market", "recently":
+			_cmd_listings()
+		"mylistings":
+			_cmd_my_listings()
+		"cancel":
+			_cmd_cancel_listing(args)
+		"trade":
+			_cmd_trade(args)
+		"accepttrade":
+			_cmd_accept_trade()
+		"declinetrade":
+			_cmd_decline_trade()
 		# Admin commands (server host only - checked above)
 		"accounts":
 			_cmd_accounts()
@@ -783,12 +798,304 @@ func _find_player_by_name(search_name: String) -> int:
 	return -1
 
 # ═══════════════════════════════════════════════════════════════════════════
+# TRADING COMMANDS
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _cmd_sell(args: Array) -> void:
+	"""Create a trade listing for a forged item
+	Usage: /sell <token_id> <price> [message]
+	       /sell list - Show your forged items with token IDs
+	"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		add_system_message("[Error] Trading requires Mantle authentication.")
+		add_system_message("Log in at the main menu to link your gaming accounts.")
+		return
+
+	if not TradingManager:
+		add_system_message("[Error] Trading system not available.")
+		return
+
+	# /sell list - Show available items
+	if args.size() == 1 and args[0].to_lower() == "list":
+		_show_forged_items_list()
+		return
+
+	# /sell <token_id> <price> [message]
+	if args.size() < 2:
+		add_system_message("Usage: /sell <token_id> <price> [message]")
+		add_system_message("       /sell list - Show your forged items")
+		add_system_message("Example: /sell 42 500 Rare sword from my Steam days!")
+		return
+
+	# Validate token_id
+	if not args[0].is_valid_int():
+		add_system_message("[Error] Token ID must be a number. Use /sell list to see your items.")
+		return
+
+	var token_id = int(args[0])
+
+	# Validate price
+	if not args[1].is_valid_int():
+		add_system_message("[Error] Price must be a whole number (gold).")
+		return
+
+	var price = int(args[1])
+	if price <= 0:
+		add_system_message("[Error] Price must be greater than 0.")
+		return
+
+	if price > 999999999:
+		add_system_message("[Error] Price is too high (max 999,999,999 gold).")
+		return
+
+	# Optional message (remaining args joined)
+	var message = ""
+	if args.size() > 2:
+		message = " ".join(args.slice(2))
+		if message.length() > 256:
+			message = message.substr(0, 256)
+
+	# Verify player owns this item
+	var forged_item = _find_forged_item_by_token(token_id)
+	if forged_item.is_empty():
+		add_system_message("[Error] You don't own an item with token ID %d." % token_id)
+		add_system_message("Use /sell list to see your forged items.")
+		return
+
+	# Connect to response signal (one-shot)
+	if not TradingManager.listing_created.is_connected(_on_listing_created):
+		TradingManager.listing_created.connect(_on_listing_created, CONNECT_ONE_SHOT)
+	if not TradingManager.trading_error.is_connected(_on_trading_error):
+		TradingManager.trading_error.connect(_on_trading_error, CONNECT_ONE_SHOT)
+
+	# Create the listing
+	add_system_message("Creating listing for %s..." % forged_item.get("item_name", "item"))
+	TradingManager.create_listing(token_id, price, message)
+
+func _on_listing_created(listing: Dictionary) -> void:
+	"""Handle successful listing creation"""
+	# Disconnect error handler if still connected
+	if TradingManager.trading_error.is_connected(_on_trading_error):
+		TradingManager.trading_error.disconnect(_on_trading_error)
+
+	add_system_message("[Trade] Listing created! Expires in 30 minutes.")
+	add_system_message("[Trade] Other players can see your item in /listings")
+
+func _on_trading_error(error: String) -> void:
+	"""Handle trading errors"""
+	# Disconnect success handler if still connected
+	if TradingManager.listing_created.is_connected(_on_listing_created):
+		TradingManager.listing_created.disconnect(_on_listing_created)
+
+	add_system_message("[Error] %s" % error)
+
+func _show_forged_items_list() -> void:
+	"""Display player's forged items with token IDs"""
+	if not ForgeItemManager:
+		add_system_message("[Error] Forge system not available.")
+		return
+
+	var items = ForgeItemManager.get_all_forged_items()
+	if items.is_empty():
+		add_system_message("You have no forged items.")
+		add_system_message("Forge items from achievements in the Armory!")
+		return
+
+	add_system_message("=== Your Forged Items ===")
+	for item in items:
+		var token_id = item.get("token_id", 0)
+		var name = item.get("item_name", "Unknown")
+		var rarity = item.get("item_rarity", "COMMON")
+		add_system_message("  [%d] %s (%s)" % [token_id, name, rarity])
+	add_system_message("Use: /sell <token_id> <price> [message]")
+
+func _find_forged_item_by_token(token_id: int) -> Dictionary:
+	"""Find a forged item by token ID"""
+	if not ForgeItemManager:
+		return {}
+
+	for item in ForgeItemManager.get_all_forged_items():
+		if item.get("token_id", -1) == token_id:
+			return item
+	return {}
+
+func _cmd_listings() -> void:
+	"""Show recently advertised items - opens UI panel"""
+	if not TradingManager:
+		add_system_message("[Error] Trading system not available.")
+		return
+
+	# Open the UI panel
+	if RecentlyAdvertisedUI:
+		RecentlyAdvertisedUI.show_panel()
+		add_system_message("Opening listings panel... (Press Tab to toggle)")
+	else:
+		# Fallback to chat display if UI not available
+		var listings = TradingManager.get_active_listings()
+		if listings.is_empty():
+			add_system_message("No active listings. Check back later!")
+			add_system_message("Use /sell to list your forged items.")
+			return
+
+		add_system_message("=== Recently Advertised ===")
+		for listing in listings.slice(0, 10):
+			var item = listing.get("item", {})
+			var item_name = item.get("item_name", "Unknown Item")
+			var rarity = item.get("rarity", "COMMON")
+			var price = listing.get("price_gold", 0)
+			var seller = listing.get("seller", {})
+			var seller_name = seller.get("display_name", "Unknown")
+			var message = listing.get("message", "")
+
+			var msg = "  %s (%s) - %dg by %s" % [item_name, rarity, price, seller_name]
+			if message != "":
+				msg += " \"%s\"" % message.substr(0, 40)
+			add_system_message(msg)
+
+		if listings.size() > 10:
+			add_system_message("  ... and %d more listings" % (listings.size() - 10))
+
+func _cmd_my_listings() -> void:
+	"""Show player's own active listings"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		add_system_message("[Error] Not logged in to Mantle.")
+		return
+
+	if not TradingManager:
+		add_system_message("[Error] Trading system not available.")
+		return
+
+	var all_listings = TradingManager.get_active_listings()
+	var my_user_id = MantleAuth.user_id
+
+	var my_listings = []
+	for listing in all_listings:
+		var seller = listing.get("seller", {})
+		if seller.get("user_id", -1) == my_user_id:
+			my_listings.append(listing)
+
+	if my_listings.is_empty():
+		add_system_message("You have no active listings.")
+		return
+
+	add_system_message("=== Your Active Listings ===")
+	for listing in my_listings:
+		var listing_id = listing.get("listing_id", 0)
+		var item = listing.get("item", {})
+		var item_name = item.get("item_name", "Unknown")
+		var price = listing.get("price_gold", 0)
+		add_system_message("  [%d] %s - %dg" % [listing_id, item_name, price])
+	add_system_message("Use /cancel <listing_id> to remove a listing")
+
+func _cmd_cancel_listing(args: Array) -> void:
+	"""Cancel an active listing"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		add_system_message("[Error] Not logged in to Mantle.")
+		return
+
+	if args.is_empty():
+		add_system_message("Usage: /cancel <listing_id>")
+		add_system_message("Use /mylistings to see your active listings.")
+		return
+
+	if not args[0].is_valid_int():
+		add_system_message("[Error] Listing ID must be a number.")
+		return
+
+	var listing_id = int(args[0])
+
+	# Connect to response
+	if not TradingManager.listing_cancelled.is_connected(_on_listing_cancelled):
+		TradingManager.listing_cancelled.connect(_on_listing_cancelled, CONNECT_ONE_SHOT)
+	if not TradingManager.trading_error.is_connected(_on_cancel_error):
+		TradingManager.trading_error.connect(_on_cancel_error, CONNECT_ONE_SHOT)
+
+	add_system_message("Cancelling listing...")
+	TradingManager.cancel_listing(listing_id)
+
+func _on_listing_cancelled() -> void:
+	if TradingManager.trading_error.is_connected(_on_cancel_error):
+		TradingManager.trading_error.disconnect(_on_cancel_error)
+	add_system_message("[Trade] Listing cancelled.")
+
+func _on_cancel_error(error: String) -> void:
+	if TradingManager.listing_cancelled.is_connected(_on_listing_cancelled):
+		TradingManager.listing_cancelled.disconnect(_on_listing_cancelled)
+	add_system_message("[Error] %s" % error)
+
+func _cmd_trade(args: Array) -> void:
+	"""Request a trade with another player"""
+	if args.is_empty():
+		add_system_message("Usage: /trade <player name>")
+		add_system_message("Must be within 5 tiles to trade.")
+		return
+
+	if not TradeWindowUI:
+		add_system_message("[Error] Trade system not available.")
+		return
+
+	var target_name = " ".join(args)
+	var target_id = _find_player_by_name(target_name)
+
+	if target_id == -1:
+		add_system_message("[Error] Player '%s' not found." % target_name)
+		add_system_message("Use /players to see online players.")
+		return
+
+	var result = TradeWindowUI.request_trade(target_id)
+	if result.success:
+		add_system_message(result.message)
+	else:
+		add_system_message("[Error] %s" % result.message)
+
+func _cmd_accept_trade() -> void:
+	"""Accept a pending trade request"""
+	if not TradeWindowUI:
+		add_system_message("[Error] Trade system not available.")
+		return
+
+	if not TradeWindowUI.has_pending_request():
+		add_system_message("[Error] No pending trade request.")
+		return
+
+	var result = TradeWindowUI.accept_trade()
+	if result.success:
+		add_system_message(result.message)
+	else:
+		add_system_message("[Error] %s" % result.message)
+
+func _cmd_decline_trade() -> void:
+	"""Decline a pending trade request"""
+	if not TradeWindowUI:
+		add_system_message("[Error] Trade system not available.")
+		return
+
+	if not TradeWindowUI.has_pending_request():
+		add_system_message("[Error] No pending trade request.")
+		return
+
+	var result = TradeWindowUI.decline_trade()
+	if result.success:
+		add_system_message(result.message)
+	else:
+		add_system_message("[Error] %s" % result.message)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # HELP COMMAND
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _cmd_help() -> void:
 	add_system_message("=== General Commands ===")
 	add_system_message("/players - List online players")
+	add_system_message("=== Trading Commands ===")
+	add_system_message("/trade <player> - Request direct trade")
+	add_system_message("/accepttrade - Accept trade request")
+	add_system_message("/declinetrade - Decline trade request")
+	add_system_message("/sell list - Show your forged items")
+	add_system_message("/sell <id> <price> [msg] - List item for sale")
+	add_system_message("/listings - View recently advertised (Tab)")
+	add_system_message("/mylistings - View your active listings")
+	add_system_message("/cancel <id> - Cancel a listing")
 	add_system_message("=== Duel Commands ===")
 	add_system_message("/duel <player> - Challenge to a duel")
 	add_system_message("/acceptduel - Accept duel request")

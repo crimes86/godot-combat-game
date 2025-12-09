@@ -650,11 +650,16 @@ World Trees are special structures for Tier 4 (Fortress) bases:
 - [x] PvP duel system
 - [x] Wolf enemies with pack behavior
 
-## Phase 2: Economy
+## Phase 2: Economy & Forge Trading
 - [ ] Alchemist vendor + potions
 - [ ] Jeweler vendor + accessories
 - [ ] Material gathering system
-- [ ] Player trading
+- [ ] Player trading (native items)
+- [ ] **Forge Trading System** (see `FORGE_ECONOMY_DESIGN.md`)
+  - [ ] Trade routes in backend
+  - [ ] Trade window UI in Godot
+  - [ ] Marketplace (auction house)
+  - [ ] Provenance tracking
 
 ## Phase 3: Base Building
 - [ ] Tier 1-3 base templates

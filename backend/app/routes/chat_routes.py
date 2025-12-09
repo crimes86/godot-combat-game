@@ -388,6 +388,28 @@ def post_sync_announcement(db: DbSession, user: User, provider_name: str, new_co
         logger.error(f"Failed to post sync announcement: {e}")
 
 
+def broadcast_system_message(content: str, message_type: str = "system") -> None:
+    """
+    Broadcast a system message to the global feed.
+    Used for trade announcements, server events, etc.
+    """
+    db = SessionLocal()
+    try:
+        message = ChatMessage(
+            user_id=None,  # System message - no user
+            room="global",
+            content=content,
+            message_type=message_type,
+        )
+        db.add(message)
+        db.commit()
+        logger.info(f"[CHAT] Broadcast system message: {content}")
+    except Exception as e:
+        logger.error(f"Failed to broadcast system message: {e}")
+    finally:
+        db.close()
+
+
 import random
 
 # Mock data pools for realistic generation

@@ -8,7 +8,7 @@ extends Node
 # INVENTORY DATA
 # ============================================
 
-const MAX_INVENTORY_SLOTS: int = 32  # 8 rows x 4 columns
+const MAX_INVENTORY_SLOTS: int = 36  # 6 rows x 6 columns (square grid)
 
 var inventory_items: Array = []  # Array of item dictionaries
 var suppress_signals: bool = false  # Flag to suppress signal emissions

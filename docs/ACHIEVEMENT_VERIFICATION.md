@@ -25,7 +25,7 @@ Mantle aggregates achievements from gaming platforms (Steam, Battle.net, etc.) a
 ```
 User
 ├── id (primary key)
-├── username (auto-generated: "metanet-{uuid}")
+├── username (auto-generated: "mantle-{uuid}")
 ├── is_admin (bypass sync cooldowns for testing)
 └── Relationships:
     ├── provider_accounts[] (Steam, Battle.net, etc.)
@@ -583,6 +583,24 @@ The Mantle achievement system provides cryptographic proof that:
 5. And can only be tokenized once
 
 This creates genuine digital scarcity backed by verifiable gaming history, with robust protection against account manipulation exploits.
+
+---
+
+## Trading & Provenance
+
+Forged items are **fully tradeable** in-game. After forging:
+
+- Items can be traded via direct trade or marketplace
+- 5% gold tax applies to trades (gold sink)
+- 24-hour cooldown after acquisition before can trade again
+- **Provenance is tracked**: trade count, ownership chain, original forger
+- Blockchain is updated (batched) but users never see crypto complexity
+
+**Key principle:** The `is_original_claim` check happens at **forge time**, not trade time. Once forged, the item exists and can be traded freely. The original forger is permanently recorded in provenance.
+
+See:
+- `docs/FORGE_ECONOMY_DESIGN.md` - Full trading specification
+- `docs/FORGE_PROVENANCE_SYSTEM.md` - Chain integration details
 
 ---
 

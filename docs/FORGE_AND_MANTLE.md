@@ -6,6 +6,25 @@ This document consolidates the Forge system specification, Armory scene design, 
 
 ---
 
+## The Twinking System
+
+Forged items are Dreadland's **twinking system**:
+
+- **No level requirements** - Forged items work at full power from level 1
+- **Fully tradeable** - Trade in-game for gold, sell on marketplace
+- **Real combat effects** - Passive abilities and active skills
+- **Backed by blockchain** - But users never see crypto complexity
+
+**Design Philosophy:** A player who beat Malenia in Elden Ring gets lifesteal and Waterfowl Dance from minute one in Dreadland. New players without achievements will get stomped initially, see cool items, and wonder "How do I get that?" - then either link their own achievements, grind native gear, or buy from other players.
+
+See:
+- `FORGE_ITEM_PHILOSOPHY.md` - Core design principles
+- `FORGE_ECONOMY_DESIGN.md` - Trading and monetization
+- `FORGE_PROVENANCE_SYSTEM.md` - Blockchain backing
+- `FORGE_ITEM_EFFECTS.md` - Item abilities
+
+---
+
 ## Table of Contents
 
 1. [System Overview](#system-overview)
@@ -44,6 +63,8 @@ GLOBAL: Feed announces legendary forges to all players
 2. **Dual access** - Armory (convenient) + In-World (immersive)
 3. **Social proof** - Others see what you forge, global feed for legendaries
 4. **LPC compatible** - All items work with existing sprite system
+5. **Frictionless trading** - Standard MMO mechanics, blockchain is invisible
+6. **Provenance matters** - Item history adds to value and storytelling
 
 ---
 
@@ -275,6 +296,61 @@ ForgeVisualEffects.gd
 ```
 
 Godot does **no computation** - it just displays pre-computed data from the backend.
+
+---
+
+## Trading System
+
+### In-Game Trading (Live Trading)
+
+All forged items are tradeable via **live trading** - players must be in proximity. No auction house.
+
+```
+DIRECT TRADE:
+1. Player A right-clicks Player B → "Trade" (must be within 5 tiles)
+2. Trade window opens
+3. Items/gold added to each side
+4. Both accept → Trade completes
+5. (Background) Provenance updated on chain
+
+CHAT AUCTION:
+1. Player types "/sell Hand of Malenia 50000" or "WTS Hand of Malenia 50k"
+2. Message appears in Trade chat + "Recently Advertised" panel
+3. Interested buyer clicks listing → "Whisper Seller" or "Show on Map"
+4. Buyer travels to seller
+5. Direct trade window opened
+```
+
+### Trading Rules
+
+| Rule | Value | Purpose |
+|------|-------|---------|
+| Trade cooldown | 24 hours after acquisition | Prevent rapid flipping |
+| Gold tax | 5% on seller | Gold sink, platform revenue |
+| Listing expiry | 30 minutes | Keep listings fresh |
+| Proximity required | 5 tiles | Social trading, no bots |
+
+### Provenance Display
+
+When inspecting a traded item:
+
+```
+┌─ PROVENANCE ──────────────────────────────────────────┐
+│ Achievement: "Shardbearer Malenia" (4.2% of players)   │
+│ Original Unlock: March 15, 2022                        │
+│                                                        │
+│ Forged by: Legolazz                                    │
+│ Forge Date: December 8, 2024                           │
+│                                                        │
+│ Times Traded: 2                                        │
+│ Current Owner: xXSlayerXx                              │
+│                                                        │
+│ 📊 Only 847 of these exist in Dreadland               │
+└────────────────────────────────────────────────────────┘
+```
+
+See `FORGE_ECONOMY_DESIGN.md` for full trading specification.
+See `FORGE_PROVENANCE_SYSTEM.md` for blockchain implementation.
 
 ---
 

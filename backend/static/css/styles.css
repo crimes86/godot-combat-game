@@ -243,6 +243,45 @@ body::after {
   box-shadow: 0 0 12px #9632ff;
 }
 
+.card-circuit-stem[data-provider="discord"] .stem-line {
+  background: linear-gradient(to bottom, #5865F2, #5865F280);
+  box-shadow: 0 0 8px #5865F2;
+}
+.card-circuit-stem[data-provider="discord"] .stem-pulse {
+  background: linear-gradient(to bottom, #5865F2, transparent);
+  box-shadow: 0 0 12px #5865F2;
+}
+.card-circuit-stem[data-provider="discord"] .stem-node {
+  border-color: #5865F2;
+  box-shadow: 0 0 12px #5865F2;
+}
+
+.card-circuit-stem[data-provider="github"] .stem-line {
+  background: linear-gradient(to bottom, #8b949e, #8b949e80);
+  box-shadow: 0 0 8px #8b949e;
+}
+.card-circuit-stem[data-provider="github"] .stem-pulse {
+  background: linear-gradient(to bottom, #8b949e, transparent);
+  box-shadow: 0 0 12px #8b949e;
+}
+.card-circuit-stem[data-provider="github"] .stem-node {
+  border-color: #8b949e;
+  box-shadow: 0 0 12px #8b949e;
+}
+
+.card-circuit-stem[data-provider="facebook"] .stem-line {
+  background: linear-gradient(to bottom, #1877F2, #1877F280);
+  box-shadow: 0 0 8px #1877F2;
+}
+.card-circuit-stem[data-provider="facebook"] .stem-pulse {
+  background: linear-gradient(to bottom, #1877F2, transparent);
+  box-shadow: 0 0 12px #1877F2;
+}
+.card-circuit-stem[data-provider="facebook"] .stem-node {
+  border-color: #1877F2;
+  box-shadow: 0 0 12px #1877F2;
+}
+
 @keyframes stemPulseAnim {
   0%, 100% { opacity: 0.3; transform: translateY(0); }
   50% { opacity: 1; transform: translateY(-5px); }
@@ -328,14 +367,15 @@ body::after {
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #dashboard-root {
-  width: calc(100vw - 30px); /* 15px margin on each side */
-  max-width: 1600px;
+  width: calc(100vw - 20px); /* 10px margin on each side - pushed to edges */
+  max-width: 1900px;
   margin: 0 auto;
   margin-top: 15px;
   padding: 0;
   display: flex;
   flex-direction: row;
-  gap: 15px;
+  justify-content: center; /* Center the columns */
+  gap: 12px;
   /* Lock height to viewport minus navbar and top gap */
   height: calc(100vh - 85px);
   max-height: calc(100vh - 85px);
@@ -344,9 +384,9 @@ body::after {
 }
 
 #left-column {
-  flex: 1;
+  flex: 1 1 300px;
   min-width: 280px;
-  max-width: 400px;
+  max-width: 320px;
   display: flex;
   flex-direction: column;
   gap: 15px;
@@ -358,7 +398,7 @@ body::after {
 
 #middle-column {
   flex: 0 0 auto;
-  width: 920px; /* Fixed width for 3 cards */
+  width: 1000px; /* Fixed width */
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -367,9 +407,9 @@ body::after {
 }
 
 #right-column {
-  flex: 1;
+  flex: 1 1 300px;
   min-width: 280px;
-  max-width: 400px;
+  max-width: 320px;
   display: flex;
   flex-direction: column;
   /* Lock to middle column height */
@@ -493,6 +533,8 @@ body::after {
   flex-direction: column;
   align-items: center;
   overflow-y: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
 }
 
 /* Right column - Forge panel (fills full height, scrolls within) */
@@ -909,8 +951,12 @@ footer {
 .nav-provider[data-provider="battlenet"] { --provider-color: #ffb932; }
 .nav-provider[data-provider="xbox"] { --provider-color: #37fd12; }
 .nav-provider[data-provider="playstation"] { --provider-color: #9632ff; }
+.nav-provider[data-provider="psn"] { --provider-color: #003791; }
 .nav-provider[data-provider="epic"] { --provider-color: #ffffff; }
 .nav-provider[data-provider="gog"] { --provider-color: #b509d9; }
+.nav-provider[data-provider="discord"] { --provider-color: #5865F2; }
+.nav-provider[data-provider="github"] { --provider-color: #8b949e; }
+.nav-provider[data-provider="facebook"] { --provider-color: #1877F2; }
 
 /* Active provider - full glow effect */
 .nav-provider.active {
@@ -938,6 +984,22 @@ footer {
 .nav-provider.active[data-provider="playstation"] {
   --provider-rgb: 150,50,255;
   border-color: #9632ff;
+}
+.nav-provider.active[data-provider="psn"] {
+  --provider-rgb: 0,55,145;
+  border-color: #003791;
+}
+.nav-provider.active[data-provider="discord"] {
+  --provider-rgb: 88,101,242;
+  border-color: #5865F2;
+}
+.nav-provider.active[data-provider="github"] {
+  --provider-rgb: 139,148,158;
+  border-color: #8b949e;
+}
+.nav-provider.active[data-provider="facebook"] {
+  --provider-rgb: 24,119,242;
+  border-color: #1877F2;
 }
 
 .nav-provider.active img {
@@ -1491,6 +1553,10 @@ a.nav-provider:hover img {
 .provider-logo-icon[src*="battlenet"] { --icon-glow: #0099ff; }
 .provider-logo-icon[src*="xbox"]    { --icon-glow: #37fd12; }
 .provider-logo-icon[src*="playstation"] { --icon-glow: #395ad6; }
+.provider-logo-icon[src*="psn"]     { --icon-glow: #003791; }
+.provider-logo-icon[src*="discord"] { --icon-glow: #5865F2; }
+.provider-logo-icon[src*="github"]  { --icon-glow: #8b949e; }
+.provider-logo-icon[src*="facebook"] { --icon-glow: #1877F2; }
 
 
 

@@ -3,6 +3,11 @@ extends Node
 ## ItemIconGenerator - Extracts inventory icons from LPC sprite sheets
 ## Uses the south-facing idle frame (row 2, frame 0) for equipment icons
 
+# ============================================
+# DEBUG SETTINGS - Set to true to enable verbose logging
+# ============================================
+const DEBUG_FORGED_ICONS: bool = false  # Debug forged item icon loading
+
 # Cache for generated icons
 var icon_cache: Dictionary = {}  # sprite_path -> ImageTexture
 
@@ -15,6 +20,29 @@ const DIR_UP = 0     # North/back-facing
 const DIR_LEFT = 1   # West-facing
 const DIR_DOWN = 2   # South/front-facing
 const DIR_RIGHT = 3  # East-facing
+
+# Weapon type fallbacks for icon generation (same as Player.gd uses)
+const WEAPON_TYPE_FALLBACKS = {
+	"greatsword": "sword",
+	"longsword": "sword",
+	"shortsword": "sword",
+	"broadsword": "sword",
+	"claymore": "sword",
+	"rapier": "sword",
+	"saber": "sword",
+	"scimitar": "sword",
+	"crossbow": "staff",
+	"bow": "staff",
+	"wand": "staff",
+	"halberd": "spear",
+	"lance": "spear",
+	"pike": "spear",
+	"glaive": "spear",
+	"hammer": "mace",
+	"club": "mace",
+	"flail": "mace",
+	"morningstar": "mace",
+}
 
 # Best facing direction per equipment slot for clearest icon visibility
 const SLOT_DIRECTIONS = {
@@ -40,6 +68,12 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 	"""Get or generate an icon for an inventory item"""
 	if item.is_empty():
 		return null
+
+	# Check if this is a forged item first - they have dedicated icons
+	if item.get("is_forged", false):
+		var forged_icon = _get_forged_item_icon(item)
+		if forged_icon:
+			return forged_icon
 
 	var item_type = item.get("type", "")
 	var item_name = item.get("name", "")
@@ -131,11 +165,13 @@ func _get_sprite_path(item_type: String, sprite_name: String, item: Dictionary) 
 		"weapon":
 			# Weapons use walk.png for cleaner icons (consistent 64x64 tiles)
 			var weapon_type = item.get("weapon_type", "sword")
+			# Apply fallback mapping for weapon types without dedicated sprites
+			var actual_type = WEAPON_TYPE_FALLBACKS.get(weapon_type, weapon_type)
 			# For daggers with "standard" subfolder
-			if weapon_type == "dagger":
+			if actual_type == "dagger":
 				return "res://assets/equipment/weapons/dagger/standard/walk.png"
 			# All weapons use walk sprite for consistent icon extraction
-			return "res://assets/equipment/weapons/%s/walk.png" % weapon_type
+			return "res://assets/equipment/weapons/%s/walk.png" % actual_type
 		"tool":
 			# Tools use the format: assets/tools/{tool_type}/walk.png
 			var tool_type = item.get("tool_type", "")
@@ -657,3 +693,255 @@ func _draw_generic_placeable(img: Image, size: int) -> void:
 	for y in range(8, size - 6):
 		img.set_pixel(6, y, dark)
 		img.set_pixel(size - 7, y, dark)
+
+# ============================================
+# FORGED ITEM ICONS
+# ============================================
+
+func _get_forged_item_icon(item: Dictionary) -> Texture2D:
+	"""Load icon for a forged item from assets/icons/forged/"""
+	var item_name = item.get("name", "")
+	var item_type = item.get("type", "weapon")
+	var item_id = item.get("item_id", "")
+
+	if DEBUG_FORGED_ICONS:
+		print("[ForgedIcon] ════════════════════════════════════════")
+		print("[ForgedIcon] Processing item: '%s'" % item_name)
+		print("[ForgedIcon]   type: '%s', item_id: '%s'" % [item_type, item_id])
+		print("[ForgedIcon]   Full item data: %s" % str(item).substr(0, 200))
+
+	# Convert item name to snake_case filename
+	# e.g. "Coiled Sword" -> "coiled_sword"
+	var filename_from_name = _name_to_snake_case(item_name)
+
+	if DEBUG_FORGED_ICONS:
+		print("[ForgedIcon]   Filename from name: '%s'" % filename_from_name)
+
+	# Start with filename derived from name
+	var filename = filename_from_name
+
+	# Also try the item_id if provided (might already be snake_case)
+	var filename_from_id = ""
+	if item_id != "":
+		filename_from_id = item_id.to_lower().replace(" ", "_").replace("-", "_").replace("'", "")
+		if DEBUG_FORGED_ICONS:
+			print("[ForgedIcon]   Filename from item_id: '%s'" % filename_from_id)
+
+	# Determine subdirectory based on item type
+	var subdir = _get_forged_subdir(item_type, item)
+
+	if DEBUG_FORGED_ICONS:
+		print("[ForgedIcon]   Subdirectory: '%s'" % subdir)
+
+	# Check cache first
+	var cache_key = "forged:%s/%s" % [subdir, filename]
+	if icon_cache.has(cache_key):
+		if DEBUG_FORGED_ICONS:
+			print("[ForgedIcon]   ✅ Found in cache: %s" % cache_key)
+		return icon_cache[cache_key]
+
+	# Build list of paths to try
+	var paths_to_try: Array[String] = []
+
+	# Primary path from name
+	paths_to_try.append("res://assets/icons/forged/%s/%s.png" % [subdir, filename_from_name])
+
+	# Path from item_id if different
+	if filename_from_id != "" and filename_from_id != filename_from_name:
+		paths_to_try.append("res://assets/icons/forged/%s/%s.png" % [subdir, filename_from_id])
+
+	# Try alternative subdirectories
+	var alt_subdirs = ["weapons", "armor", "shields", "accessories"]
+	for alt_subdir in alt_subdirs:
+		if alt_subdir != subdir:
+			paths_to_try.append("res://assets/icons/forged/%s/%s.png" % [alt_subdir, filename_from_name])
+			if filename_from_id != "" and filename_from_id != filename_from_name:
+				paths_to_try.append("res://assets/icons/forged/%s/%s.png" % [alt_subdir, filename_from_id])
+
+	# Try all paths
+	for icon_path in paths_to_try:
+		if DEBUG_FORGED_ICONS:
+			print("[ForgedIcon]   Trying: %s" % icon_path)
+		if ResourceLoader.exists(icon_path):
+			var texture = load(icon_path) as Texture2D
+			if texture:
+				if DEBUG_FORGED_ICONS:
+					print("[ForgedIcon]   ✅ LOADED: %s" % icon_path)
+				icon_cache[cache_key] = texture
+				return texture
+		else:
+			if DEBUG_FORGED_ICONS:
+				print("[ForgedIcon]   ❌ Not found")
+
+	# No forged icon found - generate a placeholder based on item type and rarity
+	if DEBUG_FORGED_ICONS:
+		print("[ForgedIcon]   ⚠️ No icon found - generating placeholder")
+		print("[ForgedIcon]     glow_color: %s, rarity: %s" % [item.get("glow_color", "none"), item.get("rarity", "Common")])
+	print("⚠️ No forged icon found for: %s (tried %d paths) - generating placeholder" % [item_name, paths_to_try.size()])
+	var placeholder = _generate_forged_placeholder(item)
+	if placeholder:
+		icon_cache[cache_key] = placeholder
+	return placeholder
+
+func _name_to_snake_case(name: String) -> String:
+	"""Convert item name to snake_case filename format"""
+	# "Coiled Sword" -> "coiled_sword"
+	# "Hand of Malenia" -> "hand_of_malenia"
+	return name.to_lower().replace(" ", "_").replace("'", "").replace("-", "_")
+
+func _get_forged_subdir(item_type: String, item: Dictionary) -> String:
+	"""Determine the subdirectory for a forged item icon"""
+	match item_type:
+		"weapon":
+			return "weapons"
+		"armor":
+			return "armor"
+		"shield":
+			return "shields"
+		"accessory":
+			return "accessories"
+		"cape":
+			return "armor"  # Capes stored with armor
+		_:
+			# Try to infer from slot
+			var slot = item.get("slot", "")
+			match slot:
+				"mainhand":
+					return "weapons"
+				"offhand":
+					return "shields"
+				"head", "chest", "legs", "feet", "hands", "back":
+					return "armor"
+				"accessory":
+					return "accessories"
+				_:
+					return "weapons"  # Default to weapons
+
+func _generate_forged_placeholder(item: Dictionary) -> ImageTexture:
+	"""Generate a placeholder icon for forged items without dedicated icons"""
+	var size = 64
+	var img = Image.create(size, size, false, Image.FORMAT_RGBA8)
+
+	var item_type = item.get("type", "weapon")
+	var rarity = item.get("rarity", "Common").to_lower()
+
+	# Get glow color from item or use rarity color
+	var glow_color: Color
+	var glow_str = item.get("glow_color", "")
+	if glow_str.begins_with("#"):
+		glow_color = Color.from_string(glow_str, _get_rarity_color(rarity))
+	else:
+		glow_color = _get_rarity_color(rarity)
+
+	var center = size / 2
+
+	# Draw glow background
+	for y in range(size):
+		for x in range(size):
+			var dist = Vector2(x - center, y - center).length()
+			if dist < 28:
+				var alpha = (1.0 - dist / 28.0) * 0.4
+				img.set_pixel(x, y, Color(glow_color.r, glow_color.g, glow_color.b, alpha))
+
+	# Draw item shape based on type
+	match item_type:
+		"weapon":
+			_draw_forged_weapon_shape(img, size, glow_color)
+		"armor", "armor_head", "armor_chest", "armor_legs", "armor_hands", "armor_feet":
+			_draw_forged_armor_shape(img, size, glow_color)
+		"shield":
+			_draw_forged_shield_shape(img, size, glow_color)
+		"cape":
+			_draw_forged_cape_shape(img, size, glow_color)
+		"accessory":
+			_draw_forged_accessory_shape(img, size, glow_color)
+		_:
+			_draw_forged_weapon_shape(img, size, glow_color)
+
+	return ImageTexture.create_from_image(img)
+
+func _draw_forged_weapon_shape(img: Image, size: int, color: Color) -> void:
+	"""Draw a sword silhouette for weapon placeholder"""
+	var center = size / 2
+	var bright = Color(color.r * 1.3, color.g * 1.3, color.b * 1.3, 1.0).clamp()
+	var dark = Color(color.r * 0.5, color.g * 0.5, color.b * 0.5, 1.0)
+
+	# Diagonal sword blade
+	for i in range(35):
+		var x = 10 + i
+		var y = 54 - i
+		if x < size and y >= 0:
+			for w in range(-2, 3):
+				var px = x + w
+				var py = y - w
+				if px >= 0 and px < size and py >= 0 and py < size:
+					img.set_pixel(px, py, bright if w == 0 else color)
+
+	# Handle/hilt
+	for i in range(-3, 4):
+		img.set_pixel(center - 12 + i, center + 12, dark)
+	for i in range(6):
+		img.set_pixel(center - 14, center + 14 + i, dark)
+		img.set_pixel(center - 13, center + 14 + i, color)
+
+func _draw_forged_armor_shape(img: Image, size: int, color: Color) -> void:
+	"""Draw a helm/armor silhouette"""
+	var center = size / 2
+	var bright = Color(color.r * 1.3, color.g * 1.3, color.b * 1.3, 1.0).clamp()
+
+	# Helmet dome
+	_draw_ellipse(img, center, center - 5, 18, 20, color)
+	# Face opening
+	_draw_ellipse(img, center, center + 2, 8, 12, Color(0.1, 0.1, 0.1, 1.0))
+	# Highlight
+	_draw_ellipse(img, center - 8, center - 12, 4, 3, bright)
+
+func _draw_forged_shield_shape(img: Image, size: int, color: Color) -> void:
+	"""Draw a shield silhouette"""
+	var center = size / 2
+	var dark = Color(color.r * 0.6, color.g * 0.6, color.b * 0.6, 1.0)
+
+	# Shield body (pointed bottom)
+	for y in range(8, size - 8):
+		var width = 20 if y < center else int(20 * (1.0 - float(y - center) / (size - 8 - center)))
+		for x in range(center - width, center + width + 1):
+			if x >= 0 and x < size:
+				img.set_pixel(x, y, color)
+
+	# Border
+	for y in range(8, size - 8):
+		var width = 20 if y < center else int(20 * (1.0 - float(y - center) / (size - 8 - center)))
+		if center - width >= 0:
+			img.set_pixel(center - width, y, dark)
+		if center + width < size:
+			img.set_pixel(center + width, y, dark)
+
+func _draw_forged_cape_shape(img: Image, size: int, color: Color) -> void:
+	"""Draw a cape/cloak silhouette"""
+	var center = size / 2
+	var dark = Color(color.r * 0.5, color.g * 0.5, color.b * 0.5, 1.0)
+
+	# Flowing cape shape
+	for y in range(6, size - 4):
+		var wave = int(sin(float(y) * 0.3) * 3)
+		var width = 8 + int(float(y - 6) / (size - 10) * 14)
+		for x in range(center - width + wave, center + width + wave + 1):
+			if x >= 0 and x < size:
+				img.set_pixel(x, y, color if abs(x - center - wave) < width - 2 else dark)
+
+func _draw_forged_accessory_shape(img: Image, size: int, color: Color) -> void:
+	"""Draw a ring/gem silhouette"""
+	var center = size / 2
+	var bright = Color(color.r * 1.5, color.g * 1.5, color.b * 1.5, 1.0).clamp()
+
+	# Outer ring
+	for angle in range(360):
+		var rad = deg_to_rad(angle)
+		for r in range(14, 20):
+			var x = int(center + cos(rad) * r)
+			var y = int(center + sin(rad) * r)
+			if x >= 0 and x < size and y >= 0 and y < size:
+				img.set_pixel(x, y, color)
+
+	# Gem in center
+	_draw_ellipse(img, center, center, 8, 8, bright)

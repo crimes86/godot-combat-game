@@ -1,7 +1,8 @@
 {
-  "version": "1.2.0",
+  "version": "1.4.0",
   "generated_at": null,
   "last_updated_by": "manual",
+  "_changelog": "v1.4.0: Added effects system - passive effects and active abilities for all items per FORGE_ITEM_EFFECTS.md. See effect_definitions for effect specs.",
 
   "_asset_paths": {
     "_comment": "Base paths for assets. Web dashboard serves from /static/items/",
@@ -11,16 +12,16 @@
   },
 
   "achievement_mappings": {
-    "_comment": "Maps specific achievements to specific items. Key format: app_id:api_name",
+    "_comment": "Maps specific achievements to specific items. Key format: app_id:api_name. Max ~40 total per FORGE_ITEM_PHILOSOPHY.md",
 
     "374320:THE_DARK_SOUL": "coiled_sword",
-    "374320:ENKINDLE": "coiled_sword",
     "374320:MASTER_OF_RINGS": "farron_greatsword",
     "374320:NAMELESS_KING": "dragonslayer_swordspear",
 
     "1245620:ELDEN_LORD": "elden_lord_crown",
     "1245620:SHARDBEARER_GODRICK": "grafted_blade",
     "1245620:SHARDBEARER_MALENIA": "hand_of_malenia",
+    "1245620:SHARDBEARER_RADAHN": "radahns_greatswords",
     "1245620:LEGEND": "moonveil",
 
     "367520:COMPLETION": "pure_nail",
@@ -32,11 +33,10 @@
     "105600:SLAYER_OF_WORLDS": "terra_blade",
 
     "814380:IMMORTAL_SEVERANCE": "mortal_blade",
-    "814380:SHURA": "mortal_blade",
+    "814380:SHURA": "gyoubu_spear",
 
     "292030:GERALT_THE_PROFESSIONAL": "witcher_silver_sword",
 
-    "413150:FULL_SHIPMENT": "farmers_hoe",
     "413150:LEGEND": "straw_hat",
 
     "discord:NITRO_SUBSCRIBER": "discord_nitro_badge",
@@ -159,6 +159,218 @@
     }
   },
 
+  "effect_definitions": {
+    "_comment": "Passive and active effect definitions. Power values scale with item rarity (legendary=100%, epic=75%, rare=50%)",
+
+    "passive": {
+      "lifesteal": {
+        "name": "I Have Never Known Defeat",
+        "description": "Heal for {power}% of damage dealt",
+        "base_power": 5.0,
+        "trigger": "on_hit",
+        "native_equivalent": "Vampiric Enchantment"
+      },
+      "death_prevention": {
+        "name": "Erdtree's Embrace",
+        "description": "Survive a lethal hit with 1 HP (once per battle)",
+        "base_power": 1,
+        "trigger": "on_lethal_damage",
+        "native_equivalent": "Phoenix Blessing"
+      },
+      "boss_damage": {
+        "name": "Godslayer",
+        "description": "+{power}% damage to bosses and elites",
+        "base_power": 15.0,
+        "trigger": "on_hit_boss",
+        "native_equivalent": "Slayer's Mark"
+      },
+      "crit_chance": {
+        "name": "Precise Strike",
+        "description": "+{power}% critical hit chance",
+        "base_power": 10.0,
+        "trigger": "passive",
+        "native_equivalent": "Precision Gem"
+      },
+      "damage_reduction": {
+        "name": "Ironclad",
+        "description": "Reduce incoming damage by {power}%",
+        "base_power": 12.0,
+        "trigger": "on_hit_received",
+        "native_equivalent": "Iron Will"
+      },
+      "lightning_proc": {
+        "name": "Storm's Fury",
+        "description": "{power}% chance to strike with lightning on hit",
+        "base_power": 15.0,
+        "trigger": "on_hit",
+        "native_equivalent": "Lightning Enchantment"
+      },
+      "fire_aura": {
+        "name": "Kindled Soul",
+        "description": "Deal {power} fire damage to nearby enemies per second",
+        "base_power": 8.0,
+        "trigger": "aura",
+        "native_equivalent": "Flame Enchantment"
+      },
+      "regen": {
+        "name": "Warmth",
+        "description": "Regenerate {power} HP per second",
+        "base_power": 3.0,
+        "trigger": "passive",
+        "native_equivalent": "Regeneration"
+      },
+      "gravity_pull": {
+        "name": "Starscourge Might",
+        "description": "Attacks pull enemies {power}% closer",
+        "base_power": 20.0,
+        "trigger": "on_hit",
+        "native_equivalent": "Magnetic Force"
+      },
+      "magic_damage": {
+        "name": "Moonlight",
+        "description": "+{power}% magic damage",
+        "base_power": 12.0,
+        "trigger": "passive",
+        "native_equivalent": "Arcane Infusion"
+      },
+      "poise": {
+        "name": "Unwavering",
+        "description": "+{power}% poise/stagger resistance",
+        "base_power": 25.0,
+        "trigger": "passive",
+        "native_equivalent": "Steadfast"
+      },
+      "void_damage": {
+        "name": "Void Soul",
+        "description": "+{power}% damage when below 30% HP",
+        "base_power": 30.0,
+        "trigger": "on_hit",
+        "native_equivalent": "Desperate Power"
+      },
+      "soul_gather": {
+        "name": "Soul Harvest",
+        "description": "Gain {power} mana/soul on hit",
+        "base_power": 5.0,
+        "trigger": "on_hit",
+        "native_equivalent": "Mana Leech"
+      },
+      "execute_bonus": {
+        "name": "Mortality",
+        "description": "+{power}% damage to enemies below 25% HP",
+        "base_power": 40.0,
+        "trigger": "on_hit",
+        "native_equivalent": "Executioner"
+      },
+      "on_kill_buff": {
+        "name": "Bloodlust",
+        "description": "Gain {power}% attack speed for 5s on kill",
+        "base_power": 20.0,
+        "trigger": "on_kill",
+        "native_equivalent": "Frenzy"
+      },
+      "armor_pierce": {
+        "name": "Piercing Strike",
+        "description": "Ignore {power}% of enemy armor",
+        "base_power": 20.0,
+        "trigger": "on_hit",
+        "native_equivalent": "Armor Break"
+      },
+      "move_speed": {
+        "name": "Swift",
+        "description": "+{power}% movement speed",
+        "base_power": 15.0,
+        "trigger": "passive",
+        "native_equivalent": "Swiftfoot"
+      },
+      "monster_slayer": {
+        "name": "Monster Hunter",
+        "description": "+{power}% damage to non-humanoid enemies",
+        "base_power": 20.0,
+        "trigger": "on_hit",
+        "native_equivalent": "Beast Slayer"
+      },
+      "stamina_regen": {
+        "name": "Endurance",
+        "description": "+{power}% stamina regeneration",
+        "base_power": 25.0,
+        "trigger": "passive",
+        "native_equivalent": "Vigor"
+      },
+      "party_buff": {
+        "name": "Community Spirit",
+        "description": "Nearby allies gain +{power}% damage",
+        "base_power": 5.0,
+        "trigger": "aura",
+        "native_equivalent": "Battle Standard"
+      },
+      "projectile_on_hit": {
+        "name": "Terra Force",
+        "description": "{power}% chance to fire a projectile on swing",
+        "base_power": 30.0,
+        "trigger": "on_hit",
+        "native_equivalent": "Ethereal Blade"
+      },
+      "dot_on_hit": {
+        "name": "Scarlet Rot",
+        "description": "Apply {power} damage over 5s on hit",
+        "base_power": 25.0,
+        "trigger": "on_hit",
+        "native_equivalent": "Poison"
+      }
+    },
+
+    "active": {
+      "waterfowl_dance": {
+        "name": "Waterfowl Dance",
+        "description": "Perform a 12-hit flurry dealing {power} damage each, healing for damage dealt",
+        "base_power": 15,
+        "cooldown": 30,
+        "animation": "waterfowl",
+        "native_equivalent": "Blade Storm"
+      },
+      "mortal_draw": {
+        "name": "Mortal Draw",
+        "description": "Unblockable strike dealing {power}% weapon damage",
+        "base_power": 200,
+        "cooldown": 25,
+        "animation": "mortal_draw",
+        "native_equivalent": "Executioner's Strike"
+      },
+      "starcaller_cry": {
+        "name": "Starcaller Cry",
+        "description": "Pull all enemies within range and deal {power} gravity damage",
+        "base_power": 80,
+        "cooldown": 35,
+        "animation": "gravity_slam",
+        "native_equivalent": "Vortex"
+      },
+      "lightning_bolt": {
+        "name": "Lightning Bolt",
+        "description": "Call down lightning dealing {power} damage in a line",
+        "base_power": 100,
+        "cooldown": 20,
+        "animation": "lightning_strike",
+        "native_equivalent": "Thunder Strike"
+      },
+      "terra_beam": {
+        "name": "Terra Beam",
+        "description": "Fire a piercing beam dealing {power} damage to all enemies hit",
+        "base_power": 120,
+        "cooldown": 15,
+        "animation": "beam",
+        "native_equivalent": "Energy Wave"
+      },
+      "shadow_phase": {
+        "name": "Shadow Phase",
+        "description": "Become invulnerable and phase through enemies for {power}s",
+        "base_power": 2.0,
+        "cooldown": 45,
+        "animation": "phase",
+        "native_equivalent": "Ethereal Form"
+      }
+    }
+  },
+
   "items": [
     {
       "item_id": "coiled_sword",
@@ -175,8 +387,12 @@
         "effect": "ember_trail",
         "glow_color": "#FF6A00"
       },
-      "has_sprites": false,
-      "has_icon": false
+      "effects": {
+        "passive": ["fire_aura", "regen"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "farron_greatsword",
@@ -185,7 +401,7 @@
       "weapon_type": "greatsword",
       "description": "Greatsword of the Abyss Watchers.",
       "lore": "The wolf blood binds together those who bear it.",
-      "base_rarity": "uncommon",
+      "base_rarity": "epic",
       "theme": "dark_souls",
       "visuals": {
         "icon_url": "/static/items/icons/farron_greatsword.png",
@@ -193,8 +409,12 @@
         "effect": "wolf_blood_aura",
         "glow_color": "#4A6B8A"
       },
-      "has_sprites": false,
-      "has_icon": false
+      "effects": {
+        "passive": ["lifesteal", "crit_chance"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "dragonslayer_swordspear",
@@ -203,7 +423,7 @@
       "weapon_type": "spear",
       "description": "A swordspear imbued with lightning.",
       "lore": "Forged from the soul of the Nameless King.",
-      "base_rarity": "rare",
+      "base_rarity": "legendary",
       "theme": "dark_souls",
       "visuals": {
         "icon_url": "/static/items/icons/dragonslayer_swordspear.png",
@@ -211,8 +431,12 @@
         "effect": "lightning_crackle",
         "glow_color": "#FFD700"
       },
-      "has_sprites": false,
-      "has_icon": false
+      "effects": {
+        "passive": ["lightning_proc", "boss_damage"],
+        "active": "lightning_bolt"
+      },
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "grafted_blade",
@@ -221,7 +445,7 @@
       "weapon_type": "greatsword",
       "description": "A sword made of many swords grafted together.",
       "lore": "Taken from the body of Godrick the Grafted.",
-      "base_rarity": "common",
+      "base_rarity": "rare",
       "theme": "elden_ring",
       "visuals": {
         "icon_url": "/static/items/icons/grafted_blade.png",
@@ -229,8 +453,12 @@
         "effect": "golden_sparkle",
         "glow_color": "#B8860B"
       },
-      "has_sprites": false,
-      "has_icon": false
+      "effects": {
+        "passive": ["poise"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "hand_of_malenia",
@@ -239,7 +467,7 @@
       "weapon_type": "katana",
       "description": "Blade of the Goddess of Rot.",
       "lore": "I am Malenia, Blade of Miquella, and I have never known defeat.",
-      "base_rarity": "rare",
+      "base_rarity": "legendary",
       "theme": "elden_ring",
       "visuals": {
         "icon_url": "/static/items/icons/hand_of_malenia.png",
@@ -247,8 +475,34 @@
         "effect": "scarlet_rot_trail",
         "glow_color": "#FF6B6B"
       },
-      "has_sprites": false,
-      "has_icon": false
+      "effects": {
+        "passive": ["lifesteal", "dot_on_hit"],
+        "active": "waterfowl_dance"
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "radahns_greatswords",
+      "item_name": "Starscourge Greatswords",
+      "item_type": "weapon",
+      "weapon_type": "greatsword",
+      "description": "Paired greatswords wielded by the Starscourge.",
+      "lore": "Radahn held back the stars with his might alone.",
+      "base_rarity": "legendary",
+      "theme": "elden_ring",
+      "visuals": {
+        "icon_url": "/static/items/icons/radahns_greatswords.png",
+        "sprite_folder": "weapons/radahns_greatswords",
+        "effect": "gravity_particles",
+        "glow_color": "#8B4513"
+      },
+      "effects": {
+        "passive": ["gravity_pull", "poise"],
+        "active": "starcaller_cry"
+      },
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "moonveil",
@@ -265,6 +519,10 @@
         "effect": "moonlight_aura",
         "glow_color": "#A0D0FF"
       },
+      "effects": {
+        "passive": ["magic_damage", "crit_chance"],
+        "active": null
+      },
       "has_sprites": false,
       "has_icon": false
     },
@@ -278,13 +536,62 @@
       "base_rarity": "legendary",
       "theme": "elden_ring",
       "visuals": {
-        "icon_url": "/static/items/icons/elden_lord_crown.png",
-        "sprite_folder": "armor/head/elden_lord_crown",
+        "icon_url": "/static/items/icons/elden_lord.png",
+        "sprite_folder": "armor/head/elden_lord",
         "effect": "erdtree_blessing",
         "glow_color": "#FFD700"
       },
+      "effects": {
+        "passive": ["death_prevention", "regen"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "carian_crown",
+      "item_name": "Carian Royal Crown",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Crown of the Carian royalty.",
+      "lore": "Worn by those who mastered the glintstone arts.",
+      "base_rarity": "epic",
+      "theme": "elden_ring",
+      "visuals": {
+        "icon_url": "/static/items/icons/carian_crown.png",
+        "sprite_folder": "armor/head/carian_crown",
+        "effect": "moonlight_aura",
+        "glow_color": "#A0D0FF"
+      },
+      "effects": {
+        "passive": ["magic_damage"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "eye_shield",
+      "item_name": "Fingerprint Stone Shield",
+      "item_type": "shield",
+      "weapon_type": null,
+      "description": "A greatshield bearing a mysterious eye.",
+      "lore": "The eye watches all who would challenge its bearer.",
+      "base_rarity": "epic",
+      "theme": "elden_ring",
+      "visuals": {
+        "icon_url": "/static/items/icons/eye_shield.png",
+        "sprite_folder": "shields/eye_shield",
+        "effect": "golden_sparkle",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["poise", "damage_reduction"],
+        "active": null
+      },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true,
+      "_note": "walk.png only - needs slash/thrust/hurt"
     },
     {
       "item_id": "pure_nail",
@@ -293,7 +600,7 @@
       "weapon_type": "sword",
       "description": "A nail refined to perfection.",
       "lore": "The final upgrade of the Knight's nail.",
-      "base_rarity": "uncommon",
+      "base_rarity": "rare",
       "theme": "hollow_knight",
       "visuals": {
         "icon_url": "/static/items/icons/pure_nail.png",
@@ -301,8 +608,12 @@
         "effect": "void_particles",
         "glow_color": "#E0E0E0"
       },
-      "has_sprites": false,
-      "has_icon": false
+      "effects": {
+        "passive": ["soul_gather"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "shade_cloak",
@@ -311,13 +622,17 @@
       "weapon_type": null,
       "description": "A cloak woven from pure void.",
       "lore": "Allows passage through shadow.",
-      "base_rarity": "rare",
+      "base_rarity": "epic",
       "theme": "hollow_knight",
       "visuals": {
         "icon_url": "/static/items/icons/shade_cloak.png",
         "sprite_folder": "capes/shade_cloak",
         "effect": "shadow_tendrils",
         "glow_color": "#1A0033"
+      },
+      "effects": {
+        "passive": ["void_damage"],
+        "active": "shadow_phase"
       },
       "has_sprites": false,
       "has_icon": false
@@ -329,7 +644,7 @@
       "weapon_type": "sword",
       "description": "The blade of the Prince of the Underworld.",
       "lore": "Forged in the River Styx.",
-      "base_rarity": "common",
+      "base_rarity": "rare",
       "theme": "hades",
       "visuals": {
         "icon_url": "/static/items/icons/stygian_blade.png",
@@ -337,8 +652,12 @@
         "effect": "blood_red_glow",
         "glow_color": "#8B0000"
       },
-      "has_sprites": false,
-      "has_icon": false
+      "effects": {
+        "passive": ["on_kill_buff"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "adamant_rail",
@@ -347,13 +666,17 @@
       "weapon_type": "crossbow",
       "description": "An exalted weapon of unknown origin.",
       "lore": "Its mechanisms are beyond mortal understanding.",
-      "base_rarity": "uncommon",
+      "base_rarity": "rare",
       "theme": "hades",
       "visuals": {
         "icon_url": "/static/items/icons/adamant_rail.png",
         "sprite_folder": "weapons/adamant_rail",
         "effect": "infernal_glow",
         "glow_color": "#FF4500"
+      },
+      "effects": {
+        "passive": ["crit_chance"],
+        "active": null
       },
       "has_sprites": false,
       "has_icon": false
@@ -373,8 +696,12 @@
         "effect": "terra_beam",
         "glow_color": "#00FF80"
       },
-      "has_sprites": false,
-      "has_icon": false
+      "effects": {
+        "passive": ["projectile_on_hit", "regen"],
+        "active": "terra_beam"
+      },
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "mortal_blade",
@@ -391,8 +718,35 @@
         "effect": "crimson_slash",
         "glow_color": "#CC0000"
       },
+      "effects": {
+        "passive": ["execute_bonus", "on_kill_buff"],
+        "active": "mortal_draw"
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "gyoubu_spear",
+      "item_name": "Gyoubu's Broken Horn",
+      "item_type": "weapon",
+      "weapon_type": "spear",
+      "description": "The broken horn spear of Gyoubu Oniwa.",
+      "lore": "MY NAME IS GYOUBU MASATAKA ONIWA!",
+      "base_rarity": "epic",
+      "theme": "sekiro",
+      "visuals": {
+        "icon_url": "/static/items/icons/gyoubu_spear.png",
+        "sprite_folder": "weapons/gyoubu_spear",
+        "effect": "blood_mist",
+        "glow_color": "#8B0000"
+      },
+      "effects": {
+        "passive": ["armor_pierce", "move_speed"],
+        "active": null
+      },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true,
+      "_note": "walk.png and thrust.png only - needs slash/hurt"
     },
     {
       "item_id": "witcher_silver_sword",
@@ -401,7 +755,7 @@
       "weapon_type": "sword",
       "description": "A silver sword for monsters.",
       "lore": "Standard equipment for any professional witcher.",
-      "base_rarity": "common",
+      "base_rarity": "rare",
       "theme": "witcher",
       "visuals": {
         "icon_url": "/static/items/icons/witcher_silver_sword.png",
@@ -409,26 +763,12 @@
         "effect": "silver_gleam",
         "glow_color": "#C0C0C0"
       },
-      "has_sprites": false,
-      "has_icon": false
-    },
-    {
-      "item_id": "farmers_hoe",
-      "item_name": "Master Farmer's Hoe",
-      "item_type": "weapon",
-      "weapon_type": "axe",
-      "description": "A golden hoe blessed by the harvest.",
-      "lore": "Awarded to master farmers.",
-      "base_rarity": "uncommon",
-      "theme": "stardew",
-      "visuals": {
-        "icon_url": "/static/items/icons/farmers_hoe.png",
-        "sprite_folder": "weapons/farmers_hoe",
-        "effect": "golden_sparkle",
-        "glow_color": "#FFD700"
+      "effects": {
+        "passive": ["monster_slayer"],
+        "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "straw_hat",
@@ -437,7 +777,7 @@
       "weapon_type": null,
       "description": "A simple straw hat for working in the sun.",
       "lore": "The mark of an honest farmer.",
-      "base_rarity": "common",
+      "base_rarity": "rare",
       "theme": "stardew",
       "visuals": {
         "icon_url": "/static/items/icons/straw_hat.png",
@@ -445,8 +785,56 @@
         "effect": "nature_sparkle",
         "glow_color": "#D4A574"
       },
+      "effects": {
+        "passive": ["stamina_regen"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "coiled_sword_fragment",
+      "item_name": "Coiled Sword Fragment",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "A fragment of the Coiled Sword.",
+      "lore": "Can be used to return to the last bonfire.",
+      "base_rarity": "epic",
+      "theme": "dark_souls",
+      "visuals": {
+        "icon_url": "/static/items/icons/coiled_sword_fragment.png",
+        "sprite_folder": null,
+        "effect": "ember_glow",
+        "glow_color": "#FF6A00"
+      },
+      "effects": {
+        "passive": ["regen"],
+        "active": null
+      },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
+    },
+    {
+      "item_id": "margits_shackle",
+      "item_name": "Margit's Shackle",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Shackles that bind the fell omen.",
+      "lore": "Used to briefly bind Margit, the Fell Omen.",
+      "base_rarity": "rare",
+      "theme": "elden_ring",
+      "visuals": {
+        "icon_url": "/static/items/icons/margits_shackle.png",
+        "sprite_folder": null,
+        "effect": "golden_sparkle",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["boss_damage"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
     },
     {
       "item_id": "discord_nitro_badge",
@@ -455,13 +843,17 @@
       "weapon_type": null,
       "description": "A badge showing Nitro support.",
       "lore": "Granted to Discord Nitro subscribers.",
-      "base_rarity": "uncommon",
+      "base_rarity": "rare",
       "theme": "discord",
       "visuals": {
         "icon_url": "/static/items/icons/discord_nitro_badge.png",
         "sprite_folder": null,
         "effect": "discord_sparkle",
         "glow_color": "#5865F2"
+      },
+      "effects": {
+        "passive": ["party_buff"],
+        "active": null
       },
       "has_sprites": false,
       "has_icon": false
@@ -480,6 +872,10 @@
         "sprite_folder": null,
         "effect": "code_particles",
         "glow_color": "#238636"
+      },
+      "effects": {
+        "passive": ["party_buff"],
+        "active": null
       },
       "has_sprites": false,
       "has_icon": false

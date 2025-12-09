@@ -1,5 +1,24 @@
 # DREADLAND - Remaining Tasks
 
+## 🚀 Start Here Tomorrow (Dec 10, 2024)
+
+**Last Session Summary:**
+- Fixed inventory icon bug where rapid equip/unequip caused text labels instead of icons
+- Added weapon type fallbacks to ItemIconGenerator (greatsword→sword, crossbow→staff, etc.)
+- Added deferred refresh to InventoryUI to coalesce rapid inventory_changed signals
+- Stress tested inventory - all icons now display correctly
+
+**Ready to Continue:**
+- Armory scene polish for forged items (pending from checklist)
+- Deploy ForgedItems contract to Polygon testnet
+- Test full forge→trade→inspect flow end-to-end
+
+**Key Files Changed This Session:**
+- `scripts/systems/ItemIconGenerator.gd` - Added WEAPON_TYPE_FALLBACKS
+- `scripts/ui/InventoryUI.gd` - Added deferred refresh system
+
+---
+
 ## Recently Completed Features
 - [x] Player Corpse System - EverQuest-style corpse runs with loot recovery
 - [x] Death Screen UI - minimalist banner with XP lost, coordinates, respawn timer
@@ -9,7 +28,12 @@
 - [x] Group/Party System - 40 players, shared XP, raid frames
 - [x] Harvest Tools - axe and pickaxe for resource gathering
 
-## Completed This Session
+## Completed This Session (Dec 9, 2024)
+- [x] FIX: Inventory icons showing text labels after rapid equip/unequip stress test
+- [x] FIX: Added WEAPON_TYPE_FALLBACKS to ItemIconGenerator (greatsword→sword, crossbow→staff, etc.)
+- [x] FIX: Added deferred refresh to InventoryUI to coalesce rapid signal emissions
+
+## Completed Previous Session
 - [x] CRITICAL: Add Windows export preset to export_presets.cfg
 - [x] CRITICAL: Configure default resolution (1280x720) in project.godot
 - [x] CRITICAL: Fix empty array crash in CorpseState.gd:27 (loot_table[0])
@@ -73,6 +97,88 @@
 
 ## Pending - Testing
 - [ ] Add unit tests for CharacterStats, InventorySystem, Weapon
+
+## Forge System - Documentation Complete
+
+The forge system (achievement-to-item) documentation is complete. See these docs:
+- `docs/FORGE_ITEM_PHILOSOPHY.md` - Core design, twinking system, trading vision
+- `docs/FORGE_ECONOMY_DESIGN.md` - Trading, monetization, market dynamics
+- `docs/FORGE_PROVENANCE_SYSTEM.md` - Blockchain backing, history tracking
+- `docs/FORGE_ITEM_EFFECTS.md` - Passive effects, active abilities
+- `docs/FORGE_ACHIEVEMENT_SHORTLIST.md` - Curated achievement list
+- `docs/ACHIEVEMENT_ITEM_CREATION_PROCESS.md` - Item creation workflow
+
+### Forge Backend - Completed
+- [x] Achievement-to-item mapping (items.json with 20+ items)
+- [x] Effort scoring system (0-100 unified scale)
+- [x] Item forge service (item generation from achievements)
+- [x] Basic forging API endpoints
+- [x] Provenance response schema defined
+- [x] Trading models (ForgedAchievement trading fields, ItemTrade, TradeListing)
+- [x] Trading routes (`app/routes/trading_routes.py`)
+  - [x] `POST /api/trades/direct` - Record direct trades (5% tax, 24h cooldown)
+  - [x] `GET /api/trades/history` - Trade history
+  - [x] `GET /api/trades/cooldown/{token_id}` - Check trade cooldown
+  - [x] `POST /api/trades/listing` - Create chat auction listing
+  - [x] `GET /api/trades/listings` - Get active listings (Recently Advertised)
+  - [x] `DELETE /api/trades/listing/{id}` - Cancel listing
+  - [x] `GET /api/trades/census` - Item census endpoint
+
+### Forge Backend - Completed
+- [x] Database migration for new trading tables (alembic)
+- [x] Chain batching service (queue trades, batch to Polygon every 5 min)
+  - Created `app/services/chain_batching_service.py`
+  - Auto-starts on app startup, batches pending trades
+  - Records `chain_tx_hash` and `chain_recorded_at` on trades
+- [x] Trade announcements for legendary items (integrate with chat_routes)
+  - Added `broadcast_system_message()` to chat_routes
+  - Legendary/Epic trades announced to global feed
+
+### Forge Godot - Completed
+- [x] Trade window UI (TradeWindowUI.gd, /trade command, 5-tile proximity)
+- [x] "Recently Advertised" UI panel (RecentlyAdvertisedUI.gd, Tab to toggle)
+- [x] /sell and /listings chat commands (TradingManager.gd, ChatUI.gd)
+- [x] Trade cooldown indicator on items
+  - Added TradingSection to Armory detail panel
+  - Shows "Tradeable" or "Cooldown: Xh Ym"
+- [x] "Only X exist" census display on tooltips
+  - TradingManager fetches census data
+  - Armory shows "Only X exist!" for rare items
+- [x] Whisper seller / Show on map buttons
+  - Whisper pre-fills chat input
+  - Map creates waypoint marker in game world
+
+### Forge Testing & Inventory - Completed
+- [x] Test forge endpoints (no blockchain required)
+  - `/api/forge/claim` - Forge an achievement into item (test mode)
+  - `/api/forge/test-grant-all` - Admin endpoint to grant all catalog items
+  - `/api/forge/catalog` - Get full item catalog for Armory
+- [x] Inventory sync for forged items
+  - ForgeItemManager.sync_to_inventory() - Syncs forged items to player inventory
+  - Converts forged items to inventory format (weapons, armor, etc.)
+  - Stats scale by rarity (damage, defense, crit)
+
+### Forge Godot - Pending Implementation
+- [ ] Armory scene redesign for tradeable items
+- [x] Item inspection UI with provenance display
+  - Created ItemInspectionUI.gd autoload
+  - Modal panel with provenance, trade history, chain status
+  - Added /api/trades/provenance/{token_id} endpoint
+
+### Forge Smart Contract - Completed
+- [x] Update ForgedItems contract with provenance struct
+  - Created ForgedItems.sol with full Provenance struct
+  - Tracks forger, currentOwner, tradeCount, forgedAt, lastTradeAt
+  - ERC-2981 royalty support (5% default)
+- [x] Add trade recording function (relayer only)
+  - recordTradeBatch() for batch processing
+  - recordTrade() for immediate processing
+  - Replay protection via txRef hashes
+- [x] Relayer service for gasless transactions
+  - Created relayer_service.py
+  - forge_item(), record_trade_batch(), get_provenance()
+  - Chain batching service uses relayer
+- [ ] Deploy to Polygon testnet
 
 ## Pending - Major Features (Designed, Not Implemented)
 - [ ] Settlement/Base Building - guild bases with sieges (see docs/FUTURE_SPECS.md)

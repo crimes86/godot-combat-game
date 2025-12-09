@@ -1,16 +1,28 @@
 extends Node
 ## ForgeItemManager - Fetches and caches forged items from backend
 ## Items come pre-computed with stats, effects, and visual data
+## Syncs forged items to InventorySystem for in-game use
 
 signal forged_items_loaded(items: Array)
 signal forge_claimed(item: Dictionary)
 signal forge_error(error: String)
+signal item_synced_to_inventory(item: Dictionary)
 
 # Cached forged items from API
 var _forged_items: Array = []
 var _forged_items_by_id: Dictionary = {}  # item_id -> forged item
 var _is_fetching: bool = false
 var _is_loaded: bool = false
+var _synced_to_inventory: bool = false
+
+# Rarity multipliers for forged item stats
+const RARITY_DAMAGE_BONUS = {
+	"common": 1,
+	"uncommon": 2,
+	"rare": 3,
+	"epic": 4,
+	"legendary": 5
+}
 
 func _ready() -> void:
 	if MantleAuth:
@@ -24,6 +36,7 @@ func _on_logout() -> void:
 	_forged_items.clear()
 	_forged_items_by_id.clear()
 	_is_loaded = false
+	_synced_to_inventory = false
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PUBLIC API
@@ -176,3 +189,152 @@ func get_forged_items_by_type(item_type: String) -> Array:
 
 func get_forged_count() -> int:
 	return _forged_items.size()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INVENTORY SYNC
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func sync_to_inventory() -> int:
+	"""Sync all forged items to player's inventory. Returns count of items added."""
+	if not _is_loaded:
+		LogManager.warning("Cannot sync - forged items not loaded yet", "forge")
+		return 0
+
+	if _synced_to_inventory:
+		LogManager.info("Forged items already synced to inventory", "forge")
+		return 0
+
+	var added_count = 0
+	for forged in _forged_items:
+		var inventory_item = _convert_to_inventory_format(forged)
+		if inventory_item.is_empty():
+			continue
+
+		# Check if already in inventory (by forged_id)
+		var forged_id = forged.get("token_id", forged.get("item_id", ""))
+		if _is_item_in_inventory(forged_id):
+			continue
+
+		if InventorySystem.add_item(inventory_item):
+			added_count += 1
+			item_synced_to_inventory.emit(inventory_item)
+
+	_synced_to_inventory = true
+	LogManager.info("Synced %d forged items to inventory" % added_count, "forge")
+	return added_count
+
+func claim_single_item(item_id: String) -> Dictionary:
+	"""Claim a single forged item and add it to inventory. Returns the inventory item or empty dict on failure."""
+	if not _is_loaded:
+		LogManager.warning("Cannot claim - forged items not loaded yet", "forge")
+		return {}
+
+	# Find the forged item by item_id
+	var forged = _forged_items_by_id.get(item_id, {})
+	if forged.is_empty():
+		LogManager.warning("Item not found in forged items: %s" % item_id, "forge")
+		return {}
+
+	# Check if already claimed (in inventory)
+	var forged_id = str(forged.get("token_id", forged.get("item_id", "")))
+	if _is_item_in_inventory(forged_id):
+		LogManager.info("Item already claimed: %s" % item_id, "forge")
+		return {}  # Already claimed
+
+	# Convert to inventory format and add
+	var inventory_item = _convert_to_inventory_format(forged)
+	if inventory_item.is_empty():
+		LogManager.error("Failed to convert forged item: %s" % item_id, "forge")
+		return {}
+
+	if InventorySystem.add_item(inventory_item):
+		LogManager.info("Claimed forged item: %s" % inventory_item.get("name", item_id), "forge")
+		item_synced_to_inventory.emit(inventory_item)
+		return inventory_item
+	else:
+		LogManager.error("Failed to add item to inventory (full?): %s" % item_id, "forge")
+		return {}
+
+func is_item_claimed(item_id: String) -> bool:
+	"""Check if a forged item has already been claimed (is in inventory)"""
+	var forged = _forged_items_by_id.get(item_id, {})
+	if forged.is_empty():
+		return false
+	var forged_id = str(forged.get("token_id", forged.get("item_id", "")))
+	return _is_item_in_inventory(forged_id)
+
+func _is_item_in_inventory(forged_id: String) -> bool:
+	"""Check if a forged item is already in inventory"""
+	for slot in range(InventorySystem.inventory_items.size()):
+		var item = InventorySystem.inventory_items[slot]
+		if item and item.get("forged_id", "") == str(forged_id):
+			return true
+	return false
+
+func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
+	"""Convert forged item from API format to inventory format"""
+	var item_type = forged.get("item_type", "weapon")
+	var rarity = forged.get("item_rarity", "common").to_lower()
+	var damage_bonus = RARITY_DAMAGE_BONUS.get(rarity, 1)
+
+	var base_item = {
+		"name": forged.get("item_name", "Forged Item"),
+		"description": forged.get("description", "A forged item from an achievement."),
+		"stackable": false,
+		"quantity": 1,
+		"is_forged": true,
+		"forged_id": str(forged.get("token_id", forged.get("item_id", ""))),
+		"item_id": forged.get("item_id", ""),
+		"rarity": rarity.capitalize(),
+		"effect_name": forged.get("effect_name", ""),
+		"effect_intensity": forged.get("effect_intensity", 0.5),
+		"glow_color": forged.get("glow_color", "#ffffff"),
+		"effort_tier": forged.get("effort_tier", ""),
+		"vintage_years": forged.get("vintage_years", 0),
+		"is_secret": forged.get("is_secret", false),
+		"can_trade": true,
+		"value": damage_bonus * 100,  # Base sell value
+	}
+
+	match item_type:
+		"weapon":
+			base_item["type"] = "weapon"
+			base_item["slot"] = "mainhand"
+			base_item["weapon_type"] = forged.get("weapon_type", "sword")
+			base_item["base_damage"] = 5 + (damage_bonus * 3)  # 8-20 damage based on rarity
+			base_item["attack_speed"] = "Normal"
+			base_item["crit_chance"] = 0.05 + (damage_bonus * 0.02)  # 7-15% crit
+			base_item["required_level"] = 1  # Forged items have no level req (twinking!)
+
+		"armor_head", "armor_chest", "armor_legs", "armor_hands", "armor_feet":
+			base_item["type"] = "armor"
+			base_item["slot"] = item_type.replace("armor_", "")
+			base_item["defense"] = 2 + damage_bonus  # 3-7 defense
+
+		"shield":
+			base_item["type"] = "shield"
+			base_item["slot"] = "offhand"
+			base_item["block_chance"] = 0.1 + (damage_bonus * 0.03)  # 13-25% block
+
+		"cape":
+			base_item["type"] = "cape"
+			base_item["slot"] = "back"
+
+		"accessory":
+			base_item["type"] = "accessory"
+			base_item["slot"] = "accessory"
+
+		_:
+			# Unknown type - still add as generic item
+			base_item["type"] = "misc"
+
+	return base_item
+
+func get_forged_weapons_for_inventory() -> Array:
+	"""Get all forged weapons formatted for inventory use"""
+	var weapons = []
+	for item in get_forged_items_by_type("weapon"):
+		var inv_item = _convert_to_inventory_format(item)
+		if not inv_item.is_empty():
+			weapons.append(inv_item)
+	return weapons

@@ -183,10 +183,12 @@ class ForgedAchievement(Base):
 
     Item stats are computed at forge time and stored immutably.
     Godot fetches these pre-computed items directly.
+
+    Trading: Items are tradeable with provenance tracking.
     """
     __tablename__ = 'forged_achievements'
     id = Column(Integer, primary_key=True, index=True)
-    achievement_credit_id = Column(Integer, ForeignKey('achievement_credits.id'), unique=True, nullable=False)
+    achievement_credit_id = Column(Integer, ForeignKey('achievement_credits.id'), unique=True, nullable=True)  # Nullable for test-granted items
     wallet_account_id = Column(Integer, ForeignKey('wallet_accounts.id'), nullable=False)
 
     # On-chain data
@@ -214,9 +216,80 @@ class ForgedAchievement(Base):
     vintage_years = Column(Integer, nullable=True)      # Years since unlock (for "Ancient" prefix)
     is_secret = Column(Boolean, nullable=True)          # From achievement.hidden
 
+    # === TRADING & PROVENANCE ===
+    # Original forger is always the wallet_account_id owner at forge time
+    current_owner_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)  # Current owner (null = original forger)
+    owned_since = Column(DateTime, nullable=True)       # When current owner acquired it
+    trade_count = Column(Integer, default=0)            # Number of times traded
+    last_trade_at = Column(DateTime, nullable=True)     # For 24h cooldown check
+
     # Relationships
     achievement_credit = relationship("AchievementCredit")
     wallet_account = relationship("WalletAccount")
+    current_owner = relationship("User", foreign_keys=[current_owner_id])
+    trades = relationship("ItemTrade", back_populates="forged_item")
+
+
+class ItemTrade(Base):
+    """
+    Append-only log of all forged item trades.
+    Used for provenance display and trade history.
+    """
+    __tablename__ = 'item_trades'
+
+    id = Column(Integer, primary_key=True, index=True)
+    forged_item_id = Column(Integer, ForeignKey('forged_achievements.id'), nullable=False, index=True)
+
+    from_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    to_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    traded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Trade details
+    price_gold = Column(Integer, nullable=True)         # Gold amount (if any)
+    tax_applied = Column(Integer, default=0)            # 5% tax amount
+    trade_type = Column(String(20), default='direct')   # direct, gift
+
+    # On-chain recording (batched)
+    chain_tx_hash = Column(String(66), nullable=True)   # Filled when batch submitted
+    chain_recorded_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    forged_item = relationship("ForgedAchievement", back_populates="trades")
+    from_user = relationship("User", foreign_keys=[from_user_id])
+    to_user = relationship("User", foreign_keys=[to_user_id])
+
+
+class TradeListing(Base):
+    """
+    Active trade listings from chat auctions.
+    Ephemeral - listings expire after 30 minutes.
+    """
+    __tablename__ = 'trade_listings'
+
+    id = Column(Integer, primary_key=True, index=True)
+    forged_item_id = Column(Integer, ForeignKey('forged_achievements.id'), nullable=False, index=True)
+    seller_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    listing_type = Column(String(10), default='sell')   # sell, buy (WTS vs WTB)
+    price_gold = Column(Integer, nullable=False)
+    message = Column(String(256), nullable=True)        # Custom message from seller
+
+    # Location for "find seller" feature
+    zone_id = Column(String(32), nullable=True)         # wasteland, cursed_lands, etc.
+    position_x = Column(Float, nullable=True)
+    position_y = Column(Float, nullable=True)
+
+    posted_at = Column(DateTime, default=datetime.utcnow, index=True)
+    expires_at = Column(DateTime, nullable=False)       # 30 min from posted_at
+
+    # Relationships
+    forged_item = relationship("ForgedAchievement")
+    seller = relationship("User")
+
+    __table_args__ = (
+        # One active listing per item per seller
+        UniqueConstraint('forged_item_id', 'seller_id', name='unique_item_listing'),
+    )
 
 
 class Friendship(Base):

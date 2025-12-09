@@ -1,0 +1,381 @@
+[gd_scene load_steps=12 format=3 uid="uid://trading_hub_001"]
+
+[ext_resource type="Script" path="res://scripts/trading_hub/TradingHub.gd" id="1_hub"]
+
+[sub_resource type="Gradient" id="Gradient_torch"]
+offsets = PackedFloat32Array(0, 0.2, 0.5, 0.8, 1)
+colors = PackedColorArray(1, 0.7, 0.3, 1, 1, 0.5, 0.2, 0.8, 0.8, 0.3, 0.1, 0.4, 0.4, 0.15, 0.05, 0.1, 0, 0, 0, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_torch"]
+gradient = SubResource("Gradient_torch")
+width = 256
+height = 256
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="Gradient_fire"]
+offsets = PackedFloat32Array(0, 0.15, 0.35, 0.6, 1)
+colors = PackedColorArray(1, 0.9, 0.6, 1, 1, 0.6, 0.2, 0.9, 0.9, 0.4, 0.1, 0.6, 0.5, 0.2, 0.05, 0.2, 0, 0, 0, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_fire"]
+gradient = SubResource("Gradient_fire")
+width = 512
+height = 512
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="Gradient_puddle"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(0.15, 0.2, 0.25, 0.4, 0.1, 0.15, 0.2, 0.2, 0.05, 0.08, 0.12, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_puddle"]
+gradient = SubResource("Gradient_puddle")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_h"]
+size = Vector2(3200, 100)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_v"]
+size = Vector2(100, 2700)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_exit_gap"]
+size = Vector2(400, 100)
+
+[sub_resource type="LabelSettings" id="LabelSettings_sign"]
+font_size = 16
+font_color = Color(0.7, 0.75, 0.8, 1)
+outline_size = 2
+outline_color = Color(0, 0, 0, 0.9)
+
+[node name="TradingHub" type="Node2D"]
+script = ExtResource("1_hub")
+
+[node name="CanvasModulate" type="CanvasModulate" parent="."]
+color = Color(0.25, 0.25, 0.28, 1)
+
+[node name="Environment" type="Node2D" parent="."]
+z_index = -10
+
+[node name="Floor" type="ColorRect" parent="Environment"]
+offset_left = -1600.0
+offset_top = -1350.0
+offset_right = 1600.0
+offset_bottom = 1350.0
+color = Color(0.08, 0.08, 0.1, 1)
+
+[node name="FloorTexture" type="ColorRect" parent="Environment"]
+offset_left = -1500.0
+offset_top = -1250.0
+offset_right = 1500.0
+offset_bottom = 1250.0
+color = Color(0.1, 0.1, 0.12, 1)
+
+[node name="Walls" type="Node2D" parent="Environment"]
+
+[node name="WallNorth" type="ColorRect" parent="Environment/Walls"]
+offset_left = -1600.0
+offset_top = -1350.0
+offset_right = 1600.0
+offset_bottom = -1250.0
+color = Color(0.12, 0.11, 0.1, 1)
+
+[node name="WallSouth" type="ColorRect" parent="Environment/Walls"]
+offset_left = -1600.0
+offset_top = 1250.0
+offset_right = 1600.0
+offset_bottom = 1350.0
+color = Color(0.12, 0.11, 0.1, 1)
+
+[node name="WallWest" type="ColorRect" parent="Environment/Walls"]
+offset_left = -1600.0
+offset_top = -1350.0
+offset_right = -1500.0
+offset_bottom = 1350.0
+color = Color(0.14, 0.13, 0.12, 1)
+
+[node name="WallEast" type="ColorRect" parent="Environment/Walls"]
+offset_left = 1500.0
+offset_top = -1350.0
+offset_right = 1600.0
+offset_bottom = 1350.0
+color = Color(0.14, 0.13, 0.12, 1)
+
+[node name="SouthExitCorridor" type="ColorRect" parent="Environment"]
+offset_left = -200.0
+offset_top = 1250.0
+offset_right = 200.0
+offset_bottom = 1350.0
+color = Color(0.05, 0.05, 0.06, 1)
+
+[node name="NorthExitCorridor" type="ColorRect" parent="Environment"]
+offset_left = -200.0
+offset_top = -1350.0
+offset_right = 200.0
+offset_bottom = -1250.0
+color = Color(0.05, 0.05, 0.06, 1)
+
+[node name="Collision" type="StaticBody2D" parent="."]
+
+[node name="WallNorth" type="CollisionShape2D" parent="Collision"]
+position = Vector2(0, -1300)
+shape = SubResource("RectangleShape2D_wall_h")
+
+[node name="WallSouth" type="CollisionShape2D" parent="Collision"]
+position = Vector2(0, 1300)
+shape = SubResource("RectangleShape2D_wall_h")
+
+[node name="WallWest" type="CollisionShape2D" parent="Collision"]
+position = Vector2(-1550, 0)
+shape = SubResource("RectangleShape2D_wall_v")
+
+[node name="WallEast" type="CollisionShape2D" parent="Collision"]
+position = Vector2(1550, 0)
+shape = SubResource("RectangleShape2D_wall_v")
+
+[node name="ExitGapNorthLeft" type="CollisionShape2D" parent="Collision"]
+position = Vector2(-800, -1300)
+shape = SubResource("RectangleShape2D_exit_gap")
+disabled = true
+
+[node name="ExitGapSouthLeft" type="CollisionShape2D" parent="Collision"]
+position = Vector2(-800, 1300)
+shape = SubResource("RectangleShape2D_exit_gap")
+disabled = true
+
+[node name="Lighting" type="Node2D" parent="."]
+
+[node name="CentralFirePit" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, -100)
+color = Color(1, 0.65, 0.35, 1)
+energy = 1.2
+texture = SubResource("GradientTexture2D_fire")
+texture_scale = 4.0
+
+[node name="Torch1" type="PointLight2D" parent="Lighting"]
+position = Vector2(-600, -400)
+color = Color(1, 0.6, 0.3, 1)
+energy = 0.6
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.5
+
+[node name="Torch2" type="PointLight2D" parent="Lighting"]
+position = Vector2(600, -400)
+color = Color(1, 0.6, 0.3, 1)
+energy = 0.6
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.5
+
+[node name="Torch3" type="PointLight2D" parent="Lighting"]
+position = Vector2(-600, 200)
+color = Color(1, 0.6, 0.3, 1)
+energy = 0.6
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.5
+
+[node name="Torch4" type="PointLight2D" parent="Lighting"]
+position = Vector2(600, 200)
+color = Color(1, 0.6, 0.3, 1)
+energy = 0.6
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.5
+
+[node name="Torch5" type="PointLight2D" parent="Lighting"]
+position = Vector2(-1200, -800)
+color = Color(1, 0.55, 0.25, 1)
+energy = 0.5
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.3
+
+[node name="Torch6" type="PointLight2D" parent="Lighting"]
+position = Vector2(1200, -800)
+color = Color(1, 0.55, 0.25, 1)
+energy = 0.5
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.3
+
+[node name="Torch7" type="PointLight2D" parent="Lighting"]
+position = Vector2(-1200, 600)
+color = Color(1, 0.55, 0.25, 1)
+energy = 0.5
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.3
+
+[node name="Torch8" type="PointLight2D" parent="Lighting"]
+position = Vector2(1200, 600)
+color = Color(1, 0.55, 0.25, 1)
+energy = 0.5
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.3
+
+[node name="SouthEntryLight" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, 1100)
+color = Color(0.4, 0.45, 0.5, 1)
+energy = 0.4
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 2.0
+
+[node name="NorthExitLight" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, -1100)
+color = Color(0.3, 0.4, 0.5, 1)
+energy = 0.3
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 2.0
+
+[node name="Props" type="Node2D" parent="."]
+z_index = -1
+
+[node name="FirePitBase" type="ColorRect" parent="Props"]
+offset_left = -80.0
+offset_top = -180.0
+offset_right = 80.0
+offset_bottom = -20.0
+color = Color(0.2, 0.15, 0.1, 1)
+
+[node name="FirePitInner" type="ColorRect" parent="Props"]
+offset_left = -60.0
+offset_top = -160.0
+offset_right = 60.0
+offset_bottom = -40.0
+color = Color(0.4, 0.2, 0.1, 1)
+
+[node name="Table1" type="ColorRect" parent="Props"]
+offset_left = -400.0
+offset_top = -300.0
+offset_right = -300.0
+offset_bottom = -200.0
+color = Color(0.25, 0.18, 0.12, 1)
+
+[node name="Table2" type="ColorRect" parent="Props"]
+offset_left = 300.0
+offset_top = -300.0
+offset_right = 400.0
+offset_bottom = -200.0
+color = Color(0.25, 0.18, 0.12, 1)
+
+[node name="Table3" type="ColorRect" parent="Props"]
+offset_left = -400.0
+offset_top = 100.0
+offset_right = -300.0
+offset_bottom = 200.0
+color = Color(0.25, 0.18, 0.12, 1)
+
+[node name="Table4" type="ColorRect" parent="Props"]
+offset_left = 300.0
+offset_top = 100.0
+offset_right = 400.0
+offset_bottom = 200.0
+color = Color(0.25, 0.18, 0.12, 1)
+
+[node name="Bench1" type="ColorRect" parent="Props"]
+offset_left = -550.0
+offset_top = -120.0
+offset_right = -450.0
+offset_bottom = -60.0
+color = Color(0.22, 0.16, 0.1, 1)
+
+[node name="Bench2" type="ColorRect" parent="Props"]
+offset_left = 450.0
+offset_top = -120.0
+offset_right = 550.0
+offset_bottom = -60.0
+color = Color(0.22, 0.16, 0.1, 1)
+
+[node name="Puddle1" type="Sprite2D" parent="Props"]
+position = Vector2(-800, 400)
+scale = Vector2(3, 2)
+texture = SubResource("GradientTexture2D_puddle")
+
+[node name="Puddle2" type="Sprite2D" parent="Props"]
+position = Vector2(700, 600)
+scale = Vector2(2.5, 1.8)
+texture = SubResource("GradientTexture2D_puddle")
+
+[node name="Puddle3" type="Sprite2D" parent="Props"]
+position = Vector2(-200, 800)
+scale = Vector2(2, 1.5)
+texture = SubResource("GradientTexture2D_puddle")
+
+[node name="AlcoveWest" type="ColorRect" parent="Props"]
+offset_left = -1480.0
+offset_top = -200.0
+offset_right = -1200.0
+offset_bottom = 200.0
+color = Color(0.06, 0.06, 0.08, 1)
+
+[node name="AlcoveEast" type="ColorRect" parent="Props"]
+offset_left = 1200.0
+offset_top = -200.0
+offset_right = 1480.0
+offset_bottom = 200.0
+color = Color(0.06, 0.06, 0.08, 1)
+
+[node name="StashArea" type="ColorRect" parent="Props"]
+offset_left = -1100.0
+offset_top = -900.0
+offset_right = -800.0
+offset_bottom = -600.0
+color = Color(0.12, 0.1, 0.08, 1)
+
+[node name="VendorArea" type="ColorRect" parent="Props"]
+offset_left = 800.0
+offset_top = -900.0
+offset_right = 1100.0
+offset_bottom = -600.0
+color = Color(0.12, 0.1, 0.08, 1)
+
+[node name="Signs" type="Node2D" parent="."]
+z_index = 5
+
+[node name="SouthSign" type="Label" parent="Signs"]
+offset_left = -100.0
+offset_top = 1050.0
+offset_right = 100.0
+offset_bottom = 1080.0
+label_settings = SubResource("LabelSettings_sign")
+text = "To Wasteland (Zone 1)"
+horizontal_alignment = 1
+
+[node name="NorthSign" type="Label" parent="Signs"]
+offset_left = -100.0
+offset_top = -1180.0
+offset_right = 100.0
+offset_bottom = -1150.0
+label_settings = SubResource("LabelSettings_sign")
+text = "To The Depths (Zone 2)"
+horizontal_alignment = 1
+
+[node name="StashSign" type="Label" parent="Signs"]
+offset_left = -1050.0
+offset_top = -620.0
+offset_right = -850.0
+offset_bottom = -590.0
+label_settings = SubResource("LabelSettings_sign")
+text = "Stash"
+horizontal_alignment = 1
+
+[node name="VendorSign" type="Label" parent="Signs"]
+offset_left = 850.0
+offset_top = -620.0
+offset_right = 1050.0
+offset_bottom = -590.0
+label_settings = SubResource("LabelSettings_sign")
+text = "Tunnel Trader"
+horizontal_alignment = 1
+
+[node name="WelcomeSign" type="Label" parent="Signs"]
+offset_left = -200.0
+offset_top = -550.0
+offset_right = 200.0
+offset_bottom = -500.0
+label_settings = SubResource("LabelSettings_sign")
+text = "THE PASSAGE"
+horizontal_alignment = 1
+
+[node name="Players" type="Node2D" parent="."]
+z_index = 1

@@ -43,6 +43,7 @@ from app.providers.oauth_handler import init_oauth_providers, create_oauth_route
 from app.routes.wallet_routes import router as wallet_router, init_wallet_routes
 from app.routes.friend_routes import router as friend_router, init_friend_routes
 from app.routes.chat_routes import router as chat_router, init_chat_routes, seed_mock_global_feed, post_user_joined_announcement, post_sync_announcement, start_mock_activity, stop_mock_activity
+from app.routes.trading_routes import router as trading_router, init_trading_routes
 import time
 import asyncio
 
@@ -62,8 +63,17 @@ async def startup_event():
     init_wallet_routes(get_db, get_current_user)
     init_friend_routes(get_current_user, calculate_mantle_tier)
     init_chat_routes(get_current_user, calculate_mantle_tier)
+    init_trading_routes(get_current_user)
     seed_mock_global_feed()  # Add demo activity to global feed
     start_mock_activity(min_interval=20, max_interval=60)  # Live mock activity every 20-60 seconds
+
+    # Start chain batching service for trade provenance
+    try:
+        from app.services.chain_batching_service import chain_batching_service
+        chain_batching_service.start()
+    except Exception as e:
+        logger.warning(f"Chain batching service not started: {e}")
+
     logger.info(f"Enabled providers: {list(get_enabled_providers().keys())}")
     if BETA_ACCESS_CODE:
         logger.info(f"Beta gate ENABLED (code: {BETA_ACCESS_CODE[:4]}...)")
@@ -75,6 +85,13 @@ async def startup_event():
 async def shutdown_event():
     """Clean up on shutdown"""
     stop_mock_activity()
+
+    # Stop chain batching service
+    try:
+        from app.services.chain_batching_service import chain_batching_service
+        chain_batching_service.stop()
+    except Exception:
+        pass
 
 
 @app.get("/")
@@ -106,7 +123,13 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 def get_all_providers_list():
     """Get list of enabled providers for templates"""
     return [
-        {"name": name, "display_name": config.display_name}
+        {
+            "name": name,
+            "display_name": config.display_name,
+            "enabled": config.enabled,
+            "color": config.color,
+            "achievement_support": config.achievement_support.value,
+        }
         for name, config in get_enabled_providers().items()
     ]
 
@@ -364,7 +387,7 @@ def get_current_user_optional(
 
 
 def generate_app_username(db: DbSession):
-    base = "metanet-"
+    base = "mantle-"
     while True:
         username = base + str(uuid.uuid4())[:8]
         if not db.query(User).filter(User.username == username).first():
@@ -1005,12 +1028,6 @@ async def navbar(request: Request, db: DbSession = Depends(get_db)):
     token = get_session_token(request)
     user = get_user_from_session(db, token) if token else None
 
-    # Build the provider lists for template
-    providers_list = [
-        {"name": "steam", "display_name": "Steam"},
-        {"name": "battlenet", "display_name": "Battle.net"},
-    ]
-
     # user_linked_providers: list of provider names actually linked
     if user:
         linked = (
@@ -1028,7 +1045,7 @@ async def navbar(request: Request, db: DbSession = Depends(get_db)):
             "request": request,
             "local_user_id": user.id if user else None,
             "country_code": getattr(user, "country", None),
-            "all_providers": providers_list,
+            "all_providers": all_providers,  # Use global dynamic list
             "user_linked_providers": user_linked_providers,
         },
     )
@@ -2005,22 +2022,33 @@ async def merge_confirm(
         logger.warning("Merge failed: one or both user IDs not found")
         return RedirectResponse(url="/dashboard", status_code=303)
 
+    # Always keep the OLDER account (lower ID = created first)
+    # Merge newer account INTO older account, then delete newer
+    if current_user.id < other_user.id:
+        keeper = current_user
+        to_merge = other_user
+    else:
+        keeper = other_user
+        to_merge = current_user
+
+    logger.info(f"Merge: keeping older account {keeper.id} ({keeper.username}), merging away {to_merge.id} ({to_merge.username})")
+
     # Find provider names linked to both users
-    current_provider_names = set(
-        p.provider_name for p in db.query(ProviderAccount).filter(ProviderAccount.user_id == current_user.id)
+    keeper_provider_names = set(
+        p.provider_name for p in db.query(ProviderAccount).filter(ProviderAccount.user_id == keeper.id)
     )
-    other_provider_names = set(
-        p.provider_name for p in db.query(ProviderAccount).filter(ProviderAccount.user_id == other_user.id)
+    to_merge_provider_names = set(
+        p.provider_name for p in db.query(ProviderAccount).filter(ProviderAccount.user_id == to_merge.id)
     )
-    conflicts = current_provider_names & other_provider_names
+    conflicts = keeper_provider_names & to_merge_provider_names
 
     if conflicts:
         msg = (
-                "Cannot merge: your account already has these provider(s): " +
+                "Cannot merge: the older account already has these provider(s): " +
                 ", ".join(conflicts) +
                 ". Unclaim them first before merging."
         )
-        logger.warning(f"Merge conflict for user {current_user.username}: providers {conflicts}")
+        logger.warning(f"Merge conflict: providers {conflicts}")
         # Show merge_confirm.html again, with clear warning
         return templates.TemplateResponse("merge_confirm.html", {
             "request": request,
@@ -2034,35 +2062,42 @@ async def merge_confirm(
 
     # No conflicts: do the merge in a single transaction
     try:
-        # Transfer all provider accounts
+        # Transfer all provider accounts from newer to older
         transferred_providers = []
-        for provider in db.query(ProviderAccount).filter(ProviderAccount.user_id == other_user.id).all():
-            provider.user_id = current_user.id
+        for provider in db.query(ProviderAccount).filter(ProviderAccount.user_id == to_merge.id).all():
+            provider.user_id = keeper.id
             transferred_providers.append(provider.provider_name)
 
         # Transfer all achievement credits (important for dashboard queries)
         credits_transferred = 0
-        for credit in db.query(AchievementCredit).filter(AchievementCredit.user_id == other_user.id).all():
-            credit.user_id = current_user.id
+        for credit in db.query(AchievementCredit).filter(AchievementCredit.user_id == to_merge.id).all():
+            credit.user_id = keeper.id
             credits_transferred += 1
 
         # Transfer any user achievements
-        for ua in db.query(UserAchievement).filter(UserAchievement.user_id == other_user.id).all():
-            ua.user_id = current_user.id
+        for ua in db.query(UserAchievement).filter(UserAchievement.user_id == to_merge.id).all():
+            ua.user_id = keeper.id
 
         # Transfer wallet accounts (if any)
-        for wallet in db.query(WalletAccount).filter(WalletAccount.user_id == other_user.id).all():
-            wallet.user_id = current_user.id
+        for wallet in db.query(WalletAccount).filter(WalletAccount.user_id == to_merge.id).all():
+            wallet.user_id = keeper.id
 
         # Flush to ensure all changes are written before delete
         db.flush()
 
-        db.delete(other_user)
+        db.delete(to_merge)
         db.commit()
 
-        logger.info(f"Accounts merged: {other_user.username} into {current_user.username}")
+        logger.info(f"Accounts merged: {to_merge.username} (id={to_merge.id}) into {keeper.username} (id={keeper.id})")
         logger.info(f"  Transferred providers: {transferred_providers}")
         logger.info(f"  Transferred credits: {credits_transferred}")
+
+        # Create new session for the keeper account and set cookie
+        response = RedirectResponse(url="/dashboard", status_code=303)
+        session_token = create_session(db, keeper)
+        set_session_cookie(response, session_token)
+        return response
+
     except Exception as e:
         db.rollback()
         logger.error(f"Merge failed: {e}")
@@ -2071,7 +2106,6 @@ async def merge_confirm(
             {"request": request, "message": "Account merge failed. Please try again."},
             status_code=500
         )
-    return RedirectResponse(url="/dashboard", status_code=303)
 
 
 # --- Reclaim Handler (for claiming orphaned/unlinked providers) ---
@@ -2230,17 +2264,7 @@ async def dashboard(
     if not user:
         return RedirectResponse(url="/login", status_code=302)
 
-    # 1) Build your "all providers" list (includes coming soon providers for navbar)
-    all_providers = [
-        {"name": "steam", "display_name": "Steam", "enabled": True},
-        {"name": "battlenet", "display_name": "Battle.net", "enabled": True},
-        {"name": "xbox", "display_name": "Xbox", "enabled": True},
-        {"name": "psn", "display_name": "PlayStation", "enabled": True},
-        {"name": "discord", "display_name": "Discord", "enabled": True},
-        {"name": "github", "display_name": "GitHub", "enabled": True},
-        {"name": "epic", "display_name": "Epic Games", "enabled": False},
-        {"name": "gog", "display_name": "GOG Galaxy", "enabled": False},
-    ]
+    # 1) Use global all_providers list (dynamically built from provider registry)
 
     # Only providers with active link
     active_linked = []
@@ -2310,6 +2334,12 @@ async def dashboard(
                     github_avatar = source.profile_data.get("avatar_url")
                     if github_avatar:
                         avatar_url = github_avatar
+                elif p["name"] == "facebook":
+                    # Facebook stores name and id
+                    profile_display_name = source.profile_data.get("name")
+                    fb_avatar = source.profile_data.get("avatar_url")
+                    if fb_avatar:
+                        avatar_url = fb_avatar
 
             # sum credits across all active accounts for this provider
             total_achievements = 0
@@ -3004,17 +3034,30 @@ async def get_forged_items_api(
     if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-    # Get all forged achievements for this user
+    # Get all forged items for this user (via wallet ownership or current_owner)
+    # Also includes test-granted items (which have no achievement_credit_id)
+    user_wallets = db.query(WalletAccount.id).filter(WalletAccount.user_id == user.id).subquery()
+
     forged_items = (
-        db.query(ForgedAchievement, Achievement, AchievementCredit)
-        .join(AchievementCredit, ForgedAchievement.achievement_credit_id == AchievementCredit.id)
-        .join(Achievement, AchievementCredit.achievement_id == Achievement.id)
-        .filter(AchievementCredit.user_id == user.id)
+        db.query(ForgedAchievement)
+        .outerjoin(AchievementCredit, ForgedAchievement.achievement_credit_id == AchievementCredit.id)
+        .outerjoin(Achievement, AchievementCredit.achievement_id == Achievement.id)
+        .filter(
+            # User owns via wallet OR is current owner (from trading) OR owns via credit
+            (ForgedAchievement.wallet_account_id.in_(user_wallets)) |
+            (ForgedAchievement.current_owner_id == user.id) |
+            (AchievementCredit.user_id == user.id)
+        )
         .all()
     )
 
     items = []
-    for forged, achievement, credit in forged_items:
+    for forged in forged_items:
+        # Get linked achievement info if available
+        achievement = None
+        if forged.achievement_credit and forged.achievement_credit.achievement:
+            achievement = forged.achievement_credit.achievement
+
         items.append({
             # Item identity
             "token_id": forged.token_id,
@@ -3035,12 +3078,12 @@ async def get_forged_items_api(
             "is_secret": forged.is_secret,
             "forged_at": forged.forged_at.isoformat() if forged.forged_at else None,
 
-            # Source achievement (for tooltip/details)
+            # Source achievement (for tooltip/details) - may be null for test items
             "source": {
-                "achievement_name": achievement.display_name,
-                "achievement_icon": achievement.icon_url,
-                "app_id": achievement.app_id,
-            },
+                "achievement_name": achievement.display_name if achievement else forged.item_name,
+                "achievement_icon": achievement.icon_url if achievement else None,
+                "app_id": achievement.app_id if achievement else None,
+            } if achievement else None,
         })
 
     return {
@@ -3412,6 +3455,273 @@ async def get_forge_status(
     }
 
 
+@app.post("/api/forge/claim")
+async def forge_claim(
+    request: Request,
+    db: DbSession = Depends(get_db),
+    achievement_id: int = None,
+):
+    """
+    Forge an achievement into an item (TEST MODE - no blockchain required).
+
+    This endpoint allows forging without wallet connection for testing.
+    Creates a ForgedAchievement record with dummy chain data.
+
+    For production, use /api/wallet/forge which requires real blockchain tx.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    # Get the achievement credit
+    credit_query = (
+        db.query(AchievementCredit, Achievement, ProviderAccount)
+        .join(Achievement, AchievementCredit.achievement_id == Achievement.id)
+        .join(ProviderAccount, AchievementCredit.provider_account_id == ProviderAccount.id)
+        .filter(AchievementCredit.user_id == user.id)
+    )
+
+    if achievement_id:
+        credit_query = credit_query.filter(Achievement.id == achievement_id)
+
+    credit_result = credit_query.first()
+
+    if not credit_result:
+        raise HTTPException(status_code=404, detail="Achievement not found or not owned")
+
+    credit, achievement, provider_account = credit_result
+
+    # Check if already forged
+    existing = db.query(ForgedAchievement).filter(
+        ForgedAchievement.achievement_credit_id == credit.id
+    ).first()
+
+    if existing:
+        return {
+            "success": False,
+            "error": "Already forged",
+            "forged_item": {
+                "item_id": existing.item_id,
+                "item_name": existing.item_name,
+                "item_type": existing.item_type,
+                "weapon_type": existing.weapon_type,
+                "item_rarity": existing.item_rarity,
+                "effect_name": existing.effect_name,
+                "glow_color": existing.glow_color,
+            }
+        }
+
+    # Look up game name
+    game = db.query(Game).filter(
+        Game.app_id == achievement.app_id,
+        Game.provider_account_id == provider_account.id
+    ).first()
+    game_name = game.name if game else achievement.app_id
+
+    # Compute item properties
+    item_props = compute_forged_item(
+        achievement_id=achievement.id,
+        api_name=achievement.api_name,
+        app_id=achievement.app_id,
+        game_name=game_name,
+        provider=provider_account.provider_name,
+        rarity_tier=achievement.rarity_tier,
+        effort_score=achievement.effort_score,
+        hidden=achievement.hidden,
+        unlocked_at=credit.unlocked_at,
+    )
+
+    # Get or create a test wallet for the user
+    wallet = db.query(WalletAccount).filter(
+        WalletAccount.user_id == user.id
+    ).first()
+
+    if not wallet:
+        # Create a dummy wallet for test forging
+        wallet = WalletAccount(
+            user_id=user.id,
+            wallet_address=f"0x{'0' * 38}{user.id:02d}",  # Dummy address
+            chain_id=137,  # Polygon
+            linked_at=datetime.utcnow(),
+        )
+        db.add(wallet)
+        db.flush()
+
+    # Generate test token_id based on user and achievement
+    import hashlib
+    token_hash = hashlib.md5(f"{user.id}:{achievement.id}".encode()).hexdigest()
+    test_token_id = int(token_hash[:8], 16)
+
+    # Create the forged achievement record
+    forge_record = ForgedAchievement(
+        achievement_credit_id=credit.id,
+        wallet_account_id=wallet.id,
+        token_id=test_token_id,
+        contract_address="0x0000000000000000000000000000000000000000",  # Test contract
+        chain_id=137,
+        tx_hash=f"0x{'0' * 62}test",  # Dummy tx hash
+        item_type=item_props["item_type"],
+        weapon_type=item_props.get("weapon_type"),
+        item_id=item_props["item_id"],
+        item_name=item_props["item_name"],
+        item_rarity=item_props["item_rarity"],
+        effect_intensity=item_props["effect_intensity"],
+        effect_name=item_props["effect_name"],
+        glow_color=item_props["glow_color"],
+        effort_tier=item_props["effort_tier"],
+        vintage_years=item_props["vintage_years"],
+        is_secret=item_props["is_secret"],
+    )
+    db.add(forge_record)
+    db.commit()
+
+    logger.info(f"User {user.username} test-forged {achievement.display_name} -> {item_props['item_name']}")
+
+    return {
+        "success": True,
+        "forged_item": item_props,
+        "token_id": test_token_id,
+        "achievement": {
+            "id": achievement.id,
+            "display_name": achievement.display_name,
+            "rarity_tier": achievement.rarity_tier,
+        }
+    }
+
+
+@app.post("/api/forge/test-grant-all")
+async def test_grant_all_items(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    ADMIN/TESTER ONLY: Grant all catalog items to user for testing.
+
+    Creates ForgedAchievement records for every item in items.json
+    without requiring actual achievements. Used for testing the
+    armory, trading, and equipment systems.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    # Only allow admins or users with specific test flag
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required for test grants")
+
+    # Get or create test wallet
+    wallet = db.query(WalletAccount).filter(
+        WalletAccount.user_id == user.id
+    ).first()
+
+    if not wallet:
+        wallet = WalletAccount(
+            user_id=user.id,
+            wallet_address=f"0xtest{'0' * 34}{user.id:04d}",
+            chain_id=137,
+            linked_at=datetime.utcnow(),
+        )
+        db.add(wallet)
+        db.flush()
+
+    # Load items catalog
+    from app.services.item_forge_service import get_items
+    items = get_items()
+
+    granted = []
+    skipped = []
+
+    for idx, item in enumerate(items):
+        item_id = item.get("item_id", f"item_{idx}")
+
+        # Check if already granted (by item_id)
+        existing = db.query(ForgedAchievement).filter(
+            ForgedAchievement.wallet_account_id == wallet.id,
+            ForgedAchievement.item_id == item_id
+        ).first()
+
+        if existing:
+            skipped.append(item_id)
+            continue
+
+        # Generate unique token_id
+        import hashlib
+        token_hash = hashlib.md5(f"test:{user.id}:{item_id}".encode()).hexdigest()
+        test_token_id = int(token_hash[:8], 16)
+
+        # Create a dummy achievement credit for this item
+        # (or find existing one with matching item theme)
+
+        # Create forged record
+        forge_record = ForgedAchievement(
+            achievement_credit_id=None,  # No real achievement
+            wallet_account_id=wallet.id,
+            token_id=test_token_id,
+            contract_address="0x0000000000000000000000000000000000000000",
+            chain_id=137,
+            tx_hash=f"0xtest{idx:060d}",
+            item_type=item.get("item_type", "weapon"),
+            weapon_type=item.get("weapon_type"),
+            item_id=item_id,
+            item_name=item.get("item_name", item_id.replace("_", " ").title()),
+            item_rarity=item.get("base_rarity", "common"),
+            effect_intensity=0.7,
+            effect_name=item.get("visuals", {}).get("effect", "standard_particles"),
+            glow_color=item.get("visuals", {}).get("glow_color", "#888888"),
+            effort_tier="Notable",
+            vintage_years=0,
+            is_secret=False,
+        )
+        db.add(forge_record)
+        granted.append({
+            "item_id": item_id,
+            "item_name": item.get("item_name", item_id),
+            "item_type": item.get("item_type"),
+            "rarity": item.get("base_rarity"),
+        })
+
+    db.commit()
+
+    logger.info(f"Admin {user.username} test-granted {len(granted)} items")
+
+    return {
+        "success": True,
+        "granted_count": len(granted),
+        "skipped_count": len(skipped),
+        "granted": granted,
+        "skipped": skipped,
+    }
+
+
+@app.get("/api/forge/catalog")
+async def get_forge_catalog():
+    """
+    Get the full forge item catalog.
+
+    Returns all items that can potentially be forged, with their
+    visual data and effects. Used by Godot Armory to show available items.
+    """
+    from app.services.item_forge_service import get_items, get_themes, get_catalog_summary
+
+    items = get_items()
+    themes = get_themes()
+    summary = get_catalog_summary()
+
+    return {
+        "items": items,
+        "themes": themes,
+        "summary": summary,
+    }
+
+
 @app.get("/api/providers")
 async def get_available_providers():
     """
@@ -3566,3 +3876,4 @@ app.include_router(generic_oauth_router)
 app.include_router(wallet_router)
 app.include_router(friend_router)
 app.include_router(chat_router)
+app.include_router(trading_router)

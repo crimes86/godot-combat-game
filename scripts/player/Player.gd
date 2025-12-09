@@ -5,6 +5,24 @@ extends CharacterBody2D
 ## - Clothing layers remain at: res://assets/characters/pants/, shirt/, etc.
 ## - If weapon sprites fail to load, check paths at equipment/weapons/[type]/
 
+# ============================================
+# DEBUG SETTINGS - Set to true to enable verbose logging
+# ============================================
+const DEBUG_FORGED_EQUIP: bool = false  # Debug forged weapon loading and effects
+
+# Weapon type fallbacks - extended types map to core types with available animations
+# Based on backend items.json weapon_types.extended definitions
+const WEAPON_TYPE_FALLBACKS = {
+	"greatsword": "sword",
+	"longsword": "sword",
+	"crossbow": "staff",
+	"bow": "staff",
+	"pike": "spear",
+	"trident": "spear",
+	"flail": "mace",
+	"scythe": "spear",
+}
+
 # Character Gender Selection
 enum Gender { MALE, FEMALE }
 var selected_gender: Gender = Gender.MALE  # Will be set at game start
@@ -2032,21 +2050,69 @@ func create_player_sprite() -> void:
 	var weapon_type = "unarmed"  # Default to unarmed when no weapon equipped
 	var effective_weapon_type = ""
 
+	# Debug: Check if equipped weapon is forged
+	var is_forged_weapon = false
+	var forged_weapon_data: Dictionary = {}
+
 	if is_local and CharacterStats.equipped_weapon:
 		effective_weapon_type = CharacterStats.equipped_weapon.weapon_type
+		# Check if we have forged weapon data stored
+		if CharacterStats.has_method("get_equipped_weapon_data"):
+			forged_weapon_data = CharacterStats.get_equipped_weapon_data()
+		is_forged_weapon = forged_weapon_data.get("is_forged", false)
+
+		if DEBUG_FORGED_EQUIP:
+			print("[ForgedEquip] ═══════════════════════════════════════")
+			print("[ForgedEquip] Equipped weapon: %s" % CharacterStats.equipped_weapon.weapon_name)
+			print("[ForgedEquip]   weapon_type: %s" % effective_weapon_type)
+			print("[ForgedEquip]   is_forged: %s" % is_forged_weapon)
+			if is_forged_weapon:
+				print("[ForgedEquip]   glow_color: %s" % forged_weapon_data.get("glow_color", "none"))
+				print("[ForgedEquip]   effect_name: %s" % forged_weapon_data.get("effect_name", "none"))
+				print("[ForgedEquip]   effect_intensity: %s" % forged_weapon_data.get("effect_intensity", 0))
+
 	elif not is_local and remote_weapon_type != "":
 		effective_weapon_type = remote_weapon_type
+		if DEBUG_FORGED_EQUIP:
+			print("[ForgedEquip] Remote player weapon_type: %s" % effective_weapon_type)
 
 	if effective_weapon_type != "":
 		weapon_type = effective_weapon_type
 		var weapon_path = "res://assets/equipment/weapons/" + weapon_type + "/"
 
+		if DEBUG_FORGED_EQUIP:
+			print("[ForgedEquip]   Base weapon path: %s" % weapon_path)
+
+		# Check if weapon folder has sprites, use fallback if not
+		var animation_type = weapon_type  # The actual type used for animations
+		var has_weapon_sprites = ResourceLoader.exists(weapon_path + "slash.png") or \
+								 ResourceLoader.exists(weapon_path + "thrust.png") or \
+								 ResourceLoader.exists(weapon_path + "thrust_oversize.png")
+
+		if DEBUG_FORGED_EQUIP:
+			print("[ForgedEquip]   Has weapon sprites at path: %s" % has_weapon_sprites)
+			print("[ForgedEquip]     Checked: %s/slash.png = %s" % [weapon_path, ResourceLoader.exists(weapon_path + "slash.png")])
+			print("[ForgedEquip]     Checked: %s/thrust.png = %s" % [weapon_path, ResourceLoader.exists(weapon_path + "thrust.png")])
+			print("[ForgedEquip]     Checked: %s/thrust_oversize.png = %s" % [weapon_path, ResourceLoader.exists(weapon_path + "thrust_oversize.png")])
+
+		if not has_weapon_sprites:
+			# Try fallback weapon type
+			if WEAPON_TYPE_FALLBACKS.has(weapon_type):
+				animation_type = WEAPON_TYPE_FALLBACKS[weapon_type]
+				weapon_path = "res://assets/equipment/weapons/" + animation_type + "/"
+				print("⚔️ Weapon type '%s' not found, using fallback: %s" % [weapon_type, animation_type])
+				if DEBUG_FORGED_EQUIP:
+					print("[ForgedEquip]   Fallback applied: %s → %s" % [weapon_type, animation_type])
+			else:
+				if DEBUG_FORGED_EQUIP:
+					print("[ForgedEquip]   ⚠️ No fallback defined for weapon_type: %s" % weapon_type)
+
 		# Try to load weapon sprites
 		# Staff uses thrust_oversize animation, spear uses thrust, others use slash
-		if weapon_type == "staff":
+		if animation_type == "staff":
 			if ResourceLoader.exists(weapon_path + "thrust_oversize.png"):
 				weapon_slash_tex = load(weapon_path + "thrust_oversize.png")
-		elif weapon_type == "spear":
+		elif animation_type == "spear":
 			if ResourceLoader.exists(weapon_path + "thrust.png"):
 				weapon_slash_tex = load(weapon_path + "thrust.png")
 		else:
@@ -2056,9 +2122,12 @@ func create_player_sprite() -> void:
 		if ResourceLoader.exists(weapon_path + "walk.png"):
 			weapon_walk_tex = load(weapon_path + "walk.png")
 
-		print("🗡️ Loading weapon sprites for type: %s (local=%s)" % [weapon_type, is_local])
+		print("🗡️ Loading weapon sprites for type: %s → %s (local=%s)" % [weapon_type, animation_type, is_local])
 		print("   Attack: %s" % ("✅" if weapon_slash_tex else "❌"))
 		print("   Walk: %s" % ("✅" if weapon_walk_tex else "❌"))
+
+		if DEBUG_FORGED_EQUIP and is_forged_weapon:
+			print("[ForgedEquip]   TODO: Apply forged effects (glow, tint, particles)")
 	else:
 		print("👊 No weapon equipped - player is unarmed")
 

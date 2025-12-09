@@ -38,10 +38,33 @@ Same process but with mainnet RPC and real ETH for gas.
 
 ## Contract Features
 
-- **Verified Minting**: Only the backend (contract owner) can mint
+- **Verified Minting**: Only the backend (contract owner/relayer) can mint
 - **Duplicate Prevention**: Same achievement can't be minted twice to same wallet
-- **Provenance Tracking**: Stores who originally earned each achievement
+- **Provenance Tracking**: Stores original forger, trade count, ownership chain
+- **Trade Recording**: Backend batches trade updates to chain (every 5 min)
 - **Standard ERC-721**: Compatible with OpenSea, Blur, etc.
+
+### Provenance Data Stored On-Chain
+
+```solidity
+struct ItemProvenance {
+    string definitionId;      // "hand_of_malenia"
+    string achievementId;     // "steam:1245620:SHARDBEARER_MALENIA"
+    uint256 forgedAt;         // Unix timestamp
+    address originalForger;   // Wallet that forged (platform wallet for most users)
+    uint256 tradeCount;       // Incremented on each trade
+}
+```
+
+### Trading Flow
+
+Most users trade **in-game** without touching crypto:
+1. Trade completes in Dreadland (instant)
+2. Backend records trade in database (source of truth)
+3. Backend queues chain update
+4. Relayer batches updates to Polygon (every 5 min)
+
+Users can optionally **bridge out** to personal wallets for external trading (OpenSea, etc.).
 
 ## Backend Verification (Before Minting)
 
@@ -76,3 +99,10 @@ MINTER_PRIVATE_KEY=0x...         # Backend wallet that owns contract
 ```bash
 npx hardhat test
 ```
+
+## Related Documentation
+
+- `docs/ACHIEVEMENT_VERIFICATION.md` - Full 6-layer anti-exploit system
+- `docs/FORGE_PROVENANCE_SYSTEM.md` - Provenance tracking specification
+- `docs/FORGE_ECONOMY_DESIGN.md` - Trading and economy design
+- `docs/API_CONTRACT.md` - Backend API endpoints for trading

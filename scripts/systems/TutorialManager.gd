@@ -1225,6 +1225,13 @@ func cleanup_tutorial_ui() -> void:
 
 func on_equippable_item_received(item: Dictionary) -> void:
 	"""Called when player receives an equippable item (weapon/armor)"""
+	# Only show if player is in the game world (not in Armory/menus)
+	var game_world = get_tree().root.get_node_or_null("main/GameWorld")
+	if not game_world:
+		game_world = get_tree().root.get_node_or_null("GameWorld")
+	if not game_world:
+		return  # Not in game world yet
+
 	# Only show once per session and if not already active
 	if equip_mini_tutorial_shown or equip_mini_tutorial_active:
 		return

@@ -159,6 +159,9 @@ func _ready():
 	# Generate dynamic elements (trees, enemies, props)
 	generate_dynamic_elements()
 
+	# Spawn tunnel entrances at north edge of each chunk
+	spawn_tunnel_entrances()
+
 	# Set camera limits
 	setup_camera_limits()
 
@@ -352,6 +355,41 @@ void fragment() {
 	fog_container.add_child(south_fog)
 
 	print("🌫️ Border fog created on north and south edges")
+
+# ============================================
+# TUNNEL ENTRANCE SYSTEM
+# ============================================
+
+const TUNNEL_ENTRANCE_SCENE = preload("res://scenes/trading_hub/TunnelEntrance.tscn")
+var tunnel_entrances: Array = []
+
+func spawn_tunnel_entrances():
+	"""Spawn tunnel entrances at the north edge of each chunk"""
+	# Clear existing entrances
+	for entrance in tunnel_entrances:
+		if is_instance_valid(entrance):
+			entrance.queue_free()
+	tunnel_entrances.clear()
+
+	# Get all active chunks (for now, chunks -1, 0, 1)
+	var chunk_ids = [-1, 0, 1]
+
+	for chunk_id in chunk_ids:
+		var entrance = TUNNEL_ENTRANCE_SCENE.instantiate()
+
+		# Position at center of chunk's X range, at north edge
+		var chunk_center_x = chunk_id * Constants.CHUNK_SIZE + Constants.CHUNK_SIZE / 2
+		var north_edge_y = -Constants.CHUNK_SIZE / 2 + 50  # Just inside north boundary
+
+		entrance.position = Vector2(chunk_center_x, north_edge_y)
+		entrance.setup(chunk_id)
+
+		add_child(entrance)
+		tunnel_entrances.append(entrance)
+
+		print("🚪 Tunnel entrance spawned for chunk %d at (%d, %d)" % [chunk_id, chunk_center_x, north_edge_y])
+
+	print("✅ Spawned %d tunnel entrances" % tunnel_entrances.size())
 
 func generate_procedural_ruins():
 	"""Generate POI positions using POIManager (ruins, settlements, etc.)"""

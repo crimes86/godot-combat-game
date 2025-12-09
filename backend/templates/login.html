@@ -278,7 +278,8 @@
       --btn-color: #107c10;
       --btn-rgb: 16,124,16;
     }
-    .provider-btn[data-provider="playstation"] {
+    .provider-btn[data-provider="playstation"],
+    .provider-btn[data-provider="psn"] {
       --btn-color: #003791;
       --btn-rgb: 0,55,145;
     }
@@ -297,6 +298,14 @@
     .provider-btn[data-provider="github"] {
       --btn-color: #8b949e;
       --btn-rgb: 139,148,158;
+    }
+    .provider-btn[data-provider="facebook"] {
+      --btn-color: #1877F2;
+      --btn-rgb: 24,119,242;
+    }
+    .provider-btn[data-provider="roblox"] {
+      --btn-color: #00A2FF;
+      --btn-rgb: 0,162,255;
     }
 
     .provider-btn:hover img {
@@ -481,7 +490,7 @@
       <div class="provider-section-title">Gaming Platforms</div>
       <div class="provider-grid">
         {% for provider in all_providers %}
-          {% if provider.name in ['steam', 'battlenet', 'xbox', 'playstation', 'epic', 'gog'] %}
+          {% if provider.name in ['steam', 'battlenet', 'xbox', 'psn', 'epic', 'gog', 'roblox'] %}
           <a
             href="/auth/{{ provider.name }}/login{% if device_code %}?device_code={{ device_code }}{% endif %}"
             class="provider-btn"
@@ -498,7 +507,7 @@
       <!-- Check if there are social providers enabled -->
       {% set social_providers = [] %}
       {% for provider in all_providers %}
-        {% if provider.name in ['discord', 'twitch', 'google', 'github', 'twitter', 'reddit', 'spotify'] %}
+        {% if provider.name in ['discord', 'twitch', 'google', 'github', 'twitter', 'reddit', 'spotify', 'facebook'] %}
           {% set _ = social_providers.append(provider) %}
         {% endif %}
       {% endfor %}
@@ -510,7 +519,7 @@
       <div class="provider-section-title">Social Login</div>
       <div class="provider-grid">
         {% for provider in all_providers %}
-          {% if provider.name in ['discord', 'twitch', 'google', 'github', 'twitter', 'reddit', 'spotify'] %}
+          {% if provider.name in ['discord', 'twitch', 'google', 'github', 'twitter', 'reddit', 'spotify', 'facebook'] %}
           <a
             href="/auth/{{ provider.name }}/login{% if device_code %}?device_code={{ device_code }}{% endif %}"
             class="provider-btn"

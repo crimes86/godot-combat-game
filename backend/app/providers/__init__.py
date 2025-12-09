@@ -32,6 +32,7 @@ class ProviderConfig:
     authorize_url: str
     token_url: str
     userinfo_url: Optional[str] = None
+    server_metadata_url: Optional[str] = None  # OIDC discovery URL
     scopes: list = None
 
     # Achievement support
@@ -127,12 +128,13 @@ PROVIDERS = {
         authorize_url="https://apis.roblox.com/oauth/v1/authorize",
         token_url="https://apis.roblox.com/oauth/v1/token",
         userinfo_url="https://apis.roblox.com/oauth/v1/userinfo",
+        server_metadata_url="https://apis.roblox.com/oauth/.well-known/openid-configuration",
         scopes=["openid", "profile"],
         achievement_support=AchievementSupport.FULL,
         achievement_sync_fn="sync_roblox_achievements",
         icon="roblox.svg",
         color="#00A2FF",
-        enabled=False,
+        enabled=True,
     ),
 
     "epic": ProviderConfig(
@@ -273,12 +275,12 @@ PROVIDERS = {
         authorize_url="https://www.facebook.com/v19.0/dialog/oauth",
         token_url="https://graph.facebook.com/v19.0/oauth/access_token",
         userinfo_url="https://graph.facebook.com/v19.0/me",
-        scopes=["public_profile", "email", "user_friends"],
+        scopes=["public_profile"],
         achievement_support=AchievementSupport.BASIC,
         achievement_sync_fn="sync_facebook_achievements",
         icon="facebook.svg",
         color="#1877F2",
-        enabled=False,
+        enabled=True,
     ),
 
     "spotify": ProviderConfig(

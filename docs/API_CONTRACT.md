@@ -49,7 +49,7 @@ GET /api/auth/status?device_code={device_code}
 {
   "status": "success",
   "user_id": 123,
-  "username": "metanet-a1b2c3d4",
+  "username": "mantle-a1b2c3d4",
   "token": "eyJ..."
 }
 ```
@@ -83,7 +83,7 @@ Authorization: Bearer {token}
 ```json
 {
   "user_id": 123,
-  "username": "metanet-a1b2c3d4",
+  "username": "mantle-a1b2c3d4",
   "total_achievements": 847,
   "by_rarity": {
     "Common": 412,
@@ -518,20 +518,36 @@ GET /api/wallet/provenance/{token_id}
 ```json
 {
   "token_id": 1,
+  "item_id": "hand_of_malenia",
+  "item_name": "Hand of Malenia",
   "original_earner": "0xabc...",
+  "original_earner_display": "Legolazz",
   "current_owner": "0xdef...",
+  "current_owner_display": "xXSlayerXx",
   "is_original": false,
   "acquisition_type": "traded",
   "achievement": {
-    "id": "steam_440_ACH_LEGENDARY",
+    "id": "steam_1245620_SHARDBEARER_MALENIA",
+    "display_name": "Shardbearer Malenia",
     "provider": "steam",
     "rarity_tier": "Legendary",
-    "minted_at": 1701388800
+    "global_percent": 4.2,
+    "unlocked_at": "2022-03-15T14:23:45Z"
+  },
+  "provenance": {
+    "forged_at": "2024-12-08T10:30:00Z",
+    "forged_by_display": "Legolazz",
+    "trade_count": 2,
+    "owned_since": "2024-12-10T08:15:00Z"
+  },
+  "census": {
+    "total_forged": 847,
+    "in_game": 823
   }
 }
 ```
 
-**Godot Action:** Use to show "EARNED" vs "TRADED" badges on equipped items
+**Godot Action:** Use to show "EARNED" vs "TRADED" badges on equipped items, display full provenance in item inspection UI
 
 ---
 
@@ -556,6 +572,213 @@ GET /api/wallet/metadata/{credit_id}
   "background_color": "ff8000"
 }
 ```
+
+---
+
+## Trading & Economy Endpoints
+
+> **Design Philosophy:** Live trading - players must be in proximity to trade. No auction house.
+> Chat-based advertising populates a "Recently Advertised" list.
+> See `docs/FORGE_ECONOMY_DESIGN.md` for full specification.
+
+### Record Direct Trade
+```
+POST /api/trades/direct
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "token_id": 42069,
+  "to_user_id": 456,
+  "price_gold": 50000
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "trade_id": "uuid-123",
+  "item": {
+    "token_id": 42069,
+    "item_id": "hand_of_malenia",
+    "new_owner_id": 456
+  },
+  "gold_transferred": 47500,
+  "tax_applied": 2500,
+  "provenance_updated": true
+}
+```
+
+**Notes:**
+- 5% gold tax applied to seller
+- 24-hour trade cooldown starts for buyer
+- Provenance updated on-chain (batched)
+- Godot validates proximity before calling
+
+---
+
+### Get Trade History
+```
+GET /api/trades/history?limit=50&offset=0
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "trades": [
+    {
+      "trade_id": "uuid-123",
+      "traded_at": "2024-12-10T08:15:00Z",
+      "role": "seller",
+      "item": {
+        "token_id": 42069,
+        "item_id": "hand_of_malenia",
+        "item_name": "Hand of Malenia"
+      },
+      "counterparty_display": "DarkKnight99",
+      "price_gold": 50000
+    }
+  ],
+  "total": 15
+}
+```
+
+---
+
+### Post Trade Listing (Chat Auction)
+```
+POST /api/trades/listing
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "token_id": 42069,
+  "listing_type": "sell",
+  "price_gold": 50000,
+  "message": "WTS Hand of Malenia 50k - at campfire"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "listing_id": "uuid-456",
+  "expires_at": "2024-12-10T09:00:00Z",
+  "broadcast_to": "trade_chat"
+}
+```
+
+**Notes:**
+- Listings expire after 30 minutes
+- One active listing per item per player
+- 30-second cooldown between /sell commands
+- Message broadcast to Trade chat channel
+
+---
+
+### Get Active Listings (Recently Advertised)
+```
+GET /api/trades/listings?zone_id=wasteland
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "listings": [
+    {
+      "listing_id": "uuid-456",
+      "listing_type": "sell",
+      "item": {
+        "token_id": 42069,
+        "item_id": "hand_of_malenia",
+        "item_name": "Hand of Malenia",
+        "rarity": "legendary"
+      },
+      "price_gold": 50000,
+      "seller": {
+        "user_id": 123,
+        "display_name": "Legolazz",
+        "position": {"x": 450, "y": 320}
+      },
+      "message": "WTS Hand of Malenia 50k - at campfire",
+      "posted_at": "2024-12-10T08:30:00Z",
+      "expires_at": "2024-12-10T09:00:00Z"
+    }
+  ]
+}
+```
+
+**Godot Action:** Populate "Recently Advertised" UI panel
+
+---
+
+### Cancel Trade Listing
+```
+DELETE /api/trades/listing/{listing_id}
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+---
+
+### Get Item Trade Cooldown
+```
+GET /api/trades/cooldown/{token_id}
+Authorization: Bearer {token}
+```
+
+**Response (on cooldown):**
+```json
+{
+  "token_id": 42069,
+  "tradeable": false,
+  "cooldown_ends": "2024-12-11T08:15:00Z",
+  "seconds_remaining": 43200
+}
+```
+
+**Response (tradeable):**
+```json
+{
+  "token_id": 42069,
+  "tradeable": true
+}
+```
+
+---
+
+### Get Item Census (Public)
+```
+GET /api/census/items
+```
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "item_id": "hand_of_malenia",
+      "item_name": "Hand of Malenia",
+      "total_forged": 847,
+      "in_game": 823,
+      "first_forged": "2024-12-08T10:30:00Z"
+    }
+  ],
+  "total_items": 15847
+}
+```
+
+**Godot Action:** Display "Only X of these exist" on item tooltips
 
 ---
 
@@ -646,6 +869,30 @@ Only original claims count toward Mantle score. The score determines your tier (
 ### Forging
 
 Only Rare, Epic, and Legendary achievements with `is_original_claim=true` can be forged into NFTs.
+
+### Trading (Twinking System)
+
+Forged items are the **twinking system** for Dreadland:
+
+- **No level requirements** - Forged items work at level 1
+- **Fully tradeable** - Standard MMO trade windows + marketplace
+- **5% gold tax** - Applied on trades to seller
+- **24-hour cooldown** - After acquiring, before can trade again
+- **Provenance tracked** - Trade history recorded (batched to chain)
+
+See `docs/FORGE_ECONOMY_DESIGN.md` for full economy specification.
+
+### Provenance
+
+Every forged item tracks its history:
+
+- **Original achievement date** - When the source achievement was earned
+- **Forged date** - When the item was created
+- **Forged by** - Original forger's display name
+- **Trade count** - Number of times traded
+- **Current owner** - Who owns it now
+
+See `docs/FORGE_PROVENANCE_SYSTEM.md` for implementation details.
 
 ### Sync Cooldown
 
@@ -750,14 +997,15 @@ Show mantle          Show login                │
 
 ## Version
 
-- **API Version**: 1.1
-- **Last Updated**: 2024-12-06
-- **Backend Status**: Implemented
+- **API Version**: 1.2
+- **Last Updated**: 2024-12-08
+- **Backend Status**: Partially implemented (trading endpoints pending)
 - **Godot Status**: Pending implementation
 
 ## Changelog
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2024-12-08 | 1.2 | Added Trading & Economy endpoints, expanded provenance response, added census endpoint, documented twinking system and provenance concepts |
 | 2024-12-06 | 1.1 | Added wallet/forging endpoints, admin endpoints, sync cooldown, achievements by rarity endpoint, provider states |
 | 2024-12-05 | 1.0 | Initial API contract |

@@ -48,6 +48,11 @@ MantleCosmetics="*res://scripts/systems/MantleCosmetics.gd"
 ForgeItemDB="*res://scripts/systems/ForgeItemDB.gd"
 ForgeItemManager="*res://scripts/systems/ForgeItemManager.gd"
 ForgeVisualEffects="*res://scripts/systems/ForgeVisualEffects.gd"
+TradingManager="*res://scripts/systems/TradingManager.gd"
+TradingHubManager="*res://scripts/trading_hub/TradingHubManager.gd"
+RecentlyAdvertisedUI="*res://scripts/ui/RecentlyAdvertisedUI.gd"
+TradeWindowUI="*res://scripts/ui/TradeWindowUI.gd"
+ItemInspectionUI="*res://scripts/ui/ItemInspectionUI.gd"
 
 [display]
 

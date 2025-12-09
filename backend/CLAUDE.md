@@ -57,6 +57,10 @@ BETA_ACCESS_CODE=<optional - enables beta gate>
 | Anti-exploit, achievement verification | `docs/ACHIEVEMENT_VERIFICATION.md` |
 | Game design, cosmetic mappings | `docs/GODOT_HANDOFF.md` |
 | Provider integration status | `docs/PROVIDER_ROADMAP.md` |
+| **Forge item design philosophy** | `docs/FORGE_ITEM_PHILOSOPHY.md` |
+| **Trading & economy system** | `docs/FORGE_ECONOMY_DESIGN.md` |
+| **Provenance & blockchain backing** | `docs/FORGE_PROVENANCE_SYSTEM.md` |
+| **Item effects & abilities** | `docs/FORGE_ITEM_EFFECTS.md` |
 
 ---
 
@@ -75,6 +79,25 @@ The `AchievementCredit` table tracks claims globally by `provider_name + provide
 - **Web users:** Session cookie (`session_id`)
 - **Godot client:** Bearer token in `Authorization` header
 - Both resolved by `get_session_token()` in `app/main.py`
+
+### Trading & Economy (Twinking System)
+
+Forged items are Dreadland's **twinking system** - no level requirements, tradeable from day one.
+
+**Key principles:**
+- Trading is **frictionless MMO-style** - standard trade windows, gold exchanges
+- Blockchain is **invisible infrastructure** - users never see wallets or gas fees
+- Provenance tracked on-chain but **batched** every 5 minutes for efficiency
+- **Traditional gamers first** - the crypto aspect is optional/hidden
+
+**Backend responsibilities:**
+- Record trades in database immediately (source of truth for gameplay)
+- Queue chain updates for batch processing
+- Apply 5% gold tax on trades
+- Enforce 24-hour trade cooldowns
+- Track provenance (forger, trade count, ownership chain)
+
+See `docs/FORGE_ECONOMY_DESIGN.md` for full specification.
 
 ### Provider Registry
 
@@ -129,10 +152,39 @@ TIERS = {
 | `app/models.py` | SQLAlchemy models |
 | `app/providers/__init__.py` | Provider registry |
 | `app/services/effort_scoring.py` | **Unified effort scoring (0-100) across all providers** |
+| `app/services/item_forge_service.py` | Item generation from achievements |
 | `app/services/steam_services.py` | Steam sync logic |
 | `app/services/battlenet_services.py` | Battle.net sync logic |
 | `app/routes/wallet_routes.py` | NFT forging endpoints |
+| `app/routes/trading_routes.py` | **Trading endpoints (pending)** |
 | `alembic/versions/` | Database migrations |
+| `data/items.json` | **Forge item catalog and achievement mappings** |
+
+---
+
+## Backend Tools
+
+| Script | Purpose |
+|--------|---------|
+| `tools/convert_provider_icons.py` | Convert SVG icons to PNG for Godot |
+| `tools/generate_item_manifest.py` | Generate item manifest from items.json |
+| `scripts/fetch_wow_achievements.py` | Fetch WoW achievement data |
+| `scripts/build_wow_achievement_db.py` | Build WoW achievement database |
+| `scripts/cleanup_duplicate_achievements.py` | Clean up duplicate achievements |
+
+### Provider Icon Conversion
+
+When adding a new provider, you need PNG versions of icons for Godot (can't load SVGs from HTTP):
+
+```bash
+# Requires cairosvg (Windows needs GTK runtime installed)
+pip install cairosvg
+
+# Convert all provider SVGs to PNGs
+python tools/convert_provider_icons.py
+```
+
+Icons are served at `/static/icons/{provider}.png` and returned in API responses.
 
 ---
 
@@ -153,10 +205,12 @@ alembic current
 
 ## Principles
 
-1. **Cosmetic only** - Mantle tier never affects gameplay/combat stats
+1. **Traditional gamers first** - Blockchain is invisible infrastructure, not marketing
 2. **Anti-exploit first** - Always check for ways users could game the system
-3. **Single source of truth** - Don't duplicate API specs across docs
-4. **Test before commit** - User tests in Godot, not automated tests
+3. **Frictionless trading** - In-game trades work like any MMO, chain updates happen behind scenes
+4. **Single source of truth** - Don't duplicate API specs across docs
+5. **Test before commit** - User tests in Godot, not automated tests
+6. **Never expose crypto complexity** - No wallets, gas fees, or blockchain terminology in user-facing flows
 
 ---
 
