@@ -747,9 +747,14 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	if character_sprite.has_method("is_harvest_active") and character_sprite.is_harvest_active():
 		return
 
-	# Don't interrupt attack animations
-	if character_sprite.animation and character_sprite.animation.begins_with("slash_") and character_sprite.is_playing():
-		return
+	# Don't interrupt attack animations (slash for melee, shoot for guns)
+	if character_sprite.animation and character_sprite.is_playing():
+		if character_sprite.animation.begins_with("slash_"):
+			return
+		# For gun weapons, check if gun body layer is playing shoot animation
+		if character_sprite.gun_body_sprite and character_sprite.gun_body_sprite.visible:
+			if character_sprite.gun_body_sprite.animation and character_sprite.gun_body_sprite.animation.begins_with("shoot_") and character_sprite.gun_body_sprite.is_playing():
+				return
 
 	# Get direction (down/up/left/right from old system)
 	var is_moving = velocity_dir.length() > 0.1
@@ -2266,16 +2271,22 @@ func create_player_sprite() -> void:
 	var is_female = (selected_gender == Gender.FEMALE)
 	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, shadow_walk_tex, shadow_slash_tex, base_head_walk_tex, base_head_slash_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, hair_walk_tex, hair_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type, is_female)
 
-	# Gun pose body swap: If weapon is a gun type, load Skorpio body for walk animations
-	# This makes the character use the shooting stance body when walking with a gun
+	# Gun pose body swap: If weapon is a gun type, load Skorpio body for walk and shoot animations
+	# This makes the character use the shooting stance body when walking/shooting with a gun
 	var gun_weapon_types = ["gun", "rifle", "pistol", "shotgun", "railgun"]
 	if weapon_type in gun_weapon_types:
-		var gun_body_path = "res://assets/characters/body_gun_pose/walk.png"
-		if ResourceLoader.exists(gun_body_path):
-			var gun_body_walk_tex = load(gun_body_path)
-			character_sprite.setup_gun_walk_animations(gun_body_walk_tex)
+		var gun_body_walk_path = "res://assets/characters/body_gun_pose/walk.png"
+		var gun_body_shoot_path = "res://assets/characters/body_gun_pose/shoot.png"
+		if ResourceLoader.exists(gun_body_walk_path):
+			var gun_body_walk_tex = load(gun_body_walk_path)
+			var gun_body_shoot_tex = null
+			if ResourceLoader.exists(gun_body_shoot_path):
+				gun_body_shoot_tex = load(gun_body_shoot_path)
+			character_sprite.setup_gun_walk_animations(gun_body_walk_tex, gun_body_shoot_tex)
 			if DEBUG_EQUIP:
 				print("[Equip] Gun weapon detected - loaded Skorpio gun pose body for walk animations")
+				if gun_body_shoot_tex:
+					print("[Equip] Gun shoot animation also loaded")
 
 	add_child(character_sprite)
 
@@ -2528,8 +2539,10 @@ func update_cone_visualizer() -> void:
 # ============================================
 
 func create_circle_visualizer() -> void:
-	"""Create targeting circle for ranged weapons (healing staff, etc.)
-	This circle follows the mouse cursor and shows the heal/attack radius."""
+	"""Create targeting circle for ranged weapons (healing staff, guns, etc.)
+	This circle follows the mouse cursor and shows the heal/attack radius.
+	- Healing weapons: Large green circle
+	- Gun weapons: Small red/orange reticle"""
 	# Clean up existing visualizer if any
 	if circle_visualizer and is_instance_valid(circle_visualizer):
 		circle_visualizer.queue_free()
@@ -2543,12 +2556,22 @@ func create_circle_visualizer() -> void:
 	# Create the filled circle using Polygon2D
 	var circle_fill = Polygon2D.new()
 	circle_fill.name = "CircleFill"
-	circle_fill.color = Color(0.4, 1.0, 0.5, 0.04)  # Faint green (same opacity as melee cone)
 
-	# Get radius from equipped weapon or use default
+	# Determine radius and color based on weapon type
 	var radius = 80.0
-	if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_healing_weapon():
-		radius = CharacterStats.equipped_weapon.heal_radius
+	var fill_color = Color(0.4, 1.0, 0.5, 0.04)  # Default: faint green for healing
+
+	if CharacterStats.equipped_weapon:
+		if CharacterStats.equipped_weapon.is_gun_weapon():
+			# Gun: Small red/orange reticle for precision targeting
+			radius = CharacterStats.equipped_weapon.gun_radius
+			fill_color = Color(1.0, 0.3, 0.2, 0.08)  # Red-orange, slightly more visible
+		elif CharacterStats.equipped_weapon.is_healing_weapon():
+			# Healing staff: Large green circle
+			radius = CharacterStats.equipped_weapon.heal_radius
+			fill_color = Color(0.4, 1.0, 0.5, 0.04)  # Faint green
+
+	circle_fill.color = fill_color
 
 	# Create circle points
 	var points = PackedVector2Array()
@@ -2560,11 +2583,22 @@ func create_circle_visualizer() -> void:
 	circle_fill.polygon = points
 	circle_visualizer.add_child(circle_fill)
 
+	# For guns, add a center dot for precision aiming
+	if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_gun_weapon():
+		var center_dot = Polygon2D.new()
+		center_dot.name = "CenterDot"
+		center_dot.color = Color(1.0, 0.4, 0.3, 0.15)  # Slightly brighter center
+		var dot_points = PackedVector2Array()
+		var dot_radius = 3.0  # Small center dot
+		for i in range(16):
+			var angle = (float(i) / 16.0) * TAU
+			dot_points.append(Vector2(cos(angle), sin(angle)) * dot_radius)
+		center_dot.polygon = dot_points
+		circle_visualizer.add_child(center_dot)
+
 	# Add to scene tree root so it stays in world space at cursor position
 	get_tree().root.add_child(circle_visualizer)
 	circle_visualizer.visible = false  # Hidden until we have a ranged weapon
-
-	# Debug print removed - was spamming logs
 
 func update_circle_visualizer() -> void:
 	"""Update circle visualizer position to follow aim position (mouse or touch)."""
@@ -3084,10 +3118,29 @@ func _get_or_create_death_screen() -> DeathScreenUI:
 	return null
 
 func _get_bind_point() -> Vector2:
-	"""Get respawn location - home campfire or default spawn"""
-	# TODO: Check for bound campfire location
-	# For now, default to chunk 0 center (starting area)
+	"""Get respawn location - guild World Tree or default campfire"""
+	# Check for guild World Tree
+	if WorldTreeManager:
+		var guild_id = _get_player_guild_id()
+		var tree = WorldTreeManager.get_tree_by_guild(guild_id)
+		if tree:
+			# Respawn slightly offset from tree center
+			return tree.position + Vector2(100, 50)
+
+	# Default to chunk 0 center (starting area/campfire)
 	return Vector2(Constants.CHUNK_SIZE / 2, 0)
+
+
+func _get_player_guild_id() -> String:
+	"""Get the current player's guild ID for respawn binding"""
+	if GroupManager and GroupManager.has_group():
+		return "guild_%d" % GroupManager.group_leader
+
+	# Solo players have their own "guild" for World Tree purposes
+	if MantleAuth and MantleAuth.is_logged_in():
+		return "solo_guild_%s" % MantleAuth.get_user_id()
+
+	return "solo_guild_local_player"
 
 func create_character_ui() -> void:
 	"""Create and add character UI to scene tree"""

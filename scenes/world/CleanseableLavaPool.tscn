@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3 uid="uid://l2jhtxxaeayy"]
+
+[ext_resource type="Script" path="res://scripts/world/CleanseableLavaPool.gd" id="1_cleansablepool"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_interact"]
+radius = 60.0
+
+[node name="CleanseableLavaPool" type="Area2D"]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_cleansablepool")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_interact")

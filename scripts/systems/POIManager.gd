@@ -22,8 +22,10 @@ const CENTER_CHUNK: int = 0  # Safe/noob zone - no POIs (campfire area)
 const MIN_POI_DISTANCE_FROM_PATH: float = 800.0
 const POI_CENTER_OFFSET: float = 1000.0  # Offset from quadrant center for variety
 
-# Guaranteed POIs per edge chunk
-const GUARANTEED_POIS: Array[String] = ["settlement_plot", "ruins"]
+# Guaranteed POIs per edge chunk (seed_plot always spawns, ruins always spawns)
+# Note: There's a 20% chance for a second seed_plot instead of a random POI
+const GUARANTEED_POIS: Array[String] = ["seed_plot", "ruins"]
+const SECOND_SEED_PLOT_CHANCE: float = 0.20  # 20% chance for 2 seed plots per chunk
 
 # Random POI pool with weights
 const RANDOM_POI_POOL: Array[Dictionary] = [
@@ -35,10 +37,10 @@ const RANDOM_POI_POOL: Array[Dictionary] = [
 
 # POI type configurations
 const POI_CONFIGS: Dictionary = {
-	"settlement_plot": {
+	"seed_plot": {
 		"radius": 300.0,
 		"min_level": 0,
-		"description": "Claimable settlement location"
+		"description": "Unclaimed World Tree planting location"
 	},
 	"ruins": {
 		"radius": 350.0,
@@ -144,9 +146,17 @@ func generate_chunk_pois(chunk_id: int, rng: RandomNumberGenerator) -> void:
 		_add_poi(chunk_id, poi_type, poi_pos, quadrant)
 
 	# Fill remaining quadrants with random POIs
-	for i in range(GUARANTEED_POIS.size(), quadrant_list.size()):
+	# First remaining quadrant has a chance to be a second seed_plot
+	var remaining_start = GUARANTEED_POIS.size()
+	for i in range(remaining_start, quadrant_list.size()):
 		var quadrant = quadrant_list[i]
-		var poi_type = _pick_random_poi_type(rng)
+		var poi_type: String
+
+		# First remaining slot has chance for second seed_plot
+		if i == remaining_start and rng.randf() < SECOND_SEED_PLOT_CHANCE:
+			poi_type = "seed_plot"
+		else:
+			poi_type = _pick_random_poi_type(rng)
 
 		var poi_pos = _get_poi_position_in_quadrant(quadrant_centers[quadrant], rng)
 		_add_poi(chunk_id, poi_type, poi_pos, quadrant)
@@ -236,9 +246,9 @@ func get_pois_by_type(poi_type: String) -> Array:
 	return result
 
 
-func get_settlement_plots() -> Array:
-	"""Get all settlement plot POIs"""
-	return get_pois_by_type("settlement_plot")
+func get_seed_plots() -> Array:
+	"""Get all seed plot POIs (World Tree planting locations)"""
+	return get_pois_by_type("seed_plot")
 
 
 func get_ruins() -> Array:
@@ -287,18 +297,18 @@ func mark_poi_spawned(chunk_id: int, poi_type: String, position: Vector2) -> voi
 			break
 
 
-func claim_settlement(position: Vector2, guild_id: String) -> bool:
-	"""Attempt to claim a settlement plot for a guild"""
+func claim_seed_plot(position: Vector2, guild_id: String) -> bool:
+	"""Attempt to claim a seed plot for a guild (plant a World Tree)"""
 	for chunk_id in poi_data:
 		for poi in poi_data[chunk_id]:
-			if poi.type != "settlement_plot":
+			if poi.type != "seed_plot":
 				continue
 
 			var dist = position.distance_to(poi.position)
 			if dist <= poi.radius and not poi.claimed:
 				poi.claimed = true
 				poi.owner_guild = guild_id
-				print("🏰 Settlement claimed at %s by guild %s" % [position, guild_id])
+				print("🌳 Seed plot claimed at %s by guild %s" % [position, guild_id])
 				return true
 
 	return false

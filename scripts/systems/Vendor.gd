@@ -429,10 +429,37 @@ func load_starter_tools() -> void:
 		"min_ruins_distance": 1000.0  # Must be at least 1000px from ruins
 	}
 
+	var world_tree_seed = {
+		"name": "World Tree Seed",
+		"description": "A mystical seed pulsing with ancient energy. Plant at a seed plot to grow your guild's World Tree - a sanctuary and respawn point in the wasteland.",
+		"type": "consumable",
+		"consumable_type": "world_tree_seed",
+		"value": 500,
+		"price": 1000,  # 1,000 gold
+		"rarity": "RARE",
+		"stackable": false,
+		"quantity": 1,
+	}
+
+	var empty_vial = {
+		"name": "Empty Vial",
+		"description": "A small glass container. Use at cleansed lava pools to collect purified water for your World Tree.",
+		"type": "consumable",
+		"consumable_type": "empty_vial",
+		"value": 25,
+		"price": 50,  # 50 gold
+		"rarity": "COMMON",
+		"stackable": true,
+		"max_stack": 10,
+		"quantity": 1,
+	}
+
 	tools_for_sale.append(rusty_axe)
 	tools_for_sale.append(rusty_pickaxe)
 	tools_for_sale.append(campfire_kit)
-	print("   Loaded 3 starter tools (2 free, 1 campfire kit)")
+	tools_for_sale.append(world_tree_seed)
+	tools_for_sale.append(empty_vial)
+	print("   Loaded 5 starter tools (World Tree Seed: 1000g, Empty Vial: 50g)")
 
 func create_weapon_from_data(data: Dictionary) -> Weapon:
 	"""Create a Weapon resource from JSON data"""
@@ -448,6 +475,10 @@ func create_weapon_from_data(data: Dictionary) -> Weapon:
 	weapon.attack_mode = data.get("attack_mode", "melee")
 	weapon.healing_power = data.get("healing_power", 0.0)
 	weapon.heal_radius = data.get("heal_radius", 80.0)
+
+	# Gun weapon properties
+	weapon.gun_radius = data.get("gun_radius", 28.0)
+	weapon.gun_range = data.get("gun_range", 350.0)
 
 	# Convert attack_speed category to numeric multiplier
 	# fast = -0.30 (30% faster), medium = 0.0, slow = +0.30 (30% slower)

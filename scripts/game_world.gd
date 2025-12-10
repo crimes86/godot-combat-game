@@ -20,16 +20,9 @@ var spawn_manager = null  # SpawnManager (type hint removed for compatibility)
 var chunk_prop_system: ChunkBasedPropSystem = null
 
 const PROP_TEXTURES = {
-	"dead_tree_1": "res://assets/environment/wasteland/dead_tree_1.png",
-	"dead_tree_2": "res://assets/environment/wasteland/dead_tree_2.png",
-	"dead_tree_3": "res://assets/environment/wasteland/dead_tree_3.png",
-	"dead_tree_4": "res://assets/environment/wasteland/dead_tree_4.png",
-	"dead_tree_5": "res://assets/environment/wasteland/dead_tree_5.png",
-	"dead_tree_6": "res://assets/environment/wasteland/dead_tree_6.png",
-	"dead_tree_7": "res://assets/environment/wasteland/dead_tree_7.png",
-	"dead_tree_8": "res://assets/environment/wasteland/dead_tree_8.png",
-	"dead_tree_9": "res://assets/environment/wasteland/dead_tree_9.png",
-	"dead_tree_10": "res://assets/environment/wasteland/dead_tree_10.png",
+	"dead_tree": "res://assets/environment/wasteland/dead_tree.png",
+	"pine_tree": "res://assets/environment/wasteland/pine_tree.png",
+	"autumn_tree": "res://assets/environment/wasteland/autumn_tree.png",
 	"rock_large": "res://assets/environment/wasteland/rock_large.png",
 	"rock_medium": "res://assets/environment/wasteland/rock_medium.png",
 	"rock_small": "res://assets/environment/wasteland/rock_small.png",
@@ -486,13 +479,16 @@ func despawn_ruins_for_chunk(chunk_id: int) -> void:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# POI SPAWNING - Settlements, Monster Dens, Resource Nodes, etc.
+# POI SPAWNING - Seed Plots, Monster Dens, Resource Nodes, etc.
 # ═══════════════════════════════════════════════════════════════════════════════
 
-var settlement_nodes: Array = []  # Track spawned settlement plots
+var seed_plot_nodes: Array = []  # Track spawned seed plots (World Tree locations)
+var world_tree_nodes: Array = []  # Track spawned World Trees
+const SEED_PLOT_SCENE = preload("res://scenes/world/SeedPlot.tscn")
+const WORLD_TREE_SCENE = preload("res://scenes/world/WorldTree.tscn")
 
 func spawn_pois_for_chunk(chunk_id: int) -> void:
-	"""Spawn all POI types for a chunk (settlements, monster dens, etc.)"""
+	"""Spawn all POI types for a chunk (seed plots, monster dens, etc.)"""
 	if not poi_manager:
 		return
 
@@ -502,8 +498,8 @@ func spawn_pois_for_chunk(chunk_id: int) -> void:
 			continue
 
 		match poi.type:
-			"settlement_plot":
-				spawn_settlement_plot(poi)
+			"seed_plot":
+				spawn_seed_plot(poi)
 			"monster_lava_lake":
 				spawn_monster_lava_lake(poi)
 			"resource_node":
@@ -515,106 +511,79 @@ func spawn_pois_for_chunk(chunk_id: int) -> void:
 			# "ruins" handled by spawn_ruins_for_chunk for backward compatibility
 
 
-func spawn_settlement_plot(poi: Dictionary) -> void:
-	"""Spawn an unclaimed settlement plot visual"""
-	var plot = Node2D.new()
-	plot.name = "SettlementPlot_%d_%d" % [poi.chunk_id, poi.quadrant]
-	plot.position = poi.position
+func spawn_seed_plot(poi: Dictionary) -> void:
+	"""Spawn a SeedPlot scene (World Tree planting location)"""
+	# Check if already claimed by a World Tree
+	if WorldTreeManager and WorldTreeManager.get_tree_in_chunk(poi.chunk_id):
+		poi.spawned = true
+		print("🌳 Skipping seed plot at %s - chunk already has World Tree" % poi.position)
+		return
 
-	# Create clearing polygon (darker area)
-	var clearing = Polygon2D.new()
-	clearing.name = "Clearing"
-	var radius = poi.radius
-	var points = PackedVector2Array()
-	for i in range(32):
-		var angle = i * TAU / 32
-		var wobble = sin(angle * 3) * 20 + cos(angle * 5) * 15
-		points.append(Vector2(cos(angle), sin(angle)) * (radius + wobble))
-	clearing.polygon = points
-	clearing.color = Color(0.04, 0.04, 0.05, 0.8)
-	clearing.z_index = -5
-	plot.add_child(clearing)
+	var seed_plot = SEED_PLOT_SCENE.instantiate()
+	seed_plot.name = "SeedPlot_%d_%d" % [poi.chunk_id, poi.quadrant]
+	seed_plot.position = poi.position
+	seed_plot.set_chunk_id(poi.chunk_id)
 
-	# Add scattered foundation stones
-	var stone_texture = load("res://assets/environment/wasteland/rock_small.png")
-	if stone_texture:
-		var rng = RandomNumberGenerator.new()
-		rng.seed = hash(poi.position)
+	# Connect the plot_claimed signal to handle World Tree spawning
+	seed_plot.plot_claimed.connect(_on_seed_plot_claimed.bind(poi))
 
-		for i in range(8):
-			var stone = Sprite2D.new()
-			stone.texture = stone_texture
-			var angle = rng.randf() * TAU
-			var dist = rng.randf_range(radius * 0.3, radius * 0.8)
-			stone.position = Vector2(cos(angle), sin(angle)) * dist
-			stone.rotation = rng.randf() * TAU
-			stone.scale = Vector2(0.8, 0.8) * rng.randf_range(0.6, 1.2)
-			stone.modulate = Color(0.6, 0.6, 0.55, 0.9)  # Weathered grey
-			stone.z_index = -4
-			plot.add_child(stone)
-
-	# Add signpost
-	var signpost = _create_settlement_signpost(poi)
-	plot.add_child(signpost)
-
-	# Add faint boundary markers (corner posts)
-	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-		var post = _create_boundary_post(corner * radius * 0.9)
-		plot.add_child(post)
-
-	add_child(plot)
-	settlement_nodes.append(plot)
+	add_child(seed_plot)
+	seed_plot_nodes.append(seed_plot)
 	poi.spawned = true
 
-	print("🏕️ Spawned settlement plot at %s (chunk %d)" % [poi.position, poi.chunk_id])
+	print("🌱 Spawned seed plot at %s (chunk %d)" % [poi.position, poi.chunk_id])
 
 
-func _create_settlement_signpost(poi: Dictionary) -> Node2D:
-	"""Create a signpost indicating unclaimed settlement"""
-	var signpost = Node2D.new()
-	signpost.name = "Signpost"
-	signpost.position = Vector2(0, -poi.radius * 0.5)  # North of center
+func _on_seed_plot_claimed(tree_data: WorldTreeData, poi: Dictionary) -> void:
+	"""Handle when a seed plot is claimed and World Tree is planted"""
+	poi.claimed = true
+	print("🌳 Seed plot claimed! World Tree planted for guild: %s" % tree_data.guild_name)
 
-	# Post (simple rectangle)
-	var post = ColorRect.new()
-	post.size = Vector2(8, 60)
-	post.position = Vector2(-4, -60)
-	post.color = Color(0.35, 0.25, 0.15)  # Wood brown
-	signpost.add_child(post)
-
-	# Sign board
-	var board = ColorRect.new()
-	board.size = Vector2(80, 30)
-	board.position = Vector2(-40, -70)
-	board.color = Color(0.4, 0.3, 0.2)  # Lighter wood
-	signpost.add_child(board)
-
-	# Text label
-	var label = Label.new()
-	label.text = "Unclaimed"
-	label.position = Vector2(-35, -68)
-	label.add_theme_font_size_override("font_size", 12)
-	label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
-	signpost.add_child(label)
-
-	return signpost
+	# Spawn the World Tree at this location
+	spawn_world_tree(tree_data, poi.position)
 
 
-func _create_boundary_post(pos: Vector2) -> ColorRect:
-	"""Create a faint boundary post at corner of settlement"""
-	var post = ColorRect.new()
-	post.name = "BoundaryPost"
-	post.size = Vector2(6, 20)
-	post.position = pos + Vector2(-3, -20)
-	post.color = Color(0.3, 0.25, 0.2, 0.5)  # Faded wood
-	return post
+func spawn_world_tree(tree_data: WorldTreeData, at_position: Vector2) -> void:
+	"""Spawn a World Tree at the given position"""
+	var world_tree = WORLD_TREE_SCENE.instantiate()
+	world_tree.name = "WorldTree_%s" % tree_data.tree_id
+	world_tree.position = at_position
 
+	# Initialize with tree data
+	if world_tree.has_method("initialize"):
+		world_tree.initialize(tree_data)
+
+	add_child(world_tree)
+	world_tree_nodes.append(world_tree)
+
+	print("🌳 Spawned World Tree for guild '%s' at %s" % [tree_data.guild_name, at_position])
+
+
+const CLEANSEABLE_LAVA_POOL_SCENE = preload("res://scenes/world/CleanseableLavaPool.tscn")
+var cleanseable_pool_nodes: Array = []
 
 func spawn_monster_lava_lake(poi: Dictionary) -> void:
-	"""Spawn a large monster-inhabited lava lake"""
-	# TODO: Implement giant lava lake with elite spawns
+	"""Spawn a large monster-inhabited lava lake with cleanseable pools"""
+	# Spawn cleanseable lava pools around the POI area
+	var rng = RandomNumberGenerator.new()
+	rng.seed = hash(poi.position)
+
+	# Spawn 2-4 cleanseable pools in the lava lake area
+	var pool_count = rng.randi_range(2, 4)
+	for i in range(pool_count):
+		var pool = CLEANSEABLE_LAVA_POOL_SCENE.instantiate()
+		pool.name = "CleanseablePool_%d_%d_%d" % [poi.chunk_id, poi.quadrant, i]
+
+		# Position pools around the POI center
+		var angle = rng.randf() * TAU
+		var dist = rng.randf_range(50, 150)
+		pool.position = poi.position + Vector2(cos(angle), sin(angle)) * dist
+
+		add_child(pool)
+		cleanseable_pool_nodes.append(pool)
+
 	poi.spawned = true
-	print("🌋 [PLACEHOLDER] Monster lava lake at %s" % poi.position)
+	print("🌋 Spawned monster lava lake with %d cleanseable pools at %s" % [pool_count, poi.position])
 
 
 func spawn_resource_node(poi: Dictionary) -> void:
@@ -644,7 +613,7 @@ func despawn_pois_for_chunk(chunk_id: int) -> void:
 		return
 
 	var to_remove = []
-	for node in settlement_nodes:
+	for node in seed_plot_nodes:
 		if not is_instance_valid(node):
 			to_remove.append(node)
 			continue
@@ -659,7 +628,7 @@ func despawn_pois_for_chunk(chunk_id: int) -> void:
 				break
 
 	for node in to_remove:
-		settlement_nodes.erase(node)
+		seed_plot_nodes.erase(node)
 
 
 func generate_ruins_positions_for_chunk(x_min: float, x_max: float, pattern: int, rng: RandomNumberGenerator) -> Array:
