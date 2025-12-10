@@ -161,7 +161,7 @@ These weapon types are defined in `scripts/weapons/WeaponAnimationData.gd` and `
 | `rapier` | precise | fast | 115px | Precision strikes |
 | `staff` | casting | medium | 125px | Magic/healing weapons |
 
-### Extended Types (11) - Fallback to core animations
+### Extended Types (12) - Fallback to core animations
 | Type | Fallback | Notes |
 |------|----------|-------|
 | `greatsword` | sword | Two-handed swords |
@@ -175,6 +175,7 @@ These weapon types are defined in `scripts/weapons/WeaponAnimationData.gd` and `
 | `scythe` | spear | Farming/reaper weapon |
 | `bow` | staff | Standard bow |
 | `crossbow` | staff | Mechanical ranged |
+| `gun` | (special) | Uses Skorpio body swap - see "Gun Weapons" section |
 
 ### Aliases (map to core types)
 ```
@@ -462,3 +463,106 @@ Set `has_sprites: true` on test items even without real sprites to test the data
 - `assets/equipment/forged/` - Forged item sprites
 - `assets/icons/forged/` - 64x64 item icons
 - LPC Generator: https://liberatedpixelcup.github.io/Universal-LPC-Spritesheet-Character-Generator/
+
+---
+
+## Sprite Tinting Tool
+
+For creating colored variants of base weapons, use the `forge_sprite_tinter.py` tool:
+
+```bash
+# Preview single item
+python tools/forge_sprite_tinter.py --preview moonveil
+
+# Generate single item sprites
+python tools/forge_sprite_tinter.py --generate moonveil
+
+# Generate all missing forged sprites
+python tools/forge_sprite_tinter.py --generate-all
+
+# Generate comparison image showing all tint methods
+python tools/forge_sprite_tinter.py --compare moonveil
+```
+
+**Tinting Methods:**
+| Method | Use Case |
+|--------|----------|
+| `simple` | Basic color multiply overlay |
+| `additive` | Tint + brightness boost (glowing effect) |
+| `hue_shift` | Rotate hue toward target color (preserves shading) |
+| `hybrid` | Hue shift + additive glow based on rarity (recommended) |
+
+Configure items in `FORGED_ITEMS` dict in the script:
+```python
+"moonveil": {
+    "weapon_class": "katana",
+    "glow_color": "#6495ED",  # Moonlight blue
+    "rarity": "legendary",
+    "game": "Elden Ring",
+},
+```
+
+---
+
+## Edge Case: Gun Weapons (Body Swap System)
+
+Gun weapons require special handling because LPC sprites don't have a "holding gun" body pose. We use the **Skorpio SciFi Sprite Pack** body with arms extended for shooting.
+
+### How It Works
+
+1. **Normal LPC body** is used for idle animations
+2. **Skorpio body** is swapped in during walk animations (arms extended for gun)
+3. **Clothing layers** (pants, shirt, hair) render on top of whichever body is showing
+4. **Gun weapon sprite** renders as a separate layer
+
+### Files Involved
+
+| File | Purpose |
+|------|---------|
+| `assets/characters/body_gun_pose/walk.png` | Skorpio MaleWalkShoot body (576x256) |
+| `assets/equipment/weapons/gun/walk.png` | Base gun sprite overlay |
+| `assets/equipment/forged/weapons/adamant_rail/walk.png` | Tinted forged gun |
+| `scripts/SimpleLPCSprite.gd` | Gun body swap logic |
+| `scripts/player/Player.gd` | Gun weapon detection |
+| `scripts/systems/ForgeItemDB.gd` | GUN weapon class enum |
+
+### Adding a New Gun Weapon
+
+1. **Add to ForgeItemDB.gd** with `WeaponClass.GUN`:
+   ```gdscript
+   "hades_1145360_ADAMANT_RAIL": {
+       "item_id": "adamant_rail",
+       "item_name": "Adamant Rail",
+       "weapon_class": WeaponClass.GUN,
+       # ...
+   },
+   ```
+
+2. **Generate tinted sprites**:
+   ```bash
+   python tools/forge_sprite_tinter.py --generate adamant_rail
+   ```
+
+3. **The system auto-detects** gun weapons in Player.gd:
+   ```gdscript
+   var gun_weapon_types = ["gun", "rifle", "pistol", "shotgun", "railgun"]
+   if weapon_type in gun_weapon_types:
+       # Load Skorpio gun pose body
+       character_sprite.setup_gun_walk_animations(gun_body_walk_tex)
+   ```
+
+### Technical Details
+
+**SimpleLPCSprite.gd** handles the body swap:
+- `gun_body_sprite`: Separate AnimatedSprite2D for Skorpio body
+- `setup_gun_walk_animations()`: Creates walk animations on gun body layer
+- `_set_body_layers_visible()`: Uses `self_modulate.a` (not `modulate`) to hide body without hiding children
+- Clothing layers sync to gun_body_sprite frames when it's visible
+
+**Key insight**: Use `self_modulate` instead of `modulate` when hiding the body, otherwise all child sprites (clothing) become invisible too.
+
+### Limitations
+
+- Gun weapons only have walk animation (no slash/attack pose from Skorpio pack)
+- Only one gun body pose available (MaleWalkShoot) - used for both male/female
+- Hurt animation uses regular LPC body (no gun pose hurt exists)

@@ -56,6 +56,11 @@ var hair_sprite: AnimatedSprite2D = null
 var weapon_sprite: AnimatedSprite2D = null
 var current_weapon_type: String = "sword"  # Track weapon type for offset calculations
 
+# Gun pose support - swap body to Skorpio pose when walking with gun
+var is_gun_weapon: bool = false  # True if current weapon is a gun type
+var has_gun_walk_animations: bool = false  # True if gun_walk_* animations exist
+var gun_body_sprite: AnimatedSprite2D = null  # Separate layer for Skorpio gun pose body
+
 # Harvest animation support - track if we need slash-based chop
 var uses_thrust_animation: bool = false  # True if body uses 8-frame thrust
 var body_type_path: String = ""  # e.g. "body_male" for loading slash.png during harvest
@@ -74,6 +79,11 @@ func _process(_delta: float) -> void:
 	# This prevents drift between independently playing AnimatedSprite2Ds
 	var body_frame = frame
 	var body_anim = animation
+
+	# If using gun pose, sync clothing to gun_body_sprite instead of main body
+	if gun_body_sprite and gun_body_sprite.visible:
+		body_frame = gun_body_sprite.frame
+		body_anim = gun_body_sprite.animation
 
 	_sync_layer(shadow_sprite, body_anim, body_frame)
 	_sync_layer(base_head_sprite, body_anim, body_frame)
@@ -542,12 +552,86 @@ func create_animation_from_image(img: Image, anim_name: String, row: int, frame_
 		# Add to sprite frames
 		frames.add_frame(anim_name, frame_texture)
 
+func setup_gun_walk_animations(gun_body_walk_tex: Texture2D) -> void:
+	"""Setup gun walk animations using Skorpio body pose (arms extended for gun)
+	Creates a SEPARATE sprite layer for the Skorpio body that shows during gun_walk.
+	The normal LPC body is hidden when this layer is visible."""
+	if not gun_body_walk_tex:
+		return
+
+	is_gun_weapon = true
+	has_gun_walk_animations = true
+
+	# Create a separate sprite layer for the gun pose body (like other clothing layers)
+	gun_body_sprite = AnimatedSprite2D.new()
+	gun_body_sprite.name = "GunBodyLayer"
+	gun_body_sprite.centered = true
+	gun_body_sprite.z_index = 0  # Same z as body - will replace it visually
+	gun_body_sprite.sprite_frames = SpriteFrames.new()
+	gun_body_sprite.visible = false  # Start hidden, show during gun_walk
+
+	var gun_walk_img = gun_body_walk_tex.get_image()
+
+	# Create walk animations on the gun body layer
+	for dir_name in DIRECTION_ROWS.keys():
+		var row = DIRECTION_ROWS[dir_name]
+		create_animation_from_image(gun_walk_img, "walk_" + dir_name, row, 8, [1, 2, 3, 4, 5, 6, 7, 8], 10.0, true, gun_body_sprite.sprite_frames, 64)
+		# Also create idle (frame 0) for when standing still with gun - use regular body instead
+		create_animation_from_image(gun_walk_img, "idle_" + dir_name, row, 1, [0], 1.0, true, gun_body_sprite.sprite_frames, 64)
+
+	add_child(gun_body_sprite)
+
+	if DEBUG_SPRITE_SETUP:
+		print("[LPCSprite] Gun body layer created for Skorpio body swap")
+		print("  - gun_body_sprite z_index: ", gun_body_sprite.z_index)
+		print("  - Animations: ", gun_body_sprite.sprite_frames.get_animation_names())
+
+func _set_body_layers_visible(visible_state: bool) -> void:
+	"""Show/hide the base body sprite when swapping to gun pose.
+	The Skorpio body includes body+arms, so we hide the main LPC body.
+	Clothing layers (pants, shirt, boots, etc.) stay visible on top of Skorpio body.
+	Hair also stays visible for character identity."""
+	# The main AnimatedSprite2D (self) is the naked body - hide it when using gun pose
+	# IMPORTANT: Use self_modulate instead of modulate - modulate affects children too!
+	# self_modulate only affects this sprite, children (clothing layers) stay visible
+	if visible_state:
+		self_modulate.a = 1.0
+	else:
+		self_modulate.a = 0.0
+
+	# base_head_sprite is also part of the naked body (for female characters) - hide it too
+	if base_head_sprite:
+		base_head_sprite.self_modulate.a = 1.0 if visible_state else 0.0
+
+	# Gun body layer is the OPPOSITE - show when regular body is hidden
+	if gun_body_sprite:
+		gun_body_sprite.visible = not visible_state
+
+	# Keep ALL clothing layers visible - they go on top of Skorpio/regular body
+	# pants_sprite, shirt_sprite, boots_sprite, arms_sprite, hands_sprite, head_sprite, hair_sprite
+	# These are NOT modified here - they stay visible
+
 func play_lpc_animation(anim_name: String, direction: String):
 	"""Play animation with direction - NO FLIPPING!"""
 	current_direction = direction
 
 	# Check if this animation has directions
 	var anim_key = anim_name + "_" + direction
+
+	# Gun body swap: When walking with a gun, show the Skorpio body layer instead of LPC body
+	var using_gun_pose = false
+	if is_gun_weapon and has_gun_walk_animations and anim_name == "walk":
+		if gun_body_sprite and gun_body_sprite.sprite_frames.has_animation("walk_" + direction):
+			using_gun_pose = true
+
+	# Hide/show body-related layers based on gun pose
+	# Skorpio body is complete (includes body+arms), so hide LPC layers to prevent double-render
+	# Keep clothing/hair visible for character identity
+	_set_body_layers_visible(not using_gun_pose)
+
+	# Play animation on gun body layer if using gun pose
+	if using_gun_pose and gun_body_sprite:
+		gun_body_sprite.play("walk_" + direction)
 
 	# NOTE: Animation speeds are set during setup_lpc_sprite() and should NOT be modified here
 	# All layers must use the same FPS that was set during creation (weapon-specific)

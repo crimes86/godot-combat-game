@@ -26,6 +26,14 @@ var enter_world_button: Button = null
 var logout_button: Button = null
 var settings_panel: Control = null
 
+# Character preview sprite rendering
+var _character_viewport: SubViewport = null
+var _character_sprite = null  # SimpleLPCSprite instance
+var _direction_cycle_timer: Timer = null
+var _current_direction_index: int = 0
+const DIRECTION_CYCLE_ORDER = ["south", "east", "west"]  # Skip north - looks weird
+const DIRECTION_CYCLE_INTERVAL: float = 2.0  # seconds per direction
+
 # Settings panel controls
 var master_volume_slider: HSlider = null
 var music_volume_slider: HSlider = null
@@ -294,6 +302,11 @@ func _exit_tree() -> void:
 	_stop_wallet_polling()
 	_stop_wallet_background_sync()
 	_stop_bridge_countdown_timer()
+	_stop_direction_cycling()
+	if _footstep_timer:
+		_footstep_timer.stop()
+		_footstep_timer.queue_free()
+		_footstep_timer = null
 
 func _on_profile_updated(_data: Dictionary) -> void:
 	"""Called when MantleAuth receives profile data - refresh the UI"""
@@ -310,6 +323,13 @@ func _on_profile_updated(_data: Dictionary) -> void:
 	# Re-trigger achievement count animation now that we have real data
 	if _target_achievement_count > 0:
 		_animate_achievement_count()
+
+	# Setup character preview from saved appearance
+	var appearance = MantleAuth.saved_appearance
+	if appearance == null or appearance.is_empty():
+		# Use default starter appearance for new players
+		appearance = _get_default_appearance()
+	call_deferred("_setup_character_preview", appearance)
 
 	print("[Armory] UI refreshed - target_achievement_count: %d" % _target_achievement_count)
 
@@ -4541,45 +4561,66 @@ func _build_dreadland_column() -> Control:
 	return wrapper
 
 func _build_character_preview_section() -> Control:
-	"""Build a character preview area with animated sprite"""
+	"""Build a character preview area with animated LPC sprite"""
 	var section = VBoxContainer.new()
 	section.add_theme_constant_override("separation", 4)
 
-	# Character preview container with border
+	# Character preview container with border - sized to fit viewport
 	var preview_container = PanelContainer.new()
 	preview_container.name = "CharPreviewContainer"
-	preview_container.custom_minimum_size = Vector2(0, 140)
+	preview_container.custom_minimum_size = Vector2(264, 264)  # 256 viewport + 4px border each side
+	preview_container.z_index = 15  # Above the grid overlay (z=10)
+	preview_container.clip_contents = false  # Don't clip - let it render fully
 	var preview_style = StyleBoxFlat.new()
-	preview_style.bg_color = BG_DARK
-	preview_style.border_color = BORDER_GLOW.darkened(0.3)
-	preview_style.set_border_width_all(1)
-	preview_style.set_corner_radius_all(6)
+	preview_style.bg_color = Color(0, 0, 0, 0)  # Transparent - viewport has its own bg
+	preview_style.border_color = BORDER_GLOW  # Cyan glow border like web app cards
+	preview_style.set_border_width_all(4)  # Thick glowing border
+	preview_style.set_corner_radius_all(4)  # Slight rounding
+	preview_style.set_content_margin_all(4)  # Match border width
+	preview_style.shadow_color = Color(BORDER_GLOW.r, BORDER_GLOW.g, BORDER_GLOW.b, 0.4)
+	preview_style.shadow_size = 8  # Outer glow effect
 	preview_container.add_theme_stylebox_override("panel", preview_style)
 	section.add_child(preview_container)
 
 	var preview_center = CenterContainer.new()
 	preview_container.add_child(preview_center)
 
-	# Placeholder text (will be replaced with actual sprite)
+	# SubViewportContainer to render the 2D character sprite in UI
+	var viewport_container = SubViewportContainer.new()
+	viewport_container.name = "CharViewportContainer"
+	viewport_container.custom_minimum_size = Vector2(256, 256)
+	viewport_container.stretch = true
+	preview_center.add_child(viewport_container)
+
+	# SubViewport for rendering the character
+	_character_viewport = SubViewport.new()
+	_character_viewport.name = "CharViewport"
+	_character_viewport.size = Vector2i(256, 256)
+	_character_viewport.transparent_bg = false  # We have a background shader
+	_character_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	viewport_container.add_child(_character_viewport)
+
+	# Add vignette background
+	_create_vignette_background()
+
+	# Create placeholder content (will be replaced when appearance loads)
+	var placeholder_center = CenterContainer.new()
+	placeholder_center.name = "PlaceholderCenter"
+	placeholder_center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_character_viewport.add_child(placeholder_center)
+
 	var placeholder = VBoxContainer.new()
+	placeholder.name = "PlaceholderContent"
 	placeholder.add_theme_constant_override("separation", 4)
-	preview_center.add_child(placeholder)
+	placeholder_center.add_child(placeholder)
 
-	var char_icon = Label.new()
-	char_icon.name = "CharIcon"
-	char_icon.text = "⚔"  # Sword icon as placeholder
-	char_icon.add_theme_font_size_override("font_size", 48)
-	char_icon.add_theme_color_override("font_color", MANTLE_CYAN.darkened(0.3))
-	char_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	placeholder.add_child(char_icon)
-
-	var char_text = Label.new()
-	char_text.name = "CharText"
-	char_text.text = "Your Character"
-	char_text.add_theme_font_size_override("font_size", FONT_TINY)
-	char_text.add_theme_color_override("font_color", TEXT_DIM)
-	char_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	placeholder.add_child(char_text)
+	var loading_label = Label.new()
+	loading_label.name = "LoadingLabel"
+	loading_label.text = "Loading..."
+	loading_label.add_theme_font_size_override("font_size", FONT_TINY)
+	loading_label.add_theme_color_override("font_color", TEXT_DIM)
+	loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	placeholder.add_child(loading_label)
 
 	return section
 
@@ -8320,3 +8361,512 @@ func _save_settings() -> void:
 		config.set_value("display", "fullscreen", fullscreen_check.button_pressed)
 
 	config.save("user://settings.cfg")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CHARACTER PREVIEW RENDERING
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _get_default_appearance() -> Dictionary:
+	"""Return default starter appearance for new players."""
+	return {
+		"gender": 0,  # Male
+		"weapon_type": "",
+		"feet_sprite": "",
+		"legs_sprite": "green_pants",
+		"chest_sprite": "white_shirt",
+		"arms_sprite": "",
+		"hands_sprite": "",
+		"head_sprite": ""
+	}
+
+func _setup_character_preview(appearance: Dictionary) -> void:
+	"""Create and configure the character sprite from appearance data."""
+	if not _character_viewport:
+		print("[Armory] Character viewport not ready")
+		return
+
+	print("[Armory] Setting up character preview with appearance: ", appearance)
+
+	# Remove placeholder
+	var placeholder = _character_viewport.get_node_or_null("PlaceholderCenter")
+	if placeholder:
+		placeholder.queue_free()
+
+	# Remove old sprite if exists
+	if _character_sprite and is_instance_valid(_character_sprite):
+		_character_sprite.queue_free()
+		_character_sprite = null
+
+	# Get appearance data with defaults for new players
+	var gender = appearance.get("gender", 0)  # 0=male, 1=female
+	var is_female = gender == 1
+	var body_type = "body_female" if is_female else "body_male"
+
+	# Load SimpleLPCSprite script
+	var SimpleLPCSpriteClass = load("res://scripts/SimpleLPCSprite.gd")
+	if not SimpleLPCSpriteClass:
+		print("[Armory] Failed to load SimpleLPCSprite script")
+		return
+
+	_character_sprite = SimpleLPCSpriteClass.new()
+	_character_sprite.name = "CharacterSprite"
+	_character_sprite.position = Vector2(128, 115)  # Center in 256x256 viewport, raised to avoid bottom clipping
+	_character_sprite.centered = true
+	_character_sprite.scale = Vector2(3.2, 3.2)  # Scale up for visibility (doubled)
+
+	# Load body textures
+	var walk_tex = _load_texture("res://assets/characters/" + body_type + "/standard/walk.png")
+	var hurt_tex = _load_texture("res://assets/characters/" + body_type + "/standard/hurt.png")
+	var slash_tex = _load_texture("res://assets/characters/" + body_type + "/standard/slash.png")
+
+	if not walk_tex:
+		print("[Armory] Failed to load body walk texture")
+		return
+
+	# Load head textures (for female separate head)
+	var head_path = "res://assets/characters/head_female/standard/" if is_female else "res://assets/characters/head_male/standard/"
+	var base_head_walk_tex = _load_texture(head_path + "walk.png")
+	var base_head_slash_tex = _load_texture(head_path + "slash.png")
+
+	# Load hair textures (default hair for preview)
+	var hair_path = "res://assets/characters/hair_female/standard/" if is_female else "res://assets/characters/hair_male/standard/"
+	var hair_walk_tex = _load_texture(hair_path + "walk.png")
+	var hair_slash_tex = _load_texture(hair_path + "slash.png")
+
+	# Load armor textures from appearance
+	var legs_sprite = appearance.get("legs_sprite", "green_pants")
+	var chest_sprite = appearance.get("chest_sprite", "white_shirt")
+	var feet_sprite = appearance.get("feet_sprite", "")
+	var arms_sprite = appearance.get("arms_sprite", "")
+	var hands_sprite = appearance.get("hands_sprite", "")
+	var head_sprite = appearance.get("head_sprite", "")
+	var weapon_type = appearance.get("weapon_type", "")
+
+	var pants_walk_tex = _load_armor_texture("pants", legs_sprite, is_female)
+	var pants_slash_tex = _load_armor_texture("pants", legs_sprite, is_female, "slash")
+	var shirt_walk_tex = _load_armor_texture("shirt", chest_sprite, is_female)
+	var shirt_slash_tex = _load_armor_texture("shirt", chest_sprite, is_female, "slash")
+	var boots_walk_tex = _load_armor_texture("boots", feet_sprite, is_female)
+	var boots_slash_tex = _load_armor_texture("boots", feet_sprite, is_female, "slash")
+	var arms_walk_tex = _load_armor_texture("arms", arms_sprite, is_female)
+	var arms_slash_tex = _load_armor_texture("arms", arms_sprite, is_female, "slash")
+	var hands_walk_tex = _load_armor_texture("hands", hands_sprite, is_female)
+	var hands_slash_tex = _load_armor_texture("hands", hands_sprite, is_female, "slash")
+	var head_armor_walk_tex = _load_armor_texture("head", head_sprite, is_female)
+	var head_armor_slash_tex = _load_armor_texture("head", head_sprite, is_female, "slash")
+
+	# Load weapon textures
+	var weapon_walk_tex = null
+	var weapon_slash_tex = null
+	if weapon_type != "":
+		weapon_walk_tex = _load_texture("res://assets/equipment/weapons/" + weapon_type + "/walk.png")
+		weapon_slash_tex = _load_texture("res://assets/equipment/weapons/" + weapon_type + "/slash.png")
+
+	# Setup sprite with all layers
+	_character_sprite.setup_lpc_sprite(
+		walk_tex,
+		slash_tex,
+		hurt_tex,
+		null, null,  # shadow (not needed for preview)
+		base_head_walk_tex, base_head_slash_tex,
+		boots_walk_tex, boots_slash_tex,
+		pants_walk_tex, pants_slash_tex,
+		shirt_walk_tex, shirt_slash_tex,
+		arms_walk_tex, arms_slash_tex,
+		hands_walk_tex, hands_slash_tex,
+		head_armor_walk_tex, head_armor_slash_tex,
+		hair_walk_tex, hair_slash_tex,
+		weapon_slash_tex, weapon_walk_tex,
+		weapon_type,
+		is_female
+	)
+
+	_character_viewport.add_child(_character_sprite)
+
+	# Add footstep dust particles at character's feet
+	_create_footstep_dust()
+
+	# Start walking animation facing south
+	_character_sprite.play_lpc_animation("walk", "south")
+	_current_direction_index = 0  # Start at south
+
+	# Start direction cycling timer
+	_start_direction_cycling()
+
+	print("[Armory] Character preview setup complete")
+
+func _load_texture(path: String) -> Texture2D:
+	"""Helper to safely load a texture."""
+	if ResourceLoader.exists(path):
+		return load(path)
+	return null
+
+func _load_armor_texture(slot: String, sprite_name: String, is_female: bool, anim_type: String = "walk") -> Texture2D:
+	"""Helper to load armor texture with gender fallback."""
+	if sprite_name == "" or sprite_name == null:
+		return null
+
+	var gender_suffix = "_female" if is_female else ""
+	var path = "res://assets/characters/" + slot + gender_suffix + "/" + sprite_name + "_" + anim_type + ".png"
+
+	if ResourceLoader.exists(path):
+		return load(path)
+
+	# Try without gender suffix
+	path = "res://assets/characters/" + slot + "/" + sprite_name + "_" + anim_type + ".png"
+	if ResourceLoader.exists(path):
+		return load(path)
+
+	return null
+
+func _start_direction_cycling() -> void:
+	"""Start timer to cycle through walking directions."""
+	if _direction_cycle_timer:
+		_direction_cycle_timer.queue_free()
+
+	_direction_cycle_timer = Timer.new()
+	_direction_cycle_timer.wait_time = DIRECTION_CYCLE_INTERVAL
+	_direction_cycle_timer.timeout.connect(_on_direction_cycle)
+	add_child(_direction_cycle_timer)
+	_direction_cycle_timer.start()
+
+func _on_direction_cycle() -> void:
+	"""Cycle to next walking direction."""
+	_current_direction_index = (_current_direction_index + 1) % DIRECTION_CYCLE_ORDER.size()
+	var direction = DIRECTION_CYCLE_ORDER[_current_direction_index]
+
+	if _character_sprite and is_instance_valid(_character_sprite):
+		_character_sprite.play_lpc_animation("walk", direction)
+
+func _stop_direction_cycling() -> void:
+	"""Stop direction cycling timer."""
+	if _direction_cycle_timer:
+		_direction_cycle_timer.stop()
+		_direction_cycle_timer.queue_free()
+		_direction_cycle_timer = null
+
+func _create_vignette_background() -> void:
+	"""Create a scene background with ground, horizon, and vignette overlay."""
+	if not _character_viewport:
+		return
+
+	# Full scene rendered with a single shader - sky gradient, horizon glow, ground with perspective
+	var scene_bg = ColorRect.new()
+	scene_bg.name = "SceneBackground"
+	scene_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scene_bg.size = Vector2(256, 256)
+
+	var shader_code = """
+shader_type canvas_item;
+
+uniform float horizon_y : hint_range(0.0, 1.0) = 0.55;
+uniform vec4 sky_top_color : source_color = vec4(0.02, 0.03, 0.05, 1.0);
+uniform vec4 sky_horizon_color : source_color = vec4(0.08, 0.06, 0.04, 1.0);
+uniform vec4 ground_near_color : source_color = vec4(0.06, 0.05, 0.04, 1.0);
+uniform vec4 ground_far_color : source_color = vec4(0.04, 0.035, 0.03, 1.0);
+uniform vec4 horizon_glow_color : source_color = vec4(0.15, 0.08, 0.03, 1.0);
+uniform float horizon_glow_strength : hint_range(0.0, 1.0) = 0.4;
+uniform float vignette_strength : hint_range(0.0, 2.0) = 0.8;
+uniform vec2 moon_pos = vec2(0.75, 0.15);
+uniform float moon_size : hint_range(0.01, 0.2) = 0.08;
+uniform vec2 shadow_pos = vec2(0.5, 0.72);  // Character shadow position
+uniform float shadow_size : hint_range(0.01, 0.3) = 0.12;
+
+// Hash functions for stars
+float hash(float x) {
+	return fract(sin(x * 127.1) * 43758.5453);
+}
+
+vec2 hash2(vec2 p) {
+	p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+	return fract(sin(p) * 43758.5453);
+}
+
+float smooth_noise(float x) {
+	float i = floor(x);
+	float f = fract(x);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(hash(i), hash(i + 1.0), f);
+}
+
+// Star field with twinkling
+float stars(vec2 uv, float density, float time) {
+	vec2 grid = floor(uv * density);
+	vec2 rand = hash2(grid);
+	vec2 center = (grid + rand) / density;
+	float d = length(uv - center) * density;
+	float star_chance = step(0.96, rand.x);
+	float brightness = rand.y * 0.5 + 0.5;
+	// Twinkle based on time and star position
+	float twinkle = sin(time * (2.0 + rand.x * 3.0) + rand.y * 6.28) * 0.3 + 0.7;
+	float star = (1.0 - smoothstep(0.0, 0.4, d)) * star_chance * brightness * twinkle;
+	return star;
+}
+
+// Shooting star
+float shooting_star(vec2 uv, float time) {
+	// Cycle every 8 seconds, visible for ~1 second
+	float cycle = mod(time, 8.0);
+	if (cycle > 1.5) return 0.0;
+
+	// Start position varies by cycle
+	float cycle_id = floor(time / 8.0);
+	vec2 start = vec2(0.1 + hash(cycle_id) * 0.5, 0.05 + hash(cycle_id + 1.0) * 0.15);
+	vec2 dir = normalize(vec2(1.0, 0.8));  // Diagonal down-right
+
+	// Current head position - 25% smaller travel distance
+	float progress = cycle / 1.5;
+	vec2 head = start + dir * progress * 0.45;
+
+	// Line from head back (tail) - 25% shorter
+	float tail_length = 0.11;
+	vec2 tail = head - dir * tail_length;
+
+	// Distance to line segment - 25% thinner
+	vec2 pa = uv - tail;
+	vec2 ba = head - tail;
+	float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+	float d = length(pa - ba * h);
+
+	// Fade along tail, bright at head
+	float streak = (1.0 - smoothstep(0.0, 0.006, d)) * h * (1.0 - progress * 0.5);
+	return streak;
+}
+
+void fragment() {
+	vec2 uv = UV;
+	vec4 final_color;
+
+	// Rolling hills horizon
+	float hills = smooth_noise(uv.x * 6.0) * 0.025;
+	hills += smooth_noise(uv.x * 12.0) * 0.012;
+	float local_horizon = horizon_y + hills - 0.018;
+
+	// Sky gradient (above horizon)
+	if (uv.y < local_horizon) {
+		float sky_t = uv.y / local_horizon;
+		final_color = mix(sky_top_color, sky_horizon_color, sky_t * sky_t);
+
+		// Twinkling stars
+		float star_fade = 1.0 - sky_t;
+		float star_field = stars(uv, 80.0, TIME) + stars(uv * 1.5 + 0.3, 60.0, TIME * 1.3) * 0.7;
+		star_field *= star_fade * star_fade;
+		final_color.rgb += vec3(1.0, 0.95, 0.9) * star_field * 0.6;
+
+		// Shooting star
+		float shoot = shooting_star(uv, TIME);
+		final_color.rgb += vec3(1.0, 0.95, 0.85) * shoot * 1.5;
+
+		// Moon - larger crescent
+		float moon_dist = length(uv - moon_pos);
+		float moon = 1.0 - smoothstep(moon_size * 0.85, moon_size, moon_dist);
+		vec2 crescent_offset = moon_pos + vec2(moon_size * 0.35, -moon_size * 0.15);
+		float crescent_cut = 1.0 - smoothstep(moon_size * 0.65, moon_size * 0.8, length(uv - crescent_offset));
+		moon = moon * (1.0 - crescent_cut * 0.92);
+		// Brighter moon glow
+		float moon_glow = (1.0 - smoothstep(moon_size, moon_size * 4.0, moon_dist)) * 0.2;
+		final_color.rgb += vec3(0.98, 0.95, 0.85) * moon;
+		final_color.rgb += vec3(0.5, 0.45, 0.4) * moon_glow;
+
+		// Horizon glow
+		float glow_dist = abs(uv.y - local_horizon) / local_horizon;
+		float glow = (1.0 - glow_dist) * horizon_glow_strength;
+		glow = glow * glow * glow;
+		final_color = mix(final_color, horizon_glow_color, glow);
+	}
+	// Ground with perspective (below horizon)
+	else {
+		float ground_t = (uv.y - local_horizon) / (1.0 - local_horizon);
+		final_color = mix(ground_far_color, ground_near_color, ground_t);
+
+		// Character shadow - ellipse on ground
+		vec2 shadow_uv = uv - shadow_pos;
+		shadow_uv.y *= 3.0;  // Flatten into ellipse
+		float shadow_d = length(shadow_uv);
+		float shadow = (1.0 - smoothstep(shadow_size * 0.3, shadow_size, shadow_d)) * 0.4;
+		final_color.rgb *= (1.0 - shadow);
+	}
+
+	// Vignette overlay
+	vec2 vignette_uv = uv - 0.5;
+	float dist = length(vignette_uv) * 2.0;
+	float vignette = smoothstep(0.3, 1.5, dist) * vignette_strength;
+	final_color = mix(final_color, vec4(0.0, 0.0, 0.0, 1.0), vignette);
+
+	COLOR = final_color;
+}
+"""
+	var shader = Shader.new()
+	shader.code = shader_code
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	# Wasteland colors - more opaque/visible
+	material.set_shader_parameter("sky_top_color", Color(0.10, 0.11, 0.18, 1.0))
+	material.set_shader_parameter("sky_horizon_color", Color(0.35, 0.22, 0.12, 1.0))
+	material.set_shader_parameter("ground_near_color", Color(0.14, 0.11, 0.08, 1.0))
+	material.set_shader_parameter("ground_far_color", Color(0.08, 0.06, 0.04, 1.0))
+	material.set_shader_parameter("horizon_glow_color", Color(0.5, 0.32, 0.15, 1.0))
+	material.set_shader_parameter("horizon_glow_strength", 0.6)
+	material.set_shader_parameter("horizon_y", 0.39)  # Horizon at character's feet level
+	material.set_shader_parameter("vignette_strength", 0.4)  # Softer vignette
+	scene_bg.material = material
+	_character_viewport.add_child(scene_bg)
+
+	# Add dust particles
+	_create_dust_particles()
+
+func _create_dust_particles() -> void:
+	"""Create subtle floating dust/ember particles."""
+	if not _character_viewport:
+		return
+
+	var particles = GPUParticles2D.new()
+	particles.name = "DustParticles"
+	particles.amount = 12
+	particles.lifetime = 4.0
+	particles.preprocess = 2.0  # Pre-warm so particles exist immediately
+	particles.position = Vector2(128, 200)  # Bottom center, float upward
+
+	var material = ParticleProcessMaterial.new()
+
+	# Emission - spread across bottom area
+	material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	material.emission_box_extents = Vector3(100, 10, 0)
+
+	# Direction - float upward with slight drift
+	material.direction = Vector3(0, -1, 0)
+	material.spread = 25.0
+	material.initial_velocity_min = 8.0
+	material.initial_velocity_max = 15.0
+
+	# Gravity - slight upward pull
+	material.gravity = Vector3(0, -5, 0)
+
+	# Scale - tiny particles
+	material.scale_min = 0.3
+	material.scale_max = 0.8
+
+	# Color - warm amber/orange embers, fading out
+	var gradient = Gradient.new()
+	gradient.set_color(0, Color(1.0, 0.6, 0.2, 0.0))  # Fade in
+	gradient.set_color(1, Color(1.0, 0.5, 0.1, 0.0))  # Fade out
+	gradient.add_point(0.1, Color(1.0, 0.6, 0.2, 0.4))  # Visible
+	gradient.add_point(0.7, Color(1.0, 0.5, 0.1, 0.3))  # Still visible
+	var color_ramp = GradientTexture1D.new()
+	color_ramp.gradient = gradient
+	material.color_ramp = color_ramp
+
+	particles.process_material = material
+
+	# Simple circle texture for particles
+	var texture = PlaceholderTexture2D.new()
+	texture.size = Vector2(4, 4)
+	particles.texture = texture
+
+	_character_viewport.add_child(particles)
+
+func _create_footstep_dust() -> void:
+	"""Create dust puffs at character's feet that sync with walking."""
+	if not _character_viewport:
+		return
+
+	# Left foot dust
+	var left_dust = GPUParticles2D.new()
+	left_dust.name = "LeftFootDust"
+	left_dust.amount = 12  # More particles
+	left_dust.lifetime = 0.6
+	left_dust.explosiveness = 0.95  # Burst emission
+	left_dust.position = Vector2(118, 205)  # Left foot position (+5px down)
+	left_dust.z_index = 5  # Behind character
+
+	var left_material = ParticleProcessMaterial.new()
+	left_material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	left_material.emission_sphere_radius = 4.0
+	left_material.direction = Vector3(0, -1, 0)
+	left_material.spread = 85.0  # Wider spread - poof out more
+	left_material.initial_velocity_min = 25.0  # Faster - spread further
+	left_material.initial_velocity_max = 45.0
+	left_material.gravity = Vector3(0, 30, 0)  # Fall back down
+	left_material.scale_min = 0.3  # Smaller particles
+	left_material.scale_max = 0.7
+
+	# Dust color - tan/brown, fades out
+	var dust_gradient = Gradient.new()
+	dust_gradient.set_color(0, Color(0.6, 0.5, 0.4, 0.7))
+	dust_gradient.set_color(1, Color(0.5, 0.4, 0.3, 0.0))
+	var dust_ramp = GradientTexture1D.new()
+	dust_ramp.gradient = dust_gradient
+	left_material.color_ramp = dust_ramp
+
+	left_dust.process_material = left_material
+	var dust_tex = PlaceholderTexture2D.new()
+	dust_tex.size = Vector2(3, 3)  # Smaller texture for higher def look
+	left_dust.texture = dust_tex
+	_character_viewport.add_child(left_dust)
+
+	# Right foot dust
+	var right_dust = GPUParticles2D.new()
+	right_dust.name = "RightFootDust"
+	right_dust.amount = 12  # More particles
+	right_dust.lifetime = 0.6
+	right_dust.explosiveness = 0.95
+	right_dust.position = Vector2(138, 205)  # Right foot position (+5px down)
+	right_dust.z_index = 5
+
+	var right_material = ParticleProcessMaterial.new()
+	right_material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	right_material.emission_sphere_radius = 4.0
+	right_material.direction = Vector3(0, -1, 0)
+	right_material.spread = 85.0  # Wider spread
+	right_material.initial_velocity_min = 25.0
+	right_material.initial_velocity_max = 45.0
+	right_material.gravity = Vector3(0, 30, 0)
+	right_material.scale_min = 0.3
+	right_material.scale_max = 0.7
+	right_material.color_ramp = dust_ramp
+
+	right_dust.process_material = right_material
+	right_dust.texture = dust_tex
+	_character_viewport.add_child(right_dust)
+
+	# Start footstep timing
+	_start_footstep_timer(left_dust, right_dust)
+
+var _footstep_timer: Timer = null
+var _footstep_left: bool = true
+var _left_dust_emitter: GPUParticles2D = null
+var _right_dust_emitter: GPUParticles2D = null
+
+func _start_footstep_timer(left_dust: GPUParticles2D, right_dust: GPUParticles2D) -> void:
+	"""Start timer to alternate footstep dust puffs."""
+	_left_dust_emitter = left_dust
+	_right_dust_emitter = right_dust
+
+	# Disable continuous emission - we'll trigger manually
+	left_dust.emitting = false
+	right_dust.emitting = false
+
+	if _footstep_timer:
+		_footstep_timer.queue_free()
+
+	_footstep_timer = Timer.new()
+	_footstep_timer.wait_time = 0.28  # Roughly matches walk cycle footstep timing
+	_footstep_timer.timeout.connect(_on_footstep)
+	add_child(_footstep_timer)
+	_footstep_timer.start()
+
+	# Emit first step immediately
+	_on_footstep()
+
+func _on_footstep() -> void:
+	"""Emit dust puff on alternating feet."""
+	if _footstep_left:
+		if _left_dust_emitter and is_instance_valid(_left_dust_emitter):
+			_left_dust_emitter.restart()
+			_left_dust_emitter.emitting = true
+	else:
+		if _right_dust_emitter and is_instance_valid(_right_dust_emitter):
+			_right_dust_emitter.restart()
+			_right_dust_emitter.emitting = true
+
+	_footstep_left = not _footstep_left

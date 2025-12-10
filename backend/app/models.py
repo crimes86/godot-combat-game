@@ -18,6 +18,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, index=True)
     is_admin = Column(Boolean, default=False, nullable=False)  # Bypass cooldowns, testing features
+    appearance_data = Column(JSON, nullable=True)  # Character appearance for Armory preview
 
     # Relationships
     provider_accounts = relationship("ProviderAccount", back_populates="user")

@@ -1587,7 +1587,7 @@ func populate_forge() -> void:
 		child.queue_free()
 
 	# Check if user is authenticated with Mantle
-	if not MantleAuth or not MantleAuth.is_authenticated():
+	if not MantleAuth or not MantleAuth.is_logged_in():
 		var auth_msg = Label.new()
 		auth_msg.text = "Sign in to Mantle to view your forged items.\nVisit the Armory to connect your account."
 		auth_msg.add_theme_font_size_override("font_size", 14)
@@ -1599,7 +1599,7 @@ func populate_forge() -> void:
 		return
 
 	# Get forged items from ForgeItemManager
-	var forged_items = ForgeItemManager.get_forged_items()
+	var forged_items = ForgeItemManager.get_all_forged_items()
 	var unclaimed_items = []
 	var claimed_items = []
 
@@ -1782,7 +1782,8 @@ func _on_claim_forge_item(forged_id: int, item: Dictionary) -> void:
 		return
 
 	# Claim the item
-	ForgeItemManager.claim_single_item(item)
+	var item_id = item.get("item_id", "")
+	ForgeItemManager.claim_single_item(item_id)
 	show_message("Claimed %s!" % item.get("item_name", "item"), Color(0.5, 0.9, 0.5))
 
 	# Play sound
@@ -1843,7 +1844,7 @@ func update_forge_tab_indicator() -> void:
 	# Count unclaimed items
 	var unclaimed_count = 0
 	if ForgeItemManager:
-		var forged_items = ForgeItemManager.get_forged_items()
+		var forged_items = ForgeItemManager.get_all_forged_items()
 		for item in forged_items:
 			if not item.get("claimed_in_game", false):
 				unclaimed_count += 1

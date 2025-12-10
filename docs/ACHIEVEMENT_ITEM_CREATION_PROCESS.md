@@ -209,10 +209,28 @@ In `items` array:
 - Size: 64x64 PNG
 - Format: RGBA with transparency
 - Weapons: 45° diagonal, tip upper-right
-- Armor/Shields: Upright, centered
+- Armor/Shields/Capes: Upright, centered
 - Padding: 4px minimum from edge
 
-**Tools:**
+**Method A: Generate from Sprite (Recommended)**
+
+If you already have LPC sprites for the item, extract a frame and apply tinting:
+
+```bash
+# Generate icon from walk sprite with tint preset
+python tools/lpc_sprite_tinter.py icon <sprite_path> <icon_path> --preset <preset> --frame X,Y
+
+# Examples:
+python tools/lpc_sprite_tinter.py icon assets/equipment/forged/weapons/grafted_blade/walk.png assets/icons/forged/weapons/grafted_blade.png --preset golden --frame 0,0
+
+python tools/lpc_sprite_tinter.py icon assets/equipment/forged/capes/shade_cloak/walk.png assets/icons/forged/capes/shade_cloak.png --preset dark --frame 0,2
+
+# Available presets: golden, silver, crimson, purple, blue, green, dark, ember, white, infernal
+# Frame format: X,Y where X=column (0-8), Y=row (0=up, 1=left, 2=down, 3=right)
+```
+
+**Method B: Manual Creation**
+
 - Reference: Source game's item art
 - Create: Aseprite, Photoshop, GIMP
 - Validate: `python assets/icons/forged/icon_standards.py --validate`
@@ -226,6 +244,7 @@ Categories:
 - armor/
 - shields/
 - accessories/
+- capes/
 ```
 
 ### Step 4.2: Create Sprites (If Applicable)

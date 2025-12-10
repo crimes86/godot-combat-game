@@ -24,7 +24,7 @@ extends Node
 enum ItemRarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 enum ItemType { WEAPON, ARMOR_HEAD, ARMOR_CHEST, ARMOR_LEGS, ARMOR_HANDS, ARMOR_FEET, CAPE, SHIELD, ACCESSORY, EMOTE, TITLE }
 # WeaponClass: Core (SWORD-RAPIER have animation data), Extended (rest fall back to core)
-enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, RAPIER, GREATSWORD, KATANA, SABER, SCIMITAR, HALBERD, PIKE, TRIDENT, FLAIL, SCYTHE, BOW, CROSSBOW }
+enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, RAPIER, GREATSWORD, KATANA, SABER, SCIMITAR, HALBERD, PIKE, TRIDENT, FLAIL, SCYTHE, BOW, CROSSBOW, GUN }
 
 # Base paths for forged items (separate from regular loot)
 const FORGED_ITEMS_BASE = "res://assets/equipment/forged/"
@@ -244,7 +244,6 @@ const FORGE_ITEMS = {
 		"sprites": {
 			"icon": FORGED_ICONS_BASE + "weapons/dragonslayer_swordspear.png",
 			"walk": FORGED_ITEMS_BASE + "weapons/dragonslayer_swordspear/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/dragonslayer_swordspear/slash.png",
 			"thrust": FORGED_ITEMS_BASE + "weapons/dragonslayer_swordspear/thrust.png",
 			"hurt": FORGED_ITEMS_BASE + "weapons/dragonslayer_swordspear/hurt.png"
 		},
@@ -452,7 +451,7 @@ const FORGE_ITEMS = {
 		"item_id": "exagryph_adamant_rail",
 		"item_name": "Adamant Rail",
 		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.BOW,  # Ranged weapon
+		"weapon_class": WeaponClass.GUN,  # Ranged weapon - uses Skorpio body for gun animations
 		"rarity": ItemRarity.UNCOMMON,
 		"description": "The legendary rail gun of the underworld.",
 		"lore": "1000 enemies slain. Death incarnate.",
@@ -460,10 +459,8 @@ const FORGE_ITEMS = {
 		"unlock_percent": 28.5,
 		"sprites": {
 			"icon": FORGED_ICONS_BASE + "weapons/adamant_rail.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/adamant_rail/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/adamant_rail/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/adamant_rail/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/adamant_rail/hurt.png"
+			"walk": FORGED_ITEMS_BASE + "weapons/adamant_rail/walk.png"
+			# Note: Guns don't have slash/thrust/hurt - they use walk animation for all poses
 		},
 		"effects": ["infernal_glow"],
 		"stats": {"damage_bonus": 2},
@@ -552,7 +549,6 @@ const FORGE_ITEMS = {
 		"sprites": {
 			"icon": FORGED_ICONS_BASE + "weapons/gyoubu_spear.png",
 			"walk": FORGED_ITEMS_BASE + "weapons/gyoubu_spear/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/gyoubu_spear/slash.png",
 			"thrust": FORGED_ITEMS_BASE + "weapons/gyoubu_spear/thrust.png",
 			"hurt": FORGED_ITEMS_BASE + "weapons/gyoubu_spear/hurt.png"
 		},

@@ -72,6 +72,109 @@ func debug_clear_claimed_items() -> void:
 	print("[ForgeItemManager] DEBUG: Cleared %d forged items from inventory" % cleared)
 	InventorySystem.inventory_changed.emit()
 
+func debug_inject_test_achievement(achievement_key: String = "steam_1145360_SLAYER") -> void:
+	"""DEBUG: Inject a test achievement as forgeable (simulates backend sync)
+	Use ForgeItemDB keys like 'steam_1145360_SLAYER' for Adamant Rail"""
+	var forge_db = ForgeItemDB.FORGE_ITEMS.get(achievement_key)
+	if not forge_db:
+		print("[ForgeItemManager] DEBUG: Unknown achievement key: %s" % achievement_key)
+		print("[ForgeItemManager] DEBUG: Available keys: %s" % ForgeItemDB.FORGE_ITEMS.keys())
+		return
+
+	# Create mock forgeable achievement matching backend format
+	var mock_achievement = {
+		"id": 99999,  # Fake ID for testing
+		"achievement_key": achievement_key,
+		"display_name": forge_db.get("achievement_name", "Test Achievement"),
+		"item_name": forge_db.get("item_name", "Test Item"),
+		"item_id": forge_db.get("item_id", "test_item"),
+		"rarity": _rarity_enum_to_string(forge_db.get("rarity", 0)),
+		"provider": "steam",
+		"app_id": "1145360",  # Hades
+		"api_name": "SLAYER",
+		"unlock_percent": forge_db.get("unlock_percent", 28.5),
+		"description": forge_db.get("description", "Test description"),
+		"is_original_claim": true
+	}
+
+	_forgeable_achievements.append(mock_achievement)
+	_forge_status_loaded = true
+
+	print("[ForgeItemManager] DEBUG: Injected test achievement '%s' as forgeable" % forge_db.get("item_name"))
+	print("[ForgeItemManager] DEBUG: Now have %d forgeable achievements" % _forgeable_achievements.size())
+	forge_status_loaded.emit({"forgeable": _forgeable_achievements, "forged": [], "unforgeable": []})
+
+func debug_forge_test_item(achievement_key: String = "steam_1145360_SLAYER") -> void:
+	"""DEBUG: Directly forge a test item into inventory (skip backend)"""
+	var forge_db = ForgeItemDB.FORGE_ITEMS.get(achievement_key)
+	if not forge_db:
+		print("[ForgeItemManager] DEBUG: Unknown achievement key: %s" % achievement_key)
+		return
+
+	# Create forged item matching what backend would return
+	var forged_item = {
+		"id": 99999,
+		"item_id": forge_db.get("item_id", "test_item"),
+		"item_name": forge_db.get("item_name", "Test Item"),
+		"item_type": "weapon",
+		"weapon_type": _weapon_class_to_string(forge_db.get("weapon_class", 0)),
+		"rarity": _rarity_enum_to_string(forge_db.get("rarity", 0)),
+		"is_forged": true,
+		"description": forge_db.get("description", ""),
+		"lore": forge_db.get("lore", ""),
+		"achievement_name": forge_db.get("achievement_name", ""),
+		"glow_color": _get_effect_color(forge_db.get("effects", [])),
+		"effect_name": forge_db.get("effects", ["standard_particles"])[0] if forge_db.get("effects", []).size() > 0 else "standard_particles",
+		"stats": forge_db.get("stats", {}),
+		"sprites": forge_db.get("sprites", {})
+	}
+
+	_forged_items.append(forged_item)
+	_forged_items_by_id[forged_item.item_id] = forged_item
+	_is_loaded = true
+
+	# Convert to inventory format and add to inventory
+	var inventory_item = _convert_to_inventory_format(forged_item)
+	if not inventory_item.is_empty():
+		InventorySystem.add_item(inventory_item)
+		item_synced_to_inventory.emit(inventory_item)
+
+	print("[ForgeItemManager] DEBUG: Forged test item '%s' directly to inventory" % forged_item.item_name)
+	forge_claimed.emit(forged_item)
+
+func _rarity_enum_to_string(rarity_enum: int) -> String:
+	match rarity_enum:
+		0: return "common"
+		1: return "uncommon"
+		2: return "rare"
+		3: return "epic"
+		4: return "legendary"
+		_: return "common"
+
+func _weapon_class_to_string(weapon_class_enum: int) -> String:
+	# Match ForgeItemDB.WeaponClass enum order
+	var classes = ["sword", "dagger", "mace", "spear", "staff", "axe", "rapier",
+				   "greatsword", "katana", "saber", "scimitar", "halberd", "pike",
+				   "trident", "flail", "scythe", "bow", "crossbow", "gun"]
+	if weapon_class_enum >= 0 and weapon_class_enum < classes.size():
+		return classes[weapon_class_enum]
+	return "sword"
+
+func _get_effect_color(effects: Array) -> String:
+	# Map effect names to glow colors
+	var effect_colors = {
+		"infernal_glow": "#FF6347",
+		"blood_red_glow": "#8B0000",
+		"ember_trail": "#FF4500",
+		"erdtree_blessing": "#DAA520",
+		"moonlight_glow": "#4169E1",
+		"void_particles": "#1A0033",
+		"standard_particles": "#FFFFFF"
+	}
+	if effects.size() > 0:
+		return effect_colors.get(effects[0], "#FFFFFF")
+	return "#FFFFFF"
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PUBLIC API
 # ═══════════════════════════════════════════════════════════════════════════════

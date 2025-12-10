@@ -816,6 +816,12 @@ func _input(event: InputEvent) -> void:
 	if not is_multiplayer_authority():
 		return
 
+	# DEBUG: F4 = Forge Adamant Rail for testing gun system
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F4:
+		print("[DEBUG] F4 pressed - Forging Adamant Rail...")
+		ForgeItemManager.debug_forge_test_item("steam_1145360_SLAYER")
+		return
+
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
@@ -2065,8 +2071,12 @@ func create_player_sprite() -> void:
 					print("[ForgedEquip]   No fallback defined for weapon_type: %s" % weapon_type)
 
 		# Try to load weapon sprites
-		# Staff uses thrust_oversize animation, spear uses thrust, others use slash
-		if animation_type == "staff":
+		# Staff uses thrust_oversize animation, spear uses thrust, gun uses walk only, others use slash
+		if animation_type == "gun":
+			# Guns don't have attack animations - they use walk animation for all poses
+			# Attack will be handled by muzzle flash overlay (future)
+			pass
+		elif animation_type == "staff":
 			if ResourceLoader.exists(weapon_path + "thrust_oversize.png"):
 				weapon_slash_tex = load(weapon_path + "thrust_oversize.png")
 		elif animation_type == "spear":
@@ -2255,6 +2265,17 @@ func create_player_sprite() -> void:
 	# Setup sprite with shadow + all armor layers + base_head + hair
 	var is_female = (selected_gender == Gender.FEMALE)
 	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, shadow_walk_tex, shadow_slash_tex, base_head_walk_tex, base_head_slash_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, hair_walk_tex, hair_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type, is_female)
+
+	# Gun pose body swap: If weapon is a gun type, load Skorpio body for walk animations
+	# This makes the character use the shooting stance body when walking with a gun
+	var gun_weapon_types = ["gun", "rifle", "pistol", "shotgun", "railgun"]
+	if weapon_type in gun_weapon_types:
+		var gun_body_path = "res://assets/characters/body_gun_pose/walk.png"
+		if ResourceLoader.exists(gun_body_path):
+			var gun_body_walk_tex = load(gun_body_path)
+			character_sprite.setup_gun_walk_animations(gun_body_walk_tex)
+			if DEBUG_EQUIP:
+				print("[Equip] Gun weapon detected - loaded Skorpio gun pose body for walk animations")
 
 	add_child(character_sprite)
 
@@ -3849,6 +3870,11 @@ func _complete_logout() -> void:
 
 	# Save sound settings before leaving
 	_save_sound_settings()
+
+	# Save character appearance to backend for Armory preview
+	if MantleAuth and MantleAuth.is_authenticated:
+		var appearance = get_appearance_data()
+		MantleAuth.save_appearance(appearance)
 
 	# Close connection and return to main menu
 	if NetworkManager:

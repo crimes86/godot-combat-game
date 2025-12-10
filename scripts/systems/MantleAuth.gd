@@ -33,6 +33,7 @@ var tier_thresholds: Dictionary = {}  # Tier definitions from backend
 var total_achievements: int = 0
 var is_guest: bool = true
 var is_authenticated: bool = false
+var saved_appearance: Dictionary = {}  # Character appearance for Armory preview
 
 # Device auth state
 var _device_code: String = ""
@@ -146,6 +147,7 @@ func logout() -> void:
 	total_achievements = 0
 	is_guest = true
 	is_authenticated = false
+	saved_appearance = {}
 
 	# Reset profile change tracking so next login emits signals
 	_last_profile_hash = 0
@@ -157,6 +159,45 @@ func logout() -> void:
 
 	LogManager.info("Logged out of Mantle", "mantle")
 	logout_completed.emit()
+
+func save_appearance(appearance_data: Dictionary, callback: Callable = Callable()) -> void:
+	"""Save character appearance to backend for Armory preview."""
+	if not is_authenticated:
+		LogManager.warning("Cannot save appearance - not authenticated", "mantle")
+		if callback.is_valid():
+			callback.call(false)
+		return
+
+	var url = get_api_base() + "/api/me/appearance"
+	var headers = [
+		"Authorization: Bearer " + auth_token,
+		"Content-Type: application/json",
+		"ngrok-skip-browser-warning: true"
+	]
+
+	var request = HTTPRequest.new()
+	add_child(request)
+	request.request_completed.connect(_on_save_appearance_response.bind(request, callback))
+
+	var json_body = JSON.stringify(appearance_data)
+	var error = request.request(url, headers, HTTPClient.METHOD_POST, json_body)
+	if error != OK:
+		LogManager.error("Failed to save appearance: %s" % error, "mantle")
+		request.queue_free()
+		if callback.is_valid():
+			callback.call(false)
+
+func _on_save_appearance_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable) -> void:
+	request.queue_free()
+
+	var success = result == HTTPRequest.RESULT_SUCCESS and response_code == 200
+	if not success:
+		LogManager.warning("Failed to save appearance: result=%d, code=%d" % [result, response_code], "mantle")
+	else:
+		LogManager.info("Appearance saved successfully", "mantle")
+
+	if callback.is_valid():
+		callback.call(success)
 
 func refresh_profile() -> void:
 	"""Fetch latest profile from API"""
@@ -425,6 +466,11 @@ func _on_profile_response(result: int, response_code: int, headers: PackedString
 	achievements = data.get("notable_achievements", [])
 	if achievements == null:
 		achievements = []
+	var appearance_val = data.get("appearance", {})
+	if appearance_val == null:
+		saved_appearance = {}
+	else:
+		saved_appearance = appearance_val
 
 	LogManager.info("Profile loaded: %s - %s tier (%d achievements)" % [
 		username,

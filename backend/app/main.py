@@ -3016,7 +3016,49 @@ async def get_current_user_api(
             "tiers": MANTLE_TIERS,
             "order": TIER_ORDER,
         },
+        "appearance": user.appearance_data,
     }
+
+
+@app.post("/api/me/appearance")
+async def save_appearance(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Save character appearance data for Armory preview.
+    Called when player logs out to persist their current look.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    body = await request.json()
+
+    # Extract and validate appearance fields
+    appearance = {
+        "gender": body.get("gender", 0),
+        "weapon_type": body.get("weapon_type", ""),
+        "feet_sprite": body.get("feet_sprite", ""),
+        "legs_sprite": body.get("legs_sprite", ""),
+        "chest_sprite": body.get("chest_sprite", ""),
+        "arms_sprite": body.get("arms_sprite", ""),
+        "hands_sprite": body.get("hands_sprite", ""),
+        "head_sprite": body.get("head_sprite", ""),
+    }
+
+    # Normalize gender to int (0=male, 1=female)
+    if isinstance(appearance["gender"], str):
+        appearance["gender"] = 0 if appearance["gender"].lower() == "male" else 1
+
+    user.appearance_data = appearance
+    db.commit()
+
+    return {"status": "ok", "appearance": appearance}
 
 
 @app.get("/api/achievements")
