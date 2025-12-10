@@ -35,16 +35,9 @@ var campfire_pos: Vector2 = Vector2(Constants.CHUNK_SIZE / 2, 0)
 
 # Prop textures (mirrors game_world.gd PROP_TEXTURES)
 const PROP_TEXTURES = {
-	"dead_tree_1": "res://assets/props/trees/dead_tree_1.png",
-	"dead_tree_2": "res://assets/props/trees/dead_tree_2.png",
-	"dead_tree_3": "res://assets/props/trees/dead_tree_3.png",
-	"dead_tree_4": "res://assets/props/trees/dead_tree_4.png",
-	"dead_tree_5": "res://assets/props/trees/dead_tree_5.png",
-	"dead_tree_6": "res://assets/props/trees/dead_tree_6.png",
-	"dead_tree_7": "res://assets/props/trees/dead_tree_7.png",
-	"dead_tree_8": "res://assets/props/trees/dead_tree_8.png",
-	"dead_tree_9": "res://assets/props/trees/dead_tree_9.png",
-	"dead_tree_10": "res://assets/props/trees/dead_tree_10.png",
+	"dead_tree": "res://assets/environment/wasteland/dead_tree.png",
+	"pine_tree": "res://assets/environment/wasteland/pine_tree.png",
+	"autumn_tree": "res://assets/environment/wasteland/autumn_tree.png",
 	"rock_large": "res://assets/props/rock_large.png",
 	"rock_small": "res://assets/props/rock_small.png",
 	"skull": "res://assets/props/skull.png",
@@ -55,10 +48,8 @@ const PROP_TEXTURES = {
 	"ground_crack_2": "res://assets/props/ground_crack_2.png",
 }
 
-var tree_types = [
-	"dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5",
-	"dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10"
-]
+# Tree types with weighted rarity: 60% dead, 30% pine, 10% autumn
+var tree_types = ["dead_tree", "pine_tree", "autumn_tree"]
 
 # Path checker function reference
 var is_position_on_path_func: Callable
@@ -117,7 +108,15 @@ func spawn_trees_everywhere_dynamic(parent: Node2D) -> void:
 			if _is_on_lava(tree_pos, 50):
 				continue
 
-			var tree_type = tree_types[rng.randi() % tree_types.size()]
+			# Weighted tree selection: 60% dead, 30% pine, 10% autumn
+			var roll = rng.randf()
+			var tree_type: String
+			if roll < 0.6:
+				tree_type = "dead_tree"
+			elif roll < 0.9:
+				tree_type = "pine_tree"
+			else:
+				tree_type = "autumn_tree"
 			create_tree_at_position(parent, tree_pos, tree_type, rng)
 			tree_positions.append(tree_pos)
 			trees_placed += 1

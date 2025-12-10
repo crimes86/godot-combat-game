@@ -52,16 +52,9 @@ var harvestable_states: Dictionary = {}  # {id: {is_harvested, is_fallen/is_mine
 
 # Prop textures (from game_world.gd)
 const PROP_TEXTURES = {
-	"dead_tree_1": "res://assets/environment/wasteland/dead_tree_1.png",
-	"dead_tree_2": "res://assets/environment/wasteland/dead_tree_2.png",
-	"dead_tree_3": "res://assets/environment/wasteland/dead_tree_3.png",
-	"dead_tree_4": "res://assets/environment/wasteland/dead_tree_4.png",
-	"dead_tree_5": "res://assets/environment/wasteland/dead_tree_5.png",
-	"dead_tree_6": "res://assets/environment/wasteland/dead_tree_6.png",
-	"dead_tree_7": "res://assets/environment/wasteland/dead_tree_7.png",
-	"dead_tree_8": "res://assets/environment/wasteland/dead_tree_8.png",
-	"dead_tree_9": "res://assets/environment/wasteland/dead_tree_9.png",
-	"dead_tree_10": "res://assets/environment/wasteland/dead_tree_10.png",
+	"dead_tree": "res://assets/environment/wasteland/dead_tree.png",
+	"pine_tree": "res://assets/environment/wasteland/pine_tree.png",
+	"autumn_tree": "res://assets/environment/wasteland/autumn_tree.png",
 	"rock_large": "res://assets/environment/wasteland/rock_large.png",
 	"rock_medium": "res://assets/environment/wasteland/rock_medium.png",
 	"rock_small": "res://assets/environment/wasteland/rock_small.png",
@@ -72,7 +65,8 @@ const PROP_TEXTURES = {
 	"ground_crack_2": "res://assets/environment/wasteland/ground_crack_2.png",
 }
 
-const TREE_TYPES = ["dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5", "dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10"]
+# Tree types with weighted rarity: 60% dead, 30% pine, 10% autumn
+const TREE_TYPES = ["dead_tree", "pine_tree", "autumn_tree"]
 
 # Path checking - main path runs along Y=0 with zigzag, branch paths go to ruins
 const PATH_WIDTH: float = 250.0  # Width to avoid for lava pools
@@ -757,7 +751,15 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			if not found_valid:
 				return  # Couldn't find valid position after all attempts
 
-			var tree_type = TREE_TYPES[rng.randi() % TREE_TYPES.size()]
+			# Weighted tree selection: 60% dead, 30% pine, 10% autumn
+			var roll = rng.randf()
+			var tree_type: String
+			if roll < 0.6:
+				tree_type = "dead_tree"
+			elif roll < 0.9:
+				tree_type = "pine_tree"
+			else:
+				tree_type = "autumn_tree"
 			create_tree(tree_pos, tree_type, container, rng, tree_id)
 			# Track position for spacing and bone fill
 			chunk_data.tree_positions.append(tree_pos)
@@ -1154,11 +1156,11 @@ func create_tree(pos: Vector2, tree_type: String, container: Node2D, rng: Random
 	var size_roll = rng.randf()
 	var tree_scale: float
 	if size_roll < 0.1:
-		tree_scale = rng.randf_range(1.95, 2.93)  # Small trees (rare - 10%)
+		tree_scale = rng.randf_range(0.3, 0.45)  # Small trees (rare - 10%)
 	elif size_roll < 0.55:
-		tree_scale = rng.randf_range(2.93, 3.9)  # Medium trees (45%)
+		tree_scale = rng.randf_range(0.45, 0.6)  # Medium trees (45%)
 	else:
-		tree_scale = rng.randf_range(3.9, 5.2)  # Large trees (45%)
+		tree_scale = rng.randf_range(0.6, 0.8)  # Large trees (45%)
 
 	var tree_flipped = rng.randf() < 0.5
 
@@ -1194,8 +1196,51 @@ void fragment() {
 	shadow.material = shader_material
 	tree_node.add_child(shadow)
 
-	# Add ground disturbance (dark earth patch around tree base)
-	add_ground_disturbance(tree_node, tree_scale * 80, rng, 0.18)
+	# Add dark earth patch at tree base to look "planted"
+	var earth_patch = ColorRect.new()
+	earth_patch.name = "EarthPatch"
+	# Scale patch based on texture size for new high-res trees, with random variation
+	var patch_scale_variation = rng.randf_range(0.85, 1.15)  # +/- 15% size variation
+	var base_patch_scale = 0.225 if tree_type == "dead_tree" else 0.3  # Dead trees 25% smaller
+	var patch_width = texture.get_width() * tree_scale * base_patch_scale * patch_scale_variation
+	var patch_height = patch_width * rng.randf_range(0.35, 0.45)  # Vary aspect ratio
+	earth_patch.size = Vector2(patch_width, patch_height)
+	# Position at trunk base - offset from sprite bottom (sprites have padding/shadows)
+	var tree_bottom_y = texture.get_height() * tree_scale * 0.5
+	var x_offset = rng.randf_range(-3, 3)  # Slight horizontal variation
+	# Each tree type needs different offset based on where trunk meets ground in the sprite
+	var y_offset: float
+	if tree_type == "dead_tree":
+		y_offset = -40  # Dead tree trunk base
+	elif tree_type == "pine_tree":
+		y_offset = -35  # Pine trunk base
+	else:  # autumn_tree
+		y_offset = -45  # Autumn trunk base
+	earth_patch.position = Vector2(-patch_width / 2 + x_offset, tree_bottom_y - patch_height * 0.5 + y_offset)
+	# Vary the darkness slightly per tree
+	var darkness_variation = rng.randf_range(0.8, 1.2)
+	earth_patch.color = Color(0.05 * darkness_variation, 0.03 * darkness_variation, 0.02 * darkness_variation, rng.randf_range(0.7, 0.85))
+	earth_patch.z_index = -5  # Below shadow
+
+	# Apply oval shader for soft edges
+	var earth_shader_material = ShaderMaterial.new()
+	var earth_shader = Shader.new()
+	earth_shader.code = """
+shader_type canvas_item;
+
+void fragment() {
+	vec2 uv = UV * 2.0 - 1.0;
+	float dist = length(uv);
+	if (dist > 1.0) {
+		discard;
+	}
+	float alpha = 1.0 - smoothstep(0.2, 1.0, dist);
+	COLOR.a *= alpha;
+}
+"""
+	earth_shader_material.shader = earth_shader
+	earth_patch.material = earth_shader_material
+	tree_node.add_child(earth_patch)
 
 	# Create sprite with proper scale
 	var sprite = Sprite2D.new()
@@ -1206,30 +1251,38 @@ void fragment() {
 	sprite.flip_h = tree_flipped
 	sprite.z_index = 10  # Above all player layers (player max z=9)
 
-	# Mix of tree types: 40% brown oak/maple, 30% white birch, 30% grey/silver
-	var tree_roll = rng.randf()
-	if tree_roll < 0.4:
-		# Brown oak/maple trees - warm natural wood tones
-		var base_brown = rng.randf_range(0.7, 0.9)
+	# Add variation to trees - brightness, saturation, and slight hue shifts
+	var brightness = rng.randf_range(0.8, 1.15)  # Some darker, some brighter
+	var saturation_shift = rng.randf_range(0.85, 1.15)  # Vary color intensity
+	var hue_shift = rng.randf_range(-0.08, 0.08)  # Slight warm/cool shift
+
+	# Apply variation based on tree type
+	if tree_type == "dead_tree":
+		# Dead trees: darker to fit wasteland, vary from grey-brown to warm brown
+		var dead_tree_darkness = 0.55  # Darken dead trees to blend with environment
 		sprite.modulate = Color(
-			base_brown,                          # Red channel (warm)
-			base_brown * rng.randf_range(0.7, 0.85),  # Green (less = more brown)
-			base_brown * rng.randf_range(0.5, 0.65),  # Blue (least = warm brown)
+			brightness * dead_tree_darkness * (1.0 + hue_shift),
+			brightness * dead_tree_darkness * (0.95 - abs(hue_shift) * 0.5),
+			brightness * dead_tree_darkness * (0.9 - hue_shift),
 			1.0
 		)
-	elif tree_roll < 0.7:
-		# White birch - bright cream/white bark
-		var brightness = rng.randf_range(0.9, 1.0)
+	elif tree_type == "pine_tree":
+		# Pine trees: muted/desaturated to fit wasteland, vary from yellow-green to blue-green
+		var pine_mute = 0.7  # Mute the pines to blend better
 		sprite.modulate = Color(
-			brightness,                    # White-cream
-			brightness * 0.98,             # Slight warm tint
-			brightness * 0.94,             # Cream undertone
+			brightness * pine_mute * (0.85 + hue_shift),
+			brightness * pine_mute * saturation_shift * 0.9,
+			brightness * pine_mute * (0.8 - hue_shift),
 			1.0
 		)
-	else:
-		# Grey/silver birch - light silvery grey bark
-		var grey = rng.randf_range(0.75, 0.95)
-		sprite.modulate = Color(grey, grey, grey * 1.02, 1.0)  # Slight cool tint
+	else:  # autumn_tree
+		# Autumn trees: vary from orange to deep red
+		sprite.modulate = Color(
+			brightness * min(1.2, 1.0 + hue_shift * 2),
+			brightness * (0.7 - hue_shift),
+			brightness * 0.6,
+			1.0
+		)
 
 	tree_node.add_child(sprite)
 
