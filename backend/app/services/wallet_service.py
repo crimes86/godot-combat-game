@@ -23,6 +23,9 @@ CONTRACT_ADDRESS = os.getenv("ACHIEVEMENT_CONTRACT_ADDRESS", "")
 MINTER_PRIVATE_KEY = os.getenv("MINTER_PRIVATE_KEY", "")  # Backend wallet that owns the contract
 APP_URL = os.getenv("APP_URL", "http://localhost:8000")
 
+# Dev mode - simulates blockchain operations without actual transactions
+DEV_MODE = os.getenv("DEV_MODE", "false").lower() in ("true", "1", "yes")
+
 # Contract ABI (minimal - just the mint function)
 ACHIEVEMENT_ABI = [
     {
@@ -271,4 +274,193 @@ def get_achievement_token_data(token_id: int) -> Optional[dict]:
         }
     except Exception as e:
         logger.error(f"Failed to get token data: {e}")
+        return None
+
+
+# =============================================================================
+# BRIDGE SYSTEM - Transfer functions
+# =============================================================================
+
+# Platform wallet that holds items when they're "in-game"
+PLATFORM_WALLET_ADDRESS = os.getenv("PLATFORM_WALLET_ADDRESS", "")
+PLATFORM_WALLET_KEY = os.getenv("PLATFORM_WALLET_KEY", "")  # Private key for platform wallet
+
+# Extended ABI for transfers
+TRANSFER_ABI = [
+    {
+        "inputs": [
+            {"name": "from", "type": "address"},
+            {"name": "to", "type": "address"},
+            {"name": "tokenId", "type": "uint256"}
+        ],
+        "name": "transferFrom",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"name": "from", "type": "address"},
+            {"name": "to", "type": "address"},
+            {"name": "tokenId", "type": "uint256"}
+        ],
+        "name": "safeTransferFrom",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"name": "tokenId", "type": "uint256"}],
+        "name": "ownerOf",
+        "outputs": [{"name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]
+
+
+def get_transfer_contract(w3: Web3):
+    """Get contract instance with transfer functions."""
+    if not CONTRACT_ADDRESS:
+        raise ValueError("ACHIEVEMENT_CONTRACT_ADDRESS not configured")
+    # Combine ABIs
+    full_abi = ACHIEVEMENT_ABI + TRANSFER_ABI
+    return w3.eth.contract(address=Web3.to_checksum_address(CONTRACT_ADDRESS), abi=full_abi)
+
+
+async def transfer_to_external(token_id: int, to_address: str) -> str:
+    """
+    Transfer NFT from platform wallet to user's external wallet.
+    Used for bridge-out confirmation.
+
+    Returns: transaction hash
+    """
+    # Dev mode - simulate successful transfer without blockchain
+    if DEV_MODE:
+        mock_tx_hash = f"0x{'dev' + str(token_id).zfill(61)}"
+        logger.info(f"[DEV MODE] Simulated bridge-out transfer: token {token_id} -> {to_address}, tx: {mock_tx_hash}")
+        return mock_tx_hash
+
+    if not PLATFORM_WALLET_KEY:
+        raise ValueError("PLATFORM_WALLET_KEY not configured - cannot transfer")
+
+    if not PLATFORM_WALLET_ADDRESS:
+        raise ValueError("PLATFORM_WALLET_ADDRESS not configured")
+
+    w3 = get_web3()
+    contract = get_transfer_contract(w3)
+
+    # Verify platform owns the token
+    current_owner = contract.functions.ownerOf(token_id).call()
+    platform_checksum = Web3.to_checksum_address(PLATFORM_WALLET_ADDRESS)
+
+    if current_owner.lower() != platform_checksum.lower():
+        raise ValueError(f"Platform does not own token {token_id}. Owner: {current_owner}")
+
+    # Build transfer transaction
+    to_checksum = Web3.to_checksum_address(to_address)
+    platform_account = w3.eth.account.from_key(PLATFORM_WALLET_KEY)
+    nonce = w3.eth.get_transaction_count(platform_account.address)
+
+    tx = contract.functions.safeTransferFrom(
+        platform_checksum,
+        to_checksum,
+        token_id
+    ).build_transaction({
+        'from': platform_account.address,
+        'nonce': nonce,
+        'gas': 100000,
+        'maxFeePerGas': w3.eth.gas_price * 2,
+        'maxPriorityFeePerGas': w3.to_wei('0.001', 'gwei'),
+    })
+
+    # Sign and send
+    signed_tx = w3.eth.account.sign_transaction(tx, PLATFORM_WALLET_KEY)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+
+    # Wait for receipt
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+
+    if receipt['status'] != 1:
+        raise Exception(f"Transfer failed: {tx_hash.hex()}")
+
+    logger.info(f"Bridge-out transfer: token {token_id} -> {to_address}, tx: {tx_hash.hex()}")
+
+    return tx_hash.hex()
+
+
+async def transfer_from_external(token_id: int, from_address: str) -> str:
+    """
+    Transfer NFT from user's external wallet to platform wallet.
+    Used for bridge-in.
+
+    NOTE: This requires the user to have approved the platform wallet
+    to transfer their tokens (via setApprovalForAll or approve).
+
+    Returns: transaction hash
+    """
+    # Dev mode - simulate successful transfer without blockchain
+    if DEV_MODE:
+        mock_tx_hash = f"0x{'dev' + str(token_id).zfill(61)}"
+        logger.info(f"[DEV MODE] Simulated bridge-in transfer: token {token_id} <- {from_address}, tx: {mock_tx_hash}")
+        return mock_tx_hash
+
+    if not PLATFORM_WALLET_KEY:
+        raise ValueError("PLATFORM_WALLET_KEY not configured - cannot transfer")
+
+    if not PLATFORM_WALLET_ADDRESS:
+        raise ValueError("PLATFORM_WALLET_ADDRESS not configured")
+
+    w3 = get_web3()
+    contract = get_transfer_contract(w3)
+
+    # Verify user owns the token
+    current_owner = contract.functions.ownerOf(token_id).call()
+    from_checksum = Web3.to_checksum_address(from_address)
+
+    if current_owner.lower() != from_checksum.lower():
+        raise ValueError(f"User does not own token {token_id}. Owner: {current_owner}")
+
+    # Build transfer transaction (platform executes transferFrom)
+    platform_checksum = Web3.to_checksum_address(PLATFORM_WALLET_ADDRESS)
+    platform_account = w3.eth.account.from_key(PLATFORM_WALLET_KEY)
+    nonce = w3.eth.get_transaction_count(platform_account.address)
+
+    tx = contract.functions.safeTransferFrom(
+        from_checksum,
+        platform_checksum,
+        token_id
+    ).build_transaction({
+        'from': platform_account.address,
+        'nonce': nonce,
+        'gas': 100000,
+        'maxFeePerGas': w3.eth.gas_price * 2,
+        'maxPriorityFeePerGas': w3.to_wei('0.001', 'gwei'),
+    })
+
+    # Sign and send
+    signed_tx = w3.eth.account.sign_transaction(tx, PLATFORM_WALLET_KEY)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+
+    # Wait for receipt
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+
+    if receipt['status'] != 1:
+        raise Exception(f"Transfer failed: {tx_hash.hex()}")
+
+    logger.info(f"Bridge-in transfer: token {token_id} <- {from_address}, tx: {tx_hash.hex()}")
+
+    return tx_hash.hex()
+
+
+def get_token_owner(token_id: int) -> Optional[str]:
+    """Get current on-chain owner of a token."""
+    w3 = get_web3()
+    contract = get_transfer_contract(w3)
+
+    try:
+        owner = contract.functions.ownerOf(token_id).call()
+        return owner.lower()
+    except Exception as e:
+        logger.error(f"Failed to get token owner: {e}")
         return None

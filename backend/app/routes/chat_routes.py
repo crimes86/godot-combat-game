@@ -15,6 +15,7 @@ from typing import Optional, Callable
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 import logging
+import html
 
 from app.models import User, ChatMessage, AchievementCredit
 from app.database import SessionLocal
@@ -207,12 +208,14 @@ async def send_message(
     if room != user_room:
         raise HTTPException(status_code=403, detail="You don't have access to this room")
 
-    # Validate content
+    # Validate and sanitize content
     content = body.content.strip()
     if not content:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     if len(content) > 500:
         raise HTTPException(status_code=400, detail="Message too long (max 500 chars)")
+    # XSS prevention: escape HTML entities before storing
+    content = html.escape(content)
 
     # Rate limiting: max 1 message per 2 seconds
     recent = db.query(ChatMessage).filter(

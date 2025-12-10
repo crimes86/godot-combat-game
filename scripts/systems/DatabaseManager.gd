@@ -579,6 +579,9 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 			else:
 				push_warning("[DatabaseManager] Invalid inventory data for: %s, starting fresh" % username)
 
+	# NOTE: Forged items are now added to inventory immediately when claimed in Armory,
+	# and saved to database right away. No sync needed here anymore.
+
 	# Apply character stats (full blob first, then individual fields as fallback)
 	var stats_json = data.get("character_stats", "")
 	if stats_json is String and not stats_json.is_empty():
@@ -638,6 +641,30 @@ func get_saved_position(username: String) -> Vector2:
 	var pos_x = data.get("position_x", 0.0)
 	var pos_y = data.get("position_y", 0.0)
 	return Vector2(pos_x, pos_y)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# INVENTORY SAVE (for Armory)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func save_inventory_for_user(username: String) -> bool:
+	"""Save just the inventory for a specific user (used by Armory before entering game)"""
+	if username.is_empty():
+		push_warning("[DatabaseManager] Cannot save inventory - no username")
+		return false
+
+	if not players_data.has(username):
+		push_warning("[DatabaseManager] Cannot save inventory - user not found: %s" % username)
+		return false
+
+	# Get inventory data and save
+	var inv_data = InventorySystem.get_save_data()
+	players_data[username]["inventory"] = JSON.stringify(inv_data)
+
+	if save_database():
+		LogManager.info("Saved inventory for: %s (%d items)" % [username, inv_data.get("items", []).size()], "database")
+		return true
+
+	return false
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TUTORIAL TRACKING

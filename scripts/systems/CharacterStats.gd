@@ -50,6 +50,7 @@ const STARTING_LUCK: int = Constants.STARTING_LUCK
 # ============================================
 
 var equipped_weapon = null  # Type: Weapon (untyped to avoid circular dependency)
+var equipped_weapon_data: Dictionary = {}  # Original item dict (preserves forged metadata)
 
 # ============================================
 # EQUIPPED ARMOR
@@ -382,19 +383,22 @@ func increase_stat(stat_name: String, amount: int) -> void:
 # WEAPON SYSTEM
 # ============================================
 
-func equip_weapon(weapon) -> void:  # weapon: Weapon
-	"""Equip a weapon"""
+func equip_weapon(weapon, item_data: Dictionary = {}) -> void:  # weapon: Weapon
+	"""Equip a weapon. Pass item_data to preserve forged metadata."""
 	if not weapon:
 		push_error("Trying to equip null weapon")
 		return
-	
+
 	equipped_weapon = weapon
+	equipped_weapon_data = item_data.duplicate(true) if not item_data.is_empty() else {}
 	weapon_equipped.emit(weapon)
-	
+
 	print("⚔️  Equipped: ", weapon.weapon_name)
 	print("   Damage: +", weapon.base_damage)
 	print("   Attack Speed: ", weapon.attack_speed_bonus * 100, "%")
 	print("   Crit Chance: +", weapon.crit_chance_bonus * 100, "%")
+	if equipped_weapon_data.get("is_forged", false):
+		print("   [Forged item - metadata preserved]")
 
 func unequip_weapon() -> bool:
 	"""Remove equipped weapon and return to inventory"""
@@ -402,39 +406,62 @@ func unequip_weapon() -> bool:
 		print("No weapon equipped")
 		return false
 
-	# Convert Weapon resource to dict for inventory
-	var weapon_dict = {
-		"name": equipped_weapon.weapon_name,
-		"description": equipped_weapon.description,
-		"type": "weapon",
-		"slot": "mainhand",
-		"weapon_type": equipped_weapon.weapon_type,
-		"base_damage": equipped_weapon.base_damage,
-		"attack_speed": _speed_bonus_to_category(equipped_weapon.attack_speed_bonus),
-		"crit_chance": equipped_weapon.crit_chance_bonus,
-		"required_level": equipped_weapon.required_level,
-		"rarity": Weapon.Rarity.keys()[equipped_weapon.rarity],
-		"value": equipped_weapon.sell_value,
-		"can_trade": equipped_weapon.can_trade,
-		"stackable": false,
-		"quantity": 1
-	}
+	# Use stored item data if available (preserves forged metadata), otherwise reconstruct
+	var weapon_dict: Dictionary
+	if not equipped_weapon_data.is_empty():
+		weapon_dict = equipped_weapon_data.duplicate(true)
+	else:
+		# Fallback: Convert Weapon resource to dict for inventory
+		weapon_dict = {
+			"name": equipped_weapon.weapon_name,
+			"description": equipped_weapon.description,
+			"type": "weapon",
+			"slot": "mainhand",
+			"weapon_type": equipped_weapon.weapon_type,
+			"base_damage": equipped_weapon.base_damage,
+			"attack_speed": _speed_bonus_to_category(equipped_weapon.attack_speed_bonus),
+			"crit_chance": equipped_weapon.crit_chance_bonus,
+			"required_level": equipped_weapon.required_level,
+			"rarity": Weapon.Rarity.keys()[equipped_weapon.rarity],
+			"value": equipped_weapon.sell_value,
+			"can_trade": equipped_weapon.can_trade,
+			"stackable": false,
+			"quantity": 1
+		}
 
-	# Add healing weapon properties if applicable
-	if equipped_weapon.attack_mode != "melee":
-		weapon_dict["attack_mode"] = equipped_weapon.attack_mode
-		weapon_dict["healing_power"] = equipped_weapon.healing_power
-		weapon_dict["heal_radius"] = equipped_weapon.heal_radius
+		# Add healing weapon properties if applicable
+		if equipped_weapon.attack_mode != "melee":
+			weapon_dict["attack_mode"] = equipped_weapon.attack_mode
+			weapon_dict["healing_power"] = equipped_weapon.healing_power
+			weapon_dict["heal_radius"] = equipped_weapon.heal_radius
 
 	# Add back to inventory
 	if InventorySystem.add_item(weapon_dict):
 		equipped_weapon = null
+		equipped_weapon_data = {}
 		weapon_unequipped.emit()
 		print("🛡️  Unequipped weapon: %s" % weapon_dict.get("name", "Unknown"))
 		return true
 	else:
 		print("❌ Inventory full! Cannot unequip weapon")
 		return false
+
+func get_equipped_weapon_data() -> Dictionary:
+	"""Get the stored weapon item data (includes forged metadata)"""
+	if equipped_weapon_data.is_empty() and equipped_weapon:
+		# Fallback: construct basic dict if no stored data
+		return {
+			"name": equipped_weapon.weapon_name,
+			"description": equipped_weapon.description,
+			"type": "weapon",
+			"slot": "mainhand",
+			"weapon_type": equipped_weapon.weapon_type,
+			"base_damage": equipped_weapon.base_damage,
+			"attack_speed_bonus": equipped_weapon.attack_speed_bonus,
+			"crit_chance_bonus": equipped_weapon.crit_chance_bonus,
+			"rarity": Weapon.Rarity.keys()[equipped_weapon.rarity]
+		}
+	return equipped_weapon_data
 
 func _speed_bonus_to_category(bonus: float) -> String:
 	"""Convert attack_speed_bonus back to category string"""

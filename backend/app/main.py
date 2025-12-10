@@ -74,6 +74,13 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Chain batching service not started: {e}")
 
+    # Start transfer indexer for bridge system (detects OpenSea sales, etc)
+    try:
+        from app.services.transfer_indexer_service import transfer_indexer_service
+        transfer_indexer_service.start()
+    except Exception as e:
+        logger.warning(f"Transfer indexer not started: {e}")
+
     logger.info(f"Enabled providers: {list(get_enabled_providers().keys())}")
     if BETA_ACCESS_CODE:
         logger.info(f"Beta gate ENABLED (code: {BETA_ACCESS_CODE[:4]}...)")
@@ -93,11 +100,24 @@ async def shutdown_event():
     except Exception:
         pass
 
+    # Stop transfer indexer
+    try:
+        from app.services.transfer_indexer_service import transfer_indexer_service
+        transfer_indexer_service.stop()
+    except Exception:
+        pass
+
 
 @app.get("/")
 async def root():
     """Redirect root to login page"""
     return RedirectResponse(url="/login", status_code=302)
+
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for Godot client to verify backend connectivity"""
+    return {"status": "ok", "service": "mantle"}
 
 
 @app.get("/index.html")
@@ -138,7 +158,13 @@ all_providers = get_all_providers_list()
 STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 BATTLENET_API_KEY = os.environ.get("BATTLENET_API_KEY")
 APP_URL = os.environ.get("APP_URL", "http://localhost:8000")
-ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "mantle-dev-admin-2024")  # Change in production!
+# Admin secret - required in production, has dev fallback for local testing
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET")
+if not ADMIN_SECRET:
+    if os.environ.get("ENV") == "production":
+        raise RuntimeError("ADMIN_SECRET environment variable is required in production")
+    ADMIN_SECRET = "dev-only-admin-secret"
+    print("⚠️  WARNING: Using default ADMIN_SECRET - do not use in production!")
 BETA_ACCESS_CODE = os.environ.get("BETA_ACCESS_CODE")  # Set to enable beta gate (e.g., "mantle-beta-2024")
 
 # In-memory device code storage (for Godot auth flow)
@@ -402,7 +428,7 @@ def get_user_by_provider(db: DbSession, provider_name: str, provider_user_id: st
     return provider_account.user if provider_account else None
 
 
-def create_new_user_with_provider(db: DbSession, provider_name: str, provider_user_id: str, profile_data=None, access_token=None):
+def create_new_user_with_provider(db: DbSession, provider_name: str, provider_user_id: str, profile_data=None, access_token=None, provider_username=None):
     """Create a new user with a provider account in a single transaction."""
     app_username = generate_app_username(db)
     user = User(username=app_username)
@@ -412,6 +438,7 @@ def create_new_user_with_provider(db: DbSession, provider_name: str, provider_us
     new_provider_account = ProviderAccount(
         provider_name=provider_name,
         provider_user_id=provider_user_id,
+        provider_username=provider_username,
         user_id=user.id,
         profile_data=profile_data or {},
         is_active=True,
@@ -1672,7 +1699,7 @@ async def psn_link(
 # =============================================================================
 
 @app.get("/auth/discord/login")
-async def discord_login(request: Request, db: DbSession = Depends(get_db)):
+async def discord_login(request: Request, db: DbSession = Depends(get_db), device_code: Optional[str] = None):
     """Initiate Discord OAuth flow"""
     token = get_session_token(request)
     current_user = get_user_from_session(db, token) if token else None
@@ -1688,6 +1715,12 @@ async def discord_login(request: Request, db: DbSession = Depends(get_db)):
                 {"request": request, "message": "You already have a Discord account linked. Unlink it before claiming another."},
                 status_code=400,
             )
+
+    # Store device_code in session for callback (Godot auth flow)
+    if device_code:
+        request.session["device_code"] = device_code
+        logger.info(f"[DISCORD] Stored device_code {device_code[:8]}... in session")
+
     redirect_uri = f"{APP_URL}/auth/discord/callback"
     logger.info("Initiating Discord login flow")
     return await oauth.discord.authorize_redirect(request, redirect_uri)
@@ -1794,25 +1827,46 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
             return RedirectResponse(url="/dashboard", status_code=303)
 
         else:
-            # Not logged in - create new user with Discord
-            user, provider_account = create_new_user_with_provider(
-                db=db,
-                provider_name="discord",
-                provider_user_id=discord_id,
-                provider_username=display_name,
-                profile_data={
+            # Not logged in - check if Discord account already exists
+            existing_provider = (
+                db.query(ProviderAccount)
+                .filter_by(provider_name="discord", provider_user_id=discord_id, is_active=True)
+                .first()
+            )
+
+            if existing_provider:
+                # Existing user - log them in
+                user = existing_provider.user
+                # Update profile data
+                existing_provider.access_token = oauth_token.get("access_token")
+                existing_provider.profile_data = {
                     "username": discord_username,
                     "discriminator": discord_discriminator,
                     "display_name": display_name,
                     "avatar_url": avatar_url,
-                },
-                access_token=oauth_token.get("access_token"),
-            )
+                }
+                db.commit()
+            else:
+                # New user - create account
+                user, provider_account = create_new_user_with_provider(
+                    db=db,
+                    provider_name="discord",
+                    provider_user_id=discord_id,
+                    provider_username=display_name,
+                    profile_data={
+                        "username": discord_username,
+                        "discriminator": discord_discriminator,
+                        "display_name": display_name,
+                        "avatar_url": avatar_url,
+                    },
+                    access_token=oauth_token.get("access_token"),
+                )
 
             # Create session
-            session = Session(
+            session_token = secrets.token_urlsafe(32)
+            session = SessionModel(
                 user_id=user.id,
-                session_token=secrets.token_urlsafe(32),
+                token=session_token,
                 expires_at=datetime.utcnow() + timedelta(days=7)
             )
             db.add(session)
@@ -1821,12 +1875,23 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
             response = RedirectResponse(url="/dashboard", status_code=303)
             response.set_cookie(
                 key="session_id",
-                value=session.session_token,
+                value=session_token,
                 httponly=True,
                 max_age=7*24*60*60,
                 samesite="lax"
             )
-            logger.info(f"[DISCORD] Created new user {user.username} via Discord")
+
+            # Handle device code flow (Godot client)
+            device_code = request.session.get("device_code")
+            if device_code and device_code in device_codes:
+                device_codes[device_code]["user_id"] = user.id
+                device_codes[device_code]["username"] = user.username
+                device_codes[device_code]["session_token"] = session_token
+                logger.info(f"[DISCORD] Device code {device_code[:8]}... completed for user {user.id}")
+                # Clear device_code from session after use
+                request.session.pop("device_code", None)
+
+            logger.info(f"[DISCORD] {'Logged in' if existing_provider else 'Created'} user {user.username} via Discord")
             return response
 
     except Exception as e:
@@ -1979,7 +2044,7 @@ async def github_callback(request: Request, db: DbSession = Depends(get_db)):
             )
 
             # Create session
-            session = Session(
+            session = SessionModel(
                 user_id=user.id,
                 session_token=secrets.token_urlsafe(32),
                 expires_at=datetime.utcnow() + timedelta(days=7)
@@ -2253,6 +2318,24 @@ async def get_battlenet_achievements(user_id: int):
 
     # --- Return just the character array
     return JSONResponse(content=result["details"]["per_game"])
+
+@app.get("/wallet/connect", response_class=HTMLResponse)
+async def wallet_connect_page(
+        request: Request,
+        db: DbSession = Depends(get_db),
+        user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Wallet connection page for SIWE (Sign-In With Ethereum) flow.
+    Users are redirected here from Godot to connect their crypto wallet."""
+    # Redirect to login if not authenticated
+    if not user:
+        return RedirectResponse(url="/login?next=/wallet/connect", status_code=302)
+
+    return templates.TemplateResponse(
+        "wallet_connect.html",
+        {"request": request, "user": user}
+    )
+
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(
@@ -3036,7 +3119,8 @@ async def get_forged_items_api(
 
     # Get all forged items for this user (via wallet ownership or current_owner)
     # Also includes test-granted items (which have no achievement_credit_id)
-    user_wallets = db.query(WalletAccount.id).filter(WalletAccount.user_id == user.id).subquery()
+    from sqlalchemy import select
+    user_wallets = select(WalletAccount.id).where(WalletAccount.user_id == user.id)
 
     forged_items = (
         db.query(ForgedAchievement)
@@ -3060,6 +3144,7 @@ async def get_forged_items_api(
 
         items.append({
             # Item identity
+            "forged_id": forged.id,  # ForgedAchievement.id - needed for bridge-out API
             "token_id": forged.token_id,
             "item_id": forged.item_id,
             "item_name": forged.item_name,
@@ -3084,12 +3169,118 @@ async def get_forged_items_api(
                 "achievement_icon": achievement.icon_url if achievement else None,
                 "app_id": achievement.app_id if achievement else None,
             } if achievement else None,
+
+            # In-game claim status (prevents duping)
+            "claimed_in_game": forged.claimed_in_game_at is not None,
+            "claimed_in_game_at": forged.claimed_in_game_at.isoformat() if forged.claimed_in_game_at else None,
+
+            # Bridge status for external wallet transfers
+            "bridge_status": forged.bridge_status or "in_game",
         })
 
     return {
         "total": len(items),
         "forged_items": items,
     }
+
+
+@app.post("/api/forge/claim-to-game")
+async def claim_forged_item_to_game(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Claim a forged item to in-game inventory.
+
+    This marks the item as claimed server-side to prevent duping.
+    Once claimed, the item cannot be claimed again (until traded to another player
+    who hasn't claimed it yet).
+
+    Request body: {"token_id": int}
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    body = await request.json()
+    token_id = body.get("token_id")
+    if not token_id:
+        raise HTTPException(status_code=400, detail="token_id required")
+
+    # Find the forged item
+    user_wallets = db.query(WalletAccount.id).filter(WalletAccount.user_id == user.id).subquery()
+    forged = (
+        db.query(ForgedAchievement)
+        .outerjoin(AchievementCredit, ForgedAchievement.achievement_credit_id == AchievementCredit.id)
+        .filter(
+            ForgedAchievement.token_id == token_id,
+            # Must own the item
+            (ForgedAchievement.wallet_account_id.in_(user_wallets)) |
+            (ForgedAchievement.current_owner_id == user.id) |
+            (AchievementCredit.user_id == user.id)
+        )
+        .first()
+    )
+
+    if not forged:
+        raise HTTPException(status_code=404, detail="Item not found or not owned by you")
+
+    # Check if already claimed
+    if forged.claimed_in_game_at:
+        raise HTTPException(status_code=409, detail="Item already claimed to game")
+
+    # Mark as claimed
+    from datetime import datetime
+    forged.claimed_in_game_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "success": True,
+        "token_id": token_id,
+        "claimed_at": forged.claimed_in_game_at.isoformat(),
+    }
+
+
+@app.post("/api/forge/unclaim-from-game")
+async def unclaim_forged_item_from_game(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    DEBUG/ADMIN: Unclaim a forged item (reset claimed_in_game_at).
+    Used for testing or if item is lost due to bugs.
+
+    Request body: {"token_id": int}
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    # Only admins can unclaim (prevents exploit)
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    body = await request.json()
+    token_id = body.get("token_id")
+    if not token_id:
+        raise HTTPException(status_code=400, detail="token_id required")
+
+    forged = db.query(ForgedAchievement).filter(ForgedAchievement.token_id == token_id).first()
+    if not forged:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    forged.claimed_in_game_at = None
+    db.commit()
+
+    return {"success": True, "token_id": token_id, "message": "Item unclaimed from game"}
 
 
 @app.get("/api/player/{user_id}/badge")
@@ -3367,9 +3558,15 @@ async def get_forge_status(
     Get forge status summary for current user.
 
     Returns counts and lists of:
-    - Already forged achievements
+    - Already forged achievements (with bridge status)
     - Forgeable achievements (Rare+, original claims, not yet forged)
     - Unforgeable achievements (Common/Uncommon or reclaimed)
+
+    Bridge status on forged items indicates:
+    - in_game: Item usable in-game
+    - bridging_out: 48h cooldown, item locked
+    - bridged: Item in external wallet, not usable in-game
+    - bridging_in: Being transferred back to platform
     """
     token = get_session_token(request)
     if not token:
@@ -3381,9 +3578,9 @@ async def get_forge_status(
 
     forgeable_tiers = ["Legendary", "Epic", "Rare"]
 
-    # Get all achievement credits
+    # Get all achievement credits with forged data
     credits = (
-        db.query(AchievementCredit, Achievement, ProviderAccount)
+        db.query(AchievementCredit, Achievement, ProviderAccount, ForgedAchievement)
         .join(Achievement, AchievementCredit.achievement_id == Achievement.id)
         .join(ProviderAccount, AchievementCredit.provider_account_id == ProviderAccount.id)
         .outerjoin(ForgedAchievement, ForgedAchievement.achievement_credit_id == AchievementCredit.id)
@@ -3391,20 +3588,12 @@ async def get_forge_status(
         .all()
     )
 
-    # Get forged credit IDs
-    forged_credit_ids = set(
-        f.achievement_credit_id for f in
-        db.query(ForgedAchievement.achievement_credit_id).filter(
-            ForgedAchievement.achievement_credit_id.in_([c[0].id for c in credits])
-        ).all()
-    )
-
     forged = []
     forgeable = []
     unforgeable = []
 
-    for credit, achievement, provider_account in credits:
-        is_forged = credit.id in forged_credit_ids
+    for credit, achievement, provider_account, forged_item in credits:
+        is_forged = forged_item is not None
         can_forge = (
             achievement.rarity_tier in forgeable_tiers and
             credit.is_original_claim and
@@ -3421,6 +3610,16 @@ async def get_forge_status(
         }
 
         if is_forged:
+            # Include bridge status and item details for forged items
+            item["forged_id"] = forged_item.id
+            item["item_id"] = forged_item.item_id
+            item["item_name"] = forged_item.item_name
+            item["bridge_status"] = forged_item.bridge_status or "in_game"
+            item["claimed_in_game"] = forged_item.claimed_in_game_at is not None
+            item["usable_in_game"] = (
+                forged_item.bridge_status in (None, "in_game") and
+                forged_item.claimed_in_game_at is not None
+            )
             forged.append(item)
         elif can_forge:
             forgeable.append(item)
@@ -3430,6 +3629,11 @@ async def get_forge_status(
                 else "Reclaimed achievement (display-only)"
             )
             unforgeable.append(item)
+
+    # Count items by bridge status
+    in_game_count = sum(1 for f in forged if f.get("bridge_status") == "in_game")
+    bridging_out_count = sum(1 for f in forged if f.get("bridge_status") == "bridging_out")
+    bridged_count = sum(1 for f in forged if f.get("bridge_status") == "bridged")
 
     # Check wallet status
     from app.routes.wallet_routes import _wallet_service
@@ -3448,6 +3652,10 @@ async def get_forge_status(
             "forgeable": len(forgeable),
             "unforgeable": len(unforgeable),
             "total": len(credits),
+            # Bridge status breakdown
+            "in_game": in_game_count,
+            "bridging_out": bridging_out_count,
+            "bridged": bridged_count,
         },
         "forged": forged,
         "forgeable": forgeable,
@@ -3459,13 +3667,14 @@ async def get_forge_status(
 async def forge_claim(
     request: Request,
     db: DbSession = Depends(get_db),
-    achievement_id: int = None,
 ):
     """
     Forge an achievement into an item (TEST MODE - no blockchain required).
 
     This endpoint allows forging without wallet connection for testing.
     Creates a ForgedAchievement record with dummy chain data.
+
+    Request body: {"achievement_id": int}
 
     For production, use /api/wallet/forge which requires real blockchain tx.
     """
@@ -3477,16 +3686,24 @@ async def forge_claim(
     if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
+    # Parse achievement_id from request body
+    try:
+        body = await request.json()
+        achievement_id = body.get("achievement_id")
+    except:
+        achievement_id = None
+
+    if not achievement_id:
+        raise HTTPException(status_code=400, detail="achievement_id is required")
+
     # Get the achievement credit
     credit_query = (
         db.query(AchievementCredit, Achievement, ProviderAccount)
         .join(Achievement, AchievementCredit.achievement_id == Achievement.id)
         .join(ProviderAccount, AchievementCredit.provider_account_id == ProviderAccount.id)
         .filter(AchievementCredit.user_id == user.id)
+        .filter(Achievement.id == achievement_id)
     )
-
-    if achievement_id:
-        credit_query = credit_query.filter(Achievement.id == achievement_id)
 
     credit_result = credit_query.first()
 
@@ -3867,6 +4084,67 @@ async def revoke_admin(
     logger.info(f"Admin revoked from user {current_user.username} (ID: {current_user.id})")
 
     return {"status": "success", "message": f"Admin revoked from {current_user.username}", "is_admin": False}
+
+
+@app.get("/api/admin/indexer-status")
+async def get_indexer_status(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """Get transfer indexer status (admin only)."""
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        from app.services.transfer_indexer_service import get_indexer_status
+        status = get_indexer_status()
+
+        # Add pending bridge transactions count
+        from app.models import BridgeTransaction
+        pending_bridges = db.query(BridgeTransaction).filter(
+            BridgeTransaction.status == "pending"
+        ).count()
+        status["pending_bridge_transactions"] = pending_bridges
+
+        return status
+    except ImportError:
+        return {
+            "running": False,
+            "error": "Indexer service not available"
+        }
+
+
+@app.post("/api/admin/indexer-poll")
+async def trigger_indexer_poll(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """Manually trigger indexer poll (admin only)."""
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        from app.services.transfer_indexer_service import manual_poll
+        processed = await manual_poll()
+        return {
+            "success": True,
+            "transfers_processed": processed
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 # =============================================================================

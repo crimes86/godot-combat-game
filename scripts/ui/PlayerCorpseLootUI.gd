@@ -396,7 +396,7 @@ func _equip_item(entry: Dictionary) -> void:
 			if not weapon_dict.is_empty():
 				var weapon = _dict_to_weapon(weapon_dict)
 				if weapon:
-					CharacterStats.equip_weapon(weapon)
+					CharacterStats.equip_weapon(weapon, weapon_dict)  # Pass item data for forged metadata
 					_show_notification("Equipped %s" % weapon_dict.get("name", "weapon"))
 
 		"inventory":
@@ -422,7 +422,7 @@ func _equip_item(entry: Dictionary) -> void:
 				if not taken_item.is_empty():
 					var weapon = _dict_to_weapon(taken_item)
 					if weapon:
-						CharacterStats.equip_weapon(weapon)
+						CharacterStats.equip_weapon(weapon, taken_item)  # Pass item data for forged metadata
 						_show_notification("Equipped %s" % taken_item.get("name", "weapon"))
 
 	_gather_all_items()

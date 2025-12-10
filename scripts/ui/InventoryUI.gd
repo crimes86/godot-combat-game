@@ -7,6 +7,7 @@ extends CanvasLayer
 # ============================================
 # DEBUG SETTINGS - Set to true to enable verbose logging
 # ============================================
+const DEBUG_EQUIP: bool = true  # Debug equipping items from inventory
 const DEBUG_FORGED_DISPLAY: bool = false  # Debug forged item display in inventory
 
 var is_visible: bool = false
@@ -551,13 +552,12 @@ func refresh_inventory() -> void:
 func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 	"""Handle GUI input on inventory slot (double-click or right-click to equip/use)"""
 	if event is InputEventMouseButton and event.pressed:
-		print("🖱️ Inventory slot %d clicked - button: %d, double_click: %s" % [slot_index, event.button_index, event.double_click])
 		if (event.button_index == MOUSE_BUTTON_LEFT and event.double_click) or event.button_index == MOUSE_BUTTON_RIGHT:
 			var item = InventorySystem.get_item(slot_index)
-			print("   Item in slot: %s" % (item if item else "empty"))
 
 			if item and item.size() > 0:
-				print("   Item type: '%s', slot: '%s'" % [item.get("type", ""), item.get("slot", "")])
+				if DEBUG_EQUIP:
+					print("[Equip] Inventory slot %d: %s (type=%s, slot=%s)" % [slot_index, item.get("name", "?"), item.get("type", ""), item.get("slot", "")])
 
 				# Check if it's a placeable item (like Campfire Kit)
 				if item.get("type", "") == "placeable":
@@ -584,11 +584,13 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 					if weapon:
 						# If there's already a weapon equipped, unequip it first
 						if CharacterStats.equipped_weapon:
-							print("⚔️ Swapping weapons - unequipping %s first" % CharacterStats.equipped_weapon.weapon_name)
+							if DEBUG_EQUIP:
+								print("[Equip] Swapping weapons - unequipping %s first" % CharacterStats.equipped_weapon.weapon_name)
 							if not CharacterStats.unequip_weapon():
-								print("❌ Cannot swap weapons - inventory full!")
+								if DEBUG_EQUIP:
+									print("[Equip] Cannot swap weapons - inventory full!")
 								return
-						CharacterStats.equip_weapon(weapon)
+						CharacterStats.equip_weapon(weapon, item)  # Pass item data for forged metadata
 						InventorySystem.remove_item(slot_index)
 						SoundManager.play_equip_sound()
 						refresh_all()
@@ -655,14 +657,10 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 
 func _get_inventory_drag_data(at_position: Vector2, slot_index: int) -> Variant:
 	"""Start dragging an inventory item"""
-	print("🎯 _get_inventory_drag_data called for slot %d" % slot_index)
 	var item = InventorySystem.get_item(slot_index)
 	if not item or item.is_empty():
-		print("   No item in slot, returning null")
 		_current_drag_data = null
 		return null
-
-	print("   Starting drag for: %s" % item.get("name", "Unknown"))
 	var preview = Label.new()
 	preview.text = item.get("name", "Item")
 	preview.add_theme_font_size_override("font_size", 16)

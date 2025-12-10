@@ -1,5 +1,15 @@
 # Achievement Token Contract
 
+> ⚠️ **SECURITY WARNING** ⚠️
+>
+> This guide references private keys and secrets. **NEVER commit real private keys to git.**
+>
+> Before deploying:
+> 1. Use `.env.example` as a template (contains placeholders only)
+> 2. Create `.env` locally with real values
+> 3. Verify `.env` is in `.gitignore`
+> 4. Consider using a hardware wallet for production deployments
+
 ## Overview
 
 This is the smart contract for minting verified gaming achievements as NFTs.

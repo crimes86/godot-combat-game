@@ -27,12 +27,24 @@ const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
 @onready var armor_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Armor/ScrollContainer/ArmorList
 @onready var sell_list: GridContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Sell/ScrollContainer/SellList
 @onready var quests_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Quests/ScrollContainer/QuestsList
+@onready var forge_list: VBoxContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Forge/VBoxContainer/ScrollContainer/ForgeList
+@onready var forge_status_label: Label = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Forge/VBoxContainer/ForgeHeader/ForgeStatus
+@onready var forge_refresh_btn: Button = $Control/Panel/MarginContainer/VBoxContainer/TabContainer/Forge/VBoxContainer/ForgeHeader/RefreshButton
 @onready var close_button: Button = $Control/Panel/MarginContainer/VBoxContainer/Header/CloseButton
 @onready var message_label: Label = $Control/Panel/MarginContainer/VBoxContainer/MessageLabel
 @onready var tab_container: TabContainer = $Control/Panel/MarginContainer/VBoxContainer/TabContainer
 
 var vendor: Vendor = null
 var quest_message_label: Label = null  # Message label inside Quests tab
+
+# Forge tab colors
+const FORGE_RARITY_COLORS = {
+	"common": Color(0.6, 0.6, 0.6),
+	"uncommon": Color(0.4, 0.8, 0.4),
+	"rare": Color(0.4, 0.5, 0.9),
+	"epic": Color(0.7, 0.4, 0.9),
+	"legendary": Color(0.9, 0.6, 0.2)
+}
 
 func _ready() -> void:
 	print("🏪 ShopUI initialized")
@@ -76,6 +88,16 @@ func _ready() -> void:
 
 	# Connect to gold changes for auto-update
 	CharacterStats.gold_changed.connect(_on_gold_changed)
+
+	# Connect ForgeItemManager signals
+	if ForgeItemManager:
+		ForgeItemManager.forged_items_loaded.connect(_on_forged_items_loaded)
+		ForgeItemManager.forge_claimed.connect(_on_forge_item_claimed)
+		ForgeItemManager.item_synced_to_inventory.connect(_on_forge_item_synced)
+
+	# Connect forge refresh button
+	if forge_refresh_btn:
+		forge_refresh_btn.pressed.connect(_on_forge_refresh_pressed)
 
 func apply_modern_styling() -> void:
 	"""Apply Dark Fantasy Wasteland theme to match CharacterUI"""
@@ -139,7 +161,9 @@ func open_shop(vendor_node: Vendor) -> void:
 	populate_armor()
 	populate_sell_items()
 	populate_quests()
+	populate_forge()
 	update_quests_tab_indicator()
+	update_forge_tab_indicator()
 
 	# Hide armor tab if vendor doesn't sell armor
 	if tab_container and vendor.armor_for_sale.is_empty():
@@ -1548,6 +1572,288 @@ func update_quests_tab_indicator() -> void:
 		tab_title = "Quests (!)"  # New quests available
 
 	tab_container.set_tab_title(quests_tab_idx, tab_title)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FORGE TAB
+# ═══════════════════════════════════════════════════════════════════════════
+
+func populate_forge() -> void:
+	"""Populate the forge tab with forged items from ForgeItemManager"""
+	if not forge_list:
+		return
+
+	# Clear existing items
+	for child in forge_list.get_children():
+		child.queue_free()
+
+	# Check if user is authenticated with Mantle
+	if not MantleAuth or not MantleAuth.is_authenticated():
+		var auth_msg = Label.new()
+		auth_msg.text = "Sign in to Mantle to view your forged items.\nVisit the Armory to connect your account."
+		auth_msg.add_theme_font_size_override("font_size", 14)
+		auth_msg.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+		auth_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		auth_msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		forge_list.add_child(auth_msg)
+		_update_forge_status("Not signed in")
+		return
+
+	# Get forged items from ForgeItemManager
+	var forged_items = ForgeItemManager.get_forged_items()
+	var unclaimed_items = []
+	var claimed_items = []
+
+	# Separate into unclaimed (can claim to inventory) and claimed
+	for item in forged_items:
+		if item.get("claimed_in_game", false):
+			claimed_items.append(item)
+		else:
+			unclaimed_items.append(item)
+
+	var has_content = false
+
+	# Show unclaimed items first (ready to claim)
+	if unclaimed_items.size() > 0:
+		has_content = true
+		var claim_header = Label.new()
+		claim_header.text = "⚔ READY TO CLAIM (%d)" % unclaimed_items.size()
+		claim_header.add_theme_font_size_override("font_size", 14)
+		claim_header.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))  # Gold
+		forge_list.add_child(claim_header)
+
+		for item in unclaimed_items:
+			var card = _create_forge_item_card(item, false)
+			forge_list.add_child(card)
+
+		# Separator
+		var sep = HSeparator.new()
+		sep.add_theme_constant_override("separation", 8)
+		forge_list.add_child(sep)
+
+	# Show claimed items
+	if claimed_items.size() > 0:
+		has_content = true
+		var claimed_header = Label.new()
+		claimed_header.text = "✓ IN INVENTORY (%d)" % claimed_items.size()
+		claimed_header.add_theme_font_size_override("font_size", 14)
+		claimed_header.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))  # Green
+		forge_list.add_child(claimed_header)
+
+		for item in claimed_items:
+			var card = _create_forge_item_card(item, true)
+			forge_list.add_child(card)
+
+	# No items message
+	if not has_content:
+		var empty_label = Label.new()
+		empty_label.text = "No forged items yet.\n\nForge achievements into items at the Armory\nto claim them here!"
+		empty_label.add_theme_font_size_override("font_size", 14)
+		empty_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		forge_list.add_child(empty_label)
+
+	# Update status
+	_update_forge_status("%d forged items" % forged_items.size() if forged_items.size() > 0 else "No items")
+
+func _create_forge_item_card(item: Dictionary, is_claimed: bool) -> PanelContainer:
+	"""Create a card displaying a forged item with claim button if unclaimed"""
+	var card = PanelContainer.new()
+	card.custom_minimum_size = Vector2(0, 80)
+
+	# Get item properties
+	var item_name = item.get("item_name", "Unknown Item")
+	var item_rarity = item.get("item_rarity", "common").to_lower()
+	var item_type = item.get("item_type", "weapon")
+	var effort_tier = item.get("effort_tier", "")
+	var effect_name = item.get("effect_name", "")
+	var rarity_color = FORGE_RARITY_COLORS.get(item_rarity, Color(0.6, 0.6, 0.6))
+
+	# Style the card with rarity border
+	var card_style = StyleBoxFlat.new()
+	card_style.bg_color = Color(0.10, 0.10, 0.12, 0.95)
+	card_style.border_width_left = 3
+	card_style.border_width_right = 3
+	card_style.border_width_top = 3
+	card_style.border_width_bottom = 3
+	card_style.border_color = rarity_color
+	card_style.corner_radius_top_left = 8
+	card_style.corner_radius_top_right = 8
+	card_style.corner_radius_bottom_left = 8
+	card_style.corner_radius_bottom_right = 8
+	card_style.content_margin_left = 12
+	card_style.content_margin_right = 12
+	card_style.content_margin_top = 8
+	card_style.content_margin_bottom = 8
+	card_style.shadow_size = 3
+	card_style.shadow_color = Color(0, 0, 0, 0.4)
+	card.add_theme_stylebox_override("panel", card_style)
+
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 12)
+	card.add_child(hbox)
+
+	# Item icon placeholder (could integrate with ItemIconGenerator)
+	var icon_container = CenterContainer.new()
+	icon_container.custom_minimum_size = Vector2(48, 48)
+	hbox.add_child(icon_container)
+
+	var icon_label = Label.new()
+	icon_label.text = "⚔" if item_type == "weapon" else ("🛡" if item_type in ["armor", "shield"] else "💎")
+	icon_label.add_theme_font_size_override("font_size", 28)
+	icon_label.add_theme_color_override("font_color", rarity_color)
+	icon_container.add_child(icon_label)
+
+	# Item info
+	var info_vbox = VBoxContainer.new()
+	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info_vbox.add_theme_constant_override("separation", 2)
+	hbox.add_child(info_vbox)
+
+	# Name with rarity color
+	var name_label = Label.new()
+	name_label.text = item_name
+	name_label.add_theme_font_size_override("font_size", 15)
+	name_label.add_theme_color_override("font_color", rarity_color)
+	info_vbox.add_child(name_label)
+
+	# Type and rarity
+	var type_label = Label.new()
+	type_label.text = "%s • %s" % [item_rarity.capitalize(), item_type.capitalize()]
+	type_label.add_theme_font_size_override("font_size", 12)
+	type_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	info_vbox.add_child(type_label)
+
+	# Effect/tier info
+	if effort_tier or effect_name:
+		var effect_label = Label.new()
+		var effect_parts = []
+		if effort_tier:
+			effect_parts.append(effort_tier)
+		if effect_name:
+			effect_parts.append(effect_name.replace("_", " ").capitalize())
+		effect_label.text = " • ".join(effect_parts)
+		effect_label.add_theme_font_size_override("font_size", 11)
+		effect_label.add_theme_color_override("font_color", Color(0.6, 0.65, 0.7))
+		info_vbox.add_child(effect_label)
+
+	# Claim button or status
+	if not is_claimed:
+		var claim_btn = Button.new()
+		claim_btn.text = "CLAIM"
+		claim_btn.add_theme_font_size_override("font_size", 12)
+		claim_btn.custom_minimum_size = Vector2(70, 30)
+
+		var btn_style = StyleBoxFlat.new()
+		btn_style.bg_color = Color(0.2, 0.4, 0.25)
+		btn_style.border_width_left = 2
+		btn_style.border_width_right = 2
+		btn_style.border_width_top = 2
+		btn_style.border_width_bottom = 2
+		btn_style.border_color = Color(0.4, 0.8, 0.4)
+		btn_style.corner_radius_top_left = 4
+		btn_style.corner_radius_top_right = 4
+		btn_style.corner_radius_bottom_left = 4
+		btn_style.corner_radius_bottom_right = 4
+		claim_btn.add_theme_stylebox_override("normal", btn_style)
+
+		var btn_hover = btn_style.duplicate()
+		btn_hover.bg_color = Color(0.3, 0.5, 0.35)
+		claim_btn.add_theme_stylebox_override("hover", btn_hover)
+
+		claim_btn.add_theme_color_override("font_color", Color.WHITE)
+
+		var forged_id = item.get("id", 0)
+		claim_btn.pressed.connect(func(): _on_claim_forge_item(forged_id, item))
+		hbox.add_child(claim_btn)
+	else:
+		var status_label = Label.new()
+		status_label.text = "✓"
+		status_label.add_theme_font_size_override("font_size", 20)
+		status_label.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))
+		hbox.add_child(status_label)
+
+	return card
+
+func _on_claim_forge_item(forged_id: int, item: Dictionary) -> void:
+	"""Handle claiming a forged item to inventory"""
+	if not ForgeItemManager:
+		show_message("Forge system unavailable", Color.RED)
+		return
+
+	# Claim the item
+	ForgeItemManager.claim_single_item(item)
+	show_message("Claimed %s!" % item.get("item_name", "item"), Color(0.5, 0.9, 0.5))
+
+	# Play sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -8.0)
+
+	# Refresh display
+	populate_forge()
+	update_forge_tab_indicator()
+
+func _on_forge_refresh_pressed() -> void:
+	"""Handle refresh button press"""
+	_play_click_sound()
+	if ForgeItemManager:
+		_update_forge_status("Refreshing...")
+		ForgeItemManager.fetch_forged_items()
+
+func _on_forged_items_loaded(_items: Array) -> void:
+	"""Handle forged items loaded from backend"""
+	if visible:
+		populate_forge()
+		update_forge_tab_indicator()
+
+func _on_forge_item_claimed(_item: Dictionary) -> void:
+	"""Handle a forge item being claimed"""
+	if visible:
+		populate_forge()
+		update_forge_tab_indicator()
+
+func _on_forge_item_synced(_item: Dictionary) -> void:
+	"""Handle a forge item being synced to inventory"""
+	if visible:
+		populate_forge()
+		update_forge_tab_indicator()
+
+func _update_forge_status(text: String) -> void:
+	"""Update the forge status label"""
+	if forge_status_label:
+		forge_status_label.text = text
+
+func update_forge_tab_indicator() -> void:
+	"""Update the Forge tab title with indicator for unclaimed items"""
+	if not tab_container:
+		return
+
+	# Find the Forge tab index
+	var forge_tab_idx = -1
+	for i in range(tab_container.get_tab_count()):
+		var title = tab_container.get_tab_title(i)
+		if title.begins_with("Forge"):
+			forge_tab_idx = i
+			break
+
+	if forge_tab_idx == -1:
+		return
+
+	# Count unclaimed items
+	var unclaimed_count = 0
+	if ForgeItemManager:
+		var forged_items = ForgeItemManager.get_forged_items()
+		for item in forged_items:
+			if not item.get("claimed_in_game", false):
+				unclaimed_count += 1
+
+	# Update tab title
+	var tab_title = "Forge"
+	if unclaimed_count > 0:
+		tab_title = "Forge (%d)" % unclaimed_count
+
+	tab_container.set_tab_title(forge_tab_idx, tab_title)
 
 func _play_click_sound() -> void:
 	"""Play button click sound"""

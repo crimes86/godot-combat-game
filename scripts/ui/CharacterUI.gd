@@ -3,6 +3,11 @@ extends CanvasLayer
 ## Character UI - Character sheet with stats and equipment
 ## Press C to toggle (Inventory is separate - press I)
 
+# ============================================
+# DEBUG SETTINGS - Set to true to enable verbose logging
+# ============================================
+const DEBUG_EQUIP: bool = true  # Debug equipping/unequipping from character sheet
+
 var is_visible: bool = false
 
 # UI References
@@ -410,14 +415,14 @@ func create_equipment_slot_compact(slot_name: String, label_text: String, is_too
 	# Main container - vertical layout with icon box and label
 	var container = VBoxContainer.new()
 	container.add_theme_constant_override("separation", 2)
-	container.custom_minimum_size = Vector2(70, 70)
+	container.custom_minimum_size = Vector2(76, 76)
 	container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	# Slot control wrapper for drag-drop
 	var slot_control = Control.new()
 	slot_control.name = "Slot_" + slot_name
-	slot_control.custom_minimum_size = Vector2(50, 50)
+	slot_control.custom_minimum_size = Vector2(56, 56)
 	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP
 	slot_control.set_meta("slot_name", slot_name)
 	slot_control.set_meta("slot_type", "tool" if is_tool else "equipment")
@@ -441,7 +446,7 @@ func create_equipment_slot_compact(slot_name: String, label_text: String, is_too
 	# Panel for slot styling
 	var panel = PanelContainer.new()
 	panel.name = "SlotPanel"
-	panel.custom_minimum_size = Vector2(50, 50)
+	panel.custom_minimum_size = Vector2(56, 56)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot_control.add_child(panel)
 
@@ -454,10 +459,10 @@ func create_equipment_slot_compact(slot_name: String, label_text: String, is_too
 	icon_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(icon_center)
 
-	# Small icon (scaled to fit slot)
+	# Icon (matched to inventory size)
 	var icon = TextureRect.new()
 	icon.name = "ItemIcon"
-	icon.custom_minimum_size = Vector2(32, 32)
+	icon.custom_minimum_size = Vector2(52, 52)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -896,19 +901,8 @@ func refresh_equipment() -> void:
 		# Special handling for mainhand - check equipped_weapon instead of equipped_armor
 		var armor_item = null
 		if slot_name == "mainhand" and CharacterStats.equipped_weapon:
-			# Convert Weapon resource to dict for display
-			var weapon = CharacterStats.equipped_weapon
-			armor_item = {
-				"name": weapon.weapon_name,
-				"description": weapon.description,
-				"type": "weapon",
-				"weapon_type": weapon.weapon_type,
-				"slot": "mainhand",
-				"base_damage": weapon.base_damage,
-				"attack_speed_bonus": weapon.attack_speed_bonus,
-				"crit_chance_bonus": weapon.crit_chance_bonus,
-				"rarity": Weapon.Rarity.keys()[weapon.rarity]
-			}
+			# Use stored weapon data (preserves forged metadata)
+			armor_item = CharacterStats.get_equipped_weapon_data()
 		else:
 			armor_item = CharacterStats.equipped_armor[slot_name]
 
@@ -1050,18 +1044,17 @@ func refresh_tools() -> void:
 func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
 	"""Handle GUI input on equipment slot (double-click or right-click to unequip)"""
 	if event is InputEventMouseButton and event.pressed:
-		print("🖱️ Equipment slot '%s' clicked - button: %d, double_click: %s" % [slot_name, event.button_index, event.double_click])
-		print("   CharacterStats.equipped_weapon: %s" % (CharacterStats.equipped_weapon.weapon_name if CharacterStats.equipped_weapon else "null"))
 		# Double-click or right-click to unequip
 		if event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
 			# Special handling for mainhand - check equipped_weapon
 			if slot_name == "mainhand" and CharacterStats.equipped_weapon:
-				print("🔄 Attempting to unequip weapon: %s" % CharacterStats.equipped_weapon.weapon_name)
+				if DEBUG_EQUIP:
+					print("[Equip] Unequipping weapon: %s" % CharacterStats.equipped_weapon.weapon_name)
 				if CharacterStats.unequip_weapon():
 					SoundManager.play_equip_sound()  # Unequip sound
 					refresh_all()
-				else:
-					print("❌ Failed to unequip weapon (inventory full?)")
+				elif DEBUG_EQUIP:
+					print("[Equip] Failed to unequip weapon (inventory full?)")
 			else:
 				var armor_item = CharacterStats.equipped_armor[slot_name]
 				if armor_item:
@@ -1071,12 +1064,13 @@ func _on_equipment_slot_gui_input(event: InputEvent, slot_name: String) -> void:
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			# Special handling for mainhand - check equipped_weapon
 			if slot_name == "mainhand" and CharacterStats.equipped_weapon:
-				print("🔄 Attempting to unequip weapon: %s" % CharacterStats.equipped_weapon.weapon_name)
+				if DEBUG_EQUIP:
+					print("[Equip] Unequipping weapon: %s" % CharacterStats.equipped_weapon.weapon_name)
 				if CharacterStats.unequip_weapon():
 					SoundManager.play_equip_sound()  # Unequip sound
 					refresh_all()
-				else:
-					print("❌ Failed to unequip weapon (inventory full?)")
+				elif DEBUG_EQUIP:
+					print("[Equip] Failed to unequip weapon (inventory full?)")
 			else:
 				var armor_item = CharacterStats.equipped_armor[slot_name]
 				if armor_item:
@@ -1241,14 +1235,16 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 			if dragged_item.get("type", "") == "weapon" and slot_name == "mainhand":
 				# If there's already a weapon equipped, unequip it first
 				if CharacterStats.equipped_weapon:
-					print("⚔️ Swapping weapons - unequipping %s first" % CharacterStats.equipped_weapon.weapon_name)
+					if DEBUG_EQUIP:
+						print("[Equip] Swapping weapons - unequipping %s first" % CharacterStats.equipped_weapon.weapon_name)
 					if not CharacterStats.unequip_weapon():
-						print("❌ Cannot swap weapons - inventory full!")
+						if DEBUG_EQUIP:
+							print("[Equip] Cannot swap weapons - inventory full!")
 						return
 				# Convert dict to Weapon resource and equip
 				var weapon = dict_to_weapon(dragged_item)
 				if weapon:
-					CharacterStats.equip_weapon(weapon)
+					CharacterStats.equip_weapon(weapon, dragged_item)  # Pass item data for forged metadata
 					equipped = true
 			# Otherwise it's armor
 			else:
@@ -1386,7 +1382,6 @@ func _on_armor_changed(_slot: String, _armor: Dictionary) -> void:
 
 func _on_weapon_changed(_weapon = null) -> void:
 	"""Called when weapon is equipped/unequipped"""
-	print("🔄 CharacterUI: Weapon changed, refreshing...")
 	refresh_all()
 
 func _on_tool_changed(_tool: Dictionary) -> void:

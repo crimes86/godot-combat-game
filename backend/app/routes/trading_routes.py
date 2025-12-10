@@ -9,7 +9,7 @@ See docs/FORGE_ECONOMY_DESIGN.md for full specification.
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy import and_, or_
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Callable
 from datetime import datetime, timedelta
 import logging
@@ -62,9 +62,9 @@ def init_trading_routes(get_current_user: Callable):
 # =============================================================================
 
 class DirectTradeRequest(BaseModel):
-    token_id: int
-    to_user_id: int
-    price_gold: int = 0
+    token_id: int = Field(ge=1)
+    to_user_id: int = Field(ge=1)
+    price_gold: int = Field(default=0, ge=0, le=999_999_999)
 
 
 class DirectTradeResponse(BaseModel):
@@ -91,11 +91,11 @@ class TradeHistoryResponse(BaseModel):
 
 
 class CreateListingRequest(BaseModel):
-    token_id: int
-    listing_type: str = "sell"  # sell or buy
-    price_gold: int
-    message: Optional[str] = None
-    zone_id: Optional[str] = None
+    token_id: int = Field(ge=1)
+    listing_type: str = Field(default="sell", pattern="^(sell|buy)$")
+    price_gold: int = Field(ge=0, le=999_999_999)
+    message: Optional[str] = Field(default=None, max_length=200)
+    zone_id: Optional[str] = Field(default=None, max_length=50)
     position_x: Optional[float] = None
     position_y: Optional[float] = None
 

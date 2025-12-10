@@ -1326,7 +1326,15 @@ func _request_start_chopping_rpc(network_id: String) -> void:
 		return
 
 	var peer_id = multiplayer.get_remote_sender_id()
-	print("🪓 Server: Tree %s chop started (requested by peer %d)" % [network_id, peer_id])
+
+	# Security: Validate the requesting player exists
+	var game_world = get_node_or_null("/root/GameWorld")
+	if not game_world or not game_world.players.has(peer_id):
+		push_warning("Tree chop rejected - unknown peer %d" % peer_id)
+		return
+
+	if OS.is_debug_build():
+		print("🪓 Server: Tree %s chop started (requested by peer %d)" % [network_id, peer_id])
 	_broadcast_start_chopping(network_id)
 
 @rpc("any_peer", "reliable")
@@ -1336,7 +1344,15 @@ func _request_complete_chop_rpc(network_id: String) -> void:
 		return
 
 	var peer_id = multiplayer.get_remote_sender_id()
-	print("🪓 Server: Tree %s chop completed (requested by peer %d)" % [network_id, peer_id])
+
+	# Security: Validate the requesting player exists
+	var game_world = get_node_or_null("/root/GameWorld")
+	if not game_world or not game_world.players.has(peer_id):
+		push_warning("Tree chop complete rejected - unknown peer %d" % peer_id)
+		return
+
+	if OS.is_debug_build():
+		print("🪓 Server: Tree %s chop completed (requested by peer %d)" % [network_id, peer_id])
 	_broadcast_complete_chop(network_id)
 
 @rpc("any_peer", "reliable")
@@ -1346,7 +1362,15 @@ func _request_loot_taken_rpc(network_id: String) -> void:
 		return
 
 	var peer_id = multiplayer.get_remote_sender_id()
-	print("🪓 Server: Tree %s loot taken (requested by peer %d)" % [network_id, peer_id])
+
+	# Security: Validate the requesting player exists
+	var game_world = get_node_or_null("/root/GameWorld")
+	if not game_world or not game_world.players.has(peer_id):
+		push_warning("Tree loot rejected - unknown peer %d" % peer_id)
+		return
+
+	if OS.is_debug_build():
+		print("🪓 Server: Tree %s loot taken (requested by peer %d)" % [network_id, peer_id])
 	_broadcast_loot_taken(network_id)
 
 # === BROADCAST METHODS (Server -> All Clients) ===

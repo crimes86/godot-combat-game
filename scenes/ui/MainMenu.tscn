@@ -45,35 +45,6 @@ stream = ExtResource("2_music")
 volume_db = -10.0
 autoplay = true
 
-[node name="TitlePanel" type="Panel" parent="."]
-anchor_left = 0.5
-anchor_top = 0.12
-anchor_right = 0.5
-anchor_bottom = 0.12
-offset_left = -250.0
-offset_right = 250.0
-offset_bottom = 100.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
-
-[node name="Title" type="Label" parent="TitlePanel"]
-anchor_right = 1.0
-anchor_bottom = 1.0
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
-theme_override_font_sizes/font_size = 56
-text = "DREADLAND"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="Subtitle" type="Label" parent="TitlePanel"]
-anchor_top = 0.75
-anchor_right = 1.0
-anchor_bottom = 1.0
-theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
-theme_override_font_sizes/font_size = 14
-text = "Multiplayer Combat"
-horizontal_alignment = 1
-vertical_alignment = 1
-
 [node name="MenuPanel" type="Panel" parent="."]
 anchor_left = 0.5
 anchor_top = 0.5

@@ -3548,10 +3548,11 @@ func _restore_ui_autoloads():
 
 func _setup_multiplayer():
 	"""Initialize multiplayer functionality"""
-	print("🔍 [PLAYER DEBUG] _setup_multiplayer() called")
-	print("   has_multiplayer_peer: %s" % multiplayer.has_multiplayer_peer())
-	print("   unique_id: %s" % multiplayer.get_unique_id())
-	print("   is_server: %s" % multiplayer.is_server())
+	if OS.is_debug_build():
+		print("🔍 [PLAYER DEBUG] _setup_multiplayer() called")
+		print("   has_multiplayer_peer: %s" % multiplayer.has_multiplayer_peer())
+		print("   unique_id: %s" % multiplayer.get_unique_id())
+		print("   is_server: %s" % multiplayer.is_server())
 
 	# Connect to NetworkManager signals
 	NetworkManager.player_connected.connect(_on_player_connected)
@@ -3560,18 +3561,21 @@ func _setup_multiplayer():
 
 	# If we're already connected (came from menu), spawn players
 	if multiplayer.has_multiplayer_peer():
-		print("🔍 [PLAYER DEBUG] Multiplayer active - calling _spawn_initial_players deferred")
+		if OS.is_debug_build():
+			print("🔍 [PLAYER DEBUG] Multiplayer active - calling _spawn_initial_players deferred")
 		call_deferred("_spawn_initial_players")
 
 func _spawn_initial_players():
 	"""Spawn all connected players"""
 	var my_id = multiplayer.get_unique_id()
-	print("🔍 [PLAYER DEBUG] _spawn_initial_players() called, my_id=%d, is_server=%s" % [my_id, multiplayer.is_server()])
-	print("   Current players dict: %s" % str(players.keys()))
+	if OS.is_debug_build():
+		print("🔍 [PLAYER DEBUG] _spawn_initial_players() called, my_id=%d, is_server=%s" % [my_id, multiplayer.is_server()])
+		print("   Current players dict: %s" % str(players.keys()))
 
 	# Check if not already spawned
 	if not players.has(my_id):
-		print("🔍 [PLAYER DEBUG] Spawning local player %d" % my_id)
+		if OS.is_debug_build():
+			print("🔍 [PLAYER DEBUG] Spawning local player %d" % my_id)
 
 		# Get saved position for authenticated players
 		var saved_pos = Vector2.ZERO
@@ -3579,7 +3583,7 @@ func _spawn_initial_players():
 			var username = NetworkManager.local_player_data.get("username", "")
 			if not username.is_empty():
 				saved_pos = DatabaseManager.get_saved_position(username)
-				if saved_pos != Vector2.ZERO:
+				if saved_pos != Vector2.ZERO and OS.is_debug_build():
 					print("📍 [PLAYER DEBUG] Restoring saved position: %s" % saved_pos)
 
 		spawn_player(my_id, saved_pos)
@@ -3592,18 +3596,22 @@ func _spawn_initial_players():
 				call_deferred("_apply_saved_data_to_player", username, my_id)
 		else:
 			# Guest player - still show tutorial
-			print("📚 [Tutorial] Guest player detected, starting tutorial...")
+			if OS.is_debug_build():
+				print("📚 [Tutorial] Guest player detected, starting tutorial...")
 			call_deferred("_start_guest_tutorial", my_id)
 	else:
-		print("🔍 [PLAYER DEBUG] Player %d already in dict, skipping spawn" % my_id)
+		if OS.is_debug_build():
+			print("🔍 [PLAYER DEBUG] Player %d already in dict, skipping spawn" % my_id)
 
 	# Server handles spawning for connected players
 	if multiplayer.is_server():
 		var connected = NetworkManager.get_player_list()
-		print("🔍 [PLAYER DEBUG] Server - connected players: %s" % str(connected))
+		if OS.is_debug_build():
+			print("🔍 [PLAYER DEBUG] Server - connected players: %s" % str(connected))
 		for player_id in connected:
 			if player_id != my_id and not players.has(player_id):
-				print("🔍 [PLAYER DEBUG] Server spawning remote player %d" % player_id)
+				if OS.is_debug_build():
+					print("🔍 [PLAYER DEBUG] Server spawning remote player %d" % player_id)
 				# Get player name from connected_players
 				var player_info = NetworkManager.connected_players.get(player_id, {})
 				var player_name = player_info.get("name", "")
@@ -3613,16 +3621,21 @@ func _spawn_initial_players():
 				spawn_player(player_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", player_name, is_guest)
 	else:
 		# Client: Request existing players from server
-		print("🔍 [PLAYER DEBUG] Client - requesting existing players from server")
+		if OS.is_debug_build():
+			print("🔍 [PLAYER DEBUG] Client - requesting existing players from server")
 		rpc_id(1, "_request_existing_players", my_id)
 
 @rpc("any_peer", "reliable")
-func _request_existing_players(requester_id: int):
+func _request_existing_players(_deprecated_id: int = 0):
 	"""Client requests list of existing players from server"""
 	if not multiplayer.is_server():
 		return
 
-	print("🔍 [PLAYER DEBUG] Server received request for existing players from %d" % requester_id)
+	# Security: Use actual sender ID, not client-provided parameter
+	var requester_id = multiplayer.get_remote_sender_id()
+
+	if OS.is_debug_build():
+		print("🔍 [PLAYER DEBUG] Server received request for existing players from %d" % requester_id)
 
 	# Send all existing players to the requesting client
 	for existing_id in players:
@@ -3653,10 +3666,12 @@ func _request_existing_players(requester_id: int):
 				var p_is_guest = NetworkManager.is_player_guest(existing_id)
 				if NetworkManager.authenticated_players.has(existing_id):
 					p_name = NetworkManager.authenticated_players[existing_id].username
-				print("🔍 [PLAYER DEBUG] Sending player %d (pos: %s, gender: %d, weapon: %s, name: %s) to client %d" % [existing_id, existing_player.global_position, gender, weapon_type, p_name, requester_id])
+				if OS.is_debug_build():
+					print("🔍 [PLAYER DEBUG] Sending player %d (pos: %s, gender: %d, weapon: %s, name: %s) to client %d" % [existing_id, existing_player.global_position, gender, weapon_type, p_name, requester_id])
 				rpc_id(requester_id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, p_name, p_is_guest)
 			else:
-				print("🔍 [PLAYER DEBUG] Sending player %d (default pos) to client %d" % [existing_id, requester_id])
+				if OS.is_debug_build():
+					print("🔍 [PLAYER DEBUG] Sending player %d (default pos) to client %d" % [existing_id, requester_id])
 				var p_name2 = ""
 				var p_is_guest2 = true
 				if NetworkManager.authenticated_players.has(existing_id):
@@ -3666,12 +3681,14 @@ func _request_existing_players(requester_id: int):
 
 func _on_player_connected(id: int):
 	"""Handle new player connection - DON'T spawn yet, wait for authentication"""
-	print("🔍 [PLAYER DEBUG] _on_player_connected(%d) - is_server=%s (waiting for auth before spawn)" % [id, multiplayer.is_server()])
+	if OS.is_debug_build():
+		print("🔍 [PLAYER DEBUG] _on_player_connected(%d) - is_server=%s (waiting for auth before spawn)" % [id, multiplayer.is_server()])
 	# Don't spawn here - wait for _on_player_authenticated
 
 func _on_player_authenticated(id: int, player_name: String):
 	"""Handle player authentication complete - NOW spawn the player"""
-	print("🔍 [PLAYER DEBUG] _on_player_authenticated(%d, '%s') - is_server=%s" % [id, player_name, multiplayer.is_server()])
+	if OS.is_debug_build():
+		print("🔍 [PLAYER DEBUG] _on_player_authenticated(%d, '%s') - is_server=%s" % [id, player_name, multiplayer.is_server()])
 	if not multiplayer.is_server():
 		return
 
@@ -3712,7 +3729,8 @@ func _on_player_authenticated(id: int, player_name: String):
 				var p_is_guest = NetworkManager.is_player_guest(existing_id)
 				if NetworkManager.authenticated_players.has(existing_id):
 					p_name = NetworkManager.authenticated_players[existing_id].username
-				print("🔍 [PLAYER DEBUG] Sending existing player %d (gender: %d, weapon: %s, name: %s) to new client %d" % [existing_id, gender, weapon_type, p_name, id])
+				if OS.is_debug_build():
+					print("🔍 [PLAYER DEBUG] Sending existing player %d (gender: %d, weapon: %s, name: %s) to new client %d" % [existing_id, gender, weapon_type, p_name, id])
 				rpc_id(id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, p_name, p_is_guest)
 			else:
 				var p_name2 = ""
@@ -3724,19 +3742,28 @@ func _on_player_authenticated(id: int, player_name: String):
 
 func _on_player_disconnected(id: int):
 	"""Handle player disconnection"""
-	print("🔍 [PLAYER DEBUG] _on_player_disconnected(%d)" % id)
+	if OS.is_debug_build():
+		print("🔍 [PLAYER DEBUG] _on_player_disconnected(%d)" % id)
 	despawn_player(id)
 
 @rpc("any_peer", "call_local", "reliable")
 func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, weapon_type: String = "", feet_sprite: String = "", legs_sprite: String = "", chest_sprite: String = "", arms_sprite: String = "", hands_sprite: String = "", head_sprite: String = "", display_name: String = "", is_guest_player: bool = false):
 	"""Spawn a player (local or remote)"""
-	print("🔍 [PLAYER DEBUG] spawn_player(%d) called on peer %d" % [id, multiplayer.get_unique_id()])
-	print("   Appearance: gender=%d, weapon=%s, feet=%s, legs=%s, chest=%s, arms=%s, hands=%s, head=%s" % [gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite])
-	print("   Name: %s (guest=%s)" % [display_name, is_guest_player])
-	print("   Current players: %s" % str(players.keys()))
+	# Security: Only server can spawn players via RPC (except local calls)
+	var sender_id = multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != 1:  # 0 = local call, 1 = server
+		push_warning("spawn_player rejected from non-server peer %d" % sender_id)
+		return
+
+	if OS.is_debug_build():
+		print("🔍 [PLAYER DEBUG] spawn_player(%d) called on peer %d" % [id, multiplayer.get_unique_id()])
+		print("   Appearance: gender=%d, weapon=%s, feet=%s, legs=%s, chest=%s, arms=%s, hands=%s, head=%s" % [gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite])
+		print("   Name: %s (guest=%s)" % [display_name, is_guest_player])
+		print("   Current players: %s" % str(players.keys()))
 
 	if players.has(id):
-		print("🔍 [PLAYER DEBUG] ⚠️ DUPLICATE BLOCKED - Player %d already in dict!" % id)
+		if OS.is_debug_build():
+			print("🔍 [PLAYER DEBUG] ⚠️ DUPLICATE BLOCKED - Player %d already in dict!" % id)
 		return
 
 	# Default spawn position near campfire
@@ -3772,7 +3799,8 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 	add_child(player)
 	players[id] = player
 
-	print("🔍 [PLAYER DEBUG] ✅ Player %d spawned at %s (local=%s)" % [id, spawn_pos, is_local])
+	if OS.is_debug_build():
+		print("🔍 [PLAYER DEBUG] ✅ Player %d spawned at %s (local=%s)" % [id, spawn_pos, is_local])
 
 	if is_local:
 		local_player = player
@@ -3825,6 +3853,12 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 @rpc("any_peer", "call_local", "reliable")
 func despawn_player(id: int):
 	"""Remove a player from the game"""
+	# Security: Only server can despawn players via RPC (except local calls)
+	var sender_id = multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != 1:  # 0 = local call, 1 = server
+		push_warning("despawn_player rejected from non-server peer %d" % sender_id)
+		return
+
 	if not players.has(id):
 		return
 
@@ -3934,6 +3968,10 @@ var _missing_player_requests: Dictionary = {}
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _receive_player_position(player_id: int, pos: Vector2, anim: String, health: int, is_dashing: bool):
 	"""Receive position update for a remote player"""
+	# Security: Verify sender is the player they claim to be (prevent position spoofing)
+	var sender_id = multiplayer.get_remote_sender_id()
+	if sender_id != player_id and sender_id != 1:  # Allow server (1) to relay positions
+		return  # Reject spoofed position updates
 
 	if player_id == multiplayer.get_unique_id():
 		return  # Ignore our own position updates
@@ -3941,7 +3979,8 @@ func _receive_player_position(player_id: int, pos: Vector2, anim: String, health
 	if not players.has(player_id):
 		# Only log once per player and request spawn
 		if not _missing_player_requests.has(player_id):
-			print("🔄 [SYNC] Player %d not in players dict! Requesting spawn..." % player_id)
+			if OS.is_debug_build():
+				print("🔄 [SYNC] Player %d not in players dict! Requesting spawn..." % player_id)
 			_missing_player_requests[player_id] = Time.get_ticks_msec()
 			# Request this player's info from server
 			if not multiplayer.is_server():
@@ -3954,7 +3993,8 @@ func _receive_player_position(player_id: int, pos: Vector2, anim: String, health
 
 	var player = players[player_id]
 	if not is_instance_valid(player):
-		print("🔄 [SYNC] Player %d invalid instance!" % player_id)
+		if OS.is_debug_build():
+			print("🔄 [SYNC] Player %d invalid instance!" % player_id)
 		return
 
 	# Smoothly interpolate to new position (instead of snapping)

@@ -172,6 +172,46 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 12
 
+[node name="Forge" type="MarginContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+metadata/_tab_index = 5
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Forge"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="ForgeHeader" type="HBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Forge/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ForgeStatus" type="Label" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Forge/VBoxContainer/ForgeHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+text = "Forged Items"
+
+[node name="RefreshButton" type="Button" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Forge/VBoxContainer/ForgeHeader"]
+layout_mode = 2
+text = "↻"
+flat = true
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Forge/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ForgeList" type="VBoxContainer" parent="Control/Panel/MarginContainer/VBoxContainer/TabContainer/Forge/VBoxContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
 [node name="GoldContainer" type="HBoxContainer" parent="Control"]
 layout_mode = 1
 anchors_preset = 3

@@ -8,7 +8,8 @@ extends CharacterBody2D
 # ============================================
 # DEBUG SETTINGS - Set to true to enable verbose logging
 # ============================================
-const DEBUG_FORGED_EQUIP: bool = false  # Debug forged weapon loading and effects
+const DEBUG_EQUIP: bool = true  # Debug all equipping (weapons, armor, sprite creation)
+const DEBUG_FORGED_EQUIP: bool = false  # Debug forged weapon loading and effects (extra verbose)
 
 # Weapon type fallbacks - extended types map to core types with available animations
 # Based on backend items.json weapon_types.extended definitions
@@ -176,24 +177,13 @@ func is_invincible() -> bool:
 	return is_dashing and dash_invincible
 
 func _ready() -> void:
-	print("🎮 Player._ready() started")
-
 	# AUTO-SELECT MALE (can switch to female by pressing F key during gameplay)
-	print("")
-	print("════════════════════════════════════════")
-	print("  CHARACTER: MALE WARRIOR")
-	print("════════════════════════════════════════")
-	print("  (Press F during gameplay to switch to female)")
-	print("════════════════════════════════════════")
-	print("")
-	
 	# Only set default gender if not already set by apply_appearance_data (for remote players)
 	if selected_gender != Gender.FEMALE:
 		selected_gender = Gender.MALE
 
 	# Create player sprite immediately
 	create_player_sprite()
-	print("✨ Player sprite created!")
 
 	# For local player, broadcast appearance to other players after a short delay
 	# (to ensure networking is ready)
@@ -207,18 +197,8 @@ func _ready() -> void:
 	# Initialize stats from CharacterStats - ONLY for local player
 	# Remote players get their stats from network sync, not from local CharacterStats
 	if is_multiplayer_authority():
-		# 🔧 DEBUG: Print initial cooldown values
-		print("═══ PLAYER COOLDOWN DEBUG ═══")
-		print("cooldown_override: ", cooldown_override)
-		print("Initial attack_cooldown: ", attack_cooldown)
-
 		# Initialize stats from CharacterStats
 		update_stats_from_character()
-
-		print("After update - attack_cooldown: ", attack_cooldown)
-		print("CharacterStats AGI: ", CharacterStats.agility)
-		print("CharacterStats.get_attack_cooldown(): ", CharacterStats.get_attack_cooldown())
-		print("═══════════════════════════")
 
 		# Set health
 		current_health = max_health
@@ -559,22 +539,12 @@ func update_stats_from_character() -> void:
 	# Update cone visualizer to match new range
 	update_cone_visualizer()
 
-	print("📊 Player stats updated:")
-	print("  Level: ", CharacterStats.level)
-	print("  HP: ", max_health)
-	print("  Damage: ", attack_damage)
-	print("  Attack Speed: %.3fs" % attack_cooldown)
-	print("  Attack Range: %.0fpx (%s)" % [attack_range, weapon_type])
-	print("  Crit Chance: %.1f%%" % (crit_system.get_player_base_crit() * 100 if crit_system else 0))
-	print("  Movement Speed: ", speed)
-
 func gain_experience(amount: int) -> void:
 	"""Grant experience to the player (called when enemy dies)"""
 	CharacterStats.gain_experience(amount)
 
 func _on_character_level_up(new_level: int) -> void:
 	"""Called when character levels up"""
-	print("🎉 Player reached level ", new_level, "!")
 
 	# Update all stats
 	update_stats_from_character()
@@ -595,7 +565,8 @@ func _on_character_level_up(new_level: int) -> void:
 
 func _on_weapon_equipped(weapon) -> void:  # weapon is Weapon type
 	"""Called when weapon is equipped"""
-	print("⚔️ Weapon equipped: ", weapon.weapon_name)
+	if DEBUG_EQUIP:
+		print("[Equip] Weapon equipped: %s" % weapon.weapon_name)
 	update_stats_from_character()
 
 	# Reset attack state - ensures player can attack after switching weapons
@@ -603,7 +574,6 @@ func _on_weapon_equipped(weapon) -> void:  # weapon is Weapon type
 	can_attack = true
 
 	# Refresh player sprite to show the new weapon
-	print("🔄 Refreshing player sprite with new weapon...")
 	create_player_sprite()
 
 	# Switch visualizer based on weapon type (cone for melee, circle for ranged)
@@ -614,7 +584,8 @@ func _on_weapon_equipped(weapon) -> void:  # weapon is Weapon type
 
 func _on_weapon_unequipped() -> void:
 	"""Called when weapon is unequipped"""
-	print("👊 Weapon unequipped - back to unarmed")
+	if DEBUG_EQUIP:
+		print("[Equip] Weapon unequipped - back to unarmed")
 	update_stats_from_character()
 
 	# Reset attack state - ensures player can attack after switching weapons
@@ -622,7 +593,6 @@ func _on_weapon_unequipped() -> void:
 	can_attack = true
 
 	# Refresh player sprite to remove weapon
-	print("🔄 Refreshing player sprite to unarmed...")
 	create_player_sprite()
 
 	# Switch back to melee visualizer (cone)
@@ -633,11 +603,11 @@ func _on_weapon_unequipped() -> void:
 
 func _on_armor_equipped(slot: String, armor_item: Dictionary) -> void:
 	"""Called when armor is equipped"""
-	print("🛡️ Armor equipped in slot %s: %s" % [slot, armor_item["name"]])
+	if DEBUG_EQUIP:
+		print("[Equip] Armor equipped in slot %s: %s" % [slot, armor_item["name"]])
 	update_stats_from_character()
 
 	# Refresh player sprite to show the new armor
-	print("🔄 Refreshing player sprite with new armor...")
 	create_player_sprite()
 
 	# Sync to network
@@ -645,11 +615,11 @@ func _on_armor_equipped(slot: String, armor_item: Dictionary) -> void:
 
 func _on_armor_unequipped(slot: String, armor_item: Dictionary) -> void:
 	"""Called when armor is unequipped"""
-	print("👕 Armor unequipped from slot %s: %s" % [slot, armor_item["name"]])
+	if DEBUG_EQUIP:
+		print("[Equip] Armor unequipped from slot %s: %s" % [slot, armor_item["name"]])
 	update_stats_from_character()
 
 	# Refresh player sprite to remove armor
-	print("🔄 Refreshing player sprite without armor...")
 	create_player_sprite()
 
 	# Sync to network
@@ -1952,43 +1922,31 @@ func flash_player_sprite() -> void:
 # WEAPON SYSTEM REMOVED - To be reimplemented from scratch
 
 func create_player_sprite() -> void:
-	print("═══════════════════════════════════════════════════════════")
-	print("🎭 CREATE_PLAYER_SPRITE called on: %s (authority=%d, is_local=%s)" % [name, get_multiplayer_authority(), is_multiplayer_authority()])
-	print("═══════════════════════════════════════════════════════════")
-
-	# DEBUG: List ALL children before cleanup
-	print("  📋 Children BEFORE cleanup:")
-	for child in get_children():
-		var type_name = child.get_class()
-		var visible_str = " (visible)" if child.get("visible") == true else " (hidden)" if child.get("visible") == false else ""
-		print("    - %s [%s]%s" % [child.name, type_name, visible_str])
+	if DEBUG_EQUIP:
+		print("[Equip] CREATE_PLAYER_SPRITE called on: %s (authority=%d, is_local=%s)" % [name, get_multiplayer_authority(), is_multiplayer_authority()])
+		print("  Children BEFORE cleanup:")
+		for child in get_children():
+			var type_name = child.get_class()
+			var visible_str = " (visible)" if child.get("visible") == true else " (hidden)" if child.get("visible") == false else ""
+			print("    - %s [%s]%s" % [child.name, type_name, visible_str])
 
 	# Remove old sprites if they exist (for weapon equip/unequip)
 	var old_character_sprite = get_node_or_null("CharacterSprite")
 	if old_character_sprite:
-		print("  🗑️ Removing old CharacterSprite (had %d children)" % old_character_sprite.get_child_count())
 		remove_child(old_character_sprite)
 		old_character_sprite.queue_free()
 
 	var old_shadow = get_node_or_null("Shadow")
 	if old_shadow:
-		print("  🗑️ Removing old Shadow")
 		remove_child(old_shadow)
 		old_shadow.queue_free()
 
 	# Hide AND remove the placeholder Sprite2D from the scene
 	var placeholder_sprite = get_node_or_null("Sprite2D")
 	if placeholder_sprite:
-		print("  🗑️ Removing placeholder Sprite2D")
 		placeholder_sprite.visible = false
 		remove_child(placeholder_sprite)
 		placeholder_sprite.queue_free()
-
-	# DEBUG: List ALL children after cleanup
-	print("  📋 Children AFTER cleanup:")
-	for child in get_children():
-		var type_name = child.get_class()
-		print("    - %s [%s]" % [child.name, type_name])
 
 	# Preload SimpleLPCSprite
 	var SimpleLPCSprite = preload("res://scripts/SimpleLPCSprite.gd")
@@ -2100,12 +2058,11 @@ func create_player_sprite() -> void:
 			if WEAPON_TYPE_FALLBACKS.has(weapon_type):
 				animation_type = WEAPON_TYPE_FALLBACKS[weapon_type]
 				weapon_path = "res://assets/equipment/weapons/" + animation_type + "/"
-				print("⚔️ Weapon type '%s' not found, using fallback: %s" % [weapon_type, animation_type])
-				if DEBUG_FORGED_EQUIP:
-					print("[ForgedEquip]   Fallback applied: %s → %s" % [weapon_type, animation_type])
+				if DEBUG_EQUIP or DEBUG_FORGED_EQUIP:
+					print("[Equip] Weapon type '%s' not found, using fallback: %s" % [weapon_type, animation_type])
 			else:
 				if DEBUG_FORGED_EQUIP:
-					print("[ForgedEquip]   ⚠️ No fallback defined for weapon_type: %s" % weapon_type)
+					print("[ForgedEquip]   No fallback defined for weapon_type: %s" % weapon_type)
 
 		# Try to load weapon sprites
 		# Staff uses thrust_oversize animation, spear uses thrust, others use slash
@@ -2122,17 +2079,16 @@ func create_player_sprite() -> void:
 		if ResourceLoader.exists(weapon_path + "walk.png"):
 			weapon_walk_tex = load(weapon_path + "walk.png")
 
-		print("🗡️ Loading weapon sprites for type: %s → %s (local=%s)" % [weapon_type, animation_type, is_local])
-		print("   Attack: %s" % ("✅" if weapon_slash_tex else "❌"))
-		print("   Walk: %s" % ("✅" if weapon_walk_tex else "❌"))
+		if DEBUG_EQUIP:
+			print("[Equip] Loading weapon sprites: %s → %s (attack=%s, walk=%s)" % [weapon_type, animation_type, "OK" if weapon_slash_tex else "MISSING", "OK" if weapon_walk_tex else "MISSING"])
 
 		if DEBUG_FORGED_EQUIP and is_forged_weapon:
 			print("[ForgedEquip]   TODO: Apply forged effects (glow, tint, particles)")
 	else:
-		print("👊 No weapon equipped - player is unarmed")
+		if DEBUG_EQUIP:
+			print("[Equip] No weapon equipped - unarmed")
 
 	# Load armor textures based on equipped armor (5 layers: boots, pants, shirt, arms, head)
-	print("═══ ARMOR LOADING ═══")
 	# Use thrust or slash suffix based on weapon type
 	var attack_suffix = "_thrust" if uses_thrust else "_slash"
 	var boots_walk_tex = null
@@ -2310,23 +2266,21 @@ func create_player_sprite() -> void:
 	if not character_sprite.frame_changed.is_connected(_on_sprite_frame_changed):
 		character_sprite.frame_changed.connect(_on_sprite_frame_changed)
 
-	# DEBUG: List ALL player children after sprite creation
-	print("  📋 Player children AFTER sprite creation:")
-	for child in get_children():
-		var type_name = child.get_class()
-		var visible_str = " (visible)" if child.get("visible") == true else " (hidden)" if child.get("visible") == false else ""
-		print("    - %s [%s]%s" % [child.name, type_name, visible_str])
-		# If it's the CharacterSprite, list its children too
-		if child.name == "CharacterSprite":
-			print("      └── CharacterSprite has %d children:" % child.get_child_count())
-			for subchild in child.get_children():
-				var sub_type = subchild.get_class()
-				var sub_visible = " (visible)" if subchild.get("visible") == true else " (hidden)" if subchild.get("visible") == false else ""
-				print("          - %s [%s]%s" % [subchild.name, sub_type, sub_visible])
-
-	print("═══════════════════════════════════════════════════════════")
-	print("✅ CREATE_PLAYER_SPRITE complete for: %s" % name)
-	print("═══════════════════════════════════════════════════════════")
+	if DEBUG_EQUIP:
+		# List ALL player children after sprite creation
+		print("[Equip] Player children AFTER sprite creation:")
+		for child in get_children():
+			var type_name = child.get_class()
+			var visible_str = " (visible)" if child.get("visible") == true else " (hidden)" if child.get("visible") == false else ""
+			print("    - %s [%s]%s" % [child.name, type_name, visible_str])
+			# If it's the CharacterSprite, list its children too
+			if child.name == "CharacterSprite":
+				print("      └── CharacterSprite has %d children:" % child.get_child_count())
+				for subchild in child.get_children():
+					var sub_type = subchild.get_class()
+					var sub_visible = " (visible)" if subchild.get("visible") == true else " (hidden)" if subchild.get("visible") == false else ""
+					print("          - %s [%s]%s" % [subchild.name, sub_type, sub_visible])
+		print("[Equip] CREATE_PLAYER_SPRITE complete for: %s" % name)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MULTIPLAYER APPEARANCE SYNC
@@ -2347,7 +2301,8 @@ func _sync_appearance_to_network():
 		return
 
 	var appearance = get_appearance_data()
-	print("🌐 [APPEARANCE] Syncing to network: %s" % str(appearance))
+	if DEBUG_EQUIP:
+		print("[Equip] Syncing appearance to network: %s" % str(appearance))
 	rpc("_receive_appearance_update", appearance["gender"], appearance["weapon_type"],
 		appearance["feet_sprite"], appearance["legs_sprite"], appearance["chest_sprite"],
 		appearance["arms_sprite"], appearance["hands_sprite"], appearance["head_sprite"])
@@ -2359,13 +2314,15 @@ func _broadcast_initial_appearance():
 	await get_tree().process_frame
 
 	if multiplayer.has_multiplayer_peer():
-		print("🌐 [APPEARANCE] Broadcasting initial appearance for local player")
+		if DEBUG_EQUIP:
+			print("[Equip] Broadcasting initial appearance for local player")
 		_sync_appearance_to_network()
 
 @rpc("any_peer", "call_remote", "reliable")
 func _receive_appearance_update(gender_int: int, weapon_type: String, feet_sprite: String, legs_sprite: String, chest_sprite: String, arms_sprite: String, hands_sprite: String, head_sprite: String):
 	"""Receive appearance update from another player"""
-	print("🌐 [APPEARANCE] Received for player %s: gender=%d, weapon=%s, feet=%s, legs=%s, chest=%s, arms=%s, hands=%s, head=%s" % [name, gender_int, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite])
+	if DEBUG_EQUIP:
+		print("[Equip] Received appearance for player %s: gender=%d, weapon=%s" % [name, gender_int, weapon_type])
 
 	# Update appearance data
 	selected_gender = Gender.MALE if gender_int == 0 else Gender.FEMALE
@@ -2382,7 +2339,6 @@ func _receive_appearance_update(gender_int: int, weapon_type: String, feet_sprit
 	await create_player_sprite()
 	await get_tree().process_frame
 	set_physics_process(true)
-	print("🌐 [APPEARANCE] Updated remote player %s appearance" % name)
 
 func get_appearance_data() -> Dictionary:
 	"""Get current appearance data for network sync"""

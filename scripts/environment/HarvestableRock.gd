@@ -1231,7 +1231,15 @@ func _request_start_mining_rpc(network_id: String) -> void:
 		return
 
 	var peer_id = multiplayer.get_remote_sender_id()
-	print("⛏️ Server: Rock %s mine started (requested by peer %d)" % [network_id, peer_id])
+
+	# Security: Validate the requesting player exists
+	var game_world = get_node_or_null("/root/GameWorld")
+	if not game_world or not game_world.players.has(peer_id):
+		push_warning("Rock mine rejected - unknown peer %d" % peer_id)
+		return
+
+	if OS.is_debug_build():
+		print("⛏️ Server: Rock %s mine started (requested by peer %d)" % [network_id, peer_id])
 	_broadcast_start_mining(network_id)
 
 @rpc("any_peer", "reliable")
@@ -1241,7 +1249,15 @@ func _request_complete_mine_rpc(network_id: String) -> void:
 		return
 
 	var peer_id = multiplayer.get_remote_sender_id()
-	print("⛏️ Server: Rock %s mine completed (requested by peer %d)" % [network_id, peer_id])
+
+	# Security: Validate the requesting player exists
+	var game_world = get_node_or_null("/root/GameWorld")
+	if not game_world or not game_world.players.has(peer_id):
+		push_warning("Rock mine complete rejected - unknown peer %d" % peer_id)
+		return
+
+	if OS.is_debug_build():
+		print("⛏️ Server: Rock %s mine completed (requested by peer %d)" % [network_id, peer_id])
 	_broadcast_complete_mine(network_id)
 
 @rpc("any_peer", "reliable")
@@ -1251,7 +1267,15 @@ func _request_loot_taken_rpc(network_id: String) -> void:
 		return
 
 	var peer_id = multiplayer.get_remote_sender_id()
-	print("⛏️ Server: Rock %s loot taken (requested by peer %d)" % [network_id, peer_id])
+
+	# Security: Validate the requesting player exists
+	var game_world = get_node_or_null("/root/GameWorld")
+	if not game_world or not game_world.players.has(peer_id):
+		push_warning("Rock loot rejected - unknown peer %d" % peer_id)
+		return
+
+	if OS.is_debug_build():
+		print("⛏️ Server: Rock %s loot taken (requested by peer %d)" % [network_id, peer_id])
 	_broadcast_loot_taken(network_id)
 
 # === BROADCAST METHODS (Server -> All Clients) ===

@@ -7,13 +7,19 @@ signal auth_completed(user_data: Dictionary)
 signal auth_failed(error: String)
 signal profile_updated(profile: Dictionary)
 signal logout_completed
+signal connection_status_changed(status: int)  # ConnectionStatus enum value
+
+# Connection status enum
+enum ConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
 
 # API Configuration
-const API_BASE_DEV = "http://127.0.0.1:8000"  # Use IP to avoid IPv6 resolution delay
+const API_BASE_DEV = "https://trisyllabical-eliz-unyieldingly.ngrok-free.dev"  # ngrok tunnel to backend
 const API_BASE_PROD = ""  # TBD
 const TOKEN_PATH = "user://mantle_session.dat"
 const POLL_INTERVAL: float = 2.0
 const DEVICE_CODE_EXPIRY: int = 600  # 10 minutes
+const HEARTBEAT_INTERVAL: float = 10.0  # Check connection every 10 seconds
+const DATA_SYNC_INTERVAL: float = 30.0  # Sync achievement data every 30 seconds
 
 # Auth state
 var auth_token: String = ""
@@ -33,8 +39,70 @@ var _device_code: String = ""
 var _poll_timer: Timer = null
 var _is_polling: bool = false
 
+# Connection retry state
+var _retry_timer: Timer = null
+var _retry_count: int = 0
+const MAX_RETRY_COUNT: int = 10  # Give up after 10 retries
+const RETRY_INTERVAL: float = 5.0  # Retry every 5 seconds
+
+# Live connection monitoring
+var connection_status: int = ConnectionStatus.DISCONNECTED
+var _heartbeat_timer: Timer = null
+var _data_sync_timer: Timer = null
+var _last_successful_ping: float = 0.0
+var _consecutive_failures: int = 0
+const MAX_CONSECUTIVE_FAILURES: int = 3  # Mark disconnected after 3 failed pings
+
+# Pending error message to show after scene change
+var pending_error_message: String = ""
+
+# Track profile data hash to detect actual changes (avoid redundant UI refreshes)
+var _last_profile_hash: int = 0
+var _is_first_profile_load: bool = true  # Always emit on first load
+
 # HTTP request nodes
 var _http_request: HTTPRequest = null
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HELPER: Clean error messages (strip HTML from server responses)
+# ═══════════════════════════════════════════════════════════════════════════
+
+static func _clean_error_body(body: String, response_code: int) -> String:
+	"""Extract a clean error message from server response, stripping HTML"""
+	if body.is_empty():
+		return "Empty response"
+
+	# Check if it's HTML (ngrok error pages, etc.)
+	if body.strip_edges().begins_with("<!DOCTYPE") or body.strip_edges().begins_with("<html"):
+		# Try to extract ngrok error code from noscript tag
+		var noscript_start = body.find("<noscript>")
+		var noscript_end = body.find("</noscript>")
+		if noscript_start != -1 and noscript_end != -1:
+			var error_text = body.substr(noscript_start + 10, noscript_end - noscript_start - 10)
+			return error_text.strip_edges()
+		# Fallback: generic message based on status code
+		match response_code:
+			400: return "Bad Request (server may be down)"
+			502, 503, 504: return "Server unavailable (ngrok tunnel down?)"
+			_: return "Server returned HTML error page"
+
+	# If it's JSON-ish, try to extract error field
+	if body.strip_edges().begins_with("{"):
+		var json = JSON.new()
+		if json.parse(body) == OK and json.data is Dictionary:
+			var data = json.data as Dictionary
+			if data.has("error"):
+				return str(data.error)
+			if data.has("detail"):
+				return str(data.detail)
+			if data.has("message"):
+				return str(data.message)
+
+	# Truncate long responses
+	if body.length() > 100:
+		return body.substr(0, 100) + "..."
+
+	return body
 
 func _ready() -> void:
 	_setup_http_request()
@@ -79,8 +147,13 @@ func logout() -> void:
 	is_guest = true
 	is_authenticated = false
 
+	# Reset profile change tracking so next login emits signals
+	_last_profile_hash = 0
+	_is_first_profile_load = true
+
 	_stop_polling()
 	_delete_saved_token()
+	stop_live_connection()
 
 	LogManager.info("Logged out of Mantle", "mantle")
 	logout_completed.emit()
@@ -110,12 +183,16 @@ func _request_device_code(provider: String = "") -> void:
 	if provider != "":
 		url += "?provider=" + provider
 
+	LogManager.info("Requesting device code from: %s" % url, "mantle")
+
 	var request = HTTPRequest.new()
 	request.timeout = 15.0  # 15 second timeout - fail fast if backend is slow
 	add_child(request)
 	request.request_completed.connect(_on_device_code_response.bind(request))
 
-	var error = request.request(url, [], HTTPClient.METHOD_GET)
+	# ngrok-skip-browser-warning header bypasses ngrok's interstitial page
+	var headers = ["ngrok-skip-browser-warning: true"]
+	var error = request.request(url, headers, HTTPClient.METHOD_GET)
 	if error != OK:
 		LogManager.error("Failed to request device code: %s" % error, "mantle")
 		auth_failed.emit("Failed to connect to auth server")
@@ -191,7 +268,9 @@ func _poll_auth_status() -> void:
 	add_child(request)
 	request.request_completed.connect(_on_poll_response.bind(request))
 
-	var error = request.request(url, [], HTTPClient.METHOD_GET)
+	# ngrok-skip-browser-warning header bypasses ngrok's interstitial page
+	var headers = ["ngrok-skip-browser-warning: true"]
+	var error = request.request(url, headers, HTTPClient.METHOD_GET)
 	if error != OK:
 		LogManager.warning("Poll request failed: %s" % error, "mantle")
 
@@ -241,8 +320,33 @@ func _handle_auth_success(data: Dictionary) -> void:
 
 	LogManager.info("Authenticated as %s (ID: %d)" % [username, user_id], "mantle")
 
+	# Bring game window to front after browser auth
+	_bring_window_to_front()
+
 	# Fetch full profile
 	_fetch_profile()
+
+func _bring_window_to_front() -> void:
+	"""Bring the game window to front after browser authentication"""
+	var window = get_window()
+	if window:
+		# Request attention first (flashes taskbar)
+		window.request_attention()
+
+		# Try to force focus - Windows is restrictive about this
+		# but these calls together usually work
+		if window.mode == Window.MODE_MINIMIZED:
+			window.mode = Window.MODE_WINDOWED
+		window.move_to_foreground()
+		window.grab_focus()
+
+		# Double-tap after a brief delay - sometimes needed on Windows
+		get_tree().create_timer(0.1).timeout.connect(func():
+			window.move_to_foreground()
+			window.grab_focus()
+		)
+
+		LogManager.info("Requested window focus", "mantle")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PROFILE FETCHING
@@ -251,7 +355,10 @@ func _handle_auth_success(data: Dictionary) -> void:
 func _fetch_profile() -> void:
 	"""GET /api/me to get full profile data"""
 	var url = get_api_base() + "/api/me"
-	var headers = ["Authorization: Bearer " + auth_token]
+	var headers = [
+		"Authorization: Bearer " + auth_token,
+		"ngrok-skip-browser-warning: true"
+	]
 
 	var request = HTTPRequest.new()
 	add_child(request)
@@ -263,10 +370,16 @@ func _fetch_profile() -> void:
 
 func _on_profile_response(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest) -> void:
 	request.queue_free()
+	print("[MantleAuth] Profile response received: result=%d, code=%d" % [result, response_code])
 
 	if result != HTTPRequest.RESULT_SUCCESS:
-		LogManager.error("Profile fetch failed: %d" % result, "mantle")
+		LogManager.error("Profile fetch failed: %d (retry %d/%d)" % [result, _retry_count, MAX_RETRY_COUNT], "mantle")
+		_schedule_profile_retry()
 		return
+
+	# Connection successful - reset retry count
+	_retry_count = 0
+	_stop_retry_timer()
 
 	if response_code == 401:
 		# Token expired, need to re-auth
@@ -276,7 +389,13 @@ func _on_profile_response(result: int, response_code: int, headers: PackedString
 		return
 
 	if response_code != 200:
-		LogManager.error("Profile fetch returned %d" % response_code, "mantle")
+		var error_body = body.get_string_from_utf8()
+		var clean_error = _clean_error_body(error_body, response_code)
+		LogManager.error("Profile fetch returned %d: %s" % [response_code, clean_error], "mantle")
+		# Treat 5xx errors as connection issues and retry
+		# 4xx errors (except 401) might be token issues - still retry a few times
+		if response_code >= 400 and response_code != 401:
+			_schedule_profile_retry()
 		return
 
 	var json = JSON.new()
@@ -313,9 +432,94 @@ func _on_profile_response(result: int, response_code: int, headers: PackedString
 		total_achievements
 	], "mantle")
 
-	# Emit for cosmetics system to process
-	profile_updated.emit(data)
-	auth_completed.emit(data)
+	# Calculate hash of profile data to detect actual changes
+	# Using key fields that affect UI: total_achievements, providers count, tier
+	var profile_hash = hash(str(total_achievements) + str(providers.size()) + str(mantle_tier.get("name", "")))
+	var data_changed = _is_first_profile_load or (profile_hash != _last_profile_hash)
+
+	if data_changed:
+		print("[MantleAuth] Profile data changed (hash %d -> %d), emitting signals" % [_last_profile_hash, profile_hash])
+		_last_profile_hash = profile_hash
+		_is_first_profile_load = false
+
+		# Emit for cosmetics system to process
+		profile_updated.emit(data)
+		auth_completed.emit(data)
+	else:
+		print("[MantleAuth] Profile data unchanged, skipping UI refresh")
+
+	# Start live connection monitoring after successful profile load
+	start_live_connection()
+
+func _schedule_profile_retry() -> void:
+	"""Schedule a retry for profile fetch if backend is unavailable"""
+	if _retry_count >= MAX_RETRY_COUNT:
+		LogManager.error("Max retries reached. Backend appears to be down.", "mantle")
+		_handle_connection_failure()
+		return
+
+	_retry_count += 1
+	_set_connection_status(ConnectionStatus.CONNECTING)  # Show reconnecting state
+
+	if _retry_timer:
+		_retry_timer.queue_free()
+
+	_retry_timer = Timer.new()
+	_retry_timer.wait_time = RETRY_INTERVAL
+	_retry_timer.one_shot = true
+	_retry_timer.timeout.connect(_on_retry_timer)
+	add_child(_retry_timer)
+	_retry_timer.start()
+
+	LogManager.info("Will retry connection in %.0f seconds..." % RETRY_INTERVAL, "mantle")
+
+func _on_retry_timer() -> void:
+	"""Retry fetching profile"""
+	_set_connection_status(ConnectionStatus.CONNECTING)
+	LogManager.info("Retrying Mantle connection (attempt %d/%d)..." % [_retry_count, MAX_RETRY_COUNT], "mantle")
+	_fetch_profile()
+
+func _stop_retry_timer() -> void:
+	"""Stop any pending retry"""
+	if _retry_timer:
+		_retry_timer.stop()
+		_retry_timer.queue_free()
+		_retry_timer = null
+
+func _handle_connection_failure() -> void:
+	"""Handle failed connection to Mantle backend - logout and return to main menu"""
+	LogManager.error("Cannot connect to Mantle server. Returning to main menu.", "mantle")
+
+	# Set disconnected status
+	_set_connection_status(ConnectionStatus.DISCONNECTED)
+
+	# Clear auth state (but keep the saved token for next attempt)
+	auth_token = ""
+	user_id = -1
+	username = ""
+	mantle_tier = {}
+	providers = []
+	achievements = []
+	by_rarity = {}
+	tier_thresholds = {}
+	total_achievements = 0
+	is_guest = true
+	is_authenticated = false
+	_retry_count = 0
+
+	# Store error message to show after MainMenu loads
+	pending_error_message = "Could not connect to Mantle server. Please check your connection and try again."
+
+	# Return to main menu (MainMenu will check pending_error_message)
+	var tree = get_tree()
+	if tree:
+		tree.change_scene_to_file("res://scenes/ui/MainMenu.tscn")
+
+func get_and_clear_pending_error() -> String:
+	"""Get pending error message and clear it (called by MainMenu on load)"""
+	var error = pending_error_message
+	pending_error_message = ""
+	return error
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TOKEN PERSISTENCE
@@ -349,8 +553,10 @@ func _load_saved_token() -> void:
 	if auth_token != "" and user_id > 0:
 		is_guest = false
 		is_authenticated = true
-		LogManager.info("Restored Mantle session for %s" % username, "mantle")
+		_set_connection_status(ConnectionStatus.CONNECTING)  # Show connecting while we verify
+		LogManager.info("Restored Mantle session for %s (fetching profile...)" % username, "mantle")
 		# Verify token is still valid by fetching profile
+		# NOTE: total_achievements will be 0 until _on_profile_response completes
 		_fetch_profile()
 	else:
 		_delete_saved_token()
@@ -408,3 +614,140 @@ func _on_badge_response(result: int, response_code: int, headers: PackedStringAr
 		return
 
 	callback.call(json.data)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LIVE CONNECTION MONITORING
+# ═══════════════════════════════════════════════════════════════════════════
+
+func start_live_connection() -> void:
+	"""Start heartbeat monitoring and data sync timers. Call after successful auth."""
+	LogManager.info("Starting live connection monitoring", "mantle")
+	_set_connection_status(ConnectionStatus.CONNECTED)
+	_consecutive_failures = 0
+	_last_successful_ping = Time.get_unix_time_from_system()
+
+	# Start heartbeat timer
+	if _heartbeat_timer:
+		_heartbeat_timer.queue_free()
+	_heartbeat_timer = Timer.new()
+	_heartbeat_timer.wait_time = HEARTBEAT_INTERVAL
+	_heartbeat_timer.timeout.connect(_on_heartbeat_tick)
+	add_child(_heartbeat_timer)
+	_heartbeat_timer.start()
+
+	# Start data sync timer
+	if _data_sync_timer:
+		_data_sync_timer.queue_free()
+	_data_sync_timer = Timer.new()
+	_data_sync_timer.wait_time = DATA_SYNC_INTERVAL
+	_data_sync_timer.timeout.connect(_on_data_sync_tick)
+	add_child(_data_sync_timer)
+	_data_sync_timer.start()
+
+func stop_live_connection() -> void:
+	"""Stop heartbeat and data sync. Call on logout."""
+	LogManager.info("Stopping live connection monitoring", "mantle")
+	if _heartbeat_timer:
+		_heartbeat_timer.stop()
+		_heartbeat_timer.queue_free()
+		_heartbeat_timer = null
+	if _data_sync_timer:
+		_data_sync_timer.stop()
+		_data_sync_timer.queue_free()
+		_data_sync_timer = null
+	_set_connection_status(ConnectionStatus.DISCONNECTED)
+
+func _set_connection_status(new_status: int) -> void:
+	"""Update connection status and emit signal if changed"""
+	if connection_status != new_status:
+		var old_status = connection_status
+		connection_status = new_status
+		var status_names = ["DISCONNECTED", "CONNECTING", "CONNECTED"]
+		LogManager.info("Connection status: %s -> %s" % [status_names[old_status], status_names[new_status]], "mantle")
+		connection_status_changed.emit(new_status)
+
+func _on_heartbeat_tick() -> void:
+	"""Periodic ping to check if backend is alive"""
+	if not is_authenticated or auth_token == "":
+		return
+
+	var url = get_api_base() + "/api/health"
+	var headers = ["ngrok-skip-browser-warning: true"]
+
+	var request = HTTPRequest.new()
+	request.timeout = 5.0  # Short timeout for heartbeat
+	add_child(request)
+	request.request_completed.connect(_on_heartbeat_response.bind(request))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_GET)
+	if error != OK:
+		_handle_heartbeat_failure()
+		request.queue_free()
+
+func _on_heartbeat_response(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray, request: HTTPRequest) -> void:
+	request.queue_free()
+
+	if result == HTTPRequest.RESULT_SUCCESS and response_code == 200:
+		# Connection healthy
+		_consecutive_failures = 0
+		_last_successful_ping = Time.get_unix_time_from_system()
+		if connection_status != ConnectionStatus.CONNECTED:
+			_set_connection_status(ConnectionStatus.CONNECTED)
+			# Connection restored - refresh all data
+			LogManager.info("Connection restored! Refreshing data...", "mantle")
+			_refresh_all_data()
+	else:
+		_handle_heartbeat_failure()
+
+func _handle_heartbeat_failure() -> void:
+	"""Handle a failed heartbeat ping"""
+	_consecutive_failures += 1
+	LogManager.warning("Heartbeat failed (attempt %d/%d)" % [_consecutive_failures, MAX_CONSECUTIVE_FAILURES], "mantle")
+
+	if _consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+		if connection_status != ConnectionStatus.DISCONNECTED:
+			_set_connection_status(ConnectionStatus.DISCONNECTED)
+	elif connection_status == ConnectionStatus.CONNECTED:
+		_set_connection_status(ConnectionStatus.CONNECTING)  # Show "reconnecting" state
+
+func _on_data_sync_tick() -> void:
+	"""Periodic sync of achievement and forge data"""
+	if connection_status != ConnectionStatus.CONNECTED:
+		return  # Don't try to sync if disconnected
+
+	if not is_authenticated or auth_token == "":
+		return
+
+	LogManager.info("Syncing achievement data...", "mantle")
+	_fetch_profile()
+
+	# Also refresh forge items
+	if ForgeItemManager:
+		ForgeItemManager.fetch_forged_items()
+
+func _refresh_all_data() -> void:
+	"""Refresh all data after connection is restored"""
+	_fetch_profile()
+
+	# Refresh forge items
+	if ForgeItemManager:
+		ForgeItemManager.fetch_forged_items()
+		ForgeItemManager.fetch_forge_status()
+		ForgeItemManager.fetch_wallet_status()
+		ForgeItemManager.fetch_bridge_in_available()
+
+func is_connected_to_backend() -> bool:
+	"""Check if we have an active connection to the backend"""
+	return connection_status == ConnectionStatus.CONNECTED
+
+func get_connection_status_name() -> String:
+	"""Get human-readable connection status"""
+	match connection_status:
+		ConnectionStatus.DISCONNECTED:
+			return "Disconnected"
+		ConnectionStatus.CONNECTING:
+			return "Reconnecting..."
+		ConnectionStatus.CONNECTED:
+			return "Connected"
+		_:
+			return "Unknown"

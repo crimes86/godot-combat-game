@@ -782,6 +782,272 @@ GET /api/census/items
 
 ---
 
+## Bridge System Endpoints
+
+> **Design Philosophy:** Bridge system allows items to move between in-game (platform wallet) and external wallets (OpenSea).
+> Traditional gamers never see this - it's opt-in for crypto-aware users.
+> 48-hour cooldown prevents exploitation and gives time to recover compromised accounts.
+> See `docs/FORGE_BRIDGE_SYSTEM.md` for full specification.
+
+### Request Bridge Out
+```
+POST /api/wallet/bridge-out
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "forged_achievement_ids": [1, 2, 3],
+  "destination_wallet": "0x..."  // Optional, defaults to linked wallet
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "bridge_requests": [
+    {
+      "forged_achievement_id": 1,
+      "item_name": "Hand of Malenia",
+      "status": "bridging_out",
+      "cooldown_ends_at": "2024-12-17T10:30:00Z",
+      "destination_wallet": "0x..."
+    }
+  ],
+  "failed": []
+}
+```
+
+**Error (400):**
+```json
+{
+  "error": "Items must be claimed to inventory before bridging"
+}
+```
+
+**Notes:**
+- 48-hour cooldown starts immediately
+- Items become unusable in-game during cooldown
+- Must have wallet connected
+- Must own the items
+
+---
+
+### Get Bridge Out Status
+```
+GET /api/wallet/bridge-out/status
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "pending_bridges": [
+    {
+      "forged_achievement_id": 1,
+      "item_name": "Hand of Malenia",
+      "item_id": "hand_of_malenia",
+      "status": "bridging_out",
+      "requested_at": "2024-12-15T10:30:00Z",
+      "cooldown_ends_at": "2024-12-17T10:30:00Z",
+      "hours_remaining": 23.5,
+      "can_confirm": false,
+      "destination_wallet": "0x..."
+    }
+  ]
+}
+```
+
+**Godot Action:** Show countdown timer on bridging items in inventory
+
+---
+
+### Confirm Bridge Out
+```
+POST /api/wallet/bridge-out/confirm
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "forged_achievement_ids": [1]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "transferred": [
+    {
+      "forged_achievement_id": 1,
+      "item_name": "Hand of Malenia",
+      "token_id": 42069,
+      "tx_hash": "0x...",
+      "destination_wallet": "0x..."
+    }
+  ],
+  "failed": []
+}
+```
+
+**Error (cooldown not expired):**
+```json
+{
+  "failed": [
+    {
+      "forged_achievement_id": 1,
+      "error": "Cooldown not expired. 23.5 hours remaining."
+    }
+  ]
+}
+```
+
+**Notes:**
+- Can only confirm after 48h cooldown expires
+- Actually transfers NFT to external wallet
+- Item removed from in-game inventory
+
+---
+
+### Cancel Bridge Out
+```
+POST /api/wallet/bridge-out/cancel
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "forged_achievement_ids": [1]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "cancelled": [1],
+  "failed": []
+}
+```
+
+**Notes:**
+- Can cancel any time during cooldown
+- Item returns to normal in-game status
+
+---
+
+### Get Bridge In Available
+```
+GET /api/wallet/bridge-in/available
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "wallet_address": "0x...",
+  "available_items": [
+    {
+      "token_id": 42069,
+      "item_id": "hand_of_malenia",
+      "item_name": "Hand of Malenia",
+      "item_rarity": "Legendary",
+      "forged_by": "Legolazz",
+      "forged_at": "2024-12-08T10:30:00Z",
+      "can_bridge_in": true
+    }
+  ]
+}
+```
+
+**Notes:**
+- Scans user's external wallet for Dreadland items
+- Only shows items in "bridged" status owned by connected wallet
+- Items purchased on OpenSea appear here
+
+---
+
+### Request Bridge In
+```
+POST /api/wallet/bridge-in
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "token_ids": [42069]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "bridged_in": [
+    {
+      "token_id": 42069,
+      "item_name": "Hand of Malenia",
+      "status": "in_game",
+      "tx_hash": "0x..."
+    }
+  ],
+  "failed": []
+}
+```
+
+**Notes:**
+- Transfers NFT from user wallet to platform wallet
+- Item becomes usable in-game immediately
+- Updates ownership in database
+
+---
+
+### Bridge Status on Forged Items
+
+The `/api/me/forge-status` endpoint now includes bridge information:
+
+```json
+{
+  "wallet_connected": true,
+  "wallet_address": "0x...",
+  "summary": {
+    "forged": 10,
+    "forgeable": 5,
+    "unforgeable": 100,
+    "total": 115,
+    "in_game": 8,
+    "bridging_out": 1,
+    "bridged": 1
+  },
+  "forged": [
+    {
+      "credit_id": 123,
+      "achievement_id": 456,
+      "display_name": "Legendary Hero",
+      "rarity_tier": "Legendary",
+      "provider": "steam",
+      "is_original_claim": true,
+      "forged_id": 1,
+      "item_id": "hand_of_malenia",
+      "item_name": "Hand of Malenia",
+      "bridge_status": "in_game",
+      "claimed_in_game": true,
+      "usable_in_game": true
+    }
+  ],
+  "forgeable": [...],
+  "unforgeable": [...]
+}
+```
+
+**Bridge Status Values:**
+- `in_game` - Item is in platform wallet, usable in Dreadland
+- `bridging_out` - 48h cooldown, item locked, not usable
+- `bridged` - Item in external wallet, not usable in-game
+- `bridging_in` - Being transferred back to platform
+
+**Godot Action:** Use `usable_in_game` to determine if item can be equipped/used
+
+---
+
 ## Admin Endpoints
 
 ### Grant Admin Status
@@ -813,6 +1079,52 @@ Authorization: Bearer {token}
   "message": "Admin status revoked from {username}"
 }
 ```
+
+---
+
+### Get Indexer Status
+```
+GET /api/admin/indexer-status
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "running": true,
+  "last_processed_block": 12345678,
+  "chain_id": 84532,
+  "contract_address": "0x...",
+  "platform_wallet": "0x...",
+  "poll_interval_seconds": 30,
+  "pending_bridge_transactions": 2
+}
+```
+
+**Notes:**
+- Requires admin access
+- Shows transfer indexer status for bridge system monitoring
+
+---
+
+### Trigger Indexer Poll
+```
+POST /api/admin/indexer-poll
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "transfers_processed": 3
+}
+```
+
+**Notes:**
+- Requires admin access
+- Manually triggers blockchain poll for testing
+- Returns number of transfer events processed
 
 ---
 
@@ -997,15 +1309,17 @@ Show mantle          Show login                │
 
 ## Version
 
-- **API Version**: 1.2
-- **Last Updated**: 2024-12-08
-- **Backend Status**: Partially implemented (trading endpoints pending)
-- **Godot Status**: Pending implementation
+- **API Version**: 1.4
+- **Last Updated**: 2024-12-10
+- **Backend Status**: Complete (bridge system, indexer, trading all implemented)
+- **Godot Status**: Complete (Armory UI with bind/unbind/lockbox terminology)
 
 ## Changelog
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2024-12-10 | 1.4 | Updated status to reflect complete implementation. Note: Godot UI uses "bind/unbind" instead of "bridge" and "lockbox" instead of "wallet" for RPG-friendly terminology |
+| 2024-12-09 | 1.3 | Added Bridge System endpoints (bridge-out, bridge-in, status), updated forge-status with bridge information, added BridgeStatus enum and BridgeTransaction table |
 | 2024-12-08 | 1.2 | Added Trading & Economy endpoints, expanded provenance response, added census endpoint, documented twinking system and provenance concepts |
 | 2024-12-06 | 1.1 | Added wallet/forging endpoints, admin endpoints, sync cooldown, achievements by rarity endpoint, provider states |
 | 2024-12-05 | 1.0 | Initial API contract |

@@ -14,7 +14,8 @@ from datetime import datetime, timedelta
 import logging
 
 from app.models import (
-    User, WalletAccount, AchievementCredit, Achievement, ForgedAchievement, ProviderAccount, Game
+    User, WalletAccount, AchievementCredit, Achievement, ForgedAchievement, ProviderAccount, Game,
+    BridgeTransaction, BridgeStatus
 )
 from app.database import SessionLocal
 from app.routes.chat_routes import post_forge_announcement
@@ -433,6 +434,8 @@ async def forge_achievements(
                 effort_tier=item_props["effort_tier"],
                 vintage_years=item_props["vintage_years"],
                 is_secret=item_props["is_secret"],
+                # Auto-claim to inventory on forge (no separate claim step needed)
+                claimed_in_game_at=datetime.utcnow(),
             )
             db.add(forge_record)
             db.commit()
@@ -673,3 +676,517 @@ async def get_token_metadata(credit_id: int):
         }
     finally:
         db.close()
+
+
+# =============================================================================
+# BRIDGE SYSTEM ENDPOINTS
+# =============================================================================
+
+# Bridge cooldown duration
+# Production: 48 hours for security
+# Testnet: 2 minutes for testing
+BRIDGE_COOLDOWN_HOURS = 0.033  # ~2 minutes for testnet testing
+
+
+class BridgeOutRequest(BaseModel):
+    forged_achievement_ids: List[int]
+    destination_wallet: Optional[str] = None  # Defaults to linked wallet
+
+
+class BridgeInRequest(BaseModel):
+    token_ids: List[int]
+
+
+@router.post("/bridge-out")
+async def request_bridge_out(
+    request_body: BridgeOutRequest,
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Request to bridge items out to external wallet.
+
+    Starts the 48h cooldown period. Items become unusable in-game
+    during the cooldown. User must confirm after cooldown expires.
+    """
+    current_user = get_current_user_dep(request, db)
+    chain_id = _wallet_service.CHAIN_ID if _wallet_service else 8453
+
+    # Get user's wallet
+    wallet = db.query(WalletAccount).filter(
+        WalletAccount.user_id == current_user.id,
+        WalletAccount.chain_id == chain_id,
+        WalletAccount.current_nonce.is_(None),
+    ).first()
+
+    if not wallet:
+        raise HTTPException(status_code=400, detail="No wallet connected. Connect a wallet first.")
+
+    destination = request_body.destination_wallet or wallet.wallet_address
+
+    bridge_requests = []
+    failed = []
+    cooldown_ends = datetime.utcnow() + timedelta(hours=BRIDGE_COOLDOWN_HOURS)
+
+    for forged_id in request_body.forged_achievement_ids:
+        # Get the forged item
+        forged = db.query(ForgedAchievement).filter(
+            ForgedAchievement.id == forged_id
+        ).first()
+
+        if not forged:
+            failed.append({"forged_achievement_id": forged_id, "error": "Item not found"})
+            continue
+
+        # Check ownership - must own the item
+        owner_id = forged.current_owner_id or (
+            db.query(AchievementCredit.user_id)
+            .filter(AchievementCredit.id == forged.achievement_credit_id)
+            .scalar()
+        )
+        if owner_id != current_user.id:
+            failed.append({"forged_achievement_id": forged_id, "error": "You don't own this item"})
+            continue
+
+        # Check if already bridging or bridged
+        if forged.bridge_status != BridgeStatus.IN_GAME.value:
+            failed.append({
+                "forged_achievement_id": forged_id,
+                "error": f"Item is already {forged.bridge_status}"
+            })
+            continue
+
+        # Note: claimed_in_game_at check removed - items are auto-claimed on forge
+        # and auto-claimed on bridge-in, so they're always "claimed" when in_game
+
+        # Start bridge-out process
+        forged.bridge_status = BridgeStatus.BRIDGING_OUT.value
+        forged.bridge_requested_at = datetime.utcnow()
+        forged.external_owner_wallet = destination.lower()
+
+        # Log the transaction
+        bridge_tx = BridgeTransaction(
+            forged_achievement_id=forged_id,
+            transaction_type="bridge_out",
+            from_user_id=current_user.id,
+            from_wallet=wallet.wallet_address,
+            to_wallet=destination.lower(),
+            status="pending",
+        )
+        db.add(bridge_tx)
+
+        bridge_requests.append({
+            "forged_achievement_id": forged_id,
+            "item_name": forged.item_name,
+            "status": "bridging_out",
+            "cooldown_ends_at": cooldown_ends.isoformat() + "Z",
+            "destination_wallet": destination.lower(),
+        })
+
+    db.commit()
+
+    logger.info(f"User {current_user.username} requested bridge-out for {len(bridge_requests)} items")
+
+    return {
+        "success": len(bridge_requests) > 0,
+        "bridge_requests": bridge_requests,
+        "failed": failed,
+    }
+
+
+@router.get("/bridge-out/status")
+async def get_bridge_out_status(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """Get status of pending bridge-out operations."""
+    current_user = get_current_user_dep(request, db)
+
+    # Find all items in bridging_out status for this user
+    bridging_items = (
+        db.query(ForgedAchievement)
+        .outerjoin(AchievementCredit, ForgedAchievement.achievement_credit_id == AchievementCredit.id)
+        .filter(
+            ForgedAchievement.bridge_status == BridgeStatus.BRIDGING_OUT.value,
+            # Owner is either current_owner_id or original forger
+            (ForgedAchievement.current_owner_id == current_user.id) |
+            (
+                (ForgedAchievement.current_owner_id.is_(None)) &
+                (AchievementCredit.user_id == current_user.id)
+            )
+        )
+        .all()
+    )
+
+    pending_bridges = []
+    for item in bridging_items:
+        cooldown_ends = item.bridge_requested_at + timedelta(hours=BRIDGE_COOLDOWN_HOURS)
+        hours_remaining = max(0, (cooldown_ends - datetime.utcnow()).total_seconds() / 3600)
+        can_confirm = hours_remaining <= 0
+
+        pending_bridges.append({
+            "forged_achievement_id": item.id,
+            "item_name": item.item_name,
+            "item_id": item.item_id,
+            "status": "bridging_out",
+            "requested_at": item.bridge_requested_at.isoformat() + "Z" if item.bridge_requested_at else None,
+            "cooldown_ends_at": cooldown_ends.isoformat() + "Z",
+            "hours_remaining": round(hours_remaining, 1),
+            "can_confirm": can_confirm,
+            "destination_wallet": item.external_owner_wallet,
+        })
+
+    return {"pending_bridges": pending_bridges}
+
+
+@router.post("/bridge-out/confirm")
+async def confirm_bridge_out(
+    request_body: BridgeOutRequest,
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Confirm bridge-out after cooldown period.
+
+    Actually transfers the NFT from platform wallet to user's external wallet.
+    """
+    current_user = get_current_user_dep(request, db)
+
+    if _wallet_service is None:
+        raise HTTPException(status_code=503, detail="Wallet service not available")
+
+    transferred = []
+    failed = []
+
+    for forged_id in request_body.forged_achievement_ids:
+        forged = db.query(ForgedAchievement).filter(
+            ForgedAchievement.id == forged_id
+        ).first()
+
+        if not forged:
+            failed.append({"forged_achievement_id": forged_id, "error": "Item not found"})
+            continue
+
+        # Check ownership
+        owner_id = forged.current_owner_id or (
+            db.query(AchievementCredit.user_id)
+            .filter(AchievementCredit.id == forged.achievement_credit_id)
+            .scalar()
+        )
+        if owner_id != current_user.id:
+            failed.append({"forged_achievement_id": forged_id, "error": "You don't own this item"})
+            continue
+
+        # Must be in bridging_out status
+        if forged.bridge_status != BridgeStatus.BRIDGING_OUT.value:
+            failed.append({
+                "forged_achievement_id": forged_id,
+                "error": f"Item is not pending bridge-out (status: {forged.bridge_status})"
+            })
+            continue
+
+        # Check cooldown expired
+        cooldown_ends = forged.bridge_requested_at + timedelta(hours=BRIDGE_COOLDOWN_HOURS)
+        if datetime.utcnow() < cooldown_ends:
+            hours_remaining = (cooldown_ends - datetime.utcnow()).total_seconds() / 3600
+            failed.append({
+                "forged_achievement_id": forged_id,
+                "error": f"Cooldown not expired. {round(hours_remaining, 1)} hours remaining."
+            })
+            continue
+
+        try:
+            # Transfer NFT to external wallet
+            tx_hash = await _wallet_service.transfer_to_external(
+                token_id=forged.token_id,
+                to_address=forged.external_owner_wallet,
+            )
+
+            # Update status
+            forged.bridge_status = BridgeStatus.BRIDGED.value
+            forged.bridge_completed_at = datetime.utcnow()
+            forged.claimed_in_game_at = None  # No longer in inventory
+
+            # Update bridge transaction
+            bridge_tx = db.query(BridgeTransaction).filter(
+                BridgeTransaction.forged_achievement_id == forged_id,
+                BridgeTransaction.transaction_type == "bridge_out",
+                BridgeTransaction.status == "pending",
+            ).first()
+
+            if bridge_tx:
+                bridge_tx.status = "completed"
+                bridge_tx.completed_at = datetime.utcnow()
+                bridge_tx.tx_hash = tx_hash
+
+            transferred.append({
+                "forged_achievement_id": forged_id,
+                "item_name": forged.item_name,
+                "token_id": forged.token_id,
+                "tx_hash": tx_hash,
+                "destination_wallet": forged.external_owner_wallet,
+            })
+
+            logger.info(f"User {current_user.username} bridged out token {forged.token_id} to {forged.external_owner_wallet}")
+
+        except Exception as e:
+            logger.error(f"Failed to bridge out {forged_id}: {e}")
+            failed.append({"forged_achievement_id": forged_id, "error": str(e)})
+
+    db.commit()
+
+    return {
+        "success": len(transferred) > 0,
+        "transferred": transferred,
+        "failed": failed,
+    }
+
+
+@router.post("/bridge-out/cancel")
+async def cancel_bridge_out(
+    request_body: BridgeOutRequest,
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """Cancel pending bridge-out (before cooldown expires)."""
+    current_user = get_current_user_dep(request, db)
+
+    cancelled = []
+    failed = []
+
+    for forged_id in request_body.forged_achievement_ids:
+        forged = db.query(ForgedAchievement).filter(
+            ForgedAchievement.id == forged_id
+        ).first()
+
+        if not forged:
+            failed.append({"forged_achievement_id": forged_id, "error": "Item not found"})
+            continue
+
+        # Check ownership
+        owner_id = forged.current_owner_id or (
+            db.query(AchievementCredit.user_id)
+            .filter(AchievementCredit.id == forged.achievement_credit_id)
+            .scalar()
+        )
+        if owner_id != current_user.id:
+            failed.append({"forged_achievement_id": forged_id, "error": "You don't own this item"})
+            continue
+
+        # Must be in bridging_out status
+        if forged.bridge_status != BridgeStatus.BRIDGING_OUT.value:
+            failed.append({
+                "forged_achievement_id": forged_id,
+                "error": f"Item is not pending bridge-out (status: {forged.bridge_status})"
+            })
+            continue
+
+        # Reset to in_game
+        forged.bridge_status = BridgeStatus.IN_GAME.value
+        forged.bridge_requested_at = None
+        forged.external_owner_wallet = None
+
+        # Update bridge transaction
+        bridge_tx = db.query(BridgeTransaction).filter(
+            BridgeTransaction.forged_achievement_id == forged_id,
+            BridgeTransaction.transaction_type == "bridge_out",
+            BridgeTransaction.status == "pending",
+        ).first()
+
+        if bridge_tx:
+            bridge_tx.status = "cancelled"
+            bridge_tx.completed_at = datetime.utcnow()
+
+        cancelled.append(forged_id)
+        logger.info(f"User {current_user.username} cancelled bridge-out for item {forged_id}")
+
+    db.commit()
+
+    return {
+        "success": len(cancelled) > 0,
+        "cancelled": cancelled,
+        "failed": failed,
+    }
+
+
+@router.get("/bridge-in/available")
+async def get_bridge_in_available(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Scan user's external wallet for Dreadland items that can be bridged in.
+
+    Returns items owned by user's wallet that are currently in 'bridged' status.
+    """
+    current_user = get_current_user_dep(request, db)
+    chain_id = _wallet_service.CHAIN_ID if _wallet_service else 8453
+
+    # Get user's wallet
+    wallet = db.query(WalletAccount).filter(
+        WalletAccount.user_id == current_user.id,
+        WalletAccount.chain_id == chain_id,
+        WalletAccount.current_nonce.is_(None),
+    ).first()
+
+    if not wallet:
+        raise HTTPException(status_code=400, detail="No wallet connected")
+
+    # Find bridged items owned by this wallet (any chain - items may have been forged on different chains)
+    available_items = db.query(ForgedAchievement).filter(
+        ForgedAchievement.bridge_status == BridgeStatus.BRIDGED.value,
+        ForgedAchievement.external_owner_wallet == wallet.wallet_address.lower(),
+    ).all()
+
+    items = []
+    for item in available_items:
+        # Get original forger info
+        original_credit = db.query(AchievementCredit).filter(
+            AchievementCredit.id == item.achievement_credit_id
+        ).first()
+        original_user = db.query(User).filter(User.id == original_credit.user_id).first() if original_credit else None
+
+        items.append({
+            "token_id": item.token_id,
+            "item_id": item.item_id,
+            "item_name": item.item_name,
+            "item_rarity": item.item_rarity,
+            "forged_by": original_user.username if original_user else "Unknown",
+            "forged_at": item.forged_at.isoformat() + "Z" if item.forged_at else None,
+            "can_bridge_in": True,
+        })
+
+    return {
+        "wallet_address": wallet.wallet_address,
+        "available_items": items,
+    }
+
+
+@router.post("/bridge-in")
+async def request_bridge_in(
+    request_body: BridgeInRequest,
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Bridge items from external wallet back to game.
+
+    Transfers NFT from user's wallet to platform wallet.
+    Item becomes usable in-game after transfer completes.
+    """
+    current_user = get_current_user_dep(request, db)
+
+    if _wallet_service is None:
+        raise HTTPException(status_code=503, detail="Wallet service not available")
+
+    chain_id = _wallet_service.CHAIN_ID
+
+    # Get user's wallet
+    wallet = db.query(WalletAccount).filter(
+        WalletAccount.user_id == current_user.id,
+        WalletAccount.chain_id == chain_id,
+        WalletAccount.current_nonce.is_(None),
+    ).first()
+
+    if not wallet:
+        raise HTTPException(status_code=400, detail="No wallet connected")
+
+    logger.info(f"Bridge-in request from user {current_user.username}: token_ids={request_body.token_ids}, wallet={wallet.wallet_address}")
+
+    bridged_in = []
+    failed = []
+
+    for token_id in request_body.token_ids:
+        # Ensure token_id is an integer (might come as float from JSON)
+        token_id_int = int(token_id)
+        logger.info(f"Bridge-in: Looking for token_id={token_id_int}")
+
+        # Find the forged item by token_id (don't filter by chain_id - items may have been forged on different chains)
+        forged = db.query(ForgedAchievement).filter(
+            ForgedAchievement.token_id == token_id_int,
+        ).first()
+
+        if not forged:
+            logger.warning(f"Bridge-in: Token {token_id_int} not found in database")
+            failed.append({"token_id": token_id, "error": "Token not found in Dreadland"})
+            continue
+
+        logger.info(f"Bridge-in: Found token {token_id}, bridge_status={forged.bridge_status}, external_wallet={forged.external_owner_wallet}")
+
+        # Must be bridged status
+        if forged.bridge_status != BridgeStatus.BRIDGED.value:
+            logger.warning(f"Bridge-in: Token {token_id} status is '{forged.bridge_status}', expected 'bridged'")
+            failed.append({
+                "token_id": token_id,
+                "error": f"Item is not bridged (status: {forged.bridge_status})"
+            })
+            continue
+
+        # Verify user owns the token on-chain
+        if forged.external_owner_wallet is None or forged.external_owner_wallet.lower() != wallet.wallet_address.lower():
+            logger.warning(f"Bridge-in: Token {token_id} wallet mismatch - item external_wallet={forged.external_owner_wallet}, user_wallet={wallet.wallet_address}")
+            failed.append({
+                "token_id": token_id,
+                "error": "Token not owned by your wallet"
+            })
+            continue
+
+        try:
+            # Mark as bridging in
+            forged.bridge_status = BridgeStatus.BRIDGING_IN.value
+
+            # Log transaction
+            bridge_tx = BridgeTransaction(
+                forged_achievement_id=forged.id,
+                transaction_type="bridge_in",
+                from_user_id=current_user.id,
+                to_user_id=current_user.id,
+                from_wallet=wallet.wallet_address,
+                to_wallet=_wallet_service.PLATFORM_WALLET_ADDRESS if _wallet_service else None,
+                status="pending",
+            )
+            db.add(bridge_tx)
+            db.flush()
+
+            # Transfer from user wallet to platform wallet
+            # NOTE: This requires user to have approved the transfer or use ERC-721 permit
+            tx_hash = await _wallet_service.transfer_from_external(
+                token_id=token_id,
+                from_address=wallet.wallet_address,
+            )
+
+            # Update status
+            forged.bridge_status = BridgeStatus.IN_GAME.value
+            forged.bridge_completed_at = datetime.utcnow()
+            forged.external_owner_wallet = None
+            forged.current_owner_id = current_user.id
+            forged.owned_since = datetime.utcnow()
+            # Auto-claim back to inventory (ready to use/bridge again)
+            forged.claimed_in_game_at = datetime.utcnow()
+
+            # Update transaction
+            bridge_tx.status = "completed"
+            bridge_tx.completed_at = datetime.utcnow()
+            bridge_tx.tx_hash = tx_hash
+
+            bridged_in.append({
+                "token_id": token_id,
+                "item_name": forged.item_name,
+                "status": "in_game",
+                "tx_hash": tx_hash,
+            })
+
+            logger.info(f"User {current_user.username} bridged in token {token_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to bridge in token {token_id}: {e}")
+            forged.bridge_status = BridgeStatus.BRIDGED.value  # Revert
+            failed.append({"token_id": token_id, "error": str(e)})
+
+    db.commit()
+
+    return {
+        "success": len(bridged_in) > 0,
+        "bridged_in": bridged_in,
+        "failed": failed,
+    }

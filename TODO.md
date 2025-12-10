@@ -1,21 +1,24 @@
 # DREADLAND - Remaining Tasks
 
-## 🚀 Start Here Tomorrow (Dec 10, 2024)
+## 🚀 Start Here Tomorrow (Dec 11, 2024)
 
-**Last Session Summary:**
-- Fixed inventory icon bug where rapid equip/unequip caused text labels instead of icons
-- Added weapon type fallbacks to ItemIconGenerator (greatsword→sword, crossbow→staff, etc.)
-- Added deferred refresh to InventoryUI to coalesce rapid inventory_changed signals
-- Stress tested inventory - all icons now display correctly
+**Last Session Summary (Dec 10):**
+- Completed Armory UI overhaul - forge detail panel, binding section, catalog polish
+- Changed terminology: "bridge" → "bind/unbind", "wallet" → "lockbox" (RPG-friendly)
+- Fixed catalog content overflow with 400px fixed height
+- Added spacing between THE FORGE header sections
+- Removed legacy TitlePanel "Dreadland" grey menu from MainMenu.tscn
+- Updated all user-facing strings (buttons, tooltips, status labels, notifications)
 
 **Ready to Continue:**
-- Armory scene polish for forged items (pending from checklist)
 - Deploy ForgedItems contract to Polygon testnet
 - Test full forge→trade→inspect flow end-to-end
+- Trading Hub implementation (see TRADING_HUB_DESIGN.md - Phase 1 done)
 
 **Key Files Changed This Session:**
-- `scripts/systems/ItemIconGenerator.gd` - Added WEAPON_TYPE_FALLBACKS
-- `scripts/ui/InventoryUI.gd` - Added deferred refresh system
+- `scripts/ui/Armory.gd` - Major UI terminology update (bind/unbind/lockbox)
+- `scripts/ui/MainMenu.gd` - Removed TitlePanel hide code
+- `scenes/ui/MainMenu.tscn` - Deleted legacy TitlePanel
 
 ---
 
@@ -32,6 +35,10 @@
 - [x] FIX: Inventory icons showing text labels after rapid equip/unequip stress test
 - [x] FIX: Added WEAPON_TYPE_FALLBACKS to ItemIconGenerator (greatsword→sword, crossbow→staff, etc.)
 - [x] FIX: Added deferred refresh to InventoryUI to coalesce rapid signal emissions
+- [x] SECURITY: Implemented security audit fixes (see docs/archive/SECURITY_AUDIT.md)
+  - Backend: Admin secret production guard, chat XSS sanitization, trading input validation
+  - GDScript: RPC sender validation on all multiplayer functions, debug prints wrapped
+  - Cleanup: Deleted backup files, updated .gitignore, added contract README warning
 
 ## Completed Previous Session
 - [x] CRITICAL: Add Windows export preset to export_presets.cfg
@@ -158,8 +165,12 @@ The forge system (achievement-to-item) documentation is complete. See these docs
   - Converts forged items to inventory format (weapons, armor, etc.)
   - Stats scale by rarity (damage, defense, crit)
 
-### Forge Godot - Pending Implementation
-- [ ] Armory scene redesign for tradeable items
+### Forge Godot - Completed
+- [x] Armory scene redesign for tradeable items
+  - Forge detail panel with 2-row layout (stats, description, trading section)
+  - Binding section (bind/unbind buttons, lockbox connection)
+  - Catalog with 400px fixed height, grid overlay, card animations
+  - UI terminology: bind/unbind (not bridge), lockbox (not wallet)
 - [x] Item inspection UI with provenance display
   - Created ItemInspectionUI.gd autoload
   - Modal panel with provenance, trade history, chain status
@@ -179,6 +190,19 @@ The forge system (achievement-to-item) documentation is complete. See these docs
   - forge_item(), record_trade_batch(), get_provenance()
   - Chain batching service uses relayer
 - [ ] Deploy to Polygon testnet
+
+## Pending - Security (Deferred from Audit)
+- [ ] CRIT-1: Rotate all API keys (before production - currently closed test)
+- [ ] CRIT-3: Generate real SESSION_SECRET (manual .env update before production)
+- [ ] MED-1: Encrypt OAuth tokens at rest (needs DB migration + encryption key)
+- [ ] MED-2: Move device codes to Redis/DB (needs infrastructure decision)
+
+## Pending - Dev Mode Cleanup (Before Production)
+- [ ] Re-enable chain_id filtering in `wallet_routes.py` lines 1038-1042, 1107-1111
+- [ ] Set DEV_MODE=false and configure real blockchain transactions
+- [ ] Update dashboard chain ID from Base Sepolia to mainnet
+- [ ] Update Godot MantleAuth API base URL to production domain
+- See `docs/DEV_MODE_CHECKLIST.md` for full list
 
 ## Pending - Major Features (Designed, Not Implemented)
 - [ ] Settlement/Base Building - guild bases with sieges (see docs/FUTURE_SPECS.md)

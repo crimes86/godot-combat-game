@@ -2,7 +2,16 @@ from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, JSON,
 from sqlalchemy.orm import relationship, sessionmaker, Mapped, mapped_column
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
-from .database import Base 
+from enum import Enum
+from .database import Base
+
+
+class BridgeStatus(str, Enum):
+    """Bridge status for forged items moving between game and external wallets."""
+    IN_GAME = "in_game"           # In platform wallet, usable in Dreadland
+    BRIDGING_OUT = "bridging_out" # Cooldown period (48h), not tradeable
+    BRIDGED = "bridged"           # In external wallet, not usable in-game
+    BRIDGING_IN = "bridging_in"   # Being transferred back to platform 
 
 class User(Base):
     __tablename__ = 'users'
@@ -24,6 +33,7 @@ class ProviderAccount(Base):
     id = Column(Integer, primary_key=True, index=True)
     provider_name = Column(String)
     provider_user_id = Column(String)
+    provider_username = Column(String, nullable=True)  # Display name from provider (e.g., Discord username)
     user_id = Column(Integer, ForeignKey('users.id'))
     profile_data = Column(JSON, nullable=True)
     # Soft-delete flag & timestamp
@@ -223,6 +233,17 @@ class ForgedAchievement(Base):
     trade_count = Column(Integer, default=0)            # Number of times traded
     last_trade_at = Column(DateTime, nullable=True)     # For 24h cooldown check
 
+    # === IN-GAME CLAIM TRACKING ===
+    # Prevents duping - once claimed in game, can't be claimed again
+    claimed_in_game_at = Column(DateTime, nullable=True)  # When added to in-game inventory
+
+    # === BRIDGE SYSTEM ===
+    # Tracks movement between in-game (platform wallet) and external wallets (OpenSea)
+    bridge_status = Column(String(20), default='in_game', index=True)  # in_game, bridging_out, bridged, bridging_in
+    bridge_requested_at = Column(DateTime, nullable=True)  # When bridge-out was requested (48h cooldown starts)
+    bridge_completed_at = Column(DateTime, nullable=True)  # When bridge actually completed
+    external_owner_wallet = Column(String(42), nullable=True, index=True)  # External wallet if bridged out
+
     # Relationships
     achievement_credit = relationship("AchievementCredit")
     wallet_account = relationship("WalletAccount")
@@ -347,3 +368,45 @@ class ChatMessage(Base):
     # Relationships
     user = relationship("User")
     achievement_credit = relationship("AchievementCredit")
+
+
+class BridgeTransaction(Base):
+    """
+    Tracks all bridge operations for audit/debugging.
+
+    Records bridge-out requests, confirmations, bridge-in operations,
+    and external transfers detected by the indexer.
+    """
+    __tablename__ = 'bridge_transactions'
+
+    id = Column(Integer, primary_key=True, index=True)
+    forged_achievement_id = Column(Integer, ForeignKey('forged_achievements.id'), nullable=False, index=True)
+
+    # Transaction type: 'bridge_out', 'bridge_in', 'external_transfer'
+    transaction_type = Column(String(20), nullable=False)
+
+    # User tracking (null for external-only transfers)
+    from_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    to_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+
+    # Wallet addresses
+    from_wallet = Column(String(42), nullable=True)
+    to_wallet = Column(String(42), nullable=True)
+
+    # Blockchain data
+    tx_hash = Column(String(66), nullable=True)  # 0x + 64 hex chars
+
+    # Timing
+    requested_at = Column(DateTime, default=datetime.utcnow, index=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    # Status: 'pending', 'completed', 'failed', 'cancelled'
+    status = Column(String(20), default='pending', index=True)
+
+    # Error info if failed
+    error_message = Column(Text, nullable=True)
+
+    # Relationships
+    forged_achievement = relationship("ForgedAchievement")
+    from_user = relationship("User", foreign_keys=[from_user_id])
+    to_user = relationship("User", foreign_keys=[to_user_id])

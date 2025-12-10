@@ -4,9 +4,16 @@ extends Node
 ## Syncs forged items to InventorySystem for in-game use
 
 signal forged_items_loaded(items: Array)
+signal forge_status_loaded(status: Dictionary)
 signal forge_claimed(item: Dictionary)
 signal forge_error(error: String)
 signal item_synced_to_inventory(item: Dictionary)
+signal bridge_status_updated(item_id: String, status: String)
+signal bridge_out_requested(item: Dictionary)
+signal bridge_out_cancelled(item_id: String)
+signal wallet_status_updated(connected: bool, wallet_address: String)
+signal bridge_in_available_updated(items: Array)
+signal bridge_in_completed(items: Array)
 
 # Cached forged items from API
 var _forged_items: Array = []
@@ -14,6 +21,15 @@ var _forged_items_by_id: Dictionary = {}  # item_id -> forged item
 var _is_fetching: bool = false
 var _is_loaded: bool = false
 var _synced_to_inventory: bool = false
+
+# Forge status - achievements that CAN be forged but haven't been yet
+var _forgeable_achievements: Array = []  # Achievements user can forge (Rare+, original claim)
+var _forge_status_loaded: bool = false
+
+# Wallet and bridge status
+var _wallet_connected: bool = false
+var _wallet_address: String = ""
+var _bridge_in_available: Array = []  # Items in external wallet that can be bridged in
 
 # Rarity multipliers for forged item stats
 const RARITY_DAMAGE_BONUS = {
@@ -31,12 +47,30 @@ func _ready() -> void:
 
 func _on_auth_completed(_data: Dictionary) -> void:
 	fetch_forged_items()
+	fetch_forge_status()
 
 func _on_logout() -> void:
 	_forged_items.clear()
 	_forged_items_by_id.clear()
+	_forgeable_achievements.clear()
 	_is_loaded = false
+	_forge_status_loaded = false
 	_synced_to_inventory = false
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEBUG - Remove after testing
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func debug_clear_claimed_items() -> void:
+	"""DEBUG: Clear all forged items from inventory so they can be reclaimed"""
+	var cleared = 0
+	for i in range(InventorySystem.inventory_items.size()):
+		var item = InventorySystem.inventory_items[i]
+		if item and item.get("is_forged", false):
+			InventorySystem.inventory_items[i] = null
+			cleared += 1
+	print("[ForgeItemManager] DEBUG: Cleared %d forged items from inventory" % cleared)
+	InventorySystem.inventory_changed.emit()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PUBLIC API
@@ -106,7 +140,88 @@ func _on_forged_items_response(result: int, response_code: int, _headers: Packed
 
 	_is_loaded = true
 	LogManager.info("Loaded %d forged items" % _forged_items.size(), "forge")
+
+	# Debug: Log bridge status of each item
+	for item in _forged_items:
+		var bridge_status = item.get("bridge_status", "unknown")
+		var item_name = item.get("item_name", "?")
+		if bridge_status != "in_game":
+			LogManager.info("  Item '%s' bridge_status: %s" % [item_name, bridge_status], "forge")
+
 	forged_items_loaded.emit(_forged_items)
+
+	# Also fetch forge status to know which achievements can be forged
+	fetch_forge_status()
+
+	# Fetch bridge status to get cooldown times for items being bridged out
+	fetch_bridge_status()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FORGE STATUS - Forgeable achievements (not yet forged)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func fetch_forge_status() -> void:
+	"""Fetch forge status - shows which achievements can be forged but haven't been yet"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		return
+
+	var url = MantleAuth.get_api_base() + "/api/me/forge-status"
+	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+
+	var request = HTTPRequest.new()
+	add_child(request)
+	request.request_completed.connect(_on_forge_status_response.bind(request))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_GET)
+	if error != OK:
+		LogManager.error("Failed to fetch forge status: %s" % error, "forge")
+		request.queue_free()
+
+func _on_forge_status_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS:
+		LogManager.error("Forge status fetch failed: %d" % result, "forge")
+		return
+
+	if response_code == 404:
+		# Endpoint doesn't exist yet - use empty list
+		LogManager.info("Forge status endpoint not implemented yet", "forge")
+		_forgeable_achievements = []
+		_forge_status_loaded = true
+		forge_status_loaded.emit({"forgeable": [], "forged": [], "unforgeable": []})
+		return
+
+	if response_code != 200:
+		LogManager.error("Forge status fetch returned %d" % response_code, "forge")
+		return
+
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+	if parse_result != OK:
+		LogManager.error("Failed to parse forge status response", "forge")
+		return
+
+	var data = json.data
+	_forgeable_achievements = data.get("forgeable", [])
+	_forge_status_loaded = true
+
+	LogManager.info("Forge status loaded: %d forgeable achievements" % _forgeable_achievements.size(), "forge")
+	forge_status_loaded.emit(data)
+
+func get_forgeable_achievements() -> Array:
+	"""Get achievements that can be forged but haven't been yet"""
+	return _forgeable_achievements.duplicate()
+
+func is_achievement_forgeable(achievement_name: String) -> bool:
+	"""Check if an achievement is forgeable (unlocked but not forged)"""
+	for ach in _forgeable_achievements:
+		if ach.get("display_name", "") == achievement_name:
+			return true
+	return false
+
+func is_forge_status_loaded() -> bool:
+	return _forge_status_loaded
 
 func claim_forge(achievement_id: int, callback: Callable = Callable()) -> void:
 	"""Claim/forge an achievement into an item"""
@@ -195,23 +310,25 @@ func get_forged_count() -> int:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 func sync_to_inventory() -> int:
-	"""Sync all forged items to player's inventory. Returns count of items added."""
+	"""Sync CLAIMED forged items to player's inventory. Returns count of items added.
+	NOTE: This is now a fallback - items are normally added immediately when claimed."""
 	if not _is_loaded:
 		LogManager.warning("Cannot sync - forged items not loaded yet", "forge")
 		return 0
 
-	if _synced_to_inventory:
-		LogManager.info("Forged items already synced to inventory", "forge")
-		return 0
-
 	var added_count = 0
 	for forged in _forged_items:
+		# Only sync items that have been claimed on server
+		if not forged.get("claimed_in_game", false):
+			continue
+
 		var inventory_item = _convert_to_inventory_format(forged)
 		if inventory_item.is_empty():
 			continue
 
 		# Check if already in inventory (by forged_id)
-		var forged_id = forged.get("token_id", forged.get("item_id", ""))
+		var token_id = forged.get("token_id", 0)
+		var forged_id = str(token_id) if token_id else forged.get("item_id", "")
 		if _is_item_in_inventory(forged_id):
 			continue
 
@@ -219,12 +336,12 @@ func sync_to_inventory() -> int:
 			added_count += 1
 			item_synced_to_inventory.emit(inventory_item)
 
-	_synced_to_inventory = true
-	LogManager.info("Synced %d forged items to inventory" % added_count, "forge")
+	if added_count > 0:
+		LogManager.info("Synced %d forged items to inventory (fallback)" % added_count, "forge")
 	return added_count
 
 func claim_single_item(item_id: String) -> Dictionary:
-	"""Claim a single forged item and add it to inventory. Returns the inventory item or empty dict on failure."""
+	"""Claim a forged item: marks on server AND adds to inventory. Returns inventory item or empty dict."""
 	if not _is_loaded:
 		LogManager.warning("Cannot claim - forged items not loaded yet", "forge")
 		return {}
@@ -235,36 +352,89 @@ func claim_single_item(item_id: String) -> Dictionary:
 		LogManager.warning("Item not found in forged items: %s" % item_id, "forge")
 		return {}
 
-	# Check if already claimed (in inventory)
-	var forged_id = str(forged.get("token_id", forged.get("item_id", "")))
-	if _is_item_in_inventory(forged_id):
-		LogManager.info("Item already claimed: %s" % item_id, "forge")
-		return {}  # Already claimed
+	# Check server-side claim status (authoritative - prevents duping)
+	if forged.get("claimed_in_game", false):
+		LogManager.info("Item already claimed (server): %s" % item_id, "forge")
+		return {}
 
-	# Convert to inventory format and add
+	# Claim on server (authoritative)
+	var token_id = forged.get("token_id", 0)
+	if token_id:
+		var claim_result = await _claim_on_server(token_id)
+		if not claim_result:
+			LogManager.error("Server rejected claim for item: %s" % item_id, "forge")
+			return {}
+
+	# Mark as claimed in local cache
+	forged["claimed_in_game"] = true
+
+	# Convert to inventory format and add to inventory
 	var inventory_item = _convert_to_inventory_format(forged)
 	if inventory_item.is_empty():
-		LogManager.error("Failed to convert forged item: %s" % item_id, "forge")
+		LogManager.error("Failed to convert forged item to inventory format: %s" % item_id, "forge")
 		return {}
 
-	if InventorySystem.add_item(inventory_item):
-		LogManager.info("Claimed forged item: %s" % inventory_item.get("name", item_id), "forge")
-		item_synced_to_inventory.emit(inventory_item)
-		return inventory_item
-	else:
-		LogManager.error("Failed to add item to inventory (full?): %s" % item_id, "forge")
+	if not InventorySystem.add_item(inventory_item):
+		LogManager.error("Failed to add forged item to inventory (full?): %s" % item_id, "forge")
 		return {}
+
+	LogManager.info("Claimed and added to inventory: %s" % forged.get("item_name", item_id), "forge")
+	forge_claimed.emit(forged)
+	item_synced_to_inventory.emit(inventory_item)
+	return inventory_item
+
+func _claim_on_server(token_id: int) -> bool:
+	"""Mark item as claimed on server. Returns true on success."""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		LogManager.warning("Cannot claim on server - not authenticated", "forge")
+		return true  # Allow claim anyway if not authenticated (offline mode)
+
+	var url = MantleAuth.get_api_base() + "/api/forge/claim-to-game"
+	var headers = [
+		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Content-Type: application/json"
+	]
+	var body = JSON.stringify({"token_id": token_id})
+
+	var http = HTTPRequest.new()
+	add_child(http)
+
+	var error = http.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		http.queue_free()
+		LogManager.error("Failed to send claim request: %s" % error, "forge")
+		return false
+
+	# Wait for response (blocking for simplicity)
+	var result = await http.request_completed
+	http.queue_free()
+
+	var response_code = result[1]
+	if response_code == 200:
+		LogManager.info("Server confirmed claim for token_id: %d" % token_id, "forge")
+		return true
+	elif response_code == 409:
+		LogManager.warning("Item already claimed on server (token_id: %d)" % token_id, "forge")
+		return false
+	else:
+		LogManager.error("Server claim failed with code %d" % response_code, "forge")
+		return false
 
 func is_item_claimed(item_id: String) -> bool:
-	"""Check if a forged item has already been claimed (is in inventory)"""
+	"""Check if a forged item has already been claimed (server-authoritative)"""
 	var forged = _forged_items_by_id.get(item_id, {})
 	if forged.is_empty():
 		return false
-	var forged_id = str(forged.get("token_id", forged.get("item_id", "")))
+	# Check server-side status first (authoritative)
+	if forged.get("claimed_in_game", false):
+		return true
+	# Fallback: check local inventory
+	var token_id = forged.get("token_id", 0)
+	var forged_id = str(token_id) if token_id else forged.get("item_id", "")
 	return _is_item_in_inventory(forged_id)
 
 func _is_item_in_inventory(forged_id: String) -> bool:
-	"""Check if a forged item is already in inventory"""
+	"""Check if a forged item is already in inventory (local check)"""
 	for slot in range(InventorySystem.inventory_items.size()):
 		var item = InventorySystem.inventory_items[slot]
 		if item and item.get("forged_id", "") == str(forged_id):
@@ -338,3 +508,540 @@ func get_forged_weapons_for_inventory() -> Array:
 		if not inv_item.is_empty():
 			weapons.append(inv_item)
 	return weapons
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BRIDGE SYSTEM - Move items between in-game and external wallets
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func get_bridge_status(item_id: String) -> String:
+	"""Get bridge status for a forged item: in_game, bridging_out, bridged, bridging_in"""
+	var forged = _forged_items_by_id.get(item_id, {})
+	return forged.get("bridge_status", "in_game")
+
+func is_item_bridgeable(item_id: String) -> bool:
+	"""Check if item can be bridged out (must be claimed and in_game)"""
+	var forged = _forged_items_by_id.get(item_id, {})
+	if forged.is_empty():
+		return false
+	var bridge_status = forged.get("bridge_status", "in_game")
+	var claimed = forged.get("claimed_in_game", false)
+	return claimed and bridge_status == "in_game"
+
+func get_bridge_cooldown_remaining(item_id: String) -> float:
+	"""Get hours remaining on bridge cooldown (0 if complete or not bridging)"""
+	var forged = _forged_items_by_id.get(item_id, {})
+	var hours = forged.get("bridge_hours_remaining", 0.0)
+	return hours
+
+func request_bridge_out(forged_id: int, callback: Callable = Callable()) -> void:
+	"""Request to bridge an item out to external wallet (48h cooldown starts)"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		forge_error.emit("Not authenticated")
+		return
+
+	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out"
+	var headers = [
+		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Content-Type: application/json"
+	]
+	var body = JSON.stringify({"forged_achievement_ids": [forged_id]})
+
+	var request = HTTPRequest.new()
+	add_child(request)
+	request.request_completed.connect(_on_bridge_out_response.bind(request, callback))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		LogManager.error("Failed to request bridge-out: %s" % error, "forge")
+		forge_error.emit("Failed to connect to server")
+		request.queue_free()
+
+func _on_bridge_out_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		LogManager.error("Bridge-out request failed: %d / %d" % [result, response_code], "forge")
+		forge_error.emit("Failed to start bridge-out")
+		if callback.is_valid():
+			callback.call({})
+		return
+
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+	if parse_result != OK:
+		forge_error.emit("Invalid server response")
+		if callback.is_valid():
+			callback.call({})
+		return
+
+	var data = json.data
+	var bridge_requests = data.get("bridge_requests", [])
+	var failed = data.get("failed", [])
+
+	# Log any failures with reasons
+	if failed.size() > 0:
+		for fail in failed:
+			var fail_id = fail.get("forged_achievement_id", "?")
+			var fail_reason = fail.get("error", "Unknown error")
+			LogManager.warning("Bridge-out failed for item %s: %s" % [str(fail_id), fail_reason], "forge")
+
+	if bridge_requests.size() > 0:
+		var bridge_info = bridge_requests[0]
+		LogManager.info("Bridge-out started for item: %s" % bridge_info.get("item_name", "Unknown"), "forge")
+		bridge_out_requested.emit(bridge_info)
+
+		# Update local cache
+		var forged_id = bridge_info.get("forged_achievement_id", -1)
+		_update_local_bridge_status(forged_id, "bridging_out")
+	elif failed.size() == 0:
+		LogManager.warning("Bridge-out returned no requests and no failures - check forged_id", "forge")
+
+	if callback.is_valid():
+		callback.call(data)
+
+	# Refresh forge status and forged items to get updated data
+	fetch_forge_status()
+	fetch_forged_items()
+
+func cancel_bridge_out(forged_id: int, callback: Callable = Callable()) -> void:
+	"""Cancel a pending bridge-out request"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		forge_error.emit("Not authenticated")
+		return
+
+	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out/cancel"
+	var headers = [
+		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Content-Type: application/json"
+	]
+	var body = JSON.stringify({"forged_achievement_ids": [forged_id]})
+
+	var request = HTTPRequest.new()
+	add_child(request)
+	request.request_completed.connect(_on_cancel_bridge_response.bind(request, forged_id, callback))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		LogManager.error("Failed to cancel bridge-out: %s" % error, "forge")
+		forge_error.emit("Failed to connect to server")
+		request.queue_free()
+
+func _on_cancel_bridge_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, forged_id: int, callback: Callable) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		LogManager.error("Cancel bridge-out failed: %d / %d" % [result, response_code], "forge")
+		forge_error.emit("Failed to cancel bridge-out")
+		if callback.is_valid():
+			callback.call(false)
+		return
+
+	LogManager.info("Bridge-out cancelled for forged_id: %d" % forged_id, "forge")
+	bridge_out_cancelled.emit(str(forged_id))
+
+	# Update local cache
+	_update_local_bridge_status(forged_id, "in_game")
+
+	if callback.is_valid():
+		callback.call(true)
+
+	# Refresh forge status
+	fetch_forge_status()
+
+func fetch_bridge_status(callback: Callable = Callable()) -> void:
+	"""Fetch current bridge-out status for all pending items"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		return
+
+	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out/status"
+	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+
+	var request = HTTPRequest.new()
+	add_child(request)
+	request.request_completed.connect(_on_bridge_status_response.bind(request, callback))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_GET)
+	if error != OK:
+		LogManager.error("Failed to fetch bridge status: %s" % error, "forge")
+		request.queue_free()
+
+func _on_bridge_status_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		LogManager.warning("Bridge status fetch failed: %d / %d" % [result, response_code], "forge")
+		if callback.is_valid():
+			callback.call([])
+		return
+
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+	if parse_result != OK:
+		if callback.is_valid():
+			callback.call([])
+		return
+
+	var data = json.data
+	var pending_bridges = data.get("pending_bridges", [])
+
+	LogManager.info("Bridge status: %d items pending" % pending_bridges.size(), "forge")
+
+	# Merge bridge status data (hours_remaining, can_confirm) into local cache
+	var items_ready_to_confirm = []
+
+	for bridge_item in pending_bridges:
+		var forged_id = int(bridge_item.get("forged_achievement_id", -1))
+		var item_id = bridge_item.get("item_id", "")
+		var hours_remaining = bridge_item.get("hours_remaining", 0.0)
+		var can_confirm = bridge_item.get("can_confirm", false)
+
+		# Update in _forged_items array
+		for item in _forged_items:
+			if int(item.get("forged_id", -1)) == forged_id or item.get("item_id", "") == item_id:
+				item["bridge_hours_remaining"] = hours_remaining
+				item["can_confirm"] = can_confirm
+				item["bridge_status"] = "bridging_out"
+				break
+
+		# Also update in _forged_items_by_id dict
+		if item_id in _forged_items_by_id:
+			_forged_items_by_id[item_id]["bridge_hours_remaining"] = hours_remaining
+			_forged_items_by_id[item_id]["can_confirm"] = can_confirm
+			_forged_items_by_id[item_id]["bridge_status"] = "bridging_out"
+
+		# Emit signal so UI can refresh
+		if item_id != "":
+			bridge_status_updated.emit(item_id, "bridging_out")
+
+		# Track items ready for auto-confirm
+		if can_confirm and forged_id > 0:
+			items_ready_to_confirm.append(forged_id)
+
+	if callback.is_valid():
+		callback.call(pending_bridges)
+
+	# Auto-confirm any items that have passed their cooldown
+	if items_ready_to_confirm.size() > 0:
+		LogManager.info("Auto-confirming %d items ready for transfer" % items_ready_to_confirm.size(), "forge")
+		_auto_confirm_bridge_out(items_ready_to_confirm)
+
+func _update_local_bridge_status(forged_id: int, status: String) -> void:
+	"""Update bridge status in local cache (both _forged_items and _forged_items_by_id)"""
+	# Update in _forged_items array
+	for item in _forged_items:
+		if int(item.get("forged_id", -1)) == forged_id:
+			item["bridge_status"] = status
+			var item_id = item.get("item_id", "")
+			bridge_status_updated.emit(item_id, status)
+			break
+
+	# Also update in _forged_items_by_id dict
+	for item_id in _forged_items_by_id:
+		var item = _forged_items_by_id[item_id]
+		if int(item.get("forged_id", -1)) == forged_id:
+			item["bridge_status"] = status
+			break
+
+func _auto_confirm_bridge_out(forged_ids: Array) -> void:
+	"""Auto-confirm bridge-out for items that have passed their cooldown"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		return
+
+	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out/confirm"
+	var headers = [
+		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Content-Type: application/json"
+	]
+	var body = JSON.stringify({"forged_achievement_ids": forged_ids})
+
+	var request = HTTPRequest.new()
+	add_child(request)
+	request.request_completed.connect(_on_auto_confirm_response.bind(request, forged_ids))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		LogManager.error("Failed to auto-confirm bridge-out: %s" % error, "forge")
+		request.queue_free()
+
+func _on_auto_confirm_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, forged_ids: Array) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		LogManager.warning("Auto-confirm bridge-out failed: %d / %d" % [result, response_code], "forge")
+		return
+
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+	if parse_result != OK:
+		return
+
+	var data = json.data
+	var transferred = data.get("transferred", [])
+
+	LogManager.info("Auto-confirmed %d bridge-out transfers" % transferred.size(), "forge")
+
+	# Update local cache for transferred items
+	for item in transferred:
+		var forged_id = int(item.get("forged_achievement_id", -1))
+		if forged_id > 0:
+			_update_local_bridge_status(forged_id, "bridged")
+
+	# Refresh forged items to get final state
+	if transferred.size() > 0:
+		fetch_forged_items()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WALLET STATUS - Check if external wallet is connected
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func is_wallet_connected() -> bool:
+	return _wallet_connected
+
+func get_wallet_address() -> String:
+	return _wallet_address
+
+func get_wallet_address_short() -> String:
+	"""Get shortened wallet address like 0x1234...5678"""
+	if _wallet_address.length() < 10:
+		return _wallet_address
+	return _wallet_address.substr(0, 6) + "..." + _wallet_address.substr(-4)
+
+func fetch_wallet_status(callback: Callable = Callable()) -> void:
+	"""Fetch wallet connection status from backend"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		if callback.is_valid():
+			callback.call(false, "")
+		return
+
+	var url = MantleAuth.get_api_base() + "/api/wallet/status"
+	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+
+	var request = HTTPRequest.new()
+	add_child(request)
+	request.request_completed.connect(_on_wallet_status_response.bind(request, callback))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_GET)
+	if error != OK:
+		LogManager.error("Failed to fetch wallet status: %s" % error, "forge")
+		request.queue_free()
+		if callback.is_valid():
+			callback.call(false, "")
+
+func _on_wallet_status_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		LogManager.warning("Wallet status fetch failed: %d / %d" % [result, response_code], "forge")
+		_wallet_connected = false
+		_wallet_address = ""
+		wallet_status_updated.emit(false, "")
+		if callback.is_valid():
+			callback.call(false, "")
+		return
+
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+	if parse_result != OK:
+		if callback.is_valid():
+			callback.call(false, "")
+		return
+
+	var data = json.data
+	_wallet_connected = data.get("connected", false)
+	_wallet_address = data.get("wallet_address", "")
+
+	LogManager.info("Wallet status: %s (%s)" % [str(_wallet_connected), get_wallet_address_short()], "forge")
+	wallet_status_updated.emit(_wallet_connected, _wallet_address)
+
+	if callback.is_valid():
+		callback.call(_wallet_connected, _wallet_address)
+
+func disconnect_wallet(callback: Callable = Callable()) -> void:
+	"""Disconnect the external wallet from the user's account"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		if callback.is_valid():
+			callback.call(false)
+		return
+
+	var url = MantleAuth.get_api_base() + "/api/wallet/disconnect"
+	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+
+	var request = HTTPRequest.new()
+	add_child(request)
+	request.request_completed.connect(_on_wallet_disconnect_response.bind(request, callback))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_DELETE)
+	if error != OK:
+		LogManager.error("Failed to disconnect wallet: %s" % error, "forge")
+		request.queue_free()
+		if callback.is_valid():
+			callback.call(false)
+
+func _on_wallet_disconnect_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		LogManager.error("Wallet disconnect failed: %d / %d" % [result, response_code], "forge")
+		if callback.is_valid():
+			callback.call(false)
+		return
+
+	LogManager.info("Wallet disconnected successfully", "forge")
+
+	# Clear local state
+	_wallet_connected = false
+	_wallet_address = ""
+	_bridge_in_available = []
+
+	wallet_status_updated.emit(false, "")
+	bridge_in_available_updated.emit([])
+
+	if callback.is_valid():
+		callback.call(true)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BRIDGE IN - Import items from external wallet back into game
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func get_bridge_in_available() -> Array:
+	"""Get items available to bridge in from external wallet"""
+	return _bridge_in_available
+
+func fetch_bridge_in_available(callback: Callable = Callable()) -> void:
+	"""Fetch items available to bridge in from external wallet"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		if callback.is_valid():
+			callback.call([])
+		return
+
+	if not _wallet_connected:
+		LogManager.info("No wallet connected, skipping bridge-in fetch", "forge")
+		_bridge_in_available = []
+		bridge_in_available_updated.emit([])
+		if callback.is_valid():
+			callback.call([])
+		return
+
+	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-in/available"
+	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+
+	var request = HTTPRequest.new()
+	add_child(request)
+	request.request_completed.connect(_on_bridge_in_available_response.bind(request, callback))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_GET)
+	if error != OK:
+		LogManager.error("Failed to fetch bridge-in available: %s" % error, "forge")
+		request.queue_free()
+		if callback.is_valid():
+			callback.call([])
+
+func _on_bridge_in_available_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		LogManager.warning("Bridge-in available fetch failed: %d / %d" % [result, response_code], "forge")
+		if callback.is_valid():
+			callback.call([])
+		return
+
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+	if parse_result != OK:
+		if callback.is_valid():
+			callback.call([])
+		return
+
+	var data = json.data
+	_bridge_in_available = data.get("available_items", [])
+
+	LogManager.info("Bridge-in available: %d items" % _bridge_in_available.size(), "forge")
+
+	# Log each available item for debugging
+	for item in _bridge_in_available:
+		LogManager.info("  - Bridge-in item: token_id=%s, name=%s, status=%s" % [
+			str(item.get("token_id", "?")),
+			item.get("item_name", "?"),
+			item.get("bridge_status", "?")
+		], "forge")
+
+	bridge_in_available_updated.emit(_bridge_in_available)
+
+	if callback.is_valid():
+		callback.call(_bridge_in_available)
+
+func request_bridge_in(token_ids: Array, callback: Callable = Callable()) -> void:
+	"""Request to bridge items back into the game from external wallet"""
+	if not MantleAuth or not MantleAuth.is_logged_in():
+		forge_error.emit("Not authenticated")
+		return
+
+	if not _wallet_connected:
+		forge_error.emit("Wallet not connected")
+		return
+
+	LogManager.info("Requesting bridge-in for token_ids: %s" % str(token_ids), "forge")
+
+	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-in"
+	var headers = [
+		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Content-Type: application/json"
+	]
+	var body = JSON.stringify({"token_ids": token_ids})
+
+	var request = HTTPRequest.new()
+	add_child(request)
+	request.request_completed.connect(_on_bridge_in_response.bind(request, callback))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		LogManager.error("Failed to request bridge-in: %s" % error, "forge")
+		forge_error.emit("Failed to connect to server")
+		request.queue_free()
+
+func _on_bridge_in_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		LogManager.error("Bridge-in request failed: %d / %d" % [result, response_code], "forge")
+		forge_error.emit("Failed to bridge items in")
+		if callback.is_valid():
+			callback.call([])
+		return
+
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+	if parse_result != OK:
+		forge_error.emit("Invalid server response")
+		if callback.is_valid():
+			callback.call([])
+		return
+
+	var data = json.data
+	var bridged_in = data.get("bridged_in", [])
+	var failed = data.get("failed", [])
+
+	LogManager.info("Bridge-in complete: %d items succeeded, %d failed" % [bridged_in.size(), failed.size()], "forge")
+
+	# Log failure details for debugging
+	if failed.size() > 0:
+		for fail_item in failed:
+			var token_id = fail_item.get("token_id", "unknown")
+			var reason = fail_item.get("error", "unknown reason")  # Backend uses "error" key
+			LogManager.error("Bridge-in FAILED for token %s: %s" % [str(token_id), reason], "forge")
+	bridge_in_completed.emit(bridged_in)
+
+	if callback.is_valid():
+		callback.call(bridged_in)
+
+	# Refresh forged items to get updated status
+	fetch_forged_items()
+	fetch_bridge_in_available()
+
+func get_items_bridging_out() -> Array:
+	"""Get all items currently in bridging_out status"""
+	var bridging = []
+	for item in _forged_items:
+		if item.get("bridge_status", "in_game") == "bridging_out":
+			bridging.append(item)
+	return bridging

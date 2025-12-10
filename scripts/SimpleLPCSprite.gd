@@ -11,6 +11,11 @@ class_name SimpleLPCSprite
 ## NO SPRITE FLIPPING - uses correct row for each direction
 ## Uses the SAME approach as working Enemy.gd skeleton code
 
+# ============================================
+# DEBUG SETTINGS - Set to true to enable verbose logging
+# ============================================
+const DEBUG_SPRITE_SETUP: bool = false  # Debug sprite/animation setup
+
 # Direction to row mapping (LPC standard)
 const DIRECTION_ROWS = {
 	"north": 0,  # up
@@ -122,28 +127,12 @@ func setup_lpc_sprite(
 	is_female: bool = false
 ):
 	"""Setup LPC sprite with layered body, armor, and weapon textures"""
-	print("SimpleLPCSprite.setup_lpc_sprite() called")
-	print("  walk_texture: ", walk_tex, " size: ", walk_tex.get_size() if walk_tex else "null")
-	print("  slash_texture: ", slash_tex, " size: ", slash_tex.get_size() if slash_tex else "null")
-	print("  hurt_texture: ", hurt_tex, " size: ", hurt_tex.get_size() if hurt_tex else "null")
-	print("  base_head_walk_tex: ", base_head_walk_tex, " size: ", base_head_walk_tex.get_size() if base_head_walk_tex else "null")
-	print("  base_head_slash_tex: ", base_head_slash_tex, " size: ", base_head_slash_tex.get_size() if base_head_slash_tex else "null")
-	print("  boots_walk_tex: ", boots_walk_tex, " size: ", boots_walk_tex.get_size() if boots_walk_tex else "null")
-	print("  boots_slash_tex: ", boots_slash_tex, " size: ", boots_slash_tex.get_size() if boots_slash_tex else "null")
-	print("  pants_walk_tex: ", pants_walk_tex, " size: ", pants_walk_tex.get_size() if pants_walk_tex else "null")
-	print("  pants_slash_tex: ", pants_slash_tex, " size: ", pants_slash_tex.get_size() if pants_slash_tex else "null")
-	print("  shirt_walk_tex: ", shirt_walk_tex, " size: ", shirt_walk_tex.get_size() if shirt_walk_tex else "null")
-	print("  shirt_slash_tex: ", shirt_slash_tex, " size: ", shirt_slash_tex.get_size() if shirt_slash_tex else "null")
-	print("  arms_walk_tex: ", arms_walk_tex, " size: ", arms_walk_tex.get_size() if arms_walk_tex else "null")
-	print("  arms_slash_tex: ", arms_slash_tex, " size: ", arms_slash_tex.get_size() if arms_slash_tex else "null")
-	print("  hands_walk_tex: ", hands_walk_tex, " size: ", hands_walk_tex.get_size() if hands_walk_tex else "null")
-	print("  hands_slash_tex: ", hands_slash_tex, " size: ", hands_slash_tex.get_size() if hands_slash_tex else "null")
-	print("  head_walk_tex: ", head_walk_tex, " size: ", head_walk_tex.get_size() if head_walk_tex else "null")
-	print("  head_slash_tex: ", head_slash_tex, " size: ", head_slash_tex.get_size() if head_slash_tex else "null")
-	print("  hair_walk_tex: ", hair_walk_tex, " size: ", hair_walk_tex.get_size() if hair_walk_tex else "null")
-	print("  hair_slash_tex: ", hair_slash_tex, " size: ", hair_slash_tex.get_size() if hair_slash_tex else "null")
-	print("  weapon_slash_tex: ", weapon_slash_tex, " path: ", weapon_slash_tex.resource_path if weapon_slash_tex else "null", " size: ", weapon_slash_tex.get_size() if weapon_slash_tex else "null")
-	print("  weapon_walk_tex: ", weapon_walk_tex, " path: ", weapon_walk_tex.resource_path if weapon_walk_tex else "null", " size: ", weapon_walk_tex.get_size() if weapon_walk_tex else "null")
+	if DEBUG_SPRITE_SETUP:
+		print("[LPCSprite] setup_lpc_sprite() called")
+		print("  walk_texture: ", walk_tex, " size: ", walk_tex.get_size() if walk_tex else "null")
+		print("  slash_texture: ", slash_tex, " size: ", slash_tex.get_size() if slash_tex else "null")
+		print("  weapon_slash_tex: ", weapon_slash_tex, " path: ", weapon_slash_tex.resource_path if weapon_slash_tex else "null")
+		print("  weapon_walk_tex: ", weapon_walk_tex, " path: ", weapon_walk_tex.resource_path if weapon_walk_tex else "null")
 
 	sprite_frames = SpriteFrames.new()
 	current_weapon_type = weapon_type  # Store for offset calculations
@@ -163,46 +152,29 @@ func setup_lpc_sprite(
 
 	# Extract armor paths for harvest animation (need to load slash.png during chop)
 	if pants_slash_tex:
-		var pants_res_path = pants_slash_tex.resource_path
-		pants_armor_path = _extract_armor_path(pants_res_path)
-		print("  📦 Pants texture path: %s -> extracted: '%s'" % [pants_res_path, pants_armor_path])
+		pants_armor_path = _extract_armor_path(pants_slash_tex.resource_path)
 	if shirt_slash_tex:
-		var shirt_res_path = shirt_slash_tex.resource_path
-		shirt_armor_path = _extract_armor_path(shirt_res_path)
-		print("  📦 Shirt texture path: %s -> extracted: '%s'" % [shirt_res_path, shirt_armor_path])
+		shirt_armor_path = _extract_armor_path(shirt_slash_tex.resource_path)
 	if boots_slash_tex:
 		boots_armor_path = _extract_armor_path(boots_slash_tex.resource_path)
-		if boots_armor_path != "":
-			print("  📦 Detected boots armor path: %s" % boots_armor_path)
 	if arms_slash_tex:
 		arms_armor_path = _extract_armor_path(arms_slash_tex.resource_path)
-		if arms_armor_path != "":
-			print("  📦 Detected arms armor path: %s" % arms_armor_path)
 	if hands_slash_tex:
 		hands_armor_path = _extract_armor_path(hands_slash_tex.resource_path)
-		if hands_armor_path != "":
-			print("  📦 Detected hands armor path: %s" % hands_armor_path)
 	if head_slash_tex:
 		head_armor_path = _extract_armor_path(head_slash_tex.resource_path)
-		if head_armor_path != "":
-			print("  📦 Detected head armor path: %s" % head_armor_path)
 
-	# ✨ Get weapon-specific slash FPS for ALL body parts to sync animations
+	# Get weapon-specific slash FPS for ALL body parts to sync animations
 	var slash_fps = WeaponAnimationDataFactory.get_slash_fps(weapon_type)
-	print("  ⚡ Using weapon-specific slash FPS for all body parts: %.1f" % slash_fps)
 
 	# Create walk animations using Image.blit_rect() like skeletons do
 	if walk_tex:
 		var walk_img = walk_tex.get_image()
-		print("  Creating walk/idle animations from image...")
-
 		# Walk animations - 4 rows (north/west/south/east), frames 1-8
 		for dir_name in DIRECTION_ROWS.keys():
 			var row = DIRECTION_ROWS[dir_name]
 			create_animation_from_image(walk_img, "walk_" + dir_name, row, 8, [1, 2, 3, 4, 5, 6, 7, 8], 10.0, true, null, 64)
 			create_animation_from_image(walk_img, "idle_" + dir_name, row, 1, [0], 1.0, true, null, 64)
-
-		print("  Walk/idle animations created")
 
 	# Create slash/thrust animations (use weapon-specific FPS!)
 	# IMPORTANT: Store body frame count to sync all layers
@@ -217,27 +189,17 @@ func setup_lpc_sprite(
 		for i in range(body_attack_frames):
 			frame_indices.append(i)
 
-		print("  Creating attack animations (%d frames) from image..." % body_attack_frames)
-
 		for dir_name in DIRECTION_ROWS.keys():
 			var row = DIRECTION_ROWS[dir_name]
 			create_animation_from_image(slash_img, "slash_" + dir_name, row, body_attack_frames, frame_indices, slash_fps, false, null, 64)
 
-		print("  Attack animations created")
-
 	# Create hurt animation (single direction - south/row 2)
 	if hurt_tex:
 		var hurt_img = hurt_tex.get_image()
-		print("  Creating hurt animation from image...")
 		create_animation_from_image(hurt_img, "hurt", 2, 6, [0, 1, 2, 3, 4, 5], 10.0, false, null, 64)
-
-	# Debug: List all animations created
-	print("  📋 Animations created: ", sprite_frames.get_animation_names())
-	print("  📊 Total animations: ", sprite_frames.get_animation_names().size())
 
 	# Setup shadow layer (z=-10 - below everything)
 	if shadow_walk_tex or shadow_slash_tex:
-		print("  👤 Creating shadow layer...")
 		shadow_sprite = AnimatedSprite2D.new()
 		shadow_sprite.name = "ShadowLayer"
 		shadow_sprite.centered = true
@@ -262,11 +224,9 @@ func setup_lpc_sprite(
 		add_child(shadow_sprite)
 		shadow_sprite.visible = true
 		shadow_sprite.play("idle_south")
-		print("  ✅ Shadow layer created (z_index=%d, visible=%s, modulate=%s)" % [shadow_sprite.z_index, shadow_sprite.visible, shadow_sprite.modulate])
 
 	# Setup base head layer (z=1 - for female characters with separate head)
 	if base_head_walk_tex or base_head_slash_tex:
-		print("  👤 Creating base head layer...")
 		base_head_sprite = AnimatedSprite2D.new()
 		base_head_sprite.name = "BaseHeadLayer"
 		base_head_sprite.centered = true
@@ -291,11 +251,9 @@ func setup_lpc_sprite(
 		add_child(base_head_sprite)
 		base_head_sprite.visible = true
 		base_head_sprite.play("idle_south")
-		print("  ✅ Base head layer created (z_index=%d, visible=%s, modulate=%s)" % [base_head_sprite.z_index, base_head_sprite.visible, base_head_sprite.modulate])
 
 	# Setup boots layer (z=2 - above base head)
 	if boots_walk_tex or boots_slash_tex:
-		print("  🥾 Creating boots layer...")
 		boots_sprite = AnimatedSprite2D.new()
 		boots_sprite.name = "BootsLayer"
 		boots_sprite.centered = true
@@ -320,11 +278,9 @@ func setup_lpc_sprite(
 		add_child(boots_sprite)
 		boots_sprite.visible = true
 		boots_sprite.play("idle_south")
-		print("  ✅ Boots layer created (z_index=%d, visible=%s, modulate=%s)" % [boots_sprite.z_index, boots_sprite.visible, boots_sprite.modulate])
 
 	# Setup pants layer (z=3 - above boots)
 	if pants_walk_tex or pants_slash_tex:
-		print("  🩳 Creating pants layer...")
 		pants_sprite = AnimatedSprite2D.new()
 		pants_sprite.name = "PantsLayer"
 		pants_sprite.centered = true
@@ -349,11 +305,9 @@ func setup_lpc_sprite(
 		add_child(pants_sprite)
 		pants_sprite.visible = true
 		pants_sprite.play("idle_south")
-		print("  ✅ Pants layer created (z_index=%d, visible=%s, modulate=%s)" % [pants_sprite.z_index, pants_sprite.visible, pants_sprite.modulate])
 
 	# Setup shirt layer (z=4 - above pants)
 	if shirt_walk_tex or shirt_slash_tex:
-		print("  👕 Creating shirt layer...")
 		shirt_sprite = AnimatedSprite2D.new()
 		shirt_sprite.name = "ShirtLayer"
 		shirt_sprite.centered = true
@@ -378,11 +332,9 @@ func setup_lpc_sprite(
 		add_child(shirt_sprite)
 		shirt_sprite.visible = true
 		shirt_sprite.play("idle_south")
-		print("  ✅ Shirt layer created (z_index=%d, visible=%s, modulate=%s)" % [shirt_sprite.z_index, shirt_sprite.visible, shirt_sprite.modulate])
 
 	# Setup arms layer (z=5 - above shirt)
 	if arms_walk_tex or arms_slash_tex:
-		print("  💪 Creating arms layer...")
 		arms_sprite = AnimatedSprite2D.new()
 		arms_sprite.name = "ArmsLayer"
 		arms_sprite.centered = true
@@ -407,11 +359,9 @@ func setup_lpc_sprite(
 		add_child(arms_sprite)
 		arms_sprite.visible = true
 		arms_sprite.play("idle_south")
-		print("  ✅ Arms layer created (z_index=%d, visible=%s, modulate=%s)" % [arms_sprite.z_index, arms_sprite.visible, arms_sprite.modulate])
 
 	# Setup hands layer (z=6 - above arms)
 	if hands_walk_tex or hands_slash_tex:
-		print("  🧤 Creating hands layer...")
 		hands_sprite = AnimatedSprite2D.new()
 		hands_sprite.name = "HandsLayer"
 		hands_sprite.centered = true
@@ -436,11 +386,9 @@ func setup_lpc_sprite(
 		add_child(hands_sprite)
 		hands_sprite.visible = true
 		hands_sprite.play("idle_south")
-		print("  ✅ Hands layer created (z_index=%d, visible=%s, modulate=%s)" % [hands_sprite.z_index, hands_sprite.visible, hands_sprite.modulate])
 
 	# Setup hair layer (z=7 - above hands, UNDER head armor)
 	if hair_walk_tex or hair_slash_tex:
-		print("  💇 Creating hair layer...")
 		hair_sprite = AnimatedSprite2D.new()
 		hair_sprite.name = "HairLayer"
 		hair_sprite.centered = true
@@ -465,11 +413,9 @@ func setup_lpc_sprite(
 		add_child(hair_sprite)
 		hair_sprite.visible = true
 		hair_sprite.play("idle_south")
-		print("  ✅ Hair layer created (z_index=%d, visible=%s, modulate=%s)" % [hair_sprite.z_index, hair_sprite.visible, hair_sprite.modulate])
 
 	# Setup head layer (z=8 - above hair, for head armor/helmets)
 	if head_walk_tex or head_slash_tex:
-		print("  🪖 Creating head armor layer...")
 		head_sprite = AnimatedSprite2D.new()
 		head_sprite.name = "HeadArmorLayer"
 		head_sprite.centered = true
@@ -494,11 +440,9 @@ func setup_lpc_sprite(
 		add_child(head_sprite)
 		head_sprite.visible = true
 		head_sprite.play("idle_south")
-		print("  ✅ Head layer created (z_index=%d, visible=%s, modulate=%s)" % [head_sprite.z_index, head_sprite.visible, head_sprite.modulate])
 
 	# Setup weapon layer if provided
 	if weapon_slash_tex or weapon_walk_tex:
-		print("  Creating weapon layer...")
 		weapon_sprite = AnimatedSprite2D.new()
 		weapon_sprite.name = "WeaponLayer"
 		weapon_sprite.centered = true
@@ -557,21 +501,15 @@ func setup_lpc_sprite(
 		if weapon_walk_tex:
 			weapon_sprite.visible = true
 			weapon_sprite.play("idle_south")  # Start with idle
-			print("  ✅ Weapon layer created with walk animations (visible, z_index=9)")
 		else:
 			weapon_sprite.visible = false
 			weapon_sprite.stop()
-			print("  ✅ Weapon layer created (slash only, hidden, z_index=9)")
 
 	# Start with idle_south
-	print("  Starting idle_south animation...")
 	if sprite_frames.has_animation("idle_south"):
 		play("idle_south")
-		print("  ✅ SimpleLPCSprite setup complete!")
-		print("  🎬 Currently playing: ", animation)
 	else:
-		print("  ERROR: idle_south animation not found!")
-		print("  Available animations: ", sprite_frames.get_animation_names())
+		push_error("SimpleLPCSprite: idle_south animation not found!")
 
 func create_animation_from_image(img: Image, anim_name: String, row: int, frame_count: int, frame_indices: Array, fps: float, loop: bool, target_frames: SpriteFrames = null, tile_size: int = 64):
 	"""Create animation from spritesheet using Image.blit_rect() - EXACTLY like Enemy.gd create_skeleton_animation()"""
@@ -622,7 +560,6 @@ func play_lpc_animation(anim_name: String, direction: String):
 		play(anim_name)
 	else:
 		push_warning("Animation not found: " + anim_key)
-		print("  ❌ Available animations: %s" % sprite_frames.get_animation_names())
 
 	# Sync shadow animation with body animation
 	if shadow_sprite:
@@ -727,7 +664,6 @@ func play_lpc_animation(anim_name: String, direction: String):
 				# Spear and other standard 64x64 weapons use no offset
 
 				weapon_sprite.offset = slash_offset
-				print("  ✅ Weapon playing slash: %s (visible=%s, z=%d, offset=%s, type=%s)" % [anim_key, weapon_sprite.visible, weapon_sprite.z_index, weapon_sprite.offset, current_weapon_type])
 			else:
 				# Walk/idle animations - weapon sprites should align with character
 				weapon_sprite.offset = Vector2(0, 0)
@@ -740,8 +676,6 @@ func play_lpc_animation(anim_name: String, direction: String):
 			# No matching weapon animation, hide weapon
 			weapon_sprite.visible = false
 			weapon_sprite.stop()
-			if anim_name == "slash":
-				print("  ❌ No weapon slash animation found for: %s" % anim_key)
 
 
 # Tool-specific harvest animation support
@@ -750,8 +684,6 @@ var is_harvesting: bool = false
 
 func play_harvest_animation(tool_type: String, direction: String) -> void:
 	"""Play harvest animation with specific tool (axe/pickaxe)"""
-	print("🪓 Playing harvest animation: tool=%s, direction=%s, uses_thrust=%s" % [tool_type, direction, uses_thrust_animation])
-	print("   DEBUG body_type_path: '%s'" % body_type_path)
 	is_harvesting = true
 
 	# Convert direction from old format (up/down/left/right) to LPC format (north/south/west/east)
@@ -762,8 +694,6 @@ func play_harvest_animation(tool_type: String, direction: String) -> void:
 		"left": lpc_direction = "west"
 		"right": lpc_direction = "east"
 
-	print("   Converted direction: %s -> %s" % [direction, lpc_direction])
-
 	# Use reversed "chop_" animation for harvesting (swing starts high, ends low)
 	var chop_anim = "chop_" + lpc_direction
 	var slash_anim = "slash_" + lpc_direction  # Source animation
@@ -771,7 +701,6 @@ func play_harvest_animation(tool_type: String, direction: String) -> void:
 	# If using thrust animation, create slash-based chop from actual slash.png
 	# This gives proper top-to-bottom swing motion instead of reversed thrust
 	if uses_thrust_animation and body_type_path != "":
-		print("   DEBUG: Using slash-based chop for thrust weapon")
 		_ensure_slash_based_chop(sprite_frames, chop_anim, lpc_direction, body_type_path)
 		# Also create slash-based chop for character layers (shadow, head, hair)
 		_ensure_layer_slash_chop(shadow_sprite, chop_anim, lpc_direction, "shadow")
@@ -784,27 +713,6 @@ func play_harvest_animation(tool_type: String, direction: String) -> void:
 		_ensure_armor_slash_chop(arms_sprite, chop_anim, lpc_direction, arms_armor_path)
 		_ensure_armor_slash_chop(hands_sprite, chop_anim, lpc_direction, hands_armor_path)
 		_ensure_armor_slash_chop(head_sprite, chop_anim, lpc_direction, head_armor_path)
-		# Debug: Print frame counts for all layers
-		print("   DEBUG frame counts:")
-		print("     body chop: %d frames" % sprite_frames.get_frame_count(chop_anim) if sprite_frames.has_animation(chop_anim) else "     body chop: NOT FOUND")
-		if shadow_sprite and shadow_sprite.sprite_frames and shadow_sprite.sprite_frames.has_animation(chop_anim):
-			print("     shadow chop: %d frames" % shadow_sprite.sprite_frames.get_frame_count(chop_anim))
-		if base_head_sprite and base_head_sprite.sprite_frames and base_head_sprite.sprite_frames.has_animation(chop_anim):
-			print("     base_head chop: %d frames" % base_head_sprite.sprite_frames.get_frame_count(chop_anim))
-		if boots_sprite and boots_sprite.sprite_frames and boots_sprite.sprite_frames.has_animation(chop_anim):
-			print("     boots chop: %d frames" % boots_sprite.sprite_frames.get_frame_count(chop_anim))
-		if pants_sprite and pants_sprite.sprite_frames and pants_sprite.sprite_frames.has_animation(chop_anim):
-			print("     pants chop: %d frames" % pants_sprite.sprite_frames.get_frame_count(chop_anim))
-		if shirt_sprite and shirt_sprite.sprite_frames and shirt_sprite.sprite_frames.has_animation(chop_anim):
-			print("     shirt chop: %d frames" % shirt_sprite.sprite_frames.get_frame_count(chop_anim))
-		if arms_sprite and arms_sprite.sprite_frames and arms_sprite.sprite_frames.has_animation(chop_anim):
-			print("     arms chop: %d frames" % arms_sprite.sprite_frames.get_frame_count(chop_anim))
-		if hands_sprite and hands_sprite.sprite_frames and hands_sprite.sprite_frames.has_animation(chop_anim):
-			print("     hands chop: %d frames" % hands_sprite.sprite_frames.get_frame_count(chop_anim))
-		if hair_sprite and hair_sprite.sprite_frames and hair_sprite.sprite_frames.has_animation(chop_anim):
-			print("     hair chop: %d frames" % hair_sprite.sprite_frames.get_frame_count(chop_anim))
-		if head_sprite and head_sprite.sprite_frames and head_sprite.sprite_frames.has_animation(chop_anim):
-			print("     head_armor chop: %d frames" % head_sprite.sprite_frames.get_frame_count(chop_anim))
 	else:
 		# Create chop animation if it doesn't exist (reversed slash)
 		_ensure_chop_animation(sprite_frames, slash_anim, chop_anim)
@@ -824,7 +732,6 @@ func play_harvest_animation(tool_type: String, direction: String) -> void:
 		stop()
 		frame = 0
 		play(chop_anim)
-		print("   Playing body chop: %s" % chop_anim)
 
 	# Play chop on layers that have it (created above)
 	if uses_thrust_animation:
@@ -841,36 +748,6 @@ func play_harvest_animation(tool_type: String, direction: String) -> void:
 
 	# Play the tool sprite overlay (axe/pickaxe)
 	_play_harvest_tool(tool_type, lpc_direction)
-
-	# Debug: Print what each layer is actually playing
-	print("   DEBUG: Layer states after chop setup:")
-	print("     ALL CHILDREN of SimpleLPCSprite:")
-	for child in get_children():
-		if child is AnimatedSprite2D:
-			print("       - %s: anim=%s, visible=%s, z=%d" % [child.name, child.animation, child.visible, child.z_index])
-		else:
-			print("       - %s: type=%s, visible=%s" % [child.name, child.get_class(), child.visible if "visible" in child else "N/A"])
-	print("     body: anim=%s, frame=%d, visible=%s, z=%d" % [animation, frame, visible, z_index])
-	if shadow_sprite:
-		print("     shadow: anim=%s, frame=%d, visible=%s, z=%d" % [shadow_sprite.animation, shadow_sprite.frame, shadow_sprite.visible, shadow_sprite.z_index])
-	if base_head_sprite:
-		print("     base_head: anim=%s, frame=%d, visible=%s, z=%d" % [base_head_sprite.animation, base_head_sprite.frame, base_head_sprite.visible, base_head_sprite.z_index])
-	if boots_sprite:
-		print("     boots: anim=%s, frame=%d, visible=%s, z=%d" % [boots_sprite.animation, boots_sprite.frame, boots_sprite.visible, boots_sprite.z_index])
-	if pants_sprite:
-		print("     pants: anim=%s, frame=%d, visible=%s, z=%d" % [pants_sprite.animation, pants_sprite.frame, pants_sprite.visible, pants_sprite.z_index])
-	if shirt_sprite:
-		print("     shirt: anim=%s, frame=%d, visible=%s, z=%d" % [shirt_sprite.animation, shirt_sprite.frame, shirt_sprite.visible, shirt_sprite.z_index])
-	if arms_sprite:
-		print("     arms: anim=%s, frame=%d, visible=%s, z=%d" % [arms_sprite.animation, arms_sprite.frame, arms_sprite.visible, arms_sprite.z_index])
-	if hands_sprite:
-		print("     hands: anim=%s, frame=%d, visible=%s, z=%d" % [hands_sprite.animation, hands_sprite.frame, hands_sprite.visible, hands_sprite.z_index])
-	if hair_sprite:
-		print("     hair: anim=%s, frame=%d, visible=%s, z=%d" % [hair_sprite.animation, hair_sprite.frame, hair_sprite.visible, hair_sprite.z_index])
-	if head_sprite:
-		print("     head_armor: anim=%s, frame=%d, visible=%s, z=%d" % [head_sprite.animation, head_sprite.frame, head_sprite.visible, head_sprite.z_index])
-	if weapon_sprite:
-		print("     weapon: visible=%s, z=%d" % [weapon_sprite.visible, weapon_sprite.z_index])
 
 func _extract_armor_path(resource_path: String) -> String:
 	"""Extract armor path from full texture path"""
@@ -933,14 +810,11 @@ func _ensure_slash_based_chop(frames: SpriteFrames, chop_anim: String, lpc_direc
 
 	var slash_path = "res://assets/characters/" + asset_folder + "/standard/slash.png"
 	if not ResourceLoader.exists(slash_path):
-		print("   ⚠️ Slash texture not found: %s" % slash_path)
 		return
 
 	var slash_tex = load(slash_path)
 	var slash_img = slash_tex.get_image()
 	var row = DIRECTION_ROWS[lpc_direction]
-
-	print("   🪓 Creating slash-based chop from: %s" % slash_path)
 
 	# Slash has 6 frames, create reversed animation for top-to-bottom swing
 	frames.add_animation(chop_anim)
@@ -1005,14 +879,12 @@ func _ensure_armor_slash_chop(layer: AnimatedSprite2D, chop_anim: String, lpc_di
 		if parts.size() >= 2:
 			slash_path = "res://assets/characters/" + parts[0] + "/" + parts[1] + "_slash.png"
 		else:
-			print("   ⚠️ Invalid chars path format: %s" % armor_path)
 			return
 	else:
 		# Legacy format without prefix - assume armor folder
 		slash_path = "res://assets/equipment/armor/" + armor_path + "/standard/slash.png"
 
 	if not ResourceLoader.exists(slash_path):
-		print("   ⚠️ Slash texture not found: %s" % slash_path)
 		return
 
 	var slash_tex = load(slash_path)
@@ -1023,10 +895,7 @@ func _ensure_armor_slash_chop(layer: AnimatedSprite2D, chop_anim: String, lpc_di
 	var tex_width = slash_img.get_width()
 	if tex_width >= 500:
 		# This is thrust.png, not slash.png - skip (we want actual 6-frame slash)
-		print("   ⚠️ Slash texture is thrust format (8 frames), skipping: %s" % slash_path)
 		return
-
-	print("   ✅ Loading slash texture: %s (6 frames)" % slash_path)
 
 	# Create reversed slash animation
 	layer.sprite_frames.add_animation(chop_anim)
@@ -1054,7 +923,6 @@ func _play_harvest_tool(tool_type: String, lpc_direction: String) -> void:
 	# Hide regular weapon if present
 	if weapon_sprite:
 		weapon_sprite.visible = false
-		print("   Hiding regular weapon")
 
 	# Get or create tool sprite
 	if not harvest_tool_sprite:
@@ -1075,7 +943,6 @@ func _play_harvest_tool(tool_type: String, lpc_direction: String) -> void:
 
 		# Connect animation_finished to hide tool when swing completes
 		harvest_tool_sprite.animation_finished.connect(_on_harvest_tool_animation_finished)
-		print("   Created harvest tool sprite as child of SimpleLPCSprite")
 
 	# Use the ACTUAL tool sprites from the custom/slash_128 folder
 	var tool_path: String
@@ -1084,20 +951,15 @@ func _play_harvest_tool(tool_type: String, lpc_direction: String) -> void:
 	else:  # pickaxe
 		tool_path = "res://assets/equipment/tools/pickaxe/custom/slash_128/140 tool_smash_.png"
 
-	print("   Loading tool animation from: %s" % tool_path)
-
 	if not ResourceLoader.exists(tool_path):
-		print("   ⚠️ Tool sprite not found at: %s" % tool_path)
 		# Fallback to using weapon sprites as placeholder
 		if tool_type == "axe":
 			tool_path = "res://assets/equipment/weapons/mace/slash.png"
 		else:
 			tool_path = "res://assets/equipment/weapons/sword/slash.png"
-		print("   Falling back to weapon sprite: %s" % tool_path)
 
 	var tool_tex = load(tool_path)
 	var tool_img = tool_tex.get_image()
-	print("   Loaded tool texture: %s" % tool_img.get_size())
 
 	# 768x512 sheet = 6 columns x 4 rows at 128x128 per frame
 	var num_frames = 6
@@ -1109,7 +971,6 @@ func _play_harvest_tool(tool_type: String, lpc_direction: String) -> void:
 	var anim_name = tool_type + "_slash_" + lpc_direction
 	if not harvest_tool_sprite.sprite_frames.has_animation(anim_name):
 		create_animation_from_image(tool_img, anim_name, row, num_frames, [5, 4, 3, 2, 1, 0], 10.0, false, harvest_tool_sprite.sprite_frames, tile_size)
-		print("   Created tool animation: %s (row %d)" % [anim_name, row])
 
 	# Hide regular weapon
 	if weapon_sprite:
@@ -1124,7 +985,6 @@ func _play_harvest_tool(tool_type: String, lpc_direction: String) -> void:
 
 		# Z-index: behind player when facing north, in front otherwise
 		harvest_tool_sprite.z_index = -1 if lpc_direction == "north" else 20
-		print("   Playing tool: %s" % anim_name)
 
 func _on_harvest_tool_animation_finished() -> void:
 	"""Called when harvest tool swing animation completes - hide tool until next swing"""

@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-Mantle is a two-part system:
-1. **Backend (this repo)** - FastAPI authentication layer that aggregates gaming achievements
-2. **Godot Game (separate repo)** - Multiplayer game where achievements become cosmetics
+Mantle is a two-part system (monorepo):
+1. **Backend (`backend/`)** - FastAPI authentication layer that aggregates gaming achievements
+2. **Godot Game (root)** - Multiplayer game where achievements become cosmetics
 
 The web dashboard is NOT a TrueAchievements competitor. It's the auth layer for the game.
 
@@ -60,8 +60,15 @@ BETA_ACCESS_CODE=<optional - enables beta gate>
 | **Forge item design philosophy** | `docs/FORGE_ITEM_PHILOSOPHY.md` |
 | **Trading & economy system** | `docs/FORGE_ECONOMY_DESIGN.md` |
 | **Provenance & blockchain backing** | `docs/FORGE_PROVENANCE_SYSTEM.md` |
+| **Bind system (OpenSea ↔ Game)** | `docs/FORGE_BRIDGE_SYSTEM.md` |
 | **Item effects & abilities** | `docs/FORGE_ITEM_EFFECTS.md` |
 | **Immutable design principles** | `docs/GOLDEN_RULES.md` |
+| **Dev mode cleanup checklist** | `docs/DEV_MODE_CHECKLIST.md` |
+
+> **UI Terminology (Dec 2024):** The Godot UI uses RPG-friendly terms:
+> - API `bridge-out` → UI "unbind" | API `bridge-in` → UI "bind"
+> - API `wallet` → UI "lockbox"
+> Backend/API retain original naming for stability.
 
 ---
 
@@ -149,15 +156,18 @@ TIERS = {
 
 | File | Purpose |
 |------|---------|
-| `app/main.py` | Routes, auth, tier calculation (~2300 lines) |
-| `app/models.py` | SQLAlchemy models |
+| `app/main.py` | Routes, auth, tier calculation |
+| `app/models.py` | SQLAlchemy models (incl. BridgeStatus, BridgeTransaction) |
 | `app/providers/__init__.py` | Provider registry |
 | `app/services/effort_scoring.py` | **Unified effort scoring (0-100) across all providers** |
 | `app/services/item_forge_service.py` | Item generation from achievements |
+| `app/services/wallet_service.py` | **Wallet auth, minting, bridge transfers** |
+| `app/services/transfer_indexer_service.py` | **Blockchain indexer for external transfers** |
+| `app/services/chain_batching_service.py` | Trade provenance batching to chain |
 | `app/services/steam_services.py` | Steam sync logic |
 | `app/services/battlenet_services.py` | Battle.net sync logic |
-| `app/routes/wallet_routes.py` | NFT forging endpoints |
-| `app/routes/trading_routes.py` | **Trading endpoints (pending)** |
+| `app/routes/wallet_routes.py` | NFT forging + **bridge endpoints** |
+| `app/routes/trading_routes.py` | Trading endpoints |
 | `alembic/versions/` | Database migrations |
 | `data/items.json` | **Forge item catalog and achievement mappings** |
 

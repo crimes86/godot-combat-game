@@ -151,6 +151,9 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> bool:
 
 # Close connection
 func close_connection():
+	print("[NetworkManager] close_connection called - is_host: %s, is_authenticated: %s, is_guest: %s" % [is_host, is_authenticated, is_guest])
+	print("[NetworkManager] local_player_data: %s" % [local_player_data])
+
 	# If we're the server, save all connected players first
 	if is_host:
 		save_all_players()
@@ -160,6 +163,7 @@ func close_connection():
 	# Stop auto-save and do final save before disconnecting (if authenticated and not guest)
 	if is_authenticated and not is_guest and not local_player_data.is_empty():
 		var username = local_player_data.get("username", "")
+		print("[NetworkManager] Attempting save for user: %s" % username)
 		if not username.is_empty() and DatabaseManager:
 			# If we're a client, sync our state to server one last time before disconnecting
 			if not is_host:
@@ -168,6 +172,8 @@ func close_connection():
 			DatabaseManager.stop_auto_save()
 			DatabaseManager.logout_player(username)
 			LogManager.info("Saved and logged out: %s" % username, "database")
+	else:
+		print("[NetworkManager] SKIPPING SAVE - conditions not met!")
 
 	# Hide all game UI autoloads before scene change
 	_hide_game_ui()

@@ -225,6 +225,14 @@ func _ready():
 		_set_menu_panel_visible(false)
 		_show_mantle_panel()
 
+		# Check if we were booted back due to connection failure
+		if MantleAuth:
+			var pending_error = MantleAuth.get_and_clear_pending_error()
+			if pending_error != "":
+				# Show the error message after a brief delay so UI is ready
+				await get_tree().create_timer(0.3).timeout
+				_on_mantle_auth_failed(pending_error)
+
 func _on_button_hover():
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
@@ -651,9 +659,11 @@ func _on_cancel_connect_pressed() -> void:
 	_hide_cancel_button()
 
 	# Clear status after a moment
-	await get_tree().create_timer(1.5).timeout
-	if current_state == MenuState.MAIN:
-		status_label.text = ""
+	var tree = get_tree()
+	if tree:
+		await tree.create_timer(1.5).timeout
+		if current_state == MenuState.MAIN:
+			status_label.text = ""
 
 # ═══════════════════════════════════════════════════════════════════════════
 # AUTHENTICATION UI
@@ -902,10 +912,10 @@ func _on_register_failed(error: String):
 var mantle_panel: Control = null
 var mantle_status_label: Label = null
 var mantle_link_button: Button = null
+var mantle_login_button: Button = null  # Single login button (replaces provider icons)
 var mantle_skip_button: Button = null
 var mantle_logout_button: Button = null
 var mantle_divider_container: Control = null
-var mantle_provider_icons_container: Control = null
 var mantle_back_button: Button = null
 var _mantle_initialized: bool = false
 var _connecting_dots_timer: Timer = null
@@ -1035,9 +1045,16 @@ func _create_mantle_panel():
 	mantle_status_label.custom_minimum_size = Vector2(0, 20)
 	vbox.add_child(mantle_status_label)
 
-	# Clickable provider icons row
-	mantle_provider_icons_container = _create_provider_icons_row()
-	vbox.add_child(mantle_provider_icons_container)
+	# Single Login button (provider selection happens in browser after beta key)
+	mantle_login_button = Button.new()
+	mantle_login_button.name = "MantleLoginButton"
+	mantle_login_button.text = "Login"
+	mantle_login_button.custom_minimum_size = Vector2(200, 50)
+	mantle_login_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_style_mantle_button(mantle_login_button, MANTLE_ACCENT_CYAN, true)
+	mantle_login_button.pressed.connect(_on_mantle_login_pressed)
+	mantle_login_button.mouse_entered.connect(_on_button_hover)
+	vbox.add_child(mantle_login_button)
 
 	# Horizontal divider with "or" text
 	mantle_divider_container = HBoxContainer.new()
@@ -1833,26 +1850,20 @@ func _update_mantle_panel_status():
 		var tier_color = Color.from_string(tier_color_hex, Color.WHITE)
 		mantle_status_label.add_theme_color_override("font_color", tier_color)
 
-		if mantle_link_button:
-			mantle_link_button.text = "LINKED - ADD MORE ACCOUNTS"
-
 		if mantle_skip_button:
 			mantle_skip_button.text = "Continue to Game"
 
 		if mantle_logout_button:
 			mantle_logout_button.visible = true
 
-		# Hide provider icons and "or" divider when logged in
-		if mantle_provider_icons_container:
-			mantle_provider_icons_container.visible = false
+		# Hide login button and "or" divider when logged in
+		if mantle_login_button:
+			mantle_login_button.visible = false
 		if mantle_divider_container:
 			mantle_divider_container.visible = false
 	else:
 		mantle_status_label.text = ""
 		mantle_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
-
-		if mantle_link_button:
-			mantle_link_button.text = "LINK GAMING ACCOUNTS"
 
 		if mantle_skip_button:
 			mantle_skip_button.text = "Continue as Guest"
@@ -1860,13 +1871,34 @@ func _update_mantle_panel_status():
 		if mantle_logout_button:
 			mantle_logout_button.visible = false
 
-		# Show provider icons and "or" divider when logged out
-		if mantle_provider_icons_container:
-			mantle_provider_icons_container.visible = true
+		# Show login button and "or" divider when logged out
+		if mantle_login_button:
+			mantle_login_button.visible = true
+			mantle_login_button.disabled = false
 		if mantle_divider_container:
 			mantle_divider_container.visible = true
 
 # _on_mantle_link_pressed removed - now using _on_provider_clicked for each provider icon
+
+func _on_mantle_login_pressed():
+	"""Handle login button press - opens browser for provider selection after beta key"""
+	_play_click_sound()
+
+	if mantle_status_label:
+		mantle_status_label.text = "Opening browser..."
+		mantle_status_label.add_theme_color_override("font_color", MANTLE_ACCENT_CYAN)
+
+	# Disable buttons during auth
+	if mantle_login_button:
+		mantle_login_button.disabled = true
+	if mantle_skip_button:
+		mantle_skip_button.disabled = true
+
+	# Start generic login (no provider specified - user picks in browser)
+	if MantleAuth:
+		MantleAuth.start_login()
+	else:
+		_on_mantle_auth_failed("Mantle service not available")
 
 func _on_mantle_skip_pressed():
 	"""Skip linking (or continue after linking) and proceed to main menu"""
@@ -2058,8 +2090,13 @@ func _on_mantle_auth_completed(user_data: Dictionary):
 	_update_provider_icons_state()
 
 	# Transition to Armory after a brief delay
-	await get_tree().create_timer(1.5).timeout
-	_transition_to_armory()
+	var tree = get_tree()
+	if tree:
+		await tree.create_timer(1.5).timeout
+		_transition_to_armory()
+	else:
+		# Fallback if tree not available
+		_transition_to_armory()
 
 func _on_mantle_auth_failed(error: String):
 	"""Mantle authentication failed"""
@@ -2069,11 +2106,9 @@ func _on_mantle_auth_failed(error: String):
 		mantle_status_label.text = error
 		mantle_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 
-	# Re-enable all provider buttons
-	for key in provider_icon_nodes.keys():
-		var btn = provider_icon_nodes[key].get("button")
-		if btn:
-			btn.disabled = false
+	# Re-enable login button
+	if mantle_login_button:
+		mantle_login_button.disabled = false
 
 	if mantle_skip_button:
 		mantle_skip_button.disabled = false
@@ -2099,7 +2134,9 @@ func _transition_to_armory():
 		fade_tween.tween_property(theme_music, "volume_db", -15.0, 0.5)
 
 	# Load Armory scene
-	get_tree().change_scene_to_file("res://scenes/ui/Armory.tscn")
+	var tree = get_tree()
+	if tree:
+		tree.change_scene_to_file("res://scenes/ui/Armory.tscn")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # GAME LOADING
@@ -2114,8 +2151,10 @@ func _load_game_world():
 		theme_music.stop()
 
 	# Small delay to ensure network is ready
-	await get_tree().create_timer(0.3).timeout
-	get_tree().change_scene_to_file("res://main.tscn")
+	var tree = get_tree()
+	if tree:
+		await tree.create_timer(0.3).timeout
+		tree.change_scene_to_file("res://main.tscn")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SETTINGS, CREDITS, EXIT

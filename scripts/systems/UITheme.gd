@@ -104,6 +104,14 @@ const BTN_DANGER = Color(0.6, 0.3, 0.3, 0.7)
 const BTN_DANGER_HOVER = Color(0.7, 0.4, 0.4, 0.9)
 
 # ═══════════════════════════════════════════════════════════════════════════
+# TOOLTIP COLORS
+# ═══════════════════════════════════════════════════════════════════════════
+
+## Tooltip background - very opaque dark panel for readability
+const TOOLTIP_BG = Color(0.08, 0.08, 0.10, 0.98)
+const TOOLTIP_BORDER = Color(0.45, 0.48, 0.52, 1.0)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -158,3 +166,38 @@ static func create_button_style(type: String = "normal") -> StyleBoxFlat:
 			style.bg_color = BTN_DANGER
 	style.set_corner_radius_all(4)
 	return style
+
+## Create tooltip StyleBoxFlat - opaque for readability
+static func create_tooltip_style() -> StyleBoxFlat:
+	var style = StyleBoxFlat.new()
+	style.bg_color = TOOLTIP_BG
+	style.border_color = TOOLTIP_BORDER
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(4)
+	style.set_content_margin_all(8)
+	# Add subtle shadow for depth
+	style.shadow_size = 4
+	style.shadow_color = Color(0, 0, 0, 0.5)
+	style.shadow_offset = Vector2(2, 2)
+	return style
+
+func _ready() -> void:
+	# Defer tooltip styling until tree is ready
+	call_deferred("_apply_tooltip_theme")
+
+func _apply_tooltip_theme() -> void:
+	"""Apply opaque tooltip styling to the project theme"""
+	var tooltip_style = create_tooltip_style()
+
+	# Create a theme and apply to root viewport
+	var root = get_tree().root if get_tree() else null
+	if root:
+		if root.theme == null:
+			root.theme = Theme.new()
+
+		# Set tooltip panel style
+		root.theme.set_stylebox("panel", "TooltipPanel", tooltip_style)
+
+		# Set tooltip label colors for better readability
+		root.theme.set_color("font_color", "TooltipLabel", TEXT_COLOR)
+		root.theme.set_font_size("font_size", "TooltipLabel", 12)

@@ -42,7 +42,13 @@ _ul-*
 # Backup files
 *.bak
 *.backup
+*.backup_*
 *~
+
+# Security - prevent accidental key commits
+*.key
+*private*key*
+*.pem
 
 # User-specific settings (optional - some prefer to track these)
 .claude/settings.local.json

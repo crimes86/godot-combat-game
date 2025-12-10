@@ -5,6 +5,11 @@ extends Node
 ## Add to project.godot as "InventorySystem"
 
 # ============================================
+# DEBUG SETTINGS - Set to true to enable verbose logging
+# ============================================
+const DEBUG_EQUIP: bool = true  # Debug tool equipping
+
+# ============================================
 # INVENTORY DATA
 # ============================================
 
@@ -204,7 +209,6 @@ func clear_all() -> void:
 	equipped_pickaxe = {}
 
 	inventory_changed.emit()
-	print("💀 Inventory cleared (death)")
 
 func has_space() -> bool:
 	"""Check if there's room for at least one more item"""
@@ -230,7 +234,6 @@ func equip_axe(axe: Dictionary) -> bool:
 
 	# Check if it's a valid axe
 	if axe.get("type", "") != "tool" or axe.get("tool_type", "") != "axe":
-		print("⚠️ Cannot equip non-axe item to axe slot")
 		return false
 
 	# If there's already an axe equipped, unequip it first
@@ -241,7 +244,8 @@ func equip_axe(axe: Dictionary) -> bool:
 	# Equip the new axe
 	equipped_axe = axe.duplicate()
 	axe_equipped.emit(axe)
-	print("🪓 Equipped axe: ", axe.get("name", "Unknown"))
+	if DEBUG_EQUIP:
+		print("[Equip] Equipped axe: %s" % axe.get("name", "Unknown"))
 	return true
 
 func unequip_axe() -> bool:
@@ -255,10 +259,10 @@ func unequip_axe() -> bool:
 		var old_axe = equipped_axe.duplicate()
 		equipped_axe = {}
 		axe_unequipped.emit(old_axe)
-		print("🪓 Unequipped axe: ", old_axe.get("name", "Unknown"))
+		if DEBUG_EQUIP:
+			print("[Equip] Unequipped axe: %s" % old_axe.get("name", "Unknown"))
 		return true
 	else:
-		print("⚠️ Cannot unequip axe - inventory full")
 		return false
 
 func equip_pickaxe(pickaxe: Dictionary) -> bool:
@@ -268,7 +272,6 @@ func equip_pickaxe(pickaxe: Dictionary) -> bool:
 
 	# Check if it's a valid pickaxe
 	if pickaxe.get("type", "") != "tool" or pickaxe.get("tool_type", "") != "pickaxe":
-		print("⚠️ Cannot equip non-pickaxe item to pickaxe slot")
 		return false
 
 	# If there's already a pickaxe equipped, unequip it first
@@ -279,7 +282,8 @@ func equip_pickaxe(pickaxe: Dictionary) -> bool:
 	# Equip the new pickaxe
 	equipped_pickaxe = pickaxe.duplicate()
 	pickaxe_equipped.emit(pickaxe)
-	print("⛏️ Equipped pickaxe: ", pickaxe.get("name", "Unknown"))
+	if DEBUG_EQUIP:
+		print("[Equip] Equipped pickaxe: %s" % pickaxe.get("name", "Unknown"))
 	return true
 
 func unequip_pickaxe() -> bool:
@@ -293,10 +297,10 @@ func unequip_pickaxe() -> bool:
 		var old_pickaxe = equipped_pickaxe.duplicate()
 		equipped_pickaxe = {}
 		pickaxe_unequipped.emit(old_pickaxe)
-		print("⛏️ Unequipped pickaxe: ", old_pickaxe.get("name", "Unknown"))
+		if DEBUG_EQUIP:
+			print("[Equip] Unequipped pickaxe: %s" % old_pickaxe.get("name", "Unknown"))
 		return true
 	else:
-		print("⚠️ Cannot unequip pickaxe - inventory full")
 		return false
 
 func has_axe_equipped() -> bool:
@@ -323,12 +327,17 @@ func get_save_data() -> Dictionary:
 	"""Serialize inventory state for database storage"""
 	# Convert inventory to saveable format (filter out nulls, keep indices)
 	var items_data: Array = []
+	var forged_count = 0
 	for i in range(inventory_items.size()):
 		if inventory_items[i] != null:
 			items_data.append({
 				"slot": i,
 				"item": inventory_items[i].duplicate()
 			})
+			if inventory_items[i].get("is_forged", false):
+				forged_count += 1
+
+	print("[InventorySystem] Saving %d items (%d forged)" % [items_data.size(), forged_count])
 
 	return {
 		"items": items_data,
@@ -340,7 +349,16 @@ func get_save_data() -> Dictionary:
 func load_save_data(data: Dictionary) -> void:
 	"""Restore inventory state from database"""
 	if data.is_empty():
+		print("[InventorySystem] load_save_data called with empty data!")
 		return
+
+	var items_data = data.get("items", [])
+	var forged_count = 0
+	for item_entry in items_data:
+		var item = item_entry.get("item", {})
+		if item.get("is_forged", false):
+			forged_count += 1
+	print("[InventorySystem] Loading %d items (%d forged) from save" % [items_data.size(), forged_count])
 
 	# Suppress signals during bulk load
 	suppress_signals = true
@@ -351,8 +369,7 @@ func load_save_data(data: Dictionary) -> void:
 	equipped_axe = {}
 	equipped_pickaxe = {}
 
-	# Restore items to their slots
-	var items_data = data.get("items", [])
+	# Restore items to their slots from saved data
 	for item_entry in items_data:
 		var slot = item_entry.get("slot", -1)
 		var item = item_entry.get("item", {})
@@ -371,7 +388,6 @@ func load_save_data(data: Dictionary) -> void:
 	# Re-enable signals and emit change
 	suppress_signals = false
 	inventory_changed.emit()
-	print("📦 Inventory loaded from save data")
 
 func clear_inventory() -> void:
 	"""Clear all inventory data (for new character or reset)"""

@@ -1077,6 +1077,9 @@
       pointer-events: auto;
       border-radius: 16px;
       transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+    }
+    /* Only disable animation when NOT in an animation phase */
+    .card-deck.expanded:not(.expand-slide-down):not(.expand-spread):not(.collapse-horizontal):not(.collapse-slide-up) .provider-cards-container .provider-card {
       animation: none !important;
     }
     /* Lift effect on hover for provider cards */
@@ -1321,85 +1324,122 @@
       /* Animation delay set dynamically via JS for any card count */
     }
 
-    /* ===== DIGITAL MATERIALIZE ANIMATIONS ===== */
+    /* ===== CARD DECK ANIMATIONS ===== */
+    /*
+     * COLLAPSE (laid out → stacked):
+     *   Phase 1: Cards collapse HORIZONTALLY to center (X-axis)
+     *   Phase 2: All cards slide UP together
+     *   Phase 3: Fade out → stacked state appears
+     *
+     * EXPAND (stacked → laid out):
+     *   Phase 1: Fade in, cards slide DOWN together
+     *   Phase 2: Cards spread HORIZONTALLY to positions
+     */
 
-    /* Simple expand: slide from center to grid positions */
-    @keyframes cardExpand {
+    /* Phase 1: Horizontal collapse to center (X-axis only) */
+    @keyframes collapseHorizontal {
       0% {
-        opacity: 0;
-        transform: translateX(var(--from-x, 0px)) translateY(var(--from-y, 0px)) scale(0.5);
+        opacity: 1;
+        transform: translateX(0) translateY(0);
       }
       100% {
         opacity: 1;
-        transform: translateX(0) translateY(0) scale(1);
+        transform: translateX(var(--to-x, 0px)) translateY(0);
       }
     }
 
-    /* Simple collapse: slide from grid positions to center */
-    @keyframes cardCollapse {
+    /* Phase 2: Slide up together after horizontal collapse */
+    @keyframes slideUpTogether {
       0% {
         opacity: 1;
-        transform: translateX(0) translateY(0) scale(1);
+        transform: translateX(var(--to-x, 0px)) translateY(0);
+      }
+      70% {
+        opacity: 1;
+        transform: translateX(var(--to-x, 0px)) translateY(-120px);
       }
       100% {
         opacity: 0;
-        transform: translateX(var(--to-x, 0px)) translateY(var(--to-y, 0px)) scale(0.5);
+        transform: translateX(var(--to-x, 0px)) translateY(-120px);
       }
     }
+
+    /* EXPAND: Phase 1 - Stacked cards slide down together */
+    @keyframes slideDownStacked {
+      0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) rotateX(48deg) translateY(var(--stack-offset, 0px));
+      }
+      100% {
+        opacity: 1;
+        transform: translate(-50%, calc(-50% + 80px)) rotateX(20deg) translateY(var(--stack-offset, 0px));
+      }
+    }
+
+    /* EXPAND: Phase 2 - Spread horizontally to grid positions */
+    @keyframes spreadHorizontal {
+      0% {
+        opacity: 1;
+        transform: translateX(var(--from-x, 0px)) translateY(0);
+      }
+      100% {
+        opacity: 1;
+        transform: translateX(0) translateY(0);
+      }
+    }
+
+    /* Slide-down while still stacked */
+    .card-deck.stacked.expand-slide-down .provider-cards-container .provider-card {
+      animation: slideDownStacked 0.4s cubic-bezier(0.25, 0.1, 0.25, 1) both !important;
+    }
+    .card-deck.stacked.expand-slide-down .provider-cards-container .provider-card:nth-child(1) { --stack-offset: 0px; }
+    .card-deck.stacked.expand-slide-down .provider-cards-container .provider-card:nth-child(2) { --stack-offset: 4px; }
+    .card-deck.stacked.expand-slide-down .provider-cards-container .provider-card:nth-child(3) { --stack-offset: 8px; }
+    .card-deck.stacked.expand-slide-down .provider-cards-container .provider-card:nth-child(4) { --stack-offset: 12px; }
+    .card-deck.stacked.expand-slide-down .provider-cards-container .provider-card:nth-child(5) { --stack-offset: 16px; }
+    .card-deck.stacked.expand-slide-down .provider-cards-container .provider-card:nth-child(6) { --stack-offset: 20px; }
+    .card-deck.stacked.expand-slide-down .provider-cards-container .provider-card:nth-child(7) { --stack-offset: 24px; }
 
     /* Stack materialize - holographic stack appears */
     @keyframes stackMaterialize {
       0% {
         opacity: 0;
-        transform: scale(0.5) translateY(30px);
-        filter: blur(15px) brightness(2);
-      }
-      50% {
-        opacity: 1;
-        transform: scale(1.05) translateY(-5px);
-        filter: blur(0) brightness(1.4);
-      }
-      75% {
-        transform: scale(0.98) translateY(2px);
-        filter: blur(0) brightness(1.2);
+        transform: translate(-50%, -50%) rotateX(48deg) translateY(var(--stack-offset, 0px)) scale(0.8);
+        filter: brightness(1.5);
       }
       100% {
         opacity: 1;
-        transform: scale(1) translateY(0);
-        filter: blur(0) brightness(1);
+        transform: translate(-50%, -50%) rotateX(48deg) translateY(var(--stack-offset, 0px)) scale(1);
+        filter: brightness(1);
       }
     }
 
-    /* Container flash effect during transitions */
-    @keyframes containerFlash {
-      0% { background: transparent; }
-      15% { background: radial-gradient(ellipse at center, rgba(0,255,255,0.15) 0%, transparent 70%); }
-      100% { background: transparent; }
+    /* COLLAPSE Phase 1: Horizontal gather */
+    .card-deck.collapse-horizontal .provider-cards-container .provider-card {
+      animation: collapseHorizontal 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
     }
 
-    /* Expanding state - simple slide from center to grid */
-    .card-deck.expanding .provider-cards-container .provider-card {
-      animation: cardExpand 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+    /* COLLAPSE Phase 2: Slide up together */
+    .card-deck.collapse-slide-up .provider-cards-container .provider-card {
+      animation: slideUpTogether 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
     }
 
-    /* Collapsing state - simple slide from grid to center */
-    .card-deck.collapsing .provider-cards-container .provider-card {
-      animation: cardCollapse 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+    /* EXPAND Phase 2: Spread horizontally */
+    .card-deck.expand-spread .provider-cards-container .provider-card {
+      animation: spreadHorizontal 0.35s cubic-bezier(0.25, 0.1, 0.25, 1) both;
     }
-
 
     /* Stack appearing state - holographic stack materializes */
     .card-deck.stack-appearing .provider-cards-container .provider-card {
-      animation: stackMaterialize 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both !important;
-      /* No stagger - collapse animation handles the visual transition */
+      animation: stackMaterialize 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both !important;
     }
-
-    /* Legacy transitioning class (fallback) */
-    .card-deck.transitioning .provider-card {
-      animation: none !important;
-      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-                  opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
+    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(1) { --stack-offset: 0px; }
+    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(2) { --stack-offset: 4px; }
+    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(3) { --stack-offset: 8px; }
+    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(4) { --stack-offset: 12px; }
+    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(5) { --stack-offset: 16px; }
+    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(6) { --stack-offset: 20px; }
+    .card-deck.stack-appearing .provider-cards-container .provider-card:nth-child(7) { --stack-offset: 24px; }
 
     /* Provider-specific colors in stacked state */
     .card-deck.stacked .provider-card[data-provider="steam"] {
@@ -2807,7 +2847,7 @@
       </div>
 
       <!-- Forge Button -->
-      <div>
+      <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
         <button onclick="openForgeModal()" class="forge-btn-main" style="
           background: linear-gradient(145deg, #ff6600 0%, #ff4400 50%, #ff6600 100%);
           border: none;
@@ -2829,6 +2869,30 @@
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
           </svg>
           Forge Relics
+        </button>
+        <button onclick="openLockboxModal()" class="forge-btn-lockbox" style="
+          background: linear-gradient(145deg, #1a0a00 0%, #2a1500 50%, #1a0a00 100%);
+          border: 1px solid #996633;
+          color: #cc9966;
+          padding: 10px 20px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 0.85rem;
+          font-weight: 600;
+          transition: all 0.3s ease;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          box-shadow: 0 2px 10px rgba(153,102,51,0.2);
+        " onmouseover="this.style.boxShadow='0 3px 15px rgba(153,102,51,0.4)'; this.style.transform='translateY(-2px)'; this.style.borderColor='#cc9966';"
+           onmouseout="this.style.boxShadow='0 2px 10px rgba(153,102,51,0.2)'; this.style.transform='translateY(0)'; this.style.borderColor='#996633';">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <circle cx="12" cy="16" r="1"></circle>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          Lockbox
+          <span id="lockbox-count" style="background: rgba(255,102,0,0.3); padding: 2px 6px; border-radius: 10px; font-size: 0.7rem; display: none;">0</span>
         </button>
       </div>
 
@@ -2886,6 +2950,37 @@
   </div>
 </div>
 
+<!-- Lockbox Modal -->
+<div id="lockbox-modal" class="neon-modal" style="display:none;">
+  <div class="neon-modal-content" style="width:60vw;max-width:800px;max-height:70vh;display:flex;flex-direction:column;">
+    <button class="neon-modal-close" onclick="closeLockboxModal()" style="align-self:flex-end;margin-top:5px;margin-right:5px;font-size:2.2rem;line-height:1;color:#996633;background:none;border:none;cursor:pointer;">&times;</button>
+    <h3 class="neon-modal-title" style="text-align:center;margin-bottom:12px;color:#cc9966;">🔐 Lockbox</h3>
+    <p style="text-align:center;opacity:0.7;margin-bottom:1rem;color:#aa8866;">Relics stored in your external wallet. Bridge them back to use in-game.</p>
+    <div id="lockbox-body" style="flex:1;overflow-y:auto;padding:0 1rem;">
+      <p style="opacity:0.5;text-align:center;">(Loading lockbox items...)</p>
+    </div>
+    <div style="padding: 1rem; border-top: 1px solid rgba(153,102,51,0.3); text-align: center; display: flex; gap: 1rem; justify-content: center; align-items: center;">
+      <a id="opensea-link" href="#" target="_blank" style="
+        color: #6699ff;
+        font-size: 0.85rem;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+      " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+        View on OpenSea
+      </a>
+    </div>
+  </div>
+</div>
+
 <script>
 // Vault connection state
 let walletConnected = false;
@@ -2926,112 +3021,112 @@ function toggleCardStack() {
 
   playClickSound();
   const deck = document.getElementById('card-deck');
+  const container = deck.querySelector('.provider-cards-container');
+  const cards = container.querySelectorAll('.provider-card');
 
   // Clean up any existing animation classes
-  deck.classList.remove('expanding', 'collapsing', 'transitioning');
+  deck.classList.remove('collapse-horizontal', 'collapse-slide-up', 'expand-slide-down', 'expand-spread', 'stack-appearing');
 
   if (cardDeckStacked) {
-    // EXPAND: stacked → grid
-    const container = deck.querySelector('.provider-cards-container');
-    const cards = container.querySelectorAll('.provider-card');
+    // ===== EXPAND: stacked → laid out =====
+    // Phase 1: Cards slide DOWN together (still visually stacked)
+    // Phase 2: Switch to grid + spread HORIZONTALLY to positions
 
-    // Measure the stacked container's center BEFORE switching states
-    // The stacked container is 140x180px centered under the Mantle card
-    const stackedContainerRect = container.getBoundingClientRect();
-    const stackCenterX = stackedContainerRect.left + stackedContainerRect.width / 2;
-    const stackCenterY = stackedContainerRect.top + stackedContainerRect.height / 2;
+    // Phase 1: Slide down while still in stacked state
+    deck.classList.add('expand-slide-down');
+    cardDeckStacked = false;
 
-    // Switch to expanded state so we can measure grid positions
-    deck.classList.remove('stacked');
-    deck.classList.add('expanded');
+    // After slide-down, switch to expanded and spread
+    setTimeout(() => {
+      // Measure stacked center before switching
+      const stackedContainerRect = container.getBoundingClientRect();
+      const stackCenterX = stackedContainerRect.left + stackedContainerRect.width / 2;
 
-    // Wait a frame for layout to calculate, then set up animation
-    requestAnimationFrame(() => {
-      // Calculate offset FROM stack center TO each card's grid position
-      cards.forEach((card, index) => {
-        const cardRect = card.getBoundingClientRect();
-        const cardCenterX = cardRect.left + cardRect.width / 2;
-        const cardCenterY = cardRect.top + cardRect.height / 2;
+      // Switch to expanded state
+      deck.classList.remove('stacked', 'expand-slide-down');
+      deck.classList.add('expanded');
 
-        // Offset from card's grid position back to stack center
-        const fromX = stackCenterX - cardCenterX;
-        const fromY = stackCenterY - cardCenterY;
+      // Wait a frame for grid layout to calculate
+      requestAnimationFrame(() => {
+        // Calculate horizontal offset from stack center to each card's grid position
+        cards.forEach((card, index) => {
+          const cardRect = card.getBoundingClientRect();
+          const cardCenterX = cardRect.left + cardRect.width / 2;
+          const fromX = stackCenterX - cardCenterX;
 
-        card.style.setProperty('--from-x', `${fromX}px`);
-        card.style.setProperty('--from-y', `${fromY}px`);
-        card.style.zIndex = cards.length - index; // First cards on top
-      });
-
-      // Now trigger the animation
-      deck.classList.add('expanding');
-      cardDeckStacked = false;
-
-      // Clean up after animation completes (0.8s)
-      setTimeout(() => {
-        cards.forEach(card => {
-          card.style.removeProperty('--from-x');
-          card.style.removeProperty('--from-y');
-          card.style.zIndex = '';
+          card.style.setProperty('--from-x', `${fromX}px`);
+          card.style.zIndex = cards.length - index;
         });
-        deck.classList.remove('expanding');
-        cardAnimating = false;
-      }, 900);
-    });
+
+        // Phase 2: Spread horizontally
+        deck.classList.add('expand-spread');
+
+        // Clean up after spread completes
+        setTimeout(() => {
+          cards.forEach(card => {
+            card.style.removeProperty('--from-x');
+            card.style.zIndex = '';
+          });
+          deck.classList.remove('expand-spread');
+          cardAnimating = false;
+        }, 400); // 0.35s animation + buffer
+      });
+    }, 450); // 0.4s slide-down animation + buffer
 
   } else {
-    // COLLAPSE: grid → stacked (multi-phase animation)
-    // Calculate each card's offset TO center BEFORE adding collapsing class
-    const container = deck.querySelector('.provider-cards-container');
-    const cards = container.querySelectorAll('.provider-card');
+    // ===== COLLAPSE: laid out → stacked =====
+    // Phase 1: Collapse HORIZONTALLY to center (X-axis only)
+    // Phase 2: Slide UP together + fade out
+    // Phase 3: Stacked state appears
 
-    // Find the center point - use container center X, and first card's Y
+    // Find the center point (horizontal center of container)
     const containerRect = container.getBoundingClientRect();
     const targetCenterX = containerRect.left + containerRect.width / 2;
-    const firstCardRect = cards[0].getBoundingClientRect();
-    const targetCenterY = firstCardRect.top + firstCardRect.height / 2;
 
-    // Store each card's offset to the center point
+    // Calculate each card's horizontal offset to center
     cards.forEach((card, index) => {
       const cardRect = card.getBoundingClientRect();
       const cardCenterX = cardRect.left + cardRect.width / 2;
-      const cardCenterY = cardRect.top + cardRect.height / 2;
 
-      // Calculate offset needed to move this card to the center
+      // Calculate horizontal offset needed to move this card to center
       const toX = targetCenterX - cardCenterX;
-      const toY = targetCenterY - cardCenterY;
 
-      // Store as CSS custom properties
       card.style.setProperty('--to-x', `${toX}px`);
-      card.style.setProperty('--to-y', `${toY}px`);
-      card.style.zIndex = cards.length - index; // First cards on top when stacking
+      card.style.zIndex = cards.length - index;
     });
 
-    // Phase 1-3: Cards gather, rise, and absorb under Mantle card
-    deck.classList.add('collapsing');
+    // Phase 1: Collapse horizontally to center
+    deck.classList.add('collapse-horizontal');
 
-    // After collapse animation (0.8s)
+    // Phase 2: Slide up together after horizontal collapse
     setTimeout(() => {
-      // Clean up custom properties
-      cards.forEach(card => {
-        card.style.removeProperty('--to-x');
-        card.style.removeProperty('--to-y');
-      });
+      deck.classList.remove('collapse-horizontal');
+      deck.classList.add('collapse-slide-up');
 
-      // Remove expanded, add stacked
-      deck.classList.remove('expanded', 'collapsing');
-      deck.classList.add('stacked');
-      cardDeckStacked = true;
-
-      // Phase 4: Stack materializes with holographic effect
-      deck.classList.add('stack-appearing');
-
-      // Clean up after stack materialize completes
+      // Phase 3: Switch to stacked state + materialize
       setTimeout(() => {
-        deck.classList.remove('stack-appearing');
-        cardAnimating = false;
-      }, 1200); // 0.8s animation + 0.3s max delay + buffer
+        // Clean up custom properties
+        cards.forEach(card => {
+          card.style.removeProperty('--to-x');
+          card.style.zIndex = '';
+        });
 
-    }, 900); // Wait for collapse animation (0.8s)
+        // Switch to stacked state
+        deck.classList.remove('expanded', 'collapse-slide-up');
+        deck.classList.add('stacked');
+        cardDeckStacked = true;
+
+        // Materialize the stack with a subtle pop-in
+        deck.classList.add('stack-appearing');
+
+        // Clean up after materialize
+        setTimeout(() => {
+          deck.classList.remove('stack-appearing');
+          cardAnimating = false;
+        }, 350); // 0.3s animation + buffer
+
+      }, 450); // 0.4s slide-up animation + buffer
+    }, 400); // 0.35s horizontal collapse + buffer
   }
 
   // Save preference
@@ -3117,8 +3212,10 @@ function showConnectedState(data) {
   document.getElementById('vault-address').textContent =
     data.wallet_address.slice(0, 6) + '...' + data.wallet_address.slice(-4);
   if (data.forged_count > 0) {
-    document.getElementById('forged-count').textContent = `${data.forged_count} achievement(s) forged`;
+    document.getElementById('forged-count').textContent = `${data.forged_count} relic(s) forged`;
   }
+  // Fetch lockbox count when wallet is connected
+  fetchLockboxCount();
 }
 
 async function connectVault() {
@@ -3348,6 +3445,179 @@ async function forgeSelected() {
 
 // Check status on page load
 document.addEventListener('DOMContentLoaded', checkVaultStatus);
+
+// ===== LOCKBOX FUNCTIONS =====
+let lockboxItems = [];
+
+async function openLockboxModal() {
+  document.body.style.overflow = 'hidden';
+  document.getElementById('lockbox-modal').style.display = 'flex';
+
+  // Update OpenSea link based on wallet
+  const openseaLink = document.getElementById('opensea-link');
+  if (walletAddress) {
+    // Base Sepolia testnet - use testnets.opensea.io
+    openseaLink.href = `https://testnets.opensea.io/${walletAddress}`;
+  }
+
+  try {
+    const resp = await fetch('/api/wallet/bridge-in/available', { credentials: 'include' });
+    const data = await resp.json();
+    console.log('Lockbox API response:', data);
+
+    lockboxItems = data.available_items || [];
+    console.log('Lockbox items:', lockboxItems.length, lockboxItems);
+    updateLockboxCount();
+
+    if (lockboxItems.length === 0) {
+      document.getElementById('lockbox-body').innerHTML = `
+        <div style="text-align:center;padding:2rem;">
+          <div style="font-size:3rem;margin-bottom:1rem;opacity:0.3;">🔐</div>
+          <p style="opacity:0.7;margin-bottom:0.5rem;">Your lockbox is empty</p>
+          <p style="opacity:0.5;font-size:0.85rem;">Unbind items from the game to store them here.</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Group by rarity (capitalize first letter to match keys)
+    const byRarity = { Legendary: [], Epic: [], Rare: [], Uncommon: [], Common: [] };
+    lockboxItems.forEach(item => {
+      let rarity = item.item_rarity || item.rarity || 'common';
+      // Capitalize first letter: "epic" -> "Epic"
+      rarity = rarity.charAt(0).toUpperCase() + rarity.slice(1).toLowerCase();
+      if (byRarity[rarity]) byRarity[rarity].push(item);
+      else byRarity['Common'].push(item); // Fallback
+    });
+
+    let html = '';
+    const rarityColors = {
+      Legendary: '#ff8000',
+      Epic: '#a335ee',
+      Rare: '#0070dd',
+      Uncommon: '#1eff00',
+      Common: '#ffffff'
+    };
+
+    ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'].forEach(tier => {
+      if (!byRarity[tier] || byRarity[tier].length === 0) return;
+      const color = rarityColors[tier];
+      html += `<h4 style="color:${color};margin:1rem 0 0.5rem;font-size:0.9rem;">${tier} (${byRarity[tier].length})</h4>`;
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:10px;">';
+
+      byRarity[tier].forEach(item => {
+        const itemName = item.item_name || item.name || 'Unknown Item';
+        const tokenId = item.token_id;
+        html += `
+          <div class="lockbox-item" style="
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:10px;
+            border:1px solid ${color}44;
+            border-radius:8px;
+            background:linear-gradient(145deg, rgba(0,0,0,0.3), rgba(0,0,0,0.1));
+            transition: all 0.2s;
+          " onmouseover="this.style.borderColor='${color}88';this.style.background='linear-gradient(145deg, rgba(0,0,0,0.5), rgba(0,0,0,0.2))';"
+             onmouseout="this.style.borderColor='${color}44';this.style.background='linear-gradient(145deg, rgba(0,0,0,0.3), rgba(0,0,0,0.1))';">
+            <div style="
+              width:50px;
+              height:50px;
+              border-radius:6px;
+              background:rgba(0,0,0,0.3);
+              border:1px solid ${color}33;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              font-size:1.5rem;
+              color:${color};
+            ">${itemName.charAt(0).toUpperCase()}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:600;color:${color};font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemName}</div>
+              <div style="font-size:0.7rem;opacity:0.5;">#${tokenId}</div>
+            </div>
+            <button onclick="bridgeInItem(${tokenId}, '${itemName.replace(/'/g, "\\'")}')" style="
+              background:linear-gradient(145deg, #1a2a1a, #0a150a);
+              border:1px solid #3a5a3a;
+              color:#6a9a6a;
+              padding:6px 12px;
+              border-radius:4px;
+              cursor:pointer;
+              font-size:0.75rem;
+              font-weight:600;
+              transition:all 0.2s;
+            " onmouseover="this.style.borderColor='#5a8a5a';this.style.color='#8aba8a';"
+               onmouseout="this.style.borderColor='#3a5a3a';this.style.color='#6a9a6a';">
+              BIND
+            </button>
+          </div>
+        `;
+      });
+      html += '</div>';
+    });
+
+    document.getElementById('lockbox-body').innerHTML = html;
+  } catch (e) {
+    document.getElementById('lockbox-body').innerHTML =
+      '<p style="text-align:center;color:#f44;">Failed to load lockbox items</p>';
+  }
+}
+
+function closeLockboxModal() {
+  document.getElementById('lockbox-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function updateLockboxCount() {
+  const countEl = document.getElementById('lockbox-count');
+  if (lockboxItems.length > 0) {
+    countEl.textContent = lockboxItems.length;
+    countEl.style.display = 'inline';
+  } else {
+    countEl.style.display = 'none';
+  }
+}
+
+async function bridgeInItem(tokenId, itemName) {
+  if (!confirm(`Bind "${itemName}" back to your in-game inventory?`)) return;
+
+  try {
+    const resp = await fetch('/api/wallet/bridge-in', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ token_ids: [tokenId] })
+    });
+
+    const data = await resp.json();
+
+    if (data.results && data.results.length > 0 && data.results[0].success) {
+      alert(`${itemName} has been bound to your inventory!`);
+      // Refresh the lockbox
+      openLockboxModal();
+    } else {
+      const error = data.results?.[0]?.error || data.detail || 'Unknown error';
+      alert('Failed to bind item: ' + error);
+    }
+  } catch (e) {
+    alert('Failed to bind item: ' + e.message);
+  }
+}
+
+// Fetch lockbox count on vault connect
+async function fetchLockboxCount() {
+  if (!walletConnected) return;
+  try {
+    const resp = await fetch('/api/wallet/bridge-in/available', { credentials: 'include' });
+    const data = await resp.json();
+    console.log('fetchLockboxCount response:', data);
+    lockboxItems = data.available_items || [];
+    console.log('Lockbox count:', lockboxItems.length);
+    updateLockboxCount();
+  } catch (e) {
+    console.log('Failed to fetch lockbox count:', e);
+  }
+}
 </script>
 
 <<!-- Neon Modal (initially hidden) -->

@@ -13,6 +13,7 @@ var _badge_tween: Tween = null
 var _progress_tween: Tween = null
 var _count_tween: Tween = null
 var _target_achievement_count: int = 0
+var _last_displayed_count: int = 0  # Track last shown count to avoid repeat animations
 var _load_complete: bool = false
 
 # UI References
@@ -48,6 +49,33 @@ var _forge_detail_panel: Control = null
 var _forge_selected_item: Dictionary = {}
 var _forge_selected_card: PanelContainer = null  # Currently selected card in forge grid
 
+# Bridge UI section
+var _bridge_section: Control = null
+var _bridge_wallet_status: Label = null
+var _bridge_connect_btn: Button = null
+var _bridge_refresh_btn: Button = null
+var _bridge_in_container: Control = null
+var _bridging_out_container: Control = null
+
+# Bridge countdown timer
+var _bridge_countdown_timer: Timer = null
+const BRIDGE_COUNTDOWN_UPDATE_INTERVAL: float = 1.0  # Update countdown every second
+
+# Connection status indicator
+var _connection_indicator: HBoxContainer = null
+var _connection_dot: ColorRect = null
+var _connection_label: Label = null
+
+# Wallet connection polling (during active connect flow)
+var _wallet_poll_timer: Timer = null
+var _wallet_poll_count: int = 0
+const WALLET_POLL_INTERVAL: float = 3.0  # seconds between polls
+const WALLET_POLL_MAX_COUNT: int = 40    # 40 polls * 3 sec = 2 minutes timeout
+
+# Background wallet sync (always running while in Armory)
+var _wallet_sync_timer: Timer = null
+const WALLET_SYNC_INTERVAL: float = 10.0  # check every 10 seconds
+
 # Theme colors - Simplified palette for consistency
 # Background layers
 const BG_DARK = Color(0.02, 0.02, 0.025)       # Darkest background
@@ -68,7 +96,8 @@ const FONT_H3 = 22        # Section headers (CONNECTED PLATFORMS)
 const FONT_BODY_LG = 24   # Large body text, important values
 const FONT_BODY = 20      # Normal body text
 const FONT_CAPTION = 18   # Captions, small labels
-const FONT_TINY = 16      # Smallest text (tooltips, hints)
+const FONT_TINY = 14      # Smallest text - minimum readable size
+const FONT_MIN = 14       # Absolute minimum - never go below 14 for readability
 
 # Brand colors (use sparingly)
 const MANTLE_RED = Color(0.95, 0.25, 0.25)     # Primary accent - titles, important numbers
@@ -76,6 +105,10 @@ const MANTLE_CYAN = Color(0.0, 0.75, 0.85)     # Secondary accent - headers, int
 
 # Font
 var default_font: Font = null
+var bold_font: Font = null
+
+# Neon accent color for MANTLE branding (matches login page)
+const MANTLE_NEON_CYAN = Color(0.0, 0.9, 1.0)  # Bright neon cyan
 
 # Tier colors
 const TIER_COLORS = {
@@ -219,42 +252,111 @@ func _ready() -> void:
 			MantleAuth.profile_updated.connect(_on_profile_updated)
 		if not MantleAuth.auth_completed.is_connected(_on_profile_updated):
 			MantleAuth.auth_completed.connect(_on_profile_updated)
+		if not MantleAuth.connection_status_changed.is_connected(_on_connection_status_changed):
+			MantleAuth.connection_status_changed.connect(_on_connection_status_changed)
 
 		# If profile data already loaded, refresh immediately
 		if MantleAuth.providers.size() > 0:
 			print("[Armory] Profile data already available, refreshing...")
 			call_deferred("_on_profile_updated", {})
 
+		# Update connection indicator with current status
+		call_deferred("_update_connection_indicator", MantleAuth.connection_status)
+
 	# Listen for forged items loaded to refresh forge display
 	if ForgeItemManager:
 		if not ForgeItemManager.forged_items_loaded.is_connected(_on_forged_items_loaded):
 			ForgeItemManager.forged_items_loaded.connect(_on_forged_items_loaded)
+		if not ForgeItemManager.forge_status_loaded.is_connected(_on_forge_status_loaded):
+			ForgeItemManager.forge_status_loaded.connect(_on_forge_status_loaded)
+		if not ForgeItemManager.bridge_status_updated.is_connected(_on_bridge_status_updated):
+			ForgeItemManager.bridge_status_updated.connect(_on_bridge_status_updated)
+		if not ForgeItemManager.bridge_in_available_updated.is_connected(_on_bridge_in_available_signal):
+			ForgeItemManager.bridge_in_available_updated.connect(_on_bridge_in_available_signal)
 		# If already loaded, refresh now
 		if ForgeItemManager.is_loaded():
-			print("[Armory] Forged items already loaded, refreshing forge...")
+			print("[Armory] Forged items already loaded, refreshing forge and bridge...")
 			call_deferred("_refresh_forge_content")
+			call_deferred("_refresh_bridge_section")
+		# Also check if bridge-in items are already available
+		var bridge_in_items = ForgeItemManager.get_bridge_in_available()
+		if bridge_in_items.size() > 0:
+			print("[Armory] Bridge-in items already available: %d" % bridge_in_items.size())
+			call_deferred("_update_bridge_in_display", bridge_in_items)
 
 	# Start entrance animations after a brief delay
-	await get_tree().create_timer(0.1).timeout
-	_play_entrance_animations()
+	if get_tree():
+		await get_tree().create_timer(0.1).timeout
+		_play_entrance_animations()
 
+func _exit_tree() -> void:
+	# Clean up timers when leaving Armory
+	_stop_wallet_polling()
+	_stop_wallet_background_sync()
+	_stop_bridge_countdown_timer()
 
 func _on_profile_updated(_data: Dictionary) -> void:
 	"""Called when MantleAuth receives profile data - refresh the UI"""
+	print("[Armory] ════════════════════════════════════════")
 	print("[Armory] Profile updated signal received!")
-	print("[Armory] Providers from MantleAuth: ", MantleAuth.providers)
-	print("[Armory] Total achievements: ", MantleAuth.total_achievements)
+	print("[Armory] MantleAuth.total_achievements: ", MantleAuth.total_achievements)
+	print("[Armory] MantleAuth.providers.size(): ", MantleAuth.providers.size())
+	print("[Armory] _data keys: ", _data.keys() if _data else "null")
+	print("[Armory] ════════════════════════════════════════")
 	_determine_state()
 	_setup_ui_for_state()
 	_apply_font_to_all(self)
-	print("[Armory] UI refreshed with new profile data")
+
+	# Re-trigger achievement count animation now that we have real data
+	if _target_achievement_count > 0:
+		_animate_achievement_count()
+
+	print("[Armory] UI refreshed - target_achievement_count: %d" % _target_achievement_count)
 
 func _on_forged_items_loaded(items: Array) -> void:
 	"""Called when ForgeItemManager finishes loading forged items"""
 	print("[Armory] ═══════════════════════════════════════")
 	print("[Armory] Forged items loaded: %d total" % items.size())
 	_refresh_forge_content()
+	_refresh_bridge_section()  # Also refresh bridge section for bridge-in/out displays
 	print("[Armory] ═══════════════════════════════════════")
+
+func _on_forge_status_loaded(status: Dictionary) -> void:
+	"""Called when ForgeItemManager finishes loading forge status (forgeable achievements)"""
+	var forgeable = status.get("forgeable", [])
+	print("[Armory] Forge status loaded: %d forgeable achievements" % forgeable.size())
+	_refresh_forge_content()
+
+func _on_bridge_status_updated(item_id: String, status: String) -> void:
+	"""Called when bridge status is updated (cooldown times fetched from API)"""
+	print("[Armory] Bridge status updated for %s: %s" % [item_id, status])
+	# Refresh the bridge section to show updated cooldown times
+	_refresh_bridge_section()
+	# Also refresh forge grid in case the item is selected
+	if _forge_selected_item and _forge_selected_item.get("item_id", "") == item_id:
+		var updated_item = ForgeItemManager.get_forged_item(item_id)
+		if not updated_item.is_empty():
+			_forge_selected_item.merge(updated_item, true)
+			_update_forge_detail(_forge_selected_item, "forged")
+
+func _on_bridge_in_available_signal(items: Array) -> void:
+	"""Called when bridge-in available items are updated from ForgeItemManager signal"""
+	print("[Armory] Bridge-in available items updated: %d items" % items.size())
+	_update_bridge_in_display(items)
+
+func _on_connection_status_changed(status: int) -> void:
+	"""Called when MantleAuth connection status changes"""
+	print("[Armory] Connection status changed: %d" % status)
+	_update_connection_indicator(status)
+
+	# If connection was restored, the data refresh is handled by MantleAuth
+	# Just update our UI to reflect the new state
+	if status == MantleAuth.ConnectionStatus.CONNECTED:
+		# Connection restored - UI will update when signals come in
+		pass
+	elif status == MantleAuth.ConnectionStatus.DISCONNECTED:
+		# Connection lost - could show a notification/toast
+		pass
 
 func _on_forge_data_changed() -> void:
 	"""Called when forge data changes (from ForgeItemManager) to update the grid"""
@@ -267,6 +369,11 @@ func _setup_font() -> void:
 	default_font = SystemFont.new()
 	default_font.font_names = PackedStringArray(["Segoe UI", "Arial", "Helvetica", "sans-serif"])
 	default_font.antialiasing = TextServer.FONT_ANTIALIASING_LCD
+
+	# Bold font for headers/titles
+	bold_font = SystemFont.new()
+	bold_font.font_names = PackedStringArray(["Segoe UI Bold", "Segoe UI Semibold", "Arial Bold", "Helvetica Bold", "sans-serif"])
+	bold_font.antialiasing = TextServer.FONT_ANTIALIASING_LCD
 
 func _create_label(text_content: String, font_size: int = 14, color: Color = TEXT_PRIMARY) -> Label:
 	var label = Label.new()
@@ -372,10 +479,10 @@ func _create_player_identity_frame() -> Control:
 	"""Create clean player identity section"""
 	var frame = VBoxContainer.new()
 	frame.name = "IdentityFrame"
-	frame.add_theme_constant_override("separation", 8)
+	frame.add_theme_constant_override("separation", 16)  # More space between identity elements
 
 	var inner_vbox = VBoxContainer.new()
-	inner_vbox.add_theme_constant_override("separation", 6)
+	inner_vbox.add_theme_constant_override("separation", 12)  # More breathing room
 	frame.add_child(inner_vbox)
 
 	# Player ID (prominent)
@@ -490,10 +597,10 @@ func _start_badge_pulse(badge_container: Control, color: Color) -> void:
 func _create_trophy_plaque() -> Control:
 	"""Create achievement score display - clean version"""
 	var plaque = VBoxContainer.new()
-	plaque.add_theme_constant_override("separation", 4)
+	plaque.add_theme_constant_override("separation", 8)  # More space around plaque
 
 	var inner_content = VBoxContainer.new()
-	inner_content.add_theme_constant_override("separation", 0)
+	inner_content.add_theme_constant_override("separation", 4)  # Slight gap between number and text
 	plaque.add_child(inner_content)
 
 	# Hero number with glow effect container
@@ -553,7 +660,7 @@ func _create_trophy_plaque() -> Control:
 func _create_enhanced_progress_section() -> Control:
 	"""Enhanced progress bar with tier emblems and glow effects"""
 	var section = VBoxContainer.new()
-	section.add_theme_constant_override("separation", 8)
+	section.add_theme_constant_override("separation", 12)  # More spacing
 
 	# Tier transition row with emblems
 	var tier_row = HBoxContainer.new()
@@ -583,12 +690,14 @@ func _create_enhanced_progress_section() -> Control:
 	next_emblem.name = "NextTierEmblem"
 	tier_row.add_child(next_emblem)
 
-	# Progress bar - clean version
+	# Progress bar - centered with max width
+	var bar_wrapper = CenterContainer.new()
+	section.add_child(bar_wrapper)
+
 	var bar_container = Control.new()
 	bar_container.name = "ProgressBarContainer"
-	bar_container.custom_minimum_size = Vector2(0, 16)
-	bar_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	section.add_child(bar_container)
+	bar_container.custom_minimum_size = Vector2(200, 14)  # Fixed width, slightly shorter height
+	bar_wrapper.add_child(bar_container)
 
 	# Simple dark background for progress bar
 	var bar_bg = ColorRect.new()
@@ -699,6 +808,31 @@ func _debug_check_colors() -> void:
 # UI CONSTRUCTION
 # ═══════════════════════════════════════════════════════════════════════════════
 
+func _apply_tooltip_theme() -> void:
+	"""Apply larger, more readable tooltip styling to the root viewport"""
+	var root = get_tree().root
+	if not root:
+		return
+
+	# Create or get existing theme
+	if root.theme == null:
+		root.theme = Theme.new()
+
+	# Set larger tooltip font size (default is ~11, we want 14-16 for readability)
+	root.theme.set_font_size("font_size", "TooltipLabel", 16)
+	root.theme.set_color("font_color", "TooltipLabel", Color(0.95, 0.95, 0.95))
+
+	# Style the tooltip panel for better visibility
+	var tooltip_style = StyleBoxFlat.new()
+	tooltip_style.bg_color = Color(0.1, 0.1, 0.12, 0.98)
+	tooltip_style.border_color = Color(0.5, 0.52, 0.55, 1.0)
+	tooltip_style.set_border_width_all(2)
+	tooltip_style.set_corner_radius_all(6)
+	tooltip_style.set_content_margin_all(12)
+	root.theme.set_stylebox("panel", "TooltipPanel", tooltip_style)
+
+	print("[Armory] Applied larger tooltip theme (font size 16)")
+
 func _build_ui() -> void:
 	print("[Armory] ═══════════════════════════════════════")
 	print("[Armory] Building UI with colors:")
@@ -713,6 +847,9 @@ func _build_ui() -> void:
 	print("[Armory] Main background set to BG_DARK: ", bg.color)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
+
+	# Apply larger tooltip font to root viewport for ALL tooltips
+	_apply_tooltip_theme()
 
 	# Main container
 	var main_vbox = VBoxContainer.new()
@@ -944,7 +1081,7 @@ func _build_mantle_stats_column() -> Control:
 func _create_recent_achievement_row(title: String, game: String, rarity: String, timestamp: String = "") -> Control:
 	"""Create a compact row for a recent achievement"""
 	var row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", 10)
 	row.tooltip_text = "%s rarity" % rarity  # Tooltip shows rarity name
 
 	# Left spacer for centering
@@ -952,14 +1089,41 @@ func _create_recent_achievement_row(title: String, game: String, rarity: String,
 	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(left_spacer)
 
-	# Rarity indicator dot - 2x bigger
-	var dot = Label.new()
-	dot.name = "RarityDot"
-	dot.text = "●"
-	dot.add_theme_font_size_override("font_size", 24)  # 2x bigger (was 14)
+	# Rarity gem pill - matches the rarity gems used elsewhere
 	var rarity_color = RARITY_COLORS.get(rarity, Color.GRAY)
-	dot.add_theme_color_override("font_color", rarity_color)
-	row.add_child(dot)
+	var gem_pill = PanelContainer.new()
+	var gem_style = StyleBoxFlat.new()
+	gem_style.bg_color = rarity_color.darkened(0.7)
+	gem_style.bg_color.a = 0.5
+	gem_style.border_color = rarity_color.darkened(0.2)
+	gem_style.set_border_width_all(1)
+	gem_style.set_corner_radius_all(12)
+	gem_style.content_margin_left = 8
+	gem_style.content_margin_right = 8
+	gem_style.content_margin_top = 4
+	gem_style.content_margin_bottom = 4
+	gem_pill.add_theme_stylebox_override("panel", gem_style)
+	row.add_child(gem_pill)
+
+	# Rarity symbol inside the pill
+	var symbol = Label.new()
+	symbol.name = "RarityGem"
+	match rarity:
+		"Common":
+			symbol.text = "●"
+		"Uncommon":
+			symbol.text = "◆"
+		"Rare":
+			symbol.text = "★"
+		"Epic":
+			symbol.text = "✦"
+		"Legendary":
+			symbol.text = "✧"
+		_:
+			symbol.text = "●"
+	symbol.add_theme_font_size_override("font_size", 18)
+	symbol.add_theme_color_override("font_color", rarity_color)
+	gem_pill.add_child(symbol)
 
 	# Achievement info
 	var info = VBoxContainer.new()
@@ -982,14 +1146,14 @@ func _create_recent_achievement_row(title: String, game: String, rarity: String,
 		var time_label = Label.new()
 		time_label.name = "Timestamp"
 		time_label.text = timestamp
-		time_label.add_theme_font_size_override("font_size", 11)
+		time_label.add_theme_font_size_override("font_size", FONT_MIN)
 		time_label.add_theme_color_override("font_color", TEXT_DIM.darkened(0.2))
 		title_row.add_child(time_label)
 
 	var game_label = Label.new()
 	game_label.name = "Game"
 	game_label.text = game
-	game_label.add_theme_font_size_override("font_size", 12)
+	game_label.add_theme_font_size_override("font_size", FONT_MIN)
 	game_label.add_theme_color_override("font_color", TEXT_DIM)
 	info.add_child(game_label)
 
@@ -1117,6 +1281,7 @@ func _build_forge_column() -> Control:
 	print("[Armory] Building RIGHT column (Forge) with tabs")
 	var wrapper = Control.new()
 	wrapper.custom_minimum_size = Vector2(320, 0)
+	wrapper.clip_contents = true  # Prevent content overflow
 
 	# Background
 	var bg = ColorRect.new()
@@ -1146,18 +1311,20 @@ func _build_forge_column() -> Control:
 	border.add_theme_stylebox_override("panel", border_style)
 	wrapper.add_child(border)
 
-	# Content
+	# Content - tighter margins to maximize item display space
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_right", 16)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	margin.clip_contents = true  # Prevent overflow
 	wrapper.add_child(margin)
 
 	var vbox = VBoxContainer.new()
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 8)  # Tighter spacing
+	vbox.add_theme_constant_override("separation", 12)  # More spacing between sections
+	vbox.clip_contents = true  # Prevent overflow
 	margin.add_child(vbox)
 
 	# === HEADER ===
@@ -1166,18 +1333,26 @@ func _build_forge_column() -> Control:
 	header_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(header_row)
 
+	# THE FORGE header - 25% larger than standard H2 for emphasis
+	const FORGE_HEADER_SIZE = 35  # 28 * 1.25 = 35
+
 	var forge_icon = Label.new()
 	forge_icon.text = "⚒"
-	forge_icon.add_theme_font_size_override("font_size", FONT_H2)
+	forge_icon.add_theme_font_size_override("font_size", FORGE_HEADER_SIZE)
 	forge_icon.add_theme_color_override("font_color", MANTLE_CYAN)
 	header_row.add_child(forge_icon)
 
 	var header = Label.new()
 	header.text = "THE FORGE"
 	header.add_theme_font_override("font", default_font)
-	header.add_theme_font_size_override("font_size", FONT_H2)
+	header.add_theme_font_size_override("font_size", FORGE_HEADER_SIZE)
 	header.add_theme_color_override("font_color", TEXT_PRIMARY)
 	header_row.add_child(header)
+
+	# Spacer after header
+	var spacer1 = Control.new()
+	spacer1.custom_minimum_size = Vector2(0, 4)
+	vbox.add_child(spacer1)
 
 	# === PROGRESS HEADER ===
 	var owned_count = _get_owned_forge_items().size()
@@ -1211,16 +1386,18 @@ func _build_forge_column() -> Control:
 	# Progress bar using ProgressBar control (simpler and more reliable)
 	var progress_bar = ProgressBar.new()
 	progress_bar.name = "ForgeProgressBar"
-	progress_bar.custom_minimum_size = Vector2(0, 10)
+	progress_bar.custom_minimum_size = Vector2(0, 12)  # Slightly taller for visibility
 	progress_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	progress_bar.max_value = 100
 	progress_bar.value = 0  # Start at 0 for animation
 	progress_bar.show_percentage = false
 
-	# Style the progress bar
+	# Style the progress bar - lighter background so empty state is visible
 	var bar_bg_style = StyleBoxFlat.new()
-	bar_bg_style.bg_color = Color(0.08, 0.08, 0.10)
+	bar_bg_style.bg_color = Color(0.20, 0.22, 0.25)  # Much lighter for visibility
 	bar_bg_style.set_corner_radius_all(4)
+	bar_bg_style.border_color = Color(0.30, 0.32, 0.35)  # Subtle border
+	bar_bg_style.set_border_width_all(1)
 	progress_bar.add_theme_stylebox_override("background", bar_bg_style)
 
 	var bar_fill_style = StyleBoxFlat.new()
@@ -1235,6 +1412,11 @@ func _build_forge_column() -> Control:
 	bar_tween.set_ease(Tween.EASE_OUT)
 	bar_tween.set_trans(Tween.TRANS_CUBIC)
 	bar_tween.tween_property(progress_bar, "value", progress_percent * 100, 0.8)
+
+	# Spacer after progress bar
+	var spacer2 = Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 6)
+	vbox.add_child(spacer2)
 
 	# === SORT OPTIONS (centered, clean) ===
 	var sort_row = HBoxContainer.new()
@@ -1261,29 +1443,20 @@ func _build_forge_column() -> Control:
 		sort_row.add_child(sort_btn)
 		_forge_filter_buttons[sort_id] = sort_btn
 
-	# === CLAIM ALL ROW (only if items to claim) ===
-	var unclaimed_count = _get_unclaimed_count()
-	if unclaimed_count > 0:
-		var claim_row = HBoxContainer.new()
-		claim_row.name = "ForgeClaimRow"
-		claim_row.alignment = BoxContainer.ALIGNMENT_CENTER
-		vbox.add_child(claim_row)
+	# Note: CLAIM ALL button removed - items are auto-added to inventory on forge
 
-		var claim_all_btn = Button.new()
-		claim_all_btn.name = "ClaimAllButton"
-		claim_all_btn.text = "CLAIM ALL (%d)" % unclaimed_count
-		claim_all_btn.custom_minimum_size = Vector2(160, 32)
-		claim_all_btn.pressed.connect(_on_claim_all_pressed)
-		claim_all_btn.mouse_entered.connect(_play_button_hover_sound)
-		_style_claim_all_button(claim_all_btn)
-		claim_row.add_child(claim_all_btn)
+	# Spacer after sort bar
+	var spacer3 = Control.new()
+	spacer3.custom_minimum_size = Vector2(0, 4)
+	vbox.add_child(spacer3)
 
 	# === CONTENT CONTAINER (switches based on tab) ===
 	_forge_content_container = PanelContainer.new()
 	_forge_content_container.name = "ForgeContent"
-	_forge_content_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Fit content, don't expand
+	_forge_content_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Don't expand - stay compact
 	_forge_content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_forge_content_container.custom_minimum_size = Vector2(0, 336)  # Height for 4 rows (4×70 + 3×8 spacing + 16 margins)
+	_forge_content_container.clip_contents = true  # Prevent overflow
+	_forge_content_container.custom_minimum_size = Vector2(0, 400)  # Fixed 400px height
 	var content_style = StyleBoxFlat.new()
 	content_style.bg_color = BG_DARK
 	content_style.set_corner_radius_all(6)
@@ -1299,8 +1472,16 @@ func _build_forge_column() -> Control:
 	detail_panel.name = "ForgeDetailPanel"
 	vbox.add_child(detail_panel)
 
+	# === BRIDGE UI SECTION ===
+	var bridge_section = _build_bridge_section()
+	bridge_section.name = "BridgeSection"
+	vbox.add_child(bridge_section)
+
 	# Build initial forge content (unified view)
 	_refresh_forge_content()
+
+	# Initialize bridge data
+	_refresh_bridge_section()
 
 	# Store references
 	character_preview = wrapper
@@ -1343,7 +1524,7 @@ func _style_filter_button(btn: Button, active: bool) -> void:
 	btn.add_theme_stylebox_override("normal", style)
 	btn.add_theme_stylebox_override("hover", style)
 	btn.add_theme_stylebox_override("pressed", style)
-	btn.add_theme_font_size_override("font_size", FONT_TINY - 2)
+	btn.add_theme_font_size_override("font_size", FONT_MIN)
 
 func _on_forge_sort_pressed(sort_id: String) -> void:
 	"""Handle sort button press"""
@@ -1359,235 +1540,277 @@ func _on_forge_sort_pressed(sort_id: String) -> void:
 	_refresh_forge_content()
 
 func _build_forge_detail_panel() -> Control:
-	"""Build the item detail panel at bottom of forge - Enhanced with effect metadata"""
+	"""Build the item detail panel - simple 2-row layout that won't overflow"""
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 120)  # Taller to fit new content
+	panel.clip_contents = true
+	panel.size_flags_vertical = Control.SIZE_SHRINK_END
+	panel.custom_minimum_size = Vector2(0, 95)  # Consistent height to prevent layout shifts
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.04, 0.05, 0.95)
+	style.bg_color = Color(0.04, 0.04, 0.05, 0.98)
 	style.border_color = BORDER_GLOW.darkened(0.3)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(6)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
 	panel.add_theme_stylebox_override("panel", style)
 
 	var margin = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 12)
 	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_bottom", 8)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
 	panel.add_child(margin)
 
-	var hbox = HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 12)
-	margin.add_child(hbox)
+	# Main vertical layout with 2 rows
+	var main_vbox = VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 8)
+	margin.add_child(main_vbox)
 
-	# Item icon placeholder - fixed square size
+	# === ROW 1: Icon + Item Info ===
+	var top_row = HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 12)
+	main_vbox.add_child(top_row)
+
+	# Icon - smaller card (80px) crops the 96px icon for tighter feel
 	var icon_container = PanelContainer.new()
 	icon_container.name = "DetailIcon"
-	icon_container.custom_minimum_size = Vector2(80, 80)  # Larger square preview
-	icon_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER  # Don't stretch horizontally
-	icon_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER    # Don't stretch vertically
+	icon_container.custom_minimum_size = Vector2(80, 80)
+	icon_container.clip_contents = true  # Crop the oversized icon
+	icon_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var icon_style = StyleBoxFlat.new()
-	icon_style.bg_color = BG_DARK
+	icon_style.bg_color = Color(0.06, 0.06, 0.08)
 	icon_style.border_color = CARD_BORDER
-	icon_style.set_border_width_all(1)
-	icon_style.set_corner_radius_all(4)
+	icon_style.set_border_width_all(2)
+	icon_style.set_corner_radius_all(6)
 	icon_container.add_theme_stylebox_override("panel", icon_style)
-	hbox.add_child(icon_container)
+	top_row.add_child(icon_container)
 
-	var icon_center = CenterContainer.new()
-	icon_container.add_child(icon_center)
+	# Use Control instead of CenterContainer so we can position the oversized icon
+	var icon_holder = Control.new()
+	icon_holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon_container.add_child(icon_holder)
 
-	# TextureRect for actual item icon
 	var icon_texture = TextureRect.new()
 	icon_texture.name = "IconTexture"
-	icon_texture.custom_minimum_size = Vector2(72, 72)  # Slightly smaller than container for padding
-	icon_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE  # Don't auto-expand, use custom_minimum_size
+	icon_texture.custom_minimum_size = Vector2(96, 96)
+	icon_texture.position = Vector2(-8, -8)  # Center 96px icon in 80px container
+	icon_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_texture.visible = false
-	icon_center.add_child(icon_texture)
+	icon_holder.add_child(icon_texture)
 
-	# Fallback label for when no icon is loaded
 	var icon_placeholder = Label.new()
 	icon_placeholder.name = "IconLabel"
 	icon_placeholder.text = "?"
-	icon_placeholder.add_theme_font_size_override("font_size", 28)
+	icon_placeholder.add_theme_font_size_override("font_size", 36)
 	icon_placeholder.add_theme_color_override("font_color", TEXT_DIM)
-	icon_center.add_child(icon_placeholder)
+	icon_placeholder.set_anchors_preset(Control.PRESET_CENTER)
+	icon_holder.add_child(icon_placeholder)
 
-	# Item details - main info column
-	var details_vbox = VBoxContainer.new()
-	details_vbox.name = "DetailInfo"
-	details_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	details_vbox.add_theme_constant_override("separation", 2)
-	hbox.add_child(details_vbox)
+	# Item info (name, rarity, status)
+	var info_vbox = VBoxContainer.new()
+	info_vbox.name = "DetailInfo"
+	info_vbox.add_theme_constant_override("separation", 2)
+	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	top_row.add_child(info_vbox)
 
 	var name_label = Label.new()
 	name_label.name = "ItemName"
-	name_label.text = "Click an item to select"
+	name_label.text = "Select an item"
 	name_label.add_theme_font_size_override("font_size", FONT_BODY)
 	name_label.add_theme_color_override("font_color", TEXT_PRIMARY)
-	details_vbox.add_child(name_label)
+	info_vbox.add_child(name_label)
 
 	var rarity_label = Label.new()
 	rarity_label.name = "ItemRarity"
 	rarity_label.text = ""
 	rarity_label.add_theme_font_size_override("font_size", FONT_TINY)
 	rarity_label.add_theme_color_override("font_color", TEXT_DIM)
-	details_vbox.add_child(rarity_label)
+	info_vbox.add_child(rarity_label)
 
 	var unlock_label = Label.new()
 	unlock_label.name = "ItemUnlock"
-	unlock_label.text = "Select an item to see details"
+	unlock_label.text = ""
 	unlock_label.add_theme_font_size_override("font_size", FONT_TINY)
 	unlock_label.add_theme_color_override("font_color", TEXT_SECONDARY)
-	unlock_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	details_vbox.add_child(unlock_label)
+	info_vbox.add_child(unlock_label)
 
-	# Lore text - italic style for flavor
 	var lore_label = Label.new()
 	lore_label.name = "ItemLore"
-	lore_label.text = ""
-	lore_label.add_theme_font_size_override("font_size", FONT_TINY)
-	lore_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.65))
-	lore_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lore_label.visible = false
-	details_vbox.add_child(lore_label)
+	info_vbox.add_child(lore_label)
 
-	# === NEW: Unique Modifiers Section ===
-	var modifiers_section = VBoxContainer.new()
-	modifiers_section.name = "ModifiersSection"
-	modifiers_section.add_theme_constant_override("separation", 4)
-	modifiers_section.visible = false
-	hbox.add_child(modifiers_section)
+	# === ROW 2: Stats + Actions ===
+	var bottom_row = HBoxContainer.new()
+	bottom_row.add_theme_constant_override("separation", 16)
+	main_vbox.add_child(bottom_row)
 
-	# Effort Score with progress bar
-	var effort_container = VBoxContainer.new()
-	effort_container.name = "EffortContainer"
-	effort_container.add_theme_constant_override("separation", 2)
-	modifiers_section.add_child(effort_container)
+	# Stats section (compact horizontal)
+	var stats_section = HBoxContainer.new()
+	stats_section.name = "StatsSection"
+	stats_section.add_theme_constant_override("separation", 16)
+	stats_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom_row.add_child(stats_section)
 
-	var effort_header = HBoxContainer.new()
-	effort_header.add_theme_constant_override("separation", 4)
-	effort_container.add_child(effort_header)
+	# Stat labels as compact "Label: Value" pairs
+	for stat_name in ["Damage", "Defense", "Speed", "Crit"]:
+		var stat_container = HBoxContainer.new()
+		stat_container.name = "Stat%sContainer" % stat_name
+		stat_container.add_theme_constant_override("separation", 4)
+		stat_container.visible = false
+		stats_section.add_child(stat_container)
 
-	var effort_label = Label.new()
-	effort_label.name = "EffortLabel"
-	effort_label.text = "EFFORT"
-	effort_label.add_theme_font_size_override("font_size", FONT_TINY - 2)
-	effort_label.add_theme_color_override("font_color", TEXT_DIM)
-	effort_header.add_child(effort_label)
+		var stat_label = Label.new()
+		stat_label.name = "Stat%sLabel" % stat_name
+		stat_label.text = "%s:" % stat_name
+		stat_label.add_theme_font_size_override("font_size", FONT_TINY)
+		stat_label.add_theme_color_override("font_color", TEXT_DIM)
+		stat_container.add_child(stat_label)
 
-	var effort_value = Label.new()
-	effort_value.name = "EffortValue"
-	effort_value.text = ""
-	effort_value.add_theme_font_size_override("font_size", FONT_TINY - 2)
-	effort_value.add_theme_color_override("font_color", MANTLE_CYAN)
-	effort_header.add_child(effort_value)
+		var stat_value = Label.new()
+		stat_value.name = "Stat%sValue" % stat_name
+		stat_value.text = ""
+		stat_value.add_theme_font_size_override("font_size", FONT_TINY)
+		stat_value.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
+		stat_container.add_child(stat_value)
 
-	var effort_bar = ProgressBar.new()
-	effort_bar.name = "EffortBar"
-	effort_bar.custom_minimum_size = Vector2(80, 8)
-	effort_bar.max_value = 100
-	effort_bar.value = 0
-	effort_bar.show_percentage = false
-	var effort_bar_style = StyleBoxFlat.new()
-	effort_bar_style.bg_color = Color(0.1, 0.1, 0.12)
-	effort_bar_style.set_corner_radius_all(2)
-	effort_bar.add_theme_stylebox_override("background", effort_bar_style)
-	var effort_fill_style = StyleBoxFlat.new()
-	effort_fill_style.bg_color = MANTLE_CYAN
-	effort_fill_style.set_corner_radius_all(2)
-	effort_bar.add_theme_stylebox_override("fill", effort_fill_style)
-	effort_container.add_child(effort_bar)
+	# Ability section (inline with stats)
+	var ability_container = HBoxContainer.new()
+	ability_container.name = "AbilityContainer"
+	ability_container.add_theme_constant_override("separation", 4)
+	ability_container.visible = false
+	stats_section.add_child(ability_container)
 
-	# Badges row (Vintage, Secret, Ultra-Rare)
-	var badges_row = HBoxContainer.new()
-	badges_row.name = "BadgesRow"
-	badges_row.add_theme_constant_override("separation", 6)
-	modifiers_section.add_child(badges_row)
+	var ability_icon = Label.new()
+	ability_icon.name = "AbilityIcon"
+	ability_icon.text = "★"
+	ability_icon.add_theme_font_size_override("font_size", FONT_TINY)
+	ability_icon.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2))
+	ability_container.add_child(ability_icon)
 
-	# Vintage badge
-	var vintage_badge = _create_modifier_badge("VintageBadge", "VETERAN", Color(0.8, 0.6, 0.2))
-	badges_row.add_child(vintage_badge)
+	var ability_label = Label.new()
+	ability_label.name = "AbilityLabel"
+	ability_label.text = ""
+	ability_label.add_theme_font_size_override("font_size", FONT_TINY)
+	ability_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2))
+	ability_container.add_child(ability_label)
 
-	# Secret badge
-	var secret_badge = _create_modifier_badge("SecretBadge", "SECRET", Color(0.6, 0.3, 0.8))
-	badges_row.add_child(secret_badge)
-
-	# Ultra-rare badge
-	var rare_badge = _create_modifier_badge("UltraRareBadge", "RARE", Color(0.9, 0.4, 0.1))
-	badges_row.add_child(rare_badge)
-
-	# Damage bonus display
-	var bonus_label = Label.new()
-	bonus_label.name = "BonusLabel"
-	bonus_label.text = ""
-	bonus_label.add_theme_font_size_override("font_size", FONT_TINY - 2)
-	bonus_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
-	modifiers_section.add_child(bonus_label)
-
-	# === NEW: Trading Info Section ===
-	var trading_section = VBoxContainer.new()
-	trading_section.name = "TradingSection"
-	trading_section.add_theme_constant_override("separation", 4)
-	trading_section.visible = false
-	hbox.add_child(trading_section)
-
-	# Census label ("Only X exist")
-	var census_label = Label.new()
-	census_label.name = "CensusLabel"
-	census_label.text = ""
-	census_label.add_theme_font_size_override("font_size", FONT_TINY - 2)
-	census_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3))  # Gold color
-	trading_section.add_child(census_label)
-
-	# Trade status (cooldown indicator)
-	var trade_status_container = HBoxContainer.new()
-	trade_status_container.name = "TradeStatusContainer"
-	trade_status_container.add_theme_constant_override("separation", 4)
-	trading_section.add_child(trade_status_container)
-
-	var trade_icon = Label.new()
-	trade_icon.name = "TradeIcon"
-	trade_icon.text = ""
-	trade_icon.add_theme_font_size_override("font_size", FONT_TINY)
-	trade_status_container.add_child(trade_icon)
-
-	var trade_status = Label.new()
-	trade_status.name = "TradeStatus"
-	trade_status.text = ""
-	trade_status.add_theme_font_size_override("font_size", FONT_TINY - 2)
-	trade_status.add_theme_color_override("font_color", TEXT_SECONDARY)
-	trade_status_container.add_child(trade_status)
-
-	# Trade cooldown badge
-	var cooldown_badge = _create_modifier_badge("CooldownBadge", "ON COOLDOWN", Color(0.8, 0.3, 0.3))
-	cooldown_badge.visible = false
-	trading_section.add_child(cooldown_badge)
-
-	# Preview button container (right side)
-	var preview_vbox = VBoxContainer.new()
-	preview_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	preview_vbox.add_theme_constant_override("separation", 4)
-	hbox.add_child(preview_vbox)
+	# Action buttons (right side of bottom row)
+	var actions_hbox = HBoxContainer.new()
+	actions_hbox.name = "ActionsSection"
+	actions_hbox.add_theme_constant_override("separation", 8)
+	bottom_row.add_child(actions_hbox)
 
 	var preview_btn = Button.new()
 	preview_btn.name = "PreviewButton"
-	preview_btn.text = "PREVIEW"
-	preview_btn.custom_minimum_size = Vector2(70, 32)
-	preview_btn.visible = false  # Hidden until item selected
+	preview_btn.text = "IN INVENTORY"
+	preview_btn.custom_minimum_size = Vector2(95, 28)
+	preview_btn.visible = false
 	preview_btn.pressed.connect(_on_preview_pressed)
 	preview_btn.mouse_entered.connect(_play_button_hover_sound)
 	_style_preview_button(preview_btn)
-	preview_vbox.add_child(preview_btn)
+	actions_hbox.add_child(preview_btn)
 
-	var preview_hint = Label.new()
-	preview_hint.name = "PreviewHint"
-	preview_hint.text = ""
-	preview_hint.add_theme_font_size_override("font_size", FONT_TINY)
-	preview_hint.add_theme_color_override("font_color", TEXT_DIM)
-	preview_hint.visible = false
-	preview_vbox.add_child(preview_hint)
+	var forge_btn = Button.new()
+	forge_btn.name = "ForgeButton"
+	forge_btn.text = "FORGE"
+	forge_btn.custom_minimum_size = Vector2(80, 28)
+	forge_btn.visible = false
+	forge_btn.pressed.connect(_on_forge_button_pressed)
+	forge_btn.mouse_entered.connect(_play_button_hover_sound)
+	_style_forge_action_button(forge_btn)
+	actions_hbox.add_child(forge_btn)
+
+	var bridge_out_btn = Button.new()
+	bridge_out_btn.name = "BridgeOutButton"
+	bridge_out_btn.text = "UNBIND"
+	bridge_out_btn.custom_minimum_size = Vector2(75, 28)
+	bridge_out_btn.visible = false
+	bridge_out_btn.pressed.connect(_on_bridge_out_pressed)
+	bridge_out_btn.mouse_entered.connect(_play_button_hover_sound)
+	_style_bridge_button(bridge_out_btn)
+	actions_hbox.add_child(bridge_out_btn)
+
+	var cancel_bridge_btn = Button.new()
+	cancel_bridge_btn.name = "CancelBridgeButton"
+	cancel_bridge_btn.text = "CANCEL"
+	cancel_bridge_btn.custom_minimum_size = Vector2(70, 28)
+	cancel_bridge_btn.visible = false
+	cancel_bridge_btn.pressed.connect(_on_cancel_bridge_pressed)
+	cancel_bridge_btn.mouse_entered.connect(_play_button_hover_sound)
+	_style_cancel_button(cancel_bridge_btn)
+	actions_hbox.add_child(cancel_bridge_btn)
+
+	var bridge_in_btn = Button.new()
+	bridge_in_btn.name = "BridgeInButton"
+	bridge_in_btn.text = "BIND"
+	bridge_in_btn.custom_minimum_size = Vector2(60, 28)
+	bridge_in_btn.visible = false
+	bridge_in_btn.pressed.connect(_on_bridge_in_pressed)
+	bridge_in_btn.mouse_entered.connect(_play_button_hover_sound)
+	_style_bridge_button(bridge_in_btn)
+	actions_hbox.add_child(bridge_in_btn)
+
+	var bridge_status_label = Label.new()
+	bridge_status_label.name = "BridgeStatusLabel"
+	bridge_status_label.text = ""
+	bridge_status_label.add_theme_font_size_override("font_size", FONT_TINY)
+	bridge_status_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
+	bridge_status_label.visible = false
+	actions_hbox.add_child(bridge_status_label)
+
+	# Hidden sections (kept for compatibility but not displayed in detail panel)
+	var modifiers_section = VBoxContainer.new()
+	modifiers_section.name = "ModifiersSection"
+	modifiers_section.visible = false
+	main_vbox.add_child(modifiers_section)
+
+	var effort_bar = ProgressBar.new()
+	effort_bar.name = "EffortBar"
+	effort_bar.visible = false
+	modifiers_section.add_child(effort_bar)
+
+	var effort_value = Label.new()
+	effort_value.name = "EffortValue"
+	effort_value.visible = false
+	modifiers_section.add_child(effort_value)
+
+	var vintage_badge = _create_modifier_badge("VintageBadge", "VETERAN", Color(0.8, 0.6, 0.2))
+	vintage_badge.visible = false
+	modifiers_section.add_child(vintage_badge)
+	var secret_badge = _create_modifier_badge("SecretBadge", "SECRET", Color(0.6, 0.3, 0.8))
+	secret_badge.visible = false
+	modifiers_section.add_child(secret_badge)
+	var rare_badge = _create_modifier_badge("UltraRareBadge", "RARE", Color(0.9, 0.4, 0.1))
+	rare_badge.visible = false
+	modifiers_section.add_child(rare_badge)
+
+	var bonus_label = Label.new()
+	bonus_label.name = "BonusLabel"
+	bonus_label.visible = false
+	modifiers_section.add_child(bonus_label)
+
+	var trading_section = VBoxContainer.new()
+	trading_section.name = "TradingSection"
+	trading_section.visible = false
+	main_vbox.add_child(trading_section)
+
+	var census_label = Label.new()
+	census_label.name = "CensusLabel"
+	census_label.visible = false
+	trading_section.add_child(census_label)
+
+	var trade_icon = Label.new()
+	trade_icon.name = "TradeIcon"
+	trade_icon.visible = false
+	trading_section.add_child(trade_icon)
+	var trade_status = Label.new()
+	trade_status.name = "TradeStatus"
+	trade_status.visible = false
+	trading_section.add_child(trade_status)
+
+	var cooldown_badge = _create_modifier_badge("CooldownBadge", "ON COOLDOWN", Color(0.8, 0.3, 0.3))
+	cooldown_badge.visible = false
+	trading_section.add_child(cooldown_badge)
 
 	_forge_detail_panel = panel
 	return panel
@@ -1608,7 +1831,7 @@ func _create_modifier_badge(badge_name: String, text: String, color: Color) -> P
 	var label = Label.new()
 	label.name = "BadgeText"
 	label.text = text
-	label.add_theme_font_size_override("font_size", FONT_TINY - 4)
+	label.add_theme_font_size_override("font_size", FONT_TINY)  # Readable badge text
 	label.add_theme_color_override("font_color", color)
 	badge.add_child(label)
 
@@ -1629,7 +1852,7 @@ func _style_preview_button(btn: Button) -> void:
 	btn.add_theme_stylebox_override("hover", hover_style)
 	btn.add_theme_stylebox_override("pressed", hover_style)
 
-	btn.add_theme_font_size_override("font_size", FONT_TINY - 2)
+	btn.add_theme_font_size_override("font_size", FONT_MIN)
 	btn.add_theme_color_override("font_color", TEXT_SECONDARY)
 	btn.add_theme_color_override("font_hover_color", TEXT_PRIMARY)
 
@@ -1656,10 +1879,16 @@ func _on_preview_pressed() -> void:
 			preview_btn.disabled = true
 		return
 
-	# Claim the item - adds to inventory
-	var claimed_item = ForgeItemManager.claim_single_item(item_id)
+	# Claim the item - marks on server AND adds to inventory
+	var claimed_item = await ForgeItemManager.claim_single_item(item_id)
 	if not claimed_item.is_empty():
-		print("[Armory] Successfully claimed: %s -> added to inventory" % claimed_item.get("name", item_id))
+		print("[Armory] Claimed: %s -> added to inventory" % claimed_item.get("name", item_id))
+
+		# Save inventory immediately so it persists when entering game
+		if DatabaseManager and MantleAuth:
+			var username = MantleAuth.username
+			if not username.is_empty():
+				DatabaseManager.save_inventory_for_user(username)
 
 		# Visual feedback - green flash
 		if preview_btn:
@@ -1675,13 +1904,29 @@ func _on_preview_pressed() -> void:
 
 		# Show notification
 		if NotificationManager:
-			NotificationManager.show_item_notification(
+			NotificationManager.notify_item_added(
 				claimed_item.get("name", "Forged Item"),
-				claimed_item.get("rarity", "Common")
+				1,
+				claimed_item.get("rarity", "Common").to_upper()
 			)
 
 		# Refresh the forge grid to update claimed status
 		_refresh_forge_content()
+
+		# Get updated item data with forged_id from ForgeItemManager
+		var updated_item = ForgeItemManager.get_forged_item(item_id)
+		if not updated_item.is_empty():
+			# Merge with catalog data for display
+			var catalog_data = _get_catalog_item_by_id(item_id)
+			if catalog_data.size() > 0:
+				var merged = catalog_data.duplicate()
+				merged.merge(updated_item, true)  # Backend takes precedence
+				_forge_selected_item = merged
+			else:
+				_forge_selected_item = updated_item
+
+		# Update the detail panel to show BRIDGE OUT button now that item is claimed
+		_update_forge_detail(_forge_selected_item, "forged")
 	else:
 		print("[Armory] Failed to claim item: %s (already claimed or inventory full)" % item_id)
 		# Flash red to indicate failure
@@ -1690,10 +1935,1241 @@ func _on_preview_pressed() -> void:
 			tween.tween_property(preview_btn, "modulate", Color(1.0, 0.3, 0.3), 0.15)
 			tween.tween_property(preview_btn, "modulate", Color.WHITE, 0.3)
 
-func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
-	"""Update the forge detail panel with item info (pre-computed from backend)"""
+func _style_forge_action_button(btn: Button) -> void:
+	"""Style the big orange FORGE action button"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.8, 0.4, 0.1)  # Orange
+	style.border_color = Color(1.0, 0.6, 0.2)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(6)
+	style.shadow_size = 6
+	style.shadow_color = Color(1.0, 0.5, 0.1, 0.4)
+	btn.add_theme_stylebox_override("normal", style)
+
+	var hover_style = style.duplicate()
+	hover_style.bg_color = Color(0.9, 0.5, 0.15)
+	hover_style.border_color = Color(1.0, 0.7, 0.3)
+	hover_style.shadow_size = 10
+	hover_style.shadow_color = Color(1.0, 0.5, 0.1, 0.6)
+	btn.add_theme_stylebox_override("hover", hover_style)
+	btn.add_theme_stylebox_override("pressed", hover_style)
+
+	btn.add_theme_font_size_override("font_size", FONT_BODY)
+	btn.add_theme_color_override("font_color", Color.WHITE)
+	btn.add_theme_color_override("font_hover_color", Color.WHITE)
+
+func _style_bridge_button(btn: Button) -> void:
+	"""Style the BRIDGE OUT button (purple/blue for external wallet)"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.3, 0.5)  # Dark blue
+	style.border_color = Color(0.4, 0.5, 0.8)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	btn.add_theme_stylebox_override("normal", style)
+
+	var hover_style = style.duplicate()
+	hover_style.bg_color = Color(0.3, 0.4, 0.6)
+	hover_style.border_color = Color(0.5, 0.6, 0.9)
+	btn.add_theme_stylebox_override("hover", hover_style)
+	btn.add_theme_stylebox_override("pressed", hover_style)
+
+	btn.add_theme_font_size_override("font_size", FONT_TINY)
+	btn.add_theme_color_override("font_color", Color(0.7, 0.8, 1.0))
+	btn.add_theme_color_override("font_hover_color", Color.WHITE)
+
+func _style_cancel_button(btn: Button) -> void:
+	"""Style the CANCEL button (red/warning)"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.4, 0.15, 0.15)  # Dark red
+	style.border_color = Color(0.6, 0.25, 0.25)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	btn.add_theme_stylebox_override("normal", style)
+
+	var hover_style = style.duplicate()
+	hover_style.bg_color = Color(0.5, 0.2, 0.2)
+	hover_style.border_color = Color(0.8, 0.3, 0.3)
+	btn.add_theme_stylebox_override("hover", hover_style)
+	btn.add_theme_stylebox_override("pressed", hover_style)
+
+	btn.add_theme_font_size_override("font_size", FONT_MIN)
+	btn.add_theme_color_override("font_color", Color(0.9, 0.6, 0.6))
+	btn.add_theme_color_override("font_hover_color", Color(1.0, 0.8, 0.8))
+
+func _on_bridge_out_pressed() -> void:
+	"""Handle BRIDGE OUT button press - start 48h cooldown to move item to external wallet"""
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+
+	if _forge_selected_item.is_empty():
+		return
+
+	var item_name = _forge_selected_item.get("name", _forge_selected_item.get("item_name", "Unknown Item"))
+	var forged_id = _forge_selected_item.get("forged_id", null)
+
+	if forged_id == null:
+		print("[Armory] No forged_id found for bridge-out")
+		return
+
+	print("[Armory] BRIDGE OUT pressed for: %s (forged_id: %d)" % [item_name, int(forged_id)])
+
+	# Disable button while processing
+	var bridge_btn = _forge_detail_panel.find_child("BridgeOutButton", true, false) if _forge_detail_panel else null
+	if bridge_btn:
+		bridge_btn.text = "STARTING..."
+		bridge_btn.disabled = true
+
+	# Call bridge-out API
+	ForgeItemManager.request_bridge_out(int(forged_id), _on_bridge_out_complete.bind(item_name, bridge_btn))
+
+func _on_bridge_out_complete(result: Dictionary, item_name: String, bridge_btn: Button) -> void:
+	"""Callback after unbind request completes"""
+	if result.is_empty() or result.get("bridge_requests", []).size() == 0:
+		# Failed
+		print("[Armory] Unbind failed")
+		if bridge_btn:
+			bridge_btn.text = "UNBIND"
+			bridge_btn.disabled = false
+		if NotificationManager:
+			NotificationManager.show_notification("Failed to unbind %s" % item_name, "error")
+		return
+
+	# Success - 48h cooldown started
+	var bridge_info = result.get("bridge_requests", [{}])[0]
+	var cooldown_ends = bridge_info.get("cooldown_ends_at", "")
+
+	print("[Armory] Unbind started for %s, cooldown ends: %s" % [item_name, cooldown_ends])
+
+	if SoundManager:
+		SoundManager.play_equip_sound(-6.0)
+
+	if NotificationManager:
+		NotificationManager.show_notification(
+			"%s is unbinding. 48h cooldown started." % item_name,
+			"info"
+		)
+
+	# Refresh the UI
+	_refresh_forge_content()
+	_refresh_bridge_section()
+	_forge_selected_item = {}
+	_update_forge_detail({}, "locked")
+
+func _on_cancel_bridge_pressed() -> void:
+	"""Handle CANCEL button press - cancel pending bridge-out"""
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+
+	if _forge_selected_item.is_empty():
+		return
+
+	var item_name = _forge_selected_item.get("name", _forge_selected_item.get("item_name", "Unknown Item"))
+	var forged_id = _forge_selected_item.get("forged_id", null)
+
+	if forged_id == null:
+		return
+
+	print("[Armory] CANCEL BRIDGE pressed for: %s" % item_name)
+
+	# Disable button
+	var cancel_btn = _forge_detail_panel.find_child("CancelBridgeButton", true, false) if _forge_detail_panel else null
+	if cancel_btn:
+		cancel_btn.text = "CANCELLING..."
+		cancel_btn.disabled = true
+
+	ForgeItemManager.cancel_bridge_out(int(forged_id), _on_cancel_bridge_complete.bind(item_name, cancel_btn))
+
+func _on_cancel_bridge_complete(success: bool, item_name: String, cancel_btn: Button) -> void:
+	"""Callback after cancel unbind request completes"""
+	if not success:
+		if cancel_btn:
+			cancel_btn.text = "CANCEL"
+			cancel_btn.disabled = false
+		if NotificationManager:
+			NotificationManager.show_notification("Failed to cancel unbind", "error")
+		return
+
+	print("[Armory] Unbind cancelled for %s" % item_name)
+
+	if NotificationManager:
+		NotificationManager.show_notification("%s unbind cancelled" % item_name, "success")
+
+	# Refresh
+	_refresh_forge_content()
+	_refresh_bridge_section()
+	_forge_selected_item = {}
+	_update_forge_detail({}, "locked")
+
+func _on_bridge_in_pressed() -> void:
+	"""Handle BRIDGE IN button press - bring item back from external wallet to game"""
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+
+	if _forge_selected_item.is_empty():
+		return
+
+	var item_name = _forge_selected_item.get("name", _forge_selected_item.get("item_name", "Unknown Item"))
+	var token_id = _forge_selected_item.get("token_id", -1)
+
+	if token_id == -1:
+		print("[Armory] No token_id found for bridge-in")
+		return
+
+	print("[Armory] BRIDGE IN pressed for: %s (token_id: %d)" % [item_name, int(token_id)])
+
+	# Show confirmation popup
+	_show_bridge_in_confirmation(item_name, int(token_id))
+
+func _show_bridge_in_confirmation(item_name: String, token_id: int) -> void:
+	"""Show confirmation popup before binding an item"""
+	# Create styled popup matching game theme
+	var popup = AcceptDialog.new()
+	popup.title = "Confirm Bind"
+	popup.dialog_text = "Bind \"%s\" to your character?\n\nThis will transfer the item from your lockbox to your in-game inventory." % item_name
+	popup.ok_button_text = "BIND"
+	popup.add_cancel_button("Cancel")
+	popup.confirmed.connect(_on_bridge_in_confirmed.bind(token_id, item_name, popup))
+	popup.canceled.connect(popup.queue_free)
+
+	# Style the popup to match game theme
+	_style_dialog(popup)
+
+	add_child(popup)
+	popup.popup_centered()
+
+func _style_dialog(dialog: AcceptDialog) -> void:
+	"""Apply dark theme styling to a dialog"""
+	# Create theme for the dialog
+	var dialog_theme = Theme.new()
+
+	# Panel background - dark like game UI
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.08, 0.10, 0.98)
+	panel_style.border_color = Color(0.3, 0.35, 0.45)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(8)
+	panel_style.set_content_margin_all(16)
+	dialog_theme.set_stylebox("panel", "AcceptDialog", panel_style)
+	dialog_theme.set_stylebox("panel", "Window", panel_style)
+
+	# Button styles
+	var btn_normal = StyleBoxFlat.new()
+	btn_normal.bg_color = Color(0.15, 0.18, 0.25)
+	btn_normal.border_color = Color(0.3, 0.35, 0.4)
+	btn_normal.set_border_width_all(1)
+	btn_normal.set_corner_radius_all(4)
+	btn_normal.set_content_margin_all(8)
+	dialog_theme.set_stylebox("normal", "Button", btn_normal)
+
+	var btn_hover = StyleBoxFlat.new()
+	btn_hover.bg_color = Color(0.2, 0.25, 0.35)
+	btn_hover.border_color = Color(0.4, 0.5, 0.6)
+	btn_hover.set_border_width_all(1)
+	btn_hover.set_corner_radius_all(4)
+	btn_hover.set_content_margin_all(8)
+	dialog_theme.set_stylebox("hover", "Button", btn_hover)
+
+	var btn_pressed = StyleBoxFlat.new()
+	btn_pressed.bg_color = Color(0.1, 0.12, 0.18)
+	btn_pressed.border_color = Color(0.3, 0.35, 0.4)
+	btn_pressed.set_border_width_all(1)
+	btn_pressed.set_corner_radius_all(4)
+	btn_pressed.set_content_margin_all(8)
+	dialog_theme.set_stylebox("pressed", "Button", btn_pressed)
+
+	# Text colors
+	dialog_theme.set_color("font_color", "Label", Color(0.9, 0.9, 0.92))
+	dialog_theme.set_color("font_color", "Button", Color(0.9, 0.9, 0.92))
+	dialog_theme.set_font_size("font_size", "Label", 16)
+	dialog_theme.set_font_size("font_size", "Button", 14)
+
+	# Window title
+	dialog_theme.set_color("title_color", "Window", Color(0.7, 0.8, 0.9))
+
+	dialog.theme = dialog_theme
+
+func _on_bridge_in_confirmed(token_id: int, item_name: String, popup: AcceptDialog) -> void:
+	"""Handle bind confirmation"""
+	popup.queue_free()
+
+	# Disable button if visible
+	var bridge_in_btn = _forge_detail_panel.find_child("BridgeInButton", true, false) if _forge_detail_panel else null
+	if bridge_in_btn and bridge_in_btn.visible:
+		bridge_in_btn.text = "BINDING..."
+		bridge_in_btn.disabled = true
+
+	# Call bridge-in API
+	ForgeItemManager.request_bridge_in([token_id], _on_bridge_in_complete.bind(item_name))
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BRIDGE UI SECTION - Wallet connection and item bridging
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _build_bridge_section() -> Control:
+	"""Build the bridge UI section below the detail panel"""
+	var panel = PanelContainer.new()
+	panel.clip_contents = true  # Prevent overflow - no forced height, shrink to content
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.03, 0.03, 0.04, 0.95)
+	style.border_color = Color(0.15, 0.2, 0.35)  # Blue-ish tint for bridge theme
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(6)
+	panel.add_theme_stylebox_override("panel", style)
+
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	margin.clip_contents = true  # Prevent overflow
+	panel.add_child(margin)
+
+	var main_vbox = VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 8)
+	main_vbox.clip_contents = true  # Prevent overflow
+	margin.add_child(main_vbox)
+
+	# === HEADER ROW: Title + Wallet Status ===
+	var header_row = HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 8)
+	main_vbox.add_child(header_row)
+
+	var title = Label.new()
+	title.text = "BINDING"
+	title.add_theme_font_size_override("font_size", FONT_CAPTION)
+	title.add_theme_color_override("font_color", Color(0.5, 0.6, 0.9))  # Blue-ish
+	header_row.add_child(title)
+
+	# Spacer
+	var spacer = Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_row.add_child(spacer)
+
+	# Wallet status container
+	var wallet_container = HBoxContainer.new()
+	wallet_container.add_theme_constant_override("separation", 6)
+	header_row.add_child(wallet_container)
+
+	# Wallet status indicator (dot)
+	var wallet_icon = Label.new()
+	wallet_icon.name = "WalletIcon"
+	wallet_icon.text = "○"  # Hollow dot - will change to solid when connected
+	wallet_icon.add_theme_font_size_override("font_size", FONT_TINY)
+	wallet_icon.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))
+	wallet_container.add_child(wallet_icon)
+
+	# Wallet status label
+	var wallet_status = Label.new()
+	wallet_status.name = "WalletStatusLabel"
+	wallet_status.text = "No lockbox connected"
+	wallet_status.add_theme_font_size_override("font_size", FONT_MIN)
+	wallet_status.add_theme_color_override("font_color", TEXT_DIM)
+	wallet_status.clip_text = true
+	wallet_status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	wallet_container.add_child(wallet_status)
+	_bridge_wallet_status = wallet_status
+
+	# Connect button (opens browser for SIWE flow)
+	var connect_btn = Button.new()
+	connect_btn.name = "WalletConnectButton"
+	connect_btn.text = "CONNECT"
+	connect_btn.custom_minimum_size = Vector2(75, 24)
+	connect_btn.pressed.connect(_on_wallet_connect_pressed)
+	connect_btn.mouse_entered.connect(_play_button_hover_sound)
+	_style_wallet_connect_button(connect_btn)
+	wallet_container.add_child(connect_btn)
+	_bridge_connect_btn = connect_btn
+
+	# Refresh button (hidden by default, shown after polling times out)
+	var refresh_btn = Button.new()
+	refresh_btn.name = "WalletRefreshButton"
+	refresh_btn.text = "↻"
+	refresh_btn.tooltip_text = "Refresh lockbox status"
+	refresh_btn.custom_minimum_size = Vector2(24, 24)
+	refresh_btn.visible = false
+	refresh_btn.pressed.connect(_on_wallet_refresh_pressed)
+	refresh_btn.mouse_entered.connect(_play_button_hover_sound)
+	_style_wallet_refresh_button(refresh_btn)
+	wallet_container.add_child(refresh_btn)
+	_bridge_refresh_btn = refresh_btn
+
+	# === CONTENT ROW: Bridge In | Bridging Out ===
+	var content_row = HBoxContainer.new()
+	content_row.add_theme_constant_override("separation", 12)
+	main_vbox.add_child(content_row)
+
+	# Bridge In section (left half)
+	var bridge_in_section = _build_bridge_in_section()
+	bridge_in_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_row.add_child(bridge_in_section)
+	_bridge_in_container = bridge_in_section
+
+	# Vertical divider
+	var divider = VSeparator.new()
+	divider.add_theme_constant_override("separation", 2)
+	content_row.add_child(divider)
+
+	# Bridging Out section (right half)
+	var bridging_out_section = _build_bridging_out_section()
+	bridging_out_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_row.add_child(bridging_out_section)
+	_bridging_out_container = bridging_out_section
+
+	_bridge_section = panel
+	return panel
+
+func _build_bridge_in_section() -> Control:
+	"""Build the Bridge In section showing items available from external wallet"""
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+
+	var header = Label.new()
+	header.name = "BridgeInHeader"
+	header.text = "BIND"
+	header.add_theme_font_size_override("font_size", FONT_MIN)
+	header.add_theme_color_override("font_color", Color(0.4, 0.7, 0.4))  # Green
+	vbox.add_child(header)
+
+	var items_row = HBoxContainer.new()
+	items_row.name = "BridgeInItems"
+	items_row.add_theme_constant_override("separation", 4)
+	vbox.add_child(items_row)
+
+	# Placeholder when no items
+	var empty_label = Label.new()
+	empty_label.name = "BridgeInEmpty"
+	empty_label.text = "No unbound items"
+	empty_label.add_theme_font_size_override("font_size", FONT_MIN)
+	empty_label.add_theme_color_override("font_color", TEXT_DIM)
+	items_row.add_child(empty_label)
+
+	return vbox
+
+func _build_bridging_out_section() -> Control:
+	"""Build the Bridging Out section showing items with countdown timers"""
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+
+	var header = Label.new()
+	header.name = "BridgingOutHeader"
+	header.text = "UNBINDING"
+	header.add_theme_font_size_override("font_size", FONT_MIN)
+	header.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))  # Orange
+	vbox.add_child(header)
+
+	var items_row = HBoxContainer.new()
+	items_row.name = "BridgingOutItems"
+	items_row.add_theme_constant_override("separation", 4)
+	vbox.add_child(items_row)
+
+	# Placeholder when no items unbinding
+	var empty_label = Label.new()
+	empty_label.name = "BridgingOutEmpty"
+	empty_label.text = "No items unbinding"
+	empty_label.add_theme_font_size_override("font_size", FONT_MIN)
+	empty_label.add_theme_color_override("font_color", TEXT_DIM)
+	items_row.add_child(empty_label)
+
+	return vbox
+
+func _style_wallet_connect_button(btn: Button, connected: bool = false) -> void:
+	"""Style the wallet connect button based on connection state"""
+	var style = StyleBoxFlat.new()
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(3)
+
+	if connected:
+		# Connected state: subtle green tint
+		style.bg_color = Color(0.1, 0.2, 0.15)
+		style.border_color = Color(0.2, 0.5, 0.3)
+		btn.add_theme_color_override("font_color", Color(0.5, 0.7, 0.5))
+		btn.add_theme_color_override("font_hover_color", Color(0.7, 0.9, 0.7))
+		btn.add_theme_color_override("font_pressed_color", Color(0.7, 0.9, 0.7))
+		btn.add_theme_color_override("font_focus_color", Color(0.5, 0.7, 0.5))
+
+		var hover_style = style.duplicate()
+		hover_style.bg_color = Color(0.15, 0.25, 0.18)
+		hover_style.border_color = Color(0.3, 0.6, 0.4)
+		btn.add_theme_stylebox_override("hover", hover_style)
+		btn.add_theme_stylebox_override("pressed", hover_style)
+		btn.add_theme_stylebox_override("focus", style)
+	else:
+		# Disconnected state: blue accent
+		style.bg_color = Color(0.15, 0.2, 0.35)
+		style.border_color = Color(0.3, 0.4, 0.6)
+		btn.add_theme_color_override("font_color", Color(0.6, 0.7, 0.9))
+		btn.add_theme_color_override("font_hover_color", Color(0.8, 0.9, 1.0))
+		btn.add_theme_color_override("font_pressed_color", Color(0.8, 0.9, 1.0))
+		btn.add_theme_color_override("font_focus_color", Color(0.6, 0.7, 0.9))
+
+		var hover_style = style.duplicate()
+		hover_style.bg_color = Color(0.2, 0.3, 0.5)
+		hover_style.border_color = Color(0.4, 0.5, 0.8)
+		btn.add_theme_stylebox_override("hover", hover_style)
+		btn.add_theme_stylebox_override("pressed", hover_style)
+		btn.add_theme_stylebox_override("focus", style)
+
+	btn.add_theme_stylebox_override("normal", style)
+	btn.add_theme_font_size_override("font_size", FONT_MIN)
+	btn.focus_mode = Control.FOCUS_NONE  # Disable focus to prevent outline
+
+func _refresh_bridge_section() -> void:
+	"""Refresh the bridge section with current wallet and item data"""
+	if not _bridge_section:
+		return
+
+	# Start background sync if not already running
+	_start_wallet_background_sync()
+
+	# Fetch wallet status and update UI
+	ForgeItemManager.fetch_wallet_status(_on_wallet_status_fetched)
+
+func _on_wallet_status_fetched(connected: bool, wallet_address: String) -> void:
+	"""Callback when wallet status is fetched"""
+	if not _bridge_section:
+		return
+
+	# Update wallet status icon
+	var wallet_icon = _bridge_section.find_child("WalletIcon", true, false)
+	if wallet_icon:
+		if connected:
+			wallet_icon.text = "●"  # Solid dot when connected
+			wallet_icon.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))  # Bright green
+		else:
+			wallet_icon.text = "○"  # Hollow dot when disconnected
+			wallet_icon.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))  # Gray
+
+	# Update wallet address display
+	if _bridge_wallet_status:
+		if connected:
+			var short_addr = ForgeItemManager.get_wallet_address_short()
+			_bridge_wallet_status.text = short_addr
+			_bridge_wallet_status.add_theme_color_override("font_color", Color(0.5, 0.85, 0.55))  # Bright green
+			_bridge_wallet_status.tooltip_text = wallet_address if wallet_address else "Connected"
+		else:
+			_bridge_wallet_status.text = "Not connected"
+			_bridge_wallet_status.add_theme_color_override("font_color", TEXT_DIM)
+			_bridge_wallet_status.tooltip_text = ""
+
+	# Update connect/disconnect button with proper styling
+	if _bridge_connect_btn:
+		if connected:
+			_bridge_connect_btn.text = "DISCONNECT"
+			_bridge_connect_btn.tooltip_text = "Disconnect your lockbox"
+		else:
+			_bridge_connect_btn.text = "CONNECT"
+			_bridge_connect_btn.tooltip_text = "Connect lockbox to bind/unbind items"
+		# Re-style button based on connection state
+		_style_wallet_connect_button(_bridge_connect_btn, connected)
+
+	# Fetch bridge-in available items if wallet connected
+	if connected:
+		ForgeItemManager.fetch_bridge_in_available(_on_bridge_in_available_fetched)
+	else:
+		_update_bridge_in_display([])
+
+	# Update bridging out items
+	_update_bridging_out_display()
+
+func _on_bridge_in_available_fetched(items: Array) -> void:
+	"""Callback when bridge-in available items are fetched"""
+	_update_bridge_in_display(items)
+
+func _update_bridge_in_display(items: Array) -> void:
+	"""Update the bridge-in section with available items"""
+	if not _bridge_in_container:
+		return
+
+	var items_row = _bridge_in_container.find_child("BridgeInItems", true, false)
+	var empty_label = _bridge_in_container.find_child("BridgeInEmpty", true, false)
+
+	if not items_row:
+		return
+
+	# Clear existing item cards (keep empty label)
+	for child in items_row.get_children():
+		if child.name != "BridgeInEmpty":
+			child.queue_free()
+
+	if items.is_empty():
+		if empty_label:
+			empty_label.visible = true
+			if ForgeItemManager.is_wallet_connected():
+				empty_label.text = "No items in lockbox"
+			else:
+				empty_label.text = "Connect lockbox"
+		return
+
+	if empty_label:
+		empty_label.visible = false
+
+	# Add small item cards for each available item (max 4)
+	for i in range(mini(items.size(), 4)):
+		var item = items[i]
+		var card = _create_bridge_item_card(item, true)
+		items_row.add_child(card)
+
+	# Show "+N more" if more items
+	if items.size() > 4:
+		var more_label = Label.new()
+		more_label.text = "+%d" % (items.size() - 4)
+		more_label.add_theme_font_size_override("font_size", FONT_MIN)
+		more_label.add_theme_color_override("font_color", TEXT_DIM)
+		items_row.add_child(more_label)
+
+func _update_bridging_out_display() -> void:
+	"""Update the bridging-out section with items currently bridging"""
+	if not _bridging_out_container:
+		return
+
+	var items_row = _bridging_out_container.find_child("BridgingOutItems", true, false)
+	var empty_label = _bridging_out_container.find_child("BridgingOutEmpty", true, false)
+
+	if not items_row:
+		return
+
+	# Clear existing item cards
+	for child in items_row.get_children():
+		if child.name != "BridgingOutEmpty":
+			child.queue_free()
+
+	var bridging_items = ForgeItemManager.get_items_bridging_out()
+
+	if bridging_items.is_empty():
+		if empty_label:
+			empty_label.visible = true
+		# Stop countdown timer when no items bridging
+		_stop_bridge_countdown_timer()
+		return
+
+	if empty_label:
+		empty_label.visible = false
+
+	# Add small item cards for each bridging item (max 4)
+	for i in range(mini(bridging_items.size(), 4)):
+		var item = bridging_items[i]
+		var card = _create_bridge_item_card(item, false)
+		items_row.add_child(card)
+
+	# Start countdown timer to update displays every second
+	_start_bridge_countdown_timer()
+
+func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
+	"""Create a small item card for the bridge section"""
+	var item_name = item.get("item_name", item.get("name", "?"))
+	var item_id = item.get("item_id", "")
+	var forged_id = item.get("forged_id", item.get("id", ""))
+
+	# For bridging out, create a vertical container with icon and countdown
+	if not is_bridge_in:
+		var vbox = VBoxContainer.new()
+		vbox.add_theme_constant_override("separation", 2)
+
+		var card = PanelContainer.new()
+		card.custom_minimum_size = Vector2(55, 55)  # 25% bigger than 44
+
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.08, 0.08, 0.10)
+		style.border_color = Color(0.6, 0.4, 0.2)  # Orange border for bridging out
+		style.set_border_width_all(1)
+		style.set_corner_radius_all(3)
+		card.add_theme_stylebox_override("panel", style)
+
+		var center = CenterContainer.new()
+		card.add_child(center)
+
+		# Item icon or placeholder
+		var icon_path = _get_forge_icon_path(item_id)
+		if icon_path and FileAccess.file_exists(icon_path):
+			var tex = load(icon_path)
+			if tex:
+				var icon = TextureRect.new()
+				icon.texture = tex
+				icon.custom_minimum_size = Vector2(45, 45)  # 25% bigger than 36
+				icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				center.add_child(icon)
+			else:
+				var label = Label.new()
+				label.text = item_name.substr(0, 1).to_upper()
+				label.add_theme_font_size_override("font_size", FONT_BODY)
+				label.add_theme_color_override("font_color", TEXT_SECONDARY)
+				center.add_child(label)
+		else:
+			var label = Label.new()
+			label.text = item_name.substr(0, 1).to_upper() if item_name else "?"
+			label.add_theme_font_size_override("font_size", FONT_BODY)
+			label.add_theme_color_override("font_color", TEXT_SECONDARY)
+			center.add_child(label)
+
+		vbox.add_child(card)
+
+		# Countdown label below the card
+		var hours = item.get("bridge_hours_remaining", item.get("hours_remaining", 0.0))
+		var countdown_label = Label.new()
+		countdown_label.name = "CountdownLabel_%s" % str(forged_id)
+		countdown_label.text = _format_bridge_countdown(hours)
+		countdown_label.add_theme_font_size_override("font_size", FONT_MIN)
+		countdown_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
+		countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		countdown_label.set_meta("hours_remaining", hours)
+		countdown_label.set_meta("last_update_time", Time.get_ticks_msec())
+		vbox.add_child(countdown_label)
+
+		# Tooltip
+		card.tooltip_text = "%s\n%s remaining" % [item_name, _format_bridge_countdown(hours)]
+
+		return vbox
+	else:
+		# Bridge-in card (existing behavior)
+		var card = PanelContainer.new()
+		card.custom_minimum_size = Vector2(55, 55)  # 25% bigger than 44
+
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.08, 0.08, 0.10)
+		style.border_color = Color(0.3, 0.5, 0.3)  # Green border
+		style.set_border_width_all(1)
+		style.set_corner_radius_all(3)
+		card.add_theme_stylebox_override("panel", style)
+
+		var center = CenterContainer.new()
+		card.add_child(center)
+
+		var icon_path = _get_forge_icon_path(item_id)
+		if icon_path and FileAccess.file_exists(icon_path):
+			var tex = load(icon_path)
+			if tex:
+				var icon = TextureRect.new()
+				icon.texture = tex
+				icon.custom_minimum_size = Vector2(45, 45)  # 25% bigger than 36
+				icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				center.add_child(icon)
+			else:
+				var label = Label.new()
+				label.text = item_name.substr(0, 1).to_upper()
+				label.add_theme_font_size_override("font_size", FONT_BODY_LG)
+				label.add_theme_color_override("font_color", TEXT_SECONDARY)
+				center.add_child(label)
+		else:
+			var label = Label.new()
+			label.text = item_name.substr(0, 1).to_upper() if item_name else "?"
+			label.add_theme_font_size_override("font_size", FONT_BODY_LG)
+			label.add_theme_color_override("font_color", TEXT_SECONDARY)
+			center.add_child(label)
+
+		card.tooltip_text = "%s\nClick to bind" % item_name
+		card.gui_input.connect(_on_bridge_in_card_clicked.bind(item))
+
+		return card
+
+func _format_bridge_countdown(hours: float) -> String:
+	"""Format hours remaining as HH:MM:SS or MM:SS countdown"""
+	if hours <= 0:
+		return "Ready!"
+
+	var total_seconds = int(hours * 3600)
+	var h = total_seconds / 3600
+	var m = (total_seconds % 3600) / 60
+	var s = total_seconds % 60
+
+	if h > 0:
+		return "%02d:%02d:%02d" % [h, m, s]
+	else:
+		return "%02d:%02d" % [m, s]
+
+func _on_bridge_in_card_clicked(event: InputEvent, item: Dictionary) -> void:
+	"""Handle click on a bridge-in item card - show confirmation popup"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var token_id = item.get("token_id", -1)
+		var item_name = item.get("item_name", "Unknown")
+
+		if token_id == -1:
+			return
+
+		if SoundManager:
+			SoundManager.play_button_click_sound(-6.0)
+
+		print("[Armory] Bridge-in clicked for: %s (token_id: %d)" % [item_name, token_id])
+
+		# Show confirmation popup
+		_show_bridge_in_confirmation(item_name, int(token_id))
+
+func _on_bridge_in_complete(bridged_items: Array, item_name: String) -> void:
+	"""Callback when bind completes"""
+	# Reset button if visible
+	var bridge_in_btn = _forge_detail_panel.find_child("BridgeInButton", true, false) if _forge_detail_panel else null
+	if bridge_in_btn:
+		bridge_in_btn.text = "BIND"
+		bridge_in_btn.disabled = false
+
+	if bridged_items.is_empty():
+		if NotificationManager:
+			NotificationManager.show_notification("Failed to bind %s" % item_name, "error")
+		return
+
+	if SoundManager:
+		SoundManager.play_equip_sound(-6.0)
+
+	if NotificationManager:
+		NotificationManager.show_notification("%s bound successfully!" % item_name, "success")
+
+	# Refresh UI
+	_refresh_forge_content()
+	_refresh_bridge_section()
+	_forge_selected_item = {}
+	_update_forge_detail({}, "locked")
+
+func _on_wallet_connect_pressed() -> void:
+	"""Handle wallet connect/disconnect button press"""
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+
+	if ForgeItemManager.is_wallet_connected():
+		# Disconnect wallet
+		print("[Armory] Disconnecting wallet...")
+
+		# Disable button while processing
+		if _bridge_connect_btn:
+			_bridge_connect_btn.text = "..."
+			_bridge_connect_btn.disabled = true
+
+		ForgeItemManager.disconnect_wallet(_on_wallet_disconnect_complete)
+	else:
+		# Connect - open browser for SIWE flow
+		print("[Armory] Opening wallet connect...")
+		var connect_url = MantleAuth.get_api_base() + "/wallet/connect"
+		OS.shell_open(connect_url)
+
+		if NotificationManager:
+			NotificationManager.show_notification("Opening browser to connect wallet...", "info")
+
+		# Start polling for wallet connection
+		_start_wallet_polling()
+
+func _on_wallet_disconnect_complete(success: bool) -> void:
+	"""Callback after wallet disconnect"""
+	if _bridge_connect_btn:
+		_bridge_connect_btn.disabled = false
+
+	if success:
+		print("[Armory] Wallet disconnected successfully")
+
+		# Update UI to show disconnected state
+		if _bridge_wallet_status:
+			_bridge_wallet_status.text = "No lockbox connected"
+			_bridge_wallet_status.add_theme_color_override("font_color", TEXT_DIM)
+
+		if _bridge_connect_btn:
+			_bridge_connect_btn.text = "CONNECT"
+
+		# Update wallet icon
+		var wallet_icon = _bridge_section.find_child("WalletIcon", true, false) if _bridge_section else null
+		if wallet_icon:
+			wallet_icon.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+
+		# Clear bridge-in display
+		_update_bridge_in_display([])
+
+		if SoundManager:
+			SoundManager.play_button_click_sound(-6.0)
+
+		if NotificationManager:
+			NotificationManager.show_notification("Wallet disconnected", "info")
+	else:
+		# Failed - restore button
+		if _bridge_connect_btn:
+			_bridge_connect_btn.text = "DISCONNECT"
+
+		if NotificationManager:
+			NotificationManager.show_notification("Failed to disconnect wallet", "error")
+
+func _on_wallet_refresh_pressed() -> void:
+	"""Handle manual refresh button press"""
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+
+	print("[Armory] Manual wallet refresh...")
+
+	# Visual feedback
+	if _bridge_refresh_btn:
+		_bridge_refresh_btn.disabled = true
+		_bridge_refresh_btn.text = "..."
+
+	# Fetch wallet status
+	ForgeItemManager.fetch_wallet_status(_on_manual_refresh_complete)
+
+func _on_manual_refresh_complete(connected: bool, wallet_address: String) -> void:
+	"""Callback after manual refresh"""
+	# Re-enable refresh button
+	if _bridge_refresh_btn:
+		_bridge_refresh_btn.disabled = false
+		_bridge_refresh_btn.text = "↻"
+
+	# Update the UI
+	_on_wallet_status_fetched(connected, wallet_address)
+
+	if connected:
+		if NotificationManager:
+			NotificationManager.show_notification("Wallet connected!", "success")
+		# Hide refresh button since we're connected
+		if _bridge_refresh_btn:
+			_bridge_refresh_btn.visible = false
+
+func _start_wallet_polling() -> void:
+	"""Start polling for wallet connection status"""
+	# Stop any existing polling
+	_stop_wallet_polling()
+
+	_wallet_poll_count = 0
+
+	# Update UI to show waiting state
+	if _bridge_wallet_status:
+		_bridge_wallet_status.text = "Waiting for connection..."
+		_bridge_wallet_status.add_theme_color_override("font_color", Color(0.8, 0.7, 0.4))
+
+	if _bridge_connect_btn:
+		_bridge_connect_btn.text = "WAITING"
+		_bridge_connect_btn.disabled = true
+
+	# Hide refresh button during polling
+	if _bridge_refresh_btn:
+		_bridge_refresh_btn.visible = false
+
+	# Create and start timer
+	_wallet_poll_timer = Timer.new()
+	_wallet_poll_timer.wait_time = WALLET_POLL_INTERVAL
+	_wallet_poll_timer.timeout.connect(_on_wallet_poll_tick)
+	add_child(_wallet_poll_timer)
+	_wallet_poll_timer.start()
+
+	print("[Armory] Started wallet polling (every %.1fs, max %d polls)" % [WALLET_POLL_INTERVAL, WALLET_POLL_MAX_COUNT])
+
+func _stop_wallet_polling() -> void:
+	"""Stop wallet connection polling"""
+	if _wallet_poll_timer:
+		_wallet_poll_timer.stop()
+		_wallet_poll_timer.queue_free()
+		_wallet_poll_timer = null
+
+func _start_wallet_background_sync() -> void:
+	"""Start background wallet sync that runs while in Armory"""
+	if _wallet_sync_timer:
+		return  # Already running
+
+	_wallet_sync_timer = Timer.new()
+	_wallet_sync_timer.wait_time = WALLET_SYNC_INTERVAL
+	_wallet_sync_timer.timeout.connect(_on_wallet_background_sync)
+	add_child(_wallet_sync_timer)
+	_wallet_sync_timer.start()
+
+	print("[Armory] Started wallet background sync (every %.0fs)" % WALLET_SYNC_INTERVAL)
+
+func _stop_wallet_background_sync() -> void:
+	"""Stop background wallet sync"""
+	if _wallet_sync_timer:
+		_wallet_sync_timer.stop()
+		_wallet_sync_timer.queue_free()
+		_wallet_sync_timer = null
+
+func _start_bridge_countdown_timer() -> void:
+	"""Start the bridge countdown timer to update countdown displays every second"""
+	if _bridge_countdown_timer:
+		return  # Already running
+
+	_bridge_countdown_timer = Timer.new()
+	_bridge_countdown_timer.wait_time = BRIDGE_COUNTDOWN_UPDATE_INTERVAL
+	_bridge_countdown_timer.timeout.connect(_on_bridge_countdown_tick)
+	add_child(_bridge_countdown_timer)
+	_bridge_countdown_timer.start()
+
+func _stop_bridge_countdown_timer() -> void:
+	"""Stop the bridge countdown timer"""
+	if _bridge_countdown_timer:
+		_bridge_countdown_timer.stop()
+		_bridge_countdown_timer.queue_free()
+		_bridge_countdown_timer = null
+
+func _on_bridge_countdown_tick() -> void:
+	"""Update all bridge countdown labels every second"""
+	if not _bridging_out_container:
+		return
+
+	var items_row = _bridging_out_container.find_child("BridgingOutItems", true, false)
+	if not items_row:
+		return
+
+	var has_active_countdowns = false
+	var any_just_completed = false
+
+	# Find all countdown labels and update them
+	for child in items_row.get_children():
+		if child is VBoxContainer:
+			for subchild in child.get_children():
+				if subchild is Label and subchild.name.begins_with("CountdownLabel_"):
+					var hours_remaining = subchild.get_meta("hours_remaining", 0.0)
+					var last_update = subchild.get_meta("last_update_time", Time.get_ticks_msec())
+					var was_active = subchild.get_meta("was_active", true)
+					var now = Time.get_ticks_msec()
+
+					# Calculate elapsed time since last update and subtract from hours
+					var elapsed_seconds = (now - last_update) / 1000.0
+					var new_hours = hours_remaining - (elapsed_seconds / 3600.0)
+
+					if new_hours > 0:
+						has_active_countdowns = true
+						subchild.text = _format_bridge_countdown(new_hours)
+						subchild.set_meta("hours_remaining", new_hours)
+						subchild.set_meta("last_update_time", now)
+						subchild.set_meta("was_active", true)
+					else:
+						subchild.text = "Ready!"
+						subchild.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))  # Green when ready
+						# Check if this just transitioned to ready
+						if was_active:
+							any_just_completed = true
+							subchild.set_meta("was_active", false)
+
+	# Also update the detail panel bridge status if visible
+	_update_detail_panel_countdown()
+
+	# If any countdown just completed, trigger bridge status check for auto-confirm
+	if any_just_completed:
+		print("[Armory] Bridge countdown completed - triggering auto-confirm check")
+		ForgeItemManager.fetch_bridge_status()
+
+	# Stop timer if no active countdowns
+	if not has_active_countdowns:
+		_stop_bridge_countdown_timer()
+
+func _update_detail_panel_countdown() -> void:
+	"""Update the countdown in the detail panel if a bridging item is selected"""
+	if not _forge_detail_panel or _forge_selected_item.is_empty():
+		return
+
+	var bridge_status = _forge_selected_item.get("bridge_status", "in_game")
+	if bridge_status != "bridging_out":
+		return
+
+	var bridge_status_label = _forge_detail_panel.find_child("BridgeStatusLabel", true, false)
+	if not bridge_status_label:
+		return
+
+	var hours = _forge_selected_item.get("bridge_hours_remaining", 0.0)
+	if hours > 0:
+		# Decrement by 1 second
+		hours -= (1.0 / 3600.0)
+		_forge_selected_item["bridge_hours_remaining"] = hours
+
+		if hours <= 0:
+			bridge_status_label.text = "📤 Unbinding..."
+			bridge_status_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+		else:
+			bridge_status_label.text = "⏳ %s remaining" % _format_bridge_countdown(hours)
+			bridge_status_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
+
+var _last_known_wallet_connected: bool = false
+
+func _on_wallet_background_sync() -> void:
+	"""Background sync tick - silently check wallet status and bridge status"""
+	# Don't sync if active polling is happening (user clicked CONNECT)
+	if _wallet_poll_timer:
+		return
+
+	# Remember current state before fetch
+	_last_known_wallet_connected = ForgeItemManager.is_wallet_connected()
+
+	ForgeItemManager.fetch_wallet_status(_on_wallet_background_sync_response)
+
+	# Also check bridge status (will auto-confirm any ready items)
+	ForgeItemManager.fetch_bridge_status()
+
+func _on_wallet_background_sync_response(connected: bool, wallet_address: String) -> void:
+	"""Handle background sync response - only update UI if state changed"""
+	# Only update UI if connection state actually changed
+	if connected != _last_known_wallet_connected:
+		print("[Armory] Wallet state changed via background sync: %s" % str(connected))
+		_on_wallet_status_fetched(connected, wallet_address)
+
+		if connected:
+			if SoundManager:
+				SoundManager.play_equip_sound(-8.0)  # Subtle sound
+			if NotificationManager:
+				NotificationManager.show_notification("Wallet connected", "success")
+		else:
+			# Wallet was disconnected externally (e.g., from web app)
+			if NotificationManager:
+				NotificationManager.show_notification("Wallet disconnected", "info")
+
+func _on_wallet_poll_tick() -> void:
+	"""Called each poll interval to check wallet status"""
+	_wallet_poll_count += 1
+
+	print("[Armory] Wallet poll %d/%d" % [_wallet_poll_count, WALLET_POLL_MAX_COUNT])
+
+	# Check if we've exceeded max polls (timeout)
+	if _wallet_poll_count >= WALLET_POLL_MAX_COUNT:
+		_on_wallet_poll_timeout()
+		return
+
+	# Poll wallet status
+	ForgeItemManager.fetch_wallet_status(_on_wallet_poll_response)
+
+func _on_wallet_poll_response(connected: bool, wallet_address: String) -> void:
+	"""Callback for each poll response"""
+	if connected:
+		# Success! Wallet is now connected
+		print("[Armory] Wallet connected via polling!")
+		_stop_wallet_polling()
+
+		# Update UI
+		_on_wallet_status_fetched(connected, wallet_address)
+
+		# Re-enable connect button (now shows DISCONNECT)
+		if _bridge_connect_btn:
+			_bridge_connect_btn.disabled = false
+
+		if SoundManager:
+			SoundManager.play_equip_sound(-6.0)
+
+		if NotificationManager:
+			NotificationManager.show_notification("Wallet connected successfully!", "success")
+	else:
+		# Still waiting - update status text with dots animation
+		if _bridge_wallet_status:
+			var dots = ".".repeat((_wallet_poll_count % 3) + 1)
+			_bridge_wallet_status.text = "Waiting for connection" + dots
+
+func _on_wallet_poll_timeout() -> void:
+	"""Called when polling times out without successful connection"""
+	print("[Armory] Wallet polling timed out")
+	_stop_wallet_polling()
+
+	# Reset UI
+	if _bridge_wallet_status:
+		_bridge_wallet_status.text = "Connection timed out"
+		_bridge_wallet_status.add_theme_color_override("font_color", Color(0.8, 0.5, 0.4))
+
+	if _bridge_connect_btn:
+		_bridge_connect_btn.text = "CONNECT"
+		_bridge_connect_btn.disabled = false
+
+	# Show refresh button for manual retry
+	if _bridge_refresh_btn:
+		_bridge_refresh_btn.visible = true
+
+	if NotificationManager:
+		NotificationManager.show_notification("Wallet connection timed out. Click refresh to check again.", "warning")
+
+func _style_wallet_refresh_button(btn: Button) -> void:
+	"""Style the wallet refresh button"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.12, 0.14, 0.18)
+	style.border_color = Color(0.25, 0.28, 0.35)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(3)
+	btn.add_theme_stylebox_override("normal", style)
+
+	var hover_style = style.duplicate()
+	hover_style.bg_color = Color(0.18, 0.22, 0.28)
+	hover_style.border_color = Color(0.35, 0.4, 0.5)
+	btn.add_theme_stylebox_override("hover", hover_style)
+	btn.add_theme_stylebox_override("pressed", hover_style)
+
+	btn.add_theme_font_size_override("font_size", FONT_TINY)
+	btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	btn.add_theme_color_override("font_hover_color", TEXT_PRIMARY)
+
+func _get_forge_icon_path(item_id: String) -> String:
+	"""Get the icon path for a forge item from catalog"""
+	for catalog_item in FORGE_CATALOG:
+		if catalog_item.get("id") == item_id:
+			return catalog_item.get("icon", "")
+	return ""
+
+func _on_forge_button_pressed() -> void:
+	"""Handle FORGE button press - forges the item and adds directly to inventory"""
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+
+	if _forge_selected_item.is_empty():
+		return
+
+	var item_name = _forge_selected_item.get("name", "Unknown Item")
+	var achievement_name = _forge_selected_item.get("achievement", "")
+	print("[Armory] FORGE pressed for: %s (achievement: %s)" % [item_name, achievement_name])
+
+	# Find the achievement_id from forgeable achievements
+	var achievement_id = -1
+	if ForgeItemManager:
+		var forgeable = ForgeItemManager.get_forgeable_achievements()
+		for ach in forgeable:
+			if ach.get("display_name", "") == achievement_name:
+				achievement_id = ach.get("achievement_id", -1)
+				break
+
+	if achievement_id == -1:
+		print("[Armory] Could not find achievement_id for: %s" % achievement_name)
+		if NotificationManager:
+			NotificationManager.show_notification("Could not find achievement to forge", "error")
+		return
+
+	# Disable button while forging
+	var forge_btn = _forge_detail_panel.find_child("ForgeButton", true, false) if _forge_detail_panel else null
+	if forge_btn:
+		forge_btn.text = "FORGING..."
+		forge_btn.disabled = true
+
+	# Call the forge API
+	print("[Armory] Calling forge API with achievement_id: %d" % achievement_id)
+	ForgeItemManager.claim_forge(achievement_id, _on_forge_complete.bind(item_name, forge_btn))
+
+func _on_forge_complete(forged_item: Dictionary, item_name: String, forge_btn: Button) -> void:
+	"""Callback after forge API completes - item is now forged (claimable or listable on OpenSea)"""
+	print("[Armory] Forge complete callback - forged_item: %s" % str(forged_item))
+
+	if forged_item.is_empty():
+		# Forge failed
+		print("[Armory] Forge failed - empty response")
+		if forge_btn:
+			forge_btn.text = "FORGE"
+			forge_btn.disabled = false
+		if NotificationManager:
+			NotificationManager.show_notification("Failed to forge %s" % item_name, "error")
+		return
+
+	# Success - item is now minted on-chain
+	print("[Armory] Successfully forged: %s" % item_name)
+	if SoundManager:
+		SoundManager.play_equip_sound(-6.0)
+
+	if NotificationManager:
+		var rarity = forged_item.get("item_rarity", "Common").to_upper()
+		NotificationManager.show_notification(
+			"%s forged! Claim to inventory or list on OpenSea." % item_name,
+			"success"
+		)
+
+	# Refresh forge status to update forgeable list
+	ForgeItemManager.fetch_forge_status()
+
+	# Refresh the forge catalog to show item as "forged" (claimable)
+	_refresh_forge_content()
+
+	# Clear selection and reset detail panel
+	_forge_selected_item = {}
+	_forge_selected_card = null
+	_update_forge_detail({}, "locked")
+
+func _update_forge_detail(item: Dictionary, item_state: String) -> void:
+	"""Update the forge detail panel with item info (pre-computed from backend)
+	States: 'forged', 'forgeable', 'locked'
+	"""
 	if not _forge_detail_panel:
 		return
+
+	var is_owned = item_state == "forged"
+	var is_forgeable = item_state == "forgeable"
 
 	var name_label = _forge_detail_panel.find_child("ItemName", true, false)
 	var rarity_label = _forge_detail_panel.find_child("ItemRarity", true, false)
@@ -1703,6 +3179,7 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 	var icon_texture = _forge_detail_panel.find_child("IconTexture", true, false)
 	var icon_container = _forge_detail_panel.find_child("DetailIcon", true, false)
 	var preview_btn = _forge_detail_panel.find_child("PreviewButton", true, false)
+	var forge_btn = _forge_detail_panel.find_child("ForgeButton", true, false)
 
 	# Modifier UI elements (display pre-computed data)
 	var modifiers_section = _forge_detail_panel.find_child("ModifiersSection", true, false)
@@ -1720,6 +3197,7 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 		if unlock_label: unlock_label.text = "Select an item to see details"
 		if lore_label: lore_label.visible = false
 		if preview_btn: preview_btn.visible = false
+		if forge_btn: forge_btn.visible = false
 		if modifiers_section: modifiers_section.visible = false
 		if icon_label:
 			icon_label.text = "?"
@@ -1747,26 +3225,73 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 
 	if unlock_label:
 		if is_owned:
-			var item_id = item.get("id", item.get("item_id", ""))
-			var already_claimed = ForgeItemManager.is_item_claimed(item_id)
-			if already_claimed:
-				unlock_label.text = "✓ CLAIMED - Check your inventory!"
-				unlock_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
-			else:
-				unlock_label.text = "✓ UNLOCKED - Click CLAIM to add to inventory"
-				unlock_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))  # Brighter green for action
+			# Items are auto-added to inventory on forge, no claim step needed
+			unlock_label.text = "✓ Ready to equip!"
+			unlock_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+		elif is_forgeable:
+			unlock_label.text = "Ready to forge!"
+			unlock_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
 		else:
-			unlock_label.text = "🔒 HOW TO UNLOCK: Link %s → Complete \"%s\"" % [item.get("game", "???"), item.get("achievement", "???")]
-			unlock_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))  # Orange for attention
+			unlock_label.text = "Locked"
+			unlock_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 
-	# Show lore text
-	if lore_label:
-		var lore = item.get("lore", "")
-		if lore != "":
-			lore_label.text = "\"%s\"" % lore
-			lore_label.visible = true
+	# Update stats section based on item category
+	var ability_container = _forge_detail_panel.find_child("AbilityContainer", true, false)
+	var ability_label = _forge_detail_panel.find_child("AbilityLabel", true, false)
+
+	# Get item stats (simulate based on rarity and category for now)
+	var category = item.get("category", "weapons")
+	var rarity_multiplier = {"Common": 1.0, "Uncommon": 1.2, "Rare": 1.5, "Epic": 1.8, "Legendary": 2.2}.get(rarity, 1.0)
+
+	# Show/hide stat containers based on category (new layout uses containers)
+	var damage_container = _forge_detail_panel.find_child("StatDamageContainer", true, false)
+	var damage_value = _forge_detail_panel.find_child("StatDamageValue", true, false)
+	var defense_container = _forge_detail_panel.find_child("StatDefenseContainer", true, false)
+	var defense_value = _forge_detail_panel.find_child("StatDefenseValue", true, false)
+	var speed_container = _forge_detail_panel.find_child("StatSpeedContainer", true, false)
+	var speed_value = _forge_detail_panel.find_child("StatSpeedValue", true, false)
+	var crit_container = _forge_detail_panel.find_child("StatCritContainer", true, false)
+	var crit_value = _forge_detail_panel.find_child("StatCritValue", true, false)
+
+	# Reset all stats visibility
+	if damage_container: damage_container.visible = false
+	if defense_container: defense_container.visible = false
+	if speed_container: speed_container.visible = false
+	if crit_container: crit_container.visible = false
+
+	if category == "weapons":
+		var base_damage = int(10 * rarity_multiplier)
+		var speed_bonus = int(5 * rarity_multiplier)
+		if damage_container and damage_value:
+			damage_container.visible = true
+			damage_value.text = "+%d" % base_damage
+		if speed_container and speed_value:
+			speed_container.visible = true
+			speed_value.text = "+%d%%" % speed_bonus
+		if rarity in ["Epic", "Legendary"] and crit_container and crit_value:
+			crit_container.visible = true
+			crit_value.text = "+%d%%" % int(3 * rarity_multiplier)
+	elif category in ["armor", "shields"]:
+		var base_defense = int(8 * rarity_multiplier)
+		if defense_container and defense_value:
+			defense_container.visible = true
+			defense_value.text = "+%d" % base_defense
+	elif category == "accessories":
+		# Accessories might have special effects instead of raw stats
+		pass
+
+	# Show special ability from achievement name (as the item's unique effect)
+	if ability_container and ability_label:
+		var achievement = item.get("achievement", "")
+		if achievement != "" and is_owned:
+			ability_container.visible = true
+			ability_label.text = achievement
 		else:
-			lore_label.visible = false
+			ability_container.visible = false
+
+	# Lore text removed from detail panel - shown in tooltip only
+	if lore_label:
+		lore_label.visible = false
 
 	# Load actual item icon
 	var icon_path = item.get("icon", "")
@@ -1781,8 +3306,7 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 				icon_label.visible = false
 
 	if not icon_loaded and icon_label:
-		# Fallback to category emoji
-		var category = item.get("category", "weapons")
+		# Fallback to category emoji (reuse category from stats section)
 		match category:
 			"weapons": icon_label.text = "⚔"
 			"armor": icon_label.text = "👑"
@@ -1800,20 +3324,79 @@ func _update_forge_detail(item: Dictionary, is_owned: bool) -> void:
 			style.border_color = rarity_color.darkened(0.3) if is_owned else CARD_BORDER
 			icon_container.add_theme_stylebox_override("panel", style)
 
-	# Show claim button for owned items (check if already claimed)
+	# Get bridge UI elements
+	var bridge_out_btn = _forge_detail_panel.find_child("BridgeOutButton", true, false)
+	var cancel_bridge_btn = _forge_detail_panel.find_child("CancelBridgeButton", true, false)
+	var bridge_status_label = _forge_detail_panel.find_child("BridgeStatusLabel", true, false)
+
+	# Get bridge status for this item
+	var bridge_status = item.get("bridge_status", "in_game")
+	var is_bridging = bridge_status == "bridging_out"
+	var is_bridged = bridge_status == "bridged"
+
+	# Items are auto-claimed on forge and bridge-in, so no CLAIM button needed
+	# Just show status indicator for forged items
 	if preview_btn:
-		preview_btn.visible = is_owned
-		if is_owned:
-			var item_id = item.get("id", item.get("item_id", ""))
-			var already_claimed = ForgeItemManager.is_item_claimed(item_id)
-			if already_claimed:
-				preview_btn.text = "CLAIMED"
-				preview_btn.disabled = true
-			else:
-				preview_btn.text = "CLAIM"
-				preview_btn.disabled = false
+		if is_bridging or is_bridged:
+			preview_btn.visible = false
+		elif is_owned and bridge_status == "in_game":
+			# Item is in inventory and ready to use
+			preview_btn.visible = true
+			preview_btn.text = "IN INVENTORY"
+			preview_btn.disabled = true
 		else:
-			preview_btn.text = ""
+			preview_btn.visible = false
+
+	# Show FORGE button only for forgeable items (achievement unlocked, not yet forged)
+	if forge_btn:
+		forge_btn.visible = is_forgeable
+
+	# === Bind buttons logic ===
+	# UNBIND button - shown for items that are in_game (items auto-claimed on forge/bind)
+	if bridge_out_btn:
+		bridge_out_btn.visible = is_owned and bridge_status == "in_game"
+		bridge_out_btn.text = "UNBIND"
+		bridge_out_btn.disabled = false
+
+	# CANCEL button - shown when item is unbinding (cancellable during cooldown)
+	if cancel_bridge_btn:
+		var can_still_cancel = item.get("can_confirm", false) == false  # Can cancel while cooldown active
+		cancel_bridge_btn.visible = is_bridging and can_still_cancel
+		cancel_bridge_btn.text = "CANCEL"
+		cancel_bridge_btn.disabled = false
+
+	# BIND button - shown when item is in external wallet (unbound)
+	var bridge_in_btn = _forge_detail_panel.find_child("BridgeInButton", true, false)
+	if bridge_in_btn:
+		bridge_in_btn.visible = is_bridged and is_owned
+
+	# Bridge status label - show cooldown timer or bridged status
+	if bridge_status_label:
+		if is_bridging:
+			var hours_remaining = item.get("hours_remaining", item.get("bridge_hours_remaining", 0.0))
+			var transfer_ready = item.get("can_confirm", false)
+			if transfer_ready:
+				bridge_status_label.text = "📤 Unbinding..."
+				bridge_status_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+			else:
+				bridge_status_label.text = "⏳ %.1fh until unbound" % hours_remaining
+				bridge_status_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
+			bridge_status_label.visible = true
+		elif is_bridged:
+			bridge_status_label.text = "📤 Unbound"
+			bridge_status_label.add_theme_color_override("font_color", Color(0.5, 0.6, 0.9))
+			bridge_status_label.visible = true
+		else:
+			bridge_status_label.visible = false
+
+	# Update unlock label for bind states
+	if unlock_label:
+		if is_bridging:
+			unlock_label.text = "⏳ Unbinding..."
+			unlock_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
+		elif is_bridged:
+			unlock_label.text = "📤 Unbound"
+			unlock_label.add_theme_color_override("font_color", Color(0.5, 0.6, 0.9))
 
 	# === Update Modifiers Section (pre-computed from backend) ===
 	_update_modifiers_display(item, modifiers_section, effort_bar, effort_value,
@@ -2018,58 +3601,98 @@ func _switch_forge_tab(_tab_id: String = "") -> void:
 	_refresh_forge_content()
 
 func _build_forge_unified_content() -> Control:
-	"""Build unified forge view - unlocked items at top, locked items below"""
+	"""Build unified forge view with 3 states:
+	1. FORGED (claimable) - User has forged this item via webapp, can claim to game
+	2. FORGEABLE - Achievement unlocked, can forge via webapp (not in game)
+	3. LOCKED - Achievement not unlocked yet
+	"""
+	# Wrap in scroll container for proper overflow handling
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO  # Show scrollbar only when needed
 
+	# Use GridContainer with fixed 8 columns for perfect alignment
 	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 8)
-	margin.add_theme_constant_override("margin_right", 8)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_bottom", 8)
+	margin.add_theme_constant_override("margin_left", 6)
+	margin.add_theme_constant_override("margin_right", 6)
+	margin.add_theme_constant_override("margin_top", 6)
+	margin.add_theme_constant_override("margin_bottom", 6)
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(margin)
 
 	var grid = GridContainer.new()
 	grid.name = "CatalogGrid"
-	grid.columns = 6  # Fixed 6-column layout
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
+	grid.columns = 8  # Fixed 8 columns
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 5)
+	grid.add_theme_constant_override("v_separation", 5)
 	margin.add_child(grid)
 
-	# Get owned items for ownership check (backend uses item_id)
+	# Get FORGED items (already minted via webapp)
 	var owned_items = _get_owned_forge_items()
-	var owned_ids = []
+	var forged_ids = []
 	for owned in owned_items:
-		# Backend forged items use "item_id", FORGE_CATALOG uses "id"
 		var oid = owned.get("item_id", owned.get("id", ""))
 		if oid != "":
-			owned_ids.append(oid)
+			forged_ids.append(oid)
+
+	# Get FORGEABLE achievements (unlocked but not yet forged)
+	var forgeable_achievements = []
+	if ForgeItemManager and ForgeItemManager.is_forge_status_loaded():
+		forgeable_achievements = ForgeItemManager.get_forgeable_achievements()
+		print("[Armory] Forge status loaded, forgeable count: %d" % forgeable_achievements.size())
+	else:
+		print("[Armory] Forge status NOT loaded yet")
+
+	# Build lookup of forgeable achievement names
+	var forgeable_names = []
+	for ach in forgeable_achievements:
+		var name = ach.get("display_name", "")
+		if name != "":
+			forgeable_names.append(name)
+	print("[Armory] Forgeable achievement names: %s" % str(forgeable_names))
 
 	# Sort catalog based on current sort setting
 	var sorted_items = _sort_items(FORGE_CATALOG.duplicate())
 
-	# Separate into owned and locked items
-	var owned_list = []
-	var locked_list = []
+	# Categorize items into 3 groups
+	var forged_list = []     # Already forged via webapp (claimable)
+	var forgeable_list = []  # Achievement unlocked, needs forging in webapp
+	var locked_list = []     # Achievement not unlocked
+
 	for item in sorted_items:
 		var item_id = item.get("id", "")
-		if item_id in owned_ids:
-			owned_list.append(item)
+		var achievement_name = item.get("achievement", "")
+
+		if item_id in forged_ids:
+			# Merge catalog data with backend data (backend has forged_id, claimed_in_game, etc.)
+			var backend_data = ForgeItemManager.get_forged_item(item_id)
+			if not backend_data.is_empty():
+				var merged = item.duplicate()
+				merged.merge(backend_data, true)  # Backend takes precedence
+				forged_list.append(merged)
+			else:
+				forged_list.append(item)
+		elif achievement_name in forgeable_names:
+			forgeable_list.append(item)
 		else:
 			locked_list.append(item)
 
-	# Add owned items first (with checkmarks)
-	for item in owned_list:
-		var item_card = _create_forge_item_card(item, true)
+	# Add FORGED items first (green checkmark, can claim)
+	for item in forged_list:
+		var item_card = _create_forge_item_card(item, "forged")
 		grid.add_child(item_card)
 
-	# Add locked items after
+	# Add FORGEABLE items second (orange anvil, needs webapp forge)
+	for item in forgeable_list:
+		var item_card = _create_forge_item_card(item, "forgeable")
+		grid.add_child(item_card)
+
+	# Add LOCKED items last (gray lock)
 	for item in locked_list:
-		var item_card = _create_forge_item_card(item, false)
+		var item_card = _create_forge_item_card(item, "locked")
 		grid.add_child(item_card)
 
 	return scroll
@@ -2143,10 +3766,9 @@ func _build_forge_unlocked_content() -> Control:
 		bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		empty_container.add_child(bottom_spacer)
 	else:
-		var grid = GridContainer.new()
-		grid.columns = 6  # Fixed 6-column layout
-		grid.add_theme_constant_override("h_separation", 8)
-		grid.add_theme_constant_override("v_separation", 8)
+		var grid = HFlowContainer.new()
+		grid.add_theme_constant_override("h_separation", 6)
+		grid.add_theme_constant_override("v_separation", 6)
 		grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		vbox.add_child(grid)
 
@@ -2154,44 +3776,60 @@ func _build_forge_unlocked_content() -> Control:
 		var sorted_owned = _sort_items(owned_items)
 
 		for item in sorted_owned:
-			var item_card = _create_forge_item_card(item, true)  # true = owned
+			var item_card = _create_forge_item_card(item, "forged")
 			grid.add_child(item_card)
 
 	return scroll
 
-func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
-	"""Create a single forge item card for the grid"""
+func _create_forge_item_card(item: Dictionary, state: String) -> Control:
+	"""Create a single forge item card for the grid
+	States:
+	- 'forged': Item has been forged via webapp, can be claimed to game (green checkmark)
+	- 'forgeable': Achievement unlocked, can be forged in webapp (orange anvil)
+	- 'locked': Achievement not unlocked (gray lock)
+	"""
+	const CARD_SIZE = 54  # Smaller card, icon stays 64px and gets cropped
+
 	var card = PanelContainer.new()
 	card.name = "ForgeCard_" + item.get("id", "unknown")
-	card.custom_minimum_size = Vector2(70, 70)  # Fixed size cards
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # Expand to fill grid cell width
-	card.size_flags_vertical = Control.SIZE_SHRINK_CENTER  # Don't expand height
-	card.mouse_filter = Control.MOUSE_FILTER_STOP  # Capture mouse events
+	card.custom_minimum_size = Vector2(CARD_SIZE, CARD_SIZE)
+	card.clip_contents = true  # Clip oversized icons
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var rarity_color = RARITY_COLORS.get(item.get("rarity", "Common"), Color.GRAY)
+	var is_owned = state == "forged"
+	var is_forgeable = state == "forgeable"
 
-	# Card style - minimal padding, rarity hint even when locked
+	# Card style - different for each state
 	var style = StyleBoxFlat.new()
 	var rarity = item.get("rarity", "Common")
 	var is_high_rarity = rarity in ["Legendary", "Epic"]
 
 	if is_owned:
+		# FORGED - bright, full color with rarity glow
 		style.bg_color = Color(0.08, 0.08, 0.10)
 		style.border_color = rarity_color.darkened(0.2)
-		# Add glow for high-rarity owned items
 		if is_high_rarity:
-			style.shadow_size = 6
+			style.shadow_size = 8
 			style.shadow_color = Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.5)
+	elif is_forgeable:
+		# FORGEABLE - intense warm glow to indicate action available
+		style.bg_color = Color(0.10, 0.07, 0.03)  # Warmer tint
+		style.border_color = Color(1.0, 0.65, 0.2)  # Brighter orange border
+		style.shadow_size = 10
+		style.shadow_color = Color(1.0, 0.5, 0.1, 0.6)  # Stronger orange glow
 	else:
-		style.bg_color = Color(0.03, 0.03, 0.04)
-		style.border_color = rarity_color.darkened(0.6)  # Subtle rarity hint when locked
+		# LOCKED - very muted, obviously unavailable
+		style.bg_color = Color(0.02, 0.02, 0.03)
+		style.border_color = Color(0.15, 0.15, 0.18)  # Gray border, ignore rarity
 	style.set_border_width_all(2)
-	style.set_corner_radius_all(4)
-	style.set_content_margin_all(1)  # Tight padding
+	style.set_corner_radius_all(5)
+	style.set_content_margin_all(2)
 	card.add_theme_stylebox_override("panel", style)
 
 	# Store item data and style for hover effects
 	card.set_meta("item_data", item)
+	card.set_meta("item_state", state)
 	card.set_meta("is_owned", is_owned)
 	card.set_meta("normal_style", style)
 	card.set_meta("rarity_color", rarity_color)
@@ -2207,11 +3845,23 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 	if is_high_rarity and is_owned:
 		var glow_tween = create_tween()
 		glow_tween.set_loops()
-		glow_tween.tween_property(style, "shadow_size", 10, 1.5).set_ease(Tween.EASE_IN_OUT)
-		glow_tween.tween_property(style, "shadow_size", 6, 1.5).set_ease(Tween.EASE_IN_OUT)
+		glow_tween.tween_property(style, "shadow_size", 12, 1.5).set_ease(Tween.EASE_IN_OUT)
+		glow_tween.tween_property(style, "shadow_size", 8, 1.5).set_ease(Tween.EASE_IN_OUT)
 
-	# Set pivot for centered scaling (will be updated on hover based on actual size)
-	card.pivot_offset = Vector2(35, 35)  # Half of 70x70
+	# Pulsing glow for forgeable items - more dramatic "ready to forge" effect
+	if is_forgeable:
+		var forge_tween = create_tween()
+		forge_tween.set_loops()
+		forge_tween.tween_property(style, "shadow_size", 16, 0.8).set_ease(Tween.EASE_IN_OUT)
+		forge_tween.tween_property(style, "shadow_size", 10, 0.8).set_ease(Tween.EASE_IN_OUT)
+		# Also pulse the border brightness
+		var border_tween = create_tween()
+		border_tween.set_loops()
+		border_tween.tween_property(style, "border_color", Color(1.0, 0.8, 0.3), 0.8).set_ease(Tween.EASE_IN_OUT)
+		border_tween.tween_property(style, "border_color", Color(1.0, 0.5, 0.1), 0.8).set_ease(Tween.EASE_IN_OUT)
+
+	# Set pivot for centered scaling
+	card.pivot_offset = Vector2(CARD_SIZE / 2.0, CARD_SIZE / 2.0)
 
 	# Icon container centered in card
 	var icon_container = CenterContainer.new()
@@ -2224,102 +3874,234 @@ func _create_forge_item_card(item: Dictionary, is_owned: bool) -> Control:
 	if ResourceLoader.exists(icon_path):
 		var texture = load(icon_path)
 		if texture:
+			# Fixed 64px icon size (source icons are 64x64), card crops the edges
+			const ICON_SIZE = 64
+			var icon_offset = (ICON_SIZE - CARD_SIZE) / 2  # Center the icon within smaller card
+
 			var icon_rect = TextureRect.new()
 			icon_rect.texture = texture
-			icon_rect.custom_minimum_size = Vector2(70, 70)  # Fill the card
+			icon_rect.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
+			icon_rect.position = Vector2(-icon_offset, -icon_offset)  # Offset to center
 			icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			if not is_owned:
-				icon_rect.modulate = Color(0.5, 0.5, 0.5, 0.85)  # Slightly grayed
+			if state == "locked":
+				icon_rect.modulate = Color(0.25, 0.25, 0.25, 0.5)  # Very dim and desaturated
+			elif state == "forgeable":
+				icon_rect.modulate = Color(1.0, 0.9, 0.7, 1.0)  # Warm golden tint (brighter)
 			icon_container.add_child(icon_rect)
 		else:
-			_add_fallback_icon(icon_container, item, is_owned)
+			_add_fallback_icon(icon_container, item, state)
 	else:
-		_add_fallback_icon(icon_container, item, is_owned)
+		_add_fallback_icon(icon_container, item, state)
 
 	# Badge overlay layer - Control node won't auto-resize like PanelContainer children
-	# This sits on top of the icon_container and allows absolute positioning
 	var badge_layer = Control.new()
 	badge_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	badge_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Pass clicks through to card
 	card.add_child(badge_layer)
 
-	# Lock overlay for unowned items - bottom right corner
-	if not is_owned:
-		var lock_bg = ColorRect.new()
-		lock_bg.color = Color(0, 0, 0, 0.7)
-		lock_bg.custom_minimum_size = Vector2(18, 18)
-		lock_bg.size = Vector2(18, 18)
-		lock_bg.position = Vector2(50, 50)  # Bottom-right of 70x70 card
-		badge_layer.add_child(lock_bg)
+	# State-specific badges - styled pill badges instead of emojis
+	match state:
+		"locked":
+			# Small lock icon in bottom-right corner
+			var lock_label = Label.new()
+			lock_label.text = "🔒"
+			lock_label.add_theme_font_size_override("font_size", FONT_MIN)
+			lock_label.modulate = Color(0.5, 0.5, 0.5, 0.8)
+			lock_label.position = Vector2(CARD_SIZE - 18, CARD_SIZE - 18)
+			badge_layer.add_child(lock_label)
 
-		var lock_label = Label.new()
-		lock_label.text = "🔒"
-		lock_label.add_theme_font_size_override("font_size", 12)
-		lock_label.position = Vector2(51, 48)  # Centered in lock_bg
-		badge_layer.add_child(lock_label)
-	elif item.get("is_new", false):
-		# NEW badge for recently forged items - top right corner
-		var badge_bg = ColorRect.new()
-		badge_bg.color = MANTLE_CYAN
-		badge_bg.custom_minimum_size = Vector2(28, 14)
-		badge_bg.size = Vector2(28, 14)
-		badge_bg.position = Vector2(40, 2)  # Top-right of 70x70 card
-		badge_layer.add_child(badge_bg)
+		"forgeable":
+			# Anvil icon badge - bottom right corner (matches checkmark positioning)
+			var anvil_bg = PanelContainer.new()
+			var anvil_style = StyleBoxFlat.new()
+			anvil_style.bg_color = Color(0.85, 0.45, 0.1, 0.95)  # Bright orange background
+			anvil_style.set_corner_radius_all(10)
+			anvil_style.set_content_margin_all(2)
+			anvil_style.shadow_size = 4
+			anvil_style.shadow_color = Color(1.0, 0.5, 0.1, 0.6)
+			anvil_bg.add_theme_stylebox_override("panel", anvil_style)
+			anvil_bg.position = Vector2(CARD_SIZE - 22, CARD_SIZE - 22)
+			badge_layer.add_child(anvil_bg)
 
-		var new_badge = Label.new()
-		new_badge.name = "NewBadge"
-		new_badge.text = "NEW"
-		new_badge.add_theme_font_size_override("font_size", 10)
-		new_badge.add_theme_color_override("font_color", Color.WHITE)
-		new_badge.position = Vector2(42, 2)  # Inside badge_bg
-		badge_layer.add_child(new_badge)
+			var anvil_label = Label.new()
+			anvil_label.text = "⚒"  # Hammer and pick unicode (forge symbol)
+			anvil_label.add_theme_font_size_override("font_size", 14)
+			anvil_label.add_theme_color_override("font_color", Color.WHITE)
+			anvil_bg.add_child(anvil_label)
 
-		# Pulsing animation for NEW badge
-		var pulse_tween = create_tween()
-		pulse_tween.set_loops()
-		pulse_tween.tween_property(new_badge, "modulate:a", 0.5, 0.5).set_ease(Tween.EASE_IN_OUT)
-		pulse_tween.tween_property(new_badge, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_IN_OUT)
-	else:
-		# Checkmark badge for owned items - bottom LEFT corner
-		var check_bg = ColorRect.new()
-		check_bg.color = Color(0.1, 0.3, 0.1, 0.9)
-		check_bg.custom_minimum_size = Vector2(16, 16)
-		check_bg.size = Vector2(16, 16)
-		check_bg.position = Vector2(2, 52)  # Bottom-left of 70x70 card
-		badge_layer.add_child(check_bg)
+			# Pulse the anvil badge
+			var badge_tween = create_tween()
+			badge_tween.set_loops()
+			badge_tween.tween_property(anvil_bg, "modulate:a", 0.7, 0.6).set_ease(Tween.EASE_IN_OUT)
+			badge_tween.tween_property(anvil_bg, "modulate:a", 1.0, 0.6).set_ease(Tween.EASE_IN_OUT)
 
-		var claim_badge = Label.new()
-		claim_badge.name = "ClaimBadge"
-		claim_badge.text = "✓"
-		claim_badge.add_theme_font_size_override("font_size", 11)
-		claim_badge.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))  # Green checkmark
-		claim_badge.position = Vector2(4, 50)  # Inside check_bg
-		badge_layer.add_child(claim_badge)
+		"forged":
+			# Check bridge status for claimed items
+			var item_id = item.get("id", item.get("item_id", ""))
+			var bridge_status = item.get("bridge_status", ForgeItemManager.get_bridge_status(item_id))
+			var already_claimed = ForgeItemManager.is_item_claimed(item_id)
 
-	# Rich tooltip with lore
+			# GREEN CHECKMARK - Always show for forged items (bottom-right corner)
+			# Use fixed square size for circular appearance
+			var check_size = 18
+			var check_bg = ColorRect.new()
+			check_bg.color = Color(0.15, 0.6, 0.25, 0.95)  # Green background
+			check_bg.custom_minimum_size = Vector2(check_size, check_size)
+			check_bg.size = Vector2(check_size, check_size)
+			check_bg.position = Vector2(CARD_SIZE - check_size - 2, CARD_SIZE - check_size - 2)
+			# Make it circular with a shader or just use rounded panel
+			badge_layer.add_child(check_bg)
+
+			# Circular overlay using PanelContainer
+			var check_circle = PanelContainer.new()
+			check_circle.custom_minimum_size = Vector2(check_size, check_size)
+			var check_style = StyleBoxFlat.new()
+			check_style.bg_color = Color(0.15, 0.6, 0.25, 0.95)
+			check_style.set_corner_radius_all(check_size / 2)  # Half size = circle
+			check_circle.add_theme_stylebox_override("panel", check_style)
+			check_circle.position = Vector2(CARD_SIZE - check_size - 2, CARD_SIZE - check_size - 2)
+			badge_layer.add_child(check_circle)
+			check_bg.visible = false  # Hide the square, use circle instead
+
+			var check_label = Label.new()
+			check_label.text = "✓"
+			check_label.add_theme_font_size_override("font_size", FONT_MIN)
+			check_label.add_theme_color_override("font_color", Color.WHITE)
+			check_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			check_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			check_circle.add_child(check_label)
+
+			# Bridge status badges (top-left corner)
+			if bridge_status == "bridging_out":
+				# Bridging out - orange with timer icon
+				var bridge_pill = PanelContainer.new()
+				var bridge_style = StyleBoxFlat.new()
+				bridge_style.bg_color = Color(0.7, 0.4, 0.1, 0.95)  # Orange
+				bridge_style.set_corner_radius_all(6)
+				bridge_style.set_content_margin_all(2)
+				bridge_pill.add_theme_stylebox_override("panel", bridge_style)
+				bridge_pill.position = Vector2(2, 2)
+				badge_layer.add_child(bridge_pill)
+
+				var bridge_label = Label.new()
+				bridge_label.text = "OUT"
+				bridge_label.add_theme_font_size_override("font_size", FONT_MIN)
+				bridge_label.add_theme_color_override("font_color", Color.WHITE)
+				bridge_pill.add_child(bridge_label)
+
+				# Pulse effect
+				var pulse = create_tween()
+				pulse.set_loops()
+				pulse.tween_property(bridge_pill, "modulate:a", 0.6, 0.8).set_ease(Tween.EASE_IN_OUT)
+				pulse.tween_property(bridge_pill, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_IN_OUT)
+
+			elif bridge_status == "bridged":
+				# Unbound (in lockbox) - blue
+				var bridge_pill = PanelContainer.new()
+				var bridge_style = StyleBoxFlat.new()
+				bridge_style.bg_color = Color(0.2, 0.3, 0.6, 0.95)  # Blue
+				bridge_style.set_corner_radius_all(6)
+				bridge_style.set_content_margin_all(2)
+				bridge_pill.add_theme_stylebox_override("panel", bridge_style)
+				bridge_pill.position = Vector2(2, 2)
+				badge_layer.add_child(bridge_pill)
+
+				var bridge_label = Label.new()
+				bridge_label.text = "BOX"  # In lockbox
+				bridge_label.add_theme_font_size_override("font_size", FONT_MIN)
+				bridge_label.add_theme_color_override("font_color", Color(0.7, 0.8, 1.0))
+				bridge_pill.add_child(bridge_label)
+
+				# Dim the card icon when bridged
+				for child in icon_container.get_children():
+					if child is TextureRect:
+						child.modulate = Color(0.5, 0.5, 0.6, 0.8)
+
+			if item.get("is_new", false):
+				# NEW badge for recently forged items - top right corner
+				var new_pill = PanelContainer.new()
+				var new_style = StyleBoxFlat.new()
+				new_style.bg_color = MANTLE_CYAN
+				new_style.set_corner_radius_all(6)
+				new_style.set_content_margin_all(2)
+				new_pill.add_theme_stylebox_override("panel", new_style)
+				new_pill.position = Vector2(CARD_SIZE - 32, 2)
+				badge_layer.add_child(new_pill)
+
+				var new_label = Label.new()
+				new_label.name = "NewBadge"
+				new_label.text = "NEW"
+				new_label.add_theme_font_size_override("font_size", FONT_MIN)
+				new_label.add_theme_color_override("font_color", Color.WHITE)
+				new_pill.add_child(new_label)
+
+				var pulse_tween = create_tween()
+				pulse_tween.set_loops()
+				pulse_tween.tween_property(new_pill, "modulate:a", 0.5, 0.5).set_ease(Tween.EASE_IN_OUT)
+				pulse_tween.tween_property(new_pill, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_IN_OUT)
+			# Note: CLAIM badge removed - items auto-added to inventory on forge
+
+	# Build polished tooltip
+	var item_name = item.get("name", "Unknown")
 	var lore = item.get("lore", "")
-	var tooltip = "%s  (%s)\n━━━━━━━━━━━━━━━━\n\"%s\"\n\n🎮 %s\n🏆 %s" % [
-		item.get("name", "Unknown"),
-		item.get("rarity", "Common"),
-		lore if lore != "" else "A mysterious item from another world.",
-		item.get("game", "???"),
-		item.get("achievement", "???")
-	]
-	if not is_owned:
-		tooltip += "\n\n🔒 HOW TO UNLOCK:\nLink %s and complete \"%s\"" % [item.get("game", "this game"), item.get("achievement", "achievement")]
-	else:
-		var item_id = item.get("id", item.get("item_id", ""))
-		var already_claimed = ForgeItemManager.is_item_claimed(item_id)
-		if already_claimed:
-			tooltip += "\n\n✓ CLAIMED - Check your inventory!"
-		else:
-			tooltip += "\n\n✓ UNLOCKED - Click to claim"
-	card.tooltip_text = tooltip
+	var game_name = item.get("game", "???")
+	var achievement_name = item.get("achievement", "???")
+
+	# Build tooltip with clean formatting
+	var tooltip_lines = []
+
+	# Title with rarity
+	tooltip_lines.append("%s" % item_name)
+	tooltip_lines.append("%s" % rarity.to_upper())
+	tooltip_lines.append("")
+
+	# Lore quote (italicized feel with quotes)
+	var lore_text = lore if lore != "" else "A mysterious item from another world."
+	tooltip_lines.append("\"%s\"" % lore_text)
+	tooltip_lines.append("")
+
+	# Metadata section
+	tooltip_lines.append("Game:  %s" % game_name)
+	tooltip_lines.append("Achievement:  %s" % achievement_name)
+
+	# State-specific section
+	match state:
+		"locked":
+			tooltip_lines.append("")
+			tooltip_lines.append("─────────────────")
+			tooltip_lines.append("LOCKED")
+			tooltip_lines.append("Link %s and complete" % game_name)
+			tooltip_lines.append("\"%s\"" % achievement_name)
+		"forgeable":
+			tooltip_lines.append("")
+			tooltip_lines.append("─────────────────")
+			tooltip_lines.append("READY TO FORGE")
+			tooltip_lines.append("Achievement unlocked!")
+			tooltip_lines.append("Visit Mantle webapp to forge.")
+		"forged":
+			var tip_item_id = item.get("id", item.get("item_id", ""))
+			var tip_bridge_status = item.get("bridge_status", ForgeItemManager.get_bridge_status(tip_item_id))
+
+			tooltip_lines.append("")
+			tooltip_lines.append("─────────────────")
+			if tip_bridge_status == "bridging_out":
+				var hours = item.get("bridge_hours_remaining", item.get("hours_remaining", 0.0))
+				tooltip_lines.append("UNBINDING")
+				tooltip_lines.append("%.1fh until unbound" % hours)
+				tooltip_lines.append("Click to cancel")
+			elif tip_bridge_status == "bridged":
+				tooltip_lines.append("UNBOUND")
+				tooltip_lines.append("Bind from wallet section")
+			else:
+				tooltip_lines.append("IN INVENTORY")
+				tooltip_lines.append("Ready to equip!")
+
+	card.tooltip_text = "\n".join(tooltip_lines)
 
 	return card
 
-func _add_fallback_icon(container: Control, item: Dictionary, is_owned: bool) -> void:
+func _add_fallback_icon(container: Control, item: Dictionary, state: String) -> void:
 	"""Add fallback emoji icon when texture not found"""
 	var fallback = Label.new()
 	var category = item.get("category", "weapons")
@@ -2329,11 +4111,15 @@ func _add_fallback_icon(container: Control, item: Dictionary, is_owned: bool) ->
 		"shields": fallback.text = "🛡"
 		"accessories": fallback.text = "💎"
 		_: fallback.text = "?"
-	fallback.add_theme_font_size_override("font_size", 44)  # Sized for 70x70 cards
-	if is_owned:
-		fallback.add_theme_color_override("font_color", RARITY_COLORS.get(item.get("rarity", "Common"), Color.GRAY))
-	else:
-		fallback.add_theme_color_override("font_color", TEXT_DIM)
+	fallback.add_theme_font_size_override("font_size", 48)  # Sized for 78x78 cards
+
+	match state:
+		"forged":
+			fallback.add_theme_color_override("font_color", RARITY_COLORS.get(item.get("rarity", "Common"), Color.GRAY))
+		"forgeable":
+			fallback.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))  # Bright golden
+		"locked", _:
+			fallback.add_theme_color_override("font_color", TEXT_DIM)
 	container.add_child(fallback)
 
 func _on_forge_card_hover(card: PanelContainer, is_hovering: bool) -> void:
@@ -2381,6 +4167,7 @@ func _on_forge_card_clicked(event: InputEvent, card: PanelContainer) -> void:
 	"""Handle click to select a forge item card"""
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var is_owned: bool = card.get_meta("is_owned", false)
+		var item_state: String = card.get_meta("item_state", "locked")
 		var item_data: Dictionary = card.get_meta("item_data", {})
 		var rarity_color: Color = card.get_meta("rarity_color", Color.GRAY)
 
@@ -2408,8 +4195,8 @@ func _on_forge_card_clicked(event: InputEvent, card: PanelContainer) -> void:
 		selected_style.shadow_color = Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.5)
 		card.add_theme_stylebox_override("panel", selected_style)
 
-		# Update detail panel with selected item
-		_update_forge_detail(item_data, is_owned)
+		# Update detail panel with selected item and state
+		_update_forge_detail(item_data, item_state)
 
 func _sort_by_rarity(a: Dictionary, b: Dictionary) -> bool:
 	"""Sort items by rarity (highest first): Legendary > Epic > Rare > Uncommon > Common"""
@@ -2513,7 +4300,7 @@ func _on_claim_all_pressed() -> void:
 		if item_id == "" or ForgeItemManager.is_item_claimed(item_id):
 			continue
 
-		var claimed_item = ForgeItemManager.claim_single_item(item_id)
+		var claimed_item = await ForgeItemManager.claim_single_item(item_id)
 		if not claimed_item.is_empty():
 			claimed_count += 1
 			print("[Armory] Claimed: %s" % claimed_item.get("name", item_id))
@@ -3614,26 +5401,44 @@ func _build_header(parent: Control) -> void:
 	header_vbox.add_theme_constant_override("separation", 4)
 	header_margin.add_child(header_vbox)
 
-	title_label = Label.new()
-	title_label.text = "MANTLE ARMORY"
-	title_label.add_theme_font_size_override("font_size", FONT_H1)
-	title_label.add_theme_color_override("font_color", MANTLE_CYAN)
-	title_label.add_theme_color_override("font_outline_color", Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.3))
-	title_label.add_theme_constant_override("outline_size", 2)
-	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	header_vbox.add_child(title_label)
+	# Title container for layered glow effect
+	var title_container = Control.new()
+	title_container.custom_minimum_size = Vector2(0, 40)
+	header_vbox.add_child(title_container)
 
-	# Add subtle glow behind title
+	# Background glow layer (larger, more diffuse)
+	var title_glow_bg = Label.new()
+	title_glow_bg.text = "M A N T L E"
+	title_glow_bg.add_theme_font_override("font", bold_font)
+	title_glow_bg.add_theme_font_size_override("font_size", FONT_H1 + 2)
+	title_glow_bg.add_theme_color_override("font_color", Color(MANTLE_NEON_CYAN.r, MANTLE_NEON_CYAN.g, MANTLE_NEON_CYAN.b, 0.2))
+	title_glow_bg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_glow_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	title_glow_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_container.add_child(title_glow_bg)
+
+	# Mid glow layer
 	var title_glow = Label.new()
-	title_glow.text = "MANTLE ARMORY"
+	title_glow.text = "M A N T L E"
+	title_glow.add_theme_font_override("font", bold_font)
 	title_glow.add_theme_font_size_override("font_size", FONT_H1)
-	title_glow.add_theme_color_override("font_color", Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.15))
+	title_glow.add_theme_color_override("font_color", Color(MANTLE_NEON_CYAN.r, MANTLE_NEON_CYAN.g, MANTLE_NEON_CYAN.b, 0.4))
 	title_glow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_glow.position = Vector2(2, 2)
-	title_glow.z_index = -1
+	title_glow.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	header_vbox.add_child(title_glow)
-	header_vbox.move_child(title_glow, 0)
+	title_container.add_child(title_glow)
+
+	# Main title label - bright neon cyan with bold font
+	title_label = Label.new()
+	title_label.text = "M A N T L E"
+	title_label.add_theme_font_override("font", bold_font)
+	title_label.add_theme_font_size_override("font_size", FONT_H1)
+	title_label.add_theme_color_override("font_color", MANTLE_NEON_CYAN)
+	title_label.add_theme_color_override("font_outline_color", Color(MANTLE_NEON_CYAN.r, MANTLE_NEON_CYAN.g, MANTLE_NEON_CYAN.b, 0.6))
+	title_label.add_theme_constant_override("outline_size", 3)
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	title_container.add_child(title_label)
 
 	subtitle_label = Label.new()
 	subtitle_label.text = "Your Gaming Legacy"
@@ -3641,6 +5446,48 @@ func _build_header(parent: Control) -> void:
 	subtitle_label.add_theme_color_override("font_color", TEXT_SECONDARY)
 	subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header_vbox.add_child(subtitle_label)
+
+	# Connection status indicator
+	_create_connection_indicator(header_vbox)
+
+func _create_connection_indicator(parent: Control) -> void:
+	"""Create a small indicator showing backend connection status"""
+	_connection_indicator = HBoxContainer.new()
+	_connection_indicator.alignment = BoxContainer.ALIGNMENT_CENTER
+	_connection_indicator.add_theme_constant_override("separation", 6)
+	parent.add_child(_connection_indicator)
+
+	# Status dot
+	_connection_dot = ColorRect.new()
+	_connection_dot.custom_minimum_size = Vector2(8, 8)
+	_connection_dot.color = Color(0.2, 0.8, 0.2)  # Green = connected
+	_connection_indicator.add_child(_connection_dot)
+
+	# Status text
+	_connection_label = Label.new()
+	_connection_label.text = "Connected"
+	_connection_label.add_theme_font_size_override("font_size", FONT_MIN)
+	_connection_label.add_theme_color_override("font_color", TEXT_DIM)
+	_connection_indicator.add_child(_connection_label)
+
+func _update_connection_indicator(status: int) -> void:
+	"""Update the connection indicator UI based on status"""
+	if not _connection_dot or not _connection_label:
+		return
+
+	match status:
+		MantleAuth.ConnectionStatus.CONNECTED:
+			_connection_dot.color = Color(0.2, 0.8, 0.2)  # Green
+			_connection_label.text = "Connected"
+			_connection_label.add_theme_color_override("font_color", TEXT_DIM)
+		MantleAuth.ConnectionStatus.CONNECTING:
+			_connection_dot.color = Color(0.9, 0.7, 0.1)  # Yellow/amber
+			_connection_label.text = "Reconnecting..."
+			_connection_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.1))
+		MantleAuth.ConnectionStatus.DISCONNECTED:
+			_connection_dot.color = Color(0.9, 0.2, 0.2)  # Red
+			_connection_label.text = "Disconnected"
+			_connection_label.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4))
 
 func _build_stats_bar(parent: Control) -> void:
 	"""Horizontal stats bar: badge | count | providers | rarity | progress | username"""
@@ -4653,8 +6500,10 @@ func _style_logout_button(button: Button) -> void:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 func _determine_state() -> void:
+	print("[Armory] _determine_state called - MantleAuth.is_logged_in()=%s" % MantleAuth.is_logged_in() if MantleAuth else "null")
 	if not MantleAuth or not MantleAuth.is_logged_in():
 		current_state = ArmoryState.GUEST
+		print("[Armory] State: GUEST (not logged in)")
 		return
 
 	profile = {
@@ -4666,6 +6515,7 @@ func _determine_state() -> void:
 		"achievements": MantleAuth.achievements,
 		"by_rarity": MantleAuth.by_rarity
 	}
+	print("[Armory] Built profile - total_achievements=%d, providers=%d" % [profile.get("total_achievements", 0), profile.get("providers", []).size()])
 
 	var providers_data = profile.get("providers", [])
 	var provider_count = providers_data.size() if providers_data else 0
@@ -4675,10 +6525,13 @@ func _determine_state() -> void:
 
 	if provider_count == 0:
 		current_state = ArmoryState.NEW_PLAYER
+		print("[Armory] State: NEW_PLAYER (no providers)")
 	elif total < 1000:
 		current_state = ArmoryState.CASUAL
+		print("[Armory] State: CASUAL (total < 1000)")
 	else:
 		current_state = ArmoryState.VETERAN
+		print("[Armory] State: VETERAN (total >= 1000)")
 
 func _setup_ui_for_state() -> void:
 	match current_state:
@@ -5874,16 +7727,34 @@ func _play_entrance_animations() -> void:
 	# Animate forge grid items with stagger
 	_animate_forge_grid_stagger()
 
+	# Final refresh - ensure all data is displayed now that UI is ready
+	# This catches any signals that fired before UI was built
+	print("[Armory] UI ready - doing final data refresh")
+	if ForgeItemManager and ForgeItemManager.is_loaded():
+		_refresh_forge_content()
+		_refresh_bridge_section()
+
 func _animate_achievement_count() -> void:
-	"""Animate the achievement count from 0 to target with satisfying count-up effect"""
+	"""Animate the achievement count from current to target with satisfying count-up effect"""
 	if not total_label or _target_achievement_count <= 0:
+		return
+
+	# Only animate if count has increased
+	if _target_achievement_count <= _last_displayed_count:
+		# Just update the display without animation
+		var formatted = _format_number(_target_achievement_count)
+		total_label.text = formatted
+		var glow_label = stats_panel.find_child("NumberGlow", true, false) if stats_panel else null
+		if glow_label:
+			glow_label.text = formatted
 		return
 
 	if _count_tween:
 		_count_tween.kill()
 
-	var duration = min(1.5, 0.5 + (_target_achievement_count / 5000.0))  # Scale duration with count
-	var current_count = {"value": 0}
+	# Animate from last displayed count to new count (not from 0)
+	var start_count = _last_displayed_count
+	var duration = min(1.5, 0.5 + ((_target_achievement_count - start_count) / 500.0))  # Scale duration with delta
 
 	_count_tween = create_tween()
 	_count_tween.set_ease(Tween.EASE_OUT)
@@ -5900,17 +7771,18 @@ func _animate_achievement_count() -> void:
 			if glow_label:
 				glow_label.text = formatted
 			# Add subtle scale pop at milestones
-			if count > 0 and count % 500 == 0:
+			if count > 0 and count % 500 == 0 and count > start_count:
 				var pop_tween = create_tween()
 				pop_tween.tween_property(total_label, "scale", Vector2(1.05, 1.05), 0.05)
 				pop_tween.tween_property(total_label, "scale", Vector2(1.0, 1.0), 0.1),
-		0.0,
+		float(start_count),
 		float(_target_achievement_count),
 		duration
 	)
 
-	# Final pop when complete
+	# Final pop when complete and update last displayed count
 	_count_tween.tween_callback(func():
+		_last_displayed_count = _target_achievement_count
 		var final_tween = create_tween()
 		final_tween.tween_property(total_label, "scale", Vector2(1.08, 1.08), 0.08)
 		final_tween.tween_property(total_label, "scale", Vector2(1.0, 1.0), 0.15)
@@ -6138,17 +8010,26 @@ func _on_enter_world_pressed() -> void:
 	entered_world.emit()
 	enter_world_button.disabled = true
 	enter_world_button.text = "Loading..."
-	await get_tree().create_timer(0.3).timeout
-	get_tree().change_scene_to_file("res://main.tscn")
+	var tree = get_tree()
+	if tree:
+		await tree.create_timer(0.3).timeout
+		tree.change_scene_to_file("res://main.tscn")
 
 func _on_logout_pressed() -> void:
 	# Play click sound
 	if SoundManager:
 		SoundManager.play_button_click_sound(-6.0)
 	LogManager.info("Logging out from Armory", "mantle")
+
+	# Save player data before logging out
+	if NetworkManager:
+		NetworkManager.close_connection()
+
 	if MantleAuth:
 		MantleAuth.logout()
-	get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
+	var tree = get_tree()
+	if tree:
+		tree.change_scene_to_file("res://scenes/ui/MainMenu.tscn")
 
 func _on_settings_pressed() -> void:
 	# Play click sound

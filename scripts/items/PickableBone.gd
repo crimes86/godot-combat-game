@@ -211,7 +211,20 @@ func _request_pickup_bone(network_id: String) -> void:
 		return
 
 	var peer_id = multiplayer.get_remote_sender_id()
-	print("🦴 Server: Bone %s picked up (requested by peer %d)" % [network_id, peer_id])
+
+	# Security: Validate the requesting player exists
+	var game_world = get_node_or_null("/root/GameWorld")
+	if game_world and game_world.players.has(peer_id):
+		var player = game_world.players[peer_id]
+		if is_instance_valid(player):
+			# Optional: Add distance check here if desired
+			pass
+	else:
+		push_warning("Bone pickup rejected - unknown peer %d" % peer_id)
+		return
+
+	if OS.is_debug_build():
+		print("🦴 Server: Bone %s picked up (requested by peer %d)" % [network_id, peer_id])
 
 	# Broadcast to all clients (including the one who requested)
 	_sync_bone_picked_up.rpc(network_id)
@@ -219,7 +232,8 @@ func _request_pickup_bone(network_id: String) -> void:
 @rpc("authority", "call_local", "reliable")
 func _sync_bone_picked_up(network_id: String) -> void:
 	"""All clients receive bone pickup notification"""
-	print("🦴 [Sync] Bone %s picked up" % network_id)
+	if OS.is_debug_build():
+		print("🦴 [Sync] Bone %s picked up" % network_id)
 
 	# Find the bone by network_id and remove it
 	var prop_system = get_node_or_null("/root/ChunkBasedPropSystem")
