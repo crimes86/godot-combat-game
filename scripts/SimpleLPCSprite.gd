@@ -14,7 +14,7 @@ class_name SimpleLPCSprite
 # ============================================
 # DEBUG SETTINGS - Set to true to enable verbose logging
 # ============================================
-const DEBUG_SPRITE_SETUP: bool = false  # Debug sprite/animation setup
+const DEBUG_SPRITE_SETUP: bool = true  # Debug sprite/animation setup
 
 # Direction to row mapping (LPC standard)
 const DIRECTION_ROWS = {
@@ -461,30 +461,48 @@ func setup_lpc_sprite(
 
 		# Don't set a static offset here - we'll adjust it per animation type
 
-		# Add slash animations if provided
+		# Add attack animations if provided (slash for melee, shoot for guns)
 		if weapon_slash_tex:
 			var weapon_slash_img = weapon_slash_tex.get_image()
 			var slash_size = weapon_slash_img.get_size()
 
-			# Thrust weapons (staff, spear) use 8 frames, slash weapons use 6 frames
-			var thrust_weapons = ["staff", "spear"]
-			var num_attack_frames = 8 if weapon_type in thrust_weapons else 6
+			# Gun weapons use shoot animation (9 frames like walk), others use slash/thrust
+			var gun_weapon_types = ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle"]
+			var is_gun = weapon_type in gun_weapon_types
 
-			# Calculate tile size - spear uses 64px tiles (LPC standard), staff uses oversize 192px
-			var slash_tile_size: int
-			if weapon_type == "spear":
-				slash_tile_size = 64  # Spear uses standard 64px LPC tiles
+			if is_gun:
+				# Gun shoot animation: 9 frames at 64px, fast playback for snappy muzzle flash
+				var shoot_tile_size = 64
+				var num_shoot_frames = 9
+				var shoot_fps = 20.0  # Fast for muzzle flash effect
+
+				var frame_indices = []
+				for i in range(num_shoot_frames):
+					frame_indices.append(i)
+
+				for dir_name in DIRECTION_ROWS.keys():
+					var row = DIRECTION_ROWS[dir_name]
+					create_animation_from_image(weapon_slash_img, "shoot_" + dir_name, row, num_shoot_frames, frame_indices, shoot_fps, false, weapon_sprite.sprite_frames, shoot_tile_size)
 			else:
-				slash_tile_size = int(slash_size.x / num_attack_frames)
+				# Thrust weapons (staff, spear) use 8 frames, slash weapons use 6 frames
+				var thrust_weapons = ["staff", "spear"]
+				var num_attack_frames = 8 if weapon_type in thrust_weapons else 6
 
-			# Build frame indices based on frame count
-			var frame_indices = []
-			for i in range(num_attack_frames):
-				frame_indices.append(i)
+				# Calculate tile size - spear uses 64px tiles (LPC standard), staff uses oversize 192px
+				var slash_tile_size: int
+				if weapon_type == "spear":
+					slash_tile_size = 64  # Spear uses standard 64px LPC tiles
+				else:
+					slash_tile_size = int(slash_size.x / num_attack_frames)
 
-			for dir_name in DIRECTION_ROWS.keys():
-				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(weapon_slash_img, "slash_" + dir_name, row, num_attack_frames, frame_indices, slash_fps, false, weapon_sprite.sprite_frames, slash_tile_size)
+				# Build frame indices based on frame count
+				var frame_indices = []
+				for i in range(num_attack_frames):
+					frame_indices.append(i)
+
+				for dir_name in DIRECTION_ROWS.keys():
+					var row = DIRECTION_ROWS[dir_name]
+					create_animation_from_image(weapon_slash_img, "slash_" + dir_name, row, num_attack_frames, frame_indices, slash_fps, false, weapon_sprite.sprite_frames, slash_tile_size)
 
 		# Add walk animations if provided
 		if weapon_walk_tex:
@@ -552,9 +570,9 @@ func create_animation_from_image(img: Image, anim_name: String, row: int, frame_
 		# Add to sprite frames
 		frames.add_frame(anim_name, frame_texture)
 
-func setup_gun_walk_animations(gun_body_walk_tex: Texture2D) -> void:
-	"""Setup gun walk animations using Skorpio body pose (arms extended for gun)
-	Creates a SEPARATE sprite layer for the Skorpio body that shows during gun_walk.
+func setup_gun_walk_animations(gun_body_walk_tex: Texture2D, gun_body_shoot_tex: Texture2D = null) -> void:
+	"""Setup gun walk and shoot animations using Skorpio body pose (arms extended for gun)
+	Creates a SEPARATE sprite layer for the Skorpio body that shows during gun_walk/shoot.
 	The normal LPC body is hidden when this layer is visible."""
 	if not gun_body_walk_tex:
 		return
@@ -579,37 +597,205 @@ func setup_gun_walk_animations(gun_body_walk_tex: Texture2D) -> void:
 		# Also create idle (frame 0) for when standing still with gun - use regular body instead
 		create_animation_from_image(gun_walk_img, "idle_" + dir_name, row, 1, [0], 1.0, true, gun_body_sprite.sprite_frames, 64)
 
+	# Create shoot animations if texture provided (13 frames like LPC shoot)
+	if gun_body_shoot_tex:
+		var gun_shoot_img = gun_body_shoot_tex.get_image()
+		for dir_name in DIRECTION_ROWS.keys():
+			var row = DIRECTION_ROWS[dir_name]
+			# Shoot animation: 13 frames, faster playback for snappy feel
+			create_animation_from_image(gun_shoot_img, "shoot_" + dir_name, row, 13, range(13), 15.0, false, gun_body_sprite.sprite_frames, 64)
+		if DEBUG_SPRITE_SETUP:
+			print("[LPCSprite] Gun shoot animations loaded")
+
+	# Apply midsection tint shader (only tints torso, not head/feet)
+	var shader = load("res://shaders/midsection_tint.gdshader")
+	if shader:
+		var mat = ShaderMaterial.new()
+		mat.shader = shader
+		gun_body_sprite.material = mat
+
 	add_child(gun_body_sprite)
 
 	if DEBUG_SPRITE_SETUP:
 		print("[LPCSprite] Gun body layer created for Skorpio body swap")
 		print("  - gun_body_sprite z_index: ", gun_body_sprite.z_index)
 		print("  - Animations: ", gun_body_sprite.sprite_frames.get_animation_names())
+		print("  - Midsection tint shader applied: ", gun_body_sprite.material != null)
 
-func _set_body_layers_visible(visible_state: bool) -> void:
-	"""Show/hide the base body sprite when swapping to gun pose.
-	The Skorpio body includes body+arms, so we hide the main LPC body.
-	Clothing layers (pants, shirt, boots, etc.) stay visible on top of Skorpio body.
-	Hair also stays visible for character identity."""
-	# The main AnimatedSprite2D (self) is the naked body - hide it when using gun pose
-	# IMPORTANT: Use self_modulate instead of modulate - modulate affects children too!
-	# self_modulate only affects this sprite, children (clothing layers) stay visible
-	if visible_state:
-		self_modulate.a = 1.0
+	# Immediately activate gun mode since we just set up a gun weapon
+	# This ensures the Skorpio body is visible from the start
+	call_deferred("_set_gun_mode", true)
+	call_deferred("_play_initial_gun_idle")
+
+func _play_initial_gun_idle() -> void:
+	"""Play initial idle animation for gun mode after setup"""
+	if gun_body_sprite and gun_body_sprite.sprite_frames.has_animation("idle_south"):
+		gun_body_sprite.play("idle_south")
+	if weapon_sprite and weapon_sprite.sprite_frames.has_animation("idle_south"):
+		weapon_sprite.play("idle_south")
+
+func _get_sprite_dominant_color(sprite: AnimatedSprite2D) -> Color:
+	"""Sample the dominant armor color from a sprite's first frame.
+	Used to tint the Skorpio body to match armor color.
+
+	For pants sprites: samples from leg region (y=40-56) which is solid armor
+	For other sprites: samples from center region"""
+	if not sprite or not sprite.sprite_frames:
+		return Color(1, 1, 1, 1)
+
+	# Get a valid animation with frames (prefer idle_south or walk_south)
+	var anims = sprite.sprite_frames.get_animation_names()
+	if anims.is_empty():
+		return Color(1, 1, 1, 1)
+
+	# Find an animation that actually has frames (avoid "default" which is often empty)
+	var target_anim = ""
+	var preferred = ["idle_south", "walk_south", "idle_east", "walk_east"]
+	for pref in preferred:
+		if sprite.sprite_frames.has_animation(pref) and sprite.sprite_frames.get_frame_count(pref) > 0:
+			target_anim = pref
+			break
+
+	# Fallback: find any animation with frames
+	if target_anim == "":
+		for anim in anims:
+			if sprite.sprite_frames.get_frame_count(anim) > 0:
+				target_anim = anim
+				break
+
+	if target_anim == "":
+		return Color(1, 1, 1, 1)
+
+	var tex = sprite.sprite_frames.get_frame_texture(target_anim, 0)
+	if not tex:
+		return Color(1, 1, 1, 1)
+
+	var img = tex.get_image()
+	if not img:
+		return Color(1, 1, 1, 1)
+
+	# Sample colors from CHEST/TORSO region - y=24-40 is the torso area
+	# LPC frames are 64x64
+	var color_sum = Vector3.ZERO
+	var count = 0
+
+	# For chest armor: sample from center torso area
+	var sample_x_start = 24
+	var sample_x_end = 40
+	var sample_y_start = 24
+	var sample_y_end = 40
+
+	for y in range(sample_y_start, min(sample_y_end, img.get_height())):
+		for x in range(sample_x_start, min(sample_x_end, img.get_width())):
+			var pixel = img.get_pixel(x, y)
+			if pixel.a > 0.5:  # Only count non-transparent pixels
+				color_sum += Vector3(pixel.r, pixel.g, pixel.b)
+				count += 1
+
+	# If no pixels found in chest region, try full scan
+	if count == 0:
+		for y in range(img.get_height()):
+			for x in range(img.get_width()):
+				var pixel = img.get_pixel(x, y)
+				if pixel.a > 0.5:
+					color_sum += Vector3(pixel.r, pixel.g, pixel.b)
+					count += 1
+
+	if count == 0:
+		return Color(1, 1, 1, 1)
+
+	var avg = color_sum / count
+	return Color(avg.x, avg.y, avg.z, 1.0)
+
+func _set_gun_mode(enabled: bool) -> void:
+	"""Toggle between Skorpio gun body and regular LPC body.
+	When gun mode is ON:
+	  - Skorpio body visible (body with arms in gun-holding pose - gun NOT included)
+	  - Weapon sprite visible (the actual gun layered on top)
+	  - Hair visible (for character identity)
+	  - Shadow visible
+	  - Lower body clothing visible (pants, boots - same position as LPC)
+	  - Upper body clothing hidden (shirt, arms, hands - different pose)
+	When gun mode is OFF:
+	  - Regular LPC body and all clothing visible
+	  - Skorpio body hidden"""
+
+	if enabled:
+		# SKORPIO MODE: Hide LPC body, show Skorpio body + compatible clothing
+		self_modulate.a = 0.0  # Hide main LPC body
+		if base_head_sprite:
+			base_head_sprite.visible = false
+		# Keep lower body clothing - legs are in same position
+		if pants_sprite:
+			pants_sprite.visible = true
+		if boots_sprite:
+			boots_sprite.visible = true
+		# Hide upper body clothing - arms are in different position (conflicts with Skorpio pose)
+		if shirt_sprite:
+			shirt_sprite.visible = false
+		if arms_sprite:
+			arms_sprite.visible = false
+		if hands_sprite:
+			hands_sprite.visible = false
+		# Keep head armor visible
+		if head_sprite:
+			head_sprite.visible = true
+		# Keep weapon visible - gun sprite goes on top of Skorpio body
+		if weapon_sprite:
+			weapon_sprite.visible = true
+		# Keep hair visible for character identity
+		if hair_sprite:
+			hair_sprite.visible = true
+		# =============================================================================
+		# GUN BODY TINT HACK - "Skorpio Armor Illusion"
+		# =============================================================================
+		# Problem: Skorpio gun-pose body sprite doesn't have armor variants.
+		# Solution: Tint the Skorpio body to match equipped chest armor color.
+		# BUT we only tint the MIDSECTION (torso) - head and feet stay original.
+		# This is done via midsection_tint.gdshader (top 56%, bottom 30% excluded).
+		# Only applies for EAST/WEST directions - north/south use normal LPC body.
+		# =============================================================================
+		if gun_body_sprite:
+			gun_body_sprite.visible = true
+			gun_body_sprite.z_index = 0  # Same z as body (replaces it)
+			# Sample armor color from chest, fallback to pants/boots
+			var armor_color = Color(1, 1, 1, 1)
+			if shirt_sprite and shirt_sprite.sprite_frames:
+				armor_color = _get_sprite_dominant_color(shirt_sprite)
+			if armor_color == Color(1, 1, 1, 1) and pants_sprite and pants_sprite.sprite_frames:
+				armor_color = _get_sprite_dominant_color(pants_sprite)
+			if armor_color == Color(1, 1, 1, 1) and boots_sprite and boots_sprite.sprite_frames:
+				armor_color = _get_sprite_dominant_color(boots_sprite)
+			# Apply tint via shader (only affects midsection, not head/feet)
+			if gun_body_sprite.material and gun_body_sprite.material is ShaderMaterial:
+				gun_body_sprite.material.set_shader_parameter("tint_color", armor_color)
+			else:
+				gun_body_sprite.modulate = armor_color
 	else:
-		self_modulate.a = 0.0
-
-	# base_head_sprite is also part of the naked body (for female characters) - hide it too
-	if base_head_sprite:
-		base_head_sprite.self_modulate.a = 1.0 if visible_state else 0.0
-
-	# Gun body layer is the OPPOSITE - show when regular body is hidden
-	if gun_body_sprite:
-		gun_body_sprite.visible = not visible_state
-
-	# Keep ALL clothing layers visible - they go on top of Skorpio/regular body
-	# pants_sprite, shirt_sprite, boots_sprite, arms_sprite, hands_sprite, head_sprite, hair_sprite
-	# These are NOT modified here - they stay visible
+		# LPC MODE: Show regular body and clothing, hide Skorpio
+		self_modulate.a = 1.0  # Show main LPC body
+		if base_head_sprite:
+			base_head_sprite.visible = true
+		if pants_sprite:
+			pants_sprite.visible = true
+		if shirt_sprite:
+			shirt_sprite.visible = true
+		if boots_sprite:
+			boots_sprite.visible = true
+		if arms_sprite:
+			arms_sprite.visible = true
+		if hands_sprite:
+			hands_sprite.visible = true
+		if head_sprite:
+			head_sprite.visible = true
+		if hair_sprite:
+			hair_sprite.visible = true
+		# Keep weapon visible
+		if weapon_sprite:
+			weapon_sprite.visible = true
+		# Hide Skorpio body
+		if gun_body_sprite:
+			gun_body_sprite.visible = false
 
 func play_lpc_animation(anim_name: String, direction: String):
 	"""Play animation with direction - NO FLIPPING!"""
@@ -618,20 +804,75 @@ func play_lpc_animation(anim_name: String, direction: String):
 	# Check if this animation has directions
 	var anim_key = anim_name + "_" + direction
 
-	# Gun body swap: When walking with a gun, show the Skorpio body layer instead of LPC body
-	var using_gun_pose = false
-	if is_gun_weapon and has_gun_walk_animations and anim_name == "walk":
-		if gun_body_sprite and gun_body_sprite.sprite_frames.has_animation("walk_" + direction):
-			using_gun_pose = true
+	# GUN MODE: When gun is equipped, use Skorpio body for EAST/WEST only
+	# North/South can use regular LPC body+armor (no pose conflict)
+	# Exception: harvest animations (chop) - those use regular LPC body with tool
+	var is_harvesting = anim_name == "chop" or anim_name == "harvest"
+	var is_side_facing = direction in ["east", "west"]
+	var use_gun_mode = is_gun_weapon and has_gun_walk_animations and gun_body_sprite and not is_harvesting and is_side_facing
 
-	# Hide/show body-related layers based on gun pose
-	# Skorpio body is complete (includes body+arms), so hide LPC layers to prevent double-render
-	# Keep clothing/hair visible for character identity
-	_set_body_layers_visible(not using_gun_pose)
+	if use_gun_mode:
+		# Enable Skorpio body mode
+		_set_gun_mode(true)
 
-	# Play animation on gun body layer if using gun pose
-	if using_gun_pose and gun_body_sprite:
-		gun_body_sprite.play("walk_" + direction)
+		# Map LPC animation names to Skorpio animations
+		# Body stays in idle/walk pose - gun itself handles shoot animation
+		var gun_anim = ""
+		match anim_name:
+			"idle":
+				gun_anim = "idle_" + direction
+			"walk":
+				gun_anim = "walk_" + direction
+			"shoot":
+				# Keep body in idle pose during shoot - gun sprite handles the visual
+				gun_anim = "idle_" + direction
+			"hurt":
+				# For hurt, just hold idle pose (Skorpio doesn't have hurt animation)
+				gun_anim = "idle_" + direction
+			_:
+				# Fallback to idle for any unknown animation
+				gun_anim = "idle_" + direction
+
+		# Play the Skorpio animation
+		if gun_body_sprite.sprite_frames.has_animation(gun_anim):
+			gun_body_sprite.play(gun_anim)
+		else:
+			# Fallback to idle if animation doesn't exist
+			var fallback = "idle_" + direction
+			if gun_body_sprite.sprite_frames.has_animation(fallback):
+				gun_body_sprite.play(fallback)
+
+		# Sync weapon sprite to match Skorpio body pose
+		if weapon_sprite:
+			var weapon_anim = "idle_" + direction
+			# For shoot action, try to play shoot animation on the gun if it exists
+			if anim_name == "shoot":
+				var shoot_anim = "shoot_" + direction
+				if weapon_sprite.sprite_frames.has_animation(shoot_anim):
+					weapon_anim = shoot_anim
+
+			if weapon_sprite.sprite_frames.has_animation(weapon_anim):
+				weapon_sprite.play(weapon_anim)
+				weapon_sprite.visible = true
+				# Z-index: behind when facing north, in front otherwise
+				weapon_sprite.z_index = -1 if direction == "north" else 9
+				weapon_sprite.offset = Vector2(0, 0)
+
+		# Sync hair sprite to match Skorpio body animation
+		if hair_sprite:
+			var hair_anim = "idle_" + direction
+			if anim_name == "walk":
+				hair_anim = "walk_" + direction
+			if hair_sprite.sprite_frames.has_animation(hair_anim):
+				hair_sprite.play(hair_anim)
+
+		# Stop the main body animation to prevent any visual artifacts
+		stop()
+		return  # Don't play LPC animations when in gun mode
+	else:
+		# Regular LPC mode - disable gun mode if it was enabled
+		if is_gun_weapon and gun_body_sprite:
+			_set_gun_mode(false)
 
 	# NOTE: Animation speeds are set during setup_lpc_sprite() and should NOT be modified here
 	# All layers must use the same FPS that was set during creation (weapon-specific)
@@ -715,6 +956,18 @@ func play_lpc_animation(anim_name: String, direction: String):
 			if anim_name != "slash":
 				# Don't interrupt slash with walk/idle
 				return
+
+		# For gun weapons, sync weapon to Skorpio body animations (idle/walk during gun mode)
+		if is_gun_weapon and has_gun_walk_animations and gun_body_sprite and gun_body_sprite.visible:
+			# Gun weapon needs to follow the Skorpio pose - use idle animation to match held position
+			var gun_weapon_anim = "idle_" + direction
+			if weapon_sprite.sprite_frames.has_animation(gun_weapon_anim):
+				weapon_sprite.play(gun_weapon_anim)
+				weapon_sprite.visible = true
+				# Z-index: behind when facing north, in front otherwise
+				weapon_sprite.z_index = -1 if direction == "north" else 9
+				weapon_sprite.offset = Vector2(0, 0)
+			return
 
 		if weapon_sprite.sprite_frames.has_animation(anim_key):
 			weapon_sprite.play(anim_key)

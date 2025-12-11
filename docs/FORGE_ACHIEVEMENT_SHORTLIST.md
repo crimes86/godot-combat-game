@@ -19,14 +19,14 @@ Curated list of achievements that pass the "holy shit you did THAT" test.
 | Elden Ring | SHARDBEARER_GODRICK | grafted_blade | HAS SPRITES |
 | Elden Ring | SHARDBEARER_MALENIA | hand_of_malenia | HAS SPRITES |
 | Elden Ring | SHARDBEARER_RADAHN | radahns_greatswords | HAS SPRITES |
-| Elden Ring | LEGEND | moonveil | NEEDS SPRITES |
+| Elden Ring | LEGEND | moonveil | HAS SPRITES |
 | Hollow Knight | COMPLETION | pure_nail | HAS SPRITES |
-| Hollow Knight | VOID | shade_cloak | NEEDS SPRITES |
+| Hollow Knight | VOID | shade_cloak | HAS SPRITES |
 | Hades | COMPLETE | stygian_blade | HAS SPRITES |
-| Hades | SPEED_RUN | adamant_rail | NEEDS SPRITES |
+| Hades | SPEED_RUN | adamant_rail | HAS SPRITES |
 | Terraria | SLAYER_OF_WORLDS | terra_blade | HAS SPRITES |
 | Sekiro | IMMORTAL_SEVERANCE | mortal_blade | HAS SPRITES |
-| Sekiro | SHURA | gyoubu_spear | NEEDS SPRITES |
+| Sekiro | SHURA | gyoubu_spear | HAS SPRITES |
 | Witcher 3 | GERALT_THE_PROFESSIONAL | witcher_silver_sword | HAS SPRITES |
 | Stardew Valley | LEGEND | straw_hat | HAS SPRITES |
 | Discord | NITRO_SUBSCRIBER | discord_nitro_badge | N/A (accessory) |

@@ -2078,13 +2078,12 @@ func _on_mantle_auth_completed(user_data: Dictionary):
 	# Show success message briefly
 	if mantle_status_label:
 		var tier_name = user_data.get("mantle", {}).get("name", "Unknown")
-		var tier_color_hex = user_data.get("mantle", {}).get("color", "#FFFFFF")
 		var total_ach = user_data.get("total_achievements", 0)
-		mantle_status_label.text = "Welcome, %s!\n%s Tier - %d achievements\n\nEntering Armory..." % [
+		mantle_status_label.text = "Welcome, %s!\n%s Tier - %d achievements\n\nSyncing to Armory..." % [
 			user_data.get("username", "Player"), tier_name, total_ach
 		]
-		var tier_color = Color.from_string(tier_color_hex, Color.WHITE)
-		mantle_status_label.add_theme_color_override("font_color", tier_color)
+		# Green color to signify success and syncing
+		mantle_status_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))
 
 	# Update provider icons to show connected state
 	_update_provider_icons_state()

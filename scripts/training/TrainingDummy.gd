@@ -811,19 +811,26 @@ func spawn_weakpoints() -> void:
 		var section = sections[i]
 
 		# Generate random position within this section's bounds
-		# Use 80% of width to avoid edges (10% margin on each side)
-		var margin_x = sprite_width * 0.1
+		# Use 60% of width to avoid edges (20% margin on each side) - increased for better clickability
+		var margin_x = sprite_width * 0.2
 		var random_x = randf_range(-sprite_width / 2.0 + margin_x, sprite_width / 2.0 - margin_x)
 
-		# Different margins for different sections
+		# Different margins for different sections - increased for better clickability
 		var random_y = 0.0
-		if section["name"] == "upper" or section["name"] == "lower":
-			# Top and bottom sections: 25% margin on top/bottom
-			var margin_y = section_height * 0.25
-			random_y = randf_range(section["y_min"] + margin_y, section["y_max"] - margin_y)
+		if section["name"] == "upper":
+			# Upper section: 30% margin on top, 15% on bottom (keep away from head edge)
+			var margin_top = section_height * 0.30
+			var margin_bottom = section_height * 0.15
+			random_y = randf_range(section["y_min"] + margin_top, section["y_max"] - margin_bottom)
+		elif section["name"] == "lower":
+			# Lower section: 15% margin on top, 30% on bottom (keep away from feet edge)
+			var margin_top = section_height * 0.15
+			var margin_bottom = section_height * 0.30
+			random_y = randf_range(section["y_min"] + margin_top, section["y_max"] - margin_bottom)
 		else:
-			# Middle section: no margin
-			random_y = randf_range(section["y_min"], section["y_max"])
+			# Middle section: 10% margin on both sides
+			var margin_y = section_height * 0.10
+			random_y = randf_range(section["y_min"] + margin_y, section["y_max"] - margin_y)
 
 		var random_pos = Vector2(random_x, random_y)
 

@@ -86,6 +86,8 @@ var fire_fuel_add_sound: AudioStream = null  # Fire magic sound when adding fuel
 # Weapon swing sounds (whoosh sounds when swinging weapons)
 var sword_swing_sounds: Array[AudioStream] = []  # Sword whoosh (2 variations)
 var unarmed_swing_sounds: Array[AudioStream] = []  # Unarmed/fist whoosh
+var gunshot_sounds: Array[AudioStream] = []  # Gunshot sounds (for gun weapons)
+var battle_rifle_sounds: Array[AudioStream] = []  # Battle rifle sounds (Halo-style burst)
 
 # Player sounds
 var player_hurt_sounds: Array[AudioStream] = []  # Player hurt/death grunts (2 variations)
@@ -158,6 +160,9 @@ var special_music_player: AudioStreamPlayer = null  # Player for special music
 # Mute state
 var sfx_muted: bool = false
 var music_muted: bool = false
+
+# Volume control (in dB, 0 = full volume, -80 = silent)
+var sfx_volume_db: float = 0.0  # SFX volume offset applied to all sound effects
 
 func _ready() -> void:
 	# Load real sound files first
@@ -386,6 +391,26 @@ func _load_real_sounds() -> void:
 			push_warning("  ⚠️ Failed to load unarmed_swing_%d.wav" % i)
 
 	print("  📊 Loaded %d unarmed swing sound variations" % unarmed_swing_sounds.size())
+
+	# Load gunshot/railgun sounds
+	var railgun_fire = load("res://assets/audio/sfx/combat/weapons/railgun_fire.wav")
+	if railgun_fire:
+		gunshot_sounds.append(railgun_fire)
+		print("  ✅ Loaded railgun_fire.wav")
+	else:
+		push_warning("  ⚠️ Failed to load railgun_fire.wav")
+
+	print("  📊 Loaded %d gunshot sound variations" % gunshot_sounds.size())
+
+	# Load battle rifle sounds (Halo-style burst fire)
+	var battle_rifle_fire = load("res://assets/audio/sfx/combat/weapons/battle_rifle_fire.wav")
+	if battle_rifle_fire:
+		battle_rifle_sounds.append(battle_rifle_fire)
+		print("  ✅ Loaded battle_rifle_fire.wav")
+	else:
+		# Battle rifle sound is optional - will use pitch-shifted gunshot as fallback
+		print("  ℹ️ battle_rifle_fire.wav not found - will use pitch-shifted gunshot")
+	print("  📊 Loaded %d battle rifle sound variations" % battle_rifle_sounds.size())
 
 	# Load player hurt sounds (grunt/pain sounds)
 	var player_hurt_1 = load("res://assets/audio/sfx/player/player_hurt_1.wav")
@@ -711,7 +736,7 @@ func play_sound(sound_type: SoundType, global_pos: Vector2 = Vector2.ZERO, volum
 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_cache[sound_type]
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db  # Apply SFX volume setting
 	player.global_position = global_pos
 	player.finished.connect(player.queue_free)
 
@@ -733,7 +758,7 @@ func play_sound_2d(sound_type: SoundType, volume_db: float = 0.0) -> void:
 
 	var player = AudioStreamPlayer.new()
 	player.stream = stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db  # Apply SFX volume setting
 	player.bus = "Master"  # Use Master bus for UI sounds
 	player.finished.connect(player.queue_free)
 
@@ -759,7 +784,7 @@ func play_weakpoint_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 	# Create player with subtle pitch randomization (±3% for variety)
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation to avoid distortion
 	player.max_polyphony = 8  # Allow multiple instances for spam clicking
@@ -780,7 +805,7 @@ func play_critical_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 	# Create player with slight pitch randomization
 	var player = AudioStreamPlayer2D.new()
 	player.stream = critical_hit_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
 	player.max_polyphony = 4  # Allow some overlap but less than weakpoints
@@ -814,7 +839,7 @@ func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float 
 	# Create player with pitch randomization
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.max_polyphony = 4  # Allow some overlap
@@ -837,7 +862,7 @@ func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 	# Create player with slight pitch randomization
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.max_polyphony = 3  # Allow some overlap but not too much
@@ -879,7 +904,7 @@ func _play_skeleton_sound(sound: AudioStream, global_pos: Vector2, volume_db: fl
 		get_tree().root.add_child(active_skeleton_sound_player)
 
 	active_skeleton_sound_player.stream = sound
-	active_skeleton_sound_player.volume_db = volume_db
+	active_skeleton_sound_player.volume_db = volume_db + sfx_volume_db
 	active_skeleton_sound_player.global_position = global_pos
 	active_skeleton_sound_player.pitch_scale = randf_range(0.95, 1.05)
 	active_skeleton_sound_player.play()
@@ -899,7 +924,7 @@ func play_skeleton_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: fl
 	# Create player with slight pitch randomization
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
@@ -922,7 +947,7 @@ func play_wolf_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)
 	player.max_polyphony = 3
@@ -962,7 +987,7 @@ func play_wolf_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float 
 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)
 	player.finished.connect(player.queue_free)
@@ -983,7 +1008,7 @@ func _play_wolf_vocalization(sound: AudioStream, global_pos: Vector2, volume_db:
 		get_tree().root.add_child(active_wolf_sound_player)
 
 	active_wolf_sound_player.stream = sound
-	active_wolf_sound_player.volume_db = volume_db
+	active_wolf_sound_player.volume_db = volume_db + sfx_volume_db
 	active_wolf_sound_player.global_position = global_pos
 	active_wolf_sound_player.pitch_scale = randf_range(0.93, 1.07)
 	active_wolf_sound_player.play()
@@ -1005,7 +1030,7 @@ func play_wolf_footstep(global_pos: Vector2, camera_pos: Vector2, is_running: bo
 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.93, 1.07)
 	player.max_polyphony = 4
@@ -1075,7 +1100,7 @@ func try_play_wolf_howl(_global_pos: Vector2 = Vector2.ZERO, howl_type: String =
 	# Play the howl with spatial audio (very large range for atmosphere)
 	var player = AudioStreamPlayer2D.new()
 	player.stream = howl_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.pitch_scale = randf_range(0.95, 1.05)
 	player.max_distance = 8000.0  # Huge range - heard across the map
 	player.attenuation = 0.3  # Very slow falloff
@@ -1134,7 +1159,7 @@ func force_play_wolf_howl(_global_pos: Vector2 = Vector2.ZERO, howl_type: String
 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = howl_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.pitch_scale = randf_range(0.95, 1.05)
 	player.max_distance = 8000.0
 	player.attenuation = 0.3
@@ -1160,7 +1185,7 @@ func play_sword_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 	# Create player with slight pitch randomization for variety
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
@@ -1183,9 +1208,75 @@ func play_unarmed_swing_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 	# Create player with slight pitch randomization for variety
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play gunshot sound (for gun weapons)
+func play_gunshot_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
+	if sfx_muted:
+		return
+	if gunshot_sounds.is_empty():
+		# No gunshot sounds loaded - use sword swing as placeholder with higher pitch
+		if not sword_swing_sounds.is_empty():
+			var sound_stream = sword_swing_sounds[randi() % sword_swing_sounds.size()]
+			var player = AudioStreamPlayer2D.new()
+			player.stream = sound_stream
+			player.volume_db = volume_db + sfx_volume_db
+			player.global_position = global_pos
+			player.pitch_scale = 1.5  # Higher pitch for "snap" sound
+			player.finished.connect(player.queue_free)
+			get_tree().root.add_child(player)
+			player.play()
+		return
+
+	# Pick random gunshot variation
+	var sound_stream = gunshot_sounds[randi() % gunshot_sounds.size()]
+
+	# Create player with slight pitch randomization
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db + sfx_volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play battle rifle sound (Halo-style burst fire - lighter, higher pitch than railgun)
+func play_battle_rifle_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
+	if sfx_muted:
+		return
+
+	var sound_stream: AudioStream = null
+	var pitch: float = randf_range(0.97, 1.03)
+
+	if not battle_rifle_sounds.is_empty():
+		# Use dedicated battle rifle sound
+		sound_stream = battle_rifle_sounds[randi() % battle_rifle_sounds.size()]
+	elif not gunshot_sounds.is_empty():
+		# Fallback: pitch-shifted gunshot for lighter report
+		sound_stream = gunshot_sounds[randi() % gunshot_sounds.size()]
+		pitch = randf_range(1.25, 1.35)  # Higher pitch for lighter, snappier sound
+	else:
+		# Last resort: sword swing with very high pitch
+		if not sword_swing_sounds.is_empty():
+			sound_stream = sword_swing_sounds[randi() % sword_swing_sounds.size()]
+			pitch = 1.8
+
+	if sound_stream == null:
+		return
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db + sfx_volume_db - 3.0  # Slightly quieter than railgun
+	player.global_position = global_pos
+	player.pitch_scale = pitch
 	player.finished.connect(player.queue_free)
 
 	get_tree().root.add_child(player)
@@ -1205,7 +1296,7 @@ func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float
 	# Create player with slight pitch randomization for variety
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
@@ -1228,7 +1319,7 @@ func play_player_death_sound(global_pos: Vector2 = Vector2.ZERO, is_female: bool
 	# Create player - no pitch randomization for dramatic death sound
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = 1.0  # Keep original pitch for impact
 	player.finished.connect(player.queue_free)
@@ -1251,7 +1342,7 @@ func play_player_footstep(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 	# Create player with slight pitch variation
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)
 	player.max_polyphony = 2  # Allow slight overlap
@@ -1286,7 +1377,7 @@ func play_skeleton_footstep(global_pos: Vector2, camera_pos: Vector2, volume_db:
 	# Create player with pitch variation
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.93, 1.07)  # More variation for bone clacking
 	player.max_polyphony = 4  # Allow more overlap for multiple skeletons
@@ -1319,11 +1410,11 @@ func play_fire_fuel_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 
 	if enhanced:
 		# Enhanced version: slightly louder and higher pitch
-		player.volume_db = volume_db + 3.0
+		player.volume_db = volume_db + sfx_volume_db + 3.0
 		player.pitch_scale = randf_range(1.05, 1.15)
 	else:
 		# Normal version: subtle pitch variation
-		player.volume_db = volume_db
+		player.volume_db = volume_db + sfx_volume_db
 		player.pitch_scale = randf_range(0.95, 1.05)
 
 	player.finished.connect(player.queue_free)
@@ -1348,7 +1439,7 @@ func play_dodge_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -8.
 	# Create player with pitch variation
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 
 	# dodge_2.wav (index 1) is a 3-second clip - speed it up to ~0.5 seconds
@@ -1377,7 +1468,7 @@ func play_inventory_move_sound(volume_db: float = -10.0) -> void:
 
 	var player = AudioStreamPlayer.new()
 	player.stream = inventory_move_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
 
@@ -1395,7 +1486,7 @@ func play_equip_sound(volume_db: float = -10.0) -> void:
 
 	var player = AudioStreamPlayer.new()
 	player.stream = equip_item_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
 
@@ -1412,7 +1503,7 @@ func play_button_click_sound(volume_db: float = -8.0) -> void:
 
 	var player = AudioStreamPlayer.new()
 	player.stream = button_click_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
 
@@ -1429,7 +1520,7 @@ func play_button_hover_sound(volume_db: float = -15.0) -> void:
 
 	var player = AudioStreamPlayer.new()
 	player.stream = button_hover_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
 
@@ -1445,7 +1536,7 @@ func play_inventory_open_sound(volume_db: float = -10.0) -> void:
 
 	var player = AudioStreamPlayer.new()
 	player.stream = inventory_open_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.pitch_scale = randf_range(0.97, 1.03)
 	player.finished.connect(player.queue_free)
 
@@ -1461,7 +1552,7 @@ func play_character_sheet_sound(volume_db: float = -10.0) -> void:
 
 	var player = AudioStreamPlayer.new()
 	player.stream = character_sheet_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.pitch_scale = randf_range(0.97, 1.03)
 	player.finished.connect(player.queue_free)
 
@@ -1480,7 +1571,7 @@ func play_weakpoint_destroyed_sound(global_pos: Vector2 = Vector2.ZERO, volume_d
 	# Create player - no pitch randomization for this dramatic finale
 	var player = AudioStreamPlayer2D.new()
 	player.stream = weakpoint_destroyed_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = 1.0  # Keep original pitch for maximum impact
 	player.max_polyphony = 2  # Allow slight overlap in case of rapid weakpoint destruction
@@ -1499,7 +1590,7 @@ func play_healing_cast_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = healing_staff_cast_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)  # Slight variation
 	player.max_distance = 800.0
@@ -1519,7 +1610,7 @@ func play_healing_impact_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: fl
 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = healing_staff_impact_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)  # Slight variation
 	player.max_distance = 800.0
@@ -1539,7 +1630,7 @@ func play_lava_burn_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = lava_burn_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.9, 1.1)  # Slight variation for variety
 	player.max_distance = 600.0
@@ -1560,7 +1651,7 @@ func play_level_up_sound(volume_db: float = -4.0) -> void:
 	# Use non-positional audio so it plays at full volume regardless of camera position
 	var player = AudioStreamPlayer.new()
 	player.stream = level_up_sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.finished.connect(player.queue_free)
 
 	get_tree().root.add_child(player)
@@ -1920,7 +2011,7 @@ func play_tree_chop_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)
 	player.max_polyphony = 4
@@ -1940,7 +2031,7 @@ func play_tree_fall_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound
-	player.volume_db = volume_db
+	player.volume_db = volume_db + sfx_volume_db
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)
 	player.bus = "SFX"

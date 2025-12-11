@@ -57,6 +57,12 @@ var debug_weakpoint_clicks: bool = false
 var tutorial_dummy_hits: int = 0
 const TUTORIAL_FORCE_CRIT_HITS: int = 5  # Force crit after this many hits on dummy during tutorial
 
+# Burst fire state (for battle rifle, etc.)
+var is_burst_firing: bool = false
+var burst_shots_remaining: int = 0
+var burst_target_pos: Vector2 = Vector2.ZERO
+var burst_damage_per_shot: float = 0.0
+
 func _init(player_ref: CharacterBody2D) -> void:
 	player = player_ref
 
@@ -82,14 +88,32 @@ func process_held_attack(delta: float, mouse_pos: Vector2) -> void:
 	if hold_attack_timer >= hold_attack_interval:
 		hold_attack_timer = 0.0
 
-		# Check if using healing weapon
-		if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_healing_weapon():
-			if can_attack:
-				attempt_heal()
+		# Check weapon type and route appropriately
+		if CharacterStats.equipped_weapon:
+			if CharacterStats.equipped_weapon.is_healing_weapon():
+				# Healing staff
+				if can_attack:
+					attempt_heal()
+			elif CharacterStats.equipped_weapon.is_gun_weapon():
+				# Gun - check weakpoint first (uncapped attack speed on weakpoints)
+				if try_gun_weakpoint_attack(mouse_pos):
+					pass  # Hit weakpoint - no cooldown needed
+				elif can_attack and not is_burst_firing:
+					# Check for burst weapon (battle rifle) vs single shot (railgun)
+					if CharacterStats.equipped_weapon.is_burst_weapon():
+						attempt_burst_attack()
+					else:
+						attempt_gun_attack()
+			else:
+				# Melee weapon - check crit window first
+				if is_holding_on_crit_window_enemy(mouse_pos):
+					pass  # Handled by crit window logic
+				elif can_attack:
+					attempt_attack()
 		else:
-			# Melee weapon - check crit window first
+			# No weapon (unarmed) - melee
 			if is_holding_on_crit_window_enemy(mouse_pos):
-				pass  # Handled by crit window logic
+				pass
 			elif can_attack:
 				attempt_attack()
 
@@ -98,12 +122,24 @@ func on_mouse_pressed(mouse_pos: Vector2) -> bool:
 	is_mouse_held = true
 	hold_attack_timer = 0.0
 
-	# Check if using a healing weapon
-	if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_healing_weapon():
-		attempt_heal()
-		return true
+	# Check weapon type and route appropriately
+	if CharacterStats.equipped_weapon:
+		if CharacterStats.equipped_weapon.is_healing_weapon():
+			# Healing staff
+			attempt_heal()
+			return true
+		elif CharacterStats.equipped_weapon.is_gun_weapon():
+			# Gun - check for weakpoint hit first (uncapped attack speed on weakpoints)
+			if try_gun_weakpoint_attack(mouse_pos):
+				return true  # Hit weakpoint - no cooldown
+			# Check for burst weapon (battle rifle) vs single shot (railgun)
+			if CharacterStats.equipped_weapon.is_burst_weapon():
+				attempt_burst_attack()
+			else:
+				attempt_gun_attack()
+			return true
 
-	# Melee/damage weapon - check weakpoint first
+	# Melee/unarmed weapon - check weakpoint first
 	if is_clicking_on_weakpoint(mouse_pos):
 		return true  # Let the weakpoint handle it
 
@@ -111,7 +147,7 @@ func on_mouse_pressed(mouse_pos: Vector2) -> bool:
 	if check_crit_window_click(mouse_pos):
 		return true
 
-	# Normal attack
+	# Normal melee attack
 	attempt_attack()
 	return true
 
@@ -512,6 +548,541 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 			else:
 				sound_manager.play_normal_hit_sound(hit_pos, -10.0, weapon_type)
 		)
+
+# ========================================
+# GUN ATTACK SYSTEM
+# ========================================
+
+func try_gun_weakpoint_attack(mouse_pos: Vector2) -> bool:
+	"""Check if gun targeting circle contains a weakpoint and hit it directly.
+	This bypasses attack cooldown for skill expression (uncapped attack speed on weakpoints).
+	Returns true if a weakpoint was hit."""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_gun_weapon():
+		return false
+
+	var cursor_pos = player.get_global_mouse_position()
+	var gun_radius = weapon.gun_radius if weapon.get("gun_radius") else 28.0
+	var gun_range = weapon.gun_range if weapon.get("gun_range") else 350.0
+
+	# Clamp cursor to max range
+	var distance_to_cursor = player.global_position.distance_to(cursor_pos)
+	if distance_to_cursor > gun_range:
+		var direction = (cursor_pos - player.global_position).normalized()
+		cursor_pos = player.global_position + direction * gun_range
+
+	# Check all enemies for weakpoints within gun targeting circle
+	var all_enemies = player.get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+
+	for enemy in all_enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		# Only check enemies in crit window
+		if not ("in_crit_window" in enemy and enemy.in_crit_window):
+			continue
+
+		if not "weakpoints" in enemy:
+			continue
+
+		for weakpoint in enemy.weakpoints:
+			if not is_instance_valid(weakpoint):
+				continue
+			if "is_destroyed" in weakpoint and weakpoint.is_destroyed:
+				continue
+
+			# Check if weakpoint is within gun targeting circle at cursor
+			var distance = cursor_pos.distance_to(weakpoint.global_position)
+			if distance <= gun_radius:
+				# HIT! Fire visual effects and hit the weakpoint (NO COOLDOWN)
+				_fire_gun_at_weakpoint(weakpoint, cursor_pos)
+				return true
+
+	return false
+
+func _fire_gun_at_weakpoint(weakpoint: Node, cursor_pos: Vector2) -> void:
+	"""Fire gun at weakpoint with visual effects but NO cooldown."""
+	# Face toward weakpoint
+	attack_direction = (weakpoint.global_position - player.global_position).normalized()
+
+	# Play shoot animation
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	var dir_str = player.get_direction_string(attack_direction)
+	var lpc_dir = player.convert_to_lpc_direction(dir_str)
+	if character_sprite and character_sprite.has_method("play_lpc_animation"):
+		character_sprite.play_lpc_animation("shoot", lpc_dir)
+
+	# Calculate barrel position and fire VFX
+	var barrel_pos = player.global_position + _get_gun_barrel_offset(lpc_dir)
+	_spawn_muzzle_flash_at(barrel_pos)
+	_spawn_bullet_trail(barrel_pos, weakpoint.global_position)
+
+	# Play gunshot sound
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_gunshot_sound(player.global_position, -6.0)
+
+	# Hit the weakpoint directly (client-predicted, no cooldown)
+	if weakpoint.has_method("hit"):
+		weakpoint.hit()
+
+func attempt_gun_attack() -> void:
+	"""Try to perform a gun attack at cursor position (with cooldown)"""
+	if not can_attack:
+		return
+
+	# Verify gun weapon equipped
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_gun_weapon():
+		return
+
+	can_attack = false
+	if player:
+		player.can_attack = false
+
+	var cursor_pos = player.get_global_mouse_position()
+	var gun_radius = weapon.gun_radius if weapon.get("gun_radius") else 28.0
+	var gun_range = weapon.gun_range if weapon.get("gun_range") else 350.0
+
+	# Clamp cursor to max range from player
+	var distance_to_cursor = player.global_position.distance_to(cursor_pos)
+	if distance_to_cursor > gun_range:
+		var direction = (cursor_pos - player.global_position).normalized()
+		cursor_pos = player.global_position + direction * gun_range
+
+	# Face toward cursor
+	attack_direction = (cursor_pos - player.global_position).normalized()
+
+	# Play gun shoot animation (uses Skorpio body pose)
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	var dir_str = player.get_direction_string(attack_direction)
+	var lpc_dir = player.convert_to_lpc_direction(dir_str)
+	if character_sprite and character_sprite.has_method("play_lpc_animation"):
+		character_sprite.play_lpc_animation("shoot", lpc_dir)
+
+	# Calculate barrel tip position based on direction
+	var barrel_pos = player.global_position + _get_gun_barrel_offset(lpc_dir)
+
+	# Spawn muzzle flash at barrel
+	_spawn_muzzle_flash_at(barrel_pos)
+
+	# Spawn bullet trail from barrel to cursor
+	_spawn_bullet_trail(barrel_pos, cursor_pos)
+
+	# Play gunshot sound
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_gunshot_sound(player.global_position, -6.0)
+
+	# Get enemies in gun targeting circle
+	var enemies = get_enemies_in_gun_radius(cursor_pos, gun_radius)
+
+	if enemies.size() > 0:
+		attack_enemies_at_cursor(enemies)
+	else:
+		# Miss - spawn impact at cursor
+		_spawn_bullet_impact(cursor_pos, false)
+
+	# Start cooldown timer
+	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
+
+# ========================================
+# BURST FIRE SYSTEM (Battle Rifle)
+# ========================================
+
+func attempt_burst_attack() -> void:
+	"""Perform a burst-fire attack (e.g., battle rifle 3-round burst)"""
+	if not can_attack or is_burst_firing:
+		return
+
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_gun_weapon():
+		return
+
+	can_attack = false
+	is_burst_firing = true
+	if player:
+		player.can_attack = false
+
+	var cursor_pos = player.get_global_mouse_position()
+	var gun_range = weapon.gun_range if weapon.get("gun_range") else 350.0
+
+	# Clamp cursor to max range
+	var distance_to_cursor = player.global_position.distance_to(cursor_pos)
+	if distance_to_cursor > gun_range:
+		var direction = (cursor_pos - player.global_position).normalized()
+		cursor_pos = player.global_position + direction * gun_range
+
+	# Store burst state
+	burst_target_pos = cursor_pos
+	burst_shots_remaining = weapon.burst_count
+	burst_damage_per_shot = attack_damage / float(weapon.burst_count)
+
+	# Face toward cursor
+	attack_direction = (cursor_pos - player.global_position).normalized()
+
+	# Start burst sequence
+	_fire_burst_round()
+
+func _fire_burst_round() -> void:
+	"""Fire a single round in a burst sequence"""
+	if burst_shots_remaining <= 0:
+		_finish_burst()
+		return
+
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon:
+		_finish_burst()
+		return
+
+	burst_shots_remaining -= 1
+
+	# Play shoot animation
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	var dir_str = player.get_direction_string(attack_direction)
+	var lpc_dir = player.convert_to_lpc_direction(dir_str)
+	if character_sprite and character_sprite.has_method("play_lpc_animation"):
+		character_sprite.play_lpc_animation("shoot", lpc_dir)
+
+	# Calculate barrel position
+	var barrel_pos = player.global_position + _get_gun_barrel_offset(lpc_dir)
+
+	# Spawn battle rifle visuals (green/teal Halo style)
+	_spawn_battle_rifle_muzzle_flash(barrel_pos)
+	_spawn_tracer_round(barrel_pos, burst_target_pos)
+
+	# Play battle rifle sound
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		if sound_manager.has_method("play_battle_rifle_sound"):
+			sound_manager.play_battle_rifle_sound(player.global_position, -6.0)
+		else:
+			# Fallback to regular gunshot
+			sound_manager.play_gunshot_sound(player.global_position, -6.0)
+
+	# Get enemies in targeting circle and deal burst damage (divided by burst count)
+	var gun_radius = weapon.gun_radius if weapon.get("gun_radius") else 28.0
+	var enemies = get_enemies_in_gun_radius(burst_target_pos, gun_radius)
+
+	if enemies.size() > 0:
+		_attack_enemies_burst_round(enemies)
+	else:
+		_spawn_bullet_impact(burst_target_pos, false)
+
+	# Schedule next burst round or finish
+	if burst_shots_remaining > 0:
+		var burst_delay = weapon.burst_delay if weapon.get("burst_delay") else 0.10
+		player.get_tree().create_timer(burst_delay).timeout.connect(_fire_burst_round)
+	else:
+		_finish_burst()
+
+func _attack_enemies_burst_round(enemies: Array) -> void:
+	"""Apply damage from a single burst round"""
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		# Burst rounds use simple damage - crit is checked on first round only
+		# (handled by attack_enemies_at_cursor for first round if needed)
+		_spawn_bullet_impact(enemy.global_position, false)
+
+		if enemy.has_method("take_damage"):
+			enemy.take_damage(burst_damage_per_shot)
+
+		if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
+			attack_feedback.spawn_damage_number(enemy.global_position, burst_damage_per_shot, false, false)
+
+func _finish_burst() -> void:
+	"""Complete burst sequence and start cooldown"""
+	is_burst_firing = false
+	burst_shots_remaining = 0
+
+	# Standard cooldown after burst completes
+	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
+
+func get_enemies_in_gun_radius(center_pos: Vector2, radius: float) -> Array:
+	"""Get all enemies within gun targeting circle at cursor position"""
+	var enemies_in_radius = []
+	var enemies = player.get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		# Use enemy's hitbox center (global_position) for hit detection
+		# This matches where their collision shape is
+		var enemy_center = enemy.global_position
+
+		# For training dummy with sprite offset, also check sprite center
+		if enemy.get("sprite") and is_instance_valid(enemy.sprite):
+			var sprite_offset = enemy.sprite.position
+			if sprite_offset != Vector2.ZERO:
+				enemy_center = enemy.global_position + sprite_offset
+
+		var distance = center_pos.distance_to(enemy_center)
+		if distance <= radius:
+			enemies_in_radius.append(enemy)
+
+	return enemies_in_radius
+
+func attack_enemies_at_cursor(enemies: Array) -> void:
+	"""Deal damage to enemies at gun cursor position - mirrors attack_enemies_in_cone()"""
+	var TutorialManager = player.get_node_or_null("/root/TutorialManager")
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		# Roll for crit (same system as melee)
+		var is_crit = false
+		var final_damage = attack_damage
+
+		if crit_system and crit_system.has_method("roll_for_crit"):
+			is_crit = crit_system.roll_for_crit()
+
+			# Tutorial: force crit on training dummy after enough hits
+			var is_training_dummy = enemy.is_in_group("training_dummy")
+			if is_training_dummy and TutorialManager and TutorialManager.is_tutorial_active():
+				tutorial_dummy_hits += 1
+				if not is_crit and tutorial_dummy_hits >= TUTORIAL_FORCE_CRIT_HITS:
+					is_crit = true
+					tutorial_dummy_hits = 0
+					print("🎯 FORCED CRIT for tutorial (gun hit dummy %d times)" % TUTORIAL_FORCE_CRIT_HITS)
+				elif is_crit:
+					tutorial_dummy_hits = 0
+
+			if is_crit:
+				var crit_mult = crit_system.get_crit_multiplier() if crit_system.has_method("get_crit_multiplier") else 2.0
+				final_damage *= crit_mult
+
+				# Play crit window opening sound
+				var sound_manager = player.get_node_or_null("/root/SoundManager")
+				if sound_manager and sound_manager.has_method("play_sound"):
+					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
+
+				# Start crit window (same as melee)
+				if crit_window_manager and crit_window_manager.has_method("start_window"):
+					crit_window_manager.start_window(enemy)
+
+		# Spawn impact effect at enemy
+		_spawn_bullet_impact(enemy.global_position, is_crit)
+
+		apply_damage_with_feedback(enemy, final_damage, is_crit, false)
+
+# ========================================
+# GUN VISUAL EFFECTS
+# ========================================
+
+func _get_gun_barrel_offset(direction: String) -> Vector2:
+	"""Get the barrel tip offset from player center based on facing direction.
+	These offsets are tuned for the Skorpio gun-pose sprites (64x64 frames)."""
+	match direction:
+		"east":
+			return Vector2(23, -3)   # Barrel extends right
+		"west":
+			return Vector2(-23, -3)  # Barrel extends left
+		"north":
+			return Vector2(10, -24)  # Barrel points up
+		"south":
+			return Vector2(-10, 23)  # Barrel points down
+		_:
+			return Vector2(20, -3)   # Default fallback
+
+func _spawn_muzzle_flash_at(flash_pos: Vector2) -> void:
+	"""Spawn code-generated muzzle flash - starburst effect"""
+	var flash_container = Node2D.new()
+	flash_container.name = "MuzzleFlash"
+	flash_container.global_position = flash_pos
+	flash_container.rotation = attack_direction.angle()
+	flash_container.z_index = 15
+	player.get_tree().root.add_child(flash_container)
+
+	# Core bright circle (white-yellow)
+	var core = Polygon2D.new()
+	core.color = Color(1.0, 0.95, 0.8, 0.95)
+	var core_points = PackedVector2Array()
+	for i in range(12):
+		var angle = (float(i) / 12) * TAU
+		core_points.append(Vector2(cos(angle), sin(angle)) * 6)
+	core.polygon = core_points
+	flash_container.add_child(core)
+
+	# Outer glow (orange)
+	var glow = Polygon2D.new()
+	glow.color = Color(1.0, 0.6, 0.2, 0.6)
+	var glow_points = PackedVector2Array()
+	for i in range(12):
+		var angle = (float(i) / 12) * TAU
+		glow_points.append(Vector2(cos(angle), sin(angle)) * 12)
+	glow.polygon = glow_points
+	glow.z_index = -1
+	flash_container.add_child(glow)
+
+	# Spikes/rays shooting outward (3-5 random spikes)
+	var num_spikes = randi_range(3, 5)
+	for i in range(num_spikes):
+		var spike = Polygon2D.new()
+		spike.color = Color(1.0, 0.85, 0.4, 0.8)
+		var spike_angle = randf_range(-0.4, 0.4)  # Spread around forward direction
+		var spike_length = randf_range(14, 22)
+		var spike_width = randf_range(2, 4)
+		spike.polygon = PackedVector2Array([
+			Vector2(0, 0),
+			Vector2(spike_length, -spike_width),
+			Vector2(spike_length + 4, 0),
+			Vector2(spike_length, spike_width)
+		])
+		spike.rotation = spike_angle
+		flash_container.add_child(spike)
+
+	# Quick scale up then fade out
+	flash_container.scale = Vector2(0.5, 0.5)
+	var tween = player.get_tree().create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(flash_container, "scale", Vector2(1.2, 1.2), 0.04)
+	tween.tween_property(flash_container, "modulate:a", 0.0, 0.1)
+	tween.set_parallel(false)
+	tween.tween_callback(flash_container.queue_free)
+
+func _spawn_bullet_trail(from_pos: Vector2, to_pos: Vector2) -> void:
+	"""Spawn bullet trail line from gun to target"""
+	var trail = Line2D.new()
+	trail.name = "BulletTrail"
+	trail.width = 2.0
+	trail.default_color = Color(0.85, 0.2, 0.9, 0.8)  # Purple-magenta beam (Hades Lucifer style)
+	trail.add_point(from_pos)
+	trail.add_point(to_pos)
+	trail.z_index = 10
+
+	player.get_tree().root.add_child(trail)
+
+	# Quick fade out
+	var tween = player.get_tree().create_tween()
+	tween.tween_property(trail, "modulate:a", 0.0, 0.12)
+	tween.tween_callback(trail.queue_free)
+
+func _spawn_bullet_impact(pos: Vector2, is_crit: bool) -> void:
+	"""Spawn bullet impact effect at position"""
+	# Create impact flash
+	var impact = Node2D.new()
+	impact.name = "BulletImpact"
+	impact.global_position = pos
+	impact.z_index = 12
+
+	# Simple expanding circle
+	var circle = Polygon2D.new()
+	if is_crit:
+		circle.color = Color(1.0, 0.8, 0.2, 0.6)  # Gold for crit
+	else:
+		circle.color = Color(1.0, 0.5, 0.2, 0.5)  # Orange for normal
+
+	var points = PackedVector2Array()
+	var segments = 12
+	var radius = 6.0
+	for i in range(segments):
+		var angle = (float(i) / segments) * TAU
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+	circle.polygon = points
+	impact.add_child(circle)
+
+	player.get_tree().root.add_child(impact)
+
+	# Expand and fade
+	var tween = player.get_tree().create_tween()
+	var final_scale = 3.0 if is_crit else 2.0
+	tween.tween_property(circle, "scale", Vector2(final_scale, final_scale), 0.15)
+	tween.parallel().tween_property(circle, "color:a", 0.0, 0.15)
+	tween.tween_callback(impact.queue_free)
+
+# ========================================
+# BATTLE RIFLE VISUAL EFFECTS (Halo Style)
+# ========================================
+
+func _spawn_tracer_round(from_pos: Vector2, to_pos: Vector2) -> void:
+	"""Spawn Halo-style tracer round - green projectile traveling to target"""
+	var tracer = Node2D.new()
+	tracer.name = "TracerRound"
+	tracer.global_position = from_pos
+	tracer.z_index = 10
+
+	# Tracer body (elongated pill shape - green/teal)
+	var tracer_body = Polygon2D.new()
+	tracer_body.color = Color(0.2, 0.9, 0.7, 0.9)  # Halo teal
+
+	# Create pill/bullet shape (elongated horizontally, will be rotated)
+	var points = PackedVector2Array()
+	points.append(Vector2(-8, -2))   # Back left
+	points.append(Vector2(8, -2))    # Front left
+	points.append(Vector2(12, 0))    # Front tip
+	points.append(Vector2(8, 2))     # Front right
+	points.append(Vector2(-8, 2))    # Back right
+	points.append(Vector2(-10, 0))   # Back end
+	tracer_body.polygon = points
+	tracer.add_child(tracer_body)
+
+	# Glow trail (slightly larger, more transparent)
+	var glow = Polygon2D.new()
+	glow.color = Color(0.3, 1.0, 0.8, 0.4)  # Brighter teal glow
+	var glow_points = PackedVector2Array()
+	glow_points.append(Vector2(-12, -3))
+	glow_points.append(Vector2(10, -3))
+	glow_points.append(Vector2(16, 0))
+	glow_points.append(Vector2(10, 3))
+	glow_points.append(Vector2(-12, 3))
+	glow_points.append(Vector2(-14, 0))
+	glow.polygon = glow_points
+	glow.z_index = -1
+	tracer.add_child(glow)
+
+	# Rotate tracer to face target
+	var direction = (to_pos - from_pos).normalized()
+	tracer.rotation = direction.angle()
+
+	player.get_tree().root.add_child(tracer)
+
+	# Animate tracer traveling to target
+	var travel_time = 0.08  # Fast travel (80ms)
+	var tween = player.get_tree().create_tween()
+	tween.tween_property(tracer, "global_position", to_pos, travel_time)
+	tween.tween_callback(tracer.queue_free)
+
+func _spawn_battle_rifle_muzzle_flash(flash_pos: Vector2) -> void:
+	"""Spawn Halo-style green muzzle flash"""
+	var flash_container = Node2D.new()
+	flash_container.name = "BRMuzzleFlash"
+	flash_container.global_position = flash_pos
+	flash_container.rotation = attack_direction.angle()
+	flash_container.z_index = 15
+	player.get_tree().root.add_child(flash_container)
+
+	# Core bright (white-green)
+	var core = Polygon2D.new()
+	core.color = Color(0.8, 1.0, 0.9, 0.95)  # Bright green-white
+	var core_points = PackedVector2Array()
+	for i in range(8):
+		var angle = (float(i) / 8) * TAU
+		core_points.append(Vector2(cos(angle), sin(angle)) * 5)
+	core.polygon = core_points
+	flash_container.add_child(core)
+
+	# Outer glow (teal)
+	var glow = Polygon2D.new()
+	glow.color = Color(0.2, 0.8, 0.6, 0.5)  # Teal
+	var glow_points = PackedVector2Array()
+	for i in range(8):
+		var angle = (float(i) / 8) * TAU
+		glow_points.append(Vector2(cos(angle), sin(angle)) * 10)
+	glow.polygon = glow_points
+	glow.z_index = -1
+	flash_container.add_child(glow)
+
+	# Quick fade
+	var tween = player.get_tree().create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(flash_container, "scale", Vector2(1.3, 1.3), 0.03)
+	tween.tween_property(flash_container, "modulate:a", 0.0, 0.08)
+	tween.set_parallel(false)
+	tween.tween_callback(flash_container.queue_free)
 
 func finish_attack_cooldown() -> void:
 	"""Reset attack cooldown"""

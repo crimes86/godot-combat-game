@@ -67,6 +67,7 @@ WEAPON_TYPE_FALLBACKS = {
     "railgun": "gun",
     "pistol": "gun",
     "shotgun": "gun",
+    "battle_rifle": "gun",
 }
 
 # Forged item definitions (extracted from ForgeItemDB.gd)
@@ -133,6 +134,13 @@ FORGED_ITEMS = {
         "glow_color": "#FF6347",  # Tomato - infernal red
         "rarity": "uncommon",
         "game": "Hades",
+        "is_gun": True,
+    },
+    "halo_battle_rifle": {
+        "weapon_class": "gun",
+        "glow_color": "#00CED1",  # Dark cyan/teal - Halo energy style
+        "rarity": "rare",
+        "game": "Halo",
         "is_gun": True,
     },
     "terra_blade": {
@@ -488,12 +496,15 @@ def generate_forged_sprites(item_id: str, method: str = "hybrid", dry_run: bool 
         return False
 
     # Determine which sprite types to generate
-    sprite_types = ["walk", "hurt"]
-    if uses_thrust:
-        sprite_types.append("thrust")
+    is_gun = item.get("is_gun", False)
+
+    if is_gun:
+        # Gun weapons use walk and shoot animations (no slash/thrust)
+        sprite_types = ["walk", "shoot"]
+    elif uses_thrust:
+        sprite_types = ["walk", "hurt", "thrust"]
     else:
-        sprite_types.append("slash")
-        sprite_types.append("thrust")  # Some weapons have both
+        sprite_types = ["walk", "hurt", "slash", "thrust"]  # Some weapons have both
 
     # Process each sprite type
     generated = []

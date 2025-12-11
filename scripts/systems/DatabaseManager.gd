@@ -666,6 +666,54 @@ func save_inventory_for_user(username: String) -> bool:
 
 	return false
 
+func save_character_stats_for_user(username: String) -> bool:
+	"""Save character stats (equipment, level, etc.) for a specific user"""
+	if username.is_empty():
+		push_warning("[DatabaseManager] Cannot save character stats - no username")
+		return false
+
+	if not players_data.has(username):
+		push_warning("[DatabaseManager] Cannot save character stats - user not found: %s" % username)
+		return false
+
+	# Get character stats data and save
+	var stats_data = CharacterStats.get_save_data()
+	players_data[username]["character_stats"] = JSON.stringify(stats_data)
+
+	if save_database():
+		LogManager.info("Saved character stats for: %s (level %d)" % [username, stats_data.get("level", 1)], "database")
+		return true
+
+	return false
+
+func save_all_player_data_for_user(username: String) -> bool:
+	"""Save both inventory and character stats for a user (use when transitioning from Armory to game)"""
+	if username.is_empty():
+		push_warning("[DatabaseManager] Cannot save player data - no username")
+		return false
+
+	if not players_data.has(username):
+		push_warning("[DatabaseManager] Cannot save player data - user not found: %s" % username)
+		return false
+
+	# Save inventory
+	var inv_data = InventorySystem.get_save_data()
+	players_data[username]["inventory"] = JSON.stringify(inv_data)
+
+	# Save character stats (includes equipped weapon, armor, level, gold, etc.)
+	var stats_data = CharacterStats.get_save_data()
+	players_data[username]["character_stats"] = JSON.stringify(stats_data)
+
+	if save_database():
+		LogManager.info("Saved all player data for: %s (level %d, %d items)" % [
+			username,
+			stats_data.get("level", 1),
+			inv_data.get("items", []).size()
+		], "database")
+		return true
+
+	return false
+
 # ═══════════════════════════════════════════════════════════════════════════
 # TUTORIAL TRACKING
 # ═══════════════════════════════════════════════════════════════════════════

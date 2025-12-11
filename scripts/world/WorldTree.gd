@@ -407,7 +407,7 @@ func _is_purified_water(item: Dictionary) -> bool:
 
 func _get_player_id() -> String:
 	if MantleAuth and MantleAuth.is_logged_in():
-		return MantleAuth.get_user_id()
+		return str(MantleAuth.user_id)
 	return "local_player"
 
 
@@ -505,6 +505,6 @@ func _get_player_guild_id() -> String:
 
 	# Solo players have their own "guild"
 	if MantleAuth and MantleAuth.is_logged_in():
-		return "solo_guild_%s" % MantleAuth.get_user_id()
+		return "solo_guild_%d" % MantleAuth.user_id
 
 	return "solo_guild_local_player"

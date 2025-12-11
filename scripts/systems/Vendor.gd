@@ -479,6 +479,9 @@ func create_weapon_from_data(data: Dictionary) -> Weapon:
 	# Gun weapon properties
 	weapon.gun_radius = data.get("gun_radius", 28.0)
 	weapon.gun_range = data.get("gun_range", 350.0)
+	weapon.gun_subtype = data.get("gun_subtype", "railgun")
+	weapon.burst_count = data.get("burst_count", 1)
+	weapon.burst_delay = data.get("burst_delay", 0.10)
 
 	# Convert attack_speed category to numeric multiplier
 	# fast = -0.30 (30% faster), medium = 0.0, slow = +0.30 (30% slower)

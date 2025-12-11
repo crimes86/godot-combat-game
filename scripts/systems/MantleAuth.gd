@@ -13,9 +13,14 @@ signal connection_status_changed(status: int)  # ConnectionStatus enum value
 enum ConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
 
 # API Configuration
-const API_BASE_DEV = "https://trisyllabical-eliz-unyieldingly.ngrok-free.dev"  # ngrok tunnel to backend
+const API_BASE_LAN = "http://192.168.28.211:8000"  # LAN backend (for local/OneDrive shared development)
+const API_BASE_NGROK = "https://trisyllabical-eliz-unyieldingly.ngrok-free.dev"  # ngrok tunnel (for remote/public access)
 const API_BASE_PROD = ""  # TBD
+const API_OVERRIDE_PATH = "user://api_override.txt"  # Local override file (put URL in this file to override default)
 const TOKEN_PATH = "user://mantle_session.dat"
+
+# Set this to switch between LAN and ngrok
+const USE_LAN_BY_DEFAULT = false
 const POLL_INTERVAL: float = 2.0
 const DEVICE_CODE_EXPIRY: int = 600  # 10 minutes
 const HEARTBEAT_INTERVAL: float = 10.0  # Check connection every 10 seconds
@@ -211,8 +216,18 @@ func is_logged_in() -> bool:
 	return is_authenticated and auth_token != "" and user_id > 0
 
 func get_api_base() -> String:
-	# TODO: Add environment detection
-	return API_BASE_DEV
+	# Check for local override file first (highest priority)
+	if FileAccess.file_exists(API_OVERRIDE_PATH):
+		var file = FileAccess.open(API_OVERRIDE_PATH, FileAccess.READ)
+		if file:
+			var override_url = file.get_as_text().strip_edges()
+			file.close()
+			if override_url != "":
+				return override_url
+	# Use LAN or ngrok based on config
+	if USE_LAN_BY_DEFAULT:
+		return API_BASE_LAN
+	return API_BASE_NGROK
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DEVICE CODE FLOW

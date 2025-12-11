@@ -12,6 +12,8 @@ var _shimmer_tween: Tween = null
 var _badge_tween: Tween = null
 var _progress_tween: Tween = null
 var _count_tween: Tween = null
+var _pulse_tween: Tween = null  # For live connection breathing effect
+var _achievement_connection_dot: Control = null  # Pulsing indicator next to achievement count
 var _target_achievement_count: int = 0
 var _last_displayed_count: int = 0  # Track last shown count to avoid repeat animations
 var _load_complete: bool = false
@@ -39,6 +41,16 @@ var master_volume_slider: HSlider = null
 var music_volume_slider: HSlider = null
 var sfx_volume_slider: HSlider = null
 var fullscreen_check: CheckBox = null
+var resolution_option: OptionButton = null
+
+# Resolution presets (width x height) - matches MainMenu
+const RESOLUTIONS = [
+	Vector2i(1280, 720),   # 720p (default)
+	Vector2i(1366, 768),   # Common laptop
+	Vector2i(1600, 900),   # 900p
+	Vector2i(1920, 1080),  # 1080p
+	Vector2i(2560, 1440),  # 1440p
+]
 
 # Labels
 var title_label: Label = null
@@ -329,6 +341,11 @@ func _on_profile_updated(_data: Dictionary) -> void:
 	if appearance == null or appearance.is_empty():
 		# Use default starter appearance for new players
 		appearance = _get_default_appearance()
+
+	# Sync appearance to CharacterStats so it persists when entering game
+	# This ensures the Armory preview matches what you'll have in-game
+	_sync_appearance_to_character_stats(appearance)
+
 	call_deferred("_setup_character_preview", appearance)
 
 	print("[Armory] UI refreshed - target_achievement_count: %d" % _target_achievement_count)
@@ -387,7 +404,7 @@ func _on_forge_data_changed() -> void:
 func _setup_font() -> void:
 	# Use SystemFont which works on all platforms
 	default_font = SystemFont.new()
-	default_font.font_names = PackedStringArray(["Segoe UI", "Arial", "Helvetica", "sans-serif"])
+	default_font.font_names = PackedStringArray(["Roboto Mono", "Consolas", "Segoe UI", "Arial", "sans-serif"])
 	default_font.antialiasing = TextServer.FONT_ANTIALIASING_LCD
 
 	# Bold font for headers/titles
@@ -664,16 +681,33 @@ func _create_trophy_plaque() -> Control:
 	total_label.offset_bottom = 35
 	number_stack.add_child(total_label)
 
-	# "ACHIEVEMENTS" suffix
-	var suffix_center = CenterContainer.new()
-	inner_content.add_child(suffix_center)
+	# "ACHIEVEMENTS" suffix with connection indicator
+	var suffix_row = HBoxContainer.new()
+	suffix_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	suffix_row.add_theme_constant_override("separation", 6)
+	inner_content.add_child(suffix_row)
+
 	var ach_suffix = Label.new()
 	ach_suffix.name = "TotalSuffix"
 	ach_suffix.text = "ACHIEVEMENTS"
 	ach_suffix.add_theme_font_override("font", default_font)
 	ach_suffix.add_theme_font_size_override("font_size", FONT_TINY)
 	ach_suffix.add_theme_color_override("font_color", TEXT_DIM)
-	suffix_center.add_child(ach_suffix)
+	suffix_row.add_child(ach_suffix)
+
+	# Connection indicator dot (starts hidden, shown after count animation)
+	_achievement_connection_dot = Panel.new()
+	_achievement_connection_dot.name = "AchievementConnectionDot"
+	_achievement_connection_dot.custom_minimum_size = Vector2(6, 6)
+	_achievement_connection_dot.modulate = Color(1, 1, 1, 0)  # Start invisible
+	var dot_style = StyleBoxFlat.new()
+	dot_style.bg_color = Color(0.2, 0.9, 0.4)  # Green
+	dot_style.corner_radius_top_left = 3
+	dot_style.corner_radius_top_right = 3
+	dot_style.corner_radius_bottom_left = 3
+	dot_style.corner_radius_bottom_right = 3
+	_achievement_connection_dot.add_theme_stylebox_override("panel", dot_style)
+	suffix_row.add_child(_achievement_connection_dot)
 
 	return plaque
 
@@ -810,7 +844,7 @@ func _debug_check_colors() -> void:
 	else:
 		print("[Armory]   LEFT column ColorRect: NOT FOUND")
 
-	var middle_bg = find_child("ForgeBG", true, false)
+	var middle_bg = find_child("MiddleColumnBG", true, false)
 	if middle_bg and middle_bg is ColorRect:
 		print("[Armory]   MIDDLE column ColorRect: ", middle_bg.color)
 	else:
@@ -896,6 +930,7 @@ func _build_ui() -> void:
 	columns.add_theme_constant_override("separation", 30)
 	columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	columns.clip_contents = true  # Prevent any column content from overflowing
 	content_margin.add_child(columns)
 
 	# LEFT column: MANTLE STATS - expands proportionally
@@ -1299,24 +1334,28 @@ func _create_compact_progress_section() -> Control:
 func _build_forge_column() -> Control:
 	"""RIGHT COLUMN: The Forge - Tabbed view (Catalog/Owned/Equipped)"""
 	print("[Armory] Building RIGHT column (Forge) with tabs")
+
+	# Use Control wrapper with explicit children (same pattern as left/middle columns)
 	var wrapper = Control.new()
+	wrapper.name = "ForgeColumnWrapper"
 	wrapper.custom_minimum_size = Vector2(320, 0)
-	wrapper.clip_contents = true  # Prevent content overflow
+	print("[Armory] Forge wrapper created, min_size: ", wrapper.custom_minimum_size)
 
 	# Background
 	var bg = ColorRect.new()
-	bg.name = "ForgeBG"
+	bg.name = "RightColumnBG"
 	bg.color = CARD_BG
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	wrapper.add_child(bg)
+	print("[Armory] Forge BG added with color: ", bg.color)
 
-	# Animated grid background effect
+	# Animated grid background effect (z_index 10 to render above content)
 	var grid_overlay = _create_animated_grid_bg()
 	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	grid_overlay.z_index = 10
 	wrapper.add_child(grid_overlay)
 
-	# Border overlay with cyan glow (matches MainMenu)
+	# Border overlay with cyan glow
 	var border = PanelContainer.new()
 	border.name = "ForgeBorder"
 	border.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1331,21 +1370,22 @@ func _build_forge_column() -> Control:
 	border.add_theme_stylebox_override("panel", border_style)
 	wrapper.add_child(border)
 
-	# Content - tighter margins to maximize item display space
+	# Content container with margins
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 12)
 	margin.add_theme_constant_override("margin_right", 12)
 	margin.add_theme_constant_override("margin_top", 10)
 	margin.add_theme_constant_override("margin_bottom", 10)
-	margin.clip_contents = true  # Prevent overflow
 	wrapper.add_child(margin)
+	print("[Armory] Forge margin container added")
 
 	var vbox = VBoxContainer.new()
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 12)  # More spacing between sections
-	vbox.clip_contents = true  # Prevent overflow
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 10)  # Tighter spacing
 	margin.add_child(vbox)
+	print("[Armory] Forge vbox added")
 
 	# === HEADER ===
 	var header_row = HBoxContainer.new()
@@ -1473,10 +1513,10 @@ func _build_forge_column() -> Control:
 	# === CONTENT CONTAINER (switches based on tab) ===
 	_forge_content_container = PanelContainer.new()
 	_forge_content_container.name = "ForgeContent"
-	_forge_content_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Don't expand - stay compact
+	_forge_content_container.size_flags_vertical = Control.SIZE_EXPAND_FILL  # Expand to fill available space
 	_forge_content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_forge_content_container.clip_contents = true  # Prevent overflow
-	_forge_content_container.custom_minimum_size = Vector2(0, 400)  # Fixed 400px height
+	_forge_content_container.custom_minimum_size = Vector2(0, 200)  # Minimum height, will expand
 	var content_style = StyleBoxFlat.new()
 	content_style.bg_color = BG_DARK
 	content_style.set_corner_radius_all(6)
@@ -1490,11 +1530,14 @@ func _build_forge_column() -> Control:
 	# === ITEM DETAIL PANEL ===
 	var detail_panel = _build_forge_detail_panel()
 	detail_panel.name = "ForgeDetailPanel"
+	detail_panel.size_flags_vertical = Control.SIZE_SHRINK_END  # Don't expand, stay at bottom
 	vbox.add_child(detail_panel)
 
 	# === BRIDGE UI SECTION ===
 	var bridge_section = _build_bridge_section()
 	bridge_section.name = "BridgeSection"
+	bridge_section.size_flags_vertical = Control.SIZE_SHRINK_END  # Don't expand, stay at bottom
+	bridge_section.clip_contents = true  # Prevent overflow
 	vbox.add_child(bridge_section)
 
 	# Build initial forge content (unified view)
@@ -1505,7 +1548,7 @@ func _build_forge_column() -> Control:
 
 	# Store references
 	character_preview = wrapper
-	cosmetics_panel = border
+	cosmetics_panel = wrapper  # Was border, now wrapper since we simplified
 	forged_panel = wrapper
 
 	return wrapper
@@ -1622,7 +1665,9 @@ func _build_forge_detail_panel() -> Control:
 	icon_placeholder.text = "?"
 	icon_placeholder.add_theme_font_size_override("font_size", 36)
 	icon_placeholder.add_theme_color_override("font_color", TEXT_DIM)
-	icon_placeholder.set_anchors_preset(Control.PRESET_CENTER)
+	icon_placeholder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon_placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	icon_placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	icon_holder.add_child(icon_placeholder)
 
 	# Item info (name, rarity, status)
@@ -1662,13 +1707,15 @@ func _build_forge_detail_panel() -> Control:
 	# === ROW 2: Stats + Actions ===
 	var bottom_row = HBoxContainer.new()
 	bottom_row.add_theme_constant_override("separation", 16)
+	bottom_row.clip_contents = true  # Prevent horizontal overflow
 	main_vbox.add_child(bottom_row)
 
-	# Stats section (compact horizontal)
+	# Stats section (compact horizontal) - allow shrinking to fit
 	var stats_section = HBoxContainer.new()
 	stats_section.name = "StatsSection"
-	stats_section.add_theme_constant_override("separation", 16)
+	stats_section.add_theme_constant_override("separation", 12)
 	stats_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stats_section.clip_contents = true  # Allow clipping if needed
 	bottom_row.add_child(stats_section)
 
 	# Stat labels as compact "Label: Value" pairs
@@ -1717,7 +1764,8 @@ func _build_forge_detail_panel() -> Control:
 	# Action buttons (right side of bottom row)
 	var actions_hbox = HBoxContainer.new()
 	actions_hbox.name = "ActionsSection"
-	actions_hbox.add_theme_constant_override("separation", 8)
+	actions_hbox.add_theme_constant_override("separation", 6)
+	actions_hbox.size_flags_horizontal = Control.SIZE_SHRINK_END
 	bottom_row.add_child(actions_hbox)
 
 	var preview_btn = Button.new()
@@ -3446,7 +3494,9 @@ func _update_modifiers_display(item: Dictionary, modifiers_section: Control,
 		if modifiers_section: modifiers_section.visible = false
 		return
 
-	if modifiers_section: modifiers_section.visible = true
+	# Keep modifiers section hidden - it causes overflow in the detail panel
+	# The data is still processed for compatibility but not displayed
+	if modifiers_section: modifiers_section.visible = false
 
 	# Update effort/intensity display (from backend's effect_intensity)
 	var intensity = item.get("effect_intensity", 0.0) * 100  # Convert 0-1 to 0-100
@@ -3633,21 +3683,22 @@ func _build_forge_unified_content() -> Control:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO  # Show scrollbar only when needed
 
-	# Use GridContainer with fixed 8 columns for perfect alignment
+	# Use GridContainer with 6 columns (fits better on smaller screens)
 	var margin = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 6)
 	margin.add_theme_constant_override("margin_right", 6)
 	margin.add_theme_constant_override("margin_top", 6)
 	margin.add_theme_constant_override("margin_bottom", 6)
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.clip_contents = true  # Prevent horizontal overflow
 	scroll.add_child(margin)
 
 	var grid = GridContainer.new()
 	grid.name = "CatalogGrid"
-	grid.columns = 8  # Fixed 8 columns
+	grid.columns = 6  # Reduced from 8 to fit smaller screens
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 5)
-	grid.add_theme_constant_override("v_separation", 5)
+	grid.add_theme_constant_override("h_separation", 4)
+	grid.add_theme_constant_override("v_separation", 4)
 	margin.add_child(grid)
 
 	# Get FORGED items (already minted via webapp)
@@ -3894,13 +3945,14 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	if ResourceLoader.exists(icon_path):
 		var texture = load(icon_path)
 		if texture:
-			# Fixed 64px icon size (source icons are 64x64), card crops the edges
-			const ICON_SIZE = 64
-			var icon_offset = (ICON_SIZE - CARD_SIZE) / 2  # Center the icon within smaller card
+			# Fixed 64px display size, icons may be 64x64 or 256x256 (enhanced)
+			const ICON_DISPLAY_SIZE = 64
+			var icon_offset = (ICON_DISPLAY_SIZE - CARD_SIZE) / 2  # Center the icon within smaller card
 
 			var icon_rect = TextureRect.new()
 			icon_rect.texture = texture
-			icon_rect.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
+			icon_rect.custom_minimum_size = Vector2(ICON_DISPLAY_SIZE, ICON_DISPLAY_SIZE)
+			icon_rect.size = Vector2(ICON_DISPLAY_SIZE, ICON_DISPLAY_SIZE)
 			icon_rect.position = Vector2(-icon_offset, -icon_offset)  # Offset to center
 			icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -6460,6 +6512,7 @@ func _style_enter_world_button(button: Button) -> void:
 	normal.border_color = green
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(6)
+	normal.set_content_margin_all(8)
 	button.add_theme_stylebox_override("normal", normal)
 	button.set_meta("normal_style", normal)
 
@@ -6469,6 +6522,7 @@ func _style_enter_world_button(button: Button) -> void:
 	hover.border_color = green_light
 	hover.set_border_width_all(2)
 	hover.set_corner_radius_all(6)
+	hover.set_content_margin_all(8)
 	button.add_theme_stylebox_override("hover", hover)
 
 	# Pressed state
@@ -6477,6 +6531,7 @@ func _style_enter_world_button(button: Button) -> void:
 	pressed.border_color = green
 	pressed.set_border_width_all(2)
 	pressed.set_corner_radius_all(6)
+	pressed.set_content_margin_all(8)
 	button.add_theme_stylebox_override("pressed", pressed)
 
 func _style_secondary_button(button: Button) -> void:
@@ -6491,6 +6546,7 @@ func _style_secondary_button(button: Button) -> void:
 	style.border_color = Color(0.25, 0.25, 0.28)
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(6)
+	style.set_content_margin_all(8)
 	button.add_theme_stylebox_override("normal", style)
 
 	var hover = StyleBoxFlat.new()
@@ -6498,6 +6554,7 @@ func _style_secondary_button(button: Button) -> void:
 	hover.border_color = MANTLE_CYAN.darkened(0.3)
 	hover.set_border_width_all(1)
 	hover.set_corner_radius_all(6)
+	hover.set_content_margin_all(8)
 	button.add_theme_stylebox_override("hover", hover)
 
 func _style_logout_button(button: Button) -> void:
@@ -6518,6 +6575,7 @@ func _style_logout_button(button: Button) -> void:
 	normal.border_color = red
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(6)
+	normal.set_content_margin_all(8)
 	button.add_theme_stylebox_override("normal", normal)
 
 	# Hover state
@@ -6526,6 +6584,7 @@ func _style_logout_button(button: Button) -> void:
 	hover.border_color = red_light
 	hover.set_border_width_all(2)
 	hover.set_corner_radius_all(6)
+	hover.set_content_margin_all(8)
 	button.add_theme_stylebox_override("hover", hover)
 
 	# Pressed state
@@ -6534,6 +6593,7 @@ func _style_logout_button(button: Button) -> void:
 	pressed.border_color = red
 	pressed.set_border_width_all(2)
 	pressed.set_corner_radius_all(6)
+	pressed.set_content_margin_all(8)
 	button.add_theme_stylebox_override("pressed", pressed)
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -6599,9 +6659,7 @@ func _show_new_player_ui() -> void:
 
 func _show_authenticated_ui() -> void:
 	var user_id = profile.get("user_id", 0)
-	var mantle = profile.get("mantle", {})
-	var tier = mantle.get("name", "Initiate")
-	subtitle_label.text = "%s Champion" % tier
+	subtitle_label.visible = false  # Hide subtitle under MANTLE header
 	username_label.text = "Player #%d" % user_id
 	logout_button.visible = true
 	_update_stats_display()
@@ -7827,7 +7885,57 @@ func _animate_achievement_count() -> void:
 		var final_tween = create_tween()
 		final_tween.tween_property(total_label, "scale", Vector2(1.08, 1.08), 0.08)
 		final_tween.tween_property(total_label, "scale", Vector2(1.0, 1.0), 0.15)
+		# Start live connection effect after count animation completes
+		final_tween.tween_callback(_start_live_connection_effect)
 	)
+
+func _start_live_connection_effect() -> void:
+	"""Start the live connection indicator - subtle pulse on number + connection dot"""
+	# Fade in the connection dot
+	if _achievement_connection_dot:
+		var dot_tween = create_tween()
+		dot_tween.tween_property(_achievement_connection_dot, "modulate:a", 1.0, 0.3)
+		# Start pulsing the dot
+		dot_tween.tween_callback(_start_achievement_dot_pulse)
+
+	# Start subtle breathing pulse on the number
+	_start_number_breathing_pulse()
+
+func _start_achievement_dot_pulse() -> void:
+	"""Pulse the achievement connection dot to show active connection"""
+	if not _achievement_connection_dot or not is_instance_valid(_achievement_connection_dot):
+		return
+
+	var dot_pulse = create_tween()
+	dot_pulse.set_loops()  # Loop forever
+
+	# Gentle pulse: fade 1.0 -> 0.4 -> 1.0 over 2 seconds
+	dot_pulse.tween_property(_achievement_connection_dot, "modulate:a", 0.4, 1.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	dot_pulse.tween_property(_achievement_connection_dot, "modulate:a", 1.0, 1.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+func _start_number_breathing_pulse() -> void:
+	"""Subtle breathing effect on the achievement number"""
+	if not total_label or not is_instance_valid(total_label):
+		return
+
+	if _pulse_tween:
+		_pulse_tween.kill()
+
+	_pulse_tween = create_tween()
+	_pulse_tween.set_loops()  # Loop forever
+
+	# Very subtle scale pulse: 1.0 -> 1.015 -> 1.0 over 3 seconds (barely noticeable but alive)
+	_pulse_tween.tween_property(total_label, "scale", Vector2(1.015, 1.015), 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_pulse_tween.tween_property(total_label, "scale", Vector2(1.0, 1.0), 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+	# Also pulse the glow layer if present
+	var glow_label = stats_panel.find_child("NumberGlow", true, false) if stats_panel else null
+	if glow_label:
+		var glow_pulse = create_tween()
+		glow_pulse.set_loops()
+		# Glow alpha pulses slightly more noticeably
+		glow_pulse.tween_property(glow_label, "modulate:a", 1.2, 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+		glow_pulse.tween_property(glow_label, "modulate:a", 0.8, 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
 func _animate_forge_grid_stagger() -> void:
 	"""Animate forge grid items with staggered fade-in effect"""
@@ -7874,26 +7982,28 @@ func _animate_forge_grid_stagger() -> void:
 
 func _animate_panel_entrances() -> void:
 	# Collect all panels in order for staggered animation
+	# Use a dictionary to deduplicate (same panel assigned to multiple vars)
+	var seen_panels: Dictionary = {}
 	var panels_to_animate: Array[Control] = []
 
-	# Left column: character preview, then cosmetics
-	if character_preview:
-		panels_to_animate.append(character_preview)
-	if cosmetics_panel:
-		panels_to_animate.append(cosmetics_panel)
+	# Helper to add panel if not already added
+	var add_panel = func(panel: Control) -> void:
+		if panel and not seen_panels.has(panel):
+			seen_panels[panel] = true
+			panels_to_animate.append(panel)
 
-	# Middle column: stats panel
-	if stats_panel:
-		panels_to_animate.append(stats_panel)
+	# Left column: stats panel
+	add_panel.call(stats_panel)
 
-	# Right column: forge section (find it), then achievements
-	var forge_section = find_child("OpenForgeBtn", true, false)
-	if forge_section:
-		var forge_panel = forge_section.get_parent().get_parent().get_parent()  # Navigate up to PanelContainer
-		if forge_panel and forge_panel is PanelContainer:
-			panels_to_animate.append(forge_panel)
-	if achievements_panel:
-		panels_to_animate.append(achievements_panel)
+	# Middle column: cosmetics/dreadland
+	add_panel.call(cosmetics_panel)
+
+	# Right column: forge column (character_preview points to forge wrapper now)
+	add_panel.call(character_preview)
+
+	# Any additional panels
+	add_panel.call(achievements_panel)
+	add_panel.call(forged_panel)
 
 	# Animate each panel with staggered timing
 	for i in range(panels_to_animate.size()):
@@ -8048,6 +8158,15 @@ func _on_enter_world_pressed() -> void:
 	if SoundManager:
 		SoundManager.play_button_click_sound(-6.0)
 	LogManager.info("Entering game world from Armory", "mantle")
+
+	# Save ALL player data (inventory + character stats) so it persists into game
+	# This ensures equipped items from Armory appear in-game
+	if DatabaseManager and MantleAuth:
+		var username = MantleAuth.username
+		if not username.is_empty():
+			DatabaseManager.save_all_player_data_for_user(username)
+			LogManager.info("Saved player state before entering world", "mantle")
+
 	entered_world.emit()
 	enter_world_button.disabled = true
 	enter_world_button.text = "Loading..."
@@ -8137,6 +8256,7 @@ func _build_settings_panel() -> void:
 	settings_panel.name = "SettingsPanel"
 	settings_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	settings_panel.visible = false
+	settings_panel.z_index = 100  # Render on top of everything including character preview
 	add_child(settings_panel)
 
 	# Dark overlay background (click to close)
@@ -8228,6 +8348,37 @@ func _build_settings_panel() -> void:
 	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 	fullscreen_row.add_child(fullscreen_check)
 
+	# Resolution dropdown
+	var resolution_row = HBoxContainer.new()
+	resolution_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(resolution_row)
+
+	var resolution_label = Label.new()
+	resolution_label.text = "Resolution"
+	resolution_label.add_theme_font_override("font", default_font)
+	resolution_label.add_theme_font_size_override("font_size", FONT_BODY)
+	resolution_label.add_theme_color_override("font_color", TEXT_PRIMARY)
+	resolution_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	resolution_row.add_child(resolution_label)
+
+	resolution_option = OptionButton.new()
+	resolution_option.custom_minimum_size = Vector2(140, 0)
+	_setup_resolution_options()
+	resolution_option.item_selected.connect(_on_resolution_selected)
+	# Disable in fullscreen mode
+	resolution_option.disabled = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+	resolution_row.add_child(resolution_option)
+
+	# Style the option button
+	var option_style = StyleBoxFlat.new()
+	option_style.bg_color = Color(0.15, 0.15, 0.18)
+	option_style.border_color = MANTLE_CYAN.darkened(0.3)
+	option_style.set_border_width_all(1)
+	option_style.set_corner_radius_all(4)
+	option_style.set_content_margin_all(8)
+	resolution_option.add_theme_stylebox_override("normal", option_style)
+	resolution_option.add_theme_color_override("font_color", TEXT_PRIMARY)
+
 	# Spacer
 	var spacer = Control.new()
 	spacer.custom_minimum_size = Vector2(0, 10)
@@ -8305,24 +8456,76 @@ func _on_master_volume_changed(value: float) -> void:
 
 func _on_music_volume_changed(value: float) -> void:
 	var db = linear_to_db(value / 100.0) if value > 0 else -80.0
-	var music_bus = AudioServer.get_bus_index("Music")
-	if music_bus >= 0:
-		AudioServer.set_bus_volume_db(music_bus, db)
+	# Use SoundManager's music volume control
+	if SoundManager and SoundManager.has_method("set_music_volume"):
+		SoundManager.set_music_volume(db)
 
 func _on_sfx_volume_changed(value: float) -> void:
 	var db = linear_to_db(value / 100.0) if value > 0 else -80.0
-	var sfx_bus = AudioServer.get_bus_index("SFX")
-	if sfx_bus >= 0:
-		AudioServer.set_bus_volume_db(sfx_bus, db)
-	# Also update SoundManager if available
-	if SoundManager and SoundManager.has_method("set_sfx_volume"):
-		SoundManager.set_sfx_volume(value / 100.0)
+	# Store SFX volume in SoundManager for all sound effects
+	if SoundManager:
+		SoundManager.sfx_volume_db = db
 
 func _on_fullscreen_toggled(pressed: bool) -> void:
 	if pressed:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		# Disable resolution dropdown in fullscreen
+		if resolution_option:
+			resolution_option.disabled = true
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		# Re-enable resolution dropdown
+		if resolution_option:
+			resolution_option.disabled = false
+		# Apply saved resolution when exiting fullscreen
+		var config = ConfigFile.new()
+		if config.load("user://settings.cfg") == OK:
+			var res_index = config.get_value("display", "resolution_index", 0)
+			if res_index >= 0 and res_index < RESOLUTIONS.size():
+				DisplayServer.window_set_size(RESOLUTIONS[res_index])
+
+func _setup_resolution_options() -> void:
+	"""Populate resolution dropdown with presets"""
+	if not resolution_option:
+		return
+	resolution_option.clear()
+	for i in range(RESOLUTIONS.size()):
+		var res = RESOLUTIONS[i]
+		resolution_option.add_item("%dx%d" % [res.x, res.y], i)
+
+	# Select current resolution or closest match
+	var current_size = DisplayServer.window_get_size()
+	var best_match = 0
+	var best_diff = INF
+	for i in range(RESOLUTIONS.size()):
+		var res = RESOLUTIONS[i]
+		var diff = abs(res.x - current_size.x) + abs(res.y - current_size.y)
+		if diff < best_diff:
+			best_diff = diff
+			best_match = i
+	resolution_option.select(best_match)
+
+func _on_resolution_selected(index: int) -> void:
+	"""Apply selected resolution (only applies in windowed mode)"""
+	if index < 0 or index >= RESOLUTIONS.size():
+		return
+
+	# Save the setting
+	var config = ConfigFile.new()
+	config.load("user://settings.cfg")  # Load existing to preserve other settings
+	config.set_value("display", "resolution_index", index)
+	config.save("user://settings.cfg")
+
+	# Only apply if not in fullscreen
+	var window_mode = DisplayServer.window_get_mode()
+	if window_mode == DisplayServer.WINDOW_MODE_FULLSCREEN:
+		return  # Resolution doesn't apply in fullscreen
+
+	# Exit exclusive fullscreen if somehow still in it
+	if window_mode != DisplayServer.WINDOW_MODE_WINDOWED:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+	DisplayServer.window_set_size(RESOLUTIONS[index])
 
 func _load_settings() -> void:
 	"""Load settings from config file"""
@@ -8339,6 +8542,11 @@ func _load_settings() -> void:
 		if fullscreen_check:
 			fullscreen_check.button_pressed = config.get_value("display", "fullscreen", false)
 
+		# Load resolution
+		var saved_res_index = config.get_value("display", "resolution_index", 0)
+		if resolution_option and saved_res_index >= 0 and saved_res_index < RESOLUTIONS.size():
+			resolution_option.select(saved_res_index)
+
 		# Apply loaded values
 		if master_volume_slider:
 			_on_master_volume_changed(master_volume_slider.value)
@@ -8350,6 +8558,7 @@ func _load_settings() -> void:
 func _save_settings() -> void:
 	"""Save settings to config file"""
 	var config = ConfigFile.new()
+	config.load("user://settings.cfg")  # Load existing to preserve other settings
 
 	if master_volume_slider:
 		config.set_value("audio", "master_volume", master_volume_slider.value)
@@ -8359,12 +8568,64 @@ func _save_settings() -> void:
 		config.set_value("audio", "sfx_volume", sfx_volume_slider.value)
 	if fullscreen_check:
 		config.set_value("display", "fullscreen", fullscreen_check.button_pressed)
+	if resolution_option:
+		config.set_value("display", "resolution_index", resolution_option.selected)
 
 	config.save("user://settings.cfg")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CHARACTER PREVIEW RENDERING
 # ═══════════════════════════════════════════════════════════════════════════
+
+func _sync_appearance_to_character_stats(appearance: Dictionary) -> void:
+	"""Sync appearance data from Mantle backend to CharacterStats.
+	This ensures the character preview in Armory matches what loads in-game."""
+	if not CharacterStats:
+		return
+
+	print("[Armory] Syncing appearance to CharacterStats...")
+
+	# Map appearance sprite names to armor slot data
+	# CharacterStats.equipped_armor uses slot names: feet, legs, chest, arms, hands, head
+	var slot_mapping = {
+		"feet_sprite": "feet",
+		"legs_sprite": "legs",
+		"chest_sprite": "chest",
+		"arms_sprite": "arms",
+		"hands_sprite": "hands",
+		"head_sprite": "head"
+	}
+
+	for appearance_key in slot_mapping:
+		var slot = slot_mapping[appearance_key]
+		var sprite_name = appearance.get(appearance_key, "")
+
+		if sprite_name and not sprite_name.is_empty():
+			# Create armor item data from sprite name
+			# This matches the format expected by Player.gd create_player_sprite()
+			var armor_item = {
+				"name": sprite_name.replace("_", " ").capitalize(),
+				"type": "armor",
+				"slot": slot,
+				"sprite_name": sprite_name,
+				"rarity": "Common"
+			}
+			CharacterStats.equipped_armor[slot] = armor_item
+			print("[Armory]   %s = %s" % [slot, sprite_name])
+		else:
+			# Clear the slot if no sprite
+			CharacterStats.equipped_armor[slot] = null
+
+	# Sync weapon if present
+	var weapon_type = appearance.get("weapon_type", "")
+	if weapon_type and not weapon_type.is_empty():
+		print("[Armory]   weapon = %s" % weapon_type)
+		# Note: weapon requires a full Weapon resource, not just sprite name
+		# The equipped_weapon should already be set from inventory if player has one
+	else:
+		print("[Armory]   weapon = (none)")
+
+	print("[Armory] Appearance synced to CharacterStats")
 
 func _get_default_appearance() -> Dictionary:
 	"""Return default starter appearance for new players."""

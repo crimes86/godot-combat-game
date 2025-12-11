@@ -8,6 +8,12 @@ extends Node
 # ============================================
 const DEBUG_FORGED_ICONS: bool = false  # Debug forged item icon loading
 
+# ============================================
+# ENHANCED ICONS - 256x256 upscaled versions
+# ============================================
+const USE_ENHANCED_ICONS: bool = true  # Use enhanced 256x256 icons when available
+const ENHANCED_ICONS_PATH: String = "res://assets/icons/enhanced/"
+
 # Cache for generated icons
 var icon_cache: Dictionary = {}  # sprite_path -> ImageTexture
 
@@ -119,7 +125,14 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 	if icon_cache.has(cache_key):
 		return icon_cache[cache_key]
 
-	# Generate the icon
+	# Try to load enhanced icon first (256x256 pre-generated versions)
+	if USE_ENHANCED_ICONS:
+		var enhanced_icon = _try_load_enhanced_equipment_icon(item_type, sprite_name, slot, item)
+		if enhanced_icon:
+			icon_cache[cache_key] = enhanced_icon
+			return enhanced_icon
+
+	# Generate the icon from sprite sheet (fallback)
 	var icon = _generate_icon_from_sprite(sprite_path, direction, slot)
 	if icon:
 		icon_cache[cache_key] = icon
@@ -190,6 +203,43 @@ func _get_sprite_path(item_type: String, sprite_name: String, item: Dictionary) 
 				return "res://assets/ui/icons/campfire_kit.png"
 
 	return ""
+
+func _try_load_enhanced_equipment_icon(item_type: String, sprite_name: String, slot: String, item: Dictionary) -> Texture2D:
+	"""Try to load a pre-generated enhanced icon for equipment items."""
+	var paths_to_try: Array[String] = []
+
+	match item_type:
+		"armor":
+			# Map slot to directory name used by icon_enhancer.py
+			var slot_dir = slot
+			match slot:
+				"chest":
+					slot_dir = "shirt"
+				"legs":
+					slot_dir = "pants"
+				"feet":
+					slot_dir = "boots"
+			paths_to_try.append(ENHANCED_ICONS_PATH + "equipment/%s/%s.png" % [slot_dir, sprite_name])
+			# Also try the original slot name
+			if slot_dir != slot:
+				paths_to_try.append(ENHANCED_ICONS_PATH + "equipment/%s/%s.png" % [slot, sprite_name])
+		"weapon":
+			var weapon_type = item.get("weapon_type", "sword")
+			var actual_type = WEAPON_TYPE_FALLBACKS.get(weapon_type, weapon_type)
+			paths_to_try.append(ENHANCED_ICONS_PATH + "equipment/weapon/%s.png" % actual_type)
+		"tool":
+			var tool_type = item.get("tool_type", "")
+			if tool_type != "":
+				paths_to_try.append(ENHANCED_ICONS_PATH + "equipment/tool/%s.png" % tool_type)
+
+	# Try each path
+	for icon_path in paths_to_try:
+		if ResourceLoader.exists(icon_path):
+			var texture = load(icon_path) as Texture2D
+			if texture:
+				return texture
+
+	return null
 
 func _generate_icon_from_sprite(sprite_path: String, direction: int = DIR_DOWN, slot: String = "") -> ImageTexture:
 	"""Extract a single frame from sprite sheet and create an icon texture"""
@@ -743,19 +793,29 @@ func _get_forged_item_icon(item: Dictionary) -> Texture2D:
 	# Build list of paths to try
 	var paths_to_try: Array[String] = []
 
-	# Primary path from name
+	# Try enhanced icons first (256x256 upscaled versions)
+	if USE_ENHANCED_ICONS:
+		paths_to_try.append(ENHANCED_ICONS_PATH + "forged/%s/%s.png" % [subdir, filename_from_name])
+		if filename_from_id != "" and filename_from_id != filename_from_name:
+			paths_to_try.append(ENHANCED_ICONS_PATH + "forged/%s/%s.png" % [subdir, filename_from_id])
+
+	# Primary path from name (original 64x64)
 	paths_to_try.append("res://assets/icons/forged/%s/%s.png" % [subdir, filename_from_name])
 
 	# Path from item_id if different
 	if filename_from_id != "" and filename_from_id != filename_from_name:
 		paths_to_try.append("res://assets/icons/forged/%s/%s.png" % [subdir, filename_from_id])
 
-	# Try alternative subdirectories
-	var alt_subdirs = ["weapons", "armor", "shields", "accessories"]
+	# Try alternative subdirectories (enhanced first, then original)
+	var alt_subdirs = ["weapons", "armor", "shields", "accessories", "capes"]
 	for alt_subdir in alt_subdirs:
 		if alt_subdir != subdir:
+			if USE_ENHANCED_ICONS:
+				paths_to_try.append(ENHANCED_ICONS_PATH + "forged/%s/%s.png" % [alt_subdir, filename_from_name])
 			paths_to_try.append("res://assets/icons/forged/%s/%s.png" % [alt_subdir, filename_from_name])
 			if filename_from_id != "" and filename_from_id != filename_from_name:
+				if USE_ENHANCED_ICONS:
+					paths_to_try.append(ENHANCED_ICONS_PATH + "forged/%s/%s.png" % [alt_subdir, filename_from_id])
 				paths_to_try.append("res://assets/icons/forged/%s/%s.png" % [alt_subdir, filename_from_id])
 
 	# Try all paths

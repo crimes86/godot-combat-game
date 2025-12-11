@@ -126,7 +126,8 @@ func debug_forge_test_item(achievement_key: String = "steam_1145360_SLAYER") -> 
 		"glow_color": _get_effect_color(forge_db.get("effects", [])),
 		"effect_name": forge_db.get("effects", ["standard_particles"])[0] if forge_db.get("effects", []).size() > 0 else "standard_particles",
 		"stats": forge_db.get("stats", {}),
-		"sprites": forge_db.get("sprites", {})
+		"sprites": forge_db.get("sprites", {}),
+		"gun_config": forge_db.get("gun_config", {})  # Burst fire config for battle rifles
 	}
 
 	_forged_items.append(forged_item)
@@ -155,7 +156,7 @@ func _weapon_class_to_string(weapon_class_enum: int) -> String:
 	# Match ForgeItemDB.WeaponClass enum order
 	var classes = ["sword", "dagger", "mace", "spear", "staff", "axe", "rapier",
 				   "greatsword", "katana", "saber", "scimitar", "halberd", "pike",
-				   "trident", "flail", "scythe", "bow", "crossbow", "gun"]
+				   "trident", "flail", "scythe", "bow", "crossbow", "gun", "battle_rifle"]
 	if weapon_class_enum >= 0 and weapon_class_enum < classes.size():
 		return classes[weapon_class_enum]
 	return "sword"
@@ -169,6 +170,7 @@ func _get_effect_color(effects: Array) -> String:
 		"erdtree_blessing": "#DAA520",
 		"moonlight_glow": "#4169E1",
 		"void_particles": "#1A0033",
+		"halo_green_glow": "#00CED1",
 		"standard_particles": "#FFFFFF"
 	}
 	if effects.size() > 0:
@@ -578,6 +580,17 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 			base_item["attack_speed"] = "Normal"
 			base_item["crit_chance"] = 0.05 + (damage_bonus * 0.02)  # 7-15% crit
 			base_item["required_level"] = 1  # Forged items have no level req (twinking!)
+			# Gun weapons need ranged_damage attack mode for cursor-based targeting
+			if base_item["weapon_type"] in ["gun", "battle_rifle"]:
+				base_item["attack_mode"] = "ranged_damage"
+				base_item["gun_radius"] = 28.0  # Precision targeting radius
+				base_item["gun_range"] = 350.0  # Max shooting distance
+				# Apply gun_config for burst weapons (battle rifle, etc.)
+				var gun_config = forged.get("gun_config", {})
+				if not gun_config.is_empty():
+					base_item["gun_subtype"] = gun_config.get("gun_subtype", "railgun")
+					base_item["burst_count"] = gun_config.get("burst_count", 1)
+					base_item["burst_delay"] = gun_config.get("burst_delay", 0.10)
 
 		"armor_head", "armor_chest", "armor_legs", "armor_hands", "armor_feet":
 			base_item["type"] = "armor"

@@ -530,8 +530,10 @@ func create_item_slot_with_icon(item_name: String, description: String, price: i
 	if icon_texture:
 		var icon = TextureRect.new()
 		icon.texture = icon_texture
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.custom_minimum_size = Vector2(48, 48)
+		icon.size = Vector2(48, 48)
 		icon_container.add_child(icon)
 	else:
 		# Fallback: show item type as text
@@ -627,8 +629,10 @@ func create_shop_slot_with_owned_check(item_name: String, description: String, p
 	if icon_texture:
 		var icon = TextureRect.new()
 		icon.texture = icon_texture
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.custom_minimum_size = Vector2(48, 48)
+		icon.size = Vector2(48, 48)
 		icon_container.add_child(icon)
 	else:
 		# Fallback: show item type as text
@@ -996,8 +1000,10 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 	if icon_texture:
 		var icon = TextureRect.new()
 		icon.texture = icon_texture
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.custom_minimum_size = Vector2(48, 48)
+		icon.size = Vector2(48, 48)
 		icon_container.add_child(icon)
 	else:
 		# Fallback: show item type as text

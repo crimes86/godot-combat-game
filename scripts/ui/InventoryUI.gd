@@ -622,6 +622,13 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	weapon.healing_power = item_dict.get("healing_power", 0.0)
 	weapon.heal_radius = item_dict.get("heal_radius", 80.0)
 
+	# Gun weapon properties
+	weapon.gun_radius = item_dict.get("gun_radius", 28.0)
+	weapon.gun_range = item_dict.get("gun_range", 350.0)
+	weapon.gun_subtype = item_dict.get("gun_subtype", "railgun")
+	weapon.burst_count = item_dict.get("burst_count", 1)
+	weapon.burst_delay = item_dict.get("burst_delay", 0.10)
+
 	var attack_speed_category = item_dict.get("attack_speed", "medium")
 	match attack_speed_category:
 		"fast":

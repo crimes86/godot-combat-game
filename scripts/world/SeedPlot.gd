@@ -298,7 +298,7 @@ func _show_message(text: String) -> void:
 func _get_player_id() -> String:
 	# Get player's Mantle account ID
 	if MantleAuth and MantleAuth.is_logged_in():
-		return MantleAuth.get_user_id()
+		return str(MantleAuth.user_id)
 	return "local_player"
 
 

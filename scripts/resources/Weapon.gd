@@ -31,6 +31,16 @@ class_name Weapon
 @export var heal_radius: float = 80.0  # Radius of healing circle for ranged_heal weapons
 
 # ============================================
+# GUN PROPERTIES (for ranged_damage weapons)
+# ============================================
+
+@export var gun_radius: float = 28.0  # Targeting reticle radius (smaller = more precision required)
+@export var gun_range: float = 350.0  # Maximum shooting distance from player
+@export var gun_subtype: String = "railgun"  # "railgun", "battle_rifle", "pistol", "shotgun"
+@export var burst_count: int = 1  # Shots per burst (1 = single shot, 3 = battle rifle burst)
+@export var burst_delay: float = 0.10  # Delay between burst shots in seconds
+
+# ============================================
 # REQUIREMENTS & VALUE
 # ============================================
 
@@ -122,6 +132,14 @@ func is_healing_weapon() -> bool:
 func is_ranged_weapon() -> bool:
 	"""Check if this weapon uses ranged targeting (cursor-based)"""
 	return attack_mode in ["ranged_heal", "ranged_damage"]
+
+func is_gun_weapon() -> bool:
+	"""Check if this weapon is a gun (ranged damage with precision targeting)"""
+	return weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle"] or attack_mode == "ranged_damage"
+
+func is_burst_weapon() -> bool:
+	"""Check if this weapon fires in bursts (e.g., battle rifle 3-round burst)"""
+	return burst_count > 1
 
 func get_display_name() -> String:
 	"""Returns formatted display name with rarity color"""

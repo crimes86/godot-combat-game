@@ -170,13 +170,13 @@ func calculate_hitbox_radius() -> float:
 	var level = CharacterStats.level
 
 	# Forgiving at low levels, tighter at high levels
-	# Level 1: 35px (very forgiving for new players)
-	# Level 10: 25px (moderate)
-	# Level 20: 20px (tighter)
-	# Level 30: 18px (minimum buffer for sprite/rendering)
-	var base_radius = 35.0
-	var min_radius = 18.0
-	var level_scaling = 0.6  # How much radius reduces per level
+	# Level 1: 38px (very forgiving for new players)
+	# Level 10: 28px (moderate)
+	# Level 20: 23px (tighter)
+	# Level 30: 22px (minimum - still clickable at edges)
+	var base_radius = 38.0
+	var min_radius = 22.0
+	var level_scaling = 0.55  # How much radius reduces per level
 
 	var radius = base_radius - (level - 1) * level_scaling
 	return clamp(radius, min_radius, base_radius)

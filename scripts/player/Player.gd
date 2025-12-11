@@ -821,10 +821,11 @@ func _input(event: InputEvent) -> void:
 	if not is_multiplayer_authority():
 		return
 
-	# DEBUG: F4 = Forge Adamant Rail for testing gun system
+	# DEBUG: F4 = Forge test guns for testing gun system
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F4:
-		print("[DEBUG] F4 pressed - Forging Adamant Rail...")
-		ForgeItemManager.debug_forge_test_item("steam_1145360_SLAYER")
+		print("[DEBUG] F4 pressed - Forging Adamant Rail + Halo Battle Rifle...")
+		ForgeItemManager.debug_forge_test_item("steam_1145360_SLAYER")  # Railgun
+		ForgeItemManager.debug_forge_test_item("xbox_HALO_LEGENDARY")   # Battle Rifle (burst)
 		return
 
 	if event is InputEventMouseButton:
@@ -2049,6 +2050,15 @@ func create_player_sprite() -> void:
 		weapon_type = effective_weapon_type
 		var weapon_path = "res://assets/equipment/weapons/" + weapon_type + "/"
 
+		# For forged weapons, check if pre-tinted sprites exist in forged folder
+		var forged_item_id = forged_weapon_data.get("item_id", "")
+		var forged_weapon_path = ""
+		if is_forged_weapon and forged_item_id != "":
+			forged_weapon_path = "res://assets/equipment/forged/weapons/" + forged_item_id + "/"
+			if DEBUG_FORGED_EQUIP:
+				print("[ForgedEquip]   Forged item_id: %s" % forged_item_id)
+				print("[ForgedEquip]   Forged weapon path: %s" % forged_weapon_path)
+
 		if DEBUG_FORGED_EQUIP:
 			print("[ForgedEquip]   Base weapon path: %s" % weapon_path)
 
@@ -2076,11 +2086,17 @@ func create_player_sprite() -> void:
 					print("[ForgedEquip]   No fallback defined for weapon_type: %s" % weapon_type)
 
 		# Try to load weapon sprites
+		# For forged weapons, prefer pre-tinted sprites from forged folder
 		# Staff uses thrust_oversize animation, spear uses thrust, gun uses walk only, others use slash
 		if animation_type == "gun":
-			# Guns don't have attack animations - they use walk animation for all poses
-			# Attack will be handled by muzzle flash overlay (future)
-			pass
+			# Guns use shoot.png with muzzle flash for attack animation
+			# Check forged folder first for pre-tinted sprites
+			if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "shoot.png"):
+				weapon_slash_tex = load(forged_weapon_path + "shoot.png")
+				if DEBUG_FORGED_EQUIP:
+					print("[ForgedEquip]   Loaded tinted shoot.png from forged folder")
+			elif ResourceLoader.exists(weapon_path + "shoot.png"):
+				weapon_slash_tex = load(weapon_path + "shoot.png")
 		elif animation_type == "staff":
 			if ResourceLoader.exists(weapon_path + "thrust_oversize.png"):
 				weapon_slash_tex = load(weapon_path + "thrust_oversize.png")
@@ -2091,7 +2107,12 @@ func create_player_sprite() -> void:
 			if ResourceLoader.exists(weapon_path + "slash.png"):
 				weapon_slash_tex = load(weapon_path + "slash.png")
 
-		if ResourceLoader.exists(weapon_path + "walk.png"):
+		# Load walk texture - check forged folder first for pre-tinted sprites
+		if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "walk.png"):
+			weapon_walk_tex = load(forged_weapon_path + "walk.png")
+			if DEBUG_FORGED_EQUIP:
+				print("[ForgedEquip]   Loaded tinted walk.png from forged folder")
+		elif ResourceLoader.exists(weapon_path + "walk.png"):
 			weapon_walk_tex = load(weapon_path + "walk.png")
 
 		if DEBUG_EQUIP:
@@ -2273,7 +2294,7 @@ func create_player_sprite() -> void:
 
 	# Gun pose body swap: If weapon is a gun type, load Skorpio body for walk and shoot animations
 	# This makes the character use the shooting stance body when walking/shooting with a gun
-	var gun_weapon_types = ["gun", "rifle", "pistol", "shotgun", "railgun"]
+	var gun_weapon_types = ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle"]
 	if weapon_type in gun_weapon_types:
 		var gun_body_walk_path = "res://assets/characters/body_gun_pose/walk.png"
 		var gun_body_shoot_path = "res://assets/characters/body_gun_pose/shoot.png"
@@ -2691,15 +2712,58 @@ func update_debug_visualization() -> void:
 	
 	debug_shapes.add_child(cone_outline)
 
-	# Draw enemy collision shapes in WORLD SPACE (don't rotate)
+	# Draw gun targeting circle at cursor (WORLD SPACE)
 	var parent = get_parent()
+	if parent and CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_gun_weapon():
+		var cursor_pos = get_global_mouse_position()
+		var gun_radius = CharacterStats.equipped_weapon.gun_radius if CharacterStats.equipped_weapon.get("gun_radius") else 28.0
+
+		# Gun reticle circle (yellow)
+		var gun_debug = Node2D.new()
+		gun_debug.name = "GunDebug"
+		parent.add_child(gun_debug)
+		world_debug_nodes.append(gun_debug)
+
+		var reticle = Line2D.new()
+		reticle.width = 2.0
+		reticle.default_color = Color.YELLOW
+		for i in range(33):
+			var angle = (i * TAU) / 32
+			reticle.add_point(cursor_pos + Vector2(cos(angle), sin(angle)) * gun_radius)
+		gun_debug.add_child(reticle)
+
+	# Draw enemy collision shapes and CENTER POINTS in WORLD SPACE
 	if parent:
 		var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 		for enemy in enemies:
-			if is_instance_valid(enemy) and enemy.has_method("draw_debug_shapes_world"):
-				var enemy_debug_node = enemy.draw_debug_shapes_world(parent)
-				if enemy_debug_node:
-					world_debug_nodes.append(enemy_debug_node)
+			if is_instance_valid(enemy):
+				# Draw enemy center point (where gun targeting checks against)
+				var enemy_center = enemy.global_position + Vector2(0, -32)
+				var center_marker = Node2D.new()
+				center_marker.name = "EnemyCenter_" + enemy.name
+				parent.add_child(center_marker)
+				world_debug_nodes.append(center_marker)
+
+				# Cross at enemy center (cyan)
+				var cross_h = Line2D.new()
+				cross_h.width = 2.0
+				cross_h.default_color = Color.CYAN
+				cross_h.add_point(enemy_center + Vector2(-10, 0))
+				cross_h.add_point(enemy_center + Vector2(10, 0))
+				center_marker.add_child(cross_h)
+
+				var cross_v = Line2D.new()
+				cross_v.width = 2.0
+				cross_v.default_color = Color.CYAN
+				cross_v.add_point(enemy_center + Vector2(0, -10))
+				cross_v.add_point(enemy_center + Vector2(0, 10))
+				center_marker.add_child(cross_v)
+
+				# Also draw existing debug shapes
+				if enemy.has_method("draw_debug_shapes_world"):
+					var enemy_debug_node = enemy.draw_debug_shapes_world(parent)
+					if enemy_debug_node:
+						world_debug_nodes.append(enemy_debug_node)
 
 func draw_debug_circle(center: Vector2, radius: float, color: Color) -> Line2D:
 	var line = Line2D.new()
@@ -3119,16 +3183,19 @@ func _get_or_create_death_screen() -> DeathScreenUI:
 
 func _get_bind_point() -> Vector2:
 	"""Get respawn location - guild World Tree or default campfire"""
-	# Check for guild World Tree
-	if WorldTreeManager:
-		var guild_id = _get_player_guild_id()
-		var tree = WorldTreeManager.get_tree_by_guild(guild_id)
-		if tree:
-			# Respawn slightly offset from tree center
-			return tree.position + Vector2(100, 50)
+	# Default spawn point (chunk 0 center / starting area campfire)
+	var default_spawn = Vector2(Constants.CHUNK_SIZE / 2, 0)
 
-	# Default to chunk 0 center (starting area/campfire)
-	return Vector2(Constants.CHUNK_SIZE / 2, 0)
+	# Check for guild World Tree
+	if WorldTreeManager and WorldTreeManager.has_method("get_tree_by_guild"):
+		var guild_id = _get_player_guild_id()
+		if guild_id and guild_id != "":
+			var tree = WorldTreeManager.get_tree_by_guild(guild_id)
+			if tree and is_instance_valid(tree):
+				# Respawn slightly offset from tree center
+				return tree.position + Vector2(100, 50)
+
+	return default_spawn
 
 
 func _get_player_guild_id() -> String:
@@ -3138,7 +3205,7 @@ func _get_player_guild_id() -> String:
 
 	# Solo players have their own "guild" for World Tree purposes
 	if MantleAuth and MantleAuth.is_logged_in():
-		return "solo_guild_%s" % MantleAuth.get_user_id()
+		return "solo_guild_%d" % MantleAuth.user_id
 
 	return "solo_guild_local_player"
 

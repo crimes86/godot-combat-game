@@ -99,50 +99,64 @@ NPCs start at the Campfire and "migrate" with players as they progress. Each ven
 
 # Settlement System
 
-**Status: NOT YET IMPLEMENTED**
+**Status: REPLACED BY WORLD TREE SYSTEM**
 
-Guild-shared base system inspired by Shadowbane sieges and WoW garrisons. Players gather resources, return to their settlement to deposit/craft, and defend it from other players during siege windows.
+> **See:** [WORLD_TREE_SYSTEM.md](./WORLD_TREE_SYSTEM.md) for the full specification.
 
-**Core Loop:** Explore -> Pillage -> Return Home -> Unload -> Rest -> Repeat
+The original Settlement System has been replaced by the World Tree System, which is inspired by Shadowbane's Tree of Life mechanics. The World Tree system provides:
+
+- **Rank 1-7 progression** with gold costs and upgrade times
+- **Runekeeper protection** for buildings (invulnerable outside sieges)
+- **Building placement** (warehouse, vendors, shrines, storage)
+- **Resource mines** with vulnerability windows
+- **Bane siege system** with 3-day countdowns and 2-hour windows
+- **World map visibility** showing tree rank and guild name
+
+Key differences from the original Settlement concept:
+- Single tree replaces complex multi-building settlement
+- Protection slots instead of physical walls
+- Mines for passive income instead of manual gathering only
+- Corruption bane replaces traditional siege mechanics
 
 ## World Structure & POI System
 
 ### Chunk Layout
 
 ```
-CHUNK 0 (Edge)         CHUNK 1 (Center)       CHUNK 2 (Edge)
+CHUNK -1 (Edge)        CHUNK 0 (Center)       CHUNK +1 (Edge)
 +------+------+       +-------------+        +------+------+
 | POI  | POI  |       |             |        | POI  | POI  |
 |  NW  |  NE  |       |  CAMPFIRE   |        |  NW  |  NE  |
 +------+------+       |  BLACKSMITH |        +------+------+
-| POI  | POI  |       |  (Noob Zone)|        | POI  | POI  |
+| POI  | POI  |       |  (Safe Zone)|        | POI  | POI  |
 |  SW  |  SE  |       |             |        |  SW  |  SE  |
 +------+------+       +-------------+        +------+------+
-   8 POI slots            Safe Zone            8 POI slots
+   4 POI slots            Safe Zone            4 POI slots
 ```
 
 ### Chunk Roles
 
 | Chunk | Role | POI Slots | Features |
 |-------|------|-----------|----------|
-| 0 (West Edge) | Exploration | 4 quadrants | Settlements, Ruins, Dangers |
-| 1 (Center) | Starter/Safe | 0 | Campfire, Blacksmith, Tutorial |
-| 2 (East Edge) | Exploration | 4 quadrants | Settlements, Ruins, Dangers |
+| -1 (West Edge) | Exploration | 4 quadrants | Seed Plot, Ruins, Mines, Dangers |
+| 0 (Center) | Starter/Safe | 0 | Campfire, Blacksmith, Tutorial |
+| +1 (East Edge) | Exploration | 4 quadrants | Seed Plot, Ruins, Mines, Dangers |
 
 ### POI Generation
 
 ```gdscript
-const GUARANTEED_POIS = ["settlement_plot", "ruins"]  # 1 of each per chunk
+const GUARANTEED_POIS = ["seed_plot", "ruins"]  # 1 of each per edge chunk
 
 const RANDOM_POI_POOL = [
-    {"type": "monster_lava_lake", "weight": 35},  # Giant lava + elite spawns
-    {"type": "resource_node", "weight": 30},       # Dense trees/rocks/ore
-    {"type": "monster_den", "weight": 20},         # Elite enemy camp
-    {"type": "ancient_shrine", "weight": 15},      # Buff altar / lore
+    {"type": "gold_mine", "weight": 25},          # Claimable resource mine
+    {"type": "monster_lava_lake", "weight": 25},  # Giant lava + elite spawns
+    {"type": "resource_node", "weight": 20},      # Dense trees/rocks/ore
+    {"type": "monster_den", "weight": 15},        # Elite enemy camp
+    {"type": "ancient_shrine", "weight": 15},     # Buff altar / lore
 ]
 ```
 
-## Settlement Structure
+## World Tree System Summary
 
 ### Fixed Layout Grid
 
@@ -619,23 +633,31 @@ data/class_matrix.json                  - Class determination
 
 # World Trees (Guild Anchors)
 
-**Status: NOT YET IMPLEMENTED**
+**Status: FULL SPECIFICATION AVAILABLE**
 
-World Trees are special structures for Tier 4 (Fortress) bases:
+> **See:** [WORLD_TREE_SYSTEM.md](./WORLD_TREE_SYSTEM.md) for the complete specification.
 
-- **Growth time:** 7 real days to mature
-- **Benefits while growing:**
-  - +10% XP in chunk per growth day
-  - Attracts rare resource spawns
-  - Visible on world map (prestige)
-- **Mature tree benefits:**
-  - +25% all stats for guild members in chunk
-  - Teleport waypoint for guild
-  - Weekly rare material harvest
-- **Siege target:**
-  - Destroying tree is primary siege objective
-  - Tree has massive HP, regenerates slowly
-  - If destroyed: 30 day regrowth timer
+World Trees are the core guild base system, inspired by Shadowbane's Tree of Life:
+
+### Quick Reference
+
+| Rank | Name | Cost | Health | Protection Slots | Mine Limit |
+|------|------|------|--------|------------------|------------|
+| 1 | Sapling | - | 10,000 | 2 | 1 |
+| 2 | Young Tree | 10,000g | 20,000 | 4 | 1 |
+| 3 | Growing Tree | 25,000g | 35,000 | 6 | 2 |
+| 4 | Mature Tree | 50,000g | 55,000 | 8 | 2 |
+| 5 | Ancient Tree | 100,000g | 80,000 | 10 | 3 |
+| 6 | Elder Tree | 200,000g | 110,000 | 12 | 4 |
+| 7 | World Tree | 500,000g | 150,000 | 15 | 5 |
+
+### Key Features
+
+- **Runekeeper Protection** - Buildings in protection slots are invulnerable outside banes
+- **Building Placement** - Warehouse, vendors, shrines, storage, crafting
+- **Resource Mines** - Claim mines for passive gold/resource income
+- **Bane Siege System** - 3-day countdown, 2-hour vulnerability window
+- **World Map Visibility** - Tree rank visible to all players (prestige + target signal)
 
 ---
 
@@ -649,6 +671,7 @@ World Trees are special structures for Tier 4 (Fortress) bases:
 - [x] Quest system framework
 - [x] PvP duel system
 - [x] Wolf enemies with pack behavior
+- [x] Gun weapon system
 
 ## Phase 2: Economy & Forge Trading
 - [ ] Alchemist vendor + potions
@@ -661,24 +684,83 @@ World Trees are special structures for Tier 4 (Fortress) bases:
   - [ ] Marketplace (auction house)
   - [ ] Provenance tracking
 
-## Phase 3: Base Building
-- [ ] Tier 1-3 base templates
-- [ ] Placeable crafting stations
-- [ ] Storage persistence
-- [ ] Base migration system
+## Phase 3: World Tree System (see `WORLD_TREE_SYSTEM.md`)
 
-## Phase 4: PvP & Sieges
+### Phase 3.1: Core Tree System
+- [ ] Seed Plot POI generation in edge chunks
+- [ ] World Tree Seed item at Blacksmith (1,000g)
+- [ ] Planting mechanic (guild-bound)
+- [ ] Basic tree visual (Rank 1)
+- [ ] Tree appears on world map with rank
+- [ ] Basic respawn binding for guild members
+
+### Phase 3.2: Watering System
+- [ ] Empty Vial item at Blacksmith (50g)
+- [ ] CleanseableLavaPool.gd (extends existing lava pools)
+- [ ] Lava pool visual states (active/cooling/ready)
+- [ ] Cleanse interaction (3-sec channel, consumes vial)
+- [ ] Purified Water item
+- [ ] Lava pool cooldown system (5 minutes)
+- [ ] Water tree interaction in WorldTreeUI
+- [ ] Daily watering bonus (+10% growth speed)
+
+### Phase 3.3: Rank & Protection
+- [ ] Rank upgrade system (1-7)
+- [ ] Gold costs and upgrade timers
+- [ ] Rank visuals (all 7 stages)
+- [ ] Runekeeper NPC (auto-spawns at tree)
+- [ ] Protection slot system
+- [ ] Tree health system
+
+### Phase 3.4: Buildings & Vendors
+- [ ] Building placement UI (6 slots around tree)
+- [ ] Warehouse building (gold/resource storage)
+- [ ] Vendor buildings (weapon, armor, potion, general)
+- [ ] Vendor stocking and pricing UI
+- [ ] Revenue collection to warehouse (5% tax)
+- [ ] Storage chest buildings
+
+### Phase 3.5: Economy & Mines
+- [ ] Weekly maintenance cost system
+- [ ] Maintenance failure/degradation
+- [ ] Resource mine POI spawning
+- [ ] Mine claiming mechanic (30-sec channel)
+- [ ] Mine vulnerability windows (30 min/day)
+- [ ] Hourly income deposits to warehouse
+
+### Phase 3.6: Shrines & Buffs
+- [ ] Shrine buildings (10,000g each)
+- [ ] 5 shrine types (warfare, vitality, swiftness, fortune, protection)
+- [ ] Buff application system
+- [ ] Buff duration (30 min) and exclusivity rules
+
+### Phase 3.7: Bane Siege System
+- [ ] Corruption Stone item (costs scale with target rank)
+- [ ] Stone placement mechanic (30-sec channel)
+- [ ] 3-day countdown system with server broadcast
+- [ ] Bane window selection UI for defenders
+- [ ] Combat rules during bane (all vulnerable, PvP enabled)
+- [ ] Victory/defeat outcomes
+- [ ] War reparations system
+
+### Phase 3.8: Polish
+- [ ] World map integration (rank, guild name, siege status)
+- [ ] Alliance tree visibility (future)
+- [ ] Tree teleportation (Rank 5+)
+- [ ] Ambient effects (particles, audio)
+- [ ] Tutorial/onboarding for new tree owners
+
+## Phase 4: PvP & Open World
 - [ ] PvP flagging system (open world)
-- [ ] Siege declaration and windows
-- [ ] Defense structures
-- [ ] World Trees (Tier 4)
+- [ ] Territory control bonuses
+- [ ] Alliance system
 
 ## Phase 5: World Expansion
 - [ ] Tier 2 biome (Cursed Lands)
 - [ ] Dynamic chunk loading based on population
 - [ ] Northern progression
-- [ ] Guild system integration
+- [ ] Higher-tier World Tree seeds for Zone 2+
 
 ---
 
-*Status: Design Specifications - Not Yet Implemented*
+*Status: Design Specifications - Implementation Starting*

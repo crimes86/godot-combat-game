@@ -3,7 +3,7 @@ extends Area2D
 
 signal player_entered_tunnel(player: Node, origin_chunk: int)
 
-const LEVEL_REQUIREMENT: int = 10
+const LEVEL_REQUIREMENT: int = 0  # No level requirement - open to all players
 const TRIGGER_DISTANCE: float = 80.0  # How close player needs to be to enter
 
 @export var chunk_id: int = 0  # Which Zone 1 chunk this entrance belongs to

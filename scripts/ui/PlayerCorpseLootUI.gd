@@ -531,6 +531,13 @@ func _dict_to_weapon(weapon_dict: Dictionary):
 		weapon.healing_power = weapon_dict.get("healing_power", 0.0)
 		weapon.heal_radius = weapon_dict.get("heal_radius", 0.0)
 
+	# Gun weapon properties
+	weapon.gun_radius = weapon_dict.get("gun_radius", 28.0)
+	weapon.gun_range = weapon_dict.get("gun_range", 350.0)
+	weapon.gun_subtype = weapon_dict.get("gun_subtype", "railgun")
+	weapon.burst_count = weapon_dict.get("burst_count", 1)
+	weapon.burst_delay = weapon_dict.get("burst_delay", 0.10)
+
 	return weapon
 
 func _on_close_pressed() -> void:

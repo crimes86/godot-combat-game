@@ -1142,6 +1142,13 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 		"LEGENDARY":
 			weapon.rarity = Weapon.Rarity.LEGENDARY
 
+	# Gun weapon properties
+	weapon.gun_radius = item_dict.get("gun_radius", 28.0)
+	weapon.gun_range = item_dict.get("gun_range", 350.0)
+	weapon.gun_subtype = item_dict.get("gun_subtype", "railgun")
+	weapon.burst_count = item_dict.get("burst_count", 1)
+	weapon.burst_delay = item_dict.get("burst_delay", 0.10)
+
 	return weapon
 
 func _get_equipment_drag_data(at_position: Vector2, slot_name: String) -> Variant:

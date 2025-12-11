@@ -24,7 +24,7 @@ extends Node
 enum ItemRarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 enum ItemType { WEAPON, ARMOR_HEAD, ARMOR_CHEST, ARMOR_LEGS, ARMOR_HANDS, ARMOR_FEET, CAPE, SHIELD, ACCESSORY, EMOTE, TITLE }
 # WeaponClass: Core (SWORD-RAPIER have animation data), Extended (rest fall back to core)
-enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, RAPIER, GREATSWORD, KATANA, SABER, SCIMITAR, HALBERD, PIKE, TRIDENT, FLAIL, SCYTHE, BOW, CROSSBOW, GUN }
+enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, RAPIER, GREATSWORD, KATANA, SABER, SCIMITAR, HALBERD, PIKE, TRIDENT, FLAIL, SCYTHE, BOW, CROSSBOW, GUN, BATTLE_RIFLE }
 
 # Base paths for forged items (separate from regular loot)
 const FORGED_ITEMS_BASE = "res://assets/equipment/forged/"
@@ -624,6 +624,37 @@ const FORGE_ITEMS = {
 		},
 		"effects": ["wolf_school_glow", "danger_sense"],
 		"cosmetic_only": true
+	},
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# HALO: MASTER CHIEF COLLECTION (Steam App ID: 976730) / Xbox
+	# Legendary campaign completion - the ultimate Halo achievement
+	# ═══════════════════════════════════════════════════════════════════════════
+
+	"xbox_HALO_LEGENDARY": {
+		"item_id": "halo_battle_rifle",
+		"item_name": "Halo Battle Rifle",
+		"item_type": ItemType.WEAPON,
+		"weapon_class": WeaponClass.BATTLE_RIFLE,
+		"rarity": ItemRarity.RARE,
+		"description": "Standard-issue UNSC battle rifle.",
+		"lore": "Finished the fight on Legendary.",
+		"achievement_name": "Legendary Campaign Complete",
+		"unlock_percent": 5.2,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "weapons/halo_battle_rifle.png",
+			"walk": FORGED_ITEMS_BASE + "weapons/halo_battle_rifle/walk.png"
+			# Note: Battle rifles use walk animation only (like railgun)
+		},
+		"effects": ["halo_green_glow"],
+		"glow_color": "#00CED1",
+		"stats": {"damage_bonus": 2},
+		"cosmetic_only": false,
+		"gun_config": {
+			"gun_subtype": "battle_rifle",
+			"burst_count": 3,
+			"burst_delay": 0.10
+		}
 	}
 }
 
