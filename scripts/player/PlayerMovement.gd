@@ -109,6 +109,21 @@ func process_movement(delta: float, input_direction: Vector2) -> Vector2:
 func clamp_to_world_bounds(pos: Vector2) -> Vector2:
 	"""Clamp position to world boundaries"""
 	var buffer = 50.0
+
+	# Check if we're in TestHub/TradingHub - use expanded bounds
+	var current_scene = player.get_tree().current_scene
+	if current_scene and current_scene.name in ["TestHub", "TradingHub"]:
+		# TestHub bounds: X: -6000 to 6000, Y: -8000 to 8000
+		var x_min = -6000.0 + buffer
+		var x_max = 6000.0 - buffer
+		var y_min = -8000.0 + buffer
+		var y_max = 8000.0 - buffer
+		return Vector2(
+			clamp(pos.x, x_min, x_max),
+			clamp(pos.y, y_min, y_max)
+		)
+
+	# Default Zone 1 world bounds
 	var x_min = -Constants.CHUNK_SIZE + buffer
 	var x_max = Constants.CHUNK_SIZE * 2 - buffer
 	var y_min = -Constants.CHUNK_SIZE / 2 + buffer
