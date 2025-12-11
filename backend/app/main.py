@@ -44,6 +44,7 @@ from app.routes.wallet_routes import router as wallet_router, init_wallet_routes
 from app.routes.friend_routes import router as friend_router, init_friend_routes
 from app.routes.chat_routes import router as chat_router, init_chat_routes, seed_mock_global_feed, post_user_joined_announcement, post_sync_announcement, start_mock_activity, stop_mock_activity
 from app.routes.trading_routes import router as trading_router, init_trading_routes
+from app.routes.weapon_stats_routes import router as weapon_stats_router, init_weapon_stats_routes
 import time
 import asyncio
 
@@ -64,6 +65,7 @@ async def startup_event():
     init_friend_routes(get_current_user, calculate_mantle_tier)
     init_chat_routes(get_current_user, calculate_mantle_tier)
     init_trading_routes(get_current_user)
+    init_weapon_stats_routes(get_current_user)
     seed_mock_global_feed()  # Add demo activity to global feed
     start_mock_activity(min_interval=20, max_interval=60)  # Live mock activity every 20-60 seconds
 
@@ -458,6 +460,84 @@ def create_new_user_with_provider(db: DbSession, provider_name: str, provider_us
         raise
 
     return user
+
+
+def handle_provider_login(
+    db: DbSession,
+    request: Request,
+    provider_name: str,
+    provider_user_id: str,
+    device_code: Optional[str] = None,
+    access_token: Optional[str] = None,
+    profile_data: dict = None,
+    provider_username: Optional[str] = None
+):
+    """
+    Unified login flow for all providers. Handles:
+    1. Active provider → Log into existing account
+    2. Inactive provider → Delete orphan link, create fresh account
+    3. No provider → Create new account
+
+    Philosophy: Provider accounts can move freely between Mantle accounts.
+    Anti-exploit is handled by AchievementCredit.is_original_claim, not provider binding.
+    """
+    # 1. Check for ACTIVE provider account
+    existing_active = (
+        db.query(ProviderAccount)
+        .filter(
+            ProviderAccount.provider_name == provider_name,
+            ProviderAccount.provider_user_id == provider_user_id,
+            ProviderAccount.is_active == True
+        )
+        .first()
+    )
+
+    if existing_active:
+        user = db.query(User).filter(User.id == existing_active.user_id).first()
+        if user:
+            # Update OAuth token
+            existing_active.access_token = access_token
+            if provider_username:
+                existing_active.provider_username = provider_username
+            db.commit()
+            logger.info(f"{provider_name.upper()} LOGIN: User {user.username} logged in via active provider")
+            return make_auth_response(request, user, device_code, provider_name, db)
+        else:
+            # Orphan - user was deleted
+            logger.info(f"{provider_name.upper()} LOGIN: Found orphan active provider (user deleted), removing")
+            db.delete(existing_active)
+            db.commit()
+
+    # 2. Check for INACTIVE provider account (was unlinked)
+    existing_inactive = (
+        db.query(ProviderAccount)
+        .filter(
+            ProviderAccount.provider_name == provider_name,
+            ProviderAccount.provider_user_id == provider_user_id,
+            ProviderAccount.is_active == False
+        )
+        .first()
+    )
+
+    if existing_inactive:
+        # User intentionally unlinked this provider - allow fresh start
+        # Delete the orphaned link so they can create a new Mantle account
+        # (Achievement credits stay with original account via is_original_claim)
+        logger.info(f"{provider_name.upper()} LOGIN: Inactive provider found (was unlinked), deleting for fresh account")
+        db.delete(existing_inactive)
+        db.commit()
+
+    # 3. No provider account exists (or was just cleaned up) → Create new user
+    logger.info(f"{provider_name.upper()} LOGIN: Creating new user for {provider_name}:{provider_user_id}")
+    new_user = create_new_user_with_provider(
+        db,
+        provider_name,
+        provider_user_id,
+        profile_data=profile_data,
+        access_token=access_token,
+        provider_username=provider_username
+    )
+    return make_auth_response(request, new_user, device_code, provider_name, db)
 
 
 # =============================================================================
@@ -1004,49 +1084,15 @@ async def steam_callback(
 
     # --------------- LOGIN FLOW (NOT LOGGED IN) ---------------
     logger.info("STEAM CALLBACK: Login flow (not logged in)")
-    existing_user = (
-        db.query(User)
-        .join(ProviderAccount, ProviderAccount.user_id == User.id)
-        .filter(
-            ProviderAccount.provider_name == "steam",
-            ProviderAccount.provider_user_id == steam_id,
-            ProviderAccount.is_active == True
-        )
-        .first()
-    )
-    logger.info(f"STEAM CALLBACK: existing_user (login) = {getattr(existing_user, 'username', None)}")
-
-    if existing_user:
-        logger.info(f"STEAM CALLBACK: User {existing_user.username} logged in via Steam {steam_id}")
-        return make_auth_response(request, existing_user, device_code, "steam", db)
-
-    # --- If here, no ACTIVE provider found; check for inactive ---
-    provider_account = db.query(ProviderAccount).filter_by(
-        provider_name="steam",
-        provider_user_id=steam_id
-    ).first()
-
-    if provider_account:
-        user = db.query(User).filter(User.id == provider_account.user_id).first()
-        if user:
-            logger.info("STEAM CALLBACK: Found INACTIVE provider row for this Steam; reactivating.")
-            provider_account.is_active = True
-            provider_account.unclaimed_at = None
-            db.commit()
-            logger.info(f"STEAM CALLBACK: Creating session for user {user.username} (reactivated Steam)")
-            return make_auth_response(request, user, device_code, "steam", db)
-        else:
-            # User was deleted, remove orphan provider_account
-            logger.info("STEAM CALLBACK: Found orphan provider_account (user deleted), removing it.")
-            db.delete(provider_account)
-            db.commit()
-
-    # --- No provider row at all: safe to create new user/provider row ---
-    logger.info(f"STEAM CALLBACK: No provider_account row for Steam {steam_id}, creating new user.")
     profile = await fetch_steam_profile(steam_id)
-    new_user = create_new_user_with_provider(db, "steam", steam_id, profile)
-    logger.info(f"STEAM CALLBACK: Creating session for user {new_user.username}")
-    return make_auth_response(request, new_user, device_code, "steam", db)
+    return handle_provider_login(
+        db=db,
+        request=request,
+        provider_name="steam",
+        provider_user_id=steam_id,
+        device_code=device_code,
+        profile_data=profile
+    )
 
 
 @app.get("/navbar", response_class=HTMLResponse)
@@ -1240,71 +1286,14 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
 
         # — Login flow for visitors —
         logger.info("BATTLENET CALLBACK: Login flow (not logged in)")
-
-        # First, check for ACTIVE provider_account
-        existing_user = (
-            db.query(User)
-            .join(ProviderAccount, ProviderAccount.user_id == User.id)
-            .filter(
-                ProviderAccount.provider_name == "battlenet",
-                ProviderAccount.provider_user_id == battlenet_id,
-                ProviderAccount.is_active == True
-            )
-            .first()
-        )
-
-        if existing_user:
-            logger.info(f"BATTLENET CALLBACK: User {existing_user.username} logged in via Battle.net {battlenet_id}")
-            # Always update OAuth token on login
-            acct = db.query(ProviderAccount).filter_by(
-                provider_name="battlenet",
-                provider_user_id=battlenet_id,
-                is_active=True
-            ).first()
-            if acct:
-                acct.access_token = oauth_token["access_token"]
-                db.commit()
-            # Create secure session and redirect
-            response = RedirectResponse(url="/dashboard")
-            session_token = create_session(db, existing_user)
-            set_session_cookie(response, session_token)
-            return response
-
-        # --- If here, no ACTIVE provider found; check for inactive (unlinked) ---
-        provider_account = db.query(ProviderAccount).filter_by(
+        return handle_provider_login(
+            db=db,
+            request=request,
             provider_name="battlenet",
-            provider_user_id=battlenet_id
-        ).first()
-
-        if provider_account:
-            # Found an inactive provider_account - check if user still exists
-            user = db.query(User).filter(User.id == provider_account.user_id).first()
-            if user:
-                logger.info(f"BATTLENET CALLBACK: Found INACTIVE provider row for this Battle.net; reactivating for user {user.username}")
-                provider_account.is_active = True
-                provider_account.unclaimed_at = None
-                provider_account.access_token = oauth_token["access_token"]
-                db.commit()
-                # Log them into the original user
-                response = RedirectResponse(url="/dashboard")
-                session_token = create_session(db, user)
-                set_session_cookie(response, session_token)
-                return response
-            else:
-                # User was deleted, remove orphan provider_account
-                logger.info("BATTLENET CALLBACK: Found orphan provider_account (user deleted), removing it.")
-                db.delete(provider_account)
-                db.commit()
-
-        # --- No provider row at all: safe to create new user/provider row ---
-        logger.info(f"BATTLENET CALLBACK: No provider_account row for Battle.net {battlenet_id}, creating new user.")
-        existing_user = create_new_user_with_provider(db, "battlenet", battlenet_id, access_token=oauth_token["access_token"])
-
-        # Create secure session and redirect
-        response = RedirectResponse(url="/dashboard")
-        session_token = create_session(db, existing_user)
-        set_session_cookie(response, session_token)
-        return response
+            provider_user_id=battlenet_id,
+            device_code=device_code,
+            access_token=oauth_token["access_token"]
+        )
 
     except Exception as e:
         logger.error(f"Battle.net callback failed: {e}", exc_info=True)
@@ -1512,54 +1501,16 @@ async def xbox_callback(request: Request, db: DbSession = Depends(get_db)):
 
         else:
             # === LOGIN FLOW: No session, creating/finding user ===
-
-            # Check if Xbox account exists
-            provider_account = (
-                db.query(ProviderAccount)
-                .filter_by(provider_name="xbox", provider_user_id=xuid)
-                .first()
-            )
-
-            if provider_account:
-                user = db.query(User).filter(User.id == provider_account.user_id).first()
-                if user:
-                    # Reactivate if inactive
-                    provider_account.is_active = True
-                    provider_account.unclaimed_at = None
-                    provider_account.access_token = user_api_key
-                    if gamertag:
-                        provider_account.profile_data = provider_account.profile_data or {}
-                        provider_account.profile_data["gamertag"] = gamertag
-                    db.commit()
-
-                    response = RedirectResponse(url="/dashboard")
-                    new_session = create_session(db, user)
-                    set_session_cookie(response, new_session)
-
-                    if device_code:
-                        complete_device_auth(device_code, user.id, user.username, new_session)
-
-                    return response
-                else:
-                    # Orphan - delete
-                    db.delete(provider_account)
-                    db.commit()
-
-            # Create new user
-            new_user = create_new_user_with_provider(
-                db, "xbox", xuid,
+            return handle_provider_login(
+                db=db,
+                request=request,
+                provider_name="xbox",
+                provider_user_id=xuid,
+                device_code=device_code,
                 access_token=user_api_key,
-                profile_data={"gamertag": gamertag} if gamertag else {}
+                profile_data={"gamertag": gamertag} if gamertag else {},
+                provider_username=gamertag
             )
-
-            response = RedirectResponse(url="/dashboard")
-            new_session = create_session(db, new_user)
-            set_session_cookie(response, new_session)
-
-            if device_code:
-                complete_device_auth(device_code, new_user.id, new_user.username, new_session)
-
-            return response
 
     except Exception as e:
         logger.error(f"[XBOX] Callback failed: {e}", exc_info=True)
@@ -1827,72 +1778,23 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
             return RedirectResponse(url="/dashboard", status_code=303)
 
         else:
-            # Not logged in - check if Discord account already exists
-            existing_provider = (
-                db.query(ProviderAccount)
-                .filter_by(provider_name="discord", provider_user_id=discord_id, is_active=True)
-                .first()
-            )
-
-            if existing_provider:
-                # Existing user - log them in
-                user = existing_provider.user
-                # Update profile data
-                existing_provider.access_token = oauth_token.get("access_token")
-                existing_provider.profile_data = {
+            # Not logged in - use unified login flow
+            device_code = request.session.get("device_code")
+            return handle_provider_login(
+                db=db,
+                request=request,
+                provider_name="discord",
+                provider_user_id=discord_id,
+                device_code=device_code,
+                access_token=oauth_token.get("access_token"),
+                profile_data={
                     "username": discord_username,
                     "discriminator": discord_discriminator,
                     "display_name": display_name,
                     "avatar_url": avatar_url,
-                }
-                db.commit()
-            else:
-                # New user - create account
-                user, provider_account = create_new_user_with_provider(
-                    db=db,
-                    provider_name="discord",
-                    provider_user_id=discord_id,
-                    provider_username=display_name,
-                    profile_data={
-                        "username": discord_username,
-                        "discriminator": discord_discriminator,
-                        "display_name": display_name,
-                        "avatar_url": avatar_url,
-                    },
-                    access_token=oauth_token.get("access_token"),
-                )
-
-            # Create session
-            session_token = secrets.token_urlsafe(32)
-            session = SessionModel(
-                user_id=user.id,
-                token=session_token,
-                expires_at=datetime.utcnow() + timedelta(days=7)
+                },
+                provider_username=display_name
             )
-            db.add(session)
-            db.commit()
-
-            response = RedirectResponse(url="/dashboard", status_code=303)
-            response.set_cookie(
-                key="session_id",
-                value=session_token,
-                httponly=True,
-                max_age=7*24*60*60,
-                samesite="lax"
-            )
-
-            # Handle device code flow (Godot client)
-            device_code = request.session.get("device_code")
-            if device_code and device_code in device_codes:
-                device_codes[device_code]["user_id"] = user.id
-                device_codes[device_code]["username"] = user.username
-                device_codes[device_code]["session_token"] = session_token
-                logger.info(f"[DISCORD] Device code {device_code[:8]}... completed for user {user.id}")
-                # Clear device_code from session after use
-                request.session.pop("device_code", None)
-
-            logger.info(f"[DISCORD] {'Logged in' if existing_provider else 'Created'} user {user.username} via Discord")
-            return response
 
     except Exception as e:
         logger.error(f"[DISCORD] Callback error: {e}", exc_info=True)
@@ -2026,12 +1928,15 @@ async def github_callback(request: Request, db: DbSession = Depends(get_db)):
             return RedirectResponse(url="/dashboard", status_code=303)
 
         else:
-            # Not logged in - create new user with GitHub
-            user, provider_account = create_new_user_with_provider(
+            # Not logged in - use unified login flow
+            device_code = request.session.get("device_code")
+            return handle_provider_login(
                 db=db,
+                request=request,
                 provider_name="github",
                 provider_user_id=github_id,
-                provider_username=github_username,
+                device_code=device_code,
+                access_token=oauth_token.get("access_token"),
                 profile_data={
                     "username": github_username,
                     "name": github_name,
@@ -2040,28 +1945,8 @@ async def github_callback(request: Request, db: DbSession = Depends(get_db)):
                     "public_repos": github_public_repos,
                     "followers": github_followers,
                 },
-                access_token=oauth_token.get("access_token"),
+                provider_username=github_username
             )
-
-            # Create session
-            session = SessionModel(
-                user_id=user.id,
-                session_token=secrets.token_urlsafe(32),
-                expires_at=datetime.utcnow() + timedelta(days=7)
-            )
-            db.add(session)
-            db.commit()
-
-            response = RedirectResponse(url="/dashboard", status_code=303)
-            response.set_cookie(
-                key="session_id",
-                value=session.session_token,
-                httponly=True,
-                max_age=7*24*60*60,
-                samesite="lax"
-            )
-            logger.info(f"[GITHUB] Created new user {user.username} via GitHub")
-            return response
 
     except Exception as e:
         logger.error(f"[GITHUB] Callback error: {e}", exc_info=True)
@@ -4197,3 +4082,4 @@ app.include_router(wallet_router)
 app.include_router(friend_router)
 app.include_router(chat_router)
 app.include_router(trading_router)
+app.include_router(weapon_stats_router)

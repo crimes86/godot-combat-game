@@ -423,7 +423,9 @@ def create_oauth_routes(
                         set_session_cookie(response, session_token)
                         return response
 
-                # Check for inactive account
+                # Check for inactive account (was unlinked)
+                # Philosophy: Provider accounts can move freely between Mantle accounts.
+                # Anti-exploit is handled by AchievementCredit.is_original_claim, not provider binding.
                 inactive_account = db.query(ProviderAccount).filter_by(
                     provider_name=provider,
                     provider_user_id=provider_user_id,
@@ -431,28 +433,10 @@ def create_oauth_routes(
                 ).first()
 
                 if inactive_account:
-                    # Reactivate
-                    inactive_account.is_active = True
-                    inactive_account.unclaimed_at = None
-                    inactive_account.access_token = token.get("access_token")
-                    inactive_account.profile_data = profile_data
+                    # User intentionally unlinked - delete orphan and allow fresh account
+                    logger.info(f"{provider} LOGIN: Inactive provider found (was unlinked), deleting for fresh account")
+                    db.delete(inactive_account)
                     db.commit()
-                    user = db.query(User).filter_by(id=inactive_account.user_id).first()
-                    logger.info(f"Reactivated {provider} account for user {user.username}")
-
-                    if device_code:
-                        from app.main import complete_device_auth
-                        session_token = create_session(db, user)
-                        complete_device_auth(device_code, user.id, user.username, session_token)
-                        return templates.TemplateResponse(
-                            "auth_success.html",
-                            {"request": request, "username": user.username, "provider": provider}
-                        )
-                    else:
-                        response = RedirectResponse(url="/dashboard", status_code=303)
-                        session_token = create_session(db, user)
-                        set_session_cookie(response, session_token)
-                        return response
 
                 # Create new user
                 new_user = create_new_user_with_provider(
