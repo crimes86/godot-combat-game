@@ -388,61 +388,38 @@ Check that the achievement's effort_score maps to expected rarity:
 
 ## Phase 6: Godot Integration
 
-### Step 6.1: Update ForgeItemDB.gd
+### Step 6.1: Items Load Automatically from JSON
 
-Add the item to `FORGE_ITEMS` dictionary in `scripts/systems/ForgeItemDB.gd`:
+**As of Dec 2024, ForgeItemDB.gd loads item data from `backend/data/items.json` at runtime.**
 
+There is NO hardcoded `FORGE_ITEMS` dictionary to edit. When you add items to `items.json` (Phase 4), they are automatically available in Godot.
+
+**How it works:**
+1. `ForgeItemDB.gd` reads `backend/data/items.json` on startup
+2. Builds `FORGE_ITEMS` dictionary from items array + achievement_mappings
+3. Converts JSON strings to GDScript enums (rarity, item_type, weapon_class)
+4. Constructs full asset paths from relative paths
+
+**To verify your item loads correctly:**
 ```gdscript
-# Key format: "{provider}_{appid}_{achievement_api_name}"
-"psn_BLOODBORNE_PLATINUM": {
-    "item_id": "saw_cleaver",
-    "item_name": "Saw Cleaver",
-    "item_type": ItemType.WEAPON,
-    "weapon_class": WeaponClass.SWORD,
-    "rarity": ItemRarity.LEGENDARY,
-    "description": "A trick weapon of the Hunters.",
-    "lore": "Tonight, Gehrman joins the hunt.",
-    "achievement_name": "Bloodborne Platinum",
-    "unlock_percent": 6.8,
-    "sprites": {
-        "icon": FORGED_ICONS_BASE + "weapons/saw_cleaver.png",
-        "walk": FORGED_ITEMS_BASE + "weapons/saw_cleaver/walk.png",
-        "slash": FORGED_ITEMS_BASE + "weapons/saw_cleaver/slash.png",
-        "slash2": FORGED_ITEMS_BASE + "weapons/saw_cleaver/slash2.png",  # Multi-slash
-        "hurt": FORGED_ITEMS_BASE + "weapons/saw_cleaver/hurt.png"
-    },
-    "effects": ["blood_particles"],   # Must exist in ForgeVisualEffects.gd
-    "glow_color": "#8B0000",
-    "stats": {"damage_bonus": 4},
-    "cosmetic_only": false,
-    "multi_slash": true                # Enable slash variant cycling
-},
+# In Godot console or debug script:
+var item = ForgeItemDB.get_item_by_id("saw_cleaver")
+print(item)  # Should show full item data with enums
 ```
 
-**Required fields:**
-- `item_id` - Must match items.json
-- `sprites.icon` - Path to 64x64 icon
-- `sprites.slash` - Path to slash animation
-- `effects` - Array of effect names from ForgeVisualEffects.gd
-- `glow_color` - Hex color for theme glow
+### Step 6.2: Armory Catalog Generates Automatically
 
-**Optional for multi-slash:**
-- `sprites.slash2`, `sprites.slash3` - Additional slash variants
-- `multi_slash: true` - Flag to enable cycling
+**The `FORGE_CATALOG` is now generated dynamically** via `ForgeItemDB.get_armory_catalog()`.
 
-### Step 6.2: Update Armory.gd FORGE_CATALOG (CRITICAL!)
+There is NO hardcoded catalog array to edit in `Armory.gd`. Items appear in the Armory automatically when:
+1. The item exists in `items.json`
+2. The achievement mapping exists in `achievement_mappings`
+3. The icon file exists at the expected path
 
-**⚠️ THIS STEP IS OFTEN FORGOTTEN!** Add the item to `FORGE_CATALOG` array in `scripts/ui/Armory.gd`:
-
-```gdscript
-{"id": "halo_battle_rifle", "name": "BR55 Battle Rifle", "game": "Halo", "achievement": "Legendary Campaign",
- "rarity": "Epic", "category": "weapons", "icon": "res://assets/icons/forged/weapons/halo_battle_rifle.png",
- "lore": "The UNSC's precision workhorse. Three-round burst, zero margin for error."},
-```
-
-**Why both files?**
-- `ForgeItemDB.gd` → Backend/game item data (stats, effects, sprites)
-- `Armory.gd` `FORGE_CATALOG` → UI display in Mantle Armory (browsing, previewing)
+**Why this changed:**
+- Single source of truth (`items.json`) for both backend and Godot
+- No more sync issues between ForgeItemDB.gd and Armory.gd
+- Easier to add/edit items without touching GDScript code
 
 ### Step 6.3: Update ForgeVisualEffects (if new effect)
 

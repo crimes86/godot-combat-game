@@ -1,18 +1,14 @@
 extends Node
 ## ForgeItemDB - Maps achievements to in-game items
-## Core database for the Forge system
+## Loads item data from backend/data/items.json at runtime
 ##
-## Priority order based on game popularity (Steam player counts):
-## 1. Elden Ring (42 achievements, 8.7% 100% rate)
-## 2. Dark Souls 3 (43 achievements)
-## 3. Stardew Valley (49 achievements)
-## 4. Terraria (104 achievements)
-## 5. Hollow Knight (63 achievements)
-## 6. Hades (49 achievements)
-## 7. The Witcher 3 (78 achievements)
-## 8. Skyrim (75 achievements)
-## 9. Monster Hunter World (50 achievements)
-## 10. Sekiro (34 achievements)
+## This file now contains:
+## - Enum definitions (ItemRarity, ItemType, WeaponClass)
+## - Path constants for Godot assets
+## - JSON loading logic
+## - Utility/lookup functions
+##
+## The actual item data is stored in backend/data/items.json
 
 # Item rarity thresholds (based on achievement unlock %)
 # Legendary: < 1% unlock rate
@@ -22,7 +18,7 @@ extends Node
 # Common: 40%+ unlock rate
 
 enum ItemRarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
-enum ItemType { WEAPON, ARMOR_HEAD, ARMOR_CHEST, ARMOR_ARMS, ARMOR_LEGS, ARMOR_HANDS, ARMOR_FEET, CAPE, SHIELD, ACCESSORY, EMOTE, TITLE }
+enum ItemType { WEAPON, ARMOR_HEAD, ARMOR_CHEST, ARMOR_ARMS, ARMOR_LEGS, ARMOR_HANDS, ARMOR_FEET, CAPE, SHIELD, ACCESSORY, RING, AMULET, EMOTE, TITLE }
 # WeaponClass: Core (SWORD-RAPIER have animation data), Extended (rest fall back to core)
 enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, RAPIER, GREATSWORD, KATANA, SABER, SCIMITAR, HALBERD, PIKE, TRIDENT, FLAIL, SCYTHE, BOW, CROSSBOW, GUN, BATTLE_RIFLE }
 
@@ -30,966 +26,264 @@ enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, RAPIER, GREATSWORD, K
 const FORGED_ITEMS_BASE = "res://assets/equipment/forged/"
 const FORGED_ICONS_BASE = "res://assets/icons/forged/"
 
+# Path to JSON data file
+const ITEMS_JSON_PATH = "res://backend/data/items.json"
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# MASTER ITEM DATABASE
-# Key format: "{provider}_{appid}_{achievement_api_name}"
+# RUNTIME DATA (loaded from JSON)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-const FORGE_ITEMS = {
-	# ═══════════════════════════════════════════════════════════════════════════
-	# ELDEN RING (Steam App ID: 1245620)
-	# 42 achievements - Very popular, high completion rates
-	# ═══════════════════════════════════════════════════════════════════════════
+## Master dictionary mapping achievement keys to item data
+## Key format: "{provider}_{appid}_{achievement_api_name}"
+## Built dynamically from items.json + achievement_mappings
+var FORGE_ITEMS: Dictionary = {}
 
-	# Common Tier (40%+ unlock) - Early game bosses
-	"steam_1245620_MARGIT_THE_FELL": {
-		"item_id": "margits_shackle",
-		"item_name": "Margit's Shackle",
-		"item_type": ItemType.ACCESSORY,
-		"rarity": ItemRarity.COMMON,
-		"description": "A chain that once bound the fell omen.",
-		"lore": "Even demons can be bound by those who know the old ways.",
-		"achievement_name": "Margit, the Fell Omen",
-		"unlock_percent": 78.5,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "accessories/margits_shackle.png"
-		},
-		"effects": [],
-		"cosmetic_only": true
-	},
+## Items indexed by item_id for fast lookup
+var _items_by_id: Dictionary = {}
 
-	"steam_1245620_GODRICK_THE_GRAFTED": {
-		"item_id": "grafted_blade",
-		"item_name": "Grafted Blade Greatsword",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.GREATSWORD,
-		"rarity": ItemRarity.COMMON,
-		"description": "A weapon of the many, grafted into one.",
-		"lore": "Bear witness! I am the lord of all that is golden!",
-		"achievement_name": "Godrick the Grafted",
-		"unlock_percent": 72.3,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/grafted_blade.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/grafted_blade/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/grafted_blade/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/grafted_blade/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/grafted_blade/hurt.png"
-		},
-		"effects": ["golden_glow"],
-		"stats": {"damage_bonus": 2},
-		"cosmetic_only": false
-	},
+## Raw JSON data cache
+var _json_data: Dictionary = {}
 
-	# Uncommon Tier (15-40% unlock) - Mid-game progression
-	"steam_1245620_RENNALA_QUEEN": {
-		"item_id": "carian_crown",
-		"item_name": "Carian Royal Crown",
-		"item_type": ItemType.ARMOR_HEAD,
-		"rarity": ItemRarity.UNCOMMON,
-		"description": "Crown worn by the Queen of the Full Moon.",
-		"lore": "Her gaze pierces even the darkest nights.",
-		"achievement_name": "Rennala, Queen of the Full Moon",
-		"unlock_percent": 52.1,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/carian_crown.png",
-			"walk": FORGED_ITEMS_BASE + "armor/head/carian_crown/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/head/carian_crown/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/head/carian_crown/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/head/carian_crown/hurt.png"
-		},
-		"effects": ["moonlight_aura"],
-		"cosmetic_only": true
-	},
+## Whether data has been loaded
+var _loaded: bool = false
 
-	"steam_1245620_STARSCOURGE_RADAHN": {
-		"item_id": "radahns_greatswords",
-		"item_name": "Starscourge Greatswords",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.GREATSWORD,
-		"rarity": ItemRarity.UNCOMMON,
-		"description": "Paired greatswords wielded by the Starscourge.",
-		"lore": "He held back the stars. Now, you carry that burden.",
-		"achievement_name": "Starscourge Radahn",
-		"unlock_percent": 38.7,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/radahns_greatswords.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/radahns_greatswords/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/radahns_greatswords/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/radahns_greatswords/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/radahns_greatswords/hurt.png"
-		},
-		"effects": ["gravity_particles", "purple_glow"],
-		"stats": {"damage_bonus": 3},
-		"cosmetic_only": false
-	},
+# ═══════════════════════════════════════════════════════════════════════════════
+# INITIALIZATION
+# ═══════════════════════════════════════════════════════════════════════════════
 
-	# Rare Tier (5-15% unlock) - Late game / Optional bosses
-	"steam_1245620_MALENIA_BLADE": {
-		"item_id": "hand_of_malenia",
-		"item_name": "Hand of Malenia",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.KATANA,
-		"rarity": ItemRarity.RARE,
-		"description": "Blade of Malenia, Blade of Miquella.",
-		"lore": "I am Malenia, and I have never known defeat.",
-		"achievement_name": "Malenia, Blade of Miquella",
-		"unlock_percent": 32.4,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/hand_of_malenia.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/hand_of_malenia/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/hand_of_malenia/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/hand_of_malenia/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/hand_of_malenia/hurt.png"
-		},
-		"effects": ["scarlet_rot_trail", "flower_petals"],
-		"stats": {"damage_bonus": 4, "lifesteal": 1},
-		"cosmetic_only": false
-	},
+func _ready() -> void:
+	_load_from_json()
 
-	# Epic Tier (1-5% unlock) - Legendary weapons/completionist
-	"steam_1245620_LEGENDARY_ARMAMENTS": {
-		"item_id": "elden_armory_chest",
-		"item_name": "Elden Armory Chestplate",
-		"item_type": ItemType.ARMOR_CHEST,
-		"rarity": ItemRarity.EPIC,
-		"description": "Bronze chestplate blessed by all legendary armaments.",
-		"lore": "The bearer has touched every legendary weapon in the Lands Between.",
-		"achievement_name": "Legendary Armaments",
-		"unlock_percent": 11.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/elden_armory_chest.png",
-			"walk": FORGED_ITEMS_BASE + "armor/chest/elden_armory/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/chest/elden_armory/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/chest/elden_armory/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/chest/elden_armory/hurt.png"
-		},
-		"effects": ["golden_sparkle"],
-		"cosmetic_only": true
-	},
+## Load all item data from JSON file
+func _load_from_json() -> void:
+	if _loaded:
+		return
 
-	# Legendary Tier (<1% unlock) - Platinum / 100% completion
-	"steam_1245620_ELDEN_LORD": {
-		"item_id": "elden_lord_helm",
-		"item_name": "Elden Lord's Greathelm",
-		"item_type": ItemType.ARMOR_HEAD,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "Golden greathelm of one who claimed the Elden Ring.",
-		"lore": "Rise, Tarnished. Claim your rightful throne.",
-		"achievement_name": "Elden Ring",
-		"unlock_percent": 8.7,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/elden_lord_helm.png",
-			"walk": FORGED_ITEMS_BASE + "armor/head/elden_lord/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/head/elden_lord/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/head/elden_lord/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/head/elden_lord/hurt.png"
-		},
-		"effects": ["erdtree_blessing", "golden_leaves", "light_rays"],
-		"cosmetic_only": true
-	},
+	var file = FileAccess.open(ITEMS_JSON_PATH, FileAccess.READ)
+	if not file:
+		push_error("ForgeItemDB: Failed to open %s" % ITEMS_JSON_PATH)
+		return
 
-	# Fingerprint Stone Shield - rare greatshield for poise/tank builds
-	"steam_1245620_FINGERPRINT_STONE": {
-		"item_id": "fingerprint_stone_shield",
-		"item_name": "Fingerprint Stone Shield",
-		"item_type": ItemType.SHIELD,
-		"rarity": ItemRarity.EPIC,
-		"description": "A great stone shield with an intricately carved fingerprint design.",
-		"lore": "One of the heaviest of all greatshields. Provides unmatched stability.",
-		"achievement_name": "Legendary Armaments",  # From collecting all legendary armaments
-		"unlock_percent": 4.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "shields/fingerprint_stone_shield_v2.png",
-			"walk": FORGED_ITEMS_BASE + "shields/fingerprint_stone_shield/standard/walk.png",
-			"slash": FORGED_ITEMS_BASE + "shields/fingerprint_stone_shield/standard/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "shields/fingerprint_stone_shield/standard/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "shields/fingerprint_stone_shield/standard/hurt.png"
-		},
-		"effects": ["stone_glow"],
-		"stats": {"defense_bonus": 5, "poise_bonus": 10},
-		"cosmetic_only": false
-	},
+	var json = JSON.new()
+	var error = json.parse(file.get_as_text())
+	file.close()
 
-	# ═══════════════════════════════════════════════════════════════════════════
-	# DARK SOULS 3 (Steam App ID: 374320)
-	# 43 achievements - Classic FromSoftware
-	# ═══════════════════════════════════════════════════════════════════════════
+	if error != OK:
+		push_error("ForgeItemDB: JSON parse error at line %d: %s" % [json.get_error_line(), json.get_error_message()])
+		return
 
-	"steam_374320_IUDEX_GUNDYR": {
-		"item_id": "coiled_sword_fragment",
-		"item_name": "Coiled Sword Fragment",
-		"item_type": ItemType.ACCESSORY,
-		"rarity": ItemRarity.COMMON,
-		"description": "A fragment of the sword that links the First Flame.",
-		"lore": "The first step on a long, dark journey.",
-		"achievement_name": "Iudex Gundyr",
-		"unlock_percent": 85.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "accessories/coiled_sword_fragment.png"
-		},
-		"effects": ["ember_glow"],
-		"cosmetic_only": true
-	},
+	_json_data = json.data
 
-	"steam_374320_ABYSS_WATCHERS": {
-		"item_id": "farron_greatsword",
-		"item_name": "Farron Greatsword",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.GREATSWORD,
-		"rarity": ItemRarity.UNCOMMON,
-		"description": "Greatsword of the Abyss Watchers.",
-		"lore": "They partook of wolf blood, and hunted the abyss.",
-		"achievement_name": "Abyss Watchers",
-		"unlock_percent": 48.3,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/farron_greatsword.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/farron_greatsword/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/farron_greatsword/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/farron_greatsword/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/farron_greatsword/hurt.png"
-		},
-		"effects": ["wolf_blood_aura"],
-		"stats": {"damage_bonus": 2},
-		"cosmetic_only": false
-	},
+	# Build items_by_id lookup from items array
+	var items_array = _json_data.get("items", [])
+	for item in items_array:
+		var item_id = item.get("item_id", "")
+		if item_id != "":
+			# Convert JSON format to FORGE_ITEMS format
+			var converted = _convert_json_item(item)
+			_items_by_id[item_id] = converted
 
-	"steam_374320_NAMELESS_KING": {
-		"item_id": "dragonslayer_swordspear",
-		"item_name": "Dragonslayer Swordspear",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.SPEAR,
-		"rarity": ItemRarity.RARE,
-		"description": "Cross-spear of the Nameless King.",
-		"lore": "The firstborn son, erased from history.",
-		"achievement_name": "Nameless King",
-		"unlock_percent": 21.7,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/dragonslayer_swordspear.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/dragonslayer_swordspear/walk.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/dragonslayer_swordspear/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/dragonslayer_swordspear/hurt.png"
-		},
-		"effects": ["lightning_crackle", "storm_particles"],
-		"stats": {"damage_bonus": 3, "lightning_damage": 2},
-		"cosmetic_only": false
-	},
+	# Build FORGE_ITEMS from achievement_mappings
+	var mappings = _json_data.get("achievement_mappings", {})
+	for key in mappings:
+		# Skip comment keys
+		if key.begins_with("_"):
+			continue
 
-	"steam_374320_THE_DARK_SOUL": {
-		"item_id": "coiled_sword",
-		"item_name": "Coiled Sword",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.SWORD,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "A sword twisted by the First Flame.",
-		"lore": "Wielded by those who linked the fire. All achievements obtained.",
-		"achievement_name": "The Dark Soul",
-		"unlock_percent": 3.8,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/coiled_sword.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/coiled_sword/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/coiled_sword/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/coiled_sword/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/coiled_sword/hurt.png"
-		},
-		"effects": ["ember_trail", "flame_idle_glow", "heat_distortion"],
-		"stats": {"damage_bonus": 5, "fire_damage": 3},
-		"cosmetic_only": false
-	},
+		var item_id = mappings[key]
+		if _items_by_id.has(item_id):
+			# Convert achievement mapping key format (app_id:api_name) to our format (provider_appid_apiname)
+			var achievement_key = _convert_mapping_key_to_achievement_key(key)
+			FORGE_ITEMS[achievement_key] = _items_by_id[item_id]
 
-	"steam_374320_TO_LINK_THE_FIRST_FLAME": {
-		"item_id": "ashen_armor",
-		"item_name": "Ashen Armor",
-		"item_type": ItemType.ARMOR_CHEST,
-		"rarity": ItemRarity.UNCOMMON,
-		"description": "Chainmail worn by the Ashen One.",
-		"lore": "The ash seeketh embers, and so the journey begins.",
-		"achievement_name": "To Link the First Flame",
-		"unlock_percent": 35.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/ashen_armor.png",
-			"walk": FORGED_ITEMS_BASE + "armor/chest/ashen_armor/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/chest/ashen_armor/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/chest/ashen_armor/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/chest/ashen_armor/hurt.png"
-		},
-		"effects": ["ember_glow"],
-		"stats": {"defense_bonus": 2},
-		"cosmetic_only": false
-	},
+	_loaded = true
+	print("ForgeItemDB: Loaded %d items, %d achievement mappings" % [_items_by_id.size(), FORGE_ITEMS.size()])
 
-	# ═══════════════════════════════════════════════════════════════════════════
-	# STARDEW VALLEY (Steam App ID: 413150)
-	# 49 achievements - Cozy farming, wide appeal
-	# ═══════════════════════════════════════════════════════════════════════════
+## Convert JSON item format to internal FORGE_ITEMS format
+func _convert_json_item(json_item: Dictionary) -> Dictionary:
+	var item = {}
 
-	"steam_413150_GREENHORN": {
-		"item_id": "straw_hat",
-		"item_name": "Farmer's Straw Hat",
-		"item_type": ItemType.ARMOR_HEAD,
-		"rarity": ItemRarity.COMMON,
-		"description": "A humble hat for an honest farmer.",
-		"lore": "Every legend starts somewhere. Yours started in the valley.",
-		"achievement_name": "Greenhorn",
-		"unlock_percent": 89.4,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/straw_hat.png",
-			"walk": FORGED_ITEMS_BASE + "armor/head/straw_hat/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/head/straw_hat/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/head/straw_hat/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/head/straw_hat/hurt.png"
-		},
-		"effects": [],
-		"cosmetic_only": true
-	},
+	# Direct copies (with null safety)
+	item["item_id"] = _safe_string(json_item.get("item_id"), "")
+	item["item_name"] = _safe_string(json_item.get("item_name"), "Unknown")
+	item["description"] = _safe_string(json_item.get("description"), "")
+	item["lore"] = _safe_string(json_item.get("lore"), "")
+	item["cosmetic_only"] = json_item.get("cosmetic_only", true) if json_item.get("cosmetic_only") != null else true
 
-	"steam_413150_SINGULAR_TALENT": {
-		"item_id": "master_hoe",
-		"item_name": "Master Farmer's Hoe",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.AXE,  # Closest to hoe mechanically
-		"rarity": ItemRarity.UNCOMMON,
-		"description": "A golden hoe for the dedicated farmer.",
-		"lore": "Level 10 in a skill. The valley remembers your dedication.",
-		"achievement_name": "Singular Talent",
-		"unlock_percent": 34.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "tools/master_hoe.png",
-			"walk": FORGED_ITEMS_BASE + "tools/master_hoe/walk.png",
-			"slash": FORGED_ITEMS_BASE + "tools/master_hoe/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "tools/master_hoe/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "tools/master_hoe/hurt.png"
-		},
-		"effects": ["golden_sparkle"],
-		"stats": {"damage_bonus": 1},
-		"cosmetic_only": false
-	},
+	# Convert item_type string to enum
+	var item_type_str = _safe_string(json_item.get("item_type"), "accessory")
+	item["item_type"] = _item_type_string_to_enum(item_type_str)
 
-	"steam_413150_MYSTERY_OF_STARDROPS": {
-		"item_id": "stardrop_pendant",
-		"item_name": "Stardrop Pendant",
-		"item_type": ItemType.ACCESSORY,
-		"rarity": ItemRarity.EPIC,
-		"description": "A pendant containing essence of all Stardrops.",
-		"lore": "You found every Stardrop. The cosmos smile upon you.",
-		"achievement_name": "Mystery of the Stardrops",
-		"unlock_percent": 6.8,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "accessories/stardrop_pendant.png"
-		},
-		"effects": ["stardust_trail", "healing_aura"],
-		"cosmetic_only": true
-	},
+	# Convert rarity string to enum
+	var rarity_str = _safe_string(json_item.get("base_rarity"), "common")
+	item["rarity"] = _rarity_string_to_enum(rarity_str)
 
-	"steam_413150_FECTOR_CHALLENGE": {
-		"item_id": "prairie_king_cape",
-		"item_name": "Prairie King's Poncho",
-		"item_type": ItemType.CAPE,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "Dusty poncho of a legendary gunslinger.",
-		"lore": "You beat Journey of the Prairie King without dying. Legendary.",
-		"achievement_name": "Fector's Challenge",
-		"unlock_percent": 0.8,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "capes/prairie_king_cape.png",
-			"walk": FORGED_ITEMS_BASE + "capes/prairie_king/walk.png",
-			"slash": FORGED_ITEMS_BASE + "capes/prairie_king/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "capes/prairie_king/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "capes/prairie_king/hurt.png"
-		},
-		"effects": ["pixel_sparkle", "dust_trail"],
-		"cosmetic_only": true
-	},
+	# Convert weapon_type string to enum (if applicable)
+	var weapon_type = json_item.get("weapon_type")
+	if weapon_type != null and weapon_type is String and weapon_type != "":
+		item["weapon_class"] = _weapon_class_string_to_enum(weapon_type)
 
-	# ═══════════════════════════════════════════════════════════════════════════
-	# HOLLOW KNIGHT (Steam App ID: 367520)
-	# 63 achievements - Metroidvania classic
-	# ═══════════════════════════════════════════════════════════════════════════
+	# Build sprites dictionary from visuals
+	var visuals = json_item.get("visuals")
+	if visuals == null or not visuals is Dictionary:
+		visuals = {}
+	var sprites = {}
 
-	"steam_367520_COMPLETION": {
-		"item_id": "pure_nail",
-		"item_name": "Pure Nail",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.SWORD,
-		"rarity": ItemRarity.UNCOMMON,
-		"description": "The ultimate form of the Knight's nail.",
-		"lore": "Forged in the pale ore of Hallownest.",
-		"achievement_name": "Completion",
-		"unlock_percent": 35.1,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/pure_nail.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/pure_nail/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/pure_nail/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/pure_nail/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/pure_nail/hurt.png"
-		},
-		"effects": ["void_particles"],
-		"stats": {"damage_bonus": 2},
-		"cosmetic_only": false
-	},
+	# Icon path - convert from web path to Godot path
+	var icon_url = _safe_string(visuals.get("icon_url"), "")
+	if icon_url != "":
+		# Convert /static/items/icons/xxx.png to res://assets/icons/forged/xxx.png
+		var icon_filename = icon_url.get_file()
+		# Determine subfolder based on item type
+		var subfolder = _get_icon_subfolder(item["item_type"])
+		sprites["icon"] = FORGED_ICONS_BASE + subfolder + "/" + icon_filename
 
-	"steam_367520_VOID": {
-		"item_id": "shade_cloak",
-		"item_name": "Shade Cloak",
-		"item_type": ItemType.CAPE,
-		"rarity": ItemRarity.RARE,
-		"description": "A cloak woven from pure void.",
-		"lore": "Embrace the void. Become one with the darkness.",
-		"achievement_name": "Void",
-		"unlock_percent": 12.4,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "capes/shade_cloak.png",
-			"walk": FORGED_ITEMS_BASE + "capes/shade_cloak/walk.png",
-			"slash": FORGED_ITEMS_BASE + "capes/shade_cloak/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "capes/shade_cloak/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "capes/shade_cloak/hurt.png"
-		},
-		"effects": ["void_trail", "shadow_dash"],
-		"cosmetic_only": true
-	},
+	# Sprite folder - build full paths
+	var sprite_folder = _safe_string(visuals.get("sprite_folder"), "")
+	if sprite_folder != "":
+		sprites["walk"] = FORGED_ITEMS_BASE + sprite_folder + "/walk.png"
+		sprites["slash"] = FORGED_ITEMS_BASE + sprite_folder + "/slash.png"
+		sprites["thrust"] = FORGED_ITEMS_BASE + sprite_folder + "/thrust.png"
+		sprites["hurt"] = FORGED_ITEMS_BASE + sprite_folder + "/hurt.png"
 
-	"steam_367520_EMBRACE_THE_VOID": {
-		"item_id": "void_heart",
-		"item_name": "Void Heart Charm",
-		"item_type": ItemType.ACCESSORY,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "A charm pulsing with void energy.",
-		"lore": "You completed the Pantheon of Hallownest. True master.",
-		"achievement_name": "Embrace the Void",
-		"unlock_percent": 1.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "accessories/void_heart.png"
-		},
-		"effects": ["void_aura", "shadow_tendrils", "dark_burst"],
-		"cosmetic_only": true
-	},
+	item["sprites"] = sprites
 
-	# ═══════════════════════════════════════════════════════════════════════════
-	# HADES (Steam App ID: 1145360)
-	# 49 achievements - Roguelike masterpiece
-	# ═══════════════════════════════════════════════════════════════════════════
+	# Effects array
+	var effects_obj = json_item.get("effects")
+	if effects_obj == null or not effects_obj is Dictionary:
+		effects_obj = {}
+	var effects_array = []
+	var passive_effects = effects_obj.get("passive")
+	if passive_effects != null and passive_effects is Array:
+		effects_array.append_array(passive_effects)
+	item["effects"] = effects_array
 
-	"steam_1145360_ESCAPED_TARTARUS": {
-		"item_id": "stygian_blade",
-		"item_name": "Stygian Blade",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.SWORD,
-		"rarity": ItemRarity.COMMON,
-		"description": "Standard blade of the underworld.",
-		"lore": "Your first escape from Tartarus. Many more to come.",
-		"achievement_name": "Escaped Tartarus",
-		"unlock_percent": 76.8,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/stygian_blade.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/stygian_blade/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/stygian_blade/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/stygian_blade/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/stygian_blade/hurt.png"
-		},
-		"effects": ["blood_red_glow"],
-		"stats": {"damage_bonus": 1},
-		"cosmetic_only": false
-	},
+	# Glow color
+	var glow_color = _safe_string(visuals.get("glow_color"), "")
+	if glow_color != "":
+		item["glow_color"] = glow_color
 
-	"steam_1145360_SLAYER": {
-		"item_id": "adamant_rail",
-		"item_name": "Adamant Rail",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.GUN,  # Ranged weapon - uses Skorpio body for gun animations
-		"rarity": ItemRarity.UNCOMMON,
-		"description": "The legendary rail gun of the underworld.",
-		"lore": "1000 enemies slain. Death incarnate.",
-		"achievement_name": "Slayer",
-		"unlock_percent": 28.5,
-		"is_two_handed": true,  # Guns block offhand slot
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/adamant_rail.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/adamant_rail/walk.png"
-			# Note: Guns don't have slash/thrust/hurt - they use walk animation for all poses
-		},
-		"effects": ["infernal_glow"],
-		"stats": {"damage_bonus": 2},
-		"cosmetic_only": false
-	},
+	# Stats
+	var stats = json_item.get("stats")
+	if stats != null and stats is Dictionary and not stats.is_empty():
+		item["stats"] = stats
 
-	"steam_1145360_END_OF_STORY": {
-		"item_id": "zagreus_helm",
-		"item_name": "Prince's Laurel Crown",
-		"item_type": ItemType.ARMOR_HEAD,
-		"rarity": ItemRarity.EPIC,
-		"description": "Crown of the Prince of the Underworld.",
-		"lore": "You completed the epilogue. The whole story, told.",
-		"achievement_name": "End of Story",
-		"unlock_percent": 4.7,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/zagreus_helm.png",
-			"walk": FORGED_ITEMS_BASE + "armor/head/zagreus_helm/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/head/zagreus_helm/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/head/zagreus_helm/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/head/zagreus_helm/hurt.png"
-		},
-		"effects": ["divine_glow", "laurel_particles"],
-		"cosmetic_only": true
-	},
+	# Gun config
+	var gun_config = json_item.get("gun_config")
+	if gun_config != null and gun_config is Dictionary and not gun_config.is_empty():
+		item["gun_config"] = gun_config
 
-	# ═══════════════════════════════════════════════════════════════════════════
-	# TERRARIA (Steam App ID: 105600)
-	# 104 achievements - Sandbox adventure
-	# ═══════════════════════════════════════════════════════════════════════════
+	# Two-handed flag
+	if json_item.get("is_two_handed", false):
+		item["is_two_handed"] = true
 
-	"steam_105600_EYE_OF_CTHULHU": {
-		"item_id": "eye_of_cthulhu_shield",
-		"item_name": "Eye of Cthulhu Shield",
-		"item_type": ItemType.SHIELD,
-		"rarity": ItemRarity.COMMON,
-		"description": "A shield fashioned from the Eye's remains.",
-		"lore": "Your first major boss. The world trembles.",
-		"achievement_name": "Slayer of Worlds",
-		"unlock_percent": 54.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "shields/eye_shield.png",
-			"walk": FORGED_ITEMS_BASE + "shields/eye_shield/walk.png"
-		},
-		"effects": ["eerie_glow"],
-		"cosmetic_only": true
-	},
+	# Multi-slash flag
+	if json_item.get("multi_slash", false):
+		item["multi_slash"] = true
 
-	"steam_105600_CHAMPION_OF_TERRARIA": {
-		"item_id": "terra_blade",
-		"item_name": "Terra Blade",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.SWORD,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "The ultimate sword, forged from night and light.",
-		"lore": "You defeated Moon Lord. Champion of Terraria.",
-		"achievement_name": "Champion of Terraria",
-		"unlock_percent": 5.8,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/terra_blade.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/terra_blade/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/terra_blade/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/terra_blade/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/terra_blade/hurt.png"
-		},
-		"effects": ["terra_beam", "green_glow", "sword_projectile"],
-		"stats": {"damage_bonus": 5},
-		"cosmetic_only": false
-	},
+	# Visual override slots (for outfits like loremaster_hood)
+	var visual_overrides = json_item.get("visual_override_slots")
+	if visual_overrides != null and visual_overrides is Dictionary and not visual_overrides.is_empty():
+		item["visual_override_slots"] = visual_overrides
 
-	# ═══════════════════════════════════════════════════════════════════════════
-	# SEKIRO (Steam App ID: 814380)
-	# 34 achievements - Shinobi action
-	# ═══════════════════════════════════════════════════════════════════════════
+	return item
 
-	"steam_814380_GYOUBU_MASATAKA": {
-		"item_id": "gyoubu_spear",
-		"item_name": "Gyoubu's Broken Horn Spear",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.SPEAR,
-		"rarity": ItemRarity.COMMON,
-		"description": "Spear of the demon general.",
-		"lore": "MY NAME IS GYOUBU MASATAKA ONIWA!",
-		"achievement_name": "Gyoubu Masataka Oniwa",
-		"unlock_percent": 68.4,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/gyoubu_spear.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/gyoubu_spear/walk.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/gyoubu_spear/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/gyoubu_spear/hurt.png"
-		},
-		"effects": [],
-		"stats": {"damage_bonus": 1},
-		"cosmetic_only": false
-	},
+## Safe string getter - returns default if value is null or not a string
+func _safe_string(value, default: String) -> String:
+	if value == null:
+		return default
+	if value is String:
+		return value
+	return default
 
-	"steam_814380_ALL_SKILLS": {
-		"item_id": "mortal_blade",
-		"item_name": "Mortal Blade",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.KATANA,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "A blade that can kill the undying.",
-		"lore": "All skills mastered. True Shinobi.",
-		"achievement_name": "All Skills",
-		"unlock_percent": 7.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/mortal_blade.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/mortal_blade/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/mortal_blade/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/mortal_blade/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/mortal_blade/hurt.png"
-		},
-		"effects": ["crimson_slash", "death_kanji", "blood_mist"],
-		"stats": {"damage_bonus": 4},
-		"cosmetic_only": false
-	},
+## Convert achievement mapping key format to FORGE_ITEMS key format
+## Input: "app_id:api_name" or "provider:api_name"
+## Output: "steam_appid_apiname" or "provider_apiname"
+func _convert_mapping_key_to_achievement_key(mapping_key: String) -> String:
+	var parts = mapping_key.split(":")
+	if parts.size() < 2:
+		return mapping_key
 
-	# ═══════════════════════════════════════════════════════════════════════════
-	# THE WITCHER 3 (Steam App ID: 292030)
-	# 78 achievements - Open world RPG
-	# ═══════════════════════════════════════════════════════════════════════════
+	var provider_or_appid = parts[0]
+	var api_name = parts[1]
 
-	"steam_292030_LILAC_GOOSEBERRIES": {
-		"item_id": "witcher_silver_sword",
-		"item_name": "Witcher's Silver Sword",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.SWORD,
-		"rarity": ItemRarity.COMMON,
-		"description": "A silver blade for hunting monsters.",
-		"lore": "Wind's howling. Time to prepare.",
-		"achievement_name": "Lilac and Gooseberries",
-		"unlock_percent": 81.3,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/witcher_silver_sword.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/witcher_silver_sword/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/witcher_silver_sword/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/witcher_silver_sword/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/witcher_silver_sword/hurt.png"
-		},
-		"effects": ["silver_gleam"],
-		"stats": {"damage_bonus": 1},
-		"cosmetic_only": false
-	},
+	# Check if it's a numeric Steam app ID
+	if provider_or_appid.is_valid_int():
+		return "steam_%s_%s" % [provider_or_appid, api_name]
+	else:
+		# Provider like "xbox", "psn", "battlenet", "discord", "github", "roblox"
+		return "%s_%s" % [provider_or_appid, api_name]
 
-	"steam_292030_WALKED_PATH": {
-		"item_id": "grandmaster_armor",
-		"item_name": "Grandmaster Armor",
-		"item_type": ItemType.ARMOR_CHEST,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "Armor of a legendary Witcher.",
-		"lore": "Completed the game on Death March difficulty. The White Wolf's finest.",
-		"achievement_name": "Walked the Path",
-		"unlock_percent": 4.1,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/grandmaster_armor.png",
-			"walk": FORGED_ITEMS_BASE + "armor/chest/grandmaster_armor/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/chest/grandmaster_armor/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/chest/grandmaster_armor/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/chest/grandmaster_armor/hurt.png"
-		},
-		"effects": ["wolf_school_glow", "danger_sense"],
-		"stats": {"defense_bonus": 4},
-		"cosmetic_only": false
-	},
+## Get icon subfolder based on item type
+func _get_icon_subfolder(item_type: ItemType) -> String:
+	match item_type:
+		ItemType.WEAPON:
+			return "weapons"
+		ItemType.ARMOR_HEAD, ItemType.ARMOR_CHEST, ItemType.ARMOR_ARMS, ItemType.ARMOR_LEGS, ItemType.ARMOR_HANDS, ItemType.ARMOR_FEET:
+			return "armor"
+		ItemType.SHIELD:
+			return "shields"
+		ItemType.CAPE:
+			return "capes"
+		ItemType.ACCESSORY, ItemType.RING, ItemType.AMULET:
+			return "accessories"
+		_:
+			return "misc"
 
-	# ═══════════════════════════════════════════════════════════════════════════
-	# HALO: MASTER CHIEF COLLECTION (Steam App ID: 976730) / Xbox
-	# Legendary campaign completion - the ultimate Halo achievement
-	# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENUM CONVERSIONS
+# ═══════════════════════════════════════════════════════════════════════════════
 
-	"xbox_HALO_LEGENDARY": {
-		"item_id": "halo_battle_rifle",
-		"item_name": "Halo Battle Rifle",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.BATTLE_RIFLE,
-		"rarity": ItemRarity.RARE,
-		"description": "Standard-issue UNSC battle rifle.",
-		"lore": "Finished the fight on Legendary.",
-		"achievement_name": "Legendary Campaign Complete",
-		"unlock_percent": 5.2,
-		"is_two_handed": true,  # Guns block offhand slot
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/halo_battle_rifle.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/halo_battle_rifle/walk.png"
-			# Note: Battle rifles use walk animation only (like railgun)
-		},
-		"effects": ["halo_green_glow"],
-		"glow_color": "#00CED1",
-		"stats": {"damage_bonus": 2},
-		"cosmetic_only": false,
-		"gun_config": {
-			"gun_subtype": "battle_rifle",
-			"burst_count": 3,
-			"burst_delay": 0.10
-		}
-	},
+func _rarity_string_to_enum(rarity_str: String) -> ItemRarity:
+	match rarity_str.to_lower():
+		"common": return ItemRarity.COMMON
+		"uncommon": return ItemRarity.UNCOMMON
+		"rare": return ItemRarity.RARE
+		"epic": return ItemRarity.EPIC
+		"legendary": return ItemRarity.LEGENDARY
+		_: return ItemRarity.COMMON
 
-	# ═══════════════════════════════════════════════════════════════════════════
-	# PLAYSTATION (PSN Trophies)
-	# Platinum trophies from PS-exclusive games
-	# ═══════════════════════════════════════════════════════════════════════════
+func _item_type_string_to_enum(type_str: String) -> ItemType:
+	match type_str.to_lower():
+		"weapon": return ItemType.WEAPON
+		"armor_head": return ItemType.ARMOR_HEAD
+		"armor_chest": return ItemType.ARMOR_CHEST
+		"armor_arms": return ItemType.ARMOR_ARMS
+		"armor_legs": return ItemType.ARMOR_LEGS
+		"armor_hands": return ItemType.ARMOR_HANDS
+		"armor_feet": return ItemType.ARMOR_FEET
+		"cape": return ItemType.CAPE
+		"shield": return ItemType.SHIELD
+		"accessory": return ItemType.ACCESSORY
+		"ring": return ItemType.RING
+		"amulet": return ItemType.AMULET
+		"emote": return ItemType.EMOTE
+		"title": return ItemType.TITLE
+		_: return ItemType.ACCESSORY
 
-	"psn_BLOODBORNE_PLATINUM": {
-		"item_id": "saw_cleaver",
-		"item_name": "Saw Cleaver",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.SWORD,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "A trick weapon of the Hunters.",
-		"lore": "Tonight, Gehrman joins the hunt.",
-		"achievement_name": "Bloodborne Platinum",
-		"unlock_percent": 6.8,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/saw_cleaver.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/saw_cleaver/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/saw_cleaver/slash.png",
-			"slash2": FORGED_ITEMS_BASE + "weapons/saw_cleaver/slash2.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/saw_cleaver/hurt.png"
-		},
-		"effects": ["blood_particles"],
-		"glow_color": "#8B0000",
-		"stats": {"damage_bonus": 4},
-		"cosmetic_only": false,
-		"multi_slash": true
-	},
-
-	"psn_DEMONS_SOULS_PLATINUM": {
-		"item_id": "false_king_helm",
-		"item_name": "False King's Helm",
-		"item_type": ItemType.ARMOR_HEAD,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "Horned helm of the Old One's false king.",
-		"lore": "The Old One has awakened. The fog covers all.",
-		"achievement_name": "Demon's Souls Platinum",
-		"unlock_percent": 4.5,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/false_king_helm.png",
-			"walk": FORGED_ITEMS_BASE + "armor/head/false_king_helm/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/head/false_king_helm/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/head/false_king_helm/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/head/false_king_helm/hurt.png"
-		},
-		"effects": ["soul_drain", "fog_wisps"],
-		"glow_color": "#FFD700",
-		"cosmetic_only": true
-	},
-
-	# ═══════════════════════════════════════════════════════════════════════════
-	# DEAD CELLS (Steam App ID: 588650)
-	# Roguelite action - Boss Cell difficulty achievements
-	# ═══════════════════════════════════════════════════════════════════════════
-
-	"steam_588650_FIVE_BOSS_CELLS": {
-		"item_id": "king_slayer",
-		"item_name": "King Slayer",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.SWORD,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "Blade of the Beheaded.",
-		"lore": "5 Boss Cells active. The true Dead Cells experience.",
-		"achievement_name": "5 Boss Cells Active",
-		"unlock_percent": 1.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/king_slayer.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/king_slayer/walk.png",
-			"slash": FORGED_ITEMS_BASE + "weapons/king_slayer/slash.png",
-			"slash2": FORGED_ITEMS_BASE + "weapons/king_slayer/slash2.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/king_slayer/hurt.png"
-		},
-		"effects": ["cell_particles"],
-		"glow_color": "#00FF00",
-		"stats": {"damage_bonus": 4},
-		"cosmetic_only": false,
-		"multi_slash": true
-	},
-
-	# ═══════════════════════════════════════════════════════════════════════════
-	# CELESTE (Steam App ID: 504230)
-	# Precision platformer - Legendary strawberry achievements
-	# ═══════════════════════════════════════════════════════════════════════════
-
-	"steam_504230_FAREWELL_GOLDEN": {
-		"item_id": "winged_strawberry",
-		"item_name": "Winged Golden Strawberry",
-		"item_type": ItemType.ACCESSORY,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "A golden strawberry with ethereal wings.",
-		"lore": "Farewell chapter, zero deaths. Perfection incarnate.",
-		"achievement_name": "Farewell Golden Berry",
-		"unlock_percent": 0.8,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "accessories/winged_strawberry.png"
-		},
-		"effects": ["golden_sparkle"],
-		"glow_color": "#FFD700",
-		"cosmetic_only": true
-	},
-
-	# ═══════════════════════════════════════════════════════════════════════════
-	# SLAY THE SPIRE (Steam App ID: 646570)
-	# Roguelike deckbuilder - Heart kill achievements
-	# ═══════════════════════════════════════════════════════════════════════════
-
-	"steam_646570_ASCENSION_20_HEART": {
-		"item_id": "heart_shard",
-		"item_name": "Corrupted Heart Shard",
-		"item_type": ItemType.ACCESSORY,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "A shard of the Corrupted Heart.",
-		"lore": "A20 Heart kill with all characters. True mastery.",
-		"achievement_name": "Ascension 20 Heart Kill",
-		"unlock_percent": 2.1,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "accessories/heart_shard.png"
-		},
-		"effects": ["heart_pulse"],
-		"glow_color": "#FF6B6B",
-		"cosmetic_only": true
-	},
-
-	"steam_646570_IRONCLAD_VICTORY": {
-		"item_id": "ironclad_armor",
-		"item_name": "Ironclad's Plate",
-		"item_type": ItemType.ARMOR_CHEST,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "Battle-worn plate armor of the Ironclad.",
-		"lore": "Forged in countless runs. Strike, Defend, repeat.",
-		"achievement_name": "Ironclad Victory",
-		"unlock_percent": 8.5,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/ironclad_armor.png",
-			"walk": FORGED_ITEMS_BASE + "armor/chest/ironclad_armor/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/chest/ironclad_armor/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/chest/ironclad_armor/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/chest/ironclad_armor/hurt.png"
-		},
-		"effects": ["golden_glow"],
-		"stats": {"defense_bonus": 4, "health_bonus": 10},
-		"glow_color": "#FFD700",
-		"cosmetic_only": false
-	},
-
-	# ═══════════════════════════════════════════════════════════════════════════
-	# PORTAL 2 (Steam App ID: 620)
-	# Puzzle game - Story completion achievements
-	# ═══════════════════════════════════════════════════════════════════════════
-
-	"steam_620_PORTAL_LUNACY": {
-		"item_id": "companion_cube",
-		"item_name": "Companion Cube",
-		"item_type": ItemType.ACCESSORY,
-		"rarity": ItemRarity.UNCOMMON,
-		"description": "The Weighted Companion Cube.",
-		"lore": "It will never threaten to stab you. And in fact, cannot speak.",
-		"achievement_name": "Lunacy",
-		"unlock_percent": 40.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "accessories/companion_cube.png"
-		},
-		"effects": ["portal_glow"],
-		"glow_color": "#FFB6C1",
-		"cosmetic_only": true
-	},
-
-	# ═══════════════════════════════════════════════════════════════════════════
-	# HALF-LIFE 2 (Steam App ID: 220)
-	# FPS classic - Exploration achievements
-	# ═══════════════════════════════════════════════════════════════════════════
-
-	"steam_220_LAMBDA_LOCATOR": {
-		"item_id": "lambda_badge",
-		"item_name": "Lambda Badge",
-		"item_type": ItemType.ACCESSORY,
-		"rarity": ItemRarity.RARE,
-		"description": "The symbol of resistance.",
-		"lore": "Found all lambda caches. Rise and shine, Mr. Freeman.",
-		"achievement_name": "Lambda Locator",
-		"unlock_percent": 5.1,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "accessories/lambda_badge.png"
-		},
-		"effects": ["orange_glow"],
-		"glow_color": "#FF8C00",
-		"cosmetic_only": true
-	},
-
-	# ═══════════════════════════════════════════════════════════════════════════
-	# LEFT 4 DEAD 2 (Steam App ID: 550)
-	# Zombie co-op - Survival achievements
-	# ═══════════════════════════════════════════════════════════════════════════
-
-	"steam_550_ZOMBIE_GENOCIDEST": {
-		"item_id": "survivor_vest",
-		"item_name": "Survivor's Vest",
-		"item_type": ItemType.ARMOR_CHEST,
-		"rarity": ItemRarity.RARE,
-		"description": "Battle-worn tactical vest of a zombie apocalypse survivor.",
-		"lore": "53,595 infected eliminated. The horde never stood a chance.",
-		"achievement_name": "Zombie Genocidest",
-		"unlock_percent": 15.3,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/survivor_vest.png",
-			"walk": FORGED_ITEMS_BASE + "armor/chest/survivor_vest/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/chest/survivor_vest/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/chest/survivor_vest/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/chest/survivor_vest/hurt.png"
-		},
-		"effects": ["survivor_glow"],
-		"stats": {"defense_bonus": 2, "health_regen": 1},
-		"glow_color": "#556B2F",
-		"cosmetic_only": false
-	},
-
-	# ═══════════════════════════════════════════════════════════════════════════
-	# CUPHEAD (Steam App ID: 268910)
-	# Run and gun - Devil boss achievements
-	# ═══════════════════════════════════════════════════════════════════════════
-
-	"steam_268910_BEAT_DEVIL_EXPERT": {
-		"item_id": "devil_pitchfork",
-		"item_name": "Devil's Pitchfork",
-		"item_type": ItemType.WEAPON,
-		"weapon_class": WeaponClass.SPEAR,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "The Devil's personal trident.",
-		"lore": "Beat the Devil on Expert. A deal's a deal.",
-		"achievement_name": "Beat Devil on Expert",
-		"unlock_percent": 3.2,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "weapons/devil_pitchfork.png",
-			"walk": FORGED_ITEMS_BASE + "weapons/devil_pitchfork/walk.png",
-			"thrust": FORGED_ITEMS_BASE + "weapons/devil_pitchfork/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "weapons/devil_pitchfork/hurt.png"
-		},
-		"effects": ["hellfire_particles"],
-		"glow_color": "#DC143C",
-		"stats": {"damage_bonus": 4},
-		"cosmetic_only": false
-	},
-
-	# ═══════════════════════════════════════════════════════════════════════════
-	# WORLD OF WARCRAFT (Battle.net)
-	# MMO classic - Loremaster achievement (complete all zone questlines)
-	# ═══════════════════════════════════════════════════════════════════════════
-
-	"bnet_WOW_LOREMASTER": {
-		"item_id": "loremaster_hood",
-		"item_name": "Loremaster's Hood",
-		"item_type": ItemType.ARMOR_HEAD,
-		"rarity": ItemRarity.LEGENDARY,
-		"description": "Hood worn by those who have uncovered every tale.",
-		"lore": "Completed every questline in Azeroth. The story never ends.",
-		"achievement_name": "Loremaster",
-		"unlock_percent": 2.8,
-		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/loremaster_hood.png",
-			# Head slot sprites (the actual item)
-			"walk": FORGED_ITEMS_BASE + "armor/head/loremaster_hood/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/head/loremaster_hood/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/head/loremaster_hood/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/head/loremaster_hood/hurt.png"
-		},
-		# Visual override: when equipped, also renders chest and legs with robe sprites
-		# This creates a complete "outfit" look from a single head item
-		"visual_override_slots": {
-			"chest": {
-				"walk": FORGED_ITEMS_BASE + "armor/chest/loremaster_robes/walk.png",
-				"slash": FORGED_ITEMS_BASE + "armor/chest/loremaster_robes/slash.png",
-				"thrust": FORGED_ITEMS_BASE + "armor/chest/loremaster_robes/thrust.png",
-				"hurt": FORGED_ITEMS_BASE + "armor/chest/loremaster_robes/hurt.png"
-			},
-			"legs": {
-				"walk": FORGED_ITEMS_BASE + "armor/legs/loremaster_skirt/walk.png",
-				"slash": FORGED_ITEMS_BASE + "armor/legs/loremaster_skirt/slash.png",
-				"thrust": FORGED_ITEMS_BASE + "armor/legs/loremaster_skirt/thrust.png",
-				"hurt": FORGED_ITEMS_BASE + "armor/legs/loremaster_skirt/hurt.png"
-			}
-		},
-		"effects": ["arcane_glow", "knowledge_aura"],
-		"glow_color": "#9370DB",
-		"stats": {"mana_bonus": 20, "wisdom_bonus": 5},
-		"cosmetic_only": false
-	}
-}
+func _weapon_class_string_to_enum(weapon_str: String) -> WeaponClass:
+	match weapon_str.to_lower():
+		"sword": return WeaponClass.SWORD
+		"dagger": return WeaponClass.DAGGER
+		"mace": return WeaponClass.MACE
+		"spear": return WeaponClass.SPEAR
+		"staff": return WeaponClass.STAFF
+		"axe": return WeaponClass.AXE
+		"rapier": return WeaponClass.RAPIER
+		"greatsword": return WeaponClass.GREATSWORD
+		"katana": return WeaponClass.KATANA
+		"saber": return WeaponClass.SABER
+		"scimitar": return WeaponClass.SCIMITAR
+		"halberd": return WeaponClass.HALBERD
+		"pike": return WeaponClass.PIKE
+		"trident": return WeaponClass.TRIDENT
+		"flail": return WeaponClass.FLAIL
+		"scythe": return WeaponClass.SCYTHE
+		"bow": return WeaponClass.BOW
+		"crossbow": return WeaponClass.CROSSBOW
+		"gun": return WeaponClass.GUN
+		"battle_rifle": return WeaponClass.BATTLE_RIFLE
+		_: return WeaponClass.SWORD
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # LOOKUP FUNCTIONS
@@ -1006,25 +300,24 @@ func get_all_forgeable_keys() -> Array:
 
 ## Get item data by item_id (e.g., "loremaster_hood", "straw_hat")
 func get_item_by_id(item_id: String) -> Dictionary:
-	for key in FORGE_ITEMS:
-		if FORGE_ITEMS[key].get("item_id", "") == item_id:
-			return FORGE_ITEMS[key]
-	return {}
+	return _items_by_id.get(item_id, {})
 
 ## Get items by rarity
 func get_items_by_rarity(rarity: ItemRarity) -> Array:
 	var results = []
-	for key in FORGE_ITEMS:
-		if FORGE_ITEMS[key].get("rarity", ItemRarity.COMMON) == rarity:
-			results.append(FORGE_ITEMS[key])
+	for item_id in _items_by_id:
+		var item = _items_by_id[item_id]
+		if item.get("rarity", ItemRarity.COMMON) == rarity:
+			results.append(item)
 	return results
 
 ## Get items by type
 func get_items_by_type(item_type: ItemType) -> Array:
 	var results = []
-	for key in FORGE_ITEMS:
-		if FORGE_ITEMS[key].get("item_type", ItemType.ACCESSORY) == item_type:
-			results.append(FORGE_ITEMS[key])
+	for item_id in _items_by_id:
+		var item = _items_by_id[item_id]
+		if item.get("item_type", ItemType.ACCESSORY) == item_type:
+			results.append(item)
 	return results
 
 ## Get items for a specific game
@@ -1087,7 +380,7 @@ func get_item_count_by_game() -> Dictionary:
 
 ## Get total forge item count
 func get_total_item_count() -> int:
-	return FORGE_ITEMS.size()
+	return _items_by_id.size()
 
 ## Game name lookup from achievement key (for Armory display)
 const GAME_NAMES = {
@@ -1149,7 +442,7 @@ func _get_game_from_key(key: String) -> String:
 	# Steam: provider_appid_achievement
 	return GAME_NAMES.get(game_id, "Steam Game " + game_id)
 
-## Generate catalog array for Armory UI (dynamic generation from FORGE_ITEMS)
+## Generate catalog array for Armory UI (dynamic generation from items)
 ## Returns array of dictionaries with: id, name, game, achievement, rarity, category, icon, lore
 func get_armory_catalog() -> Array:
 	var catalog = []
@@ -1176,6 +469,7 @@ func print_summary() -> void:
 	print("FORGE ITEM DATABASE SUMMARY")
 	print("═══════════════════════════════════════════════════════════")
 	print("Total Items: %d" % get_total_item_count())
+	print("Achievement Mappings: %d" % FORGE_ITEMS.size())
 	print("")
 	print("By Game:")
 	var by_game = get_item_count_by_game()
@@ -1187,3 +481,119 @@ func print_summary() -> void:
 		var items = get_items_by_rarity(rarity)
 		print("  %s: %d items" % [get_rarity_name(rarity), items.size()])
 	print("═══════════════════════════════════════════════════════════")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ASSET VALIDATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+## Validate all forged item assets exist on disk
+## Call this at startup or from debug menu to check for missing assets
+## Returns: Dictionary with "missing_icons", "missing_sprites", "valid_count", "total_count"
+func validate_assets(verbose: bool = false) -> Dictionary:
+	var missing_icons = []
+	var missing_sprites = []
+	var valid_count = 0
+	var total_count = _items_by_id.size()
+
+	for item_id in _items_by_id:
+		var item = _items_by_id[item_id]
+		var item_name = item.get("item_name", "Unknown")
+		var sprites = item.get("sprites", {})
+		var item_type = item.get("item_type", ItemType.ACCESSORY)
+		var is_valid = true
+
+		# Check icon
+		var icon_path = sprites.get("icon", "")
+		if icon_path != "" and not ResourceLoader.exists(icon_path):
+			missing_icons.append({
+				"item_id": item_id,
+				"item_name": item_name,
+				"expected_path": icon_path
+			})
+			is_valid = false
+			if verbose:
+				push_warning("ForgeItemDB: Missing icon for '%s' at: %s" % [item_name, icon_path])
+
+		# Check sprites (only for non-accessory items that should have sprites)
+		var needs_sprites = item_type in [ItemType.WEAPON, ItemType.ARMOR_HEAD, ItemType.ARMOR_CHEST,
+			ItemType.ARMOR_ARMS, ItemType.ARMOR_LEGS, ItemType.ARMOR_HANDS, ItemType.ARMOR_FEET,
+			ItemType.CAPE, ItemType.SHIELD]
+
+		if needs_sprites:
+			var sprite_types = ["walk", "slash", "thrust", "hurt"]
+			var missing_for_item = []
+
+			for sprite_type in sprite_types:
+				var sprite_path = sprites.get(sprite_type, "")
+				if sprite_path != "" and not ResourceLoader.exists(sprite_path):
+					missing_for_item.append(sprite_type)
+
+			if missing_for_item.size() > 0:
+				missing_sprites.append({
+					"item_id": item_id,
+					"item_name": item_name,
+					"missing_types": missing_for_item
+				})
+				is_valid = false
+				if verbose:
+					push_warning("ForgeItemDB: Missing sprites for '%s': %s" % [item_name, missing_for_item])
+
+		if is_valid:
+			valid_count += 1
+
+	var result = {
+		"missing_icons": missing_icons,
+		"missing_sprites": missing_sprites,
+		"valid_count": valid_count,
+		"total_count": total_count
+	}
+
+	if verbose:
+		print("═══════════════════════════════════════════════════════════")
+		print("FORGE ITEM ASSET VALIDATION")
+		print("═══════════════════════════════════════════════════════════")
+		print("Total Items: %d" % total_count)
+		print("Valid Items: %d" % valid_count)
+		print("Missing Icons: %d" % missing_icons.size())
+		print("Missing Sprites: %d" % missing_sprites.size())
+		if missing_icons.size() > 0:
+			print("")
+			print("Items with missing icons:")
+			for item in missing_icons:
+				print("  - %s (%s)" % [item.item_name, item.item_id])
+		if missing_sprites.size() > 0:
+			print("")
+			print("Items with missing sprites:")
+			for item in missing_sprites:
+				print("  - %s (%s): %s" % [item.item_name, item.item_id, item.missing_types])
+		print("═══════════════════════════════════════════════════════════")
+
+	return result
+
+## Quick check if a specific item has valid assets
+func item_has_valid_assets(item_id: String) -> Dictionary:
+	var item = get_item_by_id(item_id)
+	if item.is_empty():
+		return {"valid": false, "error": "Item not found"}
+
+	var sprites = item.get("sprites", {})
+	var has_icon = false
+	var has_sprites = false
+
+	# Check icon
+	var icon_path = sprites.get("icon", "")
+	if icon_path != "" and ResourceLoader.exists(icon_path):
+		has_icon = true
+
+	# Check walk sprite as indicator of full sprite set
+	var walk_path = sprites.get("walk", "")
+	if walk_path != "" and ResourceLoader.exists(walk_path):
+		has_sprites = true
+
+	return {
+		"valid": has_icon,
+		"has_icon": has_icon,
+		"has_sprites": has_sprites,
+		"item_id": item_id,
+		"item_name": item.get("item_name", "Unknown")
+	}

@@ -3,7 +3,9 @@
 ## Overview
 Authoritative dedicated server model for persistent world MMO.
 
-> **Implementation Status**: This document contains both **implemented features** (marked ✅) and **planned features** (marked 📋). The current implementation uses Godot's built-in ENet multiplayer with a host-as-server model.
+> **Implementation Status**: This document contains both **implemented features** (marked ✅) and **planned features** (marked 📋).
+>
+> **Current Reality**: The game uses Godot's built-in ENet multiplayer with a **host-as-server model** (one player hosts, others join). The dedicated headless server and advanced features in the "Planned Architecture" section are **NOT YET IMPLEMENTED**.
 
 ---
 

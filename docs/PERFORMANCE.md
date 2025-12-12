@@ -761,7 +761,7 @@ Target: **16.67ms per frame (60fps)**
 
 - Chunk width (CHUNK_SIZE = 8000px) can be adjusted in Constants.gd
 - Prop density per chunk can be tuned in ChunkBasedPropSystem.gd
-- Enemy count per chunk (ENEMIES_PER_CHUNK = 60) in ChunkAwareSpawnManager.gd
+- Enemy count per chunk (ENEMIES_PER_CHUNK = 120) in ChunkAwareSpawnManager.gd
 - Terrain exclusion radius (1500px) can be increased for more FPS
 - Lava pool layers can be reduced for more performance
 

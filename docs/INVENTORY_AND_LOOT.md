@@ -22,7 +22,7 @@ The Dreadland inventory and loot system manages item collection, storage, and di
 - **Treasure Chests**: One-time openable containers with tier-based loot
 - **Enemy Loot Drops**: Probabilistic item generation on death
 - **Corpse Looting**: Visual, interactive looting of enemy bodies with AOE collection
-- **Corpse Decay**: Timed despawn system (5-minute decay)
+- **Enemy Corpse Decay**: 5-minute despawn system (see [Player Corpse System](COMBAT_SYSTEMS.md#player-corpse-system) for player death)
 
 ---
 
@@ -283,7 +283,9 @@ Dedicated UI for displaying chest contents when opened.
 
 ### Overview
 
-Implementation of a lootable corpse system that provides a visual, interactive looting experience with AOE collection and timed decay.
+Implementation of a lootable **enemy** corpse system that provides a visual, interactive looting experience with AOE collection and timed decay.
+
+> **Note**: This section covers **enemy corpses** (5-minute decay). Player corpses have a separate EverQuest-style system with 30-minute decay - see [COMBAT_SYSTEMS.md](COMBAT_SYSTEMS.md#player-corpse-system).
 
 ### Corpse Visual State
 
@@ -828,13 +830,19 @@ Modify chest loot quality by setting `loot_tier` in scene:
 
 ### Configuration Constants
 
+**Enemy Corpses** (defined in `scripts/enemies/CorpseState.gd`):
+
 ```gdscript
-# Add to Constants.gd
 const AOE_LOOT_RADIUS: float = 300.0  # AOE loot collection radius
-const CORPSE_DECAY_TIME: float = 300.0  # 5 minutes in seconds
-const CORPSE_FRESH_TIME: float = 60.0  # First minute is "fresh"
+const CORPSE_DECAY_TIME: float = 300.0  # 5 minutes - corpse despawns
+const CORPSE_FRESH_TIME: float = 60.0   # First minute is "fresh"
 const CORPSE_LOOT_GLOW_COLOR: Color = Color(0.8, 1.0, 0.8, 0.5)  # Pale green
 ```
+
+**Player Corpses** have different timing - see [COMBAT_SYSTEMS.md](COMBAT_SYSTEMS.md#player-corpse-system):
+- FRESH: 5 minutes (clear indicator)
+- WARNING: 25 minutes (decay warning)
+- DECAY: 30 minutes (corpse despawns, items lost)
 
 ### Balance Considerations
 

@@ -3,48 +3,35 @@
   "generated_at": null,
   "last_updated_by": "manual",
   "_changelog": "v1.7.0: Synced 10 missing items from ForgeItemDB.gd (ashen_armor, elden_armory_set, eye_of_cthulhu_shield, ironclad_armor, loremaster_hood, master_hoe, prairie_king_crown, stardrop_pendant, survivor_vest, zagreus_helm). Fixed naming inconsistencies (stygian_blade_basic->stygian_blade, exagryph_adamant_rail->adamant_rail, master_farmers_hoe->master_hoe).",
-
   "_asset_paths": {
     "_comment": "Base paths for assets. Web dashboard serves from /static/items/",
     "icons_base": "/static/items/icons",
     "sprites_base": "/static/items/sprites",
     "godot_export_to": "static/items"
   },
-
   "achievement_mappings": {
     "_comment": "Maps specific achievements to specific items. Key format: app_id:api_name. Max ~40 total per FORGE_ITEM_PHILOSOPHY.md",
-
     "374320:THE_DARK_SOUL": "coiled_sword",
     "374320:MASTER_OF_RINGS": "farron_greatsword",
     "374320:NAMELESS_KING": "dragonslayer_swordspear",
-
     "1245620:ELDEN_LORD": "elden_lord_helm",
     "1245620:SHARDBEARER_GODRICK": "grafted_blade",
     "1245620:SHARDBEARER_MALENIA": "hand_of_malenia",
     "1245620:SHARDBEARER_RADAHN": "radahns_greatswords",
     "1245620:LEGEND": "moonveil",
     "1245620:MOHG_THE_OMEN": "fingerprint_stone_shield",
-
     "367520:COMPLETION": "pure_nail",
     "367520:VOID": "shade_cloak",
-
     "1145360:COMPLETE": "stygian_blade",
     "1145360:SPEED_RUN": "adamant_rail",
-
     "xbox:LEGENDARY_CAMPAIGN": "halo_battle_rifle",
-
     "105600:SLAYER_OF_WORLDS": "terra_blade",
-
     "814380:IMMORTAL_SEVERANCE": "mortal_blade",
     "814380:SHURA": "gyoubu_spear",
-
     "292030:GERALT_THE_PROFESSIONAL": "witcher_silver_sword",
-
     "413150:LEGEND": "straw_hat",
-
     "discord:NITRO_SUBSCRIBER": "discord_nitro_badge",
     "github:STARSTRUCK": "github_star_badge",
-
     "_comment_battlenet": "Battle.net / WoW achievements",
     "battlenet:SCARAB_LORD": "scarab_lord_badge",
     "battlenet:REALM_FIRST_80": "herald_of_the_titans",
@@ -53,9 +40,8 @@
     "battlenet:CUTTING_EDGE": "mythic_insignia",
     "battlenet:KEYSTONE_MASTER": "keystone_trinket",
     "battlenet:GLADIATOR": "gladiator_tabard",
-    "battlenet:LOREMASTER": "loremaster_tome",
+    "battlenet:LOREMASTER": "loremaster_hood",
     "battlenet:INSANE": "insane_straitjacket",
-
     "_comment_psn": "PlayStation achievements",
     "psn:BLOODBORNE_PLATINUM": "saw_cleaver",
     "psn:DEMONS_SOULS_PLATINUM": "false_king_helm",
@@ -63,33 +49,28 @@
     "psn:GHOST_OF_TSUSHIMA_PLATINUM": "ghost_mask",
     "psn:RETURNAL_PLATINUM": "selene_fragment",
     "psn:SPIDER_MAN_PLATINUM": "spider_emblem",
-
     "_comment_xbox": "Xbox achievements",
     "xbox:HALO_LASO": "master_chief_helmet",
     "xbox:TITANFALL_GAUNTLET": "pilot_helmet",
     "xbox:GEARS_SERIOUSLY": "cog_medal",
     "xbox:SEA_OF_THIEVES_LEGEND": "pirate_legend_hat",
-
     "_comment_discord": "Discord badges",
     "discord:EARLY_SUPPORTER": "early_supporter_badge",
     "discord:PARTNERED_SERVER": "partner_badge",
     "discord:BUG_HUNTER_2": "bug_hunter_badge",
     "discord:HYPESQUAD": "hypesquad_badge",
-
     "_comment_github": "GitHub badges",
     "github:ARCTIC_CODE_VAULT": "arctic_code_badge",
     "github:MARS_2020": "mars_badge",
     "github:PULL_SHARK": "pull_shark_badge",
     "github:GALAXY_BRAIN": "galaxy_brain_badge",
     "github:YOLO": "yolo_badge",
-
     "_comment_roblox": "Roblox tenure badges",
     "roblox:TENURE_10_YEARS": "veteran_roblox_hat",
     "roblox:TENURE_7_YEARS": "classic_roblox_hat",
     "roblox:TENURE_5_YEARS": "builder_roblox_hat",
-
     "_comment_steam_accessible": "Steam accessible achievements",
-    "374320:TO_LINK_THE_FIRST_FLAME": "ashen_estus",
+    "374320:TO_LINK_THE_FIRST_FLAME": "ashen_armor",
     "1245620:ELDEN_RING": "tarnished_ring",
     "367520:EMBRACE_THE_VOID": "void_heart",
     "1145360:ESCAPED": "boon_trinket",
@@ -101,45 +82,94 @@
     "220:LAMBDA_LOCATOR": "lambda_badge",
     "72850:MASTER": "dragonbone_helm",
     "292030:WALKED_THE_PATH": "grandmaster_armor",
-
     "_comment_new_godot_items": "Items synced from ForgeItemDB.gd",
-    "374320:TO_LINK_THE_FIRST_FLAME": "ashen_armor",
     "1245620:LEGENDARY_ARMAMENTS": "elden_armory_chest",
     "105600:EYE_OF_CTHULHU": "eye_of_cthulhu_shield",
     "646570:IRONCLAD_VICTORY": "ironclad_armor",
-    "battlenet:LOREMASTER_HOOD": "loremaster_hood",
     "413150:SINGULAR_TALENT": "master_hoe",
     "413150:FECTOR_CHALLENGE": "prairie_king_cape",
     "413150:MYSTERY_OF_STARDROPS": "stardrop_pendant",
     "550:ZOMBIE_GENOCIDEST": "survivor_vest",
     "1145360:END_OF_STORY": "zagreus_helm"
   },
-
   "weapon_types": {
     "core": {
-      "sword": {"style": "balanced", "fallback": null},
-      "dagger": {"style": "fast", "fallback": null},
-      "axe": {"style": "heavy", "fallback": null},
-      "mace": {"style": "crushing", "fallback": null},
-      "spear": {"style": "thrusting", "fallback": null},
-      "rapier": {"style": "precise", "fallback": null},
-      "staff": {"style": "casting", "fallback": null}
+      "sword": {
+        "style": "balanced",
+        "fallback": null
+      },
+      "dagger": {
+        "style": "fast",
+        "fallback": null
+      },
+      "axe": {
+        "style": "heavy",
+        "fallback": null
+      },
+      "mace": {
+        "style": "crushing",
+        "fallback": null
+      },
+      "spear": {
+        "style": "thrusting",
+        "fallback": null
+      },
+      "rapier": {
+        "style": "precise",
+        "fallback": null
+      },
+      "staff": {
+        "style": "casting",
+        "fallback": null
+      }
     },
     "extended": {
-      "greatsword": {"style": "heavy", "fallback": "sword"},
-      "katana": {"style": "precise", "fallback": "sword"},
-      "saber": {"style": "precise", "fallback": "sword"},
-      "scimitar": {"style": "precise", "fallback": "sword"},
-      "halberd": {"style": "heavy", "fallback": "spear"},
-      "pike": {"style": "thrusting", "fallback": "spear"},
-      "trident": {"style": "thrusting", "fallback": "spear"},
-      "flail": {"style": "crushing", "fallback": "mace"},
-      "scythe": {"style": "heavy", "fallback": "spear"},
-      "bow": {"style": "ranged", "fallback": "staff"},
-      "crossbow": {"style": "ranged", "fallback": "staff"}
+      "greatsword": {
+        "style": "heavy",
+        "fallback": "sword"
+      },
+      "katana": {
+        "style": "precise",
+        "fallback": "sword"
+      },
+      "saber": {
+        "style": "precise",
+        "fallback": "sword"
+      },
+      "scimitar": {
+        "style": "precise",
+        "fallback": "sword"
+      },
+      "halberd": {
+        "style": "heavy",
+        "fallback": "spear"
+      },
+      "pike": {
+        "style": "thrusting",
+        "fallback": "spear"
+      },
+      "trident": {
+        "style": "thrusting",
+        "fallback": "spear"
+      },
+      "flail": {
+        "style": "crushing",
+        "fallback": "mace"
+      },
+      "scythe": {
+        "style": "heavy",
+        "fallback": "spear"
+      },
+      "bow": {
+        "style": "ranged",
+        "fallback": "staff"
+      },
+      "crossbow": {
+        "style": "ranged",
+        "fallback": "staff"
+      }
     }
   },
-
   "item_types": [
     "weapon",
     "armor_head",
@@ -153,189 +183,370 @@
     "emote",
     "title"
   ],
-
   "rarities": {
-    "common": {"color": "#999999", "min_percent": 40},
-    "uncommon": {"color": "#33CC33", "min_percent": 15},
-    "rare": {"color": "#3399FF", "min_percent": 5},
-    "epic": {"color": "#B34DCC", "min_percent": 1},
-    "legendary": {"color": "#FF8000", "min_percent": 0}
+    "common": {
+      "color": "#999999",
+      "min_percent": 40
+    },
+    "uncommon": {
+      "color": "#33CC33",
+      "min_percent": 15
+    },
+    "rare": {
+      "color": "#3399FF",
+      "min_percent": 5
+    },
+    "epic": {
+      "color": "#B34DCC",
+      "min_percent": 1
+    },
+    "legendary": {
+      "color": "#FF8000",
+      "min_percent": 0
+    }
   },
-
   "themes": {
     "dark_souls": {
       "display_name": "Dark Souls",
-      "app_ids": ["374320", "211420", "236430"],
+      "app_ids": [
+        "374320",
+        "211420",
+        "236430"
+      ],
       "color": "#FF6A00",
-      "effects": ["ember_trail", "ember_glow", "flame_idle_glow", "wolf_blood_aura", "lightning_crackle"]
+      "effects": [
+        "ember_trail",
+        "ember_glow",
+        "flame_idle_glow",
+        "wolf_blood_aura",
+        "lightning_crackle"
+      ]
     },
     "elden_ring": {
       "display_name": "Elden Ring",
-      "app_ids": ["1245620"],
+      "app_ids": [
+        "1245620"
+      ],
       "color": "#FFD700",
-      "effects": ["erdtree_blessing", "golden_sparkle", "moonlight_aura", "gravity_particles", "scarlet_rot_trail"]
+      "effects": [
+        "erdtree_blessing",
+        "golden_sparkle",
+        "moonlight_aura",
+        "gravity_particles",
+        "scarlet_rot_trail"
+      ]
     },
     "hollow_knight": {
       "display_name": "Hollow Knight",
-      "app_ids": ["367520"],
+      "app_ids": [
+        "367520"
+      ],
       "color": "#1A0033",
-      "effects": ["void_particles", "void_trail", "void_aura", "shadow_tendrils", "dark_burst"]
+      "effects": [
+        "void_particles",
+        "void_trail",
+        "void_aura",
+        "shadow_tendrils",
+        "dark_burst"
+      ]
     },
     "hades": {
       "display_name": "Hades",
-      "app_ids": ["1145360"],
+      "app_ids": [
+        "1145360"
+      ],
       "color": "#FF4444",
-      "effects": ["underworld_flame", "blood_red_glow", "infernal_glow", "divine_glow", "laurel_particles"]
+      "effects": [
+        "underworld_flame",
+        "blood_red_glow",
+        "infernal_glow",
+        "divine_glow",
+        "laurel_particles"
+      ]
     },
     "stardew": {
       "display_name": "Stardew Valley",
-      "app_ids": ["413150"],
+      "app_ids": [
+        "413150"
+      ],
       "color": "#66FF66",
-      "effects": ["nature_sparkle", "golden_sparkle", "stardust_trail", "healing_aura", "pixel_sparkle"]
+      "effects": [
+        "nature_sparkle",
+        "golden_sparkle",
+        "stardust_trail",
+        "healing_aura",
+        "pixel_sparkle"
+      ]
     },
     "terraria": {
       "display_name": "Terraria",
-      "app_ids": ["105600"],
+      "app_ids": [
+        "105600"
+      ],
       "color": "#00FF80",
-      "effects": ["terra_beam", "green_glow", "eerie_glow", "sword_projectile"]
+      "effects": [
+        "terra_beam",
+        "green_glow",
+        "eerie_glow",
+        "sword_projectile"
+      ]
     },
     "sekiro": {
       "display_name": "Sekiro",
-      "app_ids": ["814380"],
+      "app_ids": [
+        "814380"
+      ],
       "color": "#CC0000",
-      "effects": ["crimson_slash", "death_kanji", "blood_mist"]
+      "effects": [
+        "crimson_slash",
+        "death_kanji",
+        "blood_mist"
+      ]
     },
     "witcher": {
       "display_name": "The Witcher 3",
-      "app_ids": ["292030"],
+      "app_ids": [
+        "292030"
+      ],
       "color": "#E6B833",
-      "effects": ["silver_gleam", "wolf_school_glow", "danger_sense"]
+      "effects": [
+        "silver_gleam",
+        "wolf_school_glow",
+        "danger_sense"
+      ]
     },
     "discord": {
       "display_name": "Discord",
-      "app_ids": ["discord"],
+      "app_ids": [
+        "discord"
+      ],
       "color": "#5865F2",
-      "effects": ["discord_sparkle", "purple_glow"]
+      "effects": [
+        "discord_sparkle",
+        "purple_glow"
+      ]
     },
     "github": {
       "display_name": "GitHub",
-      "app_ids": ["github"],
+      "app_ids": [
+        "github"
+      ],
       "color": "#238636",
-      "effects": ["code_particles", "green_glow"]
+      "effects": [
+        "code_particles",
+        "green_glow"
+      ]
     },
     "halo": {
       "display_name": "Halo",
-      "app_ids": ["xbox"],
+      "app_ids": [
+        "xbox"
+      ],
       "color": "#00CED1",
-      "effects": ["halo_green_glow", "shield_recharge", "spartan_visor"]
+      "effects": [
+        "halo_green_glow",
+        "shield_recharge",
+        "spartan_visor"
+      ]
     },
     "wow": {
       "display_name": "World of Warcraft",
-      "app_ids": ["battlenet"],
+      "app_ids": [
+        "battlenet"
+      ],
       "color": "#FFB932",
-      "effects": ["golden_sparkle", "arcane_glow", "fel_green", "holy_light"]
+      "effects": [
+        "golden_sparkle",
+        "arcane_glow",
+        "fel_green",
+        "holy_light"
+      ]
     },
     "bloodborne": {
       "display_name": "Bloodborne",
-      "app_ids": ["psn"],
+      "app_ids": [
+        "psn"
+      ],
       "color": "#8B0000",
-      "effects": ["blood_particles", "hunter_instinct", "beast_aura"]
+      "effects": [
+        "blood_particles",
+        "hunter_instinct",
+        "beast_aura"
+      ]
     },
     "demons_souls": {
       "display_name": "Demon's Souls",
-      "app_ids": ["psn"],
+      "app_ids": [
+        "psn"
+      ],
       "color": "#4A4A6A",
-      "effects": ["soul_particles", "nexus_glow"]
+      "effects": [
+        "soul_particles",
+        "nexus_glow"
+      ]
     },
     "god_of_war": {
       "display_name": "God of War",
-      "app_ids": ["psn"],
+      "app_ids": [
+        "psn"
+      ],
       "color": "#C41E3A",
-      "effects": ["rage_aura", "frost_particles", "spartan_glow"]
+      "effects": [
+        "rage_aura",
+        "frost_particles",
+        "spartan_glow"
+      ]
     },
     "ghost_of_tsushima": {
       "display_name": "Ghost of Tsushima",
-      "app_ids": ["psn"],
+      "app_ids": [
+        "psn"
+      ],
       "color": "#1A1A2E",
-      "effects": ["wind_particles", "ghost_stance", "leaves_falling"]
+      "effects": [
+        "wind_particles",
+        "ghost_stance",
+        "leaves_falling"
+      ]
     },
     "celeste": {
       "display_name": "Celeste",
-      "app_ids": ["504230"],
+      "app_ids": [
+        "504230"
+      ],
       "color": "#E85D8C",
-      "effects": ["feather_float", "dash_trail", "golden_sparkle"]
+      "effects": [
+        "feather_float",
+        "dash_trail",
+        "golden_sparkle"
+      ]
     },
     "cuphead": {
       "display_name": "Cuphead",
-      "app_ids": ["268910"],
+      "app_ids": [
+        "268910"
+      ],
       "color": "#DC143C",
-      "effects": ["soul_orb", "parry_pink", "knockout_burst"]
+      "effects": [
+        "soul_orb",
+        "parry_pink",
+        "knockout_burst"
+      ]
     },
     "dead_cells": {
       "display_name": "Dead Cells",
-      "app_ids": ["588650"],
+      "app_ids": [
+        "588650"
+      ],
       "color": "#00FF00",
-      "effects": ["cell_particles", "mutation_glow", "malaise_trail"]
+      "effects": [
+        "cell_particles",
+        "mutation_glow",
+        "malaise_trail"
+      ]
     },
     "slay_the_spire": {
       "display_name": "Slay the Spire",
-      "app_ids": ["646570"],
+      "app_ids": [
+        "646570"
+      ],
       "color": "#FF6B6B",
-      "effects": ["card_particles", "heart_pulse"]
+      "effects": [
+        "card_particles",
+        "heart_pulse"
+      ]
     },
     "portal": {
       "display_name": "Portal",
-      "app_ids": ["620"],
+      "app_ids": [
+        "620"
+      ],
       "color": "#FF8C00",
-      "effects": ["portal_blue", "portal_orange"]
+      "effects": [
+        "portal_blue",
+        "portal_orange"
+      ]
     },
     "valve": {
       "display_name": "Valve Games",
-      "app_ids": ["220", "550"],
+      "app_ids": [
+        "220",
+        "550"
+      ],
       "color": "#FF4500",
-      "effects": ["lambda_glow", "crowbar_gleam"]
+      "effects": [
+        "lambda_glow",
+        "crowbar_gleam"
+      ]
     },
     "skyrim": {
       "display_name": "Skyrim",
-      "app_ids": ["72850", "489830"],
+      "app_ids": [
+        "72850",
+        "489830"
+      ],
       "color": "#4A5568",
-      "effects": ["dragon_soul", "shout_particles"]
+      "effects": [
+        "dragon_soul",
+        "shout_particles"
+      ]
     },
     "titanfall": {
       "display_name": "Titanfall",
-      "app_ids": ["xbox"],
+      "app_ids": [
+        "xbox"
+      ],
       "color": "#FF6600",
-      "effects": ["pilot_boost", "titan_glow"]
+      "effects": [
+        "pilot_boost",
+        "titan_glow"
+      ]
     },
     "gears": {
       "display_name": "Gears of War",
-      "app_ids": ["xbox"],
+      "app_ids": [
+        "xbox"
+      ],
       "color": "#990000",
-      "effects": ["crimson_omen", "locust_particles"]
+      "effects": [
+        "crimson_omen",
+        "locust_particles"
+      ]
     },
     "sea_of_thieves": {
       "display_name": "Sea of Thieves",
-      "app_ids": ["xbox"],
+      "app_ids": [
+        "xbox"
+      ],
       "color": "#1E90FF",
-      "effects": ["ghost_glow", "ocean_particles"]
+      "effects": [
+        "ghost_glow",
+        "ocean_particles"
+      ]
     },
     "roblox": {
       "display_name": "Roblox",
-      "app_ids": ["roblox"],
+      "app_ids": [
+        "roblox"
+      ],
       "color": "#00A2FF",
-      "effects": ["block_particles", "classic_sparkle"]
+      "effects": [
+        "block_particles",
+        "classic_sparkle"
+      ]
     },
     "generic": {
       "display_name": "Generic",
       "app_ids": [],
       "color": "#888888",
-      "effects": ["standard_particles", "subtle_glow"]
+      "effects": [
+        "standard_particles",
+        "subtle_glow"
+      ]
     }
   },
-
   "effect_definitions": {
     "_comment": "Passive and active effect definitions. Power values scale with item rarity (legendary=100%, epic=75%, rare=50%)",
-
     "passive": {
       "lifesteal": {
         "name": "I Have Never Known Defeat",
@@ -492,7 +703,6 @@
         "native_equivalent": "Poison"
       }
     },
-
     "active": {
       "waterfowl_dance": {
         "name": "Waterfowl Dance",
@@ -544,7 +754,6 @@
       }
     }
   },
-
   "items": [
     {
       "item_id": "coiled_sword",
@@ -562,7 +771,10 @@
         "glow_color": "#FF6A00"
       },
       "effects": {
-        "passive": ["fire_aura", "regen"],
+        "passive": [
+          "fire_aura",
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -584,7 +796,10 @@
         "glow_color": "#4A6B8A"
       },
       "effects": {
-        "passive": ["lifesteal", "crit_chance"],
+        "passive": [
+          "lifesteal",
+          "crit_chance"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -606,7 +821,10 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["lightning_proc", "boss_damage"],
+        "passive": [
+          "lightning_proc",
+          "boss_damage"
+        ],
         "active": "lightning_bolt"
       },
       "has_sprites": true,
@@ -628,7 +846,9 @@
         "glow_color": "#B8860B"
       },
       "effects": {
-        "passive": ["poise"],
+        "passive": [
+          "poise"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -650,7 +870,10 @@
         "glow_color": "#FF6B6B"
       },
       "effects": {
-        "passive": ["lifesteal", "dot_on_hit"],
+        "passive": [
+          "lifesteal",
+          "dot_on_hit"
+        ],
         "active": "waterfowl_dance"
       },
       "has_sprites": true,
@@ -672,7 +895,10 @@
         "glow_color": "#8B4513"
       },
       "effects": {
-        "passive": ["gravity_pull", "poise"],
+        "passive": [
+          "gravity_pull",
+          "poise"
+        ],
         "active": "starcaller_cry"
       },
       "has_sprites": true,
@@ -694,7 +920,10 @@
         "glow_color": "#A0D0FF"
       },
       "effects": {
-        "passive": ["magic_damage", "crit_chance"],
+        "passive": [
+          "magic_damage",
+          "crit_chance"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -711,12 +940,15 @@
       "theme": "elden_ring",
       "visuals": {
         "icon_url": "/static/items/icons/elden_lord_helm.png",
-        "sprite_folder": "armor/elden_lord_helm",
+        "sprite_folder": "armor/head/elden_lord",
         "effect": "erdtree_blessing",
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["death_prevention", "regen"],
+        "passive": [
+          "death_prevention",
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -733,12 +965,14 @@
       "theme": "elden_ring",
       "visuals": {
         "icon_url": "/static/items/icons/carian_crown.png",
-        "sprite_folder": "armor/carian_crown",
+        "sprite_folder": "armor/head/carian_crown",
         "effect": "moonlight_aura",
         "glow_color": "#A0D0FF"
       },
       "effects": {
-        "passive": ["magic_damage"],
+        "passive": [
+          "magic_damage"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -760,7 +994,10 @@
         "glow_color": "#808080"
       },
       "effects": {
-        "passive": ["poise", "damage_reduction"],
+        "passive": [
+          "poise",
+          "damage_reduction"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -782,7 +1019,9 @@
         "glow_color": "#E0E0E0"
       },
       "effects": {
-        "passive": ["soul_gather"],
+        "passive": [
+          "soul_gather"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -804,7 +1043,9 @@
         "glow_color": "#1A0033"
       },
       "effects": {
-        "passive": ["void_damage"],
+        "passive": [
+          "void_damage"
+        ],
         "active": "shadow_phase"
       },
       "has_sprites": true,
@@ -826,7 +1067,9 @@
         "glow_color": "#8B0000"
       },
       "effects": {
-        "passive": ["on_kill_buff"],
+        "passive": [
+          "on_kill_buff"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -848,7 +1091,9 @@
         "glow_color": "#FF4500"
       },
       "effects": {
-        "passive": ["crit_chance"],
+        "passive": [
+          "crit_chance"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -871,7 +1116,9 @@
         "glow_color": "#00CED1"
       },
       "effects": {
-        "passive": ["burst_fire"],
+        "passive": [
+          "burst_fire"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -893,7 +1140,10 @@
         "glow_color": "#00FF80"
       },
       "effects": {
-        "passive": ["projectile_on_hit", "regen"],
+        "passive": [
+          "projectile_on_hit",
+          "regen"
+        ],
         "active": "terra_beam"
       },
       "has_sprites": true,
@@ -915,7 +1165,10 @@
         "glow_color": "#CC0000"
       },
       "effects": {
-        "passive": ["execute_bonus", "on_kill_buff"],
+        "passive": [
+          "execute_bonus",
+          "on_kill_buff"
+        ],
         "active": "mortal_draw"
       },
       "has_sprites": true,
@@ -937,7 +1190,10 @@
         "glow_color": "#8B0000"
       },
       "effects": {
-        "passive": ["armor_pierce", "move_speed"],
+        "passive": [
+          "armor_pierce",
+          "move_speed"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -959,7 +1215,9 @@
         "glow_color": "#C0C0C0"
       },
       "effects": {
-        "passive": ["monster_slayer"],
+        "passive": [
+          "monster_slayer"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -981,7 +1239,9 @@
         "glow_color": "#D4A574"
       },
       "effects": {
-        "passive": ["stamina_regen"],
+        "passive": [
+          "stamina_regen"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -1003,7 +1263,9 @@
         "glow_color": "#FF6A00"
       },
       "effects": {
-        "passive": ["regen"],
+        "passive": [
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": false,
@@ -1025,7 +1287,9 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["boss_damage"],
+        "passive": [
+          "boss_damage"
+        ],
         "active": null
       },
       "has_sprites": false,
@@ -1047,11 +1311,13 @@
         "glow_color": "#5865F2"
       },
       "effects": {
-        "passive": ["party_buff"],
+        "passive": [
+          "party_buff"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "github_star_badge",
@@ -1069,17 +1335,18 @@
         "glow_color": "#238636"
       },
       "effects": {
-        "passive": ["party_buff"],
+        "passive": [
+          "party_buff"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
-
     {
       "_comment": "=== BATTLE.NET / WOW ITEMS ===",
       "item_id": "scarab_lord_badge",
-      "item_name": "Scarab Lord's Sigil",
+      "item_name": "Scarab Lord's Ring",
       "item_type": "accessory",
       "weapon_type": null,
       "description": "A sigil marking the opening of Ahn'Qiraj.",
@@ -1093,11 +1360,14 @@
         "glow_color": "#FFB932"
       },
       "effects": {
-        "passive": ["boss_damage", "poise"],
+        "passive": [
+          "boss_damage",
+          "poise"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "herald_of_the_titans",
@@ -1105,21 +1375,24 @@
       "item_type": "armor_head",
       "weapon_type": null,
       "description": "Crown of a Realm First champion.",
-      "lore": "First to level 80 in Wrath of the Lich King.",
+      "lore": "Defeated Algalon at level 80 with appropriate gear.",
       "base_rarity": "legendary",
       "theme": "wow",
       "visuals": {
         "icon_url": "/static/items/icons/herald_of_the_titans.png",
         "sprite_folder": "armor/head/herald_of_the_titans",
-        "effect": "arcane_glow",
-        "glow_color": "#FFB932"
+        "effect": "golden_glow",
+        "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["move_speed", "stamina_regen"],
+        "passive": [
+          "boss_damage",
+          "stamina_regen"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "immortal_tabard",
@@ -1137,11 +1410,14 @@
         "glow_color": "#FFFFFF"
       },
       "effects": {
-        "passive": ["death_prevention", "damage_reduction"],
+        "passive": [
+          "death_prevention",
+          "damage_reduction"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "hand_of_adal_tabard",
@@ -1159,15 +1435,17 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["magic_damage"],
+        "passive": [
+          "magic_damage"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "mythic_insignia",
-      "item_name": "Cutting Edge Insignia",
+      "item_name": "Cutting Edge Amulet",
       "item_type": "accessory",
       "weapon_type": null,
       "description": "Proof of Mythic raid mastery.",
@@ -1181,11 +1459,14 @@
         "glow_color": "#A335EE"
       },
       "effects": {
-        "passive": ["boss_damage"],
+        "passive": [
+          "crit_chance",
+          "raid_damage"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "keystone_trinket",
@@ -1200,14 +1481,17 @@
         "icon_url": "/static/items/icons/keystone_trinket.png",
         "sprite_folder": null,
         "effect": "arcane_glow",
-        "glow_color": "#FF8000"
+        "glow_color": "#00CED1"
       },
       "effects": {
-        "passive": ["move_speed", "crit_chance"],
+        "passive": [
+          "move_speed",
+          "crit_chance"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "gladiator_tabard",
@@ -1225,38 +1509,19 @@
         "glow_color": "#CC0000"
       },
       "effects": {
-        "passive": ["crit_chance", "lifesteal"],
+        "passive": [
+          "crit_chance",
+          "lifesteal"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
-    },
-    {
-      "item_id": "loremaster_tome",
-      "item_name": "Loremaster's Tome",
-      "item_type": "accessory",
-      "weapon_type": null,
-      "description": "A tome containing every quest in Azeroth.",
-      "lore": "Completed every zone's questline.",
-      "base_rarity": "epic",
-      "theme": "wow",
-      "visuals": {
-        "icon_url": "/static/items/icons/loremaster_tome.png",
-        "sprite_folder": null,
-        "effect": "arcane_glow",
-        "glow_color": "#4169E1"
-      },
-      "effects": {
-        "passive": ["stamina_regen"],
-        "active": null
-      },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "insane_straitjacket",
       "item_name": "Insane Straitjacket",
-      "item_type": "cape",
+      "item_type": "armor_chest",
       "weapon_type": null,
       "description": "Proof of insane dedication.",
       "lore": "Insane in the Membrane - months of rep grinding.",
@@ -1264,18 +1529,20 @@
       "theme": "wow",
       "visuals": {
         "icon_url": "/static/items/icons/insane_straitjacket.png",
-        "sprite_folder": "capes/insane_straitjacket",
+        "sprite_folder": "armor/chest/insane_straitjacket",
         "effect": "arcane_glow",
-        "glow_color": "#800080"
+        "glow_color": "#FFB932"
       },
       "effects": {
-        "passive": ["damage_reduction", "regen"],
+        "passive": [
+          "damage_reduction",
+          "regen"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
-
     {
       "_comment": "=== PLAYSTATION ITEMS ===",
       "item_id": "saw_cleaver",
@@ -1293,7 +1560,10 @@
         "glow_color": "#8B0000"
       },
       "effects": {
-        "passive": ["lifesteal", "on_kill_buff"],
+        "passive": [
+          "lifesteal",
+          "on_kill_buff"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -1311,12 +1581,15 @@
       "theme": "demons_souls",
       "visuals": {
         "icon_url": "/static/items/icons/false_king_helm.png",
-        "sprite_folder": "armor/false_king_helm",
+        "sprite_folder": "armor/head/false_king_helm",
         "effect": "soul_drain",
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["magic_damage", "soul_gather"],
+        "passive": [
+          "magic_damage",
+          "soul_gather"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -1338,11 +1611,14 @@
         "glow_color": "#C41E3A"
       },
       "effects": {
-        "passive": ["fire_aura", "lifesteal"],
+        "passive": [
+          "fire_aura",
+          "lifesteal"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "ghost_mask",
@@ -1360,11 +1636,14 @@
         "glow_color": "#1A1A2E"
       },
       "effects": {
-        "passive": ["crit_chance", "move_speed"],
+        "passive": [
+          "crit_chance",
+          "move_speed"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "selene_fragment",
@@ -1382,11 +1661,13 @@
         "glow_color": "#00FFFF"
       },
       "effects": {
-        "passive": ["death_prevention"],
+        "passive": [
+          "death_prevention"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "spider_emblem",
@@ -1404,13 +1685,15 @@
         "glow_color": "#FF0000"
       },
       "effects": {
-        "passive": ["move_speed", "crit_chance"],
+        "passive": [
+          "move_speed",
+          "crit_chance"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
-
     {
       "_comment": "=== XBOX ITEMS ===",
       "item_id": "master_chief_helmet",
@@ -1428,11 +1711,14 @@
         "glow_color": "#00CED1"
       },
       "effects": {
-        "passive": ["damage_reduction", "regen"],
+        "passive": [
+          "damage_reduction",
+          "regen"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "pilot_helmet",
@@ -1450,11 +1736,14 @@
         "glow_color": "#FF6600"
       },
       "effects": {
-        "passive": ["move_speed", "crit_chance"],
+        "passive": [
+          "move_speed",
+          "crit_chance"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "cog_medal",
@@ -1472,11 +1761,14 @@
         "glow_color": "#990000"
       },
       "effects": {
-        "passive": ["damage_reduction", "on_kill_buff"],
+        "passive": [
+          "damage_reduction",
+          "on_kill_buff"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "pirate_legend_hat",
@@ -1494,13 +1786,14 @@
         "glow_color": "#1E90FF"
       },
       "effects": {
-        "passive": ["party_buff"],
+        "passive": [
+          "party_buff"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
-
     {
       "_comment": "=== DISCORD ITEMS ===",
       "item_id": "early_supporter_badge",
@@ -1518,11 +1811,14 @@
         "glow_color": "#5865F2"
       },
       "effects": {
-        "passive": ["party_buff", "regen"],
+        "passive": [
+          "party_buff",
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "partner_badge",
@@ -1540,11 +1836,13 @@
         "glow_color": "#5865F2"
       },
       "effects": {
-        "passive": ["party_buff"],
+        "passive": [
+          "party_buff"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "bug_hunter_badge",
@@ -1562,11 +1860,13 @@
         "glow_color": "#43B581"
       },
       "effects": {
-        "passive": ["crit_chance"],
+        "passive": [
+          "crit_chance"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "hypesquad_badge",
@@ -1584,13 +1884,14 @@
         "glow_color": "#FAA61A"
       },
       "effects": {
-        "passive": ["party_buff"],
+        "passive": [
+          "party_buff"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
-
     {
       "_comment": "=== GITHUB ITEMS ===",
       "item_id": "arctic_code_badge",
@@ -1608,11 +1909,14 @@
         "glow_color": "#00BFFF"
       },
       "effects": {
-        "passive": ["damage_reduction", "regen"],
+        "passive": [
+          "damage_reduction",
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "mars_badge",
@@ -1630,11 +1934,13 @@
         "glow_color": "#FF4500"
       },
       "effects": {
-        "passive": ["boss_damage"],
+        "passive": [
+          "boss_damage"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "pull_shark_badge",
@@ -1652,11 +1958,13 @@
         "glow_color": "#238636"
       },
       "effects": {
-        "passive": ["crit_chance"],
+        "passive": [
+          "crit_chance"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "galaxy_brain_badge",
@@ -1674,11 +1982,13 @@
         "glow_color": "#8B5CF6"
       },
       "effects": {
-        "passive": ["magic_damage"],
+        "passive": [
+          "magic_damage"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "yolo_badge",
@@ -1696,20 +2006,21 @@
         "glow_color": "#FF6B6B"
       },
       "effects": {
-        "passive": ["crit_chance"],
+        "passive": [
+          "crit_chance"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
-
     {
       "_comment": "=== ROBLOX ITEMS ===",
-      "item_id": "veteran_roblox_hat",
-      "item_name": "Veteran Robloxian Hat",
-      "item_type": "armor_head",
+      "item_id": "veteran_roblox_necklace",
+      "item_name": "Veteran Robloxian Necklace",
+      "item_type": "accessory",
       "weapon_type": null,
-      "description": "Hat of an OG Roblox player.",
+      "description": "Necklace of an OG Roblox player.",
       "lore": "10+ years on Roblox. Before it was cool.",
       "base_rarity": "legendary",
       "theme": "roblox",
@@ -1720,18 +2031,21 @@
         "glow_color": "#00A2FF"
       },
       "effects": {
-        "passive": ["poise", "regen"],
+        "passive": [
+          "poise",
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
-      "item_id": "classic_roblox_hat",
-      "item_name": "Classic Robloxian Hat",
-      "item_type": "armor_head",
+      "item_id": "classic_roblox_ring",
+      "item_name": "Classic Robloxian Ring",
+      "item_type": "accessory",
       "weapon_type": null,
-      "description": "Hat of a veteran Roblox player.",
+      "description": "Ring of a veteran Roblox player.",
       "lore": "7+ years on Roblox.",
       "base_rarity": "epic",
       "theme": "roblox",
@@ -1742,18 +2056,20 @@
         "glow_color": "#00A2FF"
       },
       "effects": {
-        "passive": ["stamina_regen"],
+        "passive": [
+          "stamina_regen"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
-      "item_id": "builder_roblox_hat",
-      "item_name": "Builder's Hat",
-      "item_type": "armor_head",
+      "item_id": "builder_roblox_ring",
+      "item_name": "Builder's Ring",
+      "item_type": "accessory",
       "weapon_type": null,
-      "description": "Hat of an established Roblox player.",
+      "description": "Ring of an established Roblox player.",
       "lore": "5+ years on Roblox.",
       "base_rarity": "rare",
       "theme": "roblox",
@@ -1764,13 +2080,14 @@
         "glow_color": "#00A2FF"
       },
       "effects": {
-        "passive": ["regen"],
+        "passive": [
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
-
     {
       "_comment": "=== STEAM ACCESSIBLE / PRESTIGE ITEMS ===",
       "item_id": "ashen_estus",
@@ -1788,11 +2105,13 @@
         "glow_color": "#FF6A00"
       },
       "effects": {
-        "passive": ["regen"],
+        "passive": [
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "tarnished_ring",
@@ -1810,11 +2129,13 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["stamina_regen"],
+        "passive": [
+          "stamina_regen"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "void_heart",
@@ -1832,11 +2153,14 @@
         "glow_color": "#1A0033"
       },
       "effects": {
-        "passive": ["void_damage", "death_prevention"],
+        "passive": [
+          "void_damage",
+          "death_prevention"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "boon_trinket",
@@ -1854,11 +2178,13 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["regen"],
+        "passive": [
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "winged_strawberry",
@@ -1876,7 +2202,10 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["move_speed", "death_prevention"],
+        "passive": [
+          "move_speed",
+          "death_prevention"
+        ],
         "active": null
       },
       "has_sprites": false,
@@ -1898,7 +2227,10 @@
         "glow_color": "#DC143C"
       },
       "effects": {
-        "passive": ["fire_aura", "boss_damage"],
+        "passive": [
+          "fire_aura",
+          "boss_damage"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -1920,7 +2252,10 @@
         "glow_color": "#00FF00"
       },
       "effects": {
-        "passive": ["on_kill_buff", "lifesteal"],
+        "passive": [
+          "on_kill_buff",
+          "lifesteal"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -1943,7 +2278,10 @@
         "glow_color": "#FF6B6B"
       },
       "effects": {
-        "passive": ["boss_damage", "crit_chance"],
+        "passive": [
+          "boss_damage",
+          "crit_chance"
+        ],
         "active": null
       },
       "has_sprites": false,
@@ -1965,7 +2303,9 @@
         "glow_color": "#FFB6C1"
       },
       "effects": {
-        "passive": ["party_buff"],
+        "passive": [
+          "party_buff"
+        ],
         "active": null
       },
       "has_sprites": false,
@@ -1987,7 +2327,9 @@
         "glow_color": "#FF8C00"
       },
       "effects": {
-        "passive": ["damage_reduction"],
+        "passive": [
+          "damage_reduction"
+        ],
         "active": null
       },
       "has_sprites": false,
@@ -2009,11 +2351,14 @@
         "glow_color": "#4A5568"
       },
       "effects": {
-        "passive": ["poise", "damage_reduction"],
+        "passive": [
+          "poise",
+          "damage_reduction"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "grandmaster_armor",
@@ -2031,13 +2376,15 @@
         "glow_color": "#E6B833"
       },
       "effects": {
-        "passive": ["damage_reduction", "monster_slayer"],
+        "passive": [
+          "damage_reduction",
+          "monster_slayer"
+        ],
         "active": null
       },
       "has_sprites": true,
       "has_icon": true
     },
-
     {
       "_comment": "=== SYNCED FROM FORGEITEMDB.GD ===",
       "item_id": "ashen_armor",
@@ -2055,7 +2402,9 @@
         "glow_color": "#FF6A00"
       },
       "effects": {
-        "passive": ["damage_reduction"],
+        "passive": [
+          "damage_reduction"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -2077,7 +2426,9 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["poise"],
+        "passive": [
+          "poise"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -2093,17 +2444,19 @@
       "base_rarity": "common",
       "theme": "terraria",
       "visuals": {
-        "icon_url": "/static/items/icons/eye_shield.png",
-        "sprite_folder": "shields/eye_shield",
+        "icon_url": "/static/items/icons/eye_of_cthulhu_shield.png",
+        "sprite_folder": "shields/eye_of_cthulhu_shield",
         "effect": "eerie_glow",
         "glow_color": "#00FF80"
       },
       "effects": {
-        "passive": ["damage_reduction"],
+        "passive": [
+          "damage_reduction"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "ironclad_armor",
@@ -2121,7 +2474,10 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["damage_reduction", "regen"],
+        "passive": [
+          "damage_reduction",
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -2143,7 +2499,10 @@
         "glow_color": "#9370DB"
       },
       "effects": {
-        "passive": ["magic_damage", "stamina_regen"],
+        "passive": [
+          "magic_damage",
+          "stamina_regen"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -2165,11 +2524,13 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["stamina_regen"],
+        "passive": [
+          "stamina_regen"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "prairie_king_cape",
@@ -2187,7 +2548,9 @@
         "glow_color": "#CD853F"
       },
       "effects": {
-        "passive": ["dodge_chance"],
+        "passive": [
+          "dodge_chance"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -2209,11 +2572,13 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["regen"],
+        "passive": [
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "survivor_vest",
@@ -2231,7 +2596,10 @@
         "glow_color": "#556B2F"
       },
       "effects": {
-        "passive": ["damage_reduction", "regen"],
+        "passive": [
+          "damage_reduction",
+          "regen"
+        ],
         "active": null
       },
       "has_sprites": true,
@@ -2253,14 +2621,15 @@
         "glow_color": "#FFD700"
       },
       "effects": {
-        "passive": ["move_speed"],
+        "passive": [
+          "move_speed"
+        ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     }
   ],
-
   "fallbacks": {
     "weapon": {
       "item_id": "basic_sword",

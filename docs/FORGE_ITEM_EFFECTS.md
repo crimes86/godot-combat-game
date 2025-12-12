@@ -1,5 +1,7 @@
 # Forge Item Effects System
 
+> **Status**: 🔮 **FUTURE FEATURE** - Design document only. This effect system is NOT yet implemented in the game. Currently, forged items are cosmetic with no gameplay effects.
+
 Design document for passive effects and active abilities granted by forged items.
 
 ## Overview

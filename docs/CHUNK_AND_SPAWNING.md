@@ -94,13 +94,14 @@ Enemies spawn per-chunk, managed by the chunk system rather than player distance
 1. **When chunk loads**: Spawn enemies to fill target count
 2. **When chunk unloads**: Despawn enemies (except corpses with loot)
 3. **When enemies die**: System tops up to target count
-4. **Respawn timer**: Dead enemies respawn after 5 minutes
+4. **Respawn timer**: Dead enemies respawn after 90 seconds
 
 ### Configuration
 ```gdscript
-const ENEMIES_PER_CHUNK: int = 60     # Target enemies per chunk
-const CHUNK_SIZE: float = 8000.0       # Must match prop system
-@export var respawn_time: float = 300.0  # 5 minutes
+const ENEMIES_PER_CHUNK: int = 120      # Target enemies per chunk
+var CHUNK_SIZE: float:
+    get: return Constants.CHUNK_SIZE    # 8000.0
+@export var respawn_time: float = 90.0  # 90 seconds
 ```
 
 ### Spawn Priority
