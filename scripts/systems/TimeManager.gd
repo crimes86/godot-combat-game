@@ -190,3 +190,4 @@ func advance_time(hours: float):
 	elif current_time < 0:
 		current_time += 24.0
 	update_lighting()
+	emit_signal("time_changed", current_time)  # Notify listeners (like TestHub)
