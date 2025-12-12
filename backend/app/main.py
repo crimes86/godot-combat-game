@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, Response, Form
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session as DbSession
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -8,6 +9,9 @@ from urllib.parse import urlencode
 import os
 from authlib.integrations.starlette_client import OAuth
 from starlette.middleware.sessions import SessionMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
 load_dotenv()
 from app.logging_config import setup_logging
@@ -55,6 +59,37 @@ setup_logging()
 
 app = FastAPI(title="SocialAuth", description="Gaming achievement aggregator for Godot games")
 templates = Jinja2Templates(directory="templates")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CORS CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+# Allow Godot client and web dashboard to access API
+CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "").split(",") if os.environ.get("CORS_ORIGINS") else []
+# Always allow localhost for development
+CORS_ORIGINS.extend([
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",  # If you add a separate frontend
+])
+# Filter empty strings
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
+)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RATE LIMITING
+# ═══════════════════════════════════════════════════════════════════════════
+# Protect auth endpoints from brute force attacks
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.on_event("startup")
@@ -2722,6 +2757,7 @@ async def logout(request: Request, db: DbSession = Depends(get_db)):
 # =============================================================================
 
 @app.get("/api/auth/device")
+@limiter.limit("10/minute")
 async def create_device_code(request: Request):
     """
     Generate a device code for Godot auth flow.
@@ -2730,6 +2766,8 @@ async def create_device_code(request: Request):
     {APP_URL}/auth/steam/login?device_code={device_code}
 
     Then polls /api/auth/status?device_code={device_code} until authenticated.
+
+    Rate limited: 10 requests per minute per IP.
     """
     logger.info(f"[DEVICE AUTH] Request received from {request.client.host}")
     cleanup_expired_device_codes()
@@ -2753,7 +2791,8 @@ async def create_device_code(request: Request):
 
 
 @app.get("/api/auth/status")
-async def check_device_auth_status(device_code: str):
+@limiter.limit("60/minute")
+async def check_device_auth_status(request: Request, device_code: str):
     """
     Check if a device code has been authenticated.
 
@@ -2765,6 +2804,8 @@ async def check_device_auth_status(device_code: str):
     On success, the response includes a `token` field that Godot should store
     and send with subsequent API requests via the Authorization header:
         Authorization: Bearer <token>
+
+    Rate limited: 60 requests per minute per IP (for polling).
     """
     cleanup_expired_device_codes()
 
@@ -3976,7 +4017,9 @@ async def demo_dashboard(request: Request):
 # =============================================================================
 
 @app.post("/api/admin/grant")
+@limiter.limit("5/minute")
 async def grant_admin(
+    request: Request,
     secret: str,
     db: DbSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
