@@ -85,11 +85,10 @@ var combat_system: PlayerCombat = null
 var cone_visualizer: Polygon2D = null
 var circle_visualizer: Node2D = null  # Ranged weapon targeting circle (at cursor)
 var _last_heal_pulse_time: float = 0.0  # Rate limit heal pulse visuals
-var debug_mode: bool = false
+var debug_mode: bool = false  # Synced with Constants.debug_display_visible
 var debug_shapes: Node2D = null
 var world_debug_nodes: Array = []  # Track world-space debug nodes for cleanup
 var debug_update_timer: float = 0.0  # Throttle debug updates
-var debug_label: Label = null  # Display debug info (coordinates, etc.)
 var cone_update_timer: float = 0.0  # Throttle cone color updates (CRITICAL for performance!)
 
 # Camera zoom
@@ -270,22 +269,11 @@ func _ready() -> void:
 		debug_shapes.z_index = 1000
 		add_child(debug_shapes)
 
-		# Setup debug label (screen-space coordinates display)
-		var debug_canvas = CanvasLayer.new()
-		debug_canvas.name = "DebugCanvas"
-		debug_canvas.layer = 100  # Draw on top of everything
-		add_child(debug_canvas)
+		# Connect to F3 debug toggle from Constants (syncs debug_mode)
+		if Constants:
+			Constants.debug_display_toggled.connect(_on_constants_debug_toggled)
+			debug_mode = Constants.debug_display_visible
 
-		debug_label = Label.new()
-		debug_label.name = "DebugLabel"
-		debug_label.position = Vector2(10, 10)  # Top-left corner
-		debug_label.add_theme_font_size_override("font_size", 16)
-		debug_label.add_theme_color_override("font_color", Color.WHITE)
-		debug_label.add_theme_color_override("font_outline_color", Color.BLACK)
-		debug_label.add_theme_constant_override("outline_size", 2)
-		debug_label.visible = false  # Hidden by default
-		debug_canvas.add_child(debug_label)
-	
 	# Setup camera - only for the local player
 	camera = get_node_or_null("Camera2D")
 	if camera:
@@ -941,11 +929,7 @@ func _input(event: InputEvent) -> void:
 				# Sync gender change to other players
 				_sync_appearance_to_network()
 
-			KEY_F3 when is_dev_build:
-				debug_mode = !debug_mode
-				print("Debug mode: ", "ON" if debug_mode else "OFF")
-				debug_update_timer = 0.0  # Reset timer
-				update_debug_visualization()  # Immediate update
+			# F3 handled by Constants.toggle_debug_display() - Player connects via _on_constants_debug_toggled
 
 			KEY_F6 when is_dev_build:
 				# Reset to level 1
@@ -2016,6 +2000,8 @@ func create_player_sprite() -> void:
 
 	# Load weapon textures based on equipped weapon
 	var weapon_slash_tex = null
+	var weapon_slash2_tex = null  # Multi-slash variant 2
+	var weapon_slash3_tex = null  # Multi-slash variant 3
 	var weapon_walk_tex = null
 	var weapon_type = "unarmed"  # Default to unarmed when no weapon equipped
 	var effective_weapon_type = ""
@@ -2107,6 +2093,16 @@ func create_player_sprite() -> void:
 			if ResourceLoader.exists(weapon_path + "slash.png"):
 				weapon_slash_tex = load(weapon_path + "slash.png")
 
+		# Load additional slash variants for multi-slash weapons (slash2, slash3)
+		if ResourceLoader.exists(weapon_path + "slash2.png"):
+			weapon_slash2_tex = load(weapon_path + "slash2.png")
+			if DEBUG_EQUIP:
+				print("[Equip] Multi-slash weapon: loaded slash2.png")
+		if ResourceLoader.exists(weapon_path + "slash3.png"):
+			weapon_slash3_tex = load(weapon_path + "slash3.png")
+			if DEBUG_EQUIP:
+				print("[Equip] Multi-slash weapon: loaded slash3.png")
+
 		# Load walk texture - check forged folder first for pre-tinted sprites
 		if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "walk.png"):
 			weapon_walk_tex = load(forged_weapon_path + "walk.png")
@@ -2118,8 +2114,9 @@ func create_player_sprite() -> void:
 		if DEBUG_EQUIP:
 			print("[Equip] Loading weapon sprites: %s → %s (attack=%s, walk=%s)" % [weapon_type, animation_type, "OK" if weapon_slash_tex else "MISSING", "OK" if weapon_walk_tex else "MISSING"])
 
-		if DEBUG_FORGED_EQUIP and is_forged_weapon:
-			print("[ForgedEquip]   TODO: Apply forged effects (glow, tint, particles)")
+		# Apply forged weapon visual effects (glow, particles, trails)
+		if is_forged_weapon:
+			_apply_forged_weapon_effects(forged_weapon_data)
 	else:
 		if DEBUG_EQUIP:
 			print("[Equip] No weapon equipped - unarmed")
@@ -2252,15 +2249,67 @@ func create_player_sprite() -> void:
 		elif ResourceLoader.exists(hands_path + hands_sprite_name + "_slash.png"):
 			hands_slash_tex = load(hands_path + hands_sprite_name + "_slash.png")
 
-	# Check for equipped head armor
+	# Check for equipped head armor (supports forged armor with visual overrides)
 	var head_sprite_name = ""
+	var is_forged_head = false
+	var forged_head_data: Dictionary = {}
 	if is_local and CharacterStats.equipped_armor.has("head") and CharacterStats.equipped_armor["head"] != null:
 		var head_armor = CharacterStats.equipped_armor["head"]
 		head_sprite_name = head_armor.get("sprite_name", "")
+		is_forged_head = head_armor.get("is_forged", false)
+		if is_forged_head:
+			forged_head_data = head_armor
 	elif not is_local and remote_head_sprite != "":
 		head_sprite_name = remote_head_sprite
 
-	if head_sprite_name != "":
+	# Load forged head armor from ForgeItemDB (with visual override support)
+	if is_forged_head and forged_head_data.get("forged_item_id", "") != "":
+		var forged_item_id = forged_head_data.get("forged_item_id", "")
+		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
+		if forged_db_data and forged_db_data.has("sprites"):
+			var sprites = forged_db_data["sprites"]
+			# Load head sprites from forged item
+			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
+				head_walk_tex = load(sprites["walk"])
+			# Pick slash or thrust based on weapon
+			var attack_key = "thrust" if uses_thrust else "slash"
+			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
+				head_slash_tex = load(sprites[attack_key])
+			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
+				head_slash_tex = load(sprites["slash"])
+
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Loaded forged head armor: %s" % forged_item_id)
+
+			# Check for visual_override_slots (e.g., robes that override chest/legs)
+			if forged_db_data.has("visual_override_slots"):
+				var overrides = forged_db_data["visual_override_slots"]
+
+				# Override chest (shirt) sprites if specified
+				if overrides.has("chest"):
+					var chest_override = overrides["chest"]
+					if chest_override.has("walk") and ResourceLoader.exists(chest_override["walk"]):
+						shirt_walk_tex = load(chest_override["walk"])
+					if chest_override.has(attack_key) and ResourceLoader.exists(chest_override[attack_key]):
+						shirt_slash_tex = load(chest_override[attack_key])
+					elif chest_override.has("slash") and ResourceLoader.exists(chest_override["slash"]):
+						shirt_slash_tex = load(chest_override["slash"])
+					if DEBUG_EQUIP:
+						print("[ForgedArmor]   Visual override: chest -> %s" % chest_override.get("walk", ""))
+
+				# Override legs (pants) sprites if specified
+				if overrides.has("legs"):
+					var legs_override = overrides["legs"]
+					if legs_override.has("walk") and ResourceLoader.exists(legs_override["walk"]):
+						pants_walk_tex = load(legs_override["walk"])
+					if legs_override.has(attack_key) and ResourceLoader.exists(legs_override[attack_key]):
+						pants_slash_tex = load(legs_override[attack_key])
+					elif legs_override.has("slash") and ResourceLoader.exists(legs_override["slash"]):
+						pants_slash_tex = load(legs_override["slash"])
+					if DEBUG_EQUIP:
+						print("[ForgedArmor]   Visual override: legs -> %s" % legs_override.get("walk", ""))
+	elif head_sprite_name != "":
+		# Standard (non-forged) head armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
 		var head_armor_path = "res://assets/characters/head_female_armor/" if selected_gender == Gender.FEMALE else "res://assets/characters/head/"
 		if not ResourceLoader.exists(head_armor_path + head_sprite_name + "_walk.png"):
@@ -2290,7 +2339,7 @@ func create_player_sprite() -> void:
 
 	# Setup sprite with shadow + all armor layers + base_head + hair
 	var is_female = (selected_gender == Gender.FEMALE)
-	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, shadow_walk_tex, shadow_slash_tex, base_head_walk_tex, base_head_slash_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, hair_walk_tex, hair_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type, is_female)
+	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, shadow_walk_tex, shadow_slash_tex, base_head_walk_tex, base_head_slash_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, hair_walk_tex, hair_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type, is_female, weapon_slash2_tex, weapon_slash3_tex)
 
 	# Gun pose body swap: If weapon is a gun type, load Skorpio body for walk and shoot animations
 	# This makes the character use the shooting stance body when walking/shooting with a gun
@@ -2308,6 +2357,9 @@ func create_player_sprite() -> void:
 				print("[Equip] Gun weapon detected - loaded Skorpio gun pose body for walk animations")
 				if gun_body_shoot_tex:
 					print("[Equip] Gun shoot animation also loaded")
+
+	# Cape/back slot: Load cape sprites if equipped
+	_setup_equipped_cape(character_sprite)
 
 	add_child(character_sprite)
 
@@ -2661,6 +2713,12 @@ func switch_visualizer_mode() -> void:
 	if circle_visualizer:
 		circle_visualizer.visible = is_ranged
 
+func _on_constants_debug_toggled(visible: bool) -> void:
+	"""Called when F3 debug display is toggled via Constants"""
+	debug_mode = visible
+	debug_update_timer = 0.0  # Reset timer
+	update_debug_visualization()  # Immediate update
+
 func update_debug_visualization() -> void:
 	if not debug_shapes:
 		return
@@ -2677,14 +2735,6 @@ func update_debug_visualization() -> void:
 			node.get_parent().remove_child(node)
 			node.queue_free()
 	world_debug_nodes.clear()
-
-	# Update debug label visibility and text
-	if debug_label:
-		if debug_mode:
-			debug_label.visible = true
-			debug_label.text = "Position: (%.1f, %.1f)" % [global_position.x, global_position.y]
-		else:
-			debug_label.visible = false
 
 	# If debug mode is off, stop here
 	if not debug_mode:
@@ -4356,3 +4406,157 @@ func clear_all_movement_modifiers() -> void:
 	# Keep local copy for fallback/compatibility
 	movement_modifiers.clear()
 	print("🦶 All movement modifiers cleared")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CAPE/BACK SLOT EQUIPMENT
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _setup_equipped_cape(sprite: SimpleLPCSprite) -> void:
+	"""Load and setup cape sprites if player has a cape equipped in the back slot.
+	Checks inventory for forged capes and loads their sprites from ForgeItemDB."""
+	if not sprite:
+		return
+
+	# Check for equipped cape in inventory (slot type "back" or item type "cape")
+	var equipped_cape: Dictionary = {}
+	for slot in range(InventorySystem.inventory_items.size()):
+		var item = InventorySystem.inventory_items[slot]
+		if item and (item.get("slot") == "back" or item.get("type") == "cape"):
+			# Check if item is equipped (in equipment slot)
+			if item.get("equipped", false) or item.get("is_equipped", false):
+				equipped_cape = item
+				break
+
+	# Also check CharacterStats for equipped back slot
+	if equipped_cape.is_empty() and CharacterStats:
+		var back_item = CharacterStats.get_equipped_item("back")
+		if back_item and not back_item.is_empty():
+			equipped_cape = back_item
+
+	if equipped_cape.is_empty():
+		# No cape equipped - remove any existing cape layer
+		sprite.remove_cape()
+		return
+
+	# Get forged item data from ForgeItemDB
+	var forged_item_id = equipped_cape.get("item_id", equipped_cape.get("forged_item_id", ""))
+	if forged_item_id == "":
+		if DEBUG_EQUIP:
+			print("[Equip] Cape equipped but no item_id - cannot load sprites")
+		return
+
+	var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
+	if not forged_db_data or not forged_db_data.has("sprites"):
+		if DEBUG_EQUIP:
+			print("[Equip] Cape item_id '%s' not found in ForgeItemDB or has no sprites" % forged_item_id)
+		return
+
+	var sprites = forged_db_data["sprites"]
+
+	# Load cape textures
+	var cape_walk_tex: Texture2D = null
+	var cape_slash_tex: Texture2D = null
+	var cape_thrust_tex: Texture2D = null
+	var cape_hurt_tex: Texture2D = null
+
+	if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
+		cape_walk_tex = load(sprites["walk"])
+	if sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
+		cape_slash_tex = load(sprites["slash"])
+	if sprites.has("thrust") and ResourceLoader.exists(sprites["thrust"]):
+		cape_thrust_tex = load(sprites["thrust"])
+	if sprites.has("hurt") and ResourceLoader.exists(sprites["hurt"]):
+		cape_hurt_tex = load(sprites["hurt"])
+
+	if not cape_walk_tex:
+		if DEBUG_EQUIP:
+			print("[Equip] Cape has no walk texture - cannot setup cape layer")
+		return
+
+	# Setup the cape layer
+	sprite.setup_cape(cape_walk_tex, cape_slash_tex, cape_thrust_tex, cape_hurt_tex)
+
+	if DEBUG_EQUIP:
+		print("[Equip] Cape equipped: %s" % forged_db_data.get("item_name", forged_item_id))
+		print("[Equip]   Walk: %s" % sprites.get("walk", "none"))
+		print("[Equip]   Slash: %s" % sprites.get("slash", "none"))
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FORGED WEAPON VISUAL EFFECTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _apply_forged_weapon_effects(forged_data: Dictionary) -> void:
+	"""Apply visual effects to forged weapons based on stats and theme.
+	Effects scale with weapon level/kills using the evolution tier system."""
+
+	# Clear any existing forged weapon effects first
+	_clear_forged_weapon_effects()
+
+	if forged_data.is_empty():
+		return
+
+	# Get weapon stats from the equipped weapon resource
+	var weapon_stats: WeaponStats = null
+	if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.weapon_stats:
+		weapon_stats = CharacterStats.equipped_weapon.weapon_stats
+
+	# Get theme and base effect from forged data
+	var theme = forged_data.get("theme", "generic")
+	var base_effect = forged_data.get("effect_name", "")
+	var glow_color_str = forged_data.get("glow_color", "")
+
+	# Parse glow color if provided
+	var theme_color: Color = Color.WHITE
+	if glow_color_str != "" and glow_color_str != "none":
+		theme_color = Color(glow_color_str)
+
+	# Use WeaponVisualEvolution to calculate effects based on stats
+	var effect_config = WeaponVisualEvolution.get_effects_for_weapon(weapon_stats, theme, base_effect)
+
+	if DEBUG_FORGED_EQUIP:
+		print("[ForgedEquip] ═══════════════════════════════════════")
+		print("[ForgedEquip] Applying visual effects:")
+		print("[ForgedEquip]   Theme: %s" % theme)
+		print("[ForgedEquip]   Evolution Tier: %s" % effect_config.tier_name)
+		print("[ForgedEquip]   Effects: %s" % effect_config.effects)
+		print("[ForgedEquip]   Intensity: %.2f" % effect_config.intensity)
+		print("[ForgedEquip]   Particle Multiplier: %.2f" % effect_config.particle_multiplier)
+		print("[ForgedEquip]   Trail Enabled: %s" % effect_config.trail_enabled)
+		print("[ForgedEquip]   Aura Enabled: %s" % effect_config.aura_enabled)
+		if effect_config.special_effects.size() > 0:
+			print("[ForgedEquip]   Achievement Effects: %s" % effect_config.special_effects)
+
+	# Skip if no effects to apply
+	if effect_config.effects.is_empty():
+		if DEBUG_FORGED_EQUIP:
+			print("[ForgedEquip]   No effects to apply (virgin weapon with minimal visuals)")
+		return
+
+	# Prepare modifiers for effect application
+	var modifiers = {
+		"effect_intensity": effect_config.intensity,
+		"particle_multiplier": effect_config.particle_multiplier,
+		"theme_color": theme_color
+	}
+
+	# Apply effects using ForgeVisualEffects autoload
+	ForgeVisualEffects.apply_effects_to_entity(self, effect_config.effects, modifiers)
+
+	if DEBUG_FORGED_EQUIP:
+		print("[ForgedEquip] ✓ Visual effects applied successfully")
+
+func _clear_forged_weapon_effects() -> void:
+	"""Clear all forged weapon visual effects from the player"""
+	ForgeVisualEffects.clear_effects_from_entity(self)
+	if DEBUG_FORGED_EQUIP:
+		print("[ForgedEquip] Cleared existing forged weapon effects")
+
+func refresh_forged_weapon_effects() -> void:
+	"""Refresh forged weapon effects - call after weapon stats update (level up, etc.)"""
+	if not CharacterStats.equipped_weapon or not CharacterStats.equipped_weapon.is_forged:
+		_clear_forged_weapon_effects()
+		return
+
+	var forged_data = CharacterStats.get_equipped_weapon_data()
+	if forged_data.get("is_forged", false):
+		_apply_forged_weapon_effects(forged_data)

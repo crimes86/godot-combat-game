@@ -185,6 +185,13 @@ const EFFECT_CONFIGS = {
 		"intensity": 1.1,
 		"particle_count": 10
 	},
+	"stone_glow": {
+		"type": "glow",
+		"color": Color(0.5, 0.5, 0.5, 0.4),  # Grey stone glow
+		"secondary_color": Color(0.6, 0.55, 0.5, 0.3),  # Slight warm tint
+		"intensity": 0.8,
+		"pulse": false
+	},
 	"stardust_trail": {
 		"type": "trail",
 		"color": Color(0.8, 0.6, 1.0, 0.5),
@@ -318,6 +325,24 @@ const EFFECT_CONFIGS = {
 		"particle_count": 15,
 		"trigger": "on_attack"
 	},
+	# Bloodborne hunter's weapon - dripping blood particles
+	"blood_particles": {
+		"type": "particles",
+		"color": Color(0.55, 0.0, 0.0, 0.7),  # Dark blood red (#8B0000)
+		"secondary_color": Color(0.3, 0.0, 0.0, 0.5),
+		"intensity": 1.3,
+		"particle_count": 10,
+		"gravity": 50  # Dripping downward
+	},
+	# Dead Cells - floating green cell particles
+	"cell_particles": {
+		"type": "particles",
+		"color": Color(0.0, 1.0, 0.0, 0.7),  # Bright green (#00FF00)
+		"secondary_color": Color(0.2, 0.8, 0.2, 0.5),
+		"intensity": 1.4,
+		"particle_count": 12,
+		"gravity": -20  # Float upward like cells
+	},
 
 	# Discord/Social
 	"discord_sparkle": {
@@ -390,6 +415,122 @@ const EFFECT_CONFIGS = {
 		"intensity": 1.0,
 		"radius": 8
 	},
+
+	# === ACHIEVEMENT EFFECTS (Unlocked by per-weapon achievements) ===
+
+	# Blood drip for FIRST_BLOOD achievement
+	"blood_drip": {
+		"type": "particles",
+		"color": Color(0.5, 0.0, 0.0, 0.8),
+		"intensity": 0.8,
+		"particle_count": 2,
+		"gravity": 30
+	},
+
+	# Centurion flash for 100 kills
+	"centurion_flash": {
+		"type": "glow",
+		"color": Color(0.8, 0.6, 0.0, 0.6),
+		"intensity": 1.2,
+		"radius": 10,
+		"pulse": true
+	},
+
+	# Tiny skull orbit for SLAYER achievement (1000 kills)
+	"skull_orbit": {
+		"type": "particles",
+		"color": Color(0.9, 0.9, 0.9, 0.7),
+		"intensity": 1.0,
+		"particle_count": 3,
+		"gravity": 0
+	},
+
+	# Crown/halo for LEGEND achievement (10000 kills)
+	"legend_crown": {
+		"type": "glow",
+		"color": Color(1.0, 0.85, 0.0, 0.7),
+		"intensity": 1.5,
+		"radius": 20,
+		"pulse": true
+	},
+
+	# Pristine sparkle for PERFECTIONIST (100 kills, 0 deaths)
+	"pristine_sparkle": {
+		"type": "particles",
+		"color": Color(1.0, 1.0, 1.0, 0.8),
+		"secondary_color": Color(0.9, 0.95, 1.0, 0.6),
+		"intensity": 1.3,
+		"particle_count": 6,
+		"gravity": -5
+	},
+
+	# Lightning crackle for CRIT_MASTER (50% crit rate)
+	"crit_lightning": {
+		"type": "particles",
+		"color": Color(1.0, 1.0, 0.5, 0.9),
+		"secondary_color": Color(0.8, 0.9, 1.0, 0.7),
+		"intensity": 1.4,
+		"particle_count": 4,
+		"particle_texture": "lightning"
+	},
+
+	# Chain links for CHAIN_KING achievement
+	"chain_orbit": {
+		"type": "particles",
+		"color": Color(0.7, 0.7, 0.8, 0.6),
+		"intensity": 1.0,
+		"particle_count": 5,
+		"gravity": 0
+	},
+
+	# Explosion particles for OVERKILL achievement
+	"overkill_explosion": {
+		"type": "burst",
+		"color": Color(1.0, 0.5, 0.0, 0.8),
+		"secondary_color": Color(1.0, 0.2, 0.0, 0.6),
+		"intensity": 1.5,
+		"trigger": "on_kill"
+	},
+
+	# Time-worn patina for VETERAN (100+ hours equipped)
+	"veteran_patina": {
+		"type": "glow",
+		"color": Color(0.6, 0.5, 0.4, 0.3),
+		"intensity": 0.8,
+		"radius": 6
+	},
+
+	# === LEGENDARY/MYTHIC TIER EFFECTS ===
+
+	# Floating ember particles for Mythic dark souls weapons
+	"floating_embers": {
+		"type": "particles",
+		"color": Color(1.0, 0.5, 0.1, 0.7),
+		"secondary_color": Color(1.0, 0.3, 0.0, 0.5),
+		"intensity": 1.3,
+		"particle_count": 15,
+		"gravity": -15
+	},
+
+	# Reaching void tendrils for Legendary Hollow Knight weapons
+	"reaching_tendrils": {
+		"type": "particles",
+		"color": Color(0.1, 0.0, 0.2, 0.8),
+		"secondary_color": Color(0.2, 0.0, 0.3, 0.6),
+		"intensity": 1.4,
+		"particle_count": 8,
+		"gravity": -5
+	},
+
+	# Divine golden overlay for Legendary Hades weapons
+	"divine_overlay": {
+		"type": "glow",
+		"color": Color(1.0, 0.9, 0.4, 0.5),
+		"secondary_color": Color(1.0, 0.7, 0.0, 0.3),
+		"intensity": 1.4,
+		"radius": 18,
+		"pulse": true
+	},
 }
 
 # Active effects on entities
@@ -404,7 +545,13 @@ func _ready() -> void:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 func apply_effects_to_entity(entity: Node2D, effects: Array, modifiers: Dictionary = {}) -> void:
-	"""Apply visual effects to an entity (player, weapon, etc.)"""
+	"""Apply visual effects to an entity (player, weapon, etc.)
+
+	Modifiers:
+	- effect_intensity: Multiplier for glow/effect intensity (default 1.0)
+	- particle_multiplier: Multiplier for particle counts (default 1.0)
+	- theme_color: Override color for effects (optional)
+	"""
 	var entity_id = entity.get_instance_id()
 
 	# Clear existing effects
@@ -412,11 +559,19 @@ func apply_effects_to_entity(entity: Node2D, effects: Array, modifiers: Dictiona
 
 	var effect_nodes = []
 	var intensity_multiplier = modifiers.get("effect_intensity", 1.0)
+	var particle_multiplier = modifiers.get("particle_multiplier", 1.0)
 
 	for effect_name in effects:
 		if effect_name in EFFECT_CONFIGS:
 			var config = EFFECT_CONFIGS[effect_name].duplicate()
 			config["intensity"] = config.get("intensity", 1.0) * intensity_multiplier
+
+			# Apply particle multiplier for particle-based effects
+			if config.has("particle_count"):
+				config["particle_count"] = int(config["particle_count"] * particle_multiplier)
+				# Ensure at least 1 particle if multiplier is > 0
+				if particle_multiplier > 0 and config["particle_count"] < 1:
+					config["particle_count"] = 1
 
 			# Apply theme color override if provided
 			if modifiers.has("theme_color"):

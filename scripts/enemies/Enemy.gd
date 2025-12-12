@@ -108,22 +108,80 @@ func _exit_tree() -> void:
 		if network_enemy_mgr:
 			network_enemy_mgr.unregister_enemy(network_id)
 
+# ============================================
+# TTK FRAMEWORK HELPERS
+# ============================================
+
+func _calculate_window_damage_for_level(level: int) -> float:
+	"""Calculate expected damage from a perfect weakpoint window at a given player level.
+	This mirrors CharacterStats.get_window_damage() but without needing the player instance."""
+
+	# Calculate base damage at this level
+	# Player stats at level N: STR = 10 + (N-1)*2, starting weapon ~2 damage
+	var str_at_level = 10 + (level - 1) * 2
+	var stat_damage = 5.0 + (str_at_level - 10) * 0.5
+	var weapon_damage = 2.0 + level * 1.5  # Estimated weapon damage scaling
+
+	var base_damage = stat_damage + weapon_damage
+
+	# Crit multiplier
+	var crit_mult = Constants.CRIT_DAMAGE_MULTIPLIER if "CRIT_DAMAGE_MULTIPLIER" in Constants else 2.0
+
+	# Weakpoint count scales with level
+	var weakpoint_count = 1
+	if level >= 21:
+		weakpoint_count = 3
+	elif level >= 11:
+		weakpoint_count = 2
+
+	return base_damage * crit_mult * weakpoint_count
+
 func _ready() -> void:
 	# Set collision layers: enemies on layer 1, detect layers 1 (other entities) and 2 (obstacles like trees)
 	collision_layer = 1
 	collision_mask = 3  # Bitmask: 1 (layer 1) + 2 (layer 2) = 3
 
-	# Scale stats by enemy level
-	max_health = Constants.ENEMY_BASE_HEALTH * pow(Constants.ENEMY_HEALTH_SCALING, enemy_level - 1)  # ~500 HP at level 10
+	# Determine enemy type for TTK framework
+	var is_guardian = get_meta("is_guardian", false)
+	var is_boss = is_in_group("boss")
+
+	# ============================================
+	# TTK-BASED HP SCALING
+	# ============================================
+	# HP is calculated to require X weakpoint windows to kill, ensuring
+	# consistent TTK regardless of player damage scaling.
+	#
+	# Formula: HP = window_damage × expected_windows × type_multiplier
+	# window_damage scales with enemy level (matching player progression)
+
+	# Calculate expected window damage at this enemy's level
+	# This simulates a same-level player fighting this enemy
+	var window_damage = _calculate_window_damage_for_level(enemy_level)
+
+	# Determine expected windows and type multiplier
+	var expected_windows: int
+	var type_mult: float
+
+	if is_boss:
+		expected_windows = Constants.TTK_WINDOWS_BOSS if "TTK_WINDOWS_BOSS" in Constants else 7
+		type_mult = Constants.TTK_MULT_BOSS if "TTK_MULT_BOSS" in Constants else 4.0
+	elif is_guardian:
+		expected_windows = Constants.TTK_WINDOWS_ELITE if "TTK_WINDOWS_ELITE" in Constants else 3
+		type_mult = Constants.TTK_MULT_ELITE if "TTK_MULT_ELITE" in Constants else 1.75
+	else:
+		expected_windows = Constants.TTK_WINDOWS_TRASH if "TTK_WINDOWS_TRASH" in Constants else 1
+		type_mult = Constants.TTK_MULT_TRASH if "TTK_MULT_TRASH" in Constants else 1.0
+
+	# Calculate HP based on TTK framework
+	max_health = window_damage * expected_windows * type_mult
+
+	# Scale damage by enemy level (original formula)
 	base_damage = Constants.ENEMY_BASE_DAMAGE * pow(Constants.ENEMY_DAMAGE_SCALING, enemy_level - 1)
 	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
-	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))  # Same scaling as XP
+	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 
-	# Guardian skeleton buffs - ruins guardians are tougher than regular skeletons
-	# Designed for healer+tank duo to be optimal, solo is rough but doable
-	var is_guardian = get_meta("is_guardian", false)
+	# Guardian/Elite buffs (damage, XP, gold - HP already handled by TTK)
 	if is_guardian:
-		max_health *= 1.75  # 75% more HP - fights last longer, need sustained healing
 		base_damage *= 1.5  # 50% more damage - pressures tank, rewards having a healer
 		xp_reward = int(xp_reward * 1.5)  # 50% more XP - worth the challenge
 		gold_drop = int(gold_drop * 1.5)  # 50% more gold
@@ -1524,6 +1582,16 @@ func die() -> void:
 	if QuestManager:
 		var is_guardian = get_meta("is_guardian", false)
 		QuestManager.on_enemy_killed("skeleton", enemy_level, is_guardian)
+
+	# Forged weapon stats: track kill for equipped forged weapons
+	if should_grant_xp:
+		var player_for_stats = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+		if player_for_stats and player_for_stats.has_node("PlayerCombat"):
+			var combat_system = player_for_stats.get_node("PlayerCombat")
+			if combat_system.has_method("track_enemy_killed"):
+				var is_elite_enemy = get_meta("is_guardian", false)
+				var is_boss_enemy = is_in_group("boss")
+				combat_system.track_enemy_killed("skeleton", is_elite_enemy, is_boss_enemy)
 
 	# Transition to corpse state (don't despawn)
 	become_corpse()

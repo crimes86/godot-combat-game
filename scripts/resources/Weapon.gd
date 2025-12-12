@@ -13,6 +13,7 @@ class_name Weapon
 @export var weapon_type: String = "sword"  # sword, axe, staff, dagger, etc (visual/flavor)
 @export var damage_type: String = "slash"  # blunt, slash, pierce (for crit window mechanics)
 @export_multiline var description: String = ""
+@export var is_two_handed: bool = false  # If true, blocks off-hand slot (shields, etc)
 
 # ============================================
 # COMBAT STATS
@@ -65,6 +66,14 @@ class_name Weapon
 @export var artifact_traits: Array = []
 
 # ============================================
+# FORGED WEAPON STATS (Combat Biography)
+# ============================================
+
+@export var is_forged: bool = false  # True for forged weapons from achievements
+@export var forged_id: String = ""   # Unique ID for forged item (token_id or item_id)
+var weapon_stats: WeaponStats = null  # Combat stats tracker (loaded separately)
+
+# ============================================
 # VISUAL PROPERTIES
 # ============================================
 
@@ -106,14 +115,24 @@ func get_rarity_color() -> Color:
 			return Color.WHITE
 
 func get_total_damage() -> float:
-	"""Returns total damage including artifact bonuses"""
+	"""Returns total damage including artifact and forged weapon bonuses"""
 	var damage = base_damage
 
-	# Artifact scaling
+	# Artifact scaling (legacy)
 	if is_artifact:
 		damage += artifact_level * 2.0
 
+	# Forged weapon stats bonus (soft cap system)
+	if is_forged and weapon_stats:
+		damage += weapon_stats.get_damage_bonus()
+
 	return damage
+
+func get_forged_crit_bonus() -> float:
+	"""Returns crit chance bonus from forged weapon stats"""
+	if is_forged and weapon_stats:
+		return weapon_stats.get_crit_bonus()
+	return 0.0
 
 func get_total_healing() -> float:
 	"""Returns total healing power including artifact bonuses"""
@@ -142,7 +161,9 @@ func is_burst_weapon() -> bool:
 	return burst_count > 1
 
 func get_display_name() -> String:
-	"""Returns formatted display name with rarity color"""
+	"""Returns formatted display name with level"""
+	if is_forged and weapon_stats and weapon_stats.level > 0:
+		return "%s [Lv. %d]" % [weapon_name, weapon_stats.level]
 	if is_artifact and artifact_level > 0:
 		return "%s [Lvl %d]" % [weapon_name, artifact_level]
 	return weapon_name
@@ -153,22 +174,47 @@ func can_equip(player_level: int) -> bool:
 
 func get_tooltip_text() -> String:
 	"""Generate tooltip text for UI"""
-	var text = "[b]%s[/b]\n" % weapon_name
-	text += "[color=#888888]%s[/color]\n\n" % get_rarity_name()
+	var text = "[b]%s[/b]\n" % get_display_name()
+	text += "[color=#888888]%s[/color]" % get_rarity_name()
+
+	# Forged weapon visual tier
+	if is_forged and weapon_stats:
+		text += " · %s" % weapon_stats.get_visual_tier_name()
+	text += "\n\n"
 
 	if is_healing_weapon():
 		text += "Healing: +%.1f\n" % get_total_healing()
 		text += "Heal Radius: %.0f\n" % heal_radius
 	else:
 		text += "Damage: +%.1f\n" % get_total_damage()
-	
+
 	if attack_speed_bonus != 0:
 		var speed_text = "faster" if attack_speed_bonus < 0 else "slower"
 		text += "Attack Speed: %.0f%% %s\n" % [abs(attack_speed_bonus) * 100, speed_text]
-	
-	if crit_chance_bonus != 0:
-		text += "Crit Chance: +%.1f%%\n" % (crit_chance_bonus * 100)
-	
+
+	var total_crit = crit_chance_bonus + get_forged_crit_bonus()
+	if total_crit != 0:
+		text += "Crit Chance: +%.1f%%\n" % (total_crit * 100)
+
+	# Forged weapon stats (quick tooltip version)
+	if is_forged and weapon_stats:
+		if weapon_stats.is_virgin():
+			text += "\n[color=gold]✧ PRISTINE ✧[/color]\n"
+			text += "[i]Never drawn in battle[/i]\n"
+		else:
+			text += "\n%s kills" % _format_number(weapon_stats.kills_total)
+			if weapon_stats.get_crit_rate_lifetime() > 0:
+				text += " · %.1f%% crit" % weapon_stats.get_crit_rate_lifetime()
+			text += "\n"
+			# Show top 2 achievement icons
+			if weapon_stats.achievements.size() > 0:
+				var icons = ""
+				var count = mini(weapon_stats.achievements.size(), 2)
+				for i in range(count):
+					icons += weapon_stats.get_achievement_icon(weapon_stats.achievements[i])
+				text += icons + "\n"
+		text += "\n[color=#666666][Right-click to inspect][/color]\n"
+
 	if is_artifact:
 		text += "\n[color=gold]⚡ ARTIFACT WEAPON ⚡[/color]\n"
 		text += "Artifact Level: %d/%d\n" % [artifact_level, artifact_max_level]
@@ -177,17 +223,29 @@ func get_tooltip_text() -> String:
 			var trait_count = artifact_traits.size()
 			for i in range(trait_count):
 				text += "  • %s\n" % artifact_traits[i]
-	
+
 	if required_level > 1:
 		text += "\nRequired Level: %d\n" % required_level
-	
+
 	if not can_trade:
 		text += "\n[color=red]Soulbound[/color]"
-	
+
 	if description:
 		text += "\n[i]%s[/i]" % description
-	
+
 	return text
+
+func _format_number(num: int) -> String:
+	"""Format large numbers with commas"""
+	var s = str(num)
+	var result = ""
+	var count = 0
+	for i in range(s.length() - 1, -1, -1):
+		if count > 0 and count % 3 == 0:
+			result = "," + result
+		result = s[i] + result
+		count += 1
+	return result
 
 # ============================================
 # ARTIFACT PROGRESSION

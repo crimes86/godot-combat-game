@@ -54,16 +54,24 @@ WorldTreeManager="*res://scripts/systems/WorldTreeManager.gd"
 RecentlyAdvertisedUI="*res://scripts/ui/RecentlyAdvertisedUI.gd"
 TradeWindowUI="*res://scripts/ui/TradeWindowUI.gd"
 ItemInspectionUI="*res://scripts/ui/ItemInspectionUI.gd"
+WeaponStatsTracker="*res://scripts/systems/WeaponStatsTracker.gd"
+GlobalDebugOverlay="*res://scripts/debug/GlobalDebugOverlay.gd"
 
 [display]
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
+window/vsync/vsync_mode=0
 
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/version_generator/plugin.cfg")
+
+[gui]
+
+theme/default_font_generate_mipmaps=true
+theme/default_font="res://assets/fonts/Inter-Regular.ttf"
 
 [input]
 

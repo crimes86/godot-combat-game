@@ -36,6 +36,7 @@ func spawn_particle_slash(target_position: Vector2, is_critical: bool) -> void:
 	var blood = CPUParticles2D.new()
 	blood.global_position = target_position
 	blood.rotation = direction.angle()
+	blood.z_index = 100  # Render above enemy sprites
 
 	# Configure based on crit
 	if is_critical:

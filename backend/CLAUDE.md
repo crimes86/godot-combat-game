@@ -62,6 +62,7 @@ BETA_ACCESS_CODE=<optional - enables beta gate>
 | **Provenance & blockchain backing** | `docs/FORGE_PROVENANCE_SYSTEM.md` |
 | **Bind system (OpenSea ↔ Game)** | `docs/FORGE_BRIDGE_SYSTEM.md` |
 | **Item effects & abilities** | `docs/FORGE_ITEM_EFFECTS.md` |
+| **Forged weapon stats/biography** | `docs/FORGED_WEAPON_STATS.md` |
 | **Immutable design principles** | `docs/GOLDEN_RULES.md` |
 | **Dev mode cleanup checklist** | `docs/DEV_MODE_CHECKLIST.md` |
 
@@ -168,6 +169,7 @@ TIERS = {
 | `app/services/battlenet_services.py` | Battle.net sync logic |
 | `app/routes/wallet_routes.py` | NFT forging + **bridge endpoints** |
 | `app/routes/trading_routes.py` | Trading endpoints |
+| `app/services/weapon_stats_service.py` | **Forged weapon stats persistence** |
 | `alembic/versions/` | Database migrations |
 | `data/items.json` | **Forge item catalog and achievement mappings** |
 

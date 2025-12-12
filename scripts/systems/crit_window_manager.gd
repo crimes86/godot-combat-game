@@ -3,9 +3,19 @@ class_name CritWindowManager
 
 ## Manages crit windows for multiple enemies concurrently
 ## Owns all timers, lifecycle, and state - enemies just provide visual hooks
+##
+## WEAKPOINT TRIGGER SYSTEM (v2.0):
+## Windows are now triggered by HIT COUNT and HEALTH THRESHOLDS, not random crits.
+## This ensures consistent, skill-based combat rather than RNG coinflips.
 
 # State - track MULTIPLE concurrent windows (one per enemy)
 var active_windows: Dictionary = {}  # {enemy_instance: WindowData}
+
+# Hit tracking per enemy (for hit-count-based triggers)
+var enemy_hit_counts: Dictionary = {}  # {enemy_instance: int}
+
+# Health threshold tracking (which thresholds have been triggered)
+var enemy_triggered_thresholds: Dictionary = {}  # {enemy_instance: Array[float]]
 
 # Window data for each enemy
 class WindowData:
@@ -23,6 +33,81 @@ class WindowData:
 		difficulty = d
 
 signal window_completed(success_ratio: float, total_destroyed: int)
+
+# ============================================
+# WEAKPOINT TRIGGER SYSTEM (v2.0)
+# ============================================
+
+func register_hit(target: Node, damage: float, target_health_before: float, target_max_health: float) -> bool:
+	"""
+	Register a hit on an enemy and check if it should trigger a weakpoint window.
+	Returns true if a window was triggered.
+
+	Call this from PlayerCombat INSTEAD of directly calling start_window on crits.
+	"""
+	if not is_instance_valid(target):
+		return false
+
+	# Don't trigger new window if one is already active
+	if active_windows.has(target):
+		return false
+
+	var triggered = false
+
+	# Initialize tracking for this enemy if needed
+	if not enemy_hit_counts.has(target):
+		enemy_hit_counts[target] = 0
+	if not enemy_triggered_thresholds.has(target):
+		enemy_triggered_thresholds[target] = []
+
+	# Increment hit count
+	enemy_hit_counts[target] += 1
+	var current_hits = enemy_hit_counts[target]
+
+	# Check hit count trigger
+	var hit_threshold = Constants.WEAKPOINT_TRIGGER_HIT_COUNT if "WEAKPOINT_TRIGGER_HIT_COUNT" in Constants else 8
+	if current_hits >= hit_threshold:
+		print("🎯 [WeakpointTrigger] Hit count threshold reached (%d hits) - triggering window!" % current_hits)
+		enemy_hit_counts[target] = 0  # Reset counter
+		triggered = true
+
+	# Check health threshold triggers (only if not already triggered by hit count)
+	if not triggered:
+		var health_after = target_health_before - damage
+		var health_pct_before = target_health_before / target_max_health
+		var health_pct_after = health_after / target_max_health
+
+		var thresholds = Constants.WEAKPOINT_TRIGGER_HEALTH_THRESHOLDS if "WEAKPOINT_TRIGGER_HEALTH_THRESHOLDS" in Constants else [0.75, 0.50, 0.25]
+		var already_triggered = enemy_triggered_thresholds[target]
+
+		for threshold in thresholds:
+			# Check if we crossed this threshold with this hit
+			if health_pct_before > threshold and health_pct_after <= threshold:
+				# Check if this threshold was already triggered
+				if threshold not in already_triggered:
+					print("🎯 [WeakpointTrigger] Health threshold crossed (%.0f%%) - triggering window!" % (threshold * 100))
+					already_triggered.append(threshold)
+					triggered = true
+					break  # Only trigger one window per hit
+
+	# Start the window if triggered
+	if triggered:
+		start_window(target)
+
+	return triggered
+
+func clear_enemy_tracking(target: Node) -> void:
+	"""Clear all tracking data for an enemy (call when enemy dies)"""
+	enemy_hit_counts.erase(target)
+	enemy_triggered_thresholds.erase(target)
+
+func has_active_window_for(target: Node) -> bool:
+	"""Check if target has an active weakpoint window"""
+	return active_windows.has(target)
+
+# ============================================
+# ORIGINAL WINDOW MANAGEMENT
+# ============================================
 
 func start_window(target: Node, difficulty: float = 1.0) -> void:
 	"""Start a crit window on the target enemy"""
@@ -149,7 +234,10 @@ func _cleanup_remaining_weakpoints(target: Node, window_data: WindowData) -> voi
 	window_data.weakpoint_refs.clear()
 
 func _on_target_died(target: Node) -> void:
-	"""Target died - end window immediately"""
+	"""Target died - end window immediately and clear tracking"""
+	# Clear hit/threshold tracking for this enemy
+	clear_enemy_tracking(target)
+
 	if not active_windows.has(target):
 		return
 	end_window(target, 0)

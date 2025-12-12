@@ -1,5 +1,43 @@
 # Project Guidelines for Claude
 
+## Documentation Reference
+
+When working on specific systems, consult these docs:
+
+| Topic | Document |
+|-------|----------|
+| **Forge System** | |
+| Item creation workflow | `docs/ACHIEVEMENT_ITEM_CREATION_PROCESS.md` |
+| Achievement shortlist | `docs/FORGE_ACHIEVEMENT_SHORTLIST.md` |
+| Item philosophy & design | `docs/FORGE_ITEM_PHILOSOPHY.md` |
+| Item effects & abilities | `docs/FORGE_ITEM_EFFECTS.md` |
+| Trading & economy | `docs/FORGE_ECONOMY_DESIGN.md` |
+| Bridge system (NFT) | `docs/FORGE_BRIDGE_SYSTEM.md` |
+| Provenance tracking | `docs/FORGE_PROVENANCE_SYSTEM.md` |
+| Forged weapon stats | `docs/FORGED_WEAPON_STATS.md` |
+| **Gameplay Systems** | |
+| Combat mechanics | `docs/COMBAT_SYSTEMS.md` |
+| Chunk spawning | `docs/CHUNK_AND_SPAWNING.md` |
+| Inventory & loot | `docs/INVENTORY_AND_LOOT.md` |
+| Trading hub | `docs/TRADING_HUB_DESIGN.md` |
+| World tree system | `docs/WORLD_TREE_SYSTEM.md` |
+| **Art & Assets** | |
+| LPC sprite guide | `docs/LPC_GUIDE.md` |
+| Asset design guide | `docs/ASSET_DESIGN_GUIDE.md` |
+| Godot item handoff | `docs/GODOT_ITEM_HANDOFF.md` |
+| Gun weapon spec | `docs/GUN_WEAPON_SPEC.md` |
+| **Architecture** | |
+| System architecture | `docs/ARCHITECTURE.md` |
+| Server architecture | `docs/SERVER_ARCHITECTURE.md` |
+| Performance guide | `docs/PERFORMANCE.md` |
+| API contract | `docs/API_CONTRACT.md` |
+| **Rules & Process** | |
+| Golden rules (immutable) | `docs/GOLDEN_RULES.md` |
+| Provider roadmap | `docs/PROVIDER_ROADMAP.md` |
+| Itch.io release | `docs/ITCH_RELEASE_GUIDE.md` |
+
+---
+
 ## Asset Structure (Refactored Dec 2024)
 
 All game assets should follow this canonical structure. Do NOT create new root-level folders.
@@ -164,3 +202,14 @@ python icon_standards.py --preview     # Generate shop grid preview
 ```
 
 See `docs/FORGE_ASSET_GENERATION_GUIDE.md` for full details
+
+## Forged Item Completion
+
+**Full Process:** `docs/ACHIEVEMENT_ITEM_CREATION_PROCESS.md`
+
+Key sections for checking completion:
+- **Phase 4.3** - Update `has_sprites`/`has_icon` in items.json after asset creation
+- **Phase 9.1** - Godot completion checklist (lines 665-690)
+- **Phase 11.1** - Asset verification QA (lines 823-834)
+
+**Source of Truth:** `backend/data/items.json` - check `has_sprites` and `has_icon` flags

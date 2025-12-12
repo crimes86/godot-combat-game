@@ -49,6 +49,9 @@ var DEBUFF_COLOR: Color:
 # Animation timing (snappy for fast-paced combat)
 const ANIM_SPEED = 0.1
 
+# Blocked slot color (for 2h weapon blocking offhand)
+const BLOCKED_SLOT_COLOR = Color(0.2, 0.2, 0.2, 0.8)
+
 func _ready() -> void:
 
 	# Set layer above game prompts (campfire hints are at 100)
@@ -189,6 +192,7 @@ func create_equipment_panel(parent: Control) -> void:
 	# Body-shaped grid layout for equipment
 	# Layout:
 	#        [HEAD]
+	#        [BACK]
 	#   [MH] [CHEST] [OH]
 	#        [ARMS]
 	#       [HANDS]
@@ -201,6 +205,13 @@ func create_equipment_panel(parent: Control) -> void:
 	var head_slot = create_equipment_slot_compact("head", "Head")
 	row1.add_child(head_slot)
 	equipment_slots["head"] = head_slot
+
+	# Row 1.5: Back/Cape slot (centered, between head and chest)
+	var row_back = CenterContainer.new()
+	equipment_vbox.add_child(row_back)
+	var back_slot = create_equipment_slot_compact("back", "Back")
+	row_back.add_child(back_slot)
+	equipment_slots["back"] = back_slot
 
 	# Row 2: Mainhand - Chest - Offhand (horizontal row)
 	var row2_center = CenterContainer.new()
@@ -480,6 +491,21 @@ func create_equipment_slot_compact(slot_name: String, label_text: String, is_too
 	item_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	item_label.visible = false
 	icon_center.add_child(item_label)
+
+	# Blocked overlay (X) for when slot is disabled (e.g., offhand with 2h weapon)
+	var blocked_label = Label.new()
+	blocked_label.name = "BlockedOverlay"
+	blocked_label.text = "X"
+	blocked_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	blocked_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	blocked_label.add_theme_font_size_override("font_size", 28)
+	blocked_label.add_theme_color_override("font_color", Color(0.6, 0.2, 0.2, 0.9))
+	blocked_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	blocked_label.add_theme_constant_override("outline_size", 2)
+	blocked_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	blocked_label.visible = false
+	blocked_label.custom_minimum_size = Vector2(52, 52)
+	icon_center.add_child(blocked_label)
 
 	# Center the slot control
 	var slot_center = CenterContainer.new()
@@ -872,6 +898,12 @@ func refresh_stats() -> void:
 		var equipped = CharacterStats.get_equipped_armor_count()
 		defense_label.text = "Defense: %d (%d/5 equipped)" % [defense, equipped]
 
+func is_offhand_blocked() -> bool:
+	"""Check if offhand slot is blocked by a 2-handed weapon in mainhand"""
+	if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_two_handed:
+		return true
+	return false
+
 func refresh_equipment() -> void:
 	"""Update equipment slot displays"""
 	for slot_name in equipment_slots:
@@ -894,9 +926,28 @@ func refresh_equipment() -> void:
 		# Get icon and label nodes
 		var icon_rect: TextureRect = _find_node_recursive(slot_container, "ItemIcon")
 		var label: Label = _find_node_recursive(slot_container, "ItemLabel")
+		var blocked_overlay: Label = _find_node_recursive(slot_container, "BlockedOverlay")
 
 		if not label:
 			continue
+
+		# Check if offhand slot is blocked by 2h weapon
+		if slot_name == "offhand" and is_offhand_blocked():
+			# Show blocked X overlay
+			if blocked_overlay:
+				blocked_overlay.visible = true
+			if icon_rect:
+				icon_rect.visible = false
+			label.visible = false
+			# Apply blocked style (dark/grayed out)
+			var blocked_style = create_slot_style(BLOCKED_SLOT_COLOR, Color(0.3, 0.1, 0.1), 2)
+			panel.add_theme_stylebox_override("panel", blocked_style)
+			slot_control.tooltip_text = "Off-hand blocked (2H weapon equipped)"
+			continue
+		else:
+			# Ensure blocked overlay is hidden for non-blocked slots
+			if blocked_overlay:
+				blocked_overlay.visible = false
 
 		# Special handling for mainhand - check equipped_weapon instead of equipped_armor
 		var armor_item = null
@@ -1149,6 +1200,9 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	weapon.burst_count = item_dict.get("burst_count", 1)
 	weapon.burst_delay = item_dict.get("burst_delay", 0.10)
 
+	# Two-handed property (blocks offhand slot)
+	weapon.is_two_handed = item_dict.get("is_two_handed", false)
+
 	return weapon
 
 func _get_equipment_drag_data(at_position: Vector2, slot_name: String) -> Variant:
@@ -1211,8 +1265,18 @@ func _can_drop_equipment_data(at_position: Vector2, data: Variant, slot_name: St
 	if not item.has("slot"):
 		return false
 
+	# Block offhand drops when 2h weapon equipped
+	if slot_name == "offhand" and is_offhand_blocked():
+		return false
+
 	# Check if item's slot matches this equipment slot
 	var item_slot = item.get("slot", "")
+
+	# Shields can be equipped to offhand slot
+	var item_type = item.get("item_type", item.get("type", ""))
+	if item_type == "shield" and slot_name == "offhand":
+		return true
+
 	if item_slot != slot_name:
 		return false
 
@@ -1229,7 +1293,12 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 
 	# Validate the drop
 	var item_slot = dragged_item.get("slot", "")
-	if item_slot != slot_name:
+	var item_type = dragged_item.get("item_type", dragged_item.get("type", ""))
+
+	# Allow shields to go to offhand slot
+	var is_shield_to_offhand = (item_type == "shield" and slot_name == "offhand")
+
+	if item_slot != slot_name and not is_shield_to_offhand:
 		return
 
 	if source_type == "inventory":
@@ -1253,6 +1322,19 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 				if weapon:
 					CharacterStats.equip_weapon(weapon, dragged_item)  # Pass item data for forged metadata
 					equipped = true
+			# Check if it's a shield going to offhand
+			elif is_shield_to_offhand:
+				# If there's already something in offhand, unequip it first
+				if CharacterStats.equipped_armor["offhand"]:
+					if DEBUG_EQUIP:
+						print("[Equip] Swapping offhand - unequipping existing item first")
+					CharacterStats.unequip_armor("offhand")
+				# Set the slot to offhand for proper equipping
+				var shield_item = dragged_item.duplicate()
+				shield_item["slot"] = "offhand"
+				equipped = CharacterStats.equip_armor(shield_item)
+				if DEBUG_EQUIP:
+					print("[Equip] Shield equipped to offhand: %s" % shield_item.get("name", "Unknown"))
 			# Otherwise it's armor
 			else:
 				equipped = CharacterStats.equip_armor(dragged_item)

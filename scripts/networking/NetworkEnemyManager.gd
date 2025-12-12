@@ -344,8 +344,12 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 	else:
 		is_crit = _server_roll_for_crit(attacker_id, is_training_dummy)
 
-	if is_crit:
-		LogManager.debug("CRIT rolled for player %d on enemy %d!" % [attacker_id, enemy_network_id], "combat")
+	# Check if legacy crit-based triggers are enabled (for backwards compatibility)
+	# New system uses hit count and health thresholds instead of random crits
+	var use_legacy_crit_triggers = Constants.WEAKPOINT_TRIGGER_ON_CRIT if "WEAKPOINT_TRIGGER_ON_CRIT" in Constants else false
+
+	if is_crit and use_legacy_crit_triggers:
+		LogManager.debug("CRIT rolled for player %d on enemy %d! (LEGACY MODE)" % [attacker_id, enemy_network_id], "combat")
 
 		# CLIENT-INDEPENDENT CRIT WINDOWS: Only the attacker sees weakpoints
 		if attacker_id == 1:
@@ -367,8 +371,13 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 			# Client handles their own grow, weakpoints, timers - server doesn't see their weakpoints
 			start_crit_window_for_player(enemy_network_id, attacker_id)
 	else:
-		# Normal attack
-		_apply_damage_internal(enemy_network_id, damage, false, false, attacker_id)
+		# NEW SYSTEM: Crits deal bonus damage but windows are triggered by hit count/health thresholds
+		# Window triggering is handled client-side via PlayerCombat.register_hit()
+		var final_damage = damage
+		if is_crit:
+			final_damage = damage * 2.0  # Crit still deals double damage
+			LogManager.debug("CRIT rolled for player %d on enemy %d (bonus damage only, no window)" % [attacker_id, enemy_network_id], "combat")
+		_apply_damage_internal(enemy_network_id, final_damage, is_crit, false, attacker_id)
 
 func _get_server_crit_window_manager() -> Node:
 	"""Find the CritWindowManager from the server's player."""

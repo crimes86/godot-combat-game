@@ -64,7 +64,8 @@ var equipped_armor = {
 	"arms": null,      # Armguards/bracers
 	"hands": null,     # Gloves
 	"legs": null,      # Pants/greaves
-	"feet": null       # Boots
+	"feet": null,      # Boots
+	"back": null       # Cape/cloak
 }
 
 # ============================================
@@ -206,9 +207,33 @@ func get_base_damage() -> float:
 	return stat_damage + weapon_damage
 
 func get_max_health() -> float:
-	"""Calculate max HP from vitality"""
+	"""Calculate max HP from vitality (PvE)"""
 	# Base formula: 100 HP at 10 VIT, +10 per point
 	return 100.0 + (vitality - 10) * 10.0
+
+func get_pvp_max_health() -> float:
+	"""Calculate max HP for PvP duels (separate scaling for balance)"""
+	# PvP uses higher base HP and stronger VIT scaling for longer fights
+	# Target: 3-5 weakpoint windows to kill
+	var base_hp = Constants.PLAYER_PVP_BASE_HP if "PLAYER_PVP_BASE_HP" in Constants else 800.0
+	var hp_per_vit = Constants.PLAYER_PVP_HP_PER_VIT if "PLAYER_PVP_HP_PER_VIT" in Constants else 15.0
+	return base_hp + (vitality - 10) * hp_per_vit
+
+func get_window_damage() -> float:
+	"""Calculate damage dealt by a perfect weakpoint window at current level.
+	Used for TTK calculations and enemy HP scaling."""
+	var base_damage = get_base_damage()
+	var crit_mult = Constants.CRIT_DAMAGE_MULTIPLIER if "CRIT_DAMAGE_MULTIPLIER" in Constants else 2.0
+
+	# Perfect window = all weakpoints destroyed
+	# Weakpoint count scales with level: 1 at low, 2 at mid, 3 at high
+	var weakpoint_count = 3  # Assume max for "perfect" window calculation
+	if level < 11:
+		weakpoint_count = 1
+	elif level < 21:
+		weakpoint_count = 2
+
+	return base_damage * crit_mult * weakpoint_count
 
 func get_base_crit_chance() -> float:
 	"""Calculate crit chance from luck + weapon"""
@@ -462,6 +487,12 @@ func get_equipped_weapon_data() -> Dictionary:
 			"rarity": Weapon.Rarity.keys()[equipped_weapon.rarity]
 		}
 	return equipped_weapon_data
+
+func get_equipped_item(slot: String) -> Dictionary:
+	"""Get equipped item data for a specific slot (head, chest, back, etc.)"""
+	if slot in equipped_armor and equipped_armor[slot]:
+		return equipped_armor[slot]
+	return {}
 
 func _speed_bonus_to_category(bonus: float) -> String:
 	"""Convert attack_speed_bonus back to category string"""

@@ -12,6 +12,9 @@ var _player_in_range: Node = null
 var _can_enter: bool = false
 var _denial_cooldown: float = 0.0
 
+# Static flag shared by all instances to prevent multiple transitions
+static var _any_transitioning: bool = false
+
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
 @onready var entrance_sprite: Sprite2D = $EntranceSprite
 @onready var glow_light: PointLight2D = $GlowLight
@@ -35,19 +38,25 @@ func _ready() -> void:
 		_start_glow_animation()
 
 func _process(delta: float) -> void:
+	# Don't process anything if ANY entrance is transitioning
+	if _transitioning or _any_transitioning:
+		return
+
 	if _denial_cooldown > 0:
 		_denial_cooldown -= delta
 
-	# Check if player should enter (player walks into trigger zone and keeps moving north)
+	# Check if player should enter (player walks into trigger zone near the entrance)
 	if _player_in_range and _can_enter:
 		var player = _player_in_range
 		if is_instance_valid(player):
-			# If player is at the trigger zone's northern edge, enter
 			var player_y = player.global_position.y
 			var entrance_y = global_position.y
+			# Trigger when player is within 20 pixels of entrance (or north of it)
+			var trigger_threshold = entrance_y + 20
 
-			# Trigger when player walks past the entrance point (north of it)
-			if player_y < entrance_y - 30:
+			# Trigger when player reaches the entrance area
+			if player_y <= trigger_threshold:
+				print("[TunnelEntrance] TRIGGERED! Player reached entrance (Y: %.1f <= %.1f)" % [player_y, trigger_threshold])
 				_enter_tunnel(player)
 
 func _on_body_entered(body: Node) -> void:
@@ -107,7 +116,14 @@ func _spawn_denial_text(text: String) -> void:
 		if combat_text.has_method("setup"):
 			combat_text.setup(text, Color(0.9, 0.5, 0.4), false)
 
+var _transitioning: bool = false  # Prevent multiple transitions
+
 func _enter_tunnel(player: Node) -> void:
+	if _transitioning or _any_transitioning:
+		return  # Already transitioning
+
+	_transitioning = true
+	_any_transitioning = true  # Set static flag for all instances
 	_can_enter = false  # Prevent re-entry while transitioning
 	_hide_prompt()
 
@@ -116,29 +132,26 @@ func _enter_tunnel(player: Node) -> void:
 	# Emit signal for any listeners
 	player_entered_tunnel.emit(player, chunk_id)
 
-	# Store the origin chunk for return trip
+	# Store the origin chunk and save player state for return trip
 	if has_node("/root/TradingHubManager"):
 		var hub_manager = get_node("/root/TradingHubManager")
 		hub_manager.set_player_origin_chunk(chunk_id)
+		hub_manager.save_player_state(player)  # Preserve health, etc.
 
 	# Transition to trading hub scene
 	_transition_to_hub()
 
 func _transition_to_hub() -> void:
-	# Fade out effect
-	var tween = create_tween()
+	print("[TunnelEntrance] Starting transition to hub...")
 
-	# Get the canvas modulate if it exists
-	var canvas_mod = get_tree().root.find_child("CanvasModulate", true, false)
-	if canvas_mod:
-		tween.tween_property(canvas_mod, "color", Color(0, 0, 0, 1), 0.5)
-		tween.tween_callback(_load_hub_scene)
+	# Use TradingHubManager autoload for scene change
+	# The manager handles call_deferred internally
+	var hub_manager = get_node_or_null("/root/TradingHubManager")
+	if hub_manager:
+		print("[TunnelEntrance] Delegating scene change to TradingHubManager...")
+		hub_manager.transition_to_hub()
 	else:
-		# No canvas modulate, just switch
-		_load_hub_scene()
-
-func _load_hub_scene() -> void:
-	get_tree().change_scene_to_file("res://scenes/trading_hub/TradingHub.tscn")
+		push_error("[TunnelEntrance] TradingHubManager not found! Cannot transition.")
 
 func _start_glow_animation() -> void:
 	if not glow_light:
@@ -148,6 +161,10 @@ func _start_glow_animation() -> void:
 	tween.set_loops()
 	tween.tween_property(glow_light, "energy", 0.6, 2.0).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(glow_light, "energy", 0.4, 2.0).set_trans(Tween.TRANS_SINE)
+
+func _exit_tree() -> void:
+	# Reset static flag when scene is destroyed (important for scene changes)
+	_any_transitioning = false
 
 # Called by game_world when spawning entrances dynamically
 func setup(p_chunk_id: int) -> void:

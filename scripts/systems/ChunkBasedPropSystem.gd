@@ -91,10 +91,10 @@ class ChunkData:
 func _ready() -> void:
 	print("🗺️ ChunkBasedPropSystem initialized - 3 square chunks (%.0fx%.0fpx each)" % [CHUNK_SIZE, CHUNK_SIZE])
 
-	# Create debug label (hidden by default)
-	create_debug_label()
+	# Register with GlobalDebugOverlay for F3 debug display
+	_register_debug_overlay()
 
-	# Connect to Constants F3 toggle
+	# Connect to Constants F3 toggle for bone highlighting
 	if Constants:
 		Constants.debug_display_toggled.connect(_on_debug_toggled)
 
@@ -105,28 +105,19 @@ func initialize(world: Node) -> void:
 	game_world = world
 	player = get_tree().get_first_node_in_group("player")
 
-func create_debug_label() -> void:
-	"""Create a debug label to show chunk info"""
-	debug_label = Label.new()
-	debug_label.name = "ChunkDebugLabel"
+func _register_debug_overlay() -> void:
+	"""Register chunk debug info with GlobalDebugOverlay"""
+	var overlay = get_node_or_null("/root/GlobalDebugOverlay")
+	if overlay and overlay.has_method("register_section"):
+		overlay.register_section("chunks", _get_chunk_debug_info)
+	else:
+		# Retry after a frame if overlay not ready yet
+		call_deferred("_register_debug_overlay_deferred")
 
-	# Styling
-	debug_label.add_theme_font_size_override("font_size", 14)
-	debug_label.add_theme_color_override("font_color", Color.YELLOW)
-	debug_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	debug_label.add_theme_constant_override("outline_size", 3)
-
-	# Right-aligned positioning (anchored to top-right)
-	debug_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	debug_label.position = Vector2(10, 10)  # Will be adjusted in _process to stay right
-
-	# Add to canvas layer so it's always visible
-	debug_canvas = CanvasLayer.new()
-	debug_canvas.name = "ChunkDebugCanvas"
-	debug_canvas.layer = 100
-	debug_canvas.visible = false  # Hidden by default, toggle with F3
-	add_child(debug_canvas)
-	debug_canvas.add_child(debug_label)
+func _register_debug_overlay_deferred() -> void:
+	var overlay = get_node_or_null("/root/GlobalDebugOverlay")
+	if overlay and overlay.has_method("register_section"):
+		overlay.register_section("chunks", _get_chunk_debug_info)
 
 func _on_debug_toggled(is_visible: bool) -> void:
 	"""Called when F3 debug display is toggled"""
@@ -139,10 +130,6 @@ const CHUNK_UPDATE_INTERVAL: float = 0.5  # Check chunks every 0.5s for responsi
 
 var current_player_chunk: String = ""  # Track which chunk player is currently in
 var chunks_being_loaded: Dictionary = {}  # {chunk_key: props_remaining} for async loading
-
-# Debug display
-var debug_label: Label = null
-var debug_canvas: CanvasLayer = null
 
 # LOD system for props
 var lod_update_timer: float = 0.0
@@ -167,10 +154,6 @@ func _process(delta: float) -> void:
 
 	# Continue async chunk loading if in progress
 	process_async_chunk_loading()
-
-	# Update debug display (only if visible)
-	if debug_canvas and debug_canvas.visible and debug_label:
-		update_debug_display()
 
 	# Only update chunks occasionally (chunks are massive MMO zones)
 	chunk_update_timer += delta
@@ -276,10 +259,10 @@ func update_chunks_for_all_players() -> void:
 			chunks_to_load, chunks_to_load.size(), chunks_to_unload.size()
 		])
 
-func update_debug_display() -> void:
-	"""Update the debug label with current chunk info"""
+func _get_chunk_debug_info() -> String:
+	"""Return chunk debug info for GlobalDebugOverlay"""
 	if not player or not is_instance_valid(player):
-		return
+		return ""
 
 	var player_pos = player.global_position
 	var chunk_key = get_chunk_key(player_pos)
@@ -293,7 +276,6 @@ func update_debug_display() -> void:
 	# Calculate distance to left/right edges
 	var dist_to_left_edge = pos_in_chunk_x
 	var dist_to_right_edge = CHUNK_SIZE - pos_in_chunk_x
-	var dist_to_edge = min(dist_to_left_edge, dist_to_right_edge)
 
 	# Calculate total possible chunks in world (horizontal only)
 	var world_width = WORLD_MAX.x - WORLD_MIN.x
@@ -310,40 +292,20 @@ func update_debug_display() -> void:
 	var west_loaded = loaded_chunks.has(west_chunk_key)
 	var east_loaded = loaded_chunks.has(east_chunk_key)
 
-	debug_label.text = "═══ CHUNK SYSTEM DEBUG ═══\n"
-	debug_label.text += "Chunk Size: %.0fpx wide (vertical columns)\n" % CHUNK_SIZE
-	debug_label.text += "Current Chunk: [%s]\n" % chunk_key
-	debug_label.text += "Player X: %.0f\n" % player_pos.x
-	debug_label.text += "\n"
-	debug_label.text += "── DISTANCES TO EDGES ──\n"
-	debug_label.text += "West Edge: %.0fpx%s\n" % [dist_to_left_edge, " ⚠️NEAR" if near_left else ""]
-	debug_label.text += "East Edge: %.0fpx%s\n" % [dist_to_right_edge, " ⚠️NEAR" if near_right else ""]
-	debug_label.text += "\n"
-	debug_label.text += "── NEIGHBORING CHUNKS ──\n"
-	debug_label.text += "West [%s]: %s\n" % [west_chunk_key, "✓LOADED" if west_loaded else "NOT LOADED"]
-	debug_label.text += "East [%s]: %s\n" % [east_chunk_key, "✓LOADED" if east_loaded else "NOT LOADED"]
-	debug_label.text += "\n"
-	debug_label.text += "── CHUNK BOUNDARIES ──\n"
-	var chunk_start = chunk_x * CHUNK_SIZE
-	var chunk_end = (chunk_x + 1) * CHUNK_SIZE
-	debug_label.text += "Current: X=%d to X=%d\n" % [chunk_start, chunk_end]
-	debug_label.text += "West: X=%d to X=%d\n" % [chunk_start - CHUNK_SIZE, chunk_start]
-	debug_label.text += "East: X=%d to X=%d\n" % [chunk_end, chunk_end + CHUNK_SIZE]
-	debug_label.text += "\n"
-	debug_label.text += "── STATUS ──\n"
-	debug_label.text += "Loaded: %d chunks\n" % loaded_chunks.size()
-	debug_label.text += "Loading: %d chunks\n" % chunks_being_loaded.size()
-	debug_label.text += "Active chunks: "
-	for key in loaded_chunks.keys():
-		debug_label.text += "[%s] " % key
-	debug_label.text += "\n"
-	debug_label.text += "Total World: %d chunks" % total_chunks
+	var text = "═══ CHUNKS ═══\n"
+	text += "Chunk Size: %.0fpx\n" % CHUNK_SIZE
+	text += "Current: [%s]\n" % chunk_key
+	text += "─────────────────\n"
+	text += "West Edge: %.0fpx%s\n" % [dist_to_left_edge, " ⚠️" if near_left else ""]
+	text += "East Edge: %.0fpx%s\n" % [dist_to_right_edge, " ⚠️" if near_right else ""]
+	text += "─────────────────\n"
+	text += "West [%s]: %s\n" % [west_chunk_key, "✓" if west_loaded else "✗"]
+	text += "East [%s]: %s\n" % [east_chunk_key, "✓" if east_loaded else "✗"]
+	text += "─────────────────\n"
+	text += "Loaded: %d | Loading: %d\n" % [loaded_chunks.size(), chunks_being_loaded.size()]
+	text += "Total World: %d chunks" % total_chunks
 
-	# Position on right side of screen
-	var viewport = get_viewport()
-	if viewport:
-		var viewport_size = viewport.get_visible_rect().size
-		debug_label.position = Vector2(viewport_size.x - 380, 10)  # 380px from right edge for wider text
+	return text
 
 func update_chunks() -> void:
 	"""Smart chunk loading: current chunk always, neighbors only when near edges (1000px threshold)"""

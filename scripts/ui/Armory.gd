@@ -64,6 +64,11 @@ var total_label: Label = null
 var current_state: ArmoryState = ArmoryState.GUEST
 var profile: Dictionary = {}
 
+# Debounce tracking to prevent duplicate refreshes
+var _last_profile_hash: int = 0
+var _last_forge_status_hash: int = 0
+var _profile_update_pending: bool = false
+
 # Forge detail panel
 var _forge_detail_panel: Control = null
 var _forge_selected_item: Dictionary = {}
@@ -167,83 +172,9 @@ const PROVIDER_COLORS = {
 
 # Forge Catalog - All available forge items with real asset data
 # Icons at: res://assets/icons/forged/[category]/[name].png
-# NOTE: IDs must match backend items.json item_id values exactly
-const FORGE_CATALOG = [
-	# === WEAPONS (14) - Matching backend items.json ===
-	{"id": "coiled_sword", "name": "Coiled Sword", "game": "Dark Souls III", "achievement": "The Dark Soul",
-	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/coiled_sword.png",
-	 "lore": "A twisted blade born from the First Flame. Its embers still smolder with primordial fire."},
-	{"id": "farron_greatsword", "name": "Farron Greatsword", "game": "Dark Souls III", "achievement": "Abyss Watchers",
-	 "rarity": "Epic", "category": "weapons", "icon": "res://assets/icons/forged/weapons/farron_greatsword.png",
-	 "lore": "Wielded by those who linked the fire long ago. Paired with a dagger for acrobatic combat."},
-	{"id": "dragonslayer_swordspear", "name": "Dragonslayer Swordspear", "game": "Dark Souls III", "achievement": "Nameless King",
-	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/dragonslayer_swordspear.png",
-	 "lore": "Cross-spear of the exiled god who betrayed his kin to ally with dragons."},
-	{"id": "grafted_blade", "name": "Grafted Blade Greatsword", "game": "Elden Ring", "achievement": "Godrick the Grafted",
-	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/grafted_blade.png",
-	 "lore": "A greatsword made of many weapons grafted together. Symbol of Godrick's obsession."},
-	{"id": "hand_of_malenia", "name": "Hand of Malenia", "game": "Elden Ring", "achievement": "Malenia, Blade of Miquella",
-	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/hand_of_malenia.png",
-	 "lore": "Prosthetic blade arm of the Scarlet Valkyrie. I am Malenia, and I have never known defeat."},
-	{"id": "radahns_greatswords", "name": "Starscourge Greatswords", "game": "Elden Ring", "achievement": "Starscourge Radahn",
-	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/radahns_greatswords.png",
-	 "lore": "Twin colossal swords of the Starscourge. He held back the stars for Miquella's sake."},
-	{"id": "moonveil", "name": "Moonveil", "game": "Elden Ring", "achievement": "Legend",
-	 "rarity": "Epic", "category": "weapons", "icon": "res://assets/icons/forged/weapons/moonveil.png",
-	 "lore": "A katana that channels moonlight magic. Imbued with Carian sorcery."},
-	{"id": "pure_nail", "name": "Pure Nail", "game": "Hollow Knight", "achievement": "Completion",
-	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/pure_nail.png",
-	 "lore": "A perfectly honed nail, forged in Hallownest's pale light."},
-	{"id": "stygian_blade", "name": "Stygian Blade", "game": "Hades", "achievement": "Complete",
-	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/stygian_blade.png",
-	 "lore": "First weapon of Prince Zagreus. Forged in the River Styx itself."},
-	{"id": "adamant_rail", "name": "Adamant Rail", "game": "Hades", "achievement": "Speed Run",
-	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/adamant_rail.png",
-	 "lore": "An exalted weapon of unknown origin. Its mechanisms are beyond mortal understanding."},
-	{"id": "terra_blade", "name": "Terra Blade", "game": "Terraria", "achievement": "Champion of Terraria",
-	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/terra_blade.png",
-	 "lore": "Fused from blades of light and dark. Its projectiles cut through the void itself."},
-	{"id": "mortal_blade", "name": "Mortal Blade", "game": "Sekiro", "achievement": "Immortal Severance",
-	 "rarity": "Legendary", "category": "weapons", "icon": "res://assets/icons/forged/weapons/mortal_blade.png",
-	 "lore": "The crimson blade that can sever immortality itself. Its edge cuts even the divine."},
-	{"id": "gyoubu_spear", "name": "Gyoubu's Broken Horn", "game": "Sekiro", "achievement": "Shura",
-	 "rarity": "Epic", "category": "weapons", "icon": "res://assets/icons/forged/weapons/gyoubu_spear.png",
-	 "lore": "AS I BREATHE, YOU WILL NOT PASS THE CASTLE GATE! The demon general's polearm."},
-	{"id": "witcher_silver_sword", "name": "Witcher's Silver Sword", "game": "The Witcher 3", "achievement": "Geralt the Professional",
-	 "rarity": "Rare", "category": "weapons", "icon": "res://assets/icons/forged/weapons/witcher_silver_sword.png",
-	 "lore": "Silver for monsters. A witcher's specialized tool against the supernatural."},
-	# === ARMOR (3) ===
-	{"id": "elden_lord_crown", "name": "Elden Lord's Crown", "game": "Elden Ring", "achievement": "Elden Lord",
-	 "rarity": "Legendary", "category": "armor", "icon": "res://assets/icons/forged/armor/elden_lord.png",
-	 "lore": "Crown of the one who claimed the Elden Ring and became Lord of the Lands Between."},
-	{"id": "carian_crown", "name": "Carian Royal Crown", "game": "Elden Ring", "achievement": "Rennala, Queen of the Full Moon",
-	 "rarity": "Epic", "category": "armor", "icon": "res://assets/icons/forged/armor/carian_crown.png",
-	 "lore": "Crown of Carian royalty, enchanted by the moon's sorcery."},
-	{"id": "straw_hat", "name": "Farmer's Straw Hat", "game": "Stardew Valley", "achievement": "Legend",
-	 "rarity": "Rare", "category": "armor", "icon": "res://assets/icons/forged/armor/straw_hat.png",
-	 "lore": "Simple hat for a simple life. Grandpa would be proud."},
-	# === SHIELDS (1) ===
-	{"id": "eye_shield", "name": "Fingerprint Stone Shield", "game": "Elden Ring", "achievement": "Mohg, the Omen",
-	 "rarity": "Epic", "category": "shields", "icon": "res://assets/icons/forged/shields/eye_shield.png",
-	 "lore": "A greatshield bearing a mysterious eye. It watches all who would challenge its bearer."},
-	# === CAPES (1) ===
-	{"id": "shade_cloak", "name": "Shade Cloak", "game": "Hollow Knight", "achievement": "Void",
-	 "rarity": "Epic", "category": "capes", "icon": "res://assets/icons/forged/capes/shade_cloak.png",
-	 "lore": "A cloak woven from pure void. Allows passage through shadow."},
-	# === ACCESSORIES (4) ===
-	{"id": "coiled_sword_fragment", "name": "Coiled Sword Fragment", "game": "Dark Souls III", "achievement": "Iudex Gundyr",
-	 "rarity": "Epic", "category": "accessories", "icon": "res://assets/icons/forged/accessories/coiled_sword_fragment.png",
-	 "lore": "A shard from the First Flame's bonfire. Warps back to the last checkpoint."},
-	{"id": "margits_shackle", "name": "Margit's Shackle", "game": "Elden Ring", "achievement": "Margit, the Fell Omen",
-	 "rarity": "Rare", "category": "accessories", "icon": "res://assets/icons/forged/accessories/margits_shackle.png",
-	 "lore": "Put these foolish ambitions to rest. A shackle that binds the omen."},
-	{"id": "discord_nitro_badge", "name": "Nitro Supporter Badge", "game": "Discord", "achievement": "Nitro Subscriber",
-	 "rarity": "Rare", "category": "accessories", "icon": "res://assets/icons/forged/accessories/discord_nitro_badge.png",
-	 "lore": "A badge showing Nitro support. Granted to Discord Nitro subscribers."},
-	{"id": "github_star_badge", "name": "Stargazer Badge", "game": "GitHub", "achievement": "Starstruck",
-	 "rarity": "Rare", "category": "accessories", "icon": "res://assets/icons/forged/accessories/github_star_badge.png",
-	 "lore": "A badge for repository stargazers. Earned by starring many repositories."},
-]
+# FORGE_CATALOG is now dynamically generated from ForgeItemDB
+# This eliminates duplicate data and ensures the Armory always shows all items
+var FORGE_CATALOG: Array = []
 
 # Current forge tab
 var _forge_current_tab: String = "all"
@@ -256,6 +187,10 @@ var _forge_filter_buttons: Dictionary = {}
 
 
 func _ready() -> void:
+	# Initialize FORGE_CATALOG dynamically from ForgeItemDB (single source of truth)
+	FORGE_CATALOG = ForgeItemDB.get_armory_catalog()
+	print("[Armory] Loaded %d items from ForgeItemDB" % FORGE_CATALOG.size())
+
 	_setup_font()
 	_build_ui()
 	_apply_font_to_all(self)  # Apply font to all Labels and Buttons
@@ -322,11 +257,20 @@ func _exit_tree() -> void:
 
 func _on_profile_updated(_data: Dictionary) -> void:
 	"""Called when MantleAuth receives profile data - refresh the UI"""
+	# Compute a hash of the profile data to detect actual changes
+	var profile_hash = hash(str(MantleAuth.total_achievements) + str(MantleAuth.providers.size()) + str(MantleAuth.mantle_tier))
+
+	# Skip if nothing changed (debounce duplicate signals)
+	if profile_hash == _last_profile_hash and _last_profile_hash != 0:
+		print("[Armory] Profile update skipped (no changes, hash=%d)" % profile_hash)
+		return
+
+	_last_profile_hash = profile_hash
+
 	print("[Armory] ════════════════════════════════════════")
-	print("[Armory] Profile updated signal received!")
+	print("[Armory] Profile updated (hash=%d)" % profile_hash)
 	print("[Armory] MantleAuth.total_achievements: ", MantleAuth.total_achievements)
 	print("[Armory] MantleAuth.providers.size(): ", MantleAuth.providers.size())
-	print("[Armory] _data keys: ", _data.keys() if _data else "null")
 	print("[Armory] ════════════════════════════════════════")
 	_determine_state()
 	_setup_ui_for_state()
@@ -361,6 +305,17 @@ func _on_forged_items_loaded(items: Array) -> void:
 func _on_forge_status_loaded(status: Dictionary) -> void:
 	"""Called when ForgeItemManager finishes loading forge status (forgeable achievements)"""
 	var forgeable = status.get("forgeable", [])
+
+	# Compute hash to detect actual changes
+	var forge_hash = hash(str(forgeable.size()) + str(ForgeItemManager.get_all_forged_items().size()))
+
+	# Skip if nothing changed (debounce duplicate signals)
+	if forge_hash == _last_forge_status_hash and _last_forge_status_hash != 0:
+		print("[Armory] Forge status skipped (no changes, hash=%d)" % forge_hash)
+		return
+
+	_last_forge_status_hash = forge_hash
+
 	print("[Armory] Forge status loaded: %d forgeable achievements" % forgeable.size())
 	_refresh_forge_content()
 
@@ -402,15 +357,32 @@ func _on_forge_data_changed() -> void:
 		_refresh_forge_content()
 
 func _setup_font() -> void:
-	# Use SystemFont which works on all platforms
-	default_font = SystemFont.new()
-	default_font.font_names = PackedStringArray(["Roboto Mono", "Consolas", "Segoe UI", "Arial", "sans-serif"])
-	default_font.antialiasing = TextServer.FONT_ANTIALIASING_LCD
+	# Try to get the Inter font from UITheme autoload first
+	if UITheme and UITheme.default_font:
+		default_font = UITheme.default_font
+		print("[Armory] Using Inter font from UITheme")
+	else:
+		# Fallback: try to load Inter font directly
+		var font_path = "res://assets/fonts/Inter-Regular.ttf"
+		if ResourceLoader.exists(font_path):
+			default_font = load(font_path)
+			print("[Armory] Loaded Inter font directly: %s" % font_path)
+		else:
+			# Last resort: SystemFont fallback
+			default_font = SystemFont.new()
+			default_font.font_names = PackedStringArray(["Segoe UI", "Arial", "sans-serif"])
+			default_font.antialiasing = TextServer.FONT_ANTIALIASING_LCD
+			print("[Armory] Using SystemFont fallback")
 
-	# Bold font for headers/titles
-	bold_font = SystemFont.new()
-	bold_font.font_names = PackedStringArray(["Segoe UI Bold", "Segoe UI Semibold", "Arial Bold", "Helvetica Bold", "sans-serif"])
-	bold_font.antialiasing = TextServer.FONT_ANTIALIASING_LCD
+	# Bold font - try to load Inter Medium/Bold
+	var bold_font_path = "res://assets/fonts/Inter-Bold.ttf"
+	if ResourceLoader.exists(bold_font_path):
+		bold_font = load(bold_font_path)
+		print("[Armory] Loaded Inter Bold font")
+	else:
+		# Fallback to regular font if no bold available
+		bold_font = default_font
+		print("[Armory] Using regular font for bold (Inter-Bold.ttf not found)")
 
 func _create_label(text_content: String, font_size: int = 14, color: Color = TEXT_PRIMARY) -> Label:
 	var label = Label.new()
@@ -981,10 +953,10 @@ func _build_mantle_stats_column() -> Control:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	wrapper.add_child(bg)
 
-	# Animated grid background effect (z_index 10 to render above content)
+	# Animated grid background effect (z_index 0 to render behind content)
 	var grid_overlay = _create_animated_grid_bg()
 	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	grid_overlay.z_index = 10
+	grid_overlay.z_index = 0
 	wrapper.add_child(grid_overlay)
 
 	# Border overlay with cyan glow (matches MainMenu)
@@ -1001,13 +973,14 @@ func _build_mantle_stats_column() -> Control:
 	border.add_theme_stylebox_override("panel", border_style)
 	wrapper.add_child(border)
 
-	# Content margin - tighter spacing
+	# Content margin - tighter spacing (z_index 1 to render above grid)
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 16)
 	margin.add_theme_constant_override("margin_right", 16)
 	margin.add_theme_constant_override("margin_top", 16)
 	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.z_index = 1  # Render above grid lines
 	wrapper.add_child(margin)
 
 	# Main vertical container - spread content evenly
@@ -1349,10 +1322,10 @@ func _build_forge_column() -> Control:
 	wrapper.add_child(bg)
 	print("[Armory] Forge BG added with color: ", bg.color)
 
-	# Animated grid background effect (z_index 10 to render above content)
+	# Animated grid background effect (z_index 0 to render behind content)
 	var grid_overlay = _create_animated_grid_bg()
 	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	grid_overlay.z_index = 10
+	grid_overlay.z_index = 0
 	wrapper.add_child(grid_overlay)
 
 	# Border overlay with cyan glow
@@ -1370,13 +1343,14 @@ func _build_forge_column() -> Control:
 	border.add_theme_stylebox_override("panel", border_style)
 	wrapper.add_child(border)
 
-	# Content container with margins
+	# Content container with margins (z_index 1 to render above grid)
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 12)
 	margin.add_theme_constant_override("margin_right", 12)
 	margin.add_theme_constant_override("margin_top", 10)
 	margin.add_theme_constant_override("margin_bottom", 10)
+	margin.z_index = 1  # Render above grid lines
 	wrapper.add_child(margin)
 	print("[Armory] Forge margin container added")
 
@@ -1384,6 +1358,7 @@ func _build_forge_column() -> Control:
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_theme_constant_override("separation", 10)  # Tighter spacing
+	vbox.clip_contents = true  # Prevent children from overflowing column width
 	margin.add_child(vbox)
 	print("[Armory] Forge vbox added")
 
@@ -1513,17 +1488,15 @@ func _build_forge_column() -> Control:
 	# === CONTENT CONTAINER (switches based on tab) ===
 	_forge_content_container = PanelContainer.new()
 	_forge_content_container.name = "ForgeContent"
-	_forge_content_container.size_flags_vertical = Control.SIZE_EXPAND_FILL  # Expand to fill available space
+	_forge_content_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Shrink to content, stay at top
 	_forge_content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_forge_content_container.clip_contents = true  # Prevent overflow
-	_forge_content_container.custom_minimum_size = Vector2(0, 200)  # Minimum height, will expand
+	_forge_content_container.z_index = 1  # Render above grid lines
 	var content_style = StyleBoxFlat.new()
-	content_style.bg_color = BG_DARK
+	content_style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Fully opaque dark bg
 	content_style.set_corner_radius_all(6)
 	content_style.border_color = BORDER_GLOW
 	content_style.set_border_width_all(2)
-	content_style.shadow_size = 12
-	content_style.shadow_color = SHADOW_GLOW
 	_forge_content_container.add_theme_stylebox_override("panel", content_style)
 	vbox.add_child(_forge_content_container)
 
@@ -1531,6 +1504,7 @@ func _build_forge_column() -> Control:
 	var detail_panel = _build_forge_detail_panel()
 	detail_panel.name = "ForgeDetailPanel"
 	detail_panel.size_flags_vertical = Control.SIZE_SHRINK_END  # Don't expand, stay at bottom
+	detail_panel.z_index = 1  # Render above grid lines
 	vbox.add_child(detail_panel)
 
 	# === BRIDGE UI SECTION ===
@@ -1538,6 +1512,7 @@ func _build_forge_column() -> Control:
 	bridge_section.name = "BridgeSection"
 	bridge_section.size_flags_vertical = Control.SIZE_SHRINK_END  # Don't expand, stay at bottom
 	bridge_section.clip_contents = true  # Prevent overflow
+	bridge_section.z_index = 1  # Render above grid lines
 	vbox.add_child(bridge_section)
 
 	# Build initial forge content (unified view)
@@ -1603,58 +1578,54 @@ func _on_forge_sort_pressed(sort_id: String) -> void:
 	_refresh_forge_content()
 
 func _build_forge_detail_panel() -> Control:
-	"""Build the item detail panel - simple 2-row layout that won't overflow"""
+	"""Build the item detail panel - tooltip style layout"""
 	var panel = PanelContainer.new()
 	panel.clip_contents = true
 	panel.size_flags_vertical = Control.SIZE_SHRINK_END
-	panel.custom_minimum_size = Vector2(0, 95)  # Consistent height to prevent layout shifts
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # Fill but don't overflow
+	panel.custom_minimum_size = Vector2(0, 100)  # Fixed height
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.04, 0.05, 0.98)
+	style.bg_color = Color(0.03, 0.035, 0.045, 1.0)  # Slightly lighter dark bg
 	style.border_color = BORDER_GLOW.darkened(0.3)
 	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
+	style.set_corner_radius_all(6)
 	panel.add_theme_stylebox_override("panel", style)
 
 	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_bottom", 8)
 	panel.add_child(margin)
 
-	# Main vertical layout with 2 rows
-	var main_vbox = VBoxContainer.new()
-	main_vbox.add_theme_constant_override("separation", 8)
-	margin.add_child(main_vbox)
+	# Main horizontal layout: Icon | Info | Actions
+	var main_hbox = HBoxContainer.new()
+	main_hbox.add_theme_constant_override("separation", 12)
+	main_hbox.clip_contents = true  # Prevent overflow
+	margin.add_child(main_hbox)
 
-	# === ROW 1: Icon + Item Info ===
-	var top_row = HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 12)
-	main_vbox.add_child(top_row)
-
-	# Icon - smaller card (80px) crops the 96px icon for tighter feel
+	# === LEFT: Icon ===
 	var icon_container = PanelContainer.new()
 	icon_container.name = "DetailIcon"
-	icon_container.custom_minimum_size = Vector2(80, 80)
-	icon_container.clip_contents = true  # Crop the oversized icon
+	icon_container.custom_minimum_size = Vector2(72, 72)
+	icon_container.clip_contents = true
 	icon_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var icon_style = StyleBoxFlat.new()
-	icon_style.bg_color = Color(0.06, 0.06, 0.08)
-	icon_style.border_color = CARD_BORDER
-	icon_style.set_border_width_all(2)
-	icon_style.set_corner_radius_all(6)
+	icon_style.bg_color = Color(0.05, 0.055, 0.065)
+	icon_style.border_color = Color(0.15, 0.18, 0.22)
+	icon_style.set_border_width_all(1)
+	icon_style.set_corner_radius_all(4)
 	icon_container.add_theme_stylebox_override("panel", icon_style)
-	top_row.add_child(icon_container)
+	main_hbox.add_child(icon_container)
 
-	# Use Control instead of CenterContainer so we can position the oversized icon
 	var icon_holder = Control.new()
 	icon_holder.set_anchors_preset(Control.PRESET_FULL_RECT)
 	icon_container.add_child(icon_holder)
 
 	var icon_texture = TextureRect.new()
 	icon_texture.name = "IconTexture"
-	icon_texture.custom_minimum_size = Vector2(96, 96)
-	icon_texture.position = Vector2(-8, -8)  # Center 96px icon in 80px container
+	icon_texture.custom_minimum_size = Vector2(64, 64)
+	icon_texture.position = Vector2(4, 4)
 	icon_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_texture.visible = false
@@ -1663,222 +1634,216 @@ func _build_forge_detail_panel() -> Control:
 	var icon_placeholder = Label.new()
 	icon_placeholder.name = "IconLabel"
 	icon_placeholder.text = "?"
-	icon_placeholder.add_theme_font_size_override("font_size", 36)
-	icon_placeholder.add_theme_color_override("font_color", TEXT_DIM)
+	icon_placeholder.add_theme_font_size_override("font_size", 28)
+	icon_placeholder.add_theme_color_override("font_color", Color(0.25, 0.28, 0.32))
 	icon_placeholder.set_anchors_preset(Control.PRESET_FULL_RECT)
 	icon_placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	icon_holder.add_child(icon_placeholder)
 
-	# Item info (name, rarity, status)
+	# === CENTER: Tooltip-style info ===
 	var info_vbox = VBoxContainer.new()
 	info_vbox.name = "DetailInfo"
 	info_vbox.add_theme_constant_override("separation", 2)
 	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	top_row.add_child(info_vbox)
+	info_vbox.clip_contents = true  # Prevent overflow
+	main_hbox.add_child(info_vbox)
 
+	# Item name (bold style via larger font) - with ellipsis for long names
 	var name_label = Label.new()
 	name_label.name = "ItemName"
 	name_label.text = "Select an item"
-	name_label.add_theme_font_size_override("font_size", FONT_BODY)
+	name_label.add_theme_font_size_override("font_size", 18)
 	name_label.add_theme_color_override("font_color", TEXT_PRIMARY)
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.custom_minimum_size = Vector2(180, 0)  # Min width to ensure some text shows
 	info_vbox.add_child(name_label)
 
+	# Rarity + Game line
 	var rarity_label = Label.new()
 	rarity_label.name = "ItemRarity"
 	rarity_label.text = ""
-	rarity_label.add_theme_font_size_override("font_size", FONT_TINY)
+	rarity_label.add_theme_font_size_override("font_size", FONT_CAPTION)
 	rarity_label.add_theme_color_override("font_color", TEXT_DIM)
 	info_vbox.add_child(rarity_label)
 
+	# Status line (Ready to equip! / Ready to forge! / Locked)
 	var unlock_label = Label.new()
 	unlock_label.name = "ItemUnlock"
 	unlock_label.text = ""
-	unlock_label.add_theme_font_size_override("font_size", FONT_TINY)
+	unlock_label.add_theme_font_size_override("font_size", FONT_CAPTION)
 	unlock_label.add_theme_color_override("font_color", TEXT_SECONDARY)
 	info_vbox.add_child(unlock_label)
 
+	# Spacer
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 4)
+	info_vbox.add_child(spacer)
+
+	# Stat line (Damage/Defense)
+	var stat_label = Label.new()
+	stat_label.name = "StatLabel"
+	stat_label.text = ""
+	stat_label.add_theme_font_size_override("font_size", FONT_CAPTION)
+	stat_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
+	info_vbox.add_child(stat_label)
+
+	# Achievement source line
+	var achievement_label = Label.new()
+	achievement_label.name = "AchievementLabel"
+	achievement_label.text = ""
+	achievement_label.add_theme_font_size_override("font_size", FONT_TINY)
+	achievement_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+	info_vbox.add_child(achievement_label)
+
+	# Census line (Only 1 exists!)
+	var census_label = Label.new()
+	census_label.name = "CensusLabel"
+	census_label.text = ""
+	census_label.add_theme_font_size_override("font_size", FONT_CAPTION)
+	census_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3))
+	info_vbox.add_child(census_label)
+
+	# Hidden lore label (kept for compatibility)
 	var lore_label = Label.new()
 	lore_label.name = "ItemLore"
 	lore_label.visible = false
 	info_vbox.add_child(lore_label)
 
-	# === ROW 2: Stats + Actions ===
-	var bottom_row = HBoxContainer.new()
-	bottom_row.add_theme_constant_override("separation", 16)
-	bottom_row.clip_contents = true  # Prevent horizontal overflow
-	main_vbox.add_child(bottom_row)
-
-	# Stats section (compact horizontal) - allow shrinking to fit
-	var stats_section = HBoxContainer.new()
-	stats_section.name = "StatsSection"
-	stats_section.add_theme_constant_override("separation", 12)
-	stats_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stats_section.clip_contents = true  # Allow clipping if needed
-	bottom_row.add_child(stats_section)
-
-	# Stat labels as compact "Label: Value" pairs
-	for stat_name in ["Damage", "Defense", "Speed", "Crit"]:
-		var stat_container = HBoxContainer.new()
-		stat_container.name = "Stat%sContainer" % stat_name
-		stat_container.add_theme_constant_override("separation", 4)
-		stat_container.visible = false
-		stats_section.add_child(stat_container)
-
-		var stat_label = Label.new()
-		stat_label.name = "Stat%sLabel" % stat_name
-		stat_label.text = "%s:" % stat_name
-		stat_label.add_theme_font_size_override("font_size", FONT_TINY)
-		stat_label.add_theme_color_override("font_color", TEXT_DIM)
-		stat_container.add_child(stat_label)
-
-		var stat_value = Label.new()
-		stat_value.name = "Stat%sValue" % stat_name
-		stat_value.text = ""
-		stat_value.add_theme_font_size_override("font_size", FONT_TINY)
-		stat_value.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
-		stat_container.add_child(stat_value)
-
-	# Ability section (inline with stats)
-	var ability_container = HBoxContainer.new()
-	ability_container.name = "AbilityContainer"
-	ability_container.add_theme_constant_override("separation", 4)
-	ability_container.visible = false
-	stats_section.add_child(ability_container)
-
-	var ability_icon = Label.new()
-	ability_icon.name = "AbilityIcon"
-	ability_icon.text = "★"
-	ability_icon.add_theme_font_size_override("font_size", FONT_TINY)
-	ability_icon.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2))
-	ability_container.add_child(ability_icon)
-
-	var ability_label = Label.new()
-	ability_label.name = "AbilityLabel"
-	ability_label.text = ""
-	ability_label.add_theme_font_size_override("font_size", FONT_TINY)
-	ability_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2))
-	ability_container.add_child(ability_label)
-
-	# Action buttons (right side of bottom row)
-	var actions_hbox = HBoxContainer.new()
-	actions_hbox.name = "ActionsSection"
-	actions_hbox.add_theme_constant_override("separation", 6)
-	actions_hbox.size_flags_horizontal = Control.SIZE_SHRINK_END
-	bottom_row.add_child(actions_hbox)
+	# === RIGHT: Action buttons (vertical stack) ===
+	var actions_vbox = VBoxContainer.new()
+	actions_vbox.name = "ActionsSection"
+	actions_vbox.add_theme_constant_override("separation", 4)
+	actions_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	actions_vbox.size_flags_horizontal = Control.SIZE_SHRINK_END  # Don't expand, stay compact
+	actions_vbox.clip_contents = true  # Prevent overflow
+	main_hbox.add_child(actions_vbox)
 
 	var preview_btn = Button.new()
 	preview_btn.name = "PreviewButton"
 	preview_btn.text = "IN INVENTORY"
-	preview_btn.custom_minimum_size = Vector2(95, 28)
+	preview_btn.custom_minimum_size = Vector2(95, 26)
 	preview_btn.visible = false
 	preview_btn.pressed.connect(_on_preview_pressed)
 	preview_btn.mouse_entered.connect(_play_button_hover_sound)
 	_style_preview_button(preview_btn)
-	actions_hbox.add_child(preview_btn)
-
-	var forge_btn = Button.new()
-	forge_btn.name = "ForgeButton"
-	forge_btn.text = "FORGE"
-	forge_btn.custom_minimum_size = Vector2(80, 28)
-	forge_btn.visible = false
-	forge_btn.pressed.connect(_on_forge_button_pressed)
-	forge_btn.mouse_entered.connect(_play_button_hover_sound)
-	_style_forge_action_button(forge_btn)
-	actions_hbox.add_child(forge_btn)
+	actions_vbox.add_child(preview_btn)
 
 	var bridge_out_btn = Button.new()
 	bridge_out_btn.name = "BridgeOutButton"
-	bridge_out_btn.text = "UNBIND"
-	bridge_out_btn.custom_minimum_size = Vector2(75, 28)
+	bridge_out_btn.text = "EXPORT"
+	bridge_out_btn.custom_minimum_size = Vector2(95, 26)
 	bridge_out_btn.visible = false
 	bridge_out_btn.pressed.connect(_on_bridge_out_pressed)
 	bridge_out_btn.mouse_entered.connect(_play_button_hover_sound)
 	_style_bridge_button(bridge_out_btn)
-	actions_hbox.add_child(bridge_out_btn)
+	actions_vbox.add_child(bridge_out_btn)
 
-	var cancel_bridge_btn = Button.new()
-	cancel_bridge_btn.name = "CancelBridgeButton"
-	cancel_bridge_btn.text = "CANCEL"
-	cancel_bridge_btn.custom_minimum_size = Vector2(70, 28)
-	cancel_bridge_btn.visible = false
-	cancel_bridge_btn.pressed.connect(_on_cancel_bridge_pressed)
-	cancel_bridge_btn.mouse_entered.connect(_play_button_hover_sound)
-	_style_cancel_button(cancel_bridge_btn)
-	actions_hbox.add_child(cancel_bridge_btn)
+	var forge_btn = Button.new()
+	forge_btn.name = "ForgeButton"
+	forge_btn.text = "FORGE"
+	forge_btn.custom_minimum_size = Vector2(95, 26)
+	forge_btn.visible = false
+	forge_btn.pressed.connect(_on_forge_button_pressed)
+	forge_btn.mouse_entered.connect(_play_button_hover_sound)
+	_style_forge_action_button(forge_btn)
+	actions_vbox.add_child(forge_btn)
+
+	# NOTE: Cancel button removed - cancel is now via red X on bridge-out icons
 
 	var bridge_in_btn = Button.new()
 	bridge_in_btn.name = "BridgeInButton"
-	bridge_in_btn.text = "BIND"
-	bridge_in_btn.custom_minimum_size = Vector2(60, 28)
+	bridge_in_btn.text = "IMPORT"
+	bridge_in_btn.custom_minimum_size = Vector2(95, 26)
 	bridge_in_btn.visible = false
 	bridge_in_btn.pressed.connect(_on_bridge_in_pressed)
 	bridge_in_btn.mouse_entered.connect(_play_button_hover_sound)
 	_style_bridge_button(bridge_in_btn)
-	actions_hbox.add_child(bridge_in_btn)
+	actions_vbox.add_child(bridge_in_btn)
 
 	var bridge_status_label = Label.new()
 	bridge_status_label.name = "BridgeStatusLabel"
 	bridge_status_label.text = ""
 	bridge_status_label.add_theme_font_size_override("font_size", FONT_TINY)
 	bridge_status_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
+	bridge_status_label.clip_text = true
+	bridge_status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	bridge_status_label.custom_minimum_size = Vector2(95, 0)  # Match button width
 	bridge_status_label.visible = false
-	actions_hbox.add_child(bridge_status_label)
+	actions_vbox.add_child(bridge_status_label)
 
-	# Hidden sections (kept for compatibility but not displayed in detail panel)
+	# Hidden sections (kept for compatibility)
+	var hidden_container = Control.new()
+	hidden_container.visible = false
+	margin.add_child(hidden_container)
+
 	var modifiers_section = VBoxContainer.new()
 	modifiers_section.name = "ModifiersSection"
 	modifiers_section.visible = false
-	main_vbox.add_child(modifiers_section)
+	hidden_container.add_child(modifiers_section)
 
 	var effort_bar = ProgressBar.new()
 	effort_bar.name = "EffortBar"
-	effort_bar.visible = false
 	modifiers_section.add_child(effort_bar)
 
 	var effort_value = Label.new()
 	effort_value.name = "EffortValue"
-	effort_value.visible = false
 	modifiers_section.add_child(effort_value)
 
 	var vintage_badge = _create_modifier_badge("VintageBadge", "VETERAN", Color(0.8, 0.6, 0.2))
-	vintage_badge.visible = false
 	modifiers_section.add_child(vintage_badge)
 	var secret_badge = _create_modifier_badge("SecretBadge", "SECRET", Color(0.6, 0.3, 0.8))
-	secret_badge.visible = false
 	modifiers_section.add_child(secret_badge)
 	var rare_badge = _create_modifier_badge("UltraRareBadge", "RARE", Color(0.9, 0.4, 0.1))
-	rare_badge.visible = false
 	modifiers_section.add_child(rare_badge)
 
 	var bonus_label = Label.new()
 	bonus_label.name = "BonusLabel"
-	bonus_label.visible = false
 	modifiers_section.add_child(bonus_label)
 
 	var trading_section = VBoxContainer.new()
 	trading_section.name = "TradingSection"
 	trading_section.visible = false
-	main_vbox.add_child(trading_section)
-
-	var census_label = Label.new()
-	census_label.name = "CensusLabel"
-	census_label.visible = false
-	trading_section.add_child(census_label)
+	hidden_container.add_child(trading_section)
 
 	var trade_icon = Label.new()
 	trade_icon.name = "TradeIcon"
-	trade_icon.visible = false
 	trading_section.add_child(trade_icon)
 	var trade_status = Label.new()
 	trade_status.name = "TradeStatus"
-	trade_status.visible = false
 	trading_section.add_child(trade_status)
 
 	var cooldown_badge = _create_modifier_badge("CooldownBadge", "ON COOLDOWN", Color(0.8, 0.3, 0.3))
-	cooldown_badge.visible = false
 	trading_section.add_child(cooldown_badge)
+
+	# Hidden stat containers for compatibility
+	var stats_section = HBoxContainer.new()
+	stats_section.name = "StatsSection"
+	stats_section.visible = false
+	hidden_container.add_child(stats_section)
+
+	for stat_name in ["Damage", "Defense", "Speed", "Crit"]:
+		var stat_container = HBoxContainer.new()
+		stat_container.name = "Stat%sContainer" % stat_name
+		stats_section.add_child(stat_container)
+		var stat_lbl = Label.new()
+		stat_lbl.name = "Stat%sLabel" % stat_name
+		stat_container.add_child(stat_lbl)
+		var stat_val = Label.new()
+		stat_val.name = "Stat%sValue" % stat_name
+		stat_container.add_child(stat_val)
+
+	var ability_container = HBoxContainer.new()
+	ability_container.name = "AbilityContainer"
+	ability_container.visible = false
+	hidden_container.add_child(ability_container)
+	var ability_icon = Label.new()
+	ability_icon.name = "AbilityIcon"
+	ability_container.add_child(ability_icon)
+	var ability_label = Label.new()
+	ability_label.name = "AbilityLabel"
+	ability_container.add_child(ability_label)
 
 	_forge_detail_panel = panel
 	return panel
@@ -2168,6 +2133,48 @@ func _on_cancel_bridge_complete(success: bool, item_name: String, cancel_btn: Bu
 	_forge_selected_item = {}
 	_update_forge_detail({}, "locked")
 
+func _on_bridge_card_cancel_pressed(forged_id: Variant, item_name: String) -> void:
+	"""Handle X button press on bridge-out item card - cancel the export"""
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+
+	print("[Armory] CANCEL X pressed for: %s (forged_id: %s)" % [item_name, str(forged_id)])
+
+	# Find and disable the X button to prevent double-clicks
+	var x_btn_name = "CancelX_%s" % str(forged_id)
+	var x_btn = _bridge_section.find_child(x_btn_name, true, false) if _bridge_section else null
+	if x_btn:
+		x_btn.text = "..."
+		x_btn.disabled = true
+
+	ForgeItemManager.cancel_bridge_out(int(forged_id), _on_bridge_card_cancel_complete.bind(item_name, x_btn))
+
+func _on_bridge_card_cancel_complete(success: bool, item_name: String, x_btn: Button) -> void:
+	"""Callback after bridge-out cancel from X button completes"""
+	if not success:
+		if x_btn and is_instance_valid(x_btn):
+			x_btn.text = "X"
+			x_btn.disabled = false
+		if NotificationManager:
+			NotificationManager.show_notification("Failed to cancel export", "error")
+		return
+
+	print("[Armory] Export cancelled for %s" % item_name)
+
+	if NotificationManager:
+		NotificationManager.show_notification("%s export cancelled" % item_name, "success")
+
+	# Refresh the bridge section and forge content
+	_refresh_forge_content()
+	_refresh_bridge_section()
+
+	# Clear selection if this was the selected item
+	if not _forge_selected_item.is_empty():
+		var selected_name = _forge_selected_item.get("name", _forge_selected_item.get("item_name", ""))
+		if selected_name == item_name:
+			_forge_selected_item = {}
+			_update_forge_detail({}, "locked")
+
 func _on_bridge_in_pressed() -> void:
 	"""Handle BRIDGE IN button press - bring item back from external wallet to game"""
 	if SoundManager:
@@ -2192,9 +2199,9 @@ func _show_bridge_in_confirmation(item_name: String, token_id: int) -> void:
 	"""Show confirmation popup before binding an item"""
 	# Create styled popup matching game theme
 	var popup = AcceptDialog.new()
-	popup.title = "Confirm Bind"
-	popup.dialog_text = "Bind \"%s\" to your character?\n\nThis will transfer the item from your lockbox to your in-game inventory." % item_name
-	popup.ok_button_text = "BIND"
+	popup.title = "Confirm Import"
+	popup.dialog_text = "Import \"%s\" to your inventory?\n\nThis will transfer the item from the web to your in-game bag." % item_name
+	popup.ok_button_text = "IMPORT"
 	popup.add_cancel_button("Cancel")
 	popup.confirmed.connect(_on_bridge_in_confirmed.bind(token_id, item_name, popup))
 	popup.canceled.connect(popup.queue_free)
@@ -2263,7 +2270,7 @@ func _on_bridge_in_confirmed(token_id: int, item_name: String, popup: AcceptDial
 	# Disable button if visible
 	var bridge_in_btn = _forge_detail_panel.find_child("BridgeInButton", true, false) if _forge_detail_panel else null
 	if bridge_in_btn and bridge_in_btn.visible:
-		bridge_in_btn.text = "BINDING..."
+		bridge_in_btn.text = "IMPORTING..."
 		bridge_in_btn.disabled = true
 
 	# Call bridge-in API
@@ -2277,10 +2284,11 @@ func _build_bridge_section() -> Control:
 	"""Build the bridge UI section below the detail panel"""
 	var panel = PanelContainer.new()
 	panel.clip_contents = true  # Prevent overflow - no forced height, shrink to content
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # Fill but don't overflow
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.03, 0.04, 0.95)
+	style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Fully opaque dark bg
 	style.border_color = Color(0.15, 0.2, 0.35)  # Blue-ish tint for bridge theme
-	style.set_border_width_all(1)
+	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
 	panel.add_theme_stylebox_override("panel", style)
 
@@ -2303,8 +2311,8 @@ func _build_bridge_section() -> Control:
 	main_vbox.add_child(header_row)
 
 	var title = Label.new()
-	title.text = "BINDING"
-	title.add_theme_font_size_override("font_size", FONT_CAPTION)
+	title.text = "ITEM SYNC"
+	title.add_theme_font_size_override("font_size", 16)
 	title.add_theme_color_override("font_color", Color(0.5, 0.6, 0.9))  # Blue-ish
 	header_row.add_child(title)
 
@@ -2329,7 +2337,7 @@ func _build_bridge_section() -> Control:
 	# Wallet status label
 	var wallet_status = Label.new()
 	wallet_status.name = "WalletStatusLabel"
-	wallet_status.text = "No lockbox connected"
+	wallet_status.text = "Not connected"
 	wallet_status.add_theme_font_size_override("font_size", FONT_MIN)
 	wallet_status.add_theme_color_override("font_color", TEXT_DIM)
 	wallet_status.clip_text = true
@@ -2352,7 +2360,7 @@ func _build_bridge_section() -> Control:
 	var refresh_btn = Button.new()
 	refresh_btn.name = "WalletRefreshButton"
 	refresh_btn.text = "↻"
-	refresh_btn.tooltip_text = "Refresh lockbox status"
+	refresh_btn.tooltip_text = "Refresh sync status"
 	refresh_btn.custom_minimum_size = Vector2(24, 24)
 	refresh_btn.visible = false
 	refresh_btn.pressed.connect(_on_wallet_refresh_pressed)
@@ -2387,13 +2395,13 @@ func _build_bridge_section() -> Control:
 	return panel
 
 func _build_bridge_in_section() -> Control:
-	"""Build the Bridge In section showing items available from external wallet"""
+	"""Build the Import section showing items available from web wallet"""
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 4)
 
 	var header = Label.new()
 	header.name = "BridgeInHeader"
-	header.text = "BIND"
+	header.text = "IMPORT TO GAME"
 	header.add_theme_font_size_override("font_size", FONT_MIN)
 	header.add_theme_color_override("font_color", Color(0.4, 0.7, 0.4))  # Green
 	vbox.add_child(header)
@@ -2406,7 +2414,7 @@ func _build_bridge_in_section() -> Control:
 	# Placeholder when no items
 	var empty_label = Label.new()
 	empty_label.name = "BridgeInEmpty"
-	empty_label.text = "No unbound items"
+	empty_label.text = "0 items ready"
 	empty_label.add_theme_font_size_override("font_size", FONT_MIN)
 	empty_label.add_theme_color_override("font_color", TEXT_DIM)
 	items_row.add_child(empty_label)
@@ -2414,13 +2422,13 @@ func _build_bridge_in_section() -> Control:
 	return vbox
 
 func _build_bridging_out_section() -> Control:
-	"""Build the Bridging Out section showing items with countdown timers"""
+	"""Build the Export section showing items being sent to web"""
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 4)
 
 	var header = Label.new()
 	header.name = "BridgingOutHeader"
-	header.text = "UNBINDING"
+	header.text = "EXPORT TO WEB"
 	header.add_theme_font_size_override("font_size", FONT_MIN)
 	header.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))  # Orange
 	vbox.add_child(header)
@@ -2430,10 +2438,10 @@ func _build_bridging_out_section() -> Control:
 	items_row.add_theme_constant_override("separation", 4)
 	vbox.add_child(items_row)
 
-	# Placeholder when no items unbinding
+	# Placeholder when no items exporting
 	var empty_label = Label.new()
 	empty_label.name = "BridgingOutEmpty"
-	empty_label.text = "No items unbinding"
+	empty_label.text = "0 items pending"
 	empty_label.add_theme_font_size_override("font_size", FONT_MIN)
 	empty_label.add_theme_color_override("font_color", TEXT_DIM)
 	items_row.add_child(empty_label)
@@ -2523,10 +2531,10 @@ func _on_wallet_status_fetched(connected: bool, wallet_address: String) -> void:
 	if _bridge_connect_btn:
 		if connected:
 			_bridge_connect_btn.text = "DISCONNECT"
-			_bridge_connect_btn.tooltip_text = "Disconnect your lockbox"
+			_bridge_connect_btn.tooltip_text = "Disconnect web sync"
 		else:
 			_bridge_connect_btn.text = "CONNECT"
-			_bridge_connect_btn.tooltip_text = "Connect lockbox to bind/unbind items"
+			_bridge_connect_btn.tooltip_text = "Connect to import/export items"
 		# Re-style button based on connection state
 		_style_wallet_connect_button(_bridge_connect_btn, connected)
 
@@ -2563,9 +2571,9 @@ func _update_bridge_in_display(items: Array) -> void:
 		if empty_label:
 			empty_label.visible = true
 			if ForgeItemManager.is_wallet_connected():
-				empty_label.text = "No items in lockbox"
+				empty_label.text = "0 items ready"
 			else:
-				empty_label.text = "Connect lockbox"
+				empty_label.text = "Connect to sync"
 		return
 
 	if empty_label:
@@ -2628,13 +2636,12 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 	var item_id = item.get("item_id", "")
 	var forged_id = item.get("forged_id", item.get("id", ""))
 
-	# For bridging out, create a vertical container with icon and countdown
+	# For bridging out, create card with icon, cancel X overlay, and countdown overlay
 	if not is_bridge_in:
-		var vbox = VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 2)
-
+		# Card container - 64x64
 		var card = PanelContainer.new()
-		card.custom_minimum_size = Vector2(55, 55)  # 25% bigger than 44
+		card.name = "BridgeOutCard_%s" % str(forged_id)
+		card.custom_minimum_size = Vector2(64, 64)
 
 		var style = StyleBoxFlat.new()
 		style.bg_color = Color(0.08, 0.08, 0.10)
@@ -2643,55 +2650,104 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 		style.set_corner_radius_all(3)
 		card.add_theme_stylebox_override("panel", style)
 
-		var center = CenterContainer.new()
-		card.add_child(center)
+		# Use a Control as the root to allow absolute positioning for overlays
+		var card_content = Control.new()
+		card_content.set_anchors_preset(Control.PRESET_FULL_RECT)
+		card.add_child(card_content)
 
-		# Item icon or placeholder
+		var center = CenterContainer.new()
+		center.set_anchors_preset(Control.PRESET_FULL_RECT)
+		card_content.add_child(center)
+
+		# Item icon or placeholder - 54x54
 		var icon_path = _get_forge_icon_path(item_id)
 		if icon_path and FileAccess.file_exists(icon_path):
 			var tex = load(icon_path)
 			if tex:
 				var icon = TextureRect.new()
 				icon.texture = tex
-				icon.custom_minimum_size = Vector2(45, 45)  # 25% bigger than 36
+				icon.custom_minimum_size = Vector2(54, 54)
 				icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				center.add_child(icon)
 			else:
 				var label = Label.new()
 				label.text = item_name.substr(0, 1).to_upper()
-				label.add_theme_font_size_override("font_size", FONT_BODY)
+				label.add_theme_font_size_override("font_size", FONT_BODY_LG)
 				label.add_theme_color_override("font_color", TEXT_SECONDARY)
 				center.add_child(label)
 		else:
 			var label = Label.new()
 			label.text = item_name.substr(0, 1).to_upper() if item_name else "?"
-			label.add_theme_font_size_override("font_size", FONT_BODY)
+			label.add_theme_font_size_override("font_size", FONT_BODY_LG)
 			label.add_theme_color_override("font_color", TEXT_SECONDARY)
 			center.add_child(label)
 
-		vbox.add_child(card)
+		# Red X cancel button in upper-right corner (only during cooldown)
+		var can_cancel = item.get("can_confirm", false) == false  # Can cancel while cooldown active
+		if can_cancel:
+			var cancel_btn = Button.new()
+			cancel_btn.name = "CancelX_%s" % str(forged_id)
+			cancel_btn.text = "X"
+			cancel_btn.custom_minimum_size = Vector2(18, 18)
+			cancel_btn.tooltip_text = "Cancel Export to Web"
+			cancel_btn.set_meta("forged_id", forged_id)
+			cancel_btn.set_meta("item_name", item_name)
+			cancel_btn.pressed.connect(_on_bridge_card_cancel_pressed.bind(forged_id, item_name))
+			cancel_btn.mouse_entered.connect(_play_button_hover_sound)
 
-		# Countdown label below the card
+			# Style the X button - red background
+			var x_style = StyleBoxFlat.new()
+			x_style.bg_color = Color(0.6, 0.15, 0.15)
+			x_style.border_color = Color(0.8, 0.2, 0.2)
+			x_style.set_border_width_all(1)
+			x_style.set_corner_radius_all(2)
+			cancel_btn.add_theme_stylebox_override("normal", x_style)
+
+			var x_hover = x_style.duplicate()
+			x_hover.bg_color = Color(0.8, 0.2, 0.2)
+			x_hover.border_color = Color(1.0, 0.3, 0.3)
+			cancel_btn.add_theme_stylebox_override("hover", x_hover)
+			cancel_btn.add_theme_stylebox_override("pressed", x_hover)
+
+			cancel_btn.add_theme_font_size_override("font_size", 12)
+			cancel_btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.9))
+			cancel_btn.add_theme_color_override("font_hover_color", Color.WHITE)
+			cancel_btn.focus_mode = Control.FOCUS_NONE
+
+			# Position in upper-right corner
+			cancel_btn.position = Vector2(card.custom_minimum_size.x - 20, 2)
+			card_content.add_child(cancel_btn)
+
+		# Countdown timer overlay at bottom of card
 		var hours = item.get("bridge_hours_remaining", item.get("hours_remaining", 0.0))
 		var countdown_label = Label.new()
 		countdown_label.name = "CountdownLabel_%s" % str(forged_id)
 		countdown_label.text = _format_bridge_countdown(hours)
-		countdown_label.add_theme_font_size_override("font_size", FONT_MIN)
-		countdown_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
+		countdown_label.add_theme_font_size_override("font_size", 9)
+		countdown_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+		countdown_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+		countdown_label.add_theme_constant_override("outline_size", 2)
 		countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		countdown_label.set_meta("hours_remaining", hours)
 		countdown_label.set_meta("last_update_time", Time.get_ticks_msec())
-		vbox.add_child(countdown_label)
+		# Position at bottom center of card
+		countdown_label.custom_minimum_size = Vector2(64, 14)
+		countdown_label.position = Vector2(0, 48)
+		card_content.add_child(countdown_label)
 
-		# Tooltip
-		card.tooltip_text = "%s\n%s remaining" % [item_name, _format_bridge_countdown(hours)]
+		# Tooltip on the card
+		card.tooltip_text = "%s\n%s remaining%s" % [
+			item_name,
+			_format_bridge_countdown(hours),
+			"\nClick X to cancel" if can_cancel else ""
+		]
 
-		return vbox
+		return card
 	else:
-		# Bridge-in card (existing behavior)
+		# Bridge-in card - matching size with bridge-out (64x64)
 		var card = PanelContainer.new()
-		card.custom_minimum_size = Vector2(55, 55)  # 25% bigger than 44
+		card.custom_minimum_size = Vector2(64, 64)
 
 		var style = StyleBoxFlat.new()
 		style.bg_color = Color(0.08, 0.08, 0.10)
@@ -2709,7 +2765,7 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 			if tex:
 				var icon = TextureRect.new()
 				icon.texture = tex
-				icon.custom_minimum_size = Vector2(45, 45)  # 25% bigger than 36
+				icon.custom_minimum_size = Vector2(54, 54)
 				icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 				center.add_child(icon)
@@ -2726,7 +2782,7 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 			label.add_theme_color_override("font_color", TEXT_SECONDARY)
 			center.add_child(label)
 
-		card.tooltip_text = "%s\nClick to bind" % item_name
+		card.tooltip_text = "%s\nClick to import" % item_name
 		card.gui_input.connect(_on_bridge_in_card_clicked.bind(item))
 
 		return card
@@ -2768,7 +2824,7 @@ func _on_bridge_in_complete(bridged_items: Array, item_name: String) -> void:
 	# Reset button if visible
 	var bridge_in_btn = _forge_detail_panel.find_child("BridgeInButton", true, false) if _forge_detail_panel else null
 	if bridge_in_btn:
-		bridge_in_btn.text = "BIND"
+		bridge_in_btn.text = "IMPORT"
 		bridge_in_btn.disabled = false
 
 	if bridged_items.is_empty():
@@ -2825,7 +2881,7 @@ func _on_wallet_disconnect_complete(success: bool) -> void:
 
 		# Update UI to show disconnected state
 		if _bridge_wallet_status:
-			_bridge_wallet_status.text = "No lockbox connected"
+			_bridge_wallet_status.text = "Not connected"
 			_bridge_wallet_status.add_theme_color_override("font_color", TEXT_DIM)
 
 		if _bridge_connect_btn:
@@ -3230,7 +3286,7 @@ func _on_forge_complete(forged_item: Dictionary, item_name: String, forge_btn: B
 	_update_forge_detail({}, "locked")
 
 func _update_forge_detail(item: Dictionary, item_state: String) -> void:
-	"""Update the forge detail panel with item info (pre-computed from backend)
+	"""Update the forge detail panel with item info (tooltip style)
 	States: 'forged', 'forgeable', 'locked'
 	"""
 	if not _forge_detail_panel:
@@ -3239,9 +3295,13 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 	var is_owned = item_state == "forged"
 	var is_forgeable = item_state == "forgeable"
 
+	# Get UI elements
 	var name_label = _forge_detail_panel.find_child("ItemName", true, false)
 	var rarity_label = _forge_detail_panel.find_child("ItemRarity", true, false)
 	var unlock_label = _forge_detail_panel.find_child("ItemUnlock", true, false)
+	var stat_label = _forge_detail_panel.find_child("StatLabel", true, false)
+	var achievement_label = _forge_detail_panel.find_child("AchievementLabel", true, false)
+	var census_label = _forge_detail_panel.find_child("CensusLabel", true, false)
 	var lore_label = _forge_detail_panel.find_child("ItemLore", true, false)
 	var icon_label = _forge_detail_panel.find_child("IconLabel", true, false)
 	var icon_texture = _forge_detail_panel.find_child("IconTexture", true, false)
@@ -3249,7 +3309,7 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 	var preview_btn = _forge_detail_panel.find_child("PreviewButton", true, false)
 	var forge_btn = _forge_detail_panel.find_child("ForgeButton", true, false)
 
-	# Modifier UI elements (display pre-computed data)
+	# Hidden sections (for compatibility with helper functions)
 	var modifiers_section = _forge_detail_panel.find_child("ModifiersSection", true, false)
 	var effort_bar = _forge_detail_panel.find_child("EffortBar", true, false)
 	var effort_value = _forge_detail_panel.find_child("EffortValue", true, false)
@@ -3260,40 +3320,62 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 
 	if item.is_empty():
 		_forge_selected_item = {}
-		if name_label: name_label.text = "Click an item to select"
-		if rarity_label: rarity_label.text = ""
-		if unlock_label: unlock_label.text = "Select an item to see details"
+		if name_label:
+			name_label.text = "Select an item..."
+			name_label.add_theme_color_override("font_color", TEXT_DIM)
+		if rarity_label:
+			rarity_label.text = ""
+		if unlock_label:
+			unlock_label.text = ""
+		if stat_label:
+			stat_label.text = ""
+		if achievement_label:
+			achievement_label.text = ""
+		if census_label:
+			census_label.text = ""
 		if lore_label: lore_label.visible = false
 		if preview_btn: preview_btn.visible = false
 		if forge_btn: forge_btn.visible = false
-		if modifiers_section: modifiers_section.visible = false
 		if icon_label:
 			icon_label.text = "?"
-			icon_label.add_theme_color_override("font_color", TEXT_DIM)
+			icon_label.add_theme_font_size_override("font_size", 32)
+			icon_label.add_theme_color_override("font_color", Color(0.25, 0.28, 0.32))
 			icon_label.visible = true
 		if icon_texture:
 			icon_texture.visible = false
+		# Hide action buttons in empty state
+		var bridge_out_btn = _forge_detail_panel.find_child("BridgeOutButton", true, false)
+		var bridge_in_btn = _forge_detail_panel.find_child("BridgeInButton", true, false)
+		var bridge_status = _forge_detail_panel.find_child("BridgeStatusLabel", true, false)
+		if bridge_out_btn: bridge_out_btn.visible = false
+		if bridge_in_btn: bridge_in_btn.visible = false
+		if bridge_status: bridge_status.visible = false
 		return
 
 	_forge_selected_item = item
 
-	# Get item properties (works with both catalog items and forged items)
+	# Get item properties
 	var item_name = item.get("item_name", item.get("name", "Unknown"))
 	var rarity = item.get("item_rarity", item.get("rarity", "Common"))
 	var game_name = item.get("game", "???")
+	var category = item.get("category", "weapons")
+	var achievement = item.get("achievement", "")
 	var rarity_color = RARITY_COLORS.get(rarity, Color.GRAY)
+	var rarity_multiplier = {"Common": 1.0, "Uncommon": 1.2, "Rare": 1.5, "Epic": 1.8, "Legendary": 2.2}.get(rarity, 1.0)
 
+	# Item name (colored by rarity)
 	if name_label:
 		name_label.text = item_name
 		name_label.add_theme_color_override("font_color", rarity_color if is_owned else rarity_color.darkened(0.3))
 
+	# Rarity + Game line
 	if rarity_label:
-		rarity_label.text = "%s • %s" % [rarity, game_name]
+		rarity_label.text = "%s • %s" % [rarity.to_lower(), game_name]
 		rarity_label.add_theme_color_override("font_color", rarity_color.darkened(0.2))
 
+	# Status line
 	if unlock_label:
 		if is_owned:
-			# Items are auto-added to inventory on forge, no claim step needed
 			unlock_label.text = "✓ Ready to equip!"
 			unlock_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
 		elif is_forgeable:
@@ -3303,61 +3385,38 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 			unlock_label.text = "Locked"
 			unlock_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 
-	# Update stats section based on item category
-	var ability_container = _forge_detail_panel.find_child("AbilityContainer", true, false)
-	var ability_label = _forge_detail_panel.find_child("AbilityLabel", true, false)
-
-	# Get item stats (simulate based on rarity and category for now)
-	var category = item.get("category", "weapons")
-	var rarity_multiplier = {"Common": 1.0, "Uncommon": 1.2, "Rare": 1.5, "Epic": 1.8, "Legendary": 2.2}.get(rarity, 1.0)
-
-	# Show/hide stat containers based on category (new layout uses containers)
-	var damage_container = _forge_detail_panel.find_child("StatDamageContainer", true, false)
-	var damage_value = _forge_detail_panel.find_child("StatDamageValue", true, false)
-	var defense_container = _forge_detail_panel.find_child("StatDefenseContainer", true, false)
-	var defense_value = _forge_detail_panel.find_child("StatDefenseValue", true, false)
-	var speed_container = _forge_detail_panel.find_child("StatSpeedContainer", true, false)
-	var speed_value = _forge_detail_panel.find_child("StatSpeedValue", true, false)
-	var crit_container = _forge_detail_panel.find_child("StatCritContainer", true, false)
-	var crit_value = _forge_detail_panel.find_child("StatCritValue", true, false)
-
-	# Reset all stats visibility
-	if damage_container: damage_container.visible = false
-	if defense_container: defense_container.visible = false
-	if speed_container: speed_container.visible = false
-	if crit_container: crit_container.visible = false
-
-	if category == "weapons":
-		var base_damage = int(10 * rarity_multiplier)
-		var speed_bonus = int(5 * rarity_multiplier)
-		if damage_container and damage_value:
-			damage_container.visible = true
-			damage_value.text = "+%d" % base_damage
-		if speed_container and speed_value:
-			speed_container.visible = true
-			speed_value.text = "+%d%%" % speed_bonus
-		if rarity in ["Epic", "Legendary"] and crit_container and crit_value:
-			crit_container.visible = true
-			crit_value.text = "+%d%%" % int(3 * rarity_multiplier)
-	elif category in ["armor", "shields"]:
-		var base_defense = int(8 * rarity_multiplier)
-		if defense_container and defense_value:
-			defense_container.visible = true
-			defense_value.text = "+%d" % base_defense
-	elif category == "accessories":
-		# Accessories might have special effects instead of raw stats
-		pass
-
-	# Show special ability from achievement name (as the item's unique effect)
-	if ability_container and ability_label:
-		var achievement = item.get("achievement", "")
-		if achievement != "" and is_owned:
-			ability_container.visible = true
-			ability_label.text = achievement
+	# Stat line (Damage/Defense based on category)
+	if stat_label:
+		if category == "weapons":
+			var base_damage = int(10 * rarity_multiplier)
+			stat_label.text = "Damage: +%d" % base_damage
+		elif category in ["armor", "shields"]:
+			var base_defense = int(8 * rarity_multiplier)
+			stat_label.text = "Defense: +%d" % base_defense
+		elif category == "capes":
+			stat_label.text = "Cosmetic"
+			stat_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+		elif category == "accessories":
+			stat_label.text = "Special Effect"
+			stat_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2))
 		else:
-			ability_container.visible = false
+			stat_label.text = ""
 
-	# Lore text removed from detail panel - shown in tooltip only
+	# Achievement source line (star icon + achievement name)
+	if achievement_label:
+		if achievement != "":
+			achievement_label.text = "★ %s" % achievement
+		else:
+			achievement_label.text = ""
+
+	# Census line (Only 1 exists!)
+	if census_label:
+		if is_owned:
+			census_label.text = "Only 1 exists!"
+		else:
+			census_label.text = ""
+
+	# Hide lore label (compatibility)
 	if lore_label:
 		lore_label.visible = false
 
@@ -3394,7 +3453,6 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 
 	# Get bridge UI elements
 	var bridge_out_btn = _forge_detail_panel.find_child("BridgeOutButton", true, false)
-	var cancel_bridge_btn = _forge_detail_panel.find_child("CancelBridgeButton", true, false)
 	var bridge_status_label = _forge_detail_panel.find_child("BridgeStatusLabel", true, false)
 
 	# Get bridge status for this item
@@ -3423,15 +3481,10 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 	# UNBIND button - shown for items that are in_game (items auto-claimed on forge/bind)
 	if bridge_out_btn:
 		bridge_out_btn.visible = is_owned and bridge_status == "in_game"
-		bridge_out_btn.text = "UNBIND"
+		bridge_out_btn.text = "EXPORT"
 		bridge_out_btn.disabled = false
 
-	# CANCEL button - shown when item is unbinding (cancellable during cooldown)
-	if cancel_bridge_btn:
-		var can_still_cancel = item.get("can_confirm", false) == false  # Can cancel while cooldown active
-		cancel_bridge_btn.visible = is_bridging and can_still_cancel
-		cancel_bridge_btn.text = "CANCEL"
-		cancel_bridge_btn.disabled = false
+	# NOTE: Cancel functionality moved to red X on bridge-out icons in EXPORT TO WEB section
 
 	# BIND button - shown when item is in external wallet (unbound)
 	var bridge_in_btn = _forge_detail_panel.find_child("BridgeInButton", true, false)
@@ -3472,11 +3525,10 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 
 	# === Update Trading Section ===
 	var trading_section = _forge_detail_panel.find_child("TradingSection", true, false)
-	var census_label = _forge_detail_panel.find_child("CensusLabel", true, false)
 	var trade_icon = _forge_detail_panel.find_child("TradeIcon", true, false)
 	var trade_status = _forge_detail_panel.find_child("TradeStatus", true, false)
 	var cooldown_badge = _forge_detail_panel.find_child("CooldownBadge", true, false)
-	_update_trading_display(item, trading_section, census_label, trade_icon, trade_status, cooldown_badge, is_owned)
+	_update_trading_display(item, trading_section, null, trade_icon, trade_status, cooldown_badge, is_owned)
 
 func _update_modifiers_display(item: Dictionary, modifiers_section: Control,
 		effort_bar: ProgressBar, effort_value: Label, vintage_badge: PanelContainer,
@@ -3676,14 +3728,7 @@ func _build_forge_unified_content() -> Control:
 	2. FORGEABLE - Achievement unlocked, can forge via webapp (not in game)
 	3. LOCKED - Achievement not unlocked yet
 	"""
-	# Wrap in scroll container for proper overflow handling
-	var scroll = ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO  # Show scrollbar only when needed
-
-	# Use GridContainer with 6 columns (fits better on smaller screens)
+	# Simple margin container - no scroll needed, content shrinks to fit
 	var margin = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 6)
 	margin.add_theme_constant_override("margin_right", 6)
@@ -3691,11 +3736,10 @@ func _build_forge_unified_content() -> Control:
 	margin.add_theme_constant_override("margin_bottom", 6)
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.clip_contents = true  # Prevent horizontal overflow
-	scroll.add_child(margin)
 
 	var grid = GridContainer.new()
 	grid.name = "CatalogGrid"
-	grid.columns = 6  # Reduced from 8 to fit smaller screens
+	grid.columns = 7
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 4)
 	grid.add_theme_constant_override("v_separation", 4)
@@ -3766,7 +3810,7 @@ func _build_forge_unified_content() -> Control:
 		var item_card = _create_forge_item_card(item, "locked")
 		grid.add_child(item_card)
 
-	return scroll
+	return margin
 
 func _build_forge_all_content() -> Control:
 	"""Legacy wrapper - calls unified content"""
@@ -3878,20 +3922,20 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 
 	if is_owned:
 		# FORGED - bright, full color with rarity glow
-		style.bg_color = Color(0.08, 0.08, 0.10)
+		style.bg_color = Color(0.06, 0.06, 0.08, 1.0)  # Fully opaque
 		style.border_color = rarity_color.darkened(0.2)
 		if is_high_rarity:
 			style.shadow_size = 8
 			style.shadow_color = Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.5)
 	elif is_forgeable:
 		# FORGEABLE - intense warm glow to indicate action available
-		style.bg_color = Color(0.10, 0.07, 0.03)  # Warmer tint
+		style.bg_color = Color(0.08, 0.06, 0.03, 1.0)  # Fully opaque, warmer tint
 		style.border_color = Color(1.0, 0.65, 0.2)  # Brighter orange border
 		style.shadow_size = 10
 		style.shadow_color = Color(1.0, 0.5, 0.1, 0.6)  # Stronger orange glow
 	else:
 		# LOCKED - very muted, obviously unavailable
-		style.bg_color = Color(0.02, 0.02, 0.03)
+		style.bg_color = Color(0.03, 0.03, 0.04, 1.0)  # Fully opaque
 		style.border_color = Color(0.15, 0.15, 0.18)  # Gray border, ignore rarity
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(5)
@@ -4069,7 +4113,7 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 				pulse.tween_property(bridge_pill, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_IN_OUT)
 
 			elif bridge_status == "bridged":
-				# Unbound (in lockbox) - blue
+				# On web (exported) - blue
 				var bridge_pill = PanelContainer.new()
 				var bridge_style = StyleBoxFlat.new()
 				bridge_style.bg_color = Color(0.2, 0.3, 0.6, 0.95)  # Blue
@@ -4080,7 +4124,7 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 				badge_layer.add_child(bridge_pill)
 
 				var bridge_label = Label.new()
-				bridge_label.text = "BOX"  # In lockbox
+				bridge_label.text = "WEB"  # On web
 				bridge_label.add_theme_font_size_override("font_size", FONT_MIN)
 				bridge_label.add_theme_color_override("font_color", Color(0.7, 0.8, 1.0))
 				bridge_pill.add_child(bridge_label)
@@ -4159,12 +4203,12 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 			tooltip_lines.append("─────────────────")
 			if tip_bridge_status == "bridging_out":
 				var hours = item.get("bridge_hours_remaining", item.get("hours_remaining", 0.0))
-				tooltip_lines.append("UNBINDING")
-				tooltip_lines.append("%.1fh until unbound" % hours)
+				tooltip_lines.append("EXPORTING")
+				tooltip_lines.append("%.1fh until exported" % hours)
 				tooltip_lines.append("Click to cancel")
 			elif tip_bridge_status == "bridged":
-				tooltip_lines.append("UNBOUND")
-				tooltip_lines.append("Bind from wallet section")
+				tooltip_lines.append("ON WEB")
+				tooltip_lines.append("Import from sync section")
 			else:
 				tooltip_lines.append("IN INVENTORY")
 				tooltip_lines.append("Ready to equip!")
@@ -4198,42 +4242,28 @@ func _on_forge_card_hover(card: PanelContainer, is_hovering: bool) -> void:
 	"""Handle hover visual effects on forge item cards (visual only, no selection)"""
 	var rarity_color: Color = card.get_meta("rarity_color", Color.GRAY)
 	var is_owned: bool = card.get_meta("is_owned", false)
+	var normal_style: StyleBoxFlat = card.get_meta("normal_style")
 
 	if is_hovering:
 		# Play hover sound
 		if SoundManager:
 			SoundManager.play_button_hover_sound(-12.0)
 
-		# Set pivot to center based on actual size for proper scaling
-		card.pivot_offset = card.size / 2.0
-
-		# Create hover style with glow
-		var hover_style = StyleBoxFlat.new()
+		# Clone the normal style and only change colors (never margins/borders that affect layout)
+		var hover_style = normal_style.duplicate() if normal_style else StyleBoxFlat.new()
 		if is_owned:
 			hover_style.bg_color = Color(0.12, 0.12, 0.14)
-			hover_style.border_color = rarity_color
+			hover_style.border_color = rarity_color.lightened(0.2)
 		else:
-			hover_style.bg_color = Color(0.06, 0.06, 0.08)
-			hover_style.border_color = rarity_color.darkened(0.3)
-		hover_style.set_border_width_all(2)
-		hover_style.set_corner_radius_all(4)
-		hover_style.set_content_margin_all(1)
-		hover_style.shadow_size = 8
-		hover_style.shadow_color = Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.4)
+			hover_style.bg_color = Color(0.08, 0.08, 0.10)
+			hover_style.border_color = rarity_color.lightened(0.1)
+		# Keep shadow_size at 0 during hover to prevent layout shift
+		hover_style.shadow_size = 0
 		card.add_theme_stylebox_override("panel", hover_style)
-
-		# Scale up slightly
-		var tween = create_tween()
-		tween.tween_property(card, "scale", Vector2(1.05, 1.05), 0.1).set_ease(Tween.EASE_OUT)
 	else:
 		# Restore normal style (unless this is the selected card)
-		var normal_style: StyleBoxFlat = card.get_meta("normal_style")
 		if normal_style and card != _forge_selected_card:
 			card.add_theme_stylebox_override("panel", normal_style)
-
-		# Scale back
-		var tween = create_tween()
-		tween.tween_property(card, "scale", Vector2(1.0, 1.0), 0.1).set_ease(Tween.EASE_OUT)
 
 func _on_forge_card_clicked(event: InputEvent, card: PanelContainer) -> void:
 	"""Handle click to select a forge item card"""
@@ -4449,10 +4479,10 @@ func _build_dreadland_column() -> Control:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	wrapper.add_child(bg)
 
-	# Animated grid background effect
+	# Animated grid background effect (z_index 0 to render behind content)
 	var grid_overlay = _create_animated_grid_bg()
 	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	grid_overlay.z_index = 10
+	grid_overlay.z_index = 0
 	wrapper.add_child(grid_overlay)
 
 	# Border overlay with cyan glow (matches MainMenu)
@@ -4469,13 +4499,14 @@ func _build_dreadland_column() -> Control:
 	border.add_theme_stylebox_override("panel", border_style)
 	wrapper.add_child(border)
 
-	# Content - tighter margins
+	# Content - tighter margins (z_index 1 to render above grid)
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 16)
 	margin.add_theme_constant_override("margin_right", 16)
 	margin.add_theme_constant_override("margin_top", 12)
 	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.z_index = 1  # Render above grid lines
 	wrapper.add_child(margin)
 
 	# Main vertical container - spread content evenly
@@ -4582,6 +4613,15 @@ func _build_dreadland_column() -> Control:
 	logout_button.pressed.connect(_on_logout_pressed)
 	logout_button.visible = false
 	buttons_vbox.add_child(logout_button)
+
+	# Exit button - quit the game
+	var exit_button = Button.new()
+	exit_button.text = "EXIT"
+	exit_button.custom_minimum_size = Vector2(0, 32)
+	exit_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_exit_button(exit_button)
+	exit_button.pressed.connect(_on_exit_pressed)
+	buttons_vbox.add_child(exit_button)
 
 	var spacer2b = Control.new()
 	spacer2b.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -6595,6 +6635,49 @@ func _style_logout_button(button: Button) -> void:
 	pressed.set_corner_radius_all(6)
 	pressed.set_content_margin_all(8)
 	button.add_theme_stylebox_override("pressed", pressed)
+
+func _style_exit_button(button: Button) -> void:
+	"""Style Exit button - subtle gray"""
+	var gray = Color(0.35, 0.35, 0.35)
+	var gray_dark = Color(0.2, 0.2, 0.2)
+	var gray_light = Color(0.45, 0.45, 0.45)
+
+	button.add_theme_font_override("font", default_font)
+	button.add_theme_font_size_override("font_size", FONT_CAPTION)
+	button.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	button.mouse_entered.connect(_play_button_hover_sound)
+
+	# Normal state
+	var normal = StyleBoxFlat.new()
+	normal.bg_color = gray_dark
+	normal.border_color = gray
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(4)
+	normal.set_content_margin_all(6)
+	button.add_theme_stylebox_override("normal", normal)
+
+	# Hover state
+	var hover = StyleBoxFlat.new()
+	hover.bg_color = gray
+	hover.border_color = gray_light
+	hover.set_border_width_all(1)
+	hover.set_corner_radius_all(4)
+	hover.set_content_margin_all(6)
+	button.add_theme_stylebox_override("hover", hover)
+
+	# Pressed state
+	var pressed = StyleBoxFlat.new()
+	pressed.bg_color = gray_dark.darkened(0.2)
+	pressed.border_color = gray
+	pressed.set_border_width_all(1)
+	pressed.set_corner_radius_all(4)
+	pressed.set_content_margin_all(6)
+	button.add_theme_stylebox_override("pressed", pressed)
+
+func _on_exit_pressed() -> void:
+	"""Exit the game"""
+	print("[Armory] Exit button pressed - quitting game")
+	get_tree().quit()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # STATE MANAGEMENT

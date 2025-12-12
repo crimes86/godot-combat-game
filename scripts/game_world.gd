@@ -3546,9 +3546,20 @@ func _spawn_initial_players():
 		if OS.is_debug_build():
 			print("🔍 [PLAYER DEBUG] Spawning local player %d" % my_id)
 
-		# Get saved position for authenticated players
+		# Check if returning from Trading Hub - use hub exit position
 		var saved_pos = Vector2.ZERO
-		if not NetworkManager.is_guest and DatabaseManager:
+		var hub_manager = get_node_or_null("/root/TradingHubManager")
+		var _restore_hub_state = false
+		if hub_manager and hub_manager.is_returning_from_hub():
+			# Player is returning from hub - spawn near tunnel entrance
+			saved_pos = hub_manager.get_origin_spawn_position()
+			_restore_hub_state = true
+			if OS.is_debug_build():
+				print("🚪 [PLAYER DEBUG] Returning from hub, spawning at tunnel: %s" % saved_pos)
+			# Clear the flag so next spawn uses normal logic
+			hub_manager.clear_returning_flag()
+		elif not NetworkManager.is_guest and DatabaseManager:
+			# Get saved position for authenticated players
 			var username = NetworkManager.local_player_data.get("username", "")
 			if not username.is_empty():
 				saved_pos = DatabaseManager.get_saved_position(username)
@@ -3556,6 +3567,10 @@ func _spawn_initial_players():
 					print("📍 [PLAYER DEBUG] Restoring saved position: %s" % saved_pos)
 
 		spawn_player(my_id, saved_pos)
+
+		# Restore player state if returning from hub
+		if _restore_hub_state and hub_manager and hub_manager.has_preserved_state() and players.has(my_id):
+			hub_manager.restore_player_state(players[my_id])
 
 		# Apply saved data to game systems after player spawns
 		if not NetworkManager.is_guest and DatabaseManager:

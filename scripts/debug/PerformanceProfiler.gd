@@ -106,9 +106,13 @@ func update_profile() -> void:
 	# Get time info
 	var time_info = get_time_debug_info()
 
-	label.text = """FPS: %d (%.1f ms/frame)
+	# Get cursor/player position info
+	var cursor_info = get_cursor_debug_info()
+
+	label.text = """FPS: %d (%.1f ms/frame) | Scene: %s
 ━━━━━━━━━━━━━━━━━━━━━━
 TIME: %s
+%s
 ━━━━━━━━━━━━━━━━━━━━━━
 SCENE TOTALS:
   Nodes: %d
@@ -135,8 +139,9 @@ WOLF PACKS:
 MEMORY: %.1f MB
 Press F3 to toggle | F4 advance time
 """ % [
-		fps, frame_time_ms,
+		fps, frame_time_ms, get_scene_name(),
 		time_info,
+		cursor_info,
 		total_nodes, sprite_count, polygon_count, particle_count, light_count,
 		prop_info,
 		system_info,
@@ -151,6 +156,42 @@ Press F3 to toggle | F4 advance time
 	if viewport:
 		var viewport_size = viewport.get_visible_rect().size
 		label.position = Vector2(viewport_size.x - 320, 10)
+
+func get_scene_name() -> String:
+	"""Get current scene name"""
+	var current = get_tree().current_scene
+	return current.name if current else "Unknown"
+
+func get_cursor_debug_info() -> String:
+	"""Get cursor and player position info"""
+	var mouse_screen = get_viewport().get_mouse_position()
+	var mouse_world = Vector2.ZERO
+	var player_pos = Vector2.ZERO
+	var chunk_x = 0
+	var chunk_y = 0
+
+	# Find camera to convert screen to world coords
+	var camera = get_viewport().get_camera_2d()
+	if camera:
+		mouse_world = camera.get_global_mouse_position()
+	else:
+		var player = get_tree().get_first_node_in_group("player")
+		if player:
+			var player_camera = player.get_node_or_null("Camera2D")
+			if player_camera:
+				mouse_world = player_camera.get_global_mouse_position()
+
+	# Get player position
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		player_pos = player.global_position
+		chunk_x = int(floor(player_pos.x / Constants.CHUNK_SIZE))
+		chunk_y = int(floor(player_pos.y / Constants.CHUNK_SIZE))
+
+	return "Player: (%.0f, %.0f) Chunk: (%d, %d)\nCursor: (%.0f, %.0f) Screen: (%.0f, %.0f)" % [
+		player_pos.x, player_pos.y, chunk_x, chunk_y,
+		mouse_world.x, mouse_world.y, mouse_screen.x, mouse_screen.y
+	]
 
 func get_system_node_breakdown() -> String:
 	"""Get node counts per major system"""
@@ -481,7 +522,7 @@ func draw_poi_debug() -> void:
 		return
 
 	var game_world = find_game_world()
-	if not game_world or not game_world.poi_manager:
+	if not game_world or not game_world.get("poi_manager"):
 		return
 
 	var CHUNK_SIZE = Constants.CHUNK_SIZE
@@ -606,7 +647,7 @@ func draw_circle_outline(center: Vector2, radius: float, color: Color, node_name
 	enemy_debug_circles.append(line)
 
 func find_game_world() -> Node:
-	"""Find the GameWorld node"""
+	"""Find the GameWorld node (or TestHub/TradingHub as fallback)"""
 	var root = get_tree().root
 	for child in root.get_children():
 		var game_world = child.get_node_or_null("GameWorld")
@@ -614,6 +655,13 @@ func find_game_world() -> Node:
 			return game_world
 		if child.name == "GameWorld":
 			return child
+		# Also check for TestHub/TradingHub scenes
+		if child.name in ["TestHub", "TradingHub"]:
+			return child
+	# Check current scene directly
+	var current = get_tree().current_scene
+	if current and current.name in ["GameWorld", "TestHub", "TradingHub"]:
+		return current
 	return null
 
 func get_time_debug_info() -> String:

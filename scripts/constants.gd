@@ -38,6 +38,39 @@ const WEAKPOINT_COUNTER_SCALE_DIVISOR: float = 3.2  # Counter-scale weakpoints (
 const WEAKPOINT_MAX_PER_SECTION: int = 1  # Exactly 1 weakpoint per body section
 const CRIT_DAMAGE_MULTIPLIER: float = 2.0  # Weakpoint damage multiplier
 
+# Weakpoint Window Triggers (decoupled from crit)
+# Windows trigger on hit count OR health thresholds - NOT on random crits
+const WEAKPOINT_TRIGGER_HIT_COUNT: int = 8  # Trigger window every X hits on same enemy
+const WEAKPOINT_TRIGGER_HEALTH_THRESHOLDS: Array = [0.75, 0.50, 0.25]  # Trigger at 75%, 50%, 25% HP
+const WEAKPOINT_TRIGGER_ON_CRIT: bool = false  # Legacy: if true, crits still trigger windows
+
+# ============================================
+# TTK (TIME-TO-KILL) FRAMEWORK
+# ============================================
+# HP pools are designed around expected weakpoint windows to kill.
+# This ensures consistent TTK regardless of player damage scaling.
+
+# Expected weakpoint windows to kill each enemy type
+const TTK_WINDOWS_TRASH: int = 1       # Regular mobs: 1 perfect window
+const TTK_WINDOWS_ELITE: int = 3       # Elite/Guardian mobs: 2-3 windows
+const TTK_WINDOWS_BOSS: int = 7        # Bosses: 6-8 windows
+const TTK_WINDOWS_PLAYER_PVP: int = 4  # Players in PvP: 3-5 windows
+
+# Base damage per perfect weakpoint window (at level 1)
+# Formula: 3 weakpoints × base_damage × crit_mult = 3 × 7 × 2.0 = 42 damage
+# This scales with player level automatically via base_damage
+const TTK_BASE_WINDOW_DAMAGE: float = 42.0  # Level 1 perfect window damage
+
+# Enemy HP multipliers (applied on top of base scaling)
+# These tune individual enemy types to hit TTK targets
+const TTK_MULT_TRASH: float = 1.0      # Standard HP
+const TTK_MULT_ELITE: float = 1.75     # 75% more HP (guardians already have this)
+const TTK_MULT_BOSS: float = 4.0       # 4x HP for extended fights
+
+# Player base HP for PvP (separate from PvE vitality scaling)
+const PLAYER_PVP_BASE_HP: float = 800.0  # ~4 windows with average gear
+const PLAYER_PVP_HP_PER_VIT: float = 15.0  # More impactful than PvE (+15 vs +10)
+
 # ============================================
 # ENEMY SCALING
 # ============================================

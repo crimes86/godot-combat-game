@@ -14,6 +14,17 @@ var message_container: ScrollContainer
 var message_list: VBoxContainer
 var input_field: LineEdit
 var send_button: Button
+var header_label: Label
+var input_row: HBoxContainer
+
+# Style references for fade effect (fade background, keep text visible)
+var panel_style: StyleBoxFlat
+var scroll_style: StyleBoxFlat
+var input_style_normal: StyleBoxFlat
+var input_style_focus: StyleBoxFlat
+var button_style_normal: StyleBoxFlat
+var button_style_hover: StyleBoxFlat
+var button_style_pressed: StyleBoxFlat
 
 # UI colors - use UITheme singleton for consistency
 var BG_COLOR: Color:
@@ -75,6 +86,53 @@ func _input(event: InputEvent) -> void:
 	if admin_panel and admin_panel.is_visible:
 		return
 
+	# "/" key opens chat and starts typing a command
+	if event is InputEventKey and event.pressed and event.keycode == KEY_SLASH:
+		if not is_input_focused:
+			focus_input()
+			# Pre-fill with "/" so user can start typing command immediately
+			input_field.text = "/"
+			input_field.caret_column = 1  # Put cursor after the /
+			get_viewport().set_input_as_handled()
+			return
+
+	# Readline-style shortcuts when chat is focused
+	if is_input_focused and event is InputEventKey and event.pressed and event.ctrl_pressed:
+		match event.keycode:
+			KEY_A:  # Ctrl+A - Move cursor to beginning of line
+				input_field.caret_column = 0
+				get_viewport().set_input_as_handled()
+				return
+			KEY_E:  # Ctrl+E - Move cursor to end of line
+				input_field.caret_column = input_field.text.length()
+				get_viewport().set_input_as_handled()
+				return
+			KEY_U:  # Ctrl+U - Delete from cursor to beginning of line
+				var pos = input_field.caret_column
+				input_field.text = input_field.text.substr(pos)
+				input_field.caret_column = 0
+				get_viewport().set_input_as_handled()
+				return
+			KEY_K:  # Ctrl+K - Delete from cursor to end of line
+				input_field.text = input_field.text.substr(0, input_field.caret_column)
+				get_viewport().set_input_as_handled()
+				return
+			KEY_W:  # Ctrl+W - Delete word before cursor
+				var text = input_field.text
+				var pos = input_field.caret_column
+				if pos > 0:
+					# Skip trailing spaces
+					var end = pos
+					while pos > 0 and text[pos - 1] == " ":
+						pos -= 1
+					# Delete word
+					while pos > 0 and text[pos - 1] != " ":
+						pos -= 1
+					input_field.text = text.substr(0, pos) + text.substr(end)
+					input_field.caret_column = pos
+				get_viewport().set_input_as_handled()
+				return
+
 	# Toggle chat focus with Enter key
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
@@ -120,23 +178,24 @@ func create_chat_ui() -> void:
 	chat_panel.mouse_entered.connect(_on_chat_mouse_entered)
 	chat_panel.mouse_exited.connect(_on_chat_mouse_exited)
 
-	# Start faded out
-	chat_panel.modulate.a = 0.3
+	# Keep panel at full opacity - we'll fade the BACKGROUND colors instead
+	# This keeps text visible while backgrounds fade
+	chat_panel.modulate.a = 1.0
 
-	# Apply stone gray styling
-	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = BG_COLOR
+	# Apply stone gray styling - start fully transparent (ghosted)
+	panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(BG_COLOR.r, BG_COLOR.g, BG_COLOR.b, 0.0)  # Fully invisible
 	panel_style.border_width_left = 2
 	panel_style.border_width_right = 2
 	panel_style.border_width_top = 2
 	panel_style.border_width_bottom = 2
-	panel_style.border_color = BORDER_COLOR
+	panel_style.border_color = Color(BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.0)
 	panel_style.corner_radius_top_left = 6
 	panel_style.corner_radius_top_right = 6
 	panel_style.corner_radius_bottom_left = 6
 	panel_style.corner_radius_bottom_right = 6
-	panel_style.shadow_size = 8
-	panel_style.shadow_color = Color(0, 0, 0, 0.6)
+	panel_style.shadow_size = 0  # No shadow when ghosted
+	panel_style.shadow_color = Color(0, 0, 0, 0)
 	panel_style.shadow_offset = Vector2(0, 4)
 
 	chat_panel.add_theme_stylebox_override("panel", panel_style)
@@ -154,12 +213,13 @@ func create_chat_ui() -> void:
 	vbox.add_theme_constant_override("separation", 6)
 	margin.add_child(vbox)
 
-	# Header
-	var header = Label.new()
-	header.text = "CHAT"
-	header.add_theme_color_override("font_color", HEADER_COLOR)
-	header.add_theme_font_size_override("font_size", 14)
-	vbox.add_child(header)
+	# Header - hidden when ghosted, visible on hover
+	header_label = Label.new()
+	header_label.text = "CHAT"
+	header_label.add_theme_color_override("font_color", HEADER_COLOR)
+	header_label.add_theme_font_size_override("font_size", 14)
+	header_label.modulate.a = 0.0  # Start hidden
+	vbox.add_child(header_label)
 
 	# Message scroll container
 	message_container = ScrollContainer.new()
@@ -168,9 +228,9 @@ func create_chat_ui() -> void:
 	message_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	message_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 
-	# Style scroll container background
-	var scroll_style = StyleBoxFlat.new()
-	scroll_style.bg_color = INPUT_BG
+	# Style scroll container background - start transparent (text floats)
+	scroll_style = StyleBoxFlat.new()
+	scroll_style.bg_color = Color(INPUT_BG.r, INPUT_BG.g, INPUT_BG.b, 0.0)  # Fully transparent
 	scroll_style.corner_radius_top_left = 4
 	scroll_style.corner_radius_top_right = 4
 	scroll_style.corner_radius_bottom_left = 4
@@ -185,42 +245,43 @@ func create_chat_ui() -> void:
 	message_list.add_theme_constant_override("separation", 2)
 	message_container.add_child(message_list)
 
-	# Input row
-	var input_row = HBoxContainer.new()
+	# Input row - hidden when ghosted
+	input_row = HBoxContainer.new()
 	input_row.add_theme_constant_override("separation", 4)
+	input_row.modulate.a = 0.0  # Start hidden
 	vbox.add_child(input_row)
 
 	# Text input field
 	input_field = LineEdit.new()
 	input_field.name = "ChatInput"
-	input_field.placeholder_text = "Type message..."
+	input_field.placeholder_text = "Type message... (Enter or / to focus)"
 	input_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	input_field.max_length = 200
 
-	# Style input field
-	var input_style = StyleBoxFlat.new()
-	input_style.bg_color = INPUT_BG
-	input_style.border_width_bottom = 1
-	input_style.border_color = ACCENT_COLOR
-	input_style.corner_radius_top_left = 4
-	input_style.corner_radius_top_right = 4
-	input_style.corner_radius_bottom_left = 4
-	input_style.corner_radius_bottom_right = 4
-	input_style.content_margin_left = 8
-	input_style.content_margin_right = 8
-	input_style.content_margin_top = 4
-	input_style.content_margin_bottom = 4
+	# Style input field - store reference for fade
+	input_style_normal = StyleBoxFlat.new()
+	input_style_normal.bg_color = INPUT_BG
+	input_style_normal.border_width_bottom = 1
+	input_style_normal.border_color = ACCENT_COLOR
+	input_style_normal.corner_radius_top_left = 4
+	input_style_normal.corner_radius_top_right = 4
+	input_style_normal.corner_radius_bottom_left = 4
+	input_style_normal.corner_radius_bottom_right = 4
+	input_style_normal.content_margin_left = 8
+	input_style_normal.content_margin_right = 8
+	input_style_normal.content_margin_top = 4
+	input_style_normal.content_margin_bottom = 4
 
-	input_field.add_theme_stylebox_override("normal", input_style)
+	input_field.add_theme_stylebox_override("normal", input_style_normal)
 	input_field.add_theme_color_override("font_color", TEXT_COLOR)
 	input_field.add_theme_color_override("font_placeholder_color", ACCENT_COLOR)
 	input_field.add_theme_font_size_override("font_size", 14)
 
 	# Focus style
-	var focus_style = input_style.duplicate()
-	focus_style.border_width_bottom = 2
-	focus_style.border_color = LOCAL_COLOR
-	input_field.add_theme_stylebox_override("focus", focus_style)
+	input_style_focus = input_style_normal.duplicate()
+	input_style_focus.border_width_bottom = 2
+	input_style_focus.border_color = LOCAL_COLOR
+	input_field.add_theme_stylebox_override("focus", input_style_focus)
 
 	input_field.focus_entered.connect(_on_input_focus_entered)
 	input_field.focus_exited.connect(_on_input_focus_exited)
@@ -234,27 +295,27 @@ func create_chat_ui() -> void:
 	send_button.text = "Send"
 	send_button.custom_minimum_size = Vector2(60, 0)
 
-	# Style send button
-	var button_style = StyleBoxFlat.new()
-	button_style.bg_color = ACCENT_COLOR
-	button_style.corner_radius_top_left = 4
-	button_style.corner_radius_top_right = 4
-	button_style.corner_radius_bottom_left = 4
-	button_style.corner_radius_bottom_right = 4
-	button_style.content_margin_left = 8
-	button_style.content_margin_right = 8
-	button_style.content_margin_top = 4
-	button_style.content_margin_bottom = 4
+	# Style send button - store references for fade
+	button_style_normal = StyleBoxFlat.new()
+	button_style_normal.bg_color = ACCENT_COLOR
+	button_style_normal.corner_radius_top_left = 4
+	button_style_normal.corner_radius_top_right = 4
+	button_style_normal.corner_radius_bottom_left = 4
+	button_style_normal.corner_radius_bottom_right = 4
+	button_style_normal.content_margin_left = 8
+	button_style_normal.content_margin_right = 8
+	button_style_normal.content_margin_top = 4
+	button_style_normal.content_margin_bottom = 4
 
-	var button_hover = button_style.duplicate()
-	button_hover.bg_color = HEADER_COLOR
+	button_style_hover = button_style_normal.duplicate()
+	button_style_hover.bg_color = HEADER_COLOR
 
-	var button_pressed = button_style.duplicate()
-	button_pressed.bg_color = BORDER_INNER
+	button_style_pressed = button_style_normal.duplicate()
+	button_style_pressed.bg_color = BORDER_INNER
 
-	send_button.add_theme_stylebox_override("normal", button_style)
-	send_button.add_theme_stylebox_override("hover", button_hover)
-	send_button.add_theme_stylebox_override("pressed", button_pressed)
+	send_button.add_theme_stylebox_override("normal", button_style_normal)
+	send_button.add_theme_stylebox_override("hover", button_style_hover)
+	send_button.add_theme_stylebox_override("pressed", button_style_pressed)
 	send_button.add_theme_color_override("font_color", BG_COLOR)
 	send_button.add_theme_font_size_override("font_size", 12)
 
@@ -268,14 +329,14 @@ func focus_input() -> void:
 	if input_field:
 		input_field.grab_focus()
 		is_input_focused = true
-		_fade_to(1.0)  # Show fully when typing
+		_fade_to_active()  # Show fully when typing
 
 func unfocus_input() -> void:
 	"""Remove focus from chat input"""
 	if input_field:
 		input_field.release_focus()
 		is_input_focused = false
-		_fade_to(0.3)  # Fade back out when done typing
+		_fade_to_ghosted()  # Fade back to ghosted when done typing
 
 func send_message() -> void:
 	"""Send the current message"""
@@ -334,7 +395,7 @@ func add_chat_message(sender: String, text: String, is_local: bool = false) -> v
 	msg_label.fit_content = true
 	msg_label.scroll_active = false
 	msg_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	msg_label.add_theme_font_size_override("normal_font_size", 14)
+	msg_label.add_theme_font_size_override("normal_font_size", 11)
 
 	# Format message with color
 	var name_color = LOCAL_COLOR if is_local else TEXT_COLOR
@@ -353,7 +414,7 @@ func add_system_message(text: String) -> void:
 	msg_label.fit_content = true
 	msg_label.scroll_active = false
 	msg_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	msg_label.add_theme_font_size_override("normal_font_size", 13)
+	msg_label.add_theme_font_size_override("normal_font_size", 11)
 
 	var color_hex = SYSTEM_COLOR.to_html(false)
 	msg_label.text = "[color=#%s][i]%s[/i][/color]" % [color_hex, text]
@@ -386,12 +447,14 @@ func _on_input_focus_exited() -> void:
 
 func _on_input_submitted(_text: String) -> void:
 	send_message()
-	# Keep focus after sending
-	focus_input()
+	# Unfocus after sending so player can move immediately
+	# Press / or Enter to start typing again
+	unfocus_input()
 
 func _on_send_pressed() -> void:
 	send_message()
-	focus_input()
+	# Unfocus after sending so player can move immediately
+	unfocus_input()
 
 func _on_player_authenticated(id: int, player_name: String) -> void:
 	add_system_message("%s joined the game." % player_name)
@@ -420,7 +483,7 @@ var _selected_account: String = ""  # For account commands
 const ADMIN_COMMANDS: Array[String] = [
 	"accounts", "select", "info", "setpos", "resetpos",
 	"setgold", "setlevel", "setstats", "ban", "unban",
-	"forceoffline", "delete"
+	"forceoffline", "delete", "tp", "goto"
 ]
 
 # Input validation bounds
@@ -536,6 +599,8 @@ func _handle_admin_command(cmd: String) -> void:
 			_cmd_force_offline()
 		"delete":
 			_cmd_delete()
+		"tp", "goto":
+			_cmd_teleport(args)
 		_:
 			add_system_message("Unknown command: /%s (type /help)" % command)
 
@@ -1110,11 +1175,13 @@ func _cmd_help() -> void:
 	add_system_message("/disband - Disband group (leader)")
 	add_system_message("/group - Show group info")
 	add_system_message("=== Admin Commands ===")
+	add_system_message("/tp <x> <y> - Teleport to coordinates")
+	add_system_message("/tp campfire|hub|west|east|castle - Named")
 	add_system_message("/accounts - List all accounts")
 	add_system_message("/select <username> - Select account to edit")
 	add_system_message("/info - Show selected account details")
-	add_system_message("/setpos <x> <y> - Set position")
-	add_system_message("/resetpos - Reset to campfire (0,0)")
+	add_system_message("/setpos <x> <y> - Set DB position")
+	add_system_message("/resetpos - Reset DB to campfire (0,0)")
 	add_system_message("/setgold <amount> - Set gold")
 	add_system_message("/setlevel <1-30> - Set level")
 	add_system_message("/setstats <str> <agi> <vit> <luck>")
@@ -1289,25 +1356,159 @@ func _cmd_delete() -> void:
 	_selected_account = ""
 	add_system_message("Deleted account: %s" % username)
 
+func _cmd_teleport(args: Array) -> void:
+	"""Teleport local player to specified coordinates
+	Usage: /tp <x> <y>
+	       /tp campfire - Teleport to campfire (0, 0)
+	       /tp hub - Teleport to trading hub tunnel entrance
+	"""
+	# Find local player
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		add_system_message("[Error] No player found.")
+		return
+
+	# Handle named locations
+	if args.size() == 1:
+		var location = args[0].to_lower()
+		match location:
+			"campfire", "camp", "fire", "spawn", "home":
+				# Campfire is at world origin
+				player.global_position = Vector2(0, 0)
+				add_system_message("Teleported to Campfire (0, 0)")
+				return
+			"hub", "trade", "trading":
+				# Actually load the Trading Hub scene
+				add_system_message("Entering Trading Hub...")
+				var hub_manager = get_node_or_null("/root/TradingHubManager")
+				if hub_manager:
+					hub_manager.set_player_origin_chunk(0)  # Default to center corridor
+					hub_manager.transition_to_hub()
+				else:
+					add_system_message("[Error] TradingHubManager not found")
+				return
+			"tunnel":
+				# Tunnel entrance at chunk 0 (north edge, center)
+				# chunk_center_x = 0 * 8000 + 4000 = 4000
+				# north_edge_y = -8000/2 + 50 = -3950
+				player.global_position = Vector2(4000, -3950)
+				add_system_message("Teleported to Tunnel Entrance (4000, -3950)")
+				return
+			"west", "w":
+				# West chunk center (chunk -1)
+				player.global_position = Vector2(-4000, 0)
+				add_system_message("Teleported to West (-4000, 0)")
+				return
+			"east", "e":
+				# East chunk center (chunk 1)
+				player.global_position = Vector2(12000, 0)
+				add_system_message("Teleported to East (12000, 0)")
+				return
+			"castle", "end":
+				# End of main path (castle position)
+				player.global_position = Vector2(7600, 0)
+				add_system_message("Teleported to Castle (7600, 0)")
+				return
+			"north", "n":
+				# North edge of world
+				player.global_position = Vector2(player.global_position.x, -3900)
+				add_system_message("Teleported to North edge (Y: -3900)")
+				return
+			"south", "s":
+				# South edge of world
+				player.global_position = Vector2(player.global_position.x, 3900)
+				add_system_message("Teleported to South edge (Y: 3900)")
+				return
+			_:
+				# Check if it's a single number (invalid)
+				if location.is_valid_float():
+					add_system_message("[Error] Usage: /tp <x> <y>")
+					add_system_message("Named: campfire, hub, west, east, castle, north, south")
+					return
+				add_system_message("[Error] Unknown location: %s" % location)
+				add_system_message("Named: campfire, hub, west, east, castle, north, south")
+				return
+
+	# Require x and y coordinates
+	if args.size() < 2:
+		add_system_message("Usage: /tp <x> <y>")
+		add_system_message("Named: campfire, hub, west, east, castle")
+		add_system_message("Current position: (%.0f, %.0f)" % [player.global_position.x, player.global_position.y])
+		return
+
+	# Validate numeric input
+	if not args[0].is_valid_float() or not args[1].is_valid_float():
+		add_system_message("[Error] Coordinates must be numeric values")
+		return
+
+	var x = clampf(float(args[0]), MIN_POSITION, MAX_POSITION)
+	var y = clampf(float(args[1]), MIN_POSITION, MAX_POSITION)
+
+	player.global_position = Vector2(x, y)
+	add_system_message("Teleported to (%.0f, %.0f)" % [x, y])
+
 # ═══════════════════════════════════════════════════════════════════════════
-# HOVER FADE EFFECT
+# HOVER FADE EFFECT - Background fades, text stays visible (floating effect)
 # ═══════════════════════════════════════════════════════════════════════════
 
 var _fade_tween: Tween = null
+var _is_active: bool = false  # Track current state
 
 func _on_chat_mouse_entered() -> void:
-	"""Fade in when mouse hovers over chat"""
-	_fade_to(1.0)
+	"""Fade in backgrounds when mouse hovers over chat"""
+	_fade_to_active()
 
 func _on_chat_mouse_exited() -> void:
-	"""Fade out when mouse leaves chat (unless input is focused)"""
+	"""Fade out backgrounds when mouse leaves chat (unless input is focused)"""
 	if not is_input_focused:
-		_fade_to(0.3)
+		_fade_to_ghosted()
 
-func _fade_to(target_alpha: float) -> void:
-	"""Smoothly fade chat panel to target alpha"""
+func _fade_to_active() -> void:
+	"""Show full UI - backgrounds visible, all elements shown"""
+	if _is_active:
+		return
+	_is_active = true
+
 	if _fade_tween:
 		_fade_tween.kill()
 
 	_fade_tween = create_tween()
-	_fade_tween.tween_property(chat_panel, "modulate:a", target_alpha, 0.2)
+	_fade_tween.set_parallel(true)
+
+	# Fade in panel background
+	_fade_tween.tween_property(panel_style, "bg_color:a", 0.95, 0.2)
+	_fade_tween.tween_property(panel_style, "border_color:a", 1.0, 0.2)
+	_fade_tween.tween_property(panel_style, "shadow_size", 8, 0.2)
+	_fade_tween.tween_property(panel_style, "shadow_color:a", 0.6, 0.2)
+
+	# Fade in scroll container background
+	_fade_tween.tween_property(scroll_style, "bg_color:a", 1.0, 0.2)
+
+	# Show header and input row
+	_fade_tween.tween_property(header_label, "modulate:a", 1.0, 0.2)
+	_fade_tween.tween_property(input_row, "modulate:a", 1.0, 0.2)
+
+func _fade_to_ghosted() -> void:
+	"""Ghost UI - backgrounds nearly invisible, text floats on screen"""
+	if not _is_active:
+		return
+	_is_active = false
+
+	if _fade_tween:
+		_fade_tween.kill()
+
+	_fade_tween = create_tween()
+	_fade_tween.set_parallel(true)
+
+	# Fade out panel background to nearly invisible
+	_fade_tween.tween_property(panel_style, "bg_color:a", 0.0, 0.3)
+	_fade_tween.tween_property(panel_style, "border_color:a", 0.0, 0.3)
+	_fade_tween.tween_property(panel_style, "shadow_size", 0, 0.3)
+	_fade_tween.tween_property(panel_style, "shadow_color:a", 0.0, 0.3)
+
+	# Fade out scroll container background completely
+	_fade_tween.tween_property(scroll_style, "bg_color:a", 0.0, 0.3)
+
+	# Hide header and input row
+	_fade_tween.tween_property(header_label, "modulate:a", 0.0, 0.3)
+	_fade_tween.tween_property(input_row, "modulate:a", 0.0, 0.3)

@@ -1,8 +1,8 @@
 {
-  "version": "1.4.0",
+  "version": "1.7.0",
   "generated_at": null,
   "last_updated_by": "manual",
-  "_changelog": "v1.4.0: Added effects system - passive effects and active abilities for all items per FORGE_ITEM_EFFECTS.md. See effect_definitions for effect specs.",
+  "_changelog": "v1.7.0: Synced 10 missing items from ForgeItemDB.gd (ashen_armor, elden_armory_set, eye_of_cthulhu_shield, ironclad_armor, loremaster_hood, master_hoe, prairie_king_crown, stardrop_pendant, survivor_vest, zagreus_helm). Fixed naming inconsistencies (stygian_blade_basic->stygian_blade, exagryph_adamant_rail->adamant_rail, master_farmers_hoe->master_hoe).",
 
   "_asset_paths": {
     "_comment": "Base paths for assets. Web dashboard serves from /static/items/",
@@ -18,17 +18,20 @@
     "374320:MASTER_OF_RINGS": "farron_greatsword",
     "374320:NAMELESS_KING": "dragonslayer_swordspear",
 
-    "1245620:ELDEN_LORD": "elden_lord_crown",
+    "1245620:ELDEN_LORD": "elden_lord_helm",
     "1245620:SHARDBEARER_GODRICK": "grafted_blade",
     "1245620:SHARDBEARER_MALENIA": "hand_of_malenia",
     "1245620:SHARDBEARER_RADAHN": "radahns_greatswords",
     "1245620:LEGEND": "moonveil",
+    "1245620:MOHG_THE_OMEN": "fingerprint_stone_shield",
 
     "367520:COMPLETION": "pure_nail",
     "367520:VOID": "shade_cloak",
 
     "1145360:COMPLETE": "stygian_blade",
     "1145360:SPEED_RUN": "adamant_rail",
+
+    "xbox:LEGENDARY_CAMPAIGN": "halo_battle_rifle",
 
     "105600:SLAYER_OF_WORLDS": "terra_blade",
 
@@ -40,7 +43,76 @@
     "413150:LEGEND": "straw_hat",
 
     "discord:NITRO_SUBSCRIBER": "discord_nitro_badge",
-    "github:STARSTRUCK": "github_star_badge"
+    "github:STARSTRUCK": "github_star_badge",
+
+    "_comment_battlenet": "Battle.net / WoW achievements",
+    "battlenet:SCARAB_LORD": "scarab_lord_badge",
+    "battlenet:REALM_FIRST_80": "herald_of_the_titans",
+    "battlenet:IMMORTAL": "immortal_tabard",
+    "battlenet:HAND_OF_ADAL": "hand_of_adal_tabard",
+    "battlenet:CUTTING_EDGE": "mythic_insignia",
+    "battlenet:KEYSTONE_MASTER": "keystone_trinket",
+    "battlenet:GLADIATOR": "gladiator_tabard",
+    "battlenet:LOREMASTER": "loremaster_tome",
+    "battlenet:INSANE": "insane_straitjacket",
+
+    "_comment_psn": "PlayStation achievements",
+    "psn:BLOODBORNE_PLATINUM": "saw_cleaver",
+    "psn:DEMONS_SOULS_PLATINUM": "false_king_helm",
+    "psn:GOD_OF_WAR_PLATINUM": "blades_of_chaos",
+    "psn:GHOST_OF_TSUSHIMA_PLATINUM": "ghost_mask",
+    "psn:RETURNAL_PLATINUM": "selene_fragment",
+    "psn:SPIDER_MAN_PLATINUM": "spider_emblem",
+
+    "_comment_xbox": "Xbox achievements",
+    "xbox:HALO_LASO": "master_chief_helmet",
+    "xbox:TITANFALL_GAUNTLET": "pilot_helmet",
+    "xbox:GEARS_SERIOUSLY": "cog_medal",
+    "xbox:SEA_OF_THIEVES_LEGEND": "pirate_legend_hat",
+
+    "_comment_discord": "Discord badges",
+    "discord:EARLY_SUPPORTER": "early_supporter_badge",
+    "discord:PARTNERED_SERVER": "partner_badge",
+    "discord:BUG_HUNTER_2": "bug_hunter_badge",
+    "discord:HYPESQUAD": "hypesquad_badge",
+
+    "_comment_github": "GitHub badges",
+    "github:ARCTIC_CODE_VAULT": "arctic_code_badge",
+    "github:MARS_2020": "mars_badge",
+    "github:PULL_SHARK": "pull_shark_badge",
+    "github:GALAXY_BRAIN": "galaxy_brain_badge",
+    "github:YOLO": "yolo_badge",
+
+    "_comment_roblox": "Roblox tenure badges",
+    "roblox:TENURE_10_YEARS": "veteran_roblox_hat",
+    "roblox:TENURE_7_YEARS": "classic_roblox_hat",
+    "roblox:TENURE_5_YEARS": "builder_roblox_hat",
+
+    "_comment_steam_accessible": "Steam accessible achievements",
+    "374320:TO_LINK_THE_FIRST_FLAME": "ashen_estus",
+    "1245620:ELDEN_RING": "tarnished_ring",
+    "367520:EMBRACE_THE_VOID": "void_heart",
+    "1145360:ESCAPED": "boon_trinket",
+    "504230:FAREWELL_GOLDEN": "winged_strawberry",
+    "268910:BEAT_DEVIL_EXPERT": "devil_pitchfork",
+    "588650:FIVE_BOSS_CELLS": "king_slayer",
+    "646570:ASCENSION_20_HEART": "heart_shard",
+    "620:PORTAL_LUNACY": "companion_cube",
+    "220:LAMBDA_LOCATOR": "lambda_badge",
+    "72850:MASTER": "dragonbone_helm",
+    "292030:WALKED_THE_PATH": "grandmaster_armor",
+
+    "_comment_new_godot_items": "Items synced from ForgeItemDB.gd",
+    "374320:TO_LINK_THE_FIRST_FLAME": "ashen_armor",
+    "1245620:LEGENDARY_ARMAMENTS": "elden_armory_chest",
+    "105600:EYE_OF_CTHULHU": "eye_of_cthulhu_shield",
+    "646570:IRONCLAD_VICTORY": "ironclad_armor",
+    "battlenet:LOREMASTER_HOOD": "loremaster_hood",
+    "413150:SINGULAR_TALENT": "master_hoe",
+    "413150:FECTOR_CHALLENGE": "prairie_king_cape",
+    "413150:MYSTERY_OF_STARDROPS": "stardrop_pendant",
+    "550:ZOMBIE_GENOCIDEST": "survivor_vest",
+    "1145360:END_OF_STORY": "zagreus_helm"
   },
 
   "weapon_types": {
@@ -150,6 +222,108 @@
       "app_ids": ["github"],
       "color": "#238636",
       "effects": ["code_particles", "green_glow"]
+    },
+    "halo": {
+      "display_name": "Halo",
+      "app_ids": ["xbox"],
+      "color": "#00CED1",
+      "effects": ["halo_green_glow", "shield_recharge", "spartan_visor"]
+    },
+    "wow": {
+      "display_name": "World of Warcraft",
+      "app_ids": ["battlenet"],
+      "color": "#FFB932",
+      "effects": ["golden_sparkle", "arcane_glow", "fel_green", "holy_light"]
+    },
+    "bloodborne": {
+      "display_name": "Bloodborne",
+      "app_ids": ["psn"],
+      "color": "#8B0000",
+      "effects": ["blood_particles", "hunter_instinct", "beast_aura"]
+    },
+    "demons_souls": {
+      "display_name": "Demon's Souls",
+      "app_ids": ["psn"],
+      "color": "#4A4A6A",
+      "effects": ["soul_particles", "nexus_glow"]
+    },
+    "god_of_war": {
+      "display_name": "God of War",
+      "app_ids": ["psn"],
+      "color": "#C41E3A",
+      "effects": ["rage_aura", "frost_particles", "spartan_glow"]
+    },
+    "ghost_of_tsushima": {
+      "display_name": "Ghost of Tsushima",
+      "app_ids": ["psn"],
+      "color": "#1A1A2E",
+      "effects": ["wind_particles", "ghost_stance", "leaves_falling"]
+    },
+    "celeste": {
+      "display_name": "Celeste",
+      "app_ids": ["504230"],
+      "color": "#E85D8C",
+      "effects": ["feather_float", "dash_trail", "golden_sparkle"]
+    },
+    "cuphead": {
+      "display_name": "Cuphead",
+      "app_ids": ["268910"],
+      "color": "#DC143C",
+      "effects": ["soul_orb", "parry_pink", "knockout_burst"]
+    },
+    "dead_cells": {
+      "display_name": "Dead Cells",
+      "app_ids": ["588650"],
+      "color": "#00FF00",
+      "effects": ["cell_particles", "mutation_glow", "malaise_trail"]
+    },
+    "slay_the_spire": {
+      "display_name": "Slay the Spire",
+      "app_ids": ["646570"],
+      "color": "#FF6B6B",
+      "effects": ["card_particles", "heart_pulse"]
+    },
+    "portal": {
+      "display_name": "Portal",
+      "app_ids": ["620"],
+      "color": "#FF8C00",
+      "effects": ["portal_blue", "portal_orange"]
+    },
+    "valve": {
+      "display_name": "Valve Games",
+      "app_ids": ["220", "550"],
+      "color": "#FF4500",
+      "effects": ["lambda_glow", "crowbar_gleam"]
+    },
+    "skyrim": {
+      "display_name": "Skyrim",
+      "app_ids": ["72850", "489830"],
+      "color": "#4A5568",
+      "effects": ["dragon_soul", "shout_particles"]
+    },
+    "titanfall": {
+      "display_name": "Titanfall",
+      "app_ids": ["xbox"],
+      "color": "#FF6600",
+      "effects": ["pilot_boost", "titan_glow"]
+    },
+    "gears": {
+      "display_name": "Gears of War",
+      "app_ids": ["xbox"],
+      "color": "#990000",
+      "effects": ["crimson_omen", "locust_particles"]
+    },
+    "sea_of_thieves": {
+      "display_name": "Sea of Thieves",
+      "app_ids": ["xbox"],
+      "color": "#1E90FF",
+      "effects": ["ghost_glow", "ocean_particles"]
+    },
+    "roblox": {
+      "display_name": "Roblox",
+      "app_ids": ["roblox"],
+      "color": "#00A2FF",
+      "effects": ["block_particles", "classic_sparkle"]
     },
     "generic": {
       "display_name": "Generic",
@@ -523,21 +697,21 @@
         "passive": ["magic_damage", "crit_chance"],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
-      "item_id": "elden_lord_crown",
-      "item_name": "Elden Lord's Crown",
+      "item_id": "elden_lord_helm",
+      "item_name": "Elden Lord's Greathelm",
       "item_type": "armor_head",
       "weapon_type": null,
-      "description": "Crown worn by those who claimed the Elden Throne.",
-      "lore": "The mark of a true Elden Lord.",
+      "description": "Golden greathelm of the one who claimed the Elden Ring.",
+      "lore": "Rise, Tarnished. Claim your rightful throne.",
       "base_rarity": "legendary",
       "theme": "elden_ring",
       "visuals": {
-        "icon_url": "/static/items/icons/elden_lord.png",
-        "sprite_folder": "armor/head/elden_lord",
+        "icon_url": "/static/items/icons/elden_lord_helm.png",
+        "sprite_folder": "armor/elden_lord_helm",
         "effect": "erdtree_blessing",
         "glow_color": "#FFD700"
       },
@@ -559,7 +733,7 @@
       "theme": "elden_ring",
       "visuals": {
         "icon_url": "/static/items/icons/carian_crown.png",
-        "sprite_folder": "armor/head/carian_crown",
+        "sprite_folder": "armor/carian_crown",
         "effect": "moonlight_aura",
         "glow_color": "#A0D0FF"
       },
@@ -571,27 +745,26 @@
       "has_icon": true
     },
     {
-      "item_id": "eye_shield",
+      "item_id": "fingerprint_stone_shield",
       "item_name": "Fingerprint Stone Shield",
       "item_type": "shield",
       "weapon_type": null,
-      "description": "A greatshield bearing a mysterious eye.",
-      "lore": "The eye watches all who would challenge its bearer.",
+      "description": "A great stone shield with an intricately carved fingerprint design.",
+      "lore": "One of the heaviest of all greatshields. Provides unmatched stability.",
       "base_rarity": "epic",
       "theme": "elden_ring",
       "visuals": {
-        "icon_url": "/static/items/icons/eye_shield.png",
-        "sprite_folder": "shields/eye_shield",
-        "effect": "golden_sparkle",
-        "glow_color": "#FFD700"
+        "icon_url": "/static/items/icons/fingerprint_stone_shield.png",
+        "sprite_folder": "shields/fingerprint_stone_shield/standard",
+        "effect": "stone_glow",
+        "glow_color": "#808080"
       },
       "effects": {
         "passive": ["poise", "damage_reduction"],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": true,
-      "_note": "walk.png only - needs slash/thrust/hurt"
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "pure_nail",
@@ -634,8 +807,8 @@
         "passive": ["void_damage"],
         "active": "shadow_phase"
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "stygian_blade",
@@ -678,8 +851,31 @@
         "passive": ["crit_chance"],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "halo_battle_rifle",
+      "item_name": "BR55 Battle Rifle",
+      "item_type": "weapon",
+      "weapon_type": "gun",
+      "gun_subtype": "battle_rifle",
+      "description": "The UNSC's precision workhorse.",
+      "lore": "Three-round burst, zero margin for error.",
+      "base_rarity": "epic",
+      "theme": "halo",
+      "visuals": {
+        "icon_url": "/static/items/icons/halo_battle_rifle.png",
+        "sprite_folder": "weapons/halo_battle_rifle",
+        "effect": "halo_green_glow",
+        "glow_color": "#00CED1"
+      },
+      "effects": {
+        "passive": ["burst_fire"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "terra_blade",
@@ -744,9 +940,8 @@
         "passive": ["armor_pierce", "move_speed"],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": true,
-      "_note": "walk.png and thrust.png only - needs slash/hurt"
+      "has_sprites": true,
+      "has_icon": true
     },
     {
       "item_id": "witcher_silver_sword",
@@ -875,6 +1070,1190 @@
       },
       "effects": {
         "passive": ["party_buff"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+
+    {
+      "_comment": "=== BATTLE.NET / WOW ITEMS ===",
+      "item_id": "scarab_lord_badge",
+      "item_name": "Scarab Lord's Sigil",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "A sigil marking the opening of Ahn'Qiraj.",
+      "lore": "Only ~400 players ever earned this. You rang the gong.",
+      "base_rarity": "legendary",
+      "theme": "wow",
+      "visuals": {
+        "icon_url": "/static/items/icons/scarab_lord_badge.png",
+        "sprite_folder": null,
+        "effect": "golden_sparkle",
+        "glow_color": "#FFB932"
+      },
+      "effects": {
+        "passive": ["boss_damage", "poise"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "herald_of_the_titans",
+      "item_name": "Herald of the Titans Crown",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Crown of a Realm First champion.",
+      "lore": "First to level 80 in Wrath of the Lich King.",
+      "base_rarity": "legendary",
+      "theme": "wow",
+      "visuals": {
+        "icon_url": "/static/items/icons/herald_of_the_titans.png",
+        "sprite_folder": "armor/head/herald_of_the_titans",
+        "effect": "arcane_glow",
+        "glow_color": "#FFB932"
+      },
+      "effects": {
+        "passive": ["move_speed", "stamina_regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "immortal_tabard",
+      "item_name": "Tabard of the Immortal",
+      "item_type": "cape",
+      "weapon_type": null,
+      "description": "Worn by those who cleared Naxxramas deathless.",
+      "lore": "Zero deaths, zero mistakes, immortal glory.",
+      "base_rarity": "legendary",
+      "theme": "wow",
+      "visuals": {
+        "icon_url": "/static/items/icons/immortal_tabard.png",
+        "sprite_folder": "capes/immortal_tabard",
+        "effect": "holy_light",
+        "glow_color": "#FFFFFF"
+      },
+      "effects": {
+        "passive": ["death_prevention", "damage_reduction"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "hand_of_adal_tabard",
+      "item_name": "Hand of A'dal Tabard",
+      "item_type": "cape",
+      "weapon_type": null,
+      "description": "Mark of the Burning Crusade attunement.",
+      "lore": "Completed the Black Temple attunement before it was removed.",
+      "base_rarity": "legendary",
+      "theme": "wow",
+      "visuals": {
+        "icon_url": "/static/items/icons/hand_of_adal_tabard.png",
+        "sprite_folder": "capes/hand_of_adal_tabard",
+        "effect": "holy_light",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["magic_damage"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "mythic_insignia",
+      "item_name": "Cutting Edge Insignia",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Proof of Mythic raid mastery.",
+      "lore": "Cleared the current tier before nerfs.",
+      "base_rarity": "epic",
+      "theme": "wow",
+      "visuals": {
+        "icon_url": "/static/items/icons/mythic_insignia.png",
+        "sprite_folder": null,
+        "effect": "arcane_glow",
+        "glow_color": "#A335EE"
+      },
+      "effects": {
+        "passive": ["boss_damage"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "keystone_trinket",
+      "item_name": "Keystone Master's Trinket",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "A trinket for dungeon masters.",
+      "lore": "All +20 keystones completed in time.",
+      "base_rarity": "epic",
+      "theme": "wow",
+      "visuals": {
+        "icon_url": "/static/items/icons/keystone_trinket.png",
+        "sprite_folder": null,
+        "effect": "arcane_glow",
+        "glow_color": "#FF8000"
+      },
+      "effects": {
+        "passive": ["move_speed", "crit_chance"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "gladiator_tabard",
+      "item_name": "Gladiator's Tabard",
+      "item_type": "cape",
+      "weapon_type": null,
+      "description": "Worn by the top 0.5% of Arena players.",
+      "lore": "Blood, sweat, and rating.",
+      "base_rarity": "legendary",
+      "theme": "wow",
+      "visuals": {
+        "icon_url": "/static/items/icons/gladiator_tabard.png",
+        "sprite_folder": "capes/gladiator_tabard",
+        "effect": "blood_red_glow",
+        "glow_color": "#CC0000"
+      },
+      "effects": {
+        "passive": ["crit_chance", "lifesteal"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "loremaster_tome",
+      "item_name": "Loremaster's Tome",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "A tome containing every quest in Azeroth.",
+      "lore": "Completed every zone's questline.",
+      "base_rarity": "epic",
+      "theme": "wow",
+      "visuals": {
+        "icon_url": "/static/items/icons/loremaster_tome.png",
+        "sprite_folder": null,
+        "effect": "arcane_glow",
+        "glow_color": "#4169E1"
+      },
+      "effects": {
+        "passive": ["stamina_regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "insane_straitjacket",
+      "item_name": "Insane Straitjacket",
+      "item_type": "cape",
+      "weapon_type": null,
+      "description": "Proof of insane dedication.",
+      "lore": "Insane in the Membrane - months of rep grinding.",
+      "base_rarity": "legendary",
+      "theme": "wow",
+      "visuals": {
+        "icon_url": "/static/items/icons/insane_straitjacket.png",
+        "sprite_folder": "capes/insane_straitjacket",
+        "effect": "arcane_glow",
+        "glow_color": "#800080"
+      },
+      "effects": {
+        "passive": ["damage_reduction", "regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+
+    {
+      "_comment": "=== PLAYSTATION ITEMS ===",
+      "item_id": "saw_cleaver",
+      "item_name": "Saw Cleaver",
+      "item_type": "weapon",
+      "weapon_type": "sword",
+      "description": "A trick weapon of the Hunters.",
+      "lore": "Tonight, Gehrman joins the hunt.",
+      "base_rarity": "legendary",
+      "theme": "bloodborne",
+      "visuals": {
+        "icon_url": "/static/items/icons/saw_cleaver.png",
+        "sprite_folder": "weapons/saw_cleaver",
+        "effect": "blood_particles",
+        "glow_color": "#8B0000"
+      },
+      "effects": {
+        "passive": ["lifesteal", "on_kill_buff"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "multi_slash": true
+    },
+    {
+      "item_id": "false_king_helm",
+      "item_name": "False King's Helm",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Horned helm of the Old One's false king.",
+      "lore": "The Old One has awakened. The fog covers all.",
+      "base_rarity": "legendary",
+      "theme": "demons_souls",
+      "visuals": {
+        "icon_url": "/static/items/icons/false_king_helm.png",
+        "sprite_folder": "armor/false_king_helm",
+        "effect": "soul_drain",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["magic_damage", "soul_gather"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "blades_of_chaos",
+      "item_name": "Blades of Chaos Fragment",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "A fragment of Kratos's cursed blades.",
+      "lore": "The Ghost of Sparta's burden.",
+      "base_rarity": "epic",
+      "theme": "god_of_war",
+      "visuals": {
+        "icon_url": "/static/items/icons/blades_of_chaos.png",
+        "sprite_folder": null,
+        "effect": "rage_aura",
+        "glow_color": "#C41E3A"
+      },
+      "effects": {
+        "passive": ["fire_aura", "lifesteal"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "ghost_mask",
+      "item_name": "Ghost Mask",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Mask of the Ghost of Tsushima.",
+      "lore": "Honor died on the beach.",
+      "base_rarity": "epic",
+      "theme": "ghost_of_tsushima",
+      "visuals": {
+        "icon_url": "/static/items/icons/ghost_mask.png",
+        "sprite_folder": "armor/head/ghost_mask",
+        "effect": "wind_particles",
+        "glow_color": "#1A1A2E"
+      },
+      "effects": {
+        "passive": ["crit_chance", "move_speed"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "selene_fragment",
+      "item_name": "Selene's Fragment",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "A piece of the cycle.",
+      "lore": "Break the cycle. Platinum Returnal.",
+      "base_rarity": "legendary",
+      "theme": "generic",
+      "visuals": {
+        "icon_url": "/static/items/icons/selene_fragment.png",
+        "sprite_folder": null,
+        "effect": "standard_particles",
+        "glow_color": "#00FFFF"
+      },
+      "effects": {
+        "passive": ["death_prevention"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "spider_emblem",
+      "item_name": "Spider Emblem",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Emblem of a friendly neighborhood hero.",
+      "lore": "With great power comes great responsibility.",
+      "base_rarity": "epic",
+      "theme": "generic",
+      "visuals": {
+        "icon_url": "/static/items/icons/spider_emblem.png",
+        "sprite_folder": null,
+        "effect": "standard_particles",
+        "glow_color": "#FF0000"
+      },
+      "effects": {
+        "passive": ["move_speed", "crit_chance"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+
+    {
+      "_comment": "=== XBOX ITEMS ===",
+      "item_id": "master_chief_helmet",
+      "item_name": "MJOLNIR Helmet",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Helmet of the Master Chief.",
+      "lore": "LASO completed. You are a legend.",
+      "base_rarity": "legendary",
+      "theme": "halo",
+      "visuals": {
+        "icon_url": "/static/items/icons/master_chief_helmet.png",
+        "sprite_folder": "armor/head/master_chief_helmet",
+        "effect": "shield_recharge",
+        "glow_color": "#00CED1"
+      },
+      "effects": {
+        "passive": ["damage_reduction", "regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "pilot_helmet",
+      "item_name": "Pilot's Helmet",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Helmet of an elite Pilot.",
+      "lore": "Gauntlet completed in under 33 seconds.",
+      "base_rarity": "legendary",
+      "theme": "titanfall",
+      "visuals": {
+        "icon_url": "/static/items/icons/pilot_helmet.png",
+        "sprite_folder": "armor/head/pilot_helmet",
+        "effect": "pilot_boost",
+        "glow_color": "#FF6600"
+      },
+      "effects": {
+        "passive": ["move_speed", "crit_chance"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "cog_medal",
+      "item_name": "COG Medal of Honor",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Medal for Gears veterans.",
+      "lore": "Seriously 5.0. You're insane.",
+      "base_rarity": "legendary",
+      "theme": "gears",
+      "visuals": {
+        "icon_url": "/static/items/icons/cog_medal.png",
+        "sprite_folder": null,
+        "effect": "crimson_omen",
+        "glow_color": "#990000"
+      },
+      "effects": {
+        "passive": ["damage_reduction", "on_kill_buff"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "pirate_legend_hat",
+      "item_name": "Pirate Legend Hat",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Hat of a legendary pirate.",
+      "lore": "A true Sea of Thieves legend.",
+      "base_rarity": "epic",
+      "theme": "sea_of_thieves",
+      "visuals": {
+        "icon_url": "/static/items/icons/pirate_legend_hat.png",
+        "sprite_folder": "armor/head/pirate_legend_hat",
+        "effect": "ghost_glow",
+        "glow_color": "#1E90FF"
+      },
+      "effects": {
+        "passive": ["party_buff"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+
+    {
+      "_comment": "=== DISCORD ITEMS ===",
+      "item_id": "early_supporter_badge",
+      "item_name": "Early Supporter Badge",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Badge of an OG Discord supporter.",
+      "lore": "Nitro subscriber before October 2018. Unobtainable.",
+      "base_rarity": "legendary",
+      "theme": "discord",
+      "visuals": {
+        "icon_url": "/static/items/icons/early_supporter_badge.png",
+        "sprite_folder": null,
+        "effect": "discord_sparkle",
+        "glow_color": "#5865F2"
+      },
+      "effects": {
+        "passive": ["party_buff", "regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "partner_badge",
+      "item_name": "Partner Badge",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Badge of a Discord Partner.",
+      "lore": "Owner of a partnered server.",
+      "base_rarity": "epic",
+      "theme": "discord",
+      "visuals": {
+        "icon_url": "/static/items/icons/partner_badge.png",
+        "sprite_folder": null,
+        "effect": "discord_sparkle",
+        "glow_color": "#5865F2"
+      },
+      "effects": {
+        "passive": ["party_buff"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "bug_hunter_badge",
+      "item_name": "Bug Hunter Badge",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Badge of a dedicated bug hunter.",
+      "lore": "Level 2 Bug Hunter - found many bugs.",
+      "base_rarity": "epic",
+      "theme": "discord",
+      "visuals": {
+        "icon_url": "/static/items/icons/bug_hunter_badge.png",
+        "sprite_folder": null,
+        "effect": "green_glow",
+        "glow_color": "#43B581"
+      },
+      "effects": {
+        "passive": ["crit_chance"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "hypesquad_badge",
+      "item_name": "HypeSquad Badge",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Badge of a HypeSquad member.",
+      "lore": "Representing Discord at events.",
+      "base_rarity": "rare",
+      "theme": "discord",
+      "visuals": {
+        "icon_url": "/static/items/icons/hypesquad_badge.png",
+        "sprite_folder": null,
+        "effect": "discord_sparkle",
+        "glow_color": "#FAA61A"
+      },
+      "effects": {
+        "passive": ["party_buff"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+
+    {
+      "_comment": "=== GITHUB ITEMS ===",
+      "item_id": "arctic_code_badge",
+      "item_name": "Arctic Code Vault Badge",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Your code is preserved for 1000 years.",
+      "lore": "2020 Arctic Code Vault contributor. Unobtainable.",
+      "base_rarity": "legendary",
+      "theme": "github",
+      "visuals": {
+        "icon_url": "/static/items/icons/arctic_code_badge.png",
+        "sprite_folder": null,
+        "effect": "code_particles",
+        "glow_color": "#00BFFF"
+      },
+      "effects": {
+        "passive": ["damage_reduction", "regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "mars_badge",
+      "item_name": "Mars 2020 Badge",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Your code went to Mars.",
+      "lore": "Contributed to code on the Perseverance rover.",
+      "base_rarity": "legendary",
+      "theme": "github",
+      "visuals": {
+        "icon_url": "/static/items/icons/mars_badge.png",
+        "sprite_folder": null,
+        "effect": "code_particles",
+        "glow_color": "#FF4500"
+      },
+      "effects": {
+        "passive": ["boss_damage"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "pull_shark_badge",
+      "item_name": "Pull Shark Badge",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Badge of a prolific contributor.",
+      "lore": "Many merged pull requests.",
+      "base_rarity": "epic",
+      "theme": "github",
+      "visuals": {
+        "icon_url": "/static/items/icons/pull_shark_badge.png",
+        "sprite_folder": null,
+        "effect": "code_particles",
+        "glow_color": "#238636"
+      },
+      "effects": {
+        "passive": ["crit_chance"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "galaxy_brain_badge",
+      "item_name": "Galaxy Brain Badge",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Badge of a helpful community member.",
+      "lore": "Your answers helped many developers.",
+      "base_rarity": "epic",
+      "theme": "github",
+      "visuals": {
+        "icon_url": "/static/items/icons/galaxy_brain_badge.png",
+        "sprite_folder": null,
+        "effect": "code_particles",
+        "glow_color": "#8B5CF6"
+      },
+      "effects": {
+        "passive": ["magic_damage"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "yolo_badge",
+      "item_name": "YOLO Badge",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Badge of a fearless developer.",
+      "lore": "Merged a PR without review. Absolute madman.",
+      "base_rarity": "rare",
+      "theme": "github",
+      "visuals": {
+        "icon_url": "/static/items/icons/yolo_badge.png",
+        "sprite_folder": null,
+        "effect": "code_particles",
+        "glow_color": "#FF6B6B"
+      },
+      "effects": {
+        "passive": ["crit_chance"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+
+    {
+      "_comment": "=== ROBLOX ITEMS ===",
+      "item_id": "veteran_roblox_hat",
+      "item_name": "Veteran Robloxian Hat",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Hat of an OG Roblox player.",
+      "lore": "10+ years on Roblox. Before it was cool.",
+      "base_rarity": "legendary",
+      "theme": "roblox",
+      "visuals": {
+        "icon_url": "/static/items/icons/veteran_roblox_hat.png",
+        "sprite_folder": "armor/head/veteran_roblox_hat",
+        "effect": "classic_sparkle",
+        "glow_color": "#00A2FF"
+      },
+      "effects": {
+        "passive": ["poise", "regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "classic_roblox_hat",
+      "item_name": "Classic Robloxian Hat",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Hat of a veteran Roblox player.",
+      "lore": "7+ years on Roblox.",
+      "base_rarity": "epic",
+      "theme": "roblox",
+      "visuals": {
+        "icon_url": "/static/items/icons/classic_roblox_hat.png",
+        "sprite_folder": "armor/head/classic_roblox_hat",
+        "effect": "classic_sparkle",
+        "glow_color": "#00A2FF"
+      },
+      "effects": {
+        "passive": ["stamina_regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "builder_roblox_hat",
+      "item_name": "Builder's Hat",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Hat of an established Roblox player.",
+      "lore": "5+ years on Roblox.",
+      "base_rarity": "rare",
+      "theme": "roblox",
+      "visuals": {
+        "icon_url": "/static/items/icons/builder_roblox_hat.png",
+        "sprite_folder": "armor/head/builder_roblox_hat",
+        "effect": "block_particles",
+        "glow_color": "#00A2FF"
+      },
+      "effects": {
+        "passive": ["regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+
+    {
+      "_comment": "=== STEAM ACCESSIBLE / PRESTIGE ITEMS ===",
+      "item_id": "ashen_estus",
+      "item_name": "Ashen Estus Flask",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Flask carried by those who linked the flame.",
+      "lore": "You beat Dark Souls 3. Welcome, Ashen One.",
+      "base_rarity": "uncommon",
+      "theme": "dark_souls",
+      "visuals": {
+        "icon_url": "/static/items/icons/ashen_estus.png",
+        "sprite_folder": null,
+        "effect": "ember_glow",
+        "glow_color": "#FF6A00"
+      },
+      "effects": {
+        "passive": ["regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "tarnished_ring",
+      "item_name": "Tarnished's Ring",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Ring worn by those who became Elden Lord.",
+      "lore": "Any ending counts. You did it.",
+      "base_rarity": "uncommon",
+      "theme": "elden_ring",
+      "visuals": {
+        "icon_url": "/static/items/icons/tarnished_ring.png",
+        "sprite_folder": null,
+        "effect": "golden_sparkle",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["stamina_regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "void_heart",
+      "item_name": "Void Heart",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Heart touched by the abyss.",
+      "lore": "Embrace the Void - 42 bosses, zero deaths.",
+      "base_rarity": "legendary",
+      "theme": "hollow_knight",
+      "visuals": {
+        "icon_url": "/static/items/icons/void_heart.png",
+        "sprite_folder": null,
+        "effect": "void_aura",
+        "glow_color": "#1A0033"
+      },
+      "effects": {
+        "passive": ["void_damage", "death_prevention"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "boon_trinket",
+      "item_name": "Olympian Keepsake",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "A keepsake from the gods.",
+      "lore": "You escaped the underworld.",
+      "base_rarity": "uncommon",
+      "theme": "hades",
+      "visuals": {
+        "icon_url": "/static/items/icons/boon_trinket.png",
+        "sprite_folder": null,
+        "effect": "divine_glow",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "winged_strawberry",
+      "item_name": "Winged Golden Strawberry",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "A golden strawberry with wings.",
+      "lore": "Farewell chapter, zero deaths. Perfection.",
+      "base_rarity": "legendary",
+      "theme": "celeste",
+      "visuals": {
+        "icon_url": "/static/items/icons/winged_strawberry.png",
+        "sprite_folder": null,
+        "effect": "golden_sparkle",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["move_speed", "death_prevention"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "devil_pitchfork",
+      "item_name": "Devil's Pitchfork",
+      "item_type": "weapon",
+      "weapon_type": "trident",
+      "description": "The Devil's own weapon.",
+      "lore": "Beat Cuphead on Expert. You won the final bet.",
+      "base_rarity": "legendary",
+      "theme": "cuphead",
+      "visuals": {
+        "icon_url": "/static/items/icons/devil_pitchfork.png",
+        "sprite_folder": "weapons/devil_pitchfork",
+        "effect": "hellfire_particles",
+        "glow_color": "#DC143C"
+      },
+      "effects": {
+        "passive": ["fire_aura", "boss_damage"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "king_slayer",
+      "item_name": "King Slayer",
+      "item_type": "weapon",
+      "weapon_type": "sword",
+      "description": "Blade of the Beheaded.",
+      "lore": "5 Boss Cells active. The true Dead Cells experience.",
+      "base_rarity": "legendary",
+      "theme": "dead_cells",
+      "visuals": {
+        "icon_url": "/static/items/icons/king_slayer.png",
+        "sprite_folder": "weapons/king_slayer",
+        "effect": "cell_particles",
+        "glow_color": "#00FF00"
+      },
+      "effects": {
+        "passive": ["on_kill_buff", "lifesteal"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "multi_slash": true
+    },
+    {
+      "item_id": "heart_shard",
+      "item_name": "Corrupted Heart Shard",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "A shard of the Corrupted Heart.",
+      "lore": "A20 Heart kill with all characters.",
+      "base_rarity": "legendary",
+      "theme": "slay_the_spire",
+      "visuals": {
+        "icon_url": "/static/items/icons/heart_shard.png",
+        "sprite_folder": null,
+        "effect": "heart_pulse",
+        "glow_color": "#FF6B6B"
+      },
+      "effects": {
+        "passive": ["boss_damage", "crit_chance"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "companion_cube",
+      "item_name": "Companion Cube",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "The Weighted Companion Cube.",
+      "lore": "It will never threaten to stab you.",
+      "base_rarity": "uncommon",
+      "theme": "portal",
+      "visuals": {
+        "icon_url": "/static/items/icons/companion_cube.png",
+        "sprite_folder": null,
+        "effect": "portal_glow",
+        "glow_color": "#FFB6C1"
+      },
+      "effects": {
+        "passive": ["party_buff"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "lambda_badge",
+      "item_name": "Lambda Badge",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Badge of the resistance.",
+      "lore": "Found all the lambda caches.",
+      "base_rarity": "rare",
+      "theme": "valve",
+      "visuals": {
+        "icon_url": "/static/items/icons/lambda_badge.png",
+        "sprite_folder": null,
+        "effect": "orange_glow",
+        "glow_color": "#FF8C00"
+      },
+      "effects": {
+        "passive": ["damage_reduction"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "dragonbone_helm",
+      "item_name": "Dragonbone Helm",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Helm forged from dragon bones.",
+      "lore": "100% Skyrim. Every achievement.",
+      "base_rarity": "epic",
+      "theme": "skyrim",
+      "visuals": {
+        "icon_url": "/static/items/icons/dragonbone_helm.png",
+        "sprite_folder": "armor/head/dragonbone_helm",
+        "effect": "dragon_soul",
+        "glow_color": "#4A5568"
+      },
+      "effects": {
+        "passive": ["poise", "damage_reduction"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "grandmaster_armor",
+      "item_name": "Grandmaster Wolf Armor",
+      "item_type": "armor_chest",
+      "weapon_type": null,
+      "description": "Armor of the Wolf School.",
+      "lore": "Walked the Path - 100% Witcher 3 including DLCs.",
+      "base_rarity": "legendary",
+      "theme": "witcher",
+      "visuals": {
+        "icon_url": "/static/items/icons/grandmaster_armor.png",
+        "sprite_folder": "armor/chest/grandmaster_armor",
+        "effect": "wolf_school_glow",
+        "glow_color": "#E6B833"
+      },
+      "effects": {
+        "passive": ["damage_reduction", "monster_slayer"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+
+    {
+      "_comment": "=== SYNCED FROM FORGEITEMDB.GD ===",
+      "item_id": "ashen_armor",
+      "item_name": "Ashen Armor",
+      "item_type": "armor_chest",
+      "weapon_type": null,
+      "description": "Chainmail worn by the Ashen One.",
+      "lore": "The ash seeketh embers, and so the journey begins.",
+      "base_rarity": "uncommon",
+      "theme": "dark_souls",
+      "visuals": {
+        "icon_url": "/static/items/icons/ashen_armor.png",
+        "sprite_folder": "armor/chest/ashen_armor",
+        "effect": "ember_glow",
+        "glow_color": "#FF6A00"
+      },
+      "effects": {
+        "passive": ["damage_reduction"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "elden_armory_chest",
+      "item_name": "Elden Armory Chestplate",
+      "item_type": "armor_chest",
+      "weapon_type": null,
+      "description": "Bronze chestplate blessed by all legendary armaments.",
+      "lore": "The bearer has touched every legendary weapon in the Lands Between.",
+      "base_rarity": "epic",
+      "theme": "elden_ring",
+      "visuals": {
+        "icon_url": "/static/items/icons/elden_armory_chest.png",
+        "sprite_folder": "armor/chest/elden_armory",
+        "effect": "golden_sparkle",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["poise"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "eye_of_cthulhu_shield",
+      "item_name": "Eye of Cthulhu Shield",
+      "item_type": "shield",
+      "weapon_type": null,
+      "description": "A shield fashioned from the Eye's remains.",
+      "lore": "Your first major boss. The world trembles.",
+      "base_rarity": "common",
+      "theme": "terraria",
+      "visuals": {
+        "icon_url": "/static/items/icons/eye_shield.png",
+        "sprite_folder": "shields/eye_shield",
+        "effect": "eerie_glow",
+        "glow_color": "#00FF80"
+      },
+      "effects": {
+        "passive": ["damage_reduction"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "ironclad_armor",
+      "item_name": "Ironclad's Plate",
+      "item_type": "armor_chest",
+      "weapon_type": null,
+      "description": "Battle-worn plate armor of the Ironclad.",
+      "lore": "Forged in countless runs. Strike, Defend, repeat.",
+      "base_rarity": "legendary",
+      "theme": "slay_the_spire",
+      "visuals": {
+        "icon_url": "/static/items/icons/ironclad_armor.png",
+        "sprite_folder": "armor/chest/ironclad_armor",
+        "effect": "golden_glow",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["damage_reduction", "regen"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "loremaster_hood",
+      "item_name": "Loremaster's Hood",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Hood worn by those who have uncovered every tale.",
+      "lore": "Completed every questline in Azeroth. The story never ends.",
+      "base_rarity": "legendary",
+      "theme": "wow",
+      "visuals": {
+        "icon_url": "/static/items/icons/loremaster_hood.png",
+        "sprite_folder": "armor/head/loremaster_hood",
+        "effect": "arcane_glow",
+        "glow_color": "#9370DB"
+      },
+      "effects": {
+        "passive": ["magic_damage", "stamina_regen"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "master_hoe",
+      "item_name": "Master Farmer's Hoe",
+      "item_type": "weapon",
+      "weapon_type": "axe",
+      "description": "A golden hoe for the dedicated farmer.",
+      "lore": "Level 10 in a skill. The valley remembers your dedication.",
+      "base_rarity": "uncommon",
+      "theme": "stardew",
+      "visuals": {
+        "icon_url": "/static/items/icons/master_hoe.png",
+        "sprite_folder": "tools/master_hoe",
+        "effect": "golden_sparkle",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["stamina_regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "prairie_king_cape",
+      "item_name": "Prairie King's Poncho",
+      "item_type": "cape",
+      "weapon_type": null,
+      "description": "Dusty poncho of a legendary gunslinger.",
+      "lore": "You beat Journey of the Prairie King without dying. Legendary.",
+      "base_rarity": "legendary",
+      "theme": "stardew",
+      "visuals": {
+        "icon_url": "/static/items/icons/prairie_king_cape.png",
+        "sprite_folder": "capes/prairie_king",
+        "effect": "pixel_sparkle",
+        "glow_color": "#CD853F"
+      },
+      "effects": {
+        "passive": ["dodge_chance"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "stardrop_pendant",
+      "item_name": "Stardrop Pendant",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "A pendant containing essence of all Stardrops.",
+      "lore": "You found every Stardrop. The cosmos smile upon you.",
+      "base_rarity": "epic",
+      "theme": "stardew",
+      "visuals": {
+        "icon_url": "/static/items/icons/stardrop_pendant.png",
+        "sprite_folder": null,
+        "effect": "stardust_trail",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["regen"],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "survivor_vest",
+      "item_name": "Survivor's Vest",
+      "item_type": "armor_chest",
+      "weapon_type": null,
+      "description": "Battle-worn tactical vest of a zombie apocalypse survivor.",
+      "lore": "53,595 infected eliminated. The horde never stood a chance.",
+      "base_rarity": "rare",
+      "theme": "valve",
+      "visuals": {
+        "icon_url": "/static/items/icons/survivor_vest.png",
+        "sprite_folder": "armor/chest/survivor_vest",
+        "effect": "survivor_glow",
+        "glow_color": "#556B2F"
+      },
+      "effects": {
+        "passive": ["damage_reduction", "regen"],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "zagreus_helm",
+      "item_name": "Prince's Laurel Crown",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "Crown of the Prince of the Underworld.",
+      "lore": "You completed the epilogue. The whole story, told.",
+      "base_rarity": "epic",
+      "theme": "hades",
+      "visuals": {
+        "icon_url": "/static/items/icons/zagreus_helm.png",
+        "sprite_folder": "armor/head/zagreus_helm",
+        "effect": "divine_glow",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": ["move_speed"],
         "active": null
       },
       "has_sprites": false,

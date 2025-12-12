@@ -41,8 +41,11 @@ static func get_attack_frame_indices(num_frames: int) -> Array:
 # Shadow layer (below body)
 var shadow_sprite: AnimatedSprite2D = null
 
+# Cape layer (behind body, above shadow)
+var cape_sprite: AnimatedSprite2D = null
+
 # Armor layers (optional) - between body and weapon
-# z-index order: shadow(-10) -> body(0) -> base_head(1) -> boots(2) -> pants(3) -> shirt(4) -> arms(5) -> hands(6) -> hair(7) -> head_armor(8) -> weapon(9/-1)
+# z-index order: shadow(-10) -> cape(-5) -> body(0) -> base_head(1) -> boots(2) -> pants(3) -> shirt(4) -> arms(5) -> hands(6) -> hair(7) -> head_armor(8) -> weapon(9/-1)
 var base_head_sprite: AnimatedSprite2D = null  # Female character uses separate head layer
 var boots_sprite: AnimatedSprite2D = null
 var pants_sprite: AnimatedSprite2D = null
@@ -55,6 +58,10 @@ var hair_sprite: AnimatedSprite2D = null
 # Weapon layer (optional)
 var weapon_sprite: AnimatedSprite2D = null
 var current_weapon_type: String = "sword"  # Track weapon type for offset calculations
+
+# Multi-slash weapon support - cycle through slash variants (slash, slash2, slash3)
+var weapon_slash_variants: Array[String] = []  # Available slash animation names
+var current_slash_index: int = 0  # Current index for cycling
 
 # Gun pose support - swap body to Skorpio pose when walking with gun
 var is_gun_weapon: bool = false  # True if current weapon is a gun type
@@ -86,6 +93,7 @@ func _process(_delta: float) -> void:
 		body_anim = gun_body_sprite.animation
 
 	_sync_layer(shadow_sprite, body_anim, body_frame)
+	_sync_layer(cape_sprite, body_anim, body_frame)
 	_sync_layer(base_head_sprite, body_anim, body_frame)
 	_sync_layer(boots_sprite, body_anim, body_frame)
 	_sync_layer(pants_sprite, body_anim, body_frame)
@@ -134,7 +142,9 @@ func setup_lpc_sprite(
 	weapon_slash_tex: Texture2D = null,
 	weapon_walk_tex: Texture2D = null,
 	weapon_type: String = "sword",
-	is_female: bool = false
+	is_female: bool = false,
+	weapon_slash2_tex: Texture2D = null,
+	weapon_slash3_tex: Texture2D = null
 ):
 	"""Setup LPC sprite with layered body, armor, and weapon textures"""
 	if DEBUG_SPRITE_SETUP:
@@ -146,6 +156,10 @@ func setup_lpc_sprite(
 
 	sprite_frames = SpriteFrames.new()
 	current_weapon_type = weapon_type  # Store for offset calculations
+
+	# Reset multi-slash tracking
+	weapon_slash_variants.clear()
+	current_slash_index = 0
 
 	# Detect if we're using thrust animation (8 frames) vs slash (6 frames)
 	# This affects harvest/chop animation - we need slash-based chop for proper swing
@@ -504,6 +518,29 @@ func setup_lpc_sprite(
 					var row = DIRECTION_ROWS[dir_name]
 					create_animation_from_image(weapon_slash_img, "slash_" + dir_name, row, num_attack_frames, frame_indices, slash_fps, false, weapon_sprite.sprite_frames, slash_tile_size)
 
+				# Track slash variant
+				weapon_slash_variants.append("slash")
+
+				# Create slash2 variant if provided (must be inside else block for num_attack_frames scope)
+				if weapon_slash2_tex:
+					var slash2_img = weapon_slash2_tex.get_image()
+					var slash2_size = slash2_img.get_size()
+					var slash2_tile_size = int(slash2_size.x / num_attack_frames)
+					for dir_name in DIRECTION_ROWS.keys():
+						var row = DIRECTION_ROWS[dir_name]
+						create_animation_from_image(slash2_img, "slash2_" + dir_name, row, num_attack_frames, frame_indices, slash_fps, false, weapon_sprite.sprite_frames, slash2_tile_size)
+					weapon_slash_variants.append("slash2")
+
+				# Create slash3 variant if provided
+				if weapon_slash3_tex:
+					var slash3_img = weapon_slash3_tex.get_image()
+					var slash3_size = slash3_img.get_size()
+					var slash3_tile_size = int(slash3_size.x / num_attack_frames)
+					for dir_name in DIRECTION_ROWS.keys():
+						var row = DIRECTION_ROWS[dir_name]
+						create_animation_from_image(slash3_img, "slash3_" + dir_name, row, num_attack_frames, frame_indices, slash_fps, false, weapon_sprite.sprite_frames, slash3_tile_size)
+					weapon_slash_variants.append("slash3")
+
 		# Add walk animations if provided
 		if weapon_walk_tex:
 			var weapon_walk_img = weapon_walk_tex.get_image()
@@ -626,6 +663,70 @@ func setup_gun_walk_animations(gun_body_walk_tex: Texture2D, gun_body_shoot_tex:
 	# This ensures the Skorpio body is visible from the start
 	call_deferred("_set_gun_mode", true)
 	call_deferred("_play_initial_gun_idle")
+
+func setup_cape(walk_tex: Texture2D, slash_tex: Texture2D = null, thrust_tex: Texture2D = null, hurt_tex: Texture2D = null) -> void:
+	"""Setup cape layer that renders behind the character body.
+	Capes use z-index -5 (between shadow at -10 and body at 0).
+	Call this AFTER setup_lpc_sprite() to add a cape to the character."""
+	if not walk_tex:
+		return
+
+	# Remove existing cape if present
+	if cape_sprite:
+		cape_sprite.queue_free()
+		cape_sprite = null
+
+	cape_sprite = AnimatedSprite2D.new()
+	cape_sprite.name = "CapeLayer"
+	cape_sprite.centered = true
+	cape_sprite.z_index = -5  # Behind body (0) but above shadow (-10)
+	cape_sprite.sprite_frames = SpriteFrames.new()
+	cape_sprite.modulate = Color(1, 1, 1, 1)
+
+	var walk_img = walk_tex.get_image()
+
+	# Create walk and idle animations (8 frames walk, frame 0 for idle)
+	for dir_name in DIRECTION_ROWS.keys():
+		var row = DIRECTION_ROWS[dir_name]
+		create_animation_from_image(walk_img, "walk_" + dir_name, row, 8, [1, 2, 3, 4, 5, 6, 7, 8], 10.0, true, cape_sprite.sprite_frames, 64)
+		create_animation_from_image(walk_img, "idle_" + dir_name, row, 1, [0], 1.0, true, cape_sprite.sprite_frames, 64)
+
+	# Create attack animations (slash or thrust)
+	var attack_tex = slash_tex if slash_tex else thrust_tex
+	if attack_tex:
+		var attack_img = attack_tex.get_image()
+		var attack_size = attack_img.get_size()
+		# Detect frame count: thrust has 8 frames (512px wide), slash has 6 frames (384px wide)
+		var attack_frames = 8 if attack_size.x >= 500 else 6
+		var frame_indices = []
+		for i in range(attack_frames):
+			frame_indices.append(i)
+
+		for dir_name in DIRECTION_ROWS.keys():
+			var row = DIRECTION_ROWS[dir_name]
+			create_animation_from_image(attack_img, "slash_" + dir_name, row, attack_frames, frame_indices, 10.0, false, cape_sprite.sprite_frames, 64)
+
+	# Create hurt animation if provided
+	if hurt_tex:
+		var hurt_img = hurt_tex.get_image()
+		create_animation_from_image(hurt_img, "hurt", 0, 6, [0, 1, 2, 3, 4, 5], 10.0, false, cape_sprite.sprite_frames, 64)
+
+	add_child(cape_sprite)
+	cape_sprite.visible = true
+	cape_sprite.play("idle_south")
+
+	if DEBUG_SPRITE_SETUP:
+		print("[LPCSprite] Cape layer created")
+		print("  - cape_sprite z_index: ", cape_sprite.z_index)
+		print("  - Animations: ", cape_sprite.sprite_frames.get_animation_names())
+
+func remove_cape() -> void:
+	"""Remove the cape layer from the character"""
+	if cape_sprite:
+		cape_sprite.queue_free()
+		cape_sprite = null
+		if DEBUG_SPRITE_SETUP:
+			print("[LPCSprite] Cape layer removed")
 
 func _play_initial_gun_idle() -> void:
 	"""Play initial idle animation for gun mode after setup"""
@@ -797,6 +898,20 @@ func _set_gun_mode(enabled: bool) -> void:
 		if gun_body_sprite:
 			gun_body_sprite.visible = false
 
+func get_next_attack_anim() -> String:
+	"""Get the next attack animation name, cycling through variants if available.
+	Call this instead of hardcoding 'slash' to enable multi-slash weapons."""
+	if weapon_slash_variants.is_empty():
+		return "slash"  # Default fallback
+
+	var anim = weapon_slash_variants[current_slash_index]
+	current_slash_index = (current_slash_index + 1) % weapon_slash_variants.size()
+	return anim
+
+func has_multi_slash() -> bool:
+	"""Returns true if this weapon has multiple slash variants."""
+	return weapon_slash_variants.size() > 1
+
 func play_lpc_animation(anim_name: String, direction: String):
 	"""Play animation with direction - NO FLIPPING!"""
 	current_direction = direction
@@ -892,6 +1007,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 			shadow_sprite.play(anim_key)
 		elif shadow_sprite.sprite_frames.has_animation(anim_name):
 			shadow_sprite.play(anim_name)
+
+	# Sync cape animation with body animation
+	if cape_sprite:
+		if cape_sprite.sprite_frames.has_animation(anim_key):
+			cape_sprite.play(anim_key)
+		elif cape_sprite.sprite_frames.has_animation(anim_name):
+			cape_sprite.play(anim_name)
 
 	# Sync armor animations with body animation
 	if base_head_sprite:

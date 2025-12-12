@@ -677,6 +677,14 @@ func die() -> void:
 			if game_world:
 				CombatText.create_xp(xp_reward, global_position, game_world)
 
+		# Forged weapon stats: track kill for equipped forged weapons
+		if player and player.has_node("PlayerCombat"):
+			var combat_system = player.get_node("PlayerCombat")
+			if combat_system.has_method("track_enemy_killed"):
+				var is_elite_enemy = is_in_group("elite") or is_in_group("guardian")
+				var is_boss_enemy = is_in_group("boss")
+				combat_system.track_enemy_killed("wolf", is_elite_enemy, is_boss_enemy)
+
 	# Store gold in corpse
 	if corpse_gold == 0:
 		corpse_gold = gold_drop

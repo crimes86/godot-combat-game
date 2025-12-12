@@ -22,7 +22,7 @@ extends Node
 # Common: 40%+ unlock rate
 
 enum ItemRarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
-enum ItemType { WEAPON, ARMOR_HEAD, ARMOR_CHEST, ARMOR_LEGS, ARMOR_HANDS, ARMOR_FEET, CAPE, SHIELD, ACCESSORY, EMOTE, TITLE }
+enum ItemType { WEAPON, ARMOR_HEAD, ARMOR_CHEST, ARMOR_ARMS, ARMOR_LEGS, ARMOR_HANDS, ARMOR_FEET, CAPE, SHIELD, ACCESSORY, EMOTE, TITLE }
 # WeaponClass: Core (SWORD-RAPIER have animation data), Extended (rest fall back to core)
 enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, RAPIER, GREATSWORD, KATANA, SABER, SCIMITAR, HALBERD, PIKE, TRIDENT, FLAIL, SCYTHE, BOW, CROSSBOW, GUN, BATTLE_RIFLE }
 
@@ -148,16 +148,16 @@ const FORGE_ITEMS = {
 
 	# Epic Tier (1-5% unlock) - Legendary weapons/completionist
 	"steam_1245620_LEGENDARY_ARMAMENTS": {
-		"item_id": "elden_armory_set",
-		"item_name": "Elden Armory Pauldrons",
+		"item_id": "elden_armory_chest",
+		"item_name": "Elden Armory Chestplate",
 		"item_type": ItemType.ARMOR_CHEST,
 		"rarity": ItemRarity.EPIC,
-		"description": "Shoulder guards blessed by all legendary armaments.",
+		"description": "Bronze chestplate blessed by all legendary armaments.",
 		"lore": "The bearer has touched every legendary weapon in the Lands Between.",
 		"achievement_name": "Legendary Armaments",
 		"unlock_percent": 11.2,
 		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/elden_armory_pauldrons.png",
+			"icon": FORGED_ICONS_BASE + "armor/elden_armory_chest.png",
 			"walk": FORGED_ITEMS_BASE + "armor/chest/elden_armory/walk.png",
 			"slash": FORGED_ITEMS_BASE + "armor/chest/elden_armory/slash.png",
 			"thrust": FORGED_ITEMS_BASE + "armor/chest/elden_armory/thrust.png",
@@ -169,16 +169,16 @@ const FORGE_ITEMS = {
 
 	# Legendary Tier (<1% unlock) - Platinum / 100% completion
 	"steam_1245620_ELDEN_LORD": {
-		"item_id": "elden_lord_crown",
-		"item_name": "Elden Lord's Crown",
+		"item_id": "elden_lord_helm",
+		"item_name": "Elden Lord's Greathelm",
 		"item_type": ItemType.ARMOR_HEAD,
 		"rarity": ItemRarity.LEGENDARY,
-		"description": "Crown of one who claimed the Elden Ring.",
+		"description": "Golden greathelm of one who claimed the Elden Ring.",
 		"lore": "Rise, Tarnished. Claim your rightful throne.",
 		"achievement_name": "Elden Ring",
 		"unlock_percent": 8.7,
 		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/elden_lord_crown.png",
+			"icon": FORGED_ICONS_BASE + "armor/elden_lord_helm.png",
 			"walk": FORGED_ITEMS_BASE + "armor/head/elden_lord/walk.png",
 			"slash": FORGED_ITEMS_BASE + "armor/head/elden_lord/slash.png",
 			"thrust": FORGED_ITEMS_BASE + "armor/head/elden_lord/thrust.png",
@@ -186,6 +186,28 @@ const FORGE_ITEMS = {
 		},
 		"effects": ["erdtree_blessing", "golden_leaves", "light_rays"],
 		"cosmetic_only": true
+	},
+
+	# Fingerprint Stone Shield - rare greatshield for poise/tank builds
+	"steam_1245620_FINGERPRINT_STONE": {
+		"item_id": "fingerprint_stone_shield",
+		"item_name": "Fingerprint Stone Shield",
+		"item_type": ItemType.SHIELD,
+		"rarity": ItemRarity.EPIC,
+		"description": "A great stone shield with an intricately carved fingerprint design.",
+		"lore": "One of the heaviest of all greatshields. Provides unmatched stability.",
+		"achievement_name": "Legendary Armaments",  # From collecting all legendary armaments
+		"unlock_percent": 4.2,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "shields/fingerprint_stone_shield_v2.png",
+			"walk": FORGED_ITEMS_BASE + "shields/fingerprint_stone_shield/standard/walk.png",
+			"slash": FORGED_ITEMS_BASE + "shields/fingerprint_stone_shield/standard/slash.png",
+			"thrust": FORGED_ITEMS_BASE + "shields/fingerprint_stone_shield/standard/thrust.png",
+			"hurt": FORGED_ITEMS_BASE + "shields/fingerprint_stone_shield/standard/hurt.png"
+		},
+		"effects": ["stone_glow"],
+		"stats": {"defense_bonus": 5, "poise_bonus": 10},
+		"cosmetic_only": false
 	},
 
 	# ═══════════════════════════════════════════════════════════════════════════
@@ -274,13 +296,34 @@ const FORGE_ITEMS = {
 		"cosmetic_only": false
 	},
 
+	"steam_374320_TO_LINK_THE_FIRST_FLAME": {
+		"item_id": "ashen_armor",
+		"item_name": "Ashen Armor",
+		"item_type": ItemType.ARMOR_CHEST,
+		"rarity": ItemRarity.UNCOMMON,
+		"description": "Chainmail worn by the Ashen One.",
+		"lore": "The ash seeketh embers, and so the journey begins.",
+		"achievement_name": "To Link the First Flame",
+		"unlock_percent": 35.2,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "armor/ashen_armor.png",
+			"walk": FORGED_ITEMS_BASE + "armor/chest/ashen_armor/walk.png",
+			"slash": FORGED_ITEMS_BASE + "armor/chest/ashen_armor/slash.png",
+			"thrust": FORGED_ITEMS_BASE + "armor/chest/ashen_armor/thrust.png",
+			"hurt": FORGED_ITEMS_BASE + "armor/chest/ashen_armor/hurt.png"
+		},
+		"effects": ["ember_glow"],
+		"stats": {"defense_bonus": 2},
+		"cosmetic_only": false
+	},
+
 	# ═══════════════════════════════════════════════════════════════════════════
 	# STARDEW VALLEY (Steam App ID: 413150)
 	# 49 achievements - Cozy farming, wide appeal
 	# ═══════════════════════════════════════════════════════════════════════════
 
 	"steam_413150_GREENHORN": {
-		"item_id": "farmers_straw_hat",
+		"item_id": "straw_hat",
 		"item_name": "Farmer's Straw Hat",
 		"item_type": ItemType.ARMOR_HEAD,
 		"rarity": ItemRarity.COMMON,
@@ -289,7 +332,7 @@ const FORGE_ITEMS = {
 		"achievement_name": "Greenhorn",
 		"unlock_percent": 89.4,
 		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/farmers_straw_hat.png",
+			"icon": FORGED_ICONS_BASE + "armor/straw_hat.png",
 			"walk": FORGED_ITEMS_BASE + "armor/head/straw_hat/walk.png",
 			"slash": FORGED_ITEMS_BASE + "armor/head/straw_hat/slash.png",
 			"thrust": FORGED_ITEMS_BASE + "armor/head/straw_hat/thrust.png",
@@ -300,7 +343,7 @@ const FORGE_ITEMS = {
 	},
 
 	"steam_413150_SINGULAR_TALENT": {
-		"item_id": "master_farmers_hoe",
+		"item_id": "master_hoe",
 		"item_name": "Master Farmer's Hoe",
 		"item_type": ItemType.WEAPON,
 		"weapon_class": WeaponClass.AXE,  # Closest to hoe mechanically
@@ -338,22 +381,22 @@ const FORGE_ITEMS = {
 	},
 
 	"steam_413150_FECTOR_CHALLENGE": {
-		"item_id": "prairie_king_crown",
-		"item_name": "Prairie King's Crown",
-		"item_type": ItemType.ARMOR_HEAD,
+		"item_id": "prairie_king_cape",
+		"item_name": "Prairie King's Poncho",
+		"item_type": ItemType.CAPE,
 		"rarity": ItemRarity.LEGENDARY,
-		"description": "Crown of the legendary Prairie King.",
+		"description": "Dusty poncho of a legendary gunslinger.",
 		"lore": "You beat Journey of the Prairie King without dying. Legendary.",
 		"achievement_name": "Fector's Challenge",
 		"unlock_percent": 0.8,
 		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/prairie_king_crown.png",
-			"walk": FORGED_ITEMS_BASE + "armor/head/prairie_king/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/head/prairie_king/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/head/prairie_king/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/head/prairie_king/hurt.png"
+			"icon": FORGED_ICONS_BASE + "capes/prairie_king_cape.png",
+			"walk": FORGED_ITEMS_BASE + "capes/prairie_king/walk.png",
+			"slash": FORGED_ITEMS_BASE + "capes/prairie_king/slash.png",
+			"thrust": FORGED_ITEMS_BASE + "capes/prairie_king/thrust.png",
+			"hurt": FORGED_ITEMS_BASE + "capes/prairie_king/hurt.png"
 		},
-		"effects": ["pixel_sparkle", "retro_trail"],
+		"effects": ["pixel_sparkle", "dust_trail"],
 		"cosmetic_only": true
 	},
 
@@ -385,7 +428,7 @@ const FORGE_ITEMS = {
 	},
 
 	"steam_367520_VOID": {
-		"item_id": "void_cloak",
+		"item_id": "shade_cloak",
 		"item_name": "Shade Cloak",
 		"item_type": ItemType.CAPE,
 		"rarity": ItemRarity.RARE,
@@ -426,7 +469,7 @@ const FORGE_ITEMS = {
 	# ═══════════════════════════════════════════════════════════════════════════
 
 	"steam_1145360_ESCAPED_TARTARUS": {
-		"item_id": "stygian_blade_basic",
+		"item_id": "stygian_blade",
 		"item_name": "Stygian Blade",
 		"item_type": ItemType.WEAPON,
 		"weapon_class": WeaponClass.SWORD,
@@ -448,7 +491,7 @@ const FORGE_ITEMS = {
 	},
 
 	"steam_1145360_SLAYER": {
-		"item_id": "exagryph_adamant_rail",
+		"item_id": "adamant_rail",
 		"item_name": "Adamant Rail",
 		"item_type": ItemType.WEAPON,
 		"weapon_class": WeaponClass.GUN,  # Ranged weapon - uses Skorpio body for gun animations
@@ -457,6 +500,7 @@ const FORGE_ITEMS = {
 		"lore": "1000 enemies slain. Death incarnate.",
 		"achievement_name": "Slayer",
 		"unlock_percent": 28.5,
+		"is_two_handed": true,  # Guns block offhand slot
 		"sprites": {
 			"icon": FORGED_ICONS_BASE + "weapons/adamant_rail.png",
 			"walk": FORGED_ITEMS_BASE + "weapons/adamant_rail/walk.png"
@@ -607,23 +651,24 @@ const FORGE_ITEMS = {
 	},
 
 	"steam_292030_WALKED_PATH": {
-		"item_id": "grandmaster_wolf_armor",
-		"item_name": "Grandmaster Wolf Chest",
+		"item_id": "grandmaster_armor",
+		"item_name": "Grandmaster Armor",
 		"item_type": ItemType.ARMOR_CHEST,
 		"rarity": ItemRarity.LEGENDARY,
 		"description": "Armor of a legendary Witcher.",
-		"lore": "Completed the game on Death March difficulty.",
+		"lore": "Completed the game on Death March difficulty. The White Wolf's finest.",
 		"achievement_name": "Walked the Path",
 		"unlock_percent": 4.1,
 		"sprites": {
-			"icon": FORGED_ICONS_BASE + "armor/grandmaster_wolf_chest.png",
-			"walk": FORGED_ITEMS_BASE + "armor/chest/grandmaster_wolf/walk.png",
-			"slash": FORGED_ITEMS_BASE + "armor/chest/grandmaster_wolf/slash.png",
-			"thrust": FORGED_ITEMS_BASE + "armor/chest/grandmaster_wolf/thrust.png",
-			"hurt": FORGED_ITEMS_BASE + "armor/chest/grandmaster_wolf/hurt.png"
+			"icon": FORGED_ICONS_BASE + "armor/grandmaster_armor.png",
+			"walk": FORGED_ITEMS_BASE + "armor/chest/grandmaster_armor/walk.png",
+			"slash": FORGED_ITEMS_BASE + "armor/chest/grandmaster_armor/slash.png",
+			"thrust": FORGED_ITEMS_BASE + "armor/chest/grandmaster_armor/thrust.png",
+			"hurt": FORGED_ITEMS_BASE + "armor/chest/grandmaster_armor/hurt.png"
 		},
 		"effects": ["wolf_school_glow", "danger_sense"],
-		"cosmetic_only": true
+		"stats": {"defense_bonus": 4},
+		"cosmetic_only": false
 	},
 
 	# ═══════════════════════════════════════════════════════════════════════════
@@ -641,6 +686,7 @@ const FORGE_ITEMS = {
 		"lore": "Finished the fight on Legendary.",
 		"achievement_name": "Legendary Campaign Complete",
 		"unlock_percent": 5.2,
+		"is_two_handed": true,  # Guns block offhand slot
 		"sprites": {
 			"icon": FORGED_ICONS_BASE + "weapons/halo_battle_rifle.png",
 			"walk": FORGED_ITEMS_BASE + "weapons/halo_battle_rifle/walk.png"
@@ -655,6 +701,293 @@ const FORGE_ITEMS = {
 			"burst_count": 3,
 			"burst_delay": 0.10
 		}
+	},
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# PLAYSTATION (PSN Trophies)
+	# Platinum trophies from PS-exclusive games
+	# ═══════════════════════════════════════════════════════════════════════════
+
+	"psn_BLOODBORNE_PLATINUM": {
+		"item_id": "saw_cleaver",
+		"item_name": "Saw Cleaver",
+		"item_type": ItemType.WEAPON,
+		"weapon_class": WeaponClass.SWORD,
+		"rarity": ItemRarity.LEGENDARY,
+		"description": "A trick weapon of the Hunters.",
+		"lore": "Tonight, Gehrman joins the hunt.",
+		"achievement_name": "Bloodborne Platinum",
+		"unlock_percent": 6.8,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "weapons/saw_cleaver.png",
+			"walk": FORGED_ITEMS_BASE + "weapons/saw_cleaver/walk.png",
+			"slash": FORGED_ITEMS_BASE + "weapons/saw_cleaver/slash.png",
+			"slash2": FORGED_ITEMS_BASE + "weapons/saw_cleaver/slash2.png",
+			"hurt": FORGED_ITEMS_BASE + "weapons/saw_cleaver/hurt.png"
+		},
+		"effects": ["blood_particles"],
+		"glow_color": "#8B0000",
+		"stats": {"damage_bonus": 4},
+		"cosmetic_only": false,
+		"multi_slash": true
+	},
+
+	"psn_DEMONS_SOULS_PLATINUM": {
+		"item_id": "false_king_helm",
+		"item_name": "False King's Helm",
+		"item_type": ItemType.ARMOR_HEAD,
+		"rarity": ItemRarity.LEGENDARY,
+		"description": "Horned helm of the Old One's false king.",
+		"lore": "The Old One has awakened. The fog covers all.",
+		"achievement_name": "Demon's Souls Platinum",
+		"unlock_percent": 4.5,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "armor/false_king_helm.png",
+			"walk": FORGED_ITEMS_BASE + "armor/head/false_king_helm/walk.png",
+			"slash": FORGED_ITEMS_BASE + "armor/head/false_king_helm/slash.png",
+			"thrust": FORGED_ITEMS_BASE + "armor/head/false_king_helm/thrust.png",
+			"hurt": FORGED_ITEMS_BASE + "armor/head/false_king_helm/hurt.png"
+		},
+		"effects": ["soul_drain", "fog_wisps"],
+		"glow_color": "#FFD700",
+		"cosmetic_only": true
+	},
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# DEAD CELLS (Steam App ID: 588650)
+	# Roguelite action - Boss Cell difficulty achievements
+	# ═══════════════════════════════════════════════════════════════════════════
+
+	"steam_588650_FIVE_BOSS_CELLS": {
+		"item_id": "king_slayer",
+		"item_name": "King Slayer",
+		"item_type": ItemType.WEAPON,
+		"weapon_class": WeaponClass.SWORD,
+		"rarity": ItemRarity.LEGENDARY,
+		"description": "Blade of the Beheaded.",
+		"lore": "5 Boss Cells active. The true Dead Cells experience.",
+		"achievement_name": "5 Boss Cells Active",
+		"unlock_percent": 1.2,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "weapons/king_slayer.png",
+			"walk": FORGED_ITEMS_BASE + "weapons/king_slayer/walk.png",
+			"slash": FORGED_ITEMS_BASE + "weapons/king_slayer/slash.png",
+			"slash2": FORGED_ITEMS_BASE + "weapons/king_slayer/slash2.png",
+			"hurt": FORGED_ITEMS_BASE + "weapons/king_slayer/hurt.png"
+		},
+		"effects": ["cell_particles"],
+		"glow_color": "#00FF00",
+		"stats": {"damage_bonus": 4},
+		"cosmetic_only": false,
+		"multi_slash": true
+	},
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# CELESTE (Steam App ID: 504230)
+	# Precision platformer - Legendary strawberry achievements
+	# ═══════════════════════════════════════════════════════════════════════════
+
+	"steam_504230_FAREWELL_GOLDEN": {
+		"item_id": "winged_strawberry",
+		"item_name": "Winged Golden Strawberry",
+		"item_type": ItemType.ACCESSORY,
+		"rarity": ItemRarity.LEGENDARY,
+		"description": "A golden strawberry with ethereal wings.",
+		"lore": "Farewell chapter, zero deaths. Perfection incarnate.",
+		"achievement_name": "Farewell Golden Berry",
+		"unlock_percent": 0.8,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "accessories/winged_strawberry.png"
+		},
+		"effects": ["golden_sparkle"],
+		"glow_color": "#FFD700",
+		"cosmetic_only": true
+	},
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# SLAY THE SPIRE (Steam App ID: 646570)
+	# Roguelike deckbuilder - Heart kill achievements
+	# ═══════════════════════════════════════════════════════════════════════════
+
+	"steam_646570_ASCENSION_20_HEART": {
+		"item_id": "heart_shard",
+		"item_name": "Corrupted Heart Shard",
+		"item_type": ItemType.ACCESSORY,
+		"rarity": ItemRarity.LEGENDARY,
+		"description": "A shard of the Corrupted Heart.",
+		"lore": "A20 Heart kill with all characters. True mastery.",
+		"achievement_name": "Ascension 20 Heart Kill",
+		"unlock_percent": 2.1,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "accessories/heart_shard.png"
+		},
+		"effects": ["heart_pulse"],
+		"glow_color": "#FF6B6B",
+		"cosmetic_only": true
+	},
+
+	"steam_646570_IRONCLAD_VICTORY": {
+		"item_id": "ironclad_armor",
+		"item_name": "Ironclad's Plate",
+		"item_type": ItemType.ARMOR_CHEST,
+		"rarity": ItemRarity.LEGENDARY,
+		"description": "Battle-worn plate armor of the Ironclad.",
+		"lore": "Forged in countless runs. Strike, Defend, repeat.",
+		"achievement_name": "Ironclad Victory",
+		"unlock_percent": 8.5,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "armor/ironclad_armor.png",
+			"walk": FORGED_ITEMS_BASE + "armor/chest/ironclad_armor/walk.png",
+			"slash": FORGED_ITEMS_BASE + "armor/chest/ironclad_armor/slash.png",
+			"thrust": FORGED_ITEMS_BASE + "armor/chest/ironclad_armor/thrust.png",
+			"hurt": FORGED_ITEMS_BASE + "armor/chest/ironclad_armor/hurt.png"
+		},
+		"effects": ["golden_glow"],
+		"stats": {"defense_bonus": 4, "health_bonus": 10},
+		"glow_color": "#FFD700",
+		"cosmetic_only": false
+	},
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# PORTAL 2 (Steam App ID: 620)
+	# Puzzle game - Story completion achievements
+	# ═══════════════════════════════════════════════════════════════════════════
+
+	"steam_620_PORTAL_LUNACY": {
+		"item_id": "companion_cube",
+		"item_name": "Companion Cube",
+		"item_type": ItemType.ACCESSORY,
+		"rarity": ItemRarity.UNCOMMON,
+		"description": "The Weighted Companion Cube.",
+		"lore": "It will never threaten to stab you. And in fact, cannot speak.",
+		"achievement_name": "Lunacy",
+		"unlock_percent": 40.2,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "accessories/companion_cube.png"
+		},
+		"effects": ["portal_glow"],
+		"glow_color": "#FFB6C1",
+		"cosmetic_only": true
+	},
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# HALF-LIFE 2 (Steam App ID: 220)
+	# FPS classic - Exploration achievements
+	# ═══════════════════════════════════════════════════════════════════════════
+
+	"steam_220_LAMBDA_LOCATOR": {
+		"item_id": "lambda_badge",
+		"item_name": "Lambda Badge",
+		"item_type": ItemType.ACCESSORY,
+		"rarity": ItemRarity.RARE,
+		"description": "The symbol of resistance.",
+		"lore": "Found all lambda caches. Rise and shine, Mr. Freeman.",
+		"achievement_name": "Lambda Locator",
+		"unlock_percent": 5.1,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "accessories/lambda_badge.png"
+		},
+		"effects": ["orange_glow"],
+		"glow_color": "#FF8C00",
+		"cosmetic_only": true
+	},
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# LEFT 4 DEAD 2 (Steam App ID: 550)
+	# Zombie co-op - Survival achievements
+	# ═══════════════════════════════════════════════════════════════════════════
+
+	"steam_550_ZOMBIE_GENOCIDEST": {
+		"item_id": "survivor_vest",
+		"item_name": "Survivor's Vest",
+		"item_type": ItemType.ARMOR_CHEST,
+		"rarity": ItemRarity.RARE,
+		"description": "Battle-worn tactical vest of a zombie apocalypse survivor.",
+		"lore": "53,595 infected eliminated. The horde never stood a chance.",
+		"achievement_name": "Zombie Genocidest",
+		"unlock_percent": 15.3,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "armor/survivor_vest.png",
+			"walk": FORGED_ITEMS_BASE + "armor/chest/survivor_vest/walk.png",
+			"slash": FORGED_ITEMS_BASE + "armor/chest/survivor_vest/slash.png",
+			"thrust": FORGED_ITEMS_BASE + "armor/chest/survivor_vest/thrust.png",
+			"hurt": FORGED_ITEMS_BASE + "armor/chest/survivor_vest/hurt.png"
+		},
+		"effects": ["survivor_glow"],
+		"stats": {"defense_bonus": 2, "health_regen": 1},
+		"glow_color": "#556B2F",
+		"cosmetic_only": false
+	},
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# CUPHEAD (Steam App ID: 268910)
+	# Run and gun - Devil boss achievements
+	# ═══════════════════════════════════════════════════════════════════════════
+
+	"steam_268910_BEAT_DEVIL_EXPERT": {
+		"item_id": "devil_pitchfork",
+		"item_name": "Devil's Pitchfork",
+		"item_type": ItemType.WEAPON,
+		"weapon_class": WeaponClass.SPEAR,
+		"rarity": ItemRarity.LEGENDARY,
+		"description": "The Devil's personal trident.",
+		"lore": "Beat the Devil on Expert. A deal's a deal.",
+		"achievement_name": "Beat Devil on Expert",
+		"unlock_percent": 3.2,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "weapons/devil_pitchfork.png",
+			"walk": FORGED_ITEMS_BASE + "weapons/devil_pitchfork/walk.png",
+			"thrust": FORGED_ITEMS_BASE + "weapons/devil_pitchfork/thrust.png",
+			"hurt": FORGED_ITEMS_BASE + "weapons/devil_pitchfork/hurt.png"
+		},
+		"effects": ["hellfire_particles"],
+		"glow_color": "#DC143C",
+		"stats": {"damage_bonus": 4},
+		"cosmetic_only": false
+	},
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# WORLD OF WARCRAFT (Battle.net)
+	# MMO classic - Loremaster achievement (complete all zone questlines)
+	# ═══════════════════════════════════════════════════════════════════════════
+
+	"bnet_WOW_LOREMASTER": {
+		"item_id": "loremaster_hood",
+		"item_name": "Loremaster's Hood",
+		"item_type": ItemType.ARMOR_HEAD,
+		"rarity": ItemRarity.LEGENDARY,
+		"description": "Hood worn by those who have uncovered every tale.",
+		"lore": "Completed every questline in Azeroth. The story never ends.",
+		"achievement_name": "Loremaster",
+		"unlock_percent": 2.8,
+		"sprites": {
+			"icon": FORGED_ICONS_BASE + "armor/loremaster_hood.png",
+			# Head slot sprites (the actual item)
+			"walk": FORGED_ITEMS_BASE + "armor/head/loremaster_hood/walk.png",
+			"slash": FORGED_ITEMS_BASE + "armor/head/loremaster_hood/slash.png",
+			"thrust": FORGED_ITEMS_BASE + "armor/head/loremaster_hood/thrust.png",
+			"hurt": FORGED_ITEMS_BASE + "armor/head/loremaster_hood/hurt.png"
+		},
+		# Visual override: when equipped, also renders chest and legs with robe sprites
+		# This creates a complete "outfit" look from a single head item
+		"visual_override_slots": {
+			"chest": {
+				"walk": FORGED_ITEMS_BASE + "armor/chest/loremaster_robes/walk.png",
+				"slash": FORGED_ITEMS_BASE + "armor/chest/loremaster_robes/slash.png",
+				"thrust": FORGED_ITEMS_BASE + "armor/chest/loremaster_robes/thrust.png",
+				"hurt": FORGED_ITEMS_BASE + "armor/chest/loremaster_robes/hurt.png"
+			},
+			"legs": {
+				"walk": FORGED_ITEMS_BASE + "armor/legs/loremaster_skirt/walk.png",
+				"slash": FORGED_ITEMS_BASE + "armor/legs/loremaster_skirt/slash.png",
+				"thrust": FORGED_ITEMS_BASE + "armor/legs/loremaster_skirt/thrust.png",
+				"hurt": FORGED_ITEMS_BASE + "armor/legs/loremaster_skirt/hurt.png"
+			}
+		},
+		"effects": ["arcane_glow", "knowledge_aura"],
+		"glow_color": "#9370DB",
+		"stats": {"mana_bonus": 20, "wisdom_bonus": 5},
+		"cosmetic_only": false
 	}
 }
 
@@ -670,6 +1003,13 @@ func get_item_for_achievement(provider: String, app_id: String, api_name: String
 ## Get all forgeable achievement keys
 func get_all_forgeable_keys() -> Array:
 	return FORGE_ITEMS.keys()
+
+## Get item data by item_id (e.g., "loremaster_hood", "straw_hat")
+func get_item_by_id(item_id: String) -> Dictionary:
+	for key in FORGE_ITEMS:
+		if FORGE_ITEMS[key].get("item_id", "") == item_id:
+			return FORGE_ITEMS[key]
+	return {}
 
 ## Get items by rarity
 func get_items_by_rarity(rarity: ItemRarity) -> Array:
@@ -748,6 +1088,87 @@ func get_item_count_by_game() -> Dictionary:
 ## Get total forge item count
 func get_total_item_count() -> int:
 	return FORGE_ITEMS.size()
+
+## Game name lookup from achievement key (for Armory display)
+const GAME_NAMES = {
+	"1245620": "Elden Ring",
+	"374320": "Dark Souls III",
+	"413150": "Stardew Valley",
+	"105600": "Terraria",
+	"367520": "Hollow Knight",
+	"1145360": "Hades",
+	"292030": "The Witcher 3",
+	"72850": "Skyrim",
+	"582010": "Monster Hunter World",
+	"814380": "Sekiro",
+	"620": "Portal 2",
+	"220": "Half-Life 2",
+	"550": "Left 4 Dead 2",
+	"268500": "XCOM 2",
+	"504230": "Celeste",
+	"646570": "Slay the Spire",
+	"588650": "Dead Cells",
+	"268910": "Cuphead",
+	"BLOODBORNE": "Bloodborne",
+	"DEMONS_SOULS": "Demon's Souls",
+	"MCC": "Halo MCC",
+	"battlenet": "World of Warcraft",
+	"discord": "Discord",
+	"github": "GitHub",
+}
+
+## Convert ItemType enum to category string for Armory
+func _type_to_category(item_type: ItemType) -> String:
+	match item_type:
+		ItemType.WEAPON:
+			return "weapons"
+		ItemType.ARMOR_HEAD, ItemType.ARMOR_CHEST, ItemType.ARMOR_ARMS, ItemType.ARMOR_LEGS, ItemType.ARMOR_HANDS, ItemType.ARMOR_FEET:
+			return "armor"
+		ItemType.SHIELD:
+			return "shields"
+		ItemType.CAPE:
+			return "capes"
+		ItemType.ACCESSORY:
+			return "accessories"
+		_:
+			return "misc"
+
+## Get game name from achievement key
+func _get_game_from_key(key: String) -> String:
+	var parts = key.split("_")
+	if parts.size() < 2:
+		return "Unknown"
+
+	var provider = parts[0]
+	var game_id = parts[1]
+
+	# Handle PSN/Xbox/etc with underscore in game name
+	if provider == "psn" or provider == "xbox":
+		return GAME_NAMES.get(game_id, game_id)
+
+	# Steam: provider_appid_achievement
+	return GAME_NAMES.get(game_id, "Steam Game " + game_id)
+
+## Generate catalog array for Armory UI (dynamic generation from FORGE_ITEMS)
+## Returns array of dictionaries with: id, name, game, achievement, rarity, category, icon, lore
+func get_armory_catalog() -> Array:
+	var catalog = []
+
+	for key in FORGE_ITEMS:
+		var item = FORGE_ITEMS[key]
+		var entry = {
+			"id": item.get("item_id", ""),
+			"name": item.get("item_name", "Unknown Item"),
+			"game": _get_game_from_key(key),
+			"achievement": item.get("achievement_name", ""),
+			"rarity": get_rarity_name(item.get("rarity", ItemRarity.COMMON)),
+			"category": _type_to_category(item.get("item_type", ItemType.ACCESSORY)),
+			"icon": item.get("sprites", {}).get("icon", ""),
+			"lore": item.get("lore", item.get("description", ""))
+		}
+		catalog.append(entry)
+
+	return catalog
 
 ## Print database summary
 func print_summary() -> void:

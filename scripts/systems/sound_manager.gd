@@ -88,6 +88,8 @@ var sword_swing_sounds: Array[AudioStream] = []  # Sword whoosh (2 variations)
 var unarmed_swing_sounds: Array[AudioStream] = []  # Unarmed/fist whoosh
 var gunshot_sounds: Array[AudioStream] = []  # Gunshot sounds (for gun weapons)
 var battle_rifle_sounds: Array[AudioStream] = []  # Battle rifle sounds (Halo-style burst)
+var bullet_flesh_sounds: Array[AudioStream] = []  # Bullet impact on flesh (unarmored)
+var bullet_armor_sounds: Array[AudioStream] = []  # Bullet ricochet off armor
 
 # Player sounds
 var player_hurt_sounds: Array[AudioStream] = []  # Player hurt/death grunts (2 variations)
@@ -402,15 +404,38 @@ func _load_real_sounds() -> void:
 
 	print("  📊 Loaded %d gunshot sound variations" % gunshot_sounds.size())
 
-	# Load battle rifle sounds (Halo-style burst fire)
-	var battle_rifle_fire = load("res://assets/audio/sfx/combat/weapons/battle_rifle_fire.wav")
-	if battle_rifle_fire:
-		battle_rifle_sounds.append(battle_rifle_fire)
-		print("  ✅ Loaded battle_rifle_fire.wav")
-	else:
-		# Battle rifle sound is optional - will use pitch-shifted gunshot as fallback
-		print("  ℹ️ battle_rifle_fire.wav not found - will use pitch-shifted gunshot")
+	# Load battle rifle sounds (Halo-style 3-round burst) - 3 variations
+	for i in range(1, 4):
+		var br_path = "res://assets/audio/sfx/combat/weapons/battle_rifle_fire_%d.wav" % i
+		var br_sound = load(br_path)
+		if br_sound:
+			battle_rifle_sounds.append(br_sound)
+			print("  ✅ Loaded battle_rifle_fire_%d.wav" % i)
+		else:
+			print("  ℹ️ battle_rifle_fire_%d.wav not found" % i)
 	print("  📊 Loaded %d battle rifle sound variations" % battle_rifle_sounds.size())
+
+	# Load bullet flesh impact sounds - 4 variations
+	for i in range(1, 5):
+		var bf_path = "res://assets/audio/sfx/combat/hits/bullet_flesh_%d.wav" % i
+		var bf_sound = load(bf_path)
+		if bf_sound:
+			bullet_flesh_sounds.append(bf_sound)
+			print("  ✅ Loaded bullet_flesh_%d.wav" % i)
+		else:
+			print("  ℹ️ bullet_flesh_%d.wav not found" % i)
+	print("  📊 Loaded %d bullet flesh impact variations" % bullet_flesh_sounds.size())
+
+	# Load bullet armor ricochet sounds - 4 variations
+	for i in range(1, 5):
+		var ba_path = "res://assets/audio/sfx/combat/hits/bullet_armor_%d.wav" % i
+		var ba_sound = load(ba_path)
+		if ba_sound:
+			bullet_armor_sounds.append(ba_sound)
+			print("  ✅ Loaded bullet_armor_%d.wav" % i)
+		else:
+			print("  ℹ️ bullet_armor_%d.wav not found" % i)
+	print("  📊 Loaded %d bullet armor ricochet variations" % bullet_armor_sounds.size())
 
 	# Load player hurt sounds (grunt/pain sounds)
 	var player_hurt_1 = load("res://assets/audio/sfx/player/player_hurt_1.wav")
@@ -1277,6 +1302,36 @@ func play_battle_rifle_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 	player.volume_db = volume_db + sfx_volume_db - 3.0  # Slightly quieter than railgun
 	player.global_position = global_pos
 	player.pitch_scale = pitch
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play bullet impact sound (automatically chooses flesh or armor based on enemy type)
+## is_armored: true for armored targets (training dummy), false for flesh (skeletons, wolves)
+func play_bullet_impact_sound(global_pos: Vector2 = Vector2.ZERO, is_armored: bool = false, volume_db: float = -6.0) -> void:
+	if sfx_muted:
+		return
+
+	var sounds_to_use: Array[AudioStream]
+	if is_armored and not bullet_armor_sounds.is_empty():
+		sounds_to_use = bullet_armor_sounds
+	elif not bullet_flesh_sounds.is_empty():
+		sounds_to_use = bullet_flesh_sounds
+	else:
+		# Fallback to normal hit sound
+		play_normal_hit_sound(global_pos, volume_db)
+		return
+
+	# Pick random sound variation
+	var sound_stream = sounds_to_use[randi() % sounds_to_use.size()]
+
+	# Create player with slight pitch randomization for variety
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db + sfx_volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
 
 	get_tree().root.add_child(player)

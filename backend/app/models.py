@@ -371,6 +371,72 @@ class ChatMessage(Base):
     achievement_credit = relationship("AchievementCredit")
 
 
+class WeaponStats(Base):
+    """
+    Combat biography for forged weapons.
+    Tracks kills, crits, damage, and all combat history.
+    Virgin weapons (0/0/0/0) are pristine collectors' items.
+    Stats can never be reset - that's the point.
+    """
+    __tablename__ = 'weapon_stats'
+
+    id = Column(Integer, primary_key=True, index=True)
+    forged_achievement_id = Column(Integer, ForeignKey('forged_achievements.id'), unique=True, nullable=False, index=True)
+
+    # === CORE KILL STATS ===
+    kills_total = Column(Integer, default=0)
+    kills_by_type = Column(JSON, default=dict)  # {"skeleton": 42, "wolf": 15}
+    kills_elite = Column(Integer, default=0)
+    kills_boss = Column(Integer, default=0)
+    kills_pvp = Column(Integer, default=0)  # Future PvP kills
+
+    # === DAMAGE STATS ===
+    damage_total = Column(Integer, default=0)
+    damage_max_hit = Column(Integer, default=0)
+    damage_overkill = Column(Integer, default=0)
+
+    # === CRITICAL HIT STATS ===
+    crits_landed = Column(Integer, default=0)
+    hits_total = Column(Integer, default=0)
+    weakpoints_destroyed = Column(Integer, default=0)
+    chain_max_reached = Column(Integer, default=0)
+
+    # === USAGE STATS ===
+    swings_total = Column(Integer, default=0)
+    shots_fired = Column(Integer, default=0)
+    bursts_fired = Column(Integer, default=0)
+    time_equipped_seconds = Column(Integer, default=0)
+    sessions_equipped = Column(Integer, default=0)
+
+    # === NEGATIVE STATS (Virgin Weapon Value) ===
+    deaths_equipped = Column(Integer, default=0)
+    misses_total = Column(Integer, default=0)
+    battles_lost = Column(Integer, default=0)
+    show_negative_stats = Column(Boolean, default=True)  # Toggleable visibility
+
+    # === MILESTONE TIMESTAMPS ===
+    first_equipped_at = Column(DateTime, nullable=True)
+    first_kill_at = Column(DateTime, nullable=True)
+    first_crit_at = Column(DateTime, nullable=True)
+    milestone_100_kills_at = Column(DateTime, nullable=True)
+    milestone_1000_kills_at = Column(DateTime, nullable=True)
+    milestone_10000_kills_at = Column(DateTime, nullable=True)
+
+    # === INFINITE LEVEL SYSTEM ===
+    level = Column(Integer, default=0)
+    experience = Column(Integer, default=0)
+
+    # === PER-WEAPON ACHIEVEMENTS ===
+    achievements = Column(JSON, default=list)  # ["FIRST_BLOOD", "CENTURION"]
+
+    # === SYNC TRACKING ===
+    last_synced_at = Column(DateTime, nullable=True)
+    last_synced_from_ip = Column(String(45), nullable=True)
+
+    # Relationships
+    forged_achievement = relationship("ForgedAchievement", backref="weapon_stats_record")
+
+
 class BridgeTransaction(Base):
     """
     Tracks all bridge operations for audit/debugging.

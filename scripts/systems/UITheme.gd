@@ -181,9 +181,25 @@ static func create_tooltip_style() -> StyleBoxFlat:
 	style.shadow_offset = Vector2(2, 2)
 	return style
 
+var default_font: Font = null
+
 func _ready() -> void:
+	# Load the Inter font
+	_load_default_font()
 	# Defer tooltip styling until tree is ready
 	call_deferred("_apply_tooltip_theme")
+
+func _load_default_font() -> void:
+	"""Load and configure the default Inter font"""
+	var font_path = "res://assets/fonts/Inter-Regular.ttf"
+	if ResourceLoader.exists(font_path):
+		default_font = load(font_path)
+		if default_font:
+			print("[UITheme] ✅ Loaded Inter font: %s" % font_path)
+		else:
+			push_warning("[UITheme] Failed to load font: %s" % font_path)
+	else:
+		push_warning("[UITheme] Font file not found: %s" % font_path)
 
 func _apply_tooltip_theme() -> void:
 	"""Apply opaque tooltip styling to the project theme"""
@@ -194,6 +210,11 @@ func _apply_tooltip_theme() -> void:
 	if root:
 		if root.theme == null:
 			root.theme = Theme.new()
+
+		# Set default font for the entire UI
+		if default_font:
+			root.theme.default_font = default_font
+			print("[UITheme] ✅ Applied Inter font to root theme")
 
 		# Set tooltip panel style
 		root.theme.set_stylebox("panel", "TooltipPanel", tooltip_style)

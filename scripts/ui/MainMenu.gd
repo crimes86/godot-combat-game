@@ -1111,6 +1111,17 @@ func _create_mantle_panel():
 	mantle_logout_button.mouse_entered.connect(_on_button_hover)
 	vbox.add_child(mantle_logout_button)
 
+	# Exit button - always visible, quit the game
+	var exit_button = Button.new()
+	exit_button.name = "ExitButton"
+	exit_button.text = "Exit"
+	exit_button.custom_minimum_size = Vector2(80, 28)
+	exit_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_style_exit_button(exit_button)
+	exit_button.pressed.connect(_on_exit_pressed)
+	exit_button.mouse_entered.connect(_on_button_hover)
+	vbox.add_child(exit_button)
+
 	# Remove the old link button reference (no longer used in simplified UI)
 	mantle_link_button = null
 
@@ -1753,6 +1764,36 @@ func _on_mantle_logout_pressed():
 
 	# Update provider icons to non-connected state
 	_update_provider_icons_state()
+
+func _style_exit_button(button: Button):
+	"""Style the Exit button - subtle gray"""
+	var style_normal = StyleBoxFlat.new()
+	style_normal.bg_color = Color(0.15, 0.15, 0.15, 0.8)
+	style_normal.border_width_left = 1
+	style_normal.border_width_right = 1
+	style_normal.border_width_top = 1
+	style_normal.border_width_bottom = 1
+	style_normal.border_color = Color(0.3, 0.3, 0.3, 0.6)
+	style_normal.corner_radius_top_left = 4
+	style_normal.corner_radius_top_right = 4
+	style_normal.corner_radius_bottom_left = 4
+	style_normal.corner_radius_bottom_right = 4
+
+	var style_hover = style_normal.duplicate()
+	style_hover.bg_color = Color(0.25, 0.25, 0.25, 0.9)
+	style_hover.border_color = Color(0.4, 0.4, 0.4, 0.8)
+
+	var style_pressed = style_normal.duplicate()
+	style_pressed.bg_color = Color(0.1, 0.1, 0.1, 0.9)
+
+	button.add_theme_stylebox_override("normal", style_normal)
+	button.add_theme_stylebox_override("hover", style_hover)
+	button.add_theme_stylebox_override("pressed", style_pressed)
+	button.add_theme_stylebox_override("focus", style_hover)
+
+	button.add_theme_font_size_override("font_size", 13)
+	button.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.9))
+	button.add_theme_color_override("font_hover_color", Color(0.8, 0.8, 0.8, 1.0))
 
 func _style_guest_button(button: Button):
 	"""Style the Continue as Guest button"""

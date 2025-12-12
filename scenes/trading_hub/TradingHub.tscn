@@ -1,10 +1,14 @@
-[gd_scene load_steps=12 format=3 uid="uid://trading_hub_001"]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/trading_hub/TradingHub.gd" id="1_hub"]
 
+# ═══════════════════════════════════════════════════════════════
+# GRADIENT TEXTURES FOR LIGHTING
+# ═══════════════════════════════════════════════════════════════
+
 [sub_resource type="Gradient" id="Gradient_torch"]
-offsets = PackedFloat32Array(0, 0.2, 0.5, 0.8, 1)
-colors = PackedColorArray(1, 0.7, 0.3, 1, 1, 0.5, 0.2, 0.8, 0.8, 0.3, 0.1, 0.4, 0.4, 0.15, 0.05, 0.1, 0, 0, 0, 0)
+offsets = PackedFloat32Array(0, 0.15, 0.4, 0.7, 1)
+colors = PackedColorArray(1, 0.6, 0.2, 1, 1, 0.45, 0.15, 0.85, 0.8, 0.3, 0.1, 0.5, 0.5, 0.18, 0.05, 0.2, 0, 0, 0, 0)
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_torch"]
 gradient = SubResource("Gradient_torch")
@@ -15,8 +19,8 @@ fill_from = Vector2(0.5, 0.5)
 fill_to = Vector2(1, 0.5)
 
 [sub_resource type="Gradient" id="Gradient_fire"]
-offsets = PackedFloat32Array(0, 0.15, 0.35, 0.6, 1)
-colors = PackedColorArray(1, 0.9, 0.6, 1, 1, 0.6, 0.2, 0.9, 0.9, 0.4, 0.1, 0.6, 0.5, 0.2, 0.05, 0.2, 0, 0, 0, 0)
+offsets = PackedFloat32Array(0, 0.1, 0.25, 0.5, 1)
+colors = PackedColorArray(1, 0.85, 0.5, 1, 1, 0.55, 0.15, 0.95, 0.9, 0.35, 0.08, 0.7, 0.6, 0.2, 0.05, 0.3, 0, 0, 0, 0)
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_fire"]
 gradient = SubResource("Gradient_fire")
@@ -28,7 +32,7 @@ fill_to = Vector2(1, 0.5)
 
 [sub_resource type="Gradient" id="Gradient_puddle"]
 offsets = PackedFloat32Array(0, 0.5, 1)
-colors = PackedColorArray(0.15, 0.2, 0.25, 0.4, 0.1, 0.15, 0.2, 0.2, 0.05, 0.08, 0.12, 0)
+colors = PackedColorArray(0.12, 0.16, 0.22, 0.5, 0.08, 0.12, 0.18, 0.3, 0.04, 0.06, 0.1, 0)
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_puddle"]
 gradient = SubResource("Gradient_puddle")
@@ -38,344 +42,812 @@ fill = 1
 fill_from = Vector2(0.5, 0.5)
 fill_to = Vector2(1, 0.5)
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_h"]
-size = Vector2(3200, 100)
+[sub_resource type="Gradient" id="Gradient_mist"]
+offsets = PackedFloat32Array(0, 0.3, 0.6, 1)
+colors = PackedColorArray(0.15, 0.18, 0.22, 0.2, 0.12, 0.15, 0.18, 0.12, 0.1, 0.12, 0.15, 0.05, 0.08, 0.1, 0.12, 0)
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_v"]
-size = Vector2(100, 2700)
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_mist"]
+gradient = SubResource("Gradient_mist")
+width = 256
+height = 256
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_exit_gap"]
-size = Vector2(400, 100)
+[sub_resource type="Gradient" id="Gradient_portal"]
+offsets = PackedFloat32Array(0, 0.25, 0.5, 1)
+colors = PackedColorArray(0.25, 0.45, 0.7, 0.9, 0.18, 0.35, 0.6, 0.6, 0.1, 0.25, 0.5, 0.3, 0, 0.1, 0.2, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_portal"]
+gradient = SubResource("Gradient_portal")
+width = 256
+height = 256
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="Gradient_ambient"]
+offsets = PackedFloat32Array(0, 0.3, 0.6, 1)
+colors = PackedColorArray(0.08, 0.06, 0.04, 0.4, 0.06, 0.05, 0.03, 0.25, 0.04, 0.03, 0.02, 0.1, 0, 0, 0, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_ambient"]
+gradient = SubResource("Gradient_ambient")
+width = 512
+height = 512
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="Gradient_floor_detail"]
+offsets = PackedFloat32Array(0, 0.4, 0.7, 1)
+colors = PackedColorArray(0.06, 0.055, 0.05, 0.3, 0.05, 0.045, 0.04, 0.2, 0.04, 0.035, 0.03, 0.1, 0.03, 0.025, 0.02, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_floor_detail"]
+gradient = SubResource("Gradient_floor_detail")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+# ═══════════════════════════════════════════════════════════════
+# LABEL SETTINGS
+# ═══════════════════════════════════════════════════════════════
 
 [sub_resource type="LabelSettings" id="LabelSettings_sign"]
-font_size = 16
-font_color = Color(0.7, 0.75, 0.8, 1)
+font_size = 14
+font_color = Color(0.6, 0.65, 0.7, 0.9)
 outline_size = 2
-outline_color = Color(0, 0, 0, 0.9)
+outline_color = Color(0, 0, 0, 0.95)
+
+[sub_resource type="LabelSettings" id="LabelSettings_title"]
+font_size = 28
+font_color = Color(0.9, 0.75, 0.5, 1)
+outline_size = 4
+outline_color = Color(0, 0, 0, 1)
+
+# ═══════════════════════════════════════════════════════════════
+# MAIN SCENE
+# ═══════════════════════════════════════════════════════════════
 
 [node name="TradingHub" type="Node2D"]
 script = ExtResource("1_hub")
 
 [node name="CanvasModulate" type="CanvasModulate" parent="."]
-color = Color(0.25, 0.25, 0.28, 1)
+color = Color(0.12, 0.11, 0.1, 1)
 
+# ═══════════════════════════════════════════════════════════════
+# ENVIRONMENT - Cavern floors (hub is now at Y=-2500 center)
+# Hub center at (0, -2500), corridors extend from there
+# ═══════════════════════════════════════════════════════════════
 [node name="Environment" type="Node2D" parent="."]
 z_index = -10
 
-[node name="Floor" type="ColorRect" parent="Environment"]
-offset_left = -1600.0
-offset_top = -1350.0
-offset_right = 1600.0
-offset_bottom = 1350.0
-color = Color(0.08, 0.08, 0.1, 1)
+# --- CENTRAL HUB FLOOR (at Y=-2500) ---
+[node name="CentralHubFloor" type="Polygon2D" parent="Environment"]
+color = Color(0.055, 0.05, 0.045, 1)
+polygon = PackedVector2Array(-900, -3400, -700, -3550, 700, -3550, 900, -3400, 900, -1600, 700, -1450, -700, -1450, -900, -1600)
 
-[node name="FloorTexture" type="ColorRect" parent="Environment"]
-offset_left = -1500.0
-offset_top = -1250.0
-offset_right = 1500.0
-offset_bottom = 1250.0
-color = Color(0.1, 0.1, 0.12, 1)
+[node name="CentralHubFloorInner" type="Polygon2D" parent="Environment"]
+color = Color(0.065, 0.06, 0.055, 1)
+polygon = PackedVector2Array(-750, -3300, -550, -3450, 550, -3450, 750, -3300, 750, -1700, 550, -1550, -550, -1550, -750, -1700)
 
+[node name="CentralHubFloorCenter" type="Polygon2D" parent="Environment"]
+color = Color(0.075, 0.07, 0.065, 1)
+polygon = PackedVector2Array(-500, -3100, -350, -3200, 350, -3200, 500, -3100, 500, -1900, 350, -1800, -350, -1800, -500, -1900)
+
+# --- SOUTH CORRIDOR (Center - straight shot from Y=2000 to hub at Y=-1450) ---
+# This is the most direct route - enters from chunk 0
+[node name="CorridorSouthFloor1" type="Polygon2D" parent="Environment"]
+position = Vector2(0, 0)
+color = Color(0.045, 0.04, 0.035, 1)
+polygon = PackedVector2Array(-180, 2200, 180, 2200, 180, 1400, -180, 1400)
+
+[node name="CorridorSouthFloor2" type="Polygon2D" parent="Environment"]
+position = Vector2(0, 0)
+color = Color(0.048, 0.043, 0.038, 1)
+polygon = PackedVector2Array(-180, 1400, 180, 1400, 180, 600, -180, 600)
+
+[node name="CorridorSouthFloor3" type="Polygon2D" parent="Environment"]
+position = Vector2(0, 0)
+color = Color(0.05, 0.045, 0.04, 1)
+polygon = PackedVector2Array(-180, 600, 180, 600, 180, -200, -180, -200)
+
+[node name="CorridorSouthFloor4" type="Polygon2D" parent="Environment"]
+position = Vector2(0, 0)
+color = Color(0.052, 0.047, 0.042, 1)
+polygon = PackedVector2Array(-180, -200, 180, -200, 200, -1000, -200, -1000)
+
+[node name="CorridorSouthFloor5" type="Polygon2D" parent="Environment"]
+position = Vector2(0, 0)
+color = Color(0.055, 0.05, 0.045, 1)
+polygon = PackedVector2Array(-200, -1000, 200, -1000, 200, -1450, -200, -1450)
+
+# --- WEST CORRIDOR (Left - curves down from chunk -1, longer path) ---
+# Starts at X=-2200 Y=2000, curves west then north to hub
+[node name="CorridorWestFloor1" type="Polygon2D" parent="Environment"]
+color = Color(0.042, 0.038, 0.034, 1)
+polygon = PackedVector2Array(-2400, 2200, -2000, 2200, -2000, 1600, -2400, 1600)
+
+[node name="CorridorWestFloor2" type="Polygon2D" parent="Environment"]
+color = Color(0.044, 0.04, 0.036, 1)
+polygon = PackedVector2Array(-2400, 1600, -2000, 1600, -1800, 1200, -2200, 1200)
+
+[node name="CorridorWestFloor3" type="Polygon2D" parent="Environment"]
+color = Color(0.046, 0.042, 0.038, 1)
+polygon = PackedVector2Array(-2200, 1200, -1800, 1200, -1600, 600, -2000, 600)
+
+[node name="CorridorWestFloor4" type="Polygon2D" parent="Environment"]
+color = Color(0.048, 0.044, 0.04, 1)
+polygon = PackedVector2Array(-2000, 600, -1600, 600, -1400, 0, -1800, 0)
+
+[node name="CorridorWestFloor5" type="Polygon2D" parent="Environment"]
+color = Color(0.05, 0.046, 0.042, 1)
+polygon = PackedVector2Array(-1800, 0, -1400, 0, -1200, -600, -1600, -600)
+
+[node name="CorridorWestFloor6" type="Polygon2D" parent="Environment"]
+color = Color(0.052, 0.048, 0.044, 1)
+polygon = PackedVector2Array(-1600, -600, -1200, -600, -1100, -1200, -1500, -1200)
+
+[node name="CorridorWestFloor7" type="Polygon2D" parent="Environment"]
+color = Color(0.054, 0.05, 0.046, 1)
+polygon = PackedVector2Array(-1500, -1200, -1100, -1200, -1000, -1800, -1000, -1800)
+
+[node name="CorridorWestToHub" type="Polygon2D" parent="Environment"]
+color = Color(0.055, 0.05, 0.045, 1)
+polygon = PackedVector2Array(-1100, -1800, -900, -1800, -900, -2300, -1100, -2300)
+
+# --- EAST CORRIDOR (Right - curves down from chunk +1, longer path) ---
+# Starts at X=2200 Y=2000, curves east then north to hub
+[node name="CorridorEastFloor1" type="Polygon2D" parent="Environment"]
+color = Color(0.042, 0.038, 0.034, 1)
+polygon = PackedVector2Array(2000, 2200, 2400, 2200, 2400, 1600, 2000, 1600)
+
+[node name="CorridorEastFloor2" type="Polygon2D" parent="Environment"]
+color = Color(0.044, 0.04, 0.036, 1)
+polygon = PackedVector2Array(2000, 1600, 2400, 1600, 2200, 1200, 1800, 1200)
+
+[node name="CorridorEastFloor3" type="Polygon2D" parent="Environment"]
+color = Color(0.046, 0.042, 0.038, 1)
+polygon = PackedVector2Array(1800, 1200, 2200, 1200, 2000, 600, 1600, 600)
+
+[node name="CorridorEastFloor4" type="Polygon2D" parent="Environment"]
+color = Color(0.048, 0.044, 0.04, 1)
+polygon = PackedVector2Array(1600, 600, 2000, 600, 1800, 0, 1400, 0)
+
+[node name="CorridorEastFloor5" type="Polygon2D" parent="Environment"]
+color = Color(0.05, 0.046, 0.042, 1)
+polygon = PackedVector2Array(1400, 0, 1800, 0, 1600, -600, 1200, -600)
+
+[node name="CorridorEastFloor6" type="Polygon2D" parent="Environment"]
+color = Color(0.052, 0.048, 0.044, 1)
+polygon = PackedVector2Array(1200, -600, 1600, -600, 1500, -1200, 1100, -1200)
+
+[node name="CorridorEastFloor7" type="Polygon2D" parent="Environment"]
+color = Color(0.054, 0.05, 0.046, 1)
+polygon = PackedVector2Array(1100, -1200, 1500, -1200, 1100, -1800, 1000, -1800)
+
+[node name="CorridorEastToHub" type="Polygon2D" parent="Environment"]
+color = Color(0.055, 0.05, 0.045, 1)
+polygon = PackedVector2Array(900, -1800, 1100, -1800, 1100, -2300, 900, -2300)
+
+# --- NORTH EXIT CORRIDOR (to Zone 2) ---
+[node name="CorridorNorthFloor" type="Polygon2D" parent="Environment"]
+color = Color(0.04, 0.042, 0.048, 1)
+polygon = PackedVector2Array(-180, -3550, 180, -3550, 180, -4200, -180, -4200)
+
+# ═══════════════════════════════════════════════════════════════
+# WALLS - Rocky cavern walls
+# ═══════════════════════════════════════════════════════════════
 [node name="Walls" type="Node2D" parent="Environment"]
 
-[node name="WallNorth" type="ColorRect" parent="Environment/Walls"]
-offset_left = -1600.0
-offset_top = -1350.0
-offset_right = 1600.0
-offset_bottom = -1250.0
-color = Color(0.12, 0.11, 0.1, 1)
+# Hub walls
+[node name="HubWallNW" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.09, 0.085, 0.08, 1)
+polygon = PackedVector2Array(-1100, -3700, -200, -3700, -200, -3580, -700, -3580, -950, -3430, -1100, -3430)
 
-[node name="WallSouth" type="ColorRect" parent="Environment/Walls"]
-offset_left = -1600.0
-offset_top = 1250.0
-offset_right = 1600.0
-offset_bottom = 1350.0
-color = Color(0.12, 0.11, 0.1, 1)
+[node name="HubWallNE" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.09, 0.085, 0.08, 1)
+polygon = PackedVector2Array(200, -3700, 1100, -3700, 1100, -3430, 950, -3430, 700, -3580, 200, -3580)
 
-[node name="WallWest" type="ColorRect" parent="Environment/Walls"]
-offset_left = -1600.0
-offset_top = -1350.0
-offset_right = -1500.0
-offset_bottom = 1350.0
-color = Color(0.14, 0.13, 0.12, 1)
+[node name="HubWallSW" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.085, 0.08, 0.075, 1)
+polygon = PackedVector2Array(-1100, -1570, -950, -1570, -700, -1420, -200, -1420, -200, -1300, -1100, -1300)
 
-[node name="WallEast" type="ColorRect" parent="Environment/Walls"]
-offset_left = 1500.0
-offset_top = -1350.0
-offset_right = 1600.0
-offset_bottom = 1350.0
-color = Color(0.14, 0.13, 0.12, 1)
+[node name="HubWallSE" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.085, 0.08, 0.075, 1)
+polygon = PackedVector2Array(200, -1420, 700, -1420, 950, -1570, 1100, -1570, 1100, -1300, 200, -1300)
 
-[node name="SouthExitCorridor" type="ColorRect" parent="Environment"]
-offset_left = -200.0
-offset_top = 1250.0
-offset_right = 200.0
-offset_bottom = 1350.0
-color = Color(0.05, 0.05, 0.06, 1)
+[node name="HubWallW" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.095, 0.09, 0.085, 1)
+polygon = PackedVector2Array(-1100, -3400, -950, -3400, -950, -1600, -1100, -1600)
 
-[node name="NorthExitCorridor" type="ColorRect" parent="Environment"]
-offset_left = -200.0
-offset_top = -1350.0
-offset_right = 200.0
-offset_bottom = -1250.0
-color = Color(0.05, 0.05, 0.06, 1)
+[node name="HubWallE" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.095, 0.09, 0.085, 1)
+polygon = PackedVector2Array(950, -3400, 1100, -3400, 1100, -1600, 950, -1600)
 
+# South corridor walls
+[node name="SouthWallW" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.08, 0.075, 0.07, 1)
+polygon = PackedVector2Array(-280, 2300, -200, 2300, -200, -1300, -280, -1300)
+
+[node name="SouthWallE" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.08, 0.075, 0.07, 1)
+polygon = PackedVector2Array(200, 2300, 280, 2300, 280, -1300, 200, -1300)
+
+# West corridor walls (following the curve)
+[node name="WestWallOuter1" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.075, 0.07, 0.065, 1)
+polygon = PackedVector2Array(-2500, 2300, -2400, 2300, -2400, 1500, -2500, 1500)
+
+[node name="WestWallOuter2" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.078, 0.073, 0.068, 1)
+polygon = PackedVector2Array(-2500, 1500, -2300, 1100, -2100, 500, -2200, 500)
+
+[node name="WestWallOuter3" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.08, 0.075, 0.07, 1)
+polygon = PackedVector2Array(-2100, 500, -1900, -100, -1700, -700, -1800, -700)
+
+[node name="WestWallOuter4" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.082, 0.077, 0.072, 1)
+polygon = PackedVector2Array(-1700, -700, -1600, -1300, -1200, -1900, -1300, -1900)
+
+[node name="WestWallInner1" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.072, 0.067, 0.062, 1)
+polygon = PackedVector2Array(-2000, 2300, -1900, 2300, -1900, 1700, -2000, 1700)
+
+[node name="WestWallInner2" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.074, 0.069, 0.064, 1)
+polygon = PackedVector2Array(-1900, 1700, -1700, 1300, -1500, 700, -1600, 700)
+
+[node name="WestWallInner3" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.076, 0.071, 0.066, 1)
+polygon = PackedVector2Array(-1500, 700, -1300, 100, -1100, -500, -1200, -500)
+
+[node name="WestWallInner4" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.078, 0.073, 0.068, 1)
+polygon = PackedVector2Array(-1100, -500, -1000, -1100, -800, -1700, -900, -1700)
+
+# East corridor walls (following the curve)
+[node name="EastWallOuter1" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.075, 0.07, 0.065, 1)
+polygon = PackedVector2Array(2400, 2300, 2500, 2300, 2500, 1500, 2400, 1500)
+
+[node name="EastWallOuter2" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.078, 0.073, 0.068, 1)
+polygon = PackedVector2Array(2200, 500, 2100, 1100, 2300, 1500, 2500, 1500)
+
+[node name="EastWallOuter3" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.08, 0.075, 0.07, 1)
+polygon = PackedVector2Array(1800, -700, 1900, -100, 2100, 500, 2200, 500)
+
+[node name="EastWallOuter4" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.082, 0.077, 0.072, 1)
+polygon = PackedVector2Array(1300, -1900, 1200, -1900, 1600, -1300, 1700, -700, 1800, -700)
+
+[node name="EastWallInner1" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.072, 0.067, 0.062, 1)
+polygon = PackedVector2Array(1900, 2300, 2000, 2300, 2000, 1700, 1900, 1700)
+
+[node name="EastWallInner2" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.074, 0.069, 0.064, 1)
+polygon = PackedVector2Array(1600, 700, 1500, 700, 1700, 1300, 1900, 1700)
+
+[node name="EastWallInner3" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.076, 0.071, 0.066, 1)
+polygon = PackedVector2Array(1200, -500, 1100, -500, 1300, 100, 1500, 700, 1600, 700)
+
+[node name="EastWallInner4" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.078, 0.073, 0.068, 1)
+polygon = PackedVector2Array(900, -1700, 800, -1700, 1000, -1100, 1100, -500, 1200, -500)
+
+# North corridor walls
+[node name="NorthWallW" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.07, 0.072, 0.078, 1)
+polygon = PackedVector2Array(-280, -3550, -200, -3550, -200, -4300, -280, -4300)
+
+[node name="NorthWallE" type="Polygon2D" parent="Environment/Walls"]
+color = Color(0.07, 0.072, 0.078, 1)
+polygon = PackedVector2Array(200, -3550, 280, -3550, 280, -4300, 200, -4300)
+
+# ═══════════════════════════════════════════════════════════════
+# ALCOVES - 4 semi-private trading spots in hub corners
+# ═══════════════════════════════════════════════════════════════
+[node name="Alcoves" type="Node2D" parent="Environment"]
+
+[node name="AlcoveNW" type="Polygon2D" parent="Environment/Alcoves"]
+color = Color(0.04, 0.038, 0.035, 1)
+polygon = PackedVector2Array(-850, -3350, -650, -3350, -650, -3150, -850, -3150)
+
+[node name="AlcoveNE" type="Polygon2D" parent="Environment/Alcoves"]
+color = Color(0.04, 0.038, 0.035, 1)
+polygon = PackedVector2Array(650, -3350, 850, -3350, 850, -3150, 650, -3150)
+
+[node name="AlcoveSW" type="Polygon2D" parent="Environment/Alcoves"]
+color = Color(0.04, 0.038, 0.035, 1)
+polygon = PackedVector2Array(-850, -1850, -650, -1850, -650, -1650, -850, -1650)
+
+[node name="AlcoveSE" type="Polygon2D" parent="Environment/Alcoves"]
+color = Color(0.04, 0.038, 0.035, 1)
+polygon = PackedVector2Array(650, -1850, 850, -1850, 850, -1650, 650, -1650)
+
+# ═══════════════════════════════════════════════════════════════
+# COLLISION - Static body for walls
+# ═══════════════════════════════════════════════════════════════
 [node name="Collision" type="StaticBody2D" parent="."]
 
-[node name="WallNorth" type="CollisionShape2D" parent="Collision"]
-position = Vector2(0, -1300)
-shape = SubResource("RectangleShape2D_wall_h")
+# Hub walls
+[node name="HubWallW" type="CollisionPolygon2D" parent="Collision"]
+polygon = PackedVector2Array(-1100, -3700, -950, -3700, -950, -1300, -1100, -1300)
 
-[node name="WallSouth" type="CollisionShape2D" parent="Collision"]
-position = Vector2(0, 1300)
-shape = SubResource("RectangleShape2D_wall_h")
+[node name="HubWallE" type="CollisionPolygon2D" parent="Collision"]
+polygon = PackedVector2Array(950, -3700, 1100, -3700, 1100, -1300, 950, -1300)
 
-[node name="WallWest" type="CollisionShape2D" parent="Collision"]
-position = Vector2(-1550, 0)
-shape = SubResource("RectangleShape2D_wall_v")
+[node name="HubWallN" type="CollisionPolygon2D" parent="Collision"]
+polygon = PackedVector2Array(-200, -3700, 200, -3700, 200, -3580, -200, -3580)
 
-[node name="WallEast" type="CollisionShape2D" parent="Collision"]
-position = Vector2(1550, 0)
-shape = SubResource("RectangleShape2D_wall_v")
+[node name="HubWallS" type="CollisionPolygon2D" parent="Collision"]
+polygon = PackedVector2Array(-200, -1300, 200, -1300, 200, -1420, -200, -1420)
 
-[node name="ExitGapNorthLeft" type="CollisionShape2D" parent="Collision"]
-position = Vector2(-800, -1300)
-shape = SubResource("RectangleShape2D_exit_gap")
-disabled = true
+# South corridor walls
+[node name="SouthWallW" type="CollisionPolygon2D" parent="Collision"]
+polygon = PackedVector2Array(-280, 2300, -200, 2300, -200, -1300, -280, -1300)
 
-[node name="ExitGapSouthLeft" type="CollisionShape2D" parent="Collision"]
-position = Vector2(-800, 1300)
-shape = SubResource("RectangleShape2D_exit_gap")
-disabled = true
+[node name="SouthWallE" type="CollisionPolygon2D" parent="Collision"]
+polygon = PackedVector2Array(200, 2300, 280, 2300, 280, -1300, 200, -1300)
 
+# North corridor walls
+[node name="NorthWallW" type="CollisionPolygon2D" parent="Collision"]
+polygon = PackedVector2Array(-280, -3550, -200, -3550, -200, -4300, -280, -4300)
+
+[node name="NorthWallE" type="CollisionPolygon2D" parent="Collision"]
+polygon = PackedVector2Array(200, -3550, 280, -3550, 280, -4300, 200, -4300)
+
+# ═══════════════════════════════════════════════════════════════
+# LIGHTING - Torches and fire pit
+# ═══════════════════════════════════════════════════════════════
 [node name="Lighting" type="Node2D" parent="."]
 
+# Central fire pit (in hub at Y=-2500)
 [node name="CentralFirePit" type="PointLight2D" parent="Lighting"]
-position = Vector2(0, -100)
-color = Color(1, 0.65, 0.35, 1)
-energy = 1.2
+position = Vector2(0, -2500)
+color = Color(1, 0.65, 0.3, 1)
+energy = 2.0
 texture = SubResource("GradientTexture2D_fire")
-texture_scale = 4.0
+texture_scale = 6.0
 
-[node name="Torch1" type="PointLight2D" parent="Lighting"]
-position = Vector2(-600, -400)
-color = Color(1, 0.6, 0.3, 1)
-energy = 0.6
+# Hub corner torches
+[node name="TorchHubNW" type="PointLight2D" parent="Lighting"]
+position = Vector2(-750, -3300)
+color = Color(1, 0.55, 0.2, 1)
+energy = 0.8
 texture = SubResource("GradientTexture2D_torch")
-texture_scale = 1.5
+texture_scale = 2.2
 
-[node name="Torch2" type="PointLight2D" parent="Lighting"]
-position = Vector2(600, -400)
-color = Color(1, 0.6, 0.3, 1)
-energy = 0.6
+[node name="TorchHubNE" type="PointLight2D" parent="Lighting"]
+position = Vector2(750, -3300)
+color = Color(1, 0.55, 0.2, 1)
+energy = 0.8
 texture = SubResource("GradientTexture2D_torch")
-texture_scale = 1.5
+texture_scale = 2.2
 
-[node name="Torch3" type="PointLight2D" parent="Lighting"]
-position = Vector2(-600, 200)
-color = Color(1, 0.6, 0.3, 1)
-energy = 0.6
+[node name="TorchHubSW" type="PointLight2D" parent="Lighting"]
+position = Vector2(-750, -1700)
+color = Color(1, 0.55, 0.2, 1)
+energy = 0.8
 texture = SubResource("GradientTexture2D_torch")
-texture_scale = 1.5
+texture_scale = 2.2
 
-[node name="Torch4" type="PointLight2D" parent="Lighting"]
-position = Vector2(600, 200)
-color = Color(1, 0.6, 0.3, 1)
-energy = 0.6
+[node name="TorchHubSE" type="PointLight2D" parent="Lighting"]
+position = Vector2(750, -1700)
+color = Color(1, 0.55, 0.2, 1)
+energy = 0.8
 texture = SubResource("GradientTexture2D_torch")
-texture_scale = 1.5
+texture_scale = 2.2
 
-[node name="Torch5" type="PointLight2D" parent="Lighting"]
-position = Vector2(-1200, -800)
-color = Color(1, 0.55, 0.25, 1)
-energy = 0.5
-texture = SubResource("GradientTexture2D_torch")
-texture_scale = 1.3
-
-[node name="Torch6" type="PointLight2D" parent="Lighting"]
-position = Vector2(1200, -800)
-color = Color(1, 0.55, 0.25, 1)
-energy = 0.5
-texture = SubResource("GradientTexture2D_torch")
-texture_scale = 1.3
-
-[node name="Torch7" type="PointLight2D" parent="Lighting"]
-position = Vector2(-1200, 600)
-color = Color(1, 0.55, 0.25, 1)
-energy = 0.5
-texture = SubResource("GradientTexture2D_torch")
-texture_scale = 1.3
-
-[node name="Torch8" type="PointLight2D" parent="Lighting"]
-position = Vector2(1200, 600)
-color = Color(1, 0.55, 0.25, 1)
-energy = 0.5
-texture = SubResource("GradientTexture2D_torch")
-texture_scale = 1.3
-
-[node name="SouthEntryLight" type="PointLight2D" parent="Lighting"]
-position = Vector2(0, 1100)
-color = Color(0.4, 0.45, 0.5, 1)
-energy = 0.4
+[node name="TorchHubW" type="PointLight2D" parent="Lighting"]
+position = Vector2(-850, -2500)
+color = Color(1, 0.5, 0.18, 1)
+energy = 0.7
 texture = SubResource("GradientTexture2D_torch")
 texture_scale = 2.0
 
-[node name="NorthExitLight" type="PointLight2D" parent="Lighting"]
+[node name="TorchHubE" type="PointLight2D" parent="Lighting"]
+position = Vector2(850, -2500)
+color = Color(1, 0.5, 0.18, 1)
+energy = 0.7
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 2.0
+
+# South corridor torches (every ~600 units)
+[node name="TorchSouth1" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, 1800)
+color = Color(1, 0.5, 0.18, 1)
+energy = 0.55
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.8
+
+[node name="TorchSouth2" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, 1200)
+color = Color(1, 0.5, 0.18, 1)
+energy = 0.55
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.8
+
+[node name="TorchSouth3" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, 600)
+color = Color(1, 0.5, 0.18, 1)
+energy = 0.55
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.8
+
+[node name="TorchSouth4" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, 0)
+color = Color(1, 0.5, 0.18, 1)
+energy = 0.55
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.8
+
+[node name="TorchSouth5" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, -600)
+color = Color(1, 0.52, 0.2, 1)
+energy = 0.6
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.9
+
+[node name="TorchSouth6" type="PointLight2D" parent="Lighting"]
 position = Vector2(0, -1100)
-color = Color(0.3, 0.4, 0.5, 1)
-energy = 0.3
+color = Color(1, 0.54, 0.22, 1)
+energy = 0.65
 texture = SubResource("GradientTexture2D_torch")
 texture_scale = 2.0
 
+# West corridor torches (along the curved path)
+[node name="TorchWest1" type="PointLight2D" parent="Lighting"]
+position = Vector2(-2200, 1900)
+color = Color(1, 0.48, 0.16, 1)
+energy = 0.5
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.7
+
+[node name="TorchWest2" type="PointLight2D" parent="Lighting"]
+position = Vector2(-2100, 1400)
+color = Color(1, 0.48, 0.16, 1)
+energy = 0.5
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.7
+
+[node name="TorchWest3" type="PointLight2D" parent="Lighting"]
+position = Vector2(-1900, 900)
+color = Color(1, 0.5, 0.18, 1)
+energy = 0.52
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.75
+
+[node name="TorchWest4" type="PointLight2D" parent="Lighting"]
+position = Vector2(-1700, 300)
+color = Color(1, 0.5, 0.18, 1)
+energy = 0.54
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.8
+
+[node name="TorchWest5" type="PointLight2D" parent="Lighting"]
+position = Vector2(-1500, -300)
+color = Color(1, 0.52, 0.2, 1)
+energy = 0.56
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.85
+
+[node name="TorchWest6" type="PointLight2D" parent="Lighting"]
+position = Vector2(-1300, -900)
+color = Color(1, 0.52, 0.2, 1)
+energy = 0.58
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.9
+
+[node name="TorchWest7" type="PointLight2D" parent="Lighting"]
+position = Vector2(-1000, -1500)
+color = Color(1, 0.54, 0.22, 1)
+energy = 0.6
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.95
+
+# East corridor torches (along the curved path)
+[node name="TorchEast1" type="PointLight2D" parent="Lighting"]
+position = Vector2(2200, 1900)
+color = Color(1, 0.48, 0.16, 1)
+energy = 0.5
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.7
+
+[node name="TorchEast2" type="PointLight2D" parent="Lighting"]
+position = Vector2(2100, 1400)
+color = Color(1, 0.48, 0.16, 1)
+energy = 0.5
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.7
+
+[node name="TorchEast3" type="PointLight2D" parent="Lighting"]
+position = Vector2(1900, 900)
+color = Color(1, 0.5, 0.18, 1)
+energy = 0.52
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.75
+
+[node name="TorchEast4" type="PointLight2D" parent="Lighting"]
+position = Vector2(1700, 300)
+color = Color(1, 0.5, 0.18, 1)
+energy = 0.54
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.8
+
+[node name="TorchEast5" type="PointLight2D" parent="Lighting"]
+position = Vector2(1500, -300)
+color = Color(1, 0.52, 0.2, 1)
+energy = 0.56
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.85
+
+[node name="TorchEast6" type="PointLight2D" parent="Lighting"]
+position = Vector2(1300, -900)
+color = Color(1, 0.52, 0.2, 1)
+energy = 0.58
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.9
+
+[node name="TorchEast7" type="PointLight2D" parent="Lighting"]
+position = Vector2(1000, -1500)
+color = Color(1, 0.54, 0.22, 1)
+energy = 0.6
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 1.95
+
+# North corridor - blue Zone 2 glow
+[node name="TorchNorth1" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, -3700)
+color = Color(0.35, 0.5, 0.75, 1)
+energy = 0.6
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 2.0
+
+[node name="TorchNorth2" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, -4000)
+color = Color(0.3, 0.45, 0.7, 1)
+energy = 0.7
+texture = SubResource("GradientTexture2D_torch")
+texture_scale = 2.2
+
+[node name="Zone2PortalGlow" type="PointLight2D" parent="Lighting"]
+position = Vector2(0, -4200)
+color = Color(0.25, 0.45, 0.8, 1)
+energy = 1.0
+texture = SubResource("GradientTexture2D_portal")
+texture_scale = 3.5
+
+# ═══════════════════════════════════════════════════════════════
+# PROPS - Fire pit, tables, atmosphere
+# ═══════════════════════════════════════════════════════════════
 [node name="Props" type="Node2D" parent="."]
 z_index = -1
 
-[node name="FirePitBase" type="ColorRect" parent="Props"]
-offset_left = -80.0
-offset_top = -180.0
-offset_right = 80.0
-offset_bottom = -20.0
+# Central fire pit
+[node name="FirePitOuter" type="Polygon2D" parent="Props"]
+position = Vector2(0, -2500)
+color = Color(0.18, 0.14, 0.1, 1)
+polygon = PackedVector2Array(-80, -80, 80, -80, 90, 0, 80, 80, -80, 80, -90, 0)
+
+[node name="FirePitInner" type="Polygon2D" parent="Props"]
+position = Vector2(0, -2500)
+color = Color(0.12, 0.08, 0.05, 1)
+polygon = PackedVector2Array(-55, -55, 55, -55, 62, 0, 55, 55, -55, 55, -62, 0)
+
+[node name="FirePitEmbers" type="Polygon2D" parent="Props"]
+position = Vector2(0, -2500)
+color = Color(0.7, 0.25, 0.08, 1)
+polygon = PackedVector2Array(-35, -35, 35, -35, 40, 0, 35, 35, -35, 35, -40, 0)
+
+# Tables in hub
+[node name="Table1" type="Polygon2D" parent="Props"]
+position = Vector2(-400, -2800)
 color = Color(0.2, 0.15, 0.1, 1)
+polygon = PackedVector2Array(-45, -28, 45, -28, 50, 0, 45, 28, -45, 28, -50, 0)
 
-[node name="FirePitInner" type="ColorRect" parent="Props"]
-offset_left = -60.0
-offset_top = -160.0
-offset_right = 60.0
-offset_bottom = -40.0
-color = Color(0.4, 0.2, 0.1, 1)
+[node name="Table2" type="Polygon2D" parent="Props"]
+position = Vector2(400, -2800)
+color = Color(0.2, 0.15, 0.1, 1)
+polygon = PackedVector2Array(-45, -28, 45, -28, 50, 0, 45, 28, -45, 28, -50, 0)
 
-[node name="Table1" type="ColorRect" parent="Props"]
-offset_left = -400.0
-offset_top = -300.0
-offset_right = -300.0
-offset_bottom = -200.0
-color = Color(0.25, 0.18, 0.12, 1)
+[node name="Table3" type="Polygon2D" parent="Props"]
+position = Vector2(-400, -2200)
+color = Color(0.18, 0.13, 0.09, 1)
+polygon = PackedVector2Array(-45, -28, 45, -28, 50, 0, 45, 28, -45, 28, -50, 0)
 
-[node name="Table2" type="ColorRect" parent="Props"]
-offset_left = 300.0
-offset_top = -300.0
-offset_right = 400.0
-offset_bottom = -200.0
-color = Color(0.25, 0.18, 0.12, 1)
+[node name="Table4" type="Polygon2D" parent="Props"]
+position = Vector2(400, -2200)
+color = Color(0.18, 0.13, 0.09, 1)
+polygon = PackedVector2Array(-45, -28, 45, -28, 50, 0, 45, 28, -45, 28, -50, 0)
 
-[node name="Table3" type="ColorRect" parent="Props"]
-offset_left = -400.0
-offset_top = 100.0
-offset_right = -300.0
-offset_bottom = 200.0
-color = Color(0.25, 0.18, 0.12, 1)
+# Benches
+[node name="Bench1" type="Polygon2D" parent="Props"]
+position = Vector2(-600, -2650)
+color = Color(0.16, 0.12, 0.08, 1)
+polygon = PackedVector2Array(-55, -16, 55, -16, 55, 16, -55, 16)
 
-[node name="Table4" type="ColorRect" parent="Props"]
-offset_left = 300.0
-offset_top = 100.0
-offset_right = 400.0
-offset_bottom = 200.0
-color = Color(0.25, 0.18, 0.12, 1)
+[node name="Bench2" type="Polygon2D" parent="Props"]
+position = Vector2(600, -2650)
+color = Color(0.16, 0.12, 0.08, 1)
+polygon = PackedVector2Array(-55, -16, 55, -16, 55, 16, -55, 16)
 
-[node name="Bench1" type="ColorRect" parent="Props"]
-offset_left = -550.0
-offset_top = -120.0
-offset_right = -450.0
-offset_bottom = -60.0
-color = Color(0.22, 0.16, 0.1, 1)
+[node name="Bench3" type="Polygon2D" parent="Props"]
+position = Vector2(-600, -2350)
+color = Color(0.16, 0.12, 0.08, 1)
+polygon = PackedVector2Array(-55, -16, 55, -16, 55, 16, -55, 16)
 
-[node name="Bench2" type="ColorRect" parent="Props"]
-offset_left = 450.0
-offset_top = -120.0
-offset_right = 550.0
-offset_bottom = -60.0
-color = Color(0.22, 0.16, 0.1, 1)
+[node name="Bench4" type="Polygon2D" parent="Props"]
+position = Vector2(600, -2350)
+color = Color(0.16, 0.12, 0.08, 1)
+polygon = PackedVector2Array(-55, -16, 55, -16, 55, 16, -55, 16)
 
+# Puddles in corridors
 [node name="Puddle1" type="Sprite2D" parent="Props"]
-position = Vector2(-800, 400)
-scale = Vector2(3, 2)
-texture = SubResource("GradientTexture2D_puddle")
-
-[node name="Puddle2" type="Sprite2D" parent="Props"]
-position = Vector2(700, 600)
+position = Vector2(-50, 800)
 scale = Vector2(2.5, 1.8)
 texture = SubResource("GradientTexture2D_puddle")
 
-[node name="Puddle3" type="Sprite2D" parent="Props"]
-position = Vector2(-200, 800)
+[node name="Puddle2" type="Sprite2D" parent="Props"]
+position = Vector2(80, -400)
 scale = Vector2(2, 1.5)
 texture = SubResource("GradientTexture2D_puddle")
 
-[node name="AlcoveWest" type="ColorRect" parent="Props"]
-offset_left = -1480.0
-offset_top = -200.0
-offset_right = -1200.0
-offset_bottom = 200.0
-color = Color(0.06, 0.06, 0.08, 1)
+[node name="Puddle3" type="Sprite2D" parent="Props"]
+position = Vector2(-1800, 800)
+scale = Vector2(1.8, 1.4)
+texture = SubResource("GradientTexture2D_puddle")
 
-[node name="AlcoveEast" type="ColorRect" parent="Props"]
-offset_left = 1200.0
-offset_top = -200.0
-offset_right = 1480.0
-offset_bottom = 200.0
-color = Color(0.06, 0.06, 0.08, 1)
+[node name="Puddle4" type="Sprite2D" parent="Props"]
+position = Vector2(1600, 400)
+scale = Vector2(2, 1.6)
+texture = SubResource("GradientTexture2D_puddle")
 
-[node name="StashArea" type="ColorRect" parent="Props"]
-offset_left = -1100.0
-offset_top = -900.0
-offset_right = -800.0
-offset_bottom = -600.0
-color = Color(0.12, 0.1, 0.08, 1)
+[node name="Puddle5" type="Sprite2D" parent="Props"]
+position = Vector2(-1200, -800)
+scale = Vector2(1.6, 1.2)
+texture = SubResource("GradientTexture2D_puddle")
 
-[node name="VendorArea" type="ColorRect" parent="Props"]
-offset_left = 800.0
-offset_top = -900.0
-offset_right = 1100.0
-offset_bottom = -600.0
-color = Color(0.12, 0.1, 0.08, 1)
+[node name="Puddle6" type="Sprite2D" parent="Props"]
+position = Vector2(1000, -1200)
+scale = Vector2(1.5, 1.1)
+texture = SubResource("GradientTexture2D_puddle")
 
-[node name="Signs" type="Node2D" parent="."]
+# Floor detail spots
+[node name="FloorDetail1" type="Sprite2D" parent="Props"]
+position = Vector2(-300, -2600)
+scale = Vector2(3, 2.5)
+texture = SubResource("GradientTexture2D_floor_detail")
+
+[node name="FloorDetail2" type="Sprite2D" parent="Props"]
+position = Vector2(350, -2400)
+scale = Vector2(2.5, 2)
+texture = SubResource("GradientTexture2D_floor_detail")
+
+[node name="FloorDetail3" type="Sprite2D" parent="Props"]
+position = Vector2(-100, -2100)
+scale = Vector2(2, 2)
+texture = SubResource("GradientTexture2D_floor_detail")
+
+# Mist near puddles
+[node name="Mist1" type="Sprite2D" parent="Props"]
+position = Vector2(-50, 780)
+scale = Vector2(4, 2.2)
+modulate = Color(1, 1, 1, 0.25)
+texture = SubResource("GradientTexture2D_mist")
+
+[node name="Mist2" type="Sprite2D" parent="Props"]
+position = Vector2(-1780, 780)
+scale = Vector2(3.5, 1.8)
+modulate = Color(1, 1, 1, 0.22)
+texture = SubResource("GradientTexture2D_mist")
+
+# Stalactites
+[node name="Stalactites" type="Node2D" parent="Props"]
 z_index = 5
 
+[node name="Stalactite1" type="Polygon2D" parent="Props/Stalactites"]
+position = Vector2(-600, -3400)
+color = Color(0.06, 0.055, 0.05, 0.85)
+polygon = PackedVector2Array(-18, -60, 18, -60, 6, 40, -6, 40)
+
+[node name="Stalactite2" type="Polygon2D" parent="Props/Stalactites"]
+position = Vector2(500, -3380)
+color = Color(0.06, 0.055, 0.05, 0.85)
+polygon = PackedVector2Array(-14, -50, 14, -50, 5, 32, -5, 32)
+
+[node name="Stalactite3" type="Polygon2D" parent="Props/Stalactites"]
+position = Vector2(-200, -3450)
+color = Color(0.06, 0.055, 0.05, 0.85)
+polygon = PackedVector2Array(-20, -70, 20, -70, 7, 45, -7, 45)
+
+[node name="Stalactite4" type="Polygon2D" parent="Props/Stalactites"]
+position = Vector2(700, -1600)
+color = Color(0.06, 0.055, 0.05, 0.85)
+polygon = PackedVector2Array(-12, -42, 12, -42, 4, 26, -4, 26)
+
+[node name="Stalactite5" type="Polygon2D" parent="Props/Stalactites"]
+position = Vector2(-750, -1650)
+color = Color(0.06, 0.055, 0.05, 0.85)
+polygon = PackedVector2Array(-15, -55, 15, -55, 5, 35, -5, 35)
+
+# ═══════════════════════════════════════════════════════════════
+# SIGNS - Navigation labels
+# ═══════════════════════════════════════════════════════════════
+[node name="Signs" type="Node2D" parent="."]
+z_index = 10
+
+[node name="TitleSign" type="Label" parent="Signs"]
+offset_left = -150.0
+offset_top = -3500.0
+offset_right = 150.0
+offset_bottom = -3460.0
+label_settings = SubResource("LabelSettings_title")
+text = "THE PASSAGE"
+horizontal_alignment = 1
+
 [node name="SouthSign" type="Label" parent="Signs"]
-offset_left = -100.0
-offset_top = 1050.0
-offset_right = 100.0
-offset_bottom = 1080.0
+offset_left = -120.0
+offset_top = 2100.0
+offset_right = 120.0
+offset_bottom = 2130.0
 label_settings = SubResource("LabelSettings_sign")
 text = "To Wasteland (Zone 1)"
 horizontal_alignment = 1
 
-[node name="NorthSign" type="Label" parent="Signs"]
-offset_left = -100.0
-offset_top = -1180.0
-offset_right = 100.0
-offset_bottom = -1150.0
+[node name="WestSign" type="Label" parent="Signs"]
+offset_left = -2350.0
+offset_top = 2100.0
+offset_right = -2050.0
+offset_bottom = 2130.0
 label_settings = SubResource("LabelSettings_sign")
-text = "To The Depths (Zone 2)"
+text = "West Passage"
+horizontal_alignment = 1
+
+[node name="EastSign" type="Label" parent="Signs"]
+offset_left = 2050.0
+offset_top = 2100.0
+offset_right = 2350.0
+offset_bottom = 2130.0
+label_settings = SubResource("LabelSettings_sign")
+text = "East Passage"
+horizontal_alignment = 1
+
+[node name="NorthSign" type="Label" parent="Signs"]
+offset_left = -120.0
+offset_top = -4150.0
+offset_right = 120.0
+offset_bottom = -4120.0
+label_settings = SubResource("LabelSettings_sign")
+text = "The Depths (Zone 2)"
 horizontal_alignment = 1
 
 [node name="StashSign" type="Label" parent="Signs"]
-offset_left = -1050.0
-offset_top = -620.0
-offset_right = -850.0
-offset_bottom = -590.0
+offset_left = -850.0
+offset_top = -3200.0
+offset_right = -650.0
+offset_bottom = -3170.0
 label_settings = SubResource("LabelSettings_sign")
-text = "Stash"
+text = "STASH"
 horizontal_alignment = 1
 
-[node name="VendorSign" type="Label" parent="Signs"]
-offset_left = 850.0
-offset_top = -620.0
-offset_right = 1050.0
-offset_bottom = -590.0
+[node name="TraderSign" type="Label" parent="Signs"]
+offset_left = 650.0
+offset_top = -3200.0
+offset_right = 850.0
+offset_bottom = -3170.0
 label_settings = SubResource("LabelSettings_sign")
-text = "Tunnel Trader"
+text = "TRADER"
 horizontal_alignment = 1
 
-[node name="WelcomeSign" type="Label" parent="Signs"]
-offset_left = -200.0
-offset_top = -550.0
-offset_right = 200.0
-offset_bottom = -500.0
-label_settings = SubResource("LabelSettings_sign")
-text = "THE PASSAGE"
-horizontal_alignment = 1
-
+# ═══════════════════════════════════════════════════════════════
+# PLAYERS - Container for player nodes
+# ═══════════════════════════════════════════════════════════════
 [node name="Players" type="Node2D" parent="."]
 z_index = 1

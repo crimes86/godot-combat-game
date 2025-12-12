@@ -62,6 +62,7 @@ var is_burst_firing: bool = false
 var burst_shots_remaining: int = 0
 var burst_target_pos: Vector2 = Vector2.ZERO
 var burst_damage_per_shot: float = 0.0
+var burst_crit_used: bool = false  # Only one shot per burst can crit
 
 func _init(player_ref: CharacterBody2D) -> void:
 	player = player_ref
@@ -247,13 +248,14 @@ func is_clicking_on_weakpoint(mouse_pos: Vector2) -> bool:
 					if debug_weakpoint_clicks:
 						print("[WP_DEBUG] HIT! Calling weakpoint.hit()")
 
-					# Play slash animation toward the weakpoint
+					# Play slash animation toward the weakpoint (cycles through variants)
 					var character_sprite = player.get_node_or_null("CharacterSprite")
 					if character_sprite:
 						var direction_to_weakpoint = (weakpoint.global_position - player.global_position).normalized()
 						var dir_str = player.get_direction_string(direction_to_weakpoint)
 						var lpc_dir = player.convert_to_lpc_direction(dir_str)
-						character_sprite.play_lpc_animation("slash", lpc_dir)
+						var attack_anim = character_sprite.get_next_attack_anim() if character_sprite.has_method("get_next_attack_anim") else "slash"
+						character_sprite.play_lpc_animation(attack_anim, lpc_dir)
 
 					# CLIENT-PREDICTED: Call hit() directly for instant feedback
 					# Server validates total damage at crit window end
@@ -295,12 +297,13 @@ func attempt_attack() -> void:
 	if player:
 		player.can_attack = false
 
-	# Play attack animation
+	# Play attack animation (cycles through slash variants for multi-slash weapons)
 	var character_sprite = player.get_node_or_null("CharacterSprite")
 	if character_sprite and character_sprite.has_method("play_lpc_animation"):
 		var dir_str = player.get_direction_string(attack_direction)
 		var lpc_dir = player.convert_to_lpc_direction(dir_str)
-		character_sprite.play_lpc_animation("slash", lpc_dir)
+		var attack_anim = character_sprite.get_next_attack_anim() if character_sprite.has_method("get_next_attack_anim") else "slash"
+		character_sprite.play_lpc_animation(attack_anim, lpc_dir)
 
 	# Get enemies in attack cone
 	# Play weapon swing sound (whoosh) - plays immediately on attack
@@ -311,10 +314,16 @@ func attempt_attack() -> void:
 		else:
 			sound_manager.play_unarmed_swing_sound(player.global_position, -10.0)
 
+	# Track swing for forged weapons
+	_track_weapon_swing()
+
 	var enemies = get_enemies_in_cone()
 
 	if enemies.size() > 0:
 		attack_enemies_in_cone(enemies)
+	else:
+		# No enemies hit = miss
+		_track_weapon_miss()
 
 	# PvP: Attack players in cone during duel
 	if player.is_dueling:
@@ -480,7 +489,11 @@ func attack_enemies_in_cone(enemies: Array) -> void:
 		if not is_instance_valid(enemy):
 			continue
 
-		# Roll for crit
+		# Get enemy health BEFORE damage for threshold checks
+		var enemy_hp_before = enemy.current_health if "current_health" in enemy else 100.0
+		var enemy_max_hp = enemy.max_health if "max_health" in enemy else 100.0
+
+		# Roll for crit (still gives bonus damage, but NO LONGER triggers weakpoint window)
 		var is_crit = false
 		var final_damage = attack_damage
 
@@ -501,26 +514,38 @@ func attack_enemies_in_cone(enemies: Array) -> void:
 			if is_crit:
 				var crit_mult = crit_system.get_crit_multiplier() if crit_system.has_method("get_crit_multiplier") else 2.0
 				final_damage *= crit_mult
+				# NOTE: Crits still deal bonus damage but NO LONGER auto-trigger weakpoint windows
+				# Windows are now triggered by hit count and health thresholds via register_hit()
 
-				# Play crit window opening sound
+		# Apply damage with feedback
+		apply_damage_with_feedback(enemy, final_damage, is_crit, false)
+
+		# NEW: Register hit with CritWindowManager for threshold-based window triggers
+		# This replaces the old crit-based trigger system
+		if crit_window_manager and crit_window_manager.has_method("register_hit"):
+			var window_triggered = crit_window_manager.register_hit(enemy, final_damage, enemy_hp_before, enemy_max_hp)
+			if window_triggered:
+				# Play crit window opening sound when window triggers
 				var sound_manager = player.get_node_or_null("/root/SoundManager")
 				if sound_manager and sound_manager.has_method("play_sound"):
 					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
-
-				# Start crit window
-				if crit_window_manager and crit_window_manager.has_method("start_window"):
-					crit_window_manager.start_window(enemy)
-
-		apply_damage_with_feedback(enemy, final_damage, is_crit, false)
 
 func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_weakpoint: bool) -> void:
 	"""Apply damage to enemy with visual/audio feedback"""
 	if not is_instance_valid(enemy):
 		return
 
+	# Get enemy HP before damage for overkill calculation
+	var enemy_hp_before = 0.0
+	if "current_health" in enemy:
+		enemy_hp_before = enemy.current_health
+
 	# Apply damage
 	if enemy.has_method("take_damage"):
 		enemy.take_damage(damage)
+
+	# Track weapon stats for forged weapons
+	_track_weapon_hit(damage, is_crit, enemy, enemy_hp_before)
 
 	# Damage number
 	if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
@@ -538,13 +563,19 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		var weapon_type = "unarmed"
+		var is_gun = false
 		if CharacterStats.equipped_weapon:
 			weapon_type = CharacterStats.equipped_weapon.weapon_type
+			is_gun = CharacterStats.equipped_weapon.is_gun_weapon()
 		var hit_pos = enemy.global_position
 		var tree = player.get_tree()
 		tree.create_timer(0.1).timeout.connect(func():
 			if is_crit:
 				sound_manager.play_critical_hit_sound(hit_pos, -6.0)
+			elif is_gun:
+				# Use bullet impact sounds for guns - training dummy is armored, others are flesh
+				var is_armored = enemy.is_in_group("training_dummy")
+				sound_manager.play_bullet_impact_sound(hit_pos, is_armored, -6.0)
 			else:
 				sound_manager.play_normal_hit_sound(hit_pos, -10.0, weapon_type)
 		)
@@ -612,15 +643,29 @@ func _fire_gun_at_weakpoint(weakpoint: Node, cursor_pos: Vector2) -> void:
 	if character_sprite and character_sprite.has_method("play_lpc_animation"):
 		character_sprite.play_lpc_animation("shoot", lpc_dir)
 
-	# Calculate barrel position and fire VFX
+	# Calculate barrel position
 	var barrel_pos = player.global_position + _get_gun_barrel_offset(lpc_dir)
-	_spawn_muzzle_flash_at(barrel_pos)
-	_spawn_bullet_trail(barrel_pos, weakpoint.global_position)
 
-	# Play gunshot sound
+	# Check if burst weapon (battle rifle) vs single shot (railgun) for VFX
+	var weapon = CharacterStats.equipped_weapon
+	var is_burst_weapon = weapon and weapon.has_method("is_burst_weapon") and weapon.is_burst_weapon()
+
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_gunshot_sound(player.global_position, -6.0)
+
+	if is_burst_weapon:
+		# Battle rifle style - tracer round and green muzzle flash
+		_spawn_battle_rifle_muzzle_flash(barrel_pos)
+		_spawn_tracer_round(barrel_pos, weakpoint.global_position)
+		if sound_manager and sound_manager.has_method("play_battle_rifle_sound"):
+			sound_manager.play_battle_rifle_sound(player.global_position, -6.0)
+		elif sound_manager:
+			sound_manager.play_gunshot_sound(player.global_position, -6.0)
+	else:
+		# Railgun style - beam trail and standard muzzle flash
+		_spawn_muzzle_flash_at(barrel_pos)
+		_spawn_bullet_trail(barrel_pos, weakpoint.global_position)
+		if sound_manager:
+			sound_manager.play_gunshot_sound(player.global_position, -6.0)
 
 	# Hit the weakpoint directly (client-predicted, no cooldown)
 	if weakpoint.has_method("hit"):
@@ -674,6 +719,9 @@ func attempt_gun_attack() -> void:
 	if sound_manager:
 		sound_manager.play_gunshot_sound(player.global_position, -6.0)
 
+	# Track shot for forged weapons
+	_track_weapon_shot()
+
 	# Get enemies in gun targeting circle
 	var enemies = get_enemies_in_gun_radius(cursor_pos, gun_radius)
 
@@ -682,6 +730,7 @@ func attempt_gun_attack() -> void:
 	else:
 		# Miss - spawn impact at cursor
 		_spawn_bullet_impact(cursor_pos, false)
+		_track_weapon_miss()
 
 	# Start cooldown timer
 	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
@@ -717,9 +766,21 @@ func attempt_burst_attack() -> void:
 	burst_target_pos = cursor_pos
 	burst_shots_remaining = weapon.burst_count
 	burst_damage_per_shot = attack_damage / float(weapon.burst_count)
+	burst_crit_used = false  # Reset crit tracking for new burst
+
+	# Track burst for forged weapons
+	_track_weapon_burst()
 
 	# Face toward cursor
 	attack_direction = (cursor_pos - player.global_position).normalized()
+
+	# Play battle rifle burst sound ONCE (the sound file contains all 3 shots)
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		if sound_manager.has_method("play_battle_rifle_sound"):
+			sound_manager.play_battle_rifle_sound(player.global_position, -6.0)
+		else:
+			sound_manager.play_gunshot_sound(player.global_position, -6.0)
 
 	# Start burst sequence
 	_fire_burst_round()
@@ -748,17 +809,9 @@ func _fire_burst_round() -> void:
 	var barrel_pos = player.global_position + _get_gun_barrel_offset(lpc_dir)
 
 	# Spawn battle rifle visuals (green/teal Halo style)
+	# Note: Sound is played once in attempt_burst_attack(), not per round
 	_spawn_battle_rifle_muzzle_flash(barrel_pos)
 	_spawn_tracer_round(barrel_pos, burst_target_pos)
-
-	# Play battle rifle sound
-	var sound_manager = player.get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		if sound_manager.has_method("play_battle_rifle_sound"):
-			sound_manager.play_battle_rifle_sound(player.global_position, -6.0)
-		else:
-			# Fallback to regular gunshot
-			sound_manager.play_gunshot_sound(player.global_position, -6.0)
 
 	# Get enemies in targeting circle and deal burst damage (divided by burst count)
 	var gun_radius = weapon.gun_radius if weapon.get("gun_radius") else 28.0
@@ -777,20 +830,49 @@ func _fire_burst_round() -> void:
 		_finish_burst()
 
 func _attack_enemies_burst_round(enemies: Array) -> void:
-	"""Apply damage from a single burst round"""
+	"""Apply damage from a single burst round with crit chance.
+	Only ONE shot per burst can crit to prevent advantage over single-shot weapons."""
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
 			continue
 
-		# Burst rounds use simple damage - crit is checked on first round only
-		# (handled by attack_enemies_at_cursor for first round if needed)
-		_spawn_bullet_impact(enemy.global_position, false)
+		# Get enemy health BEFORE damage for threshold checks
+		var enemy_hp_before = enemy.current_health if "current_health" in enemy else 100.0
+		var enemy_max_hp = enemy.max_health if "max_health" in enemy else 100.0
 
-		if enemy.has_method("take_damage"):
-			enemy.take_damage(burst_damage_per_shot)
+		var final_damage = burst_damage_per_shot
+		var is_crit = false
 
-		if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
-			attack_feedback.spawn_damage_number(enemy.global_position, burst_damage_per_shot, false, false)
+		# Roll for crit if we haven't used our crit this burst
+		if not burst_crit_used and crit_system and crit_system.has_method("roll_for_crit"):
+			is_crit = crit_system.roll_for_crit()
+
+			# Tutorial: force crit on training dummy after enough hits
+			if enemy.is_in_group("training_dummy"):
+				tutorial_dummy_hits += 1
+				if not is_crit and tutorial_dummy_hits >= TUTORIAL_FORCE_CRIT_HITS:
+					is_crit = true
+					tutorial_dummy_hits = 0
+				elif is_crit:
+					tutorial_dummy_hits = 0
+
+			if is_crit:
+				burst_crit_used = true  # Lock out further crits this burst
+				var crit_mult = crit_system.get_crit_multiplier() if crit_system.has_method("get_crit_multiplier") else 2.0
+				final_damage *= crit_mult
+				# NOTE: Crits still deal bonus damage but NO LONGER auto-trigger weakpoint windows
+
+		# Apply damage - blood splatter is handled by attack_feedback system
+		apply_damage_with_feedback(enemy, final_damage, is_crit, false)
+
+		# NEW: Register hit with CritWindowManager for threshold-based window triggers
+		if crit_window_manager and crit_window_manager.has_method("register_hit"):
+			var window_triggered = crit_window_manager.register_hit(enemy, final_damage, enemy_hp_before, enemy_max_hp)
+			if window_triggered:
+				# Play crit window opening sound when window triggers
+				var sound_manager = player.get_node_or_null("/root/SoundManager")
+				if sound_manager and sound_manager.has_method("play_sound"):
+					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
 
 func _finish_burst() -> void:
 	"""Complete burst sequence and start cooldown"""
@@ -833,7 +915,11 @@ func attack_enemies_at_cursor(enemies: Array) -> void:
 		if not is_instance_valid(enemy):
 			continue
 
-		# Roll for crit (same system as melee)
+		# Get enemy health BEFORE damage for threshold checks
+		var enemy_hp_before = enemy.current_health if "current_health" in enemy else 100.0
+		var enemy_max_hp = enemy.max_health if "max_health" in enemy else 100.0
+
+		# Roll for crit (still gives bonus damage, but NO LONGER triggers weakpoint window)
 		var is_crit = false
 		var final_damage = attack_damage
 
@@ -854,20 +940,19 @@ func attack_enemies_at_cursor(enemies: Array) -> void:
 			if is_crit:
 				var crit_mult = crit_system.get_crit_multiplier() if crit_system.has_method("get_crit_multiplier") else 2.0
 				final_damage *= crit_mult
+				# NOTE: Crits still deal bonus damage but NO LONGER auto-trigger weakpoint windows
 
-				# Play crit window opening sound
+		# Apply damage - blood splatter is handled by attack_feedback system
+		apply_damage_with_feedback(enemy, final_damage, is_crit, false)
+
+		# NEW: Register hit with CritWindowManager for threshold-based window triggers
+		if crit_window_manager and crit_window_manager.has_method("register_hit"):
+			var window_triggered = crit_window_manager.register_hit(enemy, final_damage, enemy_hp_before, enemy_max_hp)
+			if window_triggered:
+				# Play crit window opening sound when window triggers
 				var sound_manager = player.get_node_or_null("/root/SoundManager")
 				if sound_manager and sound_manager.has_method("play_sound"):
 					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
-
-				# Start crit window (same as melee)
-				if crit_window_manager and crit_window_manager.has_method("start_window"):
-					crit_window_manager.start_window(enemy)
-
-		# Spawn impact effect at enemy
-		_spawn_bullet_impact(enemy.global_position, is_crit)
-
-		apply_damage_with_feedback(enemy, final_damage, is_crit, false)
 
 # ========================================
 # GUN VISUAL EFFECTS
@@ -897,9 +982,9 @@ func _spawn_muzzle_flash_at(flash_pos: Vector2) -> void:
 	flash_container.z_index = 15
 	player.get_tree().root.add_child(flash_container)
 
-	# Core bright circle (white-yellow)
+	# Core bright circle (white-magenta to match beam)
 	var core = Polygon2D.new()
-	core.color = Color(1.0, 0.95, 0.8, 0.95)
+	core.color = Color(1.0, 0.8, 1.0, 0.95)  # Bright magenta-white
 	var core_points = PackedVector2Array()
 	for i in range(12):
 		var angle = (float(i) / 12) * TAU
@@ -907,9 +992,9 @@ func _spawn_muzzle_flash_at(flash_pos: Vector2) -> void:
 	core.polygon = core_points
 	flash_container.add_child(core)
 
-	# Outer glow (orange)
+	# Outer glow (purple-magenta to match beam)
 	var glow = Polygon2D.new()
-	glow.color = Color(1.0, 0.6, 0.2, 0.6)
+	glow.color = Color(0.85, 0.2, 0.9, 0.6)  # Purple-magenta (same as beam)
 	var glow_points = PackedVector2Array()
 	for i in range(12):
 		var angle = (float(i) / 12) * TAU
@@ -922,7 +1007,7 @@ func _spawn_muzzle_flash_at(flash_pos: Vector2) -> void:
 	var num_spikes = randi_range(3, 5)
 	for i in range(num_spikes):
 		var spike = Polygon2D.new()
-		spike.color = Color(1.0, 0.85, 0.4, 0.8)
+		spike.color = Color(0.9, 0.5, 1.0, 0.8)  # Light purple
 		var spike_angle = randf_range(-0.4, 0.4)  # Spread around forward direction
 		var spike_length = randf_range(14, 22)
 		var spike_width = randf_range(2, 4)
@@ -962,19 +1047,19 @@ func _spawn_bullet_trail(from_pos: Vector2, to_pos: Vector2) -> void:
 	tween.tween_callback(trail.queue_free)
 
 func _spawn_bullet_impact(pos: Vector2, is_crit: bool) -> void:
-	"""Spawn bullet impact effect at position"""
+	"""Spawn bullet impact effect at position (used for misses or ground hits)"""
 	# Create impact flash
 	var impact = Node2D.new()
 	impact.name = "BulletImpact"
 	impact.global_position = pos
 	impact.z_index = 12
 
-	# Simple expanding circle
+	# Simple expanding circle (purple-magenta to match railgun beam)
 	var circle = Polygon2D.new()
 	if is_crit:
 		circle.color = Color(1.0, 0.8, 0.2, 0.6)  # Gold for crit
 	else:
-		circle.color = Color(1.0, 0.5, 0.2, 0.5)  # Orange for normal
+		circle.color = Color(0.85, 0.2, 0.9, 0.6)  # Purple-magenta (matches beam)
 
 	var points = PackedVector2Array()
 	var segments = 12
@@ -994,12 +1079,67 @@ func _spawn_bullet_impact(pos: Vector2, is_crit: bool) -> void:
 	tween.parallel().tween_property(circle, "color:a", 0.0, 0.15)
 	tween.tween_callback(impact.queue_free)
 
+func _spawn_blood_splatter(pos: Vector2, is_crit: bool) -> void:
+	"""Spawn blood splatter particles when projectile hits enemy.
+	Same effect as melee hits for consistency."""
+	if not player:
+		return
+
+	# Calculate direction from player to impact (blood splatters away from shot)
+	var direction = (pos - player.global_position).normalized()
+
+	# Create blood splatter particles
+	var blood = CPUParticles2D.new()
+	blood.global_position = pos
+	blood.rotation = direction.angle()
+	blood.z_index = 100  # Make sure it's visible above everything
+
+	# Configure based on crit
+	if is_crit:
+		# More dramatic gold/yellow sparks for crits
+		blood.amount = 24
+		blood.color = Color(1, 0.85, 0.2, 1)  # Golden sparks
+		blood.scale_amount_min = 0.8
+		blood.scale_amount_max = 1.5
+		blood.initial_velocity_min = 80.0
+		blood.initial_velocity_max = 140.0
+	else:
+		# Dense red blood droplets - small and round
+		blood.amount = 20
+		blood.color = Color(0.85, 0.08, 0.08, 1.0)  # Blood red
+		blood.scale_amount_min = 0.6
+		blood.scale_amount_max = 1.2
+		blood.initial_velocity_min = 50.0
+		blood.initial_velocity_max = 90.0
+
+	# Common properties - particles spray away from player
+	blood.emitting = true
+	blood.one_shot = true
+	blood.lifetime = 0.4
+	blood.speed_scale = 2.0
+	blood.explosiveness = 0.9  # All particles spawn at once
+	blood.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINT
+	blood.direction = Vector2(1, 0)  # Base direction (will be rotated)
+	blood.spread = 45.0  # Cone spread
+	blood.gravity = Vector2(0, 200)  # Downward gravity
+	blood.damping_min = 30.0
+	blood.damping_max = 60.0
+
+	# Add to scene at root level
+	player.get_tree().root.add_child(blood)
+
+	# Quick cleanup
+	player.get_tree().create_timer(0.6).timeout.connect(func():
+		if is_instance_valid(blood):
+			blood.queue_free()
+	)
+
 # ========================================
 # BATTLE RIFLE VISUAL EFFECTS (Halo Style)
 # ========================================
 
 func _spawn_tracer_round(from_pos: Vector2, to_pos: Vector2) -> void:
-	"""Spawn Halo-style tracer round - green projectile traveling to target"""
+	"""Spawn Halo-style tracer round - green projectile traveling to cursor position."""
 	var tracer = Node2D.new()
 	tracer.name = "TracerRound"
 	tracer.global_position = from_pos
@@ -1040,7 +1180,7 @@ func _spawn_tracer_round(from_pos: Vector2, to_pos: Vector2) -> void:
 
 	player.get_tree().root.add_child(tracer)
 
-	# Animate tracer traveling to target
+	# Animate tracer traveling to cursor
 	var travel_time = 0.08  # Fast travel (80ms)
 	var tween = player.get_tree().create_tween()
 	tween.tween_property(tracer, "global_position", to_pos, travel_time)
@@ -1216,3 +1356,84 @@ func _on_crit_window_completed(success_ratio: float, total_destroyed: int, enemy
 	if success_ratio > 0.5:
 		var bonus_damage = attack_damage * success_ratio
 		apply_damage_with_feedback(enemy, bonus_damage, true, false)
+
+# ========================================
+# FORGED WEAPON STATS TRACKING
+# ========================================
+
+func _track_weapon_hit(damage: float, is_crit: bool, enemy: Node, enemy_hp_before: float) -> void:
+	"""Track hit stats for forged weapons"""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
+		return
+
+	# Get enemy type
+	var enemy_type = "unknown"
+	if "enemy_type" in enemy:
+		enemy_type = enemy.enemy_type
+	elif enemy.is_in_group("training_dummy"):
+		enemy_type = "training_dummy"
+
+	# Calculate HP remaining after damage
+	var hp_remaining = enemy_hp_before - damage
+
+	# Record hit
+	weapon.weapon_stats.record_hit(damage, is_crit, enemy_type, hp_remaining)
+
+	# Check if enemy died (kill tracking handled separately via signal)
+
+func _track_weapon_swing() -> void:
+	"""Track melee swing for forged weapons"""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
+		return
+	weapon.weapon_stats.record_swing()
+
+func _track_weapon_shot() -> void:
+	"""Track gun shot for forged weapons"""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
+		return
+	weapon.weapon_stats.record_shot()
+
+func _track_weapon_burst() -> void:
+	"""Track burst fire for forged weapons"""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
+		return
+	weapon.weapon_stats.record_burst()
+
+func _track_weapon_miss() -> void:
+	"""Track missed attack for forged weapons"""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
+		return
+	weapon.weapon_stats.record_miss()
+
+func _track_weakpoint_destroyed() -> void:
+	"""Track weakpoint destruction for forged weapons"""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
+		return
+	weapon.weapon_stats.record_weakpoint_destroyed()
+
+func track_enemy_killed(enemy_type: String, is_elite: bool = false, is_boss: bool = false) -> void:
+	"""Track enemy kill for forged weapons (called from Enemy.gd or kill handler)"""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
+		return
+	weapon.weapon_stats.record_kill(enemy_type, is_elite, is_boss)
+
+func track_chain_level(chain_level: int) -> void:
+	"""Track chain level for forged weapons"""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
+		return
+	weapon.weapon_stats.record_chain_level(chain_level)
+
+func track_player_death() -> void:
+	"""Track player death for forged weapons"""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
+		return
+	weapon.weapon_stats.record_death()
