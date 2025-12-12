@@ -29,6 +29,7 @@ When working on specific systems, consult these docs:
 | **Architecture** | |
 | System architecture | `docs/ARCHITECTURE.md` |
 | Server architecture | `docs/SERVER_ARCHITECTURE.md` |
+| Shard system (multi-server) | `docs/SHARD_SYSTEM.md` |
 | Performance guide | `docs/PERFORMANCE.md` |
 | API contract | `docs/API_CONTRACT.md` |
 | **Rules & Process** | |

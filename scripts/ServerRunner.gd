@@ -3,10 +3,20 @@ extends Node
 ##
 ## Usage:
 ##   Godot_v4.x.exe --headless -- --server --port 7000
+##   Godot_v4.x.exe --headless -- --server --port 7001 --shard 001
 ##
 ## Arguments (after "--"):
 ##   --server       Start as dedicated server (no local player)
 ##   --port XXXX    Server port (default: 7000)
+##   --shard ID     Shard identifier for multi-server setups (default: "default")
+##
+## Multi-Shard Setup:
+##   Each shard runs on a different port with isolated player data:
+##     --server --port 7000 --shard us-west-1
+##     --server --port 7001 --shard us-west-2
+##     --server --port 7002 --shard us-east-1
+##
+##   Player data stored in: user://shards/{shard_id}/players.json
 ##
 ## Systemd Integration:
 ##   - Responds to SIGTERM (systemctl stop) with graceful shutdown
@@ -30,6 +40,7 @@ var server_start_time: int = 0
 var stdin_thread: Thread = null
 var command_queue: Array = []
 var command_mutex: Mutex = null
+var current_shard_id: String = "default"  # Shard this server instance is running
 
 func _ready():
 	var args = OS.get_cmdline_user_args()  # Gets args after "--"
@@ -43,25 +54,36 @@ func _ready():
 		_start_dedicated_server(args)
 
 func _start_dedicated_server(args: Array):
-	# Parse port (default 7000)
+	# Parse arguments
 	var port = NetworkManager.DEFAULT_PORT
+	var shard = "default"
+
 	for i in range(args.size()):
 		if args[i] == "--port" and i + 1 < args.size():
 			port = int(args[i + 1])
+		elif args[i] == "--shard" and i + 1 < args.size():
+			shard = args[i + 1]
 
-	print("🖥️  Initializing server on port %d..." % port)
+	current_shard_id = shard
+
+	print("🖥️  Initializing server...")
 	print("   PID: %d" % OS.get_process_id())
+	print("   Port: %d" % port)
+	print("   Shard: %s" % shard)
 
-	# Initialize database
+	# Initialize database with shard isolation
 	if DatabaseManager:
+		if shard != "default":
+			DatabaseManager.set_shard_id(shard)
 		DatabaseManager.initialize_database()
-		print("📀 Database initialized")
+		print("📀 Database initialized: %s" % DatabaseManager.players_file_path)
 
 	# Start server with no local player (empty player_data = no host player)
 	if NetworkManager.host_game(port, {}):
 		print("✅ Server started successfully!")
 		print("   Version: %s" % NetworkManager.NETWORK_VERSION)
 		print("   Port: %d" % port)
+		print("   Shard: %s" % current_shard_id)
 		print("   Max Players: %d" % NetworkManager.MAX_PLAYERS)
 		print("═══════════════════════════════════════════════════════")
 		print("   Type 'help' for admin commands")
@@ -318,7 +340,7 @@ func _graceful_shutdown() -> void:
 	"""Save all players and shut down gracefully."""
 	print("")
 	print("═══════════════════════════════════════════════════════")
-	print("   SERVER SHUTTING DOWN")
+	print("   SERVER SHUTTING DOWN [Shard: %s]" % current_shard_id)
 	print("═══════════════════════════════════════════════════════")
 
 	# Stop the stdin thread
@@ -372,7 +394,7 @@ func _print_server_status() -> void:
 	var hours = int(uptime) / 3600
 	var minutes = (int(uptime) % 3600) / 60
 
-	print("📊 [Status] Players: %d | Uptime: %dh %dm" % [auth_count, hours, minutes])
+	print("📊 [Shard:%s] Players: %d | Uptime: %dh %dm" % [current_shard_id, auth_count, hours, minutes])
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BUG REPORT COMMANDS
@@ -470,9 +492,15 @@ func _cmd_clearbug(args: Array) -> void:
 	else:
 		print("❌ Bug #%d not found" % id)
 
+func _get_bug_reports_path() -> String:
+	"""Get shard-specific bug reports path."""
+	if DatabaseManager and DatabaseManager.shard_id != "default":
+		return DatabaseManager.shard_directory + "/bug_reports.json"
+	return "user://bug_reports.json"
+
 func _load_bug_reports() -> Array:
-	"""Load bug reports from file."""
-	var reports_file = "user://bug_reports.json"
+	"""Load bug reports from file (shard-aware)."""
+	var reports_file = _get_bug_reports_path()
 	if not FileAccess.file_exists(reports_file):
 		return []
 
@@ -489,8 +517,8 @@ func _load_bug_reports() -> Array:
 	return []
 
 func _save_bug_reports(reports: Array) -> void:
-	"""Save bug reports to file."""
-	var file = FileAccess.open("user://bug_reports.json", FileAccess.WRITE)
+	"""Save bug reports to file (shard-aware)."""
+	var file = FileAccess.open(_get_bug_reports_path(), FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(reports, "\t"))
 		file.close()

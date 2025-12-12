@@ -113,6 +113,7 @@ A fast-paced action RPG featuring a unique critical hit weakpoint system and cha
 | [docs/LPC_GUIDE.md](docs/LPC_GUIDE.md) | LPC sprites, armor layering, asset generation |
 | [docs/FORGE_AND_MANTLE.md](docs/FORGE_AND_MANTLE.md) | Mantle integration, forge system, Armory UI |
 | [docs/SERVER_ARCHITECTURE.md](docs/SERVER_ARCHITECTURE.md) | Multiplayer networking (host-as-server, future dedicated) |
+| [docs/SHARD_SYSTEM.md](docs/SHARD_SYSTEM.md) | Multi-server sharding for horizontal scaling |
 | [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Game world database (SQLite) - player data, persistence |
 | [docs/ITCH_RELEASE_GUIDE.md](docs/ITCH_RELEASE_GUIDE.md) | Export settings, itch.io publishing |
 | [docs/FUTURE_SPECS.md](docs/FUTURE_SPECS.md) | Settlement, class, vendor systems (NOT YET IMPLEMENTED) |

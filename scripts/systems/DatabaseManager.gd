@@ -1,12 +1,46 @@
 extends Node
 ## DatabaseManager - Handles player account storage and authentication
 ## Uses JSON file storage for simplicity (no external SQLite plugin required)
+##
+## SHARD SUPPORT:
+## Each shard stores its data in a separate directory:
+##   user://shards/{shard_id}/players.json
+##
+## Set shard_id BEFORE calling initialize_database():
+##   DatabaseManager.set_shard_id("001")
+##   DatabaseManager.initialize_database()
+##
+## Default shard is "default" for backwards compatibility (single-server mode)
 
 signal database_ready
 signal player_data_saved(username: String)
 signal auto_save_triggered
 
-const PLAYERS_FILE = "user://players.json"
+# ═══════════════════════════════════════════════════════════════════════════
+# SHARD CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+## Shard identifier - set via set_shard_id() before initialize_database()
+## Use "default" for single-server mode (backwards compatible)
+var shard_id: String = "default"
+
+## Returns the shard-specific players file path
+var players_file_path: String:
+	get:
+		if shard_id == "default":
+			# Backwards compatibility: single server uses root user:// directory
+			return "user://players.json"
+		else:
+			return "user://shards/%s/players.json" % shard_id
+
+## Returns the shard data directory
+var shard_directory: String:
+	get:
+		if shard_id == "default":
+			return "user://"
+		else:
+			return "user://shards/%s" % shard_id
+
 const SALT_LENGTH = 32
 const AUTO_SAVE_INTERVAL: float = 120.0  # 2 minutes
 
@@ -29,14 +63,86 @@ func _ready() -> void:
 	# Only initialize on server/host
 	pass
 
+# ═══════════════════════════════════════════════════════════════════════════
+# SHARD MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════════════
+
+func set_shard_id(id: String) -> void:
+	"""Set the shard ID. Must be called BEFORE initialize_database().
+
+	Args:
+		id: Shard identifier (e.g., "001", "us-west-1", "beta")
+			Use "default" for single-server mode (backwards compatible)
+	"""
+	if is_initialized:
+		push_error("[DatabaseManager] Cannot change shard_id after initialization!")
+		return
+
+	# Sanitize shard ID (alphanumeric, hyphens, underscores only)
+	var sanitized = ""
+	for c in id:
+		if c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_":
+			sanitized += c
+
+	if sanitized.is_empty():
+		push_error("[DatabaseManager] Invalid shard_id: %s" % id)
+		return
+
+	shard_id = sanitized
+	LogManager.info("[Shard:%s] Shard ID configured" % shard_id, "database")
+
+func get_shard_id() -> String:
+	"""Returns the current shard ID."""
+	return shard_id
+
+func _ensure_shard_directory() -> bool:
+	"""Create shard directory if it doesn't exist. Returns true on success."""
+	if shard_id == "default":
+		return true  # Default uses user://, always exists
+
+	var dir = DirAccess.open("user://")
+	if not dir:
+		push_error("[DatabaseManager] Cannot access user:// directory")
+		return false
+
+	# Create shards/ directory if needed
+	if not dir.dir_exists("shards"):
+		var err = dir.make_dir("shards")
+		if err != OK:
+			push_error("[DatabaseManager] Failed to create shards/ directory: %s" % err)
+			return false
+
+	# Create shard-specific directory if needed
+	var shard_path = "shards/%s" % shard_id
+	if not dir.dir_exists(shard_path):
+		var err = dir.make_dir_recursive(shard_path)
+		if err != OK:
+			push_error("[DatabaseManager] Failed to create shard directory: %s" % shard_path)
+			return false
+		LogManager.info("[Shard:%s] Created shard directory: %s" % [shard_id, shard_path], "database")
+
+	return true
+
 func initialize_database() -> bool:
-	"""Initialize the database - call this when hosting a game"""
+	"""Initialize the database - call this when hosting a game.
+
+	For multi-shard setups, call set_shard_id() first:
+		DatabaseManager.set_shard_id("001")
+		DatabaseManager.initialize_database()
+	"""
 	if is_initialized:
 		return true
 
+	# Ensure shard directory exists
+	if not _ensure_shard_directory():
+		return false
+
+	var db_path = players_file_path
+	LogManager.info("[Shard:%s] Initializing database: %s" % [shard_id, db_path], "database")
+
 	# Load existing player data
-	if FileAccess.file_exists(PLAYERS_FILE):
-		var file = FileAccess.open(PLAYERS_FILE, FileAccess.READ)
+	if FileAccess.file_exists(db_path):
+		var file = FileAccess.open(db_path, FileAccess.READ)
 		if file:
 			var json_string = file.get_as_text()
 			file.close()
@@ -45,23 +151,24 @@ func initialize_database() -> bool:
 			var parse_result = json.parse(json_string)
 			if parse_result == OK:
 				players_data = json.data
-				LogManager.info("Loaded %d player accounts" % players_data.size(), "database")
+				LogManager.info("[Shard:%s] Loaded %d player accounts" % [shard_id, players_data.size()], "database")
 			else:
 				push_error("[DatabaseManager] Failed to parse players file")
 				players_data = {}
 	else:
 		players_data = {}
-		LogManager.info("Created new players database", "database")
+		LogManager.info("[Shard:%s] Created new players database" % shard_id, "database")
 
 	is_initialized = true
 	database_ready.emit()
 	return true
 
 func save_database() -> bool:
-	"""Save all player data to disk"""
-	var file = FileAccess.open(PLAYERS_FILE, FileAccess.WRITE)
+	"""Save all player data to disk (shard-aware)"""
+	var db_path = players_file_path
+	var file = FileAccess.open(db_path, FileAccess.WRITE)
 	if not file:
-		push_error("[DatabaseManager] Failed to open players file for writing")
+		push_error("[DatabaseManager] [Shard:%s] Failed to open players file for writing: %s" % [shard_id, db_path])
 		return false
 
 	var json_string = JSON.stringify(players_data, "\t")
