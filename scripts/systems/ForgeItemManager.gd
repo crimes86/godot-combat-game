@@ -255,6 +255,11 @@ func _on_forged_items_response(result: int, response_code: int, _headers: Packed
 
 	forged_items_loaded.emit(_forged_items)
 
+	# Sync claimed items to inventory (for items claimed on other devices or via scripts)
+	var synced = sync_to_inventory()
+	if synced > 0:
+		LogManager.info("Synced %d claimed forged items to inventory" % synced, "forge")
+
 	# Also fetch forge status to know which achievements can be forged
 	fetch_forge_status()
 
