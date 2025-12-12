@@ -203,6 +203,33 @@ python icon_standards.py --preview     # Generate shop grid preview
 
 See `docs/FORGE_ASSET_GENERATION_GUIDE.md` for full details
 
+## LPC Helmet Layers
+
+Helmets from the LPC sprite generator can include **separate layers** for visors, wings, and other enhancements. When processing helmets:
+
+**Layer Structure:**
+- Base helmet layer (e.g., `130 xeon_helmet__gold_.png.png`)
+- Enhancement layers (e.g., `139 helmet_wings__gold_.png.png`, visor layers, etc.)
+
+**Processing Approach:**
+1. Extract all layers from the zip file
+2. Tint each layer separately if needed (base color, accent color, etc.)
+3. Composite layers together in order (base first, enhancements on top)
+4. Save the final composited sprite
+
+**Tinting:**
+- Use Python PIL to tint grayscale/white sprites to target colors
+- Preserve brightness/shading by multiplying color by (brightness/255)
+- Each layer can have a different tint color for multi-color effects
+
+**Example composite code:**
+```python
+from PIL import Image
+result = Image.new('RGBA', base.size, (0, 0, 0, 0))
+result.paste(base_tinted, (0, 0), base_tinted)
+result.paste(wings_tinted, (0, 0), wings_tinted)  # Wings on top
+```
+
 ## Forged Item Completion
 
 **Full Process:** `docs/ACHIEVEMENT_ITEM_CREATION_PROCESS.md`

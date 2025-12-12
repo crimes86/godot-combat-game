@@ -65,7 +65,10 @@ var equipped_armor = {
 	"hands": null,     # Gloves
 	"legs": null,      # Pants/greaves
 	"feet": null,      # Boots
-	"back": null       # Cape/cloak
+	"back": null,      # Cape/cloak
+	"ring1": null,     # Left ring (jewelry)
+	"ring2": null,     # Right ring (jewelry)
+	"amulet": null     # Neck amulet (jewelry)
 }
 
 # ============================================

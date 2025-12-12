@@ -1485,20 +1485,29 @@ func _build_forge_column() -> Control:
 	spacer3.custom_minimum_size = Vector2(0, 4)
 	vbox.add_child(spacer3)
 
-	# === CONTENT CONTAINER (switches based on tab) ===
+	# === SCROLLABLE CONTENT AREA ===
+	var forge_scroll = ScrollContainer.new()
+	forge_scroll.name = "ForgeScroll"
+	forge_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL  # Expand to fill available space
+	forge_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	forge_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	forge_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO  # Show scrollbar when needed
+	forge_scroll.z_index = 1
+	vbox.add_child(forge_scroll)
+
+	# === CONTENT CONTAINER (inside scroll) ===
 	_forge_content_container = PanelContainer.new()
 	_forge_content_container.name = "ForgeContent"
-	_forge_content_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Shrink to content, stay at top
+	_forge_content_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Shrink to content size
 	_forge_content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_forge_content_container.clip_contents = true  # Prevent overflow
-	_forge_content_container.z_index = 1  # Render above grid lines
 	var content_style = StyleBoxFlat.new()
 	content_style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Fully opaque dark bg
 	content_style.set_corner_radius_all(6)
 	content_style.border_color = BORDER_GLOW
 	content_style.set_border_width_all(2)
 	_forge_content_container.add_theme_stylebox_override("panel", content_style)
-	vbox.add_child(_forge_content_container)
+	forge_scroll.add_child(_forge_content_container)
 
 	# === ITEM DETAIL PANEL ===
 	var detail_panel = _build_forge_detail_panel()
@@ -2078,7 +2087,7 @@ func _on_bridge_out_complete(result: Dictionary, item_name: String, bridge_btn: 
 
 	if NotificationManager:
 		NotificationManager.show_notification(
-			"%s is unbinding. 48h cooldown started." % item_name,
+			"%s is unbinding. Cooldown started." % item_name,
 			"info"
 		)
 
@@ -2087,6 +2096,17 @@ func _on_bridge_out_complete(result: Dictionary, item_name: String, bridge_btn: 
 	_refresh_bridge_section()
 	_forge_selected_item = {}
 	_update_forge_detail({}, "locked")
+
+	# Immediately fetch bridge status to get accurate countdown
+	ForgeItemManager.fetch_bridge_status(_on_bridge_status_after_export)
+
+func _on_bridge_status_after_export(pending_bridges: Array) -> void:
+	"""Callback after fetching bridge status post-export - update countdown display"""
+	print("[Armory] Bridge status fetched after export, %d items pending" % pending_bridges.size())
+	# Refresh bridging out display with updated hours_remaining data
+	_update_bridging_out_display()
+	# Start countdown timer
+	_start_bridge_countdown_timer()
 
 func _on_cancel_bridge_pressed() -> void:
 	"""Handle CANCEL button press - cancel pending bridge-out"""
@@ -2835,14 +2855,32 @@ func _on_bridge_in_complete(bridged_items: Array, item_name: String) -> void:
 	if SoundManager:
 		SoundManager.play_equip_sound(-6.0)
 
-	if NotificationManager:
-		NotificationManager.show_notification("%s bound successfully!" % item_name, "success")
+	# Show success popup dialog instead of just a notification
+	_show_bridge_in_success_popup(item_name)
 
 	# Refresh UI
 	_refresh_forge_content()
 	_refresh_bridge_section()
 	_forge_selected_item = {}
 	_update_forge_detail({}, "locked")
+
+func _show_bridge_in_success_popup(item_name: String) -> void:
+	"""Show a clear success popup after bridge-in completes"""
+	var popup = AcceptDialog.new()
+	popup.title = "Item Imported!"
+	popup.dialog_text = "\"%s\" has been added to your inventory!\n\nOpen your BAG to find and equip it." % item_name
+	popup.ok_button_text = "GOT IT"
+	popup.min_size = Vector2(350, 120)
+
+	# Style the popup
+	popup.add_theme_color_override("font_color", Color(0.7, 1.0, 0.7))
+
+	add_child(popup)
+	popup.popup_centered()
+
+	# Clean up when closed
+	popup.confirmed.connect(func(): popup.queue_free())
+	popup.canceled.connect(func(): popup.queue_free())
 
 func _on_wallet_connect_pressed() -> void:
 	"""Handle wallet connect/disconnect button press"""
@@ -3047,12 +3085,16 @@ func _on_bridge_countdown_tick() -> void:
 						subchild.set_meta("last_update_time", now)
 						subchild.set_meta("was_active", true)
 					else:
-						subchild.text = "Ready!"
-						subchild.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))  # Green when ready
 						# Check if this just transitioned to ready
 						if was_active:
 							any_just_completed = true
 							subchild.set_meta("was_active", false)
+							# Show syncing state immediately
+							subchild.text = "Syncing..."
+							subchild.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2))  # Yellow while syncing
+						else:
+							subchild.text = "Ready!"
+							subchild.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))  # Green when ready
 
 	# Also update the detail panel bridge status if visible
 	_update_detail_panel_countdown()
@@ -3060,11 +3102,48 @@ func _on_bridge_countdown_tick() -> void:
 	# If any countdown just completed, trigger bridge status check for auto-confirm
 	if any_just_completed:
 		print("[Armory] Bridge countdown completed - triggering auto-confirm check")
-		ForgeItemManager.fetch_bridge_status()
+		ForgeItemManager.fetch_bridge_status(_on_bridge_auto_confirm_complete)
 
 	# Stop timer if no active countdowns
 	if not has_active_countdowns:
 		_stop_bridge_countdown_timer()
+
+func _on_bridge_auto_confirm_complete(pending_bridges: Array) -> void:
+	"""Callback after auto-confirm check completes - refresh UI to show updated status"""
+	print("[Armory] Auto-confirm check complete, %d items still pending" % pending_bridges.size())
+
+	# Update countdown labels - items that were confirmed will be gone from pending_bridges
+	if _bridge_out_container:
+		var items_row = _bridge_out_container.find_child("BridgeOutItemsRow", true, false)
+		if items_row:
+			for child in items_row.get_children():
+				for subchild in child.get_children():
+					if subchild is Label and subchild.name.begins_with("CountdownLabel_"):
+						# Check if this item is still pending
+						var label_name = subchild.name
+						var forged_id_str = label_name.replace("CountdownLabel_", "")
+						var still_pending = false
+						var new_hours = 0.0
+
+						for bridge_item in pending_bridges:
+							if str(bridge_item.get("forged_achievement_id", "")) == forged_id_str:
+								still_pending = true
+								new_hours = bridge_item.get("hours_remaining", 0.0)
+								break
+
+						if still_pending:
+							if new_hours > 0:
+								subchild.text = _format_bridge_countdown(new_hours)
+								subchild.set_meta("hours_remaining", new_hours)
+								subchild.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+							else:
+								subchild.text = "Ready!"
+								subchild.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+						# If not still pending, the item was confirmed - will be removed on next refresh
+
+	# Refresh the bridge section to remove confirmed items
+	call_deferred("_refresh_bridge_section")
+	call_deferred("_refresh_forge_content")
 
 func _update_detail_panel_countdown() -> void:
 	"""Update the countdown in the detail panel if a bridging item is selected"""
@@ -3108,6 +3187,10 @@ func _on_wallet_background_sync() -> void:
 	# Also check bridge status (will auto-confirm any ready items)
 	ForgeItemManager.fetch_bridge_status()
 
+	# Fetch bridge-in available items (items in wallet ready to import)
+	if ForgeItemManager.is_wallet_connected():
+		ForgeItemManager.fetch_bridge_in_available(_on_bridge_in_available_synced)
+
 func _on_wallet_background_sync_response(connected: bool, wallet_address: String) -> void:
 	"""Handle background sync response - only update UI if state changed"""
 	# Only update UI if connection state actually changed
@@ -3124,6 +3207,11 @@ func _on_wallet_background_sync_response(connected: bool, wallet_address: String
 			# Wallet was disconnected externally (e.g., from web app)
 			if NotificationManager:
 				NotificationManager.show_notification("Wallet disconnected", "info")
+
+func _on_bridge_in_available_synced(items: Array) -> void:
+	"""Callback when bridge-in available items are fetched during background sync"""
+	# Silently update the bridge-in display without notifications
+	_update_bridge_in_display(items)
 
 func _on_wallet_poll_tick() -> void:
 	"""Called each poll interval to check wallet status"""
@@ -3728,7 +3816,7 @@ func _build_forge_unified_content() -> Control:
 	2. FORGEABLE - Achievement unlocked, can forge via webapp (not in game)
 	3. LOCKED - Achievement not unlocked yet
 	"""
-	# Simple margin container - no scroll needed, content shrinks to fit
+	# Content inside scroll container - grows with items, scroll handles overflow
 	var margin = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 6)
 	margin.add_theme_constant_override("margin_right", 6)
