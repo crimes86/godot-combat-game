@@ -614,8 +614,9 @@ func take_damage(damage: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 
 
 func _spawn_combat_text(damage: float, is_crit: bool, is_weakpoint: bool) -> void:
-	"""Spawn floating combat text like skeletons"""
-	var spawn_pos = global_position + Vector2(randf_range(-20, 20), -40)
+	"""Spawn floating combat text - CombatText handles radial distribution"""
+	# Spawn at center-top of wolf, CombatText will apply radial offset
+	var spawn_pos = global_position + Vector2(0, -40)
 	var parent = get_tree().current_scene
 
 	# Use CombatText static factory methods

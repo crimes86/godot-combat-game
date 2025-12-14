@@ -1,7 +1,6 @@
-[gd_scene load_steps=3 format=3 uid="uid://armory_scene_001"]
+[gd_scene load_steps=2 format=3 uid="uid://b0bw54srgqkmi"]
 
-[ext_resource type="Script" path="res://scripts/ui/Armory.gd" id="1_armory"]
-[ext_resource type="AudioStream" path="res://assets/audio/music/armory.ogg" id="2_music"]
+[ext_resource type="Script" uid="uid://dl4gc055mcrs7" path="res://scripts/ui/Armory.gd" id="1_armory"]
 
 [node name="Armory" type="Control"]
 layout_mode = 3
@@ -11,8 +10,3 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_armory")
-
-[node name="ArmoryMusic" type="AudioStreamPlayer" parent="."]
-stream = ExtResource("2_music")
-volume_db = -10.0
-autoplay = true

@@ -535,6 +535,10 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F:
+			# UI F key has priority - don't open loot if any UI is open
+			if GameInput.is_any_ui_open():
+				return
+
 			print("💀 Corpse: F pressed - opening loot UI!")
 			_open_loot_ui()
 			get_viewport().set_input_as_handled()

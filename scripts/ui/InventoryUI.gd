@@ -19,10 +19,18 @@ var _refresh_scheduled: bool = false
 # Pending deletion data (for confirmation dialog)
 var pending_delete_data: Dictionary = {}
 
+# Mouse click-and-hold tracking for inspection
+var _long_hold_timer: Timer = null
+var _long_hold_slot_index: int = -1
+var _long_hold_start_time: float = 0.0
+var _radial_progress: Control = null
+const LONG_HOLD_DURATION = 0.6  # seconds (snappy but intentional)
+
 # UI References
 var main_panel: PanelContainer
 var inventory_slots: Array[Control] = []
 var gold_label: Label
+var slot_counter_label: Label
 
 # Stone Gray UI Palette (matching CharacterUI)
 const BG_COLOR = Color(0.12, 0.12, 0.14, 0.75)  # Dark stone gray (transparent for combat)
@@ -32,11 +40,12 @@ const ACCENT_COLOR = Color(0.55, 0.58, 0.62, 1.0)  # Light steel accent
 const TEXT_COLOR = Color(0.92, 0.92, 0.94, 1.0)  # Clean white text
 const HEADER_COLOR = Color(0.75, 0.78, 0.82, 1.0)  # Silver headers
 const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
+const SLOT_SIZE = UITheme.SLOT_SIZE  # Use centralized slot size (54px)
 
 func _ready() -> void:
-	# Set layer above game prompts (campfire hints are at 100)
-	# Use layer 105 so inventory can coexist with shop UI which may use similar layers
-	layer = 105
+	# Set layer above other UI panels so bag is always accessible on top
+	# Character sheet = 110, Skills panel = 115, Inspection = 120
+	layer = 125
 
 	# Add to group for tutorial system to find
 	add_to_group("inventory_ui")
@@ -50,15 +59,33 @@ func _ready() -> void:
 	# Connect to signals
 	CharacterStats.gold_changed.connect(_on_gold_changed)
 	InventorySystem.inventory_changed.connect(_on_inventory_changed)
+	InventorySystem.slots_expanded.connect(_on_slots_expanded)
 
 	# Initial update
 	refresh_all()
 
 func _input(event: InputEvent) -> void:
+	"""Global input handler for ESC key"""
+	if not visible:
+		return
+
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_ESCAPE and is_visible:
+		if event.keycode == KEY_ESCAPE:
 			toggle_ui()
 			get_viewport().set_input_as_handled()
+
+func _process(delta: float) -> void:
+	"""Update cursor-following radial progress indicator"""
+	if not visible:
+		return
+
+	# Update radial progress position and fill
+	if _radial_progress and _long_hold_start_time > 0:
+		_radial_progress.global_position = get_viewport().get_mouse_position() - Vector2(24, 24)
+		var elapsed = (Time.get_ticks_msec() / 1000.0) - _long_hold_start_time
+		var progress = clampf(elapsed / LONG_HOLD_DURATION, 0.0, 1.0)
+		_radial_progress.set_meta("progress", progress)
+		_radial_progress.queue_redraw()
 
 func create_inventory_ui() -> void:
 	"""Create standalone inventory window"""
@@ -89,8 +116,8 @@ func create_inventory_ui() -> void:
 	main_panel.anchor_right = 1.0
 	main_panel.anchor_bottom = 1.0
 	# Position from bottom-right corner with padding
-	# 6 columns: 56px*6 slots + 4px*5 gaps + 20px padding + borders = ~400px
-	main_panel.offset_left = -400
+	# 5 columns: 54px*5 slots + 6px*4 gaps + 20px padding + borders = ~320px
+	main_panel.offset_left = -330
 	main_panel.offset_right = -10
 	main_panel.offset_top = 0   # Will be determined by content size + grow direction
 	main_panel.offset_bottom = -10  # 10px from bottom edge
@@ -125,25 +152,39 @@ func create_inventory_ui() -> void:
 	main_vbox.add_theme_constant_override("separation", 8)
 	margin.add_child(main_vbox)
 
-	# Inventory grid (6 columns for square layout) - no inner panel, just the grid
+	# Scrollable inventory container
+	var scroll_container = ScrollContainer.new()
+	scroll_container.name = "InventoryScroll"
+	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	# Set max visible height (shows all 5 rows of 5x5 grid)
+	scroll_container.custom_minimum_size = Vector2(0, 294)
+	main_vbox.add_child(scroll_container)
+
+	# Inventory grid (5 columns, larger slots)
 	var inv_grid = GridContainer.new()
 	inv_grid.name = "InventoryGrid"
-	inv_grid.columns = 6
-	inv_grid.add_theme_constant_override("h_separation", 4)
-	inv_grid.add_theme_constant_override("v_separation", 4)
-	main_vbox.add_child(inv_grid)
+	inv_grid.columns = 5
+	inv_grid.add_theme_constant_override("h_separation", 6)
+	inv_grid.add_theme_constant_override("v_separation", 6)
+	scroll_container.add_child(inv_grid)
 
-	# Create inventory slots
-	for i in range(InventorySystem.MAX_INVENTORY_SLOTS):
+	# Create inventory slots (starts with current_slot_count, expands dynamically)
+	for i in range(InventorySystem.current_slot_count):
 		var slot_button = create_inventory_slot(i)
 		inv_grid.add_child(slot_button)
 		inventory_slots.append(slot_button)
 
-	# Gold display at bottom - just icon and number
+	# Bottom bar with gold and slot counter
+	var bottom_bar = HBoxContainer.new()
+	bottom_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom_bar.add_theme_constant_override("separation", 20)
+	main_vbox.add_child(bottom_bar)
+
+	# Gold display
 	var gold_container = HBoxContainer.new()
-	gold_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	gold_container.add_theme_constant_override("separation", 4)
-	main_vbox.add_child(gold_container)
+	bottom_bar.add_child(gold_container)
 
 	var gold_icon = TextureRect.new()
 	gold_icon.texture = preload("res://assets/icons/gold_coins.png")
@@ -155,13 +196,18 @@ func create_inventory_ui() -> void:
 	gold_label.add_theme_color_override("font_color", HEADER_COLOR)
 	gold_container.add_child(gold_label)
 
+	# Slot counter (X/100)
+	slot_counter_label = create_text_label("0/100", 14)
+	slot_counter_label.add_theme_color_override("font_color", ACCENT_COLOR)
+	bottom_bar.add_child(slot_counter_label)
+
 	add_child(main_panel)
 
 func create_inventory_slot(slot_index: int) -> Control:
 	"""Create a single inventory slot button with drag-drop support"""
 	var slot_control = Control.new()
 	slot_control.name = "InvSlot_" + str(slot_index)
-	slot_control.custom_minimum_size = Vector2(56, 56)
+	slot_control.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
 	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP  # Ensure we receive input
 	slot_control.set_meta("slot_index", slot_index)
 	slot_control.set_meta("slot_type", "inventory")
@@ -175,7 +221,7 @@ func create_inventory_slot(slot_index: int) -> Control:
 
 	# Add panel for styling
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(56, 56)
+	panel.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot_control.add_child(panel)
 
@@ -192,8 +238,9 @@ func create_inventory_slot(slot_index: int) -> Control:
 	# Add icon texture rect (scaled to fit most of the slot)
 	var icon = TextureRect.new()
 	icon.name = "ItemIcon"
-	icon.custom_minimum_size = Vector2(48, 48)  # Larger icon to fill slot better
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.custom_minimum_size = Vector2(SLOT_SIZE - 8, SLOT_SIZE - 8)  # Icon fills most of slot
+	icon.size = Vector2(SLOT_SIZE - 8, SLOT_SIZE - 8)  # Force size
+	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.visible = false  # Hidden until we have an icon
@@ -247,6 +294,10 @@ func create_inventory_slot(slot_index: int) -> Control:
 
 	# Connect click event
 	slot_control.gui_input.connect(_on_inventory_slot_gui_input.bind(slot_index))
+
+	# Connect hover events for F key inspection
+	slot_control.mouse_entered.connect(_on_slot_mouse_entered.bind(slot_index))
+	slot_control.mouse_exited.connect(_on_slot_mouse_exited)
 
 	return slot_control
 
@@ -332,20 +383,20 @@ func create_inner_panel_style() -> StyleBoxFlat:
 	return style
 
 func get_rarity_glow_color(rarity_str: String) -> Color:
-	"""Get glow color for item rarity"""
+	"""Get glow color for item rarity - brighter/more saturated for visibility"""
 	match rarity_str.to_upper():
 		"COMMON":
-			return Color(0.6, 0.6, 0.6, 0.9)
+			return Color(0.5, 0.5, 0.5, 1.0)  # Gray
 		"UNCOMMON":
-			return Color(0.4, 0.8, 0.4, 1.0)
+			return Color(0.2, 0.9, 0.2, 1.0)  # Bright green
 		"RARE":
-			return Color(0.4, 0.5, 0.9, 1.0)
+			return Color(0.3, 0.5, 1.0, 1.0)  # Bright blue
 		"EPIC":
-			return Color(0.7, 0.4, 0.9, 1.0)
+			return Color(0.8, 0.3, 1.0, 1.0)  # Bright purple
 		"LEGENDARY":
-			return Color(0.9, 0.6, 0.2, 1.0)
+			return Color(1.0, 0.6, 0.1, 1.0)  # Bright orange
 		"ARTIFACT":
-			return Color(0.9, 0.8, 0.3, 1.0)
+			return Color(1.0, 0.85, 0.2, 1.0)  # Bright gold
 		_:
 			return BORDER_INNER
 
@@ -373,11 +424,21 @@ func refresh_all() -> void:
 	"""Refresh all UI elements"""
 	refresh_inventory()
 	refresh_gold()
+	refresh_slot_counter()
 
 func refresh_gold() -> void:
 	"""Update gold display"""
 	if gold_label:
 		gold_label.text = "%d" % CharacterStats.gold
+
+func refresh_slot_counter() -> void:
+	"""Update slot counter (X/100)"""
+	if slot_counter_label:
+		var item_count = 0
+		for item in InventorySystem.inventory_items:
+			if item != null:
+				item_count += 1
+		slot_counter_label.text = "%d/%d" % [item_count, InventorySystem.MAX_INVENTORY_SLOTS]
 
 func refresh_inventory() -> void:
 	"""Update inventory slot displays"""
@@ -478,24 +539,34 @@ func refresh_inventory() -> void:
 			var rarity = item.get("rarity", "COMMON")
 			# is_forged already declared above
 
+			# DEBUG: Print rarity info for all items
+			if DEBUG_FORGED_DISPLAY:
+				print("[InventoryUI] Item '%s' rarity='%s' is_forged=%s" % [item_name, rarity, is_forged])
+
 			# Determine glow color - use custom glow_color for forged items if available
+			# BUT ignore white (#ffffff) since that's not a good border color - use rarity instead
 			var glow_color: Color
 			if is_forged and item.has("glow_color"):
 				var glow_str = item.get("glow_color", "")
-				if DEBUG_FORGED_DISPLAY and is_forged:
+				if DEBUG_FORGED_DISPLAY:
 					print("[InventoryUI]   glow_str from item: '%s'" % glow_str)
-				if glow_str.begins_with("#"):
+				# Ignore white glow colors - fall back to rarity
+				if glow_str.begins_with("#") and glow_str.to_lower() != "#ffffff" and glow_str.to_lower() != "#fff":
 					glow_color = Color.from_string(glow_str, get_rarity_glow_color(rarity))
-					if DEBUG_FORGED_DISPLAY and is_forged:
+					if DEBUG_FORGED_DISPLAY:
 						print("[InventoryUI]   Parsed glow_color: %s" % glow_color)
 				else:
 					glow_color = get_rarity_glow_color(rarity)
-					if DEBUG_FORGED_DISPLAY and is_forged:
-						print("[InventoryUI]   Using rarity glow (no # prefix): %s" % glow_color)
+					if DEBUG_FORGED_DISPLAY:
+						print("[InventoryUI]   Using rarity glow (white/invalid glow_color): %s" % glow_color)
 			else:
 				glow_color = get_rarity_glow_color(rarity)
-				if DEBUG_FORGED_DISPLAY and is_forged:
+				if DEBUG_FORGED_DISPLAY:
 					print("[InventoryUI]   Using rarity glow (no glow_color field): %s" % glow_color)
+
+			# DEBUG: Print final glow color
+			if DEBUG_FORGED_DISPLAY:
+				print("[InventoryUI]   Final border color: %s" % glow_color)
 
 			var glow_style = create_slot_style(SLOT_BG, glow_color, 3, true)
 			panel.add_theme_stylebox_override("panel", glow_style)
@@ -542,6 +613,9 @@ func refresh_inventory() -> void:
 				if effort_tier != "":
 					tooltip += "\nTier: %s" % effort_tier
 
+			# Add click-and-hold hint for all items
+			tooltip += "\n\n[Click and hold for details]"
+
 			slot_control.tooltip_text = tooltip
 		else:
 			# Empty slot - most state already reset above, just set tooltip and style
@@ -549,63 +623,241 @@ func refresh_inventory() -> void:
 			var default_style = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 			panel.add_theme_stylebox_override("panel", default_style)
 
+func _on_slot_mouse_entered(slot_index: int) -> void:
+	"""Track which slot the mouse is hovering over (for tooltips)"""
+	pass  # Just for tooltip system
+
+func _on_slot_mouse_exited() -> void:
+	"""Cancel radial when mouse leaves slot"""
+	_cancel_long_hold()
+
 func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
-	"""Handle GUI input on inventory slot (double-click or right-click to equip/use)"""
-	if event is InputEventMouseButton and event.pressed:
-		if (event.button_index == MOUSE_BUTTON_LEFT and event.double_click) or event.button_index == MOUSE_BUTTON_RIGHT:
-			var item = InventorySystem.get_item(slot_index)
+	"""Handle GUI input on inventory slot (click-and-hold to inspect, double-click/right-click to equip/use)"""
+	if event is InputEventMouseButton:
+		if event.pressed:
+			# Double-click to equip/use
+			if event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
+				_cancel_long_hold()  # Cancel any ongoing hold
+				_equip_or_use_item(slot_index)
+			# Right-click to equip/use
+			elif event.button_index == MOUSE_BUTTON_RIGHT:
+				_cancel_long_hold()  # Cancel any ongoing hold
+				_equip_or_use_item(slot_index)
+			# Single left-click starts hold timer for inspection
+			elif event.button_index == MOUSE_BUTTON_LEFT:
+				_start_long_hold(slot_index)
+		elif not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			# Mouse button released - cancel hold
+			_cancel_long_hold()
 
-			if item and item.size() > 0:
-				if DEBUG_EQUIP:
-					print("[Equip] Inventory slot %d: %s (type=%s, slot=%s)" % [slot_index, item.get("name", "?"), item.get("type", ""), item.get("slot", "")])
+func _equip_or_use_item(slot_index: int) -> void:
+	"""Equip or use item at slot index"""
+	var item = InventorySystem.get_item(slot_index)
 
-				# Check if it's a placeable item (like Campfire Kit)
-				if item.get("type", "") == "placeable":
-					use_placeable_item(item, slot_index)
+	if item and item.size() > 0:
+		if DEBUG_EQUIP:
+			print("[Equip] Inventory slot %d: %s (type=%s, slot=%s)" % [slot_index, item.get("name", "?"), item.get("type", ""), item.get("slot", "")])
+
+		# Check if it's a placeable item (like Campfire Kit)
+		if item.get("type", "") == "placeable":
+			use_placeable_item(item, slot_index)
+			return
+
+		# Check if it's a tool
+		if item.get("type", "") == "tool":
+			var tool_type = item.get("tool_type", "")
+			var equipped = false
+
+			if tool_type == "axe":
+				equipped = InventorySystem.equip_axe(item)
+			elif tool_type == "pickaxe":
+				equipped = InventorySystem.equip_pickaxe(item)
+
+			if equipped:
+				InventorySystem.remove_item(slot_index)
+				SoundManager.play_equip_sound()
+				refresh_all()
+		# Check if it's a weapon
+		elif item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
+			var weapon = dict_to_weapon(item)
+			if weapon:
+				# If there's already a weapon equipped, do a direct swap
+				if CharacterStats.equipped_weapon:
+					if DEBUG_EQUIP:
+						print("[Equip] Swapping weapons - %s for %s" % [CharacterStats.equipped_weapon.weapon_name, weapon.weapon_name])
+					# Get the old weapon data before clearing it
+					var old_weapon_dict = CharacterStats.get_equipped_weapon_data()
+					if old_weapon_dict.is_empty():
+						old_weapon_dict = CharacterStats.get_weapon_as_dict()
+
+					# Clear the equipped weapon without adding to inventory
+					CharacterStats.equipped_weapon = null
+					CharacterStats.equipped_weapon_data = {}
+					CharacterStats.weapon_unequipped.emit()
+
+					# Remove new weapon from inventory slot and put old weapon there
+					InventorySystem.set_item(slot_index, old_weapon_dict)
+
+					# Equip the new weapon
+					CharacterStats.equip_weapon(weapon, item)
+				else:
+					# No weapon equipped, just equip normally
+					CharacterStats.equip_weapon(weapon, item)
+					InventorySystem.remove_item(slot_index)
+
+				SoundManager.play_equip_sound()
+				refresh_all()
+				# Notify tutorial system
+				if TutorialManager:
+					TutorialManager.on_item_equipped(item)
+		# Check if it's armor or accessory
+		elif item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
+			var target_slot = item.get("slot", "")
+
+			# Special handling for rings: if ring1 is occupied, try ring2
+			if target_slot == "ring1" and CharacterStats.equipped_armor["ring1"] != null:
+				if CharacterStats.equipped_armor["ring2"] == null:
+					# ring2 is free, use it instead
+					var ring_item = item.duplicate()
+					ring_item["slot"] = "ring2"
+					if CharacterStats.equip_armor(ring_item):
+						InventorySystem.remove_item(slot_index)
+						SoundManager.play_equip_sound()
+						refresh_all()
+						if TutorialManager:
+							TutorialManager.on_item_equipped(item)
 					return
+				else:
+					# Both ring slots occupied - swap with ring1
+					var old_ring = CharacterStats.equipped_armor["ring1"]
+					if old_ring:
+						InventorySystem.set_item(slot_index, old_ring)
+					CharacterStats.equipped_armor["ring1"] = null
 
-				# Check if it's a tool
-				if item.get("type", "") == "tool":
-					var tool_type = item.get("tool_type", "")
-					var equipped = false
+			# Normal armor equip
+			if CharacterStats.equip_armor(item):
+				InventorySystem.remove_item(slot_index)
+				SoundManager.play_equip_sound()
+				refresh_all()
+				# Notify tutorial system
+				if TutorialManager:
+					TutorialManager.on_item_equipped(item)
 
-					if tool_type == "axe":
-						equipped = InventorySystem.equip_axe(item)
-					elif tool_type == "pickaxe":
-						equipped = InventorySystem.equip_pickaxe(item)
+# ============================================
+# MOUSE CLICK-AND-HOLD RADIAL SYSTEM
+# ============================================
 
-					if equipped:
-						InventorySystem.remove_item(slot_index)
-						SoundManager.play_equip_sound()
-						refresh_all()
-				# Check if it's a weapon
-				elif item.get("type", "") == "weapon" and item.get("slot", "") == "mainhand":
-					var weapon = dict_to_weapon(item)
-					if weapon:
-						# If there's already a weapon equipped, unequip it first
-						if CharacterStats.equipped_weapon:
-							if DEBUG_EQUIP:
-								print("[Equip] Swapping weapons - unequipping %s first" % CharacterStats.equipped_weapon.weapon_name)
-							if not CharacterStats.unequip_weapon():
-								if DEBUG_EQUIP:
-									print("[Equip] Cannot swap weapons - inventory full!")
-								return
-						CharacterStats.equip_weapon(weapon, item)  # Pass item data for forged metadata
-						InventorySystem.remove_item(slot_index)
-						SoundManager.play_equip_sound()
-						refresh_all()
-						# Notify tutorial system
-						if TutorialManager:
-							TutorialManager.on_item_equipped(item)
-				# Check if it's armor
-				elif item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
-					if CharacterStats.equip_armor(item):
-						InventorySystem.remove_item(slot_index)
-						SoundManager.play_equip_sound()
-						refresh_all()
-						# Notify tutorial system
-						if TutorialManager:
-							TutorialManager.on_item_equipped(item)
+func _start_long_hold(slot_index: int) -> void:
+	"""Start long-hold timer with cursor-following radial progress indicator"""
+	_cancel_long_hold()
+	_long_hold_slot_index = slot_index
+	_long_hold_start_time = Time.get_ticks_msec() / 1000.0
+
+	_long_hold_timer = Timer.new()
+	_long_hold_timer.wait_time = LONG_HOLD_DURATION
+	_long_hold_timer.one_shot = true
+	_long_hold_timer.timeout.connect(_on_long_hold_triggered)
+	add_child(_long_hold_timer)
+	_long_hold_timer.start()
+
+	# Create cursor-following radial progress indicator
+	_radial_progress = _create_radial_progress()
+	add_child(_radial_progress)
+
+func _cancel_long_hold() -> void:
+	"""Cancel long-hold timer and hide radial progress"""
+	if _long_hold_timer:
+		_long_hold_timer.stop()
+		_long_hold_timer.queue_free()
+		_long_hold_timer = null
+	if _radial_progress:
+		_radial_progress.queue_free()
+		_radial_progress = null
+	_long_hold_slot_index = -1
+	_long_hold_start_time = 0.0
+
+func _create_radial_progress() -> Control:
+	"""Create a cursor-following radial progress indicator"""
+	var radial = Control.new()
+	radial.custom_minimum_size = Vector2(48, 48)
+	radial.size = Vector2(48, 48)
+	radial.z_index = 100
+	radial.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	radial.set_meta("progress", 0.0)
+
+	radial.draw.connect(func():
+		var progress = radial.get_meta("progress", 0.0)
+		var center = Vector2(24, 24)
+		var radius = 18.0
+		var inner_radius = 12.0
+
+		# Dark backdrop disc
+		radial.draw_circle(center, radius + 4, Color(0.0, 0.0, 0.0, 0.6))
+
+		# Inner dark circle
+		radial.draw_circle(center, inner_radius, Color(0.08, 0.08, 0.1, 0.9))
+
+		# Track ring (subtle)
+		radial.draw_arc(center, radius, 0, TAU, 48, Color(0.3, 0.3, 0.35, 0.5), 4.0)
+
+		# Progress arc with glow effect
+		if progress > 0:
+			var start_angle = -PI/2
+			var end_angle = -PI/2 + (progress * TAU)
+
+			# Outer glow
+			radial.draw_arc(center, radius, start_angle, end_angle, 48, Color(1.0, 0.75, 0.2, 0.3), 8.0)
+			# Main arc
+			radial.draw_arc(center, radius, start_angle, end_angle, 48, Color(1.0, 0.85, 0.3, 1.0), 4.0)
+			# Inner bright edge
+			radial.draw_arc(center, radius - 1, start_angle, end_angle, 48, Color(1.0, 0.95, 0.6, 0.8), 1.5)
+
+			# Tip indicator dot
+			var tip_pos = center + Vector2(cos(end_angle), sin(end_angle)) * radius
+			radial.draw_circle(tip_pos, 4.0, Color(1.0, 0.95, 0.7, 1.0))
+			radial.draw_circle(tip_pos, 2.5, Color(1.0, 1.0, 1.0, 1.0))
+
+		# Center icon (magnifying glass hint)
+		var icon_color = Color(0.6, 0.6, 0.65, 0.8) if progress == 0 else Color(1.0, 0.9, 0.5, 1.0)
+		radial.draw_arc(center + Vector2(-2, -2), 5.0, 0, TAU, 16, icon_color, 1.5)
+		radial.draw_line(center + Vector2(2, 2), center + Vector2(6, 6), icon_color, 1.5)
+	)
+
+	return radial
+
+func _on_long_hold_triggered() -> void:
+	"""Called when long-hold duration reached - open inspection panel"""
+	var slot_index = _long_hold_slot_index
+	_cancel_long_hold()
+
+	if slot_index < 0:
+		return
+
+	var item = InventorySystem.get_item(slot_index)
+	if item and not item.is_empty():
+		_open_item_inspection(item)
+
+func _open_inspection_for_slot(slot_index: int) -> void:
+	"""Open inspection panel for item in slot"""
+	var item = InventorySystem.get_item(slot_index)
+	if item and not item.is_empty():
+		_open_item_inspection(item)
+
+func _open_item_inspection(item_data: Dictionary) -> void:
+	"""Open the item inspection panel"""
+	var inspection_ui = get_tree().get_first_node_in_group("item_inspection_ui")
+	if not inspection_ui:
+		inspection_ui = get_node_or_null("/root/ItemInspectionUI")
+
+	if not inspection_ui:
+		var InspectionUIScene = load("res://scripts/ui/ItemInspectionUI.gd")
+		if InspectionUIScene:
+			inspection_ui = InspectionUIScene.new()
+			inspection_ui.add_to_group("item_inspection_ui")
+			get_tree().root.add_child(inspection_ui)
+
+	if inspection_ui:
+		inspection_ui.inspect_item(item_data)
 
 func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	"""Convert a weapon dictionary to a Weapon resource"""
@@ -624,7 +876,7 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 
 	# Gun weapon properties
 	weapon.gun_radius = item_dict.get("gun_radius", 28.0)
-	weapon.gun_range = item_dict.get("gun_range", 350.0)
+	weapon.gun_range = item_dict.get("gun_range", 550.0)
 	weapon.gun_subtype = item_dict.get("gun_subtype", "railgun")
 	weapon.burst_count = item_dict.get("burst_count", 1)
 	weapon.burst_delay = item_dict.get("burst_delay", 0.10)
@@ -815,6 +1067,22 @@ func _on_inventory_changed() -> void:
 	# This prevents race conditions when rapidly equipping/unequipping items
 	_schedule_refresh()
 
+func _on_slots_expanded(new_count: int) -> void:
+	"""Add new slot buttons when inventory expands"""
+	var inv_grid = _find_node_recursive(main_panel, "InventoryGrid")
+	if not inv_grid:
+		return
+
+	# Add new slots from current count to new count
+	var current_ui_slots = inventory_slots.size()
+	for i in range(current_ui_slots, new_count):
+		var slot_button = create_inventory_slot(i)
+		inv_grid.add_child(slot_button)
+		inventory_slots.append(slot_button)
+
+	# Refresh to update display
+	_schedule_refresh()
+
 func _schedule_refresh() -> void:
 	"""Schedule a deferred refresh to coalesce rapid updates"""
 	_needs_refresh = true
@@ -829,6 +1097,7 @@ func _do_deferred_refresh() -> void:
 	if _needs_refresh:
 		_needs_refresh = false
 		refresh_inventory()
+		refresh_slot_counter()
 
 func _find_node_recursive(parent: Node, node_name: String) -> Node:
 	"""Recursively search for a node by name"""

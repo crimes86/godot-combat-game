@@ -51,7 +51,7 @@ const WEAKPOINT_TRIGGER_ON_CRIT: bool = false  # Legacy: if true, crits still tr
 # This ensures consistent TTK regardless of player damage scaling.
 
 # Expected weakpoint windows to kill each enemy type
-const TTK_WINDOWS_TRASH: int = 1       # Regular mobs: 1 perfect window
+const TTK_WINDOWS_TRASH: int = 2       # Regular mobs: 2 perfect windows (native weapons)
 const TTK_WINDOWS_ELITE: int = 3       # Elite/Guardian mobs: 2-3 windows
 const TTK_WINDOWS_BOSS: int = 7        # Bosses: 6-8 windows
 const TTK_WINDOWS_PLAYER_PVP: int = 4  # Players in PvP: 3-5 windows

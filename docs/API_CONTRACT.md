@@ -1048,6 +1048,245 @@ The `/api/me/forge-status` endpoint now includes bridge information:
 
 ---
 
+## World Tree & Chunk Expansion Endpoints
+
+### Get All Seed Plots
+```
+GET /api/world-tree/seed-plots?shard_id={shard_id}
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "seed_plots": [
+    {
+      "chunk_id": -1,
+      "position_x": -4000.0,
+      "position_y": 0.0,
+      "owner_id": "123",
+      "state": "claimed",
+      "claim_cost": 1000,
+      "contribution_score": 15420,
+      "claimed_at": "2024-12-13T10:30:00",
+      "last_contribution_at": "2024-12-13T14:22:00"
+    }
+  ]
+}
+```
+
+---
+
+### Get Specific Seed Plot
+```
+GET /api/world-tree/seed-plots/{chunk_id}?shard_id={shard_id}
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "seed_plot": {
+    "chunk_id": -1,
+    "position_x": -4000.0,
+    "position_y": 0.0,
+    "owner_id": "123",
+    "state": "claimed",
+    "claim_cost": 1000,
+    "contribution_score": 15420,
+    "total_gold_contributed": 5000,
+    "total_wood_contributed": 200,
+    "total_stone_contributed": 150,
+    "total_kills": 842,
+    "total_time_minutes": 1320,
+    "claimed_at": "2024-12-13T10:30:00",
+    "last_contribution_at": "2024-12-13T14:22:00"
+  }
+}
+```
+
+---
+
+### Claim Seed Plot
+```
+POST /api/world-tree/seed-plots/{chunk_id}/claim
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "chunk_id": -2,
+  "shard_id": "default"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "cost": 2000,
+  "plot_id": -2,
+  "message": "Seed plot claimed for 2000 gold"
+}
+```
+
+**Notes:**
+- Claim cost scales exponentially: base_cost * 2^(distance - 1)
+- Half price during decay state
+- Deducts gold from player's in-game balance
+
+---
+
+### Contribute to Seed Plot
+```
+POST /api/world-tree/seed-plots/{chunk_id}/contribute
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "chunk_id": -1,
+  "shard_id": "default",
+  "gold": 100,
+  "wood": 50,
+  "stone": 30,
+  "gems": 2,
+  "kills": 15,
+  "time_minutes": 60
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "score_added": 347,
+  "total_score": 15767,
+  "message": "Contributed 347 points to seed plot"
+}
+```
+
+**Scoring:**
+- Gold: 1 point each
+- Wood/Stone: 5 points each
+- Gems: 50 points each
+- Kills: 2 points each
+- Time: 1 point per hour
+
+---
+
+### Get World Tree Rankings
+```
+GET /api/world-tree/rankings?shard_id={shard_id}&week_number={week}
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "week_number": 2765,
+  "rankings": [
+    {
+      "rank": 1,
+      "owner_id": "123",
+      "total_score": 24580,
+      "promoted_to_origin": true,
+      "promoted_at": "2024-12-13T00:00:00",
+      "blockchain_tx_hash": "0xabc123..."
+    }
+  ]
+}
+```
+
+**Notes:**
+- Rankings calculated every Sunday midnight UTC
+- Top seed plot promoted to World Tree (Chunk -1)
+- Winner recorded on Mantle blockchain
+
+---
+
+### Get Current Week Live Rankings
+```
+GET /api/world-tree/rankings/current?shard_id={shard_id}
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "rankings": [
+    {
+      "rank": 1,
+      "chunk_id": -2,
+      "owner_id": "123",
+      "total_score": 15420
+    }
+  ]
+}
+```
+
+**Notes:**
+- Real-time rankings (not finalized)
+- Updates as contributions come in
+
+---
+
+### Get Player Ranking
+```
+GET /api/world-tree/rankings/player/{user_id}?shard_id={shard_id}
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "ranked": true,
+  "rank": 3,
+  "total_score": 8940,
+  "chunk_id": -1
+}
+```
+
+---
+
+### Record World Tree on Blockchain
+```
+POST /api/world-tree/record
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "week_number": 2765,
+  "shard_id": "default",
+  "chunk_id": -1,
+  "owner_id": "123",
+  "total_score": 24580,
+  "top_contributors": [...],
+  "recorded_at": "2024-12-13T00:00:00"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "record_id": 42,
+  "tx_hash": "0xabc123...",
+  "message": "World Tree winner recorded on blockchain"
+}
+```
+
+**Notes:**
+- Called automatically by server on Sunday midnight
+- Records winner permanently on Mantle L2
+- Includes top 10 contributors with wallet addresses
+- IPFS metadata link for detailed stats
+
+---
+
 ## Admin Endpoints
 
 ### Grant Admin Status
@@ -1309,15 +1548,16 @@ Show mantle          Show login                │
 
 ## Version
 
-- **API Version**: 1.4
-- **Last Updated**: 2024-12-10
-- **Backend Status**: Complete (bridge system, indexer, trading all implemented)
-- **Godot Status**: Complete (Armory UI with bind/unbind/lockbox terminology)
+- **API Version**: 1.5
+- **Last Updated**: 2024-12-13
+- **Backend Status**: Complete (bridge system, indexer, trading, world tree expansion all implemented)
+- **Godot Status**: Complete (Armory UI with bind/unbind/lockbox terminology, ChunkExpansionManager for world tree)
 
 ## Changelog
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2024-12-13 | 1.5 | Added World Tree & Chunk Expansion endpoints: seed plot claiming, contribution tracking, weekly rankings, blockchain recording. Database migration 7e8f9a0b1c2d adds seed_plots, active_chunks, world_tree_rankings, world_tree_contributions tables |
 | 2024-12-10 | 1.4 | Updated status to reflect complete implementation. Note: Godot UI uses "bind/unbind" instead of "bridge" and "lockbox" instead of "wallet" for RPG-friendly terminology |
 | 2024-12-09 | 1.3 | Added Bridge System endpoints (bridge-out, bridge-in, status), updated forge-status with bridge information, added BridgeStatus enum and BridgeTransaction table |
 | 2024-12-08 | 1.2 | Added Trading & Economy endpoints, expanded provenance response, added census endpoint, documented twinking system and provenance concepts |

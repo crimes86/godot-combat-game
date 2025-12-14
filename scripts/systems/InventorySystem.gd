@@ -13,10 +13,13 @@ const DEBUG_EQUIP: bool = true  # Debug tool equipping
 # INVENTORY DATA
 # ============================================
 
-const MAX_INVENTORY_SLOTS: int = 36  # 6 rows x 6 columns (square grid)
+const MAX_INVENTORY_SLOTS: int = 100  # Maximum slots (20 rows x 5 columns)
+const SLOTS_PER_ROW: int = 5          # Columns in grid
+const MIN_VISIBLE_ROWS: int = 5       # Minimum rows shown (5x5 = 25 slots)
 
 var inventory_items: Array = []  # Array of item dictionaries
 var suppress_signals: bool = false  # Flag to suppress signal emissions
+var current_slot_count: int = 25  # Current number of slots (grows dynamically)
 
 # Tool slots - for gathering tools
 var equipped_axe: Dictionary = {}  # Axe slot for tree chopping
@@ -29,6 +32,7 @@ var equipped_pickaxe: Dictionary = {}  # Pickaxe slot for rock mining
 signal inventory_changed()
 signal item_added(item: Dictionary)
 signal item_removed(item: Dictionary, slot: int)
+signal slots_expanded(new_count: int)  # Emitted when inventory grows
 signal axe_equipped(axe: Dictionary)
 signal axe_unequipped(axe: Dictionary)
 signal pickaxe_equipped(pickaxe: Dictionary)
@@ -41,12 +45,42 @@ signal pickaxe_unequipped(pickaxe: Dictionary)
 func _ready() -> void:
 	Constants.debug_log("═══════════════════════════════════════")
 	Constants.debug_log("InventorySystem initialized")
-	Constants.debug_log("Max slots: %d" % MAX_INVENTORY_SLOTS)
+	Constants.debug_log("Max slots: %d, Starting slots: %d" % [MAX_INVENTORY_SLOTS, current_slot_count])
 	Constants.debug_log("═══════════════════════════════════════")
 
-	# Initialize empty inventory
-	for i in range(MAX_INVENTORY_SLOTS):
+	# Initialize with minimum visible slots (5x5 = 25)
+	current_slot_count = MIN_VISIBLE_ROWS * SLOTS_PER_ROW
+	for i in range(current_slot_count):
 		inventory_items.append(null)
+
+func get_needed_slot_count() -> int:
+	"""Calculate slots needed to fit all items + complete the row"""
+	var item_count = 0
+	for item in inventory_items:
+		if item != null:
+			item_count += 1
+
+	# Need at least one more row than items fill (for adding new items)
+	var rows_needed = ceili(float(item_count + 1) / SLOTS_PER_ROW)
+	# Minimum 5 rows visible
+	rows_needed = max(rows_needed, MIN_VISIBLE_ROWS)
+	# Cap at max
+	var slots_needed = min(rows_needed * SLOTS_PER_ROW, MAX_INVENTORY_SLOTS)
+	return slots_needed
+
+func expand_slots_if_needed() -> bool:
+	"""Expand inventory slots if needed. Returns true if expanded."""
+	var needed = get_needed_slot_count()
+	if needed > current_slot_count:
+		var old_count = current_slot_count
+		current_slot_count = needed
+		# Add new null slots
+		for i in range(old_count, current_slot_count):
+			inventory_items.append(null)
+		Constants.debug_log("Inventory expanded: %d -> %d slots" % [old_count, current_slot_count])
+		slots_expanded.emit(current_slot_count)
+		return true
+	return false
 
 # ============================================
 # INVENTORY MANAGEMENT
@@ -94,9 +128,24 @@ func add_item(item: Dictionary) -> bool:
 			if not suppress_signals:
 				item_added.emit(new_item)
 				inventory_changed.emit()
+			# Check if we need to expand for next item
+			expand_slots_if_needed()
 			return true
 
-	return false
+	# No empty slot found - try to expand inventory
+	if expand_slots_if_needed():
+		# Retry adding to new slots
+		for i in range(inventory_items.size()):
+			if inventory_items[i] == null:
+				var new_item = item.duplicate()
+				new_item["quantity"] = quantity
+				inventory_items[i] = new_item
+				if not suppress_signals:
+					item_added.emit(new_item)
+					inventory_changed.emit()
+				return true
+
+	return false  # Inventory completely full (100 slots)
 
 func remove_item(slot: int) -> Dictionary:
 	"""Remove item from specific slot"""
@@ -215,13 +264,40 @@ func has_space() -> bool:
 	return has_empty_slot()
 
 # ============================================
-# DEBUG
+# DEBUG / PLAYTEST
 # ============================================
 
 func print_inventory() -> void:
 	"""Debug: Print all inventory contents"""
 	for i in range(inventory_items.size()):
 		var item = inventory_items[i]
+
+func clear_forged_items() -> int:
+	"""Clear all forged items from inventory. Returns count of items cleared."""
+	var cleared = 0
+	for i in range(inventory_items.size()):
+		var item = inventory_items[i]
+		if item and item.get("is_forged", false):
+			inventory_items[i] = null
+			cleared += 1
+
+	# Also unequip any forged weapons
+	if CharacterStats.equipped_weapon_data.get("is_forged", false):
+		CharacterStats.unequip_weapon()
+		cleared += 1
+
+	# Unequip any forged armor
+	for slot in CharacterStats.equipped_armor:
+		var armor_item = CharacterStats.equipped_armor[slot]
+		if armor_item and armor_item.get("is_forged", false):
+			CharacterStats.unequip_armor(slot)
+			cleared += 1
+
+	if cleared > 0:
+		inventory_changed.emit()
+		print("🔄 Cleared %d forged items from inventory and equipment" % cleared)
+
+	return cleared
 
 # ============================================
 # TOOL SLOT MANAGEMENT

@@ -72,6 +72,44 @@ func debug_clear_claimed_items() -> void:
 	print("[ForgeItemManager] DEBUG: Cleared %d forged items from inventory" % cleared)
 	InventorySystem.inventory_changed.emit()
 
+func debug_inject_all_as_forgeable() -> void:
+	"""DEBUG: Inject ALL items from ForgeItemDB as forgeable achievements.
+	This gives the user forge opportunities for every item in the catalog."""
+	# Clear existing forgeable list to avoid duplicates on re-inject
+	_forgeable_achievements.clear()
+
+	var count = 0
+	for achievement_key in ForgeItemDB.FORGE_ITEMS.keys():
+		var forge_db = ForgeItemDB.FORGE_ITEMS[achievement_key]
+		var item_id = forge_db.get("item_id", "")
+		var item_name = forge_db.get("item_name", "Unknown")
+		var achievement_name = forge_db.get("achievement_name", "")
+
+		# Create mock forgeable achievement matching backend format
+		# Include item_id for direct matching (more reliable than achievement name)
+		var mock_achievement = {
+			"id": 90000 + count,  # Fake IDs for testing
+			"achievement_id": 90000 + count,  # Armory looks for this field
+			"achievement_key": achievement_key,
+			"display_name": achievement_name,  # Use achievement_name for Armory matching
+			"item_name": item_name,
+			"item_id": item_id,  # Key field for matching
+			"rarity": _rarity_enum_to_string(forge_db.get("rarity", 0)),
+			"provider": "debug",
+			"app_id": "debug",
+			"api_name": achievement_key,
+			"unlock_percent": forge_db.get("unlock_percent", 5.0),
+			"description": forge_db.get("description", "Debug achievement"),
+			"is_original_claim": true
+		}
+
+		_forgeable_achievements.append(mock_achievement)
+		count += 1
+
+	_forge_status_loaded = true
+	print("[ForgeItemManager] DEBUG: Injected ALL %d items as forgeable" % count)
+	forge_status_loaded.emit({"forgeable": _forgeable_achievements, "forged": [], "unforgeable": []})
+
 func debug_inject_test_achievement(achievement_key: String = "steam_1145360_SLAYER") -> void:
 	"""DEBUG: Inject a test achievement as forgeable (simulates backend sync)
 	Use ForgeItemDB keys like 'steam_1145360_SLAYER' for Adamant Rail"""
@@ -84,6 +122,7 @@ func debug_inject_test_achievement(achievement_key: String = "steam_1145360_SLAY
 	# Create mock forgeable achievement matching backend format
 	var mock_achievement = {
 		"id": 99999,  # Fake ID for testing
+		"achievement_id": 99999,  # Armory looks for this field
 		"achievement_key": achievement_key,
 		"display_name": forge_db.get("achievement_name", "Test Achievement"),
 		"item_name": forge_db.get("item_name", "Test Item"),
@@ -111,13 +150,17 @@ func debug_forge_test_item(achievement_key: String = "steam_1145360_SLAYER") -> 
 		print("[ForgeItemManager] DEBUG: Unknown achievement key: %s" % achievement_key)
 		return
 
+	# Determine item_type from forge_db (armor_head, weapon, etc.)
+	var db_item_type = forge_db.get("item_type", ForgeItemDB.ItemType.WEAPON)
+	var item_type_str = ForgeItemDB.ItemType.keys()[db_item_type].to_lower() if db_item_type is int else "weapon"
+
 	# Create forged item matching what backend would return
 	var forged_item = {
 		"id": 99999,
 		"item_id": forge_db.get("item_id", "test_item"),
 		"item_name": forge_db.get("item_name", "Test Item"),
-		"item_type": "weapon",
-		"weapon_type": _weapon_class_to_string(forge_db.get("weapon_class", 0)),
+		"item_type": item_type_str,
+		"weapon_type": _weapon_class_to_string(forge_db.get("weapon_class", 0)) if item_type_str == "weapon" else null,
 		"rarity": _rarity_enum_to_string(forge_db.get("rarity", 0)),
 		"is_forged": true,
 		"description": forge_db.get("description", ""),
@@ -557,6 +600,12 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 	var rarity = forged.get("item_rarity", "common").to_lower()
 	var damage_bonus = RARITY_DAMAGE_BONUS.get(rarity, 1)
 
+	# Look up full item data from ForgeItemDB if we have an item_id
+	var item_id = forged.get("item_id", "")
+	var forge_db_item = {}
+	if item_id != "":
+		forge_db_item = ForgeItemDB.get_item_by_id(item_id)
+
 	var base_item = {
 		"name": forged.get("item_name", "Forged Item"),
 		"description": forged.get("description", "A forged item from an achievement."),
@@ -564,6 +613,7 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 		"quantity": 1,
 		"is_forged": true,
 		"forged_id": str(forged.get("token_id", forged.get("item_id", ""))),
+		"forged_item_id": forged.get("item_id", ""),  # Used by Player.gd for sprite lookup
 		"item_id": forged.get("item_id", ""),
 		"rarity": rarity.capitalize(),
 		"effect_name": forged.get("effect_name", ""),
@@ -580,22 +630,24 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 		"weapon":
 			base_item["type"] = "weapon"
 			base_item["slot"] = "mainhand"
-			base_item["weapon_type"] = forged.get("weapon_type", "sword")
+			# Get weapon_type from ForgeItemDB if available, otherwise from forged param, fallback to sword
+			base_item["weapon_type"] = forge_db_item.get("weapon_type", forged.get("weapon_type", "sword"))
 			base_item["base_damage"] = 5 + (damage_bonus * 3)  # 8-20 damage based on rarity
 			base_item["attack_speed"] = "Normal"
-			base_item["crit_chance"] = 0.05 + (damage_bonus * 0.02)  # 7-15% crit
 			base_item["required_level"] = 1  # Forged items have no level req (twinking!)
 			# Gun weapons need ranged_damage attack mode for cursor-based targeting
-			if base_item["weapon_type"] in ["gun", "battle_rifle"]:
+			if base_item["weapon_type"] == "gun":
 				base_item["attack_mode"] = "ranged_damage"
 				base_item["gun_radius"] = 28.0  # Precision targeting radius
-				base_item["gun_range"] = 350.0  # Max shooting distance
-				# Apply gun_config for burst weapons (battle rifle, etc.)
-				var gun_config = forged.get("gun_config", {})
-				if not gun_config.is_empty():
-					base_item["gun_subtype"] = gun_config.get("gun_subtype", "railgun")
-					base_item["burst_count"] = gun_config.get("burst_count", 1)
-					base_item["burst_delay"] = gun_config.get("burst_delay", 0.10)
+				base_item["gun_range"] = 550.0  # Max shooting distance
+				# Apply gun properties from ForgeItemDB first, then check forged param
+				var gun_subtype = forge_db_item.get("gun_subtype", forged.get("gun_subtype", "railgun"))
+				var burst_count = forge_db_item.get("burst_count", forged.get("burst_count", 1))
+				var burst_delay = forge_db_item.get("burst_delay", forged.get("burst_delay", 0.10))
+
+				base_item["gun_subtype"] = gun_subtype
+				base_item["burst_count"] = burst_count
+				base_item["burst_delay"] = burst_delay
 
 		"armor_head", "armor_chest", "armor_legs", "armor_hands", "armor_feet":
 			base_item["type"] = "armor"
@@ -613,7 +665,18 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 
 		"accessory":
 			base_item["type"] = "accessory"
-			base_item["slot"] = "accessory"
+			# Determine specific accessory slot based on item name/id
+			var item_name_lower = forged.get("item_name", "").to_lower()
+			var item_id_lower = forged.get("item_id", "").to_lower()
+
+			if "amulet" in item_name_lower or "amulet" in item_id_lower or "necklace" in item_name_lower:
+				base_item["slot"] = "amulet"
+			elif "ring" in item_name_lower or "ring" in item_id_lower:
+				# Rings use ring1 by default - InventoryUI will handle swapping to ring2 if ring1 is occupied
+				base_item["slot"] = "ring1"
+			else:
+				# Default to amulet if we can't determine
+				base_item["slot"] = "amulet"
 
 		_:
 			# Unknown type - still add as generic item

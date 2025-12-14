@@ -213,8 +213,9 @@ func create_loot_slot(item: Dictionary, index: int) -> Control:
 	var icon = TextureRect.new()
 	icon.name = "ItemIcon"
 	icon.custom_minimum_size = Vector2(40, 40)
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.size = Vector2(40, 40)  # Force size to 40x40
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(icon)
 

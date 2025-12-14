@@ -2984,6 +2984,7 @@
 <script>
 // Vault connection state
 let walletConnected = false;
+let walletConnecting = false;
 let walletAddress = '';
 let selectedForge = new Set();
 
@@ -3219,27 +3220,78 @@ function showConnectedState(data) {
 }
 
 async function connectVault() {
+  console.log('[Vault] Connect button clicked');
+
+  // Prevent multiple simultaneous connection attempts
+  if (walletConnecting) {
+    console.log('[Vault] Connection already in progress, ignoring click');
+    return;
+  }
+
+  if (walletConnected) {
+    console.log('[Vault] Wallet already connected');
+    return;
+  }
+
   // Check if MetaMask is available
   if (typeof window.ethereum === 'undefined') {
+    console.error('[Vault] MetaMask not detected');
     alert('Please install MetaMask or another Web3 wallet to connect your vault.');
     return;
   }
 
+  // Check specifically for MetaMask
+  const isMetaMask = window.ethereum.isMetaMask;
+  console.log('[Vault] window.ethereum detected, isMetaMask:', isMetaMask);
+
+  if (!isMetaMask) {
+    console.warn('[Vault] window.ethereum exists but isMetaMask=false');
+    console.log('[Vault] Provider info:', window.ethereum);
+  }
+
+  walletConnecting = true;
+  console.log('[Vault] Requesting accounts...');
+
   try {
     // Request account access
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    console.log('[Vault] Calling eth_requestAccounts...');
+    let accounts;
+    try {
+      accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    } catch (accountError) {
+      console.error('[Vault] eth_requestAccounts failed:', accountError);
+
+      // Handle specific error cases
+      if (accountError.code === -32002) {
+        showToast('MetaMask popup already open - please check your browser', 'error');
+      } else if (accountError.code === 4001) {
+        console.log('[Vault] User rejected connection');
+      } else if (accountError.message && accountError.message.includes('extension not found')) {
+        showToast('MetaMask extension not properly initialized. Try refreshing the page or reinstalling MetaMask.', 'error');
+      } else if (accountError.message && accountError.message.includes('Failed to connect')) {
+        showToast('Failed to connect to MetaMask. Please make sure MetaMask is unlocked and try again.', 'error');
+      } else {
+        showToast('Failed to connect: ' + (accountError.message || 'Unknown error'), 'error');
+      }
+      walletConnecting = false;
+      return;
+    }
     const address = accounts[0];
+    console.log('[Vault] Connected to wallet:', address);
 
     // Switch to Base Sepolia testnet (chain ID 84532)
     const baseSepoliaChainId = '0x14a34'; // 84532 in hex
+    console.log('[Vault] Switching to Base Sepolia...');
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: baseSepoliaChainId }],
       });
+      console.log('[Vault] Network switched successfully');
     } catch (switchError) {
       // Chain not added yet, add it
       if (switchError.code === 4902) {
+        console.log('[Vault] Base Sepolia not found, adding network...');
         await window.ethereum.request({
           method: 'wallet_addEthereumChain',
           params: [{
@@ -3250,12 +3302,15 @@ async function connectVault() {
             blockExplorerUrls: ['https://sepolia.basescan.org']
           }],
         });
+        console.log('[Vault] Network added successfully');
       } else {
+        console.error('[Vault] Network switch error:', switchError);
         throw switchError;
       }
     }
 
     // Get nonce from server
+    console.log('[Vault] Requesting nonce from server...');
     const nonceResp = await fetch('/api/wallet/nonce', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3263,19 +3318,25 @@ async function connectVault() {
       body: JSON.stringify({ wallet_address: address })
     });
 
+    console.log('[Vault] Nonce response status:', nonceResp.status);
+
     if (!nonceResp.ok) {
       const err = await nonceResp.json();
+      console.error('[Vault] Nonce request failed:', err);
       showToast(err.detail || 'Failed to connect wallet', 'error');
       return;
     }
 
     const { message, nonce } = await nonceResp.json();
+    console.log('[Vault] Received nonce, requesting signature...');
 
     // Request signature
     const signature = await window.ethereum.request({
       method: 'personal_sign',
       params: [message, address]
     });
+
+    console.log('[Vault] Signature received, verifying with server...');
 
     // Verify signature with server
     const verifyResp = await fetch('/api/wallet/verify', {
@@ -3285,23 +3346,31 @@ async function connectVault() {
       body: JSON.stringify({ message, signature })
     });
 
+    console.log('[Vault] Verify response status:', verifyResp.status);
+
     if (verifyResp.ok) {
       const data = await verifyResp.json();
+      console.log('[Vault] Verification successful!', data);
       walletConnected = true;
       walletAddress = data.wallet_address;
       showConnectedState({ wallet_address: data.wallet_address, forged_count: 0 });
       showToast('Wallet connected successfully', 'success');
     } else {
       const err = await verifyResp.json();
+      console.error('[Vault] Verification failed:', err);
       showToast(err.detail || 'Verification failed', 'error');
     }
   } catch (e) {
-    console.error('Wallet connection failed:', e);
+    console.error('[Vault] Connection error:', e);
     if (e.code === 4001) {
       // User rejected
-      return;
+      console.log('[Vault] User rejected connection');
+    } else {
+      showToast('Failed to connect wallet: ' + e.message, 'error');
     }
-    showToast('Failed to connect wallet: ' + e.message, 'error');
+  } finally {
+    walletConnecting = false;
+    console.log('[Vault] Connection attempt complete, walletConnecting reset to false');
   }
 }
 
@@ -3618,6 +3687,20 @@ async function fetchLockboxCount() {
     console.log('Failed to fetch lockbox count:', e);
   }
 }
+
+// Global handler for uncaught promise rejections (helps debug MetaMask errors)
+window.addEventListener('unhandledrejection', function(event) {
+  console.error('[Global] Uncaught promise rejection:', event.reason);
+  console.error('[Global] Promise:', event.promise);
+
+  // Check if it's a MetaMask-related error
+  if (event.reason && event.reason.message) {
+    if (event.reason.message.includes('MetaMask') || event.reason.message.includes('extension not found')) {
+      console.error('[Global] MetaMask error detected:', event.reason);
+      // Don't prevent default - let it show in console for debugging
+    }
+  }
+});
 </script>
 
 <<!-- Neon Modal (initially hidden) -->

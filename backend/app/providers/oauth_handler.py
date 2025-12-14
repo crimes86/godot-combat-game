@@ -253,14 +253,14 @@ def create_oauth_routes(
                         {"request": request, "message": f"You already have a {config.display_name} account linked."}
                     )
 
-        # Build callback URL
+        # Build callback URL (do NOT include device_code in URL - causes double-encoding issues)
+        # Device code is stored in session instead and retrieved in callback
         callback_url = f"{app_url}/auth/{provider}/callback"
-        if device_code:
-            callback_url += f"?device_code={device_code}"
 
         # Store device_code in session for callback
         if device_code:
             request.session["device_code"] = device_code
+            logger.info(f"[{provider.upper()}] Stored device_code {device_code[:8]}... in session")
 
         logger.info(f"Initiating {provider} login flow")
 

@@ -36,10 +36,18 @@ class_name Weapon
 # ============================================
 
 @export var gun_radius: float = 28.0  # Targeting reticle radius (smaller = more precision required)
-@export var gun_range: float = 350.0  # Maximum shooting distance from player
+@export var gun_range: float = 550.0  # Maximum shooting distance from player
 @export var gun_subtype: String = "railgun"  # "railgun", "battle_rifle", "pistol", "shotgun"
 @export var burst_count: int = 1  # Shots per burst (1 = single shot, 3 = battle rifle burst)
 @export var burst_delay: float = 0.10  # Delay between burst shots in seconds
+
+# ============================================
+# BOW PROPERTIES (for bow/crossbow weapons)
+# ============================================
+
+@export var bow_radius: float = 32.0  # Targeting reticle radius (slightly larger than gun)
+@export var bow_range: float = 450.0  # Maximum arrow travel distance
+@export var arrow_speed: float = 600.0  # Arrow travel speed in pixels/second
 
 # ============================================
 # REQUIREMENTS & VALUE
@@ -129,9 +137,8 @@ func get_total_damage() -> float:
 	return damage
 
 func get_forged_crit_bonus() -> float:
-	"""Returns crit chance bonus from forged weapon stats"""
-	if is_forged and weapon_stats:
-		return weapon_stats.get_crit_bonus()
+	"""DEPRECATED: Crit chance now comes purely from Luck stat, not weapons.
+	Returns 0.0 for backwards compatibility."""
 	return 0.0
 
 func get_total_healing() -> float:
@@ -150,11 +157,18 @@ func is_healing_weapon() -> bool:
 
 func is_ranged_weapon() -> bool:
 	"""Check if this weapon uses ranged targeting (cursor-based)"""
-	return attack_mode in ["ranged_heal", "ranged_damage"]
+	return attack_mode in ["ranged_heal", "ranged_damage"] or is_bow_weapon() or is_gun_weapon()
 
 func is_gun_weapon() -> bool:
 	"""Check if this weapon is a gun (ranged damage with precision targeting)"""
+	# Exclude bows from gun check even if they have ranged_damage attack_mode
+	if is_bow_weapon():
+		return false
 	return weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle"] or attack_mode == "ranged_damage"
+
+func is_bow_weapon() -> bool:
+	"""Check if this weapon is a bow or crossbow"""
+	return weapon_type in ["bow", "crossbow"]
 
 func is_burst_weapon() -> bool:
 	"""Check if this weapon fires in bursts (e.g., battle rifle 3-round burst)"""
@@ -192,9 +206,7 @@ func get_tooltip_text() -> String:
 		var speed_text = "faster" if attack_speed_bonus < 0 else "slower"
 		text += "Attack Speed: %.0f%% %s\n" % [abs(attack_speed_bonus) * 100, speed_text]
 
-	var total_crit = crit_chance_bonus + get_forged_crit_bonus()
-	if total_crit != 0:
-		text += "Crit Chance: +%.1f%%\n" % (total_crit * 100)
+	# Crit chance removed from weapons - now comes purely from Luck stat
 
 	# Forged weapon stats (quick tooltip version)
 	if is_forged and weapon_stats:
@@ -331,28 +343,24 @@ static func create_mock_artifact(provider: String = "battlenet") -> Weapon:
 			weapon.description = "Forged from countless mythic raids."
 			weapon.base_damage = 25.0
 			weapon.attack_speed_bonus = -0.30  # 30% faster
-			weapon.crit_chance_bonus = 0.15    # +15% crit
 			weapon.artifact_traits = ["Chain Master", "Thunder Strike", "Lightning Speed"]
 		"steam":
 			weapon.weapon_name = "Achievement Hunter's Blade"
 			weapon.description = "For those who've seen it all."
 			weapon.base_damage = 20.0
 			weapon.attack_speed_bonus = -0.20
-			weapon.crit_chance_bonus = 0.10
 			weapon.artifact_traits = ["Completionist", "Boss Slayer", "Speed Runner"]
 		"psn":
 			weapon.weapon_name = "Trophy Collector's Edge"
 			weapon.description = "Platinum-forged excellence."
 			weapon.base_damage = 22.0
 			weapon.attack_speed_bonus = -0.25
-			weapon.crit_chance_bonus = 0.12
 			weapon.artifact_traits = ["Trophy Master", "Platinum Touch"]
 		"xbox":
 			weapon.weapon_name = "Gamerscore Legend"
 			weapon.description = "Achievement unlocked: Ultimate Warrior."
 			weapon.base_damage = 23.0
 			weapon.attack_speed_bonus = -0.22
-			weapon.crit_chance_bonus = 0.13
 			weapon.artifact_traits = ["Score Multiplier", "Achievement Boost"]
 	
 	weapon.weapon_type = "sword"
@@ -386,7 +394,7 @@ static func create_random_drop(player_level: int) -> Weapon:
 	# Scale with player level
 	weapon.base_damage = 5.0 + player_level * 0.8
 	weapon.attack_speed_bonus = randf_range(-0.1, 0.1)
-	weapon.crit_chance_bonus = randf_range(0, 0.05)
+	# Crit chance removed - comes purely from Luck stat
 
 	# Random rarity
 	var rarity_roll = randf()

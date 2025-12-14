@@ -171,6 +171,9 @@ func play_animation(anim_name: String) -> void:
 func get_health() -> int:
 	return int(current_health)
 
+func get_attack_damage() -> float:
+	return attack_damage
+
 func is_invincible() -> bool:
 	"""Check if player is currently invincible (for server damage validation)"""
 	return is_dashing and dash_invincible
@@ -249,6 +252,10 @@ func _ready() -> void:
 	combat_system.screen_shake = screen_shake
 	combat_system.attack_feedback = attack_feedback
 	combat_system.update_stats(attack_damage, attack_cooldown, attack_range, attack_cone_angle)
+
+	# Connect chain tracking for forged weapon stats
+	if CharacterStats.has_signal("chain_increased"):
+		CharacterStats.chain_increased.connect(_on_chain_increased_for_stats)
 
 	# Register with GameInput and setup mobile controls if needed
 	if is_multiplayer_authority():
@@ -516,10 +523,6 @@ func update_stats_from_character() -> void:
 		weapon_type = CharacterStats.equipped_weapon.weapon_type
 	attack_range = WeaponAnimationData.get_attack_range(weapon_type)
 
-	# Update crit system base chance (preserves pity progress)
-	if crit_system:
-		crit_system.on_weapon_changed()
-
 	# Sync with combat subsystem
 	if combat_system:
 		combat_system.update_stats(attack_damage, attack_cooldown, attack_range, attack_cone_angle)
@@ -588,6 +591,11 @@ func _on_weapon_unequipped() -> void:
 
 	# Sync to network
 	_sync_appearance_to_network()
+
+func _on_chain_increased_for_stats(new_chain: int) -> void:
+	"""Track chain level for forged weapon stats"""
+	if combat_system and combat_system.has_method("track_chain_level"):
+		combat_system.track_chain_level(new_chain)
 
 func _on_armor_equipped(slot: String, armor_item: Dictionary) -> void:
 	"""Called when armor is equipped"""
@@ -735,18 +743,21 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	if character_sprite.has_method("is_harvest_active") and character_sprite.is_harvest_active():
 		return
 
-	# Don't interrupt attack animations (slash for melee, shoot for guns)
+	# Don't interrupt attack animations (slash for melee, shoot for guns/bows)
 	if character_sprite.animation and character_sprite.is_playing():
 		if character_sprite.animation.begins_with("slash_"):
+			return
+		# Don't interrupt shoot animations on main body (bows use this)
+		if character_sprite.animation.begins_with("shoot_"):
 			return
 		# For gun weapons, check if gun body layer is playing shoot animation
 		if character_sprite.gun_body_sprite and character_sprite.gun_body_sprite.visible:
 			if character_sprite.gun_body_sprite.animation and character_sprite.gun_body_sprite.animation.begins_with("shoot_") and character_sprite.gun_body_sprite.is_playing():
 				return
 
-	# Get direction (down/up/left/right from old system)
+	# Get direction - always face cursor (attack_direction), not movement direction
 	var is_moving = velocity_dir.length() > 0.1
-	var dir_str = get_direction_string(velocity_dir) if is_moving else get_direction_string(attack_direction)
+	var dir_str = get_direction_string(attack_direction)
 
 	# Convert to LPC direction (south/north/west/east)
 	var lpc_dir = convert_to_lpc_direction(dir_str)
@@ -807,13 +818,6 @@ func update_facing_direction() -> void:
 func _input(event: InputEvent) -> void:
 	# Only process input for the local player
 	if not is_multiplayer_authority():
-		return
-
-	# DEBUG: F4 = Forge test guns for testing gun system
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F4:
-		print("[DEBUG] F4 pressed - Forging Adamant Rail + Halo Battle Rifle...")
-		ForgeItemManager.debug_forge_test_item("steam_1145360_SLAYER")  # Railgun
-		ForgeItemManager.debug_forge_test_item("xbox_HALO_LEGENDARY")   # Battle Rifle (burst)
 		return
 
 	if event is InputEventMouseButton:
@@ -878,6 +882,24 @@ func _input(event: InputEvent) -> void:
 		var is_dev_build = OS.has_feature("editor") or OS.is_debug_build()
 
 		match event.keycode:
+			KEY_F4 when is_dev_build:
+				# DEBUG: Progress equipped weapon (add levels + kills)
+				if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.weapon_stats:
+					var stats = CharacterStats.equipped_weapon.weapon_stats
+					stats.debug_add_levels(10)
+					stats.debug_add_kills(500)
+					print("🗡️ DEBUG F4: Weapon progressed - Level: %d, Kills: %d, Tier: %s" % [
+						stats.level, stats.kills_total, stats.get_visual_tier_name()
+					])
+					# Refresh visual effects to match new tier
+					refresh_forged_weapon_effects()
+				else:
+					print("🗡️ DEBUG F4: No weapon equipped or no weapon stats")
+					print("   equipped_weapon: %s" % CharacterStats.equipped_weapon)
+					if CharacterStats.equipped_weapon:
+						print("   is_forged: %s" % CharacterStats.equipped_weapon.is_forged)
+						print("   forged_id: %s" % CharacterStats.equipped_weapon.forged_id)
+						print("   weapon_stats: %s" % CharacterStats.equipped_weapon.weapon_stats)
 			KEY_F5 when is_dev_build:
 				# Toggle mobile input mode for testing
 				var was_mobile = GameInput.is_mobile()
@@ -1581,8 +1603,10 @@ func _on_attack_animation_finished() -> void:
 	if not character_sprite:
 		return
 
-	# Only process if we just finished an attack animation
-	if not character_sprite.animation or not character_sprite.animation.begins_with("slash_"):
+	# Only process if we just finished an attack animation (slash for melee, shoot for bows)
+	if not character_sprite.animation:
+		return
+	if not character_sprite.animation.begins_with("slash_") and not character_sprite.animation.begins_with("shoot_"):
 		return
 
 	# Return to idle in current facing direction
@@ -1962,17 +1986,45 @@ func create_player_sprite() -> void:
 	var hurt_tex = load("res://assets/characters/" + body_type + "/standard/hurt.png")
 
 	# Determine attack animation type based on weapon
-	# Staff and spear use thrust animation, all other weapons use slash
+	# Staff, spear and trident use thrust animation
+	# Bow and crossbow use shoot animation
+	# All other weapons use slash
 	var uses_thrust = false
-	var thrust_weapons = ["staff", "spear"]
+	var uses_shoot = false
+	var thrust_weapons = ["staff", "spear", "trident"]
+	var bow_weapons = ["bow", "crossbow"]
 	if is_local and CharacterStats.equipped_weapon:
 		uses_thrust = CharacterStats.equipped_weapon.weapon_type in thrust_weapons
-	elif not is_local and remote_weapon_type in thrust_weapons:
-		uses_thrust = true
+		uses_shoot = CharacterStats.equipped_weapon.weapon_type in bow_weapons
+	elif not is_local:
+		if remote_weapon_type in thrust_weapons:
+			uses_thrust = true
+		elif remote_weapon_type in bow_weapons:
+			uses_shoot = true
 
-	var attack_anim_name = "thrust" if uses_thrust else "slash"
+	var attack_anim_name = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
 	var attack_tex_path = "res://assets/characters/" + body_type + "/standard/" + attack_anim_name + ".png"
-	var slash_tex = load(attack_tex_path) if ResourceLoader.exists(attack_tex_path) else load("res://assets/characters/" + body_type + "/standard/slash.png")
+	var slash_tex: Texture2D = null
+	if ResourceLoader.exists(attack_tex_path):
+		slash_tex = load(attack_tex_path)
+		# Validate thrust texture has correct dimensions (512px = 8 frames)
+		# If wrong dimensions, fall back to slash to ensure animation works
+		if uses_thrust and slash_tex:
+			var tex_width = slash_tex.get_width()
+			if tex_width != 512:
+				print("[Equip] WARNING: thrust.png has wrong dimensions (%d px, expected 512). Falling back to slash." % tex_width)
+				attack_anim_name = "slash"
+				uses_thrust = false
+				slash_tex = load("res://assets/characters/" + body_type + "/standard/slash.png")
+	elif uses_shoot:
+		# Bow/crossbow fallback: try thrust (8 frames, closer to shoot's 13) before slash (6 frames)
+		var thrust_path = "res://assets/characters/" + body_type + "/standard/thrust.png"
+		if ResourceLoader.exists(thrust_path):
+			slash_tex = load(thrust_path)
+		else:
+			slash_tex = load("res://assets/characters/" + body_type + "/standard/slash.png")
+	else:
+		slash_tex = load("res://assets/characters/" + body_type + "/standard/slash.png")
 
 	# Load shadow textures
 	var shadow_walk_tex = null
@@ -1986,7 +2038,7 @@ func create_player_sprite() -> void:
 	elif ResourceLoader.exists(shadow_path + "slash.png"):
 		shadow_slash_tex = load(shadow_path + "slash.png")
 
-	# Load base head textures (separate head layer for both genders)
+	# Load base head textures (separate head layer for face details)
 	var base_head_walk_tex = null
 	var base_head_slash_tex = null
 	var head_path = "res://assets/characters/head_female/standard/" if selected_gender == Gender.FEMALE else "res://assets/characters/head_male/standard/"
@@ -1995,6 +2047,9 @@ func create_player_sprite() -> void:
 	var head_attack_path = head_path + attack_anim_name + ".png"
 	if ResourceLoader.exists(head_attack_path):
 		base_head_slash_tex = load(head_attack_path)
+	elif uses_shoot:
+		# For bow weapons without head shoot animation, use walk for static head during shoot
+		base_head_slash_tex = base_head_walk_tex
 	elif ResourceLoader.exists(head_path + "slash.png"):
 		base_head_slash_tex = load(head_path + "slash.png")
 
@@ -2052,7 +2107,8 @@ func create_player_sprite() -> void:
 		var animation_type = weapon_type  # The actual type used for animations
 		var has_weapon_sprites = ResourceLoader.exists(weapon_path + "slash.png") or \
 								 ResourceLoader.exists(weapon_path + "thrust.png") or \
-								 ResourceLoader.exists(weapon_path + "thrust_oversize.png")
+								 ResourceLoader.exists(weapon_path + "thrust_oversize.png") or \
+								 ResourceLoader.exists(weapon_path + "shoot.png")
 
 		if DEBUG_FORGED_EQUIP:
 			print("[ForgedEquip]   Has weapon sprites at path: %s" % has_weapon_sprites)
@@ -2083,22 +2139,50 @@ func create_player_sprite() -> void:
 					print("[ForgedEquip]   Loaded tinted shoot.png from forged folder")
 			elif ResourceLoader.exists(weapon_path + "shoot.png"):
 				weapon_slash_tex = load(weapon_path + "shoot.png")
+		elif animation_type == "bow" or animation_type == "crossbow":
+			# Bows use shoot.png (13 frames) for attack animation
+			if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "shoot.png"):
+				weapon_slash_tex = load(forged_weapon_path + "shoot.png")
+				if DEBUG_FORGED_EQUIP:
+					print("[ForgedEquip]   Loaded tinted shoot.png from forged folder (bow)")
+			elif ResourceLoader.exists(weapon_path + "shoot.png"):
+				weapon_slash_tex = load(weapon_path + "shoot.png")
 		elif animation_type == "staff":
-			if ResourceLoader.exists(weapon_path + "thrust_oversize.png"):
+			# Check forged folder first
+			if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "thrust_oversize.png"):
+				weapon_slash_tex = load(forged_weapon_path + "thrust_oversize.png")
+			elif ResourceLoader.exists(weapon_path + "thrust_oversize.png"):
 				weapon_slash_tex = load(weapon_path + "thrust_oversize.png")
 		elif animation_type == "spear":
-			if ResourceLoader.exists(weapon_path + "thrust.png"):
+			# Check forged folder first
+			if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "thrust.png"):
+				weapon_slash_tex = load(forged_weapon_path + "thrust.png")
+			elif ResourceLoader.exists(weapon_path + "thrust.png"):
 				weapon_slash_tex = load(weapon_path + "thrust.png")
 		else:
-			if ResourceLoader.exists(weapon_path + "slash.png"):
+			# Check forged folder first for slash animation
+			if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "slash.png"):
+				weapon_slash_tex = load(forged_weapon_path + "slash.png")
+				if DEBUG_FORGED_EQUIP:
+					print("[ForgedEquip]   Loaded tinted slash.png from forged folder")
+			elif ResourceLoader.exists(weapon_path + "slash.png"):
 				weapon_slash_tex = load(weapon_path + "slash.png")
 
 		# Load additional slash variants for multi-slash weapons (slash2, slash3)
-		if ResourceLoader.exists(weapon_path + "slash2.png"):
+		# Check forged folder first
+		if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "slash2.png"):
+			weapon_slash2_tex = load(forged_weapon_path + "slash2.png")
+			if DEBUG_EQUIP:
+				print("[Equip] Multi-slash weapon: loaded slash2.png from forged folder")
+		elif ResourceLoader.exists(weapon_path + "slash2.png"):
 			weapon_slash2_tex = load(weapon_path + "slash2.png")
 			if DEBUG_EQUIP:
 				print("[Equip] Multi-slash weapon: loaded slash2.png")
-		if ResourceLoader.exists(weapon_path + "slash3.png"):
+		if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "slash3.png"):
+			weapon_slash3_tex = load(forged_weapon_path + "slash3.png")
+			if DEBUG_EQUIP:
+				print("[Equip] Multi-slash weapon: loaded slash3.png from forged folder")
+		elif ResourceLoader.exists(weapon_path + "slash3.png"):
 			weapon_slash3_tex = load(weapon_path + "slash3.png")
 			if DEBUG_EQUIP:
 				print("[Equip] Multi-slash weapon: loaded slash3.png")
@@ -2122,8 +2206,8 @@ func create_player_sprite() -> void:
 			print("[Equip] No weapon equipped - unarmed")
 
 	# Load armor textures based on equipped armor (5 layers: boots, pants, shirt, arms, head)
-	# Use thrust or slash suffix based on weapon type
-	var attack_suffix = "_thrust" if uses_thrust else "_slash"
+	# Use shoot/thrust/slash suffix based on weapon type
+	var attack_suffix = "_shoot" if uses_shoot else ("_thrust" if uses_thrust else "_slash")
 	var boots_walk_tex = null
 	var boots_slash_tex = null
 	var pants_walk_tex = null
@@ -2137,15 +2221,39 @@ func create_player_sprite() -> void:
 	var head_walk_tex = null
 	var head_slash_tex = null
 
-	# Check for equipped boots (feet)
+	# Check for equipped boots (feet) - support forged armor
 	var feet_sprite_name = ""
+	var is_forged_feet = false
+	var forged_feet_data: Dictionary = {}
 	if is_local and CharacterStats.equipped_armor.has("feet") and CharacterStats.equipped_armor["feet"] != null:
 		var boots_armor = CharacterStats.equipped_armor["feet"]
 		feet_sprite_name = boots_armor.get("sprite_name", "")
+		is_forged_feet = boots_armor.get("is_forged", false)
+		if is_forged_feet:
+			forged_feet_data = boots_armor
 	elif not is_local and remote_feet_sprite != "":
 		feet_sprite_name = remote_feet_sprite
 
-	if feet_sprite_name != "":
+	# Load forged feet armor from ForgeItemDB
+	if is_forged_feet and forged_feet_data.get("forged_item_id", "") != "":
+		var forged_item_id = forged_feet_data.get("forged_item_id", "")
+		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
+		if forged_db_data and forged_db_data.has("sprites"):
+			var sprites = forged_db_data["sprites"]
+			# Load feet sprites from forged item
+			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
+				boots_walk_tex = load(sprites["walk"])
+			# Pick shoot/thrust/slash based on weapon type
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
+				boots_slash_tex = load(sprites[attack_key])
+			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
+				boots_slash_tex = load(sprites["slash"])
+
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Loaded forged feet armor: %s" % forged_item_id)
+	elif feet_sprite_name != "":
+		# Standard (non-forged) feet armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
 		var boots_path = "res://assets/characters/boots_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/boots/"
 		# If gender-specific doesn't exist, try gender-neutral
@@ -2160,15 +2268,39 @@ func create_player_sprite() -> void:
 		elif ResourceLoader.exists(boots_path + feet_sprite_name + "_slash.png"):
 			boots_slash_tex = load(boots_path + feet_sprite_name + "_slash.png")
 
-	# Check for equipped leg armor (pants)
+	# Check for equipped leg armor (pants) - support forged armor
 	var legs_sprite_name = ""
+	var is_forged_legs = false
+	var forged_legs_data: Dictionary = {}
 	if is_local and CharacterStats.equipped_armor.has("legs") and CharacterStats.equipped_armor["legs"] != null:
 		var leg_armor = CharacterStats.equipped_armor["legs"]
 		legs_sprite_name = leg_armor.get("sprite_name", "green_pants")
+		is_forged_legs = leg_armor.get("is_forged", false)
+		if is_forged_legs:
+			forged_legs_data = leg_armor
 	elif not is_local and remote_legs_sprite != "":
 		legs_sprite_name = remote_legs_sprite
 
-	if legs_sprite_name != "":
+	# Load forged legs armor from ForgeItemDB
+	if is_forged_legs and forged_legs_data.get("forged_item_id", "") != "":
+		var forged_item_id = forged_legs_data.get("forged_item_id", "")
+		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
+		if forged_db_data and forged_db_data.has("sprites"):
+			var sprites = forged_db_data["sprites"]
+			# Load legs sprites from forged item
+			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
+				pants_walk_tex = load(sprites["walk"])
+			# Pick shoot/thrust/slash based on weapon type
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
+				pants_slash_tex = load(sprites[attack_key])
+			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
+				pants_slash_tex = load(sprites["slash"])
+
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Loaded forged legs armor: %s" % forged_item_id)
+	elif legs_sprite_name != "":
+		# Standard (non-forged) legs armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
 		var pants_path = "res://assets/characters/pants_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/pants/"
 		if not ResourceLoader.exists(pants_path + legs_sprite_name + "_walk.png"):
@@ -2182,15 +2314,39 @@ func create_player_sprite() -> void:
 		elif ResourceLoader.exists(pants_path + legs_sprite_name + "_slash.png"):
 			pants_slash_tex = load(pants_path + legs_sprite_name + "_slash.png")
 
-	# Check for equipped chest armor (shirt)
+	# Check for equipped chest armor (shirt) - support forged armor
 	var chest_sprite_name = ""
+	var is_forged_chest = false
+	var forged_chest_data: Dictionary = {}
 	if is_local and CharacterStats.equipped_armor.has("chest") and CharacterStats.equipped_armor["chest"] != null:
 		var chest_armor = CharacterStats.equipped_armor["chest"]
 		chest_sprite_name = chest_armor.get("sprite_name", "white_shirt")
+		is_forged_chest = chest_armor.get("is_forged", false)
+		if is_forged_chest:
+			forged_chest_data = chest_armor
 	elif not is_local and remote_chest_sprite != "":
 		chest_sprite_name = remote_chest_sprite
 
-	if chest_sprite_name != "":
+	# Load forged chest armor from ForgeItemDB
+	if is_forged_chest and forged_chest_data.get("forged_item_id", "") != "":
+		var forged_item_id = forged_chest_data.get("forged_item_id", "")
+		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
+		if forged_db_data and forged_db_data.has("sprites"):
+			var sprites = forged_db_data["sprites"]
+			# Load chest sprites from forged item
+			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
+				shirt_walk_tex = load(sprites["walk"])
+			# Pick shoot/thrust/slash based on weapon type
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
+				shirt_slash_tex = load(sprites[attack_key])
+			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
+				shirt_slash_tex = load(sprites["slash"])
+
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Loaded forged chest armor: %s" % forged_item_id)
+	elif chest_sprite_name != "":
+		# Standard (non-forged) chest armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
 		var shirt_path = "res://assets/characters/shirt_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/shirt/"
 		if not ResourceLoader.exists(shirt_path + chest_sprite_name + "_walk.png"):
@@ -2202,18 +2358,46 @@ func create_player_sprite() -> void:
 		# Try thrust first if using staff, fall back to slash
 		if ResourceLoader.exists(shirt_path + chest_sprite_name + attack_suffix + ".png"):
 			shirt_slash_tex = load(shirt_path + chest_sprite_name + attack_suffix + ".png")
+			if DEBUG_EQUIP:
+				print("[Equip] Loaded chest armor %s attack: %s%s%s.png" % [attack_anim_name, shirt_path, chest_sprite_name, attack_suffix])
 		elif ResourceLoader.exists(shirt_path + chest_sprite_name + "_slash.png"):
 			shirt_slash_tex = load(shirt_path + chest_sprite_name + "_slash.png")
+			if DEBUG_EQUIP:
+				print("[Equip] Loaded chest armor slash (fallback): %s%s_slash.png" % [shirt_path, chest_sprite_name])
 
-	# Check for equipped arm armor
+	# Check for equipped arm armor - support forged armor
 	var arms_sprite_name = ""
+	var is_forged_arms = false
+	var forged_arms_data: Dictionary = {}
 	if is_local and CharacterStats.equipped_armor.has("arms") and CharacterStats.equipped_armor["arms"] != null:
 		var arm_armor = CharacterStats.equipped_armor["arms"]
 		arms_sprite_name = arm_armor.get("sprite_name", "")
+		is_forged_arms = arm_armor.get("is_forged", false)
+		if is_forged_arms:
+			forged_arms_data = arm_armor
 	elif not is_local and remote_arms_sprite != "":
 		arms_sprite_name = remote_arms_sprite
 
-	if arms_sprite_name != "":
+	# Load forged arms armor from ForgeItemDB
+	if is_forged_arms and forged_arms_data.get("forged_item_id", "") != "":
+		var forged_item_id = forged_arms_data.get("forged_item_id", "")
+		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
+		if forged_db_data and forged_db_data.has("sprites"):
+			var sprites = forged_db_data["sprites"]
+			# Load arms sprites from forged item
+			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
+				arms_walk_tex = load(sprites["walk"])
+			# Pick shoot/thrust/slash based on weapon type
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
+				arms_slash_tex = load(sprites[attack_key])
+			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
+				arms_slash_tex = load(sprites["slash"])
+
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Loaded forged arms armor: %s" % forged_item_id)
+	elif arms_sprite_name != "":
+		# Standard (non-forged) arms armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
 		var arms_path = "res://assets/characters/arms_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/arms/"
 		if not ResourceLoader.exists(arms_path + arms_sprite_name + "_walk.png"):
@@ -2227,15 +2411,39 @@ func create_player_sprite() -> void:
 		elif ResourceLoader.exists(arms_path + arms_sprite_name + "_slash.png"):
 			arms_slash_tex = load(arms_path + arms_sprite_name + "_slash.png")
 
-	# Check for equipped hand armor (gloves)
+	# Check for equipped hand armor (gloves) - support forged armor
 	var hands_sprite_name = ""
+	var is_forged_hands = false
+	var forged_hands_data: Dictionary = {}
 	if is_local and CharacterStats.equipped_armor.has("hands") and CharacterStats.equipped_armor["hands"] != null:
 		var hand_armor = CharacterStats.equipped_armor["hands"]
 		hands_sprite_name = hand_armor.get("sprite_name", "")
+		is_forged_hands = hand_armor.get("is_forged", false)
+		if is_forged_hands:
+			forged_hands_data = hand_armor
 	elif not is_local and remote_hands_sprite != "":
 		hands_sprite_name = remote_hands_sprite
 
-	if hands_sprite_name != "":
+	# Load forged hands armor from ForgeItemDB
+	if is_forged_hands and forged_hands_data.get("forged_item_id", "") != "":
+		var forged_item_id = forged_hands_data.get("forged_item_id", "")
+		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
+		if forged_db_data and forged_db_data.has("sprites"):
+			var sprites = forged_db_data["sprites"]
+			# Load hands sprites from forged item
+			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
+				hands_walk_tex = load(sprites["walk"])
+			# Pick shoot/thrust/slash based on weapon type
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
+				hands_slash_tex = load(sprites[attack_key])
+			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
+				hands_slash_tex = load(sprites["slash"])
+
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Loaded forged hands armor: %s" % forged_item_id)
+	elif hands_sprite_name != "":
+		# Standard (non-forged) hands armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
 		var hands_path = "res://assets/characters/hands_female/" if selected_gender == Gender.FEMALE else "res://assets/characters/hands/"
 		if not ResourceLoader.exists(hands_path + hands_sprite_name + "_walk.png"):
@@ -2271,8 +2479,8 @@ func create_player_sprite() -> void:
 			# Load head sprites from forged item
 			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
 				head_walk_tex = load(sprites["walk"])
-			# Pick slash or thrust based on weapon
-			var attack_key = "thrust" if uses_thrust else "slash"
+			# Pick shoot/thrust/slash based on weapon type
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
 			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
 				head_slash_tex = load(sprites[attack_key])
 			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
@@ -2320,8 +2528,12 @@ func create_player_sprite() -> void:
 		# Try thrust first if using staff, fall back to slash
 		if ResourceLoader.exists(head_armor_path + head_sprite_name + attack_suffix + ".png"):
 			head_slash_tex = load(head_armor_path + head_sprite_name + attack_suffix + ".png")
+			if DEBUG_EQUIP:
+				print("[Equip] Loaded head armor %s attack: %s%s%s.png" % [attack_anim_name, head_armor_path, head_sprite_name, attack_suffix])
 		elif ResourceLoader.exists(head_armor_path + head_sprite_name + "_slash.png"):
 			head_slash_tex = load(head_armor_path + head_sprite_name + "_slash.png")
+			if DEBUG_EQUIP:
+				print("[Equip] Loaded head armor slash (fallback): %s_slash.png" % head_sprite_name)
 
 	# Load hair textures (for both genders)
 	var hair_walk_tex = null
@@ -2455,22 +2667,48 @@ func get_appearance_data() -> Dictionary:
 	var hands_sprite = ""
 	var head_sprite = ""
 
+	# Forged item IDs for armor pieces
+	var feet_forged_id = ""
+	var legs_forged_id = ""
+	var chest_forged_id = ""
+	var arms_forged_id = ""
+	var hands_forged_id = ""
+	var head_forged_id = ""
+
 	# Get from CharacterStats if this is the local player
 	if is_multiplayer_authority():
 		if CharacterStats.equipped_weapon:
 			weapon_type = CharacterStats.equipped_weapon.weapon_type
 		if CharacterStats.equipped_armor.get("feet"):
-			feet_sprite = CharacterStats.equipped_armor["feet"].get("sprite_name", "")
+			var feet_armor = CharacterStats.equipped_armor["feet"]
+			feet_sprite = feet_armor.get("sprite_name", "")
+			if feet_armor.get("is_forged", false):
+				feet_forged_id = feet_armor.get("forged_item_id", "")
 		if CharacterStats.equipped_armor.get("legs"):
-			legs_sprite = CharacterStats.equipped_armor["legs"].get("sprite_name", "")
+			var legs_armor = CharacterStats.equipped_armor["legs"]
+			legs_sprite = legs_armor.get("sprite_name", "")
+			if legs_armor.get("is_forged", false):
+				legs_forged_id = legs_armor.get("forged_item_id", "")
 		if CharacterStats.equipped_armor.get("chest"):
-			chest_sprite = CharacterStats.equipped_armor["chest"].get("sprite_name", "")
+			var chest_armor = CharacterStats.equipped_armor["chest"]
+			chest_sprite = chest_armor.get("sprite_name", "")
+			if chest_armor.get("is_forged", false):
+				chest_forged_id = chest_armor.get("forged_item_id", "")
 		if CharacterStats.equipped_armor.get("arms"):
-			arms_sprite = CharacterStats.equipped_armor["arms"].get("sprite_name", "")
+			var arms_armor = CharacterStats.equipped_armor["arms"]
+			arms_sprite = arms_armor.get("sprite_name", "")
+			if arms_armor.get("is_forged", false):
+				arms_forged_id = arms_armor.get("forged_item_id", "")
 		if CharacterStats.equipped_armor.get("hands"):
-			hands_sprite = CharacterStats.equipped_armor["hands"].get("sprite_name", "")
+			var hands_armor = CharacterStats.equipped_armor["hands"]
+			hands_sprite = hands_armor.get("sprite_name", "")
+			if hands_armor.get("is_forged", false):
+				hands_forged_id = hands_armor.get("forged_item_id", "")
 		if CharacterStats.equipped_armor.get("head"):
-			head_sprite = CharacterStats.equipped_armor["head"].get("sprite_name", "")
+			var head_armor = CharacterStats.equipped_armor["head"]
+			head_sprite = head_armor.get("sprite_name", "")
+			if head_armor.get("is_forged", false):
+				head_forged_id = head_armor.get("forged_item_id", "")
 	else:
 		# For remote players, use stored values
 		weapon_type = remote_weapon_type
@@ -2489,7 +2727,13 @@ func get_appearance_data() -> Dictionary:
 		"chest_sprite": chest_sprite,
 		"arms_sprite": arms_sprite,
 		"hands_sprite": hands_sprite,
-		"head_sprite": head_sprite
+		"head_sprite": head_sprite,
+		"feet_forged_id": feet_forged_id,
+		"legs_forged_id": legs_forged_id,
+		"chest_forged_id": chest_forged_id,
+		"arms_forged_id": arms_forged_id,
+		"hands_forged_id": hands_forged_id,
+		"head_forged_id": head_forged_id
 	}
 
 func apply_appearance_data(data: Dictionary):
@@ -2633,12 +2877,19 @@ func create_circle_visualizer() -> void:
 	# Determine radius and color based on weapon type
 	var radius = 80.0
 	var fill_color = Color(0.4, 1.0, 0.5, 0.04)  # Default: faint green for healing
+	var is_precision_weapon = false  # For center dot
 
 	if CharacterStats.equipped_weapon:
-		if CharacterStats.equipped_weapon.is_gun_weapon():
+		if CharacterStats.equipped_weapon.is_bow_weapon():
+			# Bow: Medium amber/brown reticle for arrow targeting
+			radius = CharacterStats.equipped_weapon.bow_radius
+			fill_color = Color(0.9, 0.6, 0.2, 0.10)  # Amber/brown
+			is_precision_weapon = true
+		elif CharacterStats.equipped_weapon.is_gun_weapon():
 			# Gun: Small red/orange reticle for precision targeting
 			radius = CharacterStats.equipped_weapon.gun_radius
 			fill_color = Color(1.0, 0.3, 0.2, 0.08)  # Red-orange, slightly more visible
+			is_precision_weapon = true
 		elif CharacterStats.equipped_weapon.is_healing_weapon():
 			# Healing staff: Large green circle
 			radius = CharacterStats.equipped_weapon.heal_radius
@@ -2656,11 +2907,15 @@ func create_circle_visualizer() -> void:
 	circle_fill.polygon = points
 	circle_visualizer.add_child(circle_fill)
 
-	# For guns, add a center dot for precision aiming
-	if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_gun_weapon():
+	# For precision weapons (guns, bows), add a center dot for aiming
+	if is_precision_weapon:
 		var center_dot = Polygon2D.new()
 		center_dot.name = "CenterDot"
-		center_dot.color = Color(1.0, 0.4, 0.3, 0.15)  # Slightly brighter center
+		# Match the weapon's color scheme for the center dot
+		if CharacterStats.equipped_weapon.is_bow_weapon():
+			center_dot.color = Color(1.0, 0.7, 0.3, 0.20)  # Brighter amber
+		else:
+			center_dot.color = Color(1.0, 0.4, 0.3, 0.15)  # Red-orange for guns
 		var dot_points = PackedVector2Array()
 		var dot_radius = 3.0  # Small center dot
 		for i in range(16):
@@ -2762,58 +3017,169 @@ func update_debug_visualization() -> void:
 	
 	debug_shapes.add_child(cone_outline)
 
-	# Draw gun targeting circle at cursor (WORLD SPACE)
+	# Draw ranged weapon targeting circle at cursor (WORLD SPACE)
 	var parent = get_parent()
-	if parent and CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_gun_weapon():
-		var cursor_pos = get_global_mouse_position()
-		var gun_radius = CharacterStats.equipped_weapon.gun_radius if CharacterStats.equipped_weapon.get("gun_radius") else 28.0
+	var is_bow = CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_bow_weapon()
+	var is_gun = CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.is_gun_weapon()
 
-		# Gun reticle circle (yellow)
-		var gun_debug = Node2D.new()
-		gun_debug.name = "GunDebug"
-		parent.add_child(gun_debug)
-		world_debug_nodes.append(gun_debug)
+	# Leniency: Player's targeting circle is slightly larger than enemy hurtbox
+	# This gives visual feedback that you're "close enough" to hit
+	const TARGETING_LENIENCY: float = 8.0  # Extra pixels on player reticle
+
+	if parent and (is_gun or is_bow):
+		var cursor_pos = get_global_mouse_position()
+		var hit_radius = 28.0  # Default
+		var circle_color = Color.YELLOW
+		var label_text = "GUN"
+
+		if is_bow:
+			hit_radius = CharacterStats.equipped_weapon.bow_radius if CharacterStats.equipped_weapon.get("bow_radius") else 32.0
+			circle_color = Color.ORANGE
+			label_text = "BOW"
+		elif is_gun:
+			hit_radius = CharacterStats.equipped_weapon.gun_radius if CharacterStats.equipped_weapon.get("gun_radius") else 28.0
+			circle_color = Color.YELLOW
+			label_text = "GUN"
+
+		# Reticle circle at cursor (with leniency - larger than actual hit area)
+		var reticle_debug = Node2D.new()
+		reticle_debug.name = label_text + "Debug"
+		parent.add_child(reticle_debug)
+		world_debug_nodes.append(reticle_debug)
 
 		var reticle = Line2D.new()
 		reticle.width = 2.0
-		reticle.default_color = Color.YELLOW
+		reticle.default_color = circle_color
+		var display_radius = hit_radius + TARGETING_LENIENCY
 		for i in range(33):
 			var angle = (i * TAU) / 32
-			reticle.add_point(cursor_pos + Vector2(cos(angle), sin(angle)) * gun_radius)
-		gun_debug.add_child(reticle)
+			reticle.add_point(cursor_pos + Vector2(cos(angle), sin(angle)) * display_radius)
+		reticle_debug.add_child(reticle)
 
-	# Draw enemy collision shapes and CENTER POINTS in WORLD SPACE
+	# Draw enemy HIT DETECTION areas in WORLD SPACE (PILL/CAPSULE shapes)
+	# This shows EXACTLY where arrows/bullets will register as hits
 	if parent:
 		var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 		for enemy in enemies:
 			if is_instance_valid(enemy):
-				# Draw enemy center point (where gun targeting checks against)
-				var enemy_center = enemy.global_position + Vector2(0, -32)
-				var center_marker = Node2D.new()
-				center_marker.name = "EnemyCenter_" + enemy.name
-				parent.add_child(center_marker)
-				world_debug_nodes.append(center_marker)
+				# Get enemy capsule hitbox (pill shape from head to toe)
+				var capsule = _get_debug_enemy_capsule(enemy)
 
-				# Cross at enemy center (cyan)
+				var hitbox_marker = Node2D.new()
+				hitbox_marker.name = "EnemyHitbox_" + enemy.name
+				parent.add_child(hitbox_marker)
+				world_debug_nodes.append(hitbox_marker)
+
+				# Draw pill/capsule shape (magenta)
+				var pill = _draw_debug_pill(capsule.top, capsule.bottom, capsule.radius, Color.MAGENTA)
+				hitbox_marker.add_child(pill)
+
+				# Draw center line of capsule (cyan)
+				var center_line = Line2D.new()
+				center_line.width = 2.0
+				center_line.default_color = Color.CYAN
+				center_line.add_point(capsule.top)
+				center_line.add_point(capsule.bottom)
+				hitbox_marker.add_child(center_line)
+
+				# Cross at capsule center
+				var capsule_center = (capsule.top + capsule.bottom) / 2.0
 				var cross_h = Line2D.new()
 				cross_h.width = 2.0
 				cross_h.default_color = Color.CYAN
-				cross_h.add_point(enemy_center + Vector2(-10, 0))
-				cross_h.add_point(enemy_center + Vector2(10, 0))
-				center_marker.add_child(cross_h)
+				cross_h.add_point(capsule_center + Vector2(-8, 0))
+				cross_h.add_point(capsule_center + Vector2(8, 0))
+				hitbox_marker.add_child(cross_h)
 
-				var cross_v = Line2D.new()
-				cross_v.width = 2.0
-				cross_v.default_color = Color.CYAN
-				cross_v.add_point(enemy_center + Vector2(0, -10))
-				cross_v.add_point(enemy_center + Vector2(0, 10))
-				center_marker.add_child(cross_v)
+func _get_debug_enemy_capsule(enemy: Node) -> Dictionary:
+	"""Get capsule/pill hitbox parameters for debug visualization.
+	Must match _get_enemy_capsule_hitbox() in PlayerCombat.gd exactly."""
 
-				# Also draw existing debug shapes
-				if enemy.has_method("draw_debug_shapes_world"):
-					var enemy_debug_node = enemy.draw_debug_shapes_world(parent)
-					if enemy_debug_node:
-						world_debug_nodes.append(enemy_debug_node)
+	# Base dimensions for LPC sprites (64x64 frame, ~32x56 character)
+	var base_height = 52.0  # Head to toe coverage
+	var base_radius = 14.0  # Half-width of body
+
+	# Get scale factor (for crit window growth)
+	var scale_factor = 1.0
+	if enemy.get("sprite") and is_instance_valid(enemy.sprite):
+		scale_factor = enemy.sprite.scale.y
+	elif enemy.get("in_crit_window") and enemy.in_crit_window:
+		scale_factor = 1.5  # Default crit window scale
+
+	# Apply scale to dimensions
+	# Height scales less aggressively to avoid oversized hitbox during crit window
+	var height_scale = 1.0 + (scale_factor - 1.0) * 0.3  # 30% of the scale increase for height
+	var height = base_height * height_scale
+	var radius = base_radius * scale_factor
+
+	# Calculate capsule position
+	var base_pos = enemy.global_position
+
+	# Check for sprite offset
+	if enemy.get("sprite") and is_instance_valid(enemy.sprite):
+		var sprite = enemy.sprite
+		if sprite.position != Vector2.ZERO:
+			base_pos = enemy.global_position + sprite.position
+
+	# For LPC sprites: feet are at global_position, head is above
+	# Offset 30px south to better align with skeleton sprites
+	# Additional 25px south when scaled up (crit window) to match grown sprite
+	var south_offset = 30.0
+	if scale_factor > 1.1:
+		south_offset += 25.0  # Extra offset for scaled enemies
+	var capsule_top = base_pos + Vector2(0, -height + 4 + south_offset)
+	var capsule_bottom = base_pos + Vector2(0, 4 + south_offset)
+
+	return {
+		"top": capsule_top,
+		"bottom": capsule_bottom,
+		"radius": radius
+	}
+
+func _draw_debug_pill(top: Vector2, bottom: Vector2, radius: float, color: Color) -> Line2D:
+	"""Draw a pill/capsule shape (vertical rounded rectangle)."""
+	var pill = Line2D.new()
+	pill.width = 2.0
+	pill.default_color = color
+
+	# Calculate direction and perpendicular
+	var direction = (bottom - top).normalized()
+	var perp = Vector2(-direction.y, direction.x)  # Perpendicular
+
+	# Draw left side (top to bottom)
+	pill.add_point(top + perp * radius)
+	pill.add_point(bottom + perp * radius)
+
+	# Draw bottom semicircle
+	var segments = 8
+	for i in range(segments + 1):
+		var angle = PI * float(i) / float(segments)  # 0 to PI (half circle)
+		var offset = Vector2(cos(angle), sin(angle)) * radius
+		# Rotate offset to align with capsule orientation
+		var rotated = Vector2(
+			perp.x * offset.x + direction.x * offset.y,
+			perp.y * offset.x + direction.y * offset.y
+		)
+		pill.add_point(bottom + rotated)
+
+	# Draw right side (bottom to top)
+	pill.add_point(bottom - perp * radius)
+	pill.add_point(top - perp * radius)
+
+	# Draw top semicircle
+	for i in range(segments + 1):
+		var angle = PI + PI * float(i) / float(segments)  # PI to 2*PI (half circle)
+		var offset = Vector2(cos(angle), sin(angle)) * radius
+		var rotated = Vector2(
+			perp.x * offset.x + direction.x * offset.y,
+			perp.y * offset.x + direction.y * offset.y
+		)
+		pill.add_point(top + rotated)
+
+	# Close the shape
+	pill.add_point(top + perp * radius)
+
+	return pill
 
 func draw_debug_circle(center: Vector2, radius: float, color: Color) -> Line2D:
 	var line = Line2D.new()
@@ -3062,6 +3428,10 @@ func die() -> void:
 	print("\n💀 ===== PLAYER DEATH =====")
 	print("Position: ", death_position)
 	print("Remaining health: ", current_health)
+
+	# Track death for forged weapon stats
+	if combat_system and combat_system.has_method("track_player_death"):
+		combat_system.track_player_death()
 
 	# Close any open loot UIs on death
 	for child in get_tree().root.get_children():
@@ -4539,14 +4909,24 @@ func _apply_forged_weapon_effects(forged_data: Dictionary) -> void:
 		"theme_color": theme_color
 	}
 
-	# Apply effects using ForgeVisualEffects autoload
-	ForgeVisualEffects.apply_effects_to_entity(self, effect_config.effects, modifiers)
-
-	if DEBUG_FORGED_EQUIP:
-		print("[ForgedEquip] ✓ Visual effects applied successfully")
+	# Apply effects to the weapon sprite, not the player
+	var weapon_sprite = get_node_or_null("WeaponSprite")
+	if weapon_sprite:
+		ForgeVisualEffects.apply_effects_to_entity(weapon_sprite, effect_config.effects, modifiers)
+		if DEBUG_FORGED_EQUIP:
+			print("[ForgedEquip] ✓ Visual effects applied to WeaponSprite")
+	else:
+		# Fallback to player if no weapon sprite found
+		ForgeVisualEffects.apply_effects_to_entity(self, effect_config.effects, modifiers)
+		if DEBUG_FORGED_EQUIP:
+			print("[ForgedEquip] ✓ Visual effects applied to Player (no WeaponSprite found)")
 
 func _clear_forged_weapon_effects() -> void:
-	"""Clear all forged weapon visual effects from the player"""
+	"""Clear all forged weapon visual effects from the weapon sprite"""
+	var weapon_sprite = get_node_or_null("WeaponSprite")
+	if weapon_sprite:
+		ForgeVisualEffects.clear_effects_from_entity(weapon_sprite)
+	# Also clear from player in case effects were applied there previously
 	ForgeVisualEffects.clear_effects_from_entity(self)
 	if DEBUG_FORGED_EQUIP:
 		print("[ForgedEquip] Cleared existing forged weapon effects")

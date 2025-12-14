@@ -1,10 +1,11 @@
-[gd_scene load_steps=9 format=3 uid="uid://cwt2fedgrkapc"]
+[gd_scene load_steps=10 format=3 uid="uid://cwt2fedgrkapc"]
 
 [ext_resource type="Script" uid="uid://bd50fqn8yhbm" path="res://scripts/player/Player.gd" id="1_owqtu"]
 [ext_resource type="PackedScene" uid="uid://dgimv5l3sdn3s" path="res://scenes/ui/health_bar.tscn" id="2_grjwn"]
 [ext_resource type="Script" uid="uid://btfpaa603y5e7" path="res://scripts/systems/crit_system.gd" id="3_k8eo2"]
 [ext_resource type="Script" uid="uid://dwhimhmok233g" path="res://scripts/systems/crit_window_manager.gd" id="4_ua83j"]
 [ext_resource type="Script" uid="uid://dmlg2b1kcbv0s" path="res://scripts/ui/chain_ui.gd" id="5_puml6"]
+[ext_resource type="PackedScene" path="res://scenes/ui/WorldTreeUI.tscn" id="6_world_tree"]
 
 [sub_resource type="PlaceholderTexture2D" id="PlaceholderTexture2D_0m6gh"]
 size = Vector2(32, 32)
@@ -62,3 +63,5 @@ grow_horizontal = 2
 theme_override_font_sizes/font_size = 36
 text = "Chain: 0x"
 script = ExtResource("5_puml6")
+
+[node name="WorldTreeUI" parent="." instance=ExtResource("6_world_tree")]

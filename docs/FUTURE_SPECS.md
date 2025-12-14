@@ -311,323 +311,556 @@ const SIEGE_WINDOWS_PER_WEEK: int = 3  # Mon/Wed/Sat
 
 ---
 
-# Class System
+# Weapon Skill & Title System
 
-**Status: NOT YET IMPLEMENTED**
+**Status: READY FOR IMPLEMENTATION**
 
-Emergent progression system where players develop their identity through gameplay rather than upfront selection.
+Weapon proficiency system where players develop mastery through combat. Each weapon type has independent skill that affects hit chance, damage, and unlocks abilities and titles.
 
-## The Four Layers
+**Design Philosophy:** Old-school skill progression with modern QOL. Players start competent but imperfect, mastering weapons through use.
+
+## Architecture Overview
 
 ```
 +-------------------------------------------------------------+
-|  LAYER 4: EMERGENT CLASS                                    |
-|  Determined by: Weapon Skill + Discipline + Runes           |
-|  Result: "Blademaster", "Assassin", "High Priest", etc.     |
+|  PLAYER IDENTITY                                            |
+|  Title earned through weapon mastery                        |
+|  "Kensei Kevin" / "Reaper Sarah" / "Archon Mike"            |
 +-------------------------------------------------------------+
                               ^
-          +-------------------+-------------------+
-          |                   |                   |
-+---------+---------+ +-------+-------+ +--------+--------+
-|  WEAPON SKILLS    | |  DISCIPLINE   | |     RUNES       |
-|  What you use     | |  How you play | |  What you find  |
-|  Swords: 247/300  | |  Warfare: 2.8k| |  Blood Price    |
-|  Daggers: 89/300  | |  Finesse: 1.2k| |  Last Stand     |
-+-------------------+ +---------------+ +-----------------+
+                              |
++-------------------------------------------------------------+
+|  WEAPON SKILLS (10 types)                                   |
+|  Independent skill per weapon type (0-300)                  |
+|  Affects: Hit chance, damage, unlocks passives & abilities  |
+|  Swords: 247/300 | Bows: 89/300 | Healing: 150/300          |
++-------------------------------------------------------------+
 ```
 
-## System 1: Weapon Skills
+> **FUTURE EXPANSION:** Disciplines (how you play) and Runes (socketed abilities) are planned for a later update. See "Future: Disciplines & Runes" section below.
+
+---
+
+## Weapon Skills
 
 Each weapon TYPE has an independent skill level that determines your effectiveness.
 
 ### Level-Based Skill Cap
 
 ```
-Weapon Skill Cap = Player Level x 10
+Weapon Skill Cap = Player Level × 10
 
-Level 1  -> Cap: 10
-Level 10 -> Cap: 100
-Level 20 -> Cap: 200
-Level 30 -> Cap: 300 (maximum)
+Level 1  -> Cap: 10   (new player)
+Level 10 -> Cap: 100  (unlock passives possible)
+Level 20 -> Cap: 200  (unlock abilities possible)
+Level 30 -> Cap: 300  (maximum mastery)
 ```
 
 ### Weapon Skill Types
 
-| Skill | Associated Weapons | Primary Stat |
-|-------|-------------------|--------------|
-| Swords | Longsword, Rapier | Strength/Agility |
-| Daggers | Stiletto, Kris | Agility |
-| Maces | Morning Star, Flanged Mace | Strength |
-| Hammers | Warhammer, Maul | Strength |
-| Spears | Pike, Halberd | Strength/Agility |
-| Staves | Healing Staff, Wizard Staff | Vitality |
+| Skill | Associated Weapons | Primary Stat | Fantasy |
+|-------|-------------------|--------------|---------|
+| Swords | Longsword, Rapier, Katana, Scimitar | STR/AGI | Honorable warrior |
+| Daggers | Dagger, Stiletto, Kris | AGI | Shadow assassin |
+| Axes | Axe, Greataxe, Hatchet | STR | Brutal raider |
+| Maces | Mace, Morning Star, Club | STR | Crushing enforcer |
+| Hammers | Warhammer, Maul | STR | Armor breaker |
+| Spears | Spear, Pike, Halberd | STR/AGI | Disciplined soldier |
+| Bows | Shortbow, Longbow, Recurve | AGI | Patient hunter |
+| Healing | Healing Staff, Restoration Wand | VIT | Divine healer |
+| Arcane | Wizard Staff, Battle Staff | INT | Battle mage |
+| Guns | Pistol, Rifle, Battle Rifle | AGI | Precise marksman |
 
 ### Skill Effects (Relative to Cap)
 
-| Fill % | Miss Chance | Damage | Status |
-|--------|-------------|--------|--------|
-| 0-15% | 25% miss | 50% | "Untrained" |
-| 16-33% | 20% miss | 60% | "Novice" |
-| 34-50% | 15% miss | 70% | "Competent" |
-| 51-66% | 10% miss | 80% | "Skilled" |
-| 67-83% | 5% miss | 90% | "Expert" |
-| 84-99% | 2% miss | 95% | "Nearly Maxed" |
-| 100% | 0% miss | 100% | "Maxed" |
+**Design:** Start competent (not helpless), master to perfection. Miss chance is noticeable but not crippling.
+
+| Fill % | Miss Chance | Damage | Status | Combat Feel |
+|--------|-------------|--------|--------|-------------|
+| 0-10% | 15% miss | 70% | Untrained | Rough but manageable |
+| 11-25% | 12% miss | 75% | Novice | Getting the hang of it |
+| 26-50% | 8% miss | 82% | Competent | Comfortable |
+| 51-75% | 4% miss | 90% | Skilled | Reliable |
+| 76-99% | 2% miss | 96% | Expert | Confident |
+| 100% | 0% miss | 100% | Master | Perfect execution |
+
+**Balance Note:** At 0% skill, effective DPS is ~60% of max (0.70 damage × 0.85 hit rate). This is challenging but not frustrating for early game enemies.
 
 ### Skill Gain Formula
 
 ```gdscript
-SKILL_GAIN_HIT = 0.5     # Landing a hit
-SKILL_GAIN_MISS = 0.1    # Missing (still learning)
-SKILL_GAIN_KILL = 3.0    # Killing blow
-SKILL_GAIN_CRIT = 1.0    # Critical hit bonus
+const SKILL_GAIN = {
+    "hit": 0.5,       # Landing a hit
+    "miss": 0.2,      # Missing (still learning)
+    "kill": 2.0,      # Killing blow
+    "crit": 0.5,      # Critical hit bonus
+}
 
-# Catch-up: faster gains when far from cap
-var fill_ratio = current / float(cap)
-var catch_up_bonus = lerp(2.0, 0.5, fill_ratio)  # 2x empty, 0.5x full
+# Catch-up: faster gains when far from cap (3x at empty, 0.5x near cap)
+var fill_ratio = current_skill / float(skill_cap)
+var catch_up_mult = lerp(3.0, 0.5, fill_ratio)
+final_gain = base_gain * catch_up_mult
 ```
 
-### Weapon-Specific Unlocks
+**Time to Cap Estimates:**
+- Skill 0 → 50: ~30 minutes (fast early progression)
+- Skill 50 → 100: ~1 hour
+- Skill 100 → 200: ~3-4 hours
+- Skill 200 → 300: ~8-10 hours
+- **Total 0 → 300:** ~15-20 hours per weapon
 
-**Passives (Skill 100):**
-| Weapon | Passive | Effect |
-|--------|---------|--------|
-| Swords | Blade Precision | +3% crit |
-| Daggers | Arterial Cuts | Crits cause bleed |
-| Maces | Crushing Blows | 10% stagger |
-| Hammers | Armor Break | -5% defense (stacks 3x) |
-| Spears | Reach | +15% range |
-| Staves | Focused Channeling | +20% healing |
+---
 
-**Abilities (Skill 200):**
-| Weapon | Ability | Effect | CD |
-|--------|---------|--------|-----|
-| Swords | Blade Flurry | 3 rapid 50% attacks | 20s |
-| Daggers | Eviscerate | 200% from behind | 15s |
-| Maces | Concussive Slam | AOE 1.5s stun | 30s |
-| Hammers | Execution | 300% under 20% HP | 25s |
-| Spears | Impale | Pierce 2 enemies | 12s |
-| Staves | Sanctuary | Heal zone 10HP/s | 45s |
+## Weapon-Specific Unlocks
 
-## System 2: Runes
+### Passives (Skill 100)
 
-Rare world drops that grant abilities, passives, or special effects.
+Permanent bonuses while wielding the weapon type.
 
-### Rune Slots
+| Weapon | Passive Name | Effect |
+|--------|--------------|--------|
+| Swords | Blade Precision | +3% crit chance |
+| Daggers | Arterial Cuts | Critical hits cause 3s bleed (2 dmg/s) |
+| Axes | Cleaving Strikes | 30% damage to adjacent enemies |
+| Maces | Crushing Force | 10% chance to stagger (interrupt) |
+| Hammers | Armor Sunder | -5% enemy defense per hit (stacks 3x) |
+| Spears | Extended Reach | +15% attack range |
+| Bows | Eagle Eye | +20% effective range, no damage falloff |
+| Healing | Blessed Touch | +25% healing power, heals remove 1 debuff |
+| Arcane | Spell Weaving | +15% spell damage, -10% cooldowns |
+| Guns | Steady Aim | -25% spread, +10% headshot zone |
 
-| Slot | Unlock Requirement |
-|------|--------------------|
-| 1 | Level 5 |
-| 2 | Level 15 |
-| 3 | Level 25 |
-| 4 | Any weapon skill 200 |
-| 5 | Any weapon skill 300 |
-| 6 | Two weapon skills 300 |
+### Abilities (Skill 200)
 
-### Rune Categories
+Active abilities with cooldowns. Bound to ability key when weapon equipped.
 
-**Ability Runes** - Active abilities with cooldowns
-```
-[Rune of Sanguine Fury]
-Ability: Blood Price
-Effect: -15% HP, +30% damage (10s)
-Cooldown: 60s
-```
+| Weapon | Ability | Effect | Cooldown |
+|--------|---------|--------|----------|
+| Swords | Blade Flurry | 3 rapid strikes at 50% damage each | 20s |
+| Daggers | Eviscerate | 200% damage from behind, 150% otherwise | 15s |
+| Axes | Whirlwind | 360° spin attack, 80% damage to all nearby | 18s |
+| Maces | Concussive Slam | AOE ground pound, 1.5s stun | 30s |
+| Hammers | Execution | 300% damage to enemies below 20% HP | 25s |
+| Spears | Impale | Thrust pierces up to 2 enemies | 12s |
+| Bows | Rain of Arrows | AOE volley, 60% damage to all in area | 25s |
+| Healing | Sanctuary | Create healing zone, 15 HP/s for 8s | 45s |
+| Arcane | Arcane Blast | 250% damage AOE explosion, knockback | 22s |
+| Guns | Deadeye Shot | Guaranteed critical hit, +50% damage | 20s |
 
-**Passive Runes** - Permanent stat bonuses
-```
-[Rune of the Relentless]
-Effect: Chain decay -50%
-```
+---
 
-**Trait Runes** - Conditional bonuses
-```
-[Rune of Last Stand]
-Condition: Below 30% HP
-Effect: +25% damage
-```
+## Title System
 
-**Title Runes** - Cosmetic + minor bonus
-```
-[Wolfbane Rune]
-Requirement: Kill 500 wolves
-Effect: +5% vs wolves, title "Wolfbane"
-```
+Titles are earned through weapon mastery and displayed with character name. Each weapon type has its own thematic title progression.
 
-### Rune Rarity
+### Title Progression by Weapon
 
-| Rarity | Drop Rate | Trade |
-|--------|-----------|-------|
-| Common | 1.0x | Yes |
-| Uncommon | 0.5x | Yes |
-| Rare | 0.2x | Yes |
-| Epic | 0.05x | Yes |
-| Legendary | 0.01x | No |
-| Artifact | Boss only | No |
+**Swords** *(Path of the Blade - Honorable Warriors)*
+| Skill | Title | Full Example |
+|-------|-------|--------------|
+| 0-49 | *(none)* | Kevin |
+| 50-99 | Squire | Squire Kevin |
+| 100-149 | Swordsman | Swordsman Kevin |
+| 150-199 | Bladesman | Bladesman Kevin |
+| 200-249 | Blademaster | Blademaster Kevin |
+| 250-299 | Sword Saint | Sword Saint Kevin |
+| 300 | Kensei | Kensei Kevin |
 
-## System 3: Discipline Affinity
+**Daggers** *(Path of Shadows - Silent Killers)*
+| Skill | Title | Full Example |
+|-------|-------|--------------|
+| 0-49 | *(none)* | Sarah |
+| 50-99 | Footpad | Footpad Sarah |
+| 100-149 | Knifesman | Knifesman Sarah |
+| 150-199 | Cutthroat | Cutthroat Sarah |
+| 200-249 | Shadow | Shadow Sarah |
+| 250-299 | Phantom | Phantom Sarah |
+| 300 | Reaper | Reaper Sarah |
 
-Tracks HOW you play, not just what weapon you hold.
+**Axes** *(Path of Fury - Berserker Raiders)*
+| Skill | Title | Full Example |
+|-------|-------|--------------|
+| 0-49 | *(none)* | Bjorn |
+| 50-99 | Woodcutter | Woodcutter Bjorn |
+| 100-149 | Axeman | Axeman Bjorn |
+| 150-199 | Raider | Raider Bjorn |
+| 200-249 | Berserker | Berserker Bjorn |
+| 250-299 | Warlord | Warlord Bjorn |
+| 300 | Executioner | Executioner Bjorn |
 
-### The Disciplines
+**Maces** *(Path of Ruin - Crushing Enforcers)*
+| Skill | Title | Full Example |
+|-------|-------|--------------|
+| 0-49 | *(none)* | Marcus |
+| 50-99 | Brawler | Brawler Marcus |
+| 100-149 | Clubman | Clubman Marcus |
+| 150-199 | Crusher | Crusher Marcus |
+| 200-249 | Enforcer | Enforcer Marcus |
+| 250-299 | Devastator | Devastator Marcus |
+| 300 | Juggernaut | Juggernaut Marcus |
 
-| Discipline | Playstyle | Tracks |
-|------------|-----------|--------|
-| Warfare | Aggressive | Damage, kills, combat time |
-| Finesse | Precision | Crits, dodges, one-shots |
-| Brutality | Berserker | Overkill, chains, multi-kills |
-| Piety | Support | Healing, revives, buffs |
-| Guardianship | Tank | Damage taken, aggro held |
+**Hammers** *(Path of the Titan - Armor Breakers)*
+| Skill | Title | Full Example |
+|-------|-------|--------------|
+| 0-49 | *(none)* | Thor |
+| 50-99 | Laborer | Laborer Thor |
+| 100-149 | Hammerman | Hammerman Thor |
+| 150-199 | Smasher | Smasher Thor |
+| 200-249 | Breaker | Breaker Thor |
+| 250-299 | Demolisher | Demolisher Thor |
+| 300 | Titan | Titan Thor |
 
-### Affinity Thresholds
+**Spears** *(Path of the Phalanx - Disciplined Soldiers)*
+| Skill | Title | Full Example |
+|-------|-------|--------------|
+| 0-49 | *(none)* | Leonidas |
+| 50-99 | Militia | Militia Leonidas |
+| 100-149 | Pikeman | Pikeman Leonidas |
+| 150-199 | Hoplite | Hoplite Leonidas |
+| 200-249 | Lancer | Lancer Leonidas |
+| 250-299 | Dragoon | Dragoon Leonidas |
+| 300 | Valkyrie | Valkyrie Leonidas |
 
-| Points | Tier | Unlock |
-|--------|------|--------|
-| 500 | Initiate | Minor title |
-| 1,000 | Adept | Discipline passive |
-| 2,500 | Specialist | First ability |
-| 5,000 | Expert | Enhanced passive |
-| 10,000 | Master | Second ability, title |
+**Bows** *(Path of the Hunt - Patient Hunters)*
+| Skill | Title | Full Example |
+|-------|-------|--------------|
+| 0-49 | *(none)* | Robin |
+| 50-99 | Fletcher | Fletcher Robin |
+| 100-149 | Bowman | Bowman Robin |
+| 150-199 | Archer | Archer Robin |
+| 200-249 | Ranger | Ranger Robin |
+| 250-299 | Hawkeye | Hawkeye Robin |
+| 300 | Artemis | Artemis Robin |
 
-### Discipline Passives (1,000 points)
+**Healing** *(Path of the Divine - Sacred Healers)*
+| Skill | Title | Full Example |
+|-------|-------|--------------|
+| 0-49 | *(none)* | Elena |
+| 50-99 | Acolyte | Acolyte Elena |
+| 100-149 | Healer | Healer Elena |
+| 150-199 | Mender | Mender Elena |
+| 200-249 | Cleric | Cleric Elena |
+| 250-299 | High Priest | High Priest Elena |
+| 300 | Archon | Archon Elena |
 
-| Discipline | Passive | Effect |
-|------------|---------|--------|
-| Warfare | Battle Hardened | +5% damage |
-| Finesse | Keen Eye | +5% crit |
-| Brutality | Blood Frenzy | +2% per chain |
-| Piety | Blessed Touch | +15% healing |
-| Guardianship | Stalwart | +10% DR |
+**Arcane** *(Path of the Arcane - Battle Mages)*
+| Skill | Title | Full Example |
+|-------|-------|--------------|
+| 0-49 | *(none)* | Merlin |
+| 50-99 | Initiate | Initiate Merlin |
+| 100-149 | Apprentice | Apprentice Merlin |
+| 150-199 | Wizard | Wizard Merlin |
+| 200-249 | Sorcerer | Sorcerer Merlin |
+| 250-299 | Archmage | Archmage Merlin |
+| 300 | Magus | Magus Merlin |
 
-### Discipline Abilities (2,500 / 10,000)
+**Guns** *(Path of the Bullet - Precise Marksmen)*
+| Skill | Title | Full Example |
+|-------|-------|--------------|
+| 0-49 | *(none)* | Dutch |
+| 50-99 | Recruit | Recruit Dutch |
+| 100-149 | Marksman | Marksman Dutch |
+| 150-199 | Sharpshooter | Sharpshooter Dutch |
+| 200-249 | Gunslinger | Gunslinger Dutch |
+| 250-299 | Deadeye | Deadeye Dutch |
+| 300 | Deadshot | Deadshot Dutch |
 
-| Discipline | First (2.5k) | Master (10k) |
-|------------|--------------|--------------|
-| Warfare | Battle Cry (+20% dmg) | Unstoppable (immune CC) |
-| Finesse | Riposte (dodge->crit) | Death Mark (+30% taken) |
-| Brutality | Execute (+50% low HP) | Rampage (kills extend buffs) |
-| Piety | Sanctuary (heal zone) | Divine Shield (absorb) |
-| Guardianship | Taunt (force aggro) | Last Stand (survive at 1HP) |
+### Active Title Selection
 
-## System 4: Emergent Classes
-
-Your "class" emerges from weapon + discipline combination.
-
-### Class Matrix (6 Weapons x 5 Disciplines = 30 Classes)
-
-| Weapon | Warfare | Finesse | Brutality | Piety | Guardian |
-|--------|---------|---------|-----------|-------|----------|
-| Swords | Blademaster | Duelist | Berserker | Templar | Sword Knight |
-| Daggers | Assassin | Rogue | Cutthroat | Nightblade | Shadow Guard |
-| Maces | Crusher | Brawler | Ravager | Priest | Cleric |
-| Hammers | Warlord | Executioner | Berserker | Justicar | Paladin |
-| Spears | Dragoon | Lancer | Impaler | Valkyrie | Hoplite |
-| Staves | Battle Mage | Sage | Warlock | High Priest | Arcane Ward |
-
-### Title Progression
-
-```
-Skill 1-49:     "Adventurer [Name]"
-Skill 50-99:    "[Weapon] Initiate [Name]"
-Skill 100-149:  "[Weapon] Apprentice [Name]"
-Skill 150-199:  "[Class Base] [Name]"
-Skill 200-249:  "[Class] [Name]"
-Skill 250-299:  "[Class] Master [Name]"
-Skill 300:      "Grandmaster [Class] [Name]"
-```
+Players can choose which earned title to display:
+- Default: Highest skill weapon's title
+- Option: Any title from weapons with skill 50+
+- Option: "Adventurer [Name]" (hide title)
 
 ### Prestige Titles (Multi-Mastery)
 
-| Achievement | Title |
-|-------------|-------|
-| 1x Grandmaster | "Grandmaster [Class]" |
-| 2x Grandmaster | "[Dual Class Title]" |
-| 3x Grandmaster | "Legendary [Class]" |
-| 4x Grandmaster | "Mythic [Class]" |
-| 5x Grandmaster | "Paragon" |
-| All Grandmaster | "[Name] the Transcendent" |
+Earned by mastering multiple weapons to 300.
 
-### Dual-Mastery Titles
+| Achievement | Title | Example |
+|-------------|-------|---------|
+| Any 1 weapon at 300 | [Weapon Title] | Kensei Kevin |
+| Any 2 weapons at 300 | Weapons Master | Weapons Master Kevin |
+| Any 4 weapons at 300 | Battle Legend | Battle Legend Kevin |
+| Any 7 weapons at 300 | Paragon | Paragon Kevin |
+| All 10 weapons at 300 | The Transcendent | Kevin the Transcendent |
 
-| Combo | Title |
-|-------|-------|
-| Swords + Daggers | Sword Saint |
-| Swords + Maces | Battle Lord |
-| Swords + Staves | Spellblade |
-| Daggers + Hammers | Shadow Crusher |
-| Maces + Staves | Holy Warrior |
-| Hammers + Spears | Warlord Prime |
+### Dual-Mastery Special Titles
 
-## Example Player Progression
+Specific weapon combinations unlock unique titles:
 
-**Level 5:** Adventurer -> trying weapons, discipline unformed
+| Combo | Special Title | Fantasy |
+|-------|---------------|---------|
+| Swords + Daggers | Blade Dancer | Master of all blades |
+| Swords + Spears | Champion | Versatile warrior |
+| Daggers + Guns | Hitman | Professional killer |
+| Daggers + Bows | Stalker | Silent hunter |
+| Axes + Hammers | Warchief | Brutal devastator |
+| Maces + Hammers | Siegebreaker | Fortress destroyer |
+| Spears + Bows | Sentinel | Ranged defender |
+| Bows + Guns | Deadeye | Master of ranged |
+| Healing + Arcane | Mystic | Master of magic |
+| Healing + Any melee | Battle Priest | Healer who fights |
+| Arcane + Any melee | Spellblade | Magic warrior |
 
-**Level 15:** Sword Apprentice -> Warfare growing from kills
+---
 
-**Level 25:** Blademaster -> Maxed sword + Warfare Specialist
+## Player Statistics & Leaderboards
 
-**Level 30:** Grandmaster Blademaster -> Working on 2nd weapon
+Track and display global statistics to help players see rarity and make informed decisions.
 
-**Prestige:** Sword Saint -> Swords + Daggers both at 300
+### Per-Title Statistics
+
+The backend tracks how many players have reached each title tier. Displayed in UI as percentage.
+
+```
+Example UI display for Swords path:
+┌─────────────────────────────────────────┐
+│  PATH OF THE BLADE                      │
+├─────────────────────────────────────────┤
+│  Squire (50)      ████████████  82.3%   │
+│  Swordsman (100)  ██████████    64.1%   │
+│  Bladesman (150)  ██████        38.7%   │
+│  Blademaster (200)████          21.2%   │
+│  Sword Saint (250)██            8.4%    │
+│  Kensei (300)     ▌             0.7%    │  ← "Only 0.7% of players!"
+└─────────────────────────────────────────┘
+```
+
+### Backend Tracking
+
+```python
+# WeaponSkillStats table
+class WeaponSkillStats(Base):
+    weapon_type: str       # "swords", "daggers", etc.
+    skill_bracket: int     # 50, 100, 150, 200, 250, 300
+    player_count: int      # Number of players who reached this
+    last_updated: datetime
+
+# API endpoint
+GET /api/weapon-stats/global
+Returns: { "swords": { "50": 8234, "100": 6412, ... }, ... }
+```
+
+### Leaderboard Categories
+
+| Category | Description | Display |
+|----------|-------------|---------|
+| **Title Rarity** | % of players with each title | Bar chart per weapon |
+| **First to Max** | First players to reach 300 in each weapon | Hall of Fame |
+| **Most Versatile** | Most weapons at 200+ skill | Top 100 list |
+| **Transcendents** | Players with all 10 at 300 | Exclusive list |
+| **Rising Stars** | Fastest skill gains this week | Weekly spotlight |
+
+### UI Integration
+
+1. **Character Panel** - Show your title + "Top X%" badge
+2. **Title Selection** - See rarity % next to each title option
+3. **Skill Progress** - "X more to reach [Title] (held by Y% of players)"
+4. **Inspect Other Players** - See their titles + rarity badges
+
+### Rarity Badges
+
+| % of Players | Badge | Color |
+|--------------|-------|-------|
+| Top 50%+ | Common | Gray |
+| Top 25% | Uncommon | Green |
+| Top 10% | Rare | Blue |
+| Top 5% | Epic | Purple |
+| Top 1% | Legendary | Orange |
+| Top 0.1% | Mythic | Red glow |
+
+---
 
 ## Technical Implementation
 
-### New Files Required
+### New Files Required (Phase 1: Weapon Skills & Titles)
 
 ```
-scripts/systems/WeaponSkillManager.gd   - Weapon skill tracking
-scripts/systems/DisciplineManager.gd    - Discipline affinity
-scripts/systems/RuneManager.gd          - Rune inventory & slots
-scripts/systems/ClassManager.gd         - Class/title determination
-scripts/resources/Rune.gd               - Rune resource definition
-scripts/ui/WeaponSkillUI.gd             - Skills display
-scripts/ui/DisciplineUI.gd              - Discipline display
-scripts/ui/RuneUI.gd                    - Rune management UI
-data/runes.json                         - Rune definitions
-data/disciplines.json                   - Discipline config
-data/class_matrix.json                  - Class determination
+scripts/systems/WeaponSkillManager.gd   - Weapon skill tracking & persistence
+scripts/systems/TitleManager.gd         - Title determination & display
+scripts/ui/WeaponSkillUI.gd             - Skills display panel
+data/weapon_skills.json                 - Skill config & title definitions
 ```
 
-### Balance Targets
+### Implementation Priority
 
-| Level | Skill Cap | Time to Reach |
-|-------|-----------|---------------|
-| 5 | 50 | ~1 hour |
-| 10 | 100 | ~3 hours |
-| 15 | 150 | ~6 hours |
-| 20 | 200 | ~10 hours |
-| 25 | 250 | ~15 hours |
-| 30 | 300 | ~20-25 hours |
+1. **WeaponSkillManager.gd** - Core skill tracking
+   - Track skill per weapon type (8 types)
+   - Apply miss chance and damage scaling
+   - Skill gain on combat events
+   - Persistence (save/load)
 
-**Catch-up:** ~100 kills to cap a new weapon (~1-2 hours)
+2. **Combat Integration** - Modify PlayerCombat.gd
+   - Check weapon skill before hit resolution
+   - Apply miss chance roll
+   - Scale damage by skill level
+   - Grant skill XP on hits/kills
 
-### Rune Drop Rates
+3. **UI Integration** ✓ IMPLEMENTED (UI scaffolding)
+   - Skill bar showing current weapon skill / cap
+   - Floating "+0.5 Sword Skill" notifications
+   - Milestone popups ("Sword Skill 100! Unlocked: Blade Precision")
+   - Title display on character nameplate
 
-| Rarity | Expected Per Hour |
-|--------|-------------------|
-| Common | 2-3 |
-| Uncommon | 0.5-1 |
-| Rare | 1 per 3-4 hours |
-| Epic | 1 per 10-15 hours |
-| Legendary | 1 per 30-50 hours |
+### UI Implementation Status
+
+**CharacterUI.gd** - Weapon Mastery section added:
+- Compact display showing: Weapon Category | Title | Skill/Cap | Progress Bar
+- Press-and-hold (1 second) opens full Weapon Skills panel
+- Full panel shows all 10 weapon types with progress bars and current titles
+- Current equipped weapon type highlighted
+
+**Standardized Press-Hold Pattern:**
+The game uses a consistent press-and-hold interaction pattern for opening detailed views:
+
+```gdscript
+# Pattern: 1 second hold with radial progress indicator
+const LONG_HOLD_DURATION = 1.0  # seconds
+
+# Components:
+var _long_hold_timer: Timer       # Fires after duration
+var _long_hold_start_time: float  # For progress calculation
+var _radial_progress: Control     # Visual indicator (follows cursor)
+
+func _start_long_hold() -> void:
+    _cancel_long_hold()
+    _long_hold_start_time = Time.get_ticks_msec() / 1000.0
+
+    _long_hold_timer = Timer.new()
+    _long_hold_timer.wait_time = LONG_HOLD_DURATION
+    _long_hold_timer.one_shot = true
+    _long_hold_timer.timeout.connect(_on_long_hold_triggered)
+    add_child(_long_hold_timer)
+    _long_hold_timer.start()
+
+    _radial_progress = _create_radial_progress()
+    add_child(_radial_progress)
+
+func _process(delta: float) -> void:
+    if _radial_progress and _long_hold_start_time > 0:
+        _radial_progress.global_position = get_viewport().get_mouse_position() - Vector2(24, 24)
+        var elapsed = (Time.get_ticks_msec() / 1000.0) - _long_hold_start_time
+        var progress = clampf(elapsed / LONG_HOLD_DURATION, 0.0, 1.0)
+        _radial_progress.set_meta("progress", progress)
+        _radial_progress.queue_redraw()
+```
+
+**Visual Design:**
+- 48x48 pixel radial indicator
+- Dark backdrop disc with inner dark circle
+- Golden progress arc with glow effect
+- Tip indicator dot at progress edge
+- Center icon (magnifying glass for inspection)
+
+**Current Uses:**
+| Location | Element | Opens |
+|----------|---------|-------|
+| InventoryUI | Item slot | Item Inspection Panel |
+| CharacterUI | Equipment slot | Item Inspection Panel |
+| CharacterUI | Mastery section | Full Weapon Skills Panel |
+
+**Standardized Side-by-Side Panel Layout:**
+When opening secondary panels (inspection, skills, etc.), use consistent positioning:
+
+```gdscript
+# Constants in CharacterUI.gd
+const PANEL_GAP: int = 8  # Minimal gap between panels
+const CHARACTER_PANEL_WIDTH: int = 580
+const INSPECTION_PANEL_WIDTH: int = 360
+const SKILLS_PANEL_WIDTH: int = 500
+
+# Calculate positions to center both panels together
+func _shift_panel_left_for(secondary_width: int) -> void:
+    var total_width = CHARACTER_PANEL_WIDTH + PANEL_GAP + secondary_width
+    var left_panel_left = -total_width / 2
+    var left_panel_right = left_panel_left + CHARACTER_PANEL_WIDTH
+    # Tween to new position...
+
+func _get_secondary_panel_position(secondary_width: int) -> Dictionary:
+    var total_width = CHARACTER_PANEL_WIDTH + PANEL_GAP + secondary_width
+    var left_panel_right = -total_width / 2 + CHARACTER_PANEL_WIDTH
+    return {
+        "offset_left": left_panel_right + PANEL_GAP,
+        "offset_right": left_panel_right + PANEL_GAP + secondary_width
+    }
+```
+
+**Layout Behavior:**
+- Primary panel shifts left smoothly (0.15s tween)
+- Secondary panel appears with 8px gap
+- Combined panels centered on screen
+- ESC closes secondary first, then primary
+- Closing secondary restores primary to center
+
+4. **Passive System** - Apply bonuses at skill 100
+5. **Ability System** - Unlock abilities at skill 200
+
+### QOL Features
+
+- **Weapon swap grace period** - No miss penalty for 3s after swap (encourages experimentation)
+- **Training dummy** - Practice weapon skills without risk
+- **Skill preview** - Show what unlocks at next milestone
+- **Miss feedback** - Clear "MISS" text with whoosh sound (not silent failure)
+
+---
+
+## Future Expansion: Disciplines & Runes
+
+> **STATUS: DEFERRED** - These systems are planned for a future expansion after weapon skills are stable.
+
+### Disciplines (How You Play)
+
+Tracks playstyle automatically to influence emergent class identity.
+
+| Discipline | Playstyle | Tracks |
+|------------|-----------|--------|
+| Warfare | Aggressive | Damage dealt, kills, combat time |
+| Finesse | Precision | Crits, dodges, one-shots |
+| Brutality | Berserker | Overkill, chains, multi-kills |
+| Piety | Support | Healing, revives, buffs given |
+| Guardianship | Tank | Damage taken, aggro held |
+
+When implemented, disciplines will combine with weapon mastery to create emergent classes (e.g., Sword + Warfare = Blademaster, Sword + Finesse = Duelist).
+
+### Runes (What You Find)
+
+Socketable items that grant abilities, passives, or conditional bonuses.
+
+- **Ability Runes** - Active abilities with cooldowns
+- **Passive Runes** - Permanent stat bonuses
+- **Trait Runes** - Conditional bonuses (e.g., +25% damage below 30% HP)
+- **Title Runes** - Cosmetic titles with minor bonuses
+
+Rune slots would unlock at character levels and weapon skill milestones.
+
+### Full Class Matrix (Future)
+
+When disciplines are implemented, 10 weapons × 5 disciplines = 50 emergent classes.
 
 ---
 
 ## Design Principles Summary
 
-### Settlement System
-- Resource gathering creates reasons to explore
-- Settlement defense creates reasons to cooperate
-- Siege windows allow PvP without 24/7 vulnerability
-- Progression tied to reputation with NPCs
+### Weapon Skill System
+- Old-school feel with modern QOL
+- 10 weapon types with independent skill tracks
+- Start competent (not helpless), master to perfection
+- Fast early progression, slower mastery grind
+- Clear milestones with tangible rewards (passives, abilities, titles)
+- Multiple weapons encouraged through prestige titles
 
-### Class System
-- No upfront class selection - identity emerges
-- Weapon skill capped by level (fair at all levels)
-- Discipline tracks behavior automatically
-- 30 unique classes from weapon x discipline matrix
-- Runes provide customization independent of weapon
-- Prestige path for post-max-level goals
+### Title System
+- Thematic titles per weapon path (10 unique progressions)
+- Player choice in displayed title
+- Prestige rewards for multi-weapon mastery
+- Social signaling of player accomplishment
+- Rarity statistics show % of players at each tier
+
+### Statistics & Social
+- Global tracking of player progression
+- Rarity badges (Common → Mythic) based on percentile
+- Leaderboards for prestige achievements
+- Helps players see diversity and make decisions
 
 ---
 

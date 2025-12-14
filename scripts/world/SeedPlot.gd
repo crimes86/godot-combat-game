@@ -216,55 +216,61 @@ func _update_prompt() -> void:
 	if not current_player:
 		return
 
-	# Check if player has seed
-	var has_seed = WorldTreeManager._player_has_tree_seed("")
+	# World Tree v2.1 - Check if plot is claimed
+	var manager = get_node_or_null("/root/ChunkExpansionManager")
+	if manager:
+		var plot_data = manager.get_seed_plot(chunk_id)
+		if plot_data.has("owner_id") and plot_data.owner_id != "":
+			is_claimed = true
+			var rank = plot_data.get("tree_rank", 0)
+			interaction_prompt.text = "[F] Manage Tree (Rank %d)" % rank
+			interaction_prompt.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
+		else:
+			is_claimed = false
 
-	if has_seed:
-		interaction_prompt.text = "[F] Plant World Tree"
-		interaction_prompt.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
+			# Check if player has World Tree Seed in inventory
+			var has_seed = _player_has_seed()
+
+			if has_seed:
+				interaction_prompt.text = "[F] Plant Seed"
+				interaction_prompt.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
+			else:
+				interaction_prompt.text = "[F] Seed Plot (No Seed)"
+				interaction_prompt.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 	else:
 		interaction_prompt.text = "[F] Examine Plot"
 		interaction_prompt.add_theme_color_override("font_color", Color(1, 0.9, 0.5))
 
 
 func _try_interact() -> void:
-	if is_claimed or not current_player:
+	if not current_player:
 		return
 
-	# Check planting conditions
-	var player_id = _get_player_id()
-	var guild_id = _get_guild_id()
-	var guild_name = _get_guild_name()
-
-	var check = WorldTreeManager.can_plant_tree(player_id, guild_id)
-
-	if not check["can_plant"]:
-		_show_message(check["reason"])
+	# Check if plot is already claimed
+	if is_claimed:
+		# Already claimed - open UI for management
+		_open_world_tree_ui()
 		return
 
-	# Show confirmation dialog or plant directly
-	# For now, plant directly
-	_plant_tree(player_id, guild_id, guild_name)
+	# Unclaimed plot - always open UI (it will show seed requirement)
+	print("🌳 Opening World Tree UI for chunk %d" % chunk_id)
+	_open_world_tree_ui()
 
 
-func _plant_tree(player_id: String, guild_id: String, guild_name: String) -> void:
-	var tree_data = WorldTreeManager.plant_tree(player_id, guild_id, guild_name, chunk_id, global_position)
+func _open_world_tree_ui() -> void:
+	# Find WorldTreeUI in the scene tree
+	var world_tree_ui = get_tree().get_first_node_in_group("world_tree_ui")
 
-	if tree_data:
-		is_claimed = true
-		plot_claimed.emit(tree_data)
-
-		# Hide plot visuals
-		_hide_plot()
-
-		# Show success message
-		_show_message("World Tree planted for %s!" % guild_name)
-
-		# Notify system
-		if NotificationManager:
-			NotificationManager.show_notification("World Tree Planted!", "Your guild now has a home in the world.")
+	if world_tree_ui:
+		world_tree_ui.open_for_plot(chunk_id, current_player)
 	else:
-		_show_message("Failed to plant tree. Try again.")
+		push_warning("⚠️ WorldTreeUI not found in scene tree!")
+		_show_message("World Tree UI not available. Add WorldTreeUI to your scene!")
+
+
+# Legacy function - no longer used but kept for compatibility
+func _plant_tree(player_id: String, guild_id: String, guild_name: String) -> void:
+	_show_message("Use the World Tree UI to claim this plot!")
 
 
 func _hide_plot() -> void:
@@ -316,3 +322,37 @@ func _get_guild_name() -> String:
 		# Use leader's name as guild name for now
 		return "%s's Guild" % GroupManager.get_member_name(GroupManager.group_leader)
 	return "The Wanderers"
+
+
+func _player_has_seed() -> bool:
+	# Check if player has a World Tree Seed in their inventory
+	if not current_player:
+		return false
+
+	# Try to get InventorySystem from player
+	var inventory = current_player.get_node_or_null("InventorySystem")
+	if not inventory:
+		# Fallback: try to get global inventory system
+		inventory = get_node_or_null("/root/InventorySystem")
+
+	if inventory and inventory.has_method("has_item"):
+		return inventory.has_item("world_tree_seed")
+
+	return false
+
+
+func _consume_seed() -> bool:
+	# Remove World Tree Seed from player's inventory
+	if not current_player:
+		return false
+
+	# Try to get InventorySystem from player
+	var inventory = current_player.get_node_or_null("InventorySystem")
+	if not inventory:
+		# Fallback: try to get global inventory system
+		inventory = get_node_or_null("/root/InventorySystem")
+
+	if inventory and inventory.has_method("remove_item"):
+		return inventory.remove_item("world_tree_seed", 1)
+
+	return false

@@ -542,6 +542,82 @@ Located in `assets/weapons/{type}/`:
 5. **Weapon layer created** → SimpleLPCSprite creates weapon AnimatedSprite2D child
 6. **Animations synced** → Weapon animations play in sync with body animations
 
+### Bow/Ranged Weapon Setup
+
+Bows and crossbows use the **shoot** animation (13 frames) instead of slash. They require special handling:
+
+#### Sprite Requirements
+
+| Animation | Size | Frames | Notes |
+|-----------|------|--------|-------|
+| `walk.png` | 576×256 | 9×4 | Use frames from shoot for visible bow |
+| `shoot.png` | 832×256 | 13×4 | Standard LPC shoot animation |
+| `hurt.png` | 384×64 | 6×1 | Standard hurt (optional) |
+
+#### Creating Bow Walk Sprite
+
+The standard LPC bow walk shows a tiny resting bow. For better visibility, create walk.png using frames from shoot:
+
+```python
+from PIL import Image
+
+# Load shoot animation (832x256 = 13 frames @ 64px)
+shoot = Image.open('shoot.png')
+
+# Create walk (576x256 = 9 frames @ 64px)
+walk = Image.new('RGBA', (576, 256), (0, 0, 0, 0))
+
+for row in range(4):  # 4 directions
+    y = row * 64
+    frame0 = shoot.crop((0, y, 64, y + 64))  # First frame - bow raised
+    frame1 = shoot.crop((64, y, 128, y + 64))
+
+    # Pattern: alternating frames for subtle motion
+    for col in range(9):
+        x = col * 64
+        walk.paste(frame1 if col % 3 == 2 else frame0, (x, y))
+
+walk.save('walk.png')
+```
+
+#### Code Behavior (SimpleLPCSprite.gd)
+
+Bow weapons trigger special handling:
+
+1. **Weapon type detection**: `bow_weapon_types = ["bow", "crossbow"]`
+2. **Shoot animation**: Body uses 13-frame shoot instead of 6-frame slash
+3. **Head layer static**: During shoot, base_head stays on idle (not synced)
+4. **Hair syncs normally**: hair_male/female has shoot.png
+
+#### Head Layer During Shoot
+
+The face/head layer (`base_head_sprite`) stays static during bow animations because:
+- `head_male` has no shoot.png (only walk, slash, thrust)
+- Syncing to 13-frame shoot would cause visual glitches
+- Solution: Keep head on `idle_{direction}` during shoot
+
+```gdscript
+# In play_lpc_animation():
+if anim_name == "shoot":
+    # Keep head static on idle during shoot
+    var idle_key = "idle_" + direction
+    if base_head_sprite.sprite_frames.has_animation(idle_key):
+        base_head_sprite.play(idle_key)
+
+# In _process():
+var is_shoot_anim = String(body_anim).begins_with("shoot_")
+if not is_shoot_anim:
+    _sync_layer(base_head_sprite, body_anim, body_frame)
+```
+
+#### Adding New Bow Weapons
+
+1. Create `assets/equipment/weapons/{bow_name}/` folder
+2. Add `shoot.png` (832×256) - standard LPC shoot
+3. Create `walk.png` (576×256) using frames from shoot (see script above)
+4. Optionally add `hurt.png` (384×64)
+5. Weapon type in item data must be `"bow"` or `"crossbow"`
+
 ---
 
 ## Character Creation

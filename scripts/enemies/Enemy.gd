@@ -134,7 +134,10 @@ func _calculate_window_damage_for_level(level: int) -> float:
 	elif level >= 11:
 		weakpoint_count = 2
 
-	return base_damage * crit_mult * weakpoint_count
+	# Each weakpoint takes 3-5 hits to destroy (average 4), and EACH hit deals damage
+	var hits_per_weakpoint = 4
+
+	return base_damage * crit_mult * weakpoint_count * hits_per_weakpoint
 
 func _ready() -> void:
 	# Set collision layers: enemies on layer 1, detect layers 1 (other entities) and 2 (obstacles like trees)
@@ -786,37 +789,17 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	else:
 		combat_text.type = 0  # TextType.NORMAL (white)
 
-	# Calculate spawn position at 70% of sprite height (accounting for scale)
+	# Calculate spawn position at center of enemy sprite
+	# CombatText handles radial distribution to prevent clumping
 	var sprite_scale = sprite.scale if sprite else Vector2.ONE
 	var sprite_height = 64.0 * sprite_scale.y  # LPC sprites are 64px tall
 	var sprite_pos = sprite.position if sprite else Vector2.ZERO
 
-	# Spawn at 70% height from bottom (30% from top)
-	# Sprite is centered, so top is at -height/2
-	var spawn_y_offset = -(sprite_height * 0.3)  # 30% from top = 70% from bottom
+	# Spawn at center-top of sprite (all types spawn from same center point)
+	var spawn_y_offset = -(sprite_height * 0.4)  # 40% from top
 
-	# Horizontal and vertical offset based on hit type
-	# NORMAL/CRIT: Centered above enemy (x=0)
-	# WEAKPOINT: Flanking on left/right sides
-	var spawn_x_offset = 0.0  # Normal/crit damage centered
-	if is_weakpoint_hit:
-		# Weakpoints: offset to sides (flanking the main column)
-		# Alternate between left and right sides
-		if not has_meta("weakpoint_side"):
-			set_meta("weakpoint_side", 1)  # Start with right side
-
-		var side = get_meta("weakpoint_side")
-		if side > 0:
-			# Right side: +40px
-			spawn_x_offset = 40.0
-		else:
-			# Left side: -40px
-			spawn_x_offset = -40.0
-		spawn_y_offset -= 15.0  # Slightly higher than main column
-		set_meta("weakpoint_side", -side)  # Flip for next hit
-
-	# Final spawn position: enemy center + sprite offset + calculated offset
-	var spawn_pos = global_position + sprite_pos + Vector2(spawn_x_offset, spawn_y_offset)
+	# Final spawn position: enemy center + sprite offset + y offset
+	var spawn_pos = global_position + sprite_pos + Vector2(0, spawn_y_offset)
 
 	combat_text.global_position = spawn_pos
 	get_tree().root.add_child(combat_text)
@@ -1521,6 +1504,15 @@ func die() -> void:
 			var game_world = get_tree().get_first_node_in_group("game_world")
 			if game_world:
 				CombatText.create_xp(xp_reward, global_position, game_world)
+
+			# Grant weapon skill on kill
+			if CharacterStats.equipped_weapon and WeaponSkillManager:
+				var weapon_type = CharacterStats.equipped_weapon.weapon_type
+				var skill_gain = WeaponSkillManager.on_kill(weapon_type)
+				# Show skill-up text near enemy (only if meaningful gain)
+				if skill_gain >= 0.1 and game_world:
+					var category = WeaponSkillManager.get_category_for_weapon(weapon_type)
+					CombatText.create_skill_up(skill_gain, category, global_position, game_world)
 
 	# Store gold in corpse for looting (skip if already set by server in multiplayer)
 	if corpse_gold == 0:

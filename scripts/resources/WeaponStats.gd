@@ -116,10 +116,8 @@ func get_crit_rate_lifetime() -> float:
 	return (float(crits_landed) / float(hits_total)) * 100.0
 
 func get_visual_tier() -> VisualTier:
-	"""Calculate visual tier based on stats"""
-	if is_virgin():
-		return VisualTier.PRISTINE
-	elif kills_total >= 50000:
+	"""Calculate visual tier based on kills (BLOODED requires first blood)"""
+	if kills_total >= 50000:
 		return VisualTier.MYTHIC
 	elif kills_total >= 10000:
 		return VisualTier.LEGENDARY
@@ -127,8 +125,10 @@ func get_visual_tier() -> VisualTier:
 		return VisualTier.BATTLE_WORN
 	elif kills_total >= 100:
 		return VisualTier.VETERAN
+	elif kills_total >= 1:
+		return VisualTier.BLOODED  # First blood earned
 	else:
-		return VisualTier.BLOODED
+		return VisualTier.PRISTINE  # No kills yet (even if used)
 
 func get_evolution_tier() -> int:
 	"""Calculate evolution tier for visual effects (uses both level AND kills).
@@ -205,11 +205,9 @@ func get_damage_bonus() -> float:
 		return 50.0 + (level - 50) * 0.1  # +0.1 damage per level after 50
 
 func get_crit_bonus() -> float:
-	"""Calculate crit chance bonus from level (soft cap at 50)"""
-	if level <= 50:
-		return level * 0.002  # +0.2% per level (returns as decimal)
-	else:
-		return 0.10 + (level - 50) * 0.0002  # +0.02% per level after 50
+	"""DEPRECATED: Crit chance now comes purely from Luck stat, not weapons.
+	Returns 0.0 for backwards compatibility with UI displays."""
+	return 0.0
 
 func format_time_equipped() -> String:
 	"""Format time equipped as human-readable string"""
@@ -494,9 +492,10 @@ static func from_dict(data: Dictionary) -> WeaponStats:
 	stats.experience = data.get("experience", 0)
 	# Achievements
 	var achievements_data = data.get("achievements", [])
-	stats.achievements = []
+	var typed_achievements: Array[String] = []
 	for ach in achievements_data:
-		stats.achievements.append(ach)
+		typed_achievements.append(str(ach))
+	stats.achievements = typed_achievements
 
 	return stats
 
@@ -507,3 +506,55 @@ func _get_timestamp() -> String:
 		datetime.year, datetime.month, datetime.day,
 		datetime.hour, datetime.minute, datetime.second
 	]
+
+# ============================================
+# DEBUG FUNCTIONS
+# ============================================
+
+func debug_add_levels(amount: int = 10) -> void:
+	"""DEBUG: Add levels to weapon for testing visual effects"""
+	var old_level = level
+	var old_tier = get_visual_tier_name()
+
+	# Grant enough XP to level up the specified amount
+	for i in range(amount):
+		level += 1
+
+	var new_tier = get_visual_tier_name()
+	print("⚔️ DEBUG: Weapon level %d → %d (Tier: %s → %s)" % [old_level, level, old_tier, new_tier])
+
+func debug_add_kills(amount: int = 100) -> void:
+	"""DEBUG: Add kills to weapon for testing tier progression"""
+	var old_kills = kills_total
+	var old_tier = get_visual_tier_name()
+
+	kills_total += amount
+
+	# Also add some XP
+	_grant_experience(amount * 10)
+
+	var new_tier = get_visual_tier_name()
+	print("💀 DEBUG: Weapon kills %d → %d (Tier: %s → %s)" % [old_kills, kills_total, old_tier, new_tier])
+
+func debug_set_tier(tier_name: String) -> void:
+	"""DEBUG: Set weapon to specific tier for testing"""
+	match tier_name.to_upper():
+		"PRISTINE":
+			kills_total = 0
+			level = 0
+		"BLOODED":
+			kills_total = 50
+			level = 5
+		"VETERAN":
+			kills_total = 500
+			level = 20
+		"BATTLE-WORN", "BATTLEWORN":
+			kills_total = 5000
+			level = 35
+		"LEGENDARY":
+			kills_total = 25000
+			level = 50
+		"MYTHIC":
+			kills_total = 60000
+			level = 70
+	print("⚔️ DEBUG: Weapon set to tier %s (Level: %d, Kills: %d)" % [get_visual_tier_name(), level, kills_total])

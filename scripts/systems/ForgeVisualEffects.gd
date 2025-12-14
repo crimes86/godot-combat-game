@@ -624,13 +624,13 @@ func _create_effect_node(effect_name: String, config: Dictionary) -> Node2D:
 			return _create_glow_effect(effect_name, config)
 
 func _create_glow_effect(effect_name: String, config: Dictionary) -> Node2D:
-	"""Create a simple glow effect using PointLight2D or modulate"""
+	"""Create a simple glow effect - tuned for weapon-sized effects"""
 	var container = Node2D.new()
 	container.name = "ForgeEffect_" + effect_name
 
 	var color: Color = config.get("color", Color.WHITE)
 	var intensity: float = config.get("intensity", 1.0)
-	var radius: float = config.get("radius", 12.0)
+	var radius: float = config.get("radius", 12.0) * 0.6  # Scale down for weapon size
 	var pulse: bool = config.get("pulse", false)
 
 	# Create a simple colored sprite for glow effect
@@ -654,7 +654,7 @@ func _create_glow_effect(effect_name: String, config: Dictionary) -> Node2D:
 	return container
 
 func _create_particle_effect(effect_name: String, config: Dictionary) -> Node2D:
-	"""Create a GPUParticles2D effect"""
+	"""Create a GPUParticles2D effect - tuned for weapon-sized spawning"""
 	var particles = GPUParticles2D.new()
 	particles.name = "ForgeEffect_" + effect_name
 
@@ -664,22 +664,22 @@ func _create_particle_effect(effect_name: String, config: Dictionary) -> Node2D:
 	var gravity: float = config.get("gravity", 0.0)
 
 	particles.amount = count
-	particles.lifetime = 1.5
+	particles.lifetime = 1.2  # Slightly shorter for weapon effects
 	particles.speed_scale = 1.0
 	particles.explosiveness = 0.0
 	particles.randomness = 0.5
 
-	# Create process material
+	# Create process material - tuned for weapon sprite size
 	var material = ParticleProcessMaterial.new()
 	material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	material.emission_sphere_radius = 8.0
+	material.emission_sphere_radius = 4.0  # Smaller radius for weapon-sized effects
 	material.direction = Vector3(0, -1, 0)
-	material.spread = 45.0
-	material.initial_velocity_min = 10.0
-	material.initial_velocity_max = 20.0
+	material.spread = 30.0  # Tighter spread around weapon
+	material.initial_velocity_min = 5.0  # Slower particles stay closer to weapon
+	material.initial_velocity_max = 12.0
 	material.gravity = Vector3(0, gravity, 0)
-	material.scale_min = 0.5 * intensity
-	material.scale_max = 1.5 * intensity
+	material.scale_min = 0.3 * intensity  # Smaller particles
+	material.scale_max = 1.0 * intensity
 	material.color = color
 
 	# Add secondary color gradient if available

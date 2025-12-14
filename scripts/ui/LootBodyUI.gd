@@ -287,7 +287,8 @@ func create_loot_slot(item: Dictionary, source_corpse) -> Control:
 	var icon = TextureRect.new()
 	icon.name = "ItemIcon"
 	icon.custom_minimum_size = Vector2(40, 40)
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.size = Vector2(40, 40)  # Force size to 40x40
+	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(icon)
@@ -505,8 +506,10 @@ func create_stacked_loot_slot(base_item: Dictionary, total_qty: int, items: Arra
 		var icon_rect = TextureRect.new()
 		icon_rect.name = "ItemIcon"
 		icon_rect.texture = icon_texture
-		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon_rect.custom_minimum_size = Vector2(40, 40)
+		icon_rect.size = Vector2(40, 40)  # Force size to 40x40
+		icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		center.add_child(icon_rect)
 	else:
@@ -531,11 +534,12 @@ func create_stacked_loot_slot(base_item: Dictionary, total_qty: int, items: Arra
 	stack_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	stack_label.add_theme_constant_override("outline_size", 2)
 	stack_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	stack_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	stack_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	stack_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	stack_label.offset_left = -35
-	stack_label.offset_right = -4
-	stack_label.offset_top = -16
-	stack_label.offset_bottom = -2
+	stack_label.offset_right = -2
+	stack_label.offset_top = 2  # Inside slot, top corner
+	stack_label.offset_bottom = 14
 	panel.add_child(stack_label)
 
 	# Build tooltip

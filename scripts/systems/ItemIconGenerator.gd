@@ -37,8 +37,7 @@ const WEAPON_TYPE_FALLBACKS = {
 	"rapier": "sword",
 	"saber": "sword",
 	"scimitar": "sword",
-	"crossbow": "staff",
-	"bow": "staff",
+	"crossbow": "bow",
 	"wand": "staff",
 	"halberd": "spear",
 	"lance": "spear",
@@ -95,6 +94,17 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 		if icon_cache.has(cache_key):
 			return icon_cache[cache_key]
 		var icon = _generate_material_icon(item_name, item)
+		if icon:
+			icon_cache[cache_key] = icon
+		return icon
+
+	# Handle consumables with icon files
+	if item_type == "consumable":
+		var consumable_type = item.get("consumable_type", "")
+		var cache_key = "consumable:%s" % consumable_type
+		if icon_cache.has(cache_key):
+			return icon_cache[cache_key]
+		var icon = _get_consumable_icon(consumable_type, item)
 		if icon:
 			icon_cache[cache_key] = icon
 		return icon
@@ -357,8 +367,28 @@ func clear_cache() -> void:
 	"""Clear the icon cache (call when sprites change)"""
 	icon_cache.clear()
 
-func _generate_material_icon(item_name: String, item: Dictionary) -> ImageTexture:
-	"""Generate a simple procedural icon for material items"""
+func _generate_material_icon(item_name: String, item: Dictionary) -> Texture2D:
+	"""Load or generate material icon - tries file first, falls back to procedural"""
+
+	# Convert item name to filename (lowercase, underscores, no apostrophes)
+	var filename = item_name.to_lower().replace(" ", "_").replace("'", "")
+
+	# Try loading from enhanced icons first (256x256)
+	if USE_ENHANCED_ICONS:
+		var enhanced_path = "res://assets/icons/enhanced/materials/%s.png" % filename
+		if FileAccess.file_exists(enhanced_path):
+			var texture = load(enhanced_path)
+			if texture:
+				return texture
+
+	# Try loading from standard materials icons (64x64)
+	var standard_path = "res://assets/icons/materials/%s.png" % filename
+	if FileAccess.file_exists(standard_path):
+		var texture = load(standard_path)
+		if texture:
+			return texture
+
+	# File not found - fall back to procedural generation
 	var size = 32
 	var img = Image.create(size, size, false, Image.FORMAT_RGBA8)
 
@@ -659,8 +689,49 @@ func _get_rarity_color(rarity: String) -> Color:
 		_:
 			return Color(0.6, 0.6, 0.6, 1.0)
 
-func _generate_placeable_icon(placeable_type: String, item: Dictionary) -> ImageTexture:
+func _get_consumable_icon(consumable_type: String, item: Dictionary) -> Texture2D:
+	"""Load consumable icon from assets/icons/consumables/ or return null"""
+
+	# First check if item has a direct icon_path specified
+	var icon_path = item.get("icon_path", "")
+	if icon_path != "" and ResourceLoader.exists(icon_path):
+		var texture = load(icon_path)
+		if texture:
+			return texture
+
+	# Convert consumable_type to filename (e.g., "empty_vial" -> "empty_vial.png")
+	var filename = consumable_type.to_lower().replace(" ", "_").replace("'", "")
+
+	# Try loading from enhanced icons first (256x256)
+	if USE_ENHANCED_ICONS:
+		var enhanced_path = "res://assets/icons/enhanced/consumables/%s.png" % filename
+		if FileAccess.file_exists(enhanced_path):
+			var texture = load(enhanced_path)
+			if texture:
+				return texture
+
+	# Try loading from standard consumables icons (64x64)
+	var standard_path = "res://assets/icons/consumables/%s.png" % filename
+	if FileAccess.file_exists(standard_path):
+		var texture = load(standard_path)
+		if texture:
+			return texture
+
+	# No icon found - return null (consumables without icons won't show in inventory)
+	print("⚠️ No consumable icon found for: %s (type: %s)" % [item.get("name", "Unknown"), consumable_type])
+	return null
+
+func _generate_placeable_icon(placeable_type: String, item: Dictionary) -> Texture2D:
 	"""Generate a procedural icon for placeable items"""
+
+	# First check if item has a direct icon_path specified
+	var icon_path = item.get("icon_path", "")
+	if icon_path != "" and ResourceLoader.exists(icon_path):
+		var texture = load(icon_path)
+		if texture:
+			return texture
+
+	# Generate procedural icon
 	var size = 32
 	var img = Image.create(size, size, false, Image.FORMAT_RGBA8)
 
@@ -748,6 +819,43 @@ func _draw_generic_placeable(img: Image, size: int) -> void:
 # FORGED ITEM ICONS
 # ============================================
 
+# Icon scale overrides for specific items (1.0 = normal, 2.0 = 2x larger)
+# Note: Prefer scaling the actual icon asset with scripts/tools/scale_icon_content.py
+const ICON_SCALE_OVERRIDES = {
+	# Empty - survivor_vest icon was scaled at asset level
+}
+
+func _scale_texture(texture: Texture2D, scale_factor: float) -> Texture2D:
+	"""Scale a texture by a factor (e.g., 1.25 = 25% larger)"""
+	if scale_factor == 1.0 or not texture:
+		return texture
+
+	var img = texture.get_image()
+	if not img:
+		return texture
+
+	var new_width = int(img.get_width() * scale_factor)
+	var new_height = int(img.get_height() * scale_factor)
+
+	# Resize the image (uses bilinear interpolation)
+	img.resize(new_width, new_height, Image.INTERPOLATE_BILINEAR)
+
+	return ImageTexture.create_from_image(img)
+
+func _get_icon_scale(item_id: String, item_name: String) -> float:
+	"""Get the scale factor for an item icon"""
+	# Check by item_id first
+	var id_lower = item_id.to_lower()
+	if ICON_SCALE_OVERRIDES.has(id_lower):
+		return ICON_SCALE_OVERRIDES[id_lower]
+
+	# Check by snake_case name
+	var name_snake = _name_to_snake_case(item_name)
+	if ICON_SCALE_OVERRIDES.has(name_snake):
+		return ICON_SCALE_OVERRIDES[name_snake]
+
+	return 1.0
+
 func _get_forged_item_icon(item: Dictionary) -> Texture2D:
 	"""Load icon for a forged item from assets/icons/forged/"""
 	var item_name = item.get("name", "")
@@ -783,8 +891,13 @@ func _get_forged_item_icon(item: Dictionary) -> Texture2D:
 	if DEBUG_FORGED_ICONS:
 		print("[ForgedIcon]   Subdirectory: '%s'" % subdir)
 
-	# Check cache first
-	var cache_key = "forged:%s/%s" % [subdir, filename]
+	# Get scale factor for this item
+	var scale_factor = _get_icon_scale(item_id, item_name)
+	if DEBUG_FORGED_ICONS and scale_factor != 1.0:
+		print("[ForgedIcon]   Scale factor: %.2f" % scale_factor)
+
+	# Check cache first (include scale in key)
+	var cache_key = "forged:%s/%s:%.2f" % [subdir, filename, scale_factor]
 	if icon_cache.has(cache_key):
 		if DEBUG_FORGED_ICONS:
 			print("[ForgedIcon]   ✅ Found in cache: %s" % cache_key)
@@ -827,6 +940,9 @@ func _get_forged_item_icon(item: Dictionary) -> Texture2D:
 			if texture:
 				if DEBUG_FORGED_ICONS:
 					print("[ForgedIcon]   ✅ LOADED: %s" % icon_path)
+				# Apply scale if needed
+				if scale_factor != 1.0:
+					texture = _scale_texture(texture, scale_factor)
 				icon_cache[cache_key] = texture
 				return texture
 		else:

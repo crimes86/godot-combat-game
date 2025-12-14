@@ -411,7 +411,7 @@
         </p>
       </div>
 
-      <form action="/beta-access" method="POST" style="max-width: 300px; margin: 0 auto;">
+      <form action="/beta-access{% if device_code %}?device_code={{ device_code }}{% endif %}" method="POST" style="max-width: 300px; margin: 0 auto;">
         <div style="margin-bottom: 1rem;">
           <input
             type="text"

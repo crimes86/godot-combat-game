@@ -27,8 +27,10 @@ var _is_syncing: bool = false
 
 func _ready() -> void:
 	# Connect to CharacterStats weapon changes
-	if CharacterStats.has_signal("weapon_changed"):
-		CharacterStats.weapon_changed.connect(_on_weapon_changed)
+	if CharacterStats.has_signal("weapon_equipped"):
+		CharacterStats.weapon_equipped.connect(_on_weapon_equipped)
+	if CharacterStats.has_signal("weapon_unequipped"):
+		CharacterStats.weapon_unequipped.connect(_on_weapon_unequipped)
 
 func _process(delta: float) -> void:
 	# Update equipped time
@@ -280,12 +282,28 @@ func _get_backend_url() -> String:
 # SIGNAL HANDLERS
 # ========================================
 
-func _on_weapon_changed(weapon: Weapon) -> void:
-	"""Handle weapon change from CharacterStats"""
-	if weapon and weapon.is_forged:
+func _on_weapon_equipped(weapon) -> void:  # weapon: Weapon (untyped for autoload safety)
+	"""Handle weapon equip from CharacterStats"""
+	if not weapon:
+		return
+
+	# Transfer forged metadata from item_data to Weapon resource
+	var item_data = CharacterStats.equipped_weapon_data
+	if item_data.get("is_forged", false):
+		weapon.is_forged = true
+		weapon.forged_id = str(item_data.get("forged_id", item_data.get("token_id", item_data.get("id", ""))))
+		print("🔗 WeaponStatsTracker: Attached forged_id '%s' to %s" % [weapon.forged_id, weapon.weapon_name])
+
+	if weapon.is_forged and weapon.forged_id != "":
 		on_weapon_equipped(weapon)
 	else:
-		on_weapon_unequipped()
+		# Non-forged weapon - clear tracking
+		if _equipped_weapon_id != "":
+			on_weapon_unequipped()
+
+func _on_weapon_unequipped() -> void:
+	"""Handle weapon unequip from CharacterStats"""
+	on_weapon_unequipped()
 
 # ========================================
 # CLEANUP

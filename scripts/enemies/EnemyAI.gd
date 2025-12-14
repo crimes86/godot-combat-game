@@ -49,7 +49,7 @@ enum State {
 	RETREATING,   # Tactical: backing away
 	UNSTUCKING,   # Recovery: walking backward to get unstuck
 	CAMPFIRE_ATTRACTED,  # Heading to campfire to investigate
-	# REMOVED: DETERRED state - players can now fight at campfire with healing
+	RETURNING,    # Walking back to spawn after leashing (can re-aggro)
 }
 
 var current_state: State = State.PATROLLING
@@ -385,6 +385,8 @@ func _physics_process(delta: float) -> void:
 			process_unstucking(delta)
 		State.CAMPFIRE_ATTRACTED:
 			process_campfire_attracted(delta)
+		State.RETURNING:
+			process_returning(delta)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PATROLLING STATE (Default - Non-Aggro)
@@ -616,24 +618,14 @@ func process_combat(delta: float) -> void:
 		disengage()
 		return
 
-	# Guardian leashing - can't be kited too far from spawn point
-	# Forces players to fight near their campfire, not infinitely kite
-	var is_guardian = enemy.get_meta("is_guardian", false)
-	if is_guardian:
-		var distance_from_spawn = enemy.global_position.distance_to(original_spawn_position)
-		var guardian_leash_distance = 600.0  # Can't be pulled more than 600px from spawn
-		if distance_from_spawn > guardian_leash_distance:
-			disengage()
+	# Chunk-based leashing - ALL mobs use chunk edges as leash boundaries
+	# This allows kiting within a chunk but prevents pulling mobs across chunks
+	# Skip this check in multiplayer - server is authoritative and players may be in different chunks
+	if not multiplayer.has_multiplayer_peer():
+		var player_chunk = get_chunk_key(player.global_position)
+		if player_chunk != spawn_chunk:
+			start_returning()
 			return
-		# Guardians use distance-based leashing only, skip chunk-based leashing
-	else:
-		# Check chunk-based leashing - if player left spawn chunk, disengage
-		# Skip this check in multiplayer - server is authoritative and players may be in different chunks
-		if not multiplayer.has_multiplayer_peer():
-			var player_chunk = get_chunk_key(player.global_position)
-			if player_chunk != spawn_chunk:
-				disengage()
-				return
 
 	var distance_to_player = enemy.global_position.distance_to(player.global_position)
 
@@ -642,9 +634,9 @@ func process_combat(delta: float) -> void:
 	if enemy.has_method("get") and enemy.get("in_crit_window"):
 		effective_attack_range = attack_range * 2.0
 
-	# Check if player escaped
+	# Check if player escaped (too far away)
 	if distance_to_player > disengage_distance:
-		disengage()
+		start_returning()
 		return
 	
 	# Check if in attack range (adjusted for crit window)
@@ -829,6 +821,9 @@ func process_unstucking(delta: float) -> void:
 		elif unstuck_state_before == State.CAMPFIRE_ATTRACTED:
 			# Resume walking to campfire
 			change_state(State.CAMPFIRE_ATTRACTED)
+		elif unstuck_state_before == State.RETURNING:
+			# Resume returning to spawn
+			change_state(State.RETURNING)
 		else:
 			# Fallback: return to patrol
 			change_state(State.PATROLLING)
@@ -908,6 +903,89 @@ func despawn_campfire_skeleton() -> void:
 		if is_instance_valid(enemy):
 			enemy.queue_free()
 	)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RETURNING STATE (Walking back to spawn after leashing)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func start_returning() -> void:
+	"""Start walking back to spawn point - enemy can still re-aggro if player follows"""
+	is_in_combat = false
+	leash_cooldown_timer = LEASH_COOLDOWN_DURATION  # Prevent immediate re-aggro
+	change_state(State.RETURNING)
+
+func process_returning(delta: float) -> void:
+	"""Walk back to original spawn point, can re-aggro if player gets close"""
+
+	# Check for player in aggro range - can re-aggro while returning!
+	# This allows players to chase and re-engage if they want
+	if leash_cooldown_timer <= 0:
+		var aggro_target = player
+		if multiplayer.has_multiplayer_peer():
+			var nearest_distance: float = INF
+			for p in cached_players:
+				if is_instance_valid(p):
+					var dist = enemy.global_position.distance_to(p.global_position)
+					if dist < nearest_distance:
+						nearest_distance = dist
+						aggro_target = p
+
+		if aggro_target and is_instance_valid(aggro_target):
+			var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
+			if distance_to_player <= aggro_range:
+				# Re-aggro! Player is following
+				player = aggro_target
+				trigger_aggro()
+				return
+
+	# Check if we've reached spawn position
+	var distance_to_spawn = enemy.global_position.distance_to(original_spawn_position)
+	if distance_to_spawn < 30.0:
+		# Reached spawn! Regenerate health and start patrolling
+		_restore_health_at_spawn()
+		spawn_position = original_spawn_position
+		pick_new_patrol_target()
+		change_state(State.PATROLLING)
+		return
+
+	# Walk toward spawn point
+	var direction = (original_spawn_position - enemy.global_position).normalized()
+	var return_speed = patrol_speed * 1.5  # Walk back a bit faster than patrol
+
+	# Avoid lava while returning
+	var next_pos = enemy.global_position + direction * return_speed * 0.1
+	if is_position_in_lava(next_pos):
+		# Try to go around lava
+		var perpendicular_right = Vector2(-direction.y, direction.x)
+		var perpendicular_left = Vector2(direction.y, -direction.x)
+
+		var right_pos = enemy.global_position + perpendicular_right * return_speed * 0.1
+		var left_pos = enemy.global_position + perpendicular_left * return_speed * 0.1
+
+		if not is_position_in_lava(right_pos):
+			direction = (direction + perpendicular_right).normalized()
+		elif not is_position_in_lava(left_pos):
+			direction = (direction + perpendicular_left).normalized()
+
+	enemy.velocity = direction * return_speed
+	update_enemy_animation(direction)
+	enemy.move_and_slide()
+
+func _restore_health_at_spawn() -> void:
+	"""Restore health when enemy reaches spawn point after returning"""
+	if enemy.has_method("get") and enemy.has_method("set"):
+		var max_hp = enemy.get("max_health")
+
+		# Validate max_health before resetting
+		if max_hp != null and max_hp > 0 and not is_nan(max_hp) and not is_inf(max_hp):
+			enemy.set("current_health", max_hp)
+
+			# Update health bar if it exists
+			if enemy.has_node("HealthBar"):
+				if health_bar_node and health_bar_node.has_method("update_health"):
+					health_bar_node.update_health(max_hp, max_hp)
+		else:
+			push_error("Cannot reset enemy health - invalid max_health: %s" % str(max_hp))
 
 # ═══════════════════════════════════════════════════════════════════════════
 # COMBAT ACTIONS
@@ -1091,6 +1169,10 @@ func _on_enemy_damaged(_damage: float, is_crit: bool) -> void:
 		if enemy.has_method("get") and enemy.get("in_crit_window"):
 			return
 
+		# Don't retreat if player has ranged weapon (distance doesn't help!)
+		if _player_has_ranged_weapon():
+			return
+
 		var retreat_roll = retreat_chance
 		if is_crit:
 			retreat_roll += 0.2  # +20% on crit
@@ -1128,6 +1210,26 @@ func disengage() -> void:
 	spawn_position = original_spawn_position
 	pick_new_patrol_target()
 	change_state(State.PATROLLING)
+
+func _player_has_ranged_weapon() -> bool:
+	"""Check if player has a ranged weapon equipped (bow, gun, etc).
+	Ranged weapons make retreating pointless since player can still hit from range."""
+	if not is_instance_valid(player):
+		return false
+
+	# Access player's equipped weapon through CharacterStats
+	if not CharacterStats or not CharacterStats.equipped_weapon:
+		return false
+
+	var weapon_type = CharacterStats.equipped_weapon.weapon_type
+
+	# Define ranged weapon types
+	var ranged_types = [
+		"bow", "crossbow",  # Bows
+		"gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle"  # Guns
+	]
+
+	return weapon_type in ranged_types
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE MANAGEMENT
@@ -1219,6 +1321,7 @@ func get_state_name_for_state(state: State) -> String:
 		State.RETREATING: return "RETREATING"
 		State.UNSTUCKING: return "UNSTUCKING"
 		State.CAMPFIRE_ATTRACTED: return "CAMPFIRE_ATTRACTED"
+		State.RETURNING: return "RETURNING"
 	return "UNKNOWN"
 
 func update_enemy_animation(velocity: Vector2) -> void:

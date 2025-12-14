@@ -11,6 +11,11 @@ extends Node
 var enemies: Dictionary = {}  # Dictionary[int, Node]
 var next_enemy_id: int = 1
 
+# Staggered loot notification queue (prevents flash when AOE looting multiple corpses)
+var _gold_loot_queue: Array = []  # Array of {amount: int, position: Vector2}
+var _gold_loot_timer: float = 0.0
+const GOLD_LOOT_STAGGER_DELAY: float = 0.08  # 80ms between each notification
+
 # Position sync rate
 const POSITION_SYNC_RATE: float = 0.05  # 20Hz (was 10Hz - increased for smoother movement)
 var position_sync_timer: float = 0.0
@@ -189,6 +194,9 @@ func _is_player_timed_out(peer_id: int) -> bool:
 	return Time.get_ticks_msec() < violation_cooldowns[peer_id]
 
 func _process(delta):
+	# Process staggered gold loot notifications
+	_process_gold_loot_queue(delta)
+
 	if not multiplayer.has_multiplayer_peer():
 		return
 
@@ -1338,17 +1346,40 @@ func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int
 		CharacterStats.add_gold(gold_amount)
 		LogManager.info("You looted %d gold" % gold_amount, "loot")
 
-		# Show world-space gold text floating up from corpse
-		var game_world = get_tree().get_first_node_in_group("game_world")
-		if game_world and is_instance_valid(enemy):
-			CombatText.create_gold(gold_amount, enemy.global_position, game_world)
-
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+		# Queue the notification for staggered display (prevents flash on AOE loot)
+		var corpse_pos = enemy.global_position if is_instance_valid(enemy) else Vector2.ZERO
+		_queue_gold_loot_notification(gold_amount, corpse_pos)
 
 	# Check if corpse is now fully empty
 	enemy.check_if_looted_empty()
+
+func _queue_gold_loot_notification(amount: int, position: Vector2) -> void:
+	"""Queue a gold loot notification for staggered display."""
+	_gold_loot_queue.append({"amount": amount, "position": position})
+
+func _process_gold_loot_queue(delta: float) -> void:
+	"""Process queued gold loot notifications with stagger delay."""
+	if _gold_loot_queue.is_empty():
+		return
+
+	_gold_loot_timer += delta
+	if _gold_loot_timer >= GOLD_LOOT_STAGGER_DELAY:
+		_gold_loot_timer = 0.0
+
+		# Pop and show the next notification
+		var entry = _gold_loot_queue.pop_front()
+		_show_gold_loot_notification(entry.amount, entry.position)
+
+func _show_gold_loot_notification(amount: int, position: Vector2) -> void:
+	"""Actually display the gold loot notification and play sound."""
+	# Show world-space gold text floating up from corpse
+	var gw = get_tree().get_first_node_in_group("game_world")
+	if gw and position != Vector2.ZERO:
+		CombatText.create_gold(amount, position, gw)
+
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
 
 @rpc("any_peer", "call_local", "reliable")
 func request_loot_item(enemy_network_id: int, item_index: int) -> void:

@@ -1,0 +1,30 @@
+{
+	"items": [
+		{
+			"id": "world_tree_seed",
+			"name": "World Tree Seed",
+			"description": "A magical seed that can be planted at seed plots to grow a World Tree. Provides respawn points, building slots, and warehouse storage for you and your guild.",
+			"item_type": "consumable",
+			"category": "special",
+			"required_level": 1,
+			"price": 1000,
+			"stack_size": 1,
+			"rarity": "Rare",
+			"icon_path": "res://assets/icons/world_tree_seed.png",
+			"notes": "Used to claim seed plots across the world. Can also be obtained from quests and achievements."
+		},
+		{
+			"id": "campfire_kit",
+			"name": "Campfire Kit",
+			"description": "A portable kit containing kindling, flint, and tinder. Use this to place a respawn campfire anywhere in the world.",
+			"item_type": "consumable",
+			"category": "utility",
+			"required_level": 1,
+			"price": 500,
+			"stack_size": 5,
+			"rarity": "Common",
+			"icon_path": "res://assets/icons/campfire_kit.png",
+			"notes": "Allows players to create temporary respawn points. Campfires last until destroyed or replaced."
+		}
+	]
+}

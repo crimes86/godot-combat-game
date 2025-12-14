@@ -246,15 +246,36 @@ def auto_crop(image: Image.Image, padding: int = 2) -> Image.Image:
     return image.crop((x1, y1, x2, y2))
 
 
-def center_in_canvas(image: Image.Image, canvas_size: int) -> Image.Image:
-    """Center image content in a square canvas."""
+def center_in_canvas(image: Image.Image, canvas_size: int,
+                     fill_percent: float = 0.0) -> Image.Image:
+    """
+    Center image content in a square canvas.
+
+    Args:
+        image: Source image
+        canvas_size: Size of output canvas (square)
+        fill_percent: If > 0, scale content to fill this percentage of canvas (0.0-1.0)
+                      E.g., 0.85 means content will fill 85% of the canvas
+    """
     # Auto-crop first to get just the content
     cropped = auto_crop(image, padding=0)
 
-    # If content is larger than canvas, scale down
     max_dim = max(cropped.width, cropped.height)
-    if max_dim > canvas_size - 8:  # Leave 4px padding on each side
-        scale = (canvas_size - 8) / max_dim
+    target_size = canvas_size - 8  # Leave 4px padding on each side
+
+    if fill_percent > 0:
+        # Scale content to fill the specified percentage of the canvas
+        target_content_size = int(canvas_size * fill_percent)
+        scale = target_content_size / max_dim
+        new_size = (int(cropped.width * scale), int(cropped.height * scale))
+        # Clamp to not exceed canvas
+        if new_size[0] > target_size or new_size[1] > target_size:
+            fit_scale = min(target_size / new_size[0], target_size / new_size[1])
+            new_size = (int(new_size[0] * fit_scale), int(new_size[1] * fit_scale))
+        cropped = cropped.resize(new_size, Image.Resampling.LANCZOS)
+    elif max_dim > target_size:
+        # Only scale down if larger than canvas
+        scale = target_size / max_dim
         new_size = (int(cropped.width * scale), int(cropped.height * scale))
         cropped = cropped.resize(new_size, Image.Resampling.LANCZOS)
 
@@ -408,16 +429,23 @@ def discover_equipment_spritesheets() -> List[Tuple[Path, str, str]]:
 
 
 def process_equipment_icons(output_dir: Path, algorithm: str = "auto",
-                            dry_run: bool = False, verbose: bool = True) -> Dict:
+                            dry_run: bool = False, verbose: bool = True,
+                            fill_percent: float = 0.0) -> Dict:
     """
     Process equipment spritesheets to create enhanced icons.
 
     Extracts frame 0 from each walk spritesheet, using the appropriate
     direction based on equipment slot.
+
+    Args:
+        fill_percent: Scale content to fill this percentage of canvas (0.0-1.0)
+                      Use 0.85 for armor pieces that are too small
     """
     stats = {"processed": 0, "skipped": 0, "errors": []}
 
     print("\n=== Processing Equipment Icons ===")
+    if fill_percent > 0:
+        print(f"Content fill: {int(fill_percent * 100)}%")
 
     spritesheets = discover_equipment_spritesheets()
     print(f"Found {len(spritesheets)} equipment spritesheets")
@@ -432,7 +460,8 @@ def process_equipment_icons(output_dir: Path, algorithm: str = "auto",
             frame = extract_frame_from_spritesheet(sprite_path, direction, frame=0)
 
             # Center in 64x64 canvas (auto-crops transparent edges)
-            centered = center_in_canvas(frame, FRAME_SIZE)
+            # Use fill_percent to scale up small content (like armor pieces)
+            centered = center_in_canvas(frame, FRAME_SIZE, fill_percent)
 
             # Determine output path
             out_subdir = output_dir / "equipment" / slot
@@ -725,6 +754,8 @@ Output:
     parser.add_argument("--algorithm", choices=["auto", "xbrz", "epx", "lanczos"],
                         default="auto",
                         help="Upscaling algorithm (default: auto - tries xBRZ, falls back to EPX+Lanczos)")
+    parser.add_argument("--fill", type=float, default=0.0, metavar="PERCENT",
+                        help="Scale content to fill this %% of canvas (0.0-1.0). Use 0.85 for small armor icons.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Show what would be processed without saving")
     parser.add_argument("--quiet", action="store_true",
@@ -759,7 +790,7 @@ Output:
         total_stats["errors"].extend(stats["errors"])
 
     if args.source == "equipment" or args.all:
-        stats = process_equipment_icons(output_dir, args.algorithm, args.dry_run, verbose)
+        stats = process_equipment_icons(output_dir, args.algorithm, args.dry_run, verbose, args.fill)
         total_stats["processed"] += stats["processed"]
         total_stats["skipped"] += stats["skipped"]
         total_stats["errors"].extend(stats["errors"])

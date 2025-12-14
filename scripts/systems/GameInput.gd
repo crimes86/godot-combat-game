@@ -158,3 +158,61 @@ func toggle_mobile_mode() -> void:
 		disable_mobile_mode()
 	else:
 		enable_mobile_mode()
+
+
+# ============================================
+# UI STATE CHECKS
+# ============================================
+
+func is_any_ui_open() -> bool:
+	"""Check if any major UI is currently open.
+	Returns true if character UI, inventory, shop, loot UI, or other modal UI is visible.
+	Use this to prevent world interactions (F key) from triggering when player is in menus."""
+
+	# Get player reference
+	var player = get_tree().get_first_node_in_group("player")
+	if not player:
+		return false
+
+	# Check character UI
+	var character_ui = player.get_node_or_null("CharacterUI")
+	if character_ui and character_ui.visible:
+		return true
+
+	# Check inventory UI
+	var inventory_ui = player.get_node_or_null("InventoryUI")
+	if inventory_ui and inventory_ui.visible:
+		return true
+
+	# Check shop UI (global)
+	var shop_ui = get_tree().get_first_node_in_group("shop_ui")
+	if shop_ui and shop_ui.visible:
+		return true
+
+	# Check loot UIs (LootBodyUI, ChestLootUI, PlayerCorpseLootUI, etc.)
+	var loot_uis = get_tree().get_nodes_in_group("loot_ui")
+	for loot_ui in loot_uis:
+		if is_instance_valid(loot_ui) and loot_ui.visible:
+			return true
+
+	# Check corpse loot UI
+	var corpse_loot_ui = player.get_node_or_null("PlayerCorpseLootUI")
+	if corpse_loot_ui and corpse_loot_ui.visible:
+		return true
+
+	# Check harvest loot UI
+	var harvest_loot_ui = player.get_node_or_null("HarvestLootUI")
+	if harvest_loot_ui and harvest_loot_ui.visible:
+		return true
+
+	# Check GameMenu (settings/credits)
+	var game_menu = get_node_or_null("/root/main/GameMenu")
+	if game_menu and game_menu.get("is_open"):
+		return true
+
+	# Check bug report UI
+	var bug_report = get_tree().get_first_node_in_group("bug_report_ui")
+	if bug_report and bug_report.visible:
+		return true
+
+	return false

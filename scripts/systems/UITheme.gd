@@ -112,6 +112,42 @@ const TOOLTIP_BG = Color(0.08, 0.08, 0.10, 0.98)
 const TOOLTIP_BORDER = Color(0.45, 0.48, 0.52, 1.0)
 
 # ═══════════════════════════════════════════════════════════════════════════
+# TYPOGRAPHY SCALE
+# ═══════════════════════════════════════════════════════════════════════════
+
+## Font sizes for consistent typography hierarchy
+const FONT_H1 = 24       # Panel titles, major headings
+const FONT_H2 = 20       # Section headers
+const FONT_H3 = 18       # Subsection headers
+const FONT_BODY = 14     # Body text, labels (MINIMUM for readability)
+const FONT_CAPTION = 12  # Small labels, tooltips
+const FONT_TINY = 10     # Absolute minimum (use sparingly)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ANIMATION TIMINGS
+# ═══════════════════════════════════════════════════════════════════════════
+
+## Standard animation durations for consistent UX feel
+const ANIM_INSTANT = 0.05   # Instant feedback (flash effects, immediate response)
+const ANIM_FAST = 0.1       # Fast interactions (button clicks, toggles, hover)
+const ANIM_NORMAL = 0.2     # Normal transitions (panel open/close, slides)
+const ANIM_SLOW = 0.3       # Emphasis animations (celebrations, important events)
+const ANIM_VERY_SLOW = 0.5  # Dramatic effects (level up, achievements)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UI MEASUREMENTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+## Standard slot size for inventory/equipment (matches existing implementations)
+const SLOT_SIZE = 54
+const ICON_SIZE = 46  # SLOT_SIZE - 8 (padding)
+
+## Corner radius scale
+const CORNER_RADIUS_LARGE = 8   # Panels, major containers
+const CORNER_RADIUS_MEDIUM = 6  # Cards, medium elements
+const CORNER_RADIUS_SMALL = 4   # Buttons, slots, small elements
+
+# ═══════════════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -124,6 +160,17 @@ static func get_rarity_color(rarity: int) -> Color:
 		3: return RARITY_EPIC
 		4: return RARITY_LEGENDARY
 		5: return RARITY_MYTHIC
+		_: return RARITY_COMMON
+
+## Get rarity color by rarity name string ("COMMON", "LEGENDARY", etc.)
+static func get_rarity_color_by_name(rarity_name: String) -> Color:
+	match rarity_name.to_upper():
+		"COMMON": return RARITY_COMMON
+		"UNCOMMON": return RARITY_UNCOMMON
+		"RARE": return RARITY_RARE
+		"EPIC": return RARITY_EPIC
+		"LEGENDARY": return RARITY_LEGENDARY
+		"MYTHIC", "ARTIFACT": return RARITY_MYTHIC
 		_: return RARITY_COMMON
 
 ## Create a standard panel StyleBoxFlat
@@ -180,6 +227,165 @@ static func create_tooltip_style() -> StyleBoxFlat:
 	style.shadow_color = Color(0, 0, 0, 0.5)
 	style.shadow_offset = Vector2(2, 2)
 	return style
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BUTTON FACTORY METHODS
+# ═══════════════════════════════════════════════════════════════════════════
+
+## Apply 3-state button styling (normal, hover, pressed) with consistent appearance
+static func style_button_3_state(button: Button, type: String = "normal", custom_color: Color = Color.TRANSPARENT) -> void:
+	"""Apply consistent 3-state styling to a button
+
+	Args:
+		button: The Button node to style
+		type: Button type - "normal", "success", "danger", or "custom"
+		custom_color: Base color for "custom" type
+	"""
+	var base_color: Color
+
+	# Determine base color
+	if type == "custom" and custom_color != Color.TRANSPARENT:
+		base_color = custom_color
+	else:
+		match type:
+			"success": base_color = BTN_SUCCESS
+			"danger": base_color = BTN_DANGER
+			_: base_color = BTN_NORMAL
+
+	# Normal state
+	var normal_style = StyleBoxFlat.new()
+	normal_style.bg_color = base_color
+	normal_style.set_corner_radius_all(4)
+	normal_style.set_content_margin_all(8)
+
+	# Hover state (20% lighter)
+	var hover_style = normal_style.duplicate()
+	hover_style.bg_color = base_color.lightened(0.2)
+
+	# Pressed state (20% darker)
+	var pressed_style = normal_style.duplicate()
+	pressed_style.bg_color = base_color.darkened(0.2)
+
+	# Disabled state (semi-transparent)
+	var disabled_style = normal_style.duplicate()
+	disabled_style.bg_color = BTN_DISABLED
+
+	# Apply styles
+	button.add_theme_stylebox_override("normal", normal_style)
+	button.add_theme_stylebox_override("hover", hover_style)
+	button.add_theme_stylebox_override("pressed", pressed_style)
+	button.add_theme_stylebox_override("disabled", disabled_style)
+
+	# Apply text color
+	button.add_theme_color_override("font_color", TEXT_COLOR)
+	button.add_theme_color_override("font_hover_color", TEXT_COLOR)
+	button.add_theme_color_override("font_pressed_color", TEXT_COLOR)
+	button.add_theme_font_size_override("font_size", 14)
+
+## Create a fully-configured button with consistent styling and optional sounds
+static func create_button(text: String, type: String = "normal", enable_sounds: bool = true, custom_color: Color = Color.TRANSPARENT) -> Button:
+	"""Create a button with consistent styling and optional audio feedback
+
+	Args:
+		text: Button text
+		type: Button type - "normal", "success", "danger", or "custom"
+		enable_sounds: Whether to connect hover/click sounds
+		custom_color: Base color for "custom" type buttons
+
+	Returns:
+		Fully configured Button node
+	"""
+	var button = Button.new()
+	button.text = text
+
+	# Apply styling
+	style_button_3_state(button, type, custom_color)
+
+	# Connect sounds and hover animations
+	if enable_sounds:
+		# Hover effects (sound + scale animation)
+		button.mouse_entered.connect(func():
+			if SoundManager:
+				SoundManager.play_button_hover_sound()
+			# Subtle scale up on hover
+			var tween = button.create_tween()
+			tween.set_ease(Tween.EASE_OUT)
+			tween.set_trans(Tween.TRANS_BACK)
+			tween.tween_property(button, "scale", Vector2(1.05, 1.05), ANIM_FAST)
+		)
+
+		# Mouse exit (scale back to normal)
+		button.mouse_exited.connect(func():
+			var tween = button.create_tween()
+			tween.set_ease(Tween.EASE_OUT)
+			tween.tween_property(button, "scale", Vector2(1.0, 1.0), ANIM_FAST)
+		)
+
+		# Click sound
+		button.pressed.connect(func():
+			if SoundManager:
+				SoundManager.play_button_click_sound()
+		)
+
+	return button
+
+## Create a close button (square X button for panels)
+static func create_close_button(enable_sounds: bool = true) -> Button:
+	"""Create a standardized close button (red X)
+
+	Args:
+		enable_sounds: Whether to connect hover/click sounds
+
+	Returns:
+		Configured close Button node
+	"""
+	var button = Button.new()
+	button.text = "X"
+	button.custom_minimum_size = Vector2(28, 28)
+
+	# Custom red styling for close buttons
+	style_button_3_state(button, "danger")
+
+	# Override content margins to be square
+	var normal_style = button.get_theme_stylebox("normal").duplicate()
+	normal_style.set_content_margin_all(0)
+	button.add_theme_stylebox_override("normal", normal_style)
+
+	var hover_style = button.get_theme_stylebox("hover").duplicate()
+	hover_style.set_content_margin_all(0)
+	button.add_theme_stylebox_override("hover", hover_style)
+
+	var pressed_style = button.get_theme_stylebox("pressed").duplicate()
+	pressed_style.set_content_margin_all(0)
+	button.add_theme_stylebox_override("pressed", pressed_style)
+
+	# Connect sounds and hover animations if enabled
+	if enable_sounds:
+		# Hover effects (sound + scale animation)
+		button.mouse_entered.connect(func():
+			if SoundManager:
+				SoundManager.play_button_hover_sound()
+			# Subtle scale up on hover
+			var tween = button.create_tween()
+			tween.set_ease(Tween.EASE_OUT)
+			tween.set_trans(Tween.TRANS_BACK)
+			tween.tween_property(button, "scale", Vector2(1.05, 1.05), ANIM_FAST)
+		)
+
+		# Mouse exit (scale back to normal)
+		button.mouse_exited.connect(func():
+			var tween = button.create_tween()
+			tween.set_ease(Tween.EASE_OUT)
+			tween.tween_property(button, "scale", Vector2(1.0, 1.0), ANIM_FAST)
+		)
+
+		# Click sound
+		button.pressed.connect(func():
+			if SoundManager:
+				SoundManager.play_button_click_sound()
+		)
+
+	return button
 
 var default_font: Font = null
 

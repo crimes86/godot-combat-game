@@ -513,8 +513,15 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 
 		# Get player's weapon type for weapon-specific sounds
 		var weapon_type = "unarmed"
+		var is_gun = false
+		var is_bow = false
 		if CharacterStats.equipped_weapon:
 			weapon_type = CharacterStats.equipped_weapon.weapon_type
+			is_gun = CharacterStats.equipped_weapon.is_gun_weapon()
+			is_bow = CharacterStats.equipped_weapon.is_bow_weapon()
+
+		# Skip impact sounds for projectile weapons (gun/bow) - PlayerCombat already plays them
+		var is_projectile = is_gun or is_bow
 
 		# Play hit + hurt sounds (delayed to let swing sound play first)
 		var hit_pos = global_position
@@ -522,7 +529,8 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 			if not is_weakpoint:
 				if is_crit:
 					sound_manager.play_critical_hit_sound(hit_pos, -6.0)
-				else:
+				elif not is_projectile:
+					# Only play normal hit sound for melee weapons (projectiles play in PlayerCombat)
 					sound_manager.play_normal_hit_sound(hit_pos, -10.0, weapon_type)
 			# Hurt sound plays with the hit
 			sound_manager.play_skeleton_hurt_sound(hit_pos, -12.0)
@@ -550,37 +558,17 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	else:
 		combat_text.type = 0  # TextType.NORMAL
 
-	# Calculate spawn position at 70% of sprite height (accounting for scale)
+	# Calculate spawn position at center of dummy sprite
+	# CombatText handles radial distribution to prevent clumping
 	var sprite_scale = sprite.scale if sprite else Vector2.ONE
 	var sprite_height = 64.0 * sprite_scale.y  # LPC sprites are 64px tall
 	var sprite_pos = sprite.position if sprite else Vector2.ZERO
 
-	# Spawn at 70% height from bottom (30% from top)
-	# Sprite is centered, so top is at -height/2
-	var spawn_y_offset = -(sprite_height * 0.3)  # 30% from top = 70% from bottom
+	# Spawn at center-top of sprite (all types spawn from same center point)
+	var spawn_y_offset = -(sprite_height * 0.4)  # 40% from top
 
-	# Horizontal and vertical offset based on hit type
-	# NORMAL/CRIT: Centered above dummy (x=0)
-	# WEAKPOINT: Flanking on left/right sides
-	var spawn_x_offset = 0.0  # Normal/crit damage centered
-	if is_weakpoint:
-		# Weakpoints: offset to sides (flanking the main column)
-		# Alternate between left and right sides
-		if not has_meta("weakpoint_side"):
-			set_meta("weakpoint_side", 1)  # Start with right side
-
-		var side = get_meta("weakpoint_side")
-		if side > 0:
-			# Right side: +40px
-			spawn_x_offset = 40.0
-		else:
-			# Left side: -40px
-			spawn_x_offset = -40.0
-		spawn_y_offset -= 15.0  # Slightly higher than main column
-		set_meta("weakpoint_side", -side)  # Flip for next hit
-
-	# Final spawn position: dummy center + sprite offset + calculated offset
-	var spawn_pos = global_position + sprite_pos + Vector2(spawn_x_offset, spawn_y_offset)
+	# Final spawn position: dummy center + sprite offset + y offset
+	var spawn_pos = global_position + sprite_pos + Vector2(0, spawn_y_offset)
 
 	combat_text.global_position = spawn_pos
 	get_tree().root.add_child(combat_text)
@@ -902,6 +890,9 @@ func _on_weakpoint_hit(weakpoint) -> void:
 		# ✨ FIX: Trigger hit flash for weakpoint hits in multiplayer (was missing!)
 		if has_node("HitFlash"):
 			get_node("HitFlash").flash(true)  # true = crit/weakpoint flash (red)
+
+		# ✨ FIX: Trigger spin animation for weakpoint hits in multiplayer
+		trigger_spin()
 		return
 
 	# Single player: deal damage directly with crit flag
@@ -915,9 +906,9 @@ func _spawn_weakpoint_combat_text(weakpoint, damage: float) -> void:
 	combat_text.text = str(int(damage))
 	combat_text.type = 2  # TextType.WEAKPOINT (orange/red)
 
-	# Position at weakpoint location
+	# Position at weakpoint location - CombatText handles radial distribution
 	var spawn_pos = weakpoint.global_position if is_instance_valid(weakpoint) else global_position
-	combat_text.global_position = spawn_pos + Vector2(randf_range(-10, 10), randf_range(-20, 0))
+	combat_text.global_position = spawn_pos
 	get_tree().root.add_child(combat_text)
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:

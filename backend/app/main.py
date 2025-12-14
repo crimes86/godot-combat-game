@@ -40,7 +40,7 @@ from app.services.github_services import sync_github_achievements
 from app.services.item_forge_service import (
     get_catalog_summary, get_items, get_items_by_type, get_items_by_theme,
     get_available_items, get_themes, compute_forged_item, get_mappings_with_items,
-    get_achievement_mappings
+    get_achievement_mappings, get_item_by_id
 )
 from app.providers import PROVIDERS, get_enabled_providers, AchievementSupport
 from app.providers.oauth_handler import init_oauth_providers, create_oauth_routes, router as oauth_router
@@ -49,6 +49,7 @@ from app.routes.friend_routes import router as friend_router, init_friend_routes
 from app.routes.chat_routes import router as chat_router, init_chat_routes, seed_mock_global_feed, post_user_joined_announcement, post_sync_announcement, start_mock_activity, stop_mock_activity
 from app.routes.trading_routes import router as trading_router, init_trading_routes
 from app.routes.weapon_stats_routes import router as weapon_stats_router, init_weapon_stats_routes
+from app.routes.world_tree_routes import router as world_tree_router, init_world_tree_routes
 import time
 import asyncio
 
@@ -101,6 +102,7 @@ async def startup_event():
     init_chat_routes(get_current_user, calculate_mantle_tier)
     init_trading_routes(get_current_user)
     init_weapon_stats_routes(get_current_user)
+    init_world_tree_routes(get_db, get_current_user)
     seed_mock_global_feed()  # Add demo activity to global feed
     start_mock_activity(min_interval=20, max_interval=60)  # Live mock activity every 20-60 seconds
 
@@ -2150,8 +2152,16 @@ async def reclaim_confirm(
 async def login_page(request: Request, device_code: Optional[str] = None):
     # Check beta gate if enabled
     if BETA_ACCESS_CODE:
+        # Check cookie first, then fallback to device_code beta verification (for ngrok/proxy scenarios)
         beta_cookie = request.cookies.get("beta_access")
-        if beta_cookie != BETA_ACCESS_CODE:
+        device_beta_verified = False
+        if device_code and device_code in device_codes:
+            device_beta_verified = device_codes[device_code].get("beta_verified", False)
+
+        beta_passed = (beta_cookie == BETA_ACCESS_CODE) or device_beta_verified
+        logger.info(f"[BETA] Checking gate - cookie: '{beta_cookie}', device_verified: {device_beta_verified}, passed: {beta_passed}")
+
+        if not beta_passed:
             # Show beta access page instead
             return templates.TemplateResponse(
                 "login.html",
@@ -2184,25 +2194,41 @@ async def login_page(request: Request, device_code: Optional[str] = None):
 
 
 @app.post("/beta-access")
-async def verify_beta_access(request: Request, access_code: str = Form(...)):
+async def verify_beta_access(request: Request, access_code: str = Form(...), device_code: str = None):
     """Verify beta access code and set cookie."""
     if not BETA_ACCESS_CODE:
-        # Beta gate not enabled
-        return RedirectResponse(url="/login", status_code=303)
+        # Beta gate not enabled - preserve device_code in redirect
+        redirect_url = "/login"
+        if device_code:
+            redirect_url += f"?device_code={device_code}"
+        return RedirectResponse(url=redirect_url, status_code=303)
 
     if access_code == BETA_ACCESS_CODE:
-        # Correct code - set cookie and redirect to login
-        response = RedirectResponse(url="/login", status_code=303)
+        # Correct code - mark device_code as beta verified and redirect
+        redirect_url = "/login"
+        if device_code:
+            redirect_url += f"?device_code={device_code}"
+            # Mark this device_code as beta verified (fallback for when cookies don't work)
+            if device_code in device_codes:
+                device_codes[device_code]["beta_verified"] = True
+                logger.info(f"[BETA] Marked device_code as beta verified: {device_code[:8]}...")
+
+        response = RedirectResponse(url=redirect_url, status_code=303)
+        # Also try to set cookie (works when cookies aren't blocked)
+        forwarded_proto = request.headers.get("x-forwarded-proto", "")
+        is_https = APP_URL.startswith("https://") or forwarded_proto == "https"
         response.set_cookie(
             key="beta_access",
             value=BETA_ACCESS_CODE,
             httponly=True,
+            secure=is_https,
             max_age=60 * 60 * 24 * 30,  # 30 days
             samesite="lax",
+            path="/",
         )
         return response
     else:
-        # Wrong code - redirect back with error
+        # Wrong code - redirect back with error, preserve device_code
         return templates.TemplateResponse(
             "login.html",
             {
@@ -2210,7 +2236,7 @@ async def verify_beta_access(request: Request, access_code: str = Form(...)):
                 "all_providers": all_providers,
                 "user": None,
                 "user_linked_providers": [],
-                "device_code": None,
+                "device_code": device_code,
                 "beta_gate": True,
                 "beta_error": "Invalid access code",
             },
@@ -2975,6 +3001,13 @@ async def save_appearance(
         "arms_sprite": body.get("arms_sprite", ""),
         "hands_sprite": body.get("hands_sprite", ""),
         "head_sprite": body.get("head_sprite", ""),
+        # Forged item IDs for each armor slot
+        "feet_forged_id": body.get("feet_forged_id", ""),
+        "legs_forged_id": body.get("legs_forged_id", ""),
+        "chest_forged_id": body.get("chest_forged_id", ""),
+        "arms_forged_id": body.get("arms_forged_id", ""),
+        "hands_forged_id": body.get("hands_forged_id", ""),
+        "head_forged_id": body.get("head_forged_id", ""),
     }
 
     # Normalize gender to int (0=male, 1=female)
@@ -3110,6 +3143,13 @@ async def get_forged_items_api(
         if forged.achievement_credit and forged.achievement_credit.achievement:
             achievement = forged.achievement_credit.achievement
 
+        # Look up item properties from catalog (source of truth, overrides DB values)
+        catalog_item = get_item_by_id(forged.item_id) if forged.item_id else None
+        # Use catalog weapon_type if available (overrides DB - fixes legacy items)
+        weapon_type = catalog_item.get("weapon_type") if catalog_item else forged.weapon_type
+        gun_subtype = catalog_item.get("gun_subtype") if catalog_item else None
+        burst_count = catalog_item.get("burst_count") if catalog_item else None
+
         items.append({
             # Item identity
             "forged_id": forged.id,  # ForgedAchievement.id - needed for bridge-out API
@@ -3117,7 +3157,9 @@ async def get_forged_items_api(
             "item_id": forged.item_id,
             "item_name": forged.item_name,
             "item_type": forged.item_type,
-            "weapon_type": forged.weapon_type,  # Only for weapons (null for armor/shield/accessory)
+            "weapon_type": weapon_type,  # From catalog (overrides legacy DB values)
+            "gun_subtype": gun_subtype,  # "railgun", "battle_rifle", etc.
+            "burst_count": burst_count,  # 1 for single shot, 3 for burst, etc.
             "item_rarity": forged.item_rarity,
 
             # Visual properties
@@ -4126,3 +4168,4 @@ app.include_router(friend_router)
 app.include_router(chat_router)
 app.include_router(trading_router)
 app.include_router(weapon_stats_router)
+app.include_router(world_tree_router)

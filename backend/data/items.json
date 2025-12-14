@@ -49,6 +49,7 @@
     "psn:GHOST_OF_TSUSHIMA_PLATINUM": "ghost_mask",
     "psn:RETURNAL_PLATINUM": "selene_fragment",
     "psn:SPIDER_MAN_PLATINUM": "spider_emblem",
+    "psn:HORIZON_ZERO_DAWN_STORY": "aloy_sharpshot_bow",
     "_comment_xbox": "Xbox achievements",
     "xbox:HALO_LASO": "master_chief_helmet",
     "xbox:TITANFALL_GAUNTLET": "pilot_helmet",
@@ -90,7 +91,9 @@
     "413150:FECTOR_CHALLENGE": "prairie_king_cape",
     "413150:MYSTERY_OF_STARDROPS": "stardrop_pendant",
     "550:ZOMBIE_GENOCIDEST": "survivor_vest",
-    "1145360:END_OF_STORY": "zagreus_helm"
+    "1145360:END_OF_STORY": "zagreus_helm",
+    "_comment_tomb_raider": "Tomb Raider achievements",
+    "203160:BOOM_GOES_THE_DYNAMITE": "tomb_raider_bow"
   },
   "weapon_types": {
     "core": {
@@ -1079,7 +1082,9 @@
       "item_id": "adamant_rail",
       "item_name": "Adamant Rail",
       "item_type": "weapon",
-      "weapon_type": "crossbow",
+      "weapon_type": "gun",
+      "gun_subtype": "railgun",
+      "burst_count": 1,
       "description": "An exalted weapon of unknown origin.",
       "lore": "Its mechanisms are beyond mortal understanding.",
       "base_rarity": "rare",
@@ -1105,6 +1110,7 @@
       "item_type": "weapon",
       "weapon_type": "gun",
       "gun_subtype": "battle_rifle",
+      "burst_count": 3,
       "description": "The UNSC's precision workhorse.",
       "lore": "Three-round burst, zero margin for error.",
       "base_rarity": "epic",
@@ -1217,6 +1223,54 @@
       "effects": {
         "passive": [
           "monster_slayer"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "aloy_sharpshot_bow",
+      "item_name": "Aloy's Sharpshot Bow",
+      "item_type": "weapon",
+      "weapon_type": "bow",
+      "description": "A precision bow from the Nora tribe.",
+      "lore": "Machine-killer. Thunderjaw-slayer. Aloy's weapon of choice.",
+      "base_rarity": "rare",
+      "theme": "horizon",
+      "visuals": {
+        "icon_url": "/static/items/icons/aloy_sharpshot_bow.png",
+        "sprite_folder": "weapons/aloy_sharpshot_bow",
+        "effect": "focus_pulse",
+        "glow_color": "#FF6B35"
+      },
+      "effects": {
+        "passive": [
+          "precision_shot"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "tomb_raider_bow",
+      "item_name": "Lara's Makeshift Bow",
+      "item_type": "weapon",
+      "weapon_type": "bow",
+      "description": "A survival bow crafted from salvaged materials.",
+      "lore": "Born of necessity, perfected through survival. Lara Croft's weapon of resilience.",
+      "base_rarity": "rare",
+      "theme": "tomb_raider",
+      "visuals": {
+        "icon_url": "/static/items/icons/tomb_raider_bow.png",
+        "sprite_folder": "weapons/tomb_raider_bow",
+        "effect": "survivor_glow",
+        "glow_color": "#8B4513"
+      },
+      "effects": {
+        "passive": [
+          "survivor_instinct"
         ],
         "active": null
       },
@@ -2215,7 +2269,7 @@
       "item_id": "devil_pitchfork",
       "item_name": "Devil's Pitchfork",
       "item_type": "weapon",
-      "weapon_type": "trident",
+      "weapon_type": "spear",
       "description": "The Devil's own weapon.",
       "lore": "Beat Cuphead on Expert. You won the final bet.",
       "base_rarity": "legendary",
@@ -2260,7 +2314,7 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "multi_slash": true
+      "multi_slash": false
     },
     {
       "item_id": "heart_shard",

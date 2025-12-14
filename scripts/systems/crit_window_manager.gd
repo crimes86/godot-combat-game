@@ -4,9 +4,13 @@ class_name CritWindowManager
 ## Manages crit windows for multiple enemies concurrently
 ## Owns all timers, lifecycle, and state - enemies just provide visual hooks
 ##
-## WEAKPOINT TRIGGER SYSTEM (v2.0):
-## Windows are now triggered by HIT COUNT and HEALTH THRESHOLDS, not random crits.
+## WEAKPOINT TRIGGER SYSTEM (v2.1):
+## Windows are triggered by HIT COUNT and HEALTH THRESHOLDS, not random crits.
 ## This ensures consistent, skill-based combat rather than RNG coinflips.
+##
+## CRITICAL: Weakpoint damage does NOT count toward threshold triggers.
+## Only normal attack damage decrements "threshold HP" - this prevents
+## chain-killing where one weakpoint burst skips multiple thresholds.
 
 # State - track MULTIPLE concurrent windows (one per enemy)
 var active_windows: Dictionary = {}  # {enemy_instance: WindowData}
@@ -16,6 +20,10 @@ var enemy_hit_counts: Dictionary = {}  # {enemy_instance: int}
 
 # Health threshold tracking (which thresholds have been triggered)
 var enemy_triggered_thresholds: Dictionary = {}  # {enemy_instance: Array[float]]
+
+# Threshold HP tracking - only decremented by normal attacks, not weakpoint damage
+# This prevents weakpoint burst from skipping HP thresholds
+var enemy_threshold_hp: Dictionary = {}  # {enemy_instance: {current: float, max: float}}
 
 # Window data for each enemy
 class WindowData:
@@ -35,15 +43,19 @@ class WindowData:
 signal window_completed(success_ratio: float, total_destroyed: int)
 
 # ============================================
-# WEAKPOINT TRIGGER SYSTEM (v2.0)
+# WEAKPOINT TRIGGER SYSTEM (v2.1)
 # ============================================
 
 func register_hit(target: Node, damage: float, target_health_before: float, target_max_health: float) -> bool:
 	"""
-	Register a hit on an enemy and check if it should trigger a weakpoint window.
+	Register a NORMAL hit on an enemy and check if it should trigger a weakpoint window.
 	Returns true if a window was triggered.
 
 	Call this from PlayerCombat INSTEAD of directly calling start_window on crits.
+
+	IMPORTANT: Only call this for NORMAL attacks, not weakpoint damage.
+	Weakpoint damage should go directly to take_damage() without calling this.
+	This ensures weakpoint burst doesn't skip HP thresholds.
 	"""
 	if not is_instance_valid(target):
 		return false
@@ -60,6 +72,14 @@ func register_hit(target: Node, damage: float, target_health_before: float, targ
 	if not enemy_triggered_thresholds.has(target):
 		enemy_triggered_thresholds[target] = []
 
+	# Initialize threshold HP tracking on first hit
+	# Threshold HP is separate from actual HP - only decremented by normal attacks
+	if not enemy_threshold_hp.has(target):
+		enemy_threshold_hp[target] = {
+			"current": target_health_before,
+			"max": target_max_health
+		}
+
 	# Increment hit count
 	enemy_hit_counts[target] += 1
 	var current_hits = enemy_hit_counts[target]
@@ -73,19 +93,27 @@ func register_hit(target: Node, damage: float, target_health_before: float, targ
 
 	# Check health threshold triggers (only if not already triggered by hit count)
 	if not triggered:
-		var health_after = target_health_before - damage
-		var health_pct_before = target_health_before / target_max_health
-		var health_pct_after = health_after / target_max_health
+		# Use THRESHOLD HP, not actual HP - this prevents weakpoint burst from skipping thresholds
+		var threshold_data = enemy_threshold_hp[target]
+		var threshold_hp_before = threshold_data["current"]
+		var threshold_hp_after = threshold_hp_before - damage
+		var threshold_max = threshold_data["max"]
+
+		# Update threshold HP (only normal damage decrements this)
+		threshold_data["current"] = threshold_hp_after
+
+		var threshold_pct_before = threshold_hp_before / threshold_max
+		var threshold_pct_after = threshold_hp_after / threshold_max
 
 		var thresholds = Constants.WEAKPOINT_TRIGGER_HEALTH_THRESHOLDS if "WEAKPOINT_TRIGGER_HEALTH_THRESHOLDS" in Constants else [0.75, 0.50, 0.25]
 		var already_triggered = enemy_triggered_thresholds[target]
 
 		for threshold in thresholds:
-			# Check if we crossed this threshold with this hit
-			if health_pct_before > threshold and health_pct_after <= threshold:
+			# Check if we crossed this threshold with this hit (using threshold HP, not actual HP)
+			if threshold_pct_before > threshold and threshold_pct_after <= threshold:
 				# Check if this threshold was already triggered
 				if threshold not in already_triggered:
-					print("🎯 [WeakpointTrigger] Health threshold crossed (%.0f%%) - triggering window!" % (threshold * 100))
+					print("🎯 [WeakpointTrigger] Threshold HP crossed (%.0f%%) - triggering window! (Threshold HP: %.1f/%.1f)" % [threshold * 100, threshold_hp_after, threshold_max])
 					already_triggered.append(threshold)
 					triggered = true
 					break  # Only trigger one window per hit
@@ -100,10 +128,22 @@ func clear_enemy_tracking(target: Node) -> void:
 	"""Clear all tracking data for an enemy (call when enemy dies)"""
 	enemy_hit_counts.erase(target)
 	enemy_triggered_thresholds.erase(target)
+	enemy_threshold_hp.erase(target)
 
 func has_active_window_for(target: Node) -> bool:
 	"""Check if target has an active weakpoint window"""
 	return active_windows.has(target)
+
+func get_threshold_hp_info(target: Node) -> Dictionary:
+	"""Get threshold HP tracking info for debugging/UI (separate from actual HP)"""
+	if enemy_threshold_hp.has(target):
+		var data = enemy_threshold_hp[target]
+		return {
+			"current": data["current"],
+			"max": data["max"],
+			"percent": data["current"] / data["max"] if data["max"] > 0 else 0.0
+		}
+	return {"current": 0.0, "max": 0.0, "percent": 0.0}
 
 # ============================================
 # ORIGINAL WINDOW MANAGEMENT
@@ -188,12 +228,16 @@ func _on_weakpoint_destroyed(weakpoint: Node, target: Node) -> void:
 	var window_data = active_windows[target]
 	window_data.weakpoints_destroyed += 1
 
+	# Track weakpoint for forged weapon stats
+	var local_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if local_player and local_player.get("combat_system") and local_player.combat_system.has_method("_track_weakpoint_destroyed"):
+		local_player.combat_system._track_weakpoint_destroyed()
+
 	# Check if all weakpoints destroyed
 	if window_data.weakpoints_destroyed >= window_data.weakpoints_spawned:
 		# Spawn success ring effect at player's feet IMMEDIATELY (buff effect!)
-		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-		if player:
-			_spawn_success_ring_at_position(player.global_position)
+		if local_player:
+			_spawn_success_ring_at_position(local_player.global_position)
 
 		# End window immediately (shrink enemy) - all happens at once!
 		end_window(target, window_data.weakpoints_destroyed)

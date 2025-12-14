@@ -90,6 +90,7 @@ var gunshot_sounds: Array[AudioStream] = []  # Gunshot sounds (for gun weapons)
 var battle_rifle_sounds: Array[AudioStream] = []  # Battle rifle sounds (Halo-style burst)
 var bullet_flesh_sounds: Array[AudioStream] = []  # Bullet impact on flesh (unarmored)
 var bullet_armor_sounds: Array[AudioStream] = []  # Bullet ricochet off armor
+var bow_shot_sounds: Array[AudioStream] = []  # Bow release/twang sounds
 
 # Player sounds
 var player_hurt_sounds: Array[AudioStream] = []  # Player hurt/death grunts (2 variations)
@@ -436,6 +437,17 @@ func _load_real_sounds() -> void:
 		else:
 			print("  ℹ️ bullet_armor_%d.wav not found" % i)
 	print("  📊 Loaded %d bullet armor ricochet variations" % bullet_armor_sounds.size())
+
+	# Load bow shot sounds - 3 variations
+	for i in range(1, 4):
+		var bow_path = "res://assets/audio/sfx/combat/weapons/bow_shot_%d.wav" % i
+		var bow_sound = load(bow_path)
+		if bow_sound:
+			bow_shot_sounds.append(bow_sound)
+			print("  ✅ Loaded bow_shot_%d.wav" % i)
+		else:
+			print("  ℹ️ bow_shot_%d.wav not found" % i)
+	print("  📊 Loaded %d bow shot sound variations" % bow_shot_sounds.size())
 
 	# Load player hurt sounds (grunt/pain sounds)
 	var player_hurt_1 = load("res://assets/audio/sfx/player/player_hurt_1.wav")
@@ -1337,6 +1349,66 @@ func play_bullet_impact_sound(global_pos: Vector2 = Vector2.ZERO, is_armored: bo
 	get_tree().root.add_child(player)
 	player.play()
 
+## Play bow shot sound (string release/twang)
+func play_bow_shot_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -12.0) -> void:
+	if sfx_muted:
+		return
+
+	if bow_shot_sounds.is_empty():
+		# Fallback: use sword swing with higher pitch for twang-like sound
+		if not sword_swing_sounds.is_empty():
+			var sound_stream = sword_swing_sounds[randi() % sword_swing_sounds.size()]
+			var player = AudioStreamPlayer2D.new()
+			player.stream = sound_stream
+			player.volume_db = volume_db + sfx_volume_db
+			player.global_position = global_pos
+			player.pitch_scale = 1.3  # Higher pitch for snap/twang
+			player.finished.connect(player.queue_free)
+			get_tree().root.add_child(player)
+			player.play()
+		return
+
+	# Pick random bow shot variation
+	var sound_stream = bow_shot_sounds[randi() % bow_shot_sounds.size()]
+
+	# Create player with slight pitch randomization
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db + sfx_volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.95, 1.05)
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
+## Play bow impact sound (reuses bullet flesh sounds for satisfying thud)
+func play_bow_impact_sound(global_pos: Vector2 = Vector2.ZERO, hit: bool = true, volume_db: float = -6.0) -> void:
+	if sfx_muted:
+		return
+
+	if not hit:
+		# Miss sound - skip for now (arrow hitting ground silently)
+		# Could add a subtle ground thud sound here later
+		return
+
+	# Hit sound - use bullet flesh impact
+	if bullet_flesh_sounds.is_empty():
+		play_normal_hit_sound(global_pos, volume_db)
+		return
+
+	var sound_stream = bullet_flesh_sounds[randi() % bullet_flesh_sounds.size()]
+
+	var player = AudioStreamPlayer2D.new()
+	player.stream = sound_stream
+	player.volume_db = volume_db + sfx_volume_db
+	player.global_position = global_pos
+	player.pitch_scale = randf_range(0.85, 0.95)  # Slightly lower pitch than bullets for heavier arrow
+	player.finished.connect(player.queue_free)
+
+	get_tree().root.add_child(player)
+	player.play()
+
 ## Play player hurt sound (random grunt/pain variation)
 func play_player_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float = -6.0) -> void:
 	if sfx_muted:
@@ -1945,6 +2017,10 @@ func set_music_volume(volume_db: float) -> void:
 	music_volume_db = volume_db
 	if music_player:
 		music_player.volume_db = volume_db
+
+## Get current music volume (for other music players to sync)
+func get_music_volume_db() -> float:
+	return music_volume_db
 
 ## Skip to next track in playlist
 func skip_music_track() -> void:

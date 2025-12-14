@@ -14,7 +14,7 @@ class_name SimpleLPCSprite
 # ============================================
 # DEBUG SETTINGS - Set to true to enable verbose logging
 # ============================================
-const DEBUG_SPRITE_SETUP: bool = true  # Debug sprite/animation setup
+const DEBUG_SPRITE_SETUP: bool = false  # Debug sprite/animation setup
 
 # Direction to row mapping (LPC standard)
 const DIRECTION_ROWS = {
@@ -41,11 +41,12 @@ static func get_attack_frame_indices(num_frames: int) -> Array:
 # Shadow layer (below body)
 var shadow_sprite: AnimatedSprite2D = null
 
-# Cape layer (behind body, above shadow)
+# Cape layer (behind body when facing south/east/west, on top when facing north)
 var cape_sprite: AnimatedSprite2D = null
 
 # Armor layers (optional) - between body and weapon
-# z-index order: shadow(-10) -> cape(-5) -> body(0) -> base_head(1) -> boots(2) -> pants(3) -> shirt(4) -> arms(5) -> hands(6) -> hair(7) -> head_armor(8) -> weapon(9/-1)
+# z-index order: shadow(-10) -> cape(-5 or 10*) -> body(0) -> base_head(1) -> boots(2) -> pants(3) -> shirt(4) -> arms(5) -> hands(6) -> hair(7) -> head_armor(8) -> weapon(9/-1)
+# *cape z-index is -5 (behind) for south/east/west directions, 10 (on top) for north direction
 var base_head_sprite: AnimatedSprite2D = null  # Female character uses separate head layer
 var boots_sprite: AnimatedSprite2D = null
 var pants_sprite: AnimatedSprite2D = null
@@ -58,6 +59,7 @@ var hair_sprite: AnimatedSprite2D = null
 # Weapon layer (optional)
 var weapon_sprite: AnimatedSprite2D = null
 var current_weapon_type: String = "sword"  # Track weapon type for offset calculations
+var current_weapon_name: String = ""  # Track specific weapon name (e.g., "saw_cleaver")
 
 # Multi-slash weapon support - cycle through slash variants (slash, slash2, slash3)
 var weapon_slash_variants: Array[String] = []  # Available slash animation names
@@ -92,9 +94,14 @@ func _process(_delta: float) -> void:
 		body_frame = gun_body_sprite.frame
 		body_anim = gun_body_sprite.animation
 
+	# Check if we're in a shoot animation (for bow weapons)
+	var is_shoot_anim = String(body_anim).begins_with("shoot_")
+
 	_sync_layer(shadow_sprite, body_anim, body_frame)
 	_sync_layer(cape_sprite, body_anim, body_frame)
-	_sync_layer(base_head_sprite, body_anim, body_frame)
+	# Don't sync base_head during shoot - keep it static on idle
+	if not is_shoot_anim:
+		_sync_layer(base_head_sprite, body_anim, body_frame)
 	_sync_layer(boots_sprite, body_anim, body_frame)
 	_sync_layer(pants_sprite, body_anim, body_frame)
 	_sync_layer(shirt_sprite, body_anim, body_frame)
@@ -157,6 +164,19 @@ func setup_lpc_sprite(
 	sprite_frames = SpriteFrames.new()
 	current_weapon_type = weapon_type  # Store for offset calculations
 
+	# Check if weapon uses shoot animation (bow/crossbow)
+	var bow_weapon_types = ["bow", "crossbow"]
+	var uses_shoot_animation = weapon_type in bow_weapon_types
+
+	# Extract weapon name from path (e.g., "saw_cleaver" from ".../weapons/saw_cleaver/walk.png")
+	current_weapon_name = ""
+	if weapon_walk_tex:
+		var weapon_path = weapon_walk_tex.resource_path
+		# Path format: res://assets/equipment/[forged/]weapons/weapon_name/walk.png
+		var parts = weapon_path.split("/")
+		if parts.size() >= 2:
+			current_weapon_name = parts[parts.size() - 2]  # Second to last = weapon folder name
+
 	# Reset multi-slash tracking
 	weapon_slash_variants.clear()
 	current_slash_index = 0
@@ -200,22 +220,38 @@ func setup_lpc_sprite(
 			create_animation_from_image(walk_img, "walk_" + dir_name, row, 8, [1, 2, 3, 4, 5, 6, 7, 8], 10.0, true, null, 64)
 			create_animation_from_image(walk_img, "idle_" + dir_name, row, 1, [0], 1.0, true, null, 64)
 
-	# Create slash/thrust animations (use weapon-specific FPS!)
+	# Create slash/thrust/shoot animations (use weapon-specific FPS!)
 	# IMPORTANT: Store body frame count to sync all layers
+	# NOTE: We always use "slash_" prefix for animation names (except guns/bows which use "shoot_")
+	# This ensures body and weapon animations match, regardless of actual frame count
 	var body_attack_frames = 6  # Default to slash
+	var attack_anim_prefix = "slash"  # Default - use "slash_" for all melee weapons
+
+	# Guns and bows use "shoot_" animation prefix
+	var shoot_weapon_types = ["bow", "crossbow", "gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle"]
+	if weapon_type in shoot_weapon_types:
+		attack_anim_prefix = "shoot"
+
 	if slash_tex:
 		var slash_img = slash_tex.get_image()
 		var slash_size = slash_img.get_size()
 
-		# Detect frame count: thrust has 8 frames (512px wide), slash has 6 frames (384px wide)
-		body_attack_frames = 8 if slash_size.x >= 500 else 6
+		# Detect frame count from texture width, but keep using slash/shoot prefix
+		if slash_size.x >= 800:  # 832px = 13 frames (shoot)
+			body_attack_frames = 13
+		elif slash_size.x >= 500:  # 512px = 8 frames (thrust uses same motion as slash)
+			body_attack_frames = 8
+		else:  # 384px = 6 frames (slash)
+			body_attack_frames = 6
+
 		var frame_indices = []
 		for i in range(body_attack_frames):
 			frame_indices.append(i)
 
 		for dir_name in DIRECTION_ROWS.keys():
 			var row = DIRECTION_ROWS[dir_name]
-			create_animation_from_image(slash_img, "slash_" + dir_name, row, body_attack_frames, frame_indices, slash_fps, false, null, 64)
+			# Use attack_anim_prefix for animation name (slash_, thrust_, or shoot_)
+			create_animation_from_image(slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, frame_indices, slash_fps, false, null, 64)
 
 	# Create hurt animation (single direction - south/row 2)
 	if hurt_tex:
@@ -243,7 +279,7 @@ func setup_lpc_sprite(
 			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(shadow_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, shadow_sprite.sprite_frames, 64)
+				create_animation_from_image(shadow_slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, shadow_sprite.sprite_frames, 64)
 
 		add_child(shadow_sprite)
 		shadow_sprite.visible = true
@@ -267,10 +303,21 @@ func setup_lpc_sprite(
 
 		if base_head_slash_tex:
 			var base_head_slash_img = base_head_slash_tex.get_image()
+			var base_head_width = base_head_slash_img.get_width()
+			# Detect if using walk texture for attack (576px = 9 frames, used when no shoot.png exists)
+			# In this case, use frame 0 (idle position) for all attack frames to create static head
+			var is_walk_texture = (base_head_width == 576)
+			var head_frame_indices = []
+			if is_walk_texture:
+				# Static head: use frame 0 for all attack frames
+				for i in range(body_attack_frames):
+					head_frame_indices.append(0)
+			else:
+				head_frame_indices = get_attack_frame_indices(body_attack_frames)
 			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(base_head_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, base_head_sprite.sprite_frames, 64)
+				create_animation_from_image(base_head_slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, head_frame_indices, slash_fps, false, base_head_sprite.sprite_frames, 64)
 
 		add_child(base_head_sprite)
 		base_head_sprite.visible = true
@@ -297,7 +344,7 @@ func setup_lpc_sprite(
 			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(boots_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, boots_sprite.sprite_frames, 64)
+				create_animation_from_image(boots_slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, boots_sprite.sprite_frames, 64)
 
 		add_child(boots_sprite)
 		boots_sprite.visible = true
@@ -324,7 +371,7 @@ func setup_lpc_sprite(
 			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(pants_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, pants_sprite.sprite_frames, 64)
+				create_animation_from_image(pants_slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, pants_sprite.sprite_frames, 64)
 
 		add_child(pants_sprite)
 		pants_sprite.visible = true
@@ -351,7 +398,9 @@ func setup_lpc_sprite(
 			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(shirt_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, shirt_sprite.sprite_frames, 64)
+				create_animation_from_image(shirt_slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, shirt_sprite.sprite_frames, 64)
+			if DEBUG_SPRITE_SETUP:
+				print("[SimpleLPCSprite] Created shirt %s animations (prefix: %s, frames: %d)" % [attack_anim_prefix, attack_anim_prefix, body_attack_frames])
 
 		add_child(shirt_sprite)
 		shirt_sprite.visible = true
@@ -378,7 +427,7 @@ func setup_lpc_sprite(
 			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(arms_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, arms_sprite.sprite_frames, 64)
+				create_animation_from_image(arms_slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, arms_sprite.sprite_frames, 64)
 
 		add_child(arms_sprite)
 		arms_sprite.visible = true
@@ -405,7 +454,7 @@ func setup_lpc_sprite(
 			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(hands_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, hands_sprite.sprite_frames, 64)
+				create_animation_from_image(hands_slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, hands_sprite.sprite_frames, 64)
 
 		add_child(hands_sprite)
 		hands_sprite.visible = true
@@ -432,7 +481,7 @@ func setup_lpc_sprite(
 			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(hair_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, hair_sprite.sprite_frames, 64)
+				create_animation_from_image(hair_slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, hair_sprite.sprite_frames, 64)
 
 		add_child(hair_sprite)
 		hair_sprite.visible = true
@@ -459,7 +508,9 @@ func setup_lpc_sprite(
 			# Use body_attack_frames to sync with body animation
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
-				create_animation_from_image(head_slash_img, "slash_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, head_sprite.sprite_frames, 64)
+				create_animation_from_image(head_slash_img, attack_anim_prefix + "_" + dir_name, row, body_attack_frames, get_attack_frame_indices(body_attack_frames), slash_fps, false, head_sprite.sprite_frames, 64)
+			if DEBUG_SPRITE_SETUP:
+				print("[SimpleLPCSprite] Created head %s animations (prefix: %s, frames: %d)" % [attack_anim_prefix, attack_anim_prefix, body_attack_frames])
 
 		add_child(head_sprite)
 		head_sprite.visible = true
@@ -475,7 +526,7 @@ func setup_lpc_sprite(
 
 		# Don't set a static offset here - we'll adjust it per animation type
 
-		# Add attack animations if provided (slash for melee, shoot for guns)
+		# Add attack animations if provided (slash for melee, shoot for guns/bows)
 		if weapon_slash_tex:
 			var weapon_slash_img = weapon_slash_tex.get_image()
 			var slash_size = weapon_slash_img.get_size()
@@ -497,17 +548,33 @@ func setup_lpc_sprite(
 				for dir_name in DIRECTION_ROWS.keys():
 					var row = DIRECTION_ROWS[dir_name]
 					create_animation_from_image(weapon_slash_img, "shoot_" + dir_name, row, num_shoot_frames, frame_indices, shoot_fps, false, weapon_sprite.sprite_frames, shoot_tile_size)
-			else:
-				# Thrust weapons (staff, spear) use 8 frames, slash weapons use 6 frames
-				var thrust_weapons = ["staff", "spear"]
-				var num_attack_frames = 8 if weapon_type in thrust_weapons else 6
 
-				# Calculate tile size - spear uses 64px tiles (LPC standard), staff uses oversize 192px
-				var slash_tile_size: int
-				if weapon_type == "spear":
-					slash_tile_size = 64  # Spear uses standard 64px LPC tiles
-				else:
-					slash_tile_size = int(slash_size.x / num_attack_frames)
+				# Track shoot variant for get_next_attack_anim()
+				weapon_slash_variants.append("shoot")
+			elif uses_shoot_animation:
+				# Bow shoot animation: 13 frames at 64px
+				var shoot_tile_size = 64
+				var num_shoot_frames = 13
+				var shoot_fps = 15.0  # Smooth draw and release
+
+				var frame_indices = []
+				for i in range(num_shoot_frames):
+					frame_indices.append(i)
+
+				for dir_name in DIRECTION_ROWS.keys():
+					var row = DIRECTION_ROWS[dir_name]
+					create_animation_from_image(weapon_slash_img, "shoot_" + dir_name, row, num_shoot_frames, frame_indices, shoot_fps, false, weapon_sprite.sprite_frames, shoot_tile_size)
+
+				# Track shoot variant for get_next_attack_anim()
+				weapon_slash_variants.append("shoot")
+			else:
+				# Thrust weapons (staff, spear, trident) use 8 frames, slash weapons use 6 frames
+				# BUT we always use "slash_" animation prefix to match body animations
+				var thrust_weapon_types = ["staff", "spear", "trident"]
+				var num_attack_frames = 8 if weapon_type in thrust_weapon_types else 6
+
+				# Calculate tile size dynamically from sprite dimensions
+				var slash_tile_size = int(slash_size.x / num_attack_frames)
 
 				# Build frame indices based on frame count
 				var frame_indices = []
@@ -516,9 +583,10 @@ func setup_lpc_sprite(
 
 				for dir_name in DIRECTION_ROWS.keys():
 					var row = DIRECTION_ROWS[dir_name]
+					# Always use "slash_" prefix for melee weapons (matches body animation naming)
 					create_animation_from_image(weapon_slash_img, "slash_" + dir_name, row, num_attack_frames, frame_indices, slash_fps, false, weapon_sprite.sprite_frames, slash_tile_size)
 
-				# Track slash variant
+				# Track slash variant (always "slash" for melee)
 				weapon_slash_variants.append("slash")
 
 				# Create slash2 variant if provided (must be inside else block for num_attack_frames scope)
@@ -546,10 +614,9 @@ func setup_lpc_sprite(
 			var weapon_walk_img = weapon_walk_tex.get_image()
 			var walk_size = weapon_walk_img.get_size()
 
-			# LPC walk sprites are always 9 columns x 4 rows with 64x64 tiles
-			# Some exports may have extra blank columns (e.g., 832px = 13 cols with 4 blank)
-			# Always use 64px tile size for proper alignment
-			var walk_tile_size = 64
+			# LPC walk sprites are 9 columns x 4 rows
+			# Calculate tile size dynamically (64px standard, 128px for oversize weapons)
+			var walk_tile_size = int(walk_size.x / 9)
 
 			# Get weapon-specific walk and idle FPS
 			var walk_fps = WeaponAnimationDataFactory.get_walk_fps(weapon_type)
@@ -665,8 +732,9 @@ func setup_gun_walk_animations(gun_body_walk_tex: Texture2D, gun_body_shoot_tex:
 	call_deferred("_play_initial_gun_idle")
 
 func setup_cape(walk_tex: Texture2D, slash_tex: Texture2D = null, thrust_tex: Texture2D = null, hurt_tex: Texture2D = null) -> void:
-	"""Setup cape layer that renders behind the character body.
-	Capes use z-index -5 (between shadow at -10 and body at 0).
+	"""Setup cape layer that renders dynamically based on facing direction.
+	Capes use z-index -5 (behind body) for south/east/west directions,
+	and z-index 10 (on top) when facing north to show cape over back.
 	Call this AFTER setup_lpc_sprite() to add a cape to the character."""
 	if not walk_tex:
 		return
@@ -697,14 +765,16 @@ func setup_cape(walk_tex: Texture2D, slash_tex: Texture2D = null, thrust_tex: Te
 		var attack_img = attack_tex.get_image()
 		var attack_size = attack_img.get_size()
 		# Detect frame count: thrust has 8 frames (512px wide), slash has 6 frames (384px wide)
-		var attack_frames = 8 if attack_size.x >= 500 else 6
+		var is_thrust = attack_size.x >= 500
+		var attack_frames = 8 if is_thrust else 6
+		var cape_attack_prefix = "thrust" if is_thrust else "slash"
 		var frame_indices = []
 		for i in range(attack_frames):
 			frame_indices.append(i)
 
 		for dir_name in DIRECTION_ROWS.keys():
 			var row = DIRECTION_ROWS[dir_name]
-			create_animation_from_image(attack_img, "slash_" + dir_name, row, attack_frames, frame_indices, 10.0, false, cape_sprite.sprite_frames, 64)
+			create_animation_from_image(attack_img, cape_attack_prefix + "_" + dir_name, row, attack_frames, frame_indices, 10.0, false, cape_sprite.sprite_frames, 64)
 
 	# Create hurt animation if provided
 	if hurt_tex:
@@ -981,6 +1051,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 			if hair_sprite.sprite_frames.has_animation(hair_anim):
 				hair_sprite.play(hair_anim)
 
+		# Adjust cape z-index for gun mode too
+		if cape_sprite:
+			if direction == "north":
+				cape_sprite.z_index = 10  # Above all body layers when facing away
+			else:
+				cape_sprite.z_index = -5  # Behind body (default)
+
 		# Stop the main body animation to prevent any visual artifacts
 		stop()
 		return  # Don't play LPC animations when in gun mode
@@ -992,6 +1069,16 @@ func play_lpc_animation(anim_name: String, direction: String):
 	# NOTE: Animation speeds are set during setup_lpc_sprite() and should NOT be modified here
 	# All layers must use the same FPS that was set during creation (weapon-specific)
 	# Previously this code was overriding FPS to 30 which caused desync with armor layers
+
+	# For gun weapons shooting north/south: body stays idle, only weapon animates
+	# Preserve original animation for weapon sprite (it will still play "shoot")
+	var weapon_anim_name = anim_name
+	var weapon_anim_key = anim_key
+	if is_gun_weapon and anim_name == "shoot":
+		# Override shoot animation to idle for body/armor layers
+		# Weapon will use weapon_anim_key which is still "shoot_north" or "shoot_south"
+		anim_name = "idle"
+		anim_key = "idle_" + direction
 
 	if sprite_frames and sprite_frames.has_animation(anim_key):
 		play(anim_key)
@@ -1015,9 +1102,21 @@ func play_lpc_animation(anim_name: String, direction: String):
 		elif cape_sprite.sprite_frames.has_animation(anim_name):
 			cape_sprite.play(anim_name)
 
+		# Adjust cape z-index: on top when facing north (cape visible over back), behind otherwise
+		if direction == "north":
+			cape_sprite.z_index = 10  # Above all body layers when facing away
+		else:
+			cape_sprite.z_index = -5  # Behind body (default)
+
 	# Sync armor animations with body animation
+	# For base_head: keep on idle during shoot animations (head doesn't animate during archery)
 	if base_head_sprite:
-		if base_head_sprite.sprite_frames.has_animation(anim_key):
+		if anim_name == "shoot":
+			# Keep head static on idle during shoot
+			var idle_key = "idle_" + direction
+			if base_head_sprite.sprite_frames.has_animation(idle_key):
+				base_head_sprite.play(idle_key)
+		elif base_head_sprite.sprite_frames.has_animation(anim_key):
 			base_head_sprite.play(anim_key)
 		elif base_head_sprite.sprite_frames.has_animation(anim_name):
 			base_head_sprite.play(anim_name)
@@ -1037,8 +1136,15 @@ func play_lpc_animation(anim_name: String, direction: String):
 	if shirt_sprite:
 		if shirt_sprite.sprite_frames.has_animation(anim_key):
 			shirt_sprite.play(anim_key)
+			if DEBUG_SPRITE_SETUP:
+				print("[SimpleLPCSprite] Playing shirt animation: %s" % anim_key)
 		elif shirt_sprite.sprite_frames.has_animation(anim_name):
 			shirt_sprite.play(anim_name)
+			if DEBUG_SPRITE_SETUP:
+				print("[SimpleLPCSprite] Playing shirt animation (no dir): %s" % anim_name)
+		else:
+			if DEBUG_SPRITE_SETUP:
+				print("[SimpleLPCSprite] WARNING: Shirt animation not found: %s or %s" % [anim_key, anim_name])
 
 	if arms_sprite:
 		if arms_sprite.sprite_frames.has_animation(anim_key):
@@ -1061,8 +1167,15 @@ func play_lpc_animation(anim_name: String, direction: String):
 	if head_sprite:
 		if head_sprite.sprite_frames.has_animation(anim_key):
 			head_sprite.play(anim_key)
+			if DEBUG_SPRITE_SETUP:
+				print("[SimpleLPCSprite] Playing head animation: %s" % anim_key)
 		elif head_sprite.sprite_frames.has_animation(anim_name):
 			head_sprite.play(anim_name)
+			if DEBUG_SPRITE_SETUP:
+				print("[SimpleLPCSprite] Playing head animation (no dir): %s" % anim_name)
+		else:
+			if DEBUG_SPRITE_SETUP:
+				print("[SimpleLPCSprite] WARNING: Head animation not found: %s or %s" % [anim_key, anim_name])
 
 	if hair_sprite:
 		if hair_sprite.sprite_frames.has_animation(anim_key):
@@ -1075,7 +1188,7 @@ func play_lpc_animation(anim_name: String, direction: String):
 		# Allow slash animation to restart for rapid attack feel
 		# Only prevent interrupt if it's NOT a slash (e.g., switching to walk/idle mid-slash)
 		if weapon_sprite.animation and weapon_sprite.animation.begins_with("slash_") and weapon_sprite.is_playing():
-			if anim_name != "slash":
+			if weapon_anim_name != "slash":
 				# Don't interrupt slash with walk/idle
 				return
 
@@ -1091,14 +1204,17 @@ func play_lpc_animation(anim_name: String, direction: String):
 				weapon_sprite.offset = Vector2(0, 0)
 			return
 
-		if weapon_sprite.sprite_frames.has_animation(anim_key):
-			weapon_sprite.play(anim_key)
+		# Use weapon-specific animation (preserves "shoot" for guns even when body is on "idle")
+		if weapon_sprite.sprite_frames.has_animation(weapon_anim_key):
+			weapon_sprite.play(weapon_anim_key)
 			weapon_sprite.visible = true
 			# Adjust weapon z-index based on direction and animation
 			if direction == "north":
 				weapon_sprite.z_index = -1  # Behind character when facing up
 			elif anim_name == "walk" and current_weapon_type == "spear" and direction in ["east", "west"]:
 				weapon_sprite.z_index = -1  # Spear goes under body when walking sideways
+			elif anim_name in ["walk", "idle"] and current_weapon_type in ["bow", "crossbow"]:
+				weapon_sprite.z_index = -1  # Bow on back goes behind player for all directions
 			elif anim_name == "idle" and direction in ["east", "west"]:
 				weapon_sprite.z_index = -1  # Weapon behind hands when idle facing sideways
 			else:
@@ -1106,29 +1222,42 @@ func play_lpc_animation(anim_name: String, direction: String):
 
 			# Adjust offset based on animation type and weapon
 			# Oversize weapons (192x192 like staff) need offsets, standard weapons (64x64) don't
-			if anim_name == "slash":
-				var slash_offset = Vector2(0, 0)
+			if weapon_anim_name in ["slash", "thrust", "shoot"]:
+				var attack_offset = Vector2(0, 0)
 
 				# Only apply offsets for oversize weapons (staff uses 192x192 tiles)
 				if current_weapon_type == "staff":
 					match direction:
 						"east":  # facing right
-							slash_offset = Vector2(-10, 5)
+							attack_offset = Vector2(-10, 5)
 						"west":  # facing left
-							slash_offset = Vector2(10, 5)
+							attack_offset = Vector2(10, 5)
 						"north":  # facing up
-							slash_offset = Vector2(-10, 0)
+							attack_offset = Vector2(-10, 0)
 						"south":  # facing down
-							slash_offset = Vector2(-5, 5)
+							attack_offset = Vector2(-5, 5)
+				elif current_weapon_type == "trident":
+					match direction:
+						"east", "west":  # facing left/right - Y down 5px
+							attack_offset = Vector2(0, 5)
+				# Saw cleaver / king slayer need offset when facing north
+				elif current_weapon_name in ["saw_cleaver", "king_slayer"]:
+					if direction == "north":
+						attack_offset = Vector2(0, -5)  # Up 5px when attacking north
 				# Spear and other standard 64x64 weapons use no offset
 
-				weapon_sprite.offset = slash_offset
+				weapon_sprite.offset = attack_offset
 			else:
 				# Walk/idle animations - weapon sprites should align with character
-				weapon_sprite.offset = Vector2(0, 0)
-		elif weapon_sprite.sprite_frames.has_animation(anim_name):
+				var walk_offset = Vector2(0, 0)
+				# Saw cleaver / king slayer need offset when facing north
+				if current_weapon_name in ["saw_cleaver", "king_slayer"]:
+					if direction == "north":
+						walk_offset = Vector2(0, -10)  # Up 10px when walking/idling north
+				weapon_sprite.offset = walk_offset
+		elif weapon_sprite.sprite_frames.has_animation(weapon_anim_name):
 			# Animation without directions (like hurt)
-			weapon_sprite.play(anim_name)
+			weapon_sprite.play(weapon_anim_name)
 			weapon_sprite.visible = true
 			weapon_sprite.z_index = -1 if direction == "north" else 9
 		else:

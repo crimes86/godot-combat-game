@@ -76,10 +76,6 @@ func update_stats(damage: float, cooldown: float, range_val: float = -1, cone_an
 	if cone_angle > 0:
 		attack_cone_angle = cone_angle
 
-	# Update crit system base chance (preserves pity progress)
-	if crit_system:
-		crit_system.on_weapon_changed()
-
 func process_held_attack(delta: float, mouse_pos: Vector2) -> void:
 	"""Process continuous attack while mouse is held"""
 	if not is_mouse_held:
@@ -105,6 +101,12 @@ func process_held_attack(delta: float, mouse_pos: Vector2) -> void:
 						attempt_burst_attack()
 					else:
 						attempt_gun_attack()
+			elif CharacterStats.equipped_weapon.is_bow_weapon():
+				# Bow - check weakpoint first (uncapped attack speed on weakpoints)
+				if try_bow_weakpoint_attack(mouse_pos):
+					pass  # Hit weakpoint - no cooldown needed
+				elif can_attack:
+					attempt_bow_attack()
 			else:
 				# Melee weapon - check crit window first
 				if is_holding_on_crit_window_enemy(mouse_pos):
@@ -138,6 +140,12 @@ func on_mouse_pressed(mouse_pos: Vector2) -> bool:
 				attempt_burst_attack()
 			else:
 				attempt_gun_attack()
+			return true
+		elif CharacterStats.equipped_weapon.is_bow_weapon():
+			# Bow - check for weakpoint hit first (uncapped attack speed on weakpoints)
+			if try_bow_weakpoint_attack(mouse_pos):
+				return true  # Hit weakpoint - no cooldown
+			attempt_bow_attack()
 			return true
 
 	# Melee/unarmed weapon - check weakpoint first
@@ -564,9 +572,11 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 	if sound_manager:
 		var weapon_type = "unarmed"
 		var is_gun = false
+		var is_bow = false
 		if CharacterStats.equipped_weapon:
 			weapon_type = CharacterStats.equipped_weapon.weapon_type
 			is_gun = CharacterStats.equipped_weapon.is_gun_weapon()
+			is_bow = CharacterStats.equipped_weapon.is_bow_weapon()
 		var hit_pos = enemy.global_position
 		var tree = player.get_tree()
 		tree.create_timer(0.1).timeout.connect(func():
@@ -576,6 +586,9 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 				# Use bullet impact sounds for guns - training dummy is armored, others are flesh
 				var is_armored = enemy.is_in_group("training_dummy")
 				sound_manager.play_bullet_impact_sound(hit_pos, is_armored, -6.0)
+			elif is_bow:
+				# Skip bow impact sound here - _spawn_arrow_impact already handles it
+				pass
 			else:
 				sound_manager.play_normal_hit_sound(hit_pos, -10.0, weapon_type)
 		)
@@ -594,7 +607,7 @@ func try_gun_weakpoint_attack(mouse_pos: Vector2) -> bool:
 
 	var cursor_pos = player.get_global_mouse_position()
 	var gun_radius = weapon.gun_radius if weapon.get("gun_radius") else 28.0
-	var gun_range = weapon.gun_range if weapon.get("gun_range") else 350.0
+	var gun_range = weapon.gun_range if weapon.get("gun_range") else 550.0
 
 	# Clamp cursor to max range
 	var distance_to_cursor = player.global_position.distance_to(cursor_pos)
@@ -687,7 +700,7 @@ func attempt_gun_attack() -> void:
 
 	var cursor_pos = player.get_global_mouse_position()
 	var gun_radius = weapon.gun_radius if weapon.get("gun_radius") else 28.0
-	var gun_range = weapon.gun_range if weapon.get("gun_range") else 350.0
+	var gun_range = weapon.gun_range if weapon.get("gun_range") else 550.0
 
 	# Clamp cursor to max range from player
 	var distance_to_cursor = player.global_position.distance_to(cursor_pos)
@@ -711,8 +724,18 @@ func attempt_gun_attack() -> void:
 	# Spawn muzzle flash at barrel
 	_spawn_muzzle_flash_at(barrel_pos)
 
-	# Spawn bullet trail from barrel to cursor
-	_spawn_bullet_trail(barrel_pos, cursor_pos)
+	# Check for enemies along the bullet path (not just at cursor)
+	var hit_result = _check_arrow_path_collision(barrel_pos, cursor_pos, gun_radius)
+
+	var actual_target = cursor_pos
+	var hit_enemy = null
+
+	if hit_result.hit:
+		actual_target = hit_result.hit_pos
+		hit_enemy = hit_result.enemy
+
+	# Spawn bullet trail from barrel to actual hit point
+	_spawn_bullet_trail(barrel_pos, actual_target)
 
 	# Play gunshot sound
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
@@ -722,18 +745,390 @@ func attempt_gun_attack() -> void:
 	# Track shot for forged weapons
 	_track_weapon_shot()
 
-	# Get enemies in gun targeting circle
-	var enemies = get_enemies_in_gun_radius(cursor_pos, gun_radius)
-
-	if enemies.size() > 0:
-		attack_enemies_at_cursor(enemies)
+	# Deal damage to enemy hit along path, or check at cursor as fallback
+	if hit_enemy and is_instance_valid(hit_enemy):
+		attack_enemies_at_cursor([hit_enemy])
+		_spawn_bullet_impact(actual_target, false)
 	else:
-		# Miss - spawn impact at cursor
-		_spawn_bullet_impact(cursor_pos, false)
-		_track_weapon_miss()
+		# Check at cursor position as fallback
+		var enemies = get_enemies_in_gun_radius(cursor_pos, gun_radius)
+		if enemies.size() > 0:
+			attack_enemies_at_cursor(enemies)
+		else:
+			# Miss - spawn impact at cursor
+			_spawn_bullet_impact(cursor_pos, false)
+			_track_weapon_miss()
 
 	# Start cooldown timer
 	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
+
+# ========================================
+# BOW ATTACK SYSTEM
+# ========================================
+
+func attempt_bow_attack() -> void:
+	"""Try to perform a bow attack at cursor position"""
+	if not can_attack:
+		return
+
+	# Verify bow weapon equipped
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_bow_weapon():
+		return
+
+	can_attack = false
+	if player:
+		player.can_attack = false
+
+	var cursor_pos = player.get_global_mouse_position()
+	var bow_radius = weapon.bow_radius if weapon.get("bow_radius") else 32.0
+	var bow_range = weapon.bow_range if weapon.get("bow_range") else 450.0
+	var arrow_speed = weapon.arrow_speed if weapon.get("arrow_speed") else 1800.0  # Fast arrows (50% faster)
+
+	# Clamp cursor to max range from player
+	var distance_to_cursor = player.global_position.distance_to(cursor_pos)
+	if distance_to_cursor > bow_range:
+		var direction = (cursor_pos - player.global_position).normalized()
+		cursor_pos = player.global_position + direction * bow_range
+
+	# Face toward cursor
+	attack_direction = (cursor_pos - player.global_position).normalized()
+
+	# Play bow shoot animation
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	var dir_str = player.get_direction_string(attack_direction)
+	var lpc_dir = player.convert_to_lpc_direction(dir_str)
+	if character_sprite and character_sprite.has_method("play_lpc_animation"):
+		character_sprite.play_lpc_animation("shoot", lpc_dir)
+
+	# Play bow shot sound (twang!) - plays immediately on attack
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_bow_shot_sound"):
+		sound_manager.play_bow_shot_sound(player.global_position, -6.0)
+
+	# Delay arrow spawn to sync with bow draw animation (release mid-animation)
+	var draw_delay = weapon.bow_draw_time if weapon.get("bow_draw_time") else 0.25
+	await player.get_tree().create_timer(draw_delay).timeout
+
+	# Re-check player is still valid after await
+	if not is_instance_valid(player):
+		return
+
+	# Calculate arrow start position (from player center, slightly forward)
+	var arrow_start = player.global_position + attack_direction * 16.0
+
+	# Spawn arrow projectile
+	_spawn_arrow_projectile(arrow_start, cursor_pos, arrow_speed, bow_radius)
+
+	# Track shot for forged weapons
+	_track_weapon_shot()
+
+	# Start cooldown timer
+	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
+
+func try_bow_weakpoint_attack(mouse_pos: Vector2) -> bool:
+	"""Check if bow can hit a weakpoint at cursor position (uncapped attack speed).
+	Returns true if a weakpoint was hit."""
+	var weapon = CharacterStats.equipped_weapon
+	if not weapon or not weapon.is_bow_weapon():
+		return false
+
+	var bow_radius = weapon.bow_radius if weapon.get("bow_radius") else 32.0
+
+	# Get all enemies
+	var all_enemies = player.get_tree().get_nodes_in_group("enemies")
+
+	for enemy in all_enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		# Only check enemies in crit window
+		if not ("in_crit_window" in enemy and enemy.in_crit_window):
+			continue
+
+		if not "weakpoints" in enemy:
+			continue
+
+		# Check each weakpoint
+		for weakpoint in enemy.weakpoints:
+			if not is_instance_valid(weakpoint):
+				continue
+			if not weakpoint.visible:
+				continue
+
+			# Check if cursor is within bow radius of weakpoint
+			var dist_to_wp = mouse_pos.distance_to(weakpoint.global_position)
+			if dist_to_wp <= bow_radius:
+				# Hit! Fire arrow at weakpoint (instant, no draw delay for weakpoints)
+				_fire_bow_at_weakpoint(weakpoint, mouse_pos)
+				return true
+
+	return false
+
+func _fire_bow_at_weakpoint(weakpoint: Node, cursor_pos: Vector2) -> void:
+	"""Fire bow at weakpoint with visual effects but NO cooldown."""
+	# Face toward weakpoint
+	attack_direction = (weakpoint.global_position - player.global_position).normalized()
+
+	# Play shoot animation
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	var dir_str = player.get_direction_string(attack_direction)
+	var lpc_dir = player.convert_to_lpc_direction(dir_str)
+	if character_sprite and character_sprite.has_method("play_lpc_animation"):
+		character_sprite.play_lpc_animation("shoot", lpc_dir)
+
+	# Play bow shot sound immediately
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_bow_shot_sound"):
+		sound_manager.play_bow_shot_sound(player.global_position, -6.0)
+
+	# Calculate arrow start position
+	var arrow_start = player.global_position + attack_direction * 16.0
+
+	# Spawn arrow projectile at weakpoint (fast, direct hit)
+	var arrow_speed = 2250.0  # Extra fast for weakpoint shots (50% faster)
+	_spawn_arrow_at_weakpoint(arrow_start, weakpoint)
+
+	# Hit the weakpoint directly (client-predicted, no cooldown)
+	if weakpoint.has_method("hit"):
+		weakpoint.hit()
+
+func _spawn_arrow_at_weakpoint(start_pos: Vector2, weakpoint: Node) -> void:
+	"""Spawn arrow that instantly travels to and hits a weakpoint."""
+	var target_pos = weakpoint.global_position
+	var arrow_speed = 2250.0
+
+	# Create arrow visual
+	var arrow = Line2D.new()
+	arrow.name = "ArrowProjectile"
+	arrow.width = 2.0
+	arrow.default_color = Color(0.8, 0.6, 0.2, 1.0)  # Brighter for weakpoint hit
+	arrow.z_index = 5
+
+	var direction = (target_pos - start_pos).normalized()
+	var arrow_length = 20.0
+	arrow.add_point(Vector2.ZERO)
+	arrow.add_point(direction * arrow_length)
+
+	arrow.global_position = start_pos
+	player.get_tree().root.add_child(arrow)
+
+	# Fast travel to weakpoint
+	var distance = start_pos.distance_to(target_pos)
+	var travel_time = distance / arrow_speed
+
+	var tween = player.get_tree().create_tween()
+	tween.tween_property(arrow, "global_position", target_pos - direction * arrow_length, travel_time)
+	tween.tween_callback(func():
+		# Impact effect
+		_spawn_arrow_impact(target_pos, true)
+		arrow.queue_free()
+	)
+
+func _spawn_arrow_projectile(start_pos: Vector2, target_pos: Vector2, speed: float, hit_radius: float) -> void:
+	"""Spawn an arrow projectile that checks for collisions along its entire flight path."""
+	# Check for enemies along the flight path FIRST (raycast-style)
+	var direction = (target_pos - start_pos).normalized()
+	var max_distance = start_pos.distance_to(target_pos)
+
+	# Find the first enemy hit along the arrow's path
+	var hit_result = _check_arrow_path_collision(start_pos, target_pos, hit_radius)
+
+	var actual_target = target_pos
+	var hit_enemy = null
+
+	if hit_result.hit:
+		# Arrow will stop at the first enemy it hits
+		actual_target = hit_result.hit_pos
+		hit_enemy = hit_result.enemy
+
+	# Create arrow visual
+	var arrow = Line2D.new()
+	arrow.name = "ArrowProjectile"
+	arrow.width = 2.0
+	arrow.default_color = Color(0.6, 0.4, 0.2, 1.0)  # Brown arrow color
+	arrow.z_index = 5
+
+	# Arrow is a line from tail to tip
+	var arrow_length = 20.0
+	arrow.add_point(Vector2.ZERO)  # Tail
+	arrow.add_point(direction * arrow_length)  # Tip
+
+	arrow.global_position = start_pos
+	player.get_tree().root.add_child(arrow)
+
+	# Calculate travel time to actual target (hit point or original target)
+	var distance = start_pos.distance_to(actual_target)
+	var travel_time = distance / speed
+
+	# Animate arrow flying to target
+	var tween = player.get_tree().create_tween()
+	tween.tween_property(arrow, "global_position", actual_target - direction * arrow_length, travel_time)
+	tween.tween_callback(func():
+		if hit_enemy and is_instance_valid(hit_enemy):
+			# Hit the enemy we detected along the path
+			attack_enemies_at_cursor([hit_enemy])
+			_spawn_arrow_impact(actual_target, true)
+		else:
+			# Check at final position as fallback (in case enemy moved into path)
+			var enemies = get_enemies_in_gun_radius(actual_target, hit_radius)
+			if enemies.size() > 0:
+				attack_enemies_at_cursor(enemies)
+				_spawn_arrow_impact(actual_target, true)
+			else:
+				# Miss
+				_spawn_arrow_impact(actual_target, false)
+				_track_weapon_miss()
+
+		# Remove arrow
+		arrow.queue_free()
+	)
+
+func _check_arrow_path_collision(start: Vector2, end: Vector2, _hit_radius: float) -> Dictionary:
+	"""Check if arrow path intersects any enemy capsule hitbox. Returns first hit.
+	Optimized with range culling for multiplayer scalability."""
+	var enemies = player.get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
+	var closest_hit_dist = INF
+	var closest_hit_pos = end
+	var closest_enemy = null
+
+	# Calculate projectile path bounds for range culling
+	var path_length = start.distance_to(end)
+	var path_center = (start + end) / 2.0
+	var cull_radius = path_length / 2.0 + 100.0  # Half path length + buffer for enemy size
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		# OPTIMIZATION: Quick range cull - skip enemies far from projectile path
+		var rough_dist = enemy.global_position.distance_to(path_center)
+		if rough_dist > cull_radius:
+			continue
+
+		# Get enemy's capsule hitbox (pill shape from head to toe)
+		var capsule = _get_enemy_capsule_hitbox(enemy)
+
+		# Check line-capsule intersection
+		var intersection = _line_capsule_intersection(start, end, capsule.top, capsule.bottom, capsule.radius)
+
+		if intersection.intersects:
+			# Check if this is the closest hit
+			var hit_dist = start.distance_to(intersection.point)
+			if hit_dist < closest_hit_dist:
+				closest_hit_dist = hit_dist
+				closest_hit_pos = intersection.point
+				closest_enemy = enemy
+
+	return {
+		"hit": closest_enemy != null,
+		"enemy": closest_enemy,
+		"hit_pos": closest_hit_pos
+	}
+
+func _line_capsule_intersection(line_start: Vector2, line_end: Vector2, cap_top: Vector2, cap_bottom: Vector2, cap_radius: float) -> Dictionary:
+	"""Check if a line segment intersects a capsule (pill shape).
+	Capsule = line segment from cap_top to cap_bottom with radius cap_radius around it."""
+
+	# Find the closest distance between the two line segments
+	var closest = _closest_points_between_segments(line_start, line_end, cap_top, cap_bottom)
+
+	if closest.distance <= cap_radius:
+		# Intersection! Return the point on the projectile line
+		return {"intersects": true, "point": closest.point_on_line1}
+
+	return {"intersects": false, "point": line_end}
+
+func _closest_points_between_segments(p1: Vector2, p2: Vector2, p3: Vector2, p4: Vector2) -> Dictionary:
+	"""Find closest points between two line segments.
+	Returns {point_on_line1, point_on_line2, distance}"""
+
+	var d1 = p2 - p1  # Direction of line 1
+	var d2 = p4 - p3  # Direction of line 2
+	var r = p1 - p3
+
+	var a = d1.dot(d1)  # Squared length of line 1
+	var e = d2.dot(d2)  # Squared length of line 2
+	var f = d2.dot(r)
+
+	var s: float = 0.0
+	var t: float = 0.0
+
+	# Check if either or both segments are points
+	if a <= 0.0001 and e <= 0.0001:
+		# Both segments are points
+		s = 0.0
+		t = 0.0
+	elif a <= 0.0001:
+		# First segment is a point
+		s = 0.0
+		t = clamp(f / e, 0.0, 1.0)
+	elif e <= 0.0001:
+		# Second segment is a point
+		t = 0.0
+		s = clamp(-d1.dot(r) / a, 0.0, 1.0)
+	else:
+		# General case
+		var b = d1.dot(d2)
+		var c = d1.dot(r)
+		var denom = a * e - b * b
+
+		if denom != 0.0:
+			s = clamp((b * f - c * e) / denom, 0.0, 1.0)
+		else:
+			s = 0.0
+
+		# Compute t for the closest point on segment 2
+		t = (b * s + f) / e
+
+		# Clamp t and recompute s if needed
+		if t < 0.0:
+			t = 0.0
+			s = clamp(-c / a, 0.0, 1.0)
+		elif t > 1.0:
+			t = 1.0
+			s = clamp((b - c) / a, 0.0, 1.0)
+
+	var closest_on_line1 = p1 + d1 * s
+	var closest_on_line2 = p3 + d2 * t
+	var dist = closest_on_line1.distance_to(closest_on_line2)
+
+	return {
+		"point_on_line1": closest_on_line1,
+		"point_on_line2": closest_on_line2,
+		"distance": dist
+	}
+
+func _spawn_arrow_impact(pos: Vector2, hit: bool) -> void:
+	"""Spawn arrow impact visual and sound at position"""
+	# Play impact sound
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_bow_impact_sound"):
+		sound_manager.play_bow_impact_sound(pos, hit, -4.0)
+
+	# Create a simple impact circle
+	var impact = Polygon2D.new()
+	impact.name = "ArrowImpact"
+	impact.global_position = pos
+	impact.z_index = 4
+
+	var color = Color(0.8, 0.6, 0.2, 0.6) if hit else Color(0.5, 0.4, 0.3, 0.4)
+	impact.color = color
+
+	# Create small circle
+	var points = PackedVector2Array()
+	var radius = 8.0 if hit else 5.0
+	for i in range(12):
+		var angle = (float(i) / 12.0) * TAU
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+	impact.polygon = points
+
+	player.get_tree().root.add_child(impact)
+
+	# Fade out and remove
+	var tween = player.get_tree().create_tween()
+	tween.tween_property(impact, "modulate:a", 0.0, 0.3)
+	tween.tween_callback(impact.queue_free)
 
 # ========================================
 # BURST FIRE SYSTEM (Battle Rifle)
@@ -754,7 +1149,7 @@ func attempt_burst_attack() -> void:
 		player.can_attack = false
 
 	var cursor_pos = player.get_global_mouse_position()
-	var gun_range = weapon.gun_range if weapon.get("gun_range") else 350.0
+	var gun_range = weapon.gun_range if weapon.get("gun_range") else 550.0
 
 	# Clamp cursor to max range
 	var distance_to_cursor = player.global_position.distance_to(cursor_pos)
@@ -808,19 +1203,31 @@ func _fire_burst_round() -> void:
 	# Calculate barrel position
 	var barrel_pos = player.global_position + _get_gun_barrel_offset(lpc_dir)
 
+	# Check for enemies along the bullet path
+	var gun_radius = weapon.gun_radius if weapon.get("gun_radius") else 28.0
+	var hit_result = _check_arrow_path_collision(barrel_pos, burst_target_pos, gun_radius)
+
+	var actual_target = burst_target_pos
+	var hit_enemy = null
+
+	if hit_result.hit:
+		actual_target = hit_result.hit_pos
+		hit_enemy = hit_result.enemy
+
 	# Spawn battle rifle visuals (green/teal Halo style)
 	# Note: Sound is played once in attempt_burst_attack(), not per round
 	_spawn_battle_rifle_muzzle_flash(barrel_pos)
-	_spawn_tracer_round(barrel_pos, burst_target_pos)
+	_spawn_tracer_round(barrel_pos, actual_target)
 
-	# Get enemies in targeting circle and deal burst damage (divided by burst count)
-	var gun_radius = weapon.gun_radius if weapon.get("gun_radius") else 28.0
-	var enemies = get_enemies_in_gun_radius(burst_target_pos, gun_radius)
-
-	if enemies.size() > 0:
-		_attack_enemies_burst_round(enemies)
+	# Deal damage to enemy hit along path, or check at target as fallback
+	if hit_enemy and is_instance_valid(hit_enemy):
+		_attack_enemies_burst_round([hit_enemy])
 	else:
-		_spawn_bullet_impact(burst_target_pos, false)
+		var enemies = get_enemies_in_gun_radius(burst_target_pos, gun_radius)
+		if enemies.size() > 0:
+			_attack_enemies_burst_round(enemies)
+		else:
+			_spawn_bullet_impact(burst_target_pos, false)
 
 	# Schedule next burst round or finish
 	if burst_shots_remaining > 0:
@@ -883,7 +1290,8 @@ func _finish_burst() -> void:
 	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
 
 func get_enemies_in_gun_radius(center_pos: Vector2, radius: float) -> Array:
-	"""Get all enemies within gun targeting circle at cursor position"""
+	"""Get all enemies whose capsule hitbox overlaps with targeting circle at cursor.
+	Uses capsule (pill) hitbox for enemies, circle for targeting area."""
 	var enemies_in_radius = []
 	var enemies = player.get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 
@@ -891,21 +1299,89 @@ func get_enemies_in_gun_radius(center_pos: Vector2, radius: float) -> Array:
 		if not is_instance_valid(enemy):
 			continue
 
-		# Use enemy's hitbox center (global_position) for hit detection
-		# This matches where their collision shape is
-		var enemy_center = enemy.global_position
+		# Get enemy's capsule hitbox
+		var capsule = _get_enemy_capsule_hitbox(enemy)
 
-		# For training dummy with sprite offset, also check sprite center
-		if enemy.get("sprite") and is_instance_valid(enemy.sprite):
-			var sprite_offset = enemy.sprite.position
-			if sprite_offset != Vector2.ZERO:
-				enemy_center = enemy.global_position + sprite_offset
+		# Check if targeting circle overlaps with capsule
+		# This is point-to-capsule distance check
+		var dist_to_capsule = _point_to_capsule_distance(center_pos, capsule.top, capsule.bottom)
 
-		var distance = center_pos.distance_to(enemy_center)
-		if distance <= radius:
+		# Hit if targeting circle overlaps capsule
+		if dist_to_capsule <= radius + capsule.radius:
 			enemies_in_radius.append(enemy)
 
 	return enemies_in_radius
+
+func _point_to_capsule_distance(point: Vector2, cap_top: Vector2, cap_bottom: Vector2) -> float:
+	"""Get minimum distance from a point to a capsule's center line."""
+	var line_vec = cap_bottom - cap_top
+	var point_vec = point - cap_top
+
+	var line_len_sq = line_vec.length_squared()
+	if line_len_sq < 0.0001:
+		# Capsule is essentially a point
+		return point.distance_to(cap_top)
+
+	# Project point onto line, clamped to segment
+	var t = clamp(point_vec.dot(line_vec) / line_len_sq, 0.0, 1.0)
+	var closest_on_line = cap_top + line_vec * t
+
+	return point.distance_to(closest_on_line)
+
+func _get_enemy_hit_center(enemy: Node) -> Vector2:
+	"""Get the center point of an enemy for projectile hit detection.
+	This targets the body/sprite center, not the feet position."""
+	var capsule = _get_enemy_capsule_hitbox(enemy)
+	# Return the center of the capsule
+	return (capsule.top + capsule.bottom) / 2.0
+
+func _get_enemy_capsule_hitbox(enemy: Node) -> Dictionary:
+	"""Get capsule/pill hitbox parameters for an enemy.
+	Returns: {top: Vector2, bottom: Vector2, radius: float}
+	The capsule covers head to toe and scales with crit window."""
+
+	# Base dimensions for LPC sprites (64x64 frame, ~32x56 character)
+	var base_height = 52.0  # Head to toe coverage
+	var base_radius = 14.0  # Half-width of body
+
+	# Get scale factor (for crit window growth)
+	var scale_factor = 1.0
+	if enemy.get("sprite") and is_instance_valid(enemy.sprite):
+		scale_factor = enemy.sprite.scale.y
+	elif enemy.get("in_crit_window") and enemy.in_crit_window:
+		# Fallback: check if in crit window and use expected scale
+		scale_factor = 1.5  # Default crit window scale
+
+	# Apply scale to dimensions
+	# Height scales less aggressively to avoid oversized hitbox during crit window
+	var height_scale = 1.0 + (scale_factor - 1.0) * 0.3  # 30% of the scale increase for height
+	var height = base_height * height_scale
+	var radius = base_radius * scale_factor
+
+	# Calculate capsule position
+	var base_pos = enemy.global_position
+
+	# Check for sprite offset
+	if enemy.get("sprite") and is_instance_valid(enemy.sprite):
+		var sprite = enemy.sprite
+		if sprite.position != Vector2.ZERO:
+			base_pos = enemy.global_position + sprite.position
+
+	# For LPC sprites: feet are at global_position, head is above
+	# Capsule top = head level, capsule bottom = feet level
+	# Offset 30px south to better align with skeleton sprites
+	# Additional 25px south when scaled up (crit window) to match grown sprite
+	var south_offset = 30.0
+	if scale_factor > 1.1:
+		south_offset += 25.0  # Extra offset for scaled enemies
+	var capsule_top = base_pos + Vector2(0, -height + 4 + south_offset)  # Head
+	var capsule_bottom = base_pos + Vector2(0, 4 + south_offset)  # Feet
+
+	return {
+		"top": capsule_top,
+		"bottom": capsule_bottom,
+		"radius": radius
+	}
 
 func attack_enemies_at_cursor(enemies: Array) -> void:
 	"""Deal damage to enemies at gun cursor position - mirrors attack_enemies_in_cone()"""
@@ -1048,18 +1524,24 @@ func _spawn_bullet_trail(from_pos: Vector2, to_pos: Vector2) -> void:
 
 func _spawn_bullet_impact(pos: Vector2, is_crit: bool) -> void:
 	"""Spawn bullet impact effect at position (used for misses or ground hits)"""
+	# Only railgun gets impact marker - battle rifle uses tracer rounds instead
+	var weapon = CharacterStats.equipped_weapon
+	var gun_subtype = weapon.gun_subtype if weapon and weapon.get("gun_subtype") else "railgun"
+	if gun_subtype == "battle_rifle":
+		return  # No impact marker for battle rifle
+
 	# Create impact flash
 	var impact = Node2D.new()
 	impact.name = "BulletImpact"
 	impact.global_position = pos
 	impact.z_index = 12
 
-	# Simple expanding circle (purple-magenta to match railgun beam)
+	# Purple-magenta circle for railgun
 	var circle = Polygon2D.new()
 	if is_crit:
 		circle.color = Color(1.0, 0.8, 0.2, 0.6)  # Gold for crit
 	else:
-		circle.color = Color(0.85, 0.2, 0.9, 0.6)  # Purple-magenta (matches beam)
+		circle.color = Color(0.85, 0.2, 0.9, 0.6)  # Purple-magenta for railgun
 
 	var points = PackedVector2Array()
 	var segments = 12
@@ -1135,59 +1617,61 @@ func _spawn_blood_splatter(pos: Vector2, is_crit: bool) -> void:
 	)
 
 # ========================================
-# BATTLE RIFLE VISUAL EFFECTS (Halo Style)
+# BATTLE RIFLE VISUAL EFFECTS (Military 7.62 Style)
 # ========================================
 
+# Track shots for tracer pattern (every 3rd round is a tracer, military style)
+var _br_shot_count: int = 0
+
 func _spawn_tracer_round(from_pos: Vector2, to_pos: Vector2) -> void:
-	"""Spawn Halo-style tracer round - green projectile traveling to cursor position."""
-	var tracer = Node2D.new()
-	tracer.name = "TracerRound"
-	tracer.global_position = from_pos
-	tracer.z_index = 10
+	"""Spawn military-style 7.62 round - yellow tracer on every 3rd shot."""
+	_br_shot_count += 1
+	var is_tracer = (_br_shot_count % 3 == 0)  # Every 3rd round is a tracer
 
-	# Tracer body (elongated pill shape - green/teal)
-	var tracer_body = Polygon2D.new()
-	tracer_body.color = Color(0.2, 0.9, 0.7, 0.9)  # Halo teal
+	if is_tracer:
+		# Yellow/orange tracer round - bright streak
+		var tracer = Line2D.new()
+		tracer.name = "TracerRound"
+		tracer.width = 2.5
+		tracer.default_color = Color(1.0, 0.85, 0.2, 0.9)  # Bright yellow tracer
+		tracer.add_point(from_pos)
+		tracer.add_point(to_pos)
+		tracer.z_index = 10
 
-	# Create pill/bullet shape (elongated horizontally, will be rotated)
-	var points = PackedVector2Array()
-	points.append(Vector2(-8, -2))   # Back left
-	points.append(Vector2(8, -2))    # Front left
-	points.append(Vector2(12, 0))    # Front tip
-	points.append(Vector2(8, 2))     # Front right
-	points.append(Vector2(-8, 2))    # Back right
-	points.append(Vector2(-10, 0))   # Back end
-	tracer_body.polygon = points
-	tracer.add_child(tracer_body)
+		# Add glow effect with wider faded line behind
+		var glow = Line2D.new()
+		glow.width = 5.0
+		glow.default_color = Color(1.0, 0.6, 0.1, 0.4)  # Orange glow
+		glow.add_point(from_pos)
+		glow.add_point(to_pos)
+		glow.z_index = 9
+		tracer.add_child(glow)
 
-	# Glow trail (slightly larger, more transparent)
-	var glow = Polygon2D.new()
-	glow.color = Color(0.3, 1.0, 0.8, 0.4)  # Brighter teal glow
-	var glow_points = PackedVector2Array()
-	glow_points.append(Vector2(-12, -3))
-	glow_points.append(Vector2(10, -3))
-	glow_points.append(Vector2(16, 0))
-	glow_points.append(Vector2(10, 3))
-	glow_points.append(Vector2(-12, 3))
-	glow_points.append(Vector2(-14, 0))
-	glow.polygon = glow_points
-	glow.z_index = -1
-	tracer.add_child(glow)
+		player.get_tree().root.add_child(tracer)
 
-	# Rotate tracer to face target
-	var direction = (to_pos - from_pos).normalized()
-	tracer.rotation = direction.angle()
+		# Quick fade out
+		var tween = player.get_tree().create_tween()
+		tween.tween_property(tracer, "modulate:a", 0.0, 0.1)
+		tween.tween_callback(tracer.queue_free)
+	else:
+		# Non-tracer rounds - subtle bullet trail (barely visible)
+		var trail = Line2D.new()
+		trail.name = "BulletTrail"
+		trail.width = 1.0
+		trail.default_color = Color(0.8, 0.8, 0.7, 0.3)  # Faint gray
+		trail.add_point(from_pos)
+		trail.add_point(to_pos)
+		trail.z_index = 8
 
-	player.get_tree().root.add_child(tracer)
+		player.get_tree().root.add_child(trail)
 
-	# Animate tracer traveling to cursor
-	var travel_time = 0.08  # Fast travel (80ms)
-	var tween = player.get_tree().create_tween()
-	tween.tween_property(tracer, "global_position", to_pos, travel_time)
-	tween.tween_callback(tracer.queue_free)
+		# Very quick fade
+		var tween = player.get_tree().create_tween()
+		tween.tween_property(trail, "modulate:a", 0.0, 0.06)
+		tween.tween_callback(trail.queue_free)
 
 func _spawn_battle_rifle_muzzle_flash(flash_pos: Vector2) -> void:
-	"""Spawn Halo-style green muzzle flash"""
+	"""Spawn military-style yellow/orange muzzle flash"""
 	var flash_container = Node2D.new()
 	flash_container.name = "BRMuzzleFlash"
 	flash_container.global_position = flash_pos
@@ -1195,32 +1679,49 @@ func _spawn_battle_rifle_muzzle_flash(flash_pos: Vector2) -> void:
 	flash_container.z_index = 15
 	player.get_tree().root.add_child(flash_container)
 
-	# Core bright (white-green)
+	# Core bright (white-yellow)
 	var core = Polygon2D.new()
-	core.color = Color(0.8, 1.0, 0.9, 0.95)  # Bright green-white
+	core.color = Color(1.0, 0.95, 0.8, 0.95)  # Bright white-yellow
 	var core_points = PackedVector2Array()
 	for i in range(8):
 		var angle = (float(i) / 8) * TAU
-		core_points.append(Vector2(cos(angle), sin(angle)) * 5)
+		core_points.append(Vector2(cos(angle), sin(angle)) * 4)
 	core.polygon = core_points
 	flash_container.add_child(core)
 
-	# Outer glow (teal)
+	# Outer glow (orange)
 	var glow = Polygon2D.new()
-	glow.color = Color(0.2, 0.8, 0.6, 0.5)  # Teal
+	glow.color = Color(1.0, 0.6, 0.1, 0.6)  # Orange
 	var glow_points = PackedVector2Array()
 	for i in range(8):
 		var angle = (float(i) / 8) * TAU
-		glow_points.append(Vector2(cos(angle), sin(angle)) * 10)
+		glow_points.append(Vector2(cos(angle), sin(angle)) * 8)
 	glow.polygon = glow_points
 	glow.z_index = -1
 	flash_container.add_child(glow)
 
+	# Muzzle spikes (directional flash)
+	var num_spikes = randi_range(2, 4)
+	for i in range(num_spikes):
+		var spike = Polygon2D.new()
+		spike.color = Color(1.0, 0.8, 0.3, 0.7)  # Yellow-orange
+		var spike_angle = randf_range(-0.3, 0.3)  # Spread around forward
+		var spike_length = randf_range(10, 16)
+		var spike_width = randf_range(1.5, 3)
+		spike.polygon = PackedVector2Array([
+			Vector2(0, 0),
+			Vector2(spike_length, -spike_width),
+			Vector2(spike_length + 3, 0),
+			Vector2(spike_length, spike_width)
+		])
+		spike.rotation = spike_angle
+		flash_container.add_child(spike)
+
 	# Quick fade
 	var tween = player.get_tree().create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(flash_container, "scale", Vector2(1.3, 1.3), 0.03)
-	tween.tween_property(flash_container, "modulate:a", 0.0, 0.08)
+	tween.tween_property(flash_container, "scale", Vector2(1.2, 1.2), 0.025)
+	tween.tween_property(flash_container, "modulate:a", 0.0, 0.06)
 	tween.set_parallel(false)
 	tween.tween_callback(flash_container.queue_free)
 

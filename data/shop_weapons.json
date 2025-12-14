@@ -1,6 +1,51 @@
 {
 	"weapons": [
 		{
+			"id": "test_bow",
+			"name": "Test Bow",
+			"description": "A simple bow for testing bow animations. Click to shoot arrows at the cursor.",
+			"weapon_type": "bow",
+			"base_damage": 12,
+			"attack_speed": "medium",
+			"crit_chance": 0.10,
+			"bow_radius": 32.0,
+			"bow_range": 450.0,
+			"arrow_speed": 600.0,
+			"required_level": 1,
+			"price": 0,
+			"rarity": "Common",
+			"zone": 1,
+			"notes": "Free test weapon for bow animations"
+		},
+		{
+			"id": "test_scimitar",
+			"name": "Test Scimitar",
+			"description": "A curved blade for testing scimitar animations.",
+			"weapon_type": "scimitar",
+			"base_damage": 15,
+			"attack_speed": "fast",
+			"crit_chance": 0.08,
+			"required_level": 1,
+			"price": 0,
+			"rarity": "Common",
+			"zone": 1,
+			"notes": "Free test weapon for scimitar animations"
+		},
+		{
+			"id": "test_katana",
+			"name": "Test Katana",
+			"description": "A sleek curved blade for testing katana animations.",
+			"weapon_type": "katana",
+			"base_damage": 15,
+			"attack_speed": "fast",
+			"crit_chance": 0.08,
+			"required_level": 1,
+			"price": 0,
+			"rarity": "Common",
+			"zone": 1,
+			"notes": "Free test weapon for katana animations"
+		},
+		{
 			"id": "morning_star",
 			"name": "Morning Star",
 			"description": "A spiked iron ball on a wooden handle. Crude but effective against the undead.",

@@ -37,6 +37,8 @@ func _ready() -> void:
 	if glow_light:
 		_start_glow_animation()
 
+var _player_entry_y: float = 0.0  # Track Y position when player entered collision area
+
 func _process(delta: float) -> void:
 	# Don't process anything if ANY entrance is transitioning
 	if _transitioning or _any_transitioning:
@@ -54,9 +56,12 @@ func _process(delta: float) -> void:
 			# Trigger when player is within 20 pixels of entrance (or north of it)
 			var trigger_threshold = entrance_y + 20
 
-			# Trigger when player reaches the entrance area
-			if player_y <= trigger_threshold:
-				print("[TunnelEntrance] TRIGGERED! Player reached entrance (Y: %.1f <= %.1f)" % [player_y, trigger_threshold])
+			# Only trigger if:
+			# 1. Player is at or past the trigger threshold (walking north into tunnel)
+			# 2. Player entered from the SOUTH (their entry Y was greater than threshold)
+			# This prevents accidental triggers from players entering from the north
+			if player_y <= trigger_threshold and _player_entry_y > trigger_threshold:
+				print("[TunnelEntrance] TRIGGERED! Player walked north into entrance (Y: %.1f <= %.1f, entered from Y: %.1f)" % [player_y, trigger_threshold, _player_entry_y])
 				_enter_tunnel(player)
 
 func _on_body_entered(body: Node) -> void:
@@ -64,6 +69,8 @@ func _on_body_entered(body: Node) -> void:
 		return
 
 	_player_in_range = body
+	# Record the Y position where player entered - used to ensure they're walking INTO the tunnel
+	_player_entry_y = body.global_position.y
 
 	# Check level requirement
 	var player_level = 1
@@ -85,6 +92,7 @@ func _on_body_exited(body: Node) -> void:
 	if body == _player_in_range:
 		_player_in_range = null
 		_can_enter = false
+		_player_entry_y = 0.0  # Reset entry position tracking
 		_hide_prompt()
 
 func _show_enter_prompt() -> void:

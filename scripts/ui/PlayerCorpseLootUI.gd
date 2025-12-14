@@ -186,7 +186,7 @@ func close_ui() -> void:
 	current_corpse = null
 
 func _gather_all_items() -> void:
-	"""Gather all items from corpse into a single list"""
+	"""Gather all items from corpse into a single list, stacking stackable items"""
 	all_items.clear()
 	if not current_corpse:
 		return
@@ -200,7 +200,8 @@ func _gather_all_items() -> void:
 				"item": loot.equipped_armor[slot],
 				"type": "armor",
 				"slot": slot,
-				"index": -1
+				"index": -1,
+				"indices": []  # Not used for equipped items
 			})
 
 	# Add weapon
@@ -209,18 +210,52 @@ func _gather_all_items() -> void:
 			"item": loot.equipped_weapon,
 			"type": "weapon",
 			"slot": "mainhand",
-			"index": -1
+			"index": -1,
+			"indices": []  # Not used for equipped items
 		})
 
-	# Add inventory items
+	# Stack inventory items by name if stackable
+	var stacked_items = {}  # item_name -> {item, indices, total_qty}
+
 	for i in range(loot.inventory.size()):
-		if loot.inventory[i]:
-			all_items.append({
-				"item": loot.inventory[i],
-				"type": "inventory",
-				"slot": "",
-				"index": i
-			})
+		if not loot.inventory[i]:
+			continue
+
+		var item = loot.inventory[i]
+		var item_name = item.get("name", "")
+		var is_stackable = item.get("stackable", false)
+		var quantity = item.get("quantity", 1)
+
+		if is_stackable and stacked_items.has(item_name):
+			# Add to existing stack
+			stacked_items[item_name]["indices"].append(i)
+			stacked_items[item_name]["total_qty"] += quantity
+		else:
+			# New stack or non-stackable item
+			var key = item_name if is_stackable else "%s_%d" % [item_name, i]
+			stacked_items[key] = {
+				"item": item.duplicate(),
+				"indices": [i],
+				"total_qty": quantity
+			}
+
+	# Convert stacked items to all_items entries
+	for key in stacked_items:
+		var stack_data = stacked_items[key]
+		var item = stack_data["item"]
+		var indices = stack_data["indices"]
+		var total_qty = stack_data["total_qty"]
+
+		# Update item quantity to reflect total
+		item["quantity"] = total_qty
+
+		all_items.append({
+			"item": item,
+			"type": "inventory",
+			"slot": "",
+			"index": indices[0],  # Primary index for first item
+			"indices": indices  # All indices for stacked items
+		})
 
 func _populate_grid() -> void:
 	"""Populate the grid with current page items"""
@@ -291,7 +326,8 @@ func _create_item_slot(entry: Dictionary) -> Control:
 	# Item icon
 	var icon = TextureRect.new()
 	icon.custom_minimum_size = ICON_SIZE
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.size = ICON_SIZE  # Force size to 32x32
+	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -302,15 +338,39 @@ func _create_item_slot(entry: Dictionary) -> Control:
 
 	center.add_child(icon)
 
+	# Add stack quantity label if stackable and qty > 1
+	var quantity = item.get("quantity", 1)
+	var is_stackable = item.get("stackable", false)
+	if is_stackable and quantity > 1:
+		var stack_label = Label.new()
+		stack_label.name = "StackLabel"
+		stack_label.text = "x%d" % quantity
+		stack_label.add_theme_font_size_override("font_size", 11)
+		stack_label.add_theme_color_override("font_color", Color.WHITE)
+		stack_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		stack_label.add_theme_constant_override("outline_size", 2)
+		stack_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		stack_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		stack_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		stack_label.offset_left = -32
+		stack_label.offset_right = -2
+		stack_label.offset_top = 2  # Inside slot, top corner
+		stack_label.offset_bottom = 14
+		bg.add_child(stack_label)
+
 	# Tooltip with control hints
 	var item_name = item.get("name", "Unknown")
 	var type_str = entry.slot.capitalize() if entry.slot != "" else "Item"
 	var is_equippable = entry.type == "armor" or entry.type == "weapon" or item.get("item_type", "") == "tool" or item.has("slot") or item.has("weapon_type")
 
+	var tooltip_qty_text = ""
+	if is_stackable and quantity > 1:
+		tooltip_qty_text = "\nQuantity: %d" % quantity
+
 	if is_equippable:
-		slot_control.tooltip_text = "[%s] %s\n%s\nLeft-click: Take | Right-click: Equip" % [rarity, item_name, type_str]
+		slot_control.tooltip_text = "[%s] %s\n%s%s\nLeft-click: Take | Right-click: Equip" % [rarity, item_name, type_str, tooltip_qty_text]
 	else:
-		slot_control.tooltip_text = "[%s] %s\n%s\nClick to take" % [rarity, item_name, type_str]
+		slot_control.tooltip_text = "[%s] %s\n%s%s\nClick to take" % [rarity, item_name, type_str, tooltip_qty_text]
 
 	# Click handler
 	slot_control.gui_input.connect(_on_slot_input.bind(slot_control))
@@ -354,28 +414,60 @@ func _take_item(entry: Dictionary) -> void:
 	if not current_corpse:
 		return
 
-	if not InventorySystem.has_space():
-		_show_notification("Inventory full!")
-		return
-
-	var taken_item: Dictionary
 	match entry.type:
 		"armor":
-			taken_item = current_corpse.remove_equipped_armor(entry.slot)
+			if not InventorySystem.has_space():
+				_show_notification("Inventory full!")
+				return
+			var taken_item = current_corpse.remove_equipped_armor(entry.slot)
+			if not taken_item.is_empty():
+				InventorySystem.add_item(taken_item)
+				_show_notification("Took %s" % taken_item.get("name", "item"))
+
 		"weapon":
-			taken_item = current_corpse.remove_weapon()
+			if not InventorySystem.has_space():
+				_show_notification("Inventory full!")
+				return
+			var taken_item = current_corpse.remove_weapon()
+			if not taken_item.is_empty():
+				InventorySystem.add_item(taken_item)
+				_show_notification("Took %s" % taken_item.get("name", "item"))
+
 		"inventory":
-			taken_item = current_corpse.remove_inventory_item(entry.index)
+			# For stacked items, take all items in the stack
+			var indices = entry.get("indices", [entry.index])
+			var item_name = entry.item.get("name", "item")
+			var total_quantity = entry.item.get("quantity", 1)
 
-	if not taken_item.is_empty():
-		InventorySystem.add_item(taken_item)
-		_show_notification("Took %s" % taken_item.get("name", "item"))
-		_gather_all_items()
-		_populate_grid()
+			# Check if we have space for at least one
+			if not InventorySystem.has_space():
+				_show_notification("Inventory full!")
+				return
 
-		if current_corpse._is_empty():
-			await get_tree().create_timer(0.3).timeout
-			close_ui()
+			# Take all items in the stack (sorted in reverse to maintain indices)
+			indices.sort()
+			indices.reverse()
+			var taken_any = false
+
+			for idx in indices:
+				var taken_item = current_corpse.remove_inventory_item(idx)
+				if not taken_item.is_empty():
+					InventorySystem.add_item(taken_item)
+					taken_any = true
+
+			if taken_any:
+				if total_quantity > 1:
+					_show_notification("Took %s x%d" % [item_name, total_quantity])
+				else:
+					_show_notification("Took %s" % item_name)
+
+	_gather_all_items()
+	_populate_grid()
+
+	# Check if corpse is empty and close UI
+	if current_corpse and current_corpse._is_empty():
+		await get_tree().create_timer(0.3).timeout
+		close_ui()
 
 func _equip_item(entry: Dictionary) -> void:
 	"""Directly equip an item from the corpse"""
@@ -533,7 +625,7 @@ func _dict_to_weapon(weapon_dict: Dictionary):
 
 	# Gun weapon properties
 	weapon.gun_radius = weapon_dict.get("gun_radius", 28.0)
-	weapon.gun_range = weapon_dict.get("gun_range", 350.0)
+	weapon.gun_range = weapon_dict.get("gun_range", 550.0)
 	weapon.gun_subtype = weapon_dict.get("gun_subtype", "railgun")
 	weapon.burst_count = weapon_dict.get("burst_count", 1)
 	weapon.burst_delay = weapon_dict.get("burst_delay", 0.10)

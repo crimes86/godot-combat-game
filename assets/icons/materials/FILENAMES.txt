@@ -1,0 +1,23 @@
+Required Material Icon Filenames (64x64 PNG)
+============================================
+
+bone_ember.png
+dry_log.png
+ancient_skull.png
+cursed_femur.png
+lichs_finger_bone.png
+old_bones.png
+broken_sword.png
+tarnished_ring.png
+dusty_gem.png
+ancient_coin.png
+
+---
+
+For 256x256 enhanced versions, use the same filenames in:
+assets/icons/enhanced/materials/
+
+---
+
+Generate these using prompts from:
+docs/MATERIAL_ICON_PROMPTS.md

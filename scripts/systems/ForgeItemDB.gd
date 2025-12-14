@@ -122,6 +122,7 @@ func _convert_json_item(json_item: Dictionary) -> Dictionary:
 	var weapon_type = json_item.get("weapon_type")
 	if weapon_type != null and weapon_type is String and weapon_type != "":
 		item["weapon_class"] = _weapon_class_string_to_enum(weapon_type)
+		item["weapon_type"] = weapon_type  # Also preserve original string for inventory system
 
 	# Build sprites dictionary from visuals
 	var visuals = json_item.get("visuals")
@@ -145,6 +146,10 @@ func _convert_json_item(json_item: Dictionary) -> Dictionary:
 		sprites["slash"] = FORGED_ITEMS_BASE + sprite_folder + "/slash.png"
 		sprites["thrust"] = FORGED_ITEMS_BASE + sprite_folder + "/thrust.png"
 		sprites["hurt"] = FORGED_ITEMS_BASE + sprite_folder + "/hurt.png"
+		# Bows/crossbows use shoot.png instead of slash/thrust
+		var weapon_type_str = _safe_string(json_item.get("weapon_type"), "")
+		if weapon_type_str in ["bow", "crossbow"]:
+			sprites["shoot"] = FORGED_ITEMS_BASE + sprite_folder + "/shoot.png"
 
 	item["sprites"] = sprites
 
@@ -168,10 +173,29 @@ func _convert_json_item(json_item: Dictionary) -> Dictionary:
 	if stats != null and stats is Dictionary and not stats.is_empty():
 		item["stats"] = stats
 
-	# Gun config
+	# Gun config - also extract root-level gun properties for inventory system
 	var gun_config = json_item.get("gun_config")
 	if gun_config != null and gun_config is Dictionary and not gun_config.is_empty():
 		item["gun_config"] = gun_config
+
+	# Extract gun properties from either gun_config or root level
+	var gun_subtype = json_item.get("gun_subtype")
+	if gun_subtype == null and gun_config != null:
+		gun_subtype = gun_config.get("gun_subtype")
+	if gun_subtype != null:
+		item["gun_subtype"] = gun_subtype
+
+	var burst_count = json_item.get("burst_count")
+	if burst_count == null and gun_config != null:
+		burst_count = gun_config.get("burst_count")
+	if burst_count != null:
+		item["burst_count"] = burst_count
+
+	var burst_delay = json_item.get("burst_delay")
+	if burst_delay == null and gun_config != null:
+		burst_delay = gun_config.get("burst_delay")
+	if burst_delay != null:
+		item["burst_delay"] = burst_delay
 
 	# Two-handed flag
 	if json_item.get("is_two_handed", false):
@@ -435,12 +459,16 @@ func _get_game_from_key(key: String) -> String:
 	var provider = parts[0]
 	var game_id = parts[1]
 
-	# Handle PSN/Xbox/etc with underscore in game name
-	if provider == "psn" or provider == "xbox":
-		return GAME_NAMES.get(game_id, game_id)
+	# Providers where the provider name IS the game (battlenet=WoW, discord, github, roblox)
+	if provider in ["battlenet", "discord", "github", "roblox"]:
+		return GAME_NAMES.get(provider, provider.capitalize())
 
-	# Steam: provider_appid_achievement
-	return GAME_NAMES.get(game_id, "Steam Game " + game_id)
+	# Handle PSN/Xbox/etc with underscore in game name
+	if provider in ["psn", "xbox"]:
+		return GAME_NAMES.get(game_id, game_id.replace("_", " ").capitalize())
+
+	# Steam: provider_appid_achievement - look up by app ID
+	return GAME_NAMES.get(game_id, "Steam")
 
 ## Generate catalog array for Armory UI (dynamic generation from items)
 ## Returns array of dictionaries with: id, name, game, achievement, rarity, category, icon, lore
@@ -449,13 +477,15 @@ func get_armory_catalog() -> Array:
 
 	for key in FORGE_ITEMS:
 		var item = FORGE_ITEMS[key]
+		var item_type_enum = item.get("item_type", ItemType.ACCESSORY)
 		var entry = {
 			"id": item.get("item_id", ""),
 			"name": item.get("item_name", "Unknown Item"),
 			"game": _get_game_from_key(key),
 			"achievement": item.get("achievement_name", ""),
 			"rarity": get_rarity_name(item.get("rarity", ItemRarity.COMMON)),
-			"category": _type_to_category(item.get("item_type", ItemType.ACCESSORY)),
+			"category": _type_to_category(item_type_enum),
+			"item_type": ItemType.keys()[item_type_enum].to_lower(),  # e.g. "armor_chest", "weapon"
 			"icon": item.get("sprites", {}).get("icon", ""),
 			"lore": item.get("lore", item.get("description", ""))
 		}

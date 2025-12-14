@@ -433,6 +433,13 @@ class WeaponStats(Base):
     last_synced_at = Column(DateTime, nullable=True)
     last_synced_from_ip = Column(String(45), nullable=True)
 
+    # === ANTI-CHEAT FLAGS ===
+    suspicious_flags = Column(Integer, default=0)  # Bitmask of detected anomalies
+    suspicious_score = Column(Float, default=0.0)  # Cumulative suspicion score (0-100)
+    is_flagged = Column(Boolean, default=False)  # True if needs manual review
+    flagged_at = Column(DateTime, nullable=True)
+    review_notes = Column(Text, nullable=True)  # Admin notes on review
+
     # Relationships
     forged_achievement = relationship("ForgedAchievement", backref="weapon_stats_record")
 
@@ -477,3 +484,432 @@ class BridgeTransaction(Base):
     forged_achievement = relationship("ForgedAchievement")
     from_user = relationship("User", foreign_keys=[from_user_id])
     to_user = relationship("User", foreign_keys=[to_user_id])
+
+
+class SuspiciousActivity(Base):
+    """
+    Telemetry log for suspicious weapon stat activity.
+    Used to detect cheaters and build ban evidence.
+
+    Anomaly types (suspicious_type):
+    - rate_exceeded: Too many updates in time window
+    - impossible_ratio: Stats violate game logic (crits > hits)
+    - spike_detected: Single update with impossible gains
+    - ip_mismatch: Update from different IP mid-session
+    - time_travel: Client timestamp in future or far past
+    - stat_regression: Attempt to decrease a stat (blocked but logged)
+    """
+    __tablename__ = 'suspicious_activities'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    weapon_stats_id = Column(Integer, ForeignKey('weapon_stats.id'), nullable=True, index=True)
+    forged_achievement_id = Column(Integer, ForeignKey('forged_achievements.id'), nullable=True, index=True)
+
+    # What triggered the flag
+    suspicious_type = Column(String(32), nullable=False, index=True)
+    severity = Column(String(16), nullable=False, default='low')  # low, medium, high, critical
+
+    # Evidence snapshot
+    details = Column(JSON, nullable=True)  # Full context of the suspicious activity
+    old_value = Column(JSON, nullable=True)  # Stats before update
+    new_value = Column(JSON, nullable=True)  # Stats client tried to set
+    delta = Column(JSON, nullable=True)  # Computed difference
+
+    # Request metadata
+    client_ip = Column(String(45), nullable=True)
+    user_agent = Column(String(256), nullable=True)
+    client_timestamp = Column(DateTime, nullable=True)  # What client claimed
+    server_timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Session tracking
+    session_id = Column(String(64), nullable=True)  # Track across updates
+
+    # Action taken
+    action_taken = Column(String(32), default='logged')  # logged, blocked, banned
+
+    # Relationships
+    user = relationship("User")
+    weapon_stats = relationship("WeaponStats")
+    forged_achievement = relationship("ForgedAchievement")
+
+
+class SeedPlot(Base):
+    """
+    Player-claimable territories that trigger chunk expansion.
+
+    Each edge chunk has one seed plot. When both edge plots are claimed,
+    the world expands by adding new chunks on both sides.
+
+    States:
+    - unclaimed: Available for claiming
+    - claimed: Owned by a player, receiving contributions
+    - abandoned: No contributions for 7 days
+    - decaying: In 3-day warning period before chunk removal
+    """
+    __tablename__ = 'seed_plots'
+
+    id = Column(Integer, primary_key=True, index=True)
+    shard_id = Column(String(32), nullable=False, index=True)
+    chunk_id = Column(Integer, nullable=False, index=True)
+    position_x = Column(Float, nullable=False)
+    position_y = Column(Float, nullable=False)
+
+    # Ownership
+    owner_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    claimed_at = Column(DateTime, nullable=True)
+    last_contribution_at = Column(DateTime, nullable=True)
+
+    # State tracking
+    state = Column(String(16), nullable=False, default='unclaimed', index=True)
+    claim_cost = Column(Integer, nullable=False, default=1000)
+
+    # Statistics
+    total_gold_contributed = Column(Integer, default=0)
+    total_wood_contributed = Column(Integer, default=0)
+    total_stone_contributed = Column(Integer, default=0)
+    total_kills = Column(Integer, default=0)
+    total_time_minutes = Column(Integer, default=0)
+    contribution_score = Column(Integer, default=0)
+
+    # Decay tracking
+    abandoned_at = Column(DateTime, nullable=True)
+    decay_warning_sent = Column(Boolean, default=False)
+
+    # World Tree v2.1 features
+    # Fix #1: Dual ownership
+    original_owner_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    last_ownership_transfer = Column(DateTime, nullable=True)
+    current_guild_id = Column(String(64), nullable=True, index=True)
+    last_guild_change = Column(DateTime, nullable=True)
+
+    # Fix #2: Champion migration
+    is_origin_champion = Column(Boolean, default=False, index=True)
+    champion_since = Column(DateTime, nullable=True)
+    is_decaying = Column(Boolean, default=False)
+    decay_complete_at = Column(DateTime, nullable=True)
+    migration_expires = Column(DateTime, nullable=True)
+    original_chunk_id = Column(Integer, nullable=True)
+
+    # Tree ranks
+    tree_rank = Column(Integer, default=0, index=True)
+    tree_health = Column(Integer, default=0)
+    tree_max_health = Column(Integer, default=0)
+
+    # Guild/faction
+    guild_name = Column(String(128), nullable=True)
+    faction = Column(String(32), default='individual', index=True)
+
+    # Upgrade system
+    upgrade_started_at = Column(DateTime, nullable=True)
+    upgrade_target_rank = Column(Integer, nullable=True)
+
+    # Watering
+    last_watered = Column(DateTime, nullable=True)
+    times_watered = Column(Integer, default=0)
+    growth_bonus_accumulated = Column(Float, default=0.0)
+
+    # Respawn binding
+    allow_public_binding = Column(Boolean, default=False)
+
+    # Warehouse (Fix #6)
+    warehouse_safe_gold = Column(Integer, default=0)
+    warehouse_safe_wood = Column(Integer, default=0)
+    warehouse_safe_stone = Column(Integer, default=0)
+    warehouse_safe_gems = Column(Integer, default=0)
+    warehouse_overflow_gold = Column(Integer, default=0)
+    warehouse_overflow_wood = Column(Integer, default=0)
+    warehouse_overflow_stone = Column(Integer, default=0)
+    warehouse_overflow_gems = Column(Integer, default=0)
+
+    # Resource mines
+    claimed_mine_ids = Column(Text, nullable=True)  # JSON array of mine IDs
+
+    # Bane defense (Fix #10)
+    defense_window_hour = Column(Integer, default=20)
+    defense_window_timezone_offset = Column(Integer, default=0)
+
+    # Relationships
+    owner = relationship("User", foreign_keys=[owner_id])
+    original_owner = relationship("User", foreign_keys=[original_owner_id])
+    world_tree_rankings = relationship("WorldTreeRanking", back_populates="seed_plot")
+    world_tree_contributions = relationship("WorldTreeContribution", back_populates="seed_plot")
+    buildings = relationship("SeedPlotBuilding", back_populates="seed_plot", cascade="all, delete-orphan")
+    resource_mines = relationship("ResourceMine", back_populates="owner_tree")
+    bane_stones = relationship("BaneStone", back_populates="target_tree")
+
+    __table_args__ = (
+        # One seed plot per chunk per shard
+        UniqueConstraint('shard_id', 'chunk_id', name='unique_seed_plot_per_chunk'),
+    )
+
+
+class ActiveChunk(Base):
+    """
+    Tracks which chunks are currently loaded on each shard.
+
+    Chunk types:
+    - origin: Permanent chunks (-1, 0, 1) connected to campfire
+    - dynamic: Player-expanded chunks, can be removed if seed plots decay
+    """
+    __tablename__ = 'active_chunks'
+
+    id = Column(Integer, primary_key=True, index=True)
+    shard_id = Column(String(32), nullable=False, index=True)
+    chunk_id = Column(Integer, nullable=False, index=True)
+    chunk_type = Column(String(16), nullable=False)  # origin, dynamic
+    created_at = Column(DateTime, default=datetime.utcnow)
+    player_count = Column(Integer, default=0)
+    is_loaded = Column(Boolean, default=True)
+
+    __table_args__ = (
+        # One chunk per shard
+        UniqueConstraint('shard_id', 'chunk_id', name='unique_chunk_per_shard'),
+    )
+
+
+class WorldTreeRanking(Base):
+    """
+    Weekly rankings for World Tree competition.
+
+    Top seed plot each week gets promoted to Chunk -1 (West Origin)
+    becoming the prestigious "World Tree" with special benefits.
+
+    Rankings calculated every Sunday midnight UTC.
+    """
+    __tablename__ = 'world_tree_rankings'
+
+    id = Column(Integer, primary_key=True, index=True)
+    shard_id = Column(String(32), nullable=False, index=True)
+    week_number = Column(Integer, nullable=False, index=True)
+    week_start = Column(DateTime, nullable=False)
+    week_end = Column(DateTime, nullable=False)
+
+    # Winner info
+    seed_plot_id = Column(Integer, ForeignKey('seed_plots.id'), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    total_score = Column(Integer, nullable=False)
+    rank = Column(Integer, nullable=False)
+
+    # Status
+    is_active = Column(Boolean, default=True, index=True)
+    promoted_to_origin = Column(Boolean, default=False)
+    promoted_at = Column(DateTime, nullable=True)
+
+    # Blockchain integration
+    blockchain_record_id = Column(Integer, nullable=True)
+    blockchain_tx_hash = Column(String(66), nullable=True)
+    recorded_on_chain_at = Column(DateTime, nullable=True)
+
+    # Ban tracking
+    owner_banned_until = Column(DateTime, nullable=True)
+
+    # Relationships
+    seed_plot = relationship("SeedPlot", back_populates="world_tree_rankings")
+    owner = relationship("User")
+
+    __table_args__ = (
+        # One ranking per shard per week
+        UniqueConstraint('shard_id', 'week_number', name='unique_ranking_per_week'),
+    )
+
+
+class WorldTreeContribution(Base):
+    """
+    Player contributions to seed plots for World Tree competition.
+
+    Tracks all resources contributed, kills performed, and time spent
+    at each seed plot during a week. Used for ranking and rewards.
+
+    Top 10 contributors get "World Tree Champion" title and bonuses.
+    """
+    __tablename__ = 'world_tree_contributions'
+
+    id = Column(Integer, primary_key=True, index=True)
+    seed_plot_id = Column(Integer, ForeignKey('seed_plots.id'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    week_number = Column(Integer, nullable=False, index=True)
+
+    # Contribution breakdown
+    gold_contributed = Column(Integer, default=0)
+    wood_contributed = Column(Integer, default=0)
+    stone_contributed = Column(Integer, default=0)
+    gems_contributed = Column(Integer, default=0)
+    kills = Column(Integer, default=0)
+    boss_kills = Column(Integer, default=0)  # World Tree v2.1 - Fix #11
+    time_minutes = Column(Integer, default=0)
+
+    # Score
+    contribution_score = Column(Integer, default=0, index=True)
+    rank = Column(Integer, nullable=True)
+
+    # Rewards
+    rewards_claimed = Column(Boolean, default=False)
+    rewards_claimed_at = Column(DateTime, nullable=True)
+
+    # Timestamps
+    first_contribution_at = Column(DateTime, default=datetime.utcnow)
+    last_contribution_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    seed_plot = relationship("SeedPlot", back_populates="world_tree_contributions")
+    user = relationship("User")
+
+
+class ResourceMine(Base):
+    """
+    Resource mines that can be claimed by seed plot owners.
+
+    Implements active collection system (Fix #7):
+    - 30-minute cooldown between collections
+    - Quick collect with diminishing returns (100% -> 80% -> 64%)
+    - Resources accumulate over time
+    """
+    __tablename__ = 'resource_mines'
+
+    id = Column(Integer, primary_key=True, index=True)
+    shard_id = Column(String(32), nullable=False, index=True)
+    chunk_id = Column(Integer, nullable=False, index=True)
+    mine_type = Column(String(16), nullable=False, index=True)  # "gold", "stone", "wood", "gems"
+    position_x = Column(Float, nullable=False)
+    position_y = Column(Float, nullable=False)
+
+    # Ownership
+    owner_tree_id = Column(Integer, ForeignKey('seed_plots.id'), nullable=True, index=True)
+
+    # Active collection tracking (Fix #7)
+    last_collected = Column(DateTime, nullable=True)
+    last_collector = Column(String(64), nullable=True)
+    quick_collect_count = Column(Integer, default=0)
+
+    # Accumulated resources
+    resources_accumulated = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    owner_tree = relationship("SeedPlot", back_populates="resource_mines")
+
+
+class SeedPlotBuilding(Base):
+    """
+    Buildings placed on seed plots (unlocked at tree rank 1+).
+
+    Building types:
+    - Campfire: Free respawn point
+    - Warehouse: Protected resource storage (Fix #6)
+    - Vendor: Sells potions/gear
+    - Shrine: Provides buffs
+    - Smithy: Repairs equipment
+    - Fortress: Defensive structure
+
+    Migration behavior (Fix #2):
+    - Buildings migrate with tree to origin chunk
+    - Start inactive, require 50% reactivation cost
+    """
+    __tablename__ = 'seed_plot_buildings'
+
+    id = Column(Integer, primary_key=True, index=True)
+    seed_plot_id = Column(Integer, ForeignKey('seed_plots.id'), nullable=False, index=True)
+    building_type = Column(String(32), nullable=False, index=True)
+    position_slot = Column(String(1), nullable=False)  # A-F
+
+    # Health
+    health = Column(Integer, default=1000)
+    max_health = Column(Integer, default=1000)
+
+    # Protection
+    is_protected = Column(Boolean, default=False)
+
+    # Migration (Fix #2)
+    is_active = Column(Boolean, default=True, index=True)
+    activation_cost = Column(Integer, default=0)
+    original_cost = Column(Integer, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    destroyed_at = Column(DateTime, nullable=True)
+    activated_at = Column(DateTime, nullable=True)
+
+    # Vendor data
+    vendor_inventory = Column(Text, nullable=True)  # JSON
+    vendor_prices = Column(Text, nullable=True)  # JSON
+    total_sales = Column(Integer, default=0)
+
+    # Shrine data
+    shrine_buff_type = Column(String(32), nullable=True)
+
+    # Relationships
+    seed_plot = relationship("SeedPlot", back_populates="buildings")
+
+
+class BaneStone(Base):
+    """
+    Siege warfare system - any tree can be attacked (Fix #5, #10).
+
+    Mechanics:
+    - Plant cost: 50k gold
+    - 50k HP, must be destroyed during 1-hour defense window
+    - Defense window scheduled by defender (default 8pm their timezone)
+    - Success: Attacker claims tree, defender gets 7-day migration period
+    - Failure: Bane stone destroyed, defender keeps tree
+
+    Universal Bane (Fix #5): Not limited to champion, any tree can be sieged
+    """
+    __tablename__ = 'bane_stones'
+
+    id = Column(Integer, primary_key=True, index=True)
+    shard_id = Column(String(32), nullable=False, index=True)
+    target_tree_id = Column(Integer, ForeignKey('seed_plots.id'), nullable=False, index=True)
+    attacker_guild_id = Column(String(64), nullable=False, index=True)
+
+    # Health
+    health = Column(Integer, default=50000)
+    max_health = Column(Integer, default=50000)
+
+    # Timeline (Fix #10 - Scheduled windows)
+    planted_at = Column(DateTime, default=datetime.utcnow)
+    window_start = Column(DateTime, nullable=True)
+    window_end = Column(DateTime, nullable=True)
+
+    # Status
+    is_active = Column(Boolean, default=False, index=True)
+    outcome = Column(String(16), nullable=True)  # "attacker_won", "defender_won", "expired"
+
+    # Relationships
+    target_tree = relationship("SeedPlot", back_populates="bane_stones")
+
+
+class SeasonalRanking(Base):
+    """
+    All-time leaderboard tracking cumulative tree performance (Fix #9).
+
+    Tracks:
+    - Total contributions across all weeks
+    - Total kills and boss kills
+    - Weeks participated vs weeks won
+    - Highest rank achieved (0-7)
+
+    Purpose: Provides historical context and long-term progression tracking
+    """
+    __tablename__ = 'seasonal_rankings'
+
+    id = Column(Integer, primary_key=True, index=True)
+    shard_id = Column(String(32), nullable=False, index=True)
+    tree_id = Column(Integer, ForeignKey('seed_plots.id'), nullable=False, index=True)
+    guild_id = Column(String(64), nullable=False, index=True)
+
+    # All-time stats
+    total_contribution = Column(Integer, default=0, index=True)
+    total_kills = Column(Integer, default=0)
+    total_boss_kills = Column(Integer, default=0)
+    total_waterings = Column(Integer, default=0)
+    weeks_participated = Column(Integer, default=0)
+    weeks_won = Column(Integer, default=0)
+
+    # Milestones
+    highest_rank_achieved = Column(Integer, default=0)
+    first_contribution = Column(DateTime, nullable=True)
+    last_contribution = Column(DateTime, nullable=True)
+
+    # Relationships
+    tree = relationship("SeedPlot")

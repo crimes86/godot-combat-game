@@ -9,7 +9,7 @@ signal shop_closed()
 signal item_purchased(item_name: String, price: int)
 signal item_sold(item_name: String, value: int)
 
-# Stone Gray UI Palette (matching CharacterUI)
+# Stone Gray UI Palette (matching CharacterUI/InventoryUI)
 const BG_COLOR = Color(0.12, 0.12, 0.14, 0.85)  # Dark stone gray (slightly more opaque for shop)
 const BORDER_COLOR = Color(0.35, 0.38, 0.42, 1.0)  # Steel gray border
 const BORDER_INNER = Color(0.06, 0.06, 0.08, 1.0)  # Dark inner shadow
@@ -18,6 +18,10 @@ const TEXT_COLOR = Color(0.92, 0.92, 0.94, 1.0)  # Clean white text
 const HEADER_COLOR = Color(0.75, 0.78, 0.82, 1.0)  # Silver headers
 const ITEM_BG_COLOR = Color(0.08, 0.08, 0.10, 0.9)  # Dark stone for items
 const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)  # Dark stone inset
+
+# Slot sizes (matching InventoryUI - square slots)
+const SLOT_SIZE = 54  # Match inventory slot width (square)
+const ICON_SIZE = 46  # SLOT_SIZE - 8, matches inventory
 
 @onready var main_panel: PanelContainer = $Control/Panel
 @onready var vendor_name_label: Label = $Control/Panel/MarginContainer/VBoxContainer/Header/VendorName
@@ -240,11 +244,13 @@ func populate_weapons() -> void:
 		if weapon.is_healing_weapon():
 			stats = "Heal: %.1f | Radius: %.0f" % [weapon.get_total_healing(), weapon.heal_radius]
 		else:
-			stats = "Dmg: %.1f | Crit: +%.1f%% | Spd: %+.1f%%" % [
-				weapon.base_damage,
-				weapon.crit_chance_bonus * 100,
-				weapon.attack_speed_bonus * 100
-			]
+			# Speed display: negative bonus = faster, positive = slower
+			var speed_text = "Normal"
+			if weapon.attack_speed_bonus < -0.15:
+				speed_text = "Fast"
+			elif weapon.attack_speed_bonus > 0.15:
+				speed_text = "Slow"
+			stats = "Dmg: %.1f | Speed: %s" % [weapon.base_damage, speed_text]
 
 		# Create item data dict for icon generation
 		var item_data = {
@@ -292,7 +298,9 @@ func populate_tools() -> void:
 
 		# Create item data dict for icon generation
 		var item_data = tool_data.duplicate()
-		item_data["type"] = "tool"
+		# Only set type to "tool" if not already specified (preserve consumable/placeable types)
+		if not item_data.has("type") or item_data["type"] == "":
+			item_data["type"] = "tool"
 
 		var item_slot = create_shop_slot_with_owned_check(
 			tool_name,
@@ -490,16 +498,16 @@ func create_item_row(item_name: String, description: String, price: int, stats: 
 	return slot_button
 
 func create_item_slot_with_icon(item_name: String, description: String, price: int, stats: String, req_level: int, color: Color, item_data: Dictionary, on_buy: Callable) -> PanelContainer:
-	"""Create a shop slot with icon, name, and price - click to buy, hover for tooltip"""
-	var slot_size = Vector2(80, 90)  # Square slot with room for price
+	"""Create a shop slot with icon and price - matches InventoryUI style (square slots)"""
+	var slot_dimensions = Vector2(SLOT_SIZE, SLOT_SIZE)
 
 	# Main container
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = slot_size
+	panel.custom_minimum_size = slot_dimensions
 
-	# Style the panel with rarity border
+	# Style the panel with rarity border (matching inventory style)
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = ITEM_BG_COLOR
+	panel_style.bg_color = SLOT_BG
 	panel_style.border_width_left = 2
 	panel_style.border_width_right = 2
 	panel_style.border_width_top = 2
@@ -511,16 +519,10 @@ func create_item_slot_with_icon(item_name: String, description: String, price: i
 	panel_style.corner_radius_bottom_right = 4
 	panel.add_theme_stylebox_override("panel", panel_style)
 
-	# VBox for icon + price
-	var vbox = VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 2)
-	panel.add_child(vbox)
-
-	# Icon container (centered)
+	# Icon container (centered, fills slot)
 	var icon_container = CenterContainer.new()
-	icon_container.custom_minimum_size = Vector2(64, 54)
-	vbox.add_child(icon_container)
+	icon_container.custom_minimum_size = slot_dimensions
+	panel.add_child(icon_container)
 
 	# Try to get icon from ItemIconGenerator
 	var icon_texture: Texture2D = null
@@ -532,31 +534,36 @@ func create_item_slot_with_icon(item_name: String, description: String, price: i
 		icon.texture = icon_texture
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.custom_minimum_size = Vector2(48, 48)
-		icon.size = Vector2(48, 48)
+		icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
+		icon.size = Vector2(ICON_SIZE, ICON_SIZE)
 		icon_container.add_child(icon)
 	else:
 		# Fallback: show item type as text
 		var fallback_label = Label.new()
 		fallback_label.text = item_data.get("weapon_type", item_data.get("type", "?")).substr(0, 3).to_upper()
-		fallback_label.add_theme_font_size_override("font_size", 16)
+		fallback_label.add_theme_font_size_override("font_size", 14)
 		fallback_label.add_theme_color_override("font_color", color)
 		fallback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		icon_container.add_child(fallback_label)
 
-	# Price label
+	# Price label (overlaid at bottom)
 	var price_label = Label.new()
-	var price_text = "%d G" % price if price > 0 else "FREE"
+	var price_text = "%dG" % price if price > 0 else "FREE"
 	price_label.text = price_text
-	price_label.add_theme_font_size_override("font_size", 11)
-	price_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5) if price > 0 else Color(0.5, 0.9, 0.5))
+	price_label.add_theme_font_size_override("font_size", 9)
+	price_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.6) if price > 0 else Color(0.5, 0.9, 0.5))
+	price_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	price_label.add_theme_constant_override("outline_size", 2)
 	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(price_label)
+	price_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	price_label.offset_top = -14
+	price_label.offset_bottom = -2
+	panel.add_child(price_label)
 
 	# Clickable overlay button (invisible but handles clicks)
 	var click_button = Button.new()
 	click_button.flat = true
-	click_button.custom_minimum_size = slot_size
+	click_button.custom_minimum_size = slot_dimensions
 	click_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	# Build rich tooltip
@@ -582,23 +589,23 @@ func create_item_slot_with_icon(item_name: String, description: String, price: i
 			panel_style.border_color = Color(color.r + 0.2, color.g + 0.2, color.b + 0.2, 1.0)
 	)
 	click_button.mouse_exited.connect(func():
-		panel_style.bg_color = ITEM_BG_COLOR
+		panel_style.bg_color = SLOT_BG
 		panel_style.border_color = color
 	)
 
 	return panel
 
 func create_shop_slot_with_owned_check(item_name: String, description: String, price: int, stats: String, req_level: int, color: Color, item_data: Dictionary, on_buy: Callable, already_owned: bool) -> PanelContainer:
-	"""Create a shop slot - shows 'Owned' if player already has this item"""
-	var slot_size = Vector2(80, 90)
+	"""Create a shop slot - shows 'Owned' if player already has this item - matches InventoryUI style (square slots)"""
+	var slot_dimensions = Vector2(SLOT_SIZE, SLOT_SIZE)
 
-	# Main container
+	# Main container - use Control for manual positioning
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = slot_size
+	panel.custom_minimum_size = slot_dimensions
 
-	# Style the panel with rarity border
+	# Style the panel with rarity border (matching inventory style)
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = ITEM_BG_COLOR
+	panel_style.bg_color = SLOT_BG
 	panel_style.border_width_left = 2
 	panel_style.border_width_right = 2
 	panel_style.border_width_top = 2
@@ -610,16 +617,17 @@ func create_shop_slot_with_owned_check(item_name: String, description: String, p
 	panel_style.corner_radius_bottom_right = 4
 	panel.add_theme_stylebox_override("panel", panel_style)
 
-	# VBox for icon + price
-	var vbox = VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 2)
-	panel.add_child(vbox)
+	# Manual layout container (Control for absolute positioning)
+	var layout = Control.new()
+	layout.custom_minimum_size = slot_dimensions
+	layout.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(layout)
 
-	# Icon container (centered)
+	# Icon container (centered in slot)
 	var icon_container = CenterContainer.new()
-	icon_container.custom_minimum_size = Vector2(64, 54)
-	vbox.add_child(icon_container)
+	icon_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon_container.offset_bottom = -12  # Leave room for price label at bottom
+	layout.add_child(icon_container)
 
 	# Try to get icon from ItemIconGenerator
 	var icon_texture: Texture2D = null
@@ -631,37 +639,60 @@ func create_shop_slot_with_owned_check(item_name: String, description: String, p
 		icon.texture = icon_texture
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.custom_minimum_size = Vector2(48, 48)
-		icon.size = Vector2(48, 48)
+		icon.custom_minimum_size = Vector2(ICON_SIZE - 4, ICON_SIZE - 4)  # Slightly smaller for padding
 		icon_container.add_child(icon)
 	else:
 		# Fallback: show item type as text
 		var fallback_label = Label.new()
 		var fallback_text = item_data.get("weapon_type", item_data.get("slot", item_data.get("tool_type", "?")))
 		fallback_label.text = fallback_text.substr(0, 3).to_upper() if fallback_text else "???"
-		fallback_label.add_theme_font_size_override("font_size", 16)
+		fallback_label.add_theme_font_size_override("font_size", 14)
 		fallback_label.add_theme_color_override("font_color", color)
 		fallback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		icon_container.add_child(fallback_label)
 
-	# Price label - show "Owned" if already owned
+	# Price label container (anchored at bottom with background pill)
+	var price_container = PanelContainer.new()
+	price_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	price_container.anchor_left = 0.5
+	price_container.anchor_right = 0.5
+	price_container.offset_left = -24
+	price_container.offset_right = 24
+	price_container.offset_top = -14
+	price_container.offset_bottom = -2
+
+	# Style the price background pill
+	var price_bg_style = StyleBoxFlat.new()
+	price_bg_style.bg_color = Color(0.0, 0.0, 0.0, 0.7)  # Semi-transparent black
+	price_bg_style.corner_radius_top_left = 3
+	price_bg_style.corner_radius_top_right = 3
+	price_bg_style.corner_radius_bottom_left = 3
+	price_bg_style.corner_radius_bottom_right = 3
+	price_bg_style.content_margin_left = 4
+	price_bg_style.content_margin_right = 4
+	price_bg_style.content_margin_top = 1
+	price_bg_style.content_margin_bottom = 1
+	price_container.add_theme_stylebox_override("panel", price_bg_style)
+	layout.add_child(price_container)
+
 	var price_label = Label.new()
 	if already_owned:
 		price_label.text = "OWNED"
-		price_label.add_theme_font_size_override("font_size", 10)
-		price_label.add_theme_color_override("font_color", Color(0.4, 0.8, 0.4))  # Green for owned
+		price_label.add_theme_font_size_override("font_size", 8)
+		price_label.add_theme_color_override("font_color", Color(0.5, 0.95, 0.5))  # Bright green for owned
 	else:
-		var price_text = "%d G" % price if price > 0 else "FREE"
+		var price_text = "%dG" % price if price > 0 else "FREE"
 		price_label.text = price_text
-		price_label.add_theme_font_size_override("font_size", 11)
-		price_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5) if price > 0 else Color(0.5, 0.9, 0.5))
+		price_label.add_theme_font_size_override("font_size", 9)
+		price_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3) if price > 0 else Color(0.5, 0.95, 0.5))
 	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(price_label)
+	price_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	price_container.add_child(price_label)
 
 	# Clickable overlay button (invisible but handles clicks)
 	var click_button = Button.new()
 	click_button.flat = true
-	click_button.custom_minimum_size = slot_size
+	click_button.set_anchors_preset(Control.PRESET_FULL_RECT)
 	click_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	# Build rich tooltip
@@ -677,14 +708,14 @@ func create_shop_slot_with_owned_check(item_name: String, description: String, p
 	if not can_buy:
 		# Dim the panel when can't buy
 		if already_owned:
-			panel.modulate = Color(0.6, 0.6, 0.6, 0.9)  # Slightly less dim for owned
+			panel.modulate = Color(0.65, 0.65, 0.65, 0.95)  # Slightly less dim for owned
 		else:
 			panel.modulate = Color(0.5, 0.5, 0.5, 0.8)  # Can't afford
 
 	click_button.pressed.connect(on_buy)
 
-	# Add button on top of panel
-	panel.add_child(click_button)
+	# Add button on top of layout
+	layout.add_child(click_button)
 
 	# Hover effects (only if can buy)
 	click_button.mouse_entered.connect(func():
@@ -693,7 +724,7 @@ func create_shop_slot_with_owned_check(item_name: String, description: String, p
 			panel_style.border_color = Color(color.r + 0.2, color.g + 0.2, color.b + 0.2, 1.0)
 	)
 	click_button.mouse_exited.connect(func():
-		panel_style.bg_color = ITEM_BG_COLOR
+		panel_style.bg_color = SLOT_BG
 		panel_style.border_color = color
 	)
 
@@ -950,8 +981,8 @@ func populate_sell_items() -> void:
 		sell_list.add_child(empty_label)
 
 func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelContainer:
-	"""Create a sell slot with icon, quantity badge, and price - click to sell"""
-	var slot_size = Vector2(80, 90)  # Match buy item size
+	"""Create a sell slot with icon, quantity badge, and price - matches InventoryUI style (square slots)"""
+	var slot_dimensions = Vector2(SLOT_SIZE, SLOT_SIZE)
 
 	var item_name = item_data.get("name", "Unknown")
 	var item_desc = item_data.get("description", "")
@@ -965,11 +996,11 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 
 	# Main container
 	var panel = PanelContainer.new()
-	panel.custom_minimum_size = slot_size
+	panel.custom_minimum_size = slot_dimensions
 
-	# Style the panel with rarity border
+	# Style the panel with rarity border (matching inventory style)
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = ITEM_BG_COLOR
+	panel_style.bg_color = SLOT_BG
 	panel_style.border_width_left = 2
 	panel_style.border_width_right = 2
 	panel_style.border_width_top = 2
@@ -981,16 +1012,17 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 	panel_style.corner_radius_bottom_right = 4
 	panel.add_theme_stylebox_override("panel", panel_style)
 
-	# VBox for icon + price
-	var vbox = VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 2)
-	panel.add_child(vbox)
+	# Manual layout container (Control for absolute positioning)
+	var layout = Control.new()
+	layout.custom_minimum_size = slot_dimensions
+	layout.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(layout)
 
-	# Icon container (centered)
+	# Icon container (centered in slot)
 	var icon_container = CenterContainer.new()
-	icon_container.custom_minimum_size = Vector2(64, 54)
-	vbox.add_child(icon_container)
+	icon_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon_container.offset_bottom = -12  # Leave room for price label at bottom
+	layout.add_child(icon_container)
 
 	# Try to get icon from ItemIconGenerator
 	var icon_texture: Texture2D = null
@@ -1002,8 +1034,7 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 		icon.texture = icon_texture
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.custom_minimum_size = Vector2(48, 48)
-		icon.size = Vector2(48, 48)
+		icon.custom_minimum_size = Vector2(ICON_SIZE - 4, ICON_SIZE - 4)
 		icon_container.add_child(icon)
 	else:
 		# Fallback: show item type as text
@@ -1013,39 +1044,73 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 			fallback_label.text = type_text.substr(0, 3).to_upper()
 		else:
 			fallback_label.text = "???"
-		fallback_label.add_theme_font_size_override("font_size", 16)
+		fallback_label.add_theme_font_size_override("font_size", 14)
 		fallback_label.add_theme_color_override("font_color", rarity_color)
 		fallback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		icon_container.add_child(fallback_label)
 
 	# Quantity badge (top-right corner) if more than 1
 	if quantity > 1:
+		var qty_container = PanelContainer.new()
+		qty_container.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		qty_container.offset_left = -22
+		qty_container.offset_right = -2
+		qty_container.offset_top = 2
+		qty_container.offset_bottom = 14
+
+		var qty_bg_style = StyleBoxFlat.new()
+		qty_bg_style.bg_color = Color(0.0, 0.0, 0.0, 0.7)
+		qty_bg_style.corner_radius_top_left = 3
+		qty_bg_style.corner_radius_top_right = 3
+		qty_bg_style.corner_radius_bottom_left = 3
+		qty_bg_style.corner_radius_bottom_right = 3
+		qty_bg_style.content_margin_left = 2
+		qty_bg_style.content_margin_right = 2
+		qty_container.add_theme_stylebox_override("panel", qty_bg_style)
+		layout.add_child(qty_container)
+
 		var qty_label = Label.new()
 		qty_label.text = "x%d" % quantity
-		qty_label.add_theme_font_size_override("font_size", 10)
+		qty_label.add_theme_font_size_override("font_size", 8)
 		qty_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
-		qty_label.add_theme_color_override("font_outline_color", Color.BLACK)
-		qty_label.add_theme_constant_override("outline_size", 2)
-		qty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		qty_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-		qty_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		qty_label.offset_left = -30
-		qty_label.offset_right = -4
-		qty_label.offset_top = 2
-		panel.add_child(qty_label)
+		qty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		qty_container.add_child(qty_label)
 
-	# Price label (sell value)
+	# Price label container (anchored at bottom with background pill)
+	var price_container = PanelContainer.new()
+	price_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	price_container.anchor_left = 0.5
+	price_container.anchor_right = 0.5
+	price_container.offset_left = -24
+	price_container.offset_right = 24
+	price_container.offset_top = -14
+	price_container.offset_bottom = -2
+
+	var price_bg_style = StyleBoxFlat.new()
+	price_bg_style.bg_color = Color(0.0, 0.0, 0.0, 0.7)
+	price_bg_style.corner_radius_top_left = 3
+	price_bg_style.corner_radius_top_right = 3
+	price_bg_style.corner_radius_bottom_left = 3
+	price_bg_style.corner_radius_bottom_right = 3
+	price_bg_style.content_margin_left = 4
+	price_bg_style.content_margin_right = 4
+	price_bg_style.content_margin_top = 1
+	price_bg_style.content_margin_bottom = 1
+	price_container.add_theme_stylebox_override("panel", price_bg_style)
+	layout.add_child(price_container)
+
 	var price_label = Label.new()
-	price_label.text = "%d G" % total_value
-	price_label.add_theme_font_size_override("font_size", 11)
-	price_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.5))
+	price_label.text = "%dG" % total_value
+	price_label.add_theme_font_size_override("font_size", 9)
+	price_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(price_label)
+	price_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	price_container.add_child(price_label)
 
 	# Clickable overlay button (invisible but handles clicks)
 	var click_button = Button.new()
 	click_button.flat = true
-	click_button.custom_minimum_size = slot_size
+	click_button.set_anchors_preset(Control.PRESET_FULL_RECT)
 	click_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	# Build tooltip
@@ -1059,8 +1124,8 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 
 	click_button.pressed.connect(func(): sell_item(slot_index))
 
-	# Add button on top of panel
-	panel.add_child(click_button)
+	# Add button on top of layout
+	layout.add_child(click_button)
 
 	# Hover effects
 	click_button.mouse_entered.connect(func():
@@ -1068,7 +1133,7 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 		panel_style.border_color = Color(rarity_color.r + 0.2, rarity_color.g + 0.2, rarity_color.b + 0.2, 1.0)
 	)
 	click_button.mouse_exited.connect(func():
-		panel_style.bg_color = ITEM_BG_COLOR
+		panel_style.bg_color = SLOT_BG
 		panel_style.border_color = rarity_color
 	)
 
@@ -1584,7 +1649,7 @@ func update_quests_tab_indicator() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func populate_forge() -> void:
-	"""Populate the forge tab with forged items from ForgeItemManager"""
+	"""Populate the forge tab with ALL ForgeItemDB items for PLAYTEST claiming"""
 	if not forge_list:
 		return
 
@@ -1592,75 +1657,365 @@ func populate_forge() -> void:
 	for child in forge_list.get_children():
 		child.queue_free()
 
-	# Check if user is authenticated with Mantle
-	if not MantleAuth or not MantleAuth.is_logged_in():
-		var auth_msg = Label.new()
-		auth_msg.text = "Sign in to Mantle to view your forged items.\nVisit the Armory to connect your account."
-		auth_msg.add_theme_font_size_override("font_size", 14)
-		auth_msg.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-		auth_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		auth_msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		forge_list.add_child(auth_msg)
-		_update_forge_status("Not signed in")
-		return
+	# Header message
+	var info = Label.new()
+	info.text = "PLAYTEST FORGE - Select any item to claim it once (isolated from NFT system)"
+	info.add_theme_font_size_override("font_size", 14)
+	info.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	forge_list.add_child(info)
 
-	# Get forged items from ForgeItemManager
-	var forged_items = ForgeItemManager.get_all_forged_items()
+	# Separator
+	var sep1 = Control.new()
+	sep1.custom_minimum_size = Vector2(0, 8)
+	forge_list.add_child(sep1)
+
+	# Get all items from ForgeItemDB
+	var all_items = []
+	for achievement_key in ForgeItemDB.FORGE_ITEMS.keys():
+		var forge_db = ForgeItemDB.FORGE_ITEMS[achievement_key]
+		var item_id = forge_db.get("item_id", "")
+		if item_id == "":
+			continue
+
+		all_items.append({
+			"item_id": item_id,
+			"item_name": forge_db.get("item_name", "Unknown"),
+			"item_type": ForgeItemDB.ItemType.keys()[forge_db.get("item_type", 0)].to_lower(),
+			"rarity": ForgeItemDB.ItemRarity.keys()[forge_db.get("rarity", 0)].to_lower(),
+		})
+
+	# Sort by rarity (legendary first)
+	all_items.sort_custom(func(a, b): return _playtest_rarity_value(a.rarity) < _playtest_rarity_value(b.rarity))
+
+	# Separate into unclaimed and claimed
 	var unclaimed_items = []
 	var claimed_items = []
-
-	# Separate into unclaimed (can claim to inventory) and claimed
-	for item in forged_items:
-		if item.get("claimed_in_game", false):
+	for item in all_items:
+		if CharacterStats.has_claimed_playtest_item(item.item_id):
 			claimed_items.append(item)
 		else:
 			unclaimed_items.append(item)
 
-	var has_content = false
-
-	# Show unclaimed items first (ready to claim)
+	# Show unclaimed items first
 	if unclaimed_items.size() > 0:
-		has_content = true
 		var claim_header = Label.new()
-		claim_header.text = "⚔ READY TO CLAIM (%d)" % unclaimed_items.size()
+		claim_header.text = "⚒ AVAILABLE TO CLAIM (%d)" % unclaimed_items.size()
 		claim_header.add_theme_font_size_override("font_size", 14)
-		claim_header.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))  # Gold
+		claim_header.add_theme_color_override("font_color", Color(1.0, 0.65, 0.2))  # Orange
 		forge_list.add_child(claim_header)
 
+		# Create grid for unclaimed items
+		var unclaimed_grid = _create_forge_grid()
+		forge_list.add_child(unclaimed_grid)
+
 		for item in unclaimed_items:
-			var card = _create_forge_item_card(item, false)
-			forge_list.add_child(card)
+			var slot = _create_playtest_forge_slot(item, false)
+			unclaimed_grid.add_child(slot)
 
 		# Separator
-		var sep = HSeparator.new()
-		sep.add_theme_constant_override("separation", 8)
+		var sep = Control.new()
+		sep.custom_minimum_size = Vector2(0, 12)
 		forge_list.add_child(sep)
 
 	# Show claimed items
 	if claimed_items.size() > 0:
-		has_content = true
 		var claimed_header = Label.new()
-		claimed_header.text = "✓ IN INVENTORY (%d)" % claimed_items.size()
+		claimed_header.text = "✓ CLAIMED (%d)" % claimed_items.size()
 		claimed_header.add_theme_font_size_override("font_size", 14)
-		claimed_header.add_theme_color_override("font_color", Color(0.5, 0.8, 0.5))  # Green
+		claimed_header.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))  # Green
 		forge_list.add_child(claimed_header)
 
-		for item in claimed_items:
-			var card = _create_forge_item_card(item, true)
-			forge_list.add_child(card)
+		# Create grid for claimed items
+		var claimed_grid = _create_forge_grid()
+		forge_list.add_child(claimed_grid)
 
-	# No items message
-	if not has_content:
-		var empty_label = Label.new()
-		empty_label.text = "No forged items yet.\n\nForge achievements into items at the Armory\nto claim them here!"
-		empty_label.add_theme_font_size_override("font_size", 14)
-		empty_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		forge_list.add_child(empty_label)
+		for item in claimed_items:
+			var slot = _create_playtest_forge_slot(item, true)
+			claimed_grid.add_child(slot)
+
+	# DEBUG: Clear forged items button (for playtesting)
+	var sep2 = Control.new()
+	sep2.custom_minimum_size = Vector2(0, 12)
+	forge_list.add_child(sep2)
+
+	var clear_button_container = CenterContainer.new()
+	forge_list.add_child(clear_button_container)
+
+	var clear_btn = Button.new()
+	clear_btn.text = "🗑 Clear All Forged Items (Playtest)"
+	clear_btn.custom_minimum_size = Vector2(250, 32)
+	clear_btn.pressed.connect(_on_clear_forged_items_pressed)
+	clear_button_container.add_child(clear_btn)
 
 	# Update status
-	_update_forge_status("%d forged items" % forged_items.size() if forged_items.size() > 0 else "No items")
+	_update_forge_status("Claimed: %d / %d" % [claimed_items.size(), all_items.size()])
+
+func _playtest_rarity_value(rarity: String) -> int:
+	"""Helper for sorting by rarity (legendary first)"""
+	match rarity:
+		"legendary": return 0
+		"epic": return 1
+		"rare": return 2
+		"uncommon": return 3
+		"common": return 4
+		_: return 5
+
+func _create_forge_grid() -> GridContainer:
+	"""Create a grid container for forge item slots"""
+	var grid = GridContainer.new()
+	grid.columns = 10  # Match BlacksmithForgeUI
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	return grid
+
+func _create_forge_slot(item: Dictionary, is_claimed: bool) -> PanelContainer:
+	"""Create a 54px icon slot for a forged item - matches inventory style"""
+	var slot = PanelContainer.new()
+	slot.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+	slot.mouse_filter = Control.MOUSE_FILTER_STOP if not is_claimed else Control.MOUSE_FILTER_IGNORE
+
+	# Get item properties
+	var item_id = item.get("item_id", "")
+	var item_name = item.get("item_name", "Unknown Item")
+	var item_rarity = item.get("rarity", "common").to_lower()
+	var rarity_color = FORGE_RARITY_COLORS.get(item_rarity, Color(0.6, 0.6, 0.6))
+
+	# Slot style with rarity border
+	var slot_style = StyleBoxFlat.new()
+	if is_claimed:
+		slot_style.bg_color = Color(0.03, 0.03, 0.04, 1.0)
+		slot_style.border_color = Color(0.15, 0.15, 0.18)
+	else:
+		slot_style.bg_color = SLOT_BG
+		slot_style.border_color = rarity_color
+		slot_style.shadow_size = 6
+		slot_style.shadow_color = Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.4)
+
+	slot_style.set_border_width_all(2)
+	slot_style.set_corner_radius_all(5)
+	slot.add_theme_stylebox_override("panel", slot_style)
+
+	# Store item data for click handling
+	slot.set_meta("item_data", item)
+	slot.set_meta("is_claimed", is_claimed)
+
+	# Load icon (enhanced first, then regular) - icons are organized by type
+	var item_type = item.get("item_type", "weapon")
+	# Map item types to icon folder names (armor is singular, others are plural)
+	var icon_folder = item_type
+	match item_type:
+		"weapon": icon_folder = "weapons"
+		"armor": icon_folder = "armor"  # singular
+		"shield": icon_folder = "shields"
+		"accessory": icon_folder = "accessories"
+		"cape": icon_folder = "capes"
+		"tool": icon_folder = "tools"
+
+	var icon_path = "res://assets/icons/forged/" + icon_folder + "/" + item_id + ".png"
+	var enhanced_icon_path = "res://assets/icons/enhanced/forged/" + icon_folder + "/" + item_id + ".png"
+
+	var texture = null
+	if ResourceLoader.exists(enhanced_icon_path):
+		texture = load(enhanced_icon_path)
+	elif ResourceLoader.exists(icon_path):
+		texture = load(icon_path)
+
+	if texture:
+		var icon = TextureRect.new()
+		icon.texture = texture
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		if is_claimed:
+			icon.modulate = Color(0.3, 0.3, 0.3, 0.5)  # Dim claimed items
+		slot.add_child(icon)
+
+	# Claimed checkmark overlay
+	if is_claimed:
+		var check = Label.new()
+		check.text = "✓"
+		check.add_theme_font_size_override("font_size", 24)
+		check.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+		check.position = Vector2(SLOT_SIZE - 20, SLOT_SIZE - 24)
+		slot.add_child(check)
+
+	# Click handler for unclaimed items
+	if not is_claimed:
+		slot.gui_input.connect(_on_forge_slot_clicked.bind(slot))
+
+	# Tooltip
+	var tooltip_lines = []
+	tooltip_lines.append(item_name)
+	tooltip_lines.append(item_rarity.capitalize())
+	if is_claimed:
+		tooltip_lines.append("[In Inventory]")
+	else:
+		tooltip_lines.append("[Click to Claim]")
+	slot.tooltip_text = "\n".join(tooltip_lines)
+
+	return slot
+
+func _create_playtest_forge_slot(item: Dictionary, is_claimed: bool) -> PanelContainer:
+	"""Create a 54px icon slot for a PLAYTEST forge item - matches inventory style"""
+	var slot = PanelContainer.new()
+	slot.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+	slot.mouse_filter = Control.MOUSE_FILTER_STOP if not is_claimed else Control.MOUSE_FILTER_IGNORE
+
+	# Get item properties
+	var item_id = item.get("item_id", "")
+	var item_name = item.get("item_name", "Unknown Item")
+	var item_rarity = item.get("rarity", "common")
+	var rarity_color = FORGE_RARITY_COLORS.get(item_rarity, Color(0.6, 0.6, 0.6))
+
+	# Slot style with rarity border
+	var slot_style = StyleBoxFlat.new()
+	if is_claimed:
+		slot_style.bg_color = Color(0.03, 0.03, 0.04, 1.0)
+		slot_style.border_color = Color(0.15, 0.15, 0.18)
+	else:
+		slot_style.bg_color = SLOT_BG
+		slot_style.border_color = rarity_color
+		slot_style.shadow_size = 6
+		slot_style.shadow_color = Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.4)
+
+	slot_style.set_border_width_all(2)
+	slot_style.set_corner_radius_all(5)
+	slot.add_theme_stylebox_override("panel", slot_style)
+
+	# Store item data for click handling
+	slot.set_meta("item_data", item)
+	slot.set_meta("is_claimed", is_claimed)
+
+	# Load icon (enhanced first, then regular) - icons are organized by type
+	var item_type = item.get("item_type", "weapon")
+	# Map item types to icon folder names
+	var icon_folder = item_type
+	match item_type:
+		"armor_head", "armor_chest", "armor_legs", "armor_feet", "armor_hands":
+			icon_folder = "armor"
+		"weapon":
+			icon_folder = "weapons"
+		"shield":
+			icon_folder = "shields"
+		"accessory":
+			icon_folder = "accessories"
+		"cape":
+			icon_folder = "capes"
+		"tool":
+			icon_folder = "tools"
+
+	var icon_path = "res://assets/icons/forged/" + icon_folder + "/" + item_id + ".png"
+	var enhanced_icon_path = "res://assets/icons/enhanced/forged/" + icon_folder + "/" + item_id + ".png"
+
+	var texture = null
+	if ResourceLoader.exists(enhanced_icon_path):
+		texture = load(enhanced_icon_path)
+	elif ResourceLoader.exists(icon_path):
+		texture = load(icon_path)
+
+	if texture:
+		var icon = TextureRect.new()
+		icon.texture = texture
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		if is_claimed:
+			icon.modulate = Color(0.3, 0.3, 0.3, 0.5)  # Dim claimed items
+		slot.add_child(icon)
+
+	# Claimed checkmark overlay
+	if is_claimed:
+		var check = Label.new()
+		check.text = "✓"
+		check.add_theme_font_size_override("font_size", 24)
+		check.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+		check.position = Vector2(SLOT_SIZE - 20, SLOT_SIZE - 24)
+		slot.add_child(check)
+
+	# Click handler for unclaimed items
+	if not is_claimed:
+		slot.gui_input.connect(_on_playtest_forge_slot_clicked.bind(slot))
+
+	# Tooltip
+	var tooltip_lines = []
+	tooltip_lines.append(item_name)
+	tooltip_lines.append(item_rarity.capitalize())
+	if is_claimed:
+		tooltip_lines.append("[Claimed]")
+	else:
+		tooltip_lines.append("[Click to Claim]")
+	slot.tooltip_text = "\n".join(tooltip_lines)
+
+	return slot
+
+func _on_playtest_forge_slot_clicked(event: InputEvent, slot: PanelContainer) -> void:
+	"""Handle PLAYTEST forge slot click to claim item"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var item_data = slot.get_meta("item_data", {})
+		var item_id = item_data.get("item_id", "")
+
+		if item_id == "":
+			return
+
+		# Try to claim
+		if not CharacterStats.claim_playtest_item(item_id):
+			print("[ShopUI] Item already claimed: %s" % item_id)
+			return
+
+		# Play sound
+		if SoundManager:
+			SoundManager.play_button_click_sound(-3.0)
+
+		# Get item from ForgeItemDB
+		var forge_db = ForgeItemDB.get_item_by_id(item_id)
+		if forge_db.is_empty():
+			print("[ShopUI] Item not found in ForgeItemDB: %s" % item_id)
+			return
+
+		# Convert to forged item format
+		var forged_item = {
+			"item_id": item_id,
+			"item_name": forge_db.get("item_name", "Unknown"),
+			"item_type": ForgeItemDB.ItemType.keys()[forge_db.get("item_type", 0)].to_lower(),
+			"item_rarity": ForgeItemDB.ItemRarity.keys()[forge_db.get("rarity", 0)].to_lower(),
+			"description": forge_db.get("description", ""),
+			"effect_name": forge_db.get("effects", ["standard_particles"])[0] if forge_db.get("effects", []).size() > 0 else "standard_particles",
+		}
+
+		# Use ForgeItemManager to convert to inventory format
+		var inventory_item = ForgeItemManager._convert_to_inventory_format(forged_item)
+		if inventory_item.is_empty():
+			print("[ShopUI] Failed to convert to inventory format")
+			return
+
+		# Add to inventory
+		if InventorySystem.add_item(inventory_item):
+			print("[ShopUI] ✅ Claimed: %s" % inventory_item.get("name"))
+			# Use NotificationManager for clean floating notification
+			var item_name = inventory_item.get("name", "Item")
+			var item_rarity = inventory_item.get("rarity", "COMMON")
+			NotificationManager.notify_item_added(item_name, 1, item_rarity)
+			# Refresh the forge tab
+			populate_forge()
+		else:
+			print("[ShopUI] Failed to add to inventory (full?)")
+			# Use NotificationManager for error too
+			NotificationManager.show_notification("Inventory full!", "error")
+
+func _on_forge_slot_clicked(event: InputEvent, slot: PanelContainer) -> void:
+	"""Handle forge slot click to claim item (OLD BACKEND SYSTEM - NOT USED FOR PLAYTEST)"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var item_data = slot.get_meta("item_data", {})
+		var forged_id = item_data.get("forged_id", 0)
+		_on_claim_forge_item(forged_id, item_data)
+
+func _on_clear_forged_items_pressed() -> void:
+	"""Clear all forged items from inventory (playtest debug)"""
+	if InventorySystem:
+		var cleared = InventorySystem.clear_forged_items()
+		show_message("Cleared %d forged items" % cleared, Color(0.5, 0.9, 0.5))
+	if CharacterStats:
+		CharacterStats.clear_playtest_claims()
+	populate_forge()  # Refresh the grid
 
 func _create_forge_item_card(item: Dictionary, is_claimed: bool) -> PanelContainer:
 	"""Create a card displaying a forged item with claim button if unclaimed"""

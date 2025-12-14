@@ -735,6 +735,10 @@ func _on_interaction_body_exited(body: Node2D) -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F:
+		# UI F key has priority - don't convert if any UI is open
+		if GameInput.is_any_ui_open():
+			return
+
 		# Only handle F-key if player is close enough to convert ruins
 		if current_state == RuinsState.RUINS and player:
 			var distance = player.global_position.distance_to(global_position)

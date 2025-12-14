@@ -55,6 +55,7 @@ RecentlyAdvertisedUI="*res://scripts/ui/RecentlyAdvertisedUI.gd"
 TradeWindowUI="*res://scripts/ui/TradeWindowUI.gd"
 ItemInspectionUI="*res://scripts/ui/ItemInspectionUI.gd"
 WeaponStatsTracker="*res://scripts/systems/WeaponStatsTracker.gd"
+WeaponSkillManager="*res://scripts/systems/WeaponSkillManager.gd"
 GlobalDebugOverlay="*res://scripts/debug/GlobalDebugOverlay.gd"
 
 [display]

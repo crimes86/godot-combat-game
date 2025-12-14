@@ -20,7 +20,9 @@ When working on specific systems, consult these docs:
 | Chunk spawning | `docs/CHUNK_AND_SPAWNING.md` |
 | Inventory & loot | `docs/INVENTORY_AND_LOOT.md` |
 | Trading hub | `docs/TRADING_HUB_DESIGN.md` |
-| World tree system | `docs/WORLD_TREE_SYSTEM.md` |
+| World tree system (v2.1) | `docs/WORLD_TREE_V2.1.md` |
+| World tree design spec | `docs/WORLD_TREE_FINAL_DESIGN_V2.1.md` |
+| World tree blockchain | `docs/WORLD_TREE_BLOCKCHAIN_INTEGRATION.md` |
 | **Art & Assets** | |
 | LPC sprite guide | `docs/LPC_GUIDE.md` |
 | Asset design guide | `docs/ASSET_DESIGN_GUIDE.md` |
@@ -32,6 +34,8 @@ When working on specific systems, consult these docs:
 | Shard system (multi-server) | `docs/SHARD_SYSTEM.md` |
 | Performance guide | `docs/PERFORMANCE.md` |
 | API contract | `docs/API_CONTRACT.md` |
+| Digital Ocean deployment | `backend/docs/DIGITALOCEAN_DEPLOYMENT.md` |
+| Dev mode checklist | `backend/docs/DEV_MODE_CHECKLIST.md` |
 | **Rules & Process** | |
 | Golden rules (immutable) | `docs/GOLDEN_RULES.md` |
 | Provider roadmap | `docs/PROVIDER_ROADMAP.md` |

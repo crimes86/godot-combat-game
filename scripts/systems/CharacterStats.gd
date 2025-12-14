@@ -39,6 +39,9 @@ var achievements: Array = []  # List of unlocked achievement IDs
 var total_playtime: float = 0.0  # Total seconds played (persisted)
 var session_start_time: float = 0.0  # Start of current session (not persisted)
 
+# Playtest forge system - isolated from real NFT system
+var playtest_claimed_items: Array = []  # item_ids of forged items claimed in playtest mode
+
 # Starting stats (for reset/new character)
 const STARTING_STRENGTH: int = Constants.STARTING_STRENGTH
 const STARTING_AGILITY: int = Constants.STARTING_AGILITY
@@ -236,29 +239,19 @@ func get_window_damage() -> float:
 	elif level < 21:
 		weakpoint_count = 2
 
-	return base_damage * crit_mult * weakpoint_count
+	# Each weakpoint takes 3-5 hits to destroy (average 4), and EACH hit deals damage
+	var hits_per_weakpoint = 4
+
+	return base_damage * crit_mult * weakpoint_count * hits_per_weakpoint
 
 func get_base_crit_chance() -> float:
-	"""Calculate crit chance from luck + weapon"""
+	"""Calculate crit chance from luck stat only (no weapon bonus)"""
 	# Base formula: 1% at 10 LUCK, +0.6% per point (for fast-paced combat)
-	var stat_crit = 0.01 + (luck - 10) * 0.006  # 16% at 35 LUCK (level 25+)
-
-	# Add weapon bonus
-	var weapon_crit = 0.0
-	if equipped_weapon:
-		weapon_crit = equipped_weapon.crit_chance_bonus
+	# At level 25+ (35 LUCK): 16% crit chance
+	var stat_crit = 0.01 + (luck - 10) * 0.006
 
 	# Add campfire buff (from bone embers)
-	var total_crit = stat_crit + weapon_crit + campfire_crit_buff
-
-	# Debug logging for crit calculation
-	if campfire_crit_buff > 0:
-		print("🎯 CRIT CALCULATION:")
-		print("   Luck: %d → Stat Crit: %.1f%%" % [luck, stat_crit * 100])
-		print("   Weapon Crit: %.1f%%" % (weapon_crit * 100))
-		print("   Campfire Buff: %.1f%%" % (campfire_crit_buff * 100))
-		print("   Total (unclamped): %.1f%%" % (total_crit * 100))
-		print("   Total (clamped): %.1f%%" % (clamp(total_crit, 0.01, 0.50) * 100))
+	var total_crit = stat_crit + campfire_crit_buff
 
 	return clamp(total_crit, 0.01, 0.50)  # Min 1%, max 50%
 
@@ -762,6 +755,7 @@ func get_save_data() -> Dictionary:
 		"kill_counts": kill_counts.duplicate(),
 		"achievements": achievements.duplicate(),
 		"total_playtime": total_playtime,
+		"playtest_claimed_items": playtest_claimed_items.duplicate(),
 
 		# Quest progress
 		"quests": quest_data,
@@ -787,6 +781,7 @@ func load_save_data(data: Dictionary) -> void:
 	kill_counts = data.get("kill_counts", {})
 	achievements = data.get("achievements", [])
 	total_playtime = data.get("total_playtime", 0.0)
+	playtest_claimed_items = data.get("playtest_claimed_items", [])
 
 	# Equipped weapon (recreate Weapon resource from saved data)
 	var weapon_data = data.get("equipped_weapon", {})
@@ -909,6 +904,33 @@ func print_stats() -> void:
 	if equipped_weapon:
 		print("Equipped: ", equipped_weapon.weapon_name)
 	print("═══════════════════════\n")
+
+# ============================================
+# PLAYTEST FORGE SYSTEM
+# ============================================
+
+func claim_playtest_item(item_id: String) -> bool:
+	"""Claim a playtest forge item (one-time only). Returns false if already claimed."""
+	if item_id in playtest_claimed_items:
+		print("⚠️  Item already claimed: %s" % item_id)
+		return false
+	playtest_claimed_items.append(item_id)
+	print("✅ Playtest item claimed: %s" % item_id)
+	return true
+
+func has_claimed_playtest_item(item_id: String) -> bool:
+	"""Check if a playtest item has been claimed"""
+	return item_id in playtest_claimed_items
+
+func clear_playtest_claims() -> void:
+	"""Reset all playtest claims (for testing)"""
+	var count = playtest_claimed_items.size()
+	playtest_claimed_items.clear()
+	print("🔄 Cleared %d playtest claims" % count)
+
+func get_playtest_claimed_count() -> int:
+	"""Get number of playtest items claimed"""
+	return playtest_claimed_items.size()
 
 # ============================================
 # CHAIN SYSTEM METHODS (merged from ChainManager)

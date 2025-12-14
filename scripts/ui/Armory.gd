@@ -7,6 +7,10 @@ signal back_to_menu
 
 enum ArmoryState { GUEST, NEW_PLAYER, CASUAL, VETERAN, PENDING_UNLOCKS }
 
+## DEBUG: Enable to make all items show as forgeable (golden glow)
+## Set this to true in the editor inspector for testing
+@export var debug_all_forgeable: bool = false
+
 # Animation state
 var _shimmer_tween: Tween = null
 var _badge_tween: Tween = null
@@ -43,6 +47,9 @@ var sfx_volume_slider: HSlider = null
 var fullscreen_check: CheckBox = null
 var resolution_option: OptionButton = null
 
+# Background music player
+var _music_player: AudioStreamPlayer = null
+
 # Resolution presets (width x height) - matches MainMenu
 const RESOLUTIONS = [
 	Vector2i(1280, 720),   # 720p (default)
@@ -54,6 +61,8 @@ const RESOLUTIONS = [
 
 # Labels
 var title_label: Label = null
+var title_glow_bg: Label = null  # Background glow layer for pulsing effect
+var title_glow: Label = null     # Mid glow layer for pulsing effect
 var subtitle_label: Label = null
 var username_label: Label = null
 var tier_badge: Control = null
@@ -120,9 +129,80 @@ const FONT_H2 = 28        # Column headers (THE FORGE, DREADLAND)
 const FONT_H3 = 22        # Section headers (CONNECTED PLATFORMS)
 const FONT_BODY_LG = 24   # Large body text, important values
 const FONT_BODY = 20      # Normal body text
-const FONT_CAPTION = 18   # Captions, small labels
+const FONT_CAPTION = 12   # Captions, small labels
 const FONT_TINY = 14      # Smallest text - minimum readable size
 const FONT_MIN = 14       # Absolute minimum - never go below 14 for readability
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STANDARDIZED BUTTON SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Button sizes (height, font_size, corner_radius, border_width, padding)
+enum ButtonSize { SMALL, MEDIUM, LARGE }
+const BUTTON_SIZES = {
+	ButtonSize.SMALL: {"height": 28, "font": 14, "radius": 4, "border": 1, "padding": 6},
+	ButtonSize.MEDIUM: {"height": 36, "font": 16, "radius": 6, "border": 1, "padding": 8},
+	ButtonSize.LARGE: {"height": 44, "font": 18, "radius": 6, "border": 2, "padding": 10}
+}
+
+# Button color themes
+enum ButtonTheme { PRIMARY, ACTION, BRIDGE, DANGER, SECONDARY, SUCCESS }
+const BUTTON_THEMES = {
+	ButtonTheme.PRIMARY: {  # Cyan - main interactive
+		"bg": Color(0.0, 0.45, 0.55),
+		"bg_hover": Color(0.0, 0.55, 0.65),
+		"bg_pressed": Color(0.0, 0.35, 0.45),
+		"border": Color(0.0, 0.75, 0.85),
+		"border_hover": Color(0.0, 0.85, 0.95),
+		"text": Color.WHITE,
+		"text_hover": Color.WHITE
+	},
+	ButtonTheme.ACTION: {  # Orange - forge/action
+		"bg": Color(0.6, 0.3, 0.08),
+		"bg_hover": Color(0.75, 0.4, 0.12),
+		"bg_pressed": Color(0.5, 0.25, 0.05),
+		"border": Color(1.0, 0.6, 0.2),
+		"border_hover": Color(1.0, 0.7, 0.3),
+		"text": Color.WHITE,
+		"text_hover": Color.WHITE
+	},
+	ButtonTheme.BRIDGE: {  # Purple/blue - external wallet
+		"bg": Color(0.2, 0.25, 0.45),
+		"bg_hover": Color(0.3, 0.35, 0.55),
+		"bg_pressed": Color(0.15, 0.2, 0.35),
+		"border": Color(0.4, 0.5, 0.8),
+		"border_hover": Color(0.5, 0.6, 0.9),
+		"text": Color(0.8, 0.85, 1.0),
+		"text_hover": Color.WHITE
+	},
+	ButtonTheme.DANGER: {  # Red - logout/cancel/destructive
+		"bg": Color(0.5, 0.15, 0.15),
+		"bg_hover": Color(0.65, 0.2, 0.2),
+		"bg_pressed": Color(0.4, 0.1, 0.1),
+		"border": Color(0.7, 0.25, 0.25),
+		"border_hover": Color(0.85, 0.35, 0.35),
+		"text": Color.WHITE,
+		"text_hover": Color.WHITE
+	},
+	ButtonTheme.SECONDARY: {  # Gray - low emphasis
+		"bg": Color(0.12, 0.12, 0.14),
+		"bg_hover": Color(0.18, 0.18, 0.2),
+		"bg_pressed": Color(0.08, 0.08, 0.1),
+		"border": Color(0.3, 0.3, 0.32),
+		"border_hover": Color(0.4, 0.4, 0.42),
+		"text": Color(0.7, 0.7, 0.72),
+		"text_hover": Color(0.85, 0.85, 0.87)
+	},
+	ButtonTheme.SUCCESS: {  # Green - enter world/confirm
+		"bg": Color(0.1, 0.45, 0.15),
+		"bg_hover": Color(0.15, 0.55, 0.2),
+		"bg_pressed": Color(0.08, 0.35, 0.1),
+		"border": Color(0.2, 0.7, 0.3),
+		"border_hover": Color(0.3, 0.85, 0.4),
+		"text": Color.WHITE,
+		"text_hover": Color.WHITE
+	}
+}
 
 # Brand colors (use sparingly)
 const MANTLE_RED = Color(0.95, 0.25, 0.25)     # Primary accent - titles, important numbers
@@ -218,6 +298,9 @@ func _ready() -> void:
 		# Update connection indicator with current status
 		call_deferred("_update_connection_indicator", MantleAuth.connection_status)
 
+	# Setup background music
+	_setup_background_music()
+
 	# Listen for forged items loaded to refresh forge display
 	if ForgeItemManager:
 		if not ForgeItemManager.forged_items_loaded.is_connected(_on_forged_items_loaded):
@@ -228,6 +311,12 @@ func _ready() -> void:
 			ForgeItemManager.bridge_status_updated.connect(_on_bridge_status_updated)
 		if not ForgeItemManager.bridge_in_available_updated.is_connected(_on_bridge_in_available_signal):
 			ForgeItemManager.bridge_in_available_updated.connect(_on_bridge_in_available_signal)
+
+		# DEBUG: If debug_all_forgeable is enabled, inject all items as forgeable
+		if debug_all_forgeable:
+			print("[Armory] DEBUG MODE: Injecting all items as forgeable...")
+			ForgeItemManager.debug_inject_all_as_forgeable()
+
 		# If already loaded, refresh now
 		if ForgeItemManager.is_loaded():
 			print("[Armory] Forged items already loaded, refreshing forge and bridge...")
@@ -255,6 +344,12 @@ func _exit_tree() -> void:
 		_footstep_timer.queue_free()
 		_footstep_timer = null
 
+	# Stop and clean up background music
+	if _music_player:
+		_music_player.stop()
+		_music_player.queue_free()
+		_music_player = null
+
 func _on_profile_updated(_data: Dictionary) -> void:
 	"""Called when MantleAuth receives profile data - refresh the UI"""
 	# Compute a hash of the profile data to detect actual changes
@@ -280,15 +375,19 @@ func _on_profile_updated(_data: Dictionary) -> void:
 	if _target_achievement_count > 0:
 		_animate_achievement_count()
 
-	# Setup character preview from saved appearance
-	var appearance = MantleAuth.saved_appearance
-	if appearance == null or appearance.is_empty():
-		# Use default starter appearance for new players
-		appearance = _get_default_appearance()
+	# Setup character preview from player's currently equipped items
+	# Priority: CharacterStats.equipped_armor > MantleAuth.saved_appearance > default
+	var appearance = _get_appearance_from_character_stats()
 
-	# Sync appearance to CharacterStats so it persists when entering game
-	# This ensures the Armory preview matches what you'll have in-game
-	_sync_appearance_to_character_stats(appearance)
+	if appearance.is_empty():
+		# No equipped items, try backend saved appearance
+		appearance = MantleAuth.saved_appearance
+		if appearance == null or appearance.is_empty():
+			# Use default starter appearance for new players
+			appearance = _get_default_appearance()
+
+		# Sync backend appearance to CharacterStats (only if we didn't load from CharacterStats)
+		_sync_appearance_to_character_stats(appearance)
 
 	call_deferred("_setup_character_preview", appearance)
 
@@ -302,9 +401,25 @@ func _on_forged_items_loaded(items: Array) -> void:
 	_refresh_bridge_section()  # Also refresh bridge section for bridge-in/out displays
 	print("[Armory] ═══════════════════════════════════════")
 
+var _debug_injecting: bool = false  # Guard against re-entrancy
+
 func _on_forge_status_loaded(status: Dictionary) -> void:
 	"""Called when ForgeItemManager finishes loading forge status (forgeable achievements)"""
+	# Guard: If we're in the middle of debug injection, skip this signal entirely
+	if _debug_injecting:
+		return
+
 	var forgeable = status.get("forgeable", [])
+
+	# DEBUG: If debug mode is enabled, re-inject all items as forgeable
+	# This ensures debug mode persists even after backend data loads
+	if debug_all_forgeable:
+		_debug_injecting = true
+		print("[Armory] DEBUG MODE: Re-injecting all items as forgeable (after backend load)...")
+		ForgeItemManager.debug_inject_all_as_forgeable()
+		_debug_injecting = false
+		_refresh_forge_content()
+		return
 
 	# Compute hash to detect actual changes
 	var forge_hash = hash(str(forgeable.size()) + str(ForgeItemManager.get_all_forged_items().size()))
@@ -322,6 +437,19 @@ func _on_forge_status_loaded(status: Dictionary) -> void:
 func _on_bridge_status_updated(item_id: String, status: String) -> void:
 	"""Called when bridge status is updated (cooldown times fetched from API)"""
 	print("[Armory] Bridge status updated for %s: %s" % [item_id, status])
+
+	# Show notification when item is successfully exported
+	if status == "bridged":
+		var item = ForgeItemManager.get_forged_item(item_id)
+		var item_name = item.get("item_name", item.get("name", item_id))
+		if NotificationManager:
+			NotificationManager.show_notification(
+				"%s exported to web!" % item_name,
+				"success"
+			)
+		if SoundManager:
+			SoundManager.play_equip_sound(-6.0)
+
 	# Refresh the bridge section to show updated cooldown times
 	_refresh_bridge_section()
 	# Also refresh forge grid in case the item is selected
@@ -488,10 +616,10 @@ func _create_player_identity_frame() -> Control:
 	"""Create clean player identity section"""
 	var frame = VBoxContainer.new()
 	frame.name = "IdentityFrame"
-	frame.add_theme_constant_override("separation", 16)  # More space between identity elements
+	frame.add_theme_constant_override("separation", 24)  # More space between identity elements
 
 	var inner_vbox = VBoxContainer.new()
-	inner_vbox.add_theme_constant_override("separation", 12)  # More breathing room
+	inner_vbox.add_theme_constant_override("separation", 20)  # More breathing room
 	frame.add_child(inner_vbox)
 
 	# Player ID (prominent)
@@ -520,12 +648,12 @@ func _create_enhanced_tier_badge(tier_key: String) -> Control:
 
 	var color = TIER_COLORS.get(tier_key, TIER_COLORS["initiate"])
 
-	# Outer glow layer (animated)
+	# Outer glow layer (animated) - aligned with badge
 	var glow_panel = PanelContainer.new()
 	glow_panel.name = "BadgeGlow"
 	glow_panel.set_anchors_preset(Control.PRESET_CENTER)
 	glow_panel.offset_left = -60
-	glow_panel.offset_right = 60
+	glow_panel.offset_right = 70
 	glow_panel.offset_top = -18
 	glow_panel.offset_bottom = 18
 	var glow_style = StyleBoxFlat.new()
@@ -536,12 +664,12 @@ func _create_enhanced_tier_badge(tier_key: String) -> Control:
 	glow_panel.add_theme_stylebox_override("panel", glow_style)
 	container.add_child(glow_panel)
 
-	# Main badge
+	# Main badge - shifted 10px left to match glow
 	var badge = PanelContainer.new()
 	badge.name = "TierBadgePanel"
 	badge.set_anchors_preset(Control.PRESET_CENTER)
-	badge.offset_left = -55
-	badge.offset_right = 55
+	badge.offset_left = -65
+	badge.offset_right = 45
 	badge.offset_top = -14
 	badge.offset_bottom = 14
 
@@ -606,10 +734,10 @@ func _start_badge_pulse(badge_container: Control, color: Color) -> void:
 func _create_trophy_plaque() -> Control:
 	"""Create achievement score display - clean version"""
 	var plaque = VBoxContainer.new()
-	plaque.add_theme_constant_override("separation", 8)  # More space around plaque
+	plaque.add_theme_constant_override("separation", 16)  # More space around plaque
 
 	var inner_content = VBoxContainer.new()
-	inner_content.add_theme_constant_override("separation", 4)  # Slight gap between number and text
+	inner_content.add_theme_constant_override("separation", 12)  # Slight gap between number and text
 	plaque.add_child(inner_content)
 
 	# Hero number with glow effect container
@@ -621,13 +749,48 @@ func _create_trophy_plaque() -> Control:
 	number_stack.custom_minimum_size = Vector2(180, 70)
 	number_container.add_child(number_stack)
 
-	# Glow layer behind number
+	# Multi-layer glow effect for modern look
+	# Layer 1: Large outer glow (most transparent)
+	var glow_outer = Label.new()
+	glow_outer.name = "NumberGlowOuter"
+	glow_outer.text = "0"
+	glow_outer.add_theme_font_override("font", default_font)
+	glow_outer.add_theme_font_size_override("font_size", 66)  # Slightly larger
+	glow_outer.add_theme_color_override("font_color", Color(MANTLE_RED.r, MANTLE_RED.g, MANTLE_RED.b, 0.15))
+	glow_outer.set_anchors_preset(Control.PRESET_CENTER)
+	glow_outer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	glow_outer.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	glow_outer.offset_left = -90
+	glow_outer.offset_right = 90
+	glow_outer.offset_top = -35
+	glow_outer.offset_bottom = 35
+	glow_outer.scale = Vector2(1.05, 1.05)  # Slightly scaled up
+	number_stack.add_child(glow_outer)
+
+	# Layer 2: Medium glow
+	var glow_mid = Label.new()
+	glow_mid.name = "NumberGlowMid"
+	glow_mid.text = "0"
+	glow_mid.add_theme_font_override("font", default_font)
+	glow_mid.add_theme_font_size_override("font_size", 64)
+	glow_mid.add_theme_color_override("font_color", Color(MANTLE_RED.r, MANTLE_RED.g, MANTLE_RED.b, 0.25))
+	glow_mid.set_anchors_preset(Control.PRESET_CENTER)
+	glow_mid.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	glow_mid.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	glow_mid.offset_left = -90
+	glow_mid.offset_right = 90
+	glow_mid.offset_top = -35
+	glow_mid.offset_bottom = 35
+	glow_mid.scale = Vector2(1.02, 1.02)
+	number_stack.add_child(glow_mid)
+
+	# Layer 3: Inner glow (brightest, closest to text)
 	var glow_label = Label.new()
 	glow_label.name = "NumberGlow"
 	glow_label.text = "0"
 	glow_label.add_theme_font_override("font", default_font)
 	glow_label.add_theme_font_size_override("font_size", 64)
-	glow_label.add_theme_color_override("font_color", Color(MANTLE_RED.r, MANTLE_RED.g, MANTLE_RED.b, 0.3))
+	glow_label.add_theme_color_override("font_color", Color(MANTLE_RED.r, MANTLE_RED.g, MANTLE_RED.b, 0.4))
 	glow_label.set_anchors_preset(Control.PRESET_CENTER)
 	glow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	glow_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -637,13 +800,15 @@ func _create_trophy_plaque() -> Control:
 	glow_label.offset_bottom = 35
 	number_stack.add_child(glow_label)
 
-	# Main number
+	# Main number with dark outline for crispness
 	total_label = Label.new()
 	total_label.name = "TotalLabel"
 	total_label.text = "0"
 	total_label.add_theme_font_override("font", default_font)
 	total_label.add_theme_font_size_override("font_size", 64)
 	total_label.add_theme_color_override("font_color", MANTLE_RED)
+	total_label.add_theme_color_override("font_outline_color", Color(0.1, 0.0, 0.0, 0.8))  # Dark red outline
+	total_label.add_theme_constant_override("outline_size", 2)
 	total_label.set_anchors_preset(Control.PRESET_CENTER)
 	total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	total_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -653,40 +818,12 @@ func _create_trophy_plaque() -> Control:
 	total_label.offset_bottom = 35
 	number_stack.add_child(total_label)
 
-	# "ACHIEVEMENTS" suffix with connection indicator
-	var suffix_row = HBoxContainer.new()
-	suffix_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	suffix_row.add_theme_constant_override("separation", 6)
-	inner_content.add_child(suffix_row)
-
-	var ach_suffix = Label.new()
-	ach_suffix.name = "TotalSuffix"
-	ach_suffix.text = "ACHIEVEMENTS"
-	ach_suffix.add_theme_font_override("font", default_font)
-	ach_suffix.add_theme_font_size_override("font_size", FONT_TINY)
-	ach_suffix.add_theme_color_override("font_color", TEXT_DIM)
-	suffix_row.add_child(ach_suffix)
-
-	# Connection indicator dot (starts hidden, shown after count animation)
-	_achievement_connection_dot = Panel.new()
-	_achievement_connection_dot.name = "AchievementConnectionDot"
-	_achievement_connection_dot.custom_minimum_size = Vector2(6, 6)
-	_achievement_connection_dot.modulate = Color(1, 1, 1, 0)  # Start invisible
-	var dot_style = StyleBoxFlat.new()
-	dot_style.bg_color = Color(0.2, 0.9, 0.4)  # Green
-	dot_style.corner_radius_top_left = 3
-	dot_style.corner_radius_top_right = 3
-	dot_style.corner_radius_bottom_left = 3
-	dot_style.corner_radius_bottom_right = 3
-	_achievement_connection_dot.add_theme_stylebox_override("panel", dot_style)
-	suffix_row.add_child(_achievement_connection_dot)
-
 	return plaque
 
 func _create_enhanced_progress_section() -> Control:
 	"""Enhanced progress bar with tier emblems and glow effects"""
 	var section = VBoxContainer.new()
-	section.add_theme_constant_override("separation", 12)  # More spacing
+	section.add_theme_constant_override("separation", 20)  # More spacing
 
 	# Tier transition row with emblems
 	var tier_row = HBoxContainer.new()
@@ -885,6 +1022,7 @@ func _build_ui() -> void:
 
 	# Header (title only)
 	_build_header(main_vbox)
+	_start_logo_pulse()  # Start pulsing animation on MANTLE logo
 
 	# Content area (fills available space)
 	var content_margin = MarginContainer.new()
@@ -995,12 +1133,22 @@ func _build_mantle_stats_column() -> Control:
 	var identity_frame = _create_player_identity_frame()
 	vbox.add_child(identity_frame)
 
+	# Spacer between identity and trophy
+	var spacer_identity = Control.new()
+	spacer_identity.custom_minimum_size = Vector2(0, 12)
+	vbox.add_child(spacer_identity)
+
 	# ═══════════════════════════════════════════════════════════════════════════
 	# ACHIEVEMENT TROPHY PLAQUE - Hero number with metallic frame
 	# ═══════════════════════════════════════════════════════════════════════════
 	var trophy_plaque = _create_trophy_plaque()
 	trophy_plaque.name = "TrophyPlaque"
 	vbox.add_child(trophy_plaque)
+
+	# Spacer between trophy and progress
+	var spacer_trophy = Control.new()
+	spacer_trophy.custom_minimum_size = Vector2(0, 12)
+	vbox.add_child(spacer_trophy)
 
 	# ═══════════════════════════════════════════════════════════════════════════
 	# TIER PROGRESS - Enhanced progress bar with emblems
@@ -1017,6 +1165,8 @@ func _build_mantle_stats_column() -> Control:
 	# Connected Providers with names
 	var providers_section = VBoxContainer.new()
 	providers_section.add_theme_constant_override("separation", 8)
+	providers_section.mouse_filter = Control.MOUSE_FILTER_STOP
+	providers_section.tooltip_text = "Gaming platforms linked to your Mantle account.\nLink more at mantle.gg/dashboard"
 	vbox.add_child(providers_section)
 
 	var providers_header = Label.new()
@@ -1025,12 +1175,14 @@ func _build_mantle_stats_column() -> Control:
 	providers_header.add_theme_font_size_override("font_size", FONT_TINY)
 	providers_header.add_theme_color_override("font_color", TEXT_DIM)
 	providers_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	providers_header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	providers_section.add_child(providers_header)
 
 	var platforms_row = HBoxContainer.new()
 	platforms_row.name = "PlatformsRow"
 	platforms_row.add_theme_constant_override("separation", 16)
 	platforms_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	platforms_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	providers_section.add_child(platforms_row)
 
 	var no_platforms = Label.new()
@@ -1039,6 +1191,7 @@ func _build_mantle_stats_column() -> Control:
 	no_platforms.add_theme_font_override("font", default_font)
 	no_platforms.add_theme_font_size_override("font_size", FONT_CAPTION)
 	no_platforms.add_theme_color_override("font_color", TEXT_SECONDARY)
+	no_platforms.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	platforms_row.add_child(no_platforms)
 
 	# Flexible spacer between platforms and rarity
@@ -1049,6 +1202,8 @@ func _build_mantle_stats_column() -> Control:
 	# Rarity Breakdown (larger, with labels)
 	var rarity_section = VBoxContainer.new()
 	rarity_section.add_theme_constant_override("separation", 10)
+	rarity_section.mouse_filter = Control.MOUSE_FILTER_STOP
+	rarity_section.tooltip_text = "Your achievements sorted by unlock rarity.\nRarer achievements unlock better forge items.\nView details at mantle.gg/dashboard"
 	vbox.add_child(rarity_section)
 
 	var rarity_header = Label.new()
@@ -1057,12 +1212,14 @@ func _build_mantle_stats_column() -> Control:
 	rarity_header.add_theme_font_size_override("font_size", FONT_TINY)
 	rarity_header.add_theme_color_override("font_color", TEXT_DIM)
 	rarity_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rarity_header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rarity_section.add_child(rarity_header)
 
 	var rarity_row = HBoxContainer.new()
 	rarity_row.name = "RarityRow"
 	rarity_row.add_theme_constant_override("separation", 6)  # Tighter spacing for pill chips
 	rarity_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	rarity_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rarity_section.add_child(rarity_row)
 
 	# Flexible spacer between rarity and recent unlocks
@@ -1485,28 +1642,43 @@ func _build_forge_column() -> Control:
 	spacer3.custom_minimum_size = Vector2(0, 4)
 	vbox.add_child(spacer3)
 
-	# === SCROLLABLE CONTENT AREA ===
+	# === SCROLLABLE CONTENT AREA (fixed height for 4 rows) ===
+	# 4 rows: 4 × 54px cards + 3 × 4px gaps + padding/borders
+	const CATALOG_HEIGHT = 295
+
+	# Wrapper with border styling (always visible) - use Control for precise sizing
+	var scroll_wrapper = Control.new()
+	scroll_wrapper.name = "ForgeScrollWrapper"
+	scroll_wrapper.custom_minimum_size = Vector2(0, CATALOG_HEIGHT)
+	scroll_wrapper.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	scroll_wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_wrapper.clip_contents = true
+	vbox.add_child(scroll_wrapper)
+
+	# Background panel for border styling
+	var wrapper_bg = PanelContainer.new()
+	wrapper_bg.name = "ForgeScrollBG"
+	wrapper_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wrapper_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var wrapper_style = StyleBoxFlat.new()
+	wrapper_style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Dark bg
+	wrapper_style.set_corner_radius_all(6)
+	wrapper_style.border_color = BORDER_GLOW
+	wrapper_style.set_border_width_all(2)
+	wrapper_bg.add_theme_stylebox_override("panel", wrapper_style)
+	scroll_wrapper.add_child(wrapper_bg)
+
 	var forge_scroll = ScrollContainer.new()
 	forge_scroll.name = "ForgeScroll"
-	forge_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL  # Expand to fill available space
-	forge_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	forge_scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
 	forge_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	forge_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO  # Show scrollbar when needed
-	forge_scroll.z_index = 1
-	vbox.add_child(forge_scroll)
+	forge_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll_wrapper.add_child(forge_scroll)
 
 	# === CONTENT CONTAINER (inside scroll) ===
-	_forge_content_container = PanelContainer.new()
+	_forge_content_container = VBoxContainer.new()
 	_forge_content_container.name = "ForgeContent"
-	_forge_content_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Shrink to content size
 	_forge_content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_forge_content_container.clip_contents = true  # Prevent overflow
-	var content_style = StyleBoxFlat.new()
-	content_style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Fully opaque dark bg
-	content_style.set_corner_radius_all(6)
-	content_style.border_color = BORDER_GLOW
-	content_style.set_border_width_all(2)
-	_forge_content_container.add_theme_stylebox_override("panel", content_style)
 	forge_scroll.add_child(_forge_content_container)
 
 	# === ITEM DETAIL PANEL ===
@@ -1538,40 +1710,20 @@ func _build_forge_column() -> Control:
 	return wrapper
 
 func _style_forge_tab(btn: Button, active: bool) -> void:
-	"""Style a forge tab button"""
-	var style = StyleBoxFlat.new()
+	"""Style a forge tab button - uses primary when active, secondary when inactive"""
 	if active:
-		style.bg_color = MANTLE_CYAN.darkened(0.6)
-		style.border_color = MANTLE_CYAN
-		btn.add_theme_color_override("font_color", TEXT_PRIMARY)
+		_style_button(btn, ButtonTheme.PRIMARY, ButtonSize.SMALL)
 	else:
-		style.bg_color = Color(0.08, 0.08, 0.10)
-		style.border_color = CARD_BORDER
+		_style_button(btn, ButtonTheme.SECONDARY, ButtonSize.SMALL)
 		btn.add_theme_color_override("font_color", TEXT_DIM)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(4)
-	btn.add_theme_stylebox_override("normal", style)
-	btn.add_theme_stylebox_override("hover", style)
-	btn.add_theme_stylebox_override("pressed", style)
-	btn.add_theme_font_size_override("font_size", FONT_TINY)
 
 func _style_filter_button(btn: Button, active: bool) -> void:
-	"""Style a filter/sort button"""
-	var style = StyleBoxFlat.new()
+	"""Style a filter/sort button - uses danger (red) when active, secondary when inactive"""
 	if active:
-		style.bg_color = MANTLE_RED.darkened(0.5)
-		style.border_color = MANTLE_RED
-		btn.add_theme_color_override("font_color", TEXT_PRIMARY)
+		_style_button(btn, ButtonTheme.DANGER, ButtonSize.SMALL)
 	else:
-		style.bg_color = Color(0.06, 0.06, 0.08)
-		style.border_color = Color(0.12, 0.12, 0.14)
+		_style_button(btn, ButtonTheme.SECONDARY, ButtonSize.SMALL)
 		btn.add_theme_color_override("font_color", TEXT_DIM)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(3)
-	btn.add_theme_stylebox_override("normal", style)
-	btn.add_theme_stylebox_override("hover", style)
-	btn.add_theme_stylebox_override("pressed", style)
-	btn.add_theme_font_size_override("font_size", FONT_MIN)
 
 func _on_forge_sort_pressed(sort_id: String) -> void:
 	"""Handle sort button press"""
@@ -1588,11 +1740,15 @@ func _on_forge_sort_pressed(sort_id: String) -> void:
 
 func _build_forge_detail_panel() -> Control:
 	"""Build the item detail panel - tooltip style layout"""
+	# Wrapper that expands to fit content
+	var wrapper = VBoxContainer.new()
+	wrapper.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
 	var panel = PanelContainer.new()
 	panel.clip_contents = true
-	panel.size_flags_vertical = Control.SIZE_SHRINK_END
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # Fill but don't overflow
-	panel.custom_minimum_size = Vector2(0, 100)  # Fixed height
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.03, 0.035, 0.045, 1.0)  # Slightly lighter dark bg
 	style.border_color = BORDER_GLOW.darkened(0.3)
@@ -1618,25 +1774,30 @@ func _build_forge_detail_panel() -> Control:
 	icon_container.name = "DetailIcon"
 	icon_container.custom_minimum_size = Vector2(72, 72)
 	icon_container.clip_contents = true
-	icon_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon_container.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Anchor to top
+	icon_container.mouse_filter = Control.MOUSE_FILTER_STOP  # Enable tooltip
+	icon_container.tooltip_text = ""  # Set dynamically when item selected
 	var icon_style = StyleBoxFlat.new()
-	icon_style.bg_color = Color(0.05, 0.055, 0.065)
+	icon_style.bg_color = Color(0.06, 0.06, 0.08)  # Match catalog card bg
 	icon_style.border_color = Color(0.15, 0.18, 0.22)
-	icon_style.set_border_width_all(1)
-	icon_style.set_corner_radius_all(4)
+	icon_style.set_border_width_all(2)  # Match catalog card
+	icon_style.set_corner_radius_all(5)  # Match catalog card
+	icon_style.set_content_margin_all(2)  # Match catalog card
 	icon_container.add_theme_stylebox_override("panel", icon_style)
 	main_hbox.add_child(icon_container)
 
 	var icon_holder = Control.new()
 	icon_holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Pass mouse to parent for tooltip
 	icon_container.add_child(icon_holder)
 
 	var icon_texture = TextureRect.new()
 	icon_texture.name = "IconTexture"
 	icon_texture.custom_minimum_size = Vector2(64, 64)
-	icon_texture.position = Vector2(4, 4)
+	icon_texture.position = Vector2(2, 2)  # Adjusted for content margin
 	icon_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Pass mouse to parent for tooltip
 	icon_texture.visible = false
 	icon_holder.add_child(icon_texture)
 
@@ -1648,6 +1809,7 @@ func _build_forge_detail_panel() -> Control:
 	icon_placeholder.set_anchors_preset(Control.PRESET_FULL_RECT)
 	icon_placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon_placeholder.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Pass mouse to parent for tooltip
 	icon_holder.add_child(icon_placeholder)
 
 	# === CENTER: Tooltip-style info ===
@@ -1675,6 +1837,8 @@ func _build_forge_detail_panel() -> Control:
 	rarity_label.text = ""
 	rarity_label.add_theme_font_size_override("font_size", FONT_CAPTION)
 	rarity_label.add_theme_color_override("font_color", TEXT_DIM)
+	rarity_label.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Prevent text selection
+	rarity_label.clip_text = true
 	info_vbox.add_child(rarity_label)
 
 	# Status line (Ready to equip! / Ready to forge! / Locked)
@@ -1854,8 +2018,9 @@ func _build_forge_detail_panel() -> Control:
 	ability_label.name = "AbilityLabel"
 	ability_container.add_child(ability_label)
 
+	wrapper.add_child(panel)
 	_forge_detail_panel = panel
-	return panel
+	return wrapper
 
 func _create_modifier_badge(badge_name: String, text: String, color: Color) -> PanelContainer:
 	"""Create a small badge for displaying modifiers"""
@@ -1880,23 +2045,8 @@ func _create_modifier_badge(badge_name: String, text: String, color: Color) -> P
 	return badge
 
 func _style_preview_button(btn: Button) -> void:
-	"""Style the preview button"""
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.10)
-	style.border_color = MANTLE_CYAN.darkened(0.3)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(4)
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover_style = style.duplicate()
-	hover_style.bg_color = MANTLE_CYAN.darkened(0.6)
-	hover_style.border_color = MANTLE_CYAN
-	btn.add_theme_stylebox_override("hover", hover_style)
-	btn.add_theme_stylebox_override("pressed", hover_style)
-
-	btn.add_theme_font_size_override("font_size", FONT_MIN)
-	btn.add_theme_color_override("font_color", TEXT_SECONDARY)
-	btn.add_theme_color_override("font_hover_color", TEXT_PRIMARY)
+	"""Style the preview/status button - secondary small"""
+	_style_button(btn, ButtonTheme.SECONDARY, ButtonSize.SMALL)
 
 func _on_preview_pressed() -> void:
 	"""Claim the selected forged item and add it to player's inventory bag"""
@@ -1979,64 +2129,15 @@ func _on_preview_pressed() -> void:
 
 func _style_forge_action_button(btn: Button) -> void:
 	"""Style the big orange FORGE action button"""
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.8, 0.4, 0.1)  # Orange
-	style.border_color = Color(1.0, 0.6, 0.2)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(6)
-	style.shadow_size = 6
-	style.shadow_color = Color(1.0, 0.5, 0.1, 0.4)
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover_style = style.duplicate()
-	hover_style.bg_color = Color(0.9, 0.5, 0.15)
-	hover_style.border_color = Color(1.0, 0.7, 0.3)
-	hover_style.shadow_size = 10
-	hover_style.shadow_color = Color(1.0, 0.5, 0.1, 0.6)
-	btn.add_theme_stylebox_override("hover", hover_style)
-	btn.add_theme_stylebox_override("pressed", hover_style)
-
-	btn.add_theme_font_size_override("font_size", FONT_BODY)
-	btn.add_theme_color_override("font_color", Color.WHITE)
-	btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	_style_button(btn, ButtonTheme.ACTION, ButtonSize.MEDIUM)
 
 func _style_bridge_button(btn: Button) -> void:
-	"""Style the BRIDGE OUT button (purple/blue for external wallet)"""
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.3, 0.5)  # Dark blue
-	style.border_color = Color(0.4, 0.5, 0.8)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(4)
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover_style = style.duplicate()
-	hover_style.bg_color = Color(0.3, 0.4, 0.6)
-	hover_style.border_color = Color(0.5, 0.6, 0.9)
-	btn.add_theme_stylebox_override("hover", hover_style)
-	btn.add_theme_stylebox_override("pressed", hover_style)
-
-	btn.add_theme_font_size_override("font_size", FONT_TINY)
-	btn.add_theme_color_override("font_color", Color(0.7, 0.8, 1.0))
-	btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	"""Style the BRIDGE/EXPORT button (purple/blue for external wallet)"""
+	_style_button(btn, ButtonTheme.BRIDGE, ButtonSize.SMALL)
 
 func _style_cancel_button(btn: Button) -> void:
 	"""Style the CANCEL button (red/warning)"""
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.4, 0.15, 0.15)  # Dark red
-	style.border_color = Color(0.6, 0.25, 0.25)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(4)
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover_style = style.duplicate()
-	hover_style.bg_color = Color(0.5, 0.2, 0.2)
-	hover_style.border_color = Color(0.8, 0.3, 0.3)
-	btn.add_theme_stylebox_override("hover", hover_style)
-	btn.add_theme_stylebox_override("pressed", hover_style)
-
-	btn.add_theme_font_size_override("font_size", FONT_MIN)
-	btn.add_theme_color_override("font_color", Color(0.9, 0.6, 0.6))
-	btn.add_theme_color_override("font_hover_color", Color(1.0, 0.8, 0.8))
+	_style_button(btn, ButtonTheme.DANGER, ButtonSize.SMALL)
 
 func _on_bridge_out_pressed() -> void:
 	"""Handle BRIDGE OUT button press - start 48h cooldown to move item to external wallet"""
@@ -2302,9 +2403,18 @@ func _on_bridge_in_confirmed(token_id: int, item_name: String, popup: AcceptDial
 
 func _build_bridge_section() -> Control:
 	"""Build the bridge UI section below the detail panel"""
+	# Wrapper to enforce fixed height (prevents expansion from content)
+	var wrapper = Control.new()
+	wrapper.custom_minimum_size = Vector2(0, 140)  # Fixed height for bridge section
+	wrapper.size_flags_vertical = Control.SIZE_SHRINK_END
+	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrapper.clip_contents = true  # Clip any overflow
+
 	var panel = PanelContainer.new()
-	panel.clip_contents = true  # Prevent overflow - no forced height, shrink to content
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # Fill but don't overflow
+	panel.clip_contents = true
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)  # Fill wrapper exactly
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Fully opaque dark bg
 	style.border_color = Color(0.15, 0.2, 0.35)  # Blue-ish tint for bridge theme
@@ -2411,8 +2521,9 @@ func _build_bridge_section() -> Control:
 	content_row.add_child(bridging_out_section)
 	_bridging_out_container = bridging_out_section
 
+	wrapper.add_child(panel)
 	_bridge_section = panel
-	return panel
+	return wrapper
 
 func _build_bridge_in_section() -> Control:
 	"""Build the Import section showing items available from web wallet"""
@@ -2470,43 +2581,10 @@ func _build_bridging_out_section() -> Control:
 
 func _style_wallet_connect_button(btn: Button, connected: bool = false) -> void:
 	"""Style the wallet connect button based on connection state"""
-	var style = StyleBoxFlat.new()
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(3)
-
 	if connected:
-		# Connected state: subtle green tint
-		style.bg_color = Color(0.1, 0.2, 0.15)
-		style.border_color = Color(0.2, 0.5, 0.3)
-		btn.add_theme_color_override("font_color", Color(0.5, 0.7, 0.5))
-		btn.add_theme_color_override("font_hover_color", Color(0.7, 0.9, 0.7))
-		btn.add_theme_color_override("font_pressed_color", Color(0.7, 0.9, 0.7))
-		btn.add_theme_color_override("font_focus_color", Color(0.5, 0.7, 0.5))
-
-		var hover_style = style.duplicate()
-		hover_style.bg_color = Color(0.15, 0.25, 0.18)
-		hover_style.border_color = Color(0.3, 0.6, 0.4)
-		btn.add_theme_stylebox_override("hover", hover_style)
-		btn.add_theme_stylebox_override("pressed", hover_style)
-		btn.add_theme_stylebox_override("focus", style)
+		_style_button(btn, ButtonTheme.SUCCESS, ButtonSize.SMALL)
 	else:
-		# Disconnected state: blue accent
-		style.bg_color = Color(0.15, 0.2, 0.35)
-		style.border_color = Color(0.3, 0.4, 0.6)
-		btn.add_theme_color_override("font_color", Color(0.6, 0.7, 0.9))
-		btn.add_theme_color_override("font_hover_color", Color(0.8, 0.9, 1.0))
-		btn.add_theme_color_override("font_pressed_color", Color(0.8, 0.9, 1.0))
-		btn.add_theme_color_override("font_focus_color", Color(0.6, 0.7, 0.9))
-
-		var hover_style = style.duplicate()
-		hover_style.bg_color = Color(0.2, 0.3, 0.5)
-		hover_style.border_color = Color(0.4, 0.5, 0.8)
-		btn.add_theme_stylebox_override("hover", hover_style)
-		btn.add_theme_stylebox_override("pressed", hover_style)
-		btn.add_theme_stylebox_override("focus", style)
-
-	btn.add_theme_stylebox_override("normal", style)
-	btn.add_theme_font_size_override("font_size", FONT_MIN)
+		_style_button(btn, ButtonTheme.BRIDGE, ButtonSize.SMALL)
 	btn.focus_mode = Control.FOCUS_NONE  # Disable focus to prevent outline
 
 func _refresh_bridge_section() -> void:
@@ -2708,35 +2786,16 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 		if can_cancel:
 			var cancel_btn = Button.new()
 			cancel_btn.name = "CancelX_%s" % str(forged_id)
-			cancel_btn.text = "X"
-			cancel_btn.custom_minimum_size = Vector2(18, 18)
+			cancel_btn.text = "✕"
+			cancel_btn.custom_minimum_size = Vector2(20, 20)
 			cancel_btn.tooltip_text = "Cancel Export to Web"
 			cancel_btn.set_meta("forged_id", forged_id)
 			cancel_btn.set_meta("item_name", item_name)
 			cancel_btn.pressed.connect(_on_bridge_card_cancel_pressed.bind(forged_id, item_name))
-			cancel_btn.mouse_entered.connect(_play_button_hover_sound)
-
-			# Style the X button - red background
-			var x_style = StyleBoxFlat.new()
-			x_style.bg_color = Color(0.6, 0.15, 0.15)
-			x_style.border_color = Color(0.8, 0.2, 0.2)
-			x_style.set_border_width_all(1)
-			x_style.set_corner_radius_all(2)
-			cancel_btn.add_theme_stylebox_override("normal", x_style)
-
-			var x_hover = x_style.duplicate()
-			x_hover.bg_color = Color(0.8, 0.2, 0.2)
-			x_hover.border_color = Color(1.0, 0.3, 0.3)
-			cancel_btn.add_theme_stylebox_override("hover", x_hover)
-			cancel_btn.add_theme_stylebox_override("pressed", x_hover)
-
-			cancel_btn.add_theme_font_size_override("font_size", 12)
-			cancel_btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.9))
-			cancel_btn.add_theme_color_override("font_hover_color", Color.WHITE)
-			cancel_btn.focus_mode = Control.FOCUS_NONE
+			_style_icon_button(cancel_btn, ButtonTheme.DANGER)
 
 			# Position in upper-right corner
-			cancel_btn.position = Vector2(card.custom_minimum_size.x - 20, 2)
+			cancel_btn.position = Vector2(card.custom_minimum_size.x - 22, 2)
 			card_content.add_child(cancel_btn)
 
 		# Countdown timer overlay at bottom of card
@@ -3113,8 +3172,8 @@ func _on_bridge_auto_confirm_complete(pending_bridges: Array) -> void:
 	print("[Armory] Auto-confirm check complete, %d items still pending" % pending_bridges.size())
 
 	# Update countdown labels - items that were confirmed will be gone from pending_bridges
-	if _bridge_out_container:
-		var items_row = _bridge_out_container.find_child("BridgeOutItemsRow", true, false)
+	if _bridging_out_container:
+		var items_row = _bridging_out_container.find_child("BridgingOutItems", true, false)
 		if items_row:
 			for child in items_row.get_children():
 				for subchild in child.get_children():
@@ -3275,22 +3334,7 @@ func _on_wallet_poll_timeout() -> void:
 
 func _style_wallet_refresh_button(btn: Button) -> void:
 	"""Style the wallet refresh button"""
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.14, 0.18)
-	style.border_color = Color(0.25, 0.28, 0.35)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(3)
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover_style = style.duplicate()
-	hover_style.bg_color = Color(0.18, 0.22, 0.28)
-	hover_style.border_color = Color(0.35, 0.4, 0.5)
-	btn.add_theme_stylebox_override("hover", hover_style)
-	btn.add_theme_stylebox_override("pressed", hover_style)
-
-	btn.add_theme_font_size_override("font_size", FONT_TINY)
-	btn.add_theme_color_override("font_color", TEXT_SECONDARY)
-	btn.add_theme_color_override("font_hover_color", TEXT_PRIMARY)
+	_style_button(btn, ButtonTheme.SECONDARY, ButtonSize.SMALL)
 
 func _get_forge_icon_path(item_id: String) -> String:
 	"""Get the icon path for a forge item from catalog"""
@@ -3431,6 +3475,8 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 			icon_label.visible = true
 		if icon_texture:
 			icon_texture.visible = false
+		if icon_container:
+			icon_container.tooltip_text = ""
 		# Hide action buttons in empty state
 		var bridge_out_btn = _forge_detail_panel.find_child("BridgeOutButton", true, false)
 		var bridge_in_btn = _forge_detail_panel.find_child("BridgeInButton", true, false)
@@ -3444,7 +3490,8 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 
 	# Get item properties
 	var item_name = item.get("item_name", item.get("name", "Unknown"))
-	var rarity = item.get("item_rarity", item.get("rarity", "Common"))
+	var rarity_raw = item.get("item_rarity", item.get("rarity", "Common"))
+	var rarity = rarity_raw.capitalize() if rarity_raw is String else "Common"  # Ensure proper casing for RARITY_COLORS lookup
 	var game_name = item.get("game", "???")
 	var category = item.get("category", "weapons")
 	var achievement = item.get("achievement", "")
@@ -3461,13 +3508,17 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 		rarity_label.text = "%s • %s" % [rarity.to_lower(), game_name]
 		rarity_label.add_theme_color_override("font_color", rarity_color.darkened(0.2))
 
-	# Status line
+	# Status line - check forge opportunity from item data
+	var detail_has_forge_opportunity = item.get("has_forge_opportunity", false)
 	if unlock_label:
-		if is_owned:
+		if is_owned and detail_has_forge_opportunity:
+			unlock_label.text = "✓ In bag • ⚒️ Can forge more!"
+			unlock_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.2))
+		elif is_owned:
 			unlock_label.text = "✓ Ready to equip!"
 			unlock_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
-		elif is_forgeable:
-			unlock_label.text = "Ready to forge!"
+		elif is_forgeable or detail_has_forge_opportunity:
+			unlock_label.text = "⚒️ Ready to forge!"
 			unlock_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
 		else:
 			unlock_label.text = "Locked"
@@ -3497,10 +3548,19 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 		else:
 			achievement_label.text = ""
 
-	# Census line (Only 1 exists!)
+	# Census line - show ownership count (will be overwritten by TradingManager data if available)
+	var detail_item_id = item.get("id", item.get("item_id", ""))
+	var detail_inv_count = _get_inventory_count_by_item_id(detail_item_id)
 	if census_label:
-		if is_owned:
-			census_label.text = "Only 1 exists!"
+		if detail_inv_count > 1:
+			census_label.text = "You own %d" % detail_inv_count
+			census_label.add_theme_color_override("font_color", Color(0.4, 0.8, 0.4))
+		elif detail_inv_count == 1:
+			census_label.text = "You own 1"
+			census_label.add_theme_color_override("font_color", Color(0.4, 0.8, 0.4))
+		elif is_owned:
+			census_label.text = "Forged (traded away)"
+			census_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 		else:
 			census_label.text = ""
 
@@ -3517,6 +3577,13 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 			icon_texture.texture = texture
 			icon_texture.visible = true
 			icon_loaded = true
+			# Apply per-item scale overrides (from centralized ItemIconGenerator)
+			if ItemIconGenerator.ICON_SCALE_OVERRIDES.has(detail_item_id):
+				var detail_scale = ItemIconGenerator.ICON_SCALE_OVERRIDES[detail_item_id]
+				icon_texture.scale = Vector2(detail_scale, detail_scale)
+				icon_texture.pivot_offset = icon_texture.size / 2.0
+			else:
+				icon_texture.scale = Vector2(1.0, 1.0)
 			if icon_label:
 				icon_label.visible = false
 
@@ -3536,8 +3603,61 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 	if icon_container:
 		var style = icon_container.get_theme_stylebox("panel").duplicate()
 		if style is StyleBoxFlat:
-			style.border_color = rarity_color.darkened(0.3) if is_owned else CARD_BORDER
+			style.border_color = rarity_color if is_owned else rarity_color.darkened(0.4)
+			style.set_border_width_all(2)  # Make border more visible
 			icon_container.add_theme_stylebox_override("panel", style)
+		# Build full in-game style tooltip with stats
+		var tooltip_lines = []
+		if is_owned:
+			tooltip_lines.append("[FORGED] %s" % item_name)
+		else:
+			tooltip_lines.append(item_name)
+		tooltip_lines.append(rarity.to_upper())
+
+		var lore = item.get("lore", item.get("description", ""))
+		if lore != "":
+			tooltip_lines.append("")
+			tooltip_lines.append("\"%s\"" % lore)
+
+		# Stats section
+		if category.to_lower() == "weapons":
+			if item.has("base_damage"):
+				tooltip_lines.append("")
+				tooltip_lines.append("Damage: +%.1f" % item.get("base_damage", 0))
+			if item.has("attack_speed_bonus"):
+				var speed_bonus = item.get("attack_speed_bonus", 0.0)
+				if speed_bonus != 0:
+					tooltip_lines.append("Attack Speed: %+.1f%%" % (speed_bonus * 100))
+			if item.has("crit_chance_bonus"):
+				var crit_bonus = item.get("crit_chance_bonus", 0.0)
+				if crit_bonus != 0:
+					tooltip_lines.append("Crit Chance: +%.1f%%" % (crit_bonus * 100))
+
+		if item.has("defense"):
+			tooltip_lines.append("")
+			tooltip_lines.append("Defense: +%d" % item.get("defense", 0))
+
+		# Forged-specific info
+		if is_owned:
+			var effect_name = item.get("effect_name", "")
+			if effect_name != "":
+				tooltip_lines.append("")
+				tooltip_lines.append("Effect: %s" % effect_name)
+			var effort_tier = item.get("effort_tier", "")
+			if effort_tier != "":
+				tooltip_lines.append("Tier: %s" % effort_tier)
+
+		# Game/achievement source
+		var tip_game_name = item.get("game", "")
+		var tip_achievement_name = item.get("achievement", "")
+		if tip_game_name != "" or tip_achievement_name != "":
+			tooltip_lines.append("")
+			if tip_game_name != "":
+				tooltip_lines.append("From: %s" % tip_game_name)
+			if tip_achievement_name != "":
+				tooltip_lines.append("Achievement: %s" % tip_achievement_name)
+
+		icon_container.tooltip_text = "\n".join(tooltip_lines)
 
 	# Get bridge UI elements
 	var bridge_out_btn = _forge_detail_panel.find_child("BridgeOutButton", true, false)
@@ -3548,28 +3668,43 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 	var is_bridging = bridge_status == "bridging_out"
 	var is_bridged = bridge_status == "bridged"
 
+	# Check for forge opportunity and inventory count
+	var has_forge_opportunity = item.get("has_forge_opportunity", false)
+	var item_id = item.get("id", item.get("item_id", ""))
+	var inventory_count = _get_inventory_count_by_item_id(item_id)
+
 	# Items are auto-claimed on forge and bridge-in, so no CLAIM button needed
 	# Just show status indicator for forged items
 	if preview_btn:
 		if is_bridging or is_bridged:
 			preview_btn.visible = false
-		elif is_owned and bridge_status == "in_game":
-			# Item is in inventory and ready to use
+		elif inventory_count > 0 and bridge_status == "in_game":
+			# Item is in inventory and ready to use - show count if multiple
 			preview_btn.visible = true
-			preview_btn.text = "IN INVENTORY"
+			if inventory_count > 1:
+				preview_btn.text = "x%d IN BAG" % inventory_count
+			else:
+				preview_btn.text = "IN BAG"
 			preview_btn.disabled = true
 		else:
 			preview_btn.visible = false
 
-	# Show FORGE button only for forgeable items (achievement unlocked, not yet forged)
+	# Show FORGE button when there's a forge opportunity (even if already owning some)
 	if forge_btn:
-		forge_btn.visible = is_forgeable
+		forge_btn.visible = has_forge_opportunity or is_forgeable
+		if has_forge_opportunity:
+			forge_btn.text = "⚒️ FORGE"
+		else:
+			forge_btn.text = "FORGE"
 
 	# === Bind buttons logic ===
-	# UNBIND button - shown for items that are in_game (items auto-claimed on forge/bind)
+	# EXPORT button - shown for items in inventory (can export one at a time)
 	if bridge_out_btn:
-		bridge_out_btn.visible = is_owned and bridge_status == "in_game"
-		bridge_out_btn.text = "EXPORT"
+		bridge_out_btn.visible = inventory_count > 0 and bridge_status == "in_game"
+		if inventory_count > 1:
+			bridge_out_btn.text = "EXPORT (1)"
+		else:
+			bridge_out_btn.text = "EXPORT"
 		bridge_out_btn.disabled = false
 
 	# NOTE: Cancel functionality moved to red X on bridge-out icons in EXPORT TO WEB section
@@ -3849,46 +3984,56 @@ func _build_forge_unified_content() -> Control:
 	else:
 		print("[Armory] Forge status NOT loaded yet")
 
-	# Build lookup of forgeable achievement names
+	# Build lookup of forgeable items by both name AND item_id (for more reliable matching)
 	var forgeable_names = []
+	var forgeable_item_ids = []
 	for ach in forgeable_achievements:
 		var name = ach.get("display_name", "")
+		var ach_item_id = ach.get("item_id", "")
 		if name != "":
 			forgeable_names.append(name)
-	print("[Armory] Forgeable achievement names: %s" % str(forgeable_names))
+		if ach_item_id != "":
+			forgeable_item_ids.append(ach_item_id)
+	print("[Armory] Forgeable: %d by name, %d by item_id" % [forgeable_names.size(), forgeable_item_ids.size()])
 
 	# Sort catalog based on current sort setting
 	var sorted_items = _sort_items(FORGE_CATALOG.duplicate())
 
-	# Categorize items into 3 groups
-	var forged_list = []     # Already forged via webapp (claimable)
-	var forgeable_list = []  # Achievement unlocked, needs forging in webapp
+	# Categorize items - now tracking forge opportunities separately from ownership
+	# An item can be BOTH forged (you own some) AND forgeable (you can make more)
+	var forged_list = []     # Already forged via webapp (owns at least one)
+	var forgeable_list = []  # Has unspent forge opportunity, doesn't own any yet
 	var locked_list = []     # Achievement not unlocked
 
 	for item in sorted_items:
 		var item_id = item.get("id", "")
+		var item_name = item.get("name", "")
 		var achievement_name = item.get("achievement", "")
+		# Match by item_id first (most reliable), then by name, then by achievement name
+		var has_forge_opportunity = (item_id in forgeable_item_ids) or (item_name in forgeable_names) or (achievement_name in forgeable_names)
 
 		if item_id in forged_ids:
 			# Merge catalog data with backend data (backend has forged_id, claimed_in_game, etc.)
 			var backend_data = ForgeItemManager.get_forged_item(item_id)
+			var merged = item.duplicate()
 			if not backend_data.is_empty():
-				var merged = item.duplicate()
 				merged.merge(backend_data, true)  # Backend takes precedence
-				forged_list.append(merged)
-			else:
-				forged_list.append(item)
-		elif achievement_name in forgeable_names:
-			forgeable_list.append(item)
+			# Track if there's an additional forge opportunity
+			merged["has_forge_opportunity"] = has_forge_opportunity
+			forged_list.append(merged)
+		elif has_forge_opportunity:
+			var merged = item.duplicate()
+			merged["has_forge_opportunity"] = true
+			forgeable_list.append(merged)
 		else:
 			locked_list.append(item)
 
-	# Add FORGED items first (green checkmark, can claim)
+	# Add FORGED items first (owns at least one - may also have glow if more available)
 	for item in forged_list:
 		var item_card = _create_forge_item_card(item, "forged")
 		grid.add_child(item_card)
 
-	# Add FORGEABLE items second (orange anvil, needs webapp forge)
+	# Add FORGEABLE items second (has opportunity, doesn't own yet)
 	for item in forgeable_list:
 		var item_card = _create_forge_item_card(item, "forgeable")
 		grid.add_child(item_card)
@@ -4066,7 +4211,7 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	# Set pivot for centered scaling
 	card.pivot_offset = Vector2(CARD_SIZE / 2.0, CARD_SIZE / 2.0)
 
-	# Icon container centered in card
+	# Icon holder (centered)
 	var icon_container = CenterContainer.new()
 	icon_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	icon_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -4077,21 +4222,40 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	if ResourceLoader.exists(icon_path):
 		var texture = load(icon_path)
 		if texture:
-			# Fixed 64px display size, icons may be 64x64 or 256x256 (enhanced)
-			const ICON_DISPLAY_SIZE = 64
-			var icon_offset = (ICON_DISPLAY_SIZE - CARD_SIZE) / 2  # Center the icon within smaller card
+			# Base 64px display size, icons may be 64x64 or 256x256 (enhanced)
+			const BASE_ICON_SIZE = 64
+			const ICON_OFFSET = (BASE_ICON_SIZE - CARD_SIZE) / 2  # Center 64px icon in 54px card
+
+			# Per-item and per-category visual scale adjustments (doesn't affect card size)
+			var item_id = item.get("id", item.get("item_id", ""))
+			var category = item.get("category", "").to_lower()
+			var item_type = item.get("item_type", "").to_lower()
+			var icon_scale = 1.0
+
+			# Check centralized scale overrides first (from ItemIconGenerator)
+			if ItemIconGenerator.ICON_SCALE_OVERRIDES.has(item_id):
+				icon_scale = ItemIconGenerator.ICON_SCALE_OVERRIDES[item_id]
+			# Special case: fingerprint_stone_shield is too big
+			elif item_id == "fingerprint_stone_shield":
+				icon_scale = 0.5
+			# Chest armor gets 50% larger
+			elif item_type == "armor_chest":
+				icon_scale = 1.5
+			# Scale up these categories by 25%: capes, armor (head/etc), weapons (swords/guns), shields
+			elif category in ["capes", "armor", "weapons", "shields"]:
+				icon_scale = 1.25
 
 			var icon_rect = TextureRect.new()
 			icon_rect.texture = texture
-			icon_rect.custom_minimum_size = Vector2(ICON_DISPLAY_SIZE, ICON_DISPLAY_SIZE)
-			icon_rect.size = Vector2(ICON_DISPLAY_SIZE, ICON_DISPLAY_SIZE)
-			icon_rect.position = Vector2(-icon_offset, -icon_offset)  # Offset to center
+			icon_rect.custom_minimum_size = Vector2(BASE_ICON_SIZE, BASE_ICON_SIZE)
+			icon_rect.position = Vector2(-ICON_OFFSET, -ICON_OFFSET)  # Center 64px in 54px card
 			icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon_rect.scale = Vector2(icon_scale, icon_scale)
 			if state == "locked":
-				icon_rect.modulate = Color(0.25, 0.25, 0.25, 0.5)  # Very dim and desaturated
+				icon_rect.modulate = Color(0.25, 0.25, 0.25, 0.5)
 			elif state == "forgeable":
-				icon_rect.modulate = Color(1.0, 0.9, 0.7, 1.0)  # Warm golden tint (brighter)
+				icon_rect.modulate = Color(1.0, 0.9, 0.7, 1.0)
 			icon_container.add_child(icon_rect)
 		else:
 			_add_fallback_icon(icon_container, item, state)
@@ -4104,77 +4268,80 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	badge_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Pass clicks through to card
 	card.add_child(badge_layer)
 
-	# State-specific badges - styled pill badges instead of emojis
+	# State-specific badges and effects
+	# Badge positioning: bottom-right corner, overlapping edge
+	const BADGE_SIZE = 14
+	const BADGE_POS = Vector2(CARD_SIZE - BADGE_SIZE + 9, CARD_SIZE - BADGE_SIZE + 9)
+
+	# Get item_id for inventory count
+	var item_id = item.get("id", item.get("item_id", ""))
+	var inventory_count = _get_inventory_count_by_item_id(item_id)
+
+	# Check for unspent forge opportunity (can appear on ANY state except locked)
+	var has_forge_opportunity = item.get("has_forge_opportunity", false)
+
+	# GOLDEN GLOW - Applied when there's a forge opportunity (regardless of ownership)
+	if has_forge_opportunity and state != "locked":
+		var glow_style = style.duplicate()
+		glow_style.border_color = Color(1.0, 0.7, 0.2, 0.9)  # Golden orange
+		glow_style.set_border_width_all(2)
+		glow_style.shadow_size = 6
+		glow_style.shadow_color = Color(1.0, 0.6, 0.1, 0.5)  # Orange glow
+		card.add_theme_stylebox_override("panel", glow_style)
+
+		# Fast blink animation on the glow - bind to card so it lives with the card
+		var glow_tween = card.create_tween()
+		glow_tween.set_loops()
+		glow_tween.tween_property(card, "modulate", Color(1.3, 1.15, 0.9), 0.35).set_ease(Tween.EASE_IN_OUT)
+		glow_tween.tween_property(card, "modulate", Color(1.0, 1.0, 1.0), 0.35).set_ease(Tween.EASE_IN_OUT)
+
 	match state:
 		"locked":
-			# Small lock icon in bottom-right corner
+			# Lock icon in circular gray badge - bottom-right corner
+			var lock_circle = PanelContainer.new()
+			lock_circle.custom_minimum_size = Vector2(BADGE_SIZE, BADGE_SIZE)
+			var lock_style = StyleBoxFlat.new()
+			lock_style.bg_color = Color(0.3, 0.3, 0.3, 0.9)
+			lock_style.set_corner_radius_all(BADGE_SIZE / 2)
+			lock_circle.add_theme_stylebox_override("panel", lock_style)
+			lock_circle.position = BADGE_POS
+			badge_layer.add_child(lock_circle)
+
 			var lock_label = Label.new()
 			lock_label.text = "🔒"
-			lock_label.add_theme_font_size_override("font_size", FONT_MIN)
-			lock_label.modulate = Color(0.5, 0.5, 0.5, 0.8)
-			lock_label.position = Vector2(CARD_SIZE - 18, CARD_SIZE - 18)
-			badge_layer.add_child(lock_label)
+			lock_label.add_theme_font_size_override("font_size", 8)
+			lock_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+			lock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lock_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			lock_circle.add_child(lock_label)
 
 		"forgeable":
-			# Anvil icon badge - bottom right corner (matches checkmark positioning)
-			var anvil_bg = PanelContainer.new()
-			var anvil_style = StyleBoxFlat.new()
-			anvil_style.bg_color = Color(0.85, 0.45, 0.1, 0.95)  # Bright orange background
-			anvil_style.set_corner_radius_all(10)
-			anvil_style.set_content_margin_all(2)
-			anvil_style.shadow_size = 4
-			anvil_style.shadow_color = Color(1.0, 0.5, 0.1, 0.6)
-			anvil_bg.add_theme_stylebox_override("panel", anvil_style)
-			anvil_bg.position = Vector2(CARD_SIZE - 22, CARD_SIZE - 22)
-			badge_layer.add_child(anvil_bg)
-
-			var anvil_label = Label.new()
-			anvil_label.text = "⚒"  # Hammer and pick unicode (forge symbol)
-			anvil_label.add_theme_font_size_override("font_size", 14)
-			anvil_label.add_theme_color_override("font_color", Color.WHITE)
-			anvil_bg.add_child(anvil_label)
-
-			# Pulse the anvil badge
-			var badge_tween = create_tween()
-			badge_tween.set_loops()
-			badge_tween.tween_property(anvil_bg, "modulate:a", 0.7, 0.6).set_ease(Tween.EASE_IN_OUT)
-			badge_tween.tween_property(anvil_bg, "modulate:a", 1.0, 0.6).set_ease(Tween.EASE_IN_OUT)
+			# Glow already applied above - no additional badge needed
+			# (item is unlocked but user doesn't own any yet)
+			pass
 
 		"forged":
-			# Check bridge status for claimed items
-			var item_id = item.get("id", item.get("item_id", ""))
+			# Check bridge status for this item
 			var bridge_status = item.get("bridge_status", ForgeItemManager.get_bridge_status(item_id))
-			var already_claimed = ForgeItemManager.is_item_claimed(item_id)
 
-			# GREEN CHECKMARK - Always show for forged items (bottom-right corner)
-			# Use fixed square size for circular appearance
-			var check_size = 18
-			var check_bg = ColorRect.new()
-			check_bg.color = Color(0.15, 0.6, 0.25, 0.95)  # Green background
-			check_bg.custom_minimum_size = Vector2(check_size, check_size)
-			check_bg.size = Vector2(check_size, check_size)
-			check_bg.position = Vector2(CARD_SIZE - check_size - 2, CARD_SIZE - check_size - 2)
-			# Make it circular with a shader or just use rounded panel
-			badge_layer.add_child(check_bg)
+			# QUANTITY BADGE - Show how many are in inventory (if any)
+			if inventory_count > 0:
+				var qty_circle = PanelContainer.new()
+				qty_circle.custom_minimum_size = Vector2(BADGE_SIZE, BADGE_SIZE)
+				var qty_style = StyleBoxFlat.new()
+				qty_style.bg_color = Color(0.15, 0.5, 0.7, 0.95)  # Teal/blue for owned
+				qty_style.set_corner_radius_all(BADGE_SIZE / 2)
+				qty_circle.add_theme_stylebox_override("panel", qty_style)
+				qty_circle.position = BADGE_POS
+				badge_layer.add_child(qty_circle)
 
-			# Circular overlay using PanelContainer
-			var check_circle = PanelContainer.new()
-			check_circle.custom_minimum_size = Vector2(check_size, check_size)
-			var check_style = StyleBoxFlat.new()
-			check_style.bg_color = Color(0.15, 0.6, 0.25, 0.95)
-			check_style.set_corner_radius_all(check_size / 2)  # Half size = circle
-			check_circle.add_theme_stylebox_override("panel", check_style)
-			check_circle.position = Vector2(CARD_SIZE - check_size - 2, CARD_SIZE - check_size - 2)
-			badge_layer.add_child(check_circle)
-			check_bg.visible = false  # Hide the square, use circle instead
-
-			var check_label = Label.new()
-			check_label.text = "✓"
-			check_label.add_theme_font_size_override("font_size", FONT_MIN)
-			check_label.add_theme_color_override("font_color", Color.WHITE)
-			check_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			check_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			check_circle.add_child(check_label)
+				var qty_label = Label.new()
+				qty_label.text = "x%d" % inventory_count
+				qty_label.add_theme_font_size_override("font_size", 7)
+				qty_label.add_theme_color_override("font_color", Color.WHITE)
+				qty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				qty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				qty_circle.add_child(qty_label)
 
 			# Bridge status badges (top-left corner)
 			if bridge_status == "bridging_out":
@@ -4301,6 +4468,109 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 				tooltip_lines.append("IN INVENTORY")
 				tooltip_lines.append("Ready to equip!")
 
+	# Add forge available notice if there's an unspent forge opportunity
+	if has_forge_opportunity:
+		tooltip_lines.append("")
+		tooltip_lines.append("⚒️ FORGE AVAILABLE!")
+		tooltip_lines.append("Visit webapp to forge another.")
+
+	card.tooltip_text = "\n".join(tooltip_lines)
+
+	return card
+
+func _create_playtest_forge_card(item: Dictionary, state: String) -> Control:
+	"""Create a PLAYTEST forge card - simplified for one-time claiming
+	States:
+	- 'unclaimed': Can be claimed (bright with CLAIM button overlay)
+	- 'claimed': Already claimed (grayed out with ✓ checkmark)
+	"""
+	const CARD_SIZE = 54
+
+	var card = PanelContainer.new()
+	card.name = "PlaytestCard_" + item.get("id", "unknown")
+	card.custom_minimum_size = Vector2(CARD_SIZE, CARD_SIZE)
+	card.clip_contents = true
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var rarity_color = RARITY_COLORS.get(item.get("rarity", "common"), Color.GRAY)
+	var is_claimed = state == "claimed"
+
+	# Card style
+	var style = StyleBoxFlat.new()
+	if is_claimed:
+		# Claimed - grayed out
+		style.bg_color = Color(0.03, 0.03, 0.04, 1.0)
+		style.border_color = Color(0.15, 0.15, 0.18)
+	else:
+		# Unclaimed - bright rarity color
+		style.bg_color = Color(0.06, 0.06, 0.08, 1.0)
+		style.border_color = rarity_color
+		style.shadow_size = 8
+		style.shadow_color = Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.4)
+
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(5)
+	style.set_content_margin_all(2)
+	card.add_theme_stylebox_override("panel", style)
+
+	# Store item data
+	card.set_meta("item_data", item)
+	card.set_meta("item_state", state)
+	card.set_meta("is_claimed", is_claimed)
+
+	# Icon container
+	var icon_container = CenterContainer.new()
+	icon_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	icon_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	card.add_child(icon_container)
+
+	# Load icon
+	var icon_path = item.get("icon_path", "")
+	if ResourceLoader.exists(icon_path):
+		var texture = load(icon_path)
+		if texture:
+			const BASE_ICON_SIZE = 64
+			const ICON_OFFSET = (BASE_ICON_SIZE - CARD_SIZE) / 2
+
+			var icon_rect = TextureRect.new()
+			icon_rect.texture = texture
+			icon_rect.custom_minimum_size = Vector2(BASE_ICON_SIZE, BASE_ICON_SIZE)
+			icon_rect.position = Vector2(-ICON_OFFSET, -ICON_OFFSET)
+			icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			if is_claimed:
+				icon_rect.modulate = Color(0.25, 0.25, 0.25, 0.5)  # Grayed out
+			icon_container.add_child(icon_rect)
+
+	# Badge overlay for claimed items
+	if is_claimed:
+		var badge_layer = Control.new()
+		badge_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+		badge_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(badge_layer)
+
+		# Checkmark badge
+		var check_badge = Label.new()
+		check_badge.text = "✓"
+		check_badge.add_theme_font_size_override("font_size", 24)
+		check_badge.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
+		check_badge.position = Vector2(CARD_SIZE - 20, CARD_SIZE - 24)
+		badge_layer.add_child(check_badge)
+
+	# Click handler for unclaimed items
+	if not is_claimed:
+		card.gui_input.connect(_on_playtest_card_clicked.bind(card))
+		card.mouse_entered.connect(_on_forge_card_hover.bind(card, true))
+		card.mouse_exited.connect(_on_forge_card_hover.bind(card, false))
+
+	# Tooltip
+	var tooltip_lines = []
+	tooltip_lines.append(item.get("name", "Unknown"))
+	tooltip_lines.append(item.get("rarity", "common").capitalize())
+	if is_claimed:
+		tooltip_lines.append("[Claimed]")
+	else:
+		tooltip_lines.append("[Click to Claim]")
 	card.tooltip_text = "\n".join(tooltip_lines)
 
 	return card
@@ -4388,6 +4658,66 @@ func _on_forge_card_clicked(event: InputEvent, card: PanelContainer) -> void:
 		# Update detail panel with selected item and state
 		_update_forge_detail(item_data, item_state)
 
+func _on_playtest_card_clicked(event: InputEvent, card: PanelContainer) -> void:
+	"""Handle playtest forge card click - claim item to inventory"""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var item_data: Dictionary = card.get_meta("item_data", {})
+		var item_id = item_data.get("item_id", "")
+
+		if item_id == "":
+			print("[Armory] ⚠️ Cannot claim - no item_id")
+			return
+
+		# Try to claim in CharacterStats
+		if not CharacterStats.claim_playtest_item(item_id):
+			print("[Armory] ⚠️ Item already claimed: %s" % item_id)
+			return
+
+		# Play sound
+		if SoundManager:
+			SoundManager.play_button_click_sound(-3.0)
+
+		# Create inventory item from ForgeItemDB
+		var forge_db = ForgeItemDB.get_item_by_id(item_id)
+		if forge_db.is_empty():
+			print("[Armory] ⚠️ Item not found in ForgeItemDB: %s" % item_id)
+			return
+
+		# Convert to inventory format using ForgeItemManager's conversion
+		var forged_item = {
+			"item_id": item_id,
+			"item_name": forge_db.get("item_name", "Unknown"),
+			"item_type": ForgeItemDB.ItemType.keys()[forge_db.get("item_type", 0)].to_lower(),
+			"weapon_type": null,  # Will be set below if weapon
+			"item_rarity": ForgeItemDB.ItemRarity.keys()[forge_db.get("rarity", 0)].to_lower(),
+			"description": forge_db.get("description", ""),
+			"effect_name": forge_db.get("effects", ["standard_particles"])[0] if forge_db.get("effects", []).size() > 0 else "standard_particles",
+			"glow_color": "#FFFFFF",
+		}
+
+		# Set weapon_type if it's a weapon
+		if forged_item["item_type"] == "weapon":
+			var weapon_class = forge_db.get("weapon_class", 0)
+			var classes = ["sword", "dagger", "mace", "spear", "staff", "axe", "rapier",
+						   "greatsword", "katana", "saber", "scimitar", "halberd", "pike",
+						   "trident", "flail", "scythe", "bow", "crossbow", "gun", "battle_rifle"]
+			if weapon_class >= 0 and weapon_class < classes.size():
+				forged_item["weapon_type"] = classes[weapon_class]
+
+		# Use ForgeItemManager's conversion to get proper inventory format
+		var inventory_item = ForgeItemManager._convert_to_inventory_format(forged_item)
+		if inventory_item.is_empty():
+			print("[Armory] ⚠️ Failed to convert to inventory format")
+			return
+
+		# Add to inventory
+		if InventorySystem.add_item(inventory_item):
+			print("[Armory] ✅ Claimed playtest item: %s" % inventory_item.get("name"))
+			# Refresh the forge UI to show updated state
+			_refresh_forge_content()
+		else:
+			print("[Armory] ⚠️ Failed to add to inventory (full?)")
+
 func _sort_by_rarity(a: Dictionary, b: Dictionary) -> bool:
 	"""Sort items by rarity (highest first): Legendary > Epic > Rare > Uncommon > Common"""
 	var rarity_order = {
@@ -4432,6 +4762,16 @@ func _sort_items(items: Array) -> Array:
 		_:
 			sorted_items.sort_custom(_sort_by_rarity)
 	return sorted_items
+
+func _get_inventory_count_by_item_id(item_id: String) -> int:
+	"""Count how many of a specific item_id are in player's inventory"""
+	var count = 0
+	if InventorySystem:
+		for slot in range(InventorySystem.inventory_items.size()):
+			var inv_item = InventorySystem.inventory_items[slot]
+			if inv_item and inv_item.get("item_id", "") == item_id:
+				count += inv_item.get("quantity", 1)
+	return count
 
 func _get_owned_forge_items() -> Array:
 	"""Get list of forge items the player owns (from backend)"""
@@ -4529,24 +4869,7 @@ func _update_claim_all_button() -> void:
 
 func _style_claim_all_button(btn: Button) -> void:
 	"""Style the CLAIM ALL button with green accent"""
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.4, 0.2, 0.9)  # Dark green
-	style.border_color = Color(0.3, 0.8, 0.4)  # Bright green border
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(6)
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover_style = style.duplicate()
-	hover_style.bg_color = Color(0.2, 0.5, 0.25, 0.95)
-	btn.add_theme_stylebox_override("hover", hover_style)
-
-	var pressed_style = style.duplicate()
-	pressed_style.bg_color = Color(0.1, 0.3, 0.15)
-	btn.add_theme_stylebox_override("pressed", pressed_style)
-
-	btn.add_theme_color_override("font_color", Color.WHITE)
-	btn.add_theme_color_override("font_hover_color", Color(0.9, 1.0, 0.9))
-	btn.add_theme_font_size_override("font_size", FONT_TINY)
+	_style_button(btn, ButtonTheme.SUCCESS, ButtonSize.SMALL)
 
 func _get_current_tier_name() -> String:
 	"""Get current tier name from profile"""
@@ -4659,55 +4982,41 @@ func _build_dreadland_column() -> Control:
 	buttons_vbox.custom_minimum_size = Vector2(280, 0)
 	buttons_center.add_child(buttons_vbox)
 
-	# Enter World button - PRIMARY, prominent with pulse
+	# Enter World button - SUCCESS theme, LARGE size
 	enter_world_button = Button.new()
 	enter_world_button.name = "EnterWorldBtn"
 	enter_world_button.text = "ENTER WORLD"
-	enter_world_button.custom_minimum_size = Vector2(0, 56)
 	enter_world_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_enter_world_button(enter_world_button)
+	_style_button(enter_world_button, ButtonTheme.SUCCESS, ButtonSize.LARGE)
 	enter_world_button.pressed.connect(_on_enter_world_pressed)
 	enter_world_button.mouse_entered.connect(_on_enter_button_hover.bind(true))
 	enter_world_button.mouse_exited.connect(_on_enter_button_hover.bind(false))
 	buttons_vbox.add_child(enter_world_button)
 	_start_button_pulse(enter_world_button)
 
-	# Link Accounts button
-	var link_button = Button.new()
-	link_button.name = "LinkAccountsBtn"
-	link_button.text = "LINK ACCOUNTS"
-	link_button.custom_minimum_size = Vector2(0, 44)
-	link_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_secondary_button(link_button)
-	link_button.pressed.connect(_on_link_accounts_pressed)
-	buttons_vbox.add_child(link_button)
-
-	# Settings button
+	# Settings button - SECONDARY theme, LARGE size
 	var settings_button = Button.new()
 	settings_button.name = "SettingsBtn"
 	settings_button.text = "SETTINGS"
-	settings_button.custom_minimum_size = Vector2(0, 44)
 	settings_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_secondary_button(settings_button)
+	_style_button(settings_button, ButtonTheme.SECONDARY, ButtonSize.LARGE)
 	settings_button.pressed.connect(_on_settings_pressed)
 	buttons_vbox.add_child(settings_button)
 
-	# Logout button - subtle
+	# Logout button - DANGER theme, LARGE size
 	logout_button = Button.new()
 	logout_button.text = "LOGOUT"
-	logout_button.custom_minimum_size = Vector2(0, 36)
 	logout_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_logout_button(logout_button)
+	_style_button(logout_button, ButtonTheme.DANGER, ButtonSize.LARGE)
 	logout_button.pressed.connect(_on_logout_pressed)
 	logout_button.visible = false
 	buttons_vbox.add_child(logout_button)
 
-	# Exit button - quit the game
+	# Exit button - SECONDARY theme, LARGE size
 	var exit_button = Button.new()
 	exit_button.text = "EXIT"
-	exit_button.custom_minimum_size = Vector2(0, 32)
 	exit_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_exit_button(exit_button)
+	_style_button(exit_button, ButtonTheme.SECONDARY, ButtonSize.LARGE)
 	exit_button.pressed.connect(_on_exit_pressed)
 	buttons_vbox.add_child(exit_button)
 
@@ -5508,59 +5817,75 @@ func _build_forge_section() -> Control:
 	var open_forge_btn = Button.new()
 	open_forge_btn.name = "OpenForgeBtn"
 	open_forge_btn.text = "OPEN FORGE"
-	open_forge_btn.custom_minimum_size = Vector2(0, 38)
 	open_forge_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_forge_button(open_forge_btn)
 	open_forge_btn.pressed.connect(_on_open_forge_pressed)
 	vbox.add_child(open_forge_btn)
 
-	# Browse forgeable link - CYAN for visibility
+	# Browse forgeable link - text-only link style
 	var browse_btn = Button.new()
 	browse_btn.name = "BrowseForgeableBtn"
 	browse_btn.text = "Browse Forgeable Achievements →"
-	browse_btn.add_theme_font_override("font", default_font)
-	browse_btn.add_theme_font_size_override("font_size", FONT_BODY)
-	browse_btn.add_theme_color_override("font_color", MANTLE_CYAN)  # Cyan for readability
-	browse_btn.add_theme_color_override("font_hover_color", MANTLE_CYAN.lightened(0.3))
-	var empty_style = StyleBoxEmpty.new()
-	browse_btn.add_theme_stylebox_override("normal", empty_style)
-	browse_btn.add_theme_stylebox_override("hover", empty_style)
-	browse_btn.add_theme_stylebox_override("pressed", empty_style)
+	_style_link_button(browse_btn)
 	browse_btn.pressed.connect(_on_browse_forgeable_pressed)
-	browse_btn.mouse_entered.connect(_play_button_hover_sound)  # Add hover sound
 	vbox.add_child(browse_btn)
 
 	return panel
 
 func _style_forge_button(button: Button) -> void:
-	button.add_theme_font_override("font", default_font)
-	button.add_theme_font_size_override("font_size", FONT_BODY_LG)
-	button.add_theme_color_override("font_color", Color.WHITE)
-	# Connect hover sound
-	button.mouse_entered.connect(_play_button_hover_sound)
+	"""Style the OPEN FORGE button - action orange, large"""
+	_style_button(button, ButtonTheme.ACTION, ButtonSize.LARGE)
+
+func _style_link_button(button: Button) -> void:
+	"""Style a text-only link button (no background)"""
+	var size_config = BUTTON_SIZES[ButtonSize.SMALL]
+
+	button.custom_minimum_size.y = size_config["height"]
+	if default_font:
+		button.add_theme_font_override("font", default_font)
+	button.add_theme_font_size_override("font_size", size_config["font"])
+	button.add_theme_color_override("font_color", MANTLE_CYAN)
+	button.add_theme_color_override("font_hover_color", MANTLE_CYAN.lightened(0.3))
+	button.add_theme_color_override("font_pressed_color", MANTLE_CYAN.darkened(0.2))
+
+	var empty_style = StyleBoxEmpty.new()
+	button.add_theme_stylebox_override("normal", empty_style)
+	button.add_theme_stylebox_override("hover", empty_style)
+	button.add_theme_stylebox_override("pressed", empty_style)
+	button.add_theme_stylebox_override("disabled", empty_style)
+
+	if not button.mouse_entered.is_connected(_play_button_hover_sound):
+		button.mouse_entered.connect(_play_button_hover_sound)
+
+func _style_icon_button(button: Button, theme: ButtonTheme) -> void:
+	"""Style a small icon button (e.g., X close button)"""
+	var theme_config = BUTTON_THEMES[theme]
+
+	# Icon buttons are small squares
+	button.add_theme_font_size_override("font_size", FONT_MIN)
+	button.add_theme_color_override("font_color", theme_config["text"])
+	button.add_theme_color_override("font_hover_color", theme_config["text_hover"])
+	button.focus_mode = Control.FOCUS_NONE
 
 	var normal = StyleBoxFlat.new()
-	normal.bg_color = Color(0.15, 0.12, 0.08)
-	normal.border_color = Color(0.8, 0.5, 0.2)
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(6)
+	normal.bg_color = theme_config["bg"]
+	normal.border_color = theme_config["border"]
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(3)
+	normal.set_content_margin_all(2)
 	button.add_theme_stylebox_override("normal", normal)
 
 	var hover = StyleBoxFlat.new()
-	hover.bg_color = Color(0.25, 0.18, 0.1)
-	hover.border_color = Color(1.0, 0.6, 0.2)
-	hover.set_border_width_all(2)
-	hover.set_corner_radius_all(6)
-	hover.shadow_color = Color(1.0, 0.5, 0.1, 0.3)
-	hover.shadow_size = 4
+	hover.bg_color = theme_config["bg_hover"]
+	hover.border_color = theme_config["border_hover"]
+	hover.set_border_width_all(1)
+	hover.set_corner_radius_all(3)
+	hover.set_content_margin_all(2)
 	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", hover)
 
-	var pressed = StyleBoxFlat.new()
-	pressed.bg_color = Color(0.1, 0.08, 0.05)
-	pressed.border_color = Color(0.6, 0.4, 0.15)
-	pressed.set_border_width_all(2)
-	pressed.set_corner_radius_all(6)
-	button.add_theme_stylebox_override("pressed", pressed)
+	if not button.mouse_entered.is_connected(_play_button_hover_sound):
+		button.mouse_entered.connect(_play_button_hover_sound)
 
 func _create_separator() -> Control:
 	# Subtle spacer instead of visible line
@@ -5628,7 +5953,7 @@ func _build_header(parent: Control) -> void:
 	header_vbox.add_child(title_container)
 
 	# Background glow layer (larger, more diffuse)
-	var title_glow_bg = Label.new()
+	title_glow_bg = Label.new()
 	title_glow_bg.text = "M A N T L E"
 	title_glow_bg.add_theme_font_override("font", bold_font)
 	title_glow_bg.add_theme_font_size_override("font_size", FONT_H1 + 2)
@@ -5639,7 +5964,7 @@ func _build_header(parent: Control) -> void:
 	title_container.add_child(title_glow_bg)
 
 	# Mid glow layer
-	var title_glow = Label.new()
+	title_glow = Label.new()
 	title_glow.text = "M A N T L E"
 	title_glow.add_theme_font_override("font", bold_font)
 	title_glow.add_theme_font_size_override("font_size", FONT_H1)
@@ -5668,8 +5993,32 @@ func _build_header(parent: Control) -> void:
 	subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header_vbox.add_child(subtitle_label)
 
-	# Connection status indicator
-	_create_connection_indicator(header_vbox)
+func _start_logo_pulse() -> void:
+	"""Start a pulsing animation on the MANTLE logo for visual effect."""
+	if not title_label or not title_glow or not title_glow_bg:
+		return
+
+	# Create a tween for the pulsing effect
+	var tween = create_tween()
+	tween.set_loops()  # Loop infinitely
+	tween.set_parallel(true)  # Animate all properties at once
+
+	# Pulse the main title brightness more dramatically
+	tween.tween_property(title_label, "modulate:a", 0.6, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(title_label, "modulate:a", 1.0, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE).set_delay(1.2)
+
+	# Very subtle scale pulse (0.33% growth max)
+	tween.tween_property(title_label, "scale", Vector2(1.0033, 1.0033), 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(title_label, "scale", Vector2(1.0, 1.0), 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE).set_delay(1.2)
+
+	# Pulse the glow layers dramatically for neon effect
+	tween.tween_property(title_glow, "modulate:a", 0.2, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(title_glow, "modulate:a", 1.0, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE).set_delay(1.2)
+
+	tween.tween_property(title_glow_bg, "modulate:a", 0.1, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(title_glow_bg, "modulate:a", 1.0, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE).set_delay(1.2)
+
+	print("[Armory] Logo pulse animation started")
 
 func _create_connection_indicator(parent: Control) -> void:
 	"""Create a small indicator showing backend connection status"""
@@ -6308,6 +6657,9 @@ func _on_enter_button_hover(is_hovering: bool) -> void:
 	if not enter_world_button:
 		return
 
+	# Set pivot to center for symmetrical scaling
+	enter_world_button.pivot_offset = enter_world_button.size / 2
+
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_BACK)
@@ -6595,172 +6947,86 @@ func _play_button_hover_sound() -> void:
 	if SoundManager:
 		SoundManager.play_button_hover_sound(-12.0)
 
-func _style_primary_button(button: Button) -> void:
-	button.add_theme_font_size_override("font_size", FONT_H2)
-	button.add_theme_color_override("font_color", Color.WHITE)
-	# Connect hover sound
-	button.mouse_entered.connect(_play_button_hover_sound)
+# ═══════════════════════════════════════════════════════════════════════════════
+# UNIFIED BUTTON STYLING
+# ═══════════════════════════════════════════════════════════════════════════════
 
+func _style_button(button: Button, theme: ButtonTheme, size: ButtonSize = ButtonSize.MEDIUM) -> void:
+	"""Master button styling function - use this for all buttons"""
+	var size_config = BUTTON_SIZES[size]
+	var theme_config = BUTTON_THEMES[theme]
+
+	# Set minimum size for consistent button height
+	button.custom_minimum_size.y = size_config["height"]
+
+	# Font styling
+	if default_font:
+		button.add_theme_font_override("font", default_font)
+	button.add_theme_font_size_override("font_size", size_config["font"])
+	button.add_theme_color_override("font_color", theme_config["text"])
+	button.add_theme_color_override("font_hover_color", theme_config["text_hover"])
+	button.add_theme_color_override("font_pressed_color", theme_config["text"])
+
+	# Normal state
 	var normal = StyleBoxFlat.new()
-	normal.bg_color = MANTLE_CYAN.darkened(0.3)
-	normal.border_color = MANTLE_CYAN
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(8)
+	normal.bg_color = theme_config["bg"]
+	normal.border_color = theme_config["border"]
+	normal.set_border_width_all(size_config["border"])
+	normal.set_corner_radius_all(size_config["radius"])
+	normal.set_content_margin_all(size_config["padding"])
 	button.add_theme_stylebox_override("normal", normal)
 
+	# Hover state
 	var hover = StyleBoxFlat.new()
-	hover.bg_color = MANTLE_CYAN.darkened(0.1)
-	hover.border_color = MANTLE_CYAN.lightened(0.2)
-	hover.set_border_width_all(2)
-	hover.set_corner_radius_all(8)
+	hover.bg_color = theme_config["bg_hover"]
+	hover.border_color = theme_config["border_hover"]
+	hover.set_border_width_all(size_config["border"])
+	hover.set_corner_radius_all(size_config["radius"])
+	hover.set_content_margin_all(size_config["padding"])
 	button.add_theme_stylebox_override("hover", hover)
 
+	# Pressed state
 	var pressed = StyleBoxFlat.new()
-	pressed.bg_color = MANTLE_CYAN.darkened(0.4)
-	pressed.border_color = MANTLE_CYAN
-	pressed.set_border_width_all(2)
-	pressed.set_corner_radius_all(8)
+	pressed.bg_color = theme_config["bg_pressed"]
+	pressed.border_color = theme_config["border"]
+	pressed.set_border_width_all(size_config["border"])
+	pressed.set_corner_radius_all(size_config["radius"])
+	pressed.set_content_margin_all(size_config["padding"])
 	button.add_theme_stylebox_override("pressed", pressed)
+
+	# Disabled state (dimmed version of normal)
+	var disabled = StyleBoxFlat.new()
+	disabled.bg_color = theme_config["bg"].darkened(0.3)
+	disabled.border_color = theme_config["border"].darkened(0.4)
+	disabled.set_border_width_all(size_config["border"])
+	disabled.set_corner_radius_all(size_config["radius"])
+	disabled.set_content_margin_all(size_config["padding"])
+	button.add_theme_stylebox_override("disabled", disabled)
+	button.add_theme_color_override("font_disabled_color", theme_config["text"].darkened(0.5))
+
+	# Hover sound - only connect if not already connected
+	if not button.mouse_entered.is_connected(_play_button_hover_sound):
+		button.mouse_entered.connect(_play_button_hover_sound)
+
+func _style_primary_button(button: Button) -> void:
+	"""Primary cyan button - use for main interactive actions"""
+	_style_button(button, ButtonTheme.PRIMARY, ButtonSize.LARGE)
 
 func _style_enter_world_button(button: Button) -> void:
-	"""Style Enter World button - GREEN"""
-	var green = Color(0.2, 0.7, 0.3)
-	var green_dark = Color(0.1, 0.5, 0.15)
-	var green_light = Color(0.3, 0.85, 0.4)
-
-	button.add_theme_font_override("font", default_font)
-	button.add_theme_font_size_override("font_size", FONT_BODY_LG)
-	button.add_theme_color_override("font_color", Color.WHITE)
-	# Connect hover sound
-	button.mouse_entered.connect(_play_button_hover_sound)
-
-	# Normal state
-	var normal = StyleBoxFlat.new()
-	normal.bg_color = green_dark
-	normal.border_color = green
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(6)
-	normal.set_content_margin_all(8)
-	button.add_theme_stylebox_override("normal", normal)
-	button.set_meta("normal_style", normal)
-
-	# Hover state
-	var hover = StyleBoxFlat.new()
-	hover.bg_color = green
-	hover.border_color = green_light
-	hover.set_border_width_all(2)
-	hover.set_corner_radius_all(6)
-	hover.set_content_margin_all(8)
-	button.add_theme_stylebox_override("hover", hover)
-
-	# Pressed state
-	var pressed = StyleBoxFlat.new()
-	pressed.bg_color = green_dark.darkened(0.2)
-	pressed.border_color = green
-	pressed.set_border_width_all(2)
-	pressed.set_corner_radius_all(6)
-	pressed.set_content_margin_all(8)
-	button.add_theme_stylebox_override("pressed", pressed)
+	"""Style Enter World button - GREEN success button"""
+	_style_button(button, ButtonTheme.SUCCESS, ButtonSize.LARGE)
 
 func _style_secondary_button(button: Button) -> void:
-	button.add_theme_font_size_override("font_size", FONT_BODY)
-	button.add_theme_color_override("font_color", TEXT_SECONDARY)
-	button.add_theme_color_override("font_hover_color", MANTLE_CYAN)
-	# Connect hover sound
-	button.mouse_entered.connect(_play_button_hover_sound)
-
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.12)
-	style.border_color = Color(0.25, 0.25, 0.28)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(6)
-	style.set_content_margin_all(8)
-	button.add_theme_stylebox_override("normal", style)
-
-	var hover = StyleBoxFlat.new()
-	hover.bg_color = Color(0.15, 0.15, 0.18)
-	hover.border_color = MANTLE_CYAN.darkened(0.3)
-	hover.set_border_width_all(1)
-	hover.set_corner_radius_all(6)
-	hover.set_content_margin_all(8)
-	button.add_theme_stylebox_override("hover", hover)
+	"""Secondary gray button - low emphasis actions"""
+	_style_button(button, ButtonTheme.SECONDARY, ButtonSize.MEDIUM)
 
 func _style_logout_button(button: Button) -> void:
-	"""Style Logout button - RED (similar to Enter World)"""
-	var red = Color(0.7, 0.25, 0.25)
-	var red_dark = Color(0.5, 0.15, 0.15)
-	var red_light = Color(0.85, 0.35, 0.35)
-
-	button.add_theme_font_override("font", default_font)
-	button.add_theme_font_size_override("font_size", FONT_BODY_LG)
-	button.add_theme_color_override("font_color", Color.WHITE)
-	# Connect hover sound
-	button.mouse_entered.connect(_play_button_hover_sound)
-
-	# Normal state
-	var normal = StyleBoxFlat.new()
-	normal.bg_color = red_dark
-	normal.border_color = red
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(6)
-	normal.set_content_margin_all(8)
-	button.add_theme_stylebox_override("normal", normal)
-
-	# Hover state
-	var hover = StyleBoxFlat.new()
-	hover.bg_color = red
-	hover.border_color = red_light
-	hover.set_border_width_all(2)
-	hover.set_corner_radius_all(6)
-	hover.set_content_margin_all(8)
-	button.add_theme_stylebox_override("hover", hover)
-
-	# Pressed state
-	var pressed = StyleBoxFlat.new()
-	pressed.bg_color = red_dark.darkened(0.2)
-	pressed.border_color = red
-	pressed.set_border_width_all(2)
-	pressed.set_corner_radius_all(6)
-	pressed.set_content_margin_all(8)
-	button.add_theme_stylebox_override("pressed", pressed)
+	"""Style Logout button - RED danger button"""
+	_style_button(button, ButtonTheme.DANGER, ButtonSize.LARGE)
 
 func _style_exit_button(button: Button) -> void:
-	"""Style Exit button - subtle gray"""
-	var gray = Color(0.35, 0.35, 0.35)
-	var gray_dark = Color(0.2, 0.2, 0.2)
-	var gray_light = Color(0.45, 0.45, 0.45)
-
-	button.add_theme_font_override("font", default_font)
-	button.add_theme_font_size_override("font_size", FONT_CAPTION)
-	button.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	button.mouse_entered.connect(_play_button_hover_sound)
-
-	# Normal state
-	var normal = StyleBoxFlat.new()
-	normal.bg_color = gray_dark
-	normal.border_color = gray
-	normal.set_border_width_all(1)
-	normal.set_corner_radius_all(4)
-	normal.set_content_margin_all(6)
-	button.add_theme_stylebox_override("normal", normal)
-
-	# Hover state
-	var hover = StyleBoxFlat.new()
-	hover.bg_color = gray
-	hover.border_color = gray_light
-	hover.set_border_width_all(1)
-	hover.set_corner_radius_all(4)
-	hover.set_content_margin_all(6)
-	button.add_theme_stylebox_override("hover", hover)
-
-	# Pressed state
-	var pressed = StyleBoxFlat.new()
-	pressed.bg_color = gray_dark.darkened(0.2)
-	pressed.border_color = gray
-	pressed.set_border_width_all(1)
-	pressed.set_corner_radius_all(4)
-	pressed.set_content_margin_all(6)
-	button.add_theme_stylebox_override("pressed", pressed)
+	"""Style Exit button - subtle gray secondary"""
+	_style_button(button, ButtonTheme.SECONDARY, ButtonSize.SMALL)
 
 func _on_exit_pressed() -> void:
 	"""Exit the game"""
@@ -7084,18 +7350,20 @@ func _create_provider_badge(provider_name: String, count: int, icon_url: String 
 	# Vertical layout: icon on top, count below
 	var container = VBoxContainer.new()
 	container.add_theme_constant_override("separation", 4)
+	container.mouse_filter = Control.MOUSE_FILTER_STOP  # Enable tooltip
 
 	# Icon wrapper for centering
 	var icon_wrapper = CenterContainer.new()
+	icon_wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	container.add_child(icon_wrapper)
 
 	# Try to load platform icon texture - local paths
 	# Facebook and Roblox load from backend URL (no local icons)
 	var icon_path = ""
 	match prov_lower:
-		"steam": icon_path = "res://assets/ui/icons/steam.png"
-		"battlenet", "blizzard": icon_path = "res://assets/ui/icons/battlenet.png"
-		"xbox": icon_path = "res://assets/ui/icons/xbox.png"
+		"steam": icon_path = "res://assets/ui/icons/steam.svg"
+		"battlenet", "blizzard": icon_path = "res://assets/ui/icons/battlenet.svg"
+		"xbox": icon_path = "res://assets/ui/icons/xbox.svg"
 		"playstation", "psn": icon_path = "res://assets/ui/icons/playstation.svg"
 		"discord": icon_path = "res://assets/ui/icons/discord.svg"
 		"github": icon_path = "res://assets/ui/icons/github.svg"
@@ -7105,8 +7373,7 @@ func _create_provider_badge(provider_name: String, count: int, icon_url: String 
 	# Always create a consistent badge container with background
 	var badge_panel = PanelContainer.new()
 	var badge_style = StyleBoxFlat.new()
-	badge_style.bg_color = color.darkened(0.6)
-	badge_style.bg_color.a = 0.4
+	badge_style.bg_color = Color(0, 0, 0, 0)  # Fully transparent background
 	badge_style.set_corner_radius_all(8)
 	badge_style.border_color = color.darkened(0.2)
 	badge_style.set_border_width_all(1)
@@ -7182,28 +7449,22 @@ func _create_provider_badge(provider_name: String, count: int, icon_url: String 
 	count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	container.add_child(count_label)
 
-	# Provider name below count
-	var name_label = Label.new()
+	# Get display name for tooltip
+	var display_name = ""
 	match provider_name.to_lower():
-		"steam": name_label.text = "Steam"
-		"battlenet", "blizzard": name_label.text = "Blizzard"
-		"xbox": name_label.text = "Xbox"
-		"playstation", "psn": name_label.text = "PSN"
-		"discord": name_label.text = "Discord"
-		"github": name_label.text = "GitHub"
-		"epic": name_label.text = "Epic"
-		"gog": name_label.text = "GOG"
-		"facebook": name_label.text = "Facebook"
-		"roblox": name_label.text = "Roblox"
-		_: name_label.text = provider_name.capitalize()
-	name_label.add_theme_font_override("font", default_font)
-	name_label.add_theme_font_size_override("font_size", FONT_TINY)
-	name_label.add_theme_color_override("font_color", TEXT_DIM)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	container.add_child(name_label)
+		"steam": display_name = "Steam"
+		"battlenet", "blizzard": display_name = "Blizzard"
+		"xbox": display_name = "Xbox"
+		"playstation", "psn": display_name = "PSN"
+		"discord": display_name = "Discord"
+		"github": display_name = "GitHub"
+		"epic": display_name = "Epic"
+		"gog": display_name = "GOG"
+		"facebook": display_name = "Facebook"
+		"roblox": display_name = "Roblox"
+		_: display_name = provider_name.capitalize()
 
 	# Rich tooltip with connection status
-	var display_name = name_label.text  # Use the formatted name
 	var is_connected = count >= 0
 	var tooltip_lines = []
 
@@ -7214,13 +7475,14 @@ func _create_provider_badge(provider_name: String, count: int, icon_url: String 
 		tooltip_lines.append("✓ Connected")
 		tooltip_lines.append("")
 		tooltip_lines.append("🏆 %s achievements" % _format_number(count))
-		# Could add account name here when available from API
-		# tooltip_lines.append("👤 Username")
 	else:
 		tooltip_lines.append("✗ Not connected")
 		tooltip_lines.append("")
 		tooltip_lines.append("Link your %s account to" % display_name)
 		tooltip_lines.append("sync achievements and unlock rewards!")
+
+	tooltip_lines.append("")
+	tooltip_lines.append("Manage at mantle.gg/dashboard")
 
 	container.tooltip_text = "\n".join(tooltip_lines)
 
@@ -7419,6 +7681,7 @@ func _update_rarity_display() -> void:
 func _create_rarity_gem(rarity_name: String, color: Color, count: int) -> Control:
 	# Pill/chip style: icon + count in a cohesive rounded container
 	var pill = PanelContainer.new()
+	pill.mouse_filter = Control.MOUSE_FILTER_STOP  # Enable tooltip
 	var style = StyleBoxFlat.new()
 	style.bg_color = color.darkened(0.7)
 	style.bg_color.a = 0.4
@@ -7434,9 +7697,10 @@ func _create_rarity_gem(rarity_name: String, color: Color, count: int) -> Contro
 
 	var hbox = HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 6)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pill.add_child(hbox)
 
-	# Rarity symbol/dot - larger size
+	# Rarity symbol/dot
 	var symbol = Label.new()
 	match rarity_name:
 		"Common":
@@ -7451,11 +7715,12 @@ func _create_rarity_gem(rarity_name: String, color: Color, count: int) -> Contro
 			symbol.text = "✧"
 		_:
 			symbol.text = "●"
-	symbol.add_theme_font_size_override("font_size", 20)
+	symbol.add_theme_font_size_override("font_size", 16)
 	symbol.add_theme_color_override("font_color", color)
+	symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(symbol)
 
-	# Count label - larger size
+	# Count label
 	var label = Label.new()
 	if count < 0:
 		label.text = "—"
@@ -7467,13 +7732,17 @@ func _create_rarity_gem(rarity_name: String, color: Color, count: int) -> Contro
 		label.text = "0"
 		label.add_theme_color_override("font_color", TEXT_DIM)
 	label.add_theme_font_override("font", default_font)
-	label.add_theme_font_size_override("font_size", FONT_BODY)
+	label.add_theme_font_size_override("font_size", 16)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(label)
 
+	# Enhanced tooltip with webapp link
 	if count < 0:
-		pill.tooltip_text = "%s: Data unavailable" % rarity_name
+		pill.tooltip_text = "%s Achievements\nData unavailable\n\nView details at mantle.gg/dashboard" % rarity_name
+	elif count > 0:
+		pill.tooltip_text = "%s Achievements: %s\nRarer achievements unlock better forge items.\n\nView details at mantle.gg/dashboard" % [rarity_name, _format_number(count)]
 	else:
-		pill.tooltip_text = "%s: %s" % [rarity_name, _format_number(count) if count > 0 else "None"]
+		pill.tooltip_text = "%s Achievements: None yet\nComplete rare achievements to unlock rewards!\n\nView details at mantle.gg/dashboard" % rarity_name
 	return pill
 
 func _create_round_gem(parent: Control, color: Color, rarity_name: String) -> void:
@@ -8014,7 +8283,14 @@ func _animate_achievement_count() -> void:
 		# Just update the display without animation
 		var formatted = _format_number(_target_achievement_count)
 		total_label.text = formatted
+		# Update all glow layers
+		var glow_outer = stats_panel.find_child("NumberGlowOuter", true, false) if stats_panel else null
+		var glow_mid = stats_panel.find_child("NumberGlowMid", true, false) if stats_panel else null
 		var glow_label = stats_panel.find_child("NumberGlow", true, false) if stats_panel else null
+		if glow_outer:
+			glow_outer.text = formatted
+		if glow_mid:
+			glow_mid.text = formatted
 		if glow_label:
 			glow_label.text = formatted
 		return
@@ -8036,8 +8312,14 @@ func _animate_achievement_count() -> void:
 			var count = int(val)
 			var formatted = _format_number(count)
 			total_label.text = formatted
-			# Also update the glow label if present (enhanced trophy plaque)
+			# Update all glow layers
+			var glow_outer = stats_panel.find_child("NumberGlowOuter", true, false) if stats_panel else null
+			var glow_mid = stats_panel.find_child("NumberGlowMid", true, false) if stats_panel else null
 			var glow_label = stats_panel.find_child("NumberGlow", true, false) if stats_panel else null
+			if glow_outer:
+				glow_outer.text = formatted
+			if glow_mid:
+				glow_mid.text = formatted
 			if glow_label:
 				glow_label.text = formatted
 			# Add subtle scale pop at milestones
@@ -8099,12 +8381,29 @@ func _start_number_breathing_pulse() -> void:
 	_pulse_tween.tween_property(total_label, "scale", Vector2(1.015, 1.015), 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 	_pulse_tween.tween_property(total_label, "scale", Vector2(1.0, 1.0), 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
-	# Also pulse the glow layer if present
+	# Also pulse all glow layers with different intensities
+	var glow_outer = stats_panel.find_child("NumberGlowOuter", true, false) if stats_panel else null
+	var glow_mid = stats_panel.find_child("NumberGlowMid", true, false) if stats_panel else null
 	var glow_label = stats_panel.find_child("NumberGlow", true, false) if stats_panel else null
+
+	# Outer glow - subtle fade
+	if glow_outer:
+		var outer_pulse = create_tween()
+		outer_pulse.set_loops()
+		outer_pulse.tween_property(glow_outer, "modulate:a", 1.0, 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+		outer_pulse.tween_property(glow_outer, "modulate:a", 0.6, 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+	# Mid glow - medium pulse
+	if glow_mid:
+		var mid_pulse = create_tween()
+		mid_pulse.set_loops()
+		mid_pulse.tween_property(glow_mid, "modulate:a", 1.1, 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+		mid_pulse.tween_property(glow_mid, "modulate:a", 0.7, 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+	# Inner glow - brightest pulse
 	if glow_label:
 		var glow_pulse = create_tween()
 		glow_pulse.set_loops()
-		# Glow alpha pulses slightly more noticeably
 		glow_pulse.tween_property(glow_label, "modulate:a", 1.2, 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 		glow_pulse.tween_property(glow_label, "modulate:a", 0.8, 1.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
@@ -8558,9 +8857,8 @@ func _build_settings_panel() -> void:
 	# Close button
 	var close_button = Button.new()
 	close_button.text = "CLOSE"
-	close_button.custom_minimum_size = Vector2(0, 44)
 	close_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_secondary_button(close_button)
+	_style_button(close_button, ButtonTheme.SECONDARY, ButtonSize.LARGE)
 	close_button.pressed.connect(_on_settings_close_pressed)
 	vbox.add_child(close_button)
 
@@ -8630,6 +8928,9 @@ func _on_music_volume_changed(value: float) -> void:
 	# Use SoundManager's music volume control
 	if SoundManager and SoundManager.has_method("set_music_volume"):
 		SoundManager.set_music_volume(db)
+	# Also update Armory background music if playing
+	if _music_player and is_instance_valid(_music_player):
+		_music_player.volume_db = db
 
 func _on_sfx_volume_changed(value: float) -> void:
 	var db = linear_to_db(value / 100.0) if value > 0 else -80.0
@@ -8811,6 +9112,61 @@ func _get_default_appearance() -> Dictionary:
 		"head_sprite": ""
 	}
 
+func _get_appearance_from_character_stats() -> Dictionary:
+	"""Build appearance dictionary from CharacterStats.equipped_armor.
+	Returns empty dict if no items are equipped."""
+	if not CharacterStats:
+		return {}
+
+	# Get gender from backend appearance, or default to male (0)
+	var saved_gender = 0
+	if MantleAuth.saved_appearance and not MantleAuth.saved_appearance.is_empty():
+		saved_gender = MantleAuth.saved_appearance.get("gender", 0)
+
+	var appearance = {
+		"gender": saved_gender,
+		"weapon_type": "",
+		"feet_sprite": "",
+		"legs_sprite": "",
+		"chest_sprite": "",
+		"arms_sprite": "",
+		"hands_sprite": "",
+		"head_sprite": ""
+	}
+
+	var has_any_items = false
+
+	# Map CharacterStats slots to appearance keys
+	var slot_mapping = {
+		"feet": "feet_sprite",
+		"legs": "legs_sprite",
+		"chest": "chest_sprite",
+		"arms": "arms_sprite",
+		"hands": "hands_sprite",
+		"head": "head_sprite"
+	}
+
+	for slot in slot_mapping:
+		var armor_item = CharacterStats.equipped_armor.get(slot, null)
+		if armor_item and armor_item is Dictionary:
+			var sprite_name = armor_item.get("sprite_name", "")
+			if sprite_name and not sprite_name.is_empty():
+				appearance[slot_mapping[slot]] = sprite_name
+				has_any_items = true
+
+	# Check for equipped weapon
+	var weapon = CharacterStats.equipped_weapon
+	if weapon and weapon is Weapon:
+		appearance["weapon_type"] = weapon.weapon_type
+		has_any_items = true
+
+	# Return empty if player has nothing equipped (use backend/default instead)
+	if not has_any_items:
+		return {}
+
+	print("[Armory] Built appearance from CharacterStats.equipped_armor")
+	return appearance
+
 func _setup_character_preview(appearance: Dictionary) -> void:
 	"""Create and configure the character sprite from appearance data."""
 	if not _character_viewport:
@@ -8874,25 +9230,49 @@ func _setup_character_preview(appearance: Dictionary) -> void:
 	var head_sprite = appearance.get("head_sprite", "")
 	var weapon_type = appearance.get("weapon_type", "")
 
-	var pants_walk_tex = _load_armor_texture("pants", legs_sprite, is_female)
-	var pants_slash_tex = _load_armor_texture("pants", legs_sprite, is_female, "slash")
-	var shirt_walk_tex = _load_armor_texture("shirt", chest_sprite, is_female)
-	var shirt_slash_tex = _load_armor_texture("shirt", chest_sprite, is_female, "slash")
-	var boots_walk_tex = _load_armor_texture("boots", feet_sprite, is_female)
-	var boots_slash_tex = _load_armor_texture("boots", feet_sprite, is_female, "slash")
-	var arms_walk_tex = _load_armor_texture("arms", arms_sprite, is_female)
-	var arms_slash_tex = _load_armor_texture("arms", arms_sprite, is_female, "slash")
-	var hands_walk_tex = _load_armor_texture("hands", hands_sprite, is_female)
-	var hands_slash_tex = _load_armor_texture("hands", hands_sprite, is_female, "slash")
-	var head_armor_walk_tex = _load_armor_texture("head", head_sprite, is_female)
-	var head_armor_slash_tex = _load_armor_texture("head", head_sprite, is_female, "slash")
+	# Forged item IDs (if equipped armor is forged)
+	var feet_forged_id = appearance.get("feet_forged_id", "")
+	var legs_forged_id = appearance.get("legs_forged_id", "")
+	var chest_forged_id = appearance.get("chest_forged_id", "")
+	var arms_forged_id = appearance.get("arms_forged_id", "")
+	var hands_forged_id = appearance.get("hands_forged_id", "")
+	var head_forged_id = appearance.get("head_forged_id", "")
+
+	var pants_walk_tex = _load_armor_texture("pants", legs_sprite, is_female, "walk", legs_forged_id)
+	var pants_slash_tex = _load_armor_texture("pants", legs_sprite, is_female, "slash", legs_forged_id)
+	var shirt_walk_tex = _load_armor_texture("shirt", chest_sprite, is_female, "walk", chest_forged_id)
+	var shirt_slash_tex = _load_armor_texture("shirt", chest_sprite, is_female, "slash", chest_forged_id)
+	var boots_walk_tex = _load_armor_texture("boots", feet_sprite, is_female, "walk", feet_forged_id)
+	var boots_slash_tex = _load_armor_texture("boots", feet_sprite, is_female, "slash", feet_forged_id)
+	var arms_walk_tex = _load_armor_texture("arms", arms_sprite, is_female, "walk", arms_forged_id)
+	var arms_slash_tex = _load_armor_texture("arms", arms_sprite, is_female, "slash", arms_forged_id)
+	var hands_walk_tex = _load_armor_texture("hands", hands_sprite, is_female, "walk", hands_forged_id)
+	var hands_slash_tex = _load_armor_texture("hands", hands_sprite, is_female, "slash", hands_forged_id)
+	var head_armor_walk_tex = _load_armor_texture("head", head_sprite, is_female, "walk", head_forged_id)
+	var head_armor_slash_tex = _load_armor_texture("head", head_sprite, is_female, "slash", head_forged_id)
+
+	# Check if weapon is a gun (needs special Skorpio body pose)
+	var gun_weapon_types = ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle"]
+	var is_gun = weapon_type in gun_weapon_types
 
 	# Load weapon textures
 	var weapon_walk_tex = null
 	var weapon_slash_tex = null
 	if weapon_type != "":
 		weapon_walk_tex = _load_texture("res://assets/equipment/weapons/" + weapon_type + "/walk.png")
-		weapon_slash_tex = _load_texture("res://assets/equipment/weapons/" + weapon_type + "/slash.png")
+		if is_gun:
+			# Guns use "shoot" animation instead of "slash"
+			weapon_slash_tex = _load_texture("res://assets/equipment/weapons/" + weapon_type + "/shoot.png")
+		else:
+			weapon_slash_tex = _load_texture("res://assets/equipment/weapons/" + weapon_type + "/slash.png")
+
+	# Load Skorpio gun body textures if using a gun
+	# Uses gender-neutral body_gun_pose (Skorpio body works for both male/female)
+	var gun_body_walk_tex = null
+	var gun_body_shoot_tex = null
+	if is_gun:
+		gun_body_walk_tex = _load_texture("res://assets/characters/body_gun_pose/walk.png")
+		gun_body_shoot_tex = _load_texture("res://assets/characters/body_gun_pose/shoot.png")
 
 	# Setup sprite with all layers
 	_character_sprite.setup_lpc_sprite(
@@ -8915,8 +9295,15 @@ func _setup_character_preview(appearance: Dictionary) -> void:
 
 	_character_viewport.add_child(_character_sprite)
 
+	# Setup gun animations if weapon is a gun
+	if is_gun and gun_body_walk_tex:
+		_character_sprite.setup_gun_walk_animations(gun_body_walk_tex, gun_body_shoot_tex)
+
 	# Add footstep dust particles at character's feet
 	_create_footstep_dust()
+
+	# Slow down animation speed by 25% for preview (75% speed)
+	_character_sprite.speed_scale = 0.75
 
 	# Start walking animation facing south
 	_character_sprite.play_lpc_animation("walk", "south")
@@ -8933,11 +9320,22 @@ func _load_texture(path: String) -> Texture2D:
 		return load(path)
 	return null
 
-func _load_armor_texture(slot: String, sprite_name: String, is_female: bool, anim_type: String = "walk") -> Texture2D:
-	"""Helper to load armor texture with gender fallback."""
+func _load_armor_texture(slot: String, sprite_name: String, is_female: bool, anim_type: String = "walk", forged_item_id: String = "") -> Texture2D:
+	"""Helper to load armor texture with gender fallback and forged item support."""
 	if sprite_name == "" or sprite_name == null:
 		return null
 
+	# If this is a forged item, load from ForgeItemDB
+	if forged_item_id != "":
+		var forged_item = ForgeItemDB.get_item_by_id(forged_item_id)
+		if forged_item and forged_item.has("sprites"):
+			var sprites = forged_item["sprites"]
+			var sprite_path = sprites.get(anim_type, "")
+			if sprite_path != "" and ResourceLoader.exists(sprite_path):
+				print("[Armory] Loading forged %s armor: %s (%s)" % [slot, forged_item_id, anim_type])
+				return load(sprite_path)
+
+	# Standard (non-forged) armor loading
 	var gender_suffix = "_female" if is_female else ""
 	var path = "res://assets/characters/" + slot + gender_suffix + "/" + sprite_name + "_" + anim_type + ".png"
 
@@ -8976,6 +9374,43 @@ func _stop_direction_cycling() -> void:
 		_direction_cycle_timer.stop()
 		_direction_cycle_timer.queue_free()
 		_direction_cycle_timer = null
+
+func _setup_background_music() -> void:
+	"""Setup and play background music for the Armory screen."""
+	# Stop any game music that might be playing from the world
+	if SoundManager and SoundManager.has_method("stop_game_music"):
+		SoundManager.stop_game_music()
+		print("[Armory] Stopped game world music")
+
+	# Create AudioStreamPlayer if it doesn't exist
+	if not _music_player:
+		_music_player = AudioStreamPlayer.new()
+		_music_player.name = "ArmoryMusicPlayer"
+		add_child(_music_player)
+
+	# Load the music file
+	var music_path = "res://assets/audio/music/armory_theme.mp3"
+	if ResourceLoader.exists(music_path):
+		var stream = load(music_path)
+		if stream:
+			_music_player.stream = stream
+			_music_player.autoplay = false
+			_music_player.bus = "Music"  # Use Music bus for volume control
+
+			# Get current music volume from SoundManager
+			if SoundManager and SoundManager.has_method("get_music_volume_db"):
+				_music_player.volume_db = SoundManager.get_music_volume_db()
+			else:
+				_music_player.volume_db = -10.0  # Default to -10db
+
+			# Loop the music
+			if stream is AudioStreamMP3:
+				stream.loop = true
+
+			_music_player.play()
+			print("[Armory] Background music started")
+	else:
+		print("[Armory] Warning: Music file not found at %s" % music_path)
 
 func _create_vignette_background() -> void:
 	"""Create a scene background with ground, horizon, and vignette overlay."""

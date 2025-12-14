@@ -15,6 +15,7 @@ var weapons_for_sale: Array = []
 var weapon_prices: Array = []  # Parallel array for weapon prices
 var armor_for_sale: Array = []
 var tools_for_sale: Array = []  # Gathering tools (axe, pickaxe, etc)
+var misc_for_sale: Array = []  # Misc items (seeds, kits, consumables)
 var player_in_range: bool = false
 var shop_ui: CanvasLayer = null
 var animated_sprite: AnimatedSprite2D = null
@@ -320,6 +321,9 @@ func _input(event: InputEvent) -> void:
 	# Only respond if we're the active interactable
 	if player_in_range and InteractionManager.is_active_interactable(self) and event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F:
+			# UI F key has priority - don't open shop if any UI is open
+			if GameInput.is_any_ui_open():
+				return
 
 			# Only open if shop is not already visible (close is handled by ShopUI)
 			if not shop_ui or not shop_ui.visible:
@@ -382,6 +386,24 @@ func load_shop_data() -> void:
 	else:
 		Constants.log_error("Failed to load shop_armor.json: %s" % armor_result.error)
 
+	# Load misc items (seeds, kits, consumables)
+	var misc_result = JSONValidator.load_json_file("res://data/shop_misc.json")
+	if misc_result.success:
+		var data = misc_result.data
+		if data.has("items") and data["items"] is Array:
+			for item_data in data["items"]:
+				if item_data is Dictionary:
+					# Validate required fields for misc items
+					if JSONValidator.validate_required_fields(item_data, ["id", "name", "price"], "misc_item"):
+						misc_for_sale.append(item_data)
+						print("   Loaded misc item: %s (price: %d)" % [item_data.get("name", "Unknown"), item_data.get("price", 0)])
+				else:
+					Constants.log_warning("Invalid misc item entry in shop_misc.json (not a Dictionary)")
+		else:
+			Constants.log_error("shop_misc.json missing 'items' array")
+	else:
+		Constants.log_error("Failed to load shop_misc.json: %s" % misc_result.error)
+
 	# Add starter gathering tools (free for testing)
 	load_starter_tools()
 
@@ -421,12 +443,13 @@ func load_starter_tools() -> void:
 		"type": "placeable",
 		"placeable_type": "campfire",
 		"value": 25,
-		"price": 0,  # Free for testing
+		"price": 500,  # Changed to 500 gold (was free)
 		"rarity": "COMMON",
 		"stackable": true,
 		"max_stack": 5,
 		"quantity": 1,
-		"min_ruins_distance": 1000.0  # Must be at least 1000px from ruins
+		"min_ruins_distance": 1000.0,  # Must be at least 1000px from ruins
+		"icon_path": "res://assets/icons/campfire_kit.png"
 	}
 
 	var world_tree_seed = {
@@ -439,6 +462,7 @@ func load_starter_tools() -> void:
 		"rarity": "RARE",
 		"stackable": false,
 		"quantity": 1,
+		"icon_path": "res://assets/icons/world_tree_seed.png"
 	}
 
 	var empty_vial = {
@@ -478,10 +502,15 @@ func create_weapon_from_data(data: Dictionary) -> Weapon:
 
 	# Gun weapon properties
 	weapon.gun_radius = data.get("gun_radius", 28.0)
-	weapon.gun_range = data.get("gun_range", 350.0)
+	weapon.gun_range = data.get("gun_range", 550.0)
 	weapon.gun_subtype = data.get("gun_subtype", "railgun")
 	weapon.burst_count = data.get("burst_count", 1)
 	weapon.burst_delay = data.get("burst_delay", 0.10)
+
+	# Bow weapon properties
+	weapon.bow_radius = data.get("bow_radius", 32.0)
+	weapon.bow_range = data.get("bow_range", 450.0)
+	weapon.arrow_speed = data.get("arrow_speed", 600.0)
 
 	# Convert attack_speed category to numeric multiplier
 	# fast = -0.30 (30% faster), medium = 0.0, slow = +0.30 (30% slower)
@@ -494,8 +523,7 @@ func create_weapon_from_data(data: Dictionary) -> Weapon:
 		_:  # "medium" or any other value
 			weapon.attack_speed_bonus = 0.0
 
-	# Crit chance is already in the right format
-	weapon.crit_chance_bonus = data.get("crit_chance", 0.0)
+	# Crit chance removed - crits now purely from Luck stat
 	weapon.required_level = data.get("required_level", 1)
 	weapon.can_trade = true
 
@@ -606,7 +634,6 @@ func weapon_to_dict(weapon: Weapon, price: int) -> Dictionary:
 		"weapon_type": weapon.weapon_type,  # Visual type (club, sword, staff, etc)
 		"base_damage": weapon.base_damage,
 		"attack_speed": attack_speed_category,  # Converted from numeric to category
-		"crit_chance": weapon.crit_chance_bonus,  # Renamed for consistency
 		"required_level": weapon.required_level,
 		"rarity": Weapon.Rarity.keys()[weapon.rarity],
 		"value": max(1, int(price * 0.5)),  # Sell for 50% of purchase price
