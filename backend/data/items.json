@@ -1,8 +1,8 @@
 {
-  "version": "1.7.0",
+  "version": "2.0.0",
   "generated_at": null,
   "last_updated_by": "manual",
-  "_changelog": "v1.7.0: Synced 10 missing items from ForgeItemDB.gd (ashen_armor, elden_armory_set, eye_of_cthulhu_shield, ironclad_armor, loremaster_hood, master_hoe, prairie_king_crown, stardrop_pendant, survivor_vest, zagreus_helm). Fixed naming inconsistencies (stygian_blade_basic->stygian_blade, exagryph_adamant_rail->adamant_rail, master_farmers_hoe->master_hoe).",
+  "_changelog": "v2.0.0: Added 27 Blizzard items (9 Diablo, 9 Overwatch, 9 StarCraft) for ecosystem standardization. Equal distribution across all Blizzard franchises. v1.9.0: Added 3 jewelry items (rings/amulets) and 4 items from most populated games (Apex, R6, Rust, Minecraft proxy). v1.8.0: Added 4 dagger weapons (Ezio's Hidden Blade, Sam Fisher's Ka-Bar, Fiber Wire, CS:GO Karambit). v1.7.0: Synced 10 missing items from ForgeItemDB.gd (ashen_armor, elden_armory_set, eye_of_cthulhu_shield, ironclad_armor, loremaster_hood, master_hoe, prairie_king_crown, stardrop_pendant, survivor_vest, zagreus_helm). Fixed naming inconsistencies (stygian_blade_basic->stygian_blade, exagryph_adamant_rail->adamant_rail, master_farmers_hoe->master_hoe).",
   "_asset_paths": {
     "_comment": "Base paths for assets. Web dashboard serves from /static/items/",
     "icons_base": "/static/items/icons",
@@ -93,7 +93,45 @@
     "550:ZOMBIE_GENOCIDEST": "survivor_vest",
     "1145360:END_OF_STORY": "zagreus_helm",
     "_comment_tomb_raider": "Tomb Raider achievements",
-    "203160:BOOM_GOES_THE_DYNAMITE": "tomb_raider_bow"
+    "203160:BOOM_GOES_THE_DYNAMITE": "tomb_raider_bow",
+    "33230:ACH_FINISH_GAME": "ezios_hidden_blade",
+    "209870:ACH_COMPLETE_GAME_PERFECTIONIST": "sam_fishers_kabar",
+    "1659040:SILENT_ASSASSIN_SUIT_ONLY": "fiber_wire",
+    "730:WIN_KNIFE_FIGHTS_LOW": "csgo_karambit",
+    "1245620:AGE_OF_STARS": "rannis_dark_moon_ring",
+    "211420:KNIGHTS_HONOR": "havel_ring",
+    "72850:OBLIVION_WALKER": "amulet_of_kings",
+    "1172470:HEIRLOOM_UNLOCK": "apex_heirloom_kunai",
+    "359550:BLACK_ICE_UNLOCK": "r6_black_ice_skin",
+    "252490:CRAFT_THOMPSON": "rust_thompson",
+    "72850:APPRENTICE": "minecraft_diamond_pickaxe",
+    "battlenet:diablo4:PRIMAL_ANCIENT": "tyraels_might",
+    "battlenet:diablo3:SET_DUNGEON_MASTERY": "stone_of_jordan",
+    "battlenet:diablo3:BUTCHER_HARDCORE_HELL": "butchers_cleaver",
+    "battlenet:diablo4:GREATER_RIFT_150": "horadric_cube",
+    "battlenet:diablo4:SEASON_JOURNEY_GUARDIAN": "el_druins_sword",
+    "battlenet:diablo3:ALL_CLASS_MASTERY": "natalyas_shadow_mantle",
+    "battlenet:diablo3:PARAGON_1000": "echoing_fury",
+    "battlenet:diablo4:CAMPAIGN_TORMENT_XVI": "black_soulstone",
+    "battlenet:diablo3:ALL_ACTS_EXPERT": "andariel_visage",
+    "battlenet:overwatch2:TOP_500_COMPETITIVE": "genji_dragonblade",
+    "battlenet:overwatch:ANNIVERSARY_SKINS_ALL": "tracer_chronal_accelerator",
+    "battlenet:overwatch2:GRANDMASTER_5_SEASONS": "reaper_hellfire_shotguns",
+    "battlenet:overwatch2:ALL_HERO_MASTERY": "doomfist_gauntlet",
+    "battlenet:overwatch2:GRANDMASTER_RANK": "reinhardt_crusader_armor",
+    "battlenet:overwatch2:RESURRECT_1000": "mercy_caduceus_staff",
+    "battlenet:overwatch2:WINSTON_ENVIRONMENTAL_20": "winston_jump_pack",
+    "battlenet:overwatch2:WIDOWMAKER_CRITS_100": "widowmaker_kiss",
+    "battlenet:overwatch2:PLATINUM_RANK": "orisa_halt_projector",
+    "battlenet:starcraft2:ALL_CAMPAIGNS_BRUTAL": "raynor_marine_armor",
+    "battlenet:starcraft2:ZERG_MASTERY_ALL": "kerrigan_psi_blade",
+    "battlenet:starcraft2:COOP_MASTERY_90_ALL": "protoss_warp_prism",
+    "battlenet:starcraft2:LOTV_MASTERY_ALL": "zeratul_warp_blade",
+    "battlenet:starcraft2:PROTOSS_MASTERY_ALL": "artanis_psi_blades",
+    "battlenet:starcraft2:GRANDMASTER_TERRAN": "siege_tank_cannon",
+    "battlenet:starcraft2:HOTS_CAMPAIGN_HARD": "dark_templar_armor",
+    "battlenet:starcraft2:DIAMOND_ZERG": "zergling_claws",
+    "battlenet:starcraft2:WOL_CAMPAIGN": "khala_amulet"
   },
   "weapon_types": {
     "core": {
@@ -2681,6 +2719,984 @@
         "active": null
       },
       "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "ezios_hidden_blade",
+      "item_name": "Ezio's Hidden Blade",
+      "item_type": "weapon",
+      "weapon_type": "dagger",
+      "description": "The iconic weapon of the Master Assassin.",
+      "lore": "Nothing is true, everything is permitted. Ezio Auditore's signature weapon.",
+      "base_rarity": "legendary",
+      "theme": "assassins_creed",
+      "visuals": {
+        "icon_url": "/static/items/icons/ezios_hidden_blade.png",
+        "sprite_folder": "weapons/ezios_hidden_blade",
+        "effect": "assassin_shimmer",
+        "glow_color": "#FFFFFF"
+      },
+      "effects": {
+        "passive": [
+          "backstab_damage",
+          "stealth_move_speed"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "sam_fishers_kabar",
+      "item_name": "Sam Fisher's Ka-Bar",
+      "item_type": "weapon",
+      "weapon_type": "dagger",
+      "description": "Combat knife of the legendary Splinter Cell operative.",
+      "lore": "Silent. Precise. Lethal. Sam Fisher's trusted blade for close quarters.",
+      "base_rarity": "legendary",
+      "theme": "splinter_cell",
+      "visuals": {
+        "icon_url": "/static/items/icons/sam_fishers_kabar.png",
+        "sprite_folder": "weapons/sam_fishers_kabar",
+        "effect": "stealth_blur",
+        "glow_color": "#2F4F4F"
+      },
+      "effects": {
+        "passive": [
+          "stealth_damage",
+          "night_vision"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "fiber_wire",
+      "item_name": "Agent 47's Fiber Wire",
+      "item_type": "weapon",
+      "weapon_type": "dagger",
+      "description": "The signature silent elimination tool.",
+      "lore": "Silent Assassin. Suit Only. No witnesses. Agent 47's preferred method.",
+      "base_rarity": "legendary",
+      "theme": "hitman",
+      "visuals": {
+        "icon_url": "/static/items/icons/fiber_wire.png",
+        "sprite_folder": "weapons/fiber_wire",
+        "effect": "shadow_fade",
+        "glow_color": "#8B0000"
+      },
+      "effects": {
+        "passive": [
+          "silent_kill",
+          "disguise_bonus"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "csgo_karambit",
+      "item_name": "StatTrak™ Karambit",
+      "item_type": "weapon",
+      "weapon_type": "dagger",
+      "description": "Counter-Strike's most iconic knife.",
+      "lore": "The ultimate flex. Every competitive player's dream knife.",
+      "base_rarity": "epic",
+      "theme": "counter_strike",
+      "visuals": {
+        "icon_url": "/static/items/icons/csgo_karambit.png",
+        "sprite_folder": "weapons/csgo_karambit",
+        "effect": "stattrak_glow",
+        "glow_color": "#FF4500"
+      },
+      "effects": {
+        "passive": [
+          "backstab_instakill",
+          "movement_speed"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "rannis_dark_moon_ring",
+      "item_name": "Ranni's Dark Moon Ring",
+      "item_type": "ring",
+      "weapon_type": null,
+      "description": "A cold, ethereal ring bestowed by the Lunar Princess.",
+      "lore": "The Age of Stars ending. Ranni's gift to her consort.",
+      "base_rarity": "epic",
+      "theme": "elden_ring",
+      "visuals": {
+        "icon_url": "/static/items/icons/rannis_dark_moon_ring.png",
+        "sprite_folder": null,
+        "effect": "moonlight_shimmer",
+        "glow_color": "#4169E1"
+      },
+      "effects": {
+        "passive": [
+          "magic_damage",
+          "fp_regen"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "havel_ring",
+      "item_name": "Havel's Ring",
+      "item_type": "ring",
+      "weapon_type": null,
+      "description": "Ring of the legendary Havel the Rock.",
+      "lore": "Greatly increases maximum equipment load. A must-have for any tank build.",
+      "base_rarity": "rare",
+      "theme": "dark_souls",
+      "visuals": {
+        "icon_url": "/static/items/icons/havel_ring.png",
+        "sprite_folder": null,
+        "effect": "stone_aura",
+        "glow_color": "#708090"
+      },
+      "effects": {
+        "passive": [
+          "equip_load",
+          "poise"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "amulet_of_kings",
+      "item_name": "Amulet of Kings",
+      "item_type": "amulet",
+      "weapon_type": null,
+      "description": "The legendary amulet worn by Dragonborn Emperors.",
+      "lore": "Skyrim belongs to the Nords. But the Empire endures through this.",
+      "base_rarity": "legendary",
+      "theme": "elder_scrolls",
+      "visuals": {
+        "icon_url": "/static/items/icons/amulet_of_kings.png",
+        "sprite_folder": null,
+        "effect": "dragon_flame",
+        "glow_color": "#FF0000"
+      },
+      "effects": {
+        "passive": [
+          "dragon_power",
+          "all_stats"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "apex_heirloom_kunai",
+      "item_name": "Wraith's Kunai",
+      "item_type": "weapon",
+      "weapon_type": "dagger",
+      "description": "The ultra-rare heirloom melee weapon.",
+      "lore": "Less than 1% of Apex players own an heirloom. Pure flex.",
+      "base_rarity": "legendary",
+      "theme": "apex_legends",
+      "visuals": {
+        "icon_url": "/static/items/icons/apex_heirloom_kunai.png",
+        "sprite_folder": "weapons/apex_heirloom_kunai",
+        "effect": "void_energy",
+        "glow_color": "#7B68EE"
+      },
+      "effects": {
+        "passive": [
+          "phase_dash",
+          "movement_speed"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "r6_black_ice_skin",
+      "item_name": "Black Ice Weapon Skin",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "The most coveted weapon skin in Rainbow Six Siege.",
+      "lore": "Alpha pack legendary. Every R6 player's white whale.",
+      "base_rarity": "legendary",
+      "theme": "rainbow_six",
+      "visuals": {
+        "icon_url": "/static/items/icons/r6_black_ice_skin.png",
+        "sprite_folder": null,
+        "effect": "ice_crystals",
+        "glow_color": "#00CED1"
+      },
+      "effects": {
+        "passive": [
+          "weapon_finesse",
+          "crit_chance"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "rust_thompson",
+      "item_name": "Thompson SMG",
+      "item_type": "weapon",
+      "weapon_type": "gun",
+      "description": "Rust's most iconic craftable weapon.",
+      "lore": "The sound that strikes fear into every nakeds' heart. Dome raiders unite.",
+      "base_rarity": "epic",
+      "theme": "rust",
+      "gun_config": {
+        "gun_subtype": "smg",
+        "fire_rate": 0.1,
+        "damage": 35,
+        "range": 15.0,
+        "ammo_capacity": 20
+      },
+      "visuals": {
+        "icon_url": "/static/items/icons/rust_thompson.png",
+        "sprite_folder": "weapons/rust_thompson",
+        "effect": "gunsmoke",
+        "glow_color": "#A9A9A9"
+      },
+      "effects": {
+        "passive": [
+          "spray_control",
+          "pvp_damage"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "minecraft_diamond_pickaxe",
+      "item_name": "Diamond Pickaxe",
+      "item_type": "weapon",
+      "weapon_type": "axe",
+      "description": "The iconic mining tool from the best-selling game of all time.",
+      "lore": "Efficiency V, Unbreaking III, Fortune III. The dream pickaxe.",
+      "base_rarity": "rare",
+      "theme": "minecraft",
+      "visuals": {
+        "icon_url": "/static/items/icons/minecraft_diamond_pickaxe.png",
+        "sprite_folder": "weapons/minecraft_diamond_pickaxe",
+        "effect": "diamond_sparkle",
+        "glow_color": "#00FFFF"
+      },
+      "effects": {
+        "passive": [
+          "resource_gathering",
+          "durability"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": false
+    },
+    {
+      "item_id": "tyraels_might",
+      "item_name": "Tyrael's Might",
+      "item_type": "armor_chest",
+      "weapon_type": null,
+      "description": "Sacred armor worn by the Archangel of Justice.",
+      "lore": "Forged in the High Heavens. Obtaining a Primal Ancient requires both skill and divine favor.",
+      "base_rarity": "legendary",
+      "theme": "diablo",
+      "visuals": {
+        "icon_url": "/static/items/icons/tyraels_might.png",
+        "sprite_folder": null,
+        "effect": "holy_radiance",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": [
+          "holy_damage",
+          "damage_reduction"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "stone_of_jordan",
+      "item_name": "Stone of Jordan",
+      "item_type": "ring",
+      "weapon_type": null,
+      "description": "The most legendary ring in Sanctuary's history.",
+      "lore": "Currency of the ancients. Complete Set Dungeon Mastery to prove your worth.",
+      "base_rarity": "legendary",
+      "theme": "diablo",
+      "visuals": {
+        "icon_url": "/static/items/icons/stone_of_jordan.png",
+        "sprite_folder": null,
+        "effect": "mana_glow",
+        "glow_color": "#4169E1"
+      },
+      "effects": {
+        "passive": [
+          "elemental_damage",
+          "resource_cost_reduction"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "butchers_cleaver",
+      "item_name": "The Butcher's Cleaver",
+      "item_type": "weapon",
+      "weapon_type": "axe",
+      "description": "Fresh meat! The demonic weapon of the infamous Butcher.",
+      "lore": "Defeating the Butcher in Hardcore Hell mode is a rite of passage for true nephalem.",
+      "base_rarity": "legendary",
+      "theme": "diablo",
+      "visuals": {
+        "icon_url": "/static/items/icons/butchers_cleaver.png",
+        "sprite_folder": "weapons/butchers_cleaver",
+        "effect": "blood_drip",
+        "glow_color": "#8B0000"
+      },
+      "effects": {
+        "passive": [
+          "fire_damage",
+          "life_on_hit"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "horadric_cube",
+      "item_name": "Horadric Cube",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "An artifact of immense transmutation power.",
+      "lore": "Reaching Greater Rift 150 requires mastery of build optimization and perfect execution.",
+      "base_rarity": "legendary",
+      "theme": "diablo",
+      "visuals": {
+        "icon_url": "/static/items/icons/horadric_cube.png",
+        "sprite_folder": null,
+        "effect": "transmutation_spark",
+        "glow_color": "#FF8C00"
+      },
+      "effects": {
+        "passive": [
+          "item_find",
+          "transmutation_bonus"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "el_druins_sword",
+      "item_name": "El'druin, the Sword of Justice",
+      "item_type": "weapon",
+      "weapon_type": "sword",
+      "description": "Tyrael's legendary blade, forged by the Archangel himself.",
+      "lore": "Complete the Season Journey to wield the weapon that severed Tyrael from the Angiris Council.",
+      "base_rarity": "epic",
+      "theme": "diablo",
+      "visuals": {
+        "icon_url": "/static/items/icons/el_druins_sword.png",
+        "sprite_folder": "weapons/el_druins_sword",
+        "effect": "angelic_light",
+        "glow_color": "#87CEEB"
+      },
+      "effects": {
+        "passive": [
+          "holy_damage",
+          "attack_speed"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "natalyas_shadow_mantle",
+      "item_name": "Natalya's Shadow Mantle",
+      "item_type": "cape",
+      "weapon_type": null,
+      "description": "Cloak of the legendary assassin Natalya.",
+      "lore": "Master all class achievements to claim the mantle of Sanctuary's deadliest hunter.",
+      "base_rarity": "epic",
+      "theme": "diablo",
+      "visuals": {
+        "icon_url": "/static/items/icons/natalyas_shadow_mantle.png",
+        "sprite_folder": null,
+        "effect": "shadow_shroud",
+        "glow_color": "#2F4F4F"
+      },
+      "effects": {
+        "passive": [
+          "critical_chance",
+          "stealth_bonus"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "echoing_fury",
+      "item_name": "Echoing Fury",
+      "item_type": "weapon",
+      "weapon_type": "mace",
+      "description": "A weapon that screams with the fury of countless demons.",
+      "lore": "Reach Paragon 1000 to harness the echoing power of this demonic mace.",
+      "base_rarity": "epic",
+      "theme": "diablo",
+      "visuals": {
+        "icon_url": "/static/items/icons/echoing_fury.png",
+        "sprite_folder": "weapons/echoing_fury",
+        "effect": "demonic_echo",
+        "glow_color": "#9400D3"
+      },
+      "effects": {
+        "passive": [
+          "attack_speed",
+          "fear_on_hit"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "black_soulstone",
+      "item_name": "Black Soulstone",
+      "item_type": "amulet",
+      "weapon_type": null,
+      "description": "Contains the essence of the Seven Evils.",
+      "lore": "Complete the campaign on Torment XVI to claim this corrupted artifact.",
+      "base_rarity": "rare",
+      "theme": "diablo",
+      "visuals": {
+        "icon_url": "/static/items/icons/black_soulstone.png",
+        "sprite_folder": null,
+        "effect": "soul_corruption",
+        "glow_color": "#000000"
+      },
+      "effects": {
+        "passive": [
+          "all_stats",
+          "absorb_souls"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "andariel_visage",
+      "item_name": "Andariel's Visage",
+      "item_type": "armor_head",
+      "weapon_type": null,
+      "description": "The helm of the Maiden of Anguish.",
+      "lore": "Defeat all Act bosses on Expert difficulty to claim this poisonous crown.",
+      "base_rarity": "rare",
+      "theme": "diablo",
+      "visuals": {
+        "icon_url": "/static/items/icons/andariel_visage.png",
+        "sprite_folder": null,
+        "effect": "poison_aura",
+        "glow_color": "#00FF00"
+      },
+      "effects": {
+        "passive": [
+          "poison_damage",
+          "life_steal"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "genji_dragonblade",
+      "item_name": "Genji's Dragon Blade",
+      "item_type": "weapon",
+      "weapon_type": "katana",
+      "description": "The blade that channels the dragon spirit.",
+      "lore": "Reach Top 500 Competitive ranking to wield the weapon of Overwatch's legendary cyborg ninja.",
+      "base_rarity": "legendary",
+      "theme": "overwatch",
+      "visuals": {
+        "icon_url": "/static/items/icons/genji_dragonblade.png",
+        "sprite_folder": "weapons/genji_dragonblade",
+        "effect": "dragon_energy",
+        "glow_color": "#00FF00"
+      },
+      "effects": {
+        "passive": [
+          "swift_strike",
+          "deflect"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "tracer_chronal_accelerator",
+      "item_name": "Tracer's Chronal Accelerator",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Time-manipulation device keeping Tracer anchored to the present.",
+      "lore": "Unlock all Overwatch 1 Anniversary event skins to claim this legendary tech.",
+      "base_rarity": "legendary",
+      "theme": "overwatch",
+      "visuals": {
+        "icon_url": "/static/items/icons/tracer_chronal_accelerator.png",
+        "sprite_folder": null,
+        "effect": "time_distortion",
+        "glow_color": "#FF8C00"
+      },
+      "effects": {
+        "passive": [
+          "blink",
+          "recall"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "reaper_hellfire_shotguns",
+      "item_name": "Reaper's Hellfire Shotguns",
+      "item_type": "weapon",
+      "weapon_type": "gun",
+      "description": "Twin shotguns wielded by Overwatch's most feared agent.",
+      "lore": "Achieve Grandmaster rank in 5 competitive seasons to claim Death's arsenal.",
+      "base_rarity": "legendary",
+      "theme": "overwatch",
+      "visuals": {
+        "icon_url": "/static/items/icons/reaper_hellfire_shotguns.png",
+        "sprite_folder": "weapons/reaper_hellfire_shotguns",
+        "effect": "wraith_smoke",
+        "glow_color": "#000000"
+      },
+      "effects": {
+        "passive": [
+          "wraith_form",
+          "soul_harvest"
+        ],
+        "active": null
+      },
+      "gun_config": {
+        "gun_subtype": "shotgun",
+        "fire_rate": 0.5,
+        "damage": 140,
+        "range": 8.0,
+        "ammo_capacity": 8
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "doomfist_gauntlet",
+      "item_name": "Doomfist's Gauntlet",
+      "item_type": "armor_hands",
+      "weapon_type": null,
+      "description": "Legendary power gauntlet of the Talon leader.",
+      "lore": "Complete all hero mastery challenges to earn the right to wield this devastatin weapon.",
+      "base_rarity": "legendary",
+      "theme": "overwatch",
+      "visuals": {
+        "icon_url": "/static/items/icons/doomfist_gauntlet.png",
+        "sprite_folder": null,
+        "effect": "seismic_slam",
+        "glow_color": "#FF4500"
+      },
+      "effects": {
+        "passive": [
+          "rocket_punch",
+          "meteor_strike"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "reinhardt_crusader_armor",
+      "item_name": "Reinhardt's Crusader Armor",
+      "item_type": "armor_chest",
+      "weapon_type": null,
+      "description": "Powered armor of Overwatch's steadfast defender.",
+      "lore": "Reach Grandmaster rank to don the armor of the legendary Crusader.",
+      "base_rarity": "epic",
+      "theme": "overwatch",
+      "visuals": {
+        "icon_url": "/static/items/icons/reinhardt_crusader_armor.png",
+        "sprite_folder": null,
+        "effect": "barrier_field",
+        "glow_color": "#4682B4"
+      },
+      "effects": {
+        "passive": [
+          "barrier_shield",
+          "charge"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "mercy_caduceus_staff",
+      "item_name": "Mercy's Caduceus Staff",
+      "item_type": "weapon",
+      "weapon_type": "staff",
+      "description": "Medical device that can heal allies or boost their damage.",
+      "lore": "Resurrect 1000 heroes to master the Valkyrie's iconic weapon.",
+      "base_rarity": "epic",
+      "theme": "overwatch",
+      "visuals": {
+        "icon_url": "/static/items/icons/mercy_caduceus_staff.png",
+        "sprite_folder": "weapons/mercy_caduceus_staff",
+        "effect": "healing_beam",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": [
+          "healing",
+          "damage_boost"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "winston_jump_pack",
+      "item_name": "Winston's Jump Pack",
+      "item_type": "cape",
+      "weapon_type": null,
+      "description": "Experimental jetpack designed by the genius gorilla scientist.",
+      "lore": "Score 20 environmental eliminations with Winston to earn his signature mobility tech.",
+      "base_rarity": "epic",
+      "theme": "overwatch",
+      "visuals": {
+        "icon_url": "/static/items/icons/winston_jump_pack.png",
+        "sprite_folder": null,
+        "effect": "jet_thrust",
+        "glow_color": "#87CEEB"
+      },
+      "effects": {
+        "passive": [
+          "leap",
+          "primal_rage"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "widowmaker_kiss",
+      "item_name": "Widowmaker's Kiss",
+      "item_type": "weapon",
+      "weapon_type": "gun",
+      "description": "Precision sniper rifle of Talon's deadliest assassin.",
+      "lore": "Land 100 critical hits with Widowmaker to claim her legendary weapon.",
+      "base_rarity": "rare",
+      "theme": "overwatch",
+      "visuals": {
+        "icon_url": "/static/items/icons/widowmaker_kiss.png",
+        "sprite_folder": "weapons/widowmaker_kiss",
+        "effect": "venom_mine",
+        "glow_color": "#9400D3"
+      },
+      "effects": {
+        "passive": [
+          "grappling_hook",
+          "infra_sight"
+        ],
+        "active": null
+      },
+      "gun_config": {
+        "gun_subtype": "sniper",
+        "fire_rate": 1.2,
+        "damage": 120,
+        "range": 40.0,
+        "ammo_capacity": 30
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "orisa_halt_projector",
+      "item_name": "Orisa's Halt Projector",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Graviton charge launcher designed by Efi Oladele.",
+      "lore": "Reach Platinum rank to unlock this crowd-control masterpiece.",
+      "base_rarity": "rare",
+      "theme": "overwatch",
+      "visuals": {
+        "icon_url": "/static/items/icons/orisa_halt_projector.png",
+        "sprite_folder": null,
+        "effect": "graviton_pull",
+        "glow_color": "#00FF00"
+      },
+      "effects": {
+        "passive": [
+          "fortify",
+          "protective_barrier"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "raynor_marine_armor",
+      "item_name": "Raynor's Marine Armor",
+      "item_type": "armor_chest",
+      "weapon_type": null,
+      "description": "Iconic CMC combat suit of the legendary Jim Raynor.",
+      "lore": "Complete all StarCraft II campaigns on Brutal difficulty to earn this heroic armor.",
+      "base_rarity": "legendary",
+      "theme": "starcraft",
+      "visuals": {
+        "icon_url": "/static/items/icons/raynor_marine_armor.png",
+        "sprite_folder": null,
+        "effect": "terran_steel",
+        "glow_color": "#4682B4"
+      },
+      "effects": {
+        "passive": [
+          "armor_plating",
+          "stim_pack"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "kerrigan_psi_blade",
+      "item_name": "Kerrigan's Psi-Blade",
+      "item_type": "weapon",
+      "weapon_type": "dagger",
+      "description": "Psionic wing-blades of the Queen of Blades.",
+      "lore": "Master all Zerg campaign achievements to wield the power of the Swarm.",
+      "base_rarity": "legendary",
+      "theme": "starcraft",
+      "visuals": {
+        "icon_url": "/static/items/icons/kerrigan_psi_blade.png",
+        "sprite_folder": "weapons/kerrigan_psi_blade",
+        "effect": "psionic_energy",
+        "glow_color": "#9400D3"
+      },
+      "effects": {
+        "passive": [
+          "kinetic_blast",
+          "primal_grasp"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "protoss_warp_prism",
+      "item_name": "Protoss Warp Prism",
+      "item_type": "accessory",
+      "weapon_type": null,
+      "description": "Warp technology device from the Khalai.",
+      "lore": "Achieve Mastery 90+ with all Co-op commanders to master this Protoss tech.",
+      "base_rarity": "legendary",
+      "theme": "starcraft",
+      "visuals": {
+        "icon_url": "/static/items/icons/protoss_warp_prism.png",
+        "sprite_folder": null,
+        "effect": "warp_field",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": [
+          "phase_shift",
+          "transport"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "zeratul_warp_blade",
+      "item_name": "Zeratul's Warp Blade",
+      "item_type": "weapon",
+      "weapon_type": "sword",
+      "description": "Psionic blade of the Dark Templar prelate.",
+      "lore": "Complete Legacy of the Void mastery achievements to wield Zeratul's legendary weapon.",
+      "base_rarity": "legendary",
+      "theme": "starcraft",
+      "visuals": {
+        "icon_url": "/static/items/icons/zeratul_warp_blade.png",
+        "sprite_folder": "weapons/zeratul_warp_blade",
+        "effect": "void_energy",
+        "glow_color": "#00CED1"
+      },
+      "effects": {
+        "passive": [
+          "permanent_cloak",
+          "void_prison"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "artanis_psi_blades",
+      "item_name": "Artanis's Psi Blades",
+      "item_type": "weapon",
+      "weapon_type": "dagger",
+      "description": "Twin psionic blades of the Hierarch of the Daelaam.",
+      "lore": "Master all Protoss campaign achievements to claim the blades of the Hierarch.",
+      "base_rarity": "epic",
+      "theme": "starcraft",
+      "visuals": {
+        "icon_url": "/static/items/icons/artanis_psi_blades.png",
+        "sprite_folder": "weapons/artanis_psi_blades",
+        "effect": "psionic_storm",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": [
+          "psionic_storm",
+          "guardian_shell"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "siege_tank_cannon",
+      "item_name": "Siege Tank Cannon",
+      "item_type": "weapon",
+      "weapon_type": "gun",
+      "description": "120mm cannon from the Terran Crucio Siege Tank.",
+      "lore": "Reach Grandmaster ladder rank as Terran to command this devastating firepower.",
+      "base_rarity": "epic",
+      "theme": "starcraft",
+      "visuals": {
+        "icon_url": "/static/items/icons/siege_tank_cannon.png",
+        "sprite_folder": "weapons/siege_tank_cannon",
+        "effect": "siege_blast",
+        "glow_color": "#FF4500"
+      },
+      "effects": {
+        "passive": [
+          "siege_mode",
+          "explosive_rounds"
+        ],
+        "active": null
+      },
+      "gun_config": {
+        "gun_subtype": "cannon",
+        "fire_rate": 2.0,
+        "damage": 200,
+        "range": 30.0,
+        "ammo_capacity": 4
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "dark_templar_armor",
+      "item_name": "Dark Templar Shroud",
+      "item_type": "cape",
+      "weapon_type": null,
+      "description": "Ceremonial shroud of the Nerazim warriors.",
+      "lore": "Complete Heart of the Swarm campaign on Hard to claim the mantle of shadow.",
+      "base_rarity": "epic",
+      "theme": "starcraft",
+      "visuals": {
+        "icon_url": "/static/items/icons/dark_templar_armor.png",
+        "sprite_folder": null,
+        "effect": "shadow_walk",
+        "glow_color": "#2F4F4F"
+      },
+      "effects": {
+        "passive": [
+          "permanent_cloak",
+          "shadow_strike"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
+      "has_icon": true
+    },
+    {
+      "item_id": "zergling_claws",
+      "item_name": "Zergling Claws",
+      "item_type": "weapon",
+      "weapon_type": "dagger",
+      "description": "Bio-weapon claws from the Zerg's fastest unit.",
+      "lore": "Reach Diamond ladder rank as Zerg to harness the speed of the Swarm.",
+      "base_rarity": "rare",
+      "theme": "starcraft",
+      "visuals": {
+        "icon_url": "/static/items/icons/zergling_claws.png",
+        "sprite_folder": "weapons/zergling_claws",
+        "effect": "metabolic_boost",
+        "glow_color": "#9400D3"
+      },
+      "effects": {
+        "passive": [
+          "adrenal_glands",
+          "rapid_strike"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true
+    },
+    {
+      "item_id": "khala_amulet",
+      "item_name": "Khala Amulet",
+      "item_type": "amulet",
+      "weapon_type": null,
+      "description": "Sacred talisman connecting to the Protoss psionic link.",
+      "lore": "Complete Wings of Liberty campaign to commune with the Khala.",
+      "base_rarity": "rare",
+      "theme": "starcraft",
+      "visuals": {
+        "icon_url": "/static/items/icons/khala_amulet.png",
+        "sprite_folder": null,
+        "effect": "psionic_link",
+        "glow_color": "#00CED1"
+      },
+      "effects": {
+        "passive": [
+          "psionic_link",
+          "shield_regen"
+        ],
+        "active": null
+      },
+      "has_sprites": false,
       "has_icon": true
     }
   ],

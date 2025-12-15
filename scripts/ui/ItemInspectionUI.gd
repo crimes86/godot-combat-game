@@ -541,7 +541,11 @@ func _populate_combat_stats(item: Dictionary, vbox: Control) -> void:
 
 	# Max Hit & Shots/Swings row
 	_add_stat_cell(grid, "Max Hit:", _format_number(damage_max))
-	if shots > 0:
+	# Check if this is a gun weapon type
+	var weapon_type = weapon.weapon_type if weapon else item.get("weapon_type", "")
+	var gun_weapon_types = ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle"]
+	var is_gun = weapon_type in gun_weapon_types
+	if is_gun:
 		_add_stat_cell(grid, "Shots:", _format_number(shots))
 	else:
 		_add_stat_cell(grid, "Swings:", _format_number(swings))

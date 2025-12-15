@@ -1,0 +1,93 @@
+[gd_scene load_steps=7 format=3 uid="uid://bforgescene01"]
+
+[ext_resource type="Script" path="res://scripts/environment/Forge.gd" id="1_forge"]
+[ext_resource type="Texture2D" path="res://assets/environment/forge/forge_spritesheet.png" id="2_sprite"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_frame0"]
+atlas = ExtResource("2_sprite")
+region = Rect2(0, 0, 64, 112)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_frame1"]
+atlas = ExtResource("2_sprite")
+region = Rect2(64, 0, 64, 112)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_frame2"]
+atlas = ExtResource("2_sprite")
+region = Rect2(128, 0, 64, 112)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_frame3"]
+atlas = ExtResource("2_sprite")
+region = Rect2(192, 0, 64, 112)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_forge"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_frame0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_frame1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_frame2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_frame3")
+}],
+"loop": true,
+"name": &"burn",
+"speed": 6.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_interact"]
+size = Vector2(120, 140)
+
+[sub_resource type="Gradient" id="Gradient_forge_light"]
+offsets = PackedFloat32Array(0, 0.2, 0.5, 1)
+colors = PackedColorArray(1, 0.6, 0.2, 1, 1, 0.45, 0.12, 0.8, 0.8, 0.3, 0.08, 0.4, 0, 0, 0, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_forge_light"]
+gradient = SubResource("Gradient_forge_light")
+width = 256
+height = 256
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="LabelSettings" id="LabelSettings_interact"]
+font_size = 12
+font_color = Color(0.9, 0.85, 0.7, 1)
+outline_size = 2
+outline_color = Color(0, 0, 0, 1)
+
+[node name="Forge" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("1_forge")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+position = Vector2(0, -56)
+sprite_frames = SubResource("SpriteFrames_forge")
+animation = &"burn"
+autoplay = "burn"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -56)
+shape = SubResource("RectangleShape2D_interact")
+
+[node name="ForgeLight" type="PointLight2D" parent="."]
+position = Vector2(0, -40)
+color = Color(1, 0.55, 0.2, 1)
+energy = 1.5
+texture = SubResource("GradientTexture2D_forge_light")
+texture_scale = 3.0
+
+[node name="InteractionLabel" type="Label" parent="."]
+offset_left = -40.0
+offset_top = 20.0
+offset_right = 40.0
+offset_bottom = 40.0
+label_settings = SubResource("LabelSettings_interact")
+text = "[F] Use Forge"
+horizontal_alignment = 1
+vertical_alignment = 1

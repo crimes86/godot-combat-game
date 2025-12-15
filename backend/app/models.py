@@ -41,7 +41,10 @@ class ProviderAccount(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     unclaimed_at = Column(DateTime, nullable=True)
     access_token = Column(String, nullable=True)
+    refresh_token = Column(String, nullable=True)  # OAuth refresh token
+    token_expires_at = Column(DateTime, nullable=True)  # When access_token expires
     last_sync_at = Column(DateTime, nullable=True)  # For sync cooldown (15 min)
+    last_credited_count = Column(Integer, nullable=True, default=0)  # Number of new achievements from last sync
 
     # Relationships
     user = relationship("User", back_populates="provider_accounts")

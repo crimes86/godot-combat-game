@@ -219,6 +219,7 @@ def create_oauth_routes(
         request: Request,
         db: DbSession = Depends(get_db),
         device_code: Optional[str] = None,
+        reauth: bool = False,
     ):
         """Generic OAuth2 login handler for any registered provider"""
 
@@ -237,8 +238,9 @@ def create_oauth_routes(
             raise HTTPException(status_code=503, detail=f"Provider '{provider}' not configured (missing credentials)")
 
         # Check if user already has this provider linked
+        # UNLESS reauth=true (token refresh flow)
         token = get_session_token(request)
-        if token:
+        if token and not reauth:
             current_user = get_user_from_session(db, token)
             if current_user:
                 from app.models import ProviderAccount
@@ -262,7 +264,12 @@ def create_oauth_routes(
             request.session["device_code"] = device_code
             logger.info(f"[{provider.upper()}] Stored device_code {device_code[:8]}... in session")
 
-        logger.info(f"Initiating {provider} login flow")
+        # Store reauth flag in session so callback knows this is a token refresh
+        if reauth:
+            request.session[f"{provider}_reauth"] = True
+            logger.info(f"[{provider.upper()}] Stored reauth=True in session")
+
+        logger.info(f"Initiating {provider} login flow (reauth={reauth})")
 
         # Redirect to OAuth provider
         client = getattr(oauth, provider)
@@ -308,14 +315,43 @@ def create_oauth_routes(
                 )
 
             # Build profile data
+            display_name = get_display_name(provider, userinfo)
             profile_data = {
-                "display_name": get_display_name(provider, userinfo),
+                "display_name": display_name,
                 "avatar_url": get_avatar_url(provider, userinfo),
                 "raw_userinfo": userinfo,  # Store full response for debugging
             }
 
+            # Extract OAuth tokens and expiry
+            from datetime import datetime, timedelta
+            access_token = token.get("access_token")
+            refresh_token = token.get("refresh_token")
+            expires_in = token.get("expires_in")  # Seconds until expiration
+
+            # Calculate token expiry time
+            token_expires_at = None
+            if expires_in:
+                token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+
             # Get device_code from session if present
-            device_code = request.session.pop("device_code", None) or request.query_params.get("device_code")
+            # Only check session if it was explicitly set by /login with device_code param
+            device_code = request.session.pop("device_code", None)
+
+            # If no device_code in session, check query params (direct link)
+            if not device_code:
+                device_code = request.query_params.get("device_code")
+
+            # Validate device_code is still active (not expired/used)
+            if device_code:
+                from app.main import device_codes
+                if device_code not in device_codes:
+                    logger.warning(f"Device code {device_code[:8]}... not found in active codes (expired or already used), treating as web login")
+                    device_code = None
+
+            # Check if this is a reauth flow (token refresh)
+            is_reauth = request.session.pop(f"{provider}_reauth", False)
+            if is_reauth:
+                logger.info(f"[{provider.upper()}] CALLBACK: Reauth flow detected, updating existing account tokens")
 
             # Check if user is logged in (claim flow)
             session_token = get_session_token(request)
@@ -334,10 +370,14 @@ def create_oauth_routes(
 
                 if existing_account:
                     if existing_account.user_id == current_user.id:
-                        # Same user, same account - just update token and redirect
-                        existing_account.access_token = token.get("access_token")
+                        # Same user, same account - just update token and redirect (reauth or normal refresh)
+                        existing_account.access_token = access_token
+                        existing_account.refresh_token = refresh_token
+                        existing_account.token_expires_at = token_expires_at
                         existing_account.profile_data = profile_data
+                        existing_account.provider_username = display_name
                         db.commit()
+                        logger.info(f"[{provider.upper()}] Updated tokens for {current_user.username}")
                         return RedirectResponse(url="/dashboard", status_code=303)
                     else:
                         # Different user owns this account - offer merge
@@ -365,8 +405,11 @@ def create_oauth_routes(
                     inactive_account.user_id = current_user.id
                     inactive_account.is_active = True
                     inactive_account.unclaimed_at = None
-                    inactive_account.access_token = token.get("access_token")
+                    inactive_account.access_token = access_token
+                    inactive_account.refresh_token = refresh_token
+                    inactive_account.token_expires_at = token_expires_at
                     inactive_account.profile_data = profile_data
+                    inactive_account.provider_username = display_name
                     db.commit()
                     logger.info(f"User {current_user.username} reclaimed {provider} {provider_user_id}")
                     return RedirectResponse(url="/dashboard", status_code=303)
@@ -377,8 +420,11 @@ def create_oauth_routes(
                     provider_user_id=provider_user_id,
                     user_id=current_user.id,
                     is_active=True,
-                    access_token=token.get("access_token"),
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    token_expires_at=token_expires_at,
                     profile_data=profile_data,
+                    provider_username=display_name,
                 )
                 db.add(new_account)
                 try:
@@ -404,8 +450,11 @@ def create_oauth_routes(
                         is_active=True
                     ).first()
                     if account:
-                        account.access_token = token.get("access_token")
+                        account.access_token = access_token
+                        account.refresh_token = refresh_token
+                        account.token_expires_at = token_expires_at
                         account.profile_data = profile_data
+                        account.provider_username = display_name
                         db.commit()
 
                     # Create session
@@ -442,7 +491,10 @@ def create_oauth_routes(
                 new_user = create_new_user_with_provider(
                     db, provider, provider_user_id,
                     profile_data=profile_data,
-                    access_token=token.get("access_token")
+                    access_token=access_token,
+                    provider_username=display_name,
+                    refresh_token=refresh_token,
+                    token_expires_at=token_expires_at
                 )
 
                 if device_code:

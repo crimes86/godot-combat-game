@@ -170,8 +170,7 @@ func get_zone2_destination() -> Dictionary:
 # ============================================
 
 var _pending_hub_transition: bool = false
-# TEMPORARILY using minimal TestHub to debug scene loading issues
-var _hub_scene_path: String = "res://scenes/trading_hub/TestHub.tscn"
+var _hub_scene_path: String = "res://scenes/trading_hub/TradingHub.tscn"
 var _hub_scene_cached: PackedScene = null  # Pre-loaded scene
 
 func _ready() -> void:

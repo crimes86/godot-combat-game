@@ -1,8 +1,14 @@
-[gd_scene load_steps=10 format=3 uid="uid://b44c1bcnts408"]
+[gd_scene load_steps=10 format=3 uid="uid://da577gtsryjlr"]
 
-[ext_resource type="Script" uid="uid://hg804buu5sno" path="res://scripts/trading_hub/TestHub.gd" id="1_test"]
+[ext_resource type="Script" path="res://scripts/trading_hub/TestHub.gd" id="1_test"]
 [ext_resource type="Shader" uid="uid://bvc2p5kpshbx6" path="res://shaders/ground_variation.gdshader" id="2_ground"]
-[ext_resource type="Shader" path="res://shaders/grassland.gdshader" id="3_grass"]
+[ext_resource type="Shader" uid="uid://ly7a3p5raf33" path="res://shaders/grassland.gdshader" id="3_grass"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cave"]
+shader = ExtResource("2_ground")
+shader_parameter/base_color = Color(0.11, 0.1, 0.09, 1)
+shader_parameter/world_scale = 2e-05
+shader_parameter/intensity = 0.5
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_grass"]
 shader = ExtResource("3_grass")
@@ -15,12 +21,6 @@ shader_parameter/patch_scale = 1.0
 shader_parameter/detail_intensity = 0.85
 shader_parameter/patch_intensity = 0.15
 shader_parameter/dirt_amount = 0.12
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_cave"]
-shader = ExtResource("2_ground")
-shader_parameter/base_color = Color(0.11, 0.1, 0.09, 1)
-shader_parameter/world_scale = 2e-05
-shader_parameter/intensity = 0.5
 
 [sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_left"]
 polygon = PackedVector2Array(-12000, -4500, -1100, -4500, -1000, -4000, -950, -3800, -1050, -3600, -980, -3400, -1100, -3200, -1000, -3000, -1150, -2800, -1050, -2600, -1200, -2400, -1400, -2200, -1600, -2000, -1900, -1850, -2200, -1650, -2500, -1500, -2850, -1350, -3200, -1150, -3550, -950, -3900, -750, -4200, -500, -4400, -200, -4550, 100, -4500, 400, -4400, 700, -4250, 1000, -4050, 1300, -3850, 1600, -4000, 1900, -4150, 2200, -4300, 2500, -4450, 2800, -4550, 3100, -4650, 3400, -4750, 3700, -4900, 4000, -5050, 4300, -5150, 4600, -5250, 4900, -5300, 5200, -5350, 5500, -5300, 5800, -5250, 6100, -5300, 6400, -5200, 6700, -5250, 7000, -5150, 7300, -5200, 7500, -4250, 7500, -4300, 7200, -4200, 6900, -4250, 6600, -4150, 6300, -4200, 6000, -4100, 5700, -4050, 5400, -3950, 5100, -3850, 4800, -3750, 4500, -3650, 4200, -3500, 3900, -3350, 3600, -3200, 3300, -3100, 3000, -2950, 2700, -2850, 2400, -2750, 2100, -2900, 1900, -550, 2150, -600, 2400, -500, 2650, -550, 2900, -480, 3150, -530, 3400, -470, 3650, -520, 3900, -480, 4150, -550, 4400, -500, 4650, -560, 4900, -490, 5150, -540, 5400, -480, 5650, -530, 5900, -470, 6150, -520, 6400, -480, 6650, -550, 6900, -500, 7150, -520, 7500, -520, 8000, -12000, 8000)
@@ -53,7 +53,6 @@ offset_bottom = 8000.0
 [node name="GrassArea" type="Polygon2D" parent="Environment"]
 z_index = -2
 material = SubResource("ShaderMaterial_grass")
-color = Color(1, 1, 1, 1)
 polygon = PackedVector2Array(-12000, -5000, -11600, -4920, -11200, -5060, -10800, -4940, -10400, -5040, -10000, -4900, -9600, -5070, -9200, -4950, -8800, -5020, -8400, -4880, -8000, -5050, -7600, -4960, -7200, -5030, -6800, -4900, -6400, -5060, -6000, -4940, -5600, -5010, -5200, -4880, -4800, -5050, -4400, -4930, -4000, -5040, -3600, -4900, -3200, -5060, -2800, -4950, -2400, -5020, -2000, -4890, -1600, -5050, -1200, -4940, -800, -5030, -400, -4900, 0, -5060, 400, -4920, 800, -5010, 1200, -4880, 1600, -5050, 2000, -4940, 2400, -5030, 2800, -4900, 3200, -5060, 3600, -4950, 4000, -5020, 4400, -4890, 4800, -5050, 5200, -4930, 5600, -5040, 6000, -4900, 6400, -5060, 6800, -4940, 7200, -5010, 7600, -4880, 8000, -5050, 8400, -4960, 8800, -5030, 9200, -4900, 9600, -5060, 10000, -4940, 10400, -5020, 10800, -4890, 11200, -5050, 11600, -4930, 12000, -5000, 12000, -12000, -12000, -12000)
 
 [node name="CaveWallsLeft" type="Polygon2D" parent="Environment"]

@@ -80,6 +80,32 @@ def get_available_items() -> List[Dict[str, Any]]:
     return [item for item in get_items() if item.get("has_sprites", False)]
 
 
+def get_production_items() -> List[Dict[str, Any]]:
+    """
+    Get only production-ready items (those with valid achievement mappings).
+
+    Filters out items with placeholder achievement IDs (e.g., Blizzard items
+    awaiting API integration). This ensures backend catalog matches Godot's
+    ForgeItemDB which only loads items with valid mappings.
+
+    Returns:
+        List of items that have valid achievement mappings in items.json
+    """
+    mappings = get_achievement_mappings()
+    all_items = get_items()
+
+    # Get set of item_ids that have valid achievement mappings
+    valid_item_ids = set(mappings.values())
+
+    # Filter items to only those with valid mappings
+    production_items = [
+        item for item in all_items
+        if item.get("item_id") in valid_item_ids
+    ]
+
+    return production_items
+
+
 def get_achievement_mappings() -> Dict[str, str]:
     """Get explicit achievement→item mappings."""
     mappings = get_catalog().get("achievement_mappings", {})
@@ -432,8 +458,13 @@ def get_mappings_with_items() -> List[Dict[str, Any]]:
 
 
 def get_catalog_summary() -> dict:
-    """Get summary of the catalog for API responses."""
-    items = get_items()
+    """
+    Get summary of the production-ready catalog for API responses.
+
+    Uses get_production_items() to match the filtered catalog returned
+    by /api/forge/catalog endpoint.
+    """
+    items = get_production_items()  # Changed from get_items() to match catalog
     themes = get_themes()
 
     available = [i for i in items if i.get("has_sprites")]

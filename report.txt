@@ -1,0 +1,106 @@
+=== FORGED ITEMS ITEMIZATION REPORT ===
+
+Total: 78 | Complete: 46 | Incomplete: 32
+
+[ACCESSORY] 0/32 complete
+  - Arctic Code Vault Badge
+  - Ashen Estus Flask
+  - Blades of Chaos Fragment
+  - Bug Hunter Badge
+  - Builder's Ring
+  - COG Medal of Honor
+  - Classic Robloxian Ring
+  - Coiled Sword Fragment
+  - Companion Cube
+  - Corrupted Heart Shard
+  - Cutting Edge Amulet
+  - Early Supporter Badge
+  - Galaxy Brain Badge
+  - HypeSquad Badge
+  - Keystone Master's Trinket
+  - Lambda Badge
+  - Margit's Shackle
+  - Mars 2020 Badge
+  - Nitro Supporter Badge
+  - Olympian Keepsake
+  - Partner Badge
+  - Pull Shark Badge
+  - Scarab Lord's Ring
+  - Selene's Fragment
+  - Spider Emblem
+  - Stardrop Pendant
+  - Stargazer Badge
+  - Tarnished's Ring
+  - Veteran Robloxian Necklace
+  - Void Heart
+  - Winged Golden Strawberry
+  - YOLO Badge
+
+[ARMOR_CHEST] 6/6 complete
+  + Ashen Armor
+  + Elden Armory Chestplate
+  + Grandmaster Wolf Armor
+  + Insane Straitjacket
+  + Ironclad's Plate
+  + Survivor's Vest
+
+[ARMOR_HEAD] 12/12 complete
+  + Carian Royal Crown
+  + Dragonbone Helm
+  + Elden Lord's Greathelm
+  + False King's Helm
+  + Farmer's Straw Hat
+  + Ghost Mask
+  + Herald of the Titans Crown
+  + Loremaster's Hood
+  + MJOLNIR Helmet
+  + Pilot's Helmet
+  + Pirate Legend Hat
+  + Prince's Laurel Crown
+
+[AXE] 1/1 complete
+  + Master Farmer's Hoe
+
+[BOW] 2/2 complete
+  + Aloy's Sharpshot Bow
+  + Lara's Makeshift Bow
+
+[CAPE] 5/5 complete
+  + Gladiator's Tabard
+  + Hand of A'dal Tabard
+  + Prairie King's Poncho
+  + Shade Cloak
+  + Tabard of the Immortal
+
+[GREATSWORD] 3/3 complete
+  + Farron Greatsword
+  + Grafted Blade Greatsword
+  + Starscourge Greatswords
+
+[GUN] 2/2 complete
+  + Adamant Rail
+  + BR55 Battle Rifle
+
+[KATANA] 3/3 complete
+  + Hand of Malenia
+  + Moonveil
+  + Mortal Blade
+
+[SHIELD] 2/2 complete
+  + Eye of Cthulhu Shield
+  + Fingerprint Stone Shield
+
+[SPEAR] 3/3 complete
+  + Devil's Pitchfork
+  + Dragonslayer Swordspear
+  + Gyoubu's Broken Horn
+
+[SWORD] 7/7 complete
+  + Coiled Sword
+  + King Slayer
+  + Pure Nail
+  + Saw Cleaver
+  + Stygian Blade
+  + Terra Blade
+  + Witcher's Silver Sword
+

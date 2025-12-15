@@ -1176,7 +1176,9 @@ func _cmd_help() -> void:
 	add_system_message("/group - Show group info")
 	add_system_message("=== Admin Commands ===")
 	add_system_message("/tp <x> <y> - Teleport to coordinates")
-	add_system_message("/tp campfire|hub|west|east|castle - Named")
+	add_system_message("/tp hub|zone1|campfire - Cross-scene teleport")
+	add_system_message("/tp forge|stash|trader - Hub locations")
+	add_system_message("/tp tunnel|west|east|castle - Zone 1 POIs")
 	add_system_message("/accounts - List all accounts")
 	add_system_message("/select <username> - Select account to edit")
 	add_system_message("/info - Show selected account details")
@@ -1357,10 +1359,8 @@ func _cmd_delete() -> void:
 	add_system_message("Deleted account: %s" % username)
 
 func _cmd_teleport(args: Array) -> void:
-	"""Teleport local player to specified coordinates
-	Usage: /tp <x> <y>
-	       /tp campfire - Teleport to campfire (0, 0)
-	       /tp hub - Teleport to trading hub tunnel entrance
+	"""Teleport local player to specified coordinates or named locations
+	Supports cross-scene teleportation between Zone 1 and Trading Hub
 	"""
 	# Find local player
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
@@ -1368,72 +1368,162 @@ func _cmd_teleport(args: Array) -> void:
 		add_system_message("[Error] No player found.")
 		return
 
+	# Detect current scene
+	var current_scene = get_tree().current_scene
+	var scene_name = current_scene.name if current_scene else "unknown"
+	var in_hub = scene_name == "TradingHub"
+
 	# Handle named locations
 	if args.size() == 1:
 		var location = args[0].to_lower()
+
+		# === CROSS-SCENE TELEPORTS (work from any scene) ===
 		match location:
-			"campfire", "camp", "fire", "spawn", "home":
-				# Campfire is at world origin
-				player.global_position = Vector2(0, 0)
-				add_system_message("Teleported to Campfire (0, 0)")
+			"hub", "trade", "trading", "passage":
+				# Teleport to Trading Hub (scene change if needed)
+				if in_hub:
+					# Already in hub - go to center
+					player.global_position = Vector2(0, -2500)
+					add_system_message("Teleported to Hub Center (0, -2500)")
+				else:
+					# Load the Trading Hub scene
+					add_system_message("Entering Trading Hub...")
+					var hub_manager = get_node_or_null("/root/TradingHubManager")
+					if hub_manager:
+						hub_manager.set_player_origin_chunk(0)
+						hub_manager.transition_to_hub()
+					else:
+						add_system_message("[Error] TradingHubManager not found")
 				return
-			"hub", "trade", "trading":
-				# Actually load the Trading Hub scene
+
+			"zone1", "world", "wasteland", "overworld":
+				# Return to Zone 1 (scene change if needed)
+				if in_hub:
+					add_system_message("Returning to Zone 1...")
+					var hub_manager = get_node_or_null("/root/TradingHubManager")
+					if hub_manager:
+						hub_manager.set_player_in_hub(false)
+						hub_manager.transition_to_zone1()
+					else:
+						get_tree().change_scene_to_file("res://main.tscn")
+				else:
+					# Already in Zone 1 - go to campfire
+					player.global_position = Vector2(0, 0)
+					add_system_message("Teleported to Zone 1 Campfire (0, 0)")
+				return
+
+			"campfire", "camp", "fire", "spawn", "home":
+				# Campfire - works in both scenes
+				if in_hub:
+					# Hub central hearth (TestHub layout)
+					player.global_position = Vector2(0, 0)
+					add_system_message("Teleported to Hub Hearth (0, 0)")
+				else:
+					# Zone 1 campfire at world origin
+					player.global_position = Vector2(0, 0)
+					add_system_message("Teleported to Campfire (0, 0)")
+				return
+
+		# === TRADING HUB LOCATIONS ===
+		# These work from anywhere - if in Zone 1, transition to hub first
+		# TradingHub layout: hearth at (0,0), south exit Y>6800, zone2 grass Y<-2800
+		var hub_locations = {
+			"forge": Vector2(150, -100),
+			"smith": Vector2(150, -100),
+			"blacksmith": Vector2(150, -100),
+			"stash": Vector2(-300, -200),
+			"storage": Vector2(-300, -200),
+			"bank": Vector2(-300, -200),
+			"trader": Vector2(300, -200),
+			"vendor": Vector2(300, -200),
+			"shop": Vector2(300, -200),
+			"merchant": Vector2(300, -200),
+			"hubfire": Vector2(0, 0),
+			"firepit": Vector2(0, 0),
+			"center": Vector2(0, 0),
+			"hearth": Vector2(0, 0),
+			"hubsouth": Vector2(0, 200),
+			"southentry": Vector2(0, 200),
+			"entry": Vector2(0, 200),
+			"hubwest": Vector2(-200, 0),
+			"westentry": Vector2(-200, 0),
+			"hubeast": Vector2(200, 0),
+			"eastentry": Vector2(200, 0),
+			"hubnorth": Vector2(0, -3500),
+			"zone2": Vector2(0, -3500),
+			"grass": Vector2(0, -3500),
+			"outdoor": Vector2(0, -3500),
+			"cavemouth": Vector2(0, -2400),
+			"mouth": Vector2(0, -2400),
+			"cliff": Vector2(0, -2400),
+			"southexit": Vector2(0, 6500),
+			"westexit": Vector2(-5000, 2700),
+			"eastexit": Vector2(5000, 2700),
+		}
+
+		if hub_locations.has(location):
+			if in_hub:
+				player.global_position = hub_locations[location]
+				add_system_message("Teleported to %s" % location)
+			else:
+				# Transition to hub - position will be set by spawn system
 				add_system_message("Entering Trading Hub...")
 				var hub_manager = get_node_or_null("/root/TradingHubManager")
 				if hub_manager:
-					hub_manager.set_player_origin_chunk(0)  # Default to center corridor
+					hub_manager.set_player_origin_chunk(0)
 					hub_manager.transition_to_hub()
 				else:
 					add_system_message("[Error] TradingHubManager not found")
-				return
-			"tunnel":
-				# Tunnel entrance at chunk 0 (north edge, center)
-				# chunk_center_x = 0 * 8000 + 4000 = 4000
-				# north_edge_y = -8000/2 + 50 = -3950
-				player.global_position = Vector2(4000, -3950)
-				add_system_message("Teleported to Tunnel Entrance (4000, -3950)")
-				return
-			"west", "w":
-				# West chunk center (chunk -1)
-				player.global_position = Vector2(-4000, 0)
-				add_system_message("Teleported to West (-4000, 0)")
-				return
-			"east", "e":
-				# East chunk center (chunk 1)
-				player.global_position = Vector2(12000, 0)
-				add_system_message("Teleported to East (12000, 0)")
-				return
-			"castle", "end":
-				# End of main path (castle position)
-				player.global_position = Vector2(7600, 0)
-				add_system_message("Teleported to Castle (7600, 0)")
-				return
-			"north", "n":
-				# North edge of world
-				player.global_position = Vector2(player.global_position.x, -3900)
-				add_system_message("Teleported to North edge (Y: -3900)")
-				return
-			"south", "s":
-				# South edge of world
-				player.global_position = Vector2(player.global_position.x, 3900)
-				add_system_message("Teleported to South edge (Y: 3900)")
-				return
-			_:
-				# Check if it's a single number (invalid)
-				if location.is_valid_float():
-					add_system_message("[Error] Usage: /tp <x> <y>")
-					add_system_message("Named: campfire, hub, west, east, castle, north, south")
+			return
+
+		# === ZONE 1 LOCATIONS (only work when in Zone 1) ===
+		if not in_hub:
+			match location:
+				"tunnel":
+					# Tunnel entrance at chunk 0 (north edge, center)
+					player.global_position = Vector2(4000, -3950)
+					add_system_message("Teleported to Tunnel Entrance (4000, -3950)")
 					return
-				add_system_message("[Error] Unknown location: %s" % location)
-				add_system_message("Named: campfire, hub, west, east, castle, north, south")
-				return
+				"west", "w":
+					# West chunk center (chunk -1)
+					player.global_position = Vector2(-4000, 0)
+					add_system_message("Teleported to West (-4000, 0)")
+					return
+				"east", "e":
+					# East chunk center (chunk 1)
+					player.global_position = Vector2(12000, 0)
+					add_system_message("Teleported to East (12000, 0)")
+					return
+				"castle", "end":
+					# End of main path (castle position)
+					player.global_position = Vector2(7600, 0)
+					add_system_message("Teleported to Castle (7600, 0)")
+					return
+				"north", "n":
+					# North edge of world
+					player.global_position = Vector2(player.global_position.x, -3900)
+					add_system_message("Teleported to North edge (Y: -3900)")
+					return
+				"south", "s":
+					# South edge of world
+					player.global_position = Vector2(player.global_position.x, 3900)
+					add_system_message("Teleported to South edge (Y: 3900)")
+					return
+
+		# Unknown location
+		if location.is_valid_float():
+			add_system_message("[Error] Usage: /tp <x> <y>")
+			_show_tp_locations(in_hub)
+			return
+		add_system_message("[Error] Unknown location: %s" % location)
+		_show_tp_locations(in_hub)
+		return
 
 	# Require x and y coordinates
 	if args.size() < 2:
-		add_system_message("Usage: /tp <x> <y>")
-		add_system_message("Named: campfire, hub, west, east, castle")
-		add_system_message("Current position: (%.0f, %.0f)" % [player.global_position.x, player.global_position.y])
+		add_system_message("Usage: /tp <x> <y>  OR  /tp <location>")
+		_show_tp_locations(in_hub)
+		add_system_message("Current: (%.0f, %.0f) in %s" % [player.global_position.x, player.global_position.y, "Hub" if in_hub else "Zone 1"])
 		return
 
 	# Validate numeric input
@@ -1446,6 +1536,19 @@ func _cmd_teleport(args: Array) -> void:
 
 	player.global_position = Vector2(x, y)
 	add_system_message("Teleported to (%.0f, %.0f)" % [x, y])
+
+func _show_tp_locations(in_hub: bool) -> void:
+	"""Show available teleport locations based on current scene"""
+	add_system_message("=== Anywhere ===")
+	add_system_message("  hub, zone1, campfire")
+	add_system_message("  forge, stash, trader, hearth")
+	if in_hub:
+		add_system_message("=== Hub Only ===")
+		add_system_message("  zone2/grass, cavemouth")
+		add_system_message("  southexit, westexit, eastexit")
+	else:
+		add_system_message("=== Zone 1 Only ===")
+		add_system_message("  tunnel, west, east, castle, north, south")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # HOVER FADE EFFECT - Background fades, text stays visible (floating effect)

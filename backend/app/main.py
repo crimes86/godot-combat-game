@@ -467,7 +467,7 @@ def get_user_by_provider(db: DbSession, provider_name: str, provider_user_id: st
     return provider_account.user if provider_account else None
 
 
-def create_new_user_with_provider(db: DbSession, provider_name: str, provider_user_id: str, profile_data=None, access_token=None, provider_username=None):
+def create_new_user_with_provider(db: DbSession, provider_name: str, provider_user_id: str, profile_data=None, access_token=None, provider_username=None, refresh_token=None, token_expires_at=None):
     """Create a new user with a provider account in a single transaction."""
     app_username = generate_app_username(db)
     user = User(username=app_username)
@@ -481,7 +481,9 @@ def create_new_user_with_provider(db: DbSession, provider_name: str, provider_us
         user_id=user.id,
         profile_data=profile_data or {},
         is_active=True,
-        access_token=access_token
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_expires_at=token_expires_at,
     )
     db.add(new_provider_account)
 
@@ -507,7 +509,9 @@ def handle_provider_login(
     device_code: Optional[str] = None,
     access_token: Optional[str] = None,
     profile_data: dict = None,
-    provider_username: Optional[str] = None
+    provider_username: Optional[str] = None,
+    refresh_token: Optional[str] = None,
+    token_expires_at: Optional[datetime] = None
 ):
     """
     Unified login flow for all providers. Handles:
@@ -534,6 +538,8 @@ def handle_provider_login(
         if user:
             # Update OAuth token
             existing_active.access_token = access_token
+            existing_active.refresh_token = refresh_token
+            existing_active.token_expires_at = token_expires_at
             if provider_username:
                 existing_active.provider_username = provider_username
             db.commit()
@@ -572,7 +578,9 @@ def handle_provider_login(
         provider_user_id,
         profile_data=profile_data,
         access_token=access_token,
-        provider_username=provider_username
+        provider_username=provider_username,
+        refresh_token=refresh_token,
+        token_expires_at=token_expires_at
     )
     return make_auth_response(request, new_user, device_code, provider_name, db)
 
@@ -1078,8 +1086,12 @@ async def steam_callback(
                     # Other user was deleted - just take it
                     acct.user_id = current_user.id
                 # Same user reclaiming their own provider, or orphan cleanup
+                # Update profile data to get the latest username
+                profile = await fetch_steam_profile(steam_id)
                 acct.is_active = True
                 acct.unclaimed_at = None
+                acct.profile_data = profile
+                acct.provider_username = profile.get("personaname")
                 db.commit()
                 logger.info(f"STEAM CALLBACK: User {current_user.username} re-claimed Steam {steam_id}")
                 return RedirectResponse(url="/dashboard", status_code=303)
@@ -1092,7 +1104,8 @@ async def steam_callback(
                 provider_user_id=steam_id,
                 user_id=current_user.id,
                 profile_data=profile,
-                is_active=True
+                is_active=True,
+                provider_username=profile.get("personaname")
             )
             db.add(new_acct)
             try:
@@ -1128,7 +1141,8 @@ async def steam_callback(
         provider_name="steam",
         provider_user_id=steam_id,
         device_code=device_code,
-        profile_data=profile
+        profile_data=profile,
+        provider_username=profile.get("personaname")
     )
 
 
@@ -1163,11 +1177,12 @@ async def navbar(request: Request, db: DbSession = Depends(get_db)):
 
 # --- BATTLE.NET OAUTH2 LOGIN/CLAIM FLOW ---
 @app.get("/auth/battlenet/login")
-async def battlenet_login(request: Request, db: DbSession = Depends(get_db)):
+async def battlenet_login(request: Request, db: DbSession = Depends(get_db), reauth: bool = False):
     # Single-link-per-provider protection if already logged in
+    # UNLESS reauth=true (token refresh flow)
     token = get_session_token(request)
     current_user = get_user_from_session(db, token) if token else None
-    if current_user:
+    if current_user and not reauth:
             existing_active = (
                 db.query(ProviderAccount)
                 .filter_by(user_id=current_user.id, provider_name="battlenet", is_active=True)
@@ -1184,8 +1199,14 @@ async def battlenet_login(request: Request, db: DbSession = Depends(get_db)):
                     },
                     status_code=400,
                 )
+
+    # Store reauth flag in session so callback knows this is a token refresh
+    if reauth:
+        request.session["battlenet_reauth"] = True
+        logger.info("Stored battlenet_reauth=True in session")
+
     redirect_uri = f"{APP_URL}/auth/battlenet/callback"
-    logger.info("Initiating Battle.net login flow")
+    logger.info(f"Initiating Battle.net login flow (reauth={reauth})")
     return await oauth.battlenet.authorize_redirect(request, redirect_uri)
 
 
@@ -1194,9 +1215,28 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
     try:
         oauth_token = await oauth.battlenet.authorize_access_token(request)
         battlenet_id = oauth_token.get("sub")
-        if not battlenet_id:
+        battletag = oauth_token.get("battletag")
+
+        # Extract OAuth tokens and expiry
+        access_token = oauth_token.get("access_token")
+        refresh_token = oauth_token.get("refresh_token")
+        expires_in = oauth_token.get("expires_in")  # Seconds until expiration
+
+        # Calculate token expiry time
+        token_expires_at = None
+        if expires_in:
+            from datetime import timedelta
+            token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+
+        # Fetch userinfo if needed
+        if not battlenet_id or not battletag:
             resp = await oauth.battlenet.get("oauth/userinfo", token=oauth_token)
-            battlenet_id = resp.json().get("sub")
+            userinfo = resp.json()
+            if not battlenet_id:
+                battlenet_id = userinfo.get("sub")
+            if not battletag:
+                battletag = userinfo.get("battletag")
+
         if not battlenet_id:
             logger.error(f"Battle.net login failed: Could not retrieve user ID. Token: {oauth_token}")
             return templates.TemplateResponse(
@@ -1206,16 +1246,32 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
 
         session_token = get_session_token(request)
         current_user = get_user_from_session(db, session_token) if session_token else None
+
+        # Get device_code from session if present (Godot flow)
+        device_code = request.session.pop("device_code", None)
+        if not device_code:
+            device_code = request.query_params.get("device_code")
+
+        # Validate device_code is still active (not expired/used)
+        if device_code and device_code not in device_codes:
+            logger.warning(f"Device code {device_code[:8]}... not found in active codes (expired or already used), treating as web login")
+            device_code = None
+
+        # Check if this is a reauth flow (token refresh)
+        is_reauth = request.session.pop("battlenet_reauth", False)
+        if is_reauth:
+            logger.info("BATTLENET CALLBACK: Reauth flow detected, updating existing account tokens")
+
         if current_user:
             # — Claim flow for logged-in user —
 
-            # ENFORCE single-link rule for claim
+            # ENFORCE single-link rule for claim (UNLESS reauth=true for token refresh)
             existing_active = (
                 db.query(ProviderAccount)
                 .filter_by(user_id=current_user.id, provider_name="battlenet", is_active=True)
                 .first()
             )
-            if existing_active:
+            if existing_active and not is_reauth:
                 return templates.TemplateResponse(
                     "error.html",
                     {
@@ -1226,6 +1282,17 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
                     },
                     status_code=400,
                 )
+
+            # If reauth flow, update existing account and redirect
+            if existing_active and is_reauth:
+                existing_active.access_token = access_token
+                existing_active.refresh_token = refresh_token
+                existing_active.token_expires_at = token_expires_at
+                if battletag:
+                    existing_active.provider_username = battletag
+                db.commit()
+                logger.info(f"BATTLENET CALLBACK: Updated tokens for {current_user.username}")
+                return RedirectResponse(url="/dashboard", status_code=303)
 
             # Lookup existing ProviderAccount for this external ID
             acct = (
@@ -1244,7 +1311,11 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
                     acct.user_id = current_user.id
                     acct.is_active = True
                     acct.unclaimed_at = None
-                    acct.access_token = oauth_token["access_token"]
+                    acct.access_token = access_token
+                    acct.refresh_token = refresh_token
+                    acct.token_expires_at = token_expires_at
+                    if battletag:
+                        acct.provider_username = battletag
                     db.commit()
                     return RedirectResponse(url="/dashboard", status_code=303)
 
@@ -1283,7 +1354,11 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
                     # Same user reclaiming their own provider
                     acct.is_active = True
                     acct.unclaimed_at = None
-                    acct.access_token = oauth_token["access_token"]
+                    acct.access_token = access_token
+                    acct.refresh_token = refresh_token
+                    acct.token_expires_at = token_expires_at
+                    if battletag:
+                        acct.provider_username = battletag
                     db.commit()
                     logger.info(f"User {current_user.username} re-claimed their own Battle.net {battlenet_id}")
                     return RedirectResponse(url="/dashboard", status_code=303)
@@ -1294,7 +1369,10 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
                     provider_user_id=battlenet_id,
                     user_id=current_user.id,
                     is_active=True,
-                    access_token=oauth_token["access_token"],
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    token_expires_at=token_expires_at,
+                    provider_username=battletag,
                 )
                 db.add(new_acct)
                 try:
@@ -1329,7 +1407,10 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
             provider_name="battlenet",
             provider_user_id=battlenet_id,
             device_code=device_code,
-            access_token=oauth_token["access_token"]
+            access_token=access_token,
+            provider_username=battletag,
+            refresh_token=refresh_token,
+            token_expires_at=token_expires_at
         )
 
     except Exception as e:
@@ -2327,45 +2408,61 @@ async def dashboard(
             # pick avatar and display name from the first active account
             source = accounts[0]
             avatar_url = "/static/icons/placeholder-avatar.svg"
-            profile_display_name = None
+            # Use provider_username first (set during OAuth), fallback to profile_data
+            profile_display_name = source.provider_username
 
             if source.profile_data:
                 avatar_url = (
                     source.profile_data.get("avatarfull")
+                    or source.profile_data.get("avatar_url")
                     or source.profile_data.get("avatar")
                     or avatar_url
                 )
-                # Get display name based on provider
-                if p["name"] == "steam":
-                    profile_display_name = source.profile_data.get("personaname")
-                elif p["name"] == "battlenet":
-                    profile_display_name = source.profile_data.get("battletag")
-                elif p["name"] == "xbox":
-                    profile_display_name = source.profile_data.get("gamertag")
-                    # Xbox avatar from OpenXBL (if stored)
+
+                # Get display name based on provider (fallback if provider_username not set)
+                if not profile_display_name:
+                    if p["name"] == "steam":
+                        profile_display_name = source.profile_data.get("personaname")
+                    elif p["name"] == "battlenet":
+                        profile_display_name = source.profile_data.get("battletag")
+                    elif p["name"] == "xbox":
+                        profile_display_name = source.profile_data.get("gamertag")
+                    elif p["name"] == "psn":
+                        profile_display_name = source.profile_data.get("online_id")
+                    elif p["name"] == "discord":
+                        # Discord stores username and display_name
+                        profile_display_name = source.profile_data.get("display_name") or source.profile_data.get("username")
+                    elif p["name"] == "github":
+                        # GitHub stores username and name (display name)
+                        profile_display_name = source.profile_data.get("name") or source.profile_data.get("username")
+                    elif p["name"] == "facebook":
+                        # Facebook stores name and id
+                        profile_display_name = source.profile_data.get("name")
+                    elif p["name"] == "roblox":
+                        # Roblox stores display name
+                        profile_display_name = source.profile_data.get("display_name") or source.profile_data.get("name")
+                    else:
+                        # Generic fallback for any other provider
+                        profile_display_name = source.profile_data.get("display_name") or source.profile_data.get("name")
+
+                # Get provider-specific avatars
+                if p["name"] == "xbox":
                     xbox_avatar = source.profile_data.get("avatar_url") or source.profile_data.get("displayPicRaw")
                     if xbox_avatar:
                         avatar_url = xbox_avatar
                 elif p["name"] == "psn":
-                    profile_display_name = source.profile_data.get("online_id")
                     psn_avatar = source.profile_data.get("avatar_url")
                     if psn_avatar:
                         avatar_url = psn_avatar
                 elif p["name"] == "discord":
-                    # Discord stores username and display_name
-                    profile_display_name = source.profile_data.get("display_name") or source.profile_data.get("username")
                     discord_avatar = source.profile_data.get("avatar_url")
                     if discord_avatar:
                         avatar_url = discord_avatar
                 elif p["name"] == "github":
-                    # GitHub stores username and name (display name)
-                    profile_display_name = source.profile_data.get("name") or source.profile_data.get("username")
                     github_avatar = source.profile_data.get("avatar_url")
                     if github_avatar:
                         avatar_url = github_avatar
                 elif p["name"] == "facebook":
-                    # Facebook stores name and id
-                    profile_display_name = source.profile_data.get("name")
                     fb_avatar = source.profile_data.get("avatar_url")
                     if fb_avatar:
                         avatar_url = fb_avatar
@@ -2373,6 +2470,11 @@ async def dashboard(
             # sum credits across all active accounts for this provider
             total_achievements = 0
             rarity_counts = Counter()
+            oldest_achievement = None
+            newest_achievement = None
+            rarest_achievement = None
+            rarest_percent = 100.0  # Start at 100% (common)
+
             for acct in accounts:
                 credits = (
                     db.query(AchievementCredit)
@@ -2384,6 +2486,37 @@ async def dashboard(
                 for credit in credits:
                     rarity = getattr(credit.achievement, "rarity_tier", "Common")
                     rarity_counts[rarity] += 1
+
+                    # Track oldest achievement (by unlock date)
+                    if credit.unlocked_at:
+                        if oldest_achievement is None or credit.unlocked_at < oldest_achievement["date"]:
+                            oldest_achievement = {
+                                "name": credit.achievement.display_name,
+                                "description": credit.achievement.description,
+                                "date": credit.unlocked_at,
+                                "icon": credit.achievement.icon_url,
+                            }
+
+                    # Track newest achievement (by unlock date)
+                    if credit.unlocked_at:
+                        if newest_achievement is None or credit.unlocked_at > newest_achievement["date"]:
+                            newest_achievement = {
+                                "name": credit.achievement.display_name,
+                                "description": credit.achievement.description,
+                                "date": credit.unlocked_at,
+                                "icon": credit.achievement.icon_url,
+                            }
+
+                    # Track rarest achievement (lowest percent)
+                    if credit.achievement.percent is not None and credit.achievement.percent < rarest_percent:
+                        rarest_percent = credit.achievement.percent
+                        rarest_achievement = {
+                            "name": credit.achievement.display_name,
+                            "description": credit.achievement.description,
+                            "percent": credit.achievement.percent,
+                            "rarity": credit.achievement.rarity_tier,
+                            "icon": credit.achievement.icon_url,
+                        }
 
             # Calculate cooldown remaining (if any) - DISABLED FOR TESTING
             cooldown_remaining = 0
@@ -2405,6 +2538,12 @@ async def dashboard(
                 "by_rarity": dict(rarity_counts),
                 "cooldown_remaining": cooldown_remaining,  # Seconds until sync available
                 "is_synced": source.last_sync_at is not None,  # Has been synced at least once
+                "last_sync_at": source.last_sync_at,  # Timestamp of last sync
+                "last_credited_count": source.last_credited_count or 0,  # New achievements from last sync
+                # Achievement milestones
+                "oldest_achievement": oldest_achievement,  # First achievement earned
+                "newest_achievement": newest_achievement,  # Most recent achievement
+                "rarest_achievement": rarest_achievement,  # Lowest completion %
             })
 
     # Calculate MANTLE AGGREGATE (all original claims, regardless of provider status)
@@ -2521,6 +2660,116 @@ async def unclaim_provider(
 
 # SYNC_COOLDOWN_MINUTES = 15  # Cooldown between syncs per provider (disabled for testing)
 
+async def refresh_oauth_token(provider_account: ProviderAccount, db: DbSession) -> bool:
+    """
+    Attempt to refresh an expired OAuth token.
+    Returns True if successful, False if refresh failed.
+    """
+    if not provider_account.refresh_token:
+        logger.warning(f"No refresh token for {provider_account.provider_name} account {provider_account.id}")
+        return False
+
+    provider_name = provider_account.provider_name
+
+    try:
+        # Get provider config
+        from app.providers import PROVIDERS
+        config = PROVIDERS.get(provider_name)
+        if not config:
+            logger.error(f"Provider {provider_name} not found in registry")
+            return False
+
+        # Build token refresh request
+        import httpx
+        async with httpx.AsyncClient() as client:
+            token_data = {
+                "grant_type": "refresh_token",
+                "refresh_token": provider_account.refresh_token,
+                "client_id": os.getenv(config.client_id_env),
+                "client_secret": os.getenv(config.client_secret_env),
+            }
+
+            resp = await client.post(config.token_url, data=token_data)
+
+            if resp.status_code != 200:
+                logger.warning(f"Token refresh failed for {provider_name}: {resp.status_code} - {resp.text[:200]}")
+                return False
+
+            token_response = resp.json()
+
+            # Update tokens
+            provider_account.access_token = token_response.get("access_token")
+            if token_response.get("refresh_token"):
+                provider_account.refresh_token = token_response.get("refresh_token")
+
+            # Update expiry
+            expires_in = token_response.get("expires_in")
+            if expires_in:
+                from datetime import timedelta
+                provider_account.token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+
+            db.commit()
+            logger.info(f"Successfully refreshed token for {provider_name} account {provider_account.id}")
+            return True
+
+    except Exception as e:
+        logger.error(f"Error refreshing token for {provider_name}: {e}", exc_info=True)
+        return False
+
+
+@app.get("/api/provider_token_status")
+async def get_provider_token_status(
+    db: DbSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Check token status for all linked providers.
+    Returns a dict mapping provider_name -> status
+
+    Status values:
+    - "valid": Token is good, sync will work immediately
+    - "needs_reauth": Token expired, user needs to re-authenticate
+    - "unknown": No token expiry info (old account)
+    """
+    from datetime import timedelta
+
+    provider_accounts = db.query(ProviderAccount).filter_by(
+        user_id=current_user.id,
+        is_active=True
+    ).all()
+
+    status_map = {}
+
+    for account in provider_accounts:
+        key = f"{account.provider_name}:{account.provider_user_id}"
+
+        # Special handling for providers with persistent/long-lived tokens
+        # These don't use expiring OAuth tokens
+        if account.provider_name in ['steam', 'psn', 'xbox', 'github', 'discord']:
+            status_map[key] = "valid"  # Persistent API keys or long-lived tokens
+            continue
+
+        # Check if token is expired or about to expire (within 5 minutes)
+        if account.token_expires_at:
+            time_until_expiry = account.token_expires_at - datetime.utcnow()
+            if time_until_expiry < timedelta(minutes=5):
+                # Token expired/expiring
+                if account.refresh_token:
+                    status_map[key] = "needs_refresh"  # Has refresh token, auto-refresh will work
+                else:
+                    status_map[key] = "needs_reauth"  # No refresh token, must re-auth
+            else:
+                status_map[key] = "valid"  # Token is still good
+        elif account.refresh_token:
+            # Old account with refresh token but no expiry - try to refresh on next sync
+            status_map[key] = "needs_refresh"
+        else:
+            # No expiry and no refresh token - old account, likely needs reauth
+            status_map[key] = "needs_reauth"
+
+    return {"provider_status": status_map}
+
+
 @app.post("/sync_achievements/{provider_name}/{provider_user_id}")
 async def sync_achievements(
     provider_name: str,
@@ -2543,6 +2792,38 @@ async def sync_achievements(
             f"Status: FAIL | Duration: 0.00s | Reason: Active provider account not found."
         )
         raise HTTPException(status_code=404, detail="Active provider account not found.")
+
+    # Check if token is expired or about to expire (within 5 minutes)
+    # Skip token refresh for providers with persistent/long-lived tokens
+    from datetime import timedelta
+    needs_refresh = False
+
+    # Skip token refresh check for providers that don't use expiring tokens
+    if provider_name not in ['steam', 'psn', 'xbox', 'github', 'discord']:
+        if provider_account.token_expires_at:
+            time_until_expiry = provider_account.token_expires_at - datetime.utcnow()
+            if time_until_expiry < timedelta(minutes=5):
+                needs_refresh = True
+        elif provider_account.refresh_token:
+            # Old account with refresh token but no expiry tracking - try to refresh
+            logger.info(f"Token expiry unknown for {provider_name}, attempting refresh")
+            needs_refresh = True
+
+    if needs_refresh:
+        logger.info(f"Token expired/expiring for {provider_name}, attempting refresh")
+        refresh_success = await refresh_oauth_token(provider_account, db)
+
+        if not refresh_success:
+            # Refresh failed - user needs to re-authenticate
+            logger.warning(f"Token refresh failed for {provider_name}, user needs to re-auth")
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "status": "needs_reauth",
+                    "provider": provider_name,
+                    "message": f"Your {provider_name} session has expired. Please re-authenticate to continue syncing."
+                }
+            )
 
     # Sync cooldown check (admins bypass) - DISABLED FOR TESTING
     # if not getattr(current_user, 'is_admin', False):
@@ -2594,8 +2875,9 @@ async def sync_achievements(
             f"Total Found: {total_found} | New Credited: {credited} | Ignored (Already Claimed): {ignored}"
         )
 
-        # Update last_sync_at for cooldown tracking
+        # Update last_sync_at and last_credited_count for cooldown and status display
         provider_account.last_sync_at = datetime.utcnow()
+        provider_account.last_credited_count = credited
         db.commit()
 
         # Announce sync in global feed if there were new achievements
@@ -2611,6 +2893,24 @@ async def sync_achievements(
     except Exception as e:
         elapsed = round(time.time() - start_time, 2)
         error_str = str(e)
+
+        # Check if this is a 401 unauthorized error (token expired)
+        if "401" in error_str or "unauthorized" in error_str.lower() or "token" in error_str.lower():
+            logger.warning(f"Token appears expired for {provider_name} (401 error during sync)")
+            print(
+                f"[SYNC REPORT] Provider: {provider_name} | User: {current_user.id} | "
+                f"Status: TOKEN_EXPIRED | Duration: {elapsed}s"
+            )
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "status": "needs_reauth",
+                    "provider": provider_name,
+                    "message": f"Your {provider_name} session has expired. Please re-authenticate to continue syncing."
+                }
+            )
+
+        # Other errors - log and re-raise
         print(
             f"[SYNC REPORT] Provider: {provider_name} | User: {current_user.id} | "
             f"Status: FAIL | Duration: {elapsed}s | Reason: {error_str}"
@@ -3588,6 +3888,9 @@ async def get_forge_status(
 
     forgeable_tiers = ["Legendary", "Epic", "Rare"]
 
+    # Load achievement mappings for item_id lookup
+    achievement_mappings = get_achievement_mappings()
+
     # Get all achievement credits with forged data
     credits = (
         db.query(AchievementCredit, Achievement, ProviderAccount, ForgedAchievement)
@@ -3632,6 +3935,15 @@ async def get_forge_status(
             )
             forged.append(item)
         elif can_forge:
+            # Look up item_id from achievement mappings
+            mapping_key = f"{achievement.app_id}:{achievement.api_name}"
+            item_id = achievement_mappings.get(mapping_key)
+            if item_id:
+                item["item_id"] = item_id
+                # Optionally add item_name for consistency
+                mapped_item = get_item_by_id(item_id)
+                if mapped_item:
+                    item["item_name"] = mapped_item.get("name", "")
             forgeable.append(item)
         else:
             item["blocked_reason"] = (
@@ -3931,14 +4243,17 @@ async def test_grant_all_items(
 @app.get("/api/forge/catalog")
 async def get_forge_catalog():
     """
-    Get the full forge item catalog.
+    Get the production-ready forge item catalog.
 
-    Returns all items that can potentially be forged, with their
-    visual data and effects. Used by Godot Armory to show available items.
+    Returns only items with valid achievement mappings (filters out items
+    with placeholder IDs). This matches Godot's ForgeItemDB which only
+    loads items with valid mappings.
+
+    Used by Godot Armory to show available items.
     """
-    from app.services.item_forge_service import get_items, get_themes, get_catalog_summary
+    from app.services.item_forge_service import get_production_items, get_themes, get_catalog_summary
 
-    items = get_items()
+    items = get_production_items()  # Changed from get_items() to match Godot
     themes = get_themes()
     summary = get_catalog_summary()
 
@@ -4169,3 +4484,7 @@ app.include_router(chat_router)
 app.include_router(trading_router)
 app.include_router(weapon_stats_router)
 app.include_router(world_tree_router)
+
+# Icon caching proxy
+from app.routes.icon_cache import router as icon_cache_router
+app.include_router(icon_cache_router, prefix="/api", tags=["icons"])

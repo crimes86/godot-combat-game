@@ -2682,6 +2682,7 @@
                 onclick="syncAchievements('{{ provider.name }}', '{{ provider.user_id }}', this)"
                 data-cooldown="{{ provider.cooldown_remaining }}"
                 data-provider="{{ provider.name }}"
+                data-userid="{{ provider.user_id }}"
                 {% if provider.name not in ['steam', 'battlenet', 'xbox', 'psn', 'discord', 'github'] or provider.cooldown_remaining > 0 %}disabled{% endif %}
                 style="position:absolute; bottom:12px; right:12px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; background:none; border:none; cursor:{% if provider.cooldown_remaining > 0 %}not-allowed{% else %}pointer{% endif %}; filter:brightness({% if provider.cooldown_remaining > 0 %}0.5{% else %}1.4{% endif %}) drop-shadow(0 0 6px var(--neon-fade)); opacity:{% if provider.cooldown_remaining > 0 %}0.5{% else %}1{% endif %};">
           <svg xmlns="http://www.w3.org/2000/svg"
@@ -2696,15 +2697,8 @@
           </svg>
         </button>
 
-        <!-- Synced Checkmark (shows if provider has been synced) -->
-        {% if provider.is_synced %}
-        <span class="sync-checkmark"
-              data-provider="{{ provider.name }}"
-              title="Synced"
-              style="position:absolute; bottom:14px; right:44px; color:#22c55e; font-size:14px; filter:drop-shadow(0 0 4px #22c55e);">
-          ✓
-        </span>
-        {% endif %}
+        <!-- Token status indicator (dynamically loaded via JavaScript) -->
+        <!-- Will show: ✓ (valid) | ↻ (needs_refresh) | ! (needs_reauth) | ? (unknown) -->
 
         <!-- Sync Status / Cooldown Timer (center bottom) -->
         <span class="sync-status"
@@ -2716,6 +2710,65 @@
             Syncing…
           {% endif %}
         </span>
+
+        <!-- Achievement Milestones (above sync status) -->
+        {% if provider.oldest_achievement or provider.rarest_achievement %}
+        <div class="achievement-milestones" style="position:absolute; bottom:38px; left:0; right:0; padding:4px 8px; background:rgba(0,0,0,0.4); border-top:1px solid rgba(255,255,255,0.05); font-size:0.65rem; color:#999; z-index:1;">
+          {% if provider.oldest_achievement %}
+          <div class="milestone-item"
+               style="display:flex; align-items:center; gap:4px; margin-bottom:2px; cursor:pointer; padding:2px 4px; border-radius:4px; transition:background 0.2s;"
+               onmouseover="showMilestoneTooltip(this, event)"
+               onmouseout="hideMilestoneTooltip()"
+               data-name="{{ provider.oldest_achievement.name }}"
+               data-description="{{ provider.oldest_achievement.description or '' }}"
+               data-icon="{{ provider.oldest_achievement.icon }}"
+               data-date="{{ provider.oldest_achievement.date.strftime('%b %d, %Y') }}"
+               data-type="oldest">
+            <span style="color:#888;">🏆</span>
+            <span style="color:#aaa; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ provider.oldest_achievement.date.strftime('%b %Y') }}</span>
+            <span style="color:#666; font-size:0.6rem;">first</span>
+          </div>
+          {% endif %}
+          {% if provider.rarest_achievement %}
+          <div class="milestone-item"
+               style="display:flex; align-items:center; gap:4px; cursor:pointer; padding:2px 4px; border-radius:4px; transition:background 0.2s;"
+               onmouseover="showMilestoneTooltip(this, event)"
+               onmouseout="hideMilestoneTooltip()"
+               data-name="{{ provider.rarest_achievement.name }}"
+               data-description="{{ provider.rarest_achievement.description or '' }}"
+               data-icon="{{ provider.rarest_achievement.icon }}"
+               data-percent="{{ provider.rarest_achievement.percent|round(2) }}"
+               data-rarity="{{ provider.rarest_achievement.rarity }}"
+               data-type="rarest">
+            <span style="color:{% if provider.rarest_achievement.rarity == 'Legendary' %}#ff8000{% elif provider.rarest_achievement.rarity == 'Epic' %}#a335ee{% else %}#0070dd{% endif %};">💎</span>
+            <span style="color:#aaa; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ provider.rarest_achievement.percent|round(1) }}%</span>
+            <span style="color:#666; font-size:0.6rem;">rarest</span>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Compact Sync Status Report (bottom edge) -->
+        {% if provider.last_sync_at %}
+        <div class="sync-report"
+             data-provider="{{ provider.name }}"
+             data-userid="{{ provider.user_id }}"
+             data-last-sync="{{ provider.last_sync_at.isoformat() if provider.last_sync_at else '' }}"
+             style="position:absolute; bottom:0; left:0; right:0; height:18px; background:rgba(0,0,0,0.6); border-top:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:space-between; padding:0 8px; font-size:0.65rem; color:#aaa; backdrop-filter:blur(4px);">
+          <span class="sync-time" style="color:#888;">
+            {% if provider.last_sync_at %}
+              {# Calculate time ago in JavaScript on page load #}
+              <span data-timestamp="{{ provider.last_sync_at.timestamp() }}"></span>
+            {% else %}
+              Never synced
+            {% endif %}
+          </span>
+          {% if provider.last_credited_count > 0 %}
+          <span class="sync-new" style="color:var(--neon); font-weight:600;">+{{ provider.last_credited_count }} new</span>
+          {% endif %}
+          <span class="sync-total" style="color:#666; font-size:0.6rem;">{{ provider.total_achievements }} total</span>
+        </div>
+        {% endif %}
 
       </div>
     {% endfor %}
@@ -3435,11 +3488,16 @@ async function openForgeModal() {
       const color = tier === 'Legendary' ? '#ff8000' : tier === 'Epic' ? '#a335ee' : '#0070dd';
       html += `<h4 style="color:${color};margin:1rem 0 0.5rem;">${tier} (${byRarity[tier].length})</h4>`;
       byRarity[tier].forEach(a => {
+        // Use caching proxy for achievement icons (improves load times)
+        const iconUrl = a.icon_url
+          ? `/api/icon?url=${encodeURIComponent(a.icon_url)}`
+          : '/static/icons/trophy.png';
+
         html += `
           <label style="display:flex;align-items:center;gap:12px;padding:8px;border:1px solid #333;border-radius:8px;margin-bottom:8px;cursor:pointer;transition:border-color 0.2s;"
                  onmouseover="this.style.borderColor='${color}'" onmouseout="this.style.borderColor='#333'">
             <input type="checkbox" value="${a.credit_id}" onchange="toggleForge(${a.credit_id})" style="width:18px;height:18px;">
-            <img src="${a.icon_url}" style="width:40px;height:40px;border-radius:4px;">
+            <img src="${iconUrl}" style="width:40px;height:40px;border-radius:4px;">
             <div style="flex:1;">
               <div style="font-weight:600;color:${color};">${a.display_name}</div>
               <div style="font-size:0.85rem;opacity:0.7;">${a.description || ''}</div>
@@ -3925,9 +3983,14 @@ function renderAchievementModalContent(data, provider, userId, avatar) {
         const unlockedDate = ach.unlocked_at ? new Date(ach.unlocked_at).toLocaleDateString() : null;
         const creditedDate = ach.date_credited ? new Date(ach.date_credited).toLocaleDateString() : null;
 
+        // Use caching proxy for achievement icons (improves load times)
+        const iconUrl = ach.icon_url
+          ? `/api/icon?url=${encodeURIComponent(ach.icon_url)}`
+          : '/static/icons/trophy.png';
+
         return `
         <div class="achievement-row" style="display:flex;align-items:center;gap:13px;margin-bottom:9px;opacity:${ach.unlocked ? 1 : 0.5};">
-          <img src="${ach.icon_url || '/static/icons/trophy.png'}" style="width:48px;height:48px;border:1px solid #191b22;">
+          <img src="${iconUrl}" style="width:48px;height:48px;border:1px solid #191b22;">
           <div style="flex:1;">
             <div style="color:var(--neon);font-weight:600;">${ach.display_name || ach.name}</div>
             <div style="font-size:0.94em;color:#aaa;">${ach.description || ''}</div>
@@ -4000,9 +4063,14 @@ function renderAchievementModalContent(data, provider, userId, avatar) {
       const unlockedDate = ach.unlocked_at ? new Date(ach.unlocked_at).toLocaleDateString() : null;
       const creditedDate = ach.date_credited ? new Date(ach.date_credited).toLocaleDateString() : null;
 
+      // Use caching proxy for achievement icons (improves load times)
+      const iconUrl = ach.icon_url
+        ? `/api/icon?url=${encodeURIComponent(ach.icon_url)}`
+        : '/static/icons/trophy.png';
+
       return `
       <div class="achievement-row" style="display:flex;align-items:center;gap:13px;margin-bottom:9px;opacity:${ach.unlocked ? 1 : 0.5};">
-        <img src="${ach.icon_url}" style="width:50px;height:50px;border:1px solid #191b22;">
+        <img src="${iconUrl}" style="width:50px;height:50px;border:1px solid #191b22;">
         <div style="flex:1;">
           <div style="color:var(--neon);font-weight:600;">${ach.display_name}</div>
           <div style="font-size:0.94em;color:#aaa;">${ach.description || ''}</div>
@@ -4142,6 +4210,24 @@ window.syncAchievements = async function(providerName, providerUserId, btn) {
             headers: { 'accept': 'application/json' }
         });
 
+        if (resp.status === 401) {
+          // Token expired - needs reauth
+          const data = await resp.json();
+          if (data.status === 'needs_reauth') {
+            statusSpan.textContent = 'Session expired';
+            statusSpan.style.color = '#fbbf24';
+
+            // Update token indicator to show needs_reauth
+            updateTokenIndicator(providerName, providerUserId, 'needs_reauth');
+
+            // Auto-redirect to OAuth after short delay with reauth=true parameter
+            setTimeout(() => {
+              window.location.href = `/auth/${providerName}/login?reauth=true`;
+            }, 1500);
+            return;
+          }
+        }
+
         if (resp.status === 429) {
           // Cooldown active - parse remaining time from response
           const data = await resp.json();
@@ -4159,16 +4245,19 @@ window.syncAchievements = async function(providerName, providerUserId, btn) {
             ? `+${data.credited} new!`
             : 'Sync complete!';
 
-        // Show/add checkmark on success
-        let checkmark = btn.parentElement.querySelector('.sync-checkmark');
-        if (!checkmark) {
-            checkmark = document.createElement('span');
-            checkmark.className = 'sync-checkmark';
-            checkmark.title = 'Synced';
-            checkmark.style.cssText = 'position:absolute; bottom:14px; right:44px; color:#22c55e; font-size:14px; filter:drop-shadow(0 0 4px #22c55e);';
-            checkmark.textContent = '✓';
-            btn.parentElement.appendChild(checkmark);
+        // Update to "valid" status on successful sync
+        updateTokenIndicator(providerName, providerUserId, 'valid');
+
+        // Update sync report with new data
+        // Find current total achievements from the card and add credited count
+        const card = btn.closest('.provider-card');
+        const currentTotalSpan = card?.querySelector('.sync-total');
+        let totalAchievements = data.credited || 0;
+        if (currentTotalSpan) {
+          const currentTotal = parseInt(currentTotalSpan.textContent) || 0;
+          totalAchievements = currentTotal + (data.credited || 0);
         }
+        updateSyncReport(providerName, providerUserId, data.credited || 0, totalAchievements);
 
         setTimeout(() => window.location.reload(), 1200);
     } catch (e) {
@@ -4178,8 +4267,262 @@ window.syncAchievements = async function(providerName, providerUserId, btn) {
     }
 }
 
-// Initialize cooldown timers on page load
-document.addEventListener('DOMContentLoaded', initCooldownTimers);
+// Update token status indicator for a provider
+function updateTokenIndicator(providerName, providerUserId, status) {
+  const key = `${providerName}:${providerUserId}`;
+  const cards = document.querySelectorAll(`.provider-card[data-provider="${providerName}"]`);
+  console.log(`[Indicator] Found ${cards.length} cards for provider ${providerName}`);
+
+  cards.forEach(card => {
+    const syncBtn = card.querySelector('.btn-sync-icon');
+    const cardUserId = syncBtn?.getAttribute('data-userid');
+    console.log(`[Indicator] Card userid: ${cardUserId}, looking for: ${providerUserId}`);
+
+    if (cardUserId !== providerUserId) {
+      console.log(`[Indicator] Skipping card (userid mismatch)`);
+      return;
+    }
+
+    console.log(`[Indicator] Updating indicator for ${providerName}:${providerUserId} to ${status}`);
+
+    // Find or create indicator
+    let indicator = card.querySelector('.token-indicator');
+    if (!indicator) {
+      indicator = document.createElement('span');
+      indicator.className = 'token-indicator';
+      indicator.style.cssText = 'position:absolute; bottom:14px; right:44px; font-size:16px; font-weight:bold; z-index:10;';
+      card.appendChild(indicator);
+      console.log(`[Indicator] Created new indicator element`);
+    }
+
+    // Update icon and color based on status
+    switch(status) {
+      case 'valid':
+        indicator.textContent = '✓';
+        indicator.title = 'Token valid - ready to sync';
+        indicator.style.color = '#22c55e';
+        indicator.style.filter = 'drop-shadow(0 0 4px #22c55e)';
+        break;
+      case 'needs_refresh':
+        indicator.textContent = '↻';
+        indicator.title = 'Token expired - will auto-refresh on sync';
+        indicator.style.color = '#fbbf24';
+        indicator.style.filter = 'drop-shadow(0 0 4px #fbbf24)';
+        break;
+      case 'needs_reauth':
+        indicator.textContent = '!';
+        indicator.title = 'Session expired - click sync to re-authenticate';
+        indicator.style.color = '#ef4444';
+        indicator.style.filter = 'drop-shadow(0 0 4px #ef4444)';
+        break;
+      case 'unknown':
+        indicator.textContent = '?';
+        indicator.title = 'Token status unknown';
+        indicator.style.color = '#a855f7';
+        indicator.style.filter = 'drop-shadow(0 0 4px #a855f7)';
+        break;
+    }
+
+    console.log(`[Indicator] Set ${indicator.textContent} icon with color ${indicator.style.color}`);
+  });
+}
+
+// Fetch and display token status for all providers
+async function loadTokenStatus() {
+  try {
+    console.log('[Token Status] Fetching token status...');
+    const resp = await fetch('/api/provider_token_status');
+    console.log('[Token Status] Response status:', resp.status);
+
+    if (!resp.ok) {
+      console.warn('[Token Status] Failed to fetch:', resp.statusText);
+      return;
+    }
+
+    const data = await resp.json();
+    console.log('[Token Status] Received data:', data);
+
+    const providerStatus = data.provider_status || {};
+
+    // Update indicators for each provider
+    for (const [key, status] of Object.entries(providerStatus)) {
+      const [providerName, providerUserId] = key.split(':');
+      console.log(`[Token Status] Updating ${providerName}:${providerUserId} -> ${status}`);
+      updateTokenIndicator(providerName, providerUserId, status);
+    }
+
+    console.log('[Token Status] All indicators updated');
+  } catch (e) {
+    console.error('[Token Status] Failed to load token status:', e);
+  }
+}
+
+// Format timestamp as "time ago" (e.g., "2m ago", "5h ago", "3d ago")
+function formatTimeAgo(timestamp) {
+  const now = Date.now() / 1000; // Current time in seconds
+  const diff = now - timestamp;
+
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
+// Update all "time ago" displays on page
+function updateTimeAgoDisplays() {
+  document.querySelectorAll('.sync-time span[data-timestamp]').forEach(span => {
+    const timestamp = parseFloat(span.getAttribute('data-timestamp'));
+    if (timestamp) {
+      span.textContent = formatTimeAgo(timestamp);
+    }
+  });
+}
+
+// Update sync report after successful sync
+function updateSyncReport(providerName, providerUserId, creditedCount, totalAchievements) {
+  const cards = document.querySelectorAll(`.provider-card[data-provider="${providerName}"]`);
+
+  cards.forEach(card => {
+    const syncBtn = card.querySelector('.btn-sync-icon');
+    const cardUserId = syncBtn?.getAttribute('data-userid');
+
+    if (cardUserId !== providerUserId) return;
+
+    // Find or create sync report
+    let syncReport = card.querySelector('.sync-report');
+    if (!syncReport) {
+      // Create new sync report if it doesn't exist
+      syncReport = document.createElement('div');
+      syncReport.className = 'sync-report';
+      syncReport.setAttribute('data-provider', providerName);
+      syncReport.setAttribute('data-userid', providerUserId);
+      syncReport.style.cssText = 'position:absolute; bottom:0; left:0; right:0; height:18px; background:rgba(0,0,0,0.6); border-top:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:space-between; padding:0 8px; font-size:0.65rem; color:#aaa; backdrop-filter:blur(4px);';
+      card.appendChild(syncReport);
+    }
+
+    // Update content
+    const now = Date.now() / 1000;
+    syncReport.innerHTML = `
+      <span class="sync-time" style="color:#888;">
+        <span data-timestamp="${now}">Just now</span>
+      </span>
+      ${creditedCount > 0 ? `<span class="sync-new" style="color:var(--neon); font-weight:600;">+${creditedCount} new</span>` : ''}
+      <span class="sync-total" style="color:#666; font-size:0.6rem;">${totalAchievements} total</span>
+    `;
+  });
+}
+
+// Milestone achievement tooltip
+let milestoneTooltip = null;
+
+function showMilestoneTooltip(element, event) {
+  // Remove existing tooltip
+  if (milestoneTooltip) {
+    milestoneTooltip.remove();
+  }
+
+  // Highlight the hovered item
+  element.style.background = 'rgba(255,255,255,0.05)';
+
+  // Get achievement data
+  const name = element.getAttribute('data-name');
+  const description = element.getAttribute('data-description');
+  const icon = element.getAttribute('data-icon');
+  const type = element.getAttribute('data-type');
+  const date = element.getAttribute('data-date');
+  const percent = element.getAttribute('data-percent');
+  const rarity = element.getAttribute('data-rarity');
+
+  // Use caching proxy for icon
+  const iconUrl = icon ? `/api/icon?url=${encodeURIComponent(icon)}` : '/static/icons/trophy.png';
+
+  // Rarity colors
+  const rarityColor = rarity === 'Legendary' ? '#ff8000' : rarity === 'Epic' ? '#a335ee' : '#0070dd';
+
+  // Create tooltip
+  milestoneTooltip = document.createElement('div');
+  milestoneTooltip.className = 'milestone-tooltip';
+  milestoneTooltip.innerHTML = `
+    <div style="display:flex; align-items:center; gap:10px; padding:12px; background:rgba(10,10,15,0.98); border:1px solid rgba(255,255,255,0.15); border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.5); min-width:280px; max-width:320px; backdrop-filter:blur(10px);">
+      <img src="${iconUrl}" style="width:48px; height:48px; border-radius:4px; border:1px solid #191b22; flex-shrink:0;">
+      <div style="flex:1; overflow:hidden;">
+        <div style="color:var(--neon); font-weight:600; font-size:0.95rem; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis;">${name}</div>
+        ${description ? `<div style="font-size:0.75rem; color:#999; margin-bottom:6px; line-height:1.3;">${description}</div>` : ''}
+        ${type === 'oldest' ? `
+          <div style="font-size:0.8rem; color:#aaa; display:flex; align-items:center; gap:4px;">
+            <span>🏆</span>
+            <span>First achievement - ${date}</span>
+          </div>
+        ` : ''}
+        ${type === 'rarest' ? `
+          <div style="font-size:0.8rem; color:${rarityColor}; margin-bottom:2px;">${rarity}</div>
+          <div style="font-size:0.75rem; color:#aaa;">Unlocked by ${percent}% of players</div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  // Position tooltip above the element
+  milestoneTooltip.style.position = 'fixed';
+  milestoneTooltip.style.zIndex = '10000';
+  milestoneTooltip.style.pointerEvents = 'none';
+  document.body.appendChild(milestoneTooltip);
+
+  // Calculate position
+  const rect = element.getBoundingClientRect();
+  const tooltipRect = milestoneTooltip.getBoundingClientRect();
+
+  let left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+  let top = rect.top - tooltipRect.height - 8;
+
+  // Keep tooltip on screen
+  if (left < 10) left = 10;
+  if (left + tooltipRect.width > window.innerWidth - 10) {
+    left = window.innerWidth - tooltipRect.width - 10;
+  }
+  if (top < 10) {
+    // If not enough room above, show below
+    top = rect.bottom + 8;
+  }
+
+  milestoneTooltip.style.left = left + 'px';
+  milestoneTooltip.style.top = top + 'px';
+
+  // Fade in
+  milestoneTooltip.style.opacity = '0';
+  setTimeout(() => {
+    if (milestoneTooltip) milestoneTooltip.style.opacity = '1';
+  }, 10);
+  milestoneTooltip.style.transition = 'opacity 0.15s';
+}
+
+function hideMilestoneTooltip() {
+  // Remove highlight from all milestone items
+  document.querySelectorAll('.milestone-item').forEach(item => {
+    item.style.background = '';
+  });
+
+  // Fade out and remove tooltip
+  if (milestoneTooltip) {
+    milestoneTooltip.style.opacity = '0';
+    setTimeout(() => {
+      if (milestoneTooltip && milestoneTooltip.parentNode) {
+        milestoneTooltip.remove();
+      }
+      milestoneTooltip = null;
+    }, 150);
+  }
+}
+
+// Initialize cooldown timers and token status on page load
+document.addEventListener('DOMContentLoaded', () => {
+  initCooldownTimers();
+  loadTokenStatus();
+  updateTimeAgoDisplays();
+
+  // Update time ago displays every minute
+  setInterval(updateTimeAgoDisplays, 60000);
+});
 
 // PATCHED MODAL LOGIC:
 async function openModal(btn) {

@@ -229,13 +229,20 @@ func _convert_mapping_key_to_achievement_key(mapping_key: String) -> String:
 		return mapping_key
 
 	var provider_or_appid = parts[0]
-	var api_name = parts[1]
 
 	# Check if it's a numeric Steam app ID
 	if provider_or_appid.is_valid_int():
+		var api_name = parts[1]
 		return "steam_%s_%s" % [provider_or_appid, api_name]
+	elif provider_or_appid == "battlenet" and parts.size() >= 3:
+		# Battlenet uses 3-part format: battlenet:game:achievement
+		# e.g., "battlenet:diablo4:SEASON_JOURNEY_GUARDIAN"
+		var game = parts[1]
+		var achievement = parts[2]
+		return "battlenet_%s_%s" % [game, achievement]
 	else:
-		# Provider like "xbox", "psn", "battlenet", "discord", "github", "roblox"
+		# Provider like "xbox", "psn", "discord", "github", "roblox" (2-part format)
+		var api_name = parts[1]
 		return "%s_%s" % [provider_or_appid, api_name]
 
 ## Get icon subfolder based on item type

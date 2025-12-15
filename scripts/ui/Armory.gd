@@ -548,9 +548,9 @@ func _create_animated_grid_bg() -> Control:
 	var container = Control.new()
 	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# Grid settings (matching web app: 80px spacing, cyan at 0.05 opacity)
-	var grid_spacing = 80  # Match web app spacing
-	var line_color = Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.04)
+	# Grid settings (matching web app: 60px spacing, cyan at 0.06 opacity)
+	var grid_spacing = 60  # Refined grid spacing for technical aesthetic
+	var line_color = Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.06)
 	var line_thickness = 1
 	var lines_created = false
 
