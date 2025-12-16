@@ -1,6 +1,5 @@
-[gd_scene load_steps=10 format=3 uid="uid://da577gtsryjlr"]
+[gd_scene load_steps=9 format=3 uid="uid://da577gtsryjlr"]
 
-[ext_resource type="Script" path="res://scripts/trading_hub/TestHub.gd" id="1_test"]
 [ext_resource type="Shader" uid="uid://bvc2p5kpshbx6" path="res://shaders/ground_variation.gdshader" id="2_ground"]
 [ext_resource type="Shader" uid="uid://ly7a3p5raf33" path="res://shaders/grassland.gdshader" id="3_grass"]
 
@@ -35,7 +34,6 @@ polygon = PackedVector2Array(-12000, -4000, -1100, -4000, -1050, -4100, -1150, -
 polygon = PackedVector2Array(12000, -4000, 1100, -4000, 1050, -4100, 1150, -4200, 1000, -4300, 1100, -4500, 12000, -4500)
 
 [node name="TestHub" type="Node2D"]
-script = ExtResource("1_test")
 
 [node name="CanvasModulate" type="CanvasModulate" parent="."]
 

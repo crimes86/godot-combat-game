@@ -3,6 +3,7 @@
     "feature-dev@claude-code-plugins": true,
     "code-review@claude-code-plugins": true,
     "security-guidance@claude-code-plugins": true,
-    "commit-commands@claude-code-plugins": true
+    "commit-commands@claude-code-plugins": true,
+    "frontend-design@claude-plugins-official": true
   }
 }

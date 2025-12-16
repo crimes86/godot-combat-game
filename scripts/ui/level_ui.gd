@@ -239,11 +239,10 @@ func update_stats_display() -> void:
 		return
 	
 	var text = ""
-	text += "═══ STATS ═══\n"
-	text += "STR: %d\n" % CharacterStats.strength
-	text += "AGI: %d\n" % CharacterStats.agility
-	text += "VIT: %d\n" % CharacterStats.vitality
-	text += "LUCK: %d\n" % CharacterStats.luck
+	text += "═══ STATS (6-stat) ═══\n"
+	text += "STR: %d  AGI: %d\n" % [CharacterStats.get_effective_strength(), CharacterStats.get_effective_agility()]
+	text += "DEX: %d  INT: %d\n" % [CharacterStats.get_effective_dexterity(), CharacterStats.get_effective_intelligence()]
+	text += "WIS: %d  VIT: %d\n" % [CharacterStats.get_effective_wisdom(), CharacterStats.get_effective_vitality()]
 	text += "\n"
 	text += "Attack Speed: %.2fs\n" % CharacterStats.get_attack_cooldown()
 	text += "Base Damage: %.1f\n" % CharacterStats.get_base_damage()

@@ -6,9 +6,10 @@ const PROP_TEXTURES = {
 	"dead_tree_1": "res://assets/environment/wasteland/dead_tree_1.png",
 	"dead_tree_2": "res://assets/environment/wasteland/dead_tree_2.png",
 	"dead_tree_3": "res://assets/environment/wasteland/dead_tree_3.png",
-	"rock_large": "res://assets/environment/wasteland/rock_large.png",
-	"rock_medium": "res://assets/environment/wasteland/rock_medium.png",
-	"rock_small": "res://assets/environment/wasteland/rock_small.png",
+	# Zone-based rock textures (zone1 used for baking)
+	"rock_large": "res://assets/environment/wasteland/rocks/zone1/rock_large_1.png",
+	"rock_medium": "res://assets/environment/wasteland/rocks/zone1/rock_medium_1.png",
+	"rock_small": "res://assets/environment/wasteland/rocks/zone1/rock_small_1.png",
 	"skull": "res://assets/environment/wasteland/skull.png",
 	"bones": "res://assets/environment/wasteland/bones.png",
 	"ground_crack_1": "res://assets/environment/wasteland/ground_crack_1.png",

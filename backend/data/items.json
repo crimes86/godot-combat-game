@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generated_at": null,
   "last_updated_by": "manual",
-  "_changelog": "v2.0.0: Added 27 Blizzard items (9 Diablo, 9 Overwatch, 9 StarCraft) for ecosystem standardization. Equal distribution across all Blizzard franchises. v1.9.0: Added 3 jewelry items (rings/amulets) and 4 items from most populated games (Apex, R6, Rust, Minecraft proxy). v1.8.0: Added 4 dagger weapons (Ezio's Hidden Blade, Sam Fisher's Ka-Bar, Fiber Wire, CS:GO Karambit). v1.7.0: Synced 10 missing items from ForgeItemDB.gd (ashen_armor, elden_armory_set, eye_of_cthulhu_shield, ironclad_armor, loremaster_hood, master_hoe, prairie_king_crown, stardrop_pendant, survivor_vest, zagreus_helm). Fixed naming inconsistencies (stygian_blade_basic->stygian_blade, exagryph_adamant_rail->adamant_rail, master_farmers_hoe->master_hoe).",
+  "_changelog": "v2.2.0: Differentiated weapon types (dagger/katana/rapier), added staff scaling, fixed lifesteal on tank weapons. v2.2.0: Differentiated weapon types (dagger/katana/rapier), added staff scaling, fixed lifesteal on tank weapons. v2.2.0: Differentiated weapon types (dagger/katana/rapier), added staff scaling, fixed lifesteal on tank weapons. v2.2.0: Differentiated weapon types (dagger/katana/rapier), added staff scaling, fixed lifesteal on tank weapons. v2.2.0: Differentiated weapon types (dagger/katana/rapier), added staff scaling, fixed lifesteal on tank weapons. v2.2.0: Differentiated weapon types (dagger/katana/rapier), added staff scaling, fixed lifesteal on tank weapons. v2.1.0: Added combat stats (base_damage, crit_chance, stat_bonuses) to all forged items. v2.0.0: Added 27 Blizzard items (9 Diablo, 9 Overwatch, 9 StarCraft) for ecosystem standardization. Equal distribution across all Blizzard franchises. v1.9.0: Added 3 jewelry items (rings/amulets) and 4 items from most populated games (Apex, R6, Rust, Minecraft proxy). v1.8.0: Added 4 dagger weapons (Ezio's Hidden Blade, Sam Fisher's Ka-Bar, Fiber Wire, CS:GO Karambit). v1.7.0: Synced 10 missing items from ForgeItemDB.gd (ashen_armor, elden_armory_set, eye_of_cthulhu_shield, ironclad_armor, loremaster_hood, master_hoe, prairie_king_crown, stardrop_pendant, survivor_vest, zagreus_helm). Fixed naming inconsistencies (stygian_blade_basic->stygian_blade, exagryph_adamant_rail->adamant_rail, master_farmers_hoe->master_hoe).",
   "_asset_paths": {
     "_comment": "Base paths for assets. Web dashboard serves from /static/items/",
     "icons_base": "/static/items/icons",
@@ -67,9 +67,9 @@
     "github:GALAXY_BRAIN": "galaxy_brain_badge",
     "github:YOLO": "yolo_badge",
     "_comment_roblox": "Roblox tenure badges",
-    "roblox:TENURE_10_YEARS": "veteran_roblox_hat",
-    "roblox:TENURE_7_YEARS": "classic_roblox_hat",
-    "roblox:TENURE_5_YEARS": "builder_roblox_hat",
+    "roblox:TENURE_10_YEARS": "veteran_roblox_necklace",
+    "roblox:TENURE_7_YEARS": "classic_roblox_ring",
+    "roblox:TENURE_5_YEARS": "builder_roblox_ring",
     "_comment_steam_accessible": "Steam accessible achievements",
     "374320:TO_LINK_THE_FIRST_FLAME": "ashen_armor",
     "1245620:ELDEN_RING": "tarnished_ring",
@@ -101,6 +101,10 @@
     "1245620:AGE_OF_STARS": "rannis_dark_moon_ring",
     "211420:KNIGHTS_HONOR": "havel_ring",
     "72850:OBLIVION_WALKER": "amulet_of_kings",
+    "374320:IUDEX_GUNDYR": "coiled_sword_fragment",
+    "374320:ASHEN_ESTUS_FLASK": "ashen_estus",
+    "1245620:MARGIT_THE_FELL_OMEN": "margits_shackle",
+    "1245620:RENNALA_FULL_MOON_QUEEN": "carian_crown",
     "1172470:HEIRLOOM_UNLOCK": "apex_heirloom_kunai",
     "359550:BLACK_ICE_UNLOCK": "r6_black_ice_skin",
     "252490:CRAFT_THOMPSON": "rust_thompson",
@@ -819,7 +823,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 75,
+        "max": 93
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 13,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 13
+      }
     },
     {
       "item_id": "farron_greatsword",
@@ -844,7 +861,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 94,
+        "max": 117
+      },
+      "attack_speed": "slow",
+      "stat_bonuses": {
+        "str": 17,
+        "agi": 0,
+        "dex": 9,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "dragonslayer_swordspear",
@@ -869,7 +899,20 @@
         "active": "lightning_bolt"
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 75,
+        "max": 93
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 13,
+        "agi": 0,
+        "dex": 10,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "grafted_blade",
@@ -893,7 +936,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 82,
+        "max": 102
+      },
+      "attack_speed": "slow",
+      "stat_bonuses": {
+        "str": 15,
+        "agi": 0,
+        "dex": 8,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "hand_of_malenia",
@@ -912,13 +968,26 @@
       },
       "effects": {
         "passive": [
-          "lifesteal",
-          "dot_on_hit"
+          "dot_on_hit",
+          "execute"
         ],
         "active": "waterfowl_dance"
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 52,
+        "max": 65
+      },
+      "attack_speed": "fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 13,
+        "dex": 13,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "radahns_greatswords",
@@ -943,7 +1012,20 @@
         "active": "starcaller_cry"
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 106,
+        "max": 132
+      },
+      "attack_speed": "slow",
+      "stat_bonuses": {
+        "str": 19,
+        "agi": 0,
+        "dex": 10,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "moonveil",
@@ -968,7 +1050,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 46,
+        "max": 57
+      },
+      "attack_speed": "fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 11,
+        "dex": 11,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "elden_lord_helm",
@@ -993,7 +1088,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 19,
+      "stat_bonuses": {
+        "str": 6,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 3
+      }
     },
     {
       "item_id": "carian_crown",
@@ -1017,7 +1121,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 17,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 3,
+        "wis": 5,
+        "vit": 0
+      }
     },
     {
       "item_id": "fingerprint_stone_shield",
@@ -1042,7 +1155,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 34,
+      "stat_bonuses": {
+        "str": 6,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 4
+      }
     },
     {
       "item_id": "pure_nail",
@@ -1066,7 +1188,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 58,
+        "max": 72
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 10
+      }
     },
     {
       "item_id": "shade_cloak",
@@ -1090,7 +1225,16 @@
         "active": "shadow_phase"
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 5,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 2,
+        "dex": 3,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "stygian_blade",
@@ -1114,7 +1258,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 58,
+        "max": 72
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 10
+      }
     },
     {
       "item_id": "adamant_rail",
@@ -1140,7 +1297,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 58,
+        "max": 72
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 10
+      }
     },
     {
       "item_id": "halo_battle_rifle",
@@ -1166,7 +1336,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 69,
+        "max": 85
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 11,
+        "dex": 9,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "terra_blade",
@@ -1191,7 +1374,20 @@
         "active": "terra_beam"
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 75,
+        "max": 93
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 13,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 13
+      }
     },
     {
       "item_id": "mortal_blade",
@@ -1216,7 +1412,20 @@
         "active": "mortal_draw"
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 52,
+        "max": 65
+      },
+      "attack_speed": "fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 13,
+        "dex": 13,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "gyoubu_spear",
@@ -1241,7 +1450,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 66,
+        "max": 82
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 11,
+        "agi": 0,
+        "dex": 9,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "witcher_silver_sword",
@@ -1265,7 +1487,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 58,
+        "max": 72
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 10
+      }
     },
     {
       "item_id": "aloy_sharpshot_bow",
@@ -1289,7 +1524,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 60,
+        "max": 74
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 10,
+        "dex": 8,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "tomb_raider_bow",
@@ -1313,7 +1561,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 60,
+        "max": 74
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 10,
+        "dex": 8,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "straw_hat",
@@ -1337,7 +1598,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 15,
+      "stat_bonuses": {
+        "str": 5,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 3
+      }
     },
     {
       "item_id": "coiled_sword_fragment",
@@ -1361,7 +1631,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 23
     },
     {
       "item_id": "margits_shackle",
@@ -1385,7 +1664,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 20
     },
     {
       "item_id": "discord_nitro_badge",
@@ -1409,7 +1697,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 20
     },
     {
       "item_id": "github_star_badge",
@@ -1433,7 +1730,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 20
     },
     {
       "_comment": "=== BATTLE.NET / WOW ITEMS ===",
@@ -1459,7 +1765,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 6,
+        "dex": 3,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "herald_of_the_titans",
@@ -1484,7 +1799,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 19,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 3,
+        "wis": 6,
+        "vit": 0
+      }
     },
     {
       "item_id": "immortal_tabard",
@@ -1509,7 +1833,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 6,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 2
+      }
     },
     {
       "item_id": "hand_of_adal_tabard",
@@ -1533,7 +1866,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 6,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 2
+      }
     },
     {
       "item_id": "mythic_insignia",
@@ -1558,7 +1900,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 23
     },
     {
       "item_id": "keystone_trinket",
@@ -1583,7 +1934,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 23
     },
     {
       "item_id": "gladiator_tabard",
@@ -1608,7 +1968,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 6,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 2
+      }
     },
     {
       "item_id": "insane_straitjacket",
@@ -1633,7 +2002,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 32,
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      }
     },
     {
       "_comment": "=== PLAYSTATION ITEMS ===",
@@ -1660,7 +2038,20 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "multi_slash": true
+      "multi_slash": true,
+      "base_damage": {
+        "min": 75,
+        "max": 93
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 13,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 13
+      }
     },
     {
       "item_id": "false_king_helm",
@@ -1685,7 +2076,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 19,
+      "stat_bonuses": {
+        "str": 6,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 3
+      }
     },
     {
       "item_id": "blades_of_chaos",
@@ -1710,7 +2110,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 23
     },
     {
       "item_id": "ghost_mask",
@@ -1735,7 +2144,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 17,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 3,
+        "dex": 5,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "selene_fragment",
@@ -1759,7 +2177,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "spider_emblem",
@@ -1784,7 +2211,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 23
     },
     {
       "_comment": "=== XBOX ITEMS ===",
@@ -1810,7 +2246,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 19,
+      "stat_bonuses": {
+        "str": 6,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 3
+      }
     },
     {
       "item_id": "pilot_helmet",
@@ -1835,7 +2280,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 19,
+      "stat_bonuses": {
+        "str": 6,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 3
+      }
     },
     {
       "item_id": "cog_medal",
@@ -1860,7 +2314,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "pirate_legend_hat",
@@ -1884,7 +2347,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 17,
+      "stat_bonuses": {
+        "str": 5,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 3
+      }
     },
     {
       "_comment": "=== DISCORD ITEMS ===",
@@ -1910,7 +2382,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "partner_badge",
@@ -1934,7 +2415,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 23
     },
     {
       "item_id": "bug_hunter_badge",
@@ -1958,7 +2448,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 23
     },
     {
       "item_id": "hypesquad_badge",
@@ -1982,7 +2481,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 20
     },
     {
       "_comment": "=== GITHUB ITEMS ===",
@@ -2008,7 +2516,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "mars_badge",
@@ -2032,7 +2549,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "pull_shark_badge",
@@ -2056,7 +2582,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 23
     },
     {
       "item_id": "galaxy_brain_badge",
@@ -2080,7 +2615,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 23
     },
     {
       "item_id": "yolo_badge",
@@ -2104,7 +2648,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 20
     },
     {
       "_comment": "=== ROBLOX ITEMS ===",
@@ -2130,7 +2683,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "classic_roblox_ring",
@@ -2154,7 +2716,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 5,
+        "dex": 3,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      },
+      "hp_bonus": 23
     },
     {
       "item_id": "builder_roblox_ring",
@@ -2178,7 +2749,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 5,
+        "dex": 3,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      },
+      "hp_bonus": 20
     },
     {
       "_comment": "=== STEAM ACCESSIBLE / PRESTIGE ITEMS ===",
@@ -2203,7 +2783,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 4
+      },
+      "hp_bonus": 17
     },
     {
       "item_id": "tarnished_ring",
@@ -2227,7 +2816,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 4,
+        "dex": 2,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      },
+      "hp_bonus": 17
     },
     {
       "item_id": "void_heart",
@@ -2252,7 +2850,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "boon_trinket",
@@ -2276,7 +2883,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 4
+      },
+      "hp_bonus": 17
     },
     {
       "item_id": "winged_strawberry",
@@ -2301,7 +2917,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "devil_pitchfork",
@@ -2326,7 +2951,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 75,
+        "max": 93
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 13,
+        "agi": 0,
+        "dex": 10,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "king_slayer",
@@ -2352,7 +2990,20 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "multi_slash": false
+      "multi_slash": false,
+      "base_damage": {
+        "min": 75,
+        "max": 93
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 13,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 13
+      }
     },
     {
       "item_id": "heart_shard",
@@ -2377,7 +3028,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "companion_cube",
@@ -2401,7 +3061,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 4,
+        "wis": 2,
+        "vit": 0
+      },
+      "hp_bonus": 17
     },
     {
       "item_id": "lambda_badge",
@@ -2425,7 +3094,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 20
     },
     {
       "item_id": "dragonbone_helm",
@@ -2450,7 +3128,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 17,
+      "stat_bonuses": {
+        "str": 5,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 3
+      }
     },
     {
       "item_id": "grandmaster_armor",
@@ -2475,7 +3162,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 32,
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      }
     },
     {
       "_comment": "=== SYNCED FROM FORGEITEMDB.GD ===",
@@ -2500,7 +3196,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 21,
+      "stat_bonuses": {
+        "str": 6,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 4
+      }
     },
     {
       "item_id": "elden_armory_chest",
@@ -2524,7 +3229,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 28,
+      "stat_bonuses": {
+        "str": 9,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      }
     },
     {
       "item_id": "eye_of_cthulhu_shield",
@@ -2548,7 +3262,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 21,
+      "stat_bonuses": {
+        "str": 4,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 2
+      }
     },
     {
       "item_id": "ironclad_armor",
@@ -2573,7 +3296,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 32,
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      }
     },
     {
       "item_id": "loremaster_hood",
@@ -2598,7 +3330,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 19,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 3,
+        "dex": 6,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "master_hoe",
@@ -2622,7 +3363,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 66,
+        "max": 83
+      },
+      "attack_speed": "slow",
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 6,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "prairie_king_cape",
@@ -2646,7 +3400,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 6,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 2
+      }
     },
     {
       "item_id": "stardrop_pendant",
@@ -2670,7 +3433,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "hp_bonus": 23
     },
     {
       "item_id": "survivor_vest",
@@ -2695,7 +3467,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 25,
+      "stat_bonuses": {
+        "str": 8,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      }
     },
     {
       "item_id": "zagreus_helm",
@@ -2719,7 +3500,16 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 17,
+      "stat_bonuses": {
+        "str": 5,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 3
+      }
     },
     {
       "item_id": "ezios_hidden_blade",
@@ -2743,8 +3533,21 @@
         ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false
+      "has_sprites": true,
+      "has_icon": true,
+      "base_damage": {
+        "min": 28,
+        "max": 41
+      },
+      "attack_speed": "very_fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 15,
+        "dex": 13,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "sam_fishers_kabar",
@@ -2769,7 +3572,20 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": false,
+      "base_damage": {
+        "min": 28,
+        "max": 41
+      },
+      "attack_speed": "very_fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 15,
+        "dex": 13,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "fiber_wire",
@@ -2794,11 +3610,24 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": false,
+      "base_damage": {
+        "min": 28,
+        "max": 41
+      },
+      "attack_speed": "very_fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 15,
+        "dex": 13,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "csgo_karambit",
-      "item_name": "StatTrak™ Karambit",
+      "item_name": "StatTrakâ„¢ Karambit",
       "item_type": "weapon",
       "weapon_type": "dagger",
       "description": "Counter-Strike's most iconic knife.",
@@ -2819,7 +3648,20 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": false,
+      "base_damage": {
+        "min": 25,
+        "max": 36
+      },
+      "attack_speed": "very_fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 13,
+        "dex": 11,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "rannis_dark_moon_ring",
@@ -2919,7 +3761,20 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": false,
+      "base_damage": {
+        "min": 28,
+        "max": 41
+      },
+      "attack_speed": "very_fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 15,
+        "dex": 13,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "r6_black_ice_skin",
@@ -2944,7 +3799,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": false,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      },
+      "hp_bonus": 26
     },
     {
       "item_id": "rust_thompson",
@@ -2976,7 +3840,20 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": false,
+      "base_damage": {
+        "min": 66,
+        "max": 82
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 11,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 11
+      }
     },
     {
       "item_id": "minecraft_diamond_pickaxe",
@@ -3001,7 +3878,20 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": false,
+      "base_damage": {
+        "min": 78,
+        "max": 98
+      },
+      "attack_speed": "slow",
+      "stat_bonuses": {
+        "str": 12,
+        "agi": 0,
+        "dex": 8,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "tyraels_might",
@@ -3026,7 +3916,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 32,
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      }
     },
     {
       "item_id": "stone_of_jordan",
@@ -3038,7 +3937,7 @@
       "base_rarity": "legendary",
       "theme": "diablo",
       "visuals": {
-        "icon_url": "/static/items/icons/stone_of_jordan.png",
+        "icon_url": "res://assets/icons/forged/accessories/stone_of_jordan.png",
         "sprite_folder": null,
         "effect": "mana_glow",
         "glow_color": "#4169E1"
@@ -3076,7 +3975,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 101,
+        "max": 127
+      },
+      "attack_speed": "slow",
+      "stat_bonuses": {
+        "str": 15,
+        "agi": 0,
+        "dex": 10,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "horadric_cube",
@@ -3101,7 +4013,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 7,
+        "wis": 4,
+        "vit": 0
+      },
+      "lifesteal": 0.039
     },
     {
       "item_id": "el_druins_sword",
@@ -3126,7 +4047,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 66,
+        "max": 82
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 11,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 11
+      }
     },
     {
       "item_id": "natalyas_shadow_mantle",
@@ -3151,7 +4085,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 5,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 2,
+        "dex": 3,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "echoing_fury",
@@ -3176,7 +4119,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 86,
+        "max": 109
+      },
+      "attack_speed": "slow",
+      "stat_bonuses": {
+        "str": 11,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 13
+      }
     },
     {
       "item_id": "black_soulstone",
@@ -3226,7 +4182,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 15,
+      "stat_bonuses": {
+        "str": 5,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 3
+      }
     },
     {
       "item_id": "genji_dragonblade",
@@ -3238,7 +4203,7 @@
       "base_rarity": "legendary",
       "theme": "overwatch",
       "visuals": {
-        "icon_url": "/static/items/icons/genji_dragonblade.png",
+        "icon_url": "res://assets/icons/forged/weapons/genji_dragonblade.png",
         "sprite_folder": "weapons/genji_dragonblade",
         "effect": "dragon_energy",
         "glow_color": "#00FF00"
@@ -3251,7 +4216,21 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "sprite_folder": "res://assets/equipment/forged/weapons/genji_dragonblade",
+      "base_damage": {
+        "min": 52,
+        "max": 65
+      },
+      "attack_speed": "fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 13,
+        "dex": 13,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "tracer_chronal_accelerator",
@@ -3263,7 +4242,7 @@
       "base_rarity": "legendary",
       "theme": "overwatch",
       "visuals": {
-        "icon_url": "/static/items/icons/tracer_chronal_accelerator.png",
+        "icon_url": "res://assets/icons/forged/accessories/tracer_chronal_accelerator.png",
         "sprite_folder": null,
         "effect": "time_distortion",
         "glow_color": "#FF8C00"
@@ -3276,7 +4255,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 6,
+        "wis": 3,
+        "vit": 0
+      },
+      "movement_speed": 0.104
     },
     {
       "item_id": "reaper_hellfire_shotguns",
@@ -3308,7 +4296,20 @@
         "ammo_capacity": 8
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 101,
+        "max": 127
+      },
+      "attack_speed": "slow",
+      "stat_bonuses": {
+        "str": 15,
+        "agi": 0,
+        "dex": 10,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "doomfist_gauntlet",
@@ -3321,7 +4322,7 @@
       "theme": "overwatch",
       "visuals": {
         "icon_url": "/static/items/icons/doomfist_gauntlet.png",
-        "sprite_folder": null,
+        "sprite_folder": "armor/hands/doomfist_gauntlet",
         "effect": "seismic_slam",
         "glow_color": "#FF4500"
       },
@@ -3332,8 +4333,17 @@
         ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": true
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 13,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 2
+      }
     },
     {
       "item_id": "reinhardt_crusader_armor",
@@ -3358,7 +4368,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 28,
+      "stat_bonuses": {
+        "str": 9,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      }
     },
     {
       "item_id": "mercy_caduceus_staff",
@@ -3383,7 +4402,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 69,
+        "max": 85
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 13,
+        "wis": 9,
+        "vit": 0
+      }
     },
     {
       "item_id": "winston_jump_pack",
@@ -3408,7 +4440,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 5,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 2
+      }
     },
     {
       "item_id": "widowmaker_kiss",
@@ -3440,7 +4481,20 @@
         "ammo_capacity": 30
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 58,
+        "max": 72
+      },
+      "attack_speed": "medium",
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 10
+      }
     },
     {
       "item_id": "orisa_halt_projector",
@@ -3465,7 +4519,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 5
+      },
+      "movement_speed": 0.08
     },
     {
       "item_id": "raynor_marine_armor",
@@ -3478,7 +4541,7 @@
       "theme": "starcraft",
       "visuals": {
         "icon_url": "/static/items/icons/raynor_marine_armor.png",
-        "sprite_folder": null,
+        "sprite_folder": "armor/chest/raynor_marine_armor",
         "effect": "terran_steel",
         "glow_color": "#4682B4"
       },
@@ -3489,8 +4552,17 @@
         ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": true
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 32,
+      "stat_bonuses": {
+        "str": 10,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 6
+      }
     },
     {
       "item_id": "kerrigan_psi_blade",
@@ -3515,7 +4587,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 49,
+        "max": 62
+      },
+      "attack_speed": "fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 15,
+        "wis": 10,
+        "vit": 0
+      }
     },
     {
       "item_id": "protoss_warp_prism",
@@ -3540,7 +4625,17 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 6,
+        "wis": 3,
+        "vit": 0
+      },
+      "hp_bonus": 32,
+      "cooldown_reduction": 0.065
     },
     {
       "item_id": "zeratul_warp_blade",
@@ -3565,7 +4660,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 52,
+        "max": 65
+      },
+      "attack_speed": "fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 13,
+        "wis": 13,
+        "vit": 0
+      }
     },
     {
       "item_id": "artanis_psi_blades",
@@ -3590,7 +4698,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 43,
+        "max": 55
+      },
+      "attack_speed": "fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 13,
+        "wis": 9,
+        "vit": 0
+      }
     },
     {
       "item_id": "siege_tank_cannon",
@@ -3622,7 +4743,20 @@
         "ammo_capacity": 4
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 94,
+        "max": 117
+      },
+      "attack_speed": "slow",
+      "stat_bonuses": {
+        "str": 16,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 13
+      }
     },
     {
       "item_id": "dark_templar_armor",
@@ -3647,7 +4781,16 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "defense": 5,
+      "stat_bonuses": {
+        "str": 3,
+        "agi": 0,
+        "dex": 0,
+        "int": 0,
+        "wis": 0,
+        "vit": 2
+      }
     },
     {
       "item_id": "zergling_claws",
@@ -3672,7 +4815,20 @@
         "active": null
       },
       "has_sprites": true,
-      "has_icon": true
+      "has_icon": true,
+      "base_damage": {
+        "min": 22,
+        "max": 32
+      },
+      "attack_speed": "very_fast",
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 12,
+        "dex": 10,
+        "int": 0,
+        "wis": 0,
+        "vit": 0
+      }
     },
     {
       "item_id": "khala_amulet",

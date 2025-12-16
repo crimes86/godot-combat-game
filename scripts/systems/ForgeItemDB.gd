@@ -25,6 +25,8 @@ enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, RAPIER, GREATSWORD, K
 # Base paths for forged items (separate from regular loot)
 const FORGED_ITEMS_BASE = "res://assets/equipment/forged/"
 const FORGED_ICONS_BASE = "res://assets/icons/forged/"
+# Prefer enhanced (upscaled) icons when present
+const ENHANCED_ICONS_BASE = "res://assets/icons/enhanced/forged/"
 
 # Path to JSON data file
 const ITEMS_JSON_PATH = "res://backend/data/items.json"
@@ -133,11 +135,40 @@ func _convert_json_item(json_item: Dictionary) -> Dictionary:
 	# Icon path - convert from web path to Godot path
 	var icon_url = _safe_string(visuals.get("icon_url"), "")
 	if icon_url != "":
-		# Convert /static/items/icons/xxx.png to res://assets/icons/forged/xxx.png
+		# Convert /static/items/icons/xxx.png to local icon paths (prefer enhanced)
 		var icon_filename = icon_url.get_file()
 		# Determine subfolder based on item type
 		var subfolder = _get_icon_subfolder(item["item_type"])
-		sprites["icon"] = FORGED_ICONS_BASE + subfolder + "/" + icon_filename
+		var enhanced_subfolder_path = ENHANCED_ICONS_BASE + subfolder + "/" + icon_filename
+		var enhanced_root_path = ENHANCED_ICONS_BASE + icon_filename
+		var forged_subfolder_path = FORGED_ICONS_BASE + subfolder + "/" + icon_filename
+		var forged_root_path = FORGED_ICONS_BASE + icon_filename
+
+		# Try enhanced first, then fall back to forged
+		if FileAccess.file_exists(enhanced_subfolder_path):
+			sprites["icon"] = enhanced_subfolder_path
+		elif FileAccess.file_exists(enhanced_root_path):
+			sprites["icon"] = enhanced_root_path
+		elif FileAccess.file_exists(forged_subfolder_path):
+			sprites["icon"] = forged_subfolder_path
+		elif FileAccess.file_exists(forged_root_path):
+			sprites["icon"] = forged_root_path
+
+	# Fallback icon lookup by item_id/name (covers cases where icon_url points to a different filename)
+	if not sprites.has("icon"):
+		var fallback_filename = item["item_id"].to_lower().replace(" ", "_").replace("-", "_").replace("'", "")
+		var name_filename = _name_to_snake_case(item["item_name"])
+		var subfolder = _get_icon_subfolder(item["item_type"])
+		var candidates = [
+			ENHANCED_ICONS_BASE + subfolder + "/" + fallback_filename + ".png",
+			ENHANCED_ICONS_BASE + subfolder + "/" + name_filename + ".png",
+			FORGED_ICONS_BASE + subfolder + "/" + fallback_filename + ".png",
+			FORGED_ICONS_BASE + subfolder + "/" + name_filename + ".png",
+		]
+		for c in candidates:
+			if FileAccess.file_exists(c):
+				sprites["icon"] = c
+				break
 
 	# Sprite folder - build full paths
 	var sprite_folder = _safe_string(visuals.get("sprite_folder"), "")
@@ -168,10 +199,54 @@ func _convert_json_item(json_item: Dictionary) -> Dictionary:
 	if glow_color != "":
 		item["glow_color"] = glow_color
 
-	# Stats
+	# Stats (legacy format)
 	var stats = json_item.get("stats")
 	if stats != null and stats is Dictionary and not stats.is_empty():
 		item["stats"] = stats
+
+	# Combat stats (new format from items.json)
+	# base_damage can be {"min": X, "max": Y} dict or single number
+	var base_damage = json_item.get("base_damage")
+	if base_damage != null:
+		if base_damage is Dictionary:
+			# Use average of min/max for single value
+			var dmg_min = base_damage.get("min", 0)
+			var dmg_max = base_damage.get("max", 0)
+			item["base_damage"] = (dmg_min + dmg_max) / 2.0
+			item["base_damage_min"] = dmg_min
+			item["base_damage_max"] = dmg_max
+		else:
+			item["base_damage"] = float(base_damage)
+
+	var attack_speed = json_item.get("attack_speed")
+	if attack_speed != null:
+		item["attack_speed"] = attack_speed
+
+	# NOTE: Crit chance removed from weapons - now purely stat-based (DEX for melee, WIS for caster)
+
+	var defense = json_item.get("defense")
+	if defense != null:
+		item["defense"] = defense
+
+	var stat_bonuses = json_item.get("stat_bonuses")
+	if stat_bonuses != null and stat_bonuses is Dictionary:
+		item["stat_bonuses"] = stat_bonuses
+
+	var hp_bonus = json_item.get("hp_bonus")
+	if hp_bonus != null:
+		item["hp_bonus"] = hp_bonus
+
+	var lifesteal = json_item.get("lifesteal")
+	if lifesteal != null:
+		item["lifesteal"] = lifesteal
+
+	var cooldown_reduction = json_item.get("cooldown_reduction")
+	if cooldown_reduction != null:
+		item["cooldown_reduction"] = cooldown_reduction
+
+	var movement_speed = json_item.get("movement_speed")
+	if movement_speed != null:
+		item["movement_speed"] = movement_speed
 
 	# Gun config - also extract root-level gun properties for inventory system
 	var gun_config = json_item.get("gun_config")
@@ -219,6 +294,10 @@ func _safe_string(value, default: String) -> String:
 	if value is String:
 		return value
 	return default
+
+## Convert a display name to snake_case (matches ItemIconGenerator convention)
+func _name_to_snake_case(name: String) -> String:
+	return name.to_lower().replace(" ", "_").replace("'", "").replace("-", "_")
 
 ## Convert achievement mapping key format to FORGE_ITEMS key format
 ## Input: "app_id:api_name" or "provider:api_name"

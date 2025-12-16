@@ -398,9 +398,10 @@ func create_ground_circle() -> void:
 
 func create_stone_circle() -> void:
 	"""Arrange rocks in a natural-looking ritual circle - scaled up 25%"""
-	var rock_large_tex = load("res://assets/environment/wasteland/rock_large.png")
-	var rock_medium_tex = load("res://assets/environment/wasteland/rock_medium.png")
-	var rock_small_tex = load("res://assets/environment/wasteland/rock_small.png")
+	# Use zone1 rock textures (zone-based system in ChunkBasedPropSystem)
+	var rock_large_tex = load("res://assets/environment/wasteland/rocks/zone1/rock_large_1.png")
+	var rock_medium_tex = load("res://assets/environment/wasteland/rocks/zone1/rock_medium_1.png")
+	var rock_small_tex = load("res://assets/environment/wasteland/rocks/zone1/rock_small_1.png")
 
 	var rng = RandomNumberGenerator.new()
 	rng.seed = hash(global_position)

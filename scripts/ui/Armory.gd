@@ -3628,10 +3628,6 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 				var speed_bonus = item.get("attack_speed_bonus", 0.0)
 				if speed_bonus != 0:
 					tooltip_lines.append("Attack Speed: %+.1f%%" % (speed_bonus * 100))
-			if item.has("crit_chance_bonus"):
-				var crit_bonus = item.get("crit_chance_bonus", 0.0)
-				if crit_bonus != 0:
-					tooltip_lines.append("Crit Chance: +%.1f%%" % (crit_bonus * 100))
 
 		if item.has("defense"):
 			tooltip_lines.append("")

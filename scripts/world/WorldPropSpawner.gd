@@ -48,6 +48,13 @@ const PROP_TEXTURES = {
 	"ground_crack_2": "res://assets/props/ground_crack_2.png",
 }
 
+# Tree scene files - collision positions can be edited visually in these scenes
+const TREE_SCENES = {
+	"dead_tree": "res://scenes/environment/DeadTree.tscn",
+	"pine_tree": "res://scenes/environment/PineTree.tscn",
+	"autumn_tree": "res://scenes/environment/AutumnTree.tscn"
+}
+
 # Tree types with weighted rarity: 60% dead, 30% pine, 10% autumn
 var tree_types = ["dead_tree", "pine_tree", "autumn_tree"]
 
@@ -124,20 +131,21 @@ func spawn_trees_everywhere_dynamic(parent: Node2D) -> void:
 	print("🌲 Placed %d trees (dynamic)" % trees_placed)
 
 func create_tree_at_position(parent: Node2D, pos: Vector2, tree_type: String, rng: RandomNumberGenerator) -> void:
-	"""Create a single tree at position"""
-	var HarvestableTreeScript = preload("res://scripts/environment/HarvestableTree.gd")
-	var prop_container: StaticBody2D = HarvestableTreeScript.new()
+	"""Create a single tree at position using scene files (collision positions editable in scenes)"""
+	if not TREE_SCENES.has(tree_type):
+		return
+
+	var scene_path = TREE_SCENES[tree_type]
+	if not ResourceLoader.exists(scene_path):
+		return
+
+	var tree_scene = load(scene_path)
+	var prop_container = tree_scene.instantiate()
 
 	prop_container.name = tree_type + "_at_" + str(pos.x) + "_" + str(pos.y)
 	prop_container.position = pos
 	prop_container.collision_layer = 2
 	prop_container.collision_mask = 0
-
-	var texture_path = PROP_TEXTURES[tree_type]
-	if not ResourceLoader.exists(texture_path):
-		return
-
-	var texture = load(texture_path)
 
 	# Determine tree size
 	var size_roll = rng.randf()
@@ -151,48 +159,44 @@ func create_tree_at_position(parent: Node2D, pos: Vector2, tree_type: String, rn
 
 	var tree_flipped = rng.randf() < 0.5
 
-	# Create shadow
-	var shadow = _create_shadow(45 * (tree_scale / 2.5) * 0.75, 56 * tree_scale, -4)
-	prop_container.add_child(shadow)
+	# Get nodes from scene
+	var sprite = prop_container.get_node_or_null("Sprite")
+	var shadow = prop_container.get_node_or_null("Shadow")
+	var collision = prop_container.get_node_or_null("CollisionShape2D")
 
-	# Create sprite
-	var sprite = Sprite2D.new()
-	sprite.name = "Sprite"
-	sprite.texture = texture
-	sprite.centered = true
-	sprite.scale = Vector2(tree_scale, tree_scale)
-	sprite.flip_h = tree_flipped
-	sprite.z_index = 0
+	if sprite:
+		sprite.scale = Vector2(tree_scale, tree_scale)
+		sprite.flip_h = tree_flipped
 
-	# Tree color variation
-	var tree_roll = rng.randf()
-	if tree_roll < 0.4:
-		# Brown oak/maple trees
-		var base_brown = rng.randf_range(0.7, 0.9)
-		sprite.modulate = Color(
-			base_brown,
-			base_brown * rng.randf_range(0.7, 0.85),
-			base_brown * rng.randf_range(0.5, 0.65),
-			1.0
-		)
-	elif tree_roll < 0.7:
-		# White birch
-		var brightness = rng.randf_range(0.9, 1.0)
-		sprite.modulate = Color(brightness, brightness * 0.98, brightness * 0.94, 1.0)
-	else:
-		# Grey/silver birch
-		var grey = rng.randf_range(0.75, 0.95)
-		sprite.modulate = Color(grey, grey, grey * 1.02, 1.0)
+		# Tree color variation
+		var tree_roll = rng.randf()
+		if tree_roll < 0.4:
+			var base_brown = rng.randf_range(0.7, 0.9)
+			sprite.modulate = Color(
+				base_brown,
+				base_brown * rng.randf_range(0.7, 0.85),
+				base_brown * rng.randf_range(0.5, 0.65),
+				1.0
+			)
+		elif tree_roll < 0.7:
+			var brightness = rng.randf_range(0.9, 1.0)
+			sprite.modulate = Color(brightness, brightness * 0.98, brightness * 0.94, 1.0)
+		else:
+			var grey = rng.randf_range(0.75, 0.95)
+			sprite.modulate = Color(grey, grey, grey * 1.02, 1.0)
 
-	prop_container.add_child(sprite)
+	if shadow:
+		var shadow_width = 45 * (tree_scale / 2.5) * 0.75
+		var shadow_height = shadow_width * 0.4
+		shadow.size = Vector2(shadow_width, shadow_height)
+		shadow.position = Vector2(-shadow_width / 2, 56 * tree_scale)
 
-	# Add collision shape
-	var collision_shape = CollisionShape2D.new()
-	var shape = CircleShape2D.new()
-	shape.radius = 10 * tree_scale
-	collision_shape.shape = shape
-	collision_shape.position = Vector2(0, 50 * tree_scale)
-	prop_container.add_child(collision_shape)
+	if collision:
+		# Scale collision position based on tree size (scene position is for scale 1.0)
+		var base_collision_y = collision.position.y
+		collision.position = Vector2(0, base_collision_y * tree_scale)
+		if collision.shape is CircleShape2D:
+			collision.shape.radius = 10 * tree_scale
 
 	parent.add_child(prop_container)
 

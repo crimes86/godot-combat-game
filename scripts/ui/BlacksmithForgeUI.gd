@@ -39,13 +39,20 @@ func _build_ui() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
 
+	# Center wrapper to keep panel centered on viewport
+	var center = CenterContainer.new()
+	center.name = "CenterWrapper"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(center)
+
 	# Main panel
 	var panel = PanelContainer.new()
 	panel.name = "MainPanel"
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.custom_minimum_size = Vector2(800, 600)
-	panel.pivot_offset = panel.custom_minimum_size / 2.0
-	add_child(panel)
+	panel.custom_minimum_size = Vector2(900, 640)
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	center.add_child(panel)
 
 	# Panel style
 	var panel_style = StyleBoxFlat.new()
@@ -117,8 +124,10 @@ func _build_ui() -> void:
 
 	# Scrollable item grid
 	var scroll = ScrollContainer.new()
+	scroll.name = "ItemScroll"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.mouse_filter = Control.MOUSE_FILTER_STOP  # ensure wheel events scroll
 	vbox.add_child(scroll)
 
 	var grid_margin = MarginContainer.new()
@@ -146,6 +155,21 @@ func _refresh_items() -> void:
 	for child in _item_grid.get_children():
 		child.queue_free()
 
+	# Build quick lookup of icons from ForgeItemDB (sprites.icon already normalized)
+	var icon_lookup: Dictionary = {}
+	for key in ForgeItemDB.FORGE_ITEMS.keys():
+		var item_dict: Dictionary = ForgeItemDB.FORGE_ITEMS[key]
+		var item_id = item_dict.get("item_id", "")
+		if item_id == "":
+			continue
+		var icon_path = ""
+		var sprites = item_dict.get("sprites")
+		if sprites is Dictionary:
+			icon_path = sprites.get("icon", "")
+		if icon_path == "" and item_dict.has("icon"):
+			icon_path = item_dict.get("icon")
+		icon_lookup[item_id] = icon_path
+
 	# Get all items from ForgeItemDB
 	var all_items = []
 	for achievement_key in ForgeItemDB.FORGE_ITEMS.keys():
@@ -158,6 +182,7 @@ func _refresh_items() -> void:
 			"item_id": item_id,
 			"name": forge_db.get("item_name", "Unknown"),
 			"rarity": ForgeItemDB.ItemRarity.keys()[forge_db.get("rarity", 0)].to_lower(),
+			"icon_path": icon_lookup.get(item_id, ""),
 		})
 
 	# Sort by rarity
@@ -222,15 +247,26 @@ func _create_item_card(item: Dictionary, is_claimed: bool) -> Control:
 	card.set_meta("is_claimed", is_claimed)
 
 	# Icon
-	var icon_path = "res://assets/icons/forged/" + item.item_id + ".png"
+	var resolved_icon = ""
+	# Prefer path from ForgeItemDB (already normalized to res:// if present)
+	if item.has("icon_path") and item.icon_path != "":
+		resolved_icon = item.icon_path
+	else:
+		# Fallback to legacy naming: res://assets/icons/forged/<item_id>.png
+		resolved_icon = "res://assets/icons/forged/%s.png" % item.item_id
+
 	var enhanced_icon_path = "res://assets/icons/enhanced/forged/" + item.item_id + ".png"
 
-	# Try enhanced icon first
+	# Try enhanced icon first, then resolved icon
 	var texture = null
 	if ResourceLoader.exists(enhanced_icon_path):
 		texture = load(enhanced_icon_path)
-	elif ResourceLoader.exists(icon_path):
-		texture = load(icon_path)
+	elif resolved_icon != "" and ResourceLoader.exists(resolved_icon):
+		texture = load(resolved_icon)
+	elif ResourceLoader.exists(resolved_icon + ".import"):
+		texture = load(resolved_icon)  # .import exists, load base path
+	else:
+		print("[BlacksmithForge] Missing icon for %s (path tried: %s)" % [item.item_id, resolved_icon])
 
 	if texture:
 		var icon = TextureRect.new()

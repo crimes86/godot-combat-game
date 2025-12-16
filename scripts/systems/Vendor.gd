@@ -376,9 +376,16 @@ func load_shop_data() -> void:
 		if data.has("armor") and data["armor"] is Array:
 			for armor_data in data["armor"]:
 				if armor_data is Dictionary:
+					# Skip armor not matching vendor's zone (unless vendor_zone is 0 = all zones)
+					var armor_zone = armor_data.get("zone", 1)
+					if vendor_zone > 0 and armor_zone != vendor_zone:
+						continue
+
 					# Validate required armor fields
 					if JSONValidator.validate_required_fields(armor_data, ["name", "slot"], "armor"):
 						armor_for_sale.append(armor_data)
+						var price = armor_data.get("price", 0)
+						print("   Loaded armor: %s (zone %d, price: %d)" % [armor_data.get("name", "Unknown"), armor_zone, price])
 				else:
 					Constants.log_warning("Invalid armor entry in shop_armor.json (not a Dictionary)")
 		else:
@@ -414,6 +421,7 @@ func load_starter_tools() -> void:
 		"description": "An old, weathered axe. Still sharp enough to chop dead wasteland trees.",
 		"type": "tool",
 		"tool_type": "axe",
+		"tier": 0,  # Tier 0 = Basic (Zone 1 trees)
 		"value": 10,
 		"price": 0,  # Free for testing
 		"rarity": "COMMON",
@@ -428,6 +436,7 @@ func load_starter_tools() -> void:
 		"description": "A worn mining pick. Good for breaking rocks and gathering ore.",
 		"type": "tool",
 		"tool_type": "pickaxe",
+		"tier": 0,  # Tier 0 = Basic (Zone 1 rocks)
 		"value": 10,
 		"price": 0,  # Free for testing
 		"rarity": "COMMON",

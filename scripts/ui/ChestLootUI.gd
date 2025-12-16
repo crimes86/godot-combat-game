@@ -213,10 +213,6 @@ func create_loot_slot(item: Dictionary, index: int) -> Control:
 			var speed_bonus = item.get("attack_speed_bonus", 0.0)
 			if speed_bonus != 0:
 				tooltip += "Attack Speed: %+.1f%%\n" % (speed_bonus * 100)
-		if item.has("crit_chance_bonus"):
-			var crit_bonus = item.get("crit_chance_bonus", 0.0)
-			if crit_bonus != 0:
-				tooltip += "Crit Chance: +%.1f%%\n" % (crit_bonus * 100)
 
 	if item.has("defense"):
 		tooltip += "Defense: +%d\n" % item.get("defense", 0)

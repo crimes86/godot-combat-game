@@ -63,10 +63,11 @@ var LEVEL_BANDS: Array:
 ## Minimum spacing between spawned enemies (prevents crowding)
 const MIN_ENEMY_SPACING: float = 80.0
 
-## Wolf pack configuration
-const WOLVES_PER_PACK_MIN: int = 3
-const WOLVES_PER_PACK_MAX: int = 5
-const WOLF_PACK_SPREAD: float = 220.0  # How far wolves spread from pack center (loosened for natural look)
+## Roaming enemy configuration (wolves and spiders in open areas)
+const ROAMING_SPAWN_DISTANCE_MIN: float = 400.0  # Min distance from lava pools
+const ROAMING_SPAWN_DISTANCE_MAX: float = 800.0  # Max distance for open area spawns
+const DIRE_WOLF_CHANCE: float = 0.08  # 8% chance for a roaming wolf to be a dire wolf
+const SPIDER_SPAWN_WEIGHT: float = 0.5  # 50% spiders, 50% wolves in open areas
 
 ## Safe zones - no enemies spawn within these areas
 ## Campfire is at chunk 0 center (CHUNK_SIZE/2, 0)
@@ -353,64 +354,51 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 	var lava_data = get_lava_pools_in_chunk(chunk_key)
 	var monster_pools = lava_data.monster   # Large lake pools (high level cores)
 	var regular_pools = lava_data.regular   # Small isolated pools (low level)
-	var ritual_sites = get_ritual_sites_in_chunk(chunk_key)
+	var all_pools = lava_data.all           # All lava pools for roaming exclusion
 
 	var total_lava = monster_pools.size() + regular_pools.size()
-	print("💀 Chunk %s spawn anchors: %d monster lakes, %d regular pools, %d ritual sites" % [
-		chunk_key, monster_pools.size(), regular_pools.size(), ritual_sites.size()
+	print("💀 Chunk %s spawn anchors: %d monster lakes, %d regular pools" % [
+		chunk_key, monster_pools.size(), regular_pools.size()
 	])
 
-	# Distribution: 45% at monster lakes, 30% at regular pools, 25% at ritual sites
-	# All skeletons MUST be anchored to a landmark (no random wandering)
-	var has_anchors = total_lava > 0 or ritual_sites.size() > 0
+	# Distribution: 45% at monster lakes, 30% at regular pools, 25% roaming wolves/spiders
+	# Skeletons spawn at lava, wolves/spiders roam open areas
+	var has_lava = total_lava > 0
 	var monster_count = int(count * 0.45) if monster_pools.size() > 0 else 0
 	var regular_count = int(count * 0.30) if regular_pools.size() > 0 else 0
-	var ritual_count = int(count * 0.25) if ritual_sites.size() > 0 else 0
+	var roaming_count = int(count * 0.25)  # Always have roaming enemies
 
-	# Redistribute if some anchor types are missing - spread to available anchors
-	if not has_anchors:
-		# No anchors at all - skip spawning in this chunk
-		print("⚠️ Chunk %s has no spawn anchors, skipping enemy spawns" % chunk_key)
-		return
+	# If no lava pools, shift all skeleton spawns to roaming
+	if not has_lava:
+		roaming_count = count
+		monster_count = 0
+		regular_count = 0
 
-	# Calculate remainder and distribute to available anchor types
-	var remainder = count - monster_count - regular_count - ritual_count
+	# Calculate remainder and distribute
+	var remainder = count - monster_count - regular_count - roaming_count
 	if remainder > 0:
-		if monster_pools.size() > 0:
-			monster_count += remainder
-		elif regular_pools.size() > 0:
-			regular_count += remainder
-		elif ritual_sites.size() > 0:
-			ritual_count += remainder
+		roaming_count += remainder
 
 	# Handle missing anchor types by redistributing
 	if monster_pools.size() == 0 and monster_count > 0:
-		if regular_pools.size() > 0 and ritual_sites.size() > 0:
+		if regular_pools.size() > 0:
 			regular_count += monster_count / 2
-			ritual_count += monster_count - monster_count / 2
-		elif regular_pools.size() > 0:
-			regular_count += monster_count
-		elif ritual_sites.size() > 0:
-			ritual_count += monster_count
+			roaming_count += monster_count - monster_count / 2
+		else:
+			roaming_count += monster_count
 		monster_count = 0
 
 	if regular_pools.size() == 0 and regular_count > 0:
 		if monster_pools.size() > 0:
-			monster_count += regular_count
-		elif ritual_sites.size() > 0:
-			ritual_count += regular_count
+			monster_count += regular_count / 2
+			roaming_count += regular_count - regular_count / 2
+		else:
+			roaming_count += regular_count
 		regular_count = 0
-
-	if ritual_sites.size() == 0 and ritual_count > 0:
-		if monster_pools.size() > 0:
-			monster_count += ritual_count
-		elif regular_pools.size() > 0:
-			regular_count += ritual_count
-		ritual_count = 0
 
 	var monster_spawned = 0
 	var regular_spawned = 0
-	var ritual_spawned = 0
+	var roaming_spawned = 0
 
 	# World Y bounds (half chunk height)
 	var world_y_min = -Constants.CHUNK_SIZE / 2
@@ -421,8 +409,9 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 
 		var spawn_pos: Vector2
 		var level: int = 1
+		var spawn_type: String = "skeleton"  # Track what type to spawn
 
-		# Phase 1: Monster lake pools (40%) - Level scaling by distance from center
+		# Phase 1: Monster lake pools (45%) - Level scaling by distance from center
 		# Edge = Level 1-3, Core/Center = Level 4-6
 		if monster_spawned < monster_count and monster_pools.size() > 0:
 			var pool = monster_pools[spawn_rng.randi() % monster_pools.size()]
@@ -449,10 +438,11 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 
 			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
 				monster_spawned += 1
+				spawn_type = "skeleton"
 			else:
 				continue
 
-		# Phase 2: Regular small pools (25%) - Low level only (1-3)
+		# Phase 2: Regular small pools (30%) - Low level only (1-3)
 		elif regular_spawned < regular_count and regular_pools.size() > 0:
 			var pool = regular_pools[spawn_rng.randi() % regular_pools.size()]
 			# Spawn at the edge of small pools - increased distance range
@@ -467,61 +457,54 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 
 			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
 				regular_spawned += 1
+				spawn_type = "skeleton"
 			else:
 				continue
 
-		# Phase 3: Ritual bone sites - Wolf packs spawn here instead of skeletons
-		# Wolves spawn as packs with level based on chunk
-		elif ritual_spawned < ritual_count and ritual_sites.size() > 0:
-			# Skip individual skeleton spawns at ritual sites - wolves are spawned separately
-			ritual_spawned = ritual_count  # Mark as complete, wolves handled below
-			continue
+		# Phase 3: Roaming wolves/spiders in open areas (25%)
+		# These spawn AWAY from lava pools in the open wasteland
+		elif roaming_spawned < roaming_count:
+			# Find a position away from all lava pools
+			spawn_pos = find_open_area_spawn(chunk_min_x, chunk_max_x, world_y_min, world_y_max, all_pools)
+			if spawn_pos == Vector2.ZERO:
+				continue
 
-		# No more phases - all skeletons must be anchored
+			# Determine level based on chunk position
+			if chunk_x == 0:
+				level = spawn_rng.randi_range(1, 5)
+			else:
+				level = spawn_rng.randi_range(5, 9)
+
+			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
+				roaming_spawned += 1
+				spawn_type = "roaming"
+			else:
+				continue
+
+		# All quotas filled
 		else:
-			# All anchor quotas filled, break out
 			break
 
-		# Spawn the enemy
-		var enemy = spawn_single_enemy(spawn_pos, level, chunk_key)
+		# Spawn the enemy based on type
+		var enemy: Node = null
+		if spawn_type == "roaming":
+			# Roaming spawn - spawn wolf or spider
+			enemy = spawn_roaming_enemy(spawn_pos, level, chunk_key)
+		else:
+			# Lava pool spawn - spawn skeleton
+			enemy = spawn_single_enemy(spawn_pos, level, chunk_key)
+
 		if enemy:
 			chunk_data.enemies.append(enemy)
-			spawn_positions.append(spawn_pos)  # Track for spacing checks
+			spawn_positions.append(spawn_pos)
 			spawned += 1
 
-	# Spawn wolf packs at ritual sites (separate from skeleton spawning)
-	# Ritual sites now have size info: {pos: Vector2, size: int (1-3)}
-	# Only spawn wolves at first 8 sites (not all ritual sites have packs)
-	const MAX_WOLF_PACKS_PER_CHUNK: int = 8
-	var wolves_spawned = 0
-	var packs_spawned = 0
-	if ritual_sites.size() > 0:
-		for site in ritual_sites:
-			# Limit wolf packs per chunk
-			if packs_spawned >= MAX_WOLF_PACKS_PER_CHUNK:
-				break
-
-			# Handle both old format (Vector2) and new format (Dictionary with pos/size)
-			var site_pos: Vector2
-			var site_size: int = 2  # Default medium
-			if site is Dictionary:
-				site_pos = site.pos
-				site_size = site.get("size", 2)
-			else:
-				site_pos = site  # Old format compatibility
-
-			var wolves = spawn_wolf_pack(site_pos, chunk_key, chunk_x, site_size)
-			for wolf in wolves:
-				chunk_data.enemies.append(wolf)
-				wolves_spawned += 1
-			packs_spawned += 1
-
-	if spawned > 0 or wolves_spawned > 0:
-		print("✨ Spawned %d skeletons + %d wolves in chunk %s (total: %d)" % [
-			spawned, wolves_spawned, chunk_key, chunk_data.get_alive_count()
+	if spawned > 0:
+		print("✨ Spawned %d enemies in chunk %s (total: %d)" % [
+			spawned, chunk_key, chunk_data.get_alive_count()
 		])
-		print("   📍 Monster lakes: %d (L1-6), Regular pools: %d (L1-3), Wolf packs: %d" % [
-			monster_spawned, regular_spawned, wolves_spawned
+		print("   📍 Monster lakes: %d (L1-6), Regular pools: %d (L1-3), Roaming: %d wolves/spiders" % [
+			monster_spawned, regular_spawned, roaming_spawned
 		])
 
 func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
@@ -564,116 +547,89 @@ func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
 
 	return enemy
 
-func spawn_wolf_pack(center_pos: Vector2, chunk_key: String, chunk_x: int, site_size: int = 2) -> Array:
-	"""Spawn a pack of wolves at a ritual site with level based on chunk and size based on site"""
-	var wolves: Array = []
+func find_open_area_spawn(min_x: float, max_x: float, min_y: float, max_y: float, lava_pools: Array) -> Vector2:
+	"""Find a spawn position in open areas away from lava pools"""
+	var attempts = 0
+	var max_attempts = 20
 
-	# Determine level range based on chunk
-	var min_level: int
-	var max_level: int
+	while attempts < max_attempts:
+		attempts += 1
 
-	if chunk_x == 0:
-		# Noob chunk: mix of low and mid level packs
-		# 50% chance for levels 1-3, 50% chance for levels 3-6
-		if spawn_rng.randf() < 0.5:
-			min_level = 1
-			max_level = 3
-		else:
-			min_level = 3
-			max_level = 6
-	else:
-		# Edge chunks (-1, +1): higher level packs 6-10
-		min_level = 6
-		max_level = 10
+		# Random position within chunk bounds
+		var pos = Vector2(
+			spawn_rng.randf_range(min_x + 100, max_x - 100),
+			spawn_rng.randf_range(min_y + 100, max_y - 100)
+		)
 
-	# Determine pack size based on ritual site size
-	# Size 1 (small): 3-4 wolves
-	# Size 2 (medium): 4-5 wolves
-	# Size 3 (large): 5-7 wolves
-	var pack_size: int
-	match site_size:
-		1:
-			pack_size = spawn_rng.randi_range(3, 4)
-		2:
-			pack_size = spawn_rng.randi_range(4, 5)
-		3:
-			pack_size = spawn_rng.randi_range(5, 7)
-		_:
-			pack_size = spawn_rng.randi_range(WOLVES_PER_PACK_MIN, WOLVES_PER_PACK_MAX)
-
-	# Generate unique pack ID
-	var pack_id = "pack_%s_%d" % [chunk_key.replace(",", "_"), randi()]
-
-	# Pick a consistent level for the pack (with slight variation)
-	var base_level = spawn_rng.randi_range(min_level, max_level)
-
-	# Track positions for spacing
-	var pack_positions: Array[Vector2] = []
-
-	for i in range(pack_size):
-		# First wolf is alpha
-		var is_alpha = (i == 0)
-
-		# Find position for this wolf
-		var wolf_pos: Vector2
-		var attempts = 0
-		var max_attempts = 10
-
-		while attempts < max_attempts:
-			attempts += 1
-			if is_alpha:
-				# Alpha at center with small offset
-				wolf_pos = center_pos + Vector2(
-					spawn_rng.randf_range(-30, 30),
-					spawn_rng.randf_range(-30, 30)
-				)
-			else:
-				# Pack members spread around alpha (loosened spacing for natural look)
-				var angle = spawn_rng.randf() * TAU
-				var distance = spawn_rng.randf_range(100, WOLF_PACK_SPREAD)
-				wolf_pos = center_pos + Vector2(cos(angle), sin(angle)) * distance
-
-			# Check spacing from other pack members (loosened from 50 to 80)
-			var spaced = true
-			for existing_pos in pack_positions:
-				if wolf_pos.distance_to(existing_pos) < 80:
-					spaced = false
-					break
-
-			if spaced and is_valid_spawn_position(wolf_pos):
+		# Check distance from all lava pools
+		var too_close = false
+		for pool in lava_pools:
+			var pool_pos = pool.pos if pool is Dictionary else pool
+			var pool_radius = pool.radius if pool is Dictionary else 100.0
+			var min_distance = pool_radius + ROAMING_SPAWN_DISTANCE_MIN
+			if pos.distance_to(pool_pos) < min_distance:
+				too_close = true
 				break
 
-		# Determine wolf level (alpha is always at max, others vary slightly)
-		var wolf_level: int
-		if is_alpha:
-			wolf_level = base_level
-		else:
-			wolf_level = max(1, base_level + spawn_rng.randi_range(-1, 0))  # Slightly lower than alpha
+		if not too_close:
+			return pos
 
-		# Spawn the wolf
-		var wolf = spawn_single_wolf(wolf_pos, wolf_level, chunk_key, pack_id, is_alpha)
-		if wolf:
-			wolves.append(wolf)
-			pack_positions.append(wolf_pos)
-
-	# Set up pack formation references (alpha is first wolf)
-	if wolves.size() > 1:
-		var alpha = wolves[0]
-		for i in range(1, wolves.size()):
-			var follower = wolves[i]
-			if follower.has_method("setup_pack_formation"):
-				follower.setup_pack_formation(alpha, i)
-
-	if wolves.size() > 0:
-		print("🐺 Spawned wolf pack '%s' with %d wolves (L%d-%d) at ritual site" % [
-			pack_id, wolves.size(), min_level, max_level
-		])
-
-	return wolves
+	return Vector2.ZERO
 
 
-func spawn_single_wolf(pos: Vector2, level: int, chunk_key: String, pack_id: String, is_alpha: bool) -> Node:
-	"""Spawn a single wolf at position"""
+func spawn_roaming_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
+	"""Spawn a roaming wolf or spider at position"""
+	# Decide between wolf and spider
+	var spawn_spider = spawn_rng.randf() < SPIDER_SPAWN_WEIGHT
+
+	if spawn_spider:
+		return spawn_single_spider(pos, level, chunk_key)
+	else:
+		# Check for rare dire wolf
+		var is_dire = spawn_rng.randf() < DIRE_WOLF_CHANCE
+		return spawn_single_wolf_roaming(pos, level, chunk_key, is_dire)
+
+
+func spawn_single_spider(pos: Vector2, level: int, chunk_key: String) -> Node:
+	"""Spawn a single spider at position"""
+	var spider_scene = load("res://scenes/enemies/spider.tscn")
+	if not spider_scene:
+		push_error("Failed to load spider scene!")
+		return null
+
+	var spider = spider_scene.instantiate()
+	spider.enemy_level = level
+
+	# Random spider variant (1-11)
+	spider.spider_variant = spawn_rng.randi_range(1, 11)
+
+	# Generate unique name
+	var spider_name = "Spider_%s_%d" % [chunk_key.replace(",", "_"), randi()]
+	spider.name = spider_name
+
+	# Set position BEFORE adding to tree
+	spider.position = pos
+
+	# Add to world
+	game_world.add_child(spider)
+
+	# Register with network enemy manager for multiplayer sync
+	if network_enemy_manager:
+		network_enemy_manager.register_enemy(spider)
+
+	# Connect death signal for respawn tracking
+	if spider.has_signal("died"):
+		spider.died.connect(_on_roaming_enemy_died.bind(spider, chunk_key, "spider"))
+
+	# Connect corpse loot signal
+	if spider.has_signal("corpse_clicked") and game_world.has_method("_on_corpse_clicked"):
+		spider.corpse_clicked.connect(game_world._on_corpse_clicked)
+
+	return spider
+
+
+func spawn_single_wolf_roaming(pos: Vector2, level: int, chunk_key: String, is_dire: bool = false) -> Node:
+	"""Spawn a single roaming wolf at position (no pack behavior)"""
 	var wolf_scene = load("res://scenes/enemies/wolf.tscn")
 	if not wolf_scene:
 		push_error("Failed to load wolf scene!")
@@ -681,11 +637,20 @@ func spawn_single_wolf(pos: Vector2, level: int, chunk_key: String, pack_id: Str
 
 	var wolf = wolf_scene.instantiate()
 	wolf.enemy_level = level
-	wolf.pack_id = pack_id
-	wolf.pack_alpha = is_alpha
+
+	# Roaming wolves have no pack - they're lone wolves
+	wolf.pack_id = ""
+	wolf.pack_alpha = false
+
+	# Dire wolves are stronger and have special visual
+	if is_dire:
+		wolf.enemy_level = level + 3  # Dire wolves are +3 levels
+		wolf.max_health *= 2.0  # Double health
+		wolf.base_damage *= 1.5  # 50% more damage
+		# The wolf script can check for dire status via level/stats
 
 	# Generate unique name
-	var wolf_name = "Wolf_%s_%d" % [chunk_key.replace(",", "_"), randi()]
+	var wolf_name = "%s_%s_%d" % ["DireWolf" if is_dire else "Wolf", chunk_key.replace(",", "_"), randi()]
 	wolf.name = wolf_name
 
 	# Set position BEFORE adding to tree
@@ -700,31 +665,33 @@ func spawn_single_wolf(pos: Vector2, level: int, chunk_key: String, pack_id: Str
 
 	# Connect death signal for respawn tracking
 	if wolf.has_signal("died"):
-		wolf.died.connect(_on_wolf_died.bind(wolf, chunk_key, pack_id))
+		wolf.died.connect(_on_roaming_enemy_died.bind(wolf, chunk_key, "wolf"))
 
 	# Connect corpse loot signal
 	if wolf.has_signal("corpse_clicked") and game_world.has_method("_on_corpse_clicked"):
 		wolf.corpse_clicked.connect(game_world._on_corpse_clicked)
 
+	if is_dire:
+		print("🐺💀 Spawned DIRE WOLF at L%d in chunk %s!" % [wolf.enemy_level, chunk_key])
+
 	return wolf
 
 
-func _on_wolf_died(wolf: Node, chunk_key: String, pack_id: String) -> void:
-	"""Called when a wolf dies - track for pack respawn"""
+func _on_roaming_enemy_died(enemy: Node, chunk_key: String, enemy_type: String) -> void:
+	"""Called when a roaming wolf or spider dies - track for respawn"""
 	if not chunk_enemies.has(chunk_key):
 		return
 
 	var chunk_data = chunk_enemies[chunk_key]
 
-	# Record death for respawn (wolves respawn as packs)
+	# Record death for respawn
 	if respawn_time > 0:
 		chunk_data.dead_enemies.append({
-			"position": wolf.global_position,
-			"level": wolf.enemy_level,
+			"position": enemy.global_position,
+			"level": enemy.enemy_level,
 			"death_time": Time.get_ticks_msec() / 1000.0,
-			"enemy_type": "wolf",
-			"pack_id": pack_id,
-			"is_alpha": wolf.pack_alpha
+			"enemy_type": enemy_type,
+			"is_roaming": true
 		})
 
 
@@ -954,12 +921,27 @@ func check_respawns() -> void:
 				var respawn_pos = find_spaced_respawn_position(dead_data.position, existing_positions)
 
 				if respawn_pos != Vector2.ZERO:
-					var enemy = spawn_single_enemy(respawn_pos, dead_data.level, chunk_key)
+					# Spawn the correct enemy type
+					var enemy: Node = null
+					var enemy_type = dead_data.get("enemy_type", "skeleton")
+					var is_roaming = dead_data.get("is_roaming", false)
+
+					if is_roaming:
+						# Roaming enemies respawn as a random roaming type
+						enemy = spawn_roaming_enemy(respawn_pos, dead_data.level, chunk_key)
+					elif enemy_type == "spider":
+						enemy = spawn_single_spider(respawn_pos, dead_data.level, chunk_key)
+					elif enemy_type == "wolf":
+						enemy = spawn_single_wolf_roaming(respawn_pos, dead_data.level, chunk_key, false)
+					else:
+						# Default: skeleton
+						enemy = spawn_single_enemy(respawn_pos, dead_data.level, chunk_key)
+
 					if enemy:
 						chunk_data.enemies.append(enemy)
 						existing_positions.append(respawn_pos)  # Track for next respawn in same batch
-						print("♻️ Enemy respawned in chunk %s at (%d, %d)" % [
-							chunk_key, int(respawn_pos.x), int(respawn_pos.y)
+						print("♻️ %s respawned in chunk %s at (%d, %d)" % [
+							enemy_type.capitalize(), chunk_key, int(respawn_pos.x), int(respawn_pos.y)
 						])
 				else:
 					# Couldn't find valid position, delay respawn

@@ -593,13 +593,32 @@ func refresh_inventory() -> void:
 					var speed_bonus = item.get("attack_speed_bonus", 0.0)
 					if speed_bonus != 0:
 						tooltip += "\nAttack Speed: %+.1f%%" % (speed_bonus * 100)
-				if item.has("crit_chance_bonus"):
-					var crit_bonus = item.get("crit_chance_bonus", 0.0)
-					if crit_bonus != 0:
-						tooltip += "\nCrit Chance: +%.1f%%" % (crit_bonus * 100)
 
 			if item.has("defense"):
 				tooltip += "\nDefense: +%d" % item.get("defense", 0)
+
+			# Display stat bonuses (STR, VIT, DEX, AGI, INT, WIS)
+			if item.has("stat_bonuses"):
+				var bonuses = item.get("stat_bonuses", {})
+				var stat_parts = []
+				if bonuses.get("str", 0) > 0:
+					stat_parts.append("+%d STR" % bonuses.get("str"))
+				if bonuses.get("vit", 0) > 0:
+					stat_parts.append("+%d VIT" % bonuses.get("vit"))
+				if bonuses.get("dex", 0) > 0:
+					stat_parts.append("+%d DEX" % bonuses.get("dex"))
+				if bonuses.get("agi", 0) > 0:
+					stat_parts.append("+%d AGI" % bonuses.get("agi"))
+				if bonuses.get("int", 0) > 0:
+					stat_parts.append("+%d INT" % bonuses.get("int"))
+				if bonuses.get("wis", 0) > 0:
+					stat_parts.append("+%d WIS" % bonuses.get("wis"))
+				if stat_parts.size() > 0:
+					tooltip += "\n" + ", ".join(stat_parts)
+
+			# Display accessory bonuses
+			if item.has("hp_bonus"):
+				tooltip += "\nHP: +%d" % item.get("hp_bonus", 0)
 
 			if item.has("value"):
 				tooltip += "\nValue: %d G" % item.get("value", 0)

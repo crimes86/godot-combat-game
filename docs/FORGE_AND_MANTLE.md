@@ -1548,6 +1548,12 @@ python assets/icons/forged/icon_standards.py --preview
 
 The preview grid (`assets/icons/forged/preview_grid.png`) shows all icons in a shop-style layout. Regenerate after adding new icons to verify visual consistency.
 
+### Armor Icons from LPC sprites (house standard)
+- Source: south-facing first frame of `walk.png` (tile 0,0, 64x64).
+- Crop to the alpha bbox, then add ~2px transparent padding so shoulders aren’t clipped.
+- Output: 64x64 to `assets/icons/forged/armor/{item_id}.png` and 256px nearest-neighbor upscale to `assets/icons/enhanced/forged/armor/{item_id}.png`.
+- Apply to all chest pieces for consistent fill (e.g., ironclad_armor, grandmaster_armor, ashen_armor, raynor_marine_armor) and future armor items.
+
 ---
 
 ## Implementation Checklist

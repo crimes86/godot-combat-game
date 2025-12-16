@@ -25,8 +25,8 @@ const WEAPON_DATA = {
 		"range_mult": 1.0  # Standard range (100px)
 	},
 	"dagger": {
-		"slash_fps": 80.0,  # Ultra-fast (6 frames = 0.075s)
-		"walk_fps": 12.0,
+		"slash_fps": 35.0,  # Slightly slower for visibility
+		"walk_fps": 11.0,
 		"idle_fps": 5.0,
 		"style": "fast",
 		"range_mult": 0.75  # Short range (75px)

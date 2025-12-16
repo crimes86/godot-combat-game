@@ -1,0 +1,72 @@
+[gd_scene load_steps=12 format=3 uid="uid://dw3nhc5pcw5ca"]
+
+[ext_resource type="Texture2D" path="res://assets/environment/forge/props/anvil_large.png" id="1_anvil_lg"]
+[ext_resource type="Texture2D" path="res://assets/environment/forge/props/anvil_medium.png" id="2_anvil_md"]
+[ext_resource type="Texture2D" path="res://assets/environment/forge/props/coal_pile_large.png" id="3_coal_lg"]
+[ext_resource type="Texture2D" path="res://assets/environment/forge/props/coal_pile_medium.png" id="4_coal_md"]
+[ext_resource type="Texture2D" path="res://assets/environment/forge/props/water_trough_large.png" id="5_trough"]
+[ext_resource type="Texture2D" path="res://assets/environment/forge/props/bellows_1.png" id="6_bellows"]
+[ext_resource type="Texture2D" path="res://assets/environment/forge/props/storage_chest.png" id="7_chest"]
+[ext_resource type="Texture2D" path="res://assets/environment/forge/props/tool_rack_1.png" id="8_rack1"]
+[ext_resource type="Texture2D" path="res://assets/environment/forge/props/tool_rack_2.png" id="9_rack2"]
+[ext_resource type="Texture2D" path="res://assets/environment/forge/props/workbench_vice.png" id="10_workbench"]
+
+[node name="BlacksmithProps" type="Node2D"]
+
+[node name="CoalPiles" type="Node2D" parent="."]
+
+[node name="CoalPileLeft" type="Sprite2D" parent="CoalPiles"]
+position = Vector2(-180, -220)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("3_coal_lg")
+
+[node name="CoalPileRight" type="Sprite2D" parent="CoalPiles"]
+position = Vector2(180, -200)
+scale = Vector2(1.3, 1.3)
+texture = ExtResource("4_coal_md")
+
+[node name="Anvils" type="Node2D" parent="."]
+
+[node name="AnvilLeft" type="Sprite2D" parent="Anvils"]
+position = Vector2(-200, 180)
+scale = Vector2(2.0, 2.0)
+texture = ExtResource("1_anvil_lg")
+
+[node name="AnvilRight" type="Sprite2D" parent="Anvils"]
+position = Vector2(200, 200)
+scale = Vector2(1.8, 1.8)
+texture = ExtResource("2_anvil_md")
+
+[node name="WaterTrough" type="Sprite2D" parent="."]
+position = Vector2(280, -80)
+scale = Vector2(1.8, 1.8)
+texture = ExtResource("5_trough")
+
+[node name="Bellows" type="Sprite2D" parent="."]
+position = Vector2(-280, -60)
+scale = Vector2(2.0, 2.0)
+texture = ExtResource("6_bellows")
+
+[node name="Workstations" type="Node2D" parent="."]
+
+[node name="StorageChest" type="Sprite2D" parent="Workstations"]
+position = Vector2(-280, 280)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("7_chest")
+
+[node name="Workbench" type="Sprite2D" parent="Workstations"]
+position = Vector2(0, 320)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("10_workbench")
+
+[node name="ToolRacks" type="Node2D" parent="."]
+
+[node name="ToolRack1" type="Sprite2D" parent="ToolRacks"]
+position = Vector2(-320, 120)
+scale = Vector2(1.3, 1.3)
+texture = ExtResource("8_rack1")
+
+[node name="ToolRack2" type="Sprite2D" parent="ToolRacks"]
+position = Vector2(320, 140)
+scale = Vector2(1.3, 1.3)
+texture = ExtResource("9_rack2")

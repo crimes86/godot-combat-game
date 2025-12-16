@@ -417,3 +417,12 @@ Check these docs:
 - `ACHIEVEMENT_VERIFICATION.md` - How achievements are validated
 
 The backend serves the data. Your assets bring it to life.
+## Forged Dagger Asset Prep (LPC)
+Use these exact layouts so the player loader slices correctly:
+- Walk/idle: 9 frames per row, 4 rows, 64x64 frames → 576x256. Row order: up, left, down, right.
+- Slash (attacks): 6 frames per row, 4 rows, 192x192 frames → 1152x768. For small blades, scale content to ~75% and center it inside each 192px frame; keep the canvas 192x192.
+- Thrust (if present): 8 frames per row, 4 rows, 64x64 frames → 512x256.
+- Hurt: 6 frames, 64x64 → 384x64.
+- Paths: place sheets at `assets/equipment/weapons/dagger/{walk,slash,thrust,hurt}.png` (and keep copies in any subfolders you reference).
+- Icons: crop/zoom a representative walk frame; save 64x64 + enhanced 256x256 to `assets/icons/forged/weapons/` and `assets/icons/enhanced/forged/weapons/`.
+- Data flags: set `sprite_folder`, `has_sprites: true`, and `has_icon: true` in items.json. Restart Godot to regenerate `.import` files after changes.

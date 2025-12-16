@@ -207,8 +207,8 @@ func _show_account_info(username: String) -> void:
 	text += "[b]XP:[/b] %d\n" % data.get("xp", 0)
 	text += "[b]Gold:[/b] %d\n" % data.get("gold", 0)
 	text += "\n[b]Stats:[/b]\n"
-	text += "  STR: %d  AGI: %d\n" % [data.get("strength", 10), data.get("agility", 10)]
-	text += "  VIT: %d  LUCK: %d\n" % [data.get("vitality", 10), data.get("luck", 10)]
+	text += "  STR: %d  AGI: %d  DEX: %d\n" % [data.get("strength", 10), data.get("agility", 10), data.get("dexterity", 10)]
+	text += "  INT: %d  WIS: %d  VIT: %d\n" % [data.get("intelligence", 10), data.get("wisdom", 10), data.get("vitality", 10)]
 	text += "\n[b]Position:[/b] (%.0f, %.0f)\n" % [data.get("position_x", 0), data.get("position_y", 0)]
 	text += "[b]HP:[/b] %.0f / %.0f\n" % [data.get("current_hp", 100), data.get("max_hp", 100)]
 
@@ -273,7 +273,7 @@ func _show_help() -> void:
 [b]resetpos[/b] - Reset to campfire spawn (0, 0)
 [b]setgold <amount>[/b] - Set gold amount
 [b]setlevel <level>[/b] - Set character level
-[b]setstats <str> <agi> <vit> <luck>[/b] - Set all stats
+[b]setstats <str> <agi> <dex> <int> <wis> <vit>[/b] - Set all stats
 [b]ban[/b] / [b]unban[/b] - Toggle ban status
 [b]forceoffline[/b] - Force account offline (fix stuck logins)
 [b]delete[/b] - Delete selected account"""
@@ -343,15 +343,17 @@ func _cmd_setstats(args: Array) -> void:
 	if selected_username.is_empty():
 		_log("[color=red]Select an account first[/color]")
 		return
-	if args.size() < 4:
-		_log("[color=red]Usage: setstats <str> <agi> <vit> <luck>[/color]")
+	if args.size() < 6:
+		_log("[color=red]Usage: setstats <str> <agi> <dex> <int> <wis> <vit>[/color]")
 		return
 
 	var data = DatabaseManager.players_data[selected_username]
 	data["strength"] = int(args[0])
 	data["agility"] = int(args[1])
-	data["vitality"] = int(args[2])
-	data["luck"] = int(args[3])
+	data["dexterity"] = int(args[2])
+	data["intelligence"] = int(args[3])
+	data["wisdom"] = int(args[4])
+	data["vitality"] = int(args[5])
 	DatabaseManager.save_database()
 
 	_log("[color=green]Updated %s stats[/color]" % selected_username)

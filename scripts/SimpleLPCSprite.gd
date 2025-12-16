@@ -15,6 +15,7 @@ class_name SimpleLPCSprite
 # DEBUG SETTINGS - Set to true to enable verbose logging
 # ============================================
 const DEBUG_SPRITE_SETUP: bool = false  # Debug sprite/animation setup
+const DEBUG_DAGGER: bool = false  # Focused dagger/psi-blade logging
 
 # Direction to row mapping (LPC standard)
 const DIRECTION_ROWS = {
@@ -31,6 +32,10 @@ var current_direction := "south"
 # Thrust = 8 frames (512px), Slash = 6 frames (384px)
 static func get_attack_frame_count(img: Image) -> int:
 	return 8 if img.get_width() >= 500 else 6
+
+func _dagger_debug(msg: String) -> void:
+	if DEBUG_DAGGER:
+		print("[DAGGER DEBUG] ", msg)
 
 static func get_attack_frame_indices(num_frames: int) -> Array:
 	var indices = []
@@ -210,6 +215,11 @@ func setup_lpc_sprite(
 
 	# Get weapon-specific slash FPS for ALL body parts to sync animations
 	var slash_fps = WeaponAnimationDataFactory.get_slash_fps(weapon_type)
+
+	if weapon_type == "dagger":
+		var walk_size_dbg = walk_tex.get_size() if walk_tex else Vector2.ZERO
+		var slash_size_dbg = slash_tex.get_size() if slash_tex else Vector2.ZERO
+		_dagger_debug("setup weapon=%s type=%s walk_size=%s slash_size=%s slash_fps=%.2f" % [current_weapon_name, weapon_type, walk_size_dbg, slash_size_dbg, slash_fps])
 
 	# Create walk animations using Image.blit_rect() like skeletons do
 	if walk_tex:
@@ -523,7 +533,11 @@ func setup_lpc_sprite(
 		weapon_sprite.centered = true
 		weapon_sprite.z_index = 9  # Draw weapon on top (above head armor z=8)
 		weapon_sprite.sprite_frames = SpriteFrames.new()
-
+		# Apply per-weapon tinting (keep most weapons default white)
+		if current_weapon_name == "zeratul_warp_blade":
+			weapon_sprite.modulate = Color(1.08, 0.7, 1.0, 1.0)  # light magenta/pink shift
+		else:
+			weapon_sprite.modulate = Color(1, 1, 1, 1)
 		# Don't set a static offset here - we'll adjust it per animation type
 
 		# Add attack animations if provided (slash for melee, shoot for guns/bows)
@@ -576,6 +590,9 @@ func setup_lpc_sprite(
 				# Calculate tile size dynamically from sprite dimensions
 				var slash_tile_size = int(slash_size.x / num_attack_frames)
 
+				if weapon_type == "dagger":
+					_dagger_debug("build slash frames weapon=%s size=%s frames=%d tile=%d fps=%.2f" % [current_weapon_name, slash_size, num_attack_frames, slash_tile_size, slash_fps])
+
 				# Build frame indices based on frame count
 				var frame_indices = []
 				for i in range(num_attack_frames):
@@ -617,10 +634,16 @@ func setup_lpc_sprite(
 			# LPC walk sprites are 9 columns x 4 rows
 			# Calculate tile size dynamically (64px standard, 128px for oversize weapons)
 			var walk_tile_size = int(walk_size.x / 9)
+			# Zeratul warp blade uses a 13-column (832px wide) sheet; force 64px tiles to avoid scrolling
+			if current_weapon_name == "zeratul_warp_blade":
+				walk_tile_size = 64
 
 			# Get weapon-specific walk and idle FPS
 			var walk_fps = WeaponAnimationDataFactory.get_walk_fps(weapon_type)
 			var idle_fps = WeaponAnimationDataFactory.get_idle_fps(weapon_type)
+
+			if weapon_type == "dagger":
+				_dagger_debug("build walk frames weapon=%s size=%s tile=%d walk_fps=%.2f idle_fps=%.2f" % [current_weapon_name, walk_size, walk_tile_size, walk_fps, idle_fps])
 
 			for dir_name in DIRECTION_ROWS.keys():
 				var row = DIRECTION_ROWS[dir_name]
@@ -1080,6 +1103,19 @@ func play_lpc_animation(anim_name: String, direction: String):
 		anim_name = "idle"
 		anim_key = "idle_" + direction
 
+	if current_weapon_type == "dagger" and weapon_sprite:
+		var has_key = weapon_sprite.sprite_frames.has_animation(weapon_anim_key)
+		var has_anim = weapon_sprite.sprite_frames.has_animation(weapon_anim_name)
+		var key_count = -1
+		var anim_count = -1
+		if has_key:
+			key_count = weapon_sprite.sprite_frames.get_frame_count(weapon_anim_key)
+		if has_anim:
+			anim_count = weapon_sprite.sprite_frames.get_frame_count(weapon_anim_name)
+		_dagger_debug("play_lpc_animation anim=%s dir=%s weapon=%s key=%s(%d) anim=%s(%d)" % [
+			anim_name, direction, current_weapon_name, weapon_anim_key, key_count, weapon_anim_name, anim_count
+		])
+
 	if sprite_frames and sprite_frames.has_animation(anim_key):
 		play(anim_key)
 	elif sprite_frames and sprite_frames.has_animation(anim_name):
@@ -1209,7 +1245,9 @@ func play_lpc_animation(anim_name: String, direction: String):
 			weapon_sprite.play(weapon_anim_key)
 			weapon_sprite.visible = true
 			# Adjust weapon z-index based on direction and animation
-			if direction == "north":
+			if current_weapon_name == "kerrigan_psi_blade":
+				weapon_sprite.z_index = 9  # Always on top for Kerrigan blade
+			elif direction == "north":
 				weapon_sprite.z_index = -1  # Behind character when facing up
 			elif anim_name == "walk" and current_weapon_type == "spear" and direction in ["east", "west"]:
 				weapon_sprite.z_index = -1  # Spear goes under body when walking sideways
@@ -1244,9 +1282,29 @@ func play_lpc_animation(anim_name: String, direction: String):
 				elif current_weapon_name in ["saw_cleaver", "king_slayer"]:
 					if direction == "north":
 						attack_offset = Vector2(0, -5)  # Up 5px when attacking north
+				elif current_weapon_type == "dagger":
+					# Keep dagger behind the body when swinging sideways
+					if direction in ["east", "west"]:
+						if current_weapon_name == "kerrigan_psi_blade":
+							weapon_sprite.z_index = 9  # keep in front for Kerrigan blade
+							attack_offset = Vector2(-6 if direction == "east" else 6, 2)
+						else:
+							weapon_sprite.z_index = -1
+							attack_offset = Vector2(-6 if direction == "east" else 6, 2)
+					else:
+						attack_offset = Vector2(0, 0)
+					_dagger_debug("attack anim=%s dir=%s weapon=%s z=%d offset=%s has_anim=%s" % [
+						weapon_anim_key, direction, current_weapon_name, weapon_sprite.z_index, attack_offset,
+						weapon_sprite.sprite_frames.has_animation(weapon_anim_key)
+					])
 				# Spear and other standard 64x64 weapons use no offset
 
 				weapon_sprite.offset = attack_offset
+				if current_weapon_type == "dagger" and weapon_sprite.sprite_frames.has_animation(weapon_anim_key):
+					var tex = weapon_sprite.sprite_frames.get_frame_texture(weapon_anim_key, 0)
+					_dagger_debug("attack frame tex=%s size=%s z=%d offset=%s dir=%s" % [
+						tex, tex and tex.get_size(), weapon_sprite.z_index, attack_offset, direction
+					])
 			else:
 				# Walk/idle animations - weapon sprites should align with character
 				var walk_offset = Vector2(0, 0)
@@ -1254,6 +1312,14 @@ func play_lpc_animation(anim_name: String, direction: String):
 				if current_weapon_name in ["saw_cleaver", "king_slayer"]:
 					if direction == "north":
 						walk_offset = Vector2(0, -10)  # Up 10px when walking/idling north
+				if current_weapon_type == "dagger" and direction in ["east", "west"]:
+					if current_weapon_name == "kerrigan_psi_blade":
+						weapon_sprite.z_index = 9  # keep in front for Kerrigan blade
+					else:
+						weapon_sprite.z_index = -1  # dagger behind body when walking sideways
+					_dagger_debug("walk dir=%s weapon=%s z=%d offset=%s anim=%s has_anim=%s" % [
+						direction, current_weapon_name, weapon_sprite.z_index, walk_offset, weapon_anim_key, weapon_sprite.sprite_frames.has_animation(weapon_anim_name)
+					])
 				weapon_sprite.offset = walk_offset
 		elif weapon_sprite.sprite_frames.has_animation(weapon_anim_name):
 			# Animation without directions (like hurt)

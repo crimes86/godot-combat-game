@@ -1231,9 +1231,10 @@ func _cmd_info() -> void:
 	var data = DatabaseManager.players_data[_selected_account]
 	add_system_message("=== %s ===" % _selected_account)
 	add_system_message("Level: %d | Gold: %d" % [data.get("level", 1), data.get("gold", 0)])
-	add_system_message("Stats: STR %d | AGI %d | VIT %d | LUCK %d" % [
+	add_system_message("Stats: STR %d | AGI %d | DEX %d | INT %d | WIS %d | VIT %d" % [
 		data.get("strength", 10), data.get("agility", 10),
-		data.get("vitality", 10), data.get("luck", 10)
+		data.get("dexterity", 10), data.get("intelligence", 10),
+		data.get("wisdom", 10), data.get("vitality", 10)
 	])
 	add_system_message("Position: (%.0f, %.0f)" % [data.get("position_x", 0), data.get("position_y", 0)])
 	add_system_message("Status: %s%s" % [
@@ -1311,12 +1312,12 @@ func _cmd_setstats(args: Array) -> void:
 	if _selected_account.is_empty():
 		add_system_message("[Error] No account selected. Use /select <username>")
 		return
-	if args.size() < 4:
-		add_system_message("[Error] Usage: /setstats <str> <agi> <vit> <luck>")
+	if args.size() < 6:
+		add_system_message("[Error] Usage: /setstats <str> <agi> <dex> <int> <wis> <vit>")
 		return
 
 	# Validate numeric inputs
-	for i in range(4):
+	for i in range(6):
 		if not args[i].is_valid_int():
 			add_system_message("[Error] All stats must be whole numbers")
 			return
@@ -1324,8 +1325,10 @@ func _cmd_setstats(args: Array) -> void:
 	var data = DatabaseManager.players_data[_selected_account]
 	data["strength"] = clampi(int(args[0]), MIN_STAT, MAX_STAT)
 	data["agility"] = clampi(int(args[1]), MIN_STAT, MAX_STAT)
-	data["vitality"] = clampi(int(args[2]), MIN_STAT, MAX_STAT)
-	data["luck"] = clampi(int(args[3]), MIN_STAT, MAX_STAT)
+	data["dexterity"] = clampi(int(args[2]), MIN_STAT, MAX_STAT)
+	data["intelligence"] = clampi(int(args[3]), MIN_STAT, MAX_STAT)
+	data["wisdom"] = clampi(int(args[4]), MIN_STAT, MAX_STAT)
+	data["vitality"] = clampi(int(args[5]), MIN_STAT, MAX_STAT)
 	DatabaseManager.save_database()
 	add_system_message("Updated %s stats (clamped to %d-%d)" % [_selected_account, MIN_STAT, MAX_STAT])
 

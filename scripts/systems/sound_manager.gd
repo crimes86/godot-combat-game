@@ -160,6 +160,12 @@ var transition_music: AudioStream = null  # Scene transition music
 var claimsequence_music: AudioStream = null  # Reward claim sequence music
 var special_music_player: AudioStreamPlayer = null  # Player for special music
 
+# Trading Hub music playlist (separate from zone music)
+var trading_hub_tracks: Array[AudioStream] = []
+var trading_hub_track_index: int = 0
+var _playing_hub_music: bool = false  # Flag to track if playing hub or zone music
+var _music_fade_tween: Tween = null  # Store fade tween so we can cancel it
+
 # Mute state
 var sfx_muted: bool = false
 var music_muted: bool = false
@@ -635,6 +641,20 @@ func _load_real_sounds() -> void:
 		print("  ✅ Loaded game_loop_2.ogg (Track 2: The Wasteland's Whisper)")
 
 	print("  📊 Loaded %d music tracks" % music_tracks.size())
+
+	# Load Trading Hub music playlist
+	print("  🏠 Loading Trading Hub music...")
+	var hub_track1 = load("res://assets/audio/music/trading_hub_1.mp3")
+	if hub_track1:
+		trading_hub_tracks.append(hub_track1)
+		print("  ✅ Loaded trading_hub_1.mp3 (The Cavern's Embrace)")
+
+	var hub_track2 = load("res://assets/audio/music/trading_hub_2.mp3")
+	if hub_track2:
+		trading_hub_tracks.append(hub_track2)
+		print("  ✅ Loaded trading_hub_2.mp3 (The Ember's Glow)")
+
+	print("  📊 Loaded %d trading hub tracks" % trading_hub_tracks.size())
 
 	# Load special music tracks (transitions, events)
 	print("  🎬 Loading special music tracks...")
@@ -1959,6 +1979,7 @@ func play_game_music(volume_db: float = -15.0) -> void:
 
 	music_volume_db = volume_db
 	current_track_index = 0
+	_playing_hub_music = false  # Mark that we're playing zone music, not hub
 
 	# Create music player if needed
 	if not music_player:
@@ -1996,21 +2017,81 @@ func _play_current_track() -> void:
 
 func _on_music_track_finished() -> void:
 	"""Called when a track finishes - advance to next track"""
-	current_track_index = (current_track_index + 1) % music_tracks.size()
-	_play_current_track()
+	if _playing_hub_music:
+		# Playing trading hub music - use hub playlist
+		trading_hub_track_index = (trading_hub_track_index + 1) % trading_hub_tracks.size()
+		_play_trading_hub_track()
+	else:
+		# Playing zone music - use zone playlist
+		current_track_index = (current_track_index + 1) % music_tracks.size()
+		_play_current_track()
 
 ## Stop the game music with fade-out
 func stop_game_music() -> void:
 	if not music_player or not music_player.playing:
 		return
 
-	var tween = create_tween()
-	tween.tween_property(music_player, "volume_db", -40.0, MUSIC_FADE_DURATION)
-	tween.tween_callback(music_player.stop)
+	# Kill any existing fade tween first
+	if _music_fade_tween and _music_fade_tween.is_valid():
+		_music_fade_tween.kill()
+
+	_music_fade_tween = create_tween()
+	_music_fade_tween.tween_property(music_player, "volume_db", -40.0, MUSIC_FADE_DURATION)
+	_music_fade_tween.tween_callback(music_player.stop)
 
 ## Check if game music is currently playing
 func is_game_music_playing() -> bool:
 	return music_player and music_player.playing
+
+## Start playing Trading Hub music playlist
+func play_trading_hub_music(volume_db: float = -15.0) -> void:
+	if trading_hub_tracks.is_empty():
+		push_warning("No trading hub music tracks loaded!")
+		return
+
+	music_volume_db = volume_db
+	trading_hub_track_index = 0
+	_playing_hub_music = true  # Mark that we're playing hub music
+
+	# Create music player if needed
+	if not music_player:
+		music_player = AudioStreamPlayer.new()
+		add_child(music_player)
+		music_player.finished.connect(_on_music_track_finished)
+
+	# Stop current music if playing something else
+	if music_player.playing:
+		music_player.stop()
+
+	# Kill any running fade-out tween that might interfere
+	if _music_fade_tween and _music_fade_tween.is_valid():
+		_music_fade_tween.kill()
+		_music_fade_tween = null
+
+	_play_trading_hub_track()
+
+func _play_trading_hub_track() -> void:
+	"""Play the current trading hub track"""
+	if trading_hub_tracks.is_empty() or not music_player:
+		return
+
+	var track = trading_hub_tracks[trading_hub_track_index]
+	music_player.stream = track
+	music_player.volume_db = -80.0 if music_muted else music_volume_db
+
+	# Don't loop individual tracks
+	if track is AudioStreamMP3:
+		(track as AudioStreamMP3).loop = false
+	elif track is AudioStreamOggVorbis:
+		(track as AudioStreamOggVorbis).loop = false
+
+	print("🏠 Now playing hub track %d/%d (%.0fs)" % [trading_hub_track_index + 1, trading_hub_tracks.size(), track.get_length()])
+	music_player.play()
+
+func _on_trading_hub_track_finished() -> void:
+	"""Called when a trading hub track finishes"""
+	trading_hub_track_index = (trading_hub_track_index + 1) % trading_hub_tracks.size()
+	_play_trading_hub_track()
 
 ## Set game music volume (for settings)
 func set_music_volume(volume_db: float) -> void:

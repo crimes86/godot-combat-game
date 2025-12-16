@@ -42,17 +42,17 @@ func _create_ui() -> void:
 	main_panel = PanelContainer.new()
 	main_panel.name = "InspectionPanel"
 
-	# Center on screen - compact size
+	# Center on screen - size to accommodate item stats + combat stats + provenance
 	main_panel.set_anchors_preset(Control.PRESET_CENTER)
-	main_panel.custom_minimum_size = Vector2(360, 520)
+	main_panel.custom_minimum_size = Vector2(360, 600)
 	main_panel.anchor_left = 0.5
 	main_panel.anchor_top = 0.5
 	main_panel.anchor_right = 0.5
 	main_panel.anchor_bottom = 0.5
 	main_panel.offset_left = -180
 	main_panel.offset_right = 180
-	main_panel.offset_top = -260
-	main_panel.offset_bottom = 260
+	main_panel.offset_top = -300
+	main_panel.offset_bottom = 300
 
 	# Apply styling
 	var panel_style = StyleBoxFlat.new()
@@ -146,7 +146,32 @@ func _create_ui() -> void:
 	close_button.pressed.connect(hide_panel)
 	header_row.add_child(close_button)
 
-	# Combat Stats section (for weapons - always visible for weapons)
+	# Item Stats section (damage, stat bonuses, effects)
+	var item_stats_header = Label.new()
+	item_stats_header.name = "ItemStatsHeader"
+	item_stats_header.text = "ITEM STATS"
+	item_stats_header.add_theme_color_override("font_color", HEADER_COLOR)
+	item_stats_header.add_theme_font_size_override("font_size", 11)
+	item_stats_header.visible = false
+	vbox.add_child(item_stats_header)
+
+	var item_stats_panel = PanelContainer.new()
+	item_stats_panel.name = "ItemStatsPanel"
+	var item_stats_style = StyleBoxFlat.new()
+	item_stats_style.bg_color = INPUT_BG
+	item_stats_style.set_corner_radius_all(4)
+	item_stats_style.set_content_margin_all(8)
+	item_stats_panel.add_theme_stylebox_override("panel", item_stats_style)
+	item_stats_panel.visible = false
+	vbox.add_child(item_stats_panel)
+
+	var item_stats_content = VBoxContainer.new()
+	item_stats_content.name = "ItemStatsContent"
+	item_stats_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	item_stats_content.add_theme_constant_override("separation", 2)
+	item_stats_panel.add_child(item_stats_content)
+
+	# Combat Tracking section (for weapons - kills, damage dealt, etc.)
 	var combat_header = Label.new()
 	combat_header.name = "CombatHeader"
 	combat_header.text = "COMBAT STATS"
@@ -170,6 +195,31 @@ func _create_ui() -> void:
 	combat_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	combat_content.add_theme_constant_override("separation", 2)
 	combat_panel.add_child(combat_content)
+
+	# Equipment Stats section (for armor/accessories - hits taken, survivals, etc.)
+	var equipment_header = Label.new()
+	equipment_header.name = "EquipmentHeader"
+	equipment_header.text = "EQUIPMENT STATS"
+	equipment_header.add_theme_color_override("font_color", HEADER_COLOR)
+	equipment_header.add_theme_font_size_override("font_size", 11)
+	equipment_header.visible = false
+	vbox.add_child(equipment_header)
+
+	var equipment_panel = PanelContainer.new()
+	equipment_panel.name = "EquipmentPanel"
+	var equip_style = StyleBoxFlat.new()
+	equip_style.bg_color = INPUT_BG
+	equip_style.set_corner_radius_all(4)
+	equip_style.set_content_margin_all(8)
+	equipment_panel.add_theme_stylebox_override("panel", equip_style)
+	equipment_panel.visible = false
+	vbox.add_child(equipment_panel)
+
+	var equipment_content = VBoxContainer.new()
+	equipment_content.name = "EquipmentContent"
+	equipment_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	equipment_content.add_theme_constant_override("separation", 2)
+	equipment_panel.add_child(equipment_content)
 
 	# Provenance section
 	var provenance_header = Label.new()
@@ -341,8 +391,8 @@ func _reset_to_center() -> void:
 	if main_panel:
 		main_panel.offset_left = -180
 		main_panel.offset_right = 180
-		main_panel.offset_top = -260
-		main_panel.offset_bottom = 260
+		main_panel.offset_top = -300
+		main_panel.offset_bottom = 300
 
 func reset_to_center() -> void:
 	"""Reset panel to centered position (public, with animation)"""
@@ -465,8 +515,148 @@ func _populate_item_data(item: Dictionary) -> void:
 			else:
 				owned_since_value.text = "Original owner"
 
-	# Populate combat stats if this is a weapon
+	# Populate item stats (damage, bonuses, effects)
+	_populate_item_stats(item, vbox)
+
+	# Populate combat tracking stats if this is a weapon
 	_populate_combat_stats(item, vbox)
+
+	# Populate equipment stats if this is armor/accessory
+	_populate_equipment_stats(item, vbox)
+
+func _populate_item_stats(item: Dictionary, vbox: Control) -> void:
+	"""Populate item stats section (damage, stat bonuses, effects)"""
+	var item_stats_header = vbox.find_child("ItemStatsHeader", true, false)
+	var item_stats_panel = vbox.find_child("ItemStatsPanel", true, false)
+	var item_stats_content = vbox.find_child("ItemStatsContent", true, false)
+
+	if not item_stats_header or not item_stats_panel or not item_stats_content:
+		return
+
+	# Check if this is a weapon or armor
+	var item_type = item.get("type", item.get("item_type", ""))
+	var is_weapon = item_type == "weapon" or item_type == "ItemType.WEAPON" or item.has("base_damage") or item.has("weapon_type")
+	var is_armor = item_type == "armor" or item.has("defense")
+	var is_accessory = item_type == "accessory" or item_type == "ring" or item_type == "amulet"
+
+	if not is_weapon and not is_armor and not is_accessory:
+		item_stats_header.visible = false
+		item_stats_panel.visible = false
+		return
+
+	# Show the section
+	item_stats_header.visible = true
+	item_stats_panel.visible = true
+
+	# Clear existing content
+	for child in item_stats_content.get_children():
+		child.queue_free()
+
+	# Build stats display
+	var stats_lines: Array[String] = []
+
+	# Weapon damage
+	if is_weapon:
+		var base_damage = item.get("base_damage", 0)
+		if base_damage is Dictionary:
+			# Range format: {"min": X, "max": Y}
+			stats_lines.append("Damage: +%.1f - %.1f" % [base_damage.get("min", 0), base_damage.get("max", 0)])
+		elif base_damage > 0:
+			stats_lines.append("Damage: +%.1f" % base_damage)
+
+		# Attack speed
+		var attack_speed = item.get("attack_speed", "")
+		if attack_speed != "":
+			stats_lines.append("Speed: %s" % str(attack_speed).capitalize())
+
+		# Weapon type
+		var weapon_type = item.get("weapon_type", "")
+		if weapon_type != "":
+			stats_lines.append("Type: %s" % weapon_type.capitalize())
+
+	# Armor defense
+	if is_armor and item.has("defense"):
+		stats_lines.append("Defense: +%d" % item.get("defense", 0))
+
+	# Stat bonuses (STR, AGI, DEX, INT, WIS, VIT)
+	var stat_bonuses = item.get("stat_bonuses", {})
+	if stat_bonuses is Dictionary and not stat_bonuses.is_empty():
+		var bonus_parts: Array[String] = []
+		if stat_bonuses.get("str", 0) > 0:
+			bonus_parts.append("+%d STR" % stat_bonuses.get("str"))
+		if stat_bonuses.get("agi", 0) > 0:
+			bonus_parts.append("+%d AGI" % stat_bonuses.get("agi"))
+		if stat_bonuses.get("dex", 0) > 0:
+			bonus_parts.append("+%d DEX" % stat_bonuses.get("dex"))
+		if stat_bonuses.get("int", 0) > 0:
+			bonus_parts.append("+%d INT" % stat_bonuses.get("int"))
+		if stat_bonuses.get("wis", 0) > 0:
+			bonus_parts.append("+%d WIS" % stat_bonuses.get("wis"))
+		if stat_bonuses.get("vit", 0) > 0:
+			bonus_parts.append("+%d VIT" % stat_bonuses.get("vit"))
+		if not bonus_parts.is_empty():
+			stats_lines.append(", ".join(bonus_parts))
+
+	# HP bonus
+	var hp_bonus = item.get("hp_bonus", 0)
+	if hp_bonus > 0:
+		stats_lines.append("+%d HP" % hp_bonus)
+
+	# Lifesteal
+	var lifesteal = item.get("lifesteal", 0.0)
+	if lifesteal > 0:
+		stats_lines.append("Lifesteal: %.1f%%" % (lifesteal * 100))
+
+	# Effects
+	var effects = item.get("effects", {})
+	if effects is Dictionary:
+		var passive = effects.get("passive", [])
+		var active = effects.get("active")
+		if passive is Array and not passive.is_empty():
+			for effect in passive:
+				stats_lines.append("Effect: %s" % _format_effect_name(effect))
+		if active != null and active != "":
+			stats_lines.append("Active: %s" % _format_effect_name(active))
+
+	# Also check for simple effect field
+	var effect = item.get("effect", item.get("effect_name", ""))
+	if effect != "" and effect != null:
+		# Don't duplicate if already in effects
+		var already_shown = false
+		for line in stats_lines:
+			if "Effect:" in line and effect in line:
+				already_shown = true
+				break
+		if not already_shown:
+			stats_lines.append("Effect: %s" % _format_effect_name(effect))
+
+	# Value
+	var value = item.get("value", item.get("sell_value", 0))
+	if value > 0:
+		stats_lines.append("Value: %d G" % value)
+
+	# Add labels for each stat line
+	for line in stats_lines:
+		var label = Label.new()
+		label.text = line
+		label.add_theme_font_size_override("font_size", 11)
+		# Color code based on content
+		if line.begins_with("Damage:") or line.begins_with("Defense:"):
+			label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3))  # Gold
+		elif line.begins_with("+") or "STR" in line or "AGI" in line or "DEX" in line or "INT" in line or "WIS" in line or "VIT" in line or "HP" in line:
+			label.add_theme_color_override("font_color", Color(0.4, 0.8, 0.4))  # Green
+		elif line.begins_with("Effect:") or line.begins_with("Active:"):
+			label.add_theme_color_override("font_color", Color(0.6, 0.7, 0.9))  # Blue
+		elif line.begins_with("Lifesteal:"):
+			label.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4))  # Red
+		else:
+			label.add_theme_color_override("font_color", TEXT_COLOR)
+		item_stats_content.add_child(label)
+
+func _format_effect_name(effect: String) -> String:
+	"""Format effect ID to readable name"""
+	# Replace underscores with spaces and capitalize
+	return effect.replace("_", " ").capitalize()
 
 func _populate_combat_stats(item: Dictionary, vbox: Control) -> void:
 	"""Populate combat stats section for weapons - always show all stats with values"""
@@ -577,6 +767,115 @@ func _populate_combat_stats(item: Dictionary, vbox: Control) -> void:
 			icon_label.add_theme_font_size_override("font_size", 12)
 			ach_row.add_child(icon_label)
 		combat_content.add_child(ach_row)
+
+func _populate_equipment_stats(item: Dictionary, vbox: Control) -> void:
+	"""Populate equipment stats section for armor/accessories"""
+	var equipment_header = vbox.find_child("EquipmentHeader", true, false)
+	var equipment_panel = vbox.find_child("EquipmentPanel", true, false)
+	var equipment_content = vbox.find_child("EquipmentContent", true, false)
+
+	if not equipment_header or not equipment_panel or not equipment_content:
+		return
+
+	# Check if this is armor or accessory (not weapon)
+	var item_type = item.get("type", item.get("item_type", ""))
+	var is_weapon = item_type == "weapon" or item_type == "ItemType.WEAPON"
+	var is_armor = item_type == "armor" or item.has("defense") or item.has("armor_slot")
+	var is_accessory = item_type == "accessory" or item_type == "ring" or item_type == "amulet" or item.has("accessory_slot")
+
+	# Only show for forged armor/accessories
+	var is_forged = item.get("is_forged", false) or item.get("forged", false)
+
+	if is_weapon or (not is_armor and not is_accessory) or not is_forged:
+		equipment_header.visible = false
+		equipment_panel.visible = false
+		return
+
+	# Show the section
+	equipment_header.visible = true
+	equipment_panel.visible = true
+
+	# Clear existing content
+	for child in equipment_content.get_children():
+		child.queue_free()
+
+	# Get stats from item data or create default
+	var stats_data = item.get("equipment_stats", {})
+	var stats: EquipmentStats = null
+	if stats_data and stats_data.size() > 0:
+		stats = EquipmentStats.from_dict(stats_data)
+	else:
+		stats = EquipmentStats.new()
+
+	# Get values
+	var level = stats.level if stats else 0
+	var tier_name = stats.get_visual_tier_name() if stats else "PRISTINE"
+	var hits_received = stats.hits_received if stats else 0
+	var hits_survived = stats.hits_survived if stats else 0
+	var damage_taken = stats.damage_taken_total if stats else 0
+	var damage_absorbed = stats.damage_absorbed if stats else 0
+	var max_hit_survived = stats.damage_max_hit_survived if stats else 0
+	var deaths = stats.deaths_wearing if stats else 0
+	var close_calls = stats.close_calls if stats else 0
+	var boss_fights = stats.boss_fights_survived if stats else 0
+	var time_equipped = stats.time_equipped_seconds if stats else 0
+	var experience = stats.experience if stats else 0
+	var xp_needed = stats.get_experience_to_next_level() if stats else 100
+
+	# Use a compact 2-column grid for stats
+	var grid = GridContainer.new()
+	grid.columns = 4  # label, value, label, value
+	grid.add_theme_constant_override("h_separation", 24)
+	grid.add_theme_constant_override("v_separation", 2)
+	equipment_content.add_child(grid)
+
+	# Level & Tier row
+	_add_stat_cell(grid, "Level:", str(level))
+	_add_stat_cell_with_tooltip(grid, "Tier:", tier_name, _get_equipment_tier_tooltip())
+
+	# Hits & Damage row
+	_add_stat_cell(grid, "Hits:", _format_number(hits_received))
+	_add_stat_cell(grid, "Survived:", _format_number(hits_survived))
+
+	# Damage stats row
+	_add_stat_cell(grid, "Dmg Taken:", _format_number(damage_taken))
+	_add_stat_cell(grid, "Absorbed:", _format_number(damage_absorbed))
+
+	# Max Hit & Deaths row
+	_add_stat_cell(grid, "Max Hit:", _format_number(max_hit_survived))
+	_add_stat_cell(grid, "Deaths:", str(deaths))
+
+	# Close Calls & Boss Fights row
+	_add_stat_cell(grid, "Close Calls:", str(close_calls))
+	_add_stat_cell(grid, "Boss Wins:", str(boss_fights))
+
+	# Time & XP row
+	_add_stat_cell(grid, "Time:", _format_time(time_equipped))
+	_add_stat_cell(grid, "XP:", "%s/%s" % [_format_number(experience), _format_number(xp_needed)])
+
+	# Virgin status message
+	if stats and stats.is_virgin():
+		var virgin_label = Label.new()
+		virgin_label.text = "✧ PRISTINE ✧"
+		virgin_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+		virgin_label.add_theme_font_size_override("font_size", 10)
+		virgin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		equipment_content.add_child(virgin_label)
+
+	# Show achievements if any
+	if stats and stats.achievements.size() > 0:
+		var ach_row = HBoxContainer.new()
+		ach_row.add_theme_constant_override("separation", 4)
+		for ach_id in stats.achievements:
+			var icon_label = Label.new()
+			icon_label.text = stats.get_achievement_icon(ach_id)
+			icon_label.add_theme_font_size_override("font_size", 12)
+			ach_row.add_child(icon_label)
+		equipment_content.add_child(ach_row)
+
+func _get_equipment_tier_tooltip() -> String:
+	"""Get tooltip text explaining the equipment tier system"""
+	return "PRISTINE: 0 hits\nTESTED: 1-99\nPROVEN: 100-999\nBATTLE-WORN: 1K-9,999\nLEGENDARY: 10K-49,999\nMYTHIC: 50K+"
 
 func _add_stat_cell(grid: GridContainer, label_text: String, value_text: String) -> void:
 	"""Add a label-value pair to the stat grid"""

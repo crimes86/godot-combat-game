@@ -121,6 +121,9 @@ var chat_ui: CanvasLayer = null
 # Inventory UI (separate from character sheet)
 var inventory_ui: CanvasLayer = null
 
+# Portrait HUD (WoW-style health display)
+var portrait_hud: CanvasLayer = null
+
 # Duel UI components
 var duel_request_popup: CanvasLayer = null
 var duel_countdown_ui: CanvasLayer = null
@@ -334,6 +337,9 @@ func _ready() -> void:
 		# Create inventory UI (separate from character sheet)
 		call_deferred("create_inventory_ui")
 
+		# Create portrait HUD (WoW-style health display)
+		call_deferred("create_portrait_hud")
+
 		# Create duel UI components
 		call_deferred("create_duel_ui")
 
@@ -544,6 +550,8 @@ func _on_character_level_up(new_level: int) -> void:
 	current_health = max_health
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
+	if portrait_hud and portrait_hud.has_method("update_health"):
+		portrait_hud.update_health(current_health, max_health)
 
 	# Visual feedback
 	if screen_shake:
@@ -1654,8 +1662,13 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 	if current_health < 0:
 		current_health = 0
 
+	# Track equipment stats on all forged armor/accessories
+	_record_equipment_hit(amount, current_health > 0)
+
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
+	if portrait_hud and portrait_hud.has_method("update_health"):
+		portrait_hud.update_health(current_health, max_health)
 
 	# Spawn damage number behind player (opposite of facing direction)
 	CombatText.create_damage(amount, global_position, get_tree().root, attack_direction)
@@ -1704,11 +1717,107 @@ func heal(amount: float, source_type: String = "self") -> void:
 	# Update health bar
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
+	if portrait_hud and portrait_hud.has_method("update_health"):
+		portrait_hud.update_health(current_health, max_health)
 
 	# Spawn heal number behind player (opposite of facing direction)
 	CombatText.create_heal(actual_heal, global_position, get_tree().root, attack_direction)
 
 	print("Player healed %.1f HP (now %.1f / %.1f)" % [actual_heal, current_health, max_health])
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EQUIPMENT STAT TRACKING (Forged Armor/Accessories)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _record_equipment_hit(damage: float, survived: bool) -> void:
+	"""Record a hit on all equipped forged armor and accessories for stat tracking"""
+	if not CharacterStats:
+		return
+
+	# Track on all equipped armor
+	for slot in CharacterStats.equipped_armor:
+		var armor_item = CharacterStats.equipped_armor[slot]
+		if armor_item and armor_item is Dictionary:
+			# Only track forged items
+			if armor_item.get("is_forged", false) or armor_item.get("forged", false):
+				_update_equipment_stats(armor_item, damage, survived)
+
+	# Track on equipped accessories (if any)
+	if CharacterStats.has("equipped_accessories"):
+		for slot in CharacterStats.equipped_accessories:
+			var accessory = CharacterStats.equipped_accessories[slot]
+			if accessory and accessory is Dictionary:
+				if accessory.get("is_forged", false) or accessory.get("forged", false):
+					_update_equipment_stats(accessory, damage, survived)
+
+func _update_equipment_stats(item: Dictionary, damage: float, survived: bool) -> void:
+	"""Update equipment stats for a forged item"""
+	# Get or create equipment_stats
+	if not item.has("equipment_stats"):
+		item["equipment_stats"] = {}
+
+	var stats_data = item["equipment_stats"]
+
+	# Record hit
+	stats_data["hits_received"] = stats_data.get("hits_received", 0) + 1
+	stats_data["damage_taken_total"] = stats_data.get("damage_taken_total", 0) + int(damage)
+
+	if survived:
+		stats_data["hits_survived"] = stats_data.get("hits_survived", 0) + 1
+		# Track max hit survived
+		if int(damage) > stats_data.get("damage_max_hit_survived", 0):
+			stats_data["damage_max_hit_survived"] = int(damage)
+
+	# Check for close call (below 25% HP)
+	var health_percent = current_health / max_health if max_health > 0 else 0
+	if health_percent < 0.25 and health_percent > 0:
+		stats_data["close_calls"] = stats_data.get("close_calls", 0) + 1
+
+	# Grant XP
+	var xp = stats_data.get("experience", 0) + (2 if survived else 1)
+	stats_data["experience"] = xp
+
+	# Check for level up
+	var level = stats_data.get("level", 0)
+	var xp_needed = int(100.0 * pow(1.08, level))
+	while xp >= xp_needed:
+		xp -= xp_needed
+		level += 1
+		xp_needed = int(100.0 * pow(1.08, level))
+	stats_data["level"] = level
+	stats_data["experience"] = xp
+
+	# First hit timestamp
+	if stats_data.get("first_hit_taken_at", "") == "":
+		var datetime = Time.get_datetime_dict_from_system()
+		stats_data["first_hit_taken_at"] = "%04d-%02d-%02dT%02d:%02d:%02d" % [
+			datetime.year, datetime.month, datetime.day,
+			datetime.hour, datetime.minute, datetime.second
+		]
+
+func _record_equipment_death() -> void:
+	"""Record death on all equipped forged armor and accessories"""
+	if not CharacterStats:
+		return
+
+	for slot in CharacterStats.equipped_armor:
+		var armor_item = CharacterStats.equipped_armor[slot]
+		if armor_item and armor_item is Dictionary:
+			if armor_item.get("is_forged", false) or armor_item.get("forged", false):
+				if not armor_item.has("equipment_stats"):
+					armor_item["equipment_stats"] = {}
+				armor_item["equipment_stats"]["deaths_wearing"] = armor_item["equipment_stats"].get("deaths_wearing", 0) + 1
+				armor_item["equipment_stats"]["battles_lost"] = armor_item["equipment_stats"].get("battles_lost", 0) + 1
+
+	if CharacterStats.has("equipped_accessories"):
+		for slot in CharacterStats.equipped_accessories:
+			var accessory = CharacterStats.equipped_accessories[slot]
+			if accessory and accessory is Dictionary:
+				if accessory.get("is_forged", false) or accessory.get("forged", false):
+					if not accessory.has("equipment_stats"):
+						accessory["equipment_stats"] = {}
+					accessory["equipment_stats"]["deaths_wearing"] = accessory["equipment_stats"].get("deaths_wearing", 0) + 1
+					accessory["equipment_stats"]["battles_lost"] = accessory["equipment_stats"].get("battles_lost", 0) + 1
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PVP DUEL STATE FUNCTIONS
@@ -1902,6 +2011,8 @@ func process_passive_healing(delta: float) -> void:
 			current_health += actual_heal
 			if health_bar and health_bar.has_method("update_health"):
 				health_bar.update_health(current_health, max_health)
+			if portrait_hud and portrait_hud.has_method("update_health"):
+				portrait_hud.update_health(current_health, max_health)
 
 			# Only show combat text for significant heals (5%+ of max HP) to reduce spam
 			# This means text appears roughly every 2.5 seconds instead of every 1 second
@@ -3433,6 +3544,9 @@ func die() -> void:
 	if combat_system and combat_system.has_method("track_player_death"):
 		combat_system.track_player_death()
 
+	# Track death for forged armor/accessory stats
+	_record_equipment_death()
+
 	# Close any open loot UIs on death
 	for child in get_tree().root.get_children():
 		if child is LootBodyUI and child.visible:
@@ -3558,6 +3672,8 @@ func die() -> void:
 	current_health = max_health
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
+	if portrait_hud and portrait_hud.has_method("update_health"):
+		portrait_hud.update_health(current_health, max_health)
 
 	# Note: Player visuals will update automatically through CharacterStats signals
 	# when reset_equipment_to_default() equips the starter clothes
@@ -3685,6 +3801,22 @@ func create_inventory_ui() -> void:
 
 	print("Inventory UI added to scene tree")
 	print("   In tree: ", inventory_ui.is_inside_tree())
+
+func create_portrait_hud() -> void:
+	"""Create and add portrait HUD to scene tree"""
+	print("🏗️ Player.create_portrait_hud() called (deferred)")
+	var PortraitHUDScript = load("res://scripts/ui/PortraitHUD.gd")
+	portrait_hud = PortraitHUDScript.new()
+	portrait_hud.name = "PortraitHUD"
+
+	# Add to scene tree
+	get_tree().root.add_child(portrait_hud)
+
+	# Initialize with current health
+	if portrait_hud.has_method("update_health"):
+		portrait_hud.update_health(current_health, max_health)
+
+	print("Portrait HUD added to scene tree")
 
 func create_duel_ui() -> void:
 	"""Create and add duel UI components to scene tree"""

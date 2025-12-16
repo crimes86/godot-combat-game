@@ -55,9 +55,6 @@ const PROP_TEXTURES = {
 	"dead_tree": "res://assets/environment/wasteland/dead_tree.png",
 	"pine_tree": "res://assets/environment/wasteland/pine_tree.png",
 	"autumn_tree": "res://assets/environment/wasteland/autumn_tree.png",
-	"rock_large": "res://assets/environment/wasteland/rock_large.png",
-	"rock_medium": "res://assets/environment/wasteland/rock_medium.png",
-	"rock_small": "res://assets/environment/wasteland/rock_small.png",
 	"ash_pile": "res://assets/environment/wasteland/ash_pile.png",
 	"bones": "res://assets/environment/wasteland/bones.png",
 	"skull": "res://assets/environment/wasteland/skull.png",
@@ -65,8 +62,151 @@ const PROP_TEXTURES = {
 	"ground_crack_2": "res://assets/environment/wasteland/ground_crack_2.png",
 }
 
+# === TIERED ROCK SYSTEM ===
+# Zone 1 = Tier 1 (tan), Zone 2 = Tier 2 (grey), Zone 3 = Tier 3 (ancient)
+const ROCK_TEXTURES = {
+	# Zone 1 - Tan/Brown rocks (Tier 1)
+	"zone1": {
+		"small": [
+			"res://assets/environment/wasteland/rocks/zone1/rock_small_1.png",
+		],
+		"medium": [
+			"res://assets/environment/wasteland/rocks/zone1/rock_medium_1.png",
+			"res://assets/environment/wasteland/rocks/zone1/rock_medium_2.png",
+			"res://assets/environment/wasteland/rocks/zone1/rock_medium_flat.png",
+		],
+		"large": [
+			"res://assets/environment/wasteland/rocks/zone1/rock_large_1.png",
+			"res://assets/environment/wasteland/rocks/zone1/rock_boulder_pair.png",
+		],
+		"cluster": [
+			"res://assets/environment/wasteland/rocks/zone1/rock_spike_cluster.png",
+			"res://assets/environment/wasteland/rocks/zone1/rock_cluster_wide.png",
+			"res://assets/environment/wasteland/rocks/zone1/rock_xlarge_cluster.png",
+		],
+		"standing": [
+			"res://assets/environment/wasteland/rocks/zone1/rock_standing_1.png",
+			"res://assets/environment/wasteland/rocks/zone1/rock_standing_2.png",
+			"res://assets/environment/wasteland/rocks/zone1/rock_spike_tall.png",
+		],
+	},
+	# Zone 2 - Grey rocks (Tier 2)
+	"zone2": {
+		"small": [
+			"res://assets/environment/wasteland/rocks/zone2/rock_small_1.png",
+		],
+		"medium": [
+			"res://assets/environment/wasteland/rocks/zone2/rock_medium_1.png",
+			"res://assets/environment/wasteland/rocks/zone2/rock_medium_flat.png",
+		],
+		"large": [
+			"res://assets/environment/wasteland/rocks/zone2/rock_large_1.png",
+			"res://assets/environment/wasteland/rocks/zone2/rock_large_flat.png",
+			"res://assets/environment/wasteland/rocks/zone2/rock_boulder_1.png",
+			"res://assets/environment/wasteland/rocks/zone2/rock_boulder_2.png",
+			"res://assets/environment/wasteland/rocks/zone2/rock_boulder_3.png",
+		],
+		"cluster": [
+			"res://assets/environment/wasteland/rocks/zone2/rock_xlarge_cluster.png",
+		],
+		"standing": [
+			"res://assets/environment/wasteland/rocks/zone2/rock_standing_1.png",
+		],
+	},
+}
+
+# Rock tier data - defines mining requirements and drops per tier
+const ROCK_TIERS = {
+	1: {
+		"name": "Wasteland Rock",
+		"zone": "zone1",
+		"pickaxe_tier": 0,  # Basic pickaxe (starter)
+		"mine_time": 3.0,
+		"xp": 10,
+		"drops": {
+			"stone": {"min": 1, "max": 3},
+			"copper_ore": {"min": 0, "max": 1, "chance": 0.3},
+		}
+	},
+	2: {
+		"name": "Highland Rock",
+		"zone": "zone2",
+		"pickaxe_tier": 1,  # Iron pickaxe
+		"mine_time": 4.0,
+		"xp": 20,
+		"drops": {
+			"stone": {"min": 2, "max": 4},
+			"iron_ore": {"min": 1, "max": 2},
+			"gem_shard": {"min": 0, "max": 1, "chance": 0.15},
+		}
+	},
+	3: {
+		"name": "Ancient Stone",
+		"zone": "zone3",
+		"pickaxe_tier": 2,  # Steel pickaxe
+		"mine_time": 5.0,
+		"xp": 35,
+		"drops": {
+			"stone": {"min": 2, "max": 3},
+			"iron_ore": {"min": 1, "max": 3},
+			"gold_ore": {"min": 0, "max": 2, "chance": 0.4},
+			"ancient_fragment": {"min": 0, "max": 1, "chance": 0.1},
+		}
+	},
+}
+
+# Tree scene files - collision positions can be edited visually in these scenes
+const TREE_SCENES = {
+	"dead_tree": "res://scenes/environment/DeadTree.tscn",
+	"pine_tree": "res://scenes/environment/PineTree.tscn",
+	"autumn_tree": "res://scenes/environment/AutumnTree.tscn"
+}
+
 # Tree types with weighted rarity: 60% dead, 30% pine, 10% autumn
 const TREE_TYPES = ["dead_tree", "pine_tree", "autumn_tree"]
+
+# Zone to tier mapping - determines which rock textures and tier data to use
+# Chunk -1 and 0 = Zone 1 (tier 1, tan rocks)
+# Chunk 1+ = Zone 2 (tier 2, grey rocks)
+# Zone 3 (tier 3) reserved for future expansion
+func get_zone_for_chunk(chunk_key: String) -> String:
+	"""Determine which zone a chunk belongs to based on chunk key"""
+	var chunk_x = int(chunk_key.split(",")[0])
+	if chunk_x <= 0:
+		return "zone1"
+	else:
+		return "zone2"
+
+func get_tier_for_chunk(chunk_key: String) -> int:
+	"""Determine rock tier based on chunk position"""
+	var zone = get_zone_for_chunk(chunk_key)
+	if zone == "zone1":
+		return 1
+	elif zone == "zone2":
+		return 2
+	else:
+		return 3
+
+func get_rock_texture_for_zone(zone: String, size_category: String, rng: RandomNumberGenerator) -> String:
+	"""Get a random rock texture path for a given zone and size category"""
+	if not ROCK_TEXTURES.has(zone):
+		zone = "zone1"  # Fallback to zone1
+
+	var zone_textures = ROCK_TEXTURES[zone]
+	if not zone_textures.has(size_category):
+		# Try to find a fallback size
+		if zone_textures.has("medium"):
+			size_category = "medium"
+		elif zone_textures.has("small"):
+			size_category = "small"
+		else:
+			return ""  # No textures available
+
+	var textures = zone_textures[size_category]
+	if textures.is_empty():
+		return ""
+
+	return textures[rng.randi() % textures.size()]
 
 # Path checking - main path runs along Y=0 with zigzag, branch paths go to ruins
 const PATH_WIDTH: float = 250.0  # Width to avoid for lava pools
@@ -753,7 +893,7 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			})
 			chunk_data.all_prop_positions.append({"pos": rock_pos, "radius": exclusion_radius})
 
-			create_lootable_rock(rock_pos, "rock_large", container, rng, rock_id)
+			create_lootable_rock(rock_pos, "large", container, rng, rock_id, chunk_key)
 
 		"rock_medium":
 			var rock_pos = chunk_center + Vector2(
@@ -768,7 +908,7 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			if is_position_on_large_rock(rock_pos, chunk_data):
 				return  # Don't spawn medium rocks on top of large rocks
 
-			create_rock_with_shadow(rock_pos, "rock_medium", container, rng, 0.7, 1.3)
+			create_rock_with_shadow(rock_pos, "medium", container, rng, chunk_key, 0.7, 1.3)
 			chunk_data.all_prop_positions.append({"pos": rock_pos, "radius": 40.0})
 
 		"rock_small":
@@ -784,7 +924,7 @@ func generate_single_prop(chunk_key: String, prop_data: Dictionary, chunk_data: 
 			if is_position_on_large_rock(rock_pos, chunk_data):
 				return  # Don't spawn small rocks on top of large rocks
 
-			create_rock_with_shadow(rock_pos, "rock_small", container, rng, 0.6, 1.0)
+			create_rock_with_shadow(rock_pos, "small", container, rng, chunk_key, 0.6, 1.0)
 			chunk_data.all_prop_positions.append({"pos": rock_pos, "radius": 25.0})
 
 		"monster_lava_pool":
@@ -1046,12 +1186,14 @@ func create_prop(pos: Vector2, prop_type: String, container: Node2D, rng: Random
 
 	container.add_child(sprite)
 
-func create_rock_with_shadow(pos: Vector2, prop_type: String, container: Node2D, rng: RandomNumberGenerator, scale_min: float = 0.8, scale_max: float = 1.2) -> void:
-	"""Create a rock sprite with feathered shadow"""
-	if not PROP_TEXTURES.has(prop_type):
+func create_rock_with_shadow(pos: Vector2, size_category: String, container: Node2D, rng: RandomNumberGenerator, chunk_key: String, scale_min: float = 0.8, scale_max: float = 1.2) -> void:
+	"""Create a decorative rock sprite with feathered shadow using zone-based textures"""
+	var zone = get_zone_for_chunk(chunk_key)
+	var texture_path = get_rock_texture_for_zone(zone, size_category, rng)
+	if texture_path.is_empty():
 		return
 
-	var texture = load(PROP_TEXTURES[prop_type]) as Texture2D
+	var texture = load(texture_path) as Texture2D
 	if not texture:
 		return
 
@@ -1092,21 +1234,16 @@ func is_in_world_bounds(pos: Vector2) -> bool:
 		   pos.y >= WORLD_MIN.y and pos.y <= WORLD_MAX.y
 
 func create_tree(pos: Vector2, tree_type: String, container: Node2D, rng: RandomNumberGenerator, tree_id: String) -> void:
-	"""Create a lootable tree with proper scaling and collision"""
-	if not PROP_TEXTURES.has(tree_type):
+	"""Create a lootable tree using scene files (collision positions editable in scenes)"""
+	if not TREE_SCENES.has(tree_type):
 		return
 
-	var texture = load(PROP_TEXTURES[tree_type]) as Texture2D
-	if not texture:
+	var scene_path = TREE_SCENES[tree_type]
+	if not ResourceLoader.exists(scene_path):
 		return
 
-	# Load HarvestableTree script if available
-	var HarvestableTreeScript = load("res://scripts/environment/HarvestableTree.gd")
-	var tree_node: StaticBody2D
-	if HarvestableTreeScript:
-		tree_node = HarvestableTreeScript.new()
-	else:
-		tree_node = StaticBody2D.new()
+	var tree_scene = load(scene_path)
+	var tree_node = tree_scene.instantiate()
 
 	tree_node.name = "Tree_" + tree_id.replace(":", "_")
 	tree_node.position = pos
@@ -1126,155 +1263,80 @@ func create_tree(pos: Vector2, tree_type: String, container: Node2D, rng: Random
 
 	var tree_flipped = rng.randf() < 0.5
 
-	# Create shadow at base of tree
-	var shadow = ColorRect.new()
-	shadow.name = "Shadow"
-	var shadow_width = 45 * (tree_scale / 2.5) * 0.75
-	var shadow_height = shadow_width * 0.4
-	shadow.size = Vector2(shadow_width, shadow_height)
-	var shadow_y = 56 * tree_scale
-	var shadow_x = -shadow_width / 2
-	shadow.position = Vector2(shadow_x, shadow_y)
-	shadow.color = Color(0, 0, 0, 0.6)
-	shadow.z_index = -4
+	# Get nodes from scene
+	var sprite = tree_node.get_node_or_null("Sprite")
+	var shadow = tree_node.get_node_or_null("Shadow")
+	var collision = tree_node.get_node_or_null("CollisionShape2D")
 
-	# Apply oval shader
-	var shader_material = ShaderMaterial.new()
-	var shader = Shader.new()
-	shader.code = """
-shader_type canvas_item;
+	if sprite:
+		sprite.scale = Vector2(tree_scale, tree_scale)
+		sprite.flip_h = tree_flipped
+		sprite.z_index = 10
 
-void fragment() {
-	vec2 uv = UV * 2.0 - 1.0;
-	float dist = length(uv);
-	if (dist > 1.0) {
-		discard;
-	}
-	float alpha = 1.0 - smoothstep(0.6, 1.0, dist);
-	COLOR.a *= alpha;
-}
-"""
-	shader_material.shader = shader
-	shadow.material = shader_material
-	tree_node.add_child(shadow)
+		# Add variation to trees - brightness, saturation, and slight hue shifts
+		var brightness = rng.randf_range(0.8, 1.15)
+		var saturation_shift = rng.randf_range(0.85, 1.15)
+		var hue_shift = rng.randf_range(-0.08, 0.08)
 
-	# Add dark earth patch at tree base to look "planted"
-	var earth_patch = ColorRect.new()
-	earth_patch.name = "EarthPatch"
-	# Scale patch based on texture size for new high-res trees, with random variation
-	var patch_scale_variation = rng.randf_range(0.85, 1.15)  # +/- 15% size variation
-	var base_patch_scale = 0.225 if tree_type == "dead_tree" else 0.3  # Dead trees 25% smaller
-	var patch_width = texture.get_width() * tree_scale * base_patch_scale * patch_scale_variation
-	var patch_height = patch_width * rng.randf_range(0.35, 0.45)  # Vary aspect ratio
-	earth_patch.size = Vector2(patch_width, patch_height)
-	# Position at trunk base - offset from sprite bottom (sprites have padding/shadows)
-	var tree_bottom_y = texture.get_height() * tree_scale * 0.5
-	var x_offset = rng.randf_range(-3, 3)  # Slight horizontal variation
-	# Each tree type needs different offset based on where trunk meets ground in the sprite
-	var y_offset: float
-	if tree_type == "dead_tree":
-		y_offset = -40  # Dead tree trunk base
-	elif tree_type == "pine_tree":
-		y_offset = -35  # Pine trunk base
-	else:  # autumn_tree
-		y_offset = -45  # Autumn trunk base
-	earth_patch.position = Vector2(-patch_width / 2 + x_offset, tree_bottom_y - patch_height * 0.5 + y_offset)
-	# Vary the darkness slightly per tree
-	var darkness_variation = rng.randf_range(0.8, 1.2)
-	earth_patch.color = Color(0.05 * darkness_variation, 0.03 * darkness_variation, 0.02 * darkness_variation, rng.randf_range(0.7, 0.85))
-	earth_patch.z_index = -5  # Below shadow
+		# Apply variation based on tree type
+		if tree_type == "dead_tree":
+			var dead_tree_darkness = 0.55
+			sprite.modulate = Color(
+				brightness * dead_tree_darkness * (1.0 + hue_shift),
+				brightness * dead_tree_darkness * (0.95 - abs(hue_shift) * 0.5),
+				brightness * dead_tree_darkness * (0.9 - hue_shift),
+				1.0
+			)
+		elif tree_type == "pine_tree":
+			var pine_mute = 0.7
+			sprite.modulate = Color(
+				brightness * pine_mute * (0.85 + hue_shift),
+				brightness * pine_mute * saturation_shift * 0.9,
+				brightness * pine_mute * (0.8 - hue_shift),
+				1.0
+			)
+		else:  # autumn_tree
+			sprite.modulate = Color(
+				brightness * min(1.2, 1.0 + hue_shift * 2),
+				brightness * (0.7 - hue_shift),
+				brightness * 0.6,
+				1.0
+			)
 
-	# Apply oval shader for soft edges
-	var earth_shader_material = ShaderMaterial.new()
-	var earth_shader = Shader.new()
-	earth_shader.code = """
-shader_type canvas_item;
+	if shadow:
+		var shadow_width = 45 * (tree_scale / 2.5) * 0.75
+		var shadow_height = shadow_width * 0.4
+		shadow.size = Vector2(shadow_width, shadow_height)
+		shadow.position = Vector2(-shadow_width / 2, 56 * tree_scale)
 
-void fragment() {
-	vec2 uv = UV * 2.0 - 1.0;
-	float dist = length(uv);
-	if (dist > 1.0) {
-		discard;
-	}
-	float alpha = 1.0 - smoothstep(0.2, 1.0, dist);
-	COLOR.a *= alpha;
-}
-"""
-	earth_shader_material.shader = earth_shader
-	earth_patch.material = earth_shader_material
-	tree_node.add_child(earth_patch)
-
-	# Create sprite with proper scale
-	var sprite = Sprite2D.new()
-	sprite.name = "Sprite"
-	sprite.texture = texture
-	sprite.centered = true
-	sprite.scale = Vector2(tree_scale, tree_scale)
-	sprite.flip_h = tree_flipped
-	sprite.z_index = 10  # Above all player layers (player max z=9)
-
-	# Add variation to trees - brightness, saturation, and slight hue shifts
-	var brightness = rng.randf_range(0.8, 1.15)  # Some darker, some brighter
-	var saturation_shift = rng.randf_range(0.85, 1.15)  # Vary color intensity
-	var hue_shift = rng.randf_range(-0.08, 0.08)  # Slight warm/cool shift
-
-	# Apply variation based on tree type
-	if tree_type == "dead_tree":
-		# Dead trees: darker to fit wasteland, vary from grey-brown to warm brown
-		var dead_tree_darkness = 0.55  # Darken dead trees to blend with environment
-		sprite.modulate = Color(
-			brightness * dead_tree_darkness * (1.0 + hue_shift),
-			brightness * dead_tree_darkness * (0.95 - abs(hue_shift) * 0.5),
-			brightness * dead_tree_darkness * (0.9 - hue_shift),
-			1.0
-		)
-	elif tree_type == "pine_tree":
-		# Pine trees: muted/desaturated to fit wasteland, vary from yellow-green to blue-green
-		var pine_mute = 0.7  # Mute the pines to blend better
-		sprite.modulate = Color(
-			brightness * pine_mute * (0.85 + hue_shift),
-			brightness * pine_mute * saturation_shift * 0.9,
-			brightness * pine_mute * (0.8 - hue_shift),
-			1.0
-		)
-	else:  # autumn_tree
-		# Autumn trees: vary from orange to deep red
-		sprite.modulate = Color(
-			brightness * min(1.2, 1.0 + hue_shift * 2),
-			brightness * (0.7 - hue_shift),
-			brightness * 0.6,
-			1.0
-		)
-
-	tree_node.add_child(sprite)
-
-	# Birch tree healing shimmer particles removed for performance
-	# (was ~945 particles across all birch trees)
-
-	# Add collision shape at tree trunk base
-	var collision_shape = CollisionShape2D.new()
-	var shape = CircleShape2D.new()
-	shape.radius = 10 * tree_scale
-	collision_shape.shape = shape
-	collision_shape.position = Vector2(0, 50 * tree_scale)
-	tree_node.add_child(collision_shape)
+	if collision:
+		# Scale collision position based on tree size (scene position is for scale 1.0)
+		var base_collision_y = collision.position.y
+		collision.position = Vector2(0, base_collision_y * tree_scale)
+		if collision.shape is CircleShape2D:
+			collision.shape.radius = 10 * tree_scale
 
 	# Store tree ID for harvest tracking
 	tree_node.set_meta("tree_id", tree_id)
 	tree_node.set_meta("lootable_type", "tree")
-	tree_node.set_meta("network_id", tree_id)  # Use tree_id as network ID
+	tree_node.set_meta("network_id", tree_id)
 
 	container.add_child(tree_node)
 
 	# Track for network sync
 	harvestables_by_id[tree_id] = tree_node
 
-func create_lootable_rock(pos: Vector2, rock_type: String, container: Node2D, rng: RandomNumberGenerator, rock_id: String) -> void:
-	"""Create a lootable rock"""
-	if not PROP_TEXTURES.has(rock_type):
+func create_lootable_rock(pos: Vector2, size_category: String, container: Node2D, rng: RandomNumberGenerator, rock_id: String, chunk_key: String) -> void:
+	"""Create a lootable rock using zone-based textures and tier system"""
+	var zone = get_zone_for_chunk(chunk_key)
+	var rock_tier = get_tier_for_chunk(chunk_key)
+
+	# Get random texture for this zone and size
+	var texture_path = get_rock_texture_for_zone(zone, size_category, rng)
+	if texture_path.is_empty():
 		return
 
-	var texture = load(PROP_TEXTURES[rock_type]) as Texture2D
+	var texture = load(texture_path) as Texture2D
 	if not texture:
 		return
 
@@ -1318,6 +1380,9 @@ func create_lootable_rock(pos: Vector2, rock_type: String, container: Node2D, rn
 		rock_node.ore_amount = 2  # Medium rocks
 	else:
 		rock_node.ore_amount = 3  # Large rocks
+
+	# Set rock tier based on zone (this determines drops and mining requirements)
+	rock_node.set_rock_tier(rock_tier, size_category)
 
 	# Store rock ID for harvest tracking
 	rock_node.set_meta("rock_id", rock_id)

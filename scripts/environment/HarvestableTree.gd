@@ -303,11 +303,14 @@ func create_interaction_area() -> void:
 	shape.radius = 60.0  # Reasonable range around trunk
 	collision.shape = shape
 
-	# Position at BASE of tree trunk (where player sees it)
-	if tree_sprite:
-		collision.position = Vector2(0, 50 * tree_sprite.scale.y)
+	# Use same position as the physical collision shape (loaded from scene)
+	var physical_collision = get_node_or_null("CollisionShape2D")
+	if physical_collision:
+		collision.position = physical_collision.position
+	elif tree_sprite:
+		collision.position = Vector2(0, 56 * tree_sprite.scale.y + 200)
 	else:
-		collision.position = Vector2(0, 100)  # Fallback
+		collision.position = Vector2(0, 400)  # Fallback for typical tree
 
 	interaction_area.add_child(collision)
 
@@ -546,8 +549,7 @@ func chop_tree() -> void:
 	if interaction_prompt:
 		interaction_prompt.visible = false
 
-	# Disable the parent tree's large collision shape (added by game_world.gd)
-	# The stump will have its own small collision
+	# Disable the tree's collision shape so player can walk through fallen tree
 	_disable_tree_collision()
 
 	# Spawn wood items
@@ -590,9 +592,6 @@ func animate_tree_chop() -> void:
 	"""Animate tree being chopped down - shake, fall to side, wait for loot"""
 	if not tree_sprite:
 		return
-
-	# Create stump from bottom portion of tree before fading out main tree
-	create_tree_stump()
 
 	# Kill any existing shake tween
 	if shake_tween and shake_tween.is_valid():
@@ -641,11 +640,11 @@ func animate_tree_chop() -> void:
 	# Create fallen tree shadow after it hits the ground
 	create_fallen_tree_shadow(fall_direction, fall_offset, start_position)
 
-	# Fade original shadow for stump
+	# Fade out original shadow (tree is falling)
 	if tree_shadow:
 		var shadow_tween = create_tween()
 		shadow_tween.tween_interval(0.8)  # Wait for tree to fall
-		shadow_tween.tween_property(tree_shadow, "modulate:a", 0.3, 0.5)  # Partial fade for stump shadow
+		shadow_tween.tween_property(tree_shadow, "modulate:a", 0.0, 0.5)  # Full fade
 
 func _on_tree_landed(fall_direction: float, fall_offset: Vector2, start_position: Vector2) -> void:
 	"""Called when tree has finished falling - enable looting"""
@@ -683,7 +682,7 @@ func expand_interaction_area_for_fallen_tree(fall_direction: float, fall_offset:
 		if child is CollisionShape2D:
 			child.queue_free()
 
-	# Create larger collision area that covers both stump and fallen trunk
+	# Create larger collision area that covers the fallen trunk
 	var collision = CollisionShape2D.new()
 	var shape = CapsuleShape2D.new()
 
@@ -850,78 +849,10 @@ func create_fallen_tree_shadow(fall_direction: float, fall_offset: Vector2, tree
 	shadow_tween.tween_interval(0.8)  # Wait for tree to land
 	shadow_tween.tween_property(shadow_sprite, "modulate:a", 1.0, 0.3)  # Fade in shadow
 
-func create_tree_stump() -> void:
-	"""Create a tree stump from the bottom section of the tree sprite with collision"""
-	if not tree_sprite or not tree_sprite.texture:
-		return
-
-	# Get the tree texture
-	var tree_texture = tree_sprite.texture
-	var source_img = tree_texture.get_image()
-
-	# Extract bottom 12% of tree image as stump (cut off top 88%)
-	var stump_height = int(source_img.get_height() * 0.12)
-	var stump_img = Image.create(source_img.get_width(), stump_height, false, Image.FORMAT_RGBA8)
-
-	# Copy bottom 12% from source image
-	var src_y = source_img.get_height() - stump_height
-	stump_img.blit_rect(source_img, Rect2i(0, src_y, source_img.get_width(), stump_height), Vector2i(0, 0))
-
-	# Make ALL pixels fully opaque (no transparency at all)
-	for x in range(stump_img.get_width()):
-		for y in range(stump_img.get_height()):
-			var pixel = stump_img.get_pixel(x, y)
-			if pixel.a > 0.1:  # If pixel has any content, make it fully opaque
-				pixel.a = 1.0
-				stump_img.set_pixel(x, y, pixel)
-
-	# Add simple jagged top edge (just remove some pixels at very top)
-	var rng = RandomNumberGenerator.new()
-	rng.seed = hash(global_position)
-	for x in range(stump_img.get_width()):
-		var cut_depth = rng.randi_range(0, 3)  # Only 0-3 pixels deep
-		for y in range(cut_depth):
-			if y < stump_img.get_height():
-				stump_img.set_pixel(x, y, Color(0, 0, 0, 0))  # Make transparent
-
-	# Create stump container with collision
-	var stump_node = StaticBody2D.new()
-	stump_node.name = "TreeStump"
-
-	# Create stump sprite
-	var stump_sprite = Sprite2D.new()
-	stump_sprite.name = "StumpSprite"
-	stump_sprite.texture = ImageTexture.create_from_image(stump_img)
-	stump_sprite.centered = true
-	stump_sprite.scale = tree_sprite.scale
-	# Match stump color to original tree color (slightly darker for cut wood look)
-	var stump_color = original_modulate
-	stump_color.r *= 0.85
-	stump_color.g *= 0.8
-	stump_color.b *= 0.75
-	stump_sprite.modulate = stump_color
-
-	# Position stump at base of tree
-	var stump_offset = (source_img.get_height() - stump_height) / 2.0 * tree_sprite.scale.y
-	stump_node.position = Vector2(0, stump_offset)
-
-	# Add tiny collision shape for the stump
-	var collision = CollisionShape2D.new()
-	var shape = CircleShape2D.new()
-	shape.radius = 4.0  # Minimal collision radius
-	collision.shape = shape
-	collision.position = Vector2(0, 5)  # Slightly below center
-
-	stump_node.add_child(stump_sprite)
-	stump_node.add_child(collision)
-
-	add_child(stump_node)
-
 func _disable_tree_collision() -> void:
-	"""Disable the parent tree's collision shape when chopped.
-	The stump will have its own small collision."""
+	"""Disable the tree's collision shape when chopped."""
 	# Find and disable CollisionShape2D children that are direct children of this StaticBody2D
-	# (not children of InteractionArea or TreeStump)
+	# (not children of InteractionArea)
 	for child in get_children():
 		if child is CollisionShape2D:
 			child.disabled = true
@@ -942,11 +873,6 @@ func respawn_tree() -> void:
 	fade_timer_started = false
 	respawn_timer = 0.0
 	tree_loot.clear()
-
-	# Remove stump if it exists
-	var stump = get_node_or_null("TreeStump")
-	if stump:
-		stump.queue_free()
 
 	# Remove fallen tree shadow if it exists
 	var fallen_shadow = get_node_or_null("FallenTreeShadow")
@@ -996,11 +922,14 @@ func restore_interaction_area() -> void:
 	shape.radius = 60.0
 
 	collision.shape = shape
-	# Position at BASE of tree trunk
-	if tree_sprite:
-		collision.position = Vector2(0, 50 * tree_sprite.scale.y)
+	# Use same position as the physical collision shape (loaded from scene)
+	var physical_collision = get_node_or_null("CollisionShape2D")
+	if physical_collision:
+		collision.position = physical_collision.position
+	elif tree_sprite:
+		collision.position = Vector2(0, 56 * tree_sprite.scale.y + 200)
 	else:
-		collision.position = Vector2(0, 100)
+		collision.position = Vector2(0, 400)  # Fallback for typical tree
 
 	interaction_area.add_child(collision)
 

@@ -98,14 +98,16 @@ const CHAIN_MILESTONE_INTERVAL: int = 5  # Play sound every 5 chain levels
 # CHARACTER PROGRESSION
 # ============================================
 
-# Starting Stats
+# Starting Stats (6-stat system)
 const STARTING_LEVEL: int = 1
 const STARTING_XP: int = 0
 const STARTING_GOLD: int = 0  # Starting currency
-const STARTING_STRENGTH: int = 10
-const STARTING_AGILITY: int = 10
-const STARTING_VITALITY: int = 10
-const STARTING_LUCK: int = 10
+const STARTING_STRENGTH: int = 10      # Heavy/2H weapon damage (Plate DPS)
+const STARTING_AGILITY: int = 10       # Light weapon damage (Leather DPS)
+const STARTING_DEXTERITY: int = 10     # Melee crit chance
+const STARTING_INTELLIGENCE: int = 10  # Staff damage + healing (Caster)
+const STARTING_WISDOM: int = 10        # Caster crit chance
+const STARTING_VITALITY: int = 10      # Max HP (Tank)
 
 # XP Progression
 const BASE_XP_REQUIREMENT: int = 100  # XP needed for level 2

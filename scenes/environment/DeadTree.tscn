@@ -1,0 +1,45 @@
+[gd_scene load_steps=6 format=3 uid="uid://dieif6wj7cfwo"]
+
+[ext_resource type="Script" uid="uid://1v1r2eslj6am" path="res://scripts/environment/HarvestableTree.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://daqmswhsk0e3l" path="res://assets/environment/wasteland/dead_tree.png" id="2_texture"]
+
+[sub_resource type="Shader" id="Shader_shadow"]
+code = "shader_type canvas_item;
+
+void fragment() {
+	vec2 uv = UV * 2.0 - 1.0;
+	float dist = length(uv);
+	if (dist > 1.0) {
+		discard;
+	}
+	float alpha = 1.0 - smoothstep(0.6, 1.0, dist);
+	COLOR.a *= alpha;
+}
+"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_shadow"]
+shader = SubResource("Shader_shadow")
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_collision"]
+radius = 30.0
+
+[node name="DeadTree" type="StaticBody2D"]
+collision_layer = 2
+collision_mask = 0
+script = ExtResource("1_script")
+
+[node name="Shadow" type="ColorRect" parent="."]
+z_index = -4
+material = SubResource("ShaderMaterial_shadow")
+offset_left = -50.0
+offset_top = 168.0
+offset_right = 50.0
+offset_bottom = 208.0
+color = Color(0, 0, 0, 0.6)
+
+[node name="Sprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_texture")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(-10, 232)
+shape = SubResource("CircleShape2D_collision")

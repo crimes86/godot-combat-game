@@ -446,12 +446,13 @@ func create_character_info_panel(parent: Control) -> void:
 	info_vbox.add_child(stats_center)
 
 	var stats_grid = GridContainer.new()
-	stats_grid.columns = 2
+	stats_grid.columns = 2  # 2 stat rows side by side (each row is an HBox with label+value)
 	stats_grid.add_theme_constant_override("h_separation", 20)
 	stats_grid.add_theme_constant_override("v_separation", 4)
 	stats_center.add_child(stats_grid)
 
-	var stat_names = ["Strength", "Agility", "Vitality", "Luck"]
+	# 6-stat system: STR, AGI, DEX, INT, WIS, VIT
+	var stat_names = ["Strength", "Agility", "Dexterity", "Intelligence", "Wisdom", "Vitality"]
 	for stat_name in stat_names:
 		var stat_row = create_stat_row(stat_name)
 		stats_grid.add_child(stat_row)
@@ -1412,14 +1413,19 @@ func refresh_character_info() -> void:
 
 func refresh_stats() -> void:
 	"""Update all stat displays"""
+	# 6-stat system: STR, AGI, DEX, INT, WIS, VIT
 	if stat_labels.has("strength"):
-		stat_labels["strength"].text = str(CharacterStats.strength)
+		stat_labels["strength"].text = str(CharacterStats.get_effective_strength())
 	if stat_labels.has("agility"):
-		stat_labels["agility"].text = str(CharacterStats.agility)
+		stat_labels["agility"].text = str(CharacterStats.get_effective_agility())
+	if stat_labels.has("dexterity"):
+		stat_labels["dexterity"].text = str(CharacterStats.get_effective_dexterity())
+	if stat_labels.has("intelligence"):
+		stat_labels["intelligence"].text = str(CharacterStats.get_effective_intelligence())
+	if stat_labels.has("wisdom"):
+		stat_labels["wisdom"].text = str(CharacterStats.get_effective_wisdom())
 	if stat_labels.has("vitality"):
-		stat_labels["vitality"].text = str(CharacterStats.vitality)
-	if stat_labels.has("luck"):
-		stat_labels["luck"].text = str(CharacterStats.luck)
+		stat_labels["vitality"].text = str(CharacterStats.get_effective_vitality())
 
 	# Derived stats
 	if stat_labels.has("attack"):
@@ -2394,10 +2400,6 @@ func _build_equipment_tooltip(item: Dictionary, slot_name: String) -> String:
 			var speed_bonus = item.get("attack_speed_bonus", 0.0)
 			if speed_bonus != 0:
 				tooltip += "\nAttack Speed: %+.1f%%" % (speed_bonus * 100)
-		if item.has("crit_chance_bonus"):
-			var crit_bonus = item.get("crit_chance_bonus", 0.0)
-			if crit_bonus != 0:
-				tooltip += "\nCrit Chance: +%.1f%%" % (crit_bonus * 100)
 		# Show weapon type
 		var weapon_type = item.get("weapon_type", "")
 		if weapon_type:
@@ -2405,6 +2407,29 @@ func _build_equipment_tooltip(item: Dictionary, slot_name: String) -> String:
 	# Armor stats
 	elif item.has("defense"):
 		tooltip += "\n\nDefense: +%d" % item.get("defense", 0)
+
+	# Display stat bonuses (STR, VIT, DEX, AGI, INT, WIS)
+	if item.has("stat_bonuses"):
+		var bonuses = item.get("stat_bonuses", {})
+		var stat_parts = []
+		if bonuses.get("str", 0) > 0:
+			stat_parts.append("+%d STR" % bonuses.get("str"))
+		if bonuses.get("vit", 0) > 0:
+			stat_parts.append("+%d VIT" % bonuses.get("vit"))
+		if bonuses.get("dex", 0) > 0:
+			stat_parts.append("+%d DEX" % bonuses.get("dex"))
+		if bonuses.get("agi", 0) > 0:
+			stat_parts.append("+%d AGI" % bonuses.get("agi"))
+		if bonuses.get("int", 0) > 0:
+			stat_parts.append("+%d INT" % bonuses.get("int"))
+		if bonuses.get("wis", 0) > 0:
+			stat_parts.append("+%d WIS" % bonuses.get("wis"))
+		if stat_parts.size() > 0:
+			tooltip += "\n" + ", ".join(stat_parts)
+
+	# Accessory bonuses
+	if item.has("hp_bonus"):
+		tooltip += "\nHP: +%d" % item.get("hp_bonus", 0)
 
 	# Action hint
 	tooltip += "\n\n[Click and hold for details]"

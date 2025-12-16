@@ -1,9 +1,22 @@
-[gd_scene load_steps=11 format=3 uid="uid://b44c1bcnts408"]
+[gd_scene load_steps=25 format=3 uid="uid://bwajqb57avv53"]
 
-[ext_resource type="Script" path="res://scripts/trading_hub/TradingHub.gd" id="1_test"]
+[ext_resource type="Script" uid="uid://mebu3q3lqlre" path="res://scripts/trading_hub/TradingHub.gd" id="1_test"]
 [ext_resource type="Shader" uid="uid://bvc2p5kpshbx6" path="res://shaders/ground_variation.gdshader" id="2_ground"]
-[ext_resource type="Shader" path="res://shaders/grassland.gdshader" id="3_grass"]
-[ext_resource type="PackedScene" path="res://scenes/environment/Forge.tscn" id="4_forge"]
+[ext_resource type="Shader" uid="uid://ly7a3p5raf33" path="res://shaders/grassland.gdshader" id="3_grass"]
+[ext_resource type="PackedScene" uid="uid://bforgescene01" path="res://scenes/environment/Forge.tscn" id="4_forge"]
+[ext_resource type="Texture2D" uid="uid://c5an8cwy57wby" path="res://assets/environment/forge/props/anvil_main.png" id="5_anvil"]
+[ext_resource type="Texture2D" uid="uid://d104egq4ukfye" path="res://assets/environment/forge/props/water_trough.png" id="6_trough"]
+[ext_resource type="Shader" uid="uid://dxfpv6a13vhmu" path="res://shaders/water_trough.gdshader" id="7_water_shader"]
+[ext_resource type="Texture2D" uid="uid://k0pts540broh" path="res://assets/environment/forge/props/tool_rack.png" id="8_toolrack"]
+[ext_resource type="Texture2D" uid="uid://2y2ipva0fdt1" path="res://assets/environment/forge/props/rock_seat_1.png" id="9_rock1"]
+[ext_resource type="Texture2D" uid="uid://dk34rn5axcrq" path="res://assets/environment/forge/props/rock_seat_2.png" id="10_rock2"]
+[ext_resource type="Texture2D" uid="uid://vrw3jnnsqjls" path="res://assets/environment/forge/props/rock_seat_3.png" id="11_rock3"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cave"]
+shader = ExtResource("2_ground")
+shader_parameter/base_color = Color(0.11, 0.1, 0.09, 1)
+shader_parameter/world_scale = 2e-05
+shader_parameter/intensity = 0.5
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_grass"]
 shader = ExtResource("3_grass")
@@ -17,12 +30,6 @@ shader_parameter/detail_intensity = 0.85
 shader_parameter/patch_intensity = 0.15
 shader_parameter/dirt_amount = 0.12
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_cave"]
-shader = ExtResource("2_ground")
-shader_parameter/base_color = Color(0.11, 0.1, 0.09, 1)
-shader_parameter/world_scale = 2e-05
-shader_parameter/intensity = 0.5
-
 [sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_left"]
 polygon = PackedVector2Array(-12000, -4500, -1100, -4500, -1000, -4000, -950, -3800, -1050, -3600, -980, -3400, -1100, -3200, -1000, -3000, -1150, -2800, -1050, -2600, -1200, -2400, -1400, -2200, -1600, -2000, -1900, -1850, -2200, -1650, -2500, -1500, -2850, -1350, -3200, -1150, -3550, -950, -3900, -750, -4200, -500, -4400, -200, -4550, 100, -4500, 400, -4400, 700, -4250, 1000, -4050, 1300, -3850, 1600, -4000, 1900, -4150, 2200, -4300, 2500, -4450, 2800, -4550, 3100, -4650, 3400, -4750, 3700, -4900, 4000, -5050, 4300, -5150, 4600, -5250, 4900, -5300, 5200, -5350, 5500, -5300, 5800, -5250, 6100, -5300, 6400, -5200, 6700, -5250, 7000, -5150, 7300, -5200, 7500, -4250, 7500, -4300, 7200, -4200, 6900, -4250, 6600, -4150, 6300, -4200, 6000, -4100, 5700, -4050, 5400, -3950, 5100, -3850, 4800, -3750, 4500, -3650, 4200, -3500, 3900, -3350, 3600, -3200, 3300, -3100, 3000, -2950, 2700, -2850, 2400, -2750, 2100, -2900, 1900, -550, 2150, -600, 2400, -500, 2650, -550, 2900, -480, 3150, -530, 3400, -470, 3650, -520, 3900, -480, 4150, -550, 4400, -500, 4650, -560, 4900, -490, 5150, -540, 5400, -480, 5650, -530, 5900, -470, 6150, -520, 6400, -480, 6650, -550, 6900, -500, 7150, -520, 7500, -520, 8000, -12000, 8000)
 
@@ -35,6 +42,30 @@ polygon = PackedVector2Array(-12000, -4000, -1100, -4000, -1050, -4100, -1150, -
 [sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_cliff_right"]
 polygon = PackedVector2Array(12000, -4000, 1100, -4000, 1050, -4100, 1150, -4200, 1000, -4300, 1100, -4500, 12000, -4500)
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_anvil"]
+size = Vector2(78, 44.75)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_water"]
+shader = ExtResource("7_water_shader")
+shader_parameter/wave_speed = 0.8
+shader_parameter/wave_amount = 0.003
+shader_parameter/ripple_speed = 1.2
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_trough"]
+size = Vector2(58.5, 113)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_toolrack"]
+size = Vector2(92, 81)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_rock1"]
+size = Vector2(40, 28.5)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_rock2"]
+size = Vector2(40, 34)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_rock3"]
+size = Vector2(126, 37)
+
 [node name="TradingHub" type="Node2D"]
 script = ExtResource("1_test")
 
@@ -46,15 +77,14 @@ z_index = -10
 [node name="CaveFloor" type="ColorRect" parent="Environment"]
 z_index = -3
 material = SubResource("ShaderMaterial_cave")
-offset_left = -12000.0
+offset_left = -12001.0
 offset_top = -5350.0
-offset_right = 12000.0
+offset_right = 11999.0
 offset_bottom = 8000.0
 
 [node name="GrassArea" type="Polygon2D" parent="Environment"]
 z_index = -2
 material = SubResource("ShaderMaterial_grass")
-color = Color(1, 1, 1, 1)
 polygon = PackedVector2Array(-12000, -5000, -11600, -4920, -11200, -5060, -10800, -4940, -10400, -5040, -10000, -4900, -9600, -5070, -9200, -4950, -8800, -5020, -8400, -4880, -8000, -5050, -7600, -4960, -7200, -5030, -6800, -4900, -6400, -5060, -6000, -4940, -5600, -5010, -5200, -4880, -4800, -5050, -4400, -4930, -4000, -5040, -3600, -4900, -3200, -5060, -2800, -4950, -2400, -5020, -2000, -4890, -1600, -5050, -1200, -4940, -800, -5030, -400, -4900, 0, -5060, 400, -4920, 800, -5010, 1200, -4880, 1600, -5050, 2000, -4940, 2400, -5030, 2800, -4900, 3200, -5060, 3600, -4950, 4000, -5020, 4400, -4890, 4800, -5050, 5200, -4930, 5600, -5040, 6000, -4900, 6400, -5060, 6800, -4940, 7200, -5010, 7600, -4880, 8000, -5050, 8400, -4960, 8800, -5030, 9200, -4900, 9600, -5060, 10000, -4940, 10400, -5020, 10800, -4890, 11200, -5050, 11600, -4930, 12000, -5000, 12000, -12000, -12000, -12000)
 
 [node name="CaveWallsLeft" type="Polygon2D" parent="Environment"]
@@ -99,4 +129,213 @@ occluder = SubResource("OccluderPolygon2D_cliff_right")
 z_index = 2
 
 [node name="Forge" parent="InteractiveObjects" instance=ExtResource("4_forge")]
-position = Vector2(150, -100)
+position = Vector2(6, -588)
+
+[node name="Anvil" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.55, 0.5, 0.55, 1)
+z_index = -1
+position = Vector2(6, -268)
+scale = Vector2(1.8430234, 1.8611112)
+texture = ExtResource("5_anvil")
+
+[node name="AnvilShadow" type="Polygon2D" parent="InteractiveObjects/Anvil"]
+z_index = -1
+position = Vector2(-1.0851737, 9.671646)
+scale = Vector2(0.62978816, 0.6380598)
+color = Color(0, 0, 0, 0.45)
+polygon = PackedVector2Array(-28, 0, -18, 7, -7.781616, 8.7030945, 0, 10, 6.639801, 8.893372, 18, 7, 28, 0, 18, -5, 0, -6, -18, -5)
+
+[node name="AnvilCollision" type="StaticBody2D" parent="InteractiveObjects/Anvil/AnvilShadow"]
+position = Vector2(-130.95384, -53.052628)
+scale = Vector2(0.8615384, 0.84210515)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractiveObjects/Anvil/AnvilShadow/AnvilCollision"]
+position = Vector2(156, 44)
+shape = SubResource("RectangleShape2D_anvil")
+
+[node name="TroughShadow" type="Polygon2D" parent="InteractiveObjects"]
+z_index = -1
+position = Vector2(229, -492.6365)
+scale = Vector2(1.4545455, 6.906543)
+color = Color(0, 0, 0, 0.45)
+polygon = PackedVector2Array(-22, 0, -22, 8.924362, -1.375, 8.924362, 22, 8.924366, 22, 0, 20.625, -7.411766, 0, -8, -14, -6)
+
+[node name="WaterTrough" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.6, 0.55, 0.55, 1)
+z_index = -1
+material = SubResource("ShaderMaterial_water")
+position = Vector2(225, -492)
+scale = Vector2(2.2198272, 1.7812496)
+texture = ExtResource("6_trough")
+
+[node name="TroughCollision" type="StaticBody2D" parent="InteractiveObjects/WaterTrough"]
+position = Vector2(-71.6272, -2.245613)
+scale = Vector2(0.45048553, 0.56140363)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractiveObjects/WaterTrough/TroughCollision"]
+position = Vector2(157.25, 5.5)
+shape = SubResource("RectangleShape2D_trough")
+
+[node name="ToolRack" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.6, 0.55, 0.55, 1)
+z_index = -1
+position = Vector2(-202, -544)
+scale = Vector2(1.6465514, 1.6500001)
+texture = ExtResource("8_toolrack")
+
+[node name="ToolRackShadow" type="Polygon2D" parent="InteractiveObjects/ToolRack"]
+z_index = -1
+position = Vector2(-1.2146623, 18.787886)
+scale = Vector2(0.6552771, 0.661157)
+color = Color(0, 0, 0, 0.45)
+polygon = PackedVector2Array(-38, 0, -25, 10, 0, 13, 25, 10, 38, 0, 25, -7, 0, -9, -25, -7)
+
+[node name="ToolRackCollision" type="StaticBody2D" parent="InteractiveObjects/ToolRack"]
+position = Vector2(-25.507858, 72.121216)
+scale = Vector2(0.60732996, 0.60606056)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractiveObjects/ToolRack/ToolRackCollision"]
+position = Vector2(42, -119.5)
+shape = SubResource("RectangleShape2D_toolrack")
+
+[node name="RockSeat7" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.45, 0.4, 0.42, 1)
+z_index = -1
+position = Vector2(150, -101.99999)
+scale = Vector2(1.5000002, 1.5865383)
+texture = ExtResource("9_rock1")
+
+[node name="RockSeat8" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.45, 0.4, 0.42, 1)
+z_index = -1
+position = Vector2(-159, 115)
+scale = Vector2(1.6875013, 1.566244)
+texture = ExtResource("9_rock1")
+
+[node name="RockSeat1" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.45, 0.4, 0.42, 1)
+z_index = -1
+position = Vector2(165, -17)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("9_rock1")
+
+[node name="RockSeat2Shadow" type="Polygon2D" parent="InteractiveObjects"]
+z_index = -2
+position = Vector2(151, 77)
+color = Color(0, 0, 0, 0.4)
+polygon = PackedVector2Array(-10.406908, 0.08052266, -2.406909, 6.0805225, 9.593091, 8.080523, 21.59309, 6.0805225, 29.593092, 0.08052266, 21.59309, -3.9194775, 9.593091, -4.9194775, -2.406909, -3.9194775)
+
+[node name="RockSeat2" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.45, 0.4, 0.42, 1)
+z_index = -1
+position = Vector2(153, 65)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("10_rock2")
+
+[node name="RockSeat3Shadow" type="Polygon2D" parent="InteractiveObjects"]
+z_index = -2
+position = Vector2(0.9999943, 134.125)
+scale = Vector2(1.8285713, 1.1875)
+color = Color(0, 0, 0, 0.4)
+polygon = PackedVector2Array(-38, -1, -25, 7, -3, 9, 19, 7, 32, -1, 19, -6, -3, -7, -25, -6)
+
+[node name="RockSeat3" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.45, 0.4, 0.42, 1)
+z_index = -1
+position = Vector2(2.999999, 121.99999)
+scale = Vector2(2.8112245, 1.5)
+texture = ExtResource("11_rock3")
+
+[node name="RockSeat4" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.45, 0.4, 0.42, 1)
+z_index = -1
+position = Vector2(-157, -56.000004)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("9_rock1")
+
+[node name="RockSeat4Shadow" type="Polygon2D" parent="InteractiveObjects/RockSeat4"]
+z_index = -2
+position = Vector2(0, 8)
+scale = Vector2(0.6666667, 0.6666667)
+color = Color(0, 0, 0, 0.4)
+polygon = PackedVector2Array(-31.301826, -0.49138373, -23.301826, 5.5086164, -11.301826, 7.5086164, 0.6981745, 5.5086164, 8.698174, -0.49138373, 0.6981745, -4.4913836, -11.301826, -5.4913836, -23.301826, -4.4913836)
+
+[node name="RockSeat4Collision" type="StaticBody2D" parent="InteractiveObjects/RockSeat4"]
+scale = Vector2(0.6666667, 0.6666667)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractiveObjects/RockSeat4/RockSeat4Collision"]
+shape = SubResource("RectangleShape2D_rock1")
+
+[node name="RockSeat5" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.45, 0.4, 0.42, 1)
+z_index = -1
+position = Vector2(-143, 27)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("10_rock2")
+
+[node name="RockSeat5Collision" type="StaticBody2D" parent="InteractiveObjects/RockSeat5"]
+scale = Vector2(0.6666667, 0.6666667)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractiveObjects/RockSeat5/RockSeat5Collision"]
+shape = SubResource("RectangleShape2D_rock2")
+
+[node name="RockSeat5Shadow" type="Polygon2D" parent="InteractiveObjects/RockSeat5"]
+z_index = -2
+position = Vector2(0, 8.000002)
+scale = Vector2(0.6666667, 0.6666667)
+color = Color(0, 0, 0, 0.4)
+polygon = PackedVector2Array(-28.705162, -0.19784461, -20.705162, 5.8021555, -8.705163, 7.8021555, 3.294837, 5.8021555, 11.294837, -0.19784461, 3.294837, -4.1978445, -8.705163, -5.1978445, -20.705162, -4.1978445)
+
+[node name="RockSeat5Shadow" type="Polygon2D" parent="InteractiveObjects"]
+z_index = -2
+position = Vector2(-162.17819, 125.8)
+scale = Vector2(0.93671036, 0.9)
+color = Color(0, 0, 0, 0.4)
+polygon = PackedVector2Array(-24.07634, -10, -24.363785, -2, -24.07634, 6, -22.127228, 7, -9.458069, 8, 23.676682, 8, 23.676682, -2, 18.803925, -12, 3.294837, -4.1978445, -8.483505, -11, -18.22902, -10)
+
+[node name="RockSeat6Shadow" type="Polygon2D" parent="InteractiveObjects"]
+z_index = -2
+position = Vector2(-9, -130)
+scale = Vector2(2.4428575, 1.75)
+color = Color(0, 0, 0, 0.4)
+polygon = PackedVector2Array(-24.152044, 5.714287, -22, 8, -11.05263, 9.714287, 0, 10, 8.990692, 9.182671, 22, 8, 30.701752, 5.1428604, 30.701752, -2.8571396, 22, -5, 0, -6, -22, -5, -24.152044, -2.2857132)
+
+[node name="RockSeat6" type="Sprite2D" parent="InteractiveObjects"]
+modulate = Color(0.45, 0.4, 0.42, 1)
+z_index = -1
+position = Vector2(2, -125)
+scale = Vector2(2.8112245, 1.5)
+texture = ExtResource("11_rock3")
+
+[node name="RockSeat1Collision" type="StaticBody2D" parent="InteractiveObjects"]
+position = Vector2(149, -20)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractiveObjects/RockSeat1Collision"]
+position = Vector2(16, 2)
+shape = SubResource("RectangleShape2D_rock1")
+
+[node name="RockSeat1Shadow" type="Polygon2D" parent="InteractiveObjects/RockSeat1Collision"]
+z_index = -2
+position = Vector2(17, 9)
+color = Color(0, 0, 0, 0.4)
+polygon = PackedVector2Array(-20, 0, -12, 6, 0, 8, 12, 6, 25, 4, 29, 2, 29, -2, 12, -4, 0, -5, -12, -4)
+
+[node name="RockSeat2Collision" type="StaticBody2D" parent="InteractiveObjects"]
+position = Vector2(151, 38)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractiveObjects/RockSeat2Collision"]
+position = Vector2(2, 26)
+shape = SubResource("RectangleShape2D_rock2")
+
+[node name="RockSeat3Collision" type="StaticBody2D" parent="InteractiveObjects"]
+position = Vector2(3, 122)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractiveObjects/RockSeat3Collision"]
+shape = SubResource("RectangleShape2D_rock3")
+
+[node name="RockSeat6Collision" type="StaticBody2D" parent="InteractiveObjects"]
+position = Vector2(2, -125)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractiveObjects/RockSeat6Collision"]
+position = Vector2(-4, -0.5)
+shape = SubResource("RectangleShape2D_rock3")

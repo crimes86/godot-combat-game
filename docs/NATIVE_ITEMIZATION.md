@@ -20,6 +20,227 @@ FORGE ITEMS:
 - ~15-25% of optimal endgame loadout
 ```
 
+---
+
+## Class Identities (4 Disciplines)
+
+Dreadland supports 4 class identities that define playstyle. Any player can spec into any class via gear and stat allocation.
+
+### Tank
+**Role**: Frontline defender, damage soak, team protection
+**Primary Armor**: Plate
+**Primary Stats**: VIT (HP/Defense), STR (Block Effectiveness)
+**Key Mechanics**:
+- High HP pool and defense mitigation
+- Block chance with shields
+- Taunt/aggro management (future)
+**Forge Synergy**: Lifesteal sustain, survival passives
+
+### DPS (Damage Dealer)
+**Role**: Primary damage output, kill targets fast
+**Subtypes**:
+- **Plate DPS (Warrior)**: Plate + Heavy weapons (greatsword, axe, halberd)
+- **Leather DPS (Assassin)**: Leather + Light weapons (daggers, rapiers, katanas)
+- **Ranged DPS (Hunter)**: Leather + Bow
+- **Caster DPS (Mage)**: Cloth + Damage Staff
+**Primary Stats**:
+- Plate DPS: STR (Heavy damage), AGI (Attack Speed)
+- Leather DPS: DEX (Light damage), AGI (Crit)
+- Caster DPS: INT (Staff damage), WIS (Staff Crit)
+**Key Mechanics**:
+- Plate DPS: Big hits, cleave, execute damage, bleed
+- Leather DPS: Critical hits, burst damage, chain building
+- Caster DPS: Ranged magic damage, spell effects
+**Forge Synergy**: Bleed effects, execute damage, armor penetration
+
+### Healer
+**Role**: Team sustain, health restoration
+**Primary Armor**: Cloth
+**Primary Weapon**: Healing Staff
+**Primary Stats**: INT (Staff Power), WIS (Staff Crit, CDR)
+**Key Mechanics**:
+- Staff healing scales with INT
+- Cooldown reduction for ability uptime
+- Moderate damage when not healing
+**Forge Synergy**: +Staff Power, AoE healing procs
+
+### Support
+**Role**: Utility, buffs, debuffs, crowd control
+**Primary Armor**: Mixed (Cloth or Leather depending on build)
+**Primary Stats**: WIS (CDR, Stamina Regen), AGI (Move Speed)
+**Key Mechanics**:
+- Ability spam with high CDR
+- Movement speed for positioning
+- Future: buff/debuff abilities
+**Forge Synergy**: Utility procs (slows, stuns, team buffs)
+
+### Class-Armor Mapping
+
+| Class | Primary Armor | Primary Stats | Recommended Weapons |
+|-------|---------------|---------------|---------------------|
+| Tank | Plate | VIT/STR | Sword + Shield, Mace, Hammer |
+| Plate DPS | Plate | STR/AGI | Greatsword, Axe, Halberd |
+| Leather DPS | Leather | DEX/AGI | Dagger, Rapier, Katana |
+| Ranged DPS | Leather | DEX/AGI | Bow |
+| Caster DPS | Cloth | INT/WIS | Damage Staff |
+| Healer | Cloth | INT/WIS | Healing Staff |
+| Support | Cloth/Leather | WIS/AGI | Support Staff, Rapier |
+
+---
+
+## Weapon Types & Scaling
+
+Weapons are divided into three categories based on their primary damage stat.
+
+### Heavy Weapons (STR Scaling)
+Used by Plate wearers (Tank and Plate DPS). Slower attacks, higher damage per hit.
+
+| Weapon | Speed | Base Crit | Identity | Best For |
+|--------|-------|-----------|----------|----------|
+| **Sword** | Medium | 8% | Balanced, shield-compatible | Tank |
+| **Greatsword** | Slow | 10% | Highest damage, two-handed | Plate DPS |
+| **Axe** | Slow | 9% | Bleed on hit | Plate DPS |
+| **Mace** | Slow | 10% | Armor penetration, stun | Tank |
+| **Hammer** | Slow | 11% | Knockback, highest single-hit | Tank |
+| **Spear** | Medium | 8% | Reach, thrust attacks | Versatile |
+| **Halberd** | Slow | 9% | Reach + high damage | Plate DPS |
+
+**Heavy Weapon Effects (Forge):**
+- Lifesteal (Tank sustain)
+- Cleave (hit multiple enemies)
+- Stagger (interrupt enemy attacks)
+- Execute (bonus damage below 25% HP)
+
+### Light Weapons (DEX Scaling)
+Used by Leather wearers (Assassin DPS). Faster attacks, crit-focused.
+
+| Weapon | Speed | Base Crit | Identity | Best For |
+|--------|-------|-----------|----------|----------|
+| **Dagger** | Very Fast | 18% | Highest crit, chain builder | Chain specialists |
+| **Rapier** | Fast | 10% | Armor penetration, precision | Anti-tank |
+| **Katana** | Fast | 12% | Weakpoint bonus, balanced | General DPS |
+| **Scimitar** | Fast | 11% | Bleed on crit | Sustained damage |
+| **Saber** | Fast | 10% | Parry bonus, riposte | Defensive DPS |
+| **Bow** | Medium | 12% | Ranged, safe positioning | Ranged DPS |
+
+**Light Weapon Effects (Forge):**
+- Bleed (damage over time)
+- Poison (slow + DoT)
+- Armor Penetration (ignore % defense)
+- Chain Damage Bonus (+X% at max chain)
+- Backstab Bonus (+X% from behind)
+
+### Staff Weapons (INT Scaling)
+Used by Cloth wearers (Caster, Healer, Support). Ranged attacks, magic damage.
+
+| Weapon | Speed | Base Crit | Identity | Best For |
+|--------|-------|-----------|----------|----------|
+| **Damage Staff** | Medium | 8% | Ranged magic damage | Caster DPS |
+| **Healing Staff** | Medium | 8% | Heals allies, moderate damage | Healer |
+| **Support Staff** | Medium | 6% | Buffs/debuffs, utility | Support |
+
+**Staff Damage Formula:**
+```
+Staff Damage = Base Staff Damage + (INT * 0.5)
+Staff Crit Chance = Base Crit + (WIS * 0.25%)
+```
+
+**Staff Effects (Forge):**
+- Spell Power (+% staff damage)
+- Healing Power (+% healing done)
+- Cooldown Reduction
+- Mana/Stamina efficiency
+- AoE radius increase
+
+---
+
+## Player Archetypes (Endgame)
+
+At endgame, three distinct player types emerge based on how they acquire gear:
+
+### Whales (All Forge Gear)
+**Profile**: Players with significant Mantle achievements, early adopters, collectors
+**Gear Source**: 100% Forge items from bridging achievements
+**Power Curve**:
+```
+Level 1:  ~800 effective power (MASSIVE early advantage)
+Level 15: ~850 effective power (plateau)
+Level 30: ~1000 effective power (base forge power)
+```
+**Strengths**:
+- Dominate early/mid game
+- Unique legendary effects
+- Prestige golden aesthetic
+- No grinding required for gear
+**Weaknesses**:
+- No set bonuses (forge items don't form sets)
+- No forge synergies (need native T3 for those)
+- Power plateaus earlier
+
+### Grinders (All Native Gear)
+**Profile**: Pure F2P players, completionists, anti-P2W philosophy
+**Gear Source**: 100% dropped/purchased native items
+**Power Curve**:
+```
+Level 1:  ~100 effective power (naked start)
+Level 15: ~400 effective power (grinding up)
+Level 30: ~950-1000 effective power + SET BONUSES
+```
+**Strengths**:
+- Full set bonuses (2pc/4pc/5pc effects)
+- No dependency on external achievements
+- Satisfaction of earned progression
+- Darker "veteran" aesthetic
+**Weaknesses**:
+- Slow early/mid game progression
+- Must grind gold and levels
+- Miss unique forge abilities
+
+### Normies (Mixed Gear)
+**Profile**: Casual players, hybrid approach, optimal min-maxers
+**Gear Source**: Mix of forge items + native T3 pieces
+**Power Curve**:
+```
+Level 1:  ~400-600 effective power (some forge items)
+Level 15: ~600-700 effective power (hybrid)
+Level 30: ~1050 effective power (FORGE SYNERGIES ACTIVE)
+```
+**Strengths**:
+- HIGHEST endgame power (forge synergies)
+- Best of both worlds
+- Flexibility in build options
+- Can fill gaps with native items
+**Weaknesses**:
+- Requires both grinding AND achievements
+- More complex gearing decisions
+- Neither pure aesthetic
+
+### Endgame Balance Philosophy
+
+```
+DESIGN GOAL: All three archetypes viable at endgame
+
+Whales:     Pure forge power + unique effects = ~1000 power
+Grinders:   Native power + full set bonuses   = ~1000 power
+Normies:    Mixed power + forge synergies     = ~1050 power
+
+The ~5% "normie bonus" rewards versatility but doesn't
+invalidate pure builds. A skilled grinder beats a
+mediocre whale through set bonus procs and game knowledge.
+```
+
+### PvP Counterplay Between Archetypes
+
+| Matchup | Dynamic |
+|---------|---------|
+| Whale vs Grinder | Whale has unique procs, Grinder has set bonus sustain |
+| Whale vs Normie | Normie has synergy edge, Whale has more legendary effects |
+| Grinder vs Normie | Grinder has full sets, Normie has hybrid flexibility |
+
+**The key insight**: No archetype is strictly "best". Each has strengths that create meaningful counterplay. A full-forge burst assassin can delete a grinder before set bonuses proc. A full-native tank with Ironclad can survive whale burst and outlast them.
+
+---
+
 ### Power Curve Target
 
 ```
@@ -534,7 +755,7 @@ These are computed from primary stat totals:
 | **HP Regen** | 1 + (VIT * 0.1) per 5s | None |
 | **Dodge Chance** | (DEX * 0.2%) | 40% |
 | **Physical Crit %** | 5% + (AGI * 0.25%) | 50% |
-| **Attack Speed** | 100% + (AGI * 0.2%) | +30% |
+| **Attack Speed** | cooldown = 1.0 / (1.0 + (AGI-10) * 0.06) | 0.05s min |
 | **Move Speed** | 100% + (AGI * 0.15%) | +50% |
 | **Staff Power** | 100% + (INT * 0.5%) | None |
 | **Staff Crit %** | 5% + (WIS * 0.25%) | 50% |
@@ -864,3 +1085,4 @@ func calculate_set_bonuses(equipped_items: Dictionary) -> Dictionary:
 ## Version History
 
 - v1.0 (2024-12) - Initial native itemization design
+- v1.1 (2024-12) - Added 4 class identities (Tank, DPS, Healer, Support) and 3 player archetypes (Whales, Grinders, Normies)

@@ -1,0 +1,13 @@
+weapon/sword/glowsword/walk/red.png
+	- Licenses:
+		- OGA-BY 3.0
+		- CC-BY-SA 3.0
+	- Authors:
+		- bluecarrot16
+		- tskaufma
+		- Johannes Sjölund (wulax)
+	- Links:
+		- https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+		- https://opengameart.org/content/lpc-glow-sword
+		- https://opengameart.org/content/lpc-extended-weapon-animations
+

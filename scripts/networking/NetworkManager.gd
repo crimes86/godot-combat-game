@@ -655,6 +655,7 @@ func handle_guest_request(guest_name: String) -> void:
 			break
 
 	# Create guest player data (default values, no persistence)
+	# 6-stat system: STR, AGI, DEX, INT, WIS, VIT
 	var guest_data = {
 		"id": -peer_id,  # Negative ID indicates guest
 		"username": guest_name,
@@ -665,8 +666,10 @@ func handle_guest_request(guest_name: String) -> void:
 		"gold": 100,
 		"strength": 10,
 		"agility": 10,
+		"dexterity": 10,
+		"intelligence": 10,
+		"wisdom": 10,
 		"vitality": 10,
-		"luck": 10,
 		"current_hp": 100.0,
 		"max_hp": 100.0,
 		"position_x": -2000.0,
@@ -895,15 +898,17 @@ func _build_local_player_state() -> Dictionary:
 		if "current_health" in player:
 			state["current_hp"] = player.current_health
 
-	# Get stats from CharacterStats
+	# Get stats from CharacterStats - 6-stat system
 	var stats_data = CharacterStats.get_save_data()
 	state["level"] = stats_data.get("level", 1)
 	state["xp"] = stats_data.get("experience", 0)
 	state["gold"] = stats_data.get("gold", 100)
 	state["strength"] = stats_data.get("strength", 10)
 	state["agility"] = stats_data.get("agility", 10)
+	state["dexterity"] = stats_data.get("dexterity", 10)
+	state["intelligence"] = stats_data.get("intelligence", 10)
+	state["wisdom"] = stats_data.get("wisdom", 10)
 	state["vitality"] = stats_data.get("vitality", 10)
-	state["luck"] = stats_data.get("luck", 10)
 	state["character_stats"] = JSON.stringify(stats_data)
 
 	# Get inventory

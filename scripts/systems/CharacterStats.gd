@@ -19,13 +19,21 @@ var experience_to_next_level: int = Constants.BASE_XP_REQUIREMENT
 var gold: int = Constants.STARTING_GOLD  # Currency for purchasing equipment (starting gold for testing)
 
 # ============================================
-# BASE ATTRIBUTES
+# BASE ATTRIBUTES (6-stat system)
 # ============================================
+# Each archetype focuses on different primary stats:
+# - Tank: VIT > STR
+# - Plate DPS (2H): STR > DEX > VIT
+# - Leather DPS: AGI > DEX > VIT
+# - Caster DPS: INT > WIS > VIT
+# - Healer: INT > VIT
 
-var strength: int = Constants.STARTING_STRENGTH  # Affects base damage
-var agility: int = Constants.STARTING_AGILITY    # Affects attack speed
-var vitality: int = Constants.STARTING_VITALITY  # Affects max HP
-var luck: int = Constants.STARTING_LUCK          # Affects crit chance
+var strength: int = Constants.STARTING_STRENGTH      # Heavy/2H weapon damage (Plate DPS)
+var agility: int = Constants.STARTING_AGILITY        # Light weapon damage (Leather DPS)
+var dexterity: int = Constants.STARTING_DEXTERITY    # Melee crit chance (all melee)
+var intelligence: int = Constants.STARTING_INTELLIGENCE  # Staff damage + healing power (Caster)
+var wisdom: int = Constants.STARTING_WISDOM          # Caster crit chance
+var vitality: int = Constants.STARTING_VITALITY      # Max HP (Tank)
 
 # Temporary buffs (from campfires, potions, etc.)
 var campfire_crit_buff: float = 0.0  # Bonus crit chance from campfire bone embers
@@ -45,8 +53,10 @@ var playtest_claimed_items: Array = []  # item_ids of forged items claimed in pl
 # Starting stats (for reset/new character)
 const STARTING_STRENGTH: int = Constants.STARTING_STRENGTH
 const STARTING_AGILITY: int = Constants.STARTING_AGILITY
+const STARTING_DEXTERITY: int = Constants.STARTING_DEXTERITY
+const STARTING_INTELLIGENCE: int = Constants.STARTING_INTELLIGENCE
+const STARTING_WISDOM: int = Constants.STARTING_WISDOM
 const STARTING_VITALITY: int = Constants.STARTING_VITALITY
-const STARTING_LUCK: int = Constants.STARTING_LUCK
 
 # ============================================
 # EQUIPPED WEAPON
@@ -122,7 +132,7 @@ func _ready() -> void:
 	Constants.debug_log("═══════════════════════════════════════")
 	Constants.debug_log("CharacterStats System Initialized")
 	Constants.debug_log("Level: %d" % level)
-	Constants.debug_log("Stats: STR:%d AGI:%d VIT:%d LUCK:%d" % [strength, agility, vitality, luck])
+	Constants.debug_log("Stats: STR:%d AGI:%d DEX:%d INT:%d WIS:%d VIT:%d" % [strength, agility, dexterity, intelligence, wisdom, vitality])
 	Constants.debug_log("Chain system: signals chain_increased, chain_reset, overdrive_activated")
 	Constants.debug_log("═══════════════════════════════════════")
 
@@ -183,39 +193,130 @@ func _equip_starting_clothes() -> void:
 # ============================================
 
 func get_attack_cooldown() -> float:
-	"""Calculate attack cooldown based on agility + weapon bonuses"""
-	# 🔧 BALANCED: Progression curve for level 30 cap
-	# Level 1 (AGI 10): 1.0s (1 attack/sec)
-	# Level 10 (AGI 28): 0.27s (3.7 attacks/sec)
-	# Level 15 (AGI 38): 0.19s (5.3 attacks/sec)
-	# Level 20 (AGI 48): 0.15s (6.7 attacks/sec)
-	# Level 25 (AGI 58): 0.12s (8.2 attacks/sec) - Near uncapped feel, needs gear to hit 0.05s cap
-	var base_cooldown = 1.0 / (1.0 + (agility - 10) * 0.15)
-	
-	# Apply weapon bonus
-	var weapon_bonus = 0.0
+	"""Calculate attack cooldown based on weapon type only.
+	Attack speed is a weapon property, not a stat - balanced per weapon type:
+	- Very Fast (dagger): 0.25s - reaches uncapped speed
+	- Fast (katana, rapier, sword): 0.40s
+	- Medium (staff, axe, mace): 0.60s
+	- Slow (greatsword, hammer, halberd): 0.85s
+	DPS is balanced across types through damage per hit."""
+
+	# Base cooldown from weapon type
+	var base_cooldown = 0.60  # Default medium speed
+
 	if equipped_weapon:
-		weapon_bonus = equipped_weapon.attack_speed_bonus
-	
-	var final_cooldown = base_cooldown * (1.0 + weapon_bonus)
-	return clamp(final_cooldown, 0.05, 2.0)  # Min 0.05s, max 2.0s
+		var weapon_type = equipped_weapon.weapon_type.to_lower()
+
+		# Very fast weapons
+		if weapon_type in ["dagger"]:
+			base_cooldown = 0.25
+		# Fast weapons
+		elif weapon_type in ["katana", "rapier", "sword"]:
+			base_cooldown = 0.40
+		# Medium weapons
+		elif weapon_type in ["staff", "damage_staff", "healing_staff", "support_staff", "axe", "mace", "spear"]:
+			base_cooldown = 0.60
+		# Slow weapons
+		elif weapon_type in ["greatsword", "hammer", "halberd"]:
+			base_cooldown = 0.85
+
+		# Apply weapon-specific bonus (for unique weapons that break the mold)
+		var weapon_bonus = equipped_weapon.attack_speed_bonus
+		base_cooldown = base_cooldown * (1.0 + weapon_bonus)
+
+	return clamp(base_cooldown, 0.15, 2.0)  # Min 0.15s, max 2.0s
 
 func get_base_damage() -> float:
-	"""Calculate base damage from strength + weapon"""
-	# Base formula: 5 damage at 10 STR, +0.5 per point
-	var stat_damage = 5.0 + (strength - 10) * 0.5
-	
-	# Add weapon damage
+	"""Calculate base damage from primary stat + weapon.
+	Weapon type determines which stat is used:
+	- Heavy weapons (sword, axe, mace, hammer, spear, halberd, greatsword): STR
+	- Light weapons (dagger, katana, rapier): AGI
+	- Staff weapons (staff, damage_staff, healing_staff, support_staff): INT
+
+	Stat scaling is adjusted by weapon speed so that equal stat investment
+	gives equal DPS regardless of weapon type. This allows Plate DPS (STR)
+	to keep pace with Leather DPS (AGI) when both invest equally in their
+	primary stat.
+	"""
+	# Determine which stat to use based on weapon type
+	var primary_stat = get_effective_strength()  # Default to STR
+
+	if equipped_weapon:
+		var weapon_type = equipped_weapon.weapon_type.to_lower()
+		var light_weapons = ["dagger", "katana", "rapier", "scimitar", "saber", "bow", "claws"]
+		var staff_weapons = ["staff", "damage_staff", "healing_staff", "support_staff", "psi_blade", "warp_blade"]
+
+		if weapon_type in light_weapons:
+			primary_stat = get_effective_agility()  # Leather DPS uses AGI
+		elif weapon_type in staff_weapons:
+			primary_stat = get_effective_intelligence()  # Caster uses INT
+		else:
+			# Heavy weapons use STR (Plate DPS)
+			primary_stat = get_effective_strength()
+
+	# Speed-adjusted stat scaling: slower weapons get more damage per stat point
+	# so that +1 stat = same DPS gain regardless of weapon speed
+	# Reference: 0.25s (very fast) = 1.0x multiplier
+	var attack_time = get_attack_cooldown()
+	var stat_multiplier = attack_time / 0.25  # 0.25s=1x, 0.40s=1.6x, 0.60s=2.4x, 0.85s=3.4x
+
+	# Base formula: 5 damage at 10 stat, +0.5 per point * speed multiplier
+	var stat_damage = 5.0 * stat_multiplier + (primary_stat - 10) * 0.5 * stat_multiplier
+
+	# Add weapon damage (not multiplied - weapon damage is already balanced per type)
 	var weapon_damage = 0.0
 	if equipped_weapon:
 		weapon_damage = equipped_weapon.base_damage
-	
+
 	return stat_damage + weapon_damage
+
+func get_effective_strength() -> int:
+	"""Get total STR including equipment bonuses"""
+	return strength + get_equipment_stat_bonus("str")
+
+func get_effective_agility() -> int:
+	"""Get total AGI including equipment bonuses"""
+	return agility + get_equipment_stat_bonus("agi")
+
+func get_effective_dexterity() -> int:
+	"""Get total DEX including equipment bonuses"""
+	return dexterity + get_equipment_stat_bonus("dex")
+
+func get_effective_intelligence() -> int:
+	"""Get total INT including equipment bonuses"""
+	return intelligence + get_equipment_stat_bonus("int")
+
+func get_effective_wisdom() -> int:
+	"""Get total WIS including equipment bonuses"""
+	return wisdom + get_equipment_stat_bonus("wis")
+
+func get_effective_vitality() -> int:
+	"""Get total VIT including equipment bonuses"""
+	return vitality + get_equipment_stat_bonus("vit")
+
+func get_equipment_stat_bonus(stat_key: String) -> int:
+	"""Calculate total bonus for a stat from all equipped items"""
+	var total_bonus = 0
+
+	# Check weapon stat bonuses
+	if not equipped_weapon_data.is_empty():
+		var bonuses = equipped_weapon_data.get("stat_bonuses", {})
+		total_bonus += bonuses.get(stat_key, 0)
+
+	# Check all armor slot stat bonuses
+	for slot in equipped_armor:
+		var armor_item = equipped_armor[slot]
+		if armor_item and armor_item is Dictionary:
+			var bonuses = armor_item.get("stat_bonuses", {})
+			total_bonus += bonuses.get(stat_key, 0)
+
+	return total_bonus
 
 func get_max_health() -> float:
 	"""Calculate max HP from vitality (PvE)"""
 	# Base formula: 100 HP at 10 VIT, +10 per point
-	return 100.0 + (vitality - 10) * 10.0
+	var effective_vit = get_effective_vitality()
+	return 100.0 + (effective_vit - 10) * 10.0
 
 func get_pvp_max_health() -> float:
 	"""Calculate max HP for PvP duels (separate scaling for balance)"""
@@ -223,7 +324,8 @@ func get_pvp_max_health() -> float:
 	# Target: 3-5 weakpoint windows to kill
 	var base_hp = Constants.PLAYER_PVP_BASE_HP if "PLAYER_PVP_BASE_HP" in Constants else 800.0
 	var hp_per_vit = Constants.PLAYER_PVP_HP_PER_VIT if "PLAYER_PVP_HP_PER_VIT" in Constants else 15.0
-	return base_hp + (vitality - 10) * hp_per_vit
+	var effective_vit = get_effective_vitality()
+	return base_hp + (effective_vit - 10) * hp_per_vit
 
 func get_window_damage() -> float:
 	"""Calculate damage dealt by a perfect weakpoint window at current level.
@@ -245,10 +347,20 @@ func get_window_damage() -> float:
 	return base_damage * crit_mult * weakpoint_count * hits_per_weakpoint
 
 func get_base_crit_chance() -> float:
-	"""Calculate crit chance from luck stat only (no weapon bonus)"""
-	# Base formula: 1% at 10 LUCK, +0.6% per point (for fast-paced combat)
-	# At level 25+ (35 LUCK): 16% crit chance
-	var stat_crit = 0.01 + (luck - 10) * 0.006
+	"""Calculate crit chance based on weapon type:
+	- Melee weapons (STR/AGI): Use DEX for crit
+	- Caster weapons (INT): Use WIS for crit
+	Base formula: 1% at 10 stat, +0.5% per point"""
+	var crit_stat = get_effective_dexterity()  # Default to DEX for melee
+
+	# Check if using a caster weapon
+	if equipped_weapon:
+		var weapon_type = equipped_weapon.weapon_type.to_lower()
+		var staff_weapons = ["staff", "damage_staff", "healing_staff", "support_staff", "psi_blade", "warp_blade"]
+		if weapon_type in staff_weapons:
+			crit_stat = get_effective_wisdom()  # Casters use WIS for crit
+
+	var stat_crit = 0.01 + (crit_stat - 10) * 0.005
 
 	# Add campfire buff (from bone embers)
 	var total_crit = stat_crit + campfire_crit_buff
@@ -297,37 +409,34 @@ func level_up_character() -> void:
 	experience_to_next_level = int(Constants.BASE_XP_REQUIREMENT * pow(Constants.XP_SCALING_EXPONENT, level_exponent))
 
 	# Grant stat points (balanced increases) - ONLY up to level 25
-	var stat_gain_str = 0
-	var stat_gain_agi = 0
-	var stat_gain_vit = 0
-	var stat_gain_luck = 0
+	# All 6 stats increase equally - player differentiates through equipment
+	var stat_gain = 0
 
 	if level <= Constants.STAT_GAIN_CAP_LEVEL:
-		stat_gain_str = 2
-		stat_gain_agi = 2
-		stat_gain_vit = 2
-		stat_gain_luck = 1
+		stat_gain = 2  # +2 to each stat per level
 
-		strength += stat_gain_str
-		agility += stat_gain_agi
-		vitality += stat_gain_vit
-		luck += stat_gain_luck
-	
+		strength += stat_gain
+		agility += stat_gain
+		dexterity += stat_gain
+		intelligence += stat_gain
+		wisdom += stat_gain
+		vitality += stat_gain
+
 	# Emit signal
 	level_up.emit(level)
-	
+
 	# Celebratory print
 	print("\n╔══════════════════════════════════════╗")
 	print("║      🎉 LEVEL UP! Level ", level, "         ║")
 	print("╚══════════════════════════════════════╝")
 	if level <= Constants.STAT_GAIN_CAP_LEVEL:
-		print("  STR: ", strength, " (+", stat_gain_str, ")")
-		print("  AGI: ", agility, " (+", stat_gain_agi, ")")
-		print("  VIT: ", vitality, " (+", stat_gain_vit, ")")
-		print("  LUCK: ", luck, " (+", stat_gain_luck, ")")
+		print("  STR: ", strength, " (+", stat_gain, ") | AGI: ", agility, " (+", stat_gain, ")")
+		print("  DEX: ", dexterity, " (+", stat_gain, ") | INT: ", intelligence, " (+", stat_gain, ")")
+		print("  WIS: ", wisdom, " (+", stat_gain, ") | VIT: ", vitality, " (+", stat_gain, ")")
 	else:
 		print("  ⚠️  MAX STAT LEVEL (", Constants.STAT_GAIN_CAP_LEVEL, ") - No stat gains")
-		print("  STR: ", strength, " | AGI: ", agility, " | VIT: ", vitality, " | LUCK: ", luck)
+		print("  STR: ", strength, " | AGI: ", agility, " | DEX: ", dexterity)
+		print("  INT: ", intelligence, " | WIS: ", wisdom, " | VIT: ", vitality)
 	print("  Next Level: ", experience_to_next_level, " XP")
 	print("════════════════════════════════════════\n")
 
@@ -381,7 +490,7 @@ func can_afford(amount: int) -> bool:
 func increase_stat(stat_name: String, amount: int) -> void:
 	"""Increase a stat by amount (for items, buffs, etc)"""
 	var old_value: int
-	
+
 	match stat_name.to_lower():
 		"strength", "str":
 			old_value = strength
@@ -391,14 +500,22 @@ func increase_stat(stat_name: String, amount: int) -> void:
 			old_value = agility
 			agility += amount
 			stat_changed.emit("agility", old_value, agility)
+		"dexterity", "dex":
+			old_value = dexterity
+			dexterity += amount
+			stat_changed.emit("dexterity", old_value, dexterity)
+		"intelligence", "int":
+			old_value = intelligence
+			intelligence += amount
+			stat_changed.emit("intelligence", old_value, intelligence)
+		"wisdom", "wis":
+			old_value = wisdom
+			wisdom += amount
+			stat_changed.emit("wisdom", old_value, wisdom)
 		"vitality", "vit":
 			old_value = vitality
 			vitality += amount
 			stat_changed.emit("vitality", old_value, vitality)
-		"luck":
-			old_value = luck
-			luck += amount
-			stat_changed.emit("luck", old_value, luck)
 
 # ============================================
 # WEAPON SYSTEM
@@ -590,8 +707,10 @@ func reset_character() -> void:
 
 	strength = STARTING_STRENGTH
 	agility = STARTING_AGILITY
+	dexterity = STARTING_DEXTERITY
+	intelligence = STARTING_INTELLIGENCE
+	wisdom = STARTING_WISDOM
 	vitality = STARTING_VITALITY
-	luck = STARTING_LUCK
 
 	# Reset to unarmed
 	equipped_weapon = null
@@ -741,11 +860,13 @@ func get_save_data() -> Dictionary:
 		"experience_to_next_level": experience_to_next_level,
 		"gold": gold,
 
-		# Attributes
+		# 6-Stat System
 		"strength": strength,
 		"agility": agility,
+		"dexterity": dexterity,
+		"intelligence": intelligence,
+		"wisdom": wisdom,
 		"vitality": vitality,
-		"luck": luck,
 
 		# Equipment
 		"equipped_weapon": weapon_data,
@@ -760,7 +881,7 @@ func get_save_data() -> Dictionary:
 		# Quest progress
 		"quests": quest_data,
 
-		"version": 1  # For future migration
+		"version": 4  # 6-stat system
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -771,11 +892,13 @@ func load_save_data(data: Dictionary) -> void:
 	experience_to_next_level = data.get("experience_to_next_level", Constants.BASE_XP_REQUIREMENT)
 	gold = data.get("gold", Constants.STARTING_GOLD)
 
-	# Attributes
+	# 6-Stat System
 	strength = data.get("strength", STARTING_STRENGTH)
 	agility = data.get("agility", STARTING_AGILITY)
+	dexterity = data.get("dexterity", STARTING_DEXTERITY)
+	intelligence = data.get("intelligence", STARTING_INTELLIGENCE)
+	wisdom = data.get("wisdom", STARTING_WISDOM)
 	vitality = data.get("vitality", STARTING_VITALITY)
-	luck = data.get("luck", STARTING_LUCK)
 
 	# Tracking stats
 	kill_counts = data.get("kill_counts", {})
@@ -889,21 +1012,46 @@ func print_stats() -> void:
 	print("\n═══ CHARACTER STATS ═══")
 	print("Level: ", level)
 	print("XP: ", experience, "/", experience_to_next_level)
-	print("\n--- Attributes ---")
-	print("Strength: ", strength)
-	print("Agility: ", agility)
-	print("Vitality: ", vitality)
-	print("Luck: ", luck)
+	print("\n--- Attributes (6-stat system) ---")
+	print("STR: ", get_effective_strength(), " (base: ", strength, " + equip: ", get_equipment_stat_bonus("str"), ") - Plate DPS")
+	print("AGI: ", get_effective_agility(), " (base: ", agility, " + equip: ", get_equipment_stat_bonus("agi"), ") - Leather DPS")
+	print("DEX: ", get_effective_dexterity(), " (base: ", dexterity, " + equip: ", get_equipment_stat_bonus("dex"), ") - Melee Crit")
+	print("INT: ", get_effective_intelligence(), " (base: ", intelligence, " + equip: ", get_equipment_stat_bonus("int"), ") - Caster")
+	print("WIS: ", get_effective_wisdom(), " (base: ", wisdom, " + equip: ", get_equipment_stat_bonus("wis"), ") - Caster Crit")
+	print("VIT: ", get_effective_vitality(), " (base: ", vitality, " + equip: ", get_equipment_stat_bonus("vit"), ") - Tank HP")
 	print("\n--- Combat Stats ---")
-	print("Attack Speed: ", "%.3f" % get_attack_cooldown(), "s")
-	print("Base Damage: ", "%.1f" % get_base_damage())
+	print("Attack Speed: ", "%.3f" % get_attack_cooldown(), "s (weapon-based)")
+	print("Base Damage: ", "%.1f" % get_base_damage(), " (scales with ", _get_weapon_scaling_stat(), ")")
 	print("Max Health: ", "%.0f" % get_max_health())
-	print("Crit Chance: ", "%.1f" % (get_base_crit_chance() * 100), "%")
+	print("Crit Chance: ", "%.1f" % (get_base_crit_chance() * 100), "% (scales with ", _get_crit_scaling_stat(), ")")
 	print("Movement Speed: ", "%.0f" % get_movement_speed())
 	print("\n--- Weapon ---")
 	if equipped_weapon:
 		print("Equipped: ", equipped_weapon.weapon_name)
+		print("Type: ", equipped_weapon.weapon_type)
+	else:
+		print("Unarmed")
 	print("═══════════════════════\n")
+
+func _get_weapon_scaling_stat() -> String:
+	"""Get the stat name that the current weapon scales with for damage"""
+	if not equipped_weapon:
+		return "STR"
+	var weapon_type = equipped_weapon.weapon_type.to_lower()
+	if weapon_type in ["dagger", "katana", "rapier", "scimitar", "saber", "bow", "claws"]:
+		return "AGI"
+	elif weapon_type in ["staff", "damage_staff", "healing_staff", "support_staff", "psi_blade", "warp_blade"]:
+		return "INT"
+	return "STR"
+
+func _get_crit_scaling_stat() -> String:
+	"""Get the stat name that the current weapon scales with for crit"""
+	if not equipped_weapon:
+		return "DEX"
+	var weapon_type = equipped_weapon.weapon_type.to_lower()
+	if weapon_type in ["staff", "damage_staff", "healing_staff", "support_staff", "psi_blade", "warp_blade"]:
+		return "WIS"
+	return "DEX"
 
 # ============================================
 # PLAYTEST FORGE SYSTEM

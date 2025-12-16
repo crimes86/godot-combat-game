@@ -395,6 +395,18 @@ func get_equipped_pickaxe() -> Dictionary:
 	"""Get the currently equipped pickaxe"""
 	return equipped_pickaxe
 
+func get_equipped_pickaxe_tier() -> int:
+	"""Get the tier of the equipped pickaxe (-1 if none equipped)"""
+	if equipped_pickaxe.is_empty():
+		return -1
+	return equipped_pickaxe.get("tier", 0)  # Default to tier 0 if not specified
+
+func get_equipped_axe_tier() -> int:
+	"""Get the tier of the equipped axe (-1 if none equipped)"""
+	if equipped_axe.is_empty():
+		return -1
+	return equipped_axe.get("tier", 0)  # Default to tier 0 if not specified
+
 # ============================================
 # SAVE/LOAD DATA (for Database Persistence)
 # ============================================

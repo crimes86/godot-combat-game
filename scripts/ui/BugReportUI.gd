@@ -230,13 +230,14 @@ func _create_indicator() -> void:
 	indicator_layer.layer = 90  # Below bug report panel but above game
 	add_child(indicator_layer)
 
-	# Container for the indicator
+	# Container for the indicator - must fill screen for anchors to work
 	indicator_container = Control.new()
 	indicator_container.name = "IndicatorContainer"
 	indicator_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	indicator_container.set_anchors_preset(Control.PRESET_FULL_RECT)
 	indicator_layer.add_child(indicator_container)
 
-	# Background panel
+	# Background panel - positioned at top-center
 	var bg_panel = PanelContainer.new()
 	bg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bg_style = StyleBoxFlat.new()
@@ -244,7 +245,11 @@ func _create_indicator() -> void:
 	bg_style.set_corner_radius_all(4)
 	bg_style.set_content_margin_all(6)
 	bg_panel.add_theme_stylebox_override("panel", bg_style)
-	bg_panel.position = Vector2(10, 10)
+
+	# Center at top of screen
+	bg_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	bg_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	bg_panel.position = Vector2(0, 10)
 	indicator_container.add_child(bg_panel)
 
 	# VBox for content

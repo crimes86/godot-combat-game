@@ -263,6 +263,8 @@ func transition_to_hub() -> void:
 	print("[TradingHubManager] Scheduling transition for next frame via timer...")
 	var timer = get_tree().create_timer(0.0)  # Zero-duration = next frame
 	timer.timeout.connect(_do_deferred_hub_transition, CONNECT_ONE_SHOT)
+	# Failsafe: force a deferred change_scene_to_file on a small delay to bypass persistent locks
+	get_tree().create_timer(0.1).timeout.connect(_force_scene_change, CONNECT_ONE_SHOT)
 
 func _do_deferred_hub_transition() -> void:
 	"""Actually perform the hub transition - called via timer"""
@@ -274,33 +276,10 @@ func _do_deferred_hub_transition() -> void:
 		_pending_hub_transition = false
 		return
 
-	# If we have a pre-loaded scene, use change_scene_to_packed instead
-	if _hub_scene_cached:
-		print("[TradingHubManager] Using pre-loaded scene with change_scene_to_packed...")
-		var err = tree.change_scene_to_packed(_hub_scene_cached)
-		print("[TradingHubManager] change_scene_to_packed returned: %d (OK=0, ERR_LOCKED=19)" % err)
-		if err == OK:
-			print("[TradingHubManager] ✅ Scene change initiated successfully!")
-			_pending_hub_transition = false
-			return
-		# If packed approach also fails, try manual swap
-		print("[TradingHubManager] change_scene_to_packed failed, trying manual swap...")
-		_do_manual_scene_swap()
-		return
-
-	# Fallback: Try the standard Godot approach: change_scene_to_file
-	print("[TradingHubManager] No pre-loaded scene, attempting change_scene_to_file('%s')..." % _hub_scene_path)
-	var err = tree.change_scene_to_file(_hub_scene_path)
-	print("[TradingHubManager] change_scene_to_file returned: %d (OK=0, ERR_LOCKED=19)" % err)
-
-	if err == OK:
-		print("[TradingHubManager] ✅ Scene change initiated successfully!")
-		_pending_hub_transition = false
-		return
-
-	# If standard approach fails, try threaded loading
-	print("[TradingHubManager] Standard approach failed (err=%d), starting threaded load..." % err)
-	_start_threaded_load()
+	# Single-step: defer change_scene_to_file to next idle tick (avoids locks)
+	print("[TradingHubManager] Deferring change_scene_to_file('%s')..." % _hub_scene_path)
+	tree.call_deferred("change_scene_to_file", _hub_scene_path)
+	_pending_hub_transition = false
 
 func _start_threaded_load() -> void:
 	"""Start loading the scene in a background thread"""
@@ -348,8 +327,14 @@ func _poll_threaded_load() -> void:
 		print("[TradingHubManager] Still loading (status=1), polling again in 50ms...")
 		get_tree().create_timer(0.05).timeout.connect(_poll_threaded_load, CONNECT_ONE_SHOT)
 	elif status == 3:  # THREAD_LOAD_FAILED
-		push_error("[TradingHubManager] Threaded load FAILED (status=3)!")
-		_pending_hub_transition = false
+		push_error("[TradingHubManager] Threaded load FAILED (status=3)! Attempting direct load fallback.")
+		_hub_scene_cached = load(_hub_scene_path)
+		if _hub_scene_cached:
+			print("[TradingHubManager] Direct load succeeded after threaded fail, deferring manual scene swap...")
+			call_deferred("_do_manual_scene_swap")
+		else:
+			push_error("[TradingHubManager] Direct load also failed after threaded fail.")
+			_pending_hub_transition = false
 	elif status == 0:  # THREAD_LOAD_INVALID_RESOURCE
 		push_error("[TradingHubManager] Invalid resource (status=0)!")
 		_pending_hub_transition = false
@@ -360,6 +345,7 @@ func _poll_threaded_load() -> void:
 func _do_manual_scene_swap() -> void:
 	"""Swap scenes manually after loading"""
 	print("[TradingHubManager] _do_manual_scene_swap() called")
+	print("[TradingHubManager] Pending hub transition: %s" % _pending_hub_transition)
 
 	if not _hub_scene_cached:
 		push_error("[TradingHubManager] No cached scene to swap!")
@@ -374,11 +360,20 @@ func _do_manual_scene_swap() -> void:
 		return
 
 	print("[TradingHubManager] instantiate() returned: %s" % str(new_scene_instance))
+	# Defer the actual swap to avoid any SceneTree lock
+	call_deferred("_finish_manual_scene_swap", new_scene_instance)
 
+func _finish_manual_scene_swap(new_scene_instance: Node) -> void:
 	var tree = get_tree()
+	if not tree:
+		push_error("[TradingHubManager] No SceneTree during manual swap finish!")
+		_pending_hub_transition = false
+		return
+
 	var root = tree.root
 	var current_scene = tree.current_scene
 
+	print("[TradingHubManager] Finishing manual swap...")
 	print("[TradingHubManager] Current scene: %s" % (current_scene.name if current_scene else "null"))
 
 	# Remove current scene
@@ -394,6 +389,14 @@ func _do_manual_scene_swap() -> void:
 
 	print("[TradingHubManager] ✅ Scene swap complete!")
 	_pending_hub_transition = false
+	_hub_scene_cached = null
+
+func _force_scene_change() -> void:
+	"""Absolute fallback: defer change_scene_to_file directly after a small delay"""
+	if _pending_hub_transition:
+		print("[TradingHubManager] Force scene change fallback executing...")
+		get_tree().call_deferred("change_scene_to_file", _hub_scene_path)
+		_pending_hub_transition = false
 
 func _debug_scene_tree_state(context: String) -> void:
 	"""Print debug info about current scene tree state"""

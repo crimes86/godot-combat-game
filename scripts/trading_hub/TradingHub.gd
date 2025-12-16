@@ -38,6 +38,9 @@ const ZONE2_ZOOM_MAX: float = 2.0           # Normal zoom in
 var _player_in_zone2: bool = false          # Track zone for zoom changes
 var _original_zoom_min: float = 0.75        # Store original to restore on exit
 
+# Fire pit ambient audio
+var _fire_ambient_player: AudioStreamPlayer2D = null
+
 # Spawn positions for each entry corridor
 const SPAWN_SOUTH: Vector2 = Vector2(0, 200)          # Near hub hearth
 const SPAWN_WEST: Vector2 = Vector2(-200, 0)          # Near hub hearth (west side)
@@ -104,6 +107,57 @@ func _ready() -> void:
 
 	# Spawn player
 	_spawn_player()
+
+	# Start Trading Hub music
+	_start_hub_music()
+
+	# Setup fire pit ambient audio
+	_setup_fire_ambient()
+
+func _start_hub_music() -> void:
+	"""Start playing Trading Hub ambient music"""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		# Stop any game music first
+		if sound_manager.has_method("stop_game_music"):
+			sound_manager.stop_game_music()
+		# Start hub music
+		if sound_manager.has_method("play_trading_hub_music"):
+			sound_manager.play_trading_hub_music(-12.0)
+			print("[TradingHub] 🎵 Started Trading Hub music")
+		else:
+			push_warning("[TradingHub] SoundManager missing play_trading_hub_music method")
+	else:
+		push_warning("[TradingHub] SoundManager not found")
+
+func _setup_fire_ambient() -> void:
+	"""Setup spatial audio for fire pit area (covers hearth and forge)"""
+	var fire_sound = load("res://assets/audio/sfx/ambient/fire_pit_ambient.mp3")
+	if not fire_sound:
+		push_warning("[TradingHub] Could not load fire_pit_ambient.mp3")
+		return
+
+	# Create spatial audio player
+	_fire_ambient_player = AudioStreamPlayer2D.new()
+	_fire_ambient_player.name = "FireAmbientAudio"
+	_fire_ambient_player.stream = fire_sound
+
+	# Position between hearth (0,0) and forge (-2,-406) to cover both
+	_fire_ambient_player.position = Vector2(0, -150)
+
+	# Spatial audio settings
+	_fire_ambient_player.max_distance = 800.0  # Audible within 800px
+	_fire_ambient_player.attenuation = 1.5  # Gradual falloff
+	_fire_ambient_player.volume_db = -6.0  # Comfortable ambient level
+	_fire_ambient_player.autoplay = true
+
+	# Enable looping for MP3
+	if fire_sound is AudioStreamMP3:
+		(fire_sound as AudioStreamMP3).loop = true
+
+	add_child(_fire_ambient_player)
+	_fire_ambient_player.play()
+	print("[TradingHub] 🔥 Fire pit ambient audio started")
 
 func _spawn_player() -> void:
 	var player_scene = _get_player_scene()

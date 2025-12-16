@@ -199,8 +199,8 @@ func validate_player_data(data: Dictionary) -> Dictionary:
 			issues.append("Invalid gold %s, clamping to valid range" % str(gold))
 			sanitized["gold"] = clampi(int(gold) if gold is int or gold is float else 0, 0, MAX_GOLD)
 
-	# Validate stats (1 - MAX_STAT)
-	for stat_name in ["strength", "agility", "vitality", "luck"]:
+	# Validate stats (1 - MAX_STAT) - 6-stat system
+	for stat_name in ["strength", "agility", "dexterity", "intelligence", "wisdom", "vitality"]:
 		if sanitized.has(stat_name):
 			var stat = sanitized[stat_name]
 			if not (stat is int or stat is float) or stat < 1 or stat > MAX_STAT:
@@ -367,10 +367,13 @@ func create_account(username: String, password: String) -> Dictionary:
 		"gold": 100,
 
 		# Stats
+		# 6-stat system
 		"strength": 10,
 		"agility": 10,
+		"dexterity": 10,
+		"intelligence": 10,
+		"wisdom": 10,
 		"vitality": 10,
-		"luck": 10,
 
 		# Current state
 		"current_hp": 100.0,
@@ -470,10 +473,10 @@ func save_player_data(username: String, data: Dictionary) -> bool:
 		push_error("[DatabaseManager] Cannot save - player not found: %s" % username)
 		return false
 
-	# Update allowed fields
+	# Update allowed fields - 6-stat system
 	var allowed_fields = [
 		"level", "xp", "gold",
-		"strength", "agility", "vitality", "luck",
+		"strength", "agility", "dexterity", "intelligence", "wisdom", "vitality",
 		"current_hp", "max_hp",
 		"position_x", "position_y", "current_phase",
 		"inventory", "equipment", "appearance",
@@ -626,14 +629,17 @@ func save_current_player_state() -> bool:
 		save_data["current_hp"] = player.current_health if player.has_method("get") else player.get("current_health")
 
 	# Character stats (level, xp, gold, attributes, equipment, kills, achievements, playtime)
+	# 6-stat system: STR, AGI, DEX, INT, WIS, VIT
 	var stats_data = CharacterStats.get_save_data()
 	save_data["level"] = stats_data.get("level", 1)
 	save_data["xp"] = stats_data.get("experience", 0)
 	save_data["gold"] = stats_data.get("gold", 100)
 	save_data["strength"] = stats_data.get("strength", 10)
 	save_data["agility"] = stats_data.get("agility", 10)
+	save_data["dexterity"] = stats_data.get("dexterity", 10)
+	save_data["intelligence"] = stats_data.get("intelligence", 10)
+	save_data["wisdom"] = stats_data.get("wisdom", 10)
 	save_data["vitality"] = stats_data.get("vitality", 10)
-	save_data["luck"] = stats_data.get("luck", 10)
 	save_data["character_stats"] = JSON.stringify(stats_data)  # Full blob for complex data
 
 	# Inventory
@@ -698,14 +704,17 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 			LogManager.debug("Loaded character stats for: %s" % username, "database")
 	else:
 		# Fallback: load individual fields if full blob not available (already validated)
+		# 6-stat system: STR, AGI, DEX, INT, WIS, VIT
 		var fallback_stats = {
 			"level": data.get("level", 1),
 			"experience": data.get("xp", 0),
 			"gold": data.get("gold", 100),
 			"strength": data.get("strength", 10),
 			"agility": data.get("agility", 10),
+			"dexterity": data.get("dexterity", 10),
+			"intelligence": data.get("intelligence", 10),
+			"wisdom": data.get("wisdom", 10),
 			"vitality": data.get("vitality", 10),
-			"luck": data.get("luck", 10),
 			"total_playtime": data.get("total_playtime_seconds", 0)
 		}
 		CharacterStats.load_save_data(fallback_stats)

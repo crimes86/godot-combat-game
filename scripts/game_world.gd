@@ -23,15 +23,24 @@ const PROP_TEXTURES = {
 	"dead_tree": "res://assets/environment/wasteland/dead_tree.png",
 	"pine_tree": "res://assets/environment/wasteland/pine_tree.png",
 	"autumn_tree": "res://assets/environment/wasteland/autumn_tree.png",
-	"rock_large": "res://assets/environment/wasteland/rock_large.png",
-	"rock_medium": "res://assets/environment/wasteland/rock_medium.png",
-	"rock_small": "res://assets/environment/wasteland/rock_small.png",
+	# Rock spawning now handled by ChunkBasedPropSystem with zone-based textures
+	# These are fallback paths for legacy code using zone1 rocks
+	"rock_large": "res://assets/environment/wasteland/rocks/zone1/rock_large_1.png",
+	"rock_medium": "res://assets/environment/wasteland/rocks/zone1/rock_medium_1.png",
+	"rock_small": "res://assets/environment/wasteland/rocks/zone1/rock_small_1.png",
 	"skull": "res://assets/environment/wasteland/skull.png",
 	"bones": "res://assets/environment/wasteland/bones.png",
 	"ground_crack_1": "res://assets/environment/wasteland/ground_crack_1.png",
 	"ground_crack_2": "res://assets/environment/wasteland/ground_crack_2.png",
 	"broken_sword": "res://assets/environment/wasteland/broken_sword.png",
 	"ash_pile": "res://assets/environment/wasteland/ash_pile.png"
+}
+
+# Tree scene files - collision positions can be edited visually in these scenes
+const TREE_SCENES = {
+	"dead_tree": "res://scenes/environment/DeadTree.tscn",
+	"pine_tree": "res://scenes/environment/PineTree.tscn",
+	"autumn_tree": "res://scenes/environment/AutumnTree.tscn"
 }
 
 const LAYER_TEMPLATE = [
@@ -2131,32 +2140,23 @@ func point_to_line_segment_distance(point: Vector2, line_start: Vector2, line_en
 	return point.distance_to(projection)
 
 func create_tree_at_position(parent: Node2D, pos: Vector2, tree_type: String, rng: RandomNumberGenerator):
-	# 100% of trees are harvestable
-	var is_harvestable = true
+	# Load tree scene (collision positions are set visually in these scenes)
+	if not TREE_SCENES.has(tree_type):
+		return
 
-	# Use StaticBody2D for collision (or HarvestableTree script if harvestable)
-	var prop_container: StaticBody2D
-	if is_harvestable:
-		# Load and create harvestable tree
-		var HarvestableTreeScript = preload("res://scripts/environment/HarvestableTree.gd")
-		prop_container = HarvestableTreeScript.new()
-	else:
-		# Regular static tree
-		prop_container = StaticBody2D.new()
+	var scene_path = TREE_SCENES[tree_type]
+	if not ResourceLoader.exists(scene_path):
+		return
+
+	var tree_scene = load(scene_path)
+	var prop_container = tree_scene.instantiate()
 
 	prop_container.name = tree_type + "_at_" + str(pos.x) + "_" + str(pos.y)
 	prop_container.position = pos
-	# Set collision layers (layer 1 = environment, blocks player and enemies)
 	prop_container.collision_layer = 2  # Layer 2 for obstacles
-	prop_container.collision_mask = 0  # Doesn't need to detect anything
+	prop_container.collision_mask = 0
 
-	var texture_path = PROP_TEXTURES[tree_type]
-	if not ResourceLoader.exists(texture_path):
-		return
-
-	var texture = load(texture_path)
-
-	# Determine tree size (small trees now rare - only 10% instead of 30%)
+	# Determine tree size (small trees now rare - only 10%)
 	var size_roll = rng.randf()
 	var tree_scale: float
 	if size_roll < 0.1:
@@ -2168,86 +2168,46 @@ func create_tree_at_position(parent: Node2D, pos: Vector2, tree_type: String, rn
 
 	var tree_flipped = rng.randf() < 0.5
 
-	# Create simple dark oval shadow at base of tree
-	var shadow = ColorRect.new()
-	shadow.name = "Shadow"
-	var shadow_width = 45 * (tree_scale / 2.5) * 0.75  # Scale shadow with tree (25% smaller)
-	var shadow_height = shadow_width * 0.4  # Oval shape
-	shadow.size = Vector2(shadow_width, shadow_height)
-	# Position at bottom of tree - new sprites are 128x128, tree base is at y=120 (56 from center when centered)
-	var shadow_y = 56 * tree_scale  # Tree base position scaled
-	# Center shadow horizontally (no skew adjustment needed with new symmetric trees)
-	var shadow_x = -shadow_width / 2
-	shadow.position = Vector2(shadow_x, shadow_y)
-	shadow.color = Color(0, 0, 0, 0.6)  # Darker shadow
-	shadow.z_index = -4  # Above ground layers, below props
+	# Get sprite and collision from scene and apply scaling
+	var sprite = prop_container.get_node_or_null("Sprite")
+	var shadow = prop_container.get_node_or_null("Shadow")
+	var collision = prop_container.get_node_or_null("CollisionShape2D")
 
-	# Apply oval shader with soft gradient falloff
-	var shader_material = ShaderMaterial.new()
-	var shader = Shader.new()
-	shader.code = """
-shader_type canvas_item;
+	if sprite:
+		sprite.scale = Vector2(tree_scale, tree_scale)
+		sprite.flip_h = tree_flipped
 
-void fragment() {
-	vec2 uv = UV * 2.0 - 1.0;  // Convert to -1 to 1 range
-	float dist = length(uv);  // Distance from center
-	if (dist > 1.0) {
-		discard;  // Make it circular
-	}
-	// Soft gradient falloff at edges
-	float alpha = 1.0 - smoothstep(0.6, 1.0, dist);
-	COLOR.a *= alpha;
-}
-"""
-	shader_material.shader = shader
-	shadow.material = shader_material
+		# Mix of tree types: 40% brown oak/maple, 30% white birch, 30% grey/silver
+		var tree_roll = rng.randf()
+		if tree_roll < 0.4:
+			var base_brown = rng.randf_range(0.7, 0.9)
+			sprite.modulate = Color(
+				base_brown,
+				base_brown * rng.randf_range(0.7, 0.85),
+				base_brown * rng.randf_range(0.5, 0.65),
+				1.0
+			)
+		elif tree_roll < 0.7:
+			var brightness = rng.randf_range(0.9, 1.0)
+			sprite.modulate = Color(brightness, brightness * 0.98, brightness * 0.94, 1.0)
+		else:
+			var grey = rng.randf_range(0.75, 0.95)
+			sprite.modulate = Color(grey, grey, grey * 1.02, 1.0)
 
-	prop_container.add_child(shadow)
+	if shadow:
+		# Scale shadow with tree
+		var shadow_width = 45 * (tree_scale / 2.5) * 0.75
+		var shadow_height = shadow_width * 0.4
+		shadow.size = Vector2(shadow_width, shadow_height)
+		shadow.position = Vector2(-shadow_width / 2, 56 * tree_scale)
 
-	var sprite = Sprite2D.new()
-	sprite.name = "Sprite"
-	sprite.texture = texture
-	sprite.centered = true
-	sprite.scale = Vector2(tree_scale, tree_scale)
-	sprite.flip_h = tree_flipped
-	sprite.z_index = 0
-
-	# Mix of tree types: 40% brown oak/maple, 30% white birch, 30% grey/silver
-	var tree_roll = rng.randf()
-	if tree_roll < 0.4:
-		# Brown oak/maple trees - warm natural wood tones
-		var base_brown = rng.randf_range(0.7, 0.9)
-		sprite.modulate = Color(
-			base_brown,                          # Red channel (warm)
-			base_brown * rng.randf_range(0.7, 0.85),  # Green (less = more brown)
-			base_brown * rng.randf_range(0.5, 0.65),  # Blue (least = warm brown)
-			1.0
-		)
-	elif tree_roll < 0.7:
-		# White birch - bright cream/white bark
-		var brightness = rng.randf_range(0.9, 1.0)
-		sprite.modulate = Color(
-			brightness,                    # White-cream
-			brightness * 0.98,             # Slight warm tint
-			brightness * 0.94,             # Cream undertone
-			1.0
-		)
-	else:
-		# Grey/silver birch - light silvery grey bark
-		var grey = rng.randf_range(0.75, 0.95)
-		sprite.modulate = Color(grey, grey, grey * 1.02, 1.0)  # Slight cool tint
-
-	prop_container.add_child(sprite)
-
-	# Add collision shape at tree trunk base
-	var collision_shape = CollisionShape2D.new()
-	var shape = CircleShape2D.new()
-	# Collision radius scales with tree size (trunk width) - tighter for better feel
-	shape.radius = 10 * tree_scale  # Reduced from 15 for tighter collision
-	collision_shape.shape = shape
-	# Position collision at base of tree trunk (where sprite base is)
-	collision_shape.position = Vector2(0, 50 * tree_scale)  # Near bottom of tree
-	prop_container.add_child(collision_shape)
+	if collision:
+		# Scale collision position and radius based on tree size
+		# The scene's collision.position.y is the base offset for scale 1.0
+		var base_collision_y = collision.position.y
+		collision.position = Vector2(0, base_collision_y * tree_scale)
+		if collision.shape is CircleShape2D:
+			collision.shape.radius = 10 * tree_scale
 
 	parent.add_child(prop_container)
 

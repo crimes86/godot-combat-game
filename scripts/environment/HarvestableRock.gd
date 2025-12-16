@@ -5,6 +5,26 @@ class_name HarvestableRock
 ## Press F when near to mine the rock
 ## Drops ore/stone that can be sold for gold
 ## Rock respawns after 180 seconds (3 minutes)
+## Supports tiered mining system (Tier 1-3)
+
+# === TIER SYSTEM ===
+var rock_tier: int = 1  # 1 = Zone 1 (basic), 2 = Zone 2 (iron), 3 = Zone 3 (steel)
+var rock_size: String = "medium"  # small, medium, large, cluster, standing
+var tier_data: Dictionary = {}  # Cached tier data from ROCK_TIERS
+
+# Tier names for display
+const TIER_NAMES = {
+	1: "Wasteland Rock",
+	2: "Highland Rock",
+	3: "Ancient Stone"
+}
+
+# Pickaxe tier names for requirement messages
+const PICKAXE_TIER_NAMES = {
+	0: "Basic Pickaxe",
+	1: "Iron Pickaxe",
+	2: "Steel Pickaxe"
+}
 
 # Harvesting
 var player_in_range: bool = false
@@ -15,7 +35,7 @@ var interaction_area: Area2D = null
 # Hold-to-mine system
 var is_mining: bool = false
 var mine_progress: float = 0.0  # 0.0 to 1.0
-var mine_time_required: float = 4.0  # 4 seconds to mine rock (slower than tree)
+var mine_time_required: float = 3.0  # Base time, overridden by tier
 var progress_circle: Node2D = null
 var cancel_grace_timer: float = 0.0  # Prevent immediate cancellation
 var cancel_grace_period: float = 0.15  # 0.15 second grace period
@@ -35,8 +55,8 @@ var rock_shadow: Node = null
 var original_modulate: Color = Color.WHITE
 var original_scale: Vector2 = Vector2.ONE
 
-# Resource yield
-var ore_amount: int = 0  # Set based on rock size (1-3 ore/stone)
+# Resource yield (now determined by tier_data drops)
+var ore_amount: int = 0  # Legacy, kept for compatibility
 
 # Loot system for mined rock pile
 var rock_loot: Array = []  # Ore items to loot from rock pile
@@ -60,6 +80,7 @@ var mine_sound_interval: float = 0.8  # Play mine sound every 0.8 seconds (slowe
 
 # Performance caching
 var cached_has_pickaxe: bool = false
+var cached_pickaxe_tier: int = -1  # -1 = no pickaxe, 0+ = pickaxe tier
 var pickaxe_check_timer: float = 0.0
 const PICKAXE_CHECK_INTERVAL: float = 0.5  # Only check pickaxe every 0.5 seconds
 var last_drawn_progress: float = -1.0  # Track last drawn progress
@@ -78,7 +99,7 @@ func _ready() -> void:
 		original_scale = rock_sprite.scale
 		original_sprite_position = rock_sprite.position
 
-		# Determine ore amount based on rock size
+		# Legacy ore amount based on rock size (kept for compatibility)
 		var rock_scale_avg = (rock_sprite.scale.x + rock_sprite.scale.y) / 2.0
 		if rock_scale_avg < 2.5:
 			ore_amount = 1  # Small rocks
@@ -86,6 +107,9 @@ func _ready() -> void:
 			ore_amount = 2  # Medium rocks
 		else:
 			ore_amount = 3  # Large rocks
+
+	# Initialize tier data
+	_setup_tier_data()
 
 	# Create interaction area
 	create_interaction_area()
@@ -98,6 +122,35 @@ func _ready() -> void:
 
 	# Load audio files
 	load_audio_files()
+
+func _setup_tier_data() -> void:
+	"""Initialize tier-specific settings from ChunkBasedPropSystem.ROCK_TIERS"""
+	# Try to get tier data from ChunkBasedPropSystem
+	var prop_system = get_node_or_null("/root/ChunkBasedPropSystem")
+	if prop_system and "ROCK_TIERS" in prop_system:
+		if prop_system.ROCK_TIERS.has(rock_tier):
+			tier_data = prop_system.ROCK_TIERS[rock_tier]
+			mine_time_required = tier_data.get("mine_time", 3.0)
+	else:
+		# Fallback tier data if prop system not available
+		tier_data = {
+			"name": TIER_NAMES.get(rock_tier, "Rock"),
+			"pickaxe_tier": rock_tier - 1,
+			"mine_time": 3.0 + (rock_tier - 1),
+			"xp": 10 * rock_tier,
+			"drops": {"stone": {"min": 1, "max": 3}}
+		}
+		mine_time_required = tier_data.mine_time
+
+func set_rock_tier(tier: int, size: String = "medium") -> void:
+	"""Set rock tier and size (called by spawner)"""
+	rock_tier = clamp(tier, 1, 3)
+	rock_size = size
+	_setup_tier_data()
+
+func get_required_pickaxe_tier() -> int:
+	"""Get the minimum pickaxe tier required to mine this rock"""
+	return tier_data.get("pickaxe_tier", rock_tier - 1)
 
 func _exit_tree() -> void:
 	"""Clean up when rock is removed from scene tree"""
@@ -173,12 +226,16 @@ func _physics_process(delta: float) -> void:
 			interaction_prompt.visible = false
 		return
 
-	# Check if player has pickaxe - CACHED for performance (only check every 0.5s)
+	# Check if player has pickaxe and tier - CACHED for performance (only check every 0.5s)
 	pickaxe_check_timer += delta
 	if pickaxe_check_timer >= PICKAXE_CHECK_INTERVAL:
 		pickaxe_check_timer = 0.0
 		cached_has_pickaxe = InventorySystem.has_pickaxe_equipped()
+		cached_pickaxe_tier = InventorySystem.get_equipped_pickaxe_tier()
 	var has_pickaxe = cached_has_pickaxe
+	var required_tier = get_required_pickaxe_tier()
+	var has_sufficient_tier = cached_pickaxe_tier >= required_tier
+	var can_mine = has_pickaxe and has_sufficient_tier
 
 	# Update interaction prompt visibility and position (only if active interactable)
 	if interaction_prompt and not is_harvested and not is_mining:
@@ -186,8 +243,12 @@ func _physics_process(delta: float) -> void:
 			interaction_prompt.visible = false
 		else:
 			var new_prompt_text = ""
-			if has_pickaxe:
-				new_prompt_text = "Hold [F] Mine Rock"
+			if can_mine:
+				new_prompt_text = "Hold [F] Mine " + tier_data.get("name", "Rock")
+			elif has_pickaxe and not has_sufficient_tier:
+				# Player has pickaxe but wrong tier
+				var required_pickaxe = PICKAXE_TIER_NAMES.get(required_tier, "Better Pickaxe")
+				new_prompt_text = "Requires " + required_pickaxe
 			else:
 				new_prompt_text = "Requires Pickaxe Equipped"
 
@@ -195,15 +256,15 @@ func _physics_process(delta: float) -> void:
 			if new_prompt_text != current_prompt_text:
 				current_prompt_text = new_prompt_text
 				interaction_prompt.text = new_prompt_text
-				if has_pickaxe:
+				if can_mine:
 					interaction_prompt.add_theme_color_override("font_color", Color(0.8, 1.0, 0.8))  # Light green
 					prompt_fade_timer = 0.0  # Reset fade timer when showing action prompt
 				else:
 					interaction_prompt.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))  # Light red
-					prompt_fade_timer = 0.0  # Start fade timer for "Requires Pickaxe"
+					prompt_fade_timer = 0.0  # Start fade timer for requirement message
 
-		# Handle fade-out for "Requires Pickaxe" message
-		if not has_pickaxe and interaction_prompt.visible:
+		# Handle fade-out for requirement messages
+		if not can_mine and interaction_prompt.visible:
 			prompt_fade_timer += delta
 			if prompt_fade_timer >= prompt_fade_duration:
 				# Fade out the message
@@ -221,13 +282,13 @@ func _physics_process(delta: float) -> void:
 			interaction_prompt.modulate.a = 1.0  # Reset opacity for action prompts
 
 		# Show/hide prompt logic
-		var should_show = has_pickaxe  # Show if has pickaxe
-		if not has_pickaxe and prompt_fade_timer < (prompt_fade_duration + 1.0):
-			should_show = true  # Show "Requires Pickaxe" until fade complete
+		var should_show = can_mine  # Show if can mine
+		if not can_mine and prompt_fade_timer < (prompt_fade_duration + 1.0):
+			should_show = true  # Show requirement message until fade complete
 
 		if should_show != interaction_prompt.visible:
 			interaction_prompt.visible = should_show
-			if should_show and not has_pickaxe:
+			if should_show and not can_mine:
 				prompt_fade_timer = 0.0  # Reset timer when reshowing
 
 		# Update position every frame when visible
@@ -236,8 +297,8 @@ func _physics_process(delta: float) -> void:
 
 	# Handle hold-to-mine mechanic
 	if not is_harvested:
-		# Check pickaxe one more time before allowing mine
-		if not has_pickaxe:
+		# Check pickaxe and tier before allowing mine
+		if not can_mine:
 			# Cancel any ongoing mining if pickaxe was unequipped mid-mine
 			if is_mining:
 				cancel_mining()
@@ -554,8 +615,9 @@ func mine_rock() -> void:
 	# Spawn ore/stone drops
 	spawn_ore_drops()
 
-	# Grant XP for mining (scales with ore amount)
-	var xp_gain = 8 * ore_amount  # 8-24 XP based on rock size (more than trees since slower)
+	# Grant XP for mining (from tier data, scaled by rock size)
+	var base_xp = tier_data.get("xp", 10)
+	var xp_gain = base_xp + (ore_amount * 2)  # Tier XP + bonus for larger rocks
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("gain_experience"):
 		player.gain_experience(xp_gain)
@@ -568,23 +630,104 @@ func mine_rock() -> void:
 	animate_rock_break()
 
 func spawn_ore_drops() -> void:
-	"""Generate ore loot for the rock pile (not added to inventory yet)"""
+	"""Generate ore loot for the rock pile based on tier drops table"""
 	rock_loot.clear()
 
-	var ore_item_data = {
-		"name": "Wasteland Ore",
-		"description": "Rough ore from wasteland rocks. Can be refined or sold.",
-		"value": 15,
-		"type": "material",
-		"rarity": "COMMON",
-		"stackable": true,
-		"max_stack": 1000,
-		"quantity": 1
+	var drops = tier_data.get("drops", {})
+	if drops.is_empty():
+		# Fallback to basic stone drop
+		drops = {"stone": {"min": 1, "max": 3}}
+
+	# Item templates for each drop type
+	var item_templates = {
+		"stone": {
+			"name": "Stone",
+			"description": "A chunk of rough stone.",
+			"value": 5,
+			"type": "material",
+			"rarity": "COMMON",
+			"stackable": true,
+			"max_stack": 1000
+		},
+		"copper_ore": {
+			"name": "Copper Ore",
+			"description": "Raw copper ore. Can be smelted into copper bars.",
+			"value": 15,
+			"type": "material",
+			"rarity": "COMMON",
+			"stackable": true,
+			"max_stack": 1000
+		},
+		"iron_ore": {
+			"name": "Iron Ore",
+			"description": "Dense iron ore. Can be smelted into iron bars.",
+			"value": 25,
+			"type": "material",
+			"rarity": "UNCOMMON",
+			"stackable": true,
+			"max_stack": 1000
+		},
+		"gold_ore": {
+			"name": "Gold Ore",
+			"description": "Precious gold ore. Highly valuable when smelted.",
+			"value": 75,
+			"type": "material",
+			"rarity": "RARE",
+			"stackable": true,
+			"max_stack": 1000
+		},
+		"gem_shard": {
+			"name": "Gem Shard",
+			"description": "A sparkling gem fragment. Used in jewelry and enchanting.",
+			"value": 50,
+			"type": "material",
+			"rarity": "UNCOMMON",
+			"stackable": true,
+			"max_stack": 100
+		},
+		"ancient_fragment": {
+			"name": "Ancient Fragment",
+			"description": "A mysterious fragment pulsing with ancient energy.",
+			"value": 150,
+			"type": "material",
+			"rarity": "RARE",
+			"stackable": true,
+			"max_stack": 50
+		}
 	}
 
-	# Generate ore items as loot (player must loot them)
-	for i in range(ore_amount):
-		rock_loot.append(ore_item_data.duplicate())
+	# Process each drop type from tier data
+	for drop_type in drops:
+		var drop_data = drops[drop_type]
+		var min_amount = drop_data.get("min", 0)
+		var max_amount = drop_data.get("max", 1)
+		var drop_chance = drop_data.get("chance", 1.0)  # Default to 100% if not specified
+
+		# Check chance roll
+		if drop_chance < 1.0 and randf() > drop_chance:
+			continue  # Failed chance roll, skip this drop
+
+		# Determine amount to drop
+		var amount = randi_range(min_amount, max_amount)
+		if amount <= 0:
+			continue
+
+		# Get item template or create generic one
+		var template = item_templates.get(drop_type, {
+			"name": drop_type.capitalize().replace("_", " "),
+			"description": "A mining resource.",
+			"value": 10,
+			"type": "material",
+			"rarity": "COMMON",
+			"stackable": true,
+			"max_stack": 1000
+		})
+
+		# Create item entries (one per unit for looting UI)
+		for i in range(amount):
+			var item = template.duplicate()
+			item["quantity"] = 1
+			rock_loot.append(item)
 
 
 func animate_rock_break() -> void:
@@ -871,6 +1014,7 @@ func _on_body_entered(body: Node2D) -> void:
 
 		# Immediately check pickaxe status when entering range (don't wait for cache timer)
 		cached_has_pickaxe = InventorySystem.has_pickaxe_equipped()
+		cached_pickaxe_tier = InventorySystem.get_equipped_pickaxe_tier()
 		pickaxe_check_timer = 0.0  # Reset cache timer
 
 		# Auto-open loot UI if rock is mined and has loot

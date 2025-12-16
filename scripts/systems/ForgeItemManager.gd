@@ -632,8 +632,12 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 			base_item["slot"] = "mainhand"
 			# Get weapon_type from ForgeItemDB if available, otherwise from forged param, fallback to sword
 			base_item["weapon_type"] = forge_db_item.get("weapon_type", forged.get("weapon_type", "sword"))
-			base_item["base_damage"] = 5 + (damage_bonus * 3)  # 8-20 damage based on rarity
-			base_item["attack_speed"] = "Normal"
+			# Get stats from ForgeItemDB, fallback to hardcoded if not found
+			base_item["base_damage"] = forge_db_item.get("base_damage", 5 + (damage_bonus * 3))
+			base_item["attack_speed"] = forge_db_item.get("attack_speed", "medium")
+			base_item["crit_chance_bonus"] = forge_db_item.get("crit_chance_bonus", forge_db_item.get("crit_chance", 0.05))
+			if forge_db_item.has("stat_bonuses"):
+				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
 			base_item["required_level"] = 1  # Forged items have no level req (twinking!)
 			# Gun weapons need ranged_damage attack mode for cursor-based targeting
 			if base_item["weapon_type"] == "gun":
@@ -652,19 +656,40 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 		"armor_head", "armor_chest", "armor_legs", "armor_hands", "armor_feet":
 			base_item["type"] = "armor"
 			base_item["slot"] = item_type.replace("armor_", "")
-			base_item["defense"] = 2 + damage_bonus  # 3-7 defense
+			# Get defense from ForgeItemDB, fallback to hardcoded
+			base_item["defense"] = forge_db_item.get("defense", 2 + damage_bonus)
+			if forge_db_item.has("stat_bonuses"):
+				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
 
 		"shield":
 			base_item["type"] = "shield"
 			base_item["slot"] = "offhand"
+			base_item["defense"] = forge_db_item.get("defense", 5 + damage_bonus)
 			base_item["block_chance"] = 0.1 + (damage_bonus * 0.03)  # 13-25% block
+			if forge_db_item.has("stat_bonuses"):
+				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
 
 		"cape":
 			base_item["type"] = "cape"
 			base_item["slot"] = "back"
+			if forge_db_item.has("defense"):
+				base_item["defense"] = forge_db_item.get("defense")
+			if forge_db_item.has("stat_bonuses"):
+				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
 
 		"accessory":
 			base_item["type"] = "accessory"
+			# Copy stat bonuses and special effects from ForgeItemDB
+			if forge_db_item.has("stat_bonuses"):
+				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
+			if forge_db_item.has("hp_bonus"):
+				base_item["hp_bonus"] = forge_db_item.get("hp_bonus")
+			if forge_db_item.has("lifesteal"):
+				base_item["lifesteal"] = forge_db_item.get("lifesteal")
+			if forge_db_item.has("cooldown_reduction"):
+				base_item["cooldown_reduction"] = forge_db_item.get("cooldown_reduction")
+			if forge_db_item.has("movement_speed"):
+				base_item["movement_speed"] = forge_db_item.get("movement_speed")
 			# Determine specific accessory slot based on item name/id
 			var item_name_lower = forged.get("item_name", "").to_lower()
 			var item_id_lower = forged.get("item_id", "").to_lower()
