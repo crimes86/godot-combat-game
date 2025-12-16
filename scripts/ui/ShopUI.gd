@@ -103,6 +103,12 @@ func _ready() -> void:
 	if forge_refresh_btn:
 		forge_refresh_btn.pressed.connect(_on_forge_refresh_pressed)
 
+	# Connect to QuestManager for item reward choices
+	if has_node("/root/QuestManager"):
+		var qm = get_node("/root/QuestManager")
+		if qm.has_signal("quest_reward_choice_needed"):
+			qm.quest_reward_choice_needed.connect(_on_quest_reward_choice_needed)
+
 func apply_modern_styling() -> void:
 	"""Apply Dark Fantasy Wasteland theme to match CharacterUI"""
 	if main_panel:
@@ -1568,7 +1574,15 @@ func _on_turn_in_quest(quest_id: String) -> void:
 
 	var qm = get_node("/root/QuestManager")
 	if qm.turn_in_quest(quest_id):
+		# Note: If quest has item reward choice, turn_in_quest returns true but
+		# doesn't complete - it emits quest_reward_choice_needed signal instead
 		var quest = qm.get_quest(quest_id)
+
+		# Check if quest is still COMPLETE (waiting for item choice)
+		if qm.get_quest_state(quest_id) == qm.QuestState.COMPLETE:
+			# Item choice popup will handle completion
+			return
+
 		var xp = quest.get("xp_reward", 0)
 		var gold = quest.get("gold_reward", 0)
 		show_quest_message("Quest complete! +%d XP, +%d G" % [xp, gold], Color(1.0, 0.85, 0.2))
@@ -1584,6 +1598,216 @@ func _on_turn_in_quest(quest_id: String) -> void:
 		update_quests_tab_indicator()
 	else:
 		show_quest_message("Cannot turn in quest!", Color.RED)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# QUEST REWARD CHOICE POPUP
+# ═══════════════════════════════════════════════════════════════════════════
+
+var reward_choice_popup: PanelContainer = null
+var pending_reward_quest_id: String = ""
+
+func _on_quest_reward_choice_needed(quest_id: String, quest_name: String, options: Array) -> void:
+	"""Show popup for player to choose their armor reward"""
+	print("🎁 Showing reward choice for quest: %s" % quest_name)
+	pending_reward_quest_id = quest_id
+	_show_reward_choice_popup(quest_name, options)
+
+func _show_reward_choice_popup(quest_name: String, options: Array) -> void:
+	"""Create and display the reward choice popup"""
+	# Remove existing popup if any
+	if reward_choice_popup and is_instance_valid(reward_choice_popup):
+		reward_choice_popup.queue_free()
+
+	# Create popup panel
+	reward_choice_popup = PanelContainer.new()
+	reward_choice_popup.name = "RewardChoicePopup"
+
+	# Style the popup
+	var popup_style = StyleBoxFlat.new()
+	popup_style.bg_color = Color(0.08, 0.08, 0.10, 0.95)
+	popup_style.border_width_left = 3
+	popup_style.border_width_right = 3
+	popup_style.border_width_top = 3
+	popup_style.border_width_bottom = 3
+	popup_style.border_color = Color(0.8, 0.7, 0.3)  # Gold border for reward
+	popup_style.corner_radius_top_left = 8
+	popup_style.corner_radius_top_right = 8
+	popup_style.corner_radius_bottom_left = 8
+	popup_style.corner_radius_bottom_right = 8
+	popup_style.shadow_size = 15
+	popup_style.shadow_color = Color(0, 0, 0, 0.9)
+	reward_choice_popup.add_theme_stylebox_override("panel", popup_style)
+
+	# Main container
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_top", 15)
+	margin.add_theme_constant_override("margin_bottom", 15)
+	reward_choice_popup.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 15)
+	margin.add_child(vbox)
+
+	# Header
+	var header = Label.new()
+	header.text = "Choose Your Reward"
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_size_override("font_size", 20)
+	header.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))  # Gold
+	vbox.add_child(header)
+
+	# Subheader with quest name
+	var subheader = Label.new()
+	subheader.text = quest_name
+	subheader.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subheader.add_theme_font_size_override("font_size", 14)
+	subheader.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	vbox.add_child(subheader)
+
+	# Options container (horizontal)
+	var options_hbox = HBoxContainer.new()
+	options_hbox.add_theme_constant_override("separation", 15)
+	options_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(options_hbox)
+
+	# Create option buttons
+	for option in options:
+		var option_btn = _create_reward_option_button(option)
+		options_hbox.add_child(option_btn)
+
+	# Add popup to the Control node (same level as main panel)
+	var control = get_node_or_null("Control")
+	if control:
+		control.add_child(reward_choice_popup)
+	else:
+		add_child(reward_choice_popup)
+
+	# Center the popup
+	await get_tree().process_frame
+	var viewport_size = get_viewport().get_visible_rect().size
+	var popup_size = reward_choice_popup.size
+	reward_choice_popup.position = (viewport_size - popup_size) / 2
+
+func _create_reward_option_button(option: Dictionary) -> VBoxContainer:
+	"""Create a clickable option for a reward choice"""
+	var container = VBoxContainer.new()
+	container.add_theme_constant_override("separation", 5)
+
+	# Button with styled background
+	var btn = Button.new()
+	btn.custom_minimum_size = Vector2(120, 100)
+
+	var btn_style = StyleBoxFlat.new()
+	btn_style.bg_color = Color(0.15, 0.15, 0.18, 1.0)
+	btn_style.border_width_left = 2
+	btn_style.border_width_right = 2
+	btn_style.border_width_top = 2
+	btn_style.border_width_bottom = 2
+	btn_style.border_color = BORDER_COLOR
+	btn_style.corner_radius_top_left = 6
+	btn_style.corner_radius_top_right = 6
+	btn_style.corner_radius_bottom_left = 6
+	btn_style.corner_radius_bottom_right = 6
+	btn.add_theme_stylebox_override("normal", btn_style)
+
+	var btn_hover = btn_style.duplicate()
+	btn_hover.border_color = Color(0.8, 0.7, 0.3)  # Gold on hover
+	btn_hover.bg_color = Color(0.2, 0.2, 0.22, 1.0)
+	btn.add_theme_stylebox_override("hover", btn_hover)
+
+	var btn_pressed = btn_style.duplicate()
+	btn_pressed.border_color = Color(1.0, 0.85, 0.3)
+	btn_pressed.bg_color = Color(0.25, 0.22, 0.15, 1.0)
+	btn.add_theme_stylebox_override("pressed", btn_pressed)
+
+	# Icon/armor type indicator
+	var armor_type = option.get("armor_type", "plate")
+	var icon_label = Label.new()
+	icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	icon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+	# Use text symbols for armor types
+	match armor_type:
+		"plate":
+			icon_label.text = "[P]"
+			icon_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))  # Steel
+		"leather":
+			icon_label.text = "[L]"
+			icon_label.add_theme_color_override("font_color", Color(0.6, 0.45, 0.3))  # Brown
+		"cloth":
+			icon_label.text = "[C]"
+			icon_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))  # Grey-blue
+
+	icon_label.add_theme_font_size_override("font_size", 28)
+
+	var icon_container = CenterContainer.new()
+	icon_container.custom_minimum_size = Vector2(0, 50)
+	icon_container.add_child(icon_label)
+	btn.add_child(icon_container)
+
+	container.add_child(btn)
+
+	# Item name label
+	var name_label = Label.new()
+	name_label.text = option.get("name", "Unknown")
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 12)
+	name_label.add_theme_color_override("font_color", TEXT_COLOR)
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	name_label.custom_minimum_size = Vector2(110, 0)
+	container.add_child(name_label)
+
+	# Armor type label
+	var type_label = Label.new()
+	type_label.text = armor_type.capitalize()
+	type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	type_label.add_theme_font_size_override("font_size", 10)
+	type_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	container.add_child(type_label)
+
+	# Connect button press
+	var item_id = option.get("id", "")
+	btn.pressed.connect(func(): _on_reward_option_selected(item_id))
+
+	return container
+
+func _on_reward_option_selected(item_id: String) -> void:
+	"""Handle player selecting a reward option"""
+	print("🎁 Player selected reward: %s" % item_id)
+
+	# Close popup
+	if reward_choice_popup and is_instance_valid(reward_choice_popup):
+		reward_choice_popup.queue_free()
+		reward_choice_popup = null
+
+	# Grant the reward
+	if pending_reward_quest_id.is_empty():
+		push_error("[ShopUI] No pending reward quest ID!")
+		return
+
+	if not has_node("/root/QuestManager"):
+		return
+
+	var qm = get_node("/root/QuestManager")
+	if qm.grant_item_reward(pending_reward_quest_id, item_id):
+		var quest = qm.get_quest(pending_reward_quest_id)
+		var xp = quest.get("xp_reward", 0)
+		var gold = quest.get("gold_reward", 0)
+		show_quest_message("Quest complete! Armor received!", Color(1.0, 0.85, 0.2))
+
+		# Play quest turn in sound
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.QUEST_TURN_IN, -6.0)
+
+		# Refresh the list, gold display, and tab indicator
+		update_gold_display()
+		populate_quests()
+		update_quests_tab_indicator()
+
+	pending_reward_quest_id = ""
 
 func _on_close_pressed() -> void:
 	"""Handle close button press"""

@@ -361,6 +361,17 @@ func _auto_crop_image(img: Image) -> Image:
 	var cropped = Image.create(crop_width, crop_height, false, Image.FORMAT_RGBA8)
 	cropped.blit_rect(img, Rect2i(min_x, min_y, crop_width, crop_height), Vector2i(0, 0))
 
+	# Make the result square by padding to the larger dimension
+	# This prevents stretching when displayed in square UI slots
+	var final_size = max(crop_width, crop_height)
+	if crop_width != crop_height:
+		var square_img = Image.create(final_size, final_size, false, Image.FORMAT_RGBA8)
+		# Center the cropped content in the square
+		var offset_x = (final_size - crop_width) / 2
+		var offset_y = (final_size - crop_height) / 2
+		square_img.blit_rect(cropped, Rect2i(0, 0, crop_width, crop_height), Vector2i(offset_x, offset_y))
+		return square_img
+
 	return cropped
 
 func clear_cache() -> void:
@@ -822,7 +833,7 @@ func _draw_generic_placeable(img: Image, size: int) -> void:
 # Icon scale overrides for specific items (1.0 = normal, 2.0 = 2x larger)
 # Note: Prefer scaling the actual icon asset with scripts/tools/scale_icon_content.py
 const ICON_SCALE_OVERRIDES = {
-	# Empty - survivor_vest icon was scaled at asset level
+	# (empty) - rely on asset-level sizing; use tools/scale_icon_content.py if needed
 }
 
 func _scale_texture(texture: Texture2D, scale_factor: float) -> Texture2D:

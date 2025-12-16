@@ -68,7 +68,16 @@
 			],
 			"xp_reward": 400,
 			"gold_reward": 50,
-			"prereq": "first_blood"
+			"prereq": "first_blood",
+			"item_reward": {
+				"choice": true,
+				"slot": "chest",
+				"options": [
+					{"id": "copper_plate_cuirass", "name": "Copper Plate Cuirass", "armor_type": "plate"},
+					{"id": "rawhide_vest", "name": "Rawhide Vest", "armor_type": "leather"},
+					{"id": "linen_robe", "name": "Linen Robe", "armor_type": "cloth"}
+				]
+			}
 		},
 		{
 			"id": "the_burning_wastes",
@@ -96,7 +105,16 @@
 			],
 			"xp_reward": 500,
 			"gold_reward": 70,
-			"prereq": "skeleton_slayer"
+			"prereq": "skeleton_slayer",
+			"item_reward": {
+				"choice": true,
+				"slot": "legs",
+				"options": [
+					{"id": "copper_plate_greaves", "name": "Copper Plate Greaves", "armor_type": "plate"},
+					{"id": "rawhide_leggings", "name": "Rawhide Leggings", "armor_type": "leather"},
+					{"id": "linen_trousers", "name": "Linen Trousers", "armor_type": "cloth"}
+				]
+			}
 		},
 		{
 			"id": "skull_seeker",
@@ -166,7 +184,16 @@
 			],
 			"xp_reward": 1000,
 			"gold_reward": 120,
-			"prereq": "ancient_ruins"
+			"prereq": "ancient_ruins",
+			"item_reward": {
+				"choice": true,
+				"slot": "head",
+				"options": [
+					{"id": "copper_plate_helm", "name": "Copper Plate Helm", "armor_type": "plate"},
+					{"id": "rawhide_hood", "name": "Rawhide Hood", "armor_type": "leather"},
+					{"id": "linen_hood", "name": "Linen Hood", "armor_type": "cloth"}
+				]
+			}
 		},
 		{
 			"id": "claim_the_ruins",

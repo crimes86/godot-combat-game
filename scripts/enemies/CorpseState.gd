@@ -71,7 +71,7 @@ const SKELETON_LOOT_TABLE = [
 ]
 
 # Guardian-specific loot table (Level 7-9 ruins guardians)
-# Drops: Iron Short Sword, Copper Boots, Copper Armguards
+# Drops: Iron Short Sword, Boots (plate/leather/cloth), Arms (plate/leather/cloth)
 # Low drop rates - intended to be a grind
 const GUARDIAN_LOOT_TABLE = [
 	{
@@ -86,35 +86,99 @@ const GUARDIAN_LOOT_TABLE = [
 		"value": 150,
 		"rarity": "Common",
 		"sprite_path": "res://assets/equipment/weapons/longsword.png",
-		"drop_weight": 8,  # 8% chance (low drop rate - grind required)
+		"drop_weight": 8,
 		"type": "weapon",
-		"slot": "mainhand",  # Required for equipping weapons
+		"slot": "mainhand",
 		"stackable": false
 	},
+	# Feet - Plate
 	{
 		"id": "copper_plate_boots",
 		"name": "Copper Plate Boots",
 		"description": "Tier 1 copper-plated boots. Basic protection for your feet.",
 		"slot": "feet",
+		"armor_type": "plate",
 		"defense": 5,
 		"type": "armor",
-		"value": 0,
+		"value": 50,
 		"rarity": "Common",
 		"sprite_name": "copper_plate",
-		"drop_weight": 12,  # 12% chance
+		"drop_weight": 4,
 		"stackable": false
 	},
+	# Feet - Leather
 	{
-		"id": "copper_plate_armguards",
-		"name": "Copper Plate Armguards",
-		"description": "Tier 1 copper-plated arm guards. Protects your forearms in combat.",
+		"id": "rawhide_boots",
+		"name": "Rawhide Boots",
+		"description": "Light leather boots. Quiet and nimble.",
+		"slot": "feet",
+		"armor_type": "leather",
+		"defense": 3,
+		"type": "armor",
+		"value": 40,
+		"rarity": "Common",
+		"sprite_name": "rawhide",
+		"drop_weight": 4,
+		"stackable": false
+	},
+	# Feet - Cloth
+	{
+		"id": "linen_sandals",
+		"name": "Linen Sandals",
+		"description": "Open sandals wrapped with cloth. Light and airy.",
+		"slot": "feet",
+		"armor_type": "cloth",
+		"defense": 1,
+		"type": "armor",
+		"value": 30,
+		"rarity": "Common",
+		"sprite_name": "linen",
+		"drop_weight": 4,
+		"stackable": false
+	},
+	# Arms - Plate
+	{
+		"id": "copper_plate_bracers",
+		"name": "Copper Plate Bracers",
+		"description": "Reinforced arm guards. Protects your forearms in combat.",
 		"slot": "arms",
+		"armor_type": "plate",
 		"defense": 6,
 		"type": "armor",
-		"value": 0,
+		"value": 50,
 		"rarity": "Common",
 		"sprite_name": "copper_plate",
-		"drop_weight": 12,  # 12% chance
+		"drop_weight": 4,
+		"stackable": false
+	},
+	# Arms - Leather
+	{
+		"id": "rawhide_wraps",
+		"name": "Rawhide Wraps",
+		"description": "Leather strips wrapped around the forearms. Light protection.",
+		"slot": "arms",
+		"armor_type": "leather",
+		"defense": 3,
+		"type": "armor",
+		"value": 40,
+		"rarity": "Common",
+		"sprite_name": "rawhide",
+		"drop_weight": 4,
+		"stackable": false
+	},
+	# Arms - Cloth
+	{
+		"id": "linen_wrappings",
+		"name": "Linen Wrappings",
+		"description": "Cloth bindings for the arms. Offers minimal protection.",
+		"slot": "arms",
+		"armor_type": "cloth",
+		"defense": 1,
+		"type": "armor",
+		"value": 30,
+		"rarity": "Common",
+		"sprite_name": "linen",
+		"drop_weight": 4,
 		"stackable": false
 	},
 	{
@@ -122,15 +186,15 @@ const GUARDIAN_LOOT_TABLE = [
 		"description": "Wasteland bones infused with supernatural heat. Burns with ghostly fire.",
 		"value": 5,
 		"rarity": "Common",
-		"drop_weight": 68,  # Fill remaining weight (common drop)
+		"drop_weight": 68,
 		"type": "material",
 		"stackable": true,
 		"max_stack": 200,
-		"fuel_type": "bone_ember"  # Used for campfire crit buff
+		"fuel_type": "bone_ember"
 	}
 ]
 
-# Level 10 Guardian loot table - can drop full copper plate set
+# Level 10 Guardian loot table - can drop full armor sets (plate/leather/cloth)
 # These are the elite guardians with full armor, higher chance for gear
 const GUARDIAN_ELITE_LOOT_TABLE = [
 	{
@@ -150,56 +214,184 @@ const GUARDIAN_ELITE_LOOT_TABLE = [
 		"slot": "mainhand",
 		"stackable": false
 	},
+	# Feet - Plate
 	{
 		"id": "copper_plate_boots",
 		"name": "Copper Plate Boots",
 		"description": "Tier 1 copper-plated boots. Basic protection for your feet.",
 		"slot": "feet",
+		"armor_type": "plate",
 		"defense": 5,
 		"type": "armor",
-		"value": 0,
+		"value": 50,
 		"rarity": "Common",
 		"sprite_name": "copper_plate",
-		"drop_weight": 8,
+		"drop_weight": 3,
 		"stackable": false
 	},
+	# Feet - Leather
 	{
-		"id": "copper_plate_armguards",
-		"name": "Copper Plate Armguards",
-		"description": "Tier 1 copper-plated arm guards. Protects your forearms in combat.",
+		"id": "rawhide_boots",
+		"name": "Rawhide Boots",
+		"description": "Light leather boots. Quiet and nimble.",
+		"slot": "feet",
+		"armor_type": "leather",
+		"defense": 3,
+		"type": "armor",
+		"value": 40,
+		"rarity": "Common",
+		"sprite_name": "rawhide",
+		"drop_weight": 3,
+		"stackable": false
+	},
+	# Feet - Cloth
+	{
+		"id": "linen_sandals",
+		"name": "Linen Sandals",
+		"description": "Open sandals wrapped with cloth. Light and airy.",
+		"slot": "feet",
+		"armor_type": "cloth",
+		"defense": 1,
+		"type": "armor",
+		"value": 30,
+		"rarity": "Common",
+		"sprite_name": "linen",
+		"drop_weight": 3,
+		"stackable": false
+	},
+	# Arms - Plate
+	{
+		"id": "copper_plate_bracers",
+		"name": "Copper Plate Bracers",
+		"description": "Reinforced arm guards. Protects your forearms in combat.",
 		"slot": "arms",
+		"armor_type": "plate",
 		"defense": 6,
 		"type": "armor",
-		"value": 0,
+		"value": 50,
 		"rarity": "Common",
 		"sprite_name": "copper_plate",
-		"drop_weight": 8,
+		"drop_weight": 3,
 		"stackable": false
 	},
+	# Arms - Leather
+	{
+		"id": "rawhide_wraps",
+		"name": "Rawhide Wraps",
+		"description": "Leather strips wrapped around the forearms. Light protection.",
+		"slot": "arms",
+		"armor_type": "leather",
+		"defense": 3,
+		"type": "armor",
+		"value": 40,
+		"rarity": "Common",
+		"sprite_name": "rawhide",
+		"drop_weight": 3,
+		"stackable": false
+	},
+	# Arms - Cloth
+	{
+		"id": "linen_wrappings",
+		"name": "Linen Wrappings",
+		"description": "Cloth bindings for the arms. Offers minimal protection.",
+		"slot": "arms",
+		"armor_type": "cloth",
+		"defense": 1,
+		"type": "armor",
+		"value": 30,
+		"rarity": "Common",
+		"sprite_name": "linen",
+		"drop_weight": 3,
+		"stackable": false
+	},
+	# Legs - Plate
 	{
 		"id": "copper_plate_greaves",
 		"name": "Copper Plate Greaves",
-		"description": "Tier 1 copper-plated leg armor. Solid leg protection.",
+		"description": "Heavy leg armor. Protects from knee to ankle.",
 		"slot": "legs",
+		"armor_type": "plate",
 		"defense": 8,
 		"type": "armor",
-		"value": 0,
+		"value": 75,
 		"rarity": "Common",
 		"sprite_name": "copper_plate",
-		"drop_weight": 6,  # Rarer - only level 10 drops
+		"drop_weight": 2,
 		"stackable": false
 	},
+	# Legs - Leather
 	{
-		"id": "copper_plate_helmet",
-		"name": "Copper Plate Helmet",
-		"description": "Tier 1 copper-plated helmet. Essential head protection.",
+		"id": "rawhide_leggings",
+		"name": "Rawhide Leggings",
+		"description": "Flexible leather pants. Good for quick movement.",
+		"slot": "legs",
+		"armor_type": "leather",
+		"defense": 5,
+		"type": "armor",
+		"value": 60,
+		"rarity": "Common",
+		"sprite_name": "rawhide",
+		"drop_weight": 2,
+		"stackable": false
+	},
+	# Legs - Cloth
+	{
+		"id": "linen_trousers",
+		"name": "Linen Trousers",
+		"description": "Simple cloth pants. Comfortable for long journeys.",
+		"slot": "legs",
+		"armor_type": "cloth",
+		"defense": 2,
+		"type": "armor",
+		"value": 50,
+		"rarity": "Common",
+		"sprite_name": "linen",
+		"drop_weight": 2,
+		"stackable": false
+	},
+	# Head - Plate
+	{
+		"id": "copper_plate_helm",
+		"name": "Copper Plate Helm",
+		"description": "A sturdy copper helm. Essential head protection for warriors.",
 		"slot": "head",
+		"armor_type": "plate",
 		"defense": 7,
 		"type": "armor",
-		"value": 0,
+		"value": 75,
 		"rarity": "Common",
 		"sprite_name": "copper_plate",
-		"drop_weight": 6,  # Rarer - only level 10 drops
+		"drop_weight": 2,
+		"stackable": false
+	},
+	# Head - Leather
+	{
+		"id": "rawhide_hood",
+		"name": "Rawhide Hood",
+		"description": "A hood of treated animal hide. Light and flexible.",
+		"slot": "head",
+		"armor_type": "leather",
+		"defense": 4,
+		"type": "armor",
+		"value": 60,
+		"rarity": "Common",
+		"sprite_name": "rawhide",
+		"drop_weight": 2,
+		"stackable": false
+	},
+	# Head - Cloth
+	{
+		"id": "linen_hood",
+		"name": "Linen Hood",
+		"description": "A simple cloth hood. Favored by wandering scholars.",
+		"slot": "head",
+		"armor_type": "cloth",
+		"defense": 2,
+		"type": "armor",
+		"value": 50,
+		"rarity": "Common",
+		"sprite_name": "linen",
+		"drop_weight": 2,
 		"stackable": false
 	},
 	{
@@ -207,7 +399,7 @@ const GUARDIAN_ELITE_LOOT_TABLE = [
 		"description": "Wasteland bones infused with supernatural heat. Burns with ghostly fire.",
 		"value": 5,
 		"rarity": "Common",
-		"drop_weight": 66,  # Fill remaining weight
+		"drop_weight": 57,
 		"type": "material",
 		"stackable": true,
 		"max_stack": 200,

@@ -25,6 +25,7 @@ signal quest_completed(quest_id: String)  # Ready for turn-in
 signal quest_turned_in(quest_id: String)
 signal active_quests_changed()
 signal quests_loaded()
+signal quest_reward_choice_needed(quest_id: String, quest_name: String, options: Array)  # For item reward selection
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA STORAGE
@@ -216,7 +217,23 @@ func turn_in_quest(quest_id: String) -> bool:
 
 	var quest = all_quests[quest_id]
 
-	# Grant rewards
+	# Check if quest has item reward with choice
+	var item_reward = quest.get("item_reward", {})
+	if item_reward.get("choice", false):
+		# Emit signal for UI to show reward choice popup
+		var options = item_reward.get("options", [])
+		quest_reward_choice_needed.emit(quest_id, quest.get("name", ""), options)
+		print("📜 Quest %s requires item reward choice - waiting for selection" % quest_id)
+		return true  # Return true but don't complete yet - waiting for choice
+
+	# No item choice needed - grant rewards immediately
+	return _complete_quest_turnin(quest_id)
+
+func _complete_quest_turnin(quest_id: String, chosen_item_id: String = "") -> bool:
+	"""Complete the quest turn-in after any choices are made"""
+	var quest = all_quests[quest_id]
+
+	# Grant XP and gold rewards
 	var xp_reward = quest.get("xp_reward", 0)
 	var gold_reward = quest.get("gold_reward", 0)
 
@@ -226,13 +243,25 @@ func turn_in_quest(quest_id: String) -> bool:
 	if gold_reward > 0:
 		CharacterStats.add_gold(gold_reward)
 
+	# Grant chosen item reward if any
+	var item_granted = ""
+	if not chosen_item_id.is_empty():
+		var item = _create_armor_item(chosen_item_id, quest)
+		if item and InventorySystem:
+			InventorySystem.add_item(item)
+			item_granted = item.get("name", chosen_item_id)
+			print("📜 Granted item reward: %s" % item_granted)
+
 	# Update state
 	quest_states[quest_id] = QuestState.TURNED_IN
 	active_quest_ids.erase(quest_id)
 
 	# Show notification
 	if NotificationManager:
-		NotificationManager.show_notification("Quest Complete: %s\n+%d XP, +%d Gold" % [quest.get("name", ""), xp_reward, gold_reward], "SUCCESS")
+		var msg = "Quest Complete: %s\n+%d XP, +%d Gold" % [quest.get("name", ""), xp_reward, gold_reward]
+		if not item_granted.is_empty():
+			msg += "\n+%s" % item_granted
+		NotificationManager.show_notification(msg, "SUCCESS")
 
 	quest_turned_in.emit(quest_id)
 	active_quests_changed.emit()
@@ -242,6 +271,58 @@ func turn_in_quest(quest_id: String) -> bool:
 
 	print("📜 Quest turned in: %s (+%d XP, +%d Gold)" % [quest.get("name", quest_id), xp_reward, gold_reward])
 	return true
+
+func grant_item_reward(quest_id: String, item_id: String) -> bool:
+	"""Called by UI after player selects their item reward choice"""
+	if get_quest_state(quest_id) != QuestState.COMPLETE:
+		print("📜 Cannot grant item reward for quest %s - not complete" % quest_id)
+		return false
+
+	return _complete_quest_turnin(quest_id, item_id)
+
+func _create_armor_item(item_id: String, quest: Dictionary) -> Dictionary:
+	"""Create armor item dictionary from item_id using quest reward options"""
+	var item_reward = quest.get("item_reward", {})
+	var options = item_reward.get("options", [])
+	var slot = item_reward.get("slot", "")
+
+	# Find the selected option
+	var selected_option = {}
+	for option in options:
+		if option.get("id") == item_id:
+			selected_option = option
+			break
+
+	if selected_option.is_empty():
+		push_error("[QuestManager] Item ID not found in quest options: %s" % item_id)
+		return {}
+
+	# Build the armor item dictionary
+	var item = {
+		"id": item_id,
+		"name": selected_option.get("name", item_id),
+		"type": "armor",
+		"slot": slot,
+		"armor_type": selected_option.get("armor_type", "plate"),
+		"sprite_name": _get_sprite_name_for_armor(selected_option.get("armor_type", "plate")),
+		"stackable": false,
+		"quantity": 1,
+		"rarity": "Common"
+	}
+
+	return item
+
+func _get_sprite_name_for_armor(armor_type: String) -> String:
+	"""Get sprite name based on armor type"""
+	match armor_type:
+		"plate":
+			return "copper_plate"
+		"leather":
+			return "rawhide"
+		"cloth":
+			return "linen"
+		_:
+			return "copper_plate"
 
 func _update_quest_availability() -> void:
 	"""Update which quests are available based on level and prerequisites"""
