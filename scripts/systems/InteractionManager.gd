@@ -4,19 +4,21 @@ extends Node
 ## Prevents multiple F prompts from showing simultaneously
 ## Priority (highest to lowest):
 ## 1. Loot bodies (corpses with items)
-## 2. Treasure chests
-## 3. Pickable items (bones, loot on ground)
-## 4. Harvestable resources (trees, rocks)
-## 5. NPCs (vendors)
-## 6. Campfire (fuel)
+## 2. Other players (inspect/trade/duel)
+## 3. Treasure chests
+## 4. Pickable items (bones, loot on ground)
+## 5. Harvestable resources (trees, rocks)
+## 6. NPCs (vendors)
+## 7. Campfire (fuel)
 
 enum InteractionType {
 	LOOT_BODY = 0,      # Highest priority
-	TREASURE_CHEST = 1,
-	PICKABLE_ITEM = 2,
-	HARVESTABLE = 3,
-	NPC = 4,
-	CAMPFIRE = 5        # Lowest priority
+	PLAYER = 1,         # Other players (inspect/trade/duel)
+	TREASURE_CHEST = 2,
+	PICKABLE_ITEM = 3,
+	HARVESTABLE = 4,
+	NPC = 5,
+	CAMPFIRE = 6        # Lowest priority
 }
 
 # Currently registered interactables in range

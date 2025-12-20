@@ -39,7 +39,7 @@ func _ready() -> void:
 
 func create_ui() -> void:
 	"""Create the campfire fuel UI"""
-	# Main panel (dark wasteland theme)
+	# Main panel (dark dreadland theme)
 	panel = Panel.new()
 	panel.name = "MainPanel"
 	panel.custom_minimum_size = Vector2(500, 600)

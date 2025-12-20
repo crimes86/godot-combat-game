@@ -1162,37 +1162,55 @@ func play_lpc_animation(anim_name: String, direction: String):
 			boots_sprite.play(anim_key)
 		elif boots_sprite.sprite_frames.has_animation(anim_name):
 			boots_sprite.play(anim_name)
+		elif anim_name in ["shoot", "thrust"]:
+			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+			var slash_key = "slash_" + direction
+			if boots_sprite.sprite_frames.has_animation(slash_key):
+				boots_sprite.play(slash_key)
 
 	if pants_sprite:
 		if pants_sprite.sprite_frames.has_animation(anim_key):
 			pants_sprite.play(anim_key)
 		elif pants_sprite.sprite_frames.has_animation(anim_name):
 			pants_sprite.play(anim_name)
+		elif anim_name in ["shoot", "thrust"]:
+			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+			var slash_key = "slash_" + direction
+			if pants_sprite.sprite_frames.has_animation(slash_key):
+				pants_sprite.play(slash_key)
 
 	if shirt_sprite:
 		if shirt_sprite.sprite_frames.has_animation(anim_key):
 			shirt_sprite.play(anim_key)
-			if DEBUG_SPRITE_SETUP:
-				print("[SimpleLPCSprite] Playing shirt animation: %s" % anim_key)
 		elif shirt_sprite.sprite_frames.has_animation(anim_name):
 			shirt_sprite.play(anim_name)
-			if DEBUG_SPRITE_SETUP:
-				print("[SimpleLPCSprite] Playing shirt animation (no dir): %s" % anim_name)
-		else:
-			if DEBUG_SPRITE_SETUP:
-				print("[SimpleLPCSprite] WARNING: Shirt animation not found: %s or %s" % [anim_key, anim_name])
+		elif anim_name in ["shoot", "thrust"]:
+			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+			var slash_key = "slash_" + direction
+			if shirt_sprite.sprite_frames.has_animation(slash_key):
+				shirt_sprite.play(slash_key)
 
 	if arms_sprite:
 		if arms_sprite.sprite_frames.has_animation(anim_key):
 			arms_sprite.play(anim_key)
 		elif arms_sprite.sprite_frames.has_animation(anim_name):
 			arms_sprite.play(anim_name)
+		elif anim_name in ["shoot", "thrust"]:
+			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+			var slash_key = "slash_" + direction
+			if arms_sprite.sprite_frames.has_animation(slash_key):
+				arms_sprite.play(slash_key)
 
 	if hands_sprite:
 		if hands_sprite.sprite_frames.has_animation(anim_key):
 			hands_sprite.play(anim_key)
 		elif hands_sprite.sprite_frames.has_animation(anim_name):
 			hands_sprite.play(anim_name)
+		elif anim_name in ["shoot", "thrust"]:
+			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+			var slash_key = "slash_" + direction
+			if hands_sprite.sprite_frames.has_animation(slash_key):
+				hands_sprite.play(slash_key)
 
 		# Adjust hands z-index: on top of weapon when idle facing east/west
 		if anim_name == "idle" and direction in ["east", "west"]:
@@ -1209,6 +1227,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 			head_sprite.play(anim_name)
 			if DEBUG_SPRITE_SETUP:
 				print("[SimpleLPCSprite] Playing head animation (no dir): %s" % anim_name)
+		elif anim_name in ["shoot", "thrust"]:
+			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+			var slash_key = "slash_" + direction
+			if head_sprite.sprite_frames.has_animation(slash_key):
+				head_sprite.play(slash_key)
+				if DEBUG_SPRITE_SETUP:
+					print("[SimpleLPCSprite] Playing head fallback: %s -> %s" % [anim_key, slash_key])
 		else:
 			if DEBUG_SPRITE_SETUP:
 				print("[SimpleLPCSprite] WARNING: Head animation not found: %s or %s" % [anim_key, anim_name])
@@ -1218,6 +1243,11 @@ func play_lpc_animation(anim_name: String, direction: String):
 			hair_sprite.play(anim_key)
 		elif hair_sprite.sprite_frames.has_animation(anim_name):
 			hair_sprite.play(anim_name)
+		elif anim_name in ["shoot", "thrust"]:
+			# Fallback: shoot/thrust -> slash for cosmetic layers
+			var slash_key = "slash_" + direction
+			if hair_sprite.sprite_frames.has_animation(slash_key):
+				hair_sprite.play(slash_key)
 
 	# Sync weapon animation with body animation
 	if weapon_sprite:

@@ -53,11 +53,10 @@ func _ready() -> void:
 	call_deferred("_connect_signals")
 
 func _connect_signals() -> void:
-	if has_node("/root/QuestManager"):
-		var qm = get_node("/root/QuestManager")
-		qm.active_quests_changed.connect(_refresh_tracker)
-		qm.quest_progress_updated.connect(_on_progress_updated)
-		qm.quests_loaded.connect(_refresh_tracker)
+	if QuestManager:
+		QuestManager.active_quests_changed.connect(_refresh_tracker)
+		QuestManager.quest_progress_updated.connect(_on_progress_updated)
+		QuestManager.quests_loaded.connect(_refresh_tracker)
 		print("📋 QuestTrackerUI connected to QuestManager")
 
 	# Connect to TutorialManager for tutorial tracking
@@ -71,14 +70,13 @@ func _connect_signals() -> void:
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent memory leaks
-	if has_node("/root/QuestManager"):
-		var qm = get_node("/root/QuestManager")
-		if qm.active_quests_changed.is_connected(_refresh_tracker):
-			qm.active_quests_changed.disconnect(_refresh_tracker)
-		if qm.quest_progress_updated.is_connected(_on_progress_updated):
-			qm.quest_progress_updated.disconnect(_on_progress_updated)
-		if qm.quests_loaded.is_connected(_refresh_tracker):
-			qm.quests_loaded.disconnect(_refresh_tracker)
+	if QuestManager:
+		if QuestManager.active_quests_changed.is_connected(_refresh_tracker):
+			QuestManager.active_quests_changed.disconnect(_refresh_tracker)
+		if QuestManager.quest_progress_updated.is_connected(_on_progress_updated):
+			QuestManager.quest_progress_updated.disconnect(_on_progress_updated)
+		if QuestManager.quests_loaded.is_connected(_refresh_tracker):
+			QuestManager.quests_loaded.disconnect(_refresh_tracker)
 	if TutorialManager:
 		if TutorialManager.tutorial_step_completed.is_connected(_on_tutorial_step_completed):
 			TutorialManager.tutorial_step_completed.disconnect(_on_tutorial_step_completed)
@@ -88,6 +86,7 @@ func _exit_tree() -> void:
 func _create_ui() -> void:
 	"""Build the quest tracker UI"""
 	# Main container - anchored to top-right, extends to bottom of screen
+	# Positioned below minimap (minimap is 220px tall at y=15, ends at y=235)
 	var control = Control.new()
 	control.name = "TrackerControl"
 	control.anchor_left = 1.0
@@ -96,7 +95,7 @@ func _create_ui() -> void:
 	control.anchor_bottom = 1.0  # Extend to bottom of screen
 	control.offset_left = -TRACKER_WIDTH - 10
 	control.offset_right = -10
-	control.offset_top = 80  # Below any top UI elements
+	control.offset_top = 250  # Below minimap (220px + 15px margin + 15px gap)
 	control.offset_bottom = -10  # Small margin from bottom
 	add_child(control)
 
@@ -182,9 +181,10 @@ func _refresh_tracker() -> void:
 		has_content = true
 
 	# Show quests from QuestManager - show ALL active quests
-	if has_node("/root/QuestManager"):
-		var qm = get_node("/root/QuestManager")
-		var active_quests = qm.get_active_quests()
+	if QuestManager:
+		var active_quests = QuestManager.get_active_quests()
+		if active_quests.size() > 0:
+			print("📋 QuestTracker: Found %d active quests" % active_quests.size())
 
 		if not active_quests.is_empty():
 			has_content = true
@@ -199,10 +199,9 @@ func _refresh_tracker() -> void:
 
 func _create_quest_entry(quest: Dictionary) -> VBoxContainer:
 	"""Create a single quest entry with objectives"""
-	var qm = get_node("/root/QuestManager")
 	var quest_id = quest.get("id", "")
-	var quest_state = qm.get_quest_state(quest_id)
-	var is_complete = quest_state == qm.QuestState.COMPLETE
+	var quest_state = QuestManager.get_quest_state(quest_id)
+	var is_complete = quest_state == QuestManager.QuestState.COMPLETE
 
 	var entry = VBoxContainer.new()
 	entry.name = "Quest_%s" % quest_id
@@ -234,8 +233,7 @@ func _create_quest_entry(quest: Dictionary) -> VBoxContainer:
 
 func _create_objective_entry(quest_id: String, obj_index: int, objective: Dictionary) -> HBoxContainer:
 	"""Create a single objective line"""
-	var qm = get_node("/root/QuestManager")
-	var current = qm.get_objective_progress(quest_id, obj_index)
+	var current = QuestManager.get_objective_progress(quest_id, obj_index)
 	var required = objective.get("count", 1)
 	var is_complete = current >= required
 
@@ -284,8 +282,7 @@ func _on_progress_updated(quest_id: String, obj_index: int, current: int, requir
 			# Update the description
 			var desc_label = child.get_node_or_null("Description")
 			if desc_label:
-				var qm = get_node("/root/QuestManager")
-				var quest = qm.get_quest(quest_id)
+				var quest = QuestManager.get_quest(quest_id)
 				var objectives = quest.get("objectives", [])
 				if obj_index < objectives.size():
 					var obj = objectives[obj_index]
@@ -302,9 +299,8 @@ func _on_progress_updated(quest_id: String, obj_index: int, current: int, requir
 			break
 
 		# Check if quest is now complete and update header
-		var qm = get_node("/root/QuestManager")
-		var quest_state = qm.get_quest_state(quest_id)
-		if quest_state == qm.QuestState.COMPLETE:
+		var quest_state = QuestManager.get_quest_state(quest_id)
+		if quest_state == QuestManager.QuestState.COMPLETE:
 			var name_label = entry.get_node_or_null("QuestName")
 			if name_label and not "[COMPLETE]" in name_label.text:
 				name_label.add_theme_color_override("font_color", COMPLETE_COLOR)

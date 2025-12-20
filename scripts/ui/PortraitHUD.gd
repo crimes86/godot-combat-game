@@ -217,11 +217,11 @@ func _connect_signals() -> void:
 		if stats.has_signal("level_up"):
 			stats.level_up.connect(_on_level_up)
 
-	# Connect to MantleCosmetics for tier color
-	if has_node("/root/MantleCosmetics"):
-		var mantle = get_node("/root/MantleCosmetics")
-		if mantle.has_method("get_tier_color"):
-			_tier_color = mantle.get_tier_color()
+	# Connect to AshbaneCosmetics for tier color
+	if has_node("/root/AshbaneCosmetics"):
+		var ashbane_cosmetics = get_node("/root/AshbaneCosmetics")
+		if ashbane_cosmetics.has_method("get_tier_color"):
+			_tier_color = ashbane_cosmetics.get_tier_color()
 			_update_frame_color()
 
 func _update_from_character_stats() -> void:
@@ -242,10 +242,10 @@ func _update_from_character_stats() -> void:
 			_name_label.text = network.player_name
 
 	# Get tier color
-	if has_node("/root/MantleCosmetics"):
-		var mantle = get_node("/root/MantleCosmetics")
-		if mantle.has_method("get_tier_color"):
-			_tier_color = mantle.get_tier_color()
+	if has_node("/root/AshbaneCosmetics"):
+		var ashbane_cosmetics = get_node("/root/AshbaneCosmetics")
+		if ashbane_cosmetics.has_method("get_tier_color"):
+			_tier_color = ashbane_cosmetics.get_tier_color()
 			_update_frame_color()
 
 func update_health(current: float, maximum: float) -> void:

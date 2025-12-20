@@ -32,7 +32,7 @@ const LOOT_DROP_CHANCES = {
 const SKELETON_LOOT_TABLE = [
 	{
 		"name": "Bone Ember",
-		"description": "Wasteland bones infused with supernatural heat. Burns with ghostly fire.",
+		"description": "dreadland bones infused with supernatural heat. Burns with ghostly fire.",
 		"value": 5,
 		"rarity": "Common",
 		"drop_weight": 70,
@@ -77,7 +77,7 @@ const GUARDIAN_LOOT_TABLE = [
 	{
 		"id": "iron_short_sword",
 		"name": "Iron Short Sword",
-		"description": "A reliable iron blade. Standard issue for wasteland survivors.",
+		"description": "A reliable iron blade. Standard issue for dreadland survivors.",
 		"weapon_type": "sword",
 		"base_damage": 12,
 		"attack_speed": "medium",
@@ -183,7 +183,7 @@ const GUARDIAN_LOOT_TABLE = [
 	},
 	{
 		"name": "Bone Ember",
-		"description": "Wasteland bones infused with supernatural heat. Burns with ghostly fire.",
+		"description": "dreadland bones infused with supernatural heat. Burns with ghostly fire.",
 		"value": 5,
 		"rarity": "Common",
 		"drop_weight": 68,
@@ -200,7 +200,7 @@ const GUARDIAN_ELITE_LOOT_TABLE = [
 	{
 		"id": "iron_short_sword",
 		"name": "Iron Short Sword",
-		"description": "A reliable iron blade. Standard issue for wasteland survivors.",
+		"description": "A reliable iron blade. Standard issue for dreadland survivors.",
 		"weapon_type": "sword",
 		"base_damage": 12,
 		"attack_speed": "medium",
@@ -396,7 +396,7 @@ const GUARDIAN_ELITE_LOOT_TABLE = [
 	},
 	{
 		"name": "Bone Ember",
-		"description": "Wasteland bones infused with supernatural heat. Burns with ghostly fire.",
+		"description": "dreadland bones infused with supernatural heat. Burns with ghostly fire.",
 		"value": 5,
 		"rarity": "Common",
 		"drop_weight": 57,

@@ -667,9 +667,21 @@ func save_current_player_state() -> bool:
 
 func apply_player_data_to_systems(username: String, player: Node = null) -> void:
 	"""Load saved data and apply it to game systems (InventorySystem, CharacterStats, player position)"""
+	print("[DatabaseManager] apply_player_data_to_systems called for user: '%s', player valid: %s" % [username, player != null])
+
+	# Create default player entry if it doesn't exist (for new Ashbane-authenticated users)
 	if not players_data.has(username):
-		push_warning("[DatabaseManager] No saved data for: %s" % username)
-		return
+		print("[DatabaseManager] Creating new player entry for: %s" % username)
+		players_data[username] = {
+			"username": username,
+			"tutorial_completed": false,
+			"created_at": Time.get_unix_time_from_system(),
+			"inventory": "",
+			"character_stats": "",
+			"position_x": 0.0,
+			"position_y": 0.0
+		}
+		save_database()
 
 	# Validate and sanitize player data before applying
 	var raw_data = players_data[username]
@@ -719,16 +731,11 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 		}
 		CharacterStats.load_save_data(fallback_stats)
 
-	# Apply position to player node if provided
+	# NOTE: Position is NOT restored here - game_world.gd handles spawn position correctly
+	# before calling this function (it uses hub return position or saved position as appropriate)
+
+	# Apply HP and other player state if player node is valid
 	if player and is_instance_valid(player):
-		var pos_x = data.get("position_x", 0.0)
-		var pos_y = data.get("position_y", 0.0)
-
-		# Only apply non-zero positions (0,0 likely means new character or default)
-		if pos_x != 0.0 or pos_y != 0.0:
-			player.global_position = Vector2(pos_x, pos_y)
-			LogManager.debug("Restored position: (%.0f, %.0f)" % [pos_x, pos_y], "player")
-
 		# Apply HP if player has health
 		var saved_hp = data.get("current_hp", -1)
 		if saved_hp > 0 and player.has_method("set_health"):
@@ -837,16 +844,36 @@ func save_all_player_data_for_user(username: String) -> bool:
 func has_completed_tutorial(username: String = "") -> bool:
 	"""Check if player has completed the tutorial"""
 	var user = username if not username.is_empty() else current_username
-	if user.is_empty() or not players_data.has(user):
+	print("[DatabaseManager] has_completed_tutorial check for user: '%s' (arg: '%s')" % [user, username])
+	if user.is_empty():
+		print("[DatabaseManager] has_completed_tutorial: user is empty, returning false")
 		return false
-	return players_data[user].get("tutorial_completed", false)
+	if not players_data.has(user):
+		print("[DatabaseManager] has_completed_tutorial: user '%s' not in players_data, returning false" % user)
+		return false
+	var completed = players_data[user].get("tutorial_completed", false)
+	print("[DatabaseManager] has_completed_tutorial: user '%s' tutorial_completed = %s" % [user, completed])
+	return completed
 
 func set_tutorial_completed(username: String = "") -> void:
 	"""Mark tutorial as completed for a player"""
 	var user = username if not username.is_empty() else current_username
-	if user.is_empty() or not players_data.has(user):
+	print("[DatabaseManager] set_tutorial_completed called - username arg: '%s', current_username: '%s', resolved user: '%s'" % [username, current_username, user])
+
+	if user.is_empty():
+		print("[DatabaseManager] ERROR: Cannot set tutorial complete - user is empty!")
 		return
 
+	# Create player entry if it doesn't exist (for Ashbane-authenticated users)
+	if not players_data.has(user):
+		print("[DatabaseManager] Creating new player entry for user '%s'" % user)
+		players_data[user] = {
+			"username": user,
+			"tutorial_completed": false,
+			"created_at": Time.get_unix_time_from_system()
+		}
+
 	players_data[user]["tutorial_completed"] = true
+	print("[DatabaseManager] Set tutorial_completed=true for user '%s'" % user)
 	save_database()
 	LogManager.info("Tutorial completed for: %s" % user, "tutorial")

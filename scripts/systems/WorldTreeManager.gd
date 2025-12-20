@@ -62,9 +62,9 @@ func _ready() -> void:
 		_seed_plot_scene = load("res://scenes/world/SeedPlot.tscn")
 
 	# Connect to auth for loading player's guild tree
-	if MantleAuth:
-		MantleAuth.auth_completed.connect(_on_auth_completed)
-		MantleAuth.logout_completed.connect(_on_logout)
+	if AshbaneAuth:
+		AshbaneAuth.auth_completed.connect(_on_auth_completed)
+		AshbaneAuth.logout_completed.connect(_on_logout)
 
 
 func _process(delta: float) -> void:

@@ -122,7 +122,7 @@ func create_inventory_ui() -> void:
 	main_panel.offset_top = 0   # Will be determined by content size + grow direction
 	main_panel.offset_bottom = -10  # 10px from bottom edge
 
-	# Dark Fantasy Wasteland styling with transparency
+	# Dark Fantasy dreadland styling with transparency
 	var panel_style = StyleBoxFlat.new()
 	panel_style.bg_color = BG_COLOR
 	panel_style.border_width_left = 2
@@ -729,14 +729,25 @@ func _equip_or_use_item(slot_index: int) -> void:
 				# Notify tutorial system
 				if TutorialManager:
 					TutorialManager.on_item_equipped(item)
-		# Check if it's armor or accessory
-		elif item.has("slot") and item.get("slot", "") in CharacterStats.equipped_armor:
+		# Check if it's armor, ring, or amulet
+		elif item.has("slot"):
 			var target_slot = item.get("slot", "")
+			var item_type = item.get("type", item.get("item_type", ""))
 
-			# Special handling for rings: if ring1 is occupied, try ring2
-			if target_slot == "ring1" and CharacterStats.equipped_armor["ring1"] != null:
-				if CharacterStats.equipped_armor["ring2"] == null:
-					# ring2 is free, use it instead
+			# Special handling for rings: can go to either ring1 or ring2
+			if target_slot == "ring" or item_type == "ring":
+				# Try ring1 first, then ring2
+				if CharacterStats.equipped_armor["ring1"] == null:
+					var ring_item = item.duplicate()
+					ring_item["slot"] = "ring1"
+					if CharacterStats.equip_armor(ring_item):
+						InventorySystem.remove_item(slot_index)
+						SoundManager.play_equip_sound()
+						refresh_all()
+						if TutorialManager:
+							TutorialManager.on_item_equipped(item)
+					return
+				elif CharacterStats.equipped_armor["ring2"] == null:
 					var ring_item = item.duplicate()
 					ring_item["slot"] = "ring2"
 					if CharacterStats.equip_armor(ring_item):
@@ -752,15 +763,25 @@ func _equip_or_use_item(slot_index: int) -> void:
 					if old_ring:
 						InventorySystem.set_item(slot_index, old_ring)
 					CharacterStats.equipped_armor["ring1"] = null
+					var ring_item = item.duplicate()
+					ring_item["slot"] = "ring1"
+					if CharacterStats.equip_armor(ring_item):
+						InventorySystem.remove_item(slot_index)
+						SoundManager.play_equip_sound()
+						refresh_all()
+						if TutorialManager:
+							TutorialManager.on_item_equipped(item)
+					return
 
-			# Normal armor equip
-			if CharacterStats.equip_armor(item):
-				InventorySystem.remove_item(slot_index)
-				SoundManager.play_equip_sound()
-				refresh_all()
-				# Notify tutorial system
-				if TutorialManager:
-					TutorialManager.on_item_equipped(item)
+			# Normal armor/amulet equip (slot matches equipment slot name)
+			if target_slot in CharacterStats.equipped_armor:
+				if CharacterStats.equip_armor(item):
+					InventorySystem.remove_item(slot_index)
+					SoundManager.play_equip_sound()
+					refresh_all()
+					# Notify tutorial system
+					if TutorialManager:
+						TutorialManager.on_item_equipped(item)
 
 # ============================================
 # MOUSE CLICK-AND-HOLD RADIAL SYSTEM

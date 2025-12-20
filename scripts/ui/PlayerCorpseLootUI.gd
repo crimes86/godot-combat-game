@@ -176,7 +176,7 @@ func open_corpse_ui(corpse: PlayerCorpse) -> void:
 
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.CORPSE_LOOT, -8.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.CORPSE_LOOT, -10.0)
 
 func close_ui() -> void:
 	hide()

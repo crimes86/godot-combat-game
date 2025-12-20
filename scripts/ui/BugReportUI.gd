@@ -247,9 +247,9 @@ func _create_indicator() -> void:
 	bg_panel.add_theme_stylebox_override("panel", bg_style)
 
 	# Center at top of screen
-	bg_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	bg_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	bg_panel.position = Vector2(0, 10)
+	bg_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	bg_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	bg_panel.position = Vector2(-10, 10)
 	indicator_container.add_child(bg_panel)
 
 	# VBox for content

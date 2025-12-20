@@ -65,9 +65,15 @@ var status_label: Label
 var my_name_label: Label
 var their_name_label: Label
 
+# Item picker popup
+var item_picker_popup: PanelContainer = null
+var item_picker_grid: GridContainer = null
+var item_picker_target_slot: PanelContainer = null
+
 func _ready() -> void:
 	layer = 120  # Above most UI
 	_create_ui()
+	_create_item_picker_popup()
 	hide_trade_window()
 
 func _process(_delta: float) -> void:
@@ -79,19 +85,26 @@ func _process(_delta: float) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func request_trade(target_id: int) -> Dictionary:
-	"""Request a trade with target player. Returns {success, message}"""
+	"""Start immediate trade with target player - opens window for both. Returns {success, message}"""
+	print("[Trade] request_trade called for target_id: %d" % target_id)
+
 	var check = can_request_trade(target_id)
 	if not check.valid:
+		print("[Trade] can_request_trade failed: %s" % check.reason)
 		return {success = false, message = check.reason}
 
 	var my_id = multiplayer.get_unique_id()
-	sent_requests[target_id] = Time.get_unix_time_from_system()
-
-	# Send request to server
-	rpc_id(1, "_server_request_trade", target_id)
-
 	var target_name = _get_player_name(target_id)
-	return {success = true, message = "Trade request sent to %s" % target_name}
+
+	# If we're the server, handle directly (rpc_id to self doesn't work without call_local)
+	if multiplayer.is_server():
+		print("[Trade] Server handling trade request directly for target: %s (%d)" % [target_name, target_id])
+		_handle_trade_start(my_id, target_id)
+	else:
+		print("[Trade] Client sending _server_start_immediate_trade RPC to server for target: %s (%d)" % [target_name, target_id])
+		rpc_id(1, "_server_start_immediate_trade", target_id)
+
+	return {success = true, message = "Starting trade with %s..." % target_name}
 
 func accept_trade() -> Dictionary:
 	"""Accept pending trade request. Returns {success, message}"""
@@ -156,9 +169,9 @@ func can_request_trade(target_id: int) -> Dictionary:
 	if distance > MAX_TRADE_DISTANCE:
 		return {valid = false, reason = "Target too far (must be within 5 tiles)"}
 
-	# Check if authenticated with Mantle (required for forged item trading)
-	if not MantleAuth or not MantleAuth.is_logged_in():
-		return {valid = false, reason = "Trading requires Mantle authentication"}
+	# Check if authenticated with Ashbane (required for forged item trading)
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
+		return {valid = false, reason = "Trading requires Ashbane authentication"}
 
 	return {valid = true, reason = ""}
 
@@ -240,6 +253,25 @@ func _create_ui() -> void:
 	cancel_button.pressed.connect(cancel_trade)
 	header_row.add_child(cancel_button)
 
+	# X close button
+	var close_btn = Button.new()
+	close_btn.text = "✕"
+	close_btn.custom_minimum_size = Vector2(32, 32)
+	var close_style = StyleBoxFlat.new()
+	close_style.bg_color = Color(0.5, 0.2, 0.2, 0.8)
+	close_style.corner_radius_top_left = 4
+	close_style.corner_radius_top_right = 4
+	close_style.corner_radius_bottom_left = 4
+	close_style.corner_radius_bottom_right = 4
+	var close_hover = close_style.duplicate()
+	close_hover.bg_color = Color(0.7, 0.2, 0.2, 1.0)
+	close_btn.add_theme_stylebox_override("normal", close_style)
+	close_btn.add_theme_stylebox_override("hover", close_hover)
+	close_btn.add_theme_font_size_override("font_size", 16)
+	close_btn.add_theme_color_override("font_color", Color.WHITE)
+	close_btn.pressed.connect(cancel_trade)
+	header_row.add_child(close_btn)
+
 	# Status label
 	status_label = Label.new()
 	status_label.text = "Select items and gold to offer"
@@ -289,8 +321,83 @@ func _create_ui() -> void:
 
 	add_child(main_panel)
 
+func _create_item_picker_popup() -> void:
+	"""Create the popup for selecting items to trade"""
+	item_picker_popup = PanelContainer.new()
+	item_picker_popup.name = "ItemPickerPopup"
+	item_picker_popup.visible = false
+	item_picker_popup.custom_minimum_size = Vector2(300, 250)
+
+	# Styling
+	var style = StyleBoxFlat.new()
+	style.bg_color = BG_COLOR.lightened(0.1)
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = ACCENT_COLOR
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.shadow_size = 10
+	style.shadow_color = Color(0, 0, 0, 0.6)
+	item_picker_popup.add_theme_stylebox_override("panel", style)
+
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	item_picker_popup.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	margin.add_child(vbox)
+
+	# Header with close button
+	var header = HBoxContainer.new()
+	vbox.add_child(header)
+
+	var title_label = Label.new()
+	title_label.text = "Select Item"
+	title_label.add_theme_color_override("font_color", HEADER_COLOR)
+	title_label.add_theme_font_size_override("font_size", 14)
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title_label)
+
+	var close_btn = Button.new()
+	close_btn.text = "✕"
+	close_btn.custom_minimum_size = Vector2(24, 24)
+	var close_style = StyleBoxFlat.new()
+	close_style.bg_color = Color(0.5, 0.2, 0.2, 0.8)
+	close_style.corner_radius_top_left = 3
+	close_style.corner_radius_top_right = 3
+	close_style.corner_radius_bottom_left = 3
+	close_style.corner_radius_bottom_right = 3
+	close_btn.add_theme_stylebox_override("normal", close_style)
+	close_btn.add_theme_font_size_override("font_size", 12)
+	close_btn.add_theme_color_override("font_color", Color.WHITE)
+	close_btn.pressed.connect(_hide_item_picker)
+	header.add_child(close_btn)
+
+	# Scroll container for items
+	var scroll = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 180)
+	vbox.add_child(scroll)
+
+	# Grid for item buttons
+	item_picker_grid = GridContainer.new()
+	item_picker_grid.columns = 3
+	item_picker_grid.add_theme_constant_override("h_separation", 6)
+	item_picker_grid.add_theme_constant_override("v_separation", 6)
+	scroll.add_child(item_picker_grid)
+
+	add_child(item_picker_popup)
+
 func _create_offer_column(title: String, is_mine: bool) -> VBoxContainer:
-	"""Create a column for offers"""
+	"""Create a column for offers - 4 fixed trade slots + gold"""
 	var column = VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.add_theme_constant_override("separation", 8)
@@ -308,31 +415,22 @@ func _create_offer_column(title: String, is_mine: bool) -> VBoxContainer:
 	else:
 		their_name_label = title_label
 
-	# Items scroll area
-	var scroll = ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(180, 200)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	var scroll_style = StyleBoxFlat.new()
-	scroll_style.bg_color = INPUT_BG
-	scroll_style.corner_radius_top_left = 4
-	scroll_style.corner_radius_top_right = 4
-	scroll_style.corner_radius_bottom_left = 4
-	scroll_style.corner_radius_bottom_right = 4
-	scroll.add_theme_stylebox_override("panel", scroll_style)
-	column.add_child(scroll)
-
+	# 4 fixed item slots (2x2 grid)
 	var grid = GridContainer.new()
 	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 4)
-	grid.add_theme_constant_override("v_separation", 4)
-	scroll.add_child(grid)
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	column.add_child(grid)
 
 	if is_mine:
 		my_items_grid = grid
 	else:
 		their_items_grid = grid
+
+	# Create 4 empty slots
+	for i in range(4):
+		var slot = _create_trade_slot(i, is_mine)
+		grid.add_child(slot)
 
 	# Gold row
 	var gold_row = HBoxContainer.new()
@@ -340,7 +438,7 @@ func _create_offer_column(title: String, is_mine: bool) -> VBoxContainer:
 	column.add_child(gold_row)
 
 	var gold_icon = Label.new()
-	gold_icon.text = "Gold:"
+	gold_icon.text = "💰 Gold:"
 	gold_icon.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	gold_row.add_child(gold_icon)
 
@@ -348,18 +446,87 @@ func _create_offer_column(title: String, is_mine: bool) -> VBoxContainer:
 		my_gold_input = SpinBox.new()
 		my_gold_input.min_value = 0
 		my_gold_input.max_value = 999999
-		my_gold_input.step = 100
+		my_gold_input.step = 10
 		my_gold_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		my_gold_input.value_changed.connect(_on_gold_changed)
 		gold_row.add_child(my_gold_input)
 	else:
 		their_gold_label = Label.new()
 		their_gold_label.text = "0"
-		their_gold_label.add_theme_color_override("font_color", TEXT_COLOR)
+		their_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+		their_gold_label.add_theme_font_size_override("font_size", 14)
 		their_gold_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		gold_row.add_child(their_gold_label)
 
 	return column
+
+func _create_trade_slot(slot_index: int, is_mine: bool) -> PanelContainer:
+	"""Create an individual trade slot"""
+	var slot = PanelContainer.new()
+	slot.custom_minimum_size = Vector2(70, 70)
+	slot.set_meta("slot_index", slot_index)
+	slot.set_meta("is_mine", is_mine)
+	slot.set_meta("item_token_id", -1)  # -1 = empty
+
+	# Slot background
+	var style = StyleBoxFlat.new()
+	style.bg_color = INPUT_BG
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = BORDER_COLOR.darkened(0.3)
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+	slot.add_theme_stylebox_override("panel", style)
+
+	# Center container for content
+	var center = CenterContainer.new()
+	slot.add_child(center)
+
+	# Empty slot label
+	var empty_label = Label.new()
+	empty_label.name = "EmptyLabel"
+	empty_label.text = "+"
+	empty_label.add_theme_font_size_override("font_size", 24)
+	empty_label.add_theme_color_override("font_color", Color(0.4, 0.4, 0.45, 0.6))
+	center.add_child(empty_label)
+
+	# Item label (hidden by default)
+	var item_label = Label.new()
+	item_label.name = "ItemLabel"
+	item_label.text = ""
+	item_label.visible = false
+	item_label.add_theme_font_size_override("font_size", 10)
+	item_label.add_theme_color_override("font_color", TEXT_COLOR)
+	item_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	item_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	item_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	center.add_child(item_label)
+
+	# Click handling for my slots
+	if is_mine:
+		slot.gui_input.connect(_on_slot_clicked.bind(slot))
+
+	return slot
+
+func _on_slot_clicked(event: InputEvent, slot: PanelContainer) -> void:
+	"""Handle clicking on a trade slot"""
+	if my_locked:
+		return
+
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var slot_index = slot.get_meta("slot_index", 0)
+		var current_token = slot.get_meta("item_token_id", -1)
+
+		if current_token > 0:
+			# Slot has item - remove it
+			_remove_item_from_slot(slot)
+		else:
+			# Slot empty - show item picker
+			_show_item_picker(slot)
 
 func _style_button(button: Button, color: Color) -> void:
 	var style = StyleBoxFlat.new()
@@ -383,6 +550,8 @@ func _style_button(button: Button, color: Color) -> void:
 
 func show_trade_window(partner_id: int, partner_name: String) -> void:
 	"""Open trade window with partner"""
+	print("[Trade] show_trade_window called: partner_id=%d, partner_name=%s" % [partner_id, partner_name])
+
 	is_trading = true
 	trade_partner_id = partner_id
 	trade_partner_name = partner_name
@@ -411,6 +580,8 @@ func show_trade_window(partner_id: int, partner_name: String) -> void:
 
 func hide_trade_window() -> void:
 	main_panel.visible = false
+	if item_picker_popup:
+		item_picker_popup.visible = false
 
 func _close_trade(reason: String) -> void:
 	"""Close trade and reset state"""
@@ -425,64 +596,177 @@ func _close_trade(reason: String) -> void:
 
 	# Show notification
 	if NotificationManager:
-		NotificationManager.show_notification(reason, NotificationManager.NotificationType.SYSTEM)
+		NotificationManager.show_notification(reason, "SYSTEM")
 
 func _populate_my_items() -> void:
-	"""Populate grid with player's forged items"""
-	# Clear existing
-	for child in my_items_grid.get_children():
-		child.queue_free()
+	"""Reset my trade slots to empty"""
+	for slot in my_items_grid.get_children():
+		_clear_slot(slot)
+	my_offered_items.clear()
 
+func _clear_their_items() -> void:
+	"""Reset their trade slots to empty"""
+	for slot in their_items_grid.get_children():
+		_clear_slot(slot)
+	their_offered_items.clear()
+
+func _clear_slot(slot: PanelContainer) -> void:
+	"""Reset a slot to empty state"""
+	slot.set_meta("item_token_id", -1)
+	slot.set_meta("item_data", null)
+
+	var center = slot.get_child(0)
+	if center:
+		var empty_label = center.get_node_or_null("EmptyLabel")
+		var item_label = center.get_node_or_null("ItemLabel")
+		if empty_label:
+			empty_label.visible = true
+		if item_label:
+			item_label.visible = false
+			item_label.text = ""
+
+	# Reset border color
+	var style = slot.get_theme_stylebox("panel").duplicate()
+	style.border_color = BORDER_COLOR.darkened(0.3)
+	slot.add_theme_stylebox_override("panel", style)
+
+func _remove_item_from_slot(slot: PanelContainer) -> void:
+	"""Remove item from a slot"""
+	var token_id = slot.get_meta("item_token_id", -1)
+	if token_id > 0:
+		my_offered_items.erase(token_id)
+
+	_clear_slot(slot)
+
+	# Sync to partner
+	if trade_partner_id > 0:
+		rpc_id(1, "_server_update_offer", trade_partner_id, my_offered_items, my_offered_gold)
+
+func _show_item_picker(slot: PanelContainer) -> void:
+	"""Show picker popup for selecting an item to add to slot"""
 	if not ForgeItemManager:
 		return
 
 	var items = ForgeItemManager.get_all_forged_items()
-	for item in items:
-		var btn = _create_item_button(item, true)
-		my_items_grid.add_child(btn)
-
 	if items.is_empty():
-		var empty_label = Label.new()
-		empty_label.text = "No forged items"
-		empty_label.add_theme_color_override("font_color", ACCENT_COLOR)
-		my_items_grid.add_child(empty_label)
+		if NotificationManager:
+			NotificationManager.show_notification("No forged items to trade", "INFO")
+		return
 
-func _clear_their_items() -> void:
-	for child in their_items_grid.get_children():
+	# Filter out already offered items
+	var available_items = []
+	for item in items:
+		var token_id = item.get("token_id", -1)
+		if token_id not in my_offered_items:
+			available_items.append(item)
+
+	if available_items.is_empty():
+		if NotificationManager:
+			NotificationManager.show_notification("All items already in trade", "INFO")
+		return
+
+	# Store target slot
+	item_picker_target_slot = slot
+
+	# Clear and populate picker grid
+	for child in item_picker_grid.get_children():
 		child.queue_free()
 
-func _create_item_button(item: Dictionary, is_mine: bool) -> Button:
-	"""Create a button for a forged item"""
+	for item in available_items:
+		var btn = _create_picker_item_button(item)
+		item_picker_grid.add_child(btn)
+
+	# Position popup near the slot
+	var slot_rect = slot.get_global_rect()
+	item_picker_popup.global_position = slot_rect.position + Vector2(slot_rect.size.x + 10, 0)
+
+	# Ensure popup stays on screen
+	var viewport_size = get_viewport().get_visible_rect().size
+	if item_picker_popup.global_position.x + 300 > viewport_size.x:
+		item_picker_popup.global_position.x = slot_rect.position.x - 310
+	if item_picker_popup.global_position.y + 250 > viewport_size.y:
+		item_picker_popup.global_position.y = viewport_size.y - 260
+
+	item_picker_popup.visible = true
+
+func _create_picker_item_button(item: Dictionary) -> Button:
+	"""Create a button for item picker"""
 	var btn = Button.new()
-	btn.custom_minimum_size = Vector2(80, 60)
-	btn.text = item.get("item_name", "???").substr(0, 10)
+	btn.custom_minimum_size = Vector2(85, 50)
 
-	var token_id = item.get("token_id", -1)
-	var is_selected = token_id in my_offered_items if is_mine else token_id in their_offered_items
-
+	var item_name = item.get("item_name", "???")
 	var rarity = item.get("item_rarity", "COMMON")
-	var rarity_color = _get_rarity_color(rarity)
+	btn.text = item_name.substr(0, 10)
 
+	var rarity_color = _get_rarity_color(rarity)
 	var style = StyleBoxFlat.new()
-	style.bg_color = rarity_color.darkened(0.7) if not is_selected else rarity_color.darkened(0.3)
+	style.bg_color = rarity_color.darkened(0.6)
 	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
 	style.border_color = rarity_color
 	style.corner_radius_top_left = 4
 	style.corner_radius_top_right = 4
 	style.corner_radius_bottom_left = 4
 	style.corner_radius_bottom_right = 4
 
+	var hover = style.duplicate()
+	hover.bg_color = rarity_color.darkened(0.4)
+
 	btn.add_theme_stylebox_override("normal", style)
+	btn.add_theme_stylebox_override("hover", hover)
 	btn.add_theme_color_override("font_color", TEXT_COLOR)
 	btn.add_theme_font_size_override("font_size", 10)
 
-	if is_mine and not my_locked:
-		btn.pressed.connect(_on_my_item_clicked.bind(token_id))
-
-	btn.set_meta("token_id", token_id)
-	btn.set_meta("item", item)
+	btn.pressed.connect(_on_picker_item_selected.bind(item))
 
 	return btn
+
+func _on_picker_item_selected(item: Dictionary) -> void:
+	"""Handle item selection from picker"""
+	if item_picker_target_slot:
+		_add_item_to_slot(item_picker_target_slot, item)
+	_hide_item_picker()
+
+func _hide_item_picker() -> void:
+	"""Hide the item picker popup"""
+	item_picker_popup.visible = false
+	item_picker_target_slot = null
+
+func _add_item_to_slot(slot: PanelContainer, item: Dictionary) -> void:
+	"""Add an item to a trade slot"""
+	var token_id = item.get("token_id", -1)
+	var item_name = item.get("item_name", "???")
+	var rarity = item.get("item_rarity", "COMMON")
+
+	slot.set_meta("item_token_id", token_id)
+	slot.set_meta("item_data", item)
+
+	# Update visuals
+	var center = slot.get_child(0)
+	if center:
+		var empty_label = center.get_node_or_null("EmptyLabel")
+		var item_label = center.get_node_or_null("ItemLabel")
+		if empty_label:
+			empty_label.visible = false
+		if item_label:
+			item_label.visible = true
+			item_label.text = item_name.substr(0, 12)
+
+	# Set border color based on rarity
+	var rarity_color = _get_rarity_color(rarity)
+	var style = slot.get_theme_stylebox("panel").duplicate()
+	style.border_color = rarity_color
+	slot.add_theme_stylebox_override("panel", style)
+
+	# Add to offered items
+	if token_id not in my_offered_items:
+		my_offered_items.append(token_id)
+
+	# Sync to partner
+	if trade_partner_id > 0:
+		rpc_id(1, "_server_update_offer", trade_partner_id, my_offered_items, my_offered_gold)
 
 func _get_rarity_color(rarity: String) -> Color:
 	match rarity.to_upper():
@@ -493,22 +777,6 @@ func _get_rarity_color(rarity: String) -> Color:
 		"LEGENDARY": return Color(1.0, 0.6, 0.1)
 		"ARTIFACT": return Color(0.9, 0.2, 0.2)
 		_: return Color(0.6, 0.6, 0.6)
-
-func _on_my_item_clicked(token_id: int) -> void:
-	"""Toggle item selection"""
-	if my_locked:
-		return
-
-	if token_id in my_offered_items:
-		my_offered_items.erase(token_id)
-	else:
-		my_offered_items.append(token_id)
-
-	# Update UI
-	_populate_my_items()
-
-	# Sync to partner
-	rpc_id(1, "_server_update_offer", trade_partner_id, my_offered_items, my_offered_gold)
 
 func _on_gold_changed(value: float) -> void:
 	if my_locked:
@@ -535,30 +803,41 @@ func _on_lock_pressed() -> void:
 	rpc_id(1, "_server_lock_offer", trade_partner_id, my_locked)
 
 func _update_their_offer(items: Array, gold: int) -> void:
-	"""Update display of partner's offer"""
+	"""Update display of partner's offer using fixed slots"""
 	their_offered_items = items
 	their_offered_gold = gold
 	their_gold_label.text = str(gold)
 
-	# Update their items display
-	_clear_their_items()
-	for token_id in items:
-		# We don't have their item details, just show token ID
-		var placeholder = Button.new()
-		placeholder.text = "Item #%d" % token_id
-		placeholder.custom_minimum_size = Vector2(80, 60)
-		placeholder.disabled = true
+	# Update their slots
+	var slots = their_items_grid.get_children()
+	for i in range(slots.size()):
+		var slot = slots[i]
+		if i < items.size():
+			# Show item in this slot
+			var token_id = items[i]
+			_update_their_slot(slot, token_id)
+		else:
+			# Clear this slot
+			_clear_slot(slot)
 
-		var style = StyleBoxFlat.new()
-		style.bg_color = Color(0.3, 0.3, 0.35)
-		style.corner_radius_top_left = 4
-		style.corner_radius_top_right = 4
-		style.corner_radius_bottom_left = 4
-		style.corner_radius_bottom_right = 4
-		placeholder.add_theme_stylebox_override("normal", style)
-		placeholder.add_theme_color_override("font_color", TEXT_COLOR)
+func _update_their_slot(slot: PanelContainer, token_id: int) -> void:
+	"""Update a partner's slot with an item"""
+	slot.set_meta("item_token_id", token_id)
 
-		their_items_grid.add_child(placeholder)
+	var center = slot.get_child(0)
+	if center:
+		var empty_label = center.get_node_or_null("EmptyLabel")
+		var item_label = center.get_node_or_null("ItemLabel")
+		if empty_label:
+			empty_label.visible = false
+		if item_label:
+			item_label.visible = true
+			item_label.text = "Item #%d" % token_id
+
+	# Set a neutral color for their items
+	var style = slot.get_theme_stylebox("panel").duplicate()
+	style.border_color = ACCENT_COLOR
+	slot.add_theme_stylebox_override("panel", style)
 
 func _update_their_lock(locked: bool) -> void:
 	their_locked = locked
@@ -642,15 +921,52 @@ func _check_trade_distance() -> void:
 # RPC - SERVER HANDLERS
 # ═══════════════════════════════════════════════════════════════════════════
 
+func _handle_trade_start(requester_id: int, target_id: int) -> void:
+	"""Core trade start logic - called by server for both local and remote requests"""
+	var requester_name = _get_player_name(requester_id)
+	var target_name = _get_player_name(target_id)
+
+	print("[Trade] Processing trade request: requester=%s (%d), target=%s (%d)" % [requester_name, requester_id, target_name, target_id])
+
+	# For the requester: if they're the server (peer 1), call directly; otherwise RPC
+	if requester_id == 1:
+		print("[Trade] Requester is server, calling _client_trade_started directly")
+		_client_trade_started(target_id, target_name)
+	else:
+		print("[Trade] Sending _client_trade_started RPC to requester %d" % requester_id)
+		rpc_id(requester_id, "_client_trade_started", target_id, target_name)
+
+	# For the target: if they're the server (peer 1), call directly; otherwise RPC
+	if target_id == 1:
+		print("[Trade] Target is server, calling _client_trade_started directly")
+		_client_trade_started(requester_id, requester_name)
+	else:
+		print("[Trade] Sending _client_trade_started RPC to target %d" % target_id)
+		rpc_id(target_id, "_client_trade_started", requester_id, requester_name)
+
+	print("[Trade] Started immediate trade: %s <-> %s" % [requester_name, target_name])
+
+@rpc("any_peer", "reliable")
+func _server_start_immediate_trade(target_id: int) -> void:
+	"""Server RPC handler - for when clients initiate trades"""
+	print("[Trade] _server_start_immediate_trade RPC received with target_id: %d" % target_id)
+
+	if not multiplayer.is_server():
+		print("[Trade] ERROR: Not server, returning")
+		return
+
+	var requester_id = multiplayer.get_remote_sender_id()
+	print("[Trade] Remote sender ID: %d" % requester_id)
+
+	_handle_trade_start(requester_id, target_id)
+
 @rpc("any_peer", "reliable")
 func _server_request_trade(target_id: int) -> void:
+	"""Legacy - redirects to immediate trade"""
 	if not multiplayer.is_server():
 		return
-	var requester_id = multiplayer.get_remote_sender_id()
-	var requester_name = _get_player_name(requester_id)
-
-	# Notify target
-	rpc_id(target_id, "_client_trade_requested", requester_id, requester_name)
+	# Redirect to immediate trade flow
+	_server_start_immediate_trade(target_id)
 
 @rpc("any_peer", "reliable")
 func _server_accept_trade(requester_id: int) -> void:
@@ -696,14 +1012,28 @@ func _server_lock_offer(partner_id: int, locked: bool) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 @rpc("authority", "call_local", "reliable")
-func _client_trade_requested(requester_id: int, requester_name: String) -> void:
-	var my_id = multiplayer.get_unique_id()
-	_add_pending_request(my_id, requester_id, requester_name)
+func _client_trade_started(partner_id: int, partner_name: String) -> void:
+	"""Immediately open trade window with partner"""
+	print("[Trade] _client_trade_started received: partner_id=%d, partner_name=%s" % [partner_id, partner_name])
+
+	# Check if we're already busy
+	if is_trading:
+		print("[Trade] Already trading, ignoring new trade request")
+		return
+
+	print("[Trade] Opening trade window with partner: %s" % partner_name)
+
+	# Open the trade window immediately
+	show_trade_window(partner_id, partner_name)
 
 	# Show notification
-	var chat_ui = get_node_or_null("/root/ChatUI")
-	if chat_ui:
-		chat_ui.add_system_message("%s wants to trade! Type /accepttrade or /declinetrade" % requester_name)
+	if NotificationManager:
+		NotificationManager.show_notification("Trade started with %s" % partner_name, "INFO")
+
+@rpc("authority", "call_local", "reliable")
+func _client_trade_requested(requester_id: int, requester_name: String) -> void:
+	"""Legacy handler - now also opens trade immediately"""
+	_client_trade_started(requester_id, requester_name)
 
 @rpc("authority", "call_local", "reliable")
 func _client_trade_accepted(partner_id: int, partner_name: String) -> void:

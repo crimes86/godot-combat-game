@@ -19,21 +19,24 @@ var spawn_manager = null  # SpawnManager (type hint removed for compatibility)
 # Chunk-based prop system for dynamic loading
 var chunk_prop_system: ChunkBasedPropSystem = null
 
+# Cell-based streaming system for smoother chunk transitions (optional replacement)
+var cell_streaming_manager: CellStreamingManager = null
+
 const PROP_TEXTURES = {
-	"dead_tree": "res://assets/environment/wasteland/dead_tree.png",
-	"pine_tree": "res://assets/environment/wasteland/pine_tree.png",
-	"autumn_tree": "res://assets/environment/wasteland/autumn_tree.png",
+	"dead_tree": "res://assets/environment/dreadland/dead_tree.png",
+	"pine_tree": "res://assets/environment/dreadland/pine_tree.png",
+	"autumn_tree": "res://assets/environment/dreadland/autumn_tree.png",
 	# Rock spawning now handled by ChunkBasedPropSystem with zone-based textures
 	# These are fallback paths for legacy code using zone1 rocks
-	"rock_large": "res://assets/environment/wasteland/rocks/zone1/rock_large_1.png",
-	"rock_medium": "res://assets/environment/wasteland/rocks/zone1/rock_medium_1.png",
-	"rock_small": "res://assets/environment/wasteland/rocks/zone1/rock_small_1.png",
-	"skull": "res://assets/environment/wasteland/skull.png",
-	"bones": "res://assets/environment/wasteland/bones.png",
-	"ground_crack_1": "res://assets/environment/wasteland/ground_crack_1.png",
-	"ground_crack_2": "res://assets/environment/wasteland/ground_crack_2.png",
-	"broken_sword": "res://assets/environment/wasteland/broken_sword.png",
-	"ash_pile": "res://assets/environment/wasteland/ash_pile.png"
+	"rock_large": "res://assets/environment/dreadland/rocks/zone1/rock_large_1.png",
+	"rock_medium": "res://assets/environment/dreadland/rocks/zone1/rock_medium_1.png",
+	"rock_small": "res://assets/environment/dreadland/rocks/zone1/rock_small_1.png",
+	"skull": "res://assets/environment/dreadland/skull.png",
+	"bones": "res://assets/environment/dreadland/bones.png",
+	"ground_crack_1": "res://assets/environment/dreadland/ground_crack_1.png",
+	"ground_crack_2": "res://assets/environment/dreadland/ground_crack_2.png",
+	"broken_sword": "res://assets/environment/dreadland/broken_sword.png",
+	"ash_pile": "res://assets/environment/dreadland/ash_pile.png"
 }
 
 # Tree scene files - collision positions can be edited visually in these scenes
@@ -145,6 +148,15 @@ func _ready():
 	chunk_prop_system = ChunkBasedPropSystem.new()
 	add_child(chunk_prop_system)
 	chunk_prop_system.initialize(self)
+
+	# Initialize cell streaming system if enabled (smoother chunk transitions)
+	if ChunkBasedPropSystem.USE_CELL_STREAMING:
+		cell_streaming_manager = CellStreamingManager.new()
+		add_child(cell_streaming_manager)
+		cell_streaming_manager.initialize(self, 12345)  # World seed for deterministic generation
+		cell_streaming_manager.set_chunk_prop_system(chunk_prop_system)  # Pass chunk system for prop creation
+		chunk_prop_system.cell_streaming_manager = cell_streaming_manager
+		print("🔲 Cell-based streaming enabled for smooth chunk transitions")
 
 	# Create world boundaries first
 	create_world_boundaries()
@@ -373,8 +385,8 @@ func spawn_tunnel_entrances():
 			entrance.queue_free()
 	tunnel_entrances.clear()
 
-	# Get all active chunks (for now, chunks -1, 0, 1)
-	var chunk_ids = [-1, 0, 1]
+	# Get edge chunks only (-1 and 1) - middle chunk (0) excluded for late-game discovery
+	var chunk_ids = [-1, 1]
 
 	for chunk_id in chunk_ids:
 		var entrance = TUNNEL_ENTRANCE_SCENE.instantiate()
@@ -1445,7 +1457,7 @@ func create_feathered_area(parent: Node2D, center: Vector2, base_size: float, rn
 			rect.position = center + offset - rect.size / 2
 
 			var darkness = layer_data["darkness"] * rng.randf_range(0.85, 1.15) * darkness_multiplier
-			# Pure greyscale for charcoal wasteland aesthetic
+			# Pure greyscale for charcoal dreadland aesthetic
 			rect.color = Color(
 				darkness,
 				darkness,
@@ -1499,8 +1511,8 @@ func create_campfire_circle(parent: Node2D, center: Vector2, rng: RandomNumberGe
 
 func add_campfire_decorations(parent: Node2D, center: Vector2, clearing_radius: float, rng: RandomNumberGenerator):
 	"""Add scattered bones, skulls around the campfire clearing"""
-	var bone_texture = load("res://assets/environment/wasteland/bones.png") as Texture2D
-	var skull_texture = load("res://assets/environment/wasteland/skull.png") as Texture2D
+	var bone_texture = load("res://assets/environment/dreadland/bones.png") as Texture2D
+	var skull_texture = load("res://assets/environment/dreadland/skull.png") as Texture2D
 
 	if not bone_texture:
 		return
@@ -2281,7 +2293,7 @@ void fragment() {
 	sprite.rotation = rng.randf_range(-PI/6, PI/6)
 	sprite.z_index = 0  # Same as trees for proper Y-sorting
 
-	# Pure greyscale for charcoal wasteland aesthetic
+	# Pure greyscale for charcoal dreadland aesthetic
 	var color_variation = rng.randf_range(0.8, 1.0)
 	sprite.modulate = Color(color_variation, color_variation, color_variation)
 
@@ -3108,7 +3120,7 @@ func create_ambient_particles():
 	print("💨 Ambient ash particles created")
 
 func spawn_lava_pools():
-	"""Create glowing lava pools scattered across the wasteland"""
+	"""Create glowing lava pools scattered across the dreadland"""
 	var rng = RandomNumberGenerator.new()
 	rng.seed = 15151515
 
@@ -3433,7 +3445,10 @@ func _on_corpse_clicked(corpse) -> void:
 	if not is_instance_valid(corpse):
 		return
 
-	var nearby_corpses = corpse.get_nearby_corpses(CorpseState.AOE_LOOT_RADIUS)
+	# Get nearby corpses for AOE looting (if enemy supports it)
+	var nearby_corpses: Array = []
+	if corpse.has_method("get_nearby_corpses"):
+		nearby_corpses = corpse.get_nearby_corpses(CorpseState.AOE_LOOT_RADIUS)
 	_create_loot_ui_deferred.call_deferred(corpse, nearby_corpses)
 
 func _create_loot_ui_deferred(corpse, nearby_corpses: Array) -> void:
@@ -3470,6 +3485,10 @@ func _restore_ui_autoloads():
 		var notif_canvas = NotificationManager.get_node_or_null("NotificationCanvas")
 		if notif_canvas:
 			notif_canvas.visible = true
+	# Show minimap when entering game world
+	if Minimap:
+		Minimap.set_game_world(self)
+		Minimap.show_minimap()
 
 # ========================
 # MULTIPLAYER FUNCTIONS
@@ -3518,6 +3537,11 @@ func _spawn_initial_players():
 				print("🚪 [PLAYER DEBUG] Returning from hub, spawning at tunnel: %s" % saved_pos)
 			# Clear the flag so next spawn uses normal logic
 			hub_manager.clear_returning_flag()
+			# Restore zone music (hub music was playing)
+			if SoundManager and SoundManager.has_method("play_game_music"):
+				SoundManager.stop_game_music()  # Stop hub music first
+				SoundManager.play_game_music(-12.0)
+				print("🎵 Restored zone music after hub exit")
 		elif not NetworkManager.is_guest and DatabaseManager:
 			# Get saved position for authenticated players
 			var username = NetworkManager.local_player_data.get("username", "")
@@ -3572,6 +3596,10 @@ func _spawn_initial_players():
 @rpc("any_peer", "reliable")
 func _request_existing_players(_deprecated_id: int = 0):
 	"""Client requests list of existing players from server"""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not multiplayer.is_server():
 		return
 
@@ -3641,7 +3669,12 @@ func _on_player_authenticated(id: int, player_name: String):
 	if NetworkManager.authenticated_players.has(id):
 		is_guest = NetworkManager.authenticated_players[id].get("is_guest", false)
 
-	spawn_player(id, Vector2.ZERO, 0, "", "", "", "", "", "", "", player_name, is_guest)
+	# Broadcast spawn to ALL peers (call_local ensures server also runs it)
+	# Note: New client may not have game_world loaded yet, but they'll spawn
+	# themselves in _spawn_initial_players when they load the scene
+	if OS.is_debug_build():
+		print("🔍 [PLAYER DEBUG] Broadcasting spawn_player RPC for %d to all peers" % id)
+	spawn_player.rpc(id, Vector2.ZERO, 0, "", "", "", "", "", "", "", player_name, is_guest)
 
 	# Tell the new player about existing players (but NOT themselves!)
 	# Note: Client will also request this via _request_existing_players as a backup
@@ -3688,11 +3721,19 @@ func _on_player_disconnected(id: int):
 	"""Handle player disconnection"""
 	if OS.is_debug_build():
 		print("🔍 [PLAYER DEBUG] _on_player_disconnected(%d)" % id)
-	despawn_player(id)
+	# Broadcast despawn to all peers so everyone removes the player
+	if multiplayer.is_server():
+		despawn_player.rpc(id)
+	else:
+		despawn_player(id)  # Client just removes locally
 
 @rpc("any_peer", "call_local", "reliable")
 func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, weapon_type: String = "", feet_sprite: String = "", legs_sprite: String = "", chest_sprite: String = "", arms_sprite: String = "", hands_sprite: String = "", head_sprite: String = "", display_name: String = "", is_guest_player: bool = false):
 	"""Spawn a player (local or remote)"""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	# Security: Only server can spawn players via RPC (except local calls)
 	var sender_id = multiplayer.get_remote_sender_id()
 	if sender_id != 0 and sender_id != 1:  # 0 = local call, 1 = server
@@ -3751,6 +3792,10 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 		player.add_to_group("player")
 		if player.has_node("Camera2D"):
 			player.get_node("Camera2D").enabled = true
+		# Enable collision with other players (layer 4) for body-blocking
+		# Local player: layer 1 (normal), mask 1+4 (world + other players)
+		player.collision_layer = 1
+		player.collision_mask = 1 | 4  # Collide with world (1) and other players (4)
 		# Set local player's name on health bar
 		var local_name = display_name
 		if local_name == "":
@@ -3765,12 +3810,12 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 					hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
 				else:
 					hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
-			# Apply Mantle tier badge if linked
-			if MantleAuth and MantleAuth.is_logged_in() and hb.has_method("set_mantle_tier"):
-				var tier = MantleAuth.mantle_tier.get("tier", "")
-				hb.set_mantle_tier(tier)
+			# Apply Ashbane tier badge if linked
+			if AshbaneAuth and AshbaneAuth.is_logged_in() and hb.has_method("set_ashbane_tier"):
+				var tier = AshbaneAuth.ashbane_tier.get("tier", "")
+				hb.set_ashbane_tier(tier)
 				# Apply cosmetics to player
-				_apply_mantle_cosmetics(player)
+				_apply_ashbane_cosmetics(player)
 	else:
 		# Disable processing for remote players - they are updated via RPC in _receive_player_position
 		player.set_physics_process(false)
@@ -3779,9 +3824,12 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 			player.set_process_unhandled_input(false)
 		if player.has_node("Camera2D"):
 			player.get_node("Camera2D").enabled = false
-		# Disable collision for remote players to prevent magnet effect
-		player.collision_layer = 0
-		player.collision_mask = 0
+		# Use layer 4 for player body-blocking (doesn't interfere with enemies on layer 1)
+		# This allows players to bump into each other without the magnet effect
+		player.collision_layer = 4  # Player body-blocking layer
+		player.collision_mask = 0   # Remote players don't detect anything themselves
+		# Add a small collision shape at feet for body-blocking
+		_add_body_blocking_collision(player)
 
 		# Set player name on health bar for remote players
 		if display_name != "" and player.has_node("HealthBar"):
@@ -3797,6 +3845,10 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 @rpc("any_peer", "call_local", "reliable")
 func despawn_player(id: int):
 	"""Remove a player from the game"""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	# Security: Only server can despawn players via RPC (except local calls)
 	var sender_id = multiplayer.get_remote_sender_id()
 	if sender_id != 0 and sender_id != 1:  # 0 = local call, 1 = server
@@ -3912,6 +3964,10 @@ var _missing_player_requests: Dictionary = {}
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _receive_player_position(player_id: int, pos: Vector2, anim: String, health: int, is_dashing: bool):
 	"""Receive position update for a remote player"""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	# Security: Verify sender is the player they claim to be (prevent position spoofing)
 	var sender_id = multiplayer.get_remote_sender_id()
 	if sender_id != player_id and sender_id != 1:  # Allow server (1) to relay positions
@@ -3978,28 +4034,56 @@ func _get_player_animation(player: Node) -> String:
 	return "idle_south"
 
 # ═══════════════════════════════════════════════════════════════════════════
-# MANTLE COSMETICS INTEGRATION
+# PLAYER BODY-BLOCKING COLLISION
 # ═══════════════════════════════════════════════════════════════════════════
 
-func _apply_mantle_cosmetics(player: Node) -> void:
-	"""Apply Mantle tier cosmetics to a player character"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+func _add_body_blocking_collision(player: Node) -> void:
+	"""Add a small collision shape at player's feet for body-blocking in PvP.
+	This creates a small circle at the feet so players can't walk through each other."""
+	# Check if player already has a collision shape
+	var existing_collision = player.get_node_or_null("CollisionShape2D")
+	if existing_collision:
+		# Modify existing shape to be smaller (feet-sized)
+		var shape = existing_collision.shape
+		if shape is CircleShape2D:
+			shape.radius = 8.0  # Small circle at feet
+		elif shape is CapsuleShape2D:
+			shape.radius = 8.0
+			shape.height = 4.0
 		return
 
-	if not MantleCosmetics:
+	# Create new collision shape if none exists
+	var collision_shape = CollisionShape2D.new()
+	collision_shape.name = "BodyBlockCollision"
+	var circle = CircleShape2D.new()
+	circle.radius = 8.0  # Small circle at feet for body-blocking
+	collision_shape.shape = circle
+	collision_shape.position = Vector2(0, 8)  # Offset to feet level
+	player.add_child(collision_shape)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ASHBANE COSMETICS INTEGRATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _apply_ashbane_cosmetics(player: Node) -> void:
+	"""Apply Ashbane tier cosmetics to a player character"""
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
+		return
+
+	if not AshbaneCosmetics:
 		return
 
 	# Get the player's profile and calculate cosmetics
 	var profile = {
-		"mantle": MantleAuth.mantle_tier,
-		"providers": MantleAuth.providers,
-		"achievements": MantleAuth.achievements,
-		"total_achievements": MantleAuth.total_achievements
+		"ashbane": AshbaneAuth.ashbane_tier,
+		"providers": AshbaneAuth.providers,
+		"achievements": AshbaneAuth.achievements,
+		"total_achievements": AshbaneAuth.total_achievements
 	}
 
-	var cosmetics = MantleCosmetics.calculate_cosmetics(profile)
+	var cosmetics = AshbaneCosmetics.calculate_cosmetics(profile)
 
 	# Apply cosmetics to the player (instant for now, transformation later)
-	MantleCosmetics.apply_to_character(player, cosmetics, true)
+	AshbaneCosmetics.apply_to_character(player, cosmetics, true)
 
-	LogManager.info("Applied Mantle cosmetics: %s tier" % cosmetics.get("tier", "unknown"), "mantle")
+	LogManager.info("Applied Ashbane cosmetics: %s tier" % cosmetics.get("tier", "unknown"), "ashbane")

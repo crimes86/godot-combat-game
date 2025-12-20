@@ -512,7 +512,7 @@ func show_invite(from_id: int, from_name: String) -> void:
 	# Play a notification sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("play_sound_2d"):
-		sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -5.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -10.0)
 
 func _hide_popup() -> void:
 	"""Hide the popup."""

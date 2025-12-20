@@ -531,6 +531,33 @@ func on_ruins_converted() -> void:
 			if obj.get("type") == "convert_ruins":
 				update_objective_progress(quest_id, i, 1)
 
+func on_npc_interaction(npc_id: String) -> void:
+	"""Track speak_to_npc objectives - call when player talks to NPC"""
+	for quest_id in active_quest_ids:
+		var quest = all_quests.get(quest_id)
+		if not quest:
+			continue
+		var objectives = quest.get("objectives", [])
+		for i in range(objectives.size()):
+			var obj = objectives[i]
+			if obj.get("type") == "speak_to_npc" and obj.get("target") == npc_id:
+				update_objective_progress(quest_id, i, 1)
+
+func on_zone_entered(zone_id: String) -> void:
+	"""Track enter_zone objectives - call when player enters a zone"""
+	for quest_id in active_quest_ids:
+		var quest = all_quests.get(quest_id)
+		if not quest:
+			continue
+		var objectives = quest.get("objectives", [])
+		for i in range(objectives.size()):
+			var obj = objectives[i]
+			if obj.get("type") == "enter_zone" and obj.get("target") == zone_id:
+				var required = obj.get("count", 1)
+				quest_progress[quest_id][i] = required
+				quest_progress_updated.emit(quest_id, i, required, required)
+				_check_quest_completion(quest_id)
+
 # ═══════════════════════════════════════════════════════════════════════════
 # QUERY HELPERS
 # ═══════════════════════════════════════════════════════════════════════════
@@ -571,6 +598,43 @@ func has_completed_quests(giver: String = "blacksmith") -> bool:
 	"""Check if giver has quests ready for turn-in"""
 	return get_completed_quests(giver).size() > 0
 
+func get_locked_quests(giver: String = "blacksmith", limit: int = 3) -> Array:
+	"""Get upcoming locked quests for a giver (for UI preview)"""
+	var result = []
+	var player_level = CharacterStats.level if CharacterStats else 1
+
+	for quest_id in all_quests.keys():
+		if get_quest_state(quest_id) == QuestState.LOCKED:
+			var quest = all_quests[quest_id]
+			if quest.get("giver", "") == giver:
+				# Add level requirement info
+				var quest_copy = quest.duplicate()
+				quest_copy["_locked_reason"] = _get_lock_reason(quest, player_level)
+				result.append(quest_copy)
+
+	# Sort by level requirement
+	result.sort_custom(func(a, b): return a.get("level_req", 1) < b.get("level_req", 1))
+
+	# Return only the first few
+	return result.slice(0, limit)
+
+func _get_lock_reason(quest: Dictionary, player_level: int) -> String:
+	"""Get human-readable reason why quest is locked"""
+	var level_req = quest.get("level_req", 1)
+	var prereq = quest.get("prereq", null)
+
+	if prereq and prereq is String and not prereq.is_empty():
+		var prereq_state = get_quest_state(prereq)
+		if prereq_state != QuestState.TURNED_IN:
+			var prereq_quest = all_quests.get(prereq, {})
+			var prereq_name = prereq_quest.get("name", prereq)
+			return "Complete \"%s\" first" % prereq_name
+
+	if player_level < level_req:
+		return "Reach level %d" % level_req
+
+	return "Locked"
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SAVE / LOAD
 # ═══════════════════════════════════════════════════════════════════════════
@@ -588,8 +652,20 @@ func load_save_data(data: Dictionary) -> void:
 	if data.is_empty():
 		return
 
-	# Load states
+	# Check if saved data is stale (no matching quest IDs)
 	var saved_states = data.get("states", {})
+	var valid_count = 0
+	for quest_id in saved_states:
+		if all_quests.has(quest_id):
+			valid_count += 1
+
+	if saved_states.size() > 0 and valid_count == 0:
+		# All saved quest IDs are obsolete - reset to fresh state
+		print("📜 Saved quest data is stale (0/%d quest IDs match) - resetting quests" % saved_states.size())
+		reset_quests()
+		return
+
+	# Load states
 	for quest_id in saved_states:
 		if all_quests.has(quest_id):
 			quest_states[quest_id] = saved_states[quest_id]
@@ -611,7 +687,7 @@ func load_save_data(data: Dictionary) -> void:
 	_update_quest_availability()
 
 	active_quests_changed.emit()
-	print("📜 Loaded quest progress: %d active quests" % active_quest_ids.size())
+	print("📜 Loaded quest progress: %d active quests (%d/%d saved states valid)" % [active_quest_ids.size(), valid_count, saved_states.size()])
 
 func reset_quests() -> void:
 	"""Reset all quest progress (for new character)"""

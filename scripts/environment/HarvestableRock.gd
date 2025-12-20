@@ -14,7 +14,7 @@ var tier_data: Dictionary = {}  # Cached tier data from ROCK_TIERS
 
 # Tier names for display
 const TIER_NAMES = {
-	1: "Wasteland Rock",
+	1: "dreadland Rock",
 	2: "Highland Rock",
 	3: "Ancient Stone"
 }
@@ -447,7 +447,7 @@ func create_progress_circle() -> void:
 	progress_circle.draw.connect(_draw_progress_circle)
 
 func _draw_progress_circle() -> void:
-	"""Draw the radial progress circle with wasteland theme"""
+	"""Draw the radial progress circle with dreadland theme"""
 	if not progress_circle or not is_mining:
 		return
 
@@ -484,7 +484,7 @@ func _draw_progress_circle() -> void:
 	var canvas_transform = get_viewport().get_canvas_transform()
 	var rock_screen_pos = canvas_transform * circle_world_pos
 
-	# === DARK FANTASY WASTELAND THEME ===
+	# === DARK FANTASY dreadland THEME ===
 	var radius = 22.5  # Reduced by 25% (same as tree)
 	var thickness = 3.4  # Proportionally reduced
 

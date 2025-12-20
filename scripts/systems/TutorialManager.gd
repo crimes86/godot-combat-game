@@ -170,6 +170,7 @@ func skip_tutorial() -> void:
 	clear_feedback_label()     # GOOD!/CRITICAL feedback
 	clear_ui_arrow()           # UI arrow pointing to tabs/buttons
 	stop_prompt_flash()        # Stop any flashing animations
+	clear_vendor_tutorial_arrow()  # Vendor/Wanderer arrow
 
 	# Clear equip mini-tutorial if active
 	end_equip_mini_tutorial()
@@ -319,7 +320,7 @@ func show_blacksmith_tutorial() -> void:
 	clear_click_indicator()  # Explicitly clear LEFT CLICK from earlier steps
 	clear_feedback_label()   # Clear any remaining feedback
 
-	set_prompt_text("Press [F] to talk to the Blacksmith!")
+	set_prompt_text("Press [F] to talk to the Wanderer!")
 
 	# Show arrow to blacksmith
 	show_arrow_to_target(get_blacksmith_position())
@@ -361,6 +362,7 @@ func show_completion_message() -> void:
 	clear_prompt()
 	clear_arrow()
 	clear_ui_arrow()
+	clear_vendor_tutorial_arrow()  # Hide Wanderer arrow immediately
 	waiting_for_quests_tab = false
 	waiting_for_accept_button = false
 
@@ -1205,6 +1207,7 @@ func set_prompt_text(text: String, color: Color = TEXT_COLOR) -> void:
 func cleanup_tutorial_ui() -> void:
 	"""Remove all tutorial UI"""
 	clear_ui_arrow()
+	clear_vendor_tutorial_arrow()  # Clean up vendor/Wanderer arrow
 
 	if ui_arrow and is_instance_valid(ui_arrow):
 		ui_arrow.queue_free()
@@ -1218,6 +1221,29 @@ func cleanup_tutorial_ui() -> void:
 	if arrow_indicator and is_instance_valid(arrow_indicator):
 		arrow_indicator.queue_free()
 		arrow_indicator = null
+
+func hide_tutorial_ui() -> void:
+	"""Hide tutorial UI (when entering trading hub)"""
+	if tutorial_ui and is_instance_valid(tutorial_ui):
+		tutorial_ui.visible = false
+		print("📚 [Tutorial] UI hidden (trading hub)")
+	if arrow_indicator and is_instance_valid(arrow_indicator):
+		arrow_indicator.visible = false
+
+func show_tutorial_ui() -> void:
+	"""Show tutorial UI (when returning to zone 1)"""
+	if tutorial_ui and is_instance_valid(tutorial_ui):
+		tutorial_ui.visible = true
+		print("📚 [Tutorial] UI shown (zone 1)")
+	if arrow_indicator and is_instance_valid(arrow_indicator):
+		arrow_indicator.visible = true
+
+func clear_vendor_tutorial_arrow() -> void:
+	"""Hide tutorial arrow on vendor/Wanderer NPC"""
+	var vendor = get_tree().get_first_node_in_group("vendor")
+	if vendor and vendor.has_method("hide_tutorial_arrow"):
+		vendor.hide_tutorial_arrow()
+		print("📚 [Tutorial] Cleared vendor tutorial arrow")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MINI-TUTORIAL: EQUIP ITEM HELPER

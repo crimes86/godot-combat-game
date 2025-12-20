@@ -36,6 +36,12 @@ var log_to_file: bool = false
 var log_file_path: String = "user://server.log"
 var _log_file: FileAccess = null
 
+# Playtest mode - routes important debug messages to in-game ChatUI
+var playtest_mode: bool = false
+var _chat_ui: Node = null
+# Categories to show in chat during playtest (keeps chat from being spammed)
+var playtest_categories: Array[String] = ["loot", "combat", "network"]
+
 # Category emoji prefixes for visual scanning
 const CATEGORY_ICONS: Dictionary = {
 	"combat": "⚔️",
@@ -158,6 +164,64 @@ func set_verbose(verbose: bool) -> void:
 	global_level = LogLevel.DEBUG if verbose else LogLevel.WARN
 
 # ═══════════════════════════════════════════════════════════════════════════
+# PLAYTEST MODE - Routes debug to in-game chat
+# ═══════════════════════════════════════════════════════════════════════════
+
+func enable_playtest_mode(categories: Array[String] = []) -> void:
+	"""Enable playtest mode - shows debug messages in ChatUI"""
+	playtest_mode = true
+	if not categories.is_empty():
+		playtest_categories = categories
+	# Also enable debug logging
+	global_level = LogLevel.DEBUG
+	_send_to_chat("[PLAYTEST] Debug mode enabled - watching: %s" % ", ".join(playtest_categories))
+	info("Playtest mode enabled for categories: %s" % playtest_categories)
+
+func disable_playtest_mode() -> void:
+	"""Disable playtest mode"""
+	playtest_mode = false
+	_send_to_chat("[PLAYTEST] Debug mode disabled")
+	info("Playtest mode disabled")
+
+func toggle_playtest_mode() -> void:
+	"""Toggle playtest mode on/off"""
+	if playtest_mode:
+		disable_playtest_mode()
+	else:
+		enable_playtest_mode()
+
+func add_playtest_category(category: String) -> void:
+	"""Add a category to watch in playtest mode"""
+	if category not in playtest_categories:
+		playtest_categories.append(category)
+		_send_to_chat("[PLAYTEST] Now watching: %s" % category)
+
+func remove_playtest_category(category: String) -> void:
+	"""Remove a category from playtest watch list"""
+	var idx = playtest_categories.find(category)
+	if idx >= 0:
+		playtest_categories.remove_at(idx)
+		_send_to_chat("[PLAYTEST] Stopped watching: %s" % category)
+
+func _get_chat_ui() -> Node:
+	"""Find ChatUI in the scene tree"""
+	if _chat_ui and is_instance_valid(_chat_ui):
+		return _chat_ui
+
+	# Search for ChatUI in tree
+	var root = get_tree().root if get_tree() else null
+	if root:
+		# ChatUI is usually a direct child of root or under main scene
+		_chat_ui = root.find_child("ChatUI", true, false)
+	return _chat_ui
+
+func _send_to_chat(message: String) -> void:
+	"""Send a message to the in-game ChatUI"""
+	var chat = _get_chat_ui()
+	if chat and chat.has_method("add_system_message"):
+		chat.add_system_message(message)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # INTERNAL METHODS
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -207,3 +271,9 @@ func _log(level: LogLevel, message: String, category: String) -> void:
 	if log_to_file and _log_file:
 		_log_file.store_line(log_line)
 		_log_file.flush()  # Ensure immediate write for crash safety
+
+	# Send to ChatUI in playtest mode (for specified categories)
+	if playtest_mode and category in playtest_categories:
+		var icon = CATEGORY_ICONS.get(category, "📋")
+		var chat_msg = "%s %s" % [icon, message]
+		_send_to_chat(chat_msg)

@@ -7,6 +7,17 @@ signal back_to_menu
 
 enum ArmoryState { GUEST, NEW_PLAYER, CASUAL, VETERAN, PENDING_UNLOCKS }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# SERVER CONFIGURATION - Change this IP to your desktop's LAN IP for playtests
+# ═══════════════════════════════════════════════════════════════════════════════
+const LAN_SERVER_IP = "192.168.28.211"  # ← CHANGE THIS to your desktop's local IP
+const LAN_SERVER_PORT = 7000
+const PRODUCTION_SERVER_IP = "167.99.55.245"
+
+## Set to true on the machine that will HOST the server
+## Set to false on machines that will JOIN as clients
+@export var is_server_host: bool = false
+
 ## DEBUG: Enable to make all items show as forgeable (golden glow)
 ## Set this to true in the editor inspector for testing
 @export var debug_all_forgeable: bool = false
@@ -22,6 +33,39 @@ var _target_achievement_count: int = 0
 var _last_displayed_count: int = 0  # Track last shown count to avoid repeat animations
 var _load_complete: bool = false
 
+# VFX layers for "Wonka TV room" effects
+var _scanline_overlay: Control = null
+var _ember_container: Control = null
+var _vignette_overlay: ColorRect = null
+var _color_drift_bg: ColorRect = null
+var _screen_warp_overlay: ColorRect = null
+var _dust_mote_container: Control = null
+var _mouse_trail_container: Control = null
+var _ember_particles: Array = []
+var _dust_motes: Array = []
+var _mouse_trail_particles: Array = []
+var _tree_logo_left: TextureRect = null
+var _tree_logo_right: TextureRect = null
+var _tree_ember_container: Control = null
+var _last_mouse_pos: Vector2 = Vector2.ZERO
+const EMBER_COUNT: int = 25
+const TREE_EMBER_COUNT: int = 8  # Embers per tree
+const DUST_MOTE_COUNT: int = 30
+const MOUSE_TRAIL_COUNT: int = 12
+const EMBER_COLORS: Array = [
+	Color(1.0, 0.4, 0.1, 0.7),   # Orange
+	Color(1.0, 0.6, 0.2, 0.6),   # Gold
+	Color(0.9, 0.3, 0.1, 0.5),   # Red-orange
+	Color(1.0, 0.8, 0.3, 0.4),   # Yellow
+]
+# Color drift hues (very subtle dark colors)
+const DRIFT_COLORS: Array = [
+	Color(0.06, 0.05, 0.08),   # Dark purple
+	Color(0.05, 0.06, 0.08),   # Dark blue
+	Color(0.05, 0.07, 0.06),   # Dark teal
+	Color(0.07, 0.05, 0.05),   # Dark red
+]
+
 # UI References
 var character_preview: Control = null
 var stats_panel: Control = null
@@ -29,8 +73,14 @@ var cosmetics_panel: Control = null
 var achievements_panel: Control = null
 var forged_panel: Control = null
 var enter_world_button: Button = null
+var host_server_button: Button = null  # For LAN host
+var connection_status_label: Label = null  # Shows connection progress
 var logout_button: Button = null
 var settings_panel: Control = null
+
+# Network connection state
+var _is_connecting: bool = false
+var _connection_timeout_timer: Timer = null
 
 # Character preview sprite rendering
 var _character_viewport: SubViewport = null
@@ -110,21 +160,33 @@ const WALLET_POLL_MAX_COUNT: int = 40    # 40 polls * 3 sec = 2 minutes timeout
 var _wallet_sync_timer: Timer = null
 const WALLET_SYNC_INTERVAL: float = 10.0  # check every 10 seconds
 
-# Theme colors - Simplified palette for consistency
-# Background layers
-const BG_DARK = Color(0.02, 0.02, 0.025)       # Darkest background
-const CARD_BG = Color(0.06, 0.08, 0.10, 0.95)  # Panel background - matches MainMenu
-const CARD_BORDER = Color(0.10, 0.11, 0.12)    # Subtle borders (internal use)
-const BORDER_GLOW = Color(0.0, 0.6, 0.7, 0.6)  # Cyan glow border - matches MainMenu
-const SHADOW_GLOW = Color(0, 0.5, 0.6, 0.25)   # Cyan shadow for panels
+# Theme colors - Now using UITheme for consistency with in-game UIs
+# Background layers - match UITheme
+var BG_DARK: Color:
+	get: return UITheme.BG_COLOR_SOLID if UITheme else Color(0.07, 0.07, 0.08, 1.0)
+var CARD_BG: Color:
+	get: return UITheme.BG_COLOR_TRANSPARENT if UITheme else Color(0.07, 0.07, 0.08, 0.85)
+var CARD_BORDER: Color:
+	get: return UITheme.BORDER_INNER if UITheme else Color(0.02, 0.02, 0.03, 1.0)
+var BORDER_GLOW: Color:
+	get: return UITheme.BORDER_COLOR if UITheme else Color(0.38, 0.36, 0.33, 1.0)
+var BORDER_HIGHLIGHT: Color:
+	get: return UITheme.BORDER_HIGHLIGHT if UITheme else Color(0.48, 0.46, 0.43, 1.0)
+var BORDER_SHADOW: Color:
+	get: return UITheme.BORDER_SHADOW if UITheme else Color(0.25, 0.23, 0.20, 1.0)
+var SHADOW_GLOW: Color:
+	get: return UITheme.BORDER_GLOW if UITheme else Color(0.45, 0.43, 0.40, 0.4)
 
-# Text hierarchy (high contrast for readability)
-const TEXT_PRIMARY = Color(0.95, 0.95, 0.97)   # Main text - almost white
-const TEXT_SECONDARY = Color(0.70, 0.72, 0.75) # Secondary info
-const TEXT_DIM = Color(0.45, 0.47, 0.50)       # Labels, hints
+# Text hierarchy - match UITheme
+var TEXT_PRIMARY: Color:
+	get: return UITheme.TEXT_COLOR if UITheme else Color(0.95, 0.90, 0.82, 1.0)
+var TEXT_SECONDARY: Color:
+	get: return UITheme.HEADER_COLOR if UITheme else Color(0.80, 0.76, 0.70, 1.0)
+var TEXT_DIM: Color:
+	get: return UITheme.TEXT_MUTED if UITheme else Color(0.55, 0.50, 0.45, 0.8)
 
 # Typography scale (standardized sizes) - scaled up for readability
-const FONT_H1 = 42        # Page title (MANTLE ARMORY)
+const FONT_H1 = 42        # Page title (ASHBANE)
 const FONT_H2 = 28        # Column headers (THE FORGE, DREADLAND)
 const FONT_H3 = 22        # Section headers (CONNECTED PLATFORMS)
 const FONT_BODY_LG = 24   # Large body text, important values
@@ -145,95 +207,128 @@ const BUTTON_SIZES = {
 	ButtonSize.LARGE: {"height": 44, "font": 18, "radius": 6, "border": 2, "padding": 10}
 }
 
-# Button color themes
+# Button color themes - Clean stone gray theme (no brown tint)
 enum ButtonTheme { PRIMARY, ACTION, BRIDGE, DANGER, SECONDARY, SUCCESS }
-const BUTTON_THEMES = {
-	ButtonTheme.PRIMARY: {  # Cyan - main interactive
-		"bg": Color(0.0, 0.45, 0.55),
-		"bg_hover": Color(0.0, 0.55, 0.65),
-		"bg_pressed": Color(0.0, 0.35, 0.45),
-		"border": Color(0.0, 0.75, 0.85),
-		"border_hover": Color(0.0, 0.85, 0.95),
-		"text": Color.WHITE,
-		"text_hover": Color.WHITE
-	},
-	ButtonTheme.ACTION: {  # Orange - forge/action
-		"bg": Color(0.6, 0.3, 0.08),
-		"bg_hover": Color(0.75, 0.4, 0.12),
-		"bg_pressed": Color(0.5, 0.25, 0.05),
-		"border": Color(1.0, 0.6, 0.2),
-		"border_hover": Color(1.0, 0.7, 0.3),
-		"text": Color.WHITE,
-		"text_hover": Color.WHITE
-	},
-	ButtonTheme.BRIDGE: {  # Purple/blue - external wallet
-		"bg": Color(0.2, 0.25, 0.45),
-		"bg_hover": Color(0.3, 0.35, 0.55),
-		"bg_pressed": Color(0.15, 0.2, 0.35),
-		"border": Color(0.4, 0.5, 0.8),
-		"border_hover": Color(0.5, 0.6, 0.9),
-		"text": Color(0.8, 0.85, 1.0),
-		"text_hover": Color.WHITE
-	},
-	ButtonTheme.DANGER: {  # Red - logout/cancel/destructive
-		"bg": Color(0.5, 0.15, 0.15),
-		"bg_hover": Color(0.65, 0.2, 0.2),
-		"bg_pressed": Color(0.4, 0.1, 0.1),
-		"border": Color(0.7, 0.25, 0.25),
-		"border_hover": Color(0.85, 0.35, 0.35),
-		"text": Color.WHITE,
-		"text_hover": Color.WHITE
-	},
-	ButtonTheme.SECONDARY: {  # Gray - low emphasis
-		"bg": Color(0.12, 0.12, 0.14),
-		"bg_hover": Color(0.18, 0.18, 0.2),
-		"bg_pressed": Color(0.08, 0.08, 0.1),
-		"border": Color(0.3, 0.3, 0.32),
-		"border_hover": Color(0.4, 0.4, 0.42),
-		"text": Color(0.7, 0.7, 0.72),
-		"text_hover": Color(0.85, 0.85, 0.87)
-	},
-	ButtonTheme.SUCCESS: {  # Green - enter world/confirm
-		"bg": Color(0.1, 0.45, 0.15),
-		"bg_hover": Color(0.15, 0.55, 0.2),
-		"bg_pressed": Color(0.08, 0.35, 0.1),
-		"border": Color(0.2, 0.7, 0.3),
-		"border_hover": Color(0.3, 0.85, 0.4),
-		"text": Color.WHITE,
-		"text_hover": Color.WHITE
+# Note: Using neutral gray tones for cleaner look
+func _get_button_themes() -> Dictionary:
+	return {
+		ButtonTheme.PRIMARY: {  # Clean stone gray - main interactive
+			"bg": Color(0.22, 0.22, 0.24, 0.9),  # Neutral dark gray
+			"bg_hover": Color(0.32, 0.32, 0.34, 0.95),
+			"bg_pressed": Color(0.15, 0.15, 0.16, 0.95),
+			"border": Color(0.42, 0.42, 0.44, 1.0),  # Neutral gray border
+			"border_hover": Color(0.55, 0.55, 0.58, 1.0),
+			"text": Color(0.9, 0.9, 0.92, 1.0),
+			"text_hover": Color.WHITE
+		},
+		ButtonTheme.ACTION: {  # Premium silver - forge/action
+			"bg": Color(0.28, 0.28, 0.30),
+			"bg_hover": Color(0.38, 0.38, 0.40),
+			"bg_pressed": Color(0.20, 0.20, 0.22),
+			"border": Color(0.55, 0.55, 0.58),  # Clean gray border
+			"border_hover": Color(0.72, 0.72, 0.75),  # Silver shine on hover
+			"text": Color(0.92, 0.92, 0.94),  # Bright silver text
+			"text_hover": Color.WHITE
+		},
+		ButtonTheme.BRIDGE: {  # Lighter stone gray for bridge actions
+			"bg": Color(0.25, 0.25, 0.27),
+			"bg_hover": Color(0.35, 0.35, 0.37),
+			"bg_pressed": Color(0.18, 0.18, 0.20),
+			"border": Color(0.48, 0.48, 0.50),
+			"border_hover": Color(0.62, 0.62, 0.65),
+			"text": Color(0.88, 0.88, 0.90),
+			"text_hover": Color.WHITE
+		},
+		ButtonTheme.DANGER: {  # Muted red - less jarring
+			"bg": Color(0.45, 0.18, 0.18, 0.85),
+			"bg_hover": Color(0.55, 0.22, 0.22, 0.95),
+			"bg_pressed": Color(0.35, 0.12, 0.12),
+			"border": Color(0.6, 0.25, 0.25),
+			"border_hover": Color(0.75, 0.35, 0.35),
+			"text": Color(1.0, 0.9, 0.9),
+			"text_hover": Color.WHITE
+		},
+		ButtonTheme.SECONDARY: {  # Lighter neutral gray - for secondary actions
+			"bg": Color(0.18, 0.18, 0.20, 0.75),  # Lighter, more neutral
+			"bg_hover": Color(0.28, 0.28, 0.30, 0.9),
+			"bg_pressed": Color(0.14, 0.14, 0.15, 0.9),
+			"border": Color(0.35, 0.35, 0.38, 0.8),  # Subtle border
+			"border_hover": Color(0.50, 0.50, 0.52, 1.0),
+			"text": Color(0.7, 0.7, 0.72, 1.0),  # Lighter muted text
+			"text_hover": Color(0.95, 0.95, 0.97, 1.0)
+		},
+		ButtonTheme.SUCCESS: {  # Clean green
+			"bg": Color(0.20, 0.42, 0.22, 0.9),
+			"bg_hover": Color(0.25, 0.50, 0.28, 0.95),
+			"bg_pressed": Color(0.14, 0.32, 0.16),
+			"border": Color(0.30, 0.55, 0.32),
+			"border_hover": Color(0.40, 0.70, 0.42),
+			"text": Color.WHITE,
+			"text_hover": Color.WHITE
+		}
 	}
-}
 
-# Brand colors (use sparingly)
-const MANTLE_RED = Color(0.95, 0.25, 0.25)     # Primary accent - titles, important numbers
-const MANTLE_CYAN = Color(0.0, 0.75, 0.85)     # Secondary accent - headers, interactive
+# Brand colors - Keep for title branding (distinctive from in-game UI)
+var ASHBANE_CRIMSON_BRAND: Color:
+	get: return UITheme.ACCENT_COLOR if UITheme else Color(0.60, 0.55, 0.48, 1.0)  # Warm bronze accent
+var ASHBANE_GOLD_BRAND: Color:
+	get: return UITheme.ASHBANE_GOLD if UITheme else Color(0.85, 0.65, 0.2, 1.0)  # Gold for special items
 
 # Font
 var default_font: Font = null
 var bold_font: Font = null
 
-# Neon accent color for MANTLE branding (matches login page)
-const MANTLE_NEON_CYAN = Color(0.0, 0.9, 1.0)  # Bright neon cyan
+# Primary accent color - now uses UITheme accent for consistency
+var ASHBANE_ACCENT: Color:
+	get: return UITheme.ACCENT_COLOR if UITheme else Color(0.60, 0.55, 0.48, 1.0)
 
-# Tier colors
+# ASHBANE_CRIMSON - used for titles and accents (warm bronze instead of crimson for consistency)
+var ASHBANE_CRIMSON: Color:
+	get: return UITheme.ACCENT_COLOR if UITheme else Color(0.60, 0.55, 0.48, 1.0)
+
+# ASHBANE_GOLD - now premium silver shine for headers (unified stone gray theme)
+var ASHBANE_GOLD: Color:
+	get: return Color(0.85, 0.82, 0.78, 1.0)  # Premium silver shine
+
+# Tier colors - matching backend definitions
 const TIER_COLORS = {
-	"initiate": Color("#666666"),
-	"bronze": Color("#cd7f32"),
-	"silver": Color("#c0c0c0"),
-	"gold": Color("#ffd700"),
-	"platinum": Color("#e5e4e2"),
-	"diamond": Color("#b9f2ff"),
-	"legendary": Color("#ff6600"),
-	"mythic": Color("#ff00ff")
+	"initiate": Color(0.4, 0.4, 0.4),       # #666666 - Gray
+	"bronze": Color(0.804, 0.498, 0.196),   # #CD7F32 - Bronze
+	"silver": Color(0.753, 0.753, 0.753),   # #C0C0C0 - Silver
+	"gold": Color(1.0, 0.843, 0.0),         # #FFD700 - Gold
+	"platinum": Color(0.898, 0.894, 0.886), # #E5E4E2 - Pale platinum
+	"diamond": Color(0.725, 0.949, 1.0),    # #B9F2FF - Cyan/Turquoise
+	"legendary": Color(1.0, 0.4, 0.0),      # #FF6600 - Orange
+	"mythic": Color(1.0, 0.0, 1.0)          # #FF00FF - Magenta
 }
 
-# Rarity colors
+# Rarity colors - Use UITheme for consistency with in-game UI
+func _get_rarity_color(rarity: String) -> Color:
+	if UITheme:
+		match rarity:
+			"Common": return UITheme.RARITY_COMMON
+			"Uncommon": return UITheme.RARITY_UNCOMMON
+			"Rare": return UITheme.RARITY_RARE
+			"Epic": return UITheme.RARITY_EPIC
+			"Legendary": return UITheme.RARITY_LEGENDARY
+			"Mythic": return UITheme.RARITY_MYTHIC
+	# Fallback colors
+	match rarity:
+		"Common": return Color(0.5, 0.48, 0.44)
+		"Uncommon": return Color(0.35, 0.6, 0.25)
+		"Rare": return Color(0.3, 0.5, 0.9)
+		"Epic": return Color(0.6, 0.2, 0.8)
+		"Legendary": return Color(1.0, 0.5, 0.1)
+		"Mythic": return Color(0.9, 0.1, 0.2)
+	return Color(0.5, 0.48, 0.44)
+
+# Legacy RARITY_COLORS for backwards compatibility - delegates to _get_rarity_color
 const RARITY_COLORS = {
-	"Common": Color("#9d9d9d"),
-	"Uncommon": Color("#1eff00"),
-	"Rare": Color("#0070dd"),
-	"Epic": Color("#a335ee"),
-	"Legendary": Color("#ff8000")
+	"Common": Color(0.5, 0.48, 0.44),
+	"Uncommon": Color(0.35, 0.6, 0.25),
+	"Rare": Color(0.3, 0.5, 0.9),
+	"Epic": Color(0.6, 0.2, 0.8),
+	"Legendary": Color(1.0, 0.5, 0.1)
 }
 
 # Provider colors
@@ -282,21 +377,21 @@ func _ready() -> void:
 	call_deferred("_debug_check_colors")
 
 	# Listen for profile updates (important for restored sessions)
-	if MantleAuth:
-		if not MantleAuth.profile_updated.is_connected(_on_profile_updated):
-			MantleAuth.profile_updated.connect(_on_profile_updated)
-		if not MantleAuth.auth_completed.is_connected(_on_profile_updated):
-			MantleAuth.auth_completed.connect(_on_profile_updated)
-		if not MantleAuth.connection_status_changed.is_connected(_on_connection_status_changed):
-			MantleAuth.connection_status_changed.connect(_on_connection_status_changed)
+	if AshbaneAuth:
+		if not AshbaneAuth.profile_updated.is_connected(_on_profile_updated):
+			AshbaneAuth.profile_updated.connect(_on_profile_updated)
+		if not AshbaneAuth.auth_completed.is_connected(_on_profile_updated):
+			AshbaneAuth.auth_completed.connect(_on_profile_updated)
+		if not AshbaneAuth.connection_status_changed.is_connected(_on_connection_status_changed):
+			AshbaneAuth.connection_status_changed.connect(_on_connection_status_changed)
 
 		# If profile data already loaded, refresh immediately
-		if MantleAuth.providers.size() > 0:
+		if AshbaneAuth.providers.size() > 0:
 			print("[Armory] Profile data already available, refreshing...")
 			call_deferred("_on_profile_updated", {})
 
 		# Update connection indicator with current status
-		call_deferred("_update_connection_indicator", MantleAuth.connection_status)
+		call_deferred("_update_connection_indicator", AshbaneAuth.connection_status)
 
 	# Setup background music
 	_setup_background_music()
@@ -351,9 +446,9 @@ func _exit_tree() -> void:
 		_music_player = null
 
 func _on_profile_updated(_data: Dictionary) -> void:
-	"""Called when MantleAuth receives profile data - refresh the UI"""
+	"""Called when AshbaneAuth receives profile data - refresh the UI"""
 	# Compute a hash of the profile data to detect actual changes
-	var profile_hash = hash(str(MantleAuth.total_achievements) + str(MantleAuth.providers.size()) + str(MantleAuth.mantle_tier))
+	var profile_hash = hash(str(AshbaneAuth.total_achievements) + str(AshbaneAuth.providers.size()) + str(AshbaneAuth.ashbane_tier))
 
 	# Skip if nothing changed (debounce duplicate signals)
 	if profile_hash == _last_profile_hash and _last_profile_hash != 0:
@@ -364,8 +459,8 @@ func _on_profile_updated(_data: Dictionary) -> void:
 
 	print("[Armory] ════════════════════════════════════════")
 	print("[Armory] Profile updated (hash=%d)" % profile_hash)
-	print("[Armory] MantleAuth.total_achievements: ", MantleAuth.total_achievements)
-	print("[Armory] MantleAuth.providers.size(): ", MantleAuth.providers.size())
+	print("[Armory] AshbaneAuth.total_achievements: ", AshbaneAuth.total_achievements)
+	print("[Armory] AshbaneAuth.providers.size(): ", AshbaneAuth.providers.size())
 	print("[Armory] ════════════════════════════════════════")
 	_determine_state()
 	_setup_ui_for_state()
@@ -376,12 +471,12 @@ func _on_profile_updated(_data: Dictionary) -> void:
 		_animate_achievement_count()
 
 	# Setup character preview from player's currently equipped items
-	# Priority: CharacterStats.equipped_armor > MantleAuth.saved_appearance > default
+	# Priority: CharacterStats.equipped_armor > AshbaneAuth.saved_appearance > default
 	var appearance = _get_appearance_from_character_stats()
 
 	if appearance.is_empty():
 		# No equipped items, try backend saved appearance
-		appearance = MantleAuth.saved_appearance
+		appearance = AshbaneAuth.saved_appearance
 		if appearance == null or appearance.is_empty():
 			# Use default starter appearance for new players
 			appearance = _get_default_appearance()
@@ -465,16 +560,16 @@ func _on_bridge_in_available_signal(items: Array) -> void:
 	_update_bridge_in_display(items)
 
 func _on_connection_status_changed(status: int) -> void:
-	"""Called when MantleAuth connection status changes"""
+	"""Called when AshbaneAuth connection status changes"""
 	print("[Armory] Connection status changed: %d" % status)
 	_update_connection_indicator(status)
 
-	# If connection was restored, the data refresh is handled by MantleAuth
+	# If connection was restored, the data refresh is handled by AshbaneAuth
 	# Just update our UI to reflect the new state
-	if status == MantleAuth.ConnectionStatus.CONNECTED:
+	if status == AshbaneAuth.ConnectionStatus.CONNECTED:
 		# Connection restored - UI will update when signals come in
 		pass
-	elif status == MantleAuth.ConnectionStatus.DISCONNECTED:
+	elif status == AshbaneAuth.ConnectionStatus.DISCONNECTED:
 		# Connection lost - could show a notification/toast
 		pass
 
@@ -526,7 +621,7 @@ func _create_section_divider() -> Control:
 	container.custom_minimum_size = Vector2(0, 20)
 
 	var line = ColorRect.new()
-	line.color = Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.2)  # Cyan tinted, more visible
+	line.color = Color(ASHBANE_GOLD.r, ASHBANE_GOLD.g, ASHBANE_GOLD.b, 0.2)  # Cyan tinted, more visible
 	line.custom_minimum_size = Vector2(0, 1)
 	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.anchor_top = 0.0
@@ -550,7 +645,7 @@ func _create_animated_grid_bg() -> Control:
 
 	# Grid settings (matching web app: 60px spacing, cyan at 0.06 opacity)
 	var grid_spacing = 60  # Refined grid spacing for technical aesthetic
-	var line_color = Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.06)
+	var line_color = Color(ASHBANE_GOLD.r, ASHBANE_GOLD.g, ASHBANE_GOLD.b, 0.06)
 	var line_thickness = 1
 	var lines_created = false
 
@@ -592,6 +687,35 @@ func _create_animated_grid_bg() -> Control:
 
 	return container
 
+func _create_polished_panel_bg(parent: Control) -> void:
+	"""Add subtle semi-transparent background with accent bar - allows gridlines to show through"""
+
+	# Semi-transparent base background - lets gridlines show through
+	var bg_base = ColorRect.new()
+	bg_base.name = "PanelBgBase"
+	bg_base.color = Color(0.06, 0.06, 0.07, 0.7)  # 70% opacity - gridlines visible
+	bg_base.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(bg_base)
+
+	# Very subtle top highlight
+	var top_highlight = ColorRect.new()
+	top_highlight.name = "TopHighlight"
+	top_highlight.color = Color(0.15, 0.15, 0.17, 0.06)
+	top_highlight.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	top_highlight.offset_bottom = 100
+	top_highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(top_highlight)
+
+	# Top accent bar - thin silver line
+	var accent_bar = ColorRect.new()
+	accent_bar.name = "TopAccentBar"
+	accent_bar.color = Color(0.45, 0.45, 0.48, 0.5)
+	accent_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	accent_bar.offset_bottom = 2
+	accent_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(accent_bar)
+
 func _create_glowing_divider() -> Control:
 	"""Create a subtle horizontal divider - simplified"""
 	var container = Control.new()
@@ -599,7 +723,7 @@ func _create_glowing_divider() -> Control:
 
 	# Simple thin line
 	var line = ColorRect.new()
-	line.color = Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.15)
+	line.color = Color(ASHBANE_GOLD.r, ASHBANE_GOLD.g, ASHBANE_GOLD.b, 0.15)
 	line.custom_minimum_size = Vector2(0, 1)
 	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.anchor_top = 0.5
@@ -642,55 +766,30 @@ func _create_player_identity_frame() -> Control:
 
 func _create_enhanced_tier_badge(tier_key: String) -> Control:
 	"""Create tier badge with pulsing glow effect"""
-	var container = Control.new()
-	container.name = "TierBadgeContainer"
-	container.custom_minimum_size = Vector2(120, 36)
-
 	var color = TIER_COLORS.get(tier_key, TIER_COLORS["initiate"])
 
-	# Outer glow layer (animated) - aligned with badge
-	var glow_panel = PanelContainer.new()
-	glow_panel.name = "BadgeGlow"
-	glow_panel.set_anchors_preset(Control.PRESET_CENTER)
-	glow_panel.offset_left = -60
-	glow_panel.offset_right = 70
-	glow_panel.offset_top = -18
-	glow_panel.offset_bottom = 18
-	var glow_style = StyleBoxFlat.new()
-	glow_style.bg_color = Color(color.r, color.g, color.b, 0.2)
-	glow_style.set_corner_radius_all(8)
-	glow_style.shadow_color = Color(color.r, color.g, color.b, 0.5)
-	glow_style.shadow_size = 16
-	glow_panel.add_theme_stylebox_override("panel", glow_style)
-	container.add_child(glow_panel)
-
-	# Main badge - shifted 10px left to match glow
+	# Main badge with built-in glow via shadow
 	var badge = PanelContainer.new()
 	badge.name = "TierBadgePanel"
-	badge.set_anchors_preset(Control.PRESET_CENTER)
-	badge.offset_left = -65
-	badge.offset_right = 45
-	badge.offset_top = -14
-	badge.offset_bottom = 14
 
 	var style = StyleBoxFlat.new()
 	style.bg_color = color
 	style.set_corner_radius_all(4)
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
 	# Metallic highlight on top edge
 	style.border_color = color.lightened(0.4)
 	style.border_width_top = 2
 	style.border_width_bottom = 0
 	style.border_width_left = 1
 	style.border_width_right = 1
+	# Glow effect via shadow - centered
+	style.shadow_color = Color(color.r, color.g, color.b, 0.5)
+	style.shadow_size = 12
+	style.shadow_offset = Vector2(0, 0)  # Centered shadow
 	badge.add_theme_stylebox_override("panel", style)
-	badge.set_meta("style", style)
-	badge.set_meta("glow_style", glow_style)
-	badge.set_meta("base_color", color)
-	container.add_child(badge)
 
 	tier_label = Label.new()
 	tier_label.name = "TierLabel"
@@ -705,31 +804,38 @@ func _create_enhanced_tier_badge(tier_key: String) -> Control:
 		tier_label.add_theme_color_override("font_color", Color.WHITE)
 	badge.add_child(tier_label)
 
-	# Start pulsing animation
-	_start_badge_pulse(container, color)
+	badge.set_meta("style", style)
+	badge.set_meta("base_color", color)
 
-	return container
+	# Start pulsing animation
+	_start_badge_pulse(badge, color)
+
+	return badge
 
 func _start_badge_pulse(badge_container: Control, color: Color) -> void:
 	"""Start subtle pulsing glow animation on tier badge"""
 	var tween = create_tween()
 	tween.set_loops()
 
-	var glow_panel = badge_container.find_child("BadgeGlow", false, false)
-	if glow_panel:
+	# Badge now has shadow built into its own style
+	var badge_panel = badge_container
+	if badge_container.name != "TierBadgePanel":
+		badge_panel = badge_container.find_child("TierBadgePanel", false, false)
+
+	if badge_panel:
 		# Pulse the shadow size
 		tween.tween_method(func(val: float):
-			var style = glow_panel.get_theme_stylebox("panel") as StyleBoxFlat
+			var style = badge_panel.get_theme_stylebox("panel") as StyleBoxFlat
 			if style:
 				style.shadow_size = int(val)
 				style.shadow_color = Color(color.r, color.g, color.b, 0.3 + (val - 12) * 0.02)
-		, 12.0, 20.0, 1.5)
+		, 12.0, 18.0, 1.5)
 		tween.tween_method(func(val: float):
-			var style = glow_panel.get_theme_stylebox("panel") as StyleBoxFlat
+			var style = badge_panel.get_theme_stylebox("panel") as StyleBoxFlat
 			if style:
 				style.shadow_size = int(val)
 				style.shadow_color = Color(color.r, color.g, color.b, 0.3 + (val - 12) * 0.02)
-		, 20.0, 12.0, 1.5)
+		, 18.0, 12.0, 1.5)
 
 func _create_trophy_plaque() -> Control:
 	"""Create achievement score display - clean version"""
@@ -756,7 +862,7 @@ func _create_trophy_plaque() -> Control:
 	glow_outer.text = "0"
 	glow_outer.add_theme_font_override("font", default_font)
 	glow_outer.add_theme_font_size_override("font_size", 66)  # Slightly larger
-	glow_outer.add_theme_color_override("font_color", Color(MANTLE_RED.r, MANTLE_RED.g, MANTLE_RED.b, 0.15))
+	glow_outer.add_theme_color_override("font_color", Color(ASHBANE_CRIMSON.r, ASHBANE_CRIMSON.g, ASHBANE_CRIMSON.b, 0.15))
 	glow_outer.set_anchors_preset(Control.PRESET_CENTER)
 	glow_outer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	glow_outer.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -773,7 +879,7 @@ func _create_trophy_plaque() -> Control:
 	glow_mid.text = "0"
 	glow_mid.add_theme_font_override("font", default_font)
 	glow_mid.add_theme_font_size_override("font_size", 64)
-	glow_mid.add_theme_color_override("font_color", Color(MANTLE_RED.r, MANTLE_RED.g, MANTLE_RED.b, 0.25))
+	glow_mid.add_theme_color_override("font_color", Color(ASHBANE_CRIMSON.r, ASHBANE_CRIMSON.g, ASHBANE_CRIMSON.b, 0.25))
 	glow_mid.set_anchors_preset(Control.PRESET_CENTER)
 	glow_mid.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	glow_mid.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -790,7 +896,7 @@ func _create_trophy_plaque() -> Control:
 	glow_label.text = "0"
 	glow_label.add_theme_font_override("font", default_font)
 	glow_label.add_theme_font_size_override("font_size", 64)
-	glow_label.add_theme_color_override("font_color", Color(MANTLE_RED.r, MANTLE_RED.g, MANTLE_RED.b, 0.4))
+	glow_label.add_theme_color_override("font_color", Color(ASHBANE_CRIMSON.r, ASHBANE_CRIMSON.g, ASHBANE_CRIMSON.b, 0.4))
 	glow_label.set_anchors_preset(Control.PRESET_CENTER)
 	glow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	glow_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -806,7 +912,7 @@ func _create_trophy_plaque() -> Control:
 	total_label.text = "0"
 	total_label.add_theme_font_override("font", default_font)
 	total_label.add_theme_font_size_override("font_size", 64)
-	total_label.add_theme_color_override("font_color", MANTLE_RED)
+	total_label.add_theme_color_override("font_color", ASHBANE_CRIMSON)
 	total_label.add_theme_color_override("font_outline_color", Color(0.1, 0.0, 0.0, 0.8))  # Dark red outline
 	total_label.add_theme_constant_override("outline_size", 2)
 	total_label.set_anchors_preset(Control.PRESET_CENTER)
@@ -845,7 +951,7 @@ func _create_enhanced_progress_section() -> Control:
 	arrow.text = "→"
 	arrow.add_theme_font_override("font", default_font)
 	arrow.add_theme_font_size_override("font_size", FONT_H3)
-	arrow.add_theme_color_override("font_color", Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.6))
+	arrow.add_theme_color_override("font_color", Color(ASHBANE_GOLD.r, ASHBANE_GOLD.g, ASHBANE_GOLD.b, 0.6))
 	arrow_container.add_child(arrow)
 
 	# Next tier emblem
@@ -886,9 +992,9 @@ func _create_enhanced_progress_section() -> Control:
 	bg_style.bg_color = Color(0, 0, 0, 0)
 	progress_bar.add_theme_stylebox_override("background", bg_style)
 
-	# Clean fill style
+	# Clean fill style - premium silver shine
 	var fill_style = StyleBoxFlat.new()
-	fill_style.bg_color = TIER_COLORS["initiate"]
+	fill_style.bg_color = Color(0.55, 0.52, 0.48, 1.0)  # Stone gray with shine
 	fill_style.set_corner_radius_all(4)
 	progress_bar.add_theme_stylebox_override("fill", fill_style)
 	progress_bar.set_meta("fill_style", fill_style)
@@ -1011,6 +1117,15 @@ func _build_ui() -> void:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
+	# VFX layers (added early so UI renders on top)
+	_setup_vfx_layers()
+
+	# Full-screen grid overlay (covers entire background, not just columns)
+	var full_grid = _create_animated_grid_bg()
+	full_grid.set_anchors_preset(Control.PRESET_FULL_RECT)
+	full_grid.z_index = 0  # Behind all content
+	add_child(full_grid)
+
 	# Apply larger tooltip font to root viewport for ALL tooltips
 	_apply_tooltip_theme()
 
@@ -1022,7 +1137,7 @@ func _build_ui() -> void:
 
 	# Header (title only)
 	_build_header(main_vbox)
-	_start_logo_pulse()  # Start pulsing animation on MANTLE logo
+	_start_logo_pulse()  # Start pulsing animation on ASHBANE logo
 
 	# Content area (fills available space)
 	var content_margin = MarginContainer.new()
@@ -1043,8 +1158,8 @@ func _build_ui() -> void:
 	columns.clip_contents = true  # Prevent any column content from overflowing
 	content_margin.add_child(columns)
 
-	# LEFT column: MANTLE STATS - expands proportionally
-	var left_column = _build_mantle_stats_column()
+	# LEFT column: ASHBANE STATS - expands proportionally
+	var left_column = _build_ashbane_stats_column()
 	left_column.name = "LeftColumn"
 	left_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1067,6 +1182,9 @@ func _build_ui() -> void:
 	right_column.size_flags_stretch_ratio = 1.0  # Equal ratio
 	columns.add_child(right_column)
 
+	# Apply pulsing border glow to main column panels
+	call_deferred("_apply_column_glow_effects", left_column, middle_column, right_column)
+
 	# Footer spacer
 	_build_footer(main_vbox)
 
@@ -1077,41 +1195,32 @@ func _build_ui() -> void:
 # THREE-COLUMN LAYOUT
 # ═══════════════════════════════════════════════════════════════════════════════
 
-func _build_mantle_stats_column() -> Control:
-	"""LEFT COLUMN: Mantle Stats - providers, rarity, achievements, tier, progress"""
-	print("[Armory] Building LEFT column with CARD_BG: ", CARD_BG)
+func _build_ashbane_stats_column() -> Control:
+	"""LEFT COLUMN: Ashbane Stats - providers, rarity, achievements, tier, progress"""
+	print("[Armory] Building LEFT column")
 	var wrapper = Control.new()
 	wrapper.custom_minimum_size = Vector2(220, 0)
 
-	# Background with subtle gradient
-	var bg = ColorRect.new()
-	bg.name = "LeftColumnBG"
-	bg.color = CARD_BG
-	print("[Armory] LEFT column bg.color set to: ", bg.color)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	wrapper.add_child(bg)
+	# Polished panel background with gradient and accent bar
+	_create_polished_panel_bg(wrapper)
 
-	# Animated grid background effect (z_index 0 to render behind content)
-	var grid_overlay = _create_animated_grid_bg()
-	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	grid_overlay.z_index = 0
-	wrapper.add_child(grid_overlay)
-
-	# Border overlay with cyan glow (matches MainMenu)
+	# Border overlay with stone gray glow
 	var border = PanelContainer.new()
 	border.set_anchors_preset(Control.PRESET_FULL_RECT)
 	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var border_style = StyleBoxFlat.new()
 	border_style.bg_color = Color(0, 0, 0, 0)
 	border_style.border_color = BORDER_GLOW
-	border_style.set_border_width_all(2)
+	border_style.set_border_width_all(3)  # Thicker for presence
 	border_style.set_corner_radius_all(8)
-	border_style.shadow_size = 20
+	border_style.shadow_size = 14
 	border_style.shadow_color = SHADOW_GLOW
+	border_style.shadow_offset = Vector2(0, 3)
+	border_style.set_expand_margin_all(1)
 	border.add_theme_stylebox_override("panel", border_style)
 	wrapper.add_child(border)
 
-	# Content margin - tighter spacing (z_index 1 to render above grid)
+	# Content margin - tighter spacing
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 16)
@@ -1166,7 +1275,7 @@ func _build_mantle_stats_column() -> Control:
 	var providers_section = VBoxContainer.new()
 	providers_section.add_theme_constant_override("separation", 8)
 	providers_section.mouse_filter = Control.MOUSE_FILTER_STOP
-	providers_section.tooltip_text = "Gaming platforms linked to your Mantle account.\nLink more at mantle.gg/dashboard"
+	providers_section.tooltip_text = "Gaming platforms linked to your Ashbane account.\nLink more at ashbane.gg/dashboard"
 	vbox.add_child(providers_section)
 
 	var providers_header = Label.new()
@@ -1203,7 +1312,7 @@ func _build_mantle_stats_column() -> Control:
 	var rarity_section = VBoxContainer.new()
 	rarity_section.add_theme_constant_override("separation", 10)
 	rarity_section.mouse_filter = Control.MOUSE_FILTER_STOP
-	rarity_section.tooltip_text = "Your achievements sorted by unlock rarity.\nRarer achievements unlock better forge items.\nView details at mantle.gg/dashboard"
+	rarity_section.tooltip_text = "Your achievements sorted by unlock rarity.\nRarer achievements unlock better forge items.\nView details at ashbane.gg/dashboard"
 	vbox.add_child(rarity_section)
 
 	var rarity_header = Label.new()
@@ -1387,7 +1496,7 @@ func _create_compact_progress_section() -> Control:
 	current_tier.text = "Initiate"
 	current_tier.add_theme_font_override("font", default_font)
 	current_tier.add_theme_font_size_override("font_size", FONT_BODY)
-	current_tier.add_theme_color_override("font_color", TIER_COLORS["initiate"])
+	current_tier.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 1.0))  # Premium silver
 	tier_row.add_child(current_tier)
 
 	var arrow = Label.new()
@@ -1402,7 +1511,7 @@ func _create_compact_progress_section() -> Control:
 	next_tier.text = "Bronze"
 	next_tier.add_theme_font_override("font", default_font)
 	next_tier.add_theme_font_size_override("font_size", FONT_BODY)
-	next_tier.add_theme_color_override("font_color", TIER_COLORS["bronze"])
+	next_tier.add_theme_color_override("font_color", Color(0.70, 0.68, 0.65, 1.0))  # Lighter silver for next
 	tier_row.add_child(next_tier)
 
 	# Progress bar (taller, more prominent)
@@ -1441,9 +1550,9 @@ func _create_compact_progress_section() -> Control:
 	bg_style.bg_color = Color(0, 0, 0, 0)  # Transparent
 	progress_bar.add_theme_stylebox_override("background", bg_style)
 
-	# Style the fill
+	# Style the fill - premium silver shine
 	var fill_style = StyleBoxFlat.new()
-	fill_style.bg_color = TIER_COLORS["initiate"]
+	fill_style.bg_color = Color(0.55, 0.52, 0.48, 1.0)  # Stone gray with shine
 	fill_style.set_corner_radius_all(6)
 	progress_bar.add_theme_stylebox_override("fill", fill_style)
 
@@ -1471,21 +1580,10 @@ func _build_forge_column() -> Control:
 	wrapper.custom_minimum_size = Vector2(320, 0)
 	print("[Armory] Forge wrapper created, min_size: ", wrapper.custom_minimum_size)
 
-	# Background
-	var bg = ColorRect.new()
-	bg.name = "RightColumnBG"
-	bg.color = CARD_BG
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	wrapper.add_child(bg)
-	print("[Armory] Forge BG added with color: ", bg.color)
+	# Polished panel background with gradient and accent bar
+	_create_polished_panel_bg(wrapper)
 
-	# Animated grid background effect (z_index 0 to render behind content)
-	var grid_overlay = _create_animated_grid_bg()
-	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	grid_overlay.z_index = 0
-	wrapper.add_child(grid_overlay)
-
-	# Border overlay with cyan glow
+	# Border overlay with stone gray glow
 	var border = PanelContainer.new()
 	border.name = "ForgeBorder"
 	border.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1493,14 +1591,16 @@ func _build_forge_column() -> Control:
 	var border_style = StyleBoxFlat.new()
 	border_style.bg_color = Color(0, 0, 0, 0)
 	border_style.border_color = BORDER_GLOW
-	border_style.set_border_width_all(2)
+	border_style.set_border_width_all(3)  # Thicker for presence
 	border_style.set_corner_radius_all(8)
-	border_style.shadow_size = 20
+	border_style.shadow_size = 14
 	border_style.shadow_color = SHADOW_GLOW
+	border_style.shadow_offset = Vector2(0, 3)
+	border_style.set_expand_margin_all(1)
 	border.add_theme_stylebox_override("panel", border_style)
 	wrapper.add_child(border)
 
-	# Content container with margins (z_index 1 to render above grid)
+	# Content container with margins
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 12)
@@ -1531,7 +1631,7 @@ func _build_forge_column() -> Control:
 	var forge_icon = Label.new()
 	forge_icon.text = "⚒"
 	forge_icon.add_theme_font_size_override("font_size", FORGE_HEADER_SIZE)
-	forge_icon.add_theme_color_override("font_color", MANTLE_CYAN)
+	forge_icon.add_theme_color_override("font_color", ASHBANE_GOLD)
 	header_row.add_child(forge_icon)
 
 	var header = Label.new()
@@ -1572,7 +1672,7 @@ func _build_forge_column() -> Control:
 	var progress_pct = Label.new()
 	progress_pct.text = "(%d%%)" % int(progress_percent * 100)
 	progress_pct.add_theme_font_size_override("font_size", FONT_CAPTION)
-	progress_pct.add_theme_color_override("font_color", MANTLE_CYAN)
+	progress_pct.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 1.0))  # Premium silver
 	progress_row.add_child(progress_pct)
 
 	# Progress bar using ProgressBar control (simpler and more reliable)
@@ -1584,16 +1684,16 @@ func _build_forge_column() -> Control:
 	progress_bar.value = 0  # Start at 0 for animation
 	progress_bar.show_percentage = false
 
-	# Style the progress bar - lighter background so empty state is visible
+	# Style the progress bar - stone gray theme
 	var bar_bg_style = StyleBoxFlat.new()
-	bar_bg_style.bg_color = Color(0.20, 0.22, 0.25)  # Much lighter for visibility
+	bar_bg_style.bg_color = Color(0.12, 0.12, 0.14)  # Dark background
 	bar_bg_style.set_corner_radius_all(4)
-	bar_bg_style.border_color = Color(0.30, 0.32, 0.35)  # Subtle border
+	bar_bg_style.border_color = Color(0.25, 0.24, 0.22)  # Stone border
 	bar_bg_style.set_border_width_all(1)
 	progress_bar.add_theme_stylebox_override("background", bar_bg_style)
 
 	var bar_fill_style = StyleBoxFlat.new()
-	bar_fill_style.bg_color = MANTLE_CYAN
+	bar_fill_style.bg_color = Color(0.55, 0.52, 0.48, 1.0)  # Stone gray fill
 	bar_fill_style.set_corner_radius_all(4)
 	progress_bar.add_theme_stylebox_override("fill", bar_fill_style)
 
@@ -1718,9 +1818,10 @@ func _style_forge_tab(btn: Button, active: bool) -> void:
 		btn.add_theme_color_override("font_color", TEXT_DIM)
 
 func _style_filter_button(btn: Button, active: bool) -> void:
-	"""Style a filter/sort button - uses danger (red) when active, secondary when inactive"""
+	"""Style a filter/sort button - uses primary (stone gray) when active, secondary when inactive"""
 	if active:
-		_style_button(btn, ButtonTheme.DANGER, ButtonSize.SMALL)
+		_style_button(btn, ButtonTheme.PRIMARY, ButtonSize.SMALL)
+		btn.add_theme_color_override("font_color", Color(0.92, 0.90, 0.86, 1.0))  # Bright silver when active
 	else:
 		_style_button(btn, ButtonTheme.SECONDARY, ButtonSize.SMALL)
 		btn.add_theme_color_override("font_color", TEXT_DIM)
@@ -1732,6 +1833,8 @@ func _on_forge_sort_pressed(sort_id: String) -> void:
 	if sort_id == _forge_sort_by:
 		return
 	_forge_sort_by = sort_id
+	# Trigger glitch VFX on sort change
+	_trigger_tab_glitch()
 	# Update button styles
 	for sid in _forge_filter_buttons:
 		_style_filter_button(_forge_filter_buttons[sid], sid == sort_id)
@@ -2077,8 +2180,8 @@ func _on_preview_pressed() -> void:
 		print("[Armory] Claimed: %s -> added to inventory" % claimed_item.get("name", item_id))
 
 		# Save inventory immediately so it persists when entering game
-		if DatabaseManager and MantleAuth:
-			var username = MantleAuth.username
+		if DatabaseManager and AshbaneAuth:
+			var username = AshbaneAuth.username
 			if not username.is_empty():
 				DatabaseManager.save_inventory_for_user(username)
 
@@ -2416,8 +2519,8 @@ func _build_bridge_section() -> Control:
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Fully opaque dark bg
-	style.border_color = Color(0.15, 0.2, 0.35)  # Blue-ish tint for bridge theme
+	style.bg_color = CARD_BG  # Match other panels
+	style.border_color = BORDER_GLOW  # Use theme border color
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
 	panel.add_theme_stylebox_override("panel", style)
@@ -2443,7 +2546,7 @@ func _build_bridge_section() -> Control:
 	var title = Label.new()
 	title.text = "ITEM SYNC"
 	title.add_theme_font_size_override("font_size", 16)
-	title.add_theme_color_override("font_color", Color(0.5, 0.6, 0.9))  # Blue-ish
+	title.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 1.0))  # Premium silver
 	header_row.add_child(title)
 
 	# Spacer
@@ -2534,7 +2637,7 @@ func _build_bridge_in_section() -> Control:
 	header.name = "BridgeInHeader"
 	header.text = "IMPORT TO GAME"
 	header.add_theme_font_size_override("font_size", FONT_MIN)
-	header.add_theme_color_override("font_color", Color(0.4, 0.7, 0.4))  # Green
+	header.add_theme_color_override("font_color", TEXT_SECONDARY)  # Match theme
 	vbox.add_child(header)
 
 	var items_row = HBoxContainer.new()
@@ -2561,7 +2664,7 @@ func _build_bridging_out_section() -> Control:
 	header.name = "BridgingOutHeader"
 	header.text = "EXPORT TO WEB"
 	header.add_theme_font_size_override("font_size", FONT_MIN)
-	header.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))  # Orange
+	header.add_theme_color_override("font_color", TEXT_SECONDARY)  # Match theme
 	vbox.add_child(header)
 
 	var items_row = HBoxContainer.new()
@@ -2582,9 +2685,9 @@ func _build_bridging_out_section() -> Control:
 func _style_wallet_connect_button(btn: Button, connected: bool = false) -> void:
 	"""Style the wallet connect button based on connection state"""
 	if connected:
-		_style_button(btn, ButtonTheme.SUCCESS, ButtonSize.SMALL)
+		_style_button(btn, ButtonTheme.DANGER, ButtonSize.SMALL)  # Red for disconnect
 	else:
-		_style_button(btn, ButtonTheme.BRIDGE, ButtonSize.SMALL)
+		_style_button(btn, ButtonTheme.PRIMARY, ButtonSize.SMALL)  # Stone gray for connect
 	btn.focus_mode = Control.FOCUS_NONE  # Disable focus to prevent outline
 
 func _refresh_bridge_section() -> void:
@@ -2608,17 +2711,17 @@ func _on_wallet_status_fetched(connected: bool, wallet_address: String) -> void:
 	if wallet_icon:
 		if connected:
 			wallet_icon.text = "●"  # Solid dot when connected
-			wallet_icon.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))  # Bright green
+			wallet_icon.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 1.0))  # Silver when connected
 		else:
 			wallet_icon.text = "○"  # Hollow dot when disconnected
-			wallet_icon.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))  # Gray
+			wallet_icon.add_theme_color_override("font_color", TEXT_DIM)  # Use theme dim
 
 	# Update wallet address display
 	if _bridge_wallet_status:
 		if connected:
 			var short_addr = ForgeItemManager.get_wallet_address_short()
 			_bridge_wallet_status.text = short_addr
-			_bridge_wallet_status.add_theme_color_override("font_color", Color(0.5, 0.85, 0.55))  # Bright green
+			_bridge_wallet_status.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 1.0))  # Silver when connected
 			_bridge_wallet_status.tooltip_text = wallet_address if wallet_address else "Connected"
 		else:
 			_bridge_wallet_status.text = "Not connected"
@@ -2959,7 +3062,7 @@ func _on_wallet_connect_pressed() -> void:
 	else:
 		# Connect - open browser for SIWE flow
 		print("[Armory] Opening wallet connect...")
-		var connect_url = MantleAuth.get_api_base() + "/wallet/connect"
+		var connect_url = AshbaneAuth.get_api_base() + "/wallet/connect"
 		OS.shell_open(connect_url)
 
 		if NotificationManager:
@@ -4389,7 +4492,7 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 				# NEW badge for recently forged items - top right corner
 				var new_pill = PanelContainer.new()
 				var new_style = StyleBoxFlat.new()
-				new_style.bg_color = MANTLE_CYAN
+				new_style.bg_color = ASHBANE_GOLD
 				new_style.set_corner_radius_all(6)
 				new_style.set_content_margin_all(2)
 				new_pill.add_theme_stylebox_override("panel", new_style)
@@ -4428,11 +4531,36 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	tooltip_lines.append("\"%s\"" % lore_text)
 	tooltip_lines.append("")
 
-	# Metadata section
+	# Weapon stats section (only for weapons)
+	var item_type = item.get("item_type", "")
+	if item_type == "weapon":
+		var weapon_type = item.get("weapon_type", "weapon")
+		tooltip_lines.append("Type:  %s" % weapon_type.capitalize())
+
+		var base_damage = item.get("base_damage", {})
+		if base_damage.has("min") and base_damage.has("max"):
+			tooltip_lines.append("Damage:  %d-%d" % [base_damage.min, base_damage.max])
+
+		var attack_speed = item.get("attack_speed", "")
+		if attack_speed != "":
+			tooltip_lines.append("Speed:  %s" % attack_speed.capitalize())
+
+		# Stat bonuses
+		var stat_bonuses = item.get("stat_bonuses", {})
+		var stat_parts = []
+		for stat_key in ["str", "agi", "dex", "int", "wis", "vit"]:
+			var val = stat_bonuses.get(stat_key, 0)
+			if val > 0:
+				stat_parts.append("+%d %s" % [val, stat_key.to_upper()])
+		if stat_parts.size() > 0:
+			tooltip_lines.append("Stats:  %s" % ", ".join(stat_parts))
+		tooltip_lines.append("")
+
+	# Source section
 	tooltip_lines.append("Game:  %s" % game_name)
 	tooltip_lines.append("Achievement:  %s" % achievement_name)
 
-	# State-specific section
+	# State-specific section (consolidated forge messages)
 	match state:
 		"locked":
 			tooltip_lines.append("")
@@ -4443,9 +4571,12 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 		"forgeable":
 			tooltip_lines.append("")
 			tooltip_lines.append("─────────────────")
-			tooltip_lines.append("READY TO FORGE")
-			tooltip_lines.append("Achievement unlocked!")
-			tooltip_lines.append("Visit Mantle webapp to forge.")
+			if has_forge_opportunity:
+				tooltip_lines.append("⚒️ FORGE AVAILABLE")
+				tooltip_lines.append("Visit Ashbane webapp to forge.")
+			else:
+				tooltip_lines.append("ACHIEVEMENT UNLOCKED")
+				tooltip_lines.append("Need forge credits to claim.")
 		"forged":
 			var tip_item_id = item.get("id", item.get("item_id", ""))
 			var tip_bridge_status = item.get("bridge_status", ForgeItemManager.get_bridge_status(tip_item_id))
@@ -4463,14 +4594,20 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 			else:
 				tooltip_lines.append("IN INVENTORY")
 				tooltip_lines.append("Ready to equip!")
-
-	# Add forge available notice if there's an unspent forge opportunity
-	if has_forge_opportunity:
-		tooltip_lines.append("")
-		tooltip_lines.append("⚒️ FORGE AVAILABLE!")
-		tooltip_lines.append("Visit webapp to forge another.")
+				if has_forge_opportunity:
+					tooltip_lines.append("")
+					tooltip_lines.append("⚒️ Forge another available")
 
 	card.tooltip_text = "\n".join(tooltip_lines)
+
+	# === WONKA VFX EFFECTS ===
+	# Apply legendary shimmer to owned Legendary items
+	if rarity == "Legendary" and is_owned:
+		apply_legendary_shimmer(card)
+
+	# Apply chromatic aberration on hover to all owned items
+	if is_owned:
+		apply_chromatic_aberration_on_hover(card)
 
 	return card
 
@@ -4569,6 +4706,16 @@ func _create_playtest_forge_card(item: Dictionary, state: String) -> Control:
 		tooltip_lines.append("[Click to Claim]")
 	card.tooltip_text = "\n".join(tooltip_lines)
 
+	# === WONKA VFX EFFECTS ===
+	var rarity = item.get("rarity", "common")
+	# Apply legendary shimmer to unclaimed Legendary items
+	if rarity == "Legendary" and not is_claimed:
+		apply_legendary_shimmer(card)
+
+	# Apply chromatic aberration on hover to unclaimed items
+	if not is_claimed:
+		apply_chromatic_aberration_on_hover(card)
+
 	return card
 
 func _add_fallback_icon(container: Control, item: Dictionary, state: String) -> void:
@@ -4607,10 +4754,10 @@ func _on_forge_card_hover(card: PanelContainer, is_hovering: bool) -> void:
 		var hover_style = normal_style.duplicate() if normal_style else StyleBoxFlat.new()
 		if is_owned:
 			hover_style.bg_color = Color(0.12, 0.12, 0.14)
-			hover_style.border_color = rarity_color.lightened(0.2)
+			hover_style.border_color = Color(0.65, 0.62, 0.58, 1.0)  # Stone gray hover
 		else:
 			hover_style.bg_color = Color(0.08, 0.08, 0.10)
-			hover_style.border_color = rarity_color.lightened(0.1)
+			hover_style.border_color = Color(0.50, 0.48, 0.45, 1.0)  # Lighter stone for unowned
 		# Keep shadow_size at 0 during hover to prevent layout shift
 		hover_style.shadow_size = 0
 		card.add_theme_stylebox_override("panel", hover_style)
@@ -4640,15 +4787,15 @@ func _on_forge_card_clicked(event: InputEvent, card: PanelContainer) -> void:
 		# Mark this card as selected
 		_forge_selected_card = card
 
-		# Apply selected style (bright border)
+		# Apply selected style - premium silver border for unified theme
 		var selected_style = StyleBoxFlat.new()
 		selected_style.bg_color = Color(0.15, 0.15, 0.18) if is_owned else Color(0.08, 0.08, 0.10)
-		selected_style.border_color = rarity_color.lightened(0.2)
+		selected_style.border_color = Color(0.85, 0.82, 0.78, 1.0)  # Premium silver border
 		selected_style.set_border_width_all(3)
 		selected_style.set_corner_radius_all(4)
 		selected_style.set_content_margin_all(1)
-		selected_style.shadow_size = 12
-		selected_style.shadow_color = Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.5)
+		selected_style.shadow_size = 10
+		selected_style.shadow_color = Color(0.85, 0.82, 0.78, 0.4)  # Silver glow
 		card.add_theme_stylebox_override("panel", selected_style)
 
 		# Update detail panel with selected item and state
@@ -4869,8 +5016,8 @@ func _style_claim_all_button(btn: Button) -> void:
 
 func _get_current_tier_name() -> String:
 	"""Get current tier name from profile"""
-	if profile.has("mantle") and profile.mantle.has("tier"):
-		return profile.mantle.tier.capitalize()
+	if profile.has("ashbane") and profile.ashbane.has("tier"):
+		return profile.ashbane.tier.capitalize()
 	return "Initiate"
 
 func _build_dreadland_column() -> Control:
@@ -4879,34 +5026,26 @@ func _build_dreadland_column() -> Control:
 	var wrapper = Control.new()
 	wrapper.custom_minimum_size = Vector2(220, 0)
 
-	# Background
-	var bg = ColorRect.new()
-	bg.name = "MiddleColumnBG"
-	bg.color = CARD_BG
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	wrapper.add_child(bg)
+	# Polished panel background with gradient and accent bar
+	_create_polished_panel_bg(wrapper)
 
-	# Animated grid background effect (z_index 0 to render behind content)
-	var grid_overlay = _create_animated_grid_bg()
-	grid_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	grid_overlay.z_index = 0
-	wrapper.add_child(grid_overlay)
-
-	# Border overlay with cyan glow (matches MainMenu)
+	# Border overlay with stone gray glow
 	var border = PanelContainer.new()
 	border.set_anchors_preset(Control.PRESET_FULL_RECT)
 	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var border_style = StyleBoxFlat.new()
 	border_style.bg_color = Color(0, 0, 0, 0)
 	border_style.border_color = BORDER_GLOW
-	border_style.set_border_width_all(2)
+	border_style.set_border_width_all(3)  # Thicker for presence
 	border_style.set_corner_radius_all(8)
-	border_style.shadow_size = 20
+	border_style.shadow_size = 14
 	border_style.shadow_color = SHADOW_GLOW
+	border_style.shadow_offset = Vector2(0, 3)
+	border_style.set_expand_margin_all(1)
 	border.add_theme_stylebox_override("panel", border_style)
 	wrapper.add_child(border)
 
-	# Content - tighter margins (z_index 1 to render above grid)
+	# Content - tighter margins
 	var margin = MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 16)
@@ -4922,33 +5061,11 @@ func _build_dreadland_column() -> Control:
 	vbox.add_theme_constant_override("separation", 0)  # Use spacers instead
 	margin.add_child(vbox)
 
-	# === GAME TITLE SECTION (compact) ===
+	# === GAME TITLE SECTION (minimal - just spacing) ===
 	var title_section = VBoxContainer.new()
 	title_section.add_theme_constant_override("separation", 2)
+	title_section.custom_minimum_size = Vector2(0, 20)  # Small spacer
 	vbox.add_child(title_section)
-
-	var game_icon = Label.new()
-	game_icon.text = "☠"
-	game_icon.add_theme_font_size_override("font_size", 56)  # Smaller skull
-	game_icon.add_theme_color_override("font_color", MANTLE_CYAN)
-	game_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_section.add_child(game_icon)
-
-	var game_title = Label.new()
-	game_title.text = "DREADLAND"
-	game_title.add_theme_font_override("font", default_font)
-	game_title.add_theme_font_size_override("font_size", FONT_H2)  # Smaller title
-	game_title.add_theme_color_override("font_color", TEXT_PRIMARY)
-	game_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_section.add_child(game_title)
-
-	var game_subtitle = Label.new()
-	game_subtitle.text = "Wasteland Survival"
-	game_subtitle.add_theme_font_override("font", default_font)
-	game_subtitle.add_theme_font_size_override("font_size", FONT_TINY)
-	game_subtitle.add_theme_color_override("font_color", TEXT_DIM)
-	game_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_section.add_child(game_subtitle)
 
 	# === CHARACTER PREVIEW SECTION (vertically centered) ===
 	var spacer1a = Control.new()
@@ -4989,6 +5106,25 @@ func _build_dreadland_column() -> Control:
 	enter_world_button.mouse_exited.connect(_on_enter_button_hover.bind(false))
 	buttons_vbox.add_child(enter_world_button)
 	_start_button_pulse(enter_world_button)
+
+	# Host Server button - for LAN playtests (only visible when is_server_host is true)
+	host_server_button = Button.new()
+	host_server_button.name = "HostServerBtn"
+	host_server_button.text = "HOST SERVER"
+	host_server_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_button(host_server_button, ButtonTheme.SECONDARY, ButtonSize.LARGE)
+	host_server_button.pressed.connect(_on_host_server_pressed)
+	host_server_button.visible = is_server_host  # Only show on host machine
+	buttons_vbox.add_child(host_server_button)
+
+	# Connection status label - shows connection progress
+	connection_status_label = Label.new()
+	connection_status_label.name = "ConnectionStatus"
+	connection_status_label.text = ""
+	connection_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	connection_status_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+	connection_status_label.add_theme_font_size_override("font_size", 14)
+	buttons_vbox.add_child(connection_status_label)
 
 	# Settings button - SECONDARY theme, LARGE size
 	var settings_button = Button.new()
@@ -5163,14 +5299,14 @@ func _start_button_pulse(button: Button) -> void:
 	tween.tween_property(button, "modulate", Color(1.0, 1.0, 1.0), 1.0).set_ease(Tween.EASE_IN_OUT)
 
 func _on_link_accounts_pressed() -> void:
-	"""Open account linking - redirect to Mantle"""
+	"""Open account linking - redirect to Ashbane"""
 	# Play click sound
 	if SoundManager:
 		SoundManager.play_button_click_sound(-6.0)
-	if MantleAuth:
-		MantleAuth.start_login()
+	if AshbaneAuth:
+		AshbaneAuth.start_login()
 	else:
-		OS.shell_open("https://mantle.gg/link")
+		OS.shell_open("https://ashbane.gg/link")
 
 func _create_mini_teaser(teaser: Dictionary) -> Control:
 	"""Create a mini teaser item for the right column"""
@@ -5320,7 +5456,7 @@ func _build_character_preview_content() -> Control:
 	effects_label.text = ""
 	effects_label.add_theme_font_override("font", default_font)
 	effects_label.add_theme_font_size_override("font_size", FONT_CAPTION)
-	effects_label.add_theme_color_override("font_color", MANTLE_CYAN)
+	effects_label.add_theme_color_override("font_color", ASHBANE_GOLD)
 	effects_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	char_section.add_child(effects_label)
 
@@ -5334,7 +5470,7 @@ func _build_character_preview_content() -> Control:
 	equip_header.text = "EQUIPMENT"
 	equip_header.add_theme_font_override("font", default_font)
 	equip_header.add_theme_font_size_override("font_size", FONT_BODY)
-	equip_header.add_theme_color_override("font_color", MANTLE_CYAN)
+	equip_header.add_theme_color_override("font_color", ASHBANE_GOLD)
 	equip_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	equip_section.add_child(equip_header)
 
@@ -5403,7 +5539,7 @@ func _build_middle_column() -> Control:
 	total_label.text = "0"
 	total_label.add_theme_font_override("font", default_font)
 	total_label.add_theme_font_size_override("font_size", 84)
-	total_label.add_theme_color_override("font_color", MANTLE_RED)
+	total_label.add_theme_color_override("font_color", ASHBANE_CRIMSON)
 	total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	center_section.add_child(total_label)
 
@@ -5412,7 +5548,7 @@ func _build_middle_column() -> Control:
 	total_suffix.text = "TOTAL ACHIEVEMENTS"
 	total_suffix.add_theme_font_override("font", default_font)
 	total_suffix.add_theme_font_size_override("font_size", FONT_TINY)
-	total_suffix.add_theme_color_override("font_color", MANTLE_RED)
+	total_suffix.add_theme_color_override("font_color", ASHBANE_CRIMSON)
 	total_suffix.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	center_section.add_child(total_suffix)
 
@@ -5488,6 +5624,16 @@ func _build_middle_column() -> Control:
 	enter_world_button.mouse_exited.connect(_on_enter_button_hover.bind(false))
 	buttons_row.add_child(enter_world_button)
 
+	# Host Server button - for LAN playtests
+	if not host_server_button:  # Don't create if already exists from another layout
+		host_server_button = Button.new()
+		host_server_button.text = "HOST SERVER"
+		host_server_button.custom_minimum_size = Vector2(140, 44)
+		_style_logout_button(host_server_button)  # Use same style as logout
+		host_server_button.pressed.connect(_on_host_server_pressed)
+		host_server_button.visible = is_server_host
+		buttons_row.add_child(host_server_button)
+
 	# Logout button - RED (same size/style as Enter World)
 	logout_button = Button.new()
 	logout_button.text = "LOGOUT"
@@ -5496,6 +5642,15 @@ func _build_middle_column() -> Control:
 	logout_button.pressed.connect(_on_logout_pressed)
 	logout_button.visible = false
 	buttons_row.add_child(logout_button)
+
+	# Connection status label below buttons
+	if not connection_status_label:
+		connection_status_label = Label.new()
+		connection_status_label.text = ""
+		connection_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		connection_status_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+		connection_status_label.add_theme_font_size_override("font_size", 14)
+		outer.add_child(connection_status_label)
 
 	return outer
 
@@ -5629,7 +5784,7 @@ func _build_right_column_combined() -> Control:
 	total_label.text = "0"
 	total_label.add_theme_font_override("font", default_font)
 	total_label.add_theme_font_size_override("font_size", 64)  # Slightly smaller
-	total_label.add_theme_color_override("font_color", MANTLE_RED)
+	total_label.add_theme_color_override("font_color", ASHBANE_CRIMSON)
 	total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	center_section.add_child(total_label)
 
@@ -5638,7 +5793,7 @@ func _build_right_column_combined() -> Control:
 	total_suffix.text = "TOTAL ACHIEVEMENTS"
 	total_suffix.add_theme_font_override("font", default_font)
 	total_suffix.add_theme_font_size_override("font_size", FONT_TINY)
-	total_suffix.add_theme_color_override("font_color", MANTLE_RED)
+	total_suffix.add_theme_color_override("font_color", ASHBANE_CRIMSON)
 	total_suffix.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	center_section.add_child(total_suffix)
 
@@ -5707,6 +5862,16 @@ func _build_right_column_combined() -> Control:
 	enter_world_button.mouse_exited.connect(_on_enter_button_hover.bind(false))
 	buttons_row.add_child(enter_world_button)
 
+	# Host Server button - for LAN playtests
+	if not host_server_button:
+		host_server_button = Button.new()
+		host_server_button.text = "HOST SERVER"
+		host_server_button.custom_minimum_size = Vector2(140, 44)
+		_style_logout_button(host_server_button)
+		host_server_button.pressed.connect(_on_host_server_pressed)
+		host_server_button.visible = is_server_host
+		buttons_row.add_child(host_server_button)
+
 	# Logout button - RED (same size/style as Enter World)
 	logout_button = Button.new()
 	logout_button.text = "LOGOUT"
@@ -5715,6 +5880,15 @@ func _build_right_column_combined() -> Control:
 	logout_button.pressed.connect(_on_logout_pressed)
 	logout_button.visible = false
 	buttons_row.add_child(logout_button)
+
+	# Connection status label
+	if not connection_status_label:
+		connection_status_label = Label.new()
+		connection_status_label.text = ""
+		connection_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		connection_status_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+		connection_status_label.add_theme_font_size_override("font_size", 14)
+		outer.add_child(connection_status_label)
 
 	# ═══ THE FORGE ═══
 	forged_panel = _build_forge_section()
@@ -5753,14 +5927,14 @@ func _build_forge_section() -> Control:
 	var forge_icon = Label.new()
 	forge_icon.text = "⚒"
 	forge_icon.add_theme_font_size_override("font_size", FONT_H1)
-	forge_icon.add_theme_color_override("font_color", MANTLE_CYAN)
+	forge_icon.add_theme_color_override("font_color", ASHBANE_GOLD)
 	header_row.add_child(forge_icon)
 
 	var header = Label.new()
 	header.text = "THE FORGE"
 	header.add_theme_font_override("font", default_font)
 	header.add_theme_font_size_override("font_size", FONT_H2)
-	header.add_theme_color_override("font_color", MANTLE_CYAN)
+	header.add_theme_color_override("font_color", ASHBANE_GOLD)
 	header_row.add_child(header)
 
 
@@ -5840,9 +6014,9 @@ func _style_link_button(button: Button) -> void:
 	if default_font:
 		button.add_theme_font_override("font", default_font)
 	button.add_theme_font_size_override("font_size", size_config["font"])
-	button.add_theme_color_override("font_color", MANTLE_CYAN)
-	button.add_theme_color_override("font_hover_color", MANTLE_CYAN.lightened(0.3))
-	button.add_theme_color_override("font_pressed_color", MANTLE_CYAN.darkened(0.2))
+	button.add_theme_color_override("font_color", ASHBANE_GOLD)
+	button.add_theme_color_override("font_hover_color", ASHBANE_GOLD.lightened(0.3))
+	button.add_theme_color_override("font_pressed_color", ASHBANE_GOLD.darkened(0.2))
 
 	var empty_style = StyleBoxEmpty.new()
 	button.add_theme_stylebox_override("normal", empty_style)
@@ -5855,7 +6029,7 @@ func _style_link_button(button: Button) -> void:
 
 func _style_icon_button(button: Button, theme: ButtonTheme) -> void:
 	"""Style a small icon button (e.g., X close button)"""
-	var theme_config = BUTTON_THEMES[theme]
+	var theme_config = _get_button_themes()[theme]
 
 	# Icon buttons are small squares
 	button.add_theme_font_size_override("font_size", FONT_MIN)
@@ -5928,69 +6102,165 @@ func _build_cosmetics_grid() -> Control:
 	return panel
 
 func _build_header(parent: Control) -> void:
-	var header_panel = PanelContainer.new()
-	_style_panel(header_panel, CARD_BG)
-	parent.add_child(header_panel)
+	# Header wrapper for border effect
+	var header_wrapper = Control.new()
+	header_wrapper.name = "HeaderWrapper"
+	header_wrapper.custom_minimum_size = Vector2(0, 110)  # Taller header for larger trees
+	parent.add_child(header_wrapper)
 
+	# Background panel
+	var header_bg = ColorRect.new()
+	header_bg.color = Color(0.06, 0.06, 0.07, 1.0)  # Slightly darker than main bg
+	header_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	header_wrapper.add_child(header_bg)
+
+	# Subtle gradient overlay at bottom for depth
+	var gradient_overlay = ColorRect.new()
+	gradient_overlay.color = Color(0.0, 0.0, 0.0, 0.3)
+	gradient_overlay.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	gradient_overlay.custom_minimum_size = Vector2(0, 20)
+	gradient_overlay.offset_top = -20
+	gradient_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header_wrapper.add_child(gradient_overlay)
+
+	# Bottom border line - stone gray accent
+	var bottom_border = ColorRect.new()
+	bottom_border.color = Color(0.38, 0.36, 0.33, 0.8)  # Stone gray
+	bottom_border.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	bottom_border.custom_minimum_size = Vector2(0, 2)
+	bottom_border.offset_top = -2
+	bottom_border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header_wrapper.add_child(bottom_border)
+
+	# Subtle glow under border
+	var border_glow = ColorRect.new()
+	border_glow.color = Color(0.7, 0.68, 0.65, 0.15)  # Silver glow
+	border_glow.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	border_glow.custom_minimum_size = Vector2(0, 8)
+	border_glow.offset_top = -10
+	border_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header_wrapper.add_child(border_glow)
+
+	# Content margin - more vertical breathing room
 	var header_margin = MarginContainer.new()
+	header_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	header_margin.add_theme_constant_override("margin_left", 40)
 	header_margin.add_theme_constant_override("margin_right", 40)
 	header_margin.add_theme_constant_override("margin_top", 12)
 	header_margin.add_theme_constant_override("margin_bottom", 12)
-	header_panel.add_child(header_margin)
+	header_wrapper.add_child(header_margin)
 
-	var header_vbox = VBoxContainer.new()
-	header_vbox.add_theme_constant_override("separation", 4)
-	header_margin.add_child(header_vbox)
+	# Center container for title
+	var center_container = CenterContainer.new()
+	center_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	header_margin.add_child(center_container)
+
+	# HBox to hold logo + title + logo
+	var header_hbox = HBoxContainer.new()
+	header_hbox.add_theme_constant_override("separation", 16)  # More space between trees and text
+	header_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	center_container.add_child(header_hbox)
+
+	# Left logo icon - LARGER with radial orange glow
+	var logo_left_container = Control.new()
+	logo_left_container.custom_minimum_size = Vector2(80, 80)
+	header_hbox.add_child(logo_left_container)
+
+	# Soft radial glow behind left tree (subtle)
+	var glow_left = _create_radial_glow(100, Color(1.0, 0.5, 0.1, 0.25))
+	glow_left.position = Vector2(-10, -10)
+	logo_left_container.add_child(glow_left)
+	_animate_tree_glow(glow_left)
+
+	_tree_logo_left = TextureRect.new()
+	_tree_logo_left.name = "TreeLogoLeft"
+	var logo_path = "res://assets/ui/logo/ashbane_tree_128.png"  # Higher res for sharp display at 80px
+	if ResourceLoader.exists(logo_path):
+		_tree_logo_left.texture = load(logo_path)
+	_tree_logo_left.custom_minimum_size = Vector2(80, 80)
+	_tree_logo_left.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	_tree_logo_left.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# Warm orange tint on the trees
+	_tree_logo_left.modulate = Color(1.1, 0.9, 0.8, 1.0)
+	logo_left_container.add_child(_tree_logo_left)
 
 	# Title container for layered glow effect
 	var title_container = Control.new()
-	title_container.custom_minimum_size = Vector2(0, 40)
-	header_vbox.add_child(title_container)
+	title_container.custom_minimum_size = Vector2(340, 50)  # Slightly narrower to bring trees closer
+	header_hbox.add_child(title_container)
 
-	# Background glow layer (larger, more diffuse)
+	# Right logo icon - LARGER with radial orange glow (mirrored)
+	var logo_right_container = Control.new()
+	logo_right_container.custom_minimum_size = Vector2(80, 80)
+	header_hbox.add_child(logo_right_container)
+
+	# Soft radial glow behind right tree (subtle)
+	var glow_right = _create_radial_glow(100, Color(1.0, 0.5, 0.1, 0.25))
+	glow_right.position = Vector2(-10, -10)
+	logo_right_container.add_child(glow_right)
+	_animate_tree_glow(glow_right)
+
+	_tree_logo_right = TextureRect.new()
+	_tree_logo_right.name = "TreeLogoRight"
+	if ResourceLoader.exists(logo_path):
+		_tree_logo_right.texture = load(logo_path)
+	_tree_logo_right.custom_minimum_size = Vector2(80, 80)
+	_tree_logo_right.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	_tree_logo_right.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_tree_logo_right.flip_h = true  # Mirror the right logo
+	_tree_logo_right.modulate = Color(1.1, 0.9, 0.8, 1.0)
+	logo_right_container.add_child(_tree_logo_right)
+
+	# Setup tree ember particles (called after trees are positioned)
+	call_deferred("_setup_tree_embers", header_wrapper)
+
+	# Premium stone gray with silver shine effect
+	# Background glow layer - soft silver glow (larger, more diffuse)
 	title_glow_bg = Label.new()
-	title_glow_bg.text = "M A N T L E"
+	title_glow_bg.text = "A S H B A N E"
 	title_glow_bg.add_theme_font_override("font", bold_font)
-	title_glow_bg.add_theme_font_size_override("font_size", FONT_H1 + 2)
-	title_glow_bg.add_theme_color_override("font_color", Color(MANTLE_NEON_CYAN.r, MANTLE_NEON_CYAN.g, MANTLE_NEON_CYAN.b, 0.2))
+	title_glow_bg.add_theme_font_size_override("font_size", FONT_H1 + 6)  # Larger glow
+	title_glow_bg.add_theme_color_override("font_color", Color(0.9, 0.88, 0.85, 0.12))  # Soft silver glow
 	title_glow_bg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_glow_bg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_glow_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title_glow_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title_container.add_child(title_glow_bg)
 
-	# Mid glow layer
+	# Mid glow layer - brighter silver
 	title_glow = Label.new()
-	title_glow.text = "M A N T L E"
+	title_glow.text = "A S H B A N E"
 	title_glow.add_theme_font_override("font", bold_font)
-	title_glow.add_theme_font_size_override("font_size", FONT_H1)
-	title_glow.add_theme_color_override("font_color", Color(MANTLE_NEON_CYAN.r, MANTLE_NEON_CYAN.g, MANTLE_NEON_CYAN.b, 0.4))
+	title_glow.add_theme_font_size_override("font_size", FONT_H1 + 4)
+	title_glow.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 0.25))  # Silver shine
 	title_glow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_glow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_glow.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title_container.add_child(title_glow)
 
-	# Main title label - bright neon cyan with bold font
+	# Main title label - bright silver/white for premium shine
 	title_label = Label.new()
-	title_label.text = "M A N T L E"
+	title_label.text = "A S H B A N E"
 	title_label.add_theme_font_override("font", bold_font)
-	title_label.add_theme_font_size_override("font_size", FONT_H1)
-	title_label.add_theme_color_override("font_color", MANTLE_NEON_CYAN)
-	title_label.add_theme_color_override("font_outline_color", Color(MANTLE_NEON_CYAN.r, MANTLE_NEON_CYAN.g, MANTLE_NEON_CYAN.b, 0.6))
-	title_label.add_theme_constant_override("outline_size", 3)
+	title_label.add_theme_font_size_override("font_size", FONT_H1 + 4)  # Slightly larger
+	title_label.add_theme_color_override("font_color", Color(0.94, 0.92, 0.88, 1.0))  # Brighter silver
+	title_label.add_theme_color_override("font_outline_color", Color(0.2, 0.19, 0.18, 0.95))  # Darker outline
+	title_label.add_theme_constant_override("outline_size", 4)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title_container.add_child(title_label)
 
+	# Hidden subtitle (kept for compatibility)
 	subtitle_label = Label.new()
-	subtitle_label.text = "Your Gaming Legacy"
-	subtitle_label.add_theme_font_size_override("font_size", FONT_BODY)
-	subtitle_label.add_theme_color_override("font_color", TEXT_SECONDARY)
-	subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	header_vbox.add_child(subtitle_label)
+	subtitle_label.text = ""
+	subtitle_label.visible = false
+	header_wrapper.add_child(subtitle_label)
 
 func _start_logo_pulse() -> void:
-	"""Start a pulsing animation on the MANTLE logo for visual effect."""
+	"""Start a pulsing animation on the ASHBANE logo for visual effect."""
 	if not title_label or not title_glow or not title_glow_bg:
 		return
 
@@ -6042,15 +6312,15 @@ func _update_connection_indicator(status: int) -> void:
 		return
 
 	match status:
-		MantleAuth.ConnectionStatus.CONNECTED:
+		AshbaneAuth.ConnectionStatus.CONNECTED:
 			_connection_dot.color = Color(0.2, 0.8, 0.2)  # Green
 			_connection_label.text = "Connected"
 			_connection_label.add_theme_color_override("font_color", TEXT_DIM)
-		MantleAuth.ConnectionStatus.CONNECTING:
+		AshbaneAuth.ConnectionStatus.CONNECTING:
 			_connection_dot.color = Color(0.9, 0.7, 0.1)  # Yellow/amber
 			_connection_label.text = "Reconnecting..."
 			_connection_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.1))
-		MantleAuth.ConnectionStatus.DISCONNECTED:
+		AshbaneAuth.ConnectionStatus.DISCONNECTED:
 			_connection_dot.color = Color(0.9, 0.2, 0.2)  # Red
 			_connection_label.text = "Disconnected"
 			_connection_label.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4))
@@ -6086,7 +6356,7 @@ func _build_stats_bar(parent: Control) -> void:
 	total_label.text = "0"
 	total_label.add_theme_font_override("font", default_font)
 	total_label.add_theme_font_size_override("font_size", 72)
-	total_label.add_theme_color_override("font_color", MANTLE_RED)
+	total_label.add_theme_color_override("font_color", ASHBANE_CRIMSON)
 	total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	total_section.add_child(total_label)
 
@@ -6203,7 +6473,7 @@ func _build_right_column_widescreen() -> Control:
 	header.text = "UNLOCK WITH ACHIEVEMENTS"
 	header.add_theme_font_override("font", default_font)
 	header.add_theme_font_size_override("font_size", FONT_BODY_LG)
-	header.add_theme_color_override("font_color", MANTLE_CYAN)
+	header.add_theme_color_override("font_color", ASHBANE_GOLD)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ach_vbox.add_child(header)
 
@@ -6256,6 +6526,16 @@ func _build_right_column_widescreen() -> Control:
 	enter_world_button.mouse_exited.connect(_on_enter_button_hover.bind(false))
 	buttons_row.add_child(enter_world_button)
 
+	# Host Server button - for LAN playtests
+	if not host_server_button:
+		host_server_button = Button.new()
+		host_server_button.text = "HOST SERVER"
+		host_server_button.custom_minimum_size = Vector2(160, 50)
+		_style_logout_button(host_server_button)
+		host_server_button.pressed.connect(_on_host_server_pressed)
+		host_server_button.visible = is_server_host
+		buttons_row.add_child(host_server_button)
+
 	# Logout button
 	logout_button = Button.new()
 	logout_button.text = "LOGOUT"
@@ -6264,6 +6544,15 @@ func _build_right_column_widescreen() -> Control:
 	logout_button.pressed.connect(_on_logout_pressed)
 	logout_button.visible = false
 	buttons_row.add_child(logout_button)
+
+	# Connection status label
+	if not connection_status_label:
+		connection_status_label = Label.new()
+		connection_status_label.text = ""
+		connection_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		connection_status_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+		connection_status_label.add_theme_font_size_override("font_size", 14)
+		outer.add_child(connection_status_label)
 
 	return outer
 
@@ -6353,14 +6642,15 @@ func _apply_tier_border_to_panel(panel: PanelContainer, color: Color, border_alp
 
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0, 0, 0, 0) if keep_transparent else CARD_BG
-	style.border_color = Color(color.r, color.g, color.b, border_alpha)
+	# Use stone gray border for unified theme instead of tier color
+	style.border_color = Color(0.38, 0.36, 0.33, 0.9)  # Stone gray border
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(8)
 
-	# Add subtle glow for higher tiers
-	if glow_intensity > 0.1:
-		style.shadow_color = Color(color.r, color.g, color.b, glow_intensity)
-		style.shadow_size = 6
+	# Add very subtle silver glow for higher tiers instead of colored glow
+	if glow_intensity > 0.05:
+		style.shadow_color = Color(0.7, 0.68, 0.65, glow_intensity * 0.5)  # Silver glow
+		style.shadow_size = 4
 		style.shadow_offset = Vector2(0, 0)
 
 	panel.add_theme_stylebox_override("panel", style)
@@ -6374,14 +6664,14 @@ func _update_equipment_slot_tier_accents(tier_key: String, color: Color) -> void
 	for slot_name in slot_names:
 		var slot_bg = character_preview.find_child("SlotBG_" + slot_name, true, false)
 		if slot_bg and slot_bg is PanelContainer:
-			# Update hover style to use tier color
+			# Update hover style to use stone gray (unified theme)
 			var hover_style = StyleBoxFlat.new()
 			hover_style.bg_color = Color(0.08, 0.085, 0.10)
-			hover_style.border_color = Color(color.r, color.g, color.b, 0.6)
+			hover_style.border_color = Color(0.55, 0.52, 0.48, 0.8)  # Stone gray
 			hover_style.set_border_width_all(2)
 			hover_style.set_corner_radius_all(6)
-			hover_style.shadow_color = Color(color.r, color.g, color.b, 0.35)
-			hover_style.shadow_size = 4
+			hover_style.shadow_color = Color(0.7, 0.68, 0.65, 0.25)  # Silver glow
+			hover_style.shadow_size = 3
 			slot_bg.set_meta("hover_style", hover_style)
 
 			# Update tooltip to reflect tier
@@ -6430,13 +6720,15 @@ func _create_tier_badge(tier_key: String) -> Control:
 	style.content_margin_right = 12
 	style.content_margin_top = 4
 	style.content_margin_bottom = 4
-	# Enhanced glow effect for premium feel
-	style.shadow_color = Color(color.r, color.g, color.b, 0.6)
+	# Enhanced glow effect for premium feel - centered
+	style.shadow_color = Color(color.r, color.g, color.b, 0.5)
 	style.shadow_size = 12
+	style.shadow_offset = Vector2(0, 0)  # Centered shadow
 	style.border_color = color.lightened(0.3)
 	style.set_border_width_all(1)
 	badge.add_theme_stylebox_override("panel", style)
 	badge.set_meta("style", style)
+	badge.set_meta("base_color", color)
 
 	tier_label = Label.new()
 	tier_label.text = tier_key.to_upper()
@@ -6600,10 +6892,10 @@ func _create_cosmetic_slot(slot_name: String) -> Control:
 	# Create hover style
 	var hover_style = StyleBoxFlat.new()
 	hover_style.bg_color = Color(0.08, 0.085, 0.10)
-	hover_style.border_color = MANTLE_CYAN.darkened(0.3)
+	hover_style.border_color = ASHBANE_GOLD.darkened(0.3)
 	hover_style.set_border_width_all(2)
 	hover_style.set_corner_radius_all(6)
-	hover_style.shadow_color = Color(MANTLE_CYAN.r, MANTLE_CYAN.g, MANTLE_CYAN.b, 0.3)
+	hover_style.shadow_color = Color(ASHBANE_GOLD.r, ASHBANE_GOLD.g, ASHBANE_GOLD.b, 0.3)
 	hover_style.shadow_size = 4
 	slot_bg.set_meta("hover_style", hover_style)
 
@@ -6689,7 +6981,7 @@ func _build_achievements_panel() -> Control:
 	header.text = "UNLOCK WITH ACHIEVEMENTS"
 	header.add_theme_font_override("font", default_font)
 	header.add_theme_font_size_override("font_size", FONT_H2)
-	header.add_theme_color_override("font_color", MANTLE_CYAN)
+	header.add_theme_color_override("font_color", ASHBANE_GOLD)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(header)
 
@@ -6698,7 +6990,7 @@ func _build_achievements_panel() -> Control:
 	subheader.text = "Legendary achievements become legendary gear"
 	subheader.add_theme_font_override("font", default_font)
 	subheader.add_theme_font_size_override("font_size", FONT_BODY)
-	subheader.add_theme_color_override("font_color", MANTLE_CYAN)
+	subheader.add_theme_color_override("font_color", ASHBANE_GOLD)
 	vbox.add_child(subheader)
 
 	# Show teaser unlock examples as a grid (always visible)
@@ -6744,7 +7036,7 @@ func _build_achievements_panel() -> Control:
 	your_header.text = "YOUR NOTABLE ACHIEVEMENTS"
 	your_header.add_theme_font_override("font", default_font)
 	your_header.add_theme_font_size_override("font_size", FONT_BODY)
-	your_header.add_theme_color_override("font_color", MANTLE_CYAN)
+	your_header.add_theme_color_override("font_color", ASHBANE_GOLD)
 	your_section.add_child(your_header)
 
 	var your_list = VBoxContainer.new()
@@ -6898,7 +7190,7 @@ func _build_forged_panel() -> Control:
 	var header = Label.new()
 	header.text = "THE FORGE"
 	header.add_theme_font_size_override("font_size", FONT_BODY)
-	header.add_theme_color_override("font_color", MANTLE_CYAN)
+	header.add_theme_color_override("font_color", ASHBANE_GOLD)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(header)
 
@@ -6931,11 +7223,20 @@ func _build_footer(parent: Control) -> void:
 func _style_panel(panel: PanelContainer, bg_color: Color) -> void:
 	var style = StyleBoxFlat.new()
 	style.bg_color = bg_color
+
+	# Rich crimson border with depth
 	style.border_color = BORDER_GLOW
-	style.set_border_width_all(2)
+	style.set_border_width_all(3)  # Thicker border for presence
 	style.set_corner_radius_all(8)
-	style.shadow_size = 20
+
+	# Outer glow/shadow for floating effect
+	style.shadow_size = 12
 	style.shadow_color = SHADOW_GLOW
+	style.shadow_offset = Vector2(0, 4)
+
+	# Expand margin creates outer breathing room
+	style.set_expand_margin_all(2)
+
 	panel.add_theme_stylebox_override("panel", style)
 
 func _play_button_hover_sound() -> void:
@@ -6950,7 +7251,7 @@ func _play_button_hover_sound() -> void:
 func _style_button(button: Button, theme: ButtonTheme, size: ButtonSize = ButtonSize.MEDIUM) -> void:
 	"""Master button styling function - use this for all buttons"""
 	var size_config = BUTTON_SIZES[size]
-	var theme_config = BUTTON_THEMES[theme]
+	var theme_config = _get_button_themes()[theme]
 
 	# Set minimum size for consistent button height
 	button.custom_minimum_size.y = size_config["height"]
@@ -7034,20 +7335,20 @@ func _on_exit_pressed() -> void:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 func _determine_state() -> void:
-	print("[Armory] _determine_state called - MantleAuth.is_logged_in()=%s" % MantleAuth.is_logged_in() if MantleAuth else "null")
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	print("[Armory] _determine_state called - AshbaneAuth.is_logged_in()=%s" % AshbaneAuth.is_logged_in() if AshbaneAuth else "null")
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		current_state = ArmoryState.GUEST
 		print("[Armory] State: GUEST (not logged in)")
 		return
 
 	profile = {
-		"user_id": MantleAuth.user_id,
-		"username": MantleAuth.username,
-		"mantle": MantleAuth.mantle_tier,
-		"providers": MantleAuth.providers,
-		"total_achievements": MantleAuth.total_achievements,
-		"achievements": MantleAuth.achievements,
-		"by_rarity": MantleAuth.by_rarity
+		"user_id": AshbaneAuth.user_id,
+		"username": AshbaneAuth.username,
+		"ashbane": AshbaneAuth.ashbane_tier,
+		"providers": AshbaneAuth.providers,
+		"total_achievements": AshbaneAuth.total_achievements,
+		"achievements": AshbaneAuth.achievements,
+		"by_rarity": AshbaneAuth.by_rarity
 	}
 	print("[Armory] Built profile - total_achievements=%d, providers=%d" % [profile.get("total_achievements", 0), profile.get("providers", []).size()])
 
@@ -7077,7 +7378,7 @@ func _setup_ui_for_state() -> void:
 			_show_authenticated_ui()
 
 func _show_guest_ui() -> void:
-	subtitle_label.text = "Your Gaming Legacy Awaits"
+	subtitle_label.visible = false  # No subtitle in Ashbane theme
 	username_label.text = "Guest"
 	total_label.text = "0"
 	logout_button.visible = false
@@ -7085,25 +7386,25 @@ func _show_guest_ui() -> void:
 
 func _show_new_player_ui() -> void:
 	var user_id = profile.get("user_id", 0)
-	subtitle_label.text = "Welcome, Player #%d" % user_id
+	subtitle_label.visible = false  # No subtitle in Ashbane theme
 	username_label.text = "Player #%d" % user_id
 	logout_button.visible = true
 	_update_stats_display()
 
 func _show_authenticated_ui() -> void:
 	var user_id = profile.get("user_id", 0)
-	subtitle_label.visible = false  # Hide subtitle under MANTLE header
+	subtitle_label.visible = false  # No subtitle in Ashbane theme
 	username_label.text = "Player #%d" % user_id
 	logout_button.visible = true
 	_update_stats_display()
 
 func _update_stats_display() -> void:
-	var mantle = profile.get("mantle", {})
-	var tier_name = mantle.get("name", "Initiate")
-	var tier_key = mantle.get("tier", "initiate").to_lower()
+	var ashbane_data = profile.get("ashbane", {})
+	var tier_name = ashbane_data.get("name", "Initiate")
+	var tier_key = ashbane_data.get("tier", "initiate").to_lower()
 	var total = profile.get("total_achievements", 0)
 	# Use effective_score for progress calculation if available (weighted scoring)
-	var effective_score = int(mantle.get("effective_score", total))
+	var effective_score = int(ashbane_data.get("effective_score", total))
 	print("[Armory] Stats display: total_achievements=%d, effective_score=%d, tier=%s" % [total, effective_score, tier_key])
 
 	# Update tier badge
@@ -7158,7 +7459,7 @@ func _update_quick_stats() -> void:
 		return
 
 	var providers = profile.get("providers", [])
-	var mantle = profile.get("mantle", {})
+	var ashbane_data = profile.get("ashbane", {})
 
 	# Games (count of providers)
 	var games_stat = stats_panel.find_child("Stat_Games", true, false)
@@ -7173,17 +7474,17 @@ func _update_quick_stats() -> void:
 	if rarest_stat:
 		var value_label = rarest_stat.find_child("Value", true, false)
 		if value_label:
-			var by_rarity = mantle.get("by_rarity", {})
+			var by_rarity = ashbane_data.get("by_rarity", {})
 			if by_rarity == null:
 				by_rarity = {}
 			var legendary_count = by_rarity.get("Legendary", 0)
 			var epic_count = by_rarity.get("Epic", 0)
 			if legendary_count != null and legendary_count > 0:
 				value_label.text = "Legend"
-				value_label.add_theme_color_override("font_color", RARITY_COLORS["Legendary"])
+				value_label.add_theme_color_override("font_color", _get_rarity_color("Legendary"))
 			elif epic_count != null and epic_count > 0:
 				value_label.text = "Epic"
-				value_label.add_theme_color_override("font_color", RARITY_COLORS["Epic"])
+				value_label.add_theme_color_override("font_color", _get_rarity_color("Epic"))
 			else:
 				value_label.text = "-"
 				value_label.add_theme_color_override("font_color", TEXT_PRIMARY)
@@ -7193,7 +7494,7 @@ func _update_quick_stats() -> void:
 	if level_stat:
 		var value_label = level_stat.find_child("Value", true, false)
 		if value_label:
-			var tier_key = mantle.get("tier", "initiate").to_lower()
+			var tier_key = ashbane_data.get("tier", "initiate").to_lower()
 			match tier_key:
 				"mythic": value_label.text = "8"
 				"legendary": value_label.text = "7"
@@ -7336,10 +7637,10 @@ func _update_platforms_display() -> void:
 
 func _create_provider_badge(provider_name: String, count: int, icon_url: String = "") -> Control:
 	var prov_lower = provider_name.to_lower()
-	var color = PROVIDER_COLORS.get(prov_lower, MANTLE_CYAN)
+	var color = PROVIDER_COLORS.get(prov_lower, ASHBANE_GOLD)
 	# Handle PSN alias
 	if prov_lower == "psn":
-		color = PROVIDER_COLORS.get("playstation", MANTLE_CYAN)
+		color = PROVIDER_COLORS.get("playstation", ASHBANE_GOLD)
 	elif prov_lower == "github":
 		color = Color(0.9, 0.9, 0.9)  # GitHub white/gray
 
@@ -7478,7 +7779,7 @@ func _create_provider_badge(provider_name: String, count: int, icon_url: String 
 		tooltip_lines.append("sync achievements and unlock rewards!")
 
 	tooltip_lines.append("")
-	tooltip_lines.append("Manage at mantle.gg/dashboard")
+	tooltip_lines.append("Manage at ashbane.gg/dashboard")
 
 	container.tooltip_text = "\n".join(tooltip_lines)
 
@@ -7613,25 +7914,25 @@ func _update_rarity_display() -> void:
 	var by_rarity = {}
 	var has_rarity_data = false
 
-	# Source 1: Direct from profile (set in _determine_state from MantleAuth.by_rarity)
+	# Source 1: Direct from profile (set in _determine_state from AshbaneAuth.by_rarity)
 	if profile.has("by_rarity") and profile.get("by_rarity") != null:
 		var data = profile.get("by_rarity", {})
 		if data is Dictionary and not data.is_empty():
 			by_rarity = data
 			has_rarity_data = true
 
-	# Source 2: Direct from MantleAuth autoload
-	if not has_rarity_data and MantleAuth:
-		var data = MantleAuth.by_rarity
+	# Source 2: Direct from AshbaneAuth autoload
+	if not has_rarity_data and AshbaneAuth:
+		var data = AshbaneAuth.by_rarity
 		if data is Dictionary and not data.is_empty():
 			by_rarity = data
 			has_rarity_data = true
 
-	# Source 3: Try nested in mantle tier object
+	# Source 3: Try nested in ashbane tier object
 	if not has_rarity_data:
-		var mantle = profile.get("mantle", {})
-		if mantle != null and mantle is Dictionary and mantle.has("by_rarity"):
-			var data = mantle.get("by_rarity", {})
+		var ashbane_data = profile.get("ashbane", {})
+		if ashbane_data != null and ashbane_data is Dictionary and ashbane_data.has("by_rarity"):
+			var data = ashbane_data.get("by_rarity", {})
 			if data is Dictionary and not data.is_empty():
 				by_rarity = data
 				has_rarity_data = true
@@ -7734,11 +8035,11 @@ func _create_rarity_gem(rarity_name: String, color: Color, count: int) -> Contro
 
 	# Enhanced tooltip with webapp link
 	if count < 0:
-		pill.tooltip_text = "%s Achievements\nData unavailable\n\nView details at mantle.gg/dashboard" % rarity_name
+		pill.tooltip_text = "%s Achievements\nData unavailable\n\nView details at ashbane.gg/dashboard" % rarity_name
 	elif count > 0:
-		pill.tooltip_text = "%s Achievements: %s\nRarer achievements unlock better forge items.\n\nView details at mantle.gg/dashboard" % [rarity_name, _format_number(count)]
+		pill.tooltip_text = "%s Achievements: %s\nRarer achievements unlock better forge items.\n\nView details at ashbane.gg/dashboard" % [rarity_name, _format_number(count)]
 	else:
-		pill.tooltip_text = "%s Achievements: None yet\nComplete rare achievements to unlock rewards!\n\nView details at mantle.gg/dashboard" % rarity_name
+		pill.tooltip_text = "%s Achievements: None yet\nComplete rare achievements to unlock rewards!\n\nView details at ashbane.gg/dashboard" % rarity_name
 	return pill
 
 func _create_round_gem(parent: Control, color: Color, rarity_name: String) -> void:
@@ -7974,7 +8275,7 @@ func _update_progress_display(total: int, tier_key: String) -> void:
 		return
 
 	# Use backend-provided tier thresholds if available
-	var backend_thresholds = MantleAuth.tier_thresholds
+	var backend_thresholds = AshbaneAuth.tier_thresholds
 	var tiers_data = backend_thresholds.get("tiers", {})
 	var tier_order = backend_thresholds.get("order", [])
 
@@ -8038,11 +8339,11 @@ func _update_progress_display(total: int, tier_key: String) -> void:
 		var current_emblem = progress_section.find_child("CurrentTierEmblem", true, false)
 		if current_emblem:
 			_update_tier_emblem(current_emblem, tier_key, true)
-		# Fallback: old label style
+		# Fallback: old label style - use premium silver for unified theme
 		var current_tier_label = progress_section.find_child("CurrentTierLabel", true, false)
 		if current_tier_label:
 			current_tier_label.text = tier_key.capitalize()
-			current_tier_label.add_theme_color_override("font_color", TIER_COLORS.get(tier_key, Color.GRAY))
+			current_tier_label.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 1.0))  # Premium silver
 
 		# Update next tier emblem (enhanced version)
 		var next_emblem = progress_section.find_child("NextTierEmblem", true, false)
@@ -8051,29 +8352,28 @@ func _update_progress_display(total: int, tier_key: String) -> void:
 				_update_tier_emblem(next_emblem, "mythic", false)
 			else:
 				_update_tier_emblem(next_emblem, next_tier_key, false)
-		# Fallback: old label style
+		# Fallback: old label style - use premium silver
 		var next_tier_label = progress_section.find_child("NextTierLabel", true, false)
 		if next_tier_label:
 			if tier_key == "mythic":
 				next_tier_label.text = "MAX"
-				next_tier_label.add_theme_color_override("font_color", TIER_COLORS["mythic"])
+				next_tier_label.add_theme_color_override("font_color", Color(0.92, 0.90, 0.86, 1.0))  # Bright silver
 			else:
 				next_tier_label.text = next_tier
-				next_tier_label.add_theme_color_override("font_color", TIER_COLORS.get(next_tier_key, Color.GRAY))
+				next_tier_label.add_theme_color_override("font_color", Color(0.70, 0.68, 0.65, 1.0))  # Lighter silver for next
 
-		# Update progress bar fill (TierProgressBar) with enhanced glow
+		# Update progress bar fill (TierProgressBar) - unified stone gray with premium shine
 		var tier_progress_bar = progress_section.find_child("TierProgressBar", true, false)
 		if tier_progress_bar and tier_progress_bar is ProgressBar:
 			tier_progress_bar.value = progress_pct * 100
-			var tier_color = TIER_COLORS.get(tier_key, Color.GRAY)
 			var fill_style = StyleBoxFlat.new()
-			fill_style.bg_color = tier_color
+			fill_style.bg_color = Color(0.55, 0.52, 0.48, 1.0)  # Stone gray
 			fill_style.set_corner_radius_all(8)
-			# Enhanced: Add glow effect
-			fill_style.border_color = tier_color.lightened(0.3)
+			# Premium shine effect
+			fill_style.border_color = Color(0.70, 0.68, 0.65, 1.0)  # Silver highlight
 			fill_style.border_width_top = 2
-			fill_style.shadow_color = Color(tier_color.r, tier_color.g, tier_color.b, 0.5)
-			fill_style.shadow_size = 6
+			fill_style.shadow_color = Color(0.85, 0.82, 0.78, 0.3)  # Silver glow
+			fill_style.shadow_size = 4
 			tier_progress_bar.add_theme_stylebox_override("fill", fill_style)
 			print("[Armory] Progress bar updated: %d%% [%d in %s tier, range %d-%d]" % [int(progress_pct * 100), total, tier_key, tier_start, tier_end])
 
@@ -8083,17 +8383,15 @@ func _update_progress_display(total: int, tier_key: String) -> void:
 			if tier_key == "mythic":
 				progress_text.text = "Maximum tier achieved!"
 			else:
-				# Show progress within tier: "27 / 2,500 to Mythic"
-				var progress_in_tier = total - tier_start
-				var tier_range = tier_end - tier_start
-				progress_text.text = "%s / %s to %s" % [_format_number(progress_in_tier), _format_number(tier_range), next_tier]
+				# Show total progress: "4,444 / 5,000 to Legendary"
+				progress_text.text = "%s / %s to %s" % [_format_number(total), _format_number(tier_end), next_tier]
 
-	# Fallback: Update ProgressBar widget if present (old style)
+	# Fallback: Update ProgressBar widget if present (old style) - stone gray theme
 	var progress_bar = stats_panel.find_child("TierProgressBar", true, false)
 	if progress_bar and progress_bar is ProgressBar:
 		progress_bar.value = progress_pct * 100
 		var fill_style = StyleBoxFlat.new()
-		fill_style.bg_color = TIER_COLORS.get(tier_key, Color.GRAY)
+		fill_style.bg_color = Color(0.55, 0.52, 0.48, 1.0)  # Stone gray
 		fill_style.set_corner_radius_all(4)
 		progress_bar.add_theme_stylebox_override("fill", fill_style)
 
@@ -8105,8 +8403,8 @@ func _update_achievements_display() -> void:
 	var your_list = achievements_panel.find_child("YourAchievementsList", true, false)
 	var teaser_container = achievements_panel.find_child("TeaserContainer", true, false)
 
-	var mantle = profile.get("mantle", {})
-	var notable = mantle.get("notable_achievements", [])
+	var ashbane_data = profile.get("ashbane", {})
+	var notable = ashbane_data.get("notable_achievements", [])
 
 	if notable == null or notable.is_empty():
 		# No notable achievements - show only teasers
@@ -8181,8 +8479,8 @@ func _update_forged_display() -> void:
 	for child in forged_list.get_children():
 		child.queue_free()
 
-	var mantle = profile.get("mantle", {})
-	var forged = mantle.get("forged_items", [])
+	var ashbane_data = profile.get("ashbane", {})
+	var forged = ashbane_data.get("forged_items", [])
 
 	if forged == null or forged.is_empty():
 		var placeholder = Label.new()
@@ -8245,8 +8543,8 @@ func _play_entrance_animations() -> void:
 
 	# Start tier badge pulse
 	if tier_badge:
-		var mantle = profile.get("mantle", {})
-		var tier_key = mantle.get("tier", "initiate").to_lower()
+		var ashbane_data = profile.get("ashbane", {})
+		var tier_key = ashbane_data.get("tier", "initiate").to_lower()
 		var color = TIER_COLORS.get(tier_key, TIER_COLORS["initiate"])
 		_start_badge_pulse(tier_badge, color)
 
@@ -8623,36 +8921,201 @@ func _on_enter_world_pressed() -> void:
 	# Play click sound
 	if SoundManager:
 		SoundManager.play_button_click_sound(-6.0)
-	LogManager.info("Entering game world from Armory", "mantle")
+
+	if _is_connecting:
+		return  # Already connecting
 
 	# Save ALL player data (inventory + character stats) so it persists into game
-	# This ensures equipped items from Armory appear in-game
-	if DatabaseManager and MantleAuth:
-		var username = MantleAuth.username
+	if DatabaseManager and AshbaneAuth:
+		var username = AshbaneAuth.username
 		if not username.is_empty():
 			DatabaseManager.save_all_player_data_for_user(username)
-			LogManager.info("Saved player state before entering world", "mantle")
+			LogManager.info("Saved player state before entering world", "armory")
 
-	entered_world.emit()
+	# Connect to server
+	_is_connecting = true
 	enter_world_button.disabled = true
-	enter_world_button.text = "Loading..."
+	enter_world_button.text = "Connecting..."
+	if connection_status_label:
+		connection_status_label.text = "Connecting to %s..." % LAN_SERVER_IP
+		connection_status_label.visible = true
+
+	# Connect NetworkManager signals
+	if not NetworkManager.connected_to_server.is_connected(_on_server_connected):
+		NetworkManager.connected_to_server.connect(_on_server_connected)
+	if not NetworkManager.connection_failed.is_connected(_on_server_connection_failed):
+		NetworkManager.connection_failed.connect(_on_server_connection_failed)
+
+	# Set player name from auth
+	var player_name = "Player"
+	if AshbaneAuth and not AshbaneAuth.username.is_empty():
+		player_name = AshbaneAuth.username
+	NetworkManager.set_player_name(player_name)
+
+	LogManager.info("Connecting to LAN server at %s:%d" % [LAN_SERVER_IP, LAN_SERVER_PORT], "armory")
+
+	if NetworkManager.join_game(LAN_SERVER_IP, LAN_SERVER_PORT):
+		# Start connection timeout
+		_start_connection_timeout()
+	else:
+		_on_server_connection_failed()
+
+func _on_host_server_pressed() -> void:
+	# Play click sound
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+
+	if _is_connecting:
+		return
+
+	# Save player data
+	if DatabaseManager and AshbaneAuth:
+		var username = AshbaneAuth.username
+		if not username.is_empty():
+			DatabaseManager.save_all_player_data_for_user(username)
+
+	_is_connecting = true
+	host_server_button.disabled = true
+	host_server_button.text = "Starting..."
+	if connection_status_label:
+		connection_status_label.text = "Starting server on port %d..." % LAN_SERVER_PORT
+		connection_status_label.visible = true
+
+	# Get player data for host
+	var host_player_data = {}
+	if AshbaneAuth:
+		host_player_data = {
+			"username": AshbaneAuth.username,
+			"character_name": AshbaneAuth.username,
+			"tier": profile.get("tier", "initiate"),
+			"total_achievements": profile.get("total_achievements", 0)
+		}
+
+	# Set player name
+	var player_name = AshbaneAuth.username if AshbaneAuth else "Host"
+	NetworkManager.set_player_name(player_name)
+
+	LogManager.info("Starting LAN server on port %d" % LAN_SERVER_PORT, "armory")
+
+	if NetworkManager.host_game(LAN_SERVER_PORT, host_player_data):
+		# Server started successfully - load the game
+		if connection_status_label:
+			connection_status_label.text = "Server started! Loading world..."
+		await get_tree().create_timer(0.5).timeout
+		_load_game_world()
+	else:
+		_is_connecting = false
+		host_server_button.disabled = false
+		host_server_button.text = "HOST SERVER"
+		if connection_status_label:
+			connection_status_label.text = "Failed to start server!"
+			connection_status_label.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
+
+func _on_server_connected() -> void:
+	"""Called when successfully connected to server"""
+	LogManager.info("Connected to server!", "armory")
+	if connection_status_label:
+		connection_status_label.text = "Connected! Authenticating..."
+	_stop_connection_timeout()
+
+	# Connect auth signals (if not already connected)
+	if not NetworkManager.login_success.is_connected(_on_login_success):
+		NetworkManager.login_success.connect(_on_login_success)
+	if not NetworkManager.login_failed.is_connected(_on_login_failed):
+		NetworkManager.login_failed.connect(_on_login_failed)
+
+	# Send authentication request to server
+	var player_name = "Player"
+	if AshbaneAuth and not AshbaneAuth.username.is_empty():
+		player_name = AshbaneAuth.username
+	LogManager.info("Sending guest authentication as: %s" % player_name, "armory")
+	NetworkManager.send_guest_login(player_name)
+
+func _on_login_success(_player_data: Dictionary) -> void:
+	"""Called when server authentication succeeds"""
+	LogManager.info("Authentication successful! Loading world...", "armory")
+	if connection_status_label:
+		connection_status_label.text = "Authenticated! Loading world..."
+	# Disconnect signals to avoid memory leaks
+	if NetworkManager.login_success.is_connected(_on_login_success):
+		NetworkManager.login_success.disconnect(_on_login_success)
+	if NetworkManager.login_failed.is_connected(_on_login_failed):
+		NetworkManager.login_failed.disconnect(_on_login_failed)
+	await get_tree().create_timer(0.3).timeout
+	_load_game_world()
+
+func _on_login_failed(error: String) -> void:
+	"""Called when server authentication fails"""
+	LogManager.error("Authentication failed: %s" % error, "armory")
+	# Disconnect signals to avoid memory leaks
+	if NetworkManager.login_success.is_connected(_on_login_success):
+		NetworkManager.login_success.disconnect(_on_login_success)
+	if NetworkManager.login_failed.is_connected(_on_login_failed):
+		NetworkManager.login_failed.disconnect(_on_login_failed)
+	_is_connecting = false
+	enter_world_button.disabled = false
+	enter_world_button.text = "ENTER WORLD"
+	if connection_status_label:
+		connection_status_label.text = "Authentication failed: %s" % error
+		connection_status_label.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
+
+func _on_server_connection_failed() -> void:
+	"""Called when connection to server fails"""
+	LogManager.error("Failed to connect to server at %s:%d" % [LAN_SERVER_IP, LAN_SERVER_PORT], "armory")
+	_stop_connection_timeout()
+	_is_connecting = false
+
+	enter_world_button.disabled = false
+	enter_world_button.text = "ENTER WORLD"
+
+	if connection_status_label:
+		connection_status_label.text = "Connection failed! Is the server running?"
+		connection_status_label.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
+
+func _start_connection_timeout() -> void:
+	"""Start a timeout timer for connection attempts"""
+	if _connection_timeout_timer:
+		_connection_timeout_timer.queue_free()
+
+	_connection_timeout_timer = Timer.new()
+	_connection_timeout_timer.wait_time = 10.0  # 10 second timeout
+	_connection_timeout_timer.one_shot = true
+	_connection_timeout_timer.timeout.connect(_on_connection_timeout)
+	add_child(_connection_timeout_timer)
+	_connection_timeout_timer.start()
+
+func _stop_connection_timeout() -> void:
+	"""Stop the connection timeout timer"""
+	if _connection_timeout_timer:
+		_connection_timeout_timer.stop()
+		_connection_timeout_timer.queue_free()
+		_connection_timeout_timer = null
+
+func _on_connection_timeout() -> void:
+	"""Called when connection attempt times out"""
+	LogManager.warning("Connection attempt timed out", "armory")
+	NetworkManager.close_connection()
+	_on_server_connection_failed()
+
+func _load_game_world() -> void:
+	"""Load the game world scene"""
+	entered_world.emit()
 	var tree = get_tree()
 	if tree:
-		await tree.create_timer(0.3).timeout
 		tree.change_scene_to_file("res://main.tscn")
 
 func _on_logout_pressed() -> void:
 	# Play click sound
 	if SoundManager:
 		SoundManager.play_button_click_sound(-6.0)
-	LogManager.info("Logging out from Armory", "mantle")
+	LogManager.info("Logging out from Armory", "ashbane")
 
 	# Save player data before logging out
 	if NetworkManager:
 		NetworkManager.close_connection()
 
-	if MantleAuth:
-		MantleAuth.logout()
+	if AshbaneAuth:
+		AshbaneAuth.logout()
 	var tree = get_tree()
 	if tree:
 		tree.change_scene_to_file("res://scenes/ui/MainMenu.tscn")
@@ -8669,7 +9132,7 @@ func _on_open_forge_pressed() -> void:
 	# Play click sound
 	if SoundManager:
 		SoundManager.play_button_click_sound(-6.0)
-	LogManager.info("Opening Forge UI", "mantle")
+	LogManager.info("Opening Forge UI", "ashbane")
 	# TODO: Open ForgeUI overlay
 	# For now, show a placeholder message
 	var pending = _get_pending_forge_count()
@@ -8682,13 +9145,13 @@ func _on_browse_forgeable_pressed() -> void:
 	# Play click sound
 	if SoundManager:
 		SoundManager.play_button_click_sound(-6.0)
-	LogManager.info("Opening web forge browser", "mantle")
+	LogManager.info("Opening web forge browser", "ashbane")
 	# Open the web forge in browser
-	var forge_url = MantleAuth.get_api_base().replace("/api", "") + "/forge"
+	var forge_url = AshbaneAuth.get_api_base().replace("/api", "") + "/forge"
 	OS.shell_open(forge_url)
 
 func _get_pending_forge_count() -> int:
-	# TODO: Get from MantleAuth.pending_forges when API supports it
+	# TODO: Get from AshbaneAuth.pending_forges when API supports it
 	return 0
 
 func _update_forge_section() -> void:
@@ -8697,7 +9160,7 @@ func _update_forge_section() -> void:
 		var pending_count = _get_pending_forge_count()
 		if pending_count > 0:
 			pending_label.text = "%d item%s ready to claim" % [pending_count, "s" if pending_count > 1 else ""]
-			pending_label.add_theme_color_override("font_color", MANTLE_CYAN)
+			pending_label.add_theme_color_override("font_color", ASHBANE_GOLD)
 		else:
 			pending_label.text = "No items waiting"
 			pending_label.add_theme_color_override("font_color", TEXT_SECONDARY)
@@ -8742,7 +9205,7 @@ func _build_settings_panel() -> void:
 	panel.custom_minimum_size = Vector2(400, 0)
 	var panel_style = StyleBoxFlat.new()
 	panel_style.bg_color = CARD_BG
-	panel_style.border_color = MANTLE_CYAN
+	panel_style.border_color = ASHBANE_GOLD
 	panel_style.set_border_width_all(2)
 	panel_style.set_corner_radius_all(12)
 	panel_style.set_content_margin_all(24)
@@ -8758,7 +9221,7 @@ func _build_settings_panel() -> void:
 	header.text = "SETTINGS"
 	header.add_theme_font_override("font", default_font)
 	header.add_theme_font_size_override("font_size", FONT_H2)
-	header.add_theme_color_override("font_color", MANTLE_CYAN)
+	header.add_theme_color_override("font_color", ASHBANE_GOLD)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(header)
 
@@ -8838,7 +9301,7 @@ func _build_settings_panel() -> void:
 	# Style the option button
 	var option_style = StyleBoxFlat.new()
 	option_style.bg_color = Color(0.15, 0.15, 0.18)
-	option_style.border_color = MANTLE_CYAN.darkened(0.3)
+	option_style.border_color = ASHBANE_GOLD.darkened(0.3)
 	option_style.set_border_width_all(1)
 	option_style.set_corner_radius_all(4)
 	option_style.set_content_margin_all(8)
@@ -8882,7 +9345,7 @@ func _create_slider_row(label_text: String, min_val: float, max_val: float, defa
 	value_label.text = "%d%%" % int(default_val)
 	value_label.add_theme_font_override("font", default_font)
 	value_label.add_theme_font_size_override("font_size", FONT_BODY)
-	value_label.add_theme_color_override("font_color", MANTLE_CYAN)
+	value_label.add_theme_color_override("font_color", ASHBANE_GOLD)
 	value_label.custom_minimum_size = Vector2(50, 0)
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	header_row.add_child(value_label)
@@ -9046,7 +9509,7 @@ func _save_settings() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _sync_appearance_to_character_stats(appearance: Dictionary) -> void:
-	"""Sync appearance data from Mantle backend to CharacterStats.
+	"""Sync appearance data from Ashbane backend to CharacterStats.
 	This ensures the character preview in Armory matches what loads in-game."""
 	if not CharacterStats:
 		return
@@ -9116,8 +9579,8 @@ func _get_appearance_from_character_stats() -> Dictionary:
 
 	# Get gender from backend appearance, or default to male (0)
 	var saved_gender = 0
-	if MantleAuth.saved_appearance and not MantleAuth.saved_appearance.is_empty():
-		saved_gender = MantleAuth.saved_appearance.get("gender", 0)
+	if AshbaneAuth.saved_appearance and not AshbaneAuth.saved_appearance.is_empty():
+		saved_gender = AshbaneAuth.saved_appearance.get("gender", 0)
 
 	var appearance = {
 		"gender": saved_gender,
@@ -9563,7 +10026,7 @@ void fragment() {
 	shader.code = shader_code
 	var material = ShaderMaterial.new()
 	material.shader = shader
-	# Wasteland colors - more opaque/visible
+	# dreadland colors - more opaque/visible
 	material.set_shader_parameter("sky_top_color", Color(0.10, 0.11, 0.18, 1.0))
 	material.set_shader_parameter("sky_horizon_color", Color(0.35, 0.22, 0.12, 1.0))
 	material.set_shader_parameter("ground_near_color", Color(0.14, 0.11, 0.08, 1.0))
@@ -9733,3 +10196,744 @@ func _on_footstep() -> void:
 			_right_dust_emitter.emitting = true
 
 	_footstep_left = not _footstep_left
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WONKA TV ROOM VFX - Trippy visual effects
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _create_scanline_overlay() -> Control:
+	"""Create subtle CRT scanline effect overlay"""
+	var container = Control.new()
+	container.name = "ScanlineOverlay"
+	container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.z_index = 1  # Just above background
+
+	# Create scanlines using ColorRects
+	for i in range(0, 1080, 4):  # Every 4 pixels
+		var line = ColorRect.new()
+		line.color = Color(0, 0, 0, 0.06)
+		line.position = Vector2(0, i)
+		line.size = Vector2(2000, 1)
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		container.add_child(line)
+
+	return container
+
+func _create_ember_particles() -> Control:
+	"""Create floating ember particles that drift upward"""
+	var container = Control.new()
+	container.name = "EmberContainer"
+	container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.z_index = 2  # Above background, embers float over scanlines
+
+	# Spawn initial embers
+	for i in range(EMBER_COUNT):
+		var ember = _create_single_ember()
+		container.add_child(ember)
+		_ember_particles.append(ember)
+		# Start at random positions
+		ember.position = Vector2(
+			randf_range(0, 1920),
+			randf_range(0, 1080)
+		)
+		# Start animation with random delay
+		_animate_ember(ember, randf_range(0, 5.0))
+
+	return container
+
+func _create_single_ember() -> ColorRect:
+	"""Create a single ember particle"""
+	var ember = ColorRect.new()
+	ember.size = Vector2(randf_range(2, 5), randf_range(2, 5))
+	ember.color = EMBER_COLORS[randi() % EMBER_COLORS.size()]
+	ember.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return ember
+
+func _animate_ember(ember: ColorRect, delay: float = 0.0) -> void:
+	"""Animate an ember floating upward with drift"""
+	if not is_instance_valid(ember):
+		return
+
+	var tween = create_tween()
+	tween.set_loops()
+
+	# Random parameters for this cycle
+	var duration = randf_range(8.0, 15.0)
+	var drift_x = randf_range(-100, 100)
+	var start_y = 1100.0  # Start below screen
+	var end_y = -50.0     # End above screen
+	var start_x = randf_range(0, 1920)
+
+	# Initial delay
+	if delay > 0:
+		tween.tween_interval(delay)
+
+	# Reset position
+	tween.tween_callback(func():
+		if is_instance_valid(ember):
+			ember.position = Vector2(randf_range(0, 1920), start_y)
+			ember.modulate.a = 0.0
+			ember.color = EMBER_COLORS[randi() % EMBER_COLORS.size()]
+			ember.size = Vector2(randf_range(2, 5), randf_range(2, 5))
+	)
+
+	# Fade in
+	tween.tween_property(ember, "modulate:a", randf_range(0.3, 0.8), 1.0)
+
+	# Float upward with horizontal drift
+	tween.parallel().tween_property(ember, "position:y", end_y, duration).set_ease(Tween.EASE_IN_OUT)
+	tween.parallel().tween_property(ember, "position:x", start_x + drift_x, duration).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+	# Fade out near top
+	tween.tween_property(ember, "modulate:a", 0.0, 1.5)
+
+func _create_vignette_overlay() -> ColorRect:
+	"""Create subtle pulsing vignette effect"""
+	var vignette = ColorRect.new()
+	vignette.name = "VignetteOverlay"
+	vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vignette.z_index = 3  # Above embers, creates edge darkening
+
+	# Create gradient shader for vignette
+	var shader_code = """
+shader_type canvas_item;
+
+uniform float intensity : hint_range(0.0, 1.0) = 0.3;
+uniform float softness : hint_range(0.0, 1.0) = 0.4;
+
+void fragment() {
+	vec2 uv = UV - 0.5;
+	float dist = length(uv * vec2(1.0, 0.6));  // Oval shape
+	float vignette = smoothstep(0.5 - softness, 0.5 + softness, dist);
+	COLOR = vec4(0.0, 0.0, 0.0, vignette * intensity);
+}
+"""
+	var shader = Shader.new()
+	shader.code = shader_code
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("intensity", 0.25)
+	material.set_shader_parameter("softness", 0.45)
+	vignette.material = material
+
+	# Subtle pulse animation
+	var tween = create_tween()
+	tween.set_loops()
+	tween.tween_method(func(val: float):
+		if is_instance_valid(vignette) and vignette.material:
+			vignette.material.set_shader_parameter("intensity", val)
+	, 0.2, 0.35, 3.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_method(func(val: float):
+		if is_instance_valid(vignette) and vignette.material:
+			vignette.material.set_shader_parameter("intensity", val)
+	, 0.35, 0.2, 3.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+	return vignette
+
+func _setup_vfx_layers() -> void:
+	"""Initialize all VFX layers"""
+	# Color drift background (slow hue shift)
+	_color_drift_bg = _create_color_drift_bg()
+	add_child(_color_drift_bg)
+
+	# Scanlines (subtle CRT effect)
+	_scanline_overlay = _create_scanline_overlay()
+	add_child(_scanline_overlay)
+
+	# Floating embers
+	_ember_container = _create_ember_particles()
+	add_child(_ember_container)
+
+	# Floating dust motes (slow ambient particles)
+	_dust_mote_container = _create_dust_motes()
+	add_child(_dust_mote_container)
+
+	# Mouse trail particles
+	_mouse_trail_container = _create_mouse_trail()
+	add_child(_mouse_trail_container)
+
+	# Screen warp effect (very subtle wave distortion)
+	_screen_warp_overlay = _create_screen_warp()
+	add_child(_screen_warp_overlay)
+
+	# Vignette (edge darkening)
+	_vignette_overlay = _create_vignette_overlay()
+	add_child(_vignette_overlay)
+
+func _create_color_drift_bg() -> ColorRect:
+	"""Create slowly color-shifting background overlay"""
+	var drift = ColorRect.new()
+	drift.name = "ColorDriftBg"
+	drift.set_anchors_preset(Control.PRESET_FULL_RECT)
+	drift.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	drift.color = DRIFT_COLORS[0]
+	drift.z_index = 0  # Same level as main background
+
+	# Slow color drift animation
+	_animate_color_drift(drift)
+
+	return drift
+
+func _animate_color_drift(drift: ColorRect) -> void:
+	"""Animate background through subtle color shifts"""
+	var tween = create_tween()
+	tween.set_loops()
+
+	var drift_duration = 8.0  # Seconds per color transition
+
+	for i in range(DRIFT_COLORS.size()):
+		var next_idx = (i + 1) % DRIFT_COLORS.size()
+		tween.tween_property(drift, "color", DRIFT_COLORS[next_idx], drift_duration).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+func apply_legendary_shimmer(item_slot: Control) -> void:
+	"""Apply rainbow holographic shimmer to legendary item slots"""
+	if not item_slot:
+		return
+
+	# Create shimmer shader
+	var shader_code = """
+shader_type canvas_item;
+
+uniform float time_scale : hint_range(0.1, 2.0) = 0.5;
+uniform float intensity : hint_range(0.0, 1.0) = 0.15;
+
+void fragment() {
+	vec4 tex = texture(TEXTURE, UV);
+
+	// Rainbow wave based on position and time
+	float wave = sin(UV.x * 10.0 + TIME * time_scale) * 0.5 + 0.5;
+	float hue_shift = wave * 0.3 + TIME * 0.1;
+
+	// Create rainbow color
+	vec3 rainbow = vec3(
+		sin(hue_shift * 6.28) * 0.5 + 0.5,
+		sin(hue_shift * 6.28 + 2.09) * 0.5 + 0.5,
+		sin(hue_shift * 6.28 + 4.18) * 0.5 + 0.5
+	);
+
+	// Blend with original
+	vec3 final_color = mix(tex.rgb, rainbow, intensity * tex.a);
+	COLOR = vec4(final_color, tex.a);
+}
+"""
+	var shader = Shader.new()
+	shader.code = shader_code
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("time_scale", 0.5)
+	material.set_shader_parameter("intensity", 0.12)
+	item_slot.material = material
+
+func apply_chromatic_aberration_on_hover(control: Control) -> void:
+	"""Apply chromatic aberration effect when hovering over a control"""
+	if not control:
+		return
+
+	var shader_code = """
+shader_type canvas_item;
+
+uniform float aberration_amount : hint_range(0.0, 10.0) = 0.0;
+
+void fragment() {
+	vec2 offset = vec2(aberration_amount / 1000.0, 0.0);
+
+	float r = texture(TEXTURE, UV + offset).r;
+	float g = texture(TEXTURE, UV).g;
+	float b = texture(TEXTURE, UV - offset).b;
+	float a = texture(TEXTURE, UV).a;
+
+	COLOR = vec4(r, g, b, a);
+}
+"""
+	var shader = Shader.new()
+	shader.code = shader_code
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("aberration_amount", 0.0)
+	control.material = material
+
+	# Connect hover signals
+	if not control.mouse_entered.is_connected(_on_chromatic_hover_enter.bind(control)):
+		control.mouse_entered.connect(_on_chromatic_hover_enter.bind(control))
+	if not control.mouse_exited.is_connected(_on_chromatic_hover_exit.bind(control)):
+		control.mouse_exited.connect(_on_chromatic_hover_exit.bind(control))
+
+func _on_chromatic_hover_enter(control: Control) -> void:
+	"""Animate chromatic aberration on hover enter"""
+	if not control or not control.material:
+		return
+	var tween = create_tween()
+	tween.tween_method(func(val: float):
+		if is_instance_valid(control) and control.material:
+			control.material.set_shader_parameter("aberration_amount", val)
+	, 0.0, 3.0, 0.15).set_ease(Tween.EASE_OUT)
+
+func _on_chromatic_hover_exit(control: Control) -> void:
+	"""Animate chromatic aberration on hover exit"""
+	if not control or not control.material:
+		return
+	var tween = create_tween()
+	tween.tween_method(func(val: float):
+		if is_instance_valid(control) and control.material:
+			control.material.set_shader_parameter("aberration_amount", val)
+	, 3.0, 0.0, 0.2).set_ease(Tween.EASE_IN)
+
+# === TREE EMBER VFX ===
+
+func _create_radial_glow(size: int, color: Color) -> ColorRect:
+	"""Create a soft radial glow using a shader"""
+	var glow = ColorRect.new()
+	glow.custom_minimum_size = Vector2(size, size)
+	glow.size = Vector2(size, size)
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glow.color = Color.WHITE  # Base color, shader handles the actual color
+
+	# Radial gradient shader for soft glow effect
+	var shader_code = """
+shader_type canvas_item;
+
+uniform vec4 glow_color : source_color = vec4(1.0, 0.5, 0.1, 0.6);
+uniform float falloff : hint_range(0.5, 4.0) = 2.0;
+
+void fragment() {
+	vec2 center = vec2(0.5, 0.5);
+	float dist = distance(UV, center) * 2.0;  // 0 at center, 1 at edge
+
+	// Smooth falloff from center
+	float alpha = 1.0 - smoothstep(0.0, 1.0, pow(dist, falloff));
+
+	COLOR = vec4(glow_color.rgb, glow_color.a * alpha);
+}
+"""
+	var shader = Shader.new()
+	shader.code = shader_code
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("glow_color", color)
+	material.set_shader_parameter("falloff", 1.5)  # Softer falloff
+	glow.material = material
+
+	return glow
+
+func _animate_tree_glow(glow_rect: ColorRect) -> void:
+	"""Animate pulsing orange glow behind tree logos"""
+	if not glow_rect:
+		return
+
+	var tween = create_tween()
+	tween.set_loops()
+
+	# Subtle pulse - gentle breathing effect
+	tween.tween_property(glow_rect, "modulate:a", 1.0, 2.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(glow_rect, "modulate:a", 0.5, 2.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+func _setup_tree_embers(header_wrapper: Control) -> void:
+	"""Create floating ember particles rising from tree logos"""
+	if not _tree_logo_left or not _tree_logo_right:
+		return
+
+	# Create container for tree embers (in header space)
+	_tree_ember_container = Control.new()
+	_tree_ember_container.name = "TreeEmberContainer"
+	_tree_ember_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tree_ember_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tree_ember_container.z_index = 10  # Above trees but below UI
+	header_wrapper.add_child(_tree_ember_container)
+
+	# Spawn embers for left tree
+	for i in range(TREE_EMBER_COUNT):
+		_spawn_tree_ember(_tree_logo_left, true)
+
+	# Spawn embers for right tree
+	for i in range(TREE_EMBER_COUNT):
+		_spawn_tree_ember(_tree_logo_right, false)
+
+func _spawn_tree_ember(tree_logo: TextureRect, is_left: bool) -> void:
+	"""Spawn a single ember particle near a tree logo"""
+	if not tree_logo or not _tree_ember_container:
+		return
+
+	var ember = ColorRect.new()
+	ember.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Random ember color (orange/gold/red)
+	var color_idx = randi() % EMBER_COLORS.size()
+	ember.color = EMBER_COLORS[color_idx]
+
+	# Random size (small particles)
+	var size = randf_range(2.0, 5.0)
+	ember.custom_minimum_size = Vector2(size, size)
+	ember.size = Vector2(size, size)
+
+	# Get tree position in header space
+	var tree_rect = tree_logo.get_global_rect()
+	var container_rect = _tree_ember_container.get_global_rect()
+
+	# Spawn near bottom/center of tree
+	var spawn_x = tree_rect.position.x - container_rect.position.x + tree_rect.size.x * randf_range(0.2, 0.8)
+	var spawn_y = tree_rect.position.y - container_rect.position.y + tree_rect.size.y * randf_range(0.5, 0.9)
+
+	ember.position = Vector2(spawn_x, spawn_y)
+	_tree_ember_container.add_child(ember)
+
+	# Animate ember rising and fading
+	_animate_tree_ember(ember, is_left)
+
+func _animate_tree_ember(ember: ColorRect, drift_left: bool) -> void:
+	"""Animate a tree ember rising, drifting, and fading"""
+	if not ember:
+		return
+
+	var duration = randf_range(2.0, 4.0)
+	var rise_height = randf_range(40.0, 80.0)
+	var drift = randf_range(10.0, 25.0) * (-1.0 if drift_left else 1.0)
+
+	# Add some randomness to drift direction
+	if randf() > 0.6:
+		drift *= -0.5  # Occasionally drift the opposite way
+
+	var tween = create_tween()
+	tween.set_parallel(true)
+
+	# Rise up
+	tween.tween_property(ember, "position:y", ember.position.y - rise_height, duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+
+	# Drift sideways with slight wave
+	tween.tween_property(ember, "position:x", ember.position.x + drift, duration).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+	# Fade out
+	tween.tween_property(ember, "modulate:a", 0.0, duration * 0.8).set_delay(duration * 0.2)
+
+	# Scale down slightly
+	tween.tween_property(ember, "scale", Vector2(0.3, 0.3), duration)
+
+	# When done, respawn
+	tween.chain().tween_callback(_respawn_tree_ember.bind(ember, drift_left))
+
+func _respawn_tree_ember(ember: ColorRect, is_left: bool) -> void:
+	"""Respawn an ember at its tree's position"""
+	if not ember or not is_instance_valid(ember):
+		return
+
+	var tree_logo = _tree_logo_left if is_left else _tree_logo_right
+	if not tree_logo or not is_instance_valid(tree_logo) or not _tree_ember_container:
+		ember.queue_free()
+		return
+
+	# Reset ember properties
+	ember.modulate.a = 1.0
+	ember.scale = Vector2(1.0, 1.0)
+
+	# New random color
+	var color_idx = randi() % EMBER_COLORS.size()
+	ember.color = EMBER_COLORS[color_idx]
+
+	# New random size
+	var size = randf_range(2.0, 5.0)
+	ember.custom_minimum_size = Vector2(size, size)
+	ember.size = Vector2(size, size)
+
+	# Reposition near tree
+	var tree_rect = tree_logo.get_global_rect()
+	var container_rect = _tree_ember_container.get_global_rect()
+
+	var spawn_x = tree_rect.position.x - container_rect.position.x + tree_rect.size.x * randf_range(0.2, 0.8)
+	var spawn_y = tree_rect.position.y - container_rect.position.y + tree_rect.size.y * randf_range(0.5, 0.9)
+	ember.position = Vector2(spawn_x, spawn_y)
+
+	# Restart animation
+	_animate_tree_ember(ember, is_left)
+
+# === DUST MOTES VFX ===
+
+func _create_dust_motes() -> Control:
+	"""Create slow-moving ambient dust particles"""
+	var container = Control.new()
+	container.name = "DustMoteContainer"
+	container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.z_index = 2  # Above background, below UI
+
+	# Spawn dust motes across the screen
+	for i in range(DUST_MOTE_COUNT):
+		var mote = ColorRect.new()
+		mote.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		# Soft white/gray color with low opacity
+		var brightness = randf_range(0.6, 0.9)
+		mote.color = Color(brightness, brightness, brightness, randf_range(0.08, 0.2))
+
+		# Small size
+		var size = randf_range(1.5, 3.5)
+		mote.custom_minimum_size = Vector2(size, size)
+		mote.size = Vector2(size, size)
+
+		# Random starting position
+		mote.position = Vector2(randf_range(0, 1920), randf_range(0, 1080))
+
+		container.add_child(mote)
+		_dust_motes.append(mote)
+
+		# Start animation with random delay
+		var delay = randf_range(0.0, 5.0)
+		get_tree().create_timer(delay).timeout.connect(_animate_dust_mote.bind(mote))
+
+	return container
+
+func _animate_dust_mote(mote: ColorRect) -> void:
+	"""Animate a dust mote floating slowly"""
+	if not mote or not is_instance_valid(mote):
+		return
+
+	var duration = randf_range(15.0, 30.0)  # Very slow movement
+	var start_pos = Vector2(randf_range(0, 1920), randf_range(0, 1080))
+	var drift_x = randf_range(-100, 100)
+	var drift_y = randf_range(-50, -150)  # Mostly upward
+
+	mote.position = start_pos
+	mote.modulate.a = 0.0
+
+	var tween = create_tween()
+
+	# Fade in
+	tween.tween_property(mote, "modulate:a", 1.0, 2.0)
+
+	# Drift slowly
+	tween.tween_property(mote, "position", start_pos + Vector2(drift_x, drift_y), duration).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+	# Fade out near end
+	tween.parallel().tween_property(mote, "modulate:a", 0.0, 3.0).set_delay(duration - 3.0)
+
+	# Respawn
+	tween.tween_callback(_animate_dust_mote.bind(mote))
+
+# === MOUSE TRAIL VFX ===
+
+func _create_mouse_trail() -> Control:
+	"""Create sparkle particles that follow mouse movement"""
+	var container = Control.new()
+	container.name = "MouseTrailContainer"
+	container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.z_index = 50  # Above most UI
+
+	# Pre-create trail particles (pooled)
+	for i in range(MOUSE_TRAIL_COUNT):
+		var particle = ColorRect.new()
+		particle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		particle.visible = false
+
+		# Gold/white sparkle color
+		particle.color = Color(1.0, 0.9, 0.6, 0.8)
+
+		var size = randf_range(2.0, 4.0)
+		particle.custom_minimum_size = Vector2(size, size)
+		particle.size = Vector2(size, size)
+
+		container.add_child(particle)
+		_mouse_trail_particles.append({"node": particle, "active": false})
+
+	return container
+
+func _input(event: InputEvent) -> void:
+	# Handle mouse trail
+	if event is InputEventMouseMotion:
+		var mouse_pos = event.position
+		var delta = mouse_pos.distance_to(_last_mouse_pos)
+
+		# Only spawn particles on significant movement
+		if delta > 15:
+			_spawn_mouse_trail_particle(mouse_pos)
+			_last_mouse_pos = mouse_pos
+
+func _spawn_mouse_trail_particle(pos: Vector2) -> void:
+	"""Spawn a sparkle particle at mouse position"""
+	if not _mouse_trail_container:
+		return
+
+	# Find inactive particle
+	for p in _mouse_trail_particles:
+		if not p.active:
+			var particle = p.node as ColorRect
+			if not particle or not is_instance_valid(particle):
+				continue
+
+			p.active = true
+			particle.visible = true
+			particle.position = pos
+			particle.modulate.a = 1.0
+			particle.scale = Vector2(1.0, 1.0)
+
+			# Randomize color slightly
+			var hue_shift = randf_range(-0.1, 0.1)
+			particle.color = Color(1.0, 0.85 + hue_shift, 0.5 + hue_shift, 0.9)
+
+			# Animate fade and shrink
+			var tween = create_tween()
+			tween.set_parallel(true)
+			tween.tween_property(particle, "modulate:a", 0.0, 0.6)
+			tween.tween_property(particle, "scale", Vector2(0.2, 0.2), 0.6)
+			tween.tween_property(particle, "position:y", pos.y - 20, 0.6).set_ease(Tween.EASE_OUT)
+
+			# Reset when done
+			tween.chain().tween_callback(func():
+				particle.visible = false
+				p.active = false
+			)
+			return
+
+# === SCREEN WARP VFX ===
+
+func _create_screen_warp() -> ColorRect:
+	"""Create subtle wave distortion overlay"""
+	var warp = ColorRect.new()
+	warp.name = "ScreenWarpOverlay"
+	warp.set_anchors_preset(Control.PRESET_FULL_RECT)
+	warp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	warp.z_index = 1  # Just above background
+
+	# Very subtle - mostly transparent
+	warp.color = Color(1, 1, 1, 0.02)
+
+	# Apply warp shader
+	var shader_code = """
+shader_type canvas_item;
+
+uniform float time_scale : hint_range(0.01, 1.0) = 0.15;
+uniform float warp_strength : hint_range(0.0, 0.02) = 0.003;
+
+void fragment() {
+	vec2 uv = UV;
+
+	// Subtle wave distortion
+	float wave1 = sin(uv.y * 8.0 + TIME * time_scale) * warp_strength;
+	float wave2 = cos(uv.x * 6.0 + TIME * time_scale * 0.7) * warp_strength * 0.5;
+
+	uv.x += wave1;
+	uv.y += wave2;
+
+	// Very subtle color tint based on position
+	vec3 tint = vec3(
+		0.5 + sin(TIME * 0.1) * 0.02,
+		0.5 + cos(TIME * 0.15) * 0.02,
+		0.5 + sin(TIME * 0.12) * 0.02
+	);
+
+	COLOR = vec4(tint, 0.015);
+}
+"""
+	var shader = Shader.new()
+	shader.code = shader_code
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("time_scale", 0.15)
+	material.set_shader_parameter("warp_strength", 0.003)
+	warp.material = material
+
+	return warp
+
+# === PANEL BORDER GLOW VFX ===
+
+func apply_pulsing_border_glow(panel: Control, color: Color = Color(0.7, 0.5, 0.2, 0.5)) -> void:
+	"""Apply a subtle pulsing glow to panel borders"""
+	if not panel:
+		return
+
+	# Get or create style
+	var style = panel.get_theme_stylebox("panel")
+	if not style or not style is StyleBoxFlat:
+		return
+
+	# Clone style to avoid modifying shared resource
+	style = style.duplicate()
+	style.shadow_color = color
+	style.shadow_size = 4
+	panel.add_theme_stylebox_override("panel", style)
+
+	# Animate the glow
+	var tween = create_tween()
+	tween.set_loops()
+	tween.tween_property(style, "shadow_size", 8, 2.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(style, "shadow_size", 4, 2.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+# === TAB GLITCH VFX ===
+
+func _trigger_tab_glitch() -> void:
+	"""Trigger a brief digital glitch effect when switching tabs"""
+	# Create temporary glitch overlay
+	var glitch = ColorRect.new()
+	glitch.name = "TabGlitchEffect"
+	glitch.set_anchors_preset(Control.PRESET_FULL_RECT)
+	glitch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glitch.z_index = 100
+	add_child(glitch)
+
+	var shader_code = """
+shader_type canvas_item;
+
+uniform float glitch_intensity : hint_range(0.0, 1.0) = 0.5;
+uniform float time_offset : hint_range(0.0, 100.0) = 0.0;
+
+void fragment() {
+	vec2 uv = UV;
+
+	// Random horizontal displacement
+	float noise = fract(sin(dot(vec2(uv.y * 100.0, time_offset), vec2(12.9898, 78.233))) * 43758.5453);
+	float displacement = (noise - 0.5) * glitch_intensity * 0.1;
+
+	// Apply only to random scanlines
+	if (fract(uv.y * 50.0 + time_offset) < 0.3) {
+		uv.x += displacement;
+	}
+
+	// Color channel separation
+	float r_offset = displacement * 0.5;
+	float b_offset = -displacement * 0.5;
+
+	vec3 color = vec3(
+		texture(TEXTURE, uv + vec2(r_offset, 0.0)).r,
+		texture(TEXTURE, uv).g,
+		texture(TEXTURE, uv + vec2(b_offset, 0.0)).b
+	);
+
+	// Random noise blocks (subtle)
+	float block_noise = step(0.98, fract(sin(dot(floor(uv * 20.0), vec2(12.9898, 78.233)) + time_offset) * 43758.5453));
+
+	COLOR = vec4(mix(color, vec3(1.0), block_noise * 0.15), glitch_intensity * 0.35);
+}
+"""
+	var shader = Shader.new()
+	shader.code = shader_code
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("glitch_intensity", 0.4)  # Softer start
+	material.set_shader_parameter("time_offset", randf() * 100.0)
+	glitch.material = material
+
+	# Quick glitch animation - slightly longer fade
+	var tween = create_tween()
+	tween.tween_property(material, "shader_parameter/glitch_intensity", 0.0, 0.2).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(glitch.queue_free)
+
+func _apply_column_glow_effects(left: Control, middle: Control, right: Control) -> void:
+	"""Apply subtle pulsing glow to the main column panels"""
+	# Find PanelContainer children in each column
+	for column in [left, middle, right]:
+		if not column:
+			continue
+		# Look for the main panel (usually first PanelContainer child)
+		for child in column.get_children():
+			if child is PanelContainer:
+				# Different glow colors for each column
+				var glow_color: Color
+				if column == left:
+					glow_color = Color(0.4, 0.5, 0.7, 0.3)  # Blue-ish for stats
+				elif column == middle:
+					glow_color = Color(0.5, 0.6, 0.4, 0.3)  # Green-ish for dreadland
+				else:
+					glow_color = Color(0.7, 0.5, 0.3, 0.3)  # Orange-ish for forge
+				apply_pulsing_border_glow(child, glow_color)
+				break  # Only apply to first panel in each column

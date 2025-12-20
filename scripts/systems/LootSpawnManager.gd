@@ -222,7 +222,7 @@ func spawn_random_item() -> void:
 	# Item data (for now, just wood - can be randomized later)
 	var item_data = {
 		"name": "Dry Log",
-		"description": "Dry wood from a dead wasteland tree. Burns well.",
+		"description": "Dry wood from a dead dreadland tree. Burns well.",
 		"value": 12,
 		"stackable": true,
 		"max_stack": 1000,

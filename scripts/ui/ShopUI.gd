@@ -45,9 +45,9 @@ var quest_message_label: Label = null  # Message label inside Quests tab
 const FORGE_RARITY_COLORS = {
 	"common": Color(0.6, 0.6, 0.6),
 	"uncommon": Color(0.4, 0.8, 0.4),
-	"rare": Color(0.4, 0.5, 0.9),
-	"epic": Color(0.7, 0.4, 0.9),
-	"legendary": Color(0.9, 0.6, 0.2)
+	"rare": Color(0.3, 0.5, 0.9),
+	"epic": Color(0.6, 0.2, 0.8),
+	"legendary": Color(1.0, 0.5, 0.1)
 }
 
 func _ready() -> void:
@@ -110,9 +110,9 @@ func _ready() -> void:
 			qm.quest_reward_choice_needed.connect(_on_quest_reward_choice_needed)
 
 func apply_modern_styling() -> void:
-	"""Apply Dark Fantasy Wasteland theme to match CharacterUI"""
+	"""Apply Dark Fantasy dreadland theme to match CharacterUI"""
 	if main_panel:
-		# Dark Fantasy Wasteland styling with transparency
+		# Dark Fantasy dreadland styling with transparency
 		var panel_style = StyleBoxFlat.new()
 		panel_style.bg_color = BG_COLOR  # 85% transparent dark leather
 		panel_style.border_width_left = 3
@@ -129,7 +129,7 @@ func apply_modern_styling() -> void:
 
 		# Heavy shadow for depth
 		panel_style.shadow_size = 12
-		panel_style.shadow_color = Color(0, 0, 0, 0.8)  # Darker shadow for wasteland
+		panel_style.shadow_color = Color(0, 0, 0, 0.8)  # Darker shadow for dreadland
 		panel_style.shadow_offset = Vector2(0, 6)
 
 		main_panel.add_theme_stylebox_override("panel", panel_style)
@@ -140,7 +140,7 @@ func apply_modern_styling() -> void:
 	if gold_label:
 		gold_label.add_theme_color_override("font_color", ACCENT_COLOR)  # Tarnished gold
 
-	# Style the close button (blood red for wasteland)
+	# Style the close button (blood red for dreadland)
 	if close_button:
 		close_button.add_theme_font_size_override("font_size", 24)
 		close_button.add_theme_color_override("font_color", Color(0.85, 0.20, 0.15))  # Blood red
@@ -187,7 +187,7 @@ func open_shop(vendor_node: Vendor) -> void:
 	# Play blacksmith open sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.BLACKSMITH_OPEN, -6.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.BLACKSMITH_OPEN, -10.0)
 
 	show()
 
@@ -768,7 +768,7 @@ func purchase_weapon(index: int) -> void:
 		# Play gold loot sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
 
 		# Refresh the UI
 		update_gold_display()
@@ -815,7 +815,7 @@ func purchase_armor(index: int) -> void:
 		# Play gold loot sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
 
 		# Refresh the UI
 		update_gold_display()
@@ -862,7 +862,7 @@ func purchase_tool(index: int) -> void:
 		# Play gold loot sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
 
 		# Refresh the UI
 		update_gold_display()
@@ -1172,7 +1172,7 @@ func sell_item(slot: int) -> void:
 	# Play gold loot sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
 
 	# Refresh the UI
 	update_gold_display()
@@ -1274,8 +1274,26 @@ func populate_quests() -> void:
 			var card = create_quest_card(quest, false)
 			quests_list.add_child(card)
 
+	# Show upcoming/locked quests preview
+	var locked_quests = qm.get_locked_quests(giver, 3)
+	if locked_quests.size() > 0:
+		# Add separator
+		var sep = HSeparator.new()
+		sep.custom_minimum_size.y = 10
+		quests_list.add_child(sep)
+
+		var locked_header = Label.new()
+		locked_header.text = "UPCOMING QUESTS"
+		locked_header.add_theme_font_size_override("font_size", 14)
+		locked_header.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+		quests_list.add_child(locked_header)
+
+		for quest in locked_quests:
+			var locked_card = create_locked_quest_card(quest)
+			quests_list.add_child(locked_card)
+
 	# No quests message - only if nothing to show at all
-	if not has_content:
+	if not has_content and locked_quests.size() == 0:
 		var no_quests = Label.new()
 		no_quests.text = "No quests available.\nLevel up to unlock more!"
 		no_quests.add_theme_font_size_override("font_size", 16)
@@ -1546,6 +1564,69 @@ func create_quest_progress_card(quest: Dictionary) -> PanelContainer:
 
 	return card
 
+func create_locked_quest_card(quest: Dictionary) -> PanelContainer:
+	"""Create a grayed-out card for locked/upcoming quests"""
+	var card = PanelContainer.new()
+	card.custom_minimum_size = Vector2(0, 70)
+
+	# Style with muted colors
+	var card_style = StyleBoxFlat.new()
+	card_style.bg_color = Color(0.08, 0.08, 0.09, 0.8)
+	card_style.border_width_left = 2
+	card_style.border_width_right = 2
+	card_style.border_width_top = 2
+	card_style.border_width_bottom = 2
+	card_style.border_color = Color(0.3, 0.3, 0.35)
+	card_style.corner_radius_top_left = 6
+	card_style.corner_radius_top_right = 6
+	card_style.corner_radius_bottom_left = 6
+	card_style.corner_radius_bottom_right = 6
+	card_style.content_margin_left = 12
+	card_style.content_margin_right = 12
+	card_style.content_margin_top = 8
+	card_style.content_margin_bottom = 8
+	card.add_theme_stylebox_override("panel", card_style)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	card.add_child(vbox)
+
+	# Quest name row
+	var name_hbox = HBoxContainer.new()
+	name_hbox.add_theme_constant_override("separation", 8)
+	vbox.add_child(name_hbox)
+
+	var lock_icon = Label.new()
+	lock_icon.text = "🔒"
+	lock_icon.add_theme_font_size_override("font_size", 14)
+	name_hbox.add_child(lock_icon)
+
+	var name_label = Label.new()
+	name_label.text = quest.get("name", "Unknown Quest")
+	name_label.add_theme_font_size_override("font_size", 15)
+	name_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55))
+	name_hbox.add_child(name_label)
+
+	# Level requirement
+	var level_req = quest.get("level_req", 1)
+	var level_label = Label.new()
+	level_label.text = "Lv.%d" % level_req
+	level_label.add_theme_font_size_override("font_size", 13)
+	level_label.add_theme_color_override("font_color", Color(0.6, 0.5, 0.3))
+	level_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	name_hbox.add_child(level_label)
+
+	# Lock reason
+	var reason = quest.get("_locked_reason", "Locked")
+	var reason_label = Label.new()
+	reason_label.text = reason
+	reason_label.add_theme_font_size_override("font_size", 13)
+	reason_label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.4))
+	vbox.add_child(reason_label)
+
+	return card
+
 func _on_accept_quest(quest_id: String) -> void:
 	"""Handle quest accept button"""
 	if not has_node("/root/QuestManager"):
@@ -1559,7 +1640,7 @@ func _on_accept_quest(quest_id: String) -> void:
 		# Play quest accept sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.QUEST_ACCEPT, -6.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.QUEST_ACCEPT, -10.0)
 
 		# Refresh the list and tab indicator
 		populate_quests()
@@ -1590,7 +1671,7 @@ func _on_turn_in_quest(quest_id: String) -> void:
 		# Play quest turn in sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.QUEST_TURN_IN, -6.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.QUEST_TURN_IN, -10.0)
 
 		# Refresh the list, gold display, and tab indicator
 		update_gold_display()
@@ -1800,7 +1881,7 @@ func _on_reward_option_selected(item_id: String) -> void:
 		# Play quest turn in sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.QUEST_TURN_IN, -6.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.QUEST_TURN_IN, -10.0)
 
 		# Refresh the list, gold display, and tab indicator
 		update_gold_display()
@@ -2374,7 +2455,7 @@ func _on_claim_forge_item(forged_id: int, item: Dictionary) -> void:
 	# Play sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -8.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
 
 	# Refresh display
 	populate_forge()

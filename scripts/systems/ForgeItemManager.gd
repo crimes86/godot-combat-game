@@ -41,9 +41,9 @@ const RARITY_DAMAGE_BONUS = {
 }
 
 func _ready() -> void:
-	if MantleAuth:
-		MantleAuth.auth_completed.connect(_on_auth_completed)
-		MantleAuth.logout_completed.connect(_on_logout)
+	if AshbaneAuth:
+		AshbaneAuth.auth_completed.connect(_on_auth_completed)
+		AshbaneAuth.logout_completed.connect(_on_logout)
 
 func _on_auth_completed(_data: Dictionary) -> void:
 	fetch_forged_items()
@@ -229,13 +229,13 @@ func fetch_forged_items() -> void:
 	if _is_fetching:
 		return
 
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		LogManager.warning("Cannot fetch forged items - not authenticated", "forge")
 		return
 
 	_is_fetching = true
-	var url = MantleAuth.get_api_base() + "/api/me/forged-items"
-	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+	var url = AshbaneAuth.get_api_base() + "/api/me/forged-items"
+	var headers = ["Authorization: Bearer " + AshbaneAuth.auth_token]
 
 	var request = HTTPRequest.new()
 	add_child(request)
@@ -315,11 +315,11 @@ func _on_forged_items_response(result: int, response_code: int, _headers: Packed
 
 func fetch_forge_status() -> void:
 	"""Fetch forge status - shows which achievements can be forged but haven't been yet"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/me/forge-status"
-	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+	var url = AshbaneAuth.get_api_base() + "/api/me/forge-status"
+	var headers = ["Authorization: Bearer " + AshbaneAuth.auth_token]
 
 	var request = HTTPRequest.new()
 	add_child(request)
@@ -378,13 +378,13 @@ func is_forge_status_loaded() -> bool:
 
 func claim_forge(achievement_id: int, callback: Callable = Callable()) -> void:
 	"""Claim/forge an achievement into an item"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		forge_error.emit("Not authenticated")
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/forge/claim"
+	var url = AshbaneAuth.get_api_base() + "/api/forge/claim"
 	var headers = [
-		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Authorization: Bearer " + AshbaneAuth.auth_token,
 		"Content-Type: application/json"
 	]
 	var body = JSON.stringify({"achievement_id": achievement_id})
@@ -538,13 +538,13 @@ func claim_single_item(item_id: String) -> Dictionary:
 
 func _claim_on_server(token_id: int) -> bool:
 	"""Mark item as claimed on server. Returns true on success."""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		LogManager.warning("Cannot claim on server - not authenticated", "forge")
 		return true  # Allow claim anyway if not authenticated (offline mode)
 
-	var url = MantleAuth.get_api_base() + "/api/forge/claim-to-game"
+	var url = AshbaneAuth.get_api_base() + "/api/forge/claim-to-game"
 	var headers = [
-		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Authorization: Bearer " + AshbaneAuth.auth_token,
 		"Content-Type: application/json"
 	]
 	var body = JSON.stringify({"token_id": token_id})
@@ -677,8 +677,10 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 			if forge_db_item.has("stat_bonuses"):
 				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
 
-		"accessory":
-			base_item["type"] = "accessory"
+		"ring":
+			base_item["type"] = "ring"
+			# Rings can go to either ring1 or ring2 slot - UI handles placement
+			base_item["slot"] = "ring"
 			# Copy stat bonuses and special effects from ForgeItemDB
 			if forge_db_item.has("stat_bonuses"):
 				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
@@ -690,18 +692,31 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 				base_item["cooldown_reduction"] = forge_db_item.get("cooldown_reduction")
 			if forge_db_item.has("movement_speed"):
 				base_item["movement_speed"] = forge_db_item.get("movement_speed")
-			# Determine specific accessory slot based on item name/id
-			var item_name_lower = forged.get("item_name", "").to_lower()
-			var item_id_lower = forged.get("item_id", "").to_lower()
 
-			if "amulet" in item_name_lower or "amulet" in item_id_lower or "necklace" in item_name_lower:
-				base_item["slot"] = "amulet"
-			elif "ring" in item_name_lower or "ring" in item_id_lower:
-				# Rings use ring1 by default - InventoryUI will handle swapping to ring2 if ring1 is occupied
-				base_item["slot"] = "ring1"
-			else:
-				# Default to amulet if we can't determine
-				base_item["slot"] = "amulet"
+		"amulet":
+			base_item["type"] = "amulet"
+			base_item["slot"] = "amulet"
+			# Copy stat bonuses and special effects from ForgeItemDB
+			if forge_db_item.has("stat_bonuses"):
+				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
+			if forge_db_item.has("hp_bonus"):
+				base_item["hp_bonus"] = forge_db_item.get("hp_bonus")
+			if forge_db_item.has("lifesteal"):
+				base_item["lifesteal"] = forge_db_item.get("lifesteal")
+			if forge_db_item.has("cooldown_reduction"):
+				base_item["cooldown_reduction"] = forge_db_item.get("cooldown_reduction")
+			if forge_db_item.has("movement_speed"):
+				base_item["movement_speed"] = forge_db_item.get("movement_speed")
+
+		"accessory":
+			# Accessories are inventory-only items (badges, fragments, etc.)
+			# They do NOT have a slot - cannot be equipped to character paperdoll
+			base_item["type"] = "accessory"
+			# Copy stat bonuses if any (passive effects while in inventory)
+			if forge_db_item.has("stat_bonuses"):
+				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
+			if forge_db_item.has("hp_bonus"):
+				base_item["hp_bonus"] = forge_db_item.get("hp_bonus")
 
 		_:
 			# Unknown type - still add as generic item
@@ -744,13 +759,13 @@ func get_bridge_cooldown_remaining(item_id: String) -> float:
 
 func request_bridge_out(forged_id: int, callback: Callable = Callable()) -> void:
 	"""Request to bridge an item out to external wallet (48h cooldown starts)"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		forge_error.emit("Not authenticated")
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out"
+	var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-out"
 	var headers = [
-		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Authorization: Bearer " + AshbaneAuth.auth_token,
 		"Content-Type: application/json"
 	]
 	var body = JSON.stringify({"forged_achievement_ids": [forged_id]})
@@ -814,13 +829,13 @@ func _on_bridge_out_response(result: int, response_code: int, _headers: PackedSt
 
 func cancel_bridge_out(forged_id: int, callback: Callable = Callable()) -> void:
 	"""Cancel a pending bridge-out request"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		forge_error.emit("Not authenticated")
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out/cancel"
+	var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-out/cancel"
 	var headers = [
-		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Authorization: Bearer " + AshbaneAuth.auth_token,
 		"Content-Type: application/json"
 	]
 	var body = JSON.stringify({"forged_achievement_ids": [forged_id]})
@@ -859,11 +874,11 @@ func _on_cancel_bridge_response(result: int, response_code: int, _headers: Packe
 
 func fetch_bridge_status(callback: Callable = Callable()) -> void:
 	"""Fetch current bridge-out status for all pending items"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out/status"
-	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+	var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-out/status"
+	var headers = ["Authorization: Bearer " + AshbaneAuth.auth_token]
 
 	var request = HTTPRequest.new()
 	add_child(request)
@@ -953,12 +968,12 @@ func _update_local_bridge_status(forged_id: int, status: String) -> void:
 
 func _auto_confirm_bridge_out(forged_ids: Array) -> void:
 	"""Auto-confirm bridge-out for items that have passed their cooldown"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out/confirm"
+	var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-out/confirm"
 	var headers = [
-		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Authorization: Bearer " + AshbaneAuth.auth_token,
 		"Content-Type: application/json"
 	]
 	var body = JSON.stringify({"forged_achievement_ids": forged_ids})
@@ -1017,13 +1032,13 @@ func get_wallet_address_short() -> String:
 
 func fetch_wallet_status(callback: Callable = Callable()) -> void:
 	"""Fetch wallet connection status from backend"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		if callback.is_valid():
 			callback.call(false, "")
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/wallet/status"
-	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+	var url = AshbaneAuth.get_api_base() + "/api/wallet/status"
+	var headers = ["Authorization: Bearer " + AshbaneAuth.auth_token]
 
 	var request = HTTPRequest.new()
 	add_child(request)
@@ -1067,13 +1082,13 @@ func _on_wallet_status_response(result: int, response_code: int, _headers: Packe
 
 func disconnect_wallet(callback: Callable = Callable()) -> void:
 	"""Disconnect the external wallet from the user's account"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		if callback.is_valid():
 			callback.call(false)
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/wallet/disconnect"
-	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+	var url = AshbaneAuth.get_api_base() + "/api/wallet/disconnect"
+	var headers = ["Authorization: Bearer " + AshbaneAuth.auth_token]
 
 	var request = HTTPRequest.new()
 	add_child(request)
@@ -1118,7 +1133,7 @@ func get_bridge_in_available() -> Array:
 
 func fetch_bridge_in_available(callback: Callable = Callable()) -> void:
 	"""Fetch items available to bridge in from external wallet"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		if callback.is_valid():
 			callback.call([])
 		return
@@ -1131,8 +1146,8 @@ func fetch_bridge_in_available(callback: Callable = Callable()) -> void:
 			callback.call([])
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-in/available"
-	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+	var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-in/available"
+	var headers = ["Authorization: Bearer " + AshbaneAuth.auth_token]
 
 	var request = HTTPRequest.new()
 	add_child(request)
@@ -1181,7 +1196,7 @@ func _on_bridge_in_available_response(result: int, response_code: int, _headers:
 
 func request_bridge_in(token_ids: Array, callback: Callable = Callable()) -> void:
 	"""Request to bridge items back into the game from external wallet"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		forge_error.emit("Not authenticated")
 		return
 
@@ -1191,9 +1206,9 @@ func request_bridge_in(token_ids: Array, callback: Callable = Callable()) -> voi
 
 	LogManager.info("Requesting bridge-in for token_ids: %s" % str(token_ids), "forge")
 
-	var url = MantleAuth.get_api_base() + "/api/wallet/bridge-in"
+	var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-in"
 	var headers = [
-		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Authorization: Bearer " + AshbaneAuth.auth_token,
 		"Content-Type: application/json"
 	]
 	var body = JSON.stringify({"token_ids": token_ids})

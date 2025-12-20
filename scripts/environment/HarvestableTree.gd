@@ -391,7 +391,7 @@ func create_progress_circle() -> void:
 	pass
 
 func _draw_progress_circle() -> void:
-	"""Draw the radial progress circle with wasteland theme"""
+	"""Draw the radial progress circle with dreadland theme"""
 	if not progress_circle or not is_chopping:
 		return
 	
@@ -428,7 +428,7 @@ func _draw_progress_circle() -> void:
 	var canvas_transform = get_viewport().get_canvas_transform()
 	var tree_screen_pos = canvas_transform * circle_world_pos
 	
-	# === DARK FANTASY WASTELAND THEME ===
+	# === DARK FANTASY dreadland THEME ===
 	var radius = 22.5  # Reduced by another 25% (was 30.0)
 	var thickness = 3.4  # Proportionally reduced (was 4.5)
 	
@@ -574,7 +574,7 @@ func spawn_wood_drops() -> void:
 
 	var wood_item_data = {
 		"name": "Dry Log",
-		"description": "Dry wood from a dead wasteland tree. Burns well.",
+		"description": "Dry wood from a dead dreadland tree. Burns well.",
 		"value": 12,
 		"type": "material",
 		"rarity": "Common",

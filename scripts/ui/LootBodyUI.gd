@@ -138,7 +138,7 @@ func open_loot_ui(primary_corpse, nearby_corpses: Array) -> void:
 	# Play corpse rummaging sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.CORPSE_LOOT, -8.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.CORPSE_LOOT, -10.0)
 
 	show()
 
@@ -572,12 +572,15 @@ func loot_all_gold(gold_corpses: Array) -> void:
 	for corpse in gold_corpses:
 		if not is_instance_valid(corpse) or corpse.corpse_gold <= 0:
 			continue
-		if network_enemy_mgr and corpse.network_id > 0:
+		var net_id = corpse.get("network_id") if "network_id" in corpse else -1
+		if network_enemy_mgr and net_id > 0:
 			if has_peer:
-				network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+				network_enemy_mgr.request_loot_gold.rpc_id(1, net_id)
 			else:
 				# Single player: call directly
-				network_enemy_mgr.request_loot_gold(corpse.network_id)
+				network_enemy_mgr.request_loot_gold(net_id)
+		elif net_id <= 0:
+			LogManager.warn("loot_all_gold: Corpse has invalid network_id=%d" % net_id, "loot")
 
 	# Check if corpses are empty and refresh
 	for corpse in gold_corpses:
@@ -600,14 +603,17 @@ func loot_stacked_items(items: Array, corpses: Array) -> void:
 		if not is_instance_valid(corpse) or not item:
 			continue
 
-		if network_enemy_mgr and corpse.network_id > 0:
+		var net_id = corpse.get("network_id") if "network_id" in corpse else -1
+		if network_enemy_mgr and net_id > 0:
 			var item_index = corpse.corpse_loot.find(item)
 			if item_index >= 0:
 				if has_peer:
-					network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, item_index)
+					network_enemy_mgr.request_loot_item.rpc_id(1, net_id, item_index)
 				else:
 					# Single player: call directly
-					network_enemy_mgr.request_loot_item(corpse.network_id, item_index)
+					network_enemy_mgr.request_loot_item(net_id, item_index)
+		elif net_id <= 0:
+			LogManager.warn("loot_stacked_items: Corpse has invalid network_id=%d" % net_id, "loot")
 
 	# Check if corpses are empty and refresh
 	for corpse in corpses:
@@ -639,19 +645,38 @@ func loot_gold(corpse, gold_amount: int) -> void:
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 	var has_peer = multiplayer.has_multiplayer_peer()
 
+	if not network_enemy_mgr:
+		print("❌ NetworkEnemyManager not found!")
+		return
+
+	var net_id = corpse.get("network_id") if "network_id" in corpse else -1
+	LogManager.debug("Looting %d gold from corpse network_id=%d (has_peer=%s)" % [gold_amount, net_id, has_peer], "loot")
+
+	if net_id <= 0:
+		LogManager.warn("Invalid network_id (%d) on corpse - cannot loot gold in multiplayer!" % net_id, "loot")
+		# Fallback: try local loot for single player
+		if not has_peer:
+			CharacterStats.add_gold(gold_amount)
+			corpse.corpse_gold = 0
+			NotificationManager.show_notification("Looted %d gold" % gold_amount, "INFO")
+			corpse.check_if_looted_empty()
+		populate_loot_grid()
+		return
+
 	# Request gold loot through server
 	# NetworkEnemyManager._client_gold_looted handles notification and sound
-	if network_enemy_mgr and "network_id" in corpse and corpse.network_id > 0:
-		if has_peer:
-			network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
-		else:
-			# Single player: call directly
-			network_enemy_mgr.request_loot_gold(corpse.network_id)
-		# Small delay for server to process before refreshing UI
-		await get_tree().create_timer(0.1).timeout
-		if not is_instance_valid(self):
-			return
-		populate_loot_grid()
+	if has_peer:
+		LogManager.debug("Sending request_loot_gold RPC to server: enemy=%d" % net_id, "loot")
+		network_enemy_mgr.request_loot_gold.rpc_id(1, net_id)
+	else:
+		# Single player: call directly
+		network_enemy_mgr.request_loot_gold(net_id)
+
+	# Small delay for server to process before refreshing UI
+	await get_tree().create_timer(0.1).timeout
+	if not is_instance_valid(self):
+		return
+	populate_loot_grid()
 
 func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, border_width: int = 2, use_glow: bool = false) -> StyleBoxFlat:
 	"""Create style for loot slots (matching InventoryUI)"""
@@ -741,18 +766,37 @@ func loot_item(corpse, item: Dictionary) -> void:
 
 	# Request item loot through server
 	# NetworkEnemyManager._client_item_looted handles notification
-	if network_enemy_mgr and corpse.network_id > 0:
-		if has_peer:
-			network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, item_index)
-		else:
-			# Single player: call directly
-			network_enemy_mgr.request_loot_item(corpse.network_id, item_index)
-		# Server will handle inventory add and broadcast removal
-		# Refresh list after small delay to allow RPC to process
-		await get_tree().create_timer(0.1).timeout
-		if not is_instance_valid(self):
-			return  # UI was closed during await
+	if not network_enemy_mgr:
+		print("❌ NetworkEnemyManager not found!")
+		return
+
+	var net_id = corpse.get("network_id") if "network_id" in corpse else -1
+	LogManager.debug("Looting item '%s' from corpse network_id=%d (has_peer=%s)" % [item_name, net_id, has_peer], "loot")
+
+	if net_id <= 0:
+		LogManager.warn("Invalid network_id (%d) on corpse - cannot loot in multiplayer!" % net_id, "loot")
+		# Fallback: try local loot for single player
+		if not has_peer:
+			if InventorySystem.add_item(item):
+				corpse.corpse_loot.remove_at(item_index)
+				NotificationManager.notify_item_added(item_name, 1, item.get("rarity", "Common"))
+				corpse.check_if_looted_empty()
 		populate_loot_grid()
+		return
+
+	if has_peer:
+		LogManager.debug("Sending request_loot_item RPC to server: enemy=%d, index=%d" % [net_id, item_index], "loot")
+		network_enemy_mgr.request_loot_item.rpc_id(1, net_id, item_index)
+	else:
+		# Single player: call directly
+		network_enemy_mgr.request_loot_item(net_id, item_index)
+
+	# Server will handle inventory add and broadcast removal
+	# Refresh list after small delay to allow RPC to process
+	await get_tree().create_timer(0.1).timeout
+	if not is_instance_valid(self):
+		return  # UI was closed during await
+	populate_loot_grid()
 
 func _on_take_all_pressed() -> void:
 	"""Take all gold and items from all corpses"""
@@ -770,15 +814,18 @@ func _on_take_all_pressed() -> void:
 			continue
 		if corpse.corpse_gold > 0:
 			total_gold += corpse.corpse_gold
-			if network_enemy_mgr and corpse.network_id > 0:
+			var net_id = corpse.get("network_id") if "network_id" in corpse else -1
+			if network_enemy_mgr and net_id > 0:
 				if has_peer:
-					network_enemy_mgr.request_loot_gold.rpc_id(1, corpse.network_id)
+					network_enemy_mgr.request_loot_gold.rpc_id(1, net_id)
 				else:
 					# Single player: call directly
-					network_enemy_mgr.request_loot_gold(corpse.network_id)
+					network_enemy_mgr.request_loot_gold(net_id)
+			elif net_id <= 0:
+				LogManager.warn("Take all: Corpse has invalid network_id=%d, skipping gold" % net_id, "loot")
 
 	if total_gold > 0:
-		print("💰 Looted %d total gold" % total_gold)
+		LogManager.debug("Looted %d total gold" % total_gold, "loot")
 
 	# Collect all items to loot (with their indices for network sync)
 	var all_items_to_loot: Array = []
@@ -798,17 +845,20 @@ func _on_take_all_pressed() -> void:
 		if not is_instance_valid(corpse):
 			continue
 
-		if network_enemy_mgr and corpse.network_id > 0:
+		var net_id = corpse.get("network_id") if "network_id" in corpse else -1
+		if network_enemy_mgr and net_id > 0:
 			if has_peer:
-				network_enemy_mgr.request_loot_item.rpc_id(1, corpse.network_id, 0)
+				network_enemy_mgr.request_loot_item.rpc_id(1, net_id, 0)
 			else:
 				# Single player: call directly
-				network_enemy_mgr.request_loot_item(corpse.network_id, 0)
+				network_enemy_mgr.request_loot_item(net_id, 0)
 			looted_count += 1
 			# Small delay to allow server to process and broadcast
 			await get_tree().create_timer(0.15).timeout
 			if not is_instance_valid(self):
 				return  # UI was closed during await
+		elif net_id <= 0:
+			LogManager.warn("Take all: Corpse has invalid network_id=%d, skipping item" % net_id, "loot")
 
 	# Check all corpses if empty
 	for corpse in corpses_looted:

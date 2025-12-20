@@ -127,6 +127,10 @@ func set_player_in_hub(in_hub: bool) -> void:
 
 	if in_hub:
 		player_entered_hub.emit(player_id, _current_shard)
+		# Track zone entry for quest objectives
+		var qm = get_node_or_null("/root/QuestManager")
+		if qm:
+			qm.on_zone_entered("trading_hub")
 	else:
 		# Set flag so game_world knows to spawn at tunnel exit
 		_returning_from_hub = true

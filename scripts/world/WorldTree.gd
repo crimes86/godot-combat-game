@@ -34,6 +34,8 @@ const GLOW_PULSE_SPEED: float = 1.2
 
 
 func _ready() -> void:
+	add_to_group("world_tree")
+
 	_create_visuals()
 	_create_interaction_area()
 	_create_ui_elements()
@@ -406,8 +408,8 @@ func _is_purified_water(item: Dictionary) -> bool:
 
 
 func _get_player_id() -> String:
-	if MantleAuth and MantleAuth.is_logged_in():
-		return str(MantleAuth.user_id)
+	if AshbaneAuth and AshbaneAuth.is_logged_in():
+		return str(AshbaneAuth.user_id)
 	return "local_player"
 
 
@@ -504,7 +506,7 @@ func _get_player_guild_id() -> String:
 		return "guild_%d" % GroupManager.group_leader
 
 	# Solo players have their own "guild"
-	if MantleAuth and MantleAuth.is_logged_in():
-		return "solo_guild_%d" % MantleAuth.user_id
+	if AshbaneAuth and AshbaneAuth.is_logged_in():
+		return "solo_guild_%d" % AshbaneAuth.user_id
 
 	return "solo_guild_local_player"

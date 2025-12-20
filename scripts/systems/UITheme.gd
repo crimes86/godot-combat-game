@@ -1,28 +1,54 @@
 extends Node
 ## UITheme.gd - Centralized UI color constants and styling
+## Ashbane medieval fantasy theme - Stone Gray variant
 ## Use this singleton for consistent colors across all UI elements
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ASHBANE THEME - CORE COLORS (Neutral Stone Gray)
+# ═══════════════════════════════════════════════════════════════════════════
+
+## Primary accent - neutral stone gray
+const ASHBANE_CRIMSON = Color(0.32, 0.32, 0.34, 1.0)
+## Lighter gray for highlights
+const ASHBANE_CRIMSON_LIGHT = Color(0.42, 0.42, 0.44, 1.0)
+## Darker gray for shadows/depth
+const ASHBANE_CRIMSON_DARK = Color(0.22, 0.22, 0.24, 1.0)
+## Secondary accent - antique gold
+const ASHBANE_GOLD = Color(0.85, 0.65, 0.2, 1.0)
+## Border glow - gray with transparency
+const ASHBANE_GLOW = Color(0.38, 0.38, 0.40, 0.6)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PANEL & BACKGROUND COLORS
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Main panel background - dark stone gray
-const BG_COLOR = Color(0.12, 0.12, 0.14, 0.95)
-const BG_COLOR_TRANSPARENT = Color(0.12, 0.12, 0.14, 0.75)
-const BG_COLOR_SOLID = Color(0.12, 0.12, 0.14, 1.0)
+## Main panel background - deep charcoal (neutral)
+const BG_COLOR = Color(0.07, 0.07, 0.08, 0.95)
+const BG_COLOR_TRANSPARENT = Color(0.07, 0.07, 0.08, 0.85)
+const BG_COLOR_SOLID = Color(0.07, 0.07, 0.08, 1.0)
+## Panel gradient top - slightly lighter for depth
+const BG_GRADIENT_TOP = Color(0.10, 0.10, 0.11, 0.95)
+## Panel gradient bottom - darker
+const BG_GRADIENT_BOTTOM = Color(0.04, 0.04, 0.05, 0.95)
 
 ## Slot/input backgrounds - darker inset
-const SLOT_BG = Color(0.08, 0.08, 0.10, 0.8)
-const INPUT_BG = Color(0.08, 0.08, 0.10, 0.9)
+const SLOT_BG = Color(0.03, 0.03, 0.04, 0.9)
+const INPUT_BG = Color(0.03, 0.03, 0.04, 0.95)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BORDER COLORS
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Steel gray border
-const BORDER_COLOR = Color(0.35, 0.38, 0.42, 1.0)
-## Dark inner shadow
-const BORDER_INNER = Color(0.06, 0.06, 0.08, 1.0)
+## Primary border - neutral stone gray (brightened for visibility)
+const BORDER_COLOR = Color(0.50, 0.50, 0.52, 1.0)
+## Border highlight - lighter neutral gray for top/left edges (beveled look)
+const BORDER_HIGHLIGHT = Color(0.62, 0.62, 0.65, 1.0)
+## Border shadow - darker neutral gray for bottom/right edges
+const BORDER_SHADOW = Color(0.30, 0.30, 0.32, 1.0)
+## Dark inner shadow - deep black
+const BORDER_INNER = Color(0.02, 0.02, 0.03, 1.0)
+## Outer glow for selected/focused elements
+const BORDER_GLOW = Color(0.55, 0.55, 0.58, 0.5)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TEXT COLORS
@@ -30,14 +56,14 @@ const BORDER_INNER = Color(0.06, 0.06, 0.08, 1.0)
 
 ## Primary text - clean white
 const TEXT_COLOR = Color(0.92, 0.92, 0.94, 1.0)
-## Headers - silver
-const HEADER_COLOR = Color(0.75, 0.78, 0.82, 1.0)
-## Accent text - light steel
-const ACCENT_COLOR = Color(0.55, 0.58, 0.62, 1.0)
-## Muted/secondary text
-const TEXT_MUTED = Color(0.6, 0.6, 0.6, 0.8)
+## Headers - neutral silver
+const HEADER_COLOR = Color(0.78, 0.78, 0.80, 1.0)
+## Accent text - neutral gray
+const ACCENT_COLOR = Color(0.58, 0.58, 0.62, 1.0)
+## Muted/secondary text - neutral gray
+const TEXT_MUTED = Color(0.52, 0.52, 0.55, 0.8)
 ## Disabled text
-const TEXT_DISABLED = Color(0.5, 0.5, 0.5, 0.6)
+const TEXT_DISABLED = Color(0.42, 0.42, 0.45, 0.6)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATUS COLORS
@@ -70,15 +96,15 @@ const HP_CRITICAL = Color(1.4, 0.3, 0.2, 1.0)
 const XP_COLOR = Color(0.40, 0.55, 0.70, 1.0)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# RARITY COLORS
+# RARITY COLORS - Ashbane theme
 # ═══════════════════════════════════════════════════════════════════════════
 
-const RARITY_COMMON = Color(0.6, 0.6, 0.6, 0.9)
-const RARITY_UNCOMMON = Color(0.4, 0.8, 0.4, 1.0)
-const RARITY_RARE = Color(0.4, 0.5, 0.9, 1.0)
-const RARITY_EPIC = Color(0.7, 0.4, 0.9, 1.0)
-const RARITY_LEGENDARY = Color(0.9, 0.6, 0.2, 1.0)
-const RARITY_MYTHIC = Color(0.9, 0.8, 0.3, 1.0)
+const RARITY_COMMON = Color(0.48, 0.48, 0.50, 0.9)    # Neutral gray
+const RARITY_UNCOMMON = Color(0.35, 0.6, 0.25, 1.0)  # Forest green
+const RARITY_RARE = Color(0.3, 0.5, 0.9, 1.0)        # Blue
+const RARITY_EPIC = Color(0.6, 0.2, 0.8, 1.0)        # Purple
+const RARITY_LEGENDARY = Color(1.0, 0.5, 0.1, 1.0)   # Orange
+const RARITY_MYTHIC = Color(0.9, 0.1, 0.2, 1.0)      # Crimson red
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CHAT COLORS
@@ -90,26 +116,26 @@ const CHAT_WHISPER = Color(0.9, 0.5, 0.9, 1.0)
 const CHAT_GROUP = Color(0.5, 0.9, 0.5, 1.0)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# BUTTON COLORS
+# BUTTON COLORS - Ashbane theme (Neutral Stone Gray)
 # ═══════════════════════════════════════════════════════════════════════════
 
-const BTN_NORMAL = Color(0.25, 0.26, 0.30, 0.8)
-const BTN_HOVER = Color(0.32, 0.34, 0.40, 0.9)
-const BTN_PRESSED = Color(0.18, 0.19, 0.22, 0.9)
-const BTN_DISABLED = Color(0.2, 0.2, 0.22, 0.5)
+const BTN_NORMAL = Color(0.15, 0.15, 0.17, 0.8)      # Neutral dark gray
+const BTN_HOVER = Color(0.22, 0.22, 0.24, 0.9)       # Lighter neutral gray
+const BTN_PRESSED = Color(0.10, 0.10, 0.12, 0.9)    # Darker neutral gray
+const BTN_DISABLED = Color(0.13, 0.13, 0.15, 0.5)   # Muted neutral gray
 
-const BTN_SUCCESS = Color(0.3, 0.5, 0.3, 1.0)
-const BTN_SUCCESS_HOVER = Color(0.35, 0.55, 0.35, 1.0)
-const BTN_DANGER = Color(0.6, 0.3, 0.3, 0.7)
-const BTN_DANGER_HOVER = Color(0.7, 0.4, 0.4, 0.9)
+const BTN_SUCCESS = Color(0.25, 0.45, 0.25, 1.0)    # Forest green
+const BTN_SUCCESS_HOVER = Color(0.30, 0.52, 0.30, 1.0)
+const BTN_DANGER = Color(0.55, 0.18, 0.15, 0.7)     # Crimson
+const BTN_DANGER_HOVER = Color(0.65, 0.25, 0.20, 0.9)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# TOOLTIP COLORS
+# TOOLTIP COLORS - Ashbane theme (Neutral Stone Gray)
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Tooltip background - very opaque dark panel for readability
-const TOOLTIP_BG = Color(0.08, 0.08, 0.10, 0.98)
-const TOOLTIP_BORDER = Color(0.45, 0.48, 0.52, 1.0)
+## Tooltip background - neutral dark charcoal
+const TOOLTIP_BG = Color(0.05, 0.05, 0.06, 0.98)
+const TOOLTIP_BORDER = Color(0.50, 0.50, 0.55, 1.0)  # Neutral gray border (brightened)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TYPOGRAPHY SCALE
@@ -173,14 +199,55 @@ static func get_rarity_color_by_name(rarity_name: String) -> Color:
 		"MYTHIC", "ARTIFACT": return RARITY_MYTHIC
 		_: return RARITY_COMMON
 
-## Create a standard panel StyleBoxFlat
-static func create_panel_style(transparent: bool = false) -> StyleBoxFlat:
+## Create a standard panel StyleBoxFlat with depth
+static func create_panel_style(transparent: bool = false, use_glow: bool = false) -> StyleBoxFlat:
 	var style = StyleBoxFlat.new()
 	style.bg_color = BG_COLOR_TRANSPARENT if transparent else BG_COLOR
+
+	# Crimson border with slight bevel effect
 	style.border_color = BORDER_COLOR
 	style.set_border_width_all(2)
+
+	# Add expand margin for outer glow/shadow effect
+	style.set_expand_margin_all(1)
+
+	# Rounded corners
 	style.set_corner_radius_all(6)
-	style.set_content_margin_all(10)
+	style.set_content_margin_all(12)
+
+	# Inner shadow for depth (inset look)
+	style.shadow_size = 8
+	style.shadow_color = Color(0, 0, 0, 0.4)
+	style.shadow_offset = Vector2(0, 2)
+
+	# Optional outer glow for selected panels
+	if use_glow:
+		style.border_color = BORDER_HIGHLIGHT
+		style.set_border_width_all(3)
+
+	return style
+
+## Create a panel style with beveled border (highlight top-left, shadow bottom-right)
+static func create_beveled_panel_style(transparent: bool = false) -> StyleBoxFlat:
+	var style = StyleBoxFlat.new()
+	style.bg_color = BG_COLOR_TRANSPARENT if transparent else BG_COLOR
+
+	# Use border highlight for top/left, shadow for bottom/right
+	style.border_color = BORDER_COLOR
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 3
+	style.border_width_bottom = 3
+
+	# Rounded corners
+	style.set_corner_radius_all(6)
+	style.set_content_margin_all(12)
+
+	# Inner shadow
+	style.shadow_size = 6
+	style.shadow_color = Color(0, 0, 0, 0.5)
+	style.shadow_offset = Vector2(2, 3)
+
 	return style
 
 ## Create a slot/input StyleBoxFlat

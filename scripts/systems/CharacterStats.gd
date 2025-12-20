@@ -97,33 +97,6 @@ signal armor_equipped(slot: String, armor_item: Dictionary)
 signal armor_unequipped(slot: String, armor_item: Dictionary)
 signal gold_changed(amount: int, total: int)  # amount can be positive (gain) or negative (spend)
 
-# Chain system signals (merged from ChainManager)
-signal chain_increased(new_level: int)
-signal chain_reset(reason: String)
-signal overdrive_activated()
-
-# ============================================
-# CHAIN SYSTEM (merged from ChainManager)
-# ============================================
-
-# Chain settings
-var chain_damage_per_level: float = Constants.CHAIN_DAMAGE_PER_LEVEL
-var chain_max_level: int = Constants.CHAIN_MAX_LEVEL
-var chain_timeout: float = Constants.CHAIN_TIMEOUT
-
-# Chain reset reasons
-enum ChainResetReason {
-	MANUAL,          # Player manually reset
-	FAILED_WINDOW,   # Failed a crit window
-	TIMEOUT,         # Chain timeout expired
-	PLAYER_DEATH,    # Player died
-	STAGE_END        # Level/stage ended
-}
-
-# Chain state
-var current_chain: int = 0
-var last_attack_time: float = 0.0
-
 # ============================================
 # INITIALIZATION
 # ============================================
@@ -133,7 +106,6 @@ func _ready() -> void:
 	Constants.debug_log("CharacterStats System Initialized")
 	Constants.debug_log("Level: %d" % level)
 	Constants.debug_log("Stats: STR:%d AGI:%d DEX:%d INT:%d WIS:%d VIT:%d" % [strength, agility, dexterity, intelligence, wisdom, vitality])
-	Constants.debug_log("Chain system: signals chain_increased, chain_reset, overdrive_activated")
 	Constants.debug_log("═══════════════════════════════════════")
 
 	# Start unarmed - player must buy/equip weapons
@@ -142,13 +114,6 @@ func _ready() -> void:
 
 	# Equip default starting clothes (non-removable)
 	_equip_starting_clothes()
-
-func _process(delta: float) -> void:
-	# Chain timeout check
-	if current_chain > 0:
-		var time_since_attack = Time.get_ticks_msec() / 1000.0 - last_attack_time
-		if time_since_attack >= chain_timeout:
-			reset_chain(ChainResetReason.TIMEOUT)
 
 func _equip_starting_clothes() -> void:
 	"""Equip default shirt and pants - minimal value, no stats"""
@@ -193,50 +158,69 @@ func _equip_starting_clothes() -> void:
 # ============================================
 
 func get_attack_cooldown() -> float:
-	"""Calculate attack cooldown based on weapon type only.
-	Attack speed is a weapon property, not a stat - balanced per weapon type:
-	- Very Fast (dagger): 0.25s - reaches uncapped speed
-	- Fast (katana, rapier, sword): 0.40s
-	- Medium (staff, axe, mace): 0.60s
-	- Slow (greatsword, hammer, halberd): 0.85s
-	DPS is balanced across types through damage per hit."""
+	"""Calculate attack cooldown based on weapon type AND player level.
 
-	# Base cooldown from weapon type
-	var base_cooldown = 0.60  # Default medium speed
+	Attack speed uses a BACK-LOADED curve for progression feel:
+	- Levels 1-10: Slow, deliberate attacks (~3% speed gain)
+	- Levels 11-19: Speed ramping up (~15% speed gain)
+	- Levels 20-30: Full speed unlocked (~60% total reduction)
+
+	Weapon type defines a speed multiplier:
+	- Very Fast (dagger): 0.50x
+	- Fast (katana, rapier, saber): 0.65x
+	- Medium (sword, scimitar, bow): 0.80x
+	- Slow (mace, spear, axe, staff): 0.95x
+	- Very Slow (hammer, halberd, greatsword): 1.10x
+	"""
+
+	# Back-loaded curve: pow((level-1)/29, exponent) gives minimal early gains
+	# Exponent of 2.5 means: L10=3%, L15=10%, L20=21%, L30=60% reduction
+	var max_reduction = Constants.ATTACK_SPEED_BASE_COOLDOWN - Constants.ATTACK_SPEED_MIN_COOLDOWN  # 0.6
+	var progress = float(level - 1) / float(Constants.MAX_LEVEL - 1)  # 0.0 to 1.0
+	var curve_factor = pow(progress, Constants.ATTACK_SPEED_CURVE_EXPONENT)  # Back-loaded
+	var level_factor = Constants.ATTACK_SPEED_BASE_COOLDOWN - (curve_factor * max_reduction)
+	level_factor = clamp(level_factor, Constants.ATTACK_SPEED_MIN_COOLDOWN, Constants.ATTACK_SPEED_BASE_COOLDOWN)
+
+	# Weapon speed multiplier
+	var weapon_mult = Constants.WEAPON_SPEED_MEDIUM  # Default medium speed
 
 	if equipped_weapon:
 		var weapon_type = equipped_weapon.weapon_type.to_lower()
 
 		# Very fast weapons
 		if weapon_type in ["dagger"]:
-			base_cooldown = 0.25
+			weapon_mult = Constants.WEAPON_SPEED_VERY_FAST
 		# Fast weapons
-		elif weapon_type in ["katana", "rapier", "sword"]:
-			base_cooldown = 0.40
+		elif weapon_type in ["katana", "rapier", "saber", "gun"]:
+			weapon_mult = Constants.WEAPON_SPEED_FAST
 		# Medium weapons
-		elif weapon_type in ["staff", "damage_staff", "healing_staff", "support_staff", "axe", "mace", "spear"]:
-			base_cooldown = 0.60
+		elif weapon_type in ["sword", "scimitar", "bow"]:
+			weapon_mult = Constants.WEAPON_SPEED_MEDIUM
 		# Slow weapons
+		elif weapon_type in ["staff", "damage_staff", "healing_staff", "support_staff", "axe", "mace", "spear"]:
+			weapon_mult = Constants.WEAPON_SPEED_SLOW
+		# Very slow weapons
 		elif weapon_type in ["greatsword", "hammer", "halberd"]:
-			base_cooldown = 0.85
+			weapon_mult = Constants.WEAPON_SPEED_VERY_SLOW
 
 		# Apply weapon-specific bonus (for unique weapons that break the mold)
 		var weapon_bonus = equipped_weapon.attack_speed_bonus
-		base_cooldown = base_cooldown * (1.0 + weapon_bonus)
+		weapon_mult = weapon_mult * (1.0 + weapon_bonus)
 
-	return clamp(base_cooldown, 0.15, 2.0)  # Min 0.15s, max 2.0s
+	var final_cooldown = level_factor * weapon_mult
+	return clamp(final_cooldown, 0.20, 1.2)  # Min 0.20s (fast!), max 1.2s (slow)
 
 func get_base_damage() -> float:
-	"""Calculate base damage from primary stat + weapon.
-	Weapon type determines which stat is used:
-	- Heavy weapons (sword, axe, mace, hammer, spear, halberd, greatsword): STR
-	- Light weapons (dagger, katana, rapier): AGI
-	- Staff weapons (staff, damage_staff, healing_staff, support_staff): INT
+	"""Calculate base damage from primary stat + weapon + level.
 
-	Stat scaling is adjusted by weapon speed so that equal stat investment
-	gives equal DPS regardless of weapon type. This allows Plate DPS (STR)
-	to keep pace with Leather DPS (AGI) when both invest equally in their
-	primary stat.
+	REBALANCED for smaller, meaningful numbers at early levels:
+	- Level 1 with starter weapon: ~6-8 total damage
+	- Level 30 with legendary: ~40-50 total damage
+
+	Weapon type determines which stat is used:
+	- Heavy weapons (sword, axe, mace, hammer, spear, halberd, greatsword, gun): STR
+	- Light weapons (dagger, katana, rapier, scimitar, saber, bow): AGI
+	- Staff weapons (staff, damage_staff, healing_staff, support_staff): INT
 	"""
 	# Determine which stat to use based on weapon type
 	var primary_stat = get_effective_strength()  # Default to STR
@@ -254,14 +238,22 @@ func get_base_damage() -> float:
 			# Heavy weapons use STR (Plate DPS)
 			primary_stat = get_effective_strength()
 
-	# Speed-adjusted stat scaling: slower weapons get more damage per stat point
-	# so that +1 stat = same DPS gain regardless of weapon speed
-	# Reference: 0.25s (very fast) = 1.0x multiplier
-	var attack_time = get_attack_cooldown()
-	var stat_multiplier = attack_time / 0.25  # 0.25s=1x, 0.40s=1.6x, 0.60s=2.4x, 0.85s=3.4x
+	# REBALANCED stat damage formula:
+	# - Base damage from level: 1.0 + 0.3 per level (1 at L1, 9.7 at L30)
+	# - Stat bonus: +0.15 per point above 10, scaled by weapon speed
+	# - This keeps early game numbers small but scales meaningfully
 
-	# Base formula: 5 damage at 10 stat, +0.5 per point * speed multiplier
-	var stat_damage = 5.0 * stat_multiplier + (primary_stat - 10) * 0.5 * stat_multiplier
+	var level_damage = 1.0 + (level - 1) * 0.3
+
+	# Speed-adjusted stat scaling (slower weapons get more per stat point)
+	# Reference: 0.50s = 1.0x multiplier (adjusted for new attack speed range)
+	var attack_time = get_attack_cooldown()
+	var stat_multiplier = attack_time / 0.50  # Normalized to 0.50s baseline
+
+	# Stat bonus: each point above 10 adds damage, scaled by weapon speed
+	var stat_bonus = (primary_stat - 10) * 0.15 * stat_multiplier
+
+	var stat_damage = level_damage + stat_bonus
 
 	# Add weapon damage (not multiplied - weapon damage is already balanced per type)
 	var weapon_damage = 0.0
@@ -1079,61 +1071,3 @@ func clear_playtest_claims() -> void:
 func get_playtest_claimed_count() -> int:
 	"""Get number of playtest items claimed"""
 	return playtest_claimed_items.size()
-
-# ============================================
-# CHAIN SYSTEM METHODS (merged from ChainManager)
-# ============================================
-
-func register_attack() -> void:
-	"""Register an attack for chain timeout tracking"""
-	last_attack_time = Time.get_ticks_msec() / 1000.0
-
-func on_crit_window_completed(all_weakpoints_destroyed: bool) -> void:
-	"""Called when a crit window ends"""
-	if all_weakpoints_destroyed:
-		increase_chain()
-	else:
-		reset_chain(ChainResetReason.FAILED_WINDOW)
-
-func increase_chain() -> void:
-	"""Increase the chain level"""
-	if current_chain < chain_max_level:
-		current_chain += 1
-		Constants.log_combat("⚡ Chain increased to %dx" % current_chain)
-		chain_increased.emit(current_chain)
-
-		# Play milestone sound at every 5 chain levels or at max
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager and (current_chain % Constants.CHAIN_MILESTONE_INTERVAL == 0 or current_chain == chain_max_level):
-			sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_MILESTONE, -8.0)
-
-		if current_chain == chain_max_level:
-			Constants.log_combat("🔥 OVERDRIVE! Maximum chain reached! 🔥")
-			overdrive_activated.emit()
-	else:
-		Constants.log_combat("⚡ Chain at maximum (%dx)" % chain_max_level)
-
-func reset_chain(reason: ChainResetReason = ChainResetReason.MANUAL) -> void:
-	"""Reset the chain to zero"""
-	if current_chain > 0:
-		Constants.log_combat("💔 Chain reset from %dx (%s)" % [current_chain, ChainResetReason.keys()[reason]])
-
-		# Play chain broken sound
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.CHAIN_BROKEN, -8.0)
-
-		current_chain = 0
-		chain_reset.emit(ChainResetReason.keys()[reason])
-
-func get_damage_multiplier() -> float:
-	"""Get damage multiplier from current chain level"""
-	return 1.0 + (current_chain * (chain_damage_per_level / 100.0))
-
-func get_chain_level() -> int:
-	"""Get current chain level"""
-	return current_chain
-
-func is_overdrive() -> bool:
-	"""Check if at max chain (overdrive mode)"""
-	return current_chain >= chain_max_level

@@ -1,5 +1,5 @@
 extends Node
-## TradingManager - Handles trading API calls to Mantle backend
+## TradingManager - Handles trading API calls to Ashbane backend
 ## Live trading system with chat auctions and proximity-based trades
 
 signal listing_created(listing: Dictionary)
@@ -27,7 +27,7 @@ func _ready() -> void:
 	add_child(timer)
 
 func _on_refresh_timer() -> void:
-	if MantleAuth and MantleAuth.is_logged_in():
+	if AshbaneAuth and AshbaneAuth.is_logged_in():
 		fetch_listings()
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -36,17 +36,17 @@ func _on_refresh_timer() -> void:
 
 func create_listing(token_id: int, price_gold: int, message: String = "") -> void:
 	"""Create a trade listing (chat auction) for a forged item"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
-		trading_error.emit("Not authenticated with Mantle")
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
+		trading_error.emit("Not authenticated with Ashbane")
 		return
 
 	if price_gold <= 0:
 		trading_error.emit("Price must be greater than 0")
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/trades/listing"
+	var url = AshbaneAuth.get_api_base() + "/api/trades/listing"
 	var headers = [
-		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Authorization: Bearer " + AshbaneAuth.auth_token,
 		"Content-Type: application/json"
 	]
 
@@ -115,7 +115,7 @@ func fetch_listings(zone_id: String = "") -> void:
 		return
 
 	_is_fetching_listings = true
-	var url = MantleAuth.get_api_base() + "/api/trades/listings"
+	var url = AshbaneAuth.get_api_base() + "/api/trades/listings"
 	if zone_id != "":
 		url += "?zone_id=" + zone_id.uri_encode()
 
@@ -155,12 +155,12 @@ func _on_listings_response(result: int, response_code: int, _headers: PackedStri
 
 func cancel_listing(listing_id: int) -> void:
 	"""Cancel an active trade listing"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		trading_error.emit("Not authenticated")
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/trades/listing/%d" % listing_id
-	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+	var url = AshbaneAuth.get_api_base() + "/api/trades/listing/%d" % listing_id
+	var headers = ["Authorization: Bearer " + AshbaneAuth.auth_token]
 
 	var request = HTTPRequest.new()
 	add_child(request)
@@ -196,12 +196,12 @@ func _on_cancel_listing_response(result: int, response_code: int, _headers: Pack
 
 func check_cooldown(token_id: int, callback: Callable) -> void:
 	"""Check if an item is on trade cooldown"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		callback.call({"tradeable": false, "error": "Not authenticated"})
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/trades/cooldown/%d" % token_id
-	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+	var url = AshbaneAuth.get_api_base() + "/api/trades/cooldown/%d" % token_id
+	var headers = ["Authorization: Bearer " + AshbaneAuth.auth_token]
 
 	var request = HTTPRequest.new()
 	add_child(request)
@@ -233,13 +233,13 @@ func _on_cooldown_response(result: int, response_code: int, _headers: PackedStri
 
 func execute_direct_trade(token_id: int, to_user_id: int, price_gold: int) -> void:
 	"""Execute a direct trade (Godot validates proximity first)"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		trading_error.emit("Not authenticated")
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/trades/direct"
+	var url = AshbaneAuth.get_api_base() + "/api/trades/direct"
 	var headers = [
-		"Authorization: Bearer " + MantleAuth.auth_token,
+		"Authorization: Bearer " + AshbaneAuth.auth_token,
 		"Content-Type: application/json"
 	]
 
@@ -302,9 +302,9 @@ func _get_player_position() -> Dictionary:
 		return {
 			"x": player.global_position.x,
 			"y": player.global_position.y,
-			"zone_id": "wasteland"  # TODO: Get actual zone from ZoneManager
+			"zone_id": "dreadland"  # TODO: Get actual zone from ZoneManager
 		}
-	return {"x": 0, "y": 0, "zone_id": "wasteland"}
+	return {"x": 0, "y": 0, "zone_id": "dreadland"}
 
 func is_within_trade_distance(target_position: Vector2) -> bool:
 	"""Check if player is close enough to trade with target"""
@@ -346,7 +346,7 @@ func fetch_census() -> void:
 		return
 
 	_is_fetching_census = true
-	var url = MantleAuth.get_api_base() + "/api/trades/census"
+	var url = AshbaneAuth.get_api_base() + "/api/trades/census"
 
 	var request = HTTPRequest.new()
 	add_child(request)

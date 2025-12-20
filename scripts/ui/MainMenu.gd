@@ -1,40 +1,42 @@
 extends Control
 ## Main menu with authentication system
-## Mantle-inspired cyberpunk UI theme
+## Ashbane medieval fantasy UI theme (WoW/Shadowbane inspired)
 
 # Server configuration
 const PRODUCTION_SERVER_IP = "167.99.55.245"
 
 # ═══════════════════════════════════════════════════════════════════════════
-# MANTLE THEME COLORS (matching the web dashboard)
+# ASHBANE THEME COLORS - Medieval fantasy (WoW/Shadowbane inspired)
 # ═══════════════════════════════════════════════════════════════════════════
-const MANTLE_BG_DARK = Color(0.04, 0.04, 0.06, 0.98)  # Near black
-const MANTLE_BG_PANEL = Color(0.06, 0.08, 0.10, 0.95)  # Dark panel
-const MANTLE_ACCENT_CYAN = Color(0.0, 0.8, 0.9, 1.0)  # Cyan glow
-const MANTLE_ACCENT_GOLD = Color(0.9, 0.7, 0.2, 1.0)  # Gold accent
-const MANTLE_BORDER_GLOW = Color(0.0, 0.6, 0.7, 0.6)  # Border glow
-const MANTLE_TEXT_PRIMARY = Color(0.9, 0.92, 0.94, 1.0)  # White text
-const MANTLE_TEXT_SECONDARY = Color(0.5, 0.55, 0.6, 1.0)  # Gray text
+const ASHBANE_BG_DARK = Color(0.05, 0.04, 0.03, 0.98)  # Warm charcoal
+const ASHBANE_BG_PANEL = Color(0.08, 0.06, 0.05, 0.95)  # Dark brown-gray
+const ASHBANE_ACCENT_PRIMARY = Color(0.7, 0.15, 0.1, 1.0)  # Deep crimson
+const ASHBANE_ACCENT_GOLD = Color(0.85, 0.65, 0.2, 1.0)  # Antique gold
+const ASHBANE_BORDER_GLOW = Color(0.5, 0.12, 0.08, 0.6)  # Crimson glow
+const ASHBANE_TEXT_PRIMARY = Color(0.95, 0.90, 0.82, 1.0)  # Parchment white
+const ASHBANE_TEXT_SECONDARY = Color(0.55, 0.50, 0.45, 1.0)  # Warm gray
+# Legacy alias for compatibility
+const ASHBANE_ACCENT_CYAN = ASHBANE_ACCENT_PRIMARY
 
-# Tier colors matching Mantle dashboard
+# Tier colors - matching backend definitions
 const TIER_COLORS = {
-	"initiate": Color(0.4, 0.4, 0.4),
-	"bronze": Color(0.8, 0.5, 0.2),
-	"silver": Color(0.75, 0.75, 0.75),
-	"gold": Color(1.0, 0.84, 0.0),
-	"platinum": Color(0.7, 0.85, 0.9),  # Light cyan/silver
-	"diamond": Color(0.7, 0.95, 1.0),   # Bright cyan
-	"legendary": Color(1.0, 0.4, 0.0),  # Orange
-	"mythic": Color(1.0, 0.0, 1.0)      # Magenta
+	"initiate": Color(0.4, 0.4, 0.4),       # #666666 - Gray
+	"bronze": Color(0.804, 0.498, 0.196),   # #CD7F32 - Bronze
+	"silver": Color(0.753, 0.753, 0.753),   # #C0C0C0 - Silver
+	"gold": Color(1.0, 0.843, 0.0),         # #FFD700 - Gold
+	"platinum": Color(0.898, 0.894, 0.886), # #E5E4E2 - Pale platinum
+	"diamond": Color(0.725, 0.949, 1.0),    # #B9F2FF - Cyan/Turquoise
+	"legendary": Color(1.0, 0.4, 0.0),      # #FF6600 - Orange
+	"mythic": Color(1.0, 0.0, 1.0)          # #FF00FF - Magenta
 }
 
-# Rarity colors for achievement breakdown
+# Rarity colors for achievement breakdown - Ashbane theme
 const RARITY_COLORS = {
-	"common": Color(0.5, 0.5, 0.5),     # Gray
-	"uncommon": Color(0.2, 0.8, 0.2),   # Green
-	"rare": Color(0.2, 0.6, 1.0),       # Blue
-	"epic": Color(0.7, 0.3, 0.9),       # Purple
-	"legendary": Color(1.0, 0.8, 0.0)   # Gold
+	"common": Color(0.5, 0.48, 0.44),    # Ashen gray
+	"uncommon": Color(0.35, 0.6, 0.25),  # Forest green
+	"rare": Color(0.3, 0.5, 0.9),        # Blue
+	"epic": Color(0.6, 0.2, 0.8),        # Purple
+	"legendary": Color(1.0, 0.5, 0.1)    # Orange
 }
 
 # Main menu nodes
@@ -92,11 +94,11 @@ const RESOLUTIONS = [
 @onready var credits_back_button = $CreditsPanel/VBoxContainer/CreditsBackButton
 
 # State
-enum MenuState { MAIN, MANTLE_SCREEN, HOSTING, JOINING, AUTH_FOR_HOST, AUTH_FOR_JOIN }
+enum MenuState { MAIN, ASHBANE_SCREEN, HOSTING, JOINING, AUTH_FOR_HOST, AUTH_FOR_JOIN }
 var current_state: MenuState = MenuState.MAIN
 var pending_ip: String = ""
 var pending_host_player_data: Dictionary = {}  # Store auth data when hosting
-var pending_action: String = ""  # "host" or "join" - what to do after Mantle screen
+var pending_action: String = ""  # "host" or "join" - what to do after Ashbane screen
 
 func _ready():
 	await get_tree().process_frame
@@ -209,29 +211,29 @@ func _ready():
 	NetworkManager.register_failed.connect(_on_register_failed)
 	NetworkManager.version_mismatch.connect(_on_version_mismatch)
 
-	# Setup Mantle integration (Link Gaming Accounts)
-	_setup_mantle_integration()
+	# Setup Ashbane integration (Link Gaming Accounts)
+	_setup_ashbane_integration()
 
 	# Check if user is already authenticated (saved token)
-	if MantleAuth and MantleAuth.is_logged_in():
+	if AshbaneAuth and AshbaneAuth.is_logged_in():
 		# Already logged in - go straight to Armory
-		LogManager.info("User already authenticated, transitioning to Armory", "mantle")
+		LogManager.info("User already authenticated, transitioning to Armory", "ashbane")
 		_set_menu_panel_visible(false)
 		await get_tree().create_timer(0.5).timeout  # Brief delay for scene to fully load
 		_transition_to_armory()
 	else:
-		# IMPORTANT: Show Mantle panel FIRST (authenticate before playing)
-		# Hide the normal menu panel and show Mantle panel on startup
+		# IMPORTANT: Show Ashbane panel FIRST (authenticate before playing)
+		# Hide the normal menu panel and show Ashbane panel on startup
 		_set_menu_panel_visible(false)
-		_show_mantle_panel()
+		_show_ashbane_panel()
 
 		# Check if we were booted back due to connection failure
-		if MantleAuth:
-			var pending_error = MantleAuth.get_and_clear_pending_error()
+		if AshbaneAuth:
+			var pending_error = AshbaneAuth.get_and_clear_pending_error()
 			if pending_error != "":
 				# Show the error message after a brief delay so UI is ready
 				await get_tree().create_timer(0.3).timeout
-				_on_mantle_auth_failed(pending_error)
+				_on_ashbane_auth_failed(pending_error)
 
 func _on_button_hover():
 	var sound_manager = get_node_or_null("/root/SoundManager")
@@ -248,7 +250,7 @@ func _play_click_sound():
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _apply_cyberpunk_theme():
-	"""Apply Mantle-style cyberpunk theme to all panels"""
+	"""Apply Ashbane medieval fantasy theme to all panels"""
 	# Create full-screen dark background
 	_create_theme_background()
 
@@ -266,7 +268,7 @@ func _create_theme_background():
 	var bg = ColorRect.new()
 	bg.name = "ThemeBackground"
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = MANTLE_BG_DARK
+	bg.color = ASHBANE_BG_DARK
 	bg.z_index = -10  # Behind everything
 	add_child(bg)
 	move_child(bg, 0)
@@ -288,7 +290,7 @@ func _style_menu_panel():
 	var title_label = menu_panel.get_node_or_null("VBoxContainer/TitleLabel")
 	if title_label:
 		title_label.add_theme_font_size_override("font_size", 32)
-		title_label.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+		title_label.add_theme_color_override("font_color", ASHBANE_TEXT_PRIMARY)
 
 	# Style text inputs
 	_style_input_fields(menu_panel)
@@ -298,7 +300,7 @@ func _style_menu_panel():
 
 	# Style status label
 	if status_label:
-		status_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+		status_label.add_theme_color_override("font_color", ASHBANE_TEXT_SECONDARY)
 
 func _style_auth_panel():
 	"""Style the authentication panel with cyberpunk aesthetic"""
@@ -320,7 +322,7 @@ func _style_auth_panel():
 
 	# Style status label
 	if auth_status_label:
-		auth_status_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+		auth_status_label.add_theme_color_override("font_color", ASHBANE_TEXT_SECONDARY)
 
 func _style_settings_panel():
 	"""Style the settings panel with cyberpunk aesthetic"""
@@ -338,7 +340,7 @@ func _style_settings_panel():
 	var title = settings_panel.get_node_or_null("VBoxContainer/SettingsTitle")
 	if title:
 		title.add_theme_font_size_override("font_size", 28)
-		title.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+		title.add_theme_color_override("font_color", ASHBANE_TEXT_PRIMARY)
 
 	# Style all labels
 	_style_panel_labels(settings_panel)
@@ -355,7 +357,7 @@ func _style_settings_panel():
 
 	# Style back button
 	if settings_back_button:
-		_style_mantle_button(settings_back_button, MANTLE_ACCENT_CYAN, false)
+		_style_ashbane_button(settings_back_button, ASHBANE_ACCENT_CYAN, false)
 
 func _style_credits_panel():
 	"""Style the credits panel with cyberpunk aesthetic"""
@@ -374,32 +376,32 @@ func _style_credits_panel():
 
 	# Style back button
 	if credits_back_button:
-		_style_mantle_button(credits_back_button, MANTLE_ACCENT_CYAN, false)
+		_style_ashbane_button(credits_back_button, ASHBANE_ACCENT_CYAN, false)
 
 func _style_bottom_buttons():
 	"""Style the bottom row of buttons (Settings, Credits, Exit)"""
 	if settings_button:
-		_style_mantle_button(settings_button, MANTLE_TEXT_SECONDARY, false)
+		_style_ashbane_button(settings_button, ASHBANE_TEXT_SECONDARY, false)
 	if credits_button:
-		_style_mantle_button(credits_button, MANTLE_TEXT_SECONDARY, false)
+		_style_ashbane_button(credits_button, ASHBANE_TEXT_SECONDARY, false)
 	if exit_button:
-		_style_mantle_button(exit_button, Color(0.8, 0.3, 0.3), false)
+		_style_ashbane_button(exit_button, Color(0.8, 0.3, 0.3), false)
 
 func _create_panel_style() -> StyleBoxFlat:
 	"""Create the standard cyberpunk panel style"""
 	var style = StyleBoxFlat.new()
-	style.bg_color = MANTLE_BG_PANEL
+	style.bg_color = ASHBANE_BG_PANEL
 	style.border_width_left = 2
 	style.border_width_right = 2
 	style.border_width_top = 2
 	style.border_width_bottom = 2
-	style.border_color = MANTLE_BORDER_GLOW
+	style.border_color = ASHBANE_BORDER_GLOW
 	style.corner_radius_top_left = 4
 	style.corner_radius_top_right = 4
 	style.corner_radius_bottom_left = 4
 	style.corner_radius_bottom_right = 4
 	style.shadow_size = 20
-	style.shadow_color = Color(0, 0.5, 0.6, 0.25)
+	style.shadow_color = Color(0.4, 0.1, 0.05, 0.25)  # Crimson shadow
 	style.content_margin_left = 20
 	style.content_margin_right = 20
 	style.content_margin_top = 20
@@ -422,7 +424,7 @@ func _style_line_edit(input: LineEdit):
 	style.border_width_right = 1
 	style.border_width_top = 1
 	style.border_width_bottom = 2
-	style.border_color = MANTLE_BORDER_GLOW
+	style.border_color = ASHBANE_BORDER_GLOW
 	style.corner_radius_top_left = 3
 	style.corner_radius_top_right = 3
 	style.corner_radius_bottom_left = 3
@@ -433,16 +435,16 @@ func _style_line_edit(input: LineEdit):
 	style.content_margin_bottom = 5
 
 	var style_focus = style.duplicate()
-	style_focus.border_color = MANTLE_ACCENT_CYAN
+	style_focus.border_color = ASHBANE_ACCENT_PRIMARY
 	style_focus.shadow_size = 5
-	style_focus.shadow_color = Color(0, 0.6, 0.7, 0.3)
+	style_focus.shadow_color = Color(0.5, 0.12, 0.08, 0.3)  # Crimson glow
 
 	input.add_theme_stylebox_override("normal", style)
 	input.add_theme_stylebox_override("focus", style_focus)
-	input.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
-	input.add_theme_color_override("font_placeholder_color", MANTLE_TEXT_SECONDARY)
-	input.add_theme_color_override("caret_color", MANTLE_ACCENT_CYAN)
-	input.add_theme_color_override("selection_color", Color(0, 0.5, 0.6, 0.4))
+	input.add_theme_color_override("font_color", ASHBANE_TEXT_PRIMARY)
+	input.add_theme_color_override("font_placeholder_color", ASHBANE_TEXT_SECONDARY)
+	input.add_theme_color_override("caret_color", ASHBANE_ACCENT_GOLD)  # Gold caret
+	input.add_theme_color_override("selection_color", Color(0.5, 0.12, 0.08, 0.4))  # Crimson selection
 
 func _style_panel_buttons(parent: Node):
 	"""Style all buttons in a panel"""
@@ -450,8 +452,8 @@ func _style_panel_buttons(parent: Node):
 		if child is Button and not child is CheckBox:
 			# Determine if it's a primary action button
 			var is_primary = child.name in ["HostButton", "JoinButton", "LoginButton", "RegisterButton", "GuestButton"]
-			var accent = MANTLE_ACCENT_CYAN if is_primary else MANTLE_TEXT_SECONDARY
-			_style_mantle_button(child, accent, is_primary)
+			var accent = ASHBANE_ACCENT_PRIMARY if is_primary else ASHBANE_TEXT_SECONDARY
+			_style_ashbane_button(child, accent, is_primary)
 		elif child.get_child_count() > 0:
 			_style_panel_buttons(child)
 
@@ -461,7 +463,7 @@ func _style_panel_labels(parent: Node):
 		if child is Label:
 			# Don't override if already colored (like status labels)
 			if not child.has_theme_color_override("font_color"):
-				child.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+				child.add_theme_color_override("font_color", ASHBANE_TEXT_PRIMARY)
 		elif child.get_child_count() > 0:
 			_style_panel_labels(child)
 
@@ -477,7 +479,7 @@ func _style_slider(slider: HSlider):
 	"""Apply cyberpunk style to a slider"""
 	# Grabber (the handle)
 	var grabber_style = StyleBoxFlat.new()
-	grabber_style.bg_color = MANTLE_ACCENT_CYAN
+	grabber_style.bg_color = ASHBANE_ACCENT_CYAN
 	grabber_style.corner_radius_top_left = 4
 	grabber_style.corner_radius_top_right = 4
 	grabber_style.corner_radius_bottom_left = 4
@@ -491,9 +493,9 @@ func _style_slider(slider: HSlider):
 	track_style.corner_radius_bottom_left = 2
 	track_style.corner_radius_bottom_right = 2
 
-	# Filled portion
+	# Filled portion - crimson fill
 	var fill_style = StyleBoxFlat.new()
-	fill_style.bg_color = Color(0, 0.5, 0.6, 0.8)
+	fill_style.bg_color = Color(0.5, 0.12, 0.08, 0.8)  # Crimson
 	fill_style.corner_radius_top_left = 2
 	fill_style.corner_radius_top_right = 2
 	fill_style.corner_radius_bottom_left = 2
@@ -507,34 +509,34 @@ func _style_checkboxes(parent: Node):
 	"""Style all checkboxes in a panel"""
 	for child in parent.get_children():
 		if child is CheckBox:
-			child.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
-			child.add_theme_color_override("font_hover_color", MANTLE_ACCENT_CYAN)
+			child.add_theme_color_override("font_color", ASHBANE_TEXT_PRIMARY)
+			child.add_theme_color_override("font_hover_color", ASHBANE_ACCENT_PRIMARY)
 		elif child.get_child_count() > 0:
 			_style_checkboxes(child)
 
 func _style_option_button(option: OptionButton):
-	"""Apply cyberpunk style to an OptionButton"""
+	"""Apply Ashbane style to an OptionButton"""
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.06, 0.08, 0.9)
+	style.bg_color = Color(0.06, 0.05, 0.04, 0.9)  # Warm dark
 	style.border_width_left = 1
 	style.border_width_right = 1
 	style.border_width_top = 1
 	style.border_width_bottom = 1
-	style.border_color = MANTLE_BORDER_GLOW
+	style.border_color = ASHBANE_BORDER_GLOW
 	style.corner_radius_top_left = 3
 	style.corner_radius_top_right = 3
 	style.corner_radius_bottom_left = 3
 	style.corner_radius_bottom_right = 3
 
 	var style_hover = style.duplicate()
-	style_hover.border_color = MANTLE_ACCENT_CYAN
+	style_hover.border_color = ASHBANE_ACCENT_PRIMARY
 
 	option.add_theme_stylebox_override("normal", style)
 	option.add_theme_stylebox_override("hover", style_hover)
 	option.add_theme_stylebox_override("pressed", style_hover)
 	option.add_theme_stylebox_override("focus", style_hover)
-	option.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
-	option.add_theme_color_override("font_hover_color", MANTLE_ACCENT_CYAN)
+	option.add_theme_color_override("font_color", ASHBANE_TEXT_PRIMARY)
+	option.add_theme_color_override("font_hover_color", ASHBANE_ACCENT_PRIMARY)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN MENU ACTIONS
@@ -565,7 +567,7 @@ func _on_join_pressed():
 	NetworkManager.set_player_name(name_input.text)
 	pending_ip = ip_input.text if is_dev_mode else PRODUCTION_SERVER_IP
 
-	# Connect to server (Mantle auth already happened at startup)
+	# Connect to server (Ashbane auth already happened at startup)
 	status_label.text = "Connecting to server..."
 	current_state = MenuState.JOINING
 
@@ -906,56 +908,56 @@ func _on_register_failed(error: String):
 	_set_auth_buttons_enabled(true)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# MANTLE INTEGRATION (Link Gaming Accounts Panel)
+# ASHBANE INTEGRATION (Link Gaming Accounts Panel)
 # ═══════════════════════════════════════════════════════════════════════════
 
-var mantle_panel: Control = null
-var mantle_status_label: Label = null
-var mantle_link_button: Button = null
-var mantle_login_button: Button = null  # Single login button (replaces provider icons)
-var mantle_skip_button: Button = null
-var mantle_logout_button: Button = null
-var mantle_divider_container: Control = null
-var mantle_back_button: Button = null
-var _mantle_initialized: bool = false
+var ashbane_panel: Control = null
+var ashbane_status_label: Label = null
+var ashbane_link_button: Button = null
+var ashbane_login_button: Button = null  # Single login button (replaces provider icons)
+var ashbane_skip_button: Button = null
+var ashbane_logout_button: Button = null
+var ashbane_divider_container: Control = null
+var ashbane_back_button: Button = null
+var _ashbane_initialized: bool = false
 var _connecting_dots_timer: Timer = null
 var _connecting_provider_label: String = ""
 var _connecting_dots_count: int = 0
 
-func _setup_mantle_integration():
-	"""Setup Mantle auth integration"""
-	if _mantle_initialized:
+func _setup_ashbane_integration():
+	"""Setup Ashbane auth integration"""
+	if _ashbane_initialized:
 		return
-	_mantle_initialized = true
+	_ashbane_initialized = true
 
-	# Create the Mantle panel
-	_create_mantle_panel()
+	# Create the Ashbane panel
+	_create_ashbane_panel()
 
-	# Connect MantleAuth signals
-	if MantleAuth:
-		MantleAuth.auth_started.connect(_on_mantle_auth_started)
-		MantleAuth.auth_completed.connect(_on_mantle_auth_completed)
-		MantleAuth.auth_failed.connect(_on_mantle_auth_failed)
-		MantleAuth.profile_updated.connect(_on_mantle_profile_updated)
+	# Connect AshbaneAuth signals
+	if AshbaneAuth:
+		AshbaneAuth.auth_started.connect(_on_ashbane_auth_started)
+		AshbaneAuth.auth_completed.connect(_on_ashbane_auth_completed)
+		AshbaneAuth.auth_failed.connect(_on_ashbane_auth_failed)
+		AshbaneAuth.profile_updated.connect(_on_ashbane_profile_updated)
 
-func _create_mantle_panel():
+func _create_ashbane_panel():
 	"""Create simplified authentication panel - 'Authenticate via' with clickable provider icons"""
 	# Create main container
-	mantle_panel = Control.new()
-	mantle_panel.name = "MantlePanel"
-	mantle_panel.visible = false
-	mantle_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(mantle_panel)
+	ashbane_panel = Control.new()
+	ashbane_panel.name = "AshbanePanel"
+	ashbane_panel.visible = false
+	ashbane_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(ashbane_panel)
 
 	# Dark background overlay
 	var bg = ColorRect.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = MANTLE_BG_DARK
-	mantle_panel.add_child(bg)
+	bg.color = ASHBANE_BG_DARK
+	ashbane_panel.add_child(bg)
 
 	# Main card panel with glow border
 	var card = Panel.new()
-	card.name = "MantleCard"
+	card.name = "AshbaneCard"
 	card.set_anchors_preset(Control.PRESET_CENTER)
 	card.offset_left = -280
 	card.offset_top = -260
@@ -964,20 +966,20 @@ func _create_mantle_panel():
 
 	# Create cyberpunk panel style
 	var card_style = StyleBoxFlat.new()
-	card_style.bg_color = MANTLE_BG_PANEL
+	card_style.bg_color = ASHBANE_BG_PANEL
 	card_style.border_width_left = 2
 	card_style.border_width_right = 2
 	card_style.border_width_top = 2
 	card_style.border_width_bottom = 2
-	card_style.border_color = MANTLE_BORDER_GLOW
+	card_style.border_color = ASHBANE_BORDER_GLOW
 	card_style.corner_radius_top_left = 4
 	card_style.corner_radius_top_right = 4
 	card_style.corner_radius_bottom_left = 4
 	card_style.corner_radius_bottom_right = 4
 	card_style.shadow_size = 20
-	card_style.shadow_color = Color(0, 0.5, 0.6, 0.3)
+	card_style.shadow_color = Color(0.4, 0.1, 0.05, 0.3)  # Crimson shadow
 	card.add_theme_stylebox_override("panel", card_style)
-	mantle_panel.add_child(card)
+	ashbane_panel.add_child(card)
 
 	# Add corner decorations
 	_add_corner_decorations(card)
@@ -992,30 +994,30 @@ func _create_mantle_panel():
 	vbox.add_theme_constant_override("separation", 16)
 	card.add_child(vbox)
 
-	# MANTLE logo - custom drawn M-mantle with trophy + text
+	# ASHBANE logo - custom drawn M-ashbane with trophy + text
 	var logo_section = VBoxContainer.new()
 	logo_section.add_theme_constant_override("separation", 4)
 	vbox.add_child(logo_section)
 
-	# Custom logo icon (M-mantle with trophy)
+	# Custom logo icon (M-ashbane with trophy)
 	var logo_icon_container = CenterContainer.new()
 	logo_section.add_child(logo_icon_container)
-	var logo_icon = _create_mantle_logo_icon()
+	var logo_icon = _create_ashbane_logo_icon()
 	logo_icon_container.add_child(logo_icon)
 
-	# "MANTLE" text under the icon
+	# "ASHBANE" text under the icon
 	var logo_text = Label.new()
-	logo_text.text = "M A N T L E"
+	logo_text.text = "A S H B A N E"
 	logo_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	logo_text.add_theme_font_size_override("font_size", 18)
-	logo_text.add_theme_color_override("font_color", MANTLE_ACCENT_CYAN)
+	logo_text.add_theme_color_override("font_color", ASHBANE_ACCENT_PRIMARY)
 	logo_section.add_child(logo_text)
 
-	# Decorative line under MANTLE
+	# Decorative line under ASHBANE
 	var line_container = CenterContainer.new()
 	logo_section.add_child(line_container)
 	var accent_line = ColorRect.new()
-	accent_line.color = MANTLE_ACCENT_CYAN
+	accent_line.color = ASHBANE_ACCENT_PRIMARY
 	accent_line.custom_minimum_size = Vector2(100, 2)
 	line_container.add_child(accent_line)
 
@@ -1024,7 +1026,7 @@ func _create_mantle_panel():
 	title.text = "LINK YOUR GAMING LEGACY"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", MANTLE_TEXT_PRIMARY)
+	title.add_theme_color_override("font_color", ASHBANE_TEXT_PRIMARY)
 	vbox.add_child(title)
 
 	# Tagline under title
@@ -1036,38 +1038,38 @@ func _create_mantle_panel():
 	vbox.add_child(tagline)
 
 	# Status label (shows auth progress)
-	mantle_status_label = Label.new()
-	mantle_status_label.name = "MantleStatusLabel"
-	mantle_status_label.text = ""
-	mantle_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mantle_status_label.add_theme_font_size_override("font_size", 14)
-	mantle_status_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
-	mantle_status_label.custom_minimum_size = Vector2(0, 20)
-	vbox.add_child(mantle_status_label)
+	ashbane_status_label = Label.new()
+	ashbane_status_label.name = "AshbaneStatusLabel"
+	ashbane_status_label.text = ""
+	ashbane_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ashbane_status_label.add_theme_font_size_override("font_size", 14)
+	ashbane_status_label.add_theme_color_override("font_color", ASHBANE_TEXT_SECONDARY)
+	ashbane_status_label.custom_minimum_size = Vector2(0, 20)
+	vbox.add_child(ashbane_status_label)
 
 	# Single Login button (provider selection happens in browser after beta key)
-	mantle_login_button = Button.new()
-	mantle_login_button.name = "MantleLoginButton"
-	mantle_login_button.text = "Login"
-	mantle_login_button.custom_minimum_size = Vector2(200, 50)
-	mantle_login_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_style_mantle_button(mantle_login_button, MANTLE_ACCENT_CYAN, true)
-	mantle_login_button.pressed.connect(_on_mantle_login_pressed)
-	mantle_login_button.mouse_entered.connect(_on_button_hover)
-	vbox.add_child(mantle_login_button)
+	ashbane_login_button = Button.new()
+	ashbane_login_button.name = "AshbaneLoginButton"
+	ashbane_login_button.text = "Login"
+	ashbane_login_button.custom_minimum_size = Vector2(200, 50)
+	ashbane_login_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_style_ashbane_button(ashbane_login_button, ASHBANE_ACCENT_CYAN, true)
+	ashbane_login_button.pressed.connect(_on_ashbane_login_pressed)
+	ashbane_login_button.mouse_entered.connect(_on_button_hover)
+	vbox.add_child(ashbane_login_button)
 
 	# Horizontal divider with "or" text
-	mantle_divider_container = HBoxContainer.new()
-	mantle_divider_container.name = "DividerContainer"
-	mantle_divider_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	mantle_divider_container.add_theme_constant_override("separation", 15)
-	vbox.add_child(mantle_divider_container)
+	ashbane_divider_container = HBoxContainer.new()
+	ashbane_divider_container.name = "DividerContainer"
+	ashbane_divider_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	ashbane_divider_container.add_theme_constant_override("separation", 15)
+	vbox.add_child(ashbane_divider_container)
 
 	# Use Control with fixed size for the lines to prevent expansion
 	var left_line_container = Control.new()
 	left_line_container.custom_minimum_size = Vector2(80, 1)
 	left_line_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	mantle_divider_container.add_child(left_line_container)
+	ashbane_divider_container.add_child(left_line_container)
 	var left_line = ColorRect.new()
 	left_line.color = Color(0.3, 0.32, 0.35, 0.6)
 	left_line.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1076,40 +1078,40 @@ func _create_mantle_panel():
 	var or_label = Label.new()
 	or_label.text = "or"
 	or_label.add_theme_font_size_override("font_size", 14)
-	or_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
-	mantle_divider_container.add_child(or_label)
+	or_label.add_theme_color_override("font_color", ASHBANE_TEXT_SECONDARY)
+	ashbane_divider_container.add_child(or_label)
 
 	var right_line_container = Control.new()
 	right_line_container.custom_minimum_size = Vector2(80, 1)
 	right_line_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	mantle_divider_container.add_child(right_line_container)
+	ashbane_divider_container.add_child(right_line_container)
 	var right_line = ColorRect.new()
 	right_line.color = Color(0.3, 0.32, 0.35, 0.6)
 	right_line.set_anchors_preset(Control.PRESET_FULL_RECT)
 	right_line_container.add_child(right_line)
 
 	# Guest button - styled more prominently
-	mantle_skip_button = Button.new()
-	mantle_skip_button.name = "MantleSkipButton"
-	mantle_skip_button.text = "Continue as Guest"
-	mantle_skip_button.custom_minimum_size = Vector2(200, 44)
-	mantle_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_style_guest_button(mantle_skip_button)
-	mantle_skip_button.pressed.connect(_on_mantle_skip_pressed)
-	mantle_skip_button.mouse_entered.connect(_on_button_hover)
-	vbox.add_child(mantle_skip_button)
+	ashbane_skip_button = Button.new()
+	ashbane_skip_button.name = "AshbaneSkipButton"
+	ashbane_skip_button.text = "Continue as Guest"
+	ashbane_skip_button.custom_minimum_size = Vector2(200, 44)
+	ashbane_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_style_guest_button(ashbane_skip_button)
+	ashbane_skip_button.pressed.connect(_on_ashbane_skip_pressed)
+	ashbane_skip_button.mouse_entered.connect(_on_button_hover)
+	vbox.add_child(ashbane_skip_button)
 
 	# Logout button - small, only visible when logged in
-	mantle_logout_button = Button.new()
-	mantle_logout_button.name = "MantleLogoutButton"
-	mantle_logout_button.text = "Logout"
-	mantle_logout_button.custom_minimum_size = Vector2(80, 28)
-	mantle_logout_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	mantle_logout_button.visible = false  # Hidden until logged in
-	_style_logout_button(mantle_logout_button)
-	mantle_logout_button.pressed.connect(_on_mantle_logout_pressed)
-	mantle_logout_button.mouse_entered.connect(_on_button_hover)
-	vbox.add_child(mantle_logout_button)
+	ashbane_logout_button = Button.new()
+	ashbane_logout_button.name = "AshbaneLogoutButton"
+	ashbane_logout_button.text = "Logout"
+	ashbane_logout_button.custom_minimum_size = Vector2(80, 28)
+	ashbane_logout_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	ashbane_logout_button.visible = false  # Hidden until logged in
+	_style_logout_button(ashbane_logout_button)
+	ashbane_logout_button.pressed.connect(_on_ashbane_logout_pressed)
+	ashbane_logout_button.mouse_entered.connect(_on_button_hover)
+	vbox.add_child(ashbane_logout_button)
 
 	# Exit button - always visible, quit the game
 	var exit_button = Button.new()
@@ -1123,13 +1125,13 @@ func _create_mantle_panel():
 	vbox.add_child(exit_button)
 
 	# Remove the old link button reference (no longer used in simplified UI)
-	mantle_link_button = null
+	ashbane_link_button = null
 
 func _add_corner_decorations(parent: Control):
-	"""Add cyberpunk corner bracket decorations"""
+	"""Add medieval corner bracket decorations - Ashbane theme"""
 	var corner_size = 20
 	var corner_thickness = 2
-	var corner_color = MANTLE_ACCENT_CYAN
+	var corner_color = ASHBANE_ACCENT_PRIMARY  # Crimson corners
 
 	# Top-left corner
 	var tl_h = ColorRect.new()
@@ -1413,18 +1415,18 @@ func _on_connecting_dots_tick():
 	# Pad to 3 chars to prevent text shifting
 	dots = dots + " ".repeat(3 - _connecting_dots_count)
 
-	if mantle_status_label and _connecting_provider_label != "":
-		mantle_status_label.text = "Connecting to %s%s" % [_connecting_provider_label, dots]
+	if ashbane_status_label and _connecting_provider_label != "":
+		ashbane_status_label.text = "Connecting to %s%s" % [_connecting_provider_label, dots]
 
 func _on_provider_clicked(provider_key: String):
 	"""Handle click on provider icon - start OAuth for that provider"""
 	_play_click_sound()
 
-	if mantle_status_label:
+	if ashbane_status_label:
 		var label = PROVIDER_ICONS[provider_key].get("label", provider_key)
 		_connecting_provider_label = label
 		_start_connecting_dots_animation()
-		mantle_status_label.add_theme_color_override("font_color", MANTLE_ACCENT_CYAN)
+		ashbane_status_label.add_theme_color_override("font_color", ASHBANE_ACCENT_CYAN)
 
 	# Disable all provider buttons during auth
 	for key in provider_icon_nodes.keys():
@@ -1432,14 +1434,14 @@ func _on_provider_clicked(provider_key: String):
 		if btn:
 			btn.disabled = true
 
-	if mantle_skip_button:
-		mantle_skip_button.disabled = true
+	if ashbane_skip_button:
+		ashbane_skip_button.disabled = true
 
 	# Start OAuth with the selected provider
-	if MantleAuth:
-		MantleAuth.start_login_with_provider(provider_key)
+	if AshbaneAuth:
+		AshbaneAuth.start_login_with_provider(provider_key)
 	else:
-		_on_mantle_auth_failed("Mantle service not available")
+		_on_ashbane_auth_failed("Ashbane service not available")
 
 func _load_provider_icon_from_cdn(provider_key: String, slug: String):
 	"""Load provider icon from Simple Icons CDN with white color"""
@@ -1524,8 +1526,8 @@ func _on_provider_icon_hover(provider_key: String, hovered: bool):
 		icon.modulate = brand_color
 
 func _is_provider_connected(provider_key: String) -> bool:
-	"""Check if a provider is connected via MantleAuth"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	"""Check if a provider is connected via AshbaneAuth"""
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		return false
 
 	# Map of provider key to possible API names
@@ -1540,8 +1542,8 @@ func _is_provider_connected(provider_key: String) -> bool:
 
 	var valid_names = name_variants.get(provider_key, [provider_key])
 
-	# MantleAuth.providers contains connected provider data
-	for provider in MantleAuth.providers:
+	# AshbaneAuth.providers contains connected provider data
+	for provider in AshbaneAuth.providers:
 		var provider_name = provider.get("provider", "").to_lower().strip_edges()
 		# Also check 'name' field as fallback
 		if provider_name == "":
@@ -1567,21 +1569,21 @@ func _update_provider_icons_state():
 			# Not connected - dim white
 			icon.modulate = Color(0.5, 0.5, 0.55, 0.7)
 
-func _create_mantle_logo_icon() -> Control:
-	"""Create the Mantle logo icon - M-mantle shape with trophy on top using Line2D"""
+func _create_ashbane_logo_icon() -> Control:
+	"""Create the Ashbane logo icon - M-ashbane shape with trophy on top using Line2D"""
 	var container = Control.new()
-	container.name = "MantleLogoIcon"
+	container.name = "AshbaneLogoIcon"
 	container.custom_minimum_size = Vector2(60, 48)
 
 	var w = 60.0
 	var h = 48.0
 	var cx = w / 2.0
-	var logo_color = MANTLE_ACCENT_CYAN
+	var logo_color = ASHBANE_ACCENT_CYAN
 	var line_width = 2.5
 
-	# M-Mantle shape dimensions
-	var mantle_top = h * 0.5
-	var mantle_bottom = h * 0.95
+	# M-Ashbane shape dimensions
+	var ashbane_top = h * 0.5
+	var ashbane_bottom = h * 0.95
 	var outer_width = w * 0.7
 	var inner_width = w * 0.28
 
@@ -1590,27 +1592,27 @@ func _create_mantle_logo_icon() -> Control:
 	var right_outer = cx + outer_width / 2
 	var right_inner = cx + inner_width / 2
 
-	# M-Mantle shape (the shelf/fireplace mantle)
-	var mantle_line = Line2D.new()
-	mantle_line.name = "MantleLine"
-	mantle_line.width = line_width
-	mantle_line.default_color = logo_color
-	mantle_line.joint_mode = Line2D.LINE_JOINT_ROUND
-	mantle_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	mantle_line.end_cap_mode = Line2D.LINE_CAP_ROUND
-	mantle_line.add_point(Vector2(left_outer, mantle_bottom))    # Bottom left
-	mantle_line.add_point(Vector2(left_outer, mantle_top))       # Top left outer
-	mantle_line.add_point(Vector2(left_inner, mantle_top))       # Shelf left edge
-	mantle_line.add_point(Vector2(left_inner, mantle_top + 10))  # Shelf inner left (deeper dip)
-	mantle_line.add_point(Vector2(right_inner, mantle_top + 10)) # Shelf inner right (deeper dip)
-	mantle_line.add_point(Vector2(right_inner, mantle_top))      # Shelf right edge
-	mantle_line.add_point(Vector2(right_outer, mantle_top))      # Top right outer
-	mantle_line.add_point(Vector2(right_outer, mantle_bottom))   # Bottom right
-	mantle_line.modulate.a = 0  # Start invisible for animation
-	container.add_child(mantle_line)
+	# M-Ashbane shape (the shelf/fireplace ashbane)
+	var ashbane_line = Line2D.new()
+	ashbane_line.name = "AshbaneLine"
+	ashbane_line.width = line_width
+	ashbane_line.default_color = logo_color
+	ashbane_line.joint_mode = Line2D.LINE_JOINT_ROUND
+	ashbane_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	ashbane_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	ashbane_line.add_point(Vector2(left_outer, ashbane_bottom))    # Bottom left
+	ashbane_line.add_point(Vector2(left_outer, ashbane_top))       # Top left outer
+	ashbane_line.add_point(Vector2(left_inner, ashbane_top))       # Shelf left edge
+	ashbane_line.add_point(Vector2(left_inner, ashbane_top + 10))  # Shelf inner left (deeper dip)
+	ashbane_line.add_point(Vector2(right_inner, ashbane_top + 10)) # Shelf inner right (deeper dip)
+	ashbane_line.add_point(Vector2(right_inner, ashbane_top))      # Shelf right edge
+	ashbane_line.add_point(Vector2(right_outer, ashbane_top))      # Top right outer
+	ashbane_line.add_point(Vector2(right_outer, ashbane_bottom))   # Bottom right
+	ashbane_line.modulate.a = 0  # Start invisible for animation
+	container.add_child(ashbane_line)
 
 	# Trophy sitting on the shelf
-	var trophy_bottom = mantle_top - 2
+	var trophy_bottom = ashbane_top - 2
 	var trophy_top = h * 0.08
 	var trophy_width = w * 0.28
 
@@ -1641,7 +1643,7 @@ func _create_mantle_logo_icon() -> Control:
 	trophy_stand.width = line_width
 	trophy_stand.default_color = Color(logo_color.r * 0.6, logo_color.g * 0.6, logo_color.b * 0.6, 0.7)
 	trophy_stand.add_point(Vector2(cx, trophy_bottom))
-	trophy_stand.add_point(Vector2(cx, mantle_bottom))
+	trophy_stand.add_point(Vector2(cx, ashbane_bottom))
 	trophy_group.add_child(trophy_stand)
 
 	# Trophy cup (left side)
@@ -1687,18 +1689,18 @@ func _create_mantle_logo_icon() -> Control:
 	trophy_group.add_child(handle_right)
 
 	# Start animation after a short delay
-	_animate_mantle_logo.call_deferred(mantle_line, trophy_group)
+	_animate_ashbane_logo.call_deferred(ashbane_line, trophy_group)
 
 	return container
 
-func _animate_mantle_logo(mantle_line: Line2D, trophy_group: Control):
+func _animate_ashbane_logo(ashbane_line: Line2D, trophy_group: Control):
 	"""Animate the logo: M draws in, then trophy fades in, then subtle pulse"""
 	await get_tree().create_timer(0.3).timeout
 
 	var tween = create_tween()
 
-	# Phase 1: M-mantle fades/draws in
-	tween.tween_property(mantle_line, "modulate:a", 1.0, 0.4).set_ease(Tween.EASE_OUT)
+	# Phase 1: M-ashbane fades/draws in
+	tween.tween_property(ashbane_line, "modulate:a", 1.0, 0.4).set_ease(Tween.EASE_OUT)
 
 	# Phase 2: Trophy drops in and fades
 	tween.tween_property(trophy_group, "position:y", -3.0, 0.0)  # Start slightly above
@@ -1707,9 +1709,9 @@ func _animate_mantle_logo(mantle_line: Line2D, trophy_group: Control):
 
 	# Phase 3: Subtle glow pulse
 	tween.tween_interval(0.2)
-	tween.tween_property(mantle_line, "modulate", Color(1.3, 1.3, 1.3, 1.0), 0.15)
+	tween.tween_property(ashbane_line, "modulate", Color(1.3, 1.3, 1.3, 1.0), 0.15)
 	tween.parallel().tween_property(trophy_group, "modulate", Color(1.3, 1.3, 1.3, 1.0), 0.15)
-	tween.tween_property(mantle_line, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+	tween.tween_property(ashbane_line, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
 	tween.parallel().tween_property(trophy_group, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
 
 func _style_logout_button(button: Button):
@@ -1736,23 +1738,23 @@ func _style_logout_button(button: Button):
 	button.add_theme_color_override("font_color", Color(0.6, 0.4, 0.4, 0.8))
 	button.add_theme_color_override("font_hover_color", Color(0.9, 0.5, 0.5, 1.0))
 
-func _on_mantle_logout_pressed():
+func _on_ashbane_logout_pressed():
 	"""Handle logout button press"""
 	_play_click_sound()
 
-	if MantleAuth:
-		MantleAuth.logout()
+	if AshbaneAuth:
+		AshbaneAuth.logout()
 
 	# Reset UI to logged-out state
-	if mantle_logout_button:
-		mantle_logout_button.visible = false
+	if ashbane_logout_button:
+		ashbane_logout_button.visible = false
 
-	if mantle_skip_button:
-		mantle_skip_button.text = "Continue as Guest"
+	if ashbane_skip_button:
+		ashbane_skip_button.text = "Continue as Guest"
 
-	if mantle_status_label:
-		mantle_status_label.text = "Logged out"
-		mantle_status_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+	if ashbane_status_label:
+		ashbane_status_label.text = "Logged out"
+		ashbane_status_label.add_theme_color_override("font_color", ASHBANE_TEXT_SECONDARY)
 
 	# Re-enable provider buttons
 	for key in provider_icon_nodes.keys():
@@ -1823,10 +1825,10 @@ func _style_guest_button(button: Button):
 
 	button.add_theme_font_size_override("font_size", 15)
 	button.add_theme_color_override("font_color", Color(0.7, 0.72, 0.75, 0.9))
-	button.add_theme_color_override("font_hover_color", MANTLE_TEXT_PRIMARY)
+	button.add_theme_color_override("font_hover_color", ASHBANE_TEXT_PRIMARY)
 
-func _style_mantle_button(button: Button, accent_color: Color, prominent: bool):
-	"""Apply Mantle cyberpunk style to a button"""
+func _style_ashbane_button(button: Button, accent_color: Color, prominent: bool):
+	"""Apply Ashbane cyberpunk style to a button"""
 	var style_normal = StyleBoxFlat.new()
 	style_normal.bg_color = Color(0.08, 0.1, 0.12, 0.9) if prominent else Color(0.05, 0.06, 0.08, 0.7)
 	style_normal.border_width_left = 2 if prominent else 1
@@ -1855,127 +1857,127 @@ func _style_mantle_button(button: Button, accent_color: Color, prominent: bool):
 	button.add_theme_stylebox_override("focus", style_hover)
 
 	button.add_theme_font_size_override("font_size", 18 if prominent else 14)
-	button.add_theme_color_override("font_color", accent_color if prominent else MANTLE_TEXT_SECONDARY)
-	button.add_theme_color_override("font_hover_color", Color(1, 1, 1) if prominent else MANTLE_TEXT_PRIMARY)
+	button.add_theme_color_override("font_color", accent_color if prominent else ASHBANE_TEXT_SECONDARY)
+	button.add_theme_color_override("font_hover_color", Color(1, 1, 1) if prominent else ASHBANE_TEXT_PRIMARY)
 
-func _show_mantle_panel():
-	"""Show the Mantle panel for linking gaming accounts"""
-	current_state = MenuState.MANTLE_SCREEN
+func _show_ashbane_panel():
+	"""Show the Ashbane panel for linking gaming accounts"""
+	current_state = MenuState.ASHBANE_SCREEN
 
-	# Hide main menu, show mantle panel
+	# Hide main menu, show ashbane panel
 	_set_menu_panel_visible(false)
-	if mantle_panel:
-		mantle_panel.visible = true
+	if ashbane_panel:
+		ashbane_panel.visible = true
 
 	# Update status based on whether already linked
-	_update_mantle_panel_status()
+	_update_ashbane_panel_status()
 
-func _hide_mantle_panel():
-	"""Hide the Mantle panel"""
-	if mantle_panel:
-		mantle_panel.visible = false
+func _hide_ashbane_panel():
+	"""Hide the Ashbane panel"""
+	if ashbane_panel:
+		ashbane_panel.visible = false
 
-func _update_mantle_panel_status():
-	"""Update the Mantle panel status display"""
-	if not mantle_status_label:
+func _update_ashbane_panel_status():
+	"""Update the Ashbane panel status display"""
+	if not ashbane_status_label:
 		return
 
-	if MantleAuth and MantleAuth.is_logged_in():
-		var tier_name = MantleAuth.mantle_tier.get("name", "Unknown")
-		var tier_color_hex = MantleAuth.mantle_tier.get("color", "#FFFFFF")
-		var provider_count = MantleAuth.providers.size()
+	if AshbaneAuth and AshbaneAuth.is_logged_in():
+		var tier_name = AshbaneAuth.ashbane_tier.get("name", "Unknown")
+		var tier_color_hex = AshbaneAuth.ashbane_tier.get("color", "#FFFFFF")
+		var provider_count = AshbaneAuth.providers.size()
 
-		mantle_status_label.text = "Player #%d\n%s Tier - %d providers connected" % [
-			MantleAuth.user_id, tier_name, provider_count
+		ashbane_status_label.text = "Player #%d\n%s Tier - %d providers connected" % [
+			AshbaneAuth.user_id, tier_name, provider_count
 		]
 		var tier_color = Color.from_string(tier_color_hex, Color.WHITE)
-		mantle_status_label.add_theme_color_override("font_color", tier_color)
+		ashbane_status_label.add_theme_color_override("font_color", tier_color)
 
-		if mantle_skip_button:
-			mantle_skip_button.text = "Continue to Game"
+		if ashbane_skip_button:
+			ashbane_skip_button.text = "Continue to Game"
 
-		if mantle_logout_button:
-			mantle_logout_button.visible = true
+		if ashbane_logout_button:
+			ashbane_logout_button.visible = true
 
 		# Hide login button and "or" divider when logged in
-		if mantle_login_button:
-			mantle_login_button.visible = false
-		if mantle_divider_container:
-			mantle_divider_container.visible = false
+		if ashbane_login_button:
+			ashbane_login_button.visible = false
+		if ashbane_divider_container:
+			ashbane_divider_container.visible = false
 	else:
-		mantle_status_label.text = ""
-		mantle_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+		ashbane_status_label.text = ""
+		ashbane_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 
-		if mantle_skip_button:
-			mantle_skip_button.text = "Continue as Guest"
+		if ashbane_skip_button:
+			ashbane_skip_button.text = "Continue as Guest"
 
-		if mantle_logout_button:
-			mantle_logout_button.visible = false
+		if ashbane_logout_button:
+			ashbane_logout_button.visible = false
 
 		# Show login button and "or" divider when logged out
-		if mantle_login_button:
-			mantle_login_button.visible = true
-			mantle_login_button.disabled = false
-		if mantle_divider_container:
-			mantle_divider_container.visible = true
+		if ashbane_login_button:
+			ashbane_login_button.visible = true
+			ashbane_login_button.disabled = false
+		if ashbane_divider_container:
+			ashbane_divider_container.visible = true
 
-# _on_mantle_link_pressed removed - now using _on_provider_clicked for each provider icon
+# _on_ashbane_link_pressed removed - now using _on_provider_clicked for each provider icon
 
-func _on_mantle_login_pressed():
+func _on_ashbane_login_pressed():
 	"""Handle login button press - opens browser for provider selection after beta key"""
 	_play_click_sound()
 
-	if mantle_status_label:
-		mantle_status_label.text = "Opening browser..."
-		mantle_status_label.add_theme_color_override("font_color", MANTLE_ACCENT_CYAN)
+	if ashbane_status_label:
+		ashbane_status_label.text = "Opening browser..."
+		ashbane_status_label.add_theme_color_override("font_color", ASHBANE_ACCENT_CYAN)
 
 	# Disable buttons during auth
-	if mantle_login_button:
-		mantle_login_button.disabled = true
-	if mantle_skip_button:
-		mantle_skip_button.disabled = true
+	if ashbane_login_button:
+		ashbane_login_button.disabled = true
+	if ashbane_skip_button:
+		ashbane_skip_button.disabled = true
 
 	# Start generic login (no provider specified - user picks in browser)
-	if MantleAuth:
-		MantleAuth.start_login()
+	if AshbaneAuth:
+		AshbaneAuth.start_login()
 	else:
-		_on_mantle_auth_failed("Mantle service not available")
+		_on_ashbane_auth_failed("Ashbane service not available")
 
-func _on_mantle_skip_pressed():
+func _on_ashbane_skip_pressed():
 	"""Skip linking (or continue after linking) and proceed to main menu"""
 	_play_click_sound()
 	_proceed_to_main_menu()
 
 func _proceed_to_main_menu():
-	"""Show main menu with PLAY button after Mantle auth/skip"""
-	_hide_mantle_panel()
+	"""Show main menu with PLAY button after Ashbane auth/skip"""
+	_hide_ashbane_panel()
 	_set_menu_panel_visible(true)
 	current_state = MenuState.MAIN
 
-	# Update the menu to show Mantle status if linked
-	_update_menu_with_mantle_status()
+	# Update the menu to show Ashbane status if linked
+	_update_menu_with_ashbane_status()
 
-var mantle_menu_status: Control = null  # Container for tier display in main menu
+var ashbane_menu_status: Control = null  # Container for tier display in main menu
 
-func _update_menu_with_mantle_status():
-	"""Update main menu to show Mantle tier if linked"""
+func _update_menu_with_ashbane_status():
+	"""Update main menu to show Ashbane tier if linked"""
 	var menu_vbox = get_node_or_null("MenuPanel/VBoxContainer")
 	if not menu_vbox:
 		return
 
 	# Create tier display container if it doesn't exist
-	if not mantle_menu_status:
-		mantle_menu_status = _create_tier_display_widget()
-		menu_vbox.add_child(mantle_menu_status)
-		menu_vbox.move_child(mantle_menu_status, 0)
+	if not ashbane_menu_status:
+		ashbane_menu_status = _create_tier_display_widget()
+		menu_vbox.add_child(ashbane_menu_status)
+		menu_vbox.move_child(ashbane_menu_status, 0)
 
-	# Update the display based on Mantle status
+	# Update the display based on Ashbane status
 	_update_tier_display_content()
 
 func _create_tier_display_widget() -> Control:
 	"""Create a fancy tier display widget with glow effects"""
 	var container = VBoxContainer.new()
-	container.name = "MantleTierDisplay"
+	container.name = "AshbaneTierDisplay"
 	container.add_theme_constant_override("separation", 4)
 
 	# Username label
@@ -1983,7 +1985,7 @@ func _create_tier_display_widget() -> Control:
 	username_label.name = "UsernameLabel"
 	username_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	username_label.add_theme_font_size_override("font_size", 14)
-	username_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+	username_label.add_theme_color_override("font_color", ASHBANE_TEXT_SECONDARY)
 	container.add_child(username_label)
 
 	# Tier badge container (with glow effect)
@@ -2010,7 +2012,7 @@ func _create_tier_display_widget() -> Control:
 	ach_label.name = "AchievementLabel"
 	ach_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ach_label.add_theme_font_size_override("font_size", 12)
-	ach_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+	ach_label.add_theme_color_override("font_color", ASHBANE_TEXT_SECONDARY)
 	container.add_child(ach_label)
 
 	# Spacer
@@ -2022,21 +2024,21 @@ func _create_tier_display_widget() -> Control:
 
 func _update_tier_display_content():
 	"""Update the tier display widget content"""
-	if not mantle_menu_status:
+	if not ashbane_menu_status:
 		return
 
-	var username_label = mantle_menu_status.get_node_or_null("UsernameLabel")
-	var badge_panel = mantle_menu_status.get_node_or_null("BadgeContainer/TierBadge")
-	var tier_label = mantle_menu_status.get_node_or_null("BadgeContainer/TierBadge/TierLabel")
-	var ach_label = mantle_menu_status.get_node_or_null("AchievementLabel")
+	var username_label = ashbane_menu_status.get_node_or_null("UsernameLabel")
+	var badge_panel = ashbane_menu_status.get_node_or_null("BadgeContainer/TierBadge")
+	var tier_label = ashbane_menu_status.get_node_or_null("BadgeContainer/TierBadge/TierLabel")
+	var ach_label = ashbane_menu_status.get_node_or_null("AchievementLabel")
 
-	if MantleAuth and MantleAuth.is_logged_in():
-		var tier_name = MantleAuth.mantle_tier.get("name", "Unknown")
+	if AshbaneAuth and AshbaneAuth.is_logged_in():
+		var tier_name = AshbaneAuth.ashbane_tier.get("name", "Unknown")
 		var tier_key = tier_name.to_lower()
-		var tier_color_hex = MantleAuth.mantle_tier.get("color", "#FFFFFF")
+		var tier_color_hex = AshbaneAuth.ashbane_tier.get("color", "#FFFFFF")
 		var tier_color = Color.from_string(tier_color_hex, Color.WHITE)
-		var total_ach = MantleAuth.total_achievements
-		var provider_count = MantleAuth.providers.size()
+		var total_ach = AshbaneAuth.total_achievements
+		var provider_count = AshbaneAuth.providers.size()
 
 		# Use our tier colors if available
 		if TIER_COLORS.has(tier_key):
@@ -2044,7 +2046,7 @@ func _update_tier_display_content():
 
 		# Update player number
 		if username_label:
-			username_label.text = "Player #%d" % MantleAuth.user_id
+			username_label.text = "Player #%d" % AshbaneAuth.user_id
 			username_label.visible = true
 
 		# Style the tier badge with glow
@@ -2074,7 +2076,7 @@ func _update_tier_display_content():
 			ach_label.text = "%d achievements • %d providers" % [total_ach, provider_count]
 			ach_label.visible = true
 
-		mantle_menu_status.visible = true
+		ashbane_menu_status.visible = true
 	else:
 		# Guest mode - simple display
 		if username_label:
@@ -2096,35 +2098,35 @@ func _update_tier_display_content():
 
 		if tier_label:
 			tier_label.text = "GUEST"
-			tier_label.add_theme_color_override("font_color", MANTLE_TEXT_SECONDARY)
+			tier_label.add_theme_color_override("font_color", ASHBANE_TEXT_SECONDARY)
 
 		if ach_label:
 			ach_label.text = "Link accounts for cosmetics"
 			ach_label.visible = true
 
-		mantle_menu_status.visible = true
+		ashbane_menu_status.visible = true
 
-func _on_mantle_auth_started(auth_url: String):
+func _on_ashbane_auth_started(auth_url: String):
 	"""Browser opened for authentication"""
 	_stop_connecting_dots_animation()
 
-	if mantle_status_label:
-		mantle_status_label.text = "Complete login in your browser...\nWaiting for authentication..."
-		mantle_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.4))
+	if ashbane_status_label:
+		ashbane_status_label.text = "Complete login in your browser...\nWaiting for authentication..."
+		ashbane_status_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.4))
 
-func _on_mantle_auth_completed(user_data: Dictionary):
-	"""Successfully authenticated with Mantle"""
+func _on_ashbane_auth_completed(user_data: Dictionary):
+	"""Successfully authenticated with Ashbane"""
 	_stop_connecting_dots_animation()
 
 	# Show success message briefly
-	if mantle_status_label:
-		var tier_name = user_data.get("mantle", {}).get("name", "Unknown")
+	if ashbane_status_label:
+		var tier_name = user_data.get("ashbane", {}).get("name", "Unknown")
 		var total_ach = user_data.get("total_achievements", 0)
-		mantle_status_label.text = "Welcome, %s!\n%s Tier - %d achievements\n\nSyncing to Armory..." % [
+		ashbane_status_label.text = "Welcome, %s!\n%s Tier - %d achievements\n\nSyncing to Armory..." % [
 			user_data.get("username", "Player"), tier_name, total_ach
 		]
 		# Green color to signify success and syncing
-		mantle_status_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))
+		ashbane_status_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.5))
 
 	# Update provider icons to show connected state
 	_update_provider_icons_state()
@@ -2138,25 +2140,25 @@ func _on_mantle_auth_completed(user_data: Dictionary):
 		# Fallback if tree not available
 		_transition_to_armory()
 
-func _on_mantle_auth_failed(error: String):
-	"""Mantle authentication failed"""
+func _on_ashbane_auth_failed(error: String):
+	"""Ashbane authentication failed"""
 	_stop_connecting_dots_animation()
 
-	if mantle_status_label:
-		mantle_status_label.text = error
-		mantle_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+	if ashbane_status_label:
+		ashbane_status_label.text = error
+		ashbane_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 
 	# Re-enable login button
-	if mantle_login_button:
-		mantle_login_button.disabled = false
+	if ashbane_login_button:
+		ashbane_login_button.disabled = false
 
-	if mantle_skip_button:
-		mantle_skip_button.disabled = false
+	if ashbane_skip_button:
+		ashbane_skip_button.disabled = false
 
-func _on_mantle_profile_updated(profile: Dictionary):
-	"""Mantle profile updated with new data"""
-	if current_state == MenuState.MANTLE_SCREEN:
-		_update_mantle_panel_status()
+func _on_ashbane_profile_updated(profile: Dictionary):
+	"""Ashbane profile updated with new data"""
+	if current_state == MenuState.ASHBANE_SCREEN:
+		_update_ashbane_panel_status()
 	# Update provider icons to reflect any newly connected providers
 	_update_provider_icons_state()
 
@@ -2166,7 +2168,7 @@ func _on_mantle_profile_updated(profile: Dictionary):
 
 func _transition_to_armory():
 	"""Transition to Armory scene after authentication"""
-	LogManager.info("Transitioning to Armory", "mantle")
+	LogManager.info("Transitioning to Armory", "ashbane")
 
 	# Fade out music slightly (don't stop it)
 	if theme_music and theme_music.playing:
@@ -2405,6 +2407,9 @@ func _reset_game_ui():
 	# Hide QuestTrackerUI (CanvasLayer autoload)
 	if QuestTrackerUI:
 		QuestTrackerUI.visible = false
+	# Hide Minimap (CanvasLayer autoload)
+	if Minimap:
+		Minimap.hide_minimap()
 	# Hide BugReportUI (CanvasLayer autoload)
 	if BugReportUI:
 		BugReportUI.visible = false

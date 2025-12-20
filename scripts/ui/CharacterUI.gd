@@ -157,7 +157,7 @@ func create_character_ui() -> void:
 	main_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	main_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 
-	# Dark Fantasy Wasteland styling with transparency
+	# Dark Fantasy dreadland styling with transparency
 	var panel_style = StyleBoxFlat.new()
 	panel_style.bg_color = BG_COLOR  # 75% transparent dark leather
 	panel_style.border_width_left = 2
@@ -174,7 +174,7 @@ func create_character_ui() -> void:
 
 	# Heavy shadow for depth
 	panel_style.shadow_size = 12
-	panel_style.shadow_color = Color(0, 0, 0, 0.8)  # Darker shadow for wasteland
+	panel_style.shadow_color = Color(0, 0, 0, 0.8)  # Darker shadow for dreadland
 	panel_style.shadow_offset = Vector2(0, 6)
 
 	main_panel.add_theme_stylebox_override("panel", panel_style)
@@ -207,6 +207,19 @@ func create_character_ui() -> void:
 	var close_btn = Button.new()
 	close_btn.text = "X"
 	close_btn.custom_minimum_size = Vector2(30, 30)
+	# Style close button to match theme (red X)
+	var close_style = StyleBoxFlat.new()
+	close_style.bg_color = Color(0.5, 0.15, 0.12, 0.8)
+	close_style.set_corner_radius_all(4)
+	var close_hover = close_style.duplicate()
+	close_hover.bg_color = Color(0.65, 0.2, 0.15, 0.9)
+	var close_pressed = close_style.duplicate()
+	close_pressed.bg_color = Color(0.4, 0.1, 0.08, 0.9)
+	close_btn.add_theme_stylebox_override("normal", close_style)
+	close_btn.add_theme_stylebox_override("hover", close_hover)
+	close_btn.add_theme_stylebox_override("pressed", close_pressed)
+	close_btn.add_theme_color_override("font_color", TEXT_COLOR)
+	close_btn.add_theme_font_size_override("font_size", 14)
 	close_btn.pressed.connect(toggle_character_ui)
 	header_row.add_child(close_btn)
 
@@ -408,7 +421,7 @@ func create_character_info_panel(parent: Control) -> void:
 	xp_bar.show_percentage = true
 	xp_bar.add_theme_color_override("font_color", TEXT_COLOR)
 
-	# Dark wasteland styled progress bar
+	# Dark dreadland styled progress bar
 	var xp_bg = StyleBoxFlat.new()
 	xp_bg.bg_color = SLOT_BG  # Dark leather inset
 	xp_bg.border_width_left = 2
@@ -573,7 +586,7 @@ func create_weapon_mastery_section(parent: Control) -> void:
 	prog_bg.corner_radius_bottom_right = 3
 
 	var prog_fill = StyleBoxFlat.new()
-	prog_fill.bg_color = Color(0.7, 0.5, 0.2, 1.0)  # Bronze/copper color
+	prog_fill.bg_color = Color(0.45, 0.55, 0.65, 1.0)  # Steel blue color
 	prog_fill.corner_radius_top_left = 3
 	prog_fill.corner_radius_top_right = 3
 	prog_fill.corner_radius_bottom_left = 3
@@ -700,6 +713,19 @@ func _create_weapon_skills_panel(offset_l: int, offset_r: int) -> CanvasLayer:
 	var close_btn = Button.new()
 	close_btn.text = "X"
 	close_btn.custom_minimum_size = Vector2(30, 30)
+	# Style close button to match theme
+	var close_style = StyleBoxFlat.new()
+	close_style.bg_color = Color(0.5, 0.15, 0.12, 0.8)
+	close_style.set_corner_radius_all(4)
+	var close_hover = close_style.duplicate()
+	close_hover.bg_color = Color(0.65, 0.2, 0.15, 0.9)
+	var close_pressed = close_style.duplicate()
+	close_pressed.bg_color = Color(0.4, 0.1, 0.08, 0.9)
+	close_btn.add_theme_stylebox_override("normal", close_style)
+	close_btn.add_theme_stylebox_override("hover", close_hover)
+	close_btn.add_theme_stylebox_override("pressed", close_pressed)
+	close_btn.add_theme_color_override("font_color", TEXT_COLOR)
+	close_btn.add_theme_font_size_override("font_size", 14)
 	close_btn.pressed.connect(func(): canvas.queue_free())  # tree_exiting handles cleanup
 	header_row.add_child(close_btn)
 
@@ -710,6 +736,9 @@ func _create_weapon_skills_panel(offset_l: int, offset_r: int) -> CanvasLayer:
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Make ScrollContainer background transparent (Godot default can be light)
+	var scroll_panel_style = StyleBoxEmpty.new()
+	scroll.add_theme_stylebox_override("panel", scroll_panel_style)
 	main_vbox.add_child(scroll)
 
 	var skills_vbox = VBoxContainer.new()
@@ -774,17 +803,17 @@ func _create_skill_row(weapon_type: String, titles: Array, is_current: bool) -> 
 	"""Create a row for a weapon skill type"""
 	var container = PanelContainer.new()
 
-	# Style - highlight current weapon
+	# Style - highlight current weapon (use solid dark colors matching theme)
 	var row_style = StyleBoxFlat.new()
 	if is_current:
-		row_style.bg_color = Color(0.25, 0.2, 0.15, 0.6)
+		row_style.bg_color = Color(0.15, 0.15, 0.17, 0.95)  # Neutral gray highlight
 		row_style.border_color = ACCENT_COLOR
 		row_style.border_width_left = 2
 		row_style.border_width_right = 2
 		row_style.border_width_top = 2
 		row_style.border_width_bottom = 2
 	else:
-		row_style.bg_color = Color(0.12, 0.12, 0.14, 0.4)
+		row_style.bg_color = Color(0.06, 0.06, 0.07, 0.9)  # Dark charcoal matching theme
 		row_style.border_color = BORDER_INNER
 		row_style.border_width_left = 1
 		row_style.border_width_right = 1
@@ -822,40 +851,36 @@ func _create_skill_row(weapon_type: String, titles: Array, is_current: bool) -> 
 	skill_label.custom_minimum_size.x = 55
 	hbox.add_child(skill_label)
 
-	# Progress bar
+	# Progress bar - taller for better visibility
 	var progress = ProgressBar.new()
-	progress.custom_minimum_size = Vector2(100, 12)
+	progress.custom_minimum_size = Vector2(100, 16)
 	progress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	progress.show_percentage = false
 	progress.max_value = max_skill if max_skill > 0 else 1
 	progress.value = skill_value
 
 	var prog_bg = StyleBoxFlat.new()
-	prog_bg.bg_color = Color(0.1, 0.1, 0.12, 0.8)
-	prog_bg.corner_radius_top_left = 3
-	prog_bg.corner_radius_top_right = 3
-	prog_bg.corner_radius_bottom_left = 3
-	prog_bg.corner_radius_bottom_right = 3
+	prog_bg.bg_color = Color(0.04, 0.04, 0.05, 0.95)
+	prog_bg.set_corner_radius_all(4)
+	prog_bg.border_color = Color(0.15, 0.15, 0.18, 0.8)
+	prog_bg.set_border_width_all(1)
 
 	var prog_fill = StyleBoxFlat.new()
-	prog_fill.bg_color = ACCENT_COLOR if is_current else Color(0.5, 0.4, 0.3, 1.0)
-	prog_fill.corner_radius_top_left = 3
-	prog_fill.corner_radius_top_right = 3
-	prog_fill.corner_radius_bottom_left = 3
-	prog_fill.corner_radius_bottom_right = 3
+	prog_fill.bg_color = ACCENT_COLOR if is_current else Color(0.40, 0.40, 0.45, 1.0)
+	prog_fill.set_corner_radius_all(3)
 
 	progress.add_theme_stylebox_override("background", prog_bg)
 	progress.add_theme_stylebox_override("fill", prog_fill)
 	hbox.add_child(progress)
 
-	# Get current title from WeaponSkillManager
+	# Get current title from WeaponSkillManager - brighter for readability
 	var current_title = ""
 	if WeaponSkillManager:
 		current_title = WeaponSkillManager.get_title(category)
 	if current_title == "":
 		current_title = titles[0] if titles.size() > 0 else "Untrained"
-	var title_label = create_text_label(current_title, 12)
-	title_label.add_theme_color_override("font_color", HEADER_COLOR)
+	var title_label = create_text_label(current_title, 13)
+	title_label.add_theme_color_override("font_color", TEXT_COLOR if is_current else HEADER_COLOR)
 	title_label.custom_minimum_size.x = 90
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hbox.add_child(title_label)
@@ -1067,7 +1092,7 @@ func create_equipment_slot(slot_name: String, label_text: String) -> HBoxContain
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let parent handle input
 	slot_control.add_child(panel)
 
-	# Wasteland slot styling with deep inset
+	# dreadland slot styling with deep inset
 	var slot_style_normal = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 	panel.add_theme_stylebox_override("panel", slot_style_normal)
 
@@ -1150,7 +1175,7 @@ func create_tool_slot(tool_name: String, label_text: String) -> HBoxContainer:
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let parent handle input
 	slot_control.add_child(panel)
 
-	# Wasteland slot styling with deep inset
+	# dreadland slot styling with deep inset
 	var slot_style_normal = create_slot_style(SLOT_BG, BORDER_INNER, 2)
 	panel.add_theme_stylebox_override("panel", slot_style_normal)
 
@@ -1227,13 +1252,17 @@ func get_stat_tooltip(stat_name: String) -> String:
 	"""Get tooltip description for a stat"""
 	match stat_name:
 		"Strength":
-			return "Increases attack damage"
+			return "Increases damage with heavy weapons (swords, maces, guns)"
 		"Agility":
-			return "Increases attack speed and dodge chance"
+			return "Increases damage with light weapons (daggers, bows)"
+		"Dexterity":
+			return "Increases melee critical hit chance"
+		"Intelligence":
+			return "Increases staff damage and healing power"
+		"Wisdom":
+			return "Increases mana pool and mana regeneration"
 		"Vitality":
-			return "Increases max HP and healing effectiveness"
-		"Luck":
-			return "Increases critical hit chance"
+			return "Increases max HP and defense"
 		_:
 			return ""
 
@@ -1255,7 +1284,7 @@ func create_text_label(text: String, size: int = 14) -> Label:
 	return label
 
 func create_styled_separator() -> Control:
-	"""Create a wasteland styled separator line"""
+	"""Create a dreadland styled separator line"""
 	var separator_container = MarginContainer.new()
 	separator_container.add_theme_constant_override("margin_top", 8)
 	separator_container.add_theme_constant_override("margin_bottom", 8)
@@ -1276,7 +1305,7 @@ func create_styled_separator() -> Control:
 	return separator_container
 
 func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, border_width: int = 2, use_glow: bool = false) -> StyleBoxFlat:
-	"""Create a wasteland style for equipment/inventory slots with optional rarity glow"""
+	"""Create a dreadland style for equipment/inventory slots with optional rarity glow"""
 	var style = StyleBoxFlat.new()
 	style.bg_color = bg_color
 	style.border_width_left = border_width
@@ -1304,7 +1333,7 @@ func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, bord
 	return style
 
 func create_inner_panel_style() -> StyleBoxFlat:
-	"""Create wasteland style for inner panels"""
+	"""Create dreadland style for inner panels"""
 	var style = StyleBoxFlat.new()
 	style.bg_color = SLOT_BG  # Darker leather inset
 
@@ -2078,7 +2107,8 @@ func _can_drop_equipment_data(at_position: Vector2, data: Variant, slot_name: St
 		return true
 
 	# Rings can be equipped to either ring1 or ring2 slot
-	if item_slot == "ring" and slot_name in ["ring1", "ring2"]:
+	# Check both item_type and slot since rings have slot="ring1" but can go to ring2
+	if (item_type == "ring" or item_slot in ["ring", "ring1", "ring2"]) and slot_name in ["ring1", "ring2"]:
 		return true
 
 	if item_slot != slot_name:
@@ -2103,7 +2133,8 @@ func _drop_equipment_data(at_position: Vector2, data: Dictionary, slot_name: Str
 	var is_shield_to_offhand = (item_type == "shield" and slot_name == "offhand")
 
 	# Allow rings to go to either ring slot
-	var is_ring_to_ring_slot = (item_slot == "ring" and slot_name in ["ring1", "ring2"])
+	# Check both item_type and slot since rings have slot="ring1" but can go to ring2
+	var is_ring_to_ring_slot = ((item_type == "ring" or item_slot in ["ring", "ring1", "ring2"]) and slot_name in ["ring1", "ring2"])
 
 	if item_slot != slot_name and not is_shield_to_offhand and not is_ring_to_ring_slot:
 		return

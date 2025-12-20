@@ -1242,16 +1242,16 @@ func create_clearing_stumps() -> void:
 
 	# Available tree textures
 	var tree_textures = [
-		"res://assets/environment/wasteland/dead_tree_1.png",
-		"res://assets/environment/wasteland/dead_tree_2.png",
-		"res://assets/environment/wasteland/dead_tree_3.png",
-		"res://assets/environment/wasteland/dead_tree_4.png",
-		"res://assets/environment/wasteland/dead_tree_5.png",
-		"res://assets/environment/wasteland/dead_tree_6.png",
-		"res://assets/environment/wasteland/dead_tree_7.png",
-		"res://assets/environment/wasteland/dead_tree_8.png",
-		"res://assets/environment/wasteland/dead_tree_9.png",
-		"res://assets/environment/wasteland/dead_tree_10.png"
+		"res://assets/environment/dreadland/dead_tree_1.png",
+		"res://assets/environment/dreadland/dead_tree_2.png",
+		"res://assets/environment/dreadland/dead_tree_3.png",
+		"res://assets/environment/dreadland/dead_tree_4.png",
+		"res://assets/environment/dreadland/dead_tree_5.png",
+		"res://assets/environment/dreadland/dead_tree_6.png",
+		"res://assets/environment/dreadland/dead_tree_7.png",
+		"res://assets/environment/dreadland/dead_tree_8.png",
+		"res://assets/environment/dreadland/dead_tree_9.png",
+		"res://assets/environment/dreadland/dead_tree_10.png"
 	]
 
 	# Create a container for all stumps

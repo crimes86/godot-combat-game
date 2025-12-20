@@ -31,6 +31,24 @@ var theme_colors = {
 		"particle_base": Color(1.1, 1.05, 0.9, 1.0),  # Particle cream
 		"particle_dark": Color(0.9, 0.85, 0.7, 1.0),  # Dark bone
 		"wave": Color(1.0, 0.95, 0.8, 1.0)  # Shockwave cream
+	},
+	"poison": {
+		"base": Color(0.2, 0.8, 0.3, 1.0),  # Toxic green
+		"glow": Color(0.3, 1.2, 0.4, 0.85),  # Bright green glow
+		"shine": Color(0.5, 1.5, 0.6, 0.5),  # Green-white shine
+		"flash": Color(0.4, 1.4, 0.5, 1.0),  # Bright green flash
+		"particle_base": Color(0.3, 1.3, 0.4, 1.0),  # Particle green
+		"particle_dark": Color(0.15, 0.9, 0.2, 1.0),  # Dark toxic green
+		"wave": Color(0.4, 1.5, 0.5, 1.0)  # Shockwave green
+	},
+	"pvp": {
+		"base": Color(0.6, 0.2, 0.9, 1.0),  # Purple/violet
+		"glow": Color(0.8, 0.3, 1.2, 0.85),  # Bright purple glow
+		"shine": Color(0.9, 0.6, 1.5, 0.5),  # Purple-white shine
+		"flash": Color(0.7, 0.3, 1.3, 1.0),  # Bright purple flash
+		"particle_base": Color(0.7, 0.3, 1.2, 1.0),  # Particle purple
+		"particle_dark": Color(0.5, 0.15, 0.8, 1.0),  # Dark purple
+		"wave": Color(0.8, 0.4, 1.4, 1.0)  # Shockwave purple
 	}
 }
 
@@ -342,6 +360,7 @@ func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
 			return
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		print("[Weakpoint] _on_input received click! theme=%s, parent=%s" % [color_theme, parent.name if parent else "null"])
 		# CLIENT-PREDICTED: All weakpoint interaction is local for instant feedback
 		# Server validates total damage at crit window end
 		hit()
@@ -364,12 +383,22 @@ func hit() -> void:
 
 	weakpoint_hit.emit(self)
 
+	# PvP: Send damage to the owner player when clicking PvP weakpoints
+	if color_theme == "pvp":
+		print("[PvP Weakpoint] hit() called, calling _apply_pvp_weakpoint_damage()")
+		_apply_pvp_weakpoint_damage()
+
 	# 🔊 Play satisfying bone-crack sound (randomized with pitch variation)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		sound_manager.play_weakpoint_sound(global_position, -8.0)
 		# Layer skeleton hurt sound for extra impact
 		sound_manager.play_skeleton_hurt_sound(global_position, -14.0)
+
+	# 🎮 Combat juice - hitstop + screen shake on every weakpoint hit
+	var combat_juice = get_node_or_null("/root/CombatJuice")
+	if combat_juice:
+		combat_juice.on_weakpoint()
 
 	# 🩸 IMPACT feedback - shake with progressive brightening
 	if sprite:
@@ -501,7 +530,7 @@ func destroy() -> void:
 	weakpoint_destroyed.emit(self)
 	weakpoint_destroyed_local.emit(self)  # For crit window client-side tracking
 
-	# 💥 SHAKE FIRST (building tension)
+	# 💥 GEM SHAKE FIRST (building tension)
 	if sprite:
 		var shake_tween = create_tween()
 		shake_tween.set_loops(4)  # Half as long (was 8)
@@ -513,17 +542,21 @@ func destroy() -> void:
 		# Brief pause before explosion
 		await get_tree().create_timer(0.05).timeout
 
-	# 💥 PLAY EXPLOSION SOUND (perfectly timed with visual explosion)
+	# 💥 Sound + shake + particles ALL AT ONCE
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		sound_manager.play_weakpoint_destroyed_sound(global_position, -6.0)
 
-	# 💥 NOW SPAWN EFFECTS (after shake completes)
+	var combat_juice = get_node_or_null("/root/CombatJuice")
+	if combat_juice:
+		combat_juice.on_kill()
+
 	spawn_destruction_particles()
 	spawn_destruction_wave()
 
-	# 💥 THEN EXPLODE (dramatic release)
+	# 💥 EXPLODE (dramatic release)
 	if sprite:
+
 		var explode_tween = create_tween()
 		explode_tween.set_parallel(true)
 		explode_tween.tween_property(sprite, "scale", Vector2(2.0, 2.0), 0.16)
@@ -771,12 +804,74 @@ func draw_debug_hitbox_world(world_container: Node2D) -> void:
 	line.width = 2.0
 	line.default_color = Color.CYAN
 	line.z_index = 1000
-	
+
 	var segments = 24
 	var radius = 25 * scale.x
 	for i in range(segments + 1):
 		var angle = (i * TAU) / segments
 		var point = global_position + Vector2(cos(angle), sin(angle)) * radius
 		line.add_point(point)
-	
+
 	world_container.add_child(line)
+
+# ============================================
+# PVP WEAKPOINT DAMAGE
+# ============================================
+
+func _apply_pvp_weakpoint_damage() -> void:
+	"""Apply damage when clicking a PvP weakpoint. Called locally by the attacker."""
+	# Get the defender (the player this weakpoint is attached to)
+	var defender = get_parent()
+	if not defender or not defender.is_in_group("player"):
+		print("[PvP Weakpoint] No valid defender parent")
+		return
+
+	# Get the local player (the attacker doing the clicking) - must find the one WE control
+	var local_player: Node = null
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	for player in get_tree().get_nodes_in_group("player"):
+		if player.get_multiplayer_authority() == my_peer_id:
+			local_player = player
+			break
+
+	if not local_player:
+		print("[PvP Weakpoint] Could not find local player for peer %d" % my_peer_id)
+		return
+
+	# Don't damage yourself (defender clicking their own weakpoints)
+	if local_player == defender:
+		print("[PvP Weakpoint] Ignoring self-click (defender can't click own weakpoints)")
+		return
+
+	# Check that we're in a duel
+	if not local_player.get("is_dueling"):
+		return
+
+	# Send PvP damage via the DuelManager
+	var duel_manager = get_node_or_null("/root/DuelManager")
+	if not duel_manager:
+		return
+
+	# Get defender's peer ID
+	var defender_peer_id = -1
+	if defender.get_multiplayer_authority() > 0:
+		defender_peer_id = defender.get_multiplayer_authority()
+
+	if defender_peer_id < 0:
+		# Try alternative methods to get peer ID
+		var game_world = get_node_or_null("/root/GameWorld")
+		if game_world and game_world.has_method("get_peer_id_for_player"):
+			defender_peer_id = game_world.get_peer_id_for_player(defender)
+
+	if defender_peer_id < 0:
+		print("[PvP Weakpoint] Could not find defender peer ID")
+		return
+
+	# Send damage through DuelManager
+	var multiplayer_api = get_tree().get_multiplayer()
+	if multiplayer_api.is_server():
+		duel_manager.request_pvp_damage(defender_peer_id, damage_per_hit)
+	else:
+		duel_manager.request_pvp_damage.rpc_id(1, defender_peer_id, damage_per_hit)
+
+	print("[PvP Weakpoint] Hit! Sent %d damage to player %d" % [damage_per_hit, defender_peer_id])

@@ -21,7 +21,7 @@ func add_fuel_to_inventory() -> void:
 
 	var bone_item = {
 		"name": "Bone Ember",
-		"description": "Wasteland bones infused with supernatural heat. Burns with ghostly fire.",
+		"description": "dreadland bones infused with supernatural heat. Burns with ghostly fire.",
 		"value": 5,
 		"rarity": "Common",
 		"type": "material",

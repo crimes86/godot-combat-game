@@ -174,14 +174,74 @@ var music_muted: bool = false
 var sfx_volume_db: float = 0.0  # SFX volume offset applied to all sound effects
 
 func _ready() -> void:
+	# Create audio buses if they don't exist
+	_setup_audio_buses()
+
 	# Load real sound files first
 	print("🔊 Loading real sound files...")
 	_load_real_sounds()
 
-	# Pre-generate all placeholder sounds
-	print("🔊 Generating placeholder sounds...")
+	# Pre-generate all placeholder sounds (uses real sounds if loaded)
+	print("🔊 Generating sound cache...")
 	_generate_all_sounds()
 	print("✅ Sound system ready!")
+
+
+func _setup_audio_buses() -> void:
+	"""Create Music and SFX audio buses if they don't exist"""
+	# Check if Music bus exists
+	var music_bus_idx = AudioServer.get_bus_index("Music")
+	if music_bus_idx < 0:
+		# Create Music bus as child of Master
+		var new_idx = AudioServer.bus_count
+		AudioServer.add_bus(new_idx)
+		AudioServer.set_bus_name(new_idx, "Music")
+		AudioServer.set_bus_send(new_idx, "Master")
+		print("🔊 Created 'Music' audio bus")
+
+	# Check if SFX bus exists
+	var sfx_bus_idx = AudioServer.get_bus_index("SFX")
+	if sfx_bus_idx < 0:
+		# Create SFX bus as child of Master
+		var new_idx = AudioServer.bus_count
+		AudioServer.add_bus(new_idx)
+		AudioServer.set_bus_name(new_idx, "SFX")
+		AudioServer.set_bus_send(new_idx, "Master")
+		print("🔊 Created 'SFX' audio bus")
+
+	# Load saved volume settings
+	_load_volume_settings()
+
+
+func _load_volume_settings() -> void:
+	"""Load and apply saved volume settings from user config"""
+	var config = ConfigFile.new()
+	if config.load("user://settings.cfg") != OK:
+		return  # No saved settings, use defaults
+
+	# Load saved values (0-100 scale)
+	var master_vol = config.get_value("audio", "master_volume", 80.0)
+	var music_vol = config.get_value("audio", "music_volume", 70.0)
+	var sfx_vol = config.get_value("audio", "sfx_volume", 80.0)
+
+	# Convert to dB and apply to buses
+	var master_db = lerp(-40.0, 0.0, master_vol / 100.0)
+	var music_db = lerp(-40.0, 0.0, music_vol / 100.0)
+	var sfx_db = lerp(-40.0, 0.0, sfx_vol / 100.0)
+
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), master_db)
+
+	var music_bus = AudioServer.get_bus_index("Music")
+	if music_bus >= 0:
+		AudioServer.set_bus_volume_db(music_bus, music_db)
+
+	var sfx_bus = AudioServer.get_bus_index("SFX")
+	if sfx_bus >= 0:
+		AudioServer.set_bus_volume_db(sfx_bus, sfx_db)
+		# NOTE: sfx_volume_db stays at 0.0 - the bus handles volume now
+		# Don't set sfx_volume_db here to avoid double volume reduction
+
+	print("🔊 Loaded volume settings - Master: %.0f%%, Music: %.0f%%, SFX: %.0f%%" % [master_vol, music_vol, sfx_vol])
 
 func _load_real_sounds() -> void:
 	"""Load real sound files for combat effects"""
@@ -638,7 +698,7 @@ func _load_real_sounds() -> void:
 	var track2 = load("res://assets/audio/music/game_loop_2.ogg")
 	if track2:
 		music_tracks.append(track2)
-		print("  ✅ Loaded game_loop_2.ogg (Track 2: The Wasteland's Whisper)")
+		print("  ✅ Loaded game_loop_2.ogg (Track 2: The dreadland's Whisper)")
 
 	print("  📊 Loaded %d music tracks" % music_tracks.size())
 
@@ -794,6 +854,7 @@ func play_sound(sound_type: SoundType, global_pos: Vector2 = Vector2.ZERO, volum
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_cache[sound_type]
 	player.volume_db = volume_db + sfx_volume_db  # Apply SFX volume setting
+	player.bus = "SFX"
 	player.global_position = global_pos
 	player.finished.connect(player.queue_free)
 
@@ -816,7 +877,7 @@ func play_sound_2d(sound_type: SoundType, volume_db: float = 0.0) -> void:
 	var player = AudioStreamPlayer.new()
 	player.stream = stream
 	player.volume_db = volume_db + sfx_volume_db  # Apply SFX volume setting
-	player.bus = "Master"  # Use Master bus for UI sounds
+	player.bus = "SFX"  # Use SFX bus for UI sounds (affected by SFX slider)
 	player.finished.connect(player.queue_free)
 
 	get_tree().root.add_child(player)
@@ -842,6 +903,7 @@ func play_weakpoint_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
 	player.volume_db = volume_db + sfx_volume_db
+	player.bus = "SFX"
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation to avoid distortion
 	player.max_polyphony = 8  # Allow multiple instances for spam clicking
@@ -863,6 +925,7 @@ func play_critical_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: floa
 	var player = AudioStreamPlayer2D.new()
 	player.stream = critical_hit_sound
 	player.volume_db = volume_db + sfx_volume_db
+	player.bus = "SFX"
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
 	player.max_polyphony = 4  # Allow some overlap but less than weakpoints
@@ -897,6 +960,7 @@ func play_normal_hit_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float 
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
 	player.volume_db = volume_db + sfx_volume_db
+	player.bus = "SFX"
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.max_polyphony = 4  # Allow some overlap
@@ -920,6 +984,7 @@ func play_skeleton_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: flo
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
 	player.volume_db = volume_db + sfx_volume_db
+	player.bus = "SFX"
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.97, 1.03)  # Subtle pitch variation
 	player.max_polyphony = 3  # Allow some overlap but not too much
@@ -962,6 +1027,7 @@ func _play_skeleton_sound(sound: AudioStream, global_pos: Vector2, volume_db: fl
 
 	active_skeleton_sound_player.stream = sound
 	active_skeleton_sound_player.volume_db = volume_db + sfx_volume_db
+	active_skeleton_sound_player.bus = "SFX"
 	active_skeleton_sound_player.global_position = global_pos
 	active_skeleton_sound_player.pitch_scale = randf_range(0.95, 1.05)
 	active_skeleton_sound_player.play()
@@ -982,6 +1048,7 @@ func play_skeleton_death_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: fl
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
 	player.volume_db = volume_db + sfx_volume_db
+	player.bus = "SFX"
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)  # Subtle pitch variation
 	player.finished.connect(player.queue_free)
@@ -1005,6 +1072,7 @@ func play_wolf_hurt_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
 	player.volume_db = volume_db + sfx_volume_db
+	player.bus = "SFX"
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.95, 1.05)
 	player.max_polyphony = 3
@@ -1066,6 +1134,7 @@ func _play_wolf_vocalization(sound: AudioStream, global_pos: Vector2, volume_db:
 
 	active_wolf_sound_player.stream = sound
 	active_wolf_sound_player.volume_db = volume_db + sfx_volume_db
+	active_wolf_sound_player.bus = "SFX"
 	active_wolf_sound_player.global_position = global_pos
 	active_wolf_sound_player.pitch_scale = randf_range(0.93, 1.07)
 	active_wolf_sound_player.play()
@@ -1525,6 +1594,7 @@ func play_skeleton_footstep(global_pos: Vector2, camera_pos: Vector2, volume_db:
 	var player = AudioStreamPlayer2D.new()
 	player.stream = sound_stream
 	player.volume_db = volume_db + sfx_volume_db
+	player.bus = "SFX"
 	player.global_position = global_pos
 	player.pitch_scale = randf_range(0.93, 1.07)  # More variation for bone clacking
 	player.max_polyphony = 4  # Allow more overlap for multiple skeletons
@@ -1552,6 +1622,7 @@ func play_fire_fuel_sound(global_pos: Vector2 = Vector2.ZERO, volume_db: float =
 	# Create player with pitch randomization for spammable variety
 	var player = AudioStreamPlayer2D.new()
 	player.stream = fire_fuel_add_sound
+	player.bus = "SFX"
 	player.global_position = global_pos
 	player.max_polyphony = 8  # Allow many overlapping sounds for spam clicking
 
@@ -1719,6 +1790,7 @@ func play_weakpoint_destroyed_sound(global_pos: Vector2 = Vector2.ZERO, volume_d
 	var player = AudioStreamPlayer2D.new()
 	player.stream = weakpoint_destroyed_sound
 	player.volume_db = volume_db + sfx_volume_db
+	player.bus = "SFX"
 	player.global_position = global_pos
 	player.pitch_scale = 1.0  # Keep original pitch for maximum impact
 	player.max_polyphony = 2  # Allow slight overlap in case of rapid weakpoint destruction
@@ -1984,6 +2056,7 @@ func play_game_music(volume_db: float = -15.0) -> void:
 	# Create music player if needed
 	if not music_player:
 		music_player = AudioStreamPlayer.new()
+		music_player.bus = "Music"
 		add_child(music_player)
 		# Connect finished signal to play next track
 		music_player.finished.connect(_on_music_track_finished)
@@ -2056,6 +2129,7 @@ func play_trading_hub_music(volume_db: float = -15.0) -> void:
 	# Create music player if needed
 	if not music_player:
 		music_player = AudioStreamPlayer.new()
+		music_player.bus = "Music"
 		add_child(music_player)
 		music_player.finished.connect(_on_music_track_finished)
 

@@ -399,9 +399,9 @@ func create_ground_circle() -> void:
 func create_stone_circle() -> void:
 	"""Arrange rocks in a natural-looking ritual circle - scaled up 25%"""
 	# Use zone1 rock textures (zone-based system in ChunkBasedPropSystem)
-	var rock_large_tex = load("res://assets/environment/wasteland/rocks/zone1/rock_large_1.png")
-	var rock_medium_tex = load("res://assets/environment/wasteland/rocks/zone1/rock_medium_1.png")
-	var rock_small_tex = load("res://assets/environment/wasteland/rocks/zone1/rock_small_1.png")
+	var rock_large_tex = load("res://assets/environment/dreadland/rocks/zone1/rock_large_1.png")
+	var rock_medium_tex = load("res://assets/environment/dreadland/rocks/zone1/rock_medium_1.png")
+	var rock_small_tex = load("res://assets/environment/dreadland/rocks/zone1/rock_small_1.png")
 
 	var rng = RandomNumberGenerator.new()
 	rng.seed = hash(global_position)
@@ -533,8 +533,8 @@ func create_summoning_rune() -> void:
 
 func create_bone_decorations() -> void:
 	"""Scatter bones and skulls around the circle - spread out more"""
-	var skull_tex = load("res://assets/environment/wasteland/skull.png")
-	var bones_tex = load("res://assets/environment/wasteland/bones.png")
+	var skull_tex = load("res://assets/environment/dreadland/skull.png")
+	var bones_tex = load("res://assets/environment/dreadland/bones.png")
 
 	var rng = RandomNumberGenerator.new()
 	rng.seed = hash(global_position) + 1
@@ -569,7 +569,7 @@ func create_bone_decorations() -> void:
 
 func create_central_altar() -> void:
 	"""Central skull pile - the focal point where skeletons rise"""
-	var skull_tex = load("res://assets/environment/wasteland/skull.png")
+	var skull_tex = load("res://assets/environment/dreadland/skull.png")
 	if not skull_tex:
 		return
 
@@ -596,7 +596,7 @@ func create_central_altar() -> void:
 
 func create_pillar_backdrop() -> void:
 	"""Add the original ruins pillars as backdrop elements - scaled up 25%"""
-	var ruins_tex = load("res://assets/environment/wasteland/ruins.png")
+	var ruins_tex = load("res://assets/environment/dreadland/ruins.png")
 	if not ruins_tex:
 		return
 

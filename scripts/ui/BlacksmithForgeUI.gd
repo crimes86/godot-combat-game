@@ -15,14 +15,14 @@ const BORDER_GLOW = Color(0.0, 0.75, 0.85)
 const SHADOW_GLOW = Color(0.0, 0.75, 0.85, 0.3)
 const TEXT_PRIMARY = Color(0.92, 0.92, 0.94)
 const TEXT_SECONDARY = Color(0.75, 0.78, 0.82)
-const MANTLE_CYAN = Color(0.0, 0.75, 0.85)
+const ASHBANE_ACCENT = Color(0.0, 0.75, 0.85)
 
 const RARITY_COLORS = {
 	"common": Color(0.6, 0.6, 0.6),
 	"uncommon": Color(0.4, 0.8, 0.4),
-	"rare": Color(0.4, 0.5, 0.9),
-	"epic": Color(0.7, 0.4, 0.9),
-	"legendary": Color(0.9, 0.6, 0.2)
+	"rare": Color(0.3, 0.5, 0.9),
+	"epic": Color(0.6, 0.2, 0.8),
+	"legendary": Color(1.0, 0.5, 0.1)
 }
 
 func _ready() -> void:
@@ -84,7 +84,7 @@ func _build_ui() -> void:
 	var forge_icon = Label.new()
 	forge_icon.text = "⚒"
 	forge_icon.add_theme_font_size_override("font_size", 32)
-	forge_icon.add_theme_color_override("font_color", MANTLE_CYAN)
+	forge_icon.add_theme_color_override("font_color", ASHBANE_ACCENT)
 	header_row.add_child(forge_icon)
 
 	var title = Label.new()

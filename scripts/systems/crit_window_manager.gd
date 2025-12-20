@@ -235,11 +235,7 @@ func _on_weakpoint_destroyed(weakpoint: Node, target: Node) -> void:
 
 	# Check if all weakpoints destroyed
 	if window_data.weakpoints_destroyed >= window_data.weakpoints_spawned:
-		# Spawn success ring effect at player's feet IMMEDIATELY (buff effect!)
-		if local_player:
-			_spawn_success_ring_at_position(local_player.global_position)
-
-		# End window immediately (shrink enemy) - all happens at once!
+		# End window immediately (shrink enemy)
 		end_window(target, window_data.weakpoints_destroyed)
 
 		# Small delay to let explosion animation complete before cleanup
@@ -360,14 +356,3 @@ func _report_window_results(target: Node, weakpoints_destroyed: int, total_damag
 	else:
 		# Client reports to server
 		network_enemy_mgr.report_crit_window_result.rpc_id(1, enemy_net_id, weakpoints_destroyed, total_damage)
-
-func _spawn_success_ring_at_position(position: Vector2) -> void:
-	"""Spawn a golden success ring effect at specified position"""
-	# Load and instantiate the success ring script
-	const SuccessRingScript = preload("res://scripts/vfx/success_ring.gd")
-	var ring = Node2D.new()
-	ring.set_script(SuccessRingScript)
-	ring.global_position = position
-
-	# Add to scene tree at root level
-	get_tree().root.add_child(ring)

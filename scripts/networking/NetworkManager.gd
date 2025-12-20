@@ -199,6 +199,9 @@ func _hide_game_ui():
 	# Hide QuestTrackerUI (CanvasLayer autoload)
 	if QuestTrackerUI:
 		QuestTrackerUI.visible = false
+	# Hide Minimap (CanvasLayer autoload)
+	if Minimap:
+		Minimap.hide_minimap()
 	# Hide BugReportUI (CanvasLayer autoload)
 	if BugReportUI:
 		BugReportUI.visible = false
@@ -277,6 +280,10 @@ func _on_connection_failed():
 # RPC Functions
 @rpc("any_peer", "reliable")
 func register_player(_id: int, name: String):
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not is_host:
 		return
 
@@ -436,6 +443,10 @@ func send_chat_message(message: String) -> void:
 @rpc("any_peer", "reliable")
 func relay_chat_message(_sender_name: String, message: String) -> void:
 	"""Server receives message from client and broadcasts to all"""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not is_host:
 		return
 
@@ -545,6 +556,10 @@ func _hash_password_for_transport(password: String) -> String:
 @rpc("any_peer", "reliable")
 func handle_login_request(username: String, password_hash: String) -> void:
 	"""Server handles login request from client"""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not is_host:
 		return
 
@@ -601,6 +616,10 @@ func handle_login_request(username: String, password_hash: String) -> void:
 @rpc("any_peer", "reliable")
 func handle_register_request(username: String, password_hash: String) -> void:
 	"""Server handles registration request from client"""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not is_host:
 		return
 
@@ -640,6 +659,10 @@ func _sanitize_guest_name(raw_name: String) -> String:
 @rpc("any_peer", "reliable")
 func handle_guest_request(guest_name: String) -> void:
 	"""Server handles guest login request"""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not is_host:
 		return
 
@@ -817,6 +840,10 @@ func save_all_players() -> void:
 @rpc("any_peer", "reliable")
 func sync_player_state_to_server(state_data: Dictionary) -> void:
 	"""Client sends their current state to server for persistence"""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not is_host:
 		return
 
@@ -927,6 +954,10 @@ func _build_local_player_state() -> Dictionary:
 @rpc("any_peer", "reliable")
 func request_player_heal(target_peer_id: int, heal_amount: float) -> void:
 	"""Client requests to heal another player. Server validates and applies."""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not multiplayer.is_server():
 		return
 

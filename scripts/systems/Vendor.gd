@@ -34,8 +34,8 @@ func _ready() -> void:
 	# Add to vendor group for tutorial system
 	add_to_group("vendor")
 
-	# Create animated blacksmith sprite
-	setup_blacksmith_sprite()
+	# Create animated sprite based on vendor type
+	setup_npc_sprite()
 
 	# Add physical collision so player can't walk through
 	add_collision_body()
@@ -231,6 +231,14 @@ func update_prompt_position() -> void:
 
 	interaction_prompt.position = Vector2(screen_x, screen_y)
 
+func setup_npc_sprite() -> void:
+	"""Setup sprite based on vendor type"""
+	match vendor_name.to_lower():
+		"wanderer":
+			setup_wanderer_sprite()
+		_:
+			setup_blacksmith_sprite()
+
 func setup_blacksmith_sprite() -> void:
 	# Create animated sprite for blacksmith
 	animated_sprite = AnimatedSprite2D.new()
@@ -271,6 +279,49 @@ func setup_blacksmith_sprite() -> void:
 	animated_sprite.play("idle")
 
 	Constants.debug_log("🔨 Blacksmith sprite loaded and animating")
+
+func setup_wanderer_sprite() -> void:
+	"""Setup sprite for the Wanderer NPC"""
+	animated_sprite = AnimatedSprite2D.new()
+	animated_sprite.name = "WandererSprite"
+	animated_sprite.centered = true
+	animated_sprite.z_index = 1
+	animated_sprite.scale.x = 1  # Face right (toward campfire from left side)
+	add_child(animated_sprite)
+
+	# Load wanderer walk animation (LPC format: 9 frames x 4 directions, 64x64 each)
+	var sprite_path = "res://assets/characters/lpc/wanderer/wanderer_walk.png"
+
+	if not ResourceLoader.exists(sprite_path):
+		Constants.log_warning("Wanderer sprite not found: %s" % sprite_path)
+		return
+
+	var texture = ResourceLoader.load(sprite_path, "Texture2D")
+	if not texture:
+		Constants.log_error("Failed to load wanderer sprite")
+		return
+
+	# Create sprite frames with single frame (stationary wanderer)
+	var sprite_frames = SpriteFrames.new()
+	sprite_frames.add_animation("idle")
+	sprite_frames.set_animation_loop("idle", false)
+	sprite_frames.set_animation_speed("idle", 1.0)
+
+	# LPC walk format: 9 columns x 4 rows, each frame 64x64
+	# Row 0 = up, Row 1 = left, Row 2 = down, Row 3 = right
+	# Extract frame from row 3 (right-facing), column 0
+	var source_img = texture.get_image()
+	var frame_img = Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	frame_img.blit_rect(source_img, Rect2i(0, 192, 64, 64), Vector2i(0, 0))  # Row 3, first frame
+
+	var frame_texture = ImageTexture.create_from_image(frame_img)
+	sprite_frames.add_frame("idle", frame_texture)
+
+	# Apply to sprite
+	animated_sprite.sprite_frames = sprite_frames
+	animated_sprite.play("idle")
+
+	Constants.debug_log("🧳 Wanderer sprite loaded and animating")
 
 func _physics_process(delta: float) -> void:
 	# Face the campfire when idle (no shop open, no player in range)
@@ -418,7 +469,7 @@ func load_starter_tools() -> void:
 	"""Load starter gathering tools (free for testing, like copper armor)"""
 	var rusty_axe = {
 		"name": "Rusty Axe",
-		"description": "An old, weathered axe. Still sharp enough to chop dead wasteland trees.",
+		"description": "An old, weathered axe. Still sharp enough to chop dead dreadland trees.",
 		"type": "tool",
 		"tool_type": "axe",
 		"tier": 0,  # Tier 0 = Basic (Zone 1 trees)
@@ -463,7 +514,7 @@ func load_starter_tools() -> void:
 
 	var world_tree_seed = {
 		"name": "World Tree Seed",
-		"description": "A mystical seed pulsing with ancient energy. Plant at a seed plot to grow your guild's World Tree - a sanctuary and respawn point in the wasteland.",
+		"description": "A mystical seed pulsing with ancient energy. Plant at a seed plot to grow your guild's World Tree - a sanctuary and respawn point in the dreadland.",
 		"type": "consumable",
 		"consumable_type": "world_tree_seed",
 		"value": 500,
@@ -573,6 +624,11 @@ func toggle_shop() -> void:
 
 func _on_first_interaction() -> void:
 	"""Handle first-time player interaction with blacksmith"""
+	# Track NPC interaction for quest objectives
+	var qm = get_node_or_null("/root/QuestManager")
+	if qm:
+		qm.on_npc_interaction(vendor_name.to_lower())
+
 	# Tutorial: notify TutorialManager of blacksmith visit (every time, not just first)
 	if TutorialManager and TutorialManager.is_tutorial_active():
 		TutorialManager.on_blacksmith_visited()
@@ -581,9 +637,6 @@ func _on_first_interaction() -> void:
 		return
 
 	has_talked_to_player = true
-
-	# Hide the quest indicator "!"
-	hide_quest_indicator()
 
 	# Dismiss spawn hints on the player
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
@@ -616,6 +669,8 @@ func _on_shop_closed() -> void:
 	shop_closed.emit()
 	# Face left (default direction toward campfire) after shop closes
 	face_left()
+	# Refresh quest indicator in case quests were accepted/turned in
+	_update_quest_indicator()
 
 func _on_item_purchased(item_name: String, price: int) -> void:
 	"""Handle item purchased signal"""
@@ -795,8 +850,8 @@ func create_tutorial_arrow() -> void:
 	# Bright green color
 	tutorial_arrow.color = Color(0.2, 1.0, 0.3, 1.0)
 
-	# Position above blacksmith (above the quest indicator)
-	tutorial_arrow.position = Vector2(0, -110)
+	# Position above NPC (closer to head)
+	tutorial_arrow.position = Vector2(0, -60)
 	tutorial_arrow.z_index = 150
 
 	# Add outline for visibility
@@ -862,7 +917,7 @@ func _start_tutorial_arrow_bob() -> void:
 	if not tutorial_arrow or not is_instance_valid(tutorial_arrow):
 		return
 
-	var base_y = -110.0
+	var base_y = -60.0
 	tutorial_arrow_tween = create_tween().set_loops()
 	tutorial_arrow_tween.tween_property(tutorial_arrow, "position:y", base_y + 10, 0.4).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 	tutorial_arrow_tween.tween_property(tutorial_arrow, "position:y", base_y, 0.4).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)

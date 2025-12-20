@@ -332,11 +332,13 @@ func focus_input() -> void:
 		_fade_to_active()  # Show fully when typing
 
 func unfocus_input() -> void:
-	"""Remove focus from chat input"""
+	"""Remove focus from chat input and return control to game"""
 	if input_field:
 		input_field.release_focus()
 		is_input_focused = false
 		_fade_to_ghosted()  # Fade back to ghosted when done typing
+		# Explicitly release GUI focus so game input works immediately
+		get_viewport().gui_release_focus()
 
 func send_message() -> void:
 	"""Send the current message"""
@@ -559,7 +561,7 @@ func _handle_admin_command(cmd: String) -> void:
 			_cmd_duel_accept()
 		"declineduel":
 			_cmd_duel_decline()
-		# Trading commands (requires Mantle auth)
+		# Trading commands (requires Ashbane auth)
 		"sell", "wts":
 			_cmd_sell(args)
 		"listings", "market", "recently":
@@ -601,6 +603,9 @@ func _handle_admin_command(cmd: String) -> void:
 			_cmd_delete()
 		"tp", "goto":
 			_cmd_teleport(args)
+		# Debug/Playtest commands (available to all for testing)
+		"playtest", "debug":
+			_cmd_playtest(args)
 		_:
 			add_system_message("Unknown command: /%s (type /help)" % command)
 
@@ -871,8 +876,8 @@ func _cmd_sell(args: Array) -> void:
 	Usage: /sell <token_id> <price> [message]
 	       /sell list - Show your forged items with token IDs
 	"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
-		add_system_message("[Error] Trading requires Mantle authentication.")
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
+		add_system_message("[Error] Trading requires Ashbane authentication.")
 		add_system_message("Log in at the main menu to link your gaming accounts.")
 		return
 
@@ -1022,8 +1027,8 @@ func _cmd_listings() -> void:
 
 func _cmd_my_listings() -> void:
 	"""Show player's own active listings"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
-		add_system_message("[Error] Not logged in to Mantle.")
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
+		add_system_message("[Error] Not logged in to Ashbane.")
 		return
 
 	if not TradingManager:
@@ -1031,7 +1036,7 @@ func _cmd_my_listings() -> void:
 		return
 
 	var all_listings = TradingManager.get_active_listings()
-	var my_user_id = MantleAuth.user_id
+	var my_user_id = AshbaneAuth.user_id
 
 	var my_listings = []
 	for listing in all_listings:
@@ -1054,8 +1059,8 @@ func _cmd_my_listings() -> void:
 
 func _cmd_cancel_listing(args: Array) -> void:
 	"""Cancel an active listing"""
-	if not MantleAuth or not MantleAuth.is_logged_in():
-		add_system_message("[Error] Not logged in to Mantle.")
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
+		add_system_message("[Error] Not logged in to Ashbane.")
 		return
 
 	if args.is_empty():
@@ -1152,6 +1157,7 @@ func _cmd_decline_trade() -> void:
 func _cmd_help() -> void:
 	add_system_message("=== General Commands ===")
 	add_system_message("/players - List online players")
+	add_system_message("/playtest - Toggle debug messages in chat")
 	add_system_message("=== Trading Commands ===")
 	add_system_message("/trade <player> - Request direct trade")
 	add_system_message("/accepttrade - Accept trade request")
@@ -1190,6 +1196,43 @@ func _cmd_help() -> void:
 	add_system_message("/ban /unban - Toggle ban")
 	add_system_message("/forceoffline - Fix stuck login")
 	add_system_message("/delete - Delete selected account")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PLAYTEST/DEBUG COMMAND
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _cmd_playtest(args: Array) -> void:
+	"""Toggle playtest mode or configure categories"""
+	if args.is_empty():
+		# Toggle playtest mode
+		LogManager.toggle_playtest_mode()
+		return
+
+	var subcommand = args[0].to_lower()
+	match subcommand:
+		"on":
+			LogManager.enable_playtest_mode()
+		"off":
+			LogManager.disable_playtest_mode()
+		"add":
+			if args.size() > 1:
+				LogManager.add_playtest_category(args[1])
+			else:
+				add_system_message("Usage: /playtest add <category>")
+		"remove":
+			if args.size() > 1:
+				LogManager.remove_playtest_category(args[1])
+			else:
+				add_system_message("Usage: /playtest remove <category>")
+		"categories":
+			add_system_message("Available: loot, combat, network, player, enemy, inventory, quest")
+			add_system_message("Currently watching: %s" % ", ".join(LogManager.playtest_categories))
+		"status":
+			var status = "ON" if LogManager.playtest_mode else "OFF"
+			add_system_message("Playtest mode: %s" % status)
+			add_system_message("Watching: %s" % ", ".join(LogManager.playtest_categories))
+		_:
+			add_system_message("Usage: /playtest [on|off|add|remove|categories|status]")
 
 func _cmd_accounts() -> void:
 	if not DatabaseManager or not DatabaseManager.is_initialized:
@@ -1399,7 +1442,7 @@ func _cmd_teleport(args: Array) -> void:
 						add_system_message("[Error] TradingHubManager not found")
 				return
 
-			"zone1", "world", "wasteland", "overworld":
+			"zone1", "world", "dreadland", "overworld":
 				# Return to Zone 1 (scene change if needed)
 				if in_hub:
 					add_system_message("Returning to Zone 1...")

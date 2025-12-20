@@ -22,9 +22,9 @@ var initial_animation_done: bool = false  # Track if pop-in is complete
 const RARITY_COLORS = {
 	"COMMON": Color(0.8, 0.8, 0.8, 1.0),      # Light gray
 	"UNCOMMON": Color(0.4, 0.9, 0.4, 1.0),    # Green
-	"RARE": Color(0.4, 0.6, 1.0, 1.0),        # Blue
-	"EPIC": Color(0.8, 0.4, 1.0, 1.0),        # Purple
-	"LEGENDARY": Color(1.0, 0.7, 0.2, 1.0)    # Orange
+	"RARE": Color(0.3, 0.5, 0.9, 1.0),        # Blue
+	"EPIC": Color(0.6, 0.2, 0.8, 1.0),        # Purple
+	"LEGENDARY": Color(1.0, 0.5, 0.1, 1.0)    # Orange
 }
 
 func _ready() -> void:

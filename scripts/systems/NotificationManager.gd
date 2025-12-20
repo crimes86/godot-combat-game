@@ -123,7 +123,7 @@ func _process_next_notification() -> void:
 			# Play item pickup sound
 			var sound_manager = get_node_or_null("/root/SoundManager")
 			if sound_manager:
-				sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -8.0)
+				sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -12.0)
 		"item_removed":
 			notification.setup_item_removed(data.item_name, data.quantity, data.rarity)
 		"gold_added":

@@ -49,7 +49,7 @@ func _ready():
 		is_dedicated_server = true
 		server_start_time = Time.get_unix_time_from_system()
 		print("═══════════════════════════════════════════════════════")
-		print("   WASTELAND DEDICATED SERVER")
+		print("   dreadland DEDICATED SERVER")
 		print("═══════════════════════════════════════════════════════")
 		_start_dedicated_server(args)
 
@@ -87,7 +87,7 @@ func _start_dedicated_server(args: Array):
 		print("   Max Players: %d" % NetworkManager.MAX_PLAYERS)
 		print("═══════════════════════════════════════════════════════")
 		print("   Type 'help' for admin commands")
-		print("   Use 'systemctl stop wasteland' for graceful shutdown")
+		print("   Use 'systemctl stop dreadland' for graceful shutdown")
 		print("═══════════════════════════════════════════════════════")
 
 		# Start CLI input thread

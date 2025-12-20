@@ -20,6 +20,8 @@ var _light_tween: Tween = null
 var _base_modulate: Color = Color(0.75, 0.8, 0.85, 1)  # Gray stone tint
 
 func _ready() -> void:
+	add_to_group("forge")
+
 	# Connect signals
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)

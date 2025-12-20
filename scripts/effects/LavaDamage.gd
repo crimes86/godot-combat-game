@@ -74,4 +74,4 @@ func apply_lava_damage(player: Node):
 		# Play lava burn sound
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager and sound_manager.has_method("play_lava_burn_sound"):
-			sound_manager.play_lava_burn_sound(player.global_position, -6.0)
+			sound_manager.play_lava_burn_sound(player.global_position, -8.0)

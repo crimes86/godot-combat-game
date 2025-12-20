@@ -400,6 +400,14 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 	var regular_spawned = 0
 	var roaming_spawned = 0
 
+	# Per-pool spawn limits to prevent crowding
+	const MAX_ENEMIES_PER_MONSTER_POOL: int = 8
+	const MAX_ENEMIES_PER_REGULAR_POOL: int = 4
+
+	# Track spawns per pool (by index)
+	var monster_pool_counts: Dictionary = {}  # pool_index -> count
+	var regular_pool_counts: Dictionary = {}  # pool_index -> count
+
 	# World Y bounds (half chunk height)
 	var world_y_min = -Constants.CHUNK_SIZE / 2
 	var world_y_max = Constants.CHUNK_SIZE / 2
@@ -410,11 +418,26 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		var spawn_pos: Vector2
 		var level: int = 1
 		var spawn_type: String = "skeleton"  # Track what type to spawn
+		var selected_pool_idx: int = -1  # Track which pool was selected
 
 		# Phase 1: Monster lake pools (45%) - Level scaling by distance from center
 		# Edge = Level 1-3, Core/Center = Level 4-6
 		if monster_spawned < monster_count and monster_pools.size() > 0:
-			var pool = monster_pools[spawn_rng.randi() % monster_pools.size()]
+			# Find a pool that hasn't reached its limit
+			var available_pools: Array = []
+			for idx in range(monster_pools.size()):
+				var current_count = monster_pool_counts.get(idx, 0)
+				if current_count < MAX_ENEMIES_PER_MONSTER_POOL:
+					available_pools.append(idx)
+
+			# If all pools are full, shift remaining to roaming
+			if available_pools.is_empty():
+				roaming_count += monster_count - monster_spawned
+				monster_count = monster_spawned
+				continue
+
+			selected_pool_idx = available_pools[spawn_rng.randi() % available_pools.size()]
+			var pool = monster_pools[selected_pool_idx]
 
 			# Decide spawn zone: 60% edge (low level), 40% core (high level)
 			var spawn_at_edge = spawn_rng.randf() < 0.6
@@ -438,13 +461,29 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 
 			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
 				monster_spawned += 1
+				monster_pool_counts[selected_pool_idx] = monster_pool_counts.get(selected_pool_idx, 0) + 1
 				spawn_type = "skeleton"
 			else:
 				continue
 
 		# Phase 2: Regular small pools (30%) - Low level only (1-3)
 		elif regular_spawned < regular_count and regular_pools.size() > 0:
-			var pool = regular_pools[spawn_rng.randi() % regular_pools.size()]
+			# Find a pool that hasn't reached its limit
+			var available_pools: Array = []
+			for idx in range(regular_pools.size()):
+				var current_count = regular_pool_counts.get(idx, 0)
+				if current_count < MAX_ENEMIES_PER_REGULAR_POOL:
+					available_pools.append(idx)
+
+			# If all pools are full, shift remaining to roaming
+			if available_pools.is_empty():
+				roaming_count += regular_count - regular_spawned
+				regular_count = regular_spawned
+				continue
+
+			selected_pool_idx = available_pools[spawn_rng.randi() % available_pools.size()]
+			var pool = regular_pools[selected_pool_idx]
+
 			# Spawn at the edge of small pools - increased distance range
 			var angle = spawn_rng.randf() * TAU
 			var edge_dist = pool.radius + spawn_rng.randf_range(30, 120)
@@ -457,12 +496,13 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 
 			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
 				regular_spawned += 1
+				regular_pool_counts[selected_pool_idx] = regular_pool_counts.get(selected_pool_idx, 0) + 1
 				spawn_type = "skeleton"
 			else:
 				continue
 
 		# Phase 3: Roaming wolves/spiders in open areas (25%)
-		# These spawn AWAY from lava pools in the open wasteland
+		# These spawn AWAY from lava pools in the open dreadland
 		elif roaming_spawned < roaming_count:
 			# Find a position away from all lava pools
 			spawn_pos = find_open_area_spawn(chunk_min_x, chunk_max_x, world_y_min, world_y_max, all_pools)
@@ -822,6 +862,34 @@ func get_lava_pools_in_chunk(chunk_key: String) -> Dictionary:
 		return result
 
 	var prop_system = game_world.chunk_prop_system
+
+	# Check if using cell streaming mode
+	if prop_system and prop_system.USE_CELL_STREAMING:
+		# Get lava positions from CellStreamingManager instead
+		var cell_manager = game_world.get("cell_streaming_manager")
+		if cell_manager and cell_manager.global_lava_positions.size() > 0:
+			# Parse chunk bounds
+			var chunk_parts = chunk_key.split(",")
+			var chunk_x = int(chunk_parts[0])
+			var chunk_min_x = chunk_x * Constants.CHUNK_SIZE
+			var chunk_max_x = (chunk_x + 1) * Constants.CHUNK_SIZE
+
+			# Filter lava positions to those within this chunk
+			for lava_pos in cell_manager.global_lava_positions:
+				if lava_pos.x >= chunk_min_x and lava_pos.x < chunk_max_x:
+					var pool_data = {"pos": lava_pos, "radius": 100.0}
+					result.all.append(pool_data)
+					# Classify as monster or regular based on position
+					# Monster pools tend to be larger and in specific locations
+					# For now, treat first few as monster pools
+					if result.monster.size() < 3:
+						result.monster.append(pool_data)
+					else:
+						result.regular.append(pool_data)
+
+			return result
+
+	# Traditional chunk-based loading path
 	if not prop_system or not prop_system.loaded_chunks.has(chunk_key):
 		return result
 

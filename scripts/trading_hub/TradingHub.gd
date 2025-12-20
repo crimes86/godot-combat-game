@@ -18,9 +18,9 @@ const CAVE_DARKNESS_FACTOR: float = 0.6  # Cave is 60% as bright as outside
 # Layout constants - matching the expanded tunnel system
 # Central hub at Y=0 (radius ~2600), winding passages extend to Y=7000
 # South corridor is direct, East/West passages are winding and 50% longer
-const EXIT_SOUTH_Y: float = 6800.0  # Exit when near end of south corridor
-const EXIT_WEST_X: float = -5300.0  # Exit when near west end of winding passage
-const EXIT_EAST_X: float = 5300.0   # Exit when near east end of winding passage
+const EXIT_SOUTH_Y: float = 6800.0  # Exit when near end of south corridor (unused - south removed)
+const EXIT_WEST_X: float = -4600.0  # Exit when in west passage gradient zone
+const EXIT_EAST_X: float = 4600.0   # Exit when in east passage gradient zone
 
 # Zone 2 preview area: Y=-2800 to Y=-8000 (massive 16,000 wide area)
 # The cliff wall with cave mouth is at Y=-2000 to Y=-2800
@@ -37,14 +37,16 @@ const ZONE2_ZOOM_MIN: float = 0.5           # Can zoom out more in open Zone 2
 const ZONE2_ZOOM_MAX: float = 2.0           # Normal zoom in
 var _player_in_zone2: bool = false          # Track zone for zoom changes
 var _original_zoom_min: float = 0.75        # Store original to restore on exit
+var _intended_spawn_position: Vector2 = Vector2.ZERO  # Store spawn pos to force after camera setup
 
 # Fire pit ambient audio
 var _fire_ambient_player: AudioStreamPlayer2D = null
 
 # Spawn positions for each entry corridor
-const SPAWN_SOUTH: Vector2 = Vector2(0, 200)          # Near hub hearth
-const SPAWN_WEST: Vector2 = Vector2(-200, 0)          # Near hub hearth (west side)
-const SPAWN_EAST: Vector2 = Vector2(200, 0)           # Near hub hearth (east side)
+const SPAWN_SOUTH: Vector2 = Vector2(0, 200)          # Near hub hearth (unused - south removed)
+const SPAWN_WEST: Vector2 = Vector2(-4400, 6600)      # At west tunnel entrance (inside exit threshold)
+const SPAWN_EAST: Vector2 = Vector2(4400, 6600)       # At east tunnel entrance (inside exit threshold)
+const SPAWN_CENTER: Vector2 = Vector2(0, -500)        # Near forge (for /tp hub command)
 
 func _get_player_scene() -> PackedScene:
 	if PLAYER_SCENE == null:
@@ -67,6 +69,41 @@ func _ready() -> void:
 		print("[TradingHub] Origin chunk: %d" % _origin_chunk)
 	else:
 		print("[TradingHub] WARNING: TradingHubManager not found!")
+
+	# Auto-skip tutorial when entering hub (tutorial only runs in Zone 1)
+	# This ensures player isn't stuck in tutorial zone when returning to Zone 1
+	if has_node("/root/TutorialManager"):
+		var tutorial_mgr = get_node("/root/TutorialManager")
+		if tutorial_mgr.is_tutorial_active():
+			tutorial_mgr.skip_tutorial()
+			# Mark tutorial as complete in database so it doesn't restart when returning
+			if has_node("/root/DatabaseManager"):
+				var db = get_node("/root/DatabaseManager")
+				# Get username explicitly from NetworkManager to avoid empty current_username issues
+				var username = ""
+				if has_node("/root/NetworkManager"):
+					var nm = get_node("/root/NetworkManager")
+					username = nm.local_player_data.get("username", "")
+				print("[TradingHub] Marking tutorial complete for user: '%s'" % username)
+				db.set_tutorial_completed(username)
+				print("[TradingHub] Tutorial auto-skipped and saved as complete (player entered hub)")
+			else:
+				print("[TradingHub] Tutorial auto-skipped (player entered hub)")
+		else:
+			tutorial_mgr.hide_tutorial_ui()
+			print("[TradingHub] Tutorial UI hidden (already complete)")
+
+	# Remove any lingering TutorialBlackout from Zone 1 (it's added to root, persists across scenes)
+	var blackout = get_tree().root.get_node_or_null("TutorialBlackout")
+	if blackout:
+		blackout.queue_free()
+		print("[TradingHub] Removed lingering TutorialBlackout from root")
+
+	# Hide quest tracker in trading hub (shows tutorial steps)
+	if has_node("/root/QuestTrackerUI"):
+		var quest_tracker = get_node("/root/QuestTrackerUI")
+		quest_tracker.visible = false
+		print("[TradingHub] Quest tracker hidden")
 
 	# Setup time-synced lighting
 	_setup_time_lighting()
@@ -123,7 +160,7 @@ func _start_hub_music() -> void:
 			sound_manager.stop_game_music()
 		# Start hub music
 		if sound_manager.has_method("play_trading_hub_music"):
-			sound_manager.play_trading_hub_music(-12.0)
+			sound_manager.play_trading_hub_music(-15.0)
 			print("[TradingHub] 🎵 Started Trading Hub music")
 		else:
 			push_warning("[TradingHub] SoundManager missing play_trading_hub_music method")
@@ -169,16 +206,26 @@ func _spawn_player() -> void:
 	local_player = player_scene.instantiate()
 
 	# Spawn based on which chunk they entered from
+	# Note: South corridor (chunk 0) removed - only edge passages remain
+	# Chunk 0 is now used for teleport commands (/tp hub) - spawns at center near forge
+	print("[TradingHub] _origin_chunk = %d, SPAWN_CENTER = %s" % [_origin_chunk, SPAWN_CENTER])
 	match _origin_chunk:
 		-1:
-			local_player.position = SPAWN_WEST
-			print("[TradingHub] Player entered from West (chunk -1)")
+			_intended_spawn_position = SPAWN_WEST
+			print("[TradingHub] Player entered from West (chunk -1) at %s" % SPAWN_WEST)
 		1:
-			local_player.position = SPAWN_EAST
-			print("[TradingHub] Player entered from East (chunk +1)")
+			_intended_spawn_position = SPAWN_EAST
+			print("[TradingHub] Player entered from East (chunk +1) at %s" % SPAWN_EAST)
+		0:
+			# Teleport command - spawn at center near forge
+			_intended_spawn_position = SPAWN_CENTER
+			print("[TradingHub] Player teleported to Hub Center at %s (near forge)" % SPAWN_CENTER)
 		_:
-			local_player.position = SPAWN_SOUTH
-			print("[TradingHub] Player entered from South (chunk 0)")
+			# Unknown chunk - fallback to center
+			_intended_spawn_position = SPAWN_CENTER
+			print("[TradingHub] Player entered from fallback Center at %s" % SPAWN_CENTER)
+
+	local_player.position = _intended_spawn_position
 
 	add_child(local_player)
 	local_player.add_to_group("player")
@@ -199,6 +246,9 @@ func _spawn_player() -> void:
 	_set_zoom_limits(CAVE_ZOOM_MIN, CAVE_ZOOM_MAX)
 	print("[TradingHub] Initial zoom set to cave mode (%.1fx - %.1fx)" % [CAVE_ZOOM_MIN, CAVE_ZOOM_MAX])
 
+	# Force position again after a short delay to override any late movers
+	_force_spawn_position_delayed()
+
 func _setup_camera() -> void:
 	"""Configure camera limits for the hub and snap camera to player position"""
 	await get_tree().process_frame
@@ -209,6 +259,12 @@ func _setup_camera() -> void:
 		player = get_tree().get_first_node_in_group("player")
 
 	if player and is_instance_valid(player):
+		# Force player back to intended spawn position (something may have moved them during await)
+		if _intended_spawn_position != Vector2.ZERO:
+			print("[TradingHub] Forcing player position from %s to intended %s" % [player.global_position, _intended_spawn_position])
+			player.global_position = _intended_spawn_position
+			player.velocity = Vector2.ZERO  # Stop any movement
+
 		var camera = player.get_node_or_null("Camera2D")
 		if camera:
 			# Disable smoothing temporarily to teleport camera instantly
@@ -241,6 +297,20 @@ func _setup_camera() -> void:
 	else:
 		push_warning("[TradingHub] No player found for camera setup!")
 
+func _force_spawn_position_delayed() -> void:
+	"""Force player to spawn position after a short delay to override any late movers"""
+	await get_tree().create_timer(0.1).timeout  # 100ms delay
+	if local_player and is_instance_valid(local_player) and _intended_spawn_position != Vector2.ZERO:
+		if local_player.global_position.distance_to(_intended_spawn_position) > 100:
+			print("[TradingHub] DELAYED FORCE: Player drifted to %s, forcing back to %s" % [local_player.global_position, _intended_spawn_position])
+			local_player.global_position = _intended_spawn_position
+			local_player.velocity = Vector2.ZERO
+			# Also snap camera
+			var camera = local_player.get_node_or_null("Camera2D")
+			if camera:
+				camera.reset_smoothing()
+				camera.global_position = _intended_spawn_position
+
 func _process(delta: float) -> void:
 	_frame_count += 1
 
@@ -261,23 +331,21 @@ func _process(delta: float) -> void:
 func _check_exit() -> void:
 	var pos = local_player.position
 
-	# South corridor exit (chunk 0) - direct path down the middle
-	if pos.y > EXIT_SOUTH_Y and abs(pos.x) < 600:
-		print("[TradingHub] EXIT: South corridor -> Zone 1 chunk 0")
-		_exit_to_zone1(0)
-		return
+	# South corridor removed - only edge passages remain for late-game discovery
 
-	# West winding passage exit (chunk -1) - at far west end
-	# Passage winds from hub (~X=-2600) to exit (~X=-5300)
-	if pos.x < EXIT_WEST_X and pos.y > 2000 and pos.y < 3500:
-		print("[TradingHub] EXIT: West passage -> Zone 1 chunk -1")
+	# West winding passage exit (chunk -1) - at far south end of winding passage
+	# Passage winds from hub (~Y=2000) down to exit (~Y=7000+)
+	# Exit triggers when player reaches the far south-west corner
+	if pos.x < EXIT_WEST_X and pos.y > 6500 and pos.y < 8000:
+		print("[TradingHub] EXIT: West passage -> Zone 1 chunk -1 (pos: %s)" % pos)
 		_exit_to_zone1(-1)
 		return
 
-	# East winding passage exit (chunk +1) - at far east end
-	# Passage winds from hub (~X=+2600) to exit (~X=+5300)
-	if pos.x > EXIT_EAST_X and pos.y > 2000 and pos.y < 3500:
-		print("[TradingHub] EXIT: East passage -> Zone 1 chunk +1")
+	# East winding passage exit (chunk +1) - at far south end of winding passage
+	# Passage winds from hub (~Y=2000) down to exit (~Y=7000+)
+	# Exit triggers when player reaches the far south-east corner
+	if pos.x > EXIT_EAST_X and pos.y > 6500 and pos.y < 8000:
+		print("[TradingHub] EXIT: East passage -> Zone 1 chunk +1 (pos: %s)" % pos)
 		_exit_to_zone1(1)
 		return
 
@@ -412,23 +480,9 @@ func _spawn_wall_torches() -> void:
 	_spawn_torch(torch_container, Vector2(4400, -200), true)
 	_spawn_torch(torch_container, Vector2(4250, 1000), true)
 
-	# === SOUTH CORRIDOR ENTRANCE (framing the opening) ===
-	_spawn_torch(torch_container, Vector2(-1647, 2035), true, 90.0)   # Left pillar, base rotated 90°
-	_spawn_torch(torch_container, Vector2(1800, 2016), false)         # Right pillar, faces right toward hub
-
-	# === SOUTH CORRIDOR (middle exit) ===
-	# Left wall - exact polygon vertices:
-	# (-600, 2400), (-520, 3900), (-540, 5400), (-550, 6900)
-	_spawn_torch(torch_container, Vector2(-600, 2400), false)
-	_spawn_torch(torch_container, Vector2(-520, 3900), false)
-	_spawn_torch(torch_container, Vector2(-540, 5400), false)
-	_spawn_torch(torch_container, Vector2(-550, 6900), false)
-
-	# Right wall - exact polygon vertices (staggered Y):
-	# (480, 3150), (500, 4650), (470, 6150)
-	_spawn_torch(torch_container, Vector2(480, 3150), true)
-	_spawn_torch(torch_container, Vector2(500, 4650), true)
-	_spawn_torch(torch_container, Vector2(470, 6150), true)
+	# === SOUTH CORRIDOR REMOVED ===
+	# South corridor entrance and torches removed - area is now blocked off
+	# Only west and east winding passages remain for late-game discovery
 
 	# === OUTER PERIMETER (SW passage outer wall) ===
 	# Polygon vertices: (-4300, 2500), (-5050, 4300), (-5250, 6100)

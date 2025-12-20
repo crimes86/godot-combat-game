@@ -67,7 +67,21 @@ var has_safe_aura: bool = false
 var duel_aura_node: Node2D = null
 var safe_aura_node: Node2D = null
 var blood_color: Color = Color(0.6, 0.05, 0.05, 0.9)  # Dark blood red (used for PvP hit effects)
-var pvp_weakpoints: Array = []  # Weakpoints spawned during PvP duels
+
+# PvP Weakpoint System (HP threshold-based, scales with level like PvE)
+# Two windows per duel: first at 70% HP, second at 35% HP
+const PVP_WEAKPOINT_THRESHOLDS: Array = [0.70, 0.35]  # Trigger at 70%, 35% HP
+const PVP_WEAKPOINT_DURATION: float = 3.5  # Seconds weakpoint window stays active
+const PVP_WEAKPOINT_DAMAGE_PER_HIT: int = 3  # Damage per weakpoint click (balanced for multi-hit windows)
+const PVP_WEAKPOINT_SCALE: float = 0.5  # Scale factor for PvP weakpoints (smaller than PvE)
+# Weakpoint COUNT scales with level (matches PvE):
+# Level 1-10: 1 weakpoint, Level 11-19: 2 weakpoints, Level 20+: 3 weakpoints
+var pvp_triggered_thresholds: Array = []  # Which HP thresholds have been triggered
+var pvp_weakpoint_active: bool = false  # Is there an active weakpoint window?
+var pvp_weakpoints: Array = []  # Active weakpoint instances
+var pvp_weakpoint_timer: Timer = null  # Window expiry timer
+var pvp_weakpoints_destroyed: int = 0  # Count of cleared weakpoints this window
+var pvp_weakpoints_spawned: int = 0  # Total weakpoints spawned in current window
 
 # References
 @onready var health_bar: Control = $HealthBar
@@ -256,10 +270,6 @@ func _ready() -> void:
 	combat_system.attack_feedback = attack_feedback
 	combat_system.update_stats(attack_damage, attack_cooldown, attack_range, attack_cone_angle)
 
-	# Connect chain tracking for forged weapon stats
-	if CharacterStats.has_signal("chain_increased"):
-		CharacterStats.chain_increased.connect(_on_chain_increased_for_stats)
-
 	# Register with GameInput and setup mobile controls if needed
 	if is_multiplayer_authority():
 		GameInput.set_player(self)
@@ -307,7 +317,7 @@ func _ready() -> void:
 			# Start background music
 			var sound_manager = get_node_or_null("/root/SoundManager")
 			if sound_manager and sound_manager.has_method("play_game_music"):
-				sound_manager.play_game_music(-15.0)  # Background level
+				sound_manager.play_game_music(-18.0)  # Background level
 				print("🎵 Game music started")
 		else:
 			# Disable camera for remote players
@@ -523,6 +533,9 @@ func update_stats_from_character() -> void:
 	else:
 		attack_cooldown = cooldown_override
 
+	# Sync hold_attack_interval to weapon cooldown (held attacks match weapon speed)
+	hold_attack_interval = attack_cooldown
+
 	# Update attack range based on weapon type
 	var weapon_type = "unarmed"
 	if CharacterStats.equipped_weapon:
@@ -560,7 +573,7 @@ func _on_character_level_up(new_level: int) -> void:
 	# Play level up sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("play_level_up_sound"):
-		sound_manager.play_level_up_sound(-4.0)
+		sound_manager.play_level_up_sound(-8.0)
 
 func _on_weapon_equipped(weapon) -> void:  # weapon is Weapon type
 	"""Called when weapon is equipped"""
@@ -599,11 +612,6 @@ func _on_weapon_unequipped() -> void:
 
 	# Sync to network
 	_sync_appearance_to_network()
-
-func _on_chain_increased_for_stats(new_chain: int) -> void:
-	"""Track chain level for forged weapon stats"""
-	if combat_system and combat_system.has_method("track_chain_level"):
-		combat_system.track_chain_level(new_chain)
 
 func _on_armor_equipped(slot: String, armor_item: Dictionary) -> void:
 	"""Called when armor is equipped"""
@@ -774,6 +782,11 @@ func update_lpc_animation(velocity_dir: Vector2) -> void:
 	var anim = "walk" if is_moving else "idle"
 	character_sprite.play_lpc_animation(anim, lpc_dir)
 
+func get_attack_direction() -> Vector2:
+	"""Get the player's current facing/attack direction (towards mouse)"""
+	return attack_direction
+
+
 func get_direction_string(dir: Vector2) -> String:
 	"""Convert direction vector to animation name string (4-way for LPC sprites)"""
 	if dir.length() < 0.1:
@@ -852,12 +865,12 @@ func _input(event: InputEvent) -> void:
 				if combat_system:
 					combat_system.on_mouse_released()
 		
-		# ✨ FIX: CAMERA ZOOM - Mouse wheel handling (disabled when shop is open)
+		# ✨ FIX: CAMERA ZOOM - Mouse wheel handling (disabled when shop is open or minimap hovered)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-			if not is_shop_open():
+			if not is_shop_open() and not _is_minimap_hovered():
 				zoom_in()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-			if not is_shop_open():
+			if not is_shop_open() and not _is_minimap_hovered():
 				zoom_out()
 
 	# Mobile touch-to-aim input (mirrors mouse behavior)
@@ -1133,8 +1146,8 @@ func attempt_heal() -> void:
 
 	# Calculate healing amount
 	var base_heal = weapon.get_total_healing()
-	# Add stat scaling (could use a new stat, for now use a fraction of strength)
-	var stat_bonus = (CharacterStats.strength - 10) * 0.3
+	# Healing scales with Intelligence (caster stat)
+	var stat_bonus = (CharacterStats.get_effective_intelligence() - 10) * 0.5
 	var heal_amount = base_heal + stat_bonus
 
 	# Play cast animation (use slash for now - could add dedicated cast animation later)
@@ -1153,7 +1166,7 @@ func attempt_heal() -> void:
 	# Play healing cast sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("play_healing_cast_sound"):
-		sound_manager.play_healing_cast_sound(global_position, -5.0)
+		sound_manager.play_healing_cast_sound(global_position, -10.0)
 
 	if allies.size() > 0:
 		heal_allies(allies, heal_amount)
@@ -1356,7 +1369,7 @@ func _spawn_heal_projectile(target_pos: Vector2, radius: float, heal_amount: flo
 			# Play healing impact sound (second pulse explosion)
 			var sound_manager = self_ref.get_node_or_null("/root/SoundManager")
 			if sound_manager and sound_manager.has_method("play_healing_impact_sound"):
-				sound_manager.play_healing_impact_sound(target, -3.0)
+				sound_manager.play_healing_impact_sound(target, -8.0)
 		projectile.queue_free()
 	)
 
@@ -1512,34 +1525,20 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 
 func _on_crit_window_completed(success_ratio: float, total_destroyed: int, enemy: Node) -> void:
 	var all_destroyed = (total_destroyed == 3)
-	
-	# Check if enemy died
-	var enemy_died = false
-	if not is_instance_valid(enemy) or (enemy.get("is_dying") and enemy.is_dying):
-		enemy_died = true
-	
-	# Update chain
-	if all_destroyed:
-		CharacterStats.on_crit_window_completed(true)
-	elif enemy_died:
-		print("⚡ Chain maintained (enemy died)")
-	else:
-		CharacterStats.on_crit_window_completed(false)
 
 	# Calculate and apply damage
 	if is_nan(success_ratio) or is_inf(success_ratio):
 		success_ratio = 0.0
 
-	var chain_multiplier = CharacterStats.get_damage_multiplier()
 	var base_crit_damage = attack_damage * 2.0
 	var multiplier = 1.0 + success_ratio
-	var final_damage = base_crit_damage * multiplier * chain_multiplier
-	
+	var final_damage = base_crit_damage * multiplier
+
 	if is_instance_valid(enemy) and enemy.has_method("take_damage"):
 		if not enemy.get("is_dying") and enemy.current_health > 0:
 			# Apply damage with full critical feedback
 			apply_damage_with_feedback(enemy, final_damage, true, all_destroyed)
-	
+
 	# Disconnect
 	if crit_window_manager.window_completed.is_connected(_on_crit_window_completed):
 		crit_window_manager.window_completed.disconnect(_on_crit_window_completed)
@@ -1633,6 +1632,18 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 		if source_type != "player" or source_player_id != duel_opponent_id:
 			return  # Ignore non-duel-opponent damage
 
+		# Check HP thresholds for PvP weakpoint system (before applying damage)
+		if not pvp_weakpoint_active:
+			var hp_before_pct = current_health / max_health
+			var hp_after_pct = (current_health - amount) / max_health
+			for threshold in PVP_WEAKPOINT_THRESHOLDS:
+				if hp_before_pct > threshold and hp_after_pct <= threshold:
+					if threshold not in pvp_triggered_thresholds:
+						pvp_triggered_thresholds.append(threshold)
+						print("[PvP] HP threshold %.0f%% crossed - spawning weakpoints!" % (threshold * 100))
+						spawn_pvp_weakpoint_window()
+						break  # Only trigger one window per hit
+
 		# Check for duel end condition (1 HP threshold)
 		if current_health - amount <= 1:
 			current_health = 1
@@ -1655,15 +1666,28 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 		if NotificationManager:
 			NotificationManager.show_notification("Logout cancelled - you took damage!", "WARNING")
 
-	print("Player taking %.1f damage (current: %.1f)" % [amount, current_health])
-	current_health -= amount
+	# Apply armor mitigation (PvE only - PvP uses separate balance)
+	var mitigated_amount = amount
+	if source_type == "pve":
+		var defense = CharacterStats.get_total_defense()
+		if defense > 0:
+			# Diminishing returns formula: mitigation = defense / (defense + K)
+			var mitigation_pct = defense / (defense + Constants.DEFENSE_CONSTANT)
+			mitigated_amount = amount * (1.0 - mitigation_pct)
+			mitigated_amount = max(mitigated_amount, Constants.MIN_DAMAGE_AFTER_MITIGATION)
+			if mitigated_amount < amount:
+				print("🛡️ Armor mitigated %.1f → %.1f (%.0f%% reduction from %d defense)" % [
+					amount, mitigated_amount, mitigation_pct * 100, defense])
+
+	print("Player taking %.1f damage (current: %.1f)" % [mitigated_amount, current_health])
+	current_health -= mitigated_amount
 
 	# Ensure health doesn't go below 0
 	if current_health < 0:
 		current_health = 0
 
 	# Track equipment stats on all forged armor/accessories
-	_record_equipment_hit(amount, current_health > 0)
+	_record_equipment_hit(mitigated_amount, current_health > 0)
 
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
@@ -1671,7 +1695,7 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 		portrait_hud.update_health(current_health, max_health)
 
 	# Spawn damage number behind player (opposite of facing direction)
-	CombatText.create_damage(amount, global_position, get_tree().root, attack_direction)
+	CombatText.create_damage(mitigated_amount, global_position, get_tree().root, attack_direction)
 
 	# Reset combat timer (entering combat)
 	time_since_last_damage = 0.0
@@ -1689,7 +1713,7 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 	# Play player hurt sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_player_hurt_sound(global_position, -3.0)
+		sound_manager.play_player_hurt_sound(global_position, -8.0)
 
 	if current_health <= 0:
 		print("Player death triggered!")
@@ -1742,8 +1766,8 @@ func _record_equipment_hit(damage: float, survived: bool) -> void:
 			if armor_item.get("is_forged", false) or armor_item.get("forged", false):
 				_update_equipment_stats(armor_item, damage, survived)
 
-	# Track on equipped accessories (if any)
-	if CharacterStats.has("equipped_accessories"):
+	# Track on equipped accessories (if any - future feature)
+	if "equipped_accessories" in CharacterStats and CharacterStats.equipped_accessories:
 		for slot in CharacterStats.equipped_accessories:
 			var accessory = CharacterStats.equipped_accessories[slot]
 			if accessory and accessory is Dictionary:
@@ -1809,7 +1833,7 @@ func _record_equipment_death() -> void:
 				armor_item["equipment_stats"]["deaths_wearing"] = armor_item["equipment_stats"].get("deaths_wearing", 0) + 1
 				armor_item["equipment_stats"]["battles_lost"] = armor_item["equipment_stats"].get("battles_lost", 0) + 1
 
-	if CharacterStats.has("equipped_accessories"):
+	if "equipped_accessories" in CharacterStats and CharacterStats.equipped_accessories:
 		for slot in CharacterStats.equipped_accessories:
 			var accessory = CharacterStats.equipped_accessories[slot]
 			if accessory and accessory is Dictionary:
@@ -1881,6 +1905,8 @@ func enter_duel_state(opponent_id: int) -> void:
 	"""Called by DuelManager when duel starts"""
 	is_dueling = true
 	duel_opponent_id = opponent_id
+	pvp_triggered_thresholds.clear()  # Reset HP threshold tracking
+	clear_pvp_weakpoint_window()
 	_create_duel_aura()
 	print("Entered duel state vs player %d" % opponent_id)
 
@@ -1888,6 +1914,8 @@ func exit_duel_state() -> void:
 	"""Called by DuelManager when duel ends"""
 	is_dueling = false
 	duel_opponent_id = -1
+	pvp_triggered_thresholds.clear()  # Reset HP threshold tracking
+	clear_pvp_weakpoint_window()
 	_remove_duel_aura()
 	print("Exited duel state")
 
@@ -1975,6 +2003,220 @@ func _start_aura_pulse(aura_node: Node2D, color_min: Color, color_max: Color) ->
 	tween.tween_property(circle, "color", color_max, 0.6).set_ease(Tween.EASE_IN_OUT)
 	tween.tween_property(circle, "color", color_min, 0.6).set_ease(Tween.EASE_IN_OUT)
 
+# ============================================
+# PVP WEAKPOINT SYSTEM (v2 - Multi-click gem weakpoints)
+# ============================================
+
+func spawn_pvp_weakpoint_window() -> void:
+	"""Spawn a clickable weakpoint window on this player during a duel.
+	Called locally when HP threshold crossed - broadcasts to all peers via RPC."""
+	print("[PvP] spawn_pvp_weakpoint_window called, active=%s, is_dueling=%s" % [pvp_weakpoint_active, is_dueling])
+	if pvp_weakpoint_active or not is_dueling:
+		print("[PvP] spawn_pvp_weakpoint_window blocked: active=%s, is_dueling=%s" % [pvp_weakpoint_active, is_dueling])
+		return
+
+	# Broadcast to all peers (including self via call_local)
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	print("[PvP] Broadcasting weakpoint spawn, my_peer_id=%d, is_server=%s" % [my_peer_id, multiplayer.is_server()])
+	if multiplayer.is_server():
+		_sync_pvp_weakpoint_window_spawn.rpc(my_peer_id)
+	else:
+		# Client requests server to broadcast
+		_request_pvp_weakpoint_window_spawn.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func _request_pvp_weakpoint_window_spawn() -> void:
+	"""Client requests server to broadcast weakpoint window spawn"""
+	print("[PvP] _request_pvp_weakpoint_window_spawn received, is_server=%s" % multiplayer.is_server())
+	if not multiplayer.is_server():
+		return
+	var sender_id = multiplayer.get_remote_sender_id()
+	print("[PvP] Server processing weakpoint request from peer %d" % sender_id)
+	# Broadcast to all peers
+	_sync_pvp_weakpoint_window_spawn.rpc(sender_id)
+
+@rpc("any_peer", "call_local", "reliable")
+func _sync_pvp_weakpoint_window_spawn(target_peer_id: int) -> void:
+	"""Server broadcasts weakpoint window spawn to all peers.
+	This RPC is called on the target player's node, so we spawn directly on self."""
+	print("[PvP] _sync_pvp_weakpoint_window_spawn received for peer %d on node %s" % [target_peer_id, name])
+
+	# Verify this is the correct player node (the one that should get weakpoints)
+	var my_authority = get_multiplayer_authority()
+	if my_authority != target_peer_id:
+		print("[PvP] Skipping - this node (authority %d) is not target peer %d" % [my_authority, target_peer_id])
+		return
+
+	print("[PvP] Spawning weakpoints on self: %s" % name)
+	_create_pvp_weakpoints_local()
+
+func _create_pvp_weakpoints_local() -> void:
+	"""Create actual Weakpoint instances on this player (called on all peers)"""
+	if pvp_weakpoint_active:
+		return  # Already has active window
+
+	pvp_weakpoint_active = true
+	pvp_weakpoints_destroyed = 0
+	pvp_weakpoints_spawned = 0
+	pvp_weakpoints.clear()
+
+	# Calculate weakpoint count based on level (matches PvE scaling)
+	var weakpoint_count = _get_pvp_weakpoint_count()
+
+	# Spawn weakpoints at different positions on the player
+	var positions = _get_pvp_weakpoint_positions()
+
+	for i in range(min(weakpoint_count, positions.size())):
+		var wp = _spawn_single_pvp_weakpoint(positions[i])
+		if wp:
+			pvp_weakpoints.append(wp)
+			pvp_weakpoints_spawned += 1
+
+	# Start window timer (only on authority)
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	var my_authority = get_multiplayer_authority()
+	if my_peer_id == my_authority:
+		if pvp_weakpoint_timer and is_instance_valid(pvp_weakpoint_timer):
+			pvp_weakpoint_timer.queue_free()
+		pvp_weakpoint_timer = Timer.new()
+		pvp_weakpoint_timer.wait_time = PVP_WEAKPOINT_DURATION
+		pvp_weakpoint_timer.one_shot = true
+		pvp_weakpoint_timer.timeout.connect(_on_pvp_weakpoint_window_timeout)
+		add_child(pvp_weakpoint_timer)
+		pvp_weakpoint_timer.start()
+
+	print("🎯 PvP Weakpoint window spawned with %d weakpoints (level %d)!" % [pvp_weakpoints.size(), CharacterStats.level])
+
+func _get_pvp_weakpoint_count() -> int:
+	"""Calculate number of PvP weakpoints based on player level (matches PvE scaling)"""
+	var level = CharacterStats.level
+	if level >= 20:
+		return 3  # Level 20+: 3 weakpoints
+	elif level >= 11:
+		return 2  # Level 11-19: 2 weakpoints
+	else:
+		return 1  # Level 1-10: 1 weakpoint
+
+func _get_pvp_weakpoint_positions() -> Array:
+	"""Get spawn positions for PvP weakpoints on the player body"""
+	# Positions relative to player center - spread out for easier clicking
+	# At 0.5 scale, visual radius is ~9px, so positions need 20+ pixel separation
+	var positions = [
+		Vector2(-18, -24),   # Left side, mid torso
+		Vector2(18, -24),    # Right side, mid torso
+		Vector2(0, -44),     # Head/top (well separated from torso positions)
+	]
+	# Shuffle to add variety
+	positions.shuffle()
+	return positions
+
+func _spawn_single_pvp_weakpoint(local_pos: Vector2) -> Node:
+	"""Spawn a single Weakpoint instance at the given local position"""
+	var WeakpointScene = preload("res://scripts/enemies/weakpoint.gd")
+	var wp = Weakpoint.new()
+	wp.color_theme = "pvp"  # Use purple PvP theme
+	wp.max_hits = randi_range(2, 3)  # Faster to clear than PvE (2-3 clicks instead of 3-5)
+	wp.scale = Vector2(PVP_WEAKPOINT_SCALE, PVP_WEAKPOINT_SCALE)  # Smaller for player hitbox
+	wp.position = local_pos
+	wp.z_index = 100  # Above player sprite
+
+	# Set damage per hit for tracking
+	wp.damage_per_hit = PVP_WEAKPOINT_DAMAGE_PER_HIT
+
+	# Connect signals for tracking
+	wp.weakpoint_destroyed.connect(_on_pvp_weakpoint_destroyed.bind(wp))
+
+	add_child(wp)
+
+	# Debug: verify weakpoint is configured for input
+	print("[PvP] Spawned weakpoint at %s, input_pickable=%s, z_index=%d, scale=%s" % [
+		local_pos, wp.input_pickable, wp.z_index, wp.scale
+	])
+
+	return wp
+
+func _on_pvp_weakpoint_destroyed(weakpoint: Node) -> void:
+	"""Called when a PvP weakpoint is cleared by clicking"""
+	if not pvp_weakpoint_active:
+		return
+
+	pvp_weakpoints_destroyed += 1
+
+	# Remove from array
+	var idx = pvp_weakpoints.find(weakpoint)
+	if idx >= 0:
+		pvp_weakpoints.remove_at(idx)
+
+	print("🎯 PvP Weakpoint destroyed! (%d/%d)" % [pvp_weakpoints_destroyed, pvp_weakpoints_spawned])
+
+	# Check if all weakpoints cleared
+	if pvp_weakpoints.size() == 0:
+		_on_pvp_weakpoints_all_cleared()
+
+func _on_pvp_weakpoints_all_cleared() -> void:
+	"""Called when all weakpoints in the window are cleared"""
+	print("🎯 ALL PvP Weakpoints cleared! Window complete!")
+
+	# Stop timer early
+	if pvp_weakpoint_timer and is_instance_valid(pvp_weakpoint_timer):
+		pvp_weakpoint_timer.stop()
+		pvp_weakpoint_timer.queue_free()
+		pvp_weakpoint_timer = null
+
+	pvp_weakpoint_active = false
+
+	# Play success sound
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_weakpoint_destroyed_sound"):
+		sound_manager.play_weakpoint_destroyed_sound(global_position, -6.0)
+
+func _on_pvp_weakpoint_window_timeout() -> void:
+	"""Weakpoint window expired - cleanup remaining weakpoints"""
+	if not pvp_weakpoint_active:
+		return
+
+	print("🎯 PvP Weakpoint window expired (%d/%d cleared)" % [pvp_weakpoints_destroyed, pvp_weakpoints_spawned])
+
+	# Force-destroy any remaining weakpoints
+	for wp in pvp_weakpoints:
+		if is_instance_valid(wp):
+			wp.queue_free()
+	pvp_weakpoints.clear()
+
+	pvp_weakpoint_active = false
+
+	if pvp_weakpoint_timer and is_instance_valid(pvp_weakpoint_timer):
+		pvp_weakpoint_timer.queue_free()
+		pvp_weakpoint_timer = null
+
+func clear_pvp_weakpoint_window() -> void:
+	"""Remove any active PvP weakpoint window (called on duel end)"""
+	pvp_weakpoint_active = false
+	pvp_weakpoints_destroyed = 0
+
+	# Clear all weakpoints
+	for wp in pvp_weakpoints:
+		if is_instance_valid(wp):
+			wp.queue_free()
+	pvp_weakpoints.clear()
+
+	# Stop timer
+	if pvp_weakpoint_timer and is_instance_valid(pvp_weakpoint_timer):
+		pvp_weakpoint_timer.stop()
+		pvp_weakpoint_timer.queue_free()
+		pvp_weakpoint_timer = null
+
+func get_pvp_weakpoint_area() -> Area2D:
+	"""Get the first active PvP weakpoint area (for ranged weapon hit detection)"""
+	for wp in pvp_weakpoints:
+		if is_instance_valid(wp):
+			return wp  # Weakpoint extends Area2D
+	return null
+
+func has_active_pvp_weakpoints() -> bool:
+	"""Check if this player has active PvP weakpoints"""
+	return pvp_weakpoint_active and pvp_weakpoints.size() > 0
+
 func process_passive_healing(delta: float) -> void:
 	"""Handle out-of-combat passive health regeneration"""
 	# Don't process if dead
@@ -1993,6 +2235,11 @@ func process_passive_healing(delta: float) -> void:
 
 	# Don't heal if already at full health
 	if current_health >= max_health:
+		return
+
+	# Don't heal if still in combat (must wait out_of_combat_delay after last damage)
+	if time_since_last_damage < out_of_combat_delay:
+		passive_heal_timer = 0.0  # Reset heal timer while in combat
 		return
 
 	# Accumulate heal timer
@@ -2867,6 +3114,71 @@ func apply_appearance_data(data: Dictionary):
 		remote_head_sprite = data["head_sprite"]
 	# Note: Caller should call create_player_sprite() after this
 
+# ═══════════════════════════════════════════════════════════════════════════
+# EQUIPMENT INSPECTION RPC
+# ═══════════════════════════════════════════════════════════════════════════
+
+@rpc("any_peer", "call_local", "reliable")
+func request_equipment_for_inspection(requester_id: int) -> void:
+	"""Another player is requesting to inspect our equipment"""
+	# Only respond if we're the authority for this player
+	if not is_multiplayer_authority():
+		return
+
+	# Gather equipment data
+	var equipment_data = _get_full_equipment_data()
+
+	# Send back to requester
+	rpc_id(requester_id, "_receive_equipment_inspection", equipment_data)
+
+@rpc("any_peer", "call_local", "reliable")
+func _receive_equipment_inspection(data: Dictionary) -> void:
+	"""Receive equipment inspection data from another player"""
+	# Forward to PlayerInspectUI
+	if PlayerInspectUI:
+		PlayerInspectUI.receive_equipment_data(data)
+
+func _get_full_equipment_data() -> Dictionary:
+	"""Get full equipment data for inspection sharing"""
+	var player_name = "Player"
+	if NetworkManager and NetworkManager.player_name:
+		player_name = NetworkManager.player_name
+
+	var level = 1
+	if CharacterStats:
+		level = CharacterStats.level
+
+	# Get equipped armor snapshot
+	var armor_snapshot = {}
+	if CharacterStats:
+		armor_snapshot = CharacterStats.get_armor_snapshot()
+
+	# Get equipped weapon as dict
+	var weapon_dict = {}
+	if CharacterStats:
+		weapon_dict = CharacterStats.get_weapon_as_dict()
+
+	# Calculate stats
+	var attack = 0.0
+	var defense = 0
+	var health = 100
+	if CharacterStats:
+		attack = CharacterStats.get_base_damage()
+		defense = CharacterStats.get_total_defense()
+		health = CharacterStats.get_max_health()
+
+	return {
+		"player_name": player_name,
+		"level": level,
+		"equipped_armor": armor_snapshot,
+		"equipped_weapon": weapon_dict,
+		"stats": {
+			"attack": attack,
+			"defense": defense,
+			"health": health
+		}
+	}
+
 # Old animation functions removed - now using SimpleLPCSprite system
 
 func create_cone_visualizer() -> void:
@@ -3525,6 +3837,13 @@ func is_shop_open() -> bool:
 	"""Legacy function - kept for compatibility. Use is_ui_blocking_input() instead"""
 	return is_ui_blocking_input()
 
+
+func _is_minimap_hovered() -> bool:
+	"""Check if mouse is hovering over the minimap"""
+	if Minimap and Minimap.is_mouse_over:
+		return true
+	return false
+
 # ═══════════════════════════════════════════════════════════════════════════
 # DEATH & RESPAWN
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3560,7 +3879,7 @@ func die() -> void:
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		var is_female = (selected_gender == Gender.FEMALE)
-		sound_manager.play_player_death_sound(global_position, is_female, -4.0)
+		sound_manager.play_player_death_sound(global_position, is_female, -6.0)
 
 	# Disable player controls during death
 	set_physics_process(false)
@@ -3740,14 +4059,22 @@ func _get_player_guild_id() -> String:
 		return "guild_%d" % GroupManager.group_leader
 
 	# Solo players have their own "guild" for World Tree purposes
-	if MantleAuth and MantleAuth.is_logged_in():
-		return "solo_guild_%d" % MantleAuth.user_id
+	if AshbaneAuth and AshbaneAuth.is_logged_in():
+		return "solo_guild_%d" % AshbaneAuth.user_id
 
 	return "solo_guild_local_player"
 
 func create_character_ui() -> void:
-	"""Create and add character UI to scene tree"""
+	"""Create and add character UI to scene tree (reuses existing if present)"""
 	print("🏗️ Player.create_character_ui() called (deferred)")
+
+	# Check if CharacterUI already exists in root
+	var existing = get_tree().root.get_node_or_null("CharacterUI")
+	if existing:
+		character_ui = existing
+		print("📋 Character UI already exists, reusing existing instance")
+		return
+
 	var CharacterUIScript = load("res://scripts/ui/CharacterUI.gd")
 	character_ui = CharacterUIScript.new()
 	character_ui.name = "CharacterUI"
@@ -3760,8 +4087,16 @@ func create_character_ui() -> void:
 	print("   Parent: ", character_ui.get_parent())
 
 func create_campfire_indicator() -> void:
-	"""Create and add campfire direction indicator to scene tree"""
+	"""Create and add campfire direction indicator to scene tree (reuses existing if present)"""
 	print("🏗️ Player.create_campfire_indicator() called (deferred)")
+
+	# Check if CampfireIndicator already exists in root
+	var existing = get_tree().root.get_node_or_null("CampfireIndicator")
+	if existing:
+		campfire_indicator = existing
+		print("🧭 Campfire indicator already exists, reusing existing instance")
+		return
+
 	var CampfireIndicatorScript = load("res://scripts/ui/CampfireIndicator.gd")
 	campfire_indicator = CampfireIndicatorScript.new()
 	campfire_indicator.name = "CampfireIndicator"
@@ -3777,8 +4112,16 @@ func create_campfire_indicator() -> void:
 	print("🧭 Campfire indicator initialized")
 
 func create_chat_ui() -> void:
-	"""Create and add chat UI to scene tree"""
+	"""Create and add chat UI to scene tree (reuses existing if present)"""
 	print("🏗️ Player.create_chat_ui() called (deferred)")
+
+	# Check if ChatUI already exists in root (persists across scene changes)
+	var existing = get_tree().root.get_node_or_null("ChatUI")
+	if existing:
+		chat_ui = existing
+		print("💬 Chat UI already exists, reusing existing instance")
+		return
+
 	var ChatUIScript = load("res://scripts/ui/ChatUI.gd")
 	chat_ui = ChatUIScript.new()
 	chat_ui.name = "ChatUI"
@@ -3790,8 +4133,16 @@ func create_chat_ui() -> void:
 	print("   In tree: ", chat_ui.is_inside_tree())
 
 func create_inventory_ui() -> void:
-	"""Create and add inventory UI to scene tree"""
+	"""Create and add inventory UI to scene tree (reuses existing if present)"""
 	print("🏗️ Player.create_inventory_ui() called (deferred)")
+
+	# Check if InventoryUI already exists in root
+	var existing = get_tree().root.get_node_or_null("InventoryUI")
+	if existing:
+		inventory_ui = existing
+		print("📦 Inventory UI already exists, reusing existing instance")
+		return
+
 	var InventoryUIScript = load("res://scripts/ui/InventoryUI.gd")
 	inventory_ui = InventoryUIScript.new()
 	inventory_ui.name = "InventoryUI"
@@ -3805,6 +4156,17 @@ func create_inventory_ui() -> void:
 func create_portrait_hud() -> void:
 	"""Create and add portrait HUD to scene tree"""
 	print("🏗️ Player.create_portrait_hud() called (deferred)")
+
+	# Check if portrait HUD already exists
+	var existing = get_tree().root.get_node_or_null("PortraitHUD")
+	if existing:
+		portrait_hud = existing
+		# Update health on existing HUD
+		if portrait_hud.has_method("update_health"):
+			portrait_hud.update_health(current_health, max_health)
+		print("🖼️ Portrait HUD already exists, reusing existing instance")
+		return
+
 	var PortraitHUDScript = load("res://scripts/ui/PortraitHUD.gd")
 	portrait_hud = PortraitHUDScript.new()
 	portrait_hud.name = "PortraitHUD"
@@ -3822,23 +4184,38 @@ func create_duel_ui() -> void:
 	"""Create and add duel UI components to scene tree"""
 	print("Creating duel UI components (deferred)")
 
-	# Load and instantiate duel request popup
-	var DuelRequestPopupScene = load("res://scenes/ui/DuelRequestPopup.tscn")
-	if DuelRequestPopupScene:
-		duel_request_popup = DuelRequestPopupScene.instantiate()
-		get_tree().root.add_child(duel_request_popup)
+	# Check for existing duel request popup
+	var existing_popup = get_tree().root.get_node_or_null("DuelRequestPopup")
+	if existing_popup:
+		duel_request_popup = existing_popup
+		print("⚔️ DuelRequestPopup already exists, reusing")
+	else:
+		var DuelRequestPopupScene = load("res://scenes/ui/DuelRequestPopup.tscn")
+		if DuelRequestPopupScene:
+			duel_request_popup = DuelRequestPopupScene.instantiate()
+			get_tree().root.add_child(duel_request_popup)
 
-	# Load and instantiate duel countdown UI
-	var DuelCountdownUIScene = load("res://scenes/ui/DuelCountdownUI.tscn")
-	if DuelCountdownUIScene:
-		duel_countdown_ui = DuelCountdownUIScene.instantiate()
-		get_tree().root.add_child(duel_countdown_ui)
+	# Check for existing duel countdown UI
+	var existing_countdown = get_tree().root.get_node_or_null("DuelCountdownUI")
+	if existing_countdown:
+		duel_countdown_ui = existing_countdown
+		print("⚔️ DuelCountdownUI already exists, reusing")
+	else:
+		var DuelCountdownUIScene = load("res://scenes/ui/DuelCountdownUI.tscn")
+		if DuelCountdownUIScene:
+			duel_countdown_ui = DuelCountdownUIScene.instantiate()
+			get_tree().root.add_child(duel_countdown_ui)
 
-	# Load and instantiate duel result UI
-	var DuelResultUIScene = load("res://scenes/ui/DuelResultUI.tscn")
-	if DuelResultUIScene:
-		duel_result_ui = DuelResultUIScene.instantiate()
-		get_tree().root.add_child(duel_result_ui)
+	# Check for existing duel result UI
+	var existing_result = get_tree().root.get_node_or_null("DuelResultUI")
+	if existing_result:
+		duel_result_ui = existing_result
+		print("⚔️ DuelResultUI already exists, reusing")
+	else:
+		var DuelResultUIScene = load("res://scenes/ui/DuelResultUI.tscn")
+		if DuelResultUIScene:
+			duel_result_ui = DuelResultUIScene.instantiate()
+			get_tree().root.add_child(duel_result_ui)
 
 	print("Duel UI components added to scene tree")
 
@@ -4544,9 +4921,9 @@ func _complete_logout() -> void:
 	_save_sound_settings()
 
 	# Save character appearance to backend for Armory preview
-	if MantleAuth and MantleAuth.is_authenticated:
+	if AshbaneAuth and AshbaneAuth.is_authenticated:
 		var appearance = get_appearance_data()
-		MantleAuth.save_appearance(appearance)
+		AshbaneAuth.save_appearance(appearance)
 
 	# Close connection and return to main menu
 	if NetworkManager:
@@ -4668,9 +5045,24 @@ func remove_tutorial_blackout() -> void:
 func update_tutorial_blackout() -> void:
 	"""Check if blackout should be shown/hidden based on tutorial state"""
 	if not TutorialManager:
+		print("🌑 [Blackout] TutorialManager not found, skipping")
 		return
 
-	var should_show_blackout = TutorialManager.is_tutorial_active() and TutorialManager.current_step < TutorialManager.TutorialStep.KILL_SKELETON
+	# Never show tutorial blackout in the Trading Hub
+	# Check via TradingHubManager (more reliable than current_scene during scene transitions)
+	var hub_manager = get_node_or_null("/root/TradingHubManager")
+	var in_hub = hub_manager and hub_manager.is_player_in_hub()
+	print("🌑 [Blackout] hub_manager=%s, in_hub=%s" % [hub_manager != null, in_hub])
+	if in_hub:
+		print("🌑 [Blackout] In Trading Hub - no blackout allowed")
+		if tutorial_blackout:
+			remove_tutorial_blackout()
+		return
+
+	var tutorial_active = TutorialManager.is_tutorial_active()
+	var current_step = TutorialManager.current_step
+	var should_show_blackout = tutorial_active and current_step < TutorialManager.TutorialStep.KILL_SKELETON
+	print("🌑 [Blackout] tutorial_active=%s, step=%s, should_show=%s" % [tutorial_active, current_step, should_show_blackout])
 
 	if should_show_blackout and not tutorial_blackout:
 		create_tutorial_blackout()
@@ -4778,7 +5170,7 @@ func start_dash() -> void:
 	# Play dash/dodge whoosh sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_dodge_sound(global_position, -8.0)
+		sound_manager.play_dodge_sound(global_position, -10.0)
 
 func end_dash() -> void:
 	"""End the dash and restore normal state"""

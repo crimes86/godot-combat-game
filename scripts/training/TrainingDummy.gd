@@ -528,13 +528,19 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 		get_tree().create_timer(0.1).timeout.connect(func():
 			if not is_weakpoint:
 				if is_crit:
-					sound_manager.play_critical_hit_sound(hit_pos, -6.0)
+					sound_manager.play_critical_hit_sound(hit_pos, -8.0)
 				elif not is_projectile:
 					# Only play normal hit sound for melee weapons (projectiles play in PlayerCombat)
-					sound_manager.play_normal_hit_sound(hit_pos, -10.0, weapon_type)
+					sound_manager.play_normal_hit_sound(hit_pos, -12.0, weapon_type)
 			# Hurt sound plays with the hit
-			sound_manager.play_skeleton_hurt_sound(hit_pos, -12.0)
+			sound_manager.play_skeleton_hurt_sound(hit_pos, -14.0)
 		)
+
+	# 🎮 Combat juice - hitstop on weakpoint hits only
+	if is_weakpoint_hit:
+		var combat_juice = get_node_or_null("/root/CombatJuice")
+		if combat_juice:
+			combat_juice.on_weakpoint()
 
 	# Trigger hit flash visual feedback
 	if has_node("HitFlash"):
@@ -542,36 +548,8 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 		if hit_flash.has_method("flash"):
 			hit_flash.flash(is_crit)
 
-	# Spawn combat text centered at 70% of sprite height (same as Enemy)
-	var combat_text_scene = preload("res://scenes/ui/combat_text.tscn")
-	var combat_text = combat_text_scene.instantiate()
-
-	# Set damage text
-	combat_text.text = str(int(amount))
-
-	# Determine text type - check if this is a weakpoint hit during crit window
-	var is_weakpoint = is_crit and in_crit_window
-	if is_weakpoint:
-		combat_text.type = 2  # TextType.WEAKPOINT
-	elif is_crit:
-		combat_text.type = 1  # TextType.CRIT
-	else:
-		combat_text.type = 0  # TextType.NORMAL
-
-	# Calculate spawn position at center of dummy sprite
-	# CombatText handles radial distribution to prevent clumping
-	var sprite_scale = sprite.scale if sprite else Vector2.ONE
-	var sprite_height = 64.0 * sprite_scale.y  # LPC sprites are 64px tall
-	var sprite_pos = sprite.position if sprite else Vector2.ZERO
-
-	# Spawn at center-top of sprite (all types spawn from same center point)
-	var spawn_y_offset = -(sprite_height * 0.4)  # 40% from top
-
-	# Final spawn position: dummy center + sprite offset + y offset
-	var spawn_pos = global_position + sprite_pos + Vector2(0, spawn_y_offset)
-
-	combat_text.global_position = spawn_pos
-	get_tree().root.add_child(combat_text)
+	# NOTE: Combat text is spawned by PlayerCombat.apply_damage_with_feedback()
+	# Do NOT spawn duplicate combat text here
 
 	# Trigger spin animation
 	trigger_spin()
@@ -898,18 +876,13 @@ func _on_weakpoint_hit(weakpoint) -> void:
 	# Single player: deal damage directly with crit flag
 	take_damage(crit_damage, true, true)
 
-func _spawn_weakpoint_combat_text(weakpoint, damage: float) -> void:
+func _spawn_weakpoint_combat_text(_weakpoint, damage: float) -> void:
 	"""Spawn combat text for weakpoint hit (used in multiplayer for instant feedback)"""
-	var combat_text_scene = preload("res://scenes/ui/combat_text.tscn")
-	var combat_text = combat_text_scene.instantiate()
-
-	combat_text.text = str(int(damage))
-	combat_text.type = 2  # TextType.WEAKPOINT (orange/red)
-
-	# Position at weakpoint location - CombatText handles radial distribution
-	var spawn_pos = weakpoint.global_position if is_instance_valid(weakpoint) else global_position
-	combat_text.global_position = spawn_pos
-	get_tree().root.add_child(combat_text)
+	# Use CombatText factory method - spawns at dummy center like regular damage
+	# This ensures consistent positioning for all damage types
+	var parent = get_tree().current_scene
+	if parent:
+		CombatText.create_weakpoint(damage, global_position, parent)
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Local handler - just forward to manager"""

@@ -18,7 +18,7 @@ extends Node
 # Common: 40%+ unlock rate
 
 enum ItemRarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
-enum ItemType { WEAPON, ARMOR_HEAD, ARMOR_CHEST, ARMOR_ARMS, ARMOR_LEGS, ARMOR_HANDS, ARMOR_FEET, CAPE, SHIELD, ACCESSORY, RING, AMULET, EMOTE, TITLE }
+enum ItemType { WEAPON, ARMOR_HEAD, ARMOR_CHEST, ARMOR_ARMS, ARMOR_LEGS, ARMOR_HANDS, ARMOR_FEET, CAPE, SHIELD, ACCESSORY, RING, AMULET, EMOTE, TITLE, TOOL }
 # WeaponClass: Core (SWORD-RAPIER have animation data), Extended (rest fall back to core)
 enum WeaponClass { SWORD, DAGGER, MACE, SPEAR, STAFF, AXE, RAPIER, GREATSWORD, KATANA, SABER, SCIMITAR, HALBERD, PIKE, TRIDENT, FLAIL, SCYTHE, BOW, CROSSBOW, GUN, BATTLE_RIFLE }
 
@@ -337,6 +337,8 @@ func _get_icon_subfolder(item_type: ItemType) -> String:
 			return "capes"
 		ItemType.ACCESSORY, ItemType.RING, ItemType.AMULET:
 			return "accessories"
+		ItemType.TOOL:
+			return "tools"
 		_:
 			return "misc"
 
@@ -369,6 +371,7 @@ func _item_type_string_to_enum(type_str: String) -> ItemType:
 		"amulet": return ItemType.AMULET
 		"emote": return ItemType.EMOTE
 		"title": return ItemType.TITLE
+		"tool": return ItemType.TOOL
 		_: return ItemType.ACCESSORY
 
 func _weapon_class_string_to_enum(weapon_str: String) -> WeaponClass:
@@ -531,6 +534,8 @@ func _type_to_category(item_type: ItemType) -> String:
 			return "shields"
 		ItemType.CAPE:
 			return "capes"
+		ItemType.RING, ItemType.AMULET:
+			return "jewelry"
 		ItemType.ACCESSORY:
 			return "accessories"
 		_:

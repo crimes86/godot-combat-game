@@ -180,6 +180,10 @@ func take_damage(amount: int, attacker_id: int):
 
 @rpc("any_peer", "call_local", "reliable")
 func request_damage(target_id: int, amount: int, attacker_id: int):
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	# Only server processes damage
 	if not multiplayer.is_server():
 		return
@@ -249,6 +253,10 @@ func request_respawn():
 
 @rpc("any_peer", "call_local", "reliable")
 func server_respawn_player(respawn_player_id: int):
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not multiplayer.is_server():
 		return
 

@@ -5,7 +5,7 @@ extends Node
 ## - Track seed plot claims and trigger world expansion
 ## - Calculate World Tree rankings weekly
 ## - Handle chunk removal when seed plots decay
-## - Record winners on Mantle blockchain
+## - Record winners on Ashbane blockchain
 ##
 ## Architecture:
 ## - Origin chunks (-1, 0, 1): Permanent, connected to campfire
@@ -399,10 +399,10 @@ func get_player_rank(player_id: String) -> int:
 # BLOCKCHAIN INTEGRATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-## Record World Tree winner on Mantle blockchain
+## Record World Tree winner on Ashbane blockchain
 func record_world_tree_on_chain(winner: Dictionary, all_trees: Array) -> void:
-	if not MantleAuth:
-		push_warning("⚠️ MantleAuth not available - skipping blockchain record")
+	if not AshbaneAuth:
+		push_warning("⚠️ AshbaneAuth not available - skipping blockchain record")
 		return
 
 	print("⛓️ Recording World Tree winner on blockchain...")
@@ -431,11 +431,11 @@ func record_world_tree_on_chain(winner: Dictionary, all_trees: Array) -> void:
 		"recorded_at": Time.get_datetime_string_from_system()
 	}
 
-	# Send to Mantle backend
-	var url = "%s/api/world-tree/record" % MantleAuth.backend_url
+	# Send to Ashbane backend
+	var url = "%s/api/world-tree/record" % AshbaneAuth.backend_url
 	var headers = [
 		"Content-Type: application/json",
-		"Authorization: Bearer %s" % MantleAuth.get_auth_token()
+		"Authorization: Bearer %s" % AshbaneAuth.get_auth_token()
 	]
 
 	_http_request.request(url, headers, HTTPClient.METHOD_POST, JSON.stringify(payload))

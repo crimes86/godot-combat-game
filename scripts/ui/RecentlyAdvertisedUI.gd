@@ -24,9 +24,9 @@ var INPUT_BG: Color:
 const RARITY_COLORS = {
 	"COMMON": Color(0.7, 0.7, 0.7),
 	"UNCOMMON": Color(0.3, 0.8, 0.3),
-	"RARE": Color(0.3, 0.5, 1.0),
-	"EPIC": Color(0.6, 0.3, 0.9),
-	"LEGENDARY": Color(1.0, 0.6, 0.1),
+	"RARE": Color(0.3, 0.5, 0.9),
+	"EPIC": Color(0.6, 0.2, 0.8),
+	"LEGENDARY": Color(1.0, 0.5, 0.1),
 	"ARTIFACT": Color(0.9, 0.2, 0.2)
 }
 

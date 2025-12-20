@@ -33,6 +33,12 @@ var player: CharacterBody2D
 # Movement stats
 var base_speed: float = Constants.PLAYER_BASE_SPEED
 
+# Backpedal slowdown (moving opposite to facing direction)
+const BACKPEDAL_SPEED_MULT: float = 0.65  # 65% speed when moving backward
+const STRAFE_SPEED_MULT: float = 0.85  # 85% speed when strafing sideways
+const BACKPEDAL_THRESHOLD: float = -0.3  # Dot product threshold for "moving backward"
+const STRAFE_THRESHOLD: float = 0.3  # Dot product below this = strafing
+
 # Dash/Dodge System
 var is_dashing: bool = false
 var dash_cooldown: float = 1.5  # Seconds between dashes
@@ -101,10 +107,48 @@ func process_movement(delta: float, input_direction: Vector2) -> Vector2:
 		if dash_timer <= 0:
 			end_dash()
 
-		# Dash ignores slow effects
+		# Dash ignores slow effects and backpedal penalty
 		return dash_direction * base_speed * dash_speed_multiplier
 	else:
-		return input_direction * effective_speed
+		# Apply backpedal/strafe slowdown based on movement vs facing direction
+		var directional_mult = get_directional_speed_mult(input_direction)
+		return input_direction * effective_speed * directional_mult
+
+
+func get_directional_speed_mult(move_direction: Vector2) -> float:
+	"""Calculate speed multiplier based on movement direction vs facing direction.
+	Moving backward = slower, strafing = slightly slower, forward = full speed."""
+	if move_direction.length_squared() < 0.01:
+		return 1.0  # Not moving
+
+	# Get player's facing direction (towards mouse/attack target)
+	var facing_direction = Vector2.ZERO
+	if player.has_method("get_attack_direction"):
+		facing_direction = player.get_attack_direction()
+	elif "attack_direction" in player:
+		facing_direction = player.attack_direction
+	else:
+		return 1.0  # No facing info, no penalty
+
+	if facing_direction.length_squared() < 0.01:
+		return 1.0  # No facing direction
+
+	# Normalize both directions
+	var move_norm = move_direction.normalized()
+	var face_norm = facing_direction.normalized()
+
+	# Dot product: 1 = same direction, -1 = opposite, 0 = perpendicular
+	var dot = move_norm.dot(face_norm)
+
+	# Moving backward (opposite to facing)
+	if dot < BACKPEDAL_THRESHOLD:
+		return BACKPEDAL_SPEED_MULT
+	# Strafing (perpendicular to facing)
+	elif dot < STRAFE_THRESHOLD:
+		return STRAFE_SPEED_MULT
+	# Moving forward or mostly forward
+	else:
+		return 1.0
 
 func clamp_to_world_bounds(pos: Vector2) -> Vector2:
 	"""Clamp position to world boundaries"""
@@ -179,7 +223,7 @@ func start_dash(input_direction: Vector2, mouse_pos: Vector2) -> bool:
 	# Play dash/dodge whoosh sound
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_dodge_sound(player.global_position, -8.0)
+		sound_manager.play_dodge_sound(player.global_position, -10.0)
 
 	# Initial dust
 	spawn_dash_dust()

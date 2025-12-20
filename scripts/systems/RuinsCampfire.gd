@@ -754,7 +754,7 @@ func create_ruins_visual() -> void:
 	"""Create ruins sprite"""
 	ruins_sprite = Sprite2D.new()
 	ruins_sprite.name = "RuinsSprite"
-	ruins_sprite.texture = load("res://assets/environment/wasteland/ruins.png")
+	ruins_sprite.texture = load("res://assets/environment/dreadland/ruins.png")
 	ruins_sprite.centered = true
 	ruins_sprite.offset = Vector2(0, -40)  # Offset so bottom is at position
 	add_child(ruins_sprite)

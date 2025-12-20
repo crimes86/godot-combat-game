@@ -302,9 +302,9 @@ func _show_message(text: String) -> void:
 
 
 func _get_player_id() -> String:
-	# Get player's Mantle account ID
-	if MantleAuth and MantleAuth.is_logged_in():
-		return str(MantleAuth.user_id)
+	# Get player's Ashbane account ID
+	if AshbaneAuth and AshbaneAuth.is_logged_in():
+		return str(AshbaneAuth.user_id)
 	return "local_player"
 
 

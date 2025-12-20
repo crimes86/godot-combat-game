@@ -35,9 +35,9 @@ var campfire_pos: Vector2 = Vector2(Constants.CHUNK_SIZE / 2, 0)
 
 # Prop textures (mirrors game_world.gd PROP_TEXTURES)
 const PROP_TEXTURES = {
-	"dead_tree": "res://assets/environment/wasteland/dead_tree.png",
-	"pine_tree": "res://assets/environment/wasteland/pine_tree.png",
-	"autumn_tree": "res://assets/environment/wasteland/autumn_tree.png",
+	"dead_tree": "res://assets/environment/dreadland/dead_tree.png",
+	"pine_tree": "res://assets/environment/dreadland/pine_tree.png",
+	"autumn_tree": "res://assets/environment/dreadland/autumn_tree.png",
 	"rock_large": "res://assets/props/rock_large.png",
 	"rock_small": "res://assets/props/rock_small.png",
 	"skull": "res://assets/props/skull.png",

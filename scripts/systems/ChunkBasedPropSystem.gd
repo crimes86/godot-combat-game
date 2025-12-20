@@ -5,6 +5,15 @@ class_name ChunkBasedPropSystem
 ## World is divided into 3 square chunks (8000x8000px each)
 ## Chunk -1 (West), Chunk 0 (Origin/Spawn), Chunk +1 (East)
 ## Smart loading: current chunk always, neighbors when within 1000px of edges
+##
+## NOTE: Can be replaced by CellStreamingManager for smoother chunk transitions.
+## Set USE_CELL_STREAMING to true to enable cell-based streaming instead.
+
+# Feature flag: Enable cell-based streaming for smoother chunk transitions
+const USE_CELL_STREAMING: bool = true  # Set to false to revert to chunk-based loading
+
+# Reference to cell streaming manager (when enabled)
+var cell_streaming_manager: CellStreamingManager = null
 
 # Use Constants singleton for chunk size (single source of truth)
 var CHUNK_SIZE: float:
@@ -52,14 +61,14 @@ var harvestable_states: Dictionary = {}  # {id: {is_harvested, is_fallen/is_mine
 
 # Prop textures (from game_world.gd)
 const PROP_TEXTURES = {
-	"dead_tree": "res://assets/environment/wasteland/dead_tree.png",
-	"pine_tree": "res://assets/environment/wasteland/pine_tree.png",
-	"autumn_tree": "res://assets/environment/wasteland/autumn_tree.png",
-	"ash_pile": "res://assets/environment/wasteland/ash_pile.png",
-	"bones": "res://assets/environment/wasteland/bones.png",
-	"skull": "res://assets/environment/wasteland/skull.png",
-	"ground_crack_1": "res://assets/environment/wasteland/ground_crack_1.png",
-	"ground_crack_2": "res://assets/environment/wasteland/ground_crack_2.png",
+	"dead_tree": "res://assets/environment/dreadland/dead_tree.png",
+	"pine_tree": "res://assets/environment/dreadland/pine_tree.png",
+	"autumn_tree": "res://assets/environment/dreadland/autumn_tree.png",
+	"ash_pile": "res://assets/environment/dreadland/ash_pile.png",
+	"bones": "res://assets/environment/dreadland/bones.png",
+	"skull": "res://assets/environment/dreadland/skull.png",
+	"ground_crack_1": "res://assets/environment/dreadland/ground_crack_1.png",
+	"ground_crack_2": "res://assets/environment/dreadland/ground_crack_2.png",
 }
 
 # === TIERED ROCK SYSTEM ===
@@ -68,49 +77,49 @@ const ROCK_TEXTURES = {
 	# Zone 1 - Tan/Brown rocks (Tier 1)
 	"zone1": {
 		"small": [
-			"res://assets/environment/wasteland/rocks/zone1/rock_small_1.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_small_1.png",
 		],
 		"medium": [
-			"res://assets/environment/wasteland/rocks/zone1/rock_medium_1.png",
-			"res://assets/environment/wasteland/rocks/zone1/rock_medium_2.png",
-			"res://assets/environment/wasteland/rocks/zone1/rock_medium_flat.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_medium_1.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_medium_2.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_medium_flat.png",
 		],
 		"large": [
-			"res://assets/environment/wasteland/rocks/zone1/rock_large_1.png",
-			"res://assets/environment/wasteland/rocks/zone1/rock_boulder_pair.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_large_1.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_boulder_pair.png",
 		],
 		"cluster": [
-			"res://assets/environment/wasteland/rocks/zone1/rock_spike_cluster.png",
-			"res://assets/environment/wasteland/rocks/zone1/rock_cluster_wide.png",
-			"res://assets/environment/wasteland/rocks/zone1/rock_xlarge_cluster.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_spike_cluster.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_cluster_wide.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_xlarge_cluster.png",
 		],
 		"standing": [
-			"res://assets/environment/wasteland/rocks/zone1/rock_standing_1.png",
-			"res://assets/environment/wasteland/rocks/zone1/rock_standing_2.png",
-			"res://assets/environment/wasteland/rocks/zone1/rock_spike_tall.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_standing_1.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_standing_2.png",
+			"res://assets/environment/dreadland/rocks/zone1/rock_spike_tall.png",
 		],
 	},
 	# Zone 2 - Grey rocks (Tier 2)
 	"zone2": {
 		"small": [
-			"res://assets/environment/wasteland/rocks/zone2/rock_small_1.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_small_1.png",
 		],
 		"medium": [
-			"res://assets/environment/wasteland/rocks/zone2/rock_medium_1.png",
-			"res://assets/environment/wasteland/rocks/zone2/rock_medium_flat.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_medium_1.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_medium_flat.png",
 		],
 		"large": [
-			"res://assets/environment/wasteland/rocks/zone2/rock_large_1.png",
-			"res://assets/environment/wasteland/rocks/zone2/rock_large_flat.png",
-			"res://assets/environment/wasteland/rocks/zone2/rock_boulder_1.png",
-			"res://assets/environment/wasteland/rocks/zone2/rock_boulder_2.png",
-			"res://assets/environment/wasteland/rocks/zone2/rock_boulder_3.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_large_1.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_large_flat.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_boulder_1.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_boulder_2.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_boulder_3.png",
 		],
 		"cluster": [
-			"res://assets/environment/wasteland/rocks/zone2/rock_xlarge_cluster.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_xlarge_cluster.png",
 		],
 		"standing": [
-			"res://assets/environment/wasteland/rocks/zone2/rock_standing_1.png",
+			"res://assets/environment/dreadland/rocks/zone2/rock_standing_1.png",
 		],
 	},
 }
@@ -118,7 +127,7 @@ const ROCK_TEXTURES = {
 # Rock tier data - defines mining requirements and drops per tier
 const ROCK_TIERS = {
 	1: {
-		"name": "Wasteland Rock",
+		"name": "dreadland Rock",
 		"zone": "zone1",
 		"pickaxe_tier": 0,  # Basic pickaxe (starter)
 		"mine_time": 3.0,
@@ -281,6 +290,12 @@ const LOD_DETAIL_DISTANCE: float = 2500.0  # Simplify props beyond this distance
 var bone_proximity_timer: float = 0.0
 
 func _process(delta: float) -> void:
+	# If cell streaming is enabled, still handle paths/torches but skip prop loading
+	if USE_CELL_STREAMING:
+		# Cell streaming handles props, but we still need to spawn paths/torches
+		_update_paths_for_cell_streaming(delta)
+		return
+
 	# In multiplayer server mode, we need to track all players
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 		# Server tracks all players for chunk loading
@@ -312,6 +327,93 @@ func _process(delta: float) -> void:
 	if bone_proximity_timer >= BONE_PROXIMITY_CHECK_INTERVAL:
 		bone_proximity_timer = 0.0
 		update_bone_proximity()
+
+# Track which chunks have had paths/torches spawned (for cell streaming mode)
+var chunks_with_paths: Dictionary = {}
+
+func _update_paths_for_cell_streaming(delta: float) -> void:
+	"""When cell streaming is enabled, still spawn paths/torches for chunks near player"""
+	if not player or not is_instance_valid(player):
+		player = get_tree().get_first_node_in_group("player")
+		return
+
+	# Only check occasionally
+	chunk_update_timer += delta
+	if chunk_update_timer < CHUNK_UPDATE_INTERVAL:
+		return
+	chunk_update_timer = 0.0
+
+	var player_pos = player.global_position
+
+	# Safety check: don't process if player is at origin (not yet properly positioned)
+	if player_pos.x == 0 and player_pos.y == 0:
+		return
+
+	var player_chunk = get_chunk_key(player_pos)
+
+	# Parse current chunk X coordinate
+	var chunk_parts = player_chunk.split(",")
+	var chunk_x = int(chunk_parts[0])
+
+	# Always load current chunk
+	var chunks_to_load = [player_chunk]
+
+	# Calculate player position within chunk (for edge detection)
+	var chunk_origin_x = chunk_x * CHUNK_SIZE
+	var pos_in_chunk_x = player_pos.x - chunk_origin_x
+
+	# Edge threshold - only load neighbors when within 1000px of edge
+	const EDGE_THRESHOLD = 1000.0
+
+	var dist_to_left_edge = pos_in_chunk_x
+	var dist_to_right_edge = CHUNK_SIZE - pos_in_chunk_x
+
+	# Load left chunk only if player is near left edge
+	if dist_to_left_edge < EDGE_THRESHOLD and dist_to_left_edge >= 0:
+		var left_chunk_key = "%d,0" % (chunk_x - 1)
+		if is_in_world_bounds(get_chunk_center(left_chunk_key)):
+			chunks_to_load.append(left_chunk_key)
+
+	# Load right chunk only if player is near right edge
+	if dist_to_right_edge < EDGE_THRESHOLD and dist_to_right_edge >= 0:
+		var right_chunk_key = "%d,0" % (chunk_x + 1)
+		if is_in_world_bounds(get_chunk_center(right_chunk_key)):
+			chunks_to_load.append(right_chunk_key)
+
+	# Unload chunks that are no longer needed (player moved away from edge)
+	var chunks_to_unload = []
+	for chunk_key in loaded_chunks.keys():
+		if chunk_key not in chunks_to_load:
+			chunks_to_unload.append(chunk_key)
+
+	for chunk_key in chunks_to_unload:
+		loaded_chunks.erase(chunk_key)
+		# Note: paths/torches stay visible, only enemy spawning is affected
+		print("📤 Chunk %s unloaded for enemy spawning (cell streaming mode)" % chunk_key)
+
+	# Spawn paths/torches and register chunks for enemy spawning
+	for chunk_key in chunks_to_load:
+		# Register chunk as loaded for enemy spawning FIRST
+		if not loaded_chunks.has(chunk_key):
+			var chunk_data = ChunkData.new()
+			chunk_data.chunk_key = chunk_key
+			chunk_data.is_loaded = true
+			loaded_chunks[chunk_key] = chunk_data
+			print("📥 Chunk %s loaded for enemy spawning (cell streaming mode)" % chunk_key)
+
+		# Spawn paths/torches/ruins (only once per chunk, separate from enemy loading)
+		if not chunks_with_paths.has(chunk_key):
+			var parts = chunk_key.split(",")
+			var chunk_id = int(parts[0])
+
+			if game_world and game_world.has_method("spawn_path_for_chunk"):
+				game_world.spawn_path_for_chunk(chunk_id)
+			if game_world and game_world.has_method("spawn_ruins_for_chunk"):
+				game_world.spawn_ruins_for_chunk(chunk_id)
+			if game_world and game_world.has_method("spawn_pois_for_chunk"):
+				game_world.spawn_pois_for_chunk(chunk_id)
+			chunks_with_paths[chunk_key] = true
+			print("🔦 Spawned path/torches/ruins for chunk %s (cell streaming mode)" % chunk_key)
 
 func process_multiplayer_chunks(delta: float) -> void:
 	"""Process chunks for all players in multiplayer mode (server only)"""
@@ -1197,10 +1299,12 @@ func create_rock_with_shadow(pos: Vector2, size_category: String, container: Nod
 	if not texture:
 		return
 
-	# Create container for rock + shadow
-	var rock_container = Node2D.new()
+	# Create container for rock + shadow (StaticBody2D for collision)
+	var rock_container = StaticBody2D.new()
 	rock_container.global_position = pos
 	rock_container.z_index = -1  # Below player, above ground
+	rock_container.collision_layer = 2  # Layer 2 for obstacles
+	rock_container.collision_mask = 0
 
 	# Random scale
 	var scale_var = rng.randf_range(scale_min, scale_max)
@@ -1211,12 +1315,20 @@ func create_rock_with_shadow(pos: Vector2, size_category: String, container: Nod
 	# Create sprite
 	var sprite = Sprite2D.new()
 	sprite.texture = texture
-	sprite.rotation = rng.randf() * TAU
+	sprite.rotation = rng.randf_range(-PI/6, PI/6)  # ±30° variance, no upside down
 	sprite.scale = Vector2(scale_var, scale_var)
 	sprite.modulate = Color(0.7, 0.7, 0.7, 1.0)
 	sprite.z_index = 0  # Above shadow
 
 	rock_container.add_child(sprite)
+
+	# Add collision shape scaled to rock size
+	var collision_shape = CollisionShape2D.new()
+	var shape = CircleShape2D.new()
+	# Base radius scaled by rock size (smaller than harvestable rocks)
+	shape.radius = 20.0 * scale_var
+	collision_shape.shape = shape
+	rock_container.add_child(collision_shape)
 
 	container.add_child(rock_container)
 
@@ -1358,7 +1470,7 @@ func create_lootable_rock(pos: Vector2, size_category: String, container: Node2D
 	var sprite = Sprite2D.new()
 	sprite.name = "Sprite"
 	sprite.texture = texture
-	sprite.rotation = rng.randf() * TAU
+	sprite.rotation = rng.randf_range(-PI/6, PI/6)  # ±30° variance, no upside down
 	var scale_var = rng.randf_range(1.2, 1.95)  # 50% bigger: 0.8*1.5=1.2, 1.3*1.5=1.95
 	sprite.scale = Vector2(scale_var, scale_var)
 	sprite.modulate = Color(0.7, 0.7, 0.7, 1.0)

@@ -641,7 +641,7 @@ func _populate_item_stats(item: Dictionary, vbox: Control) -> void:
 		label.text = line
 		label.add_theme_font_size_override("font_size", 11)
 		# Color code based on content
-		if line.begins_with("Damage:") or line.begins_with("Defense:"):
+		if line.begins_with("Damage:") or line.begins_with("Defense:") or line.begins_with("Value:"):
 			label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3))  # Gold
 		elif line.begins_with("+") or "STR" in line or "AGI" in line or "DEX" in line or "INT" in line or "WIS" in line or "VIT" in line or "HP" in line:
 			label.add_theme_color_override("font_color", Color(0.4, 0.8, 0.4))  # Green
@@ -982,11 +982,11 @@ func _fetch_provenance(item: Dictionary) -> void:
 	if token_id <= 0:
 		return
 
-	if not MantleAuth or not MantleAuth.is_logged_in():
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		return
 
-	var url = MantleAuth.get_api_base() + "/api/forge/provenance/%d" % token_id
-	var headers = ["Authorization: Bearer " + MantleAuth.auth_token]
+	var url = AshbaneAuth.get_api_base() + "/api/forge/provenance/%d" % token_id
+	var headers = ["Authorization: Bearer " + AshbaneAuth.auth_token]
 
 	var request = HTTPRequest.new()
 	add_child(request)

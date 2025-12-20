@@ -24,7 +24,7 @@ class_name EnemyAI
 @export var chain_aggro_range: float = 100.0  # Nearby allies aggro too (creates trains!)
 
 ## Combat (triggered by player attack OR aggro)
-@export var combat_speed: float = 100.0
+@export var combat_speed: float = 185.0  # Close to player speed (200) - allows skill-based kiting but not infinite
 @export var attack_range: float = 60.0
 @export var attack_cooldown: float = 1.5
 @export var attack_damage: float = 10.0
@@ -183,7 +183,7 @@ func _ready() -> void:
 		enemy.damage_taken.connect(_on_enemy_damaged)
 
 	# Fixed speed (no level scaling - equipment may add bonuses later)
-	# Note: combat_speed and patrol_speed use @export defaults (100.0 and 30.0)
+	# Note: combat_speed (185) and patrol_speed (50) use @export defaults
 
 	# Guardian skeleton combat buffs - faster attacks, slightly faster movement
 	var is_guardian = enemy.get_meta("is_guardian", false)
@@ -1008,7 +1008,7 @@ func perform_attack() -> void:
 
 	# Play attack sound (sound manager handles preventing overlap)
 	if _sound_manager:
-		_sound_manager.play_skeleton_attack_sound(enemy.global_position, -10.0)
+		_sound_manager.play_skeleton_attack_sound(enemy.global_position, -14.0)
 
 	# Lazy re-fetch anim_sprite if needed
 	if not anim_sprite and enemy and is_instance_valid(enemy):
@@ -1116,7 +1116,7 @@ func trigger_aggro() -> void:
 
 	# Play aggro sound (sound manager handles preventing overlap)
 	if _sound_manager:
-		_sound_manager.play_skeleton_aggro_sound(enemy.global_position, -10.0)
+		_sound_manager.play_skeleton_aggro_sound(enemy.global_position, -14.0)
 
 	# Chain aggro - alert nearby allies!
 	trigger_chain_aggro()

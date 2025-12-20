@@ -9,7 +9,7 @@ func add_starter_tools_to_inventory() -> void:
 
 	var rusty_axe = {
 		"name": "Rusty Axe",
-		"description": "An old, weathered axe. Still sharp enough to chop dead wasteland trees.",
+		"description": "An old, weathered axe. Still sharp enough to chop dead dreadland trees.",
 		"type": "tool",
 		"tool_type": "axe",
 		"value": 10,
