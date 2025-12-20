@@ -109,81 +109,49 @@ func _exit_tree() -> void:
 			network_enemy_mgr.unregister_enemy(network_id)
 
 # ============================================
-# TTK FRAMEWORK HELPERS
+# HP SCALING (REBALANCED)
 # ============================================
-
-func _calculate_window_damage_for_level(level: int) -> float:
-	"""Calculate expected damage from a perfect weakpoint window at a given player level.
-	This mirrors CharacterStats.get_window_damage() but without needing the player instance."""
-
-	# Calculate base damage at this level
-	# Player stats at level N: STR = 10 + (N-1)*2, starting weapon ~2 damage
-	var str_at_level = 10 + (level - 1) * 2
-	var stat_damage = 5.0 + (str_at_level - 10) * 0.5
-	var weapon_damage = 2.0 + level * 1.5  # Estimated weapon damage scaling
-
-	var base_damage = stat_damage + weapon_damage
-
-	# Crit multiplier
-	var crit_mult = Constants.CRIT_DAMAGE_MULTIPLIER if "CRIT_DAMAGE_MULTIPLIER" in Constants else 2.0
-
-	# Weakpoint count scales with level
-	var weakpoint_count = 1
-	if level >= 21:
-		weakpoint_count = 3
-	elif level >= 11:
-		weakpoint_count = 2
-
-	# Each weakpoint takes 3-5 hits to destroy (average 4), and EACH hit deals damage
-	var hits_per_weakpoint = 4
-
-	return base_damage * crit_mult * weakpoint_count * hits_per_weakpoint
+# Simple exponential scaling using Constants.
+# Target TTK: 5-8 seconds for trash mobs at all levels.
+#
+# Level 1: 35 HP (5-6 hits with ~6 damage per hit)
+# Level 10: 108 HP
+# Level 30: 1,047 HP
 
 func _ready() -> void:
 	# Set collision layers: enemies on layer 1, detect layers 1 (other entities) and 2 (obstacles like trees)
 	collision_layer = 1
 	collision_mask = 3  # Bitmask: 1 (layer 1) + 2 (layer 2) = 3
 
-	# Determine enemy type for TTK framework
+	# Determine enemy type for HP multipliers
 	var is_guardian = get_meta("is_guardian", false)
 	var is_boss = is_in_group("boss")
 
 	# ============================================
-	# TTK-BASED HP SCALING
+	# SIMPLE HP SCALING (Rebalanced Dec 2024)
 	# ============================================
-	# HP is calculated to require X weakpoint windows to kill, ensuring
-	# consistent TTK regardless of player damage scaling.
-	#
-	# Formula: HP = window_damage × expected_windows × type_multiplier
-	# window_damage scales with enemy level (matching player progression)
+	# Base HP scales exponentially with level using Constants.
+	# Type multipliers applied for guardians/bosses.
 
-	# Calculate expected window damage at this enemy's level
-	# This simulates a same-level player fighting this enemy
-	var window_damage = _calculate_window_damage_for_level(enemy_level)
+	# Base HP from exponential scaling
+	var base_hp = Constants.ENEMY_BASE_HEALTH * pow(Constants.ENEMY_HEALTH_SCALING, enemy_level - 1)
 
-	# Determine expected windows and type multiplier
-	var expected_windows: int
-	var type_mult: float
+	# Apply type multiplier
+	var type_mult: float = Constants.TTK_MULT_TRASH  # 1.0 for regular enemies
 
 	if is_boss:
-		expected_windows = Constants.TTK_WINDOWS_BOSS if "TTK_WINDOWS_BOSS" in Constants else 7
-		type_mult = Constants.TTK_MULT_BOSS if "TTK_MULT_BOSS" in Constants else 4.0
+		type_mult = Constants.TTK_MULT_BOSS  # 5.0x for bosses
 	elif is_guardian:
-		expected_windows = Constants.TTK_WINDOWS_ELITE if "TTK_WINDOWS_ELITE" in Constants else 3
-		type_mult = Constants.TTK_MULT_ELITE if "TTK_MULT_ELITE" in Constants else 1.75
-	else:
-		expected_windows = Constants.TTK_WINDOWS_TRASH if "TTK_WINDOWS_TRASH" in Constants else 1
-		type_mult = Constants.TTK_MULT_TRASH if "TTK_MULT_TRASH" in Constants else 1.0
+		type_mult = Constants.TTK_MULT_ELITE  # 2.0x for guardians
 
-	# Calculate HP based on TTK framework
-	max_health = window_damage * expected_windows * type_mult
+	max_health = base_hp * type_mult
 
-	# Scale damage by enemy level (original formula)
+	# Scale damage by enemy level
 	base_damage = Constants.ENEMY_BASE_DAMAGE * pow(Constants.ENEMY_DAMAGE_SCALING, enemy_level - 1)
 	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 
-	# Guardian/Elite buffs (damage, XP, gold - HP already handled by TTK)
+	# Guardian/Elite buffs (damage, XP, gold)
 	if is_guardian:
 		base_damage *= 1.5  # 50% more damage - pressures tank, rewards having a healer
 		xp_reward = int(xp_reward * 1.5)  # 50% more XP - worth the challenge
@@ -772,38 +740,9 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
 
-	# ✨ NEW: Spawn combat text centered at 70% of sprite height
-	var combat_text_scene = preload("res://scenes/ui/combat_text.tscn")
-	var combat_text = combat_text_scene.instantiate()
+	# NOTE: Combat text is spawned by PlayerCombat.apply_damage_with_feedback()
+	# via AttackFeedbackSystem.spawn_damage_number() - do NOT spawn here to avoid duplicates
 
-	# Set damage text
-	combat_text.text = str(int(amount))
-
-	# Determine text type based on parameters
-	if is_weakpoint_hit:
-		combat_text.type = 2  # TextType.WEAKPOINT (orange)
-	elif is_crit:
-		combat_text.type = 1  # TextType.CRIT (yellow)
-		# NOTE: Critical hit sound is now handled by NetworkEnemyManager._play_hit_sounds()
-		# in multiplayer, or in the else branch below for single player
-	else:
-		combat_text.type = 0  # TextType.NORMAL (white)
-
-	# Calculate spawn position at center of enemy sprite
-	# CombatText handles radial distribution to prevent clumping
-	var sprite_scale = sprite.scale if sprite else Vector2.ONE
-	var sprite_height = 64.0 * sprite_scale.y  # LPC sprites are 64px tall
-	var sprite_pos = sprite.position if sprite else Vector2.ZERO
-
-	# Spawn at center-top of sprite (all types spawn from same center point)
-	var spawn_y_offset = -(sprite_height * 0.4)  # 40% from top
-
-	# Final spawn position: enemy center + sprite offset + y offset
-	var spawn_pos = global_position + sprite_pos + Vector2(0, spawn_y_offset)
-
-	combat_text.global_position = spawn_pos
-	get_tree().root.add_child(combat_text)
-	
 	# ✨ Play hit sound
 	# NOTE: In multiplayer, NetworkEnemyManager._client_enemy_damaged() handles ALL hit sounds
 	# via _play_hit_sounds(). We only play sounds here in single player to avoid duplicates.
@@ -818,19 +757,38 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 				weapon_type = CharacterStats.equipped_weapon.weapon_type
 
 			if is_crit:
-				sound_manager.play_critical_hit_sound(global_position, -6.0)
+				sound_manager.play_critical_hit_sound(global_position, -8.0)
 			else:
-				sound_manager.play_normal_hit_sound(global_position, -10.0, weapon_type)
+				sound_manager.play_normal_hit_sound(global_position, -12.0, weapon_type)
 
 			# Play skeleton hurt reaction sound (for all hit types)
-			sound_manager.play_skeleton_hurt_sound(global_position, -12.0)
-	
-	# ✨ NEW: Trigger hit flash locally (always works)
-	if has_node("HitFlash"):
-		get_node("HitFlash").flash(is_crit)
+			sound_manager.play_skeleton_hurt_sound(global_position, -14.0)
+
+	# 🎮 Combat juice - hitstop on weakpoint hits only
+	if is_weakpoint_hit:
+		var combat_juice = get_node_or_null("/root/CombatJuice")
+		if combat_juice:
+			combat_juice.on_weakpoint()
+
+	# 💥 Play hurt/stagger animation on every hit
+	play_hurt_stagger()
 
 	if current_health <= 0:
 		die()
+
+func play_hurt_stagger() -> void:
+	"""Quick jolt for stagger feedback on hit - shakes the whole enemy"""
+	if is_dying or is_corpse:
+		return
+
+	if not sprite:
+		return
+
+	# Quick sharp jolt and snap back - tight, not bouncy
+	var original_pos = position
+	var stagger_tween = create_tween()
+	stagger_tween.tween_property(self, "position", original_pos + Vector2(4, -2), 0.03).set_ease(Tween.EASE_OUT)
+	stagger_tween.tween_property(self, "position", original_pos, 0.05).set_ease(Tween.EASE_IN)
 
 func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 	"""Visual effect: grow sprite and spawn weakpoints (called by CritWindowManager)"""
@@ -858,11 +816,15 @@ func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 		# Already at target scale, spawn weakpoints immediately
 		spawn_weakpoints()
 	else:
-		# Scale the sprite (not collision box) for visual growth
+		# Scale the sprite AND equipment (not collision box) for visual growth
 		if sprite:
 			_grow_tween = create_tween()
-			_grow_tween.set_parallel(false)
+			_grow_tween.set_parallel(true)  # Scale all sprites in parallel
 			_grow_tween.tween_property(sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
+			# Scale all equipment sprites (helmet, boots, gloves, weapons)
+			for equip_sprite in equipment_sprites:
+				if is_instance_valid(equip_sprite):
+					_grow_tween.tween_property(equip_sprite, "scale", target_sprite_scale, Constants.CRIT_WINDOW_SCALE_DURATION)
 			z_index = Constants.CRIT_WINDOW_Z_INDEX
 			await _grow_tween.finished
 			_grow_tween = null
@@ -1276,26 +1238,24 @@ func _on_weakpoint_hit(weakpoint) -> void:
 		# reporting to server at window end. But DO show visual feedback locally!
 		_spawn_weakpoint_combat_text(weakpoint, crit_damage)
 
-		# ✨ FIX: Trigger hit flash for weakpoint hits in multiplayer (was missing!)
+		# Trigger hit flash for weakpoint hits
 		if has_node("HitFlash"):
 			get_node("HitFlash").flash(true)  # true = crit/weakpoint flash (red)
+
+		# Trigger stagger animation
+		play_hurt_stagger()
 		return
 
 	# Single player: deal damage directly with crit flag and weakpoint flag for orange text
 	take_damage(crit_damage, true, true)  # damage, is_crit, is_weakpoint
 
-func _spawn_weakpoint_combat_text(weakpoint, damage: float) -> void:
+func _spawn_weakpoint_combat_text(_weakpoint, damage: float) -> void:
 	"""Spawn combat text for weakpoint hit (used in multiplayer for instant feedback)"""
-	var combat_text_scene = preload("res://scenes/ui/combat_text.tscn")
-	var combat_text = combat_text_scene.instantiate()
-
-	combat_text.text = str(int(damage))
-	combat_text.type = 2  # TextType.WEAKPOINT (orange/red)
-
-	# Position at weakpoint location
-	var spawn_pos = weakpoint.global_position if is_instance_valid(weakpoint) else global_position
-	combat_text.global_position = spawn_pos + Vector2(randf_range(-10, 10), randf_range(-20, 0))
-	get_tree().root.add_child(combat_text)
+	# Use CombatText factory method - spawns at enemy center like regular damage
+	# This ensures consistent positioning for all damage types
+	var parent = get_tree().current_scene
+	if parent:
+		CombatText.create_weakpoint(damage, global_position, parent)
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
 	"""Local handler - just forward to manager"""
@@ -1346,17 +1306,26 @@ func shrink_after_crit_window() -> void:
 	# Wait for weakpoint explosion animation to complete (~0.5s shake + explosion)
 	await get_tree().create_timer(0.55).timeout
 
-	# Scale sprite back to base (check we're still valid)
+	# Scale sprite AND equipment back to base (check we're still valid)
 	if is_instance_valid(self) and sprite and not is_dying:
 		var base_sprite_scale = Vector2.ONE
 		var tween = create_tween()
+		tween.set_parallel(true)  # Shrink all sprites in parallel
 		tween.tween_property(sprite, "scale", base_sprite_scale, 0.25)
+		# Shrink all equipment sprites (helmet, boots, gloves, weapons)
+		for equip_sprite in equipment_sprites:
+			if is_instance_valid(equip_sprite):
+				tween.tween_property(equip_sprite, "scale", base_sprite_scale, 0.25)
 		await tween.finished
 
 		if is_instance_valid(self) and sprite:
 			sprite.scale = base_sprite_scale
 			z_index = 0
 			sprite.modulate = Color.WHITE
+		# Ensure all equipment is reset to base scale
+		for equip_sprite in equipment_sprites:
+			if is_instance_valid(equip_sprite):
+				equip_sprite.scale = base_sprite_scale
 
 	_crit_window_transitioning = false  # Unlock after shrink complete
 
@@ -1460,6 +1429,10 @@ func die() -> void:
 		if sprite:
 			sprite.scale = Vector2.ONE
 			sprite.modulate = Color.WHITE
+		# Reset all equipment sprites to normal scale
+		for equip_sprite in equipment_sprites:
+			if is_instance_valid(equip_sprite):
+				equip_sprite.scale = Vector2.ONE
 		# Reset z_index
 		z_index = 0
 		self.modulate = Color.WHITE
@@ -1521,7 +1494,7 @@ func die() -> void:
 	# Play death sound (skeleton-specific bone collapse)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_skeleton_death_sound(global_position, -8.0)
+		sound_manager.play_skeleton_death_sound(global_position, -10.0)
 
 	# Play death animation (hurt animation) and wait for it to complete
 	var anim_sprite = sprite as AnimatedSprite2D
@@ -1715,9 +1688,12 @@ func become_corpse() -> void:
 		weakpoints.clear()
 		in_crit_window = false
 
-	# Ensure sprite is reset to normal scale (in case died during crit window)
+	# Ensure sprite and equipment is reset to normal scale (in case died during crit window)
 	if sprite:
 		sprite.scale = Vector2.ONE
+	for equip_sprite in equipment_sprites:
+		if is_instance_valid(equip_sprite):
+			equip_sprite.scale = Vector2.ONE
 	z_index = 0
 
 	# Disable AI
@@ -1746,11 +1722,10 @@ func become_corpse() -> void:
 	else:
 		print("   ⚫ No loot - no indicator")
 
-	# Play dead animation and darken sprite
-	if sprite and sprite is AnimatedSprite2D:
-		var anim_sprite = sprite as AnimatedSprite2D
-		if anim_sprite.sprite_frames and anim_sprite.sprite_frames.has_animation("dead"):
-			anim_sprite.play("dead")
+	# Darken sprite for corpse appearance
+	# NOTE: Don't play "dead" animation here - die() already freezes on the last hurt frame
+	# Calling play() would switch animations and disrupt the frozen corpse pose
+	if sprite:
 		sprite.modulate = Color(0.7, 0.7, 0.7, 1.0)  # Darken corpse
 
 	# Hide equipment on corpse (they fall off / look messy)

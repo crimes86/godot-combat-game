@@ -150,6 +150,9 @@ func _ready() -> void:
 	# Initialize AI variation (desync pack members)
 	_init_ai_variation()
 
+	# Connect damage signal to enter combat when hit by ranged weapons
+	damage_taken.connect(_on_damage_taken)
+
 	# Start with idle animation
 	play_animation("idle_down")
 
@@ -164,13 +167,15 @@ func _ready() -> void:
 func apply_level_scaling() -> void:
 	"""Scale stats based on enemy level - uses Constants like skeletons"""
 	# Base health from Constants (wolves have 80% of skeleton health - glass cannons)
+	# Rebalanced: Lower base HP (35) with 12% scaling
 	max_health = Constants.ENEMY_BASE_HEALTH * pow(Constants.ENEMY_HEALTH_SCALING, enemy_level - 1) * 0.8
 	current_health = max_health
 
-	# Damage scales with level
-	base_damage = 15.0 * pow(1.15, enemy_level - 1)  # 15% per level
-	xp_reward = int(xp_reward_base * pow(1.2, enemy_level - 1))
-	gold_drop = int(gold_drop_base * pow(1.15, enemy_level - 1))
+	# Damage scales with level (rebalanced: base 7 damage, 8% per level)
+	# Higher base makes armor meaningful - naked feels dangerous, armored feels protected
+	base_damage = 7.0 * pow(Constants.ENEMY_DAMAGE_SCALING, enemy_level - 1)
+	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
+	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 
 	# Pack alpha wolves are stronger
 	if pack_alpha:
@@ -601,31 +606,36 @@ func take_damage(damage: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 		var restore_color = original_modulate if not is_alpha_dire_wolf else Color(0.4, 0.35, 0.5, 1.0)
 		tween.tween_property(sprite, "modulate", restore_color, 0.2)
 
-	# Spawn combat text
-	_spawn_combat_text(damage, is_crit, is_weakpoint_hit)
+	# NOTE: Combat text is spawned by PlayerCombat.apply_damage_with_feedback()
+	# via AttackFeedbackSystem.spawn_damage_number() - do NOT spawn here to avoid duplicates
 
 	# Play wolf hurt sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_wolf_hurt_sound(global_position, -6.0)
+		sound_manager.play_wolf_hurt_sound(global_position, -10.0)
+
+	# 🎮 Combat juice - hitstop on weakpoint hits only
+	if is_weakpoint_hit:
+		var combat_juice = get_node_or_null("/root/CombatJuice")
+		if combat_juice:
+			combat_juice.on_weakpoint()
+
+	# 💥 Stagger shake on hit
+	play_hurt_stagger()
 
 	if current_health <= 0:
 		die()
 
+func play_hurt_stagger() -> void:
+	"""Quick jolt for stagger feedback - tight, not bouncy"""
+	if is_dying or is_corpse:
+		return
 
-func _spawn_combat_text(damage: float, is_crit: bool, is_weakpoint: bool) -> void:
-	"""Spawn floating combat text - CombatText handles radial distribution"""
-	# Spawn at center-top of wolf, CombatText will apply radial offset
-	var spawn_pos = global_position + Vector2(0, -40)
-	var parent = get_tree().current_scene
-
-	# Use CombatText static factory methods
-	if is_weakpoint:
-		CombatText.create_weakpoint(damage, spawn_pos, parent)
-	elif is_crit:
-		CombatText.create_crit(damage, spawn_pos, parent)
-	else:
-		CombatText.create_normal(damage, spawn_pos, parent)
+	# Shake the whole wolf, not just sprite
+	var original_pos = position
+	var stagger_tween = create_tween()
+	stagger_tween.tween_property(self, "position", original_pos + Vector2(4, -2), 0.03).set_ease(Tween.EASE_OUT)
+	stagger_tween.tween_property(self, "position", original_pos, 0.05).set_ease(Tween.EASE_IN)
 
 
 func die() -> void:
@@ -693,7 +703,7 @@ func die() -> void:
 	# Play wolf death sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_wolf_death_sound(global_position, -4.0)
+		sound_manager.play_wolf_death_sound(global_position, -8.0)
 
 	# Play death animation - keep _is_idle false so it animates
 	_is_idle = false
@@ -1181,6 +1191,7 @@ var target_player: Node = null
 var attack_cooldown: float = 0.0
 const ATTACK_COOLDOWN_TIME: float = 1.5
 var _has_alerted_pack: bool = false  # Prevent chain aggro spam
+var _was_attacked: bool = false  # Track if wolf was hit (for ranged aggro)
 
 # Per-wolf variation (set in _ready)
 var _detection_range: float = BASE_DETECTION_RANGE
@@ -1275,11 +1286,12 @@ func _physics_process(delta: float) -> void:
 		target_player = null
 		is_running = false
 		_has_alerted_pack = false  # Reset so pack can be alerted again later
+		_was_attacked = false  # Reset attacked state
 		_do_wander_behavior(delta)
 		return
 
-	# In detection range - chase!
-	if distance_to_player <= _detection_range and distance_to_player > ATTACK_RANGE:
+	# Chase if: in detection range OR was attacked (ranged weapons trigger chase from any distance)
+	if (distance_to_player <= _detection_range or _was_attacked) and distance_to_player > ATTACK_RANGE:
 		_is_wandering = false
 		is_running = true
 		# Alert pack members on first detection
@@ -1569,7 +1581,7 @@ func _trigger_chain_aggro() -> void:
 	# Play wolf aggro sound (growl/snarl)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_wolf_aggro_sound(global_position, -8.0)
+		sound_manager.play_wolf_aggro_sound(global_position, -12.0)
 
 	var range_squared = CHAIN_AGGRO_RANGE * CHAIN_AGGRO_RANGE
 	var alerted = 0
@@ -1608,7 +1620,7 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 	# Play wolf attack sound (bite)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_wolf_attack_sound(global_position, -8.0)
+		sound_manager.play_wolf_attack_sound(global_position, -12.0)
 
 	# Deal damage after a short delay (sync with animation)
 	await get_tree().create_timer(0.3).timeout
@@ -1620,3 +1632,23 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 	# Wait for attack animation to finish
 	await get_tree().create_timer(0.5).timeout
 	is_attacking = false
+
+
+func _on_damage_taken(_damage: float, _is_crit: bool) -> void:
+	"""Called when wolf takes damage - enter chase mode to attack the player"""
+	if is_dying or is_corpse:
+		return
+
+	# Mark as attacked so wolf chases even from outside detection range (ranged weapons)
+	_was_attacked = true
+
+	# Get local player as target (the one who hit us)
+	if not is_instance_valid(target_player):
+		target_player = _get_local_player()
+
+	# Enter combat mode - start running at the player
+	if target_player:
+		is_running = true
+		_is_wandering = false
+		# Trigger pack aggro so nearby wolves also attack
+		_trigger_chain_aggro()

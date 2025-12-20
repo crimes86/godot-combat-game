@@ -116,12 +116,15 @@ func _ready() -> void:
 
 
 func apply_level_scaling() -> void:
-	"""Scale stats based on enemy level"""
-	max_health = 60.0 * pow(1.1, enemy_level - 1)  # Fragile
+	"""Scale stats based on enemy level - rebalanced Dec 2024"""
+	# Spiders are fragile (60% of base HP) - fast but squishy
+	max_health = Constants.ENEMY_BASE_HEALTH * pow(Constants.ENEMY_HEALTH_SCALING, enemy_level - 1) * 0.6
 	current_health = max_health
-	base_damage = 12.0 * pow(1.12, enemy_level - 1)
-	xp_reward = int(xp_reward_base * pow(1.18, enemy_level - 1))
-	gold_drop = int(gold_drop_base * pow(1.12, enemy_level - 1))
+	# Spider damage (5.8 base) - proportionally scaled with wolf (7.0)
+	# Spiders hit slightly softer than wolves but are faster
+	base_damage = 5.8 * pow(Constants.ENEMY_DAMAGE_SCALING, enemy_level - 1)
+	xp_reward = int(xp_reward_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
+	gold_drop = int(gold_drop_base * pow(Constants.ENEMY_XP_GOLD_SCALING, enemy_level - 1))
 
 
 func setup_sprite() -> void:
@@ -329,28 +332,36 @@ func take_damage(damage: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 		var tween = create_tween()
 		tween.tween_property(sprite, "modulate", original_modulate, 0.2)
 
-	_spawn_combat_text(damage, is_crit, is_weakpoint_hit)
+	# NOTE: Combat text is spawned by PlayerCombat.apply_damage_with_feedback()
+	# via AttackFeedbackSystem.spawn_damage_number() - do NOT spawn here to avoid duplicates
 
 	# Play hurt sound (use skeleton sound for now)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_skeleton_hurt_sound(global_position, -6.0)
+		sound_manager.play_skeleton_hurt_sound(global_position, -10.0)
+
+	# 🎮 Combat juice - hitstop on weakpoint hits only
+	if is_weakpoint_hit:
+		var combat_juice = get_node_or_null("/root/CombatJuice")
+		if combat_juice:
+			combat_juice.on_weakpoint()
+
+	# 💥 Stagger shake on hit
+	play_hurt_stagger()
 
 	if current_health <= 0:
 		die()
 
+func play_hurt_stagger() -> void:
+	"""Quick jolt for stagger feedback - tight, not bouncy"""
+	if is_dying or is_corpse:
+		return
 
-func _spawn_combat_text(damage: float, is_crit: bool, is_weakpoint: bool) -> void:
-	"""Spawn floating combat text"""
-	var spawn_pos = global_position + Vector2(0, -35)
-	var parent = get_tree().current_scene
-
-	if is_weakpoint:
-		CombatText.create_weakpoint(damage, spawn_pos, parent)
-	elif is_crit:
-		CombatText.create_crit(damage, spawn_pos, parent)
-	else:
-		CombatText.create_normal(damage, spawn_pos, parent)
+	# Shake the whole spider, not just sprite
+	var original_pos = position
+	var stagger_tween = create_tween()
+	stagger_tween.tween_property(self, "position", original_pos + Vector2(3, -1), 0.03).set_ease(Tween.EASE_OUT)
+	stagger_tween.tween_property(self, "position", original_pos, 0.05).set_ease(Tween.EASE_IN)
 
 
 func die() -> void:

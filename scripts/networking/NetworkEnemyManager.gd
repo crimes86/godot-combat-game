@@ -286,6 +286,10 @@ func get_enemy(network_id: int) -> Node:
 @rpc("any_peer", "reliable")
 func request_attack(enemy_network_id: int, damage: float) -> void:
 	"""Client requests to attack an enemy. Server rolls for crit and handles result."""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not multiplayer.is_server():
 		return
 
@@ -369,7 +373,7 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 				# Play crit window opening sound on server
 				var sound_manager = get_node_or_null("/root/SoundManager")
 				if sound_manager:
-					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
+					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -10.0)
 			else:
 				# Fallback: just apply damage if crit window manager not available
 				LogManager.warn("CritWindowManager not found, applying crit damage directly", "combat")
@@ -450,6 +454,10 @@ func _apply_damage_internal(enemy_network_id: int, damage: float, is_crit: bool,
 @rpc("any_peer", "reliable")
 func request_damage(enemy_network_id: int, damage: float, is_crit: bool, is_weakpoint: bool) -> void:
 	"""Client requests to deal damage to an enemy. Server validates and applies."""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not multiplayer.is_server():
 		return
 
@@ -533,6 +541,10 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 	if enemy.has_node("HitFlash"):
 		enemy.get_node("HitFlash").flash(is_crit)
 
+	# Trigger stagger animation (position shake)
+	if enemy.has_method("play_hurt_stagger"):
+		enemy.play_hurt_stagger()
+
 	# Update health bar
 	if enemy.health_bar and enemy.health_bar.has_method("update_health"):
 		enemy.health_bar.update_health(new_health, max_health)
@@ -612,11 +624,11 @@ func _play_hit_sounds(enemy: Node, is_crit: bool, is_weakpoint: bool, _attacker_
 		weapon_type = CharacterStats.equipped_weapon.weapon_type
 
 	if is_crit:
-		sound_manager.play_critical_hit_sound(enemy.global_position, -6.0)
+		sound_manager.play_critical_hit_sound(enemy.global_position, -8.0)
 	else:
-		sound_manager.play_normal_hit_sound(enemy.global_position, -10.0, weapon_type)
+		sound_manager.play_normal_hit_sound(enemy.global_position, -12.0, weapon_type)
 
-	sound_manager.play_skeleton_hurt_sound(enemy.global_position, -12.0)
+	sound_manager.play_skeleton_hurt_sound(enemy.global_position, -14.0)
 
 func _trigger_attack_feedback_for_attacker(enemy: Node, is_crit: bool, is_weakpoint: bool, attacker_id: int) -> void:
 	"""Trigger attack particle feedback only for the player who attacked."""
@@ -1097,7 +1109,7 @@ func _client_start_local_crit_window(enemy_network_id: int) -> void:
 	# Play crit window opening sound
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager and enemy.is_inside_tree():
-		sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
+		sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -10.0)
 
 	# Find the local player's CritWindowManager
 	var all_players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
@@ -1178,6 +1190,10 @@ func _client_take_damage(damage: float) -> void:
 @rpc("any_peer", "reliable")
 func report_crit_window_result(enemy_network_id: int, weakpoints_destroyed: int, total_damage: int) -> void:
 	"""Client reports crit window results. Server validates and applies damage."""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not multiplayer.is_server():
 		return
 
@@ -1307,6 +1323,10 @@ func _get_max_player_damage(attacker_peer_id: int) -> float:
 @rpc("any_peer", "call_local", "reliable")
 func request_loot_gold(enemy_network_id: int) -> void:
 	"""Client requests to loot gold from a corpse. Server validates and broadcasts."""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not multiplayer.is_server():
 		return
 
@@ -1379,11 +1399,15 @@ func _show_gold_loot_notification(amount: int, position: Vector2) -> void:
 
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -10.0)
+		sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
 
 @rpc("any_peer", "call_local", "reliable")
 func request_loot_item(enemy_network_id: int, item_index: int) -> void:
 	"""Client requests to loot an item from a corpse. Server validates and broadcasts."""
+	# Guard against null multiplayer during scene transitions
+	if not multiplayer:
+		return
+
 	if not multiplayer.is_server():
 		LogManager.debug("request_loot_item: Not server, ignoring", "loot")
 		return
