@@ -2,10 +2,10 @@
 
 ## Overview
 
-World Tree winners are **permanently recorded on-chain** via the Mantle blockchain, creating an immutable historical record and enabling future NFT/governance features.
+World Tree winners are **permanently recorded on-chain** via the Ashbane blockchain, creating an immutable historical record and enabling future NFT/governance features.
 
 ```
-Game Server                Mantle Backend              Mantle Blockchain
+Game Server                Ashbane Backend              Ashbane Blockchain
 ┌──────────┐              ┌──────────┐                ┌──────────────┐
 │  World   │  HTTP POST   │  Record  │  Smart         │  World Tree  │
 │  Tree    │ ───────────> │  World   │  Contract ───> │  Registry    │
@@ -94,7 +94,7 @@ struct WorldTreeRecord {
 
 ## Smart Contract
 
-### World Tree Registry Contract (Mantle L2)
+### World Tree Registry Contract (Ashbane L2)
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -279,7 +279,7 @@ contract WorldTreeRegistry {
 
 ## Backend API Integration
 
-### Mantle Backend Endpoints
+### Ashbane Backend Endpoints
 
 **New Endpoint: `POST /api/world-tree/record`**
 
@@ -287,7 +287,7 @@ contract WorldTreeRegistry {
 # backend/app/routes/world_tree.py
 from fastapi import APIRouter, HTTPException, Depends
 from web3 import Web3
-from app.blockchain import mantle_client
+from app.blockchain import Ashbane_client
 from app.models import WorldTreeRecord
 
 router = APIRouter(prefix="/api/world-tree", tags=["world-tree"])
@@ -306,7 +306,7 @@ async def record_world_tree(
     metadata_uri = await upload_to_ipfs(record.to_metadata_json())
 
     # Prepare contract call
-    contract = mantle_client.get_contract("WorldTreeRegistry")
+    contract = Ashbane_client.get_contract("WorldTreeRegistry")
 
     try:
         # Call smart contract
@@ -324,7 +324,7 @@ async def record_world_tree(
         ).transact()
 
         # Wait for confirmation
-        receipt = mantle_client.wait_for_transaction(tx_hash)
+        receipt = Ashbane_client.wait_for_transaction(tx_hash)
 
         # Extract record ID from event logs
         record_id = contract.events.WorldTreeRecorded().processReceipt(receipt)[0]['args']['recordId']
@@ -344,7 +344,7 @@ async def record_world_tree(
 @router.get("/records/{owner_id}")
 async def get_owner_records(owner_id: str):
     """Get all World Tree wins for a player/guild"""
-    contract = mantle_client.get_contract("WorldTreeRegistry")
+    contract = Ashbane_client.get_contract("WorldTreeRegistry")
     record_ids = contract.functions.getRecordsByOwner(owner_id).call()
 
     records = []
@@ -358,7 +358,7 @@ async def get_owner_records(owner_id: str):
 @router.get("/verify/{record_id}")
 async def verify_record(record_id: int):
     """Verify a World Tree record exists on-chain"""
-    contract = mantle_client.get_contract("WorldTreeRegistry")
+    contract = Ashbane_client.get_contract("WorldTreeRegistry")
 
     try:
         record = contract.functions.getRecord(record_id).call()
@@ -407,7 +407,7 @@ func recalculate_world_tree() -> void:
 
 
 func record_world_tree_on_chain(winner: Dictionary, all_trees: Array) -> void:
-    """Record World Tree winner to Mantle blockchain via backend API"""
+    """Record World Tree winner to Ashbane blockchain via backend API"""
 
     var db = DatabaseManager
 
@@ -465,17 +465,17 @@ func record_world_tree_on_chain(winner: Dictionary, all_trees: Array) -> void:
             "score": contributor.total_points
         })
 
-    # Send to Mantle backend
+    # Send to Ashbane backend
     var http = HTTPRequest.new()
     add_child(http)
     http.request_completed.connect(_on_blockchain_record_complete)
 
     var headers = [
         "Content-Type: application/json",
-        "X-Game-Server-Key: %s" % MantleAuth.get_server_api_key()
+        "X-Game-Server-Key: %s" % AshbaneAuth.get_server_api_key()
     ]
 
-    var url = "%s/api/world-tree/record" % MantleAuth.backend_url
+    var url = "%s/api/world-tree/record" % AshbaneAuth.backend_url
     var json = JSON.stringify(payload)
 
     print("🔗 Recording World Tree to blockchain...")
@@ -518,9 +518,9 @@ func _on_blockchain_record_complete(result: int, response_code: int, headers: Pa
 @rpc("authority", "call_local")
 func _broadcast_blockchain_confirmation(record_id: int, tx_hash: String) -> void:
     """Broadcast blockchain confirmation to all players"""
-    print("🔗 World Tree permanently recorded on Mantle blockchain!")
+    print("🔗 World Tree permanently recorded on Ashbane blockchain!")
     print("   Record ID: %d" % record_id)
-    print("   View on explorer: https://explorer.mantle.xyz/tx/%s" % tx_hash)
+    print("   View on explorer: https://explorer.Ashbane.xyz/tx/%s" % tx_hash)
 ```
 
 ---
@@ -651,7 +651,7 @@ func show_world_tree_info():
 **Explorer Button**:
 ```gdscript
 func _on_explorer_button_pressed():
-    var url = "https://explorer.mantle.xyz/tx/%s" % tx_hash
+    var url = "https://explorer.Ashbane.xyz/tx/%s" % tx_hash
     OS.shell_open(url)
 ```
 
@@ -664,7 +664,7 @@ Owner: PhoenixGuild
 Score: 45,600 points
 Week: 45 (Nov 5-12, 2024)
 
-🔗 Permanently recorded on Mantle blockchain
+🔗 Permanently recorded on Ashbane blockchain
 Record ID: #123
 TX: 0xabcd...1234
 
@@ -686,7 +686,7 @@ TX: 0xabcd...1234
 
 ## Gas Costs & Optimization
 
-**Estimated Gas Cost** (Mantle L2):
+**Estimated Gas Cost** (Ashbane L2):
 - Record transaction: ~0.001 MNT ($0.0005)
 - Query (read-only): Free
 
@@ -768,7 +768,7 @@ function hasWorldTreeWin(address player) external view returns (bool) {
 ## Testing Plan
 
 1. **Local Testing**:
-   - Deploy contract to Mantle testnet
+   - Deploy contract to Ashbane testnet
    - Test recording with dummy data
    - Verify queries work correctly
 
@@ -778,7 +778,7 @@ function hasWorldTreeWin(address player) external view returns (bool) {
    - Test wallet linking
 
 3. **Production Deployment**:
-   - Deploy to Mantle mainnet
+   - Deploy to Ashbane mainnet
    - Test with first real World Tree winner
    - Monitor gas costs and transaction success
 
@@ -798,7 +798,7 @@ function hasWorldTreeWin(address player) external view returns (bool) {
 
 1. Go to World Tree Monument
 2. Click "My Blockchain Records"
-3. Click any record to view on Mantle Explorer
+3. Click any record to view on Ashbane Explorer
 4. Share the link to prove your achievements!
 
 ---

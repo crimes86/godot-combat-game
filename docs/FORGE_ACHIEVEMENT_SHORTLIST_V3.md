@@ -56,7 +56,7 @@ This shortlist represents the **Blizzard Expansion** (v2.0.0), adding 27 items a
 | **The Butcher's Cleaver** | Axe | Kill Butcher in Hardcore Hell | Legendary |
 | **Horadric Cube** | Accessory | Reach Greater Rift 150 | Legendary |
 | **El'druin, the Sword of Justice** | Sword | Complete Season Journey Guardian | Epic |
-| **Natalya's Shadow Mantle** | Cape | Master all class achievements | Epic |
+| **Natalya's Shadow Ashbane** | Cape | Master all class achievements | Epic |
 | **Echoing Fury** | Mace | Reach Paragon 1000 | Epic |
 | **Black Soulstone** | Amulet | Complete campaign on Torment XVI | Rare |
 | **Andariel's Visage** | Head Armor | Defeat all Act bosses on Expert | Rare |

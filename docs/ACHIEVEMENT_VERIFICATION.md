@@ -1,15 +1,15 @@
 # Achievement Verification & Token Integrity
 
-This document describes how Mantle verifies gaming achievements and ensures that forged tokens are unique, authentic, and non-duplicatable.
+This document describes how Ashbane verifies gaming achievements and ensures that forged tokens are unique, authentic, and non-duplicatable.
 
-> **This is the authoritative reference for Mantle's anti-exploit and integrity systems.**
+> **This is the authoritative reference for Ashbane's anti-exploit and integrity systems.**
 > Reference this document for any questions about duplicate prevention or token authenticity.
 
 ---
 
 ## Overview
 
-Mantle aggregates achievements from gaming platforms (Steam, Battle.net, etc.) and allows users to "forge" rare achievements into tradeable tokens. The system guarantees:
+Ashbane aggregates achievements from gaming platforms (Steam, Battle.net, etc.) and allows users to "forge" rare achievements into tradeable tokens. The system guarantees:
 
 1. **Authenticity** - Only actually-earned achievements can be forged
 2. **Uniqueness** - Each achievement can only be forged once globally
@@ -25,7 +25,7 @@ Mantle aggregates achievements from gaming platforms (Steam, Battle.net, etc.) a
 ```
 User
 ├── id (primary key)
-├── username (auto-generated: "mantle-{uuid}")
+├── username (auto-generated: "Ashbane-{uuid}")
 ├── is_admin (bypass sync cooldowns for testing)
 └── Relationships:
     ├── provider_accounts[] (Steam, Battle.net, etc.)
@@ -119,7 +119,7 @@ Check: Does GLOBAL claim exist? (provider_name + provider_user_id + achievement_
 - Achievements come directly from provider APIs, not user input
 - Only unlocked achievements are credited
 - **Global claim tracking prevents re-crediting after unlink/relink**
-- Reclaimed achievements are display-only (don't count toward Mantle score)
+- Reclaimed achievements are display-only (don't count toward Ashbane score)
 
 ### 3. Forge Request
 
@@ -151,7 +151,7 @@ UNIQUE CONSTRAINT: (provider_name, provider_user_id)
 ```
 
 - One Steam account = one ProviderAccount record
-- Cannot link same Steam account to multiple Mantle users simultaneously
+- Cannot link same Steam account to multiple Ashbane users simultaneously
 - Prevents: Same person having two active links to same Steam
 
 ### Layer 2: Achievement Uniqueness
@@ -189,7 +189,7 @@ is_original_claim BOOLEAN -- TRUE = first claim, FALSE = reclaimed (display only
 
 **This is the critical anti-exploit layer.** It tracks claims by the permanent provider identity (e.g., Steam ID "76561197963990204"), not by the ephemeral provider_account row ID.
 
-| Scenario | is_original_claim | Counts in Mantle | Can Forge |
+| Scenario | is_original_claim | Counts in Ashbane | Can Forge |
 |----------|-------------------|------------------|-----------|
 | First sync of Steam ID | TRUE | YES | YES |
 | Unlink, relink same Steam | FALSE | NO | NO |
@@ -268,7 +268,7 @@ AFTER PATCH:
      - is_original_claim = FALSE (not first claim!)
 
 5. User A has 500 credits, but ALL are is_original_claim=FALSE
-   → Mantle score: 0 (only original claims count)
+   → Ashbane score: 0 (only original claims count)
    → Forgeable: 0 (only original claims can forge)
    → Display: Shows on provider card for reference only
 ```
@@ -277,7 +277,7 @@ AFTER PATCH:
 
 ## Account Merging
 
-When users have multiple Mantle accounts, they can merge accounts.
+When users have multiple Ashbane accounts, they can merge accounts.
 
 ### Merge Process
 
@@ -379,9 +379,9 @@ Each token points to a metadata URI that returns:
 
 ---
 
-## Mantle Score Calculation
+## Ashbane Score Calculation
 
-Only **original claims** count toward a user's Mantle score:
+Only **original claims** count toward a user's Ashbane score:
 
 ```python
 total_achievements = (
@@ -396,12 +396,12 @@ total_achievements = (
 
 **Display behavior:**
 - Provider card: Shows ALL achievements (including reclaimed) for reference
-- Mantle card: Only shows original claims in totals
+- Ashbane card: Only shows original claims in totals
 - API `/api/achievements`: Returns `is_original_claim` flag for each achievement
 - Forge UI: Only shows achievements where `is_original_claim=TRUE`
 
 **UI Terminology:**
-- **Mantle** badge (cyan): Achievement counts toward Mantle score
+- **Ashbane** badge (cyan): Achievement counts toward Ashbane score
 - **Consumed** badge (orange): Achievement was already claimed by another user
 
 ---
@@ -574,7 +574,7 @@ can be forged into NFTs.
 
 ## Summary
 
-The Mantle achievement system provides cryptographic proof that:
+The Ashbane achievement system provides cryptographic proof that:
 
 1. A specific gaming achievement was unlocked
 2. By a verified account owner
@@ -620,4 +620,4 @@ See:
 | 2024-12-06 | Added `is_admin` to User model for cooldown bypass |
 | 2024-12-06 | Added `last_sync_at` to ProviderAccount for 15-min cooldown |
 | 2024-12-06 | Added reclaim confirmation flow documentation |
-| 2024-12-06 | Updated UI terminology: "Mantle" (credited) vs "Consumed" (display-only) |
+| 2024-12-06 | Updated UI terminology: "Ashbane" (credited) vs "Consumed" (display-only) |

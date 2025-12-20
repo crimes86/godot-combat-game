@@ -31,7 +31,7 @@
 
 ### The World Setup
 
-**The Wasteland** was once a prosperous region until the Lich Lord Malachar rose to power. His undead armies swept across the land, leaving only ruins and bone. Now, survivors gather at campfires - small pockets of warmth and light in an endless sea of death.
+**The dreadland** was once a prosperous region until the Lich Lord Malachar rose to power. His undead armies swept across the land, leaving only ruins and bone. Now, survivors gather at campfires - small pockets of warmth and light in an endless sea of death.
 
 **The Trading Hub** is an underground refuge - a network of tunnels where traders and warriors gather. The Blacksmith there forges weapons from salvaged materials, preparing fighters for the battles ahead.
 
@@ -92,7 +92,7 @@ that make them look like practice dummies."
 
 [At level 5]
 "You're getting stronger. Push north when you're ready.
-The wasteland gets more dangerous, but also more rewarding.
+The dreadland gets more dangerous, but also more rewarding.
 Ancient ruins lie in that direction... and something else."
 
 [At level 7 - tunnel discovery]
@@ -129,7 +129,7 @@ Take this letter to him. He'll know what to do with you."
 ```
 [First meeting - player arrives with Elric's letter]
 "This seal... Elric? That old survivor is still kicking?
-Thought the wasteland would've claimed him by now.
+Thought the dreadland would've claimed him by now.
 
 So you're the one he's been training. Let's see what
 you're made of. The Cursed Lands don't suffer the weak."
@@ -151,7 +151,7 @@ there... don't let it change you."
 ```
     THE WANDERER (Zone 1)                    THE BLACKSMITH (Zone 2)
     Levels 1-7 Quests                        Levels 8-10 Quests
-    ├── Knows the wasteland                  ├── Knows crafting/forging
+    ├── Knows the dreadland                  ├── Knows crafting/forging
     ├── Survived the Lich's rise             ├── Supplied the old resistance
     ├── Guides new survivors                 ├── Equips warriors for battle
     │                                        │
@@ -375,7 +375,7 @@ This achieves our goal: quests are a nice supplement (~28%) but grinding is the 
 #### Survival 101
 ```
 [Accept]
-"The wasteland teaches harsh lessons. The undead don't
+"The dreadland teaches harsh lessons. The undead don't
 rest, don't tire, don't stop. But they can be put down -
 if you know how to fight.
 
@@ -423,7 +423,7 @@ approaching the fire's light. For now."
 #### Seek the Trading Hub
 ```
 [Accept]
-"You've pushed far into the wasteland. Survived things
+"You've pushed far into the dreadland. Survived things
 that would've killed most. You're ready to know.
 
 There's a tunnel at the northern edge - hidden in the
@@ -451,7 +451,7 @@ still breathing?
 *reads letter*
 
 He says you've got potential. Says you survived the
-wasteland longer than most. That you're ready for
+dreadland longer than most. That you're ready for
 what comes next.
 
 We'll see about that. The Cursed Lands don't care
@@ -620,7 +620,7 @@ north passage. Don't let what you find there break you."
     {
       "id": "survival_101",
       "name": "Survival 101",
-      "description": "The wasteland teaches harsh lessons. Show the Wanderer you can handle yourself.",
+      "description": "The dreadland teaches harsh lessons. Show the Wanderer you can handle yourself.",
       "tier": 1,
       "level_req": 1,
       "giver": "wanderer",
@@ -704,7 +704,7 @@ north passage. Don't let what you find there break you."
     {
       "id": "fire_and_ash",
       "name": "Fire and Ash",
-      "description": "Venture beyond the campfire. Seek out the lava pools that dot the wasteland.",
+      "description": "Venture beyond the campfire. Seek out the lava pools that dot the dreadland.",
       "tier": 3,
       "level_req": 4,
       "giver": "wanderer",
@@ -732,7 +732,7 @@ north passage. Don't let what you find there break you."
     {
       "id": "rumors_of_ruins",
       "name": "Rumors of Ruins",
-      "description": "Ancient ruins lie at the edge of the wasteland. Find them.",
+      "description": "Ancient ruins lie at the edge of the dreadland. Find them.",
       "tier": 4,
       "level_req": 5,
       "giver": "wanderer",
@@ -788,7 +788,7 @@ north passage. Don't let what you find there break you."
     {
       "id": "forge_materials",
       "name": "Forge Materials",
-      "description": "The Blacksmith needs quality materials. Find Iron Ore in the wasteland.",
+      "description": "The Blacksmith needs quality materials. Find Iron Ore in the dreadland.",
       "tier": 6,
       "level_req": 8,
       "giver": "blacksmith",

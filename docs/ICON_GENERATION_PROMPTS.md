@@ -12,7 +12,7 @@
 - **Format**: PNG with transparency (RGBA)
 - **Padding**: Minimum 4 pixels on all sides (content fits in 56x56 center area)
 - **Style**: Top-down isometric view, video game inventory icon
-- **Theme**: Dark fantasy wasteland (Dreadland)
+- **Theme**: Dark fantasy dreadland (Dreadland)
 - **Color Palette**: Earthy tones, weathered metals, magical glows for special items
 - **Clarity**: Clear, recognizable at small size, distinct silhouette
 
@@ -26,7 +26,7 @@
 ### Prompt for GPT/DALL-E:
 
 ```
-Create a 64x64 pixel top-down isometric video game inventory icon of a small pile of gold coins in a dark fantasy wasteland theme.
+Create a 64x64 pixel top-down isometric video game inventory icon of a small pile of gold coins in a dark fantasy dreadland theme.
 
 SPECIFICATIONS:
 - Exactly 64x64 pixels, PNG with transparent background (RGBA)
@@ -69,7 +69,7 @@ The icon should be immediately recognizable as currency/gold when viewed in an i
 ### Prompt for GPT/DALL-E:
 
 ```
-Create a 64x64 pixel top-down isometric video game inventory icon of a campfire starter kit in a dark fantasy wasteland theme.
+Create a 64x64 pixel top-down isometric video game inventory icon of a campfire starter kit in a dark fantasy dreadland theme.
 
 SPECIFICATIONS:
 - Exactly 64x64 pixels, PNG with transparent background (RGBA)
@@ -99,14 +99,14 @@ STYLE:
 - Clean, readable at small size
 - Distinct from just "wood" or just "stone"
 - Professional game asset quality
-- Wasteland survivor aesthetic (rugged, practical)
+- dreadland survivor aesthetic (rugged, practical)
 
 The icon should clearly communicate "campfire creation item" or "fire-starting kit" at a glance.
 ```
 
 ### Alternative Shorter Prompt:
 ```
-64x64 pixel isometric game icon: Campfire starter kit with bundled kindling sticks, flint stones, and tinder cloth, dark fantasy wasteland style, centered with 4px padding, PNG transparent background, warm browns and grays, survival gear aesthetic, compact bundle arrangement
+64x64 pixel isometric game icon: Campfire starter kit with bundled kindling sticks, flint stones, and tinder cloth, dark fantasy dreadland style, centered with 4px padding, PNG transparent background, warm browns and grays, survival gear aesthetic, compact bundle arrangement
 ```
 
 ---
@@ -119,7 +119,7 @@ The icon should clearly communicate "campfire creation item" or "fire-starting k
 ### Prompt for GPT/DALL-E:
 
 ```
-Create a 64x64 pixel top-down isometric video game inventory icon of a magical World Tree seed in a dark fantasy wasteland theme.
+Create a 64x64 pixel top-down isometric video game inventory icon of a magical World Tree seed in a dark fantasy dreadland theme.
 
 SPECIFICATIONS:
 - Exactly 64x64 pixels, PNG with transparent background (RGBA)
@@ -172,7 +172,7 @@ After generating each icon:
 3. **Validate Padding**: Content has 4px minimum clear space on all edges
 4. **Test Centering**: Content is optically centered
 5. **Check Readability**: Icon is clear when viewed at 64x64 and 32x32 (thumbnail)
-6. **Validate Theme**: Matches dark fantasy wasteland aesthetic
+6. **Validate Theme**: Matches dark fantasy dreadland aesthetic
 7. **Run Validation** (if available):
    ```bash
    python assets/icons/forged/icon_standards.py --validate assets/icons/your_icon.png

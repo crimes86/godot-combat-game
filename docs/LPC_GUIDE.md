@@ -819,7 +819,7 @@ func reload_sprites():
 
 #### Armor (5 Slots, 4 Zones - 20 pieces total)
 
-**Zone 1: The Wasteland** (Brown Leather - 41 defense)
+**Zone 1: The dreadland** (Brown Leather - 41 defense)
 - Location: `assets/armor/zone1/`
 - Chest: Brown leather armor
 - Hands: Leather gloves

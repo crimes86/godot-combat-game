@@ -18,7 +18,7 @@ The bridge system allows items to move between two states:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          MANTLE DATABASE                                │
+│                          Ashbane DATABASE                                │
 │                    (Source of truth for gameplay)                       │
 │                                                                         │
 │   forged_achievements:                                                  │
@@ -503,28 +503,28 @@ enum BridgeStatus { IN_GAME, BRIDGING_OUT, BRIDGED, BRIDGING_IN }
 
 func request_bridge_out(item_ids: Array, callback: Callable) -> void:
     """Request to bridge items out to external wallet."""
-    var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out"
+    var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-out"
     var body = JSON.stringify({"forged_achievement_ids": item_ids})
     # ... HTTP request logic
 
 func get_bridge_status(callback: Callable) -> void:
     """Get status of pending bridge operations."""
-    var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out/status"
+    var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-out/status"
     # ... HTTP request logic
 
 func confirm_bridge_out(item_ids: Array, callback: Callable) -> void:
     """Confirm bridge out after cooldown."""
-    var url = MantleAuth.get_api_base() + "/api/wallet/bridge-out/confirm"
+    var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-out/confirm"
     # ... HTTP request logic
 
 func get_bridge_in_available(callback: Callable) -> void:
     """Scan wallet for items that can be bridged in."""
-    var url = MantleAuth.get_api_base() + "/api/wallet/bridge-in/available"
+    var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-in/available"
     # ... HTTP request logic
 
 func request_bridge_in(token_ids: Array, callback: Callable) -> void:
     """Bridge items from external wallet to game."""
-    var url = MantleAuth.get_api_base() + "/api/wallet/bridge-in"
+    var url = AshbaneAuth.get_api_base() + "/api/wallet/bridge-in"
     # ... HTTP request logic
 ```
 

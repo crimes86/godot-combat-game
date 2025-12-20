@@ -29,7 +29,7 @@
 
 **Epic (3 items)**:
 5. **El'druin, the Sword of Justice** (sword) - Complete Season Journey Guardian
-6. **Natalya's Shadow Mantle** (cape) - Master all class achievements
+6. **Natalya's Shadow Ashbane** (cape) - Master all class achievements
 7. **Echoing Fury** (mace) - Reach Paragon 1000
 
 **Rare (2 items)**:
@@ -311,7 +311,7 @@ All 27 new items follow the established design philosophy, maintain rarity balan
 3. The Butcher's Cleaver (legendary axe)
 4. Horadric Cube (legendary accessory)
 5. El'druin, the Sword of Justice (epic sword)
-6. Natalya's Shadow Mantle (epic cape)
+6. Natalya's Shadow Ashbane (epic cape)
 7. Echoing Fury (epic mace)
 8. Black Soulstone (rare amulet)
 9. Andariel's Visage (rare head armor)

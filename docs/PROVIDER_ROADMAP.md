@@ -1,10 +1,10 @@
 # Provider Roadmap
 
-> Cross-platform achievement aggregation strategy for Mantle
+> Cross-platform achievement aggregation strategy for Ashbane
 
 ## Vision
 
-Mantle aggregates achievements across gaming platforms AND non-gaming platforms (GitHub, Reddit, Discord) to create a unified "gamer identity" that feels fair and comparable across all sources. A WoW Feat of Strength should feel equivalent to a Steam <1% achievement or a GitHub Arctic Code Vault badge.
+Ashbane aggregates achievements across gaming platforms AND non-gaming platforms (GitHub, Reddit, Discord) to create a unified "gamer identity" that feels fair and comparable across all sources. A WoW Feat of Strength should feel equivalent to a Steam <1% achievement or a GitHub Arctic Code Vault badge.
 
 ---
 
@@ -28,10 +28,12 @@ Achievements: api_name, display_name, description, icon_url, icon_gray_url,
               hidden, percent (global unlock %), unlock_time, rarity_tier
 ```
 
-#### Battle.net (WoW)
+#### Battle.net (WoW, Diablo 3, StarCraft 2)
 ```
 Profile: battletag, characters (name, realm, avatar)
-Achievements: id, name, description, points (10/30/50), is_feat_of_strength
+WoW Achievements: id, name, description, points (10/30/50), is_feat_of_strength, icon_url
+D3 Achievements: id, name, description, points (10-50), category (via career profile)
+SC2 Achievements: achievementId, earnedAchievements (via profile API, may have 503 issues)
 ```
 
 #### Xbox (via OpenXBL)
@@ -82,7 +84,7 @@ effort_score = 100 - global_percent
 # 85% unlock rate → effort_score = 15 → Common
 ```
 
-#### Battle.net (WoW)
+#### Battle.net: WoW
 ```python
 if is_feat_of_strength:
     effort_score = 90  # Legendary
@@ -96,6 +98,52 @@ elif points >= 10:
     effort_score = 30  # Uncommon
 else:
     effort_score = 15  # Common
+```
+
+#### Battle.net: Diablo 3
+```python
+# Base score from points (10-50)
+if points >= 50:
+    base = 80
+elif points >= 30:
+    base = 60
+elif points >= 20:
+    base = 45
+elif points >= 10:
+    base = 30
+else:
+    base = 20
+
+# Category bonuses
+if "hardcore" in category:
+    base += 20  # Hardcore achievements are harder
+if "conquest" in category:
+    base += 15  # Season conquests are challenging
+if "boss" in category or "greater rift" in category:
+    base += 10
+```
+
+#### Battle.net: StarCraft 2
+```python
+# Base score from points
+if points >= 30:
+    base = 80
+elif points >= 20:
+    base = 60
+elif points >= 15:
+    base = 50
+elif points >= 10:
+    base = 35
+else:
+    base = 25
+
+# Category bonuses
+if "brutal" in category or "hard" in category:
+    base += 15
+if "multiplayer" in category or "versus" in category:
+    base += 10
+if "mastery" in category:
+    base += 20
 ```
 
 #### Xbox (Gamerscore fallback if no %)
@@ -629,9 +677,9 @@ When a console player sees a PC player's profile:
 
 ### The "Go Play" Loop
 
-1. User syncs achievements → sees Mantle card update
+1. User syncs achievements → sees Ashbane card update
 2. User plays more games → earns new achievements
-3. User returns to Mantle → re-syncs → new credits
+3. User returns to Ashbane → re-syncs → new credits
 4. Free forge rewards for new Legendary/Epic achievements
 5. New cosmetics in Godot game
 

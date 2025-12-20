@@ -61,7 +61,7 @@ Combine both systems so that:
 | **Weekly Competition** | ❌ N/A | ✅ Top score → origin chunk | ✅ **Keep** - Competitive layer |
 | **Contribution Tracking** | ❌ N/A | ✅ Gold, resources, kills, time | ✅ **Keep** - Feeds into score |
 | **Decay System** | ❌ N/A | ✅ 7 days inactivity → removal | ✅ **Keep** - Prevents dead plots |
-| **Blockchain Recording** | ❌ N/A | ✅ Winners on Mantle L2 | ✅ **Keep** - Prestige value |
+| **Blockchain Recording** | ❌ N/A | ✅ Winners on Ashbane L2 | ✅ **Keep** - Prestige value |
 
 ---
 
@@ -228,7 +228,7 @@ CREATE TABLE seed_plot_buildings (
    - Guild B: 24,800 contribution points
 4. **Sunday midnight**: Guild A wins, tree moved to **Chunk -1 (West Origin)**
 5. Guild A gets "**World Tree Champion**" title
-6. Winner recorded on **Mantle blockchain**
+6. Winner recorded on **Ashbane blockchain**
 7. Next week, competition resets
 
 ---

@@ -9,7 +9,7 @@
 Dreadland is a multiplayer game built with two main components:
 
 1. **Godot Client** (`/`) - The game itself, built in Godot 4.5
-2. **Mantle Backend** (`/backend/`) - FastAPI server for authentication and achievement aggregation
+2. **Ashbane Backend** (`/backend/`) - FastAPI server for authentication and achievement aggregation
 
 Both components live in this repo **temporarily** for streamlined AI-assisted development. For production, they will be separated.
 
@@ -50,7 +50,7 @@ godot-combat-game-master/
 ├── docs/                       # ALL documentation (consolidated)
 │   ├── ARCHITECTURE.md         # This file
 │   ├── API_CONTRACT.md         # Backend ↔ Godot API spec
-│   ├── FORGE_AND_MANTLE.md     # Forge system spec
+│   ├── FORGE_AND_Ashbane.md     # Forge system spec
 │   ├── GODOT_ITEM_HANDOFF.md   # Item system handoff
 │   ├── GODOT_HANDOFF.md        # Vision and cosmetic systems
 │   ├── ACHIEVEMENT_VERIFICATION.md  # Anti-exploit systems
@@ -59,7 +59,7 @@ godot-combat-game-master/
 │   ├── LPC_GUIDE.md            # Sprite format guide
 │   └── ...                     # Other game docs
 │
-├── backend/                    # Mantle backend (Python/FastAPI)
+├── backend/                    # Ashbane backend (Python/FastAPI)
 │   ├── app/
 │   │   ├── main.py             # Routes (~3000 lines)
 │   │   ├── models.py           # SQLAlchemy models
@@ -87,8 +87,8 @@ godot-combat-game-master/
 │
 ├── scripts/                    # Godot GDScript files
 │   ├── systems/
-│   │   ├── MantleAuth.gd       # Auth + API client
-│   │   ├── MantleCosmetics.gd  # Cosmetic application
+│   │   ├── AshbaneAuth.gd      # Auth + API client
+│   │   ├── AshbaneCosmetics.gd # Cosmetic application
 │   │   ├── ForgeItemManager.gd # Fetches forged items
 │   │   ├── ForgeItemDB.gd      # Item definitions (enums)
 │   │   └── ForgeVisualEffects.gd  # Effect rendering
@@ -168,14 +168,14 @@ When ready to launch, separate into two repos:
 
 ```bash
 # Clone just the backend
-git clone <this-repo> mantle-backend-temp
-cd mantle-backend-temp
+git clone <this-repo> Ashbane-backend-temp
+cd Ashbane-backend-temp
 
 # Keep only backend
 git filter-branch --subdirectory-filter backend HEAD
 
 # Push to new repo
-git remote set-url origin git@github.com:your-org/mantle-backend.git
+git remote set-url origin git@github.com:your-org/Ashbane-backend.git
 git push -u origin main
 ```
 
@@ -198,14 +198,14 @@ git push -u origin main
 
 ### Step 3: Configure API Endpoint
 
-In the game client, update `MantleAuth.gd`:
+In the game client, update `AshbaneAuth.gd`:
 
 ```gdscript
 # Development
 const API_BASE = "http://localhost:8000"
 
 # Production (after separation)
-const API_BASE = "https://api.mantle.gg"
+const API_BASE = "https://api.ashbane.gg"
 ```
 
 ### Step 4: Shared Definitions
@@ -234,7 +234,7 @@ After separation, keep definitions in sync via:
 | `API_CONTRACT.md` | Both repos |
 | `ACHIEVEMENT_VERIFICATION.md` | Backend only |
 | `PROVIDER_ROADMAP.md` | Backend only |
-| `FORGE_AND_MANTLE.md` | Both repos |
+| `FORGE_AND_Ashbane.md` | Both repos |
 | `GODOT_ITEM_HANDOFF.md` | Both repos |
 | `LPC_GUIDE.md` | Game client only |
 | `ASSET_DESIGN_GUIDE.md` | Game client only |
@@ -295,7 +295,7 @@ uvicorn app.main:app --reload --port 8000
 
 | File | Purpose |
 |------|---------|
-| `scripts/systems/MantleAuth.gd` | Auth flow, API calls, token management |
+| `scripts/systems/AshbaneAuth.gd` | Auth flow, API calls, token management |
 | `scripts/systems/ForgeItemManager.gd` | Fetches/caches forged items from API |
 | `scripts/systems/ForgeItemDB.gd` | Item/weapon type enums, static mappings |
 | `scripts/systems/ForgeVisualEffects.gd` | Effect rendering configs |

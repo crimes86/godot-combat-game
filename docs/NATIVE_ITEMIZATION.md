@@ -159,7 +159,7 @@ Staff Crit Chance = Base Crit + (WIS * 0.25%)
 At endgame, three distinct player types emerge based on how they acquire gear:
 
 ### Whales (All Forge Gear)
-**Profile**: Players with significant Mantle achievements, early adopters, collectors
+**Profile**: Players with significant Ashbane achievements, early adopters, collectors
 **Gear Source**: 100% Forge items from bridging achievements
 **Power Curve**:
 ```
@@ -434,7 +434,7 @@ Mixed matchups create interesting asymmetry:
 
 ## Tier Breakdown
 
-### Tier 1: Levels 1-10 (Starter Zone - "The Wasteland")
+### Tier 1: Levels 1-10 (Starter Zone - "The dreadland")
 
 **Dropped by**: Skeletons, Wolves, Zone 1 chests
 **Purchased from**: Campfire Vendor (Tattered Merchant)

@@ -32,7 +32,7 @@ The system creates asymmetry that drives engagement, not unfairness—because pa
 
 Every achievement we map must pass this test:
 
-> "A casual gamer hears about Mantle/Dreadland and thinks: 'Wait, I did [X] in [Game] years ago - that was hard as hell. I wonder if that counts for something?'"
+> "A casual gamer hears about Ashbane/Dreadland and thinks: 'Wait, I did [X] in [Game] years ago - that was hard as hell. I wonder if that counts for something?'"
 
 If an achievement doesn't make someone think "that HAS to be in there," it shouldn't be.
 

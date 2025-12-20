@@ -1,6 +1,6 @@
-# Mantle API Contract
+# Ashbane API Contract
 
-> **This document defines the API contract between the Mantle backend and Godot game client.**
+> **This document defines the API contract between the Ashbane backend and Godot game client.**
 > Both the backend Claude and game Claude should reference this file.
 
 ## Server Info
@@ -49,7 +49,7 @@ GET /api/auth/status?device_code={device_code}
 {
   "status": "success",
   "user_id": 123,
-  "username": "mantle-a1b2c3d4",
+  "username": "Ashbane-a1b2c3d4",
   "token": "eyJ..."
 }
 ```
@@ -83,7 +83,7 @@ Authorization: Bearer {token}
 ```json
 {
   "user_id": 123,
-  "username": "mantle-a1b2c3d4",
+  "username": "Ashbane-a1b2c3d4",
   "total_achievements": 847,
   "by_rarity": {
     "Common": 412,
@@ -92,7 +92,7 @@ Authorization: Bearer {token}
     "Epic": 34,
     "Legendary": 14
   },
-  "mantle": {
+  "ashbane": {
     "tier": "gold",
     "name": "Gold",
     "color": "#FFD700",
@@ -350,7 +350,7 @@ Content-Type: application/json
 ```json
 {
   "nonce": "abc123",
-  "message": "Sign this message to connect your wallet to Mantle...",
+  "message": "Sign this message to connect your wallet to Ashbane...",
   "expires_at": "2024-12-06T10:40:00Z"
 }
 ```
@@ -562,7 +562,7 @@ GET /api/wallet/metadata/{credit_id}
   "name": "Legendary Hero",
   "description": "Complete the impossible\n\nVerified gaming achievement from steam.",
   "image": "https://...",
-  "external_url": "https://mantle.gg/achievement/123",
+  "external_url": "https://Ashbane.gg/achievement/123",
   "attributes": [
     {"trait_type": "Rarity", "value": "Legendary"},
     {"trait_type": "Provider", "value": "steam"},
@@ -681,7 +681,7 @@ Content-Type: application/json
 
 ### Get Active Listings (Recently Advertised)
 ```
-GET /api/trades/listings?zone_id=wasteland
+GET /api/trades/listings?zone_id=dreadland
 Authorization: Bearer {token}
 ```
 
@@ -1202,7 +1202,7 @@ Authorization: Bearer {token}
 **Notes:**
 - Rankings calculated every Sunday midnight UTC
 - Top seed plot promoted to World Tree (Chunk -1)
-- Winner recorded on Mantle blockchain
+- Winner recorded on Ashbane blockchain
 
 ---
 
@@ -1281,7 +1281,7 @@ Content-Type: application/json
 
 **Notes:**
 - Called automatically by server on Sunday midnight
-- Records winner permanently on Mantle L2
+- Records winner permanently on Ashbane L2
 - Includes top 10 contributors with wallet addresses
 - IPFS metadata link for detailed stats
 
@@ -1373,7 +1373,7 @@ Authorization: Bearer {token}
 |-------|-------------|
 | `/` | Redirects to `/login` or `/dashboard` |
 | `/login` | OAuth provider selection page |
-| `/dashboard` | Main dashboard with Mantle card and providers |
+| `/dashboard` | Main dashboard with Ashbane card and providers |
 | `/auth/steam/login` | Initiates Steam OAuth |
 | `/auth/steam/callback` | Steam OAuth callback |
 | `/auth/battlenet/login` | Initiates Battle.net OAuth |
@@ -1410,12 +1410,12 @@ All errors follow this format:
 
 When achievements are synced from providers, they create `AchievementCredit` records:
 
-- **`is_original_claim = true`**: You were the first to claim this achievement. Counts toward Mantle score and can be forged.
-- **`is_original_claim = false`**: Achievement was already claimed by someone else. Display only, doesn't count toward Mantle.
+- **`is_original_claim = true`**: You were the first to claim this achievement. Counts toward Ashbane score and can be forged.
+- **`is_original_claim = false`**: Achievement was already claimed by someone else. Display only, doesn't count toward Ashbane.
 
-### Mantle Score
+### Ashbane Score
 
-Only original claims count toward Mantle score. The score determines your tier (Bronze, Silver, Gold, etc.).
+Only original claims count toward Ashbane score. The score determines your tier (Bronze, Silver, Gold, etc.).
 
 ### Forging
 
@@ -1462,12 +1462,12 @@ See `docs/FORGE_PROVENANCE_SYSTEM.md` for implementation details.
 | Component | Owner | Description |
 |-----------|-------|-------------|
 | `/api/*` endpoints | **Backend** | All API logic, database, auth |
-| Token storage | **Godot** | Save to `user://mantle_session.dat` |
+| Token storage | **Godot** | Save to `user://ashbane_session.dat` |
 | Browser auth flow | **Backend** | Login page, OAuth, success page |
 | Badge rendering | **Godot** | Visual badge on player characters |
 | Multiplayer badge fetch | **Godot** | Call `/api/player/{id}/badge` for other players |
 | Badge caching | **Godot** | Cache badge lookups to reduce API calls |
-| Profile UI | **Godot** | Display mantle card, tier, achievements |
+| Profile UI | **Godot** | Display ashbane card, tier, achievements |
 | Achievement sync | **Backend** | Fetch from Steam/Battle.net APIs |
 | Wallet connection | **Backend** | SIWE authentication, wallet linking |
 | NFT forging | **Backend** | Smart contract interaction |
@@ -1475,16 +1475,59 @@ See `docs/FORGE_PROVENANCE_SYSTEM.md` for implementation details.
 
 ---
 
+## Account Merge System
+
+When a user tries to link a provider (Discord, GitHub, etc.) that's already linked to another Ashbane account, the system offers to **merge** the accounts instead of blocking the action.
+
+### How It Works
+
+1. **User A** (multi-provider account) tries to link Discord
+2. Discord is already linked to **User B** (Discord-only account)
+3. System shows merge confirmation page instead of error
+4. If user confirms, **User B's** data is transferred to **User A**:
+   - Provider accounts
+   - Achievement credits
+   - Forged items (current ownership)
+   - Wallet accounts
+   - Trade history
+   - User achievements
+5. **User B** is deleted after transfer
+
+### Use Cases
+
+- **Consolidating accounts**: Player created separate accounts with different providers, wants to combine them
+- **Recovery**: Player lost access to primary account but can still log in via another provider
+- **Simplification**: Player wants all their gaming data under one Ashbane account
+
+### Merge Endpoint
+
+```
+POST /merge-confirm
+Content-Type: application/x-www-form-urlencoded
+
+other_user_id={id}&target_provider={provider}&current_user_id={id}
+```
+
+**Response (success):** Redirect to `/dashboard` with merged account
+
+**Response (conflict):** Returns `merge_confirm.html` with conflict details if both accounts have the same provider linked
+
+### Conflict Resolution
+
+If both accounts have the same provider type linked (e.g., both have Steam), the merge cannot proceed automatically. User must first unlink one of the conflicting providers.
+
+---
+
 ## Godot Autoload Expected
 
-The game should have a `MantleAuth` autoload singleton with:
+The game should have an `AshbaneAuth` autoload singleton with:
 
 ```gdscript
 # Properties
 var auth_token: String
 var user_id: int
 var username: String
-var mantle_tier: Dictionary  # {tier, name, color, glow, effective_score}
+var ashbane_tier: Dictionary  # {tier, name, color, glow, effective_score}
 var is_guest: bool
 
 # Methods
@@ -1525,7 +1568,7 @@ signal profile_updated(profile)
       │                   │                   │
       ▼                   ▼                   ▼
 Show profile         Clear token         GET /api/auth/device
-Show mantle          Show login                │
+Show Ashbane          Show login                │
                                                ▼
                                         Open browser
                                                │
@@ -1548,15 +1591,16 @@ Show mantle          Show login                │
 
 ## Version
 
-- **API Version**: 1.5
-- **Last Updated**: 2024-12-13
-- **Backend Status**: Complete (bridge system, indexer, trading, world tree expansion all implemented)
+- **API Version**: 1.6
+- **Last Updated**: 2024-12-17
+- **Backend Status**: Complete (bridge system, indexer, trading, world tree expansion, account merge all implemented)
 - **Godot Status**: Complete (Armory UI with bind/unbind/lockbox terminology, ChunkExpansionManager for world tree)
 
 ## Changelog
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2024-12-17 | 1.6 | Added Account Merge System: when linking a provider that's already linked to another user, system now offers to merge accounts instead of blocking. Supports Discord, GitHub, and other OAuth providers. Documented in "Account Merge System" section |
 | 2024-12-13 | 1.5 | Added World Tree & Chunk Expansion endpoints: seed plot claiming, contribution tracking, weekly rankings, blockchain recording. Database migration 7e8f9a0b1c2d adds seed_plots, active_chunks, world_tree_rankings, world_tree_contributions tables |
 | 2024-12-10 | 1.4 | Updated status to reflect complete implementation. Note: Godot UI uses "bind/unbind" instead of "bridge" and "lockbox" instead of "wallet" for RPG-friendly terminology |
 | 2024-12-09 | 1.3 | Added Bridge System endpoints (bridge-out, bridge-in, status), updated forge-status with bridge information, added BridgeStatus enum and BridgeTransaction table |

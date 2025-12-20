@@ -1,6 +1,6 @@
 # Asset Design Guide for Godot Engineers
 
-> How to build weapons, armor, and cosmetics that integrate seamlessly with the Mantle achievement system.
+> How to build weapons, armor, and cosmetics that integrate seamlessly with the Ashbane achievement system.
 
 ---
 
@@ -12,7 +12,7 @@ Players don't choose their tier cosmetics - **they earn them**. The backend know
 - Their overall tier (Initiate → Mythic)
 - Which specific prestigious achievements they've completed
 
-Your job: Build assets that the `MantleCosmetics` autoload can apply based on API data.
+Your job: Build assets that the `AshbaneCosmetics` autoload can apply based on API data.
 
 ---
 
@@ -82,9 +82,9 @@ Each tier should be **visually distinct at a glance**. Higher tiers = more visua
 
 ## LPC Sprite Layer Integration
 
-The character uses a 9-layer sprite system. Mantle cosmetics apply to specific layers:
+The character uses a 9-layer sprite system. Ashbane cosmetics apply to specific layers:
 
-| Layer | Z-Index | Purpose | Mantle Control |
+| Layer | Z-Index | Purpose | Ashbane Control |
 |-------|---------|---------|----------------|
 | Shadow | 0 | Ground shadow | Tier intensity |
 | Body | 1 | Base body | Tier glow/tint |
@@ -191,10 +191,10 @@ When a player authenticates, the API returns a profile like this:
 }
 ```
 
-### MantleCosmetics Resolution Logic
+### AshbaneCosmetics Resolution Logic
 
 ```gdscript
-# This is how MantleCosmetics decides what to apply
+# This is how AshbaneCosmetics decides what to apply
 
 func resolve_cosmetics(profile: Dictionary) -> Dictionary:
     var result = {}

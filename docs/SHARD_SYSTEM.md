@@ -147,18 +147,18 @@ DatabaseManager.initialize_database()
 
 For production deployments, use systemd service templates:
 
-### `/etc/systemd/system/wasteland@.service`
+### `/etc/systemd/system/dreadland@.service`
 
 ```ini
 [Unit]
-Description=Wasteland Game Server - Shard %i
+Description=dreadland Game Server - Shard %i
 After=network.target
 
 [Service]
 Type=simple
 User=gameserver
-WorkingDirectory=/opt/wasteland
-ExecStart=/opt/wasteland/server --headless -- --server --port %i --shard shard-%i
+WorkingDirectory=/opt/dreadland
+ExecStart=/opt/dreadland/server --headless -- --server --port %i --shard shard-%i
 Restart=always
 RestartSec=5
 
@@ -170,15 +170,15 @@ WantedBy=multi-user.target
 
 ```bash
 # Start shards on different ports
-sudo systemctl start wasteland@7000  # shard-7000
-sudo systemctl start wasteland@7001  # shard-7001
-sudo systemctl start wasteland@7002  # shard-7002
+sudo systemctl start dreadland@7000  # shard-7000
+sudo systemctl start dreadland@7001  # shard-7001
+sudo systemctl start dreadland@7002  # shard-7002
 
 # Check status
-sudo systemctl status wasteland@7000
+sudo systemctl status dreadland@7000
 
 # View logs
-sudo journalctl -u wasteland@7000 -f
+sudo journalctl -u dreadland@7000 -f
 ```
 
 ---
@@ -189,7 +189,7 @@ sudo journalctl -u wasteland@7000 -f
 
 ```
 ═══════════════════════════════════════════════════════════
-   WASTELAND DEDICATED SERVER
+   dreadland DEDICATED SERVER
 ═══════════════════════════════════════════════════════════
 🖥️  Initializing server...
    PID: 12345
@@ -228,7 +228,7 @@ These features are NOT yet implemented but planned:
 - [ ] Cross-shard trading hub (centralized)
 - [ ] Cross-shard leaderboards
 - [ ] Account migration between shards
-- [ ] Shard registry in Mantle backend
+- [ ] Shard registry in Ashbane backend
 
 ---
 

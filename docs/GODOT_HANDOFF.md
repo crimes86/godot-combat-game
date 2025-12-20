@@ -6,7 +6,7 @@
 
 ## What This Is
 
-Mantle is NOT competing with TrueAchievements. The web dashboard is the **authentication layer** for the Godot game.
+Ashbane is NOT competing with TrueAchievements. The web dashboard is the **authentication layer** for the Godot game.
 
 **The flow:**
 1. Player launches Godot game
@@ -22,7 +22,7 @@ Mantle is NOT competing with TrueAchievements. The web dashboard is the **authen
 
 ## Core Principle: Cosmetic Only
 
-**Non-negotiable.** Mantle tier affects ONLY visuals:
+**Non-negotiable.** Ashbane tier affects ONLY visuals:
 
 | Affected | NOT Affected |
 |----------|--------------|
@@ -49,7 +49,7 @@ A fresh Initiate can beat a Mythic in PvP if they're better. The Mythic just loo
 | Legendary | 5000 | #FF6600 | Fire/ember effects |
 | Mythic | 7500 | #FF00FF | Ethereal aura, particles |
 
-**Provider bonus:** +15% effective score per additional platform linked.
+**Note:** Pure achievement count only. Multi-platform rewards handled via separate Ashbane-specific achievements.
 
 ---
 
@@ -171,9 +171,9 @@ Player transforms → Shares clip → Friend asks "how?"
 
 ## LPC Sprite Layer Mapping
 
-Map Mantle cosmetics to the 9-layer system:
+Map Ashbane cosmetics to the 9-layer system:
 
-| Layer | LPC Purpose | Mantle Effect |
+| Layer | LPC Purpose | Ashbane Effect |
 |-------|-------------|---------------|
 | 0 | Shadow | Tier-based shadow intensity |
 | 1 | Body | Tier body glow/tint |
@@ -191,11 +191,11 @@ Map Mantle cosmetics to the 9-layer system:
 
 ## Required Autoloads
 
-### MantleAuth
+### AshbaneAuth
 
 Handles authentication. Key responsibilities:
 - Device auth flow (see `API_CONTRACT.md` for endpoints)
-- Token persistence to `user://mantle_session.dat`
+- Token persistence to `user://Ashbane_session.dat`
 - Profile fetching and caching
 - Badge lookups for other players in multiplayer
 
@@ -204,7 +204,7 @@ Signals:
 - `auth_failed(error: String)`
 - `profile_updated(profile: Dictionary)`
 
-### MantleCosmetics
+### AshbaneCosmetics
 
 Handles visual translation. Key responsibilities:
 - Calculate cosmetics from profile data
@@ -270,7 +270,7 @@ When players have new unlocks:
 ## Build Priority
 
 ### Phase 1: Launch Required
-1. [ ] MantleAuth with device auth flow
+1. [ ] AshbaneAuth with device auth flow
 2. [ ] Token persistence
 3. [ ] Tier → armor set mapping
 4. [ ] Badge display in multiplayer

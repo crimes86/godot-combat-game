@@ -1,6 +1,6 @@
 # Godot Item System Handoff
 
-This document explains how the Mantle forge system works and what the Godot client needs to implement.
+This document explains how the Ashbane forge system works and what the Godot client needs to implement.
 
 ## Overview
 
@@ -455,7 +455,7 @@ Set `has_sprites: true` on test items even without real sprites to test the data
 - `scripts/ui/Armory.gd` - Forge UI implementation
 
 **Documentation:**
-- `docs/FORGE_AND_MANTLE.md` - Full system spec, backend standardization
+- `docs/FORGE_AND_Ashbane.md` - Full system spec, backend standardization
 - `docs/LPC_GUIDE.md` - LPC sprite format, asset creation guide
 - `.claude/CLAUDE.md` - Asset folder structure
 

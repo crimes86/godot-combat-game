@@ -43,7 +43,7 @@ All endpoints available at `http://localhost:8000/api/world-tree/`:
 - `GET /rankings/player/{user_id}` - Player's current rank
 
 ### Blockchain
-- `POST /record` - Record winner on Mantle L2
+- `POST /record` - Record winner on Ashbane L2
 
 ---
 
@@ -184,7 +184,7 @@ func _on_world_tree_promoted(winner_id: String, plot_id: int):
 ### Weekly Competition
 - **Every Sunday midnight UTC**: Rankings calculated
 - **Top seed plot** → Promoted to World Tree (Chunk -1)
-- **Winner recorded** on Mantle blockchain
+- **Winner recorded** on Ashbane blockchain
 - **Top 10 contributors** get rewards
 
 ---

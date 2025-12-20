@@ -1,6 +1,6 @@
 # Mini-MMO Database Schema
 
-> **Scope**: This document covers the **game world database** (SQLite) for player data, world state, and persistence. For the Mantle achievement/NFT backend, see [API_CONTRACT.md](API_CONTRACT.md).
+> **Scope**: This document covers the **game world database** (SQLite) for player data, world state, and persistence. For the Ashbane achievement/NFT backend, see [API_CONTRACT.md](API_CONTRACT.md).
 
 ## Overview
 SQLite database for persistent world state and player data.

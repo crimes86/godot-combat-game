@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This roadmap defines the path to standardize forge item distribution across all games/IPs in the Mantle ecosystem. The goal is to create a **balanced, consistent experience** where most games have **3-4 items** each, with exceptions for games with massive content libraries (Blizzard franchises, FromSoftware games, etc.).
+This roadmap defines the path to standardize forge item distribution across all games/IPs in the Ashbane ecosystem. The goal is to create a **balanced, consistent experience** where most games have **3-4 items** each, with exceptions for games with massive content libraries (Blizzard franchises, FromSoftware games, etc.).
 
 **Key Metrics**:
 - **Current**: 116 items across 42 themes (average: 2.76 items/theme, median: 1 item)

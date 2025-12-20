@@ -72,7 +72,7 @@ git rm --cached backend/.env 2>/dev/null || true
 
 **Current Code**:
 ```python
-ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "mantle-dev-admin-2024")  # Change in production!
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "Ashbane-dev-admin-2024")  # Change in production!
 ```
 
 **Fix Specification**:

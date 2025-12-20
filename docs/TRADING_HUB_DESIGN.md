@@ -58,7 +58,7 @@ The Trading Hub is a safe, instanced zone that serves as the natural transition 
 ### Core Concept
 
 ```
-ZONE 1 (Wasteland)              TRADING HUB                    ZONE 2 (TBD)
+ZONE 1 (dreadland)              TRADING HUB                    ZONE 2 (TBD)
 Levels 1-10                     Safe Zone                      Levels 10-20
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -320,7 +320,7 @@ Reaches fog boundary (Y < -3900)
 ### Design Intent
 
 The corridor serves multiple purposes:
-1. **Atmospheric transition** - Shift from wasteland to underground
+1. **Atmospheric transition** - Shift from dreadland to underground
 2. **Loading buffer** - Time to load hub scene and sync players
 3. **Anticipation builder** - Hear echoes of trading activity ahead
 4. **Decompression** - Mental shift from combat mode to social mode
@@ -1200,7 +1200,7 @@ func hub_activity_ping():
 | **ChunkBasedPropSystem** | Tunnel entrances added to chunk north edges |
 | **ChunkAwareSpawnManager** | No enemies spawn in tunnel entrance area |
 | **NetworkEnemyManager** | Hub is enemy-free, no sync needed |
-| **MantleAuth** | Stash access requires authentication |
+| **AshbaneAuth** | Stash access requires authentication |
 | **InventorySystem** | Stash deposit/withdraw |
 | **TradingSystem** | All trading UI/logic works in hub |
 | **PlayerDatabase** | Track hub visit stats (optional) |

@@ -146,7 +146,7 @@ func _ready():
     save_timer.start()
 
     print("═══════════════════════════════════")
-    print("  WASTELAND SERVER STARTED")
+    print("  dreadland SERVER STARTED")
     print("  Port: %d" % SERVER_PORT)
     print("  Max Players: %d" % MAX_PLAYERS)
     print("  Tick Rate: %d Hz" % TICK_RATE)
@@ -552,14 +552,14 @@ CMD ["./server.x86_64", "--dedicated-server"]
 ### Systemd Service (Linux VPS)
 ```ini
 [Unit]
-Description=Wasteland Server
+Description=dreadland Server
 After=network.target
 
 [Service]
 Type=simple
 User=gameserver
-WorkingDirectory=/opt/wasteland
-ExecStart=/opt/wasteland/server.x86_64 --dedicated-server
+WorkingDirectory=/opt/dreadland
+ExecStart=/opt/dreadland/server.x86_64 --dedicated-server
 Restart=always
 RestartSec=10
 
@@ -570,11 +570,11 @@ WantedBy=multi-user.target
 ### Monitoring & Logs
 ```bash
 # View logs
-journalctl -u wasteland -f
+journalctl -u dreadland -f
 
 # Check status
-systemctl status wasteland
+systemctl status dreadland
 
 # Restart server
-systemctl restart wasteland
+systemctl restart dreadland
 ```
