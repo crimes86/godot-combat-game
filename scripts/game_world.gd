@@ -3633,23 +3633,34 @@ func _request_existing_players(_deprecated_id: int = 0):
 					arms_sprite = appearance.get("arms_sprite", "")
 					hands_sprite = appearance.get("hands_sprite", "")
 					head_sprite = appearance.get("head_sprite", "")
-				# Get player name and guest status from NetworkManager
+				# Get player name, guest status, and tier from NetworkManager
 				var p_name = NetworkManager.player_name if existing_id == 1 else ""
 				var p_is_guest = NetworkManager.is_player_guest(existing_id)
+				var p_tier = "initiate"
 				if NetworkManager.authenticated_players.has(existing_id):
 					p_name = NetworkManager.authenticated_players[existing_id].username
+					var p_data = NetworkManager.authenticated_players[existing_id].get("player_data", {})
+					var ashbane_data = p_data.get("ashbane", {})
+					p_tier = ashbane_data.get("tier", "initiate")
+				# Also check player's shield for current tier
+				if existing_player.has_node("AllegianceShield"):
+					p_tier = existing_player.get_node("AllegianceShield").current_tier
 				if OS.is_debug_build():
-					print("🔍 [PLAYER DEBUG] Sending player %d (pos: %s, gender: %d, weapon: %s, name: %s) to client %d" % [existing_id, existing_player.global_position, gender, weapon_type, p_name, requester_id])
-				rpc_id(requester_id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, p_name, p_is_guest)
+					print("🔍 [PLAYER DEBUG] Sending player %d (pos: %s, gender: %d, weapon: %s, name: %s, tier: %s) to client %d" % [existing_id, existing_player.global_position, gender, weapon_type, p_name, p_tier, requester_id])
+				rpc_id(requester_id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, p_name, p_is_guest, p_tier)
 			else:
 				if OS.is_debug_build():
 					print("🔍 [PLAYER DEBUG] Sending player %d (default pos) to client %d" % [existing_id, requester_id])
 				var p_name2 = ""
 				var p_is_guest2 = true
+				var p_tier2 = "initiate"
 				if NetworkManager.authenticated_players.has(existing_id):
 					p_name2 = NetworkManager.authenticated_players[existing_id].username
 					p_is_guest2 = NetworkManager.authenticated_players[existing_id].is_guest
-				rpc_id(requester_id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", p_name2, p_is_guest2)
+					var p_data2 = NetworkManager.authenticated_players[existing_id].get("player_data", {})
+					var ashbane_data2 = p_data2.get("ashbane", {})
+					p_tier2 = ashbane_data2.get("tier", "initiate")
+				rpc_id(requester_id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", p_name2, p_is_guest2, p_tier2)
 
 func _on_player_connected(id: int):
 	"""Handle new player connection - DON'T spawn yet, wait for authentication"""
@@ -3666,15 +3677,19 @@ func _on_player_authenticated(id: int, player_name: String):
 
 	# Now spawn the authenticated player with their name
 	var is_guest = false
+	var player_tier = "initiate"
 	if NetworkManager.authenticated_players.has(id):
 		is_guest = NetworkManager.authenticated_players[id].get("is_guest", false)
+		var p_data = NetworkManager.authenticated_players[id].get("player_data", {})
+		var ashbane_data = p_data.get("ashbane", {})
+		player_tier = ashbane_data.get("tier", "initiate")
 
 	# Broadcast spawn to ALL peers (call_local ensures server also runs it)
 	# Note: New client may not have game_world loaded yet, but they'll spawn
 	# themselves in _spawn_initial_players when they load the scene
 	if OS.is_debug_build():
-		print("🔍 [PLAYER DEBUG] Broadcasting spawn_player RPC for %d to all peers" % id)
-	spawn_player.rpc(id, Vector2.ZERO, 0, "", "", "", "", "", "", "", player_name, is_guest)
+		print("🔍 [PLAYER DEBUG] Broadcasting spawn_player RPC for %d (tier: %s) to all peers" % [id, player_tier])
+	spawn_player.rpc(id, Vector2.ZERO, 0, "", "", "", "", "", "", "", player_name, is_guest, player_tier)
 
 	# Tell the new player about existing players (but NOT themselves!)
 	# Note: Client will also request this via _request_existing_players as a backup
@@ -3701,21 +3716,34 @@ func _on_player_authenticated(id: int, player_name: String):
 					arms_sprite = appearance.get("arms_sprite", "")
 					hands_sprite = appearance.get("hands_sprite", "")
 					head_sprite = appearance.get("head_sprite", "")
-				# Get player name and guest status from NetworkManager
+				# Get player name, guest status, and tier from NetworkManager
 				var p_name = NetworkManager.player_name if existing_id == 1 else ""
 				var p_is_guest = NetworkManager.is_player_guest(existing_id)
+				var p_tier = "initiate"
 				if NetworkManager.authenticated_players.has(existing_id):
 					p_name = NetworkManager.authenticated_players[existing_id].username
+					var p_data = NetworkManager.authenticated_players[existing_id].get("player_data", {})
+					var ashbane_data = p_data.get("ashbane", {})
+					p_tier = ashbane_data.get("tier", "initiate")
+				# Also check player's shield for current tier
+				if existing_player.has_node("AllegianceShield"):
+					var shield = existing_player.get_node("AllegianceShield")
+					if shield.has_method("get") and shield.get("current_tier"):
+						p_tier = shield.current_tier
 				if OS.is_debug_build():
-					print("🔍 [PLAYER DEBUG] Sending existing player %d (gender: %d, weapon: %s, name: %s) to new client %d" % [existing_id, gender, weapon_type, p_name, id])
-				rpc_id(id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, p_name, p_is_guest)
+					print("🔍 [PLAYER DEBUG] Sending existing player %d (gender: %d, weapon: %s, name: %s, tier: %s) to new client %d" % [existing_id, gender, weapon_type, p_name, p_tier, id])
+				rpc_id(id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, p_name, p_is_guest, p_tier)
 			else:
 				var p_name2 = ""
 				var p_is_guest2 = true
+				var p_tier2 = "initiate"
 				if NetworkManager.authenticated_players.has(existing_id):
 					p_name2 = NetworkManager.authenticated_players[existing_id].username
 					p_is_guest2 = NetworkManager.authenticated_players[existing_id].is_guest
-				rpc_id(id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", p_name2, p_is_guest2)
+					var p_data2 = NetworkManager.authenticated_players[existing_id].get("player_data", {})
+					var ashbane_data2 = p_data2.get("ashbane", {})
+					p_tier2 = ashbane_data2.get("tier", "initiate")
+				rpc_id(id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", p_name2, p_is_guest2, p_tier2)
 
 func _on_player_disconnected(id: int):
 	"""Handle player disconnection"""
@@ -3728,7 +3756,7 @@ func _on_player_disconnected(id: int):
 		despawn_player(id)  # Client just removes locally
 
 @rpc("any_peer", "call_local", "reliable")
-func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, weapon_type: String = "", feet_sprite: String = "", legs_sprite: String = "", chest_sprite: String = "", arms_sprite: String = "", hands_sprite: String = "", head_sprite: String = "", display_name: String = "", is_guest_player: bool = false):
+func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, weapon_type: String = "", feet_sprite: String = "", legs_sprite: String = "", chest_sprite: String = "", arms_sprite: String = "", hands_sprite: String = "", head_sprite: String = "", display_name: String = "", is_guest_player: bool = false, ashbane_tier: String = "initiate"):
 	"""Spawn a player (local or remote)"""
 	# Guard against null multiplayer during scene transitions
 	if not multiplayer:
@@ -3743,7 +3771,7 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 	if OS.is_debug_build():
 		print("🔍 [PLAYER DEBUG] spawn_player(%d) called on peer %d" % [id, multiplayer.get_unique_id()])
 		print("   Appearance: gender=%d, weapon=%s, feet=%s, legs=%s, chest=%s, arms=%s, hands=%s, head=%s" % [gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite])
-		print("   Name: %s (guest=%s)" % [display_name, is_guest_player])
+		print("   Name: %s (guest=%s) tier=%s" % [display_name, is_guest_player, ashbane_tier])
 		print("   Current players: %s" % str(players.keys()))
 
 	if players.has(id):
@@ -3810,12 +3838,24 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 					hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
 				else:
 					hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
-			# Apply Ashbane tier badge if linked
-			if AshbaneAuth and AshbaneAuth.is_logged_in() and hb.has_method("set_ashbane_tier"):
-				var tier = AshbaneAuth.ashbane_tier.get("tier", "")
-				hb.set_ashbane_tier(tier)
-				# Apply cosmetics to player
-				_apply_ashbane_cosmetics(player)
+
+		# Determine local player's Ashbane tier
+		var local_tier = ashbane_tier
+		if AshbaneAuth and AshbaneAuth.is_logged_in():
+			local_tier = AshbaneAuth.ashbane_tier.get("tier", "initiate")
+
+		# Apply tier to health bar name coloring
+		if player.has_node("HealthBar"):
+			var hb = player.get_node("HealthBar")
+			if hb.has_method("set_ashbane_tier"):
+				hb.set_ashbane_tier(local_tier)
+
+		# Create Allegiance Shield
+		_add_allegiance_shield(player, local_tier)
+
+		# Apply cosmetics to player
+		if AshbaneAuth and AshbaneAuth.is_logged_in():
+			_apply_ashbane_cosmetics(player)
 	else:
 		# Disable processing for remote players - they are updated via RPC in _receive_player_position
 		player.set_physics_process(false)
@@ -3841,6 +3881,12 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 					hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
 				else:
 					hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
+			# Apply tier to health bar name coloring
+			if hb.has_method("set_ashbane_tier"):
+				hb.set_ashbane_tier(ashbane_tier)
+
+		# Create Allegiance Shield for remote player
+		_add_allegiance_shield(player, ashbane_tier)
 
 @rpc("any_peer", "call_local", "reliable")
 func despawn_player(id: int):
@@ -4060,6 +4106,31 @@ func _add_body_blocking_collision(player: Node) -> void:
 	collision_shape.shape = circle
 	collision_shape.position = Vector2(0, 8)  # Offset to feet level
 	player.add_child(collision_shape)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ALLEGIANCE SHIELD SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _add_allegiance_shield(player: Node, tier: String) -> void:
+	"""Add an Allegiance Shield to display player's faction and tier"""
+	if not is_instance_valid(player):
+		return
+
+	# Check if shield already exists
+	if player.has_node("AllegianceShield"):
+		var existing = player.get_node("AllegianceShield")
+		if existing.has_method("set_tier"):
+			existing.set_tier(tier)
+		return
+
+	# Create new shield
+	var shield = AllegianceShield.new()
+	shield.name = "AllegianceShield"
+	player.add_child(shield)
+
+	# Set tier after adding to tree
+	if shield.has_method("set_tier"):
+		shield.set_tier(tier)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ASHBANE COSMETICS INTEGRATION
