@@ -53,6 +53,19 @@ var attack_feedback = null
 # Debug
 var debug_weakpoint_clicks: bool = false
 
+# VFX Layer reference for full-brightness weapon effects
+var _vfx_layer: Node = null
+
+func _add_vfx(effect: Node) -> void:
+	"""Add visual effect to VFX layer (renders at full brightness, ignores CanvasModulate)"""
+	if not _vfx_layer:
+		_vfx_layer = player.get_node_or_null("/root/VFXLayer")
+	if _vfx_layer and _vfx_layer.has_method("add_effect"):
+		_vfx_layer.add_effect(effect)
+	else:
+		# Fallback to root if VFXLayer not available
+		player.get_tree().root.add_child(effect)
+
 # Tutorial forced crit tracking (single player)
 var tutorial_dummy_hits: int = 0
 const TUTORIAL_FORCE_CRIT_HITS: int = 5  # Force crit after this many hits on dummy during tutorial
@@ -71,6 +84,8 @@ func update_stats(damage: float, cooldown: float, range_val: float = -1, cone_an
 	"""Update combat stats from CharacterStats"""
 	attack_damage = damage
 	attack_cooldown = cooldown
+	# Sync hold_attack_interval to weapon cooldown (held attacks match weapon speed)
+	hold_attack_interval = cooldown
 	if range_val > 0:
 		attack_range = range_val
 	if cone_angle > 0:
@@ -212,6 +227,11 @@ func is_holding_on_crit_window_enemy(mouse_pos: Vector2) -> bool:
 
 func is_clicking_on_weakpoint(mouse_pos: Vector2) -> bool:
 	"""Check if clicking on weakpoint and trigger it directly"""
+	# First check PvP weakpoints on players (during duels)
+	if _check_pvp_weakpoint_click(mouse_pos):
+		return true
+
+	# Then check PvE weakpoints on enemies
 	var all_enemies = player.get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 
 	if debug_weakpoint_clicks:
@@ -273,26 +293,73 @@ func is_clicking_on_weakpoint(mouse_pos: Vector2) -> bool:
 
 	return false
 
-func handle_crit_window_attack(enemy: Node, click_pos: Vector2) -> void:
-	"""Handle attack during crit window (uncapped attack speed)"""
+func _check_pvp_weakpoint_click(mouse_pos: Vector2) -> bool:
+	"""Check if clicking on a PvP weakpoint during a duel"""
+	# Only check if we're in a duel
+	if not player.is_dueling:
+		return false
+
+	# Check all players for PvP weakpoints
+	var all_players = player.get_tree().get_nodes_in_group("player")
+
+	for other_player in all_players:
+		if not is_instance_valid(other_player):
+			continue
+
+		# Skip self - can't click own weakpoints
+		if other_player == player:
+			continue
+
+		# Check if this player has active PvP weakpoints
+		if not other_player.get("pvp_weakpoint_active"):
+			continue
+
+		var pvp_weakpoints = other_player.get("pvp_weakpoints")
+		if not pvp_weakpoints or pvp_weakpoints.size() == 0:
+			continue
+
+		print("[PvP WP] Checking %d weakpoints on %s" % [pvp_weakpoints.size(), other_player.name])
+
+		for weakpoint in pvp_weakpoints:
+			if not is_instance_valid(weakpoint):
+				continue
+			if weakpoint.is_destroyed:
+				continue
+
+			var distance = mouse_pos.distance_to(weakpoint.global_position)
+			# Use a forgiving click radius (38px base, scaled by weakpoint scale)
+			var click_radius = 38.0 * weakpoint.scale.x
+
+			print("[PvP WP] Weakpoint at %s, click at %s, dist=%.1f, radius=%.1f" % [
+				weakpoint.global_position, mouse_pos, distance, click_radius
+			])
+
+			if distance < click_radius:
+				print("[PvP WP] HIT! Calling weakpoint.hit()")
+
+				# Play slash animation toward the weakpoint
+				var character_sprite = player.get_node_or_null("CharacterSprite")
+				if character_sprite:
+					var direction_to_weakpoint = (weakpoint.global_position - player.global_position).normalized()
+					var dir_str = player.get_direction_string(direction_to_weakpoint)
+					var lpc_dir = player.convert_to_lpc_direction(dir_str)
+					var attack_anim = character_sprite.get_next_attack_anim() if character_sprite.has_method("get_next_attack_anim") else "slash"
+					character_sprite.play_lpc_animation(attack_anim, lpc_dir)
+
+				# Call hit() for instant feedback
+				if weakpoint.has_method("hit"):
+					weakpoint.hit()
+				return true
+
+	return false
+
+func handle_crit_window_attack(enemy: Node, _click_pos: Vector2) -> void:
+	"""Handle attack during crit window - deal normal damage to enemy body"""
 	if not is_instance_valid(enemy):
 		return
 
-	# Get crit window overlay from enemy
-	var crit_overlay = enemy.get_node_or_null("CritWindowOverlay")
-	if not crit_overlay:
-		return
-
-	# Try to hit a weakpoint at click position
-	if crit_overlay.has_method("try_hit_weakpoint_at"):
-		var hit = crit_overlay.try_hit_weakpoint_at(click_pos)
-		if hit:
-			# Weakpoint destroyed - crit damage!
-			var crit_damage = attack_damage * 2.0  # 2x damage for crit
-			apply_damage_with_feedback(enemy, crit_damage, true, true)
-			return
-
-	# No weakpoint hit - normal damage during crit window
+	# During crit window, clicking on enemy body deals normal damage
+	# (weakpoints are handled separately by is_clicking_on_weakpoint)
 	apply_damage_with_feedback(enemy, attack_damage, false, false)
 
 func attempt_attack() -> void:
@@ -313,14 +380,18 @@ func attempt_attack() -> void:
 		var attack_anim = character_sprite.get_next_attack_anim() if character_sprite.has_method("get_next_attack_anim") else "slash"
 		character_sprite.play_lpc_animation(attack_anim, lpc_dir)
 
+	# Spawn weapon swoosh visual effect
+	if attack_feedback:
+		attack_feedback.spawn_weapon_swoosh(attack_direction)
+
 	# Get enemies in attack cone
 	# Play weapon swing sound (whoosh) - plays immediately on attack
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		if CharacterStats.equipped_weapon:
-			sound_manager.play_sword_swing_sound(player.global_position, -10.0)
+			sound_manager.play_sword_swing_sound(player.global_position, -14.0)
 		else:
-			sound_manager.play_unarmed_swing_sound(player.global_position, -10.0)
+			sound_manager.play_unarmed_swing_sound(player.global_position, -14.0)
 
 	# Track swing for forged weapons
 	_track_weapon_swing()
@@ -421,7 +492,7 @@ func attack_players_in_cone(target_players: Array) -> void:
 
 		print("[PvP]   Attacking target!")
 
-		# Calculate damage (no crits for PvP currently)
+		# Deal weapon damage (PvP weakpoints are clicked directly, not via weapon attacks)
 		var final_damage = attack_damage
 
 		# Send PvP damage through network
@@ -437,7 +508,7 @@ func attack_players_in_cone(target_players: Array) -> void:
 			var weapon_type = "unarmed"
 			if CharacterStats.equipped_weapon:
 				weapon_type = CharacterStats.equipped_weapon.weapon_type
-			sound_manager.play_normal_hit_sound(target_player.global_position, -10.0, weapon_type)
+			sound_manager.play_normal_hit_sound(target_player.global_position, -12.0, weapon_type)
 
 func _get_player_peer_id(target_player: Node) -> int:
 	"""Get the peer ID for a player node using multiple methods"""
@@ -466,6 +537,86 @@ func _get_player_peer_id(target_player: Node) -> int:
 
 	return -1
 
+func _try_hit_pvp_weakpoint(target_player: Node, hit_pos: Vector2) -> bool:
+	"""Check if bullet hit a PvP weakpoint on the target player. Returns true if hit.
+
+	Guns can hit weakpoints by shooting them - we check if the hit position is within
+	any active weakpoint's hitbox radius. Uses a generous radius since aiming precisely
+	at a small moving target is difficult.
+	"""
+	if not is_instance_valid(target_player):
+		return false
+
+	# Check if target has active PvP weakpoints
+	if not target_player.has_method("has_active_pvp_weakpoints"):
+		return false
+	if not target_player.has_active_pvp_weakpoints():
+		print("[PvP] Target has no active weakpoints")
+		return false
+
+	# Get the weakpoints array from target player
+	var weakpoints = target_player.get("pvp_weakpoints")
+	if not weakpoints or weakpoints.is_empty():
+		return false
+
+	print("[PvP] Checking %d weakpoints, hit_pos=%s, target_pos=%s" % [weakpoints.size(), hit_pos, target_player.global_position])
+
+	# Check each weakpoint for collision with hit position
+	for wp in weakpoints:
+		if not is_instance_valid(wp):
+			continue
+		if wp.get("is_destroyed"):
+			continue
+
+		# Get weakpoint's world position (it's a child of the target player)
+		var wp_world_pos = target_player.global_position + wp.position
+
+		# Use a generous hitbox for gun hits - weakpoints are small and targets move
+		# Base radius from weakpoint + extra 15px for gun accuracy tolerance
+		var hitbox_radius = 45.0  # Generous radius for gun hits
+		if wp.has_method("calculate_hitbox_radius"):
+			hitbox_radius = wp.calculate_hitbox_radius() + 15.0  # Add tolerance
+
+		# Check if hit position is within weakpoint hitbox
+		var distance = hit_pos.distance_to(wp_world_pos)
+		print("[PvP] Weakpoint at %s, distance=%.1f, radius=%.1f" % [wp_world_pos, distance, hitbox_radius])
+
+		if distance <= hitbox_radius:
+			# Hit the weakpoint!
+			print("[PvP] ✓ Bullet hit weakpoint at distance %.1f (radius %.1f)" % [distance, hitbox_radius])
+			if wp.has_method("hit"):
+				wp.hit()
+			return true
+
+	print("[PvP] No weakpoint hit (closest was outside radius)")
+	return false
+
+func _check_pvp_weakpoint_hit_at_cursor(cursor_pos: Vector2) -> bool:
+	"""Check if cursor position hits any duel opponent's weakpoint directly.
+
+	This is used to detect weakpoint hits even when aiming above the player's body
+	(weakpoints spawn above the head).
+	"""
+	if not player.is_dueling:
+		return false
+
+	# Find the duel opponent
+	var all_players = player.get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for other_player in all_players:
+		if not is_instance_valid(other_player):
+			continue
+		if other_player == player:
+			continue
+
+		var target_id = _get_player_peer_id(other_player)
+		if target_id != player.duel_opponent_id:
+			continue
+
+		# Found opponent - check their weakpoints
+		return _try_hit_pvp_weakpoint(other_player, cursor_pos)
+
+	return false
+
 func _send_pvp_damage(target_player: Node, damage: int) -> void:
 	"""Send PvP damage request to server via DuelManager"""
 	var target_peer_id = _get_player_peer_id(target_player)
@@ -488,6 +639,133 @@ func _send_pvp_damage(target_player: Node, damage: int) -> void:
 		duel_manager.request_pvp_damage.rpc_id(1, target_peer_id, damage)
 
 	print("[PvP] Sent damage request: %d to player %d" % [damage, target_peer_id])
+
+func _check_bullet_path_player_collision(start: Vector2, end: Vector2, hit_radius: float) -> Dictionary:
+	"""Check if bullet path intersects duel opponent player. Returns first hit."""
+	if not player.is_dueling:
+		return {"hit": false, "player": null, "hit_pos": end}
+
+	var all_players = player.get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	var closest_hit_dist = INF
+	var closest_hit_pos = end
+	var closest_player = null
+
+	# Calculate projectile path bounds for range culling
+	var path_length = start.distance_to(end)
+	var path_center = (start + end) / 2.0
+	var cull_radius = path_length / 2.0 + 100.0
+
+	for other_player in all_players:
+		if not is_instance_valid(other_player):
+			continue
+
+		# Skip self
+		if other_player == player:
+			continue
+
+		# Only check duel opponent
+		var target_id = _get_player_peer_id(other_player)
+		if target_id != player.duel_opponent_id:
+			continue
+
+		# Quick range cull
+		var rough_dist = other_player.global_position.distance_to(path_center)
+		if rough_dist > cull_radius:
+			continue
+
+		# Use a capsule hitbox for the player (similar to enemies)
+		var player_pos = other_player.global_position
+		var capsule_top = player_pos + Vector2(0, -24)  # Head
+		var capsule_bottom = player_pos + Vector2(0, 12)  # Feet
+		var capsule_radius = 14.0  # Slightly wider than enemy for easier hitting
+
+		# Check line-capsule intersection
+		var intersection = _line_capsule_intersection(start, end, capsule_top, capsule_bottom, capsule_radius)
+
+		if intersection.intersects:
+			var hit_dist = start.distance_to(intersection.point)
+			if hit_dist < closest_hit_dist:
+				closest_hit_dist = hit_dist
+				closest_hit_pos = intersection.point
+				closest_player = other_player
+
+	return {
+		"hit": closest_player != null,
+		"player": closest_player,
+		"hit_pos": closest_hit_pos
+	}
+
+func _attack_player_with_gun(target_player: Node, hit_pos: Vector2) -> void:
+	"""Deal gun damage to a player (PvP)"""
+	if not is_instance_valid(target_player):
+		return
+
+	# Only attack duel opponent
+	if player.is_dueling:
+		var target_id = _get_player_peer_id(target_player)
+		if target_id != player.duel_opponent_id:
+			print("[PvP] Gun hit - skipping non-opponent")
+			return
+
+	# Check for weakpoint hit first - guns can hit PvP weakpoints!
+	var weakpoint_hit = _try_hit_pvp_weakpoint(target_player, hit_pos)
+	if weakpoint_hit:
+		# Weakpoint was hit - visual feedback on weakpoint position
+		_spawn_bullet_impact(hit_pos, true)
+		print("[PvP] Gun hit weakpoint!")
+		return  # Weakpoint handles its own damage
+
+	# No weakpoint hit - deal regular gun damage
+	var final_damage = attack_damage
+
+	# Send PvP damage through network
+	_send_pvp_damage(target_player, int(final_damage))
+
+	# Visual feedback - spawn bullet impact on player
+	_spawn_bullet_impact(hit_pos, true)
+
+	# Damage number
+	if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
+		attack_feedback.spawn_damage_number(target_player.global_position, final_damage, false, false)
+
+	# Hit sound
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager:
+		sound_manager.play_normal_hit_sound(target_player.global_position, -12.0, "gun")
+
+	print("[PvP] Gun attack hit player for %d damage" % int(final_damage))
+
+func _attack_player_with_burst(target_player: Node, hit_pos: Vector2) -> void:
+	"""Deal burst weapon damage to a player (PvP). Lower damage per shot."""
+	if not is_instance_valid(target_player):
+		return
+
+	# Only attack duel opponent
+	if player.is_dueling:
+		var target_id = _get_player_peer_id(target_player)
+		if target_id != player.duel_opponent_id:
+			return
+
+	# Check for weakpoint hit first - guns can hit PvP weakpoints!
+	var weakpoint_hit = _try_hit_pvp_weakpoint(target_player, hit_pos)
+	if weakpoint_hit:
+		# Weakpoint was hit - visual feedback on weakpoint position
+		_spawn_bullet_impact(hit_pos, true)
+		print("[PvP] Burst round hit weakpoint!")
+		return  # Weakpoint handles its own damage
+
+	# No weakpoint hit - deal regular burst damage
+	var final_damage = burst_damage_per_shot
+
+	# Send PvP damage through network
+	_send_pvp_damage(target_player, int(final_damage))
+
+	# Visual feedback
+	_spawn_bullet_impact(hit_pos, true)
+
+	# Damage number (no combat text for individual burst rounds to reduce spam)
+	# if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
+	#	attack_feedback.spawn_damage_number(target_player.global_position, final_damage, false, false)
 
 func attack_enemies_in_cone(enemies: Array) -> void:
 	"""Deal damage to enemies in attack cone"""
@@ -536,7 +814,7 @@ func attack_enemies_in_cone(enemies: Array) -> void:
 				# Play crit window opening sound when window triggers
 				var sound_manager = player.get_node_or_null("/root/SoundManager")
 				if sound_manager and sound_manager.has_method("play_sound"):
-					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
+					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -10.0)
 
 func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_weakpoint: bool) -> void:
 	"""Apply damage to enemy with visual/audio feedback"""
@@ -548,7 +826,25 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 	if "current_health" in enemy:
 		enemy_hp_before = enemy.current_health
 
-	# Apply damage
+	# MULTIPLAYER: Send damage to server for authoritative processing
+	var has_peer = player.multiplayer.has_multiplayer_peer()
+	var enemy_net_id = enemy.get("network_id") if enemy.get("network_id") != null else -1
+
+	if has_peer and enemy_net_id >= 0:
+		var network_enemy_mgr = player.get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr:
+			if player.multiplayer.is_server():
+				# Server processes damage directly (no RPC to self)
+				network_enemy_mgr.request_damage(enemy_net_id, damage, is_crit, hit_weakpoint)
+			else:
+				# Client sends RPC to server
+				network_enemy_mgr.request_damage.rpc_id(1, enemy_net_id, damage, is_crit, hit_weakpoint)
+			# Server will broadcast visual feedback via _client_enemy_damaged
+			# Skip local take_damage - server handles it authoritatively
+			_track_weapon_hit(damage, is_crit, enemy, enemy_hp_before)
+			return
+
+	# Single player: apply damage directly
 	if enemy.has_method("take_damage"):
 		enemy.take_damage(damage)
 
@@ -563,9 +859,9 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 	if attack_feedback and attack_feedback.has_method("trigger_attack_feedback"):
 		attack_feedback.trigger_attack_feedback(enemy.global_position, is_crit, hit_weakpoint)
 
-	# Screen shake on crit
-	if is_crit and screen_shake:
-		screen_shake.add_trauma(0.2)
+	# Screen shake disabled - CombatJuice handles hitstop only now
+	# if is_crit and screen_shake:
+	#	screen_shake.add_trauma(0.2)
 
 	# Hit sound (delayed slightly so swing whoosh plays first)
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
@@ -581,16 +877,16 @@ func apply_damage_with_feedback(enemy: Node, damage: float, is_crit: bool, hit_w
 		var tree = player.get_tree()
 		tree.create_timer(0.1).timeout.connect(func():
 			if is_crit:
-				sound_manager.play_critical_hit_sound(hit_pos, -6.0)
+				sound_manager.play_critical_hit_sound(hit_pos, -8.0)
 			elif is_gun:
 				# Use bullet impact sounds for guns - training dummy is armored, others are flesh
 				var is_armored = enemy.is_in_group("training_dummy")
-				sound_manager.play_bullet_impact_sound(hit_pos, is_armored, -6.0)
+				sound_manager.play_bullet_impact_sound(hit_pos, is_armored, -8.0)
 			elif is_bow:
 				# Skip bow impact sound here - _spawn_arrow_impact already handles it
 				pass
 			else:
-				sound_manager.play_normal_hit_sound(hit_pos, -10.0, weapon_type)
+				sound_manager.play_normal_hit_sound(hit_pos, -12.0, weapon_type)
 		)
 
 # ========================================
@@ -670,15 +966,15 @@ func _fire_gun_at_weakpoint(weakpoint: Node, cursor_pos: Vector2) -> void:
 		_spawn_battle_rifle_muzzle_flash(barrel_pos)
 		_spawn_tracer_round(barrel_pos, weakpoint.global_position)
 		if sound_manager and sound_manager.has_method("play_battle_rifle_sound"):
-			sound_manager.play_battle_rifle_sound(player.global_position, -6.0)
+			sound_manager.play_battle_rifle_sound(player.global_position, -10.0)
 		elif sound_manager:
-			sound_manager.play_gunshot_sound(player.global_position, -6.0)
+			sound_manager.play_gunshot_sound(player.global_position, -10.0)
 	else:
 		# Railgun style - beam trail and standard muzzle flash
 		_spawn_muzzle_flash_at(barrel_pos)
 		_spawn_bullet_trail(barrel_pos, weakpoint.global_position)
 		if sound_manager:
-			sound_manager.play_gunshot_sound(player.global_position, -6.0)
+			sound_manager.play_gunshot_sound(player.global_position, -10.0)
 
 	# Hit the weakpoint directly (client-predicted, no cooldown)
 	if weakpoint.has_method("hit"):
@@ -740,7 +1036,7 @@ func attempt_gun_attack() -> void:
 	# Play gunshot sound
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
 	if sound_manager:
-		sound_manager.play_gunshot_sound(player.global_position, -6.0)
+		sound_manager.play_gunshot_sound(player.global_position, -10.0)
 
 	# Track shot for forged weapons
 	_track_weapon_shot()
@@ -758,6 +1054,20 @@ func attempt_gun_attack() -> void:
 			# Miss - spawn impact at cursor
 			_spawn_bullet_impact(cursor_pos, false)
 			_track_weapon_miss()
+
+	# PvP: Check for player hits during duel
+	if player.is_dueling:
+		# First check for direct weakpoint hits (weakpoints are above the player's body)
+		var weakpoint_hit = _check_pvp_weakpoint_hit_at_cursor(actual_target)
+		if weakpoint_hit:
+			print("[PvP] Gun directly hit weakpoint!")
+			_spawn_bullet_impact(actual_target, true)
+		else:
+			# Check for body hits
+			var player_hit_result = _check_bullet_path_player_collision(barrel_pos, cursor_pos, gun_radius)
+			if player_hit_result.hit:
+				print("[PvP] Gun hit player along bullet path!")
+				_attack_player_with_gun(player_hit_result.player, actual_target)
 
 	# Start cooldown timer
 	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
@@ -804,7 +1114,7 @@ func attempt_bow_attack() -> void:
 	# Play bow shot sound (twang!) - plays immediately on attack
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("play_bow_shot_sound"):
-		sound_manager.play_bow_shot_sound(player.global_position, -6.0)
+		sound_manager.play_bow_shot_sound(player.global_position, -10.0)
 
 	# Delay arrow spawn to sync with bow draw animation (release mid-animation)
 	var draw_delay = weapon.bow_draw_time if weapon.get("bow_draw_time") else 0.25
@@ -880,7 +1190,7 @@ func _fire_bow_at_weakpoint(weakpoint: Node, cursor_pos: Vector2) -> void:
 	# Play bow shot sound immediately
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("play_bow_shot_sound"):
-		sound_manager.play_bow_shot_sound(player.global_position, -6.0)
+		sound_manager.play_bow_shot_sound(player.global_position, -10.0)
 
 	# Calculate arrow start position
 	var arrow_start = player.global_position + attack_direction * 16.0
@@ -911,7 +1221,7 @@ func _spawn_arrow_at_weakpoint(start_pos: Vector2, weakpoint: Node) -> void:
 	arrow.add_point(direction * arrow_length)
 
 	arrow.global_position = start_pos
-	player.get_tree().root.add_child(arrow)
+	_add_vfx(arrow)
 
 	# Fast travel to weakpoint
 	var distance = start_pos.distance_to(target_pos)
@@ -955,7 +1265,7 @@ func _spawn_arrow_projectile(start_pos: Vector2, target_pos: Vector2, speed: flo
 	arrow.add_point(direction * arrow_length)  # Tip
 
 	arrow.global_position = start_pos
-	player.get_tree().root.add_child(arrow)
+	_add_vfx(arrow)
 
 	# Calculate travel time to actual target (hit point or original target)
 	var distance = start_pos.distance_to(actual_target)
@@ -1104,7 +1414,7 @@ func _spawn_arrow_impact(pos: Vector2, hit: bool) -> void:
 	# Play impact sound
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("play_bow_impact_sound"):
-		sound_manager.play_bow_impact_sound(pos, hit, -4.0)
+		sound_manager.play_bow_impact_sound(pos, hit, -8.0)
 
 	# Create a simple impact circle
 	var impact = Polygon2D.new()
@@ -1123,7 +1433,7 @@ func _spawn_arrow_impact(pos: Vector2, hit: bool) -> void:
 		points.append(Vector2(cos(angle), sin(angle)) * radius)
 	impact.polygon = points
 
-	player.get_tree().root.add_child(impact)
+	_add_vfx(impact)
 
 	# Fade out and remove
 	var tween = player.get_tree().create_tween()
@@ -1173,9 +1483,9 @@ func attempt_burst_attack() -> void:
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		if sound_manager.has_method("play_battle_rifle_sound"):
-			sound_manager.play_battle_rifle_sound(player.global_position, -6.0)
+			sound_manager.play_battle_rifle_sound(player.global_position, -10.0)
 		else:
-			sound_manager.play_gunshot_sound(player.global_position, -6.0)
+			sound_manager.play_gunshot_sound(player.global_position, -10.0)
 
 	# Start burst sequence
 	_fire_burst_round()
@@ -1229,6 +1539,20 @@ func _fire_burst_round() -> void:
 		else:
 			_spawn_bullet_impact(burst_target_pos, false)
 
+	# PvP: Check for player hits during duel (burst weapons)
+	if player.is_dueling:
+		# First check for direct weakpoint hits (weakpoints are above the player's body)
+		var weakpoint_hit = _check_pvp_weakpoint_hit_at_cursor(actual_target)
+		if weakpoint_hit:
+			print("[PvP] Burst round directly hit weakpoint!")
+			_spawn_bullet_impact(actual_target, true)
+		else:
+			# Check for body hits
+			var player_hit_result = _check_bullet_path_player_collision(barrel_pos, burst_target_pos, gun_radius)
+			if player_hit_result.hit:
+				print("[PvP] Burst round hit player!")
+				_attack_player_with_burst(player_hit_result.player, actual_target)
+
 	# Schedule next burst round or finish
 	if burst_shots_remaining > 0:
 		var burst_delay = weapon.burst_delay if weapon.get("burst_delay") else 0.10
@@ -1279,7 +1603,7 @@ func _attack_enemies_burst_round(enemies: Array) -> void:
 				# Play crit window opening sound when window triggers
 				var sound_manager = player.get_node_or_null("/root/SoundManager")
 				if sound_manager and sound_manager.has_method("play_sound"):
-					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
+					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -10.0)
 
 func _finish_burst() -> void:
 	"""Complete burst sequence and start cooldown"""
@@ -1428,7 +1752,7 @@ func attack_enemies_at_cursor(enemies: Array) -> void:
 				# Play crit window opening sound when window triggers
 				var sound_manager = player.get_node_or_null("/root/SoundManager")
 				if sound_manager and sound_manager.has_method("play_sound"):
-					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -8.0)
+					sound_manager.play_sound(sound_manager.SoundType.CRIT_WINDOW_OPEN, enemy.global_position, -10.0)
 
 # ========================================
 # GUN VISUAL EFFECTS
@@ -1456,7 +1780,7 @@ func _spawn_muzzle_flash_at(flash_pos: Vector2) -> void:
 	flash_container.global_position = flash_pos
 	flash_container.rotation = attack_direction.angle()
 	flash_container.z_index = 15
-	player.get_tree().root.add_child(flash_container)
+	_add_vfx(flash_container)
 
 	# Core bright circle (white-magenta to match beam)
 	var core = Polygon2D.new()
@@ -1515,7 +1839,7 @@ func _spawn_bullet_trail(from_pos: Vector2, to_pos: Vector2) -> void:
 	trail.add_point(to_pos)
 	trail.z_index = 10
 
-	player.get_tree().root.add_child(trail)
+	_add_vfx(trail)
 
 	# Quick fade out
 	var tween = player.get_tree().create_tween()
@@ -1552,7 +1876,7 @@ func _spawn_bullet_impact(pos: Vector2, is_crit: bool) -> void:
 	circle.polygon = points
 	impact.add_child(circle)
 
-	player.get_tree().root.add_child(impact)
+	_add_vfx(impact)
 
 	# Expand and fade
 	var tween = player.get_tree().create_tween()
@@ -1607,8 +1931,8 @@ func _spawn_blood_splatter(pos: Vector2, is_crit: bool) -> void:
 	blood.damping_min = 30.0
 	blood.damping_max = 60.0
 
-	# Add to scene at root level
-	player.get_tree().root.add_child(blood)
+	# Add to VFX layer for full brightness
+	_add_vfx(blood)
 
 	# Quick cleanup
 	player.get_tree().create_timer(0.6).timeout.connect(func():
@@ -1647,7 +1971,7 @@ func _spawn_tracer_round(from_pos: Vector2, to_pos: Vector2) -> void:
 		glow.z_index = 9
 		tracer.add_child(glow)
 
-		player.get_tree().root.add_child(tracer)
+		_add_vfx(tracer)
 
 		# Quick fade out
 		var tween = player.get_tree().create_tween()
@@ -1663,7 +1987,7 @@ func _spawn_tracer_round(from_pos: Vector2, to_pos: Vector2) -> void:
 		trail.add_point(to_pos)
 		trail.z_index = 8
 
-		player.get_tree().root.add_child(trail)
+		_add_vfx(trail)
 
 		# Very quick fade
 		var tween = player.get_tree().create_tween()
@@ -1677,7 +2001,7 @@ func _spawn_battle_rifle_muzzle_flash(flash_pos: Vector2) -> void:
 	flash_container.global_position = flash_pos
 	flash_container.rotation = attack_direction.angle()
 	flash_container.z_index = 15
-	player.get_tree().root.add_child(flash_container)
+	_add_vfx(flash_container)
 
 	# Core bright (white-yellow)
 	var core = Polygon2D.new()
@@ -1794,7 +2118,7 @@ func heal_allies(allies: Array, heal_amount: float) -> void:
 
 		# Play healing impact sound for each ally healed
 		if sound_manager:
-			sound_manager.play_healing_impact_sound(ally.global_position, -3.0)
+			sound_manager.play_healing_impact_sound(ally.global_position, -8.0)
 
 var _last_heal_pulse_time: float = 0.0
 
@@ -1825,7 +2149,7 @@ func _spawn_heal_pulse(center_pos: Vector2, radius: float) -> void:
 	circle.polygon = points
 	pulse.add_child(circle)
 
-	player.get_tree().root.add_child(pulse)
+	_add_vfx(pulse)
 
 	# Animate expansion and fade
 	var tween = player.get_tree().create_tween()
@@ -1924,13 +2248,6 @@ func track_enemy_killed(enemy_type: String, is_elite: bool = false, is_boss: boo
 	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
 		return
 	weapon.weapon_stats.record_kill(enemy_type, is_elite, is_boss)
-
-func track_chain_level(chain_level: int) -> void:
-	"""Track chain level for forged weapons"""
-	var weapon = CharacterStats.equipped_weapon
-	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
-		return
-	weapon.weapon_stats.record_chain_level(chain_level)
 
 func track_player_death() -> void:
 	"""Track player death for forged weapons"""
