@@ -69,7 +69,7 @@ Slow (Warhammer):  34 dmg × 0.77 = 26.2 DPS | 9.3% × 0.77 = 0.072 crit/sec
 
 ## Weapon Pricing Strategy
 
-### Zone 1: The Wasteland (Blacksmith Vendor)
+### Zone 1: The dreadland (Blacksmith Vendor)
 
 | Weapon | Price | Attack Speed | Base Damage | DPS | Crit % | Rarity |
 |--------|-------|--------------|-------------|-----|--------|--------|

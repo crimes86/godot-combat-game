@@ -74,7 +74,7 @@ Ash Piles:                    93 props
 ## Path System
 
 ### Winding Path (19 waypoints)
-The path creates an S-curve through the wasteland, winding north and south:
+The path creates an S-curve through the dreadland, winding north and south:
 - Starts at Campfire (400, 0)
 - Winds through center with multiple direction changes
 - Ends at Castle (7600, 0)
@@ -259,7 +259,7 @@ Each end chunk (Chunk -1 and Chunk +1) contains **2 procedurally-placed ruins**:
 
 #### Visual Zone Progression
 
-**Zone 1**: Brown wasteland, sparse dead trees, bright lighting (tutorial feel)
+**Zone 1**: Brown dreadland, sparse dead trees, bright lighting (tutorial feel)
 **Zone 2**: Darker terrain, fog increasing, ominous atmosphere (danger rising)
 **Zone 3**: Purple/black corruption on ground, thick mist (nightmare zone)
 **Zone 4**: Castle walls visible, red sky, foreboding (end is near)
@@ -1279,7 +1279,7 @@ At game start, players choose between:
 
 Proper render order for all elements:
 ```
-z = -10: Ground ColorRect (brown wasteland)
+z = -10: Ground ColorRect (brown dreadland)
 z = -9:  Ground patches/texture variations
 z = -2:  Ground cracks, ash piles, path markers, castle
 z = -1:  Trees, rocks, skulls, bones, swords (props)
@@ -1797,7 +1797,7 @@ var lifetime: float = 2.0  # How long notification stays visible
 
 ### Lava Pools
 
-Dangerous lava pools scattered throughout the wasteland that damage players who get too close.
+Dangerous lava pools scattered throughout the dreadland that damage players who get too close.
 
 #### Damage System
 **Script**: `scripts/effects/LavaDamage.gd`
@@ -1861,7 +1861,7 @@ if damage_timer >= damage_interval:
 #### Placement Strategy
 
 **Zone Distribution**:
-- Zone 1 (Wasteland): 2-3 small pools
+- Zone 1 (dreadland): 2-3 small pools
 - Zone 2 (Cursed Lands): 4-5 medium pools
 - Zone 3 (Shadow Realm): 6-8 large pools
 - Zone 4 (Castle Approach): 3-4 strategic pools
@@ -1878,7 +1878,7 @@ if damage_timer >= damage_interval:
 
 ### Harvestable Trees
 
-Dead wasteland trees that can be chopped for wood, which sells for gold.
+Dead dreadland trees that can be chopped for wood, which sells for gold.
 
 #### Core Mechanics
 **Script**: `scripts/environment/HarvestableTree.gd`
@@ -1896,7 +1896,7 @@ Dead wasteland trees that can be chopped for wood, which sells for gold.
 
 **Resource Value**:
 - Item name: "Dry Log"
-- Description: "Dry wood from a dead wasteland tree. Burns well."
+- Description: "Dry wood from a dead dreadland tree. Burns well."
 - Sell value: 12 gold per log
 - Stackable: Yes (max 1000 per stack)
 
@@ -2857,7 +2857,7 @@ The game has a **fully functional 5-layer modular armor system**:
 
 **Playtest Scope**:
 - [ ] **Content available**
-  - All 4 zones (Wasteland → Castle)
+  - All 4 zones (dreadland → Castle)
   - Ruins 1, 2, 3 functional
   - Boss fight (Level 33)
   - Roaming enemies levels 1-30

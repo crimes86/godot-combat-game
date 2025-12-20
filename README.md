@@ -131,7 +131,7 @@ A fast-paced action RPG featuring a unique critical hit weakpoint system and cha
 
 ### Progression
 - **Level Cap**: 30 (stats stop at level 25)
-- **4 Zones**: Wasteland → Cursed Lands → Shadow Realm → Castle Approach
+- **4 Zones**: dreadland → Cursed Lands → Shadow Realm → Castle Approach
 - **3 Ruins**: Convertible checkpoints with vendors
 - **Boss Fight**: Level 33 Necromancer King at castle
 
