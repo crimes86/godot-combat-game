@@ -1,9 +1,10 @@
-[gd_scene load_steps=25 format=3 uid="uid://bwajqb57avv53"]
+[gd_scene load_steps=26 format=3 uid="uid://bwajqb57avv53"]
 
 [ext_resource type="Script" uid="uid://mebu3q3lqlre" path="res://scripts/trading_hub/TradingHub.gd" id="1_test"]
 [ext_resource type="Shader" uid="uid://bvc2p5kpshbx6" path="res://shaders/ground_variation.gdshader" id="2_ground"]
 [ext_resource type="Shader" uid="uid://ly7a3p5raf33" path="res://shaders/grassland.gdshader" id="3_grass"]
 [ext_resource type="PackedScene" uid="uid://bforgescene01" path="res://scenes/environment/Forge.tscn" id="4_forge"]
+[ext_resource type="PackedScene" path="res://scenes/npcs/vendor.tscn" id="14_blacksmith"]
 [ext_resource type="Texture2D" uid="uid://c5an8cwy57wby" path="res://assets/environment/forge/props/anvil_main.png" id="5_anvil"]
 [ext_resource type="Texture2D" uid="uid://d104egq4ukfye" path="res://assets/environment/forge/props/water_trough.png" id="6_trough"]
 [ext_resource type="Shader" uid="uid://dxfpv6a13vhmu" path="res://shaders/water_trough.gdshader" id="7_water_shader"]
@@ -97,6 +98,11 @@ z_index = 1
 color = Color(0.02, 0.018, 0.015, 1)
 polygon = PackedVector2Array(12000, -4500, 1100, -4500, 1000, -4000, 950, -3800, 1050, -3600, 980, -3400, 1100, -3200, 1000, -3000, 1150, -2800, 1050, -2600, 1200, -2400, 1400, -2200, 1600, -2000, 1900, -1850, 2200, -1650, 2500, -1500, 2850, -1350, 3200, -1150, 3550, -950, 3900, -750, 4200, -500, 4400, -200, 4550, 100, 4500, 400, 4400, 700, 4250, 1000, 4050, 1300, 3850, 1600, 4000, 1900, 4150, 2200, 4300, 2500, 4450, 2800, 4550, 3100, 4650, 3400, 4750, 3700, 4900, 4000, 5050, 4300, 5150, 4600, 5250, 4900, 5300, 5200, 5350, 5500, 5300, 5800, 5250, 6100, 5300, 6400, 5200, 6700, 5250, 7000, 5150, 7300, 5200, 7500, 4250, 7500, 4300, 7200, 4200, 6900, 4250, 6600, 4150, 6300, 4200, 6000, 4100, 5700, 4050, 5400, 3950, 5100, 3850, 4800, 3750, 4500, 3650, 4200, 3500, 3900, 3350, 3600, 3200, 3300, 3100, 3000, 2950, 2700, 2850, 2400, 2750, 2100, 2900, 1900, 550, 2150, 600, 2400, 500, 2650, 550, 2900, 480, 3150, 530, 3400, 470, 3650, 520, 3900, 480, 4150, 550, 4400, 500, 4650, 560, 4900, 490, 5150, 540, 5400, 480, 5650, 530, 5900, 470, 6150, 520, 6400, 480, 6650, 550, 6900, 500, 7150, 520, 7500, 520, 8000, 12000, 8000)
 
+[node name="SouthCorridorBlock" type="Polygon2D" parent="Environment"]
+z_index = 1
+color = Color(0.02, 0.018, 0.015, 1)
+polygon = PackedVector2Array(-700, 1850, -650, 1780, -580, 1820, -520, 1750, -450, 1800, -380, 1720, -320, 1780, -250, 1700, -180, 1760, -120, 1680, -60, 1740, 0, 1650, 60, 1720, 120, 1660, 180, 1740, 250, 1680, 320, 1760, 380, 1700, 450, 1780, 520, 1720, 580, 1800, 650, 1750, 700, 1850, 700, 2300, 600, 2400, 500, 2650, 550, 2900, 480, 3150, 530, 3400, 470, 3650, 520, 3900, 480, 4150, 550, 4400, 500, 4650, 560, 4900, 490, 5150, 540, 5400, 480, 5650, 530, 5900, 470, 6150, 520, 6400, 480, 6650, 550, 6900, 500, 7150, 520, 7500, -520, 7500, -550, 6900, -480, 6650, -520, 6400, -470, 6150, -530, 5900, -480, 5650, -540, 5400, -490, 5150, -560, 4900, -500, 4650, -550, 4400, -480, 4150, -520, 3900, -470, 3650, -530, 3400, -480, 3150, -550, 2900, -500, 2650, -600, 2400, -700, 2300)
+
 [node name="CaveCollision" type="StaticBody2D" parent="."]
 
 [node name="WallLeft" type="CollisionPolygon2D" parent="CaveCollision"]
@@ -110,6 +116,9 @@ polygon = PackedVector2Array(-12000, -4000, -1100, -4000, -1050, -4100, -1150, -
 
 [node name="CliffRight" type="CollisionPolygon2D" parent="CaveCollision"]
 polygon = PackedVector2Array(12000, -4000, 1100, -4000, 1050, -4100, 1150, -4200, 1000, -4300, 1100, -4500, 12000, -4500)
+
+[node name="SouthCorridorBlock" type="CollisionPolygon2D" parent="CaveCollision"]
+polygon = PackedVector2Array(-700, 1850, -650, 1780, -580, 1820, -520, 1750, -450, 1800, -380, 1720, -320, 1780, -250, 1700, -180, 1760, -120, 1680, -60, 1740, 0, 1650, 60, 1720, 120, 1660, 180, 1740, 250, 1680, 320, 1760, 380, 1700, 450, 1780, 520, 1720, 580, 1800, 650, 1750, 700, 1850, 700, 2300, 600, 2400, 500, 2650, 550, 2900, 480, 3150, 530, 3400, 470, 3650, 520, 3900, 480, 4150, 550, 4400, 500, 4650, 560, 4900, 490, 5150, 540, 5400, 480, 5650, 530, 5900, 470, 6150, 520, 6400, 480, 6650, 550, 6900, 500, 7150, 520, 7500, -520, 7500, -550, 6900, -480, 6650, -520, 6400, -470, 6150, -530, 5900, -480, 5650, -540, 5400, -490, 5150, -560, 4900, -500, 4650, -550, 4400, -480, 4150, -520, 3900, -470, 3650, -530, 3400, -480, 3150, -550, 2900, -500, 2650, -600, 2400, -700, 2300)
 
 [node name="LightOccluders" type="Node2D" parent="."]
 
@@ -130,6 +139,9 @@ z_index = 2
 
 [node name="Forge" parent="InteractiveObjects" instance=ExtResource("4_forge")]
 position = Vector2(6, -588)
+
+[node name="Blacksmith" parent="InteractiveObjects" instance=ExtResource("14_blacksmith")]
+position = Vector2(120, -520)
 
 [node name="Anvil" type="Sprite2D" parent="InteractiveObjects"]
 modulate = Color(0.55, 0.5, 0.55, 1)

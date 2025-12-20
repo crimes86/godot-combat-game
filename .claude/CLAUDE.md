@@ -124,7 +124,7 @@ assets/
 │   └── forged/                 # Forged item icons (from Mantle achievements)
 │
 ├── environment/                # World objects, terrain, props
-│   └── wasteland/              # Zone 1 environment assets
+│   └── dreadland/              # Zone 1 environment assets
 │
 ├── icons/                      # UI icons for items, abilities
 │   └── forged/                 # Forge system icons

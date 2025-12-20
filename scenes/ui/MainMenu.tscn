@@ -4,27 +4,31 @@
 [ext_resource type="AudioStream" path="res://assets/audio/music/mainmenu.ogg" id="2_music"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.12, 0.12, 0.14, 0.95)
+bg_color = Color(0.055, 0.045, 0.04, 0.97)
 border_width_left = 3
 border_width_top = 3
 border_width_right = 3
 border_width_bottom = 3
-border_color = Color(0.35, 0.38, 0.42, 1)
+border_color = Color(0.55, 0.08, 0.05, 0.85)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
-shadow_size = 12
-shadow_color = Color(0, 0, 0, 0.8)
-shadow_offset = Vector2(0, 6)
+shadow_size = 14
+shadow_color = Color(0.45, 0.06, 0.04, 0.35)
+shadow_offset = Vector2(0, 4)
+expand_margin_left = 2.0
+expand_margin_top = 2.0
+expand_margin_right = 2.0
+expand_margin_bottom = 2.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_input"]
-bg_color = Color(0.08, 0.08, 0.10, 0.9)
+bg_color = Color(0.04, 0.03, 0.03, 0.95)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.06, 0.06, 0.08, 1)
+border_color = Color(0.35, 0.04, 0.03, 0.8)
 corner_radius_top_left = 4
 corner_radius_top_right = 4
 corner_radius_bottom_right = 4
@@ -38,7 +42,7 @@ script = ExtResource("1_menu")
 [node name="Background" type="ColorRect" parent="."]
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0.06, 0.06, 0.08, 1)
+color = Color(0.025, 0.02, 0.018, 1)
 
 [node name="ThemeMusic" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("2_music")
@@ -71,7 +75,7 @@ layout_mode = 2
 [node name="NameLabel" type="Label" parent="MenuPanel/VBoxContainer/NameContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(80, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
 theme_override_font_sizes/font_size = 16
 text = "Name:"
 vertical_alignment = 1
@@ -79,9 +83,9 @@ vertical_alignment = 1
 [node name="NameInput" type="LineEdit" parent="MenuPanel/VBoxContainer/NameContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
-theme_override_colors/font_placeholder_color = Color(0.4, 0.4, 0.45, 1)
-theme_override_colors/caret_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_colors/font_placeholder_color = Color(0.45, 0.40, 0.35, 1)
+theme_override_colors/caret_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 theme_override_styles/normal = SubResource("StyleBoxFlat_input")
 text = "Player"
@@ -95,10 +99,10 @@ theme_override_constants/separation = 12
 [node name="HostButton" type="Button" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 55)
-theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
-theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.75, 0.78, 0.82, 1)
-theme_override_colors/font_focus_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
+theme_override_colors/font_focus_color = Color(0.95, 0.90, 0.82, 1)
 theme_override_font_sizes/font_size = 22
 theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
@@ -109,10 +113,10 @@ text = "HOST GAME"
 [node name="JoinButton" type="Button" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 55)
-theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
-theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.75, 0.78, 0.82, 1)
-theme_override_colors/font_focus_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
+theme_override_colors/font_focus_color = Color(0.95, 0.90, 0.82, 1)
 theme_override_font_sizes/font_size = 22
 theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
@@ -127,7 +131,7 @@ layout_mode = 2
 [node name="IPLabel" type="Label" parent="MenuPanel/VBoxContainer/JoinContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(80, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
 theme_override_font_sizes/font_size = 16
 text = "IP:"
 vertical_alignment = 1
@@ -135,9 +139,9 @@ vertical_alignment = 1
 [node name="IPInput" type="LineEdit" parent="MenuPanel/VBoxContainer/JoinContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
-theme_override_colors/font_placeholder_color = Color(0.4, 0.4, 0.45, 1)
-theme_override_colors/caret_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_colors/font_placeholder_color = Color(0.45, 0.40, 0.35, 1)
+theme_override_colors/caret_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 theme_override_styles/normal = SubResource("StyleBoxFlat_input")
 text = "127.0.0.1"
@@ -145,7 +149,7 @@ placeholder_text = "Enter server IP"
 
 [node name="StatusLabel" type="Label" parent="MenuPanel/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.45, 1)
 theme_override_font_sizes/font_size = 14
 text = ""
 horizontal_alignment = 1
@@ -166,27 +170,27 @@ alignment = 1
 [node name="SettingsButton" type="Button" parent="BottomButtons"]
 layout_mode = 2
 custom_minimum_size = Vector2(110, 36)
-theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
-theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
-theme_override_colors/font_pressed_color = Color(0.45, 0.48, 0.52, 1)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.45, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
 theme_override_font_sizes/font_size = 14
 text = "Settings"
 
 [node name="CreditsButton" type="Button" parent="BottomButtons"]
 layout_mode = 2
 custom_minimum_size = Vector2(110, 36)
-theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
-theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
-theme_override_colors/font_pressed_color = Color(0.45, 0.48, 0.52, 1)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.45, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
 theme_override_font_sizes/font_size = 14
 text = "Credits"
 
 [node name="ExitButton" type="Button" parent="BottomButtons"]
 layout_mode = 2
 custom_minimum_size = Vector2(110, 36)
-theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
-theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
-theme_override_colors/font_pressed_color = Color(0.45, 0.48, 0.52, 1)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.45, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
 theme_override_font_sizes/font_size = 14
 text = "Exit"
 
@@ -198,7 +202,7 @@ anchor_bottom = 0.88
 offset_left = -350.0
 offset_right = 350.0
 offset_bottom = 70.0
-theme_override_colors/font_color = Color(0.45, 0.48, 0.52, 1)
+theme_override_colors/font_color = Color(0.45, 0.40, 0.35, 1)
 theme_override_font_sizes/font_size = 13
 text = "Press C for Character Sheet • Press I for Inventory"
 horizontal_alignment = 1
@@ -212,7 +216,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -120.0
 offset_top = -30.0
-theme_override_colors/font_color = Color(0.35, 0.38, 0.42, 1)
+theme_override_colors/font_color = Color(0.38, 0.32, 0.28, 1)
 theme_override_font_sizes/font_size = 12
 text = "v0.3 Auth"
 horizontal_alignment = 2
@@ -240,7 +244,7 @@ theme_override_constants/separation = 10
 
 [node name="TitleLabel" type="Label" parent="AuthPanel/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 24
 text = "Authentication"
 horizontal_alignment = 1
@@ -255,7 +259,7 @@ layout_mode = 2
 [node name="UsernameLabel" type="Label" parent="AuthPanel/VBoxContainer/UsernameContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
 theme_override_font_sizes/font_size = 16
 text = "Username:"
 vertical_alignment = 1
@@ -263,9 +267,9 @@ vertical_alignment = 1
 [node name="UsernameInput" type="LineEdit" parent="AuthPanel/VBoxContainer/UsernameContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
-theme_override_colors/font_placeholder_color = Color(0.4, 0.4, 0.45, 1)
-theme_override_colors/caret_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_colors/font_placeholder_color = Color(0.45, 0.40, 0.35, 1)
+theme_override_colors/caret_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 theme_override_styles/normal = SubResource("StyleBoxFlat_input")
 placeholder_text = "3-16 characters"
@@ -277,7 +281,7 @@ layout_mode = 2
 [node name="PasswordLabel" type="Label" parent="AuthPanel/VBoxContainer/PasswordContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(90, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
 theme_override_font_sizes/font_size = 16
 text = "Password:"
 vertical_alignment = 1
@@ -285,9 +289,9 @@ vertical_alignment = 1
 [node name="PasswordInput" type="LineEdit" parent="AuthPanel/VBoxContainer/PasswordContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
-theme_override_colors/font_placeholder_color = Color(0.4, 0.4, 0.45, 1)
-theme_override_colors/caret_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_colors/font_placeholder_color = Color(0.45, 0.40, 0.35, 1)
+theme_override_colors/caret_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 theme_override_styles/normal = SubResource("StyleBoxFlat_input")
 placeholder_text = "4+ characters"
@@ -301,10 +305,10 @@ theme_override_constants/separation = 6
 [node name="LoginButton" type="Button" parent="AuthPanel/VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 40)
-theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
-theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.75, 0.78, 0.82, 1)
-theme_override_colors/font_focus_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
+theme_override_colors/font_focus_color = Color(0.95, 0.90, 0.82, 1)
 theme_override_font_sizes/font_size = 18
 theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
@@ -315,10 +319,10 @@ text = "LOGIN"
 [node name="RegisterButton" type="Button" parent="AuthPanel/VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 40)
-theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
-theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.75, 0.78, 0.82, 1)
-theme_override_colors/font_focus_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
+theme_override_colors/font_focus_color = Color(0.95, 0.90, 0.82, 1)
 theme_override_font_sizes/font_size = 18
 theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
@@ -329,10 +333,10 @@ text = "REGISTER"
 [node name="GuestButton" type="Button" parent="AuthPanel/VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 40)
-theme_override_colors/font_color = Color(0.7, 0.75, 0.7, 1)
-theme_override_colors/font_hover_color = Color(0.85, 0.9, 0.85, 1)
-theme_override_colors/font_pressed_color = Color(0.6, 0.65, 0.6, 1)
-theme_override_colors/font_focus_color = Color(0.7, 0.75, 0.7, 1)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.45, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
+theme_override_colors/font_focus_color = Color(0.55, 0.50, 0.45, 1)
 theme_override_font_sizes/font_size = 16
 theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
@@ -343,7 +347,7 @@ text = "PLAY AS GUEST"
 [node name="AuthStatusLabel" type="Label" parent="AuthPanel/VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 20)
-theme_override_colors/font_color = Color(1, 0.6, 0.5, 1)
+theme_override_colors/font_color = Color(0.85, 0.35, 0.25, 1)
 theme_override_font_sizes/font_size = 12
 text = ""
 horizontal_alignment = 1
@@ -352,10 +356,10 @@ autowrap_mode = 2
 [node name="BackButton" type="Button" parent="AuthPanel/VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 32)
-theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
-theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
-theme_override_colors/font_pressed_color = Color(0.45, 0.48, 0.52, 1)
-theme_override_colors/font_focus_color = Color(0.55, 0.58, 0.62, 1)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.45, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
+theme_override_colors/font_focus_color = Color(0.55, 0.50, 0.45, 1)
 theme_override_font_sizes/font_size = 13
 theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
@@ -386,7 +390,7 @@ theme_override_constants/separation = 15
 
 [node name="TitleLabel" type="Label" parent="SettingsPanel/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 24
 text = "Settings"
 horizontal_alignment = 1
@@ -401,7 +405,7 @@ layout_mode = 2
 [node name="MasterVolumeLabel" type="Label" parent="SettingsPanel/VBoxContainer/MasterVolumeContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(130, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
 theme_override_font_sizes/font_size = 16
 text = "Master Volume:"
 vertical_alignment = 1
@@ -416,7 +420,7 @@ value = 80.0
 [node name="MasterVolumeValue" type="Label" parent="SettingsPanel/VBoxContainer/MasterVolumeContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(40, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 14
 text = "80%"
 horizontal_alignment = 2
@@ -428,7 +432,7 @@ layout_mode = 2
 [node name="MusicVolumeLabel" type="Label" parent="SettingsPanel/VBoxContainer/MusicVolumeContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(130, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
 theme_override_font_sizes/font_size = 16
 text = "Music Volume:"
 vertical_alignment = 1
@@ -443,7 +447,7 @@ value = 70.0
 [node name="MusicVolumeValue" type="Label" parent="SettingsPanel/VBoxContainer/MusicVolumeContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(40, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 14
 text = "70%"
 horizontal_alignment = 2
@@ -455,7 +459,7 @@ layout_mode = 2
 [node name="SFXVolumeLabel" type="Label" parent="SettingsPanel/VBoxContainer/SFXVolumeContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(130, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
 theme_override_font_sizes/font_size = 16
 text = "SFX Volume:"
 vertical_alignment = 1
@@ -470,7 +474,7 @@ value = 80.0
 [node name="SFXVolumeValue" type="Label" parent="SettingsPanel/VBoxContainer/SFXVolumeContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(40, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 14
 text = "80%"
 horizontal_alignment = 2
@@ -486,7 +490,7 @@ layout_mode = 2
 [node name="FullscreenLabel" type="Label" parent="SettingsPanel/VBoxContainer/FullscreenContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(130, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
 theme_override_font_sizes/font_size = 16
 text = "Fullscreen:"
 vertical_alignment = 1
@@ -500,7 +504,7 @@ layout_mode = 2
 [node name="VSyncLabel" type="Label" parent="SettingsPanel/VBoxContainer/VSyncContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(130, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
 theme_override_font_sizes/font_size = 16
 text = "VSync:"
 vertical_alignment = 1
@@ -515,7 +519,7 @@ layout_mode = 2
 [node name="ResolutionLabel" type="Label" parent="SettingsPanel/VBoxContainer/ResolutionContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(130, 0)
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
 theme_override_font_sizes/font_size = 16
 text = "Resolution:"
 vertical_alignment = 1
@@ -523,7 +527,7 @@ vertical_alignment = 1
 [node name="ResolutionOption" type="OptionButton" parent="SettingsPanel/VBoxContainer/ResolutionContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.92, 0.92, 0.94, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
 theme_override_font_sizes/font_size = 14
 
 [node name="Spacer" type="Control" parent="SettingsPanel/VBoxContainer"]
@@ -533,8 +537,8 @@ size_flags_vertical = 3
 [node name="SettingsBackButton" type="Button" parent="SettingsPanel/VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 40)
-theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
-theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.45, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 14
 theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
@@ -563,7 +567,7 @@ theme_override_constants/separation = 10
 
 [node name="TitleLabel" type="Label" parent="CreditsPanel/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 24
 text = "Credits"
 horizontal_alignment = 1
@@ -609,8 +613,8 @@ fit_content = true
 [node name="CreditsBackButton" type="Button" parent="CreditsPanel/VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 40)
-theme_override_colors/font_color = Color(0.55, 0.58, 0.62, 1)
-theme_override_colors/font_hover_color = Color(0.75, 0.78, 0.82, 1)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.45, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
 theme_override_font_sizes/font_size = 14
 theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")

@@ -1,0 +1,26 @@
+[gd_scene load_steps=3 format=3 uid="uid://wanderer_npc_001"]
+
+[ext_resource type="Script" path="res://scripts/systems/Vendor.gd" id="1_vendor"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_interact"]
+radius = 80.0
+
+[node name="Wanderer" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+monitoring = true
+monitorable = false
+script = ExtResource("1_vendor")
+vendor_name = "Wanderer"
+greeting_text = "Another survivor. Good. The fire needs tending."
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_interact")
+
+[node name="Label" type="Label" parent="."]
+offset_left = -40.0
+offset_top = -45.0
+offset_right = 40.0
+offset_bottom = -25.0
+text = "Wanderer"
+horizontal_alignment = 1

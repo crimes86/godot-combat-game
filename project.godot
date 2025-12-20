@@ -13,7 +13,7 @@ config_version=5
 config/name="Dreadland"
 run/main_scene="res://scenes/ui/MainMenu.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
-config/icon="res://icon.svg"
+config/icon="res://assets/branding/ashbane-icon-256.png"
 
 [autoload]
 
@@ -33,6 +33,7 @@ NetworkManager="*res://scripts/networking/NetworkManager.gd"
 NetworkEnemyManager="*res://scripts/networking/NetworkEnemyManager.gd"
 CursorManager="*res://scripts/systems/CursorManager.gd"
 TimeManager="*res://scripts/systems/TimeManager.gd"
+VFXLayer="*res://scripts/systems/VFXLayer.gd"
 ItemIconGenerator="*res://scripts/systems/ItemIconGenerator.gd"
 GroupManager="*res://scripts/systems/GroupManager.gd"
 GroupUI="*res://scripts/ui/GroupUI.gd"
@@ -43,8 +44,8 @@ BugReportUI="*res://scripts/ui/BugReportUI.gd"
 DuelManager="*res://scripts/systems/DuelManager.gd"
 MobileInput="*res://scripts/mobile/MobileInput.gd"
 GameInput="*res://scripts/systems/GameInput.gd"
-MantleAuth="*res://scripts/systems/MantleAuth.gd"
-MantleCosmetics="*res://scripts/systems/MantleCosmetics.gd"
+AshbaneAuth="*res://scripts/systems/AshbaneAuth.gd"
+AshbaneCosmetics="*res://scripts/systems/AshbaneCosmetics.gd"
 ForgeItemDB="*res://scripts/systems/ForgeItemDB.gd"
 ForgeItemManager="*res://scripts/systems/ForgeItemManager.gd"
 ForgeVisualEffects="*res://scripts/systems/ForgeVisualEffects.gd"
@@ -57,6 +58,11 @@ ItemInspectionUI="*res://scripts/ui/ItemInspectionUI.gd"
 WeaponStatsTracker="*res://scripts/systems/WeaponStatsTracker.gd"
 WeaponSkillManager="*res://scripts/systems/WeaponSkillManager.gd"
 GlobalDebugOverlay="*res://scripts/debug/GlobalDebugOverlay.gd"
+PlayerInteractionMenu="*res://scripts/ui/PlayerInteractionMenu.gd"
+PlayerInspectUI="*res://scripts/ui/PlayerInspectUI.gd"
+PlayerInteractionController="*res://scripts/systems/PlayerInteractionController.gd"
+Minimap="*res://scripts/ui/Minimap.gd"
+CombatJuice="*res://scripts/systems/CombatJuice.gd"
 
 [display]
 

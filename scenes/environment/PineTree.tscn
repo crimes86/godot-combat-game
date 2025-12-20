@@ -1,7 +1,7 @@
 [gd_scene load_steps=6 format=3 uid="uid://t3g1t02ciin7"]
 
 [ext_resource type="Script" uid="uid://1v1r2eslj6am" path="res://scripts/environment/HarvestableTree.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://bk27hfdpko6u6" path="res://assets/environment/wasteland/pine_tree.png" id="2_texture"]
+[ext_resource type="Texture2D" uid="uid://bk27hfdpko6u6" path="res://assets/environment/dreadland/pine_tree.png" id="2_texture"]
 
 [sub_resource type="Shader" id="Shader_shadow"]
 code = "shader_type canvas_item;

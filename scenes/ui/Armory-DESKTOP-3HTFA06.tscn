@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://b0bw54srgqkmi"]
+[gd_scene load_steps=2 format=3 uid="uid://b6anfk670rwgo"]
 
 [ext_resource type="Script" uid="uid://dl4gc055mcrs7" path="res://scripts/ui/Armory.gd" id="1_armory"]
 
@@ -10,4 +10,3 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_armory")
-is_server_host = true

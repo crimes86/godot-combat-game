@@ -12,7 +12,7 @@ The addon expects:
 import shutil
 from pathlib import Path
 
-ASSETS = Path(r"C:\Users\kevin\OneDrive\fantom\mmo\wasteland\assets")
+ASSETS = Path(r"C:\Users\kevin\OneDrive\fantom\mmo\dreadland\assets")
 CHARACTERS = ASSETS / "characters"
 
 # Create organized structure for body types

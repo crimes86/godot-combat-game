@@ -1,241 +1,242 @@
 {
 	"quests": [
 		{
-			"id": "fuel_the_flame",
-			"name": "Fuel the Flame",
-			"description": "The campfire needs fuel. Collect Bone Embers from skeleton corpses scattered around the wasteland.",
+			"id": "survival_101",
+			"name": "Survival 101",
+			"description": "The dreadland teaches harsh lessons. Show the Wanderer you can handle yourself.",
 			"tier": 1,
 			"level_req": 1,
-			"giver": "blacksmith",
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "kill", "target": "skeleton", "count": 5, "desc": "Kill skeletons"}
+			],
+			"xp_reward": 50,
+			"gold_reward": 15,
+			"prereq": null
+		},
+		{
+			"id": "kindle_the_flame",
+			"name": "Kindle the Flame",
+			"description": "The campfire needs fuel. Collect Bone Embers from skeleton corpses.",
+			"tier": 1,
+			"level_req": 1,
+			"giver": "wanderer",
 			"objectives": [
 				{"type": "collect", "target": "Bone Ember", "count": 5, "desc": "Collect Bone Embers"}
 			],
-			"xp_reward": 150,
-			"gold_reward": 25,
+			"xp_reward": 50,
+			"gold_reward": 15,
 			"prereq": null
 		},
 		{
-			"id": "first_blood",
-			"name": "First Blood",
-			"description": "The wasteland is crawling with skeletons. Put a few back in the ground where they belong.",
-			"tier": 1,
-			"level_req": 1,
-			"giver": "blacksmith",
-			"objectives": [
-				{"type": "kill", "target": "skeleton", "count": 3, "desc": "Kill skeletons"}
-			],
-			"xp_reward": 200,
-			"gold_reward": 30,
-			"prereq": null
-		},
-		{
-			"id": "warming_glow",
-			"name": "Warming Glow",
-			"description": "Keep the campfire burning strong. Add fuel to stoke the flames and earn its protective warmth.",
+			"id": "warmth_of_hope",
+			"name": "Warmth of Hope",
+			"description": "Keep the campfire burning strong. Add fuel to stoke the flames.",
 			"tier": 1,
 			"level_req": 2,
-			"giver": "blacksmith",
+			"giver": "wanderer",
 			"objectives": [
-				{"type": "fuel_campfire", "target": "", "count": 10, "desc": "Add fuel to campfire"}
+				{"type": "fuel_campfire", "target": "", "count": 5, "desc": "Add fuel to campfire"}
 			],
-			"xp_reward": 250,
-			"gold_reward": 35,
-			"prereq": "fuel_the_flame"
+			"xp_reward": 75,
+			"gold_reward": 20,
+			"prereq": "kindle_the_flame"
 		},
 		{
-			"id": "bone_collector",
-			"name": "Bone Collector",
-			"description": "Bone Embers are valuable fuel. Gather a larger stockpile to keep the fires burning through the long nights.",
-			"tier": 1,
-			"level_req": 2,
-			"giver": "blacksmith",
-			"objectives": [
-				{"type": "collect", "target": "Bone Ember", "count": 10, "desc": "Collect Bone Embers"}
-			],
-			"xp_reward": 300,
-			"gold_reward": 40,
-			"prereq": "fuel_the_flame"
-		},
-		{
-			"id": "skeleton_slayer",
-			"name": "Skeleton Slayer",
-			"description": "Prove your worth as a warrior. The undead hordes won't clear themselves.",
-			"tier": 1,
-			"level_req": 3,
-			"giver": "blacksmith",
-			"objectives": [
-				{"type": "kill", "target": "skeleton", "count": 10, "desc": "Kill skeletons"}
-			],
-			"xp_reward": 400,
-			"gold_reward": 50,
-			"prereq": "first_blood",
-			"item_reward": {
-				"choice": true,
-				"slot": "chest",
-				"options": [
-					{"id": "copper_plate_cuirass", "name": "Copper Plate Cuirass", "armor_type": "plate"},
-					{"id": "rawhide_vest", "name": "Rawhide Vest", "armor_type": "leather"},
-					{"id": "linen_robe", "name": "Linen Robe", "armor_type": "cloth"}
-				]
-			}
-		},
-		{
-			"id": "the_burning_wastes",
-			"name": "The Burning Wastes",
-			"description": "Venture beyond the safety of the campfire. Seek out the lava pools that dot the wasteland - but mind your step.",
+			"id": "proving_ground",
+			"name": "Proving Ground",
+			"description": "The undead hordes are endless. Prove your worth by destroying more.",
 			"tier": 2,
+			"level_req": 3,
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "kill", "target": "skeleton", "count": 15, "desc": "Kill skeletons"}
+			],
+			"xp_reward": 100,
+			"gold_reward": 30,
+			"prereq": "survival_101"
+		},
+		{
+			"id": "the_pack_hunts",
+			"name": "The Pack Hunts",
+			"description": "Cursed wolves hunt in packs. Cull their numbers before they strike the camp.",
+			"tier": 2,
+			"level_req": 3,
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "kill", "target": "wolf", "count": 5, "desc": "Kill wolves"}
+			],
+			"xp_reward": 100,
+			"gold_reward": 30,
+			"prereq": "survival_101"
+		},
+		{
+			"id": "scavengers_fortune",
+			"name": "Scavenger's Fortune",
+			"description": "A true survivor never passes up useful materials. Stockpile Bone Embers.",
+			"tier": 2,
+			"level_req": 3,
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "collect", "target": "Bone Ember", "count": 15, "desc": "Collect Bone Embers"}
+			],
+			"xp_reward": 100,
+			"gold_reward": 25,
+			"prereq": "kindle_the_flame"
+		},
+		{
+			"id": "fire_and_ash",
+			"name": "Fire and Ash",
+			"description": "Venture beyond the campfire. Seek out the lava pools that dot the dreadland.",
+			"tier": 3,
 			"level_req": 4,
-			"giver": "blacksmith",
+			"giver": "wanderer",
 			"objectives": [
 				{"type": "explore", "target": "lava_pool", "count": 1, "desc": "Discover a lava pool"}
 			],
-			"xp_reward": 450,
-			"gold_reward": 60,
-			"prereq": "skeleton_slayer"
+			"xp_reward": 125,
+			"gold_reward": 40,
+			"prereq": "proving_ground"
 		},
 		{
 			"id": "veteran_hunter",
 			"name": "Veteran Hunter",
-			"description": "The skeletons grow stronger the further you venture from the campfire. Hunt the more powerful ones.",
-			"tier": 2,
-			"level_req": 4,
-			"giver": "blacksmith",
-			"objectives": [
-				{"type": "kill", "target": "skeleton", "count": 10, "min_level": 4, "desc": "Kill level 4+ skeletons"}
-			],
-			"xp_reward": 500,
-			"gold_reward": 70,
-			"prereq": "skeleton_slayer",
-			"item_reward": {
-				"choice": true,
-				"slot": "legs",
-				"options": [
-					{"id": "copper_plate_greaves", "name": "Copper Plate Greaves", "armor_type": "plate"},
-					{"id": "rawhide_leggings", "name": "Rawhide Leggings", "armor_type": "leather"},
-					{"id": "linen_trousers", "name": "Linen Trousers", "armor_type": "cloth"}
-				]
-			}
-		},
-		{
-			"id": "skull_seeker",
-			"name": "Skull Seeker",
-			"description": "Ancient Skulls hold power from ages past. Find them among the remains of fallen champions.",
-			"tier": 2,
-			"level_req": 5,
-			"giver": "blacksmith",
-			"objectives": [
-				{"type": "collect", "target": "Ancient Skull", "count": 3, "desc": "Collect Ancient Skulls"}
-			],
-			"xp_reward": 600,
-			"gold_reward": 80,
-			"prereq": "the_burning_wastes"
-		},
-		{
-			"id": "wasteland_scavenger",
-			"name": "Wasteland Scavenger",
-			"description": "A true survivor never passes up useful materials. Amass a fortune in Bone Embers.",
-			"tier": 2,
-			"level_req": 5,
-			"giver": "blacksmith",
-			"objectives": [
-				{"type": "collect", "target": "Bone Ember", "count": 25, "desc": "Collect Bone Embers"}
-			],
-			"xp_reward": 550,
-			"gold_reward": 75,
-			"prereq": "bone_collector"
-		},
-		{
-			"id": "fire_keeper",
-			"name": "Fire Keeper",
-			"description": "The campfire is our sanctuary. Keep it blazing bright to ward off the darkness.",
-			"tier": 2,
-			"level_req": 6,
-			"giver": "blacksmith",
-			"objectives": [
-				{"type": "fuel_campfire", "target": "", "count": 30, "desc": "Add fuel to campfire"}
-			],
-			"xp_reward": 700,
-			"gold_reward": 90,
-			"prereq": "warming_glow"
-		},
-		{
-			"id": "ancient_ruins",
-			"name": "Ancient Ruins",
-			"description": "Rumors speak of ancient ruins at the edge of the wasteland. Find them, if you dare.",
+			"description": "The skeletons grow stronger further from camp. Hunt the veterans.",
 			"tier": 3,
-			"level_req": 7,
-			"giver": "blacksmith",
+			"level_req": 5,
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "kill", "target": "skeleton", "count": 10, "min_level": 5, "desc": "Kill level 5+ skeletons"}
+			],
+			"xp_reward": 150,
+			"gold_reward": 50,
+			"prereq": "proving_ground"
+		},
+		{
+			"id": "rumors_of_ruins",
+			"name": "Rumors of Ruins",
+			"description": "Ancient ruins lie at the edge of the dreadland. Find them.",
+			"tier": 4,
+			"level_req": 5,
+			"giver": "wanderer",
 			"objectives": [
 				{"type": "explore", "target": "ruins", "count": 1, "desc": "Discover the ancient ruins"}
 			],
-			"xp_reward": 800,
-			"gold_reward": 100,
-			"prereq": "the_burning_wastes"
+			"xp_reward": 150,
+			"gold_reward": 50,
+			"prereq": "fire_and_ash"
 		},
 		{
-			"id": "guardian_slayer",
-			"name": "Guardian Slayer",
-			"description": "The ruins are protected by powerful guardians - elite skeletons bound to defend their domain. Destroy them.",
-			"tier": 3,
+			"id": "guardian_encounter",
+			"name": "Guardian Encounter",
+			"description": "The ruins are protected by guardian skeletons - the Lich's elite. Test yourself.",
+			"tier": 4,
+			"level_req": 6,
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "kill", "target": "skeleton", "count": 3, "is_guardian": true, "desc": "Kill guardian skeletons"}
+			],
+			"xp_reward": 175,
+			"gold_reward": 60,
+			"prereq": "rumors_of_ruins"
+		},
+		{
+			"id": "seek_the_hub",
+			"name": "Seek the Trading Hub",
+			"description": "A tunnel at the northern edge leads to the Trading Hub. Find it.",
+			"tier": 5,
 			"level_req": 7,
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "explore", "target": "tunnel_entrance", "count": 1, "desc": "Find the tunnel entrance"}
+			],
+			"xp_reward": 175,
+			"gold_reward": 60,
+			"prereq": "veteran_hunter"
+		},
+		{
+			"id": "elrics_letter",
+			"name": "Elric's Letter",
+			"description": "Deliver the Wanderer's letter to the Blacksmith in the Trading Hub.",
+			"tier": 5,
+			"level_req": 7,
+			"giver": "wanderer",
+			"objectives": [
+				{"type": "speak_to_npc", "target": "blacksmith", "count": 1, "desc": "Speak to the Blacksmith"}
+			],
+			"xp_reward": 0,
+			"gold_reward": 100,
+			"prereq": "seek_the_hub"
+		},
+		{
+			"id": "forge_materials",
+			"name": "Forge Materials",
+			"description": "The Blacksmith needs quality materials. Find Iron Ore in the dreadland.",
+			"tier": 6,
+			"level_req": 8,
 			"giver": "blacksmith",
 			"objectives": [
-				{"type": "kill", "target": "skeleton", "count": 5, "is_guardian": true, "desc": "Kill guardian skeletons"}
+				{"type": "collect", "target": "Iron Ore", "count": 5, "desc": "Collect Iron Ore"}
 			],
-			"xp_reward": 1000,
-			"gold_reward": 120,
-			"prereq": "ancient_ruins",
-			"item_reward": {
-				"choice": true,
-				"slot": "head",
-				"options": [
-					{"id": "copper_plate_helm", "name": "Copper Plate Helm", "armor_type": "plate"},
-					{"id": "rawhide_hood", "name": "Rawhide Hood", "armor_type": "leather"},
-					{"id": "linen_hood", "name": "Linen Hood", "armor_type": "cloth"}
-				]
-			}
+			"xp_reward": 125,
+			"gold_reward": 50,
+			"prereq": "elrics_letter"
 		},
 		{
-			"id": "claim_the_ruins",
-			"name": "Claim the Ruins",
-			"description": "The ruins contain an ancient hearth. Convert it to a new campfire to expand our territory.",
-			"tier": 3,
+			"id": "reclaim_the_ruins",
+			"name": "Reclaim the Ruins",
+			"description": "The ruins have an ancient hearth. Convert it to a campfire for survivors.",
+			"tier": 6,
 			"level_req": 8,
 			"giver": "blacksmith",
 			"objectives": [
 				{"type": "convert_ruins", "target": "", "count": 1, "desc": "Convert ruins to campfire"}
 			],
-			"xp_reward": 1200,
-			"gold_reward": 150,
-			"prereq": "guardian_slayer"
+			"xp_reward": 175,
+			"gold_reward": 75,
+			"prereq": "elrics_letter"
 		},
 		{
 			"id": "guardians_bane",
 			"name": "Guardian's Bane",
-			"description": "Become the terror of the ruins. No guardian shall stand before you.",
-			"tier": 3,
+			"description": "Become the terror of the ruins. Break the guardian defense.",
+			"tier": 7,
 			"level_req": 9,
 			"giver": "blacksmith",
 			"objectives": [
-				{"type": "kill", "target": "skeleton", "count": 15, "is_guardian": true, "desc": "Kill guardian skeletons"}
+				{"type": "kill", "target": "skeleton", "count": 10, "is_guardian": true, "desc": "Kill guardian skeletons"}
 			],
-			"xp_reward": 1500,
-			"gold_reward": 200,
-			"prereq": "guardian_slayer"
+			"xp_reward": 200,
+			"gold_reward": 100,
+			"prereq": "forge_materials"
 		},
 		{
-			"id": "lichs_secret",
-			"name": "Lich's Secret",
-			"description": "Legend tells of a Lich who once ruled these lands. Find the Lich's Finger Bone - a rare artifact of immense power.",
-			"tier": 3,
-			"level_req": 10,
+			"id": "ancient_secret",
+			"name": "Ancient Secret",
+			"description": "The Lich's Finger Bone holds secrets. The guardians protect it. Take it.",
+			"tier": 7,
+			"level_req": 9,
 			"giver": "blacksmith",
 			"objectives": [
 				{"type": "collect", "target": "Lich's Finger Bone", "count": 1, "desc": "Find the Lich's Finger Bone"}
 			],
-			"xp_reward": 2000,
-			"gold_reward": 300,
+			"xp_reward": 250,
+			"gold_reward": 150,
 			"prereq": "guardians_bane"
+		},
+		{
+			"id": "into_darkness",
+			"name": "Into the Darkness",
+			"description": "You are ready. Enter the Cursed Lands through the north passage.",
+			"tier": 8,
+			"level_req": 10,
+			"giver": "blacksmith",
+			"objectives": [
+				{"type": "enter_zone", "target": "zone2", "count": 1, "desc": "Enter the Cursed Lands"}
+			],
+			"xp_reward": 0,
+			"gold_reward": 200,
+			"prereq": "ancient_secret"
 		}
 	]
 }

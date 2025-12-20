@@ -59,7 +59,7 @@ def process_file(input_path):
 def main():
     print("🔧 Fixing footstep audio pops...\n")
 
-    base_path = r"C:\Users\kevin\OneDrive\fantom\mmo\wasteland\assets\sounds\footsteps"
+    base_path = r"C:\Users\kevin\OneDrive\fantom\mmo\dreadland\assets\sounds\footsteps"
 
     files = [
         "player_step_1.wav",

@@ -1,6 +1,6 @@
 {
-	"zone": "Zone 1: The Wasteland",
-	"theme": "Scavenged leather and bone armor from the wasteland",
+	"zone": "Zone 1: The dreadland",
+	"theme": "Scavenged leather and bone armor from the dreadland",
 	"_design_notes": "Three discipline sets for Zone 1 (Tier 1): Copper Plate (Tank), Rawhide Leather (DPS), Linen Cloth (Caster). See NATIVE_ITEMIZATION.md for stat philosophy.",
 	"armor_sets": {
 		"copper_plate": {
@@ -237,8 +237,8 @@
 			"stackable": false
 		},
 		{
-			"id": "wasteland_helm",
-			"name": "Wasteland Helm",
+			"id": "dreadland_helm",
+			"name": "dreadland Helm",
 			"description": "A makeshift helmet fashioned from scavenged metal and leather. Generic protection.",
 			"slot": "head",
 			"set": null,
@@ -252,8 +252,8 @@
 			"notes": "Legacy generic armor - no discipline focus"
 		},
 		{
-			"id": "wasteland_chest",
-			"name": "Wasteland Chestguard",
+			"id": "dreadland_chest",
+			"name": "dreadland Chestguard",
 			"description": "Reinforced leather armor scavenged from the ruins. Offers decent protection.",
 			"slot": "chest",
 			"set": null,
@@ -267,8 +267,8 @@
 			"notes": "Legacy generic armor - no discipline focus"
 		},
 		{
-			"id": "wasteland_armguards",
-			"name": "Wasteland Armguards",
+			"id": "dreadland_armguards",
+			"name": "dreadland Armguards",
 			"description": "Tough leather armguards with bone reinforcements.",
 			"slot": "arms",
 			"set": null,
@@ -282,8 +282,8 @@
 			"notes": "Legacy generic armor - no discipline focus"
 		},
 		{
-			"id": "wasteland_greaves",
-			"name": "Wasteland Greaves",
+			"id": "dreadland_greaves",
+			"name": "dreadland Greaves",
 			"description": "Sturdy leg guards made from scavenged materials.",
 			"slot": "legs",
 			"set": null,
@@ -297,9 +297,9 @@
 			"notes": "Legacy generic armor - no discipline focus"
 		},
 		{
-			"id": "wasteland_boots",
-			"name": "Wasteland Boots",
-			"description": "Worn but reliable boots for wasteland survival.",
+			"id": "dreadland_boots",
+			"name": "dreadland Boots",
+			"description": "Worn but reliable boots for dreadland survival.",
 			"slot": "feet",
 			"set": null,
 			"defense": 6,

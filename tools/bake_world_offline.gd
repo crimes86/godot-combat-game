@@ -3,19 +3,19 @@
 extends Node2D
 
 const PROP_TEXTURES = {
-	"dead_tree_1": "res://assets/environment/wasteland/dead_tree_1.png",
-	"dead_tree_2": "res://assets/environment/wasteland/dead_tree_2.png",
-	"dead_tree_3": "res://assets/environment/wasteland/dead_tree_3.png",
+	"dead_tree_1": "res://assets/environment/dreadland/dead_tree_1.png",
+	"dead_tree_2": "res://assets/environment/dreadland/dead_tree_2.png",
+	"dead_tree_3": "res://assets/environment/dreadland/dead_tree_3.png",
 	# Zone-based rock textures (zone1 used for baking)
-	"rock_large": "res://assets/environment/wasteland/rocks/zone1/rock_large_1.png",
-	"rock_medium": "res://assets/environment/wasteland/rocks/zone1/rock_medium_1.png",
-	"rock_small": "res://assets/environment/wasteland/rocks/zone1/rock_small_1.png",
-	"skull": "res://assets/environment/wasteland/skull.png",
-	"bones": "res://assets/environment/wasteland/bones.png",
-	"ground_crack_1": "res://assets/environment/wasteland/ground_crack_1.png",
-	"ground_crack_2": "res://assets/environment/wasteland/ground_crack_2.png",
-	"broken_sword": "res://assets/environment/wasteland/broken_sword.png",
-	"ash_pile": "res://assets/environment/wasteland/ash_pile.png"
+	"rock_large": "res://assets/environment/dreadland/rocks/zone1/rock_large_1.png",
+	"rock_medium": "res://assets/environment/dreadland/rocks/zone1/rock_medium_1.png",
+	"rock_small": "res://assets/environment/dreadland/rocks/zone1/rock_small_1.png",
+	"skull": "res://assets/environment/dreadland/skull.png",
+	"bones": "res://assets/environment/dreadland/bones.png",
+	"ground_crack_1": "res://assets/environment/dreadland/ground_crack_1.png",
+	"ground_crack_2": "res://assets/environment/dreadland/ground_crack_2.png",
+	"broken_sword": "res://assets/environment/dreadland/broken_sword.png",
+	"ash_pile": "res://assets/environment/dreadland/ash_pile.png"
 }
 
 const LAYER_TEMPLATE = [
