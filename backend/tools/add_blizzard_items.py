@@ -127,16 +127,16 @@ DIABLO_ITEMS = [
         "has_icon": False
     },
     {
-        "item_id": "natalyas_shadow_mantle",
-        "item_name": "Natalya's Shadow Mantle",
+        "item_id": "natalyas_shadow_Ashbane",
+        "item_name": "Natalya's Shadow Ashbane",
         "item_type": "cape",
         "weapon_type": None,
         "description": "Cloak of the legendary assassin Natalya.",
-        "lore": "Master all class achievements to claim the mantle of Sanctuary's deadliest hunter.",
+        "lore": "Master all class achievements to claim the Ashbane of Sanctuary's deadliest hunter.",
         "base_rarity": "epic",
         "theme": "diablo",
         "visuals": {
-            "icon_url": "/static/items/icons/natalyas_shadow_mantle.png",
+            "icon_url": "/static/items/icons/natalyas_shadow_Ashbane.png",
             "sprite_folder": None,
             "effect": "shadow_shroud",
             "glow_color": "#2F4F4F"
@@ -589,7 +589,7 @@ STARCRAFT_ITEMS = [
         "item_type": "cape",
         "weapon_type": None,
         "description": "Ceremonial shroud of the Nerazim warriors.",
-        "lore": "Complete Heart of the Swarm campaign on Hard to claim the mantle of shadow.",
+        "lore": "Complete Heart of the Swarm campaign on Hard to claim the Ashbane of shadow.",
         "base_rarity": "epic",
         "theme": "starcraft",
         "visuals": {
@@ -661,7 +661,7 @@ BLIZZARD_MAPPINGS = {
     "battlenet:diablo3:BUTCHER_HARDCORE_HELL": "butchers_cleaver",
     "battlenet:diablo4:GREATER_RIFT_150": "horadric_cube",
     "battlenet:diablo4:SEASON_JOURNEY_GUARDIAN": "el_druins_sword",
-    "battlenet:diablo3:ALL_CLASS_MASTERY": "natalyas_shadow_mantle",
+    "battlenet:diablo3:ALL_CLASS_MASTERY": "natalyas_shadow_Ashbane",
     "battlenet:diablo3:PARAGON_1000": "echoing_fury",
     "battlenet:diablo4:CAMPAIGN_TORMENT_XVI": "black_soulstone",
     "battlenet:diablo3:ALL_ACTS_EXPERT": "andariel_visage",

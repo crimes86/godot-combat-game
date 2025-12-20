@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Item Manifest Generator for Mantle Forge System.
+Item Manifest Generator for Ashbane Forge System.
 
 Scans LPC sprite folders and generates/updates data/items.json.
 This allows the Godot engineer to add new items by simply dropping sprites

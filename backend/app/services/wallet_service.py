@@ -114,7 +114,7 @@ def create_siwe_message(
     message = SiweMessage(
         domain=domain,
         address=Web3.to_checksum_address(wallet_address),
-        statement="Link your wallet to Mantle to forge achievements into tradeable tokens.",
+        statement="Link your wallet to Ashbane to forge achievements into tradeable tokens.",
         uri=APP_URL,
         version="1",
         chain_id=chain_id,

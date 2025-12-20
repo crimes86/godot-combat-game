@@ -1,7 +1,7 @@
 # ForgedItemManager.gd
 # Manages forged achievement items in Godot
 #
-# This script checks the Mantle API for achievement tokens owned by the player
+# This script checks the Ashbane API for achievement tokens owned by the player
 # and grants corresponding in-game items.
 
 extends Node
@@ -9,7 +9,7 @@ extends Node
 signal items_loaded(items: Array)
 signal item_granted(item_id: String, achievement_name: String)
 
-const API_BASE = "https://your-mantle-api.com"  # Replace with your API URL
+const API_BASE = "https://your-Ashbane-api.com"  # Replace with your API URL
 
 # Map achievement IDs to in-game items
 # Format: "provider_appid_apiname" -> ItemData
@@ -75,7 +75,7 @@ func _ready():
 # =============================================================================
 
 func set_auth_token(token: String):
-	"""Set the Mantle auth token (from device auth flow)"""
+	"""Set the Ashbane auth token (from device auth flow)"""
 	_auth_token = token
 
 

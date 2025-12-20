@@ -134,15 +134,21 @@ def compute_xbox_effort(gamerscore: int, global_percent: float = None) -> float:
     """
     Compute effort_score for an Xbox achievement.
 
-    Uses Gamerscore tiers (like Battle.net uses points).
-    OpenXBL rarity data is unreliable so we ignore global_percent.
+    - If global % available, use it (like Steam/PlayStation)
+    - Otherwise fall back to Gamerscore tiers
 
+    Gamerscore fallback tiers:
     - 100+ gamerscore → 85 (Legendary) - rare high-value achievements
     - 50+ gamerscore  → 65 (Epic)
     - 25+ gamerscore  → 45 (Rare)
     - 10+ gamerscore  → 25 (Uncommon) - standard achievements
     - <10 gamerscore  → 15 (Common) - easy/tutorial achievements
     """
+    # Prefer global percent if available (more accurate than gamerscore)
+    if global_percent is not None:
+        return compute_effort_from_percent(global_percent)
+
+    # Fallback to gamerscore tiers when no rarity data
     if gamerscore >= 100:
         return 85.0  # Legendary
     if gamerscore >= 50:

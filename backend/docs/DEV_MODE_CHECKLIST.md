@@ -122,7 +122,7 @@ const baseMainnetChainId = '0x2105'; // 8453 in hex
 
 ### API Base URL
 
-**File:** `scripts/systems/MantleAuth.gd`
+**File:** `scripts/systems/AshbaneAuth.gd`
 
 **Lines 12-13**:
 ```gdscript
@@ -156,7 +156,7 @@ Update `get_api_base()` to return `API_BASE_PROD` in production builds.
 2. `backend/app/services/wallet_service.py` - DEV_MODE checks
 3. `backend/app/routes/wallet_routes.py` - Relaxed chain_id filtering
 4. `backend/templates/dashboard.html` - Testnet chain ID
-5. `scripts/systems/MantleAuth.gd` - API base URLs
+5. `scripts/systems/AshbaneAuth.gd` - API base URLs
 
 ---
 

@@ -42,7 +42,7 @@ contract AchievementToken is ERC721, ERC721URIStorage, Ownable {
         string rarityTier
     );
 
-    constructor() ERC721("Mantle Achievement", "ACHIEVE") Ownable(msg.sender) {}
+    constructor() ERC721("Ashbane Achievement", "ACHIEVE") Ownable(msg.sender) {}
 
     /**
      * @dev Mint a new achievement NFT. Only callable by backend (owner).

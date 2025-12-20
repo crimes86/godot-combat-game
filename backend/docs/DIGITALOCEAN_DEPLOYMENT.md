@@ -1,6 +1,6 @@
 # Digital Ocean Deployment Guide
 
-Deploy the Mantle backend (FastAPI) to a Digital Ocean Droplet with PostgreSQL and Base Sepolia testnet.
+Deploy the Ashbane backend (FastAPI) to a Digital Ocean Droplet with PostgreSQL and Base Sepolia testnet.
 
 ---
 
@@ -25,7 +25,7 @@ Before starting:
    - **Image**: Ubuntu 22.04 (LTS) x64
    - **Size**: Basic > Regular > **$12/mo (2GB RAM, 1 vCPU)** minimum
    - **Authentication**: SSH Key (select your key)
-   - **Hostname**: `mantle-backend` or similar
+   - **Hostname**: `Ashbane-backend` or similar
 
 3. Click **Create Droplet**
 4. Note the IP address once created
@@ -51,11 +51,11 @@ apt install -y software-properties-common curl git
 
 ```bash
 # Create non-root user for running the app
-adduser mantle --disabled-password --gecos ""
-usermod -aG sudo mantle
+adduser Ashbane --disabled-password --gecos ""
+usermod -aG sudo Ashbane
 
 # Allow passwordless sudo for deployment (optional)
-echo "mantle ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/mantle
+echo "Ashbane ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/Ashbane
 ```
 
 ### Install Python 3.11
@@ -107,16 +107,16 @@ sudo -u postgres psql
 In PostgreSQL shell:
 
 ```sql
-CREATE USER mantle WITH PASSWORD 'your_secure_password_here';
-CREATE DATABASE mantledb OWNER mantle;
-GRANT ALL PRIVILEGES ON DATABASE mantledb TO mantle;
+CREATE USER Ashbane WITH PASSWORD 'your_secure_password_here';
+CREATE DATABASE Ashbanedb OWNER Ashbane;
+GRANT ALL PRIVILEGES ON DATABASE Ashbanedb TO Ashbane;
 \q
 ```
 
 ### Test Connection
 
 ```bash
-psql -U mantle -d mantledb -h localhost
+psql -U Ashbane -d Ashbanedb -h localhost
 # Enter password when prompted
 # Type \q to exit
 ```
@@ -128,15 +128,15 @@ psql -U mantle -d mantledb -h localhost
 ### Switch to App User
 
 ```bash
-su - mantle
+su - Ashbane
 ```
 
 ### Clone Repository
 
 ```bash
 cd ~
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git mantle-backend
-cd mantle-backend/backend
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git Ashbane-backend
+cd Ashbane-backend/backend
 ```
 
 ### Create Virtual Environment
@@ -177,7 +177,7 @@ SESSION_SECRET=generate_a_random_32_char_string_here_use_openssl
 CORS_ORIGINS=https://your-domain.com
 
 # Database (PostgreSQL)
-DATABASE_URL=postgresql://mantle:your_secure_password_here@localhost:5432/mantledb
+DATABASE_URL=postgresql://Ashbane:your_secure_password_here@localhost:5432/Ashbanedb
 
 # =============================================================================
 # PROVIDER API KEYS
@@ -250,22 +250,22 @@ Press `Ctrl+C` to stop.
 ### Create Service File
 
 ```bash
-sudo nano /etc/systemd/system/mantle.service
+sudo nano /etc/systemd/system/Ashbane.service
 ```
 
 Paste:
 
 ```ini
 [Unit]
-Description=Mantle Backend API
+Description=Ashbane Backend API
 After=network.target postgresql.service
 
 [Service]
-User=mantle
-Group=mantle
-WorkingDirectory=/home/mantle/mantle-backend/backend
-Environment="PATH=/home/mantle/mantle-backend/backend/venv/bin"
-ExecStart=/home/mantle/mantle-backend/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+User=Ashbane
+Group=Ashbane
+WorkingDirectory=/home/Ashbane/Ashbane-backend/backend
+Environment="PATH=/home/Ashbane/Ashbane-backend/backend/venv/bin"
+ExecStart=/home/Ashbane/Ashbane-backend/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
 Restart=always
 RestartSec=10
 
@@ -277,9 +277,9 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable mantle
-sudo systemctl start mantle
-sudo systemctl status mantle
+sudo systemctl enable Ashbane
+sudo systemctl start Ashbane
+sudo systemctl status Ashbane
 ```
 
 ---
@@ -289,7 +289,7 @@ sudo systemctl status mantle
 ### Create Site Config
 
 ```bash
-sudo nano /etc/nginx/sites-available/mantle
+sudo nano /etc/nginx/sites-available/Ashbane
 ```
 
 Paste (replace `your-domain.com` with your domain or IP):
@@ -313,7 +313,7 @@ server {
 
     # Static files
     location /static {
-        alias /home/mantle/mantle-backend/backend/static;
+        alias /home/Ashbane/Ashbane-backend/backend/static;
     }
 }
 ```
@@ -321,7 +321,7 @@ server {
 ### Enable Site
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/mantle /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/Ashbane /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -384,7 +384,7 @@ After deployment, update `ACHIEVEMENT_CONTRACT_ADDRESS` in `.env`.
 ### Restart Service
 
 ```bash
-sudo systemctl restart mantle
+sudo systemctl restart Ashbane
 ```
 
 ---
@@ -393,7 +393,7 @@ sudo systemctl restart mantle
 
 ### Update API URL
 
-Edit `scripts/systems/MantleAuth.gd`:
+Edit `scripts/systems/AshbaneAuth.gd`:
 
 ```gdscript
 const API_BASE_PROD = "https://your-domain.com"  # Or http://YOUR_DROPLET_IP
@@ -413,7 +413,7 @@ CORS_ORIGINS=https://your-domain.com,http://localhost:8000
 
 Restart after changes:
 ```bash
-sudo systemctl restart mantle
+sudo systemctl restart Ashbane
 ```
 
 ---
@@ -424,38 +424,38 @@ sudo systemctl restart mantle
 
 ```bash
 # Service logs
-sudo journalctl -u mantle -f
+sudo journalctl -u Ashbane -f
 
 # Last 100 lines
-sudo journalctl -u mantle -n 100
+sudo journalctl -u Ashbane -n 100
 
 # Application logs (if configured)
-tail -f /home/mantle/mantle-backend/backend/logs/app.log
+tail -f /home/Ashbane/Ashbane-backend/backend/logs/app.log
 ```
 
 ### Service Management
 
 ```bash
-sudo systemctl status mantle    # Check status
-sudo systemctl restart mantle   # Restart
-sudo systemctl stop mantle      # Stop
-sudo systemctl start mantle     # Start
+sudo systemctl status Ashbane    # Check status
+sudo systemctl restart Ashbane   # Restart
+sudo systemctl stop Ashbane      # Stop
+sudo systemctl start Ashbane     # Start
 ```
 
 ### Database Backup
 
 ```bash
 # Create backup
-pg_dump -U mantle -d mantledb > backup_$(date +%Y%m%d).sql
+pg_dump -U Ashbane -d Ashbanedb > backup_$(date +%Y%m%d).sql
 
 # Restore
-psql -U mantle -d mantledb < backup_20241212.sql
+psql -U Ashbane -d Ashbanedb < backup_20241212.sql
 ```
 
 ### Update Deployment
 
 ```bash
-cd /home/mantle/mantle-backend
+cd /home/Ashbane/Ashbane-backend
 git pull origin main
 
 cd backend
@@ -463,7 +463,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
 
-sudo systemctl restart mantle
+sudo systemctl restart Ashbane
 ```
 
 ---
@@ -473,7 +473,7 @@ sudo systemctl restart mantle
 ### Service Won't Start
 
 ```bash
-sudo journalctl -u mantle -n 50 --no-pager
+sudo journalctl -u Ashbane -n 50 --no-pager
 ```
 
 Common issues:
@@ -489,7 +489,7 @@ Common issues:
 sudo systemctl status postgresql
 
 # Check connection
-psql -U mantle -d mantledb -h localhost
+psql -U Ashbane -d Ashbanedb -h localhost
 
 # Check pg_hba.conf allows local connections
 sudo nano /etc/postgresql/14/main/pg_hba.conf
@@ -501,7 +501,7 @@ sudo systemctl restart postgresql
 
 ```bash
 # Check if uvicorn is running
-sudo systemctl status mantle
+sudo systemctl status Ashbane
 
 # Check nginx config
 sudo nginx -t
@@ -537,11 +537,11 @@ curl http://127.0.0.1:8000
 
 | Command | Purpose |
 |---------|---------|
-| `sudo systemctl restart mantle` | Restart backend |
-| `sudo journalctl -u mantle -f` | Live logs |
+| `sudo systemctl restart Ashbane` | Restart backend |
+| `sudo journalctl -u Ashbane -f` | Live logs |
 | `sudo nginx -t && sudo systemctl reload nginx` | Reload nginx |
 | `source venv/bin/activate && alembic upgrade head` | Run migrations |
-| `pg_dump -U mantle -d mantledb > backup.sql` | Backup database |
+| `pg_dump -U Ashbane -d Ashbanedb > backup.sql` | Backup database |
 
 ---
 

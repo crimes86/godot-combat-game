@@ -1,7 +1,7 @@
 """
 Chat system routes for tiered chat rooms.
 
-Rooms are based on Mantle tier:
+Rooms are based on Ashbane tier:
 - newcomers: Initiate, Bronze (0-499 achievements)
 - rising: Silver, Gold (500-1999 achievements)
 - veterans: Platinum, Diamond (2000-4999 achievements)
@@ -17,7 +17,7 @@ from pydantic import BaseModel
 import logging
 import html
 
-from app.models import User, ChatMessage, AchievementCredit
+from app.models import User, ChatMessage, AchievementCredit, AchievementDispute
 from app.database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 # These will be set by init_chat_routes()
 _get_current_user_func: Callable = None
-_calculate_mantle_tier_func: Callable = None
+_calculate_Ashbane_tier_func: Callable = None
 
 
 # Tier to room mapping
@@ -78,15 +78,17 @@ def get_current_user_dep(request: Request, db: DbSession = Depends(get_db)):
     return _get_current_user_func(request, db)
 
 
-def init_chat_routes(get_current_user: Callable, calculate_mantle_tier: Callable):
+def init_chat_routes(get_current_user: Callable, calculate_Ashbane_tier: Callable):
     """Initialize chat routes with dependencies from main app."""
-    global _get_current_user_func, _calculate_mantle_tier_func
+    global _get_current_user_func, _calculate_Ashbane_tier_func
     _get_current_user_func = get_current_user
-    _calculate_mantle_tier_func = calculate_mantle_tier
+    _calculate_Ashbane_tier_func = calculate_Ashbane_tier
 
 
 def get_user_room(user: User, db: DbSession) -> str:
     """Determine which chat room a user belongs to based on their tier."""
+    from app.models import ProviderAccount
+
     # Count original achievements
     achievement_count = (
         db.query(AchievementCredit)
@@ -97,9 +99,9 @@ def get_user_room(user: User, db: DbSession) -> str:
         .count()
     )
 
-    # Get tier
-    mantle = _calculate_mantle_tier_func(achievement_count, 0)  # provider count doesn't matter for tier
-    tier = mantle["tier"]
+    # Get tier (pure achievement count, no provider bonus)
+    Ashbane = _calculate_Ashbane_tier_func(achievement_count)
+    tier = Ashbane["tier"]
 
     return TIER_ROOMS.get(tier, "newcomers")
 
@@ -166,6 +168,16 @@ async def get_messages(
     # Reverse to get chronological order
     messages = messages[::-1]
 
+    # Pre-fetch disputes for dispute messages (batch query for efficiency)
+    dispute_msg_ids = [msg.id for msg in messages if msg.message_type == 'dispute']
+    disputes_by_msg = {}
+    if dispute_msg_ids:
+        disputes = db.query(AchievementDispute).filter(
+            AchievementDispute.chat_message_id.in_(dispute_msg_ids)
+        ).all()
+        for d in disputes:
+            disputes_by_msg[d.chat_message_id] = d
+
     result = []
     for msg in messages:
         msg_data = {
@@ -183,6 +195,17 @@ async def get_messages(
             }
         else:
             msg_data["user"] = None
+
+        # For dispute messages, include the achievement and dispute IDs
+        if msg.message_type == 'dispute' and msg.id in disputes_by_msg:
+            dispute = disputes_by_msg[msg.id]
+            msg_data["dispute"] = {
+                "dispute_id": dispute.id,
+                "achievement_id": dispute.achievement_id,
+                "status": dispute.status,
+                "suggested_rarity": dispute.suggested_rarity,
+                "current_rarity": dispute.current_rarity,
+            }
 
         result.append(msg_data)
 
@@ -322,7 +345,7 @@ def post_forge_announcement(db: DbSession, user: User, achievement_name: str, ra
 
 
 def post_user_joined_announcement(db: DbSession, user: User, provider_name: str):
-    """Post an announcement when a new user joins Mantle."""
+    """Post an announcement when a new user joins Ashbane."""
     try:
         provider_display = {
             "steam": "Steam",
@@ -331,7 +354,7 @@ def post_user_joined_announcement(db: DbSession, user: User, provider_name: str)
             "psn": "PlayStation",
         }.get(provider_name, provider_name.title())
 
-        content = f"{user.username} joined Mantle via {provider_display}"
+        content = f"{user.username} joined Ashbane via {provider_display}"
 
         message = ChatMessage(
             user_id=user.id,
@@ -456,7 +479,7 @@ def generate_random_notification() -> tuple:
 
     if event_type == "join":
         provider = random.choice(MOCK_PROVIDERS)
-        return (f"{username} joined Mantle via {provider}", "join")
+        return (f"{username} joined Ashbane via {provider}", "join")
 
     elif event_type == "sync":
         provider = random.choice(MOCK_PROVIDERS)

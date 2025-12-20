@@ -665,7 +665,7 @@ async def get_token_metadata(credit_id: int):
             "name": achievement.display_name,
             "description": f"{achievement.description}\n\nVerified gaming achievement from {provider_account.provider_name}.",
             "image": achievement.icon_url,
-            "external_url": f"https://mantle.gg/achievement/{credit_id}",
+            "external_url": f"https://Ashbane.gg/achievement/{credit_id}",
             "attributes": [
                 {"trait_type": "Rarity", "value": achievement.rarity_tier},
                 {"trait_type": "Provider", "value": provider_account.provider_name},

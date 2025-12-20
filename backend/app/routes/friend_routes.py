@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/friends", tags=["friends"])
 
 # These will be set by init_friend_routes()
 _get_current_user_func: Callable = None
-_calculate_mantle_tier_func: Callable = None
+_calculate_Ashbane_tier_func: Callable = None
 
 
 def get_db():
@@ -43,11 +43,11 @@ def get_current_user_dep(request: Request, db: DbSession = Depends(get_db)):
     return _get_current_user_func(request, db)
 
 
-def init_friend_routes(get_current_user: Callable, calculate_mantle_tier: Callable):
+def init_friend_routes(get_current_user: Callable, calculate_Ashbane_tier: Callable):
     """Initialize friend routes with dependencies from main app."""
-    global _get_current_user_func, _calculate_mantle_tier_func
+    global _get_current_user_func, _calculate_Ashbane_tier_func
     _get_current_user_func = get_current_user
-    _calculate_mantle_tier_func = calculate_mantle_tier
+    _calculate_Ashbane_tier_func = calculate_Ashbane_tier
 
 
 def get_user_summary(user: User, db: DbSession) -> dict:
@@ -69,8 +69,8 @@ def get_user_summary(user: User, db: DbSession) -> dict:
         .count()
     )
 
-    # Get mantle tier
-    mantle = _calculate_mantle_tier_func(achievement_count, provider_count)
+    # Get Ashbane tier
+    Ashbane = _calculate_Ashbane_tier_func(achievement_count, provider_count)
 
     # Get rarity breakdown
     rarity_counts = {"Common": 0, "Uncommon": 0, "Rare": 0, "Epic": 0, "Legendary": 0}
@@ -92,10 +92,10 @@ def get_user_summary(user: User, db: DbSession) -> dict:
         "user_id": user.id,
         "username": user.username,
         "achievement_count": achievement_count,
-        "mantle": {
-            "tier": mantle["tier"],
-            "name": mantle["name"],
-            "color": mantle["color"],
+        "Ashbane": {
+            "tier": Ashbane["tier"],
+            "name": Ashbane["name"],
+            "color": Ashbane["color"],
         },
         "by_rarity": rarity_counts,
     }

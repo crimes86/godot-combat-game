@@ -108,13 +108,12 @@
     "1172470:HEIRLOOM_UNLOCK": "apex_heirloom_kunai",
     "359550:BLACK_ICE_UNLOCK": "r6_black_ice_skin",
     "252490:CRAFT_THOMPSON": "rust_thompson",
-    "72850:APPRENTICE": "minecraft_diamond_pickaxe",
     "battlenet:diablo4:PRIMAL_ANCIENT": "tyraels_might",
     "battlenet:diablo3:SET_DUNGEON_MASTERY": "stone_of_jordan",
     "battlenet:diablo3:BUTCHER_HARDCORE_HELL": "butchers_cleaver",
     "battlenet:diablo4:GREATER_RIFT_150": "horadric_cube",
     "battlenet:diablo4:SEASON_JOURNEY_GUARDIAN": "el_druins_sword",
-    "battlenet:diablo3:ALL_CLASS_MASTERY": "natalyas_shadow_mantle",
+    "battlenet:diablo3:ALL_CLASS_MASTERY": "natalyas_shadow_Ashbane",
     "battlenet:diablo3:PARAGON_1000": "echoing_fury",
     "battlenet:diablo4:CAMPAIGN_TORMENT_XVI": "black_soulstone",
     "battlenet:diablo3:ALL_ACTS_EXPERT": "andariel_visage",
@@ -135,7 +134,8 @@
     "battlenet:starcraft2:GRANDMASTER_TERRAN": "siege_tank_cannon",
     "battlenet:starcraft2:HOTS_CAMPAIGN_HARD": "dark_templar_armor",
     "battlenet:starcraft2:DIAMOND_ZERG": "zergling_claws",
-    "battlenet:starcraft2:WOL_CAMPAIGN": "khala_amulet"
+    "battlenet:starcraft2:WOL_CAMPAIGN": "khala_amulet",
+    "xbox:minecraft:DIAMONDS": "minecraft_diamond_pickaxe"
   },
   "weapon_types": {
     "core": {
@@ -825,8 +825,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 75,
-        "max": 93
+        "min": 8,
+        "max": 10
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -863,8 +863,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 94,
-        "max": 117
+        "min": 10,
+        "max": 12
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -901,8 +901,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 75,
-        "max": 93
+        "min": 8,
+        "max": 10
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -938,8 +938,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 82,
-        "max": 102
+        "min": 8,
+        "max": 10
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -976,8 +976,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 52,
-        "max": 65
+        "min": 6,
+        "max": 7
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -1014,8 +1014,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 106,
-        "max": 132
+        "min": 11,
+        "max": 14
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -1052,8 +1052,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 46,
-        "max": 57
+        "min": 5,
+        "max": 6
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -1190,8 +1190,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 58,
-        "max": 72
+        "min": 6,
+        "max": 8
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1260,8 +1260,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 58,
-        "max": 72
+        "min": 6,
+        "max": 8
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1299,8 +1299,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 58,
-        "max": 72
+        "min": 6,
+        "max": 8
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1338,8 +1338,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 69,
-        "max": 85
+        "min": 7,
+        "max": 9
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1376,8 +1376,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 75,
-        "max": 93
+        "min": 8,
+        "max": 10
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1414,8 +1414,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 52,
-        "max": 65
+        "min": 6,
+        "max": 7
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -1452,8 +1452,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 66,
-        "max": 82
+        "min": 7,
+        "max": 9
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1489,8 +1489,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 58,
-        "max": 72
+        "min": 6,
+        "max": 8
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1526,8 +1526,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 60,
-        "max": 74
+        "min": 6,
+        "max": 8
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1563,8 +1563,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 60,
-        "max": 74
+        "min": 6,
+        "max": 8
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1745,7 +1745,7 @@
       "_comment": "=== BATTLE.NET / WOW ITEMS ===",
       "item_id": "scarab_lord_badge",
       "item_name": "Scarab Lord's Ring",
-      "item_type": "accessory",
+      "item_type": "ring",
       "weapon_type": null,
       "description": "A sigil marking the opening of Ahn'Qiraj.",
       "lore": "Only ~400 players ever earned this. You rang the gong.",
@@ -1880,7 +1880,7 @@
     {
       "item_id": "mythic_insignia",
       "item_name": "Cutting Edge Amulet",
-      "item_type": "accessory",
+      "item_type": "amulet",
       "weapon_type": null,
       "description": "Proof of Mythic raid mastery.",
       "lore": "Cleared the current tier before nerfs.",
@@ -2040,8 +2040,8 @@
       "has_icon": true,
       "multi_slash": true,
       "base_damage": {
-        "min": 75,
-        "max": 93
+        "min": 8,
+        "max": 10
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -2663,15 +2663,15 @@
       "_comment": "=== ROBLOX ITEMS ===",
       "item_id": "veteran_roblox_necklace",
       "item_name": "Veteran Robloxian Necklace",
-      "item_type": "accessory",
+      "item_type": "amulet",
       "weapon_type": null,
       "description": "Necklace of an OG Roblox player.",
       "lore": "10+ years on Roblox. Before it was cool.",
       "base_rarity": "legendary",
       "theme": "roblox",
       "visuals": {
-        "icon_url": "/static/items/icons/veteran_roblox_hat.png",
-        "sprite_folder": "armor/head/veteran_roblox_hat",
+        "icon_url": "/static/items/icons/veteran_roblox_necklace.png",
+        "sprite_folder": "armor/head/veteran_roblox_necklace",
         "effect": "classic_sparkle",
         "glow_color": "#00A2FF"
       },
@@ -2697,15 +2697,15 @@
     {
       "item_id": "classic_roblox_ring",
       "item_name": "Classic Robloxian Ring",
-      "item_type": "accessory",
+      "item_type": "ring",
       "weapon_type": null,
       "description": "Ring of a veteran Roblox player.",
       "lore": "7+ years on Roblox.",
       "base_rarity": "epic",
       "theme": "roblox",
       "visuals": {
-        "icon_url": "/static/items/icons/classic_roblox_hat.png",
-        "sprite_folder": "armor/head/classic_roblox_hat",
+        "icon_url": "/static/items/icons/classic_roblox_ring.png",
+        "sprite_folder": "armor/head/classic_roblox_ring",
         "effect": "classic_sparkle",
         "glow_color": "#00A2FF"
       },
@@ -2730,15 +2730,15 @@
     {
       "item_id": "builder_roblox_ring",
       "item_name": "Builder's Ring",
-      "item_type": "accessory",
+      "item_type": "ring",
       "weapon_type": null,
       "description": "Ring of an established Roblox player.",
       "lore": "5+ years on Roblox.",
       "base_rarity": "rare",
       "theme": "roblox",
       "visuals": {
-        "icon_url": "/static/items/icons/builder_roblox_hat.png",
-        "sprite_folder": "armor/head/builder_roblox_hat",
+        "icon_url": "/static/items/icons/builder_roblox_ring.png",
+        "sprite_folder": "armor/head/builder_roblox_ring",
         "effect": "block_particles",
         "glow_color": "#00A2FF"
       },
@@ -2768,7 +2768,7 @@
       "weapon_type": null,
       "description": "Flask carried by those who linked the flame.",
       "lore": "You beat Dark Souls 3. Welcome, Ashen One.",
-      "base_rarity": "uncommon",
+      "base_rarity": "rare",
       "theme": "dark_souls",
       "visuals": {
         "icon_url": "/static/items/icons/ashen_estus.png",
@@ -2797,11 +2797,11 @@
     {
       "item_id": "tarnished_ring",
       "item_name": "Tarnished's Ring",
-      "item_type": "accessory",
+      "item_type": "ring",
       "weapon_type": null,
       "description": "Ring worn by those who became Elden Lord.",
       "lore": "Any ending counts. You did it.",
-      "base_rarity": "uncommon",
+      "base_rarity": "rare",
       "theme": "elden_ring",
       "visuals": {
         "icon_url": "/static/items/icons/tarnished_ring.png",
@@ -2868,7 +2868,7 @@
       "weapon_type": null,
       "description": "A keepsake from the gods.",
       "lore": "You escaped the underworld.",
-      "base_rarity": "uncommon",
+      "base_rarity": "rare",
       "theme": "hades",
       "visuals": {
         "icon_url": "/static/items/icons/boon_trinket.png",
@@ -2953,8 +2953,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 75,
-        "max": 93
+        "min": 8,
+        "max": 10
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -2992,8 +2992,8 @@
       "has_icon": true,
       "multi_slash": false,
       "base_damage": {
-        "min": 75,
-        "max": 93
+        "min": 8,
+        "max": 10
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -3046,7 +3046,7 @@
       "weapon_type": null,
       "description": "The Weighted Companion Cube.",
       "lore": "It will never threaten to stab you.",
-      "base_rarity": "uncommon",
+      "base_rarity": "rare",
       "theme": "portal",
       "visuals": {
         "icon_url": "/static/items/icons/companion_cube.png",
@@ -3181,7 +3181,7 @@
       "weapon_type": null,
       "description": "Chainmail worn by the Ashen One.",
       "lore": "The ash seeketh embers, and so the journey begins.",
-      "base_rarity": "uncommon",
+      "base_rarity": "rare",
       "theme": "dark_souls",
       "visuals": {
         "icon_url": "/static/items/icons/ashen_armor.png",
@@ -3247,7 +3247,7 @@
       "weapon_type": null,
       "description": "A shield fashioned from the Eye's remains.",
       "lore": "Your first major boss. The world trembles.",
-      "base_rarity": "common",
+      "base_rarity": "rare",
       "theme": "terraria",
       "visuals": {
         "icon_url": "/static/items/icons/eye_of_cthulhu_shield.png",
@@ -3348,7 +3348,7 @@
       "weapon_type": "axe",
       "description": "A golden hoe for the dedicated farmer.",
       "lore": "Level 10 in a skill. The valley remembers your dedication.",
-      "base_rarity": "uncommon",
+      "base_rarity": "rare",
       "theme": "stardew",
       "visuals": {
         "icon_url": "/static/items/icons/master_hoe.png",
@@ -3365,8 +3365,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 66,
-        "max": 83
+        "min": 7,
+        "max": 8
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -3414,7 +3414,7 @@
     {
       "item_id": "stardrop_pendant",
       "item_name": "Stardrop Pendant",
-      "item_type": "accessory",
+      "item_type": "amulet",
       "weapon_type": null,
       "description": "A pendant containing essence of all Stardrops.",
       "lore": "You found every Stardrop. The cosmos smile upon you.",
@@ -3536,8 +3536,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 28,
-        "max": 41
+        "min": 3,
+        "max": 5
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -3574,8 +3574,8 @@
       "has_sprites": false,
       "has_icon": false,
       "base_damage": {
-        "min": 28,
-        "max": 41
+        "min": 3,
+        "max": 5
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -3612,8 +3612,8 @@
       "has_sprites": false,
       "has_icon": false,
       "base_damage": {
-        "min": 28,
-        "max": 41
+        "min": 3,
+        "max": 5
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -3627,7 +3627,7 @@
     },
     {
       "item_id": "csgo_karambit",
-      "item_name": "StatTrakâ„¢ Karambit",
+      "item_name": "StatTrak\u00c3\u00a2\u00e2\u20ac\u017e\u00c2\u00a2 Karambit",
       "item_type": "weapon",
       "weapon_type": "dagger",
       "description": "Counter-Strike's most iconic knife.",
@@ -3650,8 +3650,8 @@
       "has_sprites": false,
       "has_icon": false,
       "base_damage": {
-        "min": 25,
-        "max": 36
+        "min": 3,
+        "max": 4
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -3686,7 +3686,7 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "havel_ring",
@@ -3711,7 +3711,7 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "amulet_of_kings",
@@ -3736,7 +3736,7 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false
+      "has_icon": true
     },
     {
       "item_id": "apex_heirloom_kunai",
@@ -3763,8 +3763,8 @@
       "has_sprites": false,
       "has_icon": false,
       "base_damage": {
-        "min": 28,
-        "max": 41
+        "min": 3,
+        "max": 5
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -3842,8 +3842,8 @@
       "has_sprites": false,
       "has_icon": false,
       "base_damage": {
-        "min": 66,
-        "max": 82
+        "min": 7,
+        "max": 9
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -3858,15 +3858,14 @@
     {
       "item_id": "minecraft_diamond_pickaxe",
       "item_name": "Diamond Pickaxe",
-      "item_type": "weapon",
-      "weapon_type": "axe",
+      "item_type": "tool",
       "description": "The iconic mining tool from the best-selling game of all time.",
       "lore": "Efficiency V, Unbreaking III, Fortune III. The dream pickaxe.",
       "base_rarity": "rare",
       "theme": "minecraft",
       "visuals": {
-        "icon_url": "/static/items/icons/minecraft_diamond_pickaxe.png",
-        "sprite_folder": "weapons/minecraft_diamond_pickaxe",
+        "icon_url": "/static/items/icons/tools/minecraft_diamond_pickaxe.png",
+        "sprite_folder": "tools/minecraft_diamond_pickaxe",
         "effect": "diamond_sparkle",
         "glow_color": "#00FFFF"
       },
@@ -3878,12 +3877,7 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false,
-      "base_damage": {
-        "min": 78,
-        "max": 98
-      },
-      "attack_speed": "slow",
+      "has_icon": true,
       "stat_bonuses": {
         "str": 12,
         "agi": 0,
@@ -3891,7 +3885,10 @@
         "int": 0,
         "wis": 0,
         "vit": 0
-      }
+      },
+      "tool_type": "pickaxe",
+      "harvest_bonus": 2.0,
+      "harvest_yield": 1.5
     },
     {
       "item_id": "tyraels_might",
@@ -3977,8 +3974,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 101,
-        "max": 127
+        "min": 10,
+        "max": 13
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -4049,8 +4046,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 66,
-        "max": 82
+        "min": 7,
+        "max": 9
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -4063,17 +4060,17 @@
       }
     },
     {
-      "item_id": "natalyas_shadow_mantle",
-      "item_name": "Natalya's Shadow Mantle",
-      "item_type": "cape",
+      "item_id": "natalyas_shadow_Ashbane",
+      "item_name": "Natalya's Shadow Ashbane",
+      "item_type": "armor_chest",
       "weapon_type": null,
       "description": "Cloak of the legendary assassin Natalya.",
-      "lore": "Master all class achievements to claim the mantle of Sanctuary's deadliest hunter.",
+      "lore": "Master all class achievements to claim the Ashbane of Sanctuary's deadliest hunter.",
       "base_rarity": "epic",
       "theme": "diablo",
       "visuals": {
-        "icon_url": "/static/items/icons/natalyas_shadow_mantle.png",
-        "sprite_folder": null,
+        "icon_url": "/static/items/icons/natalyas_shadow.png",
+        "sprite_folder": "forged/armor/chest/natalyas_shadow",
         "effect": "shadow_shroud",
         "glow_color": "#2F4F4F"
       },
@@ -4084,7 +4081,7 @@
         ],
         "active": null
       },
-      "has_sprites": false,
+      "has_sprites": true,
       "has_icon": true,
       "defense": 5,
       "stat_bonuses": {
@@ -4121,8 +4118,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 86,
-        "max": 109
+        "min": 9,
+        "max": 11
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -4170,7 +4167,7 @@
       "theme": "diablo",
       "visuals": {
         "icon_url": "/static/items/icons/andariel_visage.png",
-        "sprite_folder": null,
+        "sprite_folder": "armor/head/andariel_visage",
         "effect": "poison_aura",
         "glow_color": "#00FF00"
       },
@@ -4181,7 +4178,7 @@
         ],
         "active": null
       },
-      "has_sprites": false,
+      "has_sprites": true,
       "has_icon": true,
       "defense": 15,
       "stat_bonuses": {
@@ -4219,8 +4216,8 @@
       "has_icon": true,
       "sprite_folder": "res://assets/equipment/forged/weapons/genji_dragonblade",
       "base_damage": {
-        "min": 52,
-        "max": 65
+        "min": 6,
+        "max": 7
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -4298,8 +4295,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 101,
-        "max": 127
+        "min": 10,
+        "max": 13
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -4404,8 +4401,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 69,
-        "max": 85
+        "min": 7,
+        "max": 9
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -4483,8 +4480,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 58,
-        "max": 72
+        "min": 6,
+        "max": 8
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -4589,8 +4586,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 49,
-        "max": 62
+        "min": 5,
+        "max": 6
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -4662,8 +4659,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 52,
-        "max": 65
+        "min": 6,
+        "max": 7
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -4700,8 +4697,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 43,
-        "max": 55
+        "min": 4,
+        "max": 6
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -4745,8 +4742,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 94,
-        "max": 117
+        "min": 10,
+        "max": 12
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -4764,12 +4761,12 @@
       "item_type": "cape",
       "weapon_type": null,
       "description": "Ceremonial shroud of the Nerazim warriors.",
-      "lore": "Complete Heart of the Swarm campaign on Hard to claim the mantle of shadow.",
+      "lore": "Complete Heart of the Swarm campaign on Hard to claim the Ashbane of shadow.",
       "base_rarity": "epic",
       "theme": "starcraft",
       "visuals": {
-        "icon_url": "/static/items/icons/dark_templar_armor.png",
-        "sprite_folder": null,
+        "icon_url": "/assets/icons/forged/capes/dark_templar_armor.png",
+        "sprite_folder": "assets/equipment/forged/cape/dark_templar_armor",
         "effect": "shadow_walk",
         "glow_color": "#2F4F4F"
       },
@@ -4780,7 +4777,7 @@
         ],
         "active": null
       },
-      "has_sprites": false,
+      "has_sprites": true,
       "has_icon": true,
       "defense": 5,
       "stat_bonuses": {
@@ -4817,8 +4814,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 22,
-        "max": 32
+        "min": 3,
+        "max": 4
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {

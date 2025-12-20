@@ -6,8 +6,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
 :root {
-  --neon: #00FFFF;
-  --neon-fade: rgba(0,255,255,0.7);
+  --neon: #d9a633;  /* Gold accent - overridden by ashbane-theme.css */
+  --neon-fade: rgba(150,150,150,0.7);  /* Neutral gray */
   --body-bg: #121212;
   --card-bg: #181818;
   --text: #FFFFFF;
@@ -34,18 +34,16 @@ body {
   overflow-x: hidden;
 }
 
-/* ===== WONKA TV ROOM BACKGROUND ===== */
+/* ===== SUBTLE BACKGROUND ===== */
 body::before {
   content: '';
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   z-index: -2;
-  /* Deep void with center glow - transmission point */
+  /* Deep void with subtle center glow - neutral gray */
   background:
-    /* Central cyan light source */
-    radial-gradient(ellipse 100% 60% at 50% 25%, rgba(0,255,255,0.12) 0%, transparent 50%),
-    /* Red accent glow */
-    radial-gradient(ellipse 80% 50% at 50% 50%, rgba(255,50,50,0.08) 0%, transparent 40%),
+    /* Central neutral light source */
+    radial-gradient(ellipse 100% 60% at 50% 25%, rgba(120,120,120,0.08) 0%, transparent 50%),
     /* Vignette - darker edges */
     radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0.7) 100%),
     /* Base gradient */
@@ -58,36 +56,36 @@ body::before {
   50% { opacity: 0.85; }
 }
 
-/* Animated grid - inside the machine */
+/* Animated grid - subtle neutral gray */
 body::after {
   content: '';
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   z-index: -1;
   background-image:
-    /* Horizontal scanlines - subtle CRT feel */
+    /* Horizontal scanlines - subtle */
     repeating-linear-gradient(
       0deg,
       transparent 0px,
       transparent 2px,
-      rgba(0,255,255,0.025) 2px,
-      rgba(0,255,255,0.025) 4px
+      rgba(120,120,120,0.02) 2px,
+      rgba(120,120,120,0.02) 4px
     ),
-    /* Vertical grid lines */
+    /* Vertical grid lines - neutral gray */
     repeating-linear-gradient(
       90deg,
       transparent 0px,
       transparent 80px,
-      rgba(0,255,255,0.05) 80px,
-      rgba(0,255,255,0.05) 81px
+      rgba(120,120,120,0.04) 80px,
+      rgba(120,120,120,0.04) 81px
     ),
-    /* Horizontal grid lines */
+    /* Horizontal grid lines - neutral gray */
     repeating-linear-gradient(
       0deg,
       transparent 0px,
       transparent 80px,
-      rgba(0,255,255,0.05) 80px,
-      rgba(0,255,255,0.05) 81px
+      rgba(120,120,120,0.04) 80px,
+      rgba(120,120,120,0.04) 81px
     );
   pointer-events: none;
   animation: gridPulse 4s ease-in-out infinite;
@@ -294,15 +292,15 @@ body::after {
   z-index: 0;
   background-image:
     /* Floating data particles */
-    radial-gradient(2px 2px at 20% 30%, rgba(0,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(2px 2px at 20% 30%, rgba(150,150,150,0.8) 0%, transparent 100%),
     radial-gradient(2px 2px at 80% 20%, rgba(255,50,50,0.7) 0%, transparent 100%),
-    radial-gradient(3px 3px at 40% 70%, rgba(0,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(3px 3px at 40% 70%, rgba(150,150,150,0.6) 0%, transparent 100%),
     radial-gradient(2px 2px at 70% 80%, rgba(255,50,50,0.6) 0%, transparent 100%),
-    radial-gradient(2px 2px at 10% 60%, rgba(0,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(2px 2px at 10% 60%, rgba(150,150,150,0.7) 0%, transparent 100%),
     radial-gradient(3px 3px at 90% 50%, rgba(255,50,50,0.5) 0%, transparent 100%),
-    radial-gradient(2px 2px at 50% 10%, rgba(0,255,255,0.7) 0%, transparent 100%),
-    radial-gradient(2px 2px at 30% 90%, rgba(0,255,255,0.6) 0%, transparent 100%),
-    radial-gradient(2.5px 2.5px at 60% 40%, rgba(0,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(2px 2px at 50% 10%, rgba(150,150,150,0.7) 0%, transparent 100%),
+    radial-gradient(2px 2px at 30% 90%, rgba(150,150,150,0.6) 0%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 60% 40%, rgba(150,150,150,0.5) 0%, transparent 100%),
     radial-gradient(2px 2px at 15% 85%, rgba(255,50,50,0.6) 0%, transparent 100%);
   animation: particleFloat 20s linear infinite;
   pointer-events: none;
@@ -353,7 +351,7 @@ body::after {
   }
 }
 
-.provider-card, .mantle-card {
+.provider-card, .Ashbane-card {
   animation: beamIn 0.8s ease-out forwards;
 }
 
@@ -420,25 +418,19 @@ body::after {
 
 /* Panel styling to match Godot UI */
 .ui-panel {
-  background: linear-gradient(180deg,
-    rgba(8, 12, 16, 0.95) 0%,
-    rgba(4, 8, 12, 0.98) 100%
-  );
-  border: 1px solid rgba(0, 180, 180, 0.3);
+  background: rgba(20, 20, 22, 0.95);
+  border: 2px solid rgb(90, 90, 90);
   border-radius: 8px;
   box-shadow:
-    0 0 20px rgba(0, 180, 180, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
   overflow: hidden;
 }
 
 .ui-panel-header {
   padding: 12px 16px;
-  background: linear-gradient(180deg,
-    rgba(0, 180, 180, 0.12) 0%,
-    rgba(0, 180, 180, 0.04) 100%
-  );
-  border-bottom: 1px solid rgba(0, 180, 180, 0.2);
+  background: rgba(35, 35, 38, 0.5);
+  border-bottom: 1px solid rgb(90, 90, 90);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -450,13 +442,11 @@ body::after {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1.5px;
-  color: rgba(0, 220, 220, 0.9);
-  text-shadow: 0 0 10px rgba(0, 200, 200, 0.4);
+  color: rgb(200, 200, 200);
 }
 
 .ui-panel-header .panel-icon {
   font-size: 1rem;
-  filter: drop-shadow(0 0 4px rgba(0, 200, 200, 0.5));
 }
 
 .ui-panel-content {
@@ -563,18 +553,18 @@ body::after {
 }
 
 .ui-panel ::-webkit-scrollbar-track {
-  background: rgba(0, 20, 20, 0.4);
+  background: rgba(20, 20, 20, 0.4);
   border-radius: 4px;
 }
 
 .ui-panel ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(0, 180, 180, 0.5), rgba(0, 140, 140, 0.5));
+  background: linear-gradient(180deg, rgba(100, 100, 100, 0.5), rgba(80, 80, 80, 0.5));
   border-radius: 4px;
-  border: 1px solid rgba(0, 200, 200, 0.2);
+  border: 1px solid rgba(120, 120, 120, 0.2);
 }
 
 .ui-panel ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, rgba(0, 200, 200, 0.7), rgba(0, 160, 160, 0.7));
+  background: linear-gradient(180deg, rgba(130, 130, 130, 0.7), rgba(100, 100, 100, 0.7));
 }
 
 /* Forge panel orange scrollbar */
@@ -590,7 +580,7 @@ body::after {
 /* Firefox */
 .ui-panel * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 180, 180, 0.5) rgba(0, 20, 20, 0.4);
+  scrollbar-color: rgba(100, 100, 100, 0.5) rgba(20, 20, 20, 0.4);
 }
 
 .forge-panel * {
@@ -604,8 +594,8 @@ body::after {
 /* New message glow animation */
 @keyframes messageGlow {
   0% {
-    background-color: rgba(0, 200, 200, 0.15);
-    box-shadow: 0 0 8px rgba(0, 200, 200, 0.3);
+    background-color: rgba(150, 150, 150, 0.15);
+    box-shadow: 0 0 8px rgba(150, 150, 150, 0.3);
   }
   100% {
     background-color: transparent;
@@ -654,14 +644,14 @@ body::after {
   top: 35px;
   left: 50%;
   transform: translateX(-50%);
-  background: linear-gradient(180deg, rgba(0, 200, 200, 0.9), rgba(0, 160, 160, 0.9));
-  color: #000;
+  background: linear-gradient(180deg, rgba(120, 120, 120, 0.9), rgba(100, 100, 100, 0.9));
+  color: #fff;
   padding: 6px 16px;
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 200, 200, 0.4);
+  box-shadow: 0 2px 10px rgba(120, 120, 120, 0.4);
   z-index: 10;
   display: none;
   transition: all 0.2s ease;
@@ -669,7 +659,7 @@ body::after {
 
 .new-messages-indicator:hover {
   transform: translateX(-50%) scale(1.05);
-  box-shadow: 0 4px 15px rgba(0, 200, 200, 0.6);
+  box-shadow: 0 4px 15px rgba(150, 150, 150, 0.6);
 }
 
 .new-messages-indicator.visible {
@@ -726,7 +716,7 @@ body::after {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   background: transparent;
-  border: 1px solid rgba(0, 180, 180, 0.2);
+  border: 1px solid rgba(100, 100, 100, 0.2);
   border-radius: 4px;
   color: #666;
   cursor: pointer;
@@ -734,14 +724,14 @@ body::after {
 }
 
 .ui-panel-header .header-tab:hover {
-  border-color: rgba(0, 200, 200, 0.4);
+  border-color: rgba(130, 130, 130, 0.4);
   color: #888;
 }
 
 .ui-panel-header .header-tab.active {
-  background: rgba(0, 200, 200, 0.15);
-  border-color: rgba(0, 200, 200, 0.5);
-  color: #0cc;
+  background: rgba(130, 130, 130, 0.15);
+  border-color: rgba(130, 130, 130, 0.5);
+  color: #999;
 }
 
 /* Forge panel - orange accent variant */
@@ -832,7 +822,7 @@ body::after {
   padding: 2rem;
   background: var(--card-bg);
   box-shadow: 0 0 10px rgba(0,0,0,0.5),
-              inset 0 0 2px rgba(0,255,255,0.2);
+              inset 0 0 2px rgba(150,150,150,0.2);
 }
 
 footer {
@@ -856,11 +846,11 @@ footer {
   background: linear-gradient(180deg, rgba(20,25,30,0.95) 0%, rgba(8,10,14,0.98) 100%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(0,255,255,0.25);
+  border-bottom: 1px solid rgba(150,150,150,0.25);
   /* 3D depth effect like cards */
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
-    inset 0 0 30px rgba(0,255,255,0.02),
+    inset 0 0 30px rgba(150,150,150,0.02),
     0 4px 0 rgba(0,0,0,0.3),
     0 8px 20px rgba(0,0,0,0.4);
   z-index: 100;
@@ -872,7 +862,7 @@ footer {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%2300ffff;stroke-width:0.5;opacity:0.08%7D.pad%7Bfill:%2300ffff;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,20 L20,20 L20,40 L40,40'/%3E%3Cpath class='trace' d='M60,0 L60,20 L80,20'/%3E%3Cpath class='trace' d='M0,60 L30,60 L30,80'/%3E%3Cpath class='trace' d='M50,50 L50,80'/%3E%3Cpath class='trace' d='M70,40 L80,40'/%3E%3Ccircle class='pad' cx='20' cy='20' r='2'/%3E%3Ccircle class='pad' cx='40' cy='40' r='2'/%3E%3Ccircle class='pad' cx='60' cy='20' r='1.5'/%3E%3Ccircle class='pad' cx='30' cy='60' r='1.5'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%23999999;stroke-width:0.5;opacity:0.08%7D.pad%7Bfill:%23999999;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,20 L20,20 L20,40 L40,40'/%3E%3Cpath class='trace' d='M60,0 L60,20 L80,20'/%3E%3Cpath class='trace' d='M0,60 L30,60 L30,80'/%3E%3Cpath class='trace' d='M50,50 L50,80'/%3E%3Cpath class='trace' d='M70,40 L80,40'/%3E%3Ccircle class='pad' cx='20' cy='20' r='2'/%3E%3Ccircle class='pad' cx='40' cy='40' r='2'/%3E%3Ccircle class='pad' cx='60' cy='20' r='1.5'/%3E%3Ccircle class='pad' cx='30' cy='60' r='1.5'/%3E%3C/svg%3E");
   background-size: 80px 80px;
   pointer-events: none;
   z-index: 0;
@@ -961,12 +951,12 @@ footer {
 /* Active provider - full glow effect */
 .nav-provider.active {
   background: linear-gradient(180deg,
-    rgba(var(--provider-rgb, 0,255,255), 0.15) 0%,
+    rgba(var(--provider-rgb, 150,150,150), 0.15) 0%,
     rgba(15,18,22,0.95) 100%);
   border-color: var(--provider-color, var(--neon));
   box-shadow:
-    0 0 12px rgba(var(--provider-rgb, 0,255,255), 0.3),
-    inset 0 0 20px rgba(var(--provider-rgb, 0,255,255), 0.1),
+    0 0 12px rgba(var(--provider-rgb, 150,150,150), 0.3),
+    inset 0 0 20px rgba(var(--provider-rgb, 150,150,150), 0.1),
     0 2px 8px rgba(0,0,0,0.4);
 }
 .nav-provider.active[data-provider="steam"] {
@@ -1032,8 +1022,8 @@ footer {
 .nav-provider.active:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 0 18px rgba(var(--provider-rgb, 0,255,255), 0.4),
-    inset 0 0 25px rgba(var(--provider-rgb, 0,255,255), 0.15),
+    0 0 18px rgba(var(--provider-rgb, 150,150,150), 0.4),
+    inset 0 0 25px rgba(var(--provider-rgb, 150,150,150), 0.15),
     0 6px 16px rgba(0,0,0,0.4);
 }
 .nav-provider.active:hover img {
@@ -1059,7 +1049,7 @@ footer {
   opacity: 0;
   transform: scale(0.5);
   transition: all 0.2s ease;
-  box-shadow: 0 0 6px rgba(0, 255, 255, 0.5);
+  box-shadow: 0 0 6px rgba(150, 150, 150, 0.5);
 }
 .nav-provider:not(.active):hover .connect-indicator {
   opacity: 1;
@@ -1073,8 +1063,8 @@ a.nav-provider:hover {
   border-color: var(--neon);
   background: linear-gradient(180deg, rgba(0, 40, 45, 0.9) 0%, rgba(0, 20, 25, 0.95) 100%);
   box-shadow:
-    0 0 12px rgba(0, 255, 255, 0.2),
-    inset 0 0 15px rgba(0, 255, 255, 0.05),
+    0 0 12px rgba(150, 150, 150, 0.2),
+    inset 0 0 15px rgba(150, 150, 150, 0.05),
     0 2px 8px rgba(0,0,0,0.4);
 }
 a.nav-provider:hover img {
@@ -1115,25 +1105,25 @@ a.nav-provider:hover img {
   filter: grayscale(80%) opacity(0.4);
 }
 
-/* MANTLE mini neon sign */
+/* Ashbane mini neon sign */
 .neon-sign-mini {
   display: inline-block;
   padding: 0.4rem 0.8rem;
-  background: linear-gradient(180deg, rgba(0,20,25,0.9) 0%, rgba(0,10,15,0.95) 100%);
-  border: 1px solid rgba(0,255,255,0.3);
+  background: linear-gradient(180deg, rgba(35,35,38,0.9) 0%, rgba(20,20,22,0.95) 100%);
+  border: 1px solid rgba(150,150,150,0.3);
   border-radius: 6px;
   text-decoration: none;
   box-shadow:
-    inset 0 0 15px rgba(0,255,255,0.08),
-    0 0 10px rgba(0,255,255,0.15),
+    inset 0 0 15px rgba(150,150,150,0.08),
+    0 0 10px rgba(150,150,150,0.15),
     0 2px 4px rgba(0,0,0,0.4);
   transition: all 0.25s ease;
 }
 .neon-sign-mini:hover {
-  border-color: rgba(0,255,255,0.5);
+  border-color: rgba(150,150,150,0.5);
   box-shadow:
-    inset 0 0 20px rgba(0,255,255,0.12),
-    0 0 20px rgba(0,255,255,0.3),
+    inset 0 0 20px rgba(150,150,150,0.12),
+    0 0 20px rgba(150,150,150,0.3),
     0 4px 8px rgba(0,0,0,0.4);
   transform: translateY(-1px);
 }
@@ -1142,33 +1132,11 @@ a.nav-provider:hover img {
   font-size: 1.1rem;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: #fff;
+  color: #d9a633;
   text-shadow:
-    0 0 3px #fff,
-    0 0 6px #fff,
-    0 0 12px #0ff,
-    0 0 24px #0ff,
-    0 0 36px #0ff;
-  animation: neonPulseMini 3s ease-in-out infinite;
-}
-@keyframes neonPulseMini {
-  0%, 100% {
-    text-shadow:
-      0 0 3px #fff,
-      0 0 6px #fff,
-      0 0 12px #0ff,
-      0 0 24px #0ff,
-      0 0 36px #0ff;
-  }
-  50% {
-    text-shadow:
-      0 0 4px #fff,
-      0 0 8px #fff,
-      0 0 16px #0ff,
-      0 0 32px #0ff,
-      0 0 48px #0ff,
-      0 0 60px rgba(0,255,255,0.4);
-  }
+    0 0 5px #d9a633,
+    0 0 10px #d9a633,
+    0 0 20px rgba(217, 166, 51, 0.5);
 }
 
 /* User info styling */
@@ -1177,15 +1145,15 @@ a.nav-provider:hover img {
   align-items: center;
   gap: 0.5rem;
   padding: 0.3rem 0.8rem;
-  background: linear-gradient(180deg, rgba(0,50,60,0.3) 0%, rgba(0,25,30,0.4) 100%);
-  border: 1px solid rgba(0,255,255,0.2);
+  background: linear-gradient(180deg, rgba(50,50,50,0.3) 0%, rgba(30,30,30,0.4) 100%);
+  border: 1px solid rgba(150,150,150,0.2);
   border-radius: 8px;
 }
 .navbar-user .user-id {
   color: var(--neon);
   font-size: 0.9rem;
   font-family: 'Roboto Mono', monospace;
-  text-shadow: 0 0 8px rgba(0,255,255,0.5);
+  text-shadow: 0 0 8px rgba(150,150,150,0.5);
 }
 .navbar-user .user-flag {
   color: var(--neon);
@@ -1204,7 +1172,7 @@ a.nav-provider:hover img {
     var(--neon) 20%,
     var(--neon) 80%,
     transparent 100%);
-  box-shadow: 0 0 10px var(--neon), 0 0 20px rgba(0,255,255,0.3);
+  box-shadow: 0 0 10px var(--neon), 0 0 20px rgba(150,150,150,0.3);
   z-index: 3;
 }
 .btn-sync-icon {
@@ -1408,7 +1376,7 @@ a.nav-provider:hover img {
 .btn-claim-icon:hover,
 .btn-claim-icon:focus {
   border-color: #00f6ff;
-  background: rgba(0,255,255,0.07);
+  background: rgba(150,150,150,0.07);
   box-shadow:
     0 0 18px 4px var(--neon),
     0 0 40px 10px var(--neon-fade);
@@ -1423,7 +1391,7 @@ a.nav-provider:hover img {
 .unclaim-btn {
   background: transparent;
   border: none;
-  color: #00FFFF;
+  color: #999;
   font-size: 2.5rem;
   line-height: 1;
   cursor: pointer;
@@ -1435,8 +1403,8 @@ a.nav-provider:hover img {
 .unclaim-btn:hover {
   transform: scale(1.2);
   filter:
-    drop-shadow(0 0 4px #00FFFF)   /* match the X color */
-    drop-shadow(0 0 8px #00FFFF);
+    drop-shadow(0 0 4px #999)   /* match the X color */
+    drop-shadow(0 0 8px #999);
 }
 
 
@@ -1534,7 +1502,7 @@ a.nav-provider:hover img {
 .rarity-badge[data-rarity="Legendary"] svg:hover .chevron { --chevron-color: #fa0; }
 
 .provider-logo-icon {
-  box-shadow: 0 0 0 4px rgba(0,255,255,0.08);
+  box-shadow: 0 0 0 4px rgba(150,150,150,0.08);
   transition: transform 0.14s cubic-bezier(.3,2,.7,.8), box-shadow 0.17s;
   border-radius: 50%;
   background: transparent;
@@ -1544,7 +1512,7 @@ a.nav-provider:hover img {
 
 .provider-logo-icon:hover {
   transform: scale(1.13) rotate(-3deg);
-  box-shadow: 0 0 16px 6px rgba(0,255,255,0.27), 0 0 60px 5px var(--icon-glow, #00ffff);
+  box-shadow: 0 0 16px 6px rgba(150,150,150,0.27), 0 0 60px 5px var(--icon-glow, #999);
   filter: brightness(1.22) saturate(1.4);
 }
 

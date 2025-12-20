@@ -61,7 +61,7 @@ def main():
         "gog.svg",
         "facebook.svg",
         "roblox.svg",
-        "mantle.svg",
+        "Ashbane.svg",
     ]
 
     converted = 0

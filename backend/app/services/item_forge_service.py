@@ -457,6 +457,77 @@ def get_mappings_with_items() -> List[Dict[str, Any]]:
     return result
 
 
+def resolve_icon_url(item_id: str, item_type: str = "weapon") -> str:
+    """
+    Resolve the web-accessible icon URL for a forged item.
+
+    Checks multiple locations in order of preference:
+    1. /assets/icons/enhanced/forged/{type}/{item_id}.png (enhanced, typed)
+    2. /assets/icons/forged/{type}/{item_id}.png (base, typed)
+    3. /assets/icons/forged/{item_id}.png (base, root - for misplaced icons)
+
+    Returns the URL path for the first existing icon, or enhanced path as default.
+    """
+    import pathlib
+
+    # Map item_type to folder name
+    type_folder_map = {
+        "weapon": "weapons",
+        "armor_head": "armor",
+        "armor_chest": "armor",
+        "armor_legs": "armor",
+        "armor_hands": "armor",
+        "armor_feet": "armor",
+        "cape": "capes",
+        "shield": "shields",
+        "accessory": "accessories",
+        "ring": "accessories",
+        "amulet": "accessories",
+        "emote": "accessories",
+        "title": "accessories",
+    }
+    folder = type_folder_map.get(item_type, "weapons")
+
+    # Base paths on disk
+    backend_dir = pathlib.Path(__file__).parent.parent.parent
+    assets_dir = backend_dir.parent / "assets" / "icons"
+
+    # Check locations in priority order
+    candidates = [
+        (assets_dir / "enhanced" / "forged" / folder / f"{item_id}.png",
+         f"/assets/icons/enhanced/forged/{folder}/{item_id}.png"),
+        (assets_dir / "forged" / folder / f"{item_id}.png",
+         f"/assets/icons/forged/{folder}/{item_id}.png"),
+        (assets_dir / "forged" / f"{item_id}.png",
+         f"/assets/icons/forged/{item_id}.png"),
+    ]
+
+    for disk_path, url_path in candidates:
+        if disk_path.exists():
+            return url_path
+
+    # Default to enhanced path (will 404 if missing, but that's expected for missing icons)
+    return f"/assets/icons/enhanced/forged/{folder}/{item_id}.png"
+
+
+def get_icon_url_for_item(item: Dict[str, Any]) -> str:
+    """Get the icon URL for a catalog item."""
+    item_id = item.get("item_id", "")
+    item_type = item.get("item_type", "weapon")
+
+    # Check if item has explicit icon URL in visuals
+    visuals = item.get("visuals", {})
+    if visuals.get("icon_url"):
+        # Convert old static path to new assets path if needed
+        url = visuals["icon_url"]
+        if url.startswith("/static/items/icons/"):
+            item_id_from_path = url.replace("/static/items/icons/", "").replace(".png", "")
+            return resolve_icon_url(item_id_from_path, item_type)
+        return url
+
+    return resolve_icon_url(item_id, item_type)
+
+
 def get_catalog_summary() -> dict:
     """
     Get summary of the production-ready catalog for API responses.

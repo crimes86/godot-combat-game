@@ -29,6 +29,18 @@ try:
 except Exception as e:
     logger.warning(f"[BNET] Failed to load WoW achievement database: {e}")
 
+# Load D3 achievement database (may be empty if API not available)
+D3_ACHIEVEMENT_DB = {}
+try:
+    db_path = os.path.join(os.path.dirname(__file__), "..", "data", "d3_achievements.json")
+    if os.path.exists(db_path):
+        with open(db_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            D3_ACHIEVEMENT_DB = data.get("achievements", {})
+            logger.info(f"[BNET] Loaded {len(D3_ACHIEVEMENT_DB)} D3 achievements from database")
+except Exception as e:
+    logger.warning(f"[BNET] Failed to load D3 achievement database: {e}")
+
 
 def get_wow_achievement_info(ach_id: int) -> dict:
     """Look up achievement info from static database."""
@@ -157,7 +169,7 @@ def upsert_achievement_credit(
     Credit an achievement with anti-exploit global claim tracking.
 
     Uses (provider_name, provider_user_id, achievement_id) as global key
-    to prevent duplicate Mantle credits when users unlink/relink accounts.
+    to prevent duplicate Ashbane credits when users unlink/relink accounts.
     """
     # Check for GLOBAL claim (same provider identity + achievement)
     existing_global = (
@@ -385,8 +397,8 @@ async def sync_battlenet_achievements(
                         db_ach.display_name = wow_info["name"]
                     if wow_info.get("description") and not db_ach.description:
                         db_ach.description = wow_info["description"]
-                    # Always update icon if we have one from database
-                    if ach_icon and not db_ach.icon_url:
+                    # Always update icon from database (ensures existing achievements get icons)
+                    if ach_icon:
                         db_ach.icon_url = ach_icon
 
                 # Get unlock time from WoW API (timestamp in milliseconds)
@@ -479,8 +491,646 @@ async def sync_battlenet_achievements(
     }
 
 
+# ============================================================================
+# DIABLO 3 SYNC
+# ============================================================================
 
 
+def get_d3_achievement_info(ach_id: int) -> dict:
+    """Look up D3 achievement info from static database."""
+    return D3_ACHIEVEMENT_DB.get(str(ach_id), {})
+
+
+async def get_d3_career_profile(battletag: str, token: str) -> dict:
+    """
+    Fetch D3 career profile for a BattleTag.
+    The battletag format is Name#1234, converted to Name-1234 for the URL.
+    """
+    # Convert battletag format: Name#1234 -> Name-1234
+    battletag_url = battletag.replace("#", "-")
+    headers = {"Authorization": f"Bearer {token}"}
+    url = f"{BNET_API_BASE}/d3/profile/{battletag_url}/"
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=headers)
+
+            if resp.status_code == 404:
+                logger.info(f"[BNET-D3] No D3 profile for {battletag}")
+                return {}
+
+            if resp.status_code != 200:
+                logger.warning(f"[BNET-D3] API error {resp.status_code}: {resp.text[:200]}")
+                return {}
+
+            return resp.json()
+    except httpx.TimeoutException:
+        logger.warning(f"[BNET-D3] Request timed out for {battletag}")
+        return {}
+    except Exception as e:
+        logger.warning(f"[BNET-D3] Error fetching profile: {e}")
+        return {}
+
+
+def compute_d3_effort(ach_data: dict) -> float:
+    """
+    Compute effort score for a Diablo 3 achievement.
+    D3 achievements have point values: 10-50 typically.
+    """
+    points = ach_data.get("points", 10)
+    category = ach_data.get("category", "").lower()
+
+    # Base score from points (D3 achievements: 10-50 points typically)
+    if points >= 50:
+        base = 80
+    elif points >= 30:
+        base = 60
+    elif points >= 20:
+        base = 45
+    elif points >= 10:
+        base = 30
+    else:
+        base = 20
+
+    # Category bonuses
+    if "hardcore" in category:
+        base += 20  # Hardcore achievements are harder
+    if "conquest" in category:
+        base += 15  # Season conquests are challenging
+    if "boss" in category or "greater rift" in category:
+        base += 10
+
+    return min(100.0, base)
+
+
+async def sync_d3_achievements(
+    user: User, provider_account: ProviderAccount, db: Session,
+    token: str = None
+) -> dict:
+    """
+    Sync Diablo 3 achievements for a Battle.net account.
+    """
+    token = token or provider_account.access_token
+
+    # BattleTag is stored in display_name (e.g., "Player#1234"), not provider_user_id (numeric)
+    battletag = provider_account.display_name
+    if not battletag or "#" not in battletag:
+        # Try profile_data as fallback
+        profile_data = provider_account.profile_data or {}
+        battletag = profile_data.get("battletag")
+
+    if not battletag or "#" not in battletag:
+        logger.warning(f"[BNET-D3] No valid battletag found (display_name={provider_account.display_name})")
+        return {"credited": 0, "details": {"total_achievements": 0, "per_game": []}}
+
+    profile = await get_d3_career_profile(battletag, token)
+
+    if not profile:
+        return {"credited": 0, "details": {"total_achievements": 0, "per_game": []}}
+
+    # Check if player has D3 data
+    if not profile.get("heroes") and not profile.get("paragonLevel"):
+        logger.info(f"[BNET-D3] {battletag}: No D3 data found")
+        return {"credited": 0, "details": {"total_achievements": 0, "per_game": []}}
+
+    # Ensure D3 game record exists for this provider account
+    d3_game = db.query(Game).filter_by(
+        provider_account_id=provider_account.id,
+        app_id="d3"
+    ).first()
+    if not d3_game:
+        d3_game = Game(
+            provider_account_id=provider_account.id,
+            app_id="d3",
+            name="Diablo III",
+            box_art_url="https://blz-contentstack-images.akamaized.net/v3/assets/blt0e00eb71333df64e/blt92aa75a9e8eb3227/64f06f3fa4e5a04a45a38c42/d3-icon.png"
+        )
+        db.add(d3_game)
+        db.commit()
+        logger.info(f"[BNET-D3] Created D3 game record for {battletag}")
+
+    # D3 career profile returns achievements as nested structure
+    # achievements: { code: "123", name: "...", ... }
+    achievements_data = profile.get("achievements", {})
+    completed = achievements_data.get("complete", [])
+
+    total_found = len(completed)
+    total_credited = 0
+    achievements = []
+
+    for ach in completed:
+        ach_id = ach.get("id")
+        if not ach_id:
+            continue
+
+        ext_ach_id = f"d3_{ach_id}"  # Prefix to avoid collision with WoW
+
+        # Look up from static database
+        d3_info = get_d3_achievement_info(ach_id)
+
+        ach_data = {
+            "points": d3_info.get("points", ach.get("points", 10)),
+            "category": d3_info.get("category", ach.get("category", "")),
+        }
+
+        effort = compute_d3_effort(ach_data)
+        rarity_tier = compute_rarity_from_effort(effort)
+
+        ach_name = d3_info.get("name") or ach.get("name", f"D3 Achievement {ach_id}")
+        ach_desc = d3_info.get("description") or ach.get("description", "")
+
+        # Upsert achievement
+        db_ach = db.query(Achievement).filter_by(app_id="d3", api_name=str(ach_id)).first()
+        if not db_ach:
+            db_ach = Achievement(
+                app_id="d3",
+                api_name=str(ach_id),
+                name=ach_name,
+                display_name=ach_name,
+                description=ach_desc,
+                icon_url="/static/icons/battlenet.svg",  # D3 data API unavailable for icons
+                effort_score=effort,
+                effort_auto=True,
+                rarity_tier=rarity_tier,
+            )
+            db.add(db_ach)
+            db.commit()
+            db.refresh(db_ach)
+        else:
+            if getattr(db_ach, "effort_auto", True):
+                db_ach.effort_score = effort
+                db_ach.rarity_tier = rarity_tier
+                db_ach.effort_auto = True
+            if d3_info.get("name") and db_ach.name != d3_info["name"]:
+                db_ach.name = d3_info["name"]
+                db_ach.display_name = d3_info["name"]
+            if d3_info.get("description") and not db_ach.description:
+                db_ach.description = d3_info["description"]
+
+        # Credit
+        already = db.query(AchievementCredit).filter_by(
+            user_id=user.id,
+            provider_account_id=provider_account.id,
+            achievement_id=db_ach.id
+        ).first()
+        if not already:
+            credit = AchievementCredit(
+                user_id=user.id,
+                provider_account_id=provider_account.id,
+                achievement_id=db_ach.id,
+                provider_name=provider_account.provider_name,
+                provider_user_id=provider_account.provider_user_id,
+                is_original_claim=True,
+            )
+            db.add(credit)
+            total_credited += 1
+
+        achievements.append({
+            "id": ach_id,
+            "display_name": ach_name,
+            "description": ach_desc,
+            "icon_url": "/static/icons/battlenet.svg",  # D3 data API unavailable for icons
+            "unlocked": True,
+            "effort_score": effort,
+            "effort_auto": getattr(db_ach, "effort_auto", True),
+            "rarity_tier": rarity_tier,
+        })
+
+    db.commit()
+
+    logger.info(f"[BNET-D3] {battletag}: Found {total_found} achievements, credited {total_credited}")
+
+    return {
+        "credited": total_credited,
+        "details": {
+            "total_achievements": total_found,
+            "per_game": [{
+                "game": "Diablo III",
+                "battletag": battletag,
+                "paragon_level": profile.get("paragonLevel", 0),
+                "heroes_count": len(profile.get("heroes", [])),
+                "total_found": total_found,
+                "credited": total_credited,
+                "achievements": achievements,
+            }],
+        }
+    }
+
+
+# ============================================================================
+# STARCRAFT 2 SYNC
+# ============================================================================
+
+# SC2 region IDs
+SC2_REGIONS = {
+    "us": 1,
+    "eu": 2,
+    "kr": 3,
+    "tw": 3,  # Taiwan uses KR region
+    "cn": 5,
+}
+
+
+async def get_sc2_account(account_id: str, token: str) -> list:
+    """
+    Get SC2 account info for a Battle.net account.
+    Returns list of SC2 profiles with region/realm/profileId.
+
+    The account_id is the numeric Battle.net account ID from OAuth.
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Try multiple regions since SC2 APIs have intermittent issues
+    regions = ["us", "eu"]
+
+    for region in regions:
+        url = f"https://{region}.api.blizzard.com/sc2/player/{account_id}"
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(url, headers=headers)
+
+                if resp.status_code == 200:
+                    data = resp.json()
+                    logger.info(f"[BNET-SC2] Found {len(data)} profiles via {region} region")
+                    return data
+                elif resp.status_code == 503:
+                    logger.warning(f"[BNET-SC2] {region} region returned 503 (API issues)")
+                    continue
+                elif resp.status_code == 404:
+                    logger.info(f"[BNET-SC2] No SC2 profiles in {region} region")
+                    continue
+                else:
+                    logger.warning(f"[BNET-SC2] {region} returned {resp.status_code}")
+                    continue
+
+        except httpx.TimeoutException:
+            logger.warning(f"[BNET-SC2] Request timed out for {region}")
+            continue
+        except Exception as e:
+            logger.warning(f"[BNET-SC2] Error getting SC2 account from {region}: {e}")
+            continue
+
+    logger.info(f"[BNET-SC2] No SC2 profiles found for account {account_id}")
+    return []
+
+
+async def get_sc2_profile(region_id: int, realm_id: int, profile_id: int, token: str) -> dict:
+    """
+    Fetch SC2 profile with achievements.
+    """
+    # Try multiple region hosts
+    region_hosts = ["us", "eu"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for region in region_hosts:
+        url = f"https://{region}.api.blizzard.com/sc2/profile/{region_id}/{realm_id}/{profile_id}"
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(url, headers=headers)
+
+                if resp.status_code == 200:
+                    return resp.json()
+                elif resp.status_code == 503:
+                    logger.warning(f"[BNET-SC2] {region} region returned 503 (API issues)")
+                    continue
+                elif resp.status_code == 404:
+                    continue
+
+        except httpx.TimeoutException:
+            logger.warning(f"[BNET-SC2] Request timed out for {region}")
+            continue
+        except Exception as e:
+            logger.warning(f"[BNET-SC2] Error: {e}")
+            continue
+
+    return {}
+
+
+async def get_sc2_static_data(region: str, token: str) -> dict:
+    """
+    Get static SC2 data including achievement definitions.
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    region_id = SC2_REGIONS.get(region, 1)
+    url = f"https://{region}.api.blizzard.com/sc2/static/profile/{region_id}"
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception as e:
+        logger.warning(f"[BNET-SC2] Error fetching static data: {e}")
+
+    return {}
+
+
+def compute_sc2_effort(ach_data: dict) -> float:
+    """
+    Compute effort score for a StarCraft 2 achievement.
+    SC2 achievements range from 5-30 points typically.
+    """
+    points = ach_data.get("points", 10)
+    category_name = ach_data.get("category_name", "").lower()
+    title = ach_data.get("title", "").lower()
+
+    # Base score from points (SC2 uses 5, 10, 15, 20, 25, 30 point values)
+    if points >= 30:
+        base = 75  # Legendary territory
+    elif points >= 25:
+        base = 65  # Epic
+    elif points >= 20:
+        base = 55  # Rare-Epic
+    elif points >= 15:
+        base = 45  # Rare
+    elif points >= 10:
+        base = 30  # Uncommon
+    else:
+        base = 20  # Common
+
+    # Category bonuses based on difficulty/type
+    category_lower = category_name.lower() if category_name else ""
+
+    # Campaign difficulty achievements
+    if "brutal" in category_lower or "brutal" in title:
+        base += 25
+    elif "hard" in category_lower or "hard" in title:
+        base += 15
+    elif "normal" in category_lower:
+        base += 5
+
+    # Multiplayer/competitive achievements are harder
+    if "versus" in category_lower or "1v1" in title or "ladder" in title:
+        base += 20
+    elif "unranked" in category_lower or "co-op" in category_lower:
+        base += 10
+
+    # Mastery and challenge achievements
+    if "mastery" in category_lower or "master" in title:
+        base += 20
+    if "challenge" in category_lower:
+        base += 10
+
+    # Special achievements
+    if "feat of strength" in category_lower or "legacy" in title:
+        base = max(base, 85)  # Minimum Legendary for FoS
+
+    return min(100.0, max(15.0, base))
+
+
+async def sync_sc2_achievements(
+    user: User, provider_account: ProviderAccount, db: Session,
+    token: str = None
+) -> dict:
+    """
+    Sync StarCraft 2 achievements for a Battle.net account.
+    Note: SC2 API may return 503 in some regions (known issue as of late 2024).
+    """
+    token = token or provider_account.access_token
+    account_id = provider_account.provider_user_id  # Numeric Battle.net account ID
+
+    if not account_id:
+        logger.warning(f"[BNET-SC2] No account ID available")
+        return {"credited": 0, "details": {"total_achievements": 0, "per_game": []}}
+
+    # Get user's SC2 profiles
+    profiles = await get_sc2_account(account_id, token)
+
+    if not profiles:
+        logger.info(f"[BNET-SC2] No SC2 profiles found")
+        return {"credited": 0, "details": {"total_achievements": 0, "per_game": []}}
+
+    # Fetch static achievement data to get names/descriptions
+    static_data = await get_sc2_static_data("us", token)
+    achievement_lookup = {}
+    category_lookup = {}
+
+    # Build category lookup first
+    if static_data and static_data.get("categories"):
+        for cat in static_data["categories"]:
+            cat_id = str(cat.get("id"))
+            category_lookup[cat_id] = cat.get("name", "")
+            # Also process child categories
+            for child in cat.get("children", []):
+                child_id = str(child.get("id"))
+                category_lookup[child_id] = child.get("name", "")
+        logger.info(f"[BNET-SC2] Loaded {len(category_lookup)} category definitions")
+
+    # Build achievement lookup with category names
+    if static_data and static_data.get("achievements"):
+        for ach in static_data["achievements"]:
+            ach_id = str(ach.get("id"))
+            cat_id = str(ach.get("categoryId", ""))
+            category_name = category_lookup.get(cat_id, "")
+
+            achievement_lookup[ach_id] = {
+                "name": ach.get("title", f"SC2 Achievement {ach_id}"),
+                "description": ach.get("description", ""),
+                "points": ach.get("points", 10),
+                "category_id": cat_id,
+                "category_name": category_name,
+                "icon_url": ach.get("imageUrl"),
+            }
+        logger.info(f"[BNET-SC2] Loaded {len(achievement_lookup)} achievement definitions from static data")
+
+    # Ensure SC2 game record exists
+    sc2_game = db.query(Game).filter_by(
+        provider_account_id=provider_account.id,
+        app_id="sc2"
+    ).first()
+    if not sc2_game:
+        sc2_game = Game(
+            provider_account_id=provider_account.id,
+            app_id="sc2",
+            name="StarCraft II",
+            box_art_url="https://blz-contentstack-images.akamaized.net/v3/assets/blt0e00eb71333df64e/blt17f559c77b54f7e0/64f06f3ce6e27d5b67d5c7b4/sc2-icon.png"
+        )
+        db.add(sc2_game)
+        db.commit()
+        logger.info(f"[BNET-SC2] Created SC2 game record")
+
+    total_found = 0
+    total_credited = 0
+    per_profile = []
+
+    for profile_info in profiles:
+        region_id = profile_info.get("regionId", 1)
+        realm_id = profile_info.get("realmId", 1)
+        profile_id = profile_info.get("profileId")
+        profile_name = profile_info.get("name", "Unknown")
+
+        if not profile_id:
+            continue
+
+        profile = await get_sc2_profile(region_id, realm_id, profile_id, token)
+
+        if not profile:
+            logger.warning(f"[BNET-SC2] Could not fetch profile {profile_name} (API may be down)")
+            continue
+
+        # SC2 profile has achievements in earnedAchievements
+        earned = profile.get("earnedAchievements", [])
+        achievements = []
+
+        for ach in earned:
+            ach_id = ach.get("achievementId")
+            if not ach_id:
+                continue
+
+            total_found += 1
+            ach_id_str = str(ach_id)
+
+            # Look up achievement details from static data
+            static_info = achievement_lookup.get(ach_id_str, {})
+
+            ach_name = static_info.get("name", f"SC2 Achievement {ach_id}")
+            ach_desc = static_info.get("description", "")
+            category_name = static_info.get("category_name", "")
+            ach_icon = static_info.get("icon_url") or "/static/icons/sc2.svg"
+
+            ach_data = {
+                "points": static_info.get("points", 10),
+                "category_name": category_name,
+                "title": ach_name,  # Pass title for keyword matching
+            }
+
+            effort = compute_sc2_effort(ach_data)
+            rarity_tier = compute_rarity_from_effort(effort)
+
+            # Upsert achievement
+            db_ach = db.query(Achievement).filter_by(app_id="sc2", api_name=ach_id_str).first()
+            if not db_ach:
+                db_ach = Achievement(
+                    app_id="sc2",
+                    api_name=ach_id_str,
+                    name=ach_name,
+                    display_name=ach_name,
+                    description=ach_desc,
+                    icon_url=ach_icon,
+                    effort_score=effort,
+                    effort_auto=True,
+                    rarity_tier=rarity_tier,
+                )
+                db.add(db_ach)
+                db.commit()
+                db.refresh(db_ach)
+            else:
+                # Update name/description/icon from static data if we have it
+                if static_info.get("name") and db_ach.name.startswith("SC2 Achievement"):
+                    db_ach.name = static_info["name"]
+                    db_ach.display_name = static_info["name"]
+                if static_info.get("description") and not db_ach.description:
+                    db_ach.description = static_info["description"]
+                if static_info.get("icon_url") and (not db_ach.icon_url or db_ach.icon_url.startswith("/static")):
+                    db_ach.icon_url = static_info["icon_url"]
+                if getattr(db_ach, "effort_auto", True):
+                    db_ach.effort_score = effort
+                    db_ach.rarity_tier = rarity_tier
+
+            # Credit
+            already = db.query(AchievementCredit).filter_by(
+                user_id=user.id,
+                provider_account_id=provider_account.id,
+                achievement_id=db_ach.id
+            ).first()
+            if not already:
+                credit = AchievementCredit(
+                    user_id=user.id,
+                    provider_account_id=provider_account.id,
+                    achievement_id=db_ach.id,
+                    provider_name=provider_account.provider_name,
+                    provider_user_id=provider_account.provider_user_id,
+                    is_original_claim=True,
+                )
+                db.add(credit)
+                total_credited += 1
+
+            achievements.append({
+                "id": ach_id,
+                "display_name": ach_name,
+                "description": ach_desc,
+                "icon_url": ach_icon,
+                "unlocked": True,
+                "effort_score": effort,
+                "effort_auto": True,
+                "rarity_tier": rarity_tier,
+            })
+
+        if achievements:
+            per_profile.append({
+                "game": "StarCraft II",
+                "profile_name": profile_name,
+                "region_id": region_id,
+                "total_found": len(achievements),
+                "credited": total_credited,
+                "achievements": achievements,
+            })
+
+    db.commit()
+
+    logger.info(f"[BNET-SC2] Found {total_found} achievements, credited {total_credited}")
+
+    return {
+        "credited": total_credited,
+        "details": {
+            "total_achievements": total_found,
+            "per_game": per_profile,
+        }
+    }
+
+
+# ============================================================================
+# COMBINED BATTLE.NET SYNC (WoW + D3 + SC2)
+# ============================================================================
+
+
+async def sync_all_battlenet_achievements(
+    user: User, provider_account: ProviderAccount, db: Session,
+    token: str = None
+) -> dict:
+    """
+    Sync all Battle.net game achievements: WoW, Diablo 3, and StarCraft 2.
+    """
+    token = token or provider_account.access_token
+    total_credited = 0
+    all_per_game = []
+
+    # Sync WoW
+    try:
+        wow_result = await sync_battlenet_achievements(user, provider_account, db, token=token)
+        total_credited += wow_result.get("credited", 0)
+        all_per_game.extend(wow_result.get("details", {}).get("per_game", []))
+        logger.info(f"[BNET] WoW sync: {wow_result.get('credited', 0)} credited")
+    except Exception as e:
+        logger.error(f"[BNET] WoW sync error: {e}")
+
+    # Sync Diablo 3
+    try:
+        d3_result = await sync_d3_achievements(user, provider_account, db, token=token)
+        total_credited += d3_result.get("credited", 0)
+        all_per_game.extend(d3_result.get("details", {}).get("per_game", []))
+        logger.info(f"[BNET] D3 sync: {d3_result.get('credited', 0)} credited")
+    except Exception as e:
+        logger.error(f"[BNET] D3 sync error: {e}")
+
+    # Sync StarCraft 2
+    try:
+        sc2_result = await sync_sc2_achievements(user, provider_account, db, token=token)
+        total_credited += sc2_result.get("credited", 0)
+        all_per_game.extend(sc2_result.get("details", {}).get("per_game", []))
+        logger.info(f"[BNET] SC2 sync: {sc2_result.get('credited', 0)} credited")
+    except Exception as e:
+        logger.error(f"[BNET] SC2 sync error: {e}")
+
+    return {
+        "credited": total_credited,
+        "details": {
+            "total_achievements": sum(g.get("total_found", 0) for g in all_per_game),
+            "per_game": all_per_game,
+        }
+    }
 
 
 

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session as DbSession
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from app.models import User, ProviderAccount, Game, UserAchievement, Achievement, AchievementCredit, Session as SessionModel, WalletAccount, ForgedAchievement
+from app.models import User, ProviderAccount, Game, UserAchievement, Achievement, AchievementCredit, Session as SessionModel, WalletAccount, ForgedAchievement, ItemTrade, TradeListing, ChatMessage, AchievementDispute, DisputeVote
 import uuid
 from urllib.parse import urlencode
 import os
@@ -31,16 +31,17 @@ import secrets
 from sqlalchemy import inspect, func
 from sqlalchemy.exc import IntegrityError
 from collections import defaultdict
-from app.services.battlenet_services import sync_battlenet_achievements
+from app.services.battlenet_services import sync_battlenet_achievements, sync_all_battlenet_achievements
 from app.services.xbox_services import sync_xbox_achievements
 from app.services.steam_services import sync_steam_achievements
 from app.services.psn_services import sync_psn_achievements
 from app.services.discord_services import sync_discord_badges
 from app.services.github_services import sync_github_achievements
+from app.services.roblox_services import sync_roblox_achievements
 from app.services.item_forge_service import (
     get_catalog_summary, get_items, get_items_by_type, get_items_by_theme,
     get_available_items, get_themes, compute_forged_item, get_mappings_with_items,
-    get_achievement_mappings, get_item_by_id
+    get_achievement_mappings, get_item_by_id, resolve_icon_url, get_icon_url_for_item
 )
 from app.providers import PROVIDERS, get_enabled_providers, AchievementSupport
 from app.providers.oauth_handler import init_oauth_providers, create_oauth_routes, router as oauth_router
@@ -98,8 +99,8 @@ async def startup_event():
     """Initialize OAuth providers and wallet routes on startup"""
     init_oauth_providers()
     init_wallet_routes(get_db, get_current_user)
-    init_friend_routes(get_current_user, calculate_mantle_tier)
-    init_chat_routes(get_current_user, calculate_mantle_tier)
+    init_friend_routes(get_current_user, calculate_Ashbane_tier)
+    init_chat_routes(get_current_user, calculate_Ashbane_tier)
     init_trading_routes(get_current_user)
     init_weapon_stats_routes(get_current_user)
     init_world_tree_routes(get_db, get_current_user)
@@ -156,7 +157,7 @@ async def root():
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint for Godot client to verify backend connectivity"""
-    return {"status": "ok", "service": "mantle"}
+    return {"status": "ok", "service": "Ashbane"}
 
 
 @app.get("/index.html")
@@ -176,7 +177,37 @@ SESSION_SECRET = os.environ.get("SESSION_SECRET")
 if not SESSION_SECRET:
     raise RuntimeError("SESSION_SECRET environment variable is required")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+# Cache middleware for static files (icons, css, etc.)
+@app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    # Cache static assets for 1 week (604800 seconds)
+    if path.startswith("/static/") or path.startswith("/assets/"):
+        # Images cache for 1 week
+        if any(path.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp']):
+            response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        # CSS/JS cache for 1 day (can be updated more frequently)
+        elif any(path.endswith(ext) for ext in ['.css', '.js']):
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        # Fonts cache for 1 month
+        elif any(path.endswith(ext) for ext in ['.woff', '.woff2', '.ttf', '.eot']):
+            response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
+    return response
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Mount forged item icons from assets directory
+# Icons are at: assets/icons/forged/{type}/{item_id}.png and assets/icons/enhanced/forged/{type}/{item_id}.png
+import pathlib
+_backend_dir = pathlib.Path(__file__).parent.parent
+_forged_icons_dir = _backend_dir.parent / "assets" / "icons" / "forged"
+_enhanced_icons_dir = _backend_dir.parent / "assets" / "icons" / "enhanced" / "forged"
+if _forged_icons_dir.exists():
+    app.mount("/assets/icons/forged", StaticFiles(directory=str(_forged_icons_dir)), name="forged_icons")
+if _enhanced_icons_dir.exists():
+    app.mount("/assets/icons/enhanced/forged", StaticFiles(directory=str(_enhanced_icons_dir)), name="enhanced_icons")
 
 # Build provider list from registry (only enabled providers)
 def get_all_providers_list():
@@ -204,7 +235,7 @@ if not ADMIN_SECRET:
         raise RuntimeError("ADMIN_SECRET environment variable is required in production")
     ADMIN_SECRET = "dev-only-admin-secret"
     print("⚠️  WARNING: Using default ADMIN_SECRET - do not use in production!")
-BETA_ACCESS_CODE = os.environ.get("BETA_ACCESS_CODE")  # Set to enable beta gate (e.g., "mantle-beta-2024")
+BETA_ACCESS_CODE = os.environ.get("BETA_ACCESS_CODE")  # Set to enable beta gate (e.g., "Ashbane-beta-2024")
 
 # In-memory device code storage (for Godot auth flow)
 # Format: {device_code: {"user_id": int|None, "username": str|None, "session_token": str|None, "created_at": datetime, "expires_at": datetime}}
@@ -264,11 +295,11 @@ COUNTRY_FLAGS = {
 }
 
 # =============================================================================
-# MANTLE TIER SYSTEM
+# Ashbane TIER SYSTEM
 # =============================================================================
 # Tier thresholds and colors for in-game badge display
 
-MANTLE_TIERS = {
+Ashbane_TIERS = {
     "initiate":  {"min_score": 0,    "color": "#666666", "glow": "#444444", "name": "Initiate"},
     "bronze":    {"min_score": 100,  "color": "#CD7F32", "glow": "#8B4513", "name": "Bronze"},
     "silver":    {"min_score": 500,  "color": "#C0C0C0", "glow": "#808080", "name": "Silver"},
@@ -283,21 +314,21 @@ MANTLE_TIERS = {
 TIER_ORDER = ["mythic", "legendary", "diamond", "platinum", "gold", "silver", "bronze", "initiate"]
 
 
-def calculate_mantle_tier(total_achievements: int, provider_count: int) -> dict:
+def calculate_Ashbane_tier(total_achievements: int, provider_count: int = 0) -> dict:
     """
-    Calculate Mantle tier based on achievements and linked providers.
+    Calculate Ashbane tier based on total achievement count.
 
-    Provider bonus: each provider beyond 1 adds 15% to effective score.
+    Pure achievement count - no provider bonuses.
+    Multi-platform rewards handled by separate Ashbane-specific achievements.
 
     Returns dict with: tier, name, color, glow, effective_score
     """
-    # Calculate provider bonus multiplier
-    bonus_multiplier = 1 + (provider_count - 1) * 0.15 if provider_count > 1 else 1
-    effective_score = int(total_achievements * bonus_multiplier)
+    # Pure achievement count - no bonuses
+    effective_score = total_achievements
 
     # Find matching tier (check highest first)
     for tier_key in TIER_ORDER:
-        tier_data = MANTLE_TIERS[tier_key]
+        tier_data = Ashbane_TIERS[tier_key]
         if effective_score >= tier_data["min_score"]:
             return {
                 "tier": tier_key,
@@ -324,12 +355,13 @@ def calculate_mantle_tier(total_achievements: int, provider_count: int) -> dict:
 def get_provider_sync_map(db):
     return {
         "steam": lambda user, acc: sync_steam_achievements(user, acc, db, STEAM_API_KEY),
-        "battlenet": lambda user, acc: sync_battlenet_achievements(user, acc, db),
+        "battlenet": lambda user, acc: sync_all_battlenet_achievements(user, acc, db),
         "xbox": lambda user, acc: sync_xbox_achievements(user, acc, db),
         # PSN uses sync library (psnawp), so wrap in thread pool
         "psn": lambda user, acc: asyncio.to_thread(sync_psn_achievements, user, acc, db),
         "discord": lambda user, acc: sync_discord_badges(user, acc, db),
         "github": lambda user, acc: sync_github_achievements(user, acc, db),
+        "roblox": lambda user, acc: sync_roblox_achievements(user, acc, db),
     }
 
 
@@ -452,7 +484,7 @@ def get_current_user_optional(
 
 
 def generate_app_username(db: DbSession):
-    base = "mantle-"
+    base = "ashbane-"
     while True:
         username = base + str(uuid.uuid4())[:8]
         if not db.query(User).filter(User.username == username).first():
@@ -519,7 +551,7 @@ def handle_provider_login(
     2. Inactive provider → Delete orphan link, create fresh account
     3. No provider → Create new account
 
-    Philosophy: Provider accounts can move freely between Mantle accounts.
+    Philosophy: Provider accounts can move freely between Ashbane accounts.
     Anti-exploit is handled by AchievementCredit.is_original_claim, not provider binding.
     """
     # 1. Check for ACTIVE provider account
@@ -564,7 +596,7 @@ def handle_provider_login(
 
     if existing_inactive:
         # User intentionally unlinked this provider - allow fresh start
-        # Delete the orphaned link so they can create a new Mantle account
+        # Delete the orphaned link so they can create a new Ashbane account
         # (Achievement credits stay with original account via is_original_claim)
         logger.info(f"{provider_name.upper()} LOGIN: Inactive provider found (was unlinked), deleting for fresh account")
         db.delete(existing_inactive)
@@ -613,9 +645,9 @@ def credit_new_achievements(
     Credit new achievements for a given provider account.
 
     ANTI-EXPLOIT: Uses global claim tracking (provider_name + provider_user_id)
-    to prevent duplicate Mantle credits when users unlink/relink accounts.
+    to prevent duplicate Ashbane credits when users unlink/relink accounts.
 
-    - First claim: is_original_claim=True (counts toward Mantle tier, can forge)
+    - First claim: is_original_claim=True (counts toward Ashbane tier, can forge)
     - Reclaim after orphan: is_original_claim=False (display only on provider card)
     """
     new_credits = []
@@ -1853,11 +1885,27 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
                 .first()
             )
             if existing_discord and existing_discord.user_id != current_user.id:
-                return templates.TemplateResponse(
-                    "error.html",
-                    {"request": request, "message": "This Discord account is already linked to another user."},
-                    status_code=400,
-                )
+                # Discord is linked to another user - offer to merge accounts
+                other_user = db.query(User).filter(User.id == existing_discord.user_id).first()
+                if other_user:
+                    logger.info(f"[DISCORD] Offering merge: Discord {discord_id} belongs to user {other_user.id}, current user is {current_user.id}")
+                    return templates.TemplateResponse(
+                        "merge_confirm.html",
+                        {
+                            "request": request,
+                            "target_provider": "discord",
+                            "other_username": other_user.username,
+                            "other_user_id": other_user.id,
+                            "current_user_id": current_user.id,
+                            "conflicts": None,  # Will be checked in merge-confirm endpoint
+                        },
+                    )
+                else:
+                    return templates.TemplateResponse(
+                        "error.html",
+                        {"request": request, "message": "This Discord account is already linked to another user."},
+                        status_code=400,
+                    )
 
             # Create or update provider account
             provider_account = (
@@ -1999,11 +2047,27 @@ async def github_callback(request: Request, db: DbSession = Depends(get_db)):
                 .first()
             )
             if existing_github and existing_github.user_id != current_user.id:
-                return templates.TemplateResponse(
-                    "error.html",
-                    {"request": request, "message": "This GitHub account is already linked to another user."},
-                    status_code=400,
-                )
+                # GitHub is linked to another user - offer to merge accounts
+                other_user = db.query(User).filter(User.id == existing_github.user_id).first()
+                if other_user:
+                    logger.info(f"[GITHUB] Offering merge: GitHub {github_id} belongs to user {other_user.id}, current user is {current_user.id}")
+                    return templates.TemplateResponse(
+                        "merge_confirm.html",
+                        {
+                            "request": request,
+                            "target_provider": "github",
+                            "other_username": other_user.username,
+                            "other_user_id": other_user.id,
+                            "current_user_id": current_user.id,
+                            "conflicts": None,
+                        },
+                    )
+                else:
+                    return templates.TemplateResponse(
+                        "error.html",
+                        {"request": request, "message": "This GitHub account is already linked to another user."},
+                        status_code=400,
+                    )
 
             # Create or update provider account
             provider_account = (
@@ -2147,8 +2211,44 @@ async def merge_confirm(
             ua.user_id = keeper.id
 
         # Transfer wallet accounts (if any)
+        wallets_transferred = 0
         for wallet in db.query(WalletAccount).filter(WalletAccount.user_id == to_merge.id).all():
-            wallet.user_id = keeper.id
+            # Check if keeper already has wallet on same chain
+            existing = db.query(WalletAccount).filter_by(
+                user_id=keeper.id,
+                chain_id=wallet.chain_id
+            ).first()
+            if not existing:
+                wallet.user_id = keeper.id
+                wallets_transferred += 1
+
+        # Transfer forged items (current ownership)
+        items_transferred = 0
+        for item in db.query(ForgedAchievement).filter(ForgedAchievement.current_owner_id == to_merge.id).all():
+            item.current_owner_id = keeper.id
+            items_transferred += 1
+
+        # Update trade history (from_user_id)
+        trades_updated = 0
+        for trade in db.query(ItemTrade).filter(ItemTrade.from_user_id == to_merge.id).all():
+            trade.from_user_id = keeper.id
+            trades_updated += 1
+
+        # Update trade history (to_user_id)
+        for trade in db.query(ItemTrade).filter(ItemTrade.to_user_id == to_merge.id).all():
+            trade.to_user_id = keeper.id
+            trades_updated += 1
+
+        # Transfer active trade listings
+        listings_transferred = 0
+        for listing in db.query(TradeListing).filter(TradeListing.seller_id == to_merge.id).all():
+            listing.seller_id = keeper.id
+            listings_transferred += 1
+
+        # Preserve admin status if source had it
+        if to_merge.is_admin and not keeper.is_admin:
+            keeper.is_admin = True
+            logger.info(f"Transferred admin status to keeper account {keeper.id}")
 
         # Flush to ensure all changes are written before delete
         db.flush()
@@ -2159,6 +2259,10 @@ async def merge_confirm(
         logger.info(f"Accounts merged: {to_merge.username} (id={to_merge.id}) into {keeper.username} (id={keeper.id})")
         logger.info(f"  Transferred providers: {transferred_providers}")
         logger.info(f"  Transferred credits: {credits_transferred}")
+        logger.info(f"  Transferred wallets: {wallets_transferred}")
+        logger.info(f"  Transferred forged items: {items_transferred}")
+        logger.info(f"  Updated trades: {trades_updated}")
+        logger.info(f"  Transferred listings: {listings_transferred}")
 
         # Create new session for the keeper account and set cookie
         response = RedirectResponse(url="/dashboard", status_code=303)
@@ -2338,7 +2442,7 @@ async def get_battlenet_achievements(user_id: int):
         raise HTTPException(status_code=404, detail="Battle.net provider account not found")
 
     # --- Run the sync (or fetch cached data if desired)
-    result = await sync_battlenet_achievements(user, provider_account, db)
+    result = await sync_all_battlenet_achievements(user, provider_account, db)
 
     db.close()
     print("PER_CHARACTER (to frontend):", result["details"]["per_game"])
@@ -2546,12 +2650,12 @@ async def dashboard(
                 "rarest_achievement": rarest_achievement,  # Lowest completion %
             })
 
-    # Calculate MANTLE AGGREGATE (all original claims, regardless of provider status)
+    # Calculate Ashbane AGGREGATE (all original claims, regardless of provider status)
     # This is your permanent gaming history - doesn't change when you unlink providers
-    mantle_data = None
+    Ashbane_data = None
     if user:
         # Count ALL original claims for this user
-        mantle_credits = (
+        Ashbane_credits = (
             db.query(AchievementCredit)
             .join(Achievement)
             .filter(
@@ -2561,11 +2665,11 @@ async def dashboard(
             .all()
         )
 
-        mantle_total = len(mantle_credits)
-        mantle_rarity = Counter()
-        for credit in mantle_credits:
+        Ashbane_total = len(Ashbane_credits)
+        Ashbane_rarity = Counter()
+        for credit in Ashbane_credits:
             rarity = getattr(credit.achievement, "rarity_tier", "Common")
-            mantle_rarity[rarity] += 1
+            Ashbane_rarity[rarity] += 1
 
         # Count total providers ever linked (active or not)
         total_providers_linked = (
@@ -2575,11 +2679,11 @@ async def dashboard(
         )
 
         # Calculate tier
-        tier_info = calculate_mantle_tier(mantle_total, total_providers_linked)
+        tier_info = calculate_Ashbane_tier(Ashbane_total, total_providers_linked)
 
-        mantle_data = {
-            "total_achievements": mantle_total,
-            "by_rarity": dict(mantle_rarity),
+        Ashbane_data = {
+            "total_achievements": Ashbane_total,
+            "by_rarity": dict(Ashbane_rarity),
             "tier": tier_info["tier"],
             "tier_name": tier_info["name"],
             "tier_color": tier_info["color"],
@@ -2596,7 +2700,8 @@ async def dashboard(
             "all_providers": all_providers,
             "user_linked_providers": active_linked,
             "providers": providers,
-            "mantle": mantle_data,
+            "ashbane": Ashbane_data,
+            "is_admin": user.is_admin if user else False,
         },
     )
 
@@ -2979,7 +3084,7 @@ async def get_achievements_by_rarity(
             "app_id": achievement.app_id,
             "provider_name": provider_account.provider_name,
             "unlocked_at": credit.unlocked_at.isoformat() if credit.unlocked_at else None,  # Original unlock
-            "date_credited": credit.date_credited.isoformat() if credit.date_credited else None,  # Added to Mantle
+            "date_credited": credit.date_credited.isoformat() if credit.date_credited else None,  # Added to Ashbane
             "is_original_claim": credit.is_original_claim,
         })
 
@@ -3043,7 +3148,7 @@ async def get_achievements(
             "percent": achievement.percent,
             "rarity_tier": achievement.rarity_tier,
             "unlocked_at": credit.unlocked_at.isoformat() if credit.unlocked_at else None,  # Original unlock time
-            "date_credited": credit.date_credited.isoformat() if credit.date_credited else None,  # When added to Mantle
+            "date_credited": credit.date_credited.isoformat() if credit.date_credited else None,  # When added to Ashbane
             "unlocked": True,  # Always unlocked for credits!
             "provider_account_id": credit.provider_account_id,
         })
@@ -3222,7 +3327,7 @@ async def get_current_user_api(
 
         providers.append(provider_info)
 
-    # Count total achievements for Mantle tier (ONLY original claims count!)
+    # Count total achievements for Ashbane tier (ONLY original claims count!)
     total_achievements = (
         db.query(AchievementCredit)
         .filter(
@@ -3248,24 +3353,24 @@ async def get_current_user_api(
         if tier in rarity_counts:
             rarity_counts[tier] = count
 
-    # Calculate Mantle tier
-    mantle = calculate_mantle_tier(total_achievements, len(providers))
+    # Calculate Ashbane tier
+    Ashbane = calculate_Ashbane_tier(total_achievements, len(providers))
 
     return {
         "user_id": user.id,
         "username": user.username,
         "total_achievements": total_achievements,
         "by_rarity": rarity_counts,
-        "mantle": {
-            "tier": mantle["tier"],
-            "name": mantle["name"],
-            "color": mantle["color"],
-            "glow": mantle["glow"],
-            "effective_score": mantle["effective_score"],
+        "ashbane": {
+            "tier": Ashbane["tier"],
+            "name": Ashbane["name"],
+            "color": Ashbane["color"],
+            "glow": Ashbane["glow"],
+            "effective_score": Ashbane["effective_score"],
         },
         "providers": providers,
         "tier_thresholds": {
-            "tiers": MANTLE_TIERS,
+            "tiers": Ashbane_TIERS,
             "order": TIER_ORDER,
         },
         "appearance": user.appearance_data,
@@ -3354,7 +3459,7 @@ async def get_all_achievements_api(
         "battlenet": "Battle.net",  # For account-level achievements
     }
 
-    # Group by rarity for summary (ONLY original claims count toward Mantle)
+    # Group by rarity for summary (ONLY original claims count toward Ashbane)
     rarity_counts = Counter()  # Only original claims
     achievements = []
     total_original = 0
@@ -3397,6 +3502,520 @@ async def get_all_achievements_api(
         "by_rarity": dict(rarity_counts),  # Only original claims
         "achievements": achievements,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ACHIEVEMENT DISPUTE SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════
+
+def get_rarity_chat_room(rarity: str) -> str:
+    """Map achievement rarity to the appropriate chat room for peer review."""
+    rarity_lower = (rarity or "common").lower()
+    if rarity_lower in ("common", "uncommon"):
+        return "newcomers"
+    elif rarity_lower == "rare":
+        return "rising"
+    elif rarity_lower == "epic":
+        return "veterans"
+    else:  # legendary, mythic
+        return "legends"
+
+
+@app.get("/api/achievements/{achievement_id}/details")
+async def get_achievement_details(
+    achievement_id: int,
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Get detailed effort scoring info for an achievement.
+    Shows how the rarity was calculated so players can dispute it.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    achievement = db.query(Achievement).filter(Achievement.id == achievement_id).first()
+    if not achievement:
+        raise HTTPException(status_code=404, detail="Achievement not found")
+
+    # Check for pending disputes on this achievement
+    pending_dispute = db.query(AchievementDispute).filter(
+        AchievementDispute.achievement_id == achievement_id,
+        AchievementDispute.status == "pending"
+    ).first()
+
+    # Check if user already has this achievement (can they dispute?)
+    user_has_achievement = db.query(AchievementCredit).filter(
+        AchievementCredit.user_id == user.id,
+        AchievementCredit.achievement_id == achievement_id
+    ).first() is not None
+
+    # Determine scoring method based on effort_auto and available data
+    scoring_method = "unknown"
+    scoring_input = None
+
+    if achievement.percent is not None:
+        scoring_method = "global_percent"
+        scoring_input = f"{achievement.percent:.1f}%"
+    elif achievement.effort_notes:
+        scoring_method = "manual_override"
+        scoring_input = achievement.effort_notes
+    else:
+        # Fallback - was likely set by gamerscore/points
+        scoring_method = "provider_default"
+
+    return {
+        "id": achievement.id,
+        "display_name": achievement.display_name,
+        "description": achievement.description,
+        "icon_url": achievement.icon_url,
+        "app_id": achievement.app_id,
+
+        # Scoring details
+        "effort_score": achievement.effort_score,
+        "rarity_tier": achievement.rarity_tier,
+        "effort_auto": achievement.effort_auto,
+        "scoring_method": scoring_method,
+        "scoring_input": scoring_input,
+        "percent": achievement.percent,
+
+        # Dispute status
+        "has_pending_dispute": pending_dispute is not None,
+        "pending_dispute_id": pending_dispute.id if pending_dispute else None,
+        "can_dispute": user_has_achievement,
+    }
+
+
+@app.post("/api/achievements/{achievement_id}/dispute")
+async def submit_achievement_dispute(
+    achievement_id: int,
+    request: Request,
+    suggested_rarity: str = Form(...),
+    reason: str = Form(...),
+    db: DbSession = Depends(get_db),
+):
+    """
+    Submit a dispute about an achievement's rarity classification.
+    Creates a chat message in the appropriate tier room for peer voting.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    # Validate suggested rarity
+    valid_rarities = ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
+    if suggested_rarity not in valid_rarities:
+        raise HTTPException(status_code=400, detail=f"Invalid rarity. Must be one of: {valid_rarities}")
+
+    # Get achievement
+    achievement = db.query(Achievement).filter(Achievement.id == achievement_id).first()
+    if not achievement:
+        raise HTTPException(status_code=404, detail="Achievement not found")
+
+    # Verify user has this achievement
+    user_credit = db.query(AchievementCredit).filter(
+        AchievementCredit.user_id == user.id,
+        AchievementCredit.achievement_id == achievement_id
+    ).first()
+
+    if not user_credit:
+        raise HTTPException(status_code=403, detail="You must have unlocked this achievement to dispute it")
+
+    # Check for existing pending dispute
+    existing = db.query(AchievementDispute).filter(
+        AchievementDispute.achievement_id == achievement_id,
+        AchievementDispute.status == "pending"
+    ).first()
+
+    if existing:
+        raise HTTPException(status_code=409, detail="There's already a pending dispute for this achievement")
+
+    # Can't dispute to same rarity
+    if suggested_rarity == achievement.rarity_tier:
+        raise HTTPException(status_code=400, detail="Suggested rarity must be different from current rarity")
+
+    # Determine scoring method for snapshot
+    scoring_method = "global_percent" if achievement.percent else "provider_default"
+    scoring_input = f"{achievement.percent:.1f}%" if achievement.percent else None
+
+    # Determine chat room based on current rarity
+    chat_room = get_rarity_chat_room(achievement.rarity_tier)
+
+    # Create chat message first
+    direction = "up" if valid_rarities.index(suggested_rarity) > valid_rarities.index(achievement.rarity_tier or "Common") else "down"
+    arrow = "⬆️" if direction == "up" else "⬇️"
+
+    chat_content = (
+        f"🔍 **DISPUTE**: {achievement.display_name}\n"
+        f"Current: {achievement.rarity_tier} → Suggested: {suggested_rarity} {arrow}\n"
+        f"Reason: {reason[:200]}"
+    )
+
+    chat_message = ChatMessage(
+        user_id=user.id,
+        room=chat_room,
+        content=chat_content,
+        message_type="dispute",
+    )
+    db.add(chat_message)
+    db.commit()
+    db.refresh(chat_message)
+
+    # Create dispute record
+    dispute = AchievementDispute(
+        achievement_id=achievement_id,
+        user_id=user.id,
+        chat_message_id=chat_message.id,
+        current_effort_score=achievement.effort_score or 0,
+        current_rarity=achievement.rarity_tier or "Common",
+        scoring_method=scoring_method,
+        scoring_input=scoring_input,
+        suggested_rarity=suggested_rarity,
+        reason=reason,
+        expires_at=datetime.utcnow() + timedelta(days=7),
+    )
+    db.add(dispute)
+    db.commit()
+    db.refresh(dispute)
+
+    return {
+        "status": "ok",
+        "dispute_id": dispute.id,
+        "chat_room": chat_room,
+        "message": f"Dispute submitted to {chat_room} room for peer review",
+    }
+
+
+@app.post("/api/disputes/{dispute_id}/vote")
+async def vote_on_dispute(
+    dispute_id: int,
+    request: Request,
+    vote: int = Form(...),  # 1 = agree with change, -1 = disagree
+    db: DbSession = Depends(get_db),
+):
+    """
+    Vote on an achievement dispute.
+    Only players who have unlocked the achievement can vote.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    if vote not in (1, -1):
+        raise HTTPException(status_code=400, detail="Vote must be 1 (agree) or -1 (disagree)")
+
+    dispute = db.query(AchievementDispute).filter(AchievementDispute.id == dispute_id).first()
+    if not dispute:
+        raise HTTPException(status_code=404, detail="Dispute not found")
+
+    if dispute.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Dispute is already {dispute.status}")
+
+    # Can't vote on own dispute
+    if dispute.user_id == user.id:
+        raise HTTPException(status_code=403, detail="You cannot vote on your own dispute")
+
+    # Verify user has this achievement
+    user_credit = db.query(AchievementCredit).filter(
+        AchievementCredit.user_id == user.id,
+        AchievementCredit.achievement_id == dispute.achievement_id
+    ).first()
+
+    if not user_credit:
+        raise HTTPException(status_code=403, detail="You must have unlocked this achievement to vote")
+
+    # Check for existing vote
+    existing_vote = db.query(DisputeVote).filter(
+        DisputeVote.dispute_id == dispute_id,
+        DisputeVote.user_id == user.id
+    ).first()
+
+    if existing_vote:
+        # Update existing vote
+        old_vote = existing_vote.vote
+        if old_vote == vote:
+            raise HTTPException(status_code=400, detail="You've already cast this vote")
+
+        existing_vote.vote = vote
+        existing_vote.voted_at = datetime.utcnow()
+
+        # Update counts
+        if old_vote == 1:
+            dispute.votes_up -= 1
+        else:
+            dispute.votes_down -= 1
+
+        if vote == 1:
+            dispute.votes_up += 1
+        else:
+            dispute.votes_down += 1
+    else:
+        # Create new vote
+        new_vote = DisputeVote(
+            dispute_id=dispute_id,
+            user_id=user.id,
+            vote=vote,
+        )
+        db.add(new_vote)
+
+        if vote == 1:
+            dispute.votes_up += 1
+        else:
+            dispute.votes_down += 1
+
+    # Note: Auto-approval disabled - disputes are held for manual admin review
+    # Votes are collected but threshold doesn't trigger automatic changes
+    # Admin can see vote counts and make final decision in the disputes panel
+
+    db.commit()
+
+    return {
+        "status": "ok",
+        "votes_up": dispute.votes_up,
+        "votes_down": dispute.votes_down,
+        "dispute_status": dispute.status,
+        "threshold": dispute.votes_threshold,
+    }
+
+
+@app.get("/api/disputes/all")
+async def get_all_disputes(
+    request: Request,
+    status: Optional[str] = None,  # pending, approved, rejected, expired
+    limit: int = 50,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Get all disputes with optional status filter.
+    Admin-only endpoint for reviewing dispute history.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    # Admin check
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    query = db.query(AchievementDispute)
+
+    if status:
+        query = query.filter(AchievementDispute.status == status)
+
+    disputes = query.order_by(AchievementDispute.created_at.desc()).limit(limit).all()
+
+    result = []
+    for dispute in disputes:
+        achievement = dispute.achievement
+        submitter = db.query(User).filter(User.id == dispute.user_id).first()
+
+        result.append({
+            "id": dispute.id,
+            "achievement_id": dispute.achievement_id,
+            "achievement_name": achievement.display_name if achievement else "Unknown",
+            "achievement_icon": achievement.icon_url if achievement else None,
+            "app_id": achievement.app_id if achievement else None,
+            "current_rarity": dispute.current_rarity,
+            "suggested_rarity": dispute.suggested_rarity,
+            "reason": dispute.reason,
+            "scoring_method": dispute.scoring_method,
+            "scoring_input": dispute.scoring_input,
+            "votes_up": dispute.votes_up,
+            "votes_down": dispute.votes_down,
+            "threshold": dispute.votes_threshold,
+            "status": dispute.status,
+            "submitter": submitter.username if submitter else "Unknown",
+            "created_at": dispute.created_at.isoformat() if dispute.created_at else None,
+            "resolved_at": dispute.resolved_at.isoformat() if dispute.resolved_at else None,
+            "admin_notes": dispute.admin_notes,
+        })
+
+    # Get counts by status
+    counts = {
+        "pending": db.query(AchievementDispute).filter(AchievementDispute.status == "pending").count(),
+        "approved": db.query(AchievementDispute).filter(AchievementDispute.status == "approved").count(),
+        "rejected": db.query(AchievementDispute).filter(AchievementDispute.status == "rejected").count(),
+        "expired": db.query(AchievementDispute).filter(AchievementDispute.status == "expired").count(),
+    }
+
+    return {"disputes": result, "counts": counts}
+
+
+@app.post("/api/disputes/{dispute_id}/admin-action")
+async def admin_dispute_action(
+    dispute_id: int,
+    request: Request,
+    action: str = Form(...),  # approve, reject, revert
+    notes: Optional[str] = Form(None),
+    db: DbSession = Depends(get_db),
+):
+    """
+    Admin action on a dispute: approve, reject, or revert an approved change.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if action not in ("approve", "reject", "revert"):
+        raise HTTPException(status_code=400, detail="Invalid action. Must be: approve, reject, revert")
+
+    dispute = db.query(AchievementDispute).filter(AchievementDispute.id == dispute_id).first()
+    if not dispute:
+        raise HTTPException(status_code=404, detail="Dispute not found")
+
+    achievement = db.query(Achievement).filter(Achievement.id == dispute.achievement_id).first()
+
+    if action == "approve":
+        if dispute.status == "approved":
+            raise HTTPException(status_code=400, detail="Already approved")
+
+        # Apply the rarity change
+        if achievement:
+            rarity_effort_map = {
+                "Common": 10, "Uncommon": 30, "Rare": 50, "Epic": 70, "Legendary": 90,
+            }
+            achievement.rarity_tier = dispute.suggested_rarity
+            achievement.effort_score = rarity_effort_map.get(dispute.suggested_rarity, 50)
+            achievement.effort_auto = False
+            achievement.effort_notes = f"Admin approved: {notes or 'No notes'}"
+
+        dispute.status = "approved"
+        dispute.resolved_at = datetime.utcnow()
+        dispute.resolved_by_id = user.id
+        dispute.admin_notes = notes
+
+    elif action == "reject":
+        if dispute.status == "rejected":
+            raise HTTPException(status_code=400, detail="Already rejected")
+
+        dispute.status = "rejected"
+        dispute.resolved_at = datetime.utcnow()
+        dispute.resolved_by_id = user.id
+        dispute.admin_notes = notes
+
+    elif action == "revert":
+        if dispute.status != "approved":
+            raise HTTPException(status_code=400, detail="Can only revert approved disputes")
+
+        # Revert to original rarity
+        if achievement:
+            rarity_effort_map = {
+                "Common": 10, "Uncommon": 30, "Rare": 50, "Epic": 70, "Legendary": 90,
+            }
+            achievement.rarity_tier = dispute.current_rarity
+            achievement.effort_score = rarity_effort_map.get(dispute.current_rarity, 50)
+            achievement.effort_auto = False
+            achievement.effort_notes = f"Admin reverted: {notes or 'No notes'}"
+
+        dispute.status = "rejected"
+        dispute.admin_notes = f"REVERTED: {notes or 'No notes'}"
+
+    db.commit()
+
+    return {
+        "status": "ok",
+        "action": action,
+        "dispute_status": dispute.status,
+    }
+
+
+@app.get("/api/disputes/pending")
+async def get_pending_disputes(
+    request: Request,
+    room: Optional[str] = None,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Get pending disputes, optionally filtered by chat room.
+    Useful for displaying active disputes in chat.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    query = db.query(AchievementDispute).filter(AchievementDispute.status == "pending")
+
+    # If room specified, filter to disputes for achievements at that tier
+    if room:
+        # Map room back to rarities
+        room_rarities = {
+            "newcomers": ["Common", "Uncommon"],
+            "rising": ["Rare"],
+            "veterans": ["Epic"],
+            "legends": ["Legendary"],
+        }
+        rarities = room_rarities.get(room, [])
+        if rarities:
+            query = query.filter(AchievementDispute.current_rarity.in_(rarities))
+
+    disputes = query.order_by(AchievementDispute.created_at.desc()).limit(20).all()
+
+    result = []
+    for dispute in disputes:
+        # Get achievement details
+        achievement = dispute.achievement
+
+        # Check if current user can vote
+        user_credit = db.query(AchievementCredit).filter(
+            AchievementCredit.user_id == user.id,
+            AchievementCredit.achievement_id == dispute.achievement_id
+        ).first()
+
+        # Check if user already voted
+        user_vote = db.query(DisputeVote).filter(
+            DisputeVote.dispute_id == dispute.id,
+            DisputeVote.user_id == user.id
+        ).first()
+
+        result.append({
+            "id": dispute.id,
+            "achievement_id": dispute.achievement_id,
+            "achievement_name": achievement.display_name if achievement else "Unknown",
+            "achievement_icon": achievement.icon_url if achievement else None,
+            "current_rarity": dispute.current_rarity,
+            "suggested_rarity": dispute.suggested_rarity,
+            "reason": dispute.reason,
+            "scoring_method": dispute.scoring_method,
+            "scoring_input": dispute.scoring_input,
+            "votes_up": dispute.votes_up,
+            "votes_down": dispute.votes_down,
+            "threshold": dispute.votes_threshold,
+            "created_at": dispute.created_at.isoformat() if dispute.created_at else None,
+            "expires_at": dispute.expires_at.isoformat() if dispute.expires_at else None,
+            "can_vote": user_credit is not None and dispute.user_id != user.id,
+            "user_vote": user_vote.vote if user_vote else None,
+            "is_mine": dispute.user_id == user.id,
+        })
+
+    return {"disputes": result}
 
 
 @app.get("/api/me/forged-items")
@@ -3601,7 +4220,7 @@ async def get_player_badge(
     """
     PUBLIC endpoint for multiplayer badge lookup.
 
-    Returns the player's Mantle tier badge info for display in-game.
+    Returns the player's Ashbane tier badge info for display in-game.
     This is lightweight and cached-friendly for multiplayer use.
 
     Response:
@@ -3638,7 +4257,7 @@ async def get_player_badge(
     )
 
     # Calculate tier
-    tier_info = calculate_mantle_tier(total_achievements, provider_count)
+    tier_info = calculate_Ashbane_tier(total_achievements, provider_count)
 
     return {
         "user_id": user_id,
@@ -3653,12 +4272,12 @@ async def get_player_badge(
 @app.get("/api/tiers")
 async def get_all_tiers():
     """
-    Get all Mantle tier definitions.
+    Get all Ashbane tier definitions.
 
     Useful for Godot to cache tier colors/thresholds locally.
     """
     return {
-        "tiers": MANTLE_TIERS,
+        "tiers": Ashbane_TIERS,
         "order": TIER_ORDER,
     }
 
@@ -3927,12 +4546,22 @@ async def get_forge_status(
             item["forged_id"] = forged_item.id
             item["item_id"] = forged_item.item_id
             item["item_name"] = forged_item.item_name
+            item["item_type"] = forged_item.item_type
+            item["item_rarity"] = forged_item.item_rarity
             item["bridge_status"] = forged_item.bridge_status or "in_game"
             item["claimed_in_game"] = forged_item.claimed_in_game_at is not None
             item["usable_in_game"] = (
                 forged_item.bridge_status in (None, "in_game") and
                 forged_item.claimed_in_game_at is not None
             )
+            # Get icon URL from catalog item
+            catalog_item = get_item_by_id(forged_item.item_id) if forged_item.item_id else None
+            if catalog_item:
+                item["icon_url"] = get_icon_url_for_item(catalog_item)
+                item["glow_color"] = catalog_item.get("visuals", {}).get("glow_color", "#888888")
+            else:
+                item["icon_url"] = resolve_icon_url(forged_item.item_id or "unknown", forged_item.item_type or "weapon")
+                item["glow_color"] = "#888888"
             forged.append(item)
         elif can_forge:
             # Look up item_id from achievement mappings
@@ -3940,10 +4569,15 @@ async def get_forge_status(
             item_id = achievement_mappings.get(mapping_key)
             if item_id:
                 item["item_id"] = item_id
-                # Optionally add item_name for consistency
                 mapped_item = get_item_by_id(item_id)
                 if mapped_item:
-                    item["item_name"] = mapped_item.get("name", "")
+                    item["item_name"] = mapped_item.get("item_name", mapped_item.get("name", ""))
+                    item["item_type"] = mapped_item.get("item_type", "weapon")
+                    item["item_rarity"] = mapped_item.get("base_rarity", "rare")
+                    item["icon_url"] = get_icon_url_for_item(mapped_item)
+                    item["glow_color"] = mapped_item.get("visuals", {}).get("glow_color", "#888888")
+                    item["description"] = mapped_item.get("description", "")
+                    item["has_icon"] = mapped_item.get("has_icon", False)
             forgeable.append(item)
         else:
             item["blocked_reason"] = (
@@ -3982,6 +4616,241 @@ async def get_forge_status(
         "forged": forged,
         "forgeable": forgeable,
         "unforgeable": unforgeable,
+    }
+
+
+@app.get("/api/me/forge-catalog")
+async def get_user_forge_catalog(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Get the forge item catalog with user-specific unlock status.
+
+    Returns all items from items.json that have achievement mappings,
+    showing which items the user can forge based on their achievements.
+
+    This matches what the in-game Godot armory displays.
+    """
+    from app.services.item_forge_service import (
+        get_production_items, get_achievement_mappings, get_item_by_id,
+        get_icon_url_for_item, get_themes
+    )
+
+    # Map app_id to friendly game names for display
+    GAME_NAMES = {
+        # Steam games (by app_id)
+        "374320": "Dark Souls III",
+        "1245620": "Elden Ring",
+        "367520": "Hollow Knight",
+        "1145360": "Hades",
+        "105600": "Terraria",
+        "814380": "Sekiro",
+        "292030": "The Witcher 3",
+        "413150": "Stardew Valley",
+        "504230": "Celeste",
+        "268910": "Cuphead",
+        "588650": "Dead Cells",
+        "646570": "Slay the Spire",
+        "620": "Portal 2",
+        "220": "Half-Life 2",
+        "72850": "Skyrim",
+        "550": "Left 4 Dead 2",
+        "203160": "Tomb Raider",
+        "33230": "Assassin's Creed II",
+        "209870": "Splinter Cell: Blacklist",
+        "1659040": "Hitman 3",
+        "730": "CS:GO",
+        # Platform/service providers
+        "discord": "Discord",
+        "github": "GitHub",
+        "roblox": "Roblox",
+        "battlenet": "World of Warcraft",
+        "xbox": "Xbox",
+        "psn": "PlayStation",
+        "steam": "Steam",
+    }
+
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    # Get achievement mappings (achievement_key -> item_id)
+    mappings = get_achievement_mappings()
+
+    # Build reverse mapping (item_id -> achievement_key)
+    item_to_achievement = {}
+    for ach_key, item_id in mappings.items():
+        if not ach_key.startswith("_"):  # Skip comments
+            item_to_achievement[item_id] = ach_key
+
+    # Get user's achievements and forged items
+    user_achievements = {}  # mapping_key -> (credit, achievement)
+    forged_items = {}  # item_id -> forged_item
+
+    # Query user's achievement credits
+    credits = (
+        db.query(AchievementCredit, Achievement, ProviderAccount, ForgedAchievement)
+        .join(Achievement, AchievementCredit.achievement_id == Achievement.id)
+        .join(ProviderAccount, AchievementCredit.provider_account_id == ProviderAccount.id)
+        .outerjoin(ForgedAchievement, ForgedAchievement.achievement_credit_id == AchievementCredit.id)
+        .filter(AchievementCredit.user_id == user.id)
+        .all()
+    )
+
+    for credit, achievement, provider_account, forged_item in credits:
+        mapping_key = f"{achievement.app_id}:{achievement.api_name}"
+        user_achievements[mapping_key] = {
+            "credit_id": credit.id,
+            "achievement_id": achievement.id,
+            "display_name": achievement.display_name,
+            "rarity_tier": achievement.rarity_tier,
+            "provider": provider_account.provider_name,
+            "is_original_claim": credit.is_original_claim,
+        }
+        if forged_item:
+            forged_items[forged_item.item_id] = {
+                "forged_id": forged_item.id,
+                "item_name": forged_item.item_name,
+                "bridge_status": forged_item.bridge_status or "in_game",
+                "claimed_in_game": forged_item.claimed_in_game_at is not None,
+            }
+
+    # Pre-fetch all achievements that match our mappings (for locked item display names)
+    all_ach_keys = [k for k in mappings.keys() if not k.startswith("_")]
+    achievement_info = {}  # mapping_key -> {display_name, app_id}
+
+    # Query achievements by app_id:api_name
+    for ach_key in all_ach_keys:
+        parts = ach_key.split(":", 1)
+        if len(parts) == 2:
+            app_id, api_name = parts
+            ach = db.query(Achievement).filter(
+                Achievement.app_id == app_id,
+                Achievement.api_name == api_name
+            ).first()
+            if ach:
+                achievement_info[ach_key] = {
+                    "display_name": ach.display_name,
+                    "app_id": app_id,
+                }
+
+    # Get all production items (items with valid mappings)
+    catalog_items = get_production_items()
+    themes = get_themes()
+
+    # Build the catalog with user status
+    catalog = []
+    stats = {"total": 0, "unlocked": 0, "forged": 0, "locked": 0}
+
+    for item in catalog_items:
+        item_id = item.get("item_id")
+        if not item_id:
+            continue
+
+        stats["total"] += 1
+
+        # Get the achievement key for this item
+        achievement_key = item_to_achievement.get(item_id)
+        user_ach = user_achievements.get(achievement_key) if achievement_key else None
+        forged_data = forged_items.get(item_id)
+
+        # Determine status
+        is_forged = forged_data is not None
+        has_achievement = user_ach is not None
+        can_forge = has_achievement and user_ach.get("is_original_claim") and not is_forged
+
+        if is_forged:
+            status = "forged"
+            stats["forged"] += 1
+        elif can_forge:
+            status = "unlocked"
+            stats["unlocked"] += 1
+        else:
+            status = "locked"
+            stats["locked"] += 1
+
+        # Build catalog entry
+        entry = {
+            "item_id": item_id,
+            "item_name": item.get("item_name", "Unknown"),
+            "item_type": item.get("item_type", "weapon"),
+            "weapon_type": item.get("weapon_type"),
+            "base_rarity": item.get("base_rarity", "rare"),
+            "theme": item.get("theme", "generic"),
+            "description": item.get("description", ""),
+            "lore": item.get("lore", ""),
+            "icon_url": get_icon_url_for_item(item),
+            "glow_color": item.get("visuals", {}).get("glow_color", "#888888"),
+            "has_icon": item.get("has_icon", False),
+            "has_sprites": item.get("has_sprites", False),
+            "status": status,
+            "can_forge": can_forge,
+            "is_forged": is_forged,
+        }
+
+        # Add combat stats for tooltip display
+        if item.get("base_damage"):
+            entry["base_damage"] = item["base_damage"]
+        if item.get("attack_speed"):
+            entry["attack_speed"] = item["attack_speed"]
+        if item.get("stat_bonuses"):
+            entry["stat_bonuses"] = item["stat_bonuses"]
+        if item.get("hp_bonus"):
+            entry["hp_bonus"] = item["hp_bonus"]
+        if item.get("effects"):
+            entry["effects"] = item["effects"]
+
+        # Add achievement info if available
+        if achievement_key:
+            parts = achievement_key.split(":", 1)
+            app_id = parts[0]
+            api_name = parts[1] if len(parts) > 1 else ""
+
+            # Get friendly game name from mapping
+            game_name = GAME_NAMES.get(app_id, app_id)
+
+            entry["achievement"] = {
+                "app_id": app_id,
+                "api_name": api_name,
+                "game_name": game_name,
+            }
+
+            if user_ach:
+                # User has this achievement - use their data
+                entry["achievement"]["display_name"] = user_ach.get("display_name", "")
+                entry["achievement"]["rarity_tier"] = user_ach.get("rarity_tier", "")
+                entry["achievement"]["provider"] = user_ach.get("provider", "")
+                entry["credit_id"] = user_ach.get("credit_id")
+            elif achievement_key in achievement_info:
+                # Locked item - use pre-fetched achievement data
+                ach_data = achievement_info[achievement_key]
+                entry["achievement"]["display_name"] = ach_data.get("display_name", "")
+
+        # Add forged data if applicable
+        if forged_data:
+            entry["forged"] = forged_data
+
+        catalog.append(entry)
+
+    # Sort by: forged first, then unlocked, then locked; within each by rarity
+    rarity_order = {"legendary": 0, "epic": 1, "rare": 2, "uncommon": 3, "common": 4}
+    status_order = {"forged": 0, "unlocked": 1, "locked": 2}
+
+    catalog.sort(key=lambda x: (
+        status_order.get(x["status"], 3),
+        rarity_order.get(x["base_rarity"].lower(), 5),
+        x["item_name"]
+    ))
+
+    return {
+        "catalog": catalog,
+        "themes": themes,
+        "stats": stats,
     }
 
 

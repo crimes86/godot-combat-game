@@ -333,13 +333,26 @@ async def sync_xbox_achievements(
             except (ValueError, TypeError):
                 gamerscore = 0
 
-            # Compute effort score based on gamerscore (like Battle.net uses points)
-            effort_score = compute_xbox_effort(gamerscore=gamerscore)
+            # Extract rarity percentage from OpenXBL data
+            # The rarity object contains currentPercentage (global unlock %)
+            rarity_data = ach.get("rarity", {})
+            rarity_percent = None
+            if isinstance(rarity_data, dict):
+                try:
+                    rarity_percent = float(rarity_data.get("currentPercentage", 0))
+                    # 0 means no data available
+                    if rarity_percent == 0:
+                        rarity_percent = None
+                except (ValueError, TypeError):
+                    rarity_percent = None
+
+            # Compute effort score - prefer rarity percent, fall back to gamerscore
+            effort_score = compute_xbox_effort(gamerscore=gamerscore, global_percent=rarity_percent)
             rarity_tier = compute_rarity_from_effort(effort_score)
 
             # Debug: Log computed values for first few achievements per game
             if found <= 3:
-                logger.info(f"[XBOX] {ach_name}: gs={gamerscore} → effort={effort_score} → {rarity_tier}")
+                logger.info(f"[XBOX] {ach_name}: rarity%={rarity_percent}, gs={gamerscore} → effort={effort_score} → {rarity_tier}")
 
             # Track rarity distribution
             if rarity_tier in rarity_counts:

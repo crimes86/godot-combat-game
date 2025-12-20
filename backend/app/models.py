@@ -86,7 +86,7 @@ class AchievementCredit(Base):
     - provider_name + provider_user_id: Permanent identifier (survives unlink/relink)
     - is_original_claim: True if this user was FIRST to claim this achievement
 
-    Only original claims count toward Mantle tier and can be forged.
+    Only original claims count toward Ashbane tier and can be forged.
     Re-claimed achievements display on provider card only.
     """
     __tablename__ = 'achievement_credits'
@@ -94,7 +94,7 @@ class AchievementCredit(Base):
     user_id = Column(Integer, ForeignKey('users.id'))
     provider_account_id = Column(Integer, ForeignKey('provider_accounts.id'), nullable=True)
     achievement_id = Column(Integer, ForeignKey('achievements.id'))
-    date_credited = Column(DateTime, default=datetime.utcnow)  # When added to Mantle
+    date_credited = Column(DateTime, default=datetime.utcnow)  # When added to Ashbane
     unlocked_at = Column(DateTime, nullable=True)  # Original unlock time from provider
 
     # Anti-exploit: Global claim tracking (permanent, survives unlink/relink)
@@ -300,7 +300,7 @@ class TradeListing(Base):
     message = Column(String(256), nullable=True)        # Custom message from seller
 
     # Location for "find seller" feature
-    zone_id = Column(String(32), nullable=True)         # wasteland, cursed_lands, etc.
+    zone_id = Column(String(32), nullable=True)         # dreadland, cursed_lands, etc.
     position_x = Column(Float, nullable=True)
     position_y = Column(Float, nullable=True)
 
@@ -350,7 +350,7 @@ class ChatMessage(Base):
     """
     Chat messages for tiered chat rooms.
 
-    Rooms are based on Mantle tier:
+    Rooms are based on Ashbane tier:
     - newcomers: Initiate, Bronze
     - rising: Silver, Gold
     - veterans: Platinum, Diamond
@@ -880,6 +880,88 @@ class BaneStone(Base):
 
     # Relationships
     target_tree = relationship("SeedPlot", back_populates="bane_stones")
+
+
+class AchievementDispute(Base):
+    """
+    Player-submitted disputes about achievement rarity classifications.
+
+    Disputes are broadcast to the appropriate tier chat room for peer review:
+    - Common/Uncommon → newcomers room
+    - Rare → rising room
+    - Epic → veterans room
+    - Legendary → legends room
+
+    Status flow:
+    - pending: Awaiting community votes
+    - approved: Enough votes to change, achievement updated
+    - rejected: Community disagreed or admin rejected
+    - expired: No action taken within voting window
+    """
+    __tablename__ = 'achievement_disputes'
+
+    id = Column(Integer, primary_key=True, index=True)
+    achievement_id = Column(Integer, ForeignKey('achievements.id'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    chat_message_id = Column(Integer, ForeignKey('chat_messages.id'), nullable=True, index=True)
+
+    # Current classification (snapshot at dispute time)
+    current_effort_score = Column(Float, nullable=False)
+    current_rarity = Column(String(16), nullable=False)
+    scoring_method = Column(String(32), nullable=True)  # "global_percent", "gamerscore", "points", etc.
+    scoring_input = Column(String(64), nullable=True)   # "16.2%", "100 gamerscore", etc.
+
+    # Suggested classification
+    suggested_rarity = Column(String(16), nullable=False)  # Common, Uncommon, Rare, Epic, Legendary
+    reason = Column(Text, nullable=False)  # Player's explanation
+
+    # Voting
+    votes_up = Column(Integer, default=0)      # Agree with suggested change
+    votes_down = Column(Integer, default=0)    # Disagree, keep current
+    votes_threshold = Column(Integer, default=5)  # Votes needed to auto-approve
+
+    # Status
+    status = Column(String(16), nullable=False, default='pending', index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    expires_at = Column(DateTime, nullable=True)  # 7 days from creation
+    resolved_at = Column(DateTime, nullable=True)
+
+    # Admin override (optional)
+    admin_notes = Column(Text, nullable=True)
+    resolved_by_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+
+    # Relationships
+    achievement = relationship("Achievement")
+    user = relationship("User", foreign_keys=[user_id])
+    chat_message = relationship("ChatMessage")
+    resolved_by = relationship("User", foreign_keys=[resolved_by_id])
+    votes = relationship("DisputeVote", back_populates="dispute")
+
+
+class DisputeVote(Base):
+    """
+    Individual votes on achievement disputes.
+
+    Only players who have unlocked the achievement can vote,
+    ensuring expertise-based peer review.
+    """
+    __tablename__ = 'dispute_votes'
+
+    id = Column(Integer, primary_key=True, index=True)
+    dispute_id = Column(Integer, ForeignKey('achievement_disputes.id'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    vote = Column(Integer, nullable=False)  # 1 = agree (change rarity), -1 = disagree (keep current)
+    voted_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    dispute = relationship("AchievementDispute", back_populates="votes")
+    user = relationship("User")
+
+    __table_args__ = (
+        # One vote per user per dispute
+        UniqueConstraint('dispute_id', 'user_id', name='unique_dispute_vote'),
+    )
 
 
 class SeasonalRanking(Base):

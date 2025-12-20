@@ -1,8 +1,9 @@
 <nav class="navbar">
   <div class="navbar-left">
-    <!-- MANTLE mini neon sign -->
-    <a href="/dashboard" class="neon-sign-mini">
-      <span class="neon-text-mini">MANTLE</span>
+    <!-- Ashbane Tree Logo + ASHBANE mini neon sign -->
+    <a href="/dashboard" class="neon-sign-mini" style="display:flex; align-items:center; gap:8px;">
+      <img src="/static/icons/ashbane-tree.png" alt="Ashbane" style="width:28px; height:28px; filter:drop-shadow(0 0 6px rgba(255,140,50,0.6));" />
+      <span class="neon-text-mini">ASHBANE</span>
     </a>
 
     <!-- Show user info only when logged in -->
@@ -61,14 +62,28 @@
       </div>
     {% endif %}
   {% endfor %}
+  <!-- Provider info icon -->
+  <span class="info-icon navbar-info-icon">?
+    <div class="info-tooltip">
+      <h4>🎮 Link Your Gaming Accounts</h4>
+      <p>Connect your gaming platforms to <span class="tip-highlight">aggregate achievements</span> across all your accounts.</p>
+      <p><strong>Why link multiple accounts?</strong></p>
+      <ul>
+        <li>All achievements count toward your tier</li>
+        <li>Unlock items from any platform's games</li>
+        <li>One Ashbane profile, all your gaming history</li>
+      </ul>
+      <p>Click any <span class="tip-highlight">grayed icon</span> with a + to connect that platform. Already connected accounts glow with their platform color.</p>
+    </div>
+  </span>
 </div>
 
 
   <div class="navbar-right">
     {% if local_user_id %}
       <!-- Friends Icon with Pending Badge -->
-      <a href="#friends-section" class="navbar-friends" title="Friends" style="position:relative; display:flex; align-items:center; margin-right:16px; color:#00c8ff; text-decoration:none;">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 4px rgba(0,200,255,0.5));">
+      <a href="#friends-section" class="navbar-friends" title="Friends" style="position:relative; display:flex; align-items:center; margin-right:16px; color:#999; text-decoration:none;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 4px rgba(150,150,150,0.5));">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
           <circle cx="9" cy="7" r="4"/>
           <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>

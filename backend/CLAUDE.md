@@ -1,8 +1,8 @@
-# Claude Instructions for Mantle
+# Claude Instructions for Ashbane
 
 ## Project Overview
 
-Mantle is a two-part system (monorepo):
+Ashbane is a two-part system (monorepo):
 1. **Backend (`backend/`)** - FastAPI authentication layer that aggregates gaming achievements
 2. **Godot Game (root)** - Multiplayer game where achievements become cosmetics
 
@@ -78,7 +78,7 @@ BETA_ACCESS_CODE=<optional - enables beta gate>
 ### Anti-Exploit System (Critical)
 
 The `AchievementCredit` table tracks claims globally by `provider_name + provider_user_id`:
-- `is_original_claim=True` → Counts toward Mantle tier, can be forged
+- `is_original_claim=True` → Counts toward Ashbane tier, can be forged
 - `is_original_claim=False` → Display only (prevents unlink/relink exploits)
 
 **Never bypass this.** See `docs/ACHIEVEMENT_VERIFICATION.md` for details.

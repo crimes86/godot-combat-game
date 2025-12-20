@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Merge Accounts – Mantle</title>
+  <title>Merge Accounts – Ashbane</title>
   <link rel="stylesheet" href="/static/css/styles.css" />
+  <link rel="stylesheet" href="/static/css/ashbane-theme.css" />
   <style>
     .merge-wrapper {
       min-height: 100vh;
@@ -19,16 +20,14 @@
       width: 100%;
       max-width: 480px;
       padding: 2rem;
-      background: linear-gradient(180deg, rgba(20,25,30,0.95) 0%, rgba(8,10,14,0.98) 100%);
+      background: rgba(20, 20, 22, 0.95);
       backdrop-filter: blur(12px);
-      border: 1px solid rgba(0,255,255,0.25);
+      border: 1px solid rgba(90,90,90,0.5);
       border-radius: 16px;
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.05),
-        inset 0 0 40px rgba(0,255,255,0.03),
         0 4px 0 rgba(0,0,0,0.3),
-        0 8px 20px rgba(0,0,0,0.4),
-        0 0 30px rgba(0,255,255,0.1);
+        0 8px 20px rgba(0,0,0,0.4);
       overflow: hidden;
     }
 
@@ -37,7 +36,7 @@
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%2300ffff;stroke-width:0.5;opacity:0.08%7D.pad%7Bfill:%2300ffff;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,25 L25,25 L25,50 L50,50'/%3E%3Cpath class='trace' d='M75,0 L75,25 L100,25'/%3E%3Cpath class='trace' d='M0,75 L35,75 L35,100'/%3E%3Ccircle class='pad' cx='25' cy='25' r='2'/%3E%3Ccircle class='pad' cx='50' cy='50' r='2'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%235a5a5a;stroke-width:0.5;opacity:0.15%7D.pad%7Bfill:%235a5a5a;opacity:0.2%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,25 L25,25 L25,50 L50,50'/%3E%3Cpath class='trace' d='M75,0 L75,25 L100,25'/%3E%3Cpath class='trace' d='M0,75 L35,75 L35,100'/%3E%3Ccircle class='pad' cx='25' cy='25' r='2'/%3E%3Ccircle class='pad' cx='50' cy='50' r='2'/%3E%3C/svg%3E");
       background-size: 100px 100px;
       pointer-events: none;
       z-index: 0;
@@ -70,7 +69,6 @@
       margin-bottom: 0.5rem;
       text-transform: uppercase;
       letter-spacing: 2px;
-      text-shadow: 0 0 10px rgba(0,255,255,0.5);
     }
 
     .merge-subtitle {
@@ -98,8 +96,8 @@
       min-width: 120px;
     }
     .account-box.current {
-      border-color: rgba(0,255,255,0.4);
-      box-shadow: 0 0 15px rgba(0,255,255,0.15);
+      border-color: rgba(120,120,120,0.6);
+      box-shadow: 0 0 15px rgba(100,100,100,0.2);
     }
     .account-box.other {
       border-color: rgba(255,200,50,0.4);
@@ -130,8 +128,8 @@
     /* Info box */
     .merge-info {
       padding: 1rem;
-      background: rgba(0,255,255,0.05);
-      border: 1px solid rgba(0,255,255,0.2);
+      background: rgba(90,90,90,0.1);
+      border: 1px solid rgba(90,90,90,0.3);
       border-radius: 8px;
       margin-bottom: 1.5rem;
     }

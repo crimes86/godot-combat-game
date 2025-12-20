@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Login – Mantle</title>
+  <title>Login – Ashbane</title>
   <link rel="stylesheet" href="/static/css/styles.css" />
+  <link rel="stylesheet" href="/static/css/ashbane-theme.css" />
   <style>
     /* Login page specific styles - matching dashboard theme */
 
-    /* MANTLE Neon Sign */
+    /* Ashbane Neon Sign */
     .neon-sign-container {
       position: relative;
       margin: 0 auto 2rem;
@@ -32,14 +33,10 @@
         /* Inner glow */
         0 0 5px #fff,
         0 0 10px #fff,
-        /* Cyan neon glow */
-        0 0 20px #0ff,
-        0 0 40px #0ff,
-        0 0 60px #0ff,
-        0 0 80px #0ff,
-        /* Outer bloom */
-        0 0 100px #0ff,
-        0 0 150px rgba(0,255,255,0.5);
+        /* Orange/gold glow */
+        0 0 20px #d9a633,
+        0 0 40px #ff9900,
+        0 0 60px #ff6600;
       animation: neonFlicker 3s infinite;
     }
 
@@ -51,13 +48,11 @@
       transform: translate(-50%, -50%);
       width: calc(100% + 40px);
       height: calc(100% + 20px);
-      background: linear-gradient(180deg,
-        rgba(0,20,25,0.9) 0%,
-        rgba(0,10,15,0.95) 100%);
-      border: 2px solid rgba(0,255,255,0.3);
+      background: rgba(15, 15, 18, 0.95);
+      border: 2px solid rgba(90,90,90,0.5);
       border-radius: 8px;
       box-shadow:
-        inset 0 0 30px rgba(0,255,255,0.1),
+        inset 0 0 30px rgba(50,50,50,0.2),
         0 0 20px rgba(0,0,0,0.5);
       z-index: -1;
     }
@@ -79,25 +74,10 @@
     /* Subtle flicker animation */
     @keyframes neonFlicker {
       0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
-        text-shadow:
-          0 0 5px #fff,
-          0 0 10px #fff,
-          0 0 20px #0ff,
-          0 0 40px #0ff,
-          0 0 60px #0ff,
-          0 0 80px #0ff,
-          0 0 100px #0ff,
-          0 0 150px rgba(0,255,255,0.5);
         opacity: 1;
       }
       20%, 24%, 55% {
-        text-shadow:
-          0 0 2px #fff,
-          0 0 5px #fff,
-          0 0 10px #0ff,
-          0 0 20px #0ff,
-          0 0 30px #0ff;
-        opacity: 0.9;
+        opacity: 0.92;
       }
     }
 
@@ -109,17 +89,17 @@
       transform: translateX(-50%);
       width: 50px;
       height: 50px;
-      filter: drop-shadow(0 0 10px #0ff) drop-shadow(0 0 20px #0ff);
+      filter: drop-shadow(0 0 10px #d9a633) drop-shadow(0 0 20px #ff9900);
       animation: iconPulse 2s ease-in-out infinite;
     }
 
     @keyframes iconPulse {
       0%, 100% {
-        filter: drop-shadow(0 0 10px #0ff) drop-shadow(0 0 20px #0ff);
+        filter: drop-shadow(0 0 10px #d9a633) drop-shadow(0 0 20px #ff9900);
         transform: translateX(-50%) scale(1);
       }
       50% {
-        filter: drop-shadow(0 0 15px #0ff) drop-shadow(0 0 30px #0ff) drop-shadow(0 0 40px rgba(0,255,255,0.5));
+        filter: drop-shadow(0 0 15px #ff9900) drop-shadow(0 0 30px #ff6600);
         transform: translateX(-50%) scale(1.05);
       }
     }
@@ -132,11 +112,11 @@
       right: 0;
       height: 40px;
       background: linear-gradient(180deg,
-        rgba(0,255,255,0.15) 0%,
+        rgba(217,166,51,0.2) 0%,
         transparent 100%);
       filter: blur(4px);
       transform: scaleY(-0.3) translateY(-100%);
-      opacity: 0.4;
+      opacity: 0.5;
       pointer-events: none;
     }
 
@@ -166,18 +146,16 @@
       max-width: 480px;
       padding: 2.5rem;
       /* Glassmorphism background */
-      background: linear-gradient(180deg, rgba(20,25,30,0.95) 0%, rgba(8,10,14,0.98) 100%);
+      background: rgba(20, 20, 22, 0.95);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(0,255,255,0.25);
+      border: 1px solid rgba(90,90,90,0.5);
       border-radius: 16px;
       /* 3D depth effect */
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.05),
-        inset 0 0 40px rgba(0,255,255,0.03),
         0 4px 0 rgba(0,0,0,0.3),
-        0 8px 20px rgba(0,0,0,0.4),
-        0 0 30px rgba(0,255,255,0.1);
+        0 8px 20px rgba(0,0,0,0.4);
       overflow: hidden;
     }
 
@@ -186,7 +164,7 @@
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%2300ffff;stroke-width:0.5;opacity:0.08%7D.pad%7Bfill:%2300ffff;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,25 L25,25 L25,50 L50,50'/%3E%3Cpath class='trace' d='M75,0 L75,25 L100,25'/%3E%3Cpath class='trace' d='M0,75 L35,75 L35,100'/%3E%3Cpath class='trace' d='M60,60 L60,100'/%3E%3Cpath class='trace' d='M85,50 L100,50'/%3E%3Ccircle class='pad' cx='25' cy='25' r='2'/%3E%3Ccircle class='pad' cx='50' cy='50' r='2'/%3E%3Ccircle class='pad' cx='75' cy='25' r='1.5'/%3E%3Ccircle class='pad' cx='35' cy='75' r='1.5'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%235a5a5a;stroke-width:0.5;opacity:0.15%7D.pad%7Bfill:%235a5a5a;opacity:0.2%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,25 L25,25 L25,50 L50,50'/%3E%3Cpath class='trace' d='M75,0 L75,25 L100,25'/%3E%3Cpath class='trace' d='M0,75 L35,75 L35,100'/%3E%3Cpath class='trace' d='M60,60 L60,100'/%3E%3Cpath class='trace' d='M85,50 L100,50'/%3E%3Ccircle class='pad' cx='25' cy='25' r='2'/%3E%3Ccircle class='pad' cx='50' cy='50' r='2'/%3E%3Ccircle class='pad' cx='75' cy='25' r='1.5'/%3E%3Ccircle class='pad' cx='35' cy='75' r='1.5'/%3E%3C/svg%3E");
       background-size: 100px 100px;
       pointer-events: none;
       z-index: 0;
@@ -203,12 +181,11 @@
     .login-title {
       font-family: 'Roboto Mono', monospace;
       font-size: 1.1rem;
-      color: var(--neon);
+      color: #ccc;
       text-align: center;
       margin-bottom: 1.5rem;
       text-transform: uppercase;
       letter-spacing: 2px;
-      text-shadow: 0 0 10px rgba(0,255,255,0.5);
     }
 
     /* Provider buttons */
@@ -353,7 +330,7 @@
       content: '';
       flex: 1;
       height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(0,255,255,0.3), transparent);
+      background: linear-gradient(90deg, transparent, rgba(120,120,120,0.5), transparent);
     }
 
     .login-divider span {
@@ -387,14 +364,14 @@
 <body>
   <div class="login-wrapper">
     <div class="login-card">
-      <!-- MANTLE Neon Sign -->
+      <!-- Ashbane Neon Sign -->
       <div class="neon-sign-container">
         <div class="neon-wire"></div>
         <div class="neon-sign">
           <div class="neon-backing"></div>
           <div class="neon-bracket left"></div>
           <div class="neon-bracket right"></div>
-          <span class="neon-text">MANTLE</span>
+          <span class="neon-text">Ashbane</span>
         </div>
         <div class="neon-reflection"></div>
       </div>
@@ -404,7 +381,7 @@
       <div class="login-title">Closed Beta</div>
       <div style="text-align: center; margin-bottom: 1.5rem;">
         <p style="color: #888; font-size: 0.95rem; margin-bottom: 1rem;">
-          Mantle is currently in closed beta testing.
+          Ashbane is currently in closed beta testing.
         </p>
         <p style="color: #666; font-size: 0.85rem;">
           Enter your access code to continue.
@@ -421,8 +398,8 @@
             style="
               width: 100%;
               padding: 14px 18px;
-              background: rgba(0, 255, 255, 0.05);
-              border: 2px solid rgba(0, 255, 255, 0.3);
+              background: rgba(50, 50, 50, 0.3);
+              border: 2px solid rgba(90, 90, 90, 0.5);
               border-radius: 8px;
               color: #fff;
               font-family: 'Roboto Mono', monospace;
@@ -432,8 +409,8 @@
               outline: none;
               transition: border-color 0.2s, box-shadow 0.2s;
             "
-            onfocus="this.style.borderColor='var(--neon)'; this.style.boxShadow='0 0 15px rgba(0,255,255,0.3)';"
-            onblur="this.style.borderColor='rgba(0,255,255,0.3)'; this.style.boxShadow='none';"
+            onfocus="this.style.borderColor='#aaa'; this.style.boxShadow='0 0 15px rgba(150,150,150,0.3)';"
+            onblur="this.style.borderColor='rgba(90,90,90,0.5)'; this.style.boxShadow='none';"
           />
         </div>
         {% if beta_error %}
@@ -454,10 +431,10 @@
           style="
             width: 100%;
             padding: 14px;
-            background: linear-gradient(180deg, rgba(0, 255, 255, 0.2) 0%, rgba(0, 255, 255, 0.1) 100%);
-            border: 2px solid var(--neon);
+            background: rgba(60, 60, 60, 0.5);
+            border: 2px solid rgba(120, 120, 120, 0.6);
             border-radius: 8px;
-            color: var(--neon);
+            color: #ccc;
             font-family: 'Roboto Mono', monospace;
             font-size: 0.95rem;
             font-weight: 600;
@@ -466,8 +443,8 @@
             cursor: pointer;
             transition: all 0.2s;
           "
-          onmouseover="this.style.background='rgba(0,255,255,0.15)'; this.style.boxShadow='0 0 20px rgba(0,255,255,0.4)';"
-          onmouseout="this.style.background='linear-gradient(180deg, rgba(0,255,255,0.2) 0%, rgba(0,255,255,0.1) 100%)'; this.style.boxShadow='none';"
+          onmouseover="this.style.background='rgba(80,80,80,0.6)'; this.style.boxShadow='0 0 20px rgba(150,150,150,0.3)';"
+          onmouseout="this.style.background='rgba(60,60,60,0.5)'; this.style.boxShadow='none';"
         >
           Enter Beta
         </button>
@@ -539,14 +516,14 @@
         <div class="guest-notice-title">Playing as Guest?</div>
         <div class="guest-notice-text">
           You can play without logging in, but your progress won't be saved
-          and you won't earn Mantle achievements.
+          and you won't earn Ashbane achievements.
         </div>
       </div>
       {% endif %}
 
       <!-- Footer -->
       <div class="login-footer">
-        &copy; 2025 Mantle. All rights reserved.
+        &copy; 2025 Ashbane. All rights reserved.
       </div>
     </div>
   </div>

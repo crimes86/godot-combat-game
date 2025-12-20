@@ -82,7 +82,7 @@ PROVIDERS = {
         userinfo_url="https://oauth.battle.net/userinfo",
         scopes=["openid"],
         achievement_support=AchievementSupport.FULL,
-        achievement_sync_fn="sync_battlenet_achievements",
+        achievement_sync_fn="sync_all_battlenet_achievements",  # Syncs WoW, D3, SC2
         icon="battlenet.svg",
         color="#ffb932",
     ),

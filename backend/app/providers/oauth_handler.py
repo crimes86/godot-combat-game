@@ -473,7 +473,7 @@ def create_oauth_routes(
                         return response
 
                 # Check for inactive account (was unlinked)
-                # Philosophy: Provider accounts can move freely between Mantle accounts.
+                # Philosophy: Provider accounts can move freely between Ashbane accounts.
                 # Anti-exploit is handled by AchievementCredit.is_original_claim, not provider binding.
                 inactive_account = db.query(ProviderAccount).filter_by(
                     provider_name=provider,

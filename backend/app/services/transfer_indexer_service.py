@@ -308,7 +308,7 @@ class TransferIndexerService:
                     f"expected 'bridged'. Updating anyway."
                 )
 
-            # Find if new owner has a Mantle account
+            # Find if new owner has a Ashbane account
             new_owner_wallet = db.query(WalletAccount).filter(
                 WalletAccount.wallet_address == to_wallet
             ).first()
@@ -316,7 +316,7 @@ class TransferIndexerService:
             old_owner_id = item.current_owner_id
 
             if new_owner_wallet:
-                # New owner has a Mantle account - they can bridge in!
+                # New owner has a Ashbane account - they can bridge in!
                 new_owner = db.query(User).filter(User.id == new_owner_wallet.user_id).first()
                 logger.info(
                     f"External transfer: token {token_id} -> {new_owner.username if new_owner else 'unknown'} "
@@ -331,13 +331,13 @@ class TransferIndexerService:
                 # Keep bridge_status as 'bridged' - new owner must explicitly bridge in
 
             else:
-                # New owner doesn't have Mantle account (external-only)
+                # New owner doesn't have Ashbane account (external-only)
                 logger.info(
                     f"External transfer: token {token_id} -> external wallet {to_wallet[:10]}... "
-                    f"(no Mantle account)"
+                    f"(no Ashbane account)"
                 )
 
-                # Clear Mantle ownership, track external wallet
+                # Clear Ashbane ownership, track external wallet
                 item.current_owner_id = None
                 item.external_owner_wallet = to_wallet
                 item.trade_count = (item.trade_count or 0) + 1

@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dashboard – Mantle</title>
+  <title>Dashboard – Ashbane</title>
   <link rel="stylesheet" href="/static/css/styles.css" />
+  <link rel="stylesheet" href="/static/css/ashbane-theme.css" />
   <style>
     /* Gem hover effects */
     .rarity-badge svg {
@@ -36,17 +37,17 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: linear-gradient(165deg, #0d1214 0%, #0a0d0f 50%, #080a0c 100%);
-      border: 1px solid rgba(0, 255, 255, 0.4);
+      background: linear-gradient(165deg, #121214 0%, #0a0a0d 50%, #080810 100%);
+      border: 1px solid rgba(90, 90, 90, 0.5);
       border-radius: 16px;
       box-shadow:
-        0 0 40px rgba(0, 255, 255, 0.2),
+        0 0 40px rgba(85, 85, 85, 0.2),
         0 25px 50px rgba(0, 0, 0, 0.5),
         inset 0 1px 0 rgba(255, 255, 255, 0.05);
       z-index: 10000;
       width: 95%;
-      max-width: 580px;
-      max-height: 75vh;
+      max-width: 800px;
+      max-height: 80vh;
       overflow: hidden;
       flex-direction: column;
     }
@@ -63,8 +64,8 @@
       align-items: center;
       justify-content: space-between;
       padding: 18px 24px;
-      border-bottom: 1px solid rgba(0, 255, 255, 0.15);
-      background: linear-gradient(180deg, rgba(0, 255, 255, 0.05) 0%, transparent 100%);
+      border-bottom: 1px solid rgba(90, 90, 90, 0.3);
+      background: linear-gradient(180deg, rgba(85, 85, 85, 0.1) 0%, transparent 100%);
     }
     .rarity-popover-title {
       display: flex;
@@ -117,17 +118,17 @@
       border-radius: 3px;
     }
     .rarity-popover-body::-webkit-scrollbar-thumb {
-      background: rgba(0, 255, 255, 0.3);
+      background: rgba(90, 90, 90, 0.5);
       border-radius: 3px;
     }
     .rarity-achievement-item {
       display: flex;
-      align-items: flex-start;
-      gap: 14px;
-      padding: 14px 16px;
-      border-radius: 12px;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
       background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(0, 0, 0, 0.1) 100%);
-      margin-bottom: 10px;
+      margin-bottom: 6px;
       border: 1px solid rgba(255, 255, 255, 0.06);
       transition: all 0.2s ease;
       position: relative;
@@ -144,81 +145,90 @@
       opacity: 0.6;
     }
     .rarity-achievement-item:hover {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(0, 255, 255, 0.02) 100%);
-      border-color: rgba(0, 255, 255, 0.2);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(85, 85, 85, 0.05) 100%);
+      border-color: rgba(90, 90, 90, 0.3);
       transform: translateX(2px);
     }
     .rarity-achievement-icon {
-      width: 52px;
-      height: 52px;
-      border-radius: 10px;
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
       object-fit: cover;
       background: linear-gradient(135deg, #1a1a1a, #0d0d0d);
-      border: 2px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       flex-shrink: 0;
     }
     .rarity-achievement-info {
       flex: 1;
       min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
     .rarity-achievement-name {
-      font-size: 0.95rem;
+      font-size: 0.85rem;
       font-weight: 600;
       color: #e8e8e8;
-      margin-bottom: 4px;
-      line-height: 1.3;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
     }
     .rarity-achievement-desc {
-      font-size: 0.8rem;
-      color: #777;
-      margin-bottom: 8px;
-      line-height: 1.4;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
+      font-size: 0.7rem;
+      color: #666;
+      line-height: 1.3;
+      white-space: nowrap;
       overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+      flex-shrink: 1;
     }
     .rarity-achievement-meta {
       display: flex;
       align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
+      gap: 8px;
+      flex-shrink: 0;
     }
     .rarity-achievement-game {
       display: flex;
       align-items: center;
-      gap: 6px;
-      font-size: 0.75rem;
+      gap: 4px;
+      font-size: 0.65rem;
       color: #888;
-      padding: 3px 8px;
+      padding: 2px 6px;
       background: rgba(0, 0, 0, 0.3);
-      border-radius: 4px;
+      border-radius: 3px;
+      white-space: nowrap;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .rarity-achievement-game img {
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       border-radius: 2px;
       opacity: 0.8;
     }
     .rarity-achievement-provider {
       display: flex;
       align-items: center;
-      gap: 4px;
-      font-size: 0.7rem;
+      gap: 3px;
+      font-size: 0.6rem;
       color: #666;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
     .rarity-achievement-provider img {
-      width: 12px;
-      height: 12px;
+      width: 11px;
+      height: 11px;
       opacity: 0.7;
     }
     .rarity-achievement-stats {
       display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 6px;
+      align-items: center;
+      gap: 10px;
       flex-shrink: 0;
     }
     .rarity-achievement-percent {
@@ -235,25 +245,27 @@
       font-size: 0.7rem;
       color: #555;
     }
-    .rarity-mantle-badge {
-      font-size: 0.65rem;
-      padding: 2px 6px;
-      background: linear-gradient(135deg, rgba(0, 255, 255, 0.15), rgba(0, 255, 255, 0.05));
-      border: 1px solid rgba(0, 255, 255, 0.3);
-      border-radius: 4px;
+    .rarity-Ashbane-badge {
+      font-size: 0.55rem;
+      padding: 2px 5px;
+      background: linear-gradient(135deg, rgba(217, 166, 51, 0.15), rgba(217, 166, 51, 0.05));
+      border: 1px solid rgba(217, 166, 51, 0.3);
+      border-radius: 3px;
       color: var(--neon);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.3px;
+      font-weight: 600;
     }
     .rarity-consumed-badge {
-      font-size: 0.65rem;
-      padding: 2px 6px;
-      background: rgba(255, 150, 50, 0.1);
-      border: 1px solid rgba(255, 150, 50, 0.3);
-      border-radius: 4px;
-      color: #fa3;
+      font-size: 0.55rem;
+      padding: 2px 5px;
+      background: rgba(100, 100, 100, 0.15);
+      border: 1px solid rgba(100, 100, 100, 0.3);
+      border-radius: 3px;
+      color: #666;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.3px;
+      font-weight: 600;
     }
     .rarity-popover-loading {
       text-align: center;
@@ -355,12 +367,12 @@
 
     /* === CARD BACKGROUND EFFECTS === */
 
-    /* Motherboard circuit pattern overlay - ANIMATED like mantle card */
+    /* Motherboard circuit pattern overlay - ANIMATED like Ashbane card */
     .provider-card::before {
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%2300ffff;stroke-width:0.8;opacity:0.18%7D.trace-thick%7Bstroke-width:1.2;opacity:0.22%7D.pad%7Bfill:%2300ffff;opacity:0.22%7D.via%7Bfill:none;stroke:%2300ffff;stroke-width:0.6;opacity:0.15%7D.chip%7Bfill:none;stroke:%2300ffff;stroke-width:0.8;opacity:0.12%7D%3C/style%3E%3C/defs%3E%3Crect class='chip' x='65' y='15' width='30' height='20' rx='1'/%3E%3Cg class='trace'%3E%3Cline x1='65' y1='20' x2='58' y2='20'/%3E%3Cline x1='65' y1='25' x2='55' y2='25'/%3E%3Cline x1='65' y1='30' x2='58' y2='30'/%3E%3Cline x1='95' y1='22' x2='105' y2='22'/%3E%3Cline x1='95' y1='28' x2='102' y2='28'/%3E%3C/g%3E%3Cpath class='trace trace-thick' d='M0,45 L25,45 L25,70 L50,70'/%3E%3Cpath class='trace' d='M50,70 L50,90 L75,90 L75,120'/%3E%3Cpath class='trace trace-thick' d='M0,85 L15,85 L15,105 L40,105 L40,120'/%3E%3Cpath class='trace' d='M105,0 L105,40 L85,40 L85,55'/%3E%3Cpath class='trace' d='M58,20 L58,0'/%3E%3Cpath class='trace' d='M55,25 L55,45 L35,45 L35,55'/%3E%3Cpath class='trace' d='M58,30 L58,50 L45,50 L45,65'/%3E%3Cpath class='trace' d='M120,65 L95,65 L95,85 L85,85 L85,100'/%3E%3Cpath class='trace' d='M10,0 L10,25 L30,25 L30,40'/%3E%3Cpath class='trace' d='M0,15 L8,15 L8,25'/%3E%3Cpath class='trace' d='M120,100 L100,100 L100,110 L90,110'/%3E%3Ccircle class='via' cx='25' cy='45' r='2.5'/%3E%3Ccircle class='via' cx='50' cy='70' r='2.5'/%3E%3Ccircle class='via' cx='85' cy='55' r='2'/%3E%3Ccircle class='via' cx='35' cy='55' r='2'/%3E%3Ccircle class='via' cx='75' cy='90' r='2'/%3E%3Ccircle class='pad' cx='25' cy='45' r='4'/%3E%3Ccircle class='pad' cx='50' cy='70' r='4'/%3E%3Ccircle class='pad' cx='15' cy='85' r='3'/%3E%3Ccircle class='pad' cx='105' cy='40' r='3'/%3E%3Ccircle class='pad' cx='30' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='10' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='85' cy='100' r='3'/%3E%3Crect class='pad' x='88' y='108' width='4' height='4' rx='0.5'/%3E%3Ccircle fill='%2300ffff' opacity='0.35' r='1.5'%3E%3CanimateMotion dur='4.7s' begin='0s' repeatCount='indefinite' path='M0,45 L25,45 L25,70 L50,70'/%3E%3C/circle%3E%3Ccircle fill='%2300ffff' opacity='0.28' r='1'%3E%3CanimateMotion dur='3.3s' begin='1.2s' repeatCount='indefinite' path='M105,0 L105,40 L85,40 L85,55'/%3E%3C/circle%3E%3Ccircle fill='%2300ffff' opacity='0.32' r='1.2'%3E%3CanimateMotion dur='5.5s' begin='2.8s' repeatCount='indefinite' path='M0,85 L15,85 L15,105 L40,105 L40,120'/%3E%3C/circle%3E%3Ccircle fill='%2300ffff' opacity='0.25' r='1'%3E%3CanimateMotion dur='2.9s' begin='0.7s' repeatCount='indefinite' path='M120,65 L95,65 L95,85 L85,85 L85,100'/%3E%3C/circle%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%235a5a5a;stroke-width:0.8;opacity:0.18%7D.trace-thick%7Bstroke-width:1.2;opacity:0.22%7D.pad%7Bfill:%235a5a5a;opacity:0.22%7D.via%7Bfill:none;stroke:%235a5a5a;stroke-width:0.6;opacity:0.15%7D.chip%7Bfill:none;stroke:%235a5a5a;stroke-width:0.8;opacity:0.12%7D%3C/style%3E%3C/defs%3E%3Crect class='chip' x='65' y='15' width='30' height='20' rx='1'/%3E%3Cg class='trace'%3E%3Cline x1='65' y1='20' x2='58' y2='20'/%3E%3Cline x1='65' y1='25' x2='55' y2='25'/%3E%3Cline x1='65' y1='30' x2='58' y2='30'/%3E%3Cline x1='95' y1='22' x2='105' y2='22'/%3E%3Cline x1='95' y1='28' x2='102' y2='28'/%3E%3C/g%3E%3Cpath class='trace trace-thick' d='M0,45 L25,45 L25,70 L50,70'/%3E%3Cpath class='trace' d='M50,70 L50,90 L75,90 L75,120'/%3E%3Cpath class='trace trace-thick' d='M0,85 L15,85 L15,105 L40,105 L40,120'/%3E%3Cpath class='trace' d='M105,0 L105,40 L85,40 L85,55'/%3E%3Cpath class='trace' d='M58,20 L58,0'/%3E%3Cpath class='trace' d='M55,25 L55,45 L35,45 L35,55'/%3E%3Cpath class='trace' d='M58,30 L58,50 L45,50 L45,65'/%3E%3Cpath class='trace' d='M120,65 L95,65 L95,85 L85,85 L85,100'/%3E%3Cpath class='trace' d='M10,0 L10,25 L30,25 L30,40'/%3E%3Cpath class='trace' d='M0,15 L8,15 L8,25'/%3E%3Cpath class='trace' d='M120,100 L100,100 L100,110 L90,110'/%3E%3Ccircle class='via' cx='25' cy='45' r='2.5'/%3E%3Ccircle class='via' cx='50' cy='70' r='2.5'/%3E%3Ccircle class='via' cx='85' cy='55' r='2'/%3E%3Ccircle class='via' cx='35' cy='55' r='2'/%3E%3Ccircle class='via' cx='75' cy='90' r='2'/%3E%3Ccircle class='pad' cx='25' cy='45' r='4'/%3E%3Ccircle class='pad' cx='50' cy='70' r='4'/%3E%3Ccircle class='pad' cx='15' cy='85' r='3'/%3E%3Ccircle class='pad' cx='105' cy='40' r='3'/%3E%3Ccircle class='pad' cx='30' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='10' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='85' cy='100' r='3'/%3E%3Crect class='pad' x='88' y='108' width='4' height='4' rx='0.5'/%3E%3Ccircle fill='%235a5a5a' opacity='0.35' r='1.5'%3E%3CanimateMotion dur='4.7s' begin='0s' repeatCount='indefinite' path='M0,45 L25,45 L25,70 L50,70'/%3E%3C/circle%3E%3Ccircle fill='%235a5a5a' opacity='0.28' r='1'%3E%3CanimateMotion dur='3.3s' begin='1.2s' repeatCount='indefinite' path='M105,0 L105,40 L85,40 L85,55'/%3E%3C/circle%3E%3Ccircle fill='%235a5a5a' opacity='0.32' r='1.2'%3E%3CanimateMotion dur='5.5s' begin='2.8s' repeatCount='indefinite' path='M0,85 L15,85 L15,105 L40,105 L40,120'/%3E%3C/circle%3E%3Ccircle fill='%235a5a5a' opacity='0.25' r='1'%3E%3CanimateMotion dur='2.9s' begin='0.7s' repeatCount='indefinite' path='M120,65 L95,65 L95,85 L85,85 L85,100'/%3E%3C/circle%3E%3C/svg%3E");
       background-size: 80px 80px;
       background-position: center;
       background-repeat: repeat;
@@ -398,22 +410,22 @@
       max-height: 390px !important;
       border-radius: 20px;
       /* Sleek bezel edge */
-      border: 2px solid rgba(0,255,255,0.5);
+      border: 2px solid rgba(90,90,90,0.5);
       border-top: 2px solid rgba(255,255,255,0.25);
       box-shadow:
         /* Inner chrome bezel highlight */
         inset 0 2px 0 rgba(255,255,255,0.15),
         inset 0 -2px 0 rgba(0,0,0,0.3),
-        /* Inner glow - holographic power */
-        inset 0 0 60px rgba(0,255,255,0.05),
+        /* Inner glow - stone gray */
+        inset 0 0 60px rgba(85,85,85,0.05),
         /* Card thickness - stacked layers like coins */
         0 3px 0 rgba(80,80,80,0.9),
         0 5px 0 rgba(60,60,60,0.85),
         0 7px 0 rgba(40,40,40,0.8),
         0 9px 0 rgba(30,30,30,0.7),
         0 11px 0 rgba(20,20,20,0.6),
-        /* Neon underglow */
-        0 0 25px rgba(0,255,255,0.25),
+        /* Stone gray underglow */
+        0 0 25px rgba(85,85,85,0.25),
         /* Weight shadow - phone-like heft */
         0 15px 35px rgba(0,0,0,0.5),
         0 25px 60px rgba(0,0,0,0.35);
@@ -428,15 +440,15 @@
       box-shadow:
         inset 0 2px 0 rgba(255,255,255,0.2),
         inset 0 -2px 0 rgba(0,0,0,0.2),
-        inset 0 0 80px rgba(0,255,255,0.08),
+        inset 0 0 80px rgba(85,85,85,0.08),
         0 3px 0 rgba(80,80,80,0.9),
         0 5px 0 rgba(60,60,60,0.85),
         0 7px 0 rgba(40,40,40,0.8),
         0 9px 0 rgba(30,30,30,0.7),
         0 11px 0 rgba(20,20,20,0.6),
-        /* Enhanced neon glow on hover */
-        0 0 40px rgba(0,255,255,0.4),
-        0 0 80px rgba(0,255,255,0.2),
+        /* Enhanced glow on hover - stone gray */
+        0 0 40px rgba(85,85,85,0.4),
+        0 0 80px rgba(85,85,85,0.2),
         0 25px 50px rgba(0,0,0,0.45),
         0 35px 80px rgba(0,0,0,0.3);
     }
@@ -582,12 +594,12 @@
 
     /* Animated border glow */
     @keyframes borderGlow {
-      0%, 100% { box-shadow: 0 0 20px var(--provider-glow, rgba(0,255,255,0.2)), inset 0 0 30px var(--provider-glow-inner, rgba(0,255,255,0.03)); }
-      50% { box-shadow: 0 0 35px var(--provider-glow, rgba(0,255,255,0.35)), inset 0 0 40px var(--provider-glow-inner, rgba(0,255,255,0.08)); }
+      0%, 100% { box-shadow: 0 0 20px var(--provider-glow, rgba(85,85,85,0.2)), inset 0 0 30px var(--provider-glow-inner, rgba(85,85,85,0.03)); }
+      50% { box-shadow: 0 0 35px var(--provider-glow, rgba(85,85,85,0.35)), inset 0 0 40px var(--provider-glow-inner, rgba(85,85,85,0.08)); }
     }
     .provider-card {
-      --provider-glow: rgba(0,255,255,0.2);
-      --provider-glow-inner: rgba(0,255,255,0.03);
+      --provider-glow: rgba(85,85,85,0.2);
+      --provider-glow-inner: rgba(85,85,85,0.03);
       animation: borderGlow 3s ease-in-out infinite;
     }
     .provider-card[data-provider="steam"] {
@@ -658,7 +670,7 @@
       background-size: 80px 80px;
     }
 
-    /* Holographic shimmer - POKEMON PRISMATIC EFFECT */
+    /* Rainbow holographic shimmer effect */
     .provider-card .holo-shimmer {
       position: absolute;
       top: 0; left: 0; bottom: 0;
@@ -668,17 +680,13 @@
         transparent 0%,
         transparent 20%,
         rgba(255,255,255,0.03) 22%,
-        rgba(255,0,128,0.12) 25%,
-        rgba(255,100,0,0.1) 28%,
-        rgba(255,255,0,0.12) 32%,
-        rgba(0,255,128,0.12) 36%,
-        rgba(0,200,255,0.15) 40%,
-        rgba(100,0,255,0.12) 44%,
-        rgba(255,0,200,0.1) 48%,
+        rgba(255,0,255,0.12) 25%,
+        rgba(0,255,255,0.15) 32%,
+        rgba(255,255,0,0.12) 40%,
+        rgba(0,255,255,0.15) 48%,
         rgba(255,255,255,0.08) 50%,
-        rgba(0,255,255,0.12) 52%,
-        rgba(255,0,255,0.1) 56%,
-        rgba(255,255,0,0.08) 60%,
+        rgba(255,0,255,0.12) 52%,
+        rgba(255,255,0,0.1) 60%,
         rgba(255,255,255,0.03) 62%,
         transparent 65%,
         transparent 100%
@@ -687,7 +695,7 @@
       z-index: 3;
       opacity: 0;
       transform: translateX(-66%);
-      mix-blend-mode: overlay;
+      mix-blend-mode: screen;
     }
     /* Persistent subtle rainbow sheen */
     .provider-card::before {
@@ -695,13 +703,13 @@
         linear-gradient(
           135deg,
           transparent 0%,
-          rgba(255,0,128,0.02) 20%,
+          rgba(255,0,255,0.02) 20%,
           rgba(0,255,255,0.03) 40%,
           rgba(255,255,0,0.02) 60%,
           rgba(255,0,255,0.02) 80%,
           transparent 100%
         ),
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%2300ffff;stroke-width:0.8;opacity:0.15%7D.trace-thick%7Bstroke-width:1.2%7D.pad%7Bfill:%2300ffff;opacity:0.18%7D.via%7Bfill:none;stroke:%2300ffff;stroke-width:0.6;opacity:0.12%7D.chip%7Bfill:none;stroke:%2300ffff;stroke-width:0.8;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3C!-- IC Chip outline --%3E%3Crect class='chip' x='65' y='15' width='30' height='20' rx='1'/%3E%3Cg class='trace'%3E%3Cline x1='65' y1='20' x2='58' y2='20'/%3E%3Cline x1='65' y1='25' x2='55' y2='25'/%3E%3Cline x1='65' y1='30' x2='58' y2='30'/%3E%3Cline x1='95' y1='22' x2='105' y2='22'/%3E%3Cline x1='95' y1='28' x2='102' y2='28'/%3E%3C/g%3E%3C!-- Main traces with 90deg turns --%3E%3Cpath class='trace trace-thick' d='M0,45 L25,45 L25,70 L50,70'/%3E%3Cpath class='trace' d='M50,70 L50,90 L75,90 L75,120'/%3E%3Cpath class='trace trace-thick' d='M0,85 L15,85 L15,105 L40,105 L40,120'/%3E%3Cpath class='trace' d='M105,0 L105,40 L85,40 L85,55'/%3E%3Cpath class='trace' d='M58,20 L58,0'/%3E%3Cpath class='trace' d='M55,25 L55,45 L35,45 L35,55'/%3E%3Cpath class='trace' d='M58,30 L58,50 L45,50 L45,65'/%3E%3Cpath class='trace' d='M120,65 L95,65 L95,85 L85,85 L85,100'/%3E%3Cpath class='trace' d='M10,0 L10,25 L30,25 L30,40'/%3E%3Cpath class='trace' d='M0,15 L8,15 L8,25'/%3E%3Cpath class='trace' d='M120,100 L100,100 L100,110 L90,110'/%3E%3C!-- Via holes --%3E%3Ccircle class='via' cx='25' cy='45' r='2.5'/%3E%3Ccircle class='via' cx='50' cy='70' r='2.5'/%3E%3Ccircle class='via' cx='85' cy='55' r='2'/%3E%3Ccircle class='via' cx='35' cy='55' r='2'/%3E%3Ccircle class='via' cx='75' cy='90' r='2'/%3E%3C!-- Solder pads --%3E%3Ccircle class='pad' cx='25' cy='45' r='4'/%3E%3Ccircle class='pad' cx='50' cy='70' r='4'/%3E%3Ccircle class='pad' cx='15' cy='85' r='3'/%3E%3Ccircle class='pad' cx='105' cy='40' r='3'/%3E%3Ccircle class='pad' cx='30' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='10' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='85' cy='100' r='3'/%3E%3Crect class='pad' x='88' y='108' width='4' height='4' rx='0.5'/%3E%3C/svg%3E");
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%235a5a5a;stroke-width:0.8;opacity:0.15%7D.trace-thick%7Bstroke-width:1.2%7D.pad%7Bfill:%235a5a5a;opacity:0.18%7D.via%7Bfill:none;stroke:%235a5a5a;stroke-width:0.6;opacity:0.12%7D.chip%7Bfill:none;stroke:%235a5a5a;stroke-width:0.8;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3C!-- IC Chip outline --%3E%3Crect class='chip' x='65' y='15' width='30' height='20' rx='1'/%3E%3Cg class='trace'%3E%3Cline x1='65' y1='20' x2='58' y2='20'/%3E%3Cline x1='65' y1='25' x2='55' y2='25'/%3E%3Cline x1='65' y1='30' x2='58' y2='30'/%3E%3Cline x1='95' y1='22' x2='105' y2='22'/%3E%3Cline x1='95' y1='28' x2='102' y2='28'/%3E%3C/g%3E%3C!-- Main traces with 90deg turns --%3E%3Cpath class='trace trace-thick' d='M0,45 L25,45 L25,70 L50,70'/%3E%3Cpath class='trace' d='M50,70 L50,90 L75,90 L75,120'/%3E%3Cpath class='trace trace-thick' d='M0,85 L15,85 L15,105 L40,105 L40,120'/%3E%3Cpath class='trace' d='M105,0 L105,40 L85,40 L85,55'/%3E%3Cpath class='trace' d='M58,20 L58,0'/%3E%3Cpath class='trace' d='M55,25 L55,45 L35,45 L35,55'/%3E%3Cpath class='trace' d='M58,30 L58,50 L45,50 L45,65'/%3E%3Cpath class='trace' d='M120,65 L95,65 L95,85 L85,85 L85,100'/%3E%3Cpath class='trace' d='M10,0 L10,25 L30,25 L30,40'/%3E%3Cpath class='trace' d='M0,15 L8,15 L8,25'/%3E%3Cpath class='trace' d='M120,100 L100,100 L100,110 L90,110'/%3E%3C!-- Via holes --%3E%3Ccircle class='via' cx='25' cy='45' r='2.5'/%3E%3Ccircle class='via' cx='50' cy='70' r='2.5'/%3E%3Ccircle class='via' cx='85' cy='55' r='2'/%3E%3Ccircle class='via' cx='35' cy='55' r='2'/%3E%3Ccircle class='via' cx='75' cy='90' r='2'/%3E%3C!-- Solder pads --%3E%3Ccircle class='pad' cx='25' cy='45' r='4'/%3E%3Ccircle class='pad' cx='50' cy='70' r='4'/%3E%3Ccircle class='pad' cx='15' cy='85' r='3'/%3E%3Ccircle class='pad' cx='105' cy='40' r='3'/%3E%3Ccircle class='pad' cx='30' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='10' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='85' cy='100' r='3'/%3E%3Crect class='pad' x='88' y='108' width='4' height='4' rx='0.5'/%3E%3C/svg%3E");
       background-size: 100% 100%, 80px 80px;
     }
     /* Shimmer active state - triggered by JS */
@@ -717,19 +725,23 @@
       0% { transform: translateX(-66%); }
       100% { transform: translateX(33%); }
     }
-    /* Idle holographic pulse - subtle rainbow breathing */
+    /* Idle holographic pulse - rainbow breathing */
     @keyframes holoBreath {
       0%, 100% {
-        filter: hue-rotate(0deg) saturate(1);
-        opacity: 0.6;
+        filter: hue-rotate(0deg) saturate(1.2);
+        opacity: 0.7;
       }
-      50% {
-        filter: hue-rotate(15deg) saturate(1.3);
-        opacity: 0.8;
+      33% {
+        filter: hue-rotate(60deg) saturate(1.4);
+        opacity: 0.85;
+      }
+      66% {
+        filter: hue-rotate(-60deg) saturate(1.4);
+        opacity: 0.85;
       }
     }
     .provider-card::after {
-      animation: holoBreath 4s ease-in-out infinite;
+      animation: holoBreath 6s ease-in-out infinite;
     }
 
     /* Make sure content is above effects */
@@ -738,28 +750,29 @@
       z-index: 2;
     }
 
-    /* ===== MANTLE CARD STYLES ===== */
-    /* Mantle card = thick smartphone with beaming red display */
-    .mantle-card {
+    /* ===== Ashbane CARD STYLES ===== */
+    /* Ashbane card = thick smartphone with platinum display */
+    .Ashbane-card {
       position: relative;
-      background: linear-gradient(180deg, rgba(255,50,50,0.1) 0%, rgba(15,8,8,0.99) 35%, rgba(8,4,4,0.99) 100%);
+      background: linear-gradient(180deg, rgba(160,216,239,0.1) 0%, rgba(12,15,18,0.99) 35%, rgba(8,10,12,0.99) 100%);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,50,50,0.5);
-      border-top: 1px solid rgba(255,100,100,0.2);
+      border: 1px solid rgba(160,216,239,0.5);
+      border-top: 1px solid rgba(180,220,240,0.2);
       overflow: hidden;
-      /* Thick smartphone depth - red edition */
+      min-height: 480px;
+      /* Thick smartphone depth - platinum edition */
       box-shadow:
         /* Top bezel highlight */
-        inset 0 1px 0 rgba(255,100,100,0.15),
+        inset 0 1px 0 rgba(180,220,240,0.15),
         /* Display backlight glow */
-        inset 0 0 80px rgba(255,50,50,0.1),
+        inset 0 0 80px rgba(160,216,239,0.1),
         /* Neon edge glow */
-        0 0 30px rgba(255,50,50,0.4),
-        0 0 60px rgba(255,50,50,0.2),
+        0 0 30px rgba(160,216,239,0.4),
+        0 0 60px rgba(160,216,239,0.2),
         /* Card thickness */
-        0 5px 0 rgba(80,20,20,0.8),
-        0 8px 0 rgba(40,10,10,0.6),
+        0 5px 0 rgba(60,80,90,0.8),
+        0 8px 0 rgba(30,40,45,0.6),
         /* Weight shadow */
         0 15px 40px rgba(0,0,0,0.6),
         0 25px 70px rgba(0,0,0,0.4);
@@ -768,31 +781,31 @@
       transform-style: preserve-3d;
       transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
     }
-    .mantle-card:hover {
+    .Ashbane-card:hover {
       transform: perspective(1000px) rotateX(0deg) translateY(-6px);
       box-shadow:
-        inset 0 1px 0 rgba(255,100,100,0.2),
-        inset 0 0 100px rgba(255,50,50,0.12),
-        0 0 40px rgba(255,50,50,0.5),
-        0 0 80px rgba(255,50,50,0.25),
-        0 5px 0 rgba(80,20,20,0.7),
-        0 8px 0 rgba(40,10,10,0.5),
+        inset 0 1px 0 rgba(180,220,240,0.2),
+        inset 0 0 100px rgba(160,216,239,0.12),
+        0 0 40px rgba(160,216,239,0.5),
+        0 0 80px rgba(160,216,239,0.25),
+        0 5px 0 rgba(60,80,90,0.7),
+        0 8px 0 rgba(30,40,45,0.5),
         0 25px 50px rgba(0,0,0,0.5),
         0 35px 80px rgba(0,0,0,0.35);
     }
-    /* Circuit pattern - same as provider cards but red */
-    .mantle-card::before {
+    /* Circuit pattern - same as provider cards but platinum */
+    .Ashbane-card::before {
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%23ff3232;stroke-width:0.8;opacity:0.15%7D.trace-thick%7Bstroke-width:1.2%7D.pad%7Bfill:%23ff3232;opacity:0.18%7D.via%7Bfill:none;stroke:%23ff3232;stroke-width:0.6;opacity:0.12%7D.chip%7Bfill:none;stroke:%23ff3232;stroke-width:0.8;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3Crect class='chip' x='65' y='15' width='30' height='20' rx='1'/%3E%3Cg class='trace'%3E%3Cline x1='65' y1='20' x2='58' y2='20'/%3E%3Cline x1='65' y1='25' x2='55' y2='25'/%3E%3Cline x1='65' y1='30' x2='58' y2='30'/%3E%3Cline x1='95' y1='22' x2='105' y2='22'/%3E%3Cline x1='95' y1='28' x2='102' y2='28'/%3E%3C/g%3E%3Cpath class='trace trace-thick' d='M0,45 L25,45 L25,70 L50,70'/%3E%3Cpath class='trace' d='M50,70 L50,90 L75,90 L75,120'/%3E%3Cpath class='trace trace-thick' d='M0,85 L15,85 L15,105 L40,105 L40,120'/%3E%3Cpath class='trace' d='M105,0 L105,40 L85,40 L85,55'/%3E%3Cpath class='trace' d='M58,20 L58,0'/%3E%3Cpath class='trace' d='M55,25 L55,45 L35,45 L35,55'/%3E%3Cpath class='trace' d='M58,30 L58,50 L45,50 L45,65'/%3E%3Cpath class='trace' d='M120,65 L95,65 L95,85 L85,85 L85,100'/%3E%3Cpath class='trace' d='M10,0 L10,25 L30,25 L30,40'/%3E%3Cpath class='trace' d='M0,15 L8,15 L8,25'/%3E%3Cpath class='trace' d='M120,100 L100,100 L100,110 L90,110'/%3E%3Ccircle class='via' cx='25' cy='45' r='2.5'/%3E%3Ccircle class='via' cx='50' cy='70' r='2.5'/%3E%3Ccircle class='via' cx='85' cy='55' r='2'/%3E%3Ccircle class='via' cx='35' cy='55' r='2'/%3E%3Ccircle class='via' cx='75' cy='90' r='2'/%3E%3Ccircle class='pad' cx='25' cy='45' r='4'/%3E%3Ccircle class='pad' cx='50' cy='70' r='4'/%3E%3Ccircle class='pad' cx='15' cy='85' r='3'/%3E%3Ccircle class='pad' cx='105' cy='40' r='3'/%3E%3Ccircle class='pad' cx='30' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='10' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='85' cy='100' r='3'/%3E%3Crect class='pad' x='88' y='108' width='4' height='4' rx='0.5'/%3E%3Ccircle fill='%23ff3232' opacity='0.25' r='1.5'%3E%3CanimateMotion dur='4.7s' begin='0s' repeatCount='indefinite' path='M0,45 L25,45 L25,70 L50,70'/%3E%3C/circle%3E%3Ccircle fill='%23ff3232' opacity='0.2' r='1'%3E%3CanimateMotion dur='3.3s' begin='1.2s' repeatCount='indefinite' path='M105,0 L105,40 L85,40 L85,55'/%3E%3C/circle%3E%3Ccircle fill='%23ff3232' opacity='0.22' r='1.2'%3E%3CanimateMotion dur='5.5s' begin='2.8s' repeatCount='indefinite' path='M0,85 L15,85 L15,105 L40,105 L40,120'/%3E%3C/circle%3E%3Ccircle fill='%23ff3232' opacity='0.18' r='1'%3E%3CanimateMotion dur='2.9s' begin='0.7s' repeatCount='indefinite' path='M120,65 L95,65 L95,85 L85,85 L85,100'/%3E%3C/circle%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%23a0d8ef;stroke-width:0.8;opacity:0.15%7D.trace-thick%7Bstroke-width:1.2%7D.pad%7Bfill:%23a0d8ef;opacity:0.18%7D.via%7Bfill:none;stroke:%23a0d8ef;stroke-width:0.6;opacity:0.12%7D.chip%7Bfill:none;stroke:%23a0d8ef;stroke-width:0.8;opacity:0.1%7D%3C/style%3E%3C/defs%3E%3Crect class='chip' x='65' y='15' width='30' height='20' rx='1'/%3E%3Cg class='trace'%3E%3Cline x1='65' y1='20' x2='58' y2='20'/%3E%3Cline x1='65' y1='25' x2='55' y2='25'/%3E%3Cline x1='65' y1='30' x2='58' y2='30'/%3E%3Cline x1='95' y1='22' x2='105' y2='22'/%3E%3Cline x1='95' y1='28' x2='102' y2='28'/%3E%3C/g%3E%3Cpath class='trace trace-thick' d='M0,45 L25,45 L25,70 L50,70'/%3E%3Cpath class='trace' d='M50,70 L50,90 L75,90 L75,120'/%3E%3Cpath class='trace trace-thick' d='M0,85 L15,85 L15,105 L40,105 L40,120'/%3E%3Cpath class='trace' d='M105,0 L105,40 L85,40 L85,55'/%3E%3Cpath class='trace' d='M58,20 L58,0'/%3E%3Cpath class='trace' d='M55,25 L55,45 L35,45 L35,55'/%3E%3Cpath class='trace' d='M58,30 L58,50 L45,50 L45,65'/%3E%3Cpath class='trace' d='M120,65 L95,65 L95,85 L85,85 L85,100'/%3E%3Cpath class='trace' d='M10,0 L10,25 L30,25 L30,40'/%3E%3Cpath class='trace' d='M0,15 L8,15 L8,25'/%3E%3Cpath class='trace' d='M120,100 L100,100 L100,110 L90,110'/%3E%3Ccircle class='via' cx='25' cy='45' r='2.5'/%3E%3Ccircle class='via' cx='50' cy='70' r='2.5'/%3E%3Ccircle class='via' cx='85' cy='55' r='2'/%3E%3Ccircle class='via' cx='35' cy='55' r='2'/%3E%3Ccircle class='via' cx='75' cy='90' r='2'/%3E%3Ccircle class='pad' cx='25' cy='45' r='4'/%3E%3Ccircle class='pad' cx='50' cy='70' r='4'/%3E%3Ccircle class='pad' cx='15' cy='85' r='3'/%3E%3Ccircle class='pad' cx='105' cy='40' r='3'/%3E%3Ccircle class='pad' cx='30' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='10' cy='25' r='2.5'/%3E%3Ccircle class='pad' cx='85' cy='100' r='3'/%3E%3Crect class='pad' x='88' y='108' width='4' height='4' rx='0.5'/%3E%3Ccircle fill='%23a0d8ef' opacity='0.25' r='1.5'%3E%3CanimateMotion dur='4.7s' begin='0s' repeatCount='indefinite' path='M0,45 L25,45 L25,70 L50,70'/%3E%3C/circle%3E%3Ccircle fill='%23a0d8ef' opacity='0.2' r='1'%3E%3CanimateMotion dur='3.3s' begin='1.2s' repeatCount='indefinite' path='M105,0 L105,40 L85,40 L85,55'/%3E%3C/circle%3E%3Ccircle fill='%23a0d8ef' opacity='0.22' r='1.2'%3E%3CanimateMotion dur='5.5s' begin='2.8s' repeatCount='indefinite' path='M0,85 L15,85 L15,105 L40,105 L40,120'/%3E%3C/circle%3E%3Ccircle fill='%23a0d8ef' opacity='0.18' r='1'%3E%3CanimateMotion dur='2.9s' begin='0.7s' repeatCount='indefinite' path='M120,65 L95,65 L95,85 L85,85 L85,100'/%3E%3C/circle%3E%3C/svg%3E");
       background-size: 120px 120px;
       pointer-events: none;
       z-index: 1;
       border-radius: inherit;
     }
     /* Radial vignette - same as provider cards */
-    .mantle-card::after {
+    .Ashbane-card::after {
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -802,18 +815,18 @@
       border-radius: inherit;
     }
     /* Ensure content is above effects */
-    .mantle-card > * {
+    .Ashbane-card > * {
       position: relative;
       z-index: 2;
     }
-    /* Red glow animation - same style as provider cards but stronger */
-    .mantle-card {
-      --provider-glow: rgba(255,50,50,0.4);
-      --provider-glow-inner: rgba(255,50,50,0.08);
+    /* Platinum glow animation - same style as provider cards but stronger */
+    .Ashbane-card {
+      --provider-glow: rgba(160,216,239,0.4);
+      --provider-glow-inner: rgba(160,216,239,0.08);
       animation: borderGlow 3s ease-in-out infinite;
-      border-color: rgba(255,50,50,0.5);
+      border-color: rgba(160,216,239,0.5);
     }
-    /* Mantle card always uses red glow - tier only affects the badge/emblem */
+    /* Ashbane card always uses platinum glow - tier only affects the badge/emblem */
     @keyframes goldPulse {
       0%, 100% { box-shadow: 0 0 30px rgba(255,215,0,0.25), inset 0 0 35px rgba(255,215,0,0.08); }
       50% { box-shadow: 0 0 45px rgba(255,215,0,0.4), inset 0 0 45px rgba(255,215,0,0.12); }
@@ -981,32 +994,36 @@
       filter: drop-shadow(0 0 6px var(--neon));
     }
 
-    /* Holographic shimmer for Mantle card - controlled via JS like provider cards */
-    .mantle-card .holo-shimmer {
+    /* Holographic shimmer for Ashbane card - same rainbow effect as provider cards */
+    .Ashbane-card .holo-shimmer {
       position: absolute;
       top: 0; left: 0; bottom: 0;
-      width: 200%;
+      width: 300%;
       background: linear-gradient(
-        120deg,
+        105deg,
         transparent 0%,
-        transparent 25%,
-        rgba(255,255,255,0.04) 30%,
-        rgba(255,100,100,0.15) 35%,
-        rgba(255,50,50,0.1) 40%,
-        rgba(255,200,100,0.08) 45%,
-        rgba(255,100,100,0.15) 50%,
-        rgba(255,255,255,0.04) 55%,
-        transparent 60%,
+        transparent 20%,
+        rgba(255,255,255,0.03) 22%,
+        rgba(255,0,255,0.12) 25%,
+        rgba(0,255,255,0.15) 32%,
+        rgba(255,255,0,0.12) 40%,
+        rgba(0,255,255,0.15) 48%,
+        rgba(255,255,255,0.08) 50%,
+        rgba(255,0,255,0.12) 52%,
+        rgba(255,255,0,0.1) 60%,
+        rgba(255,255,255,0.03) 62%,
+        transparent 65%,
         transparent 100%
       );
       pointer-events: none;
-      z-index: 1;
+      z-index: 3;
       opacity: 0;
-      transform: translateX(-50%);
+      transform: translateX(-66%);
+      mix-blend-mode: screen;
     }
-    .mantle-card.shimmer-active .holo-shimmer {
+    .Ashbane-card.shimmer-active .holo-shimmer {
       opacity: 1;
-      animation: shimmerMove 0.7s linear forwards;
+      animation: shimmerMove 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
     }
 
     /* ===== CARD DECK - EXPANDED/STACKED STATES ===== */
@@ -1015,7 +1032,7 @@
       position: relative;
     }
 
-    .mantle-row {
+    .Ashbane-row {
       z-index: 100;
       transform-style: preserve-3d;
     }
@@ -1025,8 +1042,8 @@
       position: absolute;
       right: calc(50% - 175px);
       top: 20px;
-      background: rgba(0, 180, 180, 0.15);
-      border: 1px solid rgba(0, 180, 180, 0.4);
+      background: rgba(100, 100, 100, 0.15);
+      border: 1px solid rgba(120, 120, 120, 0.4);
       border-radius: 8px;
       padding: 8px;
       cursor: pointer;
@@ -1035,8 +1052,8 @@
       z-index: 500;
     }
     .stack-toggle-btn:hover {
-      background: rgba(0, 180, 180, 0.25);
-      box-shadow: 0 0 15px rgba(0, 180, 180, 0.4);
+      background: rgba(120, 120, 120, 0.25);
+      box-shadow: 0 0 15px rgba(120, 120, 120, 0.4);
     }
     .card-deck.stacked .stack-toggle-btn .stack-icon { display: none; }
     .card-deck.stacked .stack-toggle-btn .expand-icon { display: block !important; }
@@ -1088,24 +1105,24 @@
     }
 
     /* ===== STACKED STATE ===== */
-    /* Mantle card gets a lifted effect when stacked */
-    .card-deck.stacked .mantle-row {
+    /* Ashbane card gets a lifted effect when stacked */
+    .card-deck.stacked .Ashbane-row {
       margin-bottom: 0;
     }
-    .card-deck.stacked .mantle-card {
+    .card-deck.stacked .Ashbane-card {
       box-shadow:
         0 8px 20px rgba(0, 0, 0, 0.5),
         0 0 30px rgba(255, 68, 68, 0.3),
         inset 0 0 20px rgba(255, 68, 68, 0.1);
     }
 
-    /* ===== MANTLE CARD POLISH ===== */
-    /* Golden pulse for Mantle emblem */
+    /* ===== Ashbane CARD POLISH ===== */
+    /* Golden pulse for Ashbane emblem */
     @keyframes emblemPulse {
       0%, 100% { filter: drop-shadow(0 0 8px rgba(255, 200, 50, 0.6)); }
       50% { filter: drop-shadow(0 0 20px rgba(255, 200, 50, 0.9)) drop-shadow(0 0 40px rgba(255, 150, 0, 0.5)); }
     }
-    .wasteland-emblem {
+    .dreadland-emblem {
       animation: emblemPulse 3s ease-in-out infinite;
     }
 
@@ -1203,7 +1220,7 @@
       pointer-events: auto;
       border-radius: 10px;
       /* Glass bezel edge */
-      border: 1.5px solid rgba(0,255,255,0.6) !important;
+      border: 1.5px solid rgba(90,90,90,0.6) !important;
       border-top: 1.5px solid rgba(255,255,255,0.3) !important;
       border-bottom: 2px solid rgba(0,0,0,0.4) !important;
       padding: 0 !important;
@@ -1233,8 +1250,8 @@
         0 8px 0 rgba(36,36,41,0.88),
         0 9px 0 rgba(30,30,35,0.85),
         0 10px 0 rgba(25,25,30,0.8),
-        /* Neon underglow */
-        0 0 20px rgba(0,255,255,0.25),
+        /* Stone gray underglow */
+        0 0 20px rgba(85,85,85,0.25),
         /* Weight shadow */
         0 15px 35px rgba(0,0,0,0.4);
     }
@@ -1296,7 +1313,7 @@
           0 8px 0 rgba(36,36,41,0.88),
           0 9px 0 rgba(30,30,35,0.85),
           0 10px 0 rgba(25,25,30,0.8),
-          0 0 15px var(--card-glow, rgba(0,255,255,0.2)),
+          0 0 15px var(--card-glow, rgba(85,85,85,0.2)),
           0 15px 35px rgba(0,0,0,0.4);
       }
       50% {
@@ -1314,8 +1331,8 @@
           0 8px 0 rgba(41,41,46,0.88),
           0 9px 0 rgba(35,35,40,0.85),
           0 10px 0 rgba(30,30,35,0.8),
-          0 0 28px var(--card-glow, rgba(0,255,255,0.45)),
-          0 0 45px var(--card-glow, rgba(0,255,255,0.15)),
+          0 0 28px var(--card-glow, rgba(85,85,85,0.45)),
+          0 0 45px var(--card-glow, rgba(85,85,85,0.15)),
           0 18px 40px rgba(0,0,0,0.45);
       }
     }
@@ -1540,11 +1557,11 @@
         0 8px 0 rgba(42,42,47,0.9),
         0 9px 0 rgba(36,36,41,0.88),
         0 10px 0 rgba(30,30,35,0.85),
-        0 0 30px var(--provider-glow, rgba(0,255,255,0.35)),
+        0 0 30px var(--provider-glow, rgba(85,85,85,0.35)),
         0 20px 45px rgba(0,0,0,0.5) !important;
     }
 
-    /* Holographic rainbow shimmer on stacked cards */
+    /* Subtle shimmer on stacked cards */
     .card-deck.stacked .provider-card::before {
       content: '' !important;
       display: block !important;
@@ -1553,10 +1570,10 @@
       background: linear-gradient(
         125deg,
         transparent 0%,
-        rgba(255,0,128,0.08) 20%,
-        rgba(0,255,255,0.1) 40%,
-        rgba(255,255,0,0.08) 60%,
-        rgba(255,0,255,0.08) 80%,
+        rgba(90,90,90,0.08) 20%,
+        rgba(120,120,120,0.1) 40%,
+        rgba(90,90,90,0.08) 60%,
+        rgba(85,85,85,0.06) 80%,
         transparent 100%
       );
       opacity: 0.6;
@@ -1576,38 +1593,6 @@
       }
     }
 
-    /* Connection energy between Mantle and stack */
-    .card-deck.stacked .provider-cards-container::before {
-      content: '';
-      position: absolute;
-      top: -30px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 250px;
-      height: 40px;
-      background: radial-gradient(ellipse at center bottom, rgba(255,68,68,0.25) 0%, transparent 70%);
-      pointer-events: none;
-      z-index: -1;
-    }
-
-    /* Energy tendrils from Mantle card */
-    .card-deck.stacked .provider-cards-container::after {
-      content: '';
-      position: absolute;
-      top: -25px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 6px;
-      height: 30px;
-      background: linear-gradient(to bottom, rgba(255,68,68,0.7), rgba(255,68,68,0.2), transparent);
-      border-radius: 3px;
-      pointer-events: none;
-      animation: energyPulse 2s ease-in-out infinite;
-    }
-    @keyframes energyPulse {
-      0%, 100% { opacity: 0.5; transform: translateX(-50%) scaleY(0.9); }
-      50% { opacity: 1; transform: translateX(-50%) scaleY(1.1); }
-    }
 
     /* Responsive: 2 columns on smaller screens */
     @media (max-width: 960px) {
@@ -1626,7 +1611,7 @@
 
     /* Provider icon effects */
     .provider-logo-icon {
-      box-shadow: 0 0 0 4px rgba(0,255,255,0.08);
+      box-shadow: 0 0 0 4px rgba(85,85,85,0.15);
       transition: transform 0.14s cubic-bezier(.3,2,.7,.8), box-shadow 0.17s;
       border-radius: 50%;
       background: transparent;
@@ -1635,7 +1620,7 @@
     }
     .provider-logo-icon:hover {
       transform: scale(1.13) rotate(-3deg);
-      box-shadow: 0 0 16px 6px rgba(0,255,255,0.27), 0 0 60px 5px var(--icon-glow, #00ffff);
+      box-shadow: 0 0 16px 6px rgba(85,85,85,0.35), 0 0 60px 5px var(--icon-glow, rgb(90,90,90));
       filter: brightness(1.22) saturate(1.4);
     }
     .provider-logo-icon[src*="steam"]   { --icon-glow: #1b9bd7; }
@@ -1644,6 +1629,110 @@
     .provider-logo-icon[src*="psn"]     { --icon-glow: #003791; }
     .provider-logo-icon[src*="discord"] { --icon-glow: #5865F2; }
     .provider-logo-icon[src*="github"]  { --icon-glow: #8c8ca0; }
+
+    /* ===== INFO ICON TOOLTIPS ===== */
+    .info-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #888;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: help;
+      margin-left: 8px;
+      transition: all 0.2s ease;
+    }
+    .info-icon:hover {
+      background: rgba(255, 140, 50, 0.15);
+      border-color: rgba(255, 140, 50, 0.4);
+      color: #ff8c32;
+      transform: scale(1.1);
+    }
+    /* Hidden source tooltip content */
+    .info-icon .info-tooltip {
+      display: none;
+    }
+    /* Fixed tooltip container rendered on body */
+    #info-tooltip-container {
+      position: fixed;
+      z-index: 99999;
+      pointer-events: none;
+      background: linear-gradient(165deg, #1a1a1e 0%, #111114 50%, #0d0d10 100%);
+      border: 1px solid rgba(255, 140, 50, 0.25);
+      border-radius: 12px;
+      padding: 16px 18px;
+      width: 280px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 140, 50, 0.15);
+      text-align: left;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.15s ease, visibility 0.15s ease;
+    }
+    #info-tooltip-container.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+    #info-tooltip-container::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      left: var(--arrow-left, 50%);
+      transform: translateX(-50%);
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 6px solid rgba(255, 140, 50, 0.25);
+    }
+    #info-tooltip-container::after {
+      content: '';
+      position: absolute;
+      top: -4px;
+      left: var(--arrow-left, 50%);
+      transform: translateX(-50%);
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-bottom: 5px solid #1a1a1e;
+    }
+    #info-tooltip-container h4 {
+      margin: 0 0 10px 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #ff8c32;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #info-tooltip-container p {
+      margin: 0 0 10px 0;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: #aaa;
+    }
+    #info-tooltip-container p:last-child {
+      margin-bottom: 0;
+    }
+    #info-tooltip-container ul {
+      margin: 8px 0;
+      padding-left: 16px;
+      font-size: 0.75rem;
+      color: #999;
+    }
+    #info-tooltip-container li {
+      margin-bottom: 4px;
+    }
+    #info-tooltip-container .tip-highlight {
+      color: #ff8c32;
+      font-weight: 500;
+    }
+    /* Navbar info icon spacing */
+    .navbar-info-icon {
+      margin-left: 12px;
+      margin-right: 4px;
+    }
   </style>
 </head>
 <body>
@@ -2023,11 +2112,10 @@
 
 {% set all_tiers = ['Common','Uncommon','Rare','Epic','Legendary'] %}
 
-{# Mantle Tier System - based on total achievements + provider count bonus #}
-{% macro mantle_tier(total_achievements, provider_count) %}
-  {# Provider bonus: each provider beyond 1 adds 15% to effective score #}
-  {% set bonus_multiplier = 1 + (provider_count - 1) * 0.15 if provider_count > 1 else 1 %}
-  {% set effective_score = (total_achievements * bonus_multiplier)|int %}
+{# Ashbane Tier System - pure achievement count, no bonuses #}
+{% macro Ashbane_tier(total_achievements, provider_count) %}
+  {# Pure achievement count - multi-platform rewards via separate Ashbane achievements #}
+  {% set effective_score = total_achievements %}
   {% if effective_score >= 7500 %}mythic
   {% elif effective_score >= 5000 %}legendary
   {% elif effective_score >= 3000 %}diamond
@@ -2038,17 +2126,17 @@
   {% else %}initiate{% endif %}
 {% endmacro %}
 
-{% macro mantle_emblem(tier) %}
+{% macro Ashbane_emblem(tier) %}
   {% if tier == 'initiate' %}
     <!-- Initiate Emblem - Clean M with small trophy accent -->
     <svg width="64" height="64" viewBox="0 0 64 64" style="overflow:visible;">
       <defs>
-        <linearGradient id="mantle-initiate" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id="Ashbane-initiate" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#666"/>
           <stop offset="100%" stop-color="#333"/>
         </linearGradient>
       </defs>
-      <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#mantle-initiate)" stroke="#888" stroke-width="2"/>
+      <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#Ashbane-initiate)" stroke="#888" stroke-width="2"/>
       <!-- Hand-drawn M -->
       <path d="M20,44 L20,28 L26,36 L32,24 L38,36 L44,28 L44,44" fill="none" stroke="#aaa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
       <!-- Small trophy on top -->
@@ -2058,7 +2146,7 @@
     <!-- Bronze Emblem -->
     <svg width="64" height="64" viewBox="0 0 64 64" style="overflow:visible;">
       <defs>
-        <linearGradient id="mantle-bronze" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id="Ashbane-bronze" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#cd7f32"/>
           <stop offset="50%" stop-color="#b87333"/>
           <stop offset="100%" stop-color="#8b4513"/>
@@ -2069,7 +2157,7 @@
         </filter>
       </defs>
       <g filter="url(#glow-mb)">
-        <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#mantle-bronze)" stroke="#cd7f32" stroke-width="2"/>
+        <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#Ashbane-bronze)" stroke="#cd7f32" stroke-width="2"/>
         <!-- Hand-drawn M -->
         <path d="M20,44 L20,28 L26,36 L32,24 L38,36 L44,28 L44,44" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M30,18 L32,12 L34,18 L33,18 L33,20 L31,20 L31,18 Z" fill="#fff" opacity="0.8"/>
@@ -2079,7 +2167,7 @@
     <!-- Silver Emblem with subtle pulse -->
     <svg width="64" height="64" viewBox="0 0 64 64" style="overflow:visible;">
       <defs>
-        <linearGradient id="mantle-silver" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id="Ashbane-silver" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#e8e8e8"/>
           <stop offset="50%" stop-color="#c0c0c0"/>
           <stop offset="100%" stop-color="#808080"/>
@@ -2090,7 +2178,7 @@
         </filter>
       </defs>
       <g filter="url(#glow-ms)">
-        <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#mantle-silver)" stroke="#e8e8e8" stroke-width="2"/>
+        <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#Ashbane-silver)" stroke="#e8e8e8" stroke-width="2"/>
         <!-- Hand-drawn M -->
         <path d="M20,44 L20,28 L26,36 L32,24 L38,36 L44,28 L44,44" fill="none" stroke="#333" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M30,18 L32,12 L34,18 L33,18 L33,20 L31,20 L31,18 Z" fill="#333" opacity="0.9"/>
@@ -2103,7 +2191,7 @@
     <!-- Gold Emblem with sparkles -->
     <svg width="64" height="64" viewBox="0 0 64 64" style="overflow:visible;">
       <defs>
-        <linearGradient id="mantle-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id="Ashbane-gold" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#ffd700"/>
           <stop offset="50%" stop-color="#daa520"/>
           <stop offset="100%" stop-color="#b8860b"/>
@@ -2114,7 +2202,7 @@
         </filter>
       </defs>
       <g filter="url(#glow-mg)">
-        <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#mantle-gold)" stroke="#ffd700" stroke-width="2"/>
+        <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#Ashbane-gold)" stroke="#ffd700" stroke-width="2"/>
         <!-- Hand-drawn M -->
         <path d="M20,44 L20,28 L26,36 L32,24 L38,36 L44,28 L44,44" fill="none" stroke="#5a4000" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
         <!-- Trophy with star above -->
@@ -2134,7 +2222,7 @@
     <!-- Platinum Emblem with float + sparkles -->
     <svg width="64" height="64" viewBox="0 0 64 64" style="overflow:visible;">
       <defs>
-        <linearGradient id="mantle-plat" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id="Ashbane-plat" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#e5e4e2"/>
           <stop offset="30%" stop-color="#a0d8ef"/>
           <stop offset="70%" stop-color="#d4f1f9"/>
@@ -2148,7 +2236,7 @@
       <g filter="url(#glow-mp)">
         <g>
           <animateTransform attributeName="transform" type="translate" values="0,0;0,-2;0,0" dur="2s" repeatCount="indefinite"/>
-          <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#mantle-plat)" stroke="#a0d8ef" stroke-width="2"/>
+          <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#Ashbane-plat)" stroke="#a0d8ef" stroke-width="2"/>
           <!-- Hand-drawn M -->
           <path d="M20,44 L20,28 L26,36 L32,24 L38,36 L44,28 L44,44" fill="none" stroke="#2a4a5a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M29,18 L32,8 L35,18 L34,18 L34,20 L30,20 L30,18 Z" fill="#2a4a5a"/>
@@ -2172,7 +2260,7 @@
     <!-- Diamond Emblem with rainbow + intense effects -->
     <svg width="64" height="64" viewBox="0 0 64 64" style="overflow:visible;">
       <defs>
-        <linearGradient id="mantle-diamond" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id="Ashbane-diamond" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#b9f2ff">
             <animate attributeName="stop-color" values="#b9f2ff;#e0b9ff;#b9ffb9;#b9f2ff" dur="4s" repeatCount="indefinite"/>
           </stop>
@@ -2191,7 +2279,7 @@
       <g filter="url(#glow-md)">
         <g>
           <animateTransform attributeName="transform" type="translate" values="0,0;0,-3;0,0" dur="1.5s" repeatCount="indefinite"/>
-          <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#mantle-diamond)" stroke="#40e0d0" stroke-width="2"/>
+          <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#Ashbane-diamond)" stroke="#40e0d0" stroke-width="2"/>
           <!-- Hand-drawn M -->
           <path d="M20,44 L20,28 L26,36 L32,24 L38,36 L44,28 L44,44" fill="none" stroke="#004040" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M29,18 L32,8 L35,18 L34,18 L34,20 L30,20 L30,18 Z" fill="#004040"/>
@@ -2218,7 +2306,7 @@
     <!-- Legendary Emblem - Golden fire effect + crown -->
     <svg width="64" height="64" viewBox="0 0 64 64" style="overflow:visible;">
       <defs>
-        <linearGradient id="mantle-legend" x1="0%" y1="100%" x2="100%" y2="0%">
+        <linearGradient id="Ashbane-legend" x1="0%" y1="100%" x2="100%" y2="0%">
           <stop offset="0%" stop-color="#ff4500">
             <animate attributeName="stop-color" values="#ff4500;#ff8c00;#ffd700;#ff4500" dur="2s" repeatCount="indefinite"/>
           </stop>
@@ -2237,7 +2325,7 @@
       <g filter="url(#glow-ml)">
         <g>
           <animateTransform attributeName="transform" type="translate" values="0,0;0,-3;0,0" dur="1.2s" repeatCount="indefinite"/>
-          <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#mantle-legend)" stroke="#ffd700" stroke-width="3"/>
+          <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#Ashbane-legend)" stroke="#ffd700" stroke-width="3"/>
           <!-- Hand-drawn M -->
           <path d="M19,46 L19,28 L26,38 L32,24 L38,38 L45,28 L45,46" fill="none" stroke="#4a0000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
         </g>
@@ -2267,7 +2355,7 @@
     <!-- Mythic Emblem - Ultimate prismatic with orbiting elements -->
     <svg width="64" height="64" viewBox="0 0 64 64" style="overflow:visible;">
       <defs>
-        <linearGradient id="mantle-mythic" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id="Ashbane-mythic" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#ff00ff">
             <animate attributeName="stop-color" values="#ff00ff;#00ffff;#ffff00;#ff00ff" dur="2s" repeatCount="indefinite"/>
           </stop>
@@ -2289,7 +2377,7 @@
       <g filter="url(#glow-mm)">
         <g>
           <animateTransform attributeName="transform" type="translate" values="0,0;0,-4;0,0" dur="1s" repeatCount="indefinite"/>
-          <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#mantle-mythic)" stroke="#fff" stroke-width="3">
+          <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="url(#Ashbane-mythic)" stroke="#fff" stroke-width="3">
             <animate attributeName="stroke" values="#ff00ff;#00ffff;#ffff00;#ff00ff" dur="2s" repeatCount="indefinite"/>
           </polygon>
           <!-- Ultimate M with triple trophy -->
@@ -2313,7 +2401,7 @@
         <circle cx="10" cy="8" r="3.5" fill="#fff">
           <animate attributeName="opacity" values="0.4;1;0.4" dur="0.25s" repeatCount="indefinite"/>
         </circle>
-        <circle cx="56" cy="12" r="3" fill="#0ff">
+        <circle cx="56" cy="12" r="3" fill="#d9a633">
           <animate attributeName="opacity" values="0.5;1;0.5" dur="0.3s" repeatCount="indefinite"/>
         </circle>
         <circle cx="6" cy="40" r="2.5" fill="#f0f">
@@ -2324,7 +2412,7 @@
         </circle>
         <!-- Crown with gems -->
         <polygon points="32,-8 38,2 46,-4 40,8 48,4 32,14 16,4 24,8 18,-4 26,2" fill="#ffd700">
-          <animate attributeName="fill" values="#ffd700;#ff69b4;#00ffff;#ffd700" dur="1.5s" repeatCount="indefinite"/>
+          <animate attributeName="fill" values="#ffd700;#d9a633;#8c7055;#ffd700" dur="1.5s" repeatCount="indefinite"/>
           <animateTransform attributeName="transform" type="scale" values="1;1.08;1" dur="0.8s" repeatCount="indefinite" additive="sum"/>
         </polygon>
       </g>
@@ -2354,9 +2442,9 @@
         <div style="margin-bottom: 0.75rem;">
           <div style="display: flex; gap: 4px;">
             <input type="text" id="friend-search-input" placeholder="Search users..."
-                   style="flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(0,180,180,0.3); background: rgba(0,20,20,0.6); color: #fff; font-size: 0.8rem;"
+                   style="flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(90,90,90,0.4); background: rgba(8,8,10,0.8); color: #e8e8e8; font-size: 0.8rem;"
                    onkeyup="if(event.key==='Enter') searchFriends()">
-            <button onclick="searchFriends()" style="padding: 6px 10px; border-radius: 6px; border: none; background: linear-gradient(180deg, #0cc, #099); color: #000; cursor: pointer; font-size: 0.8rem; font-weight: bold;">
+            <button onclick="searchFriends()" style="padding: 6px 10px; border-radius: 6px; border: none; background: linear-gradient(180deg, rgb(90,90,90), rgb(60,60,60)); color: #e8e8e8; cursor: pointer; font-size: 0.8rem; font-weight: bold;">
               🔍
             </button>
           </div>
@@ -2401,15 +2489,15 @@
             Loading chat...
           </div>
         </div>
-        <!-- New messages indicator (shown when scrolled down) -->
-        <div id="new-messages-indicator" class="new-messages-indicator" onclick="scrollToTop()">
-          ↑ New messages
+        <!-- New messages indicator (shown when scrolled up) -->
+        <div id="new-messages-indicator" class="new-messages-indicator" onclick="scrollToBottom()">
+          ↓ New messages
         </div>
         <div id="chat-input-container" style="display: flex; gap: 6px;">
           <input type="text" id="chat-input" placeholder="Type a message..."
-                 style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(0,180,180,0.3); background: rgba(0,20,20,0.6); color: #fff; font-size: 0.85rem;"
+                 style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(90,90,90,0.4); background: rgba(8,8,10,0.8); color: #e8e8e8; font-size: 0.85rem;"
                  onkeyup="if(event.key==='Enter') sendChatMessage()">
-          <button onclick="sendChatMessage()" style="padding: 8px 14px; border-radius: 6px; border: none; background: linear-gradient(180deg, #0cc, #099); color: #000; cursor: pointer; font-weight: bold; font-size: 0.8rem;">
+          <button onclick="sendChatMessage()" style="padding: 8px 14px; border-radius: 6px; border: none; background: linear-gradient(180deg, rgb(90,90,90), rgb(60,60,60)); color: #e8e8e8; cursor: pointer; font-weight: bold; font-size: 0.8rem;">
             Send
           </button>
         </div>
@@ -2418,23 +2506,42 @@
 
   </div><!-- End Left Column -->
 
-  <!-- ===== MIDDLE COLUMN: Mantle Card & Provider Cards ===== -->
+  <!-- ===== MIDDLE COLUMN: Ashbane Card & Provider Cards ===== -->
   <div id="middle-column">
 
   <!-- Main Panel -->
   <div id="main-panel" class="ui-panel">
     <div class="ui-panel-header">
       <span class="panel-icon">🏆</span>
-      <h3>Mantle Stats</h3>
+      <h3>Ashbane Stats</h3>
+      <span class="info-icon">?
+        <div class="info-tooltip">
+          <h4>📊 Your Ashbane Profile</h4>
+          <p>Your <span class="tip-highlight">Ashbane tier</span> reflects your total achievement count across all linked gaming platforms.</p>
+          <p><strong>Tier Thresholds:</strong></p>
+          <ul>
+            <li>Bronze: 100 • Silver: 500</li>
+            <li>Gold: 1,000 • Platinum: 2,000</li>
+            <li>Diamond: 3,000 • Legendary: 5,000</li>
+            <li>Mythic: 7,500+</li>
+          </ul>
+          <p>Higher tiers unlock exclusive <span class="tip-highlight">cosmetic frames</span> and badges in-game.</p>
+        </div>
+      </span>
     </div>
     <div class="ui-panel-content">
 
-  <!-- ===== MANTLE AGGREGATE CARD (PERMANENT - survives provider unlink) ===== -->
-  {% if mantle %}
-  {% set total_achievements = mantle.total_achievements %}
-  {% set effective_score = mantle.effective_score %}
-  {% set tier = mantle.tier %}
-  {% set agg_rarity = mantle.by_rarity %}
+  <!-- ===== Ashbane AGGREGATE CARD (PERMANENT - survives provider unlink) ===== -->
+  {% if ashbane %}
+  {% set total_achievements = ashbane.total_achievements %}
+  {% set effective_score = ashbane.effective_score %}
+  {% set tier = ashbane.tier %}
+  {% set agg_rarity = ashbane.by_rarity %}
+  {% else %}
+  {% set total_achievements = 0 %}
+  {% set effective_score = 0 %}
+  {% set tier = 'initiate' %}
+  {% set agg_rarity = {} %}
   {% endif %}
 
   <!-- Card Deck Container (handles expanded/stacked states) -->
@@ -2455,12 +2562,12 @@
       </svg>
     </button>
 
-    <!-- Mantle Card Row (always on top) -->
-    <div class="mantle-row" style="display:flex; justify-content:center; margin-bottom:1.25rem; position:relative;">
+    <!-- Ashbane Card Row (always on top) -->
+    <div class="Ashbane-row" style="display:flex; justify-content:center; margin-bottom:1.25rem; position:relative;">
 
-      <!-- MANTLE CARD -->
-      <div class="mantle-card neon-card"
-           id="mantle-card"
+      <!-- Ashbane CARD -->
+      <div class="Ashbane-card neon-card"
+           id="Ashbane-card"
            data-tier="{{ tier }}"
            style="position:relative; width:280px; display:flex; flex-direction:column; align-items:center; padding:1rem 1rem 1.5rem 1rem; border-radius:16px;">
 
@@ -2475,24 +2582,30 @@
           {{ tier }}
         </div>
 
-        <!-- Mantle Icon (top-right) -->
+        <!-- Ashbane Icon (top-right) -->
         <div style="position:absolute; top:8px; right:8px;">
-          <img src="/static/icons/mantle.svg" alt="Mantle" style="width:22px; height:22px; filter:drop-shadow(0 0 4px #ff4444);" title="Mantle" />
+          <img src="/static/icons/ashbane-tree.png" alt="Ashbane" style="width:28px; height:28px; filter:drop-shadow(0 0 6px #a0d8ef);" title="Ashbane" />
         </div>
 
         <!-- Emblem + Total -->
-        <div style="display:flex; flex-direction:column; align-items:center; margin-top:1.5rem;">
-          <div class="wasteland-emblem" style="transform:scale(0.9);">
-            {{ mantle_emblem(tier) }}
-          </div>
-          <div class="count-up" data-counter-id="mantle-total" data-target="{{ total_achievements }}" style="font-size:2rem; font-weight:700; color:#ff4444; text-shadow:0 0 15px rgba(255,68,68,0.6); line-height:1; margin-top:0.5rem;">
+        <div style="display:flex; flex-direction:column; align-items:center; margin-top:1rem;">
+          <!-- Ashbane Tree Centerpiece - clickable to view all achievements -->
+          <img src="/static/icons/ashbane-tree.png" alt="Ashbane Tree"
+               onclick="openAllAchievementsPopover()"
+               title="View all achievements"
+               style="width:120px; height:auto; filter:drop-shadow(0 0 20px rgba(160,216,239,0.5)) drop-shadow(0 0 40px rgba(255,140,50,0.3)); cursor:pointer; transition:transform 0.2s;"
+               onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" />
+          <div class="count-up" data-counter-id="Ashbane-total" data-target="{{ total_achievements }}"
+               onclick="openAllAchievementsPopover()"
+               title="View all achievements"
+               style="font-size:2rem; font-weight:700; color:#a0d8ef; text-shadow:0 0 15px rgba(160,216,239,0.6); line-height:1; margin-top:0.5rem; cursor:pointer;">
             {{ total_achievements }}
           </div>
-          <div style="font-size:0.65rem; color:#888; text-transform:uppercase; letter-spacing:1px;">
+          <div style="font-size:0.65rem; color:#888; text-transform:uppercase; letter-spacing:1px; cursor:pointer;" onclick="openAllAchievementsPopover()" title="View all achievements">
             Total Achievements
           </div>
           {% if local_user_id %}
-          <div class="player-id-badge" style="margin-top:6px;" title="Your unique Mantle ID">
+          <div class="player-id-badge" style="margin-top:6px;" title="Your unique Ashbane ID">
             <span class="hash">Player</span>
             <span class="number">#{{ local_user_id }}</span>
           </div>
@@ -2505,10 +2618,10 @@
           {% for provider in providers %}
             <div title="{{ provider.total_achievements }} {{ provider.display_name }} {% if provider.name in ['discord'] %}Badges{% elif provider.name in ['github'] %}Achievements{% else %}Achievements{% endif %}"
                  style="display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:6px; font-size:0.75rem; cursor:default;
-                        background:{% if provider.name == 'steam' %}rgba(27,155,215,0.15){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.15){% elif provider.name == 'xbox' %}rgba(55,253,18,0.12){% elif provider.name == 'psn' %}rgba(0,55,145,0.15){% elif provider.name == 'discord' %}rgba(88,101,242,0.15){% elif provider.name == 'github' %}rgba(140,140,160,0.15){% else %}rgba(0,255,255,0.15){% endif %};
-                        border:1px solid {% if provider.name == 'steam' %}rgba(27,155,215,0.3){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.3){% elif provider.name == 'xbox' %}rgba(55,253,18,0.3){% elif provider.name == 'psn' %}rgba(0,55,145,0.3){% elif provider.name == 'discord' %}rgba(88,101,242,0.3){% elif provider.name == 'github' %}rgba(140,140,160,0.3){% else %}rgba(0,255,255,0.3){% endif %};">
+                        background:{% if provider.name == 'steam' %}rgba(27,155,215,0.15){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.15){% elif provider.name == 'xbox' %}rgba(55,253,18,0.12){% elif provider.name == 'psn' %}rgba(0,55,145,0.15){% elif provider.name == 'discord' %}rgba(88,101,242,0.15){% elif provider.name == 'github' %}rgba(140,140,160,0.15){% else %}rgba(85,85,85,0.15){% endif %};
+                        border:1px solid {% if provider.name == 'steam' %}rgba(27,155,215,0.3){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.3){% elif provider.name == 'xbox' %}rgba(55,253,18,0.3){% elif provider.name == 'psn' %}rgba(0,55,145,0.3){% elif provider.name == 'discord' %}rgba(88,101,242,0.3){% elif provider.name == 'github' %}rgba(140,140,160,0.3){% else %}rgba(85,85,85,0.3){% endif %};">
               <img src="/static/icons/{{ provider.name }}.svg" style="width:14px; height:14px;" alt="{{ provider.display_name }}" />
-              <span class="count-up" data-counter-id="mantle-{{ provider.name }}" data-target="{{ provider.total_achievements }}" style="color:{% if provider.name == 'steam' %}#1b9bd7{% elif provider.name == 'battlenet' %}#ffb932{% elif provider.name == 'xbox' %}#37fd12{% elif provider.name == 'psn' %}#003791{% elif provider.name == 'discord' %}#5865F2{% elif provider.name == 'github' %}#8c8ca0{% else %}var(--neon){% endif %}; font-weight:600;">{{ provider.total_achievements }}</span>
+              <span class="count-up" data-counter-id="Ashbane-{{ provider.name }}" data-target="{{ provider.total_achievements }}" style="color:{% if provider.name == 'steam' %}#1b9bd7{% elif provider.name == 'battlenet' %}#ffb932{% elif provider.name == 'xbox' %}#37fd12{% elif provider.name == 'psn' %}#003791{% elif provider.name == 'discord' %}#5865F2{% elif provider.name == 'github' %}#8c8ca0{% else %}var(--neon){% endif %}; font-weight:600;">{{ provider.total_achievements }}</span>
             </div>
           {% endfor %}
         </div>
@@ -2525,30 +2638,6 @@
             </span>
           {% endfor %}
         </div>
-
-        <!-- Progress Bar (compact) - uses effective_score (includes provider bonus) -->
-        {% set tier_thresholds = {'initiate': [0, 100], 'bronze': [100, 500], 'silver': [500, 1000], 'gold': [1000, 2000], 'platinum': [2000, 3000], 'diamond': [3000, 5000], 'legendary': [5000, 7500], 'mythic': [7500, 7500]} %}
-        {% set current_threshold = tier_thresholds.get(tier, [0, 100]) %}
-        {% set tier_start = current_threshold[0] %}
-        {% set tier_end = current_threshold[1] %}
-        {% set progress_pct = ((effective_score - tier_start) / (tier_end - tier_start) * 100) | int if tier_end > tier_start else 100 %}
-        {% set progress_pct = [0, [progress_pct, 100] | min] | max %}
-        {% set tier_colors = {'initiate': '#666', 'bronze': '#cd7f32', 'silver': '#c0c0c0', 'gold': '#ffd700', 'platinum': '#a0d8ef', 'diamond': '#40e0d0', 'legendary': '#ffa500', 'mythic': 'linear-gradient(90deg, #ff00ff, #00ffff, #ffff00)'} %}
-        {% set next_tier_names = {'initiate': 'Bronze', 'bronze': 'Silver', 'silver': 'Gold', 'gold': 'Platinum', 'platinum': 'Diamond', 'diamond': 'Legendary', 'legendary': 'Mythic'} %}
-
-        {% if tier != 'mythic' %}
-        <div style="width:100%; margin-top:0.75rem;">
-          <div style="height:4px; background:rgba(255,255,255,0.1); border-radius:2px; overflow:hidden;">
-            <div style="height:100%; width:{{ progress_pct }}%; background:{{ tier_colors.get(tier, '#666') }}; border-radius:2px;"></div>
-          </div>
-          <div style="display:flex; justify-content:space-between; font-size:0.6rem; margin-top:3px; color:#666;">
-            <span>{{ effective_score | int }}/{{ tier_end | int }}</span>
-            <span class="next-tier-indicator" style="color:{% if tier == 'initiate' %}#cd7f32{% elif tier == 'bronze' %}#c0c0c0{% elif tier == 'silver' %}#ffd700{% elif tier == 'gold' %}#a0d8ef{% elif tier == 'platinum' %}#40e0d0{% elif tier == 'diamond' %}#ffa500{% else %}#ff00ff{% endif %};">→ {{ next_tier_names.get(tier, 'Next') }}</span>
-          </div>
-        </div>
-        {% else %}
-        <div style="font-size:0.6rem; color:#ff00ff; margin-top:0.75rem; text-align:center;">✦ Max Tier ✦</div>
-        {% endif %}
 
       </div>
     </div>
@@ -2570,7 +2659,7 @@
             src="{% if provider.name == 'battlenet' and top_char and top_char.avatar_url %}{{ top_char.avatar_url }}{% else %}{{ provider.avatar_url or '/static/icons/placeholder-avatar.svg' }}{% endif %}"
             alt="{{ provider.display_name }} avatar"
             class="avatar-main"
-            style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2px solid var(--neon); filter:drop-shadow(0 0 8px var(--neon-fade));"
+            style="width:48px; height:48px; border-radius:50%; object-fit:cover; border:2px solid {% if provider.name == 'steam' %}#1b9bd7{% elif provider.name == 'battlenet' %}#ffb932{% elif provider.name == 'xbox' %}#37fd12{% elif provider.name == 'psn' %}#003791{% elif provider.name == 'discord' %}#5865F2{% elif provider.name == 'github' %}#8c8ca0{% else %}#888{% endif %}; filter:drop-shadow(0 0 8px {% if provider.name == 'steam' %}rgba(27,155,215,0.5){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.5){% elif provider.name == 'xbox' %}rgba(55,253,18,0.5){% elif provider.name == 'psn' %}rgba(0,55,145,0.5){% elif provider.name == 'discord' %}rgba(88,101,242,0.5){% elif provider.name == 'github' %}rgba(140,140,160,0.5){% else %}rgba(136,136,136,0.5){% endif %});"
             onerror="this.onerror=null;this.src='/static/icons/placeholder-avatar.svg';" />
           <!-- Provider badge -->
           <img
@@ -2596,7 +2685,7 @@
 
         <!-- Center: Name only -->
         <div style="display:flex; flex-direction:column; align-items:center; width:100%; margin-top:3.5rem; margin-bottom:1rem;">
-          <div style="color:var(--neon); font-size:1.1rem; font-weight:600; text-align:center; word-break:break-word; max-width:95%;">
+          <div style="color:{% if provider.name == 'steam' %}#1b9bd7{% elif provider.name == 'battlenet' %}#ffb932{% elif provider.name == 'xbox' %}#37fd12{% elif provider.name == 'psn' %}#4a7dc4{% elif provider.name == 'discord' %}#5865F2{% elif provider.name == 'github' %}#c9d1d9{% else %}#888{% endif %}; font-size:1.1rem; font-weight:600; text-align:center; word-break:break-word; max-width:95%;">
             {{ provider.profile_display_name or provider.display_name }}
           </div>
           <div style="color:#666; font-size:0.65rem; font-family:'Roboto Mono', monospace; text-align:center; word-break:break-all; max-width:95%;">
@@ -2637,9 +2726,12 @@
 
         <!-- Trophy & Rarity Breakdown -->
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:space-between; flex:1; width:100%; padding-bottom:2.5rem;">
-          <!-- Trophy centered in available space -->
-          <div class="trophy-display" style="font-size:2rem; font-weight:700; display:flex; align-items:center; justify-content:center; flex:1; color:var(--neon);"
-               title="{% if provider.total_achievements <= 50 %}Bronze Trophy (0-50){% elif provider.total_achievements <= 200 %}Silver Trophy (51-200){% elif provider.total_achievements <= 500 %}Gold Trophy (201-500){% elif provider.total_achievements <= 1000 %}Platinum Trophy (501-1000){% else %}Diamond Trophy (1000+){% endif %}">
+          <!-- Trophy centered in available space - clickable to view all achievements -->
+          <div class="trophy-display"
+               onclick="openAllAchievementsPopover('{{ provider.name }}')"
+               style="font-size:2rem; font-weight:700; display:flex; align-items:center; justify-content:center; flex:1; color:var(--neon); cursor:pointer; transition:transform 0.2s;"
+               onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"
+               title="Click to view all {{ provider.display_name }} achievements">
             <span style="margin-right:0.5rem;">{{ trophy_svg(provider.total_achievements) }}</span>
             <span class="count-up" data-counter-id="provider-{{ provider.name }}" data-target="{{ provider.total_achievements }}">{{ provider.total_achievements }}</span>
           </div>
@@ -2683,7 +2775,7 @@
                 data-cooldown="{{ provider.cooldown_remaining }}"
                 data-provider="{{ provider.name }}"
                 data-userid="{{ provider.user_id }}"
-                {% if provider.name not in ['steam', 'battlenet', 'xbox', 'psn', 'discord', 'github'] or provider.cooldown_remaining > 0 %}disabled{% endif %}
+                {% if provider.name not in ['steam', 'battlenet', 'xbox', 'psn', 'discord', 'github', 'roblox'] or provider.cooldown_remaining > 0 %}disabled{% endif %}
                 style="position:absolute; bottom:12px; right:12px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; background:none; border:none; cursor:{% if provider.cooldown_remaining > 0 %}not-allowed{% else %}pointer{% endif %}; filter:brightness({% if provider.cooldown_remaining > 0 %}0.5{% else %}1.4{% endif %}) drop-shadow(0 0 6px var(--neon-fade)); opacity:{% if provider.cooldown_remaining > 0 %}0.5{% else %}1{% endif %};">
           <svg xmlns="http://www.w3.org/2000/svg"
                width="20" height="20" viewBox="0 0 24 24"
@@ -2788,6 +2880,21 @@
     <div class="ui-panel-header">
       <span class="panel-icon">⚒️</span>
       <h3>The Forge</h3>
+      <span class="info-icon">?
+        <div class="info-tooltip">
+          <h4>⚒️ Achievement-Based Items</h4>
+          <p>Certain <span class="tip-highlight">rare achievements</span> across your linked accounts unlock exclusive items you can forge.</p>
+          <p>Forged items are <span class="tip-highlight">usable in-game</span> as weapons, armor, and accessories with unique stats and abilities.</p>
+          <p><strong>How it works:</strong></p>
+          <ul>
+            <li>Link gaming accounts above</li>
+            <li>Complete qualifying achievements</li>
+            <li>Connect your lockbox (wallet)</li>
+            <li>Forge items to claim them</li>
+          </ul>
+          <p>Forged items can be <span class="tip-highlight">traded</span> with other players!</p>
+        </div>
+      </span>
     </div>
     <div class="ui-panel-content">
 
@@ -2796,7 +2903,7 @@
     padding: 1rem;
     border: none;
     border-radius: 0;
-    background: linear-gradient(145deg, rgba(30, 15, 0, 0.6) 0%, rgba(20, 10, 0, 0.8) 100%);
+    background: rgba(20, 20, 22, 0.95);
     box-shadow: none;
     position: relative;
     overflow: hidden;
@@ -2981,38 +3088,350 @@
 
 <!-- Forge Modal -->
 <div id="forge-modal" class="neon-modal" style="display:none;">
-  <div class="neon-modal-content" style="width:60vw;max-width:800px;max-height:70vh;display:flex;flex-direction:column;">
-    <button class="neon-modal-close" onclick="closeForgeModal()" style="align-self:flex-end;margin-top:5px;margin-right:5px;font-size:2.2rem;line-height:1;color:var(--neon);background:none;border:none;cursor:pointer;">&times;</button>
-    <h3 class="neon-modal-title" style="text-align:center;margin-bottom:12px;">⚒️ Forge Relics</h3>
-    <p style="text-align:center;opacity:0.7;margin-bottom:1rem;">Select achievements to immortalize as tradeable relics.</p>
-    <div id="forge-body" style="flex:1;overflow-y:auto;padding:0 1rem;">
-      <p style="opacity:0.5;text-align:center;">(Loading forgeable achievements...)</p>
+  <div class="neon-modal-content forge-modal-content" style="width:85vw;max-width:1100px;max-height:85vh;display:flex;flex-direction:column;">
+    <button class="neon-modal-close" onclick="closeForgeModal()" style="position:absolute;top:10px;right:15px;font-size:2.2rem;line-height:1;color:var(--neon);background:none;border:none;cursor:pointer;z-index:10;">&times;</button>
+
+    <!-- Header -->
+    <div class="forge-modal-header" style="padding:20px 24px 16px;border-bottom:1px solid rgba(255,102,0,0.2);background:linear-gradient(180deg, rgba(255,102,0,0.08) 0%, transparent 100%);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+        <span style="font-size:2rem;">⚒️</span>
+        <h3 style="margin:0;font-size:1.4rem;font-weight:700;color:#ff8800;text-shadow:0 0 20px rgba(255,102,0,0.3);">THE FORGE</h3>
+      </div>
+      <p style="margin:0;opacity:0.7;font-size:0.9rem;">Transform your achievements into powerful in-game relics. Select items to forge.</p>
+      <div id="forge-stats" style="display:flex;gap:24px;margin-top:12px;font-size:0.85rem;">
+        <span style="color:#ff8800;"><strong id="forge-available-count">0</strong> ready to forge</span>
+        <span style="color:#22c55e;"><strong id="forge-total-count">0</strong> forged</span>
+        <span style="color:#666;"><strong id="forge-locked-count">0</strong> locked</span>
+      </div>
     </div>
-    <div style="padding: 1rem; border-top: 1px solid var(--neon-fade); text-align: center;">
+
+    <!-- Item Grid -->
+    <div id="forge-body" class="forge-grid-container" style="flex:1;overflow-y:auto;padding:20px;">
+      <div class="forge-loading" style="text-align:center;padding:60px 20px;color:#ff8800;">
+        <div style="font-size:2rem;margin-bottom:12px;">⚒️</div>
+        <p>Loading forgeable items...</p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="forge-modal-footer" style="padding:16px 24px;border-top:1px solid rgba(255,102,0,0.2);display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.3);">
+      <div id="forge-selection-info" style="font-size:0.9rem;color:#888;">
+        Click items to select them for forging
+      </div>
       <button id="forge-selected-btn" onclick="forgeSelected()" disabled style="
         background: linear-gradient(135deg, #ff6600 0%, #ff8800 100%);
         border: none;
         color: #000;
-        padding: 10px 24px;
-        border-radius: 6px;
+        padding: 12px 28px;
+        border-radius: 8px;
         cursor: pointer;
         font-weight: 700;
+        font-size: 1rem;
         opacity: 0.5;
+        transition: all 0.2s;
+        box-shadow: 0 4px 12px rgba(255,102,0,0.3);
       ">Forge Selected (0)</button>
     </div>
   </div>
 </div>
 
+<style>
+/* Forge Grid Styles */
+.forge-grid-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,102,0,0.4) rgba(0,0,0,0.2);
+}
+.forge-grid-container::-webkit-scrollbar {
+  width: 8px;
+}
+.forge-grid-container::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+.forge-grid-container::-webkit-scrollbar-thumb {
+  background: rgba(255,102,0,0.4);
+  border-radius: 4px;
+}
+
+.forge-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+  max-width: 100%;
+}
+
+/* Wrapper that contains card + name */
+.forge-item-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+.forge-item-card {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  background: linear-gradient(145deg, rgba(20,20,24,0.95) 0%, rgba(12,12,16,0.98) 100%);
+  border: 1px solid rgba(60,60,70,0.6);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.forge-item-wrapper:hover .forge-item-card {
+  transform: translateY(-2px) scale(1.03);
+  border-color: var(--item-glow, #888);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4), 0 0 15px var(--item-glow-alpha, rgba(136,136,136,0.3));
+}
+
+.forge-item-card.selected {
+  border-color: #ff8800;
+  box-shadow: 0 0 0 2px rgba(255,136,0,0.4), 0 8px 24px rgba(255,102,0,0.3);
+  background: linear-gradient(135deg, rgba(255,102,0,0.1) 0%, rgba(20,20,25,0.95) 100%);
+}
+
+.forge-item-card.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  background: #ff8800;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: #000;
+}
+
+.forge-item-icon {
+  width: 85%;
+  height: 85%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.7));
+  transition: transform 0.2s;
+}
+
+.forge-item-wrapper:hover .forge-item-icon {
+  transform: scale(1.08);
+}
+
+/* Name is now outside the card, in the wrapper */
+.forge-item-name {
+  font-size: 0.55rem;
+  text-align: center;
+  color: #888;
+  line-height: 1.15;
+  max-height: 2.3em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+  width: 100%;
+  padding: 0 2px;
+}
+
+.forge-item-wrapper:hover .forge-item-name {
+  color: #ccc;
+}
+
+.forge-item-rarity {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--item-glow, #888);
+}
+
+/* Rarity colors */
+.forge-item-card[data-rarity="legendary"] {
+  --item-glow: #ff8000;
+  --item-glow-alpha: rgba(255,128,0,0.4);
+}
+.forge-item-card[data-rarity="epic"] {
+  --item-glow: #a855f7;
+  --item-glow-alpha: rgba(168,85,247,0.4);
+}
+.forge-item-card[data-rarity="rare"] {
+  --item-glow: #3b82f6;
+  --item-glow-alpha: rgba(59,130,246,0.4);
+}
+
+/* Section headers */
+.forge-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.forge-section-header:first-child {
+  margin-top: 0;
+}
+.forge-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.forge-section-count {
+  font-size: 0.8rem;
+  opacity: 0.6;
+  background: rgba(255,255,255,0.05);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* Empty state */
+.forge-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+}
+.forge-empty-state svg {
+  width: 64px;
+  height: 64px;
+  opacity: 0.3;
+  margin-bottom: 16px;
+}
+
+/* Item tooltip - hidden in DOM, rendered via JS to fixed container */
+.forge-item-tooltip {
+  display: none;
+}
+/* Fixed tooltip container for forge items */
+#forge-tooltip-container {
+  position: fixed;
+  z-index: 99999;
+  pointer-events: none;
+  background: rgba(10,10,12,0.98);
+  border: 1px solid var(--tooltip-glow, #888);
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 200px;
+  max-width: 300px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.7);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+#forge-tooltip-container.visible {
+  opacity: 1;
+  visibility: visible;
+}
+#forge-tooltip-container .forge-item-tooltip-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--tooltip-glow, #fff);
+}
+#forge-tooltip-container .forge-item-tooltip-type {
+  font-size: 0.75rem;
+  color: #888;
+  margin-bottom: 6px;
+  text-transform: capitalize;
+}
+#forge-tooltip-container .forge-item-tooltip-desc {
+  font-size: 0.8rem;
+  color: #999;
+  line-height: 1.4;
+}
+#forge-tooltip-container .forge-item-tooltip-stats {
+  font-size: 0.75rem;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+#forge-tooltip-container .forge-item-tooltip-stats .stat-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+#forge-tooltip-container .forge-item-tooltip-stats .stat-label {
+  color: #888;
+}
+#forge-tooltip-container .forge-item-tooltip-stats .stat-value {
+  color: #ccc;
+}
+#forge-tooltip-container .forge-item-tooltip-stats .stat-value.damage {
+  color: #ff6b6b;
+}
+#forge-tooltip-container .forge-item-tooltip-stats .stat-value.bonus {
+  color: #22c55e;
+}
+#forge-tooltip-container .forge-item-tooltip-achievement {
+  font-size: 0.75rem;
+  color: #666;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Locked item state */
+.forge-item-card.locked {
+  opacity: 0.6;
+  border-color: rgba(60,60,70,0.4);
+}
+.forge-item-wrapper:hover .forge-item-card.locked {
+  transform: none;
+  border-color: rgba(80,80,90,0.5);
+  box-shadow: none;
+}
+.forge-item-wrapper:hover .forge-item-card.locked .forge-item-icon {
+  transform: none;
+}
+
+/* Forged item state */
+.forge-item-card.forged {
+  border-color: rgba(34,197,94,0.4);
+  background: linear-gradient(145deg, rgba(34,197,94,0.08) 0%, rgba(15,15,20,0.98) 100%);
+}
+.forge-item-wrapper:hover .forge-item-card.forged {
+  border-color: rgba(34,197,94,0.6);
+  box-shadow: 0 0 12px rgba(34,197,94,0.2);
+}
+</style>
+
 <!-- Lockbox Modal -->
 <div id="lockbox-modal" class="neon-modal" style="display:none;">
-  <div class="neon-modal-content" style="width:60vw;max-width:800px;max-height:70vh;display:flex;flex-direction:column;">
-    <button class="neon-modal-close" onclick="closeLockboxModal()" style="align-self:flex-end;margin-top:5px;margin-right:5px;font-size:2.2rem;line-height:1;color:#996633;background:none;border:none;cursor:pointer;">&times;</button>
-    <h3 class="neon-modal-title" style="text-align:center;margin-bottom:12px;color:#cc9966;">🔐 Lockbox</h3>
-    <p style="text-align:center;opacity:0.7;margin-bottom:1rem;color:#aa8866;">Relics stored in your external wallet. Bridge them back to use in-game.</p>
-    <div id="lockbox-body" style="flex:1;overflow-y:auto;padding:0 1rem;">
-      <p style="opacity:0.5;text-align:center;">(Loading lockbox items...)</p>
+  <div class="neon-modal-content lockbox-modal-content" style="width:85vw;max-width:1100px;max-height:85vh;display:flex;flex-direction:column;">
+    <button class="neon-modal-close" onclick="closeLockboxModal()" style="position:absolute;top:10px;right:15px;font-size:2.2rem;line-height:1;color:#996633;background:none;border:none;cursor:pointer;z-index:10;">&times;</button>
+
+    <!-- Header -->
+    <div class="lockbox-modal-header" style="padding:20px 24px 16px;border-bottom:1px solid rgba(153,102,51,0.2);background:linear-gradient(180deg, rgba(153,102,51,0.08) 0%, transparent 100%);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+        <span style="font-size:2rem;">🔐</span>
+        <h3 style="margin:0;font-size:1.4rem;font-weight:700;color:#cc9966;text-shadow:0 0 20px rgba(153,102,51,0.3);">LOCKBOX</h3>
+      </div>
+      <p style="margin:0;opacity:0.7;font-size:0.9rem;color:#aa8866;">Items stored in your external wallet. Bind them back to use in-game.</p>
+      <div id="lockbox-stats" style="display:flex;gap:24px;margin-top:12px;font-size:0.85rem;">
+        <span style="color:#cc9966;"><strong id="lockbox-item-count">0</strong> items in lockbox</span>
+      </div>
     </div>
-    <div style="padding: 1rem; border-top: 1px solid rgba(153,102,51,0.3); text-align: center; display: flex; gap: 1rem; justify-content: center; align-items: center;">
+
+    <!-- Item Grid -->
+    <div id="lockbox-body" class="lockbox-grid-container" style="flex:1;overflow-y:auto;padding:20px;">
+      <div class="lockbox-loading" style="text-align:center;padding:60px 20px;color:#cc9966;">
+        <div style="font-size:2rem;margin-bottom:12px;">🔐</div>
+        <p>Loading lockbox items...</p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="lockbox-modal-footer" style="padding:16px 24px;border-top:1px solid rgba(153,102,51,0.2);display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.3);">
       <a id="opensea-link" href="#" target="_blank" style="
         color: #6699ff;
         font-size: 0.85rem;
@@ -3030,9 +3449,189 @@
         </svg>
         View on OpenSea
       </a>
+      <button id="bind-selected-btn" onclick="bindSelectedItems()" disabled style="
+        background: linear-gradient(135deg, #996633 0%, #cc9966 100%);
+        border: none;
+        color: #000;
+        padding: 12px 28px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 1rem;
+        opacity: 0.5;
+        transition: all 0.2s;
+        box-shadow: 0 4px 12px rgba(153,102,51,0.3);
+      ">Bind Selected (0)</button>
     </div>
   </div>
 </div>
+
+<style>
+/* Lockbox Grid Styles */
+.lockbox-grid-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(153,102,51,0.4) rgba(0,0,0,0.2);
+}
+.lockbox-grid-container::-webkit-scrollbar {
+  width: 8px;
+}
+.lockbox-grid-container::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+.lockbox-grid-container::-webkit-scrollbar-thumb {
+  background: rgba(153,102,51,0.4);
+  border-radius: 4px;
+}
+
+.lockbox-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  max-width: 100%;
+}
+
+.lockbox-item-card {
+  position: relative;
+  aspect-ratio: 0.85;
+  background: rgba(30, 30, 32, 0.95);
+  border: 2px solid rgba(90,90,90,0.5);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10px 8px 8px 8px;
+}
+
+.lockbox-item-card:hover {
+  transform: translateY(-3px) scale(1.02);
+  border-color: var(--item-glow, #999);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 20px var(--item-glow-alpha, rgba(150,150,150,0.3));
+}
+
+.lockbox-item-card.selected {
+  border-color: #aaa;
+  box-shadow: 0 0 0 2px rgba(150,150,150,0.4), 0 8px 24px rgba(100,100,100,0.3);
+  background: rgba(40, 40, 42, 0.95);
+}
+
+.lockbox-item-card.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  background: #cc9966;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: #000;
+}
+
+.lockbox-item-icon {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.lockbox-item-card:hover .lockbox-item-icon {
+  transform: scale(1.1);
+}
+
+.lockbox-item-name {
+  font-size: 0.65rem;
+  text-align: center;
+  margin-top: 6px;
+  color: #ccc;
+  line-height: 1.25;
+  max-height: 3.75em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+  padding: 0 2px;
+}
+
+.lockbox-item-rarity {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--item-glow, #996633);
+}
+
+/* Rarity colors for lockbox items */
+.lockbox-item-card[data-rarity="legendary"] {
+  --item-glow: #ff8000;
+  --item-glow-alpha: rgba(255,128,0,0.4);
+}
+.lockbox-item-card[data-rarity="epic"] {
+  --item-glow: #a855f7;
+  --item-glow-alpha: rgba(168,85,247,0.4);
+}
+.lockbox-item-card[data-rarity="rare"] {
+  --item-glow: #3b82f6;
+  --item-glow-alpha: rgba(59,130,246,0.4);
+}
+
+.lockbox-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #888;
+}
+.lockbox-empty-state svg {
+  width: 64px;
+  height: 64px;
+  opacity: 0.3;
+  margin-bottom: 16px;
+}
+
+/* Lockbox item tooltip */
+.lockbox-item-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.95);
+  border: 1px solid var(--item-glow, #996633);
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 180px;
+  max-width: 250px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 100;
+  margin-bottom: 8px;
+}
+.lockbox-item-card:hover .lockbox-item-tooltip {
+  opacity: 1;
+}
+.lockbox-item-tooltip-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--item-glow, #cc9966);
+}
+.lockbox-item-tooltip-forger {
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 4px;
+}
+</style>
 
 <script>
 // Vault connection state
@@ -3214,8 +3813,8 @@ function initCardDeckState() {
     });
   }
 
-  // Add shimmer effect and hover sounds to individual cards (provider + mantle)
-  const allCards = document.querySelectorAll('.provider-cards-container .provider-card, .mantle-card');
+  // Add shimmer effect and hover sounds to individual cards (provider + Ashbane)
+  const allCards = document.querySelectorAll('.provider-cards-container .provider-card, .Ashbane-card');
   allCards.forEach(card => {
     card.addEventListener('mouseenter', function(e) {
       e.stopPropagation();
@@ -3467,52 +4066,443 @@ async function openForgeModal() {
   updateForgeButton();
 
   try {
-    const resp = await fetch('/api/wallet/forgeable', { credentials: 'include' });
+    // Use forge-catalog API which returns full item catalog with user status
+    const resp = await fetch('/api/me/forge-catalog', { credentials: 'include' });
     const data = await resp.json();
 
-    if (data.forgeable.length === 0) {
-      document.getElementById('forge-body').innerHTML =
-        '<p style="text-align:center;opacity:0.7;padding:2rem;">No forgeable achievements yet. Sync more achievements or earn rarer ones!</p>';
+    // Update stats in header
+    document.getElementById('forge-available-count').textContent = data.stats.unlocked;
+    document.getElementById('forge-total-count').textContent = data.stats.forged;
+    document.getElementById('forge-locked-count').textContent = data.stats.locked;
+
+    if (data.catalog.length === 0) {
+      renderForgeEmptyState();
       return;
     }
 
-    // Group by rarity
-    const byRarity = { Legendary: [], Epic: [], Rare: [] };
-    data.forgeable.forEach(a => {
-      if (byRarity[a.rarity_tier]) byRarity[a.rarity_tier].push(a);
-    });
+    // Store catalog for forge operations
+    window.forgeCatalog = data.catalog;
 
-    let html = '';
-    ['Legendary', 'Epic', 'Rare'].forEach(tier => {
-      if (byRarity[tier].length === 0) return;
-      const color = tier === 'Legendary' ? '#ff8000' : tier === 'Epic' ? '#a335ee' : '#0070dd';
-      html += `<h4 style="color:${color};margin:1rem 0 0.5rem;">${tier} (${byRarity[tier].length})</h4>`;
-      byRarity[tier].forEach(a => {
-        // Use caching proxy for achievement icons (improves load times)
-        const iconUrl = a.icon_url
-          ? `/api/icon?url=${encodeURIComponent(a.icon_url)}`
-          : '/static/icons/trophy.png';
-
-        html += `
-          <label style="display:flex;align-items:center;gap:12px;padding:8px;border:1px solid #333;border-radius:8px;margin-bottom:8px;cursor:pointer;transition:border-color 0.2s;"
-                 onmouseover="this.style.borderColor='${color}'" onmouseout="this.style.borderColor='#333'">
-            <input type="checkbox" value="${a.credit_id}" onchange="toggleForge(${a.credit_id})" style="width:18px;height:18px;">
-            <img src="${iconUrl}" style="width:40px;height:40px;border-radius:4px;">
-            <div style="flex:1;">
-              <div style="font-weight:600;color:${color};">${a.display_name}</div>
-              <div style="font-size:0.85rem;opacity:0.7;">${a.description || ''}</div>
-            </div>
-            <div style="font-size:0.8rem;opacity:0.6;">${(a.percent || 0).toFixed(1)}%</div>
-          </label>
-        `;
-      });
-    });
-
-    document.getElementById('forge-body').innerHTML = html;
+    // Render the catalog grid
+    renderForgeCatalog(data.catalog);
   } catch (e) {
-    document.getElementById('forge-body').innerHTML =
-      '<p style="text-align:center;color:#f44;">Failed to load forgeable achievements</p>';
+    console.error('Forge modal error:', e);
+    renderForgeError(e.message || 'Unknown error');
   }
+}
+
+function renderForgeEmptyState() {
+  const container = document.getElementById('forge-body');
+  container.textContent = '';
+  const div = document.createElement('div');
+  div.className = 'forge-empty-state';
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.5');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', 'M12 3v18M3 12h18M7.5 7.5l9 9M16.5 7.5l-9 9');
+  svg.appendChild(path);
+  div.appendChild(svg);
+
+  const h4 = document.createElement('h4');
+  h4.style.cssText = 'margin-bottom:8px;color:#888;';
+  h4.textContent = 'No Forgeable Items';
+  div.appendChild(h4);
+
+  const p = document.createElement('p');
+  p.style.cssText = 'font-size:0.9rem;max-width:400px;margin:0 auto;';
+  p.textContent = 'Earn Rare, Epic, or Legendary achievements from your connected gaming accounts to unlock forgeable items.';
+  div.appendChild(p);
+
+  container.appendChild(div);
+}
+
+function renderForgeError(message) {
+  const container = document.getElementById('forge-body');
+  container.textContent = '';
+  const div = document.createElement('div');
+  div.className = 'forge-empty-state';
+
+  const p1 = document.createElement('p');
+  p1.style.color = '#f44';
+  p1.textContent = 'Failed to load forgeable items';
+  div.appendChild(p1);
+
+  const p2 = document.createElement('p');
+  p2.style.cssText = 'font-size:0.85rem;color:#888;margin-top:8px;';
+  p2.textContent = message;
+  div.appendChild(p2);
+
+  container.appendChild(div);
+}
+
+function renderForgeCatalog(catalog) {
+  const container = document.getElementById('forge-body');
+  container.textContent = '';
+
+  // Group by status first, then by rarity within each status
+  const byStatus = {
+    forged: { Legendary: [], Epic: [], Rare: [], Uncommon: [], Common: [] },
+    unlocked: { Legendary: [], Epic: [], Rare: [], Uncommon: [], Common: [] },
+    locked: { Legendary: [], Epic: [], Rare: [], Uncommon: [], Common: [] }
+  };
+
+  catalog.forEach(item => {
+    const status = item.status || 'locked';
+    const rarity = (item.base_rarity || 'rare').charAt(0).toUpperCase() + (item.base_rarity || 'rare').slice(1).toLowerCase();
+    if (byStatus[status] && byStatus[status][rarity]) {
+      byStatus[status][rarity].push(item);
+    }
+  });
+
+  const statusConfig = {
+    unlocked: { label: '⚒️ Ready to Forge', color: '#ff8800', description: 'You have the achievement - click to select for forging' },
+    forged: { label: '✨ Forged', color: '#22c55e', description: 'Already forged and in your collection' },
+    locked: { label: '🔒 Locked', color: '#666666', description: 'Earn the required achievement to unlock' }
+  };
+
+  const rarityColors = {
+    Legendary: '#ff8000',
+    Epic: '#a855f7',
+    Rare: '#3b82f6',
+    Uncommon: '#22c55e',
+    Common: '#888888'
+  };
+
+  // Render each status section
+  ['unlocked', 'forged', 'locked'].forEach(status => {
+    const statusItems = byStatus[status];
+    const totalInStatus = Object.values(statusItems).flat().length;
+    if (totalInStatus === 0) return;
+
+    const config = statusConfig[status];
+
+    // Status section header
+    const statusHeader = document.createElement('div');
+    statusHeader.className = 'forge-status-header';
+    statusHeader.style.cssText = 'margin: 20px 0 12px 0; padding: 10px 16px; background: rgba(0,0,0,0.3); border-radius: 8px; border-left: 4px solid ' + config.color + ';';
+
+    const statusTitle = document.createElement('div');
+    statusTitle.style.cssText = 'font-size: 1rem; font-weight: 700; color: ' + config.color + '; margin-bottom: 4px;';
+    statusTitle.textContent = config.label + ' (' + totalInStatus + ')';
+    statusHeader.appendChild(statusTitle);
+
+    const statusDesc = document.createElement('div');
+    statusDesc.style.cssText = 'font-size: 0.8rem; color: #888;';
+    statusDesc.textContent = config.description;
+    statusHeader.appendChild(statusDesc);
+
+    container.appendChild(statusHeader);
+
+    // Render items by rarity within this status
+    ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'].forEach(rarity => {
+      const items = statusItems[rarity];
+      if (items.length === 0) return;
+
+      const color = rarityColors[rarity];
+
+      // Rarity sub-header
+      const header = document.createElement('div');
+      header.className = 'forge-section-header';
+      header.style.marginLeft = '16px';
+
+      const title = document.createElement('span');
+      title.className = 'forge-section-title';
+      title.style.color = color;
+      title.style.fontSize = '0.85rem';
+      title.textContent = rarity;
+      header.appendChild(title);
+
+      const count = document.createElement('span');
+      count.className = 'forge-section-count';
+      count.textContent = items.length + ' items';
+      header.appendChild(count);
+
+      container.appendChild(header);
+
+      // Item grid
+      const grid = document.createElement('div');
+      grid.className = 'forge-item-grid';
+
+      items.forEach(item => {
+        const card = createCatalogItemCard(item, status);
+        grid.appendChild(card);
+      });
+
+      container.appendChild(grid);
+    });
+  });
+}
+
+function createCatalogItemCard(item, status) {
+  const iconUrl = item.icon_url || '/static/icons/trophy.png';
+  const itemName = item.item_name || 'Unknown Item';
+  const rarity = (item.base_rarity || 'rare').toLowerCase();
+  const description = item.description || '';
+  const theme = item.theme || 'generic';
+  const isLocked = status === 'locked';
+  const isForged = status === 'forged';
+  const canSelect = status === 'unlocked';
+
+  // Wrapper contains card + name below
+  const wrapper = document.createElement('div');
+  wrapper.className = 'forge-item-wrapper';
+
+  const card = document.createElement('div');
+  card.className = 'forge-item-card';
+  if (isLocked) card.classList.add('locked');
+  if (isForged) card.classList.add('forged');
+  card.dataset.rarity = rarity;
+  card.dataset.itemId = item.item_id;
+  card.dataset.status = status;
+  card.title = itemName;
+
+  if (canSelect && item.credit_id) {
+    card.dataset.creditId = item.credit_id;
+    card.onclick = function() { toggleForgeItem(this, item.credit_id); };
+    card.style.cursor = 'pointer';
+  } else {
+    card.style.cursor = isForged ? 'default' : 'not-allowed';
+  }
+
+  const icon = document.createElement('img');
+  icon.className = 'forge-item-icon';
+  icon.src = iconUrl;
+  icon.alt = itemName;
+  icon.onerror = function() { this.src = '/static/icons/trophy.png'; };
+  if (isLocked) icon.style.filter = 'grayscale(100%) brightness(0.5)';
+  card.appendChild(icon);
+
+  const rarityBar = document.createElement('div');
+  rarityBar.className = 'forge-item-rarity';
+  if (isLocked) rarityBar.style.opacity = '0.3';
+  card.appendChild(rarityBar);
+
+  // Status indicator
+  if (isForged) {
+    const badge = document.createElement('div');
+    badge.style.cssText = 'position:absolute;top:3px;right:3px;width:16px;height:16px;background:#22c55e;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#000;font-weight:bold;';
+    badge.textContent = '✓';
+    card.appendChild(badge);
+  } else if (isLocked) {
+    const lock = document.createElement('div');
+    lock.style.cssText = 'position:absolute;top:3px;right:3px;font-size:11px;opacity:0.5;';
+    lock.textContent = '🔒';
+    card.appendChild(lock);
+  }
+
+  wrapper.appendChild(card);
+
+  // Name is now outside the card, in the wrapper
+  const name = document.createElement('div');
+  name.className = 'forge-item-name';
+  name.textContent = itemName;
+  if (isLocked) name.style.color = '#555';
+  wrapper.appendChild(name);
+
+  // Tooltip
+  const tooltip = document.createElement('div');
+  tooltip.className = 'forge-item-tooltip';
+
+  const tooltipName = document.createElement('div');
+  tooltipName.className = 'forge-item-tooltip-name';
+  tooltipName.textContent = itemName;
+  tooltip.appendChild(tooltipName);
+
+  // Slot/type row
+  if (item.item_type) {
+    const tooltipType = document.createElement('div');
+    tooltipType.className = 'forge-item-tooltip-type';
+    // Map item_type to friendly slot names
+    const slotNames = {
+      'weapon': 'Weapon',
+      'armor_head': 'Head Armor',
+      'armor_chest': 'Chest Armor',
+      'armor_legs': 'Leg Armor',
+      'shield': 'Off-Hand (Shield)',
+      'cape': 'Cape',
+      'ring': 'Ring',
+      'amulet': 'Amulet',
+      'accessory': 'Accessory (Inventory)'
+    };
+    const slotName = slotNames[item.item_type] || item.item_type;
+    const typeText = item.weapon_type ? `${slotName} - ${item.weapon_type}` : slotName;
+    tooltipType.textContent = typeText;
+    tooltip.appendChild(tooltipType);
+  }
+
+  if (description) {
+    const tooltipDesc = document.createElement('div');
+    tooltipDesc.className = 'forge-item-tooltip-desc';
+    tooltipDesc.textContent = description;
+    tooltip.appendChild(tooltipDesc);
+  }
+
+  // Combat stats section
+  const hasStats = item.base_damage || item.attack_speed || item.stat_bonuses || item.hp_bonus;
+  if (hasStats) {
+    const statsDiv = document.createElement('div');
+    statsDiv.className = 'forge-item-tooltip-stats';
+
+    // Damage
+    if (item.base_damage) {
+      const dmgRow = document.createElement('div');
+      dmgRow.className = 'stat-row';
+      dmgRow.innerHTML = `<span class="stat-label">Damage</span><span class="stat-value damage">${item.base_damage.min}-${item.base_damage.max}</span>`;
+      statsDiv.appendChild(dmgRow);
+    }
+
+    // Attack speed
+    if (item.attack_speed) {
+      const spdRow = document.createElement('div');
+      spdRow.className = 'stat-row';
+      spdRow.innerHTML = `<span class="stat-label">Speed</span><span class="stat-value">${item.attack_speed}</span>`;
+      statsDiv.appendChild(spdRow);
+    }
+
+    // HP bonus
+    if (item.hp_bonus) {
+      const hpRow = document.createElement('div');
+      hpRow.className = 'stat-row';
+      hpRow.innerHTML = `<span class="stat-label">HP</span><span class="stat-value bonus">+${item.hp_bonus}</span>`;
+      statsDiv.appendChild(hpRow);
+    }
+
+    // Stat bonuses
+    if (item.stat_bonuses) {
+      const statNames = {str: 'STR', agi: 'AGI', dex: 'DEX', int: 'INT', wis: 'WIS', vit: 'VIT'};
+      Object.entries(item.stat_bonuses).forEach(([stat, value]) => {
+        if (value && value > 0) {
+          const statRow = document.createElement('div');
+          statRow.className = 'stat-row';
+          statRow.innerHTML = `<span class="stat-label">${statNames[stat] || stat.toUpperCase()}</span><span class="stat-value bonus">+${value}</span>`;
+          statsDiv.appendChild(statRow);
+        }
+      });
+    }
+
+    tooltip.appendChild(statsDiv);
+  }
+
+  // Achievement requirement
+  if (item.achievement) {
+    const tooltipAchv = document.createElement('div');
+    tooltipAchv.className = 'forge-item-tooltip-achievement';
+
+    // Build achievement display text with game name
+    const gameName = item.achievement.game_name || item.achievement.app_id;
+    const achName = item.achievement.display_name;
+
+    if (achName) {
+      // Create: "🔒 GameName — AchievementName"
+      const icon = document.createTextNode(isLocked ? '🔒 ' : '🏆 ');
+      const gameSpan = document.createElement('span');
+      gameSpan.style.color = '#999';
+      gameSpan.textContent = gameName;
+      const separator = document.createTextNode(' — ');
+      const achText = document.createTextNode(achName);
+
+      tooltipAchv.appendChild(icon);
+      tooltipAchv.appendChild(gameSpan);
+      tooltipAchv.appendChild(separator);
+      tooltipAchv.appendChild(achText);
+    } else {
+      // Create: "🎮 GameName"
+      const icon = document.createTextNode('🎮 ');
+      const gameSpan = document.createElement('span');
+      gameSpan.style.color = '#999';
+      gameSpan.textContent = gameName;
+
+      tooltipAchv.appendChild(icon);
+      tooltipAchv.appendChild(gameSpan);
+    }
+    tooltip.appendChild(tooltipAchv);
+  }
+
+  // Status indicator in tooltip
+  const tooltipStatus = document.createElement('div');
+  tooltipStatus.style.cssText = 'font-size:0.75rem;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1);';
+  if (isForged) {
+    tooltipStatus.style.color = '#22c55e';
+    tooltipStatus.textContent = '✓ In your collection';
+  } else if (canSelect) {
+    tooltipStatus.style.color = '#ff8800';
+    tooltipStatus.textContent = '⚒️ Click to select for forging';
+  } else {
+    tooltipStatus.style.color = '#666';
+    // Show game name for locked items
+    const gameName = item.achievement?.game_name || item.achievement?.app_id || 'Achievement';
+    tooltipStatus.textContent = '🔒 Requires ' + gameName + ' achievement';
+  }
+  tooltip.appendChild(tooltipStatus);
+
+  wrapper.appendChild(tooltip);
+
+  return wrapper;
+}
+
+// Legacy function kept for backwards compat
+function renderForgeGrid(byRarity) {
+  renderForgeCatalog(window.forgeCatalog || []);
+}
+
+function createForgeItemCard(item, tier) {
+  const iconUrl = item.icon_url || '/static/icons/trophy.png';
+  const itemName = item.item_name || item.display_name || 'Unknown Item';
+  const rarity = (item.item_rarity || tier).toLowerCase();
+  const description = item.description || '';
+  const achievementName = item.display_name || '';
+
+  const card = document.createElement('div');
+  card.className = 'forge-item-card';
+  card.dataset.rarity = rarity;
+  card.dataset.creditId = item.credit_id;
+  card.title = itemName;
+  card.onclick = function() { toggleForgeItem(this, item.credit_id); };
+
+  const icon = document.createElement('img');
+  icon.className = 'forge-item-icon';
+  icon.src = iconUrl;
+  icon.alt = itemName;
+  icon.onerror = function() { this.src = '/static/icons/trophy.png'; };
+  card.appendChild(icon);
+
+  const name = document.createElement('div');
+  name.className = 'forge-item-name';
+  name.textContent = itemName;
+  card.appendChild(name);
+
+  const rarityBar = document.createElement('div');
+  rarityBar.className = 'forge-item-rarity';
+  card.appendChild(rarityBar);
+
+  // Tooltip
+  const tooltip = document.createElement('div');
+  tooltip.className = 'forge-item-tooltip';
+
+  const tooltipName = document.createElement('div');
+  tooltipName.className = 'forge-item-tooltip-name';
+  tooltipName.textContent = itemName;
+  tooltip.appendChild(tooltipName);
+
+  if (description) {
+    const tooltipDesc = document.createElement('div');
+    tooltipDesc.className = 'forge-item-tooltip-desc';
+    tooltipDesc.textContent = description;
+    tooltip.appendChild(tooltipDesc);
+  }
+
+  const tooltipAchv = document.createElement('div');
+  tooltipAchv.className = 'forge-item-tooltip-achievement';
+  tooltipAchv.textContent = '🏆 ' + achievementName;
+  tooltip.appendChild(tooltipAchv);
+
+  card.appendChild(tooltip);
+
+  return card;
 }
 
 function closeForgeModal() {
@@ -3521,6 +4511,19 @@ function closeForgeModal() {
   document.body.style.overflow = '';
 }
 
+function toggleForgeItem(element, creditId) {
+  playClickSound();
+  element.classList.toggle('selected');
+
+  if (selectedForge.has(creditId)) {
+    selectedForge.delete(creditId);
+  } else {
+    selectedForge.add(creditId);
+  }
+  updateForgeButton();
+}
+
+// Legacy function - kept for backwards compat
 function toggleForge(creditId) {
   if (selectedForge.has(creditId)) {
     selectedForge.delete(creditId);
@@ -3575,10 +4578,13 @@ document.addEventListener('DOMContentLoaded', checkVaultStatus);
 
 // ===== LOCKBOX FUNCTIONS =====
 let lockboxItems = [];
+let selectedLockbox = new Set();
 
 async function openLockboxModal() {
   document.body.style.overflow = 'hidden';
   document.getElementById('lockbox-modal').style.display = 'flex';
+  selectedLockbox.clear();
+  updateBindButton();
 
   // Update OpenSea link based on wallet
   const openseaLink = document.getElementById('opensea-link');
@@ -3594,100 +4600,220 @@ async function openLockboxModal() {
 
     lockboxItems = data.available_items || [];
     console.log('Lockbox items:', lockboxItems.length, lockboxItems);
+
+    // Update stats
+    document.getElementById('lockbox-item-count').textContent = lockboxItems.length;
     updateLockboxCount();
 
     if (lockboxItems.length === 0) {
-      document.getElementById('lockbox-body').innerHTML = `
-        <div style="text-align:center;padding:2rem;">
-          <div style="font-size:3rem;margin-bottom:1rem;opacity:0.3;">🔐</div>
-          <p style="opacity:0.7;margin-bottom:0.5rem;">Your lockbox is empty</p>
-          <p style="opacity:0.5;font-size:0.85rem;">Unbind items from the game to store them here.</p>
-        </div>
-      `;
+      renderLockboxEmptyState();
       return;
     }
 
-    // Group by rarity (capitalize first letter to match keys)
+    // Group by rarity
     const byRarity = { Legendary: [], Epic: [], Rare: [], Uncommon: [], Common: [] };
     lockboxItems.forEach(item => {
       let rarity = item.item_rarity || item.rarity || 'common';
-      // Capitalize first letter: "epic" -> "Epic"
       rarity = rarity.charAt(0).toUpperCase() + rarity.slice(1).toLowerCase();
       if (byRarity[rarity]) byRarity[rarity].push(item);
-      else byRarity['Common'].push(item); // Fallback
+      else byRarity['Common'].push(item);
     });
 
-    let html = '';
-    const rarityColors = {
-      Legendary: '#ff8000',
-      Epic: '#a335ee',
-      Rare: '#0070dd',
-      Uncommon: '#1eff00',
-      Common: '#ffffff'
-    };
-
-    ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'].forEach(tier => {
-      if (!byRarity[tier] || byRarity[tier].length === 0) return;
-      const color = rarityColors[tier];
-      html += `<h4 style="color:${color};margin:1rem 0 0.5rem;font-size:0.9rem;">${tier} (${byRarity[tier].length})</h4>`;
-      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:10px;">';
-
-      byRarity[tier].forEach(item => {
-        const itemName = item.item_name || item.name || 'Unknown Item';
-        const tokenId = item.token_id;
-        html += `
-          <div class="lockbox-item" style="
-            display:flex;
-            align-items:center;
-            gap:10px;
-            padding:10px;
-            border:1px solid ${color}44;
-            border-radius:8px;
-            background:linear-gradient(145deg, rgba(0,0,0,0.3), rgba(0,0,0,0.1));
-            transition: all 0.2s;
-          " onmouseover="this.style.borderColor='${color}88';this.style.background='linear-gradient(145deg, rgba(0,0,0,0.5), rgba(0,0,0,0.2))';"
-             onmouseout="this.style.borderColor='${color}44';this.style.background='linear-gradient(145deg, rgba(0,0,0,0.3), rgba(0,0,0,0.1))';">
-            <div style="
-              width:50px;
-              height:50px;
-              border-radius:6px;
-              background:rgba(0,0,0,0.3);
-              border:1px solid ${color}33;
-              display:flex;
-              align-items:center;
-              justify-content:center;
-              font-size:1.5rem;
-              color:${color};
-            ">${itemName.charAt(0).toUpperCase()}</div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-weight:600;color:${color};font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemName}</div>
-              <div style="font-size:0.7rem;opacity:0.5;">#${tokenId}</div>
-            </div>
-            <button onclick="bridgeInItem(${tokenId}, '${itemName.replace(/'/g, "\\'")}')" style="
-              background:linear-gradient(145deg, #1a2a1a, #0a150a);
-              border:1px solid #3a5a3a;
-              color:#6a9a6a;
-              padding:6px 12px;
-              border-radius:4px;
-              cursor:pointer;
-              font-size:0.75rem;
-              font-weight:600;
-              transition:all 0.2s;
-            " onmouseover="this.style.borderColor='#5a8a5a';this.style.color='#8aba8a';"
-               onmouseout="this.style.borderColor='#3a5a3a';this.style.color='#6a9a6a';">
-              BIND
-            </button>
-          </div>
-        `;
-      });
-      html += '</div>';
-    });
-
-    document.getElementById('lockbox-body').innerHTML = html;
+    renderLockboxGrid(byRarity);
   } catch (e) {
-    document.getElementById('lockbox-body').innerHTML =
-      '<p style="text-align:center;color:#f44;">Failed to load lockbox items</p>';
+    console.error('Lockbox error:', e);
+    renderLockboxError(e.message || 'Unknown error');
   }
+}
+
+function renderLockboxEmptyState() {
+  const container = document.getElementById('lockbox-body');
+  container.textContent = '';
+  const div = document.createElement('div');
+  div.className = 'lockbox-empty-state';
+
+  const iconDiv = document.createElement('div');
+  iconDiv.style.cssText = 'font-size:3rem;margin-bottom:1rem;opacity:0.3;';
+  iconDiv.textContent = '🔐';
+  div.appendChild(iconDiv);
+
+  const h4 = document.createElement('h4');
+  h4.style.cssText = 'margin-bottom:8px;color:#888;';
+  h4.textContent = 'Your Lockbox is Empty';
+  div.appendChild(h4);
+
+  const p = document.createElement('p');
+  p.style.cssText = 'font-size:0.9rem;max-width:400px;margin:0 auto;color:#666;';
+  p.textContent = 'Unbind items from the game to store them here. Items in your lockbox can be traded on OpenSea.';
+  div.appendChild(p);
+
+  container.appendChild(div);
+}
+
+function renderLockboxError(message) {
+  const container = document.getElementById('lockbox-body');
+  container.textContent = '';
+  const div = document.createElement('div');
+  div.className = 'lockbox-empty-state';
+
+  const p1 = document.createElement('p');
+  p1.style.color = '#f44';
+  p1.textContent = 'Failed to load lockbox items';
+  div.appendChild(p1);
+
+  const p2 = document.createElement('p');
+  p2.style.cssText = 'font-size:0.85rem;color:#888;margin-top:8px;';
+  p2.textContent = message;
+  div.appendChild(p2);
+
+  container.appendChild(div);
+}
+
+function renderLockboxGrid(byRarity) {
+  const container = document.getElementById('lockbox-body');
+  container.textContent = '';
+
+  const rarityColors = {
+    Legendary: '#ff8000',
+    Epic: '#a855f7',
+    Rare: '#3b82f6',
+    Uncommon: '#22c55e',
+    Common: '#888888'
+  };
+
+  ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'].forEach(tier => {
+    if (!byRarity[tier] || byRarity[tier].length === 0) return;
+
+    const color = rarityColors[tier];
+
+    // Section header
+    const header = document.createElement('div');
+    header.className = 'forge-section-header';
+
+    const title = document.createElement('span');
+    title.className = 'forge-section-title';
+    title.style.color = color;
+    title.textContent = tier;
+    header.appendChild(title);
+
+    const count = document.createElement('span');
+    count.className = 'forge-section-count';
+    count.textContent = byRarity[tier].length + ' items';
+    header.appendChild(count);
+
+    container.appendChild(header);
+
+    // Item grid
+    const grid = document.createElement('div');
+    grid.className = 'lockbox-item-grid';
+
+    byRarity[tier].forEach(item => {
+      const card = createLockboxItemCard(item, tier);
+      grid.appendChild(card);
+    });
+
+    container.appendChild(grid);
+  });
+}
+
+function createLockboxItemCard(item, tier) {
+  const iconUrl = item.icon_url || '/static/icons/trophy.png';
+  const itemName = item.item_name || item.name || 'Unknown Item';
+  const rarity = (item.item_rarity || tier).toLowerCase();
+  const tokenId = item.token_id;
+  const forger = item.forger_username || 'Unknown';
+
+  const card = document.createElement('div');
+  card.className = 'lockbox-item-card';
+  card.dataset.rarity = rarity;
+  card.dataset.tokenId = tokenId;
+  card.title = itemName;
+  card.onclick = function() { toggleLockboxItem(this, tokenId); };
+
+  const icon = document.createElement('img');
+  icon.className = 'lockbox-item-icon';
+  icon.src = iconUrl;
+  icon.alt = itemName;
+  icon.onerror = function() { this.src = '/static/icons/trophy.png'; };
+  card.appendChild(icon);
+
+  const name = document.createElement('div');
+  name.className = 'lockbox-item-name';
+  name.textContent = itemName;
+  card.appendChild(name);
+
+  const rarityBar = document.createElement('div');
+  rarityBar.className = 'lockbox-item-rarity';
+  card.appendChild(rarityBar);
+
+  // Tooltip
+  const tooltip = document.createElement('div');
+  tooltip.className = 'lockbox-item-tooltip';
+
+  const tooltipName = document.createElement('div');
+  tooltipName.className = 'lockbox-item-tooltip-name';
+  tooltipName.textContent = itemName;
+  tooltip.appendChild(tooltipName);
+
+  const tooltipForger = document.createElement('div');
+  tooltipForger.className = 'lockbox-item-tooltip-forger';
+  tooltipForger.textContent = 'Forged by: ' + forger;
+  tooltip.appendChild(tooltipForger);
+
+  const tooltipToken = document.createElement('div');
+  tooltipToken.style.cssText = 'font-size:0.7rem;color:#666;margin-top:4px;';
+  tooltipToken.textContent = 'Token #' + tokenId;
+  tooltip.appendChild(tooltipToken);
+
+  card.appendChild(tooltip);
+
+  return card;
+}
+
+function toggleLockboxItem(element, tokenId) {
+  playClickSound();
+  element.classList.toggle('selected');
+
+  if (selectedLockbox.has(tokenId)) {
+    selectedLockbox.delete(tokenId);
+  } else {
+    selectedLockbox.add(tokenId);
+  }
+  updateBindButton();
+}
+
+function updateBindButton() {
+  const btn = document.getElementById('bind-selected-btn');
+  if (!btn) return;
+  const count = selectedLockbox.size;
+  btn.textContent = 'Bind Selected (' + count + ')';
+  btn.disabled = count === 0;
+  btn.style.opacity = count === 0 ? '0.5' : '1';
+}
+
+async function bindSelectedItems() {
+  if (selectedLockbox.size === 0) return;
+
+  const btn = document.getElementById('bind-selected-btn');
+  btn.disabled = true;
+  btn.textContent = 'Binding...';
+
+  try {
+    // Bridge each selected item
+    for (const tokenId of selectedLockbox) {
+      const item = lockboxItems.find(i => i.token_id === tokenId);
+      if (item) {
+        await bridgeInItem(tokenId, item.item_name || 'Unknown Item');
+      }
+    }
+    closeLockboxModal();
+  } catch (e) {
+    console.error('Bind error:', e);
+    alert('Failed to bind items: ' + (e.message || 'Unknown error'));
+  }
+
+  btn.disabled = false;
+  updateBindButton();
 }
 
 function closeLockboxModal() {
@@ -3797,6 +4923,142 @@ const rarityColors = {
   'Legendary': '#fa0'
 };
 
+// Open popover showing ALL achievements (optionally filtered by provider)
+async function openAllAchievementsPopover(providerName = null) {
+  const backdrop = document.getElementById('rarity-popover-backdrop');
+  const popover = document.getElementById('rarity-popover');
+  const body = document.getElementById('rarity-popover-body');
+  const titleText = document.getElementById('rarity-popover-title-text');
+  const gemSpan = document.getElementById('rarity-popover-gem');
+
+  // Lock body scroll
+  document.body.style.overflow = 'hidden';
+
+  // Format provider name for display
+  function formatProviderDisplay(name) {
+    if (!name) return 'All';
+    if (name === 'battlenet') return 'Battle.net';
+    if (name === 'psn') return 'PlayStation';
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  // Set title with trophy icon
+  const displayName = providerName ? formatProviderDisplay(providerName) : 'All';
+  titleText.innerHTML = `${displayName} Achievements <span class="rarity-popover-count" id="rarity-count"></span>`;
+  titleText.className = '';
+  titleText.style.color = '#a0d8ef';
+
+  // Trophy SVG for all achievements
+  gemSpan.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="#a0d8ef">
+    <path d="M12 2L15 8H21L16 12L18 19L12 15L6 19L8 12L3 8H9L12 2Z"/>
+  </svg>`;
+
+  // Show loading state
+  body.innerHTML = '<div class="rarity-popover-loading">Loading achievements...</div>';
+  backdrop.classList.add('active');
+  popover.classList.add('active');
+
+  // Fetch ALL achievements
+  try {
+    const resp = await fetch('/api/achievements', { credentials: 'include' });
+    const data = await resp.json();
+
+    let achievements = data.achievements || [];
+
+    // Filter by provider if specified
+    if (providerName && achievements.length > 0) {
+      achievements = achievements.filter(ach => ach.provider === providerName);
+    }
+
+    if (achievements.length > 0) {
+      // Update count in header
+      const countEl = document.getElementById('rarity-count');
+      if (countEl) countEl.textContent = `(${achievements.length})`;
+
+      // Render all achievements, sorted by rarity (Legendary first)
+      const rarityOrder = ['Legendary', 'Epic', 'Rare', 'Uncommon', 'Common'];
+      const sorted = achievements.sort((a, b) => {
+        const aIdx = rarityOrder.indexOf(a.rarity_tier || 'Common');
+        const bIdx = rarityOrder.indexOf(b.rarity_tier || 'Common');
+        return aIdx - bIdx;
+      });
+
+      renderAllAchievementsContent(sorted);
+    } else {
+      body.innerHTML = `
+        <div class="rarity-popover-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 2L22 9L18 22H6L2 9L12 2Z"/>
+            <path d="M12 8v4M12 16h.01"/>
+          </svg>
+          <div>No achievements found</div>
+        </div>`;
+    }
+  } catch (err) {
+    console.error('Failed to load achievements:', err);
+    body.innerHTML = '<div class="rarity-popover-empty">Failed to load achievements</div>';
+  }
+}
+
+// Render all achievements with rarity-colored rows
+function renderAllAchievementsContent(achievements) {
+  const body = document.getElementById('rarity-popover-body');
+
+  function formatDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function formatProvider(name) {
+    if (!name) return '';
+    if (name === 'battlenet') return 'Battle.net';
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  const html = achievements.map(ach => {
+    const color = rarityColors[ach.rarity_tier] || rarityColors['Common'];
+    return `
+    <div class="rarity-achievement-item" style="--item-color: ${color};" onclick="openAchievementDetail(${ach.id})" title="Click for details & dispute options">
+      <img
+        class="rarity-achievement-icon"
+        src="${ach.icon_url || '/static/icons/trophy.png'}"
+        alt="${ach.display_name}"
+        onerror="this.src='/static/icons/trophy.png'"
+      />
+      <div class="rarity-achievement-info">
+        <div class="rarity-achievement-name" title="${ach.display_name || ''}">${ach.display_name || 'Unknown Achievement'}</div>
+        ${ach.description ? `<div class="rarity-achievement-desc" title="${ach.description}">${ach.description}</div>` : ''}
+        <div class="rarity-achievement-meta">
+          ${ach.provider ? `
+            <div class="rarity-achievement-provider">
+              <img src="/static/icons/${ach.provider}.svg" alt="${ach.provider}" onerror="this.style.display='none'">
+            </div>
+          ` : ''}
+          ${!['discord', 'github'].includes(ach.provider) ? `
+          <div class="rarity-achievement-game" title="${ach.game_name || 'Unknown Game'}">
+            <span>${ach.game_name || 'Unknown Game'}</span>
+          </div>
+          ` : ''}
+        </div>
+      </div>
+      <div class="rarity-achievement-stats">
+        <div class="rarity-achievement-percent" style="color:${color};">
+          ${ach.percent !== null && ach.percent !== undefined ? ach.percent.toFixed(1) + '%' : '—'}
+        </div>
+        ${ach.is_original_claim
+          ? '<span class="rarity-Ashbane-badge">ASHBANE</span>'
+          : '<span class="rarity-consumed-badge">USED</span>'}
+        <div class="rarity-achievement-dates" style="display:flex;align-items:center;gap:8px;font-size:0.65rem;">
+          ${ach.unlocked_at ? `<span style="color:#0af;" title="Original unlock date">🏆${formatDate(ach.unlocked_at)}</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `}).join('');
+
+  body.innerHTML = html;
+}
+
 async function openRarityPopover(rarityTier, providerName = null) {
   const backdrop = document.getElementById('rarity-popover-backdrop');
   const popover = document.getElementById('rarity-popover');
@@ -3871,7 +5133,7 @@ function renderRarityPopoverContent(achievements, rarityTier) {
   }
 
   const html = achievements.map(ach => `
-    <div class="rarity-achievement-item" style="--item-color: ${color};">
+    <div class="rarity-achievement-item" style="--item-color: ${color};" onclick="openAchievementDetail(${ach.id})" title="Click for details & dispute options">
       <img
         class="rarity-achievement-icon"
         src="${ach.icon_url || '/static/icons/trophy.png'}"
@@ -3879,17 +5141,16 @@ function renderRarityPopoverContent(achievements, rarityTier) {
         onerror="this.src='/static/icons/trophy.png'"
       />
       <div class="rarity-achievement-info">
-        <div class="rarity-achievement-name">${ach.display_name || 'Unknown Achievement'}</div>
-        ${ach.description ? `<div class="rarity-achievement-desc">${ach.description}</div>` : ''}
+        <div class="rarity-achievement-name" title="${ach.display_name || ''}">${ach.display_name || 'Unknown Achievement'}</div>
+        ${ach.description ? `<div class="rarity-achievement-desc" title="${ach.description}">${ach.description}</div>` : ''}
         <div class="rarity-achievement-meta">
           ${ach.provider_name ? `
             <div class="rarity-achievement-provider">
               <img src="/static/icons/${ach.provider_name}.svg" alt="${ach.provider_name}" onerror="this.style.display='none'">
-              <span>${formatProvider(ach.provider_name)}</span>
             </div>
           ` : ''}
           ${!['discord', 'github'].includes(ach.provider_name) ? `
-          <div class="rarity-achievement-game">
+          <div class="rarity-achievement-game" title="${ach.game_name || 'Unknown Game'}">
             <span>${ach.game_name || 'Unknown Game'}</span>
           </div>
           ` : ''}
@@ -3900,11 +5161,10 @@ function renderRarityPopoverContent(achievements, rarityTier) {
           ${ach.percent !== null && ach.percent !== undefined ? ach.percent.toFixed(1) + '%' : '—'}
         </div>
         ${ach.is_original_claim
-          ? '<span class="rarity-mantle-badge">Mantle</span>'
-          : '<span class="rarity-consumed-badge">Consumed</span>'}
-        <div class="rarity-achievement-dates" style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:0.75rem;">
-          ${ach.unlocked_at ? `<div style="color:#0af;" title="Original unlock date">🏆 ${formatDate(ach.unlocked_at)}</div>` : ''}
-          ${ach.date_credited ? `<div style="color:#666;" title="Added to Mantle">📥 ${formatDate(ach.date_credited)}</div>` : ''}
+          ? '<span class="rarity-Ashbane-badge">ASHBANE</span>'
+          : '<span class="rarity-consumed-badge">USED</span>'}
+        <div class="rarity-achievement-dates" style="display:flex;align-items:center;gap:8px;font-size:0.65rem;">
+          ${ach.unlocked_at ? `<span style="color:#0af;" title="Original unlock date">🏆${formatDate(ach.unlocked_at)}</span>` : ''}
         </div>
       </div>
     </div>
@@ -3939,8 +5199,484 @@ function getGemSvg(tier) {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeRarityPopover();
+    closeAchievementDetail();
   }
 });
+</script>
+
+<!-- Achievement Detail/Dispute Modal -->
+<div id="achievement-detail-modal" class="neon-modal" style="display:none;z-index:10000;">
+  <div class="neon-modal-content" style="width:500px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;">
+    <button class="neon-modal-close" onclick="closeAchievementDetail()" style="align-self:flex-end;margin-top:5px;margin-right:5px;font-size:2.2rem;line-height:1;color:var(--neon);background:none;border:none;cursor:pointer;">&times;</button>
+    <div id="achievement-detail-content" style="flex:1;overflow-y:auto;padding:0 20px 20px;">
+      <p style="opacity:0.5;">(Loading...)</p>
+    </div>
+  </div>
+</div>
+
+<style>
+.achievement-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.achievement-detail-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: rgba(0,0,0,0.3);
+}
+.achievement-detail-title {
+  flex: 1;
+}
+.achievement-detail-name {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+.achievement-detail-desc {
+  font-size: 0.85rem;
+  color: #888;
+}
+.effort-score-section {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.effort-score-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.effort-score-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #888;
+}
+.effort-score-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+.effort-score-details {
+  font-size: 0.85rem;
+  color: #aaa;
+}
+.effort-score-details div {
+  margin: 6px 0;
+  display: flex;
+  justify-content: space-between;
+}
+.effort-score-details .label {
+  color: #666;
+}
+.dispute-section {
+  border-top: 1px solid rgba(255,255,255,0.1);
+  padding-top: 16px;
+}
+.dispute-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dispute-form label {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 4px;
+}
+.dispute-form select,
+.dispute-form textarea {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px;
+  padding: 10px;
+  color: #fff;
+  font-size: 0.9rem;
+}
+.dispute-form select:focus,
+.dispute-form textarea:focus {
+  outline: none;
+  border-color: var(--neon);
+}
+.dispute-form textarea {
+  min-height: 80px;
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+}
+.dispute-form select {
+  width: 100%;
+  box-sizing: border-box;
+}
+.achievement-full-desc {
+  background: rgba(0,0,0,0.3);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+  color: #ccc;
+  line-height: 1.5;
+}
+.dispute-submit-btn {
+  background: linear-gradient(135deg, #fa0 0%, #f60 100%);
+  border: none;
+  border-radius: 6px;
+  padding: 12px;
+  color: #000;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.dispute-submit-btn:hover {
+  opacity: 0.9;
+}
+.dispute-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pending-dispute-notice {
+  background: rgba(250,160,0,0.15);
+  border: 1px solid rgba(250,160,0,0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+.pending-dispute-notice h4 {
+  color: #fa0;
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+}
+.vote-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+.vote-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.vote-btn-agree {
+  background: rgba(0,200,100,0.2);
+  border: 1px solid rgba(0,200,100,0.5);
+  color: #0c6;
+}
+.vote-btn-agree:hover {
+  background: rgba(0,200,100,0.3);
+}
+.vote-btn-agree.voted {
+  background: rgba(0,200,100,0.4);
+}
+.vote-btn-disagree {
+  background: rgba(200,50,50,0.2);
+  border: 1px solid rgba(200,50,50,0.5);
+  color: #f55;
+}
+.vote-btn-disagree:hover {
+  background: rgba(200,50,50,0.3);
+}
+.vote-btn-disagree.voted {
+  background: rgba(200,50,50,0.4);
+}
+.vote-count {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+.rarity-achievement-item {
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.rarity-achievement-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+</style>
+
+<script>
+// Achievement Detail & Dispute Functions
+let currentAchievementId = null;
+let currentDisputeData = null;
+
+async function openAchievementDetail(achievementId) {
+  currentAchievementId = achievementId;
+  const modal = document.getElementById('achievement-detail-modal');
+  const content = document.getElementById('achievement-detail-content');
+
+  content.innerHTML = '<p style="opacity:0.5;text-align:center;padding:40px;">Loading...</p>';
+  modal.style.display = 'flex';
+
+  try {
+    const resp = await fetch(`/api/achievements/${achievementId}/details`, { credentials: 'include' });
+    if (!resp.ok) throw new Error('Failed to load');
+    const data = await resp.json();
+    currentDisputeData = data;
+    renderAchievementDetail(data);
+  } catch (err) {
+    console.error('Failed to load achievement details:', err);
+    content.innerHTML = '<p style="color:#f55;text-align:center;padding:40px;">Failed to load achievement details</p>';
+  }
+}
+
+function renderAchievementDetail(data) {
+  const content = document.getElementById('achievement-detail-content');
+  const rarityColor = rarityColors[data.rarity_tier] || '#888';
+
+  // Format scoring method for display
+  function formatScoringMethod(method) {
+    switch(method) {
+      case 'global_percent': return 'Global Unlock Rate';
+      case 'gamerscore': return 'Gamerscore';
+      case 'points': return 'Achievement Points';
+      case 'manual_override': return 'Manual Override';
+      case 'community_vote': return 'Community Vote';
+      default: return 'Provider Default';
+    }
+  }
+
+  let disputeHtml = '';
+
+  if (data.has_pending_dispute) {
+    // Show pending dispute with voting
+    disputeHtml = `
+      <div class="pending-dispute-notice">
+        <h4>🔍 Pending Dispute</h4>
+        <p style="font-size:0.85rem;margin:0;">This achievement's rarity is being reviewed by the community.</p>
+        <div id="dispute-vote-area" style="margin-top:12px;">
+          <p style="font-size:0.8rem;color:#888;">Loading vote options...</p>
+        </div>
+      </div>
+    `;
+  } else if (data.can_dispute) {
+    // Show dispute form
+    disputeHtml = `
+      <div class="dispute-section">
+        <h4 style="margin:0 0 12px 0;font-size:0.9rem;color:#fa0;">🔍 Dispute This Classification</h4>
+        <p style="font-size:0.8rem;color:#888;margin-bottom:12px;">
+          Think this achievement deserves a different rarity? Submit a dispute and let the community vote.
+        </p>
+        <form class="dispute-form" onsubmit="submitDispute(event)">
+          <div>
+            <label>Suggested Rarity</label>
+            <select id="dispute-rarity" required>
+              <option value="">Select new rarity...</option>
+              ${['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']
+                .filter(r => r !== data.rarity_tier)
+                .map(r => `<option value="${r}">${r}</option>`)
+                .join('')}
+            </select>
+          </div>
+          <div>
+            <label>Reason (why should it change?)</label>
+            <textarea id="dispute-reason" placeholder="Explain why you think this achievement deserves a different rarity..." required maxlength="500"></textarea>
+          </div>
+          <button type="submit" class="dispute-submit-btn" id="dispute-submit-btn">
+            Submit Dispute
+          </button>
+        </form>
+      </div>
+    `;
+  } else {
+    disputeHtml = `
+      <div class="dispute-section" style="opacity:0.6;">
+        <p style="font-size:0.85rem;color:#888;">
+          💡 You can only dispute achievements you've unlocked.
+        </p>
+      </div>
+    `;
+  }
+
+  content.innerHTML = `
+    <div class="achievement-detail-header">
+      <img class="achievement-detail-icon" src="${data.icon_url || '/static/icons/trophy.png'}"
+           onerror="this.src='/static/icons/trophy.png'" alt="${data.display_name}">
+      <div class="achievement-detail-title">
+        <div class="achievement-detail-name">${data.display_name || 'Unknown'}</div>
+      </div>
+    </div>
+
+    ${data.description ? `
+    <div class="achievement-full-desc">
+      ${data.description}
+    </div>
+    ` : ''}
+
+    <div class="effort-score-section">
+      <div class="effort-score-header">
+        <div class="effort-score-title">Effort Classification</div>
+        <div class="effort-score-value" style="color:${rarityColor};">${data.rarity_tier || 'Unknown'}</div>
+      </div>
+      <div class="effort-score-details">
+        <div>
+          <span class="label">Effort Score:</span>
+          <span>${data.effort_score !== null ? data.effort_score.toFixed(1) : '—'}/100</span>
+        </div>
+        <div>
+          <span class="label">Scoring Method:</span>
+          <span>${formatScoringMethod(data.scoring_method)}</span>
+        </div>
+        ${data.scoring_input ? `
+        <div>
+          <span class="label">Input Value:</span>
+          <span style="color:${rarityColor};">${data.scoring_input}</span>
+        </div>
+        ` : ''}
+        <div>
+          <span class="label">Auto-calculated:</span>
+          <span>${data.effort_auto ? 'Yes' : 'No (overridden)'}</span>
+        </div>
+      </div>
+    </div>
+
+    ${disputeHtml}
+  `;
+
+  // If there's a pending dispute, load vote options
+  if (data.has_pending_dispute && data.pending_dispute_id) {
+    loadDisputeVoteArea(data.pending_dispute_id);
+  }
+}
+
+async function loadDisputeVoteArea(disputeId) {
+  const voteArea = document.getElementById('dispute-vote-area');
+  if (!voteArea) return;
+
+  try {
+    const resp = await fetch('/api/disputes/pending', { credentials: 'include' });
+    const data = await resp.json();
+    const dispute = data.disputes.find(d => d.id === disputeId);
+
+    if (dispute) {
+      const canVote = dispute.can_vote && dispute.user_vote === null;
+      const userVoted = dispute.user_vote !== null;
+
+      voteArea.innerHTML = `
+        <div style="font-size:0.85rem;margin-bottom:8px;">
+          <strong>Proposed:</strong> ${dispute.current_rarity} → ${dispute.suggested_rarity}
+        </div>
+        <div style="font-size:0.8rem;color:#888;margin-bottom:12px;">
+          "${dispute.reason.substring(0, 150)}${dispute.reason.length > 150 ? '...' : ''}"
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+          <span style="color:#0c6;">👍 ${dispute.votes_up}</span>
+          <span style="color:#f55;">👎 ${dispute.votes_down}</span>
+          <span style="color:#888;font-size:0.8rem;">(need ${dispute.threshold} to approve)</span>
+        </div>
+        ${dispute.is_mine ? `
+          <p style="font-size:0.8rem;color:#888;">This is your dispute. Waiting for community votes.</p>
+        ` : canVote ? `
+          <div class="vote-buttons">
+            <button class="vote-btn vote-btn-agree" onclick="voteOnDispute(${disputeId}, 1)">
+              👍 Agree <span class="vote-count">(change it)</span>
+            </button>
+            <button class="vote-btn vote-btn-disagree" onclick="voteOnDispute(${disputeId}, -1)">
+              👎 Disagree <span class="vote-count">(keep current)</span>
+            </button>
+          </div>
+        ` : userVoted ? `
+          <p style="font-size:0.8rem;color:#0af;">✓ You voted ${dispute.user_vote === 1 ? 'to change' : 'to keep current'}</p>
+        ` : `
+          <p style="font-size:0.8rem;color:#888;">You need to unlock this achievement to vote.</p>
+        `}
+      `;
+    }
+  } catch (err) {
+    console.error('Failed to load dispute vote area:', err);
+    voteArea.innerHTML = '<p style="color:#888;">Could not load voting options.</p>';
+  }
+}
+
+async function submitDispute(event) {
+  event.preventDefault();
+  if (!currentAchievementId) return;
+
+  const btn = document.getElementById('dispute-submit-btn');
+  const rarity = document.getElementById('dispute-rarity').value;
+  const reason = document.getElementById('dispute-reason').value;
+
+  if (!rarity || !reason) {
+    alert('Please fill in all fields');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+
+  try {
+    const formData = new FormData();
+    formData.append('suggested_rarity', rarity);
+    formData.append('reason', reason);
+
+    const resp = await fetch(`/api/achievements/${currentAchievementId}/dispute`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+
+    const data = await resp.json();
+
+    if (resp.ok) {
+      // Show success and refresh the detail view
+      alert(`Dispute submitted to the ${data.chat_room} chat room for peer review!`);
+      openAchievementDetail(currentAchievementId);
+    } else {
+      alert(data.detail || 'Failed to submit dispute');
+      btn.disabled = false;
+      btn.textContent = 'Submit Dispute';
+    }
+  } catch (err) {
+    console.error('Failed to submit dispute:', err);
+    alert('Failed to submit dispute. Please try again.');
+    btn.disabled = false;
+    btn.textContent = 'Submit Dispute';
+  }
+}
+
+async function voteOnDispute(disputeId, vote) {
+  try {
+    const formData = new FormData();
+    formData.append('vote', vote);
+
+    const resp = await fetch(`/api/disputes/${disputeId}/vote`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+
+    const data = await resp.json();
+
+    if (resp.ok) {
+      // Refresh the vote area
+      loadDisputeVoteArea(disputeId);
+
+      // If dispute was auto-approved, show message and refresh
+      if (data.dispute_status === 'approved') {
+        alert('The dispute has been approved! The achievement rarity has been updated.');
+        if (currentAchievementId) {
+          openAchievementDetail(currentAchievementId);
+        }
+      }
+    } else {
+      alert(data.detail || 'Failed to vote');
+    }
+  } catch (err) {
+    console.error('Failed to vote:', err);
+    alert('Failed to vote. Please try again.');
+  }
+}
+
+function closeAchievementDetail() {
+  document.getElementById('achievement-detail-modal').style.display = 'none';
+  currentAchievementId = null;
+  currentDisputeData = null;
+}
 </script>
 
 <script>
@@ -3999,7 +5735,7 @@ function renderAchievementModalContent(data, provider, userId, avatar) {
             <div style="font-size:0.78em;color:#888;margin-top:3px;">
               ${unlockedDate ? `<span title="Original unlock date">🏆 ${unlockedDate}</span>` : ''}
               ${unlockedDate && creditedDate ? ' · ' : ''}
-              ${creditedDate ? `<span title="Added to Mantle">📥 ${creditedDate}</span>` : ''}
+              ${creditedDate ? `<span title="Added to Ashbane">📥 ${creditedDate}</span>` : ''}
             </div>
           </div>
           ${
@@ -4078,7 +5814,7 @@ function renderAchievementModalContent(data, provider, userId, avatar) {
           <div style="font-size:0.78em;color:#888;margin-top:3px;">
             ${unlockedDate ? `<span title="Original unlock date">🏆 ${unlockedDate}</span>` : ''}
             ${unlockedDate && creditedDate ? ' · ' : ''}
-            ${creditedDate ? `<span title="Added to Mantle">📥 ${creditedDate}</span>` : ''}
+            ${creditedDate ? `<span title="Added to Ashbane">📥 ${creditedDate}</span>` : ''}
           </div>
         </div>
         ${
@@ -4558,7 +6294,7 @@ function closeModal() {
 // Smart count-up animation - only animates deltas (new achievements)
 // Uses localStorage to track "last seen" values
 function smartCountUp() {
-  const STORAGE_KEY = 'mantle_achievement_counts';
+  const STORAGE_KEY = 'Ashbane_achievement_counts';
   const counters = document.querySelectorAll('.count-up[data-counter-id]');
 
   // Load last known values from localStorage
@@ -4832,11 +6568,12 @@ async function initChat() {
 function setupScrollDetection() {
   const container = document.getElementById('chat-messages');
   container.addEventListener('scroll', () => {
-    const isAtTop = container.scrollTop < 50;
-    isUserScrolledUp = !isAtTop;  // Now means "scrolled down" away from newest
+    // Check if user is at the bottom (within 50px)
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+    isUserScrolledUp = !isAtBottom;  // User scrolled away from newest messages
 
-    // Hide indicator when user scrolls to top (newest)
-    if (isAtTop) {
+    // Hide indicator when user scrolls to bottom (newest)
+    if (isAtBottom) {
       hideNewMessagesIndicator();
       unreadMessageCount = 0;
     }
@@ -4845,7 +6582,7 @@ function setupScrollDetection() {
 
 function showNewMessagesIndicator() {
   const indicator = document.getElementById('new-messages-indicator');
-  indicator.textContent = `↑ ${unreadMessageCount} new message${unreadMessageCount > 1 ? 's' : ''}`;
+  indicator.textContent = `↓ ${unreadMessageCount} new message${unreadMessageCount > 1 ? 's' : ''}`;
   indicator.classList.add('visible');
 }
 
@@ -4854,9 +6591,9 @@ function hideNewMessagesIndicator() {
   indicator.classList.remove('visible');
 }
 
-function scrollToTop() {
+function scrollToBottom() {
   const container = document.getElementById('chat-messages');
-  container.scrollTop = 0;
+  container.scrollTop = container.scrollHeight;
   hideNewMessagesIndicator();
   unreadMessageCount = 0;
 }
@@ -4937,10 +6674,9 @@ function renderChatMessages(messages) {
     return;
   }
 
-  // Reverse so newest is at top
-  const reversed = [...messages].reverse();
-  container.innerHTML = reversed.map(msg => renderMessage(msg, false)).join('');
-  container.scrollTop = 0;  // Scroll to top (newest)
+  // Render oldest to newest (chronological order)
+  container.innerHTML = messages.map(msg => renderMessage(msg, false)).join('');
+  container.scrollTop = container.scrollHeight;  // Scroll to bottom (newest)
 }
 
 function appendChatMessages(messages, animate = false) {
@@ -4948,16 +6684,17 @@ function appendChatMessages(messages, animate = false) {
   const isEmpty = container.querySelector('[style*="text-align:center"]');
   if (isEmpty) container.innerHTML = '';
 
-  const wasAtTop = container.scrollTop < 50;
+  // Check if user is at the bottom before adding
+  const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
 
-  // Prepend new messages at top (newest first)
-  messages.reverse().forEach(msg => {
-    container.insertAdjacentHTML('afterbegin', renderMessage(msg, animate));
+  // Append new messages at bottom (newest last)
+  messages.forEach(msg => {
+    container.insertAdjacentHTML('beforeend', renderMessage(msg, animate));
   });
 
-  // Keep scroll at top if user was at top
-  if (wasAtTop) {
-    container.scrollTop = 0;
+  // Keep scroll at bottom if user was at bottom
+  if (wasAtBottom) {
+    container.scrollTop = container.scrollHeight;
   }
 }
 
@@ -4987,16 +6724,60 @@ const NOTIFICATION_ICONS = {
 };
 
 const NOTIFICATION_STYLES = {
-  join: { color: '#00ffc8', bg: '0,255,200' },
-  sync: { color: '#00aaff', bg: '0,170,255' },
+  join: { color: '#999999', bg: '150,150,150' },
+  sync: { color: '#aaaaaa', bg: '170,170,170' },
   unlock: { color: '#ffc800', bg: '255,200,0' },
   forge: { color: '#ff6600', bg: '255,102,0' },
+  dispute: { color: '#fa8c00', bg: '250,140,0' },
   chat: { color: '#888888', bg: '136,136,136' }
+};
+
+const NOTIFICATION_ICONS_EXTRA = {
+  dispute: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 8v4M12 16h.01"/>
+  </svg>`
 };
 
 function renderMessage(msg, animate = false) {
   const time = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
   const animClass = animate ? 'chat-message-new' : '';
+
+  // Dispute message with voting
+  if (msg.type === 'dispute') {
+    const style = NOTIFICATION_STYLES.dispute;
+    const icon = NOTIFICATION_ICONS_EXTRA.dispute;
+    const username = msg.user ? msg.user.username : 'Someone';
+    const dispute = msg.dispute || {};
+    const achievementId = dispute.achievement_id;
+    const disputeStatus = dispute.status || 'pending';
+
+    // Build clickable link if we have achievement ID
+    let actionHtml = '';
+    if (achievementId && disputeStatus === 'pending') {
+      actionHtml = `<a href="#" onclick="openAchievementDetail(${achievementId}); return false;"
+        style="color:#fa0;text-decoration:underline;cursor:pointer;font-weight:500;">
+        View Achievement & Vote
+      </a>`;
+    } else if (disputeStatus !== 'pending') {
+      actionHtml = `<span style="color:#666;font-style:italic;">Dispute ${disputeStatus}</span>`;
+    } else {
+      actionHtml = `<span style="color:#666;">Click on the achievement in your list to view details and vote</span>`;
+    }
+
+    return `<div class="${animClass} dispute-msg" style="padding:8px 10px;margin-bottom:6px;background:rgba(${style.bg},0.12);border-radius:8px;border-left:3px solid ${style.color};font-size:0.8rem;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="color:${style.color};flex-shrink:0;display:flex;align-items:center;">${icon}</span>
+        <span style="color:#fa0;font-weight:600;">Rarity Dispute</span>
+        <span style="color:#666;font-size:0.7rem;">by ${username}</span>
+        <span style="color:#555;font-size:0.65rem;margin-left:auto;">${time}</span>
+      </div>
+      <div style="color:#ccc;padding-left:24px;white-space:pre-line;line-height:1.4;">${escapeHtml(msg.content).replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff;">$1</strong>')}</div>
+      <div style="padding-left:24px;margin-top:8px;font-size:0.75rem;">
+        ${actionHtml}
+      </div>
+    </div>`;
+  }
 
   // System notification types
   if (['join', 'sync', 'unlock', 'forge'].includes(msg.type)) {
@@ -5013,7 +6794,7 @@ function renderMessage(msg, animate = false) {
   // Regular chat message
   const username = msg.user ? msg.user.username : 'System';
   return `<div class="${animClass}" style="padding:4px 0;font-size:0.8rem;border-bottom:1px solid rgba(255,255,255,0.05);">
-    <span style="color:#00ffc8;font-weight:600;">${username}</span>
+    <span style="color:#999;font-weight:600;">${username}</span>
     <span style="color:#555;font-size:0.65rem;margin-left:6px;">${time}</span>
     <div style="color:#ccc;margin-top:2px;word-wrap:break-word;">${escapeHtml(msg.content)}</div>
   </div>`;
@@ -5133,8 +6914,8 @@ function renderFriendsList(friends) {
 
     return `
     <div class="friend-card" style="
-      background: rgba(0,40,80,0.4);
-      border: 1px solid rgba(0,200,255,${isOnline ? '0.4' : '0.2'});
+      background: rgba(40,40,45,0.4);
+      border: 1px solid rgba(150,150,150,${isOnline ? '0.4' : '0.2'});
       border-radius: 8px;
       padding: 8px 10px;
       display: flex;
@@ -5143,14 +6924,14 @@ function renderFriendsList(friends) {
       ${isOnline ? 'box-shadow: 0 0 10px rgba(0,255,0,0.1);' : ''}
     ">
       <div style="position:relative;width:32px;height:32px;flex-shrink:0;">
-        <div style="width:32px;height:32px;border-radius:50%;background:${f.mantle.color};display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;font-size:0.75rem;">
+        <div style="width:32px;height:32px;border-radius:50%;background:${f.Ashbane.color};display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;font-size:0.75rem;">
           ${f.username.charAt(0).toUpperCase()}
         </div>
         <div style="position:absolute;bottom:-2px;right:-2px;">${onlineDot}</div>
       </div>
       <div style="flex:1;overflow:hidden;min-width:0;">
         <div style="color:#fff;font-size:0.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.username}</div>
-        <div style="color:${f.mantle.color};font-size:0.65rem;">${f.mantle.name} · ${f.achievement_count}</div>
+        <div style="color:${f.Ashbane.color};font-size:0.65rem;">${f.Ashbane.name} · ${f.achievement_count}</div>
       </div>
       <button onclick="removeFriend(${f.user_id})" style="padding:4px 6px;border-radius:4px;border:1px solid rgba(255,100,100,0.3);background:transparent;color:#ff6666;cursor:pointer;font-size:0.65rem;" title="Remove friend">✕</button>
     </div>
@@ -5184,12 +6965,12 @@ function renderPendingRequests(requests) {
   section.style.display = 'block';
   container.innerHTML = requests.map(r => `
     <div style="display:flex;align-items:center;gap:12px;padding:8px;background:rgba(0,0,0,0.2);border-radius:8px;margin-bottom:8px;">
-      <div style="width:36px;height:36px;border-radius:50%;background:${r.mantle.color};display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;">
+      <div style="width:36px;height:36px;border-radius:50%;background:${r.Ashbane.color};display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;">
         ${r.username.charAt(0).toUpperCase()}
       </div>
       <div style="flex:1;">
         <div style="color:#fff;font-weight:bold;">${r.username}</div>
-        <div style="color:${r.mantle.color};font-size:0.8rem;">${r.mantle.name} · ${r.achievement_count} achievements</div>
+        <div style="color:${r.Ashbane.color};font-size:0.8rem;">${r.Ashbane.name} · ${r.achievement_count} achievements</div>
       </div>
       <button onclick="acceptRequest(${r.request_id})" style="padding:6px 12px;border-radius:6px;border:none;background:#22c55e;color:#fff;cursor:pointer;font-weight:bold;">Accept</button>
       <button onclick="declineRequest(${r.request_id})" style="padding:6px 12px;border-radius:6px;border:1px solid #666;background:transparent;color:#888;cursor:pointer;">Decline</button>
@@ -5236,17 +7017,17 @@ function renderSearchResults(users) {
         actionBtn = `<button onclick="acceptRequestByUserId(${u.user_id})" style="padding:4px 10px;border-radius:6px;border:none;background:#22c55e;color:#fff;cursor:pointer;font-size:0.85rem;">Accept</button>`;
       }
     } else {
-      actionBtn = `<button onclick="sendFriendRequest(${u.user_id})" style="padding:4px 10px;border-radius:6px;border:none;background:#00c8ff;color:#000;cursor:pointer;font-weight:bold;font-size:0.85rem;">+ Add</button>`;
+      actionBtn = `<button onclick="sendFriendRequest(${u.user_id})" style="padding:4px 10px;border-radius:6px;border:none;background:#888;color:#fff;cursor:pointer;font-weight:bold;font-size:0.85rem;">+ Add</button>`;
     }
 
     return `
-      <div style="display:flex;align-items:center;gap:12px;padding:10px;background:rgba(0,40,80,0.3);border-radius:8px;margin-bottom:6px;">
-        <div style="width:36px;height:36px;border-radius:50%;background:${u.mantle.color};display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;">
+      <div style="display:flex;align-items:center;gap:12px;padding:10px;background:rgba(40,40,45,0.3);border-radius:8px;margin-bottom:6px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:${u.Ashbane.color};display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;">
           ${u.username.charAt(0).toUpperCase()}
         </div>
         <div style="flex:1;">
           <div style="color:#fff;">${u.username}</div>
-          <div style="color:${u.mantle.color};font-size:0.8rem;">${u.mantle.name} · ${u.achievement_count} achievements</div>
+          <div style="color:${u.Ashbane.color};font-size:0.8rem;">${u.Ashbane.name} · ${u.achievement_count} achievements</div>
         </div>
         ${actionBtn}
       </div>
@@ -5391,6 +7172,425 @@ function showToast(message, type) {
     </p>
   </div>
 </div>
+
+{% if is_admin %}
+<!-- Admin Disputes Panel -->
+<div id="admin-disputes-panel" style="position:fixed; bottom:20px; right:20px; z-index:9000;">
+  <button onclick="toggleDisputesPanel()" style="background:linear-gradient(135deg, #fa0 0%, #f60 100%); border:none; border-radius:8px; padding:12px 16px; color:#000; font-weight:bold; cursor:pointer; box-shadow:0 4px 15px rgba(250,160,0,0.4); display:flex; align-items:center; gap:8px;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 8v4M12 16h.01"/>
+    </svg>
+    <span>Disputes</span>
+    <span id="disputes-badge" style="background:#000; color:#fa0; padding:2px 6px; border-radius:10px; font-size:0.75rem; min-width:20px; text-align:center;">0</span>
+  </button>
+</div>
+
+<!-- Admin Disputes Modal -->
+<div id="admin-disputes-modal" class="neon-modal" style="display:none; z-index:10001;">
+  <div class="neon-modal-content" style="width:800px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column;">
+    <button class="neon-modal-close" onclick="closeDisputesModal()" style="align-self:flex-end; margin:5px; font-size:2rem; color:var(--neon); background:none; border:none; cursor:pointer;">&times;</button>
+
+    <h3 style="text-align:center; margin:0 0 15px 0; color:#fa0;">🔍 Dispute Review Panel</h3>
+
+    <!-- Status Tabs -->
+    <div style="display:flex; gap:10px; justify-content:center; margin-bottom:15px;">
+      <button onclick="loadDisputes('pending')" class="dispute-tab active" data-status="pending" style="padding:8px 16px; border-radius:6px; border:1px solid #fa0; background:rgba(250,160,0,0.2); color:#fa0; cursor:pointer;">
+        Pending <span id="count-pending">0</span>
+      </button>
+      <button onclick="loadDisputes('approved')" class="dispute-tab" data-status="approved" style="padding:8px 16px; border-radius:6px; border:1px solid #0c6; background:transparent; color:#0c6; cursor:pointer;">
+        Approved <span id="count-approved">0</span>
+      </button>
+      <button onclick="loadDisputes('rejected')" class="dispute-tab" data-status="rejected" style="padding:8px 16px; border-radius:6px; border:1px solid #f55; background:transparent; color:#f55; cursor:pointer;">
+        Rejected <span id="count-rejected">0</span>
+      </button>
+    </div>
+
+    <!-- Disputes List -->
+    <div id="disputes-list" style="flex:1; overflow-y:auto; padding:0 20px 20px;">
+      <p style="color:#888; text-align:center;">Loading...</p>
+    </div>
+  </div>
+</div>
+
+<style>
+.dispute-tab.active {
+  background: rgba(250,160,0,0.3) !important;
+  font-weight: bold;
+}
+.dispute-card {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 12px;
+}
+.dispute-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.dispute-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: rgba(0,0,0,0.3);
+}
+.dispute-card-info {
+  flex: 1;
+}
+.dispute-card-name {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+.dispute-card-meta {
+  font-size: 0.8rem;
+  color: #888;
+}
+.dispute-card-votes {
+  display: flex;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+.dispute-card-body {
+  font-size: 0.85rem;
+  color: #aaa;
+  margin-bottom: 12px;
+  padding: 10px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 6px;
+}
+.dispute-card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dispute-action-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.dispute-action-approve {
+  background: rgba(0,200,100,0.2);
+  border: 1px solid rgba(0,200,100,0.5);
+  color: #0c6;
+}
+.dispute-action-reject {
+  background: rgba(200,50,50,0.2);
+  border: 1px solid rgba(200,50,50,0.5);
+  color: #f55;
+}
+.dispute-action-revert {
+  background: rgba(250,160,0,0.2);
+  border: 1px solid rgba(250,160,0,0.5);
+  color: #fa0;
+}
+</style>
+
+<script>
+let currentDisputeStatus = 'pending';
+
+function toggleDisputesPanel() {
+  const modal = document.getElementById('admin-disputes-modal');
+  if (modal.style.display === 'none') {
+    modal.style.display = 'flex';
+    loadDisputes('pending');
+  } else {
+    modal.style.display = 'none';
+  }
+}
+
+function closeDisputesModal() {
+  document.getElementById('admin-disputes-modal').style.display = 'none';
+}
+
+async function loadDisputes(status = 'pending') {
+  currentDisputeStatus = status;
+  const list = document.getElementById('disputes-list');
+  list.innerHTML = '<p style="color:#888; text-align:center;">Loading...</p>';
+
+  // Update tabs
+  document.querySelectorAll('.dispute-tab').forEach(tab => {
+    tab.classList.remove('active');
+    tab.style.background = 'transparent';
+    if (tab.dataset.status === status) {
+      tab.classList.add('active');
+      tab.style.background = 'rgba(250,160,0,0.2)';
+    }
+  });
+
+  try {
+    const resp = await fetch(`/api/disputes/all?status=${status}`, { credentials: 'include' });
+    if (!resp.ok) throw new Error('Failed to load');
+    const data = await resp.json();
+
+    // Update counts
+    document.getElementById('count-pending').textContent = data.counts.pending;
+    document.getElementById('count-approved').textContent = data.counts.approved;
+    document.getElementById('count-rejected').textContent = data.counts.rejected;
+    document.getElementById('disputes-badge').textContent = data.counts.pending;
+
+    if (data.disputes.length === 0) {
+      list.innerHTML = `<p style="color:#888; text-align:center;">No ${status} disputes</p>`;
+      return;
+    }
+
+    list.innerHTML = data.disputes.map(d => renderDisputeCard(d, status)).join('');
+  } catch (err) {
+    console.error('Failed to load disputes:', err);
+    list.innerHTML = '<p style="color:#f55; text-align:center;">Failed to load disputes</p>';
+  }
+}
+
+function renderDisputeCard(d, status) {
+  const rarityColors = {
+    'Common': '#999', 'Uncommon': '#0f0', 'Rare': '#0af', 'Epic': '#a0f', 'Legendary': '#fa0'
+  };
+  const currentColor = rarityColors[d.current_rarity] || '#888';
+  const suggestedColor = rarityColors[d.suggested_rarity] || '#888';
+
+  let actionsHtml = '';
+  if (status === 'pending') {
+    actionsHtml = `
+      <button class="dispute-action-btn dispute-action-approve" onclick="adminDisputeAction(${d.id}, 'approve')">✓ Approve</button>
+      <button class="dispute-action-btn dispute-action-reject" onclick="adminDisputeAction(${d.id}, 'reject')">✗ Reject</button>
+    `;
+  } else if (status === 'approved') {
+    actionsHtml = `
+      <button class="dispute-action-btn dispute-action-revert" onclick="adminDisputeAction(${d.id}, 'revert')">↩ Revert</button>
+    `;
+  }
+
+  return `
+    <div class="dispute-card">
+      <div class="dispute-card-header">
+        <img class="dispute-card-icon" src="${d.achievement_icon || '/static/icons/trophy.png'}" onerror="this.src='/static/icons/trophy.png'" alt="">
+        <div class="dispute-card-info">
+          <div class="dispute-card-name">${d.achievement_name}</div>
+          <div class="dispute-card-meta">
+            <span style="color:${currentColor};">${d.current_rarity}</span> →
+            <span style="color:${suggestedColor};">${d.suggested_rarity}</span>
+            | by ${d.submitter} | ${new Date(d.created_at).toLocaleDateString()}
+          </div>
+        </div>
+        <div class="dispute-card-votes">
+          <span style="color:#0c6;">👍 ${d.votes_up}</span>
+          <span style="color:#f55;">👎 ${d.votes_down}</span>
+        </div>
+      </div>
+      <div class="dispute-card-body">
+        <strong>Reason:</strong> ${d.reason}
+        ${d.scoring_input ? `<br><strong>Scoring:</strong> ${d.scoring_method} = ${d.scoring_input}` : ''}
+        ${d.admin_notes ? `<br><strong>Admin Notes:</strong> ${d.admin_notes}` : ''}
+      </div>
+      <div class="dispute-card-actions">
+        ${actionsHtml}
+      </div>
+    </div>
+  `;
+}
+
+async function adminDisputeAction(disputeId, action) {
+  const notes = prompt(`Enter admin notes for this ${action} action (optional):`);
+
+  try {
+    const formData = new FormData();
+    formData.append('action', action);
+    if (notes) formData.append('notes', notes);
+
+    const resp = await fetch(`/api/disputes/${disputeId}/admin-action`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+
+    const data = await resp.json();
+
+    if (resp.ok) {
+      alert(`Dispute ${action}ed successfully!`);
+      loadDisputes(currentDisputeStatus);
+    } else {
+      alert(data.detail || `Failed to ${action} dispute`);
+    }
+  } catch (err) {
+    console.error(`Failed to ${action} dispute:`, err);
+    alert(`Failed to ${action} dispute`);
+  }
+}
+
+// Load pending count on page load for badge
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const resp = await fetch('/api/disputes/all?status=pending', { credentials: 'include' });
+    if (resp.ok) {
+      const data = await resp.json();
+      document.getElementById('disputes-badge').textContent = data.counts.pending;
+    }
+  } catch (e) {}
+});
+</script>
+{% endif %}
+
+<!-- Info Tooltip Container (fixed position, rendered above everything) -->
+<div id="info-tooltip-container"></div>
+
+<script>
+// Info Icon Tooltip System - renders tooltips in fixed container to avoid clipping
+(function() {
+  const container = document.getElementById('info-tooltip-container');
+  if (!container) return;
+
+  let hideTimeout = null;
+
+  document.querySelectorAll('.info-icon').forEach(icon => {
+    const tooltipContent = icon.querySelector('.info-tooltip');
+    if (!tooltipContent) return;
+
+    icon.addEventListener('mouseenter', () => {
+      if (hideTimeout) {
+        clearTimeout(hideTimeout);
+        hideTimeout = null;
+      }
+
+      // Copy content to fixed container
+      container.innerHTML = tooltipContent.innerHTML;
+
+      // Get icon position
+      const rect = icon.getBoundingClientRect();
+      const tooltipWidth = 280;
+
+      // Position below the icon, centered
+      let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+      let top = rect.bottom + 10;
+
+      // Keep within viewport bounds
+      if (left < 10) left = 10;
+      if (left + tooltipWidth > window.innerWidth - 10) {
+        left = window.innerWidth - tooltipWidth - 10;
+      }
+
+      // If tooltip would go below viewport, show above instead
+      if (top + 200 > window.innerHeight) {
+        top = rect.top - 10;
+        container.style.transform = 'translateY(-100%)';
+        // Move arrow to bottom
+        container.style.setProperty('--arrow-top', 'auto');
+        container.style.setProperty('--arrow-bottom', '-6px');
+      } else {
+        container.style.transform = 'none';
+      }
+
+      // Update arrow position to point at icon
+      const arrowLeft = rect.left + (rect.width / 2) - left;
+      container.style.setProperty('--arrow-left', arrowLeft + 'px');
+
+      container.style.left = left + 'px';
+      container.style.top = top + 'px';
+      container.classList.add('visible');
+    });
+
+    icon.addEventListener('mouseleave', () => {
+      hideTimeout = setTimeout(() => {
+        container.classList.remove('visible');
+      }, 100);
+    });
+  });
+})();
+</script>
+
+<!-- Forge Item Tooltip Container (fixed position, renders above everything) -->
+<div id="forge-tooltip-container"></div>
+
+<script>
+// Forge Item Tooltip System - renders tooltips in fixed container to avoid clipping
+(function() {
+  const container = document.getElementById('forge-tooltip-container');
+  if (!container) return;
+
+  let hideTimeout = null;
+  let currentWrapper = null;
+
+  // Use mouseover/mouseout which bubble properly for event delegation
+  document.addEventListener('mouseover', function(e) {
+    const wrapper = e.target.closest('.forge-item-wrapper');
+    if (!wrapper) return;
+
+    // Skip if already showing tooltip for this wrapper
+    if (currentWrapper === wrapper) {
+      if (hideTimeout) {
+        clearTimeout(hideTimeout);
+        hideTimeout = null;
+      }
+      return;
+    }
+
+    currentWrapper = wrapper;
+
+    const tooltipContent = wrapper.querySelector('.forge-item-tooltip');
+    const card = wrapper.querySelector('.forge-item-card');
+    if (!tooltipContent) return;
+
+    if (hideTimeout) {
+      clearTimeout(hideTimeout);
+      hideTimeout = null;
+    }
+
+    // Copy content to fixed container
+    container.innerHTML = tooltipContent.innerHTML;
+
+    // Get rarity color from card
+    const rarity = card?.dataset.rarity || 'common';
+    const rarityColors = {
+      legendary: '#ff8000',
+      epic: '#a855f7',
+      rare: '#3b82f6',
+      uncommon: '#22c55e',
+      common: '#888'
+    };
+    container.style.setProperty('--tooltip-glow', rarityColors[rarity] || '#888');
+    container.style.borderColor = rarityColors[rarity] || '#888';
+
+    // Get wrapper position
+    const rect = wrapper.getBoundingClientRect();
+    const tooltipWidth = 280; // Wider for stats
+
+    // Position above the item, centered
+    let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+    let top = rect.top - 10;
+
+    // Keep within viewport bounds
+    if (left < 10) left = 10;
+    if (left + tooltipWidth > window.innerWidth - 10) {
+      left = window.innerWidth - tooltipWidth - 10;
+    }
+
+    // Position above the element
+    container.style.left = left + 'px';
+    container.style.top = top + 'px';
+    container.style.transform = 'translateY(-100%)';
+    container.classList.add('visible');
+  });
+
+  document.addEventListener('mouseout', function(e) {
+    const wrapper = e.target.closest('.forge-item-wrapper');
+    if (!wrapper) return;
+
+    // Check if we're moving to another element inside the same wrapper
+    const relatedWrapper = e.relatedTarget?.closest('.forge-item-wrapper');
+    if (relatedWrapper === wrapper) return;
+
+    hideTimeout = setTimeout(() => {
+      container.classList.remove('visible');
+      currentWrapper = null;
+    }, 150);
+  });
+})();
+</script>
 
 </body>
 </html>
