@@ -271,12 +271,12 @@ func _on_sync_complete(forged_id: String, success: bool, error: String) -> void:
 	_process_sync_queue()
 
 func _get_backend_url() -> String:
-	"""Get backend API URL"""
-	# Check for environment override
-	if OS.has_environment("BACKEND_URL"):
-		return OS.get_environment("BACKEND_URL")
-	# Default to localhost for development
-	return "http://localhost:8000"
+	"""Get backend API URL from AshbaneAuth (handles dev/prod automatically)"""
+	var auth = get_node_or_null("/root/AshbaneAuth")
+	if auth and auth.has_method("get_api_base"):
+		return auth.get_api_base()
+	# Fallback to production URL
+	return "https://api.ashbane.net"
 
 # ========================================
 # SIGNAL HANDLERS

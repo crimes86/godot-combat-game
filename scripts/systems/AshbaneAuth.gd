@@ -15,7 +15,7 @@ enum ConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
 # API Configuration
 const API_BASE_LAN = "http://192.168.28.211:8000"  # LAN backend (for local/OneDrive shared development)
 const API_BASE_NGROK = "https://trisyllabical-eliz-unyieldingly.ngrok-free.dev"  # ngrok tunnel (for remote/public access)
-const API_BASE_PROD = ""  # TODO: Set your production domain here (e.g., "https://api.ashbane.com")
+const API_BASE_PROD = "https://api.ashbane.net"
 const API_OVERRIDE_PATH = "user://api_override.txt"  # Local override file (put URL in this file to override default)
 const TOKEN_PATH = "user://ashbane_session.dat"
 
