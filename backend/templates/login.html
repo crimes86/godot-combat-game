@@ -209,6 +209,7 @@
     .provider-btn[data-provider="github"] { --btn-color: #8b949e; --btn-rgb: 139,148,158; }
     .provider-btn[data-provider="facebook"] { --btn-color: #1877F2; --btn-rgb: 24,119,242; }
     .provider-btn[data-provider="roblox"] { --btn-color: #00A2FF; --btn-rgb: 0,162,255; }
+    .provider-btn[data-provider="google_play"] { --btn-color: #34A853; --btn-rgb: 52,168,83; }
 
     .provider-btn:hover img {
       filter: brightness(1.2) drop-shadow(0 0 6px var(--btn-color));
@@ -384,7 +385,7 @@
       <div class="provider-section-title">Gaming Platforms</div>
       <div class="provider-grid gaming">
         {% for provider in all_providers %}
-          {% if provider.name in ['steam', 'battlenet', 'xbox', 'psn', 'roblox'] %}
+          {% if provider.name in ['steam', 'battlenet', 'xbox', 'psn', 'roblox', 'google_play'] %}
           <a
             href="/auth/{{ provider.name }}/login{% if device_code %}?device_code={{ device_code }}{% endif %}"
             class="provider-btn"

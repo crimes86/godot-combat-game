@@ -167,6 +167,23 @@ PROVIDERS = {
         enabled=False,
     ),
 
+    "google_play": ProviderConfig(
+        name="google_play",
+        display_name="Google Play Games",
+        type=ProviderType.OAUTH2,
+        client_id_env="GOOGLE_PLAY_CLIENT_ID",
+        client_secret_env="GOOGLE_PLAY_CLIENT_SECRET",
+        authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
+        token_url="https://oauth2.googleapis.com/token",
+        userinfo_url="https://www.googleapis.com/oauth2/v2/userinfo",
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        scopes=["openid", "email", "profile"],
+        achievement_support=AchievementSupport.NONE,  # Login only - Google doesn't expose cross-game achievements
+        icon="google_play.svg",
+        color="#34A853",
+        enabled=True,
+    ),
+
     # =========================================================================
     # SOCIAL PLATFORMS (login only - no achievements)
     # =========================================================================
@@ -276,8 +293,7 @@ PROVIDERS = {
         token_url="https://graph.facebook.com/v19.0/oauth/access_token",
         userinfo_url="https://graph.facebook.com/v19.0/me",
         scopes=["public_profile"],
-        achievement_support=AchievementSupport.BASIC,
-        achievement_sync_fn="sync_facebook_achievements",
+        achievement_support=AchievementSupport.NONE,  # Login only - no achievements
         icon="facebook.svg",
         color="#1877F2",
         enabled=True,

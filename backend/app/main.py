@@ -2292,6 +2292,15 @@ async def merge_confirm(
             keeper.is_admin = True
             logger.info(f"Transferred admin status to keeper account {keeper.id}")
 
+        # Delete sessions for the merged-away user
+        from app.models import Session as UserSession, ChatMessage
+        sessions_deleted = db.query(UserSession).filter(UserSession.user_id == to_merge.id).delete()
+        logger.info(f"  Deleted sessions: {sessions_deleted}")
+
+        # Transfer chat messages to keeper (or delete if preferred)
+        messages_transferred = db.query(ChatMessage).filter(ChatMessage.user_id == to_merge.id).update({"user_id": keeper.id})
+        logger.info(f"  Transferred chat messages: {messages_transferred}")
+
         # Flush to ensure all changes are written before delete
         db.flush()
 
@@ -2372,6 +2381,12 @@ async def reclaim_confirm(
         )
 
     return RedirectResponse(url="/dashboard", status_code=303)
+
+
+# --- Privacy Policy Page ---
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_page(request: Request):
+    return templates.TemplateResponse("privacy.html", {"request": request})
 
 
 # --- Login Page (clears existing session cookies) ---
@@ -2672,6 +2687,10 @@ async def dashboard(
             #     if datetime.utcnow() < cooldown_end:
             #         cooldown_remaining = int((cooldown_end - datetime.utcnow()).total_seconds())
 
+            # Check if provider has achievement support
+            provider_config = PROVIDERS.get(p["name"])
+            has_achievements = provider_config and provider_config.achievement_support != AchievementSupport.NONE
+
             providers.append({
                 "name": p["name"],
                 "display_name": p["display_name"],
@@ -2690,6 +2709,7 @@ async def dashboard(
                 "oldest_achievement": oldest_achievement,  # First achievement earned
                 "newest_achievement": newest_achievement,  # Most recent achievement
                 "rarest_achievement": rarest_achievement,  # Lowest completion %
+                "has_achievements": has_achievements,  # Whether this provider supports achievements
             })
 
     # Calculate Ashbane AGGREGATE (all original claims, regardless of provider status)
