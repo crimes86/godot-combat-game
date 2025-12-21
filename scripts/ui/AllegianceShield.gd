@@ -6,17 +6,19 @@ class_name AllegianceShield
 
 # Shield dimensions
 const SHIELD_WIDTH: float = 18.0
-const SHIELD_HEIGHT: float = 22.0
+const SHIELD_HEIGHT: float = 24.0
 const BORDER_WIDTH: float = 0.5
-const ICON_SIZE: float = 11.0
+const ICON_SIZE: float = 20.0
 
 # Positioning
-const OFFSET_Y: float = 50.0  # Distance above player center
-const OFFSET_X: float = -40.0  # Offset to the left of player
+const OFFSET_Y: float = 55.0  # Distance above player center
+const OFFSET_X: float = -37.0  # Offset to the left of player
 
 var current_tier: String = "initiate"
+var current_allegiance: String = "ashbane"  # Current allegiance ID ("" = rogue)
 var player_ref: Node = null
 var ready_to_position: bool = false
+var is_local_player: bool = false
 
 # Visual components
 var shield_bg: Control = null
@@ -27,7 +29,7 @@ var particle_effect: CPUParticles2D = null
 # Colors (cached from tier)
 var border_color: Color = Color(0.6, 0.5, 0.3)  # Default bronze-ish border
 var glow_color: Color = Color.TRANSPARENT
-var fill_color: Color = Color(0.15, 0.12, 0.1, 0.95)  # Dark brown fill
+var fill_color: Color = Color(0.25, 0.25, 0.28, 1.0)  # Dark gray fill (fully opaque)
 
 # Glow animation
 var glow_tween: Tween = null
@@ -38,6 +40,7 @@ func _ready() -> void:
 	# Use world-space positioning (doesn't rotate with player)
 	top_level = true
 	z_index = 99  # Just below health bar
+	light_mask = 0  # Ignore scene lighting (fire glow, etc.)
 
 	# Set size
 	custom_minimum_size = Vector2(SHIELD_WIDTH, SHIELD_HEIGHT)
@@ -56,6 +59,16 @@ func _ready() -> void:
 	if player_ref and is_instance_valid(player_ref):
 		while not player_ref.is_inside_tree() or player_ref.global_position == Vector2.ZERO:
 			await get_tree().process_frame
+
+		# Check if this is the local player (works for both single and multiplayer)
+		is_local_player = player_ref.is_multiplayer_authority()
+		print("🛡️ [AllegianceShield] Player: %s, is_local_player: %s" % [player_ref.name, is_local_player])
+
+		# If local player, sync with CharacterStats and listen for changes
+		if is_local_player and CharacterStats:
+			print("🛡️ [AllegianceShield] Connecting to CharacterStats, current allegiance: %s" % CharacterStats.get_allegiance())
+			set_allegiance(CharacterStats.get_allegiance())
+			CharacterStats.allegiance_changed.connect(_on_allegiance_changed)
 
 	ready_to_position = true
 
@@ -83,16 +96,13 @@ func _create_shield() -> void:
 	shield_icon.name = "ShieldIcon"
 	shield_icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
 	shield_icon.size = Vector2(ICON_SIZE, ICON_SIZE)
-	# Center icon, slightly up since shield tapers at bottom
+	# Center icon in shield (offset up slightly)
 	shield_icon.position = Vector2((SHIELD_WIDTH - ICON_SIZE) / 2, (SHIELD_HEIGHT - ICON_SIZE) / 2 - 2)
 	shield_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	shield_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 
-	# Load Ashbane tree texture
-	var tree_tex = load("res://assets/ui/logo/ashbane_tree_64.png")
-	if tree_tex:
-		shield_icon.texture = tree_tex
-
+	# Icon visibility controlled by set_allegiance()
+	shield_icon.visible = false  # Hidden until set_allegiance is called
 	add_child(shield_icon)
 
 func _draw_shield() -> void:
@@ -131,7 +141,7 @@ func _draw_glow() -> void:
 		glow_effect.draw_colored_polygon(points, col)
 
 func _get_shield_points(offset: Vector2, width: float, height: float) -> PackedVector2Array:
-	# Shadowbane-style heater shield: flat top, angled sides, pointed bottom
+	# Shadowbane-style heater shield: rounded top, straight sides, pointed bottom
 	var points = PackedVector2Array()
 
 	var left = offset.x
@@ -140,20 +150,27 @@ func _get_shield_points(offset: Vector2, width: float, height: float) -> PackedV
 	var bottom = offset.y + height
 	var cx = offset.x + width / 2
 
-	# Top edge (flat)
-	points.append(Vector2(left + 2, top))      # Top-left corner (slightly rounded)
-	points.append(Vector2(right - 2, top))     # Top-right corner
+	# Rounded top - starts from left side, curves over top
+	points.append(Vector2(left, top + height * 0.15))      # Left side start
+	points.append(Vector2(left + 1, top + height * 0.08))  # Curve up
+	points.append(Vector2(left + 3, top + 2))              # Top-left curve
+	points.append(Vector2(left + 5, top + 0.5))            # Near top-left
+	points.append(Vector2(cx, top))                        # Top center (highest point)
+	points.append(Vector2(right - 5, top + 0.5))           # Near top-right
+	points.append(Vector2(right - 3, top + 2))             # Top-right curve
+	points.append(Vector2(right - 1, top + height * 0.08)) # Curve down
+	points.append(Vector2(right, top + height * 0.15))     # Right side start
 
-	# Right side going down
-	points.append(Vector2(right, top + 2))     # Corner
-	points.append(Vector2(right, top + height * 0.45))  # Side
+	# Right side going down - fairly straight, then angles to point
+	points.append(Vector2(right, top + height * 0.5))      # Straight down
+	points.append(Vector2(right - 2, top + height * 0.7))  # Start angling in
 
 	# Bottom point
 	points.append(Vector2(cx, bottom))
 
-	# Left side going up
-	points.append(Vector2(left, top + height * 0.45))
-	points.append(Vector2(left, top + 2))      # Corner
+	# Left side going up - mirror of right
+	points.append(Vector2(left + 2, top + height * 0.7))   # Angle out
+	points.append(Vector2(left, top + height * 0.5))       # Straight up
 
 	return points
 
@@ -344,3 +361,56 @@ func _add_sparkle_particles() -> void:
 
 	particle_effect.position = Vector2(SHIELD_WIDTH / 2, SHIELD_HEIGHT / 2)
 	add_child(particle_effect)
+
+# ============================================
+# ALLEGIANCE DISPLAY
+# ============================================
+
+func set_allegiance(allegiance_id: String) -> void:
+	"""Update the shield display based on allegiance.
+
+	- "" (empty) = Rogue - gray shield, no icon
+	- "ashbane" = Ashbane faction - gray shield with tree icon
+	- Other = Player allegiance - could have custom colors/icons (future)
+	"""
+	current_allegiance = allegiance_id
+	print("🛡️ [AllegianceShield] set_allegiance('%s') - shield_icon exists: %s" % [allegiance_id, shield_icon != null])
+
+	# Update icon visibility based on allegiance
+	if shield_icon:
+		if allegiance_id.is_empty():
+			# Rogue - no icon, just gray shield
+			shield_icon.visible = false
+		elif allegiance_id == "ashbane":
+			# Ashbane - show tree icon (grayscale to match shield)
+			shield_icon.visible = true
+			var tree_tex = load("res://assets/ui/logo/ashbane_tree_64.png")
+			if tree_tex:
+				shield_icon.texture = tree_tex
+				shield_icon.modulate = Color(0.85, 0.9, 0.85, 1.0)  # Light gray-green for visibility
+		else:
+			# Future: other allegiances could have custom icons
+			shield_icon.visible = false
+
+	# Update border color based on allegiance
+	if allegiance_id.is_empty():
+		border_color = Color(0.5, 0.5, 0.5)  # Gray for rogue
+		glow_color = Color.TRANSPARENT
+	elif allegiance_id == "ashbane":
+		border_color = Color(0.6, 0.7, 0.6)  # Slight green tint for Ashbane
+		glow_color = Color.TRANSPARENT
+	else:
+		# Future: player allegiances could have custom colors
+		border_color = Color(0.6, 0.6, 0.7)  # Slight blue tint
+		glow_color = Color.TRANSPARENT
+
+	# Redraw shield
+	if shield_bg:
+		shield_bg.queue_redraw()
+	if glow_effect:
+		glow_effect.queue_redraw()
+
+func _on_allegiance_changed(old_allegiance: String, new_allegiance: String) -> void:
+	"""Callback when CharacterStats allegiance changes"""
+	print("🛡️ [AllegianceShield] Allegiance changed: %s → %s" % [old_allegiance, new_allegiance])
+	set_allegiance(new_allegiance)

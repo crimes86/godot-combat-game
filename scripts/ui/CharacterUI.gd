@@ -81,6 +81,7 @@ func _ready() -> void:
 	CharacterStats.armor_unequipped.connect(_on_armor_changed)
 	CharacterStats.weapon_equipped.connect(_on_weapon_changed)
 	CharacterStats.weapon_unequipped.connect(_on_weapon_changed)
+	CharacterStats.allegiance_changed.connect(_on_allegiance_changed)
 	InventorySystem.axe_equipped.connect(_on_tool_changed)
 	InventorySystem.axe_unequipped.connect(_on_tool_changed)
 	InventorySystem.pickaxe_equipped.connect(_on_tool_changed)
@@ -103,6 +104,8 @@ func _exit_tree() -> void:
 		CharacterStats.weapon_equipped.disconnect(_on_weapon_changed)
 	if CharacterStats.weapon_unequipped.is_connected(_on_weapon_changed):
 		CharacterStats.weapon_unequipped.disconnect(_on_weapon_changed)
+	if CharacterStats.allegiance_changed.is_connected(_on_allegiance_changed):
+		CharacterStats.allegiance_changed.disconnect(_on_allegiance_changed)
 	if InventorySystem.axe_equipped.is_connected(_on_tool_changed):
 		InventorySystem.axe_equipped.disconnect(_on_tool_changed)
 	if InventorySystem.axe_unequipped.is_connected(_on_tool_changed):
@@ -111,6 +114,10 @@ func _exit_tree() -> void:
 		InventorySystem.pickaxe_equipped.disconnect(_on_tool_changed)
 	if InventorySystem.pickaxe_unequipped.is_connected(_on_tool_changed):
 		InventorySystem.pickaxe_unequipped.disconnect(_on_tool_changed)
+
+func _on_allegiance_changed(_old_allegiance: String, _new_allegiance: String) -> void:
+	"""Called when allegiance changes"""
+	_update_allegiance_display()
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -507,12 +514,23 @@ func create_character_info_panel(parent: Control) -> void:
 	# Weapon Mastery section (compact - hold to expand)
 	create_weapon_mastery_section(info_vbox)
 
+	# Separator before Allegiance
+	var separator4 = create_styled_separator()
+	info_vbox.add_child(separator4)
+
+	# Allegiance section
+	create_allegiance_section(info_vbox)
+
 # Weapon Mastery UI references
 var mastery_container: Control = null
 var mastery_weapon_label: Label = null
 var mastery_title_label: Label = null
 var mastery_skill_label: Label = null
 var mastery_progress_bar: ProgressBar = null
+
+# Allegiance UI references
+var allegiance_label: Label = null
+var allegiance_button: Button = null
 
 func create_weapon_mastery_section(parent: Control) -> void:
 	"""Create compact weapon mastery section with press-hold to expand"""
@@ -604,6 +622,143 @@ func create_weapon_mastery_section(parent: Control) -> void:
 
 	# Set tooltip
 	mastery_container.tooltip_text = "Your proficiency with your current weapon type.\nHigher skill = better hit chance and damage.\n\n[Click and hold to view all weapon skills]"
+
+func create_allegiance_section(parent: Control) -> void:
+	"""Create allegiance display and toggle section"""
+	var allegiance_header = create_header_label("Allegiance", 16)
+	parent.add_child(allegiance_header)
+
+	# Container for allegiance display
+	var allegiance_container = PanelContainer.new()
+	allegiance_container.name = "AllegianceContainer"
+
+	# Subtle inner panel styling
+	var allegiance_style = StyleBoxFlat.new()
+	allegiance_style.bg_color = Color(SLOT_BG.r, SLOT_BG.g, SLOT_BG.b, 0.5)
+	allegiance_style.border_width_left = 1
+	allegiance_style.border_width_right = 1
+	allegiance_style.border_width_top = 1
+	allegiance_style.border_width_bottom = 1
+	allegiance_style.border_color = BORDER_INNER
+	allegiance_style.corner_radius_top_left = 4
+	allegiance_style.corner_radius_top_right = 4
+	allegiance_style.corner_radius_bottom_left = 4
+	allegiance_style.corner_radius_bottom_right = 4
+	allegiance_style.content_margin_left = 8
+	allegiance_style.content_margin_right = 8
+	allegiance_style.content_margin_top = 6
+	allegiance_style.content_margin_bottom = 6
+	allegiance_container.add_theme_stylebox_override("panel", allegiance_style)
+	parent.add_child(allegiance_container)
+
+	var allegiance_vbox = VBoxContainer.new()
+	allegiance_vbox.add_theme_constant_override("separation", 6)
+	allegiance_container.add_child(allegiance_vbox)
+
+	# Current allegiance label
+	allegiance_label = create_text_label("Ashbane", 14)
+	allegiance_label.add_theme_color_override("font_color", Color(0.6, 0.75, 0.6, 1.0))  # Green tint for Ashbane
+	allegiance_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	allegiance_vbox.add_child(allegiance_label)
+
+	# Toggle button
+	allegiance_button = Button.new()
+	allegiance_button.text = "Go Rogue"
+	allegiance_button.custom_minimum_size = Vector2(120, 28)
+
+	# Style button
+	var btn_style = StyleBoxFlat.new()
+	btn_style.bg_color = Color(0.4, 0.25, 0.2, 0.8)  # Reddish for "Go Rogue"
+	btn_style.set_corner_radius_all(4)
+	btn_style.border_width_left = 1
+	btn_style.border_width_right = 1
+	btn_style.border_width_top = 1
+	btn_style.border_width_bottom = 1
+	btn_style.border_color = Color(0.5, 0.3, 0.25, 1.0)
+
+	var btn_hover = btn_style.duplicate()
+	btn_hover.bg_color = Color(0.5, 0.3, 0.25, 0.9)
+
+	var btn_pressed = btn_style.duplicate()
+	btn_pressed.bg_color = Color(0.3, 0.2, 0.15, 0.9)
+
+	allegiance_button.add_theme_stylebox_override("normal", btn_style)
+	allegiance_button.add_theme_stylebox_override("hover", btn_hover)
+	allegiance_button.add_theme_stylebox_override("pressed", btn_pressed)
+	allegiance_button.add_theme_color_override("font_color", TEXT_COLOR)
+	allegiance_button.add_theme_font_size_override("font_size", 12)
+	allegiance_button.pressed.connect(_on_allegiance_button_pressed)
+
+	# Center the button
+	var btn_center = CenterContainer.new()
+	btn_center.add_child(allegiance_button)
+	allegiance_vbox.add_child(btn_center)
+
+	# Set tooltip
+	allegiance_container.tooltip_text = "Your faction allegiance.\nAshbane: Cannot attack same-faction players.\nRogue: Can attack anyone (except party)."
+
+	# Update display based on current allegiance
+	_update_allegiance_display()
+
+func _on_allegiance_button_pressed() -> void:
+	"""Handle allegiance toggle button press"""
+	if SoundManager:
+		SoundManager.play_button_click_sound()
+
+	if CharacterStats.is_rogue():
+		# Try to join Ashbane (1 hour cooldown after going rogue)
+		if CharacterStats.join_ashbane():
+			_update_allegiance_display()
+			if NotificationManager:
+				NotificationManager.show_notification("Joined Ashbane faction!", "INFO")
+		else:
+			# Show remaining cooldown time
+			var remaining = _get_rogue_rejoin_cooldown_remaining()
+			if NotificationManager:
+				NotificationManager.show_notification("Cannot rejoin yet. %d min remaining." % remaining, "WARNING")
+	else:
+		# Try to go rogue (no cooldown)
+		if CharacterStats.go_rogue():
+			_update_allegiance_display()
+			if NotificationManager:
+				NotificationManager.show_notification("You are now a Rogue!", "WARNING")
+
+func _get_rogue_rejoin_cooldown_remaining() -> int:
+	"""Get remaining minutes until can rejoin Ashbane"""
+	var current_time = Time.get_unix_time_from_system()
+	var time_since_change = current_time - CharacterStats.allegiance_last_change
+	var remaining = CharacterStats.ROGUE_REJOIN_COOLDOWN - time_since_change
+	return max(1, int(remaining / 60))  # At least 1 minute shown
+
+func _update_allegiance_display() -> void:
+	"""Update allegiance label and button based on current state"""
+	if not allegiance_label or not allegiance_button:
+		return
+
+	if CharacterStats.is_rogue():
+		allegiance_label.text = "Rogue (No Allegiance)"
+		allegiance_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1.0))  # Gray
+		allegiance_button.text = "Join Ashbane"
+		# Green button for joining
+		var btn_style = allegiance_button.get_theme_stylebox("normal").duplicate()
+		btn_style.bg_color = Color(0.25, 0.4, 0.3, 0.8)
+		btn_style.border_color = Color(0.3, 0.5, 0.35, 1.0)
+		allegiance_button.add_theme_stylebox_override("normal", btn_style)
+		var btn_hover = btn_style.duplicate()
+		btn_hover.bg_color = Color(0.3, 0.5, 0.35, 0.9)
+		allegiance_button.add_theme_stylebox_override("hover", btn_hover)
+	else:
+		allegiance_label.text = "Ashbane"
+		allegiance_label.add_theme_color_override("font_color", Color(0.6, 0.75, 0.6, 1.0))  # Green tint
+		allegiance_button.text = "Go Rogue"
+		# Red button for going rogue
+		var btn_style = allegiance_button.get_theme_stylebox("normal").duplicate()
+		btn_style.bg_color = Color(0.4, 0.25, 0.2, 0.8)
+		btn_style.border_color = Color(0.5, 0.3, 0.25, 1.0)
+		allegiance_button.add_theme_stylebox_override("normal", btn_style)
+		var btn_hover = btn_style.duplicate()
+		btn_hover.bg_color = Color(0.5, 0.3, 0.25, 0.9)
+		allegiance_button.add_theme_stylebox_override("hover", btn_hover)
 
 func _on_mastery_gui_input(event: InputEvent) -> void:
 	"""Handle mouse click-and-hold on mastery container to open skills panel"""
@@ -757,7 +912,8 @@ func _create_weapon_skills_panel(offset_l: int, offset_r: int) -> CanvasLayer:
 		{"type": "Bows", "titles": ["Fletcher", "Archer", "Marksman", "Sharpshooter", "Deadeye", "Hawkeye"]},
 		{"type": "Healing", "titles": ["Acolyte", "Healer", "Priest", "Bishop", "Cardinal", "Saint"]},
 		{"type": "Arcane", "titles": ["Apprentice", "Conjurer", "Mage", "Sorcerer", "Archmage", "Archon"]},
-		{"type": "Guns", "titles": ["Recruit", "Gunner", "Sharpshooter", "Sniper", "Ace", "Deadshot"]}
+		{"type": "Guns", "titles": ["Recruit", "Gunner", "Sharpshooter", "Sniper", "Ace", "Deadshot"]},
+		{"type": "Blocking", "titles": ["Defender", "Guardian", "Bulwark", "Shieldmaster", "Aegis", "Invincible"]}
 	]
 
 	# Get current equipped weapon type for highlighting
@@ -784,8 +940,15 @@ func _create_weapon_skills_panel(offset_l: int, offset_r: int) -> CanvasLayer:
 		elif current_weapon_type in ["Gun"]:
 			current_weapon_type = "Guns"
 
+	# Check if shield is equipped for blocking highlight
+	var has_shield = not CharacterStats.get_equipped_shield().is_empty()
+
 	for weapon_data in weapon_types:
-		var row = _create_skill_row(weapon_data.type, weapon_data.titles, weapon_data.type == current_weapon_type)
+		# Highlight weapon type if it matches equipped weapon, or blocking if shield equipped
+		var is_highlighted = weapon_data.type == current_weapon_type
+		if weapon_data.type == "Blocking" and has_shield:
+			is_highlighted = true
+		var row = _create_skill_row(weapon_data.type, weapon_data.titles, is_highlighted)
 		skills_vbox.add_child(row)
 
 	# Footer hint
@@ -957,6 +1120,8 @@ func _get_titles_for_category(category: String) -> Array:
 			return ["Apprentice", "Conjurer", "Mage", "Sorcerer", "Archmage", "Archon"]
 		"Guns":
 			return ["Recruit", "Gunner", "Sharpshooter", "Sniper", "Ace", "Deadshot"]
+		"Blocking":
+			return ["Defender", "Guardian", "Bulwark", "Shieldmaster", "Aegis", "Invincible"]
 		_:
 			return ["Novice", "Apprentice", "Journeyman", "Expert", "Master", "Grandmaster"]
 
@@ -2029,8 +2194,9 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	weapon.burst_count = item_dict.get("burst_count", 1)
 	weapon.burst_delay = item_dict.get("burst_delay", 0.10)
 
-	# Two-handed property (blocks offhand slot)
-	weapon.is_two_handed = item_dict.get("is_two_handed", false)
+	# Two-handed property - guns and bows are always two-handed (blocks offhand slot)
+	var is_two_handed_type = weapon.weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle", "bow", "crossbow"]
+	weapon.is_two_handed = item_dict.get("is_two_handed", is_two_handed_type)
 
 	return weapon
 
@@ -2039,19 +2205,35 @@ func _get_equipment_drag_data(at_position: Vector2, slot_name: String) -> Varian
 	# Special handling for mainhand - check equipped_weapon
 	var armor_item = null
 	if slot_name == "mainhand" and CharacterStats.equipped_weapon:
-		# Convert Weapon resource to dict for dragging
-		var weapon = CharacterStats.equipped_weapon
-		armor_item = {
-			"name": weapon.weapon_name,
-			"description": weapon.description,
-			"type": "weapon",
-			"slot": "mainhand",
-			"weapon_type": weapon.weapon_type,
-			"base_damage": weapon.base_damage,
-			"attack_speed": "medium",  # Will be converted properly on equip
-			"crit_chance": weapon.crit_chance_bonus,
-			"rarity": Weapon.Rarity.keys()[weapon.rarity]
-		}
+		# Prefer stored item data (preserves all properties including gun burst_count)
+		if not CharacterStats.equipped_weapon_data.is_empty():
+			armor_item = CharacterStats.equipped_weapon_data.duplicate(true)
+		else:
+			# Fallback: Convert Weapon resource to dict for dragging
+			var weapon = CharacterStats.equipped_weapon
+			armor_item = {
+				"name": weapon.weapon_name,
+				"description": weapon.description,
+				"type": "weapon",
+				"slot": "mainhand",
+				"weapon_type": weapon.weapon_type,
+				"base_damage": weapon.base_damage,
+				"attack_speed": "medium",  # Will be converted properly on equip
+				"crit_chance": weapon.crit_chance_bonus,
+				"rarity": Weapon.Rarity.keys()[weapon.rarity]
+			}
+			# Add gun weapon properties
+			if weapon.is_gun_weapon():
+				armor_item["gun_radius"] = weapon.gun_radius
+				armor_item["gun_range"] = weapon.gun_range
+				armor_item["gun_subtype"] = weapon.gun_subtype
+				armor_item["burst_count"] = weapon.burst_count
+				armor_item["burst_delay"] = weapon.burst_delay
+			# Add healing weapon properties
+			if weapon.attack_mode != "melee":
+				armor_item["attack_mode"] = weapon.attack_mode
+				armor_item["healing_power"] = weapon.healing_power
+				armor_item["heal_radius"] = weapon.heal_radius
 	else:
 		armor_item = CharacterStats.equipped_armor[slot_name]
 

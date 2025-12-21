@@ -51,8 +51,8 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    # Hardcode SQLite for local development
-    url = "sqlite:///./socialauth.db"
+    # Use DATABASE_URL from environment, fallback to SQLite for local dev
+    url = os.getenv("DATABASE_URL", "sqlite:///./socialauth.db")
     connectable = create_engine(url, poolclass=pool.NullPool)
 
     with connectable.connect() as connection:

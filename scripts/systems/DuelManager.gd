@@ -599,7 +599,7 @@ func _client_duel_ended(winner_id: int, loser_id: int) -> void:
 
 @rpc("any_peer", "reliable")
 func request_pvp_damage(target_id: int, damage: int) -> void:
-	"""Client requests to deal PvP damage to opponent during duel"""
+	"""Client requests to deal PvP damage (duel or open-world based on allegiance)"""
 	if not multiplayer.is_server():
 		return
 
@@ -607,16 +607,28 @@ func request_pvp_damage(target_id: int, damage: int) -> void:
 	if attacker_id == 0:
 		attacker_id = 1  # Server's peer ID
 
-	# Validate: attacker must be in a duel with target
-	if not active_duels.has(attacker_id):
-		print("[PvP] Damage rejected: attacker %d not in duel" % attacker_id)
+	var attacker_player = _get_player_node(attacker_id)
+	var target_player = _get_player_node(target_id)
+
+	if not attacker_player or not target_player:
+		print("[PvP] Damage rejected: invalid player nodes")
 		return
 
-	# active_duels stores {player_id: opponent_id} as integers
-	var opponent_id = active_duels[attacker_id]
-	if opponent_id != target_id:
-		print("[PvP] Damage rejected: target %d is not attacker's opponent %d" % [target_id, opponent_id])
-		return
+	# Check if attacker is in a duel
+	var is_in_duel = active_duels.has(attacker_id)
+	var is_dueling_target = is_in_duel and active_duels[attacker_id] == target_id
+
+	# Validate PvP permission
+	if is_in_duel:
+		# During duel: only allow damage to duel opponent
+		if not is_dueling_target:
+			print("[PvP] Damage rejected: target %d is not duel opponent" % target_id)
+			return
+	else:
+		# Open-world PvP: check allegiance rules
+		if not _can_damage_player_server(attacker_player, target_player, attacker_id, target_id):
+			print("[PvP] Damage rejected: allegiance rules prevent damage")
+			return
 
 	# Validate damage amount against player's actual stats
 	var max_damage = _get_max_pvp_damage(attacker_id)
@@ -625,15 +637,70 @@ func request_pvp_damage(target_id: int, damage: int) -> void:
 		damage = clampi(damage, 1, max_damage)
 
 	# Check if target is dashing (i-frames)
-	var target_player = _get_player_node(target_id)
-	if target_player and target_player.get("is_dashing") == true:
+	if target_player.get("is_dashing") == true:
 		print("[PvP] Damage blocked - target %d is dashing" % target_id)
+		return
+
+	# Check safe aura
+	if target_player.get("has_safe_aura") == true:
+		print("[PvP] Damage blocked - target %d has safe aura" % target_id)
 		return
 
 	print("[PvP] Server applying %d damage from %d to %d" % [damage, attacker_id, target_id])
 
-	# Apply damage via RPC to both players
+	# Apply damage via RPC to all clients
 	rpc("apply_pvp_damage", target_id, damage, attacker_id)
+
+func _can_damage_player_server(attacker: Node, target: Node, attacker_id: int, target_id: int) -> bool:
+	"""Server-side allegiance check for open-world PvP"""
+	# Safe zone check - no PvP in chunk 0 (spawn area)
+	if _is_in_safe_zone(attacker) or _is_in_safe_zone(target):
+		print("[PvP] Safe zone protection - no open-world PvP allowed")
+		return false
+
+	# Party protection
+	if GroupManager and GroupManager.has_group():
+		# Check if both are in the same group
+		var attacker_in_group = GroupManager.is_group_member(attacker_id) or GroupManager.group_leader_id == attacker_id
+		var target_in_group = GroupManager.is_group_member(target_id) or GroupManager.group_leader_id == target_id
+		if attacker_in_group and target_in_group:
+			return false
+
+	# Get allegiances
+	var attacker_allegiance = attacker.get("allegiance_id")
+	var target_allegiance = target.get("allegiance_id")
+	if attacker_allegiance == null:
+		attacker_allegiance = "ashbane"
+	if target_allegiance == null:
+		target_allegiance = "ashbane"
+
+	# Rogues can damage and be damaged by everyone
+	if attacker_allegiance == "" or target_allegiance == "":
+		return true
+
+	# Same allegiance = no damage
+	if attacker_allegiance == target_allegiance:
+		return false
+
+	# Different allegiance = can damage
+	return true
+
+func _is_in_safe_zone(player_node: Node) -> bool:
+	"""Check if player is in a safe zone (chunk 0 = spawn area)"""
+	if not player_node or not is_instance_valid(player_node):
+		return false
+
+	var pos = player_node.global_position
+	var chunk_size = 8000.0  # Default chunk size
+
+	# Try to get chunk size from ChunkBasedPropSystem
+	var prop_system = get_node_or_null("/root/GameWorld/ChunkBasedPropSystem")
+	if prop_system and prop_system.get("CHUNK_SIZE"):
+		chunk_size = prop_system.CHUNK_SIZE
+
+	# Chunk 0 is from x=0 to x=chunk_size
+	var chunk_x = int(floor(pos.x / chunk_size))
+	return chunk_x == 0
 
 @rpc("authority", "call_local", "reliable")
 func apply_pvp_damage(target_id: int, damage: int, attacker_id: int) -> void:

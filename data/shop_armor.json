@@ -1,6 +1,30 @@
 {
 	"armor": [
 		{
+			"_comment": "========== SHIELDS ==========",
+			"id": "starter_shield",
+			"name": "Round Wooden Shield",
+			"description": "A simple round shield made of sturdy wood. Basic but reliable protection.",
+			"slot": "offhand",
+			"armor_type": "shield",
+			"type": "shield",
+			"tier": 1,
+			"zone": 1,
+			"required_level": 1,
+			"defense": 5,
+			"block_chance": 0.10,
+			"stat_bonuses": {
+				"vit": 2
+			},
+			"price": 0,
+			"value": 50,
+			"can_trade": true,
+			"stackable": false,
+			"quantity": 1,
+			"sprite_name": "starter_shield",
+			"rarity": "Common"
+		},
+		{
 			"_comment": "========== ZONE 1 TIER 1: COPPER PLATE (Tank/Plate DPS) ==========",
 			"id": "copper_plate_helm",
 			"name": "Copper Plate Helm",

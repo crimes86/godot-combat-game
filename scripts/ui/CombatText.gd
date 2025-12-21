@@ -14,7 +14,9 @@ enum TextType {
 	HEAL,      # Green text for player gaining health
 	XP,        # Cyan text for XP gain (world-space, near mob)
 	GOLD,      # Gold text for gold pickup (world-space, near mob)
-	SKILL_UP   # Bronze/copper text for weapon skill gain (world-space, near mob)
+	SKILL_UP,  # Bronze/copper text for weapon skill gain (world-space, near mob)
+	BLOCK,     # Bright blue "BLOCKED!" text
+	PARTIAL_BLOCK  # Gray-blue "Partial Block" text
 }
 
 # Spawn area settings - rectangle above enemy
@@ -95,6 +97,14 @@ func _ready() -> void:
 			add_theme_color_override("font_color", Color(0.85, 0.6, 0.3))
 			add_theme_font_size_override("font_size", 16)
 			_animate_reward()
+		TextType.BLOCK:
+			add_theme_color_override("font_color", Color(0.3, 0.7, 1.0))  # Bright blue
+			add_theme_font_size_override("font_size", 24)
+			_animate_pop()
+		TextType.PARTIAL_BLOCK:
+			add_theme_color_override("font_color", Color(0.6, 0.7, 0.85))  # Gray-blue
+			add_theme_font_size_override("font_size", 18)
+			_animate_pop_small()
 
 	# Add thick black outline for readability
 	add_theme_color_override("font_outline_color", Color.BLACK)
@@ -226,6 +236,18 @@ static func create_skill_up(amount: float, category: String, world_pos: Vector2,
 	var spawn_pos = world_pos + Vector2(35, -40) + variance
 	var display_text = "+%.1f %s" % [amount, category.capitalize()]
 	return _create_text(display_text, TextType.SKILL_UP, spawn_pos, parent)
+
+static func create_block(world_pos: Vector2, parent: Node) -> CombatText:
+	# Block text floats up with variance
+	var variance = Vector2(randf_range(-15, 15), randf_range(-5, 5))
+	var spawn_pos = world_pos + Vector2(0, -40) + variance
+	return _create_text("BLOCKED!", TextType.BLOCK, spawn_pos, parent)
+
+static func create_partial_block(world_pos: Vector2, parent: Node) -> CombatText:
+	# Partial block text floats up with variance
+	var variance = Vector2(randf_range(-15, 15), randf_range(-5, 5))
+	var spawn_pos = world_pos + Vector2(0, -40) + variance
+	return _create_text("Partial Block", TextType.PARTIAL_BLOCK, spawn_pos, parent)
 
 static func _create_text(damage_text: String, text_type: TextType, world_pos: Vector2, parent: Node) -> CombatText:
 	var combat_text = preload("res://scenes/ui/combat_text.tscn").instantiate() as CombatText

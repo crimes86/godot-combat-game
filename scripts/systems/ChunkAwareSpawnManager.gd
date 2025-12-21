@@ -1023,8 +1023,8 @@ func check_respawns() -> void:
 
 func find_spaced_respawn_position(original_pos: Vector2, existing_positions: Array[Vector2]) -> Vector2:
 	"""Find a respawn position that maintains spacing from existing enemies"""
-	# First try the original position
-	if is_position_spaced(original_pos, existing_positions):
+	# First try the original position - must also be valid (not in safe zones)
+	if is_valid_spawn_position(original_pos) and is_position_spaced(original_pos, existing_positions):
 		return original_pos
 
 	# Try offset positions in a spiral pattern

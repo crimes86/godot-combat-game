@@ -23,6 +23,28 @@ var main_panel: PanelContainer
 var is_visible: bool = false
 var current_item: Dictionary = {}
 
+func _is_forged_item(item: Dictionary) -> bool:
+	"""Check if an item is forged using multiple detection methods"""
+	# Direct flags
+	if item.get("is_forged", false):
+		return true
+	if item.get("forged", false):
+		return true
+	# ID-based checks
+	if item.get("forged_id", "") != "":
+		return true
+	if item.get("forged_item_id", "") != "":
+		return true
+	if item.get("token_id", 0) > 0:
+		return true
+	# Fallback: check if item_id exists in ForgeItemDB
+	var item_id = item.get("item_id", "")
+	if item_id != "" and ForgeItemDB:
+		var forge_db_item = ForgeItemDB.get_item_by_id(item_id)
+		if not forge_db_item.is_empty():
+			return true
+	return false
+
 func _ready() -> void:
 	layer = 120  # Above most UI
 	add_to_group("item_inspection_ui")
@@ -434,12 +456,27 @@ func _populate_item_data(item: Dictionary) -> void:
 		item_rarity.add_theme_color_override("font_color", rarity_color.darkened(0.2))
 
 	if item_source:
-		var game = item.get("game", item.get("achievement", "Unknown"))
-		var achievement = item.get("achievement_name", item.get("achievement", ""))
-		if achievement != "":
-			item_source.text = "From: %s - \"%s\"" % [game, achievement]
+		# Check if forged (from external achievement) or in-game item
+		var is_forged_item = _is_forged_item(item)
+		if is_forged_item:
+			var game = item.get("game", item.get("achievement", "Unknown"))
+			var achievement = item.get("achievement_name", item.get("achievement", ""))
+			if achievement != "":
+				item_source.text = "From: %s - \"%s\"" % [game, achievement]
+			else:
+				item_source.text = "From: %s" % game
+			item_source.add_theme_color_override("font_color", Color(0.6, 0.5, 0.8))  # Purple for forged
 		else:
-			item_source.text = "From: %s" % game
+			# In-game item - show zone or vendor source
+			var zone = item.get("zone", item.get("drop_zone", ""))
+			var vendor = item.get("vendor", item.get("sold_by", ""))
+			if vendor != "":
+				item_source.text = "Sold by: %s" % vendor
+			elif zone != "":
+				item_source.text = "Found in: Zone %s" % zone
+			else:
+				item_source.text = "In-game item"
+			item_source.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55))  # Gray for in-game
 
 	# Load icon - try multiple possible keys
 	if icon_texture:
@@ -475,7 +512,49 @@ func _populate_item_data(item: Dictionary) -> void:
 			style.border_color = rarity_color.darkened(0.3)
 			icon_container.add_theme_stylebox_override("panel", style)
 
-	# Populate basic provenance
+	# Check if this is a forged item (from external achievements)
+	var is_forged = _is_forged_item(item)
+
+	# DEBUG: Print item data to diagnose provenance detection
+	print("[ItemInspection] Item: %s" % item.get("name", item.get("item_name", "Unknown")))
+	print("  is_forged field: %s" % item.get("is_forged", "NOT SET"))
+	print("  forged field: %s" % item.get("forged", "NOT SET"))
+	print("  forged_id field: '%s'" % item.get("forged_id", ""))
+	print("  forged_item_id field: '%s'" % item.get("forged_item_id", ""))
+	print("  item_id field: '%s'" % item.get("item_id", ""))
+	print("  token_id field: %s" % item.get("token_id", "NOT SET"))
+	print("  DETECTED AS FORGED: %s" % is_forged)
+
+	# Get provenance-related UI elements
+	var provenance_header = vbox.find_child("ProvenanceHeader", true, false)
+	var provenance_panel = vbox.find_child("ProvenancePanel", true, false)
+	var history_header = vbox.find_child("HistoryHeader", true, false)
+	var history_scroll = vbox.find_child("HistoryScroll", true, false)
+	var chain_section = vbox.find_child("ChainSection", true, false)
+
+	# Only show provenance sections for forged items
+	if provenance_header:
+		provenance_header.visible = is_forged
+	if provenance_panel:
+		provenance_panel.visible = is_forged
+	if history_header:
+		history_header.visible = is_forged
+	if history_scroll:
+		history_scroll.visible = is_forged
+	if chain_section:
+		chain_section.visible = is_forged
+
+	# Populate basic provenance (only if forged)
+	if not is_forged:
+		# Skip provenance population for in-game items
+		# Populate item stats (damage, bonuses, effects)
+		_populate_item_stats(item, vbox)
+		# Populate combat tracking stats if this is a weapon
+		_populate_combat_stats(item, vbox)
+		# Populate equipment stats if this is armor/accessory
+		_populate_equipment_stats(item, vbox)
+		return
+
 	var prov_grid = vbox.find_child("ProvenanceGrid", true, false)
 	if prov_grid:
 		var forger_value = prov_grid.find_child("ForgerValue", true, false)
@@ -784,7 +863,7 @@ func _populate_equipment_stats(item: Dictionary, vbox: Control) -> void:
 	var is_accessory = item_type == "accessory" or item_type == "ring" or item_type == "amulet" or item.has("accessory_slot")
 
 	# Only show for forged armor/accessories
-	var is_forged = item.get("is_forged", false) or item.get("forged", false)
+	var is_forged = _is_forged_item(item)
 
 	if is_weapon or (not is_armor and not is_accessory) or not is_forged:
 		equipment_header.visible = false

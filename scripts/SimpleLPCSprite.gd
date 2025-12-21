@@ -50,7 +50,7 @@ var shadow_sprite: AnimatedSprite2D = null
 var cape_sprite: AnimatedSprite2D = null
 
 # Armor layers (optional) - between body and weapon
-# z-index order: shadow(-10) -> cape(-5 or 10*) -> body(0) -> base_head(1) -> boots(2) -> pants(3) -> shirt(4) -> arms(5) -> hands(6) -> hair(7) -> head_armor(8) -> weapon(9/-1)
+# z-index order: shadow(-10) -> cape(-5 or 10*) -> body(0) -> base_head(1) -> boots(2) -> pants(3) -> shirt(4) -> arms(5) -> hands(6) -> hair(7) -> head_armor(8) -> shield(9) -> weapon(10/-1)
 # *cape z-index is -5 (behind) for south/east/west directions, 10 (on top) for north direction
 var base_head_sprite: AnimatedSprite2D = null  # Female character uses separate head layer
 var boots_sprite: AnimatedSprite2D = null
@@ -60,6 +60,7 @@ var arms_sprite: AnimatedSprite2D = null
 var hands_sprite: AnimatedSprite2D = null
 var head_sprite: AnimatedSprite2D = null  # Head armor (helmets)
 var hair_sprite: AnimatedSprite2D = null
+var shield_sprite: AnimatedSprite2D = null  # Offhand shield
 
 # Weapon layer (optional)
 var weapon_sprite: AnimatedSprite2D = null
@@ -114,6 +115,7 @@ func _process(_delta: float) -> void:
 	_sync_layer(hands_sprite, body_anim, body_frame)
 	_sync_layer(head_sprite, body_anim, body_frame)
 	_sync_layer(hair_sprite, body_anim, body_frame)
+	_sync_layer(shield_sprite, body_anim, body_frame)
 	# Note: weapon_sprite intentionally NOT synced - may have different frame count (oversize)
 
 func _sync_layer(layer: AnimatedSprite2D, target_anim: StringName, target_frame: int) -> void:
@@ -156,7 +158,9 @@ func setup_lpc_sprite(
 	weapon_type: String = "sword",
 	is_female: bool = false,
 	weapon_slash2_tex: Texture2D = null,
-	weapon_slash3_tex: Texture2D = null
+	weapon_slash3_tex: Texture2D = null,
+	shield_walk_tex: Texture2D = null,
+	shield_slash_tex: Texture2D = null
 ):
 	"""Setup LPC sprite with layered body, armor, and weapon textures"""
 	if DEBUG_SPRITE_SETUP:
@@ -526,12 +530,50 @@ func setup_lpc_sprite(
 		head_sprite.visible = true
 		head_sprite.play("idle_south")
 
+	# Setup shield layer (z=9 - above head armor, for offhand shields)
+	if shield_walk_tex or shield_slash_tex:
+		shield_sprite = AnimatedSprite2D.new()
+		shield_sprite.name = "ShieldLayer"
+		shield_sprite.centered = true
+		shield_sprite.z_index = 9
+		shield_sprite.sprite_frames = SpriteFrames.new()
+		shield_sprite.modulate = Color(1, 1, 1, 1)
+
+		# Shield uses 13-frame walk animation (832px / 64px = 13 frames)
+		if shield_walk_tex:
+			var shield_walk_img = shield_walk_tex.get_image()
+			var shield_frame_count = shield_walk_img.get_width() / 64  # Usually 13 frames
+			for dir_name in DIRECTION_ROWS.keys():
+				var row = DIRECTION_ROWS[dir_name]
+				var frame_indices = []
+				for i in range(int(shield_frame_count)):
+					frame_indices.append(i)
+				create_animation_from_image(shield_walk_img, "walk_" + dir_name, row, int(shield_frame_count), frame_indices, 10.0, true, shield_sprite.sprite_frames, 64)
+				create_animation_from_image(shield_walk_img, "idle_" + dir_name, row, 1, [0], 1.0, true, shield_sprite.sprite_frames, 64)
+
+		if shield_slash_tex:
+			var shield_slash_img = shield_slash_tex.get_image()
+			var shield_attack_frames = shield_slash_img.get_width() / 64  # Usually 13 frames for shields
+			for dir_name in DIRECTION_ROWS.keys():
+				var row = DIRECTION_ROWS[dir_name]
+				var frame_indices = []
+				for i in range(int(shield_attack_frames)):
+					frame_indices.append(i)
+				# Use same prefix as body attack animation
+				create_animation_from_image(shield_slash_img, attack_anim_prefix + "_" + dir_name, row, int(shield_attack_frames), frame_indices, slash_fps, false, shield_sprite.sprite_frames, 64)
+
+		add_child(shield_sprite)
+		shield_sprite.visible = true
+		shield_sprite.play("idle_south")
+		if DEBUG_SPRITE_SETUP:
+			print("[SimpleLPCSprite] Shield layer created (z=9)")
+
 	# Setup weapon layer if provided
 	if weapon_slash_tex or weapon_walk_tex:
 		weapon_sprite = AnimatedSprite2D.new()
 		weapon_sprite.name = "WeaponLayer"
 		weapon_sprite.centered = true
-		weapon_sprite.z_index = 9  # Draw weapon on top (above head armor z=8)
+		weapon_sprite.z_index = 10  # Draw weapon on top (above shield z=9)
 		weapon_sprite.sprite_frames = SpriteFrames.new()
 		# Apply per-weapon tinting (keep most weapons default white)
 		if current_weapon_name == "zeratul_warp_blade":
@@ -940,6 +982,9 @@ func _set_gun_mode(enabled: bool) -> void:
 		# Keep hair visible for character identity
 		if hair_sprite:
 			hair_sprite.visible = true
+		# Hide shield in gun mode (guns are 2-handed, can't use shield)
+		if shield_sprite:
+			shield_sprite.visible = false
 		# =============================================================================
 		# GUN BODY TINT HACK - "Skorpio Armor Illusion"
 		# =============================================================================
@@ -960,9 +1005,14 @@ func _set_gun_mode(enabled: bool) -> void:
 				armor_color = _get_sprite_dominant_color(pants_sprite)
 			if armor_color == Color(1, 1, 1, 1) and boots_sprite and boots_sprite.sprite_frames:
 				armor_color = _get_sprite_dominant_color(boots_sprite)
-			# Apply tint via shader (only affects midsection, not head/feet)
+			# Sample pants color for hip/butt tinting
+			var pants_color = Color(0.3, 0.5, 0.3, 1.0)  # Default green
+			if pants_sprite and pants_sprite.sprite_frames:
+				pants_color = _get_sprite_dominant_color(pants_sprite)
+			# Apply tint via shader (torso=armor color, hip/butt=pants color)
 			if gun_body_sprite.material and gun_body_sprite.material is ShaderMaterial:
 				gun_body_sprite.material.set_shader_parameter("tint_color", armor_color)
+				gun_body_sprite.material.set_shader_parameter("pants_tint_color", pants_color)
 			else:
 				gun_body_sprite.modulate = armor_color
 	else:
@@ -984,6 +1034,8 @@ func _set_gun_mode(enabled: bool) -> void:
 			head_sprite.visible = true
 		if hair_sprite:
 			hair_sprite.visible = true
+		if shield_sprite:
+			shield_sprite.visible = true
 		# Keep weapon visible
 		if weapon_sprite:
 			weapon_sprite.visible = true
@@ -1062,8 +1114,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 			if weapon_sprite.sprite_frames.has_animation(weapon_anim):
 				weapon_sprite.play(weapon_anim)
 				weapon_sprite.visible = true
-				# Z-index: behind when facing north, in front otherwise
-				weapon_sprite.z_index = -1 if direction == "north" else 9
+				# Z-index: behind for north/sideways during idle/walk, in front for south and shooting
+				if anim_name == "shoot":
+					weapon_sprite.z_index = 9  # Shooting always on top
+				elif direction in ["north", "east", "west"]:
+					weapon_sprite.z_index = -1  # Behind body when not facing south
+				else:
+					weapon_sprite.z_index = 9  # On top for south
 				weapon_sprite.offset = Vector2(0, 0)
 
 		# Sync hair sprite to match Skorpio body animation
@@ -1249,6 +1306,42 @@ func play_lpc_animation(anim_name: String, direction: String):
 			if hair_sprite.sprite_frames.has_animation(slash_key):
 				hair_sprite.play(slash_key)
 
+	if shield_sprite:
+		# Adjust shield z-index based on direction
+		if direction == "north":
+			shield_sprite.z_index = -1  # Behind player when facing north
+		elif direction in ["east", "west"] and anim_name in ["walk", "idle"]:
+			shield_sprite.z_index = 5  # Middle layer when walking sideways
+		else:
+			shield_sprite.z_index = 9  # In front for south and attacks
+
+		# Sync shield animation
+		var is_attack_anim = anim_name in ["slash", "slash2", "slash3", "shoot", "thrust"]
+		if shield_sprite.sprite_frames.has_animation(anim_key):
+			shield_sprite.play(anim_key)
+			shield_sprite.visible = true
+		elif is_attack_anim:
+			# Fallback: try slash animation for any attack type (shields only have slash)
+			var slash_key = "slash_" + direction
+			if shield_sprite.sprite_frames.has_animation(slash_key):
+				shield_sprite.play(slash_key)
+				shield_sprite.visible = true
+			else:
+				# Keep showing idle pose during attack if no slash animation
+				var idle_key = "idle_" + direction
+				if shield_sprite.sprite_frames.has_animation(idle_key):
+					shield_sprite.play(idle_key)
+					shield_sprite.visible = true
+		elif shield_sprite.sprite_frames.has_animation(anim_name):
+			shield_sprite.play(anim_name)
+			shield_sprite.visible = true
+		else:
+			# Fallback to idle if no matching animation found
+			var idle_key = "idle_" + direction
+			if shield_sprite.sprite_frames.has_animation(idle_key):
+				shield_sprite.play(idle_key)
+				shield_sprite.visible = true
+
 	# Sync weapon animation with body animation
 	if weapon_sprite:
 		# Allow slash animation to restart for rapid attack feel
@@ -1265,8 +1358,8 @@ func play_lpc_animation(anim_name: String, direction: String):
 			if weapon_sprite.sprite_frames.has_animation(gun_weapon_anim):
 				weapon_sprite.play(gun_weapon_anim)
 				weapon_sprite.visible = true
-				# Z-index: behind when facing north, in front otherwise
-				weapon_sprite.z_index = -1 if direction == "north" else 9
+				# Z-index: behind when facing north or sideways, in front for south
+				weapon_sprite.z_index = -1 if direction in ["north", "east", "west"] else 9
 				weapon_sprite.offset = Vector2(0, 0)
 			return
 
@@ -1279,14 +1372,12 @@ func play_lpc_animation(anim_name: String, direction: String):
 				weapon_sprite.z_index = 9  # Always on top for Kerrigan blade
 			elif direction == "north":
 				weapon_sprite.z_index = -1  # Behind character when facing up
-			elif anim_name == "walk" and current_weapon_type == "spear" and direction in ["east", "west"]:
-				weapon_sprite.z_index = -1  # Spear goes under body when walking sideways
+			elif anim_name in ["walk", "idle"] and direction in ["east", "west"]:
+				weapon_sprite.z_index = -1  # All weapons behind body when walking/idle sideways
 			elif anim_name in ["walk", "idle"] and current_weapon_type in ["bow", "crossbow"]:
 				weapon_sprite.z_index = -1  # Bow on back goes behind player for all directions
-			elif anim_name == "idle" and direction in ["east", "west"]:
-				weapon_sprite.z_index = -1  # Weapon behind hands when idle facing sideways
 			else:
-				weapon_sprite.z_index = 9  # On top normally
+				weapon_sprite.z_index = 9  # On top normally (south facing, attacking)
 
 			# Adjust offset based on animation type and weapon
 			# Oversize weapons (192x192 like staff) need offsets, standard weapons (64x64) don't
@@ -1355,7 +1446,11 @@ func play_lpc_animation(anim_name: String, direction: String):
 			# Animation without directions (like hurt)
 			weapon_sprite.play(weapon_anim_name)
 			weapon_sprite.visible = true
-			weapon_sprite.z_index = -1 if direction == "north" else 9
+			# Behind for north and sideways during walk/idle, on top for south and attacks
+			if direction in ["north", "east", "west"] and anim_name in ["walk", "idle"]:
+				weapon_sprite.z_index = -1
+			else:
+				weapon_sprite.z_index = 9
 		else:
 			# No matching weapon animation, hide weapon
 			weapon_sprite.visible = false

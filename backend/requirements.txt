@@ -25,12 +25,11 @@ python-dotenv==1.0.1
 # Security
 itsdangerous==2.2.0
 
-# Database drivers (uncomment the one you need)
-# psycopg2-binary==2.9.10  # PostgreSQL
-# For SQLite, no extra driver needed
+# Database drivers
+psycopg2-binary==2.9.10  # PostgreSQL (required for production)
+# For SQLite (dev only), no extra driver needed
 
-# Wallet/Blockchain (optional - for forging achievements)
-# Uncomment these to enable wallet connection and NFT forging
-# web3==6.15.1
-# siwe==4.0.0
-# eth-account==0.11.0
+# Wallet/Blockchain - required for forging achievements and bridge system
+web3==6.15.1
+siwe==4.0.0
+eth-account==0.11.0

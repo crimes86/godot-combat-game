@@ -93,8 +93,21 @@ const RESOLUTIONS = [
 @onready var credits_panel = $CreditsPanel
 @onready var credits_back_button = $CreditsPanel/VBoxContainer/CreditsBackButton
 
+# Server select panel nodes (for guest play)
+@onready var server_select_panel = $ServerSelectPanel
+@onready var server_option = $ServerSelectPanel/VBoxContainer/ServerOption
+@onready var custom_ip_input = $ServerSelectPanel/VBoxContainer/CustomIPContainer/CustomIPInput
+@onready var server_status_label = $ServerSelectPanel/VBoxContainer/ServerStatusLabel
+@onready var connect_guest_button = $ServerSelectPanel/VBoxContainer/ConnectGuestButton
+@onready var server_select_back_button = $ServerSelectPanel/VBoxContainer/ServerSelectBackButton
+# Known servers configuration
+const KNOWN_SERVERS = {
+	"Production (Dreadland)": "167.99.55.245",
+	"LAN (Local Network)": "192.168.28.211",
+}
+
 # State
-enum MenuState { MAIN, ASHBANE_SCREEN, HOSTING, JOINING, AUTH_FOR_HOST, AUTH_FOR_JOIN }
+enum MenuState { MAIN, ASHBANE_SCREEN, HOSTING, JOINING, AUTH_FOR_HOST, AUTH_FOR_JOIN, GUEST_SERVER_SELECT }
 var current_state: MenuState = MenuState.MAIN
 var pending_ip: String = ""
 var pending_host_player_data: Dictionary = {}  # Store auth data when hosting
@@ -190,6 +203,17 @@ func _ready():
 	if credits_back_button:
 		credits_back_button.pressed.connect(_on_credits_back_pressed)
 		credits_back_button.mouse_entered.connect(_on_button_hover)
+
+	# Connect server select panel buttons
+	if connect_guest_button:
+		connect_guest_button.pressed.connect(_on_connect_guest_pressed)
+		connect_guest_button.mouse_entered.connect(_on_button_hover)
+	if server_select_back_button:
+		server_select_back_button.pressed.connect(_on_server_select_back_pressed)
+		server_select_back_button.mouse_entered.connect(_on_button_hover)
+
+	# Setup server select panel
+	_setup_server_select_panel()
 
 	# Hide settings and credits panels initially
 	if settings_panel:
@@ -581,15 +605,30 @@ func _on_join_pressed():
 		current_state = MenuState.MAIN
 
 func _on_connected():
-	status_label.text = "Connected! Waiting for server..."
+	if current_state == MenuState.GUEST_SERVER_SELECT:
+		# Guest mode - update server select panel
+		if server_status_label:
+			server_status_label.text = "Connected! Authenticating..."
+	else:
+		status_label.text = "Connected! Waiting for server..."
 	_hide_cancel_button()
 	# Don't load game yet - wait for authentication
 
 func _on_connection_failed():
-	status_label.text = "Connection failed!"
-	host_button.disabled = false
-	join_button.disabled = false
-	current_state = MenuState.MAIN
+	if current_state == MenuState.GUEST_SERVER_SELECT:
+		# Guest mode - update server select panel
+		if server_status_label:
+			server_status_label.text = "Connection failed!"
+		if connect_guest_button:
+			connect_guest_button.disabled = false
+		if server_select_back_button:
+			server_select_back_button.disabled = false
+	else:
+		status_label.text = "Connection failed!"
+		if host_button:
+			host_button.disabled = false
+		join_button.disabled = false
+		current_state = MenuState.MAIN
 	_hide_cancel_button()
 
 func _on_server_created():
@@ -598,14 +637,26 @@ func _on_server_created():
 
 func _on_version_mismatch(server_version: String, client_version: String):
 	"""Block connection due to version mismatch"""
-	status_label.text = "UPDATE REQUIRED\nYour version: %s\nServer version: %s\n\nPlease download the latest version." % [client_version, server_version]
-	status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))  # Red error
+	var error_msg = "UPDATE REQUIRED\nYour version: %s\nServer version: %s\n\nPlease download the latest version." % [client_version, server_version]
 
-	# Re-enable buttons so player can retry after updating
-	if host_button:
-		host_button.disabled = false
-	join_button.disabled = false
-	current_state = MenuState.MAIN
+	if current_state == MenuState.GUEST_SERVER_SELECT:
+		# Guest mode - update server select panel
+		if server_status_label:
+			server_status_label.text = error_msg
+			server_status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		if connect_guest_button:
+			connect_guest_button.disabled = false
+		if server_select_back_button:
+			server_select_back_button.disabled = false
+	else:
+		status_label.text = error_msg
+		status_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))  # Red error
+
+		# Re-enable buttons so player can retry after updating
+		if host_button:
+			host_button.disabled = false
+		join_button.disabled = false
+		current_state = MenuState.MAIN
 	_hide_cancel_button()
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -672,9 +723,19 @@ func _on_cancel_connect_pressed() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _on_authentication_required():
-	"""Server requested authentication - show auth panel for joining"""
-	current_state = MenuState.AUTH_FOR_JOIN
-	_show_auth_panel_for_join()
+	"""Server requested authentication - show auth panel for joining OR auto-login as guest"""
+	if current_state == MenuState.GUEST_SERVER_SELECT:
+		# Guest mode - automatically send guest login
+		var guest_name = name_input.text.strip_edges() if name_input else ""
+		if guest_name.is_empty():
+			guest_name = "Guest_%d" % (randi() % 10000)
+		if server_status_label:
+			server_status_label.text = "Joining as guest..."
+		NetworkManager.send_guest_login(guest_name)
+	else:
+		# Normal mode - show auth panel
+		current_state = MenuState.AUTH_FOR_JOIN
+		_show_auth_panel_for_join()
 
 func _show_auth_panel_for_host():
 	"""Show auth panel for host - authenticates locally before starting server"""
@@ -890,14 +951,32 @@ func _hash_password(password: String) -> String:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _on_login_success(player_data: Dictionary):
-	auth_status_label.text = "Login successful!"
-	_hide_auth_panel()
-	status_label.text = "Loading game..."
-	_load_game_world()
+	if current_state == MenuState.GUEST_SERVER_SELECT:
+		# Guest mode - hide server select panel and load game
+		if server_status_label:
+			server_status_label.text = "Success! Loading game..."
+		if server_select_panel:
+			server_select_panel.visible = false
+		status_label.text = "Loading game..."
+		_load_game_world()
+	else:
+		auth_status_label.text = "Login successful!"
+		_hide_auth_panel()
+		status_label.text = "Loading game..."
+		_load_game_world()
 
 func _on_login_failed(error: String):
-	auth_status_label.text = error
-	_set_auth_buttons_enabled(true)
+	if current_state == MenuState.GUEST_SERVER_SELECT:
+		# Guest mode - update server select panel
+		if server_status_label:
+			server_status_label.text = error
+		if connect_guest_button:
+			connect_guest_button.disabled = false
+		if server_select_back_button:
+			server_select_back_button.disabled = false
+	else:
+		auth_status_label.text = error
+		_set_auth_buttons_enabled(true)
 
 func _on_register_success():
 	auth_status_label.text = "Account created! You can now log in."
@@ -1944,9 +2023,17 @@ func _on_ashbane_login_pressed():
 		_on_ashbane_auth_failed("Ashbane service not available")
 
 func _on_ashbane_skip_pressed():
-	"""Skip linking (or continue after linking) and proceed to main menu"""
+	"""Skip linking and proceed directly to server selection for guest play"""
 	_play_click_sound()
-	_proceed_to_main_menu()
+
+	# Check if user is authenticated with Ashbane
+	if AshbaneAuth and AshbaneAuth.is_authenticated:
+		# Authenticated user - go to main menu to use PLAY button
+		_proceed_to_main_menu()
+	else:
+		# Guest - go directly to server selection
+		_hide_ashbane_panel()
+		_on_guest_play_pressed()
 
 func _proceed_to_main_menu():
 	"""Show main menu with PLAY button after Ashbane auth/skip"""
@@ -2226,6 +2313,153 @@ func _on_credits_back_pressed():
 	if credits_panel:
 		credits_panel.visible = false
 	_set_menu_panel_visible(true)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GUEST SERVER SELECT
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _setup_server_select_panel():
+	"""Initialize the server select panel with known servers"""
+	if not server_option:
+		return
+
+	# Clear and populate server options
+	server_option.clear()
+
+	# Always add production server first
+	server_option.add_item("Production (Dreadland)")
+
+	# Add LAN option only in dev mode
+	if is_dev_mode:
+		server_option.add_item("LAN (Local Network)")
+
+	# Add custom option
+	server_option.add_item("Custom IP...")
+
+	# Style the option button to match theme
+	_style_server_option_button()
+
+	# Hide server select panel initially
+	if server_select_panel:
+		server_select_panel.visible = false
+
+func _style_server_option_button():
+	"""Apply Ashbane styling to the server option button"""
+	if not server_option:
+		return
+
+	var style = StyleBoxFlat.new()
+	style.bg_color = ASHBANE_BG_PANEL
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.35, 0.04, 0.03, 0.8)
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+
+	server_option.add_theme_stylebox_override("normal", style)
+	server_option.add_theme_stylebox_override("hover", style)
+	server_option.add_theme_stylebox_override("pressed", style)
+	server_option.add_theme_stylebox_override("focus", style)
+	server_option.add_theme_color_override("font_color", ASHBANE_TEXT_PRIMARY)
+	server_option.add_theme_color_override("font_hover_color", ASHBANE_ACCENT_GOLD)
+
+func _on_guest_play_pressed():
+	"""Show server selection panel for guest play"""
+	current_state = MenuState.GUEST_SERVER_SELECT
+
+	# Hide main menu, show server select
+	_set_menu_panel_visible(false)
+	if server_select_panel:
+		server_select_panel.visible = true
+
+	# Reset status
+	if server_status_label:
+		server_status_label.text = ""
+	if custom_ip_input:
+		custom_ip_input.text = ""
+
+	# Select production server by default
+	if server_option and server_option.item_count > 0:
+		server_option.select(0)
+
+func _on_connect_guest_pressed():
+	"""Connect to selected server as guest"""
+	_play_click_sound()
+
+	# Determine which IP to use based on selected option
+	var selected_idx = server_option.selected if server_option else 0
+	var selected_text = server_option.get_item_text(selected_idx) if server_option else ""
+	var target_ip: String
+
+	if selected_text.begins_with("Production"):
+		target_ip = KNOWN_SERVERS["Production (Dreadland)"]
+	elif selected_text.begins_with("LAN"):
+		target_ip = KNOWN_SERVERS["LAN (Local Network)"]
+	elif selected_text.begins_with("Custom"):
+		# Custom IP selected
+		target_ip = custom_ip_input.text.strip_edges() if custom_ip_input else ""
+		if target_ip.is_empty():
+			if server_status_label:
+				server_status_label.text = "Please enter a server IP"
+			return
+	else:
+		# Fallback to production
+		target_ip = PRODUCTION_SERVER_IP
+
+	# Set player name
+	var guest_name = name_input.text.strip_edges() if name_input else ""
+	if guest_name.is_empty():
+		guest_name = "Guest_%d" % (randi() % 10000)
+	NetworkManager.set_player_name(guest_name)
+
+	# Store for guest login after connection
+	pending_ip = target_ip
+
+	# Update UI
+	if server_status_label:
+		server_status_label.text = "Connecting to %s..." % target_ip
+	if connect_guest_button:
+		connect_guest_button.disabled = true
+	if server_select_back_button:
+		server_select_back_button.disabled = true
+
+	# Connect to server
+	if NetworkManager.join_game(target_ip):
+		# Connection initiated - wait for connected signal
+		pass
+	else:
+		if server_status_label:
+			server_status_label.text = "Failed to connect!"
+		if connect_guest_button:
+			connect_guest_button.disabled = false
+		if server_select_back_button:
+			server_select_back_button.disabled = false
+		current_state = MenuState.MAIN
+
+func _on_server_select_back_pressed():
+	"""Go back to Ashbane panel from server select"""
+	_play_click_sound()
+
+	# Close any pending connection
+	if current_state == MenuState.GUEST_SERVER_SELECT:
+		NetworkManager.close_connection()
+
+	# Hide server select, show Ashbane panel
+	if server_select_panel:
+		server_select_panel.visible = false
+
+	# Re-enable buttons
+	if connect_guest_button:
+		connect_guest_button.disabled = false
+	if server_select_back_button:
+		server_select_back_button.disabled = false
+
+	# Return to Ashbane auth screen
+	_show_ashbane_panel()
 
 func _on_exit_pressed():
 	_play_click_sound()

@@ -630,6 +630,10 @@ func _dict_to_weapon(weapon_dict: Dictionary):
 	weapon.burst_count = weapon_dict.get("burst_count", 1)
 	weapon.burst_delay = weapon_dict.get("burst_delay", 0.10)
 
+	# Two-handed property - guns and bows are always two-handed (blocks offhand slot)
+	var is_two_handed_type = weapon.weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle", "bow", "crossbow"]
+	weapon.is_two_handed = weapon_dict.get("is_two_handed", is_two_handed_type)
+
 	return weapon
 
 func _on_close_pressed() -> void:

@@ -45,6 +45,7 @@ func _ready() -> void:
 
 	# Ensure health bar renders above player sprites
 	z_index = 100
+	light_mask = 0  # Ignore scene lighting (fire glow, etc.)
 
 	# Hide initially to prevent flashing at wrong position
 	visible = false

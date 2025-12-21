@@ -50,6 +50,22 @@ var session_start_time: float = 0.0  # Start of current session (not persisted)
 # Playtest forge system - isolated from real NFT system
 var playtest_claimed_items: Array = []  # item_ids of forged items claimed in playtest mode
 
+# ============================================
+# ALLEGIANCE SYSTEM (PvP Factions)
+# ============================================
+# null = Rogue (no allegiance, hostile to all, gray shield)
+# "ashbane" = Default faction (Ashbane tree icon)
+# Other strings = Player-created allegiances (future)
+
+var allegiance_id: String = "ashbane"  # Default to Ashbane faction
+var allegiance_last_change: float = 0.0  # Unix timestamp of last allegiance change
+const ALLEGIANCE_CHANGE_COOLDOWN: float = 86400.0  # 1 day in seconds between player allegiance switches
+const ROGUE_REJOIN_COOLDOWN: float = 3600.0  # 1 hour cooldown to rejoin Ashbane after going rogue
+
+# Built-in allegiances
+const ALLEGIANCE_ASHBANE: String = "ashbane"
+const ALLEGIANCE_ROGUE: String = ""  # Empty string = rogue/no allegiance
+
 # Starting stats (for reset/new character)
 const STARTING_STRENGTH: int = Constants.STARTING_STRENGTH
 const STARTING_AGILITY: int = Constants.STARTING_AGILITY
@@ -96,6 +112,7 @@ signal weapon_unequipped()
 signal armor_equipped(slot: String, armor_item: Dictionary)
 signal armor_unequipped(slot: String, armor_item: Dictionary)
 signal gold_changed(amount: int, total: int)  # amount can be positive (gain) or negative (spend)
+signal allegiance_changed(old_allegiance: String, new_allegiance: String)
 
 # ============================================
 # INITIALIZATION
@@ -519,6 +536,11 @@ func equip_weapon(weapon, item_data: Dictionary = {}) -> void:  # weapon: Weapon
 		push_error("Trying to equip null weapon")
 		return
 
+	# If equipping a 2h weapon, auto-unequip offhand first
+	if weapon.is_two_handed and equipped_armor.get("offhand") != null:
+		print("🛡️  Unequipping offhand (2H weapon equipped)")
+		unequip_armor("offhand")
+
 	equipped_weapon = weapon
 	equipped_weapon_data = item_data.duplicate(true) if not item_data.is_empty() else {}
 	weapon_equipped.emit(weapon)
@@ -527,6 +549,8 @@ func equip_weapon(weapon, item_data: Dictionary = {}) -> void:  # weapon: Weapon
 	print("   Damage: +", weapon.base_damage)
 	print("   Attack Speed: ", weapon.attack_speed_bonus * 100, "%")
 	print("   Crit Chance: +", weapon.crit_chance_bonus * 100, "%")
+	if weapon.is_two_handed:
+		print("   [2-Handed - offhand blocked]")
 	if equipped_weapon_data.get("is_forged", false):
 		print("   [Forged item - metadata preserved]")
 
@@ -564,6 +588,14 @@ func unequip_weapon() -> bool:
 			weapon_dict["attack_mode"] = equipped_weapon.attack_mode
 			weapon_dict["healing_power"] = equipped_weapon.healing_power
 			weapon_dict["heal_radius"] = equipped_weapon.heal_radius
+
+		# Add gun weapon properties
+		if equipped_weapon.is_gun_weapon():
+			weapon_dict["gun_radius"] = equipped_weapon.gun_radius
+			weapon_dict["gun_range"] = equipped_weapon.gun_range
+			weapon_dict["gun_subtype"] = equipped_weapon.gun_subtype
+			weapon_dict["burst_count"] = equipped_weapon.burst_count
+			weapon_dict["burst_delay"] = equipped_weapon.burst_delay
 
 	# Add back to inventory
 	if InventorySystem.add_item(weapon_dict):
@@ -623,6 +655,11 @@ func equip_armor(armor_item: Dictionary) -> bool:
 		push_error("Invalid armor slot: " + slot)
 		return false
 
+	# Block offhand equipping when 2h weapon is equipped
+	if slot == "offhand" and equipped_weapon and equipped_weapon.is_two_handed:
+		push_error("Cannot equip offhand - 2-handed weapon is equipped")
+		return false
+
 	# Unequip existing armor in that slot (return to inventory)
 	if equipped_armor[slot]:
 		var old_armor = equipped_armor[slot]
@@ -673,6 +710,32 @@ func get_equipped_armor_count() -> int:
 		if equipped_armor.get(slot):
 			count += 1
 	return count
+
+func get_equipped_shield() -> Dictionary:
+	"""Return the equipped shield (offhand item) or empty dict if none"""
+	var offhand = equipped_armor.get("offhand")
+	if offhand and offhand.get("type") == "shield":
+		return offhand
+	return {}
+
+func get_plate_armor_count() -> int:
+	"""Return number of plate armor pieces equipped (for block efficiency bonus)"""
+	var count = 0
+	var armor_slots = ["head", "chest", "hands", "legs", "feet"]
+	for slot in armor_slots:
+		var armor_item = equipped_armor.get(slot)
+		if armor_item and armor_item.get("armor_type", "").to_lower() == "plate":
+			count += 1
+	return count
+
+func get_block_efficiency() -> float:
+	"""Get block efficiency (partial block damage reduction) based on plate armor
+	Base: 50% damage reduction on partial block
+	Each plate piece: +5% (max +30% with 6 pieces)
+	Returns value like 0.50 to 0.80"""
+	var base_efficiency = 0.50
+	var plate_bonus = get_plate_armor_count() * 0.05
+	return base_efficiency + plate_bonus
 
 func create_starter_weapon():  # Returns Weapon
 	"""Create the default starter weapon"""
@@ -752,6 +815,14 @@ func get_weapon_as_dict() -> Dictionary:
 		weapon_dict["attack_mode"] = equipped_weapon.attack_mode
 		weapon_dict["healing_power"] = equipped_weapon.healing_power
 		weapon_dict["heal_radius"] = equipped_weapon.heal_radius
+
+	# Add gun weapon properties
+	if equipped_weapon.is_gun_weapon():
+		weapon_dict["gun_radius"] = equipped_weapon.gun_radius
+		weapon_dict["gun_range"] = equipped_weapon.gun_range
+		weapon_dict["gun_subtype"] = equipped_weapon.gun_subtype
+		weapon_dict["burst_count"] = equipped_weapon.burst_count
+		weapon_dict["burst_delay"] = equipped_weapon.burst_delay
 
 	return weapon_dict
 
@@ -838,6 +909,18 @@ func get_save_data() -> Dictionary:
 			"can_trade": equipped_weapon.can_trade,
 			"description": equipped_weapon.description
 		}
+		# Add gun weapon properties
+		if equipped_weapon.is_gun_weapon():
+			weapon_data["gun_radius"] = equipped_weapon.gun_radius
+			weapon_data["gun_range"] = equipped_weapon.gun_range
+			weapon_data["gun_subtype"] = equipped_weapon.gun_subtype
+			weapon_data["burst_count"] = equipped_weapon.burst_count
+			weapon_data["burst_delay"] = equipped_weapon.burst_delay
+		# Add healing weapon properties
+		if equipped_weapon.attack_mode != "melee":
+			weapon_data["attack_mode"] = equipped_weapon.attack_mode
+			weapon_data["healing_power"] = equipped_weapon.healing_power
+			weapon_data["heal_radius"] = equipped_weapon.heal_radius
 
 	# Get quest data if QuestManager exists
 	var quest_data = {}
@@ -870,10 +953,14 @@ func get_save_data() -> Dictionary:
 		"total_playtime": total_playtime,
 		"playtest_claimed_items": playtest_claimed_items.duplicate(),
 
+		# Allegiance
+		"allegiance_id": allegiance_id,
+		"allegiance_last_change": allegiance_last_change,
+
 		# Quest progress
 		"quests": quest_data,
 
-		"version": 4  # 6-stat system
+		"version": 5  # Added allegiance system
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -898,6 +985,10 @@ func load_save_data(data: Dictionary) -> void:
 	total_playtime = data.get("total_playtime", 0.0)
 	playtest_claimed_items = data.get("playtest_claimed_items", [])
 
+	# Allegiance
+	allegiance_id = data.get("allegiance_id", ALLEGIANCE_ASHBANE)  # Default to Ashbane
+	allegiance_last_change = data.get("allegiance_last_change", 0.0)
+
 	# Equipped weapon (recreate Weapon resource from saved data)
 	var weapon_data = data.get("equipped_weapon", {})
 	if not weapon_data.is_empty():
@@ -912,6 +1003,19 @@ func load_save_data(data: Dictionary) -> void:
 		weapon.rarity = weapon_data.get("rarity", 0)
 		weapon.can_trade = weapon_data.get("can_trade", true)
 		weapon.description = weapon_data.get("description", "")
+		# Load gun weapon properties
+		weapon.gun_radius = weapon_data.get("gun_radius", 28.0)
+		weapon.gun_range = weapon_data.get("gun_range", 550.0)
+		weapon.gun_subtype = weapon_data.get("gun_subtype", "railgun")
+		weapon.burst_count = weapon_data.get("burst_count", 1)
+		weapon.burst_delay = weapon_data.get("burst_delay", 0.10)
+		# Load healing weapon properties
+		weapon.attack_mode = weapon_data.get("attack_mode", "melee")
+		weapon.healing_power = weapon_data.get("healing_power", 0.0)
+		weapon.heal_radius = weapon_data.get("heal_radius", 80.0)
+		# Two-handed property - guns and bows are always two-handed (blocks offhand slot)
+		var is_two_handed_type = weapon.weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle", "bow", "crossbow"]
+		weapon.is_two_handed = weapon_data.get("is_two_handed", is_two_handed_type)
 		equipped_weapon = weapon
 	else:
 		equipped_weapon = null
@@ -1071,3 +1175,143 @@ func clear_playtest_claims() -> void:
 func get_playtest_claimed_count() -> int:
 	"""Get number of playtest items claimed"""
 	return playtest_claimed_items.size()
+
+# ============================================
+# ALLEGIANCE SYSTEM
+# ============================================
+
+func is_rogue() -> bool:
+	"""Check if player has no allegiance (rogue status)"""
+	return allegiance_id.is_empty()
+
+func is_ashbane() -> bool:
+	"""Check if player is in the default Ashbane faction"""
+	return allegiance_id == ALLEGIANCE_ASHBANE
+
+func get_allegiance() -> String:
+	"""Get current allegiance ID (empty string = rogue)"""
+	return allegiance_id
+
+func get_allegiance_display_name() -> String:
+	"""Get display name for current allegiance"""
+	if allegiance_id.is_empty():
+		return "Rogue"
+	elif allegiance_id == ALLEGIANCE_ASHBANE:
+		return "Ashbane"
+	else:
+		return allegiance_id.capitalize()
+
+func is_same_allegiance(other_allegiance: String) -> bool:
+	"""Check if another allegiance matches ours (rogues never match anyone)"""
+	if allegiance_id.is_empty() or other_allegiance.is_empty():
+		return false  # Rogues don't match anyone, including other rogues
+	return allegiance_id == other_allegiance
+
+func can_damage_player(target_allegiance: String, is_in_party: bool, is_dueling_target: bool) -> bool:
+	"""Check if we can damage another player based on allegiance rules.
+
+	Rules:
+	- Same party = no damage (unless dueling that player)
+	- Dueling target = yes damage
+	- Same allegiance = no damage
+	- Different allegiance = yes damage
+	- Rogue attacker = yes damage to everyone
+	- Rogue target = yes, can be damaged by everyone
+	"""
+	# Dueling overrides all other rules
+	if is_dueling_target:
+		return true
+
+	# Party protection overrides allegiance
+	if is_in_party:
+		return false
+
+	# Rogues can damage and be damaged by everyone
+	if allegiance_id.is_empty() or target_allegiance.is_empty():
+		return true
+
+	# Same allegiance = no damage
+	if allegiance_id == target_allegiance:
+		return false
+
+	# Different allegiance = can damage
+	return true
+
+func can_heal_player(target_allegiance: String, is_in_party: bool) -> bool:
+	"""Check if we can heal another player based on allegiance rules.
+
+	Rules:
+	- Same party = yes heal (regardless of allegiance)
+	- Same allegiance = yes heal
+	- Different allegiance (not in party) = no heal
+	- Rogue target (not in party) = no heal
+	"""
+	# Party allows healing regardless of allegiance
+	if is_in_party:
+		return true
+
+	# Rogues can only be healed by party members
+	if target_allegiance.is_empty():
+		return false
+
+	# If we're rogue, we can only heal party members (handled above)
+	if allegiance_id.is_empty():
+		return false
+
+	# Same allegiance = can heal
+	return allegiance_id == target_allegiance
+
+func set_allegiance(new_allegiance: String, force: bool = false) -> bool:
+	"""Change allegiance. Returns false if on cooldown.
+
+	Rules:
+	- Going rogue = immediate (no cooldown)
+	- Rejoining Ashbane after being rogue = 1 hour cooldown
+	- Switching between player allegiances = 1 day cooldown
+	"""
+	if new_allegiance == allegiance_id:
+		return true  # Already in this allegiance
+
+	var current_time = Time.get_unix_time_from_system()
+	var time_since_change = current_time - allegiance_last_change
+
+	# Check cooldowns based on transition type
+	if not force:
+		# Rejoining Ashbane from rogue = 1 hour cooldown
+		if allegiance_id.is_empty() and new_allegiance == ALLEGIANCE_ASHBANE:
+			if time_since_change < ROGUE_REJOIN_COOLDOWN:
+				var remaining = ROGUE_REJOIN_COOLDOWN - time_since_change
+				var minutes = int(remaining / 60)
+				print("⚠️ Cannot rejoin Ashbane yet. %d minutes remaining." % minutes)
+				return false
+		# Switching between player allegiances = 1 day cooldown
+		elif not new_allegiance.is_empty() and new_allegiance != ALLEGIANCE_ASHBANE:
+			if time_since_change < ALLEGIANCE_CHANGE_COOLDOWN:
+				var remaining = ALLEGIANCE_CHANGE_COOLDOWN - time_since_change
+				var hours = int(remaining / 3600)
+				print("⚠️ Cannot change allegiance yet. %d hours remaining." % hours)
+				return false
+		# Going rogue = no cooldown (always allowed)
+
+	var old_allegiance = allegiance_id
+	allegiance_id = new_allegiance
+	allegiance_last_change = current_time
+
+	allegiance_changed.emit(old_allegiance, new_allegiance)
+
+	if new_allegiance.is_empty():
+		print("⚔️ You are now ROGUE - hostile to all factions!")
+	elif new_allegiance == ALLEGIANCE_ASHBANE:
+		print("🌳 You have joined the Ashbane faction.")
+	else:
+		print("🛡️ You have joined allegiance: %s" % new_allegiance)
+
+	return true
+
+func go_rogue() -> bool:
+	"""Leave current allegiance and become rogue"""
+	return set_allegiance(ALLEGIANCE_ROGUE)
+
+func join_ashbane() -> bool:
+	"""Join or return to the Ashbane faction"""
+	return set_allegiance(ALLEGIANCE_ASHBANE)

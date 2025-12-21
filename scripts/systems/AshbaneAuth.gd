@@ -15,12 +15,14 @@ enum ConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
 # API Configuration
 const API_BASE_LAN = "http://192.168.28.211:8000"  # LAN backend (for local/OneDrive shared development)
 const API_BASE_NGROK = "https://trisyllabical-eliz-unyieldingly.ngrok-free.dev"  # ngrok tunnel (for remote/public access)
-const API_BASE_PROD = ""  # TBD
+const API_BASE_PROD = ""  # TODO: Set your production domain here (e.g., "https://api.ashbane.com")
 const API_OVERRIDE_PATH = "user://api_override.txt"  # Local override file (put URL in this file to override default)
 const TOKEN_PATH = "user://ashbane_session.dat"
 
-# Set this to switch between LAN and ngrok
+# Set this to switch between LAN and ngrok in development
 const USE_LAN_BY_DEFAULT = false
+# Set to true to force production URL even in editor (for testing prod connection)
+const FORCE_PRODUCTION = false
 const POLL_INTERVAL: float = 2.0
 const DEVICE_CODE_EXPIRY: int = 600  # 10 minutes
 const HEARTBEAT_INTERVAL: float = 10.0  # Check connection every 10 seconds
@@ -216,7 +218,7 @@ func is_logged_in() -> bool:
 	return is_authenticated and auth_token != "" and user_id > 0
 
 func get_api_base() -> String:
-	# Check for local override file first (highest priority)
+	# Check for local override file first (highest priority - allows testing different servers)
 	if FileAccess.file_exists(API_OVERRIDE_PATH):
 		var file = FileAccess.open(API_OVERRIDE_PATH, FileAccess.READ)
 		if file:
@@ -224,7 +226,13 @@ func get_api_base() -> String:
 			file.close()
 			if override_url != "":
 				return override_url
-	# Use LAN or ngrok based on config
+
+	# Use production URL for exported builds or if forced
+	var is_export_build = OS.has_feature("standalone") or OS.has_feature("template")
+	if (is_export_build or FORCE_PRODUCTION) and API_BASE_PROD != "":
+		return API_BASE_PROD
+
+	# Development: use LAN or ngrok based on config
 	if USE_LAN_BY_DEFAULT:
 		return API_BASE_LAN
 	return API_BASE_NGROK

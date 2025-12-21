@@ -49,7 +49,10 @@ enum SoundType {
 	FIRE_FUEL_ADD,  # Fire magic sound when adding fuel to campfire
 
 	# Movement sounds
-	DODGE  # Dodge/dash whoosh sound
+	DODGE,  # Dodge/dash whoosh sound
+
+	# Combat defense sounds
+	SHIELD_BLOCK  # Shield blocking an attack
 }
 
 # Cache for generated sounds
@@ -838,6 +841,9 @@ func _generate_all_sounds() -> void:
 
 	# Environment sounds
 	sound_cache[SoundType.FIRE_FUEL_ADD] = fire_fuel_add_sound if fire_fuel_add_sound else _generate_fire_fuel_add()
+
+	# Combat defense sounds
+	sound_cache[SoundType.SHIELD_BLOCK] = _generate_shield_block()
 
 	# Footstep sounds (use real sounds if loaded, otherwise generate placeholders)
 	sound_cache[SoundType.FOOTSTEP_PLAYER] = player_footstep_sounds[0] if not player_footstep_sounds.is_empty() else _generate_footstep_soft()
@@ -1959,6 +1965,42 @@ func _generate_footstep_soft() -> AudioStreamWAV:
 func _generate_footstep_hard() -> AudioStreamWAV:
 	# Hard bone clacking footstep (higher pitch click)
 	return _create_wav_tone(300.0, 0.06, 0.2)
+
+func _generate_shield_block() -> AudioStreamWAV:
+	# Metallic clang/thud for shield blocking
+	# Mix of low thud (wood impact) and higher metallic ring
+	var sample_rate = 22050
+	var duration = 0.25
+	var samples = PackedVector2Array()
+	var sample_count = int(duration * sample_rate)
+
+	for i in range(sample_count):
+		var t = float(i) / sample_rate
+		# Envelope: quick attack, moderate decay
+		var envelope = 1.0
+		if i < sample_rate * 0.005:  # 5ms attack
+			envelope = float(i) / (sample_rate * 0.005)
+		else:
+			envelope = exp(-t * 12.0)  # Fast decay
+
+		# Low thud component (wood/shield body)
+		var thud = sin(t * 120.0 * TAU) * 0.6
+
+		# Metallic ring component (shield rim)
+		var ring = sin(t * 800.0 * TAU) * 0.3 * exp(-t * 20.0)
+
+		# Higher harmonic for bite
+		var bite = sin(t * 1600.0 * TAU) * 0.1 * exp(-t * 30.0)
+
+		var sample = (thud + ring + bite) * envelope * 0.5
+		samples.append(Vector2(sample, sample))
+
+	var wav = AudioStreamWAV.new()
+	wav.data = _pack_samples(samples)
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = sample_rate
+	wav.stereo = true
+	return wav
 
 func _generate_fire_fuel_add() -> AudioStreamWAV:
 	# Fire whoosh placeholder (ascending sweep)

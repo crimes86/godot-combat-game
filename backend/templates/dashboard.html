@@ -3634,6 +3634,15 @@
 </style>
 
 <script>
+// ===== CHAIN CONFIGURATION (from backend) =====
+const CHAIN_ID = {{ chain_id | default(84532) }};  // Injected from backend
+const CHAIN_ID_HEX = '0x' + CHAIN_ID.toString(16);  // Convert to hex for MetaMask
+const CHAIN_CONFIGS = {
+  84532: { name: 'Base Sepolia', rpc: 'https://sepolia.base.org', explorer: 'https://sepolia.basescan.org' },
+  8453: { name: 'Base Mainnet', rpc: 'https://mainnet.base.org', explorer: 'https://basescan.org' },
+};
+const CHAIN_CONFIG = CHAIN_CONFIGS[CHAIN_ID] || CHAIN_CONFIGS[84532];
+
 // Vault connection state
 let walletConnected = false;
 let walletConnecting = false;
@@ -3931,27 +3940,26 @@ async function connectVault() {
     const address = accounts[0];
     console.log('[Vault] Connected to wallet:', address);
 
-    // Switch to Base Sepolia testnet (chain ID 84532)
-    const baseSepoliaChainId = '0x14a34'; // 84532 in hex
-    console.log('[Vault] Switching to Base Sepolia...');
+    // Switch to configured chain (from backend environment)
+    console.log(`[Vault] Switching to ${CHAIN_CONFIG.name} (${CHAIN_ID})...`);
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: baseSepoliaChainId }],
+        params: [{ chainId: CHAIN_ID_HEX }],
       });
       console.log('[Vault] Network switched successfully');
     } catch (switchError) {
       // Chain not added yet, add it
       if (switchError.code === 4902) {
-        console.log('[Vault] Base Sepolia not found, adding network...');
+        console.log(`[Vault] ${CHAIN_CONFIG.name} not found, adding network...`);
         await window.ethereum.request({
           method: 'wallet_addEthereumChain',
           params: [{
-            chainId: baseSepoliaChainId,
-            chainName: 'Base Sepolia',
+            chainId: CHAIN_ID_HEX,
+            chainName: CHAIN_CONFIG.name,
             nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
-            rpcUrls: ['https://sepolia.base.org'],
-            blockExplorerUrls: ['https://sepolia.basescan.org']
+            rpcUrls: [CHAIN_CONFIG.rpc],
+            blockExplorerUrls: [CHAIN_CONFIG.explorer]
           }],
         });
         console.log('[Vault] Network added successfully');

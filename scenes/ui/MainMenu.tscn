@@ -619,3 +619,99 @@ theme_override_font_sizes/font_size = 14
 theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
 theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
 text = "< Back"
+
+[node name="ServerSelectPanel" type="Panel" parent="."]
+visible = false
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -160.0
+offset_right = 220.0
+offset_bottom = 160.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ServerSelectPanel"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 25.0
+offset_top = 20.0
+offset_right = -25.0
+offset_bottom = -20.0
+theme_override_constants/separation = 15
+
+[node name="TitleLabel" type="Label" parent="ServerSelectPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_font_sizes/font_size = 22
+text = "Select Server"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="ServerSelectPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ServerOption" type="OptionButton" parent="ServerSelectPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_font_sizes/font_size = 16
+
+[node name="CustomIPContainer" type="HBoxContainer" parent="ServerSelectPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="IPLabel" type="Label" parent="ServerSelectPanel/VBoxContainer/CustomIPContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 0)
+theme_override_colors/font_color = Color(0.80, 0.76, 0.70, 1)
+theme_override_font_sizes/font_size = 14
+text = "Custom IP:"
+vertical_alignment = 1
+
+[node name="CustomIPInput" type="LineEdit" parent="ServerSelectPanel/VBoxContainer/CustomIPContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_colors/font_placeholder_color = Color(0.45, 0.40, 0.35, 1)
+theme_override_colors/caret_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("StyleBoxFlat_input")
+placeholder_text = "Or enter custom IP"
+
+[node name="ServerStatusLabel" type="Label" parent="ServerSelectPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 20)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.45, 1)
+theme_override_font_sizes/font_size = 12
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="ConnectGuestButton" type="Button" parent="ServerSelectPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 50)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
+theme_override_colors/font_focus_color = Color(0.95, 0.90, 0.82, 1)
+theme_override_font_sizes/font_size = 20
+theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
+theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_panel")
+theme_override_styles/focus = SubResource("StyleBoxFlat_panel")
+text = "CONNECT"
+
+[node name="ServerSelectBackButton" type="Button" parent="ServerSelectPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 36)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.45, 1)
+theme_override_colors/font_hover_color = Color(0.85, 0.65, 0.2, 1)
+theme_override_colors/font_pressed_color = Color(0.70, 0.15, 0.10, 1)
+theme_override_colors/font_focus_color = Color(0.55, 0.50, 0.45, 1)
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_panel")
+theme_override_styles/hover = SubResource("StyleBoxFlat_panel")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_panel")
+theme_override_styles/focus = SubResource("StyleBoxFlat_panel")
+text = "< Back"

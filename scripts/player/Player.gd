@@ -68,6 +68,10 @@ var duel_aura_node: Node2D = null
 var safe_aura_node: Node2D = null
 var blood_color: Color = Color(0.6, 0.05, 0.05, 0.9)  # Dark blood red (used for PvP hit effects)
 
+# Allegiance System (synced for network visibility)
+# "" = Rogue (no allegiance), "ashbane" = Ashbane faction
+var allegiance_id: String = "ashbane"
+
 # PvP Weakpoint System (HP threshold-based, scales with level like PvE)
 # Two windows per duel: first at 70% HP, second at 35% HP
 const PVP_WEAKPOINT_THRESHOLDS: Array = [0.70, 0.35]  # Trigger at 70%, 35% HP
@@ -334,6 +338,12 @@ func _ready() -> void:
 		CharacterStats.weapon_unequipped.connect(_on_weapon_unequipped)
 		CharacterStats.armor_equipped.connect(_on_armor_equipped)
 		CharacterStats.armor_unequipped.connect(_on_armor_unequipped)
+		CharacterStats.allegiance_changed.connect(_on_allegiance_changed)
+
+		# Sync initial allegiance from CharacterStats
+		allegiance_id = CharacterStats.get_allegiance()
+		# Broadcast to other players after networking is ready
+		call_deferred("_broadcast_allegiance")
 
 		# Create character UI after this frame
 		call_deferred("create_character_ui")
@@ -374,6 +384,8 @@ func _exit_tree() -> void:
 		CharacterStats.armor_equipped.disconnect(_on_armor_equipped)
 	if CharacterStats.armor_unequipped.is_connected(_on_armor_unequipped):
 		CharacterStats.armor_unequipped.disconnect(_on_armor_unequipped)
+	if CharacterStats.allegiance_changed.is_connected(_on_allegiance_changed):
+		CharacterStats.allegiance_changed.disconnect(_on_allegiance_changed)
 
 	# Clean up circle visualizer (it's parented to root, not player)
 	if circle_visualizer and is_instance_valid(circle_visualizer):
@@ -996,16 +1008,14 @@ func _input(event: InputEvent) -> void:
 			KEY_F9 when is_dev_build:
 				# DEBUG: Toggle full map view (zoom out to see entire world)
 				toggle_debug_map_view()
-			# KEY_F10 debug fuel disabled for playtesting
-			# KEY_F10:
-			# 	# DEBUG: Add campfire fuel to inventory (Press F10)
-			# 	var debug_fuel = load("res://scripts/debug/debug_fuel_items.gd")
-			# 	if debug_fuel:
-			# 		var instance = debug_fuel.new()
-			# 		add_child(instance)
-			# 		await instance.add_fuel_to_inventory()
-			# 		# Clean up after async function completes
-			# 		instance.queue_free()
+			KEY_F10 when is_dev_build:
+				# DEBUG: Toggle allegiance between Ashbane and Rogue
+				if CharacterStats.is_rogue():
+					CharacterStats.join_ashbane()
+					print("🌳 DEBUG: Switched to ASHBANE allegiance")
+				else:
+					CharacterStats.go_rogue()
+					print("⚔️ DEBUG: Switched to ROGUE (no allegiance)")
 
 			KEY_F12 when is_dev_build:
 				# DEBUG: Toggle between melee weapon and healing staff
@@ -1118,13 +1128,31 @@ func get_allies_in_radius(center_pos: Vector2, radius: float) -> Array:
 	return allies_in_radius
 
 func _is_friendly_player(player_node: Node) -> bool:
-	"""Check if a player is friendly for healing purposes.
-	Currently allows healing ALL players globally (PvP healing allowed).
-	PvP damage will be restricted separately when implemented."""
-	# For now, all players are friendly for healing purposes
-	# This allows healers to help anyone, which encourages cooperative play
-	# When PvP is implemented, this can check faction/group membership
-	return true
+	"""Check if a player is friendly for healing purposes based on allegiance.
+	- Same allegiance = can heal
+	- Party members = can heal (regardless of allegiance)
+	- Rogues can only heal party members
+	- Different allegiance non-party = cannot heal
+	- Duel combatants = cannot heal (unless party member)
+	"""
+	var target_id = player_node.get_multiplayer_authority()
+
+	# Party members are always friendly
+	var is_party_member = GroupManager and GroupManager.is_group_member(target_id)
+	if is_party_member:
+		return true
+
+	# Duel isolation: cannot heal duel combatants (unless party member)
+	if player_node.get("is_dueling") == true:
+		return false
+
+	# Get target's allegiance
+	var target_allegiance = player_node.get("allegiance_id")
+	if target_allegiance == null:
+		target_allegiance = "ashbane"  # Default
+
+	# Use CharacterStats allegiance check
+	return CharacterStats.can_heal_player(target_allegiance, false)
 
 func attempt_heal() -> void:
 	"""Attempt to heal allies at cursor position with healing staff."""
@@ -1627,44 +1655,79 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 		print("Damage dodged! (dashing)")
 		return
 
-	# DUEL ISOLATION: Only duel opponent can damage me during a duel
-	if is_dueling:
-		if source_type != "player" or source_player_id != duel_opponent_id:
-			return  # Ignore non-duel-opponent damage
-
-		# Check HP thresholds for PvP weakpoint system (before applying damage)
-		if not pvp_weakpoint_active:
-			var hp_before_pct = current_health / max_health
-			var hp_after_pct = (current_health - amount) / max_health
-			for threshold in PVP_WEAKPOINT_THRESHOLDS:
-				if hp_before_pct > threshold and hp_after_pct <= threshold:
-					if threshold not in pvp_triggered_thresholds:
-						pvp_triggered_thresholds.append(threshold)
-						print("[PvP] HP threshold %.0f%% crossed - spawning weakpoints!" % (threshold * 100))
-						spawn_pvp_weakpoint_window()
-						break  # Only trigger one window per hit
-
-		# Check for duel end condition (1 HP threshold)
-		if current_health - amount <= 1:
-			current_health = 1
-			if health_bar and health_bar.has_method("update_health"):
-				health_bar.update_health(current_health, max_health)
-			CombatText.create_damage(amount, global_position, get_tree().root, attack_direction)
-			flash_player_sprite()
-			# Report loss to DuelManager
-			if DuelManager:
-				DuelManager.report_duel_loss()
-			return
-
 	# SAFE AURA: Block player damage post-duel
 	if has_safe_aura and source_type == "player":
 		return
+
+	# Handle player damage (PvP)
+	if source_type == "player":
+		if is_dueling:
+			# DUEL ISOLATION: Only duel opponent can damage me during a duel
+			if source_player_id != duel_opponent_id:
+				return  # Ignore non-duel-opponent damage
+
+			# Check HP thresholds for PvP weakpoint system (before applying damage)
+			if not pvp_weakpoint_active:
+				var hp_before_pct = current_health / max_health
+				var hp_after_pct = (current_health - amount) / max_health
+				for threshold in PVP_WEAKPOINT_THRESHOLDS:
+					if hp_before_pct > threshold and hp_after_pct <= threshold:
+						if threshold not in pvp_triggered_thresholds:
+							pvp_triggered_thresholds.append(threshold)
+							print("[PvP] HP threshold %.0f%% crossed - spawning weakpoints!" % (threshold * 100))
+							spawn_pvp_weakpoint_window()
+							break  # Only trigger one window per hit
+
+			# Check for duel end condition (1 HP threshold)
+			if current_health - amount <= 1:
+				current_health = 1
+				if health_bar and health_bar.has_method("update_health"):
+					health_bar.update_health(current_health, max_health)
+				CombatText.create_damage(amount, global_position, get_tree().root, attack_direction)
+				flash_player_sprite()
+				# Report loss to DuelManager
+				if DuelManager:
+					DuelManager.report_duel_loss()
+				return
+		else:
+			# OPEN-WORLD PvP: Server already validated allegiance rules
+			# Just accept the damage (no duel mechanics like weakpoints or 1HP threshold)
+			pass
 
 	# Cancel logout if taking damage (combat logging prevention)
 	if logout_timer_active:
 		_cancel_logout()
 		if NotificationManager:
 			NotificationManager.show_notification("Logout cancelled - you took damage!", "WARNING")
+
+	# SHIELD BLOCKING (PvE only)
+	if source_type == "pve":
+		var shield = CharacterStats.get_equipped_shield()
+		if not shield.is_empty():
+			# Calculate block chance: base from shield + bonus from skill
+			var base_block_chance = shield.get("block_chance", 0.0)
+			var skill_bonus = WeaponSkillManager.get_block_skill_bonus()
+			var total_block_chance = min(base_block_chance + skill_bonus, 0.50)  # Cap at 50%
+
+			var roll = randf()
+			if roll < total_block_chance:
+				# FULL BLOCK - negate all damage
+				WeaponSkillManager.on_block()
+				CombatText.create_block(global_position, get_tree().root)
+				print("🛡️ BLOCKED! (roll %.2f < %.2f)" % [roll, total_block_chance])
+				# Play block sound
+				SoundManager.play_sound(SoundManager.SoundType.SHIELD_BLOCK, global_position)
+				return  # No damage taken
+			elif roll < total_block_chance * 1.5:
+				# PARTIAL BLOCK - reduce damage based on block efficiency
+				WeaponSkillManager.on_partial_block()
+				var efficiency = CharacterStats.get_block_efficiency()
+				amount = amount * (1.0 - efficiency)
+				CombatText.create_partial_block(global_position, get_tree().root)
+				print("🛡️ Partial block! %.0f%% reduction (roll %.2f)" % [efficiency * 100, roll])
+			else:
+				# No block, but still gain some skill for having shield equipped
+				WeaponSkillManager.on_hit_with_shield()
 
 	# Apply armor mitigation (PvE only - PvP uses separate balance)
 	var mitigated_amount = amount
@@ -1930,6 +1993,38 @@ func remove_safe_aura() -> void:
 	has_safe_aura = false
 	_remove_safe_aura_visual()
 	print("Safe aura removed")
+
+# ============================================
+# ALLEGIANCE SYSTEM
+# ============================================
+
+func _on_allegiance_changed(_old_allegiance: String, new_allegiance: String) -> void:
+	"""Called when CharacterStats allegiance changes"""
+	allegiance_id = new_allegiance
+	_broadcast_allegiance()
+
+func _broadcast_allegiance() -> void:
+	"""Broadcast our allegiance to all other players"""
+	if not multiplayer.has_multiplayer_peer():
+		return
+	rpc("_receive_allegiance", allegiance_id)
+
+@rpc("any_peer", "reliable")
+func _receive_allegiance(new_allegiance: String) -> void:
+	"""Receive allegiance update from another player"""
+	allegiance_id = new_allegiance
+	# Update shield if exists
+	var shield = get_node_or_null("AllegianceShield")
+	if shield and shield.has_method("set_allegiance"):
+		shield.set_allegiance(new_allegiance)
+
+func is_rogue() -> bool:
+	"""Check if this player is a rogue (no allegiance)"""
+	return allegiance_id.is_empty()
+
+func get_allegiance() -> String:
+	"""Get this player's allegiance ID"""
+	return allegiance_id
 
 func _create_duel_aura() -> void:
 	"""Create red pulsing aura for duel state"""
@@ -2907,9 +3002,39 @@ func create_player_sprite() -> void:
 	elif ResourceLoader.exists(hair_path + "slash.png"):
 		hair_slash_tex = load(hair_path + "slash.png")
 
-	# Setup sprite with shadow + all armor layers + base_head + hair
+	# Load shield textures if offhand has a shield equipped
+	var shield_walk_tex = null
+	var shield_slash_tex = null
+	if is_local and CharacterStats.equipped_armor.has("offhand") and CharacterStats.equipped_armor["offhand"] != null:
+		var offhand_item = CharacterStats.equipped_armor["offhand"]
+		var shield_sprite_name = offhand_item.get("sprite_name", "")
+		var is_forged_shield = offhand_item.get("is_forged", false)
+
+		if is_forged_shield and offhand_item.get("forged_item_id", "") != "":
+			# Load forged shield sprites
+			var forged_item_id = offhand_item.get("forged_item_id", "")
+			var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
+			if forged_db_data and forged_db_data.has("sprites"):
+				var sprites = forged_db_data["sprites"]
+				if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
+					shield_walk_tex = load(sprites["walk"])
+				if sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
+					shield_slash_tex = load(sprites["slash"])
+				if DEBUG_EQUIP:
+					print("[Equip] Loaded forged shield: %s" % forged_item_id)
+		elif shield_sprite_name != "":
+			# Load standard shield sprites
+			var shield_path = "res://assets/equipment/shields/" + shield_sprite_name + "/"
+			if ResourceLoader.exists(shield_path + "walk.png"):
+				shield_walk_tex = load(shield_path + "walk.png")
+			if ResourceLoader.exists(shield_path + "slash.png"):
+				shield_slash_tex = load(shield_path + "slash.png")
+			if DEBUG_EQUIP:
+				print("[Equip] Loaded shield sprites from: %s" % shield_path)
+
+	# Setup sprite with shadow + all armor layers + base_head + hair + shield
 	var is_female = (selected_gender == Gender.FEMALE)
-	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, shadow_walk_tex, shadow_slash_tex, base_head_walk_tex, base_head_slash_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, hair_walk_tex, hair_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type, is_female, weapon_slash2_tex, weapon_slash3_tex)
+	character_sprite.setup_lpc_sprite(walk_tex, slash_tex, hurt_tex, shadow_walk_tex, shadow_slash_tex, base_head_walk_tex, base_head_slash_tex, boots_walk_tex, boots_slash_tex, pants_walk_tex, pants_slash_tex, shirt_walk_tex, shirt_slash_tex, arms_walk_tex, arms_slash_tex, hands_walk_tex, hands_slash_tex, head_walk_tex, head_slash_tex, hair_walk_tex, hair_slash_tex, weapon_slash_tex, weapon_walk_tex, weapon_type, is_female, weapon_slash2_tex, weapon_slash3_tex, shield_walk_tex, shield_slash_tex)
 
 	# Gun pose body swap: If weapon is a gun type, load Skorpio body for walk and shoot animations
 	# This makes the character use the shooting stance body when walking/shooting with a gun

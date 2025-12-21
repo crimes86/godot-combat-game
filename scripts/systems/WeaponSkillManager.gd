@@ -10,7 +10,7 @@ signal title_earned(category: String, title: String)
 # Weapon categories (map weapon types to these)
 const CATEGORIES = [
 	"swords", "daggers", "axes", "maces", "hammers",
-	"spears", "bows", "healing", "arcane", "guns"
+	"spears", "bows", "healing", "arcane", "guns", "blocking"
 ]
 
 # Skill data per category
@@ -21,6 +21,11 @@ const SKILL_GAIN_HIT: float = 0.5
 const SKILL_GAIN_MISS: float = 0.2
 const SKILL_GAIN_KILL: float = 2.0
 const SKILL_GAIN_CRIT: float = 0.5  # Bonus on top of hit
+
+# Block skill gain constants
+const SKILL_GAIN_BLOCK: float = 1.0  # Full block
+const SKILL_GAIN_PARTIAL_BLOCK: float = 0.5  # Partial block
+const SKILL_GAIN_HIT_WITH_SHIELD: float = 0.1  # Hit taken while shield equipped
 
 # Title thresholds
 const TITLE_THRESHOLDS = [0, 50, 100, 150, 200, 250, 300]
@@ -36,7 +41,8 @@ const TITLES = {
 	"bows": ["", "Fletcher", "Archer", "Marksman", "Sharpshooter", "Deadeye", "Hawkeye"],
 	"healing": ["", "Acolyte", "Healer", "Priest", "Bishop", "Cardinal", "Saint"],
 	"arcane": ["", "Apprentice", "Conjurer", "Mage", "Sorcerer", "Archmage", "Archon"],
-	"guns": ["", "Recruit", "Gunner", "Marksman", "Sharpshooter", "Ace", "Deadshot"]
+	"guns": ["", "Recruit", "Gunner", "Marksman", "Sharpshooter", "Ace", "Deadshot"],
+	"blocking": ["", "Defender", "Guardian", "Bulwark", "Shieldmaster", "Aegis", "Invincible"]
 }
 
 # Weapon type to category mapping
@@ -215,6 +221,27 @@ func on_miss(weapon_type: String) -> float:
 func on_kill(weapon_type: String) -> float:
 	var category = get_category_for_weapon(weapon_type)
 	return add_skill(category, SKILL_GAIN_KILL)
+
+## Called when player fully blocks an attack with shield
+func on_block() -> float:
+	return add_skill("blocking", SKILL_GAIN_BLOCK)
+
+## Called when player partially blocks an attack with shield
+func on_partial_block() -> float:
+	return add_skill("blocking", SKILL_GAIN_PARTIAL_BLOCK)
+
+## Called when player takes a hit while shield equipped (even if not blocked)
+func on_hit_with_shield() -> float:
+	return add_skill("blocking", SKILL_GAIN_HIT_WITH_SHIELD)
+
+## Get block chance bonus from blocking skill (0.0 to 0.20)
+func get_block_skill_bonus() -> float:
+	var skill = get_skill("blocking")
+	var cap = float(get_skill_cap())
+	if cap <= 0:
+		return 0.0
+	# Up to +20% block chance at max skill
+	return (skill / cap) * 0.20
 
 ## Get save data
 func get_save_data() -> Dictionary:

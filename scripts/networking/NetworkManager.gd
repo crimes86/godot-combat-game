@@ -997,6 +997,11 @@ func request_player_heal(target_peer_id: int, heal_amount: float) -> void:
 	# Find target player and apply heal
 	var target_player = game_world.get_player_by_peer_id(target_peer_id)
 	if target_player and is_instance_valid(target_player) and target_player.has_method("heal"):
+		# ALLEGIANCE CHECK: Validate healer can heal target
+		if not _can_heal_player_server(healer_player, target_player, healer_peer_id, target_peer_id):
+			push_warning("Allegiance: Player %d cannot heal player %d" % [healer_peer_id, target_peer_id])
+			return
+
 		# Apply heal on server
 		target_player.heal(heal_amount)
 		LogManager.debug("Player %d healed player %d for %.1f" % [healer_peer_id, target_peer_id, heal_amount], "combat")
@@ -1015,6 +1020,46 @@ func _sync_player_health(current_hp: float, max_hp: float) -> void:
 		if local_player.health_bar and local_player.health_bar.has_method("update_health"):
 			local_player.health_bar.update_health(current_hp, max_hp)
 		LogManager.debug("Health synced to %.1f/%.1f" % [current_hp, max_hp], "combat")
+
+func _can_heal_player_server(healer: Node, target: Node, healer_id: int, target_id: int) -> bool:
+	"""Server-side allegiance check for healing."""
+	# Self-healing is always allowed
+	if healer_id == target_id:
+		return true
+
+	# Party members can always heal each other
+	var is_same_party = false
+	if GroupManager and GroupManager.has_group():
+		var healer_in_group = GroupManager.is_group_member(healer_id) or GroupManager.group_leader_id == healer_id
+		var target_in_group = GroupManager.is_group_member(target_id) or GroupManager.group_leader_id == target_id
+		if healer_in_group and target_in_group:
+			is_same_party = true
+
+	if is_same_party:
+		return true
+
+	# Duel isolation: cannot heal duel combatants (unless same party - handled above)
+	if target.get("is_dueling") == true:
+		return false
+
+	# Get allegiances
+	var healer_allegiance = healer.get("allegiance_id")
+	var target_allegiance = target.get("allegiance_id")
+	if healer_allegiance == null:
+		healer_allegiance = "ashbane"
+	if target_allegiance == null:
+		target_allegiance = "ashbane"
+
+	# Rogues can only heal party members (handled above)
+	if healer_allegiance == "" or target_allegiance == "":
+		return false
+
+	# Same allegiance = can heal
+	if healer_allegiance == target_allegiance:
+		return true
+
+	# Different allegiance = cannot heal
+	return false
 
 func _get_local_player() -> Node:
 	"""Get the local player node."""

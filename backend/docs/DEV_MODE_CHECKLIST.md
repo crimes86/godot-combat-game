@@ -8,155 +8,142 @@ This document tracks all development-mode accommodations that must be addressed 
 
 | Variable | Dev Value | Prod Value | Notes |
 |----------|-----------|------------|-------|
-| `DEV_MODE` | `true` | `false` or remove | Disables blockchain simulation |
-| `CHAIN_ID` | `84532` (Base Sepolia) | `8453` (Base Mainnet) | Or `137` for Polygon |
+| `DEV_MODE` | `true` | `false` | Disables blockchain simulation + mock activity |
+| `CHAIN_ID` | `84532` (Base Sepolia) | `8453` (Base Mainnet) | Dashboard reads from backend |
 | `RPC_URL` | `https://sepolia.base.org` | Mainnet RPC URL | Get from Alchemy/Infura |
 | `ACHIEVEMENT_CONTRACT_ADDRESS` | (empty) | Deployed contract address | Deploy contract first |
 | `MINTER_PRIVATE_KEY` | (empty) | Backend wallet private key | **NEVER commit this** |
 | `PLATFORM_WALLET_ADDRESS` | (empty) | Platform custody wallet | For bridge system |
 | `PLATFORM_WALLET_KEY` | (empty) | Platform wallet private key | **NEVER commit this** |
 | `DATABASE_URL` | `sqlite:///./socialauth.db` | PostgreSQL URL | Use managed DB |
-| `SESSION_SECRET` | dev string | Random 32+ char string | Generate new for prod |
+| `SESSION_SECRET` | dev string | Random 32+ char string | `openssl rand -hex 32` |
+| `ADMIN_SECRET` | auto-generated | Secure random string | `openssl rand -hex 16` |
 | `APP_URL` | ngrok URL | Production domain | HTTPS required |
+| `CORS_ORIGINS` | (empty) | Production domain(s) | Comma-separated |
 
 ---
 
-## Code Changes to Revert/Review
+## Automated by DEV_MODE Flag
 
-### 1. Bridge System - Chain ID Filtering (RELAXED FOR DEV)
+These are now automatically controlled by setting `DEV_MODE=false`:
+
+### 1. Mock Activity Seeding (FIXED)
+**File:** `backend/app/main.py`
+
+Mock global feed and live activity generator now only run when `DEV_MODE=true`:
+```python
+if DEV_MODE:
+    seed_mock_global_feed()
+    start_mock_activity(min_interval=20, max_interval=60)
+```
+
+### 2. Blockchain Simulation (Already Working)
+**File:** `backend/app/services/wallet_service.py`
+
+Bridge transfers are simulated when `DEV_MODE=true`, real transactions when `false`.
+
+### 3. CORS Localhost Origins (FIXED)
+**File:** `backend/app/main.py`
+
+Localhost origins only added when `DEV_MODE=true` or no CORS_ORIGINS configured.
+
+---
+
+## Automated by CHAIN_ID Environment Variable
+
+### Dashboard Chain Switching (FIXED)
+**File:** `backend/templates/dashboard.html`
+
+Chain ID now read from backend environment and injected into template:
+```javascript
+const CHAIN_ID = {{ chain_id | default(84532) }};
+const CHAIN_ID_HEX = '0x' + CHAIN_ID.toString(16);
+```
+
+Just set `CHAIN_ID=8453` in `.env` for mainnet.
+
+---
+
+## Automated by DATABASE_URL
+
+### Alembic Migrations (FIXED)
+**File:** `backend/alembic/env.py`
+
+Now reads `DATABASE_URL` from environment, fallback to SQLite:
+```python
+url = os.getenv("DATABASE_URL", "sqlite:///./socialauth.db")
+```
+
+---
+
+## Still Requires Manual Review
+
+### 1. Bridge System - Chain ID Filtering
 
 **File:** `backend/app/routes/wallet_routes.py`
 
-**Lines 1038-1042** - `/bridge-in/available`:
+**Lines ~1036-1039** - `/bridge-in/available`:
 ```python
 # CURRENT (dev): No chain_id filter - finds items on any chain
 available_items = db.query(ForgedAchievement).filter(
     ForgedAchievement.bridge_status == BridgeStatus.BRIDGED.value,
     ForgedAchievement.external_owner_wallet == wallet.wallet_address.lower(),
 ).all()
-
-# PROD: Add chain_id filter
-available_items = db.query(ForgedAchievement).filter(
-    ForgedAchievement.bridge_status == BridgeStatus.BRIDGED.value,
-    ForgedAchievement.external_owner_wallet == wallet.wallet_address.lower(),
-    ForgedAchievement.chain_id == chain_id,
-).all()
 ```
 
-**Lines 1107-1111** - `/bridge-in` (POST):
-```python
-# CURRENT (dev): No chain_id filter
-forged = db.query(ForgedAchievement).filter(
-    ForgedAchievement.token_id == token_id_int,
-).first()
-
-# PROD: Add chain_id filter back
-forged = db.query(ForgedAchievement).filter(
-    ForgedAchievement.token_id == token_id_int,
-    ForgedAchievement.chain_id == chain_id,
-).first()
-```
-
-**Why relaxed:** Test data has items with `chain_id=137` (Polygon) but wallet service defaults to `84532` (Base Sepolia).
-
----
-
-### 2. DEV_MODE Blockchain Simulation
-
-**File:** `backend/app/services/wallet_service.py`
-
-**Lines 338-342** - `transfer_to_external()` (bridge-out):
-```python
-if DEV_MODE:
-    mock_tx_hash = f"0x{'dev' + str(token_id).zfill(61)}"
-    logger.info(f"[DEV MODE] Simulated bridge-out transfer...")
-    return mock_tx_hash
-```
-
-**Lines 402-406** - `transfer_from_external()` (bridge-in):
-```python
-if DEV_MODE:
-    mock_tx_hash = f"0x{'dev' + str(token_id).zfill(61)}"
-    logger.info(f"[DEV MODE] Simulated bridge-in transfer...")
-    return mock_tx_hash
-```
-
-**Prod behavior:** When `DEV_MODE=false`, these functions will execute real blockchain transactions. Requires:
-- `MINTER_PRIVATE_KEY` set
-- `PLATFORM_WALLET_ADDRESS` and `PLATFORM_WALLET_KEY` set
-- Contract deployed and address configured
-- Wallet has gas funds
-
----
-
-### 3. Dashboard Chain Switching
-
-**File:** `backend/templates/dashboard.html`
-
-**Lines 3176-3177**:
-```javascript
-// CURRENT: Base Sepolia testnet
-const baseSepoliaChainId = '0x14a34'; // 84532 in hex
-
-// PROD: Change to mainnet
-const baseMainnetChainId = '0x2105'; // 8453 in hex
-```
-
----
-
-## Database Considerations
-
-### Test Data Cleanup
-- Delete or migrate test `ForgedAchievement` records
-- Update `chain_id` values to match production chain
-- Clear test `WalletAccount` records
-- Review `AchievementCredit.is_original_claim` for test accounts
-
-### Migration
-- Run `alembic upgrade head` on prod database
-- Verify `alembic/env.py` line 55 uses PostgreSQL (not hardcoded SQLite)
+**Decision needed:** Should we filter by chain_id in production? This affects items forged on different chains.
 
 ---
 
 ## Godot Client Changes
 
-### API Base URL
-
+### API Base URL (FIXED)
 **File:** `scripts/systems/AshbaneAuth.gd`
 
-**Lines 12-13**:
+Now auto-detects export builds and uses production URL:
 ```gdscript
-const API_BASE_DEV = "https://ngrok-url"  # Current dev
-const API_BASE_PROD = ""  # TBD - set production URL
+const API_BASE_PROD = ""  # TODO: Set your production domain
+
+func get_api_base() -> String:
+    # Export builds use production URL
+    var is_export_build = OS.has_feature("standalone") or OS.has_feature("template")
+    if (is_export_build or FORCE_PRODUCTION) and API_BASE_PROD != "":
+        return API_BASE_PROD
+    # Development uses LAN or ngrok
+    ...
 ```
 
-Update `get_api_base()` to return `API_BASE_PROD` in production builds.
+**Action:** Set `API_BASE_PROD` to your production domain before exporting.
 
 ---
 
 ## Pre-Production Checklist
 
-- [ ] Deploy smart contract to mainnet
-- [ ] Set all production environment variables
-- [ ] Migrate database to PostgreSQL
-- [ ] Clean up test data OR start fresh
-- [ ] Update chain_id filters in bridge routes
+- [ ] **Rotate all API keys** (Steam, Battle.net, Discord, GitHub, Facebook, Roblox, OpenXBL)
+- [ ] Generate new `SESSION_SECRET` with `openssl rand -hex 32`
+- [ ] Generate new `ADMIN_SECRET` with `openssl rand -hex 16`
 - [ ] Set `DEV_MODE=false`
-- [ ] Update Godot API base URL
-- [ ] Fund platform wallet with gas
-- [ ] Test full bridge flow on testnet first
-- [ ] Set up monitoring/alerting
-- [ ] Configure proper CORS for production domain
+- [ ] Set `DATABASE_URL` to PostgreSQL
+- [ ] Set `APP_URL` to production domain
+- [ ] Set `CORS_ORIGINS` to production domain
+- [ ] Set `CHAIN_ID` to production chain (8453 for Base Mainnet)
+- [ ] Set `API_BASE_PROD` in Godot AshbaneAuth.gd
+- [ ] Deploy smart contract and set `ACHIEVEMENT_CONTRACT_ADDRESS`
+- [ ] Fund minter/platform wallets with gas
+- [ ] Run `alembic upgrade head` on production database
+- [ ] Test full auth flow with all providers
+- [ ] Test bridge flow (if using)
 
 ---
 
 ## Quick Reference: Files Modified for Dev Mode
 
-1. `backend/.env` - DEV_MODE=true
-2. `backend/app/services/wallet_service.py` - DEV_MODE checks
-3. `backend/app/routes/wallet_routes.py` - Relaxed chain_id filtering
-4. `backend/templates/dashboard.html` - Testnet chain ID
-5. `scripts/systems/AshbaneAuth.gd` - API base URLs
+1. `backend/.env` - DEV_MODE, CHAIN_ID, DATABASE_URL
+2. `backend/app/main.py` - DEV_MODE controls mock activity + CORS
+3. `backend/app/services/wallet_service.py` - DEV_MODE controls blockchain simulation
+4. `backend/app/routes/wallet_routes.py` - Relaxed chain_id filtering (manual)
+5. `backend/templates/dashboard.html` - CHAIN_ID from backend
+6. `scripts/systems/AshbaneAuth.gd` - API_BASE_PROD for exports
 
 ---
 

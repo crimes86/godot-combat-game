@@ -404,20 +404,10 @@ func attempt_attack() -> void:
 		# No enemies hit = miss
 		_track_weapon_miss()
 
-	# PvP: Attack players in cone during duel
-	if player.is_dueling:
-		var players_hit = get_players_in_cone()
-		print("[PvP] In duel, found %d players in cone (opponent_id: %d)" % [players_hit.size(), player.duel_opponent_id])
-		if players_hit.size() > 0:
-			attack_players_in_cone(players_hit)
-		else:
-			# Debug: Check why no players found
-			var all_players = player.get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
-			print("[PvP] Total players in group: %d" % all_players.size())
-			for p in all_players:
-				if p != player:
-					var dist = player.global_position.distance_to(p.global_position)
-					print("[PvP]   Other player at dist=%.1f (attack_range=%.1f)" % [dist, attack_range])
+	# PvP: Attack players in cone (dueling or open-world based on allegiance)
+	var players_hit = get_players_in_cone()
+	if players_hit.size() > 0:
+		attack_players_in_cone(players_hit)
 
 	# Start cooldown timer
 	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
@@ -474,23 +464,15 @@ func get_players_in_cone() -> Array:
 
 func attack_players_in_cone(target_players: Array) -> void:
 	"""Deal damage to players in attack cone (PvP)"""
-	var my_peer_id = player.get_tree().get_multiplayer().get_unique_id()
-	print("[PvP] attack_players_in_cone called with %d targets" % target_players.size())
-
 	for target_player in target_players:
 		if not is_instance_valid(target_player):
-			print("[PvP]   Target invalid, skipping")
 			continue
 
-		# Only attack duel opponent during a duel
-		if player.is_dueling:
-			var target_id = _get_player_peer_id(target_player)
-			print("[PvP]   target_id=%d, duel_opponent_id=%d" % [target_id, player.duel_opponent_id])
-			if target_id != player.duel_opponent_id:
-				print("[PvP]   Skipping - not duel opponent")
-				continue  # Skip non-opponent players
+		var target_id = _get_player_peer_id(target_player)
 
-		print("[PvP]   Attacking target!")
+		# Check if we can damage this player
+		if not _can_damage_player(target_player, target_id):
+			continue
 
 		# Deal weapon damage (PvP weakpoints are clicked directly, not via weapon attacks)
 		var final_damage = attack_damage
@@ -509,6 +491,50 @@ func attack_players_in_cone(target_players: Array) -> void:
 			if CharacterStats.equipped_weapon:
 				weapon_type = CharacterStats.equipped_weapon.weapon_type
 			sound_manager.play_normal_hit_sound(target_player.global_position, -12.0, weapon_type)
+
+func _can_damage_player(target_player: Node, target_id: int) -> bool:
+	"""Check if we can damage a target player based on allegiance rules"""
+	# During duel: only attack duel opponent
+	if player.is_dueling:
+		return target_id == player.duel_opponent_id
+
+	# Safe zone check - no open-world PvP in safe zones
+	if _is_in_safe_zone(player) or _is_in_safe_zone(target_player):
+		return false
+
+	# Safe aura blocks all incoming player damage (but we're the attacker, check target)
+	if target_player.get("has_safe_aura") == true:
+		return false
+
+	# Party members are protected
+	if GroupManager and GroupManager.is_group_member(target_id):
+		return false
+
+	# Get target's allegiance
+	var target_allegiance = target_player.get("allegiance_id")
+	if target_allegiance == null:
+		target_allegiance = "ashbane"  # Default if not set
+
+	# Use CharacterStats allegiance check
+	var is_dueling_target = player.is_dueling and target_id == player.duel_opponent_id
+	return CharacterStats.can_damage_player(target_allegiance, false, is_dueling_target)
+
+func _is_in_safe_zone(player_node: Node) -> bool:
+	"""Check if player is in a safe zone (chunk 0 = spawn area)"""
+	if not player_node or not is_instance_valid(player_node):
+		return false
+
+	var pos = player_node.global_position
+	var chunk_size = 8000.0  # Default chunk size
+
+	# Try to get chunk size from ChunkBasedPropSystem
+	var prop_system = player.get_node_or_null("/root/GameWorld/ChunkBasedPropSystem")
+	if prop_system and prop_system.get("CHUNK_SIZE"):
+		chunk_size = prop_system.CHUNK_SIZE
+
+	# Chunk 0 is from x=0 to x=chunk_size
+	var chunk_x = int(floor(pos.x / chunk_size))
+	return chunk_x == 0
 
 func _get_player_peer_id(target_player: Node) -> int:
 	"""Get the peer ID for a player node using multiple methods"""
@@ -641,10 +667,7 @@ func _send_pvp_damage(target_player: Node, damage: int) -> void:
 	print("[PvP] Sent damage request: %d to player %d" % [damage, target_peer_id])
 
 func _check_bullet_path_player_collision(start: Vector2, end: Vector2, hit_radius: float) -> Dictionary:
-	"""Check if bullet path intersects duel opponent player. Returns first hit."""
-	if not player.is_dueling:
-		return {"hit": false, "player": null, "hit_pos": end}
-
+	"""Check if bullet path intersects valid PvP target player. Returns first hit."""
 	var all_players = player.get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
 	var closest_hit_dist = INF
 	var closest_hit_pos = end
@@ -663,9 +686,9 @@ func _check_bullet_path_player_collision(start: Vector2, end: Vector2, hit_radiu
 		if other_player == player:
 			continue
 
-		# Only check duel opponent
+		# Check if we can damage this player (allegiance/duel rules)
 		var target_id = _get_player_peer_id(other_player)
-		if target_id != player.duel_opponent_id:
+		if not _can_damage_player(other_player, target_id):
 			continue
 
 		# Quick range cull

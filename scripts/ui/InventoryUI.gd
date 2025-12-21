@@ -948,6 +948,10 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 		"LEGENDARY":
 			weapon.rarity = Weapon.Rarity.LEGENDARY
 
+	# Two-handed property - guns and bows are always two-handed (blocks offhand slot)
+	var is_two_handed_type = weapon.weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle", "bow", "crossbow"]
+	weapon.is_two_handed = item_dict.get("is_two_handed", is_two_handed_type)
+
 	return weapon
 
 # ============================================

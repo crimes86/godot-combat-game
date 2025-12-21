@@ -18,13 +18,14 @@ const MARGIN := 16.0
 # UI elements
 var _container: Control
 var _portrait_frame: Control
-var _portrait_icon: Polygon2D
+var _portrait_icon: TextureRect  # Allegiance icon (Ashbane tree)
 var _health_bar_bg: ColorRect
 var _health_bar_fill: ColorRect
 var _health_bar_glow: ColorRect
 var _name_label: Label
 var _level_badge: Control
 var _level_label: Label
+var _allegiance: String = "ashbane"  # Current allegiance (future: could be other factions)
 
 # State
 var _current_health: float = 100.0
@@ -73,9 +74,20 @@ func _create_portrait_frame() -> void:
 	bg_circle.position = Vector2(PORTRAIT_SIZE / 2, PORTRAIT_SIZE / 2)
 	_portrait_frame.add_child(bg_circle)
 
-	# Portrait icon (warrior silhouette)
-	_portrait_icon = _create_warrior_icon()
-	_portrait_icon.position = Vector2(PORTRAIT_SIZE / 2, PORTRAIT_SIZE / 2)
+	# Allegiance icon (Ashbane tree - matches shield above player)
+	_portrait_icon = TextureRect.new()
+	_portrait_icon.name = "AllegianceIcon"
+	var icon_size = PORTRAIT_SIZE * 0.65  # Icon fills ~65% of portrait
+	_portrait_icon.custom_minimum_size = Vector2(icon_size, icon_size)
+	_portrait_icon.size = Vector2(icon_size, icon_size)
+	_portrait_icon.position = Vector2((PORTRAIT_SIZE - icon_size) / 2, (PORTRAIT_SIZE - icon_size) / 2)
+	_portrait_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	_portrait_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+
+	# Load Ashbane tree texture
+	var tree_tex = load("res://assets/ui/logo/ashbane_tree_64.png")
+	if tree_tex:
+		_portrait_icon.texture = tree_tex
 	_portrait_frame.add_child(_portrait_icon)
 
 	# Frame border (tier-colored ring)
@@ -183,32 +195,25 @@ func _create_ring(radius: float, thickness: float, color: Color) -> Node2D:
 
 	return ring
 
-func _create_warrior_icon() -> Polygon2D:
-	# Simple warrior/sword silhouette
-	var icon = Polygon2D.new()
-	var scale = 0.8
+func set_allegiance(allegiance_name: String) -> void:
+	"""Set the player's allegiance - updates portrait icon"""
+	_allegiance = allegiance_name.to_lower()
 
-	# Sword shape pointing up
-	icon.polygon = PackedVector2Array([
-		Vector2(0, -18) * scale,    # Blade tip
-		Vector2(3, -12) * scale,    # Blade right
-		Vector2(3, 2) * scale,      # Guard right
-		Vector2(8, 2) * scale,      # Guard end right
-		Vector2(8, 5) * scale,      # Guard bottom right
-		Vector2(2, 5) * scale,      # Handle top right
-		Vector2(2, 14) * scale,     # Handle bottom right
-		Vector2(4, 16) * scale,     # Pommel right
-		Vector2(0, 18) * scale,     # Pommel bottom
-		Vector2(-4, 16) * scale,    # Pommel left
-		Vector2(-2, 14) * scale,    # Handle bottom left
-		Vector2(-2, 5) * scale,     # Handle top left
-		Vector2(-8, 5) * scale,     # Guard bottom left
-		Vector2(-8, 2) * scale,     # Guard end left
-		Vector2(-3, 2) * scale,     # Guard left
-		Vector2(-3, -12) * scale,   # Blade left
-	])
-	icon.color = Color(0.7, 0.7, 0.75, 0.9)  # Silver/steel color
-	return icon
+	if not _portrait_icon:
+		return
+
+	# Load appropriate allegiance icon
+	var icon_path: String
+	match _allegiance:
+		"ashbane":
+			icon_path = "res://assets/ui/logo/ashbane_tree_64.png"
+		_:
+			# Default to Ashbane
+			icon_path = "res://assets/ui/logo/ashbane_tree_64.png"
+
+	var tex = load(icon_path)
+	if tex:
+		_portrait_icon.texture = tex
 
 func _connect_signals() -> void:
 	# Connect to CharacterStats for level updates

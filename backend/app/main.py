@@ -66,13 +66,19 @@ templates = Jinja2Templates(directory="templates")
 # CORS CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 # Allow Godot client and web dashboard to access API
+# Note: CORS only affects browser requests - Godot client is not restricted by CORS
+# Set CORS_ORIGINS env var to your production domain(s), comma-separated
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "").split(",") if os.environ.get("CORS_ORIGINS") else []
-# Always allow localhost for development
-CORS_ORIGINS.extend([
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://localhost:3000",  # If you add a separate frontend
-])
+
+# Include localhost origins for development (DEV_MODE) or if no origins configured
+_dev_mode_cors = os.getenv("DEV_MODE", "false").lower() in ("true", "1", "yes")
+if _dev_mode_cors or not CORS_ORIGINS:
+    CORS_ORIGINS.extend([
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",  # If you add a separate frontend
+    ])
+
 # Filter empty strings
 CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
 
@@ -104,8 +110,12 @@ async def startup_event():
     init_trading_routes(get_current_user)
     init_weapon_stats_routes(get_current_user)
     init_world_tree_routes(get_db, get_current_user)
-    seed_mock_global_feed()  # Add demo activity to global feed
-    start_mock_activity(min_interval=20, max_interval=60)  # Live mock activity every 20-60 seconds
+
+    # Only seed mock activity in development mode
+    if DEV_MODE:
+        seed_mock_global_feed()  # Add demo activity to global feed
+        start_mock_activity(min_interval=20, max_interval=60)  # Live mock activity every 20-60 seconds
+        logger.info("DEV_MODE enabled: Mock activity seeding started")
 
     # Start chain batching service for trade provenance
     try:
@@ -131,7 +141,8 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean up on shutdown"""
-    stop_mock_activity()
+    if DEV_MODE:
+        stop_mock_activity()
 
     # Stop chain batching service
     try:
@@ -228,6 +239,8 @@ all_providers = get_all_providers_list()
 STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 BATTLENET_API_KEY = os.environ.get("BATTLENET_API_KEY")
 APP_URL = os.environ.get("APP_URL", "http://localhost:8000")
+DEV_MODE = os.getenv("DEV_MODE", "false").lower() in ("true", "1", "yes")
+CHAIN_ID = int(os.getenv("CHAIN_ID", "84532"))  # 84532 = Base Sepolia, 8453 = Base Mainnet
 # Admin secret - required in production, has dev fallback for local testing
 ADMIN_SECRET = os.environ.get("ADMIN_SECRET")
 if not ADMIN_SECRET:
@@ -2702,6 +2715,7 @@ async def dashboard(
             "providers": providers,
             "ashbane": Ashbane_data,
             "is_admin": user.is_admin if user else False,
+            "chain_id": CHAIN_ID,
         },
     )
 
@@ -5234,6 +5248,7 @@ async def demo_dashboard(request: Request):
             "user_linked_providers": ["steam", "battlenet"],
             "providers": mock_providers,
             "is_demo": True,  # Flag to indicate demo mode
+            "chain_id": CHAIN_ID,
         },
     )
 
