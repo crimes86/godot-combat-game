@@ -359,8 +359,9 @@ async def sync_github_achievements(
     db.commit()
 
     return {
-        "provider": "github",
-        "total_found": total_found,
-        "total_credited": total_credited,
-        "by_rarity": rarity_counts,
+        "credited": total_credited,
+        "details": {
+            "total_achievements": total_found,
+            "by_rarity": rarity_counts,
+        }
     }

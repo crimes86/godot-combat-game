@@ -4,9 +4,34 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Dashboard – Ashbane</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
   <link rel="stylesheet" href="/static/css/styles.css" />
   <link rel="stylesheet" href="/static/css/ashbane-theme.css" />
   <style>
+    /* Syncing animation */
+    .sync-status.syncing {
+      animation: syncPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes syncPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .sync-status .sync-dots {
+      display: inline-block;
+    }
+    .sync-status .sync-dots::after {
+      content: '';
+      animation: syncDots 1.5s steps(4, end) infinite;
+    }
+    @keyframes syncDots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+      100% { content: ''; }
+    }
+
     /* Gem hover effects */
     .rarity-badge svg {
       transition: transform 0.2s ease, filter 0.2s ease;
@@ -397,7 +422,7 @@
     /* Base card with glassmorphism + provider gradient - iPHONE SCREEN STYLE */
     .provider-card {
       position: relative;
-      background: linear-gradient(180deg, rgba(20,25,30,0.98) 0%, rgba(8,10,14,0.99) 100%);
+      background: linear-gradient(180deg, rgba(20,25,30,0.85) 0%, rgba(8,10,14,0.88) 100%);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       overflow: hidden;
@@ -754,7 +779,7 @@
     /* Ashbane card = thick smartphone with platinum display */
     .Ashbane-card {
       position: relative;
-      background: linear-gradient(180deg, rgba(160,216,239,0.1) 0%, rgba(12,15,18,0.99) 35%, rgba(8,10,12,0.99) 100%);
+      background: linear-gradient(180deg, rgba(160,216,239,0.1) 0%, rgba(12,15,18,0.85) 35%, rgba(8,10,12,0.88) 100%);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(160,216,239,0.5);
@@ -2484,7 +2509,7 @@
         <div style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem;">
           <span id="chat-online-count" style="font-size: 0.7rem; color: #666;">loading...</span>
         </div>
-        <div id="chat-messages" style="flex: 1; overflow-y: auto; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 6px; margin-bottom: 0.75rem;">
+        <div id="chat-messages" style="flex: 1; overflow-y: auto; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; margin-bottom: 0.75rem;">
           <div style="text-align: center; color: #555; font-size: 0.85rem; padding: 2rem;">
             Loading chat...
           </div>
@@ -2587,56 +2612,64 @@
           <img src="/static/icons/ashbane-tree.png" alt="Ashbane" style="width:28px; height:28px; filter:drop-shadow(0 0 6px #a0d8ef);" title="Ashbane" />
         </div>
 
-        <!-- Emblem + Total -->
-        <div style="display:flex; flex-direction:column; align-items:center; margin-top:1rem;">
-          <!-- Ashbane Tree Centerpiece - clickable to view all achievements -->
-          <img src="/static/icons/ashbane-tree.png" alt="Ashbane Tree"
-               onclick="openAllAchievementsPopover()"
-               title="View all achievements"
-               style="width:120px; height:auto; filter:drop-shadow(0 0 20px rgba(160,216,239,0.5)) drop-shadow(0 0 40px rgba(255,140,50,0.3)); cursor:pointer; transition:transform 0.2s;"
-               onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" />
-          <div class="count-up" data-counter-id="Ashbane-total" data-target="{{ total_achievements }}"
-               onclick="openAllAchievementsPopover()"
-               title="View all achievements"
-               style="font-size:2rem; font-weight:700; color:#a0d8ef; text-shadow:0 0 15px rgba(160,216,239,0.6); line-height:1; margin-top:0.5rem; cursor:pointer;">
-            {{ total_achievements }}
-          </div>
-          <div style="font-size:0.65rem; color:#888; text-transform:uppercase; letter-spacing:1px; cursor:pointer;" onclick="openAllAchievementsPopover()" title="View all achievements">
-            Total Achievements
-          </div>
+        <!-- Card Content: Player ID → Count → Tree → Providers → Rarity -->
+        <div style="display:flex; flex-direction:column; align-items:center; gap:0.75rem; margin-top:0.75rem;">
+
+          <!-- 1. Player ID (top) -->
           {% if local_user_id %}
-          <div class="player-id-badge" style="margin-top:6px;" title="Your unique Ashbane ID">
+          <div class="player-id-badge" style="margin-top:25px; margin-bottom:38px;" title="Your unique Ashbane ID">
             <span class="hash">Player</span>
             <span class="number">#{{ local_user_id }}</span>
           </div>
           {% endif %}
-        </div>
 
-        <!-- Connected Providers (compact) -->
-        {% if providers and providers|length > 0 %}
-        <div style="display:flex; gap:8px; margin-top:0.75rem; flex-wrap:wrap; justify-content:center;">
-          {% for provider in providers %}
-            <div title="{{ provider.total_achievements }} {{ provider.display_name }} {% if provider.name in ['discord'] %}Badges{% elif provider.name in ['github'] %}Achievements{% else %}Achievements{% endif %}"
-                 style="display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:6px; font-size:0.75rem; cursor:default;
-                        background:{% if provider.name == 'steam' %}rgba(27,155,215,0.15){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.15){% elif provider.name == 'xbox' %}rgba(55,253,18,0.12){% elif provider.name == 'psn' %}rgba(0,55,145,0.15){% elif provider.name == 'discord' %}rgba(88,101,242,0.15){% elif provider.name == 'github' %}rgba(140,140,160,0.15){% else %}rgba(85,85,85,0.15){% endif %};
-                        border:1px solid {% if provider.name == 'steam' %}rgba(27,155,215,0.3){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.3){% elif provider.name == 'xbox' %}rgba(55,253,18,0.3){% elif provider.name == 'psn' %}rgba(0,55,145,0.3){% elif provider.name == 'discord' %}rgba(88,101,242,0.3){% elif provider.name == 'github' %}rgba(140,140,160,0.3){% else %}rgba(85,85,85,0.3){% endif %};">
-              <img src="/static/icons/{{ provider.name }}.svg" style="width:14px; height:14px;" alt="{{ provider.display_name }}" />
-              <span class="count-up" data-counter-id="Ashbane-{{ provider.name }}" data-target="{{ provider.total_achievements }}" style="color:{% if provider.name == 'steam' %}#1b9bd7{% elif provider.name == 'battlenet' %}#ffb932{% elif provider.name == 'xbox' %}#37fd12{% elif provider.name == 'psn' %}#003791{% elif provider.name == 'discord' %}#5865F2{% elif provider.name == 'github' %}#8c8ca0{% else %}var(--neon){% endif %}; font-weight:600;">{{ provider.total_achievements }}</span>
+          <!-- 2. Achievement Count -->
+          <div style="text-align:center;">
+            <div class="count-up" data-counter-id="Ashbane-total" data-target="{{ total_achievements }}"
+                 onclick="openAllAchievementsPopover()"
+                 title="View all achievements"
+                 style="font-size:2rem; font-weight:700; color:#a0d8ef; text-shadow:0 0 15px rgba(160,216,239,0.6); line-height:1; cursor:pointer;">
+              {{ total_achievements }}
             </div>
-          {% endfor %}
-        </div>
-        {% endif %}
+            <div style="font-size:0.6rem; color:#888; text-transform:uppercase; letter-spacing:1px; cursor:pointer; margin-top:0.25rem;" onclick="openAllAchievementsPopover()" title="View all achievements">
+              Achievements
+            </div>
+          </div>
 
-        <!-- Rarity Breakdown (compact) -->
-        <div style="display:flex; gap:0.25rem; margin-top:0.75rem; justify-content:center;">
-          {% for rarity_tier in all_tiers %}
-            {% set count = agg_rarity.get(rarity_tier, 0) %}
-            <span class="rarity-badge" data-rarity="{{ rarity_tier }}" onclick="openRarityPopover('{{ rarity_tier }}')"
-                  style="display:flex; flex-direction:column; align-items:center; cursor:pointer; padding:2px; position:relative;" title="{{ rarity_tier }}">
-              <span style="transform:scale(0.7);">{{ gem_svg(rarity_tier) | safe }}</span>
-              <span style="font-size:0.7rem; color:var(--neon); font-weight:600; margin-top:-2px;">{{ count }}</span>
-            </span>
-          {% endfor %}
+          <!-- 3. Ashbane Tree Centerpiece -->
+          <img src="/static/icons/ashbane-tree.png" alt="Ashbane Tree"
+               onclick="openAllAchievementsPopover()"
+               title="View all achievements"
+               style="width:112px; height:auto; margin-bottom:13px; filter:drop-shadow(0 0 20px rgba(160,216,239,0.5)) drop-shadow(0 0 40px rgba(255,140,50,0.3)); cursor:pointer; transition:transform 0.2s;"
+               onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" />
+
+          <!-- 4. Connected Providers -->
+          {% if providers and providers|length > 0 %}
+          <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:13px;">
+            {% for provider in providers %}
+              <div title="{{ provider.total_achievements }} {{ provider.display_name }} {% if provider.name in ['discord'] %}Badges{% elif provider.name in ['github'] %}Achievements{% else %}Achievements{% endif %}"
+                   style="display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:6px; font-size:0.75rem; cursor:default;
+                          background:{% if provider.name == 'steam' %}rgba(27,155,215,0.15){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.15){% elif provider.name == 'xbox' %}rgba(55,253,18,0.12){% elif provider.name == 'psn' %}rgba(0,55,145,0.15){% elif provider.name == 'discord' %}rgba(88,101,242,0.15){% elif provider.name == 'github' %}rgba(140,140,160,0.15){% else %}rgba(85,85,85,0.15){% endif %};
+                          border:1px solid {% if provider.name == 'steam' %}rgba(27,155,215,0.3){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.3){% elif provider.name == 'xbox' %}rgba(55,253,18,0.3){% elif provider.name == 'psn' %}rgba(0,55,145,0.3){% elif provider.name == 'discord' %}rgba(88,101,242,0.3){% elif provider.name == 'github' %}rgba(140,140,160,0.3){% else %}rgba(85,85,85,0.3){% endif %};">
+                <img src="/static/icons/{{ provider.name }}.svg" style="width:14px; height:14px;" alt="{{ provider.display_name }}" />
+                <span class="count-up" data-counter-id="Ashbane-{{ provider.name }}" data-target="{{ provider.total_achievements }}" style="color:{% if provider.name == 'steam' %}#1b9bd7{% elif provider.name == 'battlenet' %}#ffb932{% elif provider.name == 'xbox' %}#37fd12{% elif provider.name == 'psn' %}#003791{% elif provider.name == 'discord' %}#5865F2{% elif provider.name == 'github' %}#8c8ca0{% else %}var(--neon){% endif %}; font-weight:600;">{{ provider.total_achievements }}</span>
+              </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          <!-- 5. Rarity Breakdown -->
+          <div style="display:flex; gap:0.2rem; margin-top:38px; justify-content:center;">
+            {% for rarity_tier in all_tiers %}
+              {% set count = agg_rarity.get(rarity_tier, 0) %}
+              <span class="rarity-badge" data-rarity="{{ rarity_tier }}" onclick="openRarityPopover('{{ rarity_tier }}')"
+                    style="display:flex; flex-direction:column; align-items:center; cursor:pointer; padding:1px; position:relative;" title="{{ rarity_tier }}">
+                {{ gem_svg(rarity_tier) | safe }}
+                <span style="font-size:0.7rem; color:var(--neon); font-weight:600; margin-top:-4px;">{{ count }}</span>
+              </span>
+            {% endfor %}
+          </div>
+
         </div>
 
       </div>
@@ -2753,21 +2786,6 @@
         </div>
 
         <!-- Bottom Corner Icons -->
-        <!-- Achievement Button (bottom-left) -->
-        <button type="button"
-                class="btn-achievement-icon corner-icon"
-                onclick="openModal(this)"
-                data-provider="{{ provider.display_name }}"
-                data-userid="{{ local_user_id }}"
-                data-providername="{{ provider.name }}"
-                data-avatar="{{ provider.avatar_url }}"
-                title="View Achievements"
-                style="position:absolute; bottom:12px; left:12px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; background:none; border:none; cursor:pointer;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--neon)" style="filter:drop-shadow(0 0 6px var(--neon-fade));">
-            <path d="M12 2L9 9H2L7.5 13.5L5.5 21L12 16.5L18.5 21L16.5 13.5L22 9H15L12 2Z"/>
-          </svg>
-        </button>
-
         <!-- Sync Button (bottom-right) -->
         <button class="btn-sync-icon corner-icon {% if provider.cooldown_remaining > 0 %}cooldown-active{% endif %}"
                 title="{% if provider.cooldown_remaining > 0 %}Sync on cooldown{% else %}Sync achievements from {{ provider.display_name }}{% endif %}"
@@ -2803,12 +2821,11 @@
           {% endif %}
         </span>
 
-        <!-- Achievement Milestones (above sync status) -->
-        {% if provider.oldest_achievement or provider.rarest_achievement %}
+        <!-- Achievement Milestone - First Achievement -->
+        {% if provider.oldest_achievement %}
         <div class="achievement-milestones" style="position:absolute; bottom:38px; left:0; right:0; padding:4px 8px; background:rgba(0,0,0,0.4); border-top:1px solid rgba(255,255,255,0.05); font-size:0.65rem; color:#999; z-index:1;">
-          {% if provider.oldest_achievement %}
           <div class="milestone-item"
-               style="display:flex; align-items:center; gap:4px; margin-bottom:2px; cursor:pointer; padding:2px 4px; border-radius:4px; transition:background 0.2s;"
+               style="display:flex; align-items:center; gap:4px; cursor:pointer; padding:2px 4px; border-radius:4px; transition:background 0.2s;"
                onmouseover="showMilestoneTooltip(this, event)"
                onmouseout="hideMilestoneTooltip()"
                data-name="{{ provider.oldest_achievement.name }}"
@@ -2820,23 +2837,6 @@
             <span style="color:#aaa; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ provider.oldest_achievement.date.strftime('%b %Y') }}</span>
             <span style="color:#666; font-size:0.6rem;">first</span>
           </div>
-          {% endif %}
-          {% if provider.rarest_achievement %}
-          <div class="milestone-item"
-               style="display:flex; align-items:center; gap:4px; cursor:pointer; padding:2px 4px; border-radius:4px; transition:background 0.2s;"
-               onmouseover="showMilestoneTooltip(this, event)"
-               onmouseout="hideMilestoneTooltip()"
-               data-name="{{ provider.rarest_achievement.name }}"
-               data-description="{{ provider.rarest_achievement.description or '' }}"
-               data-icon="{{ provider.rarest_achievement.icon }}"
-               data-percent="{{ provider.rarest_achievement.percent|round(2) }}"
-               data-rarity="{{ provider.rarest_achievement.rarity }}"
-               data-type="rarest">
-            <span style="color:{% if provider.rarest_achievement.rarity == 'Legendary' %}#ff8000{% elif provider.rarest_achievement.rarity == 'Epic' %}#a335ee{% else %}#0070dd{% endif %};">💎</span>
-            <span style="color:#aaa; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ provider.rarest_achievement.percent|round(1) }}%</span>
-            <span style="color:#666; font-size:0.6rem;">rarest</span>
-          </div>
-          {% endif %}
         </div>
         {% endif %}
 
@@ -2878,11 +2878,11 @@
   <!-- Forge Panel -->
   <div id="forge-panel" class="ui-panel forge-panel">
     <div class="ui-panel-header">
-      <span class="panel-icon">⚒️</span>
+      <span class="panel-icon"><img src="/static/icons/forge.png" style="width:24px;height:24px;vertical-align:middle;" alt="forge"></span>
       <h3>The Forge</h3>
       <span class="info-icon">?
         <div class="info-tooltip">
-          <h4>⚒️ Achievement-Based Items</h4>
+          <h4><img src="/static/icons/forge.png" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;" alt="forge">Achievement-Based Items</h4>
           <p>Certain <span class="tip-highlight">rare achievements</span> across your linked accounts unlock exclusive items you can forge.</p>
           <p>Forged items are <span class="tip-highlight">usable in-game</span> as weapons, armor, and accessories with unique stats and abilities.</p>
           <p><strong>How it works:</strong></p>
@@ -2903,28 +2903,17 @@
     padding: 1rem;
     border: none;
     border-radius: 0;
-    background: rgba(20, 20, 22, 0.95);
+    background: transparent;
     box-shadow: none;
     position: relative;
     overflow: hidden;
     flex: 1;
   ">
-    <!-- Forge glow effect -->
-    <div style="position: absolute; top: -50%; left: 50%; transform: translateX(-50%); width: 200px; height: 200px; background: radial-gradient(circle, rgba(255,102,0,0.15) 0%, transparent 70%); pointer-events: none;"></div>
 
-    <!-- Anvil Icon -->
+    <!-- Forge Icon -->
     <div style="text-align: center; margin-bottom: 0.75rem;">
-      <div style="display: inline-block; padding: 10px; border-radius: 50%; background: linear-gradient(145deg, rgba(255,102,0,0.2), rgba(255,68,0,0.1)); border: 1px solid rgba(255,102,0,0.3); box-shadow: 0 0 15px rgba(255,102,0,0.2);">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ff6600" stroke-width="1.5" style="filter: drop-shadow(0 0 6px rgba(255,102,0,0.6));">
-          <!-- Anvil shape -->
-          <path d="M4 14h16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2z" fill="rgba(255,102,0,0.3)"/>
-          <path d="M6 14V12a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/>
-          <path d="M2 14h20"/>
-          <rect x="8" y="6" width="8" height="4" rx="1" fill="rgba(255,102,0,0.2)"/>
-          <path d="M10 6V4M14 6V4"/>
-          <!-- Hammer -->
-          <path d="M19 3l-3 3M16 6l2-2" stroke-width="2"/>
-        </svg>
+      <div style="display: inline-block; padding: 8px; border-radius: 50%; background: linear-gradient(145deg, rgba(255,102,0,0.2), rgba(255,68,0,0.1)); border: 1px solid rgba(255,102,0,0.3); box-shadow: 0 0 15px rgba(255,102,0,0.2);">
+        <img src="/static/icons/forge.png" style="width:32px;height:32px;filter: drop-shadow(0 0 6px rgba(255,102,0,0.6));" alt="forge">
       </div>
     </div>
 
@@ -3094,7 +3083,7 @@
     <!-- Header -->
     <div class="forge-modal-header" style="padding:20px 24px 16px;border-bottom:1px solid rgba(255,102,0,0.2);background:linear-gradient(180deg, rgba(255,102,0,0.08) 0%, transparent 100%);">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-        <span style="font-size:2rem;">⚒️</span>
+        <img src="/static/icons/forge.png" style="width:36px;height:36px;" alt="forge">
         <h3 style="margin:0;font-size:1.4rem;font-weight:700;color:#ff8800;text-shadow:0 0 20px rgba(255,102,0,0.3);">THE FORGE</h3>
       </div>
       <p style="margin:0;opacity:0.7;font-size:0.9rem;">Transform your achievements into powerful in-game relics. Select items to forge.</p>
@@ -3108,7 +3097,7 @@
     <!-- Item Grid -->
     <div id="forge-body" class="forge-grid-container" style="flex:1;overflow-y:auto;padding:20px;">
       <div class="forge-loading" style="text-align:center;padding:60px 20px;color:#ff8800;">
-        <div style="font-size:2rem;margin-bottom:12px;">⚒️</div>
+        <img src="/static/icons/forge.png" style="width:48px;height:48px;margin-bottom:12px;" alt="forge">
         <p>Loading forgeable items...</p>
       </div>
     </div>
@@ -3116,21 +3105,20 @@
     <!-- Footer -->
     <div class="forge-modal-footer" style="padding:16px 24px;border-top:1px solid rgba(255,102,0,0.2);display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.3);">
       <div id="forge-selection-info" style="font-size:0.9rem;color:#888;">
-        Click items to select them for forging
+        Forging will be available soon
       </div>
-      <button id="forge-selected-btn" onclick="forgeSelected()" disabled style="
-        background: linear-gradient(135deg, #ff6600 0%, #ff8800 100%);
+      <button id="forge-selected-btn" disabled style="
+        background: linear-gradient(135deg, #444 0%, #555 100%);
         border: none;
-        color: #000;
+        color: #888;
         padding: 12px 28px;
         border-radius: 8px;
-        cursor: pointer;
+        cursor: not-allowed;
         font-weight: 700;
         font-size: 1rem;
-        opacity: 0.5;
+        opacity: 0.7;
         transition: all 0.2s;
-        box-shadow: 0 4px 12px rgba(255,102,0,0.3);
-      ">Forge Selected (0)</button>
+      ">Coming Soon</button>
     </div>
   </div>
 </div>
@@ -4167,9 +4155,9 @@ function renderForgeCatalog(catalog) {
   });
 
   const statusConfig = {
-    unlocked: { label: '⚒️ Ready to Forge', color: '#ff8800', description: 'You have the achievement - click to select for forging' },
-    forged: { label: '✨ Forged', color: '#22c55e', description: 'Already forged and in your collection' },
-    locked: { label: '🔒 Locked', color: '#666666', description: 'Earn the required achievement to unlock' }
+    unlocked: { label: 'Ready to Forge', color: '#ff8800', description: 'You have the achievement - click to select for forging', icon: '/static/icons/forge.png' },
+    forged: { label: 'Forged', color: '#22c55e', description: 'Already forged and in your collection', icon: null },
+    locked: { label: 'Locked', color: '#666666', description: 'Earn the required achievement to unlock', icon: null }
   };
 
   const rarityColors = {
@@ -4438,12 +4426,12 @@ function createCatalogItemCard(item, status) {
     tooltipStatus.textContent = '✓ In your collection';
   } else if (canSelect) {
     tooltipStatus.style.color = '#ff8800';
-    tooltipStatus.textContent = '⚒️ Click to select for forging';
+    tooltipStatus.innerHTML = '<img src="/static/icons/forge.png" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;">Click to select for forging';
   } else {
     tooltipStatus.style.color = '#666';
     // Show game name for locked items
     const gameName = item.achievement?.game_name || item.achievement?.app_id || 'Achievement';
-    tooltipStatus.textContent = '🔒 Requires ' + gameName + ' achievement';
+    tooltipStatus.textContent = 'Requires ' + gameName + ' achievement';
   }
   tooltip.appendChild(tooltipStatus);
 
@@ -4520,15 +4508,8 @@ function closeForgeModal() {
 }
 
 function toggleForgeItem(element, creditId) {
-  playClickSound();
-  element.classList.toggle('selected');
-
-  if (selectedForge.has(creditId)) {
-    selectedForge.delete(creditId);
-  } else {
-    selectedForge.add(creditId);
-  }
-  updateForgeButton();
+  // Forging disabled - coming soon
+  return;
 }
 
 // Legacy function - kept for backwards compat
@@ -4542,11 +4523,8 @@ function toggleForge(creditId) {
 }
 
 function updateForgeButton() {
-  const btn = document.getElementById('forge-selected-btn');
-  const count = selectedForge.size;
-  btn.textContent = `Forge Selected (${count})`;
-  btn.disabled = count === 0;
-  btn.style.opacity = count === 0 ? '0.5' : '1';
+  // Forging disabled - coming soon
+  return;
 }
 
 async function forgeSelected() {
@@ -5946,7 +5924,32 @@ window.syncAchievements = async function(providerName, providerUserId, btn) {
     }
     statusSpan.style.display = 'inline';
     statusSpan.style.color = 'var(--neon)';
-    statusSpan.textContent = 'Syncing...';
+
+    // Provider-specific ETAs (in seconds)
+    const providerETAs = {
+      'battlenet': 45,
+      'xbox': 30,
+      'steam': 15,
+      'discord': 10,
+      'github': 10,
+      'roblox': 15
+    };
+    const eta = providerETAs[providerName] || 15;
+
+    // Start elapsed timer
+    let elapsed = 0;
+    const updateSyncStatus = () => {
+      const timeStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed/60)}m${elapsed%60}s`;
+      const label = elapsed < eta ? 'Syncing' : 'Working';
+      statusSpan.innerHTML = `${label}<span class="sync-dots"></span> <span style="opacity:0.6;">${timeStr}</span>`;
+    };
+    updateSyncStatus();
+    statusSpan.classList.add('syncing');
+
+    const timerInterval = setInterval(() => {
+      elapsed++;
+      updateSyncStatus();
+    }, 1000);
 
     try {
         const resp = await fetch(`/sync_achievements/${providerName}/${providerUserId}`, {
@@ -5958,6 +5961,8 @@ window.syncAchievements = async function(providerName, providerUserId, btn) {
           // Token expired - needs reauth
           const data = await resp.json();
           if (data.status === 'needs_reauth') {
+            clearInterval(timerInterval);
+            statusSpan.classList.remove('syncing');
             statusSpan.textContent = 'Session expired';
             statusSpan.style.color = '#fbbf24';
 
@@ -5974,6 +5979,8 @@ window.syncAchievements = async function(providerName, providerUserId, btn) {
 
         if (resp.status === 429) {
           // Cooldown active - parse remaining time from response
+          clearInterval(timerInterval);
+          statusSpan.classList.remove('syncing');
           const data = await resp.json();
           const match = data.detail?.match(/(\d+)m\s*(\d+)s/);
           let seconds = 15 * 60; // Default 15 min
@@ -5985,6 +5992,8 @@ window.syncAchievements = async function(providerName, providerUserId, btn) {
         }
 
         const data = await resp.json();
+        clearInterval(timerInterval);
+        statusSpan.classList.remove('syncing');
         statusSpan.textContent = data.credited !== undefined && data.credited > 0
             ? `+${data.credited} new!`
             : 'Sync complete!';
@@ -5992,19 +6001,54 @@ window.syncAchievements = async function(providerName, providerUserId, btn) {
         // Update to "valid" status on successful sync
         updateTokenIndicator(providerName, providerUserId, 'valid');
 
-        // Update sync report with new data
-        // Find current total achievements from the card and add credited count
+        // Update cards dynamically instead of full page reload
         const card = btn.closest('.provider-card');
-        const currentTotalSpan = card?.querySelector('.sync-total');
-        let totalAchievements = data.credited || 0;
-        if (currentTotalSpan) {
-          const currentTotal = parseInt(currentTotalSpan.textContent) || 0;
-          totalAchievements = currentTotal + (data.credited || 0);
-        }
-        updateSyncReport(providerName, providerUserId, data.credited || 0, totalAchievements);
+        const credited = data.credited || 0;
+        const details = data.details || {};
+        const newTotal = details.total_achievements;
+        const byRarity = details.by_rarity;
 
-        setTimeout(() => window.location.reload(), 1200);
+        // Update provider card achievement count
+        if (card && newTotal !== undefined) {
+          const countEl = card.querySelector('.count-up[data-counter-id^="provider-"]');
+          if (countEl) {
+            countEl.textContent = newTotal;
+            countEl.dataset.target = newTotal;
+          }
+        }
+
+        // Update Ashbane card total (add credited to current)
+        const ashbaneTotal = document.querySelector('.count-up[data-counter-id="Ashbane-total"]');
+        if (ashbaneTotal && credited > 0) {
+          const currentTotal = parseInt(ashbaneTotal.textContent) || 0;
+          const newAshbaneTotal = currentTotal + credited;
+          ashbaneTotal.textContent = newAshbaneTotal;
+          ashbaneTotal.dataset.target = newAshbaneTotal;
+        }
+
+        // Update provider badge in Ashbane card
+        const ashbaneProviderCount = document.querySelector(`.count-up[data-counter-id="Ashbane-${providerName}"]`);
+        if (ashbaneProviderCount && newTotal !== undefined) {
+          ashbaneProviderCount.textContent = newTotal;
+          ashbaneProviderCount.dataset.target = newTotal;
+        }
+
+        // Update sync report
+        updateSyncReport(providerName, providerUserId, credited, newTotal || 0);
+
+        // Only reload if we got new achievements (to update rarity gems properly)
+        // Otherwise just hide the status after a delay
+        if (credited > 0) {
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          setTimeout(() => {
+            statusSpan.style.display = 'none';
+            btn.disabled = false;
+          }, 2000);
+        }
     } catch (e) {
+        clearInterval(timerInterval);
+        statusSpan.classList.remove('syncing');
         statusSpan.textContent = 'Sync failed!';
         statusSpan.style.color = '#fa3232';
         btn.disabled = false;
@@ -6039,10 +6083,21 @@ function updateTokenIndicator(providerName, providerUserId, status) {
       console.log(`[Indicator] Created new indicator element`);
     }
 
+    // Check if provider has been synced at least once (has sync-report with timestamp)
+    const syncReport = card.querySelector('.sync-report');
+    const hasBeenSynced = syncReport && syncReport.dataset.lastSync;
+
+    // Hide indicator until first sync
+    if (!hasBeenSynced) {
+      indicator.style.display = 'none';
+      return;
+    }
+    indicator.style.display = 'block';
+
     // Update icon and color based on status
     switch(status) {
       case 'valid':
-        indicator.textContent = '✓';
+        indicator.textContent = '●';
         indicator.title = 'Token valid - ready to sync';
         indicator.style.color = '#22c55e';
         indicator.style.filter = 'drop-shadow(0 0 4px #22c55e)';
@@ -6549,13 +6604,8 @@ async function initChat() {
     currentChatRoom = userTierRoom;
 
     // Update room name display
-    const roomNames = {
-      'newcomers': '#newcomers',
-      'rising': '#rising',
-      'veterans': '#veterans',
-      'legends': '#legends'
-    };
-    document.getElementById('chat-room-name').textContent = roomNames[userTierRoom] || '#' + userTierRoom;
+    // Room name is now just the tier name with # prefix
+    document.getElementById('chat-room-name').textContent = '#' + userTierRoom;
 
     // Load initial messages
     await loadChatMessages();
@@ -6722,10 +6772,7 @@ const NOTIFICATION_ICONS = {
   unlock: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M12 2l3 6 6.5 1-4.7 4.6 1.1 6.4L12 17l-5.9 3 1.1-6.4L2.5 9l6.5-1z" fill="currentColor"/>
   </svg>`,
-  forge: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M14 4l-4 8h6l-4 8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
-  </svg>`,
+  forge: `<img src="/static/icons/forge.png" width="16" height="16" style="vertical-align:middle;" alt="forge">`,
   chat: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M21 12c0 4.4-4 8-9 8-1.6 0-3-.3-4.3-.9L3 21l1.9-4.7C3.7 14.8 3 13.5 3 12c0-4.4 4-8 9-8s9 3.6 9 8z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
   </svg>`
@@ -6748,7 +6795,7 @@ const NOTIFICATION_ICONS_EXTRA = {
 };
 
 function renderMessage(msg, animate = false) {
-  const time = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  const time = new Date(msg.created_at).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York'});
   const animClass = animate ? 'chat-message-new' : '';
 
   // Dispute message with voting

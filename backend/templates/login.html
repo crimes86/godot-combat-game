@@ -4,16 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Login – Ashbane</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
   <link rel="stylesheet" href="/static/css/styles.css" />
   <link rel="stylesheet" href="/static/css/ashbane-theme.css" />
   <style>
-    /* Login page specific styles - matching dashboard theme */
+    /* Login page - compact layout to fit all providers without scrolling */
 
-    /* Ashbane Neon Sign */
+    /* Ashbane Neon Sign - compact */
     .neon-sign-container {
       position: relative;
-      margin: 0 auto 2rem;
-      padding: 1.5rem 2rem;
+      margin: 0 auto 1rem;
+      padding: 0.75rem 1rem;
       text-align: center;
     }
 
@@ -25,110 +27,56 @@
 
     .neon-text {
       font-family: 'Roboto Mono', monospace;
-      font-size: 4rem;
+      font-size: 2.5rem;
       font-weight: 700;
       letter-spacing: 0.15em;
       color: #fff;
       text-shadow:
-        /* Inner glow */
-        0 0 5px #fff,
-        0 0 10px #fff,
-        /* Orange/gold glow */
-        0 0 20px #d9a633,
-        0 0 40px #ff9900,
-        0 0 60px #ff6600;
+        0 0 3px #fff,
+        0 0 6px rgba(255,255,255,0.5),
+        0 0 12px rgba(255,106,0,0.4),
+        0 0 20px rgba(255,69,0,0.2);
       animation: neonFlicker 3s infinite;
     }
 
-    /* Neon tube backing effect */
     .neon-backing {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: calc(100% + 40px);
-      height: calc(100% + 20px);
+      width: calc(100% + 30px);
+      height: calc(100% + 14px);
       background: rgba(15, 15, 18, 0.95);
       border: 2px solid rgba(90,90,90,0.5);
-      border-radius: 8px;
-      box-shadow:
-        inset 0 0 30px rgba(50,50,50,0.2),
-        0 0 20px rgba(0,0,0,0.5);
+      border-radius: 6px;
+      box-shadow: inset 0 0 20px rgba(50,50,50,0.2);
       z-index: -1;
     }
 
-    /* Tube mounting brackets */
     .neon-bracket {
       position: absolute;
-      width: 8px;
-      height: 24px;
+      width: 6px;
+      height: 18px;
       background: linear-gradient(180deg, #333 0%, #1a1a1a 100%);
       border-radius: 2px;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.1),
-        0 2px 4px rgba(0,0,0,0.5);
     }
-    .neon-bracket.left { left: -4px; top: 50%; transform: translateY(-50%); }
-    .neon-bracket.right { right: -4px; top: 50%; transform: translateY(-50%); }
+    .neon-bracket.left { left: -3px; top: 50%; transform: translateY(-50%); }
+    .neon-bracket.right { right: -3px; top: 50%; transform: translateY(-50%); }
 
-    /* Subtle flicker animation */
-    @keyframes neonFlicker {
-      0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
-        opacity: 1;
-      }
-      20%, 24%, 55% {
-        opacity: 0.92;
-      }
-    }
-
-    /* Trophy/achievement icon accent */
     .neon-icon {
-      position: absolute;
-      top: -30px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 50px;
-      height: 50px;
-      filter: drop-shadow(0 0 10px #d9a633) drop-shadow(0 0 20px #ff9900);
-      animation: iconPulse 2s ease-in-out infinite;
+      width: 56px;
+      height: 56px;
+      vertical-align: middle;
+      position: relative;
+      top: -10px;
+      filter: drop-shadow(0 0 8px #ff6a00) drop-shadow(0 0 15px #ff4500);
     }
+    .neon-icon.left { margin-right: 0.5rem; }
+    .neon-icon.right { margin-left: 0.5rem; }
 
-    @keyframes iconPulse {
-      0%, 100% {
-        filter: drop-shadow(0 0 10px #d9a633) drop-shadow(0 0 20px #ff9900);
-        transform: translateX(-50%) scale(1);
-      }
-      50% {
-        filter: drop-shadow(0 0 15px #ff9900) drop-shadow(0 0 30px #ff6600);
-        transform: translateX(-50%) scale(1.05);
-      }
-    }
-
-    /* Reflection effect */
-    .neon-reflection {
-      position: absolute;
-      bottom: -40px;
-      left: 0;
-      right: 0;
-      height: 40px;
-      background: linear-gradient(180deg,
-        rgba(217,166,51,0.2) 0%,
-        transparent 100%);
-      filter: blur(4px);
-      transform: scaleY(-0.3) translateY(-100%);
-      opacity: 0.5;
-      pointer-events: none;
-    }
-
-    /* Wire/cable decoration */
-    .neon-wire {
-      position: absolute;
-      top: -20px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 2px;
-      height: 20px;
-      background: linear-gradient(180deg, #333 0%, #1a1a1a 100%);
+    @keyframes neonFlicker {
+      0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
+      20%, 24%, 55% { opacity: 0.92; }
     }
 
     .login-wrapper {
@@ -137,21 +85,18 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 2rem;
+      padding: 1rem;
     }
 
     .login-card {
       position: relative;
       width: 100%;
-      max-width: 480px;
-      padding: 2.5rem;
-      /* Glassmorphism background */
+      max-width: 580px;
+      padding: 1.5rem 2rem;
       background: rgba(20, 20, 22, 0.95);
       backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(90,90,90,0.5);
       border-radius: 16px;
-      /* 3D depth effect */
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.05),
         0 4px 0 rgba(0,0,0,0.3),
@@ -159,12 +104,11 @@
       overflow: hidden;
     }
 
-    /* Circuit pattern overlay */
     .login-card::before {
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%235a5a5a;stroke-width:0.5;opacity:0.15%7D.pad%7Bfill:%235a5a5a;opacity:0.2%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,25 L25,25 L25,50 L50,50'/%3E%3Cpath class='trace' d='M75,0 L75,25 L100,25'/%3E%3Cpath class='trace' d='M0,75 L35,75 L35,100'/%3E%3Cpath class='trace' d='M60,60 L60,100'/%3E%3Cpath class='trace' d='M85,50 L100,50'/%3E%3Ccircle class='pad' cx='25' cy='25' r='2'/%3E%3Ccircle class='pad' cx='50' cy='50' r='2'/%3E%3Ccircle class='pad' cx='75' cy='25' r='1.5'/%3E%3Ccircle class='pad' cx='35' cy='75' r='1.5'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cdefs%3E%3Cstyle%3E.trace%7Bfill:none;stroke:%235a5a5a;stroke-width:0.5;opacity:0.15%7D.pad%7Bfill:%235a5a5a;opacity:0.2%7D%3C/style%3E%3C/defs%3E%3Cpath class='trace' d='M0,25 L25,25 L25,50 L50,50'/%3E%3Cpath class='trace' d='M75,0 L75,25 L100,25'/%3E%3Ccircle class='pad' cx='25' cy='25' r='2'/%3E%3Ccircle class='pad' cx='50' cy='50' r='2'/%3E%3C/svg%3E");
       background-size: 100px 100px;
       pointer-events: none;
       z-index: 0;
@@ -177,40 +121,47 @@
       z-index: 1;
     }
 
-    /* Title */
     .login-title {
       font-family: 'Roboto Mono', monospace;
-      font-size: 1.1rem;
-      color: #ccc;
+      font-size: 0.85rem;
+      color: #888;
       text-align: center;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
       text-transform: uppercase;
       letter-spacing: 2px;
     }
 
-    /* Provider buttons */
+    /* Compact provider grid - 3 columns for gaming, 3 for social */
     .provider-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+
+    /* For 5 gaming providers, use special layout */
+    .provider-grid.gaming {
+      grid-template-columns: repeat(5, 1fr);
     }
 
     .provider-btn {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 1rem;
-      padding: 0.9rem 1.2rem;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.75rem 0.5rem;
       background: linear-gradient(180deg, rgba(30,35,40,0.9) 0%, rgba(15,18,22,0.95) 100%);
       border: 1px solid rgba(80,80,80,0.3);
       border-radius: 10px;
       text-decoration: none;
       color: #fff;
       font-family: 'Roboto Mono', monospace;
-      font-size: 0.95rem;
+      font-size: 0.7rem;
       transition: all 0.25s ease;
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.05),
         0 2px 4px rgba(0,0,0,0.3);
+      text-align: center;
     }
 
     .provider-btn:hover {
@@ -223,19 +174,23 @@
     }
 
     .provider-btn img {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 6px;
     }
 
-    .provider-btn span {
-      flex: 1;
+    .provider-btn .provider-name {
+      font-size: 0.7rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
     }
 
     .provider-btn .provider-tag {
-      font-size: 0.7rem;
-      padding: 0.2rem 0.5rem;
-      border-radius: 4px;
+      font-size: 0.55rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
       background: rgba(var(--btn-rgb), 0.2);
       color: var(--btn-color);
       text-transform: uppercase;
@@ -243,84 +198,29 @@
     }
 
     /* Provider-specific colors */
-    .provider-btn[data-provider="steam"] {
-      --btn-color: #1b9bd7;
-      --btn-rgb: 27,155,215;
-    }
-    .provider-btn[data-provider="battlenet"] {
-      --btn-color: #ffb932;
-      --btn-rgb: 255,185,50;
-    }
-    .provider-btn[data-provider="xbox"] {
-      --btn-color: #107c10;
-      --btn-rgb: 16,124,16;
-    }
+    .provider-btn[data-provider="steam"] { --btn-color: #1b9bd7; --btn-rgb: 27,155,215; }
+    .provider-btn[data-provider="battlenet"] { --btn-color: #ffb932; --btn-rgb: 255,185,50; }
+    .provider-btn[data-provider="xbox"] { --btn-color: #107c10; --btn-rgb: 16,124,16; }
     .provider-btn[data-provider="playstation"],
-    .provider-btn[data-provider="psn"] {
-      --btn-color: #003791;
-      --btn-rgb: 0,55,145;
-    }
-    .provider-btn[data-provider="discord"] {
-      --btn-color: #5865F2;
-      --btn-rgb: 88,101,242;
-    }
-    .provider-btn[data-provider="twitch"] {
-      --btn-color: #9146FF;
-      --btn-rgb: 145,70,255;
-    }
-    .provider-btn[data-provider="google"] {
-      --btn-color: #4285F4;
-      --btn-rgb: 66,133,244;
-    }
-    .provider-btn[data-provider="github"] {
-      --btn-color: #8b949e;
-      --btn-rgb: 139,148,158;
-    }
-    .provider-btn[data-provider="facebook"] {
-      --btn-color: #1877F2;
-      --btn-rgb: 24,119,242;
-    }
-    .provider-btn[data-provider="roblox"] {
-      --btn-color: #00A2FF;
-      --btn-rgb: 0,162,255;
-    }
+    .provider-btn[data-provider="psn"] { --btn-color: #003791; --btn-rgb: 0,55,145; }
+    .provider-btn[data-provider="discord"] { --btn-color: #5865F2; --btn-rgb: 88,101,242; }
+    .provider-btn[data-provider="twitch"] { --btn-color: #9146FF; --btn-rgb: 145,70,255; }
+    .provider-btn[data-provider="google"] { --btn-color: #4285F4; --btn-rgb: 66,133,244; }
+    .provider-btn[data-provider="github"] { --btn-color: #8b949e; --btn-rgb: 139,148,158; }
+    .provider-btn[data-provider="facebook"] { --btn-color: #1877F2; --btn-rgb: 24,119,242; }
+    .provider-btn[data-provider="roblox"] { --btn-color: #00A2FF; --btn-rgb: 0,162,255; }
 
     .provider-btn:hover img {
       filter: brightness(1.2) drop-shadow(0 0 6px var(--btn-color));
-    }
-
-    /* Guest notice */
-    .guest-notice {
-      margin-top: 1.5rem;
-      padding: 1rem;
-      background: rgba(255,200,50,0.1);
-      border: 1px solid rgba(255,200,50,0.3);
-      border-radius: 8px;
-      text-align: center;
-    }
-
-    .guest-notice-title {
-      color: #ffcc33;
-      font-size: 0.85rem;
-      font-weight: bold;
-      margin-bottom: 0.3rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
-    .guest-notice-text {
-      color: #999;
-      font-size: 0.8rem;
-      line-height: 1.4;
     }
 
     /* Divider */
     .login-divider {
       display: flex;
       align-items: center;
-      margin: 1.5rem 0;
+      margin: 0.75rem 0;
       color: #555;
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       text-transform: uppercase;
       letter-spacing: 1px;
     }
@@ -334,46 +234,63 @@
     }
 
     .login-divider span {
-      padding: 0 1rem;
+      padding: 0 0.75rem;
     }
 
     /* Section headers */
     .provider-section-title {
-      font-size: 0.7rem;
+      font-size: 0.6rem;
       color: #666;
       text-transform: uppercase;
       letter-spacing: 1px;
-      margin-bottom: 0.5rem;
-      padding-left: 0.2rem;
+      margin-bottom: 0.4rem;
+      text-align: center;
+    }
+
+    /* Guest notice - compact */
+    .guest-notice {
+      margin-top: 0.75rem;
+      padding: 0.6rem 0.8rem;
+      background: rgba(255,106,0,0.08);
+      border: 1px solid rgba(255,106,0,0.25);
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .guest-notice-title {
+      color: #ff6a00;
+      font-size: 0.7rem;
+      font-weight: bold;
+      margin-bottom: 0.2rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .guest-notice-text {
+      color: #888;
+      font-size: 0.65rem;
+      line-height: 1.3;
     }
 
     /* Footer */
     .login-footer {
-      margin-top: 2rem;
+      margin-top: 0.75rem;
       text-align: center;
       color: #555;
-      font-size: 0.75rem;
-    }
-
-    .login-footer a {
-      color: var(--neon);
-      text-decoration: none;
+      font-size: 0.6rem;
     }
   </style>
 </head>
 <body>
   <div class="login-wrapper">
     <div class="login-card">
-      <!-- Ashbane Neon Sign -->
+      <!-- Ashbane Neon Sign with Icons -->
       <div class="neon-sign-container">
-        <div class="neon-wire"></div>
         <div class="neon-sign">
-          <div class="neon-backing"></div>
-          <div class="neon-bracket left"></div>
-          <div class="neon-bracket right"></div>
+          <img src="/static/logo/ashbane-icon-256.png" alt="" class="neon-icon left" />
           <span class="neon-text">Ashbane</span>
+          <img src="/static/logo/ashbane-icon-256.png" alt="" class="neon-icon right" />
         </div>
-        <div class="neon-reflection"></div>
       </div>
 
       {% if beta_gate %}
@@ -461,20 +378,20 @@
       {% else %}
       <!-- Normal Login Flow -->
       <!-- Title -->
-      <div class="login-title">Connect Your Gaming Accounts</div>
+      <div class="login-title">Login with Gaming Account</div>
 
       <!-- Provider section: Gaming -->
       <div class="provider-section-title">Gaming Platforms</div>
-      <div class="provider-grid">
+      <div class="provider-grid gaming">
         {% for provider in all_providers %}
-          {% if provider.name in ['steam', 'battlenet', 'xbox', 'psn', 'epic', 'gog', 'roblox'] %}
+          {% if provider.name in ['steam', 'battlenet', 'xbox', 'psn', 'roblox'] %}
           <a
             href="/auth/{{ provider.name }}/login{% if device_code %}?device_code={{ device_code }}{% endif %}"
             class="provider-btn"
             data-provider="{{ provider.name }}"
           >
             <img src="/static/icons/{{ provider.name }}.svg" alt="{{ provider.display_name }}" onerror="this.src='/static/icons/{{ provider.name }}.png'" />
-            <span>{{ provider.display_name }}</span>
+            <span class="provider-name">{{ provider.display_name }}</span>
             <span class="provider-tag">Achievements</span>
           </a>
           {% endif %}
@@ -503,7 +420,7 @@
             data-provider="{{ provider.name }}"
           >
             <img src="/static/icons/{{ provider.name }}.svg" alt="{{ provider.display_name }}" onerror="this.src='/static/icons/{{ provider.name }}.png'" />
-            <span>{{ provider.display_name }}</span>
+            <span class="provider-name">{{ provider.display_name }}</span>
             <span class="provider-tag">Login Only</span>
           </a>
           {% endif %}

@@ -24,12 +24,13 @@ python-dotenv==1.0.1
 
 # Security
 itsdangerous==2.2.0
+python-multipart==0.0.21
 
 # Database drivers
 psycopg2-binary==2.9.10  # PostgreSQL (required for production)
 # For SQLite (dev only), no extra driver needed
 
 # Wallet/Blockchain - required for forging achievements and bridge system
-web3==6.15.1
+web3>=6.17.0,<7
 siwe==4.0.0
-eth-account==0.11.0
+eth-account>=0.11.0

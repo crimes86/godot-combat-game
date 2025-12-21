@@ -47,7 +47,7 @@ def upgrade() -> None:
             SELECT provider_user_id FROM provider_accounts
             WHERE provider_accounts.id = achievement_credits.provider_account_id
         ),
-        is_original_claim = 1
+        is_original_claim = true
     """))
 
     # 3. Handle any orphaned credits (provider_account deleted) - mark as original but use placeholder
@@ -56,7 +56,7 @@ def upgrade() -> None:
         UPDATE achievement_credits
         SET provider_name = 'unknown',
             provider_user_id = 'orphan_' || CAST(id AS TEXT),
-            is_original_claim = 1
+            is_original_claim = true
         WHERE provider_name IS NULL
     """))
 

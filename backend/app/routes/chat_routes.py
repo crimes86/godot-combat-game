@@ -1,11 +1,7 @@
 """
 Chat system routes for tiered chat rooms.
 
-Rooms are based on Ashbane tier:
-- newcomers: Initiate, Bronze (0-499 achievements)
-- rising: Silver, Gold (500-1999 achievements)
-- veterans: Platinum, Diamond (2000-4999 achievements)
-- legends: Legendary, Mythic (5000+ achievements)
+Each tier has its own chat room matching the tier name.
 - global: Activity feed visible to all (unlock/forge announcements)
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
@@ -29,31 +25,39 @@ _get_current_user_func: Callable = None
 _calculate_Ashbane_tier_func: Callable = None
 
 
-# Tier to room mapping
+# Tier to room mapping - each tier gets its own room
 TIER_ROOMS = {
-    "initiate": "newcomers",
-    "bronze": "newcomers",
-    "silver": "rising",
-    "gold": "rising",
-    "platinum": "veterans",
-    "diamond": "veterans",
-    "legendary": "legends",
-    "mythic": "legends",
+    "initiate": "initiate",
+    "bronze": "bronze",
+    "silver": "silver",
+    "gold": "gold",
+    "platinum": "platinum",
+    "diamond": "diamond",
+    "legendary": "legendary",
+    "mythic": "mythic",
 }
 
 ROOM_DISPLAY_NAMES = {
-    "newcomers": "#newcomers",
-    "rising": "#rising",
-    "veterans": "#veterans",
-    "legends": "#legends",
+    "initiate": "#initiate",
+    "bronze": "#bronze",
+    "silver": "#silver",
+    "gold": "#gold",
+    "platinum": "#platinum",
+    "diamond": "#diamond",
+    "legendary": "#legendary",
+    "mythic": "#mythic",
     "global": "#global-feed",
 }
 
 ROOM_COLORS = {
-    "newcomers": "#888888",
-    "rising": "#c0c0c0",
-    "veterans": "#00c8ff",
-    "legends": "#ff6600",
+    "initiate": "#666666",
+    "bronze": "#cd7f32",
+    "silver": "#c0c0c0",
+    "gold": "#ffd700",
+    "platinum": "#a0d8ef",
+    "diamond": "#40e0d0",
+    "legendary": "#ff6600",
+    "mythic": "#ff00ff",
     "global": "#00ffc8",
 }
 

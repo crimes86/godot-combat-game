@@ -207,6 +207,17 @@ async def add_cache_headers(request: Request, call_next):
             response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
     return response
 
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Mount forged item icons from assets directory
@@ -1051,6 +1062,16 @@ async def steam_callback(
     logger.info(f"STEAM CALLBACK: steam_url={steam_url}")
 
     steam_id = steam_url.rsplit("/", 1)[-1] if steam_url else None
+
+    # Reject if no valid Steam ID
+    if not steam_id:
+        logger.warning("STEAM CALLBACK: No Steam ID in callback - rejecting")
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "message": "Steam authentication failed. Please try again."},
+            status_code=400,
+        )
+
     token = get_session_token(request)
     current_user = get_user_from_session(db, token) if token else None
     logger.info(f"STEAM CALLBACK: has_token={bool(token)}, steam_id={steam_id}, device_code={device_code}")
@@ -1977,6 +1998,14 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"[DISCORD] Callback error: {e}", exc_info=True)
+        # Return 400 for OAuth errors (invalid state, expired code, etc.)
+        error_msg = str(e).lower()
+        if any(x in error_msg for x in ["state", "code", "token", "invalid", "expired", "mismatch"]):
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Discord login failed: Invalid or expired authorization. Please try again."},
+                status_code=400
+            )
         return templates.TemplateResponse(
             "error.html",
             {"request": request, "message": f"Discord login failed: {str(e)}"},

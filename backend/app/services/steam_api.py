@@ -7,12 +7,14 @@ from app.services.effort_scoring import compute_steam_effort, compute_rarity_fro
 
 logger = logging.getLogger(__name__)
 
+# Longer timeout for Steam API (can be slow)
+STEAM_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 
 STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 
 async def fetch_steam_profile(steam_id: str):
     url = f"http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={STEAM_API_KEY}&steamids={steam_id}"
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=STEAM_TIMEOUT) as client:
         resp = await client.get(url)
         print("STEAM API STATUS:", resp.status_code)
         print("STEAM API RESPONSE:", resp.text)
@@ -49,7 +51,7 @@ async def get_steam_unlocked_achievements_async(provider_account, steam_api_key)
 
     results = []
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=STEAM_TIMEOUT) as client:
         resp = await client.get(url_games)
         print("[Steam API] Status:", resp.status_code)
         print("[Steam API] Raw response:", resp.text)
@@ -147,7 +149,7 @@ async def get_global_percentages_for_game_async(app_id, steam_api_key):
     url = (
         f"https://api.steampowered.com/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/?gameid={app_id}"
     )
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=STEAM_TIMEOUT) as client:
         resp = await client.get(url)
         if resp.status_code != 200:
             # Log and return empty if forbidden or bad request

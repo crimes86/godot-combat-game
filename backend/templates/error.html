@@ -1,11 +1,13 @@
-<!-- templates/error.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Error - Ashbane</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <link rel="stylesheet" href="/static/css/ashbane-theme.css" />
   <style>
     * {
       margin: 0;
@@ -15,96 +17,127 @@
 
     body {
       min-height: 100vh;
-      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%);
+      background: #121214;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: 'Rajdhani', sans-serif;
+      font-family: 'Roboto Mono', monospace;
       color: #e0e0e0;
     }
 
-    .error-container {
+    .error-wrapper {
       text-align: center;
-      padding: 60px 40px;
+      padding: 2.5rem;
       background: rgba(20, 20, 22, 0.95);
-      border: 1px solid rgba(255, 60, 60, 0.3);
+      border: 1px solid rgba(90, 90, 90, 0.5);
       border-radius: 16px;
       box-shadow:
-        0 0 40px rgba(255, 60, 60, 0.15),
-        inset 0 0 60px rgba(0, 0, 0, 0.3);
-      max-width: 500px;
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        0 4px 0 rgba(0,0,0,0.3),
+        0 8px 20px rgba(0,0,0,0.4);
+      max-width: 480px;
       margin: 20px;
     }
 
+    /* Ashbane Logo Header */
+    .logo-header {
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      filter: drop-shadow(0 0 6px #ff6a00) drop-shadow(0 0 12px #ff4500);
+    }
+
+    .logo-text {
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: #fff;
+      text-shadow:
+        0 0 5px #fff,
+        0 0 10px #fff,
+        0 0 20px #ff6a00,
+        0 0 40px #ff4500;
+    }
+
     .error-icon {
-      font-size: 64px;
-      margin-bottom: 20px;
-      filter: drop-shadow(0 0 20px rgba(255, 60, 60, 0.5));
+      font-size: 48px;
+      margin-bottom: 1rem;
+      filter: drop-shadow(0 0 15px rgba(255, 106, 0, 0.5));
     }
 
     h1 {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 28px;
+      font-size: 1.2rem;
       font-weight: 700;
-      color: #ff4444;
+      color: #ff6a00;
       text-transform: uppercase;
-      letter-spacing: 3px;
-      margin-bottom: 20px;
-      text-shadow:
-        0 0 10px rgba(255, 68, 68, 0.5),
-        0 0 20px rgba(255, 68, 68, 0.3);
+      letter-spacing: 2px;
+      margin-bottom: 1rem;
+      text-shadow: 0 0 10px rgba(255, 106, 0, 0.4);
     }
 
     .error-message {
-      font-size: 16px;
-      color: #aaa;
+      font-size: 0.9rem;
+      color: #999;
       line-height: 1.6;
-      margin-bottom: 30px;
-      padding: 15px 20px;
-      background: rgba(255, 60, 60, 0.1);
-      border-left: 3px solid #ff4444;
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: rgba(255, 106, 0, 0.08);
+      border-left: 3px solid #ff6a00;
       border-radius: 0 8px 8px 0;
       text-align: left;
     }
 
     .back-button {
       display: inline-block;
-      padding: 12px 30px;
-      background: linear-gradient(135deg, #666 0%, #555 100%);
-      color: #fff;
+      padding: 0.8rem 2rem;
+      background: linear-gradient(180deg, rgba(255,106,0,0.3) 0%, rgba(255,69,0,0.2) 100%);
+      border: 1px solid rgba(255, 106, 0, 0.5);
+      color: #ff6a00;
       text-decoration: none;
-      font-family: 'Orbitron', sans-serif;
-      font-size: 14px;
+      font-size: 0.85rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 2px;
       border-radius: 8px;
-      transition: all 0.3s ease;
-      box-shadow: 0 0 20px rgba(100, 100, 100, 0.3);
+      transition: all 0.25s ease;
+      box-shadow: 0 0 15px rgba(255, 106, 0, 0.2);
     }
 
     .back-button:hover {
       transform: translateY(-2px);
-      box-shadow: 0 0 30px rgba(150, 150, 150, 0.5);
+      background: linear-gradient(180deg, rgba(255,106,0,0.4) 0%, rgba(255,69,0,0.3) 100%);
+      box-shadow: 0 0 25px rgba(255, 106, 0, 0.4);
     }
 
-    .Ashbane-logo {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 14px;
-      color: #888;
-      letter-spacing: 4px;
-      margin-top: 30px;
-      opacity: 0.6;
+    .footer {
+      margin-top: 1.5rem;
+      font-size: 0.65rem;
+      color: #555;
+      letter-spacing: 1px;
     }
   </style>
 </head>
 <body>
-  <div class="error-container">
+  <div class="error-wrapper">
+    <!-- Ashbane Logo Header -->
+    <div class="logo-header">
+      <img src="/static/logo/ashbane-icon-256.png" alt="" class="logo-icon" />
+      <span class="logo-text">Ashbane</span>
+      <img src="/static/logo/ashbane-icon-256.png" alt="" class="logo-icon" />
+    </div>
+
     <div class="error-icon">⚠</div>
     <h1>Something Went Wrong</h1>
     <p class="error-message">{{ message }}</p>
-    <a href="/dashboard" class="back-button">Go to Dashboard</a>
-    <div class="Ashbane-logo">Ashbane</div>
+    <a href="/login" class="back-button">Back to Login</a>
+    <div class="footer">&copy; 2025 Ashbane</div>
   </div>
 </body>
 </html>

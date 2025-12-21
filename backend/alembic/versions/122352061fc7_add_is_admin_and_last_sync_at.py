@@ -30,7 +30,7 @@ def upgrade() -> None:
 
     # Backfill existing users to False
     connection = op.get_bind()
-    connection.execute(sa.text("UPDATE users SET is_admin = 0 WHERE is_admin IS NULL"))
+    connection.execute(sa.text("UPDATE users SET is_admin = false WHERE is_admin IS NULL"))
 
     # Add last_sync_at to provider_accounts
     op.add_column('provider_accounts', sa.Column('last_sync_at', sa.DateTime(), nullable=True))
