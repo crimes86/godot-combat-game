@@ -111,6 +111,9 @@ func _ready() -> void:
 	# Initialize AI
 	_init_ai_variation()
 
+	# Connect damage signal to enter combat when hit (ranged weapons)
+	damage_taken.connect(_on_damage_taken)
+
 	# Start animation
 	_start_animation_timer()
 
@@ -367,8 +370,14 @@ func play_hurt_stagger() -> void:
 func die() -> void:
 	"""Handle spider death"""
 	if is_dying:
+		if OS.is_debug_build():
+			print("🕷️ [Spider.die] Already dying, returning early - name: %s" % name)
 		return
 	is_dying = true
+
+	if OS.is_debug_build():
+		var is_server = multiplayer.has_multiplayer_peer() and multiplayer.is_server()
+		print("🕷️ [Spider.die] Starting death - name: %s, is_server: %s" % [name, is_server])
 
 	# Clean up crit window
 	in_crit_window = false
@@ -435,6 +444,13 @@ func become_corpse() -> void:
 	"""Transition to corpse state"""
 	is_corpse = true
 
+	if OS.is_debug_build():
+		var is_server = multiplayer.has_multiplayer_peer() and multiplayer.is_server()
+		print("🕷️ [Spider.become_corpse] Transitioning to corpse - name: %s, is_server: %s, gold: %d, loot_items: %d" % [
+			name, is_server, corpse_gold, corpse_loot.size()
+		])
+		print("🕷️ [Spider.become_corpse] corpse_clicked signal connections: %d" % corpse_clicked.get_connections().size())
+
 	if health_bar:
 		health_bar.visible = false
 
@@ -447,6 +463,8 @@ func become_corpse() -> void:
 
 	if corpse_gold > 0 or corpse_loot.size() > 0:
 		add_loot_indicator()
+		if OS.is_debug_build():
+			print("🕷️ [Spider.become_corpse] Added loot indicator - gold: %d, items: %d" % [corpse_gold, corpse_loot.size()])
 
 	if sprite:
 		sprite.modulate = Color(0.5, 0.5, 0.5, 1.0)
@@ -742,6 +760,7 @@ var attack_cooldown: float = 0.0
 const ATTACK_COOLDOWN_TIME: float = 1.2
 
 var _detection_range: float = BASE_DETECTION_RANGE
+var _was_attacked: bool = false  # Set when hit, forces chase even from outside detection range
 var _spawn_position: Vector2 = Vector2.ZERO
 var _wander_target: Vector2 = Vector2.ZERO
 var _wander_timer: float = 0.0
@@ -773,8 +792,9 @@ func _physics_process(delta: float) -> void:
 
 	_wander_timer -= delta
 
+	# Find target player (multiplayer aware)
 	if not is_instance_valid(target_player):
-		target_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+		_update_target_player()
 
 	if not target_player:
 		_do_wander(delta)
@@ -786,10 +806,12 @@ func _physics_process(delta: float) -> void:
 	if distance > LOSE_INTEREST_RANGE:
 		target_player = null
 		is_running = false
+		_was_attacked = false  # Reset attack flag when losing interest
 		_do_wander(delta)
 		return
 
-	if distance <= _detection_range and distance > ATTACK_RANGE:
+	# Chase if: in detection range OR was attacked (ranged weapons trigger chase from any distance)
+	if (distance <= _detection_range or _was_attacked) and distance > ATTACK_RANGE:
 		_is_wandering = false
 		is_running = true
 		velocity = direction * BASE_SPEED * RUN_SPEED_MULT
@@ -865,3 +887,45 @@ func perform_attack(player: Node, direction: Vector2) -> void:
 
 	await get_tree().create_timer(0.3).timeout
 	is_attacking = false
+
+
+func _on_damage_taken(_damage: float, _is_crit: bool) -> void:
+	"""Called when spider takes damage - enter chase mode to attack the player."""
+	if is_dying or is_corpse:
+		return
+
+	# Mark as attacked so spider chases even from outside detection range (ranged weapons)
+	_was_attacked = true
+
+	# Find nearest player to target (multiplayer aware)
+	_update_target_player()
+
+	# Enter combat mode
+	if target_player:
+		is_running = true
+		_is_wandering = false
+
+
+func _update_target_player() -> void:
+	"""Find the nearest valid player to target (multiplayer aware)."""
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	if players.is_empty():
+		target_player = null
+		return
+
+	# In multiplayer, find the nearest alive player
+	var nearest_player: Node = null
+	var nearest_distance: float = INF
+
+	for p in players:
+		if not is_instance_valid(p):
+			continue
+		if p.get("is_dead"):
+			continue
+
+		var dist = global_position.distance_to(p.global_position)
+		if dist < nearest_distance:
+			nearest_distance = dist
+			nearest_player = p
+
+	target_player = nearest_player

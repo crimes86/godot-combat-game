@@ -563,10 +563,10 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 	# (Other players shouldn't see particles spawn at their position)
 	_trigger_attack_feedback_for_attacker(enemy, is_crit, is_weakpoint, attacker_id)
 
-	# Emit damage signal for AI aggro (server only) - don't use for player feedback
-	# as that would trigger particles on ALL players
-	if multiplayer.is_server():
-		enemy.damage_taken.emit(damage, is_crit)
+	# Emit damage signal for AI aggro (all peers)
+	# This triggers combat mode on all clients so enemies chase the correct player
+	# Visual effects are handled separately above, so this is safe to emit on all peers
+	enemy.damage_taken.emit(damage, is_crit)
 
 func _spawn_combat_text(enemy: Node, damage: float, is_crit: bool, is_weakpoint: bool) -> void:
 	"""Spawn floating combat text above enemy."""
@@ -669,6 +669,8 @@ func _handle_enemy_death(enemy_network_id: int, killer_id: int) -> void:
 	# Broadcast death to all clients (loot as JSON string)
 	rpc("_client_enemy_died", enemy_network_id, killer_id, loot_json, loot_data.gold)
 
+var _loot_id_counter: int = 0  # Unique ID generator for loot items
+
 func _generate_loot(enemy: Node) -> Dictionary:
 	"""Generate loot for enemy corpse. Server only."""
 	var items = []
@@ -682,6 +684,9 @@ func _generate_loot(enemy: Node) -> Dictionary:
 	for i in range(num_items):
 		var item = CorpseState.roll_loot_item(is_guardian, enemy_level)
 		if item:
+			# Add unique loot_id for reliable syncing across clients
+			_loot_id_counter += 1
+			item["loot_id"] = _loot_id_counter
 			items.append(item)
 
 	return {"items": items, "gold": gold}
@@ -730,6 +735,10 @@ func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_json: String
 	# This is more reliable than connecting during spawn when GameWorld may not exist yet
 	if not multiplayer.is_server():
 		_ensure_corpse_signal_connected(enemy)
+		if OS.is_debug_build():
+			print("💀 [_client_enemy_died] Connected corpse signal for enemy: %s (class: %s)" % [
+				enemy.name, enemy.get_class()
+			])
 
 	# Call die() which handles:
 	# - Weakpoint cleanup
@@ -737,7 +746,14 @@ func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_json: String
 	# - Death animation
 	# - Corpse transition
 	if not enemy.is_dying:
+		if OS.is_debug_build():
+			print("💀 [_client_enemy_died] Calling die() on enemy: %s (class: %s)" % [
+				enemy.name, enemy.get_class()
+			])
 		enemy.die()
+	else:
+		if OS.is_debug_build():
+			print("💀 [_client_enemy_died] Enemy already dying, skipping die(): %s" % enemy.name)
 
 	# Track kill for quest objectives (local player only)
 	var local_peer_id = multiplayer.get_unique_id()
@@ -907,13 +923,23 @@ func _get_enemy_animation(enemy: Node) -> String:
 # ═══════════════════════════════════════════════════════════════════════════
 
 @rpc("authority", "call_local", "reliable")
-func spawn_enemy_on_clients(network_id: int, pos: Vector2, level: int, enemy_name: String) -> void:
-	"""Server tells clients to spawn an enemy."""
+func spawn_enemy_on_clients(network_id: int, pos: Vector2, level: int, enemy_name: String, scene_path: String = "") -> void:
+	"""Server tells clients to spawn an enemy.
+	scene_path: Optional explicit scene path. If empty, inferred from enemy_name."""
 	if multiplayer.is_server():
 		return  # Server already spawned
 
-	var enemy_scene = load("res://scenes/enemies/enemy.tscn")
+	# Determine scene path from enemy name if not provided
+	var actual_scene_path = scene_path
+	if actual_scene_path.is_empty():
+		actual_scene_path = _infer_enemy_scene_path(enemy_name)
+
+	if OS.is_debug_build():
+		print("🌐 [Client] Spawning enemy '%s' (net#%d) using scene: %s" % [enemy_name, network_id, actual_scene_path])
+
+	var enemy_scene = load(actual_scene_path)
 	if not enemy_scene:
+		LogManager.error("Failed to load enemy scene: %s" % actual_scene_path, "network")
 		return
 
 	var enemy = enemy_scene.instantiate()
@@ -933,6 +959,25 @@ func spawn_enemy_on_clients(network_id: int, pos: Vector2, level: int, enemy_nam
 	target_parent.call_deferred("add_child", enemy)
 	# Connect signals and disable AI after enemy is in tree
 	call_deferred("_setup_client_enemy", enemy)
+
+func _infer_enemy_scene_path(enemy_name: String) -> String:
+	"""Infer scene path from enemy name (e.g., 'Wolf_123' -> wolf.tscn)."""
+	var name_lower = enemy_name.to_lower()
+
+	# Wolf variants
+	if name_lower.begins_with("wolf") or name_lower.begins_with("direwolf") or name_lower.begins_with("alpha"):
+		return "res://scenes/enemies/wolf.tscn"
+
+	# Spider variants
+	if name_lower.begins_with("spider") or name_lower.contains("spider"):
+		return "res://scenes/enemies/spider.tscn"
+
+	# Skeleton variants (default enemy)
+	if name_lower.begins_with("skeleton") or name_lower.begins_with("guardian"):
+		return "res://scenes/enemies/enemy.tscn"
+
+	# Default to generic enemy
+	return "res://scenes/enemies/enemy.tscn"
 
 @rpc("authority", "reliable")
 func despawn_enemy_on_clients(network_id: int) -> void:
@@ -1074,8 +1119,9 @@ func _on_peer_connected(peer_id: int) -> void:
 		if enemy is TrainingDummy:
 			spawn_training_dummy_on_clients.rpc_id(peer_id, network_id, enemy.global_position)
 		else:
-			# Regular enemy
-			spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name)
+			# Regular enemy - infer scene path from name for proper type sync
+			var scene_path = _infer_enemy_scene_path(enemy.name)
+			spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CRIT WINDOW SYSTEM (Client-Independent - each player sees only their own)
@@ -1480,22 +1526,39 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 
 	# Remove item from local corpse loot
 	# For server: already removed in request_loot_item, skip removal but still process inventory
-	# For clients: need to remove from local corpse
+	# For clients: need to remove from local corpse using the index provided by server
 	if not multiplayer.is_server():
-		var item_type = item.get("type", "")
 		var removed = false
-		LogManager.debug("Client removing item '%s' from corpse (has %d items)" % [item_name, enemy.corpse_loot.size()], "loot")
-		for i in range(enemy.corpse_loot.size()):
-			var corpse_item = enemy.corpse_loot[i]
+		var loot_id = item.get("loot_id", -1)
+		LogManager.debug("Client removing item '%s' (loot_id=%d) at index %d from corpse (has %d items)" % [item_name, loot_id, item_index, enemy.corpse_loot.size()], "loot")
+
+		# First try exact index match (most reliable when arrays are in sync)
+		if item_index >= 0 and item_index < enemy.corpse_loot.size():
+			var corpse_item = enemy.corpse_loot[item_index]
+			# Match by loot_id if available, otherwise by name
 			if corpse_item:
-				LogManager.debug("   [%d] '%s' type='%s'" % [i, corpse_item.get("name", ""), corpse_item.get("type", "")], "loot")
-			if corpse_item and corpse_item.get("name", "") == item_name:
-				enemy.corpse_loot.remove_at(i)
-				removed = true
-				LogManager.debug("Removed '%s' from corpse loot at index %d" % [item_name, i], "loot")
-				break
+				var corpse_loot_id = corpse_item.get("loot_id", -1)
+				if (loot_id > 0 and corpse_loot_id == loot_id) or (loot_id <= 0 and corpse_item.get("name", "") == item_name):
+					enemy.corpse_loot.remove_at(item_index)
+					removed = true
+					LogManager.debug("Removed '%s' at exact index %d (loot_id=%d)" % [item_name, item_index, loot_id], "loot")
+
+		# Fallback: search by loot_id or name if exact index didn't match (array out of sync)
 		if not removed:
-			LogManager.warn("Could not find '%s' in corpse loot to remove" % item_name, "loot")
+			LogManager.debug("Exact index mismatch, searching by loot_id/name...", "loot")
+			for i in range(enemy.corpse_loot.size()):
+				var corpse_item = enemy.corpse_loot[i]
+				if corpse_item:
+					var corpse_loot_id = corpse_item.get("loot_id", -1)
+					# Prefer loot_id match, fall back to name match
+					if (loot_id > 0 and corpse_loot_id == loot_id) or (loot_id <= 0 and corpse_item.get("name", "") == item_name):
+						enemy.corpse_loot.remove_at(i)
+						removed = true
+						LogManager.debug("Fallback: Removed '%s' at index %d (expected %d, loot_id=%d)" % [item_name, i, item_index, loot_id], "loot")
+						break
+
+		if not removed:
+			LogManager.warn("Could not find '%s' (loot_id=%d) in corpse loot to remove (expected index %d)" % [item_name, loot_id, item_index], "loot")
 		LogManager.debug("Client corpse now has %d items" % enemy.corpse_loot.size(), "loot")
 
 	# Only the looter gets the item added to their inventory

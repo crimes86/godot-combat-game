@@ -1064,12 +1064,23 @@ func play_lpc_animation(anim_name: String, direction: String):
 	# Check if this animation has directions
 	var anim_key = anim_name + "_" + direction
 
+	# Debug: Log shoot animations
+	if anim_name == "shoot" and OS.is_debug_build():
+		var owner_name = get_parent().name if get_parent() else "unknown"
+		print("🔫 [LPCSprite] play_lpc_animation('%s', '%s') on %s" % [anim_name, direction, owner_name])
+		print("🔫 [LPCSprite]   is_gun_weapon=%s, has_gun_walk_animations=%s, gun_body_sprite=%s" % [
+			is_gun_weapon, has_gun_walk_animations, gun_body_sprite != null
+		])
+
 	# GUN MODE: When gun is equipped, use Skorpio body for EAST/WEST only
 	# North/South can use regular LPC body+armor (no pose conflict)
 	# Exception: harvest animations (chop) - those use regular LPC body with tool
 	var is_harvesting = anim_name == "chop" or anim_name == "harvest"
 	var is_side_facing = direction in ["east", "west"]
 	var use_gun_mode = is_gun_weapon and has_gun_walk_animations and gun_body_sprite and not is_harvesting and is_side_facing
+
+	if anim_name == "shoot" and OS.is_debug_build():
+		print("🔫 [LPCSprite]   is_side_facing=%s, use_gun_mode=%s" % [is_side_facing, use_gun_mode])
 
 	if use_gun_mode:
 		# Enable Skorpio body mode
@@ -1114,13 +1125,14 @@ func play_lpc_animation(anim_name: String, direction: String):
 			if weapon_sprite.sprite_frames.has_animation(weapon_anim):
 				weapon_sprite.play(weapon_anim)
 				weapon_sprite.visible = true
-				# Z-index: behind for north/sideways during idle/walk, in front for south and shooting
+				# Z-index for Skorpio gun pose: gun is held IN FRONT of body
+				# So gun should be on top for east/west (arms forward), behind only for north
 				if anim_name == "shoot":
 					weapon_sprite.z_index = 9  # Shooting always on top
-				elif direction in ["north", "east", "west"]:
-					weapon_sprite.z_index = -1  # Behind body when not facing south
+				elif direction == "north":
+					weapon_sprite.z_index = -1  # Behind body when facing away
 				else:
-					weapon_sprite.z_index = 9  # On top for south
+					weapon_sprite.z_index = 9  # On top for south AND east/west (gun held forward)
 				weapon_sprite.offset = Vector2(0, 0)
 
 		# Sync hair sprite to match Skorpio body animation
@@ -1219,8 +1231,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 			boots_sprite.play(anim_key)
 		elif boots_sprite.sprite_frames.has_animation(anim_name):
 			boots_sprite.play(anim_name)
-		elif anim_name in ["shoot", "thrust"]:
-			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+		elif anim_name == "shoot":
+			# Fallback for shoot: use idle to avoid floating (slash has different timing)
+			var idle_key = "idle_" + direction
+			if boots_sprite.sprite_frames.has_animation(idle_key):
+				boots_sprite.play(idle_key)
+		elif anim_name == "thrust":
+			# Fallback: thrust -> slash for armor that doesn't have thrust animations
 			var slash_key = "slash_" + direction
 			if boots_sprite.sprite_frames.has_animation(slash_key):
 				boots_sprite.play(slash_key)
@@ -1230,8 +1247,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 			pants_sprite.play(anim_key)
 		elif pants_sprite.sprite_frames.has_animation(anim_name):
 			pants_sprite.play(anim_name)
-		elif anim_name in ["shoot", "thrust"]:
-			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+		elif anim_name == "shoot":
+			# Fallback for shoot: use idle to avoid floating (slash has different timing)
+			var idle_key = "idle_" + direction
+			if pants_sprite.sprite_frames.has_animation(idle_key):
+				pants_sprite.play(idle_key)
+		elif anim_name == "thrust":
+			# Fallback: thrust -> slash for armor that doesn't have thrust animations
 			var slash_key = "slash_" + direction
 			if pants_sprite.sprite_frames.has_animation(slash_key):
 				pants_sprite.play(slash_key)
@@ -1241,8 +1263,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 			shirt_sprite.play(anim_key)
 		elif shirt_sprite.sprite_frames.has_animation(anim_name):
 			shirt_sprite.play(anim_name)
-		elif anim_name in ["shoot", "thrust"]:
-			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+		elif anim_name == "shoot":
+			# Fallback for shoot: use idle to avoid floating (slash has different timing)
+			var idle_key = "idle_" + direction
+			if shirt_sprite.sprite_frames.has_animation(idle_key):
+				shirt_sprite.play(idle_key)
+		elif anim_name == "thrust":
+			# Fallback: thrust -> slash for armor that doesn't have thrust animations
 			var slash_key = "slash_" + direction
 			if shirt_sprite.sprite_frames.has_animation(slash_key):
 				shirt_sprite.play(slash_key)
@@ -1252,8 +1279,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 			arms_sprite.play(anim_key)
 		elif arms_sprite.sprite_frames.has_animation(anim_name):
 			arms_sprite.play(anim_name)
-		elif anim_name in ["shoot", "thrust"]:
-			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+		elif anim_name == "shoot":
+			# Fallback for shoot: use idle to avoid floating (slash has different timing)
+			var idle_key = "idle_" + direction
+			if arms_sprite.sprite_frames.has_animation(idle_key):
+				arms_sprite.play(idle_key)
+		elif anim_name == "thrust":
+			# Fallback: thrust -> slash for armor that doesn't have thrust animations
 			var slash_key = "slash_" + direction
 			if arms_sprite.sprite_frames.has_animation(slash_key):
 				arms_sprite.play(slash_key)
@@ -1263,8 +1295,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 			hands_sprite.play(anim_key)
 		elif hands_sprite.sprite_frames.has_animation(anim_name):
 			hands_sprite.play(anim_name)
-		elif anim_name in ["shoot", "thrust"]:
-			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+		elif anim_name == "shoot":
+			# Fallback for shoot: use idle to avoid floating (slash has different timing)
+			var idle_key = "idle_" + direction
+			if hands_sprite.sprite_frames.has_animation(idle_key):
+				hands_sprite.play(idle_key)
+		elif anim_name == "thrust":
+			# Fallback: thrust -> slash for armor that doesn't have thrust animations
 			var slash_key = "slash_" + direction
 			if hands_sprite.sprite_frames.has_animation(slash_key):
 				hands_sprite.play(slash_key)
@@ -1284,8 +1321,15 @@ func play_lpc_animation(anim_name: String, direction: String):
 			head_sprite.play(anim_name)
 			if DEBUG_SPRITE_SETUP:
 				print("[SimpleLPCSprite] Playing head animation (no dir): %s" % anim_name)
-		elif anim_name in ["shoot", "thrust"]:
-			# Fallback: shoot/thrust -> slash for armor that doesn't have ranged animations
+		elif anim_name == "shoot":
+			# Fallback for shoot: use idle to avoid floating (slash has different timing)
+			var idle_key = "idle_" + direction
+			if head_sprite.sprite_frames.has_animation(idle_key):
+				head_sprite.play(idle_key)
+				if DEBUG_SPRITE_SETUP:
+					print("[SimpleLPCSprite] Playing head fallback: %s -> %s" % [anim_key, idle_key])
+		elif anim_name == "thrust":
+			# Fallback: thrust -> slash for armor that doesn't have thrust animations
 			var slash_key = "slash_" + direction
 			if head_sprite.sprite_frames.has_animation(slash_key):
 				head_sprite.play(slash_key)
@@ -1300,8 +1344,13 @@ func play_lpc_animation(anim_name: String, direction: String):
 			hair_sprite.play(anim_key)
 		elif hair_sprite.sprite_frames.has_animation(anim_name):
 			hair_sprite.play(anim_name)
-		elif anim_name in ["shoot", "thrust"]:
-			# Fallback: shoot/thrust -> slash for cosmetic layers
+		elif anim_name == "shoot":
+			# Fallback for shoot: use idle to avoid floating (slash has different timing)
+			var idle_key = "idle_" + direction
+			if hair_sprite.sprite_frames.has_animation(idle_key):
+				hair_sprite.play(idle_key)
+		elif anim_name == "thrust":
+			# Fallback: thrust -> slash for cosmetic layers
 			var slash_key = "slash_" + direction
 			if hair_sprite.sprite_frames.has_animation(slash_key):
 				hair_sprite.play(slash_key)
@@ -1349,6 +1398,12 @@ func play_lpc_animation(anim_name: String, direction: String):
 		if weapon_sprite.animation and weapon_sprite.animation.begins_with("slash_") and weapon_sprite.is_playing():
 			if weapon_anim_name != "slash":
 				# Don't interrupt slash with walk/idle
+				return
+
+		# Don't interrupt shoot animations with walk/idle (they come from RPC and should complete)
+		if weapon_sprite.animation and weapon_sprite.animation.begins_with("shoot_") and weapon_sprite.is_playing():
+			if weapon_anim_name != "shoot":
+				# Let shoot animation finish
 				return
 
 		# For gun weapons, sync weapon to Skorpio body animations (idle/walk during gun mode)

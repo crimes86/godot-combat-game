@@ -113,8 +113,16 @@ func _physics_process(delta):
 				player_instance.global_position = current_pos + direction * move_distance
 
 		# Update animation if changed
+		# IMPORTANT: Don't override shoot animations - they come from a separate RPC
+		# and should be allowed to play to completion
 		if player_instance.has_method("play_animation"):
-			player_instance.play_animation(sync_animation)
+			# Check if currently playing a shoot animation - don't interrupt it
+			var current_anim = player_instance.get_current_animation() if player_instance.has_method("get_current_animation") else ""
+			if current_anim.begins_with("shoot_"):
+				# Let shoot animation finish (about 0.5 seconds)
+				pass
+			else:
+				player_instance.play_animation(sync_animation)
 		else:
 			# Debug: This shouldn't happen anymore
 			if randf() < 0.01:

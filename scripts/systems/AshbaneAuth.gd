@@ -22,7 +22,7 @@ const TOKEN_PATH = "user://ashbane_session.dat"
 # Set this to switch between LAN and ngrok in development
 const USE_LAN_BY_DEFAULT = false
 # Set to true to force production URL even in editor (for testing prod connection)
-const FORCE_PRODUCTION = false
+const FORCE_PRODUCTION = true
 const POLL_INTERVAL: float = 2.0
 const DEVICE_CODE_EXPIRY: int = 600  # 10 minutes
 const HEARTBEAT_INTERVAL: float = 10.0  # Check connection every 10 seconds
@@ -163,6 +163,9 @@ func logout() -> void:
 	_stop_polling()
 	_delete_saved_token()
 	stop_live_connection()
+
+	# Clear user context from logging system
+	LogManager.clear_user_context()
 
 	LogManager.info("Logged out of Ashbane", "ashbane")
 	logout_completed.emit()
@@ -511,6 +514,9 @@ func _on_profile_response(result: int, response_code: int, headers: PackedString
 		_last_profile_hash = profile_hash
 		_is_first_profile_load = false
 
+		# Set user context for logging system (enriches all future logs)
+		LogManager.set_user_context(user_id, username)
+
 		# Emit for cosmetics system to process
 		profile_updated.emit(data)
 		auth_completed.emit(data)
@@ -623,6 +629,10 @@ func _load_saved_token() -> void:
 		is_guest = false
 		is_authenticated = true
 		_set_connection_status(ConnectionStatus.CONNECTING)  # Show connecting while we verify
+
+		# Set user context immediately for logging (will be refreshed when profile loads)
+		LogManager.set_user_context(user_id, username)
+
 		LogManager.info("Restored Ashbane session for %s (fetching profile...)" % username, "ashbane")
 		# Verify token is still valid by fetching profile
 		# NOTE: total_achievements will be 0 until _on_profile_response completes

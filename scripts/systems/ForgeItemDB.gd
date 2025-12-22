@@ -177,10 +177,9 @@ func _convert_json_item(json_item: Dictionary) -> Dictionary:
 		sprites["slash"] = FORGED_ITEMS_BASE + sprite_folder + "/slash.png"
 		sprites["thrust"] = FORGED_ITEMS_BASE + sprite_folder + "/thrust.png"
 		sprites["hurt"] = FORGED_ITEMS_BASE + sprite_folder + "/hurt.png"
-		# Bows/crossbows use shoot.png instead of slash/thrust
-		var weapon_type_str = _safe_string(json_item.get("weapon_type"), "")
-		if weapon_type_str in ["bow", "crossbow"]:
-			sprites["shoot"] = FORGED_ITEMS_BASE + sprite_folder + "/shoot.png"
+		# Always include shoot.png path - needed for armor when player uses bow,
+		# and for bow/crossbow weapons directly
+		sprites["shoot"] = FORGED_ITEMS_BASE + sprite_folder + "/shoot.png"
 
 	item["sprites"] = sprites
 

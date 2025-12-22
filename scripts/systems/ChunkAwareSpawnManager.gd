@@ -655,7 +655,10 @@ func spawn_single_spider(pos: Vector2, level: int, chunk_key: String) -> Node:
 
 	# Register with network enemy manager for multiplayer sync
 	if network_enemy_manager:
-		network_enemy_manager.register_enemy(spider)
+		var network_id = network_enemy_manager.register_enemy(spider)
+		# Broadcast to clients so they spawn the same enemy
+		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+			network_enemy_manager.spawn_enemy_on_clients.rpc(network_id, pos, spider.enemy_level, spider.name)
 
 	# Connect death signal for respawn tracking
 	if spider.has_signal("died"):
@@ -701,7 +704,10 @@ func spawn_single_wolf_roaming(pos: Vector2, level: int, chunk_key: String, is_d
 
 	# Register with network enemy manager for multiplayer sync
 	if network_enemy_manager:
-		network_enemy_manager.register_enemy(wolf)
+		var network_id = network_enemy_manager.register_enemy(wolf)
+		# Broadcast to clients so they spawn the same enemy
+		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+			network_enemy_manager.spawn_enemy_on_clients.rpc(network_id, pos, wolf.enemy_level, wolf.name)
 
 	# Connect death signal for respawn tracking
 	if wolf.has_signal("died"):

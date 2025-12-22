@@ -2824,7 +2824,10 @@ func spawn_tutorial_skeletons():
 
 		# Register with NetworkEnemyManager for multiplayer sync
 		if network_enemy_mgr:
-			network_enemy_mgr.register_enemy(enemy)
+			var network_id = network_enemy_mgr.register_enemy(enemy)
+			# Broadcast to clients so they spawn the same enemy
+			if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+				network_enemy_mgr.spawn_enemy_on_clients.rpc(network_id, spawn_pos, spawn_data.level, enemy.name)
 
 		spawned_count += 1
 
@@ -3812,12 +3815,14 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 	add_child(player)
 	players[id] = player
 
+	# ALL players (local AND remote) must be in "player" group for enemy AI to detect them
+	player.add_to_group("player")
+
 	if OS.is_debug_build():
 		print("🔍 [PLAYER DEBUG] ✅ Player %d spawned at %s (local=%s)" % [id, spawn_pos, is_local])
 
 	if is_local:
 		local_player = player
-		player.add_to_group("player")
 		if player.has_node("Camera2D"):
 			player.get_node("Camera2D").enabled = true
 		# Enable collision with other players (layer 4) for body-blocking

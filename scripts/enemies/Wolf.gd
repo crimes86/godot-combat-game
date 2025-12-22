@@ -641,8 +641,14 @@ func play_hurt_stagger() -> void:
 func die() -> void:
 	"""Handle wolf death (matches Enemy.gd death flow)"""
 	if is_dying:
+		if OS.is_debug_build():
+			print("🐺 [Wolf.die] Already dying, returning early - name: %s" % name)
 		return
 	is_dying = true
+
+	if OS.is_debug_build():
+		var is_server = multiplayer.has_multiplayer_peer() and multiplayer.is_server()
+		print("🐺 [Wolf.die] Starting death - name: %s, is_server: %s" % [name, is_server])
 
 	# Clean up crit window state
 	if in_crit_window or _crit_window_transitioning:
@@ -764,6 +770,13 @@ func become_corpse() -> void:
 	"""Transition wolf to corpse state (lootable)"""
 	is_corpse = true
 
+	if OS.is_debug_build():
+		var is_server = multiplayer.has_multiplayer_peer() and multiplayer.is_server()
+		print("🐺 [Wolf.become_corpse] Transitioning to corpse - name: %s, is_server: %s, gold: %d, loot_items: %d" % [
+			name, is_server, corpse_gold, corpse_loot.size()
+		])
+		print("🐺 [Wolf.become_corpse] corpse_clicked signal connections: %d" % corpse_clicked.get_connections().size())
+
 	# Disable health bar
 	if health_bar:
 		health_bar.visible = false
@@ -780,6 +793,8 @@ func become_corpse() -> void:
 	# Add loot indicator if has gold/items
 	if corpse_gold > 0 or corpse_loot.size() > 0:
 		add_loot_indicator()
+		if OS.is_debug_build():
+			print("🐺 [Wolf.become_corpse] Added loot indicator - gold: %d, items: %d" % [corpse_gold, corpse_loot.size()])
 
 	# Darken sprite
 	if sprite:

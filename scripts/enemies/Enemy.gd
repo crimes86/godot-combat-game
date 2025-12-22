@@ -1523,18 +1523,26 @@ func die() -> void:
 		if not is_instance_valid(self):
 			return
 
-	# Generate loot for this corpse (skip if already set by server in multiplayer)
+	# Generate loot for this corpse
+	# In multiplayer: Server generates loot and syncs via RPC - NEVER regenerate locally
+	# This prevents desync where server and client have different random loot
 	var has_peer = multiplayer.has_multiplayer_peer()
 	if corpse_loot.is_empty():
 		if has_peer:
-			print("⚠️ [%s] Enemy %s corpse_loot is EMPTY in multiplayer - generating local loot (this may cause desync!)" % [
-				"Server" if multiplayer.is_server() else "Client", name
-			])
-		corpse_loot = generate_corpse_loot()
+			# In multiplayer, empty loot is valid (40% chance) - don't regenerate!
+			# The loot was already set by _client_enemy_died RPC
+			if OS.is_debug_build():
+				print("📦 [%s] Enemy %s has 0 loot items (normal - 40%% drop chance)" % [
+					"Server" if multiplayer.is_server() else "Client", name
+				])
+		else:
+			# Single player - generate loot locally
+			corpse_loot = generate_corpse_loot()
 	else:
-		print("✅ [%s] Enemy %s corpse_loot already has %d items (from server)" % [
-			"Server" if multiplayer.is_server() else "Client", name, corpse_loot.size()
-		])
+		if OS.is_debug_build():
+			print("✅ [%s] Enemy %s has %d loot items (from server)" % [
+				"Server" if multiplayer.is_server() else "Client", name, corpse_loot.size()
+			])
 
 	# Emit died signal - spawner will respawn immediately
 	died.emit()

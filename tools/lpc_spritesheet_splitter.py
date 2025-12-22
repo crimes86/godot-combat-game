@@ -52,8 +52,8 @@ ANIMATIONS = {
 
 # What animations we need for different item types
 ITEM_ANIMATIONS = {
-    'weapon': ['walk', 'slash', 'thrust', 'hurt'],
-    'armor': ['walk', 'slash', 'thrust', 'hurt'],
+    'weapon': ['walk', 'slash', 'thrust', 'hurt', 'shoot'],
+    'armor': ['walk', 'slash', 'thrust', 'hurt', 'shoot'],  # shoot needed for bow!
     'shield': ['walk'],  # Shields typically only show during walk/idle
     'cape': ['walk', 'slash', 'thrust', 'hurt'],
     'all': ['walk', 'slash', 'thrust', 'hurt', 'spellcast', 'shoot'],

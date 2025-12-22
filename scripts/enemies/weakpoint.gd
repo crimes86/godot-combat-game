@@ -359,6 +359,11 @@ func _on_input(_vp: Node, event: InputEvent, _idx: int) -> void:
 		if parent.get("is_dying") or parent.get("is_corpse"):
 			return
 
+	# Don't allow hits if the local player is dead
+	var local_player = _get_local_player()
+	if local_player and local_player.get("is_dead"):
+		return
+
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		print("[Weakpoint] _on_input received click! theme=%s, parent=%s" % [color_theme, parent.name if parent else "null"])
 		# CLIENT-PREDICTED: All weakpoint interaction is local for instant feedback
@@ -813,6 +818,18 @@ func draw_debug_hitbox_world(world_container: Node2D) -> void:
 		line.add_point(point)
 
 	world_container.add_child(line)
+
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
+
+func _get_local_player() -> Node:
+	"""Get the local player (the one we control) for death checks"""
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	for player in get_tree().get_nodes_in_group("player"):
+		if player.get_multiplayer_authority() == my_peer_id:
+			return player
+	return null
 
 # ============================================
 # PVP WEAKPOINT DAMAGE
