@@ -107,7 +107,8 @@ async def sync_discord_badges(
 
     Returns summary of credited badges.
     """
-    token = provider_account.access_token
+    from app.services.crypto_service import decrypt_token
+    token = decrypt_token(provider_account.access_token)
     if not token:
         raise Exception("No Discord access token available")
 

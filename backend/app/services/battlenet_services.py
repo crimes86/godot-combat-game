@@ -299,7 +299,9 @@ async def sync_battlenet_achievements(
     user: User, provider_account: ProviderAccount, db: Session,
     bnet_api_key: str = None, token: str = None
 ) -> dict:
-    characters_data = await get_bnet_characters(token or provider_account.access_token)
+    from app.services.crypto_service import decrypt_token
+    effective_token = token or decrypt_token(provider_account.access_token)
+    characters_data = await get_bnet_characters(effective_token)
     total_credited = 0
     total_found = 0
     per_character = []
@@ -327,7 +329,7 @@ async def sync_battlenet_achievements(
             avatar_url = char.get("avatar_url") or char.get("thumb_url") or None
 
             # Fetch and normalize this character's achievements
-            raw_achievements = await get_character_achievements(realm, name, token or provider_account.access_token)
+            raw_achievements = await get_character_achievements(realm, name, effective_token)
             achievements = []
             found = 0
             credited = 0
@@ -570,7 +572,8 @@ async def sync_d3_achievements(
     """
     Sync Diablo 3 achievements for a Battle.net account.
     """
-    token = token or provider_account.access_token
+    from app.services.crypto_service import decrypt_token
+    token = token or decrypt_token(provider_account.access_token)
 
     # BattleTag is stored in display_name (e.g., "Player#1234"), not provider_user_id (numeric)
     battletag = provider_account.display_name
@@ -888,7 +891,8 @@ async def sync_sc2_achievements(
     Sync StarCraft 2 achievements for a Battle.net account.
     Note: SC2 API may return 503 in some regions (known issue as of late 2024).
     """
-    token = token or provider_account.access_token
+    from app.services.crypto_service import decrypt_token
+    token = token or decrypt_token(provider_account.access_token)
     account_id = provider_account.provider_user_id  # Numeric Battle.net account ID
 
     if not account_id:
@@ -1093,7 +1097,8 @@ async def sync_all_battlenet_achievements(
     """
     Sync all Battle.net game achievements: WoW, Diablo 3, and StarCraft 2.
     """
-    token = token or provider_account.access_token
+    from app.services.crypto_service import decrypt_token
+    token = token or decrypt_token(provider_account.access_token)
     total_credited = 0
     all_per_game = []
 

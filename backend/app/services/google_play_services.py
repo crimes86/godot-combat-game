@@ -159,7 +159,8 @@ async def sync_google_play_achievements(
 
     Returns summary of credited achievements.
     """
-    token = provider_account.access_token
+    from app.services.crypto_service import decrypt_token
+    token = decrypt_token(provider_account.access_token)
     if not token:
         raise Exception("No Google Play Games access token available")
 

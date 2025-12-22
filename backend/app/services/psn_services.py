@@ -160,7 +160,8 @@ def sync_psn_achievements(
     Note: This is synchronous because psnawp is a sync library.
     FastAPI will run it in a thread pool automatically.
     """
-    token = npsso or provider_account.access_token
+    from app.services.crypto_service import decrypt_token
+    token = npsso or decrypt_token(provider_account.access_token)
     if not token:
         raise Exception("No NPSSO token available")
 

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session as DbSession
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from app.models import User, ProviderAccount, Game, UserAchievement, Achievement, AchievementCredit, Session as SessionModel, WalletAccount, ForgedAchievement, ItemTrade, TradeListing, ChatMessage, AchievementDispute, DisputeVote
+from app.models import User, ProviderAccount, Game, UserAchievement, Achievement, AchievementCredit, Session as SessionModel, WalletAccount, ForgedAchievement, ItemTrade, TradeListing, ChatMessage, AchievementDispute, DisputeVote, DeviceCode
 import uuid
 from urllib.parse import urlencode
 import os
@@ -51,6 +51,7 @@ from app.routes.chat_routes import router as chat_router, init_chat_routes, seed
 from app.routes.trading_routes import router as trading_router, init_trading_routes
 from app.routes.weapon_stats_routes import router as weapon_stats_router, init_weapon_stats_routes
 from app.routes.world_tree_routes import router as world_tree_router, init_world_tree_routes
+from app.routes.logging_routes import router as logging_router, init_logging_routes
 import time
 import asyncio
 
@@ -104,12 +105,13 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def startup_event():
     """Initialize OAuth providers and wallet routes on startup"""
     init_oauth_providers()
-    init_wallet_routes(get_db, get_current_user)
+    init_wallet_routes(get_db, get_current_user, limiter)
     init_friend_routes(get_current_user, calculate_Ashbane_tier)
     init_chat_routes(get_current_user, calculate_Ashbane_tier)
     init_trading_routes(get_current_user)
     init_weapon_stats_routes(get_current_user)
     init_world_tree_routes(get_db, get_current_user)
+    init_logging_routes(get_current_user)
 
     # Only seed mock activity in development mode
     if DEV_MODE:
@@ -261,34 +263,79 @@ if not ADMIN_SECRET:
     print("⚠️  WARNING: Using default ADMIN_SECRET - do not use in production!")
 BETA_ACCESS_CODE = os.environ.get("BETA_ACCESS_CODE")  # Set to enable beta gate (e.g., "Ashbane-beta-2024")
 
-# In-memory device code storage (for Godot auth flow)
-# Format: {device_code: {"user_id": int|None, "username": str|None, "session_token": str|None, "created_at": datetime, "expires_at": datetime}}
-device_codes: dict = {}
+# Device code storage is now in database (DeviceCode model)
+# This allows codes to survive server restarts
 
-def cleanup_expired_device_codes():
-    """Remove expired device codes"""
-    now = datetime.utcnow()
-    expired = [code for code, data in device_codes.items() if data["expires_at"] < now]
-    for code in expired:
-        del device_codes[code]
+def cleanup_expired_device_codes(db: DbSession = None):
+    """Remove expired device codes from database"""
+    if db is None:
+        db = SessionLocal()
+        should_close = True
+    else:
+        should_close = False
+
+    try:
+        now = datetime.utcnow()
+        deleted = db.query(DeviceCode).filter(DeviceCode.expires_at < now).delete()
+        db.commit()
+        if deleted > 0:
+            logger.debug(f"Cleaned up {deleted} expired device codes")
+    finally:
+        if should_close:
+            db.close()
 
 
-def complete_device_auth(device_code: str, user_id: int, username: str, session_token: str):
+def get_device_code_data(device_code: str, db: DbSession = None) -> Optional[DeviceCode]:
+    """Get device code record from database"""
+    if db is None:
+        db = SessionLocal()
+        should_close = True
+    else:
+        should_close = False
+
+    try:
+        return db.query(DeviceCode).filter(
+            DeviceCode.device_code == device_code,
+            DeviceCode.expires_at > datetime.utcnow()
+        ).first()
+    finally:
+        if should_close:
+            db.close()
+
+
+def complete_device_auth(device_code: str, user_id: int, username: str, session_token: str, db: DbSession = None):
     """Associate a device code with an authenticated user and their session token"""
-    if device_code and device_code in device_codes:
-        device_codes[device_code]["user_id"] = user_id
-        device_codes[device_code]["username"] = username
-        device_codes[device_code]["session_token"] = session_token
-        return True
-    return False
+    if db is None:
+        db = SessionLocal()
+        should_close = True
+    else:
+        should_close = False
+
+    try:
+        record = db.query(DeviceCode).filter(
+            DeviceCode.device_code == device_code,
+            DeviceCode.expires_at > datetime.utcnow()
+        ).first()
+
+        if record:
+            record.user_id = user_id
+            record.username = username
+            record.session_token = session_token
+            db.commit()
+            return True
+        return False
+    finally:
+        if should_close:
+            db.close()
 
 
 def make_auth_response(request: Request, user, device_code: Optional[str], provider: str, db: DbSession):
     """Create appropriate response after auth - either device success page or dashboard redirect"""
-    if device_code and device_code in device_codes:
+    device_record = get_device_code_data(device_code, db) if device_code else None
+    if device_code and device_record:
         # Device auth flow - create session token for Godot to use
         token = create_session(db, user)
-        complete_device_auth(device_code, user.id, user.username, token)
+        complete_device_auth(device_code, user.id, user.username, token, db)
         return templates.TemplateResponse(
             "auth_success.html",
             {
@@ -1319,7 +1366,7 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
             device_code = request.query_params.get("device_code")
 
         # Validate device_code is still active (not expired/used)
-        if device_code and device_code not in device_codes:
+        if device_code and not get_device_code_data(device_code, db):
             logger.warning(f"Device code {device_code[:8]}... not found in active codes (expired or already used), treating as web login")
             device_code = None
 
@@ -2391,14 +2438,16 @@ async def privacy_page(request: Request):
 
 # --- Login Page (clears existing session cookies) ---
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, device_code: Optional[str] = None):
+async def login_page(request: Request, device_code: Optional[str] = None, db: DbSession = Depends(get_db)):
     # Check beta gate if enabled
     if BETA_ACCESS_CODE:
         # Check cookie first, then fallback to device_code beta verification (for ngrok/proxy scenarios)
         beta_cookie = request.cookies.get("beta_access")
         device_beta_verified = False
-        if device_code and device_code in device_codes:
-            device_beta_verified = device_codes[device_code].get("beta_verified", False)
+        if device_code:
+            device_record = get_device_code_data(device_code, db)
+            if device_record:
+                device_beta_verified = device_record.beta_verified
 
         beta_passed = (beta_cookie == BETA_ACCESS_CODE) or device_beta_verified
         logger.info(f"[BETA] Checking gate - cookie: '{beta_cookie}', device_verified: {device_beta_verified}, passed: {beta_passed}")
@@ -2436,7 +2485,7 @@ async def login_page(request: Request, device_code: Optional[str] = None):
 
 
 @app.post("/beta-access")
-async def verify_beta_access(request: Request, access_code: str = Form(...), device_code: str = None):
+async def verify_beta_access(request: Request, access_code: str = Form(...), device_code: str = None, db: DbSession = Depends(get_db)):
     """Verify beta access code and set cookie."""
     if not BETA_ACCESS_CODE:
         # Beta gate not enabled - preserve device_code in redirect
@@ -2451,8 +2500,10 @@ async def verify_beta_access(request: Request, access_code: str = Form(...), dev
         if device_code:
             redirect_url += f"?device_code={device_code}"
             # Mark this device_code as beta verified (fallback for when cookies don't work)
-            if device_code in device_codes:
-                device_codes[device_code]["beta_verified"] = True
+            device_record = get_device_code_data(device_code, db)
+            if device_record:
+                device_record.beta_verified = True
+                db.commit()
                 logger.info(f"[BETA] Marked device_code as beta verified: {device_code[:8]}...")
 
         response = RedirectResponse(url=redirect_url, status_code=303)
@@ -3252,7 +3303,7 @@ async def logout(request: Request, db: DbSession = Depends(get_db)):
 
 @app.get("/api/auth/device")
 @limiter.limit("10/minute")
-async def create_device_code(request: Request):
+async def create_device_code(request: Request, db: DbSession = Depends(get_db)):
     """
     Generate a device code for Godot auth flow.
 
@@ -3264,21 +3315,22 @@ async def create_device_code(request: Request):
     Rate limited: 10 requests per minute per IP.
     """
     logger.info(f"[DEVICE AUTH] Request received from {request.client.host}")
-    cleanup_expired_device_codes()
+    cleanup_expired_device_codes(db)
 
-    device_code = secrets.token_urlsafe(32)
-    logger.info(f"[DEVICE AUTH] Generated code: {device_code[:8]}...")
-    device_codes[device_code] = {
-        "user_id": None,
-        "username": None,
-        "session_token": None,
-        "created_at": datetime.utcnow(),
-        "expires_at": datetime.utcnow() + timedelta(minutes=10),
-    }
+    code = secrets.token_urlsafe(32)
+    logger.info(f"[DEVICE AUTH] Generated code: {code[:8]}...")
+
+    # Store in database
+    device_record = DeviceCode(
+        device_code=code,
+        expires_at=datetime.utcnow() + timedelta(minutes=10),
+    )
+    db.add(device_record)
+    db.commit()
 
     return {
-        "device_code": device_code,
-        "auth_url": f"{APP_URL}/login?device_code={device_code}",
+        "device_code": code,
+        "auth_url": f"{APP_URL}/login?device_code={code}",
         "poll_url": f"{APP_URL}/api/auth/status",
         "expires_in": 600,  # 10 minutes
     }
@@ -3286,7 +3338,7 @@ async def create_device_code(request: Request):
 
 @app.get("/api/auth/status")
 @limiter.limit("60/minute")
-async def check_device_auth_status(request: Request, device_code: str):
+async def check_device_auth_status(request: Request, device_code: str, db: DbSession = Depends(get_db)):
     """
     Check if a device code has been authenticated.
 
@@ -3301,24 +3353,28 @@ async def check_device_auth_status(request: Request, device_code: str):
 
     Rate limited: 60 requests per minute per IP (for polling).
     """
-    cleanup_expired_device_codes()
+    cleanup_expired_device_codes(db)
 
-    if device_code not in device_codes:
+    record = db.query(DeviceCode).filter(
+        DeviceCode.device_code == device_code,
+        DeviceCode.expires_at > datetime.utcnow()
+    ).first()
+
+    if not record:
         return {"status": "expired", "message": "Device code not found or expired"}
 
-    data = device_codes[device_code]
-
-    if data["user_id"] is None:
+    if record.user_id is None:
         return {"status": "pending", "message": "Waiting for user authentication"}
 
     # Auth complete - return user data with session token and clean up
     result = {
         "status": "success",
-        "user_id": data["user_id"],
-        "username": data["username"],
-        "token": data["session_token"],  # Godot stores this for API calls
+        "user_id": record.user_id,
+        "username": record.username,
+        "token": record.session_token,  # Godot stores this for API calls
     }
-    del device_codes[device_code]
+    db.delete(record)
+    db.commit()
     return result
 
 
@@ -5417,6 +5473,7 @@ app.include_router(chat_router)
 app.include_router(trading_router)
 app.include_router(weapon_stats_router)
 app.include_router(world_tree_router)
+app.include_router(logging_router)
 
 # Icon caching proxy
 from app.routes.icon_cache import router as icon_cache_router

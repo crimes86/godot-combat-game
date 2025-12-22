@@ -182,7 +182,8 @@ async def sync_github_achievements(
 
     Returns summary of credited achievements.
     """
-    token = provider_account.access_token
+    from app.services.crypto_service import decrypt_token
+    token = decrypt_token(provider_account.access_token)
     if not token:
         raise Exception("No GitHub access token available")
 

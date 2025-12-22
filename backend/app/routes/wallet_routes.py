@@ -28,6 +28,7 @@ router = APIRouter(prefix="/api/wallet", tags=["wallet"])
 # These will be set by init_wallet_routes()
 _get_current_user_func: Callable = None
 _wallet_service = None
+_limiter = None  # Rate limiter from main app
 
 
 def get_db():
@@ -46,10 +47,11 @@ def get_current_user_dep(request: Request, db: DbSession = Depends(get_db)):
     return _get_current_user_func(request, db)
 
 
-def init_wallet_routes(get_db_func: Callable, get_current_user: Callable):
+def init_wallet_routes(get_db_func: Callable, get_current_user: Callable, limiter=None):
     """Initialize wallet routes with dependencies from main app."""
-    global _get_current_user_func, _wallet_service
+    global _get_current_user_func, _wallet_service, _limiter
     _get_current_user_func = get_current_user
+    _limiter = limiter
 
     # Try to import wallet service (may fail if deps not installed)
     try:
@@ -335,7 +337,17 @@ async def forge_achievements(
     request: Request,
     db: DbSession = Depends(get_db),
 ):
-    """Forge (mint) achievements as NFTs."""
+    """Forge (mint) achievements as NFTs. Rate limited to 10/minute."""
+    # Apply rate limiting (10 forges per minute to prevent spam)
+    if _limiter:
+        from slowapi.util import get_remote_address
+        try:
+            # Check rate limit manually since decorator can't access runtime limiter
+            _limiter._check_request_limit(request, None, "10/minute", get_remote_address, 1)
+        except Exception as e:
+            if "Rate limit exceeded" in str(e) or "429" in str(e):
+                raise HTTPException(status_code=429, detail="Rate limit exceeded. Max 10 forge attempts per minute.")
+
     current_user = get_current_user_dep(request, db)
 
     if _wallet_service is None:

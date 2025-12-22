@@ -228,17 +228,25 @@ def create_oauth_routes(
 
         # Check provider exists and is enabled
         config = PROVIDERS.get(provider)
-        if not config or not config.enabled:
-            raise HTTPException(status_code=404, detail=f"Provider '{provider}' not found or not enabled")
+        if not config:
+            raise HTTPException(status_code=404, detail=f"Unknown login provider: {provider}")
+        if not config.enabled:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{config.display_name} login is not currently available. Please use a different login method."
+            )
 
         # Steam uses OpenID, not OAuth2 - has dedicated routes in main.py
         # Return 404 to let the specific route handle it (shouldn't reach here anyway)
         if config.type == ProviderType.OPENID:
             raise HTTPException(status_code=404, detail=f"Use dedicated /auth/{provider}/login route")
 
-        # Check if provider is registered with authlib
+        # Check if provider is registered with authlib (has API credentials configured)
         if provider not in _registered_providers:
-            raise HTTPException(status_code=503, detail=f"Provider '{provider}' not configured (missing credentials)")
+            raise HTTPException(
+                status_code=400,
+                detail=f"{config.display_name} login is not configured. Please contact support or use a different login method."
+            )
 
         # Check if user already has this provider linked
         # UNLESS reauth=true (token refresh flow)
@@ -288,15 +296,23 @@ def create_oauth_routes(
         from app.models import ProviderAccount, User
 
         config = PROVIDERS.get(provider)
-        if not config or not config.enabled:
-            raise HTTPException(status_code=404, detail=f"Provider '{provider}' not found")
+        if not config:
+            raise HTTPException(status_code=404, detail=f"Unknown login provider: {provider}")
+        if not config.enabled:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{config.display_name} login is not currently available."
+            )
 
         # Steam uses OpenID - should have been redirected
         if config.type == ProviderType.OPENID:
             raise HTTPException(status_code=400, detail="Use /auth/steam/callback for Steam")
 
         if provider not in _registered_providers:
-            raise HTTPException(status_code=503, detail=f"Provider '{provider}' not configured")
+            raise HTTPException(
+                status_code=400,
+                detail=f"{config.display_name} login is not properly configured."
+            )
 
         try:
             client = getattr(oauth, provider)
@@ -346,8 +362,8 @@ def create_oauth_routes(
 
             # Validate device_code is still active (not expired/used)
             if device_code:
-                from app.main import device_codes
-                if device_code not in device_codes:
+                from app.main import get_device_code_data
+                if not get_device_code_data(device_code, db):
                     logger.warning(f"Device code {device_code[:8]}... not found in active codes (expired or already used), treating as web login")
                     device_code = None
 

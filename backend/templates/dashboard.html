@@ -2664,23 +2664,23 @@
                style="width:112px; height:auto; margin-bottom:13px; filter:drop-shadow(0 0 20px rgba(160,216,239,0.5)) drop-shadow(0 0 40px rgba(255,140,50,0.3)); cursor:pointer; transition:transform 0.2s;"
                onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" />
 
-          <!-- 4. Connected Providers -->
+          <!-- 4. Connected Providers (compact pills, max 2 rows) -->
           {% if providers and providers|length > 0 %}
-          <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:13px;">
+          <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:center; max-height:52px; overflow:hidden; margin-bottom:8px;">
             {% for provider in providers %}
               <div title="{{ provider.total_achievements }} {{ provider.display_name }} {% if provider.name in ['discord'] %}Badges{% elif provider.name in ['github'] %}Achievements{% else %}Achievements{% endif %}"
-                   style="display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:6px; font-size:0.75rem; cursor:default;
-                          background:{% if provider.name == 'steam' %}rgba(27,155,215,0.15){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.15){% elif provider.name == 'xbox' %}rgba(55,253,18,0.12){% elif provider.name == 'psn' %}rgba(0,55,145,0.15){% elif provider.name == 'discord' %}rgba(88,101,242,0.15){% elif provider.name == 'github' %}rgba(140,140,160,0.15){% else %}rgba(85,85,85,0.15){% endif %};
-                          border:1px solid {% if provider.name == 'steam' %}rgba(27,155,215,0.3){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.3){% elif provider.name == 'xbox' %}rgba(55,253,18,0.3){% elif provider.name == 'psn' %}rgba(0,55,145,0.3){% elif provider.name == 'discord' %}rgba(88,101,242,0.3){% elif provider.name == 'github' %}rgba(140,140,160,0.3){% else %}rgba(85,85,85,0.3){% endif %};">
-                <img src="/static/icons/{{ provider.name }}.svg" style="width:14px; height:14px;" alt="{{ provider.display_name }}" />
-                <span class="count-up" data-counter-id="Ashbane-{{ provider.name }}" data-target="{{ provider.total_achievements }}" style="color:{% if provider.name == 'steam' %}#1b9bd7{% elif provider.name == 'battlenet' %}#ffb932{% elif provider.name == 'xbox' %}#37fd12{% elif provider.name == 'psn' %}#003791{% elif provider.name == 'discord' %}#5865F2{% elif provider.name == 'github' %}#8c8ca0{% else %}var(--neon){% endif %}; font-weight:600;">{{ provider.total_achievements }}</span>
+                   style="display:flex; align-items:center; gap:3px; padding:2px 6px; border-radius:5px; font-size:0.7rem; cursor:default;
+                          background:{% if provider.name == 'steam' %}rgba(27,155,215,0.15){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.15){% elif provider.name == 'xbox' %}rgba(55,253,18,0.12){% elif provider.name == 'psn' %}rgba(0,55,145,0.15){% elif provider.name == 'discord' %}rgba(88,101,242,0.15){% elif provider.name == 'github' %}rgba(140,140,160,0.15){% elif provider.name == 'google_play' %}rgba(52,168,83,0.15){% elif provider.name == 'roblox' %}rgba(0,162,255,0.15){% elif provider.name == 'facebook' %}rgba(24,119,242,0.15){% else %}rgba(85,85,85,0.15){% endif %};
+                          border:1px solid {% if provider.name == 'steam' %}rgba(27,155,215,0.3){% elif provider.name == 'battlenet' %}rgba(255,185,50,0.3){% elif provider.name == 'xbox' %}rgba(55,253,18,0.3){% elif provider.name == 'psn' %}rgba(0,55,145,0.3){% elif provider.name == 'discord' %}rgba(88,101,242,0.3){% elif provider.name == 'github' %}rgba(140,140,160,0.3){% elif provider.name == 'google_play' %}rgba(52,168,83,0.3){% elif provider.name == 'roblox' %}rgba(0,162,255,0.3){% elif provider.name == 'facebook' %}rgba(24,119,242,0.3){% else %}rgba(85,85,85,0.3){% endif %};">
+                <img src="/static/icons/{{ provider.name }}.svg" style="width:12px; height:12px;" alt="{{ provider.display_name }}" />
+                <span class="count-up" data-counter-id="Ashbane-{{ provider.name }}" data-target="{{ provider.total_achievements }}" style="color:{% if provider.name == 'steam' %}#1b9bd7{% elif provider.name == 'battlenet' %}#ffb932{% elif provider.name == 'xbox' %}#37fd12{% elif provider.name == 'psn' %}#003791{% elif provider.name == 'discord' %}#5865F2{% elif provider.name == 'github' %}#8c8ca0{% elif provider.name == 'google_play' %}#34A853{% elif provider.name == 'roblox' %}#00A2FF{% elif provider.name == 'facebook' %}#1877F2{% else %}var(--neon){% endif %}; font-weight:600;">{{ provider.total_achievements }}</span>
               </div>
             {% endfor %}
           </div>
           {% endif %}
 
           <!-- 5. Rarity Breakdown -->
-          <div style="display:flex; gap:0.2rem; margin-top:38px; justify-content:center;">
+          <div style="display:flex; gap:0.2rem; margin-top:12px; justify-content:center;">
             {% for rarity_tier in all_tiers %}
               {% set count = agg_rarity.get(rarity_tier, 0) %}
               <span class="rarity-badge" data-rarity="{{ rarity_tier }}" onclick="openRarityPopover('{{ rarity_tier }}')"

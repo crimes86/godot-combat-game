@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Hardhat
+cache/
+artifacts/
+typechain-types/
+
+# Environment (NEVER commit real keys)
+.env
+
+# Coverage
+coverage/
+coverage.json
+
+# Misc
+.DS_Store

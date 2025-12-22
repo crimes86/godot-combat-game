@@ -11,7 +11,33 @@ class BridgeStatus(str, Enum):
     IN_GAME = "in_game"           # In platform wallet, usable in Dreadland
     BRIDGING_OUT = "bridging_out" # Cooldown period (48h), not tradeable
     BRIDGED = "bridged"           # In external wallet, not usable in-game
-    BRIDGING_IN = "bridging_in"   # Being transferred back to platform 
+    BRIDGING_IN = "bridging_in"   # Being transferred back to platform
+
+
+class DeviceCode(Base):
+    """
+    Device authentication codes for Godot client login flow.
+
+    Replaces in-memory storage to survive server restarts.
+    Codes expire after 10 minutes.
+    """
+    __tablename__ = 'device_codes'
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_code = Column(String(64), unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+    # Set when user authenticates in browser
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    username = Column(String, nullable=True)
+    session_token = Column(String, nullable=True)
+
+    # Beta verification (if beta gate is enabled)
+    beta_verified = Column(Boolean, default=False)
+
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class User(Base):
     __tablename__ = 'users'
@@ -964,6 +990,37 @@ class DisputeVote(Base):
     )
 
 
+class GameLog(Base):
+    """
+    Client-side game logs sent from Godot clients.
+
+    Used for debugging, analytics, and monitoring.
+    Logs are batched and sent periodically (every 5 seconds).
+    Only INFO+ logs are sent (DEBUG stays client-side only).
+    """
+    __tablename__ = 'game_logs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    session_id = Column(String(36), nullable=True, index=True)  # UUID per game session
+    device_id = Column(String(36), nullable=True, index=True)   # Persistent per device
+
+    level = Column(Integer, nullable=False)  # 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
+    category = Column(String(32), nullable=True, index=True)
+    message = Column(Text, nullable=False)
+
+    client_timestamp = Column(DateTime, nullable=True)  # When client generated log
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    client_version = Column(String(16), nullable=True)
+    platform = Column(String(16), nullable=True)  # Windows, Linux, Android, Web
+    is_host = Column(Boolean, default=False)  # Was this client hosting?
+    ip_address = Column(String(45), nullable=True)  # For abuse tracking
+
+    # Relationships
+    user = relationship("User", backref="game_logs")
+
+
 class SeasonalRanking(Base):
     """
     All-time leaderboard tracking cumulative tree performance (Fix #9).
@@ -998,3 +1055,53 @@ class SeasonalRanking(Base):
 
     # Relationships
     tree = relationship("SeedPlot")
+
+
+# =============================================================================
+# TOKEN ENCRYPTION (automatic via SQLAlchemy events)
+# =============================================================================
+# Encrypts access_token and refresh_token on write, decrypts on load.
+# Handles legacy unencrypted tokens gracefully during migration.
+
+from sqlalchemy import event
+
+def _encrypt_tokens_on_set(target, value, oldvalue, initiator):
+    """Encrypt token before storing in database."""
+    if value is None or value == oldvalue:
+        return value
+    try:
+        from app.services.crypto_service import encrypt_token, is_encrypted
+        # Don't re-encrypt already encrypted values
+        if is_encrypted(value):
+            return value
+        return encrypt_token(value)
+    except Exception:
+        # If encryption fails, store plaintext (shouldn't happen in prod)
+        return value
+
+def _setup_token_encryption():
+    """Set up event listeners for token encryption."""
+    event.listen(ProviderAccount.access_token, 'set', _encrypt_tokens_on_set, retval=True)
+    event.listen(ProviderAccount.refresh_token, 'set', _encrypt_tokens_on_set, retval=True)
+
+# Initialize encryption listeners
+_setup_token_encryption()
+
+
+def get_decrypted_token(provider_account, token_attr: str = "access_token") -> str:
+    """
+    Get decrypted token from a ProviderAccount.
+    
+    Use this instead of directly accessing .access_token or .refresh_token
+    to ensure proper decryption.
+    
+    Args:
+        provider_account: ProviderAccount instance
+        token_attr: "access_token" or "refresh_token"
+    
+    Returns:
+        Decrypted token string, or None if not set
+    """
+    from app.services.crypto_service import decrypt_token
+    raw_value = getattr(provider_account, token_attr, None)
+    return decrypt_token(raw_value)
