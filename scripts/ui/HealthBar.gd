@@ -32,13 +32,13 @@ var COLOR_CRITICAL: Color:
 const COLOR_BACKGROUND = Color(0.15, 0.15, 0.15, 0.9)  # Dark gray (stays same for contrast)
 const COLOR_FLASH = Color(2.0, 2.0, 2.0, 1.0)          # Even brighter white flash!
 
-# 💊 Pill capsule dimensions (thin bar)
+# Rectangle bar dimensions (modern look)
 const BAR_WIDTH = 50.0
 const BAR_HEIGHT = 6.0
 
 func _ready() -> void:
-	# Create the pill capsule health bar
-	create_pill_capsule_bar()
+	# Create the modern rectangle health bar
+	create_rectangle_bar()
 
 	# Make healthbar use world space positioning
 	top_level = true
@@ -61,82 +61,70 @@ func _ready() -> void:
 	
 	ready_to_position = true
 
-func create_pill_capsule_bar() -> void:
-	"""Create the juicy pill capsule health bar from scratch"""
-	
+func create_rectangle_bar() -> void:
+	"""Create the modern rectangle health bar from scratch"""
+
 	# Set control size
 	custom_minimum_size = Vector2(BAR_WIDTH, BAR_HEIGHT)
 	size = Vector2(BAR_WIDTH, BAR_HEIGHT)
-	
-	# 🌟 GLOW LAYER (bottom, slightly larger) - Using Panel for rounded corners
+
+	# 🌟 GLOW LAYER (bottom, slightly larger) - hard rectangle edges
 	var glow_panel = Panel.new()
 	glow_panel.name = "GlowPanel"
 	glow_panel.size = Vector2(BAR_WIDTH + 2, BAR_HEIGHT + 2)
 	glow_panel.position = Vector2(-1, -1)
-	
+
 	var glow_style = StyleBoxFlat.new()
 	glow_style.bg_color = Color(0.45, 1.35, 0.6, 0.4)  # Brighter green glow to match!
-	glow_style.corner_radius_top_left = int(BAR_HEIGHT / 2) + 1
-	glow_style.corner_radius_top_right = int(BAR_HEIGHT / 2) + 1
-	glow_style.corner_radius_bottom_left = int(BAR_HEIGHT / 2) + 1
-	glow_style.corner_radius_bottom_right = int(BAR_HEIGHT / 2) + 1
+	# Hard rectangle edges - no corner radius
 	glow_panel.add_theme_stylebox_override("panel", glow_style)
-	
+
 	add_child(glow_panel)
 	glow = glow_panel  # Store reference
-	
-	# 🎯 BACKGROUND (dark pill shape) - Using Panel for rounded corners
+
+	# 🎯 BACKGROUND (dark rectangle) - hard edges
 	var bg_panel = Panel.new()
 	bg_panel.name = "Background"
 	bg_panel.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
-	
+
 	var bg_style = StyleBoxFlat.new()
 	bg_style.bg_color = COLOR_BACKGROUND
-	bg_style.corner_radius_top_left = int(BAR_HEIGHT / 2)
-	bg_style.corner_radius_top_right = int(BAR_HEIGHT / 2)
-	bg_style.corner_radius_bottom_left = int(BAR_HEIGHT / 2)
-	bg_style.corner_radius_bottom_right = int(BAR_HEIGHT / 2)
-	# Set borders individually (border_width_all not available in all versions)
+	# Hard rectangle edges - no corner radius
+	# Set borders individually
 	bg_style.border_width_left = 1
 	bg_style.border_width_right = 1
 	bg_style.border_width_top = 1
 	bg_style.border_width_bottom = 1
 	bg_style.border_color = Color(0.05, 0.05, 0.05, 1.0)
 	bg_panel.add_theme_stylebox_override("panel", bg_style)
-	
+
 	add_child(bg_panel)
 	background = bg_panel  # Store reference
-	
-	# 💚 FILL (colored health bar) - Using Panel for rounded corners
+
+	# 💚 FILL (colored health bar) - hard rectangle edges
 	var fill_panel = Panel.new()
 	fill_panel.name = "Fill"
 	fill_panel.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
 	fill_panel.clip_contents = true
-	
+
 	var fill_style = StyleBoxFlat.new()
 	fill_style.bg_color = COLOR_HEALTHY
-	fill_style.corner_radius_top_left = int(BAR_HEIGHT / 2)
-	fill_style.corner_radius_top_right = int(BAR_HEIGHT / 2)
-	fill_style.corner_radius_bottom_left = int(BAR_HEIGHT / 2)
-	fill_style.corner_radius_bottom_right = int(BAR_HEIGHT / 2)
+	# Hard rectangle edges - no corner radius
 	fill_panel.add_theme_stylebox_override("panel", fill_style)
-	
+
 	add_child(fill_panel)
 	fill = fill_panel  # Store reference
-	
-	# ✨ DAMAGE FLASH (white overlay) - Using Panel for rounded corners
+
+	# ✨ DAMAGE FLASH (white overlay) - hard rectangle edges
 	var flash_panel = Panel.new()
 	flash_panel.name = "DamageFlash"
 	flash_panel.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
-	
+
 	var flash_style = StyleBoxFlat.new()
 	flash_style.bg_color = Color(1.5, 1.5, 1.5, 0.0)
-	flash_style.corner_radius_top_left = int(BAR_HEIGHT / 2)
-	flash_style.corner_radius_top_right = int(BAR_HEIGHT / 2)
-	flash_style.corner_radius_bottom_left = int(BAR_HEIGHT / 2)
-	flash_style.corner_radius_bottom_right = int(BAR_HEIGHT / 2)
+	# Hard rectangle edges - no corner radius
 	flash_panel.add_theme_stylebox_override("panel", flash_style)
-	
+
 	add_child(flash_panel)
 	damage_flash = flash_panel  # Store reference
 

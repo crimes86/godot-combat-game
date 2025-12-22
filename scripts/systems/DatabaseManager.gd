@@ -596,15 +596,11 @@ func _on_auto_save_timeout() -> void:
 			NetworkManager.client_sync_state()
 			auto_save_triggered.emit()
 			LogManager.debug("Synced state to server", "database")
-			if NotificationManager and is_instance_valid(NotificationManager):
-				NotificationManager.show_notification("Progress synced", "INFO")
 		else:
 			# Host or single player: save locally
 			LogManager.debug("Auto-save triggered...", "database")
 			if save_current_player_state():
 				auto_save_triggered.emit()
-				if NotificationManager and is_instance_valid(NotificationManager):
-					NotificationManager.show_notification("Game saved", "INFO")
 
 func save_current_player_state() -> bool:
 	"""Save the current player's full game state using serialization from systems"""

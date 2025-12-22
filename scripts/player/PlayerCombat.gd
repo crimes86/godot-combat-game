@@ -968,12 +968,11 @@ func _fire_gun_at_weakpoint(weakpoint: Node, cursor_pos: Vector2) -> void:
 	# Face toward weakpoint
 	attack_direction = (weakpoint.global_position - player.global_position).normalized()
 
-	# Play shoot animation
-	var character_sprite = player.get_node_or_null("CharacterSprite")
+	# Play shoot animation (broadcasts to other players)
 	var dir_str = player.get_direction_string(attack_direction)
 	var lpc_dir = player.convert_to_lpc_direction(dir_str)
-	if character_sprite and character_sprite.has_method("play_lpc_animation"):
-		character_sprite.play_lpc_animation("shoot", lpc_dir)
+	if player.has_method("play_shoot_animation"):
+		player.play_shoot_animation(lpc_dir)
 
 	# Calculate barrel position
 	var barrel_pos = player.global_position + _get_gun_barrel_offset(lpc_dir)
@@ -988,6 +987,9 @@ func _fire_gun_at_weakpoint(weakpoint: Node, cursor_pos: Vector2) -> void:
 		# Battle rifle style - tracer round and green muzzle flash
 		_spawn_battle_rifle_muzzle_flash(barrel_pos)
 		_spawn_tracer_round(barrel_pos, weakpoint.global_position)
+		# Broadcast battle rifle visuals to other players
+		if player.has_method("broadcast_gun_visuals"):
+			player.broadcast_gun_visuals(barrel_pos, weakpoint.global_position, false, "battle_rifle")
 		if sound_manager and sound_manager.has_method("play_battle_rifle_sound"):
 			sound_manager.play_battle_rifle_sound(player.global_position, -10.0)
 		elif sound_manager:
@@ -996,6 +998,9 @@ func _fire_gun_at_weakpoint(weakpoint: Node, cursor_pos: Vector2) -> void:
 		# Railgun style - beam trail and standard muzzle flash
 		_spawn_muzzle_flash_at(barrel_pos)
 		_spawn_bullet_trail(barrel_pos, weakpoint.global_position)
+		# Broadcast railgun visuals to other players
+		if player.has_method("broadcast_gun_visuals"):
+			player.broadcast_gun_visuals(barrel_pos, weakpoint.global_position, false, "railgun")
 		if sound_manager:
 			sound_manager.play_gunshot_sound(player.global_position, -10.0)
 
@@ -1030,12 +1035,11 @@ func attempt_gun_attack() -> void:
 	# Face toward cursor
 	attack_direction = (cursor_pos - player.global_position).normalized()
 
-	# Play gun shoot animation (uses Skorpio body pose)
-	var character_sprite = player.get_node_or_null("CharacterSprite")
+	# Play gun shoot animation (broadcasts to other players)
 	var dir_str = player.get_direction_string(attack_direction)
 	var lpc_dir = player.convert_to_lpc_direction(dir_str)
-	if character_sprite and character_sprite.has_method("play_lpc_animation"):
-		character_sprite.play_lpc_animation("shoot", lpc_dir)
+	if player.has_method("play_shoot_animation"):
+		player.play_shoot_animation(lpc_dir)
 
 	# Calculate barrel tip position based on direction
 	var barrel_pos = player.global_position + _get_gun_barrel_offset(lpc_dir)
@@ -1055,6 +1059,10 @@ func attempt_gun_attack() -> void:
 
 	# Spawn bullet trail from barrel to actual hit point
 	_spawn_bullet_trail(barrel_pos, actual_target)
+
+	# Broadcast gun visuals to other players (muzzle flash, bullet trail, impact)
+	if player.has_method("broadcast_gun_visuals"):
+		player.broadcast_gun_visuals(barrel_pos, actual_target, false, "railgun")
 
 	# Play gunshot sound
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
@@ -1127,12 +1135,11 @@ func attempt_bow_attack() -> void:
 	# Face toward cursor
 	attack_direction = (cursor_pos - player.global_position).normalized()
 
-	# Play bow shoot animation
-	var character_sprite = player.get_node_or_null("CharacterSprite")
+	# Play bow shoot animation (broadcasts to other players)
 	var dir_str = player.get_direction_string(attack_direction)
 	var lpc_dir = player.convert_to_lpc_direction(dir_str)
-	if character_sprite and character_sprite.has_method("play_lpc_animation"):
-		character_sprite.play_lpc_animation("shoot", lpc_dir)
+	if player.has_method("play_shoot_animation"):
+		player.play_shoot_animation(lpc_dir)
 
 	# Play bow shot sound (twang!) - plays immediately on attack
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
@@ -1203,12 +1210,11 @@ func _fire_bow_at_weakpoint(weakpoint: Node, cursor_pos: Vector2) -> void:
 	# Face toward weakpoint
 	attack_direction = (weakpoint.global_position - player.global_position).normalized()
 
-	# Play shoot animation
-	var character_sprite = player.get_node_or_null("CharacterSprite")
+	# Play shoot animation (broadcasts to other players)
 	var dir_str = player.get_direction_string(attack_direction)
 	var lpc_dir = player.convert_to_lpc_direction(dir_str)
-	if character_sprite and character_sprite.has_method("play_lpc_animation"):
-		character_sprite.play_lpc_animation("shoot", lpc_dir)
+	if player.has_method("play_shoot_animation"):
+		player.play_shoot_animation(lpc_dir)
 
 	# Play bow shot sound immediately
 	var sound_manager = player.get_node_or_null("/root/SoundManager")
@@ -1526,12 +1532,11 @@ func _fire_burst_round() -> void:
 
 	burst_shots_remaining -= 1
 
-	# Play shoot animation
-	var character_sprite = player.get_node_or_null("CharacterSprite")
+	# Play shoot animation (broadcasts to other players)
 	var dir_str = player.get_direction_string(attack_direction)
 	var lpc_dir = player.convert_to_lpc_direction(dir_str)
-	if character_sprite and character_sprite.has_method("play_lpc_animation"):
-		character_sprite.play_lpc_animation("shoot", lpc_dir)
+	if player.has_method("play_shoot_animation"):
+		player.play_shoot_animation(lpc_dir)
 
 	# Calculate barrel position
 	var barrel_pos = player.global_position + _get_gun_barrel_offset(lpc_dir)
@@ -1551,6 +1556,10 @@ func _fire_burst_round() -> void:
 	# Note: Sound is played once in attempt_burst_attack(), not per round
 	_spawn_battle_rifle_muzzle_flash(barrel_pos)
 	_spawn_tracer_round(barrel_pos, actual_target)
+
+	# Broadcast battle rifle visuals to other players
+	if player.has_method("broadcast_gun_visuals"):
+		player.broadcast_gun_visuals(barrel_pos, actual_target, false, "battle_rifle")
 
 	# Deal damage to enemy hit along path, or check at target as fallback
 	if hit_enemy and is_instance_valid(hit_enemy):

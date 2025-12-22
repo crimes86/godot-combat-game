@@ -246,10 +246,13 @@ func _create_indicator() -> void:
 	bg_style.set_content_margin_all(6)
 	bg_panel.add_theme_stylebox_override("panel", bg_style)
 
-	# Center at top of screen
-	bg_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	bg_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	bg_panel.position = Vector2(-10, 10)
+	# Position halfway between top-right and top-center (75% from left)
+	bg_panel.anchor_left = 0.75
+	bg_panel.anchor_right = 0.75
+	bg_panel.anchor_top = 0.0
+	bg_panel.anchor_bottom = 0.0
+	bg_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	bg_panel.position = Vector2(0, 10)
 	indicator_container.add_child(bg_panel)
 
 	# VBox for content

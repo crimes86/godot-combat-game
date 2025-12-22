@@ -189,6 +189,251 @@ func play_animation(anim_name: String) -> void:
 		# Fallback: play directly if it's a valid animation name
 		character_sprite.play(anim_name)
 
+func play_shoot_animation(lpc_direction: String) -> void:
+	"""Play shoot animation and broadcast to other players.
+	Called by PlayerCombat when player shoots a gun or bow."""
+	var character_sprite_node = get_node_or_null("CharacterSprite")
+	if not character_sprite_node:
+		print("🔫 [SHOOT] No CharacterSprite found!")
+		return
+
+	# Play locally
+	if character_sprite_node.has_method("play_lpc_animation"):
+		character_sprite_node.play_lpc_animation("shoot", lpc_direction)
+		if OS.is_debug_build():
+			print("🔫 [SHOOT] Local: Playing shoot_%s animation" % lpc_direction)
+
+	# Broadcast to other players in multiplayer
+	var has_peer = multiplayer.has_multiplayer_peer()
+	if has_peer and is_multiplayer_authority():
+		if OS.is_debug_build():
+			print("🔫 [SHOOT] Broadcasting shoot_%s to other players" % lpc_direction)
+		rpc("_receive_shoot_animation", lpc_direction)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _receive_shoot_animation(lpc_direction: String) -> void:
+	"""Receive shoot animation from another player."""
+	var sender_id = multiplayer.get_remote_sender_id()
+	if OS.is_debug_build():
+		print("🔫 [SHOOT] Received shoot_%s from peer %d for player %s" % [lpc_direction, sender_id, name])
+
+	var character_sprite_node = get_node_or_null("CharacterSprite")
+	if not character_sprite_node:
+		print("🔫 [SHOOT] ERROR: No CharacterSprite on %s!" % name)
+		return
+
+	if not character_sprite_node.has_method("play_lpc_animation"):
+		print("🔫 [SHOOT] ERROR: CharacterSprite missing play_lpc_animation method!")
+		return
+
+	# Check if gun body layer exists for gun weapons
+	var gun_body = character_sprite_node.get_node_or_null("GunBodyLayer")
+	if OS.is_debug_build():
+		print("🔫 [SHOOT] GunBodyLayer exists: %s, visible: %s" % [gun_body != null, gun_body.visible if gun_body else "N/A"])
+
+	character_sprite_node.play_lpc_animation("shoot", lpc_direction)
+	if OS.is_debug_build():
+		print("🔫 [SHOOT] Animation triggered on %s" % name)
+
+# ========================================
+# GUN VISUAL EFFECTS SYNC
+# ========================================
+
+func broadcast_gun_visuals(barrel_pos: Vector2, target_pos: Vector2, is_crit: bool = false, gun_subtype: String = "railgun") -> void:
+	"""Broadcast gun visual effects (muzzle flash, bullet trail, impact) to other players."""
+	var has_peer = multiplayer.has_multiplayer_peer()
+	if has_peer and is_multiplayer_authority():
+		if OS.is_debug_build():
+			print("🔫 [GUN VFX] Broadcasting gun visuals: barrel=%s, target=%s, type=%s" % [barrel_pos, target_pos, gun_subtype])
+		rpc("_receive_gun_visuals", barrel_pos, target_pos, is_crit, gun_subtype)
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func _receive_gun_visuals(barrel_pos: Vector2, target_pos: Vector2, is_crit: bool, gun_subtype: String) -> void:
+	"""Receive gun visual effects from another player and spawn them locally."""
+	var sender_id = multiplayer.get_remote_sender_id()
+	if OS.is_debug_build():
+		print("🔫 [GUN VFX] Received gun visuals from peer %d: barrel=%s, target=%s, type=%s" % [sender_id, barrel_pos, target_pos, gun_subtype])
+
+	# Spawn the visual effects
+	_spawn_remote_gun_effects(barrel_pos, target_pos, is_crit, gun_subtype)
+
+func _spawn_remote_gun_effects(barrel_pos: Vector2, target_pos: Vector2, is_crit: bool, gun_subtype: String) -> void:
+	"""Spawn gun visual effects for remote player."""
+	var vfx_layer = get_node_or_null("/root/GameWorld/VFXLayer")
+	if not vfx_layer:
+		vfx_layer = get_tree().root  # Fallback
+
+	# Calculate direction for muzzle flash rotation
+	var direction = (target_pos - barrel_pos).normalized()
+
+	if gun_subtype == "battle_rifle":
+		# Battle rifle - green muzzle flash and tracer
+		_spawn_battle_rifle_muzzle_flash_remote(barrel_pos, direction, vfx_layer)
+		_spawn_tracer_round_remote(barrel_pos, target_pos, vfx_layer)
+	else:
+		# Railgun - purple beam and standard muzzle flash
+		_spawn_muzzle_flash_remote(barrel_pos, direction, vfx_layer)
+		_spawn_bullet_trail_remote(barrel_pos, target_pos, vfx_layer)
+
+	# Spawn impact effect (railgun only, battle rifle uses tracers)
+	if gun_subtype != "battle_rifle":
+		_spawn_bullet_impact_remote(target_pos, is_crit, vfx_layer)
+
+func _spawn_muzzle_flash_remote(flash_pos: Vector2, direction: Vector2, parent: Node) -> void:
+	"""Spawn muzzle flash effect for remote player - purple-magenta starburst."""
+	var flash_container = Node2D.new()
+	flash_container.name = "MuzzleFlash"
+	flash_container.global_position = flash_pos
+	flash_container.rotation = direction.angle()
+	flash_container.z_index = 15
+	parent.add_child(flash_container)
+
+	# Core bright circle (white-magenta)
+	var core = Polygon2D.new()
+	core.color = Color(1.0, 0.8, 1.0, 0.95)
+	var core_points = PackedVector2Array()
+	for i in range(12):
+		var angle = (float(i) / 12) * TAU
+		core_points.append(Vector2(cos(angle), sin(angle)) * 6)
+	core.polygon = core_points
+	flash_container.add_child(core)
+
+	# Outer glow (purple-magenta)
+	var glow = Polygon2D.new()
+	glow.color = Color(0.85, 0.2, 0.9, 0.6)
+	var glow_points = PackedVector2Array()
+	for i in range(12):
+		var angle = (float(i) / 12) * TAU
+		glow_points.append(Vector2(cos(angle), sin(angle)) * 12)
+	glow.polygon = glow_points
+	glow.z_index = -1
+	flash_container.add_child(glow)
+
+	# Spikes/rays
+	var num_spikes = randi_range(3, 5)
+	for i in range(num_spikes):
+		var spike = Polygon2D.new()
+		spike.color = Color(0.9, 0.5, 1.0, 0.8)
+		var spike_angle = randf_range(-0.4, 0.4)
+		var spike_length = randf_range(14, 22)
+		var spike_width = randf_range(2, 4)
+		spike.polygon = PackedVector2Array([
+			Vector2(0, 0),
+			Vector2(spike_length, -spike_width),
+			Vector2(spike_length + 4, 0),
+			Vector2(spike_length, spike_width)
+		])
+		spike.rotation = spike_angle
+		flash_container.add_child(spike)
+
+	# Quick scale up then fade out
+	flash_container.scale = Vector2(0.5, 0.5)
+	var tween = get_tree().create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(flash_container, "scale", Vector2(1.2, 1.2), 0.04)
+	tween.tween_property(flash_container, "modulate:a", 0.0, 0.1)
+	tween.set_parallel(false)
+	tween.tween_callback(flash_container.queue_free)
+
+func _spawn_bullet_trail_remote(from_pos: Vector2, to_pos: Vector2, parent: Node) -> void:
+	"""Spawn bullet trail line for remote player - purple-magenta beam."""
+	var trail = Line2D.new()
+	trail.name = "BulletTrail"
+	trail.width = 2.0
+	trail.default_color = Color(0.85, 0.2, 0.9, 0.8)
+	trail.add_point(from_pos)
+	trail.add_point(to_pos)
+	trail.z_index = 10
+	parent.add_child(trail)
+
+	# Quick fade out
+	var tween = get_tree().create_tween()
+	tween.tween_property(trail, "modulate:a", 0.0, 0.12)
+	tween.tween_callback(trail.queue_free)
+
+func _spawn_bullet_impact_remote(pos: Vector2, is_crit: bool, parent: Node) -> void:
+	"""Spawn bullet impact effect for remote player."""
+	var impact = Node2D.new()
+	impact.name = "BulletImpact"
+	impact.global_position = pos
+	impact.z_index = 12
+	parent.add_child(impact)
+
+	var circle = Polygon2D.new()
+	if is_crit:
+		circle.color = Color(1.0, 0.8, 0.2, 0.6)  # Gold for crit
+	else:
+		circle.color = Color(0.85, 0.2, 0.9, 0.6)  # Purple-magenta
+
+	var points = PackedVector2Array()
+	var segments = 12
+	var radius = 6.0
+	for i in range(segments):
+		var angle = (float(i) / segments) * TAU
+		points.append(Vector2(cos(angle), sin(angle)) * radius)
+	circle.polygon = points
+	impact.add_child(circle)
+
+	# Expand and fade
+	var tween = get_tree().create_tween()
+	var final_scale = 3.0 if is_crit else 2.0
+	tween.tween_property(circle, "scale", Vector2(final_scale, final_scale), 0.15)
+	tween.parallel().tween_property(circle, "color:a", 0.0, 0.15)
+	tween.tween_callback(impact.queue_free)
+
+func _spawn_battle_rifle_muzzle_flash_remote(flash_pos: Vector2, direction: Vector2, parent: Node) -> void:
+	"""Spawn battle rifle muzzle flash - green military style."""
+	var flash = Node2D.new()
+	flash.name = "BattleRifleMuzzleFlash"
+	flash.global_position = flash_pos
+	flash.rotation = direction.angle()
+	flash.z_index = 15
+	parent.add_child(flash)
+
+	# Core flash (bright green-white)
+	var core = Polygon2D.new()
+	core.color = Color(0.8, 1.0, 0.6, 0.95)
+	var core_points = PackedVector2Array()
+	for i in range(8):
+		var angle = (float(i) / 8) * TAU
+		core_points.append(Vector2(cos(angle), sin(angle)) * 5)
+	core.polygon = core_points
+	flash.add_child(core)
+
+	# Outer glow (green)
+	var glow = Polygon2D.new()
+	glow.color = Color(0.3, 0.8, 0.2, 0.5)
+	var glow_points = PackedVector2Array()
+	for i in range(8):
+		var angle = (float(i) / 8) * TAU
+		glow_points.append(Vector2(cos(angle), sin(angle)) * 10)
+	glow.polygon = glow_points
+	glow.z_index = -1
+	flash.add_child(glow)
+
+	# Fade out quickly
+	flash.scale = Vector2(0.6, 0.6)
+	var tween = get_tree().create_tween()
+	tween.tween_property(flash, "scale", Vector2(1.0, 1.0), 0.03)
+	tween.parallel().tween_property(flash, "modulate:a", 0.0, 0.08)
+	tween.tween_callback(flash.queue_free)
+
+func _spawn_tracer_round_remote(from_pos: Vector2, to_pos: Vector2, parent: Node) -> void:
+	"""Spawn tracer round effect - green glowing bullet trail."""
+	var trail = Line2D.new()
+	trail.name = "TracerRound"
+	trail.width = 3.0
+	trail.default_color = Color(0.4, 1.0, 0.3, 0.9)
+	trail.add_point(from_pos)
+	trail.add_point(to_pos)
+	trail.z_index = 10
+	parent.add_child(trail)
+
+	# Quick fade
+	var tween = get_tree().create_tween()
+	tween.tween_property(trail, "modulate:a", 0.0, 0.1)
+	tween.tween_callback(trail.queue_free)
+
 func get_health() -> int:
 	return int(current_health)
 
@@ -851,6 +1096,10 @@ func update_facing_direction() -> void:
 func _input(event: InputEvent) -> void:
 	# Only process input for the local player
 	if not is_multiplayer_authority():
+		return
+
+	# Don't process combat input if dead
+	if is_dead:
 		return
 
 	if event is InputEventMouseButton:
@@ -2537,8 +2786,20 @@ func create_player_sprite() -> void:
 
 	elif not is_local and remote_weapon_type != "":
 		effective_weapon_type = remote_weapon_type
+		# Populate forged weapon data from remote sync values
+		is_forged_weapon = remote_weapon_is_forged
+		if is_forged_weapon:
+			forged_weapon_data = {
+				"is_forged": true,
+				"glow_color": remote_weapon_glow_color,
+				"effect_name": remote_weapon_effect_name,
+				"theme": remote_weapon_theme,
+				"item_id": remote_weapon_item_id
+			}
 		if DEBUG_FORGED_EQUIP:
-			print("[ForgedEquip] Remote player weapon_type: %s" % effective_weapon_type)
+			print("[ForgedEquip] Remote player weapon_type: %s, forged: %s" % [effective_weapon_type, is_forged_weapon])
+			if is_forged_weapon:
+				print("[ForgedEquip]   Remote glow_color: %s" % remote_weapon_glow_color)
 
 	if effective_weapon_type != "":
 		weapon_type = effective_weapon_type
@@ -3094,6 +3355,12 @@ var remote_chest_sprite: String = ""
 var remote_arms_sprite: String = ""
 var remote_hands_sprite: String = ""
 var remote_head_sprite: String = ""
+# Remote forged weapon data (for tint/glow sync)
+var remote_weapon_glow_color: String = ""
+var remote_weapon_effect_name: String = ""
+var remote_weapon_theme: String = ""
+var remote_weapon_is_forged: bool = false
+var remote_weapon_item_id: String = ""
 
 func _sync_appearance_to_network():
 	"""Send current appearance to all other players"""
@@ -3105,7 +3372,9 @@ func _sync_appearance_to_network():
 		print("[Equip] Syncing appearance to network: %s" % str(appearance))
 	rpc("_receive_appearance_update", appearance["gender"], appearance["weapon_type"],
 		appearance["feet_sprite"], appearance["legs_sprite"], appearance["chest_sprite"],
-		appearance["arms_sprite"], appearance["hands_sprite"], appearance["head_sprite"])
+		appearance["arms_sprite"], appearance["hands_sprite"], appearance["head_sprite"],
+		appearance["weapon_glow_color"], appearance["weapon_effect_name"],
+		appearance["weapon_theme"], appearance["weapon_is_forged"], appearance["weapon_item_id"])
 
 func _broadcast_initial_appearance():
 	"""Broadcast appearance after initial spawn (called deferred from _ready)"""
@@ -3119,10 +3388,10 @@ func _broadcast_initial_appearance():
 		_sync_appearance_to_network()
 
 @rpc("any_peer", "call_remote", "reliable")
-func _receive_appearance_update(gender_int: int, weapon_type: String, feet_sprite: String, legs_sprite: String, chest_sprite: String, arms_sprite: String, hands_sprite: String, head_sprite: String):
+func _receive_appearance_update(gender_int: int, weapon_type: String, feet_sprite: String, legs_sprite: String, chest_sprite: String, arms_sprite: String, hands_sprite: String, head_sprite: String, weapon_glow_color: String = "", weapon_effect_name: String = "", weapon_theme: String = "", weapon_is_forged: bool = false, weapon_item_id: String = ""):
 	"""Receive appearance update from another player"""
 	if DEBUG_EQUIP:
-		print("[Equip] Received appearance for player %s: gender=%d, weapon=%s" % [name, gender_int, weapon_type])
+		print("[Equip] Received appearance for player %s: gender=%d, weapon=%s, forged=%s" % [name, gender_int, weapon_type, weapon_is_forged])
 
 	# Update appearance data
 	selected_gender = Gender.MALE if gender_int == 0 else Gender.FEMALE
@@ -3133,6 +3402,12 @@ func _receive_appearance_update(gender_int: int, weapon_type: String, feet_sprit
 	remote_arms_sprite = arms_sprite
 	remote_hands_sprite = hands_sprite
 	remote_head_sprite = head_sprite
+	# Forged weapon data
+	remote_weapon_glow_color = weapon_glow_color
+	remote_weapon_effect_name = weapon_effect_name
+	remote_weapon_theme = weapon_theme
+	remote_weapon_is_forged = weapon_is_forged
+	remote_weapon_item_id = weapon_item_id
 
 	# Recreate sprite with new appearance
 	set_physics_process(false)
@@ -3158,10 +3433,26 @@ func get_appearance_data() -> Dictionary:
 	var hands_forged_id = ""
 	var head_forged_id = ""
 
+	# Forged weapon data for tint/glow sync
+	var weapon_glow_color = ""
+	var weapon_effect_name = ""
+	var weapon_theme = ""
+	var weapon_is_forged = false
+	var weapon_item_id = ""
+
 	# Get from CharacterStats if this is the local player
 	if is_multiplayer_authority():
 		if CharacterStats.equipped_weapon:
 			weapon_type = CharacterStats.equipped_weapon.weapon_type
+			# Get forged weapon data
+			if CharacterStats.has_method("get_equipped_weapon_data"):
+				var forged_data = CharacterStats.get_equipped_weapon_data()
+				weapon_is_forged = forged_data.get("is_forged", false)
+				if weapon_is_forged:
+					weapon_glow_color = forged_data.get("glow_color", "")
+					weapon_effect_name = forged_data.get("effect_name", "")
+					weapon_theme = forged_data.get("theme", "")
+					weapon_item_id = forged_data.get("item_id", "")
 		if CharacterStats.equipped_armor.get("feet"):
 			var feet_armor = CharacterStats.equipped_armor["feet"]
 			feet_sprite = feet_armor.get("sprite_name", "")
@@ -3201,6 +3492,12 @@ func get_appearance_data() -> Dictionary:
 		arms_sprite = remote_arms_sprite
 		hands_sprite = remote_hands_sprite
 		head_sprite = remote_head_sprite
+		# Forged weapon data for remote players
+		weapon_glow_color = remote_weapon_glow_color
+		weapon_effect_name = remote_weapon_effect_name
+		weapon_theme = remote_weapon_theme
+		weapon_is_forged = remote_weapon_is_forged
+		weapon_item_id = remote_weapon_item_id
 
 	return {
 		"gender": 0 if selected_gender == Gender.MALE else 1,
@@ -3216,7 +3513,13 @@ func get_appearance_data() -> Dictionary:
 		"chest_forged_id": chest_forged_id,
 		"arms_forged_id": arms_forged_id,
 		"hands_forged_id": hands_forged_id,
-		"head_forged_id": head_forged_id
+		"head_forged_id": head_forged_id,
+		# Forged weapon data
+		"weapon_glow_color": weapon_glow_color,
+		"weapon_effect_name": weapon_effect_name,
+		"weapon_theme": weapon_theme,
+		"weapon_is_forged": weapon_is_forged,
+		"weapon_item_id": weapon_item_id
 	}
 
 func apply_appearance_data(data: Dictionary):
@@ -5559,22 +5862,53 @@ func _apply_forged_weapon_effects(forged_data: Dictionary) -> void:
 	}
 
 	# Apply effects to the weapon sprite, not the player
-	var weapon_sprite = get_node_or_null("WeaponSprite")
+	# WeaponLayer is a child of CharacterSprite (SimpleLPCSprite)
+	# GunBodyLayer is used for gun weapons
+	var character_sprite = get_node_or_null("CharacterSprite")
+	var weapon_sprite = character_sprite.get_node_or_null("WeaponLayer") if character_sprite else null
+	var gun_body_sprite = character_sprite.get_node_or_null("GunBodyLayer") if character_sprite else null
+
+	var applied_to_any = false
+
 	if weapon_sprite:
 		ForgeVisualEffects.apply_effects_to_entity(weapon_sprite, effect_config.effects, modifiers)
+		# Also apply direct color modulation to the weapon sprite for tint
+		if theme_color != Color.WHITE and theme_color.a > 0:
+			weapon_sprite.modulate = theme_color
+			if DEBUG_FORGED_EQUIP:
+				print("[ForgedEquip] ✓ Applied weapon tint color: %s" % theme_color)
 		if DEBUG_FORGED_EQUIP:
-			print("[ForgedEquip] ✓ Visual effects applied to WeaponSprite")
-	else:
+			print("[ForgedEquip] ✓ Visual effects applied to WeaponLayer")
+		applied_to_any = true
+
+	if gun_body_sprite:
+		ForgeVisualEffects.apply_effects_to_entity(gun_body_sprite, effect_config.effects, modifiers)
+		# Also apply direct color modulation to gun body for tint
+		if theme_color != Color.WHITE and theme_color.a > 0:
+			gun_body_sprite.modulate = theme_color
+			if DEBUG_FORGED_EQUIP:
+				print("[ForgedEquip] ✓ Applied gun tint color: %s" % theme_color)
+		if DEBUG_FORGED_EQUIP:
+			print("[ForgedEquip] ✓ Visual effects applied to GunBodyLayer")
+		applied_to_any = true
+
+	if not applied_to_any:
 		# Fallback to player if no weapon sprite found
 		ForgeVisualEffects.apply_effects_to_entity(self, effect_config.effects, modifiers)
 		if DEBUG_FORGED_EQUIP:
-			print("[ForgedEquip] ✓ Visual effects applied to Player (no WeaponSprite found)")
+			print("[ForgedEquip] ✓ Visual effects applied to Player (no weapon layers found)")
 
 func _clear_forged_weapon_effects() -> void:
 	"""Clear all forged weapon visual effects from the weapon sprite"""
-	var weapon_sprite = get_node_or_null("WeaponSprite")
+	var character_sprite = get_node_or_null("CharacterSprite")
+	var weapon_sprite = character_sprite.get_node_or_null("WeaponLayer") if character_sprite else null
+	var gun_body_sprite = character_sprite.get_node_or_null("GunBodyLayer") if character_sprite else null
 	if weapon_sprite:
 		ForgeVisualEffects.clear_effects_from_entity(weapon_sprite)
+		weapon_sprite.modulate = Color.WHITE  # Reset tint
+	if gun_body_sprite:
+		ForgeVisualEffects.clear_effects_from_entity(gun_body_sprite)
+		gun_body_sprite.modulate = Color.WHITE  # Reset tint
 	# Also clear from player in case effects were applied there previously
 	ForgeVisualEffects.clear_effects_from_entity(self)
 	if DEBUG_FORGED_EQUIP:

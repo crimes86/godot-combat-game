@@ -249,28 +249,22 @@ func _create_member_frame(peer_id: int, player_name: String, is_leader: bool, is
 	health_container.custom_minimum_size = Vector2(0, HEALTH_BAR_HEIGHT)
 	vbox.add_child(health_container)
 
-	# Health bar background - dark inset
+	# Health bar background - dark inset (hard rectangle edges)
 	var health_bg = Panel.new()
 	health_bg.name = "HealthBG"
 	var bg_style = StyleBoxFlat.new()
 	bg_style.bg_color = COLOR_HEALTH_BG
-	bg_style.corner_radius_top_left = 2
-	bg_style.corner_radius_top_right = 2
-	bg_style.corner_radius_bottom_left = 2
-	bg_style.corner_radius_bottom_right = 2
+	# Hard rectangle edges - no corner radius
 	health_bg.add_theme_stylebox_override("panel", bg_style)
 	health_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	health_container.add_child(health_bg)
 
-	# Health bar fill - starts at full
+	# Health bar fill - starts at full (hard rectangle edges)
 	var health_fill = Panel.new()
 	health_fill.name = "HealthFill"
 	var fill_style = StyleBoxFlat.new()
 	fill_style.bg_color = COLOR_HEALTH_HIGH
-	fill_style.corner_radius_top_left = 2
-	fill_style.corner_radius_top_right = 2
-	fill_style.corner_radius_bottom_left = 2
-	fill_style.corner_radius_bottom_right = 2
+	# Hard rectangle edges - no corner radius
 	health_fill.add_theme_stylebox_override("panel", fill_style)
 	health_fill.set_anchors_preset(Control.PRESET_FULL_RECT)
 	health_fill.anchor_right = 1.0  # Full width initially
