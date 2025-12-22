@@ -32,6 +32,7 @@ MAX_TRADES_PER_DAY = 10
 
 # Will be set by init_trading_routes()
 _get_current_user_func: Callable = None
+_limiter = None  # Rate limiter from main app
 
 
 def get_db():
@@ -50,10 +51,22 @@ def get_current_user_dep(request: Request, db: DbSession = Depends(get_db)):
     return _get_current_user_func(request, db)
 
 
-def init_trading_routes(get_current_user: Callable):
+def _check_rate_limit(request: Request, limit: str):
+    """Check rate limit using the main app's limiter."""
+    if _limiter:
+        from slowapi.util import get_remote_address
+        try:
+            _limiter._check_request_limit(request, None, limit, get_remote_address, 1)
+        except Exception as e:
+            if "Rate limit exceeded" in str(e) or "429" in str(e):
+                raise HTTPException(status_code=429, detail=f"Rate limit exceeded. {limit}")
+
+
+def init_trading_routes(get_current_user: Callable, limiter=None):
     """Initialize trading routes with dependencies from main app."""
-    global _get_current_user_func
+    global _get_current_user_func, _limiter
     _get_current_user_func = get_current_user
+    _limiter = limiter
     logger.info("Trading routes initialized")
 
 
@@ -215,7 +228,8 @@ def _announce_legendary_trade(forged, seller, buyer, price_gold: int) -> None:
 
 @router.post("/direct", response_model=DirectTradeResponse)
 async def record_direct_trade(
-    request: DirectTradeRequest,
+    trade_request: DirectTradeRequest,
+    request: Request,
     db: DbSession = Depends(get_db),
     current_user: User = Depends(get_current_user_dep)
 ):
@@ -226,10 +240,15 @@ async def record_direct_trade(
     - 5% gold tax applied to seller
     - 24-hour trade cooldown starts for buyer
     - Provenance updated (batched to chain later)
+
+    Rate limited to 10/minute to prevent abuse.
     """
+    # Rate limit trades to prevent spam/abuse
+    _check_rate_limit(request, "10/minute")
+
     # Find the forged item by token_id
     forged = db.query(ForgedAchievement).filter(
-        ForgedAchievement.token_id == request.token_id
+        ForgedAchievement.token_id == trade_request.token_id
     ).first()
 
     if not forged:
@@ -249,7 +268,7 @@ async def record_direct_trade(
         )
 
     # Verify recipient exists
-    recipient = db.query(User).filter(User.id == request.to_user_id).first()
+    recipient = db.query(User).filter(User.id == trade_request.to_user_id).first()
     if not recipient:
         raise HTTPException(status_code=404, detail="Recipient not found")
 
@@ -257,15 +276,15 @@ async def record_direct_trade(
         raise HTTPException(status_code=400, detail="Cannot trade with yourself")
 
     # Calculate tax
-    tax = calculate_tax(request.price_gold)
-    gold_after_tax = request.price_gold - tax
+    tax = calculate_tax(trade_request.price_gold)
+    gold_after_tax = trade_request.price_gold - tax
 
     # Create trade record
     trade = ItemTrade(
         forged_item_id=forged.id,
         from_user_id=current_user.id,
         to_user_id=recipient.id,
-        price_gold=request.price_gold,
+        price_gold=trade_request.price_gold,
         tax_applied=tax,
         trade_type='direct'
     )
@@ -285,11 +304,11 @@ async def record_direct_trade(
     db.commit()
     db.refresh(trade)
 
-    logger.info(f"Trade completed: {forged.item_name} from {current_user.username} to {recipient.username} for {request.price_gold}g")
+    logger.info(f"Trade completed: {forged.item_name} from {current_user.username} to {recipient.username} for {trade_request.price_gold}g")
 
     # Announce legendary trades to global chat
     if forged.item_rarity in ["Legendary", "Epic"]:
-        _announce_legendary_trade(forged, current_user, recipient, request.price_gold)
+        _announce_legendary_trade(forged, current_user, recipient, trade_request.price_gold)
 
     return DirectTradeResponse(
         success=True,
@@ -352,17 +371,23 @@ async def get_trade_history(
 
 @router.post("/listing", response_model=CreateListingResponse)
 async def create_listing(
-    request: CreateListingRequest,
+    listing_request: CreateListingRequest,
+    request: Request,
     db: DbSession = Depends(get_db),
     current_user: User = Depends(get_current_user_dep)
 ):
     """
     Create a trade listing (chat auction).
     Listings expire after 30 minutes.
+
+    Rate limited to 5/minute to prevent spam.
     """
+    # Rate limit listing creation
+    _check_rate_limit(request, "5/minute")
+
     # Find the forged item
     forged = db.query(ForgedAchievement).filter(
-        ForgedAchievement.token_id == request.token_id
+        ForgedAchievement.token_id == listing_request.token_id
     ).first()
 
     if not forged:
@@ -390,11 +415,11 @@ async def create_listing(
 
     if existing:
         # Update existing listing
-        existing.price_gold = request.price_gold
-        existing.message = request.message
-        existing.zone_id = request.zone_id
-        existing.position_x = request.position_x
-        existing.position_y = request.position_y
+        existing.price_gold = listing_request.price_gold
+        existing.message = listing_request.message
+        existing.zone_id = listing_request.zone_id
+        existing.position_x = listing_request.position_x
+        existing.position_y = listing_request.position_y
         existing.posted_at = datetime.utcnow()
         existing.expires_at = datetime.utcnow() + timedelta(minutes=LISTING_EXPIRY_MINUTES)
         db.commit()
@@ -410,19 +435,19 @@ async def create_listing(
     listing = TradeListing(
         forged_item_id=forged.id,
         seller_id=current_user.id,
-        listing_type=request.listing_type,
-        price_gold=request.price_gold,
-        message=request.message,
-        zone_id=request.zone_id,
-        position_x=request.position_x,
-        position_y=request.position_y,
+        listing_type=listing_request.listing_type,
+        price_gold=listing_request.price_gold,
+        message=listing_request.message,
+        zone_id=listing_request.zone_id,
+        position_x=listing_request.position_x,
+        position_y=listing_request.position_y,
         expires_at=datetime.utcnow() + timedelta(minutes=LISTING_EXPIRY_MINUTES)
     )
     db.add(listing)
     db.commit()
     db.refresh(listing)
 
-    logger.info(f"Listing created: {forged.item_name} for {request.price_gold}g by {current_user.username}")
+    logger.info(f"Listing created: {forged.item_name} for {listing_request.price_gold}g by {current_user.username}")
 
     return CreateListingResponse(
         success=True,

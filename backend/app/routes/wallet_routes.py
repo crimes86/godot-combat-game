@@ -720,7 +720,16 @@ async def request_bridge_out(
 
     Starts the 48h cooldown period. Items become unusable in-game
     during the cooldown. User must confirm after cooldown expires.
+    Rate limited to 5/minute.
     """
+    # Rate limit bridge operations
+    if _limiter:
+        from slowapi.util import get_remote_address
+        try:
+            _limiter._check_request_limit(request, None, "5/minute", get_remote_address, 1)
+        except Exception as e:
+            if "Rate limit exceeded" in str(e) or "429" in str(e):
+                raise HTTPException(status_code=429, detail="Rate limit exceeded. Max 5 bridge requests per minute.")
     current_user = get_current_user_dep(request, db)
     chain_id = _wallet_service.CHAIN_ID if _wallet_service else 8453
 
@@ -1085,7 +1094,17 @@ async def request_bridge_in(
 
     Transfers NFT from user's wallet to platform wallet.
     Item becomes usable in-game after transfer completes.
+    Rate limited to 5/minute.
     """
+    # Rate limit bridge operations
+    if _limiter:
+        from slowapi.util import get_remote_address
+        try:
+            _limiter._check_request_limit(request, None, "5/minute", get_remote_address, 1)
+        except Exception as e:
+            if "Rate limit exceeded" in str(e) or "429" in str(e):
+                raise HTTPException(status_code=429, detail="Rate limit exceeded. Max 5 bridge requests per minute.")
+
     current_user = get_current_user_dep(request, db)
 
     if _wallet_service is None:

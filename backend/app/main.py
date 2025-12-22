@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session as DbSession
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field, field_validator
 from app.models import User, ProviderAccount, Game, UserAchievement, Achievement, AchievementCredit, Session as SessionModel, WalletAccount, ForgedAchievement, ItemTrade, TradeListing, ChatMessage, AchievementDispute, DisputeVote, DeviceCode
 import uuid
 from urllib.parse import urlencode
@@ -108,10 +109,10 @@ async def startup_event():
     init_wallet_routes(get_db, get_current_user, limiter)
     init_friend_routes(get_current_user, calculate_Ashbane_tier)
     init_chat_routes(get_current_user, calculate_Ashbane_tier)
-    init_trading_routes(get_current_user)
+    init_trading_routes(get_current_user, limiter)
     init_weapon_stats_routes(get_current_user)
     init_world_tree_routes(get_db, get_current_user)
-    init_logging_routes(get_current_user)
+    init_logging_routes(get_current_user, limiter)
 
     # Only seed mock activity in development mode
     if DEV_MODE:
@@ -2237,10 +2238,26 @@ async def merge_confirm(
         target_provider: str = Form(),
         current_user_id: int = Form()
 ):
-    current_user = db.query(User).filter(User.id == current_user_id).first()
+    # SECURITY: Validate session and ensure current_user_id matches authenticated user
+    token = get_session_token(request)
+    if not token:
+        logger.warning("Merge failed: no session token")
+        return RedirectResponse(url="/login", status_code=303)
+
+    authenticated_user = get_user_from_session(db, token)
+    if not authenticated_user:
+        logger.warning("Merge failed: invalid session")
+        return RedirectResponse(url="/login", status_code=303)
+
+    # Prevent account takeover: form's current_user_id must match authenticated user
+    if authenticated_user.id != current_user_id:
+        logger.warning(f"Merge security violation: user {authenticated_user.id} tried to merge as user {current_user_id}")
+        raise HTTPException(status_code=403, detail="Unauthorized: session mismatch")
+
+    current_user = authenticated_user
     other_user = db.query(User).filter(User.id == other_user_id).first()
-    if not (current_user and other_user):
-        logger.warning("Merge failed: one or both user IDs not found")
+    if not other_user:
+        logger.warning(f"Merge failed: other user {other_user_id} not found")
         return RedirectResponse(url="/dashboard", status_code=303)
 
     # Always keep the OLDER account (lower ID = created first)
@@ -2392,10 +2409,23 @@ async def reclaim_confirm(
     Handle reclaiming an orphaned/unlinked provider.
     The original owner keeps their achievements - new owner links fresh.
     """
-    current_user = db.query(User).filter(User.id == current_user_id).first()
-    if not current_user:
-        logger.warning(f"Reclaim failed: user {current_user_id} not found")
-        return RedirectResponse(url="/dashboard", status_code=303)
+    # SECURITY: Validate session and ensure current_user_id matches authenticated user
+    token = get_session_token(request)
+    if not token:
+        logger.warning("Reclaim failed: no session token")
+        return RedirectResponse(url="/login", status_code=303)
+
+    authenticated_user = get_user_from_session(db, token)
+    if not authenticated_user:
+        logger.warning("Reclaim failed: invalid session")
+        return RedirectResponse(url="/login", status_code=303)
+
+    # Prevent provider hijacking: form's current_user_id must match authenticated user
+    if authenticated_user.id != current_user_id:
+        logger.warning(f"Reclaim security violation: user {authenticated_user.id} tried to reclaim as user {current_user_id}")
+        raise HTTPException(status_code=403, detail="Unauthorized: session mismatch")
+
+    current_user = authenticated_user
 
     # Find the provider account
     provider_account = db.query(ProviderAccount).filter_by(
@@ -3496,8 +3526,42 @@ async def get_current_user_api(
     }
 
 
+# =============================================================================
+# INPUT VALIDATION MODELS
+# =============================================================================
+
+class AppearanceRequest(BaseModel):
+    """Request model for saving character appearance."""
+    gender: int = Field(default=0, ge=0, le=1)  # 0=male, 1=female
+    weapon_type: str = Field(default="", max_length=64)
+    feet_sprite: str = Field(default="", max_length=128)
+    legs_sprite: str = Field(default="", max_length=128)
+    chest_sprite: str = Field(default="", max_length=128)
+    arms_sprite: str = Field(default="", max_length=128)
+    hands_sprite: str = Field(default="", max_length=128)
+    head_sprite: str = Field(default="", max_length=128)
+    # Forged item IDs for each armor slot
+    feet_forged_id: str = Field(default="", max_length=64)
+    legs_forged_id: str = Field(default="", max_length=64)
+    chest_forged_id: str = Field(default="", max_length=64)
+    arms_forged_id: str = Field(default="", max_length=64)
+    hands_forged_id: str = Field(default="", max_length=64)
+    head_forged_id: str = Field(default="", max_length=64)
+
+
+class TokenIdRequest(BaseModel):
+    """Request model for token_id based operations."""
+    token_id: int = Field(ge=1)
+
+
+class AchievementIdRequest(BaseModel):
+    """Request model for achievement_id based operations."""
+    achievement_id: int = Field(ge=1)
+
+
 @app.post("/api/me/appearance")
 async def save_appearance(
+    appearance_data: AppearanceRequest,
     request: Request,
     db: DbSession = Depends(get_db),
 ):
@@ -3513,30 +3577,8 @@ async def save_appearance(
     if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-    body = await request.json()
-
-    # Extract and validate appearance fields
-    appearance = {
-        "gender": body.get("gender", 0),
-        "weapon_type": body.get("weapon_type", ""),
-        "feet_sprite": body.get("feet_sprite", ""),
-        "legs_sprite": body.get("legs_sprite", ""),
-        "chest_sprite": body.get("chest_sprite", ""),
-        "arms_sprite": body.get("arms_sprite", ""),
-        "hands_sprite": body.get("hands_sprite", ""),
-        "head_sprite": body.get("head_sprite", ""),
-        # Forged item IDs for each armor slot
-        "feet_forged_id": body.get("feet_forged_id", ""),
-        "legs_forged_id": body.get("legs_forged_id", ""),
-        "chest_forged_id": body.get("chest_forged_id", ""),
-        "arms_forged_id": body.get("arms_forged_id", ""),
-        "hands_forged_id": body.get("hands_forged_id", ""),
-        "head_forged_id": body.get("head_forged_id", ""),
-    }
-
-    # Normalize gender to int (0=male, 1=female)
-    if isinstance(appearance["gender"], str):
-        appearance["gender"] = 0 if appearance["gender"].lower() == "male" else 1
+    # Convert to dict for storage
+    appearance = appearance_data.model_dump()
 
     user.appearance_data = appearance
     db.commit()
@@ -4233,7 +4275,9 @@ async def get_forged_items_api(
 
 
 @app.post("/api/forge/claim-to-game")
+@limiter.limit("20/minute")
 async def claim_forged_item_to_game(
+    claim_request: TokenIdRequest,
     request: Request,
     db: DbSession = Depends(get_db),
 ):
@@ -4244,7 +4288,7 @@ async def claim_forged_item_to_game(
     Once claimed, the item cannot be claimed again (until traded to another player
     who hasn't claimed it yet).
 
-    Request body: {"token_id": int}
+    Rate limited to 20/minute.
     """
     token = get_session_token(request)
     if not token:
@@ -4254,10 +4298,7 @@ async def claim_forged_item_to_game(
     if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-    body = await request.json()
-    token_id = body.get("token_id")
-    if not token_id:
-        raise HTTPException(status_code=400, detail="token_id required")
+    token_id = claim_request.token_id
 
     # Find the forged item
     user_wallets = db.query(WalletAccount.id).filter(WalletAccount.user_id == user.id).subquery()
@@ -4294,7 +4335,9 @@ async def claim_forged_item_to_game(
 
 
 @app.post("/api/forge/unclaim-from-game")
+@limiter.limit("10/minute")
 async def unclaim_forged_item_from_game(
+    unclaim_request: TokenIdRequest,
     request: Request,
     db: DbSession = Depends(get_db),
 ):
@@ -4302,7 +4345,7 @@ async def unclaim_forged_item_from_game(
     DEBUG/ADMIN: Unclaim a forged item (reset claimed_in_game_at).
     Used for testing or if item is lost due to bugs.
 
-    Request body: {"token_id": int}
+    Rate limited to 10/minute.
     """
     token = get_session_token(request)
     if not token:
@@ -4316,10 +4359,7 @@ async def unclaim_forged_item_from_game(
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    body = await request.json()
-    token_id = body.get("token_id")
-    if not token_id:
-        raise HTTPException(status_code=400, detail="token_id required")
+    token_id = unclaim_request.token_id
 
     forged = db.query(ForgedAchievement).filter(ForgedAchievement.token_id == token_id).first()
     if not forged:
@@ -4974,7 +5014,9 @@ async def get_user_forge_catalog(
 
 
 @app.post("/api/forge/claim")
+@limiter.limit("10/minute")
 async def forge_claim(
+    forge_request: AchievementIdRequest,
     request: Request,
     db: DbSession = Depends(get_db),
 ):
@@ -4984,9 +5026,8 @@ async def forge_claim(
     This endpoint allows forging without wallet connection for testing.
     Creates a ForgedAchievement record with dummy chain data.
 
-    Request body: {"achievement_id": int}
-
     For production, use /api/wallet/forge which requires real blockchain tx.
+    Rate limited to 10/minute.
     """
     token = get_session_token(request)
     if not token:
@@ -4996,15 +5037,7 @@ async def forge_claim(
     if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-    # Parse achievement_id from request body
-    try:
-        body = await request.json()
-        achievement_id = body.get("achievement_id")
-    except:
-        achievement_id = None
-
-    if not achievement_id:
-        raise HTTPException(status_code=400, detail="achievement_id is required")
+    achievement_id = forge_request.achievement_id
 
     # Get the achievement credit
     credit_query = (
@@ -5374,7 +5407,15 @@ async def grant_admin(
     Grant admin status to the current user.
     Requires ADMIN_SECRET to be provided.
     Admins can bypass sync cooldowns for testing.
+
+    SECURITY: This endpoint is restricted to localhost/internal requests only.
     """
+    # SECURITY: Only allow from localhost to prevent remote brute-force attempts
+    client_ip = request.client.host if request.client else None
+    if client_ip not in ("127.0.0.1", "::1", "localhost"):
+        logger.warning(f"Admin grant attempt from non-localhost IP: {client_ip}")
+        raise HTTPException(status_code=403, detail="Admin grants must be made from server")
+
     if secret != ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="Invalid admin secret")
 
@@ -5387,11 +5428,21 @@ async def grant_admin(
 
 @app.post("/api/admin/revoke")
 async def revoke_admin(
+    request: Request,
     secret: str,
     db: DbSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Revoke admin status from the current user."""
+    """Revoke admin status from the current user.
+
+    SECURITY: This endpoint is restricted to localhost/internal requests only.
+    """
+    # SECURITY: Only allow from localhost
+    client_ip = request.client.host if request.client else None
+    if client_ip not in ("127.0.0.1", "::1", "localhost"):
+        logger.warning(f"Admin revoke attempt from non-localhost IP: {client_ip}")
+        raise HTTPException(status_code=403, detail="Admin operations must be made from server")
+
     if secret != ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="Invalid admin secret")
 

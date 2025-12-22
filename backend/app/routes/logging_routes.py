@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/logs", tags=["logs"])
 
 # Injected from main app
 _get_current_user_func: Callable = None
+_limiter = None  # Rate limiter from main app
 
 # Configuration
 MAX_BATCH_SIZE = 200
@@ -96,10 +97,22 @@ def get_current_user_dep(request: Request, db: DbSession = Depends(get_db)):
     return _get_current_user_func(request, db)
 
 
-def init_logging_routes(get_current_user: Callable):
+def _check_rate_limit(request: Request, limit: str):
+    """Check rate limit using the main app's limiter."""
+    if _limiter:
+        from slowapi.util import get_remote_address
+        try:
+            _limiter._check_request_limit(request, None, limit, get_remote_address, 1)
+        except Exception as e:
+            if "Rate limit exceeded" in str(e) or "429" in str(e):
+                raise HTTPException(status_code=429, detail=f"Rate limit exceeded. {limit}")
+
+
+def init_logging_routes(get_current_user: Callable, limiter=None):
     """Initialize logging routes with dependencies from main app."""
-    global _get_current_user_func
+    global _get_current_user_func, _limiter
     _get_current_user_func = get_current_user
+    _limiter = limiter
 
 
 def require_admin(user: User):
@@ -125,7 +138,11 @@ async def receive_log_batch(
     - Logs are associated with the authenticated user
     - Client IP is recorded for abuse tracking
     - Messages are truncated if too long
+    - Rate limited to 20/minute to prevent log spam attacks
     """
+    # Rate limit to prevent log flooding
+    _check_rate_limit(request, "20/minute")
+
     if len(batch.logs) > MAX_BATCH_SIZE:
         raise HTTPException(
             status_code=400,
