@@ -274,7 +274,7 @@ Type these in chat (press Enter):
 - **Economy**: Vendor shops, gold currency, loot drops with rarity tiers
 - **Multiplayer**: Host-as-server networking, chat, party system (40 players)
 
-### Recent Features (Dec 2024)
+### Recent Features (Dec 2025)
 - **Forge System** - Achievement-to-item system with blockchain provenance
 - **Trading Hub** - Player-to-player trading with cooldowns and tax
 - **Allegiance System** - Faction shields displayed above players
@@ -334,4 +334,4 @@ See [CREDITS.md](CREDITS.md) for full attribution.
 
 ---
 
-*Last updated: December 2024*
+*Last updated: December 2025*
