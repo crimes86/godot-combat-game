@@ -1,24 +1,6 @@
-# DREADLAND - Remaining Tasks
+# Ashbane - Development TODO
 
-## 🚀 Start Here Tomorrow (Dec 11, 2024)
-
-**Last Session Summary (Dec 10):**
-- Completed Armory UI overhaul - forge detail panel, binding section, catalog polish
-- Changed terminology: "bridge" → "bind/unbind", "wallet" → "lockbox" (RPG-friendly)
-- Fixed catalog content overflow with 400px fixed height
-- Added spacing between THE FORGE header sections
-- Removed legacy TitlePanel "Dreadland" grey menu from MainMenu.tscn
-- Updated all user-facing strings (buttons, tooltips, status labels, notifications)
-
-**Ready to Continue:**
-- Deploy ForgedItems contract to Polygon testnet
-- Test full forge→trade→inspect flow end-to-end
-- Trading Hub implementation (see TRADING_HUB_DESIGN.md - Phase 1 done)
-
-**Key Files Changed This Session:**
-- `scripts/ui/Armory.gd` - Major UI terminology update (bind/unbind/lockbox)
-- `scripts/ui/MainMenu.gd` - Removed TitlePanel hide code
-- `scenes/ui/MainMenu.tscn` - Deleted legacy TitlePanel
+> Last updated: December 2024
 
 ---
 

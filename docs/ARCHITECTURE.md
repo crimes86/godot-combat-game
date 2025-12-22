@@ -43,7 +43,7 @@ This eliminates the "telephone game" between repos.
 ## Repository Structure
 
 ```
-godot-combat-game-master/
+ashbane/
 ├── .claude/                    # Claude Code instructions
 │   └── CLAUDE.md               # Project-specific AI guidelines
 │

@@ -1,6 +1,6 @@
-# Dreadland - Documentation Index
+# Ashbane - Documentation Index
 
-A fast-paced action RPG featuring a unique critical hit weakpoint system and chain multipliers.
+A fast-paced multiplayer action RPG featuring a unique critical hit weakpoint system, chain multipliers, and blockchain-backed achievement items.
 
 ## Quick Start
 
@@ -111,7 +111,7 @@ A fast-paced action RPG featuring a unique critical hit weakpoint system and cha
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | F3 debug, optimization, profiling, node management |
 | [docs/INVENTORY_AND_LOOT.md](docs/INVENTORY_AND_LOOT.md) | Inventory, loot drops, treasure systems |
 | [docs/LPC_GUIDE.md](docs/LPC_GUIDE.md) | LPC sprites, armor layering, asset generation |
-| [docs/FORGE_AND_MANTLE.md](docs/FORGE_AND_MANTLE.md) | Mantle integration, forge system, Armory UI |
+| [docs/FORGE_AND_ASHBANE.md](docs/FORGE_AND_ASHBANE.md) | Achievement-to-item forge system, Armory UI |
 | [docs/SERVER_ARCHITECTURE.md](docs/SERVER_ARCHITECTURE.md) | Multiplayer networking (host-as-server, future dedicated) |
 | [docs/SHARD_SYSTEM.md](docs/SHARD_SYSTEM.md) | Multi-server sharding for horizontal scaling |
 | [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Game world database (SQLite) - player data, persistence |
@@ -131,7 +131,7 @@ A fast-paced action RPG featuring a unique critical hit weakpoint system and cha
 
 ### Progression
 - **Level Cap**: 30 (stats stop at level 25)
-- **4 Zones**: dreadland → Cursed Lands → Shadow Realm → Castle Approach
+- **4 Zones**: Ashbane → Cursed Lands → Shadow Realm → Castle Approach
 - **3 Ruins**: Convertible checkpoints with vendors
 - **Boss Fight**: Level 33 Necromancer King at castle
 
@@ -267,47 +267,34 @@ Type these in chat (press Enter):
 
 ## Development Status
 
-### Implemented Features
-- Core combat with click-based attacking
-- Critical hit system with weakpoint windows
-- Chain multiplier system (0-10x)
-- Dodge roll with i-frames
-- 4-zone world with winding path
-- Ruins 1 with 8 guardians
-- Vendor shop with weapons/armor
-- Inventory system with loot drops and procedural icons
-- Armor equipping system (6 slots: head, chest, arms, hands, legs, feet)
-- Tool equipping (axe, pickaxe)
-- Global notification system (item gain/loss with rarity colors)
-- Environmental hazards (lava pools)
-- Resource gathering (harvestable trees and rocks)
-- Campfire with fuel system (bone embers, dry logs)
-- Training dummy for practice
-- Character sheet UI with paperdoll equipment display
-- Separate inventory UI with drag-drop support
-- Multiplayer chat system with admin commands
-- Player authentication and database persistence
-- Gender selection
-- Sound system with background music playlist
-- Performance optimizations (60fps target on laptops)
+### Core Systems (Implemented)
+- **Combat**: Click-based attacking, critical hit weakpoints, chain multipliers (0-10x), dodge roll
+- **World**: 4-zone world with winding path, 3 ruins, environmental hazards
+- **Progression**: Level 1-30, stat allocation, weapon/armor upgrades
+- **Economy**: Vendor shops, gold currency, loot drops with rarity tiers
+- **Multiplayer**: Host-as-server networking, chat, party system (40 players)
 
-### In Progress
-- Ruins 2 & 3 implementation
-- Boss fight (Level 33 Necromancer King)
+### Recent Features (Dec 2024)
+- **Forge System** - Achievement-to-item system with blockchain provenance
+- **Trading Hub** - Player-to-player trading with cooldowns and tax
+- **Allegiance System** - Faction shields displayed above players
+- **Portrait HUD** - WoW-style player frame with shield shape
+- **Gun Weapons** - Railgun with muzzle flash and projectile sync
+- **Forged Items** - 20+ achievement-backed items with unique effects
+- **Spider/Wolf AI** - Improved enemy behavior and multiplayer sync
 
-### Recently Added
-- **Player Corpse System** - EverQuest-style death with corpse loot recovery
+### Multiplayer Features
+- **Player Corpse System** - EverQuest-style death with loot recovery
 - **PvP Duel System** - Consensual 1v1 duels with `/duel` command
-- **Wolf Enemies** - Pack-based AI with howling and pursuit behavior
-- **Group/Party System** - Up to 40 players, shared XP, party frames
-- **Quest System** - Tutorial and progression quests with tracker UI
-- **Harvest Tools** - Axe and pickaxe for gathering resources
+- **Group/Party System** - Up to 40 players, shared XP, raid frames
+- **Trade Window** - Direct player trading with 5-tile proximity
+- **Recently Advertised** - /sell listings visible to all players
 
-### Planned Features
-- Base building system
-- Settlement sieges
-- Crafting system
-- Additional biomes (Cursed Lands, Shadow Realm)
+### Planned Features (Designed, Not Implemented)
+- Settlement/Base Building with guild sieges
+- Class System (emergent from weapon skills)
+- Additional biomes (expanded Cursed Lands, Shadow Realm)
+- Ranked PvP ladder
 
 ---
 
@@ -332,22 +319,19 @@ Type these in chat (press Enter):
 
 ## License
 
-[Add license information]
+See [LICENSE](LICENSE) file.
 
 ---
 
 ## Credits
 
-### Development
-- Game Design & Programming: [Your Name]
-- Art: LPC (Liberated Pixel Cup) community assets
-- Sound Effects: [Credit sound sources]
+See [CREDITS.md](CREDITS.md) for full attribution.
 
-### Special Thanks
-- Godot Engine community
-- LPC sprite contributors
-- Playtesters and early supporters
+### Core
+- **Engine**: Godot 4.x
+- **Art**: LPC (Liberated Pixel Cup) community assets
+- **Backend**: FastAPI + PostgreSQL
 
 ---
 
-This documentation was last updated: 2025-12-08
+*Last updated: December 2024*
