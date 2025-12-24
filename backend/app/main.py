@@ -264,6 +264,10 @@ if not ADMIN_SECRET:
     print("⚠️  WARNING: Using default ADMIN_SECRET - do not use in production!")
 BETA_ACCESS_CODE = os.environ.get("BETA_ACCESS_CODE")  # Set to enable beta gate (e.g., "Ashbane-beta-2024")
 
+# Client version management
+CLIENT_VERSION = os.environ.get("CLIENT_VERSION", "0.0.1")  # Current required client version
+CLIENT_DOWNLOAD_URL = os.environ.get("CLIENT_DOWNLOAD_URL", "https://ashbane.itch.io/ashbane")  # itch.io page
+
 # Device code storage is now in database (DeviceCode model)
 # This allows codes to survive server restarts
 
@@ -3406,6 +3410,25 @@ async def check_device_auth_status(request: Request, device_code: str, db: DbSes
     db.delete(record)
     db.commit()
     return result
+
+
+# =============================================================================
+# CLIENT VERSION CHECK
+# =============================================================================
+
+@app.get("/api/version")
+async def get_client_version():
+    """
+    Get current client version info for update checking.
+
+    Client should call this on startup and compare with its version.
+    Returns download URL if update is needed.
+    """
+    return {
+        "version": CLIENT_VERSION,
+        "download_url": CLIENT_DOWNLOAD_URL,
+        "update_required": True,  # Client compares versions to determine if this applies
+    }
 
 
 @app.get("/api/me")
