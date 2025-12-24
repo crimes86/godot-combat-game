@@ -4,12 +4,16 @@ Game client logging routes.
 Receives batched logs from Godot clients and provides admin query endpoints.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy import desc, func
 from typing import Optional, Callable, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 import logging
+import html
+import os
+import shutil
 
 from app.models import User, GameLog
 from app.database import SessionLocal
@@ -369,3 +373,306 @@ async def get_log_stats(
         "unique_users": unique_users,
         "unique_sessions": unique_sessions
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HTML LOG VIEWER (QA-friendly)
+# ═══════════════════════════════════════════════════════════════════════════
+
+LEVEL_NAMES = {0: "DEBUG", 1: "INFO", 2: "WARN", 3: "ERROR"}
+LEVEL_COLORS = {0: "#888", 1: "#4a9eff", 2: "#f5a623", 3: "#ff4444"}
+
+
+@router.get("/view", response_class=HTMLResponse)
+async def view_logs_html(
+    request: Request,
+    user_id: Optional[int] = Query(None),
+    session_id: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    level: int = Query(0, ge=0, le=3, alias="min_level"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    db: DbSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_dep)
+):
+    """HTML log viewer for QA (Admin only)."""
+    require_admin(current_user)
+
+    # Gather system stats
+    cutoff_24h = datetime.utcnow() - timedelta(hours=24)
+    total_logs_all = db.query(func.count(GameLog.id)).scalar() or 0
+    logs_24h = db.query(func.count(GameLog.id)).filter(GameLog.created_at >= cutoff_24h).scalar() or 0
+    errors_24h = db.query(func.count(GameLog.id)).filter(
+        GameLog.created_at >= cutoff_24h, GameLog.level >= 3
+    ).scalar() or 0
+    warns_24h = db.query(func.count(GameLog.id)).filter(
+        GameLog.created_at >= cutoff_24h, GameLog.level == 2
+    ).scalar() or 0
+    unique_sessions_24h = db.query(func.count(func.distinct(GameLog.session_id))).filter(
+        GameLog.created_at >= cutoff_24h
+    ).scalar() or 0
+    unique_users_24h = db.query(func.count(func.distinct(GameLog.user_id))).filter(
+        GameLog.created_at >= cutoff_24h
+    ).scalar() or 0
+
+    # Database file size
+    db_path = "/root/ashbane-backend/backend/socialauth.db"
+    try:
+        db_size_mb = os.path.getsize(db_path) / (1024 * 1024)
+        db_size_str = f"{db_size_mb:.1f} MB"
+    except:
+        db_size_str = "N/A"
+
+    # Disk usage
+    try:
+        disk = shutil.disk_usage("/")
+        disk_used_gb = (disk.total - disk.free) / (1024**3)
+        disk_total_gb = disk.total / (1024**3)
+        disk_pct = ((disk.total - disk.free) / disk.total) * 100
+        disk_str = f"{disk_used_gb:.1f}/{disk_total_gb:.0f} GB ({disk_pct:.0f}%)"
+    except:
+        disk_str = "N/A"
+
+    query = db.query(GameLog)
+    if user_id is not None:
+        query = query.filter(GameLog.user_id == user_id)
+    if session_id is not None:
+        query = query.filter(GameLog.session_id == session_id)
+    if category is not None:
+        query = query.filter(GameLog.category == category)
+    if level > 0:
+        query = query.filter(GameLog.level >= level)
+
+    total = query.count()
+    logs = query.order_by(desc(GameLog.created_at)).offset(offset).limit(limit).all()
+
+    # Get unique categories for filter dropdown
+    categories = [c[0] for c in db.query(GameLog.category).distinct().all() if c[0]]
+
+    # Build query string for pagination links
+    params = []
+    if user_id: params.append(f"user_id={user_id}")
+    if session_id: params.append(f"session_id={session_id}")
+    if category: params.append(f"category={category}")
+    if level > 0: params.append(f"min_level={level}")
+    params.append(f"limit={limit}")
+    base_qs = "&".join(params)
+
+    # Build log rows
+    rows = []
+    for log in logs:
+        level_name = LEVEL_NAMES.get(log.level, "?")
+        level_color = LEVEL_COLORS.get(log.level, "#888")
+        ts = log.client_timestamp.strftime("%H:%M:%S.%f")[:-3] if log.client_timestamp else "-"
+        msg = html.escape(log.message or "")
+        cat = html.escape(log.category or "-")
+        sid_short = log.session_id[:8] if log.session_id else "-"
+
+        rows.append(f"""
+        <tr>
+            <td style="color:#666">{log.id}</td>
+            <td>{ts}</td>
+            <td style="color:{level_color};font-weight:bold">{level_name}</td>
+            <td><a href="?session_id={log.session_id}&limit={limit}" style="color:#4a9eff">{sid_short}</a></td>
+            <td><a href="?category={cat}&limit={limit}" style="color:#4a9eff">{cat}</a></td>
+            <td style="font-family:monospace;white-space:pre-wrap;max-width:600px">{msg}</td>
+            <td style="color:#666">{log.platform or '-'}</td>
+            <td style="color:#666">{log.client_version or '-'}</td>
+        </tr>
+        """)
+
+    # Pagination
+    prev_offset = max(0, offset - limit)
+    next_offset = offset + limit
+    has_prev = offset > 0
+    has_next = offset + limit < total
+
+    prev_link = f'<a href="?{base_qs}&offset={prev_offset}" style="color:#4a9eff;margin-right:20px">← Previous</a>' if has_prev else ''
+    next_link = f'<a href="?{base_qs}&offset={next_offset}" style="color:#4a9eff">Next →</a>' if has_next else ''
+
+    # Category options
+    cat_options = '<option value="">All Categories</option>'
+    for c in sorted(categories):
+        selected = 'selected' if c == category else ''
+        cat_options += f'<option value="{html.escape(c)}" {selected}>{html.escape(c)}</option>'
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Ashbane Logs</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #1a1a1d;
+                color: #e0e0e0;
+                margin: 0;
+                padding: 20px;
+            }}
+            h1 {{ color: #ff6a00; margin-bottom: 5px; }}
+            .stats {{ color: #888; margin-bottom: 20px; }}
+            .stats-bar {{
+                display: flex;
+                gap: 20px;
+                background: #252528;
+                padding: 15px 20px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+            }}
+            .stat-item {{
+                display: flex;
+                flex-direction: column;
+            }}
+            .stat-value {{
+                font-size: 20px;
+                font-weight: bold;
+                color: #fff;
+            }}
+            .stat-value.error {{ color: #ff4444; }}
+            .stat-value.warn {{ color: #f5a623; }}
+            .stat-value.good {{ color: #4a9eff; }}
+            .stat-label {{
+                font-size: 11px;
+                color: #888;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }}
+            .filters {{
+                background: #252528;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                display: flex;
+                gap: 15px;
+                align-items: center;
+                flex-wrap: wrap;
+            }}
+            .filters select, .filters input {{
+                background: #1a1a1d;
+                border: 1px solid #444;
+                color: #e0e0e0;
+                padding: 8px 12px;
+                border-radius: 4px;
+            }}
+            .filters button {{
+                background: #ff6a00;
+                color: white;
+                border: none;
+                padding: 8px 20px;
+                border-radius: 4px;
+                cursor: pointer;
+            }}
+            .filters button:hover {{ background: #ff8533; }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }}
+            th {{
+                text-align: left;
+                padding: 10px 8px;
+                background: #252528;
+                color: #ff6a00;
+                position: sticky;
+                top: 0;
+            }}
+            td {{
+                padding: 8px;
+                border-bottom: 1px solid #333;
+                vertical-align: top;
+            }}
+            tr:hover {{ background: #252528; }}
+            .pagination {{
+                margin-top: 20px;
+                padding: 15px;
+                background: #252528;
+                border-radius: 8px;
+            }}
+            a {{ text-decoration: none; }}
+            a:hover {{ text-decoration: underline; }}
+        </style>
+    </head>
+    <body>
+        <h1>Ashbane Game Logs</h1>
+
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-value">{total_logs_all:,}</span>
+                <span class="stat-label">Total Logs</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value good">{logs_24h:,}</span>
+                <span class="stat-label">Last 24h</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value {'error' if errors_24h > 0 else ''}">{errors_24h}</span>
+                <span class="stat-label">Errors (24h)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value {'warn' if warns_24h > 0 else ''}">{warns_24h}</span>
+                <span class="stat-label">Warnings (24h)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">{unique_sessions_24h}</span>
+                <span class="stat-label">Sessions (24h)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">{unique_users_24h}</span>
+                <span class="stat-label">Users (24h)</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">{db_size_str}</span>
+                <span class="stat-label">Database</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">{disk_str}</span>
+                <span class="stat-label">Disk Usage</span>
+            </div>
+        </div>
+
+        <div class="stats">
+            Showing {len(logs)} of {total} logs (offset: {offset})
+        </div>
+
+        <form class="filters" method="get">
+            <select name="category">{cat_options}</select>
+            <select name="min_level">
+                <option value="0" {'selected' if level==0 else ''}>All Levels</option>
+                <option value="1" {'selected' if level==1 else ''}>INFO+</option>
+                <option value="2" {'selected' if level==2 else ''}>WARN+</option>
+                <option value="3" {'selected' if level==3 else ''}>ERROR only</option>
+            </select>
+            <input type="text" name="session_id" placeholder="Session ID" value="{session_id or ''}" style="width:200px">
+            <input type="number" name="limit" value="{limit}" style="width:80px" min="1" max="1000">
+            <button type="submit">Filter</button>
+            <a href="/api/logs/view" style="color:#888;margin-left:10px">Reset</a>
+        </form>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Time</th>
+                    <th>Level</th>
+                    <th>Session</th>
+                    <th>Category</th>
+                    <th>Message</th>
+                    <th>Platform</th>
+                    <th>Version</th>
+                </tr>
+            </thead>
+            <tbody>
+                {''.join(rows)}
+            </tbody>
+        </table>
+
+        <div class="pagination">
+            {prev_link}
+            Page {(offset // limit) + 1} of {(total // limit) + 1}
+            {next_link}
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)

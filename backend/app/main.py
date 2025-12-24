@@ -3441,6 +3441,97 @@ async def get_client_version():
     }
 
 
+# =============================================================================
+# GAME CONFIG - Hotfixable balance constants
+# =============================================================================
+# All values here can be changed and take effect immediately on server restart.
+# No client update required for balance changes.
+
+GAME_CONFIG = {
+    # Combat - Player
+    "combat": {
+        "player_base_damage": 2.0,
+        "player_attack_cooldown": 0.70,
+        "player_attack_range": 100.0,
+        "player_attack_cone_angle": 90.0,
+        "crit_damage_multiplier": 1.5,
+        "defense_constant": 100.0,  # Mitigation formula: damage / (defense + this)
+    },
+
+    # Weapon speeds (attack cooldown multipliers)
+    "weapon_speeds": {
+        "very_fast": 0.50,   # Dagger
+        "fast": 0.65,        # Katana
+        "medium": 0.80,      # Sword
+        "slow": 0.95,        # Mace
+        "very_slow": 1.10,   # Hammer
+    },
+
+    # PvP Duels
+    "duel": {
+        "request_timeout": 30.0,
+        "safe_aura_duration": 10.0,
+        "max_distance": 100.0,
+        "cancel_distance": 500.0,
+        "countdown_duration": 3.0,
+    },
+
+    # PvP Weakpoints
+    "pvp_weakpoint": {
+        "hp_thresholds": [0.70, 0.35],  # HP % that triggers weakpoint windows
+        "window_duration": 3.5,
+        "damage_per_hit": 3,
+        "scale": 0.5,
+    },
+
+    # Enemies
+    "enemies": {
+        "base_health": 120.0,
+        "health_scaling": 1.12,  # Per level multiplier
+        "base_damage": 7.0,
+        "damage_scaling": 1.08,
+    },
+
+    # TTK (Time To Kill) Windows
+    "ttk": {
+        "trash_window": 4.0,
+        "elite_window": 12.0,
+        "boss_window": 45.0,
+        "base_window_damage": 25.0,
+    },
+
+    # Economy
+    "economy": {
+        "trade_tax_percent": 5.0,
+        "trade_cooldown_hours": 24.0,
+    },
+
+    # Misc
+    "player": {
+        "base_health": 100.0,
+        "base_stamina": 100.0,
+        "stamina_regen_rate": 15.0,
+        "dash_stamina_cost": 25.0,
+        "dash_cooldown": 0.5,
+        "dash_duration": 0.2,
+        "dash_speed": 400.0,
+    },
+}
+
+
+@app.get("/api/game/config")
+async def get_game_config():
+    """
+    Get game balance configuration.
+
+    Returns all hotfixable game constants. Client/server should fetch this
+    on startup and use these values instead of hardcoded constants.
+
+    Changes here take effect immediately on backend restart - no client update needed.
+    """
+    return GAME_CONFIG
+
+
 @app.get("/api/me")
 async def get_current_user_api(
     request: Request,
