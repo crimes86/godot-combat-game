@@ -1215,7 +1215,21 @@ async def steam_callback(
                     acct.user_id = current_user.id
                 # Same user reclaiming their own provider, or orphan cleanup
                 # Update profile data to get the latest username
-                profile = await fetch_steam_profile(steam_id)
+                try:
+                    profile = await fetch_steam_profile(steam_id)
+                except Exception as e:
+                    logger.error(f"Steam profile fetch failed during reclaim: {e}")
+                    return templates.TemplateResponse(
+                        "error.html",
+                        {"request": request, "message": "Steam is slow. Please try again."},
+                        status_code=503,
+                    )
+                if not profile:
+                    return templates.TemplateResponse(
+                        "error.html",
+                        {"request": request, "message": "Could not reach Steam. Please try again."},
+                        status_code=503,
+                    )
                 acct.is_active = True
                 acct.unclaimed_at = None
                 acct.profile_data = profile
@@ -1225,7 +1239,21 @@ async def steam_callback(
                 return RedirectResponse(url="/dashboard", status_code=303)
         else:
             # No existing row -- try to create new ProviderAccount
-            profile = await fetch_steam_profile(steam_id)
+            try:
+                profile = await fetch_steam_profile(steam_id)
+            except Exception as e:
+                logger.error(f"Steam profile fetch failed during link: {e}")
+                return templates.TemplateResponse(
+                    "error.html",
+                    {"request": request, "message": "Steam is slow. Please try again."},
+                    status_code=503,
+                )
+            if not profile:
+                return templates.TemplateResponse(
+                    "error.html",
+                    {"request": request, "message": "Could not reach Steam. Please try again."},
+                    status_code=503,
+                )
             logger.info(f"STEAM CALLBACK: About to insert new ProviderAccount for steam_id {steam_id}")
             new_acct = ProviderAccount(
                 provider_name="steam",
@@ -1262,7 +1290,29 @@ async def steam_callback(
 
     # --------------- LOGIN FLOW (NOT LOGGED IN) ---------------
     logger.info("STEAM CALLBACK: Login flow (not logged in)")
-    profile = await fetch_steam_profile(steam_id)
+    try:
+        profile = await fetch_steam_profile(steam_id)
+    except Exception as e:
+        logger.error(f"Steam profile fetch failed: {e}")
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "Steam is taking too long to respond. Please try again in a moment.",
+            },
+            status_code=503,
+        )
+
+    if not profile:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "message": "Could not retrieve your Steam profile. Steam may be slow. Please try again.",
+            },
+            status_code=503,
+        )
+
     return handle_provider_login(
         db=db,
         request=request,

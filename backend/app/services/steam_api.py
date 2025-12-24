@@ -2,43 +2,63 @@ import httpx
 import os
 import logging
 import requests
+import asyncio
 from datetime import datetime
 from app.services.effort_scoring import compute_steam_effort, compute_rarity_from_effort
 
 logger = logging.getLogger(__name__)
 
-# Longer timeout for Steam API (can be slow)
-STEAM_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+# Shorter timeout per attempt, but with retries
+STEAM_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
+STEAM_MAX_RETRIES = 3
 
 STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 
 async def fetch_steam_profile(steam_id: str):
     url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={STEAM_API_KEY}&steamids={steam_id}"
-    async with httpx.AsyncClient(timeout=STEAM_TIMEOUT) as client:
-        resp = await client.get(url)
-        logger.debug(f"Steam API status: {resp.status_code}")
-        if resp.status_code != 200:
-            logger.error(f"Steam API returned {resp.status_code}: {resp.text}")
-            return {}
+
+    for attempt in range(STEAM_MAX_RETRIES):
         try:
-            data = resp.json()
+            async with httpx.AsyncClient(timeout=STEAM_TIMEOUT) as client:
+                resp = await client.get(url)
+                logger.debug(f"Steam API status: {resp.status_code} (attempt {attempt + 1})")
+
+                if resp.status_code != 200:
+                    logger.error(f"Steam API returned {resp.status_code}: {resp.text[:200]}")
+                    return {}
+
+                try:
+                    data = resp.json()
+                except Exception as e:
+                    logger.error(f"Failed to parse Steam profile JSON: {e}")
+                    return {}
+
+                players = data.get("response", {}).get("players", [])
+                if players:
+                    player = players[0]
+                    logger.debug(f"Steam player parsed: {player.get('personaname')}")
+                    return {
+                        "steam_id": player.get("steamid"),
+                        "personaname": player.get("personaname"),
+                        "avatarfull": player.get("avatarfull"),
+                        "lastlogoff": player.get("lastlogoff"),
+                        "timecreated": player.get("timecreated"),
+                        "loccountrycode": player.get("loccountrycode"),
+                    }
+                logger.warning("No players found in Steam API response")
+                return {}
+
+        except (httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+            logger.warning(f"Steam API timeout (attempt {attempt + 1}/{STEAM_MAX_RETRIES}): {e}")
+            if attempt < STEAM_MAX_RETRIES - 1:
+                await asyncio.sleep(1)  # Brief pause before retry
+            continue
         except Exception as e:
-            logger.error(f"Failed to parse Steam profile JSON: {e}")
+            logger.error(f"Steam API error: {e}")
             return {}
-        players = data.get("response", {}).get("players", [])
-        if players:
-            player = players[0]
-            logger.debug(f"Steam player parsed: {player.get('personaname')}")
-            return {
-                "steam_id": player.get("steamid"),
-                "personaname": player.get("personaname"),
-                "avatarfull": player.get("avatarfull"),
-                "lastlogoff": player.get("lastlogoff"),
-                "timecreated": player.get("timecreated"),
-                "loccountrycode": player.get("loccountrycode"),
-            }
-        logger.warning("No players found in Steam API response")
-        return {}
+
+    logger.error(f"Steam API failed after {STEAM_MAX_RETRIES} attempts")
+    return {}
 
 
 async def get_steam_unlocked_achievements_async(provider_account, steam_api_key):
