@@ -189,24 +189,37 @@ async def receive_log_batch(
     return LogBatchResponse(status="ok", count=len(log_records))
 
 
-@router.get("/recent", response_model=List[LogEntryResponse])
-async def get_recent_logs(
+class LogQueryResponse(BaseModel):
+    logs: List[LogEntryResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+@router.get("", response_model=LogQueryResponse)
+@router.get("/recent", response_model=LogQueryResponse)
+async def get_logs(
     user_id: Optional[int] = Query(None, description="Filter by user ID"),
     session_id: Optional[str] = Query(None, description="Filter by session ID"),
     category: Optional[str] = Query(None, description="Filter by category"),
-    min_level: int = Query(0, ge=0, le=3, description="Minimum log level (0=DEBUG, 3=ERROR)"),
+    level: int = Query(0, ge=0, le=3, alias="min_level", description="Minimum log level (0=DEBUG, 3=ERROR)"),
+    since: Optional[float] = Query(None, description="Unix timestamp - logs after this time"),
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     db: DbSession = Depends(get_db),
     current_user: User = Depends(get_current_user_dep)
 ):
     """
-    Query recent logs (Admin only).
+    Query logs (Admin only).
 
     Filters:
     - user_id: Filter by specific user
     - session_id: Filter by game session
-    - category: Filter by log category
-    - min_level: Minimum log level (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR)
+    - category: Filter by log category (e.g., "duel", "combat")
+    - level/min_level: Minimum log level (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR)
+    - since: Unix timestamp - only logs after this time
+    - limit: Max results (default 100, max 1000)
+    - offset: Pagination offset
     """
     require_admin(current_user)
 
@@ -218,29 +231,44 @@ async def get_recent_logs(
         query = query.filter(GameLog.session_id == session_id)
     if category is not None:
         query = query.filter(GameLog.category == category)
-    if min_level > 0:
-        query = query.filter(GameLog.level >= min_level)
+    if level > 0:
+        query = query.filter(GameLog.level >= level)
+    if since is not None:
+        try:
+            since_dt = datetime.utcfromtimestamp(since)
+            query = query.filter(GameLog.created_at >= since_dt)
+        except (ValueError, OSError):
+            raise HTTPException(status_code=400, detail="Invalid 'since' timestamp")
 
-    logs = query.order_by(desc(GameLog.created_at)).limit(limit).all()
+    # Get total count before pagination
+    total = query.count()
 
-    return [
-        LogEntryResponse(
-            id=log.id,
-            user_id=log.user_id,
-            session_id=log.session_id,
-            device_id=log.device_id,
-            level=log.level,
-            category=log.category,
-            message=log.message,
-            client_timestamp=log.client_timestamp,
-            created_at=log.created_at,
-            client_version=log.client_version,
-            platform=log.platform,
-            is_host=log.is_host,
-            ip_address=log.ip_address
-        )
-        for log in logs
-    ]
+    # Apply pagination and ordering
+    logs = query.order_by(desc(GameLog.created_at)).offset(offset).limit(limit).all()
+
+    return LogQueryResponse(
+        logs=[
+            LogEntryResponse(
+                id=log.id,
+                user_id=log.user_id,
+                session_id=log.session_id,
+                device_id=log.device_id,
+                level=log.level,
+                category=log.category,
+                message=log.message,
+                client_timestamp=log.client_timestamp,
+                created_at=log.created_at,
+                client_version=log.client_version,
+                platform=log.platform,
+                is_host=log.is_host,
+                ip_address=log.ip_address
+            )
+            for log in logs
+        ],
+        total=total,
+        limit=limit,
+        offset=offset
+    )
 
 
 @router.get("/sessions", response_model=List[SessionSummary])

@@ -44,11 +44,11 @@ async function main() {
   console.log(`CHAIN_ID=84532`);
   console.log(`RPC_URL=https://sepolia.base.org`);
   console.log(`ACHIEVEMENT_CONTRACT_ADDRESS=${contractAddress}`);
-  console.log(`MINTER_PRIVATE_KEY=${process.env.DEPLOYER_PRIVATE_KEY}`);
+  console.log(`MINTER_PRIVATE_KEY=<your deployer private key>`);
   console.log(`PLATFORM_WALLET_ADDRESS=${deployer.address}`);
-  console.log(`PLATFORM_WALLET_KEY=${process.env.DEPLOYER_PRIVATE_KEY}`);
+  console.log(`PLATFORM_WALLET_KEY=<your deployer private key>`);
   console.log(`BRIDGE_COOLDOWN_HOURS=0.033`);
-  console.log("\n");
+  console.log("\n(Copy DEPLOYER_PRIVATE_KEY from your .env - not printed for security)\n");
 }
 
 main()
