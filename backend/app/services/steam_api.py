@@ -13,11 +13,10 @@ STEAM_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 
 async def fetch_steam_profile(steam_id: str):
-    url = f"http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={STEAM_API_KEY}&steamids={steam_id}"
+    url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={STEAM_API_KEY}&steamids={steam_id}"
     async with httpx.AsyncClient(timeout=STEAM_TIMEOUT) as client:
         resp = await client.get(url)
-        print("STEAM API STATUS:", resp.status_code)
-        print("STEAM API RESPONSE:", resp.text)
+        logger.debug(f"Steam API status: {resp.status_code}")
         if resp.status_code != 200:
             logger.error(f"Steam API returned {resp.status_code}: {resp.text}")
             return {}
@@ -29,7 +28,7 @@ async def fetch_steam_profile(steam_id: str):
         players = data.get("response", {}).get("players", [])
         if players:
             player = players[0]
-            print("STEAM PLAYER PARSED:", player)
+            logger.debug(f"Steam player parsed: {player.get('personaname')}")
             return {
                 "steam_id": player.get("steamid"),
                 "personaname": player.get("personaname"),
@@ -38,14 +37,14 @@ async def fetch_steam_profile(steam_id: str):
                 "timecreated": player.get("timecreated"),
                 "loccountrycode": player.get("loccountrycode"),
             }
-        print("NO PLAYERS FOUND IN RESPONSE")
+        logger.warning("No players found in Steam API response")
         return {}
 
 
 async def get_steam_unlocked_achievements_async(provider_account, steam_api_key):
     steamid = provider_account.provider_user_id
     url_games = (
-        f"http://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
+        f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
         f"?key={steam_api_key}&steamid={steamid}&include_appinfo=1"
     )
 
@@ -53,8 +52,7 @@ async def get_steam_unlocked_achievements_async(provider_account, steam_api_key)
 
     async with httpx.AsyncClient(timeout=STEAM_TIMEOUT) as client:
         resp = await client.get(url_games)
-        print("[Steam API] Status:", resp.status_code)
-        print("[Steam API] Raw response:", resp.text)
+        logger.debug(f"Steam GetOwnedGames status: {resp.status_code}")
         games = resp.json().get("response", {}).get("games", [])
         for game in games:
             appid = str(game["appid"])
@@ -67,7 +65,7 @@ async def get_steam_unlocked_achievements_async(provider_account, steam_api_key)
 
             # 1. Get player achievement unlock status for this game
             url_achievements = (
-                f"http://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/"
+                f"https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/"
                 f"?appid={appid}&key={steam_api_key}&steamid={steamid}"
             )
             try:
@@ -83,7 +81,7 @@ async def get_steam_unlocked_achievements_async(provider_account, steam_api_key)
 
             # 2. Get schema (display info) for this game
             url_schema = (
-                f"http://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/"
+                f"https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/"
                 f"?key={steam_api_key}&appid={appid}"
             )
             try:
@@ -120,7 +118,7 @@ async def get_steam_unlocked_achievements_async(provider_account, steam_api_key)
                 rarity_tier = compute_rarity_from_effort(effort_score)
                 # Debug: log non-common achievements
                 if rarity_tier != "Common" and is_unlocked:
-                    print(f"[EFFORT] {game_name}: {api_name} = {percent}% -> effort={effort_score} -> {rarity_tier}")
+                    logger.debug(f"[EFFORT] {game_name}: {api_name} = {percent}% -> effort={effort_score} -> {rarity_tier}")
                 game_achievements.append({
                     "api_name": api_name,
                     "display_name": schema.get("displayName") if schema else api_name,
@@ -153,7 +151,7 @@ async def get_global_percentages_for_game_async(app_id, steam_api_key):
         resp = await client.get(url)
         if resp.status_code != 200:
             # Log and return empty if forbidden or bad request
-            print(f"[SYNC] GlobalPercent failed for app_id={app_id}: {resp.status_code}")
+            logger.debug(f"GlobalPercent failed for app_id={app_id}: {resp.status_code}")
             return {}
         data = resp.json()
         achievements = data.get("achievementpercentages", {}).get("achievements", [])

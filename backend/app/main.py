@@ -190,7 +190,16 @@ async def favicon():
 SESSION_SECRET = os.environ.get("SESSION_SECRET")
 if not SESSION_SECRET:
     raise RuntimeError("SESSION_SECRET environment variable is required")
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+# Session middleware with secure cookie settings
+# https_only=True when APP_URL uses HTTPS (production)
+_session_https_only = APP_URL.startswith("https://")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET,
+    https_only=_session_https_only,
+    same_site="lax",
+)
 
 # Cache middleware for static files (icons, css, etc.)
 @app.middleware("http")
@@ -5051,7 +5060,11 @@ async def forge_claim(
 
     For production, use /api/wallet/forge which requires real blockchain tx.
     Rate limited to 10/minute.
+
+    DEV_MODE only - disabled in production.
     """
+    if not DEV_MODE:
+        raise HTTPException(status_code=403, detail="Test forge endpoint disabled in production. Use /api/wallet/forge instead.")
     token = get_session_token(request)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -5187,7 +5200,12 @@ async def test_grant_all_items(
     Creates ForgedAchievement records for every item in items.json
     without requiring actual achievements. Used for testing the
     armory, trading, and equipment systems.
+
+    DEV_MODE only - disabled in production.
     """
+    if not DEV_MODE:
+        raise HTTPException(status_code=403, detail="Test endpoint disabled in production")
+
     token = get_session_token(request)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
