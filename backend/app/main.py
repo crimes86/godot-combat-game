@@ -193,7 +193,8 @@ if not SESSION_SECRET:
 
 # Session middleware with secure cookie settings
 # https_only=True when APP_URL uses HTTPS (production)
-_session_https_only = APP_URL.startswith("https://")
+_app_url = os.environ.get("APP_URL", "http://localhost:8000")
+_session_https_only = _app_url.startswith("https://")
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET,
