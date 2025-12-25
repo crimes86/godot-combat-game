@@ -534,6 +534,12 @@ func claim_single_item(item_id: String) -> Dictionary:
 	LogManager.info("Claimed and added to inventory: %s" % forged.get("item_name", item_id), "forge")
 	forge_claimed.emit(forged)
 	item_synced_to_inventory.emit(inventory_item)
+
+	# Immediately sync to server to persist the claimed item (don't wait for auto-save timer)
+	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host and not NetworkManager.is_guest:
+		NetworkManager.client_sync_state()
+		LogManager.debug("Synced inventory to server after forge claim", "forge")
+
 	return inventory_item
 
 func _claim_on_server(token_id: int) -> bool:

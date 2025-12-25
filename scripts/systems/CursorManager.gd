@@ -93,8 +93,11 @@ func check_enemy_under_cursor() -> bool:
 		if not is_instance_valid(dummy):
 			continue
 
-		var distance = mouse_world_pos.distance_to(dummy.global_position)
-		if distance < 40.0:
+		# Training dummy click area is offset by -32 on Y (to center on sprite)
+		# Use a larger vertical hitbox to cover the full dummy (head to feet)
+		var dummy_center = dummy.global_position + Vector2(0, -32)  # Match click area offset
+		var distance = mouse_world_pos.distance_to(dummy_center)
+		if distance < 55.0:  # Larger radius to cover full dummy height
 			return true
 
 	# Check for active weakpoints (crit window targets) - these have larger hitboxes

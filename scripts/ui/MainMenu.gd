@@ -238,6 +238,9 @@ func _ready():
 	# Setup Ashbane integration (Link Gaming Accounts)
 	_setup_ashbane_integration()
 
+	# Check for client updates (non-blocking)
+	_check_for_updates()
+
 	# Check if user is already authenticated (saved token)
 	if AshbaneAuth and AshbaneAuth.is_logged_in():
 		# Already logged in - go straight to Armory
@@ -2023,13 +2026,14 @@ func _on_ashbane_login_pressed():
 		_on_ashbane_auth_failed("Ashbane service not available")
 
 func _on_ashbane_skip_pressed():
-	"""Skip linking and proceed directly to server selection for guest play"""
+	"""Handle skip/continue button based on auth state"""
 	_play_click_sound()
 
 	# Check if user is authenticated with Ashbane
 	if AshbaneAuth and AshbaneAuth.is_authenticated:
-		# Authenticated user - go to main menu to use PLAY button
-		_proceed_to_main_menu()
+		# Authenticated user - go directly to Armory (pre-game hub)
+		_hide_ashbane_panel()
+		_transition_to_armory()
 	else:
 		# Guest - go directly to server selection
 		_hide_ashbane_panel()
@@ -2291,7 +2295,11 @@ func _load_game_world():
 
 func _on_settings_pressed():
 	_play_click_sound()
+	# Hide whichever panel is currently showing
 	_set_menu_panel_visible(false)
+	_hide_ashbane_panel()
+	if server_select_panel:
+		server_select_panel.visible = false
 	if settings_panel:
 		settings_panel.visible = true
 
@@ -2299,12 +2307,17 @@ func _on_settings_back_pressed():
 	_play_click_sound()
 	if settings_panel:
 		settings_panel.visible = false
-	_set_menu_panel_visible(true)
 	_save_settings()
+	# Return to appropriate panel based on state
+	_return_to_current_panel()
 
 func _on_credits_pressed():
 	_play_click_sound()
+	# Hide whichever panel is currently showing
 	_set_menu_panel_visible(false)
+	_hide_ashbane_panel()
+	if server_select_panel:
+		server_select_panel.visible = false
 	if credits_panel:
 		credits_panel.visible = true
 
@@ -2312,7 +2325,20 @@ func _on_credits_back_pressed():
 	_play_click_sound()
 	if credits_panel:
 		credits_panel.visible = false
-	_set_menu_panel_visible(true)
+	# Return to appropriate panel based on state
+	_return_to_current_panel()
+
+func _return_to_current_panel():
+	"""Return to the appropriate panel based on current menu state"""
+	match current_state:
+		MenuState.ASHBANE_SCREEN:
+			_show_ashbane_panel()
+		MenuState.GUEST_SERVER_SELECT:
+			if server_select_panel:
+				server_select_panel.visible = true
+		_:
+			# Default: show Ashbane panel (startup state)
+			_show_ashbane_panel()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # GUEST SERVER SELECT
@@ -2673,3 +2699,78 @@ func _reset_game_ui():
 			nodes_to_remove.append(child)
 	for node in nodes_to_remove:
 		node.queue_free()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VERSION CHECK SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _check_for_updates() -> void:
+	"""Check backend for newer client version"""
+	var http = HTTPRequest.new()
+	add_child(http)
+	http.request_completed.connect(_on_version_check_completed.bind(http))
+
+	var url = AshbaneAuth.get_api_base() + "/api/version"
+	var error = http.request(url)
+	if error != OK:
+		LogManager.warn("Version check failed to start", "update")
+		http.queue_free()
+
+func _on_version_check_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray, http: HTTPRequest) -> void:
+	http.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		LogManager.warn("Version check failed: HTTP %d" % response_code, "update")
+		return
+
+	var json = JSON.new()
+	if json.parse(body.get_string_from_utf8()) != OK:
+		LogManager.warn("Version check: Invalid JSON response", "update")
+		return
+
+	var data = json.get_data()
+	var server_version = data.get("version", "")
+	var download_url = data.get("download_url", "https://ashbane.itch.io/ashbane")
+	var client_version = NetworkManager.CLIENT_VERSION  # Use semver, not git hash
+
+	LogManager.info("Version check: client=%s, server=%s" % [client_version, server_version], "update")
+
+	if _is_version_outdated(client_version, server_version):
+		_show_update_prompt(server_version, download_url)
+
+func _is_version_outdated(client: String, server: String) -> bool:
+	"""Check if client version is older than server version"""
+	# Empty server version means no update info available
+	if server == "":
+		return false
+	# If versions match, not outdated
+	if client == server:
+		return false
+	# Different versions - server has newer version
+	return true
+
+func _show_update_prompt(new_version: String, download_url: String) -> void:
+	"""Show non-blocking update available dialog"""
+	var client_version = NetworkManager.CLIENT_VERSION
+
+	# Create styled dialog matching Ashbane theme
+	var dialog = AcceptDialog.new()
+	dialog.title = "Update Available"
+	dialog.dialog_text = "A new version of Ashbane is available!\n\nYour version: %s\nNew version: %s\n\nWould you like to download the update?" % [client_version, new_version]
+	dialog.ok_button_text = "Later"
+
+	# Add Download button
+	var download_btn = dialog.add_button("Download", true, "download")
+	dialog.custom_action.connect(func(action: StringName):
+		if action == "download":
+			OS.shell_open(download_url)
+			dialog.hide()
+	)
+
+	# Style the dialog
+	dialog.min_size = Vector2(400, 200)
+
+	add_child(dialog)
+	dialog.popup_centered()
+
+	LogManager.info("Showing update prompt for version %s" % new_version, "update")

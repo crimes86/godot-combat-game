@@ -182,16 +182,28 @@ func on_crit() -> void:
 ## All effects for a weakpoint hit
 func on_weakpoint() -> void:
 	# Quick punch for rapid clicking - noticeable but not overwhelming
-	trigger_screen_shake(0.2)  # Light punch per click
+	trigger_screen_shake(0.4)  # Medium punch per click (was 0.2 - too subtle)
 
 ## All effects for a killing blow
 func on_kill() -> void:
 	# BIG shake on weakpoint destruction - the payoff
 	trigger_screen_shake(0.85)  # Big satisfying explosion
 
-## Trigger screen shake via the player's ScreenShake node
+## Trigger screen shake via the LOCAL player's ScreenShake node
 func trigger_screen_shake(trauma_amount: float) -> void:
-	var player = get_tree().get_first_node_in_group("player")
-	if player and player.has_node("ScreenShake"):
-		var screen_shake = player.get_node("ScreenShake")
+	# Find the LOCAL player (the one we control), not just any player in multiplayer
+	var local_player: Node = null
+	var my_peer_id = get_tree().get_multiplayer().get_unique_id() if get_tree().get_multiplayer().has_multiplayer_peer() else 1
+
+	for player in get_tree().get_nodes_in_group("player"):
+		if player.get_multiplayer_authority() == my_peer_id:
+			local_player = player
+			break
+
+	# Fallback to first player in single-player
+	if not local_player:
+		local_player = get_tree().get_first_node_in_group("player")
+
+	if local_player and local_player.has_node("ScreenShake"):
+		var screen_shake = local_player.get_node("ScreenShake")
 		screen_shake.add_trauma(trauma_amount)

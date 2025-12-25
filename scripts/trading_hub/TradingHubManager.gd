@@ -116,25 +116,56 @@ func has_preserved_state() -> bool:
 	"""Check if there's preserved player state to restore"""
 	return not _preserved_player_state.is_empty()
 
-func is_player_in_hub() -> bool:
-	"""Check if local player is currently in the hub"""
-	return _player_in_hub.get(multiplayer.get_unique_id(), false)
+func is_player_in_hub(peer_id: int = -1) -> bool:
+	"""Check if a player is currently in the hub. If peer_id is -1, checks local player."""
+	if peer_id == -1:
+		peer_id = multiplayer.get_unique_id()
+	return _player_in_hub.get(peer_id, false)
 
-func set_player_in_hub(in_hub: bool) -> void:
-	"""Mark local player as in/out of hub"""
-	var player_id = multiplayer.get_unique_id()
+func set_player_in_hub(in_hub: bool, peer_id: int = -1) -> void:
+	"""Mark a player as in/out of hub. If peer_id is -1, uses local player."""
+	var player_id = peer_id if peer_id != -1 else multiplayer.get_unique_id()
 	_player_in_hub[player_id] = in_hub
 
 	if in_hub:
 		player_entered_hub.emit(player_id, _current_shard)
-		# Track zone entry for quest objectives
-		var qm = get_node_or_null("/root/QuestManager")
-		if qm:
-			qm.on_zone_entered("trading_hub")
+		# Track zone entry for quest objectives (only for local player)
+		if player_id == multiplayer.get_unique_id():
+			var qm = get_node_or_null("/root/QuestManager")
+			if qm:
+				qm.on_zone_entered("trading_hub")
+		# Notify the TradingHub scene if it's loaded
+		_notify_hub_scene_player_entered(player_id)
 	else:
-		# Set flag so game_world knows to spawn at tunnel exit
-		_returning_from_hub = true
+		# Set flag so game_world knows to spawn at tunnel exit (only for local player)
+		if player_id == multiplayer.get_unique_id():
+			_returning_from_hub = true
 		player_exited_hub.emit(player_id, "zone1")
+		# Notify the TradingHub scene if it's loaded
+		_notify_hub_scene_player_left(player_id)
+
+func _notify_hub_scene_player_entered(player_id: int) -> void:
+	"""Notify the TradingHub scene that a player entered"""
+	var hub_scene = get_tree().current_scene
+	if hub_scene and hub_scene.has_method("on_player_entered_hub"):
+		var player_name = _get_player_name(player_id)
+		hub_scene.on_player_entered_hub(player_id, player_name)
+
+func _notify_hub_scene_player_left(player_id: int) -> void:
+	"""Notify the TradingHub scene that a player left"""
+	var hub_scene = get_tree().current_scene
+	if hub_scene and hub_scene.has_method("on_player_left_hub"):
+		hub_scene.on_player_left_hub(player_id)
+
+func _get_player_name(player_id: int) -> String:
+	"""Get display name for a player"""
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if network_manager:
+		if network_manager.connected_players.has(player_id):
+			return network_manager.connected_players[player_id].get("name", "Player%d" % player_id)
+		if network_manager.authenticated_players.has(player_id):
+			return network_manager.authenticated_players[player_id].get("username", "Player%d" % player_id)
+	return "Player%d" % player_id
 
 # ============================================
 # SHARD MANAGEMENT (Simplified for MVP)

@@ -5,6 +5,9 @@ extends Node2D
 var PLAYER_SCENE: PackedScene = null
 var local_player: Node = null
 
+# Multiplayer: Track all players in the hub (peer_id -> player_node)
+var hub_players: Dictionary = {}
+
 # Layer 3: Hub manager integration
 var _origin_chunk: int = 0
 var _frame_count: int = 0
@@ -144,6 +147,9 @@ func _ready() -> void:
 
 	# Spawn player
 	_spawn_player()
+
+	# Setup multiplayer player visibility (so players can see each other and duel)
+	_setup_multiplayer()
 
 	# Start Trading Hub music
 	_start_hub_music()
@@ -311,6 +317,265 @@ func _force_spawn_position_delayed() -> void:
 				camera.reset_smoothing()
 				camera.global_position = _intended_spawn_position
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# MULTIPLAYER PLAYER VISIBILITY (for social features & dueling)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _setup_multiplayer() -> void:
+	"""Initialize multiplayer so players can see each other in the hub"""
+	if not multiplayer.has_multiplayer_peer():
+		print("[TradingHub] Single-player mode - skipping multiplayer setup")
+		return
+
+	print("[TradingHub] Setting up multiplayer visibility...")
+
+	# Track local player in hub_players dict
+	var my_id = multiplayer.get_unique_id()
+	if local_player and is_instance_valid(local_player):
+		hub_players[my_id] = local_player
+		# Ensure local player has correct name for DuelManager lookup
+		local_player.name = "Player_%d" % my_id
+		local_player.set_multiplayer_authority(my_id)
+
+	# Connect to NetworkManager signals for player join/leave
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if network_manager:
+		if not network_manager.player_disconnected.is_connected(_on_hub_player_disconnected):
+			network_manager.player_disconnected.connect(_on_hub_player_disconnected)
+		print("[TradingHub] Connected to NetworkManager signals")
+
+	# Request existing players from server (or spawn them if we're server)
+	call_deferred("_request_hub_players")
+
+func _request_hub_players() -> void:
+	"""Request or spawn other players in the hub"""
+	var my_id = multiplayer.get_unique_id()
+
+	if multiplayer.is_server():
+		# Server: Check who else is in the hub and spawn them
+		var network_manager = get_node_or_null("/root/NetworkManager")
+		if network_manager:
+			for peer_id in network_manager.get_player_list():
+				if peer_id != my_id and not hub_players.has(peer_id):
+					# Check if this player is also in the hub
+					var hub_manager = get_node_or_null("/root/TradingHubManager")
+					if hub_manager and hub_manager.is_player_in_hub(peer_id):
+						var player_info = network_manager.connected_players.get(peer_id, {})
+						var player_name = player_info.get("name", "Player%d" % peer_id)
+						_spawn_hub_remote_player(peer_id, SPAWN_CENTER, player_name)
+
+		print("[TradingHub] Server: Spawned existing hub players")
+	else:
+		# Client: Request hub players from server
+		rpc_id(1, "_server_request_hub_players")
+		print("[TradingHub] Client: Requested hub players from server")
+
+@rpc("any_peer", "reliable")
+func _server_request_hub_players() -> void:
+	"""Server receives request for hub players from a client"""
+	if not multiplayer.is_server():
+		return
+
+	var requester_id = multiplayer.get_remote_sender_id()
+	print("[TradingHub] Server: Received hub player request from %d" % requester_id)
+
+	# Send all players currently in hub to the requester
+	for peer_id in hub_players:
+		if peer_id != requester_id:
+			var player_node = hub_players[peer_id]
+			if is_instance_valid(player_node):
+				var player_name = _get_player_display_name(peer_id)
+				var spawn_pos = player_node.global_position
+				rpc_id(requester_id, "_client_spawn_hub_player", peer_id, spawn_pos, player_name)
+				print("[TradingHub] Server: Sent player %d to client %d" % [peer_id, requester_id])
+
+@rpc("authority", "reliable")
+func _client_spawn_hub_player(peer_id: int, spawn_pos: Vector2, player_name: String) -> void:
+	"""Client receives command to spawn a hub player"""
+	if hub_players.has(peer_id):
+		return  # Already spawned
+
+	_spawn_hub_remote_player(peer_id, spawn_pos, player_name)
+	print("[TradingHub] Client: Spawned player %d (%s) at %s" % [peer_id, player_name, spawn_pos])
+
+func _spawn_hub_remote_player(peer_id: int, spawn_pos: Vector2, player_name: String) -> void:
+	"""Spawn a remote player in the trading hub"""
+	if hub_players.has(peer_id):
+		return  # Already exists
+
+	var player_scene = _get_player_scene()
+	if not player_scene:
+		push_error("[TradingHub] Failed to load player scene for remote player!")
+		return
+
+	var player = player_scene.instantiate()
+	player.name = "Player_%d" % peer_id
+	player.set_multiplayer_authority(peer_id)
+	player.position = spawn_pos
+
+	# Disable processing for remote players (they're updated via position sync)
+	player.set_physics_process(false)
+	player.set_process(false)
+	if player.has_method("set_process_unhandled_input"):
+		player.set_process_unhandled_input(false)
+
+	# Disable camera for remote players
+	if player.has_node("Camera2D"):
+		player.get_node("Camera2D").enabled = false
+
+	# Setup collision for body-blocking (layer 4)
+	player.collision_layer = 4
+	player.collision_mask = 0
+
+	add_child(player)
+	hub_players[peer_id] = player
+
+	# Add to "player" group so DuelManager can find them
+	player.add_to_group("player")
+
+	# Set player name on health bar
+	if player_name != "" and player.has_node("HealthBar"):
+		var hb = player.get_node("HealthBar")
+		if hb.has_method("set_player_name"):
+			hb.set_player_name(player_name)
+		if hb.has_method("set_name_color"):
+			# Check if guest
+			var network_manager = get_node_or_null("/root/NetworkManager")
+			var is_guest = true
+			if network_manager and network_manager.has_method("is_player_guest"):
+				is_guest = network_manager.is_player_guest(peer_id)
+			if is_guest:
+				hb.set_name_color(Color(0.7, 0.75, 0.7, 1.0))  # Greenish-gray for guests
+			else:
+				hb.set_name_color(Color(0.4, 0.8, 1.0, 1.0))  # Cyan for authenticated
+
+	print("[TradingHub] Spawned remote player %d (%s) at %s" % [peer_id, player_name, spawn_pos])
+
+func _on_hub_player_disconnected(peer_id: int) -> void:
+	"""Handle player disconnecting from the hub"""
+	if hub_players.has(peer_id):
+		var player_node = hub_players[peer_id]
+		if is_instance_valid(player_node):
+			player_node.queue_free()
+		hub_players.erase(peer_id)
+		print("[TradingHub] Player %d disconnected and removed" % peer_id)
+
+func _get_player_display_name(peer_id: int) -> String:
+	"""Get display name for a player"""
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if network_manager:
+		if network_manager.connected_players.has(peer_id):
+			return network_manager.connected_players[peer_id].get("name", "Player%d" % peer_id)
+		if network_manager.authenticated_players.has(peer_id):
+			return network_manager.authenticated_players[peer_id].get("username", "Player%d" % peer_id)
+	return "Player%d" % peer_id
+
+# Called by TradingHubManager when a new player enters the hub
+func on_player_entered_hub(peer_id: int, player_name: String) -> void:
+	"""Called when another player enters the trading hub"""
+	if peer_id == multiplayer.get_unique_id():
+		return  # Don't spawn ourselves twice
+
+	if hub_players.has(peer_id):
+		return  # Already here
+
+	# Spawn them at center (they'll sync position shortly)
+	_spawn_hub_remote_player(peer_id, SPAWN_CENTER, player_name)
+
+	# If we're the server, notify other clients
+	if multiplayer.is_server():
+		for other_peer in hub_players:
+			if other_peer != peer_id and other_peer != 1:
+				rpc_id(other_peer, "_client_spawn_hub_player", peer_id, SPAWN_CENTER, player_name)
+
+# Called by TradingHubManager when a player leaves the hub
+func on_player_left_hub(peer_id: int) -> void:
+	"""Called when another player leaves the trading hub"""
+	_on_hub_player_disconnected(peer_id)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# POSITION SYNCHRONIZATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _sync_hub_player_position() -> void:
+	"""Send local player position to other players in the hub"""
+	if not local_player or not is_instance_valid(local_player):
+		return
+
+	var my_id = multiplayer.get_unique_id()
+	var pos = local_player.global_position
+	var anim = _get_player_animation(local_player)
+	var health = int(local_player.current_health) if local_player.get("current_health") != null else 100
+	var is_dashing = local_player.is_dashing if local_player.get("is_dashing") != null else false
+
+	# Broadcast to all peers
+	rpc("_receive_hub_player_position", my_id, pos, anim, health, is_dashing)
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func _receive_hub_player_position(player_id: int, pos: Vector2, anim: String, health: int, is_dashing: bool) -> void:
+	"""Receive position update for a remote player in the hub"""
+	if not multiplayer:
+		return
+
+	# Security: Verify sender is the player they claim to be
+	var sender_id = multiplayer.get_remote_sender_id()
+	if sender_id != player_id and sender_id != 1:
+		return
+
+	if player_id == multiplayer.get_unique_id():
+		return  # Ignore our own position updates
+
+	if not hub_players.has(player_id):
+		# Player not spawned yet - request spawn
+		if multiplayer.is_server():
+			return
+		rpc_id(1, "_server_request_hub_players")
+		return
+
+	var player = hub_players[player_id]
+	if not is_instance_valid(player):
+		return
+
+	# Smoothly interpolate to new position
+	player.global_position = player.global_position.lerp(pos, 0.3)
+
+	# Update animation for remote player
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	if character_sprite and character_sprite is AnimatedSprite2D:
+		if character_sprite.animation != anim:
+			if character_sprite.has_method("play_lpc_animation"):
+				var parts = anim.split("_")
+				if parts.size() >= 2:
+					var anim_type = parts[0]
+					var direction = parts[1]
+					character_sprite.play_lpc_animation(anim_type, direction)
+				else:
+					character_sprite.play(anim)
+			else:
+				character_sprite.play(anim)
+
+	# Update health for remote player
+	if player.get("current_health") != null:
+		player.current_health = health
+	if player.has_node("HealthBar"):
+		var hb = player.get_node("HealthBar")
+		if hb.has_method("update_health"):
+			var max_hp = player.max_health if player.get("max_health") != null else 100
+			hb.update_health(health, max_hp)
+
+func _get_player_animation(player: Node) -> String:
+	"""Get current animation name from player"""
+	var character_sprite = player.get_node_or_null("CharacterSprite")
+	if character_sprite and character_sprite is AnimatedSprite2D:
+		return character_sprite.animation
+	return "idle_south"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Position sync timing
+var _last_position_sync: int = 0
+const POSITION_SYNC_INTERVAL_MS: int = 33  # 30Hz sync rate
+
 func _process(delta: float) -> void:
 	_frame_count += 1
 
@@ -327,6 +592,13 @@ func _process(delta: float) -> void:
 		if _tree_proximity_timer >= TREE_PROXIMITY_CHECK_INTERVAL:
 			_tree_proximity_timer = 0.0
 			_update_tree_proximity()
+
+		# Sync local player position to other players in hub (30Hz)
+		if multiplayer.has_multiplayer_peer():
+			var now = Time.get_ticks_msec()
+			if now - _last_position_sync > POSITION_SYNC_INTERVAL_MS:
+				_last_position_sync = now
+				_sync_hub_player_position()
 
 func _check_exit() -> void:
 	var pos = local_player.position

@@ -24,6 +24,9 @@ const MAX_PLAYERS = 50  # Target for 3-chunk playtest (single instance)
 # Auto-generated from git commit hash - no manual incrementing needed
 var NETWORK_VERSION: String = ""
 
+# Semantic version for update checks (manually updated on releases)
+const CLIENT_VERSION: String = "0.0.1"
+
 func _get_git_commit_hash() -> String:
 	"""Get current git commit hash for version identification"""
 	# Try to read from bundled file first (for exported builds)

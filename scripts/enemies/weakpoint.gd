@@ -405,7 +405,10 @@ func hit() -> void:
 	if combat_juice:
 		combat_juice.on_weakpoint()
 
-	# 🩸 IMPACT feedback - shake with progressive brightening
+	# Check if this is the final (destroying) hit
+	var is_final_hit = current_hits >= max_hits
+
+	# 🩸 IMPACT feedback - shake with progressive brightening (skip shake on final hit)
 	if sprite:
 		var colors = theme_colors[color_theme]
 		var progress = float(current_hits) / float(max_hits)
@@ -420,50 +423,51 @@ func hit() -> void:
 		var flash_color = colors["flash"] * (1.0 + progress * 0.5)  # Get brighter each hit
 		sprite.color = flash_color
 
-		# ✨ SHAKE on hit - intensity increases with damage
-		var shake_intensity = 2.0 + (progress * 3.0)  # 2-5 pixels based on damage
-		var shake_tween = create_tween()
-		shake_tween.set_trans(Tween.TRANS_SINE)
+		# ✨ SHAKE on hit - only for non-destroying hits (final hit goes straight to explosion)
+		if not is_final_hit:
+			var shake_intensity = 2.0 + (progress * 3.0)  # 2-5 pixels based on damage
+			var shake_tween = create_tween()
+			shake_tween.set_trans(Tween.TRANS_SINE)
 
-		# Quick shake sequence (6 shakes, ~0.12s total)
-		shake_tween.tween_property(sprite, "position", Vector2(shake_intensity, 0), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(-shake_intensity, 0), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(0, shake_intensity * 0.7), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(0, -shake_intensity * 0.7), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(shake_intensity * 0.5, 0), 0.02)
-		shake_tween.tween_property(sprite, "position", Vector2(0, 0), 0.02)  # Return to center
+			# Quick shake sequence (6 shakes, ~0.12s total)
+			shake_tween.tween_property(sprite, "position", Vector2(shake_intensity, 0), 0.02)
+			shake_tween.tween_property(sprite, "position", Vector2(-shake_intensity, 0), 0.02)
+			shake_tween.tween_property(sprite, "position", Vector2(0, shake_intensity * 0.7), 0.02)
+			shake_tween.tween_property(sprite, "position", Vector2(0, -shake_intensity * 0.7), 0.02)
+			shake_tween.tween_property(sprite, "position", Vector2(shake_intensity * 0.5, 0), 0.02)
+			shake_tween.tween_property(sprite, "position", Vector2(0, 0), 0.02)  # Return to center
 
-		# Color flash back to target (parallel with shake)
-		var color_tween = create_tween()
-		color_tween.tween_property(sprite, "color", target_color, 0.1)
+			# Color flash back to target (parallel with shake) - only on non-final hits
+			var color_tween = create_tween()
+			color_tween.tween_property(sprite, "color", target_color, 0.1)
 
-		# ✨ GLOW GROWS - increases with damage (30% to 80%)
-		if glow_sprite:
-			var bright_glow = colors["glow"]
-			bright_glow.a = 1.0
-			glow_sprite.color = bright_glow
-			# Target glow alpha increases with progress
-			var target_glow = colors["glow"]
-			target_glow.a = 0.3 + (progress * 0.5)  # 0.3 to 0.8
-			color_tween.tween_property(glow_sprite, "color", target_glow, 0.1)
+			# ✨ GLOW GROWS - increases with damage (30% to 80%)
+			if glow_sprite:
+				var bright_glow = colors["glow"]
+				bright_glow.a = 1.0
+				glow_sprite.color = bright_glow
+				# Target glow alpha increases with progress
+				var target_glow = colors["glow"]
+				target_glow.a = 0.3 + (progress * 0.5)  # 0.3 to 0.8
+				color_tween.tween_property(glow_sprite, "color", target_glow, 0.1)
 
-		# ✨ SHINE LAYERS GET BRIGHTER (start at 30-35%, grow to target)
-		for i in range(shine_layers.size()):
-			var shine = shine_layers[i]
-			var start_alphas = [0.3, 0.35, 0.15]  # Starting alphas for each layer
-			var target_alphas = [0.7, 0.9, 0.3]  # Target alphas for each shine layer
-			var target_alpha = start_alphas[i] + (progress * (target_alphas[i] - start_alphas[i]))
-			var shine_color = shine.color
-			shine_color.a = target_alpha
-			color_tween.tween_property(shine, "color", shine_color, 0.1)
+			# ✨ SHINE LAYERS GET BRIGHTER (start at 30-35%, grow to target)
+			for i in range(shine_layers.size()):
+				var shine = shine_layers[i]
+				var start_alphas = [0.3, 0.35, 0.15]  # Starting alphas for each layer
+				var target_alphas = [0.7, 0.9, 0.3]  # Target alphas for each shine layer
+				var target_alpha = start_alphas[i] + (progress * (target_alphas[i] - start_alphas[i]))
+				var shine_color = shine.color
+				shine_color.a = target_alpha
+				color_tween.tween_property(shine, "color", shine_color, 0.1)
 
-		# ✨ ADD CRACKS - increasingly dense as hits increase
-		add_crack(progress)
+			# ✨ ADD CRACKS - increasingly dense as hits increase
+			add_crack(progress)
 
-		# 💫 PULSING GLOW - grows stronger with more damage
-		start_damage_pulse(progress)
+			# 💫 PULSING GLOW - grows stronger with more damage
+			start_damage_pulse(progress)
 
-	if current_hits >= max_hits:
+	if is_final_hit:
 		# CLIENT-PREDICTED: Destroy locally for instant feedback
 		# Server validates total damage at crit window end
 		destroy()
@@ -535,19 +539,8 @@ func destroy() -> void:
 	weakpoint_destroyed.emit(self)
 	weakpoint_destroyed_local.emit(self)  # For crit window client-side tracking
 
-	# 💥 GEM SHAKE FIRST (building tension)
-	if sprite:
-		var shake_tween = create_tween()
-		shake_tween.set_loops(4)  # Half as long (was 8)
-		shake_tween.tween_property(sprite, "position", Vector2(3, 0), 0.025)
-		shake_tween.tween_property(sprite, "position", Vector2(-3, 0), 0.025)
-		shake_tween.tween_property(sprite, "position", Vector2(0, 0), 0.025)
-		await shake_tween.finished
-
-		# Brief pause before explosion
-		await get_tree().create_timer(0.05).timeout
-
-	# 💥 Sound + shake + particles ALL AT ONCE
+	# 💥 INSTANT EXPLOSION - no shake delay, straight to dramatic finish
+	# Sound + juice + particles all trigger immediately on the killing blow
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:
 		sound_manager.play_weakpoint_destroyed_sound(global_position, -6.0)
@@ -559,13 +552,12 @@ func destroy() -> void:
 	spawn_destruction_particles()
 	spawn_destruction_wave()
 
-	# 💥 EXPLODE (dramatic release)
+	# 💥 EXPLODE (immediate dramatic release)
 	if sprite:
-
 		var explode_tween = create_tween()
 		explode_tween.set_parallel(true)
-		explode_tween.tween_property(sprite, "scale", Vector2(2.0, 2.0), 0.16)
-		explode_tween.tween_property(sprite, "modulate:a", 0.0, 0.16)
+		explode_tween.tween_property(sprite, "scale", Vector2(2.0, 2.0), 0.12)  # Slightly faster
+		explode_tween.tween_property(sprite, "modulate:a", 0.0, 0.12)
 		await explode_tween.finished
 
 	queue_free()
