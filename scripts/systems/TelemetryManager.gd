@@ -29,7 +29,7 @@ var remote_min_level: int = 1  # INFO and above by default
 var remote_categories: Array[String] = []
 
 ## Categories that ALWAYS get sent regardless of level (critical events)
-var always_send_categories: Array[String] = ["anticheat", "error", "crash"]
+var always_send_categories: Array[String] = ["anticheat", "error", "crash", "duel"]
 
 ## API endpoint path (appended to AshbaneAuth.get_api_base())
 var api_endpoint: String = "/api/logs/batch"

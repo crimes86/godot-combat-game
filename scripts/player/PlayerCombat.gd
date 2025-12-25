@@ -52,6 +52,7 @@ var attack_feedback = null
 
 # Debug
 var debug_weakpoint_clicks: bool = false
+# Duel debug logging now uses LogManager with category "duel" - sent to backend via TelemetryManager
 
 # VFX Layer reference for full-brightness weapon effects
 var _vfx_layer: Node = null
@@ -123,14 +124,18 @@ func process_held_attack(delta: float, mouse_pos: Vector2) -> void:
 				elif can_attack:
 					attempt_bow_attack()
 			else:
-				# Melee weapon - check crit window first
-				if is_holding_on_crit_window_enemy(mouse_pos):
+				# Melee weapon - check PvP weakpoints first (uncapped), then crit window
+				if try_melee_pvp_weakpoint_attack(mouse_pos):
+					pass  # Hit PvP weakpoint - no cooldown needed
+				elif is_holding_on_crit_window_enemy(mouse_pos):
 					pass  # Handled by crit window logic
 				elif can_attack:
 					attempt_attack()
 		else:
 			# No weapon (unarmed) - melee
-			if is_holding_on_crit_window_enemy(mouse_pos):
+			if try_melee_pvp_weakpoint_attack(mouse_pos):
+				pass  # Hit PvP weakpoint - no cooldown needed
+			elif is_holding_on_crit_window_enemy(mouse_pos):
 				pass
 			elif can_attack:
 				attempt_attack()
@@ -353,6 +358,47 @@ func _check_pvp_weakpoint_click(mouse_pos: Vector2) -> bool:
 
 	return false
 
+func try_melee_pvp_weakpoint_attack(mouse_pos: Vector2) -> bool:
+	"""Check if melee can hit a PvP weakpoint at cursor position (uncapped attack speed).
+	This is used for HELD melee attacks during duels. Returns true if a weakpoint was hit."""
+	if not player.is_dueling:
+		return false
+
+	var melee_radius = 38.0  # Forgiving click radius for melee
+
+	var all_players = player.get_tree().get_nodes_in_group("player")
+	for other_player in all_players:
+		if not is_instance_valid(other_player) or other_player == player:
+			continue
+		if not other_player.get("pvp_weakpoint_active"):
+			continue
+		var pvp_weakpoints = other_player.get("pvp_weakpoints")
+		if not pvp_weakpoints or pvp_weakpoints.size() == 0:
+			continue
+		for weakpoint in pvp_weakpoints:
+			if not is_instance_valid(weakpoint):
+				continue
+			if weakpoint.get("is_destroyed"):
+				continue
+			var distance = mouse_pos.distance_to(weakpoint.global_position)
+			var click_radius = melee_radius * weakpoint.scale.x
+			if distance <= click_radius:
+				# HIT PvP weakpoint! Play animation and hit (NO COOLDOWN)
+				var character_sprite = player.get_node_or_null("CharacterSprite")
+				if character_sprite:
+					var direction_to_weakpoint = (weakpoint.global_position - player.global_position).normalized()
+					var dir_str = player.get_direction_string(direction_to_weakpoint)
+					var lpc_dir = player.convert_to_lpc_direction(dir_str)
+					var attack_anim = character_sprite.get_next_attack_anim() if character_sprite.has_method("get_next_attack_anim") else "slash"
+					character_sprite.play_lpc_animation(attack_anim, lpc_dir)
+
+				if weakpoint.has_method("hit"):
+					weakpoint.hit()
+				LogManager.debug("MELEE_WP_HIT pvp dist=%.1f radius=%.1f" % [distance, click_radius], "duel")
+				return true
+
+	return false
+
 func handle_crit_window_attack(enemy: Node, _click_pos: Vector2) -> void:
 	"""Handle attack during crit window - deal normal damage to enemy body"""
 	if not is_instance_valid(enemy):
@@ -479,6 +525,7 @@ func attack_players_in_cone(target_players: Array) -> void:
 
 		# Send PvP damage through network
 		_send_pvp_damage(target_player, int(final_damage))
+		LogManager.info("MELEE_ATK tgt=%d dmg=%d duel=%s" % [target_id, int(final_damage), player.is_dueling], "duel")
 
 		# Visual feedback for attacker
 		if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
@@ -496,7 +543,10 @@ func _can_damage_player(target_player: Node, target_id: int) -> bool:
 	"""Check if we can damage a target player based on allegiance rules"""
 	# During duel: only attack duel opponent
 	if player.is_dueling:
-		return target_id == player.duel_opponent_id
+		var can_damage = target_id == player.duel_opponent_id
+		if not can_damage:
+			LogManager.debug("CAN_DMG DENY duel tgt=%d opp=%d" % [target_id, player.duel_opponent_id], "duel")
+		return can_damage
 
 	# Safe zone check - no open-world PvP in safe zones
 	if _is_in_safe_zone(player) or _is_in_safe_zone(target_player):
@@ -648,23 +698,23 @@ func _send_pvp_damage(target_player: Node, damage: int) -> void:
 	var target_peer_id = _get_player_peer_id(target_player)
 
 	if target_peer_id < 0:
-		print("[PvP] Cannot find target peer ID for damage")
+		LogManager.warn("DMG_SEND FAIL no_peer: target=%s" % target_player.name, "duel")
 		return
 
 	var duel_manager = player.get_node_or_null("/root/DuelManager")
 	if not duel_manager:
-		print("[PvP] DuelManager not found")
+		LogManager.warn("DMG_SEND FAIL no_manager", "duel")
 		return
 
 	# Send damage request through DuelManager
-	if player.get_tree().get_multiplayer().is_server():
-		# Server processes directly - call the RPC locally
+	var is_server = player.get_tree().get_multiplayer().is_server()
+
+	if is_server:
 		duel_manager.request_pvp_damage(target_peer_id, damage)
 	else:
-		# Client sends RPC to server
 		duel_manager.request_pvp_damage.rpc_id(1, target_peer_id, damage)
 
-	print("[PvP] Sent damage request: %d to player %d" % [damage, target_peer_id])
+	LogManager.info("DMG_SEND tgt=%d dmg=%d srv=%s" % [target_peer_id, damage, is_server], "duel")
 
 func _check_bullet_path_player_collision(start: Vector2, end: Vector2, hit_radius: float) -> Dictionary:
 	"""Check if bullet path intersects valid PvP target player. Returns first hit."""
@@ -789,6 +839,98 @@ func _attack_player_with_burst(target_player: Node, hit_pos: Vector2) -> void:
 	# Damage number (no combat text for individual burst rounds to reduce spam)
 	# if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
 	#	attack_feedback.spawn_damage_number(target_player.global_position, final_damage, false, false)
+
+func _check_arrow_path_player_collision(start: Vector2, end: Vector2, hit_radius: float) -> Dictionary:
+	"""Check if arrow path intersects valid PvP target player. Returns first hit."""
+	var all_players = player.get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	var closest_hit_dist = INF
+	var closest_hit_pos = end
+	var closest_player = null
+
+	# Calculate projectile path bounds for range culling
+	var path_length = start.distance_to(end)
+	var path_center = (start + end) / 2.0
+	var cull_radius = path_length / 2.0 + 100.0
+
+	for other_player in all_players:
+		if not is_instance_valid(other_player):
+			continue
+
+		# Skip self
+		if other_player == player:
+			continue
+
+		# Check if we can damage this player (allegiance/duel rules)
+		var target_id = _get_player_peer_id(other_player)
+		if not _can_damage_player(other_player, target_id):
+			continue
+
+		# Quick range cull
+		var rough_dist = other_player.global_position.distance_to(path_center)
+		if rough_dist > cull_radius:
+			continue
+
+		# Use a capsule hitbox for the player (similar to enemies)
+		var player_pos = other_player.global_position
+		var capsule_top = player_pos + Vector2(0, -24)  # Head
+		var capsule_bottom = player_pos + Vector2(0, 12)  # Feet
+		var capsule_radius = 14.0  # Slightly wider than enemy for easier hitting
+
+		# Check line-capsule intersection
+		var intersection = _line_capsule_intersection(start, end, capsule_top, capsule_bottom, capsule_radius)
+
+		if intersection.intersects:
+			var hit_dist = start.distance_to(intersection.point)
+			if hit_dist < closest_hit_dist:
+				closest_hit_dist = hit_dist
+				closest_hit_pos = intersection.point
+				closest_player = other_player
+
+	return {
+		"hit": closest_player != null,
+		"player": closest_player,
+		"hit_pos": closest_hit_pos
+	}
+
+func _attack_player_with_bow(target_player: Node, hit_pos: Vector2) -> void:
+	"""Deal bow damage to a player (PvP)"""
+	if not is_instance_valid(target_player):
+		return
+
+	# Only attack duel opponent during duel
+	if player.is_dueling:
+		var target_id = _get_player_peer_id(target_player)
+		if target_id != player.duel_opponent_id:
+			print("[PvP] Bow hit - skipping non-opponent")
+			return
+
+	# Check for weakpoint hit first - bows can hit PvP weakpoints!
+	var weakpoint_hit = _try_hit_pvp_weakpoint(target_player, hit_pos)
+	if weakpoint_hit:
+		# Weakpoint was hit - visual feedback
+		_spawn_arrow_impact(hit_pos, true)
+		print("[PvP] Bow hit weakpoint!")
+		return  # Weakpoint handles its own damage
+
+	# No weakpoint hit - deal regular bow damage
+	var final_damage = attack_damage
+
+	# Send PvP damage through network
+	_send_pvp_damage(target_player, int(final_damage))
+
+	# Visual feedback - spawn arrow impact on player
+	_spawn_arrow_impact(hit_pos, true)
+
+	# Damage number on attacker's screen (local feedback only)
+	if attack_feedback and attack_feedback.has_method("spawn_damage_number"):
+		attack_feedback.spawn_damage_number(target_player.global_position, final_damage, false, false)
+
+	# Hit sound
+	var sound_manager = player.get_node_or_null("/root/SoundManager")
+	if sound_manager and sound_manager.has_method("play_bow_impact_sound"):
+		sound_manager.play_bow_impact_sound(target_player.global_position, true, -8.0)
+
+	print("[PvP] Bow attack hit player for %d damage" % int(final_damage))
 
 func attack_enemies_in_cone(enemies: Array) -> void:
 	"""Deal damage to enemies in attack cone"""
@@ -933,6 +1075,29 @@ func try_gun_weakpoint_attack(mouse_pos: Vector2) -> bool:
 	if distance_to_cursor > gun_range:
 		var direction = (cursor_pos - player.global_position).normalized()
 		cursor_pos = player.global_position + direction * gun_range
+
+	# Check PvP weakpoints first (during duels) - uncapped attack speed on player weakpoints too
+	if player.is_dueling:
+		var all_players = player.get_tree().get_nodes_in_group("player")
+		for other_player in all_players:
+			if not is_instance_valid(other_player) or other_player == player:
+				continue
+			if not other_player.get("pvp_weakpoint_active"):
+				continue
+			var pvp_weakpoints = other_player.get("pvp_weakpoints")
+			if not pvp_weakpoints or pvp_weakpoints.size() == 0:
+				continue
+			for weakpoint in pvp_weakpoints:
+				if not is_instance_valid(weakpoint):
+					continue
+				if weakpoint.get("is_destroyed"):
+					continue
+				var distance = cursor_pos.distance_to(weakpoint.global_position)
+				if distance <= gun_radius:
+					# HIT PvP weakpoint! Fire visual effects (NO COOLDOWN)
+					_fire_gun_at_weakpoint(weakpoint, cursor_pos)
+					LogManager.debug("GUN_WP_HIT pvp dist=%.1f radius=%.1f" % [distance, gun_radius], "duel")
+					return true
 
 	# Check all enemies for weakpoints within gun targeting circle
 	var all_enemies = player.get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
@@ -1124,7 +1289,8 @@ func attempt_bow_attack() -> void:
 	var cursor_pos = player.get_global_mouse_position()
 	var bow_radius = weapon.bow_radius if weapon.get("bow_radius") else 32.0
 	var bow_range = weapon.bow_range if weapon.get("bow_range") else 450.0
-	var arrow_speed = weapon.arrow_speed if weapon.get("arrow_speed") else 1800.0  # Fast arrows (50% faster)
+	var base_arrow_speed = weapon.arrow_speed if weapon.get("arrow_speed") else 600.0
+	var arrow_speed = base_arrow_speed * 1.25  # Regular arrows (+25% velocity boost)
 
 	# Clamp cursor to max range from player
 	var distance_to_cursor = player.global_position.distance_to(cursor_pos)
@@ -1174,6 +1340,29 @@ func try_bow_weakpoint_attack(mouse_pos: Vector2) -> bool:
 		return false
 
 	var bow_radius = weapon.bow_radius if weapon.get("bow_radius") else 32.0
+
+	# Check PvP weakpoints first (during duels) - uncapped attack speed on player weakpoints too
+	if player.is_dueling:
+		var all_players = player.get_tree().get_nodes_in_group("player")
+		for other_player in all_players:
+			if not is_instance_valid(other_player) or other_player == player:
+				continue
+			if not other_player.get("pvp_weakpoint_active"):
+				continue
+			var pvp_weakpoints = other_player.get("pvp_weakpoints")
+			if not pvp_weakpoints or pvp_weakpoints.size() == 0:
+				continue
+			for weakpoint in pvp_weakpoints:
+				if not is_instance_valid(weakpoint):
+					continue
+				if weakpoint.get("is_destroyed"):
+					continue
+				var dist_to_wp = mouse_pos.distance_to(weakpoint.global_position)
+				if dist_to_wp <= bow_radius:
+					# Hit PvP weakpoint! Fire arrow (NO COOLDOWN)
+					_fire_bow_at_weakpoint(weakpoint, mouse_pos)
+					LogManager.debug("BOW_WP_HIT pvp dist=%.1f radius=%.1f" % [dist_to_wp, bow_radius], "duel")
+					return true
 
 	# Get all enemies
 	var all_enemies = player.get_tree().get_nodes_in_group("enemies")
@@ -1271,15 +1460,34 @@ func _spawn_arrow_projectile(start_pos: Vector2, target_pos: Vector2, speed: flo
 	var max_distance = start_pos.distance_to(target_pos)
 
 	# Find the first enemy hit along the arrow's path
-	var hit_result = _check_arrow_path_collision(start_pos, target_pos, hit_radius)
+	var enemy_hit_result = _check_arrow_path_collision(start_pos, target_pos, hit_radius)
+
+	# Also check for player hits (PvP - dueling or open-world)
+	var player_hit_result = _check_arrow_path_player_collision(start_pos, target_pos, hit_radius)
 
 	var actual_target = target_pos
 	var hit_enemy = null
+	var hit_player_target = null
+	var hit_player_pos = target_pos
 
-	if hit_result.hit:
-		# Arrow will stop at the first enemy it hits
-		actual_target = hit_result.hit_pos
-		hit_enemy = hit_result.enemy
+	# Determine what gets hit first (enemy, player, or nothing)
+	var enemy_dist = INF
+	var player_dist = INF
+
+	if enemy_hit_result.hit:
+		enemy_dist = start_pos.distance_to(enemy_hit_result.hit_pos)
+
+	if player_hit_result.hit:
+		player_dist = start_pos.distance_to(player_hit_result.hit_pos)
+
+	# Arrow stops at the first thing it hits
+	if enemy_hit_result.hit and enemy_dist <= player_dist:
+		actual_target = enemy_hit_result.hit_pos
+		hit_enemy = enemy_hit_result.enemy
+	elif player_hit_result.hit:
+		actual_target = player_hit_result.hit_pos
+		hit_player_target = player_hit_result.player
+		hit_player_pos = player_hit_result.hit_pos
 
 	# Create arrow visual
 	var arrow = Line2D.new()
@@ -1304,7 +1512,12 @@ func _spawn_arrow_projectile(start_pos: Vector2, target_pos: Vector2, speed: flo
 	var tween = player.get_tree().create_tween()
 	tween.tween_property(arrow, "global_position", actual_target - direction * arrow_length, travel_time)
 	tween.tween_callback(func():
-		if hit_enemy and is_instance_valid(hit_enemy):
+		# Check if we hit a player (PvP)
+		if hit_player_target and is_instance_valid(hit_player_target):
+			# Hit player - call PvP attack handler
+			_attack_player_with_bow(hit_player_target, hit_player_pos)
+			# Note: _attack_player_with_bow handles its own impact effect
+		elif hit_enemy and is_instance_valid(hit_enemy):
 			# Hit the enemy we detected along the path
 			attack_enemies_at_cursor([hit_enemy])
 			_spawn_arrow_impact(actual_target, true)

@@ -10,6 +10,7 @@ extends CharacterBody2D
 # ============================================
 const DEBUG_EQUIP: bool = true  # Debug all equipping (weapons, armor, sprite creation)
 const DEBUG_FORGED_EQUIP: bool = false  # Debug forged weapon loading and effects (extra verbose)
+# Duel debug logging now uses LogManager with category "duel" - sent to backend via TelemetryManager
 
 # Weapon type fallbacks - extended types map to core types with available animations
 # Based on backend items.json weapon_types.extended definitions
@@ -1899,13 +1900,17 @@ func _on_attack_animation_finished() -> void:
 	character_sprite.play_lpc_animation("idle", lpc_dir)
 
 func take_damage(amount: float, source_type: String = "pve", source_player_id: int = -1) -> void:
+	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+
 	# I-frames during dash
 	if is_dashing and dash_invincible:
-		print("Damage dodged! (dashing)")
+		if source_type == "player":
+			LogManager.debug("TAKE_DMG DENY dash: peer=%d src=%d" % [my_id, source_player_id], "duel")
 		return
 
 	# SAFE AURA: Block player damage post-duel
 	if has_safe_aura and source_type == "player":
+		LogManager.debug("TAKE_DMG DENY aura: peer=%d src=%d" % [my_id, source_player_id], "duel")
 		return
 
 	# Handle player damage (PvP)
@@ -1913,7 +1918,11 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 		if is_dueling:
 			# DUEL ISOLATION: Only duel opponent can damage me during a duel
 			if source_player_id != duel_opponent_id:
+				LogManager.debug("TAKE_DMG DENY not_opp: peer=%d src=%d opp=%d" % [my_id, source_player_id, duel_opponent_id], "duel")
 				return  # Ignore non-duel-opponent damage
+
+			# Log accepted player damage
+			LogManager.info("TAKE_DMG OK peer=%d dmg=%.0f src=%d duel=%s" % [my_id, amount, source_player_id, is_dueling], "duel")
 
 			# Check HP thresholds for PvP weakpoint system (before applying damage)
 			if not pvp_weakpoint_active:
@@ -2215,12 +2224,13 @@ func spawn_blood_splash(attacker_id: int) -> void:
 
 func enter_duel_state(opponent_id: int) -> void:
 	"""Called by DuelManager when duel starts"""
+	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
 	is_dueling = true
 	duel_opponent_id = opponent_id
 	pvp_triggered_thresholds.clear()  # Reset HP threshold tracking
 	clear_pvp_weakpoint_window()
 	_create_duel_aura()
-	print("Entered duel state vs player %d" % opponent_id)
+	LogManager.info("ENTER_DUEL peer=%d opp=%d" % [my_id, opponent_id], "duel")
 
 func exit_duel_state() -> void:
 	"""Called by DuelManager when duel ends"""
@@ -3022,9 +3032,10 @@ func create_player_sprite() -> void:
 
 		if ResourceLoader.exists(pants_path + legs_sprite_name + "_walk.png"):
 			pants_walk_tex = load(pants_path + legs_sprite_name + "_walk.png")
-		# Try thrust first if using staff, fall back to slash
-		if ResourceLoader.exists(pants_path + legs_sprite_name + attack_suffix + ".png"):
-			pants_slash_tex = load(pants_path + legs_sprite_name + attack_suffix + ".png")
+		# Try attack suffix (shoot/thrust/slash) first, fall back to slash
+		var pants_attack_path = pants_path + legs_sprite_name + attack_suffix + ".png"
+		if ResourceLoader.exists(pants_attack_path):
+			pants_slash_tex = load(pants_attack_path)
 		elif ResourceLoader.exists(pants_path + legs_sprite_name + "_slash.png"):
 			pants_slash_tex = load(pants_path + legs_sprite_name + "_slash.png")
 
@@ -5352,6 +5363,12 @@ func _complete_logout() -> void:
 	if AshbaneAuth and AshbaneAuth.is_authenticated:
 		var appearance = get_appearance_data()
 		AshbaneAuth.save_appearance(appearance)
+
+	# Sync state to server before disconnecting (give RPC time to complete)
+	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
+		NetworkManager.client_sync_state()
+		# Small delay to let the RPC go through before disconnecting
+		await get_tree().create_timer(0.2).timeout
 
 	# Close connection and return to main menu
 	if NetworkManager:

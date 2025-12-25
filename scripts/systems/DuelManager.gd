@@ -1,6 +1,7 @@
 extends Node
 
 ## DuelManager - Handles consensual 1v1 PvP duel system
+## Debug logging now uses LogManager with category "duel" - sent to backend via TelemetryManager
 ##
 ## Duel Flow:
 ## 1. Player A requests duel with Player B (must be within MAX_DUEL_DISTANCE)
@@ -151,6 +152,8 @@ func can_request_duel(target_id: int) -> Dictionary:
 
 func _start_duel_local(player1_id: int, player2_id: int) -> void:
 	"""Start duel state locally (called after countdown)"""
+	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+
 	active_duels[player1_id] = player2_id
 	active_duels[player2_id] = player1_id
 
@@ -163,7 +166,7 @@ func _start_duel_local(player1_id: int, player2_id: int) -> void:
 	_notify_player_enter_duel(player2_id, player1_id)
 
 	duel_started.emit(player1_id, player2_id)
-	print("Duel started: %d vs %d" % [player1_id, player2_id])
+	LogManager.info("START p1=%d p2=%d peer=%d" % [player1_id, player2_id, my_id], "duel")
 
 func _end_duel_local(winner_id: int, loser_id: int) -> void:
 	"""End duel and declare winner (called by server)"""
@@ -363,6 +366,8 @@ func _get_player_node(player_id: int) -> Node2D:
 			if player.get_multiplayer_authority() == player_id:
 				return player
 
+	# Only log on failure (this is important to debug)
+	LogManager.warn("Player node not found: id=%d" % player_id, "duel")
 	return null
 
 func _get_player_name(player_id: int) -> String:
@@ -381,6 +386,8 @@ func _notify_player_enter_duel(player_id: int, opponent_id: int) -> void:
 	var player = _get_player_node(player_id)
 	if player and player.has_method("enter_duel_state"):
 		player.enter_duel_state(opponent_id)
+	else:
+		LogManager.warn("enter_duel failed: player=%d node=%s" % [player_id, player != null], "duel")
 
 func _notify_player_exit_duel(player_id: int) -> void:
 	"""Notify a player to exit duel state"""
@@ -586,11 +593,15 @@ func _client_request_declined(decliner_id: int) -> void:
 @rpc("authority", "call_local", "reliable")
 func _client_countdown_started(player1_id: int, player2_id: int, duration: int) -> void:
 	"""Server notifies clients that countdown has started"""
+	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+	LogManager.info("COUNTDOWN p1=%d p2=%d dur=%d peer=%d" % [player1_id, player2_id, duration, my_id], "duel")
 	_start_countdown(player1_id, player2_id)
 
 @rpc("authority", "call_local", "reliable")
 func _client_duel_ended(winner_id: int, loser_id: int) -> void:
 	"""Server notifies clients that duel has ended"""
+	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+	LogManager.info("END winner=%d loser=%d peer=%d" % [winner_id, loser_id, my_id], "duel")
 	_end_duel_local(winner_id, loser_id)
 
 # ============================================
@@ -611,7 +622,7 @@ func request_pvp_damage(target_id: int, damage: int) -> void:
 	var target_player = _get_player_node(target_id)
 
 	if not attacker_player or not target_player:
-		print("[PvP] Damage rejected: invalid player nodes")
+		LogManager.warn("DMG_REQ REJECT nodes: atk=%d->%s tgt=%d->%s" % [attacker_id, attacker_player != null, target_id, target_player != null], "duel")
 		return
 
 	# Check if attacker is in a duel
@@ -622,34 +633,51 @@ func request_pvp_damage(target_id: int, damage: int) -> void:
 	if is_in_duel:
 		# During duel: only allow damage to duel opponent
 		if not is_dueling_target:
-			print("[PvP] Damage rejected: target %d is not duel opponent" % target_id)
+			LogManager.warn("DMG_REQ REJECT not_opponent: atk=%d tgt=%d opp=%s" % [attacker_id, target_id, active_duels.get(attacker_id, "none")], "duel")
 			return
 	else:
 		# Open-world PvP: check allegiance rules
 		if not _can_damage_player_server(attacker_player, target_player, attacker_id, target_id):
-			print("[PvP] Damage rejected: allegiance rules prevent damage")
+			LogManager.debug("DMG_REQ REJECT allegiance: atk=%d tgt=%d" % [attacker_id, target_id], "duel")
 			return
 
 	# Validate damage amount against player's actual stats
 	var max_damage = _get_max_pvp_damage(attacker_id)
 	if damage <= 0 or damage > max_damage:
-		push_warning("Anti-cheat: Invalid PvP damage %d from player %d (max expected: %d)" % [damage, attacker_id, max_damage])
+		LogManager.warn("Anti-cheat: dmg=%d from=%d max=%d" % [damage, attacker_id, max_damage], "duel")
 		damage = clampi(damage, 1, max_damage)
 
 	# Check if target is dashing (i-frames)
 	if target_player.get("is_dashing") == true:
-		print("[PvP] Damage blocked - target %d is dashing" % target_id)
+		LogManager.debug("DMG_REQ REJECT dash: tgt=%d" % target_id, "duel")
 		return
 
 	# Check safe aura
 	if target_player.get("has_safe_aura") == true:
-		print("[PvP] Damage blocked - target %d has safe aura" % target_id)
+		LogManager.debug("DMG_REQ REJECT safe_aura: tgt=%d" % target_id, "duel")
 		return
 
-	print("[PvP] Server applying %d damage from %d to %d" % [damage, attacker_id, target_id])
+	# Log accepted damage request
+	LogManager.info("DMG_REQ OK atk=%d tgt=%d dmg=%d duel=%s" % [attacker_id, target_id, damage, is_in_duel], "duel")
 
 	# Apply damage via RPC to all clients
 	rpc("apply_pvp_damage", target_id, damage, attacker_id)
+
+	# IMPORTANT: If the server is the target, process damage locally immediately
+	var my_id = multiplayer.get_unique_id()
+	if target_id == my_id:
+		_apply_damage_to_local_player(target_id, damage, attacker_id)
+
+func _apply_damage_to_local_player(target_id: int, damage: int, attacker_id: int) -> void:
+	"""Apply damage to the local player (called when we are the target)"""
+	var target_player = _get_player_node(target_id)
+	if not target_player:
+		LogManager.warn("DMG_LOCAL FAIL node: tgt=%d" % target_id, "duel")
+		return
+
+	if target_player.has_method("take_damage"):
+		target_player.take_damage(damage, "player", attacker_id)
+		LogManager.info("DMG_LOCAL OK tgt=%d dmg=%d atk=%d" % [target_id, damage, attacker_id], "duel")
 
 func _can_damage_player_server(attacker: Node, target: Node, attacker_id: int, target_id: int) -> bool:
 	"""Server-side allegiance check for open-world PvP"""
@@ -705,19 +733,17 @@ func _is_in_safe_zone(player_node: Node) -> bool:
 @rpc("authority", "call_local", "reliable")
 func apply_pvp_damage(target_id: int, damage: int, attacker_id: int) -> void:
 	"""Server broadcasts PvP damage to all clients"""
+	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+
 	var target_player = _get_player_node(target_id)
 	if not target_player:
-		print("[PvP] Could not find target player %d" % target_id)
+		LogManager.warn("DMG_RPC FAIL node: tgt=%d peer=%d" % [target_id, my_id], "duel")
 		return
 
 	# Only the target processes the actual damage
-	var my_id = -1
-	if multiplayer.has_multiplayer_peer():
-		my_id = multiplayer.get_unique_id()
-
 	if my_id == target_id and target_player.has_method("take_damage"):
 		target_player.take_damage(damage, "player", attacker_id)
-		print("[PvP] Applied %d damage to self from player %d" % [damage, attacker_id])
+		LogManager.info("DMG_RPC RECV tgt=%d dmg=%d atk=%d peer=%d" % [target_id, damage, attacker_id, my_id], "duel")
 
 # ============================================
 # DAMAGE VALIDATION HELPERS

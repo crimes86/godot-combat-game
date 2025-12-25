@@ -100,6 +100,7 @@ const CATEGORY_ICONS: Dictionary = {
 	"forge": "🔨",
 	"equipment": "🎽",
 	"pvp": "⚔️",
+	"duel": "🤺",
 	"default": "📋"
 }
 
