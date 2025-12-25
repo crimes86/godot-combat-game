@@ -222,15 +222,42 @@ func award_xp(base_amount: int) -> void:
 | **Standard** | 90 seconds | Medium | Small groups |
 | **Intense** | 45 seconds | High | Full parties, active play |
 
-### 3.2 Skeletal Ruins Layout
+### 3.2 Zone Layout (West → East Progression)
 
+**Current layout (to be changed):**
+```
+WEST (6-10) ---- CENTER (1-5) ---- EAST (6-10)  ❌ Confusing
+```
+
+**New layout (linear progression):**
 ```
 Zone 1 World (24,000 x 8,000 pixels)
 
-[Campfire]----[Ruins West]----[Ruins Center]----[Ruins East]
-   Safe         Level 3-5        Level 6-8        Level 9-12
-   Zone          Chill           Standard          Intense
+WEST                    CENTER                   EAST
+[Campfire]─────[Ruins 1]─────[Ruins 2]─────[Ruins 3]─────[Deep Ruins]
+  Safe          Level 1-3      Level 4-6      Level 7-9     Level 10-12
+  Zone           Chill         Standard        Intense        Deadly
+
+Distance from spawn → Difficulty increases →
 ```
+
+**Level Bands by X Position:**
+```
+X: 0 - 2000       Campfire safe zone (no enemies)
+X: 2000 - 6000    Level 1-3 (newbie friendly)
+X: 6000 - 12000   Level 4-6 (standard grind)
+X: 12000 - 18000  Level 7-9 (group recommended)
+X: 18000 - 24000  Level 10-12 (full party required)
+```
+
+### 3.3 Camp Locations
+
+| Camp Name | X Position | Levels | Camp Type | Party Size |
+|-----------|------------|--------|-----------|------------|
+| Ruins West | ~4000 | 1-3 | Chill | Solo/Duo |
+| Ruins Central | ~9000 | 4-6 | Standard | 2-3 players |
+| Ruins East | ~15000 | 7-9 | Intense | 3-4 players |
+| Deep Ruins | ~21000 | 10-12 | Deadly | Full party |
 
 ### 3.3 Camp Spawner Implementation
 
