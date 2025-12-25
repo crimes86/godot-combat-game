@@ -6,6 +6,166 @@ Support **100+ players in a single battle** with responsive PvP combat (sub-100m
 
 ---
 
+## SAFE IMPLEMENTATION (Phase 1 Only)
+
+**Risk: ~5% | Effort: 1 day | Gain: 50→100 players**
+
+This section is the "do this first" minimal implementation. It's additive (doesn't replace existing code) and easy to revert if anything breaks.
+
+### Step 1: Add SpatialGrid Autoload
+
+Create `scripts/autoloads/SpatialGrid.gd`:
+
+```gdscript
+extends Node
+
+const CELL_SIZE = 400
+
+var cells: Dictionary = {}  # Vector2i -> Array[int] (peer IDs)
+var player_cells: Dictionary = {}  # peer_id -> Vector2i (current cell)
+
+func update_player(peer_id: int, position: Vector2) -> void:
+    var new_cell = Vector2i(int(position.x / CELL_SIZE), int(position.y / CELL_SIZE))
+    var old_cell = player_cells.get(peer_id, Vector2i(-99999, -99999))
+
+    if new_cell == old_cell:
+        return
+
+    # Remove from old cell
+    if cells.has(old_cell):
+        cells[old_cell].erase(peer_id)
+        if cells[old_cell].is_empty():
+            cells.erase(old_cell)
+
+    # Add to new cell
+    if not cells.has(new_cell):
+        cells[new_cell] = []
+    cells[new_cell].append(peer_id)
+    player_cells[peer_id] = new_cell
+
+
+func remove_player(peer_id: int) -> void:
+    var cell = player_cells.get(peer_id)
+    if cell and cells.has(cell):
+        cells[cell].erase(peer_id)
+    player_cells.erase(peer_id)
+
+
+func get_nearby_peers(position: Vector2, radius: float) -> Array[int]:
+    var results: Array[int] = []
+    var center_cell = Vector2i(int(position.x / CELL_SIZE), int(position.y / CELL_SIZE))
+    var cell_radius = int(ceil(radius / CELL_SIZE))
+
+    for dx in range(-cell_radius, cell_radius + 1):
+        for dy in range(-cell_radius, cell_radius + 1):
+            var check_cell = center_cell + Vector2i(dx, dy)
+            if cells.has(check_cell):
+                results.append_array(cells[check_cell])
+
+    return results
+```
+
+Register as autoload: Project Settings → Autoload → `SpatialGrid`
+
+### Step 2: Update Player Position Tracking
+
+In your player movement sync (wherever you broadcast position):
+
+```gdscript
+# When local player moves:
+func _physics_process(delta: float) -> void:
+    # ... existing movement code ...
+
+    # Add this one line:
+    SpatialGrid.update_player(multiplayer.get_unique_id(), global_position)
+```
+
+### Step 3: Add AOI Check Before Sync
+
+Find where you send position updates to other players. Add ONE check:
+
+```gdscript
+const AOI_RADIUS = 2000.0  # Only sync players within 2000px
+
+# BEFORE (sends to everyone):
+func _broadcast_position() -> void:
+    rpc("receive_position", global_position)
+
+# AFTER (sends to nearby only):
+func _broadcast_position() -> void:
+    var my_pos = global_position
+    var nearby = SpatialGrid.get_nearby_peers(my_pos, AOI_RADIUS)
+
+    for peer_id in nearby:
+        if peer_id != multiplayer.get_unique_id():
+            rpc_id(peer_id, "receive_position", global_position)
+```
+
+### Step 4: Combat Still Works Globally
+
+**Don't change combat RPCs.** Damage, deaths, duels should still broadcast to everyone. Only position sync gets the AOI filter.
+
+```gdscript
+# These stay as regular rpc() - no changes:
+rpc("receive_damage", target_id, damage)
+rpc("player_died", player_id)
+rpc("duel_started", player1, player2)
+```
+
+### Step 5: Cleanup on Disconnect
+
+```gdscript
+func _on_peer_disconnected(peer_id: int) -> void:
+    SpatialGrid.remove_player(peer_id)
+    # ... existing cleanup ...
+```
+
+### That's It
+
+**Total changes:**
+- 1 new autoload file (~50 lines)
+- 1 line in player movement
+- 1 function modified (position broadcast)
+- 1 line in disconnect handler
+
+**What you get:**
+- Players only receive position updates from nearby players
+- 50 players → can now handle ~100 players
+- Combat still works globally (no desyncs)
+- Easy to revert: just remove the AOI check
+
+### Testing
+
+```gdscript
+# Add to SpatialGrid.gd for debugging:
+func _process(_delta: float) -> void:
+    if Engine.get_process_frames() % 60 == 0:  # Every second
+        var total_players = player_cells.size()
+        var total_cells = cells.size()
+        print("[SpatialGrid] %d players in %d cells" % [total_players, total_cells])
+```
+
+### If Something Breaks
+
+Most likely issue: **Players disappear when far away**
+
+This is expected! But if they don't reappear when close:
+1. Check `update_player()` is being called on movement
+2. Check `AOI_RADIUS` isn't too small (try 3000+)
+3. Add debug prints to `get_nearby_peers()`
+
+**Revert:** Just remove the AOI check in `_broadcast_position()` and go back to regular `rpc()`.
+
+---
+
+## ADVANCED IMPLEMENTATION (Phases 2-5)
+
+Only proceed below if Phase 1 isn't enough for your player counts.
+
+---
+
+---
+
 ## Current Bottlenecks
 
 ### 1. Naive Broadcasting (O(n²))
