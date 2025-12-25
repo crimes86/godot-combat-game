@@ -515,16 +515,20 @@ def get_icon_url_for_item(item: Dict[str, Any]) -> str:
     item_id = item.get("item_id", "")
     item_type = item.get("item_type", "weapon")
 
+    # Cache-busting version (increment when icons are updated to bypass CF cache)
+    ICON_VERSION = "v2"
+
     # Check if item has explicit icon URL in visuals
     visuals = item.get("visuals", {})
     if visuals.get("icon_url"):
         url = visuals["icon_url"]
-        # /static/items/icons/ URLs are GPT-generated icons - use as-is
+        # /static/items/icons/ URLs are GPT-generated icons - add cache buster
         if url.startswith("/static/items/icons/"):
-            return url
+            return f"{url}?{ICON_VERSION}"
         return url
 
-    return resolve_icon_url(item_id, item_type)
+    base_url = resolve_icon_url(item_id, item_type)
+    return f"{base_url}?{ICON_VERSION}"
 
 
 def get_catalog_summary() -> dict:
