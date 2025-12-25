@@ -6128,7 +6128,7 @@ function updateTokenIndicator(providerName, providerUserId, status) {
     }
 
     // Check if provider has been synced at least once (has sync-report with timestamp)
-    const syncReport = card.querySelector('.sync-report');
+    // syncReport already defined above
     const hasBeenSynced = syncReport && syncReport.dataset.lastSync;
 
     // Hide indicator until first sync
