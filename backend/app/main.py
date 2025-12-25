@@ -3556,7 +3556,21 @@ GAME_CONFIG = {
         "trade_cooldown_hours": 24.0,
     },
 
-    # Misc
+    # Item XP System
+    "item_xp": {
+        "base_xp_per_enemy_level": 5,      # XP = enemy_level * this
+        "elite_multiplier": 1.5,            # Elite enemies give 1.5x XP
+        "group_bonus_per_member": 0.10,     # +10% per party member beyond 1
+        "xp_base": 100,                     # XP to level = base * growth^level
+        "xp_growth": 1.08,                  # Exponential growth rate
+        "damage_per_level": 1.0,            # +1 damage per level (soft cap at 50)
+        "damage_per_level_after_cap": 0.1,  # +0.1 after level 50
+        "crit_per_level": 0.002,            # +0.2% crit per level (soft cap at 50)
+        "crit_per_level_after_cap": 0.0002, # +0.02% after level 50
+        "soft_cap_level": 50,               # Where diminishing returns start
+    },
+
+    # Player
     "player": {
         "base_health": 100.0,
         "base_stamina": 100.0,
