@@ -2702,6 +2702,7 @@
       {% set top_char = provider.profile_data.top_character if provider.name == "battlenet" and provider.profile_data and provider.profile_data.top_character else None %}
       <div class="provider-card neon-card"
            data-provider="{{ provider.name }}"
+           data-userid="{{ provider.user_id }}"
            style="position:relative; display:flex; flex-direction:column; align-items:center; padding:1.25rem 1.25rem 3rem 1.25rem;">
 
         <!-- Holographic shimmer overlay -->
@@ -6104,10 +6105,10 @@ function updateTokenIndicator(providerName, providerUserId, status) {
   console.log(`[Indicator] Found ${cards.length} cards for provider ${providerName}`);
 
   cards.forEach(card => {
-    // Try to get userid from sync button first, then sync-report as fallback
+    // Try to get userid from sync button first, then sync-report, then card itself as fallback
     const syncBtn = card.querySelector('.btn-sync-icon');
     const syncReport = card.querySelector('.sync-report');
-    const cardUserId = syncBtn?.getAttribute('data-userid') || syncReport?.getAttribute('data-userid');
+    const cardUserId = syncBtn?.getAttribute('data-userid') || syncReport?.getAttribute('data-userid') || card.getAttribute('data-userid');
     console.log(`[Indicator] Card userid: ${cardUserId}, looking for: ${providerUserId}`);
 
     if (cardUserId !== providerUserId) {

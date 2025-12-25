@@ -3864,8 +3864,8 @@
       "base_rarity": "rare",
       "theme": "minecraft",
       "visuals": {
-        "icon_url": "/static/items/icons/tools/minecraft_diamond_pickaxe.png",
-        "sprite_folder": "tools/minecraft_diamond_pickaxe",
+        "icon_url": "/static/items/icons/minecraft_diamond_pickaxe.png",
+        "sprite_folder": "equipment/tools/pickaxe/diamond",
         "effect": "diamond_sparkle",
         "glow_color": "#00FFFF"
       },
