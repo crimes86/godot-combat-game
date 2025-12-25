@@ -6104,8 +6104,10 @@ function updateTokenIndicator(providerName, providerUserId, status) {
   console.log(`[Indicator] Found ${cards.length} cards for provider ${providerName}`);
 
   cards.forEach(card => {
+    // Try to get userid from sync button first, then sync-report as fallback
     const syncBtn = card.querySelector('.btn-sync-icon');
-    const cardUserId = syncBtn?.getAttribute('data-userid');
+    const syncReport = card.querySelector('.sync-report');
+    const cardUserId = syncBtn?.getAttribute('data-userid') || syncReport?.getAttribute('data-userid');
     console.log(`[Indicator] Card userid: ${cardUserId}, looking for: ${providerUserId}`);
 
     if (cardUserId !== providerUserId) {
@@ -6224,8 +6226,10 @@ function updateSyncReport(providerName, providerUserId, creditedCount, totalAchi
   const cards = document.querySelectorAll(`.provider-card[data-provider="${providerName}"]`);
 
   cards.forEach(card => {
+    // Try to get userid from sync button first, then sync-report as fallback
     const syncBtn = card.querySelector('.btn-sync-icon');
-    const cardUserId = syncBtn?.getAttribute('data-userid');
+    const existingSyncReport = card.querySelector('.sync-report');
+    const cardUserId = syncBtn?.getAttribute('data-userid') || existingSyncReport?.getAttribute('data-userid');
 
     if (cardUserId !== providerUserId) return;
 
