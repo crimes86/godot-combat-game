@@ -1418,7 +1418,7 @@ func create_quest_card(quest: Dictionary, is_complete: bool) -> PanelContainer:
 		var gold_hbox = HBoxContainer.new()
 		gold_hbox.add_theme_constant_override("separation", 4)
 		var gold_icon = TextureRect.new()
-		gold_icon.texture = preload("res://assets/icons/gold_coins.png")
+		gold_icon.texture = preload("res://assets/icons/materials/gold_coins.png")
 		gold_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		gold_icon.custom_minimum_size = Vector2(16, 16)
 		gold_hbox.add_child(gold_icon)

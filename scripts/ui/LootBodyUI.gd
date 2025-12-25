@@ -394,7 +394,7 @@ func create_gold_slot(gold_amount: int, source_corpse) -> Control:
 	# Gold icon using texture
 	var gold_icon = TextureRect.new()
 	gold_icon.name = "GoldIcon"
-	gold_icon.texture = preload("res://assets/icons/gold_coins.png")
+	gold_icon.texture = preload("res://assets/icons/materials/gold_coins.png")
 	gold_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	gold_icon.custom_minimum_size = Vector2(32, 32)
 	gold_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -443,7 +443,7 @@ func create_combined_gold_slot(total_gold: int, gold_corpses: Array) -> Control:
 	# Gold icon using texture
 	var gold_icon = TextureRect.new()
 	gold_icon.name = "GoldIcon"
-	gold_icon.texture = preload("res://assets/icons/gold_coins.png")
+	gold_icon.texture = preload("res://assets/icons/materials/gold_coins.png")
 	gold_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	gold_icon.custom_minimum_size = Vector2(32, 32)
 	gold_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE

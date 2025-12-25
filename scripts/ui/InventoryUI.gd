@@ -187,7 +187,7 @@ func create_inventory_ui() -> void:
 	bottom_bar.add_child(gold_container)
 
 	var gold_icon = TextureRect.new()
-	gold_icon.texture = preload("res://assets/icons/gold_coins.png")
+	gold_icon.texture = preload("res://assets/icons/materials/gold_coins.png")
 	gold_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	gold_icon.custom_minimum_size = Vector2(16, 16)
 	gold_container.add_child(gold_icon)
