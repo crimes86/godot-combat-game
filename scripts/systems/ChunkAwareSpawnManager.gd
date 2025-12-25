@@ -17,44 +17,44 @@ class_name ChunkAwareSpawnManager
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Enemies per chunk (balanced for gameplay density around lava/ritual sites)
-const ENEMIES_PER_CHUNK: int = 120
+## Enemies per chunk - reduced for West→East progression with concentrated camps
+## 80 random spawns + camps near lava pools = good density without overwhelming
+const ENEMIES_PER_CHUNK: int = 80
+
+## Camp system - higher density clusters near environmental features
+const CAMP_SPAWN_RADIUS: float = 150.0  # Enemies spawn within this radius of camp center
+const CAMP_MIN_ENEMIES: int = 4  # Minimum enemies per camp
+const CAMP_MAX_ENEMIES: int = 8  # Maximum enemies per camp
 
 ## Chunk size from Constants singleton (single source of truth)
 var CHUNK_SIZE: float:
 	get: return Constants.CHUNK_SIZE
 
-## Level bands - enemy level based on distance from campfire
-## Campfire is at chunk 0 center (X: CHUNK_SIZE/2)
-## Chunk 0 (spawn): Level 1-6 (near campfire safe, edges harder)
-## Chunk -1 (west): Level 6-10 (ruins/farming area)
-## Chunk +1 (east): Level 6-10 (ruins/farming area)
-## Updated for 8000px chunks
+## Level bands - enemy level based on X position (West→East progression)
+## Campfire is at X: -6000 (chunk -1), players progress eastward to Zone 2 at chunk +1
+##
+## West→East Layout:
+##   Campfire (-6000) → L1-5 (chunk -1) → L5-9 (chunk 0) → L9-15 (chunk +1) → Zone 2 Cave
+##
+## World spans X: -8000 to +16000 (24,000px total across 3 chunks)
 var LEVEL_BANDS: Array:
 	get:
-		var cs = Constants.CHUNK_SIZE
+		var cs = Constants.CHUNK_SIZE  # 8000px
 		return [
-			# Chunk 0 - Spawn area (X: 0 to CHUNK_SIZE)
-			# Near campfire (center) is safe, edges get progressively harder
-			{"min_x": cs * 0.4, "max_x": cs * 0.6, "level": 1},         # Central 20% - level 1 (campfire)
-			{"min_x": cs * 0.3, "max_x": cs * 0.4, "level": 2},         # Inner ring west - level 2
-			{"min_x": cs * 0.6, "max_x": cs * 0.7, "level": 2},         # Inner ring east - level 2
-			{"min_x": cs * 0.2, "max_x": cs * 0.3, "level": 3},         # Mid ring west - level 3
-			{"min_x": cs * 0.7, "max_x": cs * 0.8, "level": 3},         # Mid ring east - level 3
-			{"min_x": cs * 0.1, "max_x": cs * 0.2, "level": 4},         # Outer ring west - level 4
-			{"min_x": cs * 0.8, "max_x": cs * 0.9, "level": 4},         # Outer ring east - level 4
-			{"min_x": 0, "max_x": cs * 0.1, "level": 5},                # West edge - level 5
-			{"min_x": cs * 0.9, "max_x": cs, "level": 5},               # East edge - level 5
-			# Chunk -1 - West end chunk (X: -CHUNK_SIZE to 0) - Ruins farming area
-			{"min_x": -cs * 0.25, "max_x": 0, "level": 6},              # Near chunk 0 border - level 6
-			{"min_x": -cs * 0.5, "max_x": -cs * 0.25, "level": 7},      # Mid-near - level 7
-			{"min_x": -cs * 0.75, "max_x": -cs * 0.5, "level": 8},      # Mid-far - level 8
-			{"min_x": -cs, "max_x": -cs * 0.75, "level": 9},            # Far west - level 9
-			# Chunk +1 - East end chunk (X: CHUNK_SIZE to CHUNK_SIZE*2) - Ruins farming area
-			{"min_x": cs, "max_x": cs * 1.25, "level": 6},              # Near chunk 0 border - level 6
-			{"min_x": cs * 1.25, "max_x": cs * 1.5, "level": 7},        # Mid-near - level 7
-			{"min_x": cs * 1.5, "max_x": cs * 1.75, "level": 8},        # Mid-far - level 8
-			{"min_x": cs * 1.75, "max_x": cs * 2, "level": 9},          # Far east - level 9
+			# Chunk -1 (start): Campfire at -6000, levels 1-5
+			# X: -8000 to 0
+			{"min_x": -cs, "max_x": -cs * 0.5, "level": 1},        # -8000 to -4000: L1 (near campfire)
+			{"min_x": -cs * 0.5, "max_x": 0, "level": 3},          # -4000 to 0: L3
+
+			# Chunk 0 (mid): Levels 5-9, harder enemies
+			# X: 0 to 8000
+			{"min_x": 0, "max_x": cs * 0.5, "level": 5},           # 0 to 4000: L5
+			{"min_x": cs * 0.5, "max_x": cs, "level": 7},          # 4000 to 8000: L7
+
+			# Chunk +1 (end): Levels 9-15, Zone 2 entrance at east edge
+			# X: 8000 to 16000
+			{"min_x": cs, "max_x": cs * 1.5, "level": 9},          # 8000 to 12000: L9
+			{"min_x": cs * 1.5, "max_x": cs * 2, "level": 12},     # 12000 to 16000: L12 (near Zone 2)
 		]
 
 ## Respawn timer in seconds (0 = no respawn until chunk reload)
@@ -67,19 +67,21 @@ const MIN_ENEMY_SPACING: float = 80.0
 const ROAMING_SPAWN_DISTANCE_MIN: float = 400.0  # Min distance from lava pools
 const ROAMING_SPAWN_DISTANCE_MAX: float = 800.0  # Max distance for open area spawns
 const DIRE_WOLF_CHANCE: float = 0.08  # 8% chance for a roaming wolf to be a dire wolf
-const SPIDER_SPAWN_WEIGHT: float = 0.5  # 50% spiders, 50% wolves in open areas
+const ROAMING_SKELETON_WEIGHT: float = 0.40  # 40% roaming skeletons in open areas
+const SPIDER_SPAWN_WEIGHT: float = 0.50  # Of remaining 60%: 50% spiders = 30% total
+# Remaining 50% of 60% = 30% wolves
 
 ## Safe zones - no enemies spawn within these areas
-## Campfire is at chunk 0 center (CHUNK_SIZE/2, 0)
+## Campfire is at west side of chunk -1 (X: -6000) for West→East progression
 var SAFE_ZONES: Array:
 	get: return [
-		{"pos": Vector2(Constants.CHUNK_SIZE / 2, 0), "radius": 600.0},  # Campfire spawn
+		{"pos": Vector2(-6000, 0), "radius": 600.0},  # Campfire spawn (west start)
 	]
 
 ## Tutorial zone - enemies within this radius of campfire are always level 1
 const TUTORIAL_ZONE_RADIUS: float = 1200.0
 var CAMPFIRE_POSITION: Vector2:
-	get: return Vector2(Constants.CHUNK_SIZE / 2, 0)
+	get: return Vector2(-6000, 0)  # West side of chunk -1
 
 ## Ruins areas - no random spawns (guardians spawn separately)
 ## Dynamically populated from game_world.RUINS_POSITIONS at runtime
@@ -543,7 +545,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		print("✨ Spawned %d enemies in chunk %s (total: %d)" % [
 			spawned, chunk_key, chunk_data.get_alive_count()
 		])
-		print("   📍 Monster lakes: %d (L1-6), Regular pools: %d (L1-3), Roaming: %d wolves/spiders" % [
+		print("   📍 Monster lakes: %d (L1-6), Regular pools: %d (L1-3), Roaming: %d (skeletons/wolves/spiders)" % [
 			monster_spawned, regular_spawned, roaming_spawned
 		])
 
@@ -618,14 +620,20 @@ func find_open_area_spawn(min_x: float, max_x: float, min_y: float, max_y: float
 
 
 func spawn_roaming_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
-	"""Spawn a roaming wolf or spider at position"""
-	# Decide between wolf and spider
-	var spawn_spider = spawn_rng.randf() < SPIDER_SPAWN_WEIGHT
+	"""Spawn a roaming enemy (skeleton, wolf, or spider) in open areas"""
+	var roll = spawn_rng.randf()
 
-	if spawn_spider:
+	# 40% chance for roaming skeleton
+	if roll < ROAMING_SKELETON_WEIGHT:
+		return spawn_single_enemy(pos, level, chunk_key)
+
+	# Remaining 60% split between wolves and spiders
+	# SPIDER_SPAWN_WEIGHT (0.5) of remaining 60% = 30% spiders
+	var remaining_roll = (roll - ROAMING_SKELETON_WEIGHT) / (1.0 - ROAMING_SKELETON_WEIGHT)
+	if remaining_roll < SPIDER_SPAWN_WEIGHT:
 		return spawn_single_spider(pos, level, chunk_key)
 	else:
-		# Check for rare dire wolf
+		# 30% wolves (with rare dire wolf chance)
 		var is_dire = spawn_rng.randf() < DIRE_WOLF_CHANCE
 		return spawn_single_wolf_roaming(pos, level, chunk_key, is_dire)
 

@@ -277,7 +277,12 @@ func get_base_damage() -> float:
 	if equipped_weapon:
 		weapon_damage = equipped_weapon.base_damage
 
-	return stat_damage + weapon_damage
+	# Add forged weapon level bonus (from Item XP System)
+	var weapon_level_bonus = 0.0
+	if equipped_weapon and equipped_weapon.is_forged and equipped_weapon.weapon_stats:
+		weapon_level_bonus = equipped_weapon.weapon_stats.get_damage_bonus()
+
+	return stat_damage + weapon_damage + weapon_level_bonus
 
 func get_effective_strength() -> int:
 	"""Get total STR including equipment bonuses"""

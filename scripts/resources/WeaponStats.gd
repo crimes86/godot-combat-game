@@ -2,6 +2,8 @@ extends Resource
 class_name WeaponStats
 
 ## Forged Weapon Stats - Immutable Combat Biography
+
+signal leveled_up(new_level: int)  # Emitted when weapon levels up
 ## Tracks kills, crits, damage, and all combat history for forged weapons.
 ## Virgin weapons (0/0/0/0) are pristine collectors' items.
 ## Stats can never be reset - that's the point.
@@ -252,8 +254,8 @@ func record_hit(damage: float, is_crit: bool, enemy_type: String, enemy_hp_remai
 	# Grant XP for hitting enemies
 	_grant_experience(1)
 
-func record_kill(enemy_type: String, is_elite: bool = false, is_boss: bool = false) -> void:
-	"""Record a kill"""
+func record_kill(enemy_type: String, is_elite: bool = false, is_boss: bool = false, enemy_level: int = 1, party_size: int = 1) -> void:
+	"""Record a kill and grant XP based on enemy level and party size"""
 	kills_total += 1
 
 	# Track by type
@@ -292,13 +294,27 @@ func record_kill(enemy_type: String, is_elite: bool = false, is_boss: bool = fal
 		if not ACHIEVEMENT_UNTOUCHED in achievements:
 			_unlock_achievement(ACHIEVEMENT_UNTOUCHED)
 
-	# Grant XP for kills (more than hits)
-	var xp_amount = 10
-	if is_elite:
-		xp_amount = 25
-	if is_boss:
-		xp_amount = 100
+	# Grant XP for kills using spec formula
+	var xp_amount = calculate_kill_xp(enemy_level, is_elite, is_boss, party_size)
 	_grant_experience(xp_amount)
+
+
+func calculate_kill_xp(enemy_level: int, is_elite: bool, is_boss: bool, party_size: int) -> int:
+	"""Calculate XP from a kill based on enemy level and party size.
+	Item XP is NOT split - everyone gets full XP. Group bonus encourages grouping."""
+	# Base XP scales with enemy level
+	var base_xp = enemy_level * 5
+
+	# Elite/Boss multipliers
+	if is_boss:
+		base_xp = int(base_xp * 3.0)  # Bosses give 3x
+	elif is_elite:
+		base_xp = int(base_xp * 1.5)  # Elites give 1.5x
+
+	# Group bonus: +10% per party member beyond 1
+	var group_multiplier = 1.0 + (party_size - 1) * 0.10
+
+	return int(base_xp * group_multiplier)
 
 func record_pvp_kill() -> void:
 	"""Record a PvP kill (future)"""
@@ -365,6 +381,7 @@ func _grant_experience(amount: int) -> void:
 		experience -= get_experience_to_next_level()
 		level += 1
 		print("⚔️ Weapon leveled up to %d!" % level)
+		leveled_up.emit(level)
 
 # ============================================
 # ACHIEVEMENTS

@@ -25,6 +25,10 @@ var interpolation_speed: float = 15.0  # Increased for smoother movement
 var target_position: Vector2 = Vector2.ZERO  # Target position to interpolate toward
 var calculated_move_speed: float = 200.0  # Calculated speed based on distance/time
 
+# AOI (Area of Interest) for massive battle optimization
+# Only sync position updates to players within this radius
+const AOI_RADIUS: float = 2000.0
+
 func _ready():
 	name = "Player_" + str(player_id)
 	set_multiplayer_authority(player_id)
@@ -138,7 +142,17 @@ func _send_position_update():
 	var max_hp = _get_player_max_health()
 	var dashing = _is_player_dashing()
 
-	rpc("receive_position_update", pos, anim, health, max_hp, dashing)
+	# Update our position in the spatial grid for AOI queries
+	SpatialGrid.update_player(player_id, pos)
+
+	# AOI optimization: Only send position to nearby players
+	# This reduces O(n²) broadcasts to O(nearby) - crucial for 100+ player battles
+	var my_peer_id = multiplayer.get_unique_id()
+	var nearby_peers = SpatialGrid.get_nearby_peers_fast(pos, AOI_RADIUS)
+
+	for peer_id in nearby_peers:
+		if peer_id != my_peer_id:
+			rpc_id(peer_id, "receive_position_update", pos, anim, health, max_hp, dashing)
 
 @rpc("any_peer", "call_local", "unreliable_ordered")
 func receive_position_update(pos: Vector2, anim: String, health: int, max_hp: int = 100, dashing: bool = false):

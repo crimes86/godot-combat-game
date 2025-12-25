@@ -191,6 +191,22 @@ func _ready() -> void:
 		attack_cooldown *= 0.75  # 25% faster attacks (1.5s -> 1.125s)
 		combat_speed *= 1.15  # 15% faster chase speed - harder to kite
 
+	# West→East progression: Scale combat abilities based on enemy level
+	# Higher level enemies are faster and attack more frequently
+	var enemy_level = enemy.enemy_level if enemy.get("enemy_level") != null else 1
+	if enemy_level >= 10:
+		# Endgame tier (L10+): +30% attack speed, +20% move speed
+		attack_cooldown *= 0.7
+		combat_speed *= 1.2
+	elif enemy_level >= 7:
+		# Elite tier (L7-9): +20% attack speed, +10% move speed
+		attack_cooldown *= 0.8
+		combat_speed *= 1.1
+	elif enemy_level >= 4:
+		# Armored tier (L4-6): +10% attack speed
+		attack_cooldown *= 0.9
+	# L1-3: No scaling (base stats)
+
 	# Check if this is a campfire-spawned skeleton (has meta data from Campfire.gd)
 	if enemy.has_meta("is_campfire_skeleton") and enemy.get_meta("is_campfire_skeleton"):
 		is_campfire_skeleton = true

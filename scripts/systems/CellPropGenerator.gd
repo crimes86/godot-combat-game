@@ -37,11 +37,11 @@ const CRACK_CHANCE: float = 0.25  # ~15/64 cells
 const MONSTER_LAVA_CHANCE: float = 0.015  # ~3 per chunk (very rare)
 
 # Special zones to avoid
-# Campfire is at center of chunk 0: (CHUNK_SIZE / 2, 0) = (4000, 0)
+# Campfire is at west side of chunk -1 for West→East progression
 var CAMPFIRE_POS: Vector2:
-	get: return Vector2(Constants.CHUNK_SIZE / 2, 0)
+	get: return Vector2(-6000, 0)
 const CAMPFIRE_SAFE_RADIUS = 1050.0
-const PATH_WIDTH = 200.0
+const PATH_WIDTH = 350.0  # Increased to account for zigzag path amplitude
 
 func initialize(p_streaming_manager: CellStreamingManager, p_world_seed: int) -> void:
 	"""Initialize the prop generator"""
@@ -82,18 +82,27 @@ func get_chunk_key_for_cell(cell_key: String) -> String:
 	var chunk_x = floori(world_x / CHUNK_SIZE)
 	return "%d,0" % chunk_x
 
+func get_chunk_id_from_key(chunk_key: String) -> int:
+	"""Extract chunk ID (X component) from chunk key"""
+	var parts = chunk_key.split(",")
+	return int(parts[0])
+
 func generate_prop_list(cell_key: String) -> Array:
 	"""Generate deterministic prop list for a cell"""
 	var props = []
 	var rng = get_cell_rng(cell_key)
 	var bounds = get_cell_bounds(cell_key)
 	var chunk_key = get_chunk_key_for_cell(cell_key)
+	var chunk_id = get_chunk_id_from_key(chunk_key)
 
 	# Generate props with positions
 	# Order: Lava first (exclusion zones), then trees, rocks, decorative
 
-	# Monster lava pools (very rare, anchor points)
-	if rng.randf() < MONSTER_LAVA_CHANCE:
+	# Skip random lava pools in chunk -1 (tutorial area has hardcoded POI lava lakes)
+	var skip_random_lava = (chunk_id == -1)
+
+	# Monster lava pools (very rare, anchor points) - skip in tutorial chunk
+	if not skip_random_lava and rng.randf() < MONSTER_LAVA_CHANCE:
 		var pos = _random_position_in_bounds(bounds, rng)
 		if _is_valid_position(pos):
 			props.append({
@@ -104,8 +113,8 @@ func generate_prop_list(cell_key: String) -> Array:
 				"rng_offset": rng.randi()
 			})
 
-	# Regular lava pools
-	if rng.randf() < LAVA_POOL_CHANCE:
+	# Regular lava pools - skip in tutorial chunk
+	if not skip_random_lava and rng.randf() < LAVA_POOL_CHANCE:
 		var pos = _random_position_in_bounds(bounds, rng)
 		if _is_valid_position(pos):
 			props.append({
@@ -158,10 +167,10 @@ func generate_prop_list(cell_key: String) -> Array:
 				"rng_offset": rng.randi()
 			})
 
-	# Medium rocks (decorative)
+	# Medium rocks (decorative - allowed on path)
 	for i in range(ROCKS_MEDIUM_PER_CELL):
 		var pos = _random_position_in_bounds(bounds, rng)
-		if _is_valid_position(pos):
+		if _is_valid_position(pos, true):
 			props.append({
 				"type": "rock_medium",
 				"pos": pos,
@@ -170,10 +179,10 @@ func generate_prop_list(cell_key: String) -> Array:
 				"rng_offset": rng.randi()
 			})
 
-	# Small rocks (decorative)
+	# Small rocks (decorative - allowed on path)
 	for i in range(ROCKS_SMALL_PER_CELL):
 		var pos = _random_position_in_bounds(bounds, rng)
-		if _is_valid_position(pos):
+		if _is_valid_position(pos, true):
 			props.append({
 				"type": "rock_small",
 				"pos": pos,
@@ -182,10 +191,10 @@ func generate_prop_list(cell_key: String) -> Array:
 				"rng_offset": rng.randi()
 			})
 
-	# Bone clusters (rare)
+	# Bone clusters (rare - allowed on path)
 	if rng.randf() < BONE_CLUSTER_CHANCE:
 		var pos = _random_position_in_bounds(bounds, rng)
-		if _is_valid_position(pos):
+		if _is_valid_position(pos, true):
 			props.append({
 				"type": "bone_cluster",
 				"pos": pos,
@@ -194,10 +203,10 @@ func generate_prop_list(cell_key: String) -> Array:
 				"rng_offset": rng.randi()
 			})
 
-	# Scattered bones
+	# Scattered bones (allowed on path)
 	for i in range(SCATTERED_BONES_PER_CELL):
 		var pos = _random_position_in_bounds(bounds, rng)
-		if _is_valid_position(pos):
+		if _is_valid_position(pos, true):
 			props.append({
 				"type": "scattered_bone",
 				"pos": pos,
@@ -206,10 +215,10 @@ func generate_prop_list(cell_key: String) -> Array:
 				"rng_offset": rng.randi()
 			})
 
-	# Vegetation (rare)
+	# Vegetation (rare - allowed on path)
 	if rng.randf() < VEGETATION_CHANCE:
 		var pos = _random_position_in_bounds(bounds, rng)
-		if _is_valid_position(pos):
+		if _is_valid_position(pos, true):
 			props.append({
 				"type": "vegetation",
 				"pos": pos,
@@ -218,10 +227,10 @@ func generate_prop_list(cell_key: String) -> Array:
 				"rng_offset": rng.randi()
 			})
 
-	# Ground cracks (rare)
+	# Ground cracks (rare - allowed on path)
 	if rng.randf() < CRACK_CHANCE:
 		var pos = _random_position_in_bounds(bounds, rng)
-		if _is_valid_position(pos):
+		if _is_valid_position(pos, true):
 			props.append({
 				"type": "crack",
 				"pos": pos,
@@ -239,10 +248,14 @@ func _random_position_in_bounds(bounds: Rect2, rng: RandomNumberGenerator) -> Ve
 		rng.randf_range(bounds.position.y, bounds.position.y + bounds.size.y)
 	)
 
-func _is_valid_position(pos: Vector2) -> bool:
+func _is_valid_position(pos: Vector2, allow_on_path: bool = false) -> bool:
 	"""Check if position is valid for prop placement"""
 	# Check campfire safe zone
 	if pos.distance_to(CAMPFIRE_POS) < CAMPFIRE_SAFE_RADIUS:
+		return false
+
+	# Check if on main path (only for large props)
+	if not allow_on_path and _is_on_path(pos):
 		return false
 
 	# Check world bounds

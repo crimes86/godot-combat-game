@@ -2487,12 +2487,18 @@ func _track_weakpoint_destroyed() -> void:
 		return
 	weapon.weapon_stats.record_weakpoint_destroyed()
 
-func track_enemy_killed(enemy_type: String, is_elite: bool = false, is_boss: bool = false) -> void:
+func track_enemy_killed(enemy_type: String, is_elite: bool = false, is_boss: bool = false, enemy_level: int = 1) -> void:
 	"""Track enemy kill for forged weapons (called from Enemy.gd or kill handler)"""
 	var weapon = CharacterStats.equipped_weapon
 	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
 		return
-	weapon.weapon_stats.record_kill(enemy_type, is_elite, is_boss)
+
+	# Get party size for group XP bonus (GroupManager is an autoload)
+	var party_size = 1
+	if GroupManager:
+		party_size = GroupManager.get_group_size()
+
+	weapon.weapon_stats.record_kill(enemy_type, is_elite, is_boss, enemy_level, party_size)
 
 func track_player_death() -> void:
 	"""Track player death for forged weapons"""

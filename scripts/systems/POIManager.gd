@@ -9,30 +9,42 @@ class_name POIManager
 # POI Generation seed (deterministic world gen)
 const POI_SEED: int = 67890
 
-# Chunk configuration
-# World uses chunk IDs: -1 (west), 0 (center/campfire), +1 (east)
+# Chunk configuration (West→East progression)
+# World uses chunk IDs: -1 (west/campfire), 0 (center), +1 (east/Zone 2)
 # X coords: -8000 to 0 = chunk -1, 0 to 8000 = chunk 0, 8000 to 16000 = chunk +1
+# Campfire is at X: -6000 in chunk -1 (player start area)
 var CHUNK_SIZE: float:
 	get: return Constants.CHUNK_SIZE  # 8000.0
 const QUADRANT_SIZE: float = 4000.0  # CHUNK_SIZE / 2
-const EDGE_CHUNKS: Array[int] = [-1, 1]  # Chunks with POI quadrants (west and east)
-const CENTER_CHUNK: int = 0  # Safe/noob zone - no POIs (campfire area)
+const EDGE_CHUNKS: Array[int] = [0, 1]  # Chunks with POI quadrants (mid and east)
+const STARTER_CHUNK: int = -1  # Safe/noob zone - no POIs (campfire area)
+
+# Hardcoded tutorial lava lakes - guaranteed spawns near campfire for enemy clustering
+# These are placed east of the campfire safe zone but still in early game area
+# Campfire is at X: -6000, safe radius ~1050, so lakes start around X: -4500
+const TUTORIAL_LAVA_LAKES: Array[Dictionary] = [
+	{"pos": Vector2(-4200, -1800), "chunk_id": -1},  # NE of campfire
+	{"pos": Vector2(-4500, 1600), "chunk_id": -1},   # SE of campfire
+	{"pos": Vector2(-2800, -800), "chunk_id": -1},   # East side, north
+	{"pos": Vector2(-2500, 1200), "chunk_id": -1},   # East side, south
+]
 
 # POI spacing
 const MIN_POI_DISTANCE_FROM_PATH: float = 800.0
 const POI_CENTER_OFFSET: float = 1000.0  # Offset from quadrant center for variety
 
-# Guaranteed POIs per edge chunk (seed_plot always spawns, ruins always spawns)
-# Note: There's a 20% chance for a second seed_plot instead of a random POI
-const GUARANTEED_POIS: Array[String] = ["seed_plot", "ruins"]
+# Guaranteed POIs per edge chunk (3 guaranteed, 1 random)
+# Each chunk gets: seed_plot, ruins, monster_lava_lake, plus 1 random
+const GUARANTEED_POIS: Array[String] = ["seed_plot", "ruins", "monster_lava_lake"]
 const SECOND_SEED_PLOT_CHANCE: float = 0.20  # 20% chance for 2 seed plots per chunk
 
-# Random POI pool with weights
+# Random POI pool with weights (for the 4th quadrant)
+# Note: resource_node, monster_den, ancient_shrine are placeholders for now
 const RANDOM_POI_POOL: Array[Dictionary] = [
-	{"type": "monster_lava_lake", "weight": 35},
-	{"type": "resource_node", "weight": 30},
-	{"type": "monster_den", "weight": 20},
-	{"type": "ancient_shrine", "weight": 15},
+	{"type": "monster_lava_lake", "weight": 60},  # High chance for another lava lake
+	{"type": "resource_node", "weight": 15},
+	{"type": "monster_den", "weight": 15},
+	{"type": "ancient_shrine", "weight": 10},
 ]
 
 # POI type configurations
@@ -98,11 +110,40 @@ func generate_all_pois() -> void:
 	var rng = RandomNumberGenerator.new()
 	rng.seed = POI_SEED
 
+	# First, add hardcoded tutorial lava lakes near campfire
+	generate_tutorial_lava_lakes()
+
+	# Then generate quadrant-based POIs for edge chunks
 	for chunk_id in EDGE_CHUNKS:
 		generate_chunk_pois(chunk_id, rng)
 
-	print("🗺️ POI Manager: Generated POIs for %d edge chunks" % EDGE_CHUNKS.size())
+	print("🗺️ POI Manager: Generated POIs for %d edge chunks + %d tutorial lava lakes" % [EDGE_CHUNKS.size(), TUTORIAL_LAVA_LAKES.size()])
 	_print_poi_summary()
+
+
+func generate_tutorial_lava_lakes() -> void:
+	"""Generate hardcoded lava lake POIs near the tutorial/campfire area"""
+	# Initialize chunk -1 data if needed
+	if not poi_data.has(STARTER_CHUNK):
+		poi_data[STARTER_CHUNK] = []
+		generated_chunks.append(STARTER_CHUNK)
+
+	for lake_data in TUTORIAL_LAVA_LAKES:
+		var poi_info = {
+			"type": "monster_lava_lake",
+			"position": lake_data.pos,
+			"chunk_id": lake_data.chunk_id,
+			"quadrant": Quadrant.NW,  # Not relevant for hardcoded
+			"radius": POI_CONFIGS["monster_lava_lake"].get("radius", 400.0),
+			"min_level": 1,  # Tutorial area = low level
+			"spawned": false,
+			"claimed": false,
+			"owner_guild": null,
+			"is_tutorial_lake": true,  # Flag for special handling
+		}
+		poi_data[lake_data.chunk_id].append(poi_info)
+
+	print("🌋 Generated %d tutorial lava lakes in chunk %d" % [TUTORIAL_LAVA_LAKES.size(), STARTER_CHUNK])
 
 
 func generate_chunk_pois(chunk_id: int, rng: RandomNumberGenerator) -> void:
@@ -217,12 +258,15 @@ func _print_poi_summary() -> void:
 	"""Print summary of generated POIs"""
 	var type_counts = {}
 
+	print("📍 POI Summary by chunk:")
 	for chunk_id in poi_data:
+		print("   Chunk %d: %d POIs" % [chunk_id, poi_data[chunk_id].size()])
 		for poi in poi_data[chunk_id]:
 			var t = poi.type
 			type_counts[t] = type_counts.get(t, 0) + 1
+			print("      - %s at %s" % [t, poi.position])
 
-	print("📍 POI Summary:")
+	print("📍 POI Totals:")
 	for poi_type in type_counts:
 		print("   - %s: %d" % [poi_type, type_counts[poi_type]])
 

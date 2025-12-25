@@ -71,8 +71,9 @@ var WORLD_WIDTH: float:
 var WORLD_HEIGHT: float:
 	get: return Constants.CHUNK_SIZE  # 1 chunk tall
 # World layout constants - derived from Constants for chunk size
+# West→East progression: Campfire at west, Zone 2 tunnel at east
 var CAMPFIRE_POS: Vector2:
-	get: return Vector2(Constants.CHUNK_SIZE / 2, 0)  # Center of chunk 0
+	get: return Vector2(-6000, 0)  # West side of chunk -1 (player start area)
 var WORLD_MIN_X: float:
 	get: return -Constants.CHUNK_SIZE
 var WORLD_MAX_X: float:
@@ -385,8 +386,8 @@ func spawn_tunnel_entrances():
 			entrance.queue_free()
 	tunnel_entrances.clear()
 
-	# Get edge chunks only (-1 and 1) - middle chunk (0) excluded for late-game discovery
-	var chunk_ids = [-1, 1]
+	# Zone 2 tunnel only at east end (chunk +1) - West→East progression
+	var chunk_ids = [1]
 
 	for chunk_id in chunk_ids:
 		var entrance = TUNNEL_ENTRANCE_SCENE.instantiate()
@@ -421,7 +422,10 @@ func generate_procedural_ruins():
 	poi_manager.initialize(self)
 
 	# Convert POI ruins data to RUINS_POSITIONS for backward compatibility
-	var guardian_levels = [8, 12, 16, 20]  # Increasing difficulty
+	# West→East progression: guardians scale with position
+	# West chunk (-1): Level 3-5 guardians (newbie friendly)
+	# East chunk (+1): Level 7-10 guardians (group recommended)
+	var guardian_levels = [4, 5, 8, 10]  # Increasing difficulty West→East
 	var level_index = 0
 
 	var ruins_pois = poi_manager.get_ruins()
@@ -438,6 +442,10 @@ func generate_procedural_ruins():
 		level_index += 1
 
 	print("🏛️ POI System: Generated %d ruins positions (will spawn per-chunk)" % RUINS_POSITIONS.size())
+
+	# Pre-spawn ALL POIs immediately (for debug verification)
+	# This must be AFTER RUINS_POSITIONS is populated
+	pre_spawn_all_pois()
 
 func spawn_ruins_for_chunk(chunk_id: int) -> void:
 	"""Spawn ruins that belong to a specific chunk"""
@@ -508,16 +516,93 @@ var world_tree_nodes: Array = []  # Track spawned World Trees
 const SEED_PLOT_SCENE = preload("res://scenes/world/SeedPlot.tscn")
 const WORLD_TREE_SCENE = preload("res://scenes/world/WorldTree.tscn")
 
+func pre_spawn_all_pois() -> void:
+	"""Pre-spawn ALL POIs at startup for debug verification"""
+	if not poi_manager:
+		print("⚠️ POI Manager not available for pre-spawn")
+		return
+
+	print("🗺️ Pre-spawning ALL POIs for debug verification...")
+	var total_spawned = 0
+
+	# Get all chunk IDs that have POI data
+	for chunk_id in poi_manager.poi_data.keys():
+		var pois = poi_manager.get_pois_for_chunk(chunk_id)
+		print("  Chunk %d: %d POIs" % [chunk_id, pois.size()])
+
+		for poi in pois:
+			if poi.spawned:
+				continue
+
+			print("    → Spawning %s at %s" % [poi.type, poi.position])
+			match poi.type:
+				"seed_plot":
+					spawn_seed_plot(poi)
+				"monster_lava_lake":
+					spawn_monster_lava_lake(poi)
+				"resource_node":
+					spawn_resource_node(poi)
+				"monster_den":
+					spawn_monster_den(poi)
+				"ancient_shrine":
+					spawn_ancient_shrine(poi)
+				"ruins":
+					# Spawn ruins directly here
+					pass  # Will be handled below
+				_:
+					print("    ⚠️ Unknown POI type: %s" % poi.type)
+
+			total_spawned += 1
+
+	# Also spawn all ruins from RUINS_POSITIONS
+	print("  Pre-spawning %d ruins..." % RUINS_POSITIONS.size())
+	var ruins_scene = load("res://scenes/world/ruins_spawn_point.tscn")
+	if not ruins_scene:
+		ruins_scene = load("res://scenes/world/ruins_campfire.tscn")
+
+	if ruins_scene:
+		for ruins_key in RUINS_POSITIONS.keys():
+			var ruins_data = RUINS_POSITIONS[ruins_key]
+			if ruins_data.spawned:
+				continue
+
+			var pos = ruins_data.position
+			var guardian_level = ruins_data.guardian_level
+			var chunk_id = ruins_data.chunk_id
+
+			var ruins = ruins_scene.instantiate()
+			ruins.name = "ProceduralRuins_%s" % ruins_key
+			ruins.position = pos
+
+			if "guardian_level" in ruins:
+				ruins.guardian_level = guardian_level
+
+			add_child(ruins)
+			ruins_nodes.append(ruins)
+			ruins_data.spawned = true
+
+			print("    🏛️ Spawned ruins '%s' at %s (level %d, chunk %d)" % [ruins_key, pos, guardian_level, chunk_id])
+			total_spawned += 1
+	else:
+		print("    ⚠️ Could not load ruins scene!")
+
+	print("✅ Pre-spawned %d POIs across all chunks" % total_spawned)
+
+
 func spawn_pois_for_chunk(chunk_id: int) -> void:
 	"""Spawn all POI types for a chunk (seed plots, monster dens, etc.)"""
 	if not poi_manager:
+		print("⚠️ POI Manager not available for chunk %d" % chunk_id)
 		return
 
 	var pois = poi_manager.get_pois_for_chunk(chunk_id)
+	print("🗺️ Spawning %d POIs for chunk %d" % [pois.size(), chunk_id])
+
 	for poi in pois:
 		if poi.spawned:
 			continue
 
+		print("  → POI type '%s' at %s" % [poi.type, poi.position])
 		match poi.type:
 			"seed_plot":
 				spawn_seed_plot(poi)
@@ -529,7 +614,11 @@ func spawn_pois_for_chunk(chunk_id: int) -> void:
 				spawn_monster_den(poi)
 			"ancient_shrine":
 				spawn_ancient_shrine(poi)
-			# "ruins" handled by spawn_ruins_for_chunk for backward compatibility
+			"ruins":
+				# Ruins handled by spawn_ruins_for_chunk, just mark as noted
+				print("    (ruins spawned via separate system)")
+			_:
+				print("    ⚠️ Unknown POI type: %s" % poi.type)
 
 
 func spawn_seed_plot(poi: Dictionary) -> void:
@@ -584,27 +673,96 @@ const CLEANSEABLE_LAVA_POOL_SCENE = preload("res://scenes/world/CleanseableLavaP
 var cleanseable_pool_nodes: Array = []
 
 func spawn_monster_lava_lake(poi: Dictionary) -> void:
-	"""Spawn a large monster-inhabited lava lake with cleanseable pools"""
-	# Spawn cleanseable lava pools around the POI area
-	var rng = RandomNumberGenerator.new()
-	rng.seed = hash(poi.position)
+	"""Spawn a large monster-inhabited lava lake with surrounding pools"""
+	var base_seed = hash(poi.position)
+	var layout_rng = RandomNumberGenerator.new()
+	layout_rng.seed = base_seed
 
-	# Spawn 2-4 cleanseable pools in the lava lake area
-	var pool_count = rng.randi_range(2, 4)
-	for i in range(pool_count):
-		var pool = CLEANSEABLE_LAVA_POOL_SCENE.instantiate()
-		pool.name = "CleanseablePool_%d_%d_%d" % [poi.chunk_id, poi.quadrant, i]
+	# Register the main POI position as a lava pool for enemy clustering
+	if cell_streaming_manager:
+		cell_streaming_manager.register_lava_pool(poi.position)
 
-		# Position pools around the POI center
-		var angle = rng.randf() * TAU
-		var dist = rng.randf_range(50, 150)
-		pool.position = poi.position + Vector2(cos(angle), sin(angle)) * dist
+	# Create a container for the lava lake
+	var lake_container = Node2D.new()
+	lake_container.name = "LavaLake_%d" % poi.chunk_id
+	lake_container.position = Vector2.ZERO
+	add_child(lake_container)
 
-		add_child(pool)
-		cleanseable_pool_nodes.append(pool)
+	if chunk_prop_system and chunk_prop_system.has_method("create_lava_pool"):
+		# Track pool positions to prevent overlap
+		var pool_positions: Array = []  # [{pos: Vector2, radius: float}]
+		var pool_index = 0
+
+		# Helper to get unique RNG for each pool
+		var get_pool_rng = func(idx: int) -> RandomNumberGenerator:
+			var pool_rng = RandomNumberGenerator.new()
+			pool_rng.seed = base_seed + idx * 12345
+			return pool_rng
+
+		# 1. Create the LARGE central monster pool (250-400px like original)
+		var monster_size = layout_rng.randf_range(280, 380)
+		chunk_prop_system.create_lava_pool(poi.position, lake_container, get_pool_rng.call(pool_index), monster_size)
+		pool_positions.append({"pos": poi.position, "radius": monster_size / 2})
+		pool_index += 1
+
+		# 2. Create 3-5 satellite pools around the main pool
+		var satellite_count = layout_rng.randi_range(3, 5)
+		var satellites_spawned = 0
+		for attempt in range(satellite_count * 3):
+			if satellites_spawned >= satellite_count:
+				break
+
+			# Distribute satellites evenly around with some randomness
+			var base_angle = (float(satellites_spawned) / satellite_count) * TAU
+			var angle = base_angle + layout_rng.randf_range(-0.25, 0.25)
+			# Distance from center: well outside monster pool edge
+			var dist = (monster_size / 2) + layout_rng.randf_range(80, 250)
+			var satellite_pos = poi.position + Vector2(cos(angle), sin(angle)) * dist
+
+			# Mix of medium and small pools
+			var satellite_size: float
+			if layout_rng.randf() < 0.35:
+				satellite_size = layout_rng.randf_range(90, 150)
+			else:
+				satellite_size = layout_rng.randf_range(50, 90)
+
+			# Check for overlap with existing pools (generous spacing)
+			var too_close = false
+			for existing in pool_positions:
+				var min_dist = existing.radius + (satellite_size / 2) + 40  # 40px gap minimum
+				if satellite_pos.distance_to(existing.pos) < min_dist:
+					too_close = true
+					break
+
+			if not too_close:
+				chunk_prop_system.create_lava_pool(satellite_pos, lake_container, get_pool_rng.call(pool_index), satellite_size)
+				pool_positions.append({"pos": satellite_pos, "radius": satellite_size / 2})
+				pool_index += 1
+				satellites_spawned += 1
+
+		# 3. Add a couple tiny "blister" pools scattered further out
+		var blister_count = layout_rng.randi_range(2, 4)
+		for i in range(blister_count):
+			var angle = layout_rng.randf() * TAU
+			var dist = layout_rng.randf_range(300, 450)
+			var blister_pos = poi.position + Vector2(cos(angle), sin(angle)) * dist
+			var blister_size = layout_rng.randf_range(30, 50)
+
+			var ok = true
+			for existing in pool_positions:
+				if blister_pos.distance_to(existing.pos) < existing.radius + 50:  # 50px gap for blisters
+					ok = false
+					break
+			if ok:
+				chunk_prop_system.create_lava_pool(blister_pos, lake_container, get_pool_rng.call(pool_index), blister_size)
+				pool_index += 1
+
+	# NOTE: Cleanseable pools disabled - they have their own circular visual
+	# that conflicts with the elaborate polygon lava pools above.
+	# If needed later, place cleanseable pools deliberately, not overlapping visual pools.
 
 	poi.spawned = true
-	print("🌋 Spawned monster lava lake with %d cleanseable pools at %s" % [pool_count, poi.position])
+	print("🌋 Spawned monster lava lake at %s" % poi.position)
 
 
 func spawn_resource_node(poi: Dictionary) -> void:
@@ -814,11 +972,12 @@ func spawn_path_for_chunk(chunk_id: int) -> void:
 	chunk_start_x = clamp(chunk_start_x, -cs, cs * 2)
 	chunk_end_x = clamp(chunk_end_x, -cs, cs * 2)
 
-	# For chunk 0, split path around campfire clearing
+	# For chunk -1 (campfire chunk), split path around campfire clearing
+	# Campfire is at X: -6000 in chunk -1 for West→East progression
 	var main_path: Array = []
 	var clearing_radius = 400.0
 
-	if chunk_id == 0:
+	if chunk_id == -1:
 		# Paths extend well into clearing so they blend naturally
 		var overlap = 200.0
 
@@ -3752,6 +3911,10 @@ func _on_player_disconnected(id: int):
 	"""Handle player disconnection"""
 	if OS.is_debug_build():
 		print("🔍 [PLAYER DEBUG] _on_player_disconnected(%d)" % id)
+
+	# Clean up spatial grid for AOI optimization
+	SpatialGrid.remove_player(id)
+
 	# Broadcast despawn to all peers so everyone removes the player
 	if multiplayer.is_server():
 		despawn_player.rpc(id)

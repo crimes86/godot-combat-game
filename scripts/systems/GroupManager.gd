@@ -63,6 +63,13 @@ func has_group() -> bool:
 	"""Check if local player is in a group."""
 	return group_leader != -1 and group_members.size() > 0
 
+
+func get_group_size() -> int:
+	"""Get number of players in the group (1 if solo)."""
+	if has_group():
+		return group_members.size()
+	return 1
+
 func is_leader() -> bool:
 	"""Check if local player is the group leader."""
 	if not multiplayer.has_multiplayer_peer():

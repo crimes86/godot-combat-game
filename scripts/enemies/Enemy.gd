@@ -266,6 +266,9 @@ func _ready() -> void:
 			# Create equipment layers based on enemy level
 			create_equipment_layers()
 
+			# Apply level-based visual scaling (West→East progression)
+			apply_level_visual_scaling()
+
 			# Play random idle direction for natural look
 			var idle_directions = ["idle_up", "idle_down", "idle_left", "idle_right"]
 			var random_idle = idle_directions[randi() % idle_directions.size()]
@@ -495,6 +498,32 @@ func create_equipment_layers() -> void:
 		if weapon_sprite:
 			equipment_sprites.append(weapon_sprite)
 			add_child(weapon_sprite)
+
+func apply_level_visual_scaling() -> void:
+	"""Apply visual scaling based on enemy level for West→East difficulty progression.
+	Higher level enemies are larger and have different color tints."""
+	var level = enemy_level
+
+	# Size scaling: L1=1.0x, L15=1.5x (smooth progression)
+	# Formula: 1.0 + (level - 1) * 0.033 gives ~1.0x at L1, ~1.46x at L15
+	var scale_mult = 1.0 + (level - 1) * 0.033
+	scale = Vector2(scale_mult, scale_mult)
+
+	# Color tint based on difficulty tier
+	# L1-3: Default (no tint)
+	# L4-6: Slight tan/bone tint (armored tier)
+	# L7-9: Gray/steel tint (elite tier)
+	# L10+: Dark red/ancient tint (endgame tier)
+	if level >= 10:
+		# Ancient tier - reddish tint (menacing)
+		modulate = Color(1.2, 0.85, 0.85, 1.0)
+	elif level >= 7:
+		# Elite tier - gray/steel tint (armored feel)
+		modulate = Color(0.9, 0.9, 1.0, 1.0)
+	elif level >= 4:
+		# Armored tier - subtle tan tint
+		modulate = Color(1.0, 0.95, 0.9, 1.0)
+	# L1-3: Keep default white modulate (no change)
 
 func create_equipment_sprite(equip_name: String) -> AnimatedSprite2D:
 	"""Create an animated sprite for a piece of equipment"""
@@ -1564,7 +1593,11 @@ func die() -> void:
 			if combat_system.has_method("track_enemy_killed"):
 				var is_elite_enemy = get_meta("is_guardian", false)
 				var is_boss_enemy = is_in_group("boss")
-				combat_system.track_enemy_killed("skeleton", is_elite_enemy, is_boss_enemy)
+				# Get enemy type from class name (e.g., "Enemy" -> "skeleton", "Wolf" -> "wolf")
+				var type_name = get_script().get_global_name().to_lower() if get_script() else "skeleton"
+				if type_name == "enemy" or type_name.is_empty():
+					type_name = "skeleton"
+				combat_system.track_enemy_killed(type_name, is_elite_enemy, is_boss_enemy, enemy_level)
 
 	# Transition to corpse state (don't despawn)
 	become_corpse()

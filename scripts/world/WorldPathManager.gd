@@ -31,8 +31,8 @@ var world: Node2D
 # Store generated path points for reuse (torch placement, etc.)
 var chunk_path_points: Dictionary = {}  # {chunk_id: Array of points}
 
-# Campfire position
-var campfire_pos: Vector2 = Vector2(Constants.CHUNK_SIZE / 2, 0)
+# Campfire position - West side of chunk -1 for West→East progression
+var campfire_pos: Vector2 = Vector2(-6000, 0)
 
 func _init(world_ref: Node2D, campfire_position: Vector2 = Vector2.ZERO) -> void:
 	world = world_ref
@@ -86,9 +86,10 @@ func spawn_path_for_chunk(chunk_id: int, ruins_positions: Dictionary) -> void:
 	var path_end = Vector2(chunk_end_x, 0)
 	var main_path = create_zigzag_path(path_start, path_end, 8, 350, rng)
 
-	# For chunk 0, skip drawing path spots within campfire circle radius
+	# For chunk -1, skip drawing path spots within campfire circle radius
+	# Campfire is at X: -6000 (West→East progression: player starts in west)
 	var campfire_radius = 500.0
-	if chunk_id == 0:
+	if chunk_id == -1:
 		draw_path_from_points_avoiding_area(chunk_path, main_path, 175, rng, campfire_pos, campfire_radius)
 		create_campfire_circle(chunk_path, campfire_pos, rng)
 	else:
