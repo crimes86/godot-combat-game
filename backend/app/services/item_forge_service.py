@@ -462,11 +462,12 @@ def resolve_icon_url(item_id: str, item_type: str = "weapon") -> str:
     Resolve the web-accessible icon URL for a forged item.
 
     Checks multiple locations in order of preference:
-    1. /assets/icons/enhanced/forged/{type}/{item_id}.png (enhanced, typed)
-    2. /assets/icons/forged/{type}/{item_id}.png (base, typed)
-    3. /assets/icons/forged/{item_id}.png (base, root - for misplaced icons)
+    1. /static/items/icons/{item_id}.png (GPT-generated icons - highest priority)
+    2. /assets/icons/enhanced/forged/{type}/{item_id}.png (enhanced, typed)
+    3. /assets/icons/forged/{type}/{item_id}.png (base, typed)
+    4. /assets/icons/forged/{item_id}.png (base, root - for misplaced icons)
 
-    Returns the URL path for the first existing icon, or enhanced path as default.
+    Returns the URL path for the first existing icon, or static path as default.
     """
     import pathlib
 
@@ -485,15 +486,19 @@ def resolve_icon_url(item_id: str, item_type: str = "weapon") -> str:
         "amulet": "accessories",
         "emote": "accessories",
         "title": "accessories",
+        "tool": "tools",
     }
     folder = type_folder_map.get(item_type, "weapons")
 
     # Base paths on disk
     backend_dir = pathlib.Path(__file__).parent.parent.parent
+    static_icons_dir = backend_dir / "static" / "items" / "icons"
     assets_dir = backend_dir.parent / "assets" / "icons"
 
-    # Check locations in priority order
+    # Check locations in priority order (GPT icons first!)
     candidates = [
+        (static_icons_dir / f"{item_id}.png",
+         f"/static/items/icons/{item_id}.png"),
         (assets_dir / "enhanced" / "forged" / folder / f"{item_id}.png",
          f"/assets/icons/enhanced/forged/{folder}/{item_id}.png"),
         (assets_dir / "forged" / folder / f"{item_id}.png",
@@ -506,8 +511,8 @@ def resolve_icon_url(item_id: str, item_type: str = "weapon") -> str:
         if disk_path.exists():
             return url_path
 
-    # Default to enhanced path (will 404 if missing, but that's expected for missing icons)
-    return f"/assets/icons/enhanced/forged/{folder}/{item_id}.png"
+    # Default to static path (will 404 if missing, but that's expected for missing icons)
+    return f"/static/items/icons/{item_id}.png"
 
 
 def get_icon_url_for_item(item: Dict[str, Any]) -> str:
