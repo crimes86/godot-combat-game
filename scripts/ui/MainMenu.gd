@@ -116,6 +116,14 @@ var pending_action: String = ""  # "host" or "join" - what to do after Ashbane s
 func _ready():
 	await get_tree().process_frame
 
+	# Start menu music via SoundManager (persists across scenes until entering game world)
+	if SoundManager:
+		SoundManager.play_menu_music()
+
+	# Stop the scene's ThemeMusic if it's playing (we use SoundManager instead now)
+	if theme_music and theme_music.playing:
+		theme_music.stop()
+
 	# Ensure all game UI autoloads are hidden when returning to main menu
 	_reset_game_ui()
 
@@ -2261,10 +2269,7 @@ func _transition_to_armory():
 	"""Transition to Armory scene after authentication"""
 	LogManager.info("Transitioning to Armory", "ashbane")
 
-	# Fade out music slightly (don't stop it)
-	if theme_music and theme_music.playing:
-		var fade_tween = create_tween()
-		fade_tween.tween_property(theme_music, "volume_db", -15.0, 0.5)
+	# Menu music continues playing via SoundManager (persists across scenes)
 
 	# Load Armory scene
 	var tree = get_tree()
@@ -2276,12 +2281,9 @@ func _transition_to_armory():
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _load_game_world():
-	# Fade out music before transitioning
-	if theme_music and theme_music.playing:
-		var fade_tween = create_tween()
-		fade_tween.tween_property(theme_music, "volume_db", -40.0, 0.8)
-		await fade_tween.finished
-		theme_music.stop()
+	# Stop menu music before transitioning to game world
+	if SoundManager:
+		SoundManager.stop_menu_music(0.8)  # Fade out over 0.8 seconds
 
 	# Small delay to ensure network is ready
 	var tree = get_tree()

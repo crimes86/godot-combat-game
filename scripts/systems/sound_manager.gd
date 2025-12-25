@@ -169,6 +169,11 @@ var trading_hub_track_index: int = 0
 var _playing_hub_music: bool = false  # Flag to track if playing hub or zone music
 var _music_fade_tween: Tween = null  # Store fade tween so we can cancel it
 
+# Menu music (plays on MainMenu and Armory, stops when entering game world)
+var menu_music: AudioStream = null
+var menu_music_player: AudioStreamPlayer = null
+var _playing_menu_music: bool = false
+
 # Mute state
 var sfx_muted: bool = false
 var music_muted: bool = false
@@ -732,6 +737,14 @@ func _load_real_sounds() -> void:
 		print("  ✅ Loaded claimsequence.ogg (Treasure Unveiled)")
 	else:
 		push_warning("  ⚠️ Failed to load claimsequence.ogg")
+
+	# Load menu music (main menu and armory screens)
+	print("  🏠 Loading menu music...")
+	menu_music = load("res://assets/audio/music/thorns_and_shadows.mp3")
+	if menu_music:
+		print("  ✅ Loaded thorns_and_shadows.mp3 (Thorns and Shadows)")
+	else:
+		push_warning("  ⚠️ Failed to load thorns_and_shadows.mp3")
 
 	# Load healing staff sounds
 	print("  💚 Loading healing staff sounds...")
@@ -2157,6 +2170,62 @@ func stop_game_music() -> void:
 ## Check if game music is currently playing
 func is_game_music_playing() -> bool:
 	return music_player and music_player.playing
+
+# ============================================
+# MENU MUSIC (Main Menu / Armory)
+# ============================================
+
+## Start playing menu music (persists across MainMenu and Armory scenes)
+func play_menu_music(volume_db: float = -10.0) -> void:
+	if not menu_music:
+		push_warning("Menu music not loaded!")
+		return
+
+	# Don't restart if already playing
+	if _playing_menu_music and menu_music_player and menu_music_player.playing:
+		return
+
+	_playing_menu_music = true
+
+	# Create menu music player if needed
+	if not menu_music_player:
+		menu_music_player = AudioStreamPlayer.new()
+		menu_music_player.name = "MenuMusicPlayer"
+		menu_music_player.bus = "Music"
+		add_child(menu_music_player)
+
+	menu_music_player.stream = menu_music
+	menu_music_player.volume_db = -80.0 if music_muted else volume_db
+
+	# Loop the menu music
+	if menu_music is AudioStreamMP3:
+		(menu_music as AudioStreamMP3).loop = true
+	elif menu_music is AudioStreamOggVorbis:
+		(menu_music as AudioStreamOggVorbis).loop = true
+
+	menu_music_player.play()
+	print("🏠 Menu music started (Thorns and Shadows)")
+
+## Stop menu music with fade-out (called when entering game world)
+func stop_menu_music(fade_duration: float = 0.8) -> void:
+	if not menu_music_player or not menu_music_player.playing:
+		_playing_menu_music = false
+		return
+
+	_playing_menu_music = false
+
+	if fade_duration > 0:
+		var tween = create_tween()
+		tween.tween_property(menu_music_player, "volume_db", -40.0, fade_duration)
+		tween.tween_callback(menu_music_player.stop)
+	else:
+		menu_music_player.stop()
+
+	print("🏠 Menu music stopped")
+
+## Check if menu music is currently playing
+func is_menu_music_playing() -> bool:
+	return _playing_menu_music and menu_music_player and menu_music_player.playing
 
 ## Start playing Trading Hub music playlist
 func play_trading_hub_music(volume_db: float = -15.0) -> void:

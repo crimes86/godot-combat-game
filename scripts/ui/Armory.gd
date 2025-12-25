@@ -393,8 +393,9 @@ func _ready() -> void:
 		# Update connection indicator with current status
 		call_deferred("_update_connection_indicator", AshbaneAuth.connection_status)
 
-	# Setup background music
-	_setup_background_music()
+	# NOTE: Background music disabled - MainMenu's theme_music continues through Armory
+	# and stops only when entering game world (handled by MainMenu._load_game_world)
+	# _setup_background_music()
 
 	# Listen for forged items loaded to refresh forge display
 	if ForgeItemManager:
@@ -9099,6 +9100,10 @@ func _on_connection_timeout() -> void:
 
 func _load_game_world() -> void:
 	"""Load the game world scene"""
+	# Stop menu music before entering game world
+	if SoundManager:
+		SoundManager.stop_menu_music(0.8)  # Fade out over 0.8 seconds
+
 	entered_world.emit()
 	var tree = get_tree()
 	if tree:

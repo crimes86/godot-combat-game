@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3 uid="uid://bmenu7xqw2345"]
 
 [ext_resource type="Script" path="res://scripts/ui/MainMenu.gd" id="1_menu"]
-[ext_resource type="AudioStream" path="res://assets/audio/music/mainmenu.ogg" id="2_music"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/thorns_and_shadows.mp3" id="2_music"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 bg_color = Color(0.055, 0.045, 0.04, 0.97)
@@ -47,7 +47,7 @@ color = Color(0.025, 0.02, 0.018, 1)
 [node name="ThemeMusic" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("2_music")
 volume_db = -10.0
-autoplay = true
+autoplay = false
 
 [node name="MenuPanel" type="Panel" parent="."]
 anchor_left = 0.5
