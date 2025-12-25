@@ -5469,11 +5469,15 @@ async def get_forge_catalog():
 
     Used by Godot Armory to show available items.
     """
-    from app.services.item_forge_service import get_production_items, get_themes, get_catalog_summary
+    from app.services.item_forge_service import get_production_items, get_themes, get_catalog_summary, get_icon_url_for_item
 
     items = get_production_items()  # Changed from get_items() to match Godot
     themes = get_themes()
     summary = get_catalog_summary()
+
+    # Add cache-busted icon URLs to each item
+    for item in items:
+        item["icon_url"] = get_icon_url_for_item(item)
 
     return {
         "items": items,
