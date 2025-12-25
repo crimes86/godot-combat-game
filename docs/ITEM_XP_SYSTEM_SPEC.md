@@ -234,12 +234,28 @@ WEST (6-10) ---- CENTER (1-5) ---- EAST (6-10)  ❌ Confusing
 Zone 1 World (24,000 x 8,000 pixels)
 
 WEST                    CENTER                   EAST
-[Campfire]─────[Ruins 1]─────[Ruins 2]─────[Ruins 3]─────[Deep Ruins]
-  Safe          Level 1-3      Level 4-6      Level 7-9     Level 10-12
-  Zone           Chill         Standard        Intense        Deadly
+[Campfire]─────[Ruins 1]─────[Ruins 2]─────[Ruins 3]─────[Deep Ruins]───[CAVE]
+  Safe          Level 1-3      Level 4-6      Level 7-9     Level 10-12    ↓
+  Zone           Chill         Standard        Intense        Deadly     Zone 2
 
-Distance from spawn → Difficulty increases →
+Distance from spawn → Difficulty increases → Zone 2 entrance
 ```
+
+### 3.2.1 Zone 2 Connector
+
+**Single cave entrance** at the far East end of Zone 1 (X: ~23000):
+
+- Located past the Deep Ruins (hardest camp in Zone 1)
+- Players must survive Level 10-12 enemies to reach it
+- Creates natural progression gate - you're "ready" for Zone 2 when you can get there
+- Single chokepoint = social hub where players group up before entering
+- No shortcuts or alternate entrances
+
+**Why single entrance:**
+- Prevents players from skipping content
+- Creates memorable landmark ("meet at the cave")
+- Encourages grouping for the dangerous trek East
+- Zone 2 feels earned, not stumbled upon
 
 **Level Bands by X Position:**
 ```
