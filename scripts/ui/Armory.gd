@@ -1897,6 +1897,7 @@ func _build_forge_detail_panel() -> Control:
 
 	var icon_texture = TextureRect.new()
 	icon_texture.name = "IconTexture"
+	icon_texture.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	icon_texture.custom_minimum_size = Vector2(64, 64)
 	icon_texture.position = Vector2(2, 2)  # Adjusted for content margin
 	icon_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -4060,12 +4061,12 @@ func _build_forge_unified_content() -> Control:
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.clip_contents = true  # Prevent horizontal overflow
 
-	var grid = GridContainer.new()
+	var grid = HFlowContainer.new()
 	grid.name = "CatalogGrid"
-	grid.columns = 7
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 4)
 	grid.add_theme_constant_override("v_separation", 4)
+	grid.alignment = FlowContainer.ALIGNMENT_CENTER
 	margin.add_child(grid)
 
 	# Get FORGED items (already minted via webapp)
@@ -4236,15 +4237,18 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	- 'forgeable': Achievement unlocked, can be forged in webapp (orange anvil)
 	- 'locked': Achievement not unlocked (gray lock)
 	"""
-	const CARD_SIZE = 48  # Card size for forge grid (icon is larger, gets cropped)
+	const CARD_SIZE = 50  # Card size for forge grid (icon is larger, gets cropped)
 
 	var card = PanelContainer.new()
 	card.name = "ForgeCard_" + item.get("id", "unknown")
 	card.custom_minimum_size = Vector2(CARD_SIZE, CARD_SIZE)
+	card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	card.clip_contents = true  # Clip oversized icons
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	var rarity_color = RARITY_COLORS.get(item.get("rarity", "Common"), Color.GRAY)
+	var item_rarity = item.get("rarity", "Common")
+	var rarity_color = RARITY_COLORS.get(item_rarity, Color.GRAY)
 	var is_owned = state == "forged"
 	var is_forgeable = state == "forgeable"
 
@@ -4254,18 +4258,13 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	var is_high_rarity = rarity in ["Legendary", "Epic"]
 
 	if is_owned:
-		# FORGED - bright, full color with rarity glow
+		# FORGED - bright, full color with rarity border
 		style.bg_color = Color(0.06, 0.06, 0.08, 1.0)  # Fully opaque
 		style.border_color = rarity_color.darkened(0.2)
-		if is_high_rarity:
-			style.shadow_size = 8
-			style.shadow_color = Color(rarity_color.r, rarity_color.g, rarity_color.b, 0.5)
 	elif is_forgeable:
-		# FORGEABLE - intense warm glow to indicate action available
-		style.bg_color = Color(0.08, 0.06, 0.03, 1.0)  # Fully opaque, warmer tint
-		style.border_color = Color(1.0, 0.65, 0.2)  # Brighter orange border
-		style.shadow_size = 10
-		style.shadow_color = Color(1.0, 0.5, 0.1, 0.6)  # Stronger orange glow
+		# FORGEABLE - use rarity color to indicate action available
+		style.bg_color = Color(0.06, 0.06, 0.08, 1.0)  # Fully opaque
+		style.border_color = rarity_color.darkened(0.1)  # Rarity color border
 	else:
 		# LOCKED - very muted, obviously unavailable
 		style.bg_color = Color(0.03, 0.03, 0.04, 1.0)  # Fully opaque
@@ -4289,24 +4288,19 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	# Connect click signal for selection
 	card.gui_input.connect(_on_forge_card_clicked.bind(card))
 
-	# Animated glow for high-rarity owned items
+	# Animated border color for high-rarity owned items (no shadow animation to prevent layout shift)
 	if is_high_rarity and is_owned:
 		var glow_tween = create_tween()
 		glow_tween.set_loops()
-		glow_tween.tween_property(style, "shadow_size", 12, 1.5).set_ease(Tween.EASE_IN_OUT)
-		glow_tween.tween_property(style, "shadow_size", 8, 1.5).set_ease(Tween.EASE_IN_OUT)
+		glow_tween.tween_property(style, "border_color", rarity_color.lightened(0.2), 1.5).set_ease(Tween.EASE_IN_OUT)
+		glow_tween.tween_property(style, "border_color", rarity_color.darkened(0.2), 1.5).set_ease(Tween.EASE_IN_OUT)
 
-	# Pulsing glow for forgeable items - more dramatic "ready to forge" effect
+	# Pulsing border for forgeable items (no shadow animation to prevent layout shift)
 	if is_forgeable:
-		var forge_tween = create_tween()
-		forge_tween.set_loops()
-		forge_tween.tween_property(style, "shadow_size", 16, 0.8).set_ease(Tween.EASE_IN_OUT)
-		forge_tween.tween_property(style, "shadow_size", 10, 0.8).set_ease(Tween.EASE_IN_OUT)
-		# Also pulse the border brightness
 		var border_tween = create_tween()
 		border_tween.set_loops()
-		border_tween.tween_property(style, "border_color", Color(1.0, 0.8, 0.3), 0.8).set_ease(Tween.EASE_IN_OUT)
-		border_tween.tween_property(style, "border_color", Color(1.0, 0.5, 0.1), 0.8).set_ease(Tween.EASE_IN_OUT)
+		border_tween.tween_property(style, "border_color", rarity_color.lightened(0.3), 0.8).set_ease(Tween.EASE_IN_OUT)
+		border_tween.tween_property(style, "border_color", rarity_color.darkened(0.1), 0.8).set_ease(Tween.EASE_IN_OUT)
 
 	# Set pivot for centered scaling
 	card.pivot_offset = Vector2(CARD_SIZE / 2.0, CARD_SIZE / 2.0)
@@ -4323,7 +4317,7 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 		var texture = load(icon_path)
 		if texture:
 			# Icon larger than card so it gets cropped, filling the card better
-			const BASE_ICON_SIZE = 54
+			const BASE_ICON_SIZE = 52
 			const ICON_OFFSET = (BASE_ICON_SIZE - CARD_SIZE) / 2  # Center icon in card (crops edges)
 
 			# Per-item and per-category visual scale adjustments (doesn't affect card size)
@@ -4347,8 +4341,9 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 
 			var icon_rect = TextureRect.new()
 			icon_rect.texture = texture
+			icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 			icon_rect.custom_minimum_size = Vector2(BASE_ICON_SIZE, BASE_ICON_SIZE)
-			icon_rect.position = Vector2(-ICON_OFFSET, -ICON_OFFSET)  # Center 64px in 54px card
+			icon_rect.position = Vector2(-ICON_OFFSET, -ICON_OFFSET)  # Center icon in card
 			icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			icon_rect.scale = Vector2(icon_scale, icon_scale)
@@ -4376,24 +4371,6 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	# Get item_id for inventory count
 	var item_id = item.get("id", item.get("item_id", ""))
 	var inventory_count = _get_inventory_count_by_item_id(item_id)
-
-	# Check for unspent forge opportunity (can appear on ANY state except locked)
-	var has_forge_opportunity = item.get("has_forge_opportunity", false)
-
-	# GOLDEN GLOW - Applied when there's a forge opportunity (regardless of ownership)
-	if has_forge_opportunity and state != "locked":
-		var glow_style = style.duplicate()
-		glow_style.border_color = Color(1.0, 0.7, 0.2, 0.9)  # Golden orange
-		glow_style.set_border_width_all(2)
-		glow_style.shadow_size = 6
-		glow_style.shadow_color = Color(1.0, 0.6, 0.1, 0.5)  # Orange glow
-		card.add_theme_stylebox_override("panel", glow_style)
-
-		# Fast blink animation on the glow - bind to card so it lives with the card
-		var glow_tween = card.create_tween()
-		glow_tween.set_loops()
-		glow_tween.tween_property(card, "modulate", Color(1.3, 1.15, 0.9), 0.35).set_ease(Tween.EASE_IN_OUT)
-		glow_tween.tween_property(card, "modulate", Color(1.0, 1.0, 1.0), 0.35).set_ease(Tween.EASE_IN_OUT)
 
 	match state:
 		"locked":
@@ -4572,12 +4549,8 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 		"forgeable":
 			tooltip_lines.append("")
 			tooltip_lines.append("─────────────────")
-			if has_forge_opportunity:
-				tooltip_lines.append("⚒️ FORGE AVAILABLE")
-				tooltip_lines.append("Visit Ashbane webapp to forge.")
-			else:
-				tooltip_lines.append("ACHIEVEMENT UNLOCKED")
-				tooltip_lines.append("Need forge credits to claim.")
+			tooltip_lines.append("⚒️ FORGE AVAILABLE")
+			tooltip_lines.append("Visit Ashbane webapp to forge.")
 		"forged":
 			var tip_item_id = item.get("id", item.get("item_id", ""))
 			var tip_bridge_status = item.get("bridge_status", ForgeItemManager.get_bridge_status(tip_item_id))
@@ -4595,7 +4568,7 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 			else:
 				tooltip_lines.append("IN INVENTORY")
 				tooltip_lines.append("Ready to equip!")
-				if has_forge_opportunity:
+				if item.get("has_forge_opportunity", false):
 					tooltip_lines.append("")
 					tooltip_lines.append("⚒️ Forge another available")
 
@@ -4668,6 +4641,7 @@ func _create_playtest_forge_card(item: Dictionary, state: String) -> Control:
 
 			var icon_rect = TextureRect.new()
 			icon_rect.texture = texture
+			icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 			icon_rect.custom_minimum_size = Vector2(BASE_ICON_SIZE, BASE_ICON_SIZE)
 			icon_rect.position = Vector2(-ICON_OFFSET, -ICON_OFFSET)
 			icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -4751,16 +4725,10 @@ func _on_forge_card_hover(card: PanelContainer, is_hovering: bool) -> void:
 		if SoundManager:
 			SoundManager.play_button_hover_sound(-12.0)
 
-		# Clone the normal style and only change colors (never margins/borders that affect layout)
+		# Clone the normal style and highlight with rarity color
 		var hover_style = normal_style.duplicate() if normal_style else StyleBoxFlat.new()
-		if is_owned:
-			hover_style.bg_color = Color(0.12, 0.12, 0.14)
-			hover_style.border_color = Color(0.65, 0.62, 0.58, 1.0)  # Stone gray hover
-		else:
-			hover_style.bg_color = Color(0.08, 0.08, 0.10)
-			hover_style.border_color = Color(0.50, 0.48, 0.45, 1.0)  # Lighter stone for unowned
-		# Keep shadow_size at 0 during hover to prevent layout shift
-		hover_style.shadow_size = 0
+		hover_style.border_color = rarity_color.lightened(0.1)  # Rarity color highlight
+		hover_style.bg_color = Color(0.10, 0.10, 0.12, 1.0)  # Slightly lighter bg
 		card.add_theme_stylebox_override("panel", hover_style)
 	else:
 		# Restore normal style (unless this is the selected card)
@@ -4788,15 +4756,14 @@ func _on_forge_card_clicked(event: InputEvent, card: PanelContainer) -> void:
 		# Mark this card as selected
 		_forge_selected_card = card
 
-		# Apply selected style - premium silver border for unified theme
+		# Apply selected style - solid rarity color border
+		# Keep same border/margin as normal style to prevent shifting
 		var selected_style = StyleBoxFlat.new()
-		selected_style.bg_color = Color(0.15, 0.15, 0.18) if is_owned else Color(0.08, 0.08, 0.10)
-		selected_style.border_color = Color(0.85, 0.82, 0.78, 1.0)  # Premium silver border
-		selected_style.set_border_width_all(3)
-		selected_style.set_corner_radius_all(4)
-		selected_style.set_content_margin_all(1)
-		selected_style.shadow_size = 10
-		selected_style.shadow_color = Color(0.85, 0.82, 0.78, 0.4)  # Silver glow
+		selected_style.bg_color = Color(0.12, 0.12, 0.14, 1.0)  # Brighter bg when selected
+		selected_style.border_color = rarity_color.lightened(0.2)  # Bright rarity color
+		selected_style.set_border_width_all(2)  # Same as normal
+		selected_style.set_corner_radius_all(5)  # Same as normal
+		selected_style.set_content_margin_all(2)  # Same as normal
 		card.add_theme_stylebox_override("panel", selected_style)
 
 		# Update detail panel with selected item and state
