@@ -19,7 +19,7 @@ const TOKEN_PATH = "user://ashbane_session.dat"
 
 # LAN testing (only used in editor/debug builds, never in exports)
 const API_BASE_LAN = "http://192.168.28.211:8000"
-const USE_LAN_IN_EDITOR = true  # Set false to use prod even in editor
+const USE_LAN_IN_EDITOR = false  # Set false to use prod even in editor
 
 const POLL_INTERVAL: float = 2.0
 const DEVICE_CODE_EXPIRY: int = 600  # 10 minutes
