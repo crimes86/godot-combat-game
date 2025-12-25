@@ -7694,5 +7694,42 @@ document.addEventListener('DOMContentLoaded', async () => {
 })();
 </script>
 
+<!-- Preload forge icons in background for faster modal rendering -->
+<script>
+(function() {
+  const preloadForgeIcons = () => {
+    fetch('/api/forge/catalog', { credentials: 'include' })
+      .then(resp => resp.json())
+      .then(data => {
+        const items = data.items || [];
+        console.log(`[Preload] Preloading ${items.length} forge icons...`);
+
+        let loaded = 0;
+        items.forEach(item => {
+          if (item.icon_url) {
+            const img = new Image();
+            img.onload = () => {
+              loaded++;
+              if (loaded === items.length) {
+                console.log(`[Preload] All ${loaded} forge icons cached`);
+              }
+            };
+            img.onerror = () => loaded++;
+            img.src = item.icon_url;
+          }
+        });
+      })
+      .catch(e => console.warn('[Preload] Failed to preload forge icons:', e));
+  };
+
+  // Use requestIdleCallback if available, otherwise setTimeout
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(preloadForgeIcons, { timeout: 3000 });
+  } else {
+    setTimeout(preloadForgeIcons, 1500);
+  }
+})();
+</script>
+
 </body>
 </html>
