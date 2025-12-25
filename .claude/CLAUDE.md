@@ -43,6 +43,44 @@ When working on specific systems, consult these docs:
 
 ---
 
+## Windows Environment (IMPORTANT)
+
+This project runs on **Windows**. Always use Windows-native commands:
+
+**DO NOT USE:**
+- Unix commands: `find`, `wc`, `grep`, `xargs`, `sed`, `awk`
+- Bash subshell syntax: `$(...)` or backticks
+- Unix paths with forward slashes in bash contexts
+
+**USE INSTEAD:**
+- PowerShell cmdlets: `Get-ChildItem`, `Measure-Object`, `Select-String`
+- Simple commands that work cross-platform: `dir`, `type`, `copy`
+- Claude Code's built-in tools (Glob, Grep, Read) instead of shell equivalents
+
+**Examples:**
+```powershell
+# Count PNG files (instead of: find ... | wc -l)
+(Get-ChildItem -Path assets/icons -Filter *.png -Recurse).Count
+
+# Find files by pattern (instead of: find -name "*.png")
+Get-ChildItem -Path . -Filter *.png -Recurse
+
+# Search file contents (instead of: grep -r "pattern")
+Select-String -Path "*.gd" -Pattern "pattern"
+```
+
+**Preferred approach:** Use Claude Code's native tools (Glob, Grep, Read) whenever possible - they work reliably on Windows and avoid shell escaping issues entirely.
+
+---
+
+## Workflow Preferences
+
+- For features touching 3+ files, use Plan mode first
+- Always check existing patterns in similar code before implementing
+- For Godot scripts, check for syntax with basic validation before considering done
+
+---
+
 ## Asset Structure (Refactored Dec 2024)
 
 All game assets should follow this canonical structure. Do NOT create new root-level folders.

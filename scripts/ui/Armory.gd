@@ -4236,7 +4236,7 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	- 'forgeable': Achievement unlocked, can be forged in webapp (orange anvil)
 	- 'locked': Achievement not unlocked (gray lock)
 	"""
-	const CARD_SIZE = 54  # Smaller card, icon stays 64px and gets cropped
+	const CARD_SIZE = 48  # Card size for forge grid (icon is larger, gets cropped)
 
 	var card = PanelContainer.new()
 	card.name = "ForgeCard_" + item.get("id", "unknown")
@@ -4322,9 +4322,9 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	if ResourceLoader.exists(icon_path):
 		var texture = load(icon_path)
 		if texture:
-			# Base 64px display size, icons may be 64x64 or 256x256 (enhanced)
-			const BASE_ICON_SIZE = 64
-			const ICON_OFFSET = (BASE_ICON_SIZE - CARD_SIZE) / 2  # Center 64px icon in 54px card
+			# Icon larger than card so it gets cropped, filling the card better
+			const BASE_ICON_SIZE = 54
+			const ICON_OFFSET = (BASE_ICON_SIZE - CARD_SIZE) / 2  # Center icon in card (crops edges)
 
 			# Per-item and per-category visual scale adjustments (doesn't affect card size)
 			var item_id = item.get("id", item.get("item_id", ""))
