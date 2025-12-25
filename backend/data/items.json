@@ -113,7 +113,7 @@
     "battlenet:diablo3:BUTCHER_HARDCORE_HELL": "butchers_cleaver",
     "battlenet:diablo4:GREATER_RIFT_150": "horadric_cube",
     "battlenet:diablo4:SEASON_JOURNEY_GUARDIAN": "el_druins_sword",
-    "battlenet:diablo3:ALL_CLASS_MASTERY": "natalyas_shadow_Ashbane",
+    "battlenet:diablo3:ALL_CLASS_MASTERY": "natalyas_shadow",
     "battlenet:diablo3:PARAGON_1000": "echoing_fury",
     "battlenet:diablo4:CAMPAIGN_TORMENT_XVI": "black_soulstone",
     "battlenet:diablo3:ALL_ACTS_EXPERT": "andariel_visage",
@@ -4070,8 +4070,8 @@
       }
     },
     {
-      "item_id": "natalyas_shadow_Ashbane",
-      "item_name": "Natalya's Shadow Ashbane",
+      "item_id": "natalyas_shadow",
+      "item_name": "Natalya's Shadow",
       "item_type": "armor_chest",
       "weapon_type": null,
       "description": "Cloak of the legendary assassin Natalya.",
