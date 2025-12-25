@@ -175,6 +175,30 @@ FORGED_ITEMS = {
         "game": "Hollow Knight",
         "is_cape": True,
     },
+    "fiber_wire": {
+        "weapon_class": "dagger",
+        "glow_color": "#8B0000",  # Dark red - shadow/blood assassin aesthetic
+        "rarity": "legendary",
+        "game": "Hitman 3",
+    },
+    "genji_dragonblade": {
+        "weapon_class": "katana",
+        "glow_color": "#00FF00",  # Green dragon energy
+        "rarity": "legendary",
+        "game": "Overwatch 2",
+    },
+    "sam_fishers_kabar": {
+        "weapon_class": "dagger",
+        "glow_color": "#2F4F4F",  # Dark slate gray - stealth operative
+        "rarity": "legendary",
+        "game": "Splinter Cell",
+    },
+    "apex_heirloom_kunai": {
+        "weapon_class": "dagger",
+        "glow_color": "#7B68EE",  # Medium slate blue - void energy
+        "rarity": "legendary",
+        "game": "Apex Legends",
+    },
 }
 
 # Rarity multipliers for glow intensity

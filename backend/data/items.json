@@ -3571,8 +3571,8 @@
         ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false,
+      "has_sprites": true,
+      "has_icon": true,
       "base_damage": {
         "min": 3,
         "max": 5
@@ -3609,8 +3609,8 @@
         ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false,
+      "has_sprites": true,
+      "has_icon": true,
       "base_damage": {
         "min": 3,
         "max": 5
@@ -3760,8 +3760,8 @@
         ],
         "active": null
       },
-      "has_sprites": false,
-      "has_icon": false,
+      "has_sprites": true,
+      "has_icon": true,
       "base_damage": {
         "min": 3,
         "max": 5
@@ -3799,7 +3799,7 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": false,
+      "has_icon": true,
       "stat_bonuses": {
         "str": 3,
         "agi": 0,
@@ -3901,7 +3901,7 @@
       "theme": "diablo",
       "visuals": {
         "icon_url": "/static/items/icons/tyraels_might.png",
-        "sprite_folder": null,
+        "sprite_folder": "armor/chest/tyraels_might",
         "effect": "holy_radiance",
         "glow_color": "#FFD700"
       },
@@ -3912,7 +3912,7 @@
         ],
         "active": null
       },
-      "has_sprites": false,
+      "has_sprites": true,
       "has_icon": true,
       "defense": 32,
       "stat_bonuses": {
@@ -3934,7 +3934,7 @@
       "base_rarity": "legendary",
       "theme": "diablo",
       "visuals": {
-        "icon_url": "res://assets/icons/forged/accessories/stone_of_jordan.png",
+        "icon_url": "/static/items/icons/stone_of_jordan.png",
         "sprite_folder": null,
         "effect": "mana_glow",
         "glow_color": "#4169E1"
@@ -3947,7 +3947,17 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "stat_bonuses": {
+        "str": 0,
+        "agi": 0,
+        "dex": 0,
+        "int": 12,
+        "wis": 10,
+        "vit": 0
+      },
+      "hp_bonus": 0,
+      "mana_bonus": 30
     },
     {
       "item_id": "butchers_cleaver",
@@ -4200,7 +4210,7 @@
       "base_rarity": "legendary",
       "theme": "overwatch",
       "visuals": {
-        "icon_url": "res://assets/icons/forged/weapons/genji_dragonblade.png",
+        "icon_url": "/static/items/icons/genji_dragonblade.png",
         "sprite_folder": "weapons/genji_dragonblade",
         "effect": "dragon_energy",
         "glow_color": "#00FF00"
@@ -4239,7 +4249,7 @@
       "base_rarity": "legendary",
       "theme": "overwatch",
       "visuals": {
-        "icon_url": "res://assets/icons/forged/accessories/tracer_chronal_accelerator.png",
+        "icon_url": "/static/items/icons/tracer_chronal_accelerator.png",
         "sprite_folder": null,
         "effect": "time_distortion",
         "glow_color": "#FF8C00"
