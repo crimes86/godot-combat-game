@@ -540,6 +540,7 @@ func create_item_slot_with_icon(item_name: String, description: String, price: i
 		icon.texture = icon_texture
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
 		icon.size = Vector2(ICON_SIZE, ICON_SIZE)
 		icon_container.add_child(icon)
@@ -645,6 +646,7 @@ func create_shop_slot_with_owned_check(item_name: String, description: String, p
 		icon.texture = icon_texture
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		icon.custom_minimum_size = Vector2(ICON_SIZE - 4, ICON_SIZE - 4)  # Slightly smaller for padding
 		icon_container.add_child(icon)
 	else:
@@ -1040,6 +1042,7 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 		icon.texture = icon_texture
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		icon.custom_minimum_size = Vector2(ICON_SIZE - 4, ICON_SIZE - 4)
 		icon_container.add_child(icon)
 	else:
@@ -2131,6 +2134,7 @@ func _create_forge_slot(item: Dictionary, is_claimed: bool) -> PanelContainer:
 		icon.texture = texture
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		if is_claimed:
 			icon.modulate = Color(0.3, 0.3, 0.3, 0.5)  # Dim claimed items
 		slot.add_child(icon)
@@ -2223,6 +2227,7 @@ func _create_playtest_forge_slot(item: Dictionary, is_claimed: bool) -> PanelCon
 		icon.texture = texture
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		if is_claimed:
 			icon.modulate = Color(0.3, 0.3, 0.3, 0.5)  # Dim claimed items
 		slot.add_child(icon)

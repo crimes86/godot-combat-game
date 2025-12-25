@@ -1181,6 +1181,7 @@ func create_equipment_slot_compact(slot_name: String, label_text: String, is_too
 	icon.size = Vector2(ICON_SIZE, ICON_SIZE)  # Force size
 	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.visible = false
 	icon_center.add_child(icon)
@@ -1282,6 +1283,7 @@ func create_equipment_slot(slot_name: String, label_text: String) -> HBoxContain
 	icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
 	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.visible = false  # Hidden until we have an icon
 	vbox.add_child(icon)
@@ -1365,6 +1367,7 @@ func create_tool_slot(tool_name: String, label_text: String) -> HBoxContainer:
 	icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
 	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.visible = false  # Hidden until we have an icon
 	vbox.add_child(icon)

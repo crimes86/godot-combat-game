@@ -824,22 +824,21 @@ func setup_cape(walk_tex: Texture2D, slash_tex: Texture2D = null, thrust_tex: Te
 		create_animation_from_image(walk_img, "walk_" + dir_name, row, 8, [1, 2, 3, 4, 5, 6, 7, 8], 10.0, true, cape_sprite.sprite_frames, 64)
 		create_animation_from_image(walk_img, "idle_" + dir_name, row, 1, [0], 1.0, true, cape_sprite.sprite_frames, 64)
 
-	# Create attack animations (slash or thrust)
+	# Create attack animations - always use "slash_" prefix to match body animations
+	# Body always uses "slash_" for melee attacks (see attack_anim_prefix in setup_lpc_sprite)
 	var attack_tex = slash_tex if slash_tex else thrust_tex
 	if attack_tex:
 		var attack_img = attack_tex.get_image()
-		var attack_size = attack_img.get_size()
-		# Detect frame count: thrust has 8 frames (512px wide), slash has 6 frames (384px wide)
-		var is_thrust = attack_size.x >= 500
-		var attack_frames = 8 if is_thrust else 6
-		var cape_attack_prefix = "thrust" if is_thrust else "slash"
+		# Use 6 frames (standard slash) - cape syncs with body which uses 6-frame slash
+		var attack_frames = 6
 		var frame_indices = []
 		for i in range(attack_frames):
 			frame_indices.append(i)
 
 		for dir_name in DIRECTION_ROWS.keys():
 			var row = DIRECTION_ROWS[dir_name]
-			create_animation_from_image(attack_img, cape_attack_prefix + "_" + dir_name, row, attack_frames, frame_indices, 10.0, false, cape_sprite.sprite_frames, 64)
+			# Always use "slash_" to match body animation naming
+			create_animation_from_image(attack_img, "slash_" + dir_name, row, attack_frames, frame_indices, 10.0, false, cape_sprite.sprite_frames, 64)
 
 	# Create hurt animation if provided
 	if hurt_tex:
@@ -1206,6 +1205,16 @@ func play_lpc_animation(anim_name: String, direction: String):
 			cape_sprite.play(anim_key)
 		elif cape_sprite.sprite_frames.has_animation(anim_name):
 			cape_sprite.play(anim_name)
+		elif anim_name == "shoot":
+			# Capes don't have shoot animations - fall back to idle during bow/gun use
+			var idle_key = "idle_" + direction
+			if cape_sprite.sprite_frames.has_animation(idle_key):
+				cape_sprite.play(idle_key)
+		else:
+			# Fallback: try slash animation (capes use slash for all melee attacks)
+			var slash_key = "slash_" + direction
+			if cape_sprite.sprite_frames.has_animation(slash_key):
+				cape_sprite.play(slash_key)
 
 		# Adjust cape z-index: on top when facing north (cape visible over back), behind otherwise
 		if direction == "north":
