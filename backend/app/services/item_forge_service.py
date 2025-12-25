@@ -518,11 +518,10 @@ def get_icon_url_for_item(item: Dict[str, Any]) -> str:
     # Check if item has explicit icon URL in visuals
     visuals = item.get("visuals", {})
     if visuals.get("icon_url"):
-        # Convert old static path to new assets path if needed
         url = visuals["icon_url"]
+        # /static/items/icons/ URLs are GPT-generated icons - use as-is
         if url.startswith("/static/items/icons/"):
-            item_id_from_path = url.replace("/static/items/icons/", "").replace(".png", "")
-            return resolve_icon_url(item_id_from_path, item_type)
+            return url
         return url
 
     return resolve_icon_url(item_id, item_type)
