@@ -242,6 +242,7 @@ func create_inventory_slot(slot_index: int) -> Control:
 	icon.size = Vector2(SLOT_SIZE - 8, SLOT_SIZE - 8)  # Force size
 	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.visible = false  # Hidden until we have an icon
 	center.add_child(icon)
@@ -951,6 +952,10 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	# Two-handed property - guns and bows are always two-handed (blocks offhand slot)
 	var is_two_handed_type = weapon.weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle", "bow", "crossbow"]
 	weapon.is_two_handed = item_dict.get("is_two_handed", is_two_handed_type)
+
+	# Forged item properties - critical for proper icon/sprite loading
+	weapon.is_forged = item_dict.get("is_forged", false)
+	weapon.forged_id = item_dict.get("forged_item_id", item_dict.get("item_id", item_dict.get("forged_id", "")))
 
 	return weapon
 

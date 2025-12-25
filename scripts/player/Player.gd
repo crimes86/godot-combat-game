@@ -5356,6 +5356,10 @@ func _complete_logout() -> void:
 		logout_timer_overlay.queue_free()
 		logout_timer_overlay = null
 
+	# Stop in-game music before leaving (prevents overlap with armory music)
+	if SoundManager:
+		SoundManager.stop_game_music()
+
 	# Save sound settings before leaving
 	_save_sound_settings()
 

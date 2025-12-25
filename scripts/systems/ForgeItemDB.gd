@@ -145,13 +145,14 @@ func _convert_json_item(json_item: Dictionary) -> Dictionary:
 		var forged_root_path = FORGED_ICONS_BASE + icon_filename
 
 		# Try enhanced first, then fall back to forged
-		if FileAccess.file_exists(enhanced_subfolder_path):
+		# Use ResourceLoader.exists() for res:// paths - more reliable during autoload
+		if ResourceLoader.exists(enhanced_subfolder_path):
 			sprites["icon"] = enhanced_subfolder_path
-		elif FileAccess.file_exists(enhanced_root_path):
+		elif ResourceLoader.exists(enhanced_root_path):
 			sprites["icon"] = enhanced_root_path
-		elif FileAccess.file_exists(forged_subfolder_path):
+		elif ResourceLoader.exists(forged_subfolder_path):
 			sprites["icon"] = forged_subfolder_path
-		elif FileAccess.file_exists(forged_root_path):
+		elif ResourceLoader.exists(forged_root_path):
 			sprites["icon"] = forged_root_path
 
 	# Fallback icon lookup by item_id/name (covers cases where icon_url points to a different filename)
@@ -166,7 +167,7 @@ func _convert_json_item(json_item: Dictionary) -> Dictionary:
 			FORGED_ICONS_BASE + subfolder + "/" + name_filename + ".png",
 		]
 		for c in candidates:
-			if FileAccess.file_exists(c):
+			if ResourceLoader.exists(c):
 				sprites["icon"] = c
 				break
 
@@ -413,6 +414,14 @@ func get_all_forgeable_keys() -> Array:
 ## Get item data by item_id (e.g., "loremaster_hood", "straw_hat")
 func get_item_by_id(item_id: String) -> Dictionary:
 	return _items_by_id.get(item_id, {})
+
+## Get item by display name (for migration from old saves)
+func get_item_by_name(item_name: String) -> Dictionary:
+	for item_id in _items_by_id:
+		var item = _items_by_id[item_id]
+		if item.get("item_name", "") == item_name:
+			return item
+	return {}
 
 ## Get items by rarity
 func get_items_by_rarity(rarity: ItemRarity) -> Array:

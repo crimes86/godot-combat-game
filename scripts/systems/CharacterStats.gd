@@ -585,7 +585,12 @@ func unequip_weapon() -> bool:
 			"value": equipped_weapon.sell_value,
 			"can_trade": equipped_weapon.can_trade,
 			"stackable": false,
-			"quantity": 1
+			"quantity": 1,
+			# Include forged properties from weapon resource
+			"is_forged": equipped_weapon.is_forged,
+			"forged_id": equipped_weapon.forged_id,
+			"item_id": equipped_weapon.forged_id,
+			"forged_item_id": equipped_weapon.forged_id
 		}
 
 		# Add healing weapon properties if applicable
@@ -617,7 +622,7 @@ func get_equipped_weapon_data() -> Dictionary:
 	"""Get the stored weapon item data (includes forged metadata)"""
 	if equipped_weapon_data.is_empty() and equipped_weapon:
 		# Fallback: construct basic dict if no stored data
-		return {
+		var fallback = {
 			"name": equipped_weapon.weapon_name,
 			"description": equipped_weapon.description,
 			"type": "weapon",
@@ -626,8 +631,13 @@ func get_equipped_weapon_data() -> Dictionary:
 			"base_damage": equipped_weapon.base_damage,
 			"attack_speed_bonus": equipped_weapon.attack_speed_bonus,
 			"crit_chance_bonus": equipped_weapon.crit_chance_bonus,
-			"rarity": Weapon.Rarity.keys()[equipped_weapon.rarity]
+			"rarity": Weapon.Rarity.keys()[equipped_weapon.rarity],
+			# Include forged properties from weapon resource
+			"is_forged": equipped_weapon.is_forged,
+			"forged_id": equipped_weapon.forged_id,
+			"item_id": equipped_weapon.forged_id  # item_id is same as forged_id
 		}
+		return fallback
 	return equipped_weapon_data
 
 func get_equipped_item(slot: String) -> Dictionary:
@@ -912,7 +922,10 @@ func get_save_data() -> Dictionary:
 			"required_level": equipped_weapon.required_level,
 			"rarity": equipped_weapon.rarity,
 			"can_trade": equipped_weapon.can_trade,
-			"description": equipped_weapon.description
+			"description": equipped_weapon.description,
+			# Forged weapon properties
+			"is_forged": equipped_weapon.is_forged,
+			"forged_id": equipped_weapon.forged_id
 		}
 		# Add gun weapon properties
 		if equipped_weapon.is_gun_weapon():
@@ -926,6 +939,9 @@ func get_save_data() -> Dictionary:
 			weapon_data["attack_mode"] = equipped_weapon.attack_mode
 			weapon_data["healing_power"] = equipped_weapon.healing_power
 			weapon_data["heal_radius"] = equipped_weapon.heal_radius
+
+	# Also save equipped_weapon_data (original item dict with forged metadata)
+	var equipped_weapon_dict = equipped_weapon_data.duplicate() if equipped_weapon_data else {}
 
 	# Get quest data if QuestManager exists
 	var quest_data = {}
@@ -950,6 +966,7 @@ func get_save_data() -> Dictionary:
 
 		# Equipment
 		"equipped_weapon": weapon_data,
+		"equipped_weapon_data": equipped_weapon_dict,  # Original item dict with forged metadata
 		"equipped_armor": equipped_armor.duplicate(true),
 
 		# Tracking stats
@@ -965,7 +982,7 @@ func get_save_data() -> Dictionary:
 		# Quest progress
 		"quests": quest_data,
 
-		"version": 5  # Added allegiance system
+		"version": 6  # Added forged weapon metadata persistence
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -1021,9 +1038,58 @@ func load_save_data(data: Dictionary) -> void:
 		# Two-handed property - guns and bows are always two-handed (blocks offhand slot)
 		var is_two_handed_type = weapon.weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle", "bow", "crossbow"]
 		weapon.is_two_handed = weapon_data.get("is_two_handed", is_two_handed_type)
+		# Forged weapon properties
+		weapon.is_forged = weapon_data.get("is_forged", false)
+		weapon.forged_id = weapon_data.get("forged_id", "")
 		equipped_weapon = weapon
 	else:
 		equipped_weapon = null
+
+	# Restore equipped_weapon_data (original item dict with forged metadata)
+	equipped_weapon_data = data.get("equipped_weapon_data", {})
+
+	# Migration: Fix forged weapons with missing/incorrect item_id
+	if equipped_weapon:
+		var ForgeItemDB_ref = Engine.get_singleton("ForgeItemDB") if Engine.has_singleton("ForgeItemDB") else null
+		if ForgeItemDB_ref == null and has_node("/root/ForgeItemDB"):
+			ForgeItemDB_ref = get_node("/root/ForgeItemDB")
+		if ForgeItemDB_ref and ForgeItemDB_ref.has_method("get_item_by_name"):
+			# Check if migration needed: empty data, or data exists but item_id doesn't resolve
+			var needs_migration = equipped_weapon_data.is_empty()
+			if not needs_migration:
+				var current_item_id = equipped_weapon_data.get("item_id", "")
+				if current_item_id == "":
+					needs_migration = true
+				elif ForgeItemDB_ref.has_method("get_item_by_id"):
+					var resolved = ForgeItemDB_ref.get_item_by_id(current_item_id)
+					if resolved.is_empty():
+						# Current item_id doesn't resolve - try by name
+						needs_migration = true
+
+			if needs_migration:
+				var forged_data = ForgeItemDB_ref.get_item_by_name(equipped_weapon.weapon_name)
+				if forged_data and not forged_data.is_empty():
+					# Found the weapon in ForgeItemDB - it's a forged weapon
+					var item_id = forged_data.get("item_id", "")
+					equipped_weapon.is_forged = true
+					equipped_weapon.forged_id = item_id
+					# Preserve existing data but update forged fields
+					if equipped_weapon_data.is_empty():
+						equipped_weapon_data = {
+							"name": equipped_weapon.weapon_name,
+							"type": "weapon",
+							"slot": "mainhand",
+							"weapon_type": equipped_weapon.weapon_type,
+						}
+					equipped_weapon_data["is_forged"] = true
+					equipped_weapon_data["forged_id"] = item_id
+					equipped_weapon_data["item_id"] = item_id
+					equipped_weapon_data["forged_item_id"] = item_id
+					equipped_weapon_data["glow_color"] = forged_data.get("visuals", {}).get("glow_color", "")
+					equipped_weapon_data["effect_name"] = forged_data.get("visuals", {}).get("effect", "")
+					equipped_weapon_data["theme"] = forged_data.get("theme", "")
+					equipped_weapon_data["sprites"] = forged_data.get("sprites", {})
+					print("[CharacterStats] Migrated forged weapon: %s -> item_id=%s" % [equipped_weapon.weapon_name, item_id])
 
 	# Equipped armor
 	var armor_data = data.get("equipped_armor", {})

@@ -464,6 +464,9 @@ func load_save_data(data: Dictionary) -> void:
 		if slot >= 0 and slot < inventory_items.size() and not item.is_empty():
 			inventory_items[slot] = item.duplicate()
 
+	# Migration: Mark items as forged if they match ForgeItemDB entries but aren't flagged
+	_migrate_forged_items()
+
 	# Restore equipped tools
 	var saved_axe = data.get("equipped_axe", {})
 	if not saved_axe.is_empty():
@@ -486,3 +489,71 @@ func clear_inventory() -> void:
 	equipped_pickaxe = {}
 	suppress_signals = false
 	inventory_changed.emit()
+
+func _migrate_forged_items() -> void:
+	"""Migration: Fix forged item metadata for proper icon/sprite loading"""
+	var migrated_count = 0
+	var fixed_count = 0
+
+	for i in range(inventory_items.size()):
+		var item = inventory_items[i]
+		if item == null or item.is_empty():
+			continue
+
+		var item_name = item.get("name", "")
+		var item_id = item.get("item_id", item.get("forged_item_id", ""))
+		var is_already_forged = item.get("is_forged", false)
+
+		# For items marked as forged, check if they have proper item_id
+		if is_already_forged:
+			# Check if item_id is missing or doesn't match ForgeItemDB
+			var needs_fix = false
+			var forge_data = {}
+
+			if item_id != "":
+				forge_data = ForgeItemDB.get_item_by_id(item_id)
+
+			# If item_id doesn't resolve, try by name
+			if forge_data.is_empty() and item_name != "":
+				forge_data = ForgeItemDB.get_item_by_name(item_name)
+				if not forge_data.is_empty():
+					needs_fix = true  # Found by name but not by current item_id
+
+			if needs_fix and not forge_data.is_empty():
+				var correct_item_id = forge_data.get("item_id", "")
+				if correct_item_id != "" and correct_item_id != item_id:
+					item["item_id"] = correct_item_id
+					item["forged_id"] = correct_item_id
+					item["forged_item_id"] = correct_item_id
+					fixed_count += 1
+					print("[InventorySystem] Fixed forged item ID: %s -> %s" % [item_name, correct_item_id])
+			continue
+
+		# Check if this item matches a ForgeItemDB entry by name or item_id
+		var forge_data = {}
+		# Try by item_id first
+		if item_id != "":
+			forge_data = ForgeItemDB.get_item_by_id(item_id)
+		# Try by name if not found
+		if forge_data.is_empty() and item_name != "":
+			forge_data = ForgeItemDB.get_item_by_name(item_name)
+
+		if not forge_data.is_empty():
+			# This item matches a forged item but wasn't flagged - fix it
+			var forged_item_id = forge_data.get("item_id", item_id)
+			item["is_forged"] = true
+			item["forged_id"] = forged_item_id
+			item["forged_item_id"] = forged_item_id
+			item["item_id"] = forged_item_id
+			# Copy visual properties if missing
+			if not item.has("glow_color") or item.get("glow_color", "") == "":
+				var visuals = forge_data.get("visuals", {})
+				if visuals.has("glow_color"):
+					item["glow_color"] = visuals.get("glow_color")
+				if visuals.has("effect"):
+					item["effect_name"] = visuals.get("effect")
+			migrated_count += 1
+			print("[InventorySystem] Migrated forged item: %s (now has is_forged=true, item_id=%s)" % [item_name, forged_item_id])
+
+	if migrated_count > 0 or fixed_count > 0:
+		print("[InventorySystem] Migration complete: %d items marked as forged, %d item IDs fixed" % [migrated_count, fixed_count])

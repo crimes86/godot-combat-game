@@ -246,16 +246,42 @@ func _create_item_card(item: Dictionary, is_claimed: bool) -> Control:
 	card.set_meta("item_data", item)
 	card.set_meta("is_claimed", is_claimed)
 
-	# Icon
+	# Icon - determine subdirectory based on item type from ForgeItemDB
 	var resolved_icon = ""
 	# Prefer path from ForgeItemDB (already normalized to res:// if present)
 	if item.has("icon_path") and item.icon_path != "":
 		resolved_icon = item.icon_path
 	else:
-		# Fallback to legacy naming: res://assets/icons/forged/<item_id>.png
-		resolved_icon = "res://assets/icons/forged/%s.png" % item.item_id
+		# Fallback: Try to determine correct subfolder from ForgeItemDB item type
+		var forged_item = ForgeItemDB.get_item_by_id(item.item_id)
+		var item_type_enum = forged_item.get("item_type", ForgeItemDB.ItemType.WEAPON)
+		var subfolder = "weapons"  # Default
+		match item_type_enum:
+			ForgeItemDB.ItemType.WEAPON:
+				subfolder = "weapons"
+			ForgeItemDB.ItemType.ARMOR_HEAD, ForgeItemDB.ItemType.ARMOR_CHEST, ForgeItemDB.ItemType.ARMOR_ARMS, ForgeItemDB.ItemType.ARMOR_LEGS, ForgeItemDB.ItemType.ARMOR_HANDS, ForgeItemDB.ItemType.ARMOR_FEET:
+				subfolder = "armor"
+			ForgeItemDB.ItemType.SHIELD:
+				subfolder = "shields"
+			ForgeItemDB.ItemType.CAPE:
+				subfolder = "capes"
+			ForgeItemDB.ItemType.ACCESSORY, ForgeItemDB.ItemType.RING, ForgeItemDB.ItemType.AMULET:
+				subfolder = "accessories"
+			ForgeItemDB.ItemType.TOOL:
+				subfolder = "tools"
+		resolved_icon = "res://assets/icons/forged/%s/%s.png" % [subfolder, item.item_id]
 
-	var enhanced_icon_path = "res://assets/icons/enhanced/forged/" + item.item_id + ".png"
+	# Build enhanced path with subfolder too
+	var enhanced_icon_path = ""
+	if resolved_icon.begins_with("res://assets/icons/forged/"):
+		# Extract subfolder from resolved path and use for enhanced
+		var path_parts = resolved_icon.replace("res://assets/icons/forged/", "").split("/")
+		if path_parts.size() >= 2:
+			enhanced_icon_path = "res://assets/icons/enhanced/forged/%s/%s" % [path_parts[0], path_parts[1]]
+		else:
+			enhanced_icon_path = "res://assets/icons/enhanced/forged/" + item.item_id + ".png"
+	else:
+		enhanced_icon_path = "res://assets/icons/enhanced/forged/" + item.item_id + ".png"
 
 	# Try enhanced icon first, then resolved icon
 	var texture = null
@@ -273,6 +299,7 @@ func _create_item_card(item: Dictionary, is_claimed: bool) -> Control:
 		icon.texture = texture
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		if is_claimed:
 			icon.modulate = Color(0.3, 0.3, 0.3, 0.5)
 		card.add_child(icon)
