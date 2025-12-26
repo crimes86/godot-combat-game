@@ -31,7 +31,50 @@ var _wallet_connected: bool = false
 var _wallet_address: String = ""
 var _bridge_in_available: Array = []  # Items in external wallet that can be bridged in
 
-# Rarity multipliers for forged item stats
+# ═══════════════════════════════════════════════════════════════════════════════
+# FORGED ITEM RARITY SCALING
+# ═══════════════════════════════════════════════════════════════════════════════
+# Forged items are ONLY Rare/Epic/Legendary (no Common/Uncommon)
+# Common/Uncommon are for in-game drops and shop items only
+#
+# Designed to align with in-game tier progression:
+#   Rare → Zone 2 early, falls off late (12-16 dmg)
+#   Epic → Zone 2-3, competitive mid-late (18-24 dmg)
+#   Legendary → Zone 4, equals max tier drops (26-32 dmg)
+#
+# In-game items (Common/Uncommon) fill the early game gap:
+#   Common → Zone 1 (2-6 dmg)
+#   Uncommon → Zone 1-2 transition (8-12 dmg)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+const RARITY_BASE_DAMAGE = {
+	"rare": 14,
+	"epic": 21,
+	"legendary": 29
+}
+
+# Variance range per rarity (final damage = base ± variance)
+const RARITY_DAMAGE_VARIANCE = {
+	"rare": 2,        # 12-16
+	"epic": 3,        # 18-24
+	"legendary": 3    # 26-32
+}
+
+# Rarity-based defense scaling for forged armor (per piece)
+const RARITY_BASE_DEFENSE = {
+	"rare": 4,        # Full set = 20 defense
+	"epic": 5,        # Full set = 25 defense
+	"legendary": 7    # Full set = 35 defense
+}
+
+# Shield base block chance by rarity
+const RARITY_BLOCK_CHANCE = {
+	"rare": 0.16,
+	"epic": 0.20,
+	"legendary": 0.25
+}
+
+# Legacy multiplier (kept for sell value calculation)
 const RARITY_DAMAGE_BONUS = {
 	"common": 1,
 	"uncommon": 2,
@@ -638,8 +681,21 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 			base_item["slot"] = "mainhand"
 			# Get weapon_type from ForgeItemDB if available, otherwise from forged param, fallback to sword
 			base_item["weapon_type"] = forge_db_item.get("weapon_type", forged.get("weapon_type", "sword"))
-			# Get stats from ForgeItemDB, fallback to hardcoded if not found
-			base_item["base_damage"] = forge_db_item.get("base_damage", 5 + (damage_bonus * 3))
+
+			# Calculate damage using rarity-based scaling system
+			# Forged items are only Rare/Epic/Legendary (fallback to Rare if invalid)
+			var rarity_base = RARITY_BASE_DAMAGE.get(rarity, 14)  # Fallback to Rare
+			var rarity_variance = RARITY_DAMAGE_VARIANCE.get(rarity, 2)
+
+			# Use item's individual base_damage as a variance seed (normalized to -1 to +1 range)
+			# This gives each weapon some personality while keeping rarity as the primary factor
+			var item_base = forge_db_item.get("base_damage", 5.0)
+			if item_base is Dictionary:
+				item_base = (item_base.get("min", 5) + item_base.get("max", 5)) / 2.0
+			var variance_modifier = clampf((float(item_base) - 7.0) / 5.0, -1.0, 1.0)  # Normalize around 7
+			var final_damage = rarity_base + int(variance_modifier * rarity_variance)
+
+			base_item["base_damage"] = final_damage
 			base_item["attack_speed"] = forge_db_item.get("attack_speed", "medium")
 			base_item["crit_chance_bonus"] = forge_db_item.get("crit_chance_bonus", forge_db_item.get("crit_chance", 0.05))
 			if forge_db_item.has("stat_bonuses"):
@@ -662,16 +718,22 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 		"armor_head", "armor_chest", "armor_legs", "armor_hands", "armor_feet":
 			base_item["type"] = "armor"
 			base_item["slot"] = item_type.replace("armor_", "")
-			# Get defense from ForgeItemDB, fallback to hardcoded
-			base_item["defense"] = forge_db_item.get("defense", 2 + damage_bonus)
+			# Use rarity-based defense scaling (aligns with weapon damage progression)
+			var base_defense = RARITY_BASE_DEFENSE.get(rarity, 2)
+			# Chest pieces get +1 defense bonus, head gets standard
+			if item_type == "armor_chest":
+				base_defense += 1
+			base_item["defense"] = forge_db_item.get("defense", base_defense)
 			if forge_db_item.has("stat_bonuses"):
 				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
 
 		"shield":
 			base_item["type"] = "shield"
 			base_item["slot"] = "offhand"
-			base_item["defense"] = forge_db_item.get("defense", 5 + damage_bonus)
-			base_item["block_chance"] = 0.1 + (damage_bonus * 0.03)  # 13-25% block
+			# Shields get higher defense than armor pieces + block chance
+			var shield_defense = RARITY_BASE_DEFENSE.get(rarity, 2) + 3
+			base_item["defense"] = forge_db_item.get("defense", shield_defense)
+			base_item["block_chance"] = RARITY_BLOCK_CHANCE.get(rarity, 0.10)
 			if forge_db_item.has("stat_bonuses"):
 				base_item["stat_bonuses"] = forge_db_item.get("stat_bonuses")
 

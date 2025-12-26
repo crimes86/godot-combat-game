@@ -68,10 +68,11 @@
 - Head slightly oversized to survive downscale
 
 **🏹 Bows**
-- Side profile
+- Side profile, 30-40 degree tilt (tips point upper-right/lower-left)
 - Curve opens toward the right
-- String visible but simplified
-- Arrow optional (only if iconic)
+- String visible but simplified to single line
+- Arrow optional (only if iconic to the weapon)
+- Bow centered in frame, not touching edges
 
 **🔱 Polearms (spears, halberds, tridents)**
 - Side profile
@@ -206,6 +207,45 @@ Even though orientation is flexible:
 - ✅ Must not conflict with equipped-item readability
 
 ================================================================================
+## VISUAL DESCRIPTION REQUIREMENTS (CRITICAL FOR CONSISTENCY)
+================================================================================
+
+Every prompt MUST include a "Visual elements:" section with CONCRETE details:
+
+### Required Elements:
+1. **Materials** - What is it made of? (steel, leather, bone, crystal, etc.)
+2. **Colors** - Primary and accent colors, not just glow
+3. **Distinctive Features** - What makes THIS item unique?
+4. **Surface Details** - Engravings, runes, patterns, wear marks
+5. **Energy/Effects** - Glows, particles, auras (match the glow color)
+
+### Good vs Bad Examples:
+
+**❌ BAD (too vague):**
+```
+Reference: A sword from Dark Souls. Wielded by warriors.
+```
+
+**✅ GOOD (concrete details):**
+```
+Visual elements: Curved greatsword with jagged, flame-warped blade.
+Dark iron with orange ember cracks along the edge. Wrapped leather grip,
+wolf-head pommel. Faint orange flame particles rising from blade.
+```
+
+### By Category Quick Guide:
+
+| Type | Must Include |
+|------|--------------|
+| Swords | Blade shape, crossguard style, grip material, any engravings |
+| Axes | Head shape, blade edge style, handle material, weight feel |
+| Bows | Limb material, grip wrapping, string type, any decorations |
+| Helmets | Visor style, material, horns/crests, face coverage |
+| Armor | Plate/leather/cloth, fasteners, emblems, wear level |
+| Rings | Band material, gem type/shape, engravings, magical effect |
+| Amulets | Pendant shape, chain style, central emblem, magical glow |
+
+================================================================================
 
 ## 1. **Coiled Sword** (coiled_sword)
 Type: weapon | Theme: dark_souls | Rarity: legendary
@@ -214,7 +254,7 @@ Save to: assets/icons/forged/weapons/coiled_sword.png
 
 Create a 256x256 game icon for "Coiled Sword" - a legendary weapon from Dark Souls.
 
-Reference: A sword twisted by the First Flame. Wielded by those who linked the fire.
+Visual elements: Straight longsword with blade that spirals/coils near the tip like a corkscrew. Blackened steel with glowing orange ember cracks running through the metal. Simple crossguard, leather-wrapped grip. Orange flame particles emanating from the coiled section. The blade appears to be made of solidified fire.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FF6A00
@@ -232,9 +272,9 @@ Type: weapon | Theme: dark_souls | Rarity: epic
 Glow: #4A6B8A
 Save to: assets/icons/forged/weapons/farron_greatsword.png
 
-Create a 256x256 game icon for "Farron Greatsword" - a epic weapon from Dark Souls.
+Create a 256x256 game icon for "Farron Greatsword" - an epic weapon from Dark Souls.
 
-Reference: Greatsword of the Abyss Watchers. The wolf blood binds together those who bear it.
+Visual elements: Massive curved greatsword with unique hooked tip. Weathered grey steel with blue-grey abyss energy wisps along the edge. Elongated grip for two-handed use, wrapped in dark leather. Wolf motif engraved near the crossguard. Blade has a distinctive backwards curve like a giant dagger.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #4A6B8A
@@ -254,7 +294,7 @@ Save to: assets/icons/forged/weapons/dragonslayer_swordspear.png
 
 Create a 256x256 game icon for "Dragonslayer Swordspear" - a legendary weapon from Dark Souls.
 
-Reference: A swordspear imbued with lightning. Forged from the soul of the Nameless King.
+Visual elements: Hybrid weapon - long spear with a sword-like blade as the head. Polished golden metal crackling with yellow lightning energy. Ornate dragon-scale pattern etched into the blade. Long wooden shaft wrapped in golden leather. Lightning bolts arcing from the blade tip. Royal, divine aesthetic.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -274,7 +314,7 @@ Save to: assets/icons/forged/weapons/grafted_blade.png
 
 Create a 256x256 game icon for "Grafted Blade Greatsword" - a rare weapon from Elden Ring.
 
-Reference: A sword made of many swords grafted together. Taken from the body of Godrick the Grafted.
+Visual elements: Massive colossal sword made of dozens of smaller swords fused together. Chaotic blade edge with multiple sword tips pointing outward. Rusted iron and dark gold metal, worn and ancient. Hilt wrapped in old leather with bone fragments. Dark bronze glow where the grafted blades meet. Grotesque, organic-looking fusion points.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #B8860B
@@ -294,7 +334,7 @@ Save to: assets/icons/forged/weapons/hand_of_malenia.png
 
 Create a 256x256 game icon for "Hand of Malenia" - a legendary weapon from Elden Ring.
 
-Reference: Blade of the Goddess of Rot. I am Malenia, Blade of Miquella, and I have never known defeat.
+Visual elements: Elegant curved katana with impossibly long, slender blade. Pale silver steel with scarlet rot veins spreading across the metal like infection. Delicate golden crossguard shaped like butterfly wings. White wrapping on grip with red accents. Faint pink-red scarlet rot particles floating off the blade. Beautiful yet deadly, fragile appearance.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FF6B6B
@@ -314,12 +354,12 @@ Save to: assets/icons/forged/weapons/radahns_greatswords.png
 
 Create a 256x256 game icon for "Starscourge Greatswords" - a legendary weapon from Elden Ring.
 
-Reference: Paired greatswords wielded by the Starscourge. Radahn held back the stars with his might alone.
+Visual elements: Two massive curved greatswords crossed or overlapping. Weathered bronze-brown metal with cosmic purple energy crackling between them. Thick, brutal blades meant for a giant. Lion motifs on the pommels. Gravity magic purple-brown particles swirling around the weapons. Desert-worn, battle-scarred appearance.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #8B4513
 
-BLADE ORIENTATION: Side profile, blade tip pointing to upper-right, hilt anchored lower-left. Blade occupies 65-75% of icon. 30-40 degree upward tilt.
+BLADE ORIENTATION: Side profile, blade tip pointing to upper-right, hilt anchored lower-left. Blade occupies 65-75% of icon. 30-40 degree upward tilt. Show both blades crossed.
 
 Style requirements: Icon-focused design with bold simplified shapes, minimal fine texture, strong silhouette clarity, readable at small sizes. Avoid micro-textures and excessive detail.
 
@@ -332,9 +372,9 @@ Type: weapon | Theme: elden_ring | Rarity: epic
 Glow: #A0D0FF
 Save to: assets/icons/forged/weapons/moonveil.png
 
-Create a 256x256 game icon for "Moonveil" - a epic weapon from Elden Ring.
+Create a 256x256 game icon for "Moonveil" - an epic weapon from Elden Ring.
 
-Reference: A katana that channels moonlight magic. Imbued with Carian sorcery from a distant land.
+Visual elements: Sleek curved katana with ethereal blue moonlight glow along the blade edge. Polished silver steel with Carian moon runes etched near the hilt. Traditional wrapped grip in dark blue. Faint blue magical particles trailing from the blade. Elegant, mystical eastern sword design.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #A0D0FF
@@ -354,7 +394,7 @@ Save to: assets/icons/forged/armor/elden_lord_helm.png
 
 Create a 256x256 game icon for "Elden Lord's Greathelm" - a legendary helmet/headgear from Elden Ring.
 
-Reference: Golden greathelm of the one who claimed the Elden Ring. Rise, Tarnished. Claim your rightful throne.
+Visual elements: Ornate golden greathelm with full face coverage. Regal crown-like ridge along the top. Narrow T-shaped visor slit. Intricate Erdtree branch engravings on the cheeks. Polished gold metal with faint divine glow. Royal, majestic presence befitting a lord.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -372,9 +412,9 @@ Type: armor_head | Theme: elden_ring | Rarity: epic
 Glow: #A0D0FF
 Save to: assets/icons/forged/armor/carian_crown.png
 
-Create a 256x256 game icon for "Carian Royal Crown" - a epic helmet/headgear from Elden Ring.
+Create a 256x256 game icon for "Carian Royal Crown" - an epic helmet/headgear from Elden Ring.
 
-Reference: Crown of the Carian royalty. Worn by those who mastered the glintstone arts.
+Visual elements: Elegant silver crown with tall pointed spires. Blue glintstone gems embedded in the band. Crescent moon motif at the center. Delicate silver filigree work. Pale blue magical aura emanating from the stones. Scholarly, mystical royal aesthetic.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #A0D0FF
@@ -392,9 +432,9 @@ Type: shield | Theme: elden_ring | Rarity: epic
 Glow: #808080
 Save to: assets/icons/forged/shields/fingerprint_stone_shield.png
 
-Create a 256x256 game icon for "Fingerprint Stone Shield" - a epic shield from Elden Ring.
+Create a 256x256 game icon for "Fingerprint Stone Shield" - an epic shield from Elden Ring.
 
-Reference: A great stone shield with an intricately carved fingerprint design. One of the heaviest of all greatshields. Provides unmatched stability.
+Visual elements: Massive rectangular greatshield carved from grey stone. Distinctive spiral fingerprint pattern carved deeply into the entire surface. Rough, ancient texture. Metal reinforcement bands at the edges. Subtle grey glow from the carved grooves. Impossibly heavy, fortress-like appearance.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #808080
@@ -414,7 +454,7 @@ Save to: assets/icons/forged/weapons/pure_nail.png
 
 Create a 256x256 game icon for "Pure Nail" - a rare weapon from Hollow Knight.
 
-Reference: A nail refined to perfection. The final upgrade of the Knight's nail.
+Visual elements: Sleek needle-like sword with pale white blade that gleams like polished bone. Simple minimalist design - no crossguard, just a thin pale handle flowing into the blade. Surface is perfectly smooth and pristine. Faint white luminescence along the edges. The blade tapers to an impossibly sharp point. Clean, refined, almost surgical in appearance.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #E0E0E0
@@ -432,9 +472,9 @@ Type: cape | Theme: hollow_knight | Rarity: epic
 Glow: #1A0033
 Save to: assets/icons/forged/capes/shade_cloak.png
 
-Create a 256x256 game icon for "Shade Cloak" - a epic cape/cloak from Hollow Knight.
+Create a 256x256 game icon for "Shade Cloak" - an epic cape/cloak from Hollow Knight.
 
-Reference: A cloak woven from pure void. Allows passage through shadow.
+Visual elements: Ethereal cloak made of living darkness. Deep purple-black void fabric that seems to dissolve at the edges into wisps of shadow. No visible clasps - the cloak appears to be made of pure shadow given form. Dark purple particles drifting off the hem. Interior shows deeper void than the exterior. Insubstantial, spectral appearance.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #1A0033
@@ -454,7 +494,7 @@ Save to: assets/icons/forged/weapons/stygian_blade.png
 
 Create a 256x256 game icon for "Stygian Blade" - a rare weapon from Hades.
 
-Reference: The blade of the Prince of the Underworld. Forged in the River Styx.
+Visual elements: Curved Greek-style sword with dark iron blade. Deep crimson blood-red glow along the cutting edge. Ornate bronze crossguard with skull motif. Black leather wrapped grip. Hellish red embers floating from the blade. Ancient underworld aesthetic - part xiphos sword, part infernal weapon.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #8B0000
@@ -474,7 +514,7 @@ Save to: assets/icons/forged/weapons/adamant_rail.png
 
 Create a 256x256 game icon for "Adamant Rail" - a rare weapon from Hades.
 
-Reference: An exalted weapon of unknown origin. Its mechanisms are beyond mortal understanding.
+Visual elements: Ornate bronze-and-black handheld gun with Greek decorative flourishes. Elongated barrel with fiery orange energy core visible inside. Skull motifs and Greek key patterns engraved on the receiver. Orange-red hellfire glow emanating from the barrel. Mechanical yet ancient aesthetic - steampunk meets mythology.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FF4500
@@ -492,9 +532,9 @@ Type: weapon | Theme: halo | Rarity: epic
 Glow: #00CED1
 Save to: assets/icons/forged/weapons/halo_battle_rifle.png
 
-Create a 256x256 game icon for "BR55 Battle Rifle" - a epic weapon from Halo.
+Create a 256x256 game icon for "BR55 Battle Rifle" - an epic weapon from Halo.
 
-Reference: The UNSC's precision workhorse. Three-round burst, zero margin for error.
+Visual elements: Futuristic military rifle with angular olive-green and black body. Prominent top-mounted scope. Distinctive bullpup configuration with magazine behind grip. Cyan holographic sight glow. Clean military sci-fi lines with visible panel segments. UNSC utilitarian design - functional, no-nonsense, battle-worn.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #00CED1
@@ -514,7 +554,7 @@ Save to: assets/icons/forged/weapons/terra_blade.png
 
 Create a 256x256 game icon for "Terra Blade" - a legendary weapon from Terraria.
 
-Reference: A blade forged from the essence of the world. Fires projectiles of pure terra energy.
+Visual elements: Broad-bladed sword glowing with vibrant green earth energy. Blade transitions from emerald green at the edge to deeper forest green at the center. Crystalline structure with faceted surfaces catching light. Simple golden crossguard. Green energy particles radiating outward. The blade appears to be made of solidified nature magic - leaves and vines subtly visible within.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00FF80
@@ -534,7 +574,7 @@ Save to: assets/icons/forged/weapons/mortal_blade.png
 
 Create a 256x256 game icon for "Mortal Blade" - a legendary weapon from Sekiro.
 
-Reference: A blade that can sever immortality. The crimson blade of the Divine Heir.
+Visual elements: Elegant odachi with deep crimson-red blade that seems to bleed color. Traditional Japanese sword shape with subtle curve. Black lacquered sheath visible at the grip. Red mist or blood-colored aura emanating from the blade. Ornate golden tsuba (hand guard) with floral pattern. The blade surface has a liquid, almost organic sheen.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #CC0000
@@ -552,9 +592,9 @@ Type: weapon | Theme: sekiro | Rarity: epic
 Glow: #8B0000
 Save to: assets/icons/forged/weapons/gyoubu_spear.png
 
-Create a 256x256 game icon for "Gyoubu's Broken Horn" - a epic weapon from Sekiro.
+Create a 256x256 game icon for "Gyoubu's Broken Horn" - an epic weapon from Sekiro.
 
-Reference: The broken horn spear of Gyoubu Oniwa. MY NAME IS GYOUBU MASATAKA ONIWA!
+Visual elements: Massive Japanese war spear (yari) with a distinctive broken/jagged spearhead. Dark iron blade with battle damage and chips. Long wooden shaft wrapped in faded red leather. Blood-red tassels hanging from below the blade. The spearhead has a horn-like curve. Worn, battle-tested appearance befitting a samurai general.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #8B0000
@@ -574,7 +614,7 @@ Save to: assets/icons/forged/weapons/witcher_silver_sword.png
 
 Create a 256x256 game icon for "Witcher's Silver Sword" - a rare weapon from The Witcher.
 
-Reference: A silver sword for monsters. Standard equipment for any professional witcher.
+Visual elements: Elegant longsword with polished silver blade that gleams with moonlight. Distinctive witcher crossguard with wolf-head pommel. Blade has runic etchings along the fuller. Black leather wrapped grip with silver wire accents. Faint silver glow indicating anti-monster enchantment. Professional, refined craftsmanship.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #C0C0C0
@@ -594,7 +634,7 @@ Save to: assets/icons/forged/weapons/aloy_sharpshot_bow.png
 
 Create a 256x256 game icon for "Aloy's Sharpshot Bow" - a rare weapon from Horizon Zero Dawn.
 
-Reference: A precision bow from the Nora tribe. Machine-killer. Thunderjaw-slayer. Aloy's weapon of choice.
+Visual elements: Tribal hunting bow with machine parts integrated into the design. Wood and metal hybrid construction. Orange-red cables and wires woven through the limbs. Salvaged tech components visible at the grip. Orange energy glow from the mechanical elements. Post-apocalyptic tribal meets high-tech aesthetic.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FF6B35
@@ -614,7 +654,7 @@ Save to: assets/icons/forged/weapons/tomb_raider_bow.png
 
 Create a 256x256 game icon for "Lara's Makeshift Bow" - a rare weapon from Tomb Raider.
 
-Reference: A survival bow crafted from salvaged materials. Born of necessity, perfected through survival. Lara Croft's weapon of resilience.
+Visual elements: Rugged survival bow made from scavenged materials. Wooden core wrapped with cloth bandages and duct tape. Improvised string from cabling. Scratched and worn surfaces showing heavy use. Brown-earthy tones with survival gear aesthetic. Functional, desperate craftsmanship - built to survive, not to be pretty.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #8B4513
@@ -634,7 +674,7 @@ Save to: assets/icons/forged/armor/straw_hat.png
 
 Create a 256x256 game icon for "Farmer's Straw Hat" - a rare helmet/headgear from Stardew Valley.
 
-Reference: A simple straw hat for working in the sun. The mark of an honest farmer.
+Visual elements: Wide-brimmed straw hat with golden-tan woven texture. Simple red or blue ribbon band around the crown. Slightly worn and sun-faded appearance. A few straw pieces sticking out naturally. Cozy, pastoral charm. Warm honey-colored glow suggesting sunny farmland days.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #D4A574
@@ -652,9 +692,9 @@ Type: accessory | Theme: dark_souls | Rarity: epic
 Glow: #FF6A00
 Save to: assets/icons/forged/accessories/coiled_sword_fragment.png
 
-Create a 256x256 game icon for "Coiled Sword Fragment" - a epic accessory from Dark Souls.
+Create a 256x256 game icon for "Coiled Sword Fragment" - an epic accessory from Dark Souls.
 
-Reference: A fragment of the Coiled Sword. Can be used to return to the last bonfire.
+Visual elements: Broken shard of the Coiled Sword - a curved metallic fragment with spiral texture. Blackened steel with glowing orange ember cracks. Jagged broken edge where it snapped from the full blade. Small orange flames flickering from the surface. Bonfire warmth emanating from within. Pocket-sized relic of undying flame.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FF6A00
@@ -674,7 +714,7 @@ Save to: assets/icons/forged/accessories/margits_shackle.png
 
 Create a 256x256 game icon for "Margit's Shackle" - a rare accessory from Elden Ring.
 
-Reference: Shackles that bind the fell omen. Used to briefly bind Margit, the Fell Omen.
+Visual elements: Heavy iron shackle with broken chain links attached. Dark rusted metal with golden Erdtree runes inscribed. Circular cuff design meant to bind a powerful creature. Faint golden divine glow from the binding runes. Worn, ancient appearance. Ominous power contained within simple iron restraint.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FFD700
@@ -694,7 +734,7 @@ Save to: assets/icons/forged/accessories/discord_nitro_badge.png
 
 Create a 256x256 game icon for "Nitro Supporter Badge" - a rare accessory from Discord.
 
-Reference: A badge showing Nitro support. Granted to Discord Nitro subscribers.
+Visual elements: Sleek modern badge with Discord's signature blurple color. Rocket or lightning bolt motif in the center. Metallic purple-blue gradient finish. Clean geometric design with rounded edges. Subtle purple glow emanating outward. Premium, digital aesthetic - social platform prestige made physical.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #5865F2
@@ -714,7 +754,7 @@ Save to: assets/icons/forged/accessories/github_star_badge.png
 
 Create a 256x256 game icon for "Stargazer Badge" - a rare accessory from GitHub.
 
-Reference: A badge for repository stargazers. Earned by starring many repositories.
+Visual elements: Octagonal badge featuring GitHub's octocat silhouette. Multiple star shapes surrounding the center. Dark background with bright green accent color. Clean developer aesthetic with code-like precision. Green glow suggesting open source contribution. Tech-forward, minimalist design.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #238636
@@ -734,7 +774,7 @@ Save to: assets/icons/forged/accessories/scarab_lord_badge.png
 
 Create a 256x256 game icon for "Scarab Lord's Ring" - a legendary ring from World of Warcraft.
 
-Reference: A sigil marking the opening of Ahn'Qiraj. Only ~400 players ever earned this. You rang the gong.
+Visual elements: Ancient golden ring band with elaborate scarab beetle centerpiece. The beetle is crafted from dark obsidian with amber gemstone eyes. Egyptian-style hieroglyphic engravings around the band. Sand-gold metallic finish with desert patina. Golden glow emanating from the scarab's eyes. Regal, ancient power from the sands of Silithus.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFB932
@@ -754,7 +794,7 @@ Save to: assets/icons/forged/armor/herald_of_the_titans.png
 
 Create a 256x256 game icon for "Herald of the Titans Crown" - a legendary helmet/headgear from World of Warcraft.
 
-Reference: Crown of a Realm First champion. Defeated Algalon at level 80 with appropriate gear.
+Visual elements: Celestial crown made of swirling cosmic energy and starlight. Ethereal purple-blue construction with floating star particles. Multiple tall spires reaching upward like frozen starbursts. Constellation patterns visible in the metal. Brilliant golden core light emanating from within. Otherworldly, astronomical grandeur befitting a titan's herald.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -774,7 +814,7 @@ Save to: assets/icons/forged/capes/immortal_tabard.png
 
 Create a 256x256 game icon for "Tabard of the Immortal" - a legendary cape/cloak from World of Warcraft.
 
-Reference: Worn by those who cleared Naxxramas deathless. Zero deaths, zero mistakes, immortal glory.
+Visual elements: Pure white tabard with silver trim and pristine fabric. Central emblem shows an inverted skull with wings - the mark of Naxxramas. Ghostly white glow surrounding the entire piece. Fabric appears ethereal, almost translucent. Perfect, unmarred condition symbolizing deathless achievement. Divine, immaculate radiance.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFFFFF
@@ -794,7 +834,7 @@ Save to: assets/icons/forged/capes/hand_of_adal_tabard.png
 
 Create a 256x256 game icon for "Hand of A'dal Tabard" - a legendary cape/cloak from World of Warcraft.
 
-Reference: Mark of the Burning Crusade attunement. Completed the Black Temple attunement before it was removed.
+Visual elements: Rich purple tabard with golden Naaru symbol at the center - a vertical diamond of crystalline light. Ornate gold trim with draenei geometric patterns. Deep violet fabric with subtle luminescent threads. Golden divine light radiating from the central symbol. Outland aesthetic - alien yet holy, otherworldly grace.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -812,9 +852,9 @@ Type: amulet | Theme: wow | Rarity: epic
 Glow: #A335EE
 Save to: assets/icons/forged/accessories/mythic_insignia.png
 
-Create a 256x256 game icon for "Cutting Edge Amulet" - a epic amulet/necklace from World of Warcraft.
+Create a 256x256 game icon for "Cutting Edge Amulet" - an epic amulet/necklace from World of Warcraft.
 
-Reference: Proof of Mythic raid mastery. Cleared the current tier before nerfs.
+Visual elements: Heavy medallion with jagged, blade-like edges around the perimeter. Central purple gem pulsing with mythic energy. Dark metal frame with skull motifs. Thin chain visible above. Epic purple glow emanating from the center. Aggressive, elite design - proof of hardcore raiding prowess.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #A335EE
@@ -832,9 +872,9 @@ Type: accessory | Theme: wow | Rarity: epic
 Glow: #00CED1
 Save to: assets/icons/forged/accessories/keystone_trinket.png
 
-Create a 256x256 game icon for "Keystone Master's Trinket" - a epic accessory from World of Warcraft.
+Create a 256x256 game icon for "Keystone Master's Trinket" - an epic accessory from World of Warcraft.
 
-Reference: A trinket for dungeon masters. All +20 keystones completed in time.
+Visual elements: Ornate key-shaped trinket with mystical timer runes around the shaft. Cyan-blue crystal embedded in the key's bow (handle). Bronze metallic finish with arcane engravings. Roman numeral XX (20) subtly visible. Teal energy wisps suggesting time magic. Precision-crafted dungeon master's token.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #00CED1
@@ -854,7 +894,7 @@ Save to: assets/icons/forged/capes/gladiator_tabard.png
 
 Create a 256x256 game icon for "Gladiator's Tabard" - a legendary cape/cloak from World of Warcraft.
 
-Reference: Worn by the top 0.5% of Arena players. Blood, sweat, and rating.
+Visual elements: Blood-red tabard with golden gladiator helm emblem at center. Battle-worn fabric with subtle bloodstains. Heavy gold chain clasps at the shoulders. Crimson glow of arena glory. Torn edges suggesting countless battles. Warrior's pride made manifest - victory through combat.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #CC0000
@@ -874,7 +914,7 @@ Save to: assets/icons/forged/armor/insane_straitjacket.png
 
 Create a 256x256 game icon for "Insane Straitjacket" - a legendary chest armor from World of Warcraft.
 
-Reference: Proof of insane dedication. Insane in the Membrane - months of rep grinding.
+Visual elements: Weathered white straitjacket with buckled straps and restraints. Padded canvas material with visible stitching. Multiple leather straps crossing the chest. Frayed edges and asylum-worn appearance. Golden glow suggesting madness transformed to power. Unsettling yet prestigious - proof of obsessive dedication.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFB932
@@ -894,7 +934,7 @@ Save to: assets/icons/forged/weapons/saw_cleaver.png
 
 Create a 256x256 game icon for "Saw Cleaver" - a legendary weapon from Bloodborne.
 
-Reference: A trick weapon of the Hunters. Tonight, Gehrman joins the hunt.
+Visual elements: Brutal folding cleaver with serrated saw-blade edge. Dark grey steel covered in old bloodstains. Mechanical folding mechanism visible at the hinge. Worn wooden handle wrapped in stained bandages. Deep crimson blood glow along the teeth. Industrial, medical horror aesthetic - surgery meets slaughter.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #8B0000
@@ -914,7 +954,7 @@ Save to: assets/icons/forged/armor/false_king_helm.png
 
 Create a 256x256 game icon for "False King's Helm" - a legendary helmet/headgear from Demon's Souls.
 
-Reference: Horned helm of the Old One's false king. The Old One has awakened. The fog covers all.
+Visual elements: Ornate golden crown-helm with two massive curved horns sweeping upward. Full-face greathelm design with narrow visor slit. Intricate demonic engravings on the cheeks and brow. Polished gold metal with an otherworldly sheen. Golden divine glow from within. Regal yet corrupted - false divinity made manifest.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -932,9 +972,9 @@ Type: accessory | Theme: god_of_war | Rarity: epic
 Glow: #C41E3A
 Save to: assets/icons/forged/accessories/blades_of_chaos.png
 
-Create a 256x256 game icon for "Blades of Chaos Fragment" - a epic accessory from God of War.
+Create a 256x256 game icon for "Blades of Chaos Fragment" - an epic accessory from God of War.
 
-Reference: A fragment of Kratos's cursed blades. The Ghost of Sparta's burden.
+Visual elements: Broken shard of a curved Greek blade with jagged edges. Blackened metal with glowing orange-red chains still attached. Omega symbol faintly visible on the surface. Hellfire red embers crackling along the fragment. Ash and cinder particles floating upward. Cursed, burning remnant of divine weaponry.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #C41E3A
@@ -952,9 +992,9 @@ Type: armor_head | Theme: ghost_of_tsushima | Rarity: epic
 Glow: #1A1A2E
 Save to: assets/icons/forged/armor/ghost_mask.png
 
-Create a 256x256 game icon for "Ghost Mask" - a epic helmet/headgear from Ghost of Tsushima.
+Create a 256x256 game icon for "Ghost Mask" - an epic helmet/headgear from Ghost of Tsushima.
 
-Reference: Mask of the Ghost of Tsushima. Honor died on the beach.
+Visual elements: White ceramic Japanese demon mask (oni/hannya style). Pale ghostly white with cracked surface showing age. Red accents around the eyes and mouth. Furrowed angry brow and grimacing expression. Dark shadowy aura emanating from behind. Traditional yet terrifying - the face of vengeance.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #1A1A2E
@@ -974,7 +1014,7 @@ Save to: assets/icons/forged/accessories/selene_fragment.png
 
 Create a 256x256 game icon for "Selene's Fragment" - a legendary accessory from Gaming.
 
-Reference: A piece of the cycle. Break the cycle. Platinum Returnal.
+Visual elements: Alien crystalline shard with bioluminescent cyan glow. Organic-looking surface with circuit-like patterns. Translucent material showing internal energy flowing. Sharp geometric facets meeting organic curves. Cyan-teal particles spiraling around it. Xenotech artifact - ancient and impossibly advanced.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00FFFF
@@ -992,9 +1032,9 @@ Type: accessory | Theme: generic | Rarity: epic
 Glow: #FF0000
 Save to: assets/icons/forged/accessories/spider_emblem.png
 
-Create a 256x256 game icon for "Spider Emblem" - a epic accessory from Gaming.
+Create a 256x256 game icon for "Spider Emblem" - an epic accessory from Gaming.
 
-Reference: Emblem of a friendly neighborhood hero. With great power comes great responsibility.
+Visual elements: Stylized spider emblem in red and black. Eight angular legs radiating from central body. Bold graphic design - clean lines, sharp angles. Metallic red finish with black accents. Red glow pulsing from the center. Heroic, iconic silhouette instantly recognizable.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FF0000
@@ -1014,7 +1054,7 @@ Save to: assets/icons/forged/armor/master_chief_helmet.png
 
 Create a 256x256 game icon for "MJOLNIR Helmet" - a legendary helmet/headgear from Halo.
 
-Reference: Helmet of the Master Chief. LASO completed. You are a legend.
+Visual elements: Iconic olive-green MJOLNIR powered armor helmet. Distinctive golden-orange reflective visor. Angular futuristic design with armored cheek plates. Visible tech ports and vents on the sides. Cyan holographic HUD glow reflecting in the visor. Military sci-fi perfection - the face of a Spartan.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00CED1
@@ -1034,7 +1074,7 @@ Save to: assets/icons/forged/armor/pilot_helmet.png
 
 Create a 256x256 game icon for "Pilot's Helmet" - a legendary helmet/headgear from Titanfall.
 
-Reference: Helmet of an elite Pilot. Gauntlet completed in under 33 seconds.
+Visual elements: Sleek tactical helmet with angular pilot design. Dark grey-black with orange accent stripes. Distinctive full-face visor with HUD overlay visible. Jump kit connection ports on the back. Communication antenna on one side. Orange tactical glow from visor elements. Elite military pilot aesthetic - speed and precision.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FF6600
@@ -1054,7 +1094,7 @@ Save to: assets/icons/forged/accessories/cog_medal.png
 
 Create a 256x256 game icon for "COG Medal of Honor" - a legendary accessory from Gears of War.
 
-Reference: Medal for Gears veterans. Seriously 5.0. You're insane.
+Visual elements: Heavy military medal with the crimson COG (Coalition of Ordered Governments) gear emblem. Dark metal frame with blood-red enamel center. Thick ribbon attachment in military style. Battle-worn scratches on the surface. Deep crimson glow from the gear symbol. Brutal, industrial military decoration.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #990000
@@ -1072,9 +1112,9 @@ Type: armor_head | Theme: sea_of_thieves | Rarity: epic
 Glow: #1E90FF
 Save to: assets/icons/forged/armor/pirate_legend_hat.png
 
-Create a 256x256 game icon for "Pirate Legend Hat" - a epic helmet/headgear from Sea of Thieves.
+Create a 256x256 game icon for "Pirate Legend Hat" - an epic helmet/headgear from Sea of Thieves.
 
-Reference: Hat of a legendary pirate. A true Sea of Thieves legend.
+Visual elements: Extravagant tricorn pirate hat with purple-blue legendary colors. Golden trim and ornate skull-and-crossbones emblem. Large feather plume in mystical blue. Rich velvet material with weathered sea-worn edges. Ocean blue glow emanating from the fabric. Legendary pirate finery - captain of the seas.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #1E90FF
@@ -1094,7 +1134,7 @@ Save to: assets/icons/forged/accessories/early_supporter_badge.png
 
 Create a 256x256 game icon for "Early Supporter Badge" - a legendary accessory from Discord.
 
-Reference: Badge of an OG Discord supporter. Nitro subscriber before October 2018. Unobtainable.
+Visual elements: Vintage-styled badge with Discord's classic Wumpus mascot. Purple-blue gradient with "OG" styling. Small lightning bolt accents. Worn patina suggesting age and history. Premium metallic purple finish. Legendary purple glow. Exclusive, unobtainable collector's item.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #5865F2
@@ -1112,9 +1152,9 @@ Type: accessory | Theme: discord | Rarity: epic
 Glow: #5865F2
 Save to: assets/icons/forged/accessories/partner_badge.png
 
-Create a 256x256 game icon for "Partner Badge" - a epic accessory from Discord.
+Create a 256x256 game icon for "Partner Badge" - an epic accessory from Discord.
 
-Reference: Badge of a Discord Partner. Owner of a partnered server.
+Visual elements: Hexagonal badge with Discord Partner verification checkmark. Purple-blue blurple gradient finish. Sleek modern design with beveled edges. Partner logo prominent in center. Metallic sheen with premium quality feel. Purple glow radiating outward. Verified community leader's emblem.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #5865F2
@@ -1132,9 +1172,9 @@ Type: accessory | Theme: discord | Rarity: epic
 Glow: #43B581
 Save to: assets/icons/forged/accessories/bug_hunter_badge.png
 
-Create a 256x256 game icon for "Bug Hunter Badge" - a epic accessory from Discord.
+Create a 256x256 game icon for "Bug Hunter Badge" - an epic accessory from Discord.
 
-Reference: Badge of a dedicated bug hunter. Level 2 Bug Hunter - found many bugs.
+Visual elements: Golden badge featuring a stylized bug/beetle silhouette. Magnifying glass motif incorporated into design. Bright green accent color for "hunt successful" feel. Metallic gold rim with polished finish. Green glow from the bug icon. Detective-meets-developer aesthetic.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #43B581
@@ -1154,7 +1194,7 @@ Save to: assets/icons/forged/accessories/hypesquad_badge.png
 
 Create a 256x256 game icon for "HypeSquad Badge" - a rare accessory from Discord.
 
-Reference: Badge of a HypeSquad member. Representing Discord at events.
+Visual elements: Dynamic badge with HypeSquad shield emblem. Bright orange-gold energetic color scheme. Three house icons subtly visible (Bravery, Brilliance, Balance). Event-ready, promotional styling. Metallic orange finish with excitement energy. Orange glow pulsing outward. Community ambassador's badge of honor.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FAA61A
@@ -1174,7 +1214,7 @@ Save to: assets/icons/forged/accessories/arctic_code_badge.png
 
 Create a 256x256 game icon for "Arctic Code Vault Badge" - a legendary accessory from GitHub.
 
-Reference: Your code is preserved for 1000 years. 2020 Arctic Code Vault contributor. Unobtainable.
+Visual elements: Crystalline ice-themed badge with frozen archive vault motif. Pale blue-white coloring like arctic ice. GitHub octocat silhouette preserved in ice. Snowflake patterns around the edges. Frigid cyan glow emanating from within. 1000-year preservation seal visible. Cryogenic legacy artifact.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00BFFF
@@ -1194,7 +1234,7 @@ Save to: assets/icons/forged/accessories/mars_badge.png
 
 Create a 256x256 game icon for "Mars 2020 Badge" - a legendary accessory from GitHub.
 
-Reference: Your code went to Mars. Contributed to code on the Perseverance rover.
+Visual elements: Rusty red Mars-themed badge with Perseverance rover silhouette. Red planet surface texture visible. NASA-style mission patch aesthetic. Rocket trajectory arc in the background. Martian orange-red glow emanating outward. Stars visible around the edges. Interplanetary achievement badge.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FF4500
@@ -1212,9 +1252,9 @@ Type: accessory | Theme: github | Rarity: epic
 Glow: #238636
 Save to: assets/icons/forged/accessories/pull_shark_badge.png
 
-Create a 256x256 game icon for "Pull Shark Badge" - a epic accessory from GitHub.
+Create a 256x256 game icon for "Pull Shark Badge" - an epic accessory from GitHub.
 
-Reference: Badge of a prolific contributor. Many merged pull requests.
+Visual elements: Stylized shark fin cutting through water (code). GitHub green merge color scheme. Shark silhouette with aggressive forward motion. Digital water/code stream effect. Bright green glow suggesting successful merges. Predatory developer efficiency - PRs don't stand a chance.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #238636
@@ -1232,9 +1272,9 @@ Type: accessory | Theme: github | Rarity: epic
 Glow: #8B5CF6
 Save to: assets/icons/forged/accessories/galaxy_brain_badge.png
 
-Create a 256x256 game icon for "Galaxy Brain Badge" - a epic accessory from GitHub.
+Create a 256x256 game icon for "Galaxy Brain Badge" - an epic accessory from GitHub.
 
-Reference: Badge of a helpful community member. Your answers helped many developers.
+Visual elements: Stylized brain silhouette filled with swirling galaxy patterns. Purple-violet cosmic nebula colors inside the brain shape. Stars and constellation dots visible within. Radiant purple glow emanating outward. Knowledge-as-universe aesthetic. Helpful genius community member emblem.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #8B5CF6
@@ -1254,7 +1294,7 @@ Save to: assets/icons/forged/accessories/yolo_badge.png
 
 Create a 256x256 game icon for "YOLO Badge" - a rare accessory from GitHub.
 
-Reference: Badge of a fearless developer. Merged a PR without review. Absolute madman.
+Visual elements: Reckless danger-themed badge with skull-and-crossbones motif. Bright warning red coloring. "YOLO" text or lightning bolt visible. Cracked or shattered edge effects. Red warning glow like an alarm. Daredevil developer's mark of chaos.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FF6B6B
@@ -1274,7 +1314,7 @@ Save to: assets/icons/forged/accessories/veteran_roblox_necklace.png
 
 Create a 256x256 game icon for "Veteran Robloxian Necklace" - a legendary amulet/necklace from Roblox.
 
-Reference: Necklace of an OG Roblox player. 10+ years on Roblox. Before it was cool.
+Visual elements: Blocky pixelated medallion in Roblox's signature cyan-blue. Classic Roblox "R" logo as centerpiece. Chunky chain links in gold. Retro 2008-era aesthetic with clean geometric shapes. Bright blue glow emanating from the logo. OG prestige - before the masses arrived.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00A2FF
@@ -1292,9 +1332,9 @@ Type: ring | Theme: roblox | Rarity: epic
 Glow: #00A2FF
 Save to: assets/icons/forged/accessories/classic_roblox_ring.png
 
-Create a 256x256 game icon for "Classic Robloxian Ring" - a epic ring from Roblox.
+Create a 256x256 game icon for "Classic Robloxian Ring" - an epic ring from Roblox.
 
-Reference: Ring of a veteran Roblox player. 7+ years on Roblox.
+Visual elements: Blocky geometric ring band with Roblox blue coloring. Small square gem in classic Roblox style. Clean pixel-art inspired design. Simple metallic blue finish. Blue glow from the centerpiece. Veteran player's proof of dedication.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #00A2FF
@@ -1314,7 +1354,7 @@ Save to: assets/icons/forged/accessories/builder_roblox_ring.png
 
 Create a 256x256 game icon for "Builder's Ring" - a rare ring from Roblox.
 
-Reference: Ring of an established Roblox player. 5+ years on Roblox.
+Visual elements: Simple blocky ring with brick texture pattern. Roblox blue metal band. Small studded details around the band. Builder's tool (wrench or hammer) motif on top. Blue glow suggesting creative energy. Established player's mark of experience.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00A2FF
@@ -1334,7 +1374,7 @@ Save to: assets/icons/forged/accessories/ashen_estus.png
 
 Create a 256x256 game icon for "Ashen Estus Flask" - a rare accessory from Dark Souls.
 
-Reference: Flask carried by those who linked the flame. You beat Dark Souls 3. Welcome, Ashen One.
+Visual elements: Distinctive gourd-shaped flask with warm orange liquid visible inside. Metallic bronze cap and base. Worn leather strap attachment. Glass surface catching firelight. Warm orange glow from the healing liquid within. Ember particles floating around it. Beacon of hope in dark times.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FF6A00
@@ -1354,7 +1394,7 @@ Save to: assets/icons/forged/accessories/tarnished_ring.png
 
 Create a 256x256 game icon for "Tarnished's Ring" - a rare ring from Elden Ring.
 
-Reference: Ring worn by those who became Elden Lord. Any ending counts. You did it.
+Visual elements: Ornate golden ring with Erdtree branch pattern engraved. Central amber gem pulsing with grace. Tarnished and worn golden finish showing age. Subtle Elden Ring rune markings around the band. Golden divine glow from the gem. Mark of one who claimed the throne.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FFD700
@@ -1374,7 +1414,7 @@ Save to: assets/icons/forged/accessories/void_heart.png
 
 Create a 256x256 game icon for "Void Heart" - a legendary accessory from Hollow Knight.
 
-Reference: Heart touched by the abyss. Embrace the Void - 42 bosses, zero deaths.
+Visual elements: Stylized heart-shaped charm made of pure void essence. Deep purple-black with inky tendrils wisping outward. Pale white crack or seam down the center. Void particles dissolving from the edges. Dark purple abyss glow emanating outward. Container of infinite darkness.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #1A0033
@@ -1394,7 +1434,7 @@ Save to: assets/icons/forged/accessories/boon_trinket.png
 
 Create a 256x256 game icon for "Olympian Keepsake" - a rare accessory from Hades.
 
-Reference: A keepsake from the gods. You escaped the underworld.
+Visual elements: Greek-style pendant with laurel wreath motif. Golden metal with divine sheen. Small lightning bolt or olive branch detail. Ornate border with Greek key pattern. Warm golden glow of Olympian blessing. Gift from the gods above.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FFD700
@@ -1414,7 +1454,7 @@ Save to: assets/icons/forged/accessories/winged_strawberry.png
 
 Create a 256x256 game icon for "Winged Golden Strawberry" - a legendary accessory from Celeste.
 
-Reference: A golden strawberry with wings. Farewell chapter, zero deaths. Perfection.
+Visual elements: Plump strawberry made of solid gold with crystalline sheen. Small angelic white wings sprouting from the sides. Leaf stem in emerald green. Seeds visible as small golden dots. Heavenly golden glow radiating outward. The ultimate prize - perfection achieved.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -1434,7 +1474,7 @@ Save to: assets/icons/forged/weapons/devil_pitchfork.png
 
 Create a 256x256 game icon for "Devil's Pitchfork" - a legendary weapon from Cuphead.
 
-Reference: The Devil's own weapon. Beat Cuphead on Expert. You won the final bet.
+Visual elements: Classic three-pronged pitchfork with 1930s cartoon styling. Deep crimson red metal with black accents. Slightly curved prongs with menacing sharpness. Long ebony handle with ornate demonic carvings. Hellfire red flames licking up from the tines. Retro cartoon devil aesthetic meets real menace.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #DC143C
@@ -1454,7 +1494,7 @@ Save to: assets/icons/forged/weapons/king_slayer.png
 
 Create a 256x256 game icon for "King Slayer" - a legendary weapon from Dead Cells.
 
-Reference: Blade of the Beheaded. 5 Boss Cells active. The true Dead Cells experience.
+Visual elements: Jagged biological-looking sword with mutated cell structures visible. Sickly green blade with organic veiny patterns. Biomechanical hilt that seems to grow from the blade. Dripping green mutation fluid. Bright toxic green glow pulsing through. Rogue-like chaos made manifest.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00FF00
@@ -1474,7 +1514,7 @@ Save to: assets/icons/forged/accessories/heart_shard.png
 
 Create a 256x256 game icon for "Corrupted Heart Shard" - a legendary accessory from Slay the Spire.
 
-Reference: A shard of the Corrupted Heart. A20 Heart kill with all characters.
+Visual elements: Crystalline heart fragment pulsing with malevolent red energy. Jagged broken edges where it was torn from the whole. Deep red-pink coloring with darker corruption veins. Geometric card-game inspired facets. Red glow emanating from cracks. Fragment of the ultimate challenge conquered.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FF6B6B
@@ -1494,7 +1534,7 @@ Save to: assets/icons/forged/accessories/companion_cube.png
 
 Create a 256x256 game icon for "Companion Cube" - a rare accessory from Portal.
 
-Reference: The Weighted Companion Cube. It will never threaten to stab you.
+Visual elements: Grey weighted storage cube with distinctive pink heart on each visible face. Clean Aperture Science aesthetic - metal panels with rounded corners. Pink accent color on hearts. Slightly worn test chamber appearance. Soft pink glow of companionship. Your best friend. Never forget.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FFB6C1
@@ -1514,7 +1554,7 @@ Save to: assets/icons/forged/accessories/lambda_badge.png
 
 Create a 256x256 game icon for "Lambda Badge" - a rare accessory from Valve.
 
-Reference: Badge of the resistance. Found all the lambda caches.
+Visual elements: Orange-red circular badge with Greek lambda (λ) symbol. Clean spray-painted resistance logo aesthetic. Worn metal badge backing. Black lambda on bright orange field. Orange glow suggesting rebellion energy. Half-Life resistance fighter's mark of allegiance.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FF8C00
@@ -1532,9 +1572,9 @@ Type: armor_head | Theme: skyrim | Rarity: epic
 Glow: #4A5568
 Save to: assets/icons/forged/armor/dragonbone_helm.png
 
-Create a 256x256 game icon for "Dragonbone Helm" - a epic helmet/headgear from Skyrim.
+Create a 256x256 game icon for "Dragonbone Helm" - an epic helmet/headgear from Skyrim.
 
-Reference: Helm forged from dragon bones. 100% Skyrim. Every achievement.
+Visual elements: Intimidating helmet carved from actual dragon bones. Ivory-white bone material with visible texture and joints. Small curved horns protruding from the sides. Spiky ridge along the crown. Dark eye sockets for menacing appearance. Grey bone glow suggesting dragon's ancient power. The ultimate Nordic warrior's prize.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #4A5568
@@ -1554,7 +1594,7 @@ Save to: assets/icons/forged/armor/grandmaster_armor.png
 
 Create a 256x256 game icon for "Grandmaster Wolf Armor" - a legendary chest armor from The Witcher.
 
-Reference: Armor of the Wolf School. Walked the Path - 100% Witcher 3 including DLCs.
+Visual elements: Layered leather and chainmail armor with wolf medallion prominent at the chest. Dark brown and black leather with silver chainmail visible beneath. Wolf head emblem in silver at the collar. Witcher school buckles and straps. Golden trim on the edges. Golden glow from the wolf medallion. Master witcher's battle-tested gear.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #E6B833
@@ -1574,7 +1614,7 @@ Save to: assets/icons/forged/armor/ashen_armor.png
 
 Create a 256x256 game icon for "Ashen Armor" - a rare chest armor from Dark Souls.
 
-Reference: Chainmail worn by the Ashen One. The ash seeketh embers, and so the journey begins.
+Visual elements: Simple chainmail armor over dark leather. Ash-grey metal rings with visible link pattern. Tattered cloth tabard hanging over the chest. Worn, weathered appearance of countless deaths. Orange ember glow seeping through the chains. Humble beginnings - the armor of one who rises again.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FF6A00
@@ -1592,9 +1632,9 @@ Type: armor_chest | Theme: elden_ring | Rarity: epic
 Glow: #FFD700
 Save to: assets/icons/forged/armor/elden_armory_chest.png
 
-Create a 256x256 game icon for "Elden Armory Chestplate" - a epic chest armor from Elden Ring.
+Create a 256x256 game icon for "Elden Armory Chestplate" - an epic chest armor from Elden Ring.
 
-Reference: Bronze chestplate blessed by all legendary armaments. The bearer has touched every legendary weapon in the Lands Between.
+Visual elements: Ornate bronze chestplate with weapon silhouettes engraved across the surface. Burnished bronze-gold metal with divine patina. Multiple legendary weapon symbols etched into the plate. Elaborate Erdtree filigree around the edges. Golden divine glow from the engravings. Collector's armor - every legendary weapon's blessing.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FFD700
@@ -1614,7 +1654,7 @@ Save to: assets/icons/forged/shields/eye_of_cthulhu_shield.png
 
 Create a 256x256 game icon for "Eye of Cthulhu Shield" - a rare shield from Terraria.
 
-Reference: A shield fashioned from the Eye's remains. Your first major boss. The world trembles.
+Visual elements: Round shield with giant eyeball design dominating the face. Bloodshot white with large central pupil staring outward. Veiny red tendrils around the edges like eyelid tissue. Gore-red trim around the outer rim. Green eldritch glow from the pupil. First major trophy - the Eye sees all.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00FF80
@@ -1634,7 +1674,7 @@ Save to: assets/icons/forged/armor/ironclad_armor.png
 
 Create a 256x256 game icon for "Ironclad's Plate" - a legendary chest armor from Slay the Spire.
 
-Reference: Battle-worn plate armor of the Ironclad. Forged in countless runs. Strike, Defend, repeat.
+Visual elements: Heavy battle-worn iron chestplate with distinctive red accents. Dented and scarred surface from countless battles. Playing card suits subtly engraved into the metal. Bold red cloth underneath visible at the edges. Golden glow from relic power within. Warrior's determination made steel.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -1654,7 +1694,7 @@ Save to: assets/icons/forged/armor/loremaster_hood.png
 
 Create a 256x256 game icon for "Loremaster's Hood" - a legendary helmet/headgear from World of Warcraft.
 
-Reference: Hood worn by those who have uncovered every tale. Completed every questline in Azeroth. The story never ends.
+Visual elements: Deep purple scholarly hood with mystical runes embroidered in gold. Soft fabric draping around an invisible face. Ancient tome or scroll symbol at the brow. Golden knowledge-light emanating from within the hood. Aged, well-traveled fabric texture. Purple arcane glow. Keeper of all stories.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #9370DB
@@ -1674,7 +1714,7 @@ Save to: assets/icons/forged/weapons/master_hoe.png
 
 Create a 256x256 game icon for "Master Farmer's Hoe" - a rare weapon from Stardew Valley.
 
-Reference: A golden hoe for the dedicated farmer. Level 10 in a skill. The valley remembers your dedication.
+Visual elements: Elegant golden farming hoe with polished metal blade. Warm honey-gold metal head with gentle sheen. Wooden handle wrapped in worn leather. Small stardrop-shaped gem embedded near the head. Golden glow of mastery emanating outward. The pinnacle of farming expertise.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FFD700
@@ -1694,7 +1734,7 @@ Save to: assets/icons/forged/capes/prairie_king_cape.png
 
 Create a 256x256 game icon for "Prairie King's Poncho" - a legendary cape/cloak from Stardew Valley.
 
-Reference: Dusty poncho of a legendary gunslinger. You beat Journey of the Prairie King without dying. Legendary.
+Visual elements: Dusty brown-tan poncho with Western fringe along the edges. Faded desert colors - browns, tans, burnt orange. Sheriff star or cactus motif subtly visible. Worn, sun-bleached fabric texture. Copper-brown glow of frontier legend. Wild West arcade hero's signature garb.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #CD853F
@@ -1712,9 +1752,9 @@ Type: amulet | Theme: stardew | Rarity: epic
 Glow: #FFD700
 Save to: assets/icons/forged/accessories/stardrop_pendant.png
 
-Create a 256x256 game icon for "Stardrop Pendant" - a epic amulet/necklace from Stardew Valley.
+Create a 256x256 game icon for "Stardrop Pendant" - an epic amulet/necklace from Stardew Valley.
 
-Reference: A pendant containing essence of all Stardrops. You found every Stardrop. The cosmos smile upon you.
+Visual elements: Star-shaped pendant with seven points glowing with cosmic energy. Pale blue-gold crystalline material. Delicate silver chain visible above. Each point of the star representing a collected stardrop. Warm golden glow with sparkle particles. Taste of the cosmos contained within.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FFD700
@@ -1734,7 +1774,7 @@ Save to: assets/icons/forged/armor/survivor_vest.png
 
 Create a 256x256 game icon for "Survivor's Vest" - a rare chest armor from Valve.
 
-Reference: Battle-worn tactical vest of a zombie apocalypse survivor. 53,595 infected eliminated. The horde never stood a chance.
+Visual elements: Military tactical vest in olive drab with multiple pouches. Bloodstains and zombie scratch marks across the fabric. Visible ammunition magazines in pouches. Frayed straps showing heavy use. Dark green survival glow. Battle-worn apocalypse survivor's essential gear.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #556B2F
@@ -1752,9 +1792,9 @@ Type: armor_head | Theme: hades | Rarity: epic
 Glow: #FFD700
 Save to: assets/icons/forged/armor/zagreus_helm.png
 
-Create a 256x256 game icon for "Prince's Laurel Crown" - a epic helmet/headgear from Hades.
+Create a 256x256 game icon for "Prince's Laurel Crown" - an epic helmet/headgear from Hades.
 
-Reference: Crown of the Prince of the Underworld. You completed the epilogue. The whole story, told.
+Visual elements: Classical Greek laurel wreath crown in shimmering gold. Delicate olive leaves woven together. Red gemstone or skull motif at the front. Underworld flames subtly visible between leaves. Golden divine glow of Olympian heritage. Prince of the underworld's rightful crown.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FFD700
@@ -1774,7 +1814,7 @@ Save to: assets/icons/forged/weapons/ezios_hidden_blade.png
 
 Create a 256x256 game icon for "Ezio's Hidden Blade" - a legendary weapon from Assassin's Creed.
 
-Reference: The iconic weapon of the Master Assassin. Nothing is true, everything is permitted. Ezio Auditore's signature weapon.
+Visual elements: Sleek concealed wrist-blade extended from bracer mechanism. Polished steel blade with deadly sharp point. Ornate leather and metal bracer with Assassin insignia. Mechanical spring mechanism visible. Clean white luminescence along blade edge. Renaissance engineering meets lethal precision.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFFFFF
@@ -1794,7 +1834,7 @@ Save to: assets/icons/forged/weapons/sam_fishers_kabar.png
 
 Create a 256x256 game icon for "Sam Fisher's Ka-Bar" - a legendary weapon from Splinter Cell.
 
-Reference: Combat knife of the legendary Splinter Cell operative. Silent. Precise. Lethal. Sam Fisher's trusted blade for close quarters.
+Visual elements: Military combat knife with black-finished blade. Distinctive Ka-Bar profile with clip point. Dark grey textured grip for stealth operations. Matte non-reflective coating. Subtle dark teal night-vision glow along edge. Covert operator's silent companion.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #2F4F4F
@@ -1814,7 +1854,7 @@ Save to: assets/icons/forged/weapons/fiber_wire.png
 
 Create a 256x256 game icon for "Agent 47's Fiber Wire" - a legendary weapon from Hitman.
 
-Reference: The signature silent elimination tool. Silent Assassin. Suit Only. No witnesses. Agent 47's preferred method.
+Visual elements: Thin metallic garrote wire coiled in a figure-eight loop. Red wooden or metal handles at each end. Steel wire gleaming with deadly purpose. Professional, clinical appearance. Dark crimson glow suggesting silent lethality. Assassin's most intimate tool.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #8B0000
@@ -1832,9 +1872,9 @@ Type: weapon | Theme: counter_strike | Rarity: epic
 Glow: #FF4500
 Save to: assets/icons/forged/weapons/csgo_karambit.png
 
-Create a 256x256 game icon for "StatTrakÃ¢â€žÂ¢ Karambit" - a epic weapon from Counter-Strike.
+Create a 256x256 game icon for "StatTrak Karambit" - an epic weapon from Counter-Strike.
 
-Reference: Counter-Strike's most iconic knife. The ultimate flex. Every competitive player's dream knife.
+Visual elements: Curved claw-shaped knife with distinctive ring on the grip. Fade pattern gradient - purple to pink to yellow. Polished steel with holographic sheen. StatTrak digital counter visible on the blade spine. Orange-red energy glow from the ring. The ultimate CS flex made real.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FF4500
@@ -1852,9 +1892,9 @@ Type: ring | Theme: elden_ring | Rarity: epic
 Glow: #4169E1
 Save to: assets/icons/forged/accessories/rannis_dark_moon_ring.png
 
-Create a 256x256 game icon for "Ranni's Dark Moon Ring" - a epic ring from Elden Ring.
+Create a 256x256 game icon for "Ranni's Dark Moon Ring" - an epic ring from Elden Ring.
 
-Reference: A cold, ethereal ring bestowed by the Lunar Princess. The Age of Stars ending. Ranni's gift to her consort.
+Visual elements: Elegant silver ring with dark crescent moon centerpiece. Deep royal blue gem surrounded by starfield pattern. Frost crystals forming on the band. Cold ethereal glow emanating from the moon symbol. Witch-like lunar energy particles. Consort's pledge to the dark moon.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #4169E1
@@ -1874,7 +1914,7 @@ Save to: assets/icons/forged/accessories/havel_ring.png
 
 Create a 256x256 game icon for "Havel's Ring" - a rare ring from Dark Souls.
 
-Reference: Ring of the legendary Havel the Rock. Greatly increases maximum equipment load. A must-have for any tank build.
+Visual elements: Heavy stone ring carved from grey granite. Rough, rocky texture visible on the band. Small boulder or dragon tooth motif on top. Solid, immovable weight suggested by thick band. Grey-blue stone glow. The Rock's gift - carry everything.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #708090
@@ -1894,7 +1934,7 @@ Save to: assets/icons/forged/accessories/amulet_of_kings.png
 
 Create a 256x256 game icon for "Amulet of Kings" - a legendary amulet/necklace from Elder Scrolls.
 
-Reference: The legendary amulet worn by Dragonborn Emperors. Skyrim belongs to the Nords. But the Empire endures through this.
+Visual elements: Ornate golden amulet with large red Akatosh gemstone. Dragon or dragonborn symbol engraved into the metal. Heavy gold chain with Imperial links. Ancient Cyrodilic runic inscriptions. Crimson divine glow from the central gem. Symbol of Imperial authority and dragonblood lineage.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FF0000
@@ -1914,7 +1954,7 @@ Save to: assets/icons/forged/weapons/apex_heirloom_kunai.png
 
 Create a 256x256 game icon for "Wraith's Kunai" - a legendary weapon from Apex Legends.
 
-Reference: The ultra-rare heirloom melee weapon. Less than 1% of Apex players own an heirloom. Pure flex.
+Visual elements: Sleek futuristic kunai with void energy crackling along the blade. Dark steel with purple phase-shift energy accents. Angular sci-fi design. Dimensional rift particles emanating from the tip. Purple void glow pulsing through. Ultra-rare heirloom status made manifest.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #7B68EE
@@ -1934,7 +1974,7 @@ Save to: assets/icons/forged/accessories/r6_black_ice_skin.png
 
 Create a 256x256 game icon for "Black Ice Weapon Skin" - a legendary accessory from Rainbow Six Siege.
 
-Reference: The most coveted weapon skin in Rainbow Six Siege. Alpha pack legendary. Every R6 player's white whale.
+Visual elements: Crystalline ice shard pattern in cyan and black. Frozen glacier texture with deep blue depths. Sharp angular ice formations. Translucent blue-white surface catching light. Cyan frozen glow from within. The legendary skin made tangible.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00CED1
@@ -1952,9 +1992,9 @@ Type: weapon | Theme: rust | Rarity: epic
 Glow: #A9A9A9
 Save to: assets/icons/forged/weapons/rust_thompson.png
 
-Create a 256x256 game icon for "Thompson SMG" - a epic weapon from Rust.
+Create a 256x256 game icon for "Thompson SMG" - an epic weapon from Rust.
 
-Reference: Rust's most iconic craftable weapon. The sound that strikes fear into every nakeds' heart. Dome raiders unite.
+Visual elements: Classic 1920s-style submachine gun with drum magazine. Worn gunmetal grey finish with rust spots. Distinctive cooling fins on the barrel. Wooden stock and grip worn smooth. Crude post-apocalyptic repairs visible. Grey steel glow of makeshift power.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #A9A9A9
@@ -1974,7 +2014,7 @@ Save to: assets/icons/forged/tools/minecraft_diamond_pickaxe.png
 
 Create a 256x256 game icon for "Diamond Pickaxe" - a rare tool from Minecraft.
 
-Reference: The iconic mining tool from the best-selling game of all time. Efficiency V, Unbreaking III, Fortune III. The dream pickaxe.
+Visual elements: Pixelated diamond pickaxe with iconic blocky design. Bright cyan diamond head with faceted surfaces. Brown wooden stick handle. Clean geometric Minecraft aesthetic. Enchantment shimmer particles (purple sparkles). Cyan diamond glow. The ultimate mining tool.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00FFFF
@@ -1994,7 +2034,7 @@ Save to: assets/icons/forged/armor/tyraels_might.png
 
 Create a 256x256 game icon for "Tyrael's Might" - a legendary chest armor from Diablo.
 
-Reference: Sacred armor worn by the Archangel of Justice. Forged in the High Heavens. Obtaining a Primal Ancient requires both skill and divine favor.
+Visual elements: Radiant white-gold plate armor with angelic wing motifs. Heavenly light emanating from within. Pristine metal with divine craftsmanship. Justice scales or sword emblems engraved on chest. Wings of light subtly visible at shoulders. Golden divine glow of the High Heavens. Archangel's protection made wearable.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -2014,7 +2054,7 @@ Save to: assets/icons/forged/accessories/stone_of_jordan.png
 
 Create a 256x256 game icon for "Stone of Jordan" - a legendary ring from Diablo.
 
-Reference: The most legendary ring in Sanctuary's history. Currency of the ancients. Complete Set Dungeon Mastery to prove your worth.
+Visual elements: Simple gold ring with a brilliant blue sapphire. Clean, ancient design with minimal ornamentation. The gem seems impossibly deep, like looking into the void. Subtle arcane runes around the band. Royal blue glow emanating from the stone. Currency of legends - the ultimate trading symbol.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #4169E1
@@ -2034,7 +2074,7 @@ Save to: assets/icons/forged/weapons/butchers_cleaver.png
 
 Create a 256x256 game icon for "The Butcher's Cleaver" - a legendary weapon from Diablo.
 
-Reference: Fresh meat! The demonic weapon of the infamous Butcher. Defeating the Butcher in Hardcore Hell mode is a rite of passage for true nephalem.
+Visual elements: Massive meat cleaver with dark bloodstained blade. Rusty iron covered in dried gore. Crude wrapped handle made from bone and leather. Jagged, chipped edge from countless kills. Hooks or meat fragments hanging from the blade. Dark crimson blood glow. Fresh meat incarnate.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #8B0000
@@ -2054,7 +2094,7 @@ Save to: assets/icons/forged/accessories/horadric_cube.png
 
 Create a 256x256 game icon for "Horadric Cube" - a legendary accessory from Diablo.
 
-Reference: An artifact of immense transmutation power. Reaching Greater Rift 150 requires mastery of build optimization and perfect execution.
+Visual elements: Ancient cubic box with mystical golden patterns on each face. Bronze-gold metal with arcane geometric inscriptions. Faint glow seeping from the seams as if power is contained within. Horadrim symbols etched on the sides. Orange arcane energy particles floating around it. Infinite transmutation potential.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FF8C00
@@ -2072,9 +2112,9 @@ Type: weapon | Theme: diablo | Rarity: epic
 Glow: #87CEEB
 Save to: assets/icons/forged/weapons/el_druins_sword.png
 
-Create a 256x256 game icon for "El'druin, the Sword of Justice" - a epic weapon from Diablo.
+Create a 256x256 game icon for "El'druin, the Sword of Justice" - an epic weapon from Diablo.
 
-Reference: Tyrael's legendary blade, forged by the Archangel himself. Complete the Season Journey to wield the weapon that severed Tyrael from the Angiris Council.
+Visual elements: Elegant angelic longsword radiating holy light. Blade of pure white-gold luminescence. Crossguard shaped like angelic wings. Crystal blue gems embedded in the hilt. Divine light particles trailing from the blade. Sky blue holy glow. Justice incarnate in sword form.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #87CEEB
@@ -2092,9 +2132,9 @@ Type: armor_chest | Theme: diablo | Rarity: epic
 Glow: #2F4F4F
 Save to: assets/icons/forged/armor/natalyas_shadow.png
 
-Create a 256x256 game icon for "Natalya's Shadow" - a epic chest armor from Diablo.
+Create a 256x256 game icon for "Natalya's Shadow" - an epic chest armor from Diablo.
 
-Reference: Cloak of the legendary assassin Natalya. Master all class achievements to claim the Ashbane of Sanctuary's deadliest hunter.
+Visual elements: Sleek dark leather armor designed for stealth. Deep charcoal and black layered leather. Shadow magic wisping off the edges. Concealed blade holsters visible. Hooded collar for anonymity. Dark teal-grey shadow glow. Assassin's perfect camouflage made armor.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #2F4F4F
@@ -2112,9 +2152,9 @@ Type: weapon | Theme: diablo | Rarity: epic
 Glow: #9400D3
 Save to: assets/icons/forged/weapons/echoing_fury.png
 
-Create a 256x256 game icon for "Echoing Fury" - a epic weapon from Diablo.
+Create a 256x256 game icon for "Echoing Fury" - an epic weapon from Diablo.
 
-Reference: A weapon that screams with the fury of countless demons. Reach Paragon 1000 to harness the echoing power of this demonic mace.
+Visual elements: Demonic mace with screaming faces embedded in the head. Dark purple metal with swirling soul energy. Multiple tortured faces visible in the weapon surface. Spectral wails visualized as purple wisps. Skull motif on the handle. Purple demonic glow of captured fury. Weapon that screams with each swing.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #9400D3
@@ -2134,7 +2174,7 @@ Save to: assets/icons/forged/accessories/black_soulstone.png
 
 Create a 256x256 game icon for "Black Soulstone" - a rare amulet/necklace from Diablo.
 
-Reference: Contains the essence of the Seven Evils. Complete the campaign on Torment XVI to claim this corrupted artifact.
+Visual elements: Ominous black crystal pendant pulsing with evil. Void-black surface with crimson veins of corruption. Seven subtle demonic symbols etched within. Dark energy swirling inside the stone. Heavy iron chain visible above. Void-black glow with red corruption hints. Container of ultimate evil.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #000000
@@ -2154,7 +2194,7 @@ Save to: assets/icons/forged/armor/andariel_visage.png
 
 Create a 256x256 game icon for "Andariel's Visage" - a rare helmet/headgear from Diablo.
 
-Reference: The helm of the Maiden of Anguish. Defeat all Act bosses on Expert difficulty to claim this poisonous crown.
+Visual elements: Demonic horned helm dripping with poison. Dark green corrupted metal with organic growths. Curved demon horns sweeping backward. Toxic green venom dripping from the edges. Insectoid design elements. Sickly green poison glow. Maiden of Anguish's toxic presence.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00FF00
@@ -2174,7 +2214,7 @@ Save to: assets/icons/forged/weapons/genji_dragonblade.png
 
 Create a 256x256 game icon for "Genji's Dragon Blade" - a legendary weapon from Overwatch.
 
-Reference: The blade that channels the dragon spirit. Reach Top 500 Competitive ranking to wield the weapon of Overwatch's legendary cyborg ninja.
+Visual elements: Sleek futuristic katana with glowing green dragon spirit energy. High-tech blade with circuit patterns. Green dragon spirit coiling around the blade. Carbon-fiber handle with tech grips. Neon green energy crackling along the edge. Cyber-ninja perfection.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00FF00
@@ -2194,7 +2234,7 @@ Save to: assets/icons/forged/accessories/tracer_chronal_accelerator.png
 
 Create a 256x256 game icon for "Tracer's Chronal Accelerator" - a legendary accessory from Overwatch.
 
-Reference: Time-manipulation device keeping Tracer anchored to the present. Unlock all Overwatch 1 Anniversary event skins to claim this legendary tech.
+Visual elements: Glowing circular chest device with time-energy core. Bright orange-blue energy swirling in the center. Sleek white and orange housing. Harness straps visible around the edges. Time distortion particles emanating outward. Orange chronal energy glow. The anchor to the present.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FF8C00
@@ -2214,7 +2254,7 @@ Save to: assets/icons/forged/weapons/reaper_hellfire_shotguns.png
 
 Create a 256x256 game icon for "Reaper's Hellfire Shotguns" - a legendary weapon from Overwatch.
 
-Reference: Twin shotguns wielded by Overwatch's most feared agent. Achieve Grandmaster rank in 5 competitive seasons to claim Death's arsenal.
+Visual elements: Twin black shotguns crossed in an X pattern. Matte black metal with skull motifs. Red-orange hellfire glowing in the barrels. Smoke or shadow wisping off the weapons. Death reaper aesthetic with angular design. Black void glow with hellfire accents. Death's personal arsenal.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #000000
@@ -2234,7 +2274,7 @@ Save to: assets/icons/forged/armor/doomfist_gauntlet.png
 
 Create a 256x256 game icon for "Doomfist's Gauntlet" - a legendary gauntlets/gloves from Overwatch.
 
-Reference: Legendary power gauntlet of the Talon leader. Complete all hero mastery challenges to earn the right to wield this devastatin weapon.
+Visual elements: Massive mechanical power gauntlet in black and gold. Oversized fist with rocket propulsion vents. Orange-red energy core visible in the knuckles. Talon insignia etched into the metal. Imposing, devastating weapon aesthetic. Orange energy glow from power cells. Fist that ends wars.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FF4500
@@ -2252,9 +2292,9 @@ Type: armor_chest | Theme: overwatch | Rarity: epic
 Glow: #4682B4
 Save to: assets/icons/forged/armor/reinhardt_crusader_armor.png
 
-Create a 256x256 game icon for "Reinhardt's Crusader Armor" - a epic chest armor from Overwatch.
+Create a 256x256 game icon for "Reinhardt's Crusader Armor" - an epic chest armor from Overwatch.
 
-Reference: Powered armor of Overwatch's steadfast defender. Reach Grandmaster rank to don the armor of the legendary Crusader.
+Visual elements: Massive powered plate armor in steel blue and gold. Lion crest emblazoned on the chest. Heavy pauldrons with crusader cross motifs. Thick metal plates with rivets and battle damage. Rocket boosters visible at the back. Steel blue energy glow. German engineering meets medieval knight.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #4682B4
@@ -2272,9 +2312,9 @@ Type: weapon | Theme: overwatch | Rarity: epic
 Glow: #FFD700
 Save to: assets/icons/forged/weapons/mercy_caduceus_staff.png
 
-Create a 256x256 game icon for "Mercy's Caduceus Staff" - a epic weapon from Overwatch.
+Create a 256x256 game icon for "Mercy's Caduceus Staff" - an epic weapon from Overwatch.
 
-Reference: Medical device that can heal allies or boost their damage. Resurrect 1000 heroes to master the Valkyrie's iconic weapon.
+Visual elements: Elegant healing staff with angelic medical design. White and gold with glowing yellow energy core. Twin serpent or wing motifs wrapped around the head. Bio-stream emitter at the top. Sleek, compassionate technology aesthetic. Golden healing energy glow. Valkyrie's instrument of salvation.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FFD700
@@ -2292,9 +2332,9 @@ Type: cape | Theme: overwatch | Rarity: epic
 Glow: #87CEEB
 Save to: assets/icons/forged/capes/winston_jump_pack.png
 
-Create a 256x256 game icon for "Winston's Jump Pack" - a epic cape/cloak from Overwatch.
+Create a 256x256 game icon for "Winston's Jump Pack" - an epic cape/cloak from Overwatch.
 
-Reference: Experimental jetpack designed by the genius gorilla scientist. Score 20 environmental eliminations with Winston to earn his signature mobility tech.
+Visual elements: Bulky scientific jetpack with twin boosters. White and blue color scheme with tech panels. Glowing blue energy coils. Primate-sized proportions, clearly overbuilt. Exhaust vents and power cells visible. Sky blue propulsion energy glow. Genius gorilla engineering.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #87CEEB
@@ -2314,7 +2354,7 @@ Save to: assets/icons/forged/weapons/widowmaker_kiss.png
 
 Create a 256x256 game icon for "Widowmaker's Kiss" - a rare weapon from Overwatch.
 
-Reference: Precision sniper rifle of Talon's deadliest assassin. Land 100 critical hits with Widowmaker to claim her legendary weapon.
+Visual elements: Sleek futuristic sniper rifle with spider motifs. Deep purple and black color scheme. Elegant, feminine curves to the design. Advanced scope with targeting systems. Purple venom-like energy in the barrel. Purple deadly precision glow. The last thing many see.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #9400D3
@@ -2334,7 +2374,7 @@ Save to: assets/icons/forged/accessories/orisa_halt_projector.png
 
 Create a 256x256 game icon for "Orisa's Halt Projector" - a rare accessory from Overwatch.
 
-Reference: Graviton charge launcher designed by Efi Oladele. Reach Platinum rank to unlock this crowd-control masterpiece.
+Visual elements: Spherical graviton device with green energy core. Black and green Numbani design aesthetics. Concentric rings suggesting gravity manipulation. Floating green energy particles around it. Tech-forward African-inspired patterns. Green graviton glow. Pull everything to the center.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00FF00
@@ -2354,7 +2394,7 @@ Save to: assets/icons/forged/armor/raynor_marine_armor.png
 
 Create a 256x256 game icon for "Raynor's Marine Armor" - a legendary chest armor from StarCraft.
 
-Reference: Iconic CMC combat suit of the legendary Jim Raynor. Complete all StarCraft II campaigns on Brutal difficulty to earn this heroic armor.
+Visual elements: Massive blue-grey CMC powered combat suit. Heavy armored plating with Raider insignia. Ammunition belt across the chest. Visor slot for helmet integration. Battle damage and kill tallies visible. Steel blue Terran military glow. The armor of a revolutionary leader.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #4682B4
@@ -2374,7 +2414,7 @@ Save to: assets/icons/forged/weapons/kerrigan_psi_blade.png
 
 Create a 256x256 game icon for "Kerrigan's Psi-Blade" - a legendary weapon from StarCraft.
 
-Reference: Psionic wing-blades of the Queen of Blades. Master all Zerg campaign achievements to wield the power of the Swarm.
+Visual elements: Organic wing-blade made of Zerg carapace. Bone-like chitin structure with sharp edges. Purple psionic energy crackling along the blade. Living weapon that seems to breathe. Zerg organic textures and patterns. Purple psionic glow. The Queen's evolved claws.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #9400D3
@@ -2394,7 +2434,7 @@ Save to: assets/icons/forged/accessories/protoss_warp_prism.png
 
 Create a 256x256 game icon for "Protoss Warp Prism" - a legendary accessory from StarCraft.
 
-Reference: Warp technology device from the Khalai. Achieve Mastery 90+ with all Co-op commanders to master this Protoss tech.
+Visual elements: Crystalline prism device radiating golden Protoss energy. Geometric faceted crystal structure. Khaydarin crystal blue-gold glow within. Warp field distortion visible around it. Elegant Protoss architecture aesthetic. Golden warp energy emanating outward. Power to reshape battlefield.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -2414,7 +2454,7 @@ Save to: assets/icons/forged/weapons/zeratul_warp_blade.png
 
 Create a 256x256 game icon for "Zeratul's Warp Blade" - a legendary weapon from StarCraft.
 
-Reference: Psionic blade of the Dark Templar prelate. Complete Legacy of the Void mastery achievements to wield Zeratul's legendary weapon.
+Visual elements: Curved psionic blade of solid cyan void energy. Dark Templar wrist gauntlet generating the blade. No physical metal - pure psionic energy. Shadow and void particles trailing behind. Alien geometric patterns in the energy. Cyan void glow. Shadow warrior's signature weapon.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00CED1
@@ -2432,9 +2472,9 @@ Type: weapon | Theme: starcraft | Rarity: epic
 Glow: #FFD700
 Save to: assets/icons/forged/weapons/artanis_psi_blades.png
 
-Create a 256x256 game icon for "Artanis's Psi Blades" - a epic weapon from StarCraft.
+Create a 256x256 game icon for "Artanis's Psi Blades" - an epic weapon from StarCraft.
 
-Reference: Twin psionic blades of the Hierarch of the Daelaam. Master all Protoss campaign achievements to claim the blades of the Hierarch.
+Visual elements: Twin golden psionic blades extending from wrist gauntlets. Brilliant golden Protoss energy construction. Elegant curved blades like divine light. Khalai geometric patterns within the energy. Hierarch's gauntlets ornate and regal. Golden psionic glow. Leader of the Daelaam's weapons.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FFD700
@@ -2452,9 +2492,9 @@ Type: weapon | Theme: starcraft | Rarity: epic
 Glow: #FF4500
 Save to: assets/icons/forged/weapons/siege_tank_cannon.png
 
-Create a 256x256 game icon for "Siege Tank Cannon" - a epic weapon from StarCraft.
+Create a 256x256 game icon for "Siege Tank Cannon" - an epic weapon from StarCraft.
 
-Reference: 120mm cannon from the Terran Crucio Siege Tank. Reach Grandmaster ladder rank as Terran to command this devastating firepower.
+Visual elements: Massive 120mm artillery cannon barrel. Heavy industrial Terran military design. Dark grey metal with heat venting. Siege mode hydraulics visible. Orange-red heat glow in the barrel. Shell casings or ammo visible. Orange firepower glow. Pure Terran devastation.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FF4500
@@ -2472,9 +2512,9 @@ Type: cape | Theme: starcraft | Rarity: epic
 Glow: #2F4F4F
 Save to: assets/icons/forged/capes/dark_templar_armor.png
 
-Create a 256x256 game icon for "Dark Templar Shroud" - a epic cape/cloak from StarCraft.
+Create a 256x256 game icon for "Dark Templar Shroud" - an epic cape/cloak from StarCraft.
 
-Reference: Ceremonial shroud of the Nerazim warriors. Complete Heart of the Swarm campaign on Hard to claim the Ashbane of shadow.
+Visual elements: Flowing shadow-woven cloak that seems to consume light. Deep purple-black fabric with void energy at the edges. Nerazim tribal patterns faintly visible. Shoulder clasps in dark metal. Shadow particles dissolving off the hem. Dark teal shadow glow. The shroud of those who walk unseen.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #2F4F4F
@@ -2494,7 +2534,7 @@ Save to: assets/icons/forged/weapons/zergling_claws.png
 
 Create a 256x256 game icon for "Zergling Claws" - a rare weapon from StarCraft.
 
-Reference: Bio-weapon claws from the Zerg's fastest unit. Reach Diamond ladder rank as Zerg to harness the speed of the Swarm.
+Visual elements: Curved organic claws grown from Zerg chitin. Sharp bone-like talons with purple energy veins. Living tissue connecting the claw segments. Serrated edges for rending. Purple psionic glow from within. Speed and violence made biological weapon.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #9400D3
@@ -2514,7 +2554,7 @@ Save to: assets/icons/forged/accessories/khala_amulet.png
 
 Create a 256x256 game icon for "Khala Amulet" - a rare amulet/necklace from StarCraft.
 
-Reference: Sacred talisman connecting to the Protoss psionic link. Complete Wings of Liberty campaign to commune with the Khala.
+Visual elements: Crystalline Protoss amulet pulsing with psionic energy. Khaydarin crystal core glowing cyan-blue. Elegant geometric Protoss architecture. Gold-teal metal frame holding the crystal. Psionic link visualization around it. Cyan Khala glow. Unity of all Protoss minds.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00CED1
@@ -2539,7 +2579,7 @@ Save to: assets/icons/forged/armor/apex_predator_boots.png
 
 Create a 256x256 game icon for "Apex Predator Boots" - epic boots from Apex Legends.
 
-Reference: Boots worn by the apex of the apex. Sleek futuristic combat boots with predatory design, red energy accents. You've climbed to the very top of the food chain.
+Visual elements: Sleek futuristic combat boots with angular predatory design. Black and crimson color scheme. Red energy lines running along the sides. Armored toe caps with aggressive styling. Jump kit propulsion vents visible. Red predator glow from energy accents. Top of the food chain footwear.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FF0000
@@ -2559,7 +2599,7 @@ Save to: assets/icons/forged/armor/portal_longfall_boots.png
 
 Create a 256x256 game icon for "Portal Longfall Boots" - epic boots from Portal.
 
-Reference: Aperture Science spring-loaded boots. White and orange hi-tech boots with visible shock absorbers and the Aperture logo. Now you're thinking with portals.
+Visual elements: White hi-tech boots with distinctive orange springs at the heel. Aperture Science logo visible on the side. Clean laboratory aesthetic. Visible shock absorption mechanisms. Metal and polymer construction. Orange portal energy glow. Land from any height.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FF8C00
@@ -2579,7 +2619,7 @@ Save to: assets/icons/forged/armor/cuphead_dancing_shoes.png
 
 Create a 256x256 game icon for "Cuphead's Dancing Shoes" - legendary boots from Cuphead.
 
-Reference: Cartoon shoes with that rubberhose bounce. 1930s cartoon-style rounded shoes with exaggerated proportions, rubberhose animation aesthetic. A great slam and then some!
+Visual elements: Round 1930s cartoon-style shoes with exaggerated curves. Black and white with pie-cut eyes style accents. Rubber-hose animation bounce lines. Slightly oversized proportions. Cartoon motion blur effects. Crimson retro glow. Straight from the inkwell era.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #DC143C
@@ -2599,7 +2639,7 @@ Save to: assets/icons/forged/armor/mountaineer_trousers.png
 
 Create a 256x256 game icon for "Mountaineer's Trousers" - epic leg armor from Celeste.
 
-Reference: Climbing pants that have seen the summit. Practical hiking pants with pink accents, lightweight but durable material. You can do this.
+Visual elements: Practical hiking pants in blue-grey with strawberry-pink accents. Lightweight technical fabric with reinforced knees. Chalk dust marks from climbing. Small strawberry patch on pocket. Pink determination glow from the accents. Summit-ready, feather-light construction.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #E85D8C
@@ -2619,7 +2659,7 @@ Save to: assets/icons/forged/armor/survivor_pants.png
 
 Create a 256x256 game icon for "Survivor's Pants" - legendary leg armor from Dead Cells.
 
-Reference: Tattered pants infused with cell mutation. Ragged pants with green mutated cell energy glowing through tears, organic and mechanical elements. Death is not the end.
+Visual elements: Tattered prison pants infused with green cell mutation. Tears and rips showing glowing green flesh beneath. Organic tendrils wrapping around the fabric. Biomechanical patches and repairs. Toxic green mutation glow from within. Death and rebirth woven into cloth.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00FF00
@@ -2639,7 +2679,7 @@ Save to: assets/icons/forged/armor/hunter_boots.png
 
 Create a 256x256 game icon for "Hunter's Boots" - epic boots from Bloodborne.
 
-Reference: Victorian boots stained with beast blood. Gothic leather boots with blood splatter, worn from hunting beasts. A hunter must hunt.
+Visual elements: Victorian-era leather hunting boots worn and blood-stained. Dark brown leather with silver buckles. Dried beast blood splatters across the surface. Worn soles from cobblestone streets. Gothic Yharnam aesthetic. Deep crimson blood glow. A hunter is never alone.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #8B0000
@@ -2659,7 +2699,7 @@ Save to: assets/icons/forged/armor/aloy_strider_boots.png
 
 Create a 256x256 game icon for "Aloy's Strider Boots" - rare boots from Horizon Zero Dawn.
 
-Reference: Tribal boots with machine components. Leather and cloth boots with blue machine wire accents and metal components. Machines can be tamed.
+Visual elements: Tribal leather boots with integrated machine components. Nora tribe aesthetic with salvaged tech. Blue machine cables woven through the design. Metal panels from dismantled machines. Handmade meets high-tech fusion. Blue machine glow from components. Where old world meets new.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #4169E1
@@ -2679,7 +2719,7 @@ Save to: assets/icons/forged/armor/berserker_tassets.png
 
 Create a 256x256 game icon for "Berserker Tassets" - legendary leg armor from God of War.
 
-Reference: Leg armor forged in Spartan rage. Heavy Norse-inspired leg plates with red rage energy emanating, battle-worn and powerful. BOY.
+Visual elements: Heavy Norse leg armor with Spartan influence. Dark metal with red rune engravings. Rage energy emanating from the seams. Battle scars and dents from gods' fights. Fur trim at the edges. Blood-red rage glow. The Ghost of Sparta's lower armor.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #C41E3A
@@ -2699,7 +2739,7 @@ Save to: assets/icons/forged/armor/ghost_hakama.png
 
 Create a 256x256 game icon for "Ghost Hakama" - epic leg armor from Ghost of Tsushima.
 
-Reference: Traditional samurai hakama of the Ghost. Dark flowing Japanese pants with subtle armor reinforcement. Honor died on the beach.
+Visual elements: Dark flowing hakama pants in samurai style. Deep indigo-black fabric with subtle armor beneath. Ghost mask motif subtly embroidered. Traditional pleating with hidden reinforcement. Moonlit shadow aura. Dark night-blue glow. The path of the Ghost.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #1A1A2E
@@ -2719,7 +2759,7 @@ Save to: assets/icons/forged/armor/returnal_scout_greaves.png
 
 Create a 256x256 game icon for "Returnal Scout Greaves" - rare leg armor from Returnal.
 
-Reference: ASTRA suit leg armor, loop-worn. Sleek sci-fi suit legs with cyan energy lines, weathered from countless cycles. Break the cycle.
+Visual elements: Sleek ASTRA suit leg armor with angular alien design. Dark grey with cyan energy conduits. Weathered from countless death cycles. Xeno-tech interface panels visible. Loop distortion particles around it. Cyan alien glow. Countless deaths, one destiny.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00CED1
@@ -2739,7 +2779,7 @@ Save to: assets/icons/forged/armor/pirate_legend_boots.png
 
 Create a 256x256 game icon for "Pirate Legend Boots" - epic boots from Sea of Thieves.
 
-Reference: Sea boots of a true legend. Ornate pirate boots with ghostly blue glow, gold trim, weathered leather. A thousand voyages, a thousand tales.
+Visual elements: Ornate captain's boots with gold trim and buckles. Deep brown leather weathered by salt and sea. Ghostly blue legendary glow emanating within. Skull and crossbones subtle embossing. Sea-worn but prestigious. Blue legendary pirate glow. A thousand voyages walked.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #1E90FF
@@ -2759,7 +2799,7 @@ Save to: assets/icons/forged/armor/spartan_greaves.png
 
 Create a 256x256 game icon for "Spartan Greaves" - legendary boots from Halo.
 
-Reference: MJOLNIR Mark VI leg armor. Heavy green power armor boots with gold visor accents, military sci-fi design. Finish the fight.
+Visual elements: MJOLNIR powered armor boots in olive drab green. Heavy plating with magnetic boot soles. Gold visor accent panels. Military sci-fi utilitarian design. Tech ports and armor joints visible. Green Spartan glow from power systems. Finish the fight.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00FF00
@@ -2779,7 +2819,7 @@ Save to: assets/icons/forged/armor/cog_stompers.png
 
 Create a 256x256 game icon for "COG Stompers" - epic leg armor from Gears of War.
 
-Reference: Heavy COG soldier leg armor. Bulky military leg plates with crimson omen accent, chunky and aggressive design. Seriously.
+Visual elements: Chunky military leg armor in COG grey. Heavy armored plates with crimson Omen symbol. Knee reinforcement for curb stomping. Utilitarian, brutal design. Battle damage and Locust blood stains. Crimson COG glow. Built for war, not comfort.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #990000
@@ -2799,7 +2839,7 @@ Save to: assets/icons/forged/armor/pilot_flight_pants.png
 
 Create a 256x256 game icon for "Pilot's Flight Pants" - rare leg armor from Titanfall.
 
-Reference: Pilot jumpsuit with thruster mounts. Tactical flight suit pants with orange thruster vents and jump kit attachments. Stand by for Titanfall.
+Visual elements: Tactical flight suit pants in dark grey with orange accents. Jump kit thruster mounts on thighs. Aerodynamic design for wallrunning. Tech straps and equipment pouches. Burn marks from thruster use. Orange pilot energy glow. Ready for the drop.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FF6600
@@ -2819,7 +2859,7 @@ Save to: assets/icons/forged/armor/diamond_leggings.png
 
 Create a 256x256 game icon for "Diamond Leggings" - rare leg armor from Minecraft.
 
-Reference: Classic diamond armor pants. Pixelated diamond-blue armor pants in iconic Minecraft style, blocky and crystalline. DIAMONDS!
+Visual elements: Pixelated diamond leg armor in iconic Minecraft blocky style. Bright cyan-blue diamond facets. Clean geometric 8-bit aesthetic. Enchantment shimmer particles (purple sparkles). Crystalline surface catching light. Cyan diamond glow. Every miner's dream armor.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00BFFF
@@ -2839,7 +2879,7 @@ Save to: assets/icons/forged/armor/tier_set_sabatons.png
 
 Create a 256x256 game icon for "Tier Set Sabatons" - epic boots from World of Warcraft.
 
-Reference: Mythic raid tier boots. Ornate plate boots with purple mythic glow and raid-quality detailing. Cutting Edge.
+Visual elements: Ornate plate armor boots with mythic raid detailing. Gold and purple color scheme. Intricate engravings and gem inlays. Arcane purple glow from power runes. Spiky pauldron-style toe caps. Mythic purple glow. Cutting Edge prestige on your feet.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #B34DCC
@@ -2859,7 +2899,7 @@ Save to: assets/icons/forged/armor/marauder_treads.png
 
 Create a 256x256 game icon for "Marauder's Treads" - rare boots from Diablo.
 
-Reference: Demon Hunter set boots. Dark leather boots with crossbow bolt holders and demon-hunting aesthetic. No demon escapes.
+Visual elements: Demon Hunter set boots. Dark leather boots with crossbow bolt holders and demon-hunting aesthetic. No demon escapes.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #8B4513
@@ -2879,7 +2919,7 @@ Save to: assets/icons/forged/armor/lich_king_legplates.png
 
 Create a 256x256 game icon for "Lich King Legplates" - legendary leg armor from World of Warcraft.
 
-Reference: Saronite leg armor of the Lich King. Ice-blue death knight plate legs with frost runes and saronite spikes. There must always be a Lich King.
+Visual elements: Saronite plate leg armor radiating death knight frost. Ice-blue metal with glowing frost runes. Spiked knee plates in Scourge style. Frozen chains and icicles at the edges. Frostmourne energy blue glow. There must always be a Lich King.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00BFFF
@@ -2899,7 +2939,7 @@ Save to: assets/icons/forged/armor/tracer_leggings.png
 
 Create a 256x256 game icon for "Tracer's Leggings" - rare leg armor from Overwatch.
 
-Reference: Chronal-accelerator compatible pants. Sleek orange and brown flight suit leggings with chronal energy accents. Cheers, love!
+Visual elements: Sleek flight suit leggings in orange and brown. Chronal accelerator-compatible design. Time-energy conduits running along sides. Athletic, aerodynamic cut. Orange chronal glow at the accents. Cheers, love!
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FF7F00
@@ -2919,7 +2959,7 @@ Save to: assets/icons/forged/armor/zealot_greaves.png
 
 Create a 256x256 game icon for "Zealot Greaves" - epic leg armor from StarCraft.
 
-Reference: Protoss warrior leg armor. Golden Protoss leg plates with psionic cyan energy flowing through, alien and elegant design. My life for Aiur!
+Visual elements: Golden Protoss leg armor with elegant alien design. Psionic cyan energy flowing through conduits. Khaydarin crystal accents at the knees. Geometric Protoss architecture. Cyan psionic glow. My life for Aiur!
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #00CED1
@@ -2944,7 +2984,7 @@ Save to: assets/icons/forged/armor/abyss_watcher_vambraces.png
 
 Create a 256x256 game icon for "Abyss Watcher Vambraces" - epic arm guards from Dark Souls.
 
-Reference: Arm guards of the wolf blood legion. Pointed metal vambraces with wolf motif and blue-grey wolf blood aura. The wolf blood burns within.
+Visual elements: Pointed metal vambraces with wolf emblem engraved. Blue-grey patina from Artorias' legacy. Sharp, aggressive silhouette. Wolf blood aura emanating. Blue-grey wolf blood glow. The Abyss Watchers stand eternal.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #4A6B8A
@@ -2964,7 +3004,7 @@ Save to: assets/icons/forged/armor/blacksmith_gloves.png
 
 Create a 256x256 game icon for "Blacksmith's Gloves" - rare gloves from Stardew Valley.
 
-Reference: Sturdy gloves worn at the forge. Well-worn leather work gloves with forge spark marks, practical and warm. Every item shipped, every tool crafted.
+Visual elements: Well-worn leather work gloves with forge spark marks. Brown leather darkened by heat and soot. Reinforced palms for hammer work. Warm, cozy, practical design. Brown leather glow from forge warmth. Every item shipped.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #8B4513
@@ -2984,7 +3024,7 @@ Save to: assets/icons/forged/armor/marksman_gloves.png
 
 Create a 256x256 game icon for "Marksman's Gloves" - epic gloves from Counter-Strike.
 
-Reference: Precision shooting gloves. Tactical fingerless gloves with grip pads and orange StatTrak-style glow accents. A thousand headshots, one pair of gloves.
+Visual elements: Tactical fingerless gloves in black with orange accents. Textured grip pads on fingers and palm. StatTrak-style digital counter on wrist. Professional esports aesthetic. Orange StatTrak glow. Pixel-perfect precision.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FF4500
@@ -3004,7 +3044,7 @@ Save to: assets/icons/forged/armor/grass_crest_vambraces.png
 
 Create a 256x256 game icon for "Grass Crest Vambraces" - rare arm guards from Dark Souls.
 
-Reference: Arm guards blessed with stamina recovery. Green-tinted metal bracers with grass crest emblem emitting green stamina aura. Praise the grass!
+Visual elements: Green-tinted metal bracers with grass crest emblem. Leaves and vines subtly engraved on surface. Stamina regeneration aura particles. Forest green metal patina. Green stamina glow emanating. Praise the grass!
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #228B22
@@ -3024,7 +3064,7 @@ Save to: assets/icons/forged/shields/aegis_of_champions.png
 
 Create a 256x256 game icon for "Aegis of Champions" - legendary shield from Dota 2.
 
-Reference: The shield of esports legends. Iconic Aegis of the Immortal with golden glow, championship trophy design. The International awaits.
+Visual elements: Iconic Aegis of the Immortal trophy design. Silver-gold metallic shield with ornate engravings. Championship wings motif. Immortal energy radiating from center. Golden championship glow. The International's greatest prize.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -3044,7 +3084,7 @@ Save to: assets/icons/forged/armor/thief_handwraps.png
 
 Create a 256x256 game icon for "Thief's Handwraps" - rare gloves from Skyrim.
 
-Reference: Wraps that silence your touch. Dark leather handwraps with shadowy aura, designed for stealth and pickpocketing. Light fingers, heavy pockets.
+Visual elements: Dark leather handwraps worn thin from use. Stealthy black cloth with reinforced fingertips. Shadow magic aura wisping off. Subtle lockpick pouches visible. Dark shadow glow. Light fingers, heavy pockets.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #2F4F4F
@@ -3064,7 +3104,7 @@ Save to: assets/icons/forged/armor/hunter_forearm_guards.png
 
 Create a 256x256 game icon for "Hunter's Forearm Guards" - epic arm guards from Bloodborne.
 
-Reference: Leather guards stained with old blood. Victorian-style leather bracers with blood splatter and beast-hunting aesthetic. Fear the old blood.
+Visual elements: Victorian-era leather bracers with dried blood stains. Dark brown with silver buckles. Beast claw marks visible on surface. Gothic Yharnam craftsmanship. Crimson old blood glow. Fear the old blood.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #8B0000
@@ -3084,7 +3124,7 @@ Save to: assets/icons/forged/armor/leviathan_vambraces.png
 
 Create a 256x256 game icon for "Leviathan Vambraces" - epic arm guards from God of War.
 
-Reference: Frost-touched arm guards. Norse-inspired metal bracers with ice crystals and frost particles emanating. The axe remembers.
+Visual elements: Norse-inspired metal bracers infused with Leviathan frost. Ice crystals forming on the surface. Runic engravings glowing blue. Frost particles emanating outward. Icy blue Leviathan glow. The axe remembers.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #87CEEB
@@ -3104,7 +3144,7 @@ Save to: assets/icons/forged/shields/guardian_shield.png
 
 Create a 256x256 game icon for "Guardian Shield" - epic shield from Horizon Zero Dawn.
 
-Reference: A shield forged from machine parts. Tribal shield with blue machine components, wires, and lens elements integrated. Override protocol engaged.
+Visual elements: Tribal shield integrated with machine parts. Blue cables and lenses from salvaged machines. Handcrafted wood and leather base. Machine eye lens as centerpiece. Blue machine glow from tech components. Override protocol engaged.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #4169E1
@@ -3124,7 +3164,7 @@ Save to: assets/icons/forged/armor/samurai_kote.png
 
 Create a 256x256 game icon for "Samurai Kote" - epic gloves from Ghost of Tsushima.
 
-Reference: Armored gloves of the Ghost. Traditional Japanese kote (armored gloves) with dark ghost stance energy. The way of the Ghost.
+Visual elements: Traditional Japanese armored gloves (kote) in dark samurai style. Lacquered plates with silk bindings. Ghost stance shadow energy wisping off. Indigo-black coloring. Dark ghost stance glow. The way of the Ghost.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #1A1A2E
@@ -3144,7 +3184,7 @@ Save to: assets/icons/forged/armor/atropos_bracers.png
 
 Create a 256x256 game icon for "Atropos Bracers" - rare arm guards from Returnal.
 
-Reference: Alien-touched arm guards. Sleek sci-fi bracers with cyan adrenaline pulse energy, loop-worn aesthetic. The cycle continues.
+Visual elements: Sleek ASTRA suit bracers with alien influence. Dark grey with cyan adrenaline pulse conduits. Loop-worn weathering visible. Xeno-tech interface nodes. Cyan alien energy glow. The cycle continues.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00CED1
@@ -3164,7 +3204,7 @@ Save to: assets/icons/forged/armor/mjolnir_bracers.png
 
 Create a 256x256 game icon for "MJOLNIR Bracers" - legendary arm guards from Halo.
 
-Reference: Spartan forearm armor. Heavy green power armor bracers with gold accents and shield recharge glow. Spartans never die.
+Visual elements: MJOLNIR powered armor bracers in olive drab green. Heavy plating with gold visor accents. Shield recharge systems glowing. Tech ports and armor seams visible. Green Spartan energy glow. Spartans never die.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00FF00
@@ -3184,7 +3224,7 @@ Save to: assets/icons/forged/shields/captain_buckler.png
 
 Create a 256x256 game icon for "Captain's Buckler" - rare shield from Sea of Thieves.
 
-Reference: A small shield for swift pirates. Weathered wooden buckler with gold captain's trim and ocean particle effects. Every captain needs a backup plan.
+Visual elements: Weathered wooden buckler with gold captain's trim. Salt-worn wood with brass rivets. Compass or anchor motif on face. Sea spray particle effects around it. Blue ocean glow. Every captain needs a backup plan.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #1E90FF
@@ -3204,7 +3244,7 @@ Save to: assets/icons/forged/armor/cog_gauntlets.png
 
 Create a 256x256 game icon for "COG Gauntlets" - epic gloves from Gears of War.
 
-Reference: Heavy armored gloves for chainsaw grip. Bulky metal gauntlets with crimson omen glow, designed to grip a Lancer. Rev it up.
+Visual elements: Bulky metal gauntlets in COG grey with crimson accents. Reinforced knuckles for brutal melee. Chainsaw grip texture on palms. Crimson omen symbol on back. Crimson COG glow. Rev it up.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #990000
@@ -3224,7 +3264,7 @@ Save to: assets/icons/forged/armor/pilot_bracers.png
 
 Create a 256x256 game icon for "Pilot's Bracers" - rare arm guards from Titanfall.
 
-Reference: Reinforced jump kit arm mounts. Tactical bracers with orange thruster vents and pilot boost technology. Protocol 3: Protect the Pilot.
+Visual elements: Tactical bracers with jump kit arm mounts. Dark grey with orange thruster vents. Pilot boost tech visible. Aerodynamic for wallrunning. Orange pilot energy glow. Protocol 3: Protect the Pilot.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FF6600
@@ -3244,7 +3284,7 @@ Save to: assets/icons/forged/armor/netherite_gauntlets.png
 
 Create a 256x256 game icon for "Netherite Gauntlets" - rare gloves from Minecraft.
 
-Reference: Gloves forged in the Nether. Dark grey blocky netherite gauntlets with subtle fiery undertones. Ancient debris reforged.
+Visual elements: Dark grey blocky netherite gauntlets in Minecraft style. Ancient debris texture with fiery undertones. Pixel-art aesthetic. Lava-resistant sheen visible. Dark grey netherite glow. Ancient debris reforged.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #4A4A4A
@@ -3264,7 +3304,7 @@ Save to: assets/icons/forged/shields/paladin_bulwark.png
 
 Create a 256x256 game icon for "Paladin's Bulwark" - legendary shield from World of Warcraft.
 
-Reference: A holy shield blessed by the Light. Ornate golden tower shield with holy light emanating and WoW paladin aesthetic. The Light protects.
+Visual elements: Ornate golden tower shield with holy Light emanating. Sacred inscriptions and Light symbols engraved. Divine protection barrier visible. WoW paladin aesthetic with radiant gold trim. Golden holy glow. The Light protects.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -3284,7 +3324,7 @@ Save to: assets/icons/forged/armor/crusader_bracers.png
 
 Create a 256x256 game icon for "Crusader Bracers" - epic arm guards from Diablo.
 
-Reference: Holy warrior arm guards. Heavy plate bracers with golden holy light glow, Diablo crusader aesthetic. Akarat's Champion.
+Visual elements: Heavy plate bracers with holy light infusion. Golden metal with divine symbols engraved. Crusader flail motifs visible. Golden holy energy emanating. Akarat's blessing glow. Heaven's champion's armor.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FFD700
@@ -3304,7 +3344,7 @@ Save to: assets/icons/forged/shields/reinhardt_barrier.png
 
 Create a 256x256 game icon for "Reinhardt's Barrier Fragment" - epic shield from Overwatch.
 
-Reference: A piece of the legendary barrier. Hexagonal blue energy shield fragment with Reinhardt's barrier shimmer effect. BARRIER IS HOLDING!
+Visual elements: Hexagonal blue energy shield fragment. Translucent barrier shimmer effect visible. Cracked edges where it broke off. Reinhardt's lion emblem faintly visible. Blue barrier energy glow. BARRIER IS HOLDING!
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #4169E1
@@ -3324,7 +3364,7 @@ Save to: assets/icons/forged/armor/medic_gloves.png
 
 Create a 256x256 game icon for "Medic's Gloves" - rare gloves from StarCraft.
 
-Reference: Field medic surgical gloves. White and green medical gloves with healing aura glow, Terran medic aesthetic. Heal your allies, harm your enemies.
+Visual elements: White and green medical gloves with Terran aesthetic. Healing aura glow emanating. Field medic practical design. Medkit cross symbol visible. Green healing energy glow. Heal your allies.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00FF00
@@ -3344,7 +3384,7 @@ Save to: assets/icons/forged/armor/immortal_bracers.png
 
 Create a 256x256 game icon for "Immortal Bracers" - legendary arm guards from World of Warcraft.
 
-Reference: Bracers from the Immortal raid. Golden mythic-quality arm guards with eternal golden glow, representing perfection in raiding. A tribute to perfection.
+Visual elements: Golden mythic-quality bracers with eternal radiance. Perfect, flawless craftsmanship. Naxxramas skull motif subtly visible. Undying aura emanating. Golden immortal glow. A tribute to perfection.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -3369,7 +3409,7 @@ Save to: assets/icons/forged/accessories/band_of_scholar.png
 
 Create a 256x256 game icon for "Band of the Scholar" - rare ring from Hollow Knight.
 
-Reference: A ring worn by those who seek knowledge. Dark metallic ring with void particles and subtle mushroom motifs. The more you know, the more you forget.
+Visual elements: Dark metallic ring with void energy swirling within. Subtle mushroom or grub motifs engraved. Scholar's wisdom runes visible. Void particles drifting off. Dark scholarly glow. The more you know, the more you forget.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #4A4A6A
@@ -3389,7 +3429,7 @@ Save to: assets/icons/forged/accessories/gravity_ring.png
 
 Create a 256x256 game icon for "Gravity Ring" - epic ring from Celeste.
 
-Reference: A ring that bends space around the wearer. Pink crystalline ring with gravity distortion effects. Up is a suggestion.
+Visual elements: Pink crystalline ring with gravity distortion warping around it. Space-bending visual effects. Strawberry pink crystal centerpiece. Feather or dash particles floating. Pink gravity glow. Up is a suggestion.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #E85D8C
@@ -3409,7 +3449,7 @@ Save to: assets/icons/forged/accessories/covenant_ring.png
 
 Create a 256x256 game icon for "Covenant Ring" - legendary ring from Dark Souls.
 
-Reference: A ring marking membership in a sacred covenant. Golden ring with sunlight emblem, radiating holy energy. Praise the Sun!
+Visual elements: Golden ring with radiant sunlight emblem centerpiece. Warriors of Sunlight aesthetic. Holy sun rays emanating outward. Warm golden divine glow. Solaire's blessing visible. Praise the Sun!
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #FFD700
@@ -3429,7 +3469,7 @@ Save to: assets/icons/forged/accessories/merchant_signet.png
 
 Create a 256x256 game icon for "Merchant's Signet" - rare ring from Stardew Valley.
 
-Reference: A signet ring of a successful merchant. Warm golden ring with coin emblem and sparkle effect. Buy low, sell high.
+Visual elements: Warm golden signet ring with coin emblem centerpiece. Merchant's prosperity sparkle effect. Quality gem setting. Cozy farmhouse wealth aesthetic. Golden prosperity glow. Buy low, sell high.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FFD700
@@ -3449,7 +3489,7 @@ Save to: assets/icons/forged/accessories/blood_gem_ring.png
 
 Create a 256x256 game icon for "Blood Gem Ring" - epic ring from Bloodborne.
 
-Reference: A ring set with a blood-red gem. Dark iron ring with crimson blood gem, dripping effect. The old blood courses through.
+Visual elements: Dark iron ring with blood-red gem centerpiece. Crimson blood dripping from the gem. Gothic Yharnam craftsmanship. Old blood corruption visible in the metal. Crimson blood glow. The old blood courses through.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #8B0000
@@ -3469,7 +3509,7 @@ Save to: assets/icons/forged/accessories/valkyrie_band.png
 
 Create a 256x256 game icon for "Valkyrie's Band" - epic ring from God of War.
 
-Reference: A ring forged from Valkyrie metal. Silver ring with wing motifs and ethereal shimmer. Worthy of Valhalla.
+Visual elements: Silver ring forged from Valkyrie metal. Delicate wing motifs engraved around band. Ethereal Norse shimmer effect. Odin's blessing visible. Silver ethereal glow. Worthy of Valhalla.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #C0C0C0
@@ -3489,7 +3529,7 @@ Save to: assets/icons/forged/accessories/focus_lens_amulet.png
 
 Create a 256x256 game icon for "Focus Lens Amulet" - epic amulet from Horizon.
 
-Reference: An amulet containing a Focus device lens. Blue technological medallion with scanning pulse effect. See what others cannot.
+Visual elements: Blue technological medallion with Focus lens as centerpiece. Scanning pulse effect visible. Machine-tech integrated into tribal frame. Blue holographic data streams. Blue machine scan glow. See what others cannot.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #4169E1
@@ -3509,7 +3549,7 @@ Save to: assets/icons/forged/accessories/astronaut_charm.png
 
 Create a 256x256 game icon for "Astronaut Figurine Charm" - rare amulet from Returnal.
 
-Reference: A small astronaut figurine on a chain. Cyan-glowing astronaut figure on a simple chain, loop shimmer effect. Helios. Returner.
+Visual elements: Small astronaut figurine charm on simple chain. Cyan alien energy glowing within the suit. Loop-cycle shimmer effect around it. Helios mission insignia visible. Cyan loop glow. Helios. Returner.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00CED1
@@ -3529,7 +3569,7 @@ Save to: assets/icons/forged/accessories/legendary_ring_halo.png
 
 Create a 256x256 game icon for "Legendary Ring" - legendary ring from Halo.
 
-Reference: A ring forged in the fires of Legendary difficulty. Green power armor-style ring with energy sword glow effect. Were it so easy.
+Visual elements: Green MJOLNIR-style ring with Spartan aesthetic. Energy sword glow effect emanating. Master Chief's visor gold visible. Legendary skull motif subtly present. Green Spartan energy glow. Were it so easy.
 
 Style: Painted game item icon, dark transparent background. Legendary quality item.
 Color accent/glow: #00FF00
@@ -3549,7 +3589,7 @@ Save to: assets/icons/forged/accessories/athena_favor.png
 
 Create a 256x256 game icon for "Athena's Favor" - epic ring from Hades.
 
-Reference: A ring blessed by the goddess of wisdom. Golden ring with aegis shimmer and owl emblem. My aid is given freely.
+Visual elements: Golden ring with owl emblem centerpiece. Aegis shimmer deflection effect visible. Greek geometric patterns engraved. Divine wisdom aura. Golden goddess blessing glow. My aid is given freely.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #FFD700
@@ -3569,7 +3609,7 @@ Save to: assets/icons/forged/accessories/ancient_core_amulet.png
 
 Create a 256x256 game icon for "Ancient Core Amulet" - rare amulet from Legend of Zelda.
 
-Reference: An amulet powered by ancient Sheikah technology. Blue glowing core with Sheikah eye motif. The Calamity has been sealed.
+Visual elements: Blue glowing Sheikah core amulet with eye motif. Ancient technology pulsing with energy. Geometric Sheikah patterns engraved. Guardian-tech aesthetic. Blue Sheikah glow. The Calamity has been sealed.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #00BFFF
@@ -3589,7 +3629,7 @@ Save to: assets/icons/forged/accessories/sigil_of_mage.png
 
 Create a 256x256 game icon for "Sigil of the Mage" - epic ring from World of Warcraft.
 
-Reference: A ring crackling with arcane power. Purple arcane ring with magical sparks and rune engravings. Knowledge is power.
+Visual elements: Silver band inscribed with glowing arcane runes. Purple amethyst centerpiece crackling with arcane energy. Magical sparks and arcane symbols floating around the ring. Deep violet glow emanating from the runes. Mage's scholarly power. Knowledge is power.
 
 Style: Painted game item icon, dark transparent background. Epic quality item.
 Color accent/glow: #8A2BE2
@@ -3609,7 +3649,7 @@ Save to: assets/icons/forged/accessories/horadric_charm.png
 
 Create a 256x256 game icon for "Horadric Charm" - rare amulet from Diablo.
 
-Reference: An ancient charm from the Horadric order. Golden cube-inspired medallion with glowing runes. Stay awhile and listen.
+Visual elements: Aged gold medallion with cube-inspired geometric design. Ancient Horadric runes etched into surface, glowing with golden light. Weathered patina showing great age. Small amber gem at center. Warm golden aura. Deckard Cain's blessing. Stay awhile and listen.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #FFD700
@@ -3629,7 +3669,7 @@ Save to: assets/icons/forged/accessories/xelnaga_ring.png
 
 Create a 256x256 game icon for "Xel'Naga Artifact Ring" - rare ring from StarCraft.
 
-Reference: A ring containing Xel'Naga energy. Purple void energy ring with alien geometric patterns. The cycle must be broken.
+Visual elements: Alien crystalline ring with impossible geometry. Dark purple void energy swirling within. Xel'Naga artifact patterns - angular, ancient, unknowable. Protoss-like golden accents. Deep violet void glow pulsing outward. Cosmic power contained. The cycle must be broken.
 
 Style: Painted game item icon, dark transparent background. Rare quality item.
 Color accent/glow: #9400D3

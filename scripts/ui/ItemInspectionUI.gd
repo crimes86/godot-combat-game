@@ -823,9 +823,56 @@ func _populate_combat_stats(item: Dictionary, vbox: Control) -> void:
 	_add_stat_cell(grid, "Time:", _format_time(time_equipped))
 	_add_stat_cell(grid, "Deaths:", str(deaths))
 
-	# XP row
-	_add_stat_cell(grid, "XP:", "%s/%s" % [_format_number(experience), _format_number(xp_needed)])
-	_add_stat_cell(grid, "", "")  # Empty cell for alignment
+	# XP Progress Bar (full width below the grid)
+	var xp_container = VBoxContainer.new()
+	xp_container.add_theme_constant_override("separation", 2)
+	combat_content.add_child(xp_container)
+
+	# XP label row
+	var xp_label_row = HBoxContainer.new()
+	xp_container.add_child(xp_label_row)
+
+	var xp_label = Label.new()
+	xp_label.text = "Weapon XP"
+	xp_label.add_theme_font_size_override("font_size", 10)
+	xp_label.add_theme_color_override("font_color", ACCENT_COLOR)
+	xp_label_row.add_child(xp_label)
+
+	var xp_spacer = Control.new()
+	xp_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	xp_label_row.add_child(xp_spacer)
+
+	var xp_text = Label.new()
+	xp_text.text = "%s / %s" % [_format_number(experience), _format_number(xp_needed)]
+	xp_text.add_theme_font_size_override("font_size", 10)
+	xp_text.add_theme_color_override("font_color", TEXT_COLOR)
+	xp_label_row.add_child(xp_text)
+
+	# XP progress bar
+	var xp_bar = ProgressBar.new()
+	xp_bar.custom_minimum_size = Vector2(0, 8)
+	xp_bar.max_value = 100
+	xp_bar.value = (float(experience) / float(max(xp_needed, 1))) * 100.0
+	xp_bar.show_percentage = false
+
+	# Style the progress bar
+	var bar_style = StyleBoxFlat.new()
+	bar_style.bg_color = Color(0.15, 0.15, 0.2)
+	bar_style.corner_radius_top_left = 2
+	bar_style.corner_radius_top_right = 2
+	bar_style.corner_radius_bottom_left = 2
+	bar_style.corner_radius_bottom_right = 2
+	xp_bar.add_theme_stylebox_override("background", bar_style)
+
+	var fill_style = StyleBoxFlat.new()
+	fill_style.bg_color = Color(0.4, 0.7, 1.0)  # Blue XP color
+	fill_style.corner_radius_top_left = 2
+	fill_style.corner_radius_top_right = 2
+	fill_style.corner_radius_bottom_left = 2
+	fill_style.corner_radius_bottom_right = 2
+	xp_bar.add_theme_stylebox_override("fill", fill_style)
+
+	xp_container.add_child(xp_bar)
 
 	# Virgin status message
 	if stats and stats.is_virgin():
@@ -928,9 +975,60 @@ func _populate_equipment_stats(item: Dictionary, vbox: Control) -> void:
 	_add_stat_cell(grid, "Close Calls:", str(close_calls))
 	_add_stat_cell(grid, "Boss Wins:", str(boss_fights))
 
-	# Time & XP row
+	# Time row
 	_add_stat_cell(grid, "Time:", _format_time(time_equipped))
-	_add_stat_cell(grid, "XP:", "%s/%s" % [_format_number(experience), _format_number(xp_needed)])
+	_add_stat_cell(grid, "", "")  # Empty cell for alignment
+
+	# XP Progress Bar (full width below the grid)
+	var xp_container = VBoxContainer.new()
+	xp_container.add_theme_constant_override("separation", 2)
+	equipment_content.add_child(xp_container)
+
+	# XP label row
+	var xp_label_row = HBoxContainer.new()
+	xp_container.add_child(xp_label_row)
+
+	var xp_label = Label.new()
+	xp_label.text = "Equipment XP"
+	xp_label.add_theme_font_size_override("font_size", 10)
+	xp_label.add_theme_color_override("font_color", ACCENT_COLOR)
+	xp_label_row.add_child(xp_label)
+
+	var xp_spacer = Control.new()
+	xp_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	xp_label_row.add_child(xp_spacer)
+
+	var xp_text = Label.new()
+	xp_text.text = "%s / %s" % [_format_number(experience), _format_number(xp_needed)]
+	xp_text.add_theme_font_size_override("font_size", 10)
+	xp_text.add_theme_color_override("font_color", TEXT_COLOR)
+	xp_label_row.add_child(xp_text)
+
+	# XP progress bar
+	var xp_bar = ProgressBar.new()
+	xp_bar.custom_minimum_size = Vector2(0, 8)
+	xp_bar.max_value = 100
+	xp_bar.value = (float(experience) / float(max(xp_needed, 1))) * 100.0
+	xp_bar.show_percentage = false
+
+	# Style the progress bar
+	var bar_style = StyleBoxFlat.new()
+	bar_style.bg_color = Color(0.15, 0.15, 0.2)
+	bar_style.corner_radius_top_left = 2
+	bar_style.corner_radius_top_right = 2
+	bar_style.corner_radius_bottom_left = 2
+	bar_style.corner_radius_bottom_right = 2
+	xp_bar.add_theme_stylebox_override("background", bar_style)
+
+	var fill_style = StyleBoxFlat.new()
+	fill_style.bg_color = Color(0.3, 0.8, 0.5)  # Green for equipment
+	fill_style.corner_radius_top_left = 2
+	fill_style.corner_radius_top_right = 2
+	fill_style.corner_radius_bottom_left = 2
+	fill_style.corner_radius_bottom_right = 2
+	xp_bar.add_theme_stylebox_override("fill", fill_style)
+
+	xp_container.add_child(xp_bar)
 
 	# Virgin status message
 	if stats and stats.is_virgin():

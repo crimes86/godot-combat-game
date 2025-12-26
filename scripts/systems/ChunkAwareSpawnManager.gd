@@ -34,7 +34,7 @@ var CHUNK_SIZE: float:
 ## Campfire is at X: -6000 (chunk -1), players progress eastward to Zone 2 at chunk +1
 ##
 ## West→East Layout:
-##   Campfire (-6000) → L1-5 (chunk -1) → L5-9 (chunk 0) → L9-15 (chunk +1) → Zone 2 Cave
+##   Campfire (-6000) → L1-5 (chunk -1) → L6-9 (chunk 0) → L10+ (chunk +1) → Zone 2 Cave
 ##
 ## World spans X: -8000 to +16000 (24,000px total across 3 chunks)
 var LEVEL_BANDS: Array:
@@ -43,17 +43,17 @@ var LEVEL_BANDS: Array:
 		return [
 			# Chunk -1 (start): Campfire at -6000, levels 1-5
 			# X: -8000 to 0
-			{"min_x": -cs, "max_x": -cs * 0.5, "level": 1},        # -8000 to -4000: L1 (near campfire)
-			{"min_x": -cs * 0.5, "max_x": 0, "level": 3},          # -4000 to 0: L3
+			{"min_x": -cs, "max_x": -cs * 0.5, "level": 2},        # -8000 to -4000: L2 (near campfire)
+			{"min_x": -cs * 0.5, "max_x": 0, "level": 4},          # -4000 to 0: L4
 
-			# Chunk 0 (mid): Levels 5-9, harder enemies
+			# Chunk 0 (mid): Levels 6-9
 			# X: 0 to 8000
-			{"min_x": 0, "max_x": cs * 0.5, "level": 5},           # 0 to 4000: L5
-			{"min_x": cs * 0.5, "max_x": cs, "level": 7},          # 4000 to 8000: L7
+			{"min_x": 0, "max_x": cs * 0.5, "level": 6},           # 0 to 4000: L6
+			{"min_x": cs * 0.5, "max_x": cs, "level": 8},          # 4000 to 8000: L8
 
-			# Chunk +1 (end): Levels 9-15, Zone 2 entrance at east edge
+			# Chunk +1 (end): Levels 10+, Zone 2 entrance at east edge
 			# X: 8000 to 16000
-			{"min_x": cs, "max_x": cs * 1.5, "level": 9},          # 8000 to 12000: L9
+			{"min_x": cs, "max_x": cs * 1.5, "level": 10},         # 8000 to 12000: L10
 			{"min_x": cs * 1.5, "max_x": cs * 2, "level": 12},     # 12000 to 16000: L12 (near Zone 2)
 		]
 
@@ -422,8 +422,8 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		var spawn_type: String = "skeleton"  # Track what type to spawn
 		var selected_pool_idx: int = -1  # Track which pool was selected
 
-		# Phase 1: Monster lake pools (45%) - Level scaling by distance from center
-		# Edge = Level 1-3, Core/Center = Level 4-6
+		# Phase 1: Monster lake pools (45%) - Level scaling by chunk and distance
+		# Chunk -1: edge 1-3, core 3-5 | Chunk 0: edge 6-7, core 7-9 | Chunk 1: edge 10-11, core 11-12
 		if monster_spawned < monster_count and monster_pools.size() > 0:
 			# Find a pool that hasn't reached its limit
 			var available_pools: Array = []
@@ -446,16 +446,28 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			var angle = spawn_rng.randf() * TAU
 
 			if spawn_at_edge:
-				# Edge spawn: further from pool (Level 1-3)
+				# Edge spawn: further from pool (lower end of chunk range)
 				var edge_dist = pool.radius + spawn_rng.randf_range(80, 200)
 				spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * edge_dist
-				level = spawn_rng.randi_range(1, 3)
+				# Chunk-based level: -1→1-3, 0→6-7, 1→10-11
+				if chunk_x <= -1:
+					level = spawn_rng.randi_range(1, 3)
+				elif chunk_x == 0:
+					level = spawn_rng.randi_range(6, 7)
+				else:
+					level = spawn_rng.randi_range(10, 11)
 			else:
-				# Core spawn: just outside the lava edge (Level 4-6)
+				# Core spawn: just outside the lava edge (higher end of chunk range)
 				# Spawn just outside pool radius (not inside!)
 				var core_dist = pool.radius + spawn_rng.randf_range(20, 60)
 				spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * core_dist
-				level = spawn_rng.randi_range(4, 6)
+				# Chunk-based level: -1→3-5, 0→7-9, 1→11-12
+				if chunk_x <= -1:
+					level = spawn_rng.randi_range(3, 5)
+				elif chunk_x == 0:
+					level = spawn_rng.randi_range(7, 9)
+				else:
+					level = spawn_rng.randi_range(11, 12)
 
 			# Clamp to chunk bounds
 			spawn_pos.x = clamp(spawn_pos.x, chunk_min_x, chunk_max_x)
@@ -468,7 +480,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			else:
 				continue
 
-		# Phase 2: Regular small pools (30%) - Low level only (1-3)
+		# Phase 2: Regular small pools (30%) - Lower end of chunk level range
 		elif regular_spawned < regular_count and regular_pools.size() > 0:
 			# Find a pool that hasn't reached its limit
 			var available_pools: Array = []
@@ -490,7 +502,13 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			var angle = spawn_rng.randf() * TAU
 			var edge_dist = pool.radius + spawn_rng.randf_range(30, 120)
 			spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * edge_dist
-			level = spawn_rng.randi_range(1, 3)  # Always low level at small pools
+			# Chunk-based level (lower end): -1→1-3, 0→6-7, 1→10-11
+			if chunk_x <= -1:
+				level = spawn_rng.randi_range(1, 3)
+			elif chunk_x == 0:
+				level = spawn_rng.randi_range(6, 7)
+			else:
+				level = spawn_rng.randi_range(10, 11)
 
 			# Clamp to chunk bounds
 			spawn_pos.x = clamp(spawn_pos.x, chunk_min_x, chunk_max_x)
@@ -512,10 +530,13 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 				continue
 
 			# Determine level based on chunk position
-			if chunk_x == 0:
+			# Chunk -1: L1-5, Chunk 0: L6-9, Chunk +1: L10+
+			if chunk_x <= -1:
 				level = spawn_rng.randi_range(1, 5)
-			else:
-				level = spawn_rng.randi_range(5, 9)
+			elif chunk_x == 0:
+				level = spawn_rng.randi_range(6, 9)
+			else:  # chunk_x >= 1
+				level = spawn_rng.randi_range(10, 12)
 
 			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
 				roaming_spawned += 1

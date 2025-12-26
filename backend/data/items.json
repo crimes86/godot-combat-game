@@ -839,6 +839,9 @@
         "int": 0,
         "wis": 0,
         "vit": 13
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/coiled_sword.png"
       }
     },
     {
@@ -877,6 +880,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/farron_greatsword.png"
       }
     },
     {
@@ -915,6 +921,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/dragonslayer_swordspear.png"
       }
     },
     {
@@ -952,6 +961,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/grafted_blade.png"
       }
     },
     {
@@ -990,6 +1002,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/hand_of_malenia.png"
       }
     },
     {
@@ -1028,6 +1043,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/radahns_greatswords.png"
       }
     },
     {
@@ -1066,6 +1084,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/moonveil.png"
       }
     },
     {
@@ -1100,6 +1121,9 @@
         "int": 0,
         "wis": 0,
         "vit": 3
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/elden_lord_helm.png"
       }
     },
     {
@@ -1133,6 +1157,9 @@
         "int": 3,
         "wis": 5,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/carian_crown.png"
       }
     },
     {
@@ -1167,6 +1194,9 @@
         "int": 0,
         "wis": 0,
         "vit": 4
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/shields/fingerprint_stone_shield.png"
       }
     },
     {
@@ -1204,6 +1234,9 @@
         "int": 0,
         "wis": 0,
         "vit": 10
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/pure_nail.png"
       }
     },
     {
@@ -1237,6 +1270,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/capes/shade_cloak.png"
       }
     },
     {
@@ -1274,6 +1310,9 @@
         "int": 0,
         "wis": 0,
         "vit": 10
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/stygian_blade.png"
       }
     },
     {
@@ -1313,6 +1352,9 @@
         "int": 0,
         "wis": 0,
         "vit": 10
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/adamant_rail.png"
       }
     },
     {
@@ -1352,6 +1394,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/halo_battle_rifle.png"
       }
     },
     {
@@ -1390,6 +1435,9 @@
         "int": 0,
         "wis": 0,
         "vit": 13
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/terra_blade.png"
       }
     },
     {
@@ -1428,6 +1476,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/mortal_blade.png"
       }
     },
     {
@@ -1466,6 +1517,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/gyoubu_spear.png"
       }
     },
     {
@@ -1503,6 +1557,9 @@
         "int": 0,
         "wis": 0,
         "vit": 10
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/witcher_silver_sword.png"
       }
     },
     {
@@ -1540,6 +1597,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/aloy_sharpshot_bow.png"
       }
     },
     {
@@ -1577,6 +1637,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/tomb_raider_bow.png"
       }
     },
     {
@@ -1610,6 +1673,9 @@
         "int": 0,
         "wis": 0,
         "vit": 3
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/straw_hat.png"
       }
     },
     {
@@ -1643,7 +1709,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/coiled_sword_fragment.png"
+      }
     },
     {
       "item_id": "margits_shackle",
@@ -1676,7 +1745,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 20
+      "hp_bonus": 20,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/margits_shackle.png"
+      }
     },
     {
       "item_id": "discord_nitro_badge",
@@ -1709,7 +1781,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 20
+      "hp_bonus": 20,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/discord_nitro_badge.png"
+      }
     },
     {
       "item_id": "github_star_badge",
@@ -1742,7 +1817,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 20
+      "hp_bonus": 20,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/github_star_badge.png"
+      }
     },
     {
       "_comment": "=== BATTLE.NET / WOW ITEMS ===",
@@ -1777,7 +1855,10 @@
         "wis": 0,
         "vit": 0
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/scarab_lord_badge.png"
+      }
     },
     {
       "item_id": "herald_of_the_titans",
@@ -1811,6 +1892,9 @@
         "int": 3,
         "wis": 6,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/herald_of_the_titans.png"
       }
     },
     {
@@ -1845,6 +1929,9 @@
         "int": 0,
         "wis": 0,
         "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/capes/immortal_tabard.png"
       }
     },
     {
@@ -1878,6 +1965,9 @@
         "int": 0,
         "wis": 0,
         "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/capes/hand_of_adal_tabard.png"
       }
     },
     {
@@ -1912,7 +2002,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/mythic_insignia.png"
+      }
     },
     {
       "item_id": "keystone_trinket",
@@ -1946,7 +2039,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/keystone_trinket.png"
+      }
     },
     {
       "item_id": "gladiator_tabard",
@@ -1980,6 +2076,9 @@
         "int": 0,
         "wis": 0,
         "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/capes/gladiator_tabard.png"
       }
     },
     {
@@ -2014,6 +2113,9 @@
         "int": 0,
         "wis": 0,
         "vit": 6
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/insane_straitjacket.png"
       }
     },
     {
@@ -2054,6 +2156,9 @@
         "int": 0,
         "wis": 0,
         "vit": 13
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/saw_cleaver.png"
       }
     },
     {
@@ -2088,6 +2193,9 @@
         "int": 0,
         "wis": 0,
         "vit": 3
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/false_king_helm.png"
       }
     },
     {
@@ -2122,7 +2230,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/blades_of_chaos.png"
+      }
     },
     {
       "item_id": "ghost_mask",
@@ -2156,6 +2267,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/ghost_mask.png"
       }
     },
     {
@@ -2189,7 +2303,10 @@
         "wis": 0,
         "vit": 6
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/selene_fragment.png"
+      }
     },
     {
       "item_id": "spider_emblem",
@@ -2223,7 +2340,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/spider_emblem.png"
+      }
     },
     {
       "_comment": "=== XBOX ITEMS ===",
@@ -2258,6 +2378,9 @@
         "int": 0,
         "wis": 0,
         "vit": 3
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/master_chief_helmet.png"
       }
     },
     {
@@ -2292,6 +2415,9 @@
         "int": 0,
         "wis": 0,
         "vit": 3
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/pilot_helmet.png"
       }
     },
     {
@@ -2326,7 +2452,10 @@
         "wis": 0,
         "vit": 6
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/cog_medal.png"
+      }
     },
     {
       "item_id": "pirate_legend_hat",
@@ -2359,6 +2488,9 @@
         "int": 0,
         "wis": 0,
         "vit": 3
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/pirate_legend_hat.png"
       }
     },
     {
@@ -2394,7 +2526,10 @@
         "wis": 0,
         "vit": 6
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/early_supporter_badge.png"
+      }
     },
     {
       "item_id": "partner_badge",
@@ -2427,7 +2562,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/partner_badge.png"
+      }
     },
     {
       "item_id": "bug_hunter_badge",
@@ -2460,7 +2598,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/bug_hunter_badge.png"
+      }
     },
     {
       "item_id": "hypesquad_badge",
@@ -2493,7 +2634,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 20
+      "hp_bonus": 20,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/hypesquad_badge.png"
+      }
     },
     {
       "_comment": "=== GITHUB ITEMS ===",
@@ -2528,7 +2672,10 @@
         "wis": 0,
         "vit": 6
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/arctic_code_badge.png"
+      }
     },
     {
       "item_id": "mars_badge",
@@ -2561,7 +2708,10 @@
         "wis": 0,
         "vit": 6
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/mars_badge.png"
+      }
     },
     {
       "item_id": "pull_shark_badge",
@@ -2594,7 +2744,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/pull_shark_badge.png"
+      }
     },
     {
       "item_id": "galaxy_brain_badge",
@@ -2627,7 +2780,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/galaxy_brain_badge.png"
+      }
     },
     {
       "item_id": "yolo_badge",
@@ -2660,7 +2816,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 20
+      "hp_bonus": 20,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/yolo_badge.png"
+      }
     },
     {
       "_comment": "=== ROBLOX ITEMS ===",
@@ -2695,7 +2854,10 @@
         "wis": 0,
         "vit": 6
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/veteran_roblox_necklace.png"
+      }
     },
     {
       "item_id": "classic_roblox_ring",
@@ -2728,7 +2890,10 @@
         "wis": 0,
         "vit": 0
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/classic_roblox_ring.png"
+      }
     },
     {
       "item_id": "builder_roblox_ring",
@@ -2761,7 +2926,10 @@
         "wis": 0,
         "vit": 0
       },
-      "hp_bonus": 20
+      "hp_bonus": 20,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/builder_roblox_ring.png"
+      }
     },
     {
       "_comment": "=== STEAM ACCESSIBLE / PRESTIGE ITEMS ===",
@@ -2795,7 +2963,10 @@
         "wis": 0,
         "vit": 4
       },
-      "hp_bonus": 17
+      "hp_bonus": 17,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/ashen_estus.png"
+      }
     },
     {
       "item_id": "tarnished_ring",
@@ -2828,7 +2999,10 @@
         "wis": 0,
         "vit": 0
       },
-      "hp_bonus": 17
+      "hp_bonus": 17,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/tarnished_ring.png"
+      }
     },
     {
       "item_id": "void_heart",
@@ -2862,7 +3036,10 @@
         "wis": 0,
         "vit": 6
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/void_heart.png"
+      }
     },
     {
       "item_id": "boon_trinket",
@@ -2895,7 +3072,10 @@
         "wis": 0,
         "vit": 4
       },
-      "hp_bonus": 17
+      "hp_bonus": 17,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/boon_trinket.png"
+      }
     },
     {
       "item_id": "winged_strawberry",
@@ -2929,7 +3109,10 @@
         "wis": 0,
         "vit": 6
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/winged_strawberry.png"
+      }
     },
     {
       "item_id": "devil_pitchfork",
@@ -2967,6 +3150,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/devil_pitchfork.png"
       }
     },
     {
@@ -3006,6 +3192,9 @@
         "int": 0,
         "wis": 0,
         "vit": 13
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/king_slayer.png"
       }
     },
     {
@@ -3040,7 +3229,10 @@
         "wis": 0,
         "vit": 6
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/heart_shard.png"
+      }
     },
     {
       "item_id": "companion_cube",
@@ -3073,7 +3265,10 @@
         "wis": 2,
         "vit": 0
       },
-      "hp_bonus": 17
+      "hp_bonus": 17,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/companion_cube.png"
+      }
     },
     {
       "item_id": "lambda_badge",
@@ -3106,7 +3301,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 20
+      "hp_bonus": 20,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/lambda_badge.png"
+      }
     },
     {
       "item_id": "dragonbone_helm",
@@ -3140,6 +3338,9 @@
         "int": 0,
         "wis": 0,
         "vit": 3
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/dragonbone_helm.png"
       }
     },
     {
@@ -3174,6 +3375,9 @@
         "int": 0,
         "wis": 0,
         "vit": 6
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/grandmaster_armor.png"
       }
     },
     {
@@ -3208,6 +3412,9 @@
         "int": 0,
         "wis": 0,
         "vit": 4
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/ashen_armor.png"
       }
     },
     {
@@ -3241,6 +3448,9 @@
         "int": 0,
         "wis": 0,
         "vit": 5
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/elden_armory_chest.png"
       }
     },
     {
@@ -3274,6 +3484,9 @@
         "int": 0,
         "wis": 0,
         "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/shields/eye_of_cthulhu_shield.png"
       }
     },
     {
@@ -3308,6 +3521,9 @@
         "int": 0,
         "wis": 0,
         "vit": 6
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/ironclad_armor.png"
       }
     },
     {
@@ -3342,6 +3558,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/loremaster_hood.png"
       }
     },
     {
@@ -3379,6 +3598,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/master_hoe.png"
       }
     },
     {
@@ -3412,6 +3634,9 @@
         "int": 0,
         "wis": 0,
         "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/capes/prairie_king_cape.png"
       }
     },
     {
@@ -3445,7 +3670,10 @@
         "wis": 0,
         "vit": 5
       },
-      "hp_bonus": 23
+      "hp_bonus": 23,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/stardrop_pendant.png"
+      }
     },
     {
       "item_id": "survivor_vest",
@@ -3479,6 +3707,9 @@
         "int": 0,
         "wis": 0,
         "vit": 5
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/survivor_vest.png"
       }
     },
     {
@@ -3512,6 +3743,9 @@
         "int": 0,
         "wis": 0,
         "vit": 3
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/zagreus_helm.png"
       }
     },
     {
@@ -3550,6 +3784,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/ezios_hidden_blade.png"
       }
     },
     {
@@ -3588,6 +3825,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/sam_fishers_kabar.png"
       }
     },
     {
@@ -3626,6 +3866,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/fiber_wire.png"
       }
     },
     {
@@ -3664,6 +3907,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/csgo_karambit.png"
       }
     },
     {
@@ -3689,7 +3935,10 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/rannis_dark_moon_ring.png"
+      }
     },
     {
       "item_id": "havel_ring",
@@ -3714,7 +3963,10 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/havel_ring.png"
+      }
     },
     {
       "item_id": "amulet_of_kings",
@@ -3739,7 +3991,10 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/amulet_of_kings.png"
+      }
     },
     {
       "item_id": "apex_heirloom_kunai",
@@ -3777,6 +4032,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/apex_heirloom_kunai.png"
       }
     },
     {
@@ -3811,7 +4069,10 @@
         "wis": 0,
         "vit": 6
       },
-      "hp_bonus": 26
+      "hp_bonus": 26,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/r6_black_ice_skin.png"
+      }
     },
     {
       "item_id": "rust_thompson",
@@ -3856,6 +4117,9 @@
         "int": 0,
         "wis": 0,
         "vit": 11
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/rust_thompson.png"
       }
     },
     {
@@ -3891,7 +4155,10 @@
       },
       "tool_type": "pickaxe",
       "harvest_bonus": 2.0,
-      "harvest_yield": 1.5
+      "harvest_yield": 1.5,
+      "sprites": {
+        "icon": "res://assets/icons/forged/tools/minecraft_diamond_pickaxe.png"
+      }
     },
     {
       "item_id": "tyraels_might",
@@ -3925,6 +4192,9 @@
         "int": 0,
         "wis": 0,
         "vit": 6
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/tyraels_might.png"
       }
     },
     {
@@ -3960,7 +4230,10 @@
         "vit": 0
       },
       "hp_bonus": 0,
-      "mana_bonus": 30
+      "mana_bonus": 30,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/stone_of_jordan.png"
+      }
     },
     {
       "item_id": "butchers_cleaver",
@@ -3998,6 +4271,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/butchers_cleaver.png"
       }
     },
     {
@@ -4032,7 +4308,10 @@
         "wis": 4,
         "vit": 0
       },
-      "lifesteal": 0.039
+      "lifesteal": 0.039,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/horadric_cube.png"
+      }
     },
     {
       "item_id": "el_druins_sword",
@@ -4070,6 +4349,9 @@
         "int": 0,
         "wis": 0,
         "vit": 11
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/el_druins_sword.png"
       }
     },
     {
@@ -4104,6 +4386,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/natalyas_shadow.png"
       }
     },
     {
@@ -4142,6 +4427,9 @@
         "int": 0,
         "wis": 0,
         "vit": 13
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/echoing_fury.png"
       }
     },
     {
@@ -4167,7 +4455,10 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/black_soulstone.png"
+      }
     },
     {
       "item_id": "andariel_visage",
@@ -4201,6 +4492,9 @@
         "int": 0,
         "wis": 0,
         "vit": 3
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/andariel_visage.png"
       }
     },
     {
@@ -4240,6 +4534,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/genji_dragonblade.png"
       }
     },
     {
@@ -4274,7 +4571,10 @@
         "wis": 3,
         "vit": 0
       },
-      "movement_speed": 0.104
+      "movement_speed": 0.104,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/tracer_chronal_accelerator.png"
+      }
     },
     {
       "item_id": "reaper_hellfire_shotguns",
@@ -4319,6 +4619,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/reaper_hellfire_shotguns.png"
       }
     },
     {
@@ -4353,6 +4656,9 @@
         "int": 0,
         "wis": 0,
         "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/doomfist_gauntlet.png"
       }
     },
     {
@@ -4387,6 +4693,9 @@
         "int": 0,
         "wis": 0,
         "vit": 5
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/reinhardt_crusader_armor.png"
       }
     },
     {
@@ -4425,6 +4734,9 @@
         "int": 13,
         "wis": 9,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/mercy_caduceus_staff.png"
       }
     },
     {
@@ -4459,6 +4771,9 @@
         "int": 0,
         "wis": 0,
         "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/capes/winston_jump_pack.png"
       }
     },
     {
@@ -4504,6 +4819,9 @@
         "int": 0,
         "wis": 0,
         "vit": 10
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/widowmaker_kiss.png"
       }
     },
     {
@@ -4538,7 +4856,10 @@
         "wis": 0,
         "vit": 5
       },
-      "movement_speed": 0.08
+      "movement_speed": 0.08,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/orisa_halt_projector.png"
+      }
     },
     {
       "item_id": "raynor_marine_armor",
@@ -4572,6 +4893,9 @@
         "int": 0,
         "wis": 0,
         "vit": 6
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/raynor_marine_armor.png"
       }
     },
     {
@@ -4610,6 +4934,9 @@
         "int": 15,
         "wis": 10,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/kerrigan_psi_blade.png"
       }
     },
     {
@@ -4645,7 +4972,10 @@
         "vit": 0
       },
       "hp_bonus": 32,
-      "cooldown_reduction": 0.065
+      "cooldown_reduction": 0.065,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/protoss_warp_prism.png"
+      }
     },
     {
       "item_id": "zeratul_warp_blade",
@@ -4683,6 +5013,9 @@
         "int": 13,
         "wis": 13,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/zeratul_warp_blade.png"
       }
     },
     {
@@ -4721,6 +5054,9 @@
         "int": 13,
         "wis": 9,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/artanis_psi_blades.png"
       }
     },
     {
@@ -4766,6 +5102,9 @@
         "int": 0,
         "wis": 0,
         "vit": 13
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/siege_tank_cannon.png"
       }
     },
     {
@@ -4800,6 +5139,9 @@
         "int": 0,
         "wis": 0,
         "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/capes/dark_templar_armor.png"
       }
     },
     {
@@ -4838,6 +5180,9 @@
         "int": 0,
         "wis": 0,
         "vit": 0
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/weapons/zergling_claws.png"
       }
     },
     {
@@ -4863,7 +5208,10 @@
         "active": null
       },
       "has_sprites": false,
-      "has_icon": true
+      "has_icon": true,
+      "sprites": {
+        "icon": "res://assets/icons/forged/accessories/khala_amulet.png"
+      }
     }
   ],
   "fallbacks": {
