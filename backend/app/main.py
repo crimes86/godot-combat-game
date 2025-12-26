@@ -1064,9 +1064,24 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(StarletteHTTPException)
 async def custom_starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
-    # 404 Not Found
+    # 404 Not Found - track potential scanners
     if exc.status_code == 404:
         logger.warning(f"404 Not Found at {request.url}")
+
+        # Track 404s for scanner detection (async-safe)
+        try:
+            from app.services.scanner_detection_service import record_404
+            client_ip = request.client.host if request.client else None
+            if client_ip:
+                user_agent = request.headers.get("user-agent")
+                db = SessionLocal()
+                try:
+                    record_404(client_ip, str(request.url.path), user_agent, db)
+                finally:
+                    db.close()
+        except Exception as e:
+            logger.debug(f"Scanner detection failed: {e}")
+
         return templates.TemplateResponse(
             "error.html",
             {"request": request, "message": "The page or resource was not found."},
@@ -5652,6 +5667,57 @@ async def revoke_admin(
     logger.info(f"Admin revoked from user {current_user.username} (ID: {current_user.id})")
 
     return {"status": "success", "message": f"Admin revoked from {current_user.username}", "is_admin": False}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LOGS DASHBOARD (admin secret auth)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/logs")
+async def logs_dashboard_redirect(
+    request: Request,
+    secret: Optional[str] = None,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Logs dashboard entry point at /logs.
+
+    Access methods:
+    1. Already logged in as admin → direct access
+    2. Not logged in → provide ?secret=YOUR_SECRET
+    """
+    from fastapi.responses import RedirectResponse
+
+    # First check if user is already logged in as admin
+    token = get_session_token(request)
+    if token:
+        user = get_user_from_session(db, token)
+        if user and user.is_admin:
+            # Already admin, redirect to logs view
+            return RedirectResponse(url="/api/logs/view", status_code=302)
+
+    # Not logged in as admin - require secret
+    if not secret:
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "message": "Admin access required. Log in as admin or use ?secret=YOUR_SECRET"},
+            status_code=401
+        )
+
+    if secret != ADMIN_SECRET:
+        logger.warning(f"Invalid admin secret attempt at /logs from {request.client.host if request.client else 'unknown'}")
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "message": "Invalid admin secret"},
+            status_code=403
+        )
+
+    # Valid secret but not logged in - show message
+    return templates.TemplateResponse(
+        "error.html",
+        {"request": request, "message": "Secret valid but you need to log in first. Please log in, then revisit /logs"},
+        status_code=401
+    )
 
 
 @app.get("/api/admin/indexer-status")

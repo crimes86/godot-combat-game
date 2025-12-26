@@ -563,6 +563,38 @@ class SuspiciousActivity(Base):
     forged_achievement = relationship("ForgedAchievement")
 
 
+class SuspiciousIP(Base):
+    """
+    Tracks IPs exhibiting scanner/bot behavior.
+
+    Detection triggers:
+    - Multiple 404s in short window (vulnerability scanning)
+    - Known attack paths (/wp-admin, /phpmyadmin, etc.)
+    - Rapid requests without session
+    """
+    __tablename__ = 'suspicious_ips'
+
+    id = Column(Integer, primary_key=True, index=True)
+    ip_address = Column(String(45), nullable=False, index=True)  # IPv4 or IPv6
+
+    # Detection info
+    detection_type = Column(String(32), nullable=False)  # scanner, brute_force, bot
+    threat_level = Column(String(16), default='low')  # low, medium, high
+
+    # Activity summary
+    hit_count = Column(Integer, default=1)  # Total suspicious requests
+    paths_hit = Column(JSON, nullable=True)  # List of paths requested
+    user_agents = Column(JSON, nullable=True)  # User agents seen
+
+    # Timing
+    first_seen = Column(DateTime, default=datetime.utcnow, index=True)
+    last_seen = Column(DateTime, default=datetime.utcnow)
+
+    # Action
+    is_blocked = Column(Boolean, default=False)  # For future IP blocking
+    notes = Column(Text, nullable=True)  # Manual notes
+
+
 class SeedPlot(Base):
     """
     Player-claimable territories that trigger chunk expansion.

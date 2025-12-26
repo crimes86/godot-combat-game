@@ -15,7 +15,7 @@ import html
 import os
 import shutil
 
-from app.models import User, GameLog
+from app.models import User, GameLog, SuspiciousIP
 from app.database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -629,6 +629,11 @@ async def view_logs_html(
                 <span class="stat-value">{disk_str}</span>
                 <span class="stat-label">Disk Usage</span>
             </div>
+            <div class="stat-item" style="margin-left:auto;">
+                <button onclick="openSuspiciousModal()" style="background:#ff4444;color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-weight:bold;">
+                    🚨 Suspicious IPs
+                </button>
+            </div>
         </div>
 
         <div class="stats">
@@ -672,7 +677,109 @@ async def view_logs_html(
             Page {(offset // limit) + 1} of {(total // limit) + 1}
             {next_link}
         </div>
+
+        <!-- Suspicious IPs Modal -->
+        <div id="suspiciousModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:1000;overflow-y:auto;">
+            <div style="max-width:900px;margin:40px auto;background:#1a1a1d;border-radius:12px;border:1px solid #333;">
+                <div style="padding:20px;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center;">
+                    <h2 style="margin:0;color:#ff6a00;">🚨 Suspicious IPs</h2>
+                    <button onclick="closeSuspiciousModal()" style="background:none;border:none;color:#888;font-size:24px;cursor:pointer;">×</button>
+                </div>
+                <div id="suspiciousContent" style="padding:20px;">Loading...</div>
+            </div>
+        </div>
+
+        <script>
+        function openSuspiciousModal() {{
+            document.getElementById('suspiciousModal').style.display = 'block';
+            fetch('/api/logs/suspicious-ips')
+                .then(r => r.json())
+                .then(data => {{
+                    let html = '<table style="width:100%;font-size:13px;"><thead><tr>' +
+                        '<th style="text-align:left;padding:8px;color:#ff6a00;">IP Address</th>' +
+                        '<th style="text-align:left;padding:8px;color:#ff6a00;">Type</th>' +
+                        '<th style="text-align:left;padding:8px;color:#ff6a00;">Threat</th>' +
+                        '<th style="text-align:left;padding:8px;color:#ff6a00;">Hits</th>' +
+                        '<th style="text-align:left;padding:8px;color:#ff6a00;">First Seen</th>' +
+                        '<th style="text-align:left;padding:8px;color:#ff6a00;">Last Seen</th>' +
+                        '<th style="text-align:left;padding:8px;color:#ff6a00;">Paths</th>' +
+                        '</tr></thead><tbody>';
+                    if (data.ips && data.ips.length > 0) {{
+                        data.ips.forEach(ip => {{
+                            const threatColor = ip.threat_level === 'high' ? '#ff4444' : ip.threat_level === 'medium' ? '#f5a623' : '#888';
+                            const paths = (ip.paths_hit || []).slice(0, 3).join(', ') + (ip.paths_hit && ip.paths_hit.length > 3 ? '...' : '');
+                            html += '<tr style="border-bottom:1px solid #333;">' +
+                                '<td style="padding:8px;font-family:monospace;">' + ip.ip_address + '</td>' +
+                                '<td style="padding:8px;">' + ip.detection_type + '</td>' +
+                                '<td style="padding:8px;color:' + threatColor + ';font-weight:bold;">' + ip.threat_level.toUpperCase() + '</td>' +
+                                '<td style="padding:8px;">' + ip.hit_count + '</td>' +
+                                '<td style="padding:8px;color:#666;">' + new Date(ip.first_seen).toLocaleString() + '</td>' +
+                                '<td style="padding:8px;color:#666;">' + new Date(ip.last_seen).toLocaleString() + '</td>' +
+                                '<td style="padding:8px;font-size:11px;color:#888;max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + paths + '</td>' +
+                                '</tr>';
+                        }});
+                    }} else {{
+                        html += '<tr><td colspan="7" style="padding:20px;text-align:center;color:#666;">No suspicious IPs detected yet</td></tr>';
+                    }}
+                    html += '</tbody></table>';
+                    html += '<div style="margin-top:15px;padding-top:15px;border-top:1px solid #333;color:#666;font-size:12px;">' +
+                        'Total: ' + (data.stats?.total_suspicious_ips || 0) + ' suspicious IPs | ' +
+                        'High threat: ' + (data.stats?.high_threat_count || 0) + '</div>';
+                    document.getElementById('suspiciousContent').innerHTML = html;
+                }})
+                .catch(e => {{
+                    document.getElementById('suspiciousContent').innerHTML = '<p style="color:#ff4444;">Error loading data: ' + e + '</p>';
+                }});
+        }}
+        function closeSuspiciousModal() {{
+            document.getElementById('suspiciousModal').style.display = 'none';
+        }}
+        document.getElementById('suspiciousModal').addEventListener('click', function(e) {{
+            if (e.target === this) closeSuspiciousModal();
+        }});
+        </script>
     </body>
     </html>
     """
     return HTMLResponse(content=html_content)
+
+
+@router.get("/suspicious-ips")
+async def get_suspicious_ips(
+    limit: int = Query(100, ge=1, le=500),
+    db: DbSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_dep)
+):
+    """Get list of suspicious IPs (Admin only)."""
+    require_admin(current_user)
+
+    ips = db.query(SuspiciousIP)\
+        .order_by(desc(SuspiciousIP.last_seen))\
+        .limit(limit)\
+        .all()
+
+    # Stats
+    total = db.query(func.count(SuspiciousIP.id)).scalar() or 0
+    high_threat = db.query(func.count(SuspiciousIP.id))\
+        .filter(SuspiciousIP.threat_level == 'high').scalar() or 0
+
+    return {
+        "ips": [
+            {
+                "ip_address": ip.ip_address,
+                "detection_type": ip.detection_type,
+                "threat_level": ip.threat_level,
+                "hit_count": ip.hit_count,
+                "paths_hit": ip.paths_hit or [],
+                "user_agents": ip.user_agents or [],
+                "first_seen": ip.first_seen.isoformat() if ip.first_seen else None,
+                "last_seen": ip.last_seen.isoformat() if ip.last_seen else None,
+                "is_blocked": ip.is_blocked,
+            }
+            for ip in ips
+        ],
+        "stats": {
+            "total_suspicious_ips": total,
+            "high_threat_count": high_threat,
+        }
+    }
