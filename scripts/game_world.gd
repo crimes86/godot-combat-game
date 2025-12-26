@@ -106,6 +106,16 @@ var poi_manager: POIManager = null
 
 var tree_types = ["dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5", "dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10"]
 var screenshot_mode = false
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEBUG TOGGLES - Disable these one by one to find freeze cause
+# Set to false to disable each system. Test after each change.
+# ═══════════════════════════════════════════════════════════════════════════════
+const DEBUG_DISABLE_CELL_STREAMING = false  # Disable new cell-based prop streaming
+const DEBUG_DISABLE_POI_PRESPAWN = false    # Disable POI pre-spawning at startup
+const DEBUG_DISABLE_GROUND_SHADER = false   # Disable ground variation shader
+const DEBUG_DISABLE_COMBAT_JUICE = false    # Disable hit stop/slow-mo effects
+const DEBUG_DISABLE_CAMP_SPAWNER = false    # Disable enemy camp spawning system
 var tree_positions = []  # Track tree positions to avoid spawning small rocks on them
 var lava_pool_positions = []  # Track lava pool positions to avoid spawning props on them
 
@@ -151,13 +161,15 @@ func _ready():
 	chunk_prop_system.initialize(self)
 
 	# Initialize cell streaming system if enabled (smoother chunk transitions)
-	if ChunkBasedPropSystem.USE_CELL_STREAMING:
+	if ChunkBasedPropSystem.USE_CELL_STREAMING and not DEBUG_DISABLE_CELL_STREAMING:
 		cell_streaming_manager = CellStreamingManager.new()
 		add_child(cell_streaming_manager)
 		cell_streaming_manager.initialize(self, 12345)  # World seed for deterministic generation
 		cell_streaming_manager.set_chunk_prop_system(chunk_prop_system)  # Pass chunk system for prop creation
 		chunk_prop_system.cell_streaming_manager = cell_streaming_manager
 		print("🔲 Cell-based streaming enabled for smooth chunk transitions")
+	elif DEBUG_DISABLE_CELL_STREAMING:
+		print("⚠️ DEBUG: Cell streaming DISABLED for freeze debugging")
 
 	# Create world boundaries first
 	create_world_boundaries()
@@ -445,7 +457,10 @@ func generate_procedural_ruins():
 
 	# Pre-spawn ALL POIs immediately (for debug verification)
 	# This must be AFTER RUINS_POSITIONS is populated
-	pre_spawn_all_pois()
+	if not DEBUG_DISABLE_POI_PRESPAWN:
+		pre_spawn_all_pois()
+	else:
+		print("⚠️ DEBUG: POI pre-spawning DISABLED for freeze debugging")
 
 func spawn_ruins_for_chunk(chunk_id: int) -> void:
 	"""Spawn ruins that belong to a specific chunk"""

@@ -10,6 +10,11 @@ extends Node
 ## - Vignette effects
 
 # ============================================
+# DEBUG - Set to true to disable all effects
+# ============================================
+const DEBUG_DISABLE_ALL_EFFECTS = false
+
+# ============================================
 # HIT STOP (Freeze Frames)
 # ============================================
 # Brief pause on impact - sells the weight of hits
@@ -101,6 +106,9 @@ func hitstop(duration: float) -> void:
 	_start_hitstop(duration)
 
 func _start_hitstop(duration: float) -> void:
+	if DEBUG_DISABLE_ALL_EFFECTS:
+		return
+
 	var real_time = Time.get_ticks_msec() / 1000.0
 	var new_end_time = real_time + duration
 
@@ -134,6 +142,9 @@ func slowmo(duration: float, time_scale: float = 0.3) -> void:
 	_start_slowmo(duration, time_scale)
 
 func _start_slowmo(duration: float, target_scale: float) -> void:
+	if DEBUG_DISABLE_ALL_EFFECTS:
+		return
+
 	var real_time = Time.get_ticks_msec() / 1000.0
 	_slowmo_end_time = real_time + duration
 	_slowmo_target_scale = target_scale
