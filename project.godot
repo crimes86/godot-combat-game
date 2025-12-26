@@ -60,7 +60,6 @@ TradeWindowUI="*res://scripts/ui/TradeWindowUI.gd"
 ItemInspectionUI="*res://scripts/ui/ItemInspectionUI.gd"
 WeaponStatsTracker="*res://scripts/systems/WeaponStatsTracker.gd"
 WeaponSkillManager="*res://scripts/systems/WeaponSkillManager.gd"
-GlobalDebugOverlay="*res://scripts/debug/GlobalDebugOverlay.gd"
 PlayerInteractionMenu="*res://scripts/ui/PlayerInteractionMenu.gd"
 PlayerInspectUI="*res://scripts/ui/PlayerInspectUI.gd"
 PlayerInteractionController="*res://scripts/systems/PlayerInteractionController.gd"
@@ -71,6 +70,8 @@ CombatJuice="*res://scripts/systems/CombatJuice.gd"
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
+window/size/window_width_override=1280
+window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/vsync/vsync_mode=0
 

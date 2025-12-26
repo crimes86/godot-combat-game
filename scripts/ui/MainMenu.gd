@@ -89,6 +89,9 @@ const RESOLUTIONS = [
 	Vector2i(2560, 1440),  # 1440p
 ]
 
+# Launcher window settings (compact windowed mode for menu/armory)
+const LAUNCHER_SIZE = Vector2i(1280, 720)
+
 # Credits panel nodes
 @onready var credits_panel = $CreditsPanel
 @onready var credits_back_button = $CreditsPanel/VBoxContainer/CreditsBackButton
@@ -231,6 +234,12 @@ func _ready():
 
 	# Initialize settings from current state
 	_load_settings()
+
+	# Set launcher window mode AFTER settings load (overrides saved fullscreen preference)
+	call_deferred("_set_launcher_window_mode")
+
+	# Fade in from black when launcher opens
+	_start_fade_in()
 
 	# Connect NetworkManager signals
 	NetworkManager.connected_to_server.connect(_on_connected)
@@ -2269,12 +2278,20 @@ func _transition_to_armory():
 	"""Transition to Armory scene after authentication"""
 	LogManager.info("Transitioning to Armory", "ashbane")
 
+	# Save window position before leaving
+	_save_window_position()
+
 	# Menu music continues playing via SoundManager (persists across scenes)
 
 	# Load Armory scene
 	var tree = get_tree()
 	if tree:
 		tree.change_scene_to_file("res://scenes/ui/Armory.tscn")
+
+func _notification(what: int) -> void:
+	# Save window position when closing
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_save_window_position()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # GAME LOADING
@@ -2776,3 +2793,75 @@ func _show_update_prompt(new_version: String, download_url: String) -> void:
 	dialog.popup_centered()
 
 	LogManager.info("Showing update prompt for version %s" % new_version, "update")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LAUNCHER WINDOW MODE
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _set_launcher_window_mode() -> void:
+	"""Set compact windowed mode for launcher screens (MainMenu/Armory)"""
+	# Skip in editor to avoid resizing the editor window
+	if Engine.is_editor_hint():
+		return
+
+	# Set windowed mode
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+	# Set launcher size
+	DisplayServer.window_set_size(LAUNCHER_SIZE)
+
+	# Try to restore saved window position, otherwise center
+	var config = ConfigFile.new()
+	var saved_pos: Vector2i = Vector2i.ZERO
+	var has_saved_pos = false
+
+	if config.load("user://settings.cfg") == OK:
+		var x = config.get_value("window", "launcher_x", -1)
+		var y = config.get_value("window", "launcher_y", -1)
+		if x >= 0 and y >= 0:
+			saved_pos = Vector2i(x, y)
+			has_saved_pos = true
+
+	if has_saved_pos:
+		# Validate position is still on screen
+		var screen_size = DisplayServer.screen_get_size()
+		if saved_pos.x >= 0 and saved_pos.x < screen_size.x - 100 and saved_pos.y >= 0 and saved_pos.y < screen_size.y - 100:
+			DisplayServer.window_set_position(saved_pos)
+		else:
+			_center_launcher_window()
+	else:
+		_center_launcher_window()
+
+func _center_launcher_window() -> void:
+	"""Center the launcher window on screen"""
+	var screen_size = DisplayServer.screen_get_size()
+	var centered_pos = (screen_size - LAUNCHER_SIZE) / 2
+	DisplayServer.window_set_position(centered_pos)
+
+func _save_window_position() -> void:
+	"""Save launcher window position to settings"""
+	if Engine.is_editor_hint():
+		return
+	var pos = DisplayServer.window_get_position()
+	var config = ConfigFile.new()
+	config.load("user://settings.cfg")  # Load existing settings
+	config.set_value("window", "launcher_x", pos.x)
+	config.set_value("window", "launcher_y", pos.y)
+	config.save("user://settings.cfg")
+
+func _start_fade_in() -> void:
+	"""Fade in from black when launcher opens"""
+	var canvas = CanvasLayer.new()
+	canvas.layer = 100
+	add_child(canvas)
+
+	var overlay = ColorRect.new()
+	overlay.color = Color(0, 0, 0, 1)  # Start black
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas.add_child(overlay)
+
+	# Animate to transparent
+	var tween = create_tween()
+	tween.tween_property(overlay, "color:a", 0.0, 0.4).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(canvas.queue_free)

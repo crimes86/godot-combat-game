@@ -48,6 +48,9 @@ var _tree_logo_left: TextureRect = null
 var _tree_logo_right: TextureRect = null
 var _tree_ember_container: Control = null
 var _last_mouse_pos: Vector2 = Vector2.ZERO
+# Launcher window settings (compact windowed mode for menu/armory)
+const LAUNCHER_SIZE = Vector2i(1280, 720)
+
 const EMBER_COUNT: int = 25
 const TREE_EMBER_COUNT: int = 8  # Embers per tree
 const DUST_MOTE_COUNT: int = 30
@@ -77,6 +80,9 @@ var host_server_button: Button = null  # For LAN host
 var connection_status_label: Label = null  # Shows connection progress
 var logout_button: Button = null
 var settings_panel: Control = null
+var _server_status_label: Label = null
+var _server_status_dot: Label = null
+var _server_check_timer: Timer = null
 
 # Network connection state
 var _is_connecting: bool = false
@@ -118,6 +124,9 @@ var username_label: Label = null
 var tier_badge: Control = null
 var tier_label: Label = null
 var total_label: Label = null
+var launcher_score_label: Label = null  # Launcher score display
+var launcher_progress_label: Label = null  # Launcher progress display
+var launcher_tier_badge: Control = null  # Launcher tier badge
 
 # State
 var current_state: ArmoryState = ArmoryState.GUEST
@@ -148,6 +157,16 @@ const BRIDGE_COUNTDOWN_UPDATE_INTERVAL: float = 1.0  # Update countdown every se
 # Connection status indicator
 var _connection_indicator: HBoxContainer = null
 var _connection_dot: ColorRect = null
+
+# News drawer
+var _news_drawer: Control = null
+var _news_drawer_open: bool = false
+var _news_tab_button: Button = null
+
+# Custom titlebar for borderless window
+var _titlebar: Control = null
+var _dragging_window: bool = false
+var _drag_start_pos: Vector2i = Vector2i.ZERO
 var _connection_label: Label = null
 
 # Wallet connection polling (during active connect flow)
@@ -182,18 +201,18 @@ var TEXT_PRIMARY: Color:
 	get: return UITheme.TEXT_COLOR if UITheme else Color(0.95, 0.90, 0.82, 1.0)
 var TEXT_SECONDARY: Color:
 	get: return UITheme.HEADER_COLOR if UITheme else Color(0.80, 0.76, 0.70, 1.0)
-var TEXT_DIM: Color:
+var TEXT_MUTED: Color:
 	get: return UITheme.TEXT_MUTED if UITheme else Color(0.55, 0.50, 0.45, 0.8)
 
 # Typography scale (standardized sizes) - scaled up for readability
-const FONT_H1 = 42        # Page title (ASHBANE)
-const FONT_H2 = 28        # Column headers (THE FORGE, DREADLAND)
-const FONT_H3 = 22        # Section headers (CONNECTED PLATFORMS)
-const FONT_BODY_LG = 24   # Large body text, important values
-const FONT_BODY = 20      # Normal body text
-const FONT_CAPTION = 12   # Captions, small labels
-const FONT_TINY = 14      # Smallest text - minimum readable size
-const FONT_MIN = 14       # Absolute minimum - never go below 14 for readability
+const FONT_H1 = 48        # Page title (ASHBANE)
+const FONT_H2 = 34        # Column headers (THE FORGE, DREADLAND)
+const FONT_H3 = 28        # Section headers (CONNECTED PLATFORMS)
+const FONT_BODY_LG = 28   # Large body text, important values
+const FONT_BODY = 24      # Normal body text
+const FONT_CAPTION = 18   # Captions, small labels
+const FONT_TINY = 18      # Smallest text - minimum readable size
+const FONT_MIN = 18       # Absolute minimum - never go below 18 for launcher readability
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # STANDARDIZED BUTTON SYSTEM
@@ -202,9 +221,9 @@ const FONT_MIN = 14       # Absolute minimum - never go below 14 for readability
 # Button sizes (height, font_size, corner_radius, border_width, padding)
 enum ButtonSize { SMALL, MEDIUM, LARGE }
 const BUTTON_SIZES = {
-	ButtonSize.SMALL: {"height": 28, "font": 14, "radius": 4, "border": 1, "padding": 6},
-	ButtonSize.MEDIUM: {"height": 36, "font": 16, "radius": 6, "border": 1, "padding": 8},
-	ButtonSize.LARGE: {"height": 44, "font": 18, "radius": 6, "border": 2, "padding": 10}
+	ButtonSize.SMALL: {"height": 34, "font": 18, "radius": 4, "border": 1, "padding": 8},
+	ButtonSize.MEDIUM: {"height": 44, "font": 20, "radius": 6, "border": 1, "padding": 10},
+	ButtonSize.LARGE: {"height": 52, "font": 22, "radius": 6, "border": 2, "padding": 12}
 }
 
 # Button color themes - Clean stone gray theme (no brown tint)
@@ -424,6 +443,12 @@ func _ready() -> void:
 			print("[Armory] Bridge-in items already available: %d" % bridge_in_items.size())
 			call_deferred("_update_bridge_in_display", bridge_in_items)
 
+	# Set launcher window mode AFTER UI build (overrides saved fullscreen preference)
+	call_deferred("_set_launcher_window_mode")
+
+	# Fade in from black when launcher opens
+	_start_fade_in()
+
 	# Start entrance animations after a brief delay
 	if get_tree():
 		await get_tree().create_timer(0.1).timeout
@@ -439,6 +464,10 @@ func _exit_tree() -> void:
 		_footstep_timer.stop()
 		_footstep_timer.queue_free()
 		_footstep_timer = null
+	if _server_check_timer:
+		_server_check_timer.stop()
+		_server_check_timer.queue_free()
+		_server_check_timer = null
 
 	# Stop and clean up background music
 	if _music_player:
@@ -689,33 +718,18 @@ func _create_animated_grid_bg() -> Control:
 	return container
 
 func _create_polished_panel_bg(parent: Control) -> void:
-	"""Add subtle semi-transparent background with accent bar - allows gridlines to show through"""
+	"""Add solid panel background - matches item detail panel style"""
 
-	# Semi-transparent base background - lets gridlines show through
+	# Use same color as item detail panel for consistency across all panels
+	var base_color = Color(0.03, 0.035, 0.045, 1.0)  # Matches _build_forge_detail_panel
+
+	# Solid base background
 	var bg_base = ColorRect.new()
 	bg_base.name = "PanelBgBase"
-	bg_base.color = Color(0.06, 0.06, 0.07, 0.7)  # 70% opacity - gridlines visible
+	bg_base.color = base_color
 	bg_base.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg_base.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(bg_base)
-
-	# Very subtle top highlight
-	var top_highlight = ColorRect.new()
-	top_highlight.name = "TopHighlight"
-	top_highlight.color = Color(0.15, 0.15, 0.17, 0.06)
-	top_highlight.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top_highlight.offset_bottom = 100
-	top_highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(top_highlight)
-
-	# Top accent bar - thin silver line
-	var accent_bar = ColorRect.new()
-	accent_bar.name = "TopAccentBar"
-	accent_bar.color = Color(0.45, 0.45, 0.48, 0.5)
-	accent_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	accent_bar.offset_bottom = 2
-	accent_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(accent_bar)
 
 func _create_glowing_divider() -> Control:
 	"""Create a subtle horizontal divider - simplified"""
@@ -1136,6 +1150,9 @@ func _build_ui() -> void:
 	main_vbox.add_theme_constant_override("separation", 0)
 	add_child(main_vbox)
 
+	# Custom titlebar for borderless window (drag area + window controls)
+	_build_custom_titlebar(main_vbox)
+
 	# Header (title only)
 	_build_header(main_vbox)
 	_start_logo_pulse()  # Start pulsing animation on ASHBANE logo
@@ -1159,32 +1176,25 @@ func _build_ui() -> void:
 	columns.clip_contents = true  # Prevent any column content from overflowing
 	content_margin.add_child(columns)
 
-	# LEFT column: ASHBANE STATS - expands proportionally
-	var left_column = _build_ashbane_stats_column()
+	# TWO-COLUMN LAUNCHER LAYOUT
+	# LEFT column: Profile + Character + Buttons (combined)
+	var left_column = _build_launcher_profile_column()
 	left_column.name = "LeftColumn"
 	left_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	left_column.size_flags_stretch_ratio = 1.0  # Equal ratio
+	left_column.size_flags_stretch_ratio = 1.0
 	columns.add_child(left_column)
 
-	# MIDDLE column: DREADLAND - expands proportionally (slightly larger)
-	var middle_column = _build_dreadland_column()
-	middle_column.name = "MiddleColumn"
-	middle_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	middle_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	middle_column.size_flags_stretch_ratio = 1.3  # Slightly wider
-	columns.add_child(middle_column)
-
-	# RIGHT column: THE FORGE - expands proportionally
+	# RIGHT column: THE FORGE (shrinks to fit content)
 	var right_column = _build_forge_column()
 	right_column.name = "RightColumn"
-	right_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_column.size_flags_horizontal = Control.SIZE_SHRINK_END  # Don't expand, align right
 	right_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right_column.size_flags_stretch_ratio = 1.0  # Equal ratio
+	right_column.size_flags_stretch_ratio = 0  # Don't take extra space
 	columns.add_child(right_column)
 
 	# Apply pulsing border glow to main column panels
-	call_deferred("_apply_column_glow_effects", left_column, middle_column, right_column)
+	call_deferred("_apply_column_glow_effects", left_column, null, right_column)
 
 	# Footer spacer
 	_build_footer(main_vbox)
@@ -1193,7 +1203,731 @@ func _build_ui() -> void:
 	_build_settings_panel()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# THREE-COLUMN LAYOUT
+# TWO-COLUMN LAUNCHER LAYOUT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _build_launcher_profile_column() -> Control:
+	"""LEFT COLUMN: Split layout - News on left, Profile on right"""
+	print("[Armory] Building launcher profile column")
+
+	# Use PanelContainer as root for reliable background rendering
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(320, 0)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # Expand to fill remaining space
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Standard dark panel bg
+	style.border_color = BORDER_GLOW.darkened(0.3)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(6)
+	panel.add_theme_stylebox_override("panel", style)
+
+	# Content margin
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	panel.add_child(margin)
+
+	# Split into two columns: News | Profile
+	var split_container = HBoxContainer.new()
+	split_container.add_theme_constant_override("separation", 20)
+	split_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	split_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(split_container)
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# LEFT SIDE: News/Patch Notes
+	# ═══════════════════════════════════════════════════════════════════════════
+	var news_section = _build_news_section()
+	news_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	news_section.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	news_section.size_flags_stretch_ratio = 0.4  # 40% of width
+	split_container.add_child(news_section)
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# RIGHT SIDE: Profile content
+	# ═══════════════════════════════════════════════════════════════════════════
+	var main_vbox = VBoxContainer.new()
+	main_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_vbox.size_flags_stretch_ratio = 0.6  # 60% of width
+	main_vbox.add_theme_constant_override("separation", 12)
+	split_container.add_child(main_vbox)
+
+	# SPACER - push content towards vertical center
+	var top_spacer = Control.new()
+	top_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	top_spacer.size_flags_stretch_ratio = 0.3  # Less space at top
+	main_vbox.add_child(top_spacer)
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# CHARACTER PREVIEW - fixed size, centered
+	# ═══════════════════════════════════════════════════════════════════════════
+	var char_section = VBoxContainer.new()
+	char_section.add_theme_constant_override("separation", 8)
+	main_vbox.add_child(char_section)
+
+	var char_center = CenterContainer.new()
+	char_section.add_child(char_center)
+
+	var char_preview_section = _build_character_preview_section()
+	char_preview_section.name = "CharPreviewSection"
+	char_preview_section.custom_minimum_size = Vector2(200, 200)
+	char_center.add_child(char_preview_section)
+
+	# Player identity directly under character
+	var identity_center = CenterContainer.new()
+	char_section.add_child(identity_center)
+
+	var identity_vbox = VBoxContainer.new()
+	identity_vbox.add_theme_constant_override("separation", 4)
+	identity_center.add_child(identity_vbox)
+
+	# Name + Badge row
+	var name_row = HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 12)
+	name_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	identity_vbox.add_child(name_row)
+
+	username_label = Label.new()
+	username_label.name = "UsernameLabel"
+	username_label.text = profile.get("username", "Player")
+	username_label.add_theme_font_override("font", default_font)
+	username_label.add_theme_font_size_override("font_size", 22)
+	username_label.add_theme_color_override("font_color", TEXT_PRIMARY)
+	name_row.add_child(username_label)
+
+	launcher_tier_badge = _create_compact_tier_badge()
+	launcher_tier_badge.name = "LauncherTierBadge"
+	name_row.add_child(launcher_tier_badge)
+
+	# Score + Progress in one line
+	var score_progress = HBoxContainer.new()
+	score_progress.add_theme_constant_override("separation", 16)
+	score_progress.alignment = BoxContainer.ALIGNMENT_CENTER
+	identity_vbox.add_child(score_progress)
+
+	launcher_score_label = Label.new()
+	launcher_score_label.name = "LauncherScoreLabel"
+	var total_score = profile.get("total_achievements", 0)
+	launcher_score_label.text = "%s pts" % _format_score(total_score)
+	launcher_score_label.add_theme_font_override("font", default_font)
+	launcher_score_label.add_theme_font_size_override("font_size", 16)
+	launcher_score_label.add_theme_color_override("font_color", Color(0.9, 0.82, 0.55))
+	score_progress.add_child(launcher_score_label)
+
+	# Mini progress indicator
+	launcher_progress_label = Label.new()
+	launcher_progress_label.name = "LauncherProgressLabel"
+	launcher_progress_label.text = _get_progress_text()
+	launcher_progress_label.add_theme_font_override("font", default_font)
+	launcher_progress_label.add_theme_font_size_override("font_size", 13)
+	launcher_progress_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+	score_progress.add_child(launcher_progress_label)
+
+	# Spacer between identity and play button
+	var mid_spacer = Control.new()
+	mid_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mid_spacer.size_flags_stretch_ratio = 0.4
+	main_vbox.add_child(mid_spacer)
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# PLAY BUTTON (prominent, main CTA)
+	# ═══════════════════════════════════════════════════════════════════════════
+	var play_section = CenterContainer.new()
+	main_vbox.add_child(play_section)
+
+	var play_vbox = VBoxContainer.new()
+	play_vbox.add_theme_constant_override("separation", 8)
+	play_vbox.custom_minimum_size = Vector2(260, 0)
+	play_section.add_child(play_vbox)
+
+	enter_world_button = Button.new()
+	enter_world_button.name = "EnterWorldBtn"
+	enter_world_button.text = "ENTER WORLD"
+	enter_world_button.custom_minimum_size = Vector2(0, 48)
+	enter_world_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_button(enter_world_button, ButtonTheme.SUCCESS, ButtonSize.LARGE)
+	enter_world_button.pressed.connect(_on_enter_world_pressed)
+	enter_world_button.mouse_entered.connect(_on_enter_button_hover.bind(true))
+	enter_world_button.mouse_exited.connect(_on_enter_button_hover.bind(false))
+	play_vbox.add_child(enter_world_button)
+	_start_button_pulse(enter_world_button)
+
+	# Host Server button (dev only)
+	host_server_button = Button.new()
+	host_server_button.name = "HostServerBtn"
+	host_server_button.text = "HOST SERVER"
+	host_server_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_button(host_server_button, ButtonTheme.SECONDARY, ButtonSize.MEDIUM)
+	host_server_button.pressed.connect(_on_host_server_pressed)
+	host_server_button.visible = is_server_host
+	play_vbox.add_child(host_server_button)
+
+	# Connection status
+	connection_status_label = Label.new()
+	connection_status_label.name = "ConnectionStatus"
+	connection_status_label.text = ""
+	connection_status_label.add_theme_font_override("font", default_font)
+	connection_status_label.add_theme_font_size_override("font_size", 11)
+	connection_status_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+	connection_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	play_vbox.add_child(connection_status_label)
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# SECONDARY ACTIONS (smaller, bottom)
+	# ═══════════════════════════════════════════════════════════════════════════
+	var actions_row = HBoxContainer.new()
+	actions_row.add_theme_constant_override("separation", 8)
+	actions_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	main_vbox.add_child(actions_row)
+
+	var settings_btn = Button.new()
+	settings_btn.text = "SETTINGS"
+	settings_btn.custom_minimum_size = Vector2(100, 0)
+	_style_button(settings_btn, ButtonTheme.SECONDARY, ButtonSize.SMALL)
+	settings_btn.pressed.connect(_on_settings_pressed)
+	actions_row.add_child(settings_btn)
+
+	logout_button = Button.new()
+	logout_button.text = "LOGOUT"
+	logout_button.custom_minimum_size = Vector2(100, 0)
+	_style_button(logout_button, ButtonTheme.DANGER, ButtonSize.SMALL)
+	logout_button.pressed.connect(_on_logout_pressed)
+	actions_row.add_child(logout_button)
+
+	var exit_btn = Button.new()
+	exit_btn.text = "EXIT"
+	exit_btn.custom_minimum_size = Vector2(80, 0)
+	_style_button(exit_btn, ButtonTheme.SECONDARY, ButtonSize.SMALL)
+	exit_btn.pressed.connect(_on_exit_pressed)
+	actions_row.add_child(exit_btn)
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# FOOTER: Minimal stats
+	# ═══════════════════════════════════════════════════════════════════════════
+	var footer = HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 24)
+	footer.alignment = BoxContainer.ALIGNMENT_CENTER
+	main_vbox.add_child(footer)
+
+	var time_label = Label.new()
+	time_label.text = "Played: 0h"
+	time_label.add_theme_font_override("font", default_font)
+	time_label.add_theme_font_size_override("font_size", 11)
+	time_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+	footer.add_child(time_label)
+
+	var sessions_label = Label.new()
+	sessions_label.text = "Sessions: 0"
+	sessions_label.add_theme_font_override("font", default_font)
+	sessions_label.add_theme_font_size_override("font_size", 11)
+	sessions_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+	footer.add_child(sessions_label)
+
+	# ═══════════════════════════════════════════════════════════════════════════
+	# BOTTOM SPACER - balance with top spacer
+	# ═══════════════════════════════════════════════════════════════════════════
+	var bottom_spacer = Control.new()
+	bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	bottom_spacer.size_flags_stretch_ratio = 0.5  # More space at bottom
+	main_vbox.add_child(bottom_spacer)
+
+	return panel
+
+func _build_news_section() -> Control:
+	"""Build the news/patch notes section for the left side of the column"""
+	# Center container to center everything vertically and horizontally
+	var center = CenterContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	# Margin container to offset 50px to the right
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 50)
+	center.add_child(margin)
+
+	var section = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 12)
+	margin.add_child(section)
+
+	# Header
+	var header = Label.new()
+	header.text = "NEWS"
+	header.add_theme_font_override("font", default_font)
+	header.add_theme_font_size_override("font_size", 24)  # Smaller than FONT_H2
+	header.add_theme_color_override("font_color", TEXT_MUTED)
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section.add_child(header)
+
+	# Scrollable news container
+	var scroll = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(420, 500)  # Wider for readability
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	section.add_child(scroll)
+
+	# Bottom spacer to push content 50px higher
+	var bottom_push = Control.new()
+	bottom_push.custom_minimum_size = Vector2(0, 100)
+	section.add_child(bottom_push)
+
+	var news_list = VBoxContainer.new()
+	news_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	news_list.add_theme_constant_override("separation", 16)
+	scroll.add_child(news_list)
+
+	# Sample news items (will be replaced with real data later)
+	var news_items = [
+		{
+			"date": "Dec 26",
+			"title": "Alpha Build d42fd87",
+			"content": "New launcher UI with Forge integration. Fixed cape animations and icon rendering."
+		},
+		{
+			"date": "Dec 24",
+			"title": "Forge System Live",
+			"content": "116 achievement items now available to forge. Connect your wallet to mint items."
+		},
+		{
+			"date": "Dec 20",
+			"title": "Trading Hub Update",
+			"content": "Player-to-player trading now available. Visit the Trading Hub in-game."
+		},
+		{
+			"date": "Dec 15",
+			"title": "Combat Improvements",
+			"content": "Weapon skills, dodge mechanics, and combat juice effects added."
+		}
+	]
+
+	for item in news_items:
+		var news_card = _create_news_card(item)
+		news_list.add_child(news_card)
+
+	return center
+
+func _create_news_card(item: Dictionary) -> Control:
+	"""Create a single news card"""
+	var card = VBoxContainer.new()
+	card.add_theme_constant_override("separation", 4)
+
+	# Date
+	var date_label = Label.new()
+	date_label.text = item.get("date", "")
+	date_label.add_theme_font_size_override("font_size", 14)  # Smaller date
+	date_label.add_theme_color_override("font_color", TEXT_MUTED)
+	card.add_child(date_label)
+
+	# Title
+	var title_label = Label.new()
+	title_label.text = item.get("title", "")
+	title_label.add_theme_font_override("font", default_font)
+	title_label.add_theme_font_size_override("font_size", 18)  # Medium title
+	title_label.add_theme_color_override("font_color", TEXT_PRIMARY)
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	card.add_child(title_label)
+
+	# Content
+	var content_label = Label.new()
+	content_label.text = item.get("content", "")
+	content_label.add_theme_font_size_override("font_size", 16)  # Readable content
+	content_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+	content_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	card.add_child(content_label)
+
+	# Separator line
+	var separator = ColorRect.new()
+	separator.color = BORDER_GLOW.darkened(0.5)
+	separator.custom_minimum_size = Vector2(0, 1)
+	card.add_child(separator)
+
+	return card
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CUSTOM TITLEBAR (Borderless Window)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _build_custom_titlebar(parent: Control) -> void:
+	"""Build custom titlebar with drag area and window controls"""
+	_titlebar = Control.new()
+	_titlebar.name = "CustomTitlebar"
+	_titlebar.custom_minimum_size = Vector2(0, 32)
+	_titlebar.z_index = 10  # Above header content
+	_titlebar.clip_contents = false  # Don't clip buttons
+	parent.add_child(_titlebar)
+
+	# Background
+	var bg = ColorRect.new()
+	bg.color = Color(0.04, 0.04, 0.05, 1.0)  # Slightly darker than header
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_titlebar.add_child(bg)
+
+	# Bottom border
+	var border = ColorRect.new()
+	border.color = Color(0.15, 0.15, 0.17, 1.0)
+	border.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	border.custom_minimum_size = Vector2(0, 1)
+	border.offset_top = -1
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_titlebar.add_child(border)
+
+	# Drag area (covers most of titlebar)
+	var drag_area = Control.new()
+	drag_area.name = "DragArea"
+	drag_area.set_anchors_preset(Control.PRESET_FULL_RECT)
+	drag_area.anchor_right = 0.85  # Leave space for buttons on right
+	drag_area.mouse_filter = Control.MOUSE_FILTER_STOP
+	drag_area.gui_input.connect(_on_titlebar_drag_input)
+	_titlebar.add_child(drag_area)
+
+	# Window title (small, left side)
+	var title = Label.new()
+	title.text = "Ashbane"
+	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_color_override("font_color", TEXT_MUTED)
+	title.position = Vector2(12, 7)
+	drag_area.add_child(title)
+
+	# Window control buttons (right side) - positioned absolutely to avoid clipping
+	var button_container = HBoxContainer.new()
+	button_container.name = "WindowButtons"
+	button_container.z_index = 20  # Above everything
+	button_container.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	button_container.offset_left = -150
+	button_container.offset_right = 0
+	button_container.offset_top = 0
+	button_container.offset_bottom = 32
+	button_container.alignment = BoxContainer.ALIGNMENT_END
+	button_container.add_theme_constant_override("separation", 0)
+	_titlebar.add_child(button_container)
+
+	# Minimize button
+	var minimize_btn = Button.new()
+	minimize_btn.text = "─"
+	minimize_btn.custom_minimum_size = Vector2(46, 32)
+	minimize_btn.flat = true
+	minimize_btn.add_theme_font_size_override("font_size", 14)
+	minimize_btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	minimize_btn.pressed.connect(_on_minimize_pressed)
+	minimize_btn.mouse_entered.connect(func(): minimize_btn.add_theme_color_override("font_color", TEXT_PRIMARY))
+	minimize_btn.mouse_exited.connect(func(): minimize_btn.add_theme_color_override("font_color", TEXT_SECONDARY))
+	button_container.add_child(minimize_btn)
+
+	# Maximize button
+	var maximize_btn = Button.new()
+	maximize_btn.text = "☐"
+	maximize_btn.custom_minimum_size = Vector2(46, 32)
+	maximize_btn.flat = true
+	maximize_btn.add_theme_font_size_override("font_size", 14)
+	maximize_btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	maximize_btn.pressed.connect(_on_maximize_pressed)
+	maximize_btn.mouse_entered.connect(func(): maximize_btn.add_theme_color_override("font_color", TEXT_PRIMARY))
+	maximize_btn.mouse_exited.connect(func(): maximize_btn.add_theme_color_override("font_color", TEXT_SECONDARY))
+	button_container.add_child(maximize_btn)
+
+	# Close button
+	var close_btn = Button.new()
+	close_btn.text = "✕"
+	close_btn.custom_minimum_size = Vector2(46, 32)
+	close_btn.flat = true
+	close_btn.add_theme_font_size_override("font_size", 14)
+	close_btn.add_theme_color_override("font_color", TEXT_SECONDARY)
+	close_btn.pressed.connect(_on_close_pressed)
+	close_btn.mouse_entered.connect(func(): close_btn.add_theme_color_override("font_color", Color(1, 0.3, 0.3)))
+	close_btn.mouse_exited.connect(func(): close_btn.add_theme_color_override("font_color", TEXT_SECONDARY))
+	button_container.add_child(close_btn)
+
+func _on_titlebar_drag_input(event: InputEvent) -> void:
+	"""Handle window dragging from titlebar"""
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				_dragging_window = true
+				_drag_start_pos = DisplayServer.mouse_get_position() - DisplayServer.window_get_position()
+			else:
+				_dragging_window = false
+	elif event is InputEventMouseMotion and _dragging_window:
+		var new_pos = DisplayServer.mouse_get_position() - _drag_start_pos
+		DisplayServer.window_set_position(new_pos)
+
+func _on_minimize_pressed() -> void:
+	"""Minimize the window"""
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MINIMIZED)
+
+func _on_maximize_pressed() -> void:
+	"""Toggle maximize/restore"""
+	var current_mode = DisplayServer.window_get_mode()
+	if current_mode == DisplayServer.WINDOW_MODE_MAXIMIZED:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		DisplayServer.window_set_size(LAUNCHER_SIZE)
+		_center_launcher_window()
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MAXIMIZED)
+
+func _on_close_pressed() -> void:
+	"""Close the application"""
+	get_tree().quit()
+
+func _get_progress_text() -> String:
+	"""Get compact progress text like '45/100 to Bronze'"""
+	var total_score = profile.get("total_achievements", 0)
+	var tier_key = _get_tier_from_score(total_score)
+
+	var tier_progression = {
+		"initiate": [0, 100, "Bronze"],
+		"bronze": [100, 500, "Silver"],
+		"silver": [500, 1000, "Gold"],
+		"gold": [1000, 2500, "Platinum"],
+		"platinum": [2500, 5000, "Diamond"],
+		"diamond": [5000, 10000, "Legendary"],
+		"legendary": [10000, 25000, "Mythic"],
+		"mythic": [25000, 50000, "Mythic+"]
+	}
+
+	var tier_data = tier_progression.get(tier_key, [0, 100, "Bronze"])
+	var tier_start = tier_data[0]
+	var tier_end = tier_data[1]
+	var next_tier = tier_data[2]
+
+	return "%d/%d → %s" % [total_score - tier_start, tier_end - tier_start, next_tier]
+
+func _get_tier_from_score(score: int) -> String:
+	"""Determine tier key from achievement score"""
+	var tier_thresholds = [
+		[25000, "mythic"],
+		[10000, "legendary"],
+		[5000, "diamond"],
+		[2500, "platinum"],
+		[1000, "gold"],
+		[500, "silver"],
+		[100, "bronze"],
+		[0, "initiate"]
+	]
+	for threshold in tier_thresholds:
+		if score >= threshold[0]:
+			return threshold[1]
+	return "initiate"
+
+func _create_compact_tier_badge() -> Control:
+	"""Create a tier badge"""
+	var tier_key = _get_tier_from_score(profile.get("total_achievements", 0))
+	var tier_color = TIER_COLORS.get(tier_key, Color.GRAY)
+
+	var badge = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = tier_color.darkened(0.2)
+	style.set_corner_radius_all(4)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	style.border_color = tier_color.lightened(0.2)
+	style.set_border_width_all(2)
+	badge.add_theme_stylebox_override("panel", style)
+
+	var label = Label.new()
+	label.text = tier_key.to_upper()
+	label.add_theme_font_override("font", default_font)
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	badge.add_child(label)
+
+	return badge
+
+func _create_compact_progress_bar() -> Control:
+	"""Create a progress bar with tier info"""
+	var container = VBoxContainer.new()
+	container.add_theme_constant_override("separation", 6)
+
+	# Get tier info
+	var total_score = profile.get("total_achievements", 0)
+	var tier_key = _get_tier_from_score(total_score)
+	var tier_color = TIER_COLORS.get(tier_key, Color.GRAY)
+
+	# Tier progression thresholds: [min_score, max_score, next_tier_name]
+	var tier_progression = {
+		"initiate": [0, 100, "Bronze"],
+		"bronze": [100, 500, "Silver"],
+		"silver": [500, 1000, "Gold"],
+		"gold": [1000, 2500, "Platinum"],
+		"platinum": [2500, 5000, "Diamond"],
+		"diamond": [5000, 10000, "Legendary"],
+		"legendary": [10000, 25000, "Mythic"],
+		"mythic": [25000, 50000, "Mythic+"]
+	}
+
+	# Calculate progress
+	var tier_data = tier_progression.get(tier_key, [0, 100, "Bronze"])
+	var tier_start = tier_data[0]
+	var tier_end = tier_data[1]
+	var next_tier = tier_data[2]
+
+	var progress_pct = 0.0
+	if tier_end > tier_start:
+		progress_pct = clampf(float(total_score - tier_start) / float(tier_end - tier_start), 0.0, 1.0)
+
+	# Tier transition label
+	var tier_trans_label = Label.new()
+	tier_trans_label.text = "%s → %s" % [tier_key.capitalize(), next_tier]
+	tier_trans_label.add_theme_font_override("font", default_font)
+	tier_trans_label.add_theme_font_size_override("font_size", 14)
+	tier_trans_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+	tier_trans_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	container.add_child(tier_trans_label)
+
+	# Progress bar background
+	var bar_bg = PanelContainer.new()
+	bar_bg.custom_minimum_size = Vector2(0, 12)
+	var bg_style = StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.12, 0.12, 0.14)
+	bg_style.set_corner_radius_all(6)
+	bg_style.border_color = Color(0.2, 0.2, 0.22)
+	bg_style.set_border_width_all(1)
+	bar_bg.add_theme_stylebox_override("panel", bg_style)
+	container.add_child(bar_bg)
+
+	# Progress fill
+	var bar_fill = ColorRect.new()
+	bar_fill.name = "ProgressFill"
+	bar_fill.color = tier_color
+	bar_fill.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	bar_fill.anchor_right = progress_pct
+	bar_fill.offset_right = 0
+	bar_bg.add_child(bar_fill)
+
+	# Progress text
+	var progress_label = Label.new()
+	progress_label.text = "%d / %d to %s" % [total_score - tier_start, tier_end - tier_start, next_tier]
+	progress_label.add_theme_font_override("font", default_font)
+	progress_label.add_theme_font_size_override("font_size", 12)
+	progress_label.add_theme_color_override("font_color", TEXT_SECONDARY)
+	progress_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	container.add_child(progress_label)
+
+	return container
+
+func _create_subtle_separator_style() -> StyleBoxFlat:
+	"""Create a subtle separator style"""
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(1, 1, 1, 0.1)
+	style.set_content_margin_all(0)
+	style.content_margin_top = 1
+	style.content_margin_bottom = 1
+	return style
+
+func _create_compact_stats_row() -> Control:
+	"""Create a compact horizontal stats row"""
+	var hbox = HBoxContainer.new()
+	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_theme_constant_override("separation", 0)
+
+	# Time Played
+	var time_stat = _create_compact_stat_item("Time", "0h")
+	time_stat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(time_stat)
+
+	# Sessions
+	var sessions_stat = _create_compact_stat_item("Sessions", "0")
+	sessions_stat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(sessions_stat)
+
+	# Last Played
+	var last_stat = _create_compact_stat_item("Last", "Never")
+	last_stat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(last_stat)
+
+	return hbox
+
+func _create_compact_stat_item(stat_label: String, stat_value: String) -> Control:
+	"""Create a single compact stat item (label above value)"""
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 2)
+
+	var label = Label.new()
+	label.text = stat_label
+	label.add_theme_font_override("font", default_font)
+	label.add_theme_font_size_override("font_size", 10)
+	label.add_theme_color_override("font_color", TEXT_MUTED)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(label)
+
+	var value = Label.new()
+	value.text = stat_value
+	value.add_theme_font_override("font", default_font)
+	value.add_theme_font_size_override("font_size", 12)
+	value.add_theme_color_override("font_color", TEXT_SECONDARY)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(value)
+
+	return vbox
+
+func _format_score(score: int) -> String:
+	"""Format score with thousands separator"""
+	var score_str = str(score)
+	var result = ""
+	var count = 0
+	for i in range(score_str.length() - 1, -1, -1):
+		if count > 0 and count % 3 == 0:
+			result = "," + result
+		result = score_str[i] + result
+		count += 1
+	return result
+
+func _create_game_stats_section() -> Control:
+	"""Create game stats section (time played, sessions, last played)"""
+	var section = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 4)
+
+	var header = Label.new()
+	header.text = "GAME STATS"
+	header.add_theme_font_override("font", default_font)
+	header.add_theme_font_size_override("font_size", FONT_TINY)
+	header.add_theme_color_override("font_color", TEXT_MUTED)
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section.add_child(header)
+
+	# Stats grid
+	var stats = [
+		["Time Played:", "0h"],
+		["Sessions:", "0"],
+		["Last Played:", "Never"]
+	]
+
+	for stat in stats:
+		var row = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		section.add_child(row)
+
+		var label = Label.new()
+		label.text = stat[0]
+		label.add_theme_font_override("font", default_font)
+		label.add_theme_font_size_override("font_size", FONT_CAPTION)
+		label.add_theme_color_override("font_color", TEXT_SECONDARY)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+
+		var value = Label.new()
+		value.text = stat[1]
+		value.add_theme_font_override("font", default_font)
+		value.add_theme_font_size_override("font_size", FONT_CAPTION)
+		value.add_theme_color_override("font_color", TEXT_PRIMARY)
+		row.add_child(value)
+
+	var hint = Label.new()
+	hint.text = "Achievements unlock cosmetics."
+	hint.add_theme_font_override("font", default_font)
+	hint.add_theme_font_size_override("font_size", FONT_TINY)
+	hint.add_theme_color_override("font_color", TEXT_MUTED)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section.add_child(hint)
+
+	return section
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# THREE-COLUMN LAYOUT (Legacy)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 func _build_ashbane_stats_column() -> Control:
@@ -1283,7 +2017,7 @@ func _build_ashbane_stats_column() -> Control:
 	providers_header.text = "CONNECTED PLATFORMS"
 	providers_header.add_theme_font_override("font", default_font)
 	providers_header.add_theme_font_size_override("font_size", FONT_TINY)
-	providers_header.add_theme_color_override("font_color", TEXT_DIM)
+	providers_header.add_theme_color_override("font_color", TEXT_MUTED)
 	providers_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	providers_header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	providers_section.add_child(providers_header)
@@ -1320,7 +2054,7 @@ func _build_ashbane_stats_column() -> Control:
 	rarity_header.text = "ACHIEVEMENTS BY RARITY"
 	rarity_header.add_theme_font_override("font", default_font)
 	rarity_header.add_theme_font_size_override("font_size", FONT_TINY)
-	rarity_header.add_theme_color_override("font_color", TEXT_DIM)
+	rarity_header.add_theme_color_override("font_color", TEXT_MUTED)
 	rarity_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rarity_header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rarity_section.add_child(rarity_header)
@@ -1347,7 +2081,7 @@ func _build_ashbane_stats_column() -> Control:
 	recent_header.text = "RECENT UNLOCKS"
 	recent_header.add_theme_font_override("font", default_font)
 	recent_header.add_theme_font_size_override("font_size", FONT_TINY)
-	recent_header.add_theme_color_override("font_color", TEXT_DIM)
+	recent_header.add_theme_color_override("font_color", TEXT_MUTED)
 	recent_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	recent_section.add_child(recent_header)
 
@@ -1442,14 +2176,14 @@ func _create_recent_achievement_row(title: String, game: String, rarity: String,
 		time_label.name = "Timestamp"
 		time_label.text = timestamp
 		time_label.add_theme_font_size_override("font_size", FONT_MIN)
-		time_label.add_theme_color_override("font_color", TEXT_DIM.darkened(0.2))
+		time_label.add_theme_color_override("font_color", TEXT_MUTED.darkened(0.2))
 		title_row.add_child(time_label)
 
 	var game_label = Label.new()
 	game_label.name = "Game"
 	game_label.text = game
 	game_label.add_theme_font_size_override("font_size", FONT_MIN)
-	game_label.add_theme_color_override("font_color", TEXT_DIM)
+	game_label.add_theme_color_override("font_color", TEXT_MUTED)
 	info.add_child(game_label)
 
 	# Right spacer for centering
@@ -1461,6 +2195,8 @@ func _create_recent_achievement_row(title: String, game: String, rarity: String,
 
 func _populate_recent_unlocks() -> void:
 	"""Populate the Recent Unlocks section with demo achievement data"""
+	if not stats_panel:
+		return  # Panel removed in 2-column layout
 	var recent_list = stats_panel.find_child("RecentAchievementsList", true, false)
 	if not recent_list:
 		return
@@ -1504,7 +2240,7 @@ func _create_compact_progress_section() -> Control:
 	arrow.text = "→"
 	arrow.add_theme_font_override("font", default_font)
 	arrow.add_theme_font_size_override("font_size", FONT_BODY)
-	arrow.add_theme_color_override("font_color", TEXT_DIM)
+	arrow.add_theme_color_override("font_color", TEXT_MUTED)
 	tier_row.add_child(arrow)
 
 	var next_tier = Label.new()
@@ -1575,41 +2311,27 @@ func _build_forge_column() -> Control:
 	"""RIGHT COLUMN: The Forge - Tabbed view (Catalog/Owned/Equipped)"""
 	print("[Armory] Building RIGHT column (Forge) with tabs")
 
-	# Use Control wrapper with explicit children (same pattern as left/middle columns)
-	var wrapper = Control.new()
-	wrapper.name = "ForgeColumnWrapper"
-	wrapper.custom_minimum_size = Vector2(320, 0)
-	print("[Armory] Forge wrapper created, min_size: ", wrapper.custom_minimum_size)
-
-	# Polished panel background with gradient and accent bar
-	_create_polished_panel_bg(wrapper)
-
-	# Border overlay with stone gray glow
-	var border = PanelContainer.new()
-	border.name = "ForgeBorder"
-	border.set_anchors_preset(Control.PRESET_FULL_RECT)
-	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var border_style = StyleBoxFlat.new()
-	border_style.bg_color = Color(0, 0, 0, 0)
-	border_style.border_color = BORDER_GLOW
-	border_style.set_border_width_all(3)  # Thicker for presence
-	border_style.set_corner_radius_all(8)
-	border_style.shadow_size = 14
-	border_style.shadow_color = SHADOW_GLOW
-	border_style.shadow_offset = Vector2(0, 3)
-	border_style.set_expand_margin_all(1)
-	border.add_theme_stylebox_override("panel", border_style)
-	wrapper.add_child(border)
+	# Use PanelContainer as root for reliable background rendering
+	var panel = PanelContainer.new()
+	panel.name = "ForgeColumnPanel"
+	# Fixed width for 8-column grid: 540px grid + 24px margin + 12px scroll margin + 4px border
+	panel.custom_minimum_size.x = 584
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_END  # Don't expand beyond minimum
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Standard dark panel bg
+	style.border_color = BORDER_GLOW.darkened(0.3)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(6)
+	panel.add_theme_stylebox_override("panel", style)
+	print("[Armory] Forge panel created, min_size: ", panel.custom_minimum_size)
 
 	# Content container with margins
 	var margin = MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 12)
 	margin.add_theme_constant_override("margin_right", 12)
 	margin.add_theme_constant_override("margin_top", 10)
 	margin.add_theme_constant_override("margin_bottom", 10)
-	margin.z_index = 1  # Render above grid lines
-	wrapper.add_child(margin)
+	panel.add_child(margin)
 	print("[Armory] Forge margin container added")
 
 	var vbox = VBoxContainer.new()
@@ -1721,7 +2443,7 @@ func _build_forge_column() -> Control:
 	var sort_label = Label.new()
 	sort_label.text = "SORT:"
 	sort_label.add_theme_font_size_override("font_size", FONT_TINY)
-	sort_label.add_theme_color_override("font_color", TEXT_DIM)
+	sort_label.add_theme_color_override("font_color", TEXT_MUTED)
 	sort_row.add_child(sort_label)
 
 	var sort_options = {"rarity": "Rarity", "game": "Game", "type": "Type"}
@@ -1743,15 +2465,11 @@ func _build_forge_column() -> Control:
 	spacer3.custom_minimum_size = Vector2(0, 4)
 	vbox.add_child(spacer3)
 
-	# === SCROLLABLE CONTENT AREA (fixed height for 4 rows) ===
-	# 4 rows: 4 × 54px cards + 3 × 4px gaps + padding/borders
-	const CATALOG_HEIGHT = 295
-
-	# Wrapper with border styling (always visible) - use Control for precise sizing
+	# === SCROLLABLE CONTENT AREA (expands to fill available space) ===
 	var scroll_wrapper = Control.new()
 	scroll_wrapper.name = "ForgeScrollWrapper"
-	scroll_wrapper.custom_minimum_size = Vector2(0, CATALOG_HEIGHT)
-	scroll_wrapper.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	scroll_wrapper.custom_minimum_size = Vector2(0, 200)  # Minimum height
+	scroll_wrapper.size_flags_vertical = Control.SIZE_EXPAND_FILL  # Expand to fill space
 	scroll_wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_wrapper.clip_contents = true
 	vbox.add_child(scroll_wrapper)
@@ -1782,19 +2500,19 @@ func _build_forge_column() -> Control:
 	_forge_content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	forge_scroll.add_child(_forge_content_container)
 
-	# === ITEM DETAIL PANEL ===
+	# === ITEM DETAIL PANEL (above bridge section) ===
 	var detail_panel = _build_forge_detail_panel()
 	detail_panel.name = "ForgeDetailPanel"
-	detail_panel.size_flags_vertical = Control.SIZE_SHRINK_END  # Don't expand, stay at bottom
-	detail_panel.z_index = 1  # Render above grid lines
+	detail_panel.size_flags_vertical = Control.SIZE_SHRINK_END
+	detail_panel.z_index = 1
 	vbox.add_child(detail_panel)
 
-	# === BRIDGE UI SECTION ===
+	# === BRIDGE UI SECTION (anchored to bottom) ===
 	var bridge_section = _build_bridge_section()
 	bridge_section.name = "BridgeSection"
-	bridge_section.size_flags_vertical = Control.SIZE_SHRINK_END  # Don't expand, stay at bottom
-	bridge_section.clip_contents = true  # Prevent overflow
-	bridge_section.z_index = 1  # Render above grid lines
+	bridge_section.size_flags_vertical = Control.SIZE_SHRINK_END
+	bridge_section.clip_contents = true
+	bridge_section.z_index = 1
 	vbox.add_child(bridge_section)
 
 	# Build initial forge content (unified view)
@@ -1803,12 +2521,10 @@ func _build_forge_column() -> Control:
 	# Initialize bridge data
 	_refresh_bridge_section()
 
-	# Store references
-	character_preview = wrapper
-	cosmetics_panel = wrapper  # Was border, now wrapper since we simplified
-	forged_panel = wrapper
+	# Note: Legacy panel references (cosmetics_panel, forged_panel) removed
+	# to prevent _apply_tier_accents from applying uneven styling between columns
 
-	return wrapper
+	return panel
 
 func _style_forge_tab(btn: Button, active: bool) -> void:
 	"""Style a forge tab button - uses primary when active, secondary when inactive"""
@@ -1816,7 +2532,7 @@ func _style_forge_tab(btn: Button, active: bool) -> void:
 		_style_button(btn, ButtonTheme.PRIMARY, ButtonSize.SMALL)
 	else:
 		_style_button(btn, ButtonTheme.SECONDARY, ButtonSize.SMALL)
-		btn.add_theme_color_override("font_color", TEXT_DIM)
+		btn.add_theme_color_override("font_color", TEXT_MUTED)
 
 func _style_filter_button(btn: Button, active: bool) -> void:
 	"""Style a filter/sort button - uses primary (stone gray) when active, secondary when inactive"""
@@ -1825,7 +2541,7 @@ func _style_filter_button(btn: Button, active: bool) -> void:
 		btn.add_theme_color_override("font_color", Color(0.92, 0.90, 0.86, 1.0))  # Bright silver when active
 	else:
 		_style_button(btn, ButtonTheme.SECONDARY, ButtonSize.SMALL)
-		btn.add_theme_color_override("font_color", TEXT_DIM)
+		btn.add_theme_color_override("font_color", TEXT_MUTED)
 
 func _on_forge_sort_pressed(sort_id: String) -> void:
 	"""Handle sort button press"""
@@ -1854,7 +2570,7 @@ func _build_forge_detail_panel() -> Control:
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.035, 0.045, 1.0)  # Slightly lighter dark bg
+	style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Standard dark panel bg
 	style.border_color = BORDER_GLOW.darkened(0.3)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
@@ -1941,7 +2657,7 @@ func _build_forge_detail_panel() -> Control:
 	rarity_label.name = "ItemRarity"
 	rarity_label.text = ""
 	rarity_label.add_theme_font_size_override("font_size", FONT_CAPTION)
-	rarity_label.add_theme_color_override("font_color", TEXT_DIM)
+	rarity_label.add_theme_color_override("font_color", TEXT_MUTED)
 	rarity_label.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Prevent text selection
 	rarity_label.clip_text = true
 	info_vbox.add_child(rarity_label)
@@ -2521,8 +3237,8 @@ func _build_bridge_section() -> Control:
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var style = StyleBoxFlat.new()
-	style.bg_color = CARD_BG  # Match other panels
-	style.border_color = BORDER_GLOW  # Use theme border color
+	style.bg_color = Color(0.02, 0.02, 0.03, 1.0)  # Standard dark panel bg
+	style.border_color = BORDER_GLOW.darkened(0.3)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
 	panel.add_theme_stylebox_override("panel", style)
@@ -2574,7 +3290,7 @@ func _build_bridge_section() -> Control:
 	wallet_status.name = "WalletStatusLabel"
 	wallet_status.text = "Not connected"
 	wallet_status.add_theme_font_size_override("font_size", FONT_MIN)
-	wallet_status.add_theme_color_override("font_color", TEXT_DIM)
+	wallet_status.add_theme_color_override("font_color", TEXT_MUTED)
 	wallet_status.clip_text = true
 	wallet_status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	wallet_container.add_child(wallet_status)
@@ -2652,7 +3368,7 @@ func _build_bridge_in_section() -> Control:
 	empty_label.name = "BridgeInEmpty"
 	empty_label.text = "0 items ready"
 	empty_label.add_theme_font_size_override("font_size", FONT_MIN)
-	empty_label.add_theme_color_override("font_color", TEXT_DIM)
+	empty_label.add_theme_color_override("font_color", TEXT_MUTED)
 	items_row.add_child(empty_label)
 
 	return vbox
@@ -2679,7 +3395,7 @@ func _build_bridging_out_section() -> Control:
 	empty_label.name = "BridgingOutEmpty"
 	empty_label.text = "0 items pending"
 	empty_label.add_theme_font_size_override("font_size", FONT_MIN)
-	empty_label.add_theme_color_override("font_color", TEXT_DIM)
+	empty_label.add_theme_color_override("font_color", TEXT_MUTED)
 	items_row.add_child(empty_label)
 
 	return vbox
@@ -2716,7 +3432,7 @@ func _on_wallet_status_fetched(connected: bool, wallet_address: String) -> void:
 			wallet_icon.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 1.0))  # Silver when connected
 		else:
 			wallet_icon.text = "○"  # Hollow dot when disconnected
-			wallet_icon.add_theme_color_override("font_color", TEXT_DIM)  # Use theme dim
+			wallet_icon.add_theme_color_override("font_color", TEXT_MUTED)  # Use theme dim
 
 	# Update wallet address display
 	if _bridge_wallet_status:
@@ -2727,7 +3443,7 @@ func _on_wallet_status_fetched(connected: bool, wallet_address: String) -> void:
 			_bridge_wallet_status.tooltip_text = wallet_address if wallet_address else "Connected"
 		else:
 			_bridge_wallet_status.text = "Not connected"
-			_bridge_wallet_status.add_theme_color_override("font_color", TEXT_DIM)
+			_bridge_wallet_status.add_theme_color_override("font_color", TEXT_MUTED)
 			_bridge_wallet_status.tooltip_text = ""
 
 	# Update connect/disconnect button with proper styling
@@ -2793,7 +3509,7 @@ func _update_bridge_in_display(items: Array) -> void:
 		var more_label = Label.new()
 		more_label.text = "+%d" % (items.size() - 4)
 		more_label.add_theme_font_size_override("font_size", FONT_MIN)
-		more_label.add_theme_color_override("font_color", TEXT_DIM)
+		more_label.add_theme_color_override("font_color", TEXT_MUTED)
 		items_row.add_child(more_label)
 
 func _update_bridging_out_display() -> void:
@@ -3084,7 +3800,7 @@ func _on_wallet_disconnect_complete(success: bool) -> void:
 		# Update UI to show disconnected state
 		if _bridge_wallet_status:
 			_bridge_wallet_status.text = "Not connected"
-			_bridge_wallet_status.add_theme_color_override("font_color", TEXT_DIM)
+			_bridge_wallet_status.add_theme_color_override("font_color", TEXT_MUTED)
 
 		if _bridge_connect_btn:
 			_bridge_connect_btn.text = "CONNECT"
@@ -3559,7 +4275,7 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 		_forge_selected_item = {}
 		if name_label:
 			name_label.text = "Select an item..."
-			name_label.add_theme_color_override("font_color", TEXT_DIM)
+			name_label.add_theme_color_override("font_color", TEXT_MUTED)
 		if rarity_label:
 			rarity_label.text = ""
 		if unlock_label:
@@ -3967,11 +4683,11 @@ func _update_trading_display(item: Dictionary, trading_section: Control,
 					census_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
 				else:
 					census_label.text = "%d forged" % count
-					census_label.add_theme_color_override("font_color", TEXT_DIM)
+					census_label.add_theme_color_override("font_color", TEXT_MUTED)
 				census_label.visible = true
 			else:
 				census_label.text = "None forged yet"
-				census_label.add_theme_color_override("font_color", TEXT_DIM)
+				census_label.add_theme_color_override("font_color", TEXT_MUTED)
 				census_label.visible = true
 		else:
 			census_label.visible = false
@@ -4063,10 +4779,12 @@ func _build_forge_unified_content() -> Control:
 
 	var grid = HFlowContainer.new()
 	grid.name = "CatalogGrid"
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	# Limit to 8 columns: (8 cards × 64px) + (7 gaps × 4px) = 540px
+	grid.custom_minimum_size.x = 540
 	grid.add_theme_constant_override("h_separation", 4)
 	grid.add_theme_constant_override("v_separation", 4)
-	grid.alignment = FlowContainer.ALIGNMENT_CENTER
+	grid.alignment = FlowContainer.ALIGNMENT_BEGIN  # Left-align within fixed width
 	margin.add_child(grid)
 
 	# Get FORGED items (already minted via webapp)
@@ -4205,7 +4923,7 @@ func _build_forge_unlocked_content() -> Control:
 		var desc_label = Label.new()
 		desc_label.text = "Link your gaming accounts and earn achievements\nto unlock exclusive cosmetic items!\n\nUnlocked items can be claimed and added to your inventory."
 		desc_label.add_theme_font_size_override("font_size", FONT_CAPTION)
-		desc_label.add_theme_color_override("font_color", TEXT_DIM)
+		desc_label.add_theme_color_override("font_color", TEXT_MUTED)
 		desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty_container.add_child(desc_label)
@@ -4237,7 +4955,7 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	- 'forgeable': Achievement unlocked, can be forged in webapp (orange anvil)
 	- 'locked': Achievement not unlocked (gray lock)
 	"""
-	const CARD_SIZE = 50  # Card size for forge grid (icon is larger, gets cropped)
+	const CARD_SIZE = 64  # Card size for forge grid (8 columns at 64px)
 
 	var card = PanelContainer.new()
 	card.name = "ForgeCard_" + item.get("id", "unknown")
@@ -4711,7 +5429,7 @@ func _add_fallback_icon(container: Control, item: Dictionary, state: String) -> 
 		"forgeable":
 			fallback.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))  # Bright golden
 		"locked", _:
-			fallback.add_theme_color_override("font_color", TEXT_DIM)
+			fallback.add_theme_color_override("font_color", TEXT_MUTED)
 	container.add_child(fallback)
 
 func _on_forge_card_hover(card: PanelContainer, is_hovering: bool) -> void:
@@ -5138,7 +5856,7 @@ func _build_dreadland_column() -> Control:
 	tagline.text = "Achievements unlock cosmetics."
 	tagline.add_theme_font_override("font", default_font)
 	tagline.add_theme_font_size_override("font_size", FONT_TINY)
-	tagline.add_theme_color_override("font_color", TEXT_DIM)
+	tagline.add_theme_color_override("font_color", TEXT_MUTED)
 	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(tagline)
 
@@ -5207,7 +5925,7 @@ func _build_character_preview_section() -> Control:
 	loading_label.name = "LoadingLabel"
 	loading_label.text = "Loading..."
 	loading_label.add_theme_font_size_override("font_size", FONT_TINY)
-	loading_label.add_theme_color_override("font_color", TEXT_DIM)
+	loading_label.add_theme_color_override("font_color", TEXT_MUTED)
 	loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	placeholder.add_child(loading_label)
 
@@ -5221,7 +5939,7 @@ func _build_game_stats_section() -> Control:
 	var header = Label.new()
 	header.text = "GAME STATS"
 	header.add_theme_font_size_override("font_size", FONT_TINY)
-	header.add_theme_color_override("font_color", TEXT_DIM)
+	header.add_theme_color_override("font_color", TEXT_MUTED)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	section.add_child(header)
 
@@ -5307,7 +6025,7 @@ func _create_mini_teaser(teaser: Dictionary) -> Control:
 	game_label.text = teaser.get("game", "")
 	game_label.add_theme_font_override("font", default_font)
 	game_label.add_theme_font_size_override("font_size", FONT_TINY)
-	game_label.add_theme_color_override("font_color", TEXT_DIM)
+	game_label.add_theme_color_override("font_color", TEXT_MUTED)
 	game_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	text_vbox.add_child(game_label)
 
@@ -5399,7 +6117,7 @@ func _build_character_preview_content() -> Control:
 	var char_icon = Label.new()
 	char_icon.text = "⚔"
 	char_icon.add_theme_font_size_override("font_size", 84)  # Smaller icon
-	char_icon.add_theme_color_override("font_color", TEXT_DIM)
+	char_icon.add_theme_color_override("font_color", TEXT_MUTED)
 	char_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	char_placeholder.add_child(char_icon)
 
@@ -5674,7 +6392,7 @@ func _create_stat_item(stat: Dictionary) -> Control:
 	name_label.text = stat.get("label", "")
 	name_label.add_theme_font_override("font", default_font)
 	name_label.add_theme_font_size_override("font_size", FONT_TINY)
-	name_label.add_theme_color_override("font_color", TEXT_DIM)
+	name_label.add_theme_color_override("font_color", TEXT_MUTED)
 	info.add_child(name_label)
 
 	return container
@@ -6227,6 +6945,88 @@ func _build_header(parent: Control) -> void:
 	subtitle_label.visible = false
 	header_wrapper.add_child(subtitle_label)
 
+	# Server status indicator (bottom-left of header)
+	_build_server_status_indicator(header_wrapper)
+
+func _build_server_status_indicator(parent: Control) -> void:
+	"""Build server status indicator in header"""
+	var status_container = HBoxContainer.new()
+	status_container.add_theme_constant_override("separation", 6)
+	status_container.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	status_container.offset_left = 16
+	status_container.offset_bottom = -8
+	status_container.offset_top = -28
+	parent.add_child(status_container)
+
+	# Status dot (● character)
+	_server_status_dot = Label.new()
+	_server_status_dot.text = "●"
+	_server_status_dot.add_theme_font_size_override("font_size", 12)
+	_server_status_dot.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))  # Gray initially
+	status_container.add_child(_server_status_dot)
+
+	# Status text
+	_server_status_label = Label.new()
+	_server_status_label.text = "Checking..."
+	_server_status_label.add_theme_font_override("font", default_font)
+	_server_status_label.add_theme_font_size_override("font_size", 12)
+	_server_status_label.add_theme_color_override("font_color", Color(0.6, 0.58, 0.55))
+	status_container.add_child(_server_status_label)
+
+	# Start checking server status
+	_start_server_status_check()
+
+func _start_server_status_check() -> void:
+	"""Start periodic server status checking"""
+	# Check immediately
+	_check_server_status()
+
+	# Setup timer for periodic checks (every 30 seconds)
+	_server_check_timer = Timer.new()
+	_server_check_timer.wait_time = 30.0
+	_server_check_timer.autostart = true
+	_server_check_timer.timeout.connect(_check_server_status)
+	add_child(_server_check_timer)
+
+func _check_server_status() -> void:
+	"""Check if game server is reachable"""
+	# Use AshbaneAuth connection status as proxy for server health
+	if AshbaneAuth and AshbaneAuth.connection_status == AshbaneAuth.ConnectionStatus.CONNECTED:
+		_update_server_status(true, "Server Online")
+	elif AshbaneAuth and AshbaneAuth.connection_status == AshbaneAuth.ConnectionStatus.CONNECTING:
+		_update_server_status(false, "Connecting...", Color(1.0, 0.8, 0.2))  # Yellow
+	else:
+		# Try a simple HTTP request to check server
+		var http = HTTPRequest.new()
+		add_child(http)
+		http.request_completed.connect(_on_server_status_response.bind(http))
+		var err = http.request("https://api.ashbane.net/health", [], HTTPClient.METHOD_GET)
+		if err != OK:
+			_update_server_status(false, "Server Offline")
+
+func _on_server_status_response(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray, http: HTTPRequest) -> void:
+	"""Handle server status check response"""
+	http.queue_free()
+	if result == HTTPRequest.RESULT_SUCCESS and response_code == 200:
+		_update_server_status(true, "Server Online")
+	else:
+		_update_server_status(false, "Server Offline")
+
+func _update_server_status(online: bool, text: String, color: Color = Color.WHITE) -> void:
+	"""Update the server status indicator"""
+	if not _server_status_label or not _server_status_dot:
+		return
+
+	_server_status_label.text = text
+
+	if color != Color.WHITE:
+		# Custom color provided
+		_server_status_dot.add_theme_color_override("font_color", color)
+	elif online:
+		_server_status_dot.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))  # Green
+	else:
+		_server_status_dot.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3))  # Red
+
 func _start_logo_pulse() -> void:
 	"""Start a pulsing animation on the ASHBANE logo for visual effect."""
 	if not title_label or not title_glow or not title_glow_bg:
@@ -6271,7 +7071,7 @@ func _create_connection_indicator(parent: Control) -> void:
 	_connection_label = Label.new()
 	_connection_label.text = "Connected"
 	_connection_label.add_theme_font_size_override("font_size", FONT_MIN)
-	_connection_label.add_theme_color_override("font_color", TEXT_DIM)
+	_connection_label.add_theme_color_override("font_color", TEXT_MUTED)
 	_connection_indicator.add_child(_connection_label)
 
 func _update_connection_indicator(status: int) -> void:
@@ -6283,7 +7083,7 @@ func _update_connection_indicator(status: int) -> void:
 		AshbaneAuth.ConnectionStatus.CONNECTED:
 			_connection_dot.color = Color(0.2, 0.8, 0.2)  # Green
 			_connection_label.text = "Connected"
-			_connection_label.add_theme_color_override("font_color", TEXT_DIM)
+			_connection_label.add_theme_color_override("font_color", TEXT_MUTED)
 		AshbaneAuth.ConnectionStatus.CONNECTING:
 			_connection_dot.color = Color(0.9, 0.7, 0.1)  # Yellow/amber
 			_connection_label.text = "Reconnecting..."
@@ -6333,7 +7133,7 @@ func _build_stats_bar(parent: Control) -> void:
 	total_suffix.text = "achievements"
 	total_suffix.add_theme_font_override("font", default_font)
 	total_suffix.add_theme_font_size_override("font_size", FONT_TINY)
-	total_suffix.add_theme_color_override("font_color", TEXT_DIM)
+	total_suffix.add_theme_color_override("font_color", TEXT_MUTED)
 	total_suffix.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	total_section.add_child(total_suffix)
 
@@ -6350,7 +7150,7 @@ func _build_stats_bar(parent: Control) -> void:
 	no_platforms.name = "NoPlatformsLabel"
 	no_platforms.text = "No platforms"
 	no_platforms.add_theme_font_size_override("font_size", FONT_CAPTION)
-	no_platforms.add_theme_color_override("font_color", TEXT_DIM)
+	no_platforms.add_theme_color_override("font_color", TEXT_MUTED)
 	platforms_row.add_child(no_platforms)
 
 	# Separator
@@ -6450,7 +7250,7 @@ func _build_right_column_widescreen() -> Control:
 	subheader.text = "Legendary achievements become legendary gear"
 	subheader.add_theme_font_override("font", default_font)
 	subheader.add_theme_font_size_override("font_size", FONT_CAPTION)
-	subheader.add_theme_color_override("font_color", TEXT_DIM)
+	subheader.add_theme_color_override("font_color", TEXT_MUTED)
 	subheader.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ach_vbox.add_child(subheader)
 
@@ -6738,7 +7538,7 @@ func _create_progress_section() -> Control:
 	progress_current.text = "0"
 	progress_current.add_theme_font_override("font", default_font)
 	progress_current.add_theme_font_size_override("font_size", FONT_TINY)
-	progress_current.add_theme_color_override("font_color", TEXT_DIM)
+	progress_current.add_theme_color_override("font_color", TEXT_MUTED)
 	bar_row.add_child(progress_current)
 
 	# Progress bar container with tier markers
@@ -6793,7 +7593,7 @@ func _create_progress_section() -> Control:
 	progress_target.text = "100"
 	progress_target.add_theme_font_override("font", default_font)
 	progress_target.add_theme_font_size_override("font_size", FONT_TINY)
-	progress_target.add_theme_color_override("font_color", TEXT_DIM)
+	progress_target.add_theme_color_override("font_color", TEXT_MUTED)
 	bar_row.add_child(progress_target)
 
 	# Next tier info row
@@ -6815,7 +7615,7 @@ func _create_progress_section() -> Control:
 	progress_text.text = "Reach 100 achievements to unlock Bronze tier"
 	progress_text.add_theme_font_override("font", default_font)
 	progress_text.add_theme_font_size_override("font_size", FONT_TINY)
-	progress_text.add_theme_color_override("font_color", TEXT_DIM)
+	progress_text.add_theme_color_override("font_color", TEXT_MUTED)
 	progress_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	section.add_child(progress_text)
 
@@ -7063,14 +7863,14 @@ func _create_teaser_item(teaser: Dictionary) -> Control:
 	source.text = "%s - %s" % [teaser.get("game", ""), teaser.get("achievement", "")]
 	source.add_theme_font_override("font", default_font)
 	source.add_theme_font_size_override("font_size", FONT_CAPTION)
-	source.add_theme_color_override("font_color", TEXT_DIM)
+	source.add_theme_color_override("font_color", TEXT_MUTED)
 	info_vbox.add_child(source)
 
 	# Arrow indicator
 	var arrow = Label.new()
 	arrow.text = ">"
 	arrow.add_theme_font_size_override("font_size", FONT_BODY_LG)
-	arrow.add_theme_color_override("font_color", TEXT_DIM)
+	arrow.add_theme_color_override("font_color", TEXT_MUTED)
 	hbox.add_child(arrow)
 
 	container.tooltip_text = "Earn \"%s\" in %s to unlock the %s" % [
@@ -7126,7 +7926,7 @@ func _create_compact_teaser(teaser: Dictionary) -> Control:
 	game_label.text = teaser.get("game", "")
 	game_label.add_theme_font_override("font", default_font)
 	game_label.add_theme_font_size_override("font_size", FONT_BODY)
-	game_label.add_theme_color_override("font_color", TEXT_DIM)
+	game_label.add_theme_color_override("font_color", TEXT_MUTED)
 	game_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	vbox.add_child(game_label)
 
@@ -7346,25 +8146,62 @@ func _setup_ui_for_state() -> void:
 			_show_authenticated_ui()
 
 func _show_guest_ui() -> void:
-	subtitle_label.visible = false  # No subtitle in Ashbane theme
-	username_label.text = "Guest"
-	total_label.text = "0"
-	logout_button.visible = false
+	if subtitle_label:
+		subtitle_label.visible = false  # No subtitle in Ashbane theme
+	if username_label:
+		username_label.text = "Guest"
+	if total_label:
+		total_label.text = "0"
+	if logout_button:
+		logout_button.visible = false
 	_populate_recent_unlocks()
 
 func _show_new_player_ui() -> void:
 	var user_id = profile.get("user_id", 0)
-	subtitle_label.visible = false  # No subtitle in Ashbane theme
-	username_label.text = "Player #%d" % user_id
-	logout_button.visible = true
+	if subtitle_label:
+		subtitle_label.visible = false  # No subtitle in Ashbane theme
+	if username_label:
+		username_label.text = "Player #%d" % user_id
+	if logout_button:
+		logout_button.visible = true
+	_update_launcher_display()
 	_update_stats_display()
 
 func _show_authenticated_ui() -> void:
 	var user_id = profile.get("user_id", 0)
-	subtitle_label.visible = false  # No subtitle in Ashbane theme
-	username_label.text = "Player #%d" % user_id
-	logout_button.visible = true
+	if subtitle_label:
+		subtitle_label.visible = false  # No subtitle in Ashbane theme
+	if username_label:
+		username_label.text = "Player #%d" % user_id
+	if logout_button:
+		logout_button.visible = true
+	_update_launcher_display()
 	_update_stats_display()
+
+func _update_launcher_display() -> void:
+	"""Update the launcher profile column with current profile data"""
+	var total = profile.get("total_achievements", 0)
+	var tier_key = _get_tier_from_score(total)
+	var tier_color = TIER_COLORS.get(tier_key, Color.GRAY)
+
+	# Update score label
+	if launcher_score_label:
+		launcher_score_label.text = "%s pts" % _format_score(total)
+
+	# Update progress label
+	if launcher_progress_label:
+		launcher_progress_label.text = _get_progress_text()
+
+	# Update tier badge
+	if launcher_tier_badge:
+		var badge_label = launcher_tier_badge.get_child(0) if launcher_tier_badge.get_child_count() > 0 else null
+		if badge_label and badge_label is Label:
+			badge_label.text = tier_key.to_upper()
+		# Update badge style
+		var style = launcher_tier_badge.get_theme_stylebox("panel") as StyleBoxFlat
+		if style:
+			style.bg_color = tier_color.darkened(0.2)
+			style.border_color = tier_color.lightened(0.2)
 
 func _update_stats_display() -> void:
 	var ashbane_data = profile.get("ashbane", {})
@@ -7380,9 +8217,12 @@ func _update_stats_display() -> void:
 
 	# Store target for animated count (keep label at "0" until animation)
 	_target_achievement_count = total
-	total_label.text = "0"
+	if total_label:
+		total_label.text = "0"
 
 	# Update character preview
+	if not character_preview:
+		return
 	var char_text = character_preview.find_child("CharacterTierText", true, false)
 	if char_text:
 		char_text.text = "%s Gear" % tier_name
@@ -7422,6 +8262,8 @@ func _update_stats_display() -> void:
 	_populate_recent_unlocks()
 
 func _update_quick_stats() -> void:
+	if not stats_panel:
+		return  # Panel removed in 2-column layout
 	var quick_stats = stats_panel.find_child("QuickStatsSection", true, false)
 	if not quick_stats:
 		return
@@ -7495,14 +8337,15 @@ func _update_quick_stats() -> void:
 				value_label.text = "-"
 
 func _update_tier_badge(tier_key: String, tier_name: String) -> void:
-	tier_label.text = tier_name.to_upper()
 	var color = TIER_COLORS.get(tier_key, TIER_COLORS["initiate"])
 
-	# Update tier label text color
-	if tier_key in ["gold", "silver", "platinum", "diamond"]:
-		tier_label.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1))
-	else:
-		tier_label.add_theme_color_override("font_color", Color.WHITE)
+	# Update tier label text color (if exists)
+	if tier_label:
+		tier_label.text = tier_name.to_upper()
+		if tier_key in ["gold", "silver", "platinum", "diamond"]:
+			tier_label.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1))
+		else:
+			tier_label.add_theme_color_override("font_color", Color.WHITE)
 
 	# Update enhanced badge (new structure with glow)
 	if tier_badge:
@@ -7544,6 +8387,8 @@ func _update_tier_badge(tier_key: String, tier_name: String) -> void:
 		style.shadow_color = Color(color.r, color.g, color.b, 0.4)
 
 func _update_platforms_display() -> void:
+	if not stats_panel:
+		return  # Panel removed in 2-column layout
 	var platforms_row = stats_panel.find_child("PlatformsRow", true, false)
 
 	# Clear existing content
@@ -7871,6 +8716,8 @@ func _add_fallback_letter(icon_container: Control, provider_name: String, color:
 	icon_container.add_child(icon_label)
 
 func _update_rarity_display() -> void:
+	if not stats_panel:
+		return  # Panel removed in 2-column layout
 	var rarity_row = stats_panel.find_child("RarityRow", true, false)
 	if not rarity_row:
 		return
@@ -7989,13 +8836,13 @@ func _create_rarity_gem(rarity_name: String, color: Color, count: int) -> Contro
 	var label = Label.new()
 	if count < 0:
 		label.text = "—"
-		label.add_theme_color_override("font_color", TEXT_DIM)
+		label.add_theme_color_override("font_color", TEXT_MUTED)
 	elif count > 0:
 		label.text = _format_number(count)
 		label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	else:
 		label.text = "0"
-		label.add_theme_color_override("font_color", TEXT_DIM)
+		label.add_theme_color_override("font_color", TEXT_MUTED)
 	label.add_theme_font_override("font", default_font)
 	label.add_theme_font_size_override("font_size", 16)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -8769,6 +9616,8 @@ func _animate_single_panel_entrance(panel: Control, delay: float) -> void:
 	tween.tween_property(panel, "position:y", original_position.y, 0.4)
 
 func _animate_progress_bar() -> void:
+	if not stats_panel:
+		return  # Panel removed in 2-column layout
 	var progress_section = stats_panel.find_child("ProgressSection", true, false)
 	if not progress_section:
 		return
@@ -9066,15 +9915,70 @@ func _on_connection_timeout() -> void:
 	_on_server_connection_failed()
 
 func _load_game_world() -> void:
-	"""Load the game world scene"""
-	# Stop menu music before entering game world
+	"""Load the game world scene with smooth fade transition"""
+	# Save window position before transitioning
+	_save_window_position()
+
+	# Disable buttons to prevent double-clicks during transition
+	if enter_world_button:
+		enter_world_button.disabled = true
+	if logout_button:
+		logout_button.disabled = true
+
+	# Start music fade early (syncs with visual fade)
 	if SoundManager:
-		SoundManager.stop_menu_music(0.8)  # Fade out over 0.8 seconds
+		SoundManager.stop_menu_music(0.6)
+
+	# Create fade overlay
+	await _fade_to_black(0.5)
+
+	# Switch to fullscreen while screen is black
+	if not Engine.is_editor_hint():
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+	# Small delay to let fullscreen settle
+	await get_tree().create_timer(0.1).timeout
 
 	entered_world.emit()
 	var tree = get_tree()
 	if tree:
 		tree.change_scene_to_file("res://main.tscn")
+
+func _fade_to_black(duration: float) -> void:
+	"""Create and animate a fade-to-black overlay"""
+	# Create overlay on highest layer
+	var canvas = CanvasLayer.new()
+	canvas.layer = 100  # Above everything
+	add_child(canvas)
+
+	var overlay = ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0)  # Start transparent
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas.add_child(overlay)
+
+	# Animate to black
+	var tween = create_tween()
+	tween.tween_property(overlay, "color:a", 1.0, duration).set_ease(Tween.EASE_IN)
+	await tween.finished
+
+func _start_fade_in() -> void:
+	"""Fade in from black when launcher opens"""
+	# Create overlay on highest layer, starting opaque
+	var canvas = CanvasLayer.new()
+	canvas.layer = 100
+	add_child(canvas)
+
+	var overlay = ColorRect.new()
+	overlay.color = Color(0, 0, 0, 1)  # Start black
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas.add_child(overlay)
+
+	# Animate to transparent
+	var tween = create_tween()
+	tween.tween_property(overlay, "color:a", 0.0, 0.4).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(canvas.queue_free)  # Clean up after fade
 
 func _on_logout_pressed() -> void:
 	# Play click sound
@@ -9082,12 +9986,19 @@ func _on_logout_pressed() -> void:
 		SoundManager.play_button_click_sound(-6.0)
 	LogManager.info("Logging out from Armory", "ashbane")
 
+	# Save window position before transitioning
+	_save_window_position()
+
 	# Save player data before logging out
 	if NetworkManager:
 		NetworkManager.close_connection()
 
 	if AshbaneAuth:
 		AshbaneAuth.logout()
+
+	# Return to launcher windowed mode
+	_set_launcher_window_mode()
+
 	var tree = get_tree()
 	if tree:
 		tree.change_scene_to_file("res://scenes/ui/MainMenu.tscn")
@@ -9202,7 +10113,7 @@ func _build_settings_panel() -> void:
 	audio_header.text = "AUDIO"
 	audio_header.add_theme_font_override("font", default_font)
 	audio_header.add_theme_font_size_override("font_size", FONT_CAPTION)
-	audio_header.add_theme_color_override("font_color", TEXT_DIM)
+	audio_header.add_theme_color_override("font_color", TEXT_MUTED)
 	vbox.add_child(audio_header)
 
 	# Master Volume
@@ -9228,7 +10139,7 @@ func _build_settings_panel() -> void:
 	display_header.text = "DISPLAY"
 	display_header.add_theme_font_override("font", default_font)
 	display_header.add_theme_font_size_override("font_size", FONT_CAPTION)
-	display_header.add_theme_color_override("font_color", TEXT_DIM)
+	display_header.add_theme_color_override("font_color", TEXT_MUTED)
 	vbox.add_child(display_header)
 
 	# Fullscreen
@@ -10892,6 +11803,9 @@ void fragment() {
 
 func _apply_column_glow_effects(left: Control, middle: Control, right: Control) -> void:
 	"""Apply subtle pulsing glow to the main column panels"""
+	# Use consistent stone gray glow for all columns (matches UITheme)
+	var unified_glow = Color(0.50, 0.50, 0.52, 0.25)  # Stone gray glow
+
 	# Find PanelContainer children in each column
 	for column in [left, middle, right]:
 		if not column:
@@ -10899,13 +11813,64 @@ func _apply_column_glow_effects(left: Control, middle: Control, right: Control) 
 		# Look for the main panel (usually first PanelContainer child)
 		for child in column.get_children():
 			if child is PanelContainer:
-				# Different glow colors for each column
-				var glow_color: Color
-				if column == left:
-					glow_color = Color(0.4, 0.5, 0.7, 0.3)  # Blue-ish for stats
-				elif column == middle:
-					glow_color = Color(0.5, 0.6, 0.4, 0.3)  # Green-ish for dreadland
-				else:
-					glow_color = Color(0.7, 0.5, 0.3, 0.3)  # Orange-ish for forge
-				apply_pulsing_border_glow(child, glow_color)
+				apply_pulsing_border_glow(child, unified_glow)
 				break  # Only apply to first panel in each column
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LAUNCHER WINDOW MODE
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _set_launcher_window_mode() -> void:
+	"""Set compact windowed mode for launcher screens (MainMenu/Armory)"""
+	# Skip in editor to avoid resizing the editor window
+	if Engine.is_editor_hint():
+		return
+
+	# Set windowed mode
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+	# Make window borderless for custom titlebar
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, true)
+
+	# Set launcher size
+	DisplayServer.window_set_size(LAUNCHER_SIZE)
+
+	# Try to restore saved window position, otherwise center
+	var config = ConfigFile.new()
+	var saved_pos: Vector2i = Vector2i.ZERO
+	var has_saved_pos = false
+
+	if config.load("user://settings.cfg") == OK:
+		var x = config.get_value("window", "launcher_x", -1)
+		var y = config.get_value("window", "launcher_y", -1)
+		if x >= 0 and y >= 0:
+			saved_pos = Vector2i(x, y)
+			has_saved_pos = true
+
+	if has_saved_pos:
+		var screen_size = DisplayServer.screen_get_size()
+		if saved_pos.x >= 0 and saved_pos.x < screen_size.x - 100 and saved_pos.y >= 0 and saved_pos.y < screen_size.y - 100:
+			DisplayServer.window_set_position(saved_pos)
+		else:
+			_center_launcher_window()
+	else:
+		_center_launcher_window()
+
+func _center_launcher_window() -> void:
+	var screen_size = DisplayServer.screen_get_size()
+	var centered_pos = (screen_size - LAUNCHER_SIZE) / 2
+	DisplayServer.window_set_position(centered_pos)
+
+func _save_window_position() -> void:
+	if Engine.is_editor_hint():
+		return
+	var pos = DisplayServer.window_get_position()
+	var config = ConfigFile.new()
+	config.load("user://settings.cfg")
+	config.set_value("window", "launcher_x", pos.x)
+	config.set_value("window", "launcher_y", pos.y)
+	config.save("user://settings.cfg")
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_save_window_position()
