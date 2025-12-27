@@ -563,7 +563,7 @@ def get_icon_url_for_item(item: Dict[str, Any]) -> str:
     item_type = item.get("item_type", "weapon")
 
     # Cache-busting version (increment when icons are updated to bypass CF cache)
-    ICON_VERSION = "v8"
+    ICON_VERSION = "v9"
 
     # Check if item has explicit icon URL in visuals
     visuals = item.get("visuals", {})
