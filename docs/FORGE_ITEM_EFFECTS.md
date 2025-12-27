@@ -24,6 +24,185 @@ POWER SOURCES IN DREADLAND:
 
 ---
 
+## Part 0: Effect Slot Design & Forged vs Ashbane Philosophy
+
+### 0.1 Which Slots Have Effects?
+
+**ONLY 3 SLOTS CAN HAVE ABILITIES** (to prevent ability overload):
+
+```
+EFFECT-BEARING SLOTS:
+━━━━━━━━━━━━━━━━━━━━━
+┌──────────┬────────────────────────────────────────────────────┐
+│ WEAPON   │ Primary identity - most visible, defines playstyle │
+│          │ Effects: Damage procs, on-hit effects, actives     │
+├──────────┼────────────────────────────────────────────────────┤
+│ CHEST    │ Major armor piece - defines defensive identity     │
+│          │ Effects: Defensive procs, survival, auras          │
+├──────────┼────────────────────────────────────────────────────┤
+│ HEAD     │ Crown jewel - immediately visible, prestige        │
+│          │ Effects: Utility, party buffs, resource management │
+└──────────┴────────────────────────────────────────────────────┘
+
+NON-EFFECT SLOTS (stats only):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Legs, Boots, Hands, Arms, Cape, Shield, Accessories
+• These slots provide STAT BONUSES only (str, agi, dex, int, wis, vit)
+• No passive effects, no active abilities
+• Keeps ability management simple
+
+WHY ONLY 3 SLOTS?
+• Prevents "Christmas tree" builds with 8+ procs going off
+• Forces meaningful slot choices
+• Makes each effect slot feel valuable
+• Keeps counterplay readable (you know what 3 things to watch for)
+```
+
+### 0.2 Ability Implementation Priority
+
+```
+IMPLEMENTATION ORDER:
+━━━━━━━━━━━━━━━━━━━━
+PHASE 1: PASSIVE EFFECTS (Easiest - No UI changes)
+├── On-hit procs (lifesteal, bonus damage, DoT)
+├── On-kill triggers (heal, buff, explosion)
+├── Stat modifications (crit chance, damage %)
+└── Auras (party buffs, enemy debuffs)
+
+PHASE 2: HOTBAR ACTIVES (Medium - Needs ability bar)
+├── Cooldown-based abilities (30s-60s)
+├── Press button → effect happens
+├── Visible cooldown UI
+└── Most "signature" abilities live here
+
+PHASE 3: INVENTORY/TOGGLE ABILITIES (Niche - Low priority)
+├── Out-of-combat effects (teleport to location, summon mount)
+├── Toggle states (stealth mode, defensive stance)
+└── Limited combat utility
+```
+
+### 0.3 Forged vs Ashbane Design Philosophy
+
+```
+THE ECOSYSTEM:
+━━━━━━━━━━━━━━
+
+FORGED GEAR (Achievement-based)              ASHBANE GEAR (Dreadland-native)
+─────────────────────────────────            ─────────────────────────────────
+• Available from level 1                     • Requires Dreadland progression
+• Themed after SOURCE GAME                   • Themed after DREADLAND world
+• Iconic abilities (Waterfowl Dance)         • Counterplay abilities
+• Creates FOMO/chase feeling                 • Rewards pure grinders
+• "I beat Malenia, I get this"               • "I mastered Dreadland, I get this"
+
+TIER STRUCTURE:
+━━━━━━━━━━━━━━━
+Tier 1-3: Standard Ashbane gear (stat sticks, minor effects)
+Tier 4:   BiS Ashbane with COUNTERPLAY abilities to Forged gear
+
+THE MIX-AND-MATCH VISION:
+━━━━━━━━━━━━━━━━━━━━━━━━━
+• Full Forged build: Themed, iconic, immediately powerful
+• Full Ashbane T4 build: Peak Dreadland grinder, counterplay kit
+• Hybrid build: Best of both worlds, flexible
+• NO hard counters - Ashbane T4 has SOFT advantages vs Forged
+
+COUNTERPLAY PRINCIPLES:
+━━━━━━━━━━━━━━━━━━━━━━━
+NOT: "Ashbane T4 helm completely negates Forged lifesteal"
+YES: "Ashbane T4 helm reduces healing received by enemies by 30%"
+
+NOT: "Forged invuln is useless vs Ashbane anti-invuln"
+YES: "Ashbane T4 grants True Sight (see through stealth/invuln indicators)"
+
+The goal: BOTH builds are viable, context determines winner
+• PvE: Forged builds often better (raw power, no counterplay needed)
+• PvP: Ashbane T4 has edge (counterplay matters)
+• Raids: Mixed builds optimal (bring what the party needs)
+```
+
+### 0.4 Weapon Type → Ability Style Matrix
+
+```
+WEAPON TYPE ABILITY DESIGN:
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AOE WEAPONS (Greatsword, Greataxe, Shotgun, Staff-AoE):
+├── Cleave/splash on every hit
+├── Ground slams, shockwaves
+├── Explosion on kill
+├── Slow, heavy hits
+└── Examples: Radahn's Greatswords (gravity pull), Doom Shotgun (glory kill AoE)
+
+BURST WEAPONS (Dagger, Katana, Rapier):
+├── Execute damage (bonus at low HP)
+├── Critical multipliers
+├── Backstab/flank bonuses
+├── Fast, many hits
+└── Examples: Mortal Blade (massive single strike), Hidden Blade (stealth bonus)
+
+SUSTAINED WEAPONS (Sword, Spear, Halberd):
+├── Combo builders (3rd hit bonus)
+├── Lifesteal / sustain
+├── Balanced offense/defense
+├── Medium speed
+└── Examples: Hand of Malenia (lifesteal), Pure Nail (charged attacks)
+
+RANGED WEAPONS (Bow, Gun, Battle Rifle):
+├── Range advantage effects
+├── Marking/tracking enemies
+├── Headshot bonuses
+├── Kiting support
+└── Examples: Halo BR (shield break), Aloy's Bow (weak point reveal)
+
+MAGIC WEAPONS (Staff, Wand, Catalyst):
+├── Projectile generation
+├── Area denial (DoT zones)
+├── Debuffs on hit
+├── Resource management
+└── Examples: Moonveil (magic wave), Void Heart (void damage)
+
+DEFENSIVE WEAPONS (Shield, Off-hand):
+├── Block bonuses
+├── Parry rewards
+├── Damage reflection
+├── Party protection
+└── Examples: Fingerprint Shield (stability), Dragon Crest (party defense)
+```
+
+### 0.5 FOMO & Chase Design
+
+```
+WHAT MAKES AN ABILITY WORTH GRINDING ANOTHER GAME FOR?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. VISUAL DISTINCTIVENESS
+   ✓ Waterfowl Dance: You KNOW when someone uses it (12-hit flurry, airborne)
+   ✓ Mortal Draw: Dramatic sheathe → draw animation
+   ✗ "+10% damage" - invisible, boring
+
+2. NAME RECOGNITION
+   ✓ "Waterfowl Dance" - Elden Ring players know this
+   ✓ "Terra Beam" - Terraria players know this
+   ✗ "Sword Flurry" - generic, no source connection
+
+3. POWER FANTASY
+   ✓ "I just did THE THING from that game"
+   ✓ Ability feels as impactful as in source game
+   ✗ Watered-down version that doesn't feel like the original
+
+4. EXCLUSIVITY SIGNAL
+   ✓ "That player beat Malenia to get that"
+   ✓ Rare enough to be a conversation starter
+   ✗ Everyone has it, meaningless
+
+5. NO DUPLICATES
+   Each ability MUST be unique. No two items grant the same effect.
+   The ability defines the item's identity.
+```
+
+---
+
 ## Part 1: Passive Effects
 
 ### 1.1 Effect Slot System
@@ -564,6 +743,205 @@ Cannot have both simultaneously.
 
 ---
 
+## Part 2.5: Ashbane Tier 4 Counterplay System
+
+### 2.5.1 The Ashbane Tier 4 Philosophy
+
+Tier 4 Ashbane gear is the **endgame for pure Dreadland grinders**. These items:
+- Require significant Dreadland progression (Zone 6+, raid drops, crafting)
+- Have abilities themed around DREADLAND lore, not external games
+- Provide SOFT counterplay to common Forged strategies
+- Are BiS for PvP against Forged-heavy builds
+
+```
+ASHBANE T4 DESIGN PRINCIPLE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"Reward mastery of Dreadland with tools to compete against any build"
+
+NOT: Hard counters that invalidate Forged gear
+YES: Soft advantages that reward skill and positioning
+```
+
+### 2.5.2 Ashbane T4 Weapon Abilities
+
+```yaml
+# ═══════════════════════════════════════════════════════════════
+# ASHBANE TIER 4 WEAPONS - Counterplay to Forged offensive abilities
+# ═══════════════════════════════════════════════════════════════
+
+DREAD_EXECUTIONER:  # Greatsword
+  name: "Dread Executioner"
+  passive: "Mortal Wound"
+  description: "Attacks apply Mortal Wound: target receives 30% reduced healing for 5s"
+  counterplay_vs: "Lifesteal builds (Malenia, sustain weapons)"
+  slot: weapon
+  acquisition: "Zone 6 Boss - The Dread Knight"
+
+SOUL_REND:  # Katana
+  name: "Soul Rend"
+  passive: "Spirit Severance"
+  description: "Killing blows prevent death-prevention effects (like Link the Fire) for 30s"
+  counterplay_vs: "Death prevention (Coiled Sword, Phoenix)"
+  slot: weapon
+  acquisition: "Abyss Raid - Soulkeeper"
+
+NULLBLADE:  # Sword
+  name: "Nullblade"
+  passive: "Arcane Disruption"
+  description: "Hits dispel one buff from target (10s internal CD per target)"
+  counterplay_vs: "Buff-stacking builds, auras"
+  slot: weapon
+  acquisition: "Anti-magic questline"
+
+GROUNDED_EDGE:  # Dagger
+  name: "Grounded Edge"
+  passive: "Ground Anchor"
+  description: "Hits prevent target from dashing/blinking for 2s"
+  counterplay_vs: "Mobility builds (Shade Cloak, Tracer)"
+  slot: weapon
+  acquisition: "PvP Season 1 Reward"
+
+SILENCE_KEEPER:  # Staff
+  name: "Silence Keeper"
+  passive: "Ability Lockout"
+  description: "Heavy attacks silence target for 1.5s (no active abilities)"
+  counterplay_vs: "Active ability spam (Waterfowl, Descending Dark)"
+  slot: weapon
+  acquisition: "Void Temple Boss"
+```
+
+### 2.5.3 Ashbane T4 Chest Armor Abilities
+
+```yaml
+# ═══════════════════════════════════════════════════════════════
+# ASHBANE TIER 4 CHEST - Counterplay to Forged defensive abilities
+# ═══════════════════════════════════════════════════════════════
+
+IRONHIDE_PLATE:
+  name: "Ironhide Plate"
+  passive: "Unshakeable"
+  description: "Cannot be pulled, pushed, or displaced by abilities"
+  counterplay_vs: "Gravity pull (Radahn), knockbacks"
+  slot: chest
+  acquisition: "Zone 7 Crafted - Ironforge Master"
+
+TRUTHSEEKER_MAIL:
+  name: "Truthseeker Mail"
+  passive: "True Sight"
+  description: "See through stealth and invulnerability visual effects (can still see enemy)"
+  counterplay_vs: "Stealth/invuln builds (Shade Cloak, phase abilities)"
+  slot: chest
+  acquisition: "Hunter's Guild Exalted"
+
+SPITE_CUIRASS:
+  name: "Spite Cuirass"
+  passive: "Vengeance"
+  description: "When hit by a crit, your next attack crits automatically"
+  counterplay_vs: "Crit-stacking builds"
+  slot: chest
+  acquisition: "Gladiator Arena Champion"
+
+ABSORBING_VESTMENTS:
+  name: "Absorbing Vestments"
+  passive: "Effect Absorption"
+  description: "25% of incoming magic damage restores your mana"
+  counterplay_vs: "Magic damage builds (Comet Azur, Terra Beam)"
+  slot: chest
+  acquisition: "Mage Tower Final Trial"
+
+DREADLORD_ARMOR:
+  name: "Dreadlord Armor"
+  passive: "Aura of Dread"
+  description: "Enemies within 100 units deal 10% less damage (stacks with nothing)"
+  counterplay_vs: "General damage output, close-range builds"
+  slot: chest
+  acquisition: "Dreadland Raid - Final Boss"
+```
+
+### 2.5.4 Ashbane T4 Head Armor Abilities
+
+```yaml
+# ═══════════════════════════════════════════════════════════════
+# ASHBANE TIER 4 HEAD - Utility and party support counterplay
+# ═══════════════════════════════════════════════════════════════
+
+WARDEN_HELM:
+  name: "Warden's Helm"
+  passive: "Vigilance"
+  description: "Immune to backstab/flank bonus damage"
+  counterplay_vs: "Assassin/dagger builds with positioning bonuses"
+  slot: head
+  acquisition: "Zone 5 Boss - The Warden"
+
+FOCUS_CROWN:
+  name: "Focus Crown"
+  passive: "Unbreakable Focus"
+  description: "Cannot be stunned or silenced (but can still be slowed)"
+  counterplay_vs: "CC-heavy builds (Starcaller Cry stun, Silence)"
+  slot: head
+  acquisition: "Meditation Temple Quest"
+
+RALLYING_HELM:
+  name: "Rallying Helm"
+  passive: "Commander's Presence"
+  description: "Nearby allies (150 units) gain 10% attack speed"
+  counterplay_vs: "None - pure party utility for Ashbane groups"
+  slot: head
+  acquisition: "Guild War Champion"
+
+PURIFIER_MASK:
+  name: "Purifier Mask"
+  passive: "Cleansing Aura"
+  description: "Reduce duration of all debuffs on self by 40%"
+  counterplay_vs: "DoT builds, debuff stacking"
+  slot: head
+  acquisition: "Healer's Oath Exalted"
+
+DREAD_VISAGE:
+  name: "Dread Visage"
+  passive: "Intimidating Presence"
+  description: "Enemies who hit you have 15% reduced crit chance for 3s"
+  counterplay_vs: "Crit builds (Chaos Blade, precision weapons)"
+  slot: head
+  acquisition: "Dreadland Raid - Second Boss"
+```
+
+### 2.5.5 Counterplay Matrix
+
+```
+HOW ASHBANE T4 SOFT-COUNTERS FORGED ABILITIES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FORGED ABILITY              → ASHBANE T4 COUNTERPLAY
+────────────────────────────────────────────────────
+Lifesteal (Malenia)         → Mortal Wound (30% reduced healing)
+                              NOT negated, just reduced
+
+Death Prevention (Coiled)   → Spirit Severance (blocks for 30s after kill)
+                              Must secure killing blow first
+
+Gravity Pull (Radahn)       → Unshakeable (immune to displacement)
+                              Positional counter only
+
+Invuln/Phase (Shade Cloak)  → True Sight (see through effects)
+                              Still invuln, but visible
+
+Burst Damage (Waterfowl)    → Aura of Dread (10% damage reduction)
+                              Soft mitigation, not immunity
+
+Crit Stacking               → Intimidating Presence (15% reduced crit)
+                              Still can crit, just less often
+
+KEY INSIGHT:
+━━━━━━━━━━━
+• Forged build vs Forged build: Pure damage race
+• Forged build vs Ashbane T4: Ashbane has tools to mitigate
+• Ashbane T4 vs Ashbane T4: Skill-based, no cheese
+• Hybrid builds: Best of both, but weaker in each category
+```
+
+---
+
 ## Part 3: Balance Framework
 
 ### 3.1 Power Budget
@@ -1050,6 +1428,182 @@ When creating new native items to match forged effects:
 
 ---
 
+## Appendix B: Complete Forged Ability Assignments
+
+This is the **authoritative reference** for which forged items grant which abilities. Each ability is UNIQUE - no duplicates.
+
+### B.1 Weapon Slot Abilities (Offensive Focus)
+
+```
+FORGED WEAPONS - PASSIVE + ACTIVE ASSIGNMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Item                    | Type      | Passive                  | Active (Legendary+)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+hand_of_malenia         | Katana    | Lifesteal 3%             | Waterfowl Dance
+mortal_blade            | Katana    | Execute +25% (>50% HP)   | Mortal Draw
+moonveil                | Katana    | Magic Wave on heavy      | Transient Moonlight
+radahns_greatswords     | Greatsword| Gravity Pull on heavy    | Starcaller Cry
+farron_greatsword       | Greatsword| +20% dmg after dodge     | Wolf Flip
+dragonslayer_swordspear | Spear     | Chain Lightning          | Nameless Lightning
+grafted_blade           | Greatsword| +10% damage per buff     | Grafted Strength
+coiled_sword            | Sword     | Death Prevention         | Wrath of the Gods
+terra_blade             | Sword     | Terra Beam projectile    | —
+stygian_blade           | Sword     | Combo damage +30%        | —
+pure_nail               | Sword     | Charged +50%             | —
+witcher_silver_sword    | Sword     | +15% vs non-human        | —
+saw_cleaver             | Sword     | Rally (heal on counter)  | —
+halo_battle_rifle       | Gun       | Shield Break (bypass)    | —
+adamant_rail            | Gun       | Explosive rounds         | Special Ammo
+blades_of_chaos         | Sword     | Fire DoT on hit          | Spartan Rage
+gyoubu_spear            | Spear     | Anti-heal (Mortal Wound) | —
+ezios_hidden_blade      | Dagger    | Backstab +50%            | Assassinate
+sam_fishers_kabar       | Dagger    | Stealth crit +30%        | —
+csgo_karambit           | Dagger    | Bleed on hit             | —
+fiber_wire              | Dagger    | Execute (<20% HP)        | Silent Kill
+tomb_raider_bow         | Bow       | Weakpoint reveal         | —
+aloy_sharpshot_bow      | Bow       | Machine Killer (+dmg)    | —
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### B.2 Head Slot Abilities (Utility Focus)
+
+```
+FORGED HEAD ARMOR - PASSIVE + ACTIVE ASSIGNMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Item                    | Passive                  | Active (Legendary+)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+elden_lord_helm         | +10% Max HP              | Erdtree Blessing (party heal)
+carian_crown            | Carian Phalanx (auto-missiles) | —
+dragonbone_helm         | Shout cooldown -25%      | —
+straw_hat               | OOC regen 2%/s           | —
+ghost_mask              | Stealth detection range  | Ghost Stance
+master_chief_helmet     | Shield regeneration      | Overshield
+pilot_helmet            | Double jump height       | —
+false_king_helm         | Poise +50%               | —
+herald_of_the_titans    | Boss damage +15%         | —
+zagreus_helm            | Dash damage +15%         | —
+loremaster_hood         | XP gain +10%             | —
+prairie_king_cape       | Dodge roll distance +20% | —
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### B.3 Chest Slot Abilities (Defensive Focus)
+
+```
+FORGED CHEST ARMOR - PASSIVE + ACTIVE ASSIGNMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Item                    | Passive                  | Active (Legendary+)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+shade_cloak             | +4 dodge i-frames        | Shade Soul (phase)
+void_heart              | +50% dmg after 4s nodmg  | Descending Dark
+grandmaster_armor       | Toxin immunity           | —
+ashen_armor             | Fire resistance +30%     | —
+elden_armory_chest      | Poise +25%               | —
+ironclad_armor          | Damage reduction +10%    | —
+survivor_vest           | Zombie killer +20%       | —
+insane_straitjacket     | Random buff on hit       | —
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### B.4 Accessories (No Abilities - Stats Only)
+
+```
+ACCESSORIES - STAT BONUSES ONLY, NO ABILITIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Accessories provide stat bonuses but NO passive/active abilities.
+This keeps the ability count manageable (3 slots max).
+
+Examples:
+• discord_nitro_badge    → +5% move speed (stat, not ability)
+• github_star_badge      → +3% XP gain (stat)
+• veteran_roblox_necklace → +5% gold find (stat)
+• stone_of_jordan        → +int/wis stats
+• companion_cube         → +party morale (flavor)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### B.5 Implementation Priority Matrix
+
+```
+PHASE 1 IMPLEMENTATION (Passives Only - 20 items)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Priority | Item                | Passive Effect
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   1     | hand_of_malenia     | Lifesteal 3%
+   2     | coiled_sword        | Death Prevention
+   3     | void_heart          | Perfect Dodge Damage
+   4     | terra_blade         | Terra Beam Projectile
+   5     | shade_cloak         | Enhanced Dodge
+   6     | moonveil            | Magic Wave
+   7     | mortal_blade        | Execute Damage
+   8     | radahns_greatswords | Gravity Pull
+   9     | stygian_blade       | Combo Damage
+  10     | farron_greatsword   | Dash Damage
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+(Remaining 10 in priority order...)
+
+PHASE 2 IMPLEMENTATION (Active Abilities - 8 items)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Priority | Item                | Active Ability
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   1     | hand_of_malenia     | Waterfowl Dance
+   2     | mortal_blade        | Mortal Draw
+   3     | radahns_greatswords | Starcaller Cry
+   4     | void_heart          | Descending Dark
+   5     | shade_cloak         | Shade Soul
+   6     | coiled_sword        | Wrath of the Gods
+   7     | elden_lord_helm     | Erdtree Blessing
+   8     | blades_of_chaos     | Spartan Rage
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+## Appendix C: Build Archetype Examples
+
+```
+EXAMPLE BUILDS - Showing mix-and-match potential
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BUILD 1: "Full Forged Souls"
+───────────────────────────
+Weapon: Hand of Malenia (Lifesteal + Waterfowl Dance)
+Chest:  Shade Cloak (Enhanced Dodge + Shade Soul)
+Head:   Elden Lord Helm (+10% HP + Erdtree Blessing)
+Playstyle: Aggressive, self-sustaining, invuln windows
+Weakness: Ashbane Mortal Wound reduces lifesteal
+Best for: PvE, solo content
+
+BUILD 2: "Full Ashbane Counter"
+────────────────────────────────
+Weapon: Dread Executioner (Mortal Wound)
+Chest:  Truthseeker Mail (True Sight)
+Head:   Focus Crown (CC Immunity)
+Playstyle: Anti-meta, counterplay focused
+Weakness: Lower raw damage than Forged
+Best for: PvP, anti-Forged duels
+
+BUILD 3: "Hybrid Pragmatist"
+────────────────────────────
+Weapon: Mortal Blade (Execute damage)
+Chest:  Ironhide Plate (Unshakeable - Ashbane T4)
+Head:   Ghost Mask (Stealth detection)
+Playstyle: Burst damage with anti-CC defense
+Weakness: No party utility
+Best for: Solo PvP, ganking
+
+BUILD 4: "Party Support"
+────────────────────────
+Weapon: Witcher Silver Sword (Monster slayer)
+Chest:  Dreadlord Armor (Aura of Dread - Ashbane T4)
+Head:   Rallying Helm (Commander's Presence - Ashbane T4)
+Playstyle: Group utility, damage reduction aura
+Weakness: Lower personal damage
+Best for: Raids, group PvP
+```
+
+---
+
 ## Related Documents
 
 - `FORGE_ITEM_PHILOSOPHY.md` - Core design principles and twinking system
@@ -1064,3 +1618,4 @@ When creating new native items to match forged effects:
 - v1.0 (2024-12) - Initial effects system design
 - v1.1 (2024-12) - Added Appendix A: Native Dreadland Equivalents consolidated reference
 - v1.2 (2024-12) - Added Section 4.4: Effect-Driven Trading, marketplace path in new player experience, economy document cross-references
+- v2.0 (2024-12) - Major update: Added Part 0 (Effect Slot Design, Forged vs Ashbane Philosophy, Weapon Type Matrix, FOMO Design), Part 2.5 (Ashbane Tier 4 Counterplay System with full weapon/chest/head ability definitions), Appendix B (Complete Forged Ability Assignments), Appendix C (Build Archetype Examples)
