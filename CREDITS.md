@@ -4,6 +4,9 @@
 
 **Game Design & Programming:** [Your Name]
 
+**Conflict Resolution Systems Lead:** [Daughter, Age 9]
+*"Resolving conflicts peacefully"*
+
 ---
 
 ## Third-Party Assets
@@ -157,4 +160,4 @@ For attribution questions or concerns, please contact [Your Email].
 
 ---
 
-*Last updated: 2025-12-01*
+*Last updated: 2025-12-27*
