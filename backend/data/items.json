@@ -5652,7 +5652,7 @@
       "weapon_type": null,
       "description": "Rugged hiking pants built for mountain exploration.",
       "lore": "Summit fever is real. These pants have seen peaks most never will.",
-      "base_rarity": "uncommon",
+      "base_rarity": "rare",
       "theme": "adventure",
       "material_type": "cloth",
       "visuals": {
