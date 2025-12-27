@@ -5805,6 +5805,36 @@ async def trigger_indexer_poll(
         }
 
 
+@app.get("/api/admin/unmapped-achievements")
+async def get_unmapped_achievements_endpoint(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Get unmapped cross-platform achievements discovered from user syncs.
+
+    As Xbox/PSN users sync achievements, the Tapestry system logs any
+    title_ids and achievement_ids that don't have mappings yet.
+    Use this data to populate platform_mappings.json.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from app.services.platform_mapping_service import get_unmapped_achievements
+    unmapped = get_unmapped_achievements()
+
+    return {
+        "unmapped_count": len(unmapped),
+        "titles": unmapped,
+        "_hint": "Add these to backend/data/platform_mappings.json to enable cross-platform forging"
+    }
+
+
 # =============================================================================
 # ROUTER INCLUSION (must be after specific routes like Steam to avoid conflicts)
 # =============================================================================

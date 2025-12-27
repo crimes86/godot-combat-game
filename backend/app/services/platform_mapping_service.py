@@ -131,9 +131,71 @@ def translate_to_canonical(
                 )
                 return (canonical_app_id, canonical_api_name)
 
-    # No mapping found - return original
-    logger.debug(f"No translation found for {provider}:{app_id}:{api_name}")
+    # No mapping found - log for future population
+    _log_unmapped_achievement(provider, app_id, api_name)
     return (app_id, api_name)
+
+
+# Track unmapped achievements for future mapping population
+_unmapped_achievements: dict = {}
+
+
+def _log_unmapped_achievement(provider: str, app_id: str, api_name: str) -> None:
+    """
+    Log unmapped cross-platform achievements for future mapping population.
+
+    As users sync Xbox/PSN achievements, this builds a list of title_ids
+    and achievement_ids that can be researched and added to platform_mappings.json.
+    """
+    if provider not in ["xbox", "psn"]:
+        return
+
+    key = f"{provider}:{app_id}"
+    if key not in _unmapped_achievements:
+        _unmapped_achievements[key] = {
+            "provider": provider,
+            "app_id": app_id,
+            "achievements": set()
+        }
+        logger.info(
+            f"[TAPESTRY] New unmapped {provider} title discovered: {app_id} "
+            f"(add to platform_mappings.json)"
+        )
+
+    if api_name not in _unmapped_achievements[key]["achievements"]:
+        _unmapped_achievements[key]["achievements"].add(api_name)
+        logger.info(
+            f"[TAPESTRY] Unmapped {provider} achievement: {app_id}:{api_name}"
+        )
+
+
+def get_unmapped_achievements() -> dict:
+    """
+    Get all unmapped cross-platform achievements discovered from user syncs.
+
+    Returns dict of format:
+    {
+        "xbox:12345": {
+            "provider": "xbox",
+            "app_id": "12345",
+            "achievements": ["ACH_001", "ACH_002"]
+        }
+    }
+    """
+    # Convert sets to lists for JSON serialization
+    return {
+        key: {
+            **data,
+            "achievements": list(data["achievements"])
+        }
+        for key, data in _unmapped_achievements.items()
+    }
+
+
+def clear_unmapped_achievements() -> None:
+    """Clear the unmapped achievements cache (for testing)."""
+    global _unmapped_achievements
+    _unmapped_achievements = {}
 
 
 def get_exclusive_item_id(provider: str, app_id: str, api_name: str) -> Optional[str]:
