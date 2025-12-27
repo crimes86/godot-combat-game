@@ -1035,6 +1035,12 @@ oauth.register(
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled error at {request.url}: {exc}", exc_info=True)
+    # Return JSON for API requests, HTML for web pages
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "An unexpected error occurred."}
+        )
     return templates.TemplateResponse(
         "error.html",
         {"request": request, "message": "An unexpected error occurred."},
@@ -1045,6 +1051,12 @@ async def generic_exception_handler(request: Request, exc: Exception):
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     logger.warning(f"HTTPException at {request.url}: {exc.status_code} {exc.detail}")
+    # Return JSON for API requests, HTML for web pages
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail}
+        )
     return templates.TemplateResponse(
         "error.html",
         {"request": request, "message": exc.detail},
@@ -1055,6 +1067,12 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     logger.warning(f"Validation error at {request.url}: {exc}")
+    # Return JSON for API requests, HTML for web pages
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Invalid input or missing fields.", "errors": exc.errors()}
+        )
     return templates.TemplateResponse(
         "error.html",
         {"request": request, "message": "Invalid input or missing fields."},
