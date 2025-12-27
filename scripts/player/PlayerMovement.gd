@@ -186,7 +186,7 @@ func clamp_to_tutorial_bounds(pos: Vector2, tutorial_step: int) -> Vector2:
 
 	# During early tutorial steps, keep player near campfire/dummy/blacksmith
 	if tutorial_step < 4:  # Before KILL_SKELETON step
-		var campfire_pos = Vector2(Constants.CHUNK_SIZE / 2, 0)  # Center of chunk 0
+		var campfire_pos = Vector2(-6000, 0)  # West side of chunk -1 (actual campfire location)
 		var tutorial_radius = 500.0
 
 		var distance_from_center = pos.distance_to(campfire_pos)

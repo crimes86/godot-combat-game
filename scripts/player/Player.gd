@@ -923,7 +923,7 @@ func _physics_process(delta: float) -> void:
 		var tutorial_step = TutorialManager.current_step
 		# During early tutorial steps, keep player near campfire/dummy/blacksmith
 		if tutorial_step < TutorialManager.TutorialStep.KILL_SKELETON:
-			var campfire_pos = Vector2(Constants.CHUNK_SIZE / 2, 0)  # Center of chunk 0
+			var campfire_pos = Vector2(-6000, 0)  # West side of chunk -1 (actual campfire location)
 			var tutorial_radius = 500.0  # Enough for campfire, dummy, and blacksmith
 			var distance_from_center = global_position.distance_to(campfire_pos)
 
@@ -5455,7 +5455,7 @@ func toggle_spawn_hints() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 var tutorial_blackout: Node2D = null
-const TUTORIAL_CENTER = Vector2(4000, 0)  # Constants.CHUNK_SIZE / 2, 0
+const TUTORIAL_CENTER = Vector2(-6000, 0)  # West side of chunk -1 (actual campfire location)
 const TUTORIAL_RADIUS = 500.0
 # Blackout fade is handled in TutorialBlackoutVisual inner class
 # NOTE: tutorial_dummy_hits and TUTORIAL_FORCE_CRIT_HITS moved to PlayerCombat
@@ -5532,7 +5532,7 @@ func _on_tutorial_completed_for_blackout() -> void:
 
 # Inner class for the blackout visual
 class TutorialBlackoutVisual extends Node2D:
-	var center: Vector2 = Vector2(4000, 0)
+	var center: Vector2 = Vector2(-6000, 0)  # Match TUTORIAL_CENTER (campfire location)
 	var inner_radius: float = 400.0  # Clear area around tutorial
 	var fade_width: float = 100.0    # Short fade distance for sharp edge
 

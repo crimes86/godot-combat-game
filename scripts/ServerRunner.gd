@@ -310,10 +310,10 @@ func _cmd_resetpos(args: Array) -> void:
 		print("❌ Account not found: %s" % target)
 		return
 
-	DatabaseManager.players_data[target]["position_x"] = 4000.0
-	DatabaseManager.players_data[target]["position_y"] = 0.0
+	DatabaseManager.players_data[target]["position_x"] = -6000.0
+	DatabaseManager.players_data[target]["position_y"] = 200.0
 	DatabaseManager.save_database()
-	print("✅ Reset %s position to spawn (4000, 0)" % target)
+	print("✅ Reset %s position to spawn (-6000, 200)" % target)
 
 func _cmd_broadcast(args: Array) -> void:
 	if args.is_empty():

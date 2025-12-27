@@ -27,10 +27,10 @@ texture = SubResource("PlaceholderTexture2D_0m6gh")
 shape = SubResource("RectangleShape2D_7i164")
 
 [node name="Camera2D" type="Camera2D" parent="."]
-limit_left = -4000
-limit_top = -2000
-limit_right = 8000
-limit_bottom = 2000
+limit_left = -8000
+limit_top = -4000
+limit_right = 16000
+limit_bottom = 4000
 
 [node name="AttackRange" type="Area2D" parent="."]
 

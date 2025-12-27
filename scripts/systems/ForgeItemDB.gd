@@ -326,8 +326,8 @@ func _api_name_to_display_name(api_name: String) -> String:
 	return " ".join(result)
 
 ## Convert achievement mapping key format to FORGE_ITEMS key format
-## Input: "app_id:api_name" or "provider:api_name"
-## Output: "steam_appid_apiname" or "provider_apiname"
+## Input: "app_id:api_name" or "provider:game:api_name" or "provider:api_name"
+## Output: "steam_appid_apiname" or "provider_game_apiname" or "provider_apiname"
 func _convert_mapping_key_to_achievement_key(mapping_key: String) -> String:
 	var parts = mapping_key.split(":")
 	if parts.size() < 2:
@@ -335,18 +335,19 @@ func _convert_mapping_key_to_achievement_key(mapping_key: String) -> String:
 
 	var provider_or_appid = parts[0]
 
-	# Check if it's a numeric Steam app ID
+	# Check if it's a numeric Steam app ID (2-part: appid:achievement)
 	if provider_or_appid.is_valid_int():
 		var api_name = parts[1]
 		return "steam_%s_%s" % [provider_or_appid, api_name]
-	elif provider_or_appid == "battlenet" and parts.size() >= 3:
-		# Battlenet uses 3-part format: battlenet:game:achievement
-		# e.g., "battlenet:diablo4:SEASON_JOURNEY_GUARDIAN"
+	elif parts.size() >= 3:
+		# 3-part format: provider:game:achievement
+		# e.g., "battlenet:diablo4:SEASON_JOURNEY_GUARDIAN" or "xbox:minecraft:DIAMONDS"
 		var game = parts[1]
 		var achievement = parts[2]
-		return "battlenet_%s_%s" % [game, achievement]
+		return "%s_%s_%s" % [provider_or_appid, game, achievement]
 	else:
-		# Provider like "xbox", "psn", "discord", "github", "roblox" (2-part format)
+		# 2-part format: provider:achievement
+		# e.g., "discord:NITRO_SUBSCRIBER", "github:STARSTRUCK"
 		var api_name = parts[1]
 		return "%s_%s" % [provider_or_appid, api_name]
 

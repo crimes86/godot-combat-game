@@ -1545,8 +1545,8 @@ func get_training_dummy_position() -> Vector2:
 	if dummy:
 		return dummy.global_position
 
-	# Fallback to known position
-	return Vector2(4000, -180)  # CAMPFIRE_POS + Vector2(0, -180)
+	# Fallback to known position (CAMPFIRE_POS is now at -6000, 0)
+	return Vector2(-6000, -180)  # CAMPFIRE_POS + Vector2(0, -180)
 
 func get_blacksmith_position() -> Vector2:
 	"""Get position of blacksmith"""
@@ -1554,8 +1554,8 @@ func get_blacksmith_position() -> Vector2:
 	if blacksmith:
 		return blacksmith.global_position
 
-	# Fallback to known position
-	return Vector2(4150, 0)  # CAMPFIRE_POS + Vector2(150, 0)
+	# Fallback to known position (vendor is at -5750, 0)
+	return Vector2(-5750, 0)  # Near campfire
 
 func get_nearest_skeleton_position() -> Vector2:
 	"""Get position of nearest level 1-2 skeleton to player (excludes training dummy)"""
