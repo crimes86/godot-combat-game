@@ -31,6 +31,15 @@ const EFFECT_CONFIGS = {
 		"particle_count": 5
 	},
 
+	# === THE TAPESTRY - Provider Accent Effects ===
+	# These create subtle rim glows based on source provider color
+	"provider_rim_glow": {
+		"type": "rim_glow",
+		"color": Color(0.1, 0.5, 0.9, 0.4),  # Default blue, overridden by provider
+		"intensity": 0.3,
+		"radius": 16
+	},
+
 	# === HIDDEN/SECRET EFFECTS ===
 	"secrets_keeper_aura": {
 		"type": "aura",
@@ -573,9 +582,13 @@ func apply_effects_to_entity(entity: Node2D, effects: Array, modifiers: Dictiona
 				if particle_multiplier > 0 and config["particle_count"] < 1:
 					config["particle_count"] = 1
 
-			# Apply theme color override if provided
-			if modifiers.has("theme_color"):
+			# Apply theme color override if provided (but not for provider rim glow)
+			if modifiers.has("theme_color") and effect_name != "provider_rim_glow":
 				config["color"] = modifiers.theme_color
+
+			# The Tapestry: Use provider accent color for rim glow effect
+			if effect_name == "provider_rim_glow" and modifiers.has("provider_accent_color"):
+				config["color"] = modifiers.provider_accent_color
 
 			var effect_node = _create_effect_node(effect_name, config)
 			if effect_node:
@@ -619,6 +632,8 @@ func _create_effect_node(effect_name: String, config: Dictionary) -> Node2D:
 			return _create_trail_effect(effect_name, config)
 		"aura":
 			return _create_aura_effect(effect_name, config)
+		"rim_glow":
+			return _create_rim_glow_effect(effect_name, config)
 		_:
 			# Fallback to simple glow for unsupported types
 			return _create_glow_effect(effect_name, config)
@@ -652,6 +667,45 @@ func _create_glow_effect(effect_name: String, config: Dictionary) -> Node2D:
 		tween.tween_property(glow, "modulate:a", color.a * 0.7, 1.0).set_ease(Tween.EASE_IN_OUT)
 
 	return container
+
+
+func _create_rim_glow_effect(effect_name: String, config: Dictionary) -> Node2D:
+	"""
+	Create a rim glow effect for provider accent colors (The Tapestry system).
+
+	This creates an outer glow ring that appears behind the primary glow,
+	giving forged items a subtle colored accent based on their source provider.
+
+	Config expects:
+	- color: The provider accent color
+	- intensity: Effect strength (0.0-1.0)
+	"""
+	var container = Node2D.new()
+	container.name = "ForgeEffect_" + effect_name
+
+	var color: Color = config.get("color", Color.WHITE)
+	var intensity: float = config.get("intensity", 0.3)  # Subtle by default
+	var radius: float = config.get("radius", 16.0) * 0.6  # Slightly larger than primary
+
+	# Create the rim glow sprite (appears behind primary glow)
+	var rim = Sprite2D.new()
+	rim.name = "RimGlowSprite"
+	rim.modulate = Color(color.r, color.g, color.b, intensity * 0.4)
+	rim.scale = Vector2(radius / 6.0, radius / 6.0)  # 1.4x larger than normal glow
+	rim.z_index = -1  # Render behind primary effects
+
+	var texture = _get_or_create_glow_texture()
+	rim.texture = texture
+	container.add_child(rim)
+
+	# Subtle pulse for the rim
+	var tween = container.create_tween()
+	tween.set_loops()
+	tween.tween_property(rim, "modulate:a", intensity * 0.2, 2.0).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(rim, "modulate:a", intensity * 0.5, 2.0).set_ease(Tween.EASE_IN_OUT)
+
+	return container
+
 
 func _create_particle_effect(effect_name: String, config: Dictionary) -> Node2D:
 	"""Create a GPUParticles2D effect - tuned for weapon-sized spawning"""

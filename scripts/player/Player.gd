@@ -5853,6 +5853,12 @@ func _apply_forged_weapon_effects(forged_data: Dictionary) -> void:
 	if glow_color_str != "" and glow_color_str != "none":
 		theme_color = Color(glow_color_str)
 
+	# The Tapestry: Get provider accent color for rim glow
+	var provider_accent_str = forged_data.get("provider_accent_color", "")
+	var provider_accent_color: Color = Color.WHITE
+	if provider_accent_str != "" and provider_accent_str != "none":
+		provider_accent_color = Color(provider_accent_str)
+
 	# Use WeaponVisualEvolution to calculate effects based on stats
 	var effect_config = WeaponVisualEvolution.get_effects_for_weapon(weapon_stats, theme, base_effect)
 
@@ -5879,8 +5885,15 @@ func _apply_forged_weapon_effects(forged_data: Dictionary) -> void:
 	var modifiers = {
 		"effect_intensity": effect_config.intensity,
 		"particle_multiplier": effect_config.particle_multiplier,
-		"theme_color": theme_color
+		"theme_color": theme_color,
+		"provider_accent_color": provider_accent_color
 	}
+
+	# The Tapestry: Add rim glow effect if provider accent color is present
+	if provider_accent_str != "" and provider_accent_str != "none":
+		effect_config.effects.append("provider_rim_glow")
+		if DEBUG_FORGED_EQUIP:
+			print("[ForgedEquip]   Provider Accent: %s (rim glow enabled)" % provider_accent_str)
 
 	# Apply effects to the weapon sprite, not the player
 	# WeaponLayer is a child of CharacterSprite (SimpleLPCSprite)

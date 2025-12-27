@@ -256,6 +256,12 @@ class ForgedAchievement(Base):
     vintage_years = Column(Integer, nullable=True)      # Years since unlock (for "Ancient" prefix)
     is_secret = Column(Boolean, nullable=True)          # From achievement.hidden
 
+    # === THE TAPESTRY (Cross-Platform Provenance) ===
+    # All items are "Threaded from the Tapestry" - a magical weave connecting heroic deeds.
+    # Provider colors create subtle visual accents (rim glow) without explicit naming.
+    source_provider = Column(String(32), nullable=True)     # "steam", "xbox", "psn", etc.
+    provider_accent_color = Column(String(7), nullable=True)  # "#107C10" (provider's brand color)
+
     # === TRADING & PROVENANCE ===
     # Original forger is always the wallet_account_id owner at forge time
     current_owner_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)  # Current owner (null = original forger)

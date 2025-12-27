@@ -446,6 +446,9 @@ async def forge_achievements(
                 effort_tier=item_props["effort_tier"],
                 vintage_years=item_props["vintage_years"],
                 is_secret=item_props["is_secret"],
+                # The Tapestry provenance
+                source_provider=item_props.get("source_provider"),
+                provider_accent_color=item_props.get("provider_accent_color"),
                 # Auto-claim to inventory on forge (no separate claim step needed)
                 claimed_in_game_at=datetime.utcnow(),
             )

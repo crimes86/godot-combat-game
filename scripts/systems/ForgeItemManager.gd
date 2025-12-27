@@ -699,6 +699,9 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 		"effort_tier": forged.get("effort_tier", ""),
 		"vintage_years": forged.get("vintage_years", 0),
 		"is_secret": forged.get("is_secret", false),
+		# The Tapestry provenance (cross-platform identity)
+		"source_provider": forged.get("source_provider", "steam"),
+		"provider_accent_color": forged.get("provider_accent_color", "#1B9BD7"),
 		"can_trade": true,
 		"value": damage_bonus * 100,  # Base sell value
 	}

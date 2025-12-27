@@ -13,6 +13,14 @@ from datetime import datetime
 from typing import Optional, Dict, List, Any
 from functools import lru_cache
 
+from app.services.platform_mapping_service import (
+    translate_to_canonical,
+    get_exclusive_item_id,
+    get_provider_color,
+    get_tapestry_lore,
+    PROVIDER_COLORS,
+)
+
 # =============================================================================
 # CATALOG LOADING
 # =============================================================================
@@ -113,18 +121,41 @@ def get_achievement_mappings() -> Dict[str, str]:
     return {k: v for k, v in mappings.items() if not k.startswith("_")}
 
 
-def get_mapped_item(app_id: str, api_name: str) -> Optional[Dict[str, Any]]:
+def get_mapped_item(app_id: str, api_name: str, provider: str = "steam") -> Optional[Dict[str, Any]]:
     """
     Check if achievement has an explicit item mapping.
+
+    Supports cross-platform lookup via translation layer:
+    - Steam: Direct lookup in achievement_mappings
+    - Xbox/PSN: Translate to canonical Steam ID, then lookup
 
     Returns the mapped item if found, None otherwise.
     """
     mappings = get_achievement_mappings()
-    key = f"{app_id}:{api_name}"
 
+    # Direct lookup first (works for Steam, and already-translated IDs)
+    key = f"{app_id}:{api_name}"
     if key in mappings:
         item_id = mappings[key]
         return get_item_by_id(item_id)
+
+    # For non-Steam providers, try translation
+    if provider not in ["steam", ""]:
+        # Check for platform-exclusive items first (Bloodborne, Halo, etc.)
+        exclusive_item_id = get_exclusive_item_id(provider, app_id, api_name)
+        if exclusive_item_id:
+            return get_item_by_id(exclusive_item_id)
+
+        # Translate to canonical Steam ID
+        canonical_app_id, canonical_api_name = translate_to_canonical(
+            provider, app_id, api_name
+        )
+        canonical_key = f"{canonical_app_id}:{canonical_api_name}"
+
+        # Only try if translation produced a different key
+        if canonical_key != key and canonical_key in mappings:
+            item_id = mappings[canonical_key]
+            return get_item_by_id(item_id)
 
     return None
 
@@ -177,13 +208,14 @@ def select_item_for_achievement(
 
     Selection priority:
     1. Explicit mapping in achievement_mappings (app_id:api_name → item_id)
+       - For Xbox/PSN: translates to canonical Steam ID first
     2. Items matching game theme + similar rarity
     3. Items matching game theme (any rarity)
     4. Generic items matching rarity
     5. Fallback item
     """
-    # Priority 1: Check explicit mapping
-    mapped_item = get_mapped_item(app_id, api_name)
+    # Priority 1: Check explicit mapping (with cross-platform translation)
+    mapped_item = get_mapped_item(app_id, api_name, provider=provider)
     if mapped_item:
         return mapped_item
 
@@ -361,6 +393,10 @@ def compute_forged_item(
 
     Returns dict with all fields needed for ForgedAchievement model.
     All computations are deterministic.
+
+    Includes "The Tapestry" provenance:
+    - source_provider: Which platform the achievement was earned on
+    - provider_accent_color: Visual accent color for rim glow effect
     """
     # Select item from catalog
     selected_item = select_item_for_achievement(
@@ -397,6 +433,9 @@ def compute_forged_item(
     # Get glow color - prefer item's color, fall back to theme color
     glow_color = visuals.get("glow_color") or get_theme_color(theme)
 
+    # The Tapestry: Provider provenance for cross-platform identity
+    provider_accent_color = get_provider_color(provider)
+
     return {
         "item_type": selected_item.get("item_type", "weapon"),
         "weapon_type": selected_item.get("weapon_type"),
@@ -412,6 +451,9 @@ def compute_forged_item(
         "theme": theme,
         "sprite_folder": visuals.get("sprite_folder"),
         "icon_url": visuals.get("icon_url"),
+        # The Tapestry provenance
+        "source_provider": provider,
+        "provider_accent_color": provider_accent_color,
     }
 
 

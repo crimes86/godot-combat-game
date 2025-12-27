@@ -5342,6 +5342,9 @@ async def forge_claim(
         effort_tier=item_props["effort_tier"],
         vintage_years=item_props["vintage_years"],
         is_secret=item_props["is_secret"],
+        # The Tapestry provenance
+        source_provider=item_props.get("source_provider"),
+        provider_accent_color=item_props.get("provider_accent_color"),
     )
     db.add(forge_record)
     db.commit()
@@ -5451,6 +5454,9 @@ async def test_grant_all_items(
             effort_tier="Notable",
             vintage_years=0,
             is_secret=False,
+            # Test items default to steam provider
+            source_provider="steam",
+            provider_accent_color="#1B9BD7",
         )
         db.add(forge_record)
         granted.append({

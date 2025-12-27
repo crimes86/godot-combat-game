@@ -1,0 +1,415 @@
+{
+  "version": "1.0.0",
+  "_comment": "Cross-platform achievement ID mappings. Steam is canonical; Xbox/PSN IDs translate to Steam equivalents.",
+
+  "provider_colors": {
+    "steam": "#1B9BD7",
+    "xbox": "#107C10",
+    "psn": "#003791",
+    "battlenet": "#00AEFF",
+    "roblox": "#00A2FF"
+  },
+
+  "tapestry_lore": {
+    "origin_text": "Threaded from the Tapestry",
+    "flavor_variants": [
+      "Woven from threads of distant triumph",
+      "A fragment pulled from the eternal weave",
+      "Bound by deeds written in other realms"
+    ]
+  },
+
+  "games": {
+    "elden_ring": {
+      "_display_name": "Elden Ring",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "1245620"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "ELDEN_LORD": {
+          "_display_name": "Elden Lord",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "SHARDBEARER_GODRICK": {
+          "_display_name": "Shardbearer Godrick",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "SHARDBEARER_MALENIA": {
+          "_display_name": "Shardbearer Malenia",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "SHARDBEARER_RADAHN": {
+          "_display_name": "Shardbearer Radahn",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "LEGEND": {
+          "_display_name": "Legend (Legendary Armaments)",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "MOHG_THE_OMEN": {
+          "_display_name": "Mohg, the Omen",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "ELDEN_RING": {
+          "_display_name": "Elden Ring (Any Ending)",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "LEGENDARY_ARMAMENTS": {
+          "_display_name": "Legendary Armaments",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "dark_souls_3": {
+      "_display_name": "Dark Souls III",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "374320"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "THE_DARK_SOUL": {
+          "_display_name": "The Dark Soul",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "MASTER_OF_RINGS": {
+          "_display_name": "Master of Rings",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "NAMELESS_KING": {
+          "_display_name": "Nameless King",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "TO_LINK_THE_FIRST_FLAME": {
+          "_display_name": "To Link the First Flame",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "hollow_knight": {
+      "_display_name": "Hollow Knight",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "367520"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "COMPLETION": {
+          "_display_name": "Completion",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "VOID": {
+          "_display_name": "Void",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "EMBRACE_THE_VOID": {
+          "_display_name": "Embrace the Void",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "hades": {
+      "_display_name": "Hades",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "1145360"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "COMPLETE": {
+          "_display_name": "Complete",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "SPEED_RUN": {
+          "_display_name": "Speed Run",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "ESCAPED": {
+          "_display_name": "Escaped",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "sekiro": {
+      "_display_name": "Sekiro: Shadows Die Twice",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "814380"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "IMMORTAL_SEVERANCE": {
+          "_display_name": "Immortal Severance",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "SHURA": {
+          "_display_name": "Shura",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "witcher_3": {
+      "_display_name": "The Witcher 3: Wild Hunt",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "292030"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "GERALT_THE_PROFESSIONAL": {
+          "_display_name": "Geralt: The Professional",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "WALKED_THE_PATH": {
+          "_display_name": "Walked the Path",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "terraria": {
+      "_display_name": "Terraria",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "105600"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "SLAYER_OF_WORLDS": {
+          "_display_name": "Slayer of Worlds",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "stardew_valley": {
+      "_display_name": "Stardew Valley",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "413150"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "LEGEND": {
+          "_display_name": "Legend",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "SINGULAR_TALENT": {
+          "_display_name": "Singular Talent",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "FECTOR_CHALLENGE": {
+          "_display_name": "Fector's Challenge",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "MYSTERY_OF_STARDROPS": {
+          "_display_name": "Mystery of the Stardrops",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "celeste": {
+      "_display_name": "Celeste",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "504230"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "FAREWELL_GOLDEN": {
+          "_display_name": "Farewell Golden",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "dead_cells": {
+      "_display_name": "Dead Cells",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "588650"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "FIVE_BOSS_CELLS": {
+          "_display_name": "5 Boss Cells",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "slay_the_spire": {
+      "_display_name": "Slay the Spire",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "646570"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "ASCENSION_20_HEART": {
+          "_display_name": "Ascension 20 Heart Kill",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        },
+        "IRONCLAD_VICTORY": {
+          "_display_name": "Ironclad Victory",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "cuphead": {
+      "_display_name": "Cuphead",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "268910"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "BEAT_DEVIL_EXPERT": {
+          "_display_name": "Beat Devil on Expert",
+          "xbox": { "achievement_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "skyrim": {
+      "_display_name": "The Elder Scrolls V: Skyrim",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "72850"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" },
+        "psn": { "np_communication_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "MASTER": {
+          "_display_name": "Master",
+          "xbox": { "achievement_id": "TO_RESEARCH" },
+          "psn": { "trophy_id": "TO_RESEARCH" }
+        }
+      }
+    },
+
+    "portal": {
+      "_display_name": "Portal",
+      "canonical": {
+        "platform": "steam",
+        "app_id": "620"
+      },
+      "platforms": {
+        "xbox": { "title_id": "TO_RESEARCH" }
+      },
+      "achievements": {
+        "PORTAL_LUNACY": {
+          "_display_name": "Portal Lunacy",
+          "xbox": { "achievement_id": "TO_RESEARCH" }
+        }
+      }
+    }
+  },
+
+  "exclusive_mappings": {
+    "_comment": "Platform-exclusive games that don't exist on Steam",
+    "psn": {
+      "bloodborne": {
+        "_display_name": "Bloodborne",
+        "np_communication_id": "TO_RESEARCH",
+        "achievements": {
+          "BLOODBORNE_PLATINUM": {
+            "_display_name": "Bloodborne Platinum",
+            "trophy_id": "TO_RESEARCH",
+            "item_id": "saw_cleaver"
+          }
+        }
+      }
+    },
+    "xbox": {
+      "halo_mcc": {
+        "_display_name": "Halo: The Master Chief Collection",
+        "title_id": "TO_RESEARCH",
+        "achievements": {
+          "HALO_LASO": {
+            "_display_name": "LASO Master",
+            "achievement_id": "TO_RESEARCH",
+            "item_id": "master_chief_helmet"
+          }
+        }
+      }
+    }
+  }
+}
