@@ -82,6 +82,7 @@ var logout_button: Button = null
 var settings_panel: Control = null
 var _server_status_label: Label = null
 var _server_status_dot: Label = null
+var _server_player_count_label: Label = null
 var _server_check_timer: Timer = null
 
 # Network connection state
@@ -206,7 +207,7 @@ var TEXT_MUTED: Color:
 
 # Typography scale (standardized sizes) - scaled up for readability
 const FONT_H1 = 48        # Page title (ASHBANE)
-const FONT_H2 = 34        # Column headers (THE FORGE, DREADLAND)
+const FONT_H2 = 34        # Column headers (FORGE, DREADLAND)
 const FONT_H3 = 28        # Section headers (CONNECTED PLATFORMS)
 const FONT_BODY_LG = 28   # Large body text, important values
 const FONT_BODY = 24      # Normal body text
@@ -1185,7 +1186,7 @@ func _build_ui() -> void:
 	left_column.size_flags_stretch_ratio = 1.0
 	columns.add_child(left_column)
 
-	# RIGHT column: THE FORGE (shrinks to fit content)
+	# RIGHT column: FORGE (shrinks to fit content)
 	var right_column = _build_forge_column()
 	right_column.name = "RightColumn"
 	right_column.size_flags_horizontal = Control.SIZE_SHRINK_END  # Don't expand, align right
@@ -1518,6 +1519,7 @@ func _create_news_card(item: Dictionary) -> Control:
 	date_label.text = item.get("date", "")
 	date_label.add_theme_font_size_override("font_size", 14)  # Smaller date
 	date_label.add_theme_color_override("font_color", TEXT_MUTED)
+	date_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card.add_child(date_label)
 
 	# Title
@@ -1527,6 +1529,7 @@ func _create_news_card(item: Dictionary) -> Control:
 	title_label.add_theme_font_size_override("font_size", 18)  # Medium title
 	title_label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card.add_child(title_label)
 
 	# Content
@@ -1535,6 +1538,7 @@ func _create_news_card(item: Dictionary) -> Control:
 	content_label.add_theme_font_size_override("font_size", 16)  # Readable content
 	content_label.add_theme_color_override("font_color", TEXT_SECONDARY)
 	content_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card.add_child(content_label)
 
 	# Separator line
@@ -2348,7 +2352,7 @@ func _build_forge_column() -> Control:
 	header_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(header_row)
 
-	# THE FORGE header - 25% larger than standard H2 for emphasis
+	# FORGE header - 25% larger than standard H2 for emphasis
 	const FORGE_HEADER_SIZE = 35  # 28 * 1.25 = 35
 
 	var forge_icon = Label.new()
@@ -2358,7 +2362,7 @@ func _build_forge_column() -> Control:
 	header_row.add_child(forge_icon)
 
 	var header = Label.new()
-	header.text = "THE FORGE"
+	header.text = "FORGE"
 	header.add_theme_font_override("font", default_font)
 	header.add_theme_font_size_override("font_size", FORGE_HEADER_SIZE)
 	header.add_theme_color_override("font_color", TEXT_PRIMARY)
@@ -2583,11 +2587,34 @@ func _build_forge_detail_panel() -> Control:
 	margin.add_theme_constant_override("margin_bottom", 8)
 	panel.add_child(margin)
 
+	# Stack container to swap between placeholder and item content
+	var stack = Control.new()
+	stack.name = "DetailStack"
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.custom_minimum_size = Vector2(0, 100)  # Maintain height even when content hidden
+	margin.add_child(stack)
+
+	# Centered placeholder shown when no item selected
+	var placeholder = Label.new()
+	placeholder.name = "SelectPlaceholder"
+	placeholder.text = "Select an item"
+	placeholder.add_theme_font_size_override("font_size", FONT_BODY)
+	placeholder.add_theme_color_override("font_color", TEXT_MUTED)
+	placeholder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	placeholder.visible = true  # Show by default
+	stack.add_child(placeholder)
+
 	# Main horizontal layout: Icon | Info | Actions
 	var main_hbox = HBoxContainer.new()
+	main_hbox.name = "ItemContent"
 	main_hbox.add_theme_constant_override("separation", 12)
 	main_hbox.clip_contents = true  # Prevent overflow
-	margin.add_child(main_hbox)
+	main_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	main_hbox.visible = false  # Hidden until item selected
+	stack.add_child(main_hbox)
 
 	# === LEFT: Icon ===
 	var icon_container = PanelContainer.new()
@@ -2633,10 +2660,10 @@ func _build_forge_detail_panel() -> Control:
 	icon_placeholder.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Pass mouse to parent for tooltip
 	icon_holder.add_child(icon_placeholder)
 
-	# === CENTER: Tooltip-style info ===
+	# === CENTER: Tooltip-style info (balanced layout) ===
 	var info_vbox = VBoxContainer.new()
 	info_vbox.name = "DetailInfo"
-	info_vbox.add_theme_constant_override("separation", 2)
+	info_vbox.add_theme_constant_override("separation", 1)  # Slight spacing
 	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	info_vbox.clip_contents = true  # Prevent overflow
@@ -2646,60 +2673,49 @@ func _build_forge_detail_panel() -> Control:
 	var name_label = Label.new()
 	name_label.name = "ItemName"
 	name_label.text = "Select an item"
-	name_label.add_theme_font_size_override("font_size", 18)
+	name_label.add_theme_font_size_override("font_size", 16)
 	name_label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name_label.custom_minimum_size = Vector2(180, 0)  # Min width to ensure some text shows
+	name_label.custom_minimum_size = Vector2(160, 0)
 	info_vbox.add_child(name_label)
 
-	# Rarity + Game line
-	var rarity_label = Label.new()
-	rarity_label.name = "ItemRarity"
-	rarity_label.text = ""
-	rarity_label.add_theme_font_size_override("font_size", FONT_CAPTION)
-	rarity_label.add_theme_color_override("font_color", TEXT_MUTED)
-	rarity_label.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Prevent text selection
-	rarity_label.clip_text = true
-	info_vbox.add_child(rarity_label)
-
-	# Status line (Ready to equip! / Ready to forge! / Locked)
-	var unlock_label = Label.new()
-	unlock_label.name = "ItemUnlock"
-	unlock_label.text = ""
-	unlock_label.add_theme_font_size_override("font_size", FONT_CAPTION)
-	unlock_label.add_theme_color_override("font_color", TEXT_SECONDARY)
-	info_vbox.add_child(unlock_label)
-
-	# Spacer
-	var spacer = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 4)
-	info_vbox.add_child(spacer)
-
-	# Stat line (Damage/Defense)
+	# Stat line (Damage/Defense) - right under name
 	var stat_label = Label.new()
 	stat_label.name = "StatLabel"
 	stat_label.text = ""
-	stat_label.add_theme_font_size_override("font_size", FONT_CAPTION)
+	stat_label.add_theme_font_size_override("font_size", FONT_TINY)
 	stat_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
 	info_vbox.add_child(stat_label)
 
-	# Achievement source line
-	var achievement_label = Label.new()
-	achievement_label.name = "AchievementLabel"
-	achievement_label.text = ""
-	achievement_label.add_theme_font_size_override("font_size", FONT_TINY)
-	achievement_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
-	info_vbox.add_child(achievement_label)
-
-	# Census line (Only 1 exists!)
+	# Census line (ownership count)
 	var census_label = Label.new()
 	census_label.name = "CensusLabel"
 	census_label.text = ""
-	census_label.add_theme_font_size_override("font_size", FONT_CAPTION)
-	census_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3))
+	census_label.add_theme_font_size_override("font_size", FONT_MIN)
+	census_label.add_theme_color_override("font_color", Color(0.4, 0.8, 0.4))
 	info_vbox.add_child(census_label)
 
-	# Hidden lore label (kept for compatibility)
+	# Rarity + Game line (at bottom)
+	var rarity_label = Label.new()
+	rarity_label.name = "ItemRarity"
+	rarity_label.text = ""
+	rarity_label.add_theme_font_size_override("font_size", FONT_MIN)
+	rarity_label.add_theme_color_override("font_color", TEXT_MUTED)
+	rarity_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rarity_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	info_vbox.add_child(rarity_label)
+
+	# Hidden labels (kept for compatibility but not displayed in detail pane)
+	var unlock_label = Label.new()
+	unlock_label.name = "ItemUnlock"
+	unlock_label.visible = false
+	info_vbox.add_child(unlock_label)
+
+	var achievement_label = Label.new()
+	achievement_label.name = "AchievementLabel"
+	achievement_label.visible = false
+	info_vbox.add_child(achievement_label)
+
 	var lore_label = Label.new()
 	lore_label.name = "ItemLore"
 	lore_label.visible = false
@@ -2959,6 +2975,38 @@ func _style_bridge_button(btn: Button) -> void:
 func _style_cancel_button(btn: Button) -> void:
 	"""Style the CANCEL button (red/warning)"""
 	_style_button(btn, ButtonTheme.DANGER, ButtonSize.SMALL)
+
+# Track active forge button pulse tween
+var _forge_pulse_tween: Tween = null
+
+func _start_forge_button_pulse(btn: Button) -> void:
+	"""Start a pulsing color animation on the FORGE button to draw attention"""
+	if not btn or not is_instance_valid(btn):
+		return
+
+	# Stop any existing pulse
+	_stop_forge_button_pulse(btn)
+
+	# Create looping pulse tween
+	_forge_pulse_tween = create_tween()
+	_forge_pulse_tween.set_loops()  # Infinite loop
+
+	# Bright golden color for the pulse peak
+	var golden = Color(1.0, 0.85, 0.4, 1.0)
+	var normal = Color(1.0, 1.0, 1.0, 1.0)
+
+	# Slow color pulse: natural -> golden -> natural (1.6s total cycle)
+	_forge_pulse_tween.tween_property(btn, "modulate", golden, 0.8).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_forge_pulse_tween.tween_property(btn, "modulate", normal, 0.8).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+func _stop_forge_button_pulse(btn: Button) -> void:
+	"""Stop the pulsing animation and reset button state"""
+	if _forge_pulse_tween and _forge_pulse_tween.is_valid():
+		_forge_pulse_tween.kill()
+		_forge_pulse_tween = null
+
+	if btn and is_instance_valid(btn):
+		btn.modulate = Color(1.0, 1.0, 1.0, 1.0)
 
 func _on_bridge_out_pressed() -> void:
 	"""Handle BRIDGE OUT button press - start 48h cooldown to move item to external wallet"""
@@ -4248,6 +4296,10 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 	var is_owned = item_state == "forged"
 	var is_forgeable = item_state == "forgeable"
 
+	# Get placeholder and item content containers
+	var select_placeholder = _forge_detail_panel.find_child("SelectPlaceholder", true, false)
+	var item_content = _forge_detail_panel.find_child("ItemContent", true, false)
+
 	# Get UI elements
 	var name_label = _forge_detail_panel.find_child("ItemName", true, false)
 	var rarity_label = _forge_detail_panel.find_child("ItemRarity", true, false)
@@ -4273,31 +4325,9 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 
 	if item.is_empty():
 		_forge_selected_item = {}
-		if name_label:
-			name_label.text = "Select an item..."
-			name_label.add_theme_color_override("font_color", TEXT_MUTED)
-		if rarity_label:
-			rarity_label.text = ""
-		if unlock_label:
-			unlock_label.text = ""
-		if stat_label:
-			stat_label.text = ""
-		if achievement_label:
-			achievement_label.text = ""
-		if census_label:
-			census_label.text = ""
-		if lore_label: lore_label.visible = false
-		if preview_btn: preview_btn.visible = false
-		if forge_btn: forge_btn.visible = false
-		if icon_label:
-			icon_label.text = "?"
-			icon_label.add_theme_font_size_override("font_size", 32)
-			icon_label.add_theme_color_override("font_color", Color(0.25, 0.28, 0.32))
-			icon_label.visible = true
-		if icon_texture:
-			icon_texture.visible = false
-		if icon_container:
-			icon_container.tooltip_text = ""
+		# Show centered placeholder, hide item content
+		if select_placeholder: select_placeholder.visible = true
+		if item_content: item_content.visible = false
 		# Hide action buttons in empty state
 		var bridge_out_btn = _forge_detail_panel.find_child("BridgeOutButton", true, false)
 		var bridge_in_btn = _forge_detail_panel.find_child("BridgeInButton", true, false)
@@ -4308,6 +4338,10 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 		return
 
 	_forge_selected_item = item
+
+	# Show item content, hide placeholder
+	if select_placeholder: select_placeholder.visible = false
+	if item_content: item_content.visible = true
 
 	# Get item properties
 	var item_name = item.get("item_name", item.get("name", "Unknown"))
@@ -4324,50 +4358,79 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 		name_label.text = item_name
 		name_label.add_theme_color_override("font_color", rarity_color if is_owned else rarity_color.darkened(0.3))
 
-	# Rarity + Game line
+	# Game name in rarity color
 	if rarity_label:
-		rarity_label.text = "%s • %s" % [rarity.to_lower(), game_name]
+		rarity_label.text = game_name
 		rarity_label.add_theme_color_override("font_color", rarity_color.darkened(0.2))
 
 	# Status line - check forge opportunity from item data
 	var detail_has_forge_opportunity = item.get("has_forge_opportunity", false)
-	if unlock_label:
-		if is_owned and detail_has_forge_opportunity:
-			unlock_label.text = "✓ In bag • ⚒️ Can forge more!"
-			unlock_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.2))
-		elif is_owned:
-			unlock_label.text = "✓ Ready to equip!"
-			unlock_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
-		elif is_forgeable or detail_has_forge_opportunity:
-			unlock_label.text = "⚒️ Ready to forge!"
-			unlock_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
-		else:
-			unlock_label.text = "Locked"
-			unlock_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	# unlock_label is now hidden - status communicated via animated forge button instead
 
-	# Stat line (Damage/Defense based on category)
+	# Stat line - show actual item stats based on category
 	if stat_label:
+		stat_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))  # Reset to green
+		var stat_parts = []
+
 		if category == "weapons":
-			var base_damage = int(10 * rarity_multiplier)
-			stat_label.text = "Damage: +%d" % base_damage
+			# Weapon type
+			var weapon_type = item.get("weapon_type", "")
+			if weapon_type != "":
+				stat_parts.append(weapon_type.capitalize())
+
+			# Damage from item data or calculate fallback
+			var base_damage = item.get("base_damage", null)
+			if base_damage is Dictionary:
+				if base_damage.has("min") and base_damage.has("max"):
+					stat_parts.append("Dmg: %d-%d" % [base_damage.min, base_damage.max])
+			elif base_damage is float or base_damage is int:
+				stat_parts.append("Dmg: +%d" % int(base_damage))
+			elif base_damage != null:
+				stat_parts.append("Dmg: +%d" % int(10 * rarity_multiplier))
+
+			# Attack speed
+			var attack_speed = item.get("attack_speed", "")
+			if attack_speed != "":
+				stat_parts.append(attack_speed.capitalize())
+
+			stat_label.text = " • ".join(stat_parts) if stat_parts.size() > 0 else ""
+
 		elif category in ["armor", "shields"]:
-			var base_defense = int(8 * rarity_multiplier)
-			stat_label.text = "Defense: +%d" % base_defense
+			# Defense from item data or calculate fallback
+			var defense = item.get("defense", 0)
+			if defense > 0:
+				stat_parts.append("Def: +%d" % defense)
+			else:
+				stat_parts.append("Def: +%d" % int(8 * rarity_multiplier))
+
+			# Armor slot type
+			var item_type = item.get("item_type", "")
+			if item_type != "" and item_type != "armor":
+				stat_parts.append(item_type.replace("armor_", "").capitalize())
+
+			stat_label.text = " • ".join(stat_parts) if stat_parts.size() > 0 else ""
+
+		elif category == "accessories":
+			# Show stat bonuses if available
+			var stat_bonuses = item.get("stat_bonuses", {})
+			for stat_key in ["str", "agi", "dex", "int", "wis", "vit"]:
+				var val = stat_bonuses.get(stat_key, 0)
+				if val > 0:
+					stat_parts.append("+%d %s" % [val, stat_key.to_upper()])
+
+			if stat_parts.size() > 0:
+				stat_label.text = " ".join(stat_parts)
+			else:
+				stat_label.text = "Special Effect"
+				stat_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2))
+
 		elif category == "capes":
 			stat_label.text = "Cosmetic"
 			stat_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
-		elif category == "accessories":
-			stat_label.text = "Special Effect"
-			stat_label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.2))
 		else:
 			stat_label.text = ""
 
-	# Achievement source line (star icon + achievement name)
-	if achievement_label:
-		if achievement != "":
-			achievement_label.text = "★ %s" % achievement
-		else:
-			achievement_label.text = ""
+	# achievement_label is now hidden - achievement info shown in tooltip only
 
 	# Census line - show ownership count (will be overwritten by TradingManager data if available)
 	var detail_item_id = item.get("id", item.get("item_id", ""))
@@ -4427,52 +4490,68 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 			style.border_color = rarity_color if is_owned else rarity_color.darkened(0.4)
 			style.set_border_width_all(2)  # Make border more visible
 			icon_container.add_theme_stylebox_override("panel", style)
-		# Build full in-game style tooltip with stats
+		# Build tooltip matching catalog card format
 		var tooltip_lines = []
+		var lore = item.get("lore", item.get("description", ""))
+		var tip_game_name = item.get("game", "???")
+		var tip_achievement_name = item.get("achievement", item.get("achievement_name", "???"))
+
+		# Title with forged prefix if owned
 		if is_owned:
 			tooltip_lines.append("[FORGED] %s" % item_name)
 		else:
-			tooltip_lines.append(item_name)
-		tooltip_lines.append(rarity.to_upper())
+			tooltip_lines.append("%s" % item_name)
+		tooltip_lines.append("%s" % rarity.to_upper())
+		tooltip_lines.append("")
 
-		var lore = item.get("lore", item.get("description", ""))
-		if lore != "":
+		# Lore quote
+		var lore_text = lore if lore != "" else "A mysterious item from another world."
+		tooltip_lines.append("\"%s\"" % lore_text)
+		tooltip_lines.append("")
+
+		# Weapon stats section (only for weapons)
+		var item_type = item.get("item_type", "")
+		if item_type == "weapon" or category.to_lower() == "weapons":
+			var weapon_type = item.get("weapon_type", "weapon")
+			tooltip_lines.append("Type:  %s" % weapon_type.capitalize())
+
+			var base_damage = item.get("base_damage", {})
+			if base_damage is Dictionary and base_damage.has("min") and base_damage.has("max"):
+				tooltip_lines.append("Damage:  %d-%d" % [base_damage.min, base_damage.max])
+			elif base_damage is float or base_damage is int:
+				tooltip_lines.append("Damage:  +%.1f" % base_damage)
+
+			var attack_speed = item.get("attack_speed", "")
+			if attack_speed != "":
+				tooltip_lines.append("Speed:  %s" % str(attack_speed).capitalize())
+
+			# Stat bonuses
+			var stat_bonuses = item.get("stat_bonuses", {})
+			var stat_parts = []
+			for stat_key in ["str", "agi", "dex", "int", "wis", "vit"]:
+				var val = stat_bonuses.get(stat_key, 0)
+				if val > 0:
+					stat_parts.append("+%d %s" % [val, stat_key.to_upper()])
+			if stat_parts.size() > 0:
+				tooltip_lines.append("Stats:  %s" % ", ".join(stat_parts))
 			tooltip_lines.append("")
-			tooltip_lines.append("\"%s\"" % lore)
 
-		# Stats section
-		if category.to_lower() == "weapons":
-			if item.has("base_damage"):
-				tooltip_lines.append("")
-				tooltip_lines.append("Damage: +%.1f" % item.get("base_damage", 0))
-			if item.has("attack_speed_bonus"):
-				var speed_bonus = item.get("attack_speed_bonus", 0.0)
-				if speed_bonus != 0:
-					tooltip_lines.append("Attack Speed: %+.1f%%" % (speed_bonus * 100))
-
-		if item.has("defense"):
+		# Defense for armor (only show if > 0)
+		var defense = item.get("defense", 0)
+		if defense > 0:
+			tooltip_lines.append("Defense:  +%d" % defense)
 			tooltip_lines.append("")
-			tooltip_lines.append("Defense: +%d" % item.get("defense", 0))
+
+		# Source section
+		tooltip_lines.append("Game:  %s" % tip_game_name)
+		tooltip_lines.append("Achievement:  %s" % tip_achievement_name)
 
 		# Forged-specific info
 		if is_owned:
 			var effect_name = item.get("effect_name", "")
 			if effect_name != "":
 				tooltip_lines.append("")
-				tooltip_lines.append("Effect: %s" % effect_name)
-			var effort_tier = item.get("effort_tier", "")
-			if effort_tier != "":
-				tooltip_lines.append("Tier: %s" % effort_tier)
-
-		# Game/achievement source
-		var tip_game_name = item.get("game", "")
-		var tip_achievement_name = item.get("achievement", "")
-		if tip_game_name != "" or tip_achievement_name != "":
-			tooltip_lines.append("")
-			if tip_game_name != "":
-				tooltip_lines.append("From: %s" % tip_game_name)
-			if tip_achievement_name != "":
-				tooltip_lines.append("Achievement: %s" % tip_achievement_name)
+				tooltip_lines.append("Effect:  %s" % effect_name)
 
 		icon_container.tooltip_text = "\n".join(tooltip_lines)
 
@@ -4508,11 +4587,15 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 
 	# Show FORGE button when there's a forge opportunity (even if already owning some)
 	if forge_btn:
-		forge_btn.visible = has_forge_opportunity or is_forgeable
-		if has_forge_opportunity:
-			forge_btn.text = "⚒️ FORGE"
+		var show_forge = has_forge_opportunity or is_forgeable
+		forge_btn.visible = show_forge
+		forge_btn.text = "⚒️ FORGE"
+
+		# Animate the forge button when available to draw attention
+		if show_forge:
+			_start_forge_button_pulse(forge_btn)
 		else:
-			forge_btn.text = "FORGE"
+			_stop_forge_button_pulse(forge_btn)
 
 	# === Bind buttons logic ===
 	# EXPORT button - shown for items in inventory (can export one at a time)
@@ -4989,7 +5072,7 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 		style.border_color = Color(0.15, 0.15, 0.18)  # Gray border, ignore rarity
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(5)
-	style.set_content_margin_all(2)
+	style.set_content_margin_all(2)  # 2px margin for border
 	card.add_theme_stylebox_override("panel", style)
 
 	# Store item data and style for hover effects
@@ -5034,37 +5117,17 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	if ResourceLoader.exists(icon_path):
 		var texture = load(icon_path)
 		if texture:
-			# Icon larger than card so it gets cropped, filling the card better
-			const BASE_ICON_SIZE = 52
-			const ICON_OFFSET = (BASE_ICON_SIZE - CARD_SIZE) / 2  # Center icon in card (crops edges)
-
-			# Per-item and per-category visual scale adjustments (doesn't affect card size)
-			var item_id = item.get("id", item.get("item_id", ""))
-			var category = item.get("category", "").to_lower()
-			var item_type = item.get("item_type", "").to_lower()
-			var icon_scale = 1.0
-
-			# Check centralized scale overrides first (from ItemIconGenerator)
-			if ItemIconGenerator.ICON_SCALE_OVERRIDES.has(item_id):
-				icon_scale = ItemIconGenerator.ICON_SCALE_OVERRIDES[item_id]
-			# Special case: fingerprint_stone_shield is too big
-			elif item_id == "fingerprint_stone_shield":
-				icon_scale = 0.5
-			# Chest armor gets 50% larger
-			elif item_type == "armor_chest":
-				icon_scale = 1.5
-			# Scale up these categories by 25%: capes, armor (head/etc), weapons (swords/guns), shields
-			elif category in ["capes", "armor", "weapons", "shields"]:
-				icon_scale = 1.25
+			# Icon size fits inside card (64px card - 4px border/margin = 60px, use 56 for padding)
+			const BASE_ICON_SIZE = 56
 
 			var icon_rect = TextureRect.new()
 			icon_rect.texture = texture
 			icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 			icon_rect.custom_minimum_size = Vector2(BASE_ICON_SIZE, BASE_ICON_SIZE)
-			icon_rect.position = Vector2(-ICON_OFFSET, -ICON_OFFSET)  # Center icon in card
+			icon_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			icon_rect.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon_rect.scale = Vector2(icon_scale, icon_scale)
 			if state == "locked":
 				icon_rect.modulate = Color(0.25, 0.25, 0.25, 0.5)
 			elif state == "forgeable":
@@ -5233,8 +5296,8 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 		var weapon_type = item.get("weapon_type", "weapon")
 		tooltip_lines.append("Type:  %s" % weapon_type.capitalize())
 
-		var base_damage = item.get("base_damage", {})
-		if base_damage.has("min") and base_damage.has("max"):
+		var base_damage = item.get("base_damage", null)
+		if base_damage is Dictionary and base_damage.has("min") and base_damage.has("max"):
 			tooltip_lines.append("Damage:  %d-%d" % [base_damage.min, base_damage.max])
 
 		var attack_speed = item.get("attack_speed", "")
@@ -6409,7 +6472,7 @@ func _build_right_column() -> Control:
 	column.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	outer.add_child(column)
 
-	# THE FORGE - Primary action area
+	# FORGE - Primary action area
 	forged_panel = _build_forge_section()
 	forged_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.add_child(forged_panel)
@@ -6576,7 +6639,7 @@ func _build_right_column_combined() -> Control:
 		connection_status_label.add_theme_font_size_override("font_size", 14)
 		outer.add_child(connection_status_label)
 
-	# ═══ THE FORGE ═══
+	# ═══ FORGE ═══
 	forged_panel = _build_forge_section()
 	forged_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	outer.add_child(forged_panel)
@@ -6617,7 +6680,7 @@ func _build_forge_section() -> Control:
 	header_row.add_child(forge_icon)
 
 	var header = Label.new()
-	header.text = "THE FORGE"
+	header.text = "FORGE"
 	header.add_theme_font_override("font", default_font)
 	header.add_theme_font_size_override("font_size", FONT_H2)
 	header.add_theme_color_override("font_color", ASHBANE_GOLD)
@@ -6973,6 +7036,21 @@ func _build_server_status_indicator(parent: Control) -> void:
 	_server_status_label.add_theme_color_override("font_color", Color(0.6, 0.58, 0.55))
 	status_container.add_child(_server_status_label)
 
+	# Separator
+	var separator = Label.new()
+	separator.text = "·"
+	separator.add_theme_font_size_override("font_size", 12)
+	separator.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))
+	status_container.add_child(separator)
+
+	# Player count
+	_server_player_count_label = Label.new()
+	_server_player_count_label.text = "0 online"
+	_server_player_count_label.add_theme_font_override("font", default_font)
+	_server_player_count_label.add_theme_font_size_override("font_size", 12)
+	_server_player_count_label.add_theme_color_override("font_color", Color(0.6, 0.58, 0.55))
+	status_container.add_child(_server_player_count_label)
+
 	# Start checking server status
 	_start_server_status_check()
 
@@ -7012,7 +7090,7 @@ func _on_server_status_response(result: int, response_code: int, _headers: Packe
 	else:
 		_update_server_status(false, "Server Offline")
 
-func _update_server_status(online: bool, text: String, color: Color = Color.WHITE) -> void:
+func _update_server_status(online: bool, text: String, color: Color = Color.WHITE, player_count: int = -1) -> void:
 	"""Update the server status indicator"""
 	if not _server_status_label or not _server_status_dot:
 		return
@@ -7026,6 +7104,29 @@ func _update_server_status(online: bool, text: String, color: Color = Color.WHIT
 		_server_status_dot.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))  # Green
 	else:
 		_server_status_dot.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3))  # Red
+
+	# Update player count visibility and text
+	if _server_player_count_label:
+		if online and player_count >= 0:
+			_server_player_count_label.text = "%d online" % player_count
+			_server_player_count_label.visible = true
+			# Also show the separator (it's the previous sibling)
+			var separator = _server_player_count_label.get_parent().get_child(_server_player_count_label.get_index() - 1)
+			if separator:
+				separator.visible = true
+		elif online:
+			# Online but no count available - show placeholder
+			_server_player_count_label.text = "0 online"
+			_server_player_count_label.visible = true
+			var separator = _server_player_count_label.get_parent().get_child(_server_player_count_label.get_index() - 1)
+			if separator:
+				separator.visible = true
+		else:
+			# Offline - hide player count
+			_server_player_count_label.visible = false
+			var separator = _server_player_count_label.get_parent().get_child(_server_player_count_label.get_index() - 1)
+			if separator:
+				separator.visible = false
 
 func _start_logo_pulse() -> void:
 	"""Start a pulsing animation on the ASHBANE logo for visual effect."""
@@ -7956,7 +8057,7 @@ func _build_forged_panel() -> Control:
 	margin.add_child(vbox)
 
 	var header = Label.new()
-	header.text = "THE FORGE"
+	header.text = "FORGE"
 	header.add_theme_font_size_override("font_size", FONT_BODY)
 	header.add_theme_color_override("font_color", ASHBANE_GOLD)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -11745,14 +11846,17 @@ func apply_pulsing_border_glow(panel: Control, color: Color = Color(0.7, 0.5, 0.
 # === TAB GLITCH VFX ===
 
 func _trigger_tab_glitch() -> void:
-	"""Trigger a brief digital glitch effect when switching tabs"""
+	"""Trigger a brief digital glitch effect when switching tabs - limited to forge panel"""
+	# Find the forge panel to limit glitch effect
+	var target_panel = forged_panel if forged_panel else self
+
 	# Create temporary glitch overlay
 	var glitch = ColorRect.new()
 	glitch.name = "TabGlitchEffect"
 	glitch.set_anchors_preset(Control.PRESET_FULL_RECT)
 	glitch.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	glitch.z_index = 100
-	add_child(glitch)
+	target_panel.add_child(glitch)
 
 	var shader_code = """
 shader_type canvas_item;

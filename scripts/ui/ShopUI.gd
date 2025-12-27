@@ -1956,6 +1956,90 @@ func update_quests_tab_indicator() -> void:
 # FORGE TAB
 # ═══════════════════════════════════════════════════════════════════════════
 
+func _build_forge_item_tooltip(item_id: String, is_claimed: bool) -> String:
+	"""Build a detailed tooltip for a forge item"""
+	var forge_db = ForgeItemDB.get_item_by_id(item_id)
+	if forge_db.is_empty():
+		return item_id
+
+	var lines = []
+
+	# Item name
+	var item_name = forge_db.get("item_name", "Unknown")
+	lines.append(item_name)
+	lines.append("─────────────────")
+
+	# Rarity and type
+	var rarity = ForgeItemDB.ItemRarity.keys()[forge_db.get("rarity", 0)].capitalize()
+	var item_type_enum = forge_db.get("item_type", 0)
+	var item_type = ForgeItemDB.ItemType.keys()[item_type_enum].replace("_", " ").capitalize()
+	lines.append("%s %s" % [rarity, item_type])
+
+	# Weapon type and damage
+	if item_type_enum == ForgeItemDB.ItemType.WEAPON:
+		var weapon_type = forge_db.get("weapon_type", "")
+		if weapon_type != "":
+			lines.append("Type:  %s" % weapon_type.capitalize())
+
+		var dmg_min = forge_db.get("base_damage_min", 0)
+		var dmg_max = forge_db.get("base_damage_max", 0)
+		if dmg_min > 0 or dmg_max > 0:
+			lines.append("Damage:  %d-%d" % [dmg_min, dmg_max])
+
+		var attack_speed = forge_db.get("attack_speed", "")
+		if attack_speed != "":
+			lines.append("Speed:  %s" % str(attack_speed).capitalize())
+
+	# Defense for armor
+	var defense = forge_db.get("defense", 0)
+	if defense > 0:
+		lines.append("Defense:  +%d" % defense)
+
+	# HP bonus
+	var hp_bonus = forge_db.get("hp_bonus", 0)
+	if hp_bonus > 0:
+		lines.append("HP:  +%d" % hp_bonus)
+
+	# Stat bonuses
+	var stat_bonuses = forge_db.get("stat_bonuses", {})
+	if stat_bonuses is Dictionary:
+		var stat_parts = []
+		for stat_key in ["str", "agi", "dex", "int", "wis", "vit"]:
+			var val = stat_bonuses.get(stat_key, 0)
+			if val > 0:
+				stat_parts.append("+%d %s" % [val, stat_key.to_upper()])
+		if stat_parts.size() > 0:
+			lines.append("Stats:  %s" % ", ".join(stat_parts))
+
+	# Effects
+	var effects = forge_db.get("effects", [])
+	if effects is Array and effects.size() > 0:
+		var effect_names = []
+		for e in effects:
+			effect_names.append(str(e).replace("_", " ").capitalize())
+		lines.append("Effects:  %s" % ", ".join(effect_names))
+
+	# Lore/description
+	var lore = forge_db.get("lore", forge_db.get("description", ""))
+	if lore != "":
+		lines.append("")
+		lines.append("\"%s\"" % lore)
+
+	# Source info
+	lines.append("")
+	var achievement_name = forge_db.get("achievement_name", "")
+	if achievement_name != "":
+		lines.append("Achievement:  %s" % achievement_name)
+
+	# Claimed status
+	lines.append("─────────────────")
+	if is_claimed:
+		lines.append("✓ CLAIMED")
+	else:
+		lines.append("Click to Claim")
+
+	return "\n".join(lines)
+
 func populate_forge() -> void:
 	"""Populate the forge tab with ALL ForgeItemDB items for PLAYTEST claiming"""
 	if not forge_list:
@@ -2108,25 +2192,34 @@ func _create_forge_slot(item: Dictionary, is_claimed: bool) -> PanelContainer:
 	slot.set_meta("item_data", item)
 	slot.set_meta("is_claimed", is_claimed)
 
-	# Load icon (enhanced first, then regular) - icons are organized by type
-	var item_type = item.get("item_type", "weapon")
-	# Map item types to icon folder names (armor is singular, others are plural)
-	var icon_folder = item_type
-	match item_type:
-		"weapon": icon_folder = "weapons"
-		"armor": icon_folder = "armor"  # singular
-		"shield": icon_folder = "shields"
-		"accessory": icon_folder = "accessories"
-		"cape": icon_folder = "capes"
-		"tool": icon_folder = "tools"
+	# Load icon - get path from ForgeItemDB (which reads from items.json sprites.icon)
+	var forge_db = ForgeItemDB.get_item_by_id(item_id)
+	var icon_path = ""
+	if not forge_db.is_empty():
+		var sprites = forge_db.get("sprites", {})
+		if sprites is Dictionary:
+			icon_path = sprites.get("icon", "")
 
-	var icon_path = "res://assets/icons/forged/" + icon_folder + "/" + item_id + ".png"
-	var enhanced_icon_path = "res://assets/icons/enhanced/forged/" + icon_folder + "/" + item_id + ".png"
+	# Fallback: derive path from item type if ForgeItemDB doesn't have it
+	if icon_path == "":
+		var item_type = item.get("item_type", "weapon")
+		var icon_folder = item_type
+		match item_type:
+			"weapon": icon_folder = "weapons"
+			"armor": icon_folder = "armor"
+			"shield": icon_folder = "shields"
+			"accessory": icon_folder = "accessories"
+			"cape": icon_folder = "capes"
+			"tool": icon_folder = "tools"
+		icon_path = "res://assets/icons/forged/" + icon_folder + "/" + item_id + ".png"
+
+	# Try enhanced version first
+	var enhanced_icon_path = icon_path.replace("/forged/", "/enhanced/forged/") if icon_path != "" else ""
 
 	var texture = null
-	if ResourceLoader.exists(enhanced_icon_path):
+	if enhanced_icon_path != "" and ResourceLoader.exists(enhanced_icon_path):
 		texture = load(enhanced_icon_path)
-	elif ResourceLoader.exists(icon_path):
+	elif icon_path != "" and ResourceLoader.exists(icon_path):
 		texture = load(icon_path)
 
 	if texture:
@@ -2152,15 +2245,8 @@ func _create_forge_slot(item: Dictionary, is_claimed: bool) -> PanelContainer:
 	if not is_claimed:
 		slot.gui_input.connect(_on_forge_slot_clicked.bind(slot))
 
-	# Tooltip
-	var tooltip_lines = []
-	tooltip_lines.append(item_name)
-	tooltip_lines.append(item_rarity.capitalize())
-	if is_claimed:
-		tooltip_lines.append("[In Inventory]")
-	else:
-		tooltip_lines.append("[Click to Claim]")
-	slot.tooltip_text = "\n".join(tooltip_lines)
+	# Detailed tooltip
+	slot.tooltip_text = _build_forge_item_tooltip(item_id, is_claimed)
 
 	return slot
 
@@ -2195,31 +2281,40 @@ func _create_playtest_forge_slot(item: Dictionary, is_claimed: bool) -> PanelCon
 	slot.set_meta("item_data", item)
 	slot.set_meta("is_claimed", is_claimed)
 
-	# Load icon (enhanced first, then regular) - icons are organized by type
-	var item_type = item.get("item_type", "weapon")
-	# Map item types to icon folder names
-	var icon_folder = item_type
-	match item_type:
-		"armor_head", "armor_chest", "armor_legs", "armor_feet", "armor_hands":
-			icon_folder = "armor"
-		"weapon":
-			icon_folder = "weapons"
-		"shield":
-			icon_folder = "shields"
-		"accessory":
-			icon_folder = "accessories"
-		"cape":
-			icon_folder = "capes"
-		"tool":
-			icon_folder = "tools"
+	# Load icon - get path from ForgeItemDB (which reads from items.json sprites.icon)
+	var forge_db = ForgeItemDB.get_item_by_id(item_id)
+	var icon_path = ""
+	if not forge_db.is_empty():
+		var sprites = forge_db.get("sprites", {})
+		if sprites is Dictionary:
+			icon_path = sprites.get("icon", "")
 
-	var icon_path = "res://assets/icons/forged/" + icon_folder + "/" + item_id + ".png"
-	var enhanced_icon_path = "res://assets/icons/enhanced/forged/" + icon_folder + "/" + item_id + ".png"
+	# Fallback: derive path from item type if ForgeItemDB doesn't have it
+	if icon_path == "":
+		var item_type = item.get("item_type", "weapon")
+		var icon_folder = item_type
+		match item_type:
+			"armor_head", "armor_chest", "armor_legs", "armor_feet", "armor_hands":
+				icon_folder = "armor"
+			"weapon":
+				icon_folder = "weapons"
+			"shield":
+				icon_folder = "shields"
+			"accessory":
+				icon_folder = "accessories"
+			"cape":
+				icon_folder = "capes"
+			"tool":
+				icon_folder = "tools"
+		icon_path = "res://assets/icons/forged/" + icon_folder + "/" + item_id + ".png"
+
+	# Try enhanced version first
+	var enhanced_icon_path = icon_path.replace("/forged/", "/enhanced/forged/") if icon_path != "" else ""
 
 	var texture = null
-	if ResourceLoader.exists(enhanced_icon_path):
+	if enhanced_icon_path != "" and ResourceLoader.exists(enhanced_icon_path):
 		texture = load(enhanced_icon_path)
-	elif ResourceLoader.exists(icon_path):
+	elif icon_path != "" and ResourceLoader.exists(icon_path):
 		texture = load(icon_path)
 
 	if texture:
@@ -2245,15 +2340,8 @@ func _create_playtest_forge_slot(item: Dictionary, is_claimed: bool) -> PanelCon
 	if not is_claimed:
 		slot.gui_input.connect(_on_playtest_forge_slot_clicked.bind(slot))
 
-	# Tooltip
-	var tooltip_lines = []
-	tooltip_lines.append(item_name)
-	tooltip_lines.append(item_rarity.capitalize())
-	if is_claimed:
-		tooltip_lines.append("[Claimed]")
-	else:
-		tooltip_lines.append("[Click to Claim]")
-	slot.tooltip_text = "\n".join(tooltip_lines)
+	# Detailed tooltip
+	slot.tooltip_text = _build_forge_item_tooltip(item_id, is_claimed)
 
 	return slot
 

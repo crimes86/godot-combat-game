@@ -215,4 +215,9 @@ func is_any_ui_open() -> bool:
 	if bug_report and bug_report.visible:
 		return true
 
+	# Check if chat input is focused (player is typing)
+	var chat_ui = player.get_node_or_null("ChatUI")
+	if chat_ui and chat_ui.get("is_input_focused"):
+		return true
+
 	return false

@@ -96,7 +96,15 @@ func _load_from_json() -> void:
 		if _items_by_id.has(item_id):
 			# Convert achievement mapping key format (app_id:api_name) to our format (provider_appid_apiname)
 			var achievement_key = _convert_mapping_key_to_achievement_key(key)
-			FORGE_ITEMS[achievement_key] = _items_by_id[item_id]
+			# Clone item and add achievement_name from the mapping key
+			var item_with_achievement = _items_by_id[item_id].duplicate()
+			# Extract achievement name from key (format: "app_id:ACHIEVEMENT_NAME" or "provider:ACHIEVEMENT_NAME")
+			var parts = key.split(":")
+			if parts.size() >= 2:
+				# Convert API_NAME to Display Name (e.g., "THE_DARK_SOUL" -> "The Dark Soul")
+				var api_name = parts[parts.size() - 1]  # Take last part after colon
+				item_with_achievement["achievement_name"] = _api_name_to_display_name(api_name)
+			FORGE_ITEMS[achievement_key] = item_with_achievement
 
 	_loaded = true
 	print("ForgeItemDB: Loaded %d items, %d achievement mappings" % [_items_by_id.size(), FORGE_ITEMS.size()])
@@ -132,28 +140,36 @@ func _convert_json_item(json_item: Dictionary) -> Dictionary:
 		visuals = {}
 	var sprites = {}
 
-	# Icon path - convert from web path to Godot path
-	var icon_url = _safe_string(visuals.get("icon_url"), "")
-	if icon_url != "":
-		# Convert /static/items/icons/xxx.png to local icon paths (prefer enhanced)
-		var icon_filename = icon_url.get_file()
-		# Determine subfolder based on item type
-		var subfolder = _get_icon_subfolder(item["item_type"])
-		var enhanced_subfolder_path = ENHANCED_ICONS_BASE + subfolder + "/" + icon_filename
-		var enhanced_root_path = ENHANCED_ICONS_BASE + icon_filename
-		var forged_subfolder_path = FORGED_ICONS_BASE + subfolder + "/" + icon_filename
-		var forged_root_path = FORGED_ICONS_BASE + icon_filename
+	# First, check for direct sprites.icon path in JSON (preferred - explicit path)
+	var json_sprites = json_item.get("sprites")
+	if json_sprites is Dictionary:
+		var direct_icon = json_sprites.get("icon", "")
+		if direct_icon != "" and ResourceLoader.exists(direct_icon):
+			sprites["icon"] = direct_icon
 
-		# Try enhanced first, then fall back to forged
-		# Use ResourceLoader.exists() for res:// paths - more reliable during autoload
-		if ResourceLoader.exists(enhanced_subfolder_path):
-			sprites["icon"] = enhanced_subfolder_path
-		elif ResourceLoader.exists(enhanced_root_path):
-			sprites["icon"] = enhanced_root_path
-		elif ResourceLoader.exists(forged_subfolder_path):
-			sprites["icon"] = forged_subfolder_path
-		elif ResourceLoader.exists(forged_root_path):
-			sprites["icon"] = forged_root_path
+	# If no direct icon, try deriving from visuals.icon_url
+	if not sprites.has("icon"):
+		var icon_url = _safe_string(visuals.get("icon_url"), "")
+		if icon_url != "":
+			# Convert /static/items/icons/xxx.png to local icon paths (prefer enhanced)
+			var icon_filename = icon_url.get_file()
+			# Determine subfolder based on item type
+			var subfolder = _get_icon_subfolder(item["item_type"])
+			var enhanced_subfolder_path = ENHANCED_ICONS_BASE + subfolder + "/" + icon_filename
+			var enhanced_root_path = ENHANCED_ICONS_BASE + icon_filename
+			var forged_subfolder_path = FORGED_ICONS_BASE + subfolder + "/" + icon_filename
+			var forged_root_path = FORGED_ICONS_BASE + icon_filename
+
+			# Try enhanced first, then fall back to forged
+			# Use ResourceLoader.exists() for res:// paths - more reliable during autoload
+			if ResourceLoader.exists(enhanced_subfolder_path):
+				sprites["icon"] = enhanced_subfolder_path
+			elif ResourceLoader.exists(enhanced_root_path):
+				sprites["icon"] = enhanced_root_path
+			elif ResourceLoader.exists(forged_subfolder_path):
+				sprites["icon"] = forged_subfolder_path
+			elif ResourceLoader.exists(forged_root_path):
+				sprites["icon"] = forged_root_path
 
 	# Fallback icon lookup by item_id/name (covers cases where icon_url points to a different filename)
 	if not sprites.has("icon"):
@@ -298,6 +314,16 @@ func _safe_string(value, default: String) -> String:
 ## Convert a display name to snake_case (matches ItemIconGenerator convention)
 func _name_to_snake_case(name: String) -> String:
 	return name.to_lower().replace(" ", "_").replace("'", "").replace("-", "_")
+
+## Convert API name format to display name (e.g., "THE_DARK_SOUL" -> "The Dark Soul")
+func _api_name_to_display_name(api_name: String) -> String:
+	# Split by underscores, capitalize each word, join with spaces
+	var words = api_name.split("_")
+	var result = []
+	for word in words:
+		if word.length() > 0:
+			result.append(word.capitalize())
+	return " ".join(result)
 
 ## Convert achievement mapping key format to FORGE_ITEMS key format
 ## Input: "app_id:api_name" or "provider:api_name"
@@ -570,13 +596,21 @@ func _get_game_from_key(key: String) -> String:
 	return GAME_NAMES.get(game_id, "Steam")
 
 ## Generate catalog array for Armory UI (dynamic generation from items)
-## Returns array of dictionaries with: id, name, game, achievement, rarity, category, icon, lore
+## Returns array of dictionaries with full item data for tooltip display
 func get_armory_catalog() -> Array:
 	var catalog = []
 
 	for key in FORGE_ITEMS:
 		var item = FORGE_ITEMS[key]
 		var item_type_enum = item.get("item_type", ItemType.ACCESSORY)
+
+		# Build damage dict from min/max if available
+		var damage_data = null
+		if item.has("base_damage_min") and item.has("base_damage_max"):
+			damage_data = {"min": item.get("base_damage_min"), "max": item.get("base_damage_max")}
+		elif item.has("base_damage"):
+			damage_data = item.get("base_damage")
+
 		var entry = {
 			"id": item.get("item_id", ""),
 			"name": item.get("item_name", "Unknown Item"),
@@ -586,7 +620,14 @@ func get_armory_catalog() -> Array:
 			"category": _type_to_category(item_type_enum),
 			"item_type": ItemType.keys()[item_type_enum].to_lower(),  # e.g. "armor_chest", "weapon"
 			"icon": item.get("sprites", {}).get("icon", ""),
-			"lore": item.get("lore", item.get("description", ""))
+			"lore": item.get("lore", item.get("description", "")),
+			# Combat stats for tooltip display
+			"weapon_type": item.get("weapon_type", ""),
+			"base_damage": damage_data,
+			"attack_speed": item.get("attack_speed", ""),
+			"stat_bonuses": item.get("stat_bonuses", {}),
+			"defense": item.get("defense", 0),
+			"hp_bonus": item.get("hp_bonus", 0)
 		}
 		catalog.append(entry)
 

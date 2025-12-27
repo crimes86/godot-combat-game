@@ -442,14 +442,26 @@ func load_save_data(data: Dictionary) -> void:
 
 	var items_data = data.get("items", [])
 	var forged_count = 0
+	var max_slot = 0
 	for item_entry in items_data:
 		var item = item_entry.get("item", {})
+		var slot = item_entry.get("slot", 0)
+		if slot > max_slot:
+			max_slot = slot
 		if item.get("is_forged", false):
 			forged_count += 1
-	print("[InventorySystem] Loading %d items (%d forged) from save" % [items_data.size(), forged_count])
+	print("[InventorySystem] Loading %d items (%d forged) from save, max slot: %d" % [items_data.size(), forged_count, max_slot])
 
 	# Suppress signals during bulk load
 	suppress_signals = true
+
+	# Expand inventory to fit all saved items BEFORE loading
+	var slots_needed = max_slot + 1
+	if slots_needed > inventory_items.size():
+		print("[InventorySystem] Expanding inventory from %d to %d slots to fit saved items" % [inventory_items.size(), slots_needed])
+		for i in range(inventory_items.size(), slots_needed):
+			inventory_items.append(null)
+		current_slot_count = slots_needed
 
 	# Clear current inventory
 	for i in range(inventory_items.size()):

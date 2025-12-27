@@ -1231,8 +1231,11 @@ func _cmd_playtest(args: Array) -> void:
 			var status = "ON" if LogManager.playtest_mode else "OFF"
 			add_system_message("Playtest mode: %s" % status)
 			add_system_message("Watching: %s" % ", ".join(LogManager.playtest_categories))
+		"forgereset", "resetforge":
+			ForgeItemManager.debug_reset_all_claims()
+			add_system_message("🔄 All forge claims reset! You can reclaim items now.")
 		_:
-			add_system_message("Usage: /playtest [on|off|add|remove|categories|status]")
+			add_system_message("Usage: /playtest [on|off|add|remove|categories|status|forgereset]")
 
 func _cmd_accounts() -> void:
 	if not DatabaseManager or not DatabaseManager.is_initialized:

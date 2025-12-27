@@ -192,8 +192,8 @@ func on_crit() -> void:
 
 ## All effects for a weakpoint hit
 func on_weakpoint() -> void:
-	# Quick punch for rapid clicking - noticeable but not overwhelming
-	trigger_screen_shake(0.4)  # Medium punch per click (was 0.2 - too subtle)
+	# Noticeable punch per click - feedback for hitting the mark
+	trigger_screen_shake(0.6)  # Bumped from 0.4 - more satisfying
 
 ## All effects for a killing blow
 func on_kill() -> void:

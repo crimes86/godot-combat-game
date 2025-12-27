@@ -29,6 +29,90 @@ func _ready() -> void:
 	process_mode = PROCESS_MODE_ALWAYS
 	_build_ui()
 
+func _build_forge_item_tooltip(item_id: String, is_claimed: bool) -> String:
+	"""Build a detailed tooltip for a forge item"""
+	var forge_db = ForgeItemDB.get_item_by_id(item_id)
+	if forge_db.is_empty():
+		return item_id
+
+	var lines = []
+
+	# Item name
+	var item_name = forge_db.get("item_name", "Unknown")
+	lines.append(item_name)
+	lines.append("─────────────────")
+
+	# Rarity and type
+	var rarity = ForgeItemDB.ItemRarity.keys()[forge_db.get("rarity", 0)].capitalize()
+	var item_type_enum = forge_db.get("item_type", 0)
+	var item_type = ForgeItemDB.ItemType.keys()[item_type_enum].replace("_", " ").capitalize()
+	lines.append("%s %s" % [rarity, item_type])
+
+	# Weapon type and damage
+	if item_type_enum == ForgeItemDB.ItemType.WEAPON:
+		var weapon_type = forge_db.get("weapon_type", "")
+		if weapon_type != "":
+			lines.append("Type:  %s" % weapon_type.capitalize())
+
+		var dmg_min = forge_db.get("base_damage_min", 0)
+		var dmg_max = forge_db.get("base_damage_max", 0)
+		if dmg_min > 0 or dmg_max > 0:
+			lines.append("Damage:  %d-%d" % [dmg_min, dmg_max])
+
+		var attack_speed = forge_db.get("attack_speed", "")
+		if attack_speed != "":
+			lines.append("Speed:  %s" % str(attack_speed).capitalize())
+
+	# Defense for armor
+	var defense = forge_db.get("defense", 0)
+	if defense > 0:
+		lines.append("Defense:  +%d" % defense)
+
+	# HP bonus
+	var hp_bonus = forge_db.get("hp_bonus", 0)
+	if hp_bonus > 0:
+		lines.append("HP:  +%d" % hp_bonus)
+
+	# Stat bonuses
+	var stat_bonuses = forge_db.get("stat_bonuses", {})
+	if stat_bonuses is Dictionary:
+		var stat_parts = []
+		for stat_key in ["str", "agi", "dex", "int", "wis", "vit"]:
+			var val = stat_bonuses.get(stat_key, 0)
+			if val > 0:
+				stat_parts.append("+%d %s" % [val, stat_key.to_upper()])
+		if stat_parts.size() > 0:
+			lines.append("Stats:  %s" % ", ".join(stat_parts))
+
+	# Effects
+	var effects = forge_db.get("effects", [])
+	if effects is Array and effects.size() > 0:
+		var effect_names = []
+		for e in effects:
+			effect_names.append(str(e).replace("_", " ").capitalize())
+		lines.append("Effects:  %s" % ", ".join(effect_names))
+
+	# Lore/description
+	var lore = forge_db.get("lore", forge_db.get("description", ""))
+	if lore != "":
+		lines.append("")
+		lines.append("\"%s\"" % lore)
+
+	# Source info
+	lines.append("")
+	var achievement_name = forge_db.get("achievement_name", "")
+	if achievement_name != "":
+		lines.append("Achievement:  %s" % achievement_name)
+
+	# Claimed status
+	lines.append("─────────────────")
+	if is_claimed:
+		lines.append("✓ CLAIMED")
+	else:
+		lines.append("Click to Claim")
+
+	return "\n".join(lines)
+
 func _build_ui() -> void:
 	"""Build the blacksmith forge UI"""
 	# Background overlay
@@ -317,15 +401,8 @@ func _create_item_card(item: Dictionary, is_claimed: bool) -> Control:
 	if not is_claimed:
 		card.gui_input.connect(_on_card_clicked.bind(card))
 
-	# Tooltip
-	var tooltip_lines = []
-	tooltip_lines.append(item.name)
-	tooltip_lines.append(item.rarity.capitalize())
-	if is_claimed:
-		tooltip_lines.append("[Claimed]")
-	else:
-		tooltip_lines.append("[Click to Claim]")
-	card.tooltip_text = "\n".join(tooltip_lines)
+	# Detailed tooltip
+	card.tooltip_text = _build_forge_item_tooltip(item.item_id, is_claimed)
 
 	return card
 

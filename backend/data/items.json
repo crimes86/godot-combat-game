@@ -135,7 +135,27 @@
     "battlenet:starcraft2:HOTS_CAMPAIGN_HARD": "dark_templar_armor",
     "battlenet:starcraft2:DIAMOND_ZERG": "zergling_claws",
     "battlenet:starcraft2:WOL_CAMPAIGN": "khala_amulet",
-    "xbox:minecraft:DIAMONDS": "minecraft_diamond_pickaxe"
+    "xbox:minecraft:DIAMONDS": "minecraft_diamond_pickaxe",
+    "psn:HORIZON_FORBIDDEN_WEST_COMPLETE": "aloy_strider_boots",
+    "psn:GHOST_LEGENDS_MASTER": "ghost_hakama",
+    "psn:BLOODBORNE_HUNTER_OATH": "hunter_boots",
+    "psn:RETURNAL_SCOUT_COMPLETE": "returnal_scout_greaves",
+    "xbox:GEARS_VETERAN": "cog_boots",
+    "xbox:TITANFALL_PILOT_MASTER": "pilots_flight_point",
+    "xbox:SEA_OF_THIEVES_ATHENA_10": "pirate_boots",
+    "xbox:HALO_SPARTAN_OPS": "spartan_greaves",
+    "xbox:minecraft:FULL_ARMOR": "minecraft_leggings",
+    "268910:PACIFIST": "cuphead_shoes",
+    "620:PORTAL_VETERAN": "portal_boots",
+    "550:SURVIVAL_EXPERT": "survivor_pants",
+    "782330:SLAYER_MASTERY": "marauder_treads",
+    "battlenet:FALL_OF_THE_LICH_KING": "lich_king_boots",
+    "battlenet:MYTHIC_TIER_COMPLETE": "tier_set_boots",
+    "battlenet:diablo4:BERSERKER_PARAGON": "berserker_tassets",
+    "battlenet:overwatch:TRACER_WINS_100": "tracer_pants",
+    "battlenet:starcraft:PROTOSS_CAMPAIGN_HARD": "zealot_boots",
+    "origin:APEX_PREDATOR": "apex_boots",
+    "504230:CELESTE_SUMMIT": "mountaineer_trouser"
   },
   "weapon_types": {
     "core": {
@@ -828,8 +848,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 8,
-        "max": 10
+        "min": 20,
+        "max": 24
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -869,8 +889,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 10,
-        "max": 12
+        "min": 24,
+        "max": 29
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -910,8 +930,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 8,
-        "max": 10
+        "min": 20,
+        "max": 24
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -950,8 +970,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 8,
-        "max": 10
+        "min": 21,
+        "max": 25
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -991,8 +1011,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 6,
-        "max": 7
+        "min": 15,
+        "max": 18
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -1032,8 +1052,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 11,
-        "max": 14
+        "min": 27,
+        "max": 32
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -1073,8 +1093,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 5,
-        "max": 6
+        "min": 13,
+        "max": 16
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -1113,14 +1133,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 19,
+      "defense": 22,
       "stat_bonuses": {
-        "str": 6,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 3
+        "str": 9,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/elden_lord_helm.png"
@@ -1149,14 +1169,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 17,
+      "defense": 19,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 0,
-        "dex": 0,
-        "int": 3,
-        "wis": 5,
-        "vit": 0
+        "str": 2,
+        "agi": 2,
+        "dex": 2,
+        "int": 5,
+        "wis": 7,
+        "vit": 2
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/carian_crown.png"
@@ -1223,8 +1243,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 6,
-        "max": 8
+        "min": 16,
+        "max": 19
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1264,16 +1284,17 @@
       "has_icon": true,
       "defense": 5,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 2,
-        "dex": 3,
-        "int": 0,
-        "wis": 0,
-        "vit": 0
+        "str": 2,
+        "agi": 4,
+        "dex": 5,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
       },
       "sprites": {
         "icon": "res://assets/icons/forged/capes/shade_cloak.png"
-      }
+      },
+      "hp_bonus": 0
     },
     {
       "item_id": "stygian_blade",
@@ -1299,8 +1320,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 6,
-        "max": 8
+        "min": 16,
+        "max": 19
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1341,8 +1362,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 6,
-        "max": 8
+        "min": 16,
+        "max": 19
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1383,8 +1404,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 7,
-        "max": 9
+        "min": 18,
+        "max": 21
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1424,8 +1445,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 8,
-        "max": 10
+        "min": 20,
+        "max": 24
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1465,8 +1486,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 6,
-        "max": 7
+        "min": 15,
+        "max": 18
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -1506,8 +1527,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 7,
-        "max": 9
+        "min": 18,
+        "max": 21
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1546,8 +1567,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 6,
-        "max": 8
+        "min": 16,
+        "max": 19
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1586,8 +1607,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 6,
-        "max": 8
+        "min": 16,
+        "max": 19
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1626,8 +1647,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 6,
-        "max": 8
+        "min": 16,
+        "max": 19
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -1665,14 +1686,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 15,
+      "defense": 16,
       "stat_bonuses": {
-        "str": 5,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 3
+        "str": 7,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/straw_hat.png"
@@ -1702,14 +1723,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/coiled_sword_fragment.png"
       }
@@ -1738,14 +1759,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 20,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/margits_shackle.png"
       }
@@ -1774,14 +1795,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 20,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/discord_nitro_badge.png"
       }
@@ -1810,14 +1831,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 20,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/github_star_badge.png"
       }
@@ -1848,14 +1869,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 6,
-        "dex": 3,
-        "int": 0,
-        "wis": 0,
-        "vit": 0
+        "str": 2,
+        "agi": 9,
+        "dex": 5,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/scarab_lord_badge.png"
       }
@@ -1884,14 +1905,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 19,
+      "defense": 22,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 0,
-        "dex": 0,
-        "int": 3,
-        "wis": 6,
-        "vit": 0
+        "str": 2,
+        "agi": 2,
+        "dex": 2,
+        "int": 5,
+        "wis": 9,
+        "vit": 2
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/herald_of_the_titans.png"
@@ -1923,16 +1944,17 @@
       "has_icon": true,
       "defense": 6,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 2
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
       },
       "sprites": {
         "icon": "res://assets/icons/forged/capes/immortal_tabard.png"
-      }
+      },
+      "hp_bonus": 0
     },
     {
       "item_id": "hand_of_adal_tabard",
@@ -1959,16 +1981,17 @@
       "has_icon": true,
       "defense": 6,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 2
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
       },
       "sprites": {
         "icon": "res://assets/icons/forged/capes/hand_of_adal_tabard.png"
-      }
+      },
+      "hp_bonus": 0
     },
     {
       "item_id": "mythic_insignia",
@@ -1995,14 +2018,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/mythic_insignia.png"
       }
@@ -2032,14 +2055,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/keystone_trinket.png"
       }
@@ -2070,16 +2093,17 @@
       "has_icon": true,
       "defense": 6,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 2
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
       },
       "sprites": {
         "icon": "res://assets/icons/forged/capes/gladiator_tabard.png"
-      }
+      },
+      "hp_bonus": 0
     },
     {
       "item_id": "insane_straitjacket",
@@ -2105,14 +2129,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 32,
+      "defense": 35,
       "stat_bonuses": {
-        "str": 10,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 15,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/insane_straitjacket.png"
@@ -2145,8 +2169,8 @@
       "has_icon": true,
       "multi_slash": true,
       "base_damage": {
-        "min": 8,
-        "max": 10
+        "min": 20,
+        "max": 24
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -2185,14 +2209,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 19,
+      "defense": 22,
       "stat_bonuses": {
-        "str": 6,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 3
+        "str": 9,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/false_king_helm.png"
@@ -2223,14 +2247,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/blades_of_chaos.png"
       }
@@ -2259,14 +2283,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 17,
+      "defense": 19,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 3,
-        "dex": 5,
-        "int": 0,
-        "wis": 0,
-        "vit": 0
+        "str": 2,
+        "agi": 5,
+        "dex": 7,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/ghost_mask.png"
@@ -2296,14 +2320,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/selene_fragment.png"
       }
@@ -2333,14 +2357,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/spider_emblem.png"
       }
@@ -2370,14 +2394,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 19,
+      "defense": 22,
       "stat_bonuses": {
-        "str": 6,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 3
+        "str": 9,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/master_chief_helmet.png"
@@ -2407,14 +2431,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 19,
+      "defense": 22,
       "stat_bonuses": {
-        "str": 6,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 3
+        "str": 9,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/pilot_helmet.png"
@@ -2445,14 +2469,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/cog_medal.png"
       }
@@ -2480,14 +2504,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 17,
+      "defense": 19,
       "stat_bonuses": {
-        "str": 5,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 3
+        "str": 7,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/pirate_legend_hat.png"
@@ -2519,14 +2543,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/early_supporter_badge.png"
       }
@@ -2555,14 +2579,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/partner_badge.png"
       }
@@ -2591,14 +2615,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/bug_hunter_badge.png"
       }
@@ -2627,14 +2651,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 20,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/hypesquad_badge.png"
       }
@@ -2665,14 +2689,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/arctic_code_badge.png"
       }
@@ -2701,14 +2725,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/mars_badge.png"
       }
@@ -2737,14 +2761,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/pull_shark_badge.png"
       }
@@ -2773,14 +2797,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/galaxy_brain_badge.png"
       }
@@ -2809,14 +2833,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 20,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/yolo_badge.png"
       }
@@ -2847,14 +2871,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/veteran_roblox_necklace.png"
       }
@@ -2883,14 +2907,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 5,
-        "dex": 3,
-        "int": 0,
-        "wis": 0,
-        "vit": 0
+        "str": 2,
+        "agi": 7,
+        "dex": 5,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/classic_roblox_ring.png"
       }
@@ -2919,14 +2943,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 5,
-        "dex": 3,
-        "int": 0,
-        "wis": 0,
-        "vit": 0
+        "str": 2,
+        "agi": 7,
+        "dex": 5,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
       },
-      "hp_bonus": 20,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/builder_roblox_ring.png"
       }
@@ -2956,14 +2980,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 2,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 4
+        "str": 4,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 6
       },
-      "hp_bonus": 17,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/ashen_estus.png"
       }
@@ -2992,14 +3016,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 4,
-        "dex": 2,
-        "int": 0,
-        "wis": 0,
-        "vit": 0
+        "str": 2,
+        "agi": 6,
+        "dex": 4,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
       },
-      "hp_bonus": 17,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/tarnished_ring.png"
       }
@@ -3029,14 +3053,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/void_heart.png"
       }
@@ -3065,14 +3089,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 2,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 4
+        "str": 4,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 6
       },
-      "hp_bonus": 17,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/boon_trinket.png"
       }
@@ -3102,14 +3126,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/winged_strawberry.png"
       }
@@ -3139,8 +3163,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 8,
-        "max": 10
+        "min": 20,
+        "max": 24
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -3181,8 +3205,8 @@
       "has_icon": true,
       "multi_slash": false,
       "base_damage": {
-        "min": 8,
-        "max": 10
+        "min": 20,
+        "max": 24
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -3222,14 +3246,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/heart_shard.png"
       }
@@ -3258,14 +3282,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 0,
-        "dex": 0,
-        "int": 4,
-        "wis": 2,
-        "vit": 0
+        "str": 2,
+        "agi": 2,
+        "dex": 2,
+        "int": 6,
+        "wis": 4,
+        "vit": 2
       },
-      "hp_bonus": 17,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/companion_cube.png"
       }
@@ -3294,14 +3318,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 20,
+      "hp_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/lambda_badge.png"
       }
@@ -3330,14 +3354,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 17,
+      "defense": 19,
       "stat_bonuses": {
-        "str": 5,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 3
+        "str": 7,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/dragonbone_helm.png"
@@ -3367,14 +3391,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 32,
+      "defense": 35,
       "stat_bonuses": {
-        "str": 10,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 15,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/grandmaster_armor.png"
@@ -3404,14 +3428,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 21,
+      "defense": 26,
       "stat_bonuses": {
-        "str": 6,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 4
+        "str": 9,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 6
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/ashen_armor.png"
@@ -3440,14 +3464,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 28,
+      "defense": 30,
       "stat_bonuses": {
-        "str": 9,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 13,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/elden_armory_chest.png"
@@ -3513,14 +3537,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 32,
+      "defense": 35,
       "stat_bonuses": {
-        "str": 10,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 15,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/ironclad_armor.png"
@@ -3550,14 +3574,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 19,
+      "defense": 22,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 3,
-        "dex": 6,
-        "int": 0,
-        "wis": 0,
-        "vit": 0
+        "str": 2,
+        "agi": 5,
+        "dex": 9,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/loremaster_hood.png"
@@ -3587,8 +3611,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 7,
-        "max": 8
+        "min": 21,
+        "max": 25
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -3628,16 +3652,17 @@
       "has_icon": true,
       "defense": 6,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 2
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
       },
       "sprites": {
         "icon": "res://assets/icons/forged/capes/prairie_king_cape.png"
-      }
+      },
+      "hp_bonus": 0
     },
     {
       "item_id": "stardrop_pendant",
@@ -3663,14 +3688,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
-      "hp_bonus": 23,
+      "hp_bonus": 38,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/stardrop_pendant.png"
       }
@@ -3699,14 +3724,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 25,
+      "defense": 26,
       "stat_bonuses": {
-        "str": 8,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 12,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/survivor_vest.png"
@@ -3735,14 +3760,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 17,
+      "defense": 19,
       "stat_bonuses": {
-        "str": 5,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 3
+        "str": 7,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/zagreus_helm.png"
@@ -3773,8 +3798,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 3,
-        "max": 5
+        "min": 11,
+        "max": 13
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -3814,8 +3839,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 3,
-        "max": 5
+        "min": 11,
+        "max": 13
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -3855,8 +3880,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 3,
-        "max": 5
+        "min": 11,
+        "max": 13
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -3896,8 +3921,8 @@
       "has_sprites": false,
       "has_icon": false,
       "base_damage": {
-        "min": 3,
-        "max": 4
+        "min": 9,
+        "max": 11
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -3938,6 +3963,11 @@
       "has_icon": true,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/rannis_dark_moon_ring.png"
+      },
+      "hp_bonus": 38,
+      "stat_bonuses": {
+        "str": 4,
+        "vit": 6
       }
     },
     {
@@ -3966,6 +3996,11 @@
       "has_icon": true,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/havel_ring.png"
+      },
+      "hp_bonus": 30,
+      "stat_bonuses": {
+        "str": 3,
+        "vit": 4
       }
     },
     {
@@ -3994,6 +4029,11 @@
       "has_icon": true,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/amulet_of_kings.png"
+      },
+      "hp_bonus": 45,
+      "stat_bonuses": {
+        "str": 5,
+        "vit": 8
       }
     },
     {
@@ -4021,8 +4061,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 3,
-        "max": 5
+        "min": 11,
+        "max": 13
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -4062,14 +4102,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
-      "hp_bonus": 26,
+      "hp_bonus": 45,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/r6_black_ice_skin.png"
       }
@@ -4106,8 +4146,8 @@
       "has_sprites": false,
       "has_icon": false,
       "base_damage": {
-        "min": 7,
-        "max": 9
+        "min": 18,
+        "max": 21
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -4184,14 +4224,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 32,
+      "defense": 35,
       "stat_bonuses": {
-        "str": 10,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 15,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/tyraels_might.png"
@@ -4222,14 +4262,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 0,
-        "dex": 0,
-        "int": 12,
-        "wis": 10,
-        "vit": 0
+        "str": 2,
+        "agi": 2,
+        "dex": 2,
+        "int": 18,
+        "wis": 15,
+        "vit": 2
       },
-      "hp_bonus": 0,
+      "hp_bonus": 45,
       "mana_bonus": 30,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/stone_of_jordan.png"
@@ -4260,8 +4300,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 10,
-        "max": 13
+        "min": 27,
+        "max": 32
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -4301,17 +4341,18 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 0,
-        "dex": 0,
-        "int": 7,
-        "wis": 4,
-        "vit": 0
+        "str": 2,
+        "agi": 2,
+        "dex": 2,
+        "int": 10,
+        "wis": 6,
+        "vit": 2
       },
       "lifesteal": 0.039,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/horadric_cube.png"
-      }
+      },
+      "hp_bonus": 45
     },
     {
       "item_id": "el_druins_sword",
@@ -4338,8 +4379,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 7,
-        "max": 9
+        "min": 18,
+        "max": 21
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -4378,14 +4419,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 5,
+      "defense": 30,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 2,
-        "dex": 3,
-        "int": 0,
-        "wis": 0,
-        "vit": 0
+        "str": 2,
+        "agi": 4,
+        "dex": 5,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/natalyas_shadow.png"
@@ -4416,8 +4457,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 9,
-        "max": 11
+        "min": 24,
+        "max": 29
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -4458,6 +4499,11 @@
       "has_icon": true,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/black_soulstone.png"
+      },
+      "hp_bonus": 30,
+      "stat_bonuses": {
+        "str": 3,
+        "vit": 4
       }
     },
     {
@@ -4484,14 +4530,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 15,
+      "defense": 16,
       "stat_bonuses": {
-        "str": 5,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 3
+        "str": 7,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/andariel_visage.png"
@@ -4523,8 +4569,8 @@
       "has_icon": true,
       "sprite_folder": "res://assets/equipment/forged/weapons/genji_dragonblade",
       "base_damage": {
-        "min": 6,
-        "max": 7
+        "min": 15,
+        "max": 18
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -4564,17 +4610,18 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 0,
-        "dex": 0,
-        "int": 6,
-        "wis": 3,
-        "vit": 0
+        "str": 2,
+        "agi": 2,
+        "dex": 2,
+        "int": 9,
+        "wis": 5,
+        "vit": 2
       },
       "movement_speed": 0.104,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/tracer_chronal_accelerator.png"
-      }
+      },
+      "hp_bonus": 45
     },
     {
       "item_id": "reaper_hellfire_shotguns",
@@ -4608,8 +4655,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 10,
-        "max": 13
+        "min": 27,
+        "max": 32
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -4648,14 +4695,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 13,
+      "defense": 14,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 2
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
       },
       "sprites": {
         "icon": "res://assets/icons/forged/weapons/doomfist_gauntlet.png"
@@ -4685,14 +4732,14 @@
       },
       "has_sprites": false,
       "has_icon": true,
-      "defense": 28,
+      "defense": 30,
       "stat_bonuses": {
-        "str": 9,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 13,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/reinhardt_crusader_armor.png"
@@ -4723,8 +4770,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 7,
-        "max": 9
+        "min": 18,
+        "max": 21
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -4765,16 +4812,17 @@
       "has_icon": true,
       "defense": 5,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 2
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
       },
       "sprites": {
         "icon": "res://assets/icons/forged/capes/winston_jump_pack.png"
-      }
+      },
+      "hp_bonus": 0
     },
     {
       "item_id": "widowmaker_kiss",
@@ -4808,8 +4856,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 6,
-        "max": 8
+        "min": 16,
+        "max": 19
       },
       "attack_speed": "medium",
       "stat_bonuses": {
@@ -4849,17 +4897,18 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 5
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 7
       },
       "movement_speed": 0.08,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/orisa_halt_projector.png"
-      }
+      },
+      "hp_bonus": 30
     },
     {
       "item_id": "raynor_marine_armor",
@@ -4885,14 +4934,14 @@
       },
       "has_sprites": true,
       "has_icon": true,
-      "defense": 32,
+      "defense": 35,
       "stat_bonuses": {
-        "str": 10,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 6
+        "str": 15,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 9
       },
       "sprites": {
         "icon": "res://assets/icons/forged/armor/raynor_marine_armor.png"
@@ -4923,8 +4972,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 5,
-        "max": 6
+        "min": 15,
+        "max": 18
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -4964,14 +5013,14 @@
       "has_sprites": false,
       "has_icon": true,
       "stat_bonuses": {
-        "str": 0,
-        "agi": 0,
-        "dex": 0,
-        "int": 6,
-        "wis": 3,
-        "vit": 0
+        "str": 2,
+        "agi": 2,
+        "dex": 2,
+        "int": 9,
+        "wis": 5,
+        "vit": 2
       },
-      "hp_bonus": 32,
+      "hp_bonus": 45,
       "cooldown_reduction": 0.065,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/protoss_warp_prism.png"
@@ -5002,8 +5051,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 6,
-        "max": 7
+        "min": 15,
+        "max": 18
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -5043,8 +5092,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 4,
-        "max": 6
+        "min": 13,
+        "max": 16
       },
       "attack_speed": "fast",
       "stat_bonuses": {
@@ -5091,8 +5140,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 10,
-        "max": 12
+        "min": 24,
+        "max": 29
       },
       "attack_speed": "slow",
       "stat_bonuses": {
@@ -5133,16 +5182,17 @@
       "has_icon": true,
       "defense": 5,
       "stat_bonuses": {
-        "str": 3,
-        "agi": 0,
-        "dex": 0,
-        "int": 0,
-        "wis": 0,
-        "vit": 2
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
       },
       "sprites": {
         "icon": "res://assets/icons/forged/capes/dark_templar_armor.png"
-      }
+      },
+      "hp_bonus": 0
     },
     {
       "item_id": "zergling_claws",
@@ -5169,8 +5219,8 @@
       "has_sprites": true,
       "has_icon": true,
       "base_damage": {
-        "min": 3,
-        "max": 4
+        "min": 8,
+        "max": 10
       },
       "attack_speed": "very_fast",
       "stat_bonuses": {
@@ -5211,6 +5261,765 @@
       "has_icon": true,
       "sprites": {
         "icon": "res://assets/icons/forged/accessories/khala_amulet.png"
+      },
+      "hp_bonus": 30,
+      "stat_bonuses": {
+        "str": 3,
+        "vit": 4
+      }
+    },
+    {
+      "_comment": "=== WAVE 2 ARMOR (BOOTS/LEGS) ===",
+      "item_id": "aloy_strider_boots",
+      "item_name": "Aloy's Strider Boots",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Lightweight boots worn by the machine hunter of the Nora tribe.",
+      "lore": "Silent across the snow, swift between the machines. These boots have crossed the Forbidden West.",
+      "base_rarity": "epic",
+      "theme": "horizon",
+      "material_type": "leather",
+      "visuals": {
+        "icon_url": "/static/items/icons/aloy_strider_boots.png",
+        "sprite_folder": "armor/feet/aloy_strider_boots",
+        "effect": "nature_trail",
+        "glow_color": "#8B4513"
+      },
+      "effects": {
+        "passive": [
+          "move_speed",
+          "stealth"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 15,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 7,
+        "dex": 5,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/aloy_strider_boots.png"
+      }
+    },
+    {
+      "item_id": "apex_boots",
+      "item_name": "Apex Combat Boots",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Tactical boots worn by Apex Games competitors.",
+      "lore": "Drop hot, loot fast, survive. Standard issue for the Arena.",
+      "base_rarity": "rare",
+      "theme": "apex_legends",
+      "material_type": "leather",
+      "visuals": {
+        "icon_url": "/static/items/icons/apex_boots.png",
+        "sprite_folder": "armor/feet/apex_boots",
+        "effect": "slide_boost",
+        "glow_color": "#FF4500"
+      },
+      "effects": {
+        "passive": [
+          "slide_speed"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 13,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 6,
+        "dex": 4,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/apex_boots.png"
+      }
+    },
+    {
+      "item_id": "berserker_tassets",
+      "item_name": "Berserker's Tassets",
+      "item_type": "armor_legs",
+      "weapon_type": null,
+      "description": "Heavy plate tassets forged for the mightiest barbarians.",
+      "lore": "Blood-soaked and battle-hardened. The mark of a true berserker.",
+      "base_rarity": "epic",
+      "theme": "diablo",
+      "material_type": "plate",
+      "visuals": {
+        "icon_url": "/static/items/icons/berserker_tassets.png",
+        "sprite_folder": "armor/legs/berserker_tassets",
+        "effect": "rage_aura",
+        "glow_color": "#8B0000"
+      },
+      "effects": {
+        "passive": [
+          "damage_reduction",
+          "berserker_rage"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 22,
+      "stat_bonuses": {
+        "str": 7,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/berserker_tassets.png"
+      }
+    },
+    {
+      "item_id": "cog_boots",
+      "item_name": "COG Combat Boots",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Standard issue boots of the Coalition of Ordered Governments.",
+      "lore": "Built to stomp Locust and keep fighting. Seriously.",
+      "base_rarity": "rare",
+      "theme": "gears_of_war",
+      "material_type": "plate",
+      "visuals": {
+        "icon_url": "/static/items/icons/cog_boots.png",
+        "sprite_folder": "armor/feet/cog_boots",
+        "effect": "stomp_dust",
+        "glow_color": "#4A5568"
+      },
+      "effects": {
+        "passive": [
+          "poise"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 13,
+      "stat_bonuses": {
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/cog_boots.png"
+      }
+    },
+    {
+      "item_id": "cuphead_shoes",
+      "item_name": "Cuphead's Dancing Shoes",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Cartoon shoes perfect for dodging through bullet hell.",
+      "lore": "A good day for a swell battle! Don't deal with the Devil.",
+      "base_rarity": "rare",
+      "theme": "cuphead",
+      "material_type": "cloth",
+      "visuals": {
+        "icon_url": "/static/items/icons/cuphead_shoes.png",
+        "sprite_folder": "armor/feet/cuphead_shoes",
+        "effect": "cartoon_sparkle",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": [
+          "dodge_roll"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 13,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 7,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/cuphead_shoes.png"
+      }
+    },
+    {
+      "item_id": "ghost_hakama",
+      "item_name": "Ghost's Hakama",
+      "item_type": "armor_legs",
+      "weapon_type": null,
+      "description": "Traditional samurai pants worn by the Ghost of Tsushima.",
+      "lore": "Honor died on the beach. But the Ghost lives on.",
+      "base_rarity": "epic",
+      "theme": "ghost_of_tsushima",
+      "material_type": "cloth",
+      "visuals": {
+        "icon_url": "/static/items/icons/ghost_hakama.png",
+        "sprite_folder": "armor/legs/ghost_hakama",
+        "effect": "wind_particles",
+        "glow_color": "#1A1A2E"
+      },
+      "effects": {
+        "passive": [
+          "stealth",
+          "crit_chance"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 22,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 6,
+        "dex": 6,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/ghost_hakama.png"
+      }
+    },
+    {
+      "item_id": "hunter_boots",
+      "item_name": "Hunter's Boots",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Blood-stained boots of a Yharnam hunter.",
+      "lore": "Fear the old blood. These boots have walked through nightmare.",
+      "base_rarity": "epic",
+      "theme": "bloodborne",
+      "material_type": "leather",
+      "visuals": {
+        "icon_url": "/static/items/icons/hunter_boots.png",
+        "sprite_folder": "armor/feet/hunter_boots",
+        "effect": "quickstep_trail",
+        "glow_color": "#8B0000"
+      },
+      "effects": {
+        "passive": [
+          "quickstep",
+          "rally"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 15,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 6,
+        "dex": 5,
+        "int": 2,
+        "wis": 2,
+        "vit": 3
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/hunter_boots.png"
+      }
+    },
+    {
+      "item_id": "lich_king_boots",
+      "item_name": "Lich King's Sabatons",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Frozen sabatons worn by the Lich King himself.",
+      "lore": "There must always be a Lich King. These boots have crushed countless heroes.",
+      "base_rarity": "legendary",
+      "theme": "wow",
+      "material_type": "plate",
+      "visuals": {
+        "icon_url": "/static/items/icons/lich_king_boots.png",
+        "sprite_folder": "armor/feet/lich_king_boots",
+        "effect": "frost_aura",
+        "glow_color": "#00CED1"
+      },
+      "effects": {
+        "passive": [
+          "frost_damage",
+          "death_grip"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 18,
+      "stat_bonuses": {
+        "str": 7,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 6
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/lich_king_boots.png"
+      }
+    },
+    {
+      "item_id": "marauder_treads",
+      "item_name": "Marauder's Treads",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Heavy combat boots from the Doom Slayer's arsenal.",
+      "lore": "Rip and tear. These boots have crushed demonic skulls across Hell.",
+      "base_rarity": "epic",
+      "theme": "doom",
+      "material_type": "plate",
+      "visuals": {
+        "icon_url": "/static/items/icons/marauder_treads.png",
+        "sprite_folder": "armor/feet/marauder_treads",
+        "effect": "argent_energy",
+        "glow_color": "#FF4500"
+      },
+      "effects": {
+        "passive": [
+          "glory_kill",
+          "double_jump"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 15,
+      "stat_bonuses": {
+        "str": 6,
+        "agi": 4,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/marauder_treads.png"
+      }
+    },
+    {
+      "item_id": "minecraft_leggings",
+      "item_name": "Diamond Leggings",
+      "item_type": "armor_legs",
+      "weapon_type": null,
+      "description": "Legendary leggings crafted from the rarest mineral.",
+      "lore": "Diamonds! Finally found them at Y-level 11. Worth every creeper death.",
+      "base_rarity": "rare",
+      "theme": "minecraft",
+      "material_type": "plate",
+      "visuals": {
+        "icon_url": "/static/items/icons/minecraft_leggings.png",
+        "sprite_folder": "armor/legs/minecraft_leggings",
+        "effect": "diamond_sparkle",
+        "glow_color": "#00FFFF"
+      },
+      "effects": {
+        "passive": [
+          "durability"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 19,
+      "stat_bonuses": {
+        "str": 5,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/minecraft_leggings.png"
+      }
+    },
+    {
+      "item_id": "mountaineer_trouser",
+      "item_name": "Mountaineer's Trousers",
+      "item_type": "armor_legs",
+      "weapon_type": null,
+      "description": "Rugged hiking pants built for mountain exploration.",
+      "lore": "Summit fever is real. These pants have seen peaks most never will.",
+      "base_rarity": "uncommon",
+      "theme": "adventure",
+      "material_type": "cloth",
+      "visuals": {
+        "icon_url": "/static/items/icons/mountaineer_trouser.png",
+        "sprite_folder": "armor/legs/mountaineer_trouser",
+        "effect": "nature_dust",
+        "glow_color": "#228B22"
+      },
+      "effects": {
+        "passive": [
+          "stamina_regen"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 16,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 4,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/mountaineer_trouser.png"
+      }
+    },
+    {
+      "item_id": "pilots_flight_point",
+      "item_name": "Pilot's Flight Boots",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Advanced boots worn by elite Titanfall Pilots.",
+      "lore": "Wall-running, double-jumping, Titan-slaying. Standard Pilot gear.",
+      "base_rarity": "epic",
+      "theme": "titanfall",
+      "material_type": "leather",
+      "visuals": {
+        "icon_url": "/static/items/icons/pilots_flight_point.png",
+        "sprite_folder": "armor/feet/pilots_flight_point",
+        "effect": "jet_trail",
+        "glow_color": "#FF6600"
+      },
+      "effects": {
+        "passive": [
+          "wall_run",
+          "double_jump"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 15,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 7,
+        "dex": 5,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/pilots_flight_point.png"
+      }
+    },
+    {
+      "item_id": "pirate_boots",
+      "item_name": "Pirate Legend Boots",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Sea-weathered boots of a legendary pirate.",
+      "lore": "Sailed every sea, plundered every ship. A true legend of the seas.",
+      "base_rarity": "rare",
+      "theme": "sea_of_thieves",
+      "material_type": "leather",
+      "visuals": {
+        "icon_url": "/static/items/icons/pirate_boots.png",
+        "sprite_folder": "armor/feet/pirate_boots",
+        "effect": "ghost_glow",
+        "glow_color": "#1E90FF"
+      },
+      "effects": {
+        "passive": [
+          "swim_speed"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 13,
+      "stat_bonuses": {
+        "str": 4,
+        "agi": 5,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/pirate_boots.png"
+      }
+    },
+    {
+      "item_id": "portal_boots",
+      "item_name": "Long Fall Boots",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Advanced heel springs that prevent fall damage.",
+      "lore": "Aperture Science: We do what we must, because we can.",
+      "base_rarity": "epic",
+      "theme": "portal",
+      "material_type": "cloth",
+      "visuals": {
+        "icon_url": "/static/items/icons/portal_boots.png",
+        "sprite_folder": "armor/feet/portal_boots",
+        "effect": "portal_shimmer",
+        "glow_color": "#00CED1"
+      },
+      "effects": {
+        "passive": [
+          "no_fall_damage",
+          "momentum"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 15,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 6,
+        "dex": 2,
+        "int": 4,
+        "wis": 4,
+        "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/portal_boots.png"
+      }
+    },
+    {
+      "item_id": "returnal_scout_greaves",
+      "item_name": "Selene's Scout Greaves",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Advanced combat greaves from ASTRA's scout suit.",
+      "lore": "Break the cycle. Die, return, remember. These greaves have seen infinite deaths.",
+      "base_rarity": "legendary",
+      "theme": "returnal",
+      "material_type": "plate",
+      "visuals": {
+        "icon_url": "/static/items/icons/returnal_scout_greaves.png",
+        "sprite_folder": "armor/feet/returnal_scout_greaves",
+        "effect": "xeno_energy",
+        "glow_color": "#9400D3"
+      },
+      "effects": {
+        "passive": [
+          "dash",
+          "adrenaline"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 18,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 7,
+        "dex": 5,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/returnal_scout_greaves.png"
+      }
+    },
+    {
+      "item_id": "spartan_greaves",
+      "item_name": "MJOLNIR Greaves",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Power armor greaves worn by Spartan super-soldiers.",
+      "lore": "The Covenant called them Demons. These greaves have crushed alien skulls.",
+      "base_rarity": "legendary",
+      "theme": "halo",
+      "material_type": "plate",
+      "visuals": {
+        "icon_url": "/static/items/icons/spartan_greaves.png",
+        "sprite_folder": "armor/feet/spartan_greaves",
+        "effect": "shield_recharge",
+        "glow_color": "#00CED1"
+      },
+      "effects": {
+        "passive": [
+          "damage_reduction",
+          "sprint"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 18,
+      "stat_bonuses": {
+        "str": 6,
+        "agi": 4,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 5
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/spartan_greaves.png"
+      }
+    },
+    {
+      "item_id": "survivor_pants",
+      "item_name": "Survivor's Cargo Pants",
+      "item_type": "armor_legs",
+      "weapon_type": null,
+      "description": "Rugged cargo pants worn by zombie apocalypse survivors.",
+      "lore": "Pills here! No wait, that's ammo. Either way, we're living another day.",
+      "base_rarity": "rare",
+      "theme": "left4dead",
+      "material_type": "cloth",
+      "visuals": {
+        "icon_url": "/static/items/icons/survivor_pants.png",
+        "sprite_folder": "armor/legs/survivor_pants",
+        "effect": "dust_trail",
+        "glow_color": "#556B2F"
+      },
+      "effects": {
+        "passive": [
+          "zombie_slayer"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 19,
+      "stat_bonuses": {
+        "str": 4,
+        "agi": 4,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/survivor_pants.png"
+      }
+    },
+    {
+      "item_id": "tier_set_boots",
+      "item_name": "Mythic Tier Sabatons",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Legendary boots from a complete mythic raid tier set.",
+      "lore": "Cutting Edge achieved. These boots have walked through fire and emerged victorious.",
+      "base_rarity": "epic",
+      "theme": "wow",
+      "material_type": "plate",
+      "visuals": {
+        "icon_url": "/static/items/icons/tier_set_boots.png",
+        "sprite_folder": "armor/feet/tier_set_boots",
+        "effect": "tier_glow",
+        "glow_color": "#9400D3"
+      },
+      "effects": {
+        "passive": [
+          "set_bonus",
+          "haste"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 15,
+      "stat_bonuses": {
+        "str": 6,
+        "agi": 2,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 6
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/tier_set_boots.png"
+      }
+    },
+    {
+      "item_id": "tracer_pants",
+      "item_name": "Tracer's Leggings",
+      "item_type": "armor_legs",
+      "weapon_type": null,
+      "description": "Sleek leggings worn by Overwatch's fastest agent.",
+      "lore": "Cheers, love! The cavalry's here! Perfect for blinking around the battlefield.",
+      "base_rarity": "rare",
+      "theme": "overwatch",
+      "material_type": "cloth",
+      "visuals": {
+        "icon_url": "/static/items/icons/tracer_pants.png",
+        "sprite_folder": "armor/legs/tracer_pants",
+        "effect": "time_distortion",
+        "glow_color": "#FF8C00"
+      },
+      "effects": {
+        "passive": [
+          "blink",
+          "move_speed"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 19,
+      "stat_bonuses": {
+        "str": 2,
+        "agi": 7,
+        "dex": 4,
+        "int": 2,
+        "wis": 2,
+        "vit": 2
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/tracer_pants.png"
+      }
+    },
+    {
+      "item_id": "zealot_boots",
+      "item_name": "Zealot's Psi-Treads",
+      "item_type": "armor_feet",
+      "weapon_type": null,
+      "description": "Psionic boots worn by the fearless Protoss warriors.",
+      "lore": "My life for Aiur! En Taro Adun, warrior.",
+      "base_rarity": "epic",
+      "theme": "starcraft",
+      "material_type": "plate",
+      "visuals": {
+        "icon_url": "/static/items/icons/zealot_boots.png",
+        "sprite_folder": "armor/feet/zealot_boots",
+        "effect": "psionic_glow",
+        "glow_color": "#FFD700"
+      },
+      "effects": {
+        "passive": [
+          "charge",
+          "psionic_shield"
+        ],
+        "active": null
+      },
+      "has_sprites": true,
+      "has_icon": true,
+      "defense": 15,
+      "stat_bonuses": {
+        "str": 5,
+        "agi": 5,
+        "dex": 2,
+        "int": 2,
+        "wis": 2,
+        "vit": 4
+      },
+      "sprites": {
+        "icon": "res://assets/icons/forged/armor/zealot_boots.png"
       }
     }
   ],

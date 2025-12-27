@@ -104,16 +104,44 @@ func _on_logout() -> void:
 # DEBUG - Remove after testing
 # ═══════════════════════════════════════════════════════════════════════════════
 
-func debug_clear_claimed_items() -> void:
-	"""DEBUG: Clear all forged items from inventory so they can be reclaimed"""
-	var cleared = 0
+func debug_reset_all_claims() -> void:
+	"""DEBUG: Reset ALL forge claims so items can be reclaimed for testing.
+	This clears: inventory forged items, claimed_in_game flags, and playtest claims."""
+
+	# 1. Clear forged items from inventory
+	var inv_cleared = 0
 	for i in range(InventorySystem.inventory_items.size()):
 		var item = InventorySystem.inventory_items[i]
 		if item and item.get("is_forged", false):
 			InventorySystem.inventory_items[i] = null
-			cleared += 1
-	print("[ForgeItemManager] DEBUG: Cleared %d forged items from inventory" % cleared)
+			inv_cleared += 1
+
+	# 2. Reset claimed_in_game flags on all forged items
+	var flags_reset = 0
+	for item in _forged_items:
+		if item.get("claimed_in_game", false):
+			item["claimed_in_game"] = false
+			flags_reset += 1
+	for item_id in _forged_items_by_id:
+		if _forged_items_by_id[item_id].get("claimed_in_game", false):
+			_forged_items_by_id[item_id]["claimed_in_game"] = false
+
+	# 3. Clear playtest claims
+	var playtest_count = CharacterStats.get_playtest_claimed_count()
+	CharacterStats.clear_playtest_claims()
+
+	print("═══════════════════════════════════════════════════════════")
+	print("🔄 FORGE CLAIMS RESET")
+	print("   Inventory cleared: %d forged items" % inv_cleared)
+	print("   Claim flags reset: %d items" % flags_reset)
+	print("   Playtest claims cleared: %d" % playtest_count)
+	print("═══════════════════════════════════════════════════════════")
+
 	InventorySystem.inventory_changed.emit()
+
+func debug_clear_claimed_items() -> void:
+	"""DEBUG: Alias for debug_reset_all_claims()"""
+	debug_reset_all_claims()
 
 func debug_inject_all_as_forgeable() -> void:
 	"""DEBUG: Inject ALL items from ForgeItemDB as forgeable achievements.
