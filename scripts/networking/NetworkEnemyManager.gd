@@ -1092,6 +1092,13 @@ func spawn_enemy_on_clients(network_id: int, pos: Vector2, level: int, enemy_nam
 	if multiplayer.is_server():
 		return  # Server already spawned
 
+	# DUPLICATE CHECK: Skip if this enemy already exists
+	var existing = get_enemy(network_id)
+	if existing and is_instance_valid(existing):
+		# Already have this enemy, just update position if needed
+		existing.global_position = pos
+		return
+
 	# Determine scene path from enemy name if not provided
 	var actual_scene_path = scene_path
 	if actual_scene_path.is_empty():
@@ -1155,6 +1162,12 @@ func spawn_training_dummy_on_clients(network_id: int, pos: Vector2) -> void:
 	"""Server tells clients to spawn the training dummy."""
 	if multiplayer.is_server():
 		return  # Server already spawned
+
+	# DUPLICATE CHECK: Skip if this enemy already exists
+	var existing = get_enemy(network_id)
+	if existing and is_instance_valid(existing):
+		existing.global_position = pos
+		return
 
 	var dummy_scene = load("res://scenes/training/training_dummy.tscn")
 	if not dummy_scene:

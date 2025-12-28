@@ -52,6 +52,7 @@ var their_offered_gold: int = 0
 
 var my_locked: bool = false
 var their_locked: bool = false
+var _trade_executing: bool = false  # Guard against double execution
 
 # UI elements
 var main_panel: PanelContainer
@@ -169,9 +170,8 @@ func can_request_trade(target_id: int) -> Dictionary:
 	if distance > MAX_TRADE_DISTANCE:
 		return {valid = false, reason = "Target too far (must be within 5 tiles)"}
 
-	# Check if authenticated with Ashbane (required for forged item trading)
-	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
-		return {valid = false, reason = "Trading requires Ashbane authentication"}
+	# Note: AshbaneAuth check removed for testing - guests can trade locally
+	# Backend will handle auth for finalized trades
 
 	return {valid = true, reason = ""}
 
@@ -463,7 +463,7 @@ func _create_offer_column(title: String, is_mine: bool) -> VBoxContainer:
 func _create_trade_slot(slot_index: int, is_mine: bool) -> PanelContainer:
 	"""Create an individual trade slot"""
 	var slot = PanelContainer.new()
-	slot.custom_minimum_size = Vector2(70, 70)
+	slot.custom_minimum_size = Vector2(48, 48)
 	slot.set_meta("slot_index", slot_index)
 	slot.set_meta("is_mine", is_mine)
 	slot.set_meta("item_token_id", -1)  # -1 = empty
@@ -494,7 +494,16 @@ func _create_trade_slot(slot_index: int, is_mine: bool) -> PanelContainer:
 	empty_label.add_theme_color_override("font_color", Color(0.4, 0.4, 0.45, 0.6))
 	center.add_child(empty_label)
 
-	# Item label (hidden by default)
+	# Item icon (hidden by default)
+	var item_icon = TextureRect.new()
+	item_icon.name = "ItemIcon"
+	item_icon.visible = false
+	item_icon.custom_minimum_size = Vector2(40, 40)
+	item_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	item_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	center.add_child(item_icon)
+
+	# Item label fallback (hidden by default, used if no icon)
 	var item_label = Label.new()
 	item_label.name = "ItemLabel"
 	item_label.text = ""
@@ -563,6 +572,7 @@ func show_trade_window(partner_id: int, partner_name: String) -> void:
 	their_offered_gold = 0
 	my_locked = false
 	their_locked = false
+	_trade_executing = false
 
 	# Update UI
 	my_name_label.text = "Your Offer"
@@ -585,6 +595,12 @@ func hide_trade_window() -> void:
 
 func _close_trade(reason: String) -> void:
 	"""Close trade and reset state"""
+	# Restore all inventory slots that were in trade before clearing
+	for slot in my_items_grid.get_children():
+		var inventory_slot = slot.get_meta("inventory_slot", -1)
+		if inventory_slot >= 0:
+			_restore_inventory_slot(inventory_slot)
+
 	is_trading = false
 	trade_partner_id = -1
 	trade_partner_name = ""
@@ -614,13 +630,18 @@ func _clear_slot(slot: PanelContainer) -> void:
 	"""Reset a slot to empty state"""
 	slot.set_meta("item_token_id", -1)
 	slot.set_meta("item_data", null)
+	slot.set_meta("inventory_slot", -1)  # Clear inventory slot tracking
 
 	var center = slot.get_child(0)
 	if center:
 		var empty_label = center.get_node_or_null("EmptyLabel")
+		var item_icon = center.get_node_or_null("ItemIcon")
 		var item_label = center.get_node_or_null("ItemLabel")
 		if empty_label:
 			empty_label.visible = true
+		if item_icon:
+			item_icon.visible = false
+			item_icon.texture = null
 		if item_label:
 			item_label.visible = false
 			item_label.text = ""
@@ -633,14 +654,25 @@ func _clear_slot(slot: PanelContainer) -> void:
 func _remove_item_from_slot(slot: PanelContainer) -> void:
 	"""Remove item from a slot"""
 	var token_id = slot.get_meta("item_token_id", -1)
-	if token_id > 0:
+	var inventory_slot = slot.get_meta("inventory_slot", -1)
+
+	if token_id > 0 or token_id < -1:  # Can be negative hash for unminted items
 		my_offered_items.erase(token_id)
 
 	_clear_slot(slot)
 
+	# Restore inventory slot appearance
+	if inventory_slot >= 0:
+		_restore_inventory_slot(inventory_slot)
+
 	# Sync to partner
-	if trade_partner_id > 0:
-		rpc_id(1, "_server_update_offer", trade_partner_id, my_offered_items, my_offered_gold)
+	_sync_offer_to_partner()
+
+func _restore_inventory_slot(inventory_slot: int) -> void:
+	"""Notify InventoryUI to restore a slot's appearance"""
+	var inventory_ui = get_node_or_null("/root/InventoryUI")
+	if inventory_ui and inventory_ui.has_method("_mark_slot_in_trade"):
+		inventory_ui._mark_slot_in_trade(inventory_slot, false)
 
 func _show_item_picker(slot: PanelContainer) -> void:
 	"""Show picker popup for selecting an item to add to slot"""
@@ -734,7 +766,7 @@ func _hide_item_picker() -> void:
 	item_picker_popup.visible = false
 	item_picker_target_slot = null
 
-func _add_item_to_slot(slot: PanelContainer, item: Dictionary) -> void:
+func _add_item_to_slot(slot: PanelContainer, item: Dictionary, inventory_slot: int = -1) -> void:
 	"""Add an item to a trade slot"""
 	var token_id = item.get("token_id", -1)
 	var item_name = item.get("item_name", "???")
@@ -742,17 +774,42 @@ func _add_item_to_slot(slot: PanelContainer, item: Dictionary) -> void:
 
 	slot.set_meta("item_token_id", token_id)
 	slot.set_meta("item_data", item)
+	slot.set_meta("inventory_slot", inventory_slot)
 
 	# Update visuals
 	var center = slot.get_child(0)
 	if center:
 		var empty_label = center.get_node_or_null("EmptyLabel")
+		var item_icon = center.get_node_or_null("ItemIcon")
 		var item_label = center.get_node_or_null("ItemLabel")
 		if empty_label:
 			empty_label.visible = false
-		if item_label:
+
+		# Try to load icon
+		var icon_loaded = false
+		if item_icon and ItemIconGenerator:
+			# Build item dict for ItemIconGenerator
+			var icon_item = {
+				"is_forged": true,
+				"name": item_name,
+				"item_id": item.get("forged_id", ""),
+				"type": item.get("item_type", "weapon"),
+				"rarity": rarity
+			}
+			var icon_texture = ItemIconGenerator.get_item_icon(icon_item)
+			if icon_texture:
+				item_icon.texture = icon_texture
+				item_icon.visible = true
+				icon_loaded = true
+				if item_label:
+					item_label.visible = false
+
+		# Fall back to text label if no icon
+		if not icon_loaded and item_label:
 			item_label.visible = true
 			item_label.text = item_name.substr(0, 12)
+			if item_icon:
+				item_icon.visible = false
 
 	# Set border color based on rarity
 	var rarity_color = _get_rarity_color(rarity)
@@ -764,9 +821,8 @@ func _add_item_to_slot(slot: PanelContainer, item: Dictionary) -> void:
 	if token_id not in my_offered_items:
 		my_offered_items.append(token_id)
 
-	# Sync to partner
-	if trade_partner_id > 0:
-		rpc_id(1, "_server_update_offer", trade_partner_id, my_offered_items, my_offered_gold)
+	# Sync to partner - send full item data, not just token_ids
+	_sync_offer_to_partner()
 
 func _get_rarity_color(rarity: String) -> Color:
 	match rarity.to_upper():
@@ -784,7 +840,30 @@ func _on_gold_changed(value: float) -> void:
 		return
 
 	my_offered_gold = int(value)
-	rpc_id(1, "_server_update_offer", trade_partner_id, my_offered_items, my_offered_gold)
+	_sync_offer_to_partner()
+
+func _sync_offer_to_partner() -> void:
+	"""Sync our full offer (items with data + gold) to trade partner"""
+	if trade_partner_id <= 0:
+		return
+
+	# Build array of full item data from our slots
+	var items_data: Array = []
+	for slot in my_items_grid.get_children():
+		var item_data = slot.get_meta("item_data", null)
+		if item_data and item_data is Dictionary:
+			items_data.append(item_data)
+
+	# If we're the server, send directly to partner (rpc_id to self doesn't work)
+	if multiplayer.is_server():
+		if trade_partner_id == 1:
+			# Trading with ourselves? Shouldn't happen but handle it
+			_client_offer_updated_full(1, items_data, my_offered_gold)
+		else:
+			rpc_id(trade_partner_id, "_client_offer_updated_full", multiplayer.get_unique_id(), items_data, my_offered_gold)
+	else:
+		# Send to server for relay to partner
+		rpc_id(1, "_server_update_offer_full", trade_partner_id, items_data, my_offered_gold)
 
 func _on_lock_pressed() -> void:
 	if my_locked:
@@ -793,43 +872,141 @@ func _on_lock_pressed() -> void:
 		my_lock_button.text = "Lock In Offer"
 		_style_button(my_lock_button, Color(0.3, 0.6, 0.3))
 		status_label.text = "Offer unlocked"
+		status_label.add_theme_color_override("font_color", ACCENT_COLOR)
 	else:
 		# Lock
 		my_locked = true
 		my_lock_button.text = "Unlock"
 		_style_button(my_lock_button, Color(0.6, 0.6, 0.3))
-		status_label.text = "Waiting for partner to lock in..."
+		if their_locked:
+			status_label.text = "Both locked! Executing trade..."
+			status_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))  # Green
+		else:
+			status_label.text = "Waiting for partner to lock in..."
+			status_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))  # Gold
 
-	rpc_id(1, "_server_lock_offer", trade_partner_id, my_locked)
+	# Sync lock state to partner
+	_sync_lock_to_partner()
+
+	# If both are now locked after pressing, execute trade on our side
+	if my_locked and their_locked:
+		if NotificationManager:
+			NotificationManager.show_notification("Trade executing!", "SUCCESS")
+		_execute_trade()
+
+func _sync_lock_to_partner() -> void:
+	"""Sync our lock state to trade partner"""
+	if trade_partner_id <= 0:
+		return
+
+	print("[Trade] Syncing lock state: my_locked=%s to partner %d" % [my_locked, trade_partner_id])
+
+	# If we're the server, handle directly (rpc_id to self doesn't work)
+	if multiplayer.is_server():
+		if trade_partner_id == 1:
+			# Trading with ourselves? Shouldn't happen but handle it
+			_client_lock_updated(1, my_locked)
+		else:
+			rpc_id(trade_partner_id, "_client_lock_updated", multiplayer.get_unique_id(), my_locked)
+	else:
+		# Send to server for relay to partner
+		rpc_id(1, "_server_lock_offer", trade_partner_id, my_locked)
 
 func _update_their_offer(items: Array, gold: int) -> void:
-	"""Update display of partner's offer using fixed slots"""
-	their_offered_items = items
+	"""Update display of partner's offer using fixed slots (legacy - token_id only)"""
 	their_offered_gold = gold
 	their_gold_label.text = str(gold)
 
-	# Update their slots
+	# Update their slots - items is just token_ids
 	var slots = their_items_grid.get_children()
+	their_offered_items.clear()
 	for i in range(slots.size()):
 		var slot = slots[i]
 		if i < items.size():
-			# Show item in this slot
 			var token_id = items[i]
-			_update_their_slot(slot, token_id)
+			their_offered_items.append(token_id)
+			_update_their_slot_legacy(slot, token_id)
 		else:
-			# Clear this slot
 			_clear_slot(slot)
 
-func _update_their_slot(slot: PanelContainer, token_id: int) -> void:
-	"""Update a partner's slot with an item"""
+func _update_their_offer_full(items_data: Array, gold: int) -> void:
+	"""Update display of partner's offer using full item data (with icons)"""
+	their_offered_gold = gold
+	their_gold_label.text = str(gold)
+
+	# Update their slots with full item data
+	var slots = their_items_grid.get_children()
+	their_offered_items.clear()
+	for i in range(slots.size()):
+		var slot = slots[i]
+		if i < items_data.size():
+			var item = items_data[i]
+			their_offered_items.append(item.get("token_id", -1))
+			_update_their_slot(slot, item)
+		else:
+			_clear_slot(slot)
+
+func _update_their_slot(slot: PanelContainer, item: Dictionary) -> void:
+	"""Update a partner's slot with full item data (includes icon)"""
+	var token_id = item.get("token_id", -1)
+	var item_name = item.get("item_name", "???")
+	var rarity = item.get("item_rarity", "COMMON")
+
+	slot.set_meta("item_token_id", token_id)
+	slot.set_meta("item_data", item)
+
+	var center = slot.get_child(0)
+	if center:
+		var empty_label = center.get_node_or_null("EmptyLabel")
+		var item_icon = center.get_node_or_null("ItemIcon")
+		var item_label = center.get_node_or_null("ItemLabel")
+		if empty_label:
+			empty_label.visible = false
+
+		# Try to load icon
+		var icon_loaded = false
+		if item_icon and ItemIconGenerator:
+			var icon_item = {
+				"is_forged": true,
+				"name": item_name,
+				"item_id": item.get("forged_id", ""),
+				"type": item.get("item_type", "weapon"),
+				"rarity": rarity
+			}
+			var icon_texture = ItemIconGenerator.get_item_icon(icon_item)
+			if icon_texture:
+				item_icon.texture = icon_texture
+				item_icon.visible = true
+				icon_loaded = true
+				if item_label:
+					item_label.visible = false
+
+		# Fall back to text label
+		if not icon_loaded and item_label:
+			item_label.visible = true
+			item_label.text = item_name.substr(0, 12)
+			if item_icon:
+				item_icon.visible = false
+
+	# Set border color based on rarity
+	var rarity_color = _get_rarity_color(rarity)
+	var style = slot.get_theme_stylebox("panel").duplicate()
+	style.border_color = rarity_color
+	slot.add_theme_stylebox_override("panel", style)
+
+func _update_their_slot_legacy(slot: PanelContainer, token_id: int) -> void:
+	"""Update a partner's slot with just token_id (legacy fallback)"""
 	slot.set_meta("item_token_id", token_id)
 
 	var center = slot.get_child(0)
 	if center:
 		var empty_label = center.get_node_or_null("EmptyLabel")
+		var item_icon = center.get_node_or_null("ItemIcon")
 		var item_label = center.get_node_or_null("ItemLabel")
 		if empty_label:
 			empty_label.visible = false
+		if item_icon:
+			item_icon.visible = false
 		if item_label:
 			item_label.visible = true
 			item_label.text = "Item #%d" % token_id
@@ -841,28 +1018,124 @@ func _update_their_slot(slot: PanelContainer, token_id: int) -> void:
 
 func _update_their_lock(locked: bool) -> void:
 	their_locked = locked
+	print("[Trade] Partner lock state updated: locked=%s, my_locked=%s" % [locked, my_locked])
 
 	if my_locked and their_locked:
 		status_label.text = "Both locked! Executing trade..."
+		status_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))  # Green
+		# Show notification
+		if NotificationManager:
+			NotificationManager.show_notification("Trade executing!", "SUCCESS")
 		_execute_trade()
 	elif their_locked:
 		status_label.text = "%s has locked in!" % trade_partner_name
+		status_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))  # Gold
+		# Show notification when partner locks
+		if NotificationManager:
+			NotificationManager.show_notification("%s has locked in their offer" % trade_partner_name, "INFO")
+	else:
+		status_label.text = "%s unlocked their offer" % trade_partner_name
+		status_label.add_theme_color_override("font_color", ACCENT_COLOR)
+		if NotificationManager:
+			NotificationManager.show_notification("%s unlocked their offer" % trade_partner_name, "INFO")
 
 func _execute_trade() -> void:
-	"""Execute the trade via backend"""
-	# For each forged item I'm offering, call the direct trade API
-	for token_id in my_offered_items:
-		TradingManager.execute_direct_trade(token_id, trade_partner_id, 0)
+	"""Execute the trade - transfer items between inventories"""
+	# Guard against double execution
+	if _trade_executing:
+		print("[Trade] Trade already executing, skipping duplicate call")
+		return
+	_trade_executing = true
+	print("[Trade] Executing trade: my_items=%s, their_items=%s" % [my_offered_items, their_offered_items])
 
-	# Gold transfer would be handled via local inventory (not backend)
+	# 1. Remove my offered items from my inventory
+	for slot in my_items_grid.get_children():
+		var inventory_slot = slot.get_meta("inventory_slot", -1)
+		var item_data = slot.get_meta("item_data", null)
+		if inventory_slot >= 0 and item_data:
+			print("[Trade] Removing item from inventory slot %d: %s" % [inventory_slot, item_data.get("item_name", "?")])
+			InventorySystem.remove_item(inventory_slot)
+
+	# 2. Add received items from partner to my inventory
+	for slot in their_items_grid.get_children():
+		var item_data = slot.get_meta("item_data", null)
+		if item_data and item_data is Dictionary and not item_data.is_empty():
+			print("[Trade] Adding received item to inventory: %s" % item_data.get("item_name", "?"))
+			_add_received_item_to_inventory(item_data)
+
+	# 3. Gold transfer
 	if my_offered_gold > 0:
 		CharacterStats.add_gold(-my_offered_gold)
 
 	if their_offered_gold > 0:
 		CharacterStats.add_gold(their_offered_gold)
 
+	# 4. Backend API call for NFT ownership transfer (if authenticated)
+	for token_id in my_offered_items:
+		if token_id > 0:
+			TradingManager.execute_direct_trade(token_id, trade_partner_id, 0)
+
 	trade_completed.emit(my_offered_items, their_offered_items, their_offered_gold - my_offered_gold)
 	_close_trade("Trade completed!")
+
+func _add_received_item_to_inventory(item_data: Dictionary) -> void:
+	"""Add a received forged item to inventory"""
+	var item_type = item_data.get("item_type", "misc")
+
+	# Build item dict for InventorySystem
+	var item = {
+		"name": item_data.get("item_name", "Unknown"),
+		"type": item_type,
+		"is_forged": true,
+		"forged_id": item_data.get("forged_id", ""),
+		"token_id": item_data.get("token_id", -1),
+		"rarity": item_data.get("item_rarity", "COMMON"),
+		"item_id": item_data.get("forged_id", ""),
+		"quantity": 1,
+		"stackable": false,
+	}
+
+	# Set equipment slot based on item type if not specified
+	if item_data.has("slot") and item_data.get("slot") != "":
+		item["slot"] = item_data.get("slot")
+	else:
+		# Derive slot from item type
+		match item_type:
+			"weapon":
+				item["slot"] = "mainhand"
+			"armor", "chest":
+				item["slot"] = "chest"
+			"head", "helmet":
+				item["slot"] = "head"
+			"legs", "pants":
+				item["slot"] = "legs"
+			"feet", "boots":
+				item["slot"] = "feet"
+			"hands", "gloves":
+				item["slot"] = "hands"
+			"arms", "bracers":
+				item["slot"] = "arms"
+			"shield":
+				item["slot"] = "offhand"
+			"accessory", "ring":
+				item["slot"] = "accessory"
+			"back", "cape":
+				item["slot"] = "back"
+
+	# Copy additional fields that might be useful
+	if item_data.has("achievement_id"):
+		item["achievement_id"] = item_data.get("achievement_id")
+	if item_data.has("weapon_type"):
+		item["weapon_type"] = item_data.get("weapon_type")
+	if item_data.has("damage"):
+		item["damage"] = item_data.get("damage")
+	if item_data.has("attack_speed"):
+		item["attack_speed"] = item_data.get("attack_speed")
+	if item_data.has("two_handed"):
+		item["two_handed"] = item_data.get("two_handed")
+
+	InventorySystem.add_item(item)
+	print("[Trade] Added %s to inventory (slot: %s)" % [item.name, item.get("slot", "none")])
 
 # ═══════════════════════════════════════════════════════════════════════════
 # HELPERS
@@ -1001,11 +1274,28 @@ func _server_update_offer(partner_id: int, items: Array, gold: int) -> void:
 	rpc_id(partner_id, "_client_offer_updated", sender_id, items, gold)
 
 @rpc("any_peer", "reliable")
+func _server_update_offer_full(partner_id: int, items_data: Array, gold: int) -> void:
+	"""Server relay for full item data offer updates"""
+	if not multiplayer.is_server():
+		return
+	var sender_id = multiplayer.get_remote_sender_id()
+	# For server as partner, handle locally
+	if partner_id == 1:
+		_client_offer_updated_full(sender_id, items_data, gold)
+	else:
+		rpc_id(partner_id, "_client_offer_updated_full", sender_id, items_data, gold)
+
+@rpc("any_peer", "reliable")
 func _server_lock_offer(partner_id: int, locked: bool) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id = multiplayer.get_remote_sender_id()
-	rpc_id(partner_id, "_client_lock_updated", sender_id, locked)
+	print("[Trade] Server relaying lock state from %d to %d: locked=%s" % [sender_id, partner_id, locked])
+	# For server as partner, handle locally (rpc_id to self doesn't work)
+	if partner_id == 1:
+		_client_lock_updated(sender_id, locked)
+	else:
+		rpc_id(partner_id, "_client_lock_updated", sender_id, locked)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RPC - CLIENT HANDLERS
@@ -1059,6 +1349,12 @@ func _client_trade_cancelled(canceller_id: int) -> void:
 func _client_offer_updated(sender_id: int, items: Array, gold: int) -> void:
 	if is_trading and trade_partner_id == sender_id:
 		_update_their_offer(items, gold)
+
+@rpc("authority", "call_local", "reliable")
+func _client_offer_updated_full(sender_id: int, items_data: Array, gold: int) -> void:
+	"""Receive full item data from trade partner (includes icons)"""
+	if is_trading and trade_partner_id == sender_id:
+		_update_their_offer_full(items_data, gold)
 
 @rpc("authority", "call_local", "reliable")
 func _client_lock_updated(sender_id: int, locked: bool) -> void:

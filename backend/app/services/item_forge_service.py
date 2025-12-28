@@ -352,9 +352,13 @@ def generate_item_name(
     """
     Generate full item name with prefixes.
 
+    Note: Rarity prefixes are disabled for cleaner names.
+    Only vintage and secret prefixes are applied.
+
     Examples:
-    - "Ancient Mythic Coiled Sword" (10yr old Legendary)
-    - "Occult Enchanted Frost Spear" (secret Rare)
+    - "Ancient Coiled Sword" (10yr old achievement)
+    - "Occult Frost Spear" (secret/hidden achievement)
+    - "Veteran's Hand of Malenia" (5yr old achievement)
     """
     prefixes = []
 

@@ -670,10 +670,13 @@ func _on_inventory_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 			if event.button_index == MOUSE_BUTTON_LEFT and event.double_click:
 				_cancel_long_hold()  # Cancel any ongoing hold
 				_equip_or_use_item(slot_index)
-			# Right-click to equip/use
+			# Right-click - add to trade if trading, otherwise equip/use
 			elif event.button_index == MOUSE_BUTTON_RIGHT:
 				_cancel_long_hold()  # Cancel any ongoing hold
-				_equip_or_use_item(slot_index)
+				if TradeWindowUI and TradeWindowUI.is_trading:
+					_add_item_to_trade(slot_index)
+				else:
+					_equip_or_use_item(slot_index)
 			# Single left-click starts hold timer for inspection
 			elif event.button_index == MOUSE_BUTTON_LEFT:
 				_start_long_hold(slot_index)
@@ -794,6 +797,105 @@ func _equip_or_use_item(slot_index: int) -> void:
 					# Notify tutorial system
 					if TutorialManager:
 						TutorialManager.on_item_equipped(item)
+
+func _add_item_to_trade(slot_index: int) -> void:
+	"""Add item from inventory slot to trade window (right-click while trading)"""
+	# Can't add items if offer is locked
+	if TradeWindowUI.my_locked:
+		if NotificationManager:
+			NotificationManager.show_notification("Unlock your offer first", "INFO")
+		return
+
+	# Check if this slot is already in trade
+	if slot_index >= 0 and slot_index < inventory_slots.size():
+		var slot = inventory_slots[slot_index]
+		if slot and slot.get_meta("in_trade", false):
+			if NotificationManager:
+				NotificationManager.show_notification("Item already in trade", "INFO")
+			return
+
+	var item = InventorySystem.get_item(slot_index)
+	if not item or item.is_empty():
+		return
+
+	# Only forged items can be traded (check is_forged flag, not token_id)
+	if not item.get("is_forged", false):
+		if NotificationManager:
+			NotificationManager.show_notification("Only forged items can be traded", "INFO")
+		return
+
+	# Get token_id - can be 0 for unminted items, use forged_id as backup
+	var token_id = item.get("token_id", 0)
+	if token_id is float:
+		token_id = int(token_id)
+	# forged_id is the string version (token_id or item_id)
+	var forged_id = item.get("forged_id", str(token_id) if token_id > 0 else item.get("item_id", ""))
+
+	# Check if this item is already in the trade (by forged_id since token_id can be 0)
+	for offered_id in TradeWindowUI.my_offered_items:
+		if str(offered_id) == forged_id:
+			if NotificationManager:
+				NotificationManager.show_notification("Item already in trade", "INFO")
+			return
+
+	# Find an empty slot in the trade grid
+	var empty_slot: PanelContainer = null
+	for slot in TradeWindowUI.my_items_grid.get_children():
+		var slot_token = slot.get_meta("item_token_id", -1)
+		if slot_token <= 0:
+			empty_slot = slot
+			break
+
+	if not empty_slot:
+		if NotificationManager:
+			NotificationManager.show_notification("Trade slots full", "INFO")
+		return
+
+	# Build item data for trade slot - use actual token_id if > 0, otherwise use item_id hash
+	var trade_token = token_id if token_id > 0 else hash(forged_id)
+	var trade_item = {
+		"token_id": trade_token,
+		"item_name": item.get("name", "???"),
+		"item_rarity": item.get("rarity", "COMMON").to_upper(),
+		"item_type": item.get("type", "weapon"),
+		"forged_id": forged_id,
+		# Equipment slot (mainhand, chest, head, etc.)
+		"slot": item.get("slot", ""),
+		# Weapon-specific fields
+		"weapon_type": item.get("weapon_type", ""),
+		"damage": item.get("damage", 0),
+		"attack_speed": item.get("attack_speed", 1.0),
+		"two_handed": item.get("two_handed", false),
+		# Achievement reference
+		"achievement_id": item.get("achievement_id", ""),
+	}
+
+	# Add to trade slot (pass inventory slot for tracking)
+	TradeWindowUI._add_item_to_slot(empty_slot, trade_item, slot_index)
+
+	# Mark this inventory slot as "in trade" - visually dim it
+	_mark_slot_in_trade(slot_index, true)
+
+	if NotificationManager:
+		NotificationManager.show_notification("Added %s to trade" % item.get("name", "item"), "INFO")
+
+func _mark_slot_in_trade(slot_index: int, in_trade: bool) -> void:
+	"""Mark an inventory slot as in trade (visually dim it)"""
+	if slot_index < 0 or slot_index >= inventory_slots.size():
+		return
+
+	var slot = inventory_slots[slot_index]
+	if not slot:
+		return
+
+	if in_trade:
+		# Dim the slot to show it's in trade
+		slot.modulate = Color(0.5, 0.5, 0.5, 0.6)
+		slot.set_meta("in_trade", true)
+	else:
+		# Restore normal appearance
+		slot.modulate = Color(1, 1, 1, 1)
+		slot.set_meta("in_trade", false)
 
 # ============================================
 # MOUSE CLICK-AND-HOLD RADIAL SYSTEM

@@ -317,23 +317,26 @@ True if the original achievement was hidden/secret. Adds "Occult" prefix.
 Names are generated with prefixes based on properties:
 
 ```
-[Vintage Prefix] [Secret Prefix] [Rarity Prefix] [Base Name]
+[Vintage Prefix] [Secret Prefix] [Base Name]
 ```
 
-Examples:
-- `Ancient Mythic Coiled Sword` (10yr old Legendary)
-- `Occult Enchanted Frost Spear` (secret Rare)
-- `Veteran's Exalted Plate Armor` (5yr old Epic)
-- `Basic Sword` (new Common, no prefixes)
+**Note:** Rarity prefixes are disabled for cleaner item names. Only vintage and secret prefixes apply.
 
-Rarity prefixes:
-| Rarity | Prefix |
-|--------|--------|
-| Legendary | Mythic |
-| Epic | Exalted |
-| Rare | Enchanted |
-| Uncommon | Refined |
-| Common | (none) |
+Examples:
+- `Ancient Coiled Sword` (10yr old achievement)
+- `Occult Frost Spear` (secret/hidden achievement)
+- `Veteran's Hand of Malenia` (5yr old achievement)
+- `Adamant Rail` (new achievement, no prefixes)
+
+Active prefixes:
+| Type | Prefix | Threshold |
+|------|--------|-----------|
+| Vintage | Ancient | 10+ years |
+| Vintage | Venerable | 7+ years |
+| Vintage | Veteran's | 5+ years |
+| Vintage | Seasoned | 3+ years |
+| Vintage | Proven | 1+ year |
+| Secret | Occult | Hidden achievement |
 
 ---
 
