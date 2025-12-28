@@ -4203,19 +4203,20 @@ func _on_forge_button_pressed() -> void:
 	var selected_item_id = _forge_selected_item.get("id", _forge_selected_item.get("item_id", ""))
 	print("[Armory] FORGE pressed for: %s (item_id: %s)" % [item_name, selected_item_id])
 
-	# Find the achievement_id from forgeable achievements by item_id
-	var achievement_id = -1
+	# Find the credit_id from forgeable achievements by item_id
+	# The wallet/forge endpoint requires credit_id (AchievementCredit ID), not achievement_id
+	var credit_id = -1
 	var item_id = ""
 	if ForgeItemManager and selected_item_id != "":
 		var forgeable = ForgeItemManager.get_forgeable_achievements()
 		for ach in forgeable:
 			if ach.get("item_id", "") == selected_item_id:
-				achievement_id = ach.get("achievement_id", -1)
+				credit_id = ach.get("credit_id", -1)
 				item_id = ach.get("item_id", "")
 				break
 
-	if achievement_id == -1:
-		print("[Armory] Could not find achievement_id for item: %s" % selected_item_id)
+	if credit_id == -1:
+		print("[Armory] Could not find credit_id for item: %s" % selected_item_id)
 		if NotificationManager:
 			NotificationManager.show_notification("Could not find achievement to forge", "error")
 		return
@@ -4227,8 +4228,8 @@ func _on_forge_button_pressed() -> void:
 		forge_btn.disabled = true
 
 	# Call the forge API - pass debug_bypass when debug_all_forgeable is enabled
-	print("[Armory] Calling forge API with achievement_id: %d, item_id: %s, debug: %s" % [achievement_id, item_id, debug_all_forgeable])
-	ForgeItemManager.claim_forge(achievement_id, _on_forge_complete.bind(item_name, forge_btn), item_id, debug_all_forgeable)
+	print("[Armory] Calling forge API with credit_id: %d, item_id: %s, debug: %s" % [credit_id, item_id, debug_all_forgeable])
+	ForgeItemManager.claim_forge(credit_id, _on_forge_complete.bind(item_name, forge_btn), item_id, debug_all_forgeable)
 
 func _on_forge_complete(forged_item: Dictionary, item_name: String, forge_btn: Button) -> void:
 	"""Callback after forge API completes - item is now forged (claimable or listable on OpenSea)"""

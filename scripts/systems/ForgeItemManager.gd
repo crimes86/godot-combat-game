@@ -485,27 +485,27 @@ func remove_from_forgeable(item_id: String) -> void:
 		_forgeable_achievements = new_list
 		LogManager.info("Removed '%s' from forgeable list (%d items remaining)" % [item_id, _forgeable_achievements.size()], "forge")
 
-func claim_forge(achievement_id: int, callback: Callable = Callable(), item_id: String = "", debug_bypass: bool = false) -> void:
-	"""Claim/forge an achievement into an item.
-	When debug_bypass is true and item_id is provided, bypasses achievement ownership check (DEV_MODE only)."""
+func claim_forge(credit_id: int, callback: Callable = Callable(), item_id: String = "", _debug_bypass: bool = false) -> void:
+	"""Forge an achievement into an item using the wallet/forge endpoint.
+	credit_id: The AchievementCredit ID (not achievement_id) from forgeable achievements."""
 	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		forge_error.emit("Not authenticated")
 		return
 
-	var url = AshbaneAuth.get_api_base() + "/api/forge/claim"
+	var url = AshbaneAuth.get_api_base() + "/api/wallet/forge"
 	var headers = [
 		"Authorization: Bearer " + AshbaneAuth.auth_token,
 		"Content-Type: application/json"
 	]
-	var request_data = {"achievement_id": achievement_id}
-	if debug_bypass and item_id != "":
-		request_data["debug_bypass"] = true
-		request_data["item_id"] = item_id
+	# The wallet/forge endpoint expects achievement_credit_ids array
+	var request_data = {"achievement_credit_ids": [credit_id]}
 	var body = JSON.stringify(request_data)
+
+	LogManager.info("Forging credit_id: %d (item: %s)" % [credit_id, item_id], "forge")
 
 	var request = HTTPRequest.new()
 	add_child(request)
-	request.request_completed.connect(_on_claim_response.bind(request, callback))
+	request.request_completed.connect(_on_claim_response.bind(request, callback, item_id))
 
 	var error = request.request(url, headers, HTTPClient.METHOD_POST, body)
 	if error != OK:
@@ -513,43 +513,83 @@ func claim_forge(achievement_id: int, callback: Callable = Callable(), item_id: 
 		forge_error.emit("Failed to connect to server")
 		request.queue_free()
 
-func _on_claim_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable) -> void:
+func _on_claim_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable, item_id: String) -> void:
 	request.queue_free()
 
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
-		LogManager.error("Forge claim failed: %d / %d" % [result, response_code], "forge")
+		var body_text = body.get_string_from_utf8()
+		LogManager.error("Forge claim failed: %d / %d - %s" % [result, response_code, body_text], "forge")
 		forge_error.emit("Failed to forge item")
+		if callback.is_valid():
+			callback.call({})
 		return
 
 	var json = JSON.new()
 	var parse_result = json.parse(body.get_string_from_utf8())
 	if parse_result != OK:
 		forge_error.emit("Invalid server response")
+		if callback.is_valid():
+			callback.call({})
 		return
 
 	var data = json.data
-	var forged_item = data.get("forged_item", {})
 
-	if not forged_item.is_empty():
-		# Add to cache
-		_forged_items.append(forged_item)
-		var item_id = forged_item.get("item_id", "")
-		if item_id != "":
-			_forged_items_by_id[item_id] = forged_item
+	# Check for failures first
+	var failed = data.get("failed", [])
+	if failed.size() > 0:
+		var error_msg = failed[0].get("error", "Unknown error")
+		LogManager.error("Forge failed: %s" % error_msg, "forge")
+		forge_error.emit(error_msg)
+		if callback.is_valid():
+			callback.call({})
+		return
 
-		LogManager.info("Forged new item: %s" % forged_item.get("item_name", "Unknown"), "forge")
+	# Get the forged item from the response
+	var forged_list = data.get("forged", [])
+	if forged_list.size() == 0:
+		LogManager.error("Forge returned empty forged list", "forge")
+		forge_error.emit("No item forged")
+		if callback.is_valid():
+			callback.call({})
+		return
 
-		# If item is already claimed (auto-claim on forge), add to inventory immediately
-		if forged_item.get("claimed_in_game", false):
-			var inventory_item = _convert_to_inventory_format(forged_item)
-			if not inventory_item.is_empty():
-				if InventorySystem.add_item(inventory_item):
-					LogManager.info("Added forged item to inventory: %s" % forged_item.get("item_name", "Unknown"), "forge")
-					item_synced_to_inventory.emit(inventory_item)
-				else:
-					LogManager.error("Failed to add forged item to inventory (full?): %s" % item_id, "forge")
+	var forged_data = forged_list[0]
+	var item_props = forged_data.get("item", {})
 
-		forge_claimed.emit(forged_item)
+	# Build forged_item structure for cache and inventory
+	var forged_item = {
+		"id": forged_data.get("credit_id", 0),
+		"item_id": item_props.get("item_id", item_id),
+		"item_name": item_props.get("item_name", ""),
+		"item_type": item_props.get("item_type", ""),
+		"weapon_type": item_props.get("weapon_type", ""),
+		"item_rarity": item_props.get("item_rarity", "common"),
+		"effect_name": item_props.get("effect_name", ""),
+		"effect_intensity": item_props.get("effect_intensity", 0),
+		"glow_color": item_props.get("glow_color", ""),
+		"token_id": forged_data.get("token_id"),
+		"tx_hash": forged_data.get("tx_hash", ""),
+		"claimed_in_game": true,  # Auto-claimed on forge
+	}
+
+	# Add to cache
+	_forged_items.append(forged_item)
+	var forged_item_id = forged_item.get("item_id", "")
+	if forged_item_id != "":
+		_forged_items_by_id[forged_item_id] = forged_item
+
+	LogManager.info("Forged new item: %s (token_id: %s)" % [forged_item.get("item_name", "Unknown"), str(forged_item.get("token_id", ""))], "forge")
+
+	# Add to inventory immediately (auto-claim on forge)
+	var inventory_item = _convert_to_inventory_format(forged_item)
+	if not inventory_item.is_empty():
+		if InventorySystem.add_item(inventory_item):
+			LogManager.info("Added forged item to inventory: %s" % forged_item.get("item_name", "Unknown"), "forge")
+			item_synced_to_inventory.emit(inventory_item)
+		else:
+			LogManager.error("Failed to add forged item to inventory (full?): %s" % forged_item_id, "forge")
+
+	forge_claimed.emit(forged_item)
 
 	if callback.is_valid():
 		callback.call(forged_item)
