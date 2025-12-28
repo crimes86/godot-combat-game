@@ -3321,17 +3321,20 @@ func _build_bridge_section() -> Control:
 	main_hbox.clip_contents = true
 	margin.add_child(main_hbox)
 
-	# LEFT: Import section
+	# LEFT: Import section (fixed 40% width)
 	var bridge_in_section = _build_bridge_in_section()
 	bridge_in_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bridge_in_section.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	bridge_in_section.size_flags_stretch_ratio = 0.4  # 40% of space
+	bridge_in_section.clip_contents = true  # Clip overflow
 	main_hbox.add_child(bridge_in_section)
 	_bridge_in_container = bridge_in_section
 
-	# CENTER: Status light + Disconnect button (horizontal, compact)
+	# CENTER: Status light + Disconnect button (horizontal, compact, fixed width)
 	var center_hbox = HBoxContainer.new()
 	center_hbox.add_theme_constant_override("separation", 4)
 	center_hbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Top aligned
+	center_hbox.size_flags_horizontal = Control.SIZE_SHRINK_CENTER  # Don't expand, stay centered
 	main_hbox.add_child(center_hbox)
 
 	# Status indicator (dot) - green when connected
@@ -3368,10 +3371,12 @@ func _build_bridge_section() -> Control:
 	center_hbox.add_child(refresh_btn)
 	_bridge_refresh_btn = refresh_btn
 
-	# RIGHT: Export section
+	# RIGHT: Export section (fixed 40% width)
 	var bridging_out_section = _build_bridging_out_section()
 	bridging_out_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bridging_out_section.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	bridging_out_section.size_flags_stretch_ratio = 0.4  # 40% of space
+	bridging_out_section.clip_contents = true  # Clip overflow
 	main_hbox.add_child(bridging_out_section)
 	_bridging_out_container = bridging_out_section
 
@@ -3391,12 +3396,13 @@ func _build_bridge_in_section() -> Control:
 	header.add_theme_color_override("font_color", TEXT_SECONDARY)
 	vbox.add_child(header)
 
-	# Items container - expands to fill space
+	# Items container - expands to fill space but clips overflow
 	var items_row = HBoxContainer.new()
 	items_row.name = "BridgeInItems"
 	items_row.add_theme_constant_override("separation", 4)
 	items_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	items_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	items_row.clip_contents = true  # Clip to prevent overflow pushing layout
 	vbox.add_child(items_row)
 
 	# Placeholder when no items
@@ -3422,13 +3428,14 @@ func _build_bridging_out_section() -> Control:
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	vbox.add_child(header)
 
-	# Items container - expands to fill space, right-aligned
+	# Items container - expands to fill space, right-aligned, clips overflow
 	var items_row = HBoxContainer.new()
 	items_row.name = "BridgingOutItems"
 	items_row.add_theme_constant_override("separation", 4)
 	items_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	items_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	items_row.alignment = BoxContainer.ALIGNMENT_END  # Right align items
+	items_row.clip_contents = true  # Clip to prevent overflow
 	vbox.add_child(items_row)
 
 	# Placeholder when no items exporting
