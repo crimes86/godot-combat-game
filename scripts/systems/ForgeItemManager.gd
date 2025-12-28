@@ -557,9 +557,11 @@ func _on_claim_response(result: int, response_code: int, _headers: PackedStringA
 	var item_props = forged_data.get("item", {})
 
 	# Build forged_item structure for cache and inventory
+	var forged_item_id = item_props.get("item_id", item_id)
 	var forged_item = {
-		"id": forged_data.get("credit_id", 0),
-		"item_id": item_props.get("item_id", item_id),
+		"id": forged_item_id,  # String item_id for consistency with catalog
+		"item_id": forged_item_id,
+		"credit_id": forged_data.get("credit_id", 0),  # Numeric credit ID
 		"item_name": item_props.get("item_name", ""),
 		"item_type": item_props.get("item_type", ""),
 		"weapon_type": item_props.get("weapon_type", ""),
@@ -570,11 +572,14 @@ func _on_claim_response(result: int, response_code: int, _headers: PackedStringA
 		"token_id": forged_data.get("token_id"),
 		"tx_hash": forged_data.get("tx_hash", ""),
 		"claimed_in_game": true,  # Auto-claimed on forge
+		# Provenance info for display
+		"game": forged_data.get("game_name", ""),
+		"achievement": forged_data.get("achievement_name", ""),
+		"source_provider": item_props.get("source_provider", ""),
 	}
 
 	# Add to cache
 	_forged_items.append(forged_item)
-	var forged_item_id = forged_item.get("item_id", "")
 	if forged_item_id != "":
 		_forged_items_by_id[forged_item_id] = forged_item
 

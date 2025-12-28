@@ -468,6 +468,7 @@ async def forge_achievements(
                 "token_id": result['token_id'],
                 "tx_hash": result['tx_hash'],
                 "achievement_name": achievement.display_name,
+                "game_name": game_name,
                 "item": item_props,  # Include computed item for immediate use
             })
 

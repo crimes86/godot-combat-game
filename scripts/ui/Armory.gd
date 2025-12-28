@@ -4251,8 +4251,9 @@ func _on_forge_complete(forged_item: Dictionary, item_name: String, forge_btn: B
 		SoundManager.play_equip_sound(-6.0)
 
 	# Show appropriate notification based on whether item was auto-claimed
+	var was_claimed = forged_item.get("claimed_in_game", false)
+	print("[Armory] Forge notification - was_claimed: %s, NotificationManager: %s" % [was_claimed, NotificationManager != null])
 	if NotificationManager:
-		var was_claimed = forged_item.get("claimed_in_game", false)
 		if was_claimed:
 			NotificationManager.show_notification(
 				"%s forged and added to inventory!" % item_name,
@@ -4263,6 +4264,8 @@ func _on_forge_complete(forged_item: Dictionary, item_name: String, forge_btn: B
 				"%s forged! Claim to inventory or list on OpenSea." % item_name,
 				"success"
 			)
+	else:
+		print("[Armory] ERROR: NotificationManager is null!")
 
 	# In debug mode, remove this item from the forgeable list to prevent re-forge
 	var item_id = forged_item.get("item_id", "")
@@ -4437,8 +4440,10 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 	# achievement_label is now hidden - achievement info shown in tooltip only
 
 	# Census line - show ownership count (will be overwritten by TradingManager data if available)
-	var detail_item_id = item.get("id", item.get("item_id", ""))
-	var detail_inv_count = _get_inventory_count_by_item_id(detail_item_id)
+	var detail_item_id = item.get("item_id", item.get("id", ""))
+	if detail_item_id is float or detail_item_id is int:
+		detail_item_id = str(int(detail_item_id))
+	var detail_inv_count = _get_inventory_count_by_item_id(str(detail_item_id))
 	if census_label:
 		if detail_inv_count > 1:
 			census_label.text = "You own %d" % detail_inv_count
@@ -4552,7 +4557,7 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 		tooltip_lines.append("Achievement:  %s" % tip_achievement_name)
 
 		# Abilities - use ForgeItemDB lookup for proper names
-		var ability_item_id = item.get("id", item.get("item_id", ""))
+		var ability_item_id = str(item.get("item_id", item.get("id", "")))
 		if ability_item_id != "" and ForgeItemDB.has_abilities(ability_item_id):
 			var passive_name = ForgeItemDB.get_passive_ability_name(ability_item_id)
 			var passive_desc = ForgeItemDB.get_passive_ability_description(ability_item_id)
