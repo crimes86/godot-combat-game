@@ -5343,6 +5343,7 @@ async def forge_claim(
         test_token_id = int(token_hash[:8], 16)
 
         # Create forge record without achievement_credit_id (debug mode)
+        # Auto-claim to inventory on forge (same as normal flow)
         forge_record = ForgedAchievement(
             achievement_credit_id=None,  # No achievement credit for debug forges
             wallet_account_id=wallet.id,
@@ -5363,11 +5364,19 @@ async def forge_claim(
             is_secret=item_props["is_secret"],
             source_provider="debug",
             provider_accent_color="#888888",
+            claimed_in_game_at=datetime.utcnow(),  # Auto-claim for immediate use
         )
         db.add(forge_record)
         db.commit()
+        db.refresh(forge_record)  # Get the generated ID
 
-        logger.info(f"DEBUG FORGE: User {user.username} forged {item_props['item_name']} (item_id: {forge_request.item_id})")
+        logger.info(f"DEBUG FORGE: User {user.username} forged {item_props['item_name']} (item_id: {forge_request.item_id}, forged_id: {forge_record.id})")
+
+        # Add fields needed for client to handle the item
+        item_props["forged_id"] = forge_record.id
+        item_props["token_id"] = test_token_id
+        item_props["claimed_in_game"] = True
+        item_props["bridge_status"] = "in_game"
 
         return {
             "success": True,

@@ -523,6 +523,15 @@ func _on_forged_items_loaded(items: Array) -> void:
 	"""Called when ForgeItemManager finishes loading forged items"""
 	print("[Armory] ═══════════════════════════════════════")
 	print("[Armory] Forged items loaded: %d total" % items.size())
+
+	# DEBUG: Re-inject forgeable items now that we know what's already forged
+	# This must happen AFTER forged items load to correctly filter out owned items
+	if debug_all_forgeable and not _debug_injecting:
+		_debug_injecting = true
+		print("[Armory] DEBUG MODE: Re-injecting forgeable items (after forged items loaded)...")
+		ForgeItemManager.debug_inject_all_as_forgeable()
+		_debug_injecting = false
+
 	_refresh_forge_content()
 	_refresh_bridge_section()  # Also refresh bridge section for bridge-in/out displays
 	print("[Armory] ═══════════════════════════════════════")
@@ -537,13 +546,10 @@ func _on_forge_status_loaded(status: Dictionary) -> void:
 
 	var forgeable = status.get("forgeable", [])
 
-	# DEBUG: If debug mode is enabled, re-inject all items as forgeable
-	# This ensures debug mode persists even after backend data loads
+	# DEBUG: In debug mode, the injection happens in _on_forged_items_loaded
+	# (after forged items load, so we know which items to skip)
+	# Just refresh content here without re-injecting
 	if debug_all_forgeable:
-		_debug_injecting = true
-		print("[Armory] DEBUG MODE: Re-injecting all items as forgeable (after backend load)...")
-		ForgeItemManager.debug_inject_all_as_forgeable()
-		_debug_injecting = false
 		_refresh_forge_content()
 		return
 
@@ -4270,12 +4276,24 @@ func _on_forge_complete(forged_item: Dictionary, item_name: String, forge_btn: B
 	if SoundManager:
 		SoundManager.play_equip_sound(-6.0)
 
+	# Show appropriate notification based on whether item was auto-claimed
 	if NotificationManager:
-		var rarity = forged_item.get("item_rarity", "Common").to_upper()
-		NotificationManager.show_notification(
-			"%s forged! Claim to inventory or list on OpenSea." % item_name,
-			"success"
-		)
+		var was_claimed = forged_item.get("claimed_in_game", false)
+		if was_claimed:
+			NotificationManager.show_notification(
+				"%s forged and added to inventory!" % item_name,
+				"success"
+			)
+		else:
+			NotificationManager.show_notification(
+				"%s forged! Claim to inventory or list on OpenSea." % item_name,
+				"success"
+			)
+
+	# In debug mode, remove this item from the forgeable list to prevent re-forge
+	if debug_all_forgeable:
+		var item_id = forged_item.get("item_id", "")
+		ForgeItemManager.remove_from_forgeable(item_id)
 
 	# Refresh forge status to update forgeable list
 	ForgeItemManager.fetch_forge_status()
@@ -4283,10 +4301,24 @@ func _on_forge_complete(forged_item: Dictionary, item_name: String, forge_btn: B
 	# Refresh the forge catalog to show item as "forged" (claimable)
 	_refresh_forge_content()
 
-	# Clear selection and reset detail panel
-	_forge_selected_item = {}
-	_forge_selected_card = null
-	_update_forge_detail({}, "locked")
+	# Keep the forged item selected so user can see EXPORT button
+	var item_id = forged_item.get("item_id", "")
+	if item_id != "":
+		# Get merged item data for selection
+		var catalog_data = _get_catalog_item_by_id(item_id)
+		if catalog_data.size() > 0:
+			var merged = catalog_data.duplicate()
+			merged.merge(forged_item, true)
+			_forge_selected_item = merged
+			_update_forge_detail(merged, "forged")
+		else:
+			_forge_selected_item = forged_item
+			_update_forge_detail(forged_item, "forged")
+	else:
+		# Fallback: clear selection if no item_id
+		_forge_selected_item = {}
+		_forge_selected_card = null
+		_update_forge_detail({}, "locked")
 
 func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 	"""Update the forge detail panel with item info (tooltip style)

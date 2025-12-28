@@ -25,6 +25,7 @@ var _synced_to_inventory: bool = false
 # Forge status - achievements that CAN be forged but haven't been yet
 var _forgeable_achievements: Array = []  # Achievements user can forge (Rare+, original claim)
 var _forge_status_loaded: bool = false
+var _debug_forge_mode: bool = false  # When true, backend won't overwrite debug-injected forgeable list
 
 # Wallet and bridge status
 var _wallet_connected: bool = false
@@ -99,6 +100,7 @@ func _on_logout() -> void:
 	_is_loaded = false
 	_forge_status_loaded = false
 	_synced_to_inventory = false
+	_debug_forge_mode = false
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DEBUG - Remove after testing
@@ -145,16 +147,26 @@ func debug_clear_claimed_items() -> void:
 
 func debug_inject_all_as_forgeable() -> void:
 	"""DEBUG: Inject ALL items from ForgeItemDB as forgeable achievements.
-	This gives the user forge opportunities for every item in the catalog."""
+	This gives the user forge opportunities for every item in the catalog.
+	Skips items that are already forged (owned)."""
+	# Set debug mode flag to prevent backend from overwriting our injected list
+	_debug_forge_mode = true
+
 	# Clear existing forgeable list to avoid duplicates on re-inject
 	_forgeable_achievements.clear()
 
 	var count = 0
+	var skipped = 0
 	for achievement_key in ForgeItemDB.FORGE_ITEMS.keys():
 		var forge_db = ForgeItemDB.FORGE_ITEMS[achievement_key]
 		var item_id = forge_db.get("item_id", "")
 		var item_name = forge_db.get("item_name", "Unknown")
 		var achievement_name = forge_db.get("achievement_name", "")
+
+		# Skip items that are already forged (owned by user)
+		if item_id in _forged_items_by_id:
+			skipped += 1
+			continue
 
 		# Create mock forgeable achievement matching backend format
 		# Include item_id for direct matching (more reliable than achievement name)
@@ -178,7 +190,7 @@ func debug_inject_all_as_forgeable() -> void:
 		count += 1
 
 	_forge_status_loaded = true
-	print("[ForgeItemManager] DEBUG: Injected ALL %d items as forgeable" % count)
+	print("[ForgeItemManager] DEBUG: Injected %d items as forgeable (skipped %d already forged)" % [count, skipped])
 	forge_status_loaded.emit({"forgeable": _forgeable_achievements, "forged": [], "unforgeable": []})
 
 func debug_inject_test_achievement(achievement_key: String = "steam_1145360_SLAYER") -> void:
@@ -409,8 +421,13 @@ func _on_forge_status_response(result: int, response_code: int, _headers: Packed
 		return
 
 	if response_code == 404:
-		# Endpoint doesn't exist yet - use empty list
+		# Endpoint doesn't exist yet - use empty list (unless debug mode)
 		LogManager.info("Forge status endpoint not implemented yet", "forge")
+		if _debug_forge_mode:
+			# In debug mode, keep our injected list
+			LogManager.info("Debug mode active: keeping %d injected forgeable items" % _forgeable_achievements.size(), "forge")
+			forge_status_loaded.emit({"forgeable": _forgeable_achievements, "forged": [], "unforgeable": []})
+			return
 		_forgeable_achievements = []
 		_forge_status_loaded = true
 		forge_status_loaded.emit({"forgeable": [], "forged": [], "unforgeable": []})
@@ -427,6 +444,14 @@ func _on_forge_status_response(result: int, response_code: int, _headers: Packed
 		return
 
 	var data = json.data
+
+	# In debug forge mode, don't let backend overwrite our injected forgeable list
+	if _debug_forge_mode:
+		LogManager.info("Forge status loaded: %d from backend (ignored - debug mode active, keeping %d injected)" % [data.get("forgeable", []).size(), _forgeable_achievements.size()], "forge")
+		# Still emit signal but with our debug data, not backend data
+		forge_status_loaded.emit({"forgeable": _forgeable_achievements, "forged": [], "unforgeable": []})
+		return
+
 	_forgeable_achievements = data.get("forgeable", [])
 	_forge_status_loaded = true
 
@@ -446,6 +471,19 @@ func is_achievement_forgeable(achievement_name: String) -> bool:
 
 func is_forge_status_loaded() -> bool:
 	return _forge_status_loaded
+
+func remove_from_forgeable(item_id: String) -> void:
+	"""Remove an item from the forgeable list by item_id (used after forging in debug mode)"""
+	if item_id == "":
+		return
+	var new_list = []
+	for ach in _forgeable_achievements:
+		if ach.get("item_id", "") != item_id:
+			new_list.append(ach)
+	var removed = _forgeable_achievements.size() - new_list.size()
+	if removed > 0:
+		_forgeable_achievements = new_list
+		LogManager.info("Removed '%s' from forgeable list (%d items remaining)" % [item_id, _forgeable_achievements.size()], "forge")
 
 func claim_forge(achievement_id: int, callback: Callable = Callable(), item_id: String = "", debug_bypass: bool = false) -> void:
 	"""Claim/forge an achievement into an item.
@@ -500,6 +538,17 @@ func _on_claim_response(result: int, response_code: int, _headers: PackedStringA
 			_forged_items_by_id[item_id] = forged_item
 
 		LogManager.info("Forged new item: %s" % forged_item.get("item_name", "Unknown"), "forge")
+
+		# If item is already claimed (auto-claim on forge), add to inventory immediately
+		if forged_item.get("claimed_in_game", false):
+			var inventory_item = _convert_to_inventory_format(forged_item)
+			if not inventory_item.is_empty():
+				if InventorySystem.add_item(inventory_item):
+					LogManager.info("Added forged item to inventory: %s" % forged_item.get("item_name", "Unknown"), "forge")
+					item_synced_to_inventory.emit(inventory_item)
+				else:
+					LogManager.error("Failed to add forged item to inventory (full?): %s" % item_id, "forge")
+
 		forge_claimed.emit(forged_item)
 
 	if callback.is_valid():
