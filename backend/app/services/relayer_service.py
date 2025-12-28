@@ -17,7 +17,11 @@ import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from web3 import Web3
-from web3.middleware import ExtraDataToPOAMiddleware
+try:
+    from web3.middleware import ExtraDataToPOAMiddleware
+except ImportError:
+    # web3 6.x moved this middleware
+    from web3.middleware import geth_poa_middleware as ExtraDataToPOAMiddleware
 from eth_account import Account
 
 logger = logging.getLogger(__name__)
