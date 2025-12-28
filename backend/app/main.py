@@ -5957,6 +5957,144 @@ async def get_unmapped_achievements_endpoint(
     }
 
 
+class AdminGrantCreditsRequest(BaseModel):
+    item_ids: List[str] = Field(default=None, description="List of item_ids to grant credits for. If empty, grants ALL 136 items.")
+
+
+@app.post("/api/admin/grant-forge-credits")
+async def admin_grant_forge_credits(
+    request: Request,
+    grant_request: AdminGrantCreditsRequest,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Admin endpoint to grant achievement credits for testing forge flow.
+
+    Grants credits for specified item_ids (or ALL items if empty).
+    Creates fake achievements and credits so items become forgeable.
+    Only works for admins on testnet for testing purposes.
+    """
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from app.services.item_forge_service import get_items, get_item_by_id
+
+    items_data = get_items()
+    items_catalog = items_data.get("items", {})
+    achievement_mappings = items_data.get("achievement_mappings", {})
+
+    # Determine which items to grant
+    if grant_request.item_ids:
+        item_ids_to_grant = grant_request.item_ids
+    else:
+        # Grant ALL items
+        item_ids_to_grant = list(items_catalog.keys())
+
+    granted = []
+    skipped = []
+    errors = []
+
+    for item_id in item_ids_to_grant:
+        try:
+            item = items_catalog.get(item_id)
+            if not item:
+                errors.append({"item_id": item_id, "error": "Item not found in catalog"})
+                continue
+
+            # Find the achievement mapping for this item
+            achievement_key = None
+            for key, mapped_item_id in achievement_mappings.items():
+                if mapped_item_id == item_id:
+                    achievement_key = key
+                    break
+
+            if not achievement_key:
+                # Create a synthetic achievement key for testing
+                achievement_key = f"admin_test:admin_{item_id}"
+
+            # Parse app_id and api_name from key
+            parts = achievement_key.split(":")
+            if len(parts) >= 2:
+                app_id = parts[0]
+                api_name = ":".join(parts[1:])  # Handle colons in api_name
+            else:
+                app_id = "admin_test"
+                api_name = f"admin_{item_id}"
+
+            # Check if achievement already exists
+            achievement = db.query(Achievement).filter(
+                Achievement.app_id == app_id,
+                Achievement.api_name == api_name
+            ).first()
+
+            if not achievement:
+                # Create the achievement
+                achievement = Achievement(
+                    app_id=app_id,
+                    api_name=api_name,
+                    name=item.get("item_name", item_id),
+                    display_name=item.get("item_name", item_id),
+                    description=f"Admin-granted test achievement for {item.get('item_name', item_id)}",
+                    rarity_tier=item.get("rarity", "Rare"),
+                    effort_score=50.0,
+                    effort_auto=False,
+                )
+                db.add(achievement)
+                db.flush()
+
+            # Check if user already has this credit
+            existing_credit = db.query(AchievementCredit).filter(
+                AchievementCredit.user_id == user.id,
+                AchievementCredit.achievement_id == achievement.id
+            ).first()
+
+            if existing_credit:
+                skipped.append({"item_id": item_id, "reason": "Already has credit"})
+                continue
+
+            # Create the achievement credit
+            credit = AchievementCredit(
+                user_id=user.id,
+                achievement_id=achievement.id,
+                provider_name="admin_test",
+                provider_user_id=f"admin_{user.id}",
+                is_original_claim=True,
+                date_credited=datetime.utcnow(),
+                unlocked_at=datetime.utcnow(),
+            )
+            db.add(credit)
+
+            granted.append({
+                "item_id": item_id,
+                "item_name": item.get("item_name", item_id),
+                "achievement_id": achievement.id,
+                "rarity": item.get("rarity", "Rare")
+            })
+
+        except Exception as e:
+            errors.append({"item_id": item_id, "error": str(e)})
+
+    db.commit()
+
+    logger.info(f"Admin {user.username} granted {len(granted)} forge credits (skipped: {len(skipped)}, errors: {len(errors)})")
+
+    return {
+        "success": True,
+        "granted_count": len(granted),
+        "skipped_count": len(skipped),
+        "error_count": len(errors),
+        "granted": granted,
+        "skipped": skipped,
+        "errors": errors,
+        "_hint": "Refresh your forge status to see new forgeable items"
+    }
+
+
 # =============================================================================
 # ROUTER INCLUSION (must be after specific routes like Steam to avoid conflicts)
 # =============================================================================
