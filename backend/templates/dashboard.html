@@ -3446,7 +3446,7 @@
         <span style="font-size:2rem;">🔐</span>
         <h3 style="margin:0;font-size:1.4rem;font-weight:700;color:#cc9966;text-shadow:0 0 20px rgba(153,102,51,0.3);">LOCKBOX</h3>
       </div>
-      <p style="margin:0;opacity:0.7;font-size:0.9rem;color:#aa8866;">Items stored in your external wallet. Bind them back to use in-game.</p>
+      <p style="margin:0;opacity:0.7;font-size:0.9rem;color:#aa8866;">Items stored in your external wallet. Import them to use in-game.</p>
       <div id="lockbox-stats" style="display:flex;gap:24px;margin-top:12px;font-size:0.85rem;">
         <span style="color:#cc9966;"><strong id="lockbox-item-count">0</strong> items in lockbox</span>
       </div>
@@ -3479,7 +3479,7 @@
         </svg>
         View on OpenSea
       </a>
-      <button id="bind-selected-btn" onclick="bindSelectedItems()" disabled style="
+      <button id="import-selected-btn" onclick="importSelectedItems()" disabled style="
         background: linear-gradient(135deg, #996633 0%, #cc9966 100%);
         border: none;
         color: #000;
@@ -3491,7 +3491,7 @@
         opacity: 0.5;
         transition: all 0.2s;
         box-shadow: 0 4px 12px rgba(153,102,51,0.3);
-      ">Bind Selected (0)</button>
+      ">Import Selected (0)</button>
     </div>
   </div>
 </div>
@@ -3514,108 +3514,119 @@
   border-radius: 4px;
 }
 
+/* Lockbox grid - matches Godot 64x64 forge cards */
 .lockbox-item-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, 64px);
+  gap: 8px;
+  justify-content: center;
   max-width: 100%;
 }
 
 .lockbox-item-card {
   position: relative;
-  aspect-ratio: 0.85;
-  background: rgba(30, 30, 32, 0.95);
-  border: 2px solid rgba(90,90,90,0.5);
-  border-radius: 10px;
+  width: 64px;
+  height: 64px;
+  background: rgba(15, 15, 20, 1);
+  border: 2px solid var(--item-border, rgba(90,90,90,0.5));
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  padding: 10px 8px 8px 8px;
+  justify-content: center;
 }
 
 .lockbox-item-card:hover {
-  transform: translateY(-3px) scale(1.02);
+  transform: scale(1.08);
   border-color: var(--item-glow, #999);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 20px var(--item-glow-alpha, rgba(150,150,150,0.3));
+  box-shadow: 0 0 12px var(--item-glow-alpha, rgba(150,150,150,0.4));
+  z-index: 10;
 }
 
 .lockbox-item-card.selected {
-  border-color: #aaa;
-  box-shadow: 0 0 0 2px rgba(150,150,150,0.4), 0 8px 24px rgba(100,100,100,0.3);
-  background: rgba(40, 40, 42, 0.95);
+  border-color: #cc9966;
+  box-shadow: 0 0 0 2px rgba(204,153,102,0.5), 0 0 16px rgba(204,153,102,0.4);
+  background: rgba(30, 25, 20, 1);
 }
 
 .lockbox-item-card.selected::after {
   content: '✓';
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 20px;
-  height: 20px;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
   background: #cc9966;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
   color: #000;
+  z-index: 5;
 }
 
 .lockbox-item-icon {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   object-fit: contain;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
-  transition: transform 0.2s;
-  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+  transition: transform 0.15s;
 }
 
 .lockbox-item-card:hover .lockbox-item-icon {
-  transform: scale(1.1);
+  transform: scale(1.05);
 }
 
+/* Hide name inside card - show in tooltip only */
 .lockbox-item-name {
-  font-size: 0.65rem;
-  text-align: center;
-  margin-top: 6px;
-  color: #ccc;
-  line-height: 1.25;
-  max-height: 3.75em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  word-break: break-word;
-  padding: 0 2px;
+  display: none;
 }
 
+/* Hide rarity bar - use border color instead */
 .lockbox-item-rarity {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--item-glow, #996633);
+  display: none;
 }
 
-/* Rarity colors for lockbox items */
+/* Rarity colors - matching Godot forge card style */
 .lockbox-item-card[data-rarity="legendary"] {
   --item-glow: #ff8000;
-  --item-glow-alpha: rgba(255,128,0,0.4);
+  --item-glow-alpha: rgba(255,128,0,0.5);
+  --item-border: rgba(255,128,0,0.7);
+  animation: legendary-pulse 2s ease-in-out infinite;
 }
 .lockbox-item-card[data-rarity="epic"] {
   --item-glow: #a855f7;
-  --item-glow-alpha: rgba(168,85,247,0.4);
+  --item-glow-alpha: rgba(168,85,247,0.5);
+  --item-border: rgba(168,85,247,0.7);
+  animation: epic-pulse 2.5s ease-in-out infinite;
 }
 .lockbox-item-card[data-rarity="rare"] {
   --item-glow: #3b82f6;
   --item-glow-alpha: rgba(59,130,246,0.4);
+  --item-border: rgba(59,130,246,0.6);
+}
+.lockbox-item-card[data-rarity="uncommon"] {
+  --item-glow: #22c55e;
+  --item-glow-alpha: rgba(34,197,94,0.4);
+  --item-border: rgba(34,197,94,0.6);
+}
+.lockbox-item-card[data-rarity="common"] {
+  --item-glow: #9ca3af;
+  --item-glow-alpha: rgba(156,163,175,0.3);
+  --item-border: rgba(156,163,175,0.5);
+}
+
+@keyframes legendary-pulse {
+  0%, 100% { border-color: rgba(255,128,0,0.5); }
+  50% { border-color: rgba(255,180,80,0.9); }
+}
+@keyframes epic-pulse {
+  0%, 100% { border-color: rgba(168,85,247,0.5); }
+  50% { border-color: rgba(200,140,255,0.9); }
 }
 
 .lockbox-empty-state {
@@ -4778,7 +4789,7 @@ async function openLockboxModal() {
   document.body.style.overflow = 'hidden';
   document.getElementById('lockbox-modal').style.display = 'flex';
   selectedLockbox.clear();
-  updateBindButton();
+  updateImportButton();
 
   // Update OpenSea link based on wallet
   const openseaLink = document.getElementById('opensea-link');
@@ -4836,7 +4847,7 @@ function updateApprovalBanner() {
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:1.2rem;">⚠️</span>
           <span style="color:#ffaa66;font-size:0.9rem;">
-            <strong>Approval Required</strong> - You need to approve Ashbane to bind items from your wallet.
+            <strong>Approval Required</strong> - You need to approve Ashbane to import items from your wallet.
             <span style="opacity:0.7;">(One-time only)</span>
           </span>
         </div>
@@ -4881,7 +4892,7 @@ async function requestApproval() {
     if (data.already_approved) {
       platformApproved = true;
       updateApprovalBanner();
-      alert('Already approved! You can now bind items.');
+      alert('Already approved! You can now import items.');
       return;
     }
 
@@ -4931,9 +4942,9 @@ async function requestApproval() {
     if (verifyData.approved) {
       platformApproved = true;
       updateApprovalBanner();
-      alert('Approved! You can now bind items from your lockbox.');
+      alert('Approved! You can now import items from your lockbox.');
     } else {
-      alert('Approval transaction sent but not yet confirmed. Please wait a moment and try binding again.');
+      alert('Approval transaction sent but not yet confirmed. Please wait a moment and try importing again.');
     }
   } catch (e) {
     console.error('Approval error:', e);
@@ -4964,7 +4975,7 @@ function renderLockboxEmptyState() {
 
   const p = document.createElement('p');
   p.style.cssText = 'font-size:0.9rem;max-width:400px;margin:0 auto;color:#666;';
-  p.textContent = 'Unbind items from the game to store them here. Items in your lockbox can be traded on OpenSea.';
+  p.textContent = 'Export items from the game to store them here. Items in your lockbox can be traded on OpenSea.';
   div.appendChild(p);
 
   container.appendChild(div);
@@ -5041,7 +5052,7 @@ function createLockboxItemCard(item, tier) {
   const itemName = item.item_name || item.name || 'Unknown Item';
   const rarity = (item.item_rarity || tier).toLowerCase();
   const tokenId = item.token_id;
-  const forger = item.forger_username || 'Unknown';
+  const forger = item.forged_by || item.forger_username || 'Unknown';
 
   const card = document.createElement('div');
   card.className = 'lockbox-item-card';
@@ -5099,24 +5110,24 @@ function toggleLockboxItem(element, tokenId) {
   } else {
     selectedLockbox.add(tokenId);
   }
-  updateBindButton();
+  updateImportButton();
 }
 
-function updateBindButton() {
-  const btn = document.getElementById('bind-selected-btn');
+function updateImportButton() {
+  const btn = document.getElementById('import-selected-btn');
   if (!btn) return;
   const count = selectedLockbox.size;
-  btn.textContent = 'Bind Selected (' + count + ')';
+  btn.textContent = 'Import Selected (' + count + ')';
   btn.disabled = count === 0;
   btn.style.opacity = count === 0 ? '0.5' : '1';
 }
 
-async function bindSelectedItems() {
+async function importSelectedItems() {
   if (selectedLockbox.size === 0) return;
 
-  const btn = document.getElementById('bind-selected-btn');
+  const btn = document.getElementById('import-selected-btn');
   btn.disabled = true;
-  btn.textContent = 'Binding...';
+  btn.textContent = 'Importing...';
 
   try {
     // Bridge each selected item
@@ -5128,12 +5139,12 @@ async function bindSelectedItems() {
     }
     closeLockboxModal();
   } catch (e) {
-    console.error('Bind error:', e);
-    alert('Failed to bind items: ' + (e.message || 'Unknown error'));
+    console.error('Import error:', e);
+    alert('Failed to import items: ' + (e.message || 'Unknown error'));
   }
 
   btn.disabled = false;
-  updateBindButton();
+  updateImportButton();
 }
 
 function closeLockboxModal() {
@@ -5152,7 +5163,7 @@ function updateLockboxCount() {
 }
 
 async function bridgeInItem(tokenId, itemName) {
-  if (!confirm(`Bind "${itemName}" back to your in-game inventory?`)) return;
+  if (!confirm(`Import "${itemName}" to your in-game inventory?`)) return;
 
   try {
     const resp = await fetch('/api/wallet/bridge-in', {
@@ -5164,16 +5175,26 @@ async function bridgeInItem(tokenId, itemName) {
 
     const data = await resp.json();
 
-    if (data.results && data.results.length > 0 && data.results[0].success) {
-      alert(`${itemName} has been bound to your inventory!`);
+    // Check for 403 - approval required
+    if (resp.status === 403) {
+      const detail = data.detail || {};
+      if (detail.requires_approval) {
+        alert('Approval required! Please click the "Approve" button first.');
+        return;
+      }
+    }
+
+    // API returns { success, bridged_in: [...], failed: [...] }
+    if (data.success && data.bridged_in && data.bridged_in.length > 0) {
+      alert(`${itemName} has been imported to your inventory!`);
       // Refresh the lockbox
       openLockboxModal();
     } else {
-      const error = data.results?.[0]?.error || data.detail || 'Unknown error';
-      alert('Failed to bind item: ' + error);
+      const error = data.failed?.[0]?.error || data.detail?.message || data.detail || 'Unknown error';
+      alert('Failed to import item: ' + error);
     }
   } catch (e) {
-    alert('Failed to bind item: ' + e.message);
+    alert('Failed to import item: ' + e.message);
   }
 }
 

@@ -19,7 +19,41 @@ from app.models import (
 )
 from app.database import SessionLocal
 from app.routes.chat_routes import post_forge_announcement
-from app.services.item_forge_service import compute_forged_item
+from app.services.item_forge_service import compute_forged_item, get_item_by_id
+
+
+def _get_web_icon_url(item_id: str) -> str:
+    """Convert Godot icon path to web URL for an item."""
+    item = get_item_by_id(item_id)
+    if not item:
+        return "/static/icons/trophy.png"
+
+    visuals = item.get("visuals", {})
+
+    # Check for direct web URL first (icon_url field)
+    web_url = visuals.get("icon_url", "")
+    if web_url and web_url.startswith("/static/"):
+        return web_url
+
+    # Fallback to Godot path (icon field)
+    godot_path = visuals.get("icon", "")
+    if godot_path:
+        # Extract filename from Godot path (icons are in flat structure)
+        # res://assets/icons/forged/weapons/coiled_sword.png -> coiled_sword.png
+        filename = godot_path.split("/")[-1]
+        return f"/static/items/icons/{filename}"
+
+    # Last resort: try item_id directly
+    return f"/static/items/icons/{item_id}.png"
+
+
+def _get_item_rarity(item_id: str) -> str:
+    """Get rarity from items.json catalog."""
+    item = get_item_by_id(item_id)
+    if not item:
+        return "common"
+    # items.json uses base_rarity or rarity
+    return item.get("base_rarity", item.get("rarity", "common")).lower()
 
 logger = logging.getLogger(__name__)
 
@@ -1228,11 +1262,15 @@ async def get_bridge_in_available(
         ).first()
         original_user = db.query(User).filter(User.id == original_credit.user_id).first() if original_credit else None
 
+        # Get rarity from catalog (more reliable than stored value)
+        catalog_rarity = _get_item_rarity(item.item_id)
+
         items.append({
             "token_id": item.token_id,
             "item_id": item.item_id,
             "item_name": item.item_name,
-            "item_rarity": item.item_rarity,
+            "item_rarity": catalog_rarity,
+            "icon_url": _get_web_icon_url(item.item_id),
             "forged_by": original_user.username if original_user else "Unknown",
             "forged_at": item.forged_at.isoformat() + "Z" if item.forged_at else None,
             "can_bridge_in": True,
