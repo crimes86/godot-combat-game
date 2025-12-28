@@ -763,11 +763,17 @@ async def request_bridge_out(
             continue
 
         # Check ownership - must own the item
-        owner_id = forged.current_owner_id or (
-            db.query(AchievementCredit.user_id)
-            .filter(AchievementCredit.id == forged.achievement_credit_id)
-            .scalar()
-        )
+        # Try current_owner_id first, then achievement_credit owner, then wallet owner
+        owner_id = forged.current_owner_id
+        if not owner_id and forged.achievement_credit_id:
+            owner_id = db.query(AchievementCredit.user_id).filter(
+                AchievementCredit.id == forged.achievement_credit_id
+            ).scalar()
+        if not owner_id and forged.wallet_account_id:
+            # Fallback for debug forges - check via wallet
+            owner_id = db.query(WalletAccount.user_id).filter(
+                WalletAccount.id == forged.wallet_account_id
+            ).scalar()
         if owner_id != current_user.id:
             failed.append({"forged_achievement_id": forged_id, "error": "You don't own this item"})
             continue
@@ -891,12 +897,16 @@ async def confirm_bridge_out(
             failed.append({"forged_achievement_id": forged_id, "error": "Item not found"})
             continue
 
-        # Check ownership
-        owner_id = forged.current_owner_id or (
-            db.query(AchievementCredit.user_id)
-            .filter(AchievementCredit.id == forged.achievement_credit_id)
-            .scalar()
-        )
+        # Check ownership - try current_owner_id, then achievement_credit owner, then wallet owner
+        owner_id = forged.current_owner_id
+        if not owner_id and forged.achievement_credit_id:
+            owner_id = db.query(AchievementCredit.user_id).filter(
+                AchievementCredit.id == forged.achievement_credit_id
+            ).scalar()
+        if not owner_id and forged.wallet_account_id:
+            owner_id = db.query(WalletAccount.user_id).filter(
+                WalletAccount.id == forged.wallet_account_id
+            ).scalar()
         if owner_id != current_user.id:
             failed.append({"forged_achievement_id": forged_id, "error": "You don't own this item"})
             continue
@@ -987,12 +997,16 @@ async def cancel_bridge_out(
             failed.append({"forged_achievement_id": forged_id, "error": "Item not found"})
             continue
 
-        # Check ownership
-        owner_id = forged.current_owner_id or (
-            db.query(AchievementCredit.user_id)
-            .filter(AchievementCredit.id == forged.achievement_credit_id)
-            .scalar()
-        )
+        # Check ownership - try current_owner_id, then achievement_credit owner, then wallet owner
+        owner_id = forged.current_owner_id
+        if not owner_id and forged.achievement_credit_id:
+            owner_id = db.query(AchievementCredit.user_id).filter(
+                AchievementCredit.id == forged.achievement_credit_id
+            ).scalar()
+        if not owner_id and forged.wallet_account_id:
+            owner_id = db.query(WalletAccount.user_id).filter(
+                WalletAccount.id == forged.wallet_account_id
+            ).scalar()
         if owner_id != current_user.id:
             failed.append({"forged_achievement_id": forged_id, "error": "You don't own this item"})
             continue

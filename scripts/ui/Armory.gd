@@ -141,7 +141,7 @@ var _profile_update_pending: bool = false
 # Forge detail panel
 var _forge_detail_panel: Control = null
 var _forge_selected_item: Dictionary = {}
-var _forge_selected_card: PanelContainer = null  # Currently selected card in forge grid
+var _forge_selected_card: Control = null  # Currently selected card in forge grid
 
 # Bridge UI section
 var _bridge_section: Control = null
@@ -548,7 +548,6 @@ func _on_forge_status_loaded(status: Dictionary) -> void:
 
 	# DEBUG: In debug mode, the injection happens in _on_forged_items_loaded
 	# (after forged items load, so we know which items to skip)
-	# Just refresh content here without re-injecting
 	if debug_all_forgeable:
 		_refresh_forge_content()
 		return
@@ -2565,8 +2564,8 @@ func _on_forge_sort_pressed(sort_id: String) -> void:
 	# Update button styles
 	for sid in _forge_filter_buttons:
 		_style_filter_button(_forge_filter_buttons[sid], sid == sort_id)
-	# Refresh forge content
-	_refresh_forge_content()
+	# Refresh forge content (force=true to bypass guard for user action)
+	_refresh_forge_content(true)
 
 func _build_forge_detail_panel() -> Control:
 	"""Build the item detail panel - tooltip style layout"""
@@ -3041,29 +3040,29 @@ func _on_bridge_out_pressed() -> void:
 	ForgeItemManager.request_bridge_out(int(forged_id), _on_bridge_out_complete.bind(item_name, bridge_btn))
 
 func _on_bridge_out_complete(result: Dictionary, item_name: String, bridge_btn: Button) -> void:
-	"""Callback after unbind request completes"""
+	"""Callback after export request completes"""
 	if result.is_empty() or result.get("bridge_requests", []).size() == 0:
 		# Failed
-		print("[Armory] Unbind failed")
+		print("[Armory] Export failed")
 		if bridge_btn:
-			bridge_btn.text = "UNBIND"
+			bridge_btn.text = "EXPORT"
 			bridge_btn.disabled = false
 		if NotificationManager:
-			NotificationManager.show_notification("Failed to unbind %s" % item_name, "error")
+			NotificationManager.show_notification("Failed to export %s" % item_name, "error")
 		return
 
 	# Success - 48h cooldown started
 	var bridge_info = result.get("bridge_requests", [{}])[0]
 	var cooldown_ends = bridge_info.get("cooldown_ends_at", "")
 
-	print("[Armory] Unbind started for %s, cooldown ends: %s" % [item_name, cooldown_ends])
+	print("[Armory] Export started for %s, cooldown ends: %s" % [item_name, cooldown_ends])
 
 	if SoundManager:
 		SoundManager.play_equip_sound(-6.0)
 
 	if NotificationManager:
 		NotificationManager.show_notification(
-			"%s is unbinding. Cooldown started." % item_name,
+			"%s export started. 48h cooldown." % item_name,
 			"info"
 		)
 
@@ -3109,19 +3108,19 @@ func _on_cancel_bridge_pressed() -> void:
 	ForgeItemManager.cancel_bridge_out(int(forged_id), _on_cancel_bridge_complete.bind(item_name, cancel_btn))
 
 func _on_cancel_bridge_complete(success: bool, item_name: String, cancel_btn: Button) -> void:
-	"""Callback after cancel unbind request completes"""
+	"""Callback after cancel export request completes"""
 	if not success:
 		if cancel_btn:
 			cancel_btn.text = "CANCEL"
 			cancel_btn.disabled = false
 		if NotificationManager:
-			NotificationManager.show_notification("Failed to cancel unbind", "error")
+			NotificationManager.show_notification("Failed to cancel export", "error")
 		return
 
-	print("[Armory] Unbind cancelled for %s" % item_name)
+	print("[Armory] Export cancelled for %s" % item_name)
 
 	if NotificationManager:
-		NotificationManager.show_notification("%s unbind cancelled" % item_name, "success")
+		NotificationManager.show_notification("%s export cancelled" % item_name, "success")
 
 	# Refresh
 	_refresh_forge_content()
@@ -4099,7 +4098,7 @@ func _update_detail_panel_countdown() -> void:
 		_forge_selected_item["bridge_hours_remaining"] = hours
 
 		if hours <= 0:
-			bridge_status_label.text = "📤 Unbinding..."
+			bridge_status_label.text = "📤 Exporting..."
 			bridge_status_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
 		else:
 			bridge_status_label.text = "⏳ %s remaining" % _format_bridge_countdown(hours)
@@ -4291,29 +4290,25 @@ func _on_forge_complete(forged_item: Dictionary, item_name: String, forge_btn: B
 			)
 
 	# In debug mode, remove this item from the forgeable list to prevent re-forge
+	var item_id = forged_item.get("item_id", "")
 	if debug_all_forgeable:
-		var item_id = forged_item.get("item_id", "")
 		ForgeItemManager.remove_from_forgeable(item_id)
 
-	# Refresh forge status to update forgeable list
-	ForgeItemManager.fetch_forge_status()
+	# DON'T rebuild the grid - just update the detail panel in place
+	# The item stays where it is, we just update its state
 
-	# Refresh the forge catalog to show item as "forged" (claimable)
-	_refresh_forge_content()
-
-	# Keep the forged item selected so user can see EXPORT button
-	var item_id = forged_item.get("item_id", "")
+	# Update selected item data with forged status
 	if item_id != "":
-		# Get merged item data for selection
-		var catalog_data = _get_catalog_item_by_id(item_id)
-		if catalog_data.size() > 0:
-			var merged = catalog_data.duplicate()
-			merged.merge(forged_item, true)
-			_forge_selected_item = merged
-			_update_forge_detail(merged, "forged")
-		else:
-			_forge_selected_item = forged_item
-			_update_forge_detail(forged_item, "forged")
+		# Merge forged data into the currently selected item
+		_forge_selected_item.merge(forged_item, true)
+		_forge_selected_item["has_forge_opportunity"] = false  # No more forge credits
+
+		# Update the detail panel to show forged state (EXPORT button)
+		_update_forge_detail(_forge_selected_item, "forged")
+
+		# Update the card visually to show it's now owned (add quantity badge)
+		if _forge_selected_card and is_instance_valid(_forge_selected_card):
+			_update_card_forged_state(_forge_selected_card, _forge_selected_item)
 	else:
 		# Fallback: clear selection if no item_id
 		_forge_selected_item = {}
@@ -4547,7 +4542,8 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 		var item_type = item.get("item_type", "")
 		if item_type == "weapon" or category.to_lower() == "weapons":
 			var weapon_type = item.get("weapon_type", "weapon")
-			tooltip_lines.append("Type:  %s" % weapon_type.capitalize())
+			if weapon_type != null and weapon_type != "":
+				tooltip_lines.append("Type:  %s" % weapon_type.capitalize())
 
 			var base_damage = item.get("base_damage", {})
 			if base_damage is Dictionary and base_damage.has("min") and base_damage.has("max"):
@@ -4625,25 +4621,16 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 
 	# Items are auto-claimed on forge and bridge-in, so no CLAIM button needed
 	# Just show status indicator for forged items
+	# IN BAG button removed for cleaner UI - EXPORT button indicates ownership
 	if preview_btn:
-		if is_bridging or is_bridged:
-			preview_btn.visible = false
-		elif inventory_count > 0 and bridge_status == "in_game":
-			# Item is in inventory and ready to use - show count if multiple
-			preview_btn.visible = true
-			if inventory_count > 1:
-				preview_btn.text = "x%d IN BAG" % inventory_count
-			else:
-				preview_btn.text = "IN BAG"
-			preview_btn.disabled = true
-		else:
-			preview_btn.visible = false
+		preview_btn.visible = false
 
 	# Show FORGE button when there's a forge opportunity (even if already owning some)
 	if forge_btn:
 		var show_forge = has_forge_opportunity or is_forgeable
 		forge_btn.visible = show_forge
 		forge_btn.text = "⚒️ FORGE"
+		forge_btn.disabled = false  # Reset disabled state for new item selection
 
 		# Animate the forge button when available to draw attention
 		if show_forge:
@@ -4652,11 +4639,11 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 			_stop_forge_button_pulse(forge_btn)
 
 	# === Bind buttons logic ===
-	# EXPORT button - shown for items in inventory (can export one at a time)
+	# EXPORT button - shown for items in inventory (exports one at a time)
 	if bridge_out_btn:
 		bridge_out_btn.visible = inventory_count > 0 and bridge_status == "in_game"
 		if inventory_count > 1:
-			bridge_out_btn.text = "EXPORT (1)"
+			bridge_out_btn.text = "EXPORT (x%d)" % inventory_count
 		else:
 			bridge_out_btn.text = "EXPORT"
 		bridge_out_btn.disabled = false
@@ -4674,14 +4661,14 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 			var hours_remaining = item.get("hours_remaining", item.get("bridge_hours_remaining", 0.0))
 			var transfer_ready = item.get("can_confirm", false)
 			if transfer_ready:
-				bridge_status_label.text = "📤 Unbinding..."
+				bridge_status_label.text = "📤 Exporting..."
 				bridge_status_label.add_theme_color_override("font_color", Color(0.3, 0.8, 0.3))
 			else:
-				bridge_status_label.text = "⏳ %.1fh until unbound" % hours_remaining
+				bridge_status_label.text = "⏳ %.1fh until exported" % hours_remaining
 				bridge_status_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
 			bridge_status_label.visible = true
 		elif is_bridged:
-			bridge_status_label.text = "📤 Unbound"
+			bridge_status_label.text = "📤 Exported"
 			bridge_status_label.add_theme_color_override("font_color", Color(0.5, 0.6, 0.9))
 			bridge_status_label.visible = true
 		else:
@@ -4690,10 +4677,10 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 	# Update unlock label for bind states
 	if unlock_label:
 		if is_bridging:
-			unlock_label.text = "⏳ Unbinding..."
+			unlock_label.text = "⏳ Exporting..."
 			unlock_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
 		elif is_bridged:
-			unlock_label.text = "📤 Unbound"
+			unlock_label.text = "📤 Exported"
 			unlock_label.add_theme_color_override("font_color", Color(0.5, 0.6, 0.9))
 
 	# === Update Modifiers Section (pre-computed from backend) ===
@@ -4882,18 +4869,57 @@ func _update_cooldown_display(data: Dictionary, trade_icon: Label, trade_status:
 				else:
 					badge_text.text = "%dm remaining" % mins
 
-func _refresh_forge_content() -> void:
-	"""Refresh the forge grid content"""
+var _forge_refresh_pending: bool = false
+var _last_forge_refresh_time: int = 0
+
+func _refresh_forge_content(force: bool = false) -> void:
+	"""Refresh the forge grid content with debouncing to prevent rapid rebuilds
+	force: If true, bypasses the initial_build_done guard (for user actions like sorting)"""
 	if not _forge_content_container:
 		return
 
-	# Clear existing content
-	for child in _forge_content_container.get_children():
-		child.queue_free()
+	# Debounce: Skip refresh if we just refreshed within 100ms
+	var now = Time.get_ticks_msec()
+	if now - _last_forge_refresh_time < 100:
+		# Schedule a deferred refresh if not already pending
+		if not _forge_refresh_pending:
+			_forge_refresh_pending = true
+			call_deferred("_do_forge_refresh", force)
+		return
+
+	_do_forge_refresh(force)
+
+var _forge_is_building: bool = false
+
+func _do_forge_refresh(force: bool = false) -> void:
+	"""Actually perform the forge refresh
+	force: Parameter kept for compatibility but no longer used"""
+	_forge_refresh_pending = false
+	_last_forge_refresh_time = Time.get_ticks_msec()
+
+	if not _forge_content_container:
+		return
+
+	# Prevent overlapping builds
+	if _forge_is_building:
+		print("[Forge] Skipping rebuild - already building")
+		return
+	_forge_is_building = true
+
+	# Clear existing content using free() instead of queue_free() to prevent race conditions
+	var children = _forge_content_container.get_children()
+	for child in children:
+		_forge_content_container.remove_child(child)
+		child.free()  # Immediate destruction, not deferred
+
+	# Clear stale selected card reference
+	_forge_selected_card = null
 
 	# Build unified content (owned items first, then locked)
 	var content = _build_forge_unified_content()
 	_forge_content_container.add_child(content)
+
+	_forge_is_building = false
 
 func _switch_forge_tab(_tab_id: String = "") -> void:
 	"""Legacy wrapper - now just refreshes unified content"""
@@ -4973,7 +4999,25 @@ func _build_forge_unified_content() -> Control:
 			var backend_data = ForgeItemManager.get_forged_item(item_id)
 			var merged = item.duplicate()
 			if not backend_data.is_empty():
-				merged.merge(backend_data, true)  # Backend takes precedence
+				# Preserve catalog fields that backend doesn't have (icon, theme, etc.)
+				var catalog_icon = merged.get("icon", "")
+				var catalog_theme = merged.get("theme", "")
+				var catalog_description = merged.get("description", "")
+				var catalog_rarity = merged.get("rarity", "")
+				merged.merge(backend_data, true)  # Backend takes precedence for status fields
+				# Restore catalog fields if backend overwrote them with empty/null/missing
+				var merged_icon = merged.get("icon")
+				if merged_icon == null or merged_icon == "":
+					merged["icon"] = catalog_icon
+				var merged_theme = merged.get("theme")
+				if merged_theme == null or merged_theme == "":
+					merged["theme"] = catalog_theme
+				var merged_desc = merged.get("description")
+				if merged_desc == null or merged_desc == "":
+					merged["description"] = catalog_description
+				# Also preserve rarity from catalog (backend uses item_rarity)
+				if catalog_rarity != "" and not merged.has("rarity"):
+					merged["rarity"] = catalog_rarity
 			# Track if there's an additional forge opportunity
 			merged["has_forge_opportunity"] = has_forge_opportunity
 			forged_list.append(merged)
@@ -4983,6 +5027,19 @@ func _build_forge_unified_content() -> Control:
 			forgeable_list.append(merged)
 		else:
 			locked_list.append(item)
+
+	# DEBUG: Print categorization summary
+	print("[Forge] Categorization: %d forged, %d forgeable, %d locked" % [forged_list.size(), forgeable_list.size(), locked_list.size()])
+	if forged_list.size() > 0:
+		var names = []
+		for i in range(min(3, forged_list.size())):
+			names.append(forged_list[i].get("name", forged_list[i].get("id", "?")))
+		print("[Forge] First 3 FORGED: %s" % str(names))
+	if forgeable_list.size() > 0:
+		var names = []
+		for i in range(min(3, forgeable_list.size())):
+			names.append(forgeable_list[i].get("name", forgeable_list[i].get("id", "?")))
+		print("[Forge] First 3 FORGEABLE: %s" % str(names))
 
 	# Add FORGED items first (owns at least one - may also have glow if more available)
 	for item in forged_list:
@@ -5094,7 +5151,8 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	"""
 	const CARD_SIZE = 64  # Card size for forge grid (8 columns at 64px)
 
-	var card = PanelContainer.new()
+	# Use Control instead of PanelContainer to avoid theme inheritance issues
+	var card = Control.new()
 	card.name = "ForgeCard_" + item.get("id", "unknown")
 	card.custom_minimum_size = Vector2(CARD_SIZE, CARD_SIZE)
 	card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -5107,33 +5165,54 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	var is_owned = state == "forged"
 	var is_forgeable = state == "forgeable"
 
-	# Card style - different for each state
-	var style = StyleBoxFlat.new()
 	var rarity = item.get("rarity", "Common")
 	var is_high_rarity = rarity in ["Legendary", "Epic"]
 
+	# Determine colors based on state
+	var bg_color: Color
+	var border_color: Color
 	if is_owned:
-		# FORGED - bright, full color with rarity border
-		style.bg_color = Color(0.06, 0.06, 0.08, 1.0)  # Fully opaque
-		style.border_color = rarity_color.darkened(0.2)
+		# FORGED - dark background with rarity border
+		bg_color = Color(0.06, 0.06, 0.08, 1.0)
+		border_color = rarity_color.darkened(0.2)
 	elif is_forgeable:
-		# FORGEABLE - use rarity color to indicate action available
-		style.bg_color = Color(0.06, 0.06, 0.08, 1.0)  # Fully opaque
-		style.border_color = rarity_color.darkened(0.1)  # Rarity color border
+		# FORGEABLE - same dark bg, rarity border
+		bg_color = Color(0.06, 0.06, 0.08, 1.0)
+		border_color = rarity_color.darkened(0.1)
 	else:
-		# LOCKED - very muted, obviously unavailable
-		style.bg_color = Color(0.03, 0.03, 0.04, 1.0)  # Fully opaque
-		style.border_color = Color(0.15, 0.15, 0.18)  # Gray border, ignore rarity
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(5)
-	style.set_content_margin_all(2)  # 2px margin for border
-	card.add_theme_stylebox_override("panel", style)
+		# LOCKED - darker, gray border
+		bg_color = Color(0.03, 0.03, 0.04, 1.0)
+		border_color = Color(0.15, 0.15, 0.18)
 
-	# Store item data and style for hover effects
+	# Create background ColorRect (bypasses theme system entirely)
+	var bg_rect = ColorRect.new()
+	bg_rect.name = "CardBackground"
+	bg_rect.color = bg_color
+	bg_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(bg_rect)
+
+	# Create border panel on top of background
+	var border_panel = PanelContainer.new()
+	border_panel.name = "CardBorder"
+	border_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	border_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var border_style = StyleBoxFlat.new()
+	border_style.bg_color = Color(0, 0, 0, 0)  # Transparent - we use ColorRect for bg
+	border_style.border_color = border_color
+	border_style.set_border_width_all(2)
+	border_style.set_corner_radius_all(5)
+	border_panel.add_theme_stylebox_override("panel", border_style)
+	card.add_child(border_panel)
+
+	# Store item data and components for hover effects
 	card.set_meta("item_data", item)
 	card.set_meta("item_state", state)
 	card.set_meta("is_owned", is_owned)
-	card.set_meta("normal_style", style)
+	card.set_meta("bg_rect", bg_rect)
+	card.set_meta("border_style", border_style)
+	card.set_meta("normal_bg_color", bg_color)
+	card.set_meta("normal_border_color", border_color)
 	card.set_meta("rarity_color", rarity_color)
 	card.set_meta("is_high_rarity", is_high_rarity and is_owned)
 
@@ -5143,19 +5222,19 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	# Connect click signal for selection
 	card.gui_input.connect(_on_forge_card_clicked.bind(card))
 
-	# Animated border color for high-rarity owned items (no shadow animation to prevent layout shift)
+	# Animated border color for high-rarity owned items
 	if is_high_rarity and is_owned:
-		var glow_tween = create_tween()
+		var glow_tween = card.create_tween()
 		glow_tween.set_loops()
-		glow_tween.tween_property(style, "border_color", rarity_color.lightened(0.2), 1.5).set_ease(Tween.EASE_IN_OUT)
-		glow_tween.tween_property(style, "border_color", rarity_color.darkened(0.2), 1.5).set_ease(Tween.EASE_IN_OUT)
+		glow_tween.tween_property(border_style, "border_color", rarity_color.lightened(0.2), 1.5).set_ease(Tween.EASE_IN_OUT)
+		glow_tween.tween_property(border_style, "border_color", rarity_color.darkened(0.2), 1.5).set_ease(Tween.EASE_IN_OUT)
 
-	# Pulsing border for forgeable items (no shadow animation to prevent layout shift)
+	# Pulsing border for forgeable items
 	if is_forgeable:
-		var border_tween = create_tween()
-		border_tween.set_loops()
-		border_tween.tween_property(style, "border_color", rarity_color.lightened(0.3), 0.8).set_ease(Tween.EASE_IN_OUT)
-		border_tween.tween_property(style, "border_color", rarity_color.darkened(0.1), 0.8).set_ease(Tween.EASE_IN_OUT)
+		var pulse_tween = card.create_tween()
+		pulse_tween.set_loops()
+		pulse_tween.tween_property(border_style, "border_color", rarity_color.lightened(0.3), 0.8).set_ease(Tween.EASE_IN_OUT)
+		pulse_tween.tween_property(border_style, "border_color", rarity_color.darkened(0.1), 0.8).set_ease(Tween.EASE_IN_OUT)
 
 	# Set pivot for centered scaling
 	card.pivot_offset = Vector2(CARD_SIZE / 2.0, CARD_SIZE / 2.0)
@@ -5348,7 +5427,8 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	var item_type = item.get("item_type", "")
 	if item_type == "weapon":
 		var weapon_type = item.get("weapon_type", "weapon")
-		tooltip_lines.append("Type:  %s" % weapon_type.capitalize())
+		if weapon_type != null and weapon_type != "":
+			tooltip_lines.append("Type:  %s" % weapon_type.capitalize())
 
 		var base_damage = item.get("base_damage", null)
 		if base_damage is Dictionary and base_damage.has("min") and base_damage.has("max"):
@@ -5549,28 +5629,33 @@ func _add_fallback_icon(container: Control, item: Dictionary, state: String) -> 
 			fallback.add_theme_color_override("font_color", TEXT_MUTED)
 	container.add_child(fallback)
 
-func _on_forge_card_hover(card: PanelContainer, is_hovering: bool) -> void:
+func _on_forge_card_hover(card: Control, is_hovering: bool) -> void:
 	"""Handle hover visual effects on forge item cards (visual only, no selection)"""
 	var rarity_color: Color = card.get_meta("rarity_color", Color.GRAY)
-	var is_owned: bool = card.get_meta("is_owned", false)
-	var normal_style: StyleBoxFlat = card.get_meta("normal_style")
+	var bg_rect: ColorRect = card.get_meta("bg_rect", null)
+	var border_style: StyleBoxFlat = card.get_meta("border_style", null)
+	var normal_bg_color: Color = card.get_meta("normal_bg_color", Color(0.06, 0.06, 0.08, 1.0))
+	var normal_border_color: Color = card.get_meta("normal_border_color", Color.GRAY)
 
 	if is_hovering:
 		# Play hover sound
 		if SoundManager:
 			SoundManager.play_button_hover_sound(-12.0)
 
-		# Clone the normal style and highlight with rarity color
-		var hover_style = normal_style.duplicate() if normal_style else StyleBoxFlat.new()
-		hover_style.border_color = rarity_color.lightened(0.1)  # Rarity color highlight
-		hover_style.bg_color = Color(0.10, 0.10, 0.12, 1.0)  # Slightly lighter bg
-		card.add_theme_stylebox_override("panel", hover_style)
+		# Lighten background and highlight border
+		if bg_rect:
+			bg_rect.color = Color(0.10, 0.10, 0.12, 1.0)  # Slightly lighter bg
+		if border_style:
+			border_style.border_color = rarity_color.lightened(0.1)
 	else:
-		# Restore normal style (unless this is the selected card)
-		if normal_style and card != _forge_selected_card:
-			card.add_theme_stylebox_override("panel", normal_style)
+		# Restore normal colors (unless this is the selected card)
+		if card != _forge_selected_card:
+			if bg_rect:
+				bg_rect.color = normal_bg_color
+			if border_style:
+				border_style.border_color = normal_border_color
 
-func _on_forge_card_clicked(event: InputEvent, card: PanelContainer) -> void:
+func _on_forge_card_clicked(event: InputEvent, card: Control) -> void:
 	"""Handle click to select a forge item card"""
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var is_owned: bool = card.get_meta("is_owned", false)
@@ -5582,29 +5667,125 @@ func _on_forge_card_clicked(event: InputEvent, card: PanelContainer) -> void:
 		if SoundManager:
 			SoundManager.play_button_click_sound(-6.0)
 
-		# Deselect previous card
-		if _forge_selected_card and _forge_selected_card != card:
-			var old_style: StyleBoxFlat = _forge_selected_card.get_meta("normal_style")
-			if old_style:
-				_forge_selected_card.add_theme_stylebox_override("panel", old_style)
+		# Deselect previous card (check validity in case it was freed during grid rebuild)
+		if _forge_selected_card and is_instance_valid(_forge_selected_card) and _forge_selected_card != card:
+			var old_bg_rect: ColorRect = _forge_selected_card.get_meta("bg_rect", null)
+			var old_border_style: StyleBoxFlat = _forge_selected_card.get_meta("border_style", null)
+			var old_bg_color: Color = _forge_selected_card.get_meta("normal_bg_color", Color(0.06, 0.06, 0.08, 1.0))
+			var old_border_color: Color = _forge_selected_card.get_meta("normal_border_color", Color.GRAY)
+			if old_bg_rect:
+				old_bg_rect.color = old_bg_color
+			if old_border_style:
+				old_border_style.border_color = old_border_color
 
 		# Mark this card as selected
 		_forge_selected_card = card
 
-		# Apply selected style - solid rarity color border
-		# Keep same border/margin as normal style to prevent shifting
-		var selected_style = StyleBoxFlat.new()
-		selected_style.bg_color = Color(0.12, 0.12, 0.14, 1.0)  # Brighter bg when selected
-		selected_style.border_color = rarity_color.lightened(0.2)  # Bright rarity color
-		selected_style.set_border_width_all(2)  # Same as normal
-		selected_style.set_corner_radius_all(5)  # Same as normal
-		selected_style.set_content_margin_all(2)  # Same as normal
-		card.add_theme_stylebox_override("panel", selected_style)
+		# Apply selected style - brighter bg and rarity border
+		var bg_rect: ColorRect = card.get_meta("bg_rect", null)
+		var border_style: StyleBoxFlat = card.get_meta("border_style", null)
+		if bg_rect:
+			bg_rect.color = Color(0.12, 0.12, 0.14, 1.0)  # Brighter bg when selected
+		if border_style:
+			border_style.border_color = rarity_color.lightened(0.2)  # Bright rarity color
 
 		# Update detail panel with selected item and state
 		_update_forge_detail(item_data, item_state)
 
-func _on_playtest_card_clicked(event: InputEvent, card: PanelContainer) -> void:
+func _select_card_by_item_id(item_id: String) -> void:
+	"""Find and select a card in the forge grid by item_id"""
+	if not _forge_content_container or item_id == "":
+		_forge_selected_card = null
+		return
+
+	# Search through the grid for the card with matching item_id
+	var grid = _forge_content_container.find_child("CatalogGrid", true, false)
+	if not grid:
+		_forge_selected_card = null
+		return
+
+	for card in grid.get_children():
+		if card is Control and card.has_meta("item_data"):
+			var card_data: Dictionary = card.get_meta("item_data", {})
+			var card_item_id = card_data.get("id", card_data.get("item_id", ""))
+			if card_item_id == item_id:
+				# Found the card - apply selected style using ColorRect and border_style
+				_forge_selected_card = card
+				var rarity_color: Color = card.get_meta("rarity_color", Color.GRAY)
+
+				# Update ColorRect background for selected state
+				var bg_rect: ColorRect = card.get_meta("bg_rect", null)
+				if bg_rect:
+					bg_rect.color = Color(0.12, 0.12, 0.14, 1.0)
+
+				# Update border for selected state
+				var border_style: StyleBoxFlat = card.get_meta("border_style", null)
+				if border_style:
+					border_style.border_color = rarity_color.lightened(0.2)
+				return
+
+	# Card not found
+	_forge_selected_card = null
+
+func _update_card_forged_state(card: Control, item: Dictionary) -> void:
+	"""Update a card's visual state after forging (add quantity badge, update metadata)"""
+	if not card or not is_instance_valid(card):
+		return
+
+	# Update the card's metadata
+	card.set_meta("is_owned", true)
+	card.set_meta("item_state", "forged")
+	card.set_meta("item_data", item)
+
+	# Update the card's background color to forged state
+	var rarity_color: Color = card.get_meta("rarity_color", Color.GRAY)
+	var bg_rect: ColorRect = card.get_meta("bg_rect", null)
+	if bg_rect:
+		bg_rect.color = Color(0.06, 0.06, 0.08, 1.0)
+		card.set_meta("normal_bg_color", Color(0.06, 0.06, 0.08, 1.0))
+
+	var border_style: StyleBoxFlat = card.get_meta("border_style", null)
+	if border_style:
+		border_style.border_color = rarity_color.darkened(0.2)
+		card.set_meta("normal_border_color", rarity_color.darkened(0.2))
+
+	# Find or create the quantity badge
+	var badge_layer = card.find_child("BadgeLayer", false, false)
+	if not badge_layer:
+		return
+
+	# Check if quantity badge already exists
+	var existing_badge = null
+	for child in badge_layer.get_children():
+		if child is PanelContainer and child.name.begins_with("QtyBadge"):
+			existing_badge = child
+			break
+
+	# Add quantity badge showing "x1"
+	if not existing_badge:
+		const BADGE_SIZE = 14
+		const CARD_SIZE = 64
+		var qty_circle = PanelContainer.new()
+		qty_circle.name = "QtyBadge"
+		qty_circle.custom_minimum_size = Vector2(BADGE_SIZE, BADGE_SIZE)
+		var qty_style = StyleBoxFlat.new()
+		qty_style.bg_color = Color(0.1, 0.6, 0.2, 0.95)  # Green for owned
+		qty_style.set_corner_radius_all(7)
+		qty_circle.add_theme_stylebox_override("panel", qty_style)
+		qty_circle.position = Vector2(CARD_SIZE - BADGE_SIZE + 9, CARD_SIZE - BADGE_SIZE + 9)
+
+		var qty_label = Label.new()
+		qty_label.text = "x1"
+		qty_label.add_theme_font_size_override("font_size", 7)
+		qty_label.add_theme_color_override("font_color", Color.WHITE)
+		qty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		qty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		qty_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+		qty_circle.add_child(qty_label)
+
+		badge_layer.add_child(qty_circle)
+
+func _on_playtest_card_clicked(event: InputEvent, card: Control) -> void:
 	"""Handle playtest forge card click - claim item to inventory"""
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var item_data: Dictionary = card.get_meta("item_data", {})
@@ -5732,12 +5913,34 @@ func _get_owned_forge_items() -> Array:
 			var item_id = item.get("item_id", "")
 			var catalog_data = _get_catalog_item_by_id(item_id)
 			if catalog_data.size() > 0:
-				# Merge catalog data with backend data (backend takes precedence)
+				# Merge catalog data with backend data (backend takes precedence for status fields)
+				# BUT preserve catalog visual fields that backend doesn't have
+				var catalog_icon = catalog_data.get("icon", "")
+				var catalog_theme = catalog_data.get("theme", "")
+				var catalog_description = catalog_data.get("description", "")
+				var catalog_rarity = catalog_data.get("rarity", "")
+
 				var merged = catalog_data.duplicate()
-				merged.merge(item, true)  # Backend overwrites catalog
+				merged.merge(item, true)  # Backend overwrites catalog for status fields
+
+				# Restore catalog visual fields if backend overwrote with empty/null
+				var merged_icon = merged.get("icon")
+				if merged_icon == null or merged_icon == "":
+					merged["icon"] = catalog_icon
+					print("[Forge] Restored icon for '%s': '%s'" % [item_id, catalog_icon])
+				var merged_theme = merged.get("theme")
+				if merged_theme == null or merged_theme == "":
+					merged["theme"] = catalog_theme
+				var merged_desc = merged.get("description")
+				if merged_desc == null or merged_desc == "":
+					merged["description"] = catalog_description
+				if catalog_rarity != "" and (not merged.has("rarity") or merged.get("rarity") == ""):
+					merged["rarity"] = catalog_rarity
+
 				enriched.append(merged)
 			else:
 				# No catalog match - use backend data as-is
+				print("[Forge] WARNING: No catalog match for item_id '%s'" % item_id)
 				enriched.append(item)
 
 		return enriched
