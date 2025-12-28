@@ -227,14 +227,20 @@ async def mint_achievement_nft(
     if receipt['status'] != 1:
         raise Exception(f"Transaction failed: {tx_hash.hex()}")
 
-    # Parse token ID from logs (AchievementMinted event)
-    # Event signature: AchievementMinted(uint256 indexed tokenId, address indexed originalEarner, ...)
+    # Parse token ID from logs
+    # Look for Transfer event: Transfer(address from, address to, uint256 tokenId)
+    # Token ID is in topics[3] for ERC721 Transfer events
     token_id = None
+    TRANSFER_SIGNATURE = Web3.keccak(text="Transfer(address,address,uint256)").hex()
+
     for log in receipt['logs']:
-        if len(log['topics']) >= 2:
-            # First topic is event signature, second is tokenId (indexed)
-            token_id = int(log['topics'][1].hex(), 16)
-            break
+        if len(log['topics']) >= 4:
+            topic0 = log['topics'][0].hex() if hasattr(log['topics'][0], 'hex') else log['topics'][0]
+            if topic0 == TRANSFER_SIGNATURE:
+                # Token ID is the 4th topic (index 3)
+                topic3 = log['topics'][3].hex() if hasattr(log['topics'][3], 'hex') else log['topics'][3]
+                token_id = int(topic3, 16)
+                break
 
     logger.info(f"Minted achievement {achievement_id} to {wallet_address}: token_id={token_id}, tx={tx_hash.hex()}")
 
