@@ -1,9 +1,8 @@
 extends Node
-class_name PlaytestBot
 
 ## Automated Playtest Bot
 ## Simulates a real player: equips gear, follows quests, fights, gathers, loots
-## Toggle with F9 in-game, or launch with --bot flag for headless client
+## Toggle with F4 in-game, or launch with --bot flag for headless client
 
 signal bot_error(message: String, context: Dictionary)
 signal bot_action(action: String, details: String)
