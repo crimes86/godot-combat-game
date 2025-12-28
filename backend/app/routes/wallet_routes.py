@@ -500,11 +500,21 @@ async def get_forged_achievements(
     return {
         "forged": [
             {
+                "id": f.id,
                 "token_id": f.token_id,
                 "contract_address": f.contract_address,
                 "chain_id": f.chain_id,
                 "tx_hash": f.tx_hash,
                 "forged_at": f.forged_at.isoformat() if f.forged_at else None,
+                # Item properties from ForgedAchievement
+                "item_id": f.item_id,
+                "item_name": f.item_name,
+                "item_type": f.item_type,
+                "weapon_type": f.weapon_type,
+                "item_rarity": f.item_rarity,
+                "effect_name": f.effect_name,
+                "glow_color": f.glow_color,
+                "bridge_status": f.bridge_status or "in_game",
                 "achievement": {
                     "display_name": achievement.display_name,
                     "description": achievement.description,
