@@ -1165,24 +1165,7 @@ func _input(event: InputEvent) -> void:
 		var is_dev_build = OS.has_feature("editor") or OS.is_debug_build()
 
 		match event.keycode:
-			KEY_F4 when is_dev_build:
-				# DEBUG: Progress equipped weapon (add levels + kills)
-				if CharacterStats.equipped_weapon and CharacterStats.equipped_weapon.weapon_stats:
-					var stats = CharacterStats.equipped_weapon.weapon_stats
-					stats.debug_add_levels(10)
-					stats.debug_add_kills(500)
-					print("🗡️ DEBUG F4: Weapon progressed - Level: %d, Kills: %d, Tier: %s" % [
-						stats.level, stats.kills_total, stats.get_visual_tier_name()
-					])
-					# Refresh visual effects to match new tier
-					refresh_forged_weapon_effects()
-				else:
-					print("🗡️ DEBUG F4: No weapon equipped or no weapon stats")
-					print("   equipped_weapon: %s" % CharacterStats.equipped_weapon)
-					if CharacterStats.equipped_weapon:
-						print("   is_forged: %s" % CharacterStats.equipped_weapon.is_forged)
-						print("   forged_id: %s" % CharacterStats.equipped_weapon.forged_id)
-						print("   weapon_stats: %s" % CharacterStats.equipped_weapon.weapon_stats)
+			# F4 is now used by PlaytestBot autoload
 			KEY_F5 when is_dev_build:
 				# Toggle mobile input mode for testing
 				var was_mobile = GameInput.is_mobile()

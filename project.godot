@@ -65,6 +65,7 @@ PlayerInspectUI="*res://scripts/ui/PlayerInspectUI.gd"
 PlayerInteractionController="*res://scripts/systems/PlayerInteractionController.gd"
 Minimap="*res://scripts/ui/Minimap.gd"
 CombatJuice="*res://scripts/systems/CombatJuice.gd"
+PlaytestBot="*res://scripts/debug/PlaytestBot.gd"
 
 [display]
 

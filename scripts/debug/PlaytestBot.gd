@@ -80,7 +80,7 @@ func _ready():
 		print("[PlaytestBot] HEADLESS MODE - Connecting to %s:%d as %s" % [server_address, server_port, bot_name])
 		call_deferred("_start_headless_connection")
 	else:
-		print("[PlaytestBot] Initialized - Press F9 to toggle")
+		print("[PlaytestBot] Initialized - Press F4 to toggle")
 
 	set_process(false)
 
@@ -139,7 +139,7 @@ func _on_login_failed(error: String):
 	enabled = false
 
 func _input(event):
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F9:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F4:
 		toggle_bot()
 
 func toggle_bot():
