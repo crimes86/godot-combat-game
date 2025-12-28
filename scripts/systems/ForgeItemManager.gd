@@ -361,7 +361,22 @@ func _on_forged_items_response(result: int, response_code: int, _headers: Packed
 		return
 
 	var data = json.data
+
+	# Preserve bridge_cooldown_ends_at timestamps before replacing data
+	# (these are client-computed and not stored on backend)
+	var preserved_cooldowns: Dictionary = {}
+	for old_item in _forged_items:
+		var item_id = old_item.get("item_id", "")
+		if item_id != "" and old_item.has("bridge_cooldown_ends_at"):
+			preserved_cooldowns[item_id] = old_item["bridge_cooldown_ends_at"]
+
 	_forged_items = data.get("forged_items", [])
+
+	# Restore preserved cooldown timestamps
+	for item in _forged_items:
+		var item_id = item.get("item_id", "")
+		if item_id in preserved_cooldowns:
+			item["bridge_cooldown_ends_at"] = preserved_cooldowns[item_id]
 
 	# Build lookup dictionary
 	_forged_items_by_id.clear()
@@ -1120,12 +1135,24 @@ func _on_bridge_status_response(result: int, response_code: int, _headers: Packe
 	for bridge_item in pending_bridges:
 		var forged_id = int(bridge_item.get("forged_achievement_id", -1))
 		var item_id = bridge_item.get("item_id", "")
-		var hours_remaining = bridge_item.get("hours_remaining", 0.0)
+		var hours_remaining = bridge_item.get("hours_remaining", -1.0)
 		var can_confirm = bridge_item.get("can_confirm", false)
+
+		# Default to 2 minutes if API doesn't provide hours_remaining or returns 0 but not confirmable
+		if hours_remaining <= 0 and not can_confirm:
+			hours_remaining = 0.0333  # 2 minutes default
+
+		# Calculate end timestamp so countdown survives UI refreshes
+		var cooldown_ends_at = Time.get_unix_time_from_system() + (hours_remaining * 3600.0)
+
+		LogManager.info("Bridge item %s: hours=%.4f, can_confirm=%s, ends_at=%.0f" % [item_id, hours_remaining, str(can_confirm), cooldown_ends_at], "forge")
 
 		# Update in _forged_items array
 		for item in _forged_items:
 			if int(item.get("forged_id", -1)) == forged_id or item.get("item_id", "") == item_id:
+				# Only update cooldown_ends_at if not already set (preserve existing countdown)
+				if not item.has("bridge_cooldown_ends_at"):
+					item["bridge_cooldown_ends_at"] = cooldown_ends_at
 				item["bridge_hours_remaining"] = hours_remaining
 				item["can_confirm"] = can_confirm
 				item["bridge_status"] = "bridging_out"
@@ -1133,6 +1160,9 @@ func _on_bridge_status_response(result: int, response_code: int, _headers: Packe
 
 		# Also update in _forged_items_by_id dict
 		if item_id in _forged_items_by_id:
+			# Only update cooldown_ends_at if not already set (preserve existing countdown)
+			if not _forged_items_by_id[item_id].has("bridge_cooldown_ends_at"):
+				_forged_items_by_id[item_id]["bridge_cooldown_ends_at"] = cooldown_ends_at
 			_forged_items_by_id[item_id]["bridge_hours_remaining"] = hours_remaining
 			_forged_items_by_id[item_id]["can_confirm"] = can_confirm
 			_forged_items_by_id[item_id]["bridge_status"] = "bridging_out"
@@ -1159,6 +1189,10 @@ func _update_local_bridge_status(forged_id: int, status: String) -> void:
 	for item in _forged_items:
 		if int(item.get("forged_id", -1)) == forged_id:
 			item["bridge_status"] = status
+			# Set default hours for bridging_out until API responds with actual time
+			if status == "bridging_out" and not item.has("bridge_hours_remaining"):
+				item["bridge_hours_remaining"] = 0.0333  # 2 minutes default
+				item["can_confirm"] = false
 			var item_id = item.get("item_id", "")
 			bridge_status_updated.emit(item_id, status)
 			break
@@ -1168,6 +1202,10 @@ func _update_local_bridge_status(forged_id: int, status: String) -> void:
 		var item = _forged_items_by_id[item_id]
 		if int(item.get("forged_id", -1)) == forged_id:
 			item["bridge_status"] = status
+			# Set default hours for bridging_out until API responds with actual time
+			if status == "bridging_out" and not item.has("bridge_hours_remaining"):
+				item["bridge_hours_remaining"] = 0.0333  # 2 minutes default
+				item["can_confirm"] = false
 			break
 
 func _auto_confirm_bridge_out(forged_ids: Array) -> void:
