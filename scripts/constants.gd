@@ -12,6 +12,35 @@ func _ready():
 	debug_log("Press F3 to toggle debug displays")
 
 # ============================================
+# BACKGROUND THROTTLING
+# ============================================
+# Reduces CPU/GPU usage when the game window is not focused
+# This prevents the game from freezing the system when running in background
+
+var _is_window_focused: bool = true
+var _normal_physics_ticks: int = 60
+var _background_physics_ticks: int = 10  # Reduced physics when backgrounded
+
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			# Window lost focus - enable low processor mode
+			_is_window_focused = false
+			OS.low_processor_usage_mode = true
+			Engine.max_fps = 10  # Cap FPS when backgrounded
+			Engine.physics_ticks_per_second = _background_physics_ticks
+			if ENABLE_DEBUG:
+				print("[Background] Window unfocused - enabling low processor mode")
+		NOTIFICATION_APPLICATION_FOCUS_IN:
+			# Window gained focus - disable low processor mode
+			_is_window_focused = true
+			OS.low_processor_usage_mode = false
+			Engine.max_fps = 0  # Uncapped (or use your normal cap)
+			Engine.physics_ticks_per_second = _normal_physics_ticks
+			if ENABLE_DEBUG:
+				print("[Background] Window focused - restoring normal processing")
+
+# ============================================
 # COMBAT SYSTEM
 # ============================================
 

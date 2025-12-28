@@ -220,9 +220,9 @@ func spawn_skeleton(index: int) -> void:
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 	if network_enemy_mgr:
 		var network_id = network_enemy_mgr.register_enemy(skeleton)
-		# Broadcast spawn to clients in multiplayer
+		# Sync to NEARBY clients only (interest management)
 		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-			network_enemy_mgr.spawn_enemy_on_clients.rpc(network_id, spawn_pos, skeleton.enemy_level, skeleton.name)
+			network_enemy_mgr.spawn_enemy_for_nearby_clients(network_id, skeleton)
 
 	# Store skeleton data
 	var data = {
@@ -481,9 +481,9 @@ func respawn_skeleton(data: Dictionary) -> void:
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 	if network_enemy_mgr:
 		var network_id = network_enemy_mgr.register_enemy(skeleton)
-		# Broadcast spawn to clients in multiplayer
+		# Sync to NEARBY clients only (interest management)
 		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-			network_enemy_mgr.spawn_enemy_on_clients.rpc(network_id, spawn_pos, skeleton.enemy_level, skeleton.name)
+			network_enemy_mgr.spawn_enemy_for_nearby_clients(network_id, skeleton)
 
 	data["skeleton"] = skeleton
 	data["state"] = SkeletonState.PATROLLING_SPAWN

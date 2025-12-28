@@ -553,7 +553,17 @@ func create_weapon_from_data(data: Dictionary) -> Weapon:
 	weapon.weapon_type = data.get("weapon_type", "sword")  # Visual type (club, sword, dagger, etc)
 	weapon.damage_type = "unified"  # Unified damage system (no slash/pierce/blunt)
 	weapon.description = data.get("description", "")
-	weapon.base_damage = data.get("base_damage", 5.0)
+
+	# Handle base_damage - can be a number or a Dictionary with min/max
+	var base_damage = data.get("base_damage", 5.0)
+	if base_damage is Dictionary:
+		var dmg_min = base_damage.get("min", 5)
+		var dmg_max = base_damage.get("max", 5)
+		weapon.base_damage = (dmg_min + dmg_max) / 2.0
+	elif base_damage is float or base_damage is int:
+		weapon.base_damage = float(base_damage)
+	else:
+		weapon.base_damage = 5.0
 
 	# Healing weapon properties
 	weapon.attack_mode = data.get("attack_mode", "melee")

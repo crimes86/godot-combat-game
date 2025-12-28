@@ -462,6 +462,7 @@ func create_stacked_loot_slot(base_item: Dictionary, total_qty: int, items: Arra
 	"""Create a slot for stacked items from multiple corpses"""
 	var slot_control = Control.new()
 	slot_control.custom_minimum_size = SLOT_SIZE
+	slot_control.size = SLOT_SIZE  # Explicitly set size for child positioning
 	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Store stacked item data
@@ -521,22 +522,21 @@ func create_stacked_loot_slot(base_item: Dictionary, total_qty: int, items: Arra
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		center.add_child(label)
 
-	# Add stack count label
+	# Add stack count label (bottom-right corner, matching InventoryUI)
 	var stack_label = Label.new()
 	stack_label.name = "StackLabel"
 	stack_label.text = "x%d" % total_qty
-	stack_label.add_theme_font_size_override("font_size", 11)
+	stack_label.add_theme_font_size_override("font_size", 10)
 	stack_label.add_theme_color_override("font_color", Color.WHITE)
 	stack_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	stack_label.add_theme_constant_override("outline_size", 2)
 	stack_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	stack_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	stack_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	stack_label.offset_left = -35
-	stack_label.offset_right = -2
-	stack_label.offset_top = 2  # Inside slot, top corner
-	stack_label.offset_bottom = 14
-	panel.add_child(stack_label)
+	stack_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	stack_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Position at bottom-right corner (absolute positioning)
+	stack_label.position = Vector2(SLOT_SIZE.x - 34, SLOT_SIZE.y - 21)
+	stack_label.size = Vector2(30, 14)
+	slot_control.add_child(stack_label)
 
 	# Build tooltip
 	var tooltip = "[%s] %s" % [item_rarity, item_name]

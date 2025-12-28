@@ -22,11 +22,11 @@ var loot_indicator: Node2D = null  # Sparkle effect for unopened chests
 
 # Loot table - items that can be found in chests
 const LOOT_TABLE = [
-	{"name": "Ancient Skull", "description": "A weathered skull from an ancient warrior", "value": 15, "drop_weight": 30, "type": "material", "rarity": "Uncommon", "stackable": false},
+	{"name": "Ancient Skull", "description": "A weathered skull from an ancient warrior", "value": 15, "drop_weight": 30, "type": "material", "rarity": "Common", "stackable": true, "max_stack": 99},
 	{"name": "Old Bones", "description": "Bones from a long-forgotten battle", "value": 8, "drop_weight": 35, "type": "material", "rarity": "Common", "stackable": true, "max_stack": 99},
 	{"name": "Broken Sword", "description": "Fragments of a shattered blade", "value": 25, "drop_weight": 25, "type": "material", "rarity": "Common", "stackable": false},
-	{"name": "Tarnished Ring", "description": "An old ring with faded engravings", "value": 40, "drop_weight": 20, "type": "material", "rarity": "Uncommon", "stackable": false},
-	{"name": "Dusty Gem", "description": "A gemstone covered in dreadland dust", "value": 60, "drop_weight": 15, "type": "material", "rarity": "Rare", "stackable": false},
+	{"name": "Tarnished Ring", "description": "An old ring with faded engravings", "value": 40, "drop_weight": 20, "type": "material", "rarity": "Common", "stackable": false},
+	{"name": "Dusty Gem", "description": "A gemstone covered in dreadland dust", "value": 60, "drop_weight": 15, "type": "material", "rarity": "Common", "stackable": false},
 	{"name": "Ancient Coin", "description": "Currency from a forgotten kingdom", "value": 20, "drop_weight": 25, "type": "material", "rarity": "Common", "stackable": true, "max_stack": 999},
 	# Copper Plate Armor Pieces (rare drops from chests)
 	{

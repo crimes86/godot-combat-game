@@ -2161,7 +2161,17 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	weapon.weapon_type = item_dict.get("weapon_type", "sword")
 	weapon.damage_type = "unified"
 	weapon.description = item_dict.get("description", "")
-	weapon.base_damage = item_dict.get("base_damage", 5.0)
+
+	# Handle base_damage - can be a number or a Dictionary with min/max
+	var base_damage = item_dict.get("base_damage", 5.0)
+	if base_damage is Dictionary:
+		var dmg_min = base_damage.get("min", 5)
+		var dmg_max = base_damage.get("max", 5)
+		weapon.base_damage = (dmg_min + dmg_max) / 2.0
+	elif base_damage is float or base_damage is int:
+		weapon.base_damage = float(base_damage)
+	else:
+		weapon.base_damage = 5.0
 
 	var attack_speed_category = item_dict.get("attack_speed", "medium")
 	match attack_speed_category:
@@ -2574,7 +2584,8 @@ func _build_equipment_tooltip(item: Dictionary, slot_name: String) -> String:
 		# Combat stats
 		tooltip += "\n"
 		var total_damage = weapon.get_total_damage()
-		var damage_bonus = stats.get_damage_bonus()
+		# Calculate actual bonus from level using percentage-based multiplier
+		var damage_bonus = stats.get_damage_bonus_for_base(weapon.base_damage)
 		if damage_bonus > 0:
 			tooltip += "\nDamage: +%.1f (+%.1f from level)" % [total_damage, damage_bonus]
 		else:

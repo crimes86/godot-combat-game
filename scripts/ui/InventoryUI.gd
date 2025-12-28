@@ -208,6 +208,7 @@ func create_inventory_slot(slot_index: int) -> Control:
 	var slot_control = Control.new()
 	slot_control.name = "InvSlot_" + str(slot_index)
 	slot_control.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
+	slot_control.size = Vector2(SLOT_SIZE, SLOT_SIZE)  # Explicitly set size for child positioning
 	slot_control.mouse_filter = Control.MOUSE_FILTER_STOP  # Ensure we receive input
 	slot_control.set_meta("slot_index", slot_index)
 	slot_control.set_meta("slot_type", "inventory")
@@ -260,7 +261,7 @@ func create_inventory_slot(slot_index: int) -> Control:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(label)
 
-	# Stack count label (bottom-right corner)
+	# Stack count label (bottom-right corner) - uses absolute positioning
 	var stack_label = Label.new()
 	stack_label.name = "StackLabel"
 	stack_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -270,13 +271,13 @@ func create_inventory_slot(slot_index: int) -> Control:
 	stack_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	stack_label.add_theme_constant_override("outline_size", 2)
 	stack_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stack_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	stack_label.offset_left = -30
-	stack_label.offset_top = -16
-	stack_label.offset_right = -2
-	stack_label.offset_bottom = -2
+	# Position at bottom-right corner (absolute positioning)
+	# SLOT_SIZE is 54, label needs ~30px width for "x99", positioned inside the border
+	stack_label.position = Vector2(SLOT_SIZE - 34, SLOT_SIZE - 23)  # x=20, y=31 for 54px slot
+	stack_label.size = Vector2(30, 14)
 	stack_label.visible = false
-	panel.add_child(stack_label)
+	stack_label.z_index = 10  # Ensure it's on top
+	slot_control.add_child(stack_label)
 
 	# Forged badge (top-left corner) - shows for forged items
 	# Added to slot_control (not panel) so it's on top of everything
@@ -462,8 +463,8 @@ func refresh_inventory() -> void:
 			icon_rect = center.get_node_or_null("ItemIcon")
 			label = center.get_node_or_null("ItemLabel")
 
-		# Stack label is directly under panel
-		stack_label = panel.get_node_or_null("StackLabel")
+		# Stack label is directly under slot_control (not panel)
+		stack_label = slot_control.get_node_or_null("StackLabel")
 
 		# Fallback: search recursively
 		if not label:
@@ -624,11 +625,21 @@ func refresh_inventory() -> void:
 			if item.has("value"):
 				tooltip += "\nValue: %d G" % item.get("value", 0)
 
-			# Add forged-specific info
+			# Add forged-specific info - use ForgeItemDB ability lookup
 			if is_forged:
-				var effect_name = item.get("effect_name", "")
-				if effect_name != "":
-					tooltip += "\nEffect: %s" % effect_name
+				var forged_item_id = item.get("item_id", item.get("forged_item_id", item.get("forged_id", "")))
+				if forged_item_id != "" and ForgeItemDB and ForgeItemDB.has_abilities(forged_item_id):
+					var passive_name = ForgeItemDB.get_passive_ability_name(forged_item_id)
+					var active_name = ForgeItemDB.get_active_ability_name(forged_item_id)
+					if passive_name != "":
+						tooltip += "\nPassive: %s" % passive_name
+					if active_name != "":
+						tooltip += "\nActive: %s" % active_name
+				else:
+					# Fallback to legacy effect_name
+					var effect_name = item.get("effect_name", "")
+					if effect_name != "":
+						tooltip += "\nEffect: %s" % effect_name
 				var effort_tier = item.get("effort_tier", "")
 				if effort_tier != "":
 					tooltip += "\nTier: %s" % effort_tier
@@ -908,7 +919,18 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	weapon.weapon_type = item_dict.get("weapon_type", "sword")
 	weapon.damage_type = "unified"
 	weapon.description = item_dict.get("description", "")
-	weapon.base_damage = item_dict.get("base_damage", 5.0)
+
+	# Handle base_damage - can be a number or a Dictionary with min/max
+	var base_damage = item_dict.get("base_damage", 5.0)
+	if base_damage is Dictionary:
+		# Use average of min/max for the weapon's base damage
+		var dmg_min = base_damage.get("min", 5)
+		var dmg_max = base_damage.get("max", 5)
+		weapon.base_damage = (dmg_min + dmg_max) / 2.0
+	elif base_damage is float or base_damage is int:
+		weapon.base_damage = float(base_damage)
+	else:
+		weapon.base_damage = 5.0
 
 	# Healing weapon properties
 	weapon.attack_mode = item_dict.get("attack_mode", "melee")

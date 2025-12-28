@@ -2011,13 +2011,30 @@ func _build_forge_item_tooltip(item_id: String, is_claimed: bool) -> String:
 		if stat_parts.size() > 0:
 			lines.append("Stats:  %s" % ", ".join(stat_parts))
 
-	# Effects
-	var effects = forge_db.get("effects", [])
-	if effects is Array and effects.size() > 0:
-		var effect_names = []
-		for e in effects:
-			effect_names.append(str(e).replace("_", " ").capitalize())
-		lines.append("Effects:  %s" % ", ".join(effect_names))
+	# Abilities - use ForgeItemDB lookup for proper names
+	if ForgeItemDB.has_abilities(item_id):
+		var passive_name = ForgeItemDB.get_passive_ability_name(item_id)
+		var passive_desc = ForgeItemDB.get_passive_ability_description(item_id)
+		var active_name = ForgeItemDB.get_active_ability_name(item_id)
+		var active_desc = ForgeItemDB.get_active_ability_description(item_id)
+
+		if passive_name != "":
+			lines.append("Passive:  %s" % passive_name)
+			if passive_desc != "":
+				lines.append("   %s" % passive_desc)
+
+		if active_name != "":
+			lines.append("Active:  %s" % active_name)
+			if active_desc != "":
+				lines.append("   %s" % active_desc)
+	else:
+		# Fallback to raw effects
+		var effects = forge_db.get("effects", [])
+		if effects is Array and effects.size() > 0:
+			var effect_names = []
+			for e in effects:
+				effect_names.append(str(e).replace("_", " ").capitalize())
+			lines.append("Effects:  %s" % ", ".join(effect_names))
 
 	# Lore/description
 	var lore = forge_db.get("lore", forge_db.get("description", ""))

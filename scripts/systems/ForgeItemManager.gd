@@ -447,8 +447,9 @@ func is_achievement_forgeable(achievement_name: String) -> bool:
 func is_forge_status_loaded() -> bool:
 	return _forge_status_loaded
 
-func claim_forge(achievement_id: int, callback: Callable = Callable()) -> void:
-	"""Claim/forge an achievement into an item"""
+func claim_forge(achievement_id: int, callback: Callable = Callable(), item_id: String = "", debug_bypass: bool = false) -> void:
+	"""Claim/forge an achievement into an item.
+	When debug_bypass is true and item_id is provided, bypasses achievement ownership check (DEV_MODE only)."""
 	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		forge_error.emit("Not authenticated")
 		return
@@ -458,7 +459,11 @@ func claim_forge(achievement_id: int, callback: Callable = Callable()) -> void:
 		"Authorization: Bearer " + AshbaneAuth.auth_token,
 		"Content-Type: application/json"
 	]
-	var body = JSON.stringify({"achievement_id": achievement_id})
+	var request_data = {"achievement_id": achievement_id}
+	if debug_bypass and item_id != "":
+		request_data["debug_bypass"] = true
+		request_data["item_id"] = item_id
+	var body = JSON.stringify(request_data)
 
 	var request = HTTPRequest.new()
 	add_child(request)

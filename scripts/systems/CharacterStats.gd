@@ -277,12 +277,13 @@ func get_base_damage() -> float:
 	if equipped_weapon:
 		weapon_damage = equipped_weapon.base_damage
 
-	# Add forged weapon level bonus (from Item XP System)
-	var weapon_level_bonus = 0.0
+	# Apply forged weapon level multiplier (percentage-based scaling)
+	# This multiplies the weapon's base damage, preserving balance between weapons
+	var weapon_level_multiplier = 1.0
 	if equipped_weapon and equipped_weapon.is_forged and equipped_weapon.weapon_stats:
-		weapon_level_bonus = equipped_weapon.weapon_stats.get_damage_bonus()
+		weapon_level_multiplier = equipped_weapon.weapon_stats.get_damage_multiplier()
 
-	return stat_damage + weapon_damage + weapon_level_bonus
+	return stat_damage + (weapon_damage * weapon_level_multiplier)
 
 func get_effective_strength() -> int:
 	"""Get total STR including equipment bonuses"""
@@ -1018,7 +1019,18 @@ func load_save_data(data: Dictionary) -> void:
 		var weapon = Weapon.new()
 		weapon.weapon_name = weapon_data.get("weapon_name", "Unknown")
 		weapon.weapon_type = weapon_data.get("weapon_type", "sword")
-		weapon.base_damage = weapon_data.get("base_damage", 1.0)
+
+		# Handle base_damage - can be a number or a Dictionary with min/max
+		var base_damage = weapon_data.get("base_damage", 1.0)
+		if base_damage is Dictionary:
+			var dmg_min = base_damage.get("min", 5)
+			var dmg_max = base_damage.get("max", 5)
+			weapon.base_damage = (dmg_min + dmg_max) / 2.0
+		elif base_damage is float or base_damage is int:
+			weapon.base_damage = float(base_damage)
+		else:
+			weapon.base_damage = 5.0
+
 		weapon.attack_speed_bonus = weapon_data.get("attack_speed_bonus", 0.0)
 		weapon.crit_chance_bonus = weapon_data.get("crit_chance_bonus", 0.0)
 		weapon.required_level = weapon_data.get("required_level", 1)

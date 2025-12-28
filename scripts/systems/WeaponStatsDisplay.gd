@@ -91,7 +91,7 @@ static func get_inspect_panel_data(weapon: Weapon) -> Dictionary:
 			"experience": stats.experience,
 			"experience_to_next": stats.get_experience_to_next_level(),
 			"level_progress": stats.get_level_progress(),
-			"damage_bonus": stats.get_damage_bonus(),
+			"damage_bonus": stats.get_damage_bonus_for_base(weapon.base_damage),
 			"crit_bonus": stats.get_crit_bonus() * 100,  # As percentage
 		})
 

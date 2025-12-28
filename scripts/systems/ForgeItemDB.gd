@@ -768,3 +768,283 @@ func item_has_valid_assets(item_id: String) -> Dictionary:
 		"item_id": item_id,
 		"item_name": item.get("item_name", "Unknown")
 	}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ABILITY DEFINITIONS
+# Maps item_id -> {passive: {name, description}, active: {name, description}}
+# Only effect-bearing slots (weapon, chest, head) have abilities
+# ═══════════════════════════════════════════════════════════════════════════════
+
+const ABILITY_DEFINITIONS: Dictionary = {
+	# ─────────────────────────────────────────────────────────────────────────────
+	# WEAPONS
+	# ─────────────────────────────────────────────────────────────────────────────
+	"hand_of_malenia": {
+		"passive": {"name": "I Have Never Known Defeat", "description": "3% lifesteal on all attacks"},
+		"active": {"name": "Waterfowl Dance", "description": "Devastating flurry of slashes"}
+	},
+	"mortal_blade": {
+		"passive": {"name": "Mortal Edge", "description": "+25% damage to enemies above 50% HP"},
+		"active": {"name": "Mortal Draw", "description": "Unblockable execute strike"}
+	},
+	"moonveil": {
+		"passive": {"name": "Moonlight Wave", "description": "Heavy attacks release magic projectile"},
+		"active": {"name": "Transient Moonlight", "description": "Devastating moonlight slash"}
+	},
+	"radahns_greatswords": {
+		"passive": {"name": "Gravity Well", "description": "Heavy attacks pull enemies toward you"},
+		"active": {"name": "Starcaller Cry", "description": "Meteor strike from above"}
+	},
+	"farron_greatsword": {
+		"passive": {"name": "Wolf's Instinct", "description": "+20% damage for 3s after dodging"},
+		"active": {"name": "Wolf Flip", "description": "Spinning blade flip attack"}
+	},
+	"dragonslayer_swordspear": {
+		"passive": {"name": "Lightning Surge", "description": "Attacks chain lightning to nearby enemies"},
+		"active": {"name": "Nameless Lightning", "description": "Call down a lightning storm"}
+	},
+	"grafted_blade": {
+		"passive": {"name": "Blade Amalgam", "description": "+10% damage per active buff"},
+		"active": {"name": "Grafted Strength", "description": "Gain all stat buffs temporarily"}
+	},
+	"coiled_sword": {
+		"passive": {"name": "Link the Fire", "description": "Prevent death once per 5 minutes"},
+		"active": {"name": "Wrath of the Gods", "description": "AOE shockwave knockback"}
+	},
+	"terra_blade": {
+		"passive": {"name": "Terra Beam", "description": "Attacks fire a projectile beam"},
+		"active": null
+	},
+	"stygian_blade": {
+		"passive": {"name": "Infernal Combo", "description": "+30% damage on combo hits (3+)"},
+		"active": null
+	},
+	"pure_nail": {
+		"passive": {"name": "Focused Power", "description": "+50% damage on fully charged attacks"},
+		"active": null
+	},
+	"witcher_silver_sword": {
+		"passive": {"name": "Monster Slayer", "description": "+15% damage vs non-human enemies"},
+		"active": null
+	},
+	"saw_cleaver": {
+		"passive": {"name": "Rally", "description": "Hitting after taking damage heals you"},
+		"active": null
+	},
+	"halo_battle_rifle": {
+		"passive": {"name": "Shield Breaker", "description": "Damage bypasses shield effects"},
+		"active": null
+	},
+	"adamant_rail": {
+		"passive": {"name": "Explosive Rounds", "description": "Shots explode on impact"},
+		"active": {"name": "Special Ammo", "description": "Load devastating special rounds"}
+	},
+	"blades_of_chaos": {
+		"passive": {"name": "Chaos Burn", "description": "Attacks apply burning DoT"},
+		"active": {"name": "Spartan Rage", "description": "Unleash devastating fury"}
+	},
+	"gyoubu_spear": {
+		"passive": {"name": "Mortal Wound", "description": "Hits apply -30% healing received"},
+		"active": null
+	},
+	"ezios_hidden_blade": {
+		"passive": {"name": "Assassin's Creed", "description": "+50% backstab damage"},
+		"active": {"name": "Assassinate", "description": "Instant kill from stealth"}
+	},
+	"sam_fishers_kabar": {
+		"passive": {"name": "Shadow Strike", "description": "+30% crit damage from stealth"},
+		"active": null
+	},
+	"csgo_karambit": {
+		"passive": {"name": "Serrated Edge", "description": "Attacks apply bleed DoT"},
+		"active": null
+	},
+	"fiber_wire": {
+		"passive": {"name": "Clean Kill", "description": "Execute enemies below 20% HP"},
+		"active": {"name": "Silent Kill", "description": "Instant stealth elimination"}
+	},
+	"tomb_raider_bow": {
+		"passive": {"name": "Survivor Instinct", "description": "Reveal enemy weak points"},
+		"active": null
+	},
+	"aloy_sharpshot_bow": {
+		"passive": {"name": "Machine Hunter", "description": "+25% damage vs mechanical enemies"},
+		"active": null
+	},
+	"chaos_zweihander": {
+		"passive": {"name": "Giant Dad", "description": "+20% poise, attacks stagger enemies"},
+		"active": null
+	},
+
+	# ─────────────────────────────────────────────────────────────────────────────
+	# HEAD ARMOR
+	# ─────────────────────────────────────────────────────────────────────────────
+	"elden_lord_crown": {
+		"passive": {"name": "Elden Vitality", "description": "+10% maximum HP"},
+		"active": {"name": "Erdtree Blessing", "description": "Heal self and nearby allies"}
+	},
+	"carian_crown": {
+		"passive": {"name": "Carian Phalanx", "description": "Auto-firing magic missiles orbit you"},
+		"active": null
+	},
+	"dragonbone_helm": {
+		"passive": {"name": "Thu'um Mastery", "description": "-25% shout cooldowns"},
+		"active": null
+	},
+	"straw_hat": {
+		"passive": {"name": "Farmer's Rest", "description": "+2% HP/s regen out of combat"},
+		"active": null
+	},
+	"ghost_mask": {
+		"passive": {"name": "Ghost Sense", "description": "Detect stealthed enemies"},
+		"active": {"name": "Ghost Stance", "description": "Enter lethal counter-stance"}
+	},
+	"master_chief_helmet": {
+		"passive": {"name": "Shield Recharge", "description": "Shield regenerates faster"},
+		"active": {"name": "Overshield", "description": "Gain temporary shield boost"}
+	},
+	"pilot_helmet": {
+		"passive": {"name": "Jump Kit", "description": "Double jump reaches higher"},
+		"active": null
+	},
+	"false_king_helm": {
+		"passive": {"name": "Tyrant's Will", "description": "+50% poise"},
+		"active": null
+	},
+	"herald_of_the_titans": {
+		"passive": {"name": "Titan Slayer", "description": "+15% damage vs bosses"},
+		"active": null
+	},
+	"zagreus_helm": {
+		"passive": {"name": "Hell Dash", "description": "+15% dash damage"},
+		"active": null
+	},
+	"loremaster_hood": {
+		"passive": {"name": "Seeker's Wisdom", "description": "+10% XP gain"},
+		"active": null
+	},
+	"prairie_king_cape": {
+		"passive": {"name": "Gunslinger Dodge", "description": "+20% dodge roll distance"},
+		"active": null
+	},
+	"cuphead_mugman_helmet": {
+		"passive": {"name": "Parry Master", "description": "Parry window +50%"},
+		"active": null
+	},
+
+	# ─────────────────────────────────────────────────────────────────────────────
+	# CHEST ARMOR
+	# ─────────────────────────────────────────────────────────────────────────────
+	"shade_cloak": {
+		"passive": {"name": "Void Heart", "description": "+4 frames of dodge invincibility"},
+		"active": {"name": "Shade Soul", "description": "Become incorporeal briefly"}
+	},
+	"void_heart": {
+		"passive": {"name": "Perfect Void", "description": "+50% damage after 4s of no damage taken"},
+		"active": {"name": "Descending Dark", "description": "Devastating downward strike"}
+	},
+	"grandmaster_armor": {
+		"passive": {"name": "Witcher Immunity", "description": "Immune to poison and toxin"},
+		"active": null
+	},
+	"ashen_armor": {
+		"passive": {"name": "Ember Shield", "description": "+30% fire resistance"},
+		"active": null
+	},
+	"elden_armory_chest": {
+		"passive": {"name": "Elden Bulwark", "description": "+25% poise"},
+		"active": null
+	},
+	"ironclad_armor": {
+		"passive": {"name": "Iron Skin", "description": "+10% damage reduction"},
+		"active": null
+	},
+	"survivor_vest": {
+		"passive": {"name": "Dead Rising", "description": "+20% damage vs undead"},
+		"active": null
+	},
+	"insane_straitjacket": {
+		"passive": {"name": "Chaotic Fortune", "description": "Random buff on taking damage"},
+		"active": null
+	},
+	"spartans_chest": {
+		"passive": {"name": "Spartan Resolve", "description": "+15% damage at low HP"},
+		"active": null
+	},
+	"spartans_vambraces": {
+		"passive": {"name": "Shield Bash", "description": "Block counters deal bonus damage"},
+		"active": null
+	},
+	"master_chief_chest": {
+		"passive": {"name": "Mjolnir Armor", "description": "+20% shield capacity"},
+		"active": null
+	},
+	"tracer_jacket": {
+		"passive": {"name": "Blink", "description": "+1 extra dash charge"},
+		"active": null
+	},
+
+	# ─────────────────────────────────────────────────────────────────────────────
+	# LEGS (effect-bearing in some cases)
+	# ─────────────────────────────────────────────────────────────────────────────
+	"tracer_pants": {
+		"passive": {"name": "Chronal Accelerator", "description": "+10% movement speed"},
+		"active": null
+	},
+	"spartan_greaves": {
+		"passive": {"name": "Warrior's March", "description": "Cannot be slowed below 50% speed"},
+		"active": null
+	},
+
+	# ─────────────────────────────────────────────────────────────────────────────
+	# FEET
+	# ─────────────────────────────────────────────────────────────────────────────
+	"portal_boots": {
+		"passive": {"name": "Long Fall Boots", "description": "Immune to fall damage"},
+		"active": null
+	},
+	"hunter_boots": {
+		"passive": {"name": "Quicksilver", "description": "+5% dodge chance"},
+		"active": null
+	},
+}
+
+## Get ability info for an item
+func get_item_ability(item_id: String) -> Dictionary:
+	return ABILITY_DEFINITIONS.get(item_id, {})
+
+## Get passive ability name for display
+func get_passive_ability_name(item_id: String) -> String:
+	var ability = ABILITY_DEFINITIONS.get(item_id, {})
+	var passive = ability.get("passive")
+	if passive is Dictionary:
+		return passive.get("name", "")
+	return ""
+
+## Get passive ability description
+func get_passive_ability_description(item_id: String) -> String:
+	var ability = ABILITY_DEFINITIONS.get(item_id, {})
+	var passive = ability.get("passive")
+	if passive is Dictionary:
+		return passive.get("description", "")
+	return ""
+
+## Get active ability name for display (legendary+ items only)
+func get_active_ability_name(item_id: String) -> String:
+	var ability = ABILITY_DEFINITIONS.get(item_id, {})
+	var active = ability.get("active")
+	if active is Dictionary:
+		return active.get("name", "")
+	return ""
+
+## Get active ability description
+func get_active_ability_description(item_id: String) -> String:
+	var ability = ABILITY_DEFINITIONS.get(item_id, {})
+	var active = ability.get("active")
+	if active is Dictionary:
+		return active.get("description", "")
+	return ""
+
+## Check if item has any abilities
+func has_abilities(item_id: String) -> bool:
+	return ABILITY_DEFINITIONS.has(item_id)

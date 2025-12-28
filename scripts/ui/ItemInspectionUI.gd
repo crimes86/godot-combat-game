@@ -686,28 +686,56 @@ func _populate_item_stats(item: Dictionary, vbox: Control) -> void:
 	if lifesteal > 0:
 		stats_lines.append("Lifesteal: %.1f%%" % (lifesteal * 100))
 
-	# Effects
-	var effects = item.get("effects", {})
-	if effects is Dictionary:
-		var passive = effects.get("passive", [])
-		var active = effects.get("active")
-		if passive is Array and not passive.is_empty():
-			for effect in passive:
-				stats_lines.append("Effect: %s" % _format_effect_name(effect))
-		if active != null and active != "":
-			stats_lines.append("Active: %s" % _format_effect_name(active))
+	# Abilities - use ForgeItemDB lookup for proper names
+	var item_id = item.get("item_id", "")
+	var has_ability_display = false
 
-	# Also check for simple effect field
-	var effect = item.get("effect", item.get("effect_name", ""))
-	if effect != "" and effect != null:
-		# Don't duplicate if already in effects
-		var already_shown = false
-		for line in stats_lines:
-			if "Effect:" in line and effect in line:
-				already_shown = true
-				break
-		if not already_shown:
-			stats_lines.append("Effect: %s" % _format_effect_name(effect))
+	if item_id != "" and ForgeItemDB and ForgeItemDB.has_abilities(item_id):
+		# Get ability info from ForgeItemDB
+		var passive_name = ForgeItemDB.get_passive_ability_name(item_id)
+		var passive_desc = ForgeItemDB.get_passive_ability_description(item_id)
+		var active_name = ForgeItemDB.get_active_ability_name(item_id)
+		var active_desc = ForgeItemDB.get_active_ability_description(item_id)
+
+		if passive_name != "":
+			stats_lines.append("Passive: %s" % passive_name)
+			if passive_desc != "":
+				stats_lines.append("  %s" % passive_desc)
+			has_ability_display = true
+
+		if active_name != "":
+			stats_lines.append("Active: %s" % active_name)
+			if active_desc != "":
+				stats_lines.append("  %s" % active_desc)
+			has_ability_display = true
+
+	# Fallback to raw effects if no ForgeItemDB entry
+	if not has_ability_display:
+		var effects = item.get("effects", {})
+		if effects is Dictionary:
+			var passive = effects.get("passive", [])
+			var active = effects.get("active")
+			if passive is Array and not passive.is_empty():
+				for effect in passive:
+					stats_lines.append("Effect: %s" % _format_effect_name(effect))
+			if active != null and active != "":
+				stats_lines.append("Active: %s" % _format_effect_name(active))
+		elif effects is Array and not effects.is_empty():
+			# Handle array format (legacy)
+			for effect in effects:
+				stats_lines.append("Effect: %s" % _format_effect_name(effect))
+
+		# Also check for simple effect field
+		var effect = item.get("effect", item.get("effect_name", ""))
+		if effect != "" and effect != null:
+			# Don't duplicate if already in effects
+			var already_shown = false
+			for line in stats_lines:
+				if "Effect:" in line and effect in line:
+					already_shown = true
+					break
+			if not already_shown:
+				stats_lines.append("Effect: %s" % _format_effect_name(effect))
 
 	# Value
 	var value = item.get("value", item.get("sell_value", 0))
@@ -724,8 +752,16 @@ func _populate_item_stats(item: Dictionary, vbox: Control) -> void:
 			label.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3))  # Gold
 		elif line.begins_with("+") or "STR" in line or "AGI" in line or "DEX" in line or "INT" in line or "WIS" in line or "VIT" in line or "HP" in line:
 			label.add_theme_color_override("font_color", Color(0.4, 0.8, 0.4))  # Green
-		elif line.begins_with("Effect:") or line.begins_with("Active:"):
-			label.add_theme_color_override("font_color", Color(0.6, 0.7, 0.9))  # Blue
+		elif line.begins_with("Passive:"):
+			label.add_theme_color_override("font_color", Color(0.7, 0.5, 0.9))  # Purple for passive abilities
+		elif line.begins_with("Active:"):
+			label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))  # Orange for active abilities
+		elif line.begins_with("  "):
+			# Indented description text - slightly dimmer
+			label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+			label.add_theme_font_size_override("font_size", 10)  # Slightly smaller
+		elif line.begins_with("Effect:"):
+			label.add_theme_color_override("font_color", Color(0.6, 0.7, 0.9))  # Blue for legacy effects
 		elif line.begins_with("Lifesteal:"):
 			label.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4))  # Red
 		else:
@@ -738,7 +774,7 @@ func _format_effect_name(effect: String) -> String:
 	return effect.replace("_", " ").capitalize()
 
 func _populate_combat_stats(item: Dictionary, vbox: Control) -> void:
-	"""Populate combat stats section for weapons - always show all stats with values"""
+	"""Populate combat stats section for FORGED weapons only - base weapons don't track stats"""
 	var combat_header = vbox.find_child("CombatHeader", true, false)
 	var combat_panel = vbox.find_child("CombatPanel", true, false)
 	var combat_content = vbox.find_child("CombatContent", true, false)
@@ -764,7 +800,18 @@ func _populate_combat_stats(item: Dictionary, vbox: Control) -> void:
 		combat_panel.visible = false
 		return
 
-	# Show the section
+	# ONLY show combat stats for FORGED items (T4+)
+	# Base/vendor weapons (T1-T3) don't have stat tracking
+	var is_forged = item.get("is_forged", false) or item.get("forged", false)
+	if weapon:
+		is_forged = weapon.is_forged
+
+	if not is_forged:
+		combat_header.visible = false
+		combat_panel.visible = false
+		return
+
+	# Show the section for forged items only
 	combat_header.visible = true
 	combat_panel.visible = true
 

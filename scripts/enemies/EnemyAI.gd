@@ -277,11 +277,19 @@ func _physics_process(delta: float) -> void:
 		_refresh_caches()
 
 	# Cache player reference (look up once, reuse)
-	if not cached_player or not is_instance_valid(cached_player):
-		if cached_players.size() > 0:
-			cached_player = cached_players[0]
-		else:
-			cached_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	# Also invalidate cache if player is dead - don't keep targeting dead players
+	if not cached_player or not is_instance_valid(cached_player) or cached_player.get("is_dead"):
+		cached_player = null
+		# Find first ALIVE player
+		for p in cached_players:
+			if is_instance_valid(p) and not p.get("is_dead"):
+				cached_player = p
+				break
+		# Fallback to group search if cache is stale
+		if not cached_player:
+			var first_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+			if first_player and not first_player.get("is_dead"):
+				cached_player = first_player
 		player = cached_player
 
 	# Calculate distance-based update rate (using squared distance to avoid sqrt)

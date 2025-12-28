@@ -130,9 +130,9 @@ func get_total_damage() -> float:
 	if is_artifact:
 		damage += artifact_level * 2.0
 
-	# Forged weapon stats bonus (soft cap system)
+	# Forged weapon level multiplier (percentage-based scaling)
 	if is_forged and weapon_stats:
-		damage += weapon_stats.get_damage_bonus()
+		damage = damage * weapon_stats.get_damage_multiplier()
 
 	return damage
 

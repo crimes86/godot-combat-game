@@ -603,7 +603,18 @@ func _dict_to_weapon(weapon_dict: Dictionary):
 	weapon.weapon_name = weapon_dict.get("name", "Unknown")
 	weapon.description = weapon_dict.get("description", "")
 	weapon.weapon_type = weapon_dict.get("weapon_type", "sword")
-	weapon.base_damage = weapon_dict.get("base_damage", 5.0)
+
+	# Handle base_damage - can be a number or a Dictionary with min/max
+	var base_damage = weapon_dict.get("base_damage", 5.0)
+	if base_damage is Dictionary:
+		var dmg_min = base_damage.get("min", 5)
+		var dmg_max = base_damage.get("max", 5)
+		weapon.base_damage = (dmg_min + dmg_max) / 2.0
+	elif base_damage is float or base_damage is int:
+		weapon.base_damage = float(base_damage)
+	else:
+		weapon.base_damage = 5.0
+
 	weapon.attack_speed_bonus = weapon_dict.get("attack_speed_bonus", 0.0)
 	weapon.crit_chance_bonus = weapon_dict.get("crit_chance_bonus", 0.0)
 	weapon.required_level = weapon_dict.get("required_level", 1)

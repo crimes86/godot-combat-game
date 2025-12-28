@@ -199,12 +199,24 @@ func get_level_progress() -> float:
 		return 0.0
 	return float(experience) / float(xp_needed)
 
-func get_damage_bonus() -> float:
-	"""Calculate damage bonus from level (soft cap at 50)"""
+func get_damage_multiplier() -> float:
+	"""Calculate damage multiplier from level (percentage-based scaling).
+	Returns a multiplier: 1.0 = no bonus, 2.0 = double damage.
+	+2% per level up to 50 (100% bonus at L50), then +0.5% per level after."""
 	if level <= 50:
-		return level * 1.0  # +1 damage per level
+		return 1.0 + (level * 0.02)  # L1=1.02, L25=1.50, L50=2.0
 	else:
-		return 50.0 + (level - 50) * 0.1  # +0.1 damage per level after 50
+		return 2.0 + ((level - 50) * 0.005)  # Soft cap: L100=2.25
+
+func get_damage_bonus_for_base(base_damage: float) -> float:
+	"""Calculate the actual damage bonus for a given base damage (for UI display)."""
+	return base_damage * (get_damage_multiplier() - 1.0)
+
+func get_damage_bonus() -> float:
+	"""DEPRECATED: Use get_damage_multiplier() instead.
+	Kept for backwards compatibility - returns approximate flat bonus for display."""
+	# Estimate based on typical weapon damage of 15-20
+	return (get_damage_multiplier() - 1.0) * 17.5
 
 func get_crit_bonus() -> float:
 	"""DEPRECATED: Crit chance now comes purely from Luck stat, not weapons.

@@ -548,6 +548,11 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		else:
 			break
 
+		# TUTORIAL ZONE CHECK: Override level to 1 for enemies near campfire
+		# This ensures new players always see level 1 enemies in the starting area
+		if spawn_pos.distance_to(CAMPFIRE_POSITION) <= TUTORIAL_ZONE_RADIUS:
+			level = 1
+
 		# Spawn the enemy based on type
 		var enemy: Node = null
 		if spawn_type == "roaming":
@@ -604,9 +609,9 @@ func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
 	if enemy.has_signal("corpse_clicked") and game_world.has_method("_on_corpse_clicked"):
 		enemy.corpse_clicked.connect(game_world._on_corpse_clicked)
 
-	# In multiplayer, sync to clients via NetworkEnemyManager
+	# In multiplayer, sync to NEARBY clients via NetworkEnemyManager (interest management)
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server() and network_enemy_manager:
-		network_enemy_manager.spawn_enemy_on_clients.rpc(network_id, pos, level, enemy_name)
+		network_enemy_manager.spawn_enemy_for_nearby_clients(network_id, enemy)
 
 	return enemy
 
@@ -685,9 +690,9 @@ func spawn_single_spider(pos: Vector2, level: int, chunk_key: String) -> Node:
 	# Register with network enemy manager for multiplayer sync
 	if network_enemy_manager:
 		var network_id = network_enemy_manager.register_enemy(spider)
-		# Broadcast to clients so they spawn the same enemy
+		# Sync to NEARBY clients only (interest management)
 		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-			network_enemy_manager.spawn_enemy_on_clients.rpc(network_id, pos, spider.enemy_level, spider.name)
+			network_enemy_manager.spawn_enemy_for_nearby_clients(network_id, spider)
 
 	# Connect death signal for respawn tracking
 	if spider.has_signal("died"):
@@ -734,9 +739,9 @@ func spawn_single_wolf_roaming(pos: Vector2, level: int, chunk_key: String, is_d
 	# Register with network enemy manager for multiplayer sync
 	if network_enemy_manager:
 		var network_id = network_enemy_manager.register_enemy(wolf)
-		# Broadcast to clients so they spawn the same enemy
+		# Sync to NEARBY clients only (interest management)
 		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-			network_enemy_manager.spawn_enemy_on_clients.rpc(network_id, pos, wolf.enemy_level, wolf.name)
+			network_enemy_manager.spawn_enemy_for_nearby_clients(network_id, wolf)
 
 	# Connect death signal for respawn tracking
 	if wolf.has_signal("died"):

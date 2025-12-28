@@ -2999,9 +2999,9 @@ func spawn_tutorial_skeletons():
 		# Register with NetworkEnemyManager for multiplayer sync
 		if network_enemy_mgr:
 			var network_id = network_enemy_mgr.register_enemy(enemy)
-			# Broadcast to clients so they spawn the same enemy
+			# Sync to NEARBY clients only (interest management)
 			if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-				network_enemy_mgr.spawn_enemy_on_clients.rpc(network_id, spawn_pos, spawn_data.level, enemy.name)
+				network_enemy_mgr.spawn_enemy_for_nearby_clients(network_id, enemy)
 
 		spawned_count += 1
 
@@ -3763,7 +3763,7 @@ func _spawn_initial_players():
 				var is_guest = false
 				if NetworkManager.authenticated_players.has(player_id):
 					is_guest = NetworkManager.authenticated_players[player_id].get("is_guest", false)
-				spawn_player(player_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", player_name, is_guest)
+				spawn_player(player_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", false, "", player_name, is_guest)
 	else:
 		# Client: Request existing players from server
 		if OS.is_debug_build():
@@ -3800,6 +3800,17 @@ func _request_existing_players(_deprecated_id: int = 0):
 				var arms_sprite = ""
 				var hands_sprite = ""
 				var head_sprite = ""
+				var feet_forged_id = ""
+				var legs_forged_id = ""
+				var chest_forged_id = ""
+				var arms_forged_id = ""
+				var hands_forged_id = ""
+				var head_forged_id = ""
+				var weapon_glow_color = ""
+				var weapon_effect_name = ""
+				var weapon_theme = ""
+				var weapon_is_forged = false
+				var weapon_item_id = ""
 				if existing_player.has_method("get_appearance_data"):
 					var appearance = existing_player.get_appearance_data()
 					gender = appearance.get("gender", 0)
@@ -3810,6 +3821,17 @@ func _request_existing_players(_deprecated_id: int = 0):
 					arms_sprite = appearance.get("arms_sprite", "")
 					hands_sprite = appearance.get("hands_sprite", "")
 					head_sprite = appearance.get("head_sprite", "")
+					feet_forged_id = appearance.get("feet_forged_id", "")
+					legs_forged_id = appearance.get("legs_forged_id", "")
+					chest_forged_id = appearance.get("chest_forged_id", "")
+					arms_forged_id = appearance.get("arms_forged_id", "")
+					hands_forged_id = appearance.get("hands_forged_id", "")
+					head_forged_id = appearance.get("head_forged_id", "")
+					weapon_glow_color = appearance.get("weapon_glow_color", "")
+					weapon_effect_name = appearance.get("weapon_effect_name", "")
+					weapon_theme = appearance.get("weapon_theme", "")
+					weapon_is_forged = appearance.get("weapon_is_forged", false)
+					weapon_item_id = appearance.get("weapon_item_id", "")
 				# Get player name, guest status, and tier from NetworkManager
 				var p_name = NetworkManager.player_name if existing_id == 1 else ""
 				var p_is_guest = NetworkManager.is_player_guest(existing_id)
@@ -3823,8 +3845,8 @@ func _request_existing_players(_deprecated_id: int = 0):
 				if existing_player.has_node("AllegianceShield"):
 					p_tier = existing_player.get_node("AllegianceShield").current_tier
 				if OS.is_debug_build():
-					print("🔍 [PLAYER DEBUG] Sending player %d (pos: %s, gender: %d, weapon: %s, name: %s, tier: %s) to client %d" % [existing_id, existing_player.global_position, gender, weapon_type, p_name, p_tier, requester_id])
-				rpc_id(requester_id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, p_name, p_is_guest, p_tier)
+					print("🔍 [PLAYER DEBUG] Sending player %d (pos: %s, gender: %d, weapon: %s, chest_forged: %s, weapon_forged: %s, name: %s, tier: %s) to client %d" % [existing_id, existing_player.global_position, gender, weapon_type, chest_forged_id, weapon_is_forged, p_name, p_tier, requester_id])
+				rpc_id(requester_id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, feet_forged_id, legs_forged_id, chest_forged_id, arms_forged_id, hands_forged_id, head_forged_id, weapon_glow_color, weapon_effect_name, weapon_theme, weapon_is_forged, weapon_item_id, p_name, p_is_guest, p_tier)
 			else:
 				if OS.is_debug_build():
 					print("🔍 [PLAYER DEBUG] Sending player %d (default pos) to client %d" % [existing_id, requester_id])
@@ -3837,7 +3859,7 @@ func _request_existing_players(_deprecated_id: int = 0):
 					var p_data2 = NetworkManager.authenticated_players[existing_id].get("player_data", {})
 					var ashbane_data2 = p_data2.get("ashbane", {})
 					p_tier2 = ashbane_data2.get("tier", "initiate")
-				rpc_id(requester_id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", p_name2, p_is_guest2, p_tier2)
+				rpc_id(requester_id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", false, "", p_name2, p_is_guest2, p_tier2)
 
 func _on_player_connected(id: int):
 	"""Handle new player connection - DON'T spawn yet, wait for authentication"""
@@ -3866,7 +3888,7 @@ func _on_player_authenticated(id: int, player_name: String):
 	# themselves in _spawn_initial_players when they load the scene
 	if OS.is_debug_build():
 		print("🔍 [PLAYER DEBUG] Broadcasting spawn_player RPC for %d (tier: %s) to all peers" % [id, player_tier])
-	spawn_player.rpc(id, Vector2.ZERO, 0, "", "", "", "", "", "", "", player_name, is_guest, player_tier)
+	spawn_player.rpc(id, Vector2.ZERO, 0, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", false, "", player_name, is_guest, player_tier)
 
 	# Tell the new player about existing players (but NOT themselves!)
 	# Note: Client will also request this via _request_existing_players as a backup
@@ -3883,6 +3905,17 @@ func _on_player_authenticated(id: int, player_name: String):
 				var arms_sprite = ""
 				var hands_sprite = ""
 				var head_sprite = ""
+				var feet_forged_id = ""
+				var legs_forged_id = ""
+				var chest_forged_id = ""
+				var arms_forged_id = ""
+				var hands_forged_id = ""
+				var head_forged_id = ""
+				var weapon_glow_color = ""
+				var weapon_effect_name = ""
+				var weapon_theme = ""
+				var weapon_is_forged = false
+				var weapon_item_id = ""
 				if existing_player.has_method("get_appearance_data"):
 					var appearance = existing_player.get_appearance_data()
 					gender = appearance.get("gender", 0)
@@ -3893,6 +3926,17 @@ func _on_player_authenticated(id: int, player_name: String):
 					arms_sprite = appearance.get("arms_sprite", "")
 					hands_sprite = appearance.get("hands_sprite", "")
 					head_sprite = appearance.get("head_sprite", "")
+					feet_forged_id = appearance.get("feet_forged_id", "")
+					legs_forged_id = appearance.get("legs_forged_id", "")
+					chest_forged_id = appearance.get("chest_forged_id", "")
+					arms_forged_id = appearance.get("arms_forged_id", "")
+					hands_forged_id = appearance.get("hands_forged_id", "")
+					head_forged_id = appearance.get("head_forged_id", "")
+					weapon_glow_color = appearance.get("weapon_glow_color", "")
+					weapon_effect_name = appearance.get("weapon_effect_name", "")
+					weapon_theme = appearance.get("weapon_theme", "")
+					weapon_is_forged = appearance.get("weapon_is_forged", false)
+					weapon_item_id = appearance.get("weapon_item_id", "")
 				# Get player name, guest status, and tier from NetworkManager
 				var p_name = NetworkManager.player_name if existing_id == 1 else ""
 				var p_is_guest = NetworkManager.is_player_guest(existing_id)
@@ -3908,8 +3952,8 @@ func _on_player_authenticated(id: int, player_name: String):
 					if shield.has_method("get") and shield.get("current_tier"):
 						p_tier = shield.current_tier
 				if OS.is_debug_build():
-					print("🔍 [PLAYER DEBUG] Sending existing player %d (gender: %d, weapon: %s, name: %s, tier: %s) to new client %d" % [existing_id, gender, weapon_type, p_name, p_tier, id])
-				rpc_id(id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, p_name, p_is_guest, p_tier)
+					print("🔍 [PLAYER DEBUG] Sending existing player %d (gender: %d, weapon: %s, chest_forged: %s, weapon_forged: %s, name: %s, tier: %s) to new client %d" % [existing_id, gender, weapon_type, chest_forged_id, weapon_is_forged, p_name, p_tier, id])
+				rpc_id(id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, feet_forged_id, legs_forged_id, chest_forged_id, arms_forged_id, hands_forged_id, head_forged_id, weapon_glow_color, weapon_effect_name, weapon_theme, weapon_is_forged, weapon_item_id, p_name, p_is_guest, p_tier)
 			else:
 				var p_name2 = ""
 				var p_is_guest2 = true
@@ -3920,7 +3964,7 @@ func _on_player_authenticated(id: int, player_name: String):
 					var p_data2 = NetworkManager.authenticated_players[existing_id].get("player_data", {})
 					var ashbane_data2 = p_data2.get("ashbane", {})
 					p_tier2 = ashbane_data2.get("tier", "initiate")
-				rpc_id(id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", p_name2, p_is_guest2, p_tier2)
+				rpc_id(id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", false, "", p_name2, p_is_guest2, p_tier2)
 
 func _on_player_disconnected(id: int):
 	"""Handle player disconnection"""
@@ -3937,7 +3981,7 @@ func _on_player_disconnected(id: int):
 		despawn_player(id)  # Client just removes locally
 
 @rpc("any_peer", "call_local", "reliable")
-func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, weapon_type: String = "", feet_sprite: String = "", legs_sprite: String = "", chest_sprite: String = "", arms_sprite: String = "", hands_sprite: String = "", head_sprite: String = "", display_name: String = "", is_guest_player: bool = false, ashbane_tier: String = "initiate"):
+func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, weapon_type: String = "", feet_sprite: String = "", legs_sprite: String = "", chest_sprite: String = "", arms_sprite: String = "", hands_sprite: String = "", head_sprite: String = "", feet_forged_id: String = "", legs_forged_id: String = "", chest_forged_id: String = "", arms_forged_id: String = "", hands_forged_id: String = "", head_forged_id: String = "", weapon_glow_color: String = "", weapon_effect_name: String = "", weapon_theme: String = "", weapon_is_forged: bool = false, weapon_item_id: String = "", display_name: String = "", is_guest_player: bool = false, ashbane_tier: String = "initiate"):
 	"""Spawn a player (local or remote)"""
 	# Guard against null multiplayer during scene transitions
 	if not multiplayer:
@@ -3952,6 +3996,8 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 	if OS.is_debug_build():
 		print("🔍 [PLAYER DEBUG] spawn_player(%d) called on peer %d" % [id, multiplayer.get_unique_id()])
 		print("   Appearance: gender=%d, weapon=%s, feet=%s, legs=%s, chest=%s, arms=%s, hands=%s, head=%s" % [gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite])
+		print("   Forged IDs: feet=%s, legs=%s, chest=%s, arms=%s, hands=%s, head=%s" % [feet_forged_id, legs_forged_id, chest_forged_id, arms_forged_id, hands_forged_id, head_forged_id])
+		print("   Weapon forged: %s, glow=%s, item_id=%s" % [weapon_is_forged, weapon_glow_color, weapon_item_id])
 		print("   Name: %s (guest=%s) tier=%s" % [display_name, is_guest_player, ashbane_tier])
 		print("   Current players: %s" % str(players.keys()))
 
@@ -3987,7 +4033,18 @@ func spawn_player(id: int, spawn_pos: Vector2 = Vector2.ZERO, gender: int = 0, w
 				"chest_sprite": chest_sprite,
 				"arms_sprite": arms_sprite,
 				"hands_sprite": hands_sprite,
-				"head_sprite": head_sprite
+				"head_sprite": head_sprite,
+				"feet_forged_id": feet_forged_id,
+				"legs_forged_id": legs_forged_id,
+				"chest_forged_id": chest_forged_id,
+				"arms_forged_id": arms_forged_id,
+				"hands_forged_id": hands_forged_id,
+				"head_forged_id": head_forged_id,
+				"weapon_glow_color": weapon_glow_color,
+				"weapon_effect_name": weapon_effect_name,
+				"weapon_theme": weapon_theme,
+				"weapon_is_forged": weapon_is_forged,
+				"weapon_item_id": weapon_item_id
 			})
 
 	add_child(player)

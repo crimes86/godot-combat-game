@@ -2955,8 +2955,12 @@ func create_player_sprite() -> void:
 		is_forged_feet = boots_armor.get("is_forged", false)
 		if is_forged_feet:
 			forged_feet_data = boots_armor
-	elif not is_local and remote_feet_sprite != "":
+	elif not is_local:
 		feet_sprite_name = remote_feet_sprite
+		# Check for remote forged feet armor
+		if remote_feet_forged_id != "":
+			is_forged_feet = true
+			forged_feet_data = {"forged_item_id": remote_feet_forged_id}
 
 	# Load forged feet armor from ForgeItemDB
 	if is_forged_feet and forged_feet_data.get("forged_item_id", "") != "":
@@ -3002,8 +3006,12 @@ func create_player_sprite() -> void:
 		is_forged_legs = leg_armor.get("is_forged", false)
 		if is_forged_legs:
 			forged_legs_data = leg_armor
-	elif not is_local and remote_legs_sprite != "":
+	elif not is_local:
 		legs_sprite_name = remote_legs_sprite
+		# Check for remote forged legs armor
+		if remote_legs_forged_id != "":
+			is_forged_legs = true
+			forged_legs_data = {"forged_item_id": remote_legs_forged_id}
 
 	# Load forged legs armor from ForgeItemDB
 	if is_forged_legs and forged_legs_data.get("forged_item_id", "") != "":
@@ -3049,8 +3057,12 @@ func create_player_sprite() -> void:
 		is_forged_chest = chest_armor.get("is_forged", false)
 		if is_forged_chest:
 			forged_chest_data = chest_armor
-	elif not is_local and remote_chest_sprite != "":
+	elif not is_local:
 		chest_sprite_name = remote_chest_sprite
+		# Check for remote forged chest armor
+		if remote_chest_forged_id != "":
+			is_forged_chest = true
+			forged_chest_data = {"forged_item_id": remote_chest_forged_id}
 
 	# Load forged chest armor from ForgeItemDB
 	if is_forged_chest and forged_chest_data.get("forged_item_id", "") != "":
@@ -3100,8 +3112,12 @@ func create_player_sprite() -> void:
 		is_forged_arms = arm_armor.get("is_forged", false)
 		if is_forged_arms:
 			forged_arms_data = arm_armor
-	elif not is_local and remote_arms_sprite != "":
+	elif not is_local:
 		arms_sprite_name = remote_arms_sprite
+		# Check for remote forged arms armor
+		if remote_arms_forged_id != "":
+			is_forged_arms = true
+			forged_arms_data = {"forged_item_id": remote_arms_forged_id}
 
 	# Load forged arms armor from ForgeItemDB
 	if is_forged_arms and forged_arms_data.get("forged_item_id", "") != "":
@@ -3146,8 +3162,12 @@ func create_player_sprite() -> void:
 		is_forged_hands = hand_armor.get("is_forged", false)
 		if is_forged_hands:
 			forged_hands_data = hand_armor
-	elif not is_local and remote_hands_sprite != "":
+	elif not is_local:
 		hands_sprite_name = remote_hands_sprite
+		# Check for remote forged hands armor
+		if remote_hands_forged_id != "":
+			is_forged_hands = true
+			forged_hands_data = {"forged_item_id": remote_hands_forged_id}
 
 	# Load forged hands armor from ForgeItemDB
 	if is_forged_hands and forged_hands_data.get("forged_item_id", "") != "":
@@ -3192,8 +3212,12 @@ func create_player_sprite() -> void:
 		is_forged_head = head_armor.get("is_forged", false)
 		if is_forged_head:
 			forged_head_data = head_armor
-	elif not is_local and remote_head_sprite != "":
+	elif not is_local:
 		head_sprite_name = remote_head_sprite
+		# Check for remote forged head armor
+		if remote_head_forged_id != "":
+			is_forged_head = true
+			forged_head_data = {"forged_item_id": remote_head_forged_id}
 
 	# Load forged head armor from ForgeItemDB (with visual override support)
 	if is_forged_head and forged_head_data.get("forged_item_id", "") != "":
@@ -3366,6 +3390,13 @@ var remote_chest_sprite: String = ""
 var remote_arms_sprite: String = ""
 var remote_hands_sprite: String = ""
 var remote_head_sprite: String = ""
+# Remote forged armor IDs (for loading from ForgeItemDB)
+var remote_feet_forged_id: String = ""
+var remote_legs_forged_id: String = ""
+var remote_chest_forged_id: String = ""
+var remote_arms_forged_id: String = ""
+var remote_hands_forged_id: String = ""
+var remote_head_forged_id: String = ""
 # Remote forged weapon data (for tint/glow sync)
 var remote_weapon_glow_color: String = ""
 var remote_weapon_effect_name: String = ""
@@ -3384,6 +3415,8 @@ func _sync_appearance_to_network():
 	rpc("_receive_appearance_update", appearance["gender"], appearance["weapon_type"],
 		appearance["feet_sprite"], appearance["legs_sprite"], appearance["chest_sprite"],
 		appearance["arms_sprite"], appearance["hands_sprite"], appearance["head_sprite"],
+		appearance["feet_forged_id"], appearance["legs_forged_id"], appearance["chest_forged_id"],
+		appearance["arms_forged_id"], appearance["hands_forged_id"], appearance["head_forged_id"],
 		appearance["weapon_glow_color"], appearance["weapon_effect_name"],
 		appearance["weapon_theme"], appearance["weapon_is_forged"], appearance["weapon_item_id"])
 
@@ -3399,10 +3432,10 @@ func _broadcast_initial_appearance():
 		_sync_appearance_to_network()
 
 @rpc("any_peer", "call_remote", "reliable")
-func _receive_appearance_update(gender_int: int, weapon_type: String, feet_sprite: String, legs_sprite: String, chest_sprite: String, arms_sprite: String, hands_sprite: String, head_sprite: String, weapon_glow_color: String = "", weapon_effect_name: String = "", weapon_theme: String = "", weapon_is_forged: bool = false, weapon_item_id: String = ""):
+func _receive_appearance_update(gender_int: int, weapon_type: String, feet_sprite: String, legs_sprite: String, chest_sprite: String, arms_sprite: String, hands_sprite: String, head_sprite: String, feet_forged_id: String = "", legs_forged_id: String = "", chest_forged_id: String = "", arms_forged_id: String = "", hands_forged_id: String = "", head_forged_id: String = "", weapon_glow_color: String = "", weapon_effect_name: String = "", weapon_theme: String = "", weapon_is_forged: bool = false, weapon_item_id: String = ""):
 	"""Receive appearance update from another player"""
 	if DEBUG_EQUIP:
-		print("[Equip] Received appearance for player %s: gender=%d, weapon=%s, forged=%s" % [name, gender_int, weapon_type, weapon_is_forged])
+		print("[Equip] Received appearance for player %s: gender=%d, weapon=%s, forged=%s, chest_forged_id=%s" % [name, gender_int, weapon_type, weapon_is_forged, chest_forged_id])
 
 	# Update appearance data
 	selected_gender = Gender.MALE if gender_int == 0 else Gender.FEMALE
@@ -3413,6 +3446,13 @@ func _receive_appearance_update(gender_int: int, weapon_type: String, feet_sprit
 	remote_arms_sprite = arms_sprite
 	remote_hands_sprite = hands_sprite
 	remote_head_sprite = head_sprite
+	# Forged armor IDs (for loading from ForgeItemDB)
+	remote_feet_forged_id = feet_forged_id
+	remote_legs_forged_id = legs_forged_id
+	remote_chest_forged_id = chest_forged_id
+	remote_arms_forged_id = arms_forged_id
+	remote_hands_forged_id = hands_forged_id
+	remote_head_forged_id = head_forged_id
 	# Forged weapon data
 	remote_weapon_glow_color = weapon_glow_color
 	remote_weapon_effect_name = weapon_effect_name
@@ -3503,6 +3543,13 @@ func get_appearance_data() -> Dictionary:
 		arms_sprite = remote_arms_sprite
 		hands_sprite = remote_hands_sprite
 		head_sprite = remote_head_sprite
+		# Forged armor IDs for remote players
+		feet_forged_id = remote_feet_forged_id
+		legs_forged_id = remote_legs_forged_id
+		chest_forged_id = remote_chest_forged_id
+		arms_forged_id = remote_arms_forged_id
+		hands_forged_id = remote_hands_forged_id
+		head_forged_id = remote_head_forged_id
 		# Forged weapon data for remote players
 		weapon_glow_color = remote_weapon_glow_color
 		weapon_effect_name = remote_weapon_effect_name
@@ -3551,6 +3598,30 @@ func apply_appearance_data(data: Dictionary):
 		remote_hands_sprite = data["hands_sprite"]
 	if data.has("head_sprite"):
 		remote_head_sprite = data["head_sprite"]
+	# Forged armor IDs
+	if data.has("feet_forged_id"):
+		remote_feet_forged_id = data["feet_forged_id"]
+	if data.has("legs_forged_id"):
+		remote_legs_forged_id = data["legs_forged_id"]
+	if data.has("chest_forged_id"):
+		remote_chest_forged_id = data["chest_forged_id"]
+	if data.has("arms_forged_id"):
+		remote_arms_forged_id = data["arms_forged_id"]
+	if data.has("hands_forged_id"):
+		remote_hands_forged_id = data["hands_forged_id"]
+	if data.has("head_forged_id"):
+		remote_head_forged_id = data["head_forged_id"]
+	# Forged weapon data
+	if data.has("weapon_glow_color"):
+		remote_weapon_glow_color = data["weapon_glow_color"]
+	if data.has("weapon_effect_name"):
+		remote_weapon_effect_name = data["weapon_effect_name"]
+	if data.has("weapon_theme"):
+		remote_weapon_theme = data["weapon_theme"]
+	if data.has("weapon_is_forged"):
+		remote_weapon_is_forged = data["weapon_is_forged"]
+	if data.has("weapon_item_id"):
+		remote_weapon_item_id = data["weapon_item_id"]
 	# Note: Caller should call create_player_sprite() after this
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4415,9 +4486,9 @@ func die() -> void:
 	# Re-add to player group so systems can find us
 	if not is_in_group("player"):
 		add_to_group("player")
-	# Restore collision (layer 1 = player)
+	# Restore collision (layer 1 = player, mask 2 = obstacles only, no player-player collision)
 	collision_layer = 1
-	collision_mask = 1
+	collision_mask = 2
 	# Show health bar
 	if health_bar:
 		health_bar.visible = true
@@ -5875,8 +5946,10 @@ func _apply_forged_weapon_effects(forged_data: Dictionary) -> void:
 		if effect_config.special_effects.size() > 0:
 			print("[ForgedEquip]   Achievement Effects: %s" % effect_config.special_effects)
 
-	# Skip if no effects to apply
-	if effect_config.effects.is_empty():
+	# Skip if no effects to apply AND no theme color tint
+	# Note: Remote players may not have full effect_config but still need the tint applied
+	var has_tint = theme_color != Color.WHITE and theme_color.a > 0
+	if effect_config.effects.is_empty() and not has_tint:
 		if DEBUG_FORGED_EQUIP:
 			print("[ForgedEquip]   No effects to apply (virgin weapon with minimal visuals)")
 		return

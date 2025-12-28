@@ -3778,6 +3778,8 @@ class TokenIdRequest(BaseModel):
 class AchievementIdRequest(BaseModel):
     """Request model for achievement_id based operations."""
     achievement_id: int = Field(ge=1)
+    debug_bypass: bool = Field(default=False, description="When True and DEV_MODE is enabled, forge item without requiring actual achievement ownership")
+    item_id: Optional[str] = Field(default=None, description="Item ID from items.json for debug_bypass forging")
 
 
 @app.post("/api/me/appearance")
@@ -5264,6 +5266,117 @@ async def forge_claim(
 
     achievement_id = forge_request.achievement_id
 
+    # DEBUG BYPASS: When enabled, skip achievement ownership check and forge directly from item catalog
+    # Security: Requires admin privileges even in DEV_MODE
+    if forge_request.debug_bypass and forge_request.item_id:
+        if not user.is_admin:
+            logger.warning(f"DEBUG BYPASS DENIED: Non-admin user {user.username} attempted debug forge for {forge_request.item_id}")
+            raise HTTPException(status_code=403, detail="Debug bypass requires admin privileges")
+        logger.info(f"DEBUG BYPASS (ADMIN): User {user.username} forging item {forge_request.item_id} without achievement ownership")
+
+        # Load item directly from items.json
+        from app.services.item_forge_service import get_items, get_item_by_id
+        item_data = get_item_by_id(forge_request.item_id)
+
+        if not item_data:
+            raise HTTPException(status_code=404, detail=f"Item '{forge_request.item_id}' not found in catalog")
+
+        # Check if already forged by item_id for this user (debug forges use item_id as key)
+        existing = db.query(ForgedAchievement).filter(
+            ForgedAchievement.item_id == forge_request.item_id,
+            ForgedAchievement.wallet_account_id.in_(
+                db.query(WalletAccount.id).filter(WalletAccount.user_id == user.id)
+            )
+        ).first()
+
+        if existing:
+            return {
+                "success": False,
+                "error": "Already forged (debug)",
+                "forged_item": {
+                    "item_id": existing.item_id,
+                    "item_name": existing.item_name,
+                    "item_type": existing.item_type,
+                    "weapon_type": existing.weapon_type,
+                    "item_rarity": existing.item_rarity,
+                    "effect_name": existing.effect_name,
+                    "glow_color": existing.glow_color,
+                }
+            }
+
+        # Build item_props directly from catalog data
+        item_props = {
+            "item_id": item_data.get("item_id", forge_request.item_id),
+            "item_name": item_data.get("item_name", "Unknown Item"),
+            "item_type": item_data.get("item_type", "weapon"),
+            "weapon_type": item_data.get("weapon_type"),
+            "item_rarity": item_data.get("rarity", "Rare"),
+            "effect_intensity": item_data.get("effect_intensity", 0.5),
+            "effect_name": item_data.get("effect_name", ""),
+            "glow_color": item_data.get("glow_color", "#ffffff"),
+            "effort_tier": item_data.get("effort_tier", "standard"),
+            "vintage_years": 0,
+            "is_secret": item_data.get("is_secret", False),
+            "source_provider": "debug",
+            "provider_accent_color": "#888888",
+            "base_damage": item_data.get("base_damage"),
+            "attack_speed_bonus": item_data.get("attack_speed_bonus", 0),
+            "defense": item_data.get("defense", 0),
+            "stat_bonuses": item_data.get("stat_bonuses", {}),
+        }
+
+        # Get or create test wallet
+        wallet = db.query(WalletAccount).filter(WalletAccount.user_id == user.id).first()
+        if not wallet:
+            wallet = WalletAccount(
+                user_id=user.id,
+                wallet_address=f"0xdebug{'0' * 32}{user.id:06d}",
+                chain_id=137,
+                linked_at=datetime.utcnow(),
+            )
+            db.add(wallet)
+            db.flush()
+
+        # Generate debug token_id
+        import hashlib
+        token_hash = hashlib.md5(f"debug:{user.id}:{forge_request.item_id}".encode()).hexdigest()
+        test_token_id = int(token_hash[:8], 16)
+
+        # Create forge record without achievement_credit_id (debug mode)
+        forge_record = ForgedAchievement(
+            achievement_credit_id=None,  # No achievement credit for debug forges
+            wallet_account_id=wallet.id,
+            token_id=test_token_id,
+            contract_address="0x0000000000000000000000000000000000debug",
+            chain_id=137,
+            tx_hash=f"0x{'0' * 58}debug",
+            item_type=item_props["item_type"],
+            weapon_type=item_props.get("weapon_type"),
+            item_id=item_props["item_id"],
+            item_name=item_props["item_name"],
+            item_rarity=item_props["item_rarity"],
+            effect_intensity=item_props["effect_intensity"],
+            effect_name=item_props["effect_name"],
+            glow_color=item_props["glow_color"],
+            effort_tier=item_props["effort_tier"],
+            vintage_years=item_props["vintage_years"],
+            is_secret=item_props["is_secret"],
+            source_provider="debug",
+            provider_accent_color="#888888",
+        )
+        db.add(forge_record)
+        db.commit()
+
+        logger.info(f"DEBUG FORGE: User {user.username} forged {item_props['item_name']} (item_id: {forge_request.item_id})")
+
+        return {
+            "success": True,
+            "forged_item": item_props,
+            "token_id": test_token_id,
+            "debug_mode": True,
+        }
+
+    # Normal forge flow: requires achievement ownership
     # Get the achievement credit
     credit_query = (
         db.query(AchievementCredit, Achievement, ProviderAccount)

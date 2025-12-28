@@ -45,25 +45,27 @@ const SKELETON_LOOT_TABLE = [
 		"name": "Ancient Skull",
 		"description": "A weathered skull from an ancient warrior. Radiates faint energy.",
 		"value": 15,
-		"rarity": "Uncommon",
+		"rarity": "Common",
 		"drop_weight": 25,
 		"type": "material",
-		"stackable": false
+		"stackable": true,
+		"max_stack": 99
 	},
 	{
 		"name": "Cursed Femur",
 		"description": "This bone hums with dark magic. Handle with care.",
 		"value": 35,
-		"rarity": "Rare",
+		"rarity": "Common",
 		"drop_weight": 4,
 		"type": "material",
-		"stackable": false
+		"stackable": true,
+		"max_stack": 99
 	},
 	{
 		"name": "Lich's Finger Bone",
 		"description": "The preserved digit of a powerful undead mage. Very rare.",
 		"value": 100,
-		"rarity": "Epic",
+		"rarity": "Common",
 		"drop_weight": 1,
 		"type": "material",
 		"stackable": false

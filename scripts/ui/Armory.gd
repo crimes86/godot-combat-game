@@ -4224,13 +4224,15 @@ func _on_forge_button_pressed() -> void:
 	var achievement_name = _forge_selected_item.get("achievement", "")
 	print("[Armory] FORGE pressed for: %s (achievement: %s)" % [item_name, achievement_name])
 
-	# Find the achievement_id from forgeable achievements
+	# Find the achievement_id and item_id from forgeable achievements
 	var achievement_id = -1
+	var item_id = ""
 	if ForgeItemManager:
 		var forgeable = ForgeItemManager.get_forgeable_achievements()
 		for ach in forgeable:
 			if ach.get("display_name", "") == achievement_name:
 				achievement_id = ach.get("achievement_id", -1)
+				item_id = ach.get("item_id", "")
 				break
 
 	if achievement_id == -1:
@@ -4245,9 +4247,9 @@ func _on_forge_button_pressed() -> void:
 		forge_btn.text = "FORGING..."
 		forge_btn.disabled = true
 
-	# Call the forge API
-	print("[Armory] Calling forge API with achievement_id: %d" % achievement_id)
-	ForgeItemManager.claim_forge(achievement_id, _on_forge_complete.bind(item_name, forge_btn))
+	# Call the forge API - pass debug_bypass when debug_all_forgeable is enabled
+	print("[Armory] Calling forge API with achievement_id: %d, item_id: %s, debug: %s" % [achievement_id, item_id, debug_all_forgeable])
+	ForgeItemManager.claim_forge(achievement_id, _on_forge_complete.bind(item_name, forge_btn), item_id, debug_all_forgeable)
 
 func _on_forge_complete(forged_item: Dictionary, item_name: String, forge_btn: Button) -> void:
 	"""Callback after forge API completes - item is now forged (claimable or listable on OpenSea)"""
@@ -4546,8 +4548,28 @@ func _update_forge_detail(item: Dictionary, item_state: String) -> void:
 		tooltip_lines.append("Game:  %s" % tip_game_name)
 		tooltip_lines.append("Achievement:  %s" % tip_achievement_name)
 
-		# Forged-specific info
-		if is_owned:
+		# Abilities - use ForgeItemDB lookup for proper names
+		var ability_item_id = item.get("id", item.get("item_id", ""))
+		if ability_item_id != "" and ForgeItemDB.has_abilities(ability_item_id):
+			var passive_name = ForgeItemDB.get_passive_ability_name(ability_item_id)
+			var passive_desc = ForgeItemDB.get_passive_ability_description(ability_item_id)
+			var active_name = ForgeItemDB.get_active_ability_name(ability_item_id)
+			var active_desc = ForgeItemDB.get_active_ability_description(ability_item_id)
+
+			if passive_name != "" or active_name != "":
+				tooltip_lines.append("")
+
+			if passive_name != "":
+				tooltip_lines.append("Passive:  %s" % passive_name)
+				if passive_desc != "":
+					tooltip_lines.append("   %s" % passive_desc)
+
+			if active_name != "":
+				tooltip_lines.append("Active:  %s" % active_name)
+				if active_desc != "":
+					tooltip_lines.append("   %s" % active_desc)
+		else:
+			# Fallback to legacy effect_name
 			var effect_name = item.get("effect_name", "")
 			if effect_name != "":
 				tooltip_lines.append("")

@@ -26,6 +26,16 @@ const SYNC_RADIUS_REDUCED: float = 3000.0   # 5Hz sync for mid-range enemies
 const SYNC_RADIUS_MAX: float = 4000.0       # Beyond this, don't sync at all
 var reduced_sync_counter: int = 0           # Counter to throttle reduced-rate syncs
 
+# Interest Management for SPAWNING - clients only load enemies within this radius
+# Uses same radius as position sync for consistency
+const SPAWN_RADIUS: float = 4000.0          # Spawn enemies within this radius of player
+const SPAWN_HYSTERESIS: float = 500.0       # Extra buffer before despawning (prevents flicker)
+const VISIBILITY_CHECK_RATE: float = 0.5    # Check visibility every 0.5s (not every frame)
+var visibility_check_timer: float = 0.0
+
+# Track which enemies each client knows about: peer_id -> {network_id: true}
+var client_known_enemies: Dictionary = {}   # Dictionary[int, Dictionary[int, bool]]
+
 # Client-side interpolation data for smooth movement
 var enemy_target_positions: Dictionary = {}  # network_id -> target position
 var enemy_interpolation_speeds: Dictionary = {}  # network_id -> calculated speed
@@ -142,6 +152,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	tutorial_dummy_hits.erase(peer_id)
 	violation_counts.erase(peer_id)
 	violation_cooldowns.erase(peer_id)
+	client_known_enemies.erase(peer_id)  # Clean up enemy visibility tracking
 
 func _record_violation(peer_id: int, violation_type: String) -> bool:
 	"""Record an anti-cheat violation and apply exponential backoff.
@@ -206,6 +217,12 @@ func _process(delta):
 		if position_sync_timer >= POSITION_SYNC_RATE:
 			position_sync_timer = 0.0
 			_sync_enemy_positions()
+
+		# Periodically check which enemies should be spawned/despawned for each client
+		visibility_check_timer += delta
+		if visibility_check_timer >= VISIBILITY_CHECK_RATE:
+			visibility_check_timer = 0.0
+			_update_client_enemy_visibility()
 	else:
 		# Client: smoothly interpolate enemies toward their target positions
 		_interpolate_enemy_positions(delta)
@@ -919,6 +936,152 @@ func _get_enemy_animation(enemy: Node) -> String:
 	return "idle_down"
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ENEMY VISIBILITY STREAMING (Interest Management for Spawning)
+# ═══════════════════════════════════════════════════════════════════════════
+# Clients only load enemies within SPAWN_RADIUS - reduces memory and CPU load
+# Enemies are dynamically spawned/despawned as players move around the world
+
+func _update_client_enemy_visibility() -> void:
+	"""Server periodically checks which enemies should be visible to each client.
+	Spawns enemies entering view radius, despawns those leaving (with hysteresis)."""
+	if not multiplayer.is_server():
+		return
+
+	# Get all player positions
+	var all_players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	if all_players.is_empty():
+		return
+
+	var player_positions: Dictionary = {}  # peer_id -> Vector2
+	for player in all_players:
+		if not is_instance_valid(player):
+			continue
+		var peer_id = player.get_multiplayer_authority()
+		if peer_id != 1:  # Only track clients, not server
+			player_positions[peer_id] = player.global_position
+
+	if player_positions.is_empty():
+		return  # No clients to update
+
+	# For each client, check which enemies should be visible
+	for peer_id in player_positions:
+		var player_pos = player_positions[peer_id]
+
+		# Initialize tracking dict for this peer if needed
+		if not client_known_enemies.has(peer_id):
+			client_known_enemies[peer_id] = {}
+
+		var known = client_known_enemies[peer_id]
+		var enemies_to_spawn: Array = []
+		var enemies_to_despawn: Array = []
+
+		# Check all enemies
+		for network_id in enemies:
+			var enemy = enemies[network_id]
+			if not is_instance_valid(enemy):
+				continue
+			if enemy.is_corpse or enemy.is_dying:
+				continue  # Don't spawn dead/dying enemies
+
+			var distance = player_pos.distance_to(enemy.global_position)
+			var is_known = known.has(network_id)
+
+			if distance <= SPAWN_RADIUS:
+				# Enemy is in range - spawn if not known
+				if not is_known:
+					enemies_to_spawn.append(network_id)
+			elif distance > SPAWN_RADIUS + SPAWN_HYSTERESIS:
+				# Enemy is out of range (with hysteresis) - despawn if known
+				if is_known:
+					enemies_to_despawn.append(network_id)
+			# Else: enemy is in hysteresis zone, don't change state
+
+		# Spawn new enemies for this client
+		for network_id in enemies_to_spawn:
+			var enemy = enemies[network_id]
+			if not is_instance_valid(enemy):
+				continue
+
+			# Mark as known BEFORE sending RPC (prevents duplicate spawns)
+			known[network_id] = true
+
+			# Send spawn RPC to this specific client
+			var scene_path = _infer_enemy_scene_path(enemy.name)
+			if enemy is TrainingDummy:
+				spawn_training_dummy_on_clients.rpc_id(peer_id, network_id, enemy.global_position)
+			else:
+				spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path)
+
+		# Despawn enemies that left view for this client
+		for network_id in enemies_to_despawn:
+			known.erase(network_id)
+			despawn_enemy_for_client.rpc_id(peer_id, network_id)
+
+		# Debug log occasionally
+		if not enemies_to_spawn.is_empty() or not enemies_to_despawn.is_empty():
+			if OS.is_debug_build():
+				print("🌐 [Visibility] Peer %d: +%d spawned, -%d despawned (total known: %d)" % [
+					peer_id, enemies_to_spawn.size(), enemies_to_despawn.size(), known.size()
+				])
+
+func spawn_enemy_for_nearby_clients(network_id: int, enemy: Node) -> void:
+	"""Called when server spawns a new enemy - notify only nearby clients.
+	This replaces the old broadcast-to-all approach."""
+	if not multiplayer.is_server():
+		return
+
+	if not is_instance_valid(enemy):
+		return
+
+	var enemy_pos = enemy.global_position
+
+	# Get all client player positions
+	var all_players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player in all_players:
+		if not is_instance_valid(player):
+			continue
+
+		var peer_id = player.get_multiplayer_authority()
+		if peer_id == 1:
+			continue  # Skip server
+
+		var distance = player.global_position.distance_to(enemy_pos)
+		if distance <= SPAWN_RADIUS:
+			# Client is close enough - spawn the enemy for them
+			if not client_known_enemies.has(peer_id):
+				client_known_enemies[peer_id] = {}
+
+			# Only spawn if not already known
+			if not client_known_enemies[peer_id].has(network_id):
+				client_known_enemies[peer_id][network_id] = true
+
+				var scene_path = _infer_enemy_scene_path(enemy.name)
+				if enemy is TrainingDummy:
+					spawn_training_dummy_on_clients.rpc_id(peer_id, network_id, enemy.global_position)
+				else:
+					spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path)
+
+				if OS.is_debug_build():
+					print("🌐 [Spawn] Enemy %d spawned for nearby peer %d (dist: %.0f)" % [network_id, peer_id, distance])
+
+@rpc("authority", "reliable")
+func despawn_enemy_for_client(network_id: int) -> void:
+	"""Server tells a specific client to remove an enemy (interest management)."""
+	if multiplayer.is_server():
+		return  # Server doesn't despawn its own enemies this way
+
+	var enemy = get_enemy(network_id)
+	if enemy and is_instance_valid(enemy):
+		if OS.is_debug_build():
+			print("🌐 [Client] Despawning enemy %d (out of range)" % network_id)
+		enemy.queue_free()
+
+	# Clean up local tracking
+	unregister_enemy(network_id)
+	enemy_target_positions.erase(network_id)
+	enemy_interpolation_speeds.erase(network_id)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # SPAWN SYNC (Server -> Clients)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1097,16 +1260,43 @@ func _disable_client_enemy_ai(enemy: Node) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _on_peer_connected(peer_id: int) -> void:
-	"""When a new peer connects, send them all existing enemies."""
+	"""When a new peer connects, send them only NEARBY enemies (interest management)."""
 	if not multiplayer.is_server():
 		return
 
-	# Small delay to let client fully initialize
+	# Initialize tracking for this peer IMMEDIATELY (before await)
+	# This prevents _update_client_enemy_visibility from sending duplicates during the delay
+	if not client_known_enemies.has(peer_id):
+		client_known_enemies[peer_id] = {}
+
+	# Small delay to let client fully initialize and spawn their player
 	await get_tree().create_timer(0.5).timeout
 
 	# Check if we're still valid after await
 	if not is_instance_valid(self):
 		return
+
+	# Check if peer disconnected during the await
+	if not client_known_enemies.has(peer_id):
+		return
+
+	# Find the new player's position
+	var player_pos: Vector2 = Vector2.ZERO
+	var found_player = false
+	var all_players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	for player in all_players:
+		if is_instance_valid(player) and player.get_multiplayer_authority() == peer_id:
+			player_pos = player.global_position
+			found_player = true
+			break
+
+	if not found_player:
+		# Player not found yet - the visibility update will catch them later
+		push_warning("NetworkEnemyManager: Player for peer %d not found during connect, enemies will stream in via visibility updates" % peer_id)
+		return
+
+	var spawned_count = 0
+	var total_count = 0
 
 	for network_id in enemies:
 		var enemy = enemies[network_id]
@@ -1115,6 +1305,17 @@ func _on_peer_connected(peer_id: int) -> void:
 		if enemy.is_corpse or enemy.is_dying:
 			continue  # Don't sync dead/dying enemies
 
+		total_count += 1
+
+		# INTEREST MANAGEMENT: Only spawn enemies within SPAWN_RADIUS
+		var distance = player_pos.distance_to(enemy.global_position)
+		if distance > SPAWN_RADIUS:
+			continue  # Skip - too far from player
+
+		# Mark as known
+		client_known_enemies[peer_id][network_id] = true
+		spawned_count += 1
+
 		# Check if this is a TrainingDummy (different spawn RPC)
 		if enemy is TrainingDummy:
 			spawn_training_dummy_on_clients.rpc_id(peer_id, network_id, enemy.global_position)
@@ -1122,6 +1323,10 @@ func _on_peer_connected(peer_id: int) -> void:
 			# Regular enemy - infer scene path from name for proper type sync
 			var scene_path = _infer_enemy_scene_path(enemy.name)
 			spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path)
+
+	print("🌐 [Connect] Peer %d: Spawned %d/%d enemies within %.0f units" % [
+		peer_id, spawned_count, total_count, SPAWN_RADIUS
+	])
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CRIT WINDOW SYSTEM (Client-Independent - each player sees only their own)
