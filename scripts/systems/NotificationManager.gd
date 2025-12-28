@@ -21,22 +21,24 @@ func _ready() -> void:
 	# Create a CanvasLayer to display notifications on top of everything
 	var canvas_layer = CanvasLayer.new()
 	canvas_layer.name = "NotificationCanvas"
-	canvas_layer.layer = 200  # Above all game UI (shop=100, inventory=105, chat=110, etc.)
+	canvas_layer.layer = 1000  # Very high layer to ensure visibility above everything
+	canvas_layer.follow_viewport_enabled = true  # Follow the active viewport
 	add_child(canvas_layer)
 
-	# Create container for notifications (below player, above action bar area)
+	# Create container for notifications (center of screen, works in both fullscreen and windowed)
 	notification_container = Control.new()
 	notification_container.name = "NotificationContainer"
 	notification_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	notification_container.anchor_left = 0.5
 	notification_container.anchor_right = 0.5
-	notification_container.anchor_top = 0.68  # Below player feet (~68% down)
-	notification_container.anchor_bottom = 0.68
+	notification_container.anchor_top = 0.45  # Center-ish, visible in 720p windowed mode
+	notification_container.anchor_bottom = 0.45
 	notification_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	notification_container.grow_vertical = Control.GROW_DIRECTION_END
 	notification_container.offset_left = -150
 	notification_container.offset_right = 150
 	notification_container.custom_minimum_size = Vector2(300, 0)
+	notification_container.z_index = 1000  # High z-index within the layer
 	canvas_layer.add_child(notification_container)
 
 	print("✅ NotificationManager initialized")
@@ -164,10 +166,21 @@ func _show_notification(notification: ItemNotification) -> void:
 			var tween = create_tween()
 			tween.tween_property(existing_notification, "position:y", new_y, shift_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
+	# Update container position based on current WINDOW size (not viewport - they can differ)
+	var window_size = DisplayServer.window_get_size()
+	notification_container.position = Vector2(window_size.x * 0.5 - 150, window_size.y * 0.45)
+	print("📋 Recalculated container pos for window %s -> %s" % [window_size, notification_container.position])
+
 	# Add the new notification at the top (position 0) immediately
 	notification_queue.append(notification)
 	notification.position = Vector2(0, 0)
 	notification_container.add_child(notification)
+
+	print("📋 Notification added to container at global_pos: %s, container visible: %s, container in tree: %s" % [
+		notification_container.global_position,
+		notification_container.visible,
+		notification_container.is_inside_tree()
+	])
 
 	# Connect to cleanup signal
 	notification.notification_finished.connect(_on_notification_finished.bind(notification))

@@ -4607,6 +4607,7 @@ document.addEventListener('DOMContentLoaded', checkVaultStatus);
 // ===== LOCKBOX FUNCTIONS =====
 let lockboxItems = [];
 let selectedLockbox = new Set();
+let platformApproved = false;
 
 async function openLockboxModal() {
   document.body.style.overflow = 'hidden';
@@ -4627,11 +4628,15 @@ async function openLockboxModal() {
     console.log('Lockbox API response:', data);
 
     lockboxItems = data.available_items || [];
-    console.log('Lockbox items:', lockboxItems.length, lockboxItems);
+    platformApproved = data.platform_approved || false;
+    console.log('Lockbox items:', lockboxItems.length, 'Approved:', platformApproved);
 
     // Update stats
     document.getElementById('lockbox-item-count').textContent = lockboxItems.length;
     updateLockboxCount();
+
+    // Show approval banner if not approved and has items
+    updateApprovalBanner();
 
     if (lockboxItems.length === 0) {
       renderLockboxEmptyState();
@@ -4651,6 +4656,128 @@ async function openLockboxModal() {
   } catch (e) {
     console.error('Lockbox error:', e);
     renderLockboxError(e.message || 'Unknown error');
+  }
+}
+
+function updateApprovalBanner() {
+  let banner = document.getElementById('approval-banner');
+  if (!banner) {
+    // Create banner if it doesn't exist
+    banner = document.createElement('div');
+    banner.id = 'approval-banner';
+    banner.style.cssText = 'padding:12px 24px;background:linear-gradient(90deg,rgba(255,102,0,0.15),rgba(255,102,0,0.05));border-bottom:1px solid rgba(255,102,0,0.3);display:none;';
+    banner.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.2rem;">⚠️</span>
+          <span style="color:#ffaa66;font-size:0.9rem;">
+            <strong>Approval Required</strong> - You need to approve Ashbane to bind items from your wallet.
+            <span style="opacity:0.7;">(One-time only)</span>
+          </span>
+        </div>
+        <button onclick="requestApproval()" id="approve-btn" style="
+          background:linear-gradient(145deg,#2a1500,#3a2000);
+          border:1px solid #ff6600;
+          color:#ffaa66;
+          padding:8px 16px;
+          border-radius:6px;
+          cursor:pointer;
+          font-weight:600;
+          white-space:nowrap;
+        ">Approve Now</button>
+      </div>
+    `;
+    // Insert after header
+    const header = document.querySelector('.lockbox-modal-header');
+    if (header && header.nextSibling) {
+      header.parentNode.insertBefore(banner, header.nextSibling);
+    }
+  }
+
+  if (!platformApproved && lockboxItems.length > 0) {
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+async function requestApproval() {
+  const btn = document.getElementById('approve-btn');
+  if (btn) {
+    btn.textContent = 'Preparing...';
+    btn.disabled = true;
+  }
+
+  try {
+    // Get approval transaction data
+    const resp = await fetch('/api/wallet/bridge-in/approval-tx', { credentials: 'include' });
+    const data = await resp.json();
+
+    if (data.already_approved) {
+      platformApproved = true;
+      updateApprovalBanner();
+      alert('Already approved! You can now bind items.');
+      return;
+    }
+
+    const tx = data.transaction;
+    if (!tx) {
+      throw new Error('No transaction data received');
+    }
+
+    // Check if MetaMask/wallet is available
+    if (typeof window.ethereum === 'undefined') {
+      throw new Error('No wallet detected. Please install MetaMask or use WalletConnect.');
+    }
+
+    if (btn) btn.textContent = 'Sign in Wallet...';
+
+    // Send transaction
+    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+    if (!accounts || accounts.length === 0) {
+      // Need to connect first
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+    }
+
+    const txHash = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      params: [{
+        from: walletAddress,
+        to: tx.to,
+        data: tx.data,
+        gas: tx.gas,
+        value: tx.value || '0x0',
+      }]
+    });
+
+    console.log('Approval tx sent:', txHash);
+    if (btn) btn.textContent = 'Confirming...';
+
+    // Wait a few seconds for confirmation
+    await new Promise(r => setTimeout(r, 5000));
+
+    // Verify approval
+    const verifyResp = await fetch('/api/wallet/bridge-in/verify-approval', {
+      method: 'POST',
+      credentials: 'include'
+    });
+    const verifyData = await verifyResp.json();
+
+    if (verifyData.approved) {
+      platformApproved = true;
+      updateApprovalBanner();
+      alert('Approved! You can now bind items from your lockbox.');
+    } else {
+      alert('Approval transaction sent but not yet confirmed. Please wait a moment and try binding again.');
+    }
+  } catch (e) {
+    console.error('Approval error:', e);
+    alert('Approval failed: ' + (e.message || 'Unknown error'));
+  } finally {
+    if (btn) {
+      btn.textContent = 'Approve Now';
+      btn.disabled = false;
+    }
   }
 }
 

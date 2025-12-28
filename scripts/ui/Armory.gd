@@ -426,6 +426,8 @@ func _ready() -> void:
 			ForgeItemManager.bridge_status_updated.connect(_on_bridge_status_updated)
 		if not ForgeItemManager.bridge_in_available_updated.is_connected(_on_bridge_in_available_signal):
 			ForgeItemManager.bridge_in_available_updated.connect(_on_bridge_in_available_signal)
+		if not ForgeItemManager.bridge_in_approval_required.is_connected(_on_bridge_in_approval_required):
+			ForgeItemManager.bridge_in_approval_required.connect(_on_bridge_in_approval_required)
 
 		# DEBUG: If debug_all_forgeable is enabled, inject all items as forgeable
 		if debug_all_forgeable:
@@ -2779,16 +2781,23 @@ func _build_forge_detail_panel() -> Control:
 	_style_bridge_button(bridge_in_btn)
 	actions_vbox.add_child(bridge_in_btn)
 
+	# Bridge status label - positioned at bottom-right corner of detail panel
 	var bridge_status_label = Label.new()
 	bridge_status_label.name = "BridgeStatusLabel"
 	bridge_status_label.text = ""
 	bridge_status_label.add_theme_font_size_override("font_size", FONT_TINY)
 	bridge_status_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.2))
-	bridge_status_label.clip_text = true
-	bridge_status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	bridge_status_label.custom_minimum_size = Vector2(95, 0)  # Match button width
+	bridge_status_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	bridge_status_label.add_theme_constant_override("outline_size", 2)
+	bridge_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	bridge_status_label.visible = false
-	actions_vbox.add_child(bridge_status_label)
+	# Anchor to bottom-right corner
+	bridge_status_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	bridge_status_label.offset_left = -120
+	bridge_status_label.offset_top = -20
+	bridge_status_label.offset_right = -4
+	bridge_status_label.offset_bottom = -4
+	stack.add_child(bridge_status_label)
 
 	# Hidden sections (kept for compatibility)
 	var hidden_container = Control.new()
@@ -3580,17 +3589,24 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 
 	# For bridging out, create card with icon, cancel X overlay, and countdown overlay
 	if not is_bridge_in:
-		# Card container - 64x64
-		var card = PanelContainer.new()
+		# Card container - fixed 64x64 square
+		var card = Control.new()
 		card.name = "BridgeOutCard_%s" % str(forged_id)
 		card.custom_minimum_size = Vector2(64, 64)
+		card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		card.clip_contents = true
 
+		# Background panel
+		var bg_panel = PanelContainer.new()
+		bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 		var style = StyleBoxFlat.new()
 		style.bg_color = Color(0.08, 0.08, 0.10)
 		style.border_color = Color(0.6, 0.4, 0.2)  # Orange border for bridging out
 		style.set_border_width_all(1)
 		style.set_corner_radius_all(3)
-		card.add_theme_stylebox_override("panel", style)
+		bg_panel.add_theme_stylebox_override("panel", style)
+		card.add_child(bg_panel)
 
 		# Use a Control as the root to allow absolute positioning for overlays
 		var card_content = Control.new()
@@ -3601,7 +3617,7 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 		center.set_anchors_preset(Control.PRESET_FULL_RECT)
 		card_content.add_child(center)
 
-		# Item icon or placeholder - 54x54
+		# Item icon or placeholder - 54x54 square
 		var icon_path = _get_forge_icon_path(item_id)
 		if icon_path and FileAccess.file_exists(icon_path):
 			var tex = load(icon_path)
@@ -3669,18 +3685,31 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 		return card
 	else:
 		# Bridge-in card - matching size with bridge-out (64x64)
-		var card = PanelContainer.new()
+		var card = Control.new()
+		card.name = "BridgeInCard_%s" % str(forged_id)
 		card.custom_minimum_size = Vector2(64, 64)
+		card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		card.clip_contents = true
 
+		# Background panel
+		var bg_panel = PanelContainer.new()
+		bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 		var style = StyleBoxFlat.new()
 		style.bg_color = Color(0.08, 0.08, 0.10)
 		style.border_color = Color(0.3, 0.5, 0.3)  # Green border
 		style.set_border_width_all(1)
 		style.set_corner_radius_all(3)
-		card.add_theme_stylebox_override("panel", style)
+		bg_panel.add_theme_stylebox_override("panel", style)
+		card.add_child(bg_panel)
+
+		var card_content = Control.new()
+		card_content.set_anchors_preset(Control.PRESET_FULL_RECT)
+		card.add_child(card_content)
 
 		var center = CenterContainer.new()
-		card.add_child(center)
+		center.set_anchors_preset(Control.PRESET_FULL_RECT)
+		card_content.add_child(center)
 
 		var icon_path = _get_forge_icon_path(item_id)
 		if icon_path and FileAccess.file_exists(icon_path):
@@ -3784,6 +3813,49 @@ func _show_bridge_in_success_popup(item_name: String) -> void:
 	# Clean up when closed
 	popup.confirmed.connect(func(): popup.queue_free())
 	popup.canceled.connect(func(): popup.queue_free())
+
+func _on_bridge_in_approval_required() -> void:
+	"""Handle when platform approval is required for bridge-in"""
+	print("[Armory] Bridge-in requires platform approval")
+
+	# Reset button if visible
+	var bridge_in_btn = _forge_detail_panel.find_child("BridgeInButton", true, false) if _forge_detail_panel else null
+	if bridge_in_btn:
+		bridge_in_btn.text = "IMPORT"
+		bridge_in_btn.disabled = false
+
+	# Show approval dialog
+	var popup = AcceptDialog.new()
+	popup.title = "Approval Required"
+	popup.dialog_text = """To import items from your wallet, you need to grant one-time approval.
+
+This is a standard blockchain permission that allows Ashbane to transfer YOUR items when YOU request it.
+
+Click "Approve on Web" to open the dashboard and complete the approval. You only need to do this once."""
+
+	popup.ok_button_text = "Approve on Web"
+	popup.add_cancel_button("Cancel")
+	popup.min_size = Vector2(400, 180)
+
+	# Style
+	popup.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+
+	add_child(popup)
+	popup.popup_centered()
+
+	popup.confirmed.connect(_on_approval_popup_confirmed.bind(popup))
+	popup.canceled.connect(func(): popup.queue_free())
+
+func _on_approval_popup_confirmed(popup: AcceptDialog) -> void:
+	"""Open browser to approve platform for bridge-in"""
+	popup.queue_free()
+
+	# Open the dashboard wallet page where they can approve
+	var approval_url = AshbaneAuth.get_api_base() + "/dashboard#lockbox"
+	OS.shell_open(approval_url)
+
+	if NotificationManager:
+		NotificationManager.show_notification("Opening browser for approval...", "info")
 
 func _on_wallet_connect_pressed() -> void:
 	"""Handle wallet connect/disconnect button press"""
@@ -4250,22 +4322,10 @@ func _on_forge_complete(forged_item: Dictionary, item_name: String, forge_btn: B
 	if SoundManager:
 		SoundManager.play_equip_sound(-6.0)
 
-	# Show appropriate notification based on whether item was auto-claimed
+	# Show forge success notification directly in Armory (bypassing NotificationManager which has CanvasLayer issues)
 	var was_claimed = forged_item.get("claimed_in_game", false)
-	print("[Armory] Forge notification - was_claimed: %s, NotificationManager: %s" % [was_claimed, NotificationManager != null])
-	if NotificationManager:
-		if was_claimed:
-			NotificationManager.show_notification(
-				"%s forged and added to inventory!" % item_name,
-				"success"
-			)
-		else:
-			NotificationManager.show_notification(
-				"%s forged! Claim to inventory or list on OpenSea." % item_name,
-				"success"
-			)
-	else:
-		print("[Armory] ERROR: NotificationManager is null!")
+	var msg = "%s forged and added to inventory!" % item_name if was_claimed else "%s forged!" % item_name
+	_show_forge_notification(msg)
 
 	# In debug mode, remove this item from the forgeable list to prevent re-forge
 	var item_id = forged_item.get("item_id", "")
@@ -5219,10 +5279,10 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	# Set pivot for centered scaling
 	card.pivot_offset = Vector2(CARD_SIZE / 2.0, CARD_SIZE / 2.0)
 
-	# Icon holder (centered)
+	# Icon holder (fill card exactly, then center icon within)
 	var icon_container = CenterContainer.new()
-	icon_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	icon_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	icon_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(icon_container)
 
 	# Try to load actual icon
@@ -5230,16 +5290,15 @@ func _create_forge_item_card(item: Dictionary, state: String) -> Control:
 	if ResourceLoader.exists(icon_path):
 		var texture = load(icon_path)
 		if texture:
-			# Icon size fits inside card (64px card - 4px border/margin = 60px, use 56 for padding)
+			# Icon size fits inside card (64px card - 8px for border/padding = 56px)
 			const BASE_ICON_SIZE = 56
 
 			var icon_rect = TextureRect.new()
 			icon_rect.texture = texture
 			icon_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 			icon_rect.custom_minimum_size = Vector2(BASE_ICON_SIZE, BASE_ICON_SIZE)
-			icon_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-			icon_rect.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			icon_rect.size = Vector2(BASE_ICON_SIZE, BASE_ICON_SIZE)  # Explicit size
+			icon_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 			icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			if state == "locked":
 				icon_rect.modulate = Color(0.25, 0.25, 0.25, 0.5)
@@ -12156,6 +12215,48 @@ func _apply_column_glow_effects(left: Control, middle: Control, right: Control) 
 			if child is PanelContainer:
 				apply_pulsing_border_glow(child, unified_glow)
 				break  # Only apply to first panel in each column
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FORGE NOTIFICATION (simple overlay, bypasses broken NotificationManager)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _show_forge_notification(message: String) -> void:
+	"""Show a simple notification banner at top of screen"""
+	# Create notification label
+	var notif = Label.new()
+	notif.text = message
+	notif.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	notif.add_theme_font_size_override("font_size", 18)
+	notif.add_theme_color_override("font_color", Color(0.4, 0.95, 0.4))  # Green
+	notif.add_theme_color_override("font_outline_color", Color.BLACK)
+	notif.add_theme_constant_override("outline_size", 3)
+
+	# Background panel
+	var panel = PanelContainer.new()
+	panel.name = "ForgeNotification"
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.1, 0.1, 0.12, 0.95)
+	style.border_color = Color(0.3, 0.8, 0.3)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	style.set_content_margin_all(12)
+	panel.add_theme_stylebox_override("panel", style)
+	panel.add_child(notif)
+
+	# Position at top center
+	panel.position = Vector2(size.x / 2 - 200, 80)
+	panel.custom_minimum_size = Vector2(400, 0)
+	panel.modulate.a = 0.0  # Start transparent
+	add_child(panel)
+
+	# Animate in
+	var tween = create_tween()
+	tween.tween_property(panel, "modulate:a", 1.0, 0.2)
+	tween.tween_interval(2.5)  # Hold for 2.5 seconds
+	tween.tween_property(panel, "modulate:a", 0.0, 0.3)
+	tween.tween_callback(panel.queue_free)
+
+	print("[Armory] Forge notification shown: %s" % message)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # LAUNCHER WINDOW MODE

@@ -14,6 +14,7 @@ signal bridge_out_cancelled(item_id: String)
 signal wallet_status_updated(connected: bool, wallet_address: String)
 signal bridge_in_available_updated(items: Array)
 signal bridge_in_completed(items: Array)
+signal bridge_in_approval_required()  # Emitted when platform needs approval for bridge-in
 
 # Cached forged items from API
 var _forged_items: Array = []
@@ -1428,7 +1429,32 @@ func request_bridge_in(token_ids: Array, callback: Callable = Callable()) -> voi
 func _on_bridge_in_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable) -> void:
 	request.queue_free()
 
-	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+	if result != HTTPRequest.RESULT_SUCCESS:
+		LogManager.error("Bridge-in request failed: result=%d" % result, "forge")
+		forge_error.emit("Failed to connect to server")
+		if callback.is_valid():
+			callback.call([])
+		return
+
+	# Handle 403 - approval required
+	if response_code == 403:
+		var json = JSON.new()
+		if json.parse(body.get_string_from_utf8()) == OK:
+			var data = json.data
+			var detail = data.get("detail", {})
+			if typeof(detail) == TYPE_DICTIONARY and detail.get("requires_approval", false):
+				LogManager.warning("Bridge-in requires platform approval", "forge")
+				bridge_in_approval_required.emit()
+				if callback.is_valid():
+					callback.call([])
+				return
+		LogManager.error("Bridge-in forbidden: %s" % body.get_string_from_utf8(), "forge")
+		forge_error.emit("Permission denied for bridge-in")
+		if callback.is_valid():
+			callback.call([])
+		return
+
+	if response_code != 200:
 		LogManager.error("Bridge-in request failed: %d / %d" % [result, response_code], "forge")
 		forge_error.emit("Failed to bridge items in")
 		if callback.is_valid():
