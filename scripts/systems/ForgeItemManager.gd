@@ -562,6 +562,7 @@ func _on_claim_response(result: int, response_code: int, _headers: PackedStringA
 	var forged_item = {
 		"id": forged_item_id,  # String item_id for consistency with catalog
 		"item_id": forged_item_id,
+		"forged_id": forged_data.get("forged_achievement_id", 0),  # Database ID for bridge-out
 		"credit_id": forged_data.get("credit_id", 0),  # Numeric credit ID
 		"item_name": item_props.get("item_name", ""),
 		"item_type": item_props.get("item_type", ""),

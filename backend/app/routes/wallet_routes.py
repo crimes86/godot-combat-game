@@ -465,6 +465,7 @@ async def forge_achievements(
 
             forged.append({
                 "credit_id": credit_id,
+                "forged_achievement_id": forge_record.id,  # Database ID for bridge-out
                 "token_id": result['token_id'],
                 "tx_hash": result['tx_hash'],
                 "achievement_name": achievement.display_name,
