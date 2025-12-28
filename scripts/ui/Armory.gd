@@ -3850,8 +3850,8 @@ func _on_approval_popup_confirmed(popup: AcceptDialog) -> void:
 	"""Open browser to approve platform for bridge-in"""
 	popup.queue_free()
 
-	# Open the dashboard wallet page where they can approve
-	var approval_url = AshbaneAuth.get_api_base() + "/dashboard#lockbox"
+	# Open the dashboard with auto-approve parameter - will trigger MetaMask popup immediately
+	var approval_url = AshbaneAuth.get_api_base() + "/dashboard?approve=1"
 	OS.shell_open(approval_url)
 
 	if NotificationManager:

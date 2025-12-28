@@ -4604,6 +4604,171 @@ async function forgeSelected() {
 // Check status on page load
 document.addEventListener('DOMContentLoaded', checkVaultStatus);
 
+// Check for auto-approve parameter (from Godot deeplink)
+document.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('approve') === '1') {
+    console.log('[Approval] Auto-approve triggered from game');
+    // Clear the URL param so refresh doesn't re-trigger
+    window.history.replaceState({}, '', window.location.pathname);
+
+    // Wait for wallet status to load, then trigger approval
+    await new Promise(r => setTimeout(r, 500));
+
+    if (!walletConnected) {
+      alert('Please connect your wallet first, then try importing from the game again.');
+      return;
+    }
+
+    // Trigger the approval flow directly
+    await autoTriggerApproval();
+  }
+});
+
+async function autoTriggerApproval() {
+  console.log('[Approval] Starting auto-approval flow...');
+
+  try {
+    // Check if already approved
+    const statusResp = await fetch('/api/wallet/bridge-in/approval-status', { credentials: 'include' });
+    const statusData = await statusResp.json();
+
+    if (statusData.approved) {
+      showApprovalSuccess('Already approved! Return to the game and click Import again.');
+      return;
+    }
+
+    // Get approval transaction data
+    const resp = await fetch('/api/wallet/bridge-in/approval-tx', { credentials: 'include' });
+    const data = await resp.json();
+
+    if (data.already_approved) {
+      showApprovalSuccess('Already approved! Return to the game and click Import again.');
+      return;
+    }
+
+    const tx = data.transaction;
+    if (!tx) {
+      throw new Error('No transaction data received');
+    }
+
+    // Check if MetaMask/wallet is available
+    if (typeof window.ethereum === 'undefined') {
+      alert('No wallet detected. Please install MetaMask and try again.');
+      return;
+    }
+
+    // Ensure wallet is connected
+    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+    if (!accounts || accounts.length === 0) {
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+    }
+
+    // Show a brief message before MetaMask popup
+    showApprovalPending();
+
+    // Send transaction - this triggers MetaMask popup
+    const txHash = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      params: [{
+        from: walletAddress,
+        to: tx.to,
+        data: tx.data,
+        gas: tx.gas,
+        value: tx.value || '0x0',
+      }]
+    });
+
+    console.log('[Approval] Tx sent:', txHash);
+    showApprovalWaiting();
+
+    // Wait for confirmation
+    await new Promise(r => setTimeout(r, 5000));
+
+    // Verify approval
+    const verifyResp = await fetch('/api/wallet/bridge-in/verify-approval', {
+      method: 'POST',
+      credentials: 'include'
+    });
+    const verifyData = await verifyResp.json();
+
+    if (verifyData.approved) {
+      showApprovalSuccess('Approved! Return to the game and click Import again.');
+    } else {
+      showApprovalSuccess('Transaction sent! Wait a moment, then return to the game and try Import again.');
+    }
+  } catch (e) {
+    console.error('[Approval] Error:', e);
+    if (e.code === 4001) {
+      // User rejected
+      showApprovalError('Transaction cancelled. Return to game and try again when ready.');
+    } else {
+      showApprovalError('Approval failed: ' + (e.message || 'Unknown error'));
+    }
+  }
+}
+
+function showApprovalPending() {
+  showApprovalOverlay('🔐 Approve in your wallet...', 'A MetaMask popup should appear. Please confirm the transaction.', '#ffaa66');
+}
+
+function showApprovalWaiting() {
+  showApprovalOverlay('⏳ Confirming...', 'Waiting for blockchain confirmation...', '#66aaff');
+}
+
+function showApprovalSuccess(message) {
+  showApprovalOverlay('✅ Success!', message, '#66ff66');
+}
+
+function showApprovalError(message) {
+  showApprovalOverlay('❌ Error', message, '#ff6666');
+}
+
+function showApprovalOverlay(title, message, color) {
+  let overlay = document.getElementById('approval-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'approval-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div style="
+      background: linear-gradient(145deg, #1a1a1c, #2a2a2c);
+      border: 2px solid ${color};
+      border-radius: 16px;
+      padding: 40px 60px;
+      text-align: center;
+      max-width: 500px;
+      box-shadow: 0 0 60px ${color}44;
+    ">
+      <div style="font-size: 3rem; margin-bottom: 20px;">${title.split(' ')[0]}</div>
+      <h2 style="color: ${color}; margin: 0 0 16px 0; font-size: 1.5rem;">${title}</h2>
+      <p style="color: #aaa; margin: 0 0 24px 0; font-size: 1rem; line-height: 1.5;">${message}</p>
+      <button onclick="document.getElementById('approval-overlay').remove()" style="
+        background: linear-gradient(145deg, #333, #444);
+        border: 1px solid #666;
+        color: #fff;
+        padding: 12px 32px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1rem;
+      ">Close</button>
+    </div>
+  `;
+
+  overlay.style.display = 'flex';
+}
+
 // ===== LOCKBOX FUNCTIONS =====
 let lockboxItems = [];
 let selectedLockbox = new Set();
