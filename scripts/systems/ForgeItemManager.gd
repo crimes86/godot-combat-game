@@ -721,8 +721,12 @@ func _is_item_in_inventory(forged_id: String) -> bool:
 	"""Check if a forged item is already in inventory (local check)"""
 	for slot in range(InventorySystem.inventory_items.size()):
 		var item = InventorySystem.inventory_items[slot]
-		if item and item.get("forged_id", "") == str(forged_id):
-			return true
+		if item:
+			# Check by forged_id first, then by item_id as fallback
+			if item.get("forged_id", "") == str(forged_id):
+				return true
+			if item.get("item_id", "") == forged_id:
+				return true
 	return false
 
 func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:

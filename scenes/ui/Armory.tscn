@@ -11,4 +11,3 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_armory")
 is_server_host = true
-debug_all_forgeable = true

@@ -145,7 +145,6 @@ var _forge_selected_card: Control = null  # Currently selected card in forge gri
 
 # Bridge UI section
 var _bridge_section: Control = null
-var _bridge_wallet_status: Label = null
 var _bridge_connect_btn: Button = null
 var _bridge_refresh_btn: Button = null
 var _bridge_in_container: Control = null
@@ -2474,11 +2473,12 @@ func _build_forge_column() -> Control:
 	spacer3.custom_minimum_size = Vector2(0, 4)
 	vbox.add_child(spacer3)
 
-	# === SCROLLABLE CONTENT AREA (expands to fill available space) ===
+	# === SCROLLABLE CONTENT AREA (catalog grid - takes majority of space) ===
 	var scroll_wrapper = Control.new()
 	scroll_wrapper.name = "ForgeScrollWrapper"
-	scroll_wrapper.custom_minimum_size = Vector2(0, 200)  # Minimum height
-	scroll_wrapper.size_flags_vertical = Control.SIZE_EXPAND_FILL  # Expand to fill space
+	scroll_wrapper.custom_minimum_size = Vector2(0, 150)  # Minimum height
+	scroll_wrapper.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll_wrapper.size_flags_stretch_ratio = 2.5  # Takes ~2.5x the space of detail/sync panels
 	scroll_wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_wrapper.clip_contents = true
 	vbox.add_child(scroll_wrapper)
@@ -2509,17 +2509,19 @@ func _build_forge_column() -> Control:
 	_forge_content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	forge_scroll.add_child(_forge_content_container)
 
-	# === ITEM DETAIL PANEL (above bridge section) ===
+	# === ITEM DETAIL PANEL (equal size with sync panel) ===
 	var detail_panel = _build_forge_detail_panel()
 	detail_panel.name = "ForgeDetailPanel"
-	detail_panel.size_flags_vertical = Control.SIZE_SHRINK_END
+	detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	detail_panel.size_flags_stretch_ratio = 1.0  # Equal with sync panel
 	detail_panel.z_index = 1
 	vbox.add_child(detail_panel)
 
-	# === BRIDGE UI SECTION (anchored to bottom) ===
+	# === BRIDGE UI SECTION (equal size with detail panel) ===
 	var bridge_section = _build_bridge_section()
 	bridge_section.name = "BridgeSection"
-	bridge_section.size_flags_vertical = Control.SIZE_SHRINK_END
+	bridge_section.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	bridge_section.size_flags_stretch_ratio = 1.0  # Equal with detail panel
 	bridge_section.clip_contents = true
 	bridge_section.z_index = 1
 	vbox.add_child(bridge_section)
@@ -2597,7 +2599,7 @@ func _build_forge_detail_panel() -> Control:
 	stack.name = "DetailStack"
 	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	stack.custom_minimum_size = Vector2(0, 100)  # Maintain height even when content hidden
+	stack.custom_minimum_size = Vector2(0, 80)  # Minimum height
 	margin.add_child(stack)
 
 	# Centered placeholder shown when no item selected
@@ -2670,7 +2672,7 @@ func _build_forge_detail_panel() -> Control:
 	info_vbox.name = "DetailInfo"
 	info_vbox.add_theme_constant_override("separation", 1)  # Slight spacing
 	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	info_vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Top aligned
 	info_vbox.clip_contents = true  # Prevent overflow
 	main_hbox.add_child(info_vbox)
 
@@ -2678,7 +2680,7 @@ func _build_forge_detail_panel() -> Control:
 	var name_label = Label.new()
 	name_label.name = "ItemName"
 	name_label.text = "Select an item"
-	name_label.add_theme_font_size_override("font_size", 16)
+	name_label.add_theme_font_size_override("font_size", 20)  # Larger header
 	name_label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	name_label.custom_minimum_size = Vector2(160, 0)
@@ -2688,7 +2690,7 @@ func _build_forge_detail_panel() -> Control:
 	var stat_label = Label.new()
 	stat_label.name = "StatLabel"
 	stat_label.text = ""
-	stat_label.add_theme_font_size_override("font_size", FONT_TINY)
+	stat_label.add_theme_font_size_override("font_size", 14)  # Smaller than header
 	stat_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
 	info_vbox.add_child(stat_label)
 
@@ -2696,7 +2698,7 @@ func _build_forge_detail_panel() -> Control:
 	var census_label = Label.new()
 	census_label.name = "CensusLabel"
 	census_label.text = ""
-	census_label.add_theme_font_size_override("font_size", FONT_MIN)
+	census_label.add_theme_font_size_override("font_size", 13)  # Small info text
 	census_label.add_theme_color_override("font_color", Color(0.4, 0.8, 0.4))
 	info_vbox.add_child(census_label)
 
@@ -2704,7 +2706,7 @@ func _build_forge_detail_panel() -> Control:
 	var rarity_label = Label.new()
 	rarity_label.name = "ItemRarity"
 	rarity_label.text = ""
-	rarity_label.add_theme_font_size_override("font_size", FONT_MIN)
+	rarity_label.add_theme_font_size_override("font_size", 13)  # Small info text
 	rarity_label.add_theme_color_override("font_color", TEXT_MUTED)
 	rarity_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rarity_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -2730,7 +2732,7 @@ func _build_forge_detail_panel() -> Control:
 	var actions_vbox = VBoxContainer.new()
 	actions_vbox.name = "ActionsSection"
 	actions_vbox.add_theme_constant_override("separation", 4)
-	actions_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	actions_vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Top aligned
 	actions_vbox.size_flags_horizontal = Control.SIZE_SHRINK_END  # Don't expand, stay compact
 	actions_vbox.clip_contents = true  # Prevent overflow
 	main_hbox.add_child(actions_vbox)
@@ -3277,10 +3279,10 @@ func _on_bridge_in_confirmed(token_id: int, item_name: String, popup: AcceptDial
 
 func _build_bridge_section() -> Control:
 	"""Build the bridge UI section below the detail panel"""
-	# Wrapper to enforce fixed height (prevents expansion from content)
+	# Wrapper that expands to fill available space (equal with detail panel)
 	var wrapper = Control.new()
-	wrapper.custom_minimum_size = Vector2(0, 140)  # Fixed height for bridge section
-	wrapper.size_flags_vertical = Control.SIZE_SHRINK_END
+	wrapper.custom_minimum_size = Vector2(0, 80)  # Minimum height
+	wrapper.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.clip_contents = true  # Clip any overflow
 
@@ -3299,100 +3301,69 @@ func _build_bridge_section() -> Control:
 	var margin = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 12)
 	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_bottom", 8)
+	margin.add_theme_constant_override("margin_top", 6)
+	margin.add_theme_constant_override("margin_bottom", 6)
 	margin.clip_contents = true  # Prevent overflow
 	panel.add_child(margin)
 
-	var main_vbox = VBoxContainer.new()
-	main_vbox.add_theme_constant_override("separation", 8)
-	main_vbox.clip_contents = true  # Prevent overflow
-	margin.add_child(main_vbox)
+	# === MAIN LAYOUT: Import | Disconnect | Export ===
+	var main_hbox = HBoxContainer.new()
+	main_hbox.add_theme_constant_override("separation", 8)
+	main_hbox.clip_contents = true
+	margin.add_child(main_hbox)
 
-	# === HEADER ROW: Title + Wallet Status ===
-	var header_row = HBoxContainer.new()
-	header_row.add_theme_constant_override("separation", 8)
-	main_vbox.add_child(header_row)
+	# LEFT: Import section
+	var bridge_in_section = _build_bridge_in_section()
+	bridge_in_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bridge_in_section.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_hbox.add_child(bridge_in_section)
+	_bridge_in_container = bridge_in_section
 
-	var title = Label.new()
-	title.text = "ITEM SYNC"
-	title.add_theme_font_size_override("font_size", 16)
-	title.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 1.0))  # Premium silver
-	header_row.add_child(title)
+	# CENTER: Status light + Disconnect button (horizontal, compact)
+	var center_hbox = HBoxContainer.new()
+	center_hbox.add_theme_constant_override("separation", 4)
+	center_hbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN  # Top aligned
+	main_hbox.add_child(center_hbox)
 
-	# Spacer
-	var spacer = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_row.add_child(spacer)
-
-	# Wallet status container
-	var wallet_container = HBoxContainer.new()
-	wallet_container.add_theme_constant_override("separation", 6)
-	header_row.add_child(wallet_container)
-
-	# Wallet status indicator (dot)
+	# Status indicator (dot) - green when connected
 	var wallet_icon = Label.new()
 	wallet_icon.name = "WalletIcon"
-	wallet_icon.text = "○"  # Hollow dot - will change to solid when connected
-	wallet_icon.add_theme_font_size_override("font_size", FONT_TINY)
+	wallet_icon.text = "○"
+	wallet_icon.add_theme_font_size_override("font_size", 12)
 	wallet_icon.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))
-	wallet_container.add_child(wallet_icon)
+	wallet_icon.tooltip_text = "Not connected"
+	wallet_icon.mouse_filter = Control.MOUSE_FILTER_PASS
+	center_hbox.add_child(wallet_icon)
 
-	# Wallet status label
-	var wallet_status = Label.new()
-	wallet_status.name = "WalletStatusLabel"
-	wallet_status.text = "Not connected"
-	wallet_status.add_theme_font_size_override("font_size", FONT_MIN)
-	wallet_status.add_theme_color_override("font_color", TEXT_MUTED)
-	wallet_status.clip_text = true
-	wallet_status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	wallet_container.add_child(wallet_status)
-	_bridge_wallet_status = wallet_status
-
-	# Connect button (opens browser for SIWE flow)
+	# Connect/Disconnect button (compact)
 	var connect_btn = Button.new()
 	connect_btn.name = "WalletConnectButton"
 	connect_btn.text = "CONNECT"
-	connect_btn.custom_minimum_size = Vector2(75, 24)
+	connect_btn.custom_minimum_size = Vector2(70, 20)
 	connect_btn.pressed.connect(_on_wallet_connect_pressed)
 	connect_btn.mouse_entered.connect(_play_button_hover_sound)
 	_style_wallet_connect_button(connect_btn)
-	wallet_container.add_child(connect_btn)
+	center_hbox.add_child(connect_btn)
 	_bridge_connect_btn = connect_btn
 
-	# Refresh button (hidden by default, shown after polling times out)
+	# Refresh button (hidden by default)
 	var refresh_btn = Button.new()
 	refresh_btn.name = "WalletRefreshButton"
 	refresh_btn.text = "↻"
 	refresh_btn.tooltip_text = "Refresh sync status"
-	refresh_btn.custom_minimum_size = Vector2(24, 24)
+	refresh_btn.custom_minimum_size = Vector2(20, 20)
 	refresh_btn.visible = false
 	refresh_btn.pressed.connect(_on_wallet_refresh_pressed)
 	refresh_btn.mouse_entered.connect(_play_button_hover_sound)
 	_style_wallet_refresh_button(refresh_btn)
-	wallet_container.add_child(refresh_btn)
+	center_hbox.add_child(refresh_btn)
 	_bridge_refresh_btn = refresh_btn
 
-	# === CONTENT ROW: Bridge In | Bridging Out ===
-	var content_row = HBoxContainer.new()
-	content_row.add_theme_constant_override("separation", 12)
-	main_vbox.add_child(content_row)
-
-	# Bridge In section (left half)
-	var bridge_in_section = _build_bridge_in_section()
-	bridge_in_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_row.add_child(bridge_in_section)
-	_bridge_in_container = bridge_in_section
-
-	# Vertical divider
-	var divider = VSeparator.new()
-	divider.add_theme_constant_override("separation", 2)
-	content_row.add_child(divider)
-
-	# Bridging Out section (right half)
+	# RIGHT: Export section
 	var bridging_out_section = _build_bridging_out_section()
 	bridging_out_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_row.add_child(bridging_out_section)
+	bridging_out_section.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_hbox.add_child(bridging_out_section)
 	_bridging_out_container = bridging_out_section
 
 	wrapper.add_child(panel)
@@ -3402,25 +3373,28 @@ func _build_bridge_section() -> Control:
 func _build_bridge_in_section() -> Control:
 	"""Build the Import section showing items available from web wallet"""
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", 2)
 
 	var header = Label.new()
 	header.name = "BridgeInHeader"
 	header.text = "IMPORT TO GAME"
-	header.add_theme_font_size_override("font_size", FONT_MIN)
-	header.add_theme_color_override("font_color", TEXT_SECONDARY)  # Match theme
+	header.add_theme_font_size_override("font_size", 12)
+	header.add_theme_color_override("font_color", TEXT_SECONDARY)
 	vbox.add_child(header)
 
+	# Items container - expands to fill space
 	var items_row = HBoxContainer.new()
 	items_row.name = "BridgeInItems"
 	items_row.add_theme_constant_override("separation", 4)
+	items_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	items_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(items_row)
 
 	# Placeholder when no items
 	var empty_label = Label.new()
 	empty_label.name = "BridgeInEmpty"
 	empty_label.text = "0 items ready"
-	empty_label.add_theme_font_size_override("font_size", FONT_MIN)
+	empty_label.add_theme_font_size_override("font_size", 11)
 	empty_label.add_theme_color_override("font_color", TEXT_MUTED)
 	items_row.add_child(empty_label)
 
@@ -3429,25 +3403,30 @@ func _build_bridge_in_section() -> Control:
 func _build_bridging_out_section() -> Control:
 	"""Build the Export section showing items being sent to web"""
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", 2)
 
 	var header = Label.new()
 	header.name = "BridgingOutHeader"
 	header.text = "EXPORT TO WEB"
-	header.add_theme_font_size_override("font_size", FONT_MIN)
-	header.add_theme_color_override("font_color", TEXT_SECONDARY)  # Match theme
+	header.add_theme_font_size_override("font_size", 12)
+	header.add_theme_color_override("font_color", TEXT_SECONDARY)
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	vbox.add_child(header)
 
+	# Items container - expands to fill space, right-aligned
 	var items_row = HBoxContainer.new()
 	items_row.name = "BridgingOutItems"
 	items_row.add_theme_constant_override("separation", 4)
+	items_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	items_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	items_row.alignment = BoxContainer.ALIGNMENT_END  # Right align items
 	vbox.add_child(items_row)
 
 	# Placeholder when no items exporting
 	var empty_label = Label.new()
 	empty_label.name = "BridgingOutEmpty"
 	empty_label.text = "0 items pending"
-	empty_label.add_theme_font_size_override("font_size", FONT_MIN)
+	empty_label.add_theme_font_size_override("font_size", 11)
 	empty_label.add_theme_color_override("font_color", TEXT_MUTED)
 	items_row.add_child(empty_label)
 
@@ -3477,27 +3456,18 @@ func _on_wallet_status_fetched(connected: bool, wallet_address: String) -> void:
 	if not _bridge_section:
 		return
 
-	# Update wallet status icon
+	# Update wallet status icon (green when connected)
 	var wallet_icon = _bridge_section.find_child("WalletIcon", true, false)
 	if wallet_icon:
 		if connected:
 			wallet_icon.text = "●"  # Solid dot when connected
-			wallet_icon.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 1.0))  # Silver when connected
+			wallet_icon.add_theme_color_override("font_color", Color(0.3, 0.85, 0.4, 1.0))  # Green when connected
+			var short_addr = ForgeItemManager.get_wallet_address_short()
+			wallet_icon.tooltip_text = "Connected: " + short_addr if short_addr else "Connected"
 		else:
 			wallet_icon.text = "○"  # Hollow dot when disconnected
-			wallet_icon.add_theme_color_override("font_color", TEXT_MUTED)  # Use theme dim
-
-	# Update wallet address display
-	if _bridge_wallet_status:
-		if connected:
-			var short_addr = ForgeItemManager.get_wallet_address_short()
-			_bridge_wallet_status.text = short_addr
-			_bridge_wallet_status.add_theme_color_override("font_color", Color(0.85, 0.82, 0.78, 1.0))  # Silver when connected
-			_bridge_wallet_status.tooltip_text = wallet_address if wallet_address else "Connected"
-		else:
-			_bridge_wallet_status.text = "Not connected"
-			_bridge_wallet_status.add_theme_color_override("font_color", TEXT_MUTED)
-			_bridge_wallet_status.tooltip_text = ""
+			wallet_icon.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))  # Gray when disconnected
+			wallet_icon.tooltip_text = "Not connected"
 
 	# Update connect/disconnect button with proper styling
 	if _bridge_connect_btn:
@@ -3851,17 +3821,16 @@ func _on_wallet_disconnect_complete(success: bool) -> void:
 		print("[Armory] Wallet disconnected successfully")
 
 		# Update UI to show disconnected state
-		if _bridge_wallet_status:
-			_bridge_wallet_status.text = "Not connected"
-			_bridge_wallet_status.add_theme_color_override("font_color", TEXT_MUTED)
-
 		if _bridge_connect_btn:
 			_bridge_connect_btn.text = "CONNECT"
+			_style_wallet_connect_button(_bridge_connect_btn, false)
 
-		# Update wallet icon
+		# Update wallet icon to disconnected state
 		var wallet_icon = _bridge_section.find_child("WalletIcon", true, false) if _bridge_section else null
 		if wallet_icon:
-			wallet_icon.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+			wallet_icon.text = "○"  # Hollow dot
+			wallet_icon.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))
+			wallet_icon.tooltip_text = "Not connected"
 
 		# Clear bridge-in display
 		_update_bridge_in_display([])
@@ -3919,9 +3888,11 @@ func _start_wallet_polling() -> void:
 	_wallet_poll_count = 0
 
 	# Update UI to show waiting state
-	if _bridge_wallet_status:
-		_bridge_wallet_status.text = "Waiting for connection..."
-		_bridge_wallet_status.add_theme_color_override("font_color", Color(0.8, 0.7, 0.4))
+	var wallet_icon = _bridge_section.find_child("WalletIcon", true, false) if _bridge_section else null
+	if wallet_icon:
+		wallet_icon.text = "◐"  # Half-filled dot for waiting
+		wallet_icon.add_theme_color_override("font_color", Color(0.8, 0.7, 0.4))  # Amber
+		wallet_icon.tooltip_text = "Waiting for connection..."
 
 	if _bridge_connect_btn:
 		_bridge_connect_btn.text = "WAITING"
@@ -4180,20 +4151,23 @@ func _on_wallet_poll_response(connected: bool, wallet_address: String) -> void:
 		if NotificationManager:
 			NotificationManager.show_notification("Wallet connected successfully!", "success")
 	else:
-		# Still waiting - update status text with dots animation
-		if _bridge_wallet_status:
+		# Still waiting - update tooltip with dots animation
+		var wallet_icon = _bridge_section.find_child("WalletIcon", true, false) if _bridge_section else null
+		if wallet_icon:
 			var dots = ".".repeat((_wallet_poll_count % 3) + 1)
-			_bridge_wallet_status.text = "Waiting for connection" + dots
+			wallet_icon.tooltip_text = "Waiting for connection" + dots
 
 func _on_wallet_poll_timeout() -> void:
 	"""Called when polling times out without successful connection"""
 	print("[Armory] Wallet polling timed out")
 	_stop_wallet_polling()
 
-	# Reset UI
-	if _bridge_wallet_status:
-		_bridge_wallet_status.text = "Connection timed out"
-		_bridge_wallet_status.add_theme_color_override("font_color", Color(0.8, 0.5, 0.4))
+	# Reset UI - show timeout state
+	var wallet_icon = _bridge_section.find_child("WalletIcon", true, false) if _bridge_section else null
+	if wallet_icon:
+		wallet_icon.text = "○"  # Hollow dot
+		wallet_icon.add_theme_color_override("font_color", Color(0.8, 0.5, 0.4))  # Orange/red
+		wallet_icon.tooltip_text = "Connection timed out"
 
 	if _bridge_connect_btn:
 		_bridge_connect_btn.text = "CONNECT"

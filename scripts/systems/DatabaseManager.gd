@@ -700,8 +700,12 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 			else:
 				push_warning("[DatabaseManager] Invalid inventory data for: %s, starting fresh" % username)
 
-	# NOTE: Forged items are now added to inventory immediately when claimed in Armory,
-	# and saved to database right away. No sync needed here anymore.
+	# Sync forged items to inventory AFTER loading saved inventory
+	# This merges any forged items that aren't already in the save
+	if ForgeItemManager and ForgeItemManager.is_loaded():
+		var synced = ForgeItemManager.sync_to_inventory()
+		if synced > 0:
+			LogManager.info("Synced %d forged items to inventory after load" % synced, "forge")
 
 	# Apply character stats (full blob first, then individual fields as fallback)
 	var stats_json = data.get("character_stats", "")
