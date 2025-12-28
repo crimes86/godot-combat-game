@@ -156,6 +156,81 @@
       color: #a8a;
     }
 
+    /* Approval section */
+    .approval-section {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: rgba(255, 180, 50, 0.1);
+      border: 1px solid rgba(255, 180, 50, 0.3);
+      border-radius: 8px;
+    }
+
+    .approval-section.approved {
+      background: rgba(0, 200, 100, 0.1);
+      border-color: rgba(0, 200, 100, 0.3);
+    }
+
+    .approval-title {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #ffb432;
+    }
+
+    .approval-section.approved .approval-title {
+      color: #0f8;
+    }
+
+    .approval-text {
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 1rem;
+    }
+
+    .approve-btn {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #ffb432 0%, #e6a020 100%);
+      color: #111;
+      transition: all 0.3s ease;
+    }
+
+    .approve-btn:hover {
+      background: linear-gradient(135deg, #ffc44d 0%, #ffb432 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(255, 180, 50, 0.4);
+    }
+
+    .approve-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .approval-complete {
+      text-align: center;
+      color: #0f8;
+    }
+
+    .approval-complete svg {
+      width: 32px;
+      height: 32px;
+      margin-bottom: 0.5rem;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 180, 50, 0.4); }
+      50% { box-shadow: 0 0 0 10px rgba(255, 180, 50, 0); }
+    }
+
+    .approval-section:not(.approved) {
+      animation: pulse 2s infinite;
+    }
+
     .spinner {
       display: inline-block;
       width: 16px;
@@ -195,6 +270,29 @@
     <!-- Status messages -->
     <div id="statusMessage" class="status-message hidden"></div>
 
+    <!-- Approval section (shown after wallet connect) -->
+    <div id="approvalSection" class="approval-section hidden">
+      <div id="approvalNeeded">
+        <div class="approval-title">⚠️ One More Step: Approve Bridge-In</div>
+        <div class="approval-text">
+          To import items from your wallet into the game, you need to grant one-time permission.
+          This allows Ashbane to transfer your NFTs when you click "Import" in game.
+        </div>
+        <button id="approveBtn" class="approve-btn" onclick="requestApproval()">
+          Approve Bridge-In Access
+        </button>
+      </div>
+      <div id="approvalComplete" class="approval-complete hidden">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+        <div class="approval-title">✓ All Set!</div>
+        <div class="approval-text" style="margin-bottom: 0;">
+          You can now import items in the game. Return to Godot and open your Lockbox.
+        </div>
+      </div>
+    </div>
+
     <!-- Notice for Godot users -->
     <div class="godot-notice">
       After connecting, return to the game.<br>
@@ -218,6 +316,8 @@
 
         if (data.connected) {
           updateUI(true, data.wallet_address);
+          // Also check and show approval status
+          await checkApprovalStatus();
         }
       } catch (err) {
         console.log('No existing wallet connection');
@@ -324,7 +424,10 @@
         if (verifyData.success) {
           currentAccount = walletAddress;
           updateUI(true, walletAddress);
-          showMessage('Wallet connected successfully! You can return to the game.', 'success');
+          showMessage('Wallet connected! Checking approval status...', 'success');
+
+          // Check and show approval section
+          await checkApprovalStatus();
         } else {
           throw new Error('Verification failed');
         }
@@ -357,6 +460,151 @@
       } catch (err) {
         showMessage('Error disconnecting: ' + err.message, 'error');
       }
+    }
+
+    // === APPROVAL FLOW ===
+
+    async function checkApprovalStatus() {
+      const approvalSection = document.getElementById('approvalSection');
+      const approvalNeeded = document.getElementById('approvalNeeded');
+      const approvalComplete = document.getElementById('approvalComplete');
+
+      try {
+        const response = await fetch('/api/wallet/bridge-in/approval-status', {
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          console.log('Could not check approval status');
+          return;
+        }
+
+        const data = await response.json();
+
+        // Show approval section
+        approvalSection.classList.remove('hidden');
+
+        if (data.approved) {
+          // Already approved - show success
+          approvalSection.classList.add('approved');
+          approvalNeeded.classList.add('hidden');
+          approvalComplete.classList.remove('hidden');
+          showMessage('Wallet connected and approved! You can return to the game.', 'success');
+        } else {
+          // Need approval - show approval button
+          approvalSection.classList.remove('approved');
+          approvalNeeded.classList.remove('hidden');
+          approvalComplete.classList.add('hidden');
+          showMessage('Wallet connected! Please approve bridge-in access below.', 'info');
+        }
+
+      } catch (err) {
+        console.error('Error checking approval:', err);
+      }
+    }
+
+    async function requestApproval() {
+      const approveBtn = document.getElementById('approveBtn');
+
+      if (typeof window.ethereum === 'undefined') {
+        showMessage('MetaMask not found.', 'error');
+        return;
+      }
+
+      try {
+        approveBtn.disabled = true;
+        approveBtn.innerHTML = '<span class="spinner"></span> Getting approval data...';
+
+        // Get approval transaction data from backend
+        const txResponse = await fetch('/api/wallet/bridge-in/approval-tx', {
+          credentials: 'include'
+        });
+
+        if (!txResponse.ok) {
+          const err = await txResponse.json();
+          throw new Error(err.detail || 'Failed to get approval transaction');
+        }
+
+        const txData = await txResponse.json();
+
+        if (txData.already_approved) {
+          // Already approved
+          showApprovalComplete();
+          return;
+        }
+
+        const tx = txData.transaction;
+
+        approveBtn.innerHTML = '<span class="spinner"></span> Approve in MetaMask...';
+        showMessage('Please confirm the approval in MetaMask...', 'info');
+
+        // Request current account
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+        // Send the approval transaction
+        const txHash = await window.ethereum.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: accounts[0],
+            to: tx.to,
+            data: tx.data,
+            gas: tx.gas,
+            value: tx.value
+          }]
+        });
+
+        approveBtn.innerHTML = '<span class="spinner"></span> Confirming...';
+        showMessage('Transaction sent! Waiting for confirmation...', 'info');
+
+        // Poll for approval status
+        let confirmed = false;
+        for (let i = 0; i < 30; i++) {  // Max 30 attempts (~1 minute)
+          await new Promise(r => setTimeout(r, 2000));
+
+          const verifyResponse = await fetch('/api/wallet/bridge-in/verify-approval', {
+            method: 'POST',
+            credentials: 'include'
+          });
+
+          if (verifyResponse.ok) {
+            const verifyData = await verifyResponse.json();
+            if (verifyData.approved) {
+              confirmed = true;
+              break;
+            }
+          }
+        }
+
+        if (confirmed) {
+          showApprovalComplete();
+        } else {
+          showMessage('Approval taking longer than expected. Check back in a minute.', 'info');
+          approveBtn.innerHTML = 'Check Approval Status';
+          approveBtn.onclick = checkApprovalStatus;
+          approveBtn.disabled = false;
+        }
+
+      } catch (err) {
+        console.error('Approval error:', err);
+        if (err.code === 4001) {
+          showMessage('Approval cancelled.', 'info');
+        } else {
+          showMessage('Error: ' + err.message, 'error');
+        }
+        approveBtn.innerHTML = 'Approve Bridge-In Access';
+        approveBtn.disabled = false;
+      }
+    }
+
+    function showApprovalComplete() {
+      const approvalSection = document.getElementById('approvalSection');
+      const approvalNeeded = document.getElementById('approvalNeeded');
+      const approvalComplete = document.getElementById('approvalComplete');
+
+      approvalSection.classList.add('approved');
+      approvalNeeded.classList.add('hidden');
+      approvalComplete.classList.remove('hidden');
+      showMessage('All set! You can now import items in the game.', 'success');
     }
 
     // Initialize on page load
