@@ -4891,10 +4891,11 @@ async def get_forge_status(
     achievement_mappings = get_achievement_mappings()
 
     # Get all achievement credits with forged data
+    # Use outerjoin for ProviderAccount to include admin-granted credits (no provider)
     credits = (
         db.query(AchievementCredit, Achievement, ProviderAccount, ForgedAchievement)
         .join(Achievement, AchievementCredit.achievement_id == Achievement.id)
-        .join(ProviderAccount, AchievementCredit.provider_account_id == ProviderAccount.id)
+        .outerjoin(ProviderAccount, AchievementCredit.provider_account_id == ProviderAccount.id)
         .outerjoin(ForgedAchievement, ForgedAchievement.achievement_credit_id == AchievementCredit.id)
         .filter(AchievementCredit.user_id == user.id)
         .all()
@@ -4917,7 +4918,7 @@ async def get_forge_status(
             "achievement_id": achievement.id,
             "display_name": achievement.display_name,
             "rarity_tier": achievement.rarity_tier,
-            "provider": provider_account.provider_name,
+            "provider": provider_account.provider_name if provider_account else credit.provider_name,
             "is_original_claim": credit.is_original_claim,
         }
 
@@ -5853,11 +5854,12 @@ async def admin_grant_forge_credits(
     if not user or not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    from app.services.item_forge_service import get_items, get_item_by_id
+    from app.services.item_forge_service import get_items, get_item_by_id, get_catalog
 
-    items_data = get_items()
-    items_catalog = items_data.get("items", {})
-    achievement_mappings = items_data.get("achievement_mappings", {})
+    # get_items() returns a list, not a dict
+    items_list = get_items()
+    items_catalog = {item["item_id"]: item for item in items_list}
+    achievement_mappings = get_catalog().get("achievement_mappings", {})
 
     # Determine which items to grant
     if grant_request.item_ids:

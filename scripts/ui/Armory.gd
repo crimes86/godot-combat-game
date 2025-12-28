@@ -4226,22 +4226,22 @@ func _on_forge_button_pressed() -> void:
 		return
 
 	var item_name = _forge_selected_item.get("name", "Unknown Item")
-	var achievement_name = _forge_selected_item.get("achievement", "")
-	print("[Armory] FORGE pressed for: %s (achievement: %s)" % [item_name, achievement_name])
+	var selected_item_id = _forge_selected_item.get("id", _forge_selected_item.get("item_id", ""))
+	print("[Armory] FORGE pressed for: %s (item_id: %s)" % [item_name, selected_item_id])
 
-	# Find the achievement_id and item_id from forgeable achievements
+	# Find the achievement_id from forgeable achievements by item_id
 	var achievement_id = -1
 	var item_id = ""
-	if ForgeItemManager:
+	if ForgeItemManager and selected_item_id != "":
 		var forgeable = ForgeItemManager.get_forgeable_achievements()
 		for ach in forgeable:
-			if ach.get("display_name", "") == achievement_name:
+			if ach.get("item_id", "") == selected_item_id:
 				achievement_id = ach.get("achievement_id", -1)
 				item_id = ach.get("item_id", "")
 				break
 
 	if achievement_id == -1:
-		print("[Armory] Could not find achievement_id for: %s" % achievement_name)
+		print("[Armory] Could not find achievement_id for item: %s" % selected_item_id)
 		if NotificationManager:
 			NotificationManager.show_notification("Could not find achievement to forge", "error")
 		return
