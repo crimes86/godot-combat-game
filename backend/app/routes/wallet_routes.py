@@ -1155,6 +1155,19 @@ async def request_bridge_in(
     if not wallet:
         raise HTTPException(status_code=400, detail="No wallet connected")
 
+    # Check if user has approved the platform for transfers
+    is_approved = _wallet_service.check_bridge_approval(wallet.wallet_address)
+    if not is_approved:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "Platform not approved for transfers",
+                "message": "You must approve Ashbane to transfer your NFTs before bridging in. "
+                          "Call GET /api/wallet/bridge-in/approval-tx to get the approval transaction.",
+                "requires_approval": True,
+            }
+        )
+
     logger.info(f"Bridge-in request from user {current_user.username}: token_ids={request_body.token_ids}, wallet={wallet.wallet_address}")
 
     bridged_in = []
@@ -1253,4 +1266,146 @@ async def request_bridge_in(
         "success": len(bridged_in) > 0,
         "bridged_in": bridged_in,
         "failed": failed,
+    }
+
+
+# =============================================================================
+# BRIDGE APPROVAL - Required before bridge-in
+# =============================================================================
+
+@router.get("/bridge-in/approval-status")
+async def get_bridge_approval_status(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Check if the user's wallet has approved the platform for bridge-in transfers.
+
+    Users must approve the platform wallet once before they can bridge items in.
+    This is a standard ERC-721 setApprovalForAll operation.
+
+    Returns:
+    - approved: bool - Whether the platform can transfer user's NFTs
+    - platform_wallet: str - The platform wallet address (for verification)
+    - contract_address: str - The NFT contract address
+    - chain_id: int - The chain ID
+    """
+    current_user = get_current_user_dep(request, db)
+
+    if _wallet_service is None:
+        raise HTTPException(status_code=503, detail="Wallet service not available")
+
+    # Get user's wallet
+    wallet = db.query(WalletAccount).filter(
+        WalletAccount.user_id == current_user.id
+    ).first()
+
+    if not wallet:
+        return {
+            "approved": False,
+            "error": "No wallet connected",
+            "platform_wallet": _wallet_service.get_platform_wallet_address(),
+            "contract_address": _wallet_service.get_contract_address(),
+            "chain_id": _wallet_service.CHAIN_ID,
+        }
+
+    is_approved = _wallet_service.check_bridge_approval(wallet.wallet_address)
+
+    return {
+        "approved": is_approved,
+        "wallet_address": wallet.wallet_address,
+        "platform_wallet": _wallet_service.get_platform_wallet_address(),
+        "contract_address": _wallet_service.get_contract_address(),
+        "chain_id": _wallet_service.CHAIN_ID,
+    }
+
+
+@router.get("/bridge-in/approval-tx")
+async def get_bridge_approval_transaction(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Get the transaction data for approving the platform to transfer NFTs.
+
+    Returns unsigned transaction data that Godot can submit via WalletConnect
+    or another wallet signing mechanism.
+
+    The user signs this transaction once, and it grants the platform permission
+    to transfer all their NFTs (current and future) for bridge-in operations.
+
+    Returns:
+    - to: Contract address to call
+    - data: Encoded setApprovalForAll(platform, true) call
+    - chainId: Chain ID for the transaction
+    - value: "0x0" (no ETH needed)
+    - gas: Estimated gas limit
+    """
+    current_user = get_current_user_dep(request, db)
+
+    if _wallet_service is None:
+        raise HTTPException(status_code=503, detail="Wallet service not available")
+
+    # Get user's wallet
+    wallet = db.query(WalletAccount).filter(
+        WalletAccount.user_id == current_user.id
+    ).first()
+
+    if not wallet:
+        raise HTTPException(status_code=400, detail="No wallet connected")
+
+    # Check if already approved
+    is_approved = _wallet_service.check_bridge_approval(wallet.wallet_address)
+    if is_approved:
+        return {
+            "already_approved": True,
+            "message": "Platform already approved for bridge-in transfers"
+        }
+
+    try:
+        tx_data = _wallet_service.get_approval_transaction_data(wallet.wallet_address)
+
+        return {
+            "already_approved": False,
+            "transaction": tx_data,
+            "description": "Approve Ashbane to transfer your NFTs for bridge-in",
+            "one_time": True,  # Only need to do this once
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to build approval transaction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/bridge-in/verify-approval")
+async def verify_bridge_approval(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Verify that the approval transaction was successful.
+
+    Call this after the user has signed and submitted the approval transaction.
+    Polls the chain to confirm the approval is now active.
+
+    Returns:
+    - approved: bool - Whether approval is now active
+    """
+    current_user = get_current_user_dep(request, db)
+
+    if _wallet_service is None:
+        raise HTTPException(status_code=503, detail="Wallet service not available")
+
+    wallet = db.query(WalletAccount).filter(
+        WalletAccount.user_id == current_user.id
+    ).first()
+
+    if not wallet:
+        raise HTTPException(status_code=400, detail="No wallet connected")
+
+    is_approved = _wallet_service.check_bridge_approval(wallet.wallet_address)
+
+    return {
+        "approved": is_approved,
+        "wallet_address": wallet.wallet_address,
     }

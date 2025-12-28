@@ -300,7 +300,7 @@ def get_achievement_token_data(token_id: int) -> Optional[dict]:
 PLATFORM_WALLET_ADDRESS = os.getenv("PLATFORM_WALLET_ADDRESS", "")
 PLATFORM_WALLET_KEY = os.getenv("PLATFORM_WALLET_KEY", "")  # Private key for platform wallet
 
-# Extended ABI for transfers
+# Extended ABI for transfers and approvals
 TRANSFER_ABI = [
     {
         "inputs": [
@@ -320,6 +320,27 @@ TRANSFER_ABI = [
             {"name": "tokenId", "type": "uint256"}
         ],
         "name": "safeTransferFrom",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    # Approval functions for bridge-in flow
+    {
+        "inputs": [
+            {"name": "owner", "type": "address"},
+            {"name": "operator", "type": "address"}
+        ],
+        "name": "isApprovedForAll",
+        "outputs": [{"name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"name": "operator", "type": "address"},
+            {"name": "approved", "type": "bool"}
+        ],
+        "name": "setApprovalForAll",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -473,3 +494,93 @@ def get_token_owner(token_id: int) -> Optional[str]:
     except Exception as e:
         logger.error(f"Failed to get token owner: {e}")
         return None
+
+
+# =============================================================================
+# APPROVAL SYSTEM - Required for bridge-in
+# =============================================================================
+
+def check_bridge_approval(wallet_address: str) -> bool:
+    """
+    Check if a wallet has approved the platform to transfer their NFTs.
+
+    Users must call setApprovalForAll(platform_wallet, true) before bridge-in.
+    This is a one-time approval that covers all current and future NFTs.
+
+    Returns: True if approved, False otherwise
+    """
+    if not PLATFORM_WALLET_ADDRESS:
+        logger.error("PLATFORM_WALLET_ADDRESS not configured")
+        return False
+
+    if not CONTRACT_ADDRESS:
+        logger.error("CONTRACT_ADDRESS not configured")
+        return False
+
+    try:
+        w3 = get_web3()
+        contract = get_transfer_contract(w3)
+
+        owner_checksum = Web3.to_checksum_address(wallet_address)
+        platform_checksum = Web3.to_checksum_address(PLATFORM_WALLET_ADDRESS)
+
+        is_approved = contract.functions.isApprovedForAll(
+            owner_checksum,
+            platform_checksum
+        ).call()
+
+        logger.info(f"Approval check for {wallet_address}: {is_approved}")
+        return is_approved
+
+    except Exception as e:
+        logger.error(f"Failed to check approval: {e}")
+        return False
+
+
+def get_approval_transaction_data(wallet_address: str) -> dict:
+    """
+    Build the transaction data for setApprovalForAll.
+
+    Returns a dict with all data needed for Godot to submit via wallet signing:
+    - to: Contract address
+    - data: Encoded function call
+    - chainId: Chain ID for the transaction
+    - value: 0 (no ETH needed)
+
+    The user signs and submits this transaction via their wallet (WalletConnect/MetaMask).
+    """
+    if not PLATFORM_WALLET_ADDRESS:
+        raise ValueError("PLATFORM_WALLET_ADDRESS not configured")
+
+    if not CONTRACT_ADDRESS:
+        raise ValueError("CONTRACT_ADDRESS not configured")
+
+    w3 = get_web3()
+    contract = get_transfer_contract(w3)
+
+    platform_checksum = Web3.to_checksum_address(PLATFORM_WALLET_ADDRESS)
+
+    # Encode the setApprovalForAll(platform, true) call
+    tx_data = contract.encodeABI(
+        fn_name='setApprovalForAll',
+        args=[platform_checksum, True]
+    )
+
+    return {
+        'to': Web3.to_checksum_address(CONTRACT_ADDRESS),
+        'data': tx_data,
+        'chainId': CHAIN_ID,
+        'value': '0x0',  # No ETH needed for approval
+        # Gas estimation - approval is cheap (~46k gas)
+        'gas': hex(60000),
+    }
+
+
+def get_platform_wallet_address() -> str:
+    """Get the platform wallet address for display/verification."""
+    return PLATFORM_WALLET_ADDRESS
+
+
+def get_contract_address() -> str:
+    """Get the NFT contract address."""
+    return CONTRACT_ADDRESS
