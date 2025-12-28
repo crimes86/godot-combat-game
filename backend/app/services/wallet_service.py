@@ -176,7 +176,10 @@ async def mint_achievement_nft(
     rarity_tier: str,
 ) -> dict:
     """
-    Mint an achievement NFT to the specified wallet.
+    Mint an achievement NFT to the platform wallet (custodial).
+
+    Items start "in_game" (owned by platform wallet). Users can bridge-out
+    to transfer to their personal wallet for trading on OpenSea.
 
     Returns dict with:
     - token_id: The minted token ID
@@ -186,6 +189,9 @@ async def mint_achievement_nft(
     if not MINTER_PRIVATE_KEY:
         raise ValueError("MINTER_PRIVATE_KEY not configured - cannot mint")
 
+    if not PLATFORM_WALLET_ADDRESS:
+        raise ValueError("PLATFORM_WALLET_ADDRESS not configured - cannot mint to custodial wallet")
+
     w3 = get_web3()
     contract = get_contract(w3)
 
@@ -193,18 +199,21 @@ async def mint_achievement_nft(
     achievement_id = build_achievement_id(provider, app_id, api_name)
     metadata_uri = build_metadata_uri(achievement_credit_id)
 
-    # Check if already minted
-    checksum_address = Web3.to_checksum_address(wallet_address)
-    already_minted = contract.functions.isMinted(checksum_address, achievement_id).call()
+    # Mint to platform wallet (custodial) - NOT user's wallet
+    # The database tracks which user earned/owns the item
+    platform_checksum = Web3.to_checksum_address(PLATFORM_WALLET_ADDRESS)
+
+    # Check if already minted for this achievement (platform can have multiple items, but same achievement ID shouldn't repeat)
+    already_minted = contract.functions.isMinted(platform_checksum, achievement_id).call()
     if already_minted:
-        raise ValueError(f"Achievement {achievement_id} already minted for {wallet_address}")
+        raise ValueError(f"Achievement {achievement_id} already minted")
 
     # Build transaction
     minter_account = w3.eth.account.from_key(MINTER_PRIVATE_KEY)
     nonce = w3.eth.get_transaction_count(minter_account.address)
 
     tx = contract.functions.mintAchievement(
-        checksum_address,
+        platform_checksum,  # Mint to platform wallet, not user wallet
         achievement_id,
         provider,
         rarity_tier,
@@ -314,14 +323,8 @@ TRANSFER_ABI = [
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
-    },
-    {
-        "inputs": [{"name": "tokenId", "type": "uint256"}],
-        "name": "ownerOf",
-        "outputs": [{"name": "", "type": "address"}],
-        "stateMutability": "view",
-        "type": "function"
     }
+    # Note: ownerOf is already in ACHIEVEMENT_ABI, don't duplicate
 ]
 
 
