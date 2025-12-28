@@ -395,20 +395,25 @@ async def forge_achievements(
             continue
 
         achievement = db.query(Achievement).filter(Achievement.id == credit.achievement_id).first()
-        provider_account = db.query(ProviderAccount).filter(ProviderAccount.id == credit.provider_account_id).first()
+        provider_account = db.query(ProviderAccount).filter(ProviderAccount.id == credit.provider_account_id).first() if credit.provider_account_id else None
+
+        # Get provider name (from account or credit's stored provider_name for admin grants)
+        provider_name = provider_account.provider_name if provider_account else credit.provider_name
 
         # Look up game name for item type mapping
-        game = db.query(Game).filter(
-            Game.app_id == achievement.app_id,
-            Game.provider_account_id == provider_account.id
-        ).first()
+        game = None
+        if provider_account:
+            game = db.query(Game).filter(
+                Game.app_id == achievement.app_id,
+                Game.provider_account_id == provider_account.id
+            ).first()
         game_name = game.name if game else achievement.app_id
 
         try:
             result = await _wallet_service.mint_achievement_nft(
                 wallet_address=wallet.wallet_address,
                 achievement_credit_id=credit_id,
-                provider=provider_account.provider_name,
+                provider=provider_name,
                 app_id=achievement.app_id,
                 api_name=achievement.api_name,
                 rarity_tier=achievement.rarity_tier,
@@ -420,7 +425,7 @@ async def forge_achievements(
                 api_name=achievement.api_name,
                 app_id=achievement.app_id,
                 game_name=game_name,
-                provider=provider_account.provider_name,
+                provider=provider_name,
                 rarity_tier=achievement.rarity_tier,
                 effort_score=achievement.effort_score,
                 hidden=achievement.hidden,

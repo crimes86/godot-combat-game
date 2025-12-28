@@ -327,7 +327,7 @@ class RelayerService:
 
             # Sign and send
             signed = self.account.sign_transaction(tx)
-            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+            tx_hash = self.w3.eth.send_raw_transaction(signed.rawTransaction)
 
             logger.info(f"Forge tx sent: {tx_hash.hex()}")
 
@@ -428,7 +428,7 @@ class RelayerService:
 
             # Sign and send
             signed = self.account.sign_transaction(tx)
-            tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+            tx_hash = self.w3.eth.send_raw_transaction(signed.rawTransaction)
 
             logger.info(f"Trade batch tx sent: {tx_hash.hex()} ({len(trades)} trades)")
 

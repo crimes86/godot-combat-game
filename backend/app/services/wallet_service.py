@@ -212,14 +212,14 @@ async def mint_achievement_nft(
     ).build_transaction({
         'from': minter_account.address,
         'nonce': nonce,
-        'gas': 200000,  # Estimated gas
+        'gas': 500000,  # NFT minting needs ~357k gas
         'maxFeePerGas': w3.eth.gas_price * 2,
         'maxPriorityFeePerGas': w3.to_wei('0.001', 'gwei'),
     })
 
     # Sign and send
     signed_tx = w3.eth.account.sign_transaction(tx, MINTER_PRIVATE_KEY)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
     # Wait for receipt
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
@@ -376,7 +376,7 @@ async def transfer_to_external(token_id: int, to_address: str) -> str:
 
     # Sign and send
     signed_tx = w3.eth.account.sign_transaction(tx, PLATFORM_WALLET_KEY)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
     # Wait for receipt
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
@@ -440,7 +440,7 @@ async def transfer_from_external(token_id: int, from_address: str) -> str:
 
     # Sign and send
     signed_tx = w3.eth.account.sign_transaction(tx, PLATFORM_WALLET_KEY)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
     # Wait for receipt
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
