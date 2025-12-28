@@ -3227,22 +3227,165 @@ func _on_bridge_card_cancel_pressed(forged_id: Variant, item_name: String) -> vo
 
 	print("[Armory] Cancel clicked for: %s (forged_id: %s)" % [item_name, str(forged_id)])
 
-	# Show confirmation dialog
-	var dialog = AcceptDialog.new()
-	dialog.title = "Cancel Export"
-	dialog.dialog_text = "Cancel export of %s?\n\nThe item will return to your inventory." % item_name
-	dialog.ok_button_text = "Cancel Export"
-	dialog.add_cancel_button("Keep Exporting")
+	# === Create full-screen overlay ===
+	var overlay = ColorRect.new()
+	overlay.name = "CancelExportOverlay"
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.z_index = 100
+	add_child(overlay)
 
-	dialog.confirmed.connect(_execute_bridge_card_cancel.bind(forged_id, item_name, dialog))
-	dialog.canceled.connect(dialog.queue_free)
+	# === Center container ===
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
 
-	add_child(dialog)
-	dialog.popup_centered()
+	# === Main dialog panel ===
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(300, 0)
 
-func _execute_bridge_card_cancel(forged_id: Variant, item_name: String, dialog: AcceptDialog) -> void:
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.07, 0.06, 0.98)
+	panel_style.set_corner_radius_all(8)
+	panel_style.set_border_width_all(2)
+	panel_style.border_color = Color(0.6, 0.35, 0.15, 0.8)  # Orange/red tint for cancel
+	panel_style.shadow_color = Color(0.8, 0.4, 0.1, 0.3)
+	panel_style.shadow_size = 12
+	panel_style.shadow_offset = Vector2(0, 4)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	center.add_child(panel)
+
+	# === Content margin ===
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+
+	# === Main content VBox ===
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(vbox)
+
+	# --- Header ---
+	var header_hbox = HBoxContainer.new()
+	header_hbox.add_theme_constant_override("separation", 8)
+	vbox.add_child(header_hbox)
+
+	var title_label = Label.new()
+	title_label.text = "CANCEL EXPORT?"
+	title_label.add_theme_font_size_override("font_size", 16)
+	title_label.add_theme_color_override("font_color", Color(0.95, 0.75, 0.6))
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_hbox.add_child(title_label)
+
+	var close_btn = Button.new()
+	close_btn.text = "✕"
+	close_btn.flat = true
+	close_btn.add_theme_font_size_override("font_size", 16)
+	close_btn.add_theme_color_override("font_color", Color(0.6, 0.55, 0.5))
+	close_btn.add_theme_color_override("font_hover_color", Color(0.9, 0.5, 0.4))
+	close_btn.pressed.connect(overlay.queue_free)
+	close_btn.focus_mode = Control.FOCUS_NONE
+	header_hbox.add_child(close_btn)
+
+	# --- Separator ---
+	var sep_line = ColorRect.new()
+	sep_line.color = Color(0.5, 0.3, 0.15, 0.5)
+	sep_line.custom_minimum_size = Vector2(0, 1)
+	vbox.add_child(sep_line)
+
+	# --- Item name ---
+	var name_label = Label.new()
+	name_label.text = item_name
+	name_label.add_theme_font_size_override("font_size", 16)
+	name_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.3))
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(name_label)
+
+	# --- Description ---
+	var desc_label = Label.new()
+	desc_label.text = "The item will return to your inventory."
+	desc_label.add_theme_font_size_override("font_size", 12)
+	desc_label.add_theme_color_override("font_color", Color(0.65, 0.6, 0.55))
+	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(desc_label)
+
+	# --- Buttons ---
+	var btn_spacer = Control.new()
+	btn_spacer.custom_minimum_size = Vector2(0, 4)
+	vbox.add_child(btn_spacer)
+
+	var btn_hbox = HBoxContainer.new()
+	btn_hbox.add_theme_constant_override("separation", 12)
+	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(btn_hbox)
+
+	# Cancel Export button (red/danger)
+	var cancel_export_btn = Button.new()
+	cancel_export_btn.text = "Cancel Export"
+	cancel_export_btn.custom_minimum_size = Vector2(120, 36)
+	cancel_export_btn.focus_mode = Control.FOCUS_NONE
+
+	var danger_style = StyleBoxFlat.new()
+	danger_style.bg_color = Color(0.6, 0.2, 0.15, 0.9)
+	danger_style.set_corner_radius_all(4)
+	danger_style.set_border_width_all(1)
+	danger_style.border_color = Color(0.8, 0.35, 0.25, 0.8)
+	cancel_export_btn.add_theme_stylebox_override("normal", danger_style)
+
+	var danger_hover = danger_style.duplicate()
+	danger_hover.bg_color = Color(0.7, 0.25, 0.18, 0.95)
+	danger_hover.border_color = Color(0.9, 0.4, 0.3, 0.9)
+	cancel_export_btn.add_theme_stylebox_override("hover", danger_hover)
+
+	var danger_pressed = danger_style.duplicate()
+	danger_pressed.bg_color = Color(0.5, 0.15, 0.1, 0.95)
+	cancel_export_btn.add_theme_stylebox_override("pressed", danger_pressed)
+
+	cancel_export_btn.add_theme_font_size_override("font_size", 14)
+	cancel_export_btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.85))
+	cancel_export_btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.95))
+	cancel_export_btn.pressed.connect(_execute_bridge_card_cancel.bind(forged_id, item_name, overlay))
+	btn_hbox.add_child(cancel_export_btn)
+
+	# Keep Exporting button (subtle)
+	var keep_btn = Button.new()
+	keep_btn.text = "Keep"
+	keep_btn.custom_minimum_size = Vector2(80, 36)
+	keep_btn.focus_mode = Control.FOCUS_NONE
+
+	var keep_style = StyleBoxFlat.new()
+	keep_style.bg_color = Color(0.18, 0.16, 0.14, 0.9)
+	keep_style.set_corner_radius_all(4)
+	keep_style.set_border_width_all(1)
+	keep_style.border_color = Color(0.35, 0.3, 0.25, 0.7)
+	keep_btn.add_theme_stylebox_override("normal", keep_style)
+
+	var keep_hover = keep_style.duplicate()
+	keep_hover.bg_color = Color(0.25, 0.22, 0.18, 0.95)
+	keep_hover.border_color = Color(0.45, 0.38, 0.3, 0.8)
+	keep_btn.add_theme_stylebox_override("hover", keep_hover)
+
+	keep_btn.add_theme_font_size_override("font_size", 14)
+	keep_btn.add_theme_color_override("font_color", Color(0.7, 0.65, 0.6))
+	keep_btn.add_theme_color_override("font_hover_color", Color(0.85, 0.8, 0.75))
+	keep_btn.pressed.connect(overlay.queue_free)
+	btn_hbox.add_child(keep_btn)
+
+	# Click outside to dismiss
+	overlay.gui_input.connect(func(event):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			var panel_rect = panel.get_global_rect()
+			if not panel_rect.has_point(event.global_position):
+				overlay.queue_free()
+	)
+
+func _execute_bridge_card_cancel(forged_id: Variant, item_name: String, overlay: Control) -> void:
 	"""Execute the bridge-out cancel after confirmation"""
-	dialog.queue_free()
+	overlay.queue_free()
 
 	# Find and disable the X button to prevent double-clicks
 	var x_btn_name = "CancelX_%s" % str(forged_id)
@@ -3777,10 +3920,12 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 	card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	card.clip_contents = true
+	card.mouse_filter = Control.MOUSE_FILTER_STOP  # Capture mouse input
 
 	# Background panel with colored border
 	var bg_panel = PanelContainer.new()
 	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_panel.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass input to parent
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.08, 0.10)
 	if is_bridge_in:
@@ -3795,10 +3940,12 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 	# Content container for overlays
 	var card_content = Control.new()
 	card_content.set_anchors_preset(Control.PRESET_FULL_RECT)
+	card_content.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass input to parent
 	card.add_child(card_content)
 
 	var center = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass input to parent
 	card_content.add_child(center)
 
 	# Item icon - 42x42 to fit in 48x48 card with border
@@ -3811,24 +3958,39 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 			icon.custom_minimum_size = Vector2(42, 42)
 			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass input to parent
 			center.add_child(icon)
 		else:
 			var label = Label.new()
 			label.text = item_name.substr(0, 1).to_upper() if item_name else "?"
 			label.add_theme_font_size_override("font_size", 16)
 			label.add_theme_color_override("font_color", TEXT_SECONDARY)
+			label.mouse_filter = Control.MOUSE_FILTER_PASS
 			center.add_child(label)
 	else:
 		var label = Label.new()
 		label.text = item_name.substr(0, 1).to_upper() if item_name else "?"
 		label.add_theme_font_size_override("font_size", 16)
 		label.add_theme_color_override("font_color", TEXT_SECONDARY)
+		label.mouse_filter = Control.MOUSE_FILTER_PASS
 		center.add_child(label)
 
 	if is_bridge_in:
 		# Bridge-in: clickable to import
 		card.tooltip_text = "%s\nClick to import" % item_name
-		card.gui_input.connect(_on_bridge_in_card_clicked.bind(item))
+		# Add invisible click overlay button for reliable click handling
+		var click_overlay = Button.new()
+		click_overlay.name = "ClickOverlay"
+		click_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+		click_overlay.flat = true
+		click_overlay.focus_mode = Control.FOCUS_NONE
+		click_overlay.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		var transparent_style = StyleBoxEmpty.new()
+		click_overlay.add_theme_stylebox_override("normal", transparent_style)
+		click_overlay.add_theme_stylebox_override("hover", transparent_style)
+		click_overlay.add_theme_stylebox_override("pressed", transparent_style)
+		click_overlay.pressed.connect(_on_bridge_in_card_button_pressed.bind(item))
+		card.add_child(click_overlay)
 	else:
 		# Bridge-out: show countdown, click to cancel
 		var can_confirm = item.get("can_confirm", false)
@@ -3858,6 +4020,7 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 		countdown_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 		countdown_label.add_theme_constant_override("outline_size", 2)
 		countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		countdown_label.mouse_filter = Control.MOUSE_FILTER_PASS  # Pass input to parent
 		# Store end timestamp for accurate countdown even after UI refresh
 		var label_ends_at = cooldown_ends_at if cooldown_ends_at > 0 else (Time.get_unix_time_from_system() + hours * 3600.0)
 		countdown_label.set_meta("cooldown_ends_at", label_ends_at)
@@ -3876,10 +4039,20 @@ func _create_bridge_item_card(item: Dictionary, is_bridge_in: bool) -> Control:
 				item_name,
 				_format_bridge_countdown(hours) if hours > 0 else "Starting..."
 			]
-			# Always allow click to cancel while in cooldown
-			card.set_meta("forged_id", forged_id)
-			card.set_meta("item_name", item_name)
-			card.gui_input.connect(_on_bridge_out_card_input.bind(forged_id, item_name))
+			# Add invisible click overlay button (Control nodes don't have proper hit areas)
+			var click_overlay = Button.new()
+			click_overlay.name = "ClickOverlay"
+			click_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+			click_overlay.flat = true
+			click_overlay.focus_mode = Control.FOCUS_NONE
+			click_overlay.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			# Make button transparent
+			var transparent_style = StyleBoxEmpty.new()
+			click_overlay.add_theme_stylebox_override("normal", transparent_style)
+			click_overlay.add_theme_stylebox_override("hover", transparent_style)
+			click_overlay.add_theme_stylebox_override("pressed", transparent_style)
+			click_overlay.pressed.connect(_on_bridge_card_cancel_pressed.bind(forged_id, item_name))
+			card.add_child(click_overlay)
 
 	return card
 
@@ -3919,22 +4092,26 @@ func _format_bridge_countdown(hours: float) -> String:
 	else:
 		return "%02d:%02d" % [m, s]
 
+func _on_bridge_in_card_button_pressed(item: Dictionary) -> void:
+	"""Handle button press on a bridge-in item card - show confirmation popup"""
+	var token_id = item.get("token_id", -1)
+	var item_name = item.get("item_name", "Unknown")
+
+	if token_id == -1:
+		return
+
+	if SoundManager:
+		SoundManager.play_button_click_sound(-6.0)
+
+	print("[Armory] Bridge-in clicked for: %s (token_id: %d)" % [item_name, token_id])
+
+	# Show confirmation popup
+	_show_bridge_in_confirmation(item_name, int(token_id))
+
 func _on_bridge_in_card_clicked(event: InputEvent, item: Dictionary) -> void:
-	"""Handle click on a bridge-in item card - show confirmation popup"""
+	"""Handle click on a bridge-in item card - show confirmation popup (legacy, kept for compatibility)"""
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var token_id = item.get("token_id", -1)
-		var item_name = item.get("item_name", "Unknown")
-
-		if token_id == -1:
-			return
-
-		if SoundManager:
-			SoundManager.play_button_click_sound(-6.0)
-
-		print("[Armory] Bridge-in clicked for: %s (token_id: %d)" % [item_name, token_id])
-
-		# Show confirmation popup
-		_show_bridge_in_confirmation(item_name, int(token_id))
+		_on_bridge_in_card_button_pressed(item)
 
 func _on_bridge_in_complete(bridged_items: Array, item_name: String) -> void:
 	"""Callback when bind completes"""

@@ -574,6 +574,22 @@ func _on_claim_response(result: int, response_code: int, _headers: PackedStringA
 
 	# Build forged_item structure for cache and inventory
 	var forged_item_id = item_props.get("item_id", item_id)
+
+	# Get forger name - this is the current user who just forged
+	var forger_name_value = ""
+	if AshbaneAuth and AshbaneAuth.is_logged_in():
+		forger_name_value = AshbaneAuth.username if AshbaneAuth.username else "Unknown"
+
+	# Get current timestamp for forged_at (backend may also provide this)
+	var forged_at_value = forged_data.get("forged_at", forged_data.get("created_at", ""))
+	if forged_at_value == "":
+		# Use current ISO timestamp if backend didn't provide one
+		var datetime = Time.get_datetime_dict_from_system(true)  # UTC
+		forged_at_value = "%04d-%02d-%02dT%02d:%02d:%02dZ" % [
+			datetime.year, datetime.month, datetime.day,
+			datetime.hour, datetime.minute, datetime.second
+		]
+
 	var forged_item = {
 		"id": forged_item_id,  # String item_id for consistency with catalog
 		"item_id": forged_item_id,
@@ -593,6 +609,11 @@ func _on_claim_response(result: int, response_code: int, _headers: PackedStringA
 		"game": forged_data.get("game_name", ""),
 		"achievement": forged_data.get("achievement_name", ""),
 		"source_provider": item_props.get("source_provider", ""),
+		# Provenance fields for ItemInspectionUI
+		"forger_name": forger_name_value,
+		"original_forger": forger_name_value,
+		"forged_at": forged_at_value,
+		"trade_count": 0,  # New items haven't been traded
 	}
 
 	# Add to cache
@@ -667,7 +688,10 @@ func sync_to_inventory() -> int:
 			continue
 
 		# Check if already in inventory (by forged_id)
+		# NOTE: token_id can be float from JSON (e.g., 134.0), must convert to int first
 		var token_id = forged.get("token_id", 0)
+		if token_id is float:
+			token_id = int(token_id)
 		var forged_id = str(token_id) if token_id else forged.get("item_id", "")
 		if _is_item_in_inventory(forged_id):
 			continue
@@ -699,6 +723,8 @@ func claim_single_item(item_id: String) -> Dictionary:
 
 	# Claim on server (authoritative)
 	var token_id = forged.get("token_id", 0)
+	if token_id is float:
+		token_id = int(token_id)
 	if token_id:
 		var claim_result = await _claim_on_server(token_id)
 		if not claim_result:
@@ -775,7 +801,10 @@ func is_item_claimed(item_id: String) -> bool:
 	if forged.get("claimed_in_game", false):
 		return true
 	# Fallback: check local inventory
+	# NOTE: token_id can be float from JSON (e.g., 134.0), must convert to int first
 	var token_id = forged.get("token_id", 0)
+	if token_id is float:
+		token_id = int(token_id)
 	var forged_id = str(token_id) if token_id else forged.get("item_id", "")
 	return _is_item_in_inventory(forged_id)
 
@@ -803,13 +832,23 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 	if item_id != "":
 		forge_db_item = ForgeItemDB.get_item_by_id(item_id)
 
+	# Get forger name from AshbaneAuth if this is our item
+	var forger_name = forged.get("forger_name", forged.get("original_forger", ""))
+	if forger_name == "" and AshbaneAuth and AshbaneAuth.is_logged_in():
+		forger_name = AshbaneAuth.username if AshbaneAuth.username else "Unknown"
+
+	# Get token_id (can be int or float from JSON)
+	var token_id = forged.get("token_id", 0)
+	if token_id is float:
+		token_id = int(token_id)
+
 	var base_item = {
 		"name": forged.get("item_name", "Forged Item"),
 		"description": forged.get("description", "A forged item from an achievement."),
 		"stackable": false,
 		"quantity": 1,
 		"is_forged": true,
-		"forged_id": str(forged.get("token_id", forged.get("item_id", ""))),
+		"forged_id": str(token_id if token_id else forged.get("item_id", "")),
 		"forged_item_id": forged.get("item_id", ""),  # Used by Player.gd for sprite lookup
 		"item_id": forged.get("item_id", ""),
 		"rarity": rarity.capitalize(),
@@ -824,6 +863,13 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 		"provider_accent_color": forged.get("provider_accent_color", "#1B9BD7"),
 		"can_trade": true,
 		"value": damage_bonus * 100,  # Base sell value
+		# Provenance fields for ItemInspectionUI
+		"token_id": token_id,
+		"forger_name": forger_name,
+		"original_forger": forger_name,
+		"forged_at": forged.get("forged_at", forged.get("created_at", "")),
+		"tx_hash": forged.get("tx_hash", ""),
+		"trade_count": forged.get("trade_count", 0),
 	}
 
 	match item_type:

@@ -298,11 +298,12 @@ VINTAGE_PREFIXES = [
     (0, ""),
 ]
 
+# Rarity prefixes disabled - item names are cleaner without them
 RARITY_PREFIXES = {
-    "legendary": "Mythic",
-    "epic": "Exalted",
-    "rare": "Enchanted",
-    "uncommon": "Refined",
+    "legendary": "",
+    "epic": "",
+    "rare": "",
+    "uncommon": "",
     "common": "",
 }
 
