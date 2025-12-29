@@ -2781,6 +2781,9 @@ async def dashboard(
                     elif p["name"] == "roblox":
                         # Roblox stores display name
                         profile_display_name = source.profile_data.get("display_name") or source.profile_data.get("name")
+                    elif p["name"] == "google_play":
+                        # Google Play Games stores gamertag
+                        profile_display_name = source.profile_data.get("gamertag") or "Google Play"
                     else:
                         # Generic fallback for any other provider
                         profile_display_name = source.profile_data.get("display_name") or source.profile_data.get("name")

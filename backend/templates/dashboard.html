@@ -6,8 +6,8 @@
   <title>Dashboard – Ashbane</title>
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
-  <link rel="stylesheet" href="/static/css/styles.css?v=5" />
-  <link rel="stylesheet" href="/static/css/ashbane-theme.css?v=5" />
+  <link rel="stylesheet" href="/static/css/styles.css?v=7" />
+  <link rel="stylesheet" href="/static/css/ashbane-theme.css?v=7" />
   <style>
     /* Syncing animation */
     .sync-status.syncing {
@@ -2038,7 +2038,7 @@
 {% macro gem_svg(tier) %}
   {% if tier == 'Common' %}
     <!-- Gray Stone - Classic Diamond Cut -->
-    <svg width="32" height="32" viewBox="0 0 32 32" style="overflow:visible;">
+    <svg width="24" height="24" viewBox="0 0 32 32" style="overflow:visible;">
       <defs>
         <linearGradient id="gc1" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#a0a0a0"/>
@@ -2058,7 +2058,7 @@
     </svg>
   {% elif tier == 'Uncommon' %}
     <!-- Green Emerald -->
-    <svg width="32" height="32" viewBox="0 0 32 32" style="overflow:visible;">
+    <svg width="24" height="24" viewBox="0 0 32 32" style="overflow:visible;">
       <defs>
         <linearGradient id="gu1" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#40ff40"/>
@@ -2081,7 +2081,7 @@
     </svg>
   {% elif tier == 'Rare' %}
     <!-- Blue Sapphire -->
-    <svg width="32" height="32" viewBox="0 0 32 32" style="overflow:visible;">
+    <svg width="24" height="24" viewBox="0 0 32 32" style="overflow:visible;">
       <defs>
         <linearGradient id="gr1" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#44ccff"/>
@@ -2104,7 +2104,7 @@
     </svg>
   {% elif tier == 'Epic' %}
     <!-- Purple Amethyst -->
-    <svg width="32" height="32" viewBox="0 0 32 32" style="overflow:visible;">
+    <svg width="24" height="24" viewBox="0 0 32 32" style="overflow:visible;">
       <defs>
         <linearGradient id="ge1" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#cc66ff"/>
@@ -2127,7 +2127,7 @@
     </svg>
   {% else %}
     <!-- Legendary Gold Diamond -->
-    <svg width="32" height="32" viewBox="0 0 32 32" style="overflow:visible;">
+    <svg width="24" height="24" viewBox="0 0 32 32" style="overflow:visible;">
       <defs>
         <linearGradient id="gl1" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#ffdd44"/>
@@ -2765,36 +2765,6 @@
         {% else %}
         {# Achievement Provider - Full Card #}
 
-        {% if provider.name == 'xbox' and provider.profile_data %}
-        <!-- Xbox Stats Row -->
-        <div class="xbox-stats" style="display:flex; justify-content:center; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap;">
-          {% if provider.profile_data.gamerscore %}
-          <div style="display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; background:rgba(55,253,18,0.1); border:1px solid rgba(55,253,18,0.25);">
-            <span style="color:#37fd12; font-weight:700; font-size:0.9rem;">G</span>
-            <span style="color:#ccc; font-size:0.8rem; font-weight:500;">{{ "{:,}".format(provider.profile_data.gamerscore) }}</span>
-          </div>
-          {% endif %}
-          {% if provider.profile_data.tenure_level %}
-          <div style="display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; background:rgba(55,253,18,0.1); border:1px solid rgba(55,253,18,0.25);" title="{{ provider.profile_data.tenure_level }} years on Xbox Live">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#37fd12" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <polyline points="12,6 12,12 16,14"/>
-            </svg>
-            <span style="color:#ccc; font-size:0.8rem; font-weight:500;">{{ provider.profile_data.tenure_level }}yr</span>
-          </div>
-          {% endif %}
-          {% if provider.profile_data.total_games %}
-          <div style="display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; background:rgba(55,253,18,0.1); border:1px solid rgba(55,253,18,0.25);" title="{{ provider.profile_data.total_games }} games played">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#37fd12" stroke-width="2">
-              <rect x="2" y="6" width="20" height="12" rx="2"/>
-              <circle cx="8" cy="12" r="2"/>
-              <circle cx="16" cy="12" r="2"/>
-            </svg>
-            <span style="color:#ccc; font-size:0.8rem; font-weight:500;">{{ provider.profile_data.total_games }}</span>
-          </div>
-          {% endif %}
-        </div>
-        {% endif %}
 
         <!-- Trophy & Rarity Breakdown -->
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:space-between; flex:1; width:100%; padding-bottom:2.5rem;">

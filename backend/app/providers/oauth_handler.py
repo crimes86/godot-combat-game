@@ -128,7 +128,7 @@ def get_display_name(provider_name: str, userinfo: dict) -> Optional[str]:
         "discord": ["username", "global_name"],
         "twitch": ["data.0.display_name", "data.0.login"],
         "google": ["name", "email"],
-        "google_play": ["name", "email"],
+        "google_play": [],  # Gamertag fetched from Play Games API during sync
         "github": ["login", "name"],
         "twitter": ["data.username", "data.name"],
         "reddit": ["name"],

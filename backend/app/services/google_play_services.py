@@ -18,6 +18,29 @@ logger = logging.getLogger(__name__)
 GOOGLE_PLAY_GAMES_API = "https://games.googleapis.com/games/v1"
 
 
+async def get_player_profile(access_token: str) -> dict:
+    """
+    Fetch player profile from Google Play Games.
+    Returns player info including displayName (gamertag).
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(
+            f"{GOOGLE_PLAY_GAMES_API}/players/me",
+            headers=headers,
+        )
+
+        if resp.status_code != 200:
+            logger.warning(f"[GOOGLE_PLAY] Player profile API returned {resp.status_code}")
+            return {}
+
+        return resp.json()
+
+
 async def get_player_achievements(access_token: str) -> list:
     """
     Fetch all unlocked achievements for the authenticated player.
@@ -171,6 +194,17 @@ async def sync_google_play_achievements(
     # Initialize profile_data if needed
     if not provider_account.profile_data:
         provider_account.profile_data = {}
+
+    # Fetch player profile (for gamertag)
+    try:
+        player_profile = await get_player_profile(token)
+        gamertag = player_profile.get("displayName")
+        if gamertag:
+            provider_account.provider_username = gamertag
+            provider_account.profile_data["gamertag"] = gamertag
+            logger.info(f"[GOOGLE_PLAY] Player gamertag: {gamertag}")
+    except Exception as e:
+        logger.warning(f"[GOOGLE_PLAY] Could not fetch player profile: {e}")
 
     # Fetch unlocked achievements
     try:

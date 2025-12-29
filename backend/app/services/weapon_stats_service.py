@@ -666,6 +666,7 @@ def stats_to_dict(stats: WeaponStats) -> Dict[str, Any]:
         # Computed
         "is_virgin": is_virgin(stats),
         "visual_tier": get_visual_tier(stats),
+        "combat_prefix": get_combat_prefix(stats),
         "crit_rate_lifetime": get_crit_rate(stats),
     }
 
@@ -681,9 +682,19 @@ def is_virgin(stats: WeaponStats) -> bool:
 
 
 def get_visual_tier(stats: WeaponStats) -> str:
-    """Get visual tier based on kills."""
+    """
+    Get visual tier based on kills for weapon evolution.
+
+    Tiers (per FORGED_WEAPON_STATS.md):
+    - VIRGIN: 0 kills (pristine, collectors' items)
+    - BLOODED: 1-99 kills
+    - VETERAN: 100-999 kills
+    - BATTLE-WORN: 1K-9,999 kills
+    - LEGENDARY: 10K-49,999 kills
+    - MYTHIC: 50K+ kills
+    """
     if is_virgin(stats):
-        return "PRISTINE"
+        return "VIRGIN"
     elif stats.kills_total >= 50000:
         return "MYTHIC"
     elif stats.kills_total >= 10000:
@@ -694,6 +705,42 @@ def get_visual_tier(stats: WeaponStats) -> str:
         return "VETERAN"
     else:
         return "BLOODED"
+
+
+# Combat tier prefixes for item display names
+COMBAT_TIER_PREFIXES = {
+    "VIRGIN": "",           # No prefix for virgin weapons - they're pure
+    "BLOODED": "Blooded",
+    "VETERAN": "Veteran",
+    "BATTLE-WORN": "Battle-Worn",
+    "LEGENDARY": "Legendary",
+    "MYTHIC": "Mythic",
+}
+
+
+def get_combat_prefix(stats: WeaponStats) -> str:
+    """Get the combat tier prefix for display name."""
+    tier = get_visual_tier(stats)
+    return COMBAT_TIER_PREFIXES.get(tier, "")
+
+
+def get_display_name_with_combat_tier(base_name: str, stats: Optional[WeaponStats]) -> str:
+    """
+    Generate item display name with combat tier prefix.
+
+    Examples:
+    - Virgin weapon: "Coiled Sword"
+    - Blooded: "Blooded Coiled Sword"
+    - Veteran: "Veteran Coiled Sword"
+    - Mythic: "Mythic Coiled Sword"
+    """
+    if not stats:
+        return base_name
+
+    prefix = get_combat_prefix(stats)
+    if prefix:
+        return f"{prefix} {base_name}"
+    return base_name
 
 
 def get_crit_rate(stats: WeaponStats) -> float:

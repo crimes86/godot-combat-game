@@ -55,6 +55,43 @@ def _get_item_rarity(item_id: str) -> str:
     # items.json uses base_rarity or rarity
     return item.get("base_rarity", item.get("rarity", "common")).lower()
 
+
+def _get_display_name_with_combat_prefix(forged: ForgedAchievement, db: DbSession) -> str:
+    """
+    Get item display name with combat tier prefix (for weapons only).
+
+    Combat tiers based on kills:
+    - Virgin (0 kills): No prefix
+    - Blooded (1-99): "Blooded X"
+    - Veteran (100-999): "Veteran X"
+    - Battle-Worn (1K-9,999): "Battle-Worn X"
+    - Legendary (10K-49,999): "Legendary X"
+    - Mythic (50K+): "Mythic X"
+    """
+    base_name = forged.item_name or "Unknown Item"
+
+    # Only weapons have combat tiers
+    if forged.item_type != "weapon":
+        return base_name
+
+    # Import here to avoid circular imports
+    from app.models import WeaponStats
+    from app.services.weapon_stats_service import get_combat_prefix
+
+    # Look up weapon stats
+    stats = db.query(WeaponStats).filter(
+        WeaponStats.forged_achievement_id == forged.id
+    ).first()
+
+    if not stats:
+        return base_name
+
+    prefix = get_combat_prefix(stats)
+    if prefix:
+        return f"{prefix} {base_name}"
+    return base_name
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/wallet", tags=["wallet"])
@@ -532,34 +569,35 @@ async def get_forged_achievements(
         .all()
     )
 
-    return {
-        "forged": [
-            {
-                "id": f.id,
-                "token_id": f.token_id,
-                "contract_address": f.contract_address,
-                "chain_id": f.chain_id,
-                "tx_hash": f.tx_hash,
-                "forged_at": f.forged_at.isoformat() if f.forged_at else None,
-                # Item properties from ForgedAchievement
-                "item_id": f.item_id,
-                "item_name": f.item_name,
-                "item_type": f.item_type,
-                "weapon_type": f.weapon_type,
-                "item_rarity": f.item_rarity,
-                "effect_name": f.effect_name,
-                "glow_color": f.glow_color,
-                "bridge_status": f.bridge_status or "in_game",
-                "achievement": {
-                    "display_name": achievement.display_name,
-                    "description": achievement.description,
-                    "icon_url": achievement.icon_url,
-                    "rarity_tier": achievement.rarity_tier,
-                },
-            }
-            for f, achievement, credit in forged
-        ],
-    }
+    # Build response with display names (includes combat tier prefix for weapons)
+    forged_list = []
+    for f, achievement, credit in forged:
+        forged_list.append({
+            "id": f.id,
+            "token_id": f.token_id,
+            "contract_address": f.contract_address,
+            "chain_id": f.chain_id,
+            "tx_hash": f.tx_hash,
+            "forged_at": f.forged_at.isoformat() if f.forged_at else None,
+            # Item properties from ForgedAchievement
+            "item_id": f.item_id,
+            "item_name": f.item_name,
+            "display_name": _get_display_name_with_combat_prefix(f, db),
+            "item_type": f.item_type,
+            "weapon_type": f.weapon_type,
+            "item_rarity": f.item_rarity,
+            "effect_name": f.effect_name,
+            "glow_color": f.glow_color,
+            "bridge_status": f.bridge_status or "in_game",
+            "achievement": {
+                "display_name": achievement.display_name,
+                "description": achievement.description,
+                "icon_url": achievement.icon_url,
+                "rarity_tier": achievement.rarity_tier,
+            },
+        })
+
+    return {"forged": forged_list}
 
 
 # =============================================================================
