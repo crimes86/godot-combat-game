@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Tapestry - Ashbane</title>
+    <!-- Preconnect to external domains -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.cloudflare.steamstatic.com">
+    <!-- Async font loading -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0f;
+            color: #e8e6e3;
+            min-height: 100vh;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .back-link {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #12121a;
+            border: 1px solid rgba(201, 162, 39, 0.3);
+            border-radius: 6px;
+            color: #9d9d9d;
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+        .back-link:hover { border-color: #c9a227; color: #c9a227; }
+
+        .tapestry-header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 12px;
+            padding: 10px 18px;
+            background: linear-gradient(135deg, #12121a 0%, #1a1a24 100%);
+            border: 1px solid rgba(201, 162, 39, 0.3);
+            border-radius: 8px;
+        }
+
+        .tapestry-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.2rem;
+            background: linear-gradient(135deg, #c9a227 0%, #e8d5b7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .parity-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 6px 14px;
+            background: #0a0a0f;
+            border: 1px solid #c9a227;
+            border-radius: 6px;
+        }
+
+        .parity-value {
+            font-family: 'Cinzel', serif;
+            font-size: 1.3rem;
+            color: #c9a227;
+        }
+
+        .parity-label {
+            font-size: 0.65rem;
+            color: #9d9d9d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .contribute-btn {
+            margin-left: auto;
+            padding: 6px 14px;
+            background: linear-gradient(135deg, #c9a227 0%, #b8941f 100%);
+            border: none;
+            border-radius: 5px;
+            color: #000;
+            font-family: 'Cinzel', serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .contribute-btn:hover { filter: brightness(1.1); }
+
+        .provider-legend {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.7rem;
+            color: #9d9d9d;
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* The tapestry weave container - RGB RAM style */
+        .tapestry-weave {
+            display: inline-block;
+            position: relative;
+            padding: 10px 15px;
+            background: #0a0a0f;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* RGB wave layer behind content */
+        .tapestry-weave::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                90deg,
+                #ff0040,      /* Hot pink */
+                #ff6600,      /* Orange */
+                #ffcc00,      /* Gold */
+                #37fd12,      /* Xbox green */
+                #00ffaa,      /* Cyan-green */
+                #1b9bd7,      /* Steam blue */
+                #5865f2,      /* Discord purple */
+                #ff00ff,      /* Magenta */
+                #ff0040       /* Loop back */
+            );
+            background-size: 400% 400%;
+            animation: rgbShift 20s ease-in-out infinite;
+            opacity: 0.15;
+        }
+
+        /* Intense glow border effect */
+        .tapestry-weave::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            left: -4px;
+            right: -4px;
+            bottom: -4px;
+            background: linear-gradient(
+                90deg,
+                #ff0040,
+                #ff6600,
+                #ffcc00,
+                #37fd12,
+                #00ffaa,
+                #1b9bd7,
+                #5865f2,
+                #ff00ff,
+                #ff0040
+            );
+            background-size: 400% 400%;
+            animation: rgbShift 20s ease-in-out infinite reverse;
+            border-radius: 12px;
+            z-index: -1;
+            filter: blur(15px);
+            opacity: 1;
+        }
+
+        /* Complex shifting animation with direction changes */
+        @keyframes rgbShift {
+            0% { background-position: 0% 50%; }
+            25% { background-position: 100% 25%; }
+            50% { background-position: 200% 75%; }
+            75% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .tapestry-wrapper {
+            text-align: center;
+            position: relative;
+            display: inline-block;
+            padding: 30px; /* Space for tassels */
+        }
+
+        /* Tassel fringe around perimeter - contained within wrapper */
+        .tassel-border {
+            position: absolute;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* Bottom tassels - hanging threads with organic variation */
+        .tassel-bottom {
+            bottom: 6px;
+            left: 38px;
+            right: 38px;
+            height: 24px;
+            background:
+                /* Layer 1: Main threads - irregular spacing */
+                repeating-linear-gradient(
+                    92deg,
+                    transparent 0px,
+                    transparent 2px,
+                    rgba(190, 165, 115, 0.7) 2px,
+                    rgba(175, 150, 100, 0.5) 3px,
+                    transparent 3px,
+                    transparent 8px,
+                    rgba(170, 145, 95, 0.6) 8px,
+                    rgba(160, 140, 90, 0.4) 9px,
+                    transparent 9px,
+                    transparent 14px
+                ),
+                /* Layer 2: Thinner accent threads */
+                repeating-linear-gradient(
+                    88deg,
+                    transparent 0px,
+                    transparent 5px,
+                    rgba(200, 175, 125, 0.4) 5px,
+                    rgba(185, 160, 110, 0.3) 5.5px,
+                    transparent 5.5px,
+                    transparent 18px
+                ),
+                /* Layer 3: Sparse long threads */
+                repeating-linear-gradient(
+                    90deg,
+                    transparent 0px,
+                    transparent 22px,
+                    rgba(180, 155, 105, 0.5) 22px,
+                    rgba(165, 140, 95, 0.3) 23px,
+                    transparent 23px,
+                    transparent 35px
+                );
+            mask-image:
+                linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.2) 80%, rgba(0,0,0,0) 100%),
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            -webkit-mask-image:
+                linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.2) 80%, rgba(0,0,0,0) 100%);
+            mask-composite: intersect;
+        }
+
+        /* Top tassels - shorter fringe */
+        .tassel-top {
+            top: 16px;
+            left: 38px;
+            right: 38px;
+            height: 14px;
+            background:
+                repeating-linear-gradient(
+                    91deg,
+                    transparent 0px,
+                    transparent 3px,
+                    rgba(185, 160, 110, 0.55) 3px,
+                    rgba(170, 145, 95, 0.4) 4px,
+                    transparent 4px,
+                    transparent 9px,
+                    rgba(175, 150, 100, 0.45) 9px,
+                    rgba(160, 140, 90, 0.3) 10px,
+                    transparent 10px,
+                    transparent 16px
+                ),
+                repeating-linear-gradient(
+                    87deg,
+                    transparent 0px,
+                    transparent 7px,
+                    rgba(195, 170, 120, 0.35) 7px,
+                    rgba(180, 155, 105, 0.25) 7.5px,
+                    transparent 7.5px,
+                    transparent 21px
+                );
+            mask-image: linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
+            -webkit-mask-image: linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
+        }
+
+        /* Left tassels - horizontal threads */
+        .tassel-left {
+            left: 12px;
+            top: 38px;
+            bottom: 38px;
+            width: 18px;
+            background:
+                repeating-linear-gradient(
+                    2deg,
+                    transparent 0px,
+                    transparent 3px,
+                    rgba(185, 160, 110, 0.5) 3px,
+                    rgba(170, 145, 95, 0.35) 4px,
+                    transparent 4px,
+                    transparent 10px,
+                    rgba(175, 150, 100, 0.45) 10px,
+                    rgba(160, 140, 90, 0.3) 11px,
+                    transparent 11px,
+                    transparent 17px
+                ),
+                repeating-linear-gradient(
+                    -2deg,
+                    transparent 0px,
+                    transparent 8px,
+                    rgba(195, 170, 120, 0.3) 8px,
+                    rgba(180, 155, 105, 0.2) 8.5px,
+                    transparent 8.5px,
+                    transparent 25px
+                );
+            mask-image: linear-gradient(270deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
+            -webkit-mask-image: linear-gradient(270deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
+        }
+
+        /* Right tassels */
+        .tassel-right {
+            right: 12px;
+            top: 38px;
+            bottom: 38px;
+            width: 18px;
+            background:
+                repeating-linear-gradient(
+                    -1deg,
+                    transparent 0px,
+                    transparent 3px,
+                    rgba(185, 160, 110, 0.5) 3px,
+                    rgba(170, 145, 95, 0.35) 4px,
+                    transparent 4px,
+                    transparent 11px,
+                    rgba(175, 150, 100, 0.45) 11px,
+                    rgba(160, 140, 90, 0.3) 12px,
+                    transparent 12px,
+                    transparent 18px
+                ),
+                repeating-linear-gradient(
+                    3deg,
+                    transparent 0px,
+                    transparent 6px,
+                    rgba(195, 170, 120, 0.3) 6px,
+                    rgba(180, 155, 105, 0.2) 6.5px,
+                    transparent 6.5px,
+                    transparent 22px
+                );
+            mask-image: linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
+            -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
+        }
+
+        /* Corner tassels - decorative knots with texture */
+        .tassel-corner {
+            width: 16px;
+            height: 16px;
+            background:
+                radial-gradient(
+                    ellipse 60% 80% at 45% 55%,
+                    rgba(210, 180, 120, 0.6) 0%,
+                    rgba(190, 160, 100, 0.4) 30%,
+                    rgba(170, 140, 80, 0.2) 60%,
+                    transparent 80%
+                ),
+                radial-gradient(
+                    ellipse 50% 70% at 55% 45%,
+                    rgba(200, 170, 110, 0.5) 0%,
+                    rgba(180, 150, 90, 0.3) 40%,
+                    transparent 70%
+                );
+        }
+        .tassel-corner.top-left { top: 22px; left: 22px; transform: rotate(-5deg); }
+        .tassel-corner.top-right { top: 22px; right: 22px; transform: rotate(8deg); }
+        .tassel-corner.bottom-left { bottom: 22px; left: 22px; transform: rotate(3deg); }
+        .tassel-corner.bottom-right { bottom: 22px; right: 22px; transform: rotate(-6deg); }
+
+        /* Inner container for icons */
+        .tapestry-icons {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* Woven thread grid overlay - organic fabric look */
+        .tapestry-icons::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 50;
+            background:
+                /* Layer 1: Primary horizontal threads - slightly irregular */
+                repeating-linear-gradient(
+                    2deg,
+                    transparent,
+                    transparent 7px,
+                    rgba(190, 170, 130, 0.15) 7px,
+                    rgba(200, 180, 140, 0.10) 8px,
+                    rgba(180, 160, 120, 0.08) 9px,
+                    transparent 9px
+                ),
+                /* Layer 2: Secondary horizontal - offset */
+                repeating-linear-gradient(
+                    -1deg,
+                    transparent,
+                    transparent 11px,
+                    rgba(170, 150, 110, 0.08) 11px,
+                    rgba(160, 140, 100, 0.06) 12px,
+                    transparent 12px
+                ),
+                /* Layer 3: Primary vertical threads */
+                repeating-linear-gradient(
+                    91deg,
+                    transparent,
+                    transparent 6px,
+                    rgba(200, 175, 130, 0.12) 6px,
+                    rgba(185, 165, 125, 0.08) 7px,
+                    rgba(170, 150, 110, 0.05) 8px,
+                    transparent 8px
+                ),
+                /* Layer 4: Secondary vertical - offset */
+                repeating-linear-gradient(
+                    88deg,
+                    transparent,
+                    transparent 13px,
+                    rgba(175, 155, 115, 0.07) 13px,
+                    rgba(165, 145, 105, 0.05) 14px,
+                    transparent 14px
+                ),
+                /* Subtle noise/grain texture */
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.25;
+        }
+
+        /* Game icon tiles */
+        .game-icon {
+            position: absolute;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            overflow: hidden;
+            background: #1a1a24;
+            opacity: 0.5;
+        }
+
+        .game-icon:hover {
+            opacity: 1;
+        }
+
+        .game-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: filter 0.25s;
+        }
+
+        .game-icon:hover {
+            transform: scale(1.15) translateY(-5px);
+            z-index: 100 !important;
+            box-shadow: 0 8px 40px rgba(201, 162, 39, 0.4);
+        }
+
+        .game-icon:hover img {
+            filter: brightness(1.2);
+        }
+
+        /* Provider-themed borders */
+        .game-icon.provider-steam { border: 2px solid #1B9BD7; box-shadow: 0 0 12px rgba(27, 155, 215, 0.5); }
+        .game-icon.provider-xbox { border: 2px solid #107C10; box-shadow: 0 0 12px rgba(16, 124, 16, 0.5); }
+        .game-icon.provider-psn { border: 2px solid #003791; box-shadow: 0 0 12px rgba(0, 55, 145, 0.5); }
+        .game-icon.provider-battlenet { border: 2px solid #00AEFF; box-shadow: 0 0 12px rgba(0, 174, 255, 0.5); }
+        .game-icon.provider-gog { border: 2px solid #86328A; box-shadow: 0 0 12px rgba(134, 50, 138, 0.5); }
+        .game-icon.provider-epic { border: 2px solid #888888; box-shadow: 0 0 12px rgba(136, 136, 136, 0.4); }
+        .game-icon.provider-nintendo { border: 2px solid #E60012; box-shadow: 0 0 12px rgba(230, 0, 18, 0.5); }
+        .game-icon.provider-roblox { border: 2px solid #00A2FF; box-shadow: 0 0 12px rgba(0, 162, 255, 0.5); }
+        .game-icon.provider-multi { border: 2px solid #c9a227; box-shadow: 0 0 12px rgba(201, 162, 39, 0.5); }
+
+        /* Provider coverage dots */
+        .coverage-dots {
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 3px;
+            background: rgba(0,0,0,0.85);
+            padding: 3px 5px;
+            border-radius: 10px;
+        }
+
+        .coverage-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            box-shadow: 0 0 3px currentColor;
+        }
+
+        .coverage-dot.mapped { opacity: 1; }
+        .coverage-dot.unmapped { opacity: 0.2; }
+
+        /* Tooltip */
+        .tooltip {
+            position: fixed;
+            background: #1a1a24;
+            border: 1px solid rgba(201, 162, 39, 0.4);
+            border-radius: 10px;
+            padding: 14px 18px;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.15s;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            max-width: 280px;
+        }
+        .tooltip.visible { opacity: 1; }
+        .tooltip-title {
+            font-family: 'Cinzel', serif;
+            color: #c9a227;
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        .tooltip-parity {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .tooltip-detail { color: #9d9d9d; font-size: 0.85rem; line-height: 1.4; }
+        .tooltip-providers {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .tooltip-provider {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+        }
+        .tooltip-provider-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            backdrop-filter: blur(6px);
+        }
+        .modal-overlay.visible { display: flex; align-items: center; justify-content: center; }
+
+        .modal {
+            background: #1a1a24;
+            border: 1px solid rgba(201, 162, 39, 0.5);
+            border-radius: 14px;
+            padding: 0;
+            max-width: 450px;
+            width: 90%;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.6);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            position: relative;
+            height: 120px;
+            background: #12121a;
+            display: flex;
+            align-items: flex-end;
+            padding: 16px;
+        }
+
+        .modal-header-img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.4;
+        }
+
+        .modal-title-area {
+            position: relative;
+            z-index: 1;
+        }
+
+        .modal-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.3rem;
+            color: #fff;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+        }
+
+        .modal-subtitle {
+            font-size: 0.8rem;
+            color: #c9a227;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(0,0,0,0.5);
+            border: none;
+            color: #fff;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 18px;
+            cursor: pointer;
+            z-index: 2;
+        }
+        .modal-close:hover { background: rgba(0,0,0,0.8); }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .modal-stat-row:last-child { border-bottom: none; }
+        .modal-stat-label { color: #9d9d9d; }
+        .modal-stat-value { color: #e8e6e3; font-weight: 600; }
+        .modal-stat-value.gold { color: #c9a227; }
+
+        .modal-platforms {
+            display: flex;
+            gap: 8px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        .modal-platform {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px;
+            font-size: 0.8rem;
+        }
+
+        .modal-platform-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .modal-cta {
+            display: block;
+            width: 100%;
+            margin-top: 20px;
+            padding: 14px;
+            background: linear-gradient(135deg, #c9a227 0%, #b8941f 100%);
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            font-family: 'Cinzel', serif;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .modal-cta:hover { filter: brightness(1.1); }
+
+        .loading {
+            color: #9d9d9d;
+            font-style: italic;
+            padding: 60px;
+            text-align: center;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <a href="/dashboard" class="back-link">← Dashboard</a>
+
+    <div class="tapestry-header">
+        <div class="tapestry-title">THE TAPESTRY</div>
+        <div class="parity-box" id="parity-box">
+            <div>
+                <div class="parity-value" id="parity-value">--%</div>
+                <div class="parity-label">Parity</div>
+            </div>
+            <div>
+                <div class="parity-value" id="gap-count" style="font-size:1.1rem;">--</div>
+                <div class="parity-label">Gaps</div>
+            </div>
+        </div>
+        <div class="provider-legend" id="provider-legend"></div>
+        <a href="/contributions" class="contribute-btn">Contribute</a>
+    </div>
+
+    <div class="tapestry-wrapper">
+        <div class="tapestry-weave" id="tapestry-weave">
+            <div class="tapestry-icons" id="tapestry-icons">
+                <div class="loading">Weaving threads...</div>
+            </div>
+        </div>
+        <!-- Tassel fringe around perimeter -->
+        <div class="tassel-border tassel-top"></div>
+        <div class="tassel-border tassel-bottom"></div>
+        <div class="tassel-border tassel-left"></div>
+        <div class="tassel-border tassel-right"></div>
+        <div class="tassel-border tassel-corner top-left"></div>
+        <div class="tassel-border tassel-corner top-right"></div>
+        <div class="tassel-border tassel-corner bottom-left"></div>
+        <div class="tassel-border tassel-corner bottom-right"></div>
+    </div>
+
+    <!-- Size scale legend (hidden - visual is self-explanatory) -->
+
+    <div class="tooltip" id="tooltip">
+        <div class="tooltip-title" id="tooltip-title"></div>
+        <div class="tooltip-parity" id="tooltip-parity"></div>
+        <div class="tooltip-detail" id="tooltip-detail"></div>
+        <div class="tooltip-providers" id="tooltip-providers"></div>
+    </div>
+
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal" id="modal">
+            <div class="modal-header" id="modal-header">
+                <img class="modal-header-img" id="modal-header-img" src="" alt="">
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <div class="modal-title-area">
+                    <div class="modal-title" id="modal-title"></div>
+                    <div class="modal-subtitle" id="modal-subtitle"></div>
+                </div>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <script>
+        let tapestryData = null;
+        const COLORS = {
+            steam: '#1B9BD7', xbox: '#107C10', psn: '#003791',
+            battlenet: '#00AEFF', gog: '#86328A', epic: '#2A2A2A',
+            nintendo: '#E60012', roblox: '#00A2FF'
+        };
+
+        const PROVIDER_NAMES = {
+            steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation',
+            battlenet: 'Battle.net', gog: 'GOG', epic: 'Epic',
+            nintendo: 'Nintendo', roblox: 'Roblox'
+        };
+
+        function getSteamImageUrl(appId) {
+            if (!appId) return '/static/icons/ashbane-tree.png';
+            return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_184x69.jpg`;
+        }
+
+        function getSteamHeaderUrl(appId) {
+            if (!appId) return '';
+            return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`;
+        }
+
+        async function loadTapestry() {
+            try {
+                const res = await fetch('/api/tapestry/status');
+                tapestryData = await res.json();
+                renderHeader();
+                renderWeave();
+            } catch (e) {
+                document.getElementById('tapestry-icons').innerHTML = '<div class="loading">Failed to load tapestry</div>';
+            }
+        }
+
+        function renderHeader() {
+            const { overall, providers } = tapestryData;
+
+            document.getElementById('parity-value').textContent = overall.parity + '%';
+            document.getElementById('gap-count').textContent = overall.gap_count;
+
+            // Provider legend
+            const activeProviders = providers.filter(p => p.total > 0);
+            document.getElementById('provider-legend').innerHTML = activeProviders.map(p => `
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:${COLORS[p.key] || '#666'}"></div>
+                    ${p.name}
+                </div>
+            `).join('');
+        }
+
+        function renderWeave() {
+            const { games, providers } = tapestryData;
+            const container = document.getElementById('tapestry-icons');
+
+            // ═══════════════════════════════════════════════════════════════
+            // TAPESTRY LAYOUT CONFIG (Locked Dec 2024)
+            // ═══════════════════════════════════════════════════════════════
+            // Container: 750x150px fixed
+            // Icon sizes: 90-180px width (height = width * 0.375 for Steam capsule ratio)
+            // Max overlap: 20% of smaller icon area
+            // Scoring: Cluster-centered distribution (no side bias)
+            // ═══════════════════════════════════════════════════════════════
+
+            // Calculate max gaps for scaling
+            const maxGaps = Math.max(...games.map(g => g.gap_count), 1);
+
+            // Icon size range (width in px, more gaps = bigger)
+            const minSize = 70;
+            const maxSize = 140;
+
+            // Calculate sizes for all games
+            const gameData = games.map(game => {
+                let size;
+                if (game.parity >= 100) {
+                    size = minSize * 0.7;
+                } else if (game.gap_count === 0) {
+                    size = minSize;
+                } else {
+                    const gapRatio = game.gap_count / maxGaps;
+                    size = minSize + (Math.pow(gapRatio, 0.7) * (maxSize - minSize));
+                }
+                return { ...game, size, width: size, height: size * 0.375 };
+            });
+
+            // Shuffle randomly
+            for (let i = gameData.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [gameData[i], gameData[j]] = [gameData[j], gameData[i]];
+            }
+
+            const placements = [];
+            const maxHeight = 150;  // Fixed container height
+            const maxWidth = 750;   // Fixed container width
+
+            // Scattered patches style: individual icons with gaps between them
+            const minGap = 8; // Minimum gap between patches
+            const edgePadding = 15; // Keep icons away from edges
+
+            // Helper: check if position collides with any existing placement
+            function collides(x, y, w, h) {
+                return placements.some(p => {
+                    // Check if rectangles overlap (with gap)
+                    const noOverlap = x + w + minGap <= p.x ||
+                                     p.x + p.w + minGap <= x ||
+                                     y + h + minGap <= p.y ||
+                                     p.y + p.h + minGap <= y;
+                    return !noOverlap;
+                });
+            }
+
+            gameData.forEach((game, idx) => {
+                let placed = false;
+                let bestX = 0, bestY = 0;
+
+                // Placement bounds with edge padding
+                const placeMinX = edgePadding;
+                const placeMaxX = maxWidth - game.width - edgePadding;
+                const placeMinY = edgePadding;
+                const placeMaxY = maxHeight - game.height - edgePadding;
+
+                // Try up to 500 random positions to find a non-colliding spot
+                for (let attempt = 0; attempt < 500 && !placed; attempt++) {
+                    const tryX = placeMinX + Math.random() * Math.max(0, placeMaxX - placeMinX);
+                    const tryY = placeMinY + Math.random() * Math.max(0, placeMaxY - placeMinY);
+
+                    if (!collides(tryX, tryY, game.width, game.height)) {
+                        bestX = tryX;
+                        bestY = tryY;
+                        placed = true;
+                    }
+                }
+
+                // If still not placed after random tries, skip this icon
+                if (!placed) {
+                    console.log('Could not place:', game.name);
+                    return; // Skip this game
+                }
+
+                placements.push({
+                    game,
+                    x: bestX,
+                    y: bestY,
+                    w: game.width,
+                    h: game.height
+                });
+            });
+
+            // Normalize positions (shift so min is 0)
+            const minX = Math.min(...placements.map(p => p.x));
+            const minY = Math.min(...placements.map(p => p.y));
+            placements.forEach(p => {
+                p.x -= minX;
+                p.y -= minY;
+            });
+
+            // Fixed container size
+            const totalWidth = maxWidth;
+            const totalHeight = maxHeight;
+
+            // Generate HTML
+            let html = '';
+            placements.forEach((p, idx) => {
+                const game = p.game;
+
+                // Provider-themed class (use primary provider, or 'multi' if multiple)
+                let providerClass = 'provider-steam'; // default
+                if (game.platforms && game.platforms.length > 0) {
+                    if (game.platforms.length > 1) {
+                        providerClass = 'provider-multi';
+                    } else {
+                        providerClass = 'provider-' + game.platforms[0];
+                    }
+                }
+
+                // Z-index: bigger icons in back, smaller in front (based on size, not position)
+                const zIndex = Math.floor(50 + (1 - game.size / maxSize) * 40);
+
+                const imgUrl = getSteamImageUrl(game.canonical_app_id);
+
+                html += `
+                    <div class="game-icon ${providerClass}"
+                         style="left:${p.x}px; top:${p.y}px; width:${p.w}px; height:${p.h}px; z-index:${zIndex};"
+                         data-game="${game.key}"
+                         onmouseenter="showGameTooltip(event, '${game.key}')"
+                         onmouseleave="hideTooltip()"
+                         onclick="showGameModal('${game.key}')">
+                        <img src="${imgUrl}" alt="${game.name}" loading="lazy" onerror="this.src='/static/icons/ashbane-tree.png'">
+                    </div>
+                `;
+            });
+
+            // Set container size and render
+            container.style.width = totalWidth + 'px';
+            container.style.height = totalHeight + 'px';
+            container.innerHTML = html;
+        }
+
+        function showGameTooltip(event, gameKey) {
+            const game = tapestryData.games.find(g => g.key === gameKey);
+            if (!game) return;
+
+            const parityColor = game.parity >= 100 ? '#c9a227' : game.parity >= 75 ? '#4caf50' : game.parity >= 50 ? '#ff9800' : '#f44336';
+
+            document.getElementById('tooltip-title').textContent = game.name;
+            document.getElementById('tooltip-parity').innerHTML = `<span style="color:${parityColor}">${game.parity}%</span> parity`;
+            document.getElementById('tooltip-detail').textContent = `${game.achievement_count} achievements • ${game.gap_count} gaps`;
+
+            // Provider breakdown
+            const providersHtml = game.platforms.map(p => {
+                const cov = game.platform_coverage[p];
+                const pct = cov ? Math.round((cov.mapped / cov.total) * 100) : 0;
+                return `
+                    <div class="tooltip-provider">
+                        <div class="tooltip-provider-dot" style="background:${COLORS[p] || '#666'}"></div>
+                        ${PROVIDER_NAMES[p] || p}: ${pct}%
+                    </div>
+                `;
+            }).join('');
+            document.getElementById('tooltip-providers').innerHTML = providersHtml;
+
+            const tt = document.getElementById('tooltip');
+            tt.style.left = (event.clientX + 20) + 'px';
+            tt.style.top = (event.clientY - 10) + 'px';
+            tt.classList.add('visible');
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').classList.remove('visible');
+        }
+
+        function showGameModal(gameKey) {
+            hideTooltip();
+            const game = tapestryData.games.find(g => g.key === gameKey);
+            if (!game) return;
+
+            const headerImg = getSteamHeaderUrl(game.canonical_app_id);
+            document.getElementById('modal-header-img').src = headerImg;
+            document.getElementById('modal-title').textContent = game.name;
+            document.getElementById('modal-subtitle').textContent = game.weave_strength.charAt(0).toUpperCase() + game.weave_strength.slice(1) + ' weave';
+
+            const parityColor = game.parity >= 100 ? '#c9a227' : game.parity >= 75 ? '#4caf50' : game.parity >= 50 ? '#ff9800' : '#f44336';
+
+            // Platform breakdown
+            const platformsHtml = game.platforms.map(p => {
+                const cov = game.platform_coverage[p];
+                const pct = cov ? Math.round((cov.mapped / cov.total) * 100) : 0;
+                return `
+                    <div class="modal-platform">
+                        <div class="modal-platform-dot" style="background:${COLORS[p] || '#666'}"></div>
+                        ${PROVIDER_NAMES[p] || p}: ${pct}%
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('modal-body').innerHTML = `
+                <div class="modal-stat-row">
+                    <span class="modal-stat-label">Overall Parity</span>
+                    <span class="modal-stat-value" style="color:${parityColor}">${game.parity}%</span>
+                </div>
+                <div class="modal-stat-row">
+                    <span class="modal-stat-label">Achievements</span>
+                    <span class="modal-stat-value">${game.achievement_count}</span>
+                </div>
+                <div class="modal-stat-row">
+                    <span class="modal-stat-label">Mappings Needed</span>
+                    <span class="modal-stat-value gold">${game.gap_count}</span>
+                </div>
+                <div style="margin-top:14px; font-size:0.85rem; color:#9d9d9d;">Platform Coverage:</div>
+                <div class="modal-platforms">${platformsHtml}</div>
+                <a href="/contributions?game=${game.key}" class="modal-cta">Contribute Mappings</a>
+            `;
+
+            document.getElementById('modal-overlay').classList.add('visible');
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.remove('visible');
+        }
+
+        document.getElementById('modal-overlay').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('modal-overlay')) closeModal();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        loadTapestry();
+    </script>
+</body>
+</html>

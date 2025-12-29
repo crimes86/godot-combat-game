@@ -54,6 +54,8 @@ from app.routes.weapon_stats_routes import router as weapon_stats_router, init_w
 from app.routes.world_tree_routes import router as world_tree_router, init_world_tree_routes
 from app.routes.logging_routes import router as logging_router, init_logging_routes
 from app.routes.contribution_routes import router as contribution_router
+from app.routes.forge_routes import router as forge_router, init_forge_routes
+from app.routes.tapestry_routes import router as tapestry_router, init_tapestry_routes
 import time
 import asyncio
 
@@ -114,6 +116,8 @@ async def startup_event():
     init_weapon_stats_routes(get_current_user)
     init_world_tree_routes(get_db, get_current_user)
     init_logging_routes(get_current_user, limiter)
+    init_forge_routes(get_current_user, get_admin_user)
+    init_tapestry_routes(get_current_user)
 
     # Only seed mock activity in development mode
     if DEV_MODE:
@@ -568,6 +572,21 @@ def get_current_user_optional(
         return None
 
     return get_user_from_session(db, token)
+
+
+def get_admin_user(
+        request: Request,
+        db: DbSession = Depends(get_db),
+) -> Optional[User]:
+    """Get current user if they are an admin, otherwise None."""
+    token = get_session_token(request)
+    if not token:
+        return None
+
+    user = get_user_from_session(db, token)
+    if user and user.is_admin:
+        return user
+    return None
 
 
 def generate_app_username(db: DbSession):
@@ -2810,56 +2829,88 @@ async def dashboard(
                     if fb_avatar:
                         avatar_url = fb_avatar
 
-            # sum credits across all active accounts for this provider
-            total_achievements = 0
+            # OPTIMIZED: Use SQL aggregates instead of loading all achievements
+            account_ids = [acct.id for acct in accounts]
+
+            # Total count (single query)
+            total_achievements = (
+                db.query(func.count(AchievementCredit.id))
+                .filter(AchievementCredit.provider_account_id.in_(account_ids))
+                .scalar() or 0
+            )
+
+            # Rarity counts (single GROUP BY query)
             rarity_counts = Counter()
-            oldest_achievement = None
-            newest_achievement = None
-            rarest_achievement = None
-            rarest_percent = 100.0  # Start at 100% (common)
+            rarity_rows = (
+                db.query(Achievement.rarity_tier, func.count(AchievementCredit.id))
+                .join(AchievementCredit)
+                .filter(AchievementCredit.provider_account_id.in_(account_ids))
+                .group_by(Achievement.rarity_tier)
+                .all()
+            )
+            for rarity, count in rarity_rows:
+                rarity_counts[rarity or "Common"] = count
 
-            for acct in accounts:
-                credits = (
-                    db.query(AchievementCredit)
-                    .join(Achievement)
-                    .filter(AchievementCredit.provider_account_id == acct.id)
-                    .all()
+            # Oldest achievement (ORDER BY + LIMIT 1)
+            oldest_credit = (
+                db.query(AchievementCredit)
+                .join(Achievement)
+                .filter(
+                    AchievementCredit.provider_account_id.in_(account_ids),
+                    AchievementCredit.unlocked_at.isnot(None)
                 )
-                total_achievements += len(credits)
-                for credit in credits:
-                    rarity = getattr(credit.achievement, "rarity_tier", "Common")
-                    rarity_counts[rarity] += 1
+                .order_by(AchievementCredit.unlocked_at.asc())
+                .first()
+            )
+            oldest_achievement = None
+            if oldest_credit:
+                oldest_achievement = {
+                    "name": oldest_credit.achievement.display_name,
+                    "description": oldest_credit.achievement.description,
+                    "date": oldest_credit.unlocked_at,
+                    "icon": oldest_credit.achievement.icon_url,
+                }
 
-                    # Track oldest achievement (by unlock date)
-                    if credit.unlocked_at:
-                        if oldest_achievement is None or credit.unlocked_at < oldest_achievement["date"]:
-                            oldest_achievement = {
-                                "name": credit.achievement.display_name,
-                                "description": credit.achievement.description,
-                                "date": credit.unlocked_at,
-                                "icon": credit.achievement.icon_url,
-                            }
+            # Newest achievement (ORDER BY + LIMIT 1)
+            newest_credit = (
+                db.query(AchievementCredit)
+                .join(Achievement)
+                .filter(
+                    AchievementCredit.provider_account_id.in_(account_ids),
+                    AchievementCredit.unlocked_at.isnot(None)
+                )
+                .order_by(AchievementCredit.unlocked_at.desc())
+                .first()
+            )
+            newest_achievement = None
+            if newest_credit:
+                newest_achievement = {
+                    "name": newest_credit.achievement.display_name,
+                    "description": newest_credit.achievement.description,
+                    "date": newest_credit.unlocked_at,
+                    "icon": newest_credit.achievement.icon_url,
+                }
 
-                    # Track newest achievement (by unlock date)
-                    if credit.unlocked_at:
-                        if newest_achievement is None or credit.unlocked_at > newest_achievement["date"]:
-                            newest_achievement = {
-                                "name": credit.achievement.display_name,
-                                "description": credit.achievement.description,
-                                "date": credit.unlocked_at,
-                                "icon": credit.achievement.icon_url,
-                            }
-
-                    # Track rarest achievement (lowest percent)
-                    if credit.achievement.percent is not None and credit.achievement.percent < rarest_percent:
-                        rarest_percent = credit.achievement.percent
-                        rarest_achievement = {
-                            "name": credit.achievement.display_name,
-                            "description": credit.achievement.description,
-                            "percent": credit.achievement.percent,
-                            "rarity": credit.achievement.rarity_tier,
-                            "icon": credit.achievement.icon_url,
-                        }
+            # Rarest achievement (ORDER BY percent ASC + LIMIT 1)
+            rarest_credit = (
+                db.query(AchievementCredit)
+                .join(Achievement)
+                .filter(
+                    AchievementCredit.provider_account_id.in_(account_ids),
+                    Achievement.percent.isnot(None)
+                )
+                .order_by(Achievement.percent.asc())
+                .first()
+            )
+            rarest_achievement = None
+            if rarest_credit:
+                rarest_achievement = {
+                    "name": rarest_credit.achievement.display_name,
+                    "description": rarest_credit.achievement.description,
+                    "percent": rarest_credit.achievement.percent,
+                    "rarity": rarest_credit.achievement.rarity_tier,
+                    "icon": rarest_credit.achievement.icon_url,
+                }
 
             # Calculate cooldown remaining (if any) - DISABLED FOR TESTING
             cooldown_remaining = 0
@@ -2898,22 +2949,31 @@ async def dashboard(
     # This is your permanent gaming history - doesn't change when you unlink providers
     Ashbane_data = None
     if user:
-        # Count ALL original claims for this user
-        Ashbane_credits = (
-            db.query(AchievementCredit)
-            .join(Achievement)
+        # OPTIMIZED: Use SQL aggregates instead of loading all achievements
+        # Total count
+        Ashbane_total = (
+            db.query(func.count(AchievementCredit.id))
             .filter(
                 AchievementCredit.user_id == user.id,
                 AchievementCredit.is_original_claim == True
             )
-            .all()
+            .scalar() or 0
         )
 
-        Ashbane_total = len(Ashbane_credits)
+        # Rarity counts (GROUP BY)
         Ashbane_rarity = Counter()
-        for credit in Ashbane_credits:
-            rarity = getattr(credit.achievement, "rarity_tier", "Common")
-            Ashbane_rarity[rarity] += 1
+        rarity_rows = (
+            db.query(Achievement.rarity_tier, func.count(AchievementCredit.id))
+            .join(AchievementCredit)
+            .filter(
+                AchievementCredit.user_id == user.id,
+                AchievementCredit.is_original_claim == True
+            )
+            .group_by(Achievement.rarity_tier)
+            .all()
+        )
+        for rarity, count in rarity_rows:
+            Ashbane_rarity[rarity or "Common"] = count
 
         # Count total providers ever linked (active or not)
         total_providers_linked = (
@@ -2958,8 +3018,20 @@ async def tapestry_page(
     user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
-    The Tapestry - where achievement threads from different realms are woven together.
-    Users can submit mappings, vote on patterns, and earn weaver titles.
+    The Tapestry visualization - a living representation of cross-platform achievement parity.
+    Shows the weave of all platform mappings and where community contributions are needed.
+    """
+    return templates.TemplateResponse("tapestry.html", {"request": request, "user": user})
+
+
+@app.get("/contributions", response_class=HTMLResponse)
+async def contributions_page(
+    request: Request,
+    db: DbSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional),
+):
+    """
+    Community contributions page - where users submit mappings and vote on patterns.
     """
     # Get user's linked providers for navbar
     user_linked_providers = []
@@ -4483,6 +4555,8 @@ async def get_forged_items_api(
         .outerjoin(AchievementCredit, ForgedAchievement.achievement_credit_id == AchievementCredit.id)
         .outerjoin(Achievement, AchievementCredit.achievement_id == Achievement.id)
         .filter(
+            # Exclude destroyed items
+            ForgedAchievement.destroyed_at.is_(None),
             # User owns via wallet OR is current owner (from trading) OR owns via credit
             (ForgedAchievement.wallet_account_id.in_(user_wallets)) |
             (ForgedAchievement.current_owner_id == user.id) |
@@ -6023,6 +6097,94 @@ async def admin_grant_forge_credits(
 
 
 # =============================================================================
+# USER FEEDBACK
+# =============================================================================
+
+class FeedbackRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=5000)
+    page_url: Optional[str] = None
+
+
+@app.post("/api/feedback")
+@limiter.limit("5/minute")
+async def submit_feedback(
+    feedback: FeedbackRequest,
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Submit user feedback. Rate limited to 5/minute.
+    Works for both logged-in and anonymous users.
+    """
+    from app.models import UserFeedback
+
+    # Get user if logged in (optional)
+    user_id = None
+    token = get_session_token(request)
+    if token:
+        user = get_user_from_session(db, token)
+        if user:
+            user_id = user.id
+
+    # Get user agent
+    user_agent = request.headers.get("user-agent", "")[:500]
+
+    # Create feedback record
+    feedback_record = UserFeedback(
+        user_id=user_id,
+        message=feedback.message,
+        page_url=feedback.page_url,
+        user_agent=user_agent,
+    )
+    db.add(feedback_record)
+    db.commit()
+
+    logger.info(f"Feedback submitted: user_id={user_id}, message_length={len(feedback.message)}")
+
+    return {"success": True, "message": "Thank you for your feedback!"}
+
+
+@app.get("/api/admin/feedback")
+async def get_all_feedback(
+    request: Request,
+    db: DbSession = Depends(get_db),
+    status: Optional[str] = None,
+    limit: int = 50,
+):
+    """Admin endpoint to view all feedback."""
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from app.models import UserFeedback
+
+    query = db.query(UserFeedback).order_by(UserFeedback.created_at.desc())
+
+    if status:
+        query = query.filter(UserFeedback.status == status)
+
+    feedback_list = query.limit(limit).all()
+
+    return {
+        "feedback": [
+            {
+                "id": f.id,
+                "user_id": f.user_id,
+                "message": f.message,
+                "page_url": f.page_url,
+                "status": f.status,
+                "created_at": f.created_at.isoformat() if f.created_at else None,
+            }
+            for f in feedback_list
+        ]
+    }
+
+
+# =============================================================================
 # ROUTER INCLUSION (must be after specific routes like Steam to avoid conflicts)
 # =============================================================================
 app.include_router(generic_oauth_router)
@@ -6034,6 +6196,8 @@ app.include_router(weapon_stats_router)
 app.include_router(world_tree_router)
 app.include_router(logging_router)
 app.include_router(contribution_router)
+app.include_router(forge_router)
+app.include_router(tapestry_router)
 
 # Icon caching proxy
 from app.routes.icon_cache import router as icon_cache_router

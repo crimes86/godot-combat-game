@@ -286,6 +286,12 @@ class ForgedAchievement(Base):
     bridge_completed_at = Column(DateTime, nullable=True)  # When bridge actually completed
     external_owner_wallet = Column(String(42), nullable=True, index=True)  # External wallet if bridged out
 
+    # === SOFT DELETE (Destroyed Items) ===
+    destroyed_at = Column(DateTime, nullable=True, index=True)  # When item was destroyed
+    destroyed_reason = Column(String(50), nullable=True)  # player_delete, vendor_sale, dropped_decay
+    destroyed_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # Who destroyed it
+    previous_owner_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # Owner before destruction
+
     # Relationships
     achievement_credit = relationship("AchievementCredit")
     wallet_account = relationship("WalletAccount")
@@ -1232,6 +1238,33 @@ class ContributorProfile(Base):
 
     # Relationships
     user = relationship("User", back_populates="contributor_profile")
+
+
+class UserFeedback(Base):
+    """
+    User feedback submissions.
+    Simple free-form text feedback from the glowing navbar button.
+    """
+    __tablename__ = 'user_feedback'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)  # Nullable for anonymous
+
+    # Feedback content
+    message = Column(Text, nullable=False)
+    page_url = Column(String(500), nullable=True)  # Where they were when they submitted
+    user_agent = Column(String(500), nullable=True)  # Browser info
+
+    # Status tracking
+    status = Column(String(20), default='new', index=True)  # new, reviewed, actioned, archived
+    admin_notes = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    user = relationship("User", backref="feedback_submissions")
 
 
 # =============================================================================
