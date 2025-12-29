@@ -1148,6 +1148,8 @@ func create_sell_item_slot(item_data: Dictionary, slot_index: int) -> PanelConta
 
 	return panel
 
+var _pending_sell_slot: int = -1  # Track slot for forged item sell confirmation
+
 func sell_item(slot: int) -> void:
 	"""Sell an item from inventory (entire stack if stackable)"""
 	if slot < 0 or slot >= InventorySystem.inventory_items.size():
@@ -1157,8 +1159,67 @@ func sell_item(slot: int) -> void:
 	if not item:  # Slot is empty
 		return
 
+	# Forged items need confirmation and backend call
+	if item.get("is_forged", false):
+		_pending_sell_slot = slot
+		_show_forged_sell_confirmation(item)
+		return
+
+	_complete_sell(slot, item)
+
+func _show_forged_sell_confirmation(item: Dictionary) -> void:
+	"""Show confirmation dialog for selling a forged item"""
 	var item_name = item.get("name", "Unknown")
 	var item_value = item.get("value", 0)
+
+	# Create confirmation dialog if needed
+	var dialog = get_node_or_null("ForgedSellConfirmDialog")
+	if not dialog:
+		dialog = ConfirmationDialog.new()
+		dialog.name = "ForgedSellConfirmDialog"
+		dialog.title = "Sell Forged Item"
+		dialog.confirmed.connect(_on_forged_sell_confirmed)
+		dialog.canceled.connect(func(): _pending_sell_slot = -1)
+		add_child(dialog)
+
+	dialog.dialog_text = "⚠️ WARNING: '%s' is a FORGED item!\n\nSelling to vendor is PERMANENT. You will receive %d gold.\n\nThe item will be transferred to the treasury.\n\nAre you sure?" % [item_name, item_value]
+	dialog.popup_centered()
+
+func _on_forged_sell_confirmed() -> void:
+	"""Handle confirmed forged item sale"""
+	if _pending_sell_slot < 0:
+		return
+
+	var slot = _pending_sell_slot
+	_pending_sell_slot = -1
+
+	var item = InventorySystem.inventory_items[slot]
+	if not item or not item.get("is_forged", false):
+		return
+
+	var token_id = item.get("token_id", 0)
+	if token_id is float:
+		token_id = int(token_id)
+
+	if token_id > 0 and ForgeItemManager:
+		# Call backend to destroy/transfer to treasury
+		var result = await ForgeItemManager.destroy_item(token_id, "vendor_sale")
+		if result.get("success", false):
+			# Use gold from backend if provided, otherwise use item value
+			var gold_received = result.get("gold_received", item.get("value", 0))
+			_complete_sell(slot, item, gold_received)
+			print("💰 Sold forged item to vendor: %s (token_id: %d, gold: %d)" % [item.get("name", "?"), token_id, gold_received])
+		else:
+			show_message("Failed to sell item - try again", Color(1.0, 0.3, 0.3))
+			print("❌ Failed to sell forged item to vendor - backend rejected")
+	else:
+		# Fallback for items without token_id
+		_complete_sell(slot, item)
+
+func _complete_sell(slot: int, item: Dictionary, override_gold: int = -1) -> void:
+	"""Complete the sale of an item"""
+	var item_name = item.get("name", "Unknown")
+	var item_value = item.get("value", 0) if override_gold < 0 else override_gold
 	var quantity = item.get("quantity", 1)
 	var total_value = item_value * quantity
 	var item_rarity = item.get("rarity", "COMMON")

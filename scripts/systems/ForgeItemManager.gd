@@ -27,6 +27,7 @@ var _synced_to_inventory: bool = false
 var _forgeable_achievements: Array = []  # Achievements user can forge (Rare+, original claim)
 var _forge_status_loaded: bool = false
 var _debug_forge_mode: bool = false  # When true, backend won't overwrite debug-injected forgeable list
+var _debug_claims_cleared: bool = false  # When true, sync_to_inventory will skip re-adding items
 
 # Wallet and bridge status
 var _wallet_connected: bool = false
@@ -102,6 +103,7 @@ func _on_logout() -> void:
 	_forge_status_loaded = false
 	_synced_to_inventory = false
 	_debug_forge_mode = false
+	_debug_claims_cleared = false
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DEBUG - Remove after testing
@@ -133,11 +135,15 @@ func debug_reset_all_claims() -> void:
 	var playtest_count = CharacterStats.get_playtest_claimed_count()
 	CharacterStats.clear_playtest_claims()
 
+	# 4. Set debug flag to prevent sync_to_inventory from re-adding items
+	_debug_claims_cleared = true
+
 	print("═══════════════════════════════════════════════════════════")
 	print("🔄 FORGE CLAIMS RESET")
 	print("   Inventory cleared: %d forged items" % inv_cleared)
 	print("   Claim flags reset: %d items" % flags_reset)
 	print("   Playtest claims cleared: %d" % playtest_count)
+	print("   Debug claims cleared flag: SET (sync will skip)")
 	print("═══════════════════════════════════════════════════════════")
 
 	InventorySystem.inventory_changed.emit()
@@ -531,6 +537,8 @@ func claim_forge(credit_id: int, callback: Callable = Callable(), item_id: Strin
 
 func _on_claim_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable, item_id: String) -> void:
 	request.queue_free()
+	# Clear debug claims flag when a forge completes (user is actively claiming)
+	_debug_claims_cleared = false
 
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
 		var body_text = body.get_string_from_utf8()
@@ -677,6 +685,11 @@ func sync_to_inventory() -> int:
 		LogManager.warning("Cannot sync - forged items not loaded yet", "forge")
 		return 0
 
+	# Skip sync if debug claims were cleared (prevents items coming back after deletion)
+	if _debug_claims_cleared:
+		LogManager.info("Skipping sync_to_inventory - debug claims cleared flag is set", "forge")
+		return 0
+
 	var added_count = 0
 	for forged in _forged_items:
 		# Only sync items that have been claimed on server
@@ -706,6 +719,9 @@ func sync_to_inventory() -> int:
 
 func claim_single_item(item_id: String) -> Dictionary:
 	"""Claim a forged item: marks on server AND adds to inventory. Returns inventory item or empty dict."""
+	# Clear debug claims flag when user explicitly claims an item
+	_debug_claims_cleared = false
+
 	if not _is_loaded:
 		LogManager.warning("Cannot claim - forged items not loaded yet", "forge")
 		return {}
@@ -819,6 +835,157 @@ func _is_item_in_inventory(forged_id: String) -> bool:
 			if item.get("item_id", "") == forged_id:
 				return true
 	return false
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ITEM DESTRUCTION / UNCLAIM - Game server authoritative actions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+signal item_destroyed(token_id: int, reason: String)
+signal item_unclaimed(token_id: int)
+
+func destroy_item(token_id: int, reason: String = "player_delete", callback: Callable = Callable()) -> Dictionary:
+	"""Permanently destroy a forged item (vendor sale, player delete, etc).
+	Item is transferred to treasury wallet and soft-deleted for potential recovery.
+	Returns: { "success": bool, "gold_received": int, "error": String }"""
+
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
+		LogManager.warning("Cannot destroy item - not authenticated", "forge")
+		# Allow destruction anyway in offline mode (local only)
+		_remove_from_local_cache(token_id)
+		if callback.is_valid():
+			callback.call({"success": true, "gold_received": 0, "offline": true})
+		return {"success": true, "gold_received": 0, "offline": true}
+
+	var url = AshbaneAuth.get_api_base() + "/api/forge/destroy"
+	var headers = [
+		"Authorization: Bearer " + AshbaneAuth.auth_token,
+		"Content-Type: application/json"
+	]
+	var body = JSON.stringify({
+		"token_id": token_id,
+		"reason": reason  # "vendor_sale", "player_delete", "dropped_decay"
+	})
+
+	var http = HTTPRequest.new()
+	add_child(http)
+
+	var error = http.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		http.queue_free()
+		LogManager.error("Failed to send destroy request: %s" % error, "forge")
+		if callback.is_valid():
+			callback.call({"success": false, "error": "Request failed"})
+		return {"success": false, "error": "Request failed"}
+
+	# Wait for response
+	var result = await http.request_completed
+	http.queue_free()
+
+	var response_code = result[1]
+	var response_body = result[3].get_string_from_utf8()
+
+	if response_code == 200:
+		var json = JSON.new()
+		var parse_result = json.parse(response_body)
+		var data = json.data if parse_result == OK else {}
+
+		var gold_received = data.get("gold_received", 0)
+		LogManager.info("Item destroyed (token_id: %d, reason: %s, gold: %d)" % [token_id, reason, gold_received], "forge")
+
+		# Remove from local cache
+		_remove_from_local_cache(token_id)
+
+		item_destroyed.emit(token_id, reason)
+
+		var response = {"success": true, "gold_received": gold_received}
+		if callback.is_valid():
+			callback.call(response)
+		return response
+	else:
+		LogManager.error("Destroy item failed with code %d: %s" % [response_code, response_body], "forge")
+		var response = {"success": false, "error": "Server rejected destruction"}
+		if callback.is_valid():
+			callback.call(response)
+		return response
+
+func unclaim_from_game(token_id: int, callback: Callable = Callable()) -> bool:
+	"""Unclaim item from game - still exists in user's forge, can be re-claimed.
+	Use this for 'stash' functionality or temporary removal."""
+
+	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
+		LogManager.warning("Cannot unclaim item - not authenticated", "forge")
+		if callback.is_valid():
+			callback.call(false)
+		return false
+
+	var url = AshbaneAuth.get_api_base() + "/api/forge/unclaim-from-game"
+	var headers = [
+		"Authorization: Bearer " + AshbaneAuth.auth_token,
+		"Content-Type: application/json"
+	]
+	var body = JSON.stringify({"token_id": token_id})
+
+	var http = HTTPRequest.new()
+	add_child(http)
+
+	var error = http.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		http.queue_free()
+		LogManager.error("Failed to send unclaim request: %s" % error, "forge")
+		if callback.is_valid():
+			callback.call(false)
+		return false
+
+	# Wait for response
+	var result = await http.request_completed
+	http.queue_free()
+
+	var response_code = result[1]
+
+	if response_code == 200:
+		LogManager.info("Item unclaimed from game (token_id: %d)" % token_id, "forge")
+
+		# Update local cache - mark as unclaimed
+		_mark_unclaimed_in_cache(token_id)
+
+		item_unclaimed.emit(token_id)
+
+		if callback.is_valid():
+			callback.call(true)
+		return true
+	else:
+		LogManager.error("Unclaim item failed with code %d" % response_code, "forge")
+		if callback.is_valid():
+			callback.call(false)
+		return false
+
+func _remove_from_local_cache(token_id: int) -> void:
+	"""Remove item from local forged items cache after destruction"""
+	# Remove from array
+	for i in range(_forged_items.size() - 1, -1, -1):
+		var item = _forged_items[i]
+		var item_token = item.get("token_id", 0)
+		if item_token is float:
+			item_token = int(item_token)
+		if item_token == token_id:
+			var item_id = item.get("item_id", "")
+			_forged_items.remove_at(i)
+			# Also remove from dict
+			if item_id in _forged_items_by_id:
+				_forged_items_by_id.erase(item_id)
+			LogManager.debug("Removed token_id %d from local cache" % token_id, "forge")
+			break
+
+func _mark_unclaimed_in_cache(token_id: int) -> void:
+	"""Mark item as unclaimed in local cache"""
+	for item in _forged_items:
+		var item_token = item.get("token_id", 0)
+		if item_token is float:
+			item_token = int(item_token)
+		if item_token == token_id:
+			item["claimed_in_game"] = false
+			LogManager.debug("Marked token_id %d as unclaimed in cache" % token_id, "forge")
+			break
 
 func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 	"""Convert forged item from API format to inventory format"""

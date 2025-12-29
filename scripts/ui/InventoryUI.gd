@@ -859,6 +859,7 @@ func _add_item_to_trade(slot_index: int) -> void:
 		"item_rarity": item.get("rarity", "COMMON").to_upper(),
 		"item_type": item.get("type", "weapon"),
 		"forged_id": forged_id,
+		"item_id": item.get("item_id", forged_id),  # Item catalog ID for ForgeItemDB lookup
 		# Equipment slot (mainhand, chest, head, etc.)
 		"slot": item.get("slot", ""),
 		# Weapon-specific fields
@@ -866,8 +867,20 @@ func _add_item_to_trade(slot_index: int) -> void:
 		"damage": item.get("damage", 0),
 		"attack_speed": item.get("attack_speed", 1.0),
 		"two_handed": item.get("two_handed", false),
+		# Gun-specific fields (for ranged weapons)
+		"gun_subtype": item.get("gun_subtype", ""),
+		"burst_count": item.get("burst_count", 1),
+		"burst_delay": item.get("burst_delay", 0.0),
 		# Achievement reference
 		"achievement_id": item.get("achievement_id", ""),
+		# Provenance fields (for ItemInspectionUI)
+		"forger_name": item.get("forger_name", item.get("original_forger", "")),
+		"original_forger": item.get("original_forger", item.get("forger_name", "")),
+		"forged_at": item.get("forged_at", ""),
+		"trade_count": item.get("trade_count", 0),
+		"game": item.get("game", ""),
+		"achievement_name": item.get("achievement_name", item.get("achievement", "")),
+		"source_provider": item.get("source_provider", ""),
 	}
 
 	# Add to trade slot (pass inventory slot for tracking)
@@ -1210,11 +1223,17 @@ func _prompt_delete_item(data: Dictionary) -> void:
 	"""Show confirmation dialog for item deletion"""
 	pending_delete_data = data
 
-	var item_name = data.get("item", {}).get("name", "Unknown")
+	var item = data.get("item", {})
+	var item_name = item.get("name", "Unknown")
+	var is_forged = item.get("is_forged", false)
 
 	var dialog = get_node_or_null("DeleteConfirmDialog")
 	if dialog:
-		dialog.dialog_text = "Are you sure you want to delete '%s'?" % item_name
+		if is_forged:
+			# Extra warning for forged items - this is permanent!
+			dialog.dialog_text = "⚠️ WARNING: '%s' is a FORGED item!\n\nThis action is PERMANENT. The item will be transferred to the treasury and cannot be recovered without submitting a support ticket.\n\nAre you absolutely sure?" % item_name
+		else:
+			dialog.dialog_text = "Are you sure you want to delete '%s'?" % item_name
 		dialog.popup_centered()
 
 func _on_delete_confirmed() -> void:
@@ -1227,7 +1246,27 @@ func _on_delete_confirmed() -> void:
 	if source_type == "inventory":
 		var source_index = pending_delete_data.get("source_index", -1)
 		if source_index >= 0:
-			InventorySystem.remove_item(source_index)
+			# Check if this is a forged item - need to notify backend
+			if dragged_item.get("is_forged", false):
+				var token_id = dragged_item.get("token_id", 0)
+				if token_id is float:
+					token_id = int(token_id)
+				if token_id > 0 and ForgeItemManager:
+					# Destroy on backend first, then remove locally
+					var result = await ForgeItemManager.destroy_item(token_id, "player_delete")
+					if result.get("success", false):
+						InventorySystem.remove_item(source_index)
+						print("🗑️ Forged item destroyed: %s (token_id: %d)" % [dragged_item.get("name", "?"), token_id])
+					else:
+						# Backend rejected - don't delete locally
+						print("❌ Failed to destroy forged item on backend - keeping in inventory")
+						push_warning("Could not delete forged item - server rejected")
+				else:
+					# No token_id, just delete locally (shouldn't happen for real forged items)
+					InventorySystem.remove_item(source_index)
+			else:
+				# Regular item - just delete locally
+				InventorySystem.remove_item(source_index)
 			refresh_all()
 
 	pending_delete_data = {}

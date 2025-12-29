@@ -1133,6 +1133,30 @@ func _add_received_item_to_inventory(item_data: Dictionary) -> void:
 		item["attack_speed"] = item_data.get("attack_speed")
 	if item_data.has("two_handed"):
 		item["two_handed"] = item_data.get("two_handed")
+	# Gun-specific fields (for ranged weapons like battle rifles, railguns)
+	if item_data.has("gun_subtype") and item_data.get("gun_subtype") != "":
+		item["gun_subtype"] = item_data.get("gun_subtype")
+	if item_data.has("burst_count"):
+		item["burst_count"] = item_data.get("burst_count")
+	if item_data.has("burst_delay"):
+		item["burst_delay"] = item_data.get("burst_delay")
+
+	# Provenance fields (for ItemInspectionUI)
+	if item_data.has("forger_name") and item_data.get("forger_name") != "":
+		item["forger_name"] = item_data.get("forger_name")
+	if item_data.has("original_forger") and item_data.get("original_forger") != "":
+		item["original_forger"] = item_data.get("original_forger")
+	if item_data.has("forged_at") and item_data.get("forged_at") != "":
+		item["forged_at"] = item_data.get("forged_at")
+	if item_data.has("trade_count"):
+		# Increment trade count since this is a new trade
+		item["trade_count"] = item_data.get("trade_count", 0) + 1
+	if item_data.has("game") and item_data.get("game") != "":
+		item["game"] = item_data.get("game")
+	if item_data.has("achievement_name") and item_data.get("achievement_name") != "":
+		item["achievement_name"] = item_data.get("achievement_name")
+	if item_data.has("source_provider") and item_data.get("source_provider") != "":
+		item["source_provider"] = item_data.get("source_provider")
 
 	InventorySystem.add_item(item)
 	print("[Trade] Added %s to inventory (slot: %s)" % [item.name, item.get("slot", "none")])

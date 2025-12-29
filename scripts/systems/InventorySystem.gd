@@ -296,6 +296,10 @@ func clear_forged_items() -> int:
 	if cleared > 0:
 		inventory_changed.emit()
 		print("🔄 Cleared %d forged items from inventory and equipment" % cleared)
+		# Tell ForgeItemManager to stop re-syncing items until user explicitly claims
+		if ForgeItemManager:
+			ForgeItemManager._debug_claims_cleared = true
+			print("🔄 Set _debug_claims_cleared flag to prevent re-sync")
 
 	return cleared
 
