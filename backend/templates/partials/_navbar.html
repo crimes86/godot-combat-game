@@ -81,6 +81,16 @@
 
   <div class="navbar-right">
     {% if local_user_id %}
+      <!-- Tapestry Link -->
+      <a href="/tapestry" class="navbar-tapestry" title="The Tapestry" style="position:relative; display:flex; align-items:center; margin-right:16px; color:#fa0; text-decoration:none;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 4px rgba(250,140,0,0.5));">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+        <span id="navbar-contributions-badge" style="display:none; position:absolute; top:-6px; right:-8px; background:#fa0; color:#000; font-size:10px; font-weight:bold; padding:2px 5px; border-radius:8px; min-width:14px; text-align:center;"></span>
+      </a>
+
       <!-- Friends Icon with Pending Badge -->
       <a href="#friends-section" class="navbar-friends" title="Friends" style="position:relative; display:flex; align-items:center; margin-right:16px; color:#999; text-decoration:none;">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 0 4px rgba(150,150,150,0.5));">
@@ -110,6 +120,23 @@
       const badge = document.getElementById('navbar-pending-badge');
       if (data.count > 0) {
         badge.textContent = data.count;
+        badge.style.display = 'block';
+      }
+    })
+    .catch(() => {});
+})();
+
+// Load pending contributions count for navbar badge
+(function() {
+  const badge = document.getElementById('navbar-contributions-badge');
+  if (!badge) return;
+
+  fetch('/api/contributions/pending')
+    .then(r => r.json())
+    .then(data => {
+      const count = data.contributions ? data.contributions.length : 0;
+      if (count > 0) {
+        badge.textContent = count;
         badge.style.display = 'block';
       }
     })

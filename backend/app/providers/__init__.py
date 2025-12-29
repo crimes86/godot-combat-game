@@ -296,7 +296,7 @@ PROVIDERS = {
         achievement_support=AchievementSupport.NONE,  # Login only - no achievements
         icon="facebook.svg",
         color="#1877F2",
-        enabled=True,
+        enabled=False,  # Requires business verification
     ),
 
     "spotify": ProviderConfig(

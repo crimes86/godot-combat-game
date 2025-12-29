@@ -6,8 +6,8 @@
   <title>Dashboard – Ashbane</title>
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
-  <link rel="stylesheet" href="/static/css/styles.css" />
-  <link rel="stylesheet" href="/static/css/ashbane-theme.css" />
+  <link rel="stylesheet" href="/static/css/styles.css?v=5" />
+  <link rel="stylesheet" href="/static/css/ashbane-theme.css?v=5" />
   <style>
     /* Syncing animation */
     .sync-status.syncing {
@@ -426,13 +426,13 @@
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       overflow: hidden;
-      /* iPhone screen style - stretched wider */
-      width: 212px !important;
-      min-width: 212px !important;
-      max-width: 212px !important;
-      height: 390px !important;
-      min-height: 390px !important;
-      max-height: 390px !important;
+      /* iPhone screen style - compact */
+      width: 180px !important;
+      min-width: 180px !important;
+      max-width: 180px !important;
+      height: 340px !important;
+      min-height: 340px !important;
+      max-height: 340px !important;
       border-radius: 20px;
       /* Sleek bezel edge */
       border: 2px solid rgba(90,90,90,0.5);
@@ -1109,12 +1109,12 @@
     /* Provider Cards Container - Base */
     .provider-cards-container {
       display: grid;
-      grid-template-columns: repeat(auto-fit, 212px);
-      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fit, 180px);
+      gap: 1.25rem;
       justify-content: center;
       transform-style: preserve-3d;
       width: 100%;
-      max-width: 1100px;
+      max-width: 900px;
     }
 
     /* Expanded state - full grid */
@@ -1124,10 +1124,10 @@
       margin-top: 0;
     }
 
-    /* Provider Card base for transitions - stretched wider */
+    /* Provider Card base for transitions - compact */
     .provider-cards-container .provider-card {
-      width: 212px !important;
-      height: 390px !important;
+      width: 180px !important;
+      height: 340px !important;
       transform-origin: center top;
     }
 
@@ -1643,15 +1643,15 @@
     /* Responsive: 2 columns on smaller screens */
     @media (max-width: 960px) {
       .provider-cards-container {
-        grid-template-columns: repeat(2, 280px);
+        grid-template-columns: repeat(2, 180px);
       }
     }
     @media (max-width: 620px) {
       .provider-cards-container {
-        grid-template-columns: 280px;
+        grid-template-columns: 180px;
       }
       .stack-toggle-btn {
-        right: calc(50% - 160px);
+        right: calc(50% - 110px);
       }
     }
 
@@ -2615,7 +2615,7 @@
       <div class="Ashbane-card neon-card"
            id="Ashbane-card"
            data-tier="{{ tier }}"
-           style="position:relative; width:280px; display:flex; flex-direction:column; align-items:center; padding:1rem 1rem 1.5rem 1rem; border-radius:16px;">
+           style="position:relative; width:240px; display:flex; flex-direction:column; align-items:center; padding:0.875rem 0.875rem 1.25rem 0.875rem; border-radius:14px;">
 
         <div class="holo-shimmer"></div>
 

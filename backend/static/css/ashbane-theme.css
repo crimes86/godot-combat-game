@@ -97,15 +97,15 @@ body::before {
 ═══════════════════════════════════════════════════════════════════════════════ */
 
 #dashboard-root {
-  width: calc(100vw - 20px);
-  max-width: 1900px;
-  margin: 0 auto;
+  width: 100vw;
+  max-width: 100%;
+  margin: 0;
   margin-top: 15px;
-  padding: 0;
+  padding: 0 22px;
   display: flex;
   flex-direction: row;
-  justify-content: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 40px;
   height: calc(100vh - 75px);
   max-height: calc(100vh - 75px);
   overflow: hidden;
@@ -113,9 +113,9 @@ body::before {
 }
 
 #left-column {
-  flex: 1 1 300px;
-  min-width: 280px;
-  max-width: 320px;
+  flex: 1 1 340px;
+  min-width: 300px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -126,7 +126,7 @@ body::before {
 
 #middle-column {
   flex: 0 0 auto;
-  width: 1000px;
+  width: 970px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -135,9 +135,9 @@ body::before {
 }
 
 #right-column {
-  flex: 1 1 300px;
-  min-width: 280px;
-  max-width: 320px;
+  flex: 1 1 340px;
+  min-width: 300px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
   align-self: stretch;

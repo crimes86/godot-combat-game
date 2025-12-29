@@ -46,10 +46,16 @@ class User(Base):
     is_admin = Column(Boolean, default=False, nullable=False)  # Bypass cooldowns, testing features
     appearance_data = Column(JSON, nullable=True)  # Character appearance for Armory preview
 
+    # Contributor cosmetics (earned via community contributions)
+    active_title = Column(String(64), nullable=True)      # "Archivist", "Lorekeeper", "Curator"
+    active_badges = Column(JSON, default=list)            # ["lorekeeper_badge", "curator_badge"]
+    contributor_role = Column(String(32), nullable=True)  # "curator" = special permissions
+
     # Relationships
     provider_accounts = relationship("ProviderAccount", back_populates="user")
     achievement_credits = relationship("AchievementCredit", back_populates="user")
     wallet_accounts = relationship("WalletAccount", back_populates="user")
+    contributor_profile = relationship("ContributorProfile", back_populates="user", uselist=False)
 
 class ProviderAccount(Base):
     __tablename__ = 'provider_accounts'
@@ -1093,6 +1099,139 @@ class SeasonalRanking(Base):
 
     # Relationships
     tree = relationship("SeedPlot")
+
+
+# =============================================================================
+# COMMUNITY CONTRIBUTION SYSTEM
+# =============================================================================
+# Enables players to submit cross-platform achievement mappings and rarity
+# disputes, earning Ashbane-native titles, badges, and cosmetics.
+
+class CommunityContribution(Base):
+    """
+    Unified table for all community contributions.
+
+    Contribution types:
+    - platform_mapping: Cross-platform achievement ID mappings
+    - rarity_dispute: Achievement rarity score disputes
+
+    Status flow:
+    - pending: Awaiting community votes
+    - approved: Reached vote threshold, changes applied
+    - rejected: Community disagreed or admin rejected
+    - expired: No action taken within 7 days
+    """
+    __tablename__ = 'community_contributions'
+
+    id = Column(Integer, primary_key=True, index=True)
+    contribution_type = Column(String(32), nullable=False, index=True)  # "platform_mapping", "rarity_dispute"
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    chat_message_id = Column(Integer, ForeignKey('chat_messages.id'), nullable=True)
+
+    # Type-specific data stored as JSON
+    # For platform_mapping: {game_key, steam_api_name, target_platform, target_api_name, game_name, achievement_name}
+    # For rarity_dispute: {achievement_id, current_rarity, suggested_rarity, current_effort_score, scoring_method}
+    data = Column(JSON, nullable=False)
+    reason = Column(Text, nullable=False)  # Player's explanation
+
+    # Voting
+    votes_up = Column(Integer, default=0)       # Agree with contribution
+    votes_down = Column(Integer, default=0)     # Disagree
+    votes_threshold = Column(Integer, default=5)  # Votes needed to auto-approve
+
+    # Status
+    status = Column(String(16), nullable=False, default='pending', index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    expires_at = Column(DateTime, nullable=True)  # 7 days from creation
+    resolved_at = Column(DateTime, nullable=True)
+
+    # Admin/moderation
+    admin_notes = Column(Text, nullable=True)
+    resolved_by_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+
+    # Credit display (shown on forged items, mapping entries)
+    credit_display = Column(String(64), nullable=True)  # "Contributed by username"
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    chat_message = relationship("ChatMessage")
+    resolved_by = relationship("User", foreign_keys=[resolved_by_id])
+    votes = relationship("ContributionVote", back_populates="contribution", cascade="all, delete-orphan")
+
+
+class ContributionVote(Base):
+    """
+    Individual votes on community contributions.
+
+    Expert-gating rules:
+    - Platform mappings: Must have achievements from at least one platform
+    - Rarity disputes: Must have the achievement being disputed
+    - Curator role: Can vote on anything with 3x weight
+    """
+    __tablename__ = 'contribution_votes'
+
+    id = Column(Integer, primary_key=True, index=True)
+    contribution_id = Column(Integer, ForeignKey('community_contributions.id'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    vote = Column(Integer, nullable=False)  # 1 = agree, -1 = disagree
+    weight = Column(Integer, default=1)     # 3 for curators
+    voted_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    contribution = relationship("CommunityContribution", back_populates="votes")
+    user = relationship("User")
+
+    __table_args__ = (
+        # One vote per user per contribution
+        UniqueConstraint('contribution_id', 'user_id', name='unique_contribution_vote'),
+    )
+
+
+class ContributorProfile(Base):
+    """
+    Tracks contributor statistics and unlocked rewards.
+
+    Reward tiers (approved contributions):
+    - 5: Archivist (title)
+    - 25: Lorekeeper (title + badge)
+    - 100: Curator (title + badge + cape + aura + curator role)
+
+    Curator perks:
+    - 3x vote weight
+    - Auto-approve own submissions
+    - Access to moderation panel
+    """
+    __tablename__ = 'contributor_profiles'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), unique=True, nullable=False, index=True)
+
+    # Approved contribution counts
+    total_approved = Column(Integer, default=0, index=True)
+    mappings_approved = Column(Integer, default=0)
+    disputes_approved = Column(Integer, default=0)
+
+    # Voting stats
+    total_votes_cast = Column(Integer, default=0)
+    helpful_votes = Column(Integer, default=0)  # Votes on contributions that were approved
+
+    # Rewards tracking
+    rewards_claimed = Column(JSON, default=list)    # ["archivist_title", "lorekeeper_badge"]
+    rewards_available = Column(JSON, default=list)  # Rewards ready to claim
+
+    # Role (synced to User.contributor_role)
+    contributor_role = Column(String(32), default='contributor')  # "contributor", "curator"
+
+    # Leaderboard
+    leaderboard_rank = Column(Integer, nullable=True, index=True)
+
+    # Timestamps
+    first_contribution_at = Column(DateTime, nullable=True)
+    last_contribution_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="contributor_profile")
 
 
 # =============================================================================

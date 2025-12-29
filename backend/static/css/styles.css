@@ -365,15 +365,15 @@ body::after {
 /*────────────────────────────────────────────────────────────────────────────*/
 
 #dashboard-root {
-  width: calc(100vw - 20px); /* 10px margin on each side - pushed to edges */
-  max-width: 1900px;
-  margin: 0 auto;
-  margin-top: 15px;
-  padding: 0;
-  display: flex;
-  flex-direction: row;
-  justify-content: center; /* Center the columns */
-  gap: 12px;
+  width: 100vw !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  margin-top: 15px !important;
+  padding: 0 22px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  gap: 40px !important;
   /* Lock height to viewport minus navbar and top gap */
   height: calc(100vh - 85px);
   max-height: calc(100vh - 85px);
@@ -382,13 +382,12 @@ body::after {
 }
 
 #left-column {
-  flex: 1 1 300px;
-  min-width: 280px;
-  max-width: 320px;
+  flex: 1 1 340px;
+  min-width: 300px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  /* Lock to middle column height */
+  gap: 12px;
   align-self: stretch;
   min-height: 0;
   overflow: hidden;
@@ -396,7 +395,7 @@ body::after {
 
 #middle-column {
   flex: 0 0 auto;
-  width: 1000px; /* Fixed width */
+  width: 970px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -405,12 +404,11 @@ body::after {
 }
 
 #right-column {
-  flex: 1 1 300px;
-  min-width: 280px;
-  max-width: 320px;
+  flex: 1 1 340px;
+  min-width: 300px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
-  /* Lock to middle column height */
   align-self: stretch;
   min-height: 0;
   overflow: hidden;

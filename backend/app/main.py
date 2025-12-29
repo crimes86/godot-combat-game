@@ -53,6 +53,7 @@ from app.routes.trading_routes import router as trading_router, init_trading_rou
 from app.routes.weapon_stats_routes import router as weapon_stats_router, init_weapon_stats_routes
 from app.routes.world_tree_routes import router as world_tree_router, init_world_tree_routes
 from app.routes.logging_routes import router as logging_router, init_logging_routes
+from app.routes.contribution_routes import router as contribution_router
 import time
 import asyncio
 
@@ -2947,6 +2948,38 @@ async def dashboard(
     )
 
 
+@app.get("/tapestry", response_class=HTMLResponse)
+async def tapestry_page(
+    request: Request,
+    db: DbSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional),
+):
+    """
+    The Tapestry - where achievement threads from different realms are woven together.
+    Users can submit mappings, vote on patterns, and earn weaver titles.
+    """
+    # Get user's linked providers for navbar
+    user_linked_providers = []
+    local_user_id = None
+
+    if user:
+        local_user_id = user.id
+        linked = db.query(ProviderAccount.provider_name).filter(
+            ProviderAccount.user_id == user.id
+        ).distinct().all()
+        user_linked_providers = [row[0] for row in linked]
+
+    return templates.TemplateResponse(
+        "contributions.html",
+        {
+            "request": request,
+            "user": user,
+            "local_user_id": local_user_id,
+            "all_providers": all_providers,
+            "user_linked_providers": user_linked_providers,
+        },
+    )
+
 
 @app.post("/unclaim/{provider_name}")
 async def unclaim_provider(
@@ -3726,6 +3759,23 @@ async def get_current_user_api(
     # Calculate Ashbane tier
     Ashbane = calculate_Ashbane_tier(total_achievements, len(providers))
 
+    # Get contributor profile if exists
+    from app.models import ContributorProfile
+    contributor_profile = db.query(ContributorProfile).filter(
+        ContributorProfile.user_id == user.id
+    ).first()
+
+    contributor_data = None
+    if contributor_profile or user.active_title or user.active_badges:
+        contributor_data = {
+            "total_approved": contributor_profile.total_approved if contributor_profile else 0,
+            "leaderboard_rank": contributor_profile.leaderboard_rank if contributor_profile else None,
+            "active_title": user.active_title,
+            "active_badges": user.active_badges or [],
+            "contributor_role": user.contributor_role or "contributor",
+            "rewards_available": contributor_profile.rewards_available if contributor_profile else [],
+        }
+
     return {
         "user_id": user.id,
         "username": user.username,
@@ -3744,6 +3794,7 @@ async def get_current_user_api(
             "order": TIER_ORDER,
         },
         "appearance": user.appearance_data,
+        "contributor": contributor_data,
     }
 
 
@@ -5979,6 +6030,7 @@ app.include_router(trading_router)
 app.include_router(weapon_stats_router)
 app.include_router(world_tree_router)
 app.include_router(logging_router)
+app.include_router(contribution_router)
 
 # Icon caching proxy
 from app.routes.icon_cache import router as icon_cache_router
