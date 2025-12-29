@@ -281,16 +281,17 @@ func create_inventory_slot(slot_index: int) -> Control:
 
 	# Forged badge (top-left corner) - shows for forged items
 	# Added to slot_control (not panel) so it's on top of everything
-	var forged_badge = Label.new()
+	var forged_badge = TextureRect.new()
 	forged_badge.name = "ForgedBadge"
-	forged_badge.text = "⚒"  # Anvil/hammer emoji
-	forged_badge.add_theme_font_size_override("font_size", 14)
-	forged_badge.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))  # Gold color
-	forged_badge.add_theme_color_override("font_outline_color", Color.BLACK)
-	forged_badge.add_theme_constant_override("outline_size", 3)
+	var forge_badge_tex = load("res://assets/ui/forge_icon.png")
+	if forge_badge_tex:
+		forged_badge.texture = forge_badge_tex
+	forged_badge.custom_minimum_size = Vector2(18, 18)
+	forged_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	forged_badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	forged_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	forged_badge.z_index = 10  # On top of everything
-	forged_badge.position = Vector2(2, 0)  # Top-left with small padding
+	forged_badge.position = Vector2(1, 1)  # Top-left with small padding
 	forged_badge.visible = false
 	slot_control.add_child(forged_badge)
 

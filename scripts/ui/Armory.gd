@@ -2380,10 +2380,14 @@ func _build_forge_column() -> Control:
 	# FORGE header - 25% larger than standard H2 for emphasis
 	const FORGE_HEADER_SIZE = 35  # 28 * 1.25 = 35
 
-	var forge_icon = Label.new()
-	forge_icon.text = "⚒"
-	forge_icon.add_theme_font_size_override("font_size", FORGE_HEADER_SIZE)
-	forge_icon.add_theme_color_override("font_color", ASHBANE_GOLD)
+	# Custom forge icon instead of emoji
+	var forge_icon = TextureRect.new()
+	var forge_icon_tex = load("res://assets/ui/forge_icon.png")
+	if forge_icon_tex:
+		forge_icon.texture = forge_icon_tex
+		forge_icon.custom_minimum_size = Vector2(36, 36)  # Match header size
+		forge_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		forge_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	header_row.add_child(forge_icon)
 
 	var header = Label.new()
@@ -4664,11 +4668,14 @@ func _show_forge_confirmation() -> void:
 	header_hbox.add_theme_constant_override("separation", 8)
 	vbox.add_child(header_hbox)
 
-	# Forge icon
-	var forge_icon = Label.new()
-	forge_icon.text = "⚒"
-	forge_icon.add_theme_font_size_override("font_size", 18)
-	forge_icon.add_theme_color_override("font_color", Color(1.0, 0.7, 0.3))
+	# Forge icon (custom image)
+	var forge_icon = TextureRect.new()
+	var forge_icon_tex = load("res://assets/ui/forge_icon.png")
+	if forge_icon_tex:
+		forge_icon.texture = forge_icon_tex
+		forge_icon.custom_minimum_size = Vector2(24, 24)
+		forge_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		forge_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	header_hbox.add_child(forge_icon)
 
 	# Title
@@ -7511,10 +7518,13 @@ func _build_forge_section() -> Control:
 	header_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(header_row)
 
-	var forge_icon = Label.new()
-	forge_icon.text = "⚒"
-	forge_icon.add_theme_font_size_override("font_size", FONT_H1)
-	forge_icon.add_theme_color_override("font_color", ASHBANE_GOLD)
+	var forge_icon = TextureRect.new()
+	var forge_icon_tex = load("res://assets/ui/forge_icon.png")
+	if forge_icon_tex:
+		forge_icon.texture = forge_icon_tex
+		forge_icon.custom_minimum_size = Vector2(42, 42)  # Larger for H1 header
+		forge_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		forge_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	header_row.add_child(forge_icon)
 
 	var header = Label.new()
