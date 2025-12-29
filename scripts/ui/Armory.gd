@@ -213,7 +213,7 @@ var TEXT_MUTED: Color:
 
 # Typography scale (standardized sizes) - scaled up for readability
 const FONT_H1 = 48        # Page title (ASHBANE)
-const FONT_H2 = 34        # Column headers (FORGE, DREADLAND)
+const FONT_H2 = 34        # Column headers (FORGE, ASHBANE)
 const FONT_H3 = 28        # Section headers (CONNECTED PLATFORMS)
 const FONT_BODY_LG = 28   # Large body text, important values
 const FONT_BODY = 24      # Normal body text

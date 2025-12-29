@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title ForgedItems
- * @dev NFT contract for Dreadland forged items with full provenance tracking
+ * @dev NFT contract for Ashbane forged items with full provenance tracking
  *
  * Key features:
  * - Items forged from verified achievements (via backend relayer)
@@ -91,7 +91,7 @@ contract ForgedItems is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
         _;
     }
 
-    constructor(address _relayer) ERC721("Dreadland Forged Item", "FORGE") Ownable(msg.sender) {
+    constructor(address _relayer) ERC721("Ashbane Forged Item", "FORGE") Ownable(msg.sender) {
         relayer = _relayer;
         royaltyReceiver = msg.sender;
     }

@@ -69,7 +69,7 @@ struct ItemProvenance {
 ### Trading Flow
 
 Most users trade **in-game** without touching crypto:
-1. Trade completes in Dreadland (instant)
+1. Trade completes in Ashbane (instant)
 2. Backend records trade in database (source of truth)
 3. Backend queues chain update
 4. Relayer batches updates to Polygon (every 5 min)

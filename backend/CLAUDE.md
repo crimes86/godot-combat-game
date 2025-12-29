@@ -91,7 +91,7 @@ The `AchievementCredit` table tracks claims globally by `provider_name + provide
 
 ### Trading & Economy (Twinking System)
 
-Forged items are Dreadland's **twinking system** - no level requirements, tradeable from day one.
+Forged items are Ashbane's **twinking system** - no level requirements, tradeable from day one.
 
 **Key principles:**
 - Trading is **frictionless MMO-style** - standard trade windows, gold exchanges

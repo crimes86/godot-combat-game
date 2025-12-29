@@ -105,7 +105,7 @@ const LAUNCHER_SIZE = Vector2i(1280, 720)
 @onready var server_select_back_button = $ServerSelectPanel/VBoxContainer/ServerSelectBackButton
 # Known servers configuration
 const KNOWN_SERVERS = {
-	"Production (Dreadland)": "167.99.55.245",
+	"Production (Ashbane)": "167.99.55.245",
 	"LAN (Local Network)": "192.168.28.211",
 }
 
@@ -2372,7 +2372,7 @@ func _setup_server_select_panel():
 	server_option.clear()
 
 	# Always add production server first
-	server_option.add_item("Production (Dreadland)")
+	server_option.add_item("Production (Ashbane)")
 
 	# Add LAN option only in dev mode
 	if is_dev_mode:
@@ -2441,7 +2441,7 @@ func _on_connect_guest_pressed():
 	var target_ip: String
 
 	if selected_text.begins_with("Production"):
-		target_ip = KNOWN_SERVERS["Production (Dreadland)"]
+		target_ip = KNOWN_SERVERS["Production (Ashbane)"]
 	elif selected_text.begins_with("LAN"):
 		target_ip = KNOWN_SERVERS["LAN (Local Network)"]
 	elif selected_text.begins_with("Custom"):

@@ -58,10 +58,10 @@ func _ready() -> void:
 	# Detect if running on mobile
 	is_mobile = OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
 
-	# Also enable for testing in editor with touch emulation
-	if OS.has_feature("editor"):
-		# Can be enabled manually for testing
-		pass
+	# Auto-enable on touchscreen devices (laptops, tablets, etc.)
+	if not is_mobile and DisplayServer.is_touchscreen_available():
+		is_mobile = true
+		print("[MobileInput] Touchscreen detected - enabling touch input")
 
 	_viewport = get_viewport()
 	_update_screen_zones()
@@ -351,4 +351,7 @@ func enable_for_testing() -> void:
 func disable_for_testing() -> void:
 	"""Disable mobile input testing mode."""
 	is_mobile = OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
+	# Preserve touchscreen detection
+	if not is_mobile and DisplayServer.is_touchscreen_available():
+		is_mobile = true
 	print("[MobileInput] Testing mode disabled, is_mobile: %s" % is_mobile)
