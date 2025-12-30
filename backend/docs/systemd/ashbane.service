@@ -1,0 +1,20 @@
+# Main API workers - handles HTTP requests
+# Location: /etc/systemd/system/ashbane.service
+
+[Unit]
+Description=Ashbane Backend API
+After=network.target postgresql.service
+
+[Service]
+User=Ashbane
+Group=Ashbane
+WorkingDirectory=/home/Ashbane/Ashbane-backend/backend
+EnvironmentFile=/home/Ashbane/Ashbane-backend/backend/.env
+Environment="PATH=/home/Ashbane/Ashbane-backend/backend/venv/bin"
+# Main workers - no background services (handled by ashbane-worker)
+ExecStart=/home/Ashbane/Ashbane-backend/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

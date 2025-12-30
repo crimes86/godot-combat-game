@@ -59,7 +59,8 @@ from app.routes.tapestry_routes import router as tapestry_router, init_tapestry_
 import time
 import asyncio
 
-Base.metadata.create_all(bind=engine)
+# NOTE: Schema creation removed - use Alembic migrations exclusively
+# Run: alembic upgrade head
 
 logger = logging.getLogger(__name__)
 setup_logging()
@@ -108,6 +109,17 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 @app.on_event("startup")
 async def startup_event():
     """Initialize OAuth providers and wallet routes on startup"""
+    # Clean up expired sessions and device codes on startup
+    db = SessionLocal()
+    try:
+        cleanup_expired_sessions(db)
+        cleanup_expired_device_codes(db)
+        logger.info("Cleaned up expired sessions and device codes")
+    except Exception as e:
+        logger.warning(f"Startup cleanup failed: {e}")
+    finally:
+        db.close()
+
     init_oauth_providers()
     init_wallet_routes(get_db, get_current_user, limiter)
     init_friend_routes(get_current_user, calculate_Ashbane_tier)
@@ -125,19 +137,25 @@ async def startup_event():
         start_mock_activity(min_interval=20, max_interval=60)  # Live mock activity every 20-60 seconds
         logger.info("DEV_MODE enabled: Mock activity seeding started")
 
-    # Start chain batching service for trade provenance
-    try:
-        from app.services.chain_batching_service import chain_batching_service
-        chain_batching_service.start()
-    except Exception as e:
-        logger.warning(f"Chain batching service not started: {e}")
+    # Background services only run on designated worker to prevent races
+    if BACKGROUND_WORKER:
+        # Start chain batching service for trade provenance
+        try:
+            from app.services.chain_batching_service import chain_batching_service
+            chain_batching_service.start()
+            logger.info("Chain batching service started (BACKGROUND_WORKER=true)")
+        except Exception as e:
+            logger.warning(f"Chain batching service not started: {e}")
 
-    # Start transfer indexer for bridge system (detects OpenSea sales, etc)
-    try:
-        from app.services.transfer_indexer_service import transfer_indexer_service
-        transfer_indexer_service.start()
-    except Exception as e:
-        logger.warning(f"Transfer indexer not started: {e}")
+        # Start transfer indexer for bridge system (detects OpenSea sales, etc)
+        try:
+            from app.services.transfer_indexer_service import transfer_indexer_service
+            transfer_indexer_service.start()
+            logger.info("Transfer indexer started (BACKGROUND_WORKER=true)")
+        except Exception as e:
+            logger.warning(f"Transfer indexer not started: {e}")
+    else:
+        logger.info("Background services disabled (BACKGROUND_WORKER not set)")
 
     logger.info(f"Enabled providers: {list(get_enabled_providers().keys())}")
     if BETA_ACCESS_CODE:
@@ -152,19 +170,19 @@ async def shutdown_event():
     if DEV_MODE:
         stop_mock_activity()
 
-    # Stop chain batching service
-    try:
-        from app.services.chain_batching_service import chain_batching_service
-        chain_batching_service.stop()
-    except Exception:
-        pass
+    # Stop background services (only if this worker started them)
+    if BACKGROUND_WORKER:
+        try:
+            from app.services.chain_batching_service import chain_batching_service
+            chain_batching_service.stop()
+        except Exception:
+            pass
 
-    # Stop transfer indexer
-    try:
-        from app.services.transfer_indexer_service import transfer_indexer_service
-        transfer_indexer_service.stop()
-    except Exception:
-        pass
+        try:
+            from app.services.transfer_indexer_service import transfer_indexer_service
+            transfer_indexer_service.stop()
+        except Exception:
+            pass
 
 
 @app.get("/")
@@ -270,18 +288,47 @@ BATTLENET_API_KEY = os.environ.get("BATTLENET_API_KEY")
 APP_URL = os.environ.get("APP_URL", "http://localhost:8000")
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() in ("true", "1", "yes")
 CHAIN_ID = int(os.getenv("CHAIN_ID", "84532"))  # 84532 = Base Sepolia, 8453 = Base Mainnet
-# Admin secret - required in production, has dev fallback for local testing
+TRUST_PROXY = os.getenv("TRUST_PROXY", "false").lower() in ("true", "1", "yes")
+BACKGROUND_WORKER = os.getenv("BACKGROUND_WORKER", "false").lower() in ("true", "1", "yes")
+
+# Admin secret - required in production, generates ephemeral secret for dev
 ADMIN_SECRET = os.environ.get("ADMIN_SECRET")
 if not ADMIN_SECRET:
-    if os.environ.get("ENV") == "production":
+    # Detect production: ENV=production OR (not dev mode AND real domain)
+    _is_production = (
+        os.environ.get("ENV") == "production" or
+        (not DEV_MODE and APP_URL and not APP_URL.startswith("http://localhost"))
+    )
+    if _is_production:
         raise RuntimeError("ADMIN_SECRET environment variable is required in production")
-    ADMIN_SECRET = "dev-only-admin-secret"
-    print("⚠️  WARNING: Using default ADMIN_SECRET - do not use in production!")
+    # Generate ephemeral secret for dev - changes each restart
+    import secrets as _secrets
+    ADMIN_SECRET = _secrets.token_urlsafe(32)
+    print(f"⚠️  No ADMIN_SECRET set - generated ephemeral: {ADMIN_SECRET[:16]}...")
+    print("   Set ADMIN_SECRET env var for persistent admin access")
 BETA_ACCESS_CODE = os.environ.get("BETA_ACCESS_CODE")  # Set to enable beta gate (e.g., "Ashbane-beta-2024")
 
 # Client version management
 CLIENT_VERSION = os.environ.get("CLIENT_VERSION", "0.0.1")  # Current required client version
 CLIENT_DOWNLOAD_URL = os.environ.get("CLIENT_DOWNLOAD_URL", "https://ashbane.itch.io/ashbane")  # itch.io page
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UTILITY FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════
+
+def get_real_client_ip(request: Request) -> str:
+    """Get real client IP, respecting X-Forwarded-For when behind trusted proxy."""
+    if TRUST_PROXY:
+        # X-Real-IP is set by nginx to $remote_addr (single IP, most reliable)
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip:
+            return real_ip
+        # Fallback: first IP from X-Forwarded-For chain (original client)
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
 
 # Device code storage is now in database (DeviceCode model)
 # This allows codes to survive server restarts
@@ -490,16 +537,19 @@ def get_session_token(request: Request) -> Optional[str]:
 
 
 def create_session(db: DbSession, user: User) -> str:
-    """Create a new secure session token for the user"""
+    """Create a new secure session token for the user.
+
+    Returns the plaintext token (for cookie), stores SHA-256 hash in DB.
+    """
     # Generate a cryptographically secure token
     token = secrets.token_urlsafe(48)  # 64 chars when encoded
 
     # Set expiry to 24 hours from now
     expires_at = datetime.utcnow() + timedelta(hours=24)
 
-    # Create session record
+    # Create session record with hashed token
     session = SessionModel(
-        token=token,
+        token_hash=SessionModel.hash_token(token),
         user_id=user.id,
         expires_at=expires_at
     )
@@ -507,7 +557,7 @@ def create_session(db: DbSession, user: User) -> str:
     db.commit()
 
     logger.info(f"Created new session for user {user.username}")
-    return token
+    return token  # Return plaintext for cookie
 
 
 def set_session_cookie(response: Response, token: str):
@@ -531,12 +581,18 @@ def cleanup_expired_sessions(db: DbSession):
 
 
 def get_user_from_session(db: DbSession, token: str) -> Optional[User]:
-    """Look up user by session token"""
+    """Look up user by session token.
+
+    Hashes the provided token and compares against stored hash.
+    """
     if not token:
         return None
 
+    # Hash the token to compare against stored hash
+    token_hash = SessionModel.hash_token(token)
+
     session = db.query(SessionModel).filter(
-        SessionModel.token == token,
+        SessionModel.token_hash == token_hash,
         SessionModel.expires_at > datetime.utcnow()
     ).first()
 
@@ -1469,7 +1525,7 @@ async def battlenet_callback(request: Request, db: DbSession = Depends(get_db)):
                 battletag = userinfo.get("battletag")
 
         if not battlenet_id:
-            logger.error(f"Battle.net login failed: Could not retrieve user ID. Token: {oauth_token}")
+            logger.error(f"Battle.net login failed: Could not retrieve user ID. Token present: {bool(oauth_token)}, keys: {list(oauth_token.keys()) if oauth_token else None}")
             return templates.TemplateResponse(
                 "merge_failed.html",
                 {"request": request, "message": "Battle.net login failed: Could not retrieve user ID."}
@@ -2596,7 +2652,7 @@ async def login_page(request: Request, device_code: Optional[str] = None, db: Db
             if device_record:
                 device_beta_verified = device_record.beta_verified
 
-        beta_passed = (beta_cookie == BETA_ACCESS_CODE) or device_beta_verified
+        beta_passed = (beta_cookie == "verified") or device_beta_verified
         logger.info(f"[BETA] Checking gate - cookie: '{beta_cookie}', device_verified: {device_beta_verified}, passed: {beta_passed}")
 
         if not beta_passed:
@@ -2659,7 +2715,7 @@ async def verify_beta_access(request: Request, access_code: str = Form(...), dev
         is_https = APP_URL.startswith("https://") or forwarded_proto == "https"
         response.set_cookie(
             key="beta_access",
-            value=BETA_ACCESS_CODE,
+            value="verified",  # Fixed value - changing BETA_ACCESS_CODE won't invalidate existing users
             httponly=True,
             secure=is_https,
             max_age=60 * 60 * 24 * 30,  # 30 days
@@ -3021,39 +3077,36 @@ async def tapestry_page(
     The Tapestry visualization - a living representation of cross-platform achievement parity.
     Shows the weave of all platform mappings and where community contributions are needed.
     """
-    return templates.TemplateResponse("tapestry.html", {"request": request, "user": user})
-
-
-@app.get("/contributions", response_class=HTMLResponse)
-async def contributions_page(
-    request: Request,
-    db: DbSession = Depends(get_db),
-    user: Optional[User] = Depends(get_current_user_optional),
-):
-    """
-    Community contributions page - where users submit mappings and vote on patterns.
-    """
-    # Get user's linked providers for navbar
-    user_linked_providers = []
-    local_user_id = None
-
+    # Get linked providers for navbar
     if user:
-        local_user_id = user.id
-        linked = db.query(ProviderAccount.provider_name).filter(
-            ProviderAccount.user_id == user.id
-        ).distinct().all()
+        linked = (
+            db.query(ProviderAccount.provider_name)
+            .filter(ProviderAccount.user_id == user.id)
+            .all()
+        )
         user_linked_providers = [row[0] for row in linked]
+    else:
+        user_linked_providers = []
 
     return templates.TemplateResponse(
-        "contributions.html",
+        "tapestry.html",
         {
             "request": request,
             "user": user,
-            "local_user_id": local_user_id,
+            "local_user_id": user.id if user else None,
+            "country_code": getattr(user, "country", None),
             "all_providers": all_providers,
             "user_linked_providers": user_linked_providers,
         },
     )
+
+
+@app.get("/contributions")
+async def contributions_page():
+    """
+    Legacy redirect - contributions are now part of the unified Tapestry page.
+    """
+    return RedirectResponse(url="/tapestry", status_code=302)
 
 
 @app.post("/unclaim/{provider_name}")
@@ -3522,8 +3575,9 @@ async def logout(request: Request, db: DbSession = Depends(get_db)):
         user = get_user_from_session(db, token)
         if user:
             logger.info(f"User {user.username} logged out")
-        # Delete the session from database
-        db.query(SessionModel).filter(SessionModel.token == token).delete()
+        # Delete the session from database (hash the token to find it)
+        token_hash = SessionModel.hash_token(token)
+        db.query(SessionModel).filter(SessionModel.token_hash == token_hash).delete()
         db.commit()
 
     # Redirect back to login and delete cookies
@@ -5770,25 +5824,21 @@ async def grant_admin(
     Requires ADMIN_SECRET to be provided.
     Admins can bypass sync cooldowns for testing.
 
-    SECURITY: This endpoint is restricted to localhost/internal requests only.
+    SECURITY: Protected by rate limiting and strong secret requirement.
     """
-    # SECURITY: Only allow from localhost to prevent remote brute-force attempts
-    client_ip = request.client.host if request.client else None
-    if client_ip not in ("127.0.0.1", "::1", "localhost"):
-        logger.warning(f"Admin grant attempt from non-localhost IP: {client_ip}")
-        raise HTTPException(status_code=403, detail="Admin grants must be made from server")
-
     if secret != ADMIN_SECRET:
+        logger.warning(f"Invalid admin grant attempt from {get_real_client_ip(request)} for user {current_user.username}")
         raise HTTPException(status_code=403, detail="Invalid admin secret")
 
     current_user.is_admin = True
     db.commit()
-    logger.info(f"Admin granted to user {current_user.username} (ID: {current_user.id})")
+    logger.info(f"Admin granted to user {current_user.username} (ID: {current_user.id}) from {get_real_client_ip(request)}")
 
     return {"status": "success", "message": f"Admin granted to {current_user.username}", "is_admin": True}
 
 
 @app.post("/api/admin/revoke")
+@limiter.limit("5/minute")
 async def revoke_admin(
     request: Request,
     secret: str,
@@ -5797,22 +5847,130 @@ async def revoke_admin(
 ):
     """Revoke admin status from the current user.
 
-    SECURITY: This endpoint is restricted to localhost/internal requests only.
+    SECURITY: Protected by rate limiting and strong secret requirement.
     """
-    # SECURITY: Only allow from localhost
-    client_ip = request.client.host if request.client else None
-    if client_ip not in ("127.0.0.1", "::1", "localhost"):
-        logger.warning(f"Admin revoke attempt from non-localhost IP: {client_ip}")
-        raise HTTPException(status_code=403, detail="Admin operations must be made from server")
-
     if secret != ADMIN_SECRET:
+        logger.warning(f"Invalid admin revoke attempt from {get_real_client_ip(request)} for user {current_user.username}")
         raise HTTPException(status_code=403, detail="Invalid admin secret")
 
     current_user.is_admin = False
     db.commit()
-    logger.info(f"Admin revoked from user {current_user.username} (ID: {current_user.id})")
+    logger.info(f"Admin revoked from user {current_user.username} (ID: {current_user.id}) from {get_real_client_ip(request)}")
 
     return {"status": "success", "message": f"Admin revoked from {current_user.username}", "is_admin": False}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GAME DISCOVERY ADMIN ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+from app.services.game_discovery_service import (
+    get_pending_discoveries,
+    get_discovery_stats,
+    update_discovery_status
+)
+
+@app.get("/api/admin/game-discoveries")
+async def list_game_discoveries(
+    request: Request,
+    status: Optional[str] = "pending",
+    provider: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: DbSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List pending game discoveries for admin review.
+
+    Games are discovered automatically when users sync achievements from
+    games not yet in the Tapestry (platform_mappings.json).
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    discoveries = get_pending_discoveries(db, status, provider, limit, offset)
+    stats = get_discovery_stats(db)
+
+    return {
+        "stats": stats,
+        "discoveries": [
+            {
+                "id": d.id,
+                "game_name": d.game_name,
+                "source_provider": d.source_provider,
+                "provider_game_id": d.provider_game_id,
+                "achievement_count": d.achievement_count,
+                "sample_achievements": d.sample_achievements,
+                "discovery_count": d.discovery_count,
+                "priority": d.priority,
+                "status": d.status,
+                "first_discovered_at": d.first_discovered_at.isoformat() if d.first_discovered_at else None,
+                "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
+                "cross_platform_notes": d.cross_platform_notes,
+                "available_on_steam": d.available_on_steam,
+                "available_on_xbox": d.available_on_xbox,
+                "available_on_psn": d.available_on_psn,
+                "admin_notes": d.admin_notes
+            }
+            for d in discoveries
+        ]
+    }
+
+
+@app.post("/api/admin/game-discoveries/{discovery_id}/update")
+async def update_game_discovery(
+    discovery_id: int,
+    status: str,
+    notes: Optional[str] = None,
+    available_on_steam: Optional[bool] = None,
+    available_on_xbox: Optional[bool] = None,
+    available_on_psn: Optional[bool] = None,
+    steam_app_id: Optional[str] = None,
+    xbox_title_id: Optional[str] = None,
+    psn_np_id: Optional[str] = None,
+    has_forge_items: Optional[bool] = None,
+    forge_item_count: Optional[int] = None,
+    db: DbSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update a game discovery's status and cross-platform research data.
+
+    Status values:
+    - pending: Awaiting review
+    - researching: Admin is looking into it
+    - added: Game was added to platform_mappings.json
+    - rejected: Not suitable for Tapestry
+    - no_items: Game has no forge-eligible achievements
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    cross_platform_data = {
+        "steam": available_on_steam,
+        "xbox": available_on_xbox,
+        "psn": available_on_psn,
+        "steam_app_id": steam_app_id,
+        "xbox_title_id": xbox_title_id,
+        "psn_np_id": psn_np_id,
+        "has_forge_items": has_forge_items,
+        "forge_item_count": forge_item_count,
+        "notes": notes
+    }
+
+    discovery = update_discovery_status(
+        db, discovery_id, status, current_user.id, notes, cross_platform_data
+    )
+
+    if not discovery:
+        raise HTTPException(status_code=404, detail="Discovery not found")
+
+    return {
+        "status": "success",
+        "discovery_id": discovery_id,
+        "new_status": status
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════

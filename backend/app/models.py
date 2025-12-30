@@ -188,15 +188,25 @@ class UserAchievement(Base):
 
 
 class Session(Base):
-    """Secure session tokens for user authentication"""
+    """Secure session tokens for user authentication.
+
+    Tokens are stored as SHA-256 hashes for security - a DB leak won't
+    expose session tokens that could be used for account takeover.
+    """
     __tablename__ = 'sessions'
     id = Column(Integer, primary_key=True, index=True)
-    token = Column(String(64), unique=True, index=True, nullable=False)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
 
     user = relationship("User")
+
+    @staticmethod
+    def hash_token(token: str) -> str:
+        """Hash a session token using SHA-256."""
+        import hashlib
+        return hashlib.sha256(token.encode()).hexdigest()
 
 
 class WalletAccount(Base):
@@ -1265,6 +1275,74 @@ class UserFeedback(Base):
 
     # Relationships
     user = relationship("User", backref="feedback_submissions")
+
+
+class PendingGameDiscovery(Base):
+    """
+    Tracks games discovered during achievement syncs that aren't in platform_mappings.json.
+
+    When a user syncs achievements from a game we haven't seen before, it gets
+    logged here for admin review. Admin can then research cross-platform availability
+    and add it to the Tapestry if applicable.
+
+    Status flow:
+    - pending: Newly discovered, awaiting admin review
+    - researching: Admin is looking into cross-platform availability
+    - added: Game was added to platform_mappings.json
+    - rejected: Game not suitable for Tapestry (single-platform exclusive, etc.)
+    - no_items: Game has no forge-eligible achievements
+    """
+    __tablename__ = 'pending_game_discoveries'
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Discovery source
+    discovered_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    source_provider = Column(String(32), nullable=False, index=True)  # steam, xbox, psn, etc.
+
+    # Game identification
+    provider_game_id = Column(String(128), nullable=False, index=True)  # Steam app_id, Xbox title_id, etc.
+    game_name = Column(String(256), nullable=False)
+
+    # Discovery metadata
+    achievement_count = Column(Integer, default=0)  # How many achievements this game has
+    sample_achievements = Column(JSON, nullable=True)  # First 5 achievement names for context
+
+    # Cross-platform research (filled by admin)
+    cross_platform_notes = Column(Text, nullable=True)  # Admin's research notes
+    available_on_steam = Column(Boolean, nullable=True)
+    available_on_xbox = Column(Boolean, nullable=True)
+    available_on_psn = Column(Boolean, nullable=True)
+    steam_app_id = Column(String(32), nullable=True)
+    xbox_title_id = Column(String(64), nullable=True)
+    psn_np_id = Column(String(64), nullable=True)
+
+    # Forge eligibility
+    has_forge_items = Column(Boolean, nullable=True)  # Does this game have forge-eligible achievements?
+    forge_item_count = Column(Integer, nullable=True)  # How many items if added
+
+    # Cross-platform auto-detection
+    # When same game is discovered from multiple providers, they share a match_id
+    cross_platform_match_id = Column(Integer, nullable=True, index=True)
+    is_cross_platform = Column(Boolean, default=False, index=True)  # True if detected on multiple platforms
+
+    # Status tracking
+    status = Column(String(20), default='pending', index=True)
+    priority = Column(Integer, default=0)  # Higher = more users have this game, cross-platform = +100
+    discovery_count = Column(Integer, default=1)  # How many users have synced this game
+
+    # Timestamps
+    first_discovered_at = Column(DateTime, default=datetime.utcnow, index=True)
+    last_seen_at = Column(DateTime, default=datetime.utcnow)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    # Admin handling
+    reviewed_by_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    admin_notes = Column(Text, nullable=True)
+
+    # Relationships
+    discovered_by = relationship("User", foreign_keys=[discovered_by_user_id])
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_id])
 
 
 # =============================================================================

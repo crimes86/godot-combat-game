@@ -1,0 +1,27 @@
+# Background worker - runs chain batching and transfer indexer
+# Location: /etc/systemd/system/ashbane-worker.service
+#
+# This service runs background jobs that should only have ONE instance:
+# - Chain batching service (trade provenance)
+# - Transfer indexer (bridge system, OpenSea detection)
+#
+# Does NOT need nginx routing - internal only
+
+[Unit]
+Description=Ashbane Background Worker
+After=network.target postgresql.service ashbane.service
+
+[Service]
+User=Ashbane
+Group=Ashbane
+WorkingDirectory=/home/Ashbane/Ashbane-backend/backend
+EnvironmentFile=/home/Ashbane/Ashbane-backend/backend/.env
+Environment="PATH=/home/Ashbane/Ashbane-backend/backend/venv/bin"
+Environment="BACKGROUND_WORKER=true"
+# Single worker on different port - not exposed via nginx
+ExecStart=/home/Ashbane/Ashbane-backend/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 1
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

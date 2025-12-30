@@ -66,9 +66,12 @@ def decrypt_token(ciphertext: Optional[str]) -> Optional[str]:
         decrypted = fernet.decrypt(ciphertext.encode())
         return decrypted.decode()
     except InvalidToken:
-        # Likely a legacy unencrypted token - return as-is
-        # This allows gradual migration without breaking existing sessions
-        logger.debug("Token appears unencrypted (legacy), returning as-is")
+        # Legacy unencrypted token - return as-is for backwards compatibility
+        # TODO: Remove this fallback after migration period (force re-auth to encrypt)
+        logger.warning(
+            "LEGACY_UNENCRYPTED_TOKEN: OAuth token stored in plaintext. "
+            "User should re-authenticate to migrate to encrypted storage."
+        )
         return ciphertext
     except Exception as e:
         logger.error(f"Token decryption failed: {e}")

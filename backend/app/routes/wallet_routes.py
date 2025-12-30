@@ -1136,130 +1136,6 @@ async def cancel_bridge_out(
     }
 
 
-@router.get("/bridge-in/approval-status")
-async def get_bridge_approval_status(
-    request: Request,
-    db: DbSession = Depends(get_db),
-):
-    """
-    Check if the user's wallet has approved the platform for bridge-in transfers.
-
-    Users must approve the platform (via setApprovalForAll) before they can bridge items
-    from their wallet back into the game. This is a one-time operation per wallet.
-    """
-    current_user = get_current_user_dep(request, db)
-
-    if _wallet_service is None:
-        raise HTTPException(status_code=503, detail="Wallet service not available")
-
-    chain_id = _wallet_service.CHAIN_ID
-
-    # Get user's wallet
-    wallet = db.query(WalletAccount).filter(
-        WalletAccount.user_id == current_user.id,
-        WalletAccount.chain_id == chain_id,
-        WalletAccount.current_nonce.is_(None),
-    ).first()
-
-    if not wallet:
-        raise HTTPException(status_code=400, detail="No wallet connected")
-
-    # Check on-chain approval status
-    is_approved = _wallet_service.check_bridge_approval(wallet.wallet_address)
-
-    return {
-        "approved": is_approved,
-        "wallet_address": wallet.wallet_address,
-        "platform_wallet": _wallet_service.get_platform_wallet_address(),
-        "contract_address": _wallet_service.CONTRACT_ADDRESS,
-        "chain_id": chain_id,
-    }
-
-
-@router.get("/bridge-in/approval-tx")
-async def get_bridge_approval_transaction(
-    request: Request,
-    db: DbSession = Depends(get_db),
-):
-    """
-    Get the transaction data for approving the platform to transfer NFTs.
-
-    Returns the setApprovalForAll transaction data that the user's wallet
-    needs to sign via WalletConnect.
-    """
-    current_user = get_current_user_dep(request, db)
-
-    if _wallet_service is None:
-        raise HTTPException(status_code=503, detail="Wallet service not available")
-
-    chain_id = _wallet_service.CHAIN_ID
-
-    # Get user's wallet
-    wallet = db.query(WalletAccount).filter(
-        WalletAccount.user_id == current_user.id,
-        WalletAccount.chain_id == chain_id,
-        WalletAccount.current_nonce.is_(None),
-    ).first()
-
-    if not wallet:
-        raise HTTPException(status_code=400, detail="No wallet connected")
-
-    # Check if already approved
-    is_approved = _wallet_service.check_bridge_approval(wallet.wallet_address)
-    if is_approved:
-        return {
-            "already_approved": True,
-            "message": "Platform already approved for bridge-in transfers"
-        }
-
-    # Build approval transaction data
-    tx_data = _wallet_service.get_approval_transaction_data(wallet.wallet_address)
-
-    return {
-        "already_approved": False,
-        "transaction": tx_data,
-        "description": "Approve Ashbane to transfer your NFTs for bridge-in",
-        "one_time": True,
-    }
-
-
-@router.post("/bridge-in/verify-approval")
-async def verify_bridge_approval(
-    request: Request,
-    db: DbSession = Depends(get_db),
-):
-    """
-    Verify that the user's wallet has approved the platform.
-
-    Called after the user signs the approval transaction to confirm
-    it was successfully processed on-chain.
-    """
-    current_user = get_current_user_dep(request, db)
-
-    if _wallet_service is None:
-        raise HTTPException(status_code=503, detail="Wallet service not available")
-
-    chain_id = _wallet_service.CHAIN_ID
-
-    # Get user's wallet
-    wallet = db.query(WalletAccount).filter(
-        WalletAccount.user_id == current_user.id,
-        WalletAccount.chain_id == chain_id,
-        WalletAccount.current_nonce.is_(None),
-    ).first()
-
-    if not wallet:
-        raise HTTPException(status_code=400, detail="No wallet connected")
-
-    # Check on-chain approval status
-    is_approved = _wallet_service.check_bridge_approval(wallet.wallet_address)
-
-    return {
-        "approved": is_approved,
-        "wallet_address": wallet.wallet_address,
-    }
-
-
 @router.get("/bridge-in/available")
 async def get_bridge_in_available(
     request: Request,
@@ -1500,9 +1376,10 @@ async def get_bridge_approval_status(
     if _wallet_service is None:
         raise HTTPException(status_code=503, detail="Wallet service not available")
 
-    # Get user's wallet
+    # Get user's wallet for the current chain
     wallet = db.query(WalletAccount).filter(
-        WalletAccount.user_id == current_user.id
+        WalletAccount.user_id == current_user.id,
+        WalletAccount.chain_id == _wallet_service.CHAIN_ID,
     ).first()
 
     if not wallet:
@@ -1551,9 +1428,10 @@ async def get_bridge_approval_transaction(
     if _wallet_service is None:
         raise HTTPException(status_code=503, detail="Wallet service not available")
 
-    # Get user's wallet
+    # Get user's wallet for the current chain
     wallet = db.query(WalletAccount).filter(
-        WalletAccount.user_id == current_user.id
+        WalletAccount.user_id == current_user.id,
+        WalletAccount.chain_id == _wallet_service.CHAIN_ID,
     ).first()
 
     if not wallet:
@@ -1601,8 +1479,10 @@ async def verify_bridge_approval(
     if _wallet_service is None:
         raise HTTPException(status_code=503, detail="Wallet service not available")
 
+    # Get user's wallet for the current chain
     wallet = db.query(WalletAccount).filter(
-        WalletAccount.user_id == current_user.id
+        WalletAccount.user_id == current_user.id,
+        WalletAccount.chain_id == _wallet_service.CHAIN_ID,
     ).first()
 
     if not wallet:

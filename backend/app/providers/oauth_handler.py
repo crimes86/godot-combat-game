@@ -118,7 +118,7 @@ def get_provider_user_id(provider_name: str, token: dict, userinfo: dict) -> Opt
         if field in token and token[field]:
             return str(token[field])
 
-    logger.error(f"Could not extract user ID for {provider_name}. Token: {token}, Userinfo: {userinfo}")
+    logger.error(f"Could not extract user ID for {provider_name}. Token keys: {list(token.keys()) if token else None}, Userinfo keys: {list(userinfo.keys()) if userinfo else None}")
     return None
 
 

@@ -247,14 +247,21 @@ Press `Ctrl+C` to stop.
 
 ## 5. Systemd Service
 
-### Create Service File
+### Create Service Files
+
+Two services are needed:
+1. **ashbane.service** - Main API workers (handles HTTP requests)
+2. **ashbane-worker.service** - Background worker (chain batching, transfer indexer)
 
 ```bash
-sudo nano /etc/systemd/system/Ashbane.service
+# Copy service files from repo
+sudo cp docs/systemd/ashbane.service /etc/systemd/system/
+sudo cp docs/systemd/ashbane-worker.service /etc/systemd/system/
 ```
 
-Paste:
+Or create manually:
 
+**Main API Service** (`/etc/systemd/system/ashbane.service`):
 ```ini
 [Unit]
 Description=Ashbane Backend API
@@ -264,8 +271,30 @@ After=network.target postgresql.service
 User=Ashbane
 Group=Ashbane
 WorkingDirectory=/home/Ashbane/Ashbane-backend/backend
+EnvironmentFile=/home/Ashbane/Ashbane-backend/backend/.env
 Environment="PATH=/home/Ashbane/Ashbane-backend/backend/venv/bin"
 ExecStart=/home/Ashbane/Ashbane-backend/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Background Worker Service** (`/etc/systemd/system/ashbane-worker.service`):
+```ini
+[Unit]
+Description=Ashbane Background Worker
+After=network.target postgresql.service ashbane.service
+
+[Service]
+User=Ashbane
+Group=Ashbane
+WorkingDirectory=/home/Ashbane/Ashbane-backend/backend
+EnvironmentFile=/home/Ashbane/Ashbane-backend/backend/.env
+Environment="PATH=/home/Ashbane/Ashbane-backend/backend/venv/bin"
+Environment="BACKGROUND_WORKER=true"
+ExecStart=/home/Ashbane/Ashbane-backend/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 1
 Restart=always
 RestartSec=10
 
@@ -277,9 +306,9 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable Ashbane
-sudo systemctl start Ashbane
-sudo systemctl status Ashbane
+sudo systemctl enable ashbane ashbane-worker
+sudo systemctl start ashbane ashbane-worker
+sudo systemctl status ashbane ashbane-worker
 ```
 
 ---
