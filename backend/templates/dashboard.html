@@ -6,7 +6,7 @@
   <title>Dashboard – Ashbane</title>
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
-  <link rel="stylesheet" href="/static/css/styles.css?v=7" />
+  <link rel="stylesheet" href="/static/css/styles.css?v=11" />
   <link rel="stylesheet" href="/static/css/ashbane-theme.css?v=7" />
   <style>
     /* Syncing animation */
@@ -2485,27 +2485,27 @@
       </div>
       <div class="ui-panel-content">
         <!-- Search -->
-        <div style="margin-bottom: 0.75rem;">
+        <div style="margin-bottom: 6px;">
           <div style="display: flex; gap: 4px;">
             <input type="text" id="friend-search-input" placeholder="Search users..."
-                   style="flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(90,90,90,0.4); background: rgba(8,8,10,0.8); color: #e8e8e8; font-size: 0.8rem;"
+                   style="flex: 1; padding: 5px 8px; border-radius: 4px; border: 1px solid rgba(90,90,90,0.4); background: rgba(8,8,10,0.8); color: #e8e8e8; font-size: 0.7rem;"
                    onkeyup="if(event.key==='Enter') searchFriends()">
-            <button onclick="searchFriends()" style="padding: 6px 10px; border-radius: 6px; border: none; background: linear-gradient(180deg, rgb(90,90,90), rgb(60,60,60)); color: #e8e8e8; cursor: pointer; font-size: 0.8rem; font-weight: bold;">
+            <button onclick="searchFriends()" style="padding: 5px 8px; border-radius: 4px; border: none; background: linear-gradient(180deg, rgb(90,90,90), rgb(60,60,60)); color: #e8e8e8; cursor: pointer; font-size: 0.7rem; font-weight: bold;">
               🔍
             </button>
           </div>
-          <div id="search-results" style="margin-top: 8px; display: none; max-height: 150px; overflow-y: auto;"></div>
+          <div id="search-results" style="margin-top: 4px; display: none; max-height: 100px; overflow-y: auto;"></div>
         </div>
 
         <!-- Pending Requests -->
-        <div id="pending-requests-section" style="display: none; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(255,200,0,0.08); border-radius: 6px; border: 1px solid rgba(255,200,0,0.25);">
-          <div style="font-size: 0.75rem; color: #ffc800; margin-bottom: 6px; font-weight: bold;">Pending Requests</div>
-          <div id="pending-requests-list" style="max-height: 100px; overflow-y: auto;"></div>
+        <div id="pending-requests-section" style="display: none; margin-bottom: 6px; padding: 5px; background: rgba(255,200,0,0.08); border-radius: 4px; border: 1px solid rgba(255,200,0,0.25);">
+          <div style="font-size: 0.65rem; color: #ffc800; margin-bottom: 3px; font-weight: bold;">Pending Requests</div>
+          <div id="pending-requests-list" style="max-height: 60px; overflow-y: auto;"></div>
         </div>
 
         <!-- Friends List -->
-        <div id="friends-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
-          <div style="text-align: center; padding: 1rem; color: #555; font-size: 0.8rem;">
+        <div id="friends-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+          <div style="text-align: center; padding: 8px; color: #555; font-size: 0.7rem;">
             Loading friends...
           </div>
         </div>
@@ -2527,11 +2527,11 @@
         </div>
       </div>
       <div class="ui-panel-content">
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem;">
-          <span id="chat-online-count" style="font-size: 0.7rem; color: #666;">loading...</span>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 4px;">
+          <span id="chat-online-count" style="font-size: 0.65rem; color: #666;">loading...</span>
         </div>
-        <div id="chat-messages" style="flex: 1; overflow-y: auto; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; margin-bottom: 0.75rem;">
-          <div style="text-align: center; color: #555; font-size: 0.85rem; padding: 2rem;">
+        <div id="chat-messages" style="flex: 1; overflow-y: auto; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 4px; margin-bottom: 6px;">
+          <div style="text-align: center; color: #555; font-size: 0.7rem; padding: 8px;">
             Loading chat...
           </div>
         </div>
@@ -2539,11 +2539,11 @@
         <div id="new-messages-indicator" class="new-messages-indicator" onclick="scrollToBottom()">
           ↓ New messages
         </div>
-        <div id="chat-input-container" style="display: flex; gap: 6px;">
+        <div id="chat-input-container" style="display: flex; gap: 4px;">
           <input type="text" id="chat-input" placeholder="Type a message..."
-                 style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(90,90,90,0.4); background: rgba(8,8,10,0.8); color: #e8e8e8; font-size: 0.85rem;"
+                 style="flex: 1; padding: 6px 8px; border-radius: 4px; border: 1px solid rgba(90,90,90,0.4); background: rgba(8,8,10,0.8); color: #e8e8e8; font-size: 0.75rem;"
                  onkeyup="if(event.key==='Enter') sendChatMessage()">
-          <button onclick="sendChatMessage()" style="padding: 8px 14px; border-radius: 6px; border: none; background: linear-gradient(180deg, rgb(90,90,90), rgb(60,60,60)); color: #e8e8e8; cursor: pointer; font-weight: bold; font-size: 0.8rem;">
+          <button onclick="sendChatMessage()" style="padding: 6px 10px; border-radius: 4px; border: none; background: linear-gradient(180deg, rgb(90,90,90), rgb(60,60,60)); color: #e8e8e8; cursor: pointer; font-weight: 600; font-size: 0.7rem;">
             Send
           </button>
         </div>
@@ -5330,7 +5330,7 @@ function renderAllAchievementsContent(achievements) {
   const html = achievements.map(ach => {
     const color = rarityColors[ach.rarity_tier] || rarityColors['Common'];
     return `
-    <div class="rarity-achievement-item" style="--item-color: ${color};" onclick="openAchievementDetail(${ach.id})" title="Click for details & dispute options">
+    <div class="rarity-achievement-item" style="--item-color: ${color};" onclick="openAchievementDetail(${ach.id})" title="Click for details">
       <img
         class="rarity-achievement-icon"
         src="${ach.icon_url || '/static/icons/trophy.png'}"
@@ -5444,7 +5444,7 @@ function renderRarityPopoverContent(achievements, rarityTier) {
   }
 
   const html = achievements.map(ach => `
-    <div class="rarity-achievement-item" style="--item-color: ${color};" onclick="openAchievementDetail(${ach.id})" title="Click for details & dispute options">
+    <div class="rarity-achievement-item" style="--item-color: ${color};" onclick="openAchievementDetail(${ach.id})" title="Click for details">
       <img
         class="rarity-achievement-icon"
         src="${ach.icon_url || '/static/icons/trophy.png'}"
@@ -5752,46 +5752,31 @@ function renderAchievementDetail(data) {
     }
   }
 
+  // Dispute section - now redirects to Tapestry
   let disputeHtml = '';
 
   if (data.has_pending_dispute) {
-    // Show pending dispute with voting
+    // Show pending dispute notice with link to Tapestry
     disputeHtml = `
       <div class="pending-dispute-notice">
         <h4>🔍 Pending Dispute</h4>
         <p style="font-size:0.85rem;margin:0;">This achievement's rarity is being reviewed by the community.</p>
-        <div id="dispute-vote-area" style="margin-top:12px;">
-          <p style="font-size:0.8rem;color:#888;">Loading vote options...</p>
-        </div>
+        <a href="/tapestry" style="display:inline-block;margin-top:10px;color:var(--ashbane-gold);font-size:0.85rem;">
+          View & vote on the Tapestry →
+        </a>
       </div>
     `;
   } else if (data.can_dispute) {
-    // Show dispute form
+    // Link to Tapestry for disputes
     disputeHtml = `
       <div class="dispute-section">
-        <h4 style="margin:0 0 12px 0;font-size:0.9rem;color:#fa0;">🔍 Dispute This Classification</h4>
+        <h4 style="margin:0 0 8px 0;font-size:0.9rem;color:#fa0;">⚖️ Dispute Rarity</h4>
         <p style="font-size:0.8rem;color:#888;margin-bottom:12px;">
-          Think this achievement deserves a different rarity? Submit a dispute and let the community vote.
+          Think this achievement deserves a different rarity? Submit a dispute on the Tapestry.
         </p>
-        <form class="dispute-form" onsubmit="submitDispute(event)">
-          <div>
-            <label>Suggested Rarity</label>
-            <select id="dispute-rarity" required>
-              <option value="">Select new rarity...</option>
-              ${['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']
-                .filter(r => r !== data.rarity_tier)
-                .map(r => `<option value="${r}">${r}</option>`)
-                .join('')}
-            </select>
-          </div>
-          <div>
-            <label>Reason (why should it change?)</label>
-            <textarea id="dispute-reason" placeholder="Explain why you think this achievement deserves a different rarity..." required maxlength="500"></textarea>
-          </div>
-          <button type="submit" class="dispute-submit-btn" id="dispute-submit-btn">
-            Submit Dispute
-          </button>
-        </form>
+        <a href="/tapestry" class="dispute-submit-btn" style="display:inline-block;text-decoration:none;text-align:center;">
+          Open Tapestry →
+        </a>
       </div>
     `;
   } else {
@@ -7056,8 +7041,8 @@ function renderChatMessages(messages) {
   const container = document.getElementById('chat-messages');
 
   if (messages.length === 0) {
-    container.innerHTML = `<div style="text-align:center;color:#555;padding:2rem;font-size:0.85rem;">
-      ${currentChatRoom === 'global' ? 'No activity yet. Unlock or forge achievements to see updates!' : 'No messages yet. Start the conversation!'}
+    container.innerHTML = `<div style="text-align:center;color:#555;padding:8px;font-size:0.7rem;">
+      ${currentChatRoom === 'global' ? 'No activity yet.' : 'No messages yet.'}
     </div>`;
     return;
   }
@@ -7279,7 +7264,7 @@ function renderFriendsList(friends) {
   const container = document.getElementById('friends-list');
 
   if (!friends || friends.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:1rem;color:#666;font-size:0.8rem;">No friends yet. Search to add!</div>';
+    container.innerHTML = '<div style="text-align:center;padding:6px;color:#555;font-size:0.7rem;">No friends yet.</div>';
     return;
   }
 

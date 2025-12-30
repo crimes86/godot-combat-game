@@ -6,6 +6,7 @@ from app.models import Achievement, Game
 from app.models import ProviderAccount
 from app.models import AchievementCredit
 from app.services.steam_api import get_steam_unlocked_achievements_async  # your Steam API helper
+from app.services.game_discovery_service import check_and_log_game_discovery
 from app.database import SessionLocal
 import os
 
@@ -172,6 +173,18 @@ async def sync_steam_achievements(user, provider_account: ProviderAccount, db: S
             "game_name": game["game_name"],
             "box_art_url": game["box_art_url"],
         })
+
+        # Check if this game should be added to the Tapestry
+        achievement_names = [a.get("display_name") or a.get("api_name") for a in game.get("achievements", [])[:5]]
+        check_and_log_game_discovery(
+            db=db,
+            provider="steam",
+            game_id=str(game["app_id"]),
+            game_name=game["game_name"],
+            achievement_count=len(game.get("achievements", [])),
+            sample_achievements=achievement_names,
+            user_id=user.id if user else None
+        )
 
         found = 0
         credited = 0

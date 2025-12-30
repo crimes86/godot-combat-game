@@ -12,6 +12,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from app.services.activity_service import (
+    log_activity, ActivityCategory, ContributionAction, DisputeAction
+)
+
 from app.database import SessionLocal
 from app.services.contribution_service import (
     submit_platform_mapping,
@@ -115,7 +119,8 @@ async def get_optional_user_id(request: Request, db: Session = Depends(get_db)) 
 
 @router.post("/mapping")
 async def submit_mapping(
-    request: PlatformMappingRequest,
+    mapping_request: PlatformMappingRequest,
+    http_request: Request,
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
@@ -129,14 +134,28 @@ async def submit_mapping(
         contribution, chat_message = submit_platform_mapping(
             db=db,
             user_id=current_user_id,
-            game_key=request.game_key,
-            steam_api_name=request.steam_api_name,
-            target_platform=request.target_platform,
-            target_api_name=request.target_api_name,
-            game_name=request.game_name,
-            achievement_name=request.achievement_name,
-            reason=request.reason,
+            game_key=mapping_request.game_key,
+            steam_api_name=mapping_request.steam_api_name,
+            target_platform=mapping_request.target_platform,
+            target_api_name=mapping_request.target_api_name,
+            game_name=mapping_request.game_name,
+            achievement_name=mapping_request.achievement_name,
+            reason=mapping_request.reason,
         )
+
+        # Log activity
+        log_activity(
+            db, ActivityCategory.CONTRIBUTION, ContributionAction.SUBMIT,
+            user_id=current_user_id,
+            details={
+                "type": "mapping",
+                "game_key": mapping_request.game_key,
+                "target_platform": mapping_request.target_platform,
+                "contribution_id": contribution.id
+            },
+            request=http_request
+        )
+
         return {
             "success": True,
             "contribution_id": contribution.id,
@@ -149,7 +168,8 @@ async def submit_mapping(
 
 @router.post("/dispute")
 async def submit_dispute(
-    request: RarityDisputeRequest,
+    dispute_request: RarityDisputeRequest,
+    http_request: Request,
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
@@ -163,10 +183,23 @@ async def submit_dispute(
         contribution, chat_message = submit_rarity_dispute(
             db=db,
             user_id=current_user_id,
-            achievement_id=request.achievement_id,
-            suggested_rarity=request.suggested_rarity,
-            reason=request.reason,
+            achievement_id=dispute_request.achievement_id,
+            suggested_rarity=dispute_request.suggested_rarity,
+            reason=dispute_request.reason,
         )
+
+        # Log activity
+        log_activity(
+            db, ActivityCategory.DISPUTE, DisputeAction.CREATE,
+            user_id=current_user_id,
+            details={
+                "achievement_id": dispute_request.achievement_id,
+                "suggested_rarity": dispute_request.suggested_rarity,
+                "contribution_id": contribution.id
+            },
+            request=http_request
+        )
+
         return {
             "success": True,
             "contribution_id": contribution.id,
@@ -241,7 +274,8 @@ async def get_single_contribution(
 @router.post("/{contribution_id}/vote")
 async def vote(
     contribution_id: int,
-    request: VoteRequest,
+    vote_request: VoteRequest,
+    http_request: Request,
     current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
@@ -253,7 +287,7 @@ async def vote(
     - Rarity disputes: Must have the achievement
     - Curators: Can vote on anything with 3x weight
     """
-    if request.vote not in [1, -1]:
+    if vote_request.vote not in [1, -1]:
         raise HTTPException(status_code=400, detail="Vote must be 1 (agree) or -1 (disagree)")
 
     try:
@@ -261,8 +295,23 @@ async def vote(
             db=db,
             user_id=current_user_id,
             contribution_id=contribution_id,
-            vote=request.vote,
+            vote=vote_request.vote,
         )
+
+        # Log activity
+        action = ContributionAction.VOTE_UP if vote_request.vote == 1 else ContributionAction.VOTE_DOWN
+        log_activity(
+            db, ActivityCategory.CONTRIBUTION, action,
+            user_id=current_user_id,
+            details={
+                "contribution_id": contribution_id,
+                "vote": vote_request.vote,
+                "weight": vote_record.weight,
+                "resulted_in_approval": was_approved
+            },
+            request=http_request
+        )
+
         return {
             "success": True,
             "vote_id": vote_record.id,
@@ -507,22 +556,30 @@ async def submit_visual_mapping(
 
     Validates the mapping and creates a contribution for community voting.
     """
+    import time
+    _start = time.time()
+    logger.info(f"[MAPPING SUBMIT] Starting for user {current_user_id}")
+
     from app.models import Achievement, Game
 
     # Validate the mapping
+    logger.info(f"[MAPPING SUBMIT] t={time.time()-_start:.3f}s - validating")
     validation = validate_mapping_submission(
         db=db,
         user_id=current_user_id,
         left_achievement_id=request.left_achievement_id,
         right_achievement_id=request.right_achievement_id,
     )
+    logger.info(f"[MAPPING SUBMIT] t={time.time()-_start:.3f}s - validated")
 
     if not validation["valid"]:
         raise HTTPException(status_code=400, detail=validation["error"])
 
     # Get achievement details
+    logger.info(f"[MAPPING SUBMIT] t={time.time()-_start:.3f}s - getting achievements")
     left_ach = db.query(Achievement).filter(Achievement.id == request.left_achievement_id).first()
     right_ach = db.query(Achievement).filter(Achievement.id == request.right_achievement_id).first()
+    logger.info(f"[MAPPING SUBMIT] t={time.time()-_start:.3f}s - got achievements")
 
     if not left_ach or not right_ach:
         raise HTTPException(status_code=404, detail="Achievement not found")
@@ -609,6 +666,7 @@ async def submit_visual_mapping(
         game_name = f"Game {steam_app_id}"
 
     # Create the contribution using existing service
+    logger.info(f"[MAPPING SUBMIT] t={time.time()-_start:.3f}s - calling submit_platform_mapping")
     try:
         contribution, chat_message = submit_platform_mapping(
             db=db,
@@ -630,6 +688,7 @@ async def submit_visual_mapping(
             source_ach_id=source_ach_id,
             target_ach_id=target_ach_id,
         )
+        logger.info(f"[MAPPING SUBMIT] Completed in {time.time() - _start:.2f}s for user {current_user_id}")
         return {
             "success": True,
             "contribution_id": contribution.id,

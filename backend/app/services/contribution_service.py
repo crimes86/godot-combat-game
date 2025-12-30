@@ -10,11 +10,40 @@ Handles:
 - Leaderboard calculations
 """
 import json
+import logging
 import os
+from difflib import SequenceMatcher
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
+
+logger = logging.getLogger(__name__)
+
+
+def calculate_description_similarity(desc1: str, desc2: str) -> float:
+    """
+    Calculate similarity ratio between two descriptions.
+    Returns a value between 0.0 (completely different) and 1.0 (identical).
+    """
+    if not desc1 or not desc2:
+        return 0.0
+
+    # Normalize: lowercase, strip whitespace
+    desc1 = desc1.lower().strip()
+    desc2 = desc2.lower().strip()
+
+    if desc1 == desc2:
+        return 1.0
+
+    return SequenceMatcher(None, desc1, desc2).ratio()
+
+
+# Similarity thresholds for auto-approval
+SIMILARITY_AUTO_APPROVE = 0.95  # 95%+ = auto-approve
+SIMILARITY_HIGH_CONFIDENCE = 0.80  # 80-95% = reduced votes (2 instead of 5)
+DEFAULT_VOTE_THRESHOLD = 5
+HIGH_CONFIDENCE_VOTE_THRESHOLD = 2
 
 from app.models import (
     CommunityContribution,
@@ -94,12 +123,17 @@ def get_or_create_contributor_profile(db: Session, user_id: int) -> ContributorP
 
 
 MAX_SUBMISSIONS_PER_DAY = 20
-MIN_REASON_LENGTH = 10
+MIN_REASON_LENGTH = 0  # Reason is optional
 MAX_REASON_LENGTH = 500
 
 
 def _check_submission_rate_limit(db: Session, user_id: int) -> bool:
-    """Check if user has exceeded daily submission limit."""
+    """Check if user has exceeded daily submission limit. Curators bypass."""
+    # Check if curator - they bypass rate limits
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and user.contributor_role == "curator":
+        return True  # Curators bypass daily limit
+
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     count = db.query(CommunityContribution).filter(
         CommunityContribution.user_id == user_id,
@@ -128,12 +162,24 @@ def submit_platform_mapping(
     game_name: str,
     achievement_name: str,
     reason: str,
+    target_achievement_name: str = None,
+    source_platform: str = "steam",
+    source_icon: str = None,
+    target_icon: str = None,
+    steam_app_id: str = None,
+    source_description: str = None,
+    target_description: str = None,
+    source_ach_id: int = None,
+    target_ach_id: int = None,
 ) -> Tuple[CommunityContribution, Optional[ChatMessage]]:
     """
     Submit a cross-platform achievement mapping contribution.
 
     Expert-gating: User must have achievements from at least one of the platforms.
     """
+    import time
+    _t0 = time.time()
+
     # Rate limiting
     if not _check_submission_rate_limit(db, user_id):
         raise ValueError(f"Daily submission limit ({MAX_SUBMISSIONS_PER_DAY}) reached. Try again tomorrow.")
@@ -160,6 +206,51 @@ def submit_platform_mapping(
     if not is_curator and not has_steam and not has_target:
         raise ValueError(f"Must have achievements from Steam or {target_platform} to submit mappings")
 
+    # Check for duplicate pending OR approved mapping
+    from sqlalchemy import and_, or_
+    logger.info(f"[MAPPING] t={time.time()-_t0:.2f}s - checking duplicates")
+    existing = db.query(CommunityContribution).filter(
+        CommunityContribution.contribution_type == "platform_mapping",
+        or_(
+            CommunityContribution.status == "pending",
+            CommunityContribution.status == "approved",
+        ),
+    ).all()
+    logger.info(f"[MAPPING] t={time.time()-_t0:.2f}s - found {len(existing)} existing mappings")
+
+    for contrib in existing:
+        data = contrib.data or {}
+        # Check if same source achievement and target platform
+        if (data.get("steam_api_name") == steam_api_name and
+            data.get("target_platform") == target_platform):
+            if contrib.status == "pending":
+                raise ValueError("This mapping is already pending review. Please vote on the existing submission instead.")
+            elif contrib.status == "approved":
+                raise ValueError("This achievement is already mapped to this platform.")
+
+    # Calculate similarity for auto-approval
+    # Require BOTH name AND description to match for auto-approval (prevents generic description abuse)
+    desc_similarity = calculate_description_similarity(source_description or "", target_description or "")
+    name_similarity = calculate_description_similarity(
+        (achievement_name or "").lower(),
+        (target_achievement_name or target_api_name or "").lower()
+    )
+    similarity_percent = round(desc_similarity * 100, 1)
+    name_similarity_percent = round(name_similarity * 100, 1)
+
+    # Determine vote threshold based on similarity
+    # Auto-approve requires: description ≥95% AND name ≥70%
+    if desc_similarity >= SIMILARITY_AUTO_APPROVE and name_similarity >= 0.70:
+        # Will be auto-approved after creation
+        vote_threshold = 1  # Minimal threshold
+        auto_approve_reason = "description_match"
+    elif desc_similarity >= SIMILARITY_HIGH_CONFIDENCE and name_similarity >= 0.50:
+        vote_threshold = HIGH_CONFIDENCE_VOTE_THRESHOLD
+        auto_approve_reason = None
+    else:
+        vote_threshold = DEFAULT_VOTE_THRESHOLD
+        auto_approve_reason = None
+
     # Create contribution
     contribution = CommunityContribution(
         contribution_type="platform_mapping",
@@ -167,15 +258,26 @@ def submit_platform_mapping(
         data={
             "game_key": game_key,
             "steam_api_name": steam_api_name,
+            "source_platform": source_platform,
             "target_platform": target_platform,
             "target_api_name": target_api_name,
             "game_name": game_name,
             "achievement_name": achievement_name,
+            "target_achievement_name": target_achievement_name or target_api_name,
+            "source_icon": source_icon,
+            "target_icon": target_icon,
+            "steam_app_id": steam_app_id,
+            "source_description": source_description,
+            "target_description": target_description,
+            "source_ach_id": source_ach_id,
+            "target_ach_id": target_ach_id,
+            "similarity_percent": similarity_percent,
+            "name_similarity_percent": name_similarity_percent,
         },
         reason=reason,
         votes_up=0,
         votes_down=0,
-        votes_threshold=5,
+        votes_threshold=vote_threshold,
         status="pending",
         created_at=datetime.utcnow(),
         expires_at=datetime.utcnow() + timedelta(days=7),
@@ -183,6 +285,12 @@ def submit_platform_mapping(
     db.add(contribution)
     db.commit()
     db.refresh(contribution)
+
+    # Auto-approve if similarity is very high (desc ≥95% AND name ≥70%)
+    if auto_approve_reason == "description_match":
+        contribution.reason = (reason or "") + f" [Auto-matched: {similarity_percent}% desc, {name_similarity_percent}% name]"
+        _auto_approve_contribution(db, contribution)
+        return contribution, None  # No chat message for auto-approved
 
     # Post to chat (newcomers room for mappings)
     chat_message = _post_contribution_to_chat(
@@ -198,8 +306,10 @@ def submit_platform_mapping(
 
     # Auto-approve if curator
     if is_curator:
+        logger.info(f"[MAPPING] t={time.time()-_t0:.2f}s - auto-approving (curator)")
         _auto_approve_contribution(db, contribution)
 
+    logger.info(f"[MAPPING] t={time.time()-_t0:.2f}s - DONE")
     return contribution, chat_message
 
 
@@ -427,6 +537,22 @@ def _auto_approve_contribution(db: Session, contribution: CommunityContribution)
     if contribution.contribution_type == "platform_mapping":
         profile.mappings_approved = (profile.mappings_approved or 0) + 1
         _apply_platform_mapping(db, contribution)
+
+        # Post notification to global feed
+        try:
+            from app.routes.chat_routes import post_mapping_approved
+            data = contribution.data
+            post_mapping_approved(
+                db=db,
+                user=user,
+                game_name=data.get("game_name", "Unknown Game"),
+                achievement_name=data.get("achievement_name", ""),
+                platform=data.get("target_platform", "")
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to post mapping notification: {e}")
+
     elif contribution.contribution_type == "rarity_dispute":
         profile.disputes_approved = (profile.disputes_approved or 0) + 1
         _apply_rarity_dispute(db, contribution)
@@ -454,37 +580,69 @@ def _apply_platform_mapping(db: Session, contribution: CommunityContribution):
         mappings = {"games": {}}
 
     game_key = data["game_key"]
-    steam_api_name = data["steam_api_name"]
+    source_api_name = data.get("steam_api_name") or data.get("source_api_name", "")
+    source_platform = data.get("source_platform", "steam")
     target_platform = data["target_platform"]
     target_api_name = data["target_api_name"]
     game_name = data["game_name"]
     achievement_name = data["achievement_name"]
+    source_app_id = data.get("source_app_id", "")
+    target_app_id = data.get("target_app_id", "")
 
     # Initialize structure if needed
     if "games" not in mappings:
         mappings["games"] = {}
+
+    # If game doesn't exist, create it with proper structure
     if game_key not in mappings["games"]:
+        # Create proper game entry with canonical and platforms
         mappings["games"][game_key] = {
-            "name": game_name,
+            "_display_name": game_name,
+            "canonical": {
+                "platform": source_platform,
+            },
+            "platforms": {},
             "achievements": {}
         }
+        # Add app_id to canonical based on platform type
+        if source_platform == "steam" and source_app_id:
+            mappings["games"][game_key]["canonical"]["app_id"] = source_app_id
+        elif source_platform == "xbox" and source_app_id:
+            mappings["games"][game_key]["canonical"]["title_id"] = source_app_id
+        elif source_platform == "psn" and source_app_id:
+            mappings["games"][game_key]["canonical"]["np_communication_id"] = source_app_id
+
+    # Ensure platforms dict exists with target platform
+    if "platforms" not in mappings["games"][game_key]:
+        mappings["games"][game_key]["platforms"] = {}
+    if target_platform not in mappings["games"][game_key]["platforms"]:
+        mappings["games"][game_key]["platforms"][target_platform] = {}
+        # Add target app_id if we have it
+        if target_app_id:
+            if target_platform == "steam":
+                mappings["games"][game_key]["platforms"][target_platform]["app_id"] = target_app_id
+            elif target_platform == "xbox":
+                mappings["games"][game_key]["platforms"][target_platform]["title_id"] = target_app_id
+            elif target_platform == "psn":
+                mappings["games"][game_key]["platforms"][target_platform]["np_communication_id"] = target_app_id
+
     if "achievements" not in mappings["games"][game_key]:
         mappings["games"][game_key]["achievements"] = {}
-    if steam_api_name not in mappings["games"][game_key]["achievements"]:
-        mappings["games"][game_key]["achievements"][steam_api_name] = {
+    if source_api_name not in mappings["games"][game_key]["achievements"]:
+        mappings["games"][game_key]["achievements"][source_api_name] = {
             "name": achievement_name,
         }
 
     # Add the mapping
-    mappings["games"][game_key]["achievements"][steam_api_name][target_platform] = target_api_name
+    mappings["games"][game_key]["achievements"][source_api_name][target_platform] = target_api_name
 
     # Add contributor credit
-    if "contributed_by" not in mappings["games"][game_key]["achievements"][steam_api_name]:
-        mappings["games"][game_key]["achievements"][steam_api_name]["contributed_by"] = []
+    if "contributed_by" not in mappings["games"][game_key]["achievements"][source_api_name]:
+        mappings["games"][game_key]["achievements"][source_api_name]["contributed_by"] = []
 
     user = db.query(User).filter(User.id == contribution.user_id).first()
-    if user and user.username not in mappings["games"][game_key]["achievements"][steam_api_name]["contributed_by"]:
-        mappings["games"][game_key]["achievements"][steam_api_name]["contributed_by"].append(user.username)
+    if user and user.username not in mappings["games"][game_key]["achievements"][source_api_name]["contributed_by"]:
+        mappings["games"][game_key]["achievements"][source_api_name]["contributed_by"].append(user.username)
 
     # Save
     with open(mappings_path, "w") as f:
@@ -597,7 +755,7 @@ def get_pending_contributions(
         desc(CommunityContribution.created_at)
     ).offset(offset).limit(limit).all()
 
-    return [_contribution_to_dict(c) for c in contributions]
+    return [_contribution_to_dict(c, db) for c in contributions]
 
 
 def get_contribution(db: Session, contribution_id: int) -> Optional[Dict[str, Any]]:
@@ -609,7 +767,7 @@ def get_contribution(db: Session, contribution_id: int) -> Optional[Dict[str, An
     if not contribution:
         return None
 
-    return _contribution_to_dict(contribution)
+    return _contribution_to_dict(contribution, db)
 
 
 def get_contributor_profile(db: Session, user_id: int) -> Dict[str, Any]:
@@ -684,11 +842,18 @@ def get_user_contributions(
         desc(CommunityContribution.created_at)
     ).offset(offset).limit(limit).all()
 
-    return [_contribution_to_dict(c) for c in contributions]
+    return [_contribution_to_dict(c, db) for c in contributions]
 
 
-def _contribution_to_dict(contribution: CommunityContribution) -> Dict[str, Any]:
+def _contribution_to_dict(contribution: CommunityContribution, db: Session = None) -> Dict[str, Any]:
     """Convert contribution to dictionary."""
+    # For pending contributions, look up user info
+    credit_display = contribution.credit_display
+    if not credit_display and db and contribution.user_id:
+        user = db.query(User).filter(User.id == contribution.user_id).first()
+        if user:
+            credit_display = f"Player #{user.id}" + (f" ({user.username})" if user.username else "")
+
     return {
         "id": contribution.id,
         "contribution_type": contribution.contribution_type,
@@ -703,7 +868,7 @@ def _contribution_to_dict(contribution: CommunityContribution) -> Dict[str, Any]
         "created_at": contribution.created_at.isoformat() if contribution.created_at else None,
         "expires_at": contribution.expires_at.isoformat() if contribution.expires_at else None,
         "resolved_at": contribution.resolved_at.isoformat() if contribution.resolved_at else None,
-        "credit_display": contribution.credit_display,
+        "credit_display": credit_display,
     }
 
 

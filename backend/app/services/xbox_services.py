@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from app.models import Achievement, AchievementCredit, Game, ProviderAccount, User
 from app.services.effort_scoring import compute_xbox_effort, compute_rarity_from_effort
+from app.services.game_discovery_service import check_and_log_game_discovery
 import logging
 
 logger = logging.getLogger(__name__)
@@ -280,8 +281,20 @@ async def sync_xbox_achievements(
         # Upsert game record
         db_game = upsert_xbox_game(db, provider_account, title)
 
-        # Check if user has any achievements in this title
+        # Check if this game should be added to the Tapestry
         achievement_summary = title.get("achievement", {})
+        total_achs = achievement_summary.get("totalAchievements", 0) if isinstance(achievement_summary, dict) else 0
+        check_and_log_game_discovery(
+            db=db,
+            provider="xbox",
+            game_id=title_id,
+            game_name=title_name,
+            achievement_count=total_achs,
+            sample_achievements=None,  # Will be populated on later syncs
+            user_id=user.id if user else None
+        )
+
+        # Check if user has any achievements in this title
         current_achievements = achievement_summary.get("currentAchievements", 0) if isinstance(achievement_summary, dict) else 0
 
         if current_achievements == 0:
@@ -304,30 +317,15 @@ async def sync_xbox_achievements(
         found = 0
         credited = 0
         ignored = 0
+        stored = 0
 
         for ach in achievements:
-            # Only count unlocked achievements
-            progress_state = ach.get("progressState", "")
-            if progress_state != "Achieved":
-                continue
-
-            found += 1
-
             ach_id = str(ach.get("id", ""))
             ach_name = ach.get("name", f"Achievement {ach_id}")
             ach_desc = ach.get("description", "")
+            progress_state = ach.get("progressState", "")
+            is_unlocked = progress_state == "Achieved"
 
-            # Get unlock time from progression data
-            unlock_time = None
-            progression = ach.get("progression", {})
-            time_unlocked = progression.get("timeUnlocked") if isinstance(progression, dict) else None
-            if time_unlocked:
-                try:
-                    from datetime import datetime
-                    # Xbox returns ISO 8601 format: "2024-01-15T10:30:00.000Z"
-                    unlock_time = datetime.fromisoformat(time_unlocked.replace("Z", "+00:00"))
-                except (ValueError, AttributeError):
-                    pass
             # Get gamerscore value - it's in rewards[0].value as a string
             try:
                 gamerscore = int(ach.get("rewards", [{}])[0].get("value", 0)) if ach.get("rewards") else 0
@@ -335,29 +333,19 @@ async def sync_xbox_achievements(
                 gamerscore = 0
 
             # Extract rarity percentage from OpenXBL data
-            # The rarity object contains currentPercentage (global unlock %)
             rarity_data = ach.get("rarity", {})
             rarity_percent = None
             if isinstance(rarity_data, dict):
                 try:
                     rarity_percent = float(rarity_data.get("currentPercentage", 0))
-                    # 0 means no data available
                     if rarity_percent == 0:
                         rarity_percent = None
                 except (ValueError, TypeError):
                     rarity_percent = None
 
-            # Compute effort score - prefer rarity percent, fall back to gamerscore
+            # Compute effort score
             effort_score = compute_xbox_effort(gamerscore=gamerscore, global_percent=rarity_percent)
             rarity_tier = compute_rarity_from_effort(effort_score)
-
-            # Debug: Log computed values for first few achievements per game
-            if found <= 3:
-                logger.info(f"[XBOX] {ach_name}: rarity%={rarity_percent}, gs={gamerscore} → effort={effort_score} → {rarity_tier}")
-
-            # Track rarity distribution
-            if rarity_tier in rarity_counts:
-                rarity_counts[rarity_tier] += 1
 
             # Icon URL
             icon_url = None
@@ -365,7 +353,7 @@ async def sync_xbox_achievements(
             if media_assets:
                 icon_url = media_assets[0].get("url")
 
-            # Upsert achievement
+            # Upsert achievement (store ALL achievements, not just unlocked)
             db_ach = (
                 db.query(Achievement)
                 .filter_by(app_id=title_id, api_name=ach_id)
@@ -387,12 +375,37 @@ async def sync_xbox_achievements(
                 db.add(db_ach)
                 db.commit()
                 db.refresh(db_ach)
+                stored += 1
             else:
                 # Update if auto-calculated
                 if getattr(db_ach, "effort_auto", True):
                     db_ach.effort_score = effort_score
                     db_ach.rarity_tier = rarity_tier
+                # Update icon if we have one now
+                if icon_url and not db_ach.icon_url:
+                    db_ach.icon_url = icon_url
                 db.commit()
+
+            # Only credit UNLOCKED achievements
+            if not is_unlocked:
+                continue
+
+            found += 1
+
+            # Track rarity distribution for unlocked achievements
+            if rarity_tier in rarity_counts:
+                rarity_counts[rarity_tier] += 1
+
+            # Get unlock time from progression data
+            unlock_time = None
+            progression = ach.get("progression", {})
+            time_unlocked = progression.get("timeUnlocked") if isinstance(progression, dict) else None
+            if time_unlocked:
+                try:
+                    from datetime import datetime
+                    unlock_time = datetime.fromisoformat(time_unlocked.replace("Z", "+00:00"))
+                except (ValueError, AttributeError):
+                    pass
 
             # Credit achievement
             existing = (
@@ -425,7 +438,7 @@ async def sync_xbox_achievements(
 
         db.commit()
 
-        if found > 0:
+        if found > 0 or stored > 0:
             per_game.append({
                 "app_id": title_id,
                 "game_name": title_name,

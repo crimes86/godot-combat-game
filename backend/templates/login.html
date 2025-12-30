@@ -131,16 +131,18 @@
       letter-spacing: 2px;
     }
 
-    /* Compact provider grid - 3 columns for gaming, 3 for social */
+    /* Compact provider grid - 3 columns */
     .provider-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 0.5rem;
+      gap: 0.6rem;
     }
 
-    /* For 5 gaming providers, use special layout */
-    .provider-grid.gaming {
-      grid-template-columns: repeat(5, 1fr);
+    /* Social login - 2 columns centered */
+    .provider-grid.social {
+      grid-template-columns: repeat(2, 1fr);
+      max-width: 320px;
+      margin: 0 auto;
     }
 
     .provider-btn {
@@ -295,11 +297,11 @@
       </div>
 
       {% if beta_gate %}
-      <!-- Beta Access Gate -->
-      <div class="login-title">Closed Beta</div>
+      <!-- Alpha Access Gate -->
+      <div class="login-title">Closed Alpha</div>
       <div style="text-align: center; margin-bottom: 1.5rem;">
         <p style="color: #888; font-size: 0.95rem; margin-bottom: 1rem;">
-          Ashbane is currently in closed beta testing.
+          Ashbane is currently in closed alpha testing.
         </p>
         <p style="color: #666; font-size: 0.85rem;">
           Enter your access code to continue.
@@ -364,7 +366,7 @@
           onmouseover="this.style.background='rgba(80,80,80,0.6)'; this.style.boxShadow='0 0 20px rgba(150,150,150,0.3)';"
           onmouseout="this.style.background='rgba(60,60,60,0.5)'; this.style.boxShadow='none';"
         >
-          Enter Beta
+          Enter Alpha
         </button>
       </form>
 
@@ -383,7 +385,7 @@
 
       <!-- Provider section: Gaming -->
       <div class="provider-section-title">Gaming Platforms</div>
-      <div class="provider-grid gaming">
+      <div class="provider-grid">
         {% for provider in all_providers %}
           {% if provider.name in ['steam', 'battlenet', 'xbox', 'psn', 'roblox', 'google_play'] %}
           <a
@@ -412,7 +414,7 @@
 
       <!-- Provider section: Social -->
       <div class="provider-section-title">Social Login</div>
-      <div class="provider-grid">
+      <div class="provider-grid social">
         {% for provider in all_providers %}
           {% if provider.name in ['discord', 'twitch', 'google', 'github', 'twitter', 'reddit', 'spotify', 'facebook'] %}
           <a
@@ -429,14 +431,6 @@
       </div>
       {% endif %}
 
-      <!-- Guest notice -->
-      <div class="guest-notice">
-        <div class="guest-notice-title">Playing as Guest?</div>
-        <div class="guest-notice-text">
-          You can play without logging in, but your progress won't be saved
-          and you won't earn Ashbane achievements.
-        </div>
-      </div>
       {% endif %}
 
       <!-- Footer -->

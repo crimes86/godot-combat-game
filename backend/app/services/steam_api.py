@@ -182,4 +182,100 @@ async def get_global_percentages_for_game_async(app_id, steam_api_key):
 # Use compute_steam_effort() and compute_rarity_from_effort() instead
 
 
+async def fetch_and_store_steam_schema(db, app_id: str) -> int:
+    """
+    Fetch achievement schema from Steam and store in DB if not already present.
+
+    Returns the total number of achievements for the game.
+    """
+    from app.models import Achievement
+
+    # Check current count
+    current_count = db.query(Achievement).filter(Achievement.app_id == str(app_id)).count()
+
+    # Fetch schema from Steam
+    schema = await get_steam_achievement_schema(str(app_id))
+
+    if not schema:
+        return current_count
+
+    # If we already have more achievements than schema, something's off - return current
+    if current_count >= len(schema):
+        return current_count
+
+    # Get existing api_names
+    existing = set(
+        a.api_name for a in
+        db.query(Achievement.api_name).filter(Achievement.app_id == str(app_id)).all()
+    )
+
+    # Add missing achievements
+    added = 0
+    for api_name, data in schema.items():
+        if api_name not in existing:
+            ach = Achievement(
+                app_id=str(app_id),
+                api_name=api_name,
+                name=data.get("display_name", api_name),
+                display_name=data.get("display_name", api_name),
+                description=data.get("description", ""),
+                icon_url=data.get("icon_url", ""),
+                rarity_tier="Common",  # Default, will be updated when someone unlocks
+            )
+            db.add(ach)
+            added += 1
+
+    if added > 0:
+        db.commit()
+        logger.info(f"[Steam] Added {added} achievements for app_id={app_id} (total: {len(schema)})")
+
+    return len(schema)
+
+
+async def get_steam_achievement_schema(app_id: str) -> dict:
+    """
+    Fetch achievement schema (names, descriptions, icons) for a Steam game.
+
+    Returns dict mapping api_name -> {display_name, description, icon_url, icon_gray_url}
+    """
+    if not STEAM_API_KEY:
+        logger.warning("STEAM_API_KEY not set, cannot fetch achievement schema")
+        return {}
+
+    url = (
+        f"https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/"
+        f"?key={STEAM_API_KEY}&appid={app_id}"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=STEAM_TIMEOUT) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                logger.debug(f"GetSchemaForGame failed for app_id={app_id}: {resp.status_code}")
+                return {}
+
+            schema_achs = (
+                resp.json().get("game", {})
+                .get("availableGameStats", {})
+                .get("achievements", [])
+            )
+
+            result = {}
+            for ach in schema_achs:
+                api_name = ach.get("name", "")
+                result[api_name] = {
+                    "display_name": ach.get("displayName", api_name),
+                    "description": ach.get("description", ""),
+                    "icon_url": ach.get("icon", ""),
+                    "icon_gray_url": ach.get("icongray", ""),
+                }
+
+            logger.info(f"[Steam] Fetched schema for app_id={app_id}: {len(result)} achievements")
+            return result
+
+    except Exception as e:
+        logger.warning(f"Failed to fetch Steam schema for app_id={app_id}: {e}")
+        return {}
+
+
 

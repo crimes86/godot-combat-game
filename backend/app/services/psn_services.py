@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from app.models import Achievement, AchievementCredit, Game, ProviderAccount, User
 from app.services.effort_scoring import compute_psn_effort, compute_rarity_from_effort
+from app.services.game_discovery_service import check_and_log_game_discovery
 import logging
 from datetime import datetime
 from typing import Optional
@@ -219,6 +220,19 @@ def sync_psn_achievements(
         # Upsert game record
         db_game = upsert_psn_game(db, provider_account, title)
 
+        # Check if this game should be added to the Tapestry
+        defined_trophies = title.get("defined_trophies", {})
+        total_defined = sum(defined_trophies.values()) if isinstance(defined_trophies, dict) else 0
+        check_and_log_game_discovery(
+            db=db,
+            provider="psn",
+            game_id=np_id,
+            game_name=title_name,
+            achievement_count=total_defined,
+            sample_achievements=None,  # Will be populated on later syncs
+            user_id=user.id if user else None
+        )
+
         # Fetch individual trophies
         logger.info(f"[PSN] Fetching {total_earned} trophies for: {title_name}")
         trophies = get_psn_trophies_for_title(token, np_id, platform)
@@ -230,34 +244,22 @@ def sync_psn_achievements(
         found = 0
         credited = 0
         ignored = 0
+        stored = 0
 
         for trophy in trophies:
-            # Only count earned trophies
-            if not trophy.get("earned"):
-                continue
-
-            found += 1
-
             trophy_id = str(trophy["trophy_id"])
             trophy_name = trophy.get("trophy_name", f"Trophy {trophy_id}")
             trophy_desc = trophy.get("trophy_detail", "")
             trophy_type = trophy.get("trophy_type", "bronze").lower()
             trophy_icon = trophy.get("trophy_icon_url")
             earn_rate = trophy.get("trophy_earn_rate")  # Percentage
-
-            # Track trophy type
-            if trophy_type in trophy_totals:
-                trophy_totals[trophy_type] += 1
+            is_earned = trophy.get("earned", False)
 
             # Compute effort score based on trophy type and rarity
             effort_score = compute_psn_effort(trophy_type=trophy_type, earn_rate=earn_rate)
             rarity_tier = compute_rarity_from_effort(effort_score)
 
-            # Track rarity distribution
-            if rarity_tier in rarity_counts:
-                rarity_counts[rarity_tier] += 1
-
-            # Upsert achievement
+            # Upsert achievement (store ALL trophies, not just earned)
             db_ach = (
                 db.query(Achievement)
                 .filter_by(app_id=np_id, api_name=trophy_id)
@@ -280,13 +282,31 @@ def sync_psn_achievements(
                 db.add(db_ach)
                 db.commit()
                 db.refresh(db_ach)
+                stored += 1
             else:
                 # Update if auto-calculated
                 if getattr(db_ach, "effort_auto", True):
                     db_ach.effort_score = effort_score
                     db_ach.rarity_tier = rarity_tier
                     db_ach.percent = earn_rate
+                # Update icon if we have one now
+                if trophy_icon and not db_ach.icon_url:
+                    db_ach.icon_url = trophy_icon
                 db.commit()
+
+            # Only credit EARNED trophies
+            if not is_earned:
+                continue
+
+            found += 1
+
+            # Track trophy type for earned only
+            if trophy_type in trophy_totals:
+                trophy_totals[trophy_type] += 1
+
+            # Track rarity distribution for earned only
+            if rarity_tier in rarity_counts:
+                rarity_counts[rarity_tier] += 1
 
             # Get unlock time
             unlock_time = None
@@ -331,13 +351,14 @@ def sync_psn_achievements(
 
         db.commit()
 
-        if found > 0:
+        if found > 0 or stored > 0:
             per_game.append({
                 "app_id": np_id,
                 "game_name": title_name,
                 "total_found": found,
                 "credited": credited,
                 "ignored": ignored,
+                "stored": stored,
             })
 
         total_found += found

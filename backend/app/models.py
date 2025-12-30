@@ -209,6 +209,46 @@ class Session(Base):
         return hashlib.sha256(token.encode()).hexdigest()
 
 
+class UserActivity(Base):
+    """
+    Tracks user journey and interactions for analytics and debugging.
+
+    Activity types:
+    - auth: login, logout, session_refresh
+    - provider: connect, disconnect, sync, sync_error
+    - tapestry: view, map_open, map_submit, vote
+    - contribution: submit, approve, reject
+    - dispute: create, vote, resolve
+    - forge: item_forge, item_trade
+    - navigation: page_view
+    """
+    __tablename__ = 'user_activities'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)  # Nullable for pre-login events
+
+    # Activity classification
+    category = Column(String(32), nullable=False, index=True)  # auth, provider, tapestry, etc.
+    action = Column(String(64), nullable=False, index=True)    # login, connect, view, etc.
+
+    # Context data (JSON for flexibility)
+    details = Column(JSON, nullable=True)  # provider_name, game_key, achievement_id, etc.
+
+    # Request context (for debugging/security)
+    ip_address = Column(String(45), nullable=True)  # IPv6 max length
+    user_agent = Column(String(512), nullable=True)
+
+    # Timing
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Optional: duration for timed activities (e.g., how long mapping took)
+    duration_ms = Column(Integer, nullable=True)
+
+    # Success/failure tracking
+    success = Column(Boolean, default=True)
+    error_message = Column(String(512), nullable=True)
+
+
 class WalletAccount(Base):
     """
     Linked crypto wallet for NFT minting.

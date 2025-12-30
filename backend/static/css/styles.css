@@ -369,11 +369,11 @@ body::after {
   max-width: 100% !important;
   margin: 0 !important;
   margin-top: 15px !important;
-  padding: 0 22px !important;
+  padding: 0 20px !important;
   display: flex !important;
   flex-direction: row !important;
   justify-content: space-between !important;
-  gap: 40px !important;
+  gap: 20px !important;
   /* Lock height to viewport minus navbar and top gap */
   height: calc(100vh - 85px);
   max-height: calc(100vh - 85px);
@@ -382,12 +382,10 @@ body::after {
 }
 
 #left-column {
-  flex: 1 1 340px;
-  min-width: 300px;
-  max-width: 400px;
+  flex: 0 0 300px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   align-self: stretch;
   min-height: 0;
   overflow: hidden;
@@ -404,9 +402,7 @@ body::after {
 }
 
 #right-column {
-  flex: 1 1 340px;
-  min-width: 300px;
-  max-width: 400px;
+  flex: 0 0 300px;
   display: flex;
   flex-direction: column;
   align-self: stretch;
@@ -417,7 +413,7 @@ body::after {
 /* Panel styling to match Godot UI */
 .ui-panel {
   background: rgba(20, 20, 22, 0.95);
-  border: 2px solid rgb(90, 90, 90);
+  border: 1px solid rgb(90, 90, 90);
   border-radius: 8px;
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.3),
@@ -426,29 +422,29 @@ body::after {
 }
 
 .ui-panel-header {
-  padding: 12px 16px;
+  padding: 8px 12px;
   background: rgba(35, 35, 38, 0.5);
   border-bottom: 1px solid rgb(90, 90, 90);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .ui-panel-header h3 {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
   color: rgb(200, 200, 200);
 }
 
 .ui-panel-header .panel-icon {
-  font-size: 1rem;
+  font-size: 0.85rem;
 }
 
 .ui-panel-content {
-  padding: 1rem;
+  padding: 8px;
 }
 
 /* Left column specific - stacked panels */
@@ -467,22 +463,56 @@ body::after {
   overflow-y: auto;
 }
 
-/* Friends panel (top - fixed size) */
+/* Friends panel (top - smaller fixed portion) */
 #friends-panel {
   flex: 0 0 auto;
-  max-height: 280px;
+  max-height: 120px;
 }
 
 #friends-panel .ui-panel-content {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 6px;
 }
 
 #friends-list {
   flex: 1;
   overflow-y: auto;
-  min-height: 80px;
+  min-height: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Friend item styling */
+.friend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.7rem;
+}
+
+.friend-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.friend-online-dot {
+  width: 8px;
+  height: 8px;
+  background: #0f0;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #0f0;
+}
+
+.friend-offline-dot {
+  width: 8px;
+  height: 8px;
+  background: #555;
+  border-radius: 50%;
 }
 
 /* Chat panel (bottom - fills remaining space) */
@@ -490,13 +520,13 @@ body::after {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0; /* Allow shrinking to fit */
+  min-height: 0;
   overflow: hidden;
 }
 
 #chat-panel .ui-panel-content {
   flex: 1;
-  padding: 0.75rem;
+  padding: 6px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -504,8 +534,53 @@ body::after {
 
 #chat-messages {
   flex: 1;
-  min-height: 100px;
+  min-height: 0;
   overflow-y: auto;
+  padding: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+/* Chat input row */
+.chat-input-row {
+  display: flex;
+  gap: 4px;
+}
+
+.chat-input-row input,
+#chat-input {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(90, 90, 90, 0.5);
+  background: rgba(8, 8, 10, 0.8);
+  color: #fff;
+  font-size: 0.75rem;
+}
+
+.chat-input-row button,
+#chat-send-btn {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: none;
+  background: linear-gradient(180deg, rgb(90, 90, 90), rgb(60, 60, 60));
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+.chat-input-row button:hover,
+#chat-send-btn:hover {
+  background: linear-gradient(180deg, rgb(100, 100, 100), rgb(70, 70, 70));
+}
+
+/* Chat online count */
+.chat-online-count {
+  font-size: 0.65rem;
+  color: #666;
+  margin-left: auto;
 }
 
 /* Middle column panel */
@@ -676,26 +751,6 @@ body::after {
   }
 }
 
-/* Friend online indicator */
-.friend-online-dot {
-  width: 8px;
-  height: 8px;
-  background: #0f0;
-  border-radius: 50%;
-  box-shadow: 0 0 6px #0f0;
-  display: inline-block;
-  margin-right: 6px;
-}
-
-.friend-offline-dot {
-  width: 8px;
-  height: 8px;
-  background: #555;
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 6px;
-}
-
 /* Chat panel needs relative positioning for indicator */
 #chat-panel .ui-panel-content {
   position: relative;
@@ -708,8 +763,8 @@ body::after {
 }
 
 .ui-panel-header .header-tab {
-  padding: 4px 10px;
-  font-size: 0.7rem;
+  padding: 3px 8px;
+  font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;

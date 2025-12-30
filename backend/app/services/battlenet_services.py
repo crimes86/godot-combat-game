@@ -575,15 +575,15 @@ async def sync_d3_achievements(
     from app.services.crypto_service import decrypt_token
     token = token or decrypt_token(provider_account.access_token)
 
-    # BattleTag is stored in display_name (e.g., "Player#1234"), not provider_user_id (numeric)
-    battletag = provider_account.display_name
+    # BattleTag is stored in provider_username (e.g., "Player#1234"), not provider_user_id (numeric)
+    battletag = provider_account.provider_username
     if not battletag or "#" not in battletag:
         # Try profile_data as fallback
         profile_data = provider_account.profile_data or {}
         battletag = profile_data.get("battletag")
 
     if not battletag or "#" not in battletag:
-        logger.warning(f"[BNET-D3] No valid battletag found (display_name={provider_account.display_name})")
+        logger.warning(f"[BNET-D3] No valid battletag found (provider_username={provider_account.provider_username})")
         return {"credited": 0, "details": {"total_achievements": 0, "per_game": []}}
 
     profile = await get_d3_career_profile(battletag, token)

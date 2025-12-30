@@ -3,761 +3,2361 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Tapestry - Ashbane</title>
-    <!-- Preconnect to external domains -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <title>The Tapestry – Ashbane</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
+    <link rel="stylesheet" href="/static/css/styles.css?v=7" />
+    <link rel="stylesheet" href="/static/css/ashbane-theme.css?v=7" />
     <link rel="preconnect" href="https://cdn.cloudflare.steamstatic.com">
-    <!-- Async font loading -->
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0a0a0f;
-            color: #e8e6e3;
-            min-height: 100vh;
-            padding: 20px;
-            overflow-x: hidden;
+        :root {
+            --steam-color: #1B9BD7;
+            --xbox-color: #107C10;
+            --psn-color: #003791;
+            --battlenet-color: #00AEFF;
         }
 
-        .back-link {
-            display: inline-block;
-            padding: 8px 16px;
-            background: #12121a;
-            border: 1px solid rgba(201, 162, 39, 0.3);
-            border-radius: 6px;
-            color: #9d9d9d;
-            text-decoration: none;
-            margin-bottom: 20px;
-        }
-        .back-link:hover { border-color: #c9a227; color: #c9a227; }
-
-        .tapestry-header {
+        .tapestry-page {
+            padding: 15px 20px;
+            margin: 0;
             display: flex;
-            align-items: center;
             gap: 20px;
-            margin-bottom: 12px;
-            padding: 10px 18px;
-            background: linear-gradient(135deg, #12121a 0%, #1a1a24 100%);
-            border: 1px solid rgba(201, 162, 39, 0.3);
-            border-radius: 8px;
+            height: calc(100vh - 85px);
+            overflow: hidden;
         }
 
-        .tapestry-title {
-            font-family: 'Cinzel', serif;
-            font-size: 1.2rem;
-            background: linear-gradient(135deg, #c9a227 0%, #e8d5b7 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+        /* Left sidebar for chat/friends */
+        .left-sidebar {
+            flex: 0 0 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 0;
+            overflow: hidden;
         }
 
-        .parity-box {
+        /* Main content area */
+        .tapestry-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .page-header {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 6px 14px;
-            background: #0a0a0f;
-            border: 1px solid #c9a227;
-            border-radius: 6px;
+            gap: 16px;
+            margin-bottom: 24px;
+            padding: 16px 20px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--corner-radius);
+            flex-wrap: wrap;
         }
 
-        .parity-value {
-            font-family: 'Cinzel', serif;
+        .page-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--ashbane-gold);
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .help-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--slot-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .help-icon:hover {
+            background: var(--ashbane-gold);
+            color: var(--bg-darker);
+            border-color: var(--ashbane-gold);
+        }
+
+        .help-tooltip {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 12px;
+            width: 320px;
+            padding: 16px;
+            background: var(--bg-panel);
+            border: 1px solid var(--ashbane-gold);
+            border-radius: var(--corner-radius);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            z-index: 1000;
+            text-align: left;
+            font-size: 0.85rem;
+            font-weight: 400;
+            letter-spacing: 0;
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        .help-tooltip::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 8px solid var(--ashbane-gold);
+        }
+
+        .help-icon:hover .help-tooltip,
+        .help-icon:focus .help-tooltip {
+            display: block;
+        }
+
+        .help-tooltip h4 {
+            margin: 0 0 8px 0;
+            color: var(--ashbane-gold);
+            font-size: 0.9rem;
+        }
+
+        .help-tooltip ul {
+            margin: 0;
+            padding-left: 18px;
+            color: #e0e0e0;
+        }
+
+        .help-tooltip li {
+            margin-bottom: 6px;
+            color: #e0e0e0;
+        }
+
+        .help-tooltip .help-section {
+            margin-bottom: 12px;
+        }
+
+        .help-tooltip .help-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .stat-box {
+            display: flex;
+            flex-direction: column;
+            padding: 8px 16px;
+            background: var(--slot-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--corner-radius-sm);
+        }
+
+        .stat-value {
             font-size: 1.3rem;
-            color: #c9a227;
+            font-weight: 700;
+            color: var(--ashbane-gold);
         }
 
-        .parity-label {
+        .stat-label {
             font-size: 0.65rem;
-            color: #9d9d9d;
+            color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
-        .contribute-btn {
+        .user-stats {
             margin-left: auto;
-            padding: 6px 14px;
-            background: linear-gradient(135deg, #c9a227 0%, #b8941f 100%);
-            border: none;
-            border-radius: 5px;
-            color: #000;
-            font-family: 'Cinzel', serif;
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-decoration: none;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .contribute-btn:hover { filter: brightness(1.1); }
-
-        .provider-legend {
             display: flex;
             gap: 12px;
             align-items: center;
         }
 
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.7rem;
-            color: #9d9d9d;
-        }
-
-        .legend-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
-
-        /* The tapestry weave container - RGB RAM style */
-        .tapestry-weave {
-            display: inline-block;
-            position: relative;
-            padding: 10px 15px;
-            background: #0a0a0f;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        /* RGB wave layer behind content */
-        .tapestry-weave::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(
-                90deg,
-                #ff0040,      /* Hot pink */
-                #ff6600,      /* Orange */
-                #ffcc00,      /* Gold */
-                #37fd12,      /* Xbox green */
-                #00ffaa,      /* Cyan-green */
-                #1b9bd7,      /* Steam blue */
-                #5865f2,      /* Discord purple */
-                #ff00ff,      /* Magenta */
-                #ff0040       /* Loop back */
-            );
-            background-size: 400% 400%;
-            animation: rgbShift 20s ease-in-out infinite;
-            opacity: 0.15;
-        }
-
-        /* Intense glow border effect */
-        .tapestry-weave::after {
-            content: '';
-            position: absolute;
-            top: -4px;
-            left: -4px;
-            right: -4px;
-            bottom: -4px;
-            background: linear-gradient(
-                90deg,
-                #ff0040,
-                #ff6600,
-                #ffcc00,
-                #37fd12,
-                #00ffaa,
-                #1b9bd7,
-                #5865f2,
-                #ff00ff,
-                #ff0040
-            );
-            background-size: 400% 400%;
-            animation: rgbShift 20s ease-in-out infinite reverse;
-            border-radius: 12px;
-            z-index: -1;
-            filter: blur(15px);
-            opacity: 1;
-        }
-
-        /* Complex shifting animation with direction changes */
-        @keyframes rgbShift {
-            0% { background-position: 0% 50%; }
-            25% { background-position: 100% 25%; }
-            50% { background-position: 200% 75%; }
-            75% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        .tapestry-wrapper {
+        .user-stat {
             text-align: center;
-            position: relative;
-            display: inline-block;
-            padding: 30px; /* Space for tassels */
+            padding: 6px 12px;
+            background: rgba(217, 166, 51, 0.1);
+            border: 1px solid rgba(217, 166, 51, 0.3);
+            border-radius: var(--corner-radius-sm);
         }
 
-        /* Tassel fringe around perimeter - contained within wrapper */
-        .tassel-border {
-            position: absolute;
-            pointer-events: none;
-            z-index: 10;
+        .user-stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--ashbane-gold);
         }
 
-        /* Bottom tassels - hanging threads with organic variation */
-        .tassel-bottom {
-            bottom: 6px;
-            left: 38px;
-            right: 38px;
-            height: 24px;
-            background:
-                /* Layer 1: Main threads - irregular spacing */
-                repeating-linear-gradient(
-                    92deg,
-                    transparent 0px,
-                    transparent 2px,
-                    rgba(190, 165, 115, 0.7) 2px,
-                    rgba(175, 150, 100, 0.5) 3px,
-                    transparent 3px,
-                    transparent 8px,
-                    rgba(170, 145, 95, 0.6) 8px,
-                    rgba(160, 140, 90, 0.4) 9px,
-                    transparent 9px,
-                    transparent 14px
-                ),
-                /* Layer 2: Thinner accent threads */
-                repeating-linear-gradient(
-                    88deg,
-                    transparent 0px,
-                    transparent 5px,
-                    rgba(200, 175, 125, 0.4) 5px,
-                    rgba(185, 160, 110, 0.3) 5.5px,
-                    transparent 5.5px,
-                    transparent 18px
-                ),
-                /* Layer 3: Sparse long threads */
-                repeating-linear-gradient(
-                    90deg,
-                    transparent 0px,
-                    transparent 22px,
-                    rgba(180, 155, 105, 0.5) 22px,
-                    rgba(165, 140, 95, 0.3) 23px,
-                    transparent 23px,
-                    transparent 35px
-                );
-            mask-image:
-                linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.2) 80%, rgba(0,0,0,0) 100%),
-                url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-            -webkit-mask-image:
-                linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.2) 80%, rgba(0,0,0,0) 100%);
-            mask-composite: intersect;
+        .user-stat-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
         }
 
-        /* Top tassels - shorter fringe */
-        .tassel-top {
-            top: 16px;
-            left: 38px;
-            right: 38px;
-            height: 14px;
-            background:
-                repeating-linear-gradient(
-                    91deg,
-                    transparent 0px,
-                    transparent 3px,
-                    rgba(185, 160, 110, 0.55) 3px,
-                    rgba(170, 145, 95, 0.4) 4px,
-                    transparent 4px,
-                    transparent 9px,
-                    rgba(175, 150, 100, 0.45) 9px,
-                    rgba(160, 140, 90, 0.3) 10px,
-                    transparent 10px,
-                    transparent 16px
-                ),
-                repeating-linear-gradient(
-                    87deg,
-                    transparent 0px,
-                    transparent 7px,
-                    rgba(195, 170, 120, 0.35) 7px,
-                    rgba(180, 155, 105, 0.25) 7.5px,
-                    transparent 7.5px,
-                    transparent 21px
-                );
-            mask-image: linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
-            -webkit-mask-image: linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
+        .user-title-box {
+            background: linear-gradient(135deg, rgba(217, 166, 51, 0.15), rgba(255, 200, 50, 0.1));
+            border-color: rgba(217, 166, 51, 0.4);
         }
 
-        /* Left tassels - horizontal threads */
-        .tassel-left {
-            left: 12px;
-            top: 38px;
-            bottom: 38px;
-            width: 18px;
-            background:
-                repeating-linear-gradient(
-                    2deg,
-                    transparent 0px,
-                    transparent 3px,
-                    rgba(185, 160, 110, 0.5) 3px,
-                    rgba(170, 145, 95, 0.35) 4px,
-                    transparent 4px,
-                    transparent 10px,
-                    rgba(175, 150, 100, 0.45) 10px,
-                    rgba(160, 140, 90, 0.3) 11px,
-                    transparent 11px,
-                    transparent 17px
-                ),
-                repeating-linear-gradient(
-                    -2deg,
-                    transparent 0px,
-                    transparent 8px,
-                    rgba(195, 170, 120, 0.3) 8px,
-                    rgba(180, 155, 105, 0.2) 8.5px,
-                    transparent 8.5px,
-                    transparent 25px
-                );
-            mask-image: linear-gradient(270deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
-            -webkit-mask-image: linear-gradient(270deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
+        .user-title-box .user-stat-value {
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
         }
 
-        /* Right tassels */
-        .tassel-right {
-            right: 12px;
-            top: 38px;
-            bottom: 38px;
-            width: 18px;
-            background:
-                repeating-linear-gradient(
-                    -1deg,
-                    transparent 0px,
-                    transparent 3px,
-                    rgba(185, 160, 110, 0.5) 3px,
-                    rgba(170, 145, 95, 0.35) 4px,
-                    transparent 4px,
-                    transparent 11px,
-                    rgba(175, 150, 100, 0.45) 11px,
-                    rgba(160, 140, 90, 0.3) 12px,
-                    transparent 12px,
-                    transparent 18px
-                ),
-                repeating-linear-gradient(
-                    3deg,
-                    transparent 0px,
-                    transparent 6px,
-                    rgba(195, 170, 120, 0.3) 6px,
-                    rgba(180, 155, 105, 0.2) 6.5px,
-                    transparent 6.5px,
-                    transparent 22px
-                );
-            mask-image: linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
-            -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%);
-        }
-
-        /* Corner tassels - decorative knots with texture */
-        .tassel-corner {
-            width: 16px;
-            height: 16px;
-            background:
-                radial-gradient(
-                    ellipse 60% 80% at 45% 55%,
-                    rgba(210, 180, 120, 0.6) 0%,
-                    rgba(190, 160, 100, 0.4) 30%,
-                    rgba(170, 140, 80, 0.2) 60%,
-                    transparent 80%
-                ),
-                radial-gradient(
-                    ellipse 50% 70% at 55% 45%,
-                    rgba(200, 170, 110, 0.5) 0%,
-                    rgba(180, 150, 90, 0.3) 40%,
-                    transparent 70%
-                );
-        }
-        .tassel-corner.top-left { top: 22px; left: 22px; transform: rotate(-5deg); }
-        .tassel-corner.top-right { top: 22px; right: 22px; transform: rotate(8deg); }
-        .tassel-corner.bottom-left { bottom: 22px; left: 22px; transform: rotate(3deg); }
-        .tassel-corner.bottom-right { bottom: 22px; right: 22px; transform: rotate(-6deg); }
-
-        /* Inner container for icons */
-        .tapestry-icons {
-            position: relative;
-            display: inline-block;
-        }
-
-        /* Woven thread grid overlay - organic fabric look */
-        .tapestry-icons::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            pointer-events: none;
-            z-index: 50;
-            background:
-                /* Layer 1: Primary horizontal threads - slightly irregular */
-                repeating-linear-gradient(
-                    2deg,
-                    transparent,
-                    transparent 7px,
-                    rgba(190, 170, 130, 0.15) 7px,
-                    rgba(200, 180, 140, 0.10) 8px,
-                    rgba(180, 160, 120, 0.08) 9px,
-                    transparent 9px
-                ),
-                /* Layer 2: Secondary horizontal - offset */
-                repeating-linear-gradient(
-                    -1deg,
-                    transparent,
-                    transparent 11px,
-                    rgba(170, 150, 110, 0.08) 11px,
-                    rgba(160, 140, 100, 0.06) 12px,
-                    transparent 12px
-                ),
-                /* Layer 3: Primary vertical threads */
-                repeating-linear-gradient(
-                    91deg,
-                    transparent,
-                    transparent 6px,
-                    rgba(200, 175, 130, 0.12) 6px,
-                    rgba(185, 165, 125, 0.08) 7px,
-                    rgba(170, 150, 110, 0.05) 8px,
-                    transparent 8px
-                ),
-                /* Layer 4: Secondary vertical - offset */
-                repeating-linear-gradient(
-                    88deg,
-                    transparent,
-                    transparent 13px,
-                    rgba(175, 155, 115, 0.07) 13px,
-                    rgba(165, 145, 105, 0.05) 14px,
-                    transparent 14px
-                ),
-                /* Subtle noise/grain texture */
-                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-            opacity: 0.25;
-        }
-
-        /* Game icon tiles */
-        .game-icon {
-            position: absolute;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-            overflow: hidden;
-            background: #1a1a24;
-            opacity: 0.5;
-        }
-
-        .game-icon:hover {
-            opacity: 1;
-        }
-
-        .game-icon img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transition: filter 0.25s;
-        }
-
-        .game-icon:hover {
-            transform: scale(1.15) translateY(-5px);
-            z-index: 100 !important;
-            box-shadow: 0 8px 40px rgba(201, 162, 39, 0.4);
-        }
-
-        .game-icon:hover img {
-            filter: brightness(1.2);
-        }
-
-        /* Provider-themed borders */
-        .game-icon.provider-steam { border: 2px solid #1B9BD7; box-shadow: 0 0 12px rgba(27, 155, 215, 0.5); }
-        .game-icon.provider-xbox { border: 2px solid #107C10; box-shadow: 0 0 12px rgba(16, 124, 16, 0.5); }
-        .game-icon.provider-psn { border: 2px solid #003791; box-shadow: 0 0 12px rgba(0, 55, 145, 0.5); }
-        .game-icon.provider-battlenet { border: 2px solid #00AEFF; box-shadow: 0 0 12px rgba(0, 174, 255, 0.5); }
-        .game-icon.provider-gog { border: 2px solid #86328A; box-shadow: 0 0 12px rgba(134, 50, 138, 0.5); }
-        .game-icon.provider-epic { border: 2px solid #888888; box-shadow: 0 0 12px rgba(136, 136, 136, 0.4); }
-        .game-icon.provider-nintendo { border: 2px solid #E60012; box-shadow: 0 0 12px rgba(230, 0, 18, 0.5); }
-        .game-icon.provider-roblox { border: 2px solid #00A2FF; box-shadow: 0 0 12px rgba(0, 162, 255, 0.5); }
-        .game-icon.provider-multi { border: 2px solid #c9a227; box-shadow: 0 0 12px rgba(201, 162, 39, 0.5); }
-
-        /* Provider coverage dots */
-        .coverage-dots {
-            position: absolute;
-            bottom: 2px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 3px;
-            background: rgba(0,0,0,0.85);
-            padding: 3px 5px;
-            border-radius: 10px;
-        }
-
-        .coverage-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            box-shadow: 0 0 3px currentColor;
-        }
-
-        .coverage-dot.mapped { opacity: 1; }
-        .coverage-dot.unmapped { opacity: 0.2; }
-
-        /* Tooltip */
-        .tooltip {
-            position: fixed;
-            background: #1a1a24;
-            border: 1px solid rgba(201, 162, 39, 0.4);
-            border-radius: 10px;
-            padding: 14px 18px;
-            pointer-events: none;
-            z-index: 1000;
-            opacity: 0;
-            transition: opacity 0.15s;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-            max-width: 280px;
-        }
-        .tooltip.visible { opacity: 1; }
-        .tooltip-title {
-            font-family: 'Cinzel', serif;
-            color: #c9a227;
-            font-size: 1rem;
-            margin-bottom: 8px;
-        }
-        .tooltip-parity {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 6px;
-        }
-        .tooltip-detail { color: #9d9d9d; font-size: 0.85rem; line-height: 1.4; }
-        .tooltip-providers {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-            flex-wrap: wrap;
-        }
-        .tooltip-provider {
+        /* Pending Button */
+        .pending-btn {
             display: flex;
             align-items: center;
-            gap: 4px;
-            font-size: 0.75rem;
-            padding: 3px 8px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 12px;
-        }
-        .tooltip-provider-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
+            gap: 8px;
+            padding: 8px 14px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: var(--corner-radius-sm);
+            color: #c4b5fd;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-left: 12px;
         }
 
-        /* Modal */
-        .modal-overlay {
+        .pending-btn:hover {
+            background: rgba(139, 92, 246, 0.25);
+            border-color: rgba(139, 92, 246, 0.6);
+            box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .pending-badge {
+            background: #8b5cf6;
+            color: #fff;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        .pending-badge.empty {
+            background: rgba(100, 100, 100, 0.5);
+            color: #888;
+        }
+
+        /* Pending Modal */
+        .pending-modal-overlay {
             display: none;
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8);
-            z-index: 2000;
-            backdrop-filter: blur(6px);
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9000;
+            backdrop-filter: blur(4px);
         }
-        .modal-overlay.visible { display: flex; align-items: center; justify-content: center; }
 
-        .modal {
-            background: #1a1a24;
-            border: 1px solid rgba(201, 162, 39, 0.5);
-            border-radius: 14px;
-            padding: 0;
-            max-width: 450px;
+        .pending-modal-overlay.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pending-modal {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--corner-radius);
             width: 90%;
-            box-shadow: 0 25px 80px rgba(0,0,0,0.6);
+            max-width: 600px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pending-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .pending-modal-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .pending-modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        .pending-modal-close:hover {
+            color: var(--text-color);
+        }
+
+        .pending-modal-body {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* Two Column Layout */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 280px;
+            gap: 16px;
+            flex: 1;
+            min-height: 0;
             overflow: hidden;
         }
 
-        .modal-header {
-            position: relative;
-            height: 120px;
-            background: #12121a;
+        @media (max-width: 1200px) {
+            .two-col { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+        }
+
+        @media (max-width: 900px) {
+            .left-sidebar { display: none; }
+        }
+
+        .main-content {
             display: flex;
-            align-items: flex-end;
+            flex-direction: column;
+            gap: 16px;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        /* Chat/Friends Panel Styles */
+        .social-panel {
+            background: rgba(20, 20, 22, 0.95);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .social-panel-header {
+            padding: 10px 14px;
+            background: rgba(35, 35, 38, 0.5);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .social-panel-header h3 {
+            margin: 0;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgb(200, 200, 200);
+        }
+
+        .social-panel-header .panel-icon {
+            font-size: 0.9rem;
+        }
+
+        .social-panel-content {
+            flex: 1;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        /* Friends panel (top - fixed size) */
+        #tapestry-friends-panel {
+            flex: 0 0 auto;
+            max-height: 240px;
+        }
+
+        #tapestry-friends-list {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        /* Chat panel (bottom - fills remaining) */
+        #tapestry-chat-panel {
+            flex: 1;
+            min-height: 0;
+        }
+
+        #tapestry-chat-messages {
+            flex: 1;
+            min-height: 100px;
+            overflow-y: auto;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+
+        .chat-input-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .chat-input-row input {
+            flex: 1;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: rgba(8, 8, 10, 0.8);
+            color: var(--text-color);
+            font-size: 0.8rem;
+        }
+
+        .chat-input-row button {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: none;
+            background: linear-gradient(180deg, rgb(90, 90, 90), rgb(60, 60, 60));
+            color: var(--text-color);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .chat-input-row button:hover {
+            background: linear-gradient(180deg, rgb(100, 100, 100), rgb(70, 70, 70));
+        }
+
+        .header-tabs {
+            display: flex;
+            gap: 4px;
+            margin-left: auto;
+        }
+
+        .header-tab {
+            padding: 3px 8px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: transparent;
+            border: 1px solid rgba(100, 100, 100, 0.2);
+            border-radius: 4px;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .header-tab:hover {
+            border-color: rgba(130, 130, 130, 0.4);
+            color: #888;
+        }
+
+        .header-tab.active {
+            background: rgba(130, 130, 130, 0.15);
+            border-color: rgba(130, 130, 130, 0.5);
+            color: #999;
+        }
+
+        .friend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.02);
+            font-size: 0.75rem;
+        }
+
+        .friend-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .friend-online-dot {
+            width: 8px;
+            height: 8px;
+            background: #0f0;
+            border-radius: 50%;
+            box-shadow: 0 0 6px #0f0;
+        }
+
+        .friend-offline-dot {
+            width: 8px;
+            height: 8px;
+            background: #555;
+            border-radius: 50%;
+        }
+
+        .chat-online-count {
+            font-size: 0.65rem;
+            color: #666;
+            margin-left: auto;
+        }
+
+        /* Chat message animations */
+        @keyframes tapestryMsgGlow {
+            0% { background-color: rgba(217, 166, 51, 0.15); }
+            100% { background-color: transparent; }
+        }
+
+        .chat-msg-new {
+            animation: tapestryMsgGlow 2s ease-out forwards;
+            border-radius: 4px;
+        }
+
+        /* Tapestry-specific notification styles */
+        .tapestry-notification {
+            padding: 6px 8px;
+            margin-bottom: 4px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tapestry-notification.mapping {
+            background: rgba(217, 166, 51, 0.1);
+            border-left: 3px solid var(--ashbane-gold);
+        }
+
+        .tapestry-notification.sync {
+            background: rgba(27, 155, 215, 0.1);
+            border-left: 3px solid #1b9bd7;
+        }
+
+        .tapestry-notification.approved {
+            background: rgba(76, 175, 80, 0.1);
+            border-left: 3px solid #4CAF50;
+        }
+
+        /* Table Container */
+        .table-container {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--corner-radius);
+            overflow: hidden;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--bg-darker);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        /* Sort Controls */
+        .sort-controls {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .sort-btn {
+            padding: 4px 10px;
+            background: var(--btn-normal);
+            border: 1px solid var(--border-color);
+            border-radius: var(--corner-radius-sm);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sort-btn:hover {
+            border-color: var(--border-highlight);
+            color: var(--text-color);
+        }
+
+        .sort-btn.active {
+            background: rgba(217, 166, 51, 0.15);
+            border-color: var(--ashbane-gold);
+            color: var(--ashbane-gold);
+        }
+
+        /* Game Table */
+        .leaderboard {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .leaderboard th {
+            text-align: left;
+            padding: 10px 14px;
+            background: var(--bg-darker);
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 500;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .leaderboard td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(90, 90, 90, 0.15);
+            vertical-align: middle;
+        }
+
+        .leaderboard tr:hover td {
+            background: rgba(217, 166, 51, 0.03);
+        }
+
+        .game-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .game-icon {
+            width: 80px;
+            height: 30px;
+            border-radius: 3px;
+            object-fit: cover;
+            background: var(--slot-bg);
+        }
+
+        .game-name {
+            font-weight: 500;
+            color: var(--text-color);
+            font-size: 0.9rem;
+        }
+
+        /* Parity Bar */
+        .parity-cell { min-width: 120px; }
+
+        .parity-bar-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .parity-bar {
+            flex: 1;
+            height: 6px;
+            background: var(--slot-bg);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .parity-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+        }
+
+        .parity-value {
+            font-size: 0.8rem;
+            font-weight: 600;
+            min-width: 36px;
+            text-align: right;
+        }
+
+        .parity-critical .parity-bar-fill { background: linear-gradient(90deg, #dc2626, #ef4444); }
+        .parity-critical .parity-value { color: var(--error-color); }
+        .parity-low .parity-bar-fill { background: linear-gradient(90deg, #ea580c, #f97316); }
+        .parity-low .parity-value { color: var(--warning-color); }
+        .parity-medium .parity-bar-fill { background: linear-gradient(90deg, #ca8a04, #eab308); }
+        .parity-medium .parity-value { color: #facc15; }
+        .parity-high .parity-bar-fill { background: linear-gradient(90deg, #16a34a, #22c55e); }
+        .parity-high .parity-value { color: var(--success-color); }
+        .parity-complete .parity-bar-fill { background: linear-gradient(90deg, var(--ashbane-gold), #e8d5b7); }
+        .parity-complete .parity-value { color: var(--ashbane-gold); }
+
+        .gaps-cell {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        /* Animated Map button when user can contribute */
+        .map-btn.has-mappable {
+            animation: pulse-glow 2s ease-in-out infinite;
+            border-color: var(--ashbane-gold);
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% {
+                box-shadow: 0 0 4px rgba(217, 166, 51, 0.3);
+            }
+            50% {
+                box-shadow: 0 0 12px rgba(217, 166, 51, 0.6), 0 0 20px rgba(217, 166, 51, 0.3);
+            }
+        }
+
+        .gaps-high { color: var(--error-color); }
+        .gaps-medium { color: var(--warning-color); }
+        .gaps-low { color: #facc15; }
+        .gaps-none { color: var(--success-color); }
+
+        .platforms-cell {
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .platforms-cell .platform-dot {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            vertical-align: middle;
+            margin: 0 2px;
+        }
+
+        .platform-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            font-size: 9px;
+            font-weight: bold;
+        }
+
+        .platform-dot.canonical {
+            box-shadow: 0 0 6px currentColor;
+            color: #fff;
+        }
+
+        .platform-dot.target {
+            background: transparent;
+            border: 2px solid;
+            font-size: 10px;
+        }
+
+        .platform-arrow {
+            display: inline-block;
+            vertical-align: middle;
+            color: var(--text-muted);
+            font-size: 10px;
+            margin: 0 3px;
+            opacity: 0.6;
+        }
+
+        .map-btn {
+            padding: 5px 12px;
+            background: rgba(217, 166, 51, 0.1);
+            border: 1px solid rgba(217, 166, 51, 0.4);
+            border-radius: var(--corner-radius-sm);
+            color: var(--ashbane-gold);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .map-btn:hover:not(:disabled) {
+            background: rgba(217, 166, 51, 0.2);
+            border-color: var(--ashbane-gold);
+        }
+
+        .map-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            background: var(--btn-normal);
+            border-color: var(--border-color);
+            color: var(--text-muted);
+        }
+
+        .awaiting-btn {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 4px 8px;
+        }
+
+        .complete-badge {
+            color: var(--success-color);
+            font-size: 0.75rem;
+        }
+
+        /* Pending Contributions */
+        .pending-section {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--corner-radius);
+        }
+
+        .pending-list {
+            padding: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .pending-item {
+            background: var(--slot-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .pending-item:last-child { margin-bottom: 0; }
+
+        .pending-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .pending-type {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--ashbane-gold);
+            text-transform: uppercase;
+            padding: 2px 6px;
+            background: rgba(217, 166, 51, 0.15);
+            border-radius: 3px;
+        }
+
+        .pending-submitter {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .pending-game {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .pending-game-icon {
+            width: 46px;
+            height: 22px;
+            border-radius: 3px;
+            object-fit: cover;
+            background: var(--slot-bg);
+        }
+
+        .pending-game-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .pending-mapping {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: var(--bg-darker);
+            border-radius: 4px;
+        }
+
+        .pending-ach {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .pending-ach-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            object-fit: cover;
+            background: var(--slot-bg);
+            flex-shrink: 0;
+        }
+
+        .pending-ach-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .pending-ach-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            line-height: 1.3;
+            opacity: 0.8;
+        }
+
+        .pending-ach-provider {
+            font-size: 0.6rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+        }
+
+        .pending-ach-name {
+            font-size: 0.8rem;
+            color: var(--text-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pending-arrow {
+            color: var(--ashbane-gold);
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .pending-reason {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-style: italic;
+            margin-bottom: 8px;
+            padding: 6px 8px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 4px;
+            border-left: 2px solid var(--border-color);
+        }
+
+        .pending-reason:empty { display: none; }
+
+        .pending-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .vote-btns {
+            display: flex;
+            gap: 6px;
+        }
+
+        .vote-btn {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            border: 1px solid;
+        }
+
+        .vote-btn.confirm {
+            background: rgba(0, 200, 100, 0.15);
+            border-color: var(--success-color);
+            color: var(--success-color);
+        }
+
+        .vote-btn.reject {
+            background: rgba(255, 80, 80, 0.15);
+            border-color: var(--error-color);
+            color: var(--error-color);
+        }
+
+        .vote-btn:hover { filter: brightness(1.2); }
+
+        .vote-status {
+            font-size: 0.75rem;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .vote-status.own {
+            background: rgba(100, 100, 100, 0.2);
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+        }
+
+        .vote-status.voted {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .vote-counts {
+            display: flex;
+            gap: 8px;
+            font-size: 0.8rem;
+        }
+
+        .vote-up { color: var(--success-color); }
+        .vote-down { color: var(--error-color); }
+
+        .empty-pending {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* Sidebar */
+        .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+        .sidebar-section {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--corner-radius);
             padding: 16px;
         }
 
-        .modal-header-img {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            opacity: 0.4;
+        .sidebar-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--ashbane-gold);
+            margin-bottom: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(217, 166, 51, 0.2);
         }
 
-        .modal-title-area {
-            position: relative;
-            z-index: 1;
+        /* Rewards Section */
+        .reward-tier {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.2s;
         }
 
-        .modal-title {
-            font-family: 'Cinzel', serif;
-            font-size: 1.3rem;
-            color: #fff;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
-        }
+        .reward-tier:last-child { margin-bottom: 0; }
+        .reward-tier:hover { background: rgba(255, 255, 255, 0.04); }
 
-        .modal-subtitle {
-            font-size: 0.8rem;
-            color: #c9a227;
-        }
-
-        .modal-close {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            background: rgba(0,0,0,0.5);
-            border: none;
-            color: #fff;
+        .reward-icon {
             width: 32px;
             height: 32px;
             border-radius: 50%;
-            font-size: 18px;
-            cursor: pointer;
-            z-index: 2;
-        }
-        .modal-close:hover { background: rgba(0,0,0,0.8); }
-
-        .modal-body {
-            padding: 20px;
-        }
-
-        .modal-stat-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
-        }
-        .modal-stat-row:last-child { border-bottom: none; }
-        .modal-stat-label { color: #9d9d9d; }
-        .modal-stat-value { color: #e8e6e3; font-weight: 600; }
-        .modal-stat-value.gold { color: #c9a227; }
-
-        .modal-platforms {
-            display: flex;
-            gap: 8px;
-            margin-top: 14px;
-            flex-wrap: wrap;
-        }
-
-        .modal-platform {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 16px;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .reward-info { flex: 1; min-width: 0; }
+
+        .reward-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .reward-threshold {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .reward-progress {
+            height: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 3px;
+            margin-top: 6px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .reward-progress-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.3s;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        .tier-threadbinder .reward-name { color: #9cf; }
+        .tier-threadbinder .reward-icon { border: 2px solid rgba(153, 204, 255, 0.3); }
+        .tier-threadbinder .reward-progress-fill { background: linear-gradient(90deg, #6af, #9cf); }
+
+        .tier-loomkeeper .reward-name { color: #c9f; }
+        .tier-loomkeeper .reward-icon { border: 2px solid rgba(204, 153, 255, 0.3); }
+        .tier-loomkeeper .reward-progress-fill { background: linear-gradient(90deg, #a6f, #c9f); }
+
+        .tier-tapestry-master .reward-name { color: #fc6; }
+        .tier-tapestry-master .reward-icon { border: 2px solid rgba(255, 204, 102, 0.3); }
+        .tier-tapestry-master .reward-progress-fill { background: linear-gradient(90deg, #f90, #fc6); }
+
+        .reward-tier.earned {
+            border-color: rgba(100, 200, 100, 0.3);
+            background: rgba(100, 200, 100, 0.05);
+        }
+
+        .reward-tier.earned .reward-icon {
+            box-shadow: 0 0 10px rgba(100, 200, 100, 0.5);
+        }
+
+        .reward-earned {
+            font-size: 0.65rem;
+            color: var(--success-color);
+            font-weight: 600;
+        }
+
+        /* Leaderboard */
+        .lb-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .lb-item:last-child { margin-bottom: 0; }
+        .lb-item:hover { background: rgba(255, 255, 255, 0.05); }
+
+        .lb-item:nth-child(1) {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 215, 0, 0.05) 100%);
+            border-color: rgba(255, 215, 0, 0.2);
+        }
+        .lb-item:nth-child(2) {
+            background: linear-gradient(135deg, rgba(192, 192, 192, 0.12) 0%, rgba(192, 192, 192, 0.04) 100%);
+            border-color: rgba(192, 192, 192, 0.15);
+        }
+        .lb-item:nth-child(3) {
+            background: linear-gradient(135deg, rgba(205, 127, 50, 0.12) 0%, rgba(205, 127, 50, 0.04) 100%);
+            border-color: rgba(205, 127, 50, 0.15);
+        }
+
+        .lb-rank {
+            font-size: 0.85rem;
+            font-weight: 700;
+            min-width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-muted);
+        }
+
+        .lb-item:nth-child(1) .lb-rank { color: #ffd700; background: rgba(255, 215, 0, 0.2); }
+        .lb-item:nth-child(2) .lb-rank { color: #c0c0c0; background: rgba(192, 192, 192, 0.2); }
+        .lb-item:nth-child(3) .lb-rank { color: #cd7f32; background: rgba(205, 127, 50, 0.2); }
+
+        .lb-info { flex: 1; min-width: 0; }
+        .lb-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .lb-count {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        .lb-empty {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
             font-size: 0.8rem;
         }
 
-        .modal-platform-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
+        /* Mapping Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
         }
 
-        .modal-cta {
+        .modal-overlay.active { display: flex; }
+
+        .mapping-modal {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 1000px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .modal-loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 15, 20, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            border-radius: 12px;
+        }
+        .modal-loading-overlay.active {
+            display: flex;
+        }
+        .modal-loading-content {
+            text-align: center;
+        }
+        .modal-loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        .modal-loading-text {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .modal-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .modal-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .modal-close {
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-muted);
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .modal-close:hover {
+            border-color: var(--error-color);
+            color: var(--error-color);
+        }
+
+        .platform-tabs {
+            display: flex;
+            gap: 6px;
+            padding: 8px 16px;
+            background: var(--bg-darker);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .platform-tab {
+            padding: 4px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--btn-normal);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+
+        .platform-tab:hover { border-color: var(--border-highlight); color: var(--text-color); }
+        .platform-tab.active { border-color: var(--ashbane-gold); color: var(--ashbane-gold); background: rgba(217, 166, 51, 0.1); }
+
+        /* Suggested Matches Section */
+        .suggested-matches-section {
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(135deg, rgba(217, 166, 51, 0.05) 0%, rgba(217, 166, 51, 0.02) 100%);
+        }
+
+        .suggested-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .suggested-header:hover {
+            background: rgba(217, 166, 51, 0.08);
+        }
+
+        .suggested-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .suggested-icon {
+            font-size: 1rem;
+        }
+
+        .suggested-title {
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: var(--ashbane-gold);
+        }
+
+        .suggested-count {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: var(--bg-darker);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .suggested-header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .suggested-confidence-badges {
+            display: flex;
+            gap: 6px;
+        }
+
+        .confidence-badge {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .confidence-badge.high {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+        }
+
+        .confidence-badge.medium {
+            background: rgba(255, 193, 7, 0.2);
+            color: #FFC107;
+        }
+
+        .confidence-badge.low {
+            background: rgba(255, 152, 0, 0.2);
+            color: #FF9800;
+        }
+
+        .suggested-toggle {
+            color: var(--text-muted);
+            transition: transform 0.2s;
+        }
+
+        .suggested-body {
+            max-height: 160px;
+            overflow-y: auto;
+            padding: 0 16px 10px 16px;
+        }
+
+        .suggested-body.collapsed {
+            display: none;
+        }
+
+        .suggested-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 8px;
+        }
+
+        .suggested-card {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .suggested-card:hover {
+            border-color: var(--ashbane-gold);
+            background: rgba(217, 166, 51, 0.05);
+        }
+
+        .suggested-card.high-conf {
+            border-left: 3px solid #4CAF50;
+        }
+
+        .suggested-card.medium-conf {
+            border-left: 3px solid #FFC107;
+        }
+
+        .suggested-card.low-conf {
+            border-left: 3px solid #FF9800;
+        }
+
+        .suggested-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .suggested-confidence {
+            font-size: 0.6rem;
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        .suggested-confidence.high {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+        }
+
+        .suggested-confidence.medium {
+            background: rgba(255, 193, 7, 0.2);
+            color: #FFC107;
+        }
+
+        .suggested-confidence.low {
+            background: rgba(255, 152, 0, 0.2);
+            color: #FF9800;
+        }
+
+        .suggested-pair {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .suggested-ach {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .suggested-ach-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        .suggested-ach-info {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .suggested-ach-name {
+            font-size: 0.7rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .suggested-ach-desc {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .suggested-arrow {
+            color: var(--ashbane-gold);
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .suggested-action {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .suggested-select-btn {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border: 1px solid var(--ashbane-gold);
+            background: transparent;
+            color: var(--ashbane-gold);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .suggested-select-btn:hover {
+            background: var(--ashbane-gold);
+            color: var(--bg-panel);
+        }
+
+        .suggested-card.locked {
+            opacity: 0.5;
+        }
+
+        .suggested-card.unlocked {
+            border-color: var(--ashbane-gold);
+        }
+
+        .suggested-unlocked {
+            font-size: 0.65rem;
+            color: #4CAF50;
+            font-weight: 600;
+        }
+
+        .suggested-locked {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .modal-body { padding: 12px 16px; }
+
+        .side-by-side {
+            display: grid;
+            grid-template-columns: 1fr 40px 1fr;
+            gap: 12px;
+            min-height: 280px;
+        }
+
+        @media (max-width: 800px) {
+            .side-by-side { grid-template-columns: 1fr; }
+            .connector { display: none; }
+        }
+
+        .ach-panel {
+            background: var(--slot-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 320px;
+        }
+
+        .ach-panel-header {
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .provider-label {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.65rem;
+        }
+
+        .ach-search {
+            padding: 6px 10px;
+            border: none;
+            border-bottom: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-color);
+            font-size: 0.8rem;
+        }
+
+        .ach-search::placeholder { color: var(--text-muted); }
+
+        .ach-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 6px;
+        }
+
+        .ach-item {
+            display: flex;
+            gap: 8px;
+            padding: 6px;
+            margin-bottom: 4px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .ach-item:hover { border-color: rgba(255, 255, 255, 0.1); }
+        .ach-item.selected { border-color: var(--ashbane-gold); background: rgba(217, 166, 51, 0.1); }
+        .ach-item.unlocked { border-left: 3px solid var(--success-color); }
+        .ach-item.locked { opacity: 0.5; }
+
+        .ach-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 3px;
+            background: #222;
+            flex-shrink: 0;
+        }
+
+        .ach-info { flex: 1; min-width: 0; }
+        .ach-name { font-size: 0.75rem; font-weight: 600; margin-bottom: 1px; }
+        .ach-desc {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .ach-tags { display: flex; gap: 3px; margin-top: 2px; flex-wrap: wrap; }
+        .ach-tag {
+            font-size: 0.55rem;
+            padding: 1px 4px;
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-muted);
+        }
+        .ach-tag.unlocked { background: rgba(0, 200, 100, 0.2); color: var(--success-color); }
+        .ach-tag.pending { background: rgba(255, 180, 0, 0.2); color: #FFB400; }
+        .ach-tag.mapped { background: rgba(100, 200, 100, 0.2); color: #6c6; }
+        .ach-item.has-pending { opacity: 0.6; border-color: rgba(255, 180, 0, 0.3); }
+        .ach-item.has-pending:hover { opacity: 0.8; }
+        .ach-item.is-mapped { opacity: 0.5; border-color: rgba(100, 200, 100, 0.3); pointer-events: none; }
+        .ach-item.is-mapped .ach-icon { filter: grayscale(50%); }
+
+        .dispute-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: all 0.2s;
+        }
+        .dispute-btn:hover {
+            opacity: 1;
+            border-color: var(--ashbane-gold);
+            background: rgba(217, 166, 51, 0.1);
+        }
+
+        /* Dispute Modal */
+        .dispute-modal {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .dispute-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .dispute-current, .dispute-proposed, .dispute-reason {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .dispute-current label, .dispute-proposed label, .dispute-reason label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .rarity-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .rarity-badge.common { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
+        .rarity-badge.uncommon { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .rarity-badge.rare { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .rarity-badge.epic { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+        .rarity-badge.legendary { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+
+        .rarity-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .rarity-option {
+            padding: 8px 14px;
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--slot-bg);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .rarity-option:hover {
+            border-color: var(--border-highlight);
+            color: var(--text-color);
+        }
+
+        .rarity-option.selected {
+            border-color: var(--ashbane-gold);
+            color: var(--ashbane-gold);
+            background: rgba(217, 166, 51, 0.1);
+        }
+
+        .rarity-option.disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .rarity-option[data-rarity="common"] { color: #9ca3af; }
+        .rarity-option[data-rarity="uncommon"] { color: #22c55e; }
+        .rarity-option[data-rarity="rare"] { color: #3b82f6; }
+        .rarity-option[data-rarity="epic"] { color: #a855f7; }
+        .rarity-option[data-rarity="legendary"] { color: #f59e0b; }
+
+        .rarity-option.selected[data-rarity="common"] { border-color: #9ca3af; background: rgba(156, 163, 175, 0.15); }
+        .rarity-option.selected[data-rarity="uncommon"] { border-color: #22c55e; background: rgba(34, 197, 94, 0.15); }
+        .rarity-option.selected[data-rarity="rare"] { border-color: #3b82f6; background: rgba(59, 130, 246, 0.15); }
+        .rarity-option.selected[data-rarity="epic"] { border-color: #a855f7; background: rgba(168, 85, 247, 0.15); }
+        .rarity-option.selected[data-rarity="legendary"] { border-color: #f59e0b; background: rgba(245, 158, 11, 0.15); }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 99999;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 10px;
+        }
+
+        .toast {
+            padding: 14px 20px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            animation: toastSlideIn 0.3s ease-out;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            max-width: 400px;
+        }
+
+        .toast.error {
+            background: linear-gradient(135deg, rgba(255, 50, 50, 0.95), rgba(180, 30, 30, 0.95));
+            border: 1px solid rgba(255, 100, 100, 0.5);
+            color: #fff;
+        }
+
+        .toast.success {
+            background: linear-gradient(135deg, rgba(50, 200, 100, 0.95), rgba(30, 150, 70, 0.95));
+            border: 1px solid rgba(100, 255, 150, 0.5);
+            color: #fff;
+        }
+
+        .toast.warning {
+            background: linear-gradient(135deg, rgba(255, 180, 50, 0.95), rgba(200, 140, 30, 0.95));
+            border: 1px solid rgba(255, 200, 100, 0.5);
+            color: #fff;
+        }
+
+        .toast.info {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95));
+            border: 1px solid rgba(100, 150, 255, 0.5);
+            color: #fff;
+        }
+
+        @keyframes toastSlideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .ach-tag.has-item {
+            background: linear-gradient(135deg, rgba(217, 166, 51, 0.3), rgba(255, 200, 50, 0.2));
+            color: var(--ashbane-gold);
+            font-weight: 600;
+            border: 1px solid rgba(217, 166, 51, 0.4);
+        }
+        .ach-tag.candidate {
+            background: rgba(139, 92, 246, 0.2);
+            color: #c4b5fd;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        .ach-tag.priority-high { border-color: rgba(255, 150, 50, 0.5); }
+        .ach-tag.priority-legendary { border-color: rgba(255, 200, 50, 0.6); color: #ffd700; }
+
+        .connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.65rem;
+            text-align: center;
+        }
+
+        .connector-arrow { font-size: 1.4rem; color: var(--ashbane-gold); margin: 4px 0; }
+
+        .waiting-message {
+            display: none;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .waiting-message.active { display: block; }
+
+        .waiting-icon { font-size: 2rem; margin-bottom: 10px; opacity: 0.5; }
+        .waiting-title { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 4px; }
+        .waiting-desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; }
+
+        /* Submit Area */
+        .submit-area {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .reason-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--slot-bg);
+            color: var(--text-color);
+            font-size: 0.85rem;
+            resize: vertical;
+            min-height: 50px;
+            margin-bottom: 12px;
+        }
+
+        .submit-btn {
             display: block;
             width: 100%;
-            margin-top: 20px;
-            padding: 14px;
-            background: linear-gradient(135deg, #c9a227 0%, #b8941f 100%);
+            max-width: 280px;
+            margin: 0 auto;
+            padding: 12px;
+            background: linear-gradient(135deg, var(--ashbane-gold), #b8941f);
             border: none;
             border-radius: 8px;
             color: #000;
-            font-family: 'Cinzel', serif;
             font-weight: 600;
-            font-size: 0.95rem;
-            text-align: center;
-            text-decoration: none;
             cursor: pointer;
+            transition: all 0.2s;
         }
-        .modal-cta:hover { filter: brightness(1.1); }
 
+        .submit-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(217, 166, 51, 0.4); }
+        .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Loading */
         .loading {
-            color: #9d9d9d;
-            font-style: italic;
-            padding: 60px;
             text-align: center;
-            font-size: 1rem;
+            padding: 20px;
+            color: var(--text-muted);
+        }
+
+        .loading-spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--ashbane-gold);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 8px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Navbar Info Tooltip */
+        .info-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #888;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: help;
+            margin-left: 8px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .info-icon:hover {
+            background: rgba(255, 140, 50, 0.15);
+            border-color: rgba(255, 140, 50, 0.4);
+            color: #ff8c32;
+            transform: scale(1.1);
+        }
+
+        /* Hide tooltip content inside icon - shown via fixed container */
+        .info-icon .info-tooltip {
+            display: none;
+        }
+
+        /* Fixed tooltip container */
+        #info-tooltip-container {
+            position: fixed;
+            z-index: 99999;
+            pointer-events: none;
+            background: linear-gradient(165deg, #1a1a1e 0%, #111114 50%, #0d0d10 100%);
+            border: 1px solid rgba(255, 140, 50, 0.25);
+            border-radius: 12px;
+            padding: 16px 18px;
+            width: 280px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 20px rgba(255, 140, 50, 0.15);
+            text-align: left;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #c5c5c5;
+        }
+
+        #info-tooltip-container.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        #info-tooltip-container h4 {
+            margin: 0 0 10px 0;
+            color: var(--ashbane-gold, #fa0);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        #info-tooltip-container p {
+            margin: 8px 0;
+        }
+
+        #info-tooltip-container ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        #info-tooltip-container li {
+            margin: 4px 0;
+        }
+
+        #info-tooltip-container .tip-highlight {
+            color: var(--ashbane-gold, #fa0);
+            font-weight: 500;
         }
     </style>
 </head>
 <body>
-    <a href="/dashboard" class="back-link">← Dashboard</a>
+    {% include 'partials/_navbar.html' %}
 
-    <div class="tapestry-header">
-        <div class="tapestry-title">
-            <img src="/static/icons/tapestry.png" alt="Tapestry" style="width:48px; height:48px; vertical-align:middle; margin-right:12px; filter:drop-shadow(0 0 6px rgba(250,140,0,0.6));">
-            THE TAPESTRY
-        </div>
-        <div class="parity-box" id="parity-box">
-            <div>
-                <div class="parity-value" id="parity-value">--%</div>
-                <div class="parity-label">Parity</div>
-            </div>
-            <div>
-                <div class="parity-value" id="gap-count" style="font-size:1.1rem;">--</div>
-                <div class="parity-label">Gaps</div>
-            </div>
-        </div>
-        <div class="provider-legend" id="provider-legend"></div>
-        <a href="/contributions" class="contribute-btn">Contribute</a>
-    </div>
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toast-container"></div>
 
-    <div class="tapestry-wrapper">
-        <div class="tapestry-weave" id="tapestry-weave">
-            <div class="tapestry-icons" id="tapestry-icons">
-                <div class="loading">Weaving threads...</div>
-            </div>
-        </div>
-        <!-- Tassel fringe around perimeter -->
-        <div class="tassel-border tassel-top"></div>
-        <div class="tassel-border tassel-bottom"></div>
-        <div class="tassel-border tassel-left"></div>
-        <div class="tassel-border tassel-right"></div>
-        <div class="tassel-border tassel-corner top-left"></div>
-        <div class="tassel-border tassel-corner top-right"></div>
-        <div class="tassel-border tassel-corner bottom-left"></div>
-        <div class="tassel-border tassel-corner bottom-right"></div>
-    </div>
-
-    <!-- Size scale legend (hidden - visual is self-explanatory) -->
-
-    <div class="tooltip" id="tooltip">
-        <div class="tooltip-title" id="tooltip-title"></div>
-        <div class="tooltip-parity" id="tooltip-parity"></div>
-        <div class="tooltip-detail" id="tooltip-detail"></div>
-        <div class="tooltip-providers" id="tooltip-providers"></div>
-    </div>
-
-    <div class="modal-overlay" id="modal-overlay">
-        <div class="modal" id="modal">
-            <div class="modal-header" id="modal-header">
-                <img class="modal-header-img" id="modal-header-img" src="" alt="">
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-                <div class="modal-title-area">
-                    <div class="modal-title" id="modal-title"></div>
-                    <div class="modal-subtitle" id="modal-subtitle"></div>
+    <div class="tapestry-page">
+        <!-- Left Sidebar: Friends & Chat -->
+        <div class="left-sidebar">
+            <!-- Friends Panel -->
+            <div id="tapestry-friends-panel" class="social-panel">
+                <div class="social-panel-header">
+                    <span class="panel-icon">👥</span>
+                    <h3>Friends</h3>
+                    <span id="tapestry-pending-badge" style="display:none;background:#ff4444;color:white;padding:2px 6px;border-radius:8px;font-size:0.6rem;font-weight:bold;margin-left:auto;"></span>
+                </div>
+                <div class="social-panel-content">
+                    <div style="margin-bottom:8px;">
+                        <div style="display:flex;gap:4px;">
+                            <input type="text" id="tapestry-friend-search" placeholder="Search users..."
+                                   style="flex:1;padding:6px 8px;border-radius:4px;border:1px solid var(--border-color);background:rgba(8,8,10,0.8);color:var(--text-color);font-size:0.75rem;"
+                                   onkeyup="if(event.key==='Enter') tapestrySearchFriends()">
+                            <button onclick="tapestrySearchFriends()" style="padding:6px 8px;border-radius:4px;border:none;background:linear-gradient(180deg,rgb(90,90,90),rgb(60,60,60));color:var(--text-color);cursor:pointer;font-size:0.75rem;">🔍</button>
+                        </div>
+                        <div id="tapestry-search-results" style="margin-top:6px;display:none;max-height:100px;overflow-y:auto;"></div>
+                    </div>
+                    <div id="tapestry-friends-list">
+                        <div style="text-align:center;padding:1rem;color:#555;font-size:0.75rem;">Loading...</div>
+                    </div>
                 </div>
             </div>
-            <div class="modal-body" id="modal-body"></div>
+
+            <!-- Chat Panel -->
+            <div id="tapestry-chat-panel" class="social-panel">
+                <div class="social-panel-header">
+                    <span class="panel-icon">💬</span>
+                    <h3>Activity</h3>
+                    <div class="header-tabs">
+                        <button id="tapestry-chat-tab-room" onclick="tapestrySwitchChatRoom('room')" class="header-tab active">
+                            <span id="tapestry-chat-room-name">#room</span>
+                        </button>
+                        <button id="tapestry-chat-tab-global" onclick="tapestrySwitchChatRoom('global')" class="header-tab">
+                            #global
+                        </button>
+                    </div>
+                </div>
+                <div class="social-panel-content">
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+                        <span id="tapestry-chat-online" class="chat-online-count">loading...</span>
+                    </div>
+                    <div id="tapestry-chat-messages">
+                        <div style="text-align:center;color:#555;font-size:0.75rem;padding:1rem;">Loading chat...</div>
+                    </div>
+                    <div class="chat-input-row" id="tapestry-chat-input-row">
+                        <input type="text" id="tapestry-chat-input" placeholder="Type a message..."
+                               onkeyup="if(event.key==='Enter') tapestrySendChat()">
+                        <button onclick="tapestrySendChat()">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Tapestry Content -->
+        <div class="tapestry-content">
+            <!-- Header -->
+            <div class="page-header">
+            <div class="page-title">
+                <img src="/static/icons/tapestry.png?v=2" alt="Tapestry" style="width:56px; height:56px; vertical-align:middle; margin-right:12px; filter:drop-shadow(0 0 8px rgba(180,130,255,0.8));">
+                THE TAPESTRY
+                <span class="help-icon" tabindex="0">?
+                    <div class="help-tooltip">
+                        <div class="help-section">
+                            <h4>Weaving Threads</h4>
+                            <ul>
+                                <li>Click <strong>Map</strong> on any game to link achievements across platforms</li>
+                                <li>Select matching achievements from Steam and your target platform</li>
+                                <li>You must have unlocked at least one of the achievements to submit</li>
+                                <li>High-similarity matches are auto-approved; others need community votes</li>
+                            </ul>
+                        </div>
+                        <div class="help-section">
+                            <h4>Voting on Contributions</h4>
+                            <ul>
+                                <li>Click <strong>Pending</strong> to see mappings awaiting approval</li>
+                                <li>Vote to confirm or reject proposed matches</li>
+                                <li>Helpful votes increase your rank</li>
+                            </ul>
+                        </div>
+                        <div class="help-section">
+                            <h4>Disputing Rarity</h4>
+                            <ul>
+                                <li>Think an achievement's rarity is wrong? Click it to dispute</li>
+                                <li>You must have unlocked the achievement to dispute its rarity</li>
+                                <li>Provide evidence and the community will vote</li>
+                            </ul>
+                        </div>
+                    </div>
+                </span>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="parity-value">--%</div>
+                <div class="stat-label">Parity</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="gap-count">--</div>
+                <div class="stat-label">Gaps</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="game-count">--</div>
+                <div class="stat-label">Games</div>
+            </div>
+            <div class="user-stats">
+                <div class="user-stat" title="Approved mappings + disputes">
+                    <div class="user-stat-value" id="user-woven">0</div>
+                    <div class="user-stat-label">Woven</div>
+                </div>
+                <div class="user-stat" title="Votes that matched final outcome">
+                    <div class="user-stat-value" id="user-helpful">0</div>
+                    <div class="user-stat-label">Helpful</div>
+                </div>
+                <div class="user-stat" title="Your leaderboard position">
+                    <div class="user-stat-value" id="user-rank">-</div>
+                    <div class="user-stat-label">Rank</div>
+                </div>
+                <div class="user-stat user-title-box" id="user-title-box" style="display:none;" title="Your earned title">
+                    <div class="user-stat-value" id="user-title">-</div>
+                    <div class="user-stat-label">Title</div>
+                </div>
+            </div>
+            <button class="pending-btn" onclick="openPendingModal()">
+                <span>Pending</span>
+                <span class="pending-badge" id="pending-badge">0</span>
+            </button>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="two-col">
+            <div class="main-content">
+                <!-- Game Leaderboard -->
+                <div class="table-container">
+                    <div class="section-header">
+                        <span class="section-title">Games Needing Mappings</span>
+                        <div class="sort-controls">
+                            <button class="sort-btn active" data-sort="gaps-desc">Most Gaps</button>
+                            <button class="sort-btn" data-sort="gaps-asc">Least</button>
+                            <button class="sort-btn" data-sort="parity-asc">Low Parity</button>
+                            <button class="sort-btn" data-sort="name-asc">A-Z</button>
+                        </div>
+                    </div>
+                    <table class="leaderboard">
+                        <thead>
+                            <tr>
+                                <th style="width:30px">#</th>
+                                <th>Game</th>
+                                <th style="width:140px">Parity</th>
+                                <th style="width:60px">Gaps</th>
+                                <th style="width:90px">Platforms</th>
+                                <th style="width:70px"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="game-table-body">
+                            <tr><td colspan="6" class="loading"><div class="loading-spinner"></div>Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <!-- Rewards -->
+                <div class="sidebar-section">
+                    <div class="sidebar-title">Weaver Titles</div>
+                    <div id="rewards-list">
+                        <div class="reward-tier tier-threadbinder">
+                            <div class="reward-icon" style="background:rgba(153,204,255,0.2);">🧵</div>
+                            <div class="reward-info">
+                                <div class="reward-name">Threadbinder</div>
+                                <div class="reward-threshold">5 woven</div>
+                                <div class="reward-progress"><div class="reward-progress-fill" id="progress-threadbinder" style="width:0%"></div></div>
+                            </div>
+                        </div>
+                        <div class="reward-tier tier-loomkeeper">
+                            <div class="reward-icon" style="background:rgba(204,153,255,0.2);">🎭</div>
+                            <div class="reward-info">
+                                <div class="reward-name">Loomkeeper</div>
+                                <div class="reward-threshold">25 woven</div>
+                                <div class="reward-progress"><div class="reward-progress-fill" id="progress-loomkeeper" style="width:0%"></div></div>
+                            </div>
+                        </div>
+                        <div class="reward-tier tier-tapestry-master">
+                            <div class="reward-icon" style="background:rgba(255,204,102,0.2);">👑</div>
+                            <div class="reward-info">
+                                <div class="reward-name">Tapestry Master</div>
+                                <div class="reward-threshold">100 woven</div>
+                                <div class="reward-progress"><div class="reward-progress-fill" id="progress-master" style="width:0%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Leaderboard -->
+                <div class="sidebar-section">
+                    <div class="sidebar-title">Top Weavers</div>
+                    <div id="leaderboard-list">
+                        <div class="loading"><div class="loading-spinner"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div><!-- End tapestry-content -->
+    </div><!-- End tapestry-page -->
+
+    <!-- Pending Contributions Modal -->
+    <div class="pending-modal-overlay" id="pending-modal" onclick="closePendingModalIfOverlay(event)">
+        <div class="pending-modal" onclick="event.stopPropagation()">
+            <div class="pending-modal-header">
+                <span class="pending-modal-title">Pending Contributions</span>
+                <button class="pending-modal-close" onclick="closePendingModal()">Close</button>
+            </div>
+            <div class="pending-modal-body" id="pending-list">
+                <div class="loading"><div class="loading-spinner"></div>Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mapping Modal -->
+    <div class="modal-overlay" id="mapping-modal" onclick="closeModalIfOverlay(event)">
+        <div class="mapping-modal" onclick="event.stopPropagation()">
+            <!-- Loading overlay -->
+            <div class="modal-loading-overlay" id="modal-loading">
+                <div class="modal-loading-content">
+                    <div class="modal-loading-spinner"></div>
+                    <div class="modal-loading-text">Loading achievements...</div>
+                </div>
+            </div>
+            <div class="modal-header">
+                <div>
+                    <div class="modal-title" id="modal-game-title">Game Name</div>
+                    <div class="modal-subtitle" id="modal-subtitle">Map Steam achievements to Xbox</div>
+                </div>
+                <button class="modal-close" onclick="closeModal()">Close</button>
+            </div>
+            <div class="platform-tabs" id="platform-tabs"></div>
+
+            <!-- Suggested Matches Section -->
+            <div class="suggested-matches-section" id="suggested-section" style="display:none;">
+                <div class="suggested-header" onclick="toggleSuggestedMatches()">
+                    <div class="suggested-header-left">
+                        <span class="suggested-icon">🧠</span>
+                        <span class="suggested-title">Intelligent Matches</span>
+                        <span class="suggested-count" id="suggested-count">0 suggested</span>
+                    </div>
+                    <div class="suggested-header-right">
+                        <span class="suggested-confidence-badges" id="confidence-badges"></span>
+                        <span class="suggested-toggle" id="suggested-toggle">▼</span>
+                    </div>
+                </div>
+                <div class="suggested-body" id="suggested-body">
+                    <div class="suggested-grid" id="suggested-grid"></div>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <div class="side-by-side">
+                    <!-- Left: Canonical -->
+                    <div class="ach-panel">
+                        <div class="ach-panel-header">
+                            <span>Needs Mapping</span>
+                            <span class="provider-label" id="left-provider" style="background:rgba(27,155,215,0.2);color:#1B9BD7;">STEAM</span>
+                        </div>
+                        <input type="text" class="ach-search" id="left-search" placeholder="Search..." oninput="filterList('left')">
+                        <div class="ach-list" id="left-list"></div>
+                    </div>
+
+                    <!-- Connector -->
+                    <div class="connector">
+                        <span>Bind to</span>
+                        <div class="connector-arrow">↔</div>
+                        <span>its twin</span>
+                    </div>
+
+                    <!-- Right: Target -->
+                    <div class="ach-panel">
+                        <div class="ach-panel-header">
+                            <span>Target Platform</span>
+                            <span class="provider-label" id="right-provider" style="background:rgba(16,124,16,0.2);color:#107C10;">XBOX</span>
+                        </div>
+                        <input type="text" class="ach-search" id="right-search" placeholder="Search..." oninput="filterList('right')">
+                        <div class="ach-list" id="right-list"></div>
+                        <div class="waiting-message" id="waiting-message">
+                            <div class="waiting-icon">🧵</div>
+                            <div class="waiting-title">Thread not yet spun</div>
+                            <div class="waiting-desc">We await a traveler from <strong>this realm</strong> to bring their achievements.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Area -->
+                <div class="submit-area">
+                    <textarea class="reason-input" id="reason-input" placeholder="Why do these match? (e.g., 'Same name - both for defeating the final boss')"></textarea>
+                    <button class="submit-btn" id="submit-btn" onclick="submitMapping()" disabled>Weave This Pattern</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dispute Modal -->
+    <div class="modal-overlay" id="dispute-modal" onclick="closeDisputeModalIfOverlay(event)">
+        <div class="dispute-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-title">⚖️ Dispute Rarity</div>
+                    <div class="modal-subtitle" id="dispute-ach-name">Achievement Name</div>
+                </div>
+                <button class="modal-close" onclick="closeDisputeModal()">Close</button>
+            </div>
+            <div class="modal-body">
+                <div class="dispute-form">
+                    <div class="dispute-current">
+                        <label>Current Rarity:</label>
+                        <span class="rarity-badge" id="dispute-current-rarity">Common</span>
+                    </div>
+                    <div class="dispute-proposed">
+                        <label>Proposed Rarity:</label>
+                        <div class="rarity-options" id="rarity-options">
+                            <button class="rarity-option" data-rarity="common" onclick="selectRarity('common')">Common</button>
+                            <button class="rarity-option" data-rarity="uncommon" onclick="selectRarity('uncommon')">Uncommon</button>
+                            <button class="rarity-option" data-rarity="rare" onclick="selectRarity('rare')">Rare</button>
+                            <button class="rarity-option" data-rarity="epic" onclick="selectRarity('epic')">Epic</button>
+                            <button class="rarity-option" data-rarity="legendary" onclick="selectRarity('legendary')">Legendary</button>
+                        </div>
+                    </div>
+                    <div class="dispute-reason">
+                        <label>Reason (optional):</label>
+                        <textarea class="reason-input" id="dispute-reason" placeholder="Why should this rarity be changed? (e.g., 'Only 0.1% of players have this')"></textarea>
+                    </div>
+                    <button class="submit-btn" id="dispute-submit-btn" onclick="submitDispute()" disabled>Submit Dispute</button>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
+        // ═══════════════════════════════════════════════════════════════════
+        // TOAST NOTIFICATIONS
+        // ═══════════════════════════════════════════════════════════════════
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            // Remove after 5 seconds
+            setTimeout(() => {
+                toast.style.animation = 'toastSlideIn 0.3s ease-out reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        // State
         let tapestryData = null;
+        let currentSort = 'gaps-desc';
+        let currentGame = null;
+        let currentPlatform = null;
+        let leftAchievements = [];
+        let rightAchievements = [];
+        let suggestedMatches = [];
+        let matchStats = null;
+        let selectedLeft = null;
+        let selectedRight = null;
+
         const COLORS = {
-            steam: '#1B9BD7', xbox: '#107C10', psn: '#003791',
-            battlenet: '#00AEFF', gog: '#86328A', epic: '#2A2A2A',
-            nintendo: '#E60012', roblox: '#00A2FF'
+            steam: '#1B9BD7', xbox: '#107C10', psn: '#003791', battlenet: '#00AEFF',
+            gog: '#86328A', epic: '#666666', nintendo: '#E60012', roblox: '#00A2FF'
         };
 
         const PROVIDER_NAMES = {
-            steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation',
-            battlenet: 'Battle.net', gog: 'GOG', epic: 'Epic',
-            nintendo: 'Nintendo', roblox: 'Roblox'
+            steam: 'Steam', xbox: 'Xbox', psn: 'PlayStation', battlenet: 'Battle.net',
+            gog: 'GOG', epic: 'Epic', nintendo: 'Nintendo', roblox: 'Roblox'
         };
 
         function getSteamImageUrl(appId) {
@@ -765,276 +2365,1307 @@
             return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_184x69.jpg`;
         }
 
-        function getSteamHeaderUrl(appId) {
-            if (!appId) return '';
-            return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`;
+        // Initialize
+        async function init() {
+            loadTapestry();
+            loadPending();
+            loadLeaderboard();
+            loadProfile();
+            checkApprovalNotifications();
+            // Initialize social panels
+            initTapestrySocial();
         }
 
+        // =============================================================================
+        // TAPESTRY SOCIAL - Chat & Friends
+        // =============================================================================
+
+        let tapestryCurrentRoom = 'global';  // Default to global (activity feed)
+        let tapestryUserTierRoom = 'initiate';  // Will be set from user data
+        let tapestryLastMessageId = 0;
+        let tapestryChatPollInterval = null;
+
+        async function initTapestrySocial() {
+            // Get user tier room first
+            try {
+                const resp = await fetch('/api/chat/rooms', { credentials: 'include' });
+                const data = await resp.json();
+                tapestryUserTierRoom = data.current_room;
+                tapestryCurrentChatRoom = tapestryUserTierRoom;
+                document.getElementById('tapestry-chat-room-name').textContent = '#' + tapestryUserTierRoom;
+            } catch (err) {
+                console.error('Failed to get chat rooms:', err);
+            }
+
+            // Load initial data
+            tapestryLoadFriends();
+            tapestryLoadChat();
+            tapestryUpdateOnlineCount();
+
+            // Start polling for new messages
+            tapestryChatPollInterval = setInterval(tapestryPollMessages, 5000);
+            setInterval(tapestryUpdateOnlineCount, 30000);
+        }
+
+        // === Friends Functions ===
+        async function tapestryLoadFriends() {
+            try {
+                const resp = await fetch('/api/friends', { credentials: 'include' });
+                const data = await resp.json();
+                tapestryRenderFriends(data.friends || []);
+            } catch (err) {
+                document.getElementById('tapestry-friends-list').innerHTML = '<div style="text-align:center;padding:1rem;color:#666;font-size:0.75rem;">Failed to load</div>';
+            }
+        }
+
+        function tapestryRenderFriends(friends) {
+            const container = document.getElementById('tapestry-friends-list');
+            if (!friends || friends.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:1rem;color:#666;font-size:0.75rem;">No friends yet</div>';
+                return;
+            }
+
+            container.innerHTML = friends.map(f => `
+                <div class="friend-item">
+                    <span class="${f.is_online ? 'friend-online-dot' : 'friend-offline-dot'}"></span>
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(f.username || 'User')}</span>
+                    <span style="font-size:0.6rem;color:#666;">${f.tier || ''}</span>
+                </div>
+            `).join('');
+        }
+
+        async function tapestrySearchFriends() {
+            const input = document.getElementById('tapestry-friend-search');
+            const query = input.value.trim();
+            const results = document.getElementById('tapestry-search-results');
+
+            if (!query) {
+                results.style.display = 'none';
+                return;
+            }
+
+            try {
+                const resp = await fetch(`/api/friends/search?q=${encodeURIComponent(query)}`, { credentials: 'include' });
+                const data = await resp.json();
+
+                if (!data.users || data.users.length === 0) {
+                    results.innerHTML = '<div style="padding:8px;color:#666;font-size:0.7rem;">No users found</div>';
+                } else {
+                    results.innerHTML = data.users.slice(0, 5).map(u => `
+                        <div style="padding:6px 8px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.02);border-radius:4px;margin-bottom:4px;font-size:0.7rem;">
+                            <span style="flex:1;">${escapeHtml(u.username)}</span>
+                            <button onclick="tapestrySendFriendRequest(${u.id})" style="padding:2px 8px;font-size:0.6rem;border:1px solid var(--ashbane-gold);background:transparent;color:var(--ashbane-gold);border-radius:3px;cursor:pointer;">Add</button>
+                        </div>
+                    `).join('');
+                }
+                results.style.display = 'block';
+            } catch (err) {
+                results.innerHTML = '<div style="padding:8px;color:#f66;font-size:0.7rem;">Search failed</div>';
+                results.style.display = 'block';
+            }
+        }
+
+        async function tapestrySendFriendRequest(userId) {
+            try {
+                const resp = await fetch('/api/friends/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ to_user_id: userId })
+                });
+                if (resp.ok) {
+                    showToast('Friend request sent!', 'success');
+                    document.getElementById('tapestry-search-results').style.display = 'none';
+                    document.getElementById('tapestry-friend-search').value = '';
+                } else {
+                    const err = await resp.json();
+                    showToast(err.detail || 'Failed to send request', 'error');
+                }
+            } catch (err) {
+                showToast('Failed to send request', 'error');
+            }
+        }
+
+        // === Chat Functions ===
+        function tapestrySwitchChatRoom(roomType) {
+            const roomTab = document.getElementById('tapestry-chat-tab-room');
+            const globalTab = document.getElementById('tapestry-chat-tab-global');
+            const inputRow = document.getElementById('tapestry-chat-input-row');
+
+            if (roomType === 'room') {
+                tapestryCurrentRoom = tapestryUserTierRoom;
+                roomTab.classList.add('active');
+                globalTab.classList.remove('active');
+                inputRow.style.display = 'flex';
+            } else {
+                tapestryCurrentRoom = 'global';
+                globalTab.classList.add('active');
+                roomTab.classList.remove('active');
+                inputRow.style.display = 'none';  // Global is read-only
+            }
+
+            tapestryLastMessageId = 0;
+            tapestryLoadChat();
+        }
+
+        async function tapestryLoadChat() {
+            try {
+                const resp = await fetch(`/api/chat/messages/${tapestryCurrentRoom}?limit=30`, { credentials: 'include' });
+                const data = await resp.json();
+                tapestryRenderMessages(data.messages || []);
+                if (data.messages && data.messages.length > 0) {
+                    tapestryLastMessageId = data.messages[data.messages.length - 1].id;
+                }
+            } catch (err) {
+                document.getElementById('tapestry-chat-messages').innerHTML = '<div style="text-align:center;padding:1rem;color:#666;font-size:0.75rem;">Failed to load</div>';
+            }
+        }
+
+        async function tapestryPollMessages() {
+            if (!tapestryCurrentRoom) return;
+            try {
+                const resp = await fetch(`/api/chat/messages/${tapestryCurrentRoom}?limit=15`, { credentials: 'include' });
+                const data = await resp.json();
+                const newMsgs = (data.messages || []).filter(m => m.id > tapestryLastMessageId);
+                if (newMsgs.length > 0) {
+                    tapestryAppendMessages(newMsgs);
+                    tapestryLastMessageId = newMsgs[newMsgs.length - 1].id;
+                }
+            } catch (err) {}
+        }
+
+        const TAPESTRY_MSG_STYLES = {
+            join: { color: '#999', bg: '150,150,150' },
+            sync: { color: '#1b9bd7', bg: '27,155,215' },
+            unlock: { color: '#ffc800', bg: '255,200,0' },
+            forge: { color: '#ff6600', bg: '255,102,0' },
+            mapping: { color: '#d9a633', bg: '217,166,51' },
+            mapping_approved: { color: '#4CAF50', bg: '76,175,80' },
+            game_sync: { color: '#1b9bd7', bg: '27,155,215' },
+            chat: { color: '#888', bg: '136,136,136' }
+        };
+
+        function tapestryRenderMessage(msg, animate = false) {
+            const time = new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
+            const animClass = animate ? 'chat-msg-new' : '';
+
+            // System notification types
+            if (['join', 'sync', 'unlock', 'forge', 'mapping', 'mapping_approved', 'game_sync'].includes(msg.type)) {
+                const style = TAPESTRY_MSG_STYLES[msg.type] || TAPESTRY_MSG_STYLES.chat;
+                const icon = msg.type === 'forge' ? '🔨' : msg.type === 'unlock' ? '⭐' : msg.type === 'mapping' ? '🧵' : msg.type === 'mapping_approved' ? '✅' : msg.type === 'game_sync' ? '🎮' : '•';
+                return `<div class="${animClass}" style="padding:5px 6px;margin-bottom:3px;background:rgba(${style.bg},0.1);border-radius:4px;border-left:2px solid ${style.color};font-size:0.7rem;display:flex;align-items:center;gap:6px;">
+                    <span style="color:${style.color};">${icon}</span>
+                    <span style="color:#bbb;flex:1;overflow:hidden;text-overflow:ellipsis;">${msg.content}</span>
+                    <span style="color:#555;font-size:0.6rem;flex-shrink:0;">${time}</span>
+                </div>`;
+            }
+
+            // Regular chat message
+            const username = msg.user ? msg.user.username : 'System';
+            return `<div class="${animClass}" style="padding:3px 0;font-size:0.7rem;border-bottom:1px solid rgba(255,255,255,0.03);">
+                <span style="color:#999;font-weight:500;">${escapeHtml(username)}</span>
+                <span style="color:#555;font-size:0.6rem;margin-left:4px;">${time}</span>
+                <div style="color:#bbb;margin-top:1px;word-wrap:break-word;">${escapeHtml(msg.content)}</div>
+            </div>`;
+        }
+
+        function tapestryRenderMessages(messages) {
+            const container = document.getElementById('tapestry-chat-messages');
+            if (!messages || messages.length === 0) {
+                container.innerHTML = `<div style="text-align:center;color:#555;font-size:0.7rem;padding:1rem;">
+                    ${tapestryCurrentRoom === 'global' ? 'No activity yet' : 'No messages yet'}
+                </div>`;
+                return;
+            }
+            container.innerHTML = messages.map(m => tapestryRenderMessage(m, false)).join('');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function tapestryAppendMessages(messages) {
+            const container = document.getElementById('tapestry-chat-messages');
+            const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 30;
+            const isEmpty = container.querySelector('[style*="text-align:center"]');
+            if (isEmpty) container.innerHTML = '';
+
+            messages.forEach(msg => {
+                container.insertAdjacentHTML('beforeend', tapestryRenderMessage(msg, true));
+            });
+
+            if (wasAtBottom) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        async function tapestrySendChat() {
+            const input = document.getElementById('tapestry-chat-input');
+            const content = input.value.trim();
+            if (!content || tapestryCurrentRoom === 'global') return;
+
+            input.disabled = true;
+            try {
+                const resp = await fetch(`/api/chat/messages/${tapestryCurrentRoom}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ content })
+                });
+
+                if (resp.ok) {
+                    const data = await resp.json();
+                    tapestryAppendMessages([data.message]);
+                    tapestryLastMessageId = data.message.id;
+                    input.value = '';
+                } else {
+                    showToast('Failed to send message', 'error');
+                }
+            } catch (err) {
+                showToast('Failed to send message', 'error');
+            } finally {
+                input.disabled = false;
+                input.focus();
+            }
+        }
+
+        async function tapestryUpdateOnlineCount() {
+            try {
+                const resp = await fetch('/api/chat/online', { credentials: 'include' });
+                const data = await resp.json();
+                document.getElementById('tapestry-chat-online').textContent = `${data.online || 0} online`;
+            } catch (err) {
+                document.getElementById('tapestry-chat-online').textContent = '';
+            }
+        }
+
+        // Check for recently approved contributions and show notifications
+        async function checkApprovalNotifications() {
+            try {
+                const res = await fetch('/api/contributions/my-approvals?since_minutes=1440', { credentials: 'include' });
+                if (!res.ok) return;
+
+                const data = await res.json();
+                if (!data.approvals || data.approvals.length === 0) return;
+
+                // Get already-shown notification IDs from localStorage
+                const shownKey = 'tapestry_shown_approvals';
+                const shown = JSON.parse(localStorage.getItem(shownKey) || '[]');
+                const shownSet = new Set(shown);
+
+                // Filter to only new approvals
+                const newApprovals = data.approvals.filter(a => !shownSet.has(a.id));
+
+                // Show toast for each new approval (max 3 to avoid spam)
+                newApprovals.slice(0, 3).forEach((approval, idx) => {
+                    setTimeout(() => {
+                        const typeName = approval.type === 'platform_mapping' ? 'Mapping' : 'Dispute';
+                        showToast(`Your ${typeName} for "${approval.achievement_name}" was approved!`, 'success');
+                    }, idx * 1500); // Stagger toasts
+                });
+
+                // Mark all as shown
+                const newShown = [...shown, ...newApprovals.map(a => a.id)].slice(-100); // Keep last 100
+                localStorage.setItem(shownKey, JSON.stringify(newShown));
+
+            } catch (err) {
+                // Silently fail - notifications are non-critical
+            }
+        }
+
+        // Load tapestry data
         async function loadTapestry() {
             try {
                 const res = await fetch('/api/tapestry/status');
                 tapestryData = await res.json();
                 renderHeader();
-                renderWeave();
+                renderGameTable();
             } catch (e) {
-                document.getElementById('tapestry-icons').innerHTML = '<div class="loading">Failed to load tapestry</div>';
+                document.getElementById('game-table-body').innerHTML = '<tr><td colspan="6" class="loading">Failed to load</td></tr>';
             }
         }
 
         function renderHeader() {
-            const { overall, providers } = tapestryData;
-
+            const { overall } = tapestryData;
             document.getElementById('parity-value').textContent = overall.parity + '%';
-            document.getElementById('gap-count').textContent = overall.gap_count;
-
-            // Provider legend
-            const activeProviders = providers.filter(p => p.total > 0);
-            document.getElementById('provider-legend').innerHTML = activeProviders.map(p => `
-                <div class="legend-item">
-                    <div class="legend-dot" style="background:${COLORS[p.key] || '#666'}"></div>
-                    ${p.name}
-                </div>
-            `).join('');
+            document.getElementById('gap-count').textContent = overall.gap_count.toLocaleString();
+            document.getElementById('game-count').textContent = overall.total_games;
         }
 
-        function renderWeave() {
-            const { games, providers } = tapestryData;
-            const container = document.getElementById('tapestry-icons');
+        function sortGames(games, sortKey) {
+            const sorted = [...games];
+            switch (sortKey) {
+                case 'gaps-desc': sorted.sort((a, b) => b.gap_count - a.gap_count); break;
+                case 'gaps-asc': sorted.sort((a, b) => a.gap_count - b.gap_count); break;
+                case 'parity-asc': sorted.sort((a, b) => a.parity - b.parity); break;
+                case 'name-asc': sorted.sort((a, b) => a.name.localeCompare(b.name)); break;
+            }
+            return sorted;
+        }
 
-            // ═══════════════════════════════════════════════════════════════
-            // TAPESTRY LAYOUT CONFIG (Locked Dec 2024)
-            // ═══════════════════════════════════════════════════════════════
-            // Container: 750x150px fixed
-            // Icon sizes: 90-180px width (height = width * 0.375 for Steam capsule ratio)
-            // Max overlap: 20% of smaller icon area
-            // Scoring: Cluster-centered distribution (no side bias)
-            // ═══════════════════════════════════════════════════════════════
+        function getParityClass(parity) {
+            if (parity >= 100) return 'parity-complete';
+            if (parity >= 75) return 'parity-high';
+            if (parity >= 50) return 'parity-medium';
+            if (parity >= 25) return 'parity-low';
+            return 'parity-critical';
+        }
 
-            // Calculate max gaps for scaling
-            const maxGaps = Math.max(...games.map(g => g.gap_count), 1);
+        function getGapsClass(gaps) {
+            if (gaps === 0) return 'gaps-none';
+            if (gaps <= 5) return 'gaps-low';
+            if (gaps <= 15) return 'gaps-medium';
+            return 'gaps-high';
+        }
 
-            // Icon size range (width in px, more gaps = bigger)
-            const minSize = 70;
-            const maxSize = 140;
+        function renderGameTable() {
+            const games = sortGames(tapestryData.games, currentSort);
+            const tbody = document.getElementById('game-table-body');
 
-            // Calculate sizes for all games
-            const gameData = games.map(game => {
-                let size;
-                if (game.parity >= 100) {
-                    size = minSize * 0.7;
-                } else if (game.gap_count === 0) {
-                    size = minSize;
-                } else {
-                    const gapRatio = game.gap_count / maxGaps;
-                    size = minSize + (Math.pow(gapRatio, 0.7) * (maxSize - minSize));
-                }
-                return { ...game, size, width: size, height: size * 0.375 };
-            });
-
-            // Shuffle randomly
-            for (let i = gameData.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [gameData[i], gameData[j]] = [gameData[j], gameData[i]];
+            if (games.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="loading">No games in tapestry</td></tr>';
+                return;
             }
 
-            const placements = [];
-            const maxHeight = 150;  // Fixed container height
-            const maxWidth = 750;   // Fixed container width
+            tbody.innerHTML = games.map((game, idx) => {
+                const parityClass = getParityClass(game.parity);
+                const gapsClass = getGapsClass(game.gap_count);
+                const imgUrl = getSteamImageUrl(game.steam_app_id || game.canonical_app_id);
 
-            // Scattered patches style: individual icons with gaps between them
-            const minGap = 8; // Minimum gap between patches
-            const edgePadding = 15; // Keep icons away from edges
+                // Show canonical (source) platform first with special styling, then targets
+                const canonicalDot = `<div class="platform-dot canonical" style="background:${COLORS[game.canonical_platform] || '#666'}" title="${PROVIDER_NAMES[game.canonical_platform] || game.canonical_platform} (Source)">✓</div>`;
+                const targetDots = game.platforms.map(p => `
+                    <div class="platform-dot target" style="border-color:${COLORS[p] || '#666'};color:${COLORS[p] || '#666'}" title="${PROVIDER_NAMES[p] || p} (Needs Mapping)">?</div>
+                `).join('');
+                const platformDots = canonicalDot + `<span class="platform-arrow">→</span>` + targetDots;
 
-            // Helper: check if position collides with any existing placement
-            function collides(x, y, w, h) {
-                return placements.some(p => {
-                    // Check if rectangles overlap (with gap)
-                    const noOverlap = x + w + minGap <= p.x ||
-                                     p.x + p.w + minGap <= x ||
-                                     y + h + minGap <= p.y ||
-                                     p.y + p.h + minGap <= y;
-                    return !noOverlap;
-                });
-            }
+                return `
+                    <tr>
+                        <td style="color:var(--text-muted);font-size:0.8rem;">${idx + 1}</td>
+                        <td>
+                            <div class="game-cell">
+                                <img class="game-icon" src="${imgUrl}" alt="" loading="lazy" onerror="this.src='/static/icons/ashbane-tree.png'">
+                                <span class="game-name">${escapeHtml(game.name)}</span>
+                            </div>
+                        </td>
+                        <td class="parity-cell ${parityClass}">
+                            <div class="parity-bar-container">
+                                <div class="parity-bar"><div class="parity-bar-fill" style="width:${game.parity}%"></div></div>
+                                <span class="parity-value">${game.parity}%</span>
+                            </div>
+                        </td>
+                        <td class="gaps-cell ${gapsClass}" title="${game.mappable > 0 ? `You can help map ${game.mappable} achievements!` : 'Total unmapped achievements'}">
+                            ${game.gap_count}${game.gap_count_is_minimum ? '+' : ''}
+                        </td>
+                        <td class="platforms-cell">${platformDots}</td>
+                        <td>
+                            ${game.gap_count > 0
+                                ? (game.ready_to_map
+                                    ? `<button class="map-btn ${game.mappable > 0 ? 'has-mappable' : ''}" onclick="openMappingModal('${game.key}')" ${game.mappable > 0 ? `title="You can map ${game.mappable} achievements!"` : ''}>Map</button>`
+                                    : `<span class="awaiting-btn" title="Awaiting achievements from target platforms">Awaiting</span>`)
+                                : '<span class="complete-badge">✓</span>'
+                            }
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
 
-            gameData.forEach((game, idx) => {
-                let placed = false;
-                let bestX = 0, bestY = 0;
+        // Sort buttons
+        document.querySelectorAll('.sort-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentSort = btn.dataset.sort;
+                renderGameTable();
+            });
+        });
 
-                // Placement bounds with edge padding
-                const placeMinX = edgePadding;
-                const placeMaxX = maxWidth - game.width - edgePadding;
-                const placeMinY = edgePadding;
-                const placeMaxY = maxHeight - game.height - edgePadding;
+        // Load pending contributions
+        async function loadPending() {
+            const el = document.getElementById('pending-list');
+            const badge = document.getElementById('pending-badge');
+            try {
+                const res = await fetch('/api/contributions/pending', { credentials: 'include' });
+                const data = await res.json();
 
-                // Try up to 500 random positions to find a non-colliding spot
-                for (let attempt = 0; attempt < 500 && !placed; attempt++) {
-                    const tryX = placeMinX + Math.random() * Math.max(0, placeMaxX - placeMinX);
-                    const tryY = placeMinY + Math.random() * Math.max(0, placeMaxY - placeMinY);
+                const count = data.contributions ? data.contributions.length : 0;
+                badge.textContent = count;
+                badge.classList.toggle('empty', count === 0);
 
-                    if (!collides(tryX, tryY, game.width, game.height)) {
-                        bestX = tryX;
-                        bestY = tryY;
-                        placed = true;
-                    }
+                if (!data.contributions || data.contributions.length === 0) {
+                    el.innerHTML = '<div class="empty-pending">No pending contributions. The loom awaits new patterns.</div>';
+                    return;
                 }
 
-                // If still not placed after random tries, skip this icon
-                if (!placed) {
-                    console.log('Could not place:', game.name);
-                    return; // Skip this game
-                }
+                el.innerHTML = data.contributions.map(c => {
+                    const d = c.data;
+                    const isMapping = c.contribution_type === 'platform_mapping';
 
-                placements.push({
-                    game,
-                    x: bestX,
-                    y: bestY,
-                    w: game.width,
-                    h: game.height
-                });
-            });
+                    // Get provider colors
+                    const sourceColor = COLORS[d.source_platform || 'steam'] || '#1B9BD7';
+                    const targetColor = COLORS[d.target_platform] || '#107C10';
 
-            // Normalize positions (shift so min is 0)
-            const minX = Math.min(...placements.map(p => p.x));
-            const minY = Math.min(...placements.map(p => p.y));
-            placements.forEach(p => {
-                p.x -= minX;
-                p.y -= minY;
-            });
+                    // Build game icon URL (Steam header)
+                    const steamAppId = d.steam_app_id || '';
+                    const gameIconUrl = steamAppId ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${steamAppId}/capsule_184x69.jpg` : '';
 
-            // Fixed container size
-            const totalWidth = maxWidth;
-            const totalHeight = maxHeight;
+                    let mappingHtml = '';
+                    if (isMapping) {
+                        // Use proxied URLs for achievement icons if they're from Xbox
+                        const sourceIconUrl = d.source_icon || '';
+                        const targetIconUrl = d.target_icon || '';
+                        const proxiedSourceIcon = sourceIconUrl.includes('xboxlive.com') ? `/api/tapestry/image-proxy?url=${encodeURIComponent(sourceIconUrl)}` : sourceIconUrl;
+                        const proxiedTargetIcon = targetIconUrl.includes('xboxlive.com') ? `/api/tapestry/image-proxy?url=${encodeURIComponent(targetIconUrl)}` : targetIconUrl;
 
-            // Generate HTML
-            let html = '';
-            placements.forEach((p, idx) => {
-                const game = p.game;
-
-                // Provider-themed class (use primary provider, or 'multi' if multiple)
-                let providerClass = 'provider-steam'; // default
-                if (game.platforms && game.platforms.length > 0) {
-                    if (game.platforms.length > 1) {
-                        providerClass = 'provider-multi';
+                        mappingHtml = `
+                            <div class="pending-mapping">
+                                <div class="pending-ach">
+                                    ${proxiedSourceIcon ? `<img class="pending-ach-icon" src="${proxiedSourceIcon}" onerror="this.style.display='none'" alt="">` : ''}
+                                    <div class="pending-ach-info">
+                                        <div class="pending-ach-provider" style="color:${sourceColor}">${escapeHtml((d.source_platform || 'steam').toUpperCase())}</div>
+                                        <div class="pending-ach-name" title="${escapeHtml(d.achievement_name || d.steam_api_name)}">${escapeHtml(d.achievement_name || d.steam_api_name)}</div>
+                                        ${d.source_description ? `<div class="pending-ach-desc">${escapeHtml(d.source_description)}</div>` : ''}
+                                    </div>
+                                </div>
+                                <div class="pending-arrow">↔</div>
+                                <div class="pending-ach">
+                                    ${proxiedTargetIcon ? `<img class="pending-ach-icon" src="${proxiedTargetIcon}" onerror="this.style.display='none'" alt="">` : ''}
+                                    <div class="pending-ach-info">
+                                        <div class="pending-ach-provider" style="color:${targetColor}">${escapeHtml((d.target_platform || 'xbox').toUpperCase())}</div>
+                                        <div class="pending-ach-name" title="${escapeHtml(d.target_achievement_name || d.target_api_name)}">${escapeHtml(d.target_achievement_name || d.target_api_name)}</div>
+                                        ${d.target_description ? `<div class="pending-ach-desc">${escapeHtml(d.target_description)}</div>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
                     } else {
-                        providerClass = 'provider-' + game.platforms[0];
+                        // Dispute display with rarity badges
+                        const currentClass = (d.current_rarity || 'common').toLowerCase();
+                        const suggestedClass = (d.suggested_rarity || 'common').toLowerCase();
+                        mappingHtml = `
+                            <div class="pending-mapping" style="flex-direction:column;align-items:flex-start;gap:6px;">
+                                <div class="pending-ach-name" style="font-size:0.9rem;margin-bottom:4px;">${escapeHtml(d.achievement_name || 'Achievement')}</div>
+                                <div style="display:flex;align-items:center;gap:10px;">
+                                    <span class="rarity-badge ${currentClass}">${escapeHtml((d.current_rarity || 'Common').charAt(0).toUpperCase() + (d.current_rarity || 'common').slice(1))}</span>
+                                    <span class="pending-arrow">→</span>
+                                    <span class="rarity-badge ${suggestedClass}">${escapeHtml((d.suggested_rarity || 'Common').charAt(0).toUpperCase() + (d.suggested_rarity || 'common').slice(1))}</span>
+                                </div>
+                            </div>
+                        `;
                     }
+
+                    const reasonHtml = c.reason ? `<div class="pending-reason">"${escapeHtml(c.reason)}"</div>` : '';
+
+                    return `
+                        <div class="pending-item">
+                            <div class="pending-header">
+                                <div class="pending-type">${isMapping ? 'MAPPING' : 'DISPUTE'}</div>
+                                <div class="pending-submitter">by ${escapeHtml(c.credit_display || 'Anonymous')}</div>
+                            </div>
+                            <div class="pending-game">
+                                ${gameIconUrl ? `<img class="pending-game-icon" src="${gameIconUrl}" onerror="this.style.display='none'" alt="">` : ''}
+                                <span class="pending-game-name">${escapeHtml(d.game_name || 'Game')}</span>
+                            </div>
+                            ${mappingHtml}
+                            ${reasonHtml}
+                            <div class="pending-actions">
+                                ${c.is_own ? `
+                                    <div class="vote-status own">Your submission - awaiting votes</div>
+                                ` : c.user_vote !== null ? `
+                                    <div class="vote-status voted">You voted ${c.user_vote > 0 ? '✓ Confirm' : '✗ Reject'}</div>
+                                ` : `
+                                    <div class="vote-btns">
+                                        <button class="vote-btn confirm" onclick="vote(${c.id}, 1)">✓ Confirm</button>
+                                        <button class="vote-btn reject" onclick="vote(${c.id}, -1)">✗ Reject</button>
+                                    </div>
+                                `}
+                                <div class="vote-counts">
+                                    <span class="vote-up">+${c.votes_up}</span>
+                                    <span class="vote-down">-${c.votes_down}</span>
+                                    <span style="color:var(--text-muted);font-size:0.7rem;">/ ${c.votes_threshold} needed</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                el.innerHTML = '<div class="empty-pending">Failed to load pending contributions</div>';
+            }
+        }
+
+        async function vote(id, value) {
+            try {
+                const res = await fetch(`/api/contributions/${id}/vote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ vote: value })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    loadPending();
+                    if (data.was_approved) {
+                        showToast('Pattern woven into the Tapestry!', 'success');
+                        // Refresh stats since an approval happened
+                        loadLeaderboard();
+                        loadProfile();
+                        loadTapestry(); // Refresh parity/gaps
+                    }
+                } else {
+                    showToast(data.detail || 'Failed to vote', 'error');
+                }
+            } catch (err) {
+                showToast('Error voting', 'error');
+            }
+        }
+
+        // Load leaderboard
+        async function loadLeaderboard() {
+            const el = document.getElementById('leaderboard-list');
+            try {
+                const res = await fetch('/api/contributions/leaderboard', { credentials: 'include' });
+                const data = await res.json();
+
+                if (!data.leaderboard || data.leaderboard.length === 0) {
+                    el.innerHTML = '<div class="lb-empty">No contributors yet. Be the first!</div>';
+                    return;
                 }
 
-                // Z-index: bigger icons in back, smaller in front (based on size, not position)
-                const zIndex = Math.floor(50 + (1 - game.size / maxSize) * 40);
-
-                const imgUrl = getSteamImageUrl(game.canonical_app_id);
-
-                html += `
-                    <div class="game-icon ${providerClass}"
-                         style="left:${p.x}px; top:${p.y}px; width:${p.w}px; height:${p.h}px; z-index:${zIndex};"
-                         data-game="${game.key}"
-                         onmouseenter="showGameTooltip(event, '${game.key}')"
-                         onmouseleave="hideTooltip()"
-                         onclick="showGameModal('${game.key}')">
-                        <img src="${imgUrl}" alt="${game.name}" loading="lazy" onerror="this.src='/static/icons/ashbane-tree.png'">
+                el.innerHTML = data.leaderboard.slice(0, 5).map((u, i) => `
+                    <div class="lb-item">
+                        <div class="lb-rank">${i + 1}</div>
+                        <div class="lb-info">
+                            <div class="lb-name">${escapeHtml(u.username || 'User ' + u.user_id)}</div>
+                            <div class="lb-count">${u.total_approved} woven</div>
+                        </div>
                     </div>
-                `;
+                `).join('');
+            } catch (err) {
+                el.innerHTML = '<div class="lb-empty">Failed to load leaderboard</div>';
+            }
+        }
+
+        // Load user profile
+        async function loadProfile() {
+            try {
+                const res = await fetch('/api/contributions/profile', { credentials: 'include' });
+                if (!res.ok) return;
+                const data = await res.json();
+
+                const woven = data.total_approved || 0;
+                const helpful = data.helpful_votes || 0;
+                document.getElementById('user-woven').textContent = woven;
+                document.getElementById('user-helpful').textContent = helpful;
+                document.getElementById('user-rank').textContent = data.leaderboard_rank ? '#' + data.leaderboard_rank : '-';
+
+                // Show active title if earned
+                if (data.active_title) {
+                    document.getElementById('user-title').textContent = data.active_title;
+                    document.getElementById('user-title-box').style.display = 'flex';
+                }
+
+                // Update progress bars and earned status
+                const threadbinderTier = document.querySelector('.tier-threadbinder');
+                const loomkeeperTier = document.querySelector('.tier-loomkeeper');
+                const masterTier = document.querySelector('.tier-tapestry-master');
+
+                document.getElementById('progress-threadbinder').style.width = Math.min(100, (woven / 5) * 100) + '%';
+                document.getElementById('progress-loomkeeper').style.width = Math.min(100, (woven / 25) * 100) + '%';
+                document.getElementById('progress-master').style.width = Math.min(100, (woven / 100) * 100) + '%';
+
+                // Add earned class to completed tiers
+                if (woven >= 5) threadbinderTier.classList.add('earned');
+                if (woven >= 25) loomkeeperTier.classList.add('earned');
+                if (woven >= 100) masterTier.classList.add('earned');
+
+                // Update threshold text with progress
+                threadbinderTier.querySelector('.reward-threshold').textContent = woven >= 5 ? '✓ Earned!' : `${woven}/5 woven`;
+                loomkeeperTier.querySelector('.reward-threshold').textContent = woven >= 25 ? '✓ Earned!' : `${woven}/25 woven`;
+                masterTier.querySelector('.reward-threshold').textContent = woven >= 100 ? '✓ Earned!' : `${woven}/100 woven`;
+            } catch (err) {}
+        }
+
+        // Mapping Modal
+        function openMappingModal(gameKey) {
+            const game = tapestryData.games.find(g => g.key === gameKey);
+            if (!game) return;
+
+            currentGame = game;
+            document.getElementById('modal-game-title').textContent = game.name;
+
+            // Show loading overlay immediately
+            document.getElementById('modal-loading').classList.add('active');
+
+            // Build platform tabs
+            const tabs = document.getElementById('platform-tabs');
+            tabs.innerHTML = game.platforms.map((p, i) => `
+                <button class="platform-tab ${i === 0 ? 'active' : ''}" onclick="selectPlatform('${p}')" style="color:${COLORS[p] || '#888'}">
+                    ${PROVIDER_NAMES[p] || p}
+                </button>
+            `).join('');
+
+            // Open modal first (so user sees it's responding)
+            document.getElementById('mapping-modal').classList.add('active');
+
+            // Then load achievements
+            if (game.platforms.length > 0) {
+                selectPlatform(game.platforms[0]);
+            }
+        }
+
+        async function selectPlatform(platform) {
+            currentPlatform = platform;
+
+            // Show loading overlay when switching platforms
+            document.getElementById('modal-loading').classList.add('active');
+
+            // Update tabs
+            document.querySelectorAll('.platform-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.textContent.trim() === (PROVIDER_NAMES[platform] || platform));
             });
 
-            // Set container size and render
-            container.style.width = totalWidth + 'px';
-            container.style.height = totalHeight + 'px';
-            container.innerHTML = html;
+            // Update labels
+            document.getElementById('modal-subtitle').textContent = `Map ${currentGame.canonical_platform?.toUpperCase() || 'STEAM'} → ${platform.toUpperCase()}`;
+
+            const leftLabel = document.getElementById('left-provider');
+            leftLabel.textContent = (currentGame.canonical_platform || 'steam').toUpperCase();
+            leftLabel.style.background = `rgba(${hexToRgb(COLORS[currentGame.canonical_platform || 'steam'])}, 0.2)`;
+            leftLabel.style.color = COLORS[currentGame.canonical_platform || 'steam'];
+
+            const rightLabel = document.getElementById('right-provider');
+            rightLabel.textContent = platform.toUpperCase();
+            rightLabel.style.background = `rgba(${hexToRgb(COLORS[platform] || '#888')}, 0.2)`;
+            rightLabel.style.color = COLORS[platform] || '#888';
+
+
+            // Reset selection
+            selectedLeft = null;
+            selectedRight = null;
+            updatePreview();
+
+            // Load achievements
+            await loadAchievements();
         }
 
-        function showGameTooltip(event, gameKey) {
-            const game = tapestryData.games.find(g => g.key === gameKey);
-            if (!game) return;
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '128, 128, 128';
+        }
 
-            const parityColor = game.parity >= 100 ? '#c9a227' : game.parity >= 75 ? '#4caf50' : game.parity >= 50 ? '#ff9800' : '#f44336';
+        async function loadAchievements() {
+            const leftEl = document.getElementById('left-list');
+            const rightEl = document.getElementById('right-list');
+            const rightSearch = document.getElementById('right-search');
+            const waitingEl = document.getElementById('waiting-message');
+            const loadingOverlay = document.getElementById('modal-loading');
 
-            document.getElementById('tooltip-title').textContent = game.name;
-            document.getElementById('tooltip-parity').innerHTML = `<span style="color:${parityColor}">${game.parity}%</span> parity`;
-            document.getElementById('tooltip-detail').textContent = `${game.achievement_count} achievements • ${game.gap_count} gaps`;
+            leftEl.innerHTML = '<div class="loading"><div class="loading-spinner"></div></div>';
+            rightEl.innerHTML = '<div class="loading"><div class="loading-spinner"></div></div>';
+            waitingEl.classList.remove('active');
+            rightSearch.style.display = 'block';
 
-            // Provider breakdown
-            const providersHtml = game.platforms.map(p => {
-                const cov = game.platform_coverage[p];
-                const pct = cov ? Math.round((cov.mapped / cov.total) * 100) : 0;
+            try {
+                const res = await fetch(`/api/contributions/mapping-tool/game/${currentGame.key}/unmapped?target_platform=${currentPlatform}`, { credentials: 'include' });
+                const data = await res.json();
+
+                // Use canonical_achievements to show all (including mapped ones)
+                leftAchievements = data.canonical_achievements || data.unmapped_achievements || [];
+                rightAchievements = data.target_achievements || [];
+                suggestedMatches = data.suggested_matches || [];
+                matchStats = data.match_stats || null;
+
+                renderAchList('left');
+                renderSuggestedMatches();
+
+                // Hide loading overlay
+                loadingOverlay.classList.remove('active');
+
+                // Reset waiting message styles
+                waitingEl.style.background = '';
+                waitingEl.style.borderRadius = '';
+                waitingEl.style.margin = '';
+                waitingEl.style.padding = '';
+
+                if (rightAchievements.length === 0) {
+                    rightSearch.style.display = 'none';
+                    rightEl.innerHTML = '';
+                    waitingEl.classList.add('active');
+                    document.querySelector('#waiting-message .waiting-icon').textContent = '🧵';
+                    document.querySelector('#waiting-message .waiting-title').textContent = 'Thread not yet spun';
+                    document.querySelector('#waiting-message .waiting-desc').innerHTML = `We await a traveler from <strong>${currentPlatform.toUpperCase()}</strong> to bring their achievements.`;
+                } else {
+                    renderAchList('right');
+                }
+            } catch (err) {
+                leftEl.innerHTML = '<div class="loading">Failed to load</div>';
+                rightEl.innerHTML = '<div class="loading">Failed to load</div>';
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        function renderSuggestedMatches() {
+            const section = document.getElementById('suggested-section');
+            const grid = document.getElementById('suggested-grid');
+            const countEl = document.getElementById('suggested-count');
+            const badgesEl = document.getElementById('confidence-badges');
+
+            if (!suggestedMatches || suggestedMatches.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+
+            section.style.display = 'block';
+            countEl.textContent = `${suggestedMatches.length} suggested`;
+
+            // Build confidence badges
+            if (matchStats) {
+                let badges = '';
+                if (matchStats.high_confidence > 0) {
+                    badges += `<span class="confidence-badge high">${matchStats.high_confidence} high</span>`;
+                }
+                if (matchStats.medium_confidence > 0) {
+                    badges += `<span class="confidence-badge medium">${matchStats.medium_confidence} med</span>`;
+                }
+                if (matchStats.low_confidence > 0) {
+                    badges += `<span class="confidence-badge low">${matchStats.low_confidence} low</span>`;
+                }
+                badgesEl.innerHTML = badges;
+            }
+
+            // Render cards
+            grid.innerHTML = suggestedMatches.map((match, idx) => {
+                const confClass = match.confidence >= 90 ? 'high' : (match.confidence >= 80 ? 'medium' : 'low');
+                const confLabel = match.confidence >= 90 ? 'High' : (match.confidence >= 80 ? 'Med' : 'Low');
+
+                const sourceIcon = match.source.icon_url || '/static/icons/trophy.png';
+                const targetIcon = match.target.icon_url || '/static/icons/trophy.png';
+                // Use image proxy for Xbox icons
+                const targetIconUrl = currentPlatform === 'xbox' && targetIcon.startsWith('http')
+                    ? `/api/tapestry/image-proxy?url=${encodeURIComponent(targetIcon)}`
+                    : targetIcon;
+
+                const srcUnlocked = match.source_unlocked;
+                const tgtUnlocked = match.target_unlocked;
+                const eitherUnlocked = srcUnlocked || tgtUnlocked;
+                const srcPlatform = (currentGame.canonical_platform || 'steam').toUpperCase();
+                const tgtPlatform = currentPlatform.toUpperCase();
+
+                // Build unlock indicator showing which platform(s) unlocked
+                let unlockBadge = '';
+                if (srcUnlocked && tgtUnlocked) {
+                    unlockBadge = '<span class="suggested-unlocked">✓ BOTH</span>';
+                } else if (srcUnlocked) {
+                    unlockBadge = `<span class="suggested-unlocked">✓ ${srcPlatform}</span>`;
+                } else if (tgtUnlocked) {
+                    unlockBadge = `<span class="suggested-unlocked">✓ ${tgtPlatform}</span>`;
+                } else {
+                    unlockBadge = '<span class="suggested-locked">🔒</span>';
+                }
+
                 return `
-                    <div class="tooltip-provider">
-                        <div class="tooltip-provider-dot" style="background:${COLORS[p] || '#666'}"></div>
-                        ${PROVIDER_NAMES[p] || p}: ${pct}%
+                    <div class="suggested-card ${confClass}-conf ${eitherUnlocked ? 'unlocked' : 'locked'}" onclick="selectSuggestedMatch(${idx})">
+                        <div class="suggested-card-header">
+                            <span class="suggested-confidence ${confClass}">${match.confidence}% ${confLabel}</span>
+                            ${unlockBadge}
+                        </div>
+                        <div class="suggested-pair">
+                            <div class="suggested-ach">
+                                <img class="suggested-ach-icon" src="${escapeHtml(sourceIcon)}" onerror="this.src='/static/icons/trophy.png'">
+                                <div class="suggested-ach-info">
+                                    <div class="suggested-ach-name" title="${escapeHtml(match.source.name)}">${escapeHtml(match.source.name)}</div>
+                                    <div class="suggested-ach-desc" title="${escapeHtml(match.source.description || '')}">${escapeHtml(match.source.description || '')}</div>
+                                </div>
+                            </div>
+                            <span class="suggested-arrow">↔</span>
+                            <div class="suggested-ach">
+                                <img class="suggested-ach-icon" src="${escapeHtml(targetIconUrl)}" onerror="this.src='/static/icons/trophy.png'">
+                                <div class="suggested-ach-info">
+                                    <div class="suggested-ach-name" title="${escapeHtml(match.target.name)}">${escapeHtml(match.target.name)}</div>
+                                    <div class="suggested-ach-desc" title="${escapeHtml(match.target.description || '')}">${escapeHtml(match.target.description || '')}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="suggested-action">
+                            <button class="suggested-select-btn">Select & Weave</button>
+                        </div>
                     </div>
                 `;
             }).join('');
-            document.getElementById('tooltip-providers').innerHTML = providersHtml;
-
-            const tt = document.getElementById('tooltip');
-            tt.style.left = (event.clientX + 20) + 'px';
-            tt.style.top = (event.clientY - 10) + 'px';
-            tt.classList.add('visible');
         }
 
-        function hideTooltip() {
-            document.getElementById('tooltip').classList.remove('visible');
+        function toggleSuggestedMatches() {
+            const body = document.getElementById('suggested-body');
+            const toggle = document.getElementById('suggested-toggle');
+            body.classList.toggle('collapsed');
+            toggle.textContent = body.classList.contains('collapsed') ? '▶' : '▼';
         }
 
-        function showGameModal(gameKey) {
-            hideTooltip();
-            const game = tapestryData.games.find(g => g.key === gameKey);
-            if (!game) return;
+        function selectSuggestedMatch(idx) {
+            const match = suggestedMatches[idx];
+            if (!match) return;
 
-            const headerImg = getSteamHeaderUrl(game.canonical_app_id);
-            document.getElementById('modal-header-img').src = headerImg;
-            document.getElementById('modal-title').textContent = game.name;
-            document.getElementById('modal-subtitle').textContent = game.weave_strength.charAt(0).toUpperCase() + game.weave_strength.slice(1) + ' weave';
+            // Find the achievements in our lists
+            const leftAch = leftAchievements.find(a => a.id === match.source.id);
+            const rightAch = rightAchievements.find(a => a.id === match.target.id);
 
-            const parityColor = game.parity >= 100 ? '#c9a227' : game.parity >= 75 ? '#4caf50' : game.parity >= 50 ? '#ff9800' : '#f44336';
+            if (leftAch && rightAch) {
+                // Select both
+                selectedLeft = leftAch;
+                selectedRight = rightAch;
 
-            // Platform breakdown
-            const platformsHtml = game.platforms.map(p => {
-                const cov = game.platform_coverage[p];
-                const pct = cov ? Math.round((cov.mapped / cov.total) * 100) : 0;
+                // Re-render lists to show selection
+                renderAchList('left');
+                renderAchList('right');
+
+                // Scroll to selected items in their lists
+                setTimeout(() => {
+                    const leftSelected = document.querySelector('#left-list .ach-item.selected');
+                    const rightSelected = document.querySelector('#right-list .ach-item.selected');
+
+                    if (leftSelected) {
+                        leftSelected.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    if (rightSelected) {
+                        rightSelected.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 50);
+
+                // Update preview
+                updatePreview();
+
+                // Auto-fill reason with confidence info
+                const reasonInput = document.getElementById('reason-input');
+                if (!reasonInput.value) {
+                    reasonInput.value = `Intelligent match: ${match.confidence}% similarity (name: ${match.name_match}%, description: ${match.desc_match}%)`;
+                }
+
+                showToast(`Selected: ${leftAch.name} ↔ ${rightAch.name}`, 'info');
+            } else {
+                showToast('Could not find achievements in lists', 'error');
+            }
+        }
+
+        function renderAchList(side) {
+            const achievements = side === 'left' ? leftAchievements : rightAchievements;
+            const search = document.getElementById(side + '-search').value.toLowerCase();
+            const el = document.getElementById(side + '-list');
+            const selected = side === 'left' ? selectedLeft : selectedRight;
+
+            let filtered = achievements.filter(a =>
+                a.name.toLowerCase().includes(search) ||
+                (a.description && a.description.toLowerCase().includes(search))
+            );
+
+            // Sort: mapped/pending last, then items first, then candidates, then unlocked, then by name
+            filtered.sort((a, b) => {
+                // Mapped = lowest priority (pushed to very bottom)
+                // Pending = second lowest (pushed to bottom)
+                // Has item = highest priority (0)
+                // Is candidate = second priority (1)
+                // Unlocked = third priority (2)
+                // Regular = fourth priority (3)
+                const getPriority = (ach) => {
+                    if (ach.is_mapped) return 11; // Push to very bottom
+                    if (ach.has_pending) return 10; // Push to bottom
+                    if (ach.has_item) return 0;
+                    if (ach.is_candidate) return 1;
+                    if (ach.unlocked) return 2;
+                    return 3;
+                };
+                const pA = getPriority(a);
+                const pB = getPriority(b);
+                if (pA !== pB) return pA - pB;
+                return a.name.localeCompare(b.name);
+            });
+
+            if (filtered.length === 0) {
+                el.innerHTML = '<div class="loading">No matches</div>';
+                return;
+            }
+
+            el.innerHTML = filtered.map(a => {
+                const isSelected = selected && selected.id === a.id;
+                const classes = ['ach-item'];
+                if (a.unlocked) classes.push('unlocked');
+                else classes.push('locked');
+                if (isSelected) classes.push('selected');
+                if (a.is_mapped) classes.push('is-mapped');
+                if (a.has_pending) classes.push('has-pending');
+
+                // Build tags HTML including forge status
+                let tagsHtml = '';
+
+                // Mapped badge (show first - already done)
+                if (a.is_mapped) {
+                    tagsHtml += '<span class="ach-tag mapped" title="Already mapped to this platform">✓ MAPPED</span>';
+                }
+                // Pending mapping badge (show second as warning)
+                else if (a.has_pending) {
+                    tagsHtml += '<span class="ach-tag pending" title="Already submitted for review">⏳ PENDING</span>';
+                }
+
+                // Forge item badge (highest priority - gold)
+                if (a.has_item && a.item) {
+                    tagsHtml += `<span class="ach-tag has-item" title="Unlocks: ${escapeHtml(a.item.item_name)}">🏆 ${escapeHtml(a.item.item_name)}</span>`;
+                }
+                // Candidate badge (purple/blue)
+                else if (a.is_candidate && a.candidate) {
+                    const priorityClass = a.candidate.priority === 'legendary' ? 'priority-legendary' :
+                                          a.candidate.priority === 'high' ? 'priority-high' : '';
+                    tagsHtml += `<span class="ach-tag candidate ${priorityClass}" title="Planned: ${escapeHtml(a.candidate.proposed_item)}">🔮 ${escapeHtml(a.candidate.proposed_item)}</span>`;
+                }
+
+                // Unlocked badge
+                if (a.unlocked) {
+                    tagsHtml += '<span class="ach-tag unlocked">UNLOCKED</span>';
+                }
+
+                // Rarity badge
+                tagsHtml += `<span class="ach-tag">${a.rarity_tier || 'Common'}</span>`;
+
+                // Use image proxy for Xbox icons (CORS workaround)
+                let iconUrl = a.icon_url || '/static/icons/trophy.png';
+                if (side === 'right' && currentPlatform === 'xbox' && iconUrl.startsWith('http')) {
+                    iconUrl = `/api/tapestry/image-proxy?url=${encodeURIComponent(iconUrl)}`;
+                }
+
                 return `
-                    <div class="modal-platform">
-                        <div class="modal-platform-dot" style="background:${COLORS[p] || '#666'}"></div>
-                        ${PROVIDER_NAMES[p] || p}: ${pct}%
+                    <div class="${classes.join(' ')}" onclick="selectAch('${side}', ${a.id})">
+                        <img class="ach-icon" src="${iconUrl}" onerror="this.src='/static/icons/trophy.png'" alt="">
+                        <div class="ach-info">
+                            <div class="ach-name">${escapeHtml(a.name)}</div>
+                            <div class="ach-desc">${escapeHtml(a.description || '')}</div>
+                            <div class="ach-tags">
+                                ${tagsHtml}
+                                <button class="dispute-btn" onclick="event.stopPropagation(); openDisputeModal(${a.id}, '${escapeHtml(a.name)}', '${a.rarity_tier || 'Common'}')" title="Dispute this rarity">⚖️</button>
+                            </div>
+                        </div>
                     </div>
                 `;
             }).join('');
+        }
 
-            document.getElementById('modal-body').innerHTML = `
-                <div class="modal-stat-row">
-                    <span class="modal-stat-label">Overall Parity</span>
-                    <span class="modal-stat-value" style="color:${parityColor}">${game.parity}%</span>
-                </div>
-                <div class="modal-stat-row">
-                    <span class="modal-stat-label">Achievements</span>
-                    <span class="modal-stat-value">${game.achievement_count}</span>
-                </div>
-                <div class="modal-stat-row">
-                    <span class="modal-stat-label">Mappings Needed</span>
-                    <span class="modal-stat-value gold">${game.gap_count}</span>
-                </div>
-                <div style="margin-top:14px; font-size:0.85rem; color:#9d9d9d;">Platform Coverage:</div>
-                <div class="modal-platforms">${platformsHtml}</div>
-                <a href="/contributions?game=${game.key}" class="modal-cta">Contribute Mappings</a>
-            `;
+        function filterList(side) {
+            renderAchList(side);
+        }
 
-            document.getElementById('modal-overlay').classList.add('visible');
+        function selectAch(side, id) {
+            const list = side === 'left' ? leftAchievements : rightAchievements;
+            const ach = list.find(a => a.id === id);
+            if (!ach) return;
+
+            if (side === 'left') selectedLeft = ach;
+            else selectedRight = ach;
+
+            renderAchList(side);
+            updatePreview();
+        }
+
+        function updatePreview() {
+            const btn = document.getElementById('submit-btn');
+
+            if (selectedLeft && selectedRight) {
+                validateSubmit();
+            } else {
+                btn.disabled = true;
+            }
+        }
+
+        function validateSubmit() {
+            const reason = document.getElementById('reason-input').value.trim();
+            const btn = document.getElementById('submit-btn');
+            const reasonInput = document.getElementById('reason-input');
+
+            // Check all conditions
+            const hasSelection = selectedLeft && selectedRight;
+            // User must have unlocked at least ONE of the two achievements (either side works)
+            const hasUnlocked = (selectedLeft && selectedLeft.unlocked) || (selectedRight && selectedRight.unlocked);
+            // Check if left achievement already has pending mapping
+            const hasPending = selectedLeft && selectedLeft.has_pending;
+
+            if (hasSelection && hasPending) {
+                btn.disabled = true;
+                btn.textContent = '⏳ Already pending review';
+                reasonInput.placeholder = 'This achievement already has a pending mapping. Check the Pending list to vote.';
+            } else if (hasSelection && !hasUnlocked) {
+                btn.disabled = true;
+                btn.textContent = '🔒 Unlock one of these achievements to map';
+                reasonInput.placeholder = 'You must have unlocked at least one of these achievements to submit';
+            } else if (hasSelection && hasUnlocked) {
+                btn.disabled = false;
+                btn.textContent = 'Weave This Pattern';
+                reasonInput.placeholder = 'Optional: Why do these match?';
+            } else {
+                btn.disabled = true;
+                btn.textContent = 'Weave This Pattern';
+                reasonInput.placeholder = 'Optional: Why do these match?';
+            }
+        }
+
+        document.getElementById('reason-input').addEventListener('input', validateSubmit);
+
+        async function submitMapping() {
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Submitting...';
+
+            try {
+                const res = await fetch('/api/contributions/mapping-tool/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        left_provider: currentGame.canonical_platform || 'steam',
+                        left_app_id: currentGame.canonical_app_id,
+                        left_achievement_id: selectedLeft.id,
+                        right_provider: currentPlatform,
+                        right_app_id: '',
+                        right_achievement_id: selectedRight.id,
+                        reason: document.getElementById('reason-input').value.trim()
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    // Check if it was auto-approved
+                    if (data.status === 'approved') {
+                        showToast('Pattern auto-woven into the Tapestry!', 'success');
+                        // Refresh stats since it was approved
+                        loadLeaderboard();
+                        loadProfile();
+                        loadTapestry(); // Refresh parity/gaps
+                    } else {
+                        showToast('Pattern submitted for approval!', 'success');
+                    }
+                    leftAchievements = leftAchievements.filter(a => a.id !== selectedLeft.id);
+                    // Also mark the right achievement as mapped
+                    if (selectedRight) {
+                        const rightAch = rightAchievements.find(a => a.id === selectedRight.id);
+                        if (rightAch) rightAch.is_mapped = true;
+                    }
+                    selectedLeft = null;
+                    selectedRight = null;
+                    document.getElementById('reason-input').value = '';
+                    renderAchList('left');
+                    renderAchList('right');
+                    updatePreview();
+                    loadPending();
+                } else {
+                    showToast(data.detail || 'Failed to submit', 'error');
+                }
+            } catch (err) {
+                showToast('Error submitting mapping', 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Weave This Pattern';
         }
 
         function closeModal() {
-            document.getElementById('modal-overlay').classList.remove('visible');
+            document.getElementById('mapping-modal').classList.remove('active');
+            document.getElementById('suggested-section').style.display = 'none';
+            currentGame = null;
+            currentPlatform = null;
+            selectedLeft = null;
+            selectedRight = null;
+            suggestedMatches = [];
+            matchStats = null;
         }
 
-        document.getElementById('modal-overlay').addEventListener('click', (e) => {
-            if (e.target === document.getElementById('modal-overlay')) closeModal();
+        function closeModalIfOverlay(event) {
+            if (event.target.id === 'mapping-modal') closeModal();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // PENDING CONTRIBUTIONS MODAL
+        // ═══════════════════════════════════════════════════════════════════
+        function openPendingModal() {
+            document.getElementById('pending-modal').classList.add('active');
+        }
+
+        function closePendingModal() {
+            document.getElementById('pending-modal').classList.remove('active');
+        }
+
+        function closePendingModalIfOverlay(event) {
+            if (event.target.id === 'pending-modal') closePendingModal();
+        }
+
+        // Close modals on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                // Close dispute modal first if open, then mapping modal, then pending modal
+                const disputeModal = document.getElementById('dispute-modal');
+                const mappingModal = document.getElementById('mapping-modal');
+                const pendingModal = document.getElementById('pending-modal');
+                if (disputeModal.classList.contains('active')) {
+                    closeDisputeModal();
+                } else if (mappingModal.classList.contains('active')) {
+                    closeModal();
+                } else if (pendingModal.classList.contains('active')) {
+                    closePendingModal();
+                }
+            }
         });
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
-        });
+        // ═══════════════════════════════════════════════════════════════════
+        // DISPUTE RARITY MODAL
+        // ═══════════════════════════════════════════════════════════════════
+        let disputeAchievementId = null;
+        let disputeCurrentRarity = null;
+        let disputeSelectedRarity = null;
 
-        loadTapestry();
+        function openDisputeModal(achievementId, achievementName, currentRarity) {
+            disputeAchievementId = achievementId;
+            disputeCurrentRarity = (currentRarity || 'common').toLowerCase();
+            disputeSelectedRarity = null;
+
+            // Set modal content
+            document.getElementById('dispute-ach-name').textContent = achievementName;
+
+            // Update current rarity badge
+            const currentBadge = document.getElementById('dispute-current-rarity');
+            currentBadge.textContent = disputeCurrentRarity.charAt(0).toUpperCase() + disputeCurrentRarity.slice(1);
+            currentBadge.className = 'rarity-badge ' + disputeCurrentRarity;
+
+            // Reset rarity options
+            document.querySelectorAll('.rarity-option').forEach(btn => {
+                btn.classList.remove('selected', 'disabled');
+                // Disable the current rarity option
+                if (btn.dataset.rarity === disputeCurrentRarity) {
+                    btn.classList.add('disabled');
+                }
+            });
+
+            // Reset reason and disable submit
+            document.getElementById('dispute-reason').value = '';
+            document.getElementById('dispute-submit-btn').disabled = true;
+
+            // Show modal
+            document.getElementById('dispute-modal').classList.add('active');
+        }
+
+        function closeDisputeModal() {
+            document.getElementById('dispute-modal').classList.remove('active');
+            disputeAchievementId = null;
+            disputeCurrentRarity = null;
+            disputeSelectedRarity = null;
+        }
+
+        function closeDisputeModalIfOverlay(event) {
+            if (event.target.id === 'dispute-modal') closeDisputeModal();
+        }
+
+        function selectRarity(rarity) {
+            // Don't select the current rarity
+            if (rarity === disputeCurrentRarity) return;
+
+            disputeSelectedRarity = rarity;
+
+            // Update UI
+            document.querySelectorAll('.rarity-option').forEach(btn => {
+                btn.classList.toggle('selected', btn.dataset.rarity === rarity);
+            });
+
+            // Enable submit button
+            document.getElementById('dispute-submit-btn').disabled = false;
+        }
+
+        async function submitDispute() {
+            if (!disputeAchievementId || !disputeSelectedRarity) return;
+
+            const btn = document.getElementById('dispute-submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Submitting...';
+
+            try {
+                // Use the contribution-based dispute endpoint
+                const res = await fetch('/api/contributions/dispute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        achievement_id: disputeAchievementId,
+                        suggested_rarity: disputeSelectedRarity.charAt(0).toUpperCase() + disputeSelectedRarity.slice(1), // Capitalize
+                        reason: document.getElementById('dispute-reason').value.trim() || null
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast('Dispute submitted for community review!', 'success');
+                    closeDisputeModal();
+                    loadPending(); // Refresh pending list
+                } else {
+                    showToast(data.detail || 'Failed to submit dispute', 'error');
+                }
+            } catch (err) {
+                console.error('Dispute error:', err);
+                showToast('Error submitting dispute', 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Submit Dispute';
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // NAVBAR INFO TOOLTIP POSITIONING
+        // ═══════════════════════════════════════════════════════════════════
+        (function() {
+            // Create tooltip container
+            const container = document.createElement('div');
+            container.id = 'info-tooltip-container';
+            document.body.appendChild(container);
+
+            let hideTimeout = null;
+
+            document.querySelectorAll('.info-icon').forEach(icon => {
+                const tooltipContent = icon.querySelector('.info-tooltip');
+                if (!tooltipContent) return;
+
+                icon.addEventListener('mouseenter', () => {
+                    if (hideTimeout) {
+                        clearTimeout(hideTimeout);
+                        hideTimeout = null;
+                    }
+
+                    // Copy content to fixed container
+                    container.innerHTML = tooltipContent.innerHTML;
+
+                    // Get icon position
+                    const rect = icon.getBoundingClientRect();
+                    const tooltipWidth = 280;
+
+                    // Position below icon, centered
+                    let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+                    let top = rect.bottom + 10;
+
+                    // Keep within viewport
+                    if (left < 10) left = 10;
+                    if (left + tooltipWidth > window.innerWidth - 10) {
+                        left = window.innerWidth - tooltipWidth - 10;
+                    }
+
+                    container.style.left = left + 'px';
+                    container.style.top = top + 'px';
+                    container.classList.add('visible');
+                });
+
+                icon.addEventListener('mouseleave', () => {
+                    hideTimeout = setTimeout(() => {
+                        container.classList.remove('visible');
+                    }, 100);
+                });
+            });
+        })();
+
+        init();
     </script>
 </body>
 </html>

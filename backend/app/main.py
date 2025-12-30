@@ -56,6 +56,10 @@ from app.routes.logging_routes import router as logging_router, init_logging_rou
 from app.routes.contribution_routes import router as contribution_router
 from app.routes.forge_routes import router as forge_router, init_forge_routes
 from app.routes.tapestry_routes import router as tapestry_router, init_tapestry_routes
+from app.services.activity_service import (
+    log_activity, ActivityCategory, AuthAction, ProviderAction,
+    TapestryAction, ContributionAction, ForgeAction, SocialAction
+)
 import time
 import asyncio
 
@@ -399,6 +403,15 @@ def complete_device_auth(device_code: str, user_id: int, username: str, session_
 def make_auth_response(request: Request, user, device_code: Optional[str], provider: str, db: DbSession):
     """Create appropriate response after auth - either device success page or dashboard redirect"""
     device_record = get_device_code_data(device_code, db) if device_code else None
+
+    # Log the login activity
+    log_activity(
+        db, ActivityCategory.AUTH, AuthAction.LOGIN,
+        user_id=user.id,
+        details={"provider": provider, "device_auth": bool(device_code and device_record)},
+        request=request
+    )
+
     if device_code and device_record:
         # Device auth flow - create session token for Godot to use
         token = create_session(db, user)
@@ -3281,11 +3294,20 @@ async def get_provider_token_status(
 async def sync_achievements(
     provider_name: str,
     provider_user_id: str,
+    request: Request,
     db: DbSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     import time
     start_time = time.time()
+
+    # Log sync start
+    log_activity(
+        db, ActivityCategory.PROVIDER, ProviderAction.SYNC_START,
+        user_id=current_user.id,
+        details={"provider": provider_name},
+        request=request
+    )
     provider_account = db.query(ProviderAccount).filter_by(
         provider_name=provider_name,
         provider_user_id=provider_user_id,
@@ -3391,6 +3413,20 @@ async def sync_achievements(
         if credited > 0:
             post_sync_announcement(db, current_user, provider_name, credited)
 
+        # Log sync complete
+        log_activity(
+            db, ActivityCategory.PROVIDER, ProviderAction.SYNC_COMPLETE,
+            user_id=current_user.id,
+            details={
+                "provider": provider_name,
+                "credited": credited,
+                "total_found": total_found,
+                "duration_ms": int(elapsed * 1000)
+            },
+            request=request,
+            duration_ms=int(elapsed * 1000)
+        )
+
         return {
             "provider": provider_name,
             "credited": credited,
@@ -3400,6 +3436,17 @@ async def sync_achievements(
     except Exception as e:
         elapsed = round(time.time() - start_time, 2)
         error_str = str(e)
+
+        # Log sync error
+        log_activity(
+            db, ActivityCategory.PROVIDER, ProviderAction.SYNC_ERROR,
+            user_id=current_user.id,
+            details={"provider": provider_name},
+            request=request,
+            success=False,
+            error_message=error_str[:500],
+            duration_ms=int(elapsed * 1000)
+        )
 
         # Check if this is a 401 unauthorized error (token expired)
         if "401" in error_str or "unauthorized" in error_str.lower() or "token" in error_str.lower():
@@ -3570,11 +3617,18 @@ async def get_achievements(
 async def logout(request: Request, db: DbSession = Depends(get_db)):
     # Log the logout event and invalidate the session
     token = get_session_token(request)
+    user_id = None
     if token:
         # Get user info for logging before deleting session
         user = get_user_from_session(db, token)
         if user:
+            user_id = user.id
             logger.info(f"User {user.username} logged out")
+            # Log logout activity
+            log_activity(
+                db, ActivityCategory.AUTH, AuthAction.LOGOUT,
+                user_id=user.id, request=request
+            )
         # Delete the session from database (hash the token to find it)
         token_hash = SessionModel.hash_token(token)
         db.query(SessionModel).filter(SessionModel.token_hash == token_hash).delete()
@@ -6338,6 +6392,125 @@ async def get_all_feedback(
                 "created_at": f.created_at.isoformat() if f.created_at else None,
             }
             for f in feedback_list
+        ]
+    }
+
+
+# =============================================================================
+# ADMIN: USER ACTIVITY TRACKING
+# =============================================================================
+
+@app.get("/api/admin/activity/stats")
+async def get_activity_stats(
+    request: Request,
+    db: DbSession = Depends(get_db),
+    hours: int = 24,
+):
+    """
+    Admin endpoint to view activity statistics.
+
+    Returns aggregate stats for the last N hours:
+    - Total activities
+    - Unique users
+    - Breakdown by category and action
+    - Error count
+    """
+    from app.services.activity_service import get_activity_stats as activity_stats
+
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    return activity_stats(db, hours=min(hours, 168))  # Max 1 week
+
+
+@app.get("/api/admin/activity/funnel")
+async def get_activity_funnel(
+    request: Request,
+    db: DbSession = Depends(get_db),
+    hours: int = 24,
+):
+    """
+    Admin endpoint to view user conversion funnel.
+
+    Tracks user progression through key milestones:
+    1. Login
+    2. Provider connected
+    3. Achievement synced
+    4. Tapestry viewed
+    5. Mapping submitted
+    """
+    from app.services.activity_service import get_user_funnel
+
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    return get_user_funnel(db, hours=min(hours, 168))
+
+
+@app.get("/api/admin/activity/errors")
+async def get_activity_errors(
+    request: Request,
+    db: DbSession = Depends(get_db),
+    limit: int = 20,
+):
+    """Admin endpoint to view recent errors."""
+    from app.services.activity_service import get_recent_errors
+
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    return {"errors": get_recent_errors(db, limit=min(limit, 100))}
+
+
+@app.get("/api/admin/activity/user/{user_id}")
+async def get_user_activity(
+    user_id: int,
+    request: Request,
+    db: DbSession = Depends(get_db),
+    limit: int = 50,
+):
+    """Admin endpoint to view a specific user's activity journey."""
+    from app.services.activity_service import get_user_journey
+
+    token = get_session_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_from_session(db, token)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    activities = get_user_journey(db, user_id, limit=min(limit, 200))
+
+    return {
+        "user_id": user_id,
+        "activities": [
+            {
+                "id": a.id,
+                "category": a.category,
+                "action": a.action,
+                "details": a.details,
+                "success": a.success,
+                "error": a.error_message,
+                "ip": a.ip_address,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in activities
         ]
     }
 

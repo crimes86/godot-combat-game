@@ -188,7 +188,7 @@ async def get_messages(
             "id": msg.id,
             "content": msg.content,
             "type": msg.message_type,
-            "created_at": msg.created_at.isoformat(),
+            "created_at": msg.created_at.isoformat() + "Z",  # UTC
             "room": msg.room,
         }
 
@@ -272,7 +272,7 @@ async def send_message(
             "id": message.id,
             "content": message.content,
             "type": message.message_type,
-            "created_at": message.created_at.isoformat(),
+            "created_at": message.created_at.isoformat() + "Z",  # UTC
             "room": message.room,
             "user": {
                 "id": current_user.id,
@@ -438,6 +438,76 @@ def broadcast_system_message(content: str, message_type: str = "system") -> None
         logger.error(f"Failed to broadcast system message: {e}")
     finally:
         db.close()
+
+
+# =============================================================================
+# TAPESTRY NOTIFICATIONS (mapping contributions, game discoveries)
+# =============================================================================
+
+def post_mapping_approved(db: DbSession, user: User, game_name: str, achievement_name: str, platform: str):
+    """Post when a user's mapping contribution is approved."""
+    try:
+        platform_display = {
+            "xbox": "Xbox",
+            "psn": "PlayStation",
+            "battlenet": "Battle.net",
+        }.get(platform, platform.title())
+
+        content = f"{user.username} wove a thread: {game_name} → {platform_display}"
+
+        message = ChatMessage(
+            user_id=user.id,
+            room="global",
+            content=content,
+            message_type="mapping",
+        )
+        db.add(message)
+        db.commit()
+        logger.info(f"[CHAT] Posted mapping approval for {user.username}: {game_name}")
+    except Exception as e:
+        logger.error(f"Failed to post mapping approval: {e}")
+
+
+def post_game_discovery(db: DbSession, user: User, game_name: str, achievement_count: int, platforms: list):
+    """Post when a new cross-platform game is discovered."""
+    try:
+        platform_names = [p.title() for p in platforms]
+        platform_str = " & ".join(platform_names) if len(platform_names) <= 2 else f"{len(platform_names)} platforms"
+
+        content = f"🎮 New game discovered: {game_name} ({achievement_count} achievements, {platform_str})"
+
+        message = ChatMessage(
+            user_id=user.id,
+            room="global",
+            content=content,
+            message_type="game_sync",
+        )
+        db.add(message)
+        db.commit()
+        logger.info(f"[CHAT] Posted game discovery: {game_name}")
+    except Exception as e:
+        logger.error(f"Failed to post game discovery: {e}")
+
+
+def post_tapestry_milestone(db: DbSession, game_name: str, parity_percent: int):
+    """Post when a game reaches a parity milestone (25%, 50%, 75%, 100%)."""
+    try:
+        if parity_percent == 100:
+            content = f"🏆 {game_name} is now fully mapped! 100% parity achieved!"
+        else:
+            content = f"📈 {game_name} reached {parity_percent}% mapping parity!"
+
+        message = ChatMessage(
+            user_id=None,  # System message
+            room="global",
+            content=content,
+            message_type="mapping",
+        )
+        db.add(message)
+        db.commit()
+        logger.info(f"[CHAT] Posted tapestry milestone: {game_name} at {parity_percent}%")
+    except Exception as e:
+        logger.error(f"Failed to post tapestry milestone: {e}")
 
 
 import random
