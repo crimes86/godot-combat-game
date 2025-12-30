@@ -56,3 +56,9 @@ nul
 
 # LPC Generator (external tool - not part of project)
 tools/lpc-generator/
+
+# MCP config (machine-specific paths)
+.mcp.json
+
+# Temp files
+_ul
