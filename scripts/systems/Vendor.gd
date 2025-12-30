@@ -570,12 +570,12 @@ func create_weapon_from_data(data: Dictionary) -> Weapon:
 	weapon.healing_power = data.get("healing_power", 0.0)
 	weapon.heal_radius = data.get("heal_radius", 80.0)
 
-	# Gun weapon properties
-	weapon.gun_radius = data.get("gun_radius", 28.0)
-	weapon.gun_range = data.get("gun_range", 550.0)
-	weapon.gun_subtype = data.get("gun_subtype", "railgun")
-	weapon.burst_count = data.get("burst_count", 1)
-	weapon.burst_delay = data.get("burst_delay", 0.10)
+	# Gun weapon properties (use explicit null checks since .get() returns null if key exists with null value)
+	weapon.gun_radius = data.get("gun_radius") if data.get("gun_radius") != null else 28.0
+	weapon.gun_range = data.get("gun_range") if data.get("gun_range") != null else 550.0
+	weapon.gun_subtype = data.get("gun_subtype") if data.get("gun_subtype") != null else "railgun"
+	weapon.burst_count = data.get("burst_count") if data.get("burst_count") != null else 1
+	weapon.burst_delay = data.get("burst_delay") if data.get("burst_delay") != null else 0.10
 
 	# Bow weapon properties
 	weapon.bow_radius = data.get("bow_radius", 32.0)

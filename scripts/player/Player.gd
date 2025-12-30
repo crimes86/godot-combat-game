@@ -23,6 +23,7 @@ const WEAPON_TYPE_FALLBACKS = {
 	"trident": "spear",
 	"flail": "mace",
 	"scythe": "spear",
+	"gun": "railgun",  # Guns without sprites fallback to railgun animations
 }
 
 # Character Gender Selection
@@ -2683,7 +2684,7 @@ func create_player_sprite() -> void:
 	# Determine attack animation type based on weapon
 	# Staff, spear and trident use thrust animation
 	# Bow and crossbow use shoot animation
-	# All other weapons use slash
+	# All other weapons use slash (guns use Skorpio body system separately)
 	var uses_thrust = false
 	var uses_shoot = false
 	var thrust_weapons = ["staff", "spear", "trident"]
@@ -2801,27 +2802,36 @@ func create_player_sprite() -> void:
 		# For forged weapons, check if pre-tinted sprites exist in forged folder
 		var forged_item_id = forged_weapon_data.get("item_id", "")
 		var forged_weapon_path = ""
+		var item_specific_weapon_path = ""  # For item-specific sprites in weapons/{type}/{item_id}/standard/
 		if is_forged_weapon and forged_item_id != "":
 			forged_weapon_path = "res://assets/equipment/forged/weapons/" + forged_item_id + "/"
+			item_specific_weapon_path = "res://assets/equipment/weapons/" + weapon_type + "/" + forged_item_id + "/standard/"
 			if DEBUG_FORGED_EQUIP:
 				print("[ForgedEquip]   Forged item_id: %s" % forged_item_id)
 				print("[ForgedEquip]   Forged weapon path: %s" % forged_weapon_path)
+				print("[ForgedEquip]   Item-specific path: %s" % item_specific_weapon_path)
 
 		if DEBUG_FORGED_EQUIP:
 			print("[ForgedEquip]   Base weapon path: %s" % weapon_path)
 
 		# Check if weapon folder has sprites, use fallback if not
 		var animation_type = weapon_type  # The actual type used for animations
+		# Check base weapon folder, item-specific folder, and forged folder
 		var has_weapon_sprites = ResourceLoader.exists(weapon_path + "slash.png") or \
 								 ResourceLoader.exists(weapon_path + "thrust.png") or \
 								 ResourceLoader.exists(weapon_path + "thrust_oversize.png") or \
-								 ResourceLoader.exists(weapon_path + "shoot.png")
+								 ResourceLoader.exists(weapon_path + "shoot.png") or \
+								 (item_specific_weapon_path != "" and (ResourceLoader.exists(item_specific_weapon_path + "slash.png") or \
+								 ResourceLoader.exists(item_specific_weapon_path + "shoot.png") or \
+								 ResourceLoader.exists(item_specific_weapon_path + "thrust.png")))
 
 		if DEBUG_FORGED_EQUIP:
 			print("[ForgedEquip]   Has weapon sprites at path: %s" % has_weapon_sprites)
 			print("[ForgedEquip]     Checked: %s/slash.png = %s" % [weapon_path, ResourceLoader.exists(weapon_path + "slash.png")])
 			print("[ForgedEquip]     Checked: %s/thrust.png = %s" % [weapon_path, ResourceLoader.exists(weapon_path + "thrust.png")])
 			print("[ForgedEquip]     Checked: %s/thrust_oversize.png = %s" % [weapon_path, ResourceLoader.exists(weapon_path + "thrust_oversize.png")])
+			if item_specific_weapon_path != "":
+				print("[ForgedEquip]     Checked item-specific: %s/shoot.png = %s" % [item_specific_weapon_path, ResourceLoader.exists(item_specific_weapon_path + "shoot.png")])
 
 		if not has_weapon_sprites:
 			# Try fallback weapon type
@@ -2839,11 +2849,15 @@ func create_player_sprite() -> void:
 		# Staff uses thrust_oversize animation, spear uses thrust, gun uses walk only, others use slash
 		if animation_type == "gun":
 			# Guns use shoot.png with muzzle flash for attack animation
-			# Check forged folder first for pre-tinted sprites
+			# Check forged folder first, then item-specific folder, then base folder
 			if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "shoot.png"):
 				weapon_slash_tex = load(forged_weapon_path + "shoot.png")
 				if DEBUG_FORGED_EQUIP:
 					print("[ForgedEquip]   Loaded tinted shoot.png from forged folder")
+			elif item_specific_weapon_path != "" and ResourceLoader.exists(item_specific_weapon_path + "shoot.png"):
+				weapon_slash_tex = load(item_specific_weapon_path + "shoot.png")
+				if DEBUG_FORGED_EQUIP:
+					print("[ForgedEquip]   Loaded shoot.png from item-specific folder: %s" % item_specific_weapon_path)
 			elif ResourceLoader.exists(weapon_path + "shoot.png"):
 				weapon_slash_tex = load(weapon_path + "shoot.png")
 		elif animation_type == "bow" or animation_type == "crossbow":
@@ -2894,11 +2908,15 @@ func create_player_sprite() -> void:
 			if DEBUG_EQUIP:
 				print("[Equip] Multi-slash weapon: loaded slash3.png")
 
-		# Load walk texture - check forged folder first for pre-tinted sprites
+		# Load walk texture - check forged folder first, then item-specific, then base
 		if forged_weapon_path != "" and ResourceLoader.exists(forged_weapon_path + "walk.png"):
 			weapon_walk_tex = load(forged_weapon_path + "walk.png")
 			if DEBUG_FORGED_EQUIP:
 				print("[ForgedEquip]   Loaded tinted walk.png from forged folder")
+		elif item_specific_weapon_path != "" and ResourceLoader.exists(item_specific_weapon_path + "walk.png"):
+			weapon_walk_tex = load(item_specific_weapon_path + "walk.png")
+			if DEBUG_FORGED_EQUIP:
+				print("[ForgedEquip]   Loaded walk.png from item-specific folder: %s" % item_specific_weapon_path)
 		elif ResourceLoader.exists(weapon_path + "walk.png"):
 			weapon_walk_tex = load(weapon_path + "walk.png")
 

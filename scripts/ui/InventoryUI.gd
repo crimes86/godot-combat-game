@@ -1053,12 +1053,12 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	weapon.healing_power = item_dict.get("healing_power", 0.0)
 	weapon.heal_radius = item_dict.get("heal_radius", 80.0)
 
-	# Gun weapon properties
-	weapon.gun_radius = item_dict.get("gun_radius", 28.0)
-	weapon.gun_range = item_dict.get("gun_range", 550.0)
-	weapon.gun_subtype = item_dict.get("gun_subtype", "railgun")
-	weapon.burst_count = item_dict.get("burst_count", 1)
-	weapon.burst_delay = item_dict.get("burst_delay", 0.10)
+	# Gun weapon properties (use explicit null checks since .get() returns null if key exists with null value)
+	weapon.gun_radius = item_dict.get("gun_radius") if item_dict.get("gun_radius") != null else 28.0
+	weapon.gun_range = item_dict.get("gun_range") if item_dict.get("gun_range") != null else 550.0
+	weapon.gun_subtype = item_dict.get("gun_subtype") if item_dict.get("gun_subtype") != null else "railgun"
+	weapon.burst_count = item_dict.get("burst_count") if item_dict.get("burst_count") != null else 1
+	weapon.burst_delay = item_dict.get("burst_delay") if item_dict.get("burst_delay") != null else 0.10
 
 	var attack_speed_category = item_dict.get("attack_speed", "medium")
 	match attack_speed_category:

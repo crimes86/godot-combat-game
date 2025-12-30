@@ -55,13 +55,13 @@ var _canvas_transform := Transform2D.IDENTITY
 
 
 func _ready() -> void:
-	# Detect if running on mobile
+	# Detect if running on mobile - only true mobile platforms, not touchscreen laptops
 	is_mobile = OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
 
-	# Auto-enable on touchscreen devices (laptops, tablets, etc.)
-	if not is_mobile and DisplayServer.is_touchscreen_available():
-		is_mobile = true
-		print("[MobileInput] Touchscreen detected - enabling touch input")
+	# NOTE: Removed auto-enable for touchscreen laptops - many gaming laptops have
+	# touchscreens but players use mouse+keyboard. Mobile mode only on actual mobile devices.
+	if is_mobile:
+		print("[MobileInput] Mobile platform detected - enabling touch input")
 
 	_viewport = get_viewport()
 	_update_screen_zones()

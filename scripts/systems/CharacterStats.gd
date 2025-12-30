@@ -1037,12 +1037,12 @@ func load_save_data(data: Dictionary) -> void:
 		weapon.rarity = weapon_data.get("rarity", 0)
 		weapon.can_trade = weapon_data.get("can_trade", true)
 		weapon.description = weapon_data.get("description", "")
-		# Load gun weapon properties
-		weapon.gun_radius = weapon_data.get("gun_radius", 28.0)
-		weapon.gun_range = weapon_data.get("gun_range", 550.0)
-		weapon.gun_subtype = weapon_data.get("gun_subtype", "railgun")
-		weapon.burst_count = weapon_data.get("burst_count", 1)
-		weapon.burst_delay = weapon_data.get("burst_delay", 0.10)
+		# Load gun weapon properties (use explicit null checks since .get() returns null if key exists with null value)
+		weapon.gun_radius = weapon_data.get("gun_radius") if weapon_data.get("gun_radius") != null else 28.0
+		weapon.gun_range = weapon_data.get("gun_range") if weapon_data.get("gun_range") != null else 550.0
+		weapon.gun_subtype = weapon_data.get("gun_subtype") if weapon_data.get("gun_subtype") != null else "railgun"
+		weapon.burst_count = weapon_data.get("burst_count") if weapon_data.get("burst_count") != null else 1
+		weapon.burst_delay = weapon_data.get("burst_delay") if weapon_data.get("burst_delay") != null else 0.10
 		# Load healing weapon properties
 		weapon.attack_mode = weapon_data.get("attack_mode", "melee")
 		weapon.healing_power = weapon_data.get("healing_power", 0.0)

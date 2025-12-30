@@ -634,12 +634,12 @@ func _dict_to_weapon(weapon_dict: Dictionary):
 		weapon.healing_power = weapon_dict.get("healing_power", 0.0)
 		weapon.heal_radius = weapon_dict.get("heal_radius", 0.0)
 
-	# Gun weapon properties
-	weapon.gun_radius = weapon_dict.get("gun_radius", 28.0)
-	weapon.gun_range = weapon_dict.get("gun_range", 550.0)
-	weapon.gun_subtype = weapon_dict.get("gun_subtype", "railgun")
-	weapon.burst_count = weapon_dict.get("burst_count", 1)
-	weapon.burst_delay = weapon_dict.get("burst_delay", 0.10)
+	# Gun weapon properties (use explicit null checks since .get() returns null if key exists with null value)
+	weapon.gun_radius = weapon_dict.get("gun_radius") if weapon_dict.get("gun_radius") != null else 28.0
+	weapon.gun_range = weapon_dict.get("gun_range") if weapon_dict.get("gun_range") != null else 550.0
+	weapon.gun_subtype = weapon_dict.get("gun_subtype") if weapon_dict.get("gun_subtype") != null else "railgun"
+	weapon.burst_count = weapon_dict.get("burst_count") if weapon_dict.get("burst_count") != null else 1
+	weapon.burst_delay = weapon_dict.get("burst_delay") if weapon_dict.get("burst_delay") != null else 0.10
 
 	# Two-handed property - guns and bows are always two-handed (blocks offhand slot)
 	var is_two_handed_type = weapon.weapon_type in ["gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle", "bow", "crossbow"]
