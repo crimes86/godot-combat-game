@@ -20,6 +20,24 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
+# In-memory online tracking (user_id -> last_heartbeat timestamp)
+# Updated when users fetch chat messages
+_online_users: dict[int, datetime] = {}
+ONLINE_TIMEOUT_MINUTES = 3  # Consider user offline after this
+
+def _heartbeat(user_id: int):
+    """Update user's last seen timestamp."""
+    _online_users[user_id] = datetime.utcnow()
+
+def _get_online_count() -> int:
+    """Count users active in the last ONLINE_TIMEOUT_MINUTES."""
+    cutoff = datetime.utcnow() - timedelta(minutes=ONLINE_TIMEOUT_MINUTES)
+    # Clean up old entries while counting
+    active = {uid: ts for uid, ts in _online_users.items() if ts > cutoff}
+    _online_users.clear()
+    _online_users.update(active)
+    return len(active)
+
 # These will be set by init_chat_routes()
 _get_current_user_func: Callable = None
 _calculate_Ashbane_tier_func: Callable = None
@@ -156,6 +174,9 @@ async def get_messages(
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    # Update online presence
+    _heartbeat(current_user.id)
+
     # Validate room access
     user_room = get_user_room(current_user, db)
     if room != "global" and room != user_room:
@@ -287,25 +308,20 @@ async def get_online_count(
     request: Request,
     db: DbSession = Depends(get_db),
 ):
-    """Get approximate online user count (users with recent activity)."""
+    """Get online user count (users who fetched chat in last 3 minutes)."""
     current_user = get_current_user_dep(request, db)
     if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Count users who sent a message in the last 5 minutes
-    recent_threshold = datetime.utcnow() - timedelta(minutes=5)
+    # Update our own heartbeat
+    _heartbeat(current_user.id)
 
     user_room = get_user_room(current_user, db)
-
-    online_in_room = db.query(ChatMessage.user_id).filter(
-        ChatMessage.room == user_room,
-        ChatMessage.created_at > recent_threshold,
-        ChatMessage.user_id.isnot(None)
-    ).distinct().count()
+    online_count = _get_online_count()
 
     return {
         "room": user_room,
-        "online": max(1, online_in_room),  # At least 1 (current user)
+        "online": max(1, online_count),  # At least 1 (current user)
     }
 
 

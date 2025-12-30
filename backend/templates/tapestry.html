@@ -1973,9 +1973,34 @@
             color: var(--ashbane-gold, #fa0);
             font-weight: 500;
         }
+
+        /* Construction Banner */
+        .construction-banner {
+            background: linear-gradient(90deg, #1a1a1a 0%, #2a2010 50%, #1a1a1a 100%);
+            border-bottom: 1px solid #fa0;
+            color: #fa0;
+            text-align: center;
+            padding: 8px 16px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .construction-icon {
+            font-size: 1rem;
+        }
     </style>
 </head>
 <body>
+    <!-- Under Construction Banner -->
+    <div class="construction-banner">
+        <span class="construction-icon">🚧</span>
+        <span>Under active development — expect frequent updates and occasional restarts</span>
+        <span class="construction-icon">🚧</span>
+    </div>
+
     {% include 'partials/_navbar.html' %}
 
     <!-- Toast Notification Container -->
@@ -2546,7 +2571,19 @@
         };
 
         function tapestryRenderMessage(msg, animate = false) {
-            const time = new Date(msg.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
+            const msgDate = new Date(msg.created_at);
+            const now = new Date();
+            const hoursDiff = (now - msgDate) / (1000 * 60 * 60);
+
+            let time;
+            if (hoursDiff > 24) {
+                // Older than 24h: show date + time
+                time = msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }) + ' ' +
+                       msgDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
+            } else {
+                // Recent: just show time
+                time = msgDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
+            }
             const animClass = animate ? 'chat-msg-new' : '';
 
             // System notification types

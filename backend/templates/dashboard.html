@@ -1779,9 +1779,31 @@
       margin-left: 12px;
       margin-right: 4px;
     }
+
+    /* Construction Banner */
+    .construction-banner {
+        background: linear-gradient(90deg, #1a1a1a 0%, #2a2010 50%, #1a1a1a 100%);
+        border-bottom: 1px solid #fa0;
+        color: #fa0;
+        text-align: center;
+        padding: 8px 16px;
+        font-size: 0.8rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+    }
+    .construction-icon { font-size: 1rem; }
   </style>
 </head>
 <body>
+  <!-- Under Construction Banner -->
+  <div class="construction-banner">
+      <span class="construction-icon">🚧</span>
+      <span>Under active development — expect frequent updates and occasional restarts</span>
+      <span class="construction-icon">🚧</span>
+  </div>
+
   <!-- Wonka TV Room floating particles -->
   <div class="wonka-particles" aria-hidden="true"></div>
 
