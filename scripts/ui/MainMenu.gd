@@ -3,7 +3,7 @@ extends Control
 ## Ashbane medieval fantasy UI theme (WoW/Shadowbane inspired)
 
 # Server configuration
-const PRODUCTION_SERVER_IP = "167.99.55.245"
+const PRODUCTION_SERVER_IP = "104.131.181.120"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ASHBANE THEME COLORS - Medieval fantasy (WoW/Shadowbane inspired)

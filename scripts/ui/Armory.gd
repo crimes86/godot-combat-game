@@ -12,7 +12,7 @@ enum ArmoryState { GUEST, NEW_PLAYER, CASUAL, VETERAN, PENDING_UNLOCKS }
 # ═══════════════════════════════════════════════════════════════════════════════
 const LAN_SERVER_IP = "192.168.28.211"  # ← CHANGE THIS to your desktop's local IP
 const LAN_SERVER_PORT = 7000
-const PRODUCTION_SERVER_IP = "167.99.55.245"
+const PRODUCTION_SERVER_IP = "104.131.181.120"
 
 ## Set to true on the machine that will HOST the server
 ## Set to false on machines that will JOIN as clients
@@ -10703,7 +10703,7 @@ func _on_enter_world_pressed() -> void:
 	enter_world_button.disabled = true
 	enter_world_button.text = "Connecting..."
 	if connection_status_label:
-		connection_status_label.text = "Connecting to %s..." % LAN_SERVER_IP
+		connection_status_label.text = "Connecting to %s..." % PRODUCTION_SERVER_IP
 		connection_status_label.visible = true
 
 	# Connect NetworkManager signals
@@ -10718,9 +10718,9 @@ func _on_enter_world_pressed() -> void:
 		player_name = AshbaneAuth.username
 	NetworkManager.set_player_name(player_name)
 
-	LogManager.info("Connecting to LAN server at %s:%d" % [LAN_SERVER_IP, LAN_SERVER_PORT], "armory")
+	LogManager.info("Connecting to production server at %s:%d" % [PRODUCTION_SERVER_IP, LAN_SERVER_PORT], "armory")
 
-	if NetworkManager.join_game(LAN_SERVER_IP, LAN_SERVER_PORT):
+	if NetworkManager.join_game(PRODUCTION_SERVER_IP, LAN_SERVER_PORT):
 		# Start connection timeout
 		_start_connection_timeout()
 	else:
@@ -10827,7 +10827,7 @@ func _on_login_failed(error: String) -> void:
 
 func _on_server_connection_failed() -> void:
 	"""Called when connection to server fails"""
-	LogManager.error("Failed to connect to server at %s:%d" % [LAN_SERVER_IP, LAN_SERVER_PORT], "armory")
+	LogManager.error("Failed to connect to server at %s:%d" % [PRODUCTION_SERVER_IP, LAN_SERVER_PORT], "armory")
 	_stop_connection_timeout()
 	_is_connecting = false
 
@@ -10883,6 +10883,8 @@ func _load_game_world() -> void:
 
 	# Switch to fullscreen while screen is black
 	if not Engine.is_editor_hint():
+		# Remove borderless flag so windowed mode has title bar
+		DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 	# Small delay to let fullscreen settle

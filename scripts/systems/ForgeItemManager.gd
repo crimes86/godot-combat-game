@@ -1046,20 +1046,17 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 			# Get weapon_type from ForgeItemDB if available, otherwise from forged param, fallback to sword
 			base_item["weapon_type"] = forge_db_item.get("weapon_type", forged.get("weapon_type", "sword"))
 
-			# Calculate damage using rarity-based scaling system
-			# Forged items are only Rare/Epic/Legendary (fallback to Rare if invalid)
-			var rarity_base = RARITY_BASE_DAMAGE.get(rarity, 14)  # Fallback to Rare
-			var rarity_variance = RARITY_DAMAGE_VARIANCE.get(rarity, 2)
-
-			# Use item's individual base_damage as a variance seed (normalized to -1 to +1 range)
-			# This gives each weapon some personality while keeping rarity as the primary factor
-			var item_base = forge_db_item.get("base_damage", 5.0)
-			if item_base is Dictionary:
-				item_base = (item_base.get("min", 5) + item_base.get("max", 5)) / 2.0
-			var variance_modifier = clampf((float(item_base) - 7.0) / 5.0, -1.0, 1.0)  # Normalize around 7
-			var final_damage = rarity_base + int(variance_modifier * rarity_variance)
-
-			base_item["base_damage"] = final_damage
+			# Use pre-calculated damage from items.json (rarity scaling deprecated)
+			var item_damage = forge_db_item.get("base_damage", 10.0)
+			if item_damage is Dictionary:
+				# Use average of min/max for the weapon's base damage
+				var dmg_min = item_damage.get("min", 10)
+				var dmg_max = item_damage.get("max", 10)
+				base_item["base_damage"] = (dmg_min + dmg_max) / 2.0
+			elif item_damage is float or item_damage is int:
+				base_item["base_damage"] = float(item_damage)
+			else:
+				base_item["base_damage"] = 10.0
 			base_item["attack_speed"] = forge_db_item.get("attack_speed", "medium")
 			base_item["crit_chance_bonus"] = forge_db_item.get("crit_chance_bonus", forge_db_item.get("crit_chance", 0.05))
 			if forge_db_item.has("stat_bonuses"):

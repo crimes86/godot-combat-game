@@ -275,6 +275,10 @@ func _physics_process(delta: float) -> void:
 	if not enemy or not is_instance_valid(enemy):
 		return
 
+	# AI only runs on server - clients use interpolated positions from NetworkEnemyManager
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+
 	# Don't process physics until fully initialized
 	if not _initialized:
 		enemy.velocity = Vector2.ZERO

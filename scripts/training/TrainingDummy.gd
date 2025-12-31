@@ -74,7 +74,7 @@ signal died()  # Note: Dummy never actually dies
 
 func _ready() -> void:
 	# Cache _tutorial_manager reference (may not exist in server builds)
-	_tutorial_manager = get_node_or_null("/root/_tutorial_manager")
+	_tutorial_manager = get_node_or_null("/root/TutorialManager")
 
 	# Add to enemies group so player can target it
 	add_to_group(Constants.GROUP_ENEMIES)
@@ -890,9 +890,13 @@ func _spawn_weakpoint_combat_text(_weakpoint, damage: float) -> void:
 		CombatText.create_weakpoint(damage, global_position, parent)
 
 func _on_weakpoint_destroyed_local(weakpoint) -> void:
-	"""Local handler - just forward to manager"""
+	"""Local handler - forward to manager and notify tutorial"""
 	# Emit signal for manager to handle
 	weakpoint_destroyed.emit(weakpoint)
+
+	# Notify tutorial manager of weakpoint destruction (not just hit)
+	if _tutorial_manager and _tutorial_manager.is_tutorial_active():
+		_tutorial_manager.on_weakpoint_hit()
 
 func _clear_weakpoints_delayed() -> void:
 	"""Client-side: Clear weakpoints array after a delay to allow destruction RPCs to arrive"""
