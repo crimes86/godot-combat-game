@@ -50,9 +50,9 @@ func _ready():
 		server_start_time = Time.get_unix_time_from_system()
 
 		# CRITICAL: Limit server tick rate to reduce CPU usage in headless mode
-		# 30 physics ticks per second is plenty for server game logic
-		Engine.max_fps = 30
-		Engine.physics_ticks_per_second = 30
+		# 20 physics ticks per second is enough for server game logic
+		Engine.max_fps = 20
+		Engine.physics_ticks_per_second = 20
 
 		# Enable physics processing so our delay loop runs
 		set_physics_process(true)
@@ -397,9 +397,9 @@ func _physics_process(_delta):
 		return
 	# CRITICAL: In headless mode, Engine.max_fps doesn't limit the main loop.
 	# Add sleep in physics_process to reduce CPU usage when server is idle.
-	# 30ms delay per physics frame = ~33 physics ticks per second max
+	# 50ms delay = 20 physics ticks per second max
 	# (Increased from 15ms due to high CPU with 160+ enemies)
-	OS.delay_msec(30)
+	OS.delay_msec(50)
 
 func _print_server_status() -> void:
 	"""Print current server status to logs."""
