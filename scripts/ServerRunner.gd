@@ -397,8 +397,9 @@ func _physics_process(_delta):
 		return
 	# CRITICAL: In headless mode, Engine.max_fps doesn't limit the main loop.
 	# Add sleep in physics_process to reduce CPU usage when server is idle.
-	# 15ms delay per physics frame = ~66 physics ticks per second max
-	OS.delay_msec(15)
+	# 30ms delay per physics frame = ~33 physics ticks per second max
+	# (Increased from 15ms due to high CPU with 160+ enemies)
+	OS.delay_msec(30)
 
 func _print_server_status() -> void:
 	"""Print current server status to logs."""
