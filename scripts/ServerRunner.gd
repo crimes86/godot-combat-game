@@ -48,6 +48,11 @@ func _ready():
 	if "--server" in args:
 		is_dedicated_server = true
 		server_start_time = Time.get_unix_time_from_system()
+
+		# Cap FPS to reduce CPU usage on dedicated server (30 is plenty for game logic)
+		Engine.max_fps = 30
+		Engine.physics_ticks_per_second = 30
+
 		print("═══════════════════════════════════════════════════════")
 		print("   dreadland DEDICATED SERVER")
 		print("═══════════════════════════════════════════════════════")
