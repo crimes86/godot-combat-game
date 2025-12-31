@@ -4367,6 +4367,13 @@ func die() -> void:
 		return
 
 	is_dead = true
+
+	# Notify server so enemies stop attacking (multiplayer)
+	if multiplayer.has_multiplayer_peer():
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr:
+			network_enemy_mgr.notify_player_death.rpc_id(1)
+
 	var death_position = global_position
 	print("\n💀 ===== PLAYER DEATH =====")
 	print("Position: ", death_position)
@@ -4516,6 +4523,12 @@ func die() -> void:
 	# Reset death flag
 	is_dead = false
 
+	# Notify server that we respawned (multiplayer)
+	if multiplayer.has_multiplayer_peer():
+		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+		if network_enemy_mgr:
+			network_enemy_mgr.notify_player_respawn.rpc_id(1)
+
 	print("✨ Player respawned at bind point")
 	print("   XP lost: %d (now at %d)" % [xp_lost, CharacterStats.experience])
 	print("   Equipment: Default clothes only")
@@ -4551,8 +4564,8 @@ func _get_or_create_death_screen() -> DeathScreenUI:
 
 func _get_bind_point() -> Vector2:
 	"""Get respawn location - guild World Tree or default campfire"""
-	# Default spawn point (chunk 0 center / starting area campfire)
-	var default_spawn = Vector2(Constants.CHUNK_SIZE / 2, 0)
+	# Default spawn point (campfire clearing at origin)
+	var default_spawn = Vector2(0, 0)
 
 	# Check for guild World Tree
 	if WorldTreeManager and WorldTreeManager.has_method("get_tree_by_guild"):

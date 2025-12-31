@@ -105,7 +105,7 @@ const LAUNCHER_SIZE = Vector2i(1280, 720)
 @onready var server_select_back_button = $ServerSelectPanel/VBoxContainer/ServerSelectBackButton
 # Known servers configuration
 const KNOWN_SERVERS = {
-	"Production (Ashbane)": "167.99.55.245",
+	"Production (Ashbane)": "104.131.181.120",
 	"LAN (Local Network)": "192.168.28.211",
 }
 

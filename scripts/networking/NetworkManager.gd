@@ -17,7 +17,7 @@ signal register_success()
 signal register_failed(error: String)
 signal authentication_required()  # Emitted when client connects and needs to auth
 
-const DEFAULT_PORT = 7000
+const DEFAULT_PORT = 7777
 const MAX_PLAYERS = 50  # Target for 3-chunk playtest (single instance)
 
 # Version for client/server compatibility checking

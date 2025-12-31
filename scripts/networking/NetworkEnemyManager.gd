@@ -60,6 +60,9 @@ const MAX_TIMEOUT_MS: int = 60000  # Max timeout (60 seconds)
 var tutorial_dummy_hits: Dictionary = {}  # Dictionary[int, int] - peer_id -> hit_count
 const TUTORIAL_FORCE_CRIT_HITS: int = 5  # Force crit after this many hits on dummy during tutorial
 
+# Dead player tracking (server-side) - enemies stop attacking dead players
+var dead_players: Dictionary = {}  # Dictionary[int, bool] - peer_id -> is_dead
+
 # Valid item rarities and types for validation
 const VALID_RARITIES: Array = ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
 const VALID_ITEM_TYPES: Array = ["weapon", "armor", "consumable", "material", "bone", "key_item", "misc"]
@@ -1446,6 +1449,64 @@ func _client_take_damage(damage: float) -> void:
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 	if player and player.has_method("take_damage"):
 		player.take_damage(damage)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PLAYER DEATH TRACKING (Server-side)
+# Enemies check this to stop attacking dead players
+# ═══════════════════════════════════════════════════════════════════════════
+
+@rpc("any_peer", "reliable")
+func notify_player_death() -> void:
+	"""Client notifies server that they died. Server tracks this so enemies disengage."""
+	if not multiplayer.is_server():
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	if peer_id == 0:
+		peer_id = 1  # Server's peer ID
+
+	dead_players[peer_id] = true
+	LogManager.info("Player %d marked as dead (enemies will disengage)" % peer_id, "network")
+
+@rpc("any_peer", "reliable")
+func notify_player_respawn() -> void:
+	"""Client notifies server that they respawned. Enemies can target them again."""
+	if not multiplayer.is_server():
+		return
+
+	var peer_id = multiplayer.get_remote_sender_id()
+	if peer_id == 0:
+		peer_id = 1  # Server's peer ID
+
+	dead_players.erase(peer_id)
+	LogManager.info("Player %d respawned (enemies can target again)" % peer_id, "network")
+
+func is_player_dead(peer_id: int) -> bool:
+	"""Check if a player is dead (server-side tracking). Used by EnemyAI."""
+	return dead_players.get(peer_id, false)
+
+func get_player_peer_id(player_node: Node) -> int:
+	"""Get the peer ID for a player node."""
+	if not player_node:
+		return -1
+
+	# Check multiplayer authority
+	if player_node.has_method("get_multiplayer_authority"):
+		return player_node.get_multiplayer_authority()
+
+	# Check meta
+	if player_node.has_meta("peer_id"):
+		return player_node.get_meta("peer_id")
+
+	# Fallback: search connected players
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if network_manager and "connected_players" in network_manager:
+		for peer_id in network_manager.connected_players:
+			var info = network_manager.connected_players[peer_id]
+			if info.get("node") == player_node:
+				return peer_id
+
+	return -1
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CRIT WINDOW RESULT REPORTING (Client-Predicted System)

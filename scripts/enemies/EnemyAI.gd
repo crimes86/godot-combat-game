@@ -237,7 +237,7 @@ func _ready() -> void:
 			var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
 			var has_nearby_player = false
 			for p in players:
-				if is_instance_valid(p) and not p.get("is_dead"):
+				if is_instance_valid(p) and not _is_player_dead(p):
 					var dist = enemy.global_position.distance_to(p.global_position)
 					if dist <= SLEEP_DISTANCE:
 						has_nearby_player = true
@@ -271,6 +271,20 @@ func _refresh_caches() -> void:
 	cached_players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
 	cached_enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)
 
+func _is_player_dead(p: Node) -> bool:
+	"""Check if a player is dead using server-side tracking (multiplayer) or local flag."""
+	if not p or not is_instance_valid(p):
+		return true  # Treat invalid players as dead
+
+	# In multiplayer, use server-side death tracking (NetworkEnemyManager)
+	if multiplayer.has_multiplayer_peer() and _network_enemy_mgr:
+		var peer_id = _network_enemy_mgr.get_player_peer_id(p)
+		if peer_id > 0:
+			return _network_enemy_mgr.is_player_dead(peer_id)
+
+	# Fallback: check local is_dead flag
+	return p.get("is_dead") == true
+
 func _physics_process(delta: float) -> void:
 	if not enemy or not is_instance_valid(enemy):
 		return
@@ -301,7 +315,7 @@ func _physics_process(delta: float) -> void:
 		var should_wake = false
 		var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
 		for p in players:
-			if is_instance_valid(p) and not p.get("is_dead"):
+			if is_instance_valid(p) and not _is_player_dead(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist <= WAKE_DISTANCE:
 					should_wake = true
@@ -342,17 +356,17 @@ func _physics_process(delta: float) -> void:
 
 	# Cache player reference (look up once, reuse)
 	# Also invalidate cache if player is dead - don't keep targeting dead players
-	if not cached_player or not is_instance_valid(cached_player) or cached_player.get("is_dead"):
+	if not cached_player or not is_instance_valid(cached_player) or _is_player_dead(cached_player):
 		cached_player = null
 		# Find first ALIVE player
 		for p in cached_players:
-			if is_instance_valid(p) and not p.get("is_dead"):
+			if is_instance_valid(p) and not _is_player_dead(p):
 				cached_player = p
 				break
 		# Fallback to group search if cache is stale
 		if not cached_player:
 			var first_player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-			if first_player and not first_player.get("is_dead"):
+			if first_player and not _is_player_dead(first_player):
 				cached_player = first_player
 		player = cached_player
 
@@ -489,7 +503,7 @@ func process_patrolling(delta: float) -> void:
 	if is_server_mode and not is_campfire_skeleton:
 		var nearest_player_dist = INF
 		for p in cached_players:
-			if is_instance_valid(p) and not p.get("is_dead"):
+			if is_instance_valid(p) and not _is_player_dead(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_player_dist:
 					nearest_player_dist = dist
@@ -509,7 +523,7 @@ func process_patrolling(delta: float) -> void:
 
 	# If player attacked us, enter combat (but not if they're dead)
 	if is_in_combat and player:
-		if player.get("is_dead"):
+		if _is_player_dead(player):
 			# Player died while we were in combat - disengage
 			disengage()
 			return
@@ -521,14 +535,14 @@ func process_patrolling(delta: float) -> void:
 	if multiplayer.has_multiplayer_peer():
 		var nearest_distance: float = INF
 		for p in cached_players:
-			if is_instance_valid(p) and not p.get("is_dead"):
+			if is_instance_valid(p) and not _is_player_dead(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_distance:
 					nearest_distance = dist
 					aggro_target = p
 
 	# Check for player in aggro range (auto-aggro) - but only if not on leash cooldown and player is alive
-	if aggro_target and is_instance_valid(aggro_target) and not aggro_target.get("is_dead") and leash_cooldown_timer <= 0:
+	if aggro_target and is_instance_valid(aggro_target) and not _is_player_dead(aggro_target) and leash_cooldown_timer <= 0:
 		var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
 		if distance_to_player <= aggro_range:
 			# AGGRO!
@@ -718,7 +732,7 @@ func process_combat(delta: float) -> void:
 		var nearest_player: CharacterBody2D = null
 		var nearest_distance: float = INF
 		for p in cached_players:
-			if is_instance_valid(p) and not p.get("is_dead"):
+			if is_instance_valid(p) and not _is_player_dead(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_distance:
 					nearest_distance = dist
@@ -730,7 +744,7 @@ func process_combat(delta: float) -> void:
 		return
 
 	# Disengage if target player is dead - don't camp the corpse!
-	if player.get("is_dead"):
+	if _is_player_dead(player):
 		disengage()
 		return
 
@@ -821,7 +835,7 @@ func process_attacking(delta: float) -> void:
 		var nearest_player: CharacterBody2D = null
 		var nearest_distance: float = INF
 		for p in cached_players:
-			if is_instance_valid(p) and not p.get("is_dead"):
+			if is_instance_valid(p) and not _is_player_dead(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_distance:
 					nearest_distance = dist
@@ -833,7 +847,7 @@ func process_attacking(delta: float) -> void:
 		return
 
 	# Disengage if target player is dead - don't camp the corpse!
-	if player.get("is_dead"):
+	if _is_player_dead(player):
 		disengage()
 		return
 
@@ -974,14 +988,14 @@ func process_campfire_attracted(delta: float) -> void:
 	if multiplayer.has_multiplayer_peer():
 		var nearest_distance: float = INF
 		for p in cached_players:
-			if is_instance_valid(p) and not p.get("is_dead"):
+			if is_instance_valid(p) and not _is_player_dead(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_distance:
 					nearest_distance = dist
 					aggro_target = p
 
 	# Check for player in aggro range (auto-aggro) - campfire skeletons still aggro, but not on dead players
-	if aggro_target and is_instance_valid(aggro_target) and not aggro_target.get("is_dead") and leash_cooldown_timer <= 0:
+	if aggro_target and is_instance_valid(aggro_target) and not _is_player_dead(aggro_target) and leash_cooldown_timer <= 0:
 		var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
 		if distance_to_player <= aggro_range:
 			player = aggro_target  # Update player reference
@@ -1045,13 +1059,13 @@ func process_returning(delta: float) -> void:
 		if multiplayer.has_multiplayer_peer():
 			var nearest_distance: float = INF
 			for p in cached_players:
-				if is_instance_valid(p) and not p.get("is_dead"):
+				if is_instance_valid(p) and not _is_player_dead(p):
 					var dist = enemy.global_position.distance_to(p.global_position)
 					if dist < nearest_distance:
 						nearest_distance = dist
 						aggro_target = p
 
-		if aggro_target and is_instance_valid(aggro_target) and not aggro_target.get("is_dead"):
+		if aggro_target and is_instance_valid(aggro_target) and not _is_player_dead(aggro_target):
 			var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
 			if distance_to_player <= aggro_range:
 				# Re-aggro! Player is following
@@ -1177,7 +1191,7 @@ func perform_attack() -> void:
 		return
 
 	# Don't deal damage to dead players
-	if player.get("is_dead"):
+	if _is_player_dead(player):
 		is_performing_attack = false
 		disengage()
 		return

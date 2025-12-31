@@ -11,7 +11,7 @@ enum ArmoryState { GUEST, NEW_PLAYER, CASUAL, VETERAN, PENDING_UNLOCKS }
 # SERVER CONFIGURATION - Change this IP to your desktop's LAN IP for playtests
 # ═══════════════════════════════════════════════════════════════════════════════
 const LAN_SERVER_IP = "192.168.28.211"  # ← CHANGE THIS to your desktop's local IP
-const LAN_SERVER_PORT = 7000
+const LAN_SERVER_PORT = 7777
 const PRODUCTION_SERVER_IP = "104.131.181.120"
 
 ## Set to true on the machine that will HOST the server

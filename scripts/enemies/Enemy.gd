@@ -395,6 +395,10 @@ func create_skeleton_animation(sprite_frames: SpriteFrames, skeleton_img: Image,
 
 func create_shadow_layer() -> void:
 	"""Create animated shadow layer for skeleton"""
+	# Skip shadow compositing on clients - saves texture RIDs
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+
 	# Load shadow textures
 	var shadow_walk_path = "res://assets/characters/shadow/standard/walk.png"
 	var shadow_slash_path = "res://assets/characters/shadow/standard/slash.png"
@@ -449,6 +453,11 @@ func create_shadow_layer() -> void:
 
 func create_equipment_layers() -> void:
 	"""Create equipment layers based on enemy level"""
+	# Skip equipment compositing on clients - saves texture RIDs
+	# Each equipment piece creates ~50+ ImageTextures, causing "Element limit reached" crash
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+
 	equipment_sprites.clear()
 
 	var is_guardian = get_meta("is_guardian", false)
