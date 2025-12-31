@@ -12,6 +12,10 @@ const VFX_LAYER_INDEX = 5
 var _effects_container: Node2D = null
 
 func _ready() -> void:
+	# Skip in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		return
+
 	layer = VFX_LAYER_INDEX
 	follow_viewport_enabled = true
 

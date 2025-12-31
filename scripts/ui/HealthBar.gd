@@ -49,16 +49,27 @@ func _ready() -> void:
 
 	# Hide initially to prevent flashing at wrong position
 	visible = false
-	
+
+	# Skip positioning logic in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		ready_to_position = false
+		set_process(false)
+		return
+
 	# Wait for parent to be fully initialized and in scene tree
+	if not is_inside_tree():
+		await ready  # Wait until we're in the tree
+
 	await get_tree().process_frame
-	
+
 	# Additional safety: wait for parent to have valid position
 	if get_parent() and is_instance_valid(get_parent()):
-		# Wait until parent is properly in tree with valid position
-		while not get_parent().is_inside_tree() or get_parent().global_position == Vector2.ZERO:
+		# Wait until parent is properly in tree with valid position (max 60 frames to prevent infinite loop)
+		var wait_frames = 0
+		while wait_frames < 60 and (not get_parent().is_inside_tree() or get_parent().global_position == Vector2.ZERO):
 			await get_tree().process_frame
-	
+			wait_frames += 1
+
 	ready_to_position = true
 
 func create_rectangle_bar() -> void:

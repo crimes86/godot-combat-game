@@ -44,6 +44,12 @@ var stats_row: HBoxContainer
 var equipment_slots: Dictionary = {}
 
 func _ready() -> void:
+	# Skip UI creation in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		set_process_input(false)
+		return
+
 	layer = 118  # Above interaction menu (115), below character sheet (120)
 	_create_ui()
 	# Ensure panel starts hidden

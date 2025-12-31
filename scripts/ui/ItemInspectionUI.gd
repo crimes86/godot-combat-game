@@ -46,6 +46,12 @@ func _is_forged_item(item: Dictionary) -> bool:
 	return false
 
 func _ready() -> void:
+	# Skip UI creation in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		set_process_input(false)
+		return
+
 	layer = 120  # Above most UI
 	add_to_group("item_inspection_ui")
 	_create_ui()

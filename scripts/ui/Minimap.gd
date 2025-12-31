@@ -83,6 +83,11 @@ const FOG_UPDATE_DISTANCE: float = 100.0  # Only update fog when moved this far
 
 
 func _ready() -> void:
+	# Skip UI creation in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		return
+
 	layer = 5  # Same as QuestTrackerUI
 	_create_ui()
 

@@ -42,6 +42,12 @@ var no_listings_label: Label
 var is_visible: bool = false
 
 func _ready() -> void:
+	# Skip UI creation in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		set_process_input(false)
+		return
+
 	layer = 115  # Above chat (110) but below tooltips
 	_create_ui()
 	hide_panel()

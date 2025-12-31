@@ -46,6 +46,11 @@ var tutorial_steps: Array = [
 ]
 
 func _ready() -> void:
+	# Skip UI creation in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		return
+
 	layer = 5  # Above game, below inventory (105) and other menus
 	_create_ui()
 

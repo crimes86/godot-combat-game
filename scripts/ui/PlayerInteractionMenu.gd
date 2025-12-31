@@ -40,6 +40,12 @@ var duel_button: Button
 var cancel_button: Button
 
 func _ready() -> void:
+	# Skip UI creation in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		set_process_input(false)
+		return
+
 	layer = 115  # Above game, below character sheet (120)
 	_create_ui()
 	# Ensure panel starts hidden

@@ -30,6 +30,12 @@ var check_timer: float = 0.0
 const CHECK_INTERVAL: float = 0.05  # Check 20 times per second (performant)
 
 func _ready():
+	# Skip all cursor operations in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		set_process_input(false)
+		return
+
 	create_arrowhead_cursor()
 	create_pressed_cursor()
 	create_sword_cursor()

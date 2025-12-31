@@ -72,6 +72,11 @@ var item_picker_grid: GridContainer = null
 var item_picker_target_slot: PanelContainer = null
 
 func _ready() -> void:
+	# Skip UI creation in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		return
+
 	layer = 120  # Above most UI
 	_create_ui()
 	_create_item_picker_popup()

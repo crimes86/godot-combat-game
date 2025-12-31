@@ -30,6 +30,12 @@ const CATEGORIES = [
 ]
 
 func _ready() -> void:
+	# Skip UI creation in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		set_process_input(false)
+		return
+
 	layer = 100
 	visible = false
 	_create_ui()

@@ -51,6 +51,11 @@ const COLOR_DECLINE_HOVER: Color = Color(0.6, 0.3, 0.3, 1.0)
 const COLOR_BUTTON_TEXT: Color = Color(0.95, 0.95, 0.95, 1.0)
 
 func _ready() -> void:
+	# Skip UI creation in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		return
+
 	layer = 100  # Above game, below menus
 	_create_ui()
 	_create_invite_popup()
