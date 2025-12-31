@@ -17,9 +17,9 @@ class_name ChunkAwareSpawnManager
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Enemies per chunk - reduced for West→East progression with concentrated camps
-## 80 random spawns + camps near lava pools = good density without overwhelming
-const ENEMIES_PER_CHUNK: int = 80
+## Enemies per chunk - reduced from 80 to lower server CPU load
+## 40 spawns + camps near lava pools = manageable density for dedicated server
+const ENEMIES_PER_CHUNK: int = 40
 
 ## Camp system - higher density clusters near environmental features
 const CAMP_SPAWN_RADIUS: float = 150.0  # Enemies spawn within this radius of camp center
