@@ -13,7 +13,7 @@ config_version=5
 [application]
 
 config/name="Dreadland"
-run/main_scene="res://scenes/ui/MainMenu.tscn"
+run/main_scene="res://scenes/server_main.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://assets/branding/ashbane-icon-256.png"
 
@@ -40,6 +40,7 @@ GameInput="*res://scripts/systems/GameInput.gd"
 AshbaneAuth="*res://scripts/systems/AshbaneAuth.gd"
 GameConfig="*res://scripts/systems/GameConfig.gd"
 TelemetryManager="*res://scripts/systems/TelemetryManager.gd"
+AshbaneCosmetics="*res://scripts/systems/AshbaneCosmetics.gd"
 ForgeItemDB="*res://scripts/systems/ForgeItemDB.gd"
 ForgeItemManager="*res://scripts/systems/ForgeItemManager.gd"
 TradingManager="*res://scripts/systems/TradingManager.gd"

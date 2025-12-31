@@ -45,8 +45,9 @@ func _ready() -> void:
 	body_exited.connect(_on_body_exited)
 
 	# Connect mobile interact signal
-	if MobileInput:
-		MobileInput.interact_pressed.connect(_on_mobile_interact)
+	var mobile_input = get_node_or_null("/root/MobileInput")
+	if mobile_input:
+		mobile_input.interact_pressed.connect(_on_mobile_interact)
 
 	print("   Signals connected")
 
@@ -131,8 +132,9 @@ func _connect_quest_signals() -> void:
 		qm.quests_loaded.connect(_update_quest_indicator)
 
 	# Connect to TutorialManager to refresh indicator when tutorial steps change
-	if TutorialManager:
-		TutorialManager.tutorial_step_completed.connect(_on_tutorial_step_changed)
+	var tutorial_mgr = get_node_or_null("/root/TutorialManager")
+	if tutorial_mgr:
+		tutorial_mgr.tutorial_step_completed.connect(_on_tutorial_step_changed)
 
 	# Initial update
 	_update_quest_indicator()
@@ -164,8 +166,9 @@ func _update_quest_indicator() -> void:
 	# Check for available quests
 	if qm.has_available_quests(giver):
 		# During tutorial, only show ! when it's the VISIT_BLACKSMITH step
-		if TutorialManager and TutorialManager.is_tutorial_active():
-			var tutorial_step = TutorialManager.current_step
+		var tutorial_mgr = get_node_or_null("/root/TutorialManager")
+		if tutorial_mgr and tutorial_mgr.is_tutorial_active():
+			var tutorial_step = tutorial_mgr.current_step
 			# TutorialStep.VISIT_BLACKSMITH = 6
 			if tutorial_step < 6:
 				# Tutorial is active but not yet at blacksmith step - hide indicator
@@ -644,8 +647,9 @@ func _on_first_interaction() -> void:
 		qm.on_npc_interaction(vendor_name.to_lower())
 
 	# Tutorial: notify TutorialManager of blacksmith visit (every time, not just first)
-	if TutorialManager and TutorialManager.is_tutorial_active():
-		TutorialManager.on_blacksmith_visited()
+	var tutorial_mgr = get_node_or_null("/root/TutorialManager")
+	if tutorial_mgr and tutorial_mgr.is_tutorial_active():
+		tutorial_mgr.on_blacksmith_visited()
 
 	if has_talked_to_player:
 		return

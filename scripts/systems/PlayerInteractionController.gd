@@ -33,8 +33,18 @@ var _distance_check_timer: float = 0.0
 var prompt_layer: CanvasLayer = null
 
 func _ready() -> void:
+	# Skip UI creation on dedicated server
+	if _is_dedicated_server():
+		print("PlayerInteractionController initialized (server mode - UI disabled)")
+		set_process(false)  # Disable processing on server
+		return
 	print("PlayerInteractionController initialized")
 	_create_prompt_ui()
+
+func _is_dedicated_server() -> bool:
+	"""Check if running as dedicated server"""
+	var args = OS.get_cmdline_user_args()
+	return "--server" in args
 
 func _process(delta: float) -> void:
 	# Don't process if game is paused or player is in UI

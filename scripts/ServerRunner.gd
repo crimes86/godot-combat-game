@@ -93,9 +93,8 @@ func _start_dedicated_server(args: Array):
 		# Start CLI input thread
 		_start_cli_thread()
 
-		# Skip MainMenu, go straight to game world
-		await get_tree().process_frame
-		get_tree().change_scene_to_file("res://main.tscn")
+		# Server uses server_main.tscn as main scene (set in project.server.godot)
+		# No need to change scenes - GameWorld loads directly
 	else:
 		push_error("❌ Failed to start server on port %d" % port)
 		get_tree().quit(1)

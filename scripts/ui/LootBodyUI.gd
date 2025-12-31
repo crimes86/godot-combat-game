@@ -294,8 +294,9 @@ func create_loot_slot(item: Dictionary, source_corpse) -> Control:
 	center.add_child(icon)
 
 	# Try to get icon from ItemIconGenerator
-	if ItemIconGenerator:
-		var icon_texture = ItemIconGenerator.get_item_icon(item)
+	var icon_gen = get_node_or_null("/root/ItemIconGenerator")
+	if icon_gen:
+		var icon_texture = icon_gen.get_item_icon(item)
 		if icon_texture:
 			icon.texture = icon_texture
 
@@ -496,8 +497,9 @@ func create_stacked_loot_slot(base_item: Dictionary, total_qty: int, items: Arra
 
 	# Try to get item icon
 	var icon_texture: Texture2D = null
-	if ItemIconGenerator:
-		icon_texture = ItemIconGenerator.get_item_icon(base_item)
+	var icon_gen = get_node_or_null("/root/ItemIconGenerator")
+	if icon_gen:
+		icon_texture = icon_gen.get_item_icon(base_item)
 
 	if icon_texture:
 		var icon_rect = TextureRect.new()

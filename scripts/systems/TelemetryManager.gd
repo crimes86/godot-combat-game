@@ -71,18 +71,26 @@ var _total_dropped: int = 0
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _ready() -> void:
+	# Skip telemetry on dedicated server (no need for client-side logging)
+	if _is_dedicated_server():
+		enabled = false
+		print("[TelemetryManager] Disabled on dedicated server")
+		return
+
 	# Wait a frame to ensure LogManager and AshbaneAuth are ready
+	if not is_inside_tree():
+		push_warning("[TelemetryManager] Not in tree, skipping initialization")
+		return
 	await get_tree().process_frame
 
 	_setup_timer()
 	_setup_http()
 	_connect_to_log_manager()
 
-	# Auto-disable in editor to avoid spamming backend during development
-	if Engine.is_editor_hint():
-		enabled = false
-
-	LogManager.info("TelemetryManager initialized (enabled: %s)" % enabled, "telemetry")
+func _is_dedicated_server() -> bool:
+	"""Check if running as dedicated server"""
+	var args = OS.get_cmdline_user_args()
+	return "--server" in args
 
 func _exit_tree() -> void:
 	# Try to flush remaining logs before exit

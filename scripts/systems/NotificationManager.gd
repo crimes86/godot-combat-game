@@ -18,6 +18,11 @@ var is_processing_queue: bool = false
 const STAGGER_DELAY: float = 0.12  # Delay between each notification
 
 func _ready() -> void:
+	# Skip UI creation on dedicated server (headless mode)
+	if _is_dedicated_server():
+		print("✅ NotificationManager initialized (server mode - UI disabled)")
+		return
+
 	# Create a CanvasLayer to display notifications on top of everything
 	var canvas_layer = CanvasLayer.new()
 	canvas_layer.name = "NotificationCanvas"
@@ -42,6 +47,11 @@ func _ready() -> void:
 	canvas_layer.add_child(notification_container)
 
 	print("✅ NotificationManager initialized")
+
+func _is_dedicated_server() -> bool:
+	"""Check if running as dedicated server"""
+	var args = OS.get_cmdline_user_args()
+	return "--server" in args
 
 ## Show an item added notification
 ## rarity: "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"

@@ -181,7 +181,17 @@ var music_muted: bool = false
 # Volume control (in dB, 0 = full volume, -80 = silent)
 var sfx_volume_db: float = 0.0  # SFX volume offset applied to all sound effects
 
+# Server mode flag - disables all audio operations
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running as dedicated server
+	var args = OS.get_cmdline_user_args()
+	if "--server" in args:
+		_is_server_mode = true
+		print("✅ Sound system ready! (server mode - audio disabled)")
+		return
+
 	# Create audio buses if they don't exist
 	_setup_audio_buses()
 
@@ -864,7 +874,7 @@ func _generate_all_sounds() -> void:
 
 ## Play a sound at a specific position in the world
 func play_sound(sound_type: SoundType, global_pos: Vector2 = Vector2.ZERO, volume_db: float = 0.0) -> void:
-	if sfx_muted:
+	if _is_server_mode or sfx_muted:
 		return
 	if not sound_cache.has(sound_type):
 		push_error("Sound type not found: ", sound_type)
@@ -882,7 +892,7 @@ func play_sound(sound_type: SoundType, global_pos: Vector2 = Vector2.ZERO, volum
 
 ## Play a sound without 2D positioning (UI sounds, etc)
 func play_sound_2d(sound_type: SoundType, volume_db: float = 0.0) -> void:
-	if sfx_muted:
+	if _is_server_mode or sfx_muted:
 		return
 	if not sound_cache.has(sound_type):
 		push_error("Sound type not found: ", sound_type)
@@ -2100,6 +2110,8 @@ func _pack_samples(samples: PackedVector2Array) -> PackedByteArray:
 
 ## Start playing the game music playlist
 func play_game_music(volume_db: float = -15.0) -> void:
+	if _is_server_mode:
+		return
 	if music_tracks.is_empty():
 		push_warning("No music tracks loaded!")
 		return
@@ -2177,6 +2189,8 @@ func is_game_music_playing() -> bool:
 
 ## Start playing menu music (persists across MainMenu and Armory scenes)
 func play_menu_music(volume_db: float = -10.0) -> void:
+	if _is_server_mode:
+		return
 	if not menu_music:
 		push_warning("Menu music not loaded!")
 		return
