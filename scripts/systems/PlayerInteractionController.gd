@@ -306,11 +306,12 @@ func _hide_prompt() -> void:
 
 func _show_interaction_menu() -> void:
 	"""Show the Inspect/Trade/Duel menu"""
-	if not PlayerInteractionMenu:
-		push_error("PlayerInteractionMenu autoload not found")
+	var interaction_menu = get_node_or_null("/root/PlayerInteractionMenu")
+	if not interaction_menu:
+		# Server build doesn't have this UI autoload - just skip
 		return
 
-	PlayerInteractionMenu.show_menu(closest_player_id, closest_player_name, closest_player_node)
+	interaction_menu.show_menu(closest_player_id, closest_player_name, closest_player_node)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # HELPERS
@@ -332,12 +333,14 @@ func _get_player_name(peer_id: int) -> String:
 
 func _is_player_busy() -> bool:
 	"""Check if player is in a UI or state that blocks interaction"""
-	# Check trade/duel states (autoloads)
-	if TradeWindowUI and TradeWindowUI.is_trading:
+	# Check trade/duel states (autoloads) - use get_node_or_null for server build compatibility
+	var trade_window = get_node_or_null("/root/TradeWindowUI")
+	if trade_window and trade_window.is_trading:
 		return true
 	if DuelManager and DuelManager.is_dueling():
 		return true
-	if PlayerInteractionMenu and PlayerInteractionMenu.is_visible:
+	var interaction_menu = get_node_or_null("/root/PlayerInteractionMenu")
+	if interaction_menu and interaction_menu.is_visible:
 		return true
 
 	# Check scene-based UIs via tree

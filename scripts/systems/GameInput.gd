@@ -9,15 +9,18 @@ signal attack_ended()
 # Cached state
 var _is_mobile: bool = false
 var _player: Node2D = null  # Reference to local player for position calculations
+var _mobile_input: Node = null  # Cached reference to MobileInput autoload (may be null in server builds)
 
 
 func _ready() -> void:
+	# Cache MobileInput reference (may not exist in server builds)
+	_mobile_input = get_node_or_null("/root/MobileInput")
 	_update_platform_state()
 
 
 func _update_platform_state() -> void:
 	"""Update cached platform state."""
-	_is_mobile = MobileInput and MobileInput.is_mobile_platform()
+	_is_mobile = _mobile_input and _mobile_input.is_mobile_platform()
 
 
 func set_player(player: Node2D) -> void:
@@ -37,8 +40,8 @@ func is_mobile() -> bool:
 func get_movement() -> Vector2:
 	"""Get movement input as a normalized Vector2.
 	Works on both desktop (WASD) and mobile (virtual joystick)."""
-	if _is_mobile:
-		return MobileInput.get_left_stick()
+	if _is_mobile and _mobile_input:
+		return _mobile_input.get_left_stick()
 	else:
 		return Input.get_vector("move_left", "move_right", "move_up", "move_down")
 
@@ -50,8 +53,8 @@ func get_movement() -> Vector2:
 func get_aim_position() -> Vector2:
 	"""Get the current aim position in world coordinates.
 	Desktop: mouse position. Mobile: touch position (or last known)."""
-	if _is_mobile and MobileInput.is_aim_touch_active():
-		return MobileInput.get_aim_touch_position()
+	if _is_mobile and _mobile_input and _mobile_input.is_aim_touch_active():
+		return _mobile_input.get_aim_touch_position()
 	elif _player and is_instance_valid(_player):
 		return _player.get_global_mouse_position()
 	else:
@@ -76,8 +79,8 @@ func get_aim_direction() -> Vector2:
 func is_attack_held() -> bool:
 	"""Check if attack input is being held.
 	Desktop: left mouse button. Mobile: touch in aim zone."""
-	if _is_mobile:
-		return MobileInput.is_aim_touch_active()
+	if _is_mobile and _mobile_input:
+		return _mobile_input.is_aim_touch_active()
 	else:
 		return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 
@@ -86,8 +89,8 @@ func is_aim_active() -> bool:
 	"""Check if there's active aim input (for updating visualizers).
 	On desktop this is always true (mouse always exists).
 	On mobile, only true when touching aim zone."""
-	if _is_mobile:
-		return MobileInput.is_aim_touch_active()
+	if _is_mobile and _mobile_input:
+		return _mobile_input.is_aim_touch_active()
 	else:
 		return true  # Mouse is always "active" on desktop
 
@@ -109,8 +112,8 @@ func is_dash_pressed() -> bool:
 func is_interact_just_pressed() -> bool:
 	"""Check if interact input was just pressed.
 	Desktop: F key. Mobile: interact button."""
-	if _is_mobile and MobileInput:
-		return MobileInput.is_interact_just_pressed()
+	if _is_mobile and _mobile_input:
+		return _mobile_input.is_interact_just_pressed()
 	else:
 		return Input.is_physical_key_pressed(KEY_F)
 
@@ -121,16 +124,16 @@ func is_interact_just_pressed() -> bool:
 
 func is_pinching() -> bool:
 	"""Check if a pinch gesture is active (mobile only)."""
-	if _is_mobile and MobileInput:
-		return MobileInput.is_pinching()
+	if _is_mobile and _mobile_input:
+		return _mobile_input.is_pinching()
 	return false
 
 
 func get_pinch_zoom_delta() -> float:
 	"""Get zoom delta from pinch gesture.
 	Positive = zoom in (spread fingers), Negative = zoom out (pinch fingers)."""
-	if _is_mobile and MobileInput:
-		return MobileInput.get_zoom_delta()
+	if _is_mobile and _mobile_input:
+		return _mobile_input.get_zoom_delta()
 	return 0.0
 
 
@@ -140,15 +143,15 @@ func get_pinch_zoom_delta() -> float:
 
 func enable_mobile_mode() -> void:
 	"""Enable mobile mode for testing."""
-	if MobileInput:
-		MobileInput.enable_for_testing()
+	if _mobile_input:
+		_mobile_input.enable_for_testing()
 	_update_platform_state()
 
 
 func disable_mobile_mode() -> void:
 	"""Disable mobile mode testing."""
-	if MobileInput:
-		MobileInput.disable_for_testing()
+	if _mobile_input:
+		_mobile_input.disable_for_testing()
 	_update_platform_state()
 
 

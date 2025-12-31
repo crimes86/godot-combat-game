@@ -195,36 +195,45 @@ func close_connection():
 
 func _hide_game_ui():
 	"""Hide all game UI autoloads when disconnecting"""
+	# Use get_node_or_null for autoloads that may not exist in server builds
+	var group_ui = get_node_or_null("/root/GroupUI")
+	var quest_tracker = get_node_or_null("/root/QuestTrackerUI")
+	var minimap = get_node_or_null("/root/Minimap")
+	var bug_report = get_node_or_null("/root/BugReportUI")
+	var account_admin = get_node_or_null("/root/AccountAdmin")
+	var tutorial_mgr = get_node_or_null("/root/TutorialManager")
+	var cursor_mgr = get_node_or_null("/root/CursorManager")
+
 	# Hide GroupUI (CanvasLayer autoload) - also hides invite popup
-	if GroupUI:
-		GroupUI.visible = false
-		GroupUI._hide_popup()  # Hide invite popup too
+	if group_ui:
+		group_ui.visible = false
+		group_ui._hide_popup()  # Hide invite popup too
 	# Hide QuestTrackerUI (CanvasLayer autoload)
-	if QuestTrackerUI:
-		QuestTrackerUI.visible = false
+	if quest_tracker:
+		quest_tracker.visible = false
 	# Hide Minimap (CanvasLayer autoload)
-	if Minimap:
-		Minimap.hide_minimap()
+	if minimap:
+		minimap.hide_minimap()
 	# Hide BugReportUI (CanvasLayer autoload)
-	if BugReportUI:
-		BugReportUI.visible = false
+	if bug_report:
+		bug_report.visible = false
 	# Hide AccountAdmin (CanvasLayer autoload)
-	if AccountAdmin:
-		AccountAdmin.visible = false
+	if account_admin:
+		account_admin.visible = false
 	# Hide NotificationManager canvas layer (Node autoload with CanvasLayer child)
 	if NotificationManager:
 		var notif_canvas = NotificationManager.get_node_or_null("NotificationCanvas")
 		if notif_canvas:
 			notif_canvas.visible = false
 	# Hide TutorialManager UI elements (Node autoload with CanvasLayer children)
-	if TutorialManager:
-		if TutorialManager.get("tutorial_ui") and TutorialManager.tutorial_ui:
-			TutorialManager.tutorial_ui.visible = false
-		if TutorialManager.get("ui_arrow_canvas") and TutorialManager.ui_arrow_canvas:
-			TutorialManager.ui_arrow_canvas.visible = false
+	if tutorial_mgr:
+		if tutorial_mgr.get("tutorial_ui") and tutorial_mgr.tutorial_ui:
+			tutorial_mgr.tutorial_ui.visible = false
+		if tutorial_mgr.get("ui_arrow_canvas") and tutorial_mgr.ui_arrow_canvas:
+			tutorial_mgr.ui_arrow_canvas.visible = false
 	# Hide CursorManager UI (may have custom cursor visible)
-	if CursorManager and CursorManager.has_method("reset_cursor"):
-		CursorManager.reset_cursor()
+	if cursor_mgr and cursor_mgr.has_method("reset_cursor"):
+		cursor_mgr.reset_cursor()
 
 # Called when a player connects (server only)
 func _on_player_connected(id: int):

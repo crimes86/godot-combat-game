@@ -4195,11 +4195,12 @@ func _apply_saved_data_to_player(username: String, player_id: int) -> void:
 			print("📚 [Tutorial] Starting tutorial in 1 second...")
 			# Small delay to let player fully load
 			await get_tree().create_timer(1.0).timeout
-			print("📚 [Tutorial] Timer done, TutorialManager exists: %s, player valid: %s" % [TutorialManager != null, is_instance_valid(player)])
-			if TutorialManager and is_instance_valid(player):
+			var tutorial_mgr = get_node_or_null("/root/TutorialManager")
+			print("📚 [Tutorial] Timer done, TutorialManager exists: %s, player valid: %s" % [tutorial_mgr != null, is_instance_valid(player)])
+			if tutorial_mgr and is_instance_valid(player):
 				print("📚 [Tutorial] Calling start_tutorial()")
-				TutorialManager.start_tutorial(player)
-				TutorialManager.tutorial_completed.connect(func():
+				tutorial_mgr.start_tutorial(player)
+				tutorial_mgr.tutorial_completed.connect(func():
 					DatabaseManager.set_tutorial_completed(username)
 				, CONNECT_ONE_SHOT)
 			else:
@@ -4219,9 +4220,10 @@ func _start_guest_tutorial(player_id: int) -> void:
 	print("📚 [Tutorial] Starting guest tutorial in 1 second...")
 	await get_tree().create_timer(1.0).timeout
 
-	if TutorialManager and is_instance_valid(player):
+	var tutorial_mgr = get_node_or_null("/root/TutorialManager")
+	if tutorial_mgr and is_instance_valid(player):
 		print("📚 [Tutorial] Calling start_tutorial() for guest")
-		TutorialManager.start_tutorial(player)
+		tutorial_mgr.start_tutorial(player)
 	else:
 		print("📚 [Tutorial] ERROR - TutorialManager or player invalid for guest!")
 
@@ -4392,9 +4394,8 @@ func _apply_ashbane_cosmetics(player: Node) -> void:
 		"total_achievements": AshbaneAuth.total_achievements
 	}
 
-	var cosmetics = AshbaneCosmetics.calculate_cosmetics(profile)
-
-	# Apply cosmetics to the player (instant for now, transformation later)
-	AshbaneCosmetics.apply_to_character(player, cosmetics, true)
-
-	LogManager.info("Applied Ashbane cosmetics: %s tier" % cosmetics.get("tier", "unknown"), "ashbane")
+	if AshbaneCosmetics:
+		var cosmetics = AshbaneCosmetics.calculate_cosmetics(profile)
+		# Apply cosmetics to the player (instant for now, transformation later)
+		AshbaneCosmetics.apply_to_character(player, cosmetics, true)
+		LogManager.info("Applied Ashbane cosmetics: %s tier" % cosmetics.get("tier", "unknown"), "ashbane")

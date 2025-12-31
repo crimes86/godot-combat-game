@@ -615,9 +615,10 @@ func _ready() -> void:
 
 		# Create tutorial blackout if in tutorial and connect to updates
 		call_deferred("update_tutorial_blackout")
-		if TutorialManager:
-			TutorialManager.tutorial_step_completed.connect(_on_tutorial_step_for_blackout)
-			TutorialManager.tutorial_completed.connect(_on_tutorial_completed_for_blackout)
+		var _tutorial_mgr = get_node_or_null("/root/TutorialManager")
+		if _tutorial_mgr:
+			_tutorial_mgr.tutorial_step_completed.connect(_on_tutorial_step_for_blackout)
+			_tutorial_mgr.tutorial_completed.connect(_on_tutorial_completed_for_blackout)
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent crash on exit
@@ -920,10 +921,11 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 	# Tutorial boundary - restrict player to safe zone until tutorial complete
-	if TutorialManager and TutorialManager.is_tutorial_active():
-		var tutorial_step = TutorialManager.current_step
+	var _tutorial_mgr = get_node_or_null("/root/TutorialManager")
+	if _tutorial_mgr and _tutorial_mgr.is_tutorial_active():
+		var tutorial_step = _tutorial_mgr.current_step
 		# During early tutorial steps, keep player near campfire/dummy/blacksmith
-		if tutorial_step < TutorialManager.TutorialStep.KILL_SKELETON:
+		if tutorial_step < _tutorial_mgr.TutorialStep.KILL_SKELETON:
 			var campfire_pos = Vector2(-6000, 0)  # West side of chunk -1 (actual campfire location)
 			var tutorial_radius = 500.0  # Enough for campfire, dummy, and blacksmith
 			var distance_from_center = global_position.distance_to(campfire_pos)
@@ -5580,9 +5582,10 @@ func update_tutorial_blackout() -> void:
 			remove_tutorial_blackout()
 		return
 
-	var tutorial_active = TutorialManager.is_tutorial_active()
-	var current_step = TutorialManager.current_step
-	var should_show_blackout = tutorial_active and current_step < TutorialManager.TutorialStep.KILL_SKELETON
+	var _tut_mgr = get_node_or_null("/root/TutorialManager")
+	var tutorial_active = _tut_mgr.is_tutorial_active() if _tut_mgr else false
+	var current_step = _tut_mgr.current_step if _tut_mgr else 0
+	var should_show_blackout = _tut_mgr and tutorial_active and current_step < _tut_mgr.TutorialStep.KILL_SKELETON
 	print("🌑 [Blackout] tutorial_active=%s, step=%s, should_show=%s" % [tutorial_active, current_step, should_show_blackout])
 
 	if should_show_blackout and not tutorial_blackout:
@@ -5979,7 +5982,8 @@ func _apply_forged_weapon_effects(forged_data: Dictionary) -> void:
 	var applied_to_any = false
 
 	if weapon_sprite:
-		ForgeVisualEffects.apply_effects_to_entity(weapon_sprite, effect_config.effects, modifiers)
+		if ForgeVisualEffects:
+			ForgeVisualEffects.apply_effects_to_entity(weapon_sprite, effect_config.effects, modifiers)
 		# Also apply direct color modulation to the weapon sprite for tint
 		if theme_color != Color.WHITE and theme_color.a > 0:
 			weapon_sprite.modulate = theme_color
@@ -5990,7 +5994,8 @@ func _apply_forged_weapon_effects(forged_data: Dictionary) -> void:
 		applied_to_any = true
 
 	if gun_body_sprite:
-		ForgeVisualEffects.apply_effects_to_entity(gun_body_sprite, effect_config.effects, modifiers)
+		if ForgeVisualEffects:
+			ForgeVisualEffects.apply_effects_to_entity(gun_body_sprite, effect_config.effects, modifiers)
 		# Also apply direct color modulation to gun body for tint
 		if theme_color != Color.WHITE and theme_color.a > 0:
 			gun_body_sprite.modulate = theme_color
@@ -6002,7 +6007,8 @@ func _apply_forged_weapon_effects(forged_data: Dictionary) -> void:
 
 	if not applied_to_any:
 		# Fallback to player if no weapon sprite found
-		ForgeVisualEffects.apply_effects_to_entity(self, effect_config.effects, modifiers)
+		if ForgeVisualEffects:
+			ForgeVisualEffects.apply_effects_to_entity(self, effect_config.effects, modifiers)
 		if DEBUG_FORGED_EQUIP:
 			print("[ForgedEquip] ✓ Visual effects applied to Player (no weapon layers found)")
 
@@ -6012,13 +6018,16 @@ func _clear_forged_weapon_effects() -> void:
 	var weapon_sprite = character_sprite.get_node_or_null("WeaponLayer") if character_sprite else null
 	var gun_body_sprite = character_sprite.get_node_or_null("GunBodyLayer") if character_sprite else null
 	if weapon_sprite:
-		ForgeVisualEffects.clear_effects_from_entity(weapon_sprite)
+		if ForgeVisualEffects:
+			ForgeVisualEffects.clear_effects_from_entity(weapon_sprite)
 		weapon_sprite.modulate = Color.WHITE  # Reset tint
 	if gun_body_sprite:
-		ForgeVisualEffects.clear_effects_from_entity(gun_body_sprite)
+		if ForgeVisualEffects:
+			ForgeVisualEffects.clear_effects_from_entity(gun_body_sprite)
 		gun_body_sprite.modulate = Color.WHITE  # Reset tint
 	# Also clear from player in case effects were applied there previously
-	ForgeVisualEffects.clear_effects_from_entity(self)
+	if ForgeVisualEffects:
+		ForgeVisualEffects.clear_effects_from_entity(self)
 	if DEBUG_FORGED_EQUIP:
 		print("[ForgedEquip] Cleared existing forged weapon effects")
 

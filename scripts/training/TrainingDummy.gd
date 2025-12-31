@@ -6,6 +6,9 @@ class_name TrainingDummy
 ## Displays damage numbers and tracks DPS
 ## Updated: 2025-01-17 - Remote PC sync fix
 
+# Cached autoload reference (may be null in server builds)
+var _tutorial_manager: Node = null
+
 # Network ID for multiplayer sync (same as Enemy.gd)
 var network_id: int = -1
 
@@ -70,6 +73,8 @@ signal weakpoint_destroyed(weakpoint: Node)  # Emitted when a weakpoint is destr
 signal died()  # Note: Dummy never actually dies
 
 func _ready() -> void:
+	# Cache _tutorial_manager reference (may not exist in server builds)
+	_tutorial_manager = get_node_or_null("/root/_tutorial_manager")
 
 	# Add to enemies group so player can target it
 	add_to_group(Constants.GROUP_ENEMIES)
@@ -293,41 +298,41 @@ func create_tutorial_arrow() -> void:
 	outline.default_color = Color(0.0, 0.3, 0.0, 1.0)  # Dark green outline
 	tutorial_arrow.add_child(outline)
 
-	# Connect to TutorialManager signals to show/hide arrow
-	if TutorialManager:
-		TutorialManager.tutorial_step_completed.connect(_on_tutorial_step_changed)
-		TutorialManager.tutorial_completed.connect(hide_tutorial_arrow)
+	# Connect to _tutorial_manager signals to show/hide arrow
+	if _tutorial_manager:
+		_tutorial_manager.tutorial_step_completed.connect(_on_tutorial_step_changed)
+		_tutorial_manager.tutorial_completed.connect(hide_tutorial_arrow)
 		# Check if already in a tutorial step that shows arrow when spawned
-		if TutorialManager.is_tutorial_active():
-			var step = TutorialManager.current_step
-			if step == TutorialManager.TutorialStep.FIND_DUMMY:
+		if _tutorial_manager.is_tutorial_active():
+			var step = _tutorial_manager.current_step
+			if step == _tutorial_manager.TutorialStep.FIND_DUMMY:
 				call_deferred("show_tutorial_arrow_green")
-			elif step == TutorialManager.TutorialStep.ATTACK_DUMMY or step == TutorialManager.TutorialStep.CRIT_WINDOW:
+			elif step == _tutorial_manager.TutorialStep.ATTACK_DUMMY or step == _tutorial_manager.TutorialStep.CRIT_WINDOW:
 				call_deferred("show_tutorial_arrow_red")
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent memory leaks
-	if TutorialManager:
-		if TutorialManager.tutorial_step_completed.is_connected(_on_tutorial_step_changed):
-			TutorialManager.tutorial_step_completed.disconnect(_on_tutorial_step_changed)
-		if TutorialManager.tutorial_completed.is_connected(hide_tutorial_arrow):
-			TutorialManager.tutorial_completed.disconnect(hide_tutorial_arrow)
+	if _tutorial_manager:
+		if _tutorial_manager.tutorial_step_completed.is_connected(_on_tutorial_step_changed):
+			_tutorial_manager.tutorial_step_completed.disconnect(_on_tutorial_step_changed)
+		if _tutorial_manager.tutorial_completed.is_connected(hide_tutorial_arrow):
+			_tutorial_manager.tutorial_completed.disconnect(hide_tutorial_arrow)
 
 func _on_tutorial_step_changed(completed_step: int) -> void:
 	"""Handle tutorial step changes to show/hide arrow"""
-	if not TutorialManager:
+	if not _tutorial_manager:
 		return
 
-	var current_step = TutorialManager.current_step
+	var current_step = _tutorial_manager.current_step
 
 	# Show green arrow during FIND_DUMMY step
-	if current_step == TutorialManager.TutorialStep.FIND_DUMMY:
+	if current_step == _tutorial_manager.TutorialStep.FIND_DUMMY:
 		show_tutorial_arrow_green()
 	# Show red arrow during ATTACK_DUMMY and CRIT_WINDOW steps
-	elif current_step == TutorialManager.TutorialStep.ATTACK_DUMMY or current_step == TutorialManager.TutorialStep.CRIT_WINDOW:
+	elif current_step == _tutorial_manager.TutorialStep.ATTACK_DUMMY or current_step == _tutorial_manager.TutorialStep.CRIT_WINDOW:
 		show_tutorial_arrow_red()
 	# HIT_WEAKPOINT step - arrow will be moved to weakpoint by spawn_weakpoints()
-	elif current_step == TutorialManager.TutorialStep.HIT_WEAKPOINT:
+	elif current_step == _tutorial_manager.TutorialStep.HIT_WEAKPOINT:
 		# Arrow is already pointing at weakpoint, keep it visible
 		pass
 	else:
@@ -492,18 +497,18 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	# Emit signal for player feedback (damage numbers)
 	damage_taken.emit(amount, is_crit)
 
-	# Tutorial: notify TutorialManager of dummy hit
-	if TutorialManager:
+	# Tutorial: notify _tutorial_manager of dummy hit
+	if _tutorial_manager:
 		# Note: keys() index offset by 1 since INACTIVE = -1
-		var step_name = TutorialManager.TutorialStep.keys()[TutorialManager.current_step + 1] if TutorialManager.current_step >= -1 else "UNKNOWN"
-		print("📚 [Dummy] TutorialManager exists, is_tutorial_active: %s, current_step: %s" % [TutorialManager.is_tutorial_active(), step_name])
-		if TutorialManager.is_tutorial_active():
-			TutorialManager.on_dummy_hit(is_crit)
+		var step_name = _tutorial_manager.TutorialStep.keys()[_tutorial_manager.current_step + 1] if _tutorial_manager.current_step >= -1 else "UNKNOWN"
+		print("📚 [Dummy] _tutorial_manager exists, is_tutorial_active: %s, current_step: %s" % [_tutorial_manager.is_tutorial_active(), step_name])
+		if _tutorial_manager.is_tutorial_active():
+			_tutorial_manager.on_dummy_hit(is_crit)
 			# Check if this was a weakpoint hit during tutorial
 			if is_weakpoint_hit:
-				TutorialManager.on_weakpoint_hit()
+				_tutorial_manager.on_weakpoint_hit()
 	else:
-		print("📚 [Dummy] TutorialManager is null!")
+		print("📚 [Dummy] _tutorial_manager is null!")
 
 	# Play sounds for dummy hits (dummy is not managed by NetworkEnemyManager, so always play locally)
 	var sound_manager = get_node_or_null("/root/SoundManager")
@@ -696,9 +701,9 @@ func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 	if in_crit_window and is_instance_valid(self):
 		spawn_weakpoints()
 
-		# Tutorial: notify TutorialManager of crit window opening
-		if TutorialManager and TutorialManager.is_tutorial_active():
-			TutorialManager.on_crit_window_opened()
+		# Tutorial: notify _tutorial_manager of crit window opening
+		if _tutorial_manager and _tutorial_manager.is_tutorial_active():
+			_tutorial_manager.on_crit_window_opened()
 
 	_crit_window_transitioning = false  # Unlock after grow complete
 
@@ -808,7 +813,7 @@ func spawn_weakpoints() -> void:
 	_spawn_weakpoints_internal(chosen_positions)
 
 	# During tutorial, point arrow at first weakpoint
-	if TutorialManager and TutorialManager.is_tutorial_active():
+	if _tutorial_manager and _tutorial_manager.is_tutorial_active():
 		if chosen_positions.size() > 0:
 			point_arrow_at_weakpoint(chosen_positions[0])
 
