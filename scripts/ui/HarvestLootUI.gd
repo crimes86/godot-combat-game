@@ -219,9 +219,10 @@ func create_loot_slot(item: Dictionary, index: int) -> Control:
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(icon)
 
-	# Try to get icon from ItemIconGenerator
-	if ItemIconGenerator:
-		var icon_texture = ItemIconGenerator.get_item_icon(item)
+	# Try to get icon from ItemIconGenerator (may not exist on server)
+	var icon_gen = get_node_or_null("/root/ItemIconGenerator")
+	if icon_gen:
+		var icon_texture = icon_gen.get_item_icon(item)
 		if icon_texture:
 			icon.texture = icon_texture
 

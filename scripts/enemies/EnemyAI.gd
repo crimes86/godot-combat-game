@@ -43,6 +43,7 @@ class_name EnemyAI
 # ═══════════════════════════════════════════════════════════════════════════
 
 enum State {
+	SLEEPING,     # Server-only: no players nearby, minimal processing
 	PATROLLING,   # Default: peaceful wandering
 	COMBAT,       # Engaged: chasing player
 	ATTACKING,    # In range: striking player
@@ -139,6 +140,13 @@ var current_lod: LODLevel = LODLevel.FULL
 var lod_update_timer: float = 0.0
 var lod_update_interval: float = 1.0  # Check LOD once per second
 
+# Sleep system (server-side CPU optimization)
+const SLEEP_DISTANCE: float = 2500.0  # Distance from ALL players to enter sleep
+const WAKE_DISTANCE: float = 2000.0   # Distance to wake up (hysteresis prevents thrashing)
+const SLEEP_CHECK_INTERVAL: float = 1.0  # Only check wake condition once per second
+var sleep_check_timer: float = 0.0
+var is_server_mode: bool = false  # Set to true on dedicated server
+
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
 # ═══════════════════════════════════════════════════════════════════════════
@@ -148,6 +156,9 @@ func _ready() -> void:
 	if not enemy:
 		push_error("EnemyAI must be child of CharacterBody2D!")
 		return
+
+	# Detect if running as dedicated server (--server flag)
+	is_server_mode = "--server" in OS.get_cmdline_user_args()
 
 	# Cache autoload references (safe to do immediately)
 	_sound_manager = get_node_or_null("/root/SoundManager")
@@ -221,9 +232,27 @@ func _ready() -> void:
 			pick_new_patrol_target()
 			change_state(State.PATROLLING)
 	else:
-		# Normal skeleton - start patrolling
-		pick_new_patrol_target()
-		change_state(State.PATROLLING)
+		# Normal skeleton - check if we should start sleeping (server mode, no players)
+		if is_server_mode:
+			var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+			var has_nearby_player = false
+			for p in players:
+				if is_instance_valid(p) and not p.get("is_dead"):
+					var dist = enemy.global_position.distance_to(p.global_position)
+					if dist <= SLEEP_DISTANCE:
+						has_nearby_player = true
+						break
+
+			if not has_nearby_player:
+				# No players nearby - start sleeping to save CPU
+				change_state(State.SLEEPING)
+			else:
+				pick_new_patrol_target()
+				change_state(State.PATROLLING)
+		else:
+			# Client mode - start patrolling normally
+			pick_new_patrol_target()
+			change_state(State.PATROLLING)
 
 	# Mark as initialized - physics can now run
 	_initialized = true
@@ -250,6 +279,37 @@ func _physics_process(delta: float) -> void:
 	if not _initialized:
 		enemy.velocity = Vector2.ZERO
 		return
+
+	# ═══════════════════════════════════════════════════════════════
+	# SLEEP SYSTEM (Server-side CPU optimization)
+	# When no players are nearby, enemies enter SLEEPING state and
+	# only check once per second if they should wake up.
+	# ═══════════════════════════════════════════════════════════════
+	if current_state == State.SLEEPING:
+		sleep_check_timer += delta
+		if sleep_check_timer < SLEEP_CHECK_INTERVAL:
+			# Still sleeping - skip ALL processing
+			return
+
+		sleep_check_timer = 0.0
+
+		# Check if any player is within wake distance
+		var should_wake = false
+		var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+		for p in players:
+			if is_instance_valid(p) and not p.get("is_dead"):
+				var dist = enemy.global_position.distance_to(p.global_position)
+				if dist <= WAKE_DISTANCE:
+					should_wake = true
+					cached_player = p
+					break
+
+		if should_wake:
+			# Wake up and resume patrolling
+			change_state(State.PATROLLING)
+		else:
+			# Stay asleep
+			return
 
 	# FIX: Cap velocity to prevent runaway speeds from collision sliding
 	var max_speed = 150.0
@@ -417,6 +477,25 @@ func _physics_process(delta: float) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func process_patrolling(delta: float) -> void:
+	# ═══════════════════════════════════════════════════════════════
+	# SLEEP CHECK (Server-side optimization)
+	# If on dedicated server and no players are within sleep distance,
+	# enter sleep mode to save CPU.
+	# ═══════════════════════════════════════════════════════════════
+	if is_server_mode and not is_campfire_skeleton:
+		var nearest_player_dist = INF
+		for p in cached_players:
+			if is_instance_valid(p) and not p.get("is_dead"):
+				var dist = enemy.global_position.distance_to(p.global_position)
+				if dist < nearest_player_dist:
+					nearest_player_dist = dist
+
+		# If no players exist or all players are far away, go to sleep
+		if nearest_player_dist > SLEEP_DISTANCE:
+			enemy.velocity = Vector2.ZERO
+			change_state(State.SLEEPING)
+			return
+
 	# Campfire skeletons: track despawn timer even while patrolling
 	if is_campfire_skeleton:
 		campfire_patrol_timer += delta
@@ -1359,6 +1438,7 @@ func get_state_name() -> String:
 
 func get_state_name_for_state(state: State) -> String:
 	match state:
+		State.SLEEPING: return "SLEEPING"
 		State.PATROLLING: return "PATROLLING"
 		State.COMBAT: return "COMBAT"
 		State.ATTACKING: return "ATTACKING"

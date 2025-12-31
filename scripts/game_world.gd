@@ -3651,21 +3651,27 @@ func _create_loot_ui_deferred(corpse, nearby_corpses: Array) -> void:
 func _restore_ui_autoloads():
 	"""Restore UI autoloads that were hidden when returning to main menu"""
 	# These are hidden in NetworkManager._return_to_main_menu()
-	if QuestTrackerUI:
-		QuestTrackerUI.visible = true
-	if GroupUI:
-		GroupUI.visible = true
+	# Use get_node_or_null for server compatibility (UI autoloads may not exist)
+	var quest_tracker = get_node_or_null("/root/QuestTrackerUI")
+	if quest_tracker:
+		quest_tracker.visible = true
+	var group_ui = get_node_or_null("/root/GroupUI")
+	if group_ui:
+		group_ui.visible = true
 		# Note: invite popup visibility is managed internally by GroupUI
-	if BugReportUI:
-		BugReportUI.visible = true
-	if NotificationManager:
-		var notif_canvas = NotificationManager.get_node_or_null("NotificationCanvas")
+	var bug_report = get_node_or_null("/root/BugReportUI")
+	if bug_report:
+		bug_report.visible = true
+	var notif_mgr = get_node_or_null("/root/NotificationManager")
+	if notif_mgr:
+		var notif_canvas = notif_mgr.get_node_or_null("NotificationCanvas")
 		if notif_canvas:
 			notif_canvas.visible = true
 	# Show minimap when entering game world
-	if Minimap:
-		Minimap.set_game_world(self)
-		Minimap.show_minimap()
+	var minimap = get_node_or_null("/root/Minimap")
+	if minimap:
+		minimap.set_game_world(self)
+		minimap.show_minimap()
 
 # ========================
 # MULTIPLAYER FUNCTIONS
@@ -3696,6 +3702,13 @@ func _spawn_initial_players():
 	if OS.is_debug_build():
 		print("🔍 [PLAYER DEBUG] _spawn_initial_players() called, my_id=%d, is_server=%s" % [my_id, multiplayer.is_server()])
 		print("   Current players dict: %s" % str(players.keys()))
+
+	# Dedicated server should NOT spawn a player for itself (it has no local player)
+	# This is critical for enemy AI sleep - server player would keep all enemies awake!
+	if multiplayer.is_server() and "--server" in OS.get_cmdline_user_args():
+		if OS.is_debug_build():
+			print("🔍 [PLAYER DEBUG] Skipping local player spawn on dedicated server")
+		return
 
 	# Check if not already spawned
 	if not players.has(my_id):

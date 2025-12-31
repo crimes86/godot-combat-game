@@ -2,6 +2,6 @@
 
 [ext_resource type="PackedScene" uid="uid://c2ui1a8yb4sjg" path="res://scenes/game_world.tscn" id="1_gameworld"]
 
-[node name="ServerMain" type="Node2D"]
+[node name="main" type="Node2D"]
 
 [node name="GameWorld" parent="." instance=ExtResource("1_gameworld")]

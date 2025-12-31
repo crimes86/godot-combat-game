@@ -49,9 +49,13 @@ func _ready():
 		is_dedicated_server = true
 		server_start_time = Time.get_unix_time_from_system()
 
-		# Cap FPS to reduce CPU usage on dedicated server (30 is plenty for game logic)
+		# CRITICAL: Limit server tick rate to reduce CPU usage in headless mode
+		# 30 physics ticks per second is plenty for server game logic
 		Engine.max_fps = 30
 		Engine.physics_ticks_per_second = 30
+
+		# Enable physics processing so our delay loop runs
+		set_physics_process(true)
 
 		print("═══════════════════════════════════════════════════════")
 		print("   dreadland DEDICATED SERVER")
@@ -387,6 +391,14 @@ func _process(_delta):
 	# Periodic server status (every 60 seconds at 60fps = 3600 frames)
 	if frame % 3600 == 0 and frame > 0:
 		_print_server_status()
+
+func _physics_process(_delta):
+	if not is_dedicated_server:
+		return
+	# CRITICAL: In headless mode, Engine.max_fps doesn't limit the main loop.
+	# Add sleep in physics_process to reduce CPU usage when server is idle.
+	# 15ms delay per physics frame = ~66 physics ticks per second max
+	OS.delay_msec(15)
 
 func _print_server_status() -> void:
 	"""Print current server status to logs."""

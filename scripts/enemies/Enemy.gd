@@ -1576,9 +1576,10 @@ func die() -> void:
 	# Emit died signal - spawner will respawn immediately
 	died.emit()
 
-	# Tutorial: notify TutorialManager of skeleton kill
-	if TutorialManager and TutorialManager.is_tutorial_active():
-		TutorialManager.on_skeleton_killed()
+	# Tutorial: notify TutorialManager of skeleton kill (may not exist on server)
+	var tutorial_mgr = get_node_or_null("/root/TutorialManager")
+	if tutorial_mgr and tutorial_mgr.is_tutorial_active():
+		tutorial_mgr.on_skeleton_killed()
 
 	# Quest: notify QuestManager of enemy kill
 	if QuestManager:

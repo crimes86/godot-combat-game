@@ -273,6 +273,55 @@ result.paste(base_tinted, (0, 0), base_tinted)
 result.paste(wings_tinted, (0, 0), wings_tinted)  # Wings on top
 ```
 
+## Dedicated Server Build
+
+The server uses a separate project configuration (`project.server.godot`) with fewer autoloads (no UI autoloads like TutorialManager, ItemIconGenerator, MobileInput, etc.).
+
+**Building the server:**
+
+The export must use `project.server.godot` instead of `project.godot`. Swap the files during export:
+
+```bash
+cd /opt/ashbane-game/source
+cp project.godot project.godot.bak
+cp project.server.godot project.godot
+godot --headless --export-release "Linux Server" /path/to/ashbane-server.x86_64
+cp project.godot.bak project.godot
+```
+
+**Why this is needed:**
+- `project.server.godot` excludes UI autoloads not needed on headless servers
+- UI scripts reference these autoloads directly and fail to parse without them
+- The export uses whatever `project.godot` exists, so we temporarily swap it
+
+**Server-specific features:**
+- `server_main.tscn` as main scene (GameWorld only, no main menu)
+- AI sleep system: enemies enter SLEEPING state when no players within 2500px
+- Enemies only check for wake-up once per second (saves CPU when idle)
+- Server doesn't spawn a local player (prevents enemies from staying awake)
+
+**Running the server (CPU optimization):**
+```bash
+# IMPORTANT: Use --frame-delay to reduce CPU usage in headless mode
+./ashbane-server.x86_64 --headless --frame-delay 15 -- --server --port 7777 --shard shard-1
+
+# Without --frame-delay, Godot headless mode will use 100% CPU
+# The --frame-delay 15 adds a 15ms delay per frame, limiting to ~66 FPS
+```
+
+**Systemd service:**
+```bash
+systemctl start ashbane-game
+systemctl stop ashbane-game   # Graceful shutdown, saves all player data
+journalctl -u ashbane-game -f  # View logs
+```
+
+**Note:** Even with `--frame-delay`, CPU usage will be higher than expected (~30-80%)
+due to Godot 4 headless mode limitations. For production, consider using OS-level
+process limiting (`cpulimit`) or container resource constraints.
+
+---
+
 ## Forged Item Completion
 
 **Full Process:** `docs/ACHIEVEMENT_ITEM_CREATION_PROCESS.md`
