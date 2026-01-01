@@ -147,6 +147,11 @@ const SLEEP_CHECK_INTERVAL: float = 1.0  # Only check wake condition once per se
 var sleep_check_timer: float = 0.0
 var is_server_mode: bool = false  # Set to true on dedicated server
 
+# AI throttling (server-side CPU optimization)
+# Patrolling enemies only run AI every N frames to reduce CPU load
+const AI_THROTTLE_FRAMES: int = 3  # Process every 3rd frame when patrolling
+var ai_frame_counter: int = 0  # Tracks which frame we're on
+
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
 # ═══════════════════════════════════════════════════════════════════════════
@@ -327,6 +332,18 @@ func _physics_process(delta: float) -> void:
 			change_state(State.PATROLLING)
 		else:
 			# Stay asleep
+			return
+
+	# ═══════════════════════════════════════════════════════════════
+	# AI THROTTLE (Server-side CPU optimization)
+	# Patrolling enemies only process AI every N frames to reduce CPU.
+	# Combat enemies always run at full rate for responsive gameplay.
+	# ═══════════════════════════════════════════════════════════════
+	ai_frame_counter += 1
+	if current_state == State.PATROLLING or current_state == State.RETURNING:
+		if ai_frame_counter % AI_THROTTLE_FRAMES != 0:
+			# Skip this frame for patrolling enemies - just move with existing velocity
+			enemy.move_and_slide()
 			return
 
 	# FIX: Cap velocity to prevent runaway speeds from collision sliding
