@@ -383,13 +383,18 @@ func _process(_delta):
 	if not is_dedicated_server:
 		return
 
+	# CRITICAL: In headless mode, Engine.max_fps doesn't limit the main loop.
+	# Add sleep in _process to reduce CPU usage. This is the main loop throttle.
+	# Combined with physics_process delay, this limits overall server tick rate.
+	OS.delay_msec(30)  # ~33 fps max for main loop
+
 	# Process any CLI commands from stdin
 	_process_cli_commands()
 
 	var frame = Engine.get_process_frames()
 
-	# Periodic server status (every 60 seconds at 60fps = 3600 frames)
-	if frame % 3600 == 0 and frame > 0:
+	# Periodic server status (every 60 seconds at ~30fps = ~1800 frames)
+	if frame % 1800 == 0 and frame > 0:
 		_print_server_status()
 
 func _physics_process(_delta):
