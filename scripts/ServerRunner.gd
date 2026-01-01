@@ -379,22 +379,31 @@ func _graceful_shutdown() -> void:
 	# Exit cleanly
 	get_tree().quit(0)
 
+var _last_frame_time: int = 0
+const TARGET_FRAME_TIME_IDLE: int = 100  # 100ms = 10 fps when no players
+const TARGET_FRAME_TIME_ACTIVE: int = 33  # 33ms = 30 fps with players
+
 func _process(_delta):
 	if not is_dedicated_server:
 		return
 
-	# CRITICAL: In headless mode, Engine.max_fps doesn't limit the main loop.
-	# Delay based on player count - longer delay when idle to save CPU.
+	# CRITICAL: In headless mode, Engine.max_fps doesn't work.
+	# We must manually throttle by sleeping for remaining frame time.
+	var current_time = Time.get_ticks_msec()
+	var elapsed = current_time - _last_frame_time
+
 	var player_count = 0
 	if NetworkManager:
 		player_count = NetworkManager.get_player_count()
 
-	if player_count == 0:
-		# No players - sleep longer to reduce idle CPU usage
-		OS.delay_msec(100)  # ~10 fps when empty
-	else:
-		# Players connected - run at reasonable rate
-		OS.delay_msec(16)  # ~60 fps with players
+	var target_frame_time = TARGET_FRAME_TIME_ACTIVE if player_count > 0 else TARGET_FRAME_TIME_IDLE
+
+	# Sleep for remaining time to hit target frame rate
+	var sleep_time = target_frame_time - elapsed
+	if sleep_time > 0:
+		OS.delay_msec(sleep_time)
+
+	_last_frame_time = Time.get_ticks_msec()
 
 	# Process any CLI commands from stdin
 	_process_cli_commands()
@@ -408,18 +417,8 @@ func _process(_delta):
 func _physics_process(_delta):
 	if not is_dedicated_server:
 		return
-
-	# Delay based on player count - physics needs less frequent updates when empty
-	var player_count = 0
-	if NetworkManager:
-		player_count = NetworkManager.get_player_count()
-
-	if player_count == 0:
-		# No players - minimal physics updates
-		OS.delay_msec(100)  # ~10 physics ticks/sec when empty
-	else:
-		# Players connected - normal physics rate
-		OS.delay_msec(33)  # ~30 physics ticks/sec with players
+	# Physics is already rate-limited by Engine.physics_ticks_per_second
+	# No additional delay needed here
 
 func _print_server_status() -> void:
 	"""Print current server status to logs."""
