@@ -384,27 +384,42 @@ func _process(_delta):
 		return
 
 	# CRITICAL: In headless mode, Engine.max_fps doesn't limit the main loop.
-	# Add sleep in _process to reduce CPU usage. This is the main loop throttle.
-	# Combined with physics_process delay, this limits overall server tick rate.
-	OS.delay_msec(30)  # ~33 fps max for main loop
+	# Delay based on player count - longer delay when idle to save CPU.
+	var player_count = 0
+	if NetworkManager:
+		player_count = NetworkManager.get_player_count()
+
+	if player_count == 0:
+		# No players - sleep longer to reduce idle CPU usage
+		OS.delay_msec(100)  # ~10 fps when empty
+	else:
+		# Players connected - run at reasonable rate
+		OS.delay_msec(16)  # ~60 fps with players
 
 	# Process any CLI commands from stdin
 	_process_cli_commands()
 
 	var frame = Engine.get_process_frames()
 
-	# Periodic server status (every 60 seconds at ~30fps = ~1800 frames)
-	if frame % 1800 == 0 and frame > 0:
+	# Periodic server status (every 60 seconds)
+	if frame % 600 == 0 and frame > 0:
 		_print_server_status()
 
 func _physics_process(_delta):
 	if not is_dedicated_server:
 		return
-	# CRITICAL: In headless mode, Engine.max_fps doesn't limit the main loop.
-	# Add sleep in physics_process to reduce CPU usage when server is idle.
-	# 50ms delay = 20 physics ticks per second max
-	# (Increased from 15ms due to high CPU with 160+ enemies)
-	OS.delay_msec(50)
+
+	# Delay based on player count - physics needs less frequent updates when empty
+	var player_count = 0
+	if NetworkManager:
+		player_count = NetworkManager.get_player_count()
+
+	if player_count == 0:
+		# No players - minimal physics updates
+		OS.delay_msec(100)  # ~10 physics ticks/sec when empty
+	else:
+		# Players connected - normal physics rate
+		OS.delay_msec(33)  # ~30 physics ticks/sec with players
 
 func _print_server_status() -> void:
 	"""Print current server status to logs."""
