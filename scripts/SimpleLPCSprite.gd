@@ -676,9 +676,13 @@ func setup_lpc_sprite(
 			# LPC walk sprites are 9 columns x 4 rows
 			# Calculate tile size dynamically (64px standard, 128px for oversize weapons)
 			var walk_tile_size = int(walk_size.x / 9)
-			# Zeratul warp blade uses a 13-column (832px wide) sheet; force 64px tiles to avoid scrolling
+			# Some weapons use non-standard column counts - force 64px tiles to avoid scrolling
+			# - zeratul_warp_blade: 13-column (832px wide) sheet
+			# - generic staff: 13-column (832px wide) sheet
 			if current_weapon_name == "zeratul_warp_blade":
 				walk_tile_size = 64
+			elif current_weapon_type == "staff" and walk_size.x == 832:
+				walk_tile_size = 64  # Staff uses 832px (13 columns) instead of 576px (9 columns)
 
 			# Get weapon-specific walk and idle FPS
 			var walk_fps = WeaponAnimationDataFactory.get_walk_fps(weapon_type)

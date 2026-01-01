@@ -360,11 +360,15 @@ func play_hurt_stagger() -> void:
 	if is_dying or is_corpse:
 		return
 
-	# Shake the whole spider, not just sprite
+	# Kill any existing stagger tween to prevent bouncy overlap
+	if _stagger_tween and _stagger_tween.is_valid():
+		_stagger_tween.kill()
+
+	# Tight jolt and snap back - single sharp movement
 	var original_pos = position
-	var stagger_tween = create_tween()
-	stagger_tween.tween_property(self, "position", original_pos + Vector2(3, -1), 0.03).set_ease(Tween.EASE_OUT)
-	stagger_tween.tween_property(self, "position", original_pos, 0.05).set_ease(Tween.EASE_IN)
+	_stagger_tween = create_tween()
+	_stagger_tween.tween_property(self, "position", original_pos + Vector2(2, -1), 0.02).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	_stagger_tween.tween_property(self, "position", original_pos, 0.04).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 
 func die() -> void:
@@ -643,6 +647,7 @@ func get_enemy_type() -> String:
 
 var _crit_window_transitioning: bool = false
 var _grow_tween: Tween = null
+var _stagger_tween: Tween = null  # Track stagger tween to prevent bouncy overlaps
 
 
 func grow_for_crit_window(_difficulty: float = 1.0) -> void:

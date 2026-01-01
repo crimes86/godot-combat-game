@@ -231,7 +231,9 @@ func _process(delta):
 		_interpolate_enemy_positions(delta)
 
 func _interpolate_enemy_positions(delta: float) -> void:
-	"""Client-side smooth interpolation of enemy positions."""
+	"""Client-side smooth interpolation of enemy positions using exponential smoothing."""
+	const LERP_SPEED: float = 12.0  # Higher = snappier, lower = smoother (10-15 feels good)
+
 	for id in enemy_target_positions:
 		var enemy = get_enemy(id)
 		if not enemy or not is_instance_valid(enemy):
@@ -242,22 +244,19 @@ func _interpolate_enemy_positions(delta: float) -> void:
 		var distance = current_pos.distance_to(target_pos)
 
 		# If very close, snap to target
-		if distance < 1.0:
+		if distance < 0.5:
 			enemy.global_position = target_pos
 			continue
 
-		# Get interpolation speed (calculated when we receive network update)
-		var speed = enemy_interpolation_speeds.get(id, 150.0)
-		# Clamp speed to reasonable range (prevent teleporting on lag spikes)
-		speed = clampf(speed, 50.0, 400.0)
-
-		# Move toward target at calculated speed
-		var move_distance = speed * delta
-		if move_distance >= distance:
+		# If too far (lag spike or teleport), snap immediately
+		if distance > 500.0:
 			enemy.global_position = target_pos
-		else:
-			var direction = (target_pos - current_pos).normalized()
-			enemy.global_position = current_pos + direction * move_distance
+			continue
+
+		# Exponential smoothing - moves faster when far, slower when close
+		# This creates smooth deceleration as enemy approaches target
+		var t = clampf(delta * LERP_SPEED, 0.0, 1.0)
+		enemy.global_position = current_pos.lerp(target_pos, t)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ENEMY REGISTRATION (Server Only)
@@ -554,8 +553,8 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 		var tutorial_mgr = get_node_or_null("/root/TutorialManager")
 		if tutorial_mgr and tutorial_mgr.is_tutorial_active():
 			tutorial_mgr.on_dummy_hit(is_crit)
-			if is_weakpoint:
-				tutorial_mgr.on_weakpoint_hit()
+			# NOTE: Don't call on_weakpoint_hit() here - it's called in _on_weakpoint_destroyed_local()
+			# when the weakpoint is actually destroyed (not just hit). This prevents double-counting.
 
 	# Trigger visual feedback (hit flash, combat text, sounds)
 	if enemy.has_node("HitFlash"):

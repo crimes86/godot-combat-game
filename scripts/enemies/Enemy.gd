@@ -71,6 +71,7 @@ var original_scale: Vector2 = Vector2.ONE
 var original_modulate: Color = Color.WHITE  # Store original difficulty color
 var weakpoints: Array = []  # Just for visual rendering
 var _grow_tween: Tween = null  # Track grow tween so shrink can wait for it
+var _stagger_tween: Tween = null  # Track stagger tween to prevent bouncy overlaps
 var is_dying: bool = false
 
 # Tutorial: show red arrow pointing at weakpoints for first 3 crit windows on skeletons
@@ -822,11 +823,17 @@ func play_hurt_stagger() -> void:
 	if not sprite:
 		return
 
-	# Quick sharp jolt and snap back - tight, not bouncy
+	# Kill any existing stagger tween to prevent bouncy overlap
+	if _stagger_tween and _stagger_tween.is_valid():
+		_stagger_tween.kill()
+
+	# Tight jolt and snap back - single sharp movement, not bouncy
 	var original_pos = position
-	var stagger_tween = create_tween()
-	stagger_tween.tween_property(self, "position", original_pos + Vector2(4, -2), 0.03).set_ease(Tween.EASE_OUT)
-	stagger_tween.tween_property(self, "position", original_pos, 0.05).set_ease(Tween.EASE_IN)
+	_stagger_tween = create_tween()
+	# Quick jolt away from attacker direction (simplified to up-right)
+	_stagger_tween.tween_property(self, "position", original_pos + Vector2(3, -1), 0.02).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	# Snap back to original - slightly slower for weight
+	_stagger_tween.tween_property(self, "position", original_pos, 0.04).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 	"""Visual effect: grow sprite and spawn weakpoints (called by CritWindowManager)"""

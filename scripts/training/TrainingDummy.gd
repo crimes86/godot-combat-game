@@ -504,9 +504,8 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 		print("📚 [Dummy] _tutorial_manager exists, is_tutorial_active: %s, current_step: %s" % [_tutorial_manager.is_tutorial_active(), step_name])
 		if _tutorial_manager.is_tutorial_active():
 			_tutorial_manager.on_dummy_hit(is_crit)
-			# Check if this was a weakpoint hit during tutorial
-			if is_weakpoint_hit:
-				_tutorial_manager.on_weakpoint_hit()
+			# NOTE: Don't call on_weakpoint_hit() here - it's called in _on_weakpoint_destroyed_local()
+			# when the weakpoint is actually destroyed (not just hit). This prevents double-counting.
 	else:
 		print("📚 [Dummy] _tutorial_manager is null!")
 
