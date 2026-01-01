@@ -149,8 +149,12 @@ func _process_next_notification() -> void:
 
 	# Schedule next notification with delay
 	if not pending_notifications.is_empty():
-		await get_tree().create_timer(STAGGER_DELAY).timeout
-		_process_next_notification()
+		var tree = get_tree()
+		if tree:
+			await tree.create_timer(STAGGER_DELAY).timeout
+			_process_next_notification()
+		else:
+			is_processing_queue = false
 	else:
 		is_processing_queue = false
 		print("📋 Queue empty, done processing")

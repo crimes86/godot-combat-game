@@ -15,6 +15,11 @@ var cycle_paused: bool = false
 const TIME_SYNC_INTERVAL: float = 5.0  # Sync time to clients every 5 seconds
 var time_sync_timer: float = 0.0
 
+# Server health monitoring (lightweight - logs every 10 min)
+const HEARTBEAT_INTERVAL: float = 600.0  # 10 minutes
+var _heartbeat_timer: float = 0.0
+var _server_uptime: float = 0.0
+
 # Lighting color presets
 # Daytime (bright) - neutral white, not too washed out
 const DAY_CANVAS_MODULATE := Color(1.0, 1.0, 0.98, 1.0)
@@ -56,6 +61,14 @@ func _input(event: InputEvent):
 			print("TimeManager: Only server can advance time")
 
 func _process(delta: float):
+	# Server heartbeat (runs even when cycle paused, lightweight health check)
+	if _is_server_or_singleplayer():
+		_server_uptime += delta
+		_heartbeat_timer += delta
+		if _heartbeat_timer >= HEARTBEAT_INTERVAL:
+			_heartbeat_timer = 0.0
+			_log_server_heartbeat()
+
 	if cycle_paused or canvas_modulate == null:
 		return
 
@@ -191,3 +204,20 @@ func advance_time(hours: float):
 		current_time += 24.0
 	update_lighting()
 	emit_signal("time_changed", current_time)  # Notify listeners (like TestHub)
+
+func _log_server_heartbeat():
+	"""Log server health stats every 10 minutes (crash debugging)"""
+	var uptime_min = int(_server_uptime / 60.0)
+	var mem_static = Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0  # MB
+	var mem_msg_buf = Performance.get_monitor(Performance.MEMORY_MESSAGE_BUFFER_MAX) / 1048576.0  # MB
+	var obj_count = Performance.get_monitor(Performance.OBJECT_COUNT)
+	var node_count = Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
+	var orphan_count = Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)
+
+	print("[HEARTBEAT] uptime=%dm | mem=%.1fMB | objects=%d | nodes=%d | orphans=%d | time=%s" % [
+		uptime_min, mem_static, int(obj_count), int(node_count), int(orphan_count), get_time_string()
+	])
+
+	# Warn if orphan nodes are accumulating (memory leak indicator)
+	if orphan_count > 100:
+		push_warning("[HEARTBEAT] High orphan node count: %d - possible memory leak!" % int(orphan_count))

@@ -327,8 +327,12 @@ func _handle_failure() -> void:
 	var delay = RETRY_BACKOFF_BASE * pow(2, _retry_count - 1)
 	LogManager.debug("Telemetry: Retrying in %.1fs (attempt %d/%d)" % [delay, _retry_count, MAX_RETRY_ATTEMPTS], "telemetry")
 
-	# Schedule retry
-	get_tree().create_timer(delay).timeout.connect(_flush_batch)
+	# Schedule retry (with null check to prevent crash if node removed from tree)
+	var tree = get_tree()
+	if tree:
+		tree.create_timer(delay).timeout.connect(_flush_batch)
+	else:
+		push_warning("[TelemetryManager] Cannot schedule retry - not in scene tree")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # HELPER METHODS

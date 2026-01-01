@@ -405,10 +405,12 @@ func _bring_window_to_front() -> void:
 		window.grab_focus()
 
 		# Double-tap after a brief delay - sometimes needed on Windows
-		get_tree().create_timer(0.1).timeout.connect(func():
-			window.move_to_foreground()
-			window.grab_focus()
-		)
+		var tree = get_tree()
+		if tree:
+			tree.create_timer(0.1).timeout.connect(func():
+				window.move_to_foreground()
+				window.grab_focus()
+			)
 
 		LogManager.info("Requested window focus", "ashbane")
 
