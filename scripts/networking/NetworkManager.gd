@@ -21,11 +21,26 @@ const DEFAULT_PORT = 7777
 const MAX_PLAYERS = 50  # Target for 3-chunk playtest (single instance)
 
 # Version for client/server compatibility checking
-# Auto-generated from git commit hash - no manual incrementing needed
-var NETWORK_VERSION: String = ""
+# Git hash for debugging/logging (auto-generated at export)
+var GIT_HASH: String = ""
 
-# Semantic version for update checks (manually updated on releases)
-const CLIENT_VERSION: String = "0.0.1"
+# Semantic versioning (MAJOR.MINOR.PATCH)
+# - MAJOR: Breaking changes (new network protocol, save format changes)
+# - MINOR: New features (both client and server should update together)
+# - PATCH: Bug fixes (client and server can differ in patch version)
+const GAME_VERSION: String = "0.1.0"
+
+# Minimum client version the server accepts (server-only setting)
+# - Server-only patches: bump GAME_VERSION, keep MIN_CLIENT_VERSION same
+# - Client-breaking changes: bump both GAME_VERSION and MIN_CLIENT_VERSION
+const MIN_CLIENT_VERSION: String = "0.1.0"
+
+# Legacy alias for update checks
+const CLIENT_VERSION: String = GAME_VERSION
+
+# Legacy alias for logging
+var NETWORK_VERSION: String:
+	get: return GAME_VERSION + " (" + GIT_HASH + ")"
 
 func _get_git_commit_hash() -> String:
 	"""Get current git commit hash for version identification"""
@@ -72,8 +87,8 @@ func _ready():
 	# Set this as singleton
 	set_process(false)
 
-	# Initialize version from git commit hash
-	NETWORK_VERSION = _get_git_commit_hash()
+	# Initialize git hash for debugging
+	GIT_HASH = _get_git_commit_hash()
 	LogManager.info("Version %s" % NETWORK_VERSION, "network")
 
 	# Connect multiplayer signals
@@ -241,8 +256,8 @@ func _on_player_connected(id: int):
 
 	if is_host:
 		# Don't add to player list yet - wait for authentication
-		# Send version info along with auth request
-		rpc_id(id, "request_authentication_with_version", NETWORK_VERSION)
+		# Send minimum required version - client checks if it meets requirement
+		rpc_id(id, "request_authentication_with_version", MIN_CLIENT_VERSION)
 
 	player_connected.emit(id)
 
@@ -506,25 +521,42 @@ func request_authentication() -> void:
 	authentication_required.emit()
 
 @rpc("authority", "reliable")
-func request_authentication_with_version(server_version: String) -> void:
+func request_authentication_with_version(min_version_required: String) -> void:
 	"""Server tells client to authenticate, with version check"""
-	LogManager.info("Server requested authentication (server version: %s, client version: %s)" % [server_version, NETWORK_VERSION], "network")
+	LogManager.info("Server requires min version: %s, client version: %s" % [min_version_required, GAME_VERSION], "network")
 
 	# In dev mode (editor or debug builds), skip version check for local testing
 	var is_dev_mode = OS.has_feature("editor") or OS.is_debug_build()
 
-	if server_version != NETWORK_VERSION and not is_dev_mode:
-		LogManager.warn("VERSION MISMATCH! Server: %s, Client: %s - connection blocked" % [server_version, NETWORK_VERSION], "network")
-		version_mismatch.emit(server_version, NETWORK_VERSION)
+	# Check if client meets minimum version requirement
+	var client_meets_requirement = _compare_versions(GAME_VERSION, min_version_required) >= 0
+
+	if not client_meets_requirement and not is_dev_mode:
+		LogManager.warn("VERSION TOO OLD! Server requires: %s, Client has: %s - connection blocked" % [min_version_required, GAME_VERSION], "network")
+		version_mismatch.emit(min_version_required, GAME_VERSION)
 		# Block connection - don't allow authentication to proceed
 		close_connection()
 		return
-	elif server_version != NETWORK_VERSION:
-		LogManager.warn("VERSION MISMATCH (dev mode - allowing): Server: %s, Client: %s" % [server_version, NETWORK_VERSION], "network")
+	elif not client_meets_requirement:
+		LogManager.warn("VERSION TOO OLD (dev mode - allowing): Server requires: %s, Client has: %s" % [min_version_required, GAME_VERSION], "network")
 	else:
-		LogManager.info("Version match: %s" % NETWORK_VERSION, "network")
+		LogManager.info("Version OK: %s >= %s" % [GAME_VERSION, min_version_required], "network")
 
 	authentication_required.emit()
+
+func _compare_versions(version_a: String, version_b: String) -> int:
+	"""Compare two semver strings. Returns: -1 if a < b, 0 if equal, 1 if a > b"""
+	var parts_a = version_a.split(".")
+	var parts_b = version_b.split(".")
+
+	for i in range(max(parts_a.size(), parts_b.size())):
+		var a = int(parts_a[i]) if i < parts_a.size() else 0
+		var b = int(parts_b[i]) if i < parts_b.size() else 0
+		if a < b:
+			return -1
+		elif a > b:
+			return 1
+	return 0
 
 # --- Client-side auth functions ---
 

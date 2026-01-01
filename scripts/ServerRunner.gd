@@ -90,7 +90,9 @@ func _start_dedicated_server(args: Array):
 	# Start server with no local player (empty player_data = no host player)
 	if NetworkManager.host_game(port, {}):
 		print("✅ Server started successfully!")
-		print("   Version: %s" % NetworkManager.NETWORK_VERSION)
+		print("   Version: %s" % NetworkManager.GAME_VERSION)
+		print("   Git: %s" % NetworkManager.GIT_HASH)
+		print("   Min Client: %s" % NetworkManager.MIN_CLIENT_VERSION)
 		print("   Port: %d" % port)
 		print("   Shard: %s" % current_shard_id)
 		print("   Max Players: %d" % NetworkManager.MAX_PLAYERS)

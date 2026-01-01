@@ -655,9 +655,9 @@ func _on_server_created():
 	status_label.text = "Server created! Loading game..."
 	_load_game_world()
 
-func _on_version_mismatch(server_version: String, client_version: String):
+func _on_version_mismatch(min_required: String, client_version: String):
 	"""Block connection due to version mismatch"""
-	var error_msg = "UPDATE REQUIRED\nYour version: %s\nServer version: %s\n\nPlease download the latest version." % [client_version, server_version]
+	var error_msg = "UPDATE REQUIRED\nYour version: %s\nMinimum required: %s\n\nPlease download the latest version." % [client_version, min_required]
 
 	if current_state == MenuState.GUEST_SERVER_SELECT:
 		# Guest mode - update server select panel
