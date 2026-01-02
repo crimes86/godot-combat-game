@@ -13,6 +13,7 @@ class_name RuinsSpawnPoint
 # ═══════════════════════════════════════════════════════════════════════════
 
 @export var pool_capacity: int = 12  # Maximum skeletons in the pool
+@export var max_roamers: int = 6  # Maximum roamers (prevents endless spawning/memory leak)
 @export var spawn_interval: float = 18.0  # Seconds between spawns (pool fill rate)
 @export var patrol_inner_radius: float = 375.0  # Inner patrol ring (scaled up 25%)
 @export var patrol_outer_radius: float = 500.0  # Outer patrol ring (scaled up 25%)
@@ -62,22 +63,30 @@ const MAX_ALTAR_ENERGY: float = 1.5
 var player: CharacterBody2D = null
 var main_campfire_position: Vector2 = Vector2(2000, 0)
 
+# Server mode flag
+var _is_server_mode: bool = false
+
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	# Load guardian skeleton scene
 	skeleton_scene = load("res://scenes/enemies/guardian_skeleton.tscn")
 	if not skeleton_scene:
 		push_error("Could not load guardian_skeleton.tscn!")
 		return
 
-	# Cache altar light reference
-	altar_glow = get_node_or_null("RuinsLight")
+	# Cache altar light reference (only on client)
+	if not _is_server_mode:
+		altar_glow = get_node_or_null("RuinsLight")
 
-	# Create visuals
-	create_ruins_visual()
+	# Create visuals (client only - server doesn't need visual decorations)
+	if not _is_server_mode:
+		create_ruins_visual()
 
 	# Initialize chest kill target (randomized)
 	chest_kill_target = randi_range(chest_kill_threshold_min, chest_kill_threshold_max)
@@ -140,9 +149,10 @@ func update_spawn_system(delta: float) -> void:
 		if current_pool_size < pool_capacity:
 			# Pool has room - spawn a regular skeleton
 			spawn_skeleton()
-		else:
-			# Pool is full - spawn a roamer (wanders further out)
+		elif roamer_skeletons.size() < max_roamers:
+			# Pool is full but roamer limit not reached - spawn a roamer
 			spawn_roamer()
+		# else: both pool and roamers at capacity - skip spawn to prevent memory leak
 
 func spawn_skeleton() -> void:
 	"""Spawn a skeleton that patrols around the ruins"""
@@ -649,6 +659,10 @@ func create_dark_particles() -> void:
 
 func update_altar_glow() -> void:
 	"""Scale altar glow and rune visuals based on pool fullness and time of day"""
+	# Skip on server - no visuals needed
+	if _is_server_mode:
+		return
+
 	# Pool fullness affects intensity
 	var pool_percent = float(active_skeletons.size()) / float(pool_capacity)
 

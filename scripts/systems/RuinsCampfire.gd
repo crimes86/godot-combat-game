@@ -70,24 +70,32 @@ const MAX_RUINS_LIGHT_ENERGY: float = 1.5  # Strong mystical glow at night
 var player: CharacterBody2D = null
 var main_campfire_position: Vector2 = Vector2(2000, 0)  # Main campfire location (center of chunk 0)
 
+# Server mode flag
+var _is_server_mode: bool = false
+
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	# Load guardian skeleton scene (armored guardians with special loot)
 	skeleton_scene = load("res://scenes/enemies/guardian_skeleton.tscn")
 	if not skeleton_scene:
 		push_error("❌ Could not load guardian_skeleton.tscn!")
 		return
 
-	# Cache ruins light reference
-	ruins_light = get_node_or_null("RuinsLight")
+	# Client-only visuals and interactions
+	if not _is_server_mode:
+		# Cache ruins light reference
+		ruins_light = get_node_or_null("RuinsLight")
 
-	# Create visuals
-	create_ruins_visual()
-	create_interaction_area()
-	create_interaction_prompt()
+		# Create visuals
+		create_ruins_visual()
+		create_interaction_area()
+		create_interaction_prompt()
 
 	# IMPORTANT: Wait one frame to ensure RuinsCampfire is fully in tree before spawning
 	await get_tree().process_frame
@@ -114,22 +122,24 @@ func _exit_tree() -> void:
 	print("🗑️ RuinsCampfire cleaned up %d guardian skeletons" % cleaned_count)
 
 func _physics_process(delta: float) -> void:
-	# Find player if needed
+	# Find player if needed (needed for both server and client)
 	if not player or not is_instance_valid(player):
 		player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 
-	# Update skeleton systems
+	# Update skeleton systems (server handles spawning/respawning)
 	update_skeletons(delta)
 
-	# Update interaction prompt
-	update_interaction_prompt()
+	# Client-only visual updates
+	if not _is_server_mode:
+		# Update interaction prompt
+		update_interaction_prompt()
 
-	# Check for abandonment (only in campfire mode)
-	if current_state == RuinsState.CAMPFIRE:
-		check_abandonment(delta)
+		# Check for abandonment (only in campfire mode)
+		if current_state == RuinsState.CAMPFIRE:
+			check_abandonment(delta)
 
-	# Update ruins light based on time of day
-	update_ruins_light()
+		# Update ruins light based on time of day
+		update_ruins_light()
 
 	# Debug: Track skeleton states every 5 seconds
 	if Engine.get_physics_frames() % 300 == 0:  # Every 5 seconds at 60fps
