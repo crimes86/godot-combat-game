@@ -313,7 +313,7 @@ if not ADMIN_SECRET:
 BETA_ACCESS_CODE = os.environ.get("BETA_ACCESS_CODE")  # Set to enable beta gate (e.g., "Ashbane-beta-2024")
 
 # Client version management
-CLIENT_VERSION = os.environ.get("CLIENT_VERSION", "0.0.1")  # Current required client version
+CLIENT_VERSION = os.environ.get("CLIENT_VERSION", "0.1.0")  # Current required client version
 CLIENT_DOWNLOAD_URL = os.environ.get("CLIENT_DOWNLOAD_URL", "https://ashbane.itch.io/ashbane")  # itch.io page
 
 # ═══════════════════════════════════════════════════════════════════════════
