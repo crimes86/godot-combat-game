@@ -36,7 +36,7 @@ class_name EnemyAI
 
 ## Avoidance (stop and pick new target when blocked)
 @export var separation_radius: float = 60.0  # Distance to detect blocking enemies (increased)
-@export var separation_force_strength: float = 100.0  # How strongly skeletons push apart
+@export var separation_force_strength: float = 60.0  # How strongly skeletons push apart (reduced to prevent oscillation)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE MACHINE
@@ -342,7 +342,9 @@ func _physics_process(delta: float) -> void:
 	ai_frame_counter += 1
 	if current_state == State.PATROLLING or current_state == State.RETURNING:
 		if ai_frame_counter % AI_THROTTLE_FRAMES != 0:
-			# Skip this frame for patrolling enemies - just move with existing velocity
+			# Skip this frame for patrolling enemies - dampen velocity to prevent oscillation
+			# Without damping, high separation forces cause enemies to overshoot and bounce
+			enemy.velocity *= 0.8
 			enemy.move_and_slide()
 			return
 
