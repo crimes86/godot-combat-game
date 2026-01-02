@@ -26,6 +26,12 @@ const MIN_LIGHT_ENERGY: float = 0.1  # Subtle glow during bright day
 const MAX_LIGHT_ENERGY: float = 1.6  # Moderate glow at night
 
 func _ready() -> void:
+	# Skip all visuals on dedicated server - torches are purely decorative
+	if "--server" in OS.get_cmdline_user_args():
+		set_process(false)
+		set_physics_process(false)
+		return
+
 	# Create visual representation
 	create_torch_visual()
 

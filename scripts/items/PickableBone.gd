@@ -28,7 +28,12 @@ const BONE_EMBER_ITEM = {
 	"fuel_type": "bone_ember"
 }
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	# Add to group for network sync lookup
 	add_to_group("pickable_bones")
 
@@ -36,16 +41,20 @@ func _ready() -> void:
 	collision_layer = 0
 	collision_mask = 1  # Detect player on layer 1
 
-	# Connect signals
-	body_entered.connect(_on_body_entered)
-	body_exited.connect(_on_body_exited)
-
-	# Create collision shape for interaction
+	# Create collision shape for interaction (needed on server for collision)
 	var collision = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
 	shape.radius = 35.0  # Pick up range
 	collision.shape = shape
 	add_child(collision)
+
+	# DEDICATED SERVER: Skip visual/UI elements
+	if _is_server_mode:
+		return
+
+	# Connect signals
+	body_entered.connect(_on_body_entered)
+	body_exited.connect(_on_body_exited)
 
 	# Create interaction prompt
 	create_interaction_prompt()

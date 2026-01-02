@@ -122,12 +122,26 @@ var players_in_warmth: Dictionary = {}
 # Visual elements
 var fire_sprite: Node2D = null
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	add_to_group("campfire")
 
 	# Check if this campfire should start unlit
 	if starts_unlit:
 		is_unlit = true
+
+	# Setup area detection (needed on server for healing)
+	body_entered.connect(_on_body_entered)
+	body_exited.connect(_on_body_exited)
+
+	# DEDICATED SERVER: Skip visual/audio creation
+	if _is_server_mode:
+		print("🔥 Campfire initialized (server mode - skipping visuals)")
+		return
 
 	# Disable scene's default CampfireLight (we create our own fire_light dynamically)
 	var scene_light = get_node_or_null("CampfireLight")
@@ -136,10 +150,6 @@ func _ready() -> void:
 
 	# Create campfire visuals
 	create_campfire_scene()
-
-	# Setup area detection
-	body_entered.connect(_on_body_entered)
-	body_exited.connect(_on_body_exited)
 
 	# Create UI elements
 	create_interaction_prompt()
@@ -553,6 +563,9 @@ func create_campfire_scene() -> void:
 
 func create_fire_particles() -> void:
 	"""Create enhanced particle effects with embers, sparks, and aurora wisps"""
+	# Skip on dedicated server - visual effects not needed
+	if "--server" in OS.get_cmdline_user_args():
+		return
 
 	# EMBER PARTICLES (orange glowing embers floating up) - REDUCED for performance
 	var ember_particles = CPUParticles2D.new()

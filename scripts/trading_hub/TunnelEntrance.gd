@@ -20,7 +20,12 @@ static var _any_transitioning: bool = false
 @onready var glow_light: PointLight2D = $GlowLight
 @onready var interaction_label: Label = $InteractionLabel
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	# Connect signals
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
@@ -28,6 +33,10 @@ func _ready() -> void:
 	# Set collision layer/mask for player detection
 	collision_layer = 0
 	collision_mask = 1  # Player layer
+
+	# DEDICATED SERVER: Skip visual elements
+	if _is_server_mode:
+		return
 
 	# Hide interaction label initially
 	if interaction_label:

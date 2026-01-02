@@ -57,21 +57,31 @@ const LOOT_TABLE = [
 	}
 ]
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	# Set up Area2D
 	collision_layer = 0
 	collision_mask = 1  # Detect player on layer 1
 
-	# Create visual representation
-	create_chest_visual()
-
-	# Create collision shape
+	# Create collision shape (needed for both server and client)
 	var collision = CollisionShape2D.new()
 	var shape = RectangleShape2D.new()
 	shape.size = Vector2(60, 50)
 	collision.shape = shape
 	collision.position = Vector2(0, 0)
 	add_child(collision)
+
+	# Skip visual/audio on dedicated server
+	if _is_server_mode:
+		set_physics_process(false)
+		return
+
+	# Create visual representation (client only)
+	create_chest_visual()
 
 	# Connect signals
 	body_entered.connect(_on_body_entered)

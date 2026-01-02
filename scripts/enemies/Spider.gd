@@ -90,29 +90,36 @@ var _current_frame: int = 0
 var _anim_timer: Timer = null
 var _is_idle: bool = false
 
+# Server mode flag - skip all visual/texture creation on dedicated server
+var _is_server_mode: bool = false
 
 func _ready() -> void:
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
 	add_to_group(Constants.GROUP_ENEMIES)
 	add_to_group("spiders")
 
 	# Apply level scaling
 	apply_level_scaling()
 
-	# Setup visuals
-	setup_sprite()
-	setup_shadow()
-	setup_health_bar()
-	setup_click_area()
-
-	# Set collision
+	# Set collision (needed on server for physics)
 	collision_layer = 4  # Enemy layer
 	collision_mask = 1 | 2  # Player + obstacles
 
-	# Initialize AI
+	# Initialize AI (needed on server)
 	_init_ai_variation()
 
 	# Connect damage signal to enter combat when hit (ranged weapons)
 	damage_taken.connect(_on_damage_taken)
+
+	# DEDICATED SERVER: Skip all visual/texture creation
+	if _is_server_mode:
+		return
+
+	# --- CLIENT-ONLY VISUAL SETUP BELOW ---
+	setup_sprite()
+	setup_shadow()
+	setup_health_bar()
+	setup_click_area()
 
 	# Start animation
 	_start_animation_timer()
@@ -390,32 +397,37 @@ func die() -> void:
 			wp.queue_free()
 	weakpoints.clear()
 
-	# Grant XP
-	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-	if player and player.has_method("gain_experience"):
-		player.gain_experience(xp_reward)
-		var game_world = get_tree().get_first_node_in_group("game_world")
-		if game_world:
-			CombatText.create_xp(xp_reward, global_position, game_world)
+	# DEDICATED SERVER: Skip visual/audio operations
+	var is_dedicated_server = "--server" in OS.get_cmdline_user_args()
+
+	# Grant XP (only on clients - server has no local player)
+	if not is_dedicated_server:
+		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+		if player and player.has_method("gain_experience"):
+			player.gain_experience(xp_reward)
+			var game_world = get_tree().get_first_node_in_group("game_world")
+			if game_world:
+				CombatText.create_xp(xp_reward, global_position, game_world)
 
 	# Store gold
 	if corpse_gold == 0:
 		corpse_gold = gold_drop
 
-	# Play death animation
-	_is_idle = false
-	play_animation("die")
+	# Play death animation (skip on dedicated server)
+	if not is_dedicated_server:
+		_is_idle = false
+		play_animation("die")
 
-	# Wait for death animation
-	await get_tree().create_timer(0.4).timeout
-	if not is_instance_valid(self):
-		return
+		# Wait for death animation
+		await get_tree().create_timer(0.4).timeout
+		if not is_instance_valid(self):
+			return
 
-	# Stop on last frame
-	_is_idle = true
-	_current_frame = SPIDER_ANIMS["die"].frames - 1
-	var frame_y = SPIDER_ANIMS["die"].row * FRAME_SIZE.y
-	sprite.region_rect = Rect2(_current_frame * FRAME_SIZE.x, frame_y, FRAME_SIZE.x, FRAME_SIZE.y)
+		# Stop on last frame
+		_is_idle = true
+		_current_frame = SPIDER_ANIMS["die"].frames - 1
+		var frame_y = SPIDER_ANIMS["die"].row * FRAME_SIZE.y
+		sprite.region_rect = Rect2(_current_frame * FRAME_SIZE.x, frame_y, FRAME_SIZE.x, FRAME_SIZE.y)
 
 	# Generate loot
 	if corpse_loot.is_empty():

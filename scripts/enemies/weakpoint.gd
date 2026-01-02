@@ -60,7 +60,17 @@ signal weakpoint_destroyed_local(weakpoint)  # Client-side tracking for crit win
 var damage_per_hit: int = 0  # Set by crit_window_manager
 var total_damage_dealt: int = 0
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
+	# DEDICATED SERVER: Skip visual creation - weakpoints are client-only
+	if _is_server_mode:
+		queue_free()
+		return
+
 	z_index = 300
 	input_pickable = true
 

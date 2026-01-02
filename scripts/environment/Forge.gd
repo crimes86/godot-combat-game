@@ -19,8 +19,17 @@ var _is_lit: bool = false
 var _light_tween: Tween = null
 var _base_modulate: Color = Color(0.75, 0.8, 0.85, 1)  # Gray stone tint
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	add_to_group("forge")
+
+	# DEDICATED SERVER: Skip visual/audio initialization
+	if _is_server_mode:
+		return
 
 	# Connect signals
 	body_entered.connect(_on_body_entered)

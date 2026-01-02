@@ -92,6 +92,9 @@ var player_in_loot_range: bool = false  # Is player close enough to loot?
 var loot_prompt: Label = null  # [F] Loot prompt
 var loot_ui_open: bool = false  # Is the loot UI currently open for this corpse?
 
+# Server mode flag - skip all visual/texture creation on dedicated server
+var _is_server_mode: bool = false
+
 # Signals for CritWindowManager
 signal weakpoint_spawned(weakpoint: Node)  # Emitted when a weakpoint is created
 signal weakpoint_destroyed(weakpoint: Node)  # Emitted when a weakpoint is destroyed
@@ -160,10 +163,27 @@ func _ready() -> void:
 		# Note: Guardians also have faster attacks and movement (set in EnemyAI.gd)
 
 	current_health = max_health
+	original_scale = scale  # For general reference
+
+	# Add to enemy group (needed on server for AI, targeting, etc.)
+	add_to_group(Constants.GROUP_ENEMIES)
+
+	# DEDICATED SERVER: Skip all visual/sprite creation - only need collision + stats
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+	if _is_server_mode:
+		# Server only needs collision body and stats, no visuals
+		if health_bar:
+			health_bar.queue_free()
+			health_bar = null
+		if sprite:
+			sprite.queue_free()
+			sprite = null
+		return
+
+	# --- CLIENT-ONLY VISUAL SETUP BELOW ---
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
 		health_bar.visible = false  # Start hidden, show when player is within 375px
-	original_scale = scale  # For general reference
 
 	# ✨ Store original difficulty color (set by GameWorld)
 	await get_tree().process_frame  # Wait one frame for GameWorld to set color
@@ -304,10 +324,7 @@ func _ready() -> void:
 		if collision.shape is RectangleShape2D:
 			# Match collision to sprite size
 			collision.shape.size = Vector2(32, 56)
-	
-	# Add to group
-	add_to_group(Constants.GROUP_ENEMIES)
-	
+
 	# Add level display
 	update_level_display()
 
@@ -396,8 +413,8 @@ func create_skeleton_animation(sprite_frames: SpriteFrames, skeleton_img: Image,
 
 func create_shadow_layer() -> void:
 	"""Create animated shadow layer for skeleton"""
-	# Skip shadow compositing on clients - saves texture RIDs
-	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+	# Skip shadow layer on dedicated server - no visuals needed
+	if _is_server_mode:
 		return
 
 	# Load shadow textures
@@ -1536,37 +1553,41 @@ func die() -> void:
 	if corpse_gold == 0:
 		corpse_gold = gold_drop
 
-	# Play death sound (skeleton-specific bone collapse)
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_skeleton_death_sound(global_position, -10.0)
+	# DEDICATED SERVER: Skip sound and animation - only update game state
+	var is_dedicated_server = "--server" in OS.get_cmdline_user_args()
 
-	# Play death animation (hurt animation) and wait for it to complete
-	var anim_sprite = sprite as AnimatedSprite2D
-	if anim_sprite and anim_sprite.sprite_frames and anim_sprite.sprite_frames.has_animation("hurt"):
-		anim_sprite.play("hurt")
-		# Wait for the full animation to finish
-		await anim_sprite.animation_finished
-		if not is_instance_valid(self):
-			return
+	if not is_dedicated_server:
+		# Play death sound (skeleton-specific bone collapse)
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_skeleton_death_sound(global_position, -10.0)
 
-		# FREEZE on last frame
-		anim_sprite.stop()
-		var frame_count = anim_sprite.sprite_frames.get_frame_count("hurt")
-		anim_sprite.frame = frame_count - 1
-	else:
-		# Fallback if animation doesn't exist (e.g., guardians have no hurt animation)
-		# Stop any playing animation and freeze on last frame
-		if anim_sprite:
+		# Play death animation (hurt animation) and wait for it to complete
+		var anim_sprite = sprite as AnimatedSprite2D
+		if anim_sprite and anim_sprite.sprite_frames and anim_sprite.sprite_frames.has_animation("hurt"):
+			anim_sprite.play("hurt")
+			# Wait for the full animation to finish
+			await anim_sprite.animation_finished
+			if not is_instance_valid(self):
+				return
+
+			# FREEZE on last frame
 			anim_sprite.stop()
-			# Freeze on the last frame of current animation
-			if anim_sprite.sprite_frames and anim_sprite.animation:
-				var frame_count = anim_sprite.sprite_frames.get_frame_count(anim_sprite.animation)
-				if frame_count > 0:
-					anim_sprite.frame = frame_count - 1
-		await get_tree().create_timer(0.6).timeout
-		if not is_instance_valid(self):
-			return
+			var frame_count = anim_sprite.sprite_frames.get_frame_count("hurt")
+			anim_sprite.frame = frame_count - 1
+		else:
+			# Fallback if animation doesn't exist (e.g., guardians have no hurt animation)
+			# Stop any playing animation and freeze on last frame
+			if anim_sprite:
+				anim_sprite.stop()
+				# Freeze on the last frame of current animation
+				if anim_sprite.sprite_frames and anim_sprite.animation:
+					var frame_count = anim_sprite.sprite_frames.get_frame_count(anim_sprite.animation)
+					if frame_count > 0:
+						anim_sprite.frame = frame_count - 1
+			await get_tree().create_timer(0.6).timeout
+			if not is_instance_valid(self):
+				return
 
 	# Generate loot for this corpse
 	# In multiplayer: Server generates loot and syncs via RPC - NEVER regenerate locally
@@ -1905,7 +1926,12 @@ func rot_and_despawn() -> void:
 
 	corpse_state = CorpseState.State.ROTTED
 
-	# Fade out animation
+	# DEDICATED SERVER: Skip visual animation, just remove immediately
+	if _is_server_mode:
+		queue_free()
+		return
+
+	# Fade out animation (client only)
 	var tween = create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(self, "modulate:a", 0.0, 2.0)
@@ -1937,6 +1963,11 @@ func check_if_looted_empty() -> void:
 
 func graceful_despawn() -> void:
 	"""Gradual fade out for fully looted corpses - smooth UX for mass looting"""
+	# DEDICATED SERVER: Skip visual animation, just remove immediately
+	if _is_server_mode:
+		queue_free()
+		return
+
 	# Disable any remaining interactions
 	if has_node("Area2D"):
 		var area = get_node("Area2D")

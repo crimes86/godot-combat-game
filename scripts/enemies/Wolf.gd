@@ -123,27 +123,18 @@ const ANIMS_FRONT = {
 # Loaded textures cache
 var _wolf_textures: Dictionary = {}
 
+# Server mode flag - skip all visual/texture creation on dedicated server
+var _is_server_mode: bool = false
 
 func _ready() -> void:
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
 	add_to_group(Constants.GROUP_ENEMIES)
 	add_to_group("wolves")
 
 	# Apply level scaling
 	apply_level_scaling()
 
-	# Create sprite with animations
-	setup_sprite()
-
-	# Create shadow
-	setup_shadow()
-
-	# Create health bar
-	setup_health_bar()
-
-	# Create click area for targeting
-	setup_click_area()
-
-	# Set collision
+	# Set collision (needed on server for physics)
 	collision_layer = 4  # Enemy layer
 	collision_mask = 1 | 2  # Player + obstacles
 
@@ -152,6 +143,16 @@ func _ready() -> void:
 
 	# Connect damage signal to enter combat when hit by ranged weapons
 	damage_taken.connect(_on_damage_taken)
+
+	# DEDICATED SERVER: Skip all visual/texture creation
+	if _is_server_mode:
+		return
+
+	# --- CLIENT-ONLY VISUAL SETUP BELOW ---
+	setup_sprite()
+	setup_shadow()
+	setup_health_bar()
+	setup_click_area()
 
 	# Start with idle animation
 	play_animation("idle_down")
@@ -666,73 +667,85 @@ func die() -> void:
 			sprite.modulate = Color.WHITE
 		z_index = 0
 
-	# Clean up weakpoints - let them finish their animations first
-	# Reparent them to world so they survive wolf death, then let them self-destruct
-	var world = get_tree().current_scene
-	for wp in weakpoints:
-		if is_instance_valid(wp):
-			var wp_pos = wp.global_position
-			# Reparent to world FIRST so it survives while animating
-			if wp.get_parent():
-				wp.get_parent().remove_child(wp)
-			world.add_child(wp)
-			wp.global_position = wp_pos
-			# If not already destroyed, trigger destruction animation
-			if not wp.is_destroyed:
-				wp.destroy()
-	weakpoints.clear()
+	# DEDICATED SERVER: Skip visual/audio operations
+	var is_dedicated_server = "--server" in OS.get_cmdline_user_args()
 
-	# Grant XP to player
-	var should_grant_xp = true
-	if multiplayer.has_multiplayer_peer():
-		var killer_id = get_meta("killer_peer_id", -1)
-		should_grant_xp = (killer_id == multiplayer.get_unique_id())
+	# Clean up weakpoints - just queue_free on server, let clients animate
+	if is_dedicated_server:
+		for wp in weakpoints:
+			if is_instance_valid(wp):
+				wp.queue_free()
+		weakpoints.clear()
+	else:
+		# Client: let weakpoints finish their animations first
+		var world = get_tree().current_scene
+		for wp in weakpoints:
+			if is_instance_valid(wp):
+				var wp_pos = wp.global_position
+				# Reparent to world FIRST so it survives while animating
+				if wp.get_parent():
+					wp.get_parent().remove_child(wp)
+				world.add_child(wp)
+				wp.global_position = wp_pos
+				# If not already destroyed, trigger destruction animation
+				if not wp.is_destroyed:
+					wp.destroy()
+		weakpoints.clear()
 
-	if should_grant_xp:
-		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-		if player and player.has_method("gain_experience"):
-			player.gain_experience(xp_reward)
-			print("🐺 Wolf killed! Granting %d XP" % xp_reward)
-			# Show world-space XP text floating up from mob
-			var game_world = get_tree().get_first_node_in_group("game_world")
-			if game_world:
-				CombatText.create_xp(xp_reward, global_position, game_world)
+	# Grant XP to player (only on clients - server has no local player)
+	if not is_dedicated_server:
+		var should_grant_xp = true
+		if multiplayer.has_multiplayer_peer():
+			var killer_id = get_meta("killer_peer_id", -1)
+			should_grant_xp = (killer_id == multiplayer.get_unique_id())
 
-		# Forged weapon stats: track kill for equipped forged weapons
-		if player and player.has_node("PlayerCombat"):
-			var combat_system = player.get_node("PlayerCombat")
-			if combat_system.has_method("track_enemy_killed"):
-				var is_elite_enemy = is_in_group("elite") or is_in_group("guardian")
-				var is_boss_enemy = is_in_group("boss")
-				combat_system.track_enemy_killed("wolf", is_elite_enemy, is_boss_enemy)
+		if should_grant_xp:
+			var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+			if player and player.has_method("gain_experience"):
+				player.gain_experience(xp_reward)
+				print("🐺 Wolf killed! Granting %d XP" % xp_reward)
+				# Show world-space XP text floating up from mob
+				var game_world = get_tree().get_first_node_in_group("game_world")
+				if game_world:
+					CombatText.create_xp(xp_reward, global_position, game_world)
+
+			# Forged weapon stats: track kill for equipped forged weapons
+			if player and player.has_node("PlayerCombat"):
+				var combat_system = player.get_node("PlayerCombat")
+				if combat_system.has_method("track_enemy_killed"):
+					var is_elite_enemy = is_in_group("elite") or is_in_group("guardian")
+					var is_boss_enemy = is_in_group("boss")
+					combat_system.track_enemy_killed("wolf", is_elite_enemy, is_boss_enemy)
 
 	# Store gold in corpse
 	if corpse_gold == 0:
 		corpse_gold = gold_drop
 
-	# Play wolf death sound
-	var sound_manager = get_node_or_null("/root/SoundManager")
-	if sound_manager:
-		sound_manager.play_wolf_death_sound(global_position, -8.0)
+	# Skip visual/audio on dedicated server
+	if not is_dedicated_server:
+		# Play wolf death sound
+		var sound_manager = get_node_or_null("/root/SoundManager")
+		if sound_manager:
+			sound_manager.play_wolf_death_sound(global_position, -8.0)
 
-	# Play death animation - keep _is_idle false so it animates
-	_is_idle = false
-	_set_animation_type("die")
-	_current_frame = 0
-	_update_sprite_region()
-
-	# Wait for death animation (4 frames at 8fps = 0.5s)
-	await get_tree().create_timer(0.5).timeout
-	if not is_instance_valid(self):
-		return
-
-	# Stop on last death frame
-	_is_idle = true
-	var is_side = (_current_dir == "left" or _current_dir == "right")
-	var anims = ANIMS_SIDE if is_side else ANIMS_FRONT
-	if anims.has("die"):
-		_current_frame = anims["die"].frames - 1
+		# Play death animation - keep _is_idle false so it animates
+		_is_idle = false
+		_set_animation_type("die")
+		_current_frame = 0
 		_update_sprite_region()
+
+		# Wait for death animation (4 frames at 8fps = 0.5s)
+		await get_tree().create_timer(0.5).timeout
+		if not is_instance_valid(self):
+			return
+
+		# Stop on last death frame
+		_is_idle = true
+		var is_side = (_current_dir == "left" or _current_dir == "right")
+		var anims = ANIMS_SIDE if is_side else ANIMS_FRONT
+		if anims.has("die"):
+			_current_frame = anims["die"].frames - 1
+			_update_sprite_region()
 
 	# Generate loot
 	if corpse_loot.is_empty():

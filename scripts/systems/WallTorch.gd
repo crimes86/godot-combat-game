@@ -27,6 +27,12 @@ const BASE_LIGHT_ENERGY: float = 2.5
 const BASE_TEXTURE_SCALE: float = 15.0  # Extended radius for coverage bleed
 
 func _ready() -> void:
+	# Skip all visuals on dedicated server - wall torches are purely decorative
+	if "--server" in OS.get_cmdline_user_args():
+		set_process(false)
+		set_physics_process(false)
+		return
+
 	# Create visual representation
 	create_torch_visual()
 

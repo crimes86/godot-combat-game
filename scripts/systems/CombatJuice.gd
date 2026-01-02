@@ -53,11 +53,20 @@ var _effect_decay_rate: float = 5.0
 var _canvas_modulate: CanvasModulate = null
 var _world_environment: WorldEnvironment = null
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Skip on dedicated server - combat juice is purely visual/audio feedback
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+	if _is_server_mode:
+		set_process(false)
+		return
 	print("✅ CombatJuice autoload initialized")
 	process_mode = Node.PROCESS_MODE_ALWAYS  # Process even when time_scale is 0
 
 func _process(delta: float) -> void:
+	if _is_server_mode:
+		return
 	# Use REAL time (not affected by Engine.time_scale)
 	var real_time = Time.get_ticks_msec() / 1000.0
 

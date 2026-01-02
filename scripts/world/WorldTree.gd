@@ -36,6 +36,12 @@ const GLOW_PULSE_SPEED: float = 1.2
 func _ready() -> void:
 	add_to_group("world_tree")
 
+	# Skip visuals on dedicated server
+	if "--server" in OS.get_cmdline_user_args():
+		set_process(false)
+		_create_interaction_area()  # Keep collision for gameplay
+		return
+
 	_create_visuals()
 	_create_interaction_area()
 	_create_ui_elements()

@@ -23,10 +23,20 @@ var is_picked_up: bool = false
 # Visual
 var sprite: Sprite2D = null
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	# Set up Area2D
 	collision_layer = 0
 	collision_mask = 1  # Detect player on layer 1
+
+	# Skip visual/UI on dedicated server
+	if _is_server_mode:
+		set_physics_process(false)
+		return
 
 	# Connect signals
 	body_entered.connect(_on_body_entered)

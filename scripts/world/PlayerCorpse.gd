@@ -65,17 +65,25 @@ const DRAG_DISTANCE: float = 40.0
 var corpse_sprite: AnimatedSprite2D = null
 var decay_particles: GPUParticles2D = null
 
+# Server mode flag - skip all visual/texture creation on dedicated server
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
 	add_to_group("player_corpses")
 
 	# Set up collision (don't block movement, just for interaction detection)
 	collision_layer = 0
 	collision_mask = 0
 
-	# Create interaction area
+	# DEDICATED SERVER: Skip visual elements
+	if _is_server_mode:
+		return
+
+	# Create interaction area (client-only)
 	_create_interaction_area()
 
-	# Create loot prompt label
+	# Create loot prompt label (client-only)
 	_create_loot_prompt()
 
 func initialize(player: Node, death_pos: Vector2) -> void:
@@ -126,8 +134,9 @@ func initialize(player: Node, death_pos: Vector2) -> void:
 	if not stored_equipped_weapon.is_empty():
 		stored_sprite_names["weapon"] = stored_equipped_weapon.get("weapon_type", "")
 
-	# Setup corpse visual with armor layers
-	_setup_corpse_visual()
+	# Setup corpse visual with armor layers (client-only)
+	if not _is_server_mode:
+		_setup_corpse_visual()
 
 	print("   Stored: %d inventory items, %d gold, weapon=%s" % [
 		_count_items(stored_inventory),

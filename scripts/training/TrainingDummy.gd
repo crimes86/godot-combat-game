@@ -72,7 +72,12 @@ signal weakpoint_spawned(weakpoint: Node)  # Emitted when a weakpoint is created
 signal weakpoint_destroyed(weakpoint: Node)  # Emitted when a weakpoint is destroyed
 signal died()  # Note: Dummy never actually dies
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	# Cache _tutorial_manager reference (may not exist in server builds)
 	_tutorial_manager = get_node_or_null("/root/TutorialManager")
 
@@ -85,6 +90,10 @@ func _ready() -> void:
 	# Set collision layers (same as enemies)
 	collision_layer = 1
 	collision_mask = 0  # Doesn't need to detect anything
+
+	# DEDICATED SERVER: Skip all visual/audio creation - only need collision
+	if _is_server_mode:
+		return
 
 	# Create shadow first (so it's behind everything)
 	create_shadow()

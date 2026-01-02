@@ -237,7 +237,12 @@ class ChunkData:
 	var deferred_pickable_bones: Array[Dictionary] = []  # [{pos, texture, scale, rotation, modulate}]
 	var active_pickable_bones: Array[Node2D] = []  # Currently spawned pickable bones
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	print("🗺️ ChunkBasedPropSystem initialized - 3 square chunks (%.0fx%.0fpx each)" % [CHUNK_SIZE, CHUNK_SIZE])
 
 	# Register with GlobalDebugOverlay for F3 debug display
@@ -1625,54 +1630,56 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 
 	lava_pool.add_child(light)
 
-	# Add heat particles (embers rising)
-	var particles = GPUParticles2D.new()
-	particles.amount = int(pool_size / 8)
-	particles.lifetime = 2.5
-	particles.explosiveness = 0.0
-	particles.randomness = 0.7
-	particles.local_coords = false
+	# Add heat particles (embers rising) - skip on dedicated server
+	var is_dedicated_server = "--server" in OS.get_cmdline_user_args()
+	if not is_dedicated_server:
+		var particles = GPUParticles2D.new()
+		particles.amount = int(pool_size / 8)
+		particles.lifetime = 2.5
+		particles.explosiveness = 0.0
+		particles.randomness = 0.7
+		particles.local_coords = false
 
-	var material = ParticleProcessMaterial.new()
-	material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	var emission_width = (pool_size / 3) * elongation_x
-	var emission_height = (pool_size / 3) * elongation_y
-	material.emission_box_extents = Vector3(emission_width, emission_height, 0)
-	material.direction = Vector3(0, -1, 0)
-	material.spread = 12.0
-	material.initial_velocity_min = 25.0
-	material.initial_velocity_max = 50.0
-	material.gravity = Vector3(0, -28, 0)
-	material.scale_min = 1.0
-	material.scale_max = 2.0
-	material.color = Color(1.0, 0.65, 0.1, 1.0)
+		var material = ParticleProcessMaterial.new()
+		material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+		var emission_width = (pool_size / 3) * elongation_x
+		var emission_height = (pool_size / 3) * elongation_y
+		material.emission_box_extents = Vector3(emission_width, emission_height, 0)
+		material.direction = Vector3(0, -1, 0)
+		material.spread = 12.0
+		material.initial_velocity_min = 25.0
+		material.initial_velocity_max = 50.0
+		material.gravity = Vector3(0, -28, 0)
+		material.scale_min = 1.0
+		material.scale_max = 2.0
+		material.color = Color(1.0, 0.65, 0.1, 1.0)
 
-	var particle_gradient = Gradient.new()
-	particle_gradient.add_point(0.0, Color(1.0, 0.7, 0.15, 0))
-	particle_gradient.add_point(0.08, Color(1.0, 0.65, 0.12, 1))
-	particle_gradient.add_point(0.35, Color(1.0, 0.5, 0.08, 1))
-	particle_gradient.add_point(0.65, Color(0.95, 0.3, 0.05, 1))
-	particle_gradient.add_point(1.0, Color(0.6, 0.15, 0.0, 0))
-	var particle_gradient_tex = GradientTexture1D.new()
-	particle_gradient_tex.gradient = particle_gradient
-	material.color_ramp = particle_gradient_tex
+		var particle_gradient = Gradient.new()
+		particle_gradient.add_point(0.0, Color(1.0, 0.7, 0.15, 0))
+		particle_gradient.add_point(0.08, Color(1.0, 0.65, 0.12, 1))
+		particle_gradient.add_point(0.35, Color(1.0, 0.5, 0.08, 1))
+		particle_gradient.add_point(0.65, Color(0.95, 0.3, 0.05, 1))
+		particle_gradient.add_point(1.0, Color(0.6, 0.15, 0.0, 0))
+		var particle_gradient_tex = GradientTexture1D.new()
+		particle_gradient_tex.gradient = particle_gradient
+		material.color_ramp = particle_gradient_tex
 
-	particles.process_material = material
+		particles.process_material = material
 
-	var ember_gradient = Gradient.new()
-	ember_gradient.set_color(0, Color(1, 1, 1, 1))
-	ember_gradient.set_color(0.7, Color(1, 1, 1, 1))
-	ember_gradient.set_color(0.85, Color(1, 1, 1, 0.5))
-	ember_gradient.set_color(1, Color(0, 0, 0, 0))
-	var ember_texture = GradientTexture2D.new()
-	ember_texture.gradient = ember_gradient
-	ember_texture.width = 4
-	ember_texture.height = 4
-	ember_texture.fill = GradientTexture2D.FILL_RADIAL
-	ember_texture.fill_from = Vector2(0.5, 0.5)
-	particles.texture = ember_texture
+		var ember_gradient = Gradient.new()
+		ember_gradient.set_color(0, Color(1, 1, 1, 1))
+		ember_gradient.set_color(0.7, Color(1, 1, 1, 1))
+		ember_gradient.set_color(0.85, Color(1, 1, 1, 0.5))
+		ember_gradient.set_color(1, Color(0, 0, 0, 0))
+		var ember_texture = GradientTexture2D.new()
+		ember_texture.gradient = ember_gradient
+		ember_texture.width = 4
+		ember_texture.height = 4
+		ember_texture.fill = GradientTexture2D.FILL_RADIAL
+		ember_texture.fill_from = Vector2(0.5, 0.5)
+		particles.texture = ember_texture
 
-	lava_pool.add_child(particles)
+		lava_pool.add_child(particles)
 
 	# Add damage area for players walking on lava
 	var damage_area = Area2D.new()
@@ -2170,6 +2177,10 @@ func _on_bone_picked_up(bone_node: Node2D) -> void:
 
 func add_bone_sparkle(bone_node: Node2D) -> void:
 	"""Add sparkle effect to pickable bone (like treasure chests)"""
+	# DEDICATED SERVER: Skip visual effects
+	if _is_server_mode:
+		return
+
 	var sparkle_container = Node2D.new()
 	sparkle_container.name = "SparkleContainer"
 	sparkle_container.z_index = 10  # Draw on top

@@ -500,18 +500,21 @@ func _ready() -> void:
 		create_cone_visualizer()
 	# create_range_indicator()  # Commented out - don't show range circle
 	
-	# Setup screen shake
-	screen_shake = ScreenShake.new()
-	screen_shake.name = "ScreenShake"
-	add_child(screen_shake)
+	# Setup screen shake - only for local player on client (not on dedicated server)
+	var is_dedicated_server = "--server" in OS.get_cmdline_user_args()
+	if is_multiplayer_authority() and not is_dedicated_server:
+		screen_shake = ScreenShake.new()
+		screen_shake.name = "ScreenShake"
+		add_child(screen_shake)
 
 	# Initialize movement subsystem
 	movement_system = PlayerMovement.new(self)
 	movement_system.set_base_speed(speed)
-	
-	# Setup attack feedback system
-	attack_feedback = AttackFeedbackSystem.new()
-	add_child(attack_feedback)
+
+	# Setup attack feedback system - only for local player on client
+	if is_multiplayer_authority() and not is_dedicated_server:
+		attack_feedback = AttackFeedbackSystem.new()
+		add_child(attack_feedback)
 
 	# Initialize combat subsystem
 	combat_system = PlayerCombat.new(self)

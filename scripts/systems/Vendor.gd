@@ -28,17 +28,27 @@ var tutorial_arrow: Polygon2D = null
 var tutorial_arrow_tween: Tween = null
 var tutorial_arrow_flash_tween: Tween = null
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	print("🏪 Vendor '%s' starting initialization..." % vendor_name)
 
 	# Add to vendor group for tutorial system
 	add_to_group("vendor")
 
+	# Add physical collision so player can't walk through (needed on server)
+	add_collision_body()
+
+	# DEDICATED SERVER: Skip visual/UI elements
+	if _is_server_mode:
+		print("🏪 Vendor '%s' skipping visuals (server mode)" % vendor_name)
+		return
+
 	# Create animated sprite based on vendor type
 	setup_npc_sprite()
-
-	# Add physical collision so player can't walk through
-	add_collision_body()
 
 	# Connect area signals
 	body_entered.connect(_on_body_entered)

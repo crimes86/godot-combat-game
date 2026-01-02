@@ -37,6 +37,13 @@ const BAR_WIDTH = 50.0
 const BAR_HEIGHT = 6.0
 
 func _ready() -> void:
+	# Skip all visual creation in headless mode (dedicated server)
+	if DisplayServer.get_name() == "headless" or "--server" in OS.get_cmdline_user_args():
+		ready_to_position = false
+		set_process(false)
+		visible = false
+		return
+
 	# Create the modern rectangle health bar
 	create_rectangle_bar()
 
@@ -49,12 +56,6 @@ func _ready() -> void:
 
 	# Hide initially to prevent flashing at wrong position
 	visible = false
-
-	# Skip positioning logic in headless mode (dedicated server)
-	if DisplayServer.get_name() == "headless":
-		ready_to_position = false
-		set_process(false)
-		return
 
 	# Wait for parent to be fully initialized and in scene tree
 	if not is_inside_tree():
@@ -200,6 +201,11 @@ func _process(delta: float) -> void:
 
 func update_health(current: float, maximum: float) -> void:
 	"""✨ JUICY health update with smooth animation and color transitions"""
+	# DEDICATED SERVER: Skip all visual updates
+	if not fill:
+		current_health = current
+		max_health = maximum
+		return
 
 	var previous_health = current_health
 	current_health = current

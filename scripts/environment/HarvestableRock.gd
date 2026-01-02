@@ -89,7 +89,12 @@ var last_drawn_progress: float = -1.0  # Track last drawn progress
 var network_mine_progress_timer: float = 0.0
 const NETWORK_PROGRESS_SYNC_INTERVAL: float = 0.25  # Sync progress every 0.25s
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
+
 	# Find sprite and shadow from children (created by game_world.gd)
 	rock_sprite = get_node_or_null("Sprite")
 	rock_shadow = get_node_or_null("Shadow")
@@ -884,6 +889,10 @@ func _on_rock_imploded() -> void:
 
 func add_loot_indicator() -> void:
 	"""Add shiny glimmer effect to indicate rock pile has loot"""
+	# DEDICATED SERVER: Skip visual effects
+	if _is_server_mode:
+		return
+
 	if loot_indicator:
 		return  # Already has indicator
 

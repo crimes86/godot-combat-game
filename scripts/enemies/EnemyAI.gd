@@ -1048,6 +1048,11 @@ func despawn_campfire_skeleton() -> void:
 	if not enemy or not is_instance_valid(enemy):
 		return
 
+	# DEDICATED SERVER: Skip visual fade, just remove immediately
+	if is_server_mode:
+		enemy.queue_free()
+		return
+
 	# Fade out and remove
 	var tween = enemy.create_tween()
 	tween.tween_property(enemy, "modulate:a", 0.0, 0.5)
@@ -1239,6 +1244,10 @@ func perform_attack() -> void:
 			player.take_damage(damage)
 
 	# ✨ FIX: Enhanced visual feedback for attack (single tween for performance)
+	# DEDICATED SERVER: Skip visual feedback
+	if is_server_mode:
+		return
+
 	if is_instance_valid(enemy):
 		var original_scale = enemy.scale
 		var tween = enemy.create_tween()

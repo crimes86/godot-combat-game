@@ -13,6 +13,9 @@ func is_attack_held() -> bool:
 func is_interact_pressed() -> bool:
 	return false
 
+func is_mobile_platform() -> bool:
+	return false
+
 func show_controls() -> void:
 	pass
 

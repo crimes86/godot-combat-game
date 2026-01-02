@@ -16,7 +16,7 @@ const TIME_SYNC_INTERVAL: float = 5.0  # Sync time to clients every 5 seconds
 var time_sync_timer: float = 0.0
 
 # Server health monitoring (lightweight - logs every 10 min)
-const HEARTBEAT_INTERVAL: float = 600.0  # 10 minutes
+const HEARTBEAT_INTERVAL: float = 60.0  # 1 minute for debugging memory leaks
 var _heartbeat_timer: float = 0.0
 var _server_uptime: float = 0.0
 

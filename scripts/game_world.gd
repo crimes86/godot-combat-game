@@ -3227,6 +3227,10 @@ func spawn_dead_vegetation(parent: Node2D):
 
 func create_ambient_particles():
 	"""Create floating ash/dust particles for atmosphere"""
+	# Skip on dedicated server - visual effects not needed
+	if "--server" in OS.get_cmdline_user_args():
+		return
+
 	var particles = GPUParticles2D.new()
 	particles.name = "AmbientAsh"
 	particles.z_index = 450  # Above combat effects, below UI/labels
@@ -3510,59 +3514,61 @@ func spawn_lava_pools():
 
 		lava_pool.add_child(light)
 
-		# Add heat particles (embers rising) - sharper and more defined
-		var particles = GPUParticles2D.new()
-		particles.amount = int(pool_size / 8)  # More particles for bigger pools
-		particles.lifetime = 2.5
-		particles.explosiveness = 0.0
-		particles.randomness = 0.7
-		particles.local_coords = false
+		# Add heat particles (embers rising) - skip on dedicated server
+		var _is_dedicated_server = "--server" in OS.get_cmdline_user_args()
+		if not _is_dedicated_server:
+			var particles = GPUParticles2D.new()
+			particles.amount = int(pool_size / 8)  # More particles for bigger pools
+			particles.lifetime = 2.5
+			particles.explosiveness = 0.0
+			particles.randomness = 0.7
+			particles.local_coords = false
 
-		var material = ParticleProcessMaterial.new()
-		material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-		# Box emission with elongation to match pool shape
-		var emission_width = (pool_size / 3) * elongation_x
-		var emission_height = (pool_size / 3) * elongation_y
-		material.emission_box_extents = Vector3(emission_width, emission_height, 0)
-		material.direction = Vector3(0, -1, 0)  # Rise upward
-		material.spread = 12.0  # Very tight spread
-		material.initial_velocity_min = 25.0
-		material.initial_velocity_max = 50.0
-		material.gravity = Vector3(0, -28, 0)  # Float upward faster
-		material.scale_min = 1.0  # Smaller, tighter particles
-		material.scale_max = 2.0
+			var material = ParticleProcessMaterial.new()
+			material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+			# Box emission with elongation to match pool shape
+			var emission_width = (pool_size / 3) * elongation_x
+			var emission_height = (pool_size / 3) * elongation_y
+			material.emission_box_extents = Vector3(emission_width, emission_height, 0)
+			material.direction = Vector3(0, -1, 0)  # Rise upward
+			material.spread = 12.0  # Very tight spread
+			material.initial_velocity_min = 25.0
+			material.initial_velocity_max = 50.0
+			material.gravity = Vector3(0, -28, 0)  # Float upward faster
+			material.scale_min = 1.0  # Smaller, tighter particles
+			material.scale_max = 2.0
 
-		# Hot orange embers that fade to red (realistic lava)
-		material.color = Color(1.0, 0.65, 0.1, 1.0)  # Bright orange embers
+			# Hot orange embers that fade to red (realistic lava)
+			material.color = Color(1.0, 0.65, 0.1, 1.0)  # Bright orange embers
 
-		# Color over lifetime: bright orange -> red-orange -> red -> fade
-		var particle_gradient = Gradient.new()
-		particle_gradient.add_point(0.0, Color(1.0, 0.7, 0.15, 0))  # Fade in bright orange
-		particle_gradient.add_point(0.08, Color(1.0, 0.65, 0.12, 1))  # Full bright orange
-		particle_gradient.add_point(0.35, Color(1.0, 0.5, 0.08, 1))  # Orange
-		particle_gradient.add_point(0.65, Color(0.95, 0.3, 0.05, 1))  # Red-orange
-		particle_gradient.add_point(1.0, Color(0.6, 0.15, 0.0, 0))  # Fade to dark red
-		var particle_gradient_tex = GradientTexture1D.new()
-		particle_gradient_tex.gradient = particle_gradient
-		material.color_ramp = particle_gradient_tex
+			# Color over lifetime: bright orange -> red-orange -> red -> fade
+			var particle_gradient = Gradient.new()
+			particle_gradient.add_point(0.0, Color(1.0, 0.7, 0.15, 0))  # Fade in bright orange
+			particle_gradient.add_point(0.08, Color(1.0, 0.65, 0.12, 1))  # Full bright orange
+			particle_gradient.add_point(0.35, Color(1.0, 0.5, 0.08, 1))  # Orange
+			particle_gradient.add_point(0.65, Color(0.95, 0.3, 0.05, 1))  # Red-orange
+			particle_gradient.add_point(1.0, Color(0.6, 0.15, 0.0, 0))  # Fade to dark red
+			var particle_gradient_tex = GradientTexture1D.new()
+			particle_gradient_tex.gradient = particle_gradient
+			material.color_ramp = particle_gradient_tex
 
-		particles.process_material = material
+			particles.process_material = material
 
-		# Crisp pixel-art style texture - very small with hard edges
-		var ember_gradient = Gradient.new()
-		ember_gradient.set_color(0, Color(1, 1, 1, 1))  # Solid bright center
-		ember_gradient.set_color(0.7, Color(1, 1, 1, 1))  # Hold solid longer
-		ember_gradient.set_color(0.85, Color(1, 1, 1, 0.5))  # Sharp falloff
-		ember_gradient.set_color(1, Color(0, 0, 0, 0))  # Transparent edge
-		var ember_texture = GradientTexture2D.new()
-		ember_texture.gradient = ember_gradient
-		ember_texture.width = 4  # Tiny = crisp pixel-art look
-		ember_texture.height = 4
-		ember_texture.fill = GradientTexture2D.FILL_RADIAL
-		ember_texture.fill_from = Vector2(0.5, 0.5)
-		particles.texture = ember_texture
+			# Crisp pixel-art style texture - very small with hard edges
+			var ember_gradient = Gradient.new()
+			ember_gradient.set_color(0, Color(1, 1, 1, 1))  # Solid bright center
+			ember_gradient.set_color(0.7, Color(1, 1, 1, 1))  # Hold solid longer
+			ember_gradient.set_color(0.85, Color(1, 1, 1, 0.5))  # Sharp falloff
+			ember_gradient.set_color(1, Color(0, 0, 0, 0))  # Transparent edge
+			var ember_texture = GradientTexture2D.new()
+			ember_texture.gradient = ember_gradient
+			ember_texture.width = 4  # Tiny = crisp pixel-art look
+			ember_texture.height = 4
+			ember_texture.fill = GradientTexture2D.FILL_RADIAL
+			ember_texture.fill_from = Vector2(0.5, 0.5)
+			particles.texture = ember_texture
 
-		lava_pool.add_child(particles)
+			lava_pool.add_child(particles)
 
 		# Add damage area (tighter circle - 60% of pool size so edges are safe)
 		var damage_area = Area2D.new()
@@ -3899,9 +3905,11 @@ func _on_player_authenticated(id: int, player_name: String):
 	# Broadcast spawn to ALL peers (call_local ensures server also runs it)
 	# Note: New client may not have game_world loaded yet, but they'll spawn
 	# themselves in _spawn_initial_players when they load the scene
+	# IMPORTANT: Server generates spawn position to ensure all clients use the same position
+	var server_spawn_pos = get_spawn_point()
 	if OS.is_debug_build():
-		print("🔍 [PLAYER DEBUG] Broadcasting spawn_player RPC for %d (tier: %s) to all peers" % [id, player_tier])
-	spawn_player.rpc(id, Vector2.ZERO, 0, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", false, "", player_name, is_guest, player_tier)
+		print("🔍 [PLAYER DEBUG] Broadcasting spawn_player RPC for %d (tier: %s) at %s to all peers" % [id, player_tier, server_spawn_pos])
+	spawn_player.rpc(id, server_spawn_pos, 0, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", false, "", player_name, is_guest, player_tier)
 
 	# Tell the new player about existing players (but NOT themselves!)
 	# Note: Client will also request this via _request_existing_players as a backup

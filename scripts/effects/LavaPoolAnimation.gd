@@ -13,6 +13,11 @@ var update_timer: float = 0.0
 const UPDATE_INTERVAL: float = 0.1  # Update 10 times per second instead of 60
 
 func _ready():
+	# Skip on dedicated server - visual animations not needed
+	if "--server" in OS.get_cmdline_user_args():
+		set_process(false)
+		return
+
 	# Add random time offset so each pool flows differently
 	time_offset = randf() * TAU
 

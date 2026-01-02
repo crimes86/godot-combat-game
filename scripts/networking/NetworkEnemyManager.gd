@@ -539,14 +539,21 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 	if not enemy or not is_instance_valid(enemy):
 		return
 
-	# Safety check - enemy must be in scene tree for visual feedback
-	if not enemy.is_inside_tree():
-		# Still update health even if not in tree
-		enemy.current_health = new_health
+	# Update local health (needed on both server and client)
+	enemy.current_health = new_health
+
+	# Emit damage signal for AI aggro (needed on server for enemy AI)
+	if enemy.is_inside_tree():
+		enemy.damage_taken.emit(damage, is_crit)
+
+	# DEDICATED SERVER: Skip all visual/audio operations to prevent memory leak
+	# Combat text, sounds, particles, etc. are client-only visual feedback
+	if "--server" in OS.get_cmdline_user_args():
 		return
 
-	# Update local health
-	enemy.current_health = new_health
+	# Safety check - enemy must be in scene tree for visual feedback
+	if not enemy.is_inside_tree():
+		return
 
 	# Tutorial: Notify TutorialManager if this is the training dummy
 	if enemy.is_in_group("training_dummy"):
@@ -581,11 +588,6 @@ func _client_enemy_damaged(enemy_network_id: int, damage: float, new_health: flo
 	# Trigger attack particle feedback ONLY for the attacker
 	# (Other players shouldn't see particles spawn at their position)
 	_trigger_attack_feedback_for_attacker(enemy, is_crit, is_weakpoint, attacker_id)
-
-	# Emit damage signal for AI aggro (all peers)
-	# This triggers combat mode on all clients so enemies chase the correct player
-	# Visual effects are handled separately above, so this is safe to emit on all peers
-	enemy.damage_taken.emit(damage, is_crit)
 
 func _spawn_combat_text(enemy: Node, damage: float, is_crit: bool, is_weakpoint: bool) -> void:
 	"""Spawn floating combat text above enemy."""

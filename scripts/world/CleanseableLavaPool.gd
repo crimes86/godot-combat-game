@@ -42,6 +42,10 @@ func _ready() -> void:
 	collision_layer = 4  # Interactable layer
 	collision_mask = 1  # Player layer
 
+	# Skip visuals on dedicated server
+	if "--server" in OS.get_cmdline_user_args():
+		return
+
 	# Create visuals
 	_create_visuals()
 	_create_ui_elements()

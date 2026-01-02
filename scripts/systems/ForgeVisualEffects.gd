@@ -545,7 +545,11 @@ const EFFECT_CONFIGS = {
 # Active effects on entities
 var _active_effects: Dictionary = {}  # entity_id -> [effect_nodes]
 
+var _is_server_mode: bool = false
+
 func _ready() -> void:
+	# Check if running on dedicated server
+	_is_server_mode = "--server" in OS.get_cmdline_user_args()
 	# Effects are now pre-computed by backend - no runtime generation needed
 	pass
 
@@ -560,7 +564,12 @@ func apply_effects_to_entity(entity: Node2D, effects: Array, modifiers: Dictiona
 	- effect_intensity: Multiplier for glow/effect intensity (default 1.0)
 	- particle_multiplier: Multiplier for particle counts (default 1.0)
 	- theme_color: Override color for effects (optional)
+
+	DEDICATED SERVER: Skip all visual effects
 	"""
+	if _is_server_mode:
+		return
+
 	var entity_id = entity.get_instance_id()
 
 	# Clear existing effects

@@ -32,6 +32,11 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 
+	# Skip visuals on dedicated server
+	if "--server" in OS.get_cmdline_user_args():
+		set_process(false)
+		return
+
 	# Create visuals
 	_create_visuals()
 

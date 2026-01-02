@@ -100,6 +100,8 @@ func _ready():
 # Host a game server
 func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}) -> bool:
 	peer = ENetMultiplayerPeer.new()
+	# Bind to IPv4 only to avoid IPv6 port conflicts on some systems
+	peer.set_bind_ip("0.0.0.0")
 	var error = peer.create_server(port, MAX_PLAYERS)
 
 	if error == OK:
