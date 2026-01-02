@@ -34,3 +34,6 @@ psycopg2-binary==2.9.10  # PostgreSQL (required for production)
 web3>=6.17.0,<7
 siwe==4.0.0
 eth-account>=0.11.0
+
+# System monitoring
+psutil>=5.9.0

@@ -1,0 +1,26 @@
+[Unit]
+Description=Ashbane Server Monitor Agent
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ashbane-monitor
+
+# Configuration via environment file
+EnvironmentFile=/opt/ashbane-monitor/monitor.env
+
+ExecStart=/usr/bin/python3 /opt/ashbane-monitor/ashbane_monitor.py
+
+# Restart on failure
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ashbane-monitor
+
+[Install]
+WantedBy=multi-user.target

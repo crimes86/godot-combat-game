@@ -636,6 +636,17 @@ async def view_logs_html(
             </div>
         </div>
 
+        <!-- Server Stats Section -->
+        <div id="server-stats-section" style="margin-bottom:20px;">
+            <h2 style="color:#ff6a00;font-size:16px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
+                Server Infrastructure
+                <span id="server-stats-refresh" style="font-size:12px;color:#666;cursor:pointer;" onclick="loadServerStats()">🔄 Refresh</span>
+            </h2>
+            <div id="server-stats-container" style="display:flex;gap:15px;flex-wrap:wrap;">
+                <div style="color:#666;padding:20px;">Loading server stats...</div>
+            </div>
+        </div>
+
         <div class="stats">
             Showing {len(logs)} of {total} logs (offset: {offset})
         </div>
@@ -737,7 +748,178 @@ async def view_logs_html(
         document.getElementById('suspiciousModal').addEventListener('click', function(e) {{
             if (e.target === this) closeSuspiciousModal();
         }});
+
+        // Server Infrastructure Stats
+        function loadServerStats() {{
+            document.getElementById('server-stats-container').innerHTML = '<div style="color:#666;padding:20px;">Loading...</div>';
+            fetch('/api/server-stats/servers')
+                .then(r => r.json())
+                .then(servers => {{
+                    let html = '';
+                    servers.forEach(server => {{
+                        const statusColor = server.status === 'online' ? '#4ade80' : server.status === 'stale' ? '#f5a623' : '#ff4444';
+                        const statusIcon = server.status === 'online' ? '🟢' : server.status === 'stale' ? '🟡' : '🔴';
+                        const cpuColor = server.cpu_percent > 80 ? '#ff4444' : server.cpu_percent > 60 ? '#f5a623' : '#4ade80';
+                        const memColor = server.memory_percent > 80 ? '#ff4444' : server.memory_percent > 60 ? '#f5a623' : '#4ade80';
+                        const diskColor = server.disk_percent > 80 ? '#ff4444' : server.disk_percent > 60 ? '#f5a623' : '#4ade80';
+
+                        const isGameServer = server.server_type === 'gameserver';
+                        const typeIcon = isGameServer ? '🎮' : '🖥️';
+                        const typeBadge = isGameServer ?
+                            '<span style="background:#7c3aed;color:white;padding:2px 6px;border-radius:4px;font-size:10px;margin-left:5px;">GAME</span>' :
+                            '<span style="background:#2563eb;color:white;padding:2px 6px;border-radius:4px;font-size:10px;margin-left:5px;">API</span>';
+
+                        const uptimeStr = formatUptime(server.uptime_seconds);
+                        const playerInfo = server.players_online !== null ?
+                            `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #333;">
+                                <span style="color:#4a9eff;font-weight:bold;font-size:18px;">${{server.players_online}}</span>
+                                <span style="color:#666;">/${{server.players_max || '?'}} players</span>
+                            </div>` : '';
+
+                        html += `
+                            <div style="background:#252528;border-radius:8px;padding:15px;min-width:280px;border-left:3px solid ${{statusColor}};" onclick="openServerDetail('${{server.server_id}}')" class="server-card">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                                    <div>
+                                        <span style="font-size:16px;">${{typeIcon}}</span>
+                                        <span style="color:#fff;font-weight:bold;">${{server.server_id}}</span>
+                                        ${{typeBadge}}
+                                    </div>
+                                    <span style="font-size:14px;" title="${{server.status}}">${{statusIcon}}</span>
+                                </div>
+                                <div style="color:#888;font-size:11px;margin-bottom:10px;">
+                                    ${{server.hostname || 'Unknown host'}} • Up ${{uptimeStr}}
+                                </div>
+                                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+                                    <div>
+                                        <div style="color:${{cpuColor}};font-weight:bold;font-size:16px;">${{server.cpu_percent.toFixed(0)}}%</div>
+                                        <div style="color:#666;font-size:10px;">CPU</div>
+                                    </div>
+                                    <div>
+                                        <div style="color:${{memColor}};font-weight:bold;font-size:16px;">${{server.memory_percent.toFixed(0)}}%</div>
+                                        <div style="color:#666;font-size:10px;">MEM</div>
+                                    </div>
+                                    <div>
+                                        <div style="color:${{diskColor}};font-weight:bold;font-size:16px;">${{server.disk_percent.toFixed(0)}}%</div>
+                                        <div style="color:#666;font-size:10px;">DISK</div>
+                                    </div>
+                                </div>
+                                ${{playerInfo}}
+                            </div>
+                        `;
+                    }});
+
+                    if (servers.length === 0) {{
+                        html = '<div style="color:#666;padding:20px;background:#252528;border-radius:8px;">No servers reporting. Deploy monitoring agents to see stats.</div>';
+                    }}
+
+                    document.getElementById('server-stats-container').innerHTML = html;
+                }})
+                .catch(e => {{
+                    document.getElementById('server-stats-container').innerHTML = '<div style="color:#ff4444;padding:20px;">Error loading server stats: ' + e + '</div>';
+                }});
+        }}
+
+        function formatUptime(seconds) {{
+            if (!seconds) return 'N/A';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            if (days > 0) return days + 'd ' + hours + 'h';
+            if (hours > 0) return hours + 'h ' + mins + 'm';
+            return mins + 'm';
+        }}
+
+        // Server Detail Modal
+        function openServerDetail(serverId) {{
+            const modal = document.getElementById('serverDetailModal');
+            const content = document.getElementById('serverDetailContent');
+            modal.style.display = 'block';
+            content.innerHTML = '<div style="padding:20px;color:#666;">Loading...</div>';
+
+            fetch('/api/server-stats/servers/' + serverId)
+                .then(r => r.json())
+                .then(data => {{
+                    let html = `
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                            <div>
+                                <h3 style="color:#ff6a00;margin-bottom:10px;">System</h3>
+                                <div style="background:#1a1a1d;padding:10px;border-radius:6px;">
+                                    <div style="margin-bottom:8px;"><span style="color:#666;">Hostname:</span> <span style="color:#fff;">${{data.hostname || 'N/A'}}</span></div>
+                                    <div style="margin-bottom:8px;"><span style="color:#666;">CPU:</span> <span style="color:#fff;">${{data.cpu_percent?.toFixed(1) || 0}}% (${{data.cpu_count || '?'}} cores)</span></div>
+                                    <div style="margin-bottom:8px;"><span style="color:#666;">Load:</span> <span style="color:#fff;">${{data.load_avg_1m?.toFixed(2) || 'N/A'}} / ${{data.load_avg_5m?.toFixed(2) || 'N/A'}} / ${{data.load_avg_15m?.toFixed(2) || 'N/A'}}</span></div>
+                                    <div style="margin-bottom:8px;"><span style="color:#666;">Memory:</span> <span style="color:#fff;">${{(data.memory_used_mb/1024).toFixed(1) || 0}} / ${{(data.memory_total_mb/1024).toFixed(1) || 0}} GB (${{data.memory_percent?.toFixed(0) || 0}}%)</span></div>
+                                    <div><span style="color:#666;">Uptime:</span> <span style="color:#fff;">${{formatUptime(data.uptime_seconds)}}</span></div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="color:#ff6a00;margin-bottom:10px;">Disks</h3>
+                                <div style="background:#1a1a1d;padding:10px;border-radius:6px;">
+                                    ${{(data.disks || []).map(d => `
+                                        <div style="margin-bottom:8px;">
+                                            <span style="color:#666;">${{d.mount}}:</span>
+                                            <span style="color:#fff;">${{d.used_gb?.toFixed(1) || 0}} / ${{d.total_gb?.toFixed(0) || 0}} GB (${{d.percent?.toFixed(0) || 0}}%)</span>
+                                        </div>
+                                    `).join('') || '<div style="color:#666;">No disk info</div>'}}
+                                </div>
+                            </div>
+                        </div>
+
+                        <h3 style="color:#ff6a00;margin:20px 0 10px 0;">Listening Ports</h3>
+                        <div style="background:#1a1a1d;padding:10px;border-radius:6px;max-height:150px;overflow-y:auto;">
+                            <table style="width:100%;font-size:12px;">
+                                <tr style="color:#666;"><th style="text-align:left;padding:4px;">Port</th><th style="text-align:left;padding:4px;">Process</th><th style="text-align:left;padding:4px;">PID</th></tr>
+                                ${{(data.connections || []).filter(c => c.status === 'LISTEN').map(c => `
+                                    <tr><td style="padding:4px;color:#4a9eff;">${{c.local_port}}</td><td style="padding:4px;color:#fff;">${{c.process_name || '-'}}</td><td style="padding:4px;color:#666;">${{c.pid || '-'}}</td></tr>
+                                `).join('') || '<tr><td colspan="3" style="color:#666;padding:4px;">No listening ports</td></tr>'}}
+                            </table>
+                        </div>
+
+                        <h3 style="color:#ff6a00;margin:20px 0 10px 0;">Top Processes</h3>
+                        <div style="background:#1a1a1d;padding:10px;border-radius:6px;max-height:200px;overflow-y:auto;">
+                            <table style="width:100%;font-size:12px;">
+                                <tr style="color:#666;"><th style="text-align:left;padding:4px;">Process</th><th style="text-align:right;padding:4px;">CPU%</th><th style="text-align:right;padding:4px;">MEM MB</th><th style="text-align:left;padding:4px;">Ports</th></tr>
+                                ${{(data.processes || []).slice(0, 10).map(p => `
+                                    <tr>
+                                        <td style="padding:4px;color:#fff;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${{p.cmdline || p.name}}">${{p.name}}</td>
+                                        <td style="padding:4px;color:${{p.cpu_percent > 50 ? '#ff4444' : '#4ade80'}};text-align:right;">${{p.cpu_percent?.toFixed(1) || 0}}</td>
+                                        <td style="padding:4px;text-align:right;color:#fff;">${{p.memory_mb?.toFixed(0) || 0}}</td>
+                                        <td style="padding:4px;color:#4a9eff;font-size:11px;">${{(p.ports || []).join(', ') || '-'}}</td>
+                                    </tr>
+                                `).join('') || '<tr><td colspan="4" style="color:#666;padding:4px;">No process info</td></tr>'}}
+                            </table>
+                        </div>
+                    `;
+                    content.innerHTML = html;
+                }})
+                .catch(e => {{
+                    content.innerHTML = '<div style="color:#ff4444;padding:20px;">Error: ' + e + '</div>';
+                }});
+        }}
+
+        function closeServerDetail() {{
+            document.getElementById('serverDetailModal').style.display = 'none';
+        }}
+
+        // Load server stats on page load and refresh every 30s
+        loadServerStats();
+        setInterval(loadServerStats, 30000);
         </script>
+
+        <!-- Server Detail Modal -->
+        <div id="serverDetailModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:1000;overflow-y:auto;">
+            <div style="max-width:800px;margin:40px auto;background:#1a1a1d;border-radius:12px;border:1px solid #333;">
+                <div style="padding:20px;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center;">
+                    <h2 style="margin:0;color:#ff6a00;">Server Details</h2>
+                    <button onclick="closeServerDetail()" style="background:none;border:none;color:#888;font-size:24px;cursor:pointer;">×</button>
+                </div>
+                <div id="serverDetailContent" style="padding:20px;"></div>
+            </div>
+        </div>
+
+        <style>
+            .server-card {{ cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; }}
+            .server-card:hover {{ transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }}
+        </style>
     </body>
     </html>
     """
