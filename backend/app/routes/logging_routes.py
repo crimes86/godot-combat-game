@@ -594,8 +594,14 @@ async def view_logs_html(
         </style>
     </head>
     <body>
-        <h1>Ashbane Game Logs</h1>
+        <h1>Ashbane Operations Dashboard</h1>
 
+        <!-- Section: Client Telemetry (Godot) -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <h2 style="color:#4a9eff;font-size:16px;margin:0;">📱 Client Telemetry</h2>
+            <span style="background:#2563eb;color:white;padding:2px 8px;border-radius:4px;font-size:10px;">GODOT</span>
+            <span id="client-status" style="font-size:12px;color:#4ade80;">● Receiving</span>
+        </div>
         <div class="stats-bar">
             <div class="stat-item">
                 <span class="stat-value">{total_logs_all:,}</span>
@@ -636,19 +642,23 @@ async def view_logs_html(
             </div>
         </div>
 
-        <!-- Server Stats Section -->
+        <!-- Section: Server Infrastructure (Python Agents) -->
         <div id="server-stats-section" style="margin-bottom:20px;">
-            <h2 style="color:#ff6a00;font-size:16px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
-                Server Infrastructure
-                <span id="server-stats-refresh" style="font-size:12px;color:#666;cursor:pointer;" onclick="loadServerStats()">🔄 Refresh</span>
-            </h2>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <h2 style="color:#ff6a00;font-size:16px;margin:0;">🖥️ Server Infrastructure</h2>
+                <span style="background:#7c3aed;color:white;padding:2px 8px;border-radius:4px;font-size:10px;">AGENTS</span>
+                <span id="server-status" style="font-size:12px;color:#666;">● Loading...</span>
+                <span id="server-stats-refresh" style="font-size:12px;color:#666;cursor:pointer;margin-left:auto;" onclick="loadServerStats()">🔄 Refresh</span>
+            </div>
             <div id="server-stats-container" style="display:flex;gap:15px;flex-wrap:wrap;">
                 <div style="color:#666;padding:20px;">Loading server stats...</div>
             </div>
         </div>
 
-        <div class="stats">
-            Showing {len(logs)} of {total} logs (offset: {offset})
+        <!-- Client Logs Section -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <h2 style="color:#4a9eff;font-size:14px;margin:0;">Client Logs</h2>
+            <span style="color:#666;font-size:12px;">Showing {len(logs)} of {total} logs (offset: {offset})</span>
         </div>
 
         <form class="filters" method="get">
@@ -810,12 +820,32 @@ async def view_logs_html(
 
                     if (servers.length === 0) {{
                         html = '<div style="color:#666;padding:20px;background:#252528;border-radius:8px;">No servers reporting. Deploy monitoring agents to see stats.</div>';
+                        document.getElementById('server-status').innerHTML = '⚪ No agents';
+                        document.getElementById('server-status').style.color = '#666';
+                    }} else {{
+                        // Update status indicator based on server health
+                        const onlineCount = servers.filter(s => s.status === 'online').length;
+                        const offlineCount = servers.filter(s => s.status === 'offline').length;
+                        const staleCount = servers.filter(s => s.status === 'stale').length;
+
+                        if (offlineCount > 0) {{
+                            document.getElementById('server-status').innerHTML = `🔴 ${{offlineCount}} offline`;
+                            document.getElementById('server-status').style.color = '#ff4444';
+                        }} else if (staleCount > 0) {{
+                            document.getElementById('server-status').innerHTML = `🟡 ${{staleCount}} stale`;
+                            document.getElementById('server-status').style.color = '#f5a623';
+                        }} else {{
+                            document.getElementById('server-status').innerHTML = `🟢 ${{onlineCount}} online`;
+                            document.getElementById('server-status').style.color = '#4ade80';
+                        }}
                     }}
 
                     document.getElementById('server-stats-container').innerHTML = html;
                 }})
                 .catch(e => {{
                     document.getElementById('server-stats-container').innerHTML = '<div style="color:#ff4444;padding:20px;">Error loading server stats: ' + e + '</div>';
+                    document.getElementById('server-status').innerHTML = '🔴 Error';
+                    document.getElementById('server-status').style.color = '#ff4444';
                 }});
         }}
 
