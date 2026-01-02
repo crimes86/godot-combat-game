@@ -211,40 +211,95 @@ def get_uptime() -> float:
 
 def get_game_server_stats() -> Dict[str, Any]:
     """
-    Get game-specific stats by checking for Godot process.
+    Get game-specific stats by checking for Godot processes.
 
     This looks for running Godot server processes and extracts
     player counts if available (requires the game to expose this somehow).
+    Also tracks individual game server instances with their uptimes.
     """
     game_stats = {
         "players_online": None,
         "players_max": None,
         "shard_id": None,
         "game_version": None,
+        "game_instances": [],  # List of running game server instances
     }
 
-    # Look for Godot server process
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    now = time.time()
+
+    # Look for all Godot server processes
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cpu_percent', 'memory_info', 'create_time']):
         try:
             pinfo = proc.info
             cmdline = pinfo.get('cmdline', [])
             cmdline_str = " ".join(cmdline) if cmdline else ""
+            proc_name = pinfo.get('name', '').lower()
 
-            # Check if this is a Godot server
-            if 'godot' in pinfo.get('name', '').lower() or '--server' in cmdline_str:
-                # Try to extract shard from cmdline
+            # Check if this is a Godot server (binary name or --server flag)
+            is_game_server = (
+                'godot' in proc_name or
+                'ashbane' in proc_name or
+                '--server' in cmdline_str
+            )
+
+            if is_game_server:
+                # Extract shard from cmdline
+                shard_id = None
+                port = None
                 if '--shard' in cmdline_str:
                     for i, arg in enumerate(cmdline):
                         if arg == '--shard' and i + 1 < len(cmdline):
-                            game_stats['shard_id'] = cmdline[i + 1]
+                            shard_id = cmdline[i + 1]
+                            break
+                if '--port' in cmdline_str:
+                    for i, arg in enumerate(cmdline):
+                        if arg == '--port' and i + 1 < len(cmdline):
+                            try:
+                                port = int(cmdline[i + 1])
+                            except ValueError:
+                                pass
                             break
 
-                # TODO: Could read player count from a status file if game exports one
-                # e.g., /tmp/ashbane-server-status.json
+                # Get process ports
+                proc_ports = []
+                try:
+                    for conn in proc.connections(kind='inet'):
+                        if conn.laddr and conn.status == 'LISTEN':
+                            proc_ports.append(conn.laddr.port)
+                except (psutil.AccessDenied, psutil.NoSuchProcess):
+                    pass
 
-                break
+                # Calculate process uptime
+                create_time = pinfo.get('create_time', now)
+                instance_uptime = now - create_time
+
+                # Memory
+                mem_info = pinfo.get('memory_info')
+                memory_mb = mem_info.rss / (1024 ** 2) if mem_info else 0
+
+                instance = {
+                    "pid": pinfo['pid'],
+                    "name": pinfo.get('name', 'unknown'),
+                    "shard_id": shard_id,
+                    "port": port or (proc_ports[0] if proc_ports else None),
+                    "ports": proc_ports,
+                    "uptime_seconds": instance_uptime,
+                    "cpu_percent": pinfo.get('cpu_percent', 0) or 0,
+                    "memory_mb": memory_mb,
+                    "cmdline": cmdline_str[:300],
+                }
+
+                game_stats['game_instances'].append(instance)
+
+                # Use first instance's shard as the primary (for backwards compat)
+                if game_stats['shard_id'] is None and shard_id:
+                    game_stats['shard_id'] = shard_id
+
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
+
+    # Sort instances by uptime (oldest first)
+    game_stats['game_instances'].sort(key=lambda x: x['uptime_seconds'], reverse=True)
 
     # Try to read status file if it exists (game server can write this)
     status_file = "/tmp/ashbane-server-status.json"

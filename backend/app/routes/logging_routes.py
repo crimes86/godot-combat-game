@@ -814,6 +814,13 @@ async def view_logs_html(
                                 <span style="color:#666;">/${{server.players_max || '?'}} players</span>
                             </div>` : '';
 
+                        // Show game instances count for gameservers
+                        const instancesInfo = (isGameServer && server.game_instances_count > 0) ?
+                            `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #333;">
+                                <span style="color:#7c3aed;font-weight:bold;font-size:14px;">🎮 ${{server.game_instances_count}}</span>
+                                <span style="color:#666;font-size:12px;"> instance${{server.game_instances_count > 1 ? 's' : ''}} running</span>
+                            </div>` : '';
+
                         html += `
                             <div style="background:#252528;border-radius:8px;padding:15px;min-width:280px;border-left:3px solid ${{statusColor}};" onclick="openServerDetail('${{server.server_id}}')" class="server-card">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -842,6 +849,7 @@ async def view_logs_html(
                                     </div>
                                 </div>
                                 ${{playerInfo}}
+                                ${{instancesInfo}}
                             </div>
                         `;
                     }});
@@ -946,6 +954,38 @@ async def view_logs_html(
                                 `).join('') || '<tr><td colspan="4" style="color:#666;padding:4px;">No process info</td></tr>'}}
                             </table>
                         </div>
+
+                        ${{(data.game_instances && data.game_instances.length > 0) ? `
+                            <h3 style="color:#7c3aed;margin:20px 0 10px 0;">🎮 Game Server Instances</h3>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(250px, 1fr));gap:10px;">
+                                ${{data.game_instances.map(inst => `
+                                    <div style="background:#1a1a1d;padding:12px;border-radius:6px;border-left:3px solid #7c3aed;">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                            <span style="color:#fff;font-weight:bold;">${{inst.shard_id || inst.name}}</span>
+                                            <span style="color:#666;font-size:11px;">PID ${{inst.pid}}</span>
+                                        </div>
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+                                            <div>
+                                                <div style="color:#4ade80;font-weight:bold;">${{formatUptime(inst.uptime_seconds)}}</div>
+                                                <div style="color:#666;font-size:10px;">UPTIME</div>
+                                            </div>
+                                            <div>
+                                                <div style="color:#4a9eff;font-weight:bold;">${{inst.port || '-'}}</div>
+                                                <div style="color:#666;font-size:10px;">PORT</div>
+                                            </div>
+                                            <div>
+                                                <div style="color:${{inst.cpu_percent > 50 ? '#ff4444' : '#fff'}};">${{inst.cpu_percent?.toFixed(1) || 0}}%</div>
+                                                <div style="color:#666;font-size:10px;">CPU</div>
+                                            </div>
+                                            <div>
+                                                <div style="color:#fff;">${{inst.memory_mb?.toFixed(0) || 0}} MB</div>
+                                                <div style="color:#666;font-size:10px;">MEM</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}}
+                            </div>
+                        ` : ''}}
                     `;
                     content.innerHTML = html;
                 }})

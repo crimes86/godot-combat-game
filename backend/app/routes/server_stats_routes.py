@@ -51,6 +51,18 @@ class ProcessInfo(BaseModel):
     cmdline: str = ""
 
 
+class GameInstanceInfo(BaseModel):
+    pid: int
+    name: str = "unknown"
+    shard_id: Optional[str] = None
+    port: Optional[int] = None
+    ports: List[int] = []
+    uptime_seconds: float = 0
+    cpu_percent: float = 0
+    memory_mb: float = 0
+    cmdline: str = ""
+
+
 class NetworkConnection(BaseModel):
     local_port: int
     remote_addr: Optional[str] = None
@@ -109,6 +121,7 @@ class HeartbeatRequest(BaseModel):
     players_max: Optional[int] = None
     shard_id: Optional[str] = None
     game_version: Optional[str] = None
+    game_instances: List[GameInstanceInfo] = []  # Running game server instances
 
     # Agent metadata
     agent_version: str = "1.0.0"
@@ -139,6 +152,7 @@ class ServerStatus(BaseModel):
     players_online: Optional[int] = None
     players_max: Optional[int] = None
     shard_id: Optional[str] = None
+    game_instances_count: int = 0  # Number of running game server instances
 
     # Full data available via detail endpoint
     uptime_seconds: float = 0
@@ -428,6 +442,7 @@ async def list_servers(
             players_online=data.get("players_online"),
             players_max=data.get("players_max"),
             shard_id=data.get("shard_id"),
+            game_instances_count=len(data.get("game_instances", [])),
             uptime_seconds=data.get("uptime_seconds", 0)
         ))
 
