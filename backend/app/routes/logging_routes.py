@@ -129,20 +129,31 @@ def require_admin(user: User):
 # ROUTES
 # ═══════════════════════════════════════════════════════════════════════════
 
+def get_optional_user(request: Request, db: DbSession = Depends(get_db)) -> Optional[User]:
+    """Get current user if authenticated, None otherwise (for anonymous logs)."""
+    if _get_current_user_func is None:
+        return None
+    try:
+        return _get_current_user_func(request, db)
+    except HTTPException:
+        return None
+
+
 @router.post("/batch", response_model=LogBatchResponse)
 async def receive_log_batch(
     request: Request,
     batch: LogBatchRequest,
     db: DbSession = Depends(get_db),
-    user: User = Depends(get_current_user_dep)
+    user: Optional[User] = Depends(get_optional_user)
 ):
     """
     Receive batched logs from game client.
 
-    - Logs are associated with the authenticated user
-    - Client IP is recorded for abuse tracking
-    - Messages are truncated if too long
-    - Rate limited to 20/minute to prevent log spam attacks
+    Supports both authenticated and anonymous logging:
+    - Authenticated: Logs associated with user account
+    - Anonymous: Logs tracked by device_id/session_id and IP
+
+    Rate limited to 20/minute per IP to prevent abuse.
     """
     # Rate limit to prevent log flooding
     _check_rate_limit(request, "20/minute")
@@ -155,6 +166,16 @@ async def receive_log_batch(
 
     # Get client IP
     client_ip = request.client.host if request.client else None
+
+    # For anonymous logs, require at least device_id or session_id
+    is_anonymous = user is None
+    if is_anonymous:
+        has_identifier = any(entry.device_id or entry.session_id for entry in batch.logs)
+        if not has_identifier:
+            raise HTTPException(
+                status_code=400,
+                detail="Anonymous logs require device_id or session_id"
+            )
 
     # Bulk insert logs
     log_records = []
@@ -171,7 +192,7 @@ async def receive_log_batch(
                 pass  # Invalid timestamp, leave as None
 
         log_record = GameLog(
-            user_id=user.id,
+            user_id=user.id if user else None,
             session_id=entry.session_id,
             device_id=entry.device_id,
             level=entry.level,
@@ -188,7 +209,10 @@ async def receive_log_batch(
     db.add_all(log_records)
     db.commit()
 
-    logger.info(f"Received {len(log_records)} logs from user {user.id} ({user.username})")
+    if user:
+        logger.info(f"Received {len(log_records)} logs from user {user.id} ({user.username})")
+    else:
+        logger.info(f"Received {len(log_records)} anonymous logs from {client_ip}")
 
     return LogBatchResponse(status="ok", count=len(log_records))
 

@@ -230,13 +230,8 @@ func _on_batch_timer() -> void:
 		_flush_batch()
 
 func _flush_batch() -> void:
-	"""Send pending logs to backend"""
+	"""Send pending logs to backend (supports both authenticated and anonymous)"""
 	if _pending_logs.is_empty() or _is_sending:
-		return
-
-	# Check if authenticated
-	if not _is_authenticated():
-		# Keep logs in queue, will send after auth
 		return
 
 	_is_sending = true
@@ -251,7 +246,7 @@ func _flush_batch() -> void:
 	}
 
 	var url = _get_api_url()
-	var headers = _get_auth_headers()
+	var headers = _get_auth_headers()  # Includes auth if available, otherwise just Content-Type
 
 	var json_body = JSON.stringify(payload)
 	var error = _http_request.request(url, headers, HTTPClient.METHOD_POST, json_body)
@@ -265,7 +260,7 @@ func _flush_batch() -> void:
 
 func _flush_batch_sync() -> void:
 	"""Synchronous flush for exit (best effort)"""
-	if _pending_logs.is_empty() or not _is_authenticated():
+	if _pending_logs.is_empty():
 		return
 
 	# Use a fresh HTTPRequest for sync
@@ -339,7 +334,7 @@ func _handle_failure() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _is_authenticated() -> bool:
-	"""Check if we have valid auth to send logs"""
+	"""Check if we have valid auth (logs can still be sent anonymously)"""
 	if not AshbaneAuth:
 		return false
 	return AshbaneAuth.is_authenticated and AshbaneAuth.auth_token != ""
