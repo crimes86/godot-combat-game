@@ -8,22 +8,24 @@ This document covers the complete setup, configuration, and maintenance of the A
 
 ```bash
 # Start server
-systemctl start ashbane-server
+systemctl start ashbane-game
 
 # Stop server
-systemctl stop ashbane-server
+systemctl stop ashbane-game
 
 # Check status and memory
-systemctl status ashbane-server
+systemctl status ashbane-game
 
 # View live logs
-journalctl -u ashbane-server -f
+journalctl -u ashbane-game -f
 
 # Rebuild and deploy
 cd /opt/ashbane-game/source
 /usr/local/bin/godot45 --headless --export-release "Linux Server" /opt/ashbane-game/server/ashbane-server.x86_64
-systemctl restart ashbane-server
+systemctl restart ashbane-game
 ```
+
+**Note:** The service is `ashbane-game.service` (port 7777), not `ashbane-server.service` (deprecated, port 7000).
 
 ---
 
@@ -61,31 +63,42 @@ The server project file removes UI-only autoloads that crash on headless:
 
 ## 2. Systemd Service Configuration
 
-### /etc/systemd/system/ashbane-server.service
+### /etc/systemd/system/ashbane-game.service
 
 ```ini
 [Unit]
-Description=Ashbane Game Server
+Description=Ashbane Game Server (Godot)
 After=network.target
 
 [Service]
 Type=simple
 User=root
+Nice=10
 WorkingDirectory=/opt/ashbane-game/server
-ExecStart=/opt/ashbane-game/server/ashbane-server.x86_64 -- --server --port 7000
+Environment=GODOT_SILENCE_ROOT_WARNING=1
+ExecStartPre=/bin/bash -c 'fuser -k 7777/udp 2>/dev/null || true'
+ExecStart=/opt/ashbane-game/server/ashbane-server.x86_64 --headless --max-fps 30 -- --server --port 7777 --shard shard-1
 Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
+RestartSec=10
+StandardOutput=append:/opt/ashbane-game/logs/game.log
+StandardError=append:/opt/ashbane-game/logs/game.log
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=1500M
+CPUQuota=50%
 
 [Install]
 WantedBy=multi-user.target
 ```
 
 ### Key Points:
+- **Port 7777** - Matches client `DEFAULT_PORT` in NetworkManager.gd
 - `Restart=always` - Auto-restart on crash
-- `RestartSec=5` - Wait 5 seconds before restart (prevents rapid restart loops)
-- Logs go to journalctl for centralized logging
+- `RestartSec=10` - Wait 10 seconds before restart (prevents rapid restart loops)
+- `ExecStartPre` - Kills any zombie processes on port 7777 before starting
+- `--max-fps 30` - Limits server to 30 FPS to reduce CPU usage
+- Logs go to `/opt/ashbane-game/logs/game.log`
 
 ### Commands:
 ```bash
@@ -93,11 +106,14 @@ WantedBy=multi-user.target
 systemctl daemon-reload
 
 # Enable auto-start on boot
-systemctl enable ashbane-server
+systemctl enable ashbane-game
 
 # Disable auto-start
-systemctl disable ashbane-server
+systemctl disable ashbane-game
 ```
+
+### Deprecated Service
+The old `ashbane-server.service` (port 7000) is deprecated and disabled. Do not use it.
 
 ---
 
