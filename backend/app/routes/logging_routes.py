@@ -359,8 +359,11 @@ async def get_log_stats(
 
     cutoff = datetime.utcnow() - timedelta(hours=hours)
 
-    # Total count
-    total = db.query(func.count(GameLog.id)).filter(GameLog.created_at >= cutoff).scalar()
+    # Total count (all time)
+    total_all = db.query(func.count(GameLog.id)).scalar() or 0
+
+    # Total in time window
+    total = db.query(func.count(GameLog.id)).filter(GameLog.created_at >= cutoff).scalar() or 0
 
     # Count by level
     level_counts = dict(
@@ -381,11 +384,12 @@ async def get_log_stats(
     )
 
     # Unique users and sessions
-    unique_users = db.query(func.count(func.distinct(GameLog.user_id))).filter(GameLog.created_at >= cutoff).scalar()
-    unique_sessions = db.query(func.count(func.distinct(GameLog.session_id))).filter(GameLog.created_at >= cutoff).scalar()
+    unique_users = db.query(func.count(func.distinct(GameLog.user_id))).filter(GameLog.created_at >= cutoff).scalar() or 0
+    unique_sessions = db.query(func.count(func.distinct(GameLog.session_id))).filter(GameLog.created_at >= cutoff).scalar() or 0
 
     return {
         "hours": hours,
+        "total_logs_all": total_all,
         "total_logs": total,
         "by_level": {
             "debug": level_counts.get(0, 0),
@@ -628,27 +632,27 @@ async def view_logs_html(
         </div>
         <div class="stats-bar">
             <div class="stat-item">
-                <span class="stat-value">{total_logs_all:,}</span>
+                <span class="stat-value" id="stat-total-logs">{total_logs_all:,}</span>
                 <span class="stat-label">Total Logs</span>
             </div>
             <div class="stat-item">
-                <span class="stat-value good">{logs_24h:,}</span>
+                <span class="stat-value good" id="stat-logs-24h">{logs_24h:,}</span>
                 <span class="stat-label">Last 24h</span>
             </div>
             <div class="stat-item">
-                <span class="stat-value {'error' if errors_24h > 0 else ''}">{errors_24h}</span>
+                <span class="stat-value {'error' if errors_24h > 0 else ''}" id="stat-errors-24h">{errors_24h}</span>
                 <span class="stat-label">Errors (24h)</span>
             </div>
             <div class="stat-item">
-                <span class="stat-value {'warn' if warns_24h > 0 else ''}">{warns_24h}</span>
+                <span class="stat-value {'warn' if warns_24h > 0 else ''}" id="stat-warns-24h">{warns_24h}</span>
                 <span class="stat-label">Warnings (24h)</span>
             </div>
             <div class="stat-item">
-                <span class="stat-value">{unique_sessions_24h}</span>
+                <span class="stat-value" id="stat-sessions-24h">{unique_sessions_24h}</span>
                 <span class="stat-label">Sessions (24h)</span>
             </div>
             <div class="stat-item">
-                <span class="stat-value">{unique_users_24h}</span>
+                <span class="stat-value" id="stat-users-24h">{unique_users_24h}</span>
                 <span class="stat-label">Users (24h)</span>
             </div>
             <div class="stat-item">
@@ -953,6 +957,61 @@ async def view_logs_html(
         function closeServerDetail() {{
             document.getElementById('serverDetailModal').style.display = 'none';
         }}
+
+        // Client Telemetry Stats
+        function loadClientStats() {{
+            fetch('/api/logs/stats?hours=24')
+                .then(r => r.json())
+                .then(data => {{
+                    // Update stat values
+                    const totalEl = document.getElementById('stat-total-logs');
+                    const logs24hEl = document.getElementById('stat-logs-24h');
+                    const errorsEl = document.getElementById('stat-errors-24h');
+                    const warnsEl = document.getElementById('stat-warns-24h');
+                    const sessionsEl = document.getElementById('stat-sessions-24h');
+                    const usersEl = document.getElementById('stat-users-24h');
+
+                    if (totalEl) totalEl.textContent = data.total_logs_all.toLocaleString();
+                    if (logs24hEl) logs24hEl.textContent = data.total_logs.toLocaleString();
+                    if (errorsEl) {{
+                        errorsEl.textContent = data.by_level.error;
+                        errorsEl.className = data.by_level.error > 0 ? 'stat-value error' : 'stat-value';
+                    }}
+                    if (warnsEl) {{
+                        warnsEl.textContent = data.by_level.warn;
+                        warnsEl.className = data.by_level.warn > 0 ? 'stat-value warn' : 'stat-value';
+                    }}
+                    if (sessionsEl) sessionsEl.textContent = data.unique_sessions;
+                    if (usersEl) usersEl.textContent = data.unique_users;
+
+                    // Update status indicator
+                    const statusEl = document.getElementById('client-status');
+                    if (statusEl) {{
+                        if (data.by_level.error > 0) {{
+                            statusEl.innerHTML = '● ' + data.by_level.error + ' errors';
+                            statusEl.style.color = '#ff4444';
+                        }} else if (data.total_logs > 0) {{
+                            statusEl.innerHTML = '● Receiving';
+                            statusEl.style.color = '#4ade80';
+                        }} else {{
+                            statusEl.innerHTML = '○ No recent logs';
+                            statusEl.style.color = '#666';
+                        }}
+                    }}
+                }})
+                .catch(e => {{
+                    console.error('Failed to load client stats:', e);
+                    const statusEl = document.getElementById('client-status');
+                    if (statusEl) {{
+                        statusEl.innerHTML = '● Error';
+                        statusEl.style.color = '#ff4444';
+                    }}
+                }});
+        }}
+
+        // Load stats on page load and refresh every 15s
+        loadClientStats();
+        setInterval(loadClientStats, 15000);
 
         // Load server stats on page load and refresh every 30s
         loadServerStats();
