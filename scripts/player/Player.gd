@@ -3422,13 +3422,13 @@ func create_player_sprite() -> void:
 		if head_walk_tex == null and forged_db_data:
 			var material_type = forged_db_data.get("material_type", "cloth")
 			var fallback_sprite = "copper_plate" if material_type == "plate" else "linen"
-			var head_path = "res://assets/characters/head/"
-			if ResourceLoader.exists(head_path + fallback_sprite + "_walk.png"):
-				head_walk_tex = load(head_path + fallback_sprite + "_walk.png")
-			if ResourceLoader.exists(head_path + fallback_sprite + attack_suffix + ".png"):
-				head_slash_tex = load(head_path + fallback_sprite + attack_suffix + ".png")
-			elif ResourceLoader.exists(head_path + fallback_sprite + "_slash.png"):
-				head_slash_tex = load(head_path + fallback_sprite + "_slash.png")
+			var fallback_head_path = "res://assets/characters/head/"
+			if ResourceLoader.exists(fallback_head_path + fallback_sprite + "_walk.png"):
+				head_walk_tex = load(fallback_head_path + fallback_sprite + "_walk.png")
+			if ResourceLoader.exists(fallback_head_path + fallback_sprite + attack_suffix + ".png"):
+				head_slash_tex = load(fallback_head_path + fallback_sprite + attack_suffix + ".png")
+			elif ResourceLoader.exists(fallback_head_path + fallback_sprite + "_slash.png"):
+				head_slash_tex = load(fallback_head_path + fallback_sprite + "_slash.png")
 			if DEBUG_EQUIP:
 				print("[ForgedArmor] Using fallback %s head for: %s" % [fallback_sprite, forged_item_id])
 	elif head_sprite_name != "":
