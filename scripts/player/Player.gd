@@ -2972,20 +2972,46 @@ func create_player_sprite() -> void:
 	if is_forged_feet and forged_feet_data.get("forged_item_id", "") != "":
 		var forged_item_id = forged_feet_data.get("forged_item_id", "")
 		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
-		if forged_db_data and forged_db_data.has("sprites"):
-			var sprites = forged_db_data["sprites"]
-			# Load feet sprites from forged item
+		if forged_db_data:
+			var sprites = forged_db_data.get("sprites", {})
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+
+			# Method 1: Direct sprite paths in JSON
 			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
 				boots_walk_tex = load(sprites["walk"])
-			# Pick shoot/thrust/slash based on weapon type
-			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
 			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
 				boots_slash_tex = load(sprites[attack_key])
 			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
 				boots_slash_tex = load(sprites["slash"])
 
-			if DEBUG_EQUIP:
+			# Method 2: Construct path from item_id (feet are at armor root)
+			if boots_walk_tex == null:
+				var forged_path = "res://assets/equipment/forged/armor/" + forged_item_id + "/"
+				if ResourceLoader.exists(forged_path + "walk.png"):
+					boots_walk_tex = load(forged_path + "walk.png")
+					if ResourceLoader.exists(forged_path + attack_key + ".png"):
+						boots_slash_tex = load(forged_path + attack_key + ".png")
+					elif ResourceLoader.exists(forged_path + "slash.png"):
+						boots_slash_tex = load(forged_path + "slash.png")
+					if DEBUG_EQUIP:
+						print("[ForgedArmor] Loaded from folder: %s" % forged_path)
+
+			if DEBUG_EQUIP and boots_walk_tex:
 				print("[ForgedArmor] Loaded forged feet armor: %s" % forged_item_id)
+
+		# FALLBACK: If forged sprites not available, use base sprite by material_type
+		if boots_walk_tex == null and forged_db_data:
+			var material_type = forged_db_data.get("material_type", "cloth")
+			var fallback_sprite = "copper_plate" if material_type == "plate" else ("leather" if material_type == "leather" else "linen")
+			var boots_path = "res://assets/characters/boots/"
+			if ResourceLoader.exists(boots_path + fallback_sprite + "_walk.png"):
+				boots_walk_tex = load(boots_path + fallback_sprite + "_walk.png")
+			if ResourceLoader.exists(boots_path + fallback_sprite + attack_suffix + ".png"):
+				boots_slash_tex = load(boots_path + fallback_sprite + attack_suffix + ".png")
+			elif ResourceLoader.exists(boots_path + fallback_sprite + "_slash.png"):
+				boots_slash_tex = load(boots_path + fallback_sprite + "_slash.png")
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Using fallback %s boots for: %s" % [fallback_sprite, forged_item_id])
 	elif feet_sprite_name != "":
 		# Standard (non-forged) feet armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
@@ -3023,20 +3049,48 @@ func create_player_sprite() -> void:
 	if is_forged_legs and forged_legs_data.get("forged_item_id", "") != "":
 		var forged_item_id = forged_legs_data.get("forged_item_id", "")
 		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
-		if forged_db_data and forged_db_data.has("sprites"):
-			var sprites = forged_db_data["sprites"]
-			# Load legs sprites from forged item
+		if forged_db_data:
+			var sprites = forged_db_data.get("sprites", {})
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+
+			# Method 1: Direct sprite paths in JSON
 			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
 				pants_walk_tex = load(sprites["walk"])
-			# Pick shoot/thrust/slash based on weapon type
-			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
 			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
 				pants_slash_tex = load(sprites[attack_key])
 			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
 				pants_slash_tex = load(sprites["slash"])
 
-			if DEBUG_EQUIP:
+			# Method 2: Construct path (legs at armor root or armor/legs/)
+			if pants_walk_tex == null:
+				var forged_path = "res://assets/equipment/forged/armor/" + forged_item_id + "/"
+				if not ResourceLoader.exists(forged_path + "walk.png"):
+					forged_path = "res://assets/equipment/forged/armor/legs/" + forged_item_id + "/"
+				if ResourceLoader.exists(forged_path + "walk.png"):
+					pants_walk_tex = load(forged_path + "walk.png")
+					if ResourceLoader.exists(forged_path + attack_key + ".png"):
+						pants_slash_tex = load(forged_path + attack_key + ".png")
+					elif ResourceLoader.exists(forged_path + "slash.png"):
+						pants_slash_tex = load(forged_path + "slash.png")
+					if DEBUG_EQUIP:
+						print("[ForgedArmor] Loaded legs from folder: %s" % forged_path)
+
+			if DEBUG_EQUIP and pants_walk_tex:
 				print("[ForgedArmor] Loaded forged legs armor: %s" % forged_item_id)
+
+		# FALLBACK: If forged sprites not available, use base sprite by material_type
+		if pants_walk_tex == null and forged_db_data:
+			var material_type = forged_db_data.get("material_type", "cloth")
+			var fallback_sprite = "copper_plate" if material_type == "plate" else ("leather" if material_type == "leather" else "green_pants")
+			var pants_path = "res://assets/characters/pants/"
+			if ResourceLoader.exists(pants_path + fallback_sprite + "_walk.png"):
+				pants_walk_tex = load(pants_path + fallback_sprite + "_walk.png")
+			if ResourceLoader.exists(pants_path + fallback_sprite + attack_suffix + ".png"):
+				pants_slash_tex = load(pants_path + fallback_sprite + attack_suffix + ".png")
+			elif ResourceLoader.exists(pants_path + fallback_sprite + "_slash.png"):
+				pants_slash_tex = load(pants_path + fallback_sprite + "_slash.png")
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Using fallback %s pants for: %s" % [fallback_sprite, forged_item_id])
 	elif legs_sprite_name != "":
 		# Standard (non-forged) legs armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
@@ -3074,20 +3128,46 @@ func create_player_sprite() -> void:
 	if is_forged_chest and forged_chest_data.get("forged_item_id", "") != "":
 		var forged_item_id = forged_chest_data.get("forged_item_id", "")
 		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
-		if forged_db_data and forged_db_data.has("sprites"):
-			var sprites = forged_db_data["sprites"]
-			# Load chest sprites from forged item
+		if forged_db_data:
+			var sprites = forged_db_data.get("sprites", {})
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+
+			# Method 1: Direct sprite paths in JSON
 			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
 				shirt_walk_tex = load(sprites["walk"])
-			# Pick shoot/thrust/slash based on weapon type
-			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
 			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
 				shirt_slash_tex = load(sprites[attack_key])
 			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
 				shirt_slash_tex = load(sprites["slash"])
 
-			if DEBUG_EQUIP:
+			# Method 2: Construct path (chest at armor/chest/)
+			if shirt_walk_tex == null:
+				var forged_path = "res://assets/equipment/forged/armor/chest/" + forged_item_id + "/"
+				if ResourceLoader.exists(forged_path + "walk.png"):
+					shirt_walk_tex = load(forged_path + "walk.png")
+					if ResourceLoader.exists(forged_path + attack_key + ".png"):
+						shirt_slash_tex = load(forged_path + attack_key + ".png")
+					elif ResourceLoader.exists(forged_path + "slash.png"):
+						shirt_slash_tex = load(forged_path + "slash.png")
+					if DEBUG_EQUIP:
+						print("[ForgedArmor] Loaded chest from folder: %s" % forged_path)
+
+			if DEBUG_EQUIP and shirt_walk_tex:
 				print("[ForgedArmor] Loaded forged chest armor: %s" % forged_item_id)
+
+		# FALLBACK: If forged sprites not available, use base sprite by material_type
+		if shirt_walk_tex == null and forged_db_data:
+			var material_type = forged_db_data.get("material_type", "cloth")
+			var fallback_sprite = "copper_plate" if material_type == "plate" else ("rawhide" if material_type == "leather" else "linen")
+			var shirt_path = "res://assets/characters/shirt/"
+			if ResourceLoader.exists(shirt_path + fallback_sprite + "_walk.png"):
+				shirt_walk_tex = load(shirt_path + fallback_sprite + "_walk.png")
+			if ResourceLoader.exists(shirt_path + fallback_sprite + attack_suffix + ".png"):
+				shirt_slash_tex = load(shirt_path + fallback_sprite + attack_suffix + ".png")
+			elif ResourceLoader.exists(shirt_path + fallback_sprite + "_slash.png"):
+				shirt_slash_tex = load(shirt_path + fallback_sprite + "_slash.png")
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Using fallback %s chest for: %s" % [fallback_sprite, forged_item_id])
 	elif chest_sprite_name != "":
 		# Standard (non-forged) chest armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
@@ -3129,20 +3209,48 @@ func create_player_sprite() -> void:
 	if is_forged_arms and forged_arms_data.get("forged_item_id", "") != "":
 		var forged_item_id = forged_arms_data.get("forged_item_id", "")
 		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
-		if forged_db_data and forged_db_data.has("sprites"):
-			var sprites = forged_db_data["sprites"]
-			# Load arms sprites from forged item
+		if forged_db_data:
+			var sprites = forged_db_data.get("sprites", {})
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+
+			# Method 1: Direct sprite paths in JSON
 			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
 				arms_walk_tex = load(sprites["walk"])
-			# Pick shoot/thrust/slash based on weapon type
-			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
 			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
 				arms_slash_tex = load(sprites[attack_key])
 			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
 				arms_slash_tex = load(sprites["slash"])
 
-			if DEBUG_EQUIP:
+			# Method 2: Construct path (arms at armor root or armor/arms/)
+			if arms_walk_tex == null:
+				var forged_path = "res://assets/equipment/forged/armor/" + forged_item_id + "/"
+				if not ResourceLoader.exists(forged_path + "walk.png"):
+					forged_path = "res://assets/equipment/forged/armor/arms/" + forged_item_id + "/"
+				if ResourceLoader.exists(forged_path + "walk.png"):
+					arms_walk_tex = load(forged_path + "walk.png")
+					if ResourceLoader.exists(forged_path + attack_key + ".png"):
+						arms_slash_tex = load(forged_path + attack_key + ".png")
+					elif ResourceLoader.exists(forged_path + "slash.png"):
+						arms_slash_tex = load(forged_path + "slash.png")
+					if DEBUG_EQUIP:
+						print("[ForgedArmor] Loaded arms from folder: %s" % forged_path)
+
+			if DEBUG_EQUIP and arms_walk_tex:
 				print("[ForgedArmor] Loaded forged arms armor: %s" % forged_item_id)
+
+		# FALLBACK: If forged sprites not available, use base sprite by material_type
+		if arms_walk_tex == null and forged_db_data:
+			var material_type = forged_db_data.get("material_type", "cloth")
+			var fallback_sprite = "copper_plate" if material_type == "plate" else "linen"
+			var arms_path = "res://assets/characters/arms/"
+			if ResourceLoader.exists(arms_path + fallback_sprite + "_walk.png"):
+				arms_walk_tex = load(arms_path + fallback_sprite + "_walk.png")
+			if ResourceLoader.exists(arms_path + fallback_sprite + attack_suffix + ".png"):
+				arms_slash_tex = load(arms_path + fallback_sprite + attack_suffix + ".png")
+			elif ResourceLoader.exists(arms_path + fallback_sprite + "_slash.png"):
+				arms_slash_tex = load(arms_path + fallback_sprite + "_slash.png")
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Using fallback %s arms for: %s" % [fallback_sprite, forged_item_id])
 	elif arms_sprite_name != "":
 		# Standard (non-forged) arms armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
@@ -3179,20 +3287,46 @@ func create_player_sprite() -> void:
 	if is_forged_hands and forged_hands_data.get("forged_item_id", "") != "":
 		var forged_item_id = forged_hands_data.get("forged_item_id", "")
 		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
-		if forged_db_data and forged_db_data.has("sprites"):
-			var sprites = forged_db_data["sprites"]
-			# Load hands sprites from forged item
+		if forged_db_data:
+			var sprites = forged_db_data.get("sprites", {})
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+
+			# Method 1: Direct sprite paths in JSON
 			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
 				hands_walk_tex = load(sprites["walk"])
-			# Pick shoot/thrust/slash based on weapon type
-			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
 			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
 				hands_slash_tex = load(sprites[attack_key])
 			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
 				hands_slash_tex = load(sprites["slash"])
 
-			if DEBUG_EQUIP:
+			# Method 2: Construct path (hands at armor/hands/)
+			if hands_walk_tex == null:
+				var forged_path = "res://assets/equipment/forged/armor/hands/" + forged_item_id + "/"
+				if ResourceLoader.exists(forged_path + "walk.png"):
+					hands_walk_tex = load(forged_path + "walk.png")
+					if ResourceLoader.exists(forged_path + attack_key + ".png"):
+						hands_slash_tex = load(forged_path + attack_key + ".png")
+					elif ResourceLoader.exists(forged_path + "slash.png"):
+						hands_slash_tex = load(forged_path + "slash.png")
+					if DEBUG_EQUIP:
+						print("[ForgedArmor] Loaded hands from folder: %s" % forged_path)
+
+			if DEBUG_EQUIP and hands_walk_tex:
 				print("[ForgedArmor] Loaded forged hands armor: %s" % forged_item_id)
+
+		# FALLBACK: If forged sprites not available, use base sprite by material_type
+		if hands_walk_tex == null and forged_db_data:
+			var material_type = forged_db_data.get("material_type", "cloth")
+			var fallback_sprite = "copper_gloves" if material_type == "plate" else "linen"
+			var hands_path = "res://assets/characters/hands/"
+			if ResourceLoader.exists(hands_path + fallback_sprite + "_walk.png"):
+				hands_walk_tex = load(hands_path + fallback_sprite + "_walk.png")
+			if ResourceLoader.exists(hands_path + fallback_sprite + attack_suffix + ".png"):
+				hands_slash_tex = load(hands_path + fallback_sprite + attack_suffix + ".png")
+			elif ResourceLoader.exists(hands_path + fallback_sprite + "_slash.png"):
+				hands_slash_tex = load(hands_path + fallback_sprite + "_slash.png")
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Using fallback %s hands for: %s" % [fallback_sprite, forged_item_id])
 	elif hands_sprite_name != "":
 		# Standard (non-forged) hands armor loading
 		# Try gender-specific path first, then fall back to gender-neutral
@@ -3229,19 +3363,31 @@ func create_player_sprite() -> void:
 	if is_forged_head and forged_head_data.get("forged_item_id", "") != "":
 		var forged_item_id = forged_head_data.get("forged_item_id", "")
 		var forged_db_data = ForgeItemDB.get_item_by_id(forged_item_id)
-		if forged_db_data and forged_db_data.has("sprites"):
-			var sprites = forged_db_data["sprites"]
-			# Load head sprites from forged item
+		if forged_db_data:
+			var sprites = forged_db_data.get("sprites", {})
+			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
+
+			# Method 1: Direct sprite paths in JSON
 			if sprites.has("walk") and ResourceLoader.exists(sprites["walk"]):
 				head_walk_tex = load(sprites["walk"])
-			# Pick shoot/thrust/slash based on weapon type
-			var attack_key = "shoot" if uses_shoot else ("thrust" if uses_thrust else "slash")
 			if sprites.has(attack_key) and ResourceLoader.exists(sprites[attack_key]):
 				head_slash_tex = load(sprites[attack_key])
 			elif sprites.has("slash") and ResourceLoader.exists(sprites["slash"]):
 				head_slash_tex = load(sprites["slash"])
 
-			if DEBUG_EQUIP:
+			# Method 2: Construct path (head at armor/head/)
+			if head_walk_tex == null:
+				var forged_path = "res://assets/equipment/forged/armor/head/" + forged_item_id + "/"
+				if ResourceLoader.exists(forged_path + "walk.png"):
+					head_walk_tex = load(forged_path + "walk.png")
+					if ResourceLoader.exists(forged_path + attack_key + ".png"):
+						head_slash_tex = load(forged_path + attack_key + ".png")
+					elif ResourceLoader.exists(forged_path + "slash.png"):
+						head_slash_tex = load(forged_path + "slash.png")
+					if DEBUG_EQUIP:
+						print("[ForgedArmor] Loaded head from folder: %s" % forged_path)
+
+			if DEBUG_EQUIP and head_walk_tex:
 				print("[ForgedArmor] Loaded forged head armor: %s" % forged_item_id)
 
 			# Check for visual_override_slots (e.g., robes that override chest/legs)
@@ -3271,6 +3417,20 @@ func create_player_sprite() -> void:
 						pants_slash_tex = load(legs_override["slash"])
 					if DEBUG_EQUIP:
 						print("[ForgedArmor]   Visual override: legs -> %s" % legs_override.get("walk", ""))
+
+		# FALLBACK: If forged sprites not available, use base sprite by material_type
+		if head_walk_tex == null and forged_db_data:
+			var material_type = forged_db_data.get("material_type", "cloth")
+			var fallback_sprite = "copper_plate" if material_type == "plate" else "linen"
+			var head_path = "res://assets/characters/head/"
+			if ResourceLoader.exists(head_path + fallback_sprite + "_walk.png"):
+				head_walk_tex = load(head_path + fallback_sprite + "_walk.png")
+			if ResourceLoader.exists(head_path + fallback_sprite + attack_suffix + ".png"):
+				head_slash_tex = load(head_path + fallback_sprite + attack_suffix + ".png")
+			elif ResourceLoader.exists(head_path + fallback_sprite + "_slash.png"):
+				head_slash_tex = load(head_path + fallback_sprite + "_slash.png")
+			if DEBUG_EQUIP:
+				print("[ForgedArmor] Using fallback %s head for: %s" % [fallback_sprite, forged_item_id])
 	elif head_sprite_name != "":
 		# Standard (non-forged) head armor loading
 		# Try gender-specific path first, then fall back to gender-neutral

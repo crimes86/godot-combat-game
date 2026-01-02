@@ -1244,8 +1244,9 @@ func perform_attack() -> void:
 			player.take_damage(damage)
 
 	# ✨ FIX: Enhanced visual feedback for attack (single tween for performance)
-	# DEDICATED SERVER: Skip visual feedback
+	# DEDICATED SERVER: Skip visual feedback, but still reset attack flag
 	if is_server_mode:
+		is_performing_attack = false
 		return
 
 	if is_instance_valid(enemy):
