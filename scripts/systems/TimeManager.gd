@@ -45,6 +45,7 @@ func _ready():
 	print("TimeManager: Day/night cycle initialized (1 hour = full day)")
 	print("TimeManager: Starting at noon (12:00)")
 	print("TimeManager: Press F4 to advance time by 1 hour (debug)")
+	print("TimeManager: Server mode = %s (heartbeat every %ds)" % [_is_server_or_singleplayer(), int(HEARTBEAT_INTERVAL)])
 
 func _input(event: InputEvent):
 	# F4 advances time by 1 hour for testing day/night cycle (dev builds only, server only)
@@ -218,6 +219,39 @@ func _log_server_heartbeat():
 		uptime_min, mem_static, int(obj_count), int(node_count), int(orphan_count), get_time_string()
 	])
 
+	# Log node breakdown by type (every 5 minutes for debugging)
+	if uptime_min % 5 == 0:
+		_log_node_breakdown()
+
 	# Warn if orphan nodes are accumulating (memory leak indicator)
 	if orphan_count > 100:
 		push_warning("[HEARTBEAT] High orphan node count: %d - possible memory leak!" % int(orphan_count))
+
+func _log_node_breakdown():
+	"""Count nodes by type to help identify memory leaks."""
+	var type_counts: Dictionary = {}
+	var root = get_tree().root
+	_count_nodes_recursive(root, type_counts)
+
+	# Sort by count (descending) and show top 15
+	var sorted_types = type_counts.keys()
+	sorted_types.sort_custom(func(a, b): return type_counts[b] < type_counts[a])
+
+	var breakdown = "[NODE_BREAKDOWN] Top types: "
+	var count = 0
+	for node_type in sorted_types:
+		if count >= 15:
+			break
+		breakdown += "%s:%d " % [node_type, type_counts[node_type]]
+		count += 1
+	print(breakdown)
+
+func _count_nodes_recursive(node: Node, counts: Dictionary):
+	"""Recursively count all nodes by their class name."""
+	var node_class = node.get_class()
+	if not counts.has(node_class):
+		counts[node_class] = 0
+	counts[node_class] += 1
+
+	for child in node.get_children():
+		_count_nodes_recursive(child, counts)

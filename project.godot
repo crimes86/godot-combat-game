@@ -5,13 +5,16 @@
 ; Format:
 ;   [section] ; section goes between []
 ;   param=value ; assign values to parameters
+;
+; SERVER BUILD - UI autoloads removed for headless operation
 
 config_version=5
 
 [application]
 
 config/name="Dreadland"
-run/main_scene="res://scenes/ui/MainMenu.tscn"
+run/main_scene="res://scenes/server_main.tscn"
+run/max_fps=30
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://assets/branding/ashbane-icon-256.png"
 
@@ -28,21 +31,12 @@ LootSpawnManager="*res://scripts/systems/LootSpawnManager.gd"
 NotificationManager="*res://scripts/systems/NotificationManager.gd"
 InteractionManager="*res://scripts/systems/InteractionManager.gd"
 DatabaseManager="*res://scripts/systems/DatabaseManager.gd"
-AccountAdmin="*res://scripts/ui/AccountAdminPanel.gd"
 NetworkManager="*res://scripts/networking/NetworkManager.gd"
 NetworkEnemyManager="*res://scripts/networking/NetworkEnemyManager.gd"
-CursorManager="*res://scripts/systems/CursorManager.gd"
 TimeManager="*res://scripts/systems/TimeManager.gd"
-VFXLayer="*res://scripts/systems/VFXLayer.gd"
-ItemIconGenerator="*res://scripts/systems/ItemIconGenerator.gd"
 GroupManager="*res://scripts/systems/GroupManager.gd"
-GroupUI="*res://scripts/ui/GroupUI.gd"
-TutorialManager="*res://scripts/systems/TutorialManager.gd"
 QuestManager="*res://scripts/systems/QuestManager.gd"
-QuestTrackerUI="*res://scripts/ui/QuestTrackerUI.gd"
-BugReportUI="*res://scripts/ui/BugReportUI.gd"
 DuelManager="*res://scripts/systems/DuelManager.gd"
-MobileInput="*res://scripts/mobile/MobileInput.gd"
 GameInput="*res://scripts/systems/GameInput.gd"
 AshbaneAuth="*res://scripts/systems/AshbaneAuth.gd"
 GameConfig="*res://scripts/systems/GameConfig.gd"
@@ -50,22 +44,31 @@ TelemetryManager="*res://scripts/systems/TelemetryManager.gd"
 AshbaneCosmetics="*res://scripts/systems/AshbaneCosmetics.gd"
 ForgeItemDB="*res://scripts/systems/ForgeItemDB.gd"
 ForgeItemManager="*res://scripts/systems/ForgeItemManager.gd"
-ForgeVisualEffects="*res://scripts/systems/ForgeVisualEffects.gd"
 TradingManager="*res://scripts/systems/TradingManager.gd"
 SpatialGrid="*res://scripts/systems/SpatialGrid.gd"
 TradingHubManager="*res://scripts/trading_hub/TradingHubManager.gd"
 WorldTreeManager="*res://scripts/systems/WorldTreeManager.gd"
-RecentlyAdvertisedUI="*res://scripts/ui/RecentlyAdvertisedUI.gd"
-TradeWindowUI="*res://scripts/ui/TradeWindowUI.gd"
-ItemInspectionUI="*res://scripts/ui/ItemInspectionUI.gd"
 WeaponStatsTracker="*res://scripts/systems/WeaponStatsTracker.gd"
 WeaponSkillManager="*res://scripts/systems/WeaponSkillManager.gd"
-PlayerInteractionMenu="*res://scripts/ui/PlayerInteractionMenu.gd"
-PlayerInspectUI="*res://scripts/ui/PlayerInspectUI.gd"
 PlayerInteractionController="*res://scripts/systems/PlayerInteractionController.gd"
-Minimap="*res://scripts/ui/Minimap.gd"
-CombatJuice="*res://scripts/systems/CombatJuice.gd"
 PlaytestBot="*res://scripts/debug/PlaytestBot.gd"
+AccountAdmin="*res://scripts/stubs/AccountAdminStub.gd"
+CursorManager="*res://scripts/stubs/CursorManagerStub.gd"
+VFXLayer="*res://scripts/stubs/VFXLayerStub.gd"
+ItemIconGenerator="*res://scripts/stubs/ItemIconGeneratorStub.gd"
+GroupUI="*res://scripts/stubs/GroupUIStub.gd"
+TutorialManager="*res://scripts/stubs/TutorialManagerStub.gd"
+QuestTrackerUI="*res://scripts/stubs/QuestTrackerUIStub.gd"
+BugReportUI="*res://scripts/stubs/BugReportUIStub.gd"
+MobileInput="*res://scripts/stubs/MobileInputStub.gd"
+ForgeVisualEffects="*res://scripts/stubs/ForgeVisualEffectsStub.gd"
+RecentlyAdvertisedUI="*res://scripts/stubs/RecentlyAdvertisedUIStub.gd"
+TradeWindowUI="*res://scripts/stubs/TradeWindowUIStub.gd"
+ItemInspectionUI="*res://scripts/stubs/ItemInspectionUIStub.gd"
+PlayerInteractionMenu="*res://scripts/stubs/PlayerInteractionMenuStub.gd"
+PlayerInspectUI="*res://scripts/stubs/PlayerInspectUIStub.gd"
+Minimap="*res://scripts/stubs/MinimapStub.gd"
+CombatJuice="*res://scripts/stubs/CombatJuiceStub.gd"
 
 [display]
 
@@ -114,7 +117,7 @@ pointing/emulate_touch_from_mouse=true
 
 [physics]
 
-common/physics_interpolation=true
+common/physics_ticks_per_second=30
 
 [rendering]
 

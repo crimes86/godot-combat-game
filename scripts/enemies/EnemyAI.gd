@@ -727,9 +727,15 @@ func get_separation_force() -> Vector2:
 			strength = strength * strength  # Square for aggressive close-range separation
 			force -= to_other.normalized() * strength
 		else:
-			# Nearly on top of each other - push in random direction
-			var random_dir = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
-			force += random_dir * 2.0
+			# Nearly on top of each other - use deterministic direction based on instance IDs
+			# This prevents oscillating/bouncing behavior from random directions
+			var my_id = enemy.get_instance_id()
+			var other_id = other_enemy.get_instance_id()
+			var angle = float(my_id % 360) * 0.01745  # Convert to radians (deterministic per enemy)
+			if my_id < other_id:
+				angle += PI  # Push in opposite direction based on ID ordering
+			var deterministic_dir = Vector2(cos(angle), sin(angle))
+			force += deterministic_dir * 2.0
 
 	# Return scaled force (not just normalized) for more aggressive separation
 	var force_len_sq = force.length_squared()
