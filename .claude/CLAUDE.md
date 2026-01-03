@@ -1,8 +1,101 @@
-# Project Guidelines for Claude
+# Dreadland Project Guidelines
+
+## Quick Reference: Where Am I Working?
+
+| Context | Config File | Main Scene | Key Docs |
+|---------|-------------|------------|----------|
+| **Client (Godot)** | `project.godot` | `MainMenu.tscn` | This file, `docs/` folder |
+| **Server (Godot)** | `project.server.godot` | `server_main.tscn` | [Dedicated Server Build](#dedicated-server-build) |
+| **Backend (Python)** | `backend/.env` | FastAPI app | `backend/README.md`, `backend/docs/` |
+
+---
+
+## Client Development (Godot)
+
+The client is a Godot 4.5 game. Key entry points:
+- **Main scene:** `scenes/ui/MainMenu.tscn`
+- **Player:** `scripts/player/Player.gd`
+- **Combat:** `scripts/player/PlayerCombat.gd`
+- **Networking:** `scripts/networking/NetworkManager.gd`
+
+### Windows Environment (IMPORTANT)
+
+This project runs on **Windows**. Always use Windows-native commands:
+
+**DO NOT USE:** `find`, `wc`, `grep`, `xargs`, `sed`, `awk`, `$(...)` subshells
+
+**USE INSTEAD:** PowerShell cmdlets or Claude Code's built-in tools (Glob, Grep, Read)
+
+```powershell
+# Count PNG files
+(Get-ChildItem -Path assets/icons -Filter *.png -Recurse).Count
+
+# Find files by pattern
+Get-ChildItem -Path . -Filter *.png -Recurse
+```
+
+### Code Conventions
+- Don't commit until user has tested changes in Godot
+- Equipment loading: `assets/equipment/` paths
+- Enemy loading: `assets/characters/enemies/` paths
+- Audio loading: `assets/audio/` paths (sfx/ or music/)
+
+---
+
+## Dedicated Server Build
+
+The server uses `project.server.godot` with stub autoloads (no UI rendering).
+
+### Monorepo Workflow
+
+```
+project.godot          # CLIENT - always committed from Windows machine
+project.server.godot   # SERVER - used only during export
+build_server.sh        # Handles swap automatically
+```
+
+**On the game server (`/opt/ashbane-game/source`):**
+```bash
+./build_server.sh      # Swaps configs, exports, restores
+```
+
+**Server-specific patterns:**
+- `--server` flag detection: `"--server" in OS.get_cmdline_user_args()`
+- No sprites on server - use `current_animation` variable for sync (see `docs/MULTIPLAYER_ANIMATION_SYNC.md`)
+- AI sleep system when no players nearby
+- Stub autoloads for UI systems
+
+**Running:**
+```bash
+./ashbane-server.x86_64 --headless --frame-delay 15 -- --server --port 7777 --shard shard-1
+systemctl start ashbane-game
+```
+
+---
+
+## Backend Development (Python/FastAPI)
+
+Located in `backend/` folder. Handles auth, items, telemetry, trading.
+
+**Setup:**
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env  # Configure for local/prod
+python -m uvicorn app.main:app --reload
+```
+
+**Key files:**
+- `backend/app/main.py` - FastAPI app entry
+- `backend/app/routers/` - API endpoints
+- `backend/data/items.json` - Forge item definitions (source of truth)
+- `backend/docs/` - Backend-specific docs
+
+**Deployment:** See `backend/docs/DIGITALOCEAN_DEPLOYMENT.md`
+
+---
 
 ## Documentation Reference
-
-When working on specific systems, consult these docs:
 
 | Topic | Document |
 |-------|----------|
@@ -44,36 +137,6 @@ When working on specific systems, consult these docs:
 
 ---
 
-## Windows Environment (IMPORTANT)
-
-This project runs on **Windows**. Always use Windows-native commands:
-
-**DO NOT USE:**
-- Unix commands: `find`, `wc`, `grep`, `xargs`, `sed`, `awk`
-- Bash subshell syntax: `$(...)` or backticks
-- Unix paths with forward slashes in bash contexts
-
-**USE INSTEAD:**
-- PowerShell cmdlets: `Get-ChildItem`, `Measure-Object`, `Select-String`
-- Simple commands that work cross-platform: `dir`, `type`, `copy`
-- Claude Code's built-in tools (Glob, Grep, Read) instead of shell equivalents
-
-**Examples:**
-```powershell
-# Count PNG files (instead of: find ... | wc -l)
-(Get-ChildItem -Path assets/icons -Filter *.png -Recurse).Count
-
-# Find files by pattern (instead of: find -name "*.png")
-Get-ChildItem -Path . -Filter *.png -Recurse
-
-# Search file contents (instead of: grep -r "pattern")
-Select-String -Path "*.gd" -Pattern "pattern"
-```
-
-**Preferred approach:** Use Claude Code's native tools (Glob, Grep, Read) whenever possible - they work reliably on Windows and avoid shell escaping issues entirely.
-
----
-
 ## Workflow Preferences
 
 - For features touching 3+ files, use Plan mode first
@@ -90,13 +153,9 @@ All game assets should follow this canonical structure. Do NOT create new root-l
 assets/
 ├── audio/                      # ALL audio files
 │   ├── music/                  # Background music tracks
-│   └── sfx/                    # Sound effects (consolidated from old sounds/)
+│   └── sfx/                    # Sound effects
 │       ├── ambient/            # Campfire, wolf howls, etc.
 │       ├── combat/             # Hits, reactions, weapon sounds
-│       │   ├── hits/
-│       │   ├── reactions/
-│       │   ├── weapons/
-│       │   └── weapon_swings/
 │       ├── footsteps/          # Player, skeleton, wolf steps
 │       ├── player/             # Player hurt, death, healing sounds
 │       ├── tree/               # Chopping, falling sounds
@@ -106,79 +165,28 @@ assets/
 │   ├── body_male/              # Male player body
 │   ├── body_female/            # Female player body
 │   ├── body_skeleton/          # Skeleton enemy body
-│   ├── head_male/              # Male head options
-│   ├── head_female/            # Female head options
-│   ├── hair_male/              # Male hair options
-│   ├── hair_female/            # Female hair options
+│   ├── enemies/                # ALL enemy sprites (wolf, skeleton, zombie)
 │   ├── shadow/                 # Character shadow sprites
-│   ├── enemies/                # ALL enemy sprites
-│   │   ├── wolf-*.png          # Wolf directional sprites
-│   │   ├── skeleton.png        # Basic skeleton
-│   │   └── zombie.png          # Zombie enemy
-│   ├── skeletal_guardian/      # Elite skeleton variants
-│   ├── armor_tier1/            # Character armor definition data
-│   ├── equipment/              # Player equipment sprites
-│   ├── lpc/                    # LPC character templates (blacksmith, etc.)
-│   │
-│   # STARTER CLOTHES (flat file structure):
-│   ├── pants/                  # green_pants_*.png, copper_plate_*.png
-│   ├── pants_female/           # Female variants
-│   ├── shirt/                  # white_shirt_*.png, copper_plate_*.png
-│   ├── shirt_female/
-│   ├── boots/
-│   ├── boots_female/
-│   ├── arms/
-│   ├── arms_female/
-│   ├── hands/
-│   ├── hands_female/
-│   ├── head/                   # Head armor pieces
-│   ├── head_female_armor/
-│   ├── head_leather_hat/       # Leather hat variants
-│   ├── torso_leather/          # Leather torso armor
-│   └── legs_greenish/          # Green leg variants
+│   └── [clothing folders]/     # pants/, shirt/, boots/, etc.
 │
 ├── equipment/                  # All equippable items
-│   ├── armor/                  # Armor sets
-│   │   ├── starter/            # Starting armor pieces
-│   │   ├── tier1/              # Zone 1 armor (copper plate set)
-│   │   │   ├── chest/copper_plate/standard/
-│   │   │   ├── legs/copper_plate/standard/
-│   │   │   └── ...
-│   │   └── head/               # Head armor pieces
-│   ├── weapons/                # Combat weapons
-│   │   ├── sword/
-│   │   ├── mace/
-│   │   ├── spear/
-│   │   ├── staff/
-│   │   ├── dagger/
-│   │   ├── halberd/
-│   │   ├── katana/
-│   │   ├── rapier/
-│   │   ├── saber/
-│   │   └── scimitar/
-│   ├── tools/                  # Harvesting tools
-│   │   ├── axe/
-│   │   └── pickaxe/
+│   ├── armor/                  # Armor sets (starter/, tier1/)
+│   ├── weapons/                # Combat weapons (sword/, mace/, spear/, etc.)
+│   ├── tools/                  # Harvesting tools (axe/, pickaxe/)
 │   ├── shields/
-│   └── forged/                 # Forged item icons (from Mantle achievements)
+│   └── forged/                 # Forged item sprites
 │
 ├── environment/                # World objects, terrain, props
-│   └── dreadland/              # Zone 1 environment assets
-│
 ├── icons/                      # UI icons for items, abilities
 │   └── forged/                 # Forge system icons
-│
-├── npcs/                       # Non-enemy NPCs (merchants, quest givers)
-│
+├── npcs/                       # Non-enemy NPCs
 ├── sprites/                    # Additional sprite assets
-│   └── lpc/                    # LPC sprite templates
-│
 └── ui/                         # UI elements, frames, buttons
 ```
 
 ## LPC Sprite Naming Convention
 
-For LPC-compatible sprites in equipment/armor/, use this folder structure:
+For equipment sprites in `equipment/armor/`:
 ```
 [slot]/[item_name]/standard/
 ├── walk.png      # 9 frames x 4 directions (576x256)
@@ -187,7 +195,7 @@ For LPC-compatible sprites in equipment/armor/, use this folder structure:
 └── hurt.png      # 6 frames x 1 direction (384x64)
 ```
 
-For starter clothes in characters/, use flat naming:
+For starter clothes in `characters/`:
 ```
 [item_name]_walk.png
 [item_name]_slash.png
@@ -195,39 +203,9 @@ For starter clothes in characters/, use flat naming:
 [item_name]_hurt.png
 ```
 
-## Code Conventions
-
-- Don't commit until user has tested changes in Godot
-- Equipment loading should use `assets/equipment/` paths
-- Enemy loading should use `assets/characters/enemies/` paths
-- Audio loading should use `assets/audio/` paths (sfx/ or music/)
-
-## Potential Issues After Refactor
-
-If assets fail to load after the Dec 2024 refactor, check:
-
-1. **Sounds not playing**: Paths changed from `assets/sounds/` to `assets/audio/sfx/`
-2. **Weapons not showing**: Paths changed from `assets/weapons/` to `assets/equipment/weapons/`
-3. **Tools not loading**: Paths changed from `assets/tools/` to `assets/equipment/tools/`
-4. **Armor not loading**: Paths changed from `assets/armor/zone1/` to `assets/equipment/armor/tier1/`
-
-Key files with path references (check these first):
-- `scripts/systems/sound_manager.gd` - All sound effects
-- `scripts/SimpleLPCSprite.gd` - Equipment sprites during combat
-- `scripts/player/Player.gd` - Weapon and clothing loading
-- `scripts/enemies/Enemy.gd` - Enemy equipment
-- `scripts/systems/ItemIconGenerator.gd` - Inventory icons
-
-## When Adding New Assets
-
-1. Check this structure FIRST before creating folders
-2. Place assets in the correct category
-3. Follow LPC naming conventions for sprites
-4. Update relevant loader scripts if paths change
+---
 
 ## Forge Icon Standards
-
-When creating or modifying forge icons (`assets/icons/forged/`):
 
 **Spec:** 64x64 PNG, RGBA, centered content, min 4px padding
 
@@ -236,113 +214,7 @@ When creating or modifying forge icons (`assets/icons/forged/`):
 - Armor/Shields: Upright, centered
 - Accessories: Natural, centered
 
-**Validation tool:** `assets/icons/forged/icon_standards.py`
-
-```bash
-python icon_standards.py --validate    # Check compliance
-python icon_standards.py --fix         # Auto-center all
-python icon_standards.py --orient weapons/x.png upper-right  # Fix orientation
-python icon_standards.py --preview     # Generate shop grid preview
-```
-
-See `docs/FORGE_ASSET_GENERATION_GUIDE.md` for full details
-
-## LPC Helmet Layers
-
-Helmets from the LPC sprite generator can include **separate layers** for visors, wings, and other enhancements. When processing helmets:
-
-**Layer Structure:**
-- Base helmet layer (e.g., `130 xeon_helmet__gold_.png.png`)
-- Enhancement layers (e.g., `139 helmet_wings__gold_.png.png`, visor layers, etc.)
-
-**Processing Approach:**
-1. Extract all layers from the zip file
-2. Tint each layer separately if needed (base color, accent color, etc.)
-3. Composite layers together in order (base first, enhancements on top)
-4. Save the final composited sprite
-
-**Tinting:**
-- Use Python PIL to tint grayscale/white sprites to target colors
-- Preserve brightness/shading by multiplying color by (brightness/255)
-- Each layer can have a different tint color for multi-color effects
-
-**Example composite code:**
-```python
-from PIL import Image
-result = Image.new('RGBA', base.size, (0, 0, 0, 0))
-result.paste(base_tinted, (0, 0), base_tinted)
-result.paste(wings_tinted, (0, 0), wings_tinted)  # Wings on top
-```
-
-## Dedicated Server Build
-
-The server uses a separate project configuration (`project.server.godot`) with stub autoloads for UI systems that don't run on headless servers.
-
-### Monorepo Workflow (IMPORTANT)
-
-```
-project.godot          # CLIENT version (real UI autoloads) - always committed from client
-project.server.godot   # SERVER version (stubs) - used only for server exports
-build_server.sh        # Server export script - handles file swap automatically
-```
-
-**Rules:**
-- `project.godot` is the CLIENT config - only commit changes from the client machine
-- Server machine has `git update-index --skip-worktree project.godot` set to prevent pushing server changes
-- Always use `build_server.sh` on the server to export
-
-### Building the Server
-
-**On the game server (`/opt/ashbane-game/source`):**
-```bash
-./build_server.sh
-```
-
-This script:
-1. Backs up `project.godot` (client version)
-2. Swaps in `project.server.godot` for export
-3. Runs the Godot export
-4. Restores `project.godot` to client version
-
-**Manual export (if needed):**
-```bash
-cd /opt/ashbane-game/source
-cp project.godot project.godot.bak
-cp project.server.godot project.godot
-/usr/local/bin/godot45 --headless --export-release "Linux Server" /opt/ashbane-game/server/ashbane-server.x86_64
-mv project.godot.bak project.godot
-```
-
-**Why this is needed:**
-- `project.server.godot` uses stub autoloads for UI systems (no rendering needed)
-- Prevents server from crashing on headless display operations
-- Keeps client's real UI autoloads intact in git
-
-**Server-specific features:**
-- `server_main.tscn` as main scene (GameWorld only, no main menu)
-- AI sleep system: enemies enter SLEEPING state when no players within 2500px
-- Enemies only check for wake-up once per second (saves CPU when idle)
-- Server doesn't spawn a local player (prevents enemies from staying awake)
-
-**Running the server (CPU optimization):**
-```bash
-# IMPORTANT: Use --frame-delay to reduce CPU usage in headless mode
-./ashbane-server.x86_64 --headless --frame-delay 15 -- --server --port 7777 --shard shard-1
-
-# Without --frame-delay, Godot headless mode will use 100% CPU
-# The --frame-delay 15 adds a 15ms delay per frame, limiting to ~66 FPS
-```
-
-**Systemd service:**
-```bash
-systemctl start ashbane-game
-systemctl stop ashbane-game   # Graceful shutdown, saves all player data
-journalctl -u ashbane-game -f  # View logs
-```
-
-**Note:** Even with `--frame-delay`, CPU usage will be higher than expected (~30-80%)
-due to Godot 4 headless mode limitations. For production, consider using OS-level
-process limiting (`cpulimit`) or container resource constraints.
+**Validation:** `python assets/icons/forged/icon_standards.py --validate`
 
 ---
 
@@ -350,9 +222,46 @@ process limiting (`cpulimit`) or container resource constraints.
 
 **Full Process:** `docs/ACHIEVEMENT_ITEM_CREATION_PROCESS.md`
 
-Key sections for checking completion:
-- **Phase 4.3** - Update `has_sprites`/`has_icon` in items.json after asset creation
-- **Phase 9.1** - Godot completion checklist (lines 665-690)
-- **Phase 11.1** - Asset verification QA (lines 823-834)
+Key phases:
+- **Phase 4.3** - Update `has_sprites`/`has_icon` in items.json
+- **Phase 9.1** - Godot completion checklist
+- **Phase 11.1** - Asset verification QA
 
-**Source of Truth:** `backend/data/items.json` - check `has_sprites` and `has_icon` flags
+**Source of Truth:** `backend/data/items.json`
+
+---
+
+## LPC Helmet Layers
+
+Helmets can have separate layers (base, visor, wings). When processing:
+
+1. Extract all layers from zip
+2. Tint each layer separately if needed
+3. Composite layers (base first, enhancements on top)
+
+```python
+from PIL import Image
+result = Image.new('RGBA', base.size, (0, 0, 0, 0))
+result.paste(base_tinted, (0, 0), base_tinted)
+result.paste(wings_tinted, (0, 0), wings_tinted)
+```
+
+---
+
+## Potential Issues After Dec 2024 Refactor
+
+If assets fail to load:
+
+| Issue | Old Path | New Path |
+|-------|----------|----------|
+| Sounds not playing | `assets/sounds/` | `assets/audio/sfx/` |
+| Weapons not showing | `assets/weapons/` | `assets/equipment/weapons/` |
+| Tools not loading | `assets/tools/` | `assets/equipment/tools/` |
+| Armor not loading | `assets/armor/zone1/` | `assets/equipment/armor/tier1/` |
+
+Key files to check:
+- `scripts/systems/sound_manager.gd`
+- `scripts/SimpleLPCSprite.gd`
+- `scripts/player/Player.gd`
+- `scripts/enemies/Enemy.gd`
+- `scripts/systems/ItemIconGenerator.gd`
