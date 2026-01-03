@@ -1410,7 +1410,12 @@ func _player_has_ranged_weapon() -> bool:
 	if not weapon:
 		return false
 
-	var weapon_type = weapon.weapon_type if weapon.has("weapon_type") or "weapon_type" in weapon else ""
+	# Get weapon_type - handle both Weapon resource and dict (from remote player sync)
+	var weapon_type = ""
+	if weapon is Dictionary:
+		weapon_type = weapon.get("weapon_type", "")
+	elif "weapon_type" in weapon:
+		weapon_type = weapon.weapon_type
 
 	# Define ranged weapon types
 	var ranged_types = [
@@ -1420,7 +1425,14 @@ func _player_has_ranged_weapon() -> bool:
 	]
 
 	# Also check attack_mode for weapons that use ranged targeting
-	var attack_mode = weapon.attack_mode if "attack_mode" in weapon else "melee"
+	var attack_mode = ""
+	if weapon is Dictionary:
+		attack_mode = weapon.get("attack_mode", "melee")
+	elif "attack_mode" in weapon:
+		attack_mode = weapon.attack_mode
+	else:
+		attack_mode = "melee"
+
 	if attack_mode in ["ranged_heal", "ranged_damage"]:
 		return true
 

@@ -816,13 +816,17 @@ func gain_experience(amount: int) -> void:
 	"""Grant experience to the player (called when enemy dies)"""
 	CharacterStats.gain_experience(amount)
 
-func get_equipped_weapon() -> Weapon:
-	"""Returns the player's equipped weapon. Used by EnemyAI for ranged weapon checks."""
-	# Only return weapon for local player (we control CharacterStats)
+func get_equipped_weapon():
+	"""Returns the player's equipped weapon or weapon info dict.
+	Used by EnemyAI for ranged weapon checks.
+	For remote players, returns a dict with weapon_type from synced appearance data."""
+	# Local player - return actual weapon resource
 	if is_multiplayer_authority():
 		return CharacterStats.equipped_weapon
-	# For remote players, we don't have their weapon data synced
-	# TODO: Sync weapon type in multiplayer for better AI behavior
+	# Remote player - return dict with synced weapon_type
+	# (weapon_type is synced via _receive_appearance_update)
+	if remote_weapon_type != "":
+		return {"weapon_type": remote_weapon_type, "attack_mode": "melee"}
 	return null
 
 func _on_character_level_up(new_level: int) -> void:
