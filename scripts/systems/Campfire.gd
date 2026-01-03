@@ -313,6 +313,10 @@ func _heal_all_players_in_warmth(delta: float) -> void:
 		if not is_instance_valid(p):
 			continue
 
+		# Skip dead players - no healing for corpses!
+		if "is_dead" in p and p.is_dead:
+			continue
+
 		# For competitive campfires:
 		# - If unclaimed (owner_pool_key == NO_OWNER), anyone gets minimal healing
 		# - If claimed, only owners get healed

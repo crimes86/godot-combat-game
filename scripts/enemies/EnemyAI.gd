@@ -120,6 +120,10 @@ const CAMPFIRE_DESPAWN_TIME: float = 600.0  # 10 minutes before despawning
 var is_campfire_skeleton: bool = false  # True if spawned by campfire fuel
 var aggro_sound_cooldown: float = 3.0  # Min 3.0s between aggro laughs per enemy
 
+# Campfire safe zone - prevent endless death loop for AFK players at campfire
+const HOME_CAMPFIRE_POS: Vector2 = Vector2(-6000, 0)  # Main campfire position
+const CAMPFIRE_SAFE_RADIUS: float = 250.0  # Radius within which enemies won't aggro idle players
+
 # Footstep tracking
 var last_footstep_frame: int = -1  # Track last frame that played footstep
 var last_facing_direction: String = ""  # Track last direction for idle (random on spawn)
@@ -289,6 +293,16 @@ func _is_player_dead(p: Node) -> bool:
 
 	# Fallback: check local is_dead flag
 	return p.get("is_dead") == true
+
+func _is_player_in_campfire_safe_zone(p: Node) -> bool:
+	"""Check if player is in the campfire safe zone (prevents endless death loop for AFK players).
+	Skeletons should not auto-aggro players standing idle at campfire."""
+	if not p or not is_instance_valid(p):
+		return false
+
+	var player_pos = p.global_position
+	var distance_to_campfire = player_pos.distance_to(HOME_CAMPFIRE_POS)
+	return distance_to_campfire <= CAMPFIRE_SAFE_RADIUS
 
 func _physics_process(delta: float) -> void:
 	if not enemy or not is_instance_valid(enemy):
@@ -563,13 +577,15 @@ func process_patrolling(delta: float) -> void:
 					aggro_target = p
 
 	# Check for player in aggro range (auto-aggro) - but only if not on leash cooldown and player is alive
+	# Also skip aggro if player is in campfire safe zone (prevents endless death loop for AFK players)
 	if aggro_target and is_instance_valid(aggro_target) and not _is_player_dead(aggro_target) and leash_cooldown_timer <= 0:
-		var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
-		if distance_to_player <= aggro_range:
-			# AGGRO!
-			player = aggro_target  # Update player reference to the one who triggered aggro
-			trigger_aggro()
-			return
+		if not _is_player_in_campfire_safe_zone(aggro_target):
+			var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
+			if distance_to_player <= aggro_range:
+				# AGGRO!
+				player = aggro_target  # Update player reference to the one who triggered aggro
+				trigger_aggro()
+				return
 
 	# Calculate separation force from nearby enemies (always check, even when paused)
 	var separation_force = get_separation_force()
@@ -1022,12 +1038,14 @@ func process_campfire_attracted(delta: float) -> void:
 					aggro_target = p
 
 	# Check for player in aggro range (auto-aggro) - campfire skeletons still aggro, but not on dead players
+	# Also skip aggro if player is in campfire safe zone (prevents endless death loop for AFK players)
 	if aggro_target and is_instance_valid(aggro_target) and not _is_player_dead(aggro_target) and leash_cooldown_timer <= 0:
-		var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
-		if distance_to_player <= aggro_range:
-			player = aggro_target  # Update player reference
-			trigger_aggro()
-			return
+		if not _is_player_in_campfire_safe_zone(aggro_target):
+			var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
+			if distance_to_player <= aggro_range:
+				player = aggro_target  # Update player reference
+				trigger_aggro()
+				return
 
 	# Check if campfire still exists
 	if not campfire_target or not is_instance_valid(campfire_target):
@@ -1086,6 +1104,7 @@ func process_returning(delta: float) -> void:
 
 	# Check for player in aggro range - can re-aggro while returning!
 	# This allows players to chase and re-engage if they want
+	# Skip aggro if player is in campfire safe zone (prevents endless death loop for AFK players)
 	if leash_cooldown_timer <= 0:
 		var aggro_target = player
 		if multiplayer.has_multiplayer_peer():
@@ -1097,7 +1116,7 @@ func process_returning(delta: float) -> void:
 						nearest_distance = dist
 						aggro_target = p
 
-		if aggro_target and is_instance_valid(aggro_target) and not _is_player_dead(aggro_target):
+		if aggro_target and is_instance_valid(aggro_target) and not _is_player_dead(aggro_target) and not _is_player_in_campfire_safe_zone(aggro_target):
 			var distance_to_player = enemy.global_position.distance_to(aggro_target.global_position)
 			if distance_to_player <= aggro_range:
 				# Re-aggro! Player is following
