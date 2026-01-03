@@ -275,24 +275,47 @@ result.paste(wings_tinted, (0, 0), wings_tinted)  # Wings on top
 
 ## Dedicated Server Build
 
-The server uses a separate project configuration (`project.server.godot`) with fewer autoloads (no UI autoloads like TutorialManager, ItemIconGenerator, MobileInput, etc.).
+The server uses a separate project configuration (`project.server.godot`) with stub autoloads for UI systems that don't run on headless servers.
 
-**Building the server:**
+### Monorepo Workflow (IMPORTANT)
 
-The export must use `project.server.godot` instead of `project.godot`. Swap the files during export:
+```
+project.godot          # CLIENT version (real UI autoloads) - always committed from client
+project.server.godot   # SERVER version (stubs) - used only for server exports
+build_server.sh        # Server export script - handles file swap automatically
+```
 
+**Rules:**
+- `project.godot` is the CLIENT config - only commit changes from the client machine
+- Server machine has `git update-index --skip-worktree project.godot` set to prevent pushing server changes
+- Always use `build_server.sh` on the server to export
+
+### Building the Server
+
+**On the game server (`/opt/ashbane-game/source`):**
+```bash
+./build_server.sh
+```
+
+This script:
+1. Backs up `project.godot` (client version)
+2. Swaps in `project.server.godot` for export
+3. Runs the Godot export
+4. Restores `project.godot` to client version
+
+**Manual export (if needed):**
 ```bash
 cd /opt/ashbane-game/source
 cp project.godot project.godot.bak
 cp project.server.godot project.godot
-godot --headless --export-release "Linux Server" /path/to/ashbane-server.x86_64
-cp project.godot.bak project.godot
+/usr/local/bin/godot45 --headless --export-release "Linux Server" /opt/ashbane-game/server/ashbane-server.x86_64
+mv project.godot.bak project.godot
 ```
 
 **Why this is needed:**
-- `project.server.godot` excludes UI autoloads not needed on headless servers
-- UI scripts reference these autoloads directly and fail to parse without them
-- The export uses whatever `project.godot` exists, so we temporarily swap it
+- `project.server.godot` uses stub autoloads for UI systems (no rendering needed)
+- Prevents server from crashing on headless display operations
+- Keeps client's real UI autoloads intact in git
 
 **Server-specific features:**
 - `server_main.tscn` as main scene (GameWorld only, no main menu)

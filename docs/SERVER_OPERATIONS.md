@@ -19,13 +19,15 @@ systemctl status ashbane-game
 # View live logs
 journalctl -u ashbane-game -f
 
-# Rebuild and deploy
+# Rebuild and deploy (USE THIS - handles project file swap)
 cd /opt/ashbane-game/source
-/usr/local/bin/godot45 --headless --export-release "Linux Server" /opt/ashbane-game/server/ashbane-server.x86_64
+./build_server.sh
 systemctl restart ashbane-game
 ```
 
 **Note:** The service is `ashbane-game.service` (port 7777), not `ashbane-server.service` (deprecated, port 7000).
+
+**IMPORTANT:** Always use `./build_server.sh` instead of running godot export directly. The script handles swapping `project.server.godot` in place of `project.godot` during export, then restores it. This prevents server stub autoloads from polluting the client config in git.
 
 ---
 
@@ -51,13 +53,26 @@ Key settings:
 
 ### Project Configuration
 
-Use `project.server.godot` for server builds (see `SERVER_EXPORT_SPEC.md` for autoload differences).
+**Monorepo Workflow:**
+```
+project.godot          # CLIENT version (real UI autoloads) - committed from client only
+project.server.godot   # SERVER version (stubs) - used for server exports
+build_server.sh        # Handles project file swap during export
+```
 
-The server project file removes UI-only autoloads that crash on headless:
+The server uses `project.server.godot` which replaces UI autoloads with stubs:
 - AccountAdmin, CursorManager, VFXLayer, ItemIconGenerator
 - GroupUI, TutorialManager, QuestTrackerUI, BugReportUI
 - MobileInput, AshbaneCosmetics, ForgeVisualEffects
 - Various UI managers
+
+**Git Configuration (on server machine):**
+```bash
+# Prevent server from pushing project.godot changes
+git update-index --skip-worktree project.godot
+```
+
+This ensures pulls update scripts but don't overwrite the local project.godot, and pushes don't include server stub changes.
 
 ---
 
