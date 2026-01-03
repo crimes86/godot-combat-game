@@ -64,8 +64,23 @@ var level_label: Label = null  # Created dynamically in show_level()
 var shadow_sprite: AnimatedSprite2D = null  # Shadow layer
 var equipment_sprites: Array[AnimatedSprite2D] = []  # Equipment layers (boots, gloves, helmet)
 
-# Server-side animation tracking (works without actual sprite on dedicated server)
-var current_animation: String = "idle_down"  # Updated by EnemyAI, synced to clients
+# ═══════════════════════════════════════════════════════════════════════════════
+# SERVER-SIDE ANIMATION TRACKING
+# ═══════════════════════════════════════════════════════════════════════════════
+# On dedicated servers (--server flag), sprites are deleted to save memory.
+# But we still need to sync animations to clients! This variable tracks the
+# current animation STATE without needing the actual AnimatedSprite2D node.
+#
+# Flow:
+#   1. EnemyAI calculates animation name based on velocity/state
+#   2. EnemyAI sets enemy.current_animation (works even without sprites)
+#   3. NetworkEnemyManager._get_enemy_animation() reads this variable
+#   4. Server syncs animation name to clients via _client_sync_positions()
+#   5. Clients play the animation on their local sprites
+#
+# See: docs/MULTIPLAYER_ANIMATION_SYNC.md for full architecture
+# ═══════════════════════════════════════════════════════════════════════════════
+var current_animation: String = "idle_down"
 
 # Crit window state (minimal - manager owns lifecycle)
 var in_crit_window: bool = false  # Simple flag set by grow/shrink methods
