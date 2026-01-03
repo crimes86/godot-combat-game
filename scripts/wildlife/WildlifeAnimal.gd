@@ -1,0 +1,373 @@
+class_name WildlifeAnimal
+extends CharacterBody2D
+## Base class for huntable wildlife (rabbits, foxes, deer, etc.)
+## Simple AI: Roam around, flee from players, can be hunted for resources
+##
+## MULTIPLAYER: Server runs AI and syncs to clients via NetworkWildlifeManager
+## Client copies have is_client_copy=true and skip AI processing
+
+enum State {
+	IDLE,
+	ROAMING,
+	ALERT,
+	FLEEING,
+	DEAD
+}
+
+# Animal configuration (override in subclasses)
+@export var animal_type: String = "generic"
+@export var max_health: float = 20.0
+@export var roam_speed: float = 30.0
+@export var flee_speed: float = 120.0
+@export var detection_range: float = 300.0  # Distance to detect player
+@export var flee_range: float = 500.0  # Distance before stopping flee
+@export var roam_radius: float = 400.0  # How far from home to roam
+
+# Loot configuration
+@export var carcass_item_id: String = "rabbit_carcass"
+@export var base_pelt_quality: float = 1.0  # Affected by how it was killed
+
+# State
+var current_state: State = State.IDLE
+var current_health: float = 20.0
+var home_position: Vector2 = Vector2.ZERO
+var target_position: Vector2 = Vector2.ZERO
+var facing_right: bool = true
+var hit_count: int = 0  # More hits = worse pelt quality
+
+# Timers
+var idle_timer: float = 0.0
+var alert_timer: float = 0.0
+const IDLE_TIME_MIN: float = 1.0
+const IDLE_TIME_MAX: float = 4.0
+const ALERT_TIME: float = 1.5
+
+# References - multiple sprites for different animations (sprite sheets)
+@onready var idle_sprite: Sprite2D = $IdleSprite if has_node("IdleSprite") else null
+@onready var walk_sprite: Sprite2D = $WalkSprite if has_node("WalkSprite") else null
+@onready var run_sprite: Sprite2D = $RunSprite if has_node("RunSprite") else null
+@onready var detection_area: Area2D = $DetectionArea if has_node("DetectionArea") else null
+
+# Animation state
+var current_sprite: Sprite2D = null
+var frame_timer: float = 0.0
+var animation_fps: float = 10.0
+
+# Signals
+signal animal_died(animal: WildlifeAnimal, killer: Node)
+signal animal_fled(animal: WildlifeAnimal)
+
+
+func _ready() -> void:
+	add_to_group("wildlife")
+	add_to_group("huntable")
+
+	home_position = global_position
+	current_health = max_health
+
+	# Set up detection area if it exists
+	if detection_area:
+		detection_area.body_entered.connect(_on_body_entered_detection)
+		detection_area.body_exited.connect(_on_body_exited_detection)
+
+	# Start with random idle time
+	idle_timer = randf_range(IDLE_TIME_MIN, IDLE_TIME_MAX)
+
+	# Initialize sprite references
+	current_sprite = idle_sprite
+	_play_animation("idle")
+
+
+func _is_client_copy() -> bool:
+	"""Check if this is a client-side copy (AI runs on server only)."""
+	return has_meta("is_client_copy") and get_meta("is_client_copy") == true
+
+
+func _physics_process(delta: float) -> void:
+	if current_state == State.DEAD:
+		return
+
+	# Client copies only update animations, server handles AI
+	if _is_client_copy():
+		_update_animation(delta)
+		_update_facing()
+		return
+
+	match current_state:
+		State.IDLE:
+			_process_idle(delta)
+		State.ROAMING:
+			_process_roaming(delta)
+		State.ALERT:
+			_process_alert(delta)
+		State.FLEEING:
+			_process_fleeing(delta)
+
+	# Advance animation frames
+	_update_animation(delta)
+
+	# Update sprite facing
+	_update_facing()
+
+	move_and_slide()
+
+
+func _process_idle(delta: float) -> void:
+	velocity = Vector2.ZERO
+
+	idle_timer -= delta
+	if idle_timer <= 0:
+		# Decide to roam somewhere
+		_pick_roam_target()
+		current_state = State.ROAMING
+		_play_animation("walk")
+
+
+func _process_roaming(delta: float) -> void:
+	var direction = (target_position - global_position).normalized()
+	velocity = direction * roam_speed
+
+	# Check if we've reached target
+	if global_position.distance_to(target_position) < 20.0:
+		current_state = State.IDLE
+		idle_timer = randf_range(IDLE_TIME_MIN, IDLE_TIME_MAX)
+		_play_animation("idle")
+		velocity = Vector2.ZERO
+
+
+func _process_alert(delta: float) -> void:
+	velocity = Vector2.ZERO
+
+	# Face the threat
+	var player = _get_nearest_player()
+	if player:
+		facing_right = player.global_position.x > global_position.x
+
+	alert_timer -= delta
+	if alert_timer <= 0:
+		# Check if player is still close
+		if player and global_position.distance_to(player.global_position) < detection_range:
+			# Start fleeing!
+			current_state = State.FLEEING
+			_play_animation("run")
+			animal_fled.emit(self)
+		else:
+			# Threat gone, return to idle
+			current_state = State.IDLE
+			idle_timer = randf_range(IDLE_TIME_MIN, IDLE_TIME_MAX)
+			_play_animation("idle")
+
+
+func _process_fleeing(delta: float) -> void:
+	var player = _get_nearest_player()
+
+	if player:
+		# Flee directly away from player
+		var flee_direction = (global_position - player.global_position).normalized()
+		velocity = flee_direction * flee_speed
+
+		# Check if we've fled far enough
+		var distance = global_position.distance_to(player.global_position)
+		if distance > flee_range:
+			# Safe! Stop fleeing
+			current_state = State.IDLE
+			idle_timer = randf_range(IDLE_TIME_MIN, IDLE_TIME_MAX)
+			home_position = global_position  # New home
+			_play_animation("idle")
+			velocity = Vector2.ZERO
+	else:
+		# No player, stop fleeing
+		current_state = State.IDLE
+		idle_timer = randf_range(IDLE_TIME_MIN, IDLE_TIME_MAX)
+		_play_animation("idle")
+		velocity = Vector2.ZERO
+
+
+func _pick_roam_target() -> void:
+	# Pick a random point within roam radius of home
+	var angle = randf() * TAU
+	var distance = randf_range(roam_radius * 0.3, roam_radius)
+	target_position = home_position + Vector2(cos(angle), sin(angle)) * distance
+
+
+func _update_animation(delta: float) -> void:
+	if not current_sprite:
+		return
+
+	frame_timer += delta
+	var frame_duration = 1.0 / animation_fps
+
+	if frame_timer >= frame_duration:
+		frame_timer -= frame_duration
+		# Advance to next frame, loop if needed
+		var next_frame = current_sprite.frame + 1
+		if next_frame >= current_sprite.hframes:
+			next_frame = 0
+		current_sprite.frame = next_frame
+
+
+func _update_facing() -> void:
+	if velocity.length_squared() > 1.0:
+		facing_right = velocity.x > 0
+
+	# Update all sprites' flip_h (sprites face right by default)
+	var flip = not facing_right
+	if idle_sprite: idle_sprite.flip_h = flip
+	if walk_sprite: walk_sprite.flip_h = flip
+	if run_sprite: run_sprite.flip_h = flip
+
+
+func _play_animation(anim_name: String) -> void:
+	# Hide all sprites
+	if idle_sprite: idle_sprite.visible = false
+	if walk_sprite: walk_sprite.visible = false
+	if run_sprite: run_sprite.visible = false
+
+	# Show and set current sprite based on animation
+	match anim_name:
+		"idle":
+			current_sprite = idle_sprite
+			animation_fps = 8.0
+		"walk":
+			current_sprite = walk_sprite
+			animation_fps = 10.0
+		"run":
+			current_sprite = run_sprite
+			animation_fps = 12.0
+		_:
+			current_sprite = idle_sprite
+			animation_fps = 8.0
+
+	if current_sprite:
+		current_sprite.visible = true
+		current_sprite.frame = 0
+		frame_timer = 0.0
+
+
+func _get_nearest_player() -> Node2D:
+	var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+	var nearest: Node2D = null
+	var nearest_dist: float = INF
+
+	for player in players:
+		var dist = global_position.distance_to(player.global_position)
+		if dist < nearest_dist:
+			nearest_dist = dist
+			nearest = player
+
+	return nearest
+
+
+func _on_body_entered_detection(body: Node2D) -> void:
+	if body.is_in_group(Constants.GROUP_PLAYER):
+		# Player detected! Go to alert state
+		if current_state in [State.IDLE, State.ROAMING]:
+			current_state = State.ALERT
+			alert_timer = ALERT_TIME
+			_play_animation("idle")  # Stand still, look alert
+
+
+func _on_body_exited_detection(body: Node2D) -> void:
+	# Player left detection area - handled in _process_alert
+	pass
+
+
+# === DAMAGE / HUNTING ===
+
+func request_damage(amount: float, attacker: Node = null) -> void:
+	"""Public API for dealing damage - routes through network in multiplayer."""
+	var network_manager = get_node_or_null("/root/NetworkWildlifeManager")
+
+	if network_manager and has_meta("network_id"):
+		# Multiplayer: request damage through server
+		var network_id = get_meta("network_id")
+		network_manager.request_damage_wildlife(network_id, amount, 0)
+	else:
+		# Single player: apply directly
+		take_damage(amount, attacker)
+
+
+func take_damage(amount: float, attacker: Node = null) -> void:
+	"""Apply damage directly (called by server or single-player)."""
+	if current_state == State.DEAD:
+		return
+
+	current_health -= amount
+	hit_count += 1
+
+	# Flash red on all sprites
+	_set_all_sprites_modulate(Color.RED)
+	get_tree().create_timer(0.1).timeout.connect(_reset_sprite_modulate)
+
+	# Immediately flee if hit (server-side only, clients get state via sync)
+	if not _is_client_copy():
+		if current_state != State.FLEEING:
+			current_state = State.FLEEING
+			_play_animation("run")
+
+	if current_health <= 0:
+		_die(attacker)
+
+
+func _set_all_sprites_modulate(color: Color) -> void:
+	if idle_sprite: idle_sprite.modulate = color
+	if walk_sprite: walk_sprite.modulate = color
+	if run_sprite: run_sprite.modulate = color
+
+
+func _reset_sprite_modulate() -> void:
+	_set_all_sprites_modulate(Color.WHITE)
+
+
+func _die(killer: Node = null) -> void:
+	current_state = State.DEAD
+	velocity = Vector2.ZERO
+
+	animal_died.emit(self, killer)
+
+	# Calculate pelt quality based on hits
+	var quality = _calculate_pelt_quality()
+
+	# Spawn carcass loot or add to player inventory
+	_drop_carcass(killer, quality)
+
+	# Death animation - fade out current sprite
+	if current_sprite:
+		var tween = create_tween()
+		tween.tween_property(current_sprite, "modulate:a", 0.0, 0.5)
+		tween.tween_callback(queue_free)
+	else:
+		queue_free()
+
+
+func _calculate_pelt_quality() -> float:
+	# More hits = worse quality
+	# 1 hit = pristine (1.0), 2 hits = good (0.8), 3+ hits = poor (0.5)
+	match hit_count:
+		1: return 1.0
+		2: return 0.8
+		_: return 0.5
+
+
+func _drop_carcass(killer: Node, quality: float) -> void:
+	# For now, just print - will integrate with inventory later
+	print("[Wildlife] %s died. Carcass: %s, Quality: %.0f%%" % [animal_type, carcass_item_id, quality * 100])
+
+	# TODO: Add carcass to killer's inventory or spawn as loot
+	# var carcass_data = {
+	#     "item_id": carcass_item_id,
+	#     "quality": quality,
+	#     "animal_type": animal_type
+	# }
+
+
+# === UTILITY ===
+
+func get_animal_info() -> Dictionary:
+	return {
+		"type": animal_type,
+		"state": State.keys()[current_state],
+		"health": current_health,
+		"max_health": max_health,
+		"position": global_position
+	}

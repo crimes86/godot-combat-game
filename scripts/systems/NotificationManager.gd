@@ -56,7 +56,6 @@ func _is_dedicated_server() -> bool:
 ## Show an item added notification
 ## rarity: "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"
 func notify_item_added(item_name: String, quantity: int = 1, rarity: String = "COMMON") -> void:
-	print("📢 NotificationManager.notify_item_added: %s x%d (%s)" % [item_name, quantity, rarity])
 	_queue_notification({
 		"type": "item_added",
 		"item_name": item_name,
@@ -75,7 +74,6 @@ func notify_item_removed(item_name: String, quantity: int = 1, rarity: String = 
 
 ## Show a gold added notification
 func notify_gold_added(amount: int) -> void:
-	print("📢 NotificationManager.notify_gold_added: %d gold" % amount)
 	if amount <= 0:
 		return
 	_queue_notification({
@@ -85,7 +83,6 @@ func notify_gold_added(amount: int) -> void:
 
 ## Show an XP gained notification
 func notify_xp_gained(amount: int, source: String = "") -> void:
-	print("📢 NotificationManager.notify_xp_gained: %d XP from %s" % [amount, source])
 	if amount <= 0:
 		return
 	_queue_notification({
@@ -106,7 +103,6 @@ func show_notification(message: String, type: String = "INFO") -> void:
 ## Queue a notification for staggered display
 func _queue_notification(data: Dictionary) -> void:
 	pending_notifications.append(data)
-	print("📋 Queued notification (queue size: %d, processing: %s)" % [pending_notifications.size(), is_processing_queue])
 	if not is_processing_queue:
 		_start_processing_queue()
 
@@ -121,11 +117,9 @@ func _start_processing_queue() -> void:
 func _process_next_notification() -> void:
 	if pending_notifications.is_empty():
 		is_processing_queue = false
-		print("📋 Queue empty, done processing")
 		return
 
 	var data = pending_notifications.pop_front()
-	print("📋 Processing notification: %s (remaining: %d)" % [data.get("type", "unknown"), pending_notifications.size()])
 
 	# Create and show the notification based on type
 	var notification = _create_notification()
@@ -157,7 +151,6 @@ func _process_next_notification() -> void:
 			is_processing_queue = false
 	else:
 		is_processing_queue = false
-		print("📋 Queue empty, done processing")
 
 func _create_notification() -> ItemNotification:
 	var notification_scene = preload("res://scenes/ui/item_notification.tscn")
@@ -183,18 +176,11 @@ func _show_notification(notification: ItemNotification) -> void:
 	# Update container position based on current WINDOW size (not viewport - they can differ)
 	var window_size = DisplayServer.window_get_size()
 	notification_container.position = Vector2(window_size.x * 0.5 - 150, window_size.y * 0.45)
-	print("📋 Recalculated container pos for window %s -> %s" % [window_size, notification_container.position])
 
 	# Add the new notification at the top (position 0) immediately
 	notification_queue.append(notification)
 	notification.position = Vector2(0, 0)
 	notification_container.add_child(notification)
-
-	print("📋 Notification added to container at global_pos: %s, container visible: %s, container in tree: %s" % [
-		notification_container.global_position,
-		notification_container.visible,
-		notification_container.is_inside_tree()
-	])
 
 	# Connect to cleanup signal
 	notification.notification_finished.connect(_on_notification_finished.bind(notification))

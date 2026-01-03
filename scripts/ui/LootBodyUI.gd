@@ -26,6 +26,20 @@ const GRID_COLUMNS = 3  # 3 columns for compact layout
 const MIN_SLOTS = 3  # Always show at least 3 slots
 const LOOT_RANGE = 150.0  # Max distance to loot corpses
 
+# Staggered notification queue
+var _loot_notification_queue: Array = []  # [{type, data, world_pos}]
+var _is_processing_loot_queue: bool = false
+const LOOT_STAGGER_DELAY: float = 0.12  # Delay between notifications
+
+# Rarity sort order (higher = shown first)
+const RARITY_ORDER = {
+	"LEGENDARY": 5,
+	"EPIC": 4,
+	"RARE": 3,
+	"UNCOMMON": 2,
+	"COMMON": 1
+}
+
 func _ready() -> void:
 	print("💀 LootBodyUI initialized")
 	hide()
@@ -573,19 +587,31 @@ func loot_all_gold(gold_corpses: Array) -> void:
 	"""Loot gold from all corpses in the array via server"""
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 	var has_peer = multiplayer.has_multiplayer_peer()
+	var total_gold = 0
+	var first_position = Vector2.ZERO
 
 	# Request gold loot from server for each corpse
 	for corpse in gold_corpses:
 		if not is_instance_valid(corpse) or corpse.corpse_gold <= 0:
 			continue
+		var gold = corpse.corpse_gold
+		total_gold += gold
+		if first_position == Vector2.ZERO:
+			first_position = corpse.global_position
 		var net_id = corpse.get("network_id") if "network_id" in corpse else -1
 		if network_enemy_mgr and net_id > 0:
 			if has_peer:
 				network_enemy_mgr.request_loot_gold.rpc_id(1, net_id)
 			else:
 				network_enemy_mgr.request_loot_gold(net_id)
-		# Optimistic update - clear gold immediately
+		# Optimistic add gold immediately
+		CharacterStats.add_gold(gold)
+		# Optimistic update - clear gold on corpse
 		corpse.corpse_gold = 0
+
+	# Show combined gold notification
+	if total_gold > 0:
+		_show_gold_loot_feedback(total_gold, first_position)
 
 	# Check if corpses are empty and refresh
 	for corpse in gold_corpses:
@@ -607,15 +633,30 @@ func loot_stacked_items(items: Array, corpses: Array) -> void:
 		if not is_instance_valid(corpse) or not item:
 			continue
 
+		var item_name = item.get("name", "Unknown")
+		var item_rarity = item.get("rarity", "Common")
 		var net_id = corpse.get("network_id") if "network_id" in corpse else -1
+
 		if network_enemy_mgr and net_id > 0:
-			var item_index = corpse.corpse_loot.find(item)
+			# Find item by name match instead of reference (more reliable)
+			var item_index = -1
+			for j in range(corpse.corpse_loot.size()):
+				var c_item = corpse.corpse_loot[j]
+				if c_item and c_item.get("name", "") == item_name:
+					item_index = j
+					break
+
 			if item_index >= 0:
 				if has_peer:
 					network_enemy_mgr.request_loot_item.rpc_id(1, net_id, item_index)
 				else:
 					network_enemy_mgr.request_loot_item(net_id, item_index)
-				# Optimistic update - remove item immediately
+
+				# Optimistic add item and show floating text
+				if InventorySystem.add_item(item):
+					_show_item_loot_feedback(item_name, 1, item_rarity, corpse.global_position)
+
+				# Optimistic update - remove item from corpse
 				corpse.corpse_loot.remove_at(item_index)
 
 	# Check if corpses are empty and refresh
@@ -661,19 +702,23 @@ func loot_gold(corpse, gold_amount: int) -> void:
 		if not has_peer:
 			CharacterStats.add_gold(gold_amount)
 			corpse.corpse_gold = 0
-			NotificationManager.show_notification("Looted %d gold" % gold_amount, "INFO")
+			_show_gold_loot_feedback(gold_amount, corpse.global_position)
 			corpse.check_if_looted_empty()
 		populate_loot_grid()
 		return
 
 	# Request gold loot through server
-	# NetworkEnemyManager._client_gold_looted handles notification and sound
 	if has_peer:
 		LogManager.debug("Sending request_loot_gold RPC to server: enemy=%d" % net_id, "loot")
 		network_enemy_mgr.request_loot_gold.rpc_id(1, net_id)
 	else:
 		# Single player: call directly
 		network_enemy_mgr.request_loot_gold(net_id)
+
+	# Optimistic update - add gold and show notification immediately
+	# (Server RPC will confirm, but we show instant feedback)
+	CharacterStats.add_gold(gold_amount)
+	_show_gold_loot_feedback(gold_amount, corpse.global_position)
 
 	# Optimistic UI update - clear gold immediately
 	corpse.corpse_gold = 0
@@ -745,18 +790,8 @@ func loot_item(corpse, item: Dictionary) -> void:
 	var item_type = item.get("type", "")
 	var item_rarity = item.get("rarity", "")
 
-	print("🔍 Looking for item: name='%s' type='%s' rarity='%s'" % [item_name, item_type, item_rarity])
-	print("🔍 Corpse has %d items in loot array" % corpse.corpse_loot.size())
-
 	for i in range(corpse.corpse_loot.size()):
 		var corpse_item = corpse.corpse_loot[i]
-		if corpse_item:
-			print("   [%d] name='%s' type='%s' rarity='%s'" % [
-				i,
-				corpse_item.get("name", ""),
-				corpse_item.get("type", ""),
-				corpse_item.get("rarity", "")
-			])
 		# Match by name only to be more lenient with sync issues
 		if corpse_item and corpse_item.get("name", "") == item_name:
 			item_index = i
@@ -785,7 +820,7 @@ func loot_item(corpse, item: Dictionary) -> void:
 		if not has_peer:
 			if InventorySystem.add_item(item):
 				corpse.corpse_loot.remove_at(item_index)
-				NotificationManager.notify_item_added(item_name, 1, item.get("rarity", "Common"))
+				_show_item_loot_feedback(item_name, 1, item.get("rarity", "Common"), corpse.global_position)
 				corpse.check_if_looted_empty()
 		populate_loot_grid()
 		return
@@ -796,6 +831,13 @@ func loot_item(corpse, item: Dictionary) -> void:
 	else:
 		# Single player: call directly
 		network_enemy_mgr.request_loot_item(net_id, item_index)
+
+	# Optimistic update - add item and show floating text
+	# (Server RPC will confirm, but we show instant feedback)
+	if InventorySystem.add_item(item):
+		_show_item_loot_feedback(item_name, 1, item_rarity if item_rarity else "Common", corpse.global_position)
+	else:
+		LogManager.warn("Inventory full! Cannot loot %s" % item_name, "inventory")
 
 	# Optimistic UI update - remove item immediately from local corpse data
 	# Server will confirm, but UI feels instant
@@ -822,28 +864,51 @@ func _on_take_all_pressed() -> void:
 		if not is_instance_valid(corpse):
 			continue
 		if corpse.corpse_gold > 0:
-			total_gold += corpse.corpse_gold
+			var gold = corpse.corpse_gold
+			total_gold += gold
 			var net_id = corpse.get("network_id") if "network_id" in corpse else -1
 			if network_enemy_mgr and net_id > 0:
 				if has_peer:
 					network_enemy_mgr.request_loot_gold.rpc_id(1, net_id)
 				else:
 					network_enemy_mgr.request_loot_gold(net_id)
+			# Optimistic add gold immediately
+			CharacterStats.add_gold(gold)
+			corpse.corpse_gold = 0
 
-	# Collect all items and send loot requests immediately (no delays)
-	# Server will handle notification staggering
+	# Show combined gold notification if any
+	if total_gold > 0:
+		_show_gold_loot_feedback(total_gold, corpses_looted[0].global_position if corpses_looted.size() > 0 and is_instance_valid(corpses_looted[0]) else Vector2.ZERO)
+
+	# Collect all items and loot them immediately with optimistic adds
 	for corpse in corpses_looted:
 		if not is_instance_valid(corpse):
 			continue
 		var net_id = corpse.get("network_id") if "network_id" in corpse else -1
-		if network_enemy_mgr and net_id > 0:
-			# Request all items from this corpse (always index 0 since they shift)
-			for i in range(corpse.corpse_loot.size()):
+		# Loot all items from this corpse
+		while corpse.corpse_loot.size() > 0:
+			var item = corpse.corpse_loot[0]
+			if not item:
+				corpse.corpse_loot.remove_at(0)
+				continue
+
+			var item_name = item.get("name", "Unknown")
+			var item_rarity = item.get("rarity", "Common")
+
+			# Send request to server
+			if network_enemy_mgr and net_id > 0:
 				if has_peer:
 					network_enemy_mgr.request_loot_item.rpc_id(1, net_id, 0)
 				else:
 					network_enemy_mgr.request_loot_item(net_id, 0)
+
+			# Optimistic add item and show floating text
+			if InventorySystem.add_item(item):
+				_show_item_loot_feedback(item_name, 1, item_rarity, corpse.global_position)
 				looted_count += 1
+
+			# Remove from local corpse
+			corpse.corpse_loot.remove_at(0)
 
 	# Mark corpses as looted
 	for corpse in corpses_looted:
@@ -867,3 +932,69 @@ func _play_click_sound() -> void:
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager and sound_manager.has_method("play_button_click_sound"):
 		sound_manager.play_button_click_sound()
+
+func _show_gold_loot_feedback(amount: int, world_position: Vector2) -> void:
+	"""Queue gold loot notification for staggered display (gold always first)"""
+	_loot_notification_queue.append({
+		"type": "gold",
+		"amount": amount,
+		"world_pos": world_position,
+		"priority": 100  # Gold always first
+	})
+	_try_start_queue_processing()
+
+func _show_item_loot_feedback(item_name: String, quantity: int, rarity: String, world_position: Vector2) -> void:
+	"""Queue item loot notification for staggered display (sorted by rarity)"""
+	var priority = RARITY_ORDER.get(rarity.to_upper(), 1)
+	_loot_notification_queue.append({
+		"type": "item",
+		"name": item_name,
+		"quantity": quantity,
+		"rarity": rarity,
+		"world_pos": world_position,
+		"priority": priority
+	})
+	_try_start_queue_processing()
+
+func _try_start_queue_processing() -> void:
+	"""Start queue processing if not already running"""
+	if _is_processing_loot_queue:
+		return
+
+	# Sort queue: gold first (priority 100), then items by rarity (legendary=5 down to common=1)
+	_loot_notification_queue.sort_custom(func(a, b): return a.priority > b.priority)
+
+	_is_processing_loot_queue = true
+	_process_next_loot_notification()
+
+func _process_next_loot_notification() -> void:
+	"""Process the next notification in the queue with stagger delay"""
+	if _loot_notification_queue.is_empty():
+		_is_processing_loot_queue = false
+		return
+
+	var notif = _loot_notification_queue.pop_front()
+	var gw = get_tree().get_first_node_in_group("game_world")
+	var sound_manager = get_node_or_null("/root/SoundManager")
+
+	if notif.type == "gold":
+		if gw and notif.world_pos != Vector2.ZERO:
+			CombatText.create_gold(notif.amount, notif.world_pos, gw)
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
+	elif notif.type == "item":
+		if gw and notif.world_pos != Vector2.ZERO:
+			CombatText.create_item(notif.name, notif.quantity, notif.rarity, notif.world_pos, gw)
+		if sound_manager:
+			sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -12.0)
+
+	# Schedule next notification with stagger delay
+	if not _loot_notification_queue.is_empty():
+		var tree = get_tree()
+		if tree:
+			await tree.create_timer(LOOT_STAGGER_DELAY).timeout
+			_process_next_loot_notification()
+		else:
+			_is_processing_loot_queue = false
+	else:
+		_is_processing_loot_queue = false

@@ -35,18 +35,8 @@ func _ready() -> void:
 	add_theme_color_override("font_outline_color", Color.BLACK)
 	add_theme_constant_override("outline_size", 3)
 
-	# DEBUG: Add bright background so we can see if it's rendering at all
-	var bg = ColorRect.new()
-	bg.color = Color(1.0, 0.0, 0.0, 0.8)  # Bright red semi-transparent
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.z_index = -1  # Behind the text
-	add_child(bg)
-	custom_minimum_size = Vector2(400, 50)  # Make it bigger to see
-
 	# Size to fit content
 	autowrap_mode = TextServer.AUTOWRAP_OFF
-
-	print("📋 ItemNotification _ready: text='%s', global_pos=%s, visible=%s, viewport=%s" % [text, global_position, visible, get_viewport().size if get_viewport() else "null"])
 
 	# Start animation
 	animate()
@@ -103,7 +93,6 @@ func setup_xp_gained(amount: int, source: String = "") -> void:
 func setup_system_message(message: String, msg_type: String) -> void:
 	notification_type = NotificationType.SYSTEM_MESSAGE
 	text = message
-	print("📋 ItemNotification setup_system_message: '%s' type=%s" % [message, msg_type])
 
 	# Color based on message type
 	var color: Color
@@ -119,20 +108,14 @@ func setup_system_message(message: String, msg_type: String) -> void:
 
 	add_theme_color_override("font_color", color)
 	add_theme_font_size_override("font_size", 18)
-	print("📋 ItemNotification text='%s', color=%s, size=%s" % [text, color, size])
 
 func animate() -> void:
 	# Pop-in animation for below-player notifications
 	var tween = create_tween()
 
-	# DEBUG: Start fully visible to test if notification is rendering
-	scale = Vector2(1.0, 1.0)
-	modulate.a = 1.0
-	print("📋 ItemNotification animate() called - starting VISIBLE for debug")
-
-	# Initial state - small and transparent (disabled for debug)
-	#scale = Vector2(0.5, 0.5)
-	#modulate.a = 0.0
+	# Initial state - small and transparent
+	scale = Vector2(0.5, 0.5)
+	modulate.a = 0.0
 
 	# Pop in with smooth bounce
 	tween.set_parallel(true)
