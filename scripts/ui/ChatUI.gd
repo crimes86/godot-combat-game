@@ -173,8 +173,9 @@ func create_chat_ui() -> void:
 	chat_panel.offset_top = -330
 	chat_panel.offset_bottom = -10
 
-	# Enable mouse detection for hover fade effect
-	chat_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Start with mouse pass-through so aiming works through chat area
+	# Only capture mouse when actively typing (Enter or / pressed)
+	chat_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chat_panel.mouse_entered.connect(_on_chat_mouse_entered)
 	chat_panel.mouse_exited.connect(_on_chat_mouse_exited)
 
@@ -329,6 +330,9 @@ func focus_input() -> void:
 	if input_field:
 		input_field.grab_focus()
 		is_input_focused = true
+		# Capture mouse events when typing
+		if chat_panel:
+			chat_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 		_fade_to_active()  # Show fully when typing
 
 func unfocus_input() -> void:
@@ -336,6 +340,9 @@ func unfocus_input() -> void:
 	if input_field:
 		input_field.release_focus()
 		is_input_focused = false
+		# Allow mouse to pass through chat area for aiming
+		if chat_panel:
+			chat_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_fade_to_ghosted()  # Fade back to ghosted when done typing
 		# Explicitly release GUI focus so game input works immediately
 		get_viewport().gui_release_focus()

@@ -632,14 +632,19 @@ func _play_hit_sounds(enemy: Node, is_crit: bool, is_weakpoint: bool, _attacker_
 		return
 
 	var weapon_type = ""
+	var is_bow = false
 	if CharacterStats.equipped_weapon:
 		weapon_type = CharacterStats.equipped_weapon.weapon_type
+		is_bow = CharacterStats.equipped_weapon.is_bow_weapon() if CharacterStats.equipped_weapon.has_method("is_bow_weapon") else false
 
-	if is_crit:
-		sound_manager.play_critical_hit_sound(enemy.global_position, -8.0)
-	else:
-		sound_manager.play_normal_hit_sound(enemy.global_position, -12.0, weapon_type)
+	# Bows skip the hit sound here - they play their own impact sound via _spawn_arrow_impact
+	if not is_bow:
+		if is_crit:
+			sound_manager.play_critical_hit_sound(enemy.global_position, -8.0)
+		else:
+			sound_manager.play_normal_hit_sound(enemy.global_position, -12.0, weapon_type)
 
+	# Always play skeleton hurt sound (the grunt)
 	sound_manager.play_skeleton_hurt_sound(enemy.global_position, -14.0)
 
 func _trigger_attack_feedback_for_attacker(enemy: Node, is_crit: bool, is_weakpoint: bool, attacker_id: int) -> void:

@@ -2490,7 +2490,14 @@ func _track_weakpoint_destroyed() -> void:
 func track_enemy_killed(enemy_type: String, is_elite: bool = false, is_boss: bool = false, enemy_level: int = 1) -> void:
 	"""Track enemy kill for forged weapons (called from Enemy.gd or kill handler)"""
 	var weapon = CharacterStats.equipped_weapon
-	if not weapon or not weapon.is_forged or not weapon.weapon_stats:
+	if not weapon:
+		print("⚔️ [KILL] No equipped weapon - skipping kill tracking")
+		return
+	if not weapon.is_forged:
+		print("⚔️ [KILL] Weapon not forged - skipping kill tracking")
+		return
+	if not weapon.weapon_stats:
+		print("⚔️ [KILL] Weapon has no stats - skipping kill tracking")
 		return
 
 	# Get party size for group XP bonus (GroupManager is an autoload)
@@ -2498,7 +2505,9 @@ func track_enemy_killed(enemy_type: String, is_elite: bool = false, is_boss: boo
 	if GroupManager:
 		party_size = GroupManager.get_group_size()
 
+	var old_kills = weapon.weapon_stats.kills_total
 	weapon.weapon_stats.record_kill(enemy_type, is_elite, is_boss, enemy_level, party_size)
+	print("⚔️ [KILL] Recorded %s kill! Kills: %d → %d" % [enemy_type, old_kills, weapon.weapon_stats.kills_total])
 
 func track_player_death() -> void:
 	"""Track player death for forged weapons"""

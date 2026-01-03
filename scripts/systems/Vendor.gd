@@ -175,15 +175,17 @@ func _update_quest_indicator() -> void:
 
 	# Check for available quests
 	if qm.has_available_quests(giver):
-		# During tutorial, only show ! when it's the VISIT_BLACKSMITH step
-		var tutorial_mgr = get_node_or_null("/root/TutorialManager")
-		if tutorial_mgr and tutorial_mgr.is_tutorial_active():
-			var tutorial_step = tutorial_mgr.current_step
-			# TutorialStep.VISIT_BLACKSMITH = 6
-			if tutorial_step < 6:
-				# Tutorial is active but not yet at blacksmith step - hide indicator
-				quest_indicator.visible = false
-				return
+		# During tutorial, only show Blacksmith's ! when it's the VISIT_BLACKSMITH step
+		# Other NPCs (like Wanderer) should always show their quest indicators
+		if giver == "blacksmith":
+			var tutorial_mgr = get_node_or_null("/root/TutorialManager")
+			if tutorial_mgr and tutorial_mgr.is_tutorial_active():
+				var tutorial_step = tutorial_mgr.current_step
+				# TutorialStep.VISIT_BLACKSMITH = 5
+				if tutorial_step < 5:
+					# Tutorial is active but not yet at blacksmith step - hide indicator
+					quest_indicator.visible = false
+					return
 
 		# Show available quest indicator
 		quest_indicator.text = "!"

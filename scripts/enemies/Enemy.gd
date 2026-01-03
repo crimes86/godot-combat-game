@@ -1658,7 +1658,16 @@ func die() -> void:
 				var type_name = get_script().get_global_name().to_lower() if get_script() else "skeleton"
 				if type_name == "enemy" or type_name.is_empty():
 					type_name = "skeleton"
+				print("💀 [Enemy.die] Calling track_enemy_killed for %s (level %d)" % [type_name, enemy_level])
 				combat_system.track_enemy_killed(type_name, is_elite_enemy, is_boss_enemy, enemy_level)
+			else:
+				print("💀 [Enemy.die] PlayerCombat has no track_enemy_killed method!")
+		else:
+			print("💀 [Enemy.die] Could not find player or PlayerCombat node")
+	else:
+		var killer_id = get_meta("killer_peer_id", -1)
+		var my_peer_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+		print("💀 [Enemy.die] Skipping weapon tracking - not XP grantee (killer=%d, me=%d)" % [killer_id, my_peer_id])
 
 	# Transition to corpse state (don't despawn)
 	become_corpse()

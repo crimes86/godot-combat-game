@@ -323,9 +323,12 @@ func place_torches_along_path(path_positions: Array, parent: Node2D, rng: Random
 			var t = distance_into_segment / segment_length
 			var torch_pos = start_pos.lerp(end_pos, t)
 
+			# Place torches on PATH EDGES (not in the middle)
 			var direction = (end_pos - start_pos).normalized()
 			var perpendicular = Vector2(-direction.y, direction.x)
-			var offset = rng.randf_range(-180.0, 180.0)
+			# Force torches to one side or the other (150-250 units from center)
+			var side = 1 if rng.randf() > 0.5 else -1
+			var offset = rng.randf_range(150.0, 250.0) * side
 			torch_pos += perpendicular * offset
 
 			var torch_script = load("res://scripts/systems/Torch.gd")

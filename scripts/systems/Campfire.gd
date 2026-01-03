@@ -2046,6 +2046,9 @@ func _sync_fuel_to_clients(pool_key: int, wood: int, bone_embers: int) -> void:
 	pool.wood = wood
 	pool.bone_embers = bone_embers
 	update_visual_intensity()
+	# Force immediate aura update (don't wait for next _physics_process)
+	if not _is_server_mode:
+		update_ground_mist(0.0)
 	print("🔥 [CLIENT] Fuel synced for pool %d: wood=%d, embers=%d" % [pool_key, wood, bone_embers])
 
 func _sync_fuel_state_to_clients() -> void:

@@ -1202,28 +1202,33 @@ func perform_attack() -> void:
 			sprite = enemy.get_node("Sprite")
 			anim_sprite = sprite as AnimatedSprite2D
 
-	# Play attack animation
+	# Determine direction to player for attack animation
+	var direction = (player.global_position - enemy.global_position).normalized()
+	var angle = direction.angle()
+	var deg = rad_to_deg(angle)
+	if deg < 0:
+		deg += 360
+
+	# Get direction string
+	var dir_str = "down"
+	if deg >= 315 or deg < 45:
+		dir_str = "right"
+	elif deg >= 45 and deg < 135:
+		dir_str = "down"
+	elif deg >= 135 and deg < 225:
+		dir_str = "left"
+	else:
+		dir_str = "up"
+
+	# Build attack animation name
+	var attack_anim = "attack_" + dir_str
+
+	# CRITICAL: Always set current_animation for network sync (even on server without sprites)
+	# This allows NetworkEnemyManager to sync the attack animation to clients
+	enemy.current_animation = attack_anim
+
+	# Play attack animation (only if we have sprites - skipped on dedicated server)
 	if anim_sprite and anim_sprite.sprite_frames:
-		# Determine direction to player
-		var direction = (player.global_position - enemy.global_position).normalized()
-		var angle = direction.angle()
-		var deg = rad_to_deg(angle)
-		if deg < 0:
-			deg += 360
-
-		# Get direction string
-		var dir_str = "down"
-		if deg >= 315 or deg < 45:
-			dir_str = "right"
-		elif deg >= 45 and deg < 135:
-			dir_str = "down"
-		elif deg >= 135 and deg < 225:
-			dir_str = "left"
-		else:
-			dir_str = "up"
-
-		# Play attack animation
-		var attack_anim = "attack_" + dir_str
 		if anim_sprite.sprite_frames.has_animation(attack_anim):
 			anim_sprite.play(attack_anim)
 			# Don't flip - we have dedicated directional attack animations
