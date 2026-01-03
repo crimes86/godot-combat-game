@@ -337,15 +337,7 @@ func request_attack(enemy_network_id: int, damage: float) -> void:
 	if _is_player_timed_out(attacker_id):
 		return  # Silently ignore requests during timeout
 
-	# SECURITY: Attack cooldown check (anti-spam) with violation tracking
-	var current_time = Time.get_ticks_msec()
-	if attack_cooldowns.has(attacker_id):
-		var time_since_last = current_time - attack_cooldowns[attacker_id]
-		if time_since_last < ATTACK_COOLDOWN_MS:
-			if _record_violation(attacker_id, "attacking too fast (%d ms)" % time_since_last):
-				return  # Blocked due to timeout
-			return  # Still block this specific attack
-	attack_cooldowns[attacker_id] = current_time
+	# NOTE: Attack speed is uncapped by design - we validate damage instead
 
 	# SECURITY: Validate damage is within reasonable bounds for player's level
 	var max_base_damage = _get_max_player_damage(attacker_id)
@@ -505,15 +497,7 @@ func request_damage(enemy_network_id: int, damage: float, is_crit: bool, is_weak
 	if _is_player_timed_out(attacker_id):
 		return  # Silently ignore requests during timeout
 
-	# SECURITY: Attack cooldown check (anti-spam) - share cooldown with request_attack
-	var current_time = Time.get_ticks_msec()
-	if attack_cooldowns.has(attacker_id):
-		var time_since_last = current_time - attack_cooldowns[attacker_id]
-		if time_since_last < ATTACK_COOLDOWN_MS:
-			if _record_violation(attacker_id, "dealing damage too fast (%d ms)" % time_since_last):
-				return  # Blocked due to timeout
-			return  # Still block this specific action
-	attack_cooldowns[attacker_id] = current_time
+	# NOTE: Attack speed is uncapped by design - we validate damage instead
 
 	# SECURITY: Validate damage amount based on player's actual stats
 	var max_expected_damage = _get_max_player_damage(attacker_id)

@@ -111,6 +111,7 @@ var screenshot_mode = false
 var tutorial_skeletons: Array = []  # Active tutorial skeletons
 var dead_tutorial_skeletons: Array = []  # Pending respawns: [{position, level, death_time}]
 const TUTORIAL_RESPAWN_TIME: float = 90.0  # Match ChunkAwareSpawnManager respawn time
+const TUTORIAL_MIN_CAMPFIRE_DISTANCE: float = 800.0  # Minimum distance from campfire for respawns
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DEBUG TOGGLES - Disable these one by one to find freeze cause
@@ -2977,26 +2978,26 @@ func spawn_tutorial_skeletons():
 	const ENEMY_SCENE = preload("res://scenes/enemies/enemy.tscn")
 	var campfire_pos = CAMPFIRE_POS
 
-	# Spawn positions in a ring just outside the safe zone (600 radius)
-	# Place them at 650-850 radius so they're visible but not in the clearing
+	# Spawn positions in a ring well outside the safe zone
+	# Place them at 850-1000 radius so they don't aggro players at campfire
 	var spawn_positions = [
 		# Level 1 skeletons (10 total, spread around) - noob practice targets
-		{"offset": Vector2(700, -100), "level": 1},   # East-north
-		{"offset": Vector2(700, 100), "level": 1},    # East-south
-		{"offset": Vector2(720, 0), "level": 1},      # East center
-		{"offset": Vector2(-700, 0), "level": 1},     # West
-		{"offset": Vector2(-680, 150), "level": 1},   # West-south
-		{"offset": Vector2(-680, -150), "level": 1},  # West-north
-		{"offset": Vector2(0, 680), "level": 1},      # South
-		{"offset": Vector2(200, 660), "level": 1},    # South-east
-		{"offset": Vector2(-200, 660), "level": 1},   # South-west
-		{"offset": Vector2(0, -700), "level": 1},     # North
+		{"offset": Vector2(900, -150), "level": 1},   # East-north
+		{"offset": Vector2(900, 150), "level": 1},    # East-south
+		{"offset": Vector2(920, 0), "level": 1},      # East center
+		{"offset": Vector2(-900, 0), "level": 1},     # West
+		{"offset": Vector2(-880, 200), "level": 1},   # West-south
+		{"offset": Vector2(-880, -200), "level": 1},  # West-north
+		{"offset": Vector2(0, 880), "level": 1},      # South
+		{"offset": Vector2(250, 860), "level": 1},    # South-east
+		{"offset": Vector2(-250, 860), "level": 1},   # South-west
+		{"offset": Vector2(0, -900), "level": 1},     # North
 		# Level 2 skeletons (5 total, slightly further)
-		{"offset": Vector2(800, -300), "level": 2},   # East-north far
-		{"offset": Vector2(800, 300), "level": 2},    # East-south far
-		{"offset": Vector2(-750, -200), "level": 2},  # West-north
-		{"offset": Vector2(-750, 200), "level": 2},   # West-south
-		{"offset": Vector2(0, -800), "level": 2},     # North far
+		{"offset": Vector2(1000, -350), "level": 2},  # East-north far
+		{"offset": Vector2(1000, 350), "level": 2},   # East-south far
+		{"offset": Vector2(-950, -250), "level": 2},  # West-north
+		{"offset": Vector2(-950, 250), "level": 2},   # West-south
+		{"offset": Vector2(0, -1000), "level": 2},    # North far
 	]
 
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
@@ -3058,17 +3059,32 @@ func check_tutorial_respawns() -> void:
 	for dead_data in dead_tutorial_skeletons:
 		var elapsed = current_time - dead_data.death_time
 		if elapsed >= TUTORIAL_RESPAWN_TIME:
+			# Calculate respawn position - ensure minimum distance from campfire
+			var respawn_pos = dead_data.position
+			var campfire_pos = CAMPFIRE_POS
+			var distance_to_campfire = respawn_pos.distance_to(campfire_pos)
+
+			if distance_to_campfire < TUTORIAL_MIN_CAMPFIRE_DISTANCE:
+				# Push position outward to minimum distance
+				var direction = (respawn_pos - campfire_pos).normalized()
+				if direction == Vector2.ZERO:
+					direction = Vector2.RIGHT  # Fallback direction
+				respawn_pos = campfire_pos + direction * TUTORIAL_MIN_CAMPFIRE_DISTANCE
+				print("⚠️ [RESPAWN] Adjusted tutorial skeleton from %.0f to %.0f units from campfire" % [
+					distance_to_campfire, TUTORIAL_MIN_CAMPFIRE_DISTANCE
+				])
+
 			# Respawn this skeleton
 			var enemy = ENEMY_SCENE.instantiate()
-			enemy.global_position = dead_data.position
+			enemy.global_position = respawn_pos
 			enemy.enemy_level = dead_data.level
 			enemy.name = "TutorialSkeleton_Respawned_%d" % randi()
 			add_child(enemy)
 
-			# Track for future respawns
+			# Track for future respawns - use adjusted position for next respawn
 			tutorial_skeletons.append(enemy)
 			if enemy.has_signal("died"):
-				enemy.died.connect(_on_tutorial_skeleton_died.bind(dead_data.position, dead_data.level))
+				enemy.died.connect(_on_tutorial_skeleton_died.bind(respawn_pos, dead_data.level))
 
 			# Register with NetworkEnemyManager for multiplayer sync
 			if network_enemy_mgr:
@@ -3077,7 +3093,7 @@ func check_tutorial_respawns() -> void:
 					network_enemy_mgr.spawn_enemy_for_nearby_clients(network_id, enemy)
 
 			print("♻️ [RESPAWN] Tutorial skeleton respawned at (%d, %d) after %.0fs" % [
-				int(dead_data.position.x), int(dead_data.position.y), elapsed
+				int(respawn_pos.x), int(respawn_pos.y), elapsed
 			])
 		else:
 			still_dead.append(dead_data)
