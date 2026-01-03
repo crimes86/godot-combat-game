@@ -1,24 +1,16 @@
 #!/bin/bash
-# build_server.sh - Build dedicated server with UI autoloads removed
-
+# Server export script - swaps project file temporarily
 set -e
+cd /opt/ashbane-game/source
 
-PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$PROJECT_DIR"
-
-echo "=== Building Dedicated Server ==="
-
-# Backup original project.godot
-cp project.godot project.godot.backup
-
-# Use server-specific project file
+echo "🔧 Swapping to server project config..."
+cp project.godot project.godot.client.bak
 cp project.server.godot project.godot
 
-# Export the server build
-echo "Exporting Linux Server..."
-/usr/local/bin/godot --headless --export-release "Linux Server" builds/server/ashbane-server.x86_64
+echo "📦 Exporting server build..."
+/usr/local/bin/godot45 --headless --export-release "Linux Server" /opt/ashbane-game/server/ashbane-server.x86_64
 
-# Restore original project.godot
-mv project.godot.backup project.godot
+echo "🔄 Restoring client project config..."
+mv project.godot.client.bak project.godot
 
-echo "=== Server build complete: builds/server/ashbane-server.x86_64 ==="
+echo "✅ Server exported successfully!"
