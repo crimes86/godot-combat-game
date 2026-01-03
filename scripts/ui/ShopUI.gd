@@ -256,7 +256,7 @@ func populate_weapons() -> void:
 				speed_text = "Fast"
 			elif weapon.attack_speed_bonus > 0.15:
 				speed_text = "Slow"
-			stats = "Dmg: %.1f | Speed: %s" % [weapon.base_damage, speed_text]
+			stats = "Dmg: %s | Speed: %s" % [weapon.get_damage_display(), speed_text]
 
 		# Create item data dict for icon generation
 		var item_data = {

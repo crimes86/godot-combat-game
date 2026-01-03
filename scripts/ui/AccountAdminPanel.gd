@@ -138,6 +138,22 @@ func _create_ui() -> void:
 	delete_btn.pressed.connect(_delete_selected_account)
 	btn_hbox.add_child(delete_btn)
 
+	# Local data section (client-side operations)
+	var local_label = Label.new()
+	local_label.text = "Local Data:"
+	local_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	left_vbox.add_child(local_label)
+
+	var local_btn_hbox = HBoxContainer.new()
+	local_btn_hbox.add_theme_constant_override("separation", 5)
+	left_vbox.add_child(local_btn_hbox)
+
+	var reset_weapons_btn = Button.new()
+	reset_weapons_btn.text = "Reset Weapon Stats"
+	reset_weapons_btn.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
+	reset_weapons_btn.pressed.connect(_reset_weapon_stats)
+	local_btn_hbox.add_child(reset_weapons_btn)
+
 	# Right side: Info panel
 	var right_vbox = VBoxContainer.new()
 	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -269,6 +285,8 @@ func _on_command_submitted(cmd: String) -> void:
 			_cmd_force_offline()
 		"delete":
 			_delete_selected_account()
+		"resetweapons":
+			_reset_weapon_stats()
 		_:
 			_log("[color=red]Unknown command: %s[/color]" % command)
 
@@ -282,7 +300,8 @@ func _show_help() -> void:
 [b]setstats <str> <agi> <dex> <int> <wis> <vit>[/b] - Set all stats
 [b]ban[/b] / [b]unban[/b] - Toggle ban status
 [b]forceoffline[/b] - Force account offline (fix stuck logins)
-[b]delete[/b] - Delete selected account"""
+[b]delete[/b] - Delete selected account
+[b]resetweapons[/b] - Clear cached weapon stats (fixes stale damage)"""
 	_log(help_text)
 
 func _cmd_setpos(args: Array) -> void:
@@ -404,3 +423,35 @@ func _delete_selected_account() -> void:
 
 func _log(text: String) -> void:
 	output_label.text = text
+
+func _reset_weapon_stats() -> void:
+	# Clear all cached weapon stats from user://weapon_stats/
+	# This fixes stale damage values from old forged items
+	var path = "user://weapon_stats"
+	var dir = DirAccess.open(path)
+
+	if not dir:
+		# Directory doesn't exist - nothing to clear
+		_log("[color=yellow]No weapon stats folder found. Nothing to clear.[/color]")
+		return
+
+	var deleted_count = 0
+	dir.list_dir_begin()
+	var file_name = dir.get_next()
+
+	while file_name != "":
+		if not dir.current_is_dir() and file_name.ends_with(".json"):
+			var err = dir.remove(file_name)
+			if err == OK:
+				deleted_count += 1
+				print("[AdminPanel] Deleted weapon stat: ", file_name)
+			else:
+				print("[AdminPanel] Failed to delete: ", file_name)
+		file_name = dir.get_next()
+
+	dir.list_dir_end()
+
+	if deleted_count > 0:
+		_log("[color=green]Cleared %d weapon stat file(s).[/color]\n\nRe-equip weapons to recalculate fresh stats." % deleted_count)
+	else:
+		_log("[color=yellow]No weapon stat files found to clear.[/color]")

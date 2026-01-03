@@ -816,6 +816,15 @@ func gain_experience(amount: int) -> void:
 	"""Grant experience to the player (called when enemy dies)"""
 	CharacterStats.gain_experience(amount)
 
+func get_equipped_weapon() -> Weapon:
+	"""Returns the player's equipped weapon. Used by EnemyAI for ranged weapon checks."""
+	# Only return weapon for local player (we control CharacterStats)
+	if is_multiplayer_authority():
+		return CharacterStats.equipped_weapon
+	# For remote players, we don't have their weapon data synced
+	# TODO: Sync weapon type in multiplayer for better AI behavior
+	return null
+
 func _on_character_level_up(new_level: int) -> void:
 	"""Called when character levels up"""
 
@@ -4727,8 +4736,8 @@ func _get_or_create_death_screen() -> DeathScreenUI:
 
 func _get_bind_point() -> Vector2:
 	"""Get respawn location - guild World Tree or default campfire"""
-	# Default spawn point (campfire clearing at origin)
-	var default_spawn = Vector2(0, 0)
+	# Default spawn point at campfire (west side of zone 1, X: -6000)
+	var default_spawn = Vector2(-6000, 0)
 
 	# Check for guild World Tree
 	if WorldTreeManager and WorldTreeManager.has_method("get_tree_by_guild"):

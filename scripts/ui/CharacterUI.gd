@@ -2167,9 +2167,15 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 	if base_damage is Dictionary:
 		var dmg_min = base_damage.get("min", 5)
 		var dmg_max = base_damage.get("max", 5)
+		weapon.damage_min = float(dmg_min)
+		weapon.damage_max = float(dmg_max)
 		weapon.base_damage = (dmg_min + dmg_max) / 2.0
 	elif base_damage is float or base_damage is int:
 		weapon.base_damage = float(base_damage)
+		# Check for separate damage_min/damage_max fields
+		if item_dict.has("damage_min") and item_dict.has("damage_max"):
+			weapon.damage_min = float(item_dict.get("damage_min"))
+			weapon.damage_max = float(item_dict.get("damage_max"))
 	else:
 		weapon.base_damage = 5.0
 
@@ -2583,13 +2589,13 @@ func _build_equipment_tooltip(item: Dictionary, slot_name: String) -> String:
 
 		# Combat stats
 		tooltip += "\n"
-		var total_damage = weapon.get_total_damage()
+		var damage_display = weapon.get_damage_display()
 		# Calculate actual bonus from level using percentage-based multiplier
 		var damage_bonus = stats.get_damage_bonus_for_base(weapon.base_damage)
 		if damage_bonus > 0:
-			tooltip += "\nDamage: +%.1f (+%.1f from level)" % [total_damage, damage_bonus]
+			tooltip += "\nDamage: +%s (+%.1f from level)" % [damage_display, damage_bonus]
 		else:
-			tooltip += "\nDamage: +%.1f" % total_damage
+			tooltip += "\nDamage: +%s" % damage_display
 
 		var crit_bonus = stats.get_crit_bonus() * 100
 		if crit_bonus > 0:
@@ -2622,7 +2628,13 @@ func _build_equipment_tooltip(item: Dictionary, slot_name: String) -> String:
 	if item.get("type") == "weapon":
 		tooltip += "\n"
 		if item.has("base_damage"):
-			tooltip += "\nDamage: +%.1f" % item.get("base_damage", 0)
+			var base_dmg = item.get("base_damage", 0)
+			if base_dmg is Dictionary:
+				tooltip += "\nDamage: +%d-%d" % [int(base_dmg.get("min", 0)), int(base_dmg.get("max", 0))]
+			elif item.has("damage_min") and item.has("damage_max"):
+				tooltip += "\nDamage: +%d-%d" % [int(item.get("damage_min")), int(item.get("damage_max"))]
+			else:
+				tooltip += "\nDamage: +%.1f" % base_dmg
 		if item.has("attack_speed_bonus"):
 			var speed_bonus = item.get("attack_speed_bonus", 0.0)
 			if speed_bonus != 0:

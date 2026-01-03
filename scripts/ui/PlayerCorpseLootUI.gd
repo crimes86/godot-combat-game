@@ -609,9 +609,15 @@ func _dict_to_weapon(weapon_dict: Dictionary):
 	if base_damage is Dictionary:
 		var dmg_min = base_damage.get("min", 5)
 		var dmg_max = base_damage.get("max", 5)
+		weapon.damage_min = float(dmg_min)
+		weapon.damage_max = float(dmg_max)
 		weapon.base_damage = (dmg_min + dmg_max) / 2.0
 	elif base_damage is float or base_damage is int:
 		weapon.base_damage = float(base_damage)
+		# Check for separate damage_min/damage_max fields
+		if weapon_dict.has("damage_min") and weapon_dict.has("damage_max"):
+			weapon.damage_min = float(weapon_dict.get("damage_min"))
+			weapon.damage_max = float(weapon_dict.get("damage_max"))
 	else:
 		weapon.base_damage = 5.0
 

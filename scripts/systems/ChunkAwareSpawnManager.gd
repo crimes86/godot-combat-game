@@ -337,9 +337,9 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 
 	# Track spawn positions in this chunk to enforce minimum spacing
 	var spawn_positions: Array[Vector2] = []
-	# Also consider existing enemies in the chunk
+	# Also consider existing ALIVE enemies in the chunk (corpses don't block spawns)
 	for enemy in chunk_data.enemies:
-		if is_instance_valid(enemy):
+		if is_instance_valid(enemy) and not enemy.is_corpse:
 			spawn_positions.append(enemy.global_position)
 
 	# Parse chunk coordinates

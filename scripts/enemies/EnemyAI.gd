@@ -1390,22 +1390,39 @@ func disengage() -> void:
 	change_state(State.PATROLLING)
 
 func _player_has_ranged_weapon() -> bool:
-	"""Check if player has a ranged weapon equipped (bow, gun, etc).
-	Ranged weapons make retreating pointless since player can still hit from range."""
+	"""Check if player has a ranged weapon equipped (bow, gun, staff, etc).
+	Ranged weapons make retreating pointless since player can still hit from range.
+	Also checks attack_mode for healing/damage staffs."""
 	if not is_instance_valid(player):
 		return false
 
-	# Access player's equipped weapon through CharacterStats
-	if not CharacterStats or not CharacterStats.equipped_weapon:
+	# Try to get weapon from the actual target player (works in multiplayer)
+	var weapon = null
+	if player.has_method("get_equipped_weapon"):
+		weapon = player.get_equipped_weapon()
+	elif "equipped_weapon" in player:
+		weapon = player.equipped_weapon
+
+	# Fallback to CharacterStats for local player (single player mode)
+	if not weapon and CharacterStats and CharacterStats.equipped_weapon:
+		weapon = CharacterStats.equipped_weapon
+
+	if not weapon:
 		return false
 
-	var weapon_type = CharacterStats.equipped_weapon.weapon_type
+	var weapon_type = weapon.weapon_type if weapon.has("weapon_type") or "weapon_type" in weapon else ""
 
 	# Define ranged weapon types
 	var ranged_types = [
 		"bow", "crossbow",  # Bows
-		"gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle"  # Guns
+		"gun", "rifle", "pistol", "shotgun", "railgun", "battle_rifle",  # Guns
+		"staff", "damage_staff", "healing_staff", "support_staff"  # Staffs
 	]
+
+	# Also check attack_mode for weapons that use ranged targeting
+	var attack_mode = weapon.attack_mode if "attack_mode" in weapon else "melee"
+	if attack_mode in ["ranged_heal", "ranged_damage"]:
+		return true
 
 	return weapon_type in ranged_types
 

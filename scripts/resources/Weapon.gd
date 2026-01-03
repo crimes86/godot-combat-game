@@ -19,7 +19,9 @@ class_name Weapon
 # COMBAT STATS
 # ============================================
 
-@export var base_damage: float = 5.0
+@export var base_damage: float = 5.0  # Average damage (for backwards compatibility)
+@export var damage_min: float = 0.0  # Minimum damage (0 = use base_damage)
+@export var damage_max: float = 0.0  # Maximum damage (0 = use base_damage)
 @export var attack_speed_bonus: float = 0.0  # -0.2 = 20% faster, 0.2 = 20% slower
 @export var crit_chance_bonus: float = 0.0   # 0.10 = +10% crit chance
 
@@ -136,6 +138,36 @@ func get_total_damage() -> float:
 
 	return damage
 
+func get_damage_range() -> Dictionary:
+	"""Returns damage min/max as a dictionary. Uses base_damage as fallback if range not set."""
+	var dmg_min = damage_min if damage_min > 0 else base_damage
+	var dmg_max = damage_max if damage_max > 0 else base_damage
+
+	# Apply forged weapon level multiplier if applicable
+	if is_forged and weapon_stats:
+		var mult = weapon_stats.get_damage_multiplier()
+		dmg_min = dmg_min * mult
+		dmg_max = dmg_max * mult
+
+	# Artifact scaling
+	if is_artifact:
+		dmg_min += artifact_level * 2.0
+		dmg_max += artifact_level * 2.0
+
+	return {"min": dmg_min, "max": dmg_max}
+
+func get_damage_display() -> String:
+	"""Returns formatted damage string for tooltips (e.g., '18-21' or '5.0' if no range)"""
+	var range_data = get_damage_range()
+	if range_data.min == range_data.max:
+		return "%.1f" % range_data.min
+	else:
+		# Show as integers if both are whole numbers, otherwise show decimals
+		if range_data.min == int(range_data.min) and range_data.max == int(range_data.max):
+			return "%d-%d" % [int(range_data.min), int(range_data.max)]
+		else:
+			return "%.1f-%.1f" % [range_data.min, range_data.max]
+
 func get_forged_crit_bonus() -> float:
 	"""DEPRECATED: Crit chance now comes purely from Luck stat, not weapons.
 	Returns 0.0 for backwards compatibility."""
@@ -200,7 +232,7 @@ func get_tooltip_text() -> String:
 		text += "Healing: +%.1f\n" % get_total_healing()
 		text += "Heal Radius: %.0f\n" % heal_radius
 	else:
-		text += "Damage: +%.1f\n" % get_total_damage()
+		text += "Damage: +%s\n" % get_damage_display()
 
 	if attack_speed_bonus != 0:
 		var speed_text = "faster" if attack_speed_bonus < 0 else "slower"

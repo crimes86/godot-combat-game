@@ -28,6 +28,13 @@ var fightback_pulse_count: int = 0
 const FIGHTBACK_PULSES: int = 5  # Number of "struggle" pulses before full regen
 const MIN_HEALTH_PERCENT: float = 0.05  # Never drop below 5% health
 
+# Passive healing - gradual out-of-combat regeneration
+var passive_heal_timer: float = 0.0
+var time_since_last_damage: float = 0.0
+const PASSIVE_HEAL_DELAY: float = 3.0  # Seconds after last hit before passive regen starts
+const PASSIVE_HEAL_RATE: float = 0.05  # 5% max health per second (faster than player)
+const PASSIVE_HEAL_TICK: float = 0.5  # Heal every 0.5 seconds
+
 # Enemy-like properties to prevent crashes (dummy can't actually die)
 var gold_drop: int = 0  # No gold from training dummy
 var corpse_loot: Array = []  # No loot from training dummy
@@ -473,6 +480,20 @@ func _physics_process(delta: float) -> void:
 			is_spinning = false
 			spin_timer = 0.0
 
+	# Passive out-of-combat healing
+	if not fightback_active and not is_regenerating and current_health < max_health:
+		time_since_last_damage += delta
+		if time_since_last_damage >= PASSIVE_HEAL_DELAY:
+			passive_heal_timer += delta
+			if passive_heal_timer >= PASSIVE_HEAL_TICK:
+				passive_heal_timer = 0.0
+				# Heal 5% of max health per second (scaled by tick interval)
+				var heal_amount = max_health * PASSIVE_HEAL_RATE * PASSIVE_HEAL_TICK
+				current_health = min(current_health + heal_amount, max_health)
+				# Update health bar
+				if health_bar and health_bar.has_method("update_health"):
+					health_bar.update_health(current_health, max_health)
+
 func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = false) -> void:
 	"""Handle being hit - spin and show damage"""
 
@@ -488,6 +509,10 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	else:
 		total_damage_dealt += amount
 	last_damage_time = current_time
+
+	# Reset passive healing timer (we just took damage)
+	time_since_last_damage = 0.0
+	passive_heal_timer = 0.0
 
 	# Actually reduce health (dummy has real HP but regenerates)
 	# Clamp to minimum health - dummy can NEVER die

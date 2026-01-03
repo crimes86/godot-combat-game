@@ -591,7 +591,13 @@ func refresh_inventory() -> void:
 
 			if item.get("type") == "weapon":
 				if item.has("base_damage"):
-					tooltip += "\nDamage: +%.1f" % item.get("base_damage", 0)
+					var base_dmg = item.get("base_damage", 0)
+					if base_dmg is Dictionary:
+						tooltip += "\nDamage: +%d-%d" % [int(base_dmg.get("min", 0)), int(base_dmg.get("max", 0))]
+					elif item.has("damage_min") and item.has("damage_max"):
+						tooltip += "\nDamage: +%d-%d" % [int(item.get("damage_min")), int(item.get("damage_max"))]
+					else:
+						tooltip += "\nDamage: +%.1f" % base_dmg
 				if item.has("attack_speed_bonus"):
 					var speed_bonus = item.get("attack_speed_bonus", 0.0)
 					if speed_bonus != 0:
@@ -1042,9 +1048,15 @@ func dict_to_weapon(item_dict: Dictionary) -> Weapon:
 		# Use average of min/max for the weapon's base damage
 		var dmg_min = base_damage.get("min", 5)
 		var dmg_max = base_damage.get("max", 5)
+		weapon.damage_min = float(dmg_min)
+		weapon.damage_max = float(dmg_max)
 		weapon.base_damage = (dmg_min + dmg_max) / 2.0
 	elif base_damage is float or base_damage is int:
 		weapon.base_damage = float(base_damage)
+		# Check for separate damage_min/damage_max fields
+		if item_dict.has("damage_min") and item_dict.has("damage_max"):
+			weapon.damage_min = float(item_dict.get("damage_min"))
+			weapon.damage_max = float(item_dict.get("damage_max"))
 	else:
 		weapon.base_damage = 5.0
 

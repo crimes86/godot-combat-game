@@ -208,7 +208,13 @@ func create_loot_slot(item: Dictionary, index: int) -> Control:
 
 	if item.get("type") == "weapon":
 		if item.has("base_damage"):
-			tooltip += "Damage: +%.1f\n" % item.get("base_damage", 0)
+			var base_dmg = item.get("base_damage", 0)
+			if base_dmg is Dictionary:
+				tooltip += "Damage: +%d-%d\n" % [int(base_dmg.get("min", 0)), int(base_dmg.get("max", 0))]
+			elif item.has("damage_min") and item.has("damage_max"):
+				tooltip += "Damage: +%d-%d\n" % [int(item.get("damage_min")), int(item.get("damage_max"))]
+			else:
+				tooltip += "Damage: +%.1f\n" % base_dmg
 		if item.has("attack_speed_bonus"):
 			var speed_bonus = item.get("attack_speed_bonus", 0.0)
 			if speed_bonus != 0:
