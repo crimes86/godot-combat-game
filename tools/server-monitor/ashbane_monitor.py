@@ -48,7 +48,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Agent version
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.0.1"
 
 # Global flag for graceful shutdown
 running = True
@@ -228,7 +228,7 @@ def get_game_server_stats() -> Dict[str, Any]:
     now = time.time()
 
     # Look for all Godot server processes
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cpu_percent', 'memory_info', 'create_time']):
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'memory_info', 'create_time']):
         try:
             pinfo = proc.info
             cmdline = pinfo.get('cmdline', [])
@@ -277,6 +277,10 @@ def get_game_server_stats() -> Dict[str, Any]:
                 mem_info = pinfo.get('memory_info')
                 memory_mb = mem_info.rss / (1024 ** 2) if mem_info else 0
 
+                # Get accurate CPU - must call with interval for real measurement
+                # process_iter's cpu_percent returns stale/cached values
+                cpu_pct = proc.cpu_percent(interval=0.1)
+
                 instance = {
                     "pid": pinfo['pid'],
                     "name": pinfo.get('name', 'unknown'),
@@ -284,7 +288,7 @@ def get_game_server_stats() -> Dict[str, Any]:
                     "port": port or (proc_ports[0] if proc_ports else None),
                     "ports": proc_ports,
                     "uptime_seconds": instance_uptime,
-                    "cpu_percent": pinfo.get('cpu_percent', 0) or 0,
+                    "cpu_percent": cpu_pct,
                     "memory_mb": memory_mb,
                     "cmdline": cmdline_str[:300],
                 }

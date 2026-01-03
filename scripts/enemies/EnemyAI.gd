@@ -342,10 +342,12 @@ func _physics_process(delta: float) -> void:
 	ai_frame_counter += 1
 	if current_state == State.PATROLLING or current_state == State.RETURNING:
 		if ai_frame_counter % AI_THROTTLE_FRAMES != 0:
-			# Skip this frame for patrolling enemies - dampen velocity to prevent oscillation
-			# Without damping, high separation forces cause enemies to overshoot and bounce
+			# Skip AI logic on throttled frames, but still update animations
+			# Dampen velocity to prevent oscillation from separation forces
 			enemy.velocity *= 0.8
 			enemy.move_and_slide()
+			# IMPORTANT: Still update animations so enemies don't appear frozen
+			update_enemy_animation(enemy.velocity)
 			return
 
 	# FIX: Cap velocity to prevent runaway speeds from collision sliding
