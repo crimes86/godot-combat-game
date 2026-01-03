@@ -2787,14 +2787,17 @@ func _setup_wildlife_spawner() -> void:
 	var wildlife_spawner = WildlifeSpawner.new()
 	wildlife_spawner.name = "WildlifeSpawner"
 
-	# Configure spawn zone (northern area with forests)
-	wildlife_spawner.spawn_area_min = Vector2(-2000, -9500)
-	wildlife_spawner.spawn_area_max = Vector2(2000, -6000)
-	wildlife_spawner.max_animals = 12
-	wildlife_spawner.spawn_interval = 3.0
+	# Configure spawn zone - horizontal progression (west→east)
+	# Campfire is at x=-6000, so start wildlife east of that
+	# World: x=-8000 to x=16000, y=-4000 to y=4000
+	wildlife_spawner.spawn_area_min = Vector2(-4000, -3500)
+	wildlife_spawner.spawn_area_max = Vector2(16000, 3500)
+	wildlife_spawner.max_animals = 15
+	wildlife_spawner.spawn_interval = 2.0
+	wildlife_spawner.player_proximity_required = 3000.0  # Spawn when player within range
 
 	add_child(wildlife_spawner)
-	print("🐰 WildlifeSpawner initialized in northern forest region")
+	print("🐰 WildlifeSpawner initialized across Zone 1 (west→east)")
 
 func collect_spawn_markers() -> Array:
 	"""Collect all enemy spawn markers (don't spawn yet - SpawnManager handles that)
