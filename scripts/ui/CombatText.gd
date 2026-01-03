@@ -237,6 +237,28 @@ static func create_skill_up(amount: float, category: String, world_pos: Vector2,
 	var display_text = "+%.1f %s" % [amount, category.capitalize()]
 	return _create_text(display_text, TextType.SKILL_UP, spawn_pos, parent)
 
+static func create_item(item_name: String, quantity: int, rarity: String, world_pos: Vector2, parent: Node) -> CombatText:
+	# Item pickup floats up with variance, color based on rarity
+	var variance = Vector2(randf_range(-15, 15), randf_range(-10, 10))
+	var spawn_pos = world_pos + Vector2(0, -30) + variance
+	var display_text = "+%d %s" % [quantity, item_name] if quantity > 1 else "+%s" % item_name
+	var combat_text = _create_text(display_text, TextType.GOLD, spawn_pos, parent)
+	# Override color based on rarity
+	match rarity.to_lower():
+		"common":
+			combat_text.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+		"uncommon":
+			combat_text.add_theme_color_override("font_color", Color(0.2, 0.9, 0.3))
+		"rare":
+			combat_text.add_theme_color_override("font_color", Color(0.3, 0.5, 1.0))
+		"epic":
+			combat_text.add_theme_color_override("font_color", Color(0.7, 0.3, 0.9))
+		"legendary":
+			combat_text.add_theme_color_override("font_color", Color(1.0, 0.6, 0.1))
+		_:
+			combat_text.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+	return combat_text
+
 static func create_block(world_pos: Vector2, parent: Node) -> CombatText:
 	# Block text floats up with variance
 	var variance = Vector2(randf_range(-15, 15), randf_range(-5, 5))

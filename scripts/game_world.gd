@@ -2778,6 +2778,24 @@ func spawn_all_enemies():
 	# Initialize with chunk system and manual markers
 	spawn_manager.initialize(self, chunk_prop_system, spawn_markers)
 
+	# Set up wildlife spawner (rabbits, foxes, etc in northern region)
+	_setup_wildlife_spawner()
+
+func _setup_wildlife_spawner() -> void:
+	"""Initialize the wildlife spawner for huntable animals."""
+	const WildlifeSpawner = preload("res://scripts/wildlife/WildlifeSpawner.gd")
+	var wildlife_spawner = WildlifeSpawner.new()
+	wildlife_spawner.name = "WildlifeSpawner"
+
+	# Configure spawn zone (northern area with forests)
+	wildlife_spawner.spawn_area_min = Vector2(-2000, -9500)
+	wildlife_spawner.spawn_area_max = Vector2(2000, -6000)
+	wildlife_spawner.max_animals = 12
+	wildlife_spawner.spawn_interval = 3.0
+
+	add_child(wildlife_spawner)
+	print("🐰 WildlifeSpawner initialized in northern forest region")
+
 func collect_spawn_markers() -> Array:
 	"""Collect all enemy spawn markers (don't spawn yet - SpawnManager handles that)
 
