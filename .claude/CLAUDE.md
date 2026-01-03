@@ -44,7 +44,34 @@ Get-ChildItem -Path . -Filter *.png -Recurse
 
 ## Dedicated Server Build
 
+**⚠️ CRITICAL: Before ANY server build/deploy, read `docs/SERVER_OPERATIONS.md` first!**
+
 The server uses `project.server.godot` with stub autoloads (no UI rendering).
+
+### Service Names (IMPORTANT)
+
+| Service | Port | Status |
+|---------|------|--------|
+| `ashbane-game` | 7777 | ✅ **USE THIS** |
+| `ashbane-server` | 7000 | ❌ DEPRECATED - DO NOT USE |
+
+### Build and Deploy Steps
+
+```bash
+# 1. Read the operations doc first!
+cat docs/SERVER_OPERATIONS.md
+
+# 2. Build server (handles project file swap)
+cd /opt/ashbane-game/source
+./build_server.sh
+
+# 3. Restart the CORRECT service
+systemctl restart ashbane-game
+
+# 4. Verify
+systemctl status ashbane-game
+journalctl -u ashbane-game -n 20
+```
 
 ### Monorepo Workflow
 
@@ -54,22 +81,11 @@ project.server.godot   # SERVER - used only during export
 build_server.sh        # Handles swap automatically
 ```
 
-**On the game server (`/opt/ashbane-game/source`):**
-```bash
-./build_server.sh      # Swaps configs, exports, restores
-```
-
 **Server-specific patterns:**
 - `--server` flag detection: `"--server" in OS.get_cmdline_user_args()`
 - No sprites on server - use `current_animation` variable for sync (see `docs/MULTIPLAYER_ANIMATION_SYNC.md`)
 - AI sleep system when no players nearby
 - Stub autoloads for UI systems
-
-**Running:**
-```bash
-./ashbane-server.x86_64 --headless --frame-delay 15 -- --server --port 7777 --shard shard-1
-systemctl start ashbane-game
-```
 
 ---
 
@@ -124,6 +140,7 @@ python -m uvicorn app.main:app --reload
 | **Architecture** | |
 | System architecture | `docs/ARCHITECTURE.md` |
 | Server architecture | `docs/SERVER_ARCHITECTURE.md` |
+| **Server operations (READ BEFORE DEPLOY)** | `docs/SERVER_OPERATIONS.md` |
 | Shard system (multi-server) | `docs/SHARD_SYSTEM.md` |
 | Multiplayer animation sync | `docs/MULTIPLAYER_ANIMATION_SYNC.md` |
 | Performance guide | `docs/PERFORMANCE.md` |
