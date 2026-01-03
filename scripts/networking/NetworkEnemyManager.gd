@@ -627,8 +627,8 @@ func _play_hit_sounds(enemy: Node, is_crit: bool, is_weakpoint: bool, _attacker_
 	if is_weakpoint:
 		return  # Weakpoint sounds handled in weakpoint.gd
 
-	var sound_manager = enemy.get_node_or_null("/root/SoundManager")
-	if not sound_manager:
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if not sound_manager or not enemy.is_inside_tree():
 		return
 
 	var weapon_type = ""
