@@ -107,6 +107,11 @@ var poi_manager: POIManager = null
 var tree_types = ["dead_tree_1", "dead_tree_2", "dead_tree_3", "dead_tree_4", "dead_tree_5", "dead_tree_6", "dead_tree_7", "dead_tree_8", "dead_tree_9", "dead_tree_10"]
 var screenshot_mode = false
 
+# Tutorial skeleton respawn tracking
+var tutorial_skeletons: Array = []  # Active tutorial skeletons
+var dead_tutorial_skeletons: Array = []  # Pending respawns: [{position, level, death_time}]
+const TUTORIAL_RESPAWN_TIME: float = 90.0  # Match ChunkAwareSpawnManager respawn time
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # DEBUG TOGGLES - Disable these one by one to find freeze cause
 # Set to false to disable each system. Test after each change.
@@ -133,6 +138,9 @@ const PLAYER_SYNC_INTERVAL = 0.05  # 20Hz - 50ms between syncs
 # Lava light time-based updates
 var lava_light_timer = 0.0
 const LAVA_LIGHT_UPDATE_INTERVAL = 0.1  # Update 10 times per second
+
+# Tutorial skeleton respawn check timer
+var respawn_check_timer = 0.0
 
 func _ready():
 	# Add to group so LootSpawnManager can find us on clients
@@ -229,6 +237,13 @@ func _process(delta):
 	if lava_light_timer >= LAVA_LIGHT_UPDATE_INTERVAL:
 		lava_light_timer = 0.0
 		_update_lava_lights()
+
+	# Check for tutorial skeleton respawns (server only, every second)
+	if multiplayer.is_server() and not dead_tutorial_skeletons.is_empty():
+		respawn_check_timer += delta
+		if respawn_check_timer >= 1.0:
+			respawn_check_timer = 0.0
+			check_tutorial_respawns()
 
 func _update_lava_lights():
 	"""Scale lava pool lights based on time of day - bright at night, subtle during day"""
@@ -2996,6 +3011,11 @@ func spawn_tutorial_skeletons():
 		enemy.name = "TutorialSkeleton_%d" % spawned_count
 		add_child(enemy)
 
+		# Track for respawn system
+		tutorial_skeletons.append(enemy)
+		if enemy.has_signal("died"):
+			enemy.died.connect(_on_tutorial_skeleton_died.bind(spawn_pos, spawn_data.level))
+
 		# Register with NetworkEnemyManager for multiplayer sync
 		if network_enemy_mgr:
 			var network_id = network_enemy_mgr.register_enemy(enemy)
@@ -3006,6 +3026,63 @@ func spawn_tutorial_skeletons():
 		spawned_count += 1
 
 	print("💀 Spawned %d tutorial skeletons around campfire clearing" % spawned_count)
+
+func _on_tutorial_skeleton_died(spawn_pos: Vector2, level: int) -> void:
+	"""Called when a tutorial skeleton dies - queue for respawn"""
+	# Only server handles respawns in multiplayer
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+
+	dead_tutorial_skeletons.append({
+		"position": spawn_pos,
+		"level": level,
+		"death_time": Time.get_ticks_msec() / 1000.0
+	})
+	print("💀 [RESPAWN] Tutorial skeleton died at (%d, %d), added to respawn queue (total pending: %d)" % [
+		int(spawn_pos.x), int(spawn_pos.y), dead_tutorial_skeletons.size()
+	])
+
+func check_tutorial_respawns() -> void:
+	"""Check for pending tutorial skeleton respawns - called from _process"""
+	if dead_tutorial_skeletons.is_empty():
+		return
+
+	# Only server handles respawns
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+
+	var current_time = Time.get_ticks_msec() / 1000.0
+	var still_dead: Array = []
+	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
+
+	for dead_data in dead_tutorial_skeletons:
+		var elapsed = current_time - dead_data.death_time
+		if elapsed >= TUTORIAL_RESPAWN_TIME:
+			# Respawn this skeleton
+			var enemy = ENEMY_SCENE.instantiate()
+			enemy.global_position = dead_data.position
+			enemy.enemy_level = dead_data.level
+			enemy.name = "TutorialSkeleton_Respawned_%d" % randi()
+			add_child(enemy)
+
+			# Track for future respawns
+			tutorial_skeletons.append(enemy)
+			if enemy.has_signal("died"):
+				enemy.died.connect(_on_tutorial_skeleton_died.bind(dead_data.position, dead_data.level))
+
+			# Register with NetworkEnemyManager for multiplayer sync
+			if network_enemy_mgr:
+				var network_id = network_enemy_mgr.register_enemy(enemy)
+				if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+					network_enemy_mgr.spawn_enemy_for_nearby_clients(network_id, enemy)
+
+			print("♻️ [RESPAWN] Tutorial skeleton respawned at (%d, %d) after %.0fs" % [
+				int(dead_data.position.x), int(dead_data.position.y), elapsed
+			])
+		else:
+			still_dead.append(dead_data)
+
+	dead_tutorial_skeletons = still_dead
 
 func spawn_bone_clusters(parent: Node2D):
 	"""Spawn clusters of bones and skulls, plus scattered individual bones everywhere"""

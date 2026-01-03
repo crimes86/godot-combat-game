@@ -760,6 +760,7 @@ func spawn_single_wolf_roaming(pos: Vector2, level: int, chunk_key: String, is_d
 func _on_roaming_enemy_died(enemy: Node, chunk_key: String, enemy_type: String) -> void:
 	"""Called when a roaming wolf or spider dies - track for respawn"""
 	if not chunk_enemies.has(chunk_key):
+		print("💀 [RESPAWN] Roaming %s died but chunk %s not found!" % [enemy_type, chunk_key])
 		return
 
 	var chunk_data = chunk_enemies[chunk_key]
@@ -773,6 +774,11 @@ func _on_roaming_enemy_died(enemy: Node, chunk_key: String, enemy_type: String) 
 			"enemy_type": enemy_type,
 			"is_roaming": true
 		})
+		print("💀 [RESPAWN] Roaming %s died in chunk %s, added to respawn queue (total pending: %d, respawn_time: %.0fs)" % [
+			enemy_type.capitalize(), chunk_key, chunk_data.dead_enemies.size(), respawn_time
+		])
+	else:
+		print("💀 [RESPAWN] Roaming %s died but respawn_time is %.1f (disabled)" % [enemy_type, respawn_time])
 
 
 @rpc("authority", "call_local", "reliable")
@@ -987,17 +993,30 @@ func get_ritual_sites_in_chunk(chunk_key: String) -> Array:
 func _on_enemy_died(enemy: Node, chunk_key: String) -> void:
 	"""Called when an enemy dies - track for respawn"""
 	if not chunk_enemies.has(chunk_key):
+		print("💀 [RESPAWN] Enemy died but chunk %s not found in chunk_enemies!" % chunk_key)
 		return
 
 	var chunk_data = chunk_enemies[chunk_key]
 
 	# Record death for respawn
 	if respawn_time > 0:
+		var enemy_type = "skeleton"
+		if enemy.name.to_lower().contains("wolf"):
+			enemy_type = "wolf"
+		elif enemy.name.to_lower().contains("spider"):
+			enemy_type = "spider"
+
 		chunk_data.dead_enemies.append({
 			"position": enemy.global_position,
 			"level": enemy.enemy_level,
-			"death_time": Time.get_ticks_msec() / 1000.0
+			"death_time": Time.get_ticks_msec() / 1000.0,
+			"enemy_type": enemy_type
 		})
+		print("💀 [RESPAWN] %s died in chunk %s, added to respawn queue (total pending: %d, respawn_time: %.0fs)" % [
+			enemy_type.capitalize(), chunk_key, chunk_data.dead_enemies.size(), respawn_time
+		])
+	else:
+		print("💀 [RESPAWN] Enemy died but respawn_time is %.1f (disabled)" % respawn_time)
 
 func check_respawns() -> void:
 	"""Check for enemies ready to respawn"""
@@ -1011,6 +1030,10 @@ func check_respawns() -> void:
 
 		# Check if chunk is still loaded
 		if not chunk_system.loaded_chunks.has(chunk_key):
+			if chunk_data.dead_enemies.size() > 0:
+				print("⏱️ [RESPAWN] Chunk %s has %d pending respawns but chunk not loaded" % [
+					chunk_key, chunk_data.dead_enemies.size()
+				])
 			continue
 
 		# Build list of existing enemy positions for spacing check
@@ -1023,15 +1046,19 @@ func check_respawns() -> void:
 		var still_dead = []
 		for dead_data in chunk_data.dead_enemies:
 			var time_since_death = current_time - dead_data.death_time
+			var enemy_type = dead_data.get("enemy_type", "skeleton")
 
 			if time_since_death >= respawn_time:
+				print("⏱️ [RESPAWN] %s ready to respawn (waited %.1fs, needed %.1fs)" % [
+					enemy_type.capitalize(), time_since_death, respawn_time
+				])
+
 				# Find a valid respawn position (original or offset if blocked)
 				var respawn_pos = find_spaced_respawn_position(dead_data.position, existing_positions)
 
 				if respawn_pos != Vector2.ZERO:
 					# Spawn the correct enemy type
 					var enemy: Node = null
-					var enemy_type = dead_data.get("enemy_type", "skeleton")
 					var is_roaming = dead_data.get("is_roaming", false)
 
 					if is_roaming:
@@ -1048,13 +1075,38 @@ func check_respawns() -> void:
 					if enemy:
 						chunk_data.enemies.append(enemy)
 						existing_positions.append(respawn_pos)  # Track for next respawn in same batch
-						print("♻️ %s respawned in chunk %s at (%d, %d)" % [
+						print("♻️ [RESPAWN] %s respawned in chunk %s at (%d, %d)" % [
 							enemy_type.capitalize(), chunk_key, int(respawn_pos.x), int(respawn_pos.y)
 						])
+					else:
+						print("❌ [RESPAWN] spawn function returned null for %s!" % enemy_type)
+						still_dead.append(dead_data)
 				else:
-					# Couldn't find valid position, delay respawn
-					dead_data.death_time = current_time - respawn_time + 5.0  # Try again in 5 seconds
-					still_dead.append(dead_data)
+					# Couldn't find "valid" position - but enemy was already here, so respawn anyway
+					# This handles cases where enemies died on paths or near safe zones
+					print("⚠️ [RESPAWN] Using original position for %s at (%d, %d) - no better spot found" % [
+						enemy_type, int(dead_data.position.x), int(dead_data.position.y)
+					])
+					respawn_pos = dead_data.position
+					var enemy: Node = null
+					var is_roaming = dead_data.get("is_roaming", false)
+					if is_roaming:
+						enemy = spawn_roaming_enemy(respawn_pos, dead_data.level, chunk_key)
+					elif enemy_type == "spider":
+						enemy = spawn_single_spider(respawn_pos, dead_data.level, chunk_key)
+					elif enemy_type == "wolf":
+						enemy = spawn_single_wolf_roaming(respawn_pos, dead_data.level, chunk_key, false)
+					else:
+						enemy = spawn_single_enemy(respawn_pos, dead_data.level, chunk_key)
+					if enemy:
+						chunk_data.enemies.append(enemy)
+						existing_positions.append(respawn_pos)
+						print("♻️ [RESPAWN] %s respawned in chunk %s at original position (%d, %d)" % [
+							enemy_type.capitalize(), chunk_key, int(respawn_pos.x), int(respawn_pos.y)
+						])
+					else:
+						print("❌ [RESPAWN] spawn function returned null for %s!" % enemy_type)
+						still_dead.append(dead_data)
 			else:
 				# Not ready yet
 				still_dead.append(dead_data)

@@ -131,7 +131,7 @@ func open_loot_ui(primary_corpse, nearby_corpses: Array) -> void:
 		for corpse in corpses_looted:
 			if is_instance_valid(corpse):
 				corpse.check_if_looted_empty()
-		await get_tree().create_timer(0.5).timeout
+		# Close immediately - no delay needed
 		close_ui()
 		return
 
@@ -249,8 +249,7 @@ func populate_loot_grid() -> void:
 			if is_instance_valid(corpse):
 				corpse.check_if_looted_empty()
 
-		# Close after showing empty state
-		await get_tree().create_timer(0.5).timeout
+		# Close immediately when empty - no delay
 		close_ui()
 
 func create_loot_slot(item: Dictionary, source_corpse) -> Control:
@@ -576,7 +575,6 @@ func loot_all_gold(gold_corpses: Array) -> void:
 	var has_peer = multiplayer.has_multiplayer_peer()
 
 	# Request gold loot from server for each corpse
-	# NetworkEnemyManager._client_gold_looted handles notification and sound
 	for corpse in gold_corpses:
 		if not is_instance_valid(corpse) or corpse.corpse_gold <= 0:
 			continue
@@ -585,10 +583,9 @@ func loot_all_gold(gold_corpses: Array) -> void:
 			if has_peer:
 				network_enemy_mgr.request_loot_gold.rpc_id(1, net_id)
 			else:
-				# Single player: call directly
 				network_enemy_mgr.request_loot_gold(net_id)
-		elif net_id <= 0:
-			LogManager.warn("loot_all_gold: Corpse has invalid network_id=%d" % net_id, "loot")
+		# Optimistic update - clear gold immediately
+		corpse.corpse_gold = 0
 
 	# Check if corpses are empty and refresh
 	for corpse in gold_corpses:
@@ -603,7 +600,6 @@ func loot_stacked_items(items: Array, corpses: Array) -> void:
 	var has_peer = multiplayer.has_multiplayer_peer()
 
 	# Request each item loot from server
-	# NetworkEnemyManager._client_item_looted handles notification
 	for i in range(items.size()):
 		var item = items[i]
 		var corpse = corpses[i]
@@ -618,10 +614,9 @@ func loot_stacked_items(items: Array, corpses: Array) -> void:
 				if has_peer:
 					network_enemy_mgr.request_loot_item.rpc_id(1, net_id, item_index)
 				else:
-					# Single player: call directly
 					network_enemy_mgr.request_loot_item(net_id, item_index)
-		elif net_id <= 0:
-			LogManager.warn("loot_stacked_items: Corpse has invalid network_id=%d" % net_id, "loot")
+				# Optimistic update - remove item immediately
+				corpse.corpse_loot.remove_at(item_index)
 
 	# Check if corpses are empty and refresh
 	for corpse in corpses:
@@ -680,10 +675,13 @@ func loot_gold(corpse, gold_amount: int) -> void:
 		# Single player: call directly
 		network_enemy_mgr.request_loot_gold(net_id)
 
-	# Small delay for server to process before refreshing UI
-	await get_tree().create_timer(0.1).timeout
-	if not is_instance_valid(self):
-		return
+	# Optimistic UI update - clear gold immediately
+	corpse.corpse_gold = 0
+
+	# Check if corpse is now empty
+	corpse.check_if_looted_empty()
+
+	# Refresh grid immediately (no delay)
 	populate_loot_grid()
 
 func create_slot_style(bg_color: Color, border_color: Color = BORDER_COLOR, border_width: int = 2, use_glow: bool = false) -> StyleBoxFlat:
@@ -799,15 +797,19 @@ func loot_item(corpse, item: Dictionary) -> void:
 		# Single player: call directly
 		network_enemy_mgr.request_loot_item(net_id, item_index)
 
-	# Server will handle inventory add and broadcast removal
-	# Refresh list after small delay to allow RPC to process
-	await get_tree().create_timer(0.1).timeout
-	if not is_instance_valid(self):
-		return  # UI was closed during await
+	# Optimistic UI update - remove item immediately from local corpse data
+	# Server will confirm, but UI feels instant
+	if item_index < corpse.corpse_loot.size():
+		corpse.corpse_loot.remove_at(item_index)
+
+	# Check if corpse is now empty
+	corpse.check_if_looted_empty()
+
+	# Refresh grid immediately (no delay)
 	populate_loot_grid()
 
 func _on_take_all_pressed() -> void:
-	"""Take all gold and items from all corpses"""
+	"""Take all gold and items from all corpses - sends requests immediately and closes UI"""
 	_play_click_sound()
 	var looted_count = 0
 	var total_gold = 0
@@ -815,8 +817,7 @@ func _on_take_all_pressed() -> void:
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
 	var has_peer = multiplayer.has_multiplayer_peer()
 
-	# Loot all gold from all corpses via server
-	# NetworkEnemyManager._client_gold_looted handles notification and sound
+	# Loot all gold from all corpses via server (immediate, no waiting)
 	for corpse in corpses_looted:
 		if not is_instance_valid(corpse):
 			continue
@@ -827,48 +828,24 @@ func _on_take_all_pressed() -> void:
 				if has_peer:
 					network_enemy_mgr.request_loot_gold.rpc_id(1, net_id)
 				else:
-					# Single player: call directly
 					network_enemy_mgr.request_loot_gold(net_id)
-			elif net_id <= 0:
-				LogManager.warn("Take all: Corpse has invalid network_id=%d, skipping gold" % net_id, "loot")
 
-	if total_gold > 0:
-		LogManager.debug("Looted %d total gold" % total_gold, "loot")
-
-	# Collect all items to loot (with their indices for network sync)
-	var all_items_to_loot: Array = []
+	# Collect all items and send loot requests immediately (no delays)
+	# Server will handle notification staggering
 	for corpse in corpses_looted:
 		if not is_instance_valid(corpse):
 			continue
-		for i in range(corpse.corpse_loot.size()):
-			var item = corpse.corpse_loot[i]
-			if item:
-				all_items_to_loot.append({"item": item, "corpse": corpse, "index": i})
-
-	# Loot items via server - request each from index 0 since items shift after removal
-	# NetworkEnemyManager._client_item_looted handles notification
-	for entry in all_items_to_loot:
-		var corpse = entry["corpse"]
-
-		if not is_instance_valid(corpse):
-			continue
-
 		var net_id = corpse.get("network_id") if "network_id" in corpse else -1
 		if network_enemy_mgr and net_id > 0:
-			if has_peer:
-				network_enemy_mgr.request_loot_item.rpc_id(1, net_id, 0)
-			else:
-				# Single player: call directly
-				network_enemy_mgr.request_loot_item(net_id, 0)
-			looted_count += 1
-			# Small delay to allow server to process and broadcast
-			await get_tree().create_timer(0.15).timeout
-			if not is_instance_valid(self):
-				return  # UI was closed during await
-		elif net_id <= 0:
-			LogManager.warn("Take all: Corpse has invalid network_id=%d, skipping item" % net_id, "loot")
+			# Request all items from this corpse (always index 0 since they shift)
+			for i in range(corpse.corpse_loot.size()):
+				if has_peer:
+					network_enemy_mgr.request_loot_item.rpc_id(1, net_id, 0)
+				else:
+					network_enemy_mgr.request_loot_item(net_id, 0)
+				looted_count += 1
 
-	# Check all corpses if empty
+	# Mark corpses as looted
 	for corpse in corpses_looted:
 		if is_instance_valid(corpse):
 			corpse.check_if_looted_empty()
@@ -877,8 +854,8 @@ func _on_take_all_pressed() -> void:
 		print("✨ Looted all: %d gold, %d items from %d corpse(s)" % [total_gold, looted_count, corpses_looted.size()])
 		all_corpses_looted.emit()
 
-	# Refresh and potentially close
-	populate_loot_grid()
+	# Close UI immediately - notifications will appear asynchronously
+	close_ui()
 
 func _on_close_pressed() -> void:
 	"""Handle close button press"""
