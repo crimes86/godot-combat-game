@@ -64,6 +64,9 @@ var level_label: Label = null  # Created dynamically in show_level()
 var shadow_sprite: AnimatedSprite2D = null  # Shadow layer
 var equipment_sprites: Array[AnimatedSprite2D] = []  # Equipment layers (boots, gloves, helmet)
 
+# Server-side animation tracking (works without actual sprite on dedicated server)
+var current_animation: String = "idle_down"  # Updated by EnemyAI, synced to clients
+
 # Crit window state (minimal - manager owns lifecycle)
 var in_crit_window: bool = false  # Simple flag set by grow/shrink methods
 var _crit_window_transitioning: bool = false  # Lock during grow/shrink async operations
@@ -295,10 +298,12 @@ func _ready() -> void:
 			var random_idle = idle_directions[randi() % idle_directions.size()]
 			if anim_sprite.sprite_frames.has_animation(random_idle):
 				anim_sprite.play(random_idle)
+				current_animation = random_idle  # Set initial animation for server sync
 			elif anim_sprite.sprite_frames.has_animation("idle_down"):
 				anim_sprite.play("idle_down")
+				current_animation = "idle_down"
 			else:
-				push_error("❌ idle animations not found!")
+				push_error("Enemy %s: idle animations not found!" % name)
 
 			# ✨ FIX: Refresh HitFlash sprite reference after conversion
 			if has_node("HitFlash"):

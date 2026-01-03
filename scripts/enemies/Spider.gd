@@ -43,6 +43,7 @@ var shadow_sprite: Sprite2D = null
 var current_direction: String = "down"
 var is_running: bool = false
 var is_attacking: bool = false
+var current_animation: String = "idle_down"  # Server sync - updated on every animation change
 
 # Health bar and UI
 var health_bar: Control = null
@@ -189,6 +190,9 @@ func _advance_frame() -> void:
 
 func play_animation(anim_name: String) -> void:
 	"""Play an animation by name"""
+	# Always track animation for server sync (even without sprite on dedicated server)
+	current_animation = anim_name
+
 	if _current_anim == anim_name:
 		return
 
@@ -196,7 +200,7 @@ func play_animation(anim_name: String) -> void:
 	_current_frame = 0
 	_is_idle = false
 
-	if SPIDER_ANIMS.has(anim_name):
+	if sprite and SPIDER_ANIMS.has(anim_name):
 		var anim_data = SPIDER_ANIMS[anim_name]
 		sprite.region_rect = Rect2(0, anim_data.row * FRAME_SIZE.y, FRAME_SIZE.x, FRAME_SIZE.y)
 
@@ -205,6 +209,8 @@ func update_animation_for_direction(direction: Vector2) -> void:
 	"""Update animation based on movement direction"""
 	if direction.length() < 0.1:
 		_is_idle = true
+		# Track idle animation for server sync (spiders use walk_direction for idle)
+		current_animation = "idle_" + current_direction
 		return
 
 	_is_idle = false
@@ -213,8 +219,10 @@ func update_animation_for_direction(direction: Vector2) -> void:
 	var new_anim: String
 	if abs(direction.x) > abs(direction.y):
 		new_anim = "walk_right" if direction.x > 0 else "walk_left"
+		current_direction = "right" if direction.x > 0 else "left"
 	else:
 		new_anim = "walk_down" if direction.y > 0 else "walk_up"
+		current_direction = "down" if direction.y > 0 else "up"
 
 	if new_anim != _current_anim:
 		play_animation(new_anim)

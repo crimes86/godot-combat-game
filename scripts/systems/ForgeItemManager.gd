@@ -1009,13 +1009,27 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 	if token_id is float:
 		token_id = int(token_id)
 
+	# Get unique forged_id - priority: forged_id (database ID) > token_id > item_id
+	# IMPORTANT: Using item_id as fallback causes stale weapon stats (all items of same type share stats!)
+	var unique_forged_id = forged.get("forged_id", 0)
+	if unique_forged_id is float:
+		unique_forged_id = int(unique_forged_id)
+	if unique_forged_id and unique_forged_id != 0:
+		unique_forged_id = str(unique_forged_id)
+	elif token_id and token_id != 0:
+		unique_forged_id = str(token_id)
+	else:
+		# Last resort - but this causes shared weapon stats bug!
+		unique_forged_id = forged.get("item_id", "unknown_forged")
+		LogManager.warning("Forged item '%s' has no unique ID - weapon stats may be shared!" % forged.get("item_name", "Unknown"), "forge")
+
 	var base_item = {
 		"name": forged.get("item_name", "Forged Item"),
 		"description": forged.get("description", "A forged item from an achievement."),
 		"stackable": false,
 		"quantity": 1,
 		"is_forged": true,
-		"forged_id": str(token_id if token_id else forged.get("item_id", "")),
+		"forged_id": unique_forged_id,
 		"forged_item_id": forged.get("item_id", ""),  # Used by Player.gd for sprite lookup
 		"item_id": forged.get("item_id", ""),
 		"rarity": rarity.capitalize(),
@@ -1049,14 +1063,20 @@ func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 			# Use pre-calculated damage from items.json (rarity scaling deprecated)
 			var item_damage = forge_db_item.get("base_damage", 10.0)
 			if item_damage is Dictionary:
-				# Use average of min/max for the weapon's base damage
+				# Preserve min/max for display, use average for base_damage calculations
 				var dmg_min = item_damage.get("min", 10)
 				var dmg_max = item_damage.get("max", 10)
+				base_item["damage_min"] = dmg_min
+				base_item["damage_max"] = dmg_max
 				base_item["base_damage"] = (dmg_min + dmg_max) / 2.0
 			elif item_damage is float or item_damage is int:
 				base_item["base_damage"] = float(item_damage)
+				base_item["damage_min"] = float(item_damage)
+				base_item["damage_max"] = float(item_damage)
 			else:
 				base_item["base_damage"] = 10.0
+				base_item["damage_min"] = 10.0
+				base_item["damage_max"] = 10.0
 			base_item["attack_speed"] = forge_db_item.get("attack_speed", "medium")
 			base_item["crit_chance_bonus"] = forge_db_item.get("crit_chance_bonus", forge_db_item.get("crit_chance", 0.05))
 			if forge_db_item.has("stat_bonuses"):

@@ -1504,21 +1504,13 @@ func get_state_name_for_state(state: State) -> String:
 	return "UNKNOWN"
 
 func update_enemy_animation(velocity: Vector2) -> void:
-	"""Update enemy animation based on movement"""
-	# Lazy re-fetch: if anim_sprite is null, try to get it from enemy.sprite
-	# This handles timing where EnemyAI._ready() runs before Enemy._ready() converts Sprite2D to AnimatedSprite2D
-	if not anim_sprite and enemy and is_instance_valid(enemy):
-		if enemy.has_node("Sprite"):
-			sprite = enemy.get_node("Sprite")
-			anim_sprite = sprite as AnimatedSprite2D
+	"""Update enemy animation based on movement.
+	IMPORTANT: Always updates enemy.current_animation for server sync, even without sprites."""
 
-	if not anim_sprite or not anim_sprite.sprite_frames:
+	if not enemy or not is_instance_valid(enemy):
 		return
 
-	# ✨ FIX: Don't interrupt attack animations
-	if anim_sprite.animation.begins_with("attack_") and anim_sprite.is_playing():
-		return
-
+	# Calculate animation name FIRST (needed for server sync even without sprites)
 	var is_moving = velocity.length() > 0.1
 
 	# Get direction
@@ -1550,10 +1542,33 @@ func update_enemy_animation(velocity: Vector2) -> void:
 			var directions = ["up", "down", "left", "right"]
 			last_facing_direction = directions[randi() % directions.size()]
 			dir_str = last_facing_direction
-	
-	# Play appropriate animation
+
+	# Calculate animation name
 	var prefix = "walk_" if is_moving else "idle_"
 	var anim_name = prefix + dir_str
+
+	# ALWAYS update enemy.current_animation for server sync (works without sprites on dedicated server)
+	enemy.current_animation = anim_name
+
+	# Lazy re-fetch: if anim_sprite is null, try to get it from enemy.sprite
+	# This handles timing where EnemyAI._ready() runs before Enemy._ready() converts Sprite2D to AnimatedSprite2D
+	if not anim_sprite:
+		if enemy.has_node("Sprite"):
+			sprite = enemy.get_node("Sprite")
+			anim_sprite = sprite as AnimatedSprite2D
+
+	# If no anim_sprite (dedicated server mode), we're done - animation state is tracked
+	if not anim_sprite:
+		return
+
+	if not anim_sprite.sprite_frames:
+		return
+
+	# ✨ FIX: Don't interrupt attack animations
+	if anim_sprite.animation.begins_with("attack_") and anim_sprite.is_playing():
+		# Keep current_animation as the attack animation for sync
+		enemy.current_animation = anim_sprite.animation
+		return
 
 	if anim_sprite.sprite_frames.has_animation(anim_name):
 		if anim_sprite.animation != anim_name:

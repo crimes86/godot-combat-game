@@ -933,7 +933,13 @@ func _client_sync_positions(positions: Dictionary) -> void:
 					sprite.play(data.anim)
 
 func _get_enemy_animation(enemy: Node) -> String:
-	"""Get current animation name for enemy."""
+	"""Get current animation name for enemy.
+	Uses enemy.current_animation variable which works on dedicated servers without sprites."""
+	# Use the tracked animation state (works on headless server without sprites)
+	if "current_animation" in enemy:
+		return enemy.current_animation
+
+	# Fallback: try to read from sprite (for backwards compatibility)
 	var sprite = enemy.get_node_or_null("Sprite")
 	if sprite and sprite is AnimatedSprite2D:
 		return sprite.animation

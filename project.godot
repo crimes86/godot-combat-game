@@ -6,15 +6,15 @@
 ;   [section] ; section goes between []
 ;   param=value ; assign values to parameters
 ;
-; SERVER BUILD - UI autoloads removed for headless operation
+; CLIENT BUILD - Full UI autoloads for desktop/player builds
 
 config_version=5
 
 [application]
 
 config/name="Dreadland"
-run/main_scene="res://scenes/server_main.tscn"
-run/max_fps=30
+run/main_scene="res://scenes/ui/MainMenu.tscn"
+run/max_fps=0
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://assets/branding/ashbane-icon-256.png"
 
@@ -52,23 +52,23 @@ WeaponStatsTracker="*res://scripts/systems/WeaponStatsTracker.gd"
 WeaponSkillManager="*res://scripts/systems/WeaponSkillManager.gd"
 PlayerInteractionController="*res://scripts/systems/PlayerInteractionController.gd"
 PlaytestBot="*res://scripts/debug/PlaytestBot.gd"
-AccountAdmin="*res://scripts/stubs/AccountAdminStub.gd"
-CursorManager="*res://scripts/stubs/CursorManagerStub.gd"
-VFXLayer="*res://scripts/stubs/VFXLayerStub.gd"
-ItemIconGenerator="*res://scripts/stubs/ItemIconGeneratorStub.gd"
-GroupUI="*res://scripts/stubs/GroupUIStub.gd"
-TutorialManager="*res://scripts/stubs/TutorialManagerStub.gd"
-QuestTrackerUI="*res://scripts/stubs/QuestTrackerUIStub.gd"
-BugReportUI="*res://scripts/stubs/BugReportUIStub.gd"
-MobileInput="*res://scripts/stubs/MobileInputStub.gd"
-ForgeVisualEffects="*res://scripts/stubs/ForgeVisualEffectsStub.gd"
-RecentlyAdvertisedUI="*res://scripts/stubs/RecentlyAdvertisedUIStub.gd"
-TradeWindowUI="*res://scripts/stubs/TradeWindowUIStub.gd"
-ItemInspectionUI="*res://scripts/stubs/ItemInspectionUIStub.gd"
-PlayerInteractionMenu="*res://scripts/stubs/PlayerInteractionMenuStub.gd"
-PlayerInspectUI="*res://scripts/stubs/PlayerInspectUIStub.gd"
-Minimap="*res://scripts/stubs/MinimapStub.gd"
-CombatJuice="*res://scripts/stubs/CombatJuiceStub.gd"
+AccountAdmin="*res://scripts/ui/AccountAdminPanel.gd"
+CursorManager="*res://scripts/systems/CursorManager.gd"
+VFXLayer="*res://scripts/systems/VFXLayer.gd"
+ItemIconGenerator="*res://scripts/systems/ItemIconGenerator.gd"
+GroupUI="*res://scripts/ui/GroupUI.gd"
+TutorialManager="*res://scripts/systems/TutorialManager.gd"
+QuestTrackerUI="*res://scripts/ui/QuestTrackerUI.gd"
+BugReportUI="*res://scripts/ui/BugReportUI.gd"
+MobileInput="*res://scripts/mobile/MobileInput.gd"
+ForgeVisualEffects="*res://scripts/systems/ForgeVisualEffects.gd"
+RecentlyAdvertisedUI="*res://scripts/ui/RecentlyAdvertisedUI.gd"
+TradeWindowUI="*res://scripts/ui/TradeWindowUI.gd"
+ItemInspectionUI="*res://scripts/ui/ItemInspectionUI.gd"
+PlayerInteractionMenu="*res://scripts/ui/PlayerInteractionMenu.gd"
+PlayerInspectUI="*res://scripts/ui/PlayerInspectUI.gd"
+Minimap="*res://scripts/ui/Minimap.gd"
+CombatJuice="*res://scripts/systems/CombatJuice.gd"
 
 [display]
 
@@ -117,7 +117,7 @@ pointing/emulate_touch_from_mouse=true
 
 [physics]
 
-common/physics_ticks_per_second=30
+common/physics_ticks_per_second=60
 
 [rendering]
 

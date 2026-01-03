@@ -49,6 +49,7 @@ var shadow_sprite: Sprite2D = null
 var current_direction: String = "down"
 var is_running: bool = false
 var is_attacking: bool = false
+var current_animation: String = "idle_down"  # Server sync - updated on every animation change
 
 # Health bar and UI
 var health_bar: Control = null
@@ -521,6 +522,9 @@ func _process(delta: float) -> void:
 
 func play_animation(anim_name: String) -> void:
 	"""Play an animation - format: 'type_direction' e.g. 'walk_down', 'attack_left'"""
+	# Always track animation for server sync (even without sprite on dedicated server)
+	current_animation = anim_name
+
 	if not sprite:
 		return
 
@@ -548,6 +552,8 @@ func update_animation_for_direction(direction: Vector2) -> void:
 	if direction.length() < 0.1:
 		# Idle - pause animation on current frame
 		_is_idle = true
+		# Track idle animation for server sync
+		current_animation = "idle_" + current_direction
 		return
 
 	# Moving - resume animation
@@ -583,6 +589,9 @@ func update_animation_for_direction(direction: Vector2) -> void:
 	# Set animation type
 	var anim_type = "run" if is_running else "walk"
 	_set_animation_type(anim_type)
+
+	# Track animation for server sync
+	current_animation = anim_type + "_" + current_direction
 
 
 func take_damage(damage: float, is_crit: bool = false, is_weakpoint_hit: bool = false) -> void:
