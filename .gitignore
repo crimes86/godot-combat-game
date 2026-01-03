@@ -50,8 +50,8 @@ _ul-*
 *private*key*
 *.pem
 
-# User-specific settings (optional - some prefer to track these)
-.claude/settings.local.json
+# User-specific settings (machine-specific, not tracked)
+.claude/settings.local*.json
 nul
 
 # LPC Generator (external tool - not part of project)
