@@ -1,8 +1,11 @@
-[gd_scene load_steps=26 format=3 uid="uid://bwajqb57avv53"]
+[gd_scene load_steps=31 format=3 uid="uid://bwajqb57avv53"]
 
 [ext_resource type="Script" uid="uid://mebu3q3lqlre" path="res://scripts/trading_hub/TradingHub.gd" id="1_test"]
+[ext_resource type="Script" path="res://scripts/wildlife/WildlifeSpawner.gd" id="17_spawner"]
 [ext_resource type="Shader" uid="uid://bvc2p5kpshbx6" path="res://shaders/ground_variation.gdshader" id="2_ground"]
 [ext_resource type="Shader" uid="uid://ly7a3p5raf33" path="res://shaders/grassland.gdshader" id="3_grass"]
+[ext_resource type="Shader" path="res://shaders/forest_ground.gdshader" id="15_forest"]
+[ext_resource type="Shader" path="res://shaders/river_water.gdshader" id="16_river"]
 [ext_resource type="PackedScene" uid="uid://bforgescene01" path="res://scenes/environment/Forge.tscn" id="4_forge"]
 [ext_resource type="PackedScene" path="res://scenes/npcs/vendor.tscn" id="14_blacksmith"]
 [ext_resource type="Texture2D" uid="uid://c5an8cwy57wby" path="res://assets/environment/forge/props/anvil_main.png" id="5_anvil"]
@@ -67,6 +70,41 @@ size = Vector2(40, 34)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_rock3"]
 size = Vector2(126, 37)
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_forest"]
+shader = ExtResource("15_forest")
+shader_parameter/earth_base = Color(0.08, 0.065, 0.04, 1)
+shader_parameter/earth_dark = Color(0.05, 0.04, 0.025, 1)
+shader_parameter/moss_color = Color(0.06, 0.10, 0.045, 1)
+shader_parameter/leaf_litter = Color(0.14, 0.09, 0.045, 1)
+shader_parameter/pine_needle = Color(0.075, 0.06, 0.03, 1)
+shader_parameter/patch_scale = 1.0
+shader_parameter/detail_intensity = 0.85
+shader_parameter/moss_amount = 0.22
+shader_parameter/leaf_amount = 0.28
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_river"]
+shader = ExtResource("16_river")
+shader_parameter/water_shallow = Color(0.12, 0.16, 0.14, 1)
+shader_parameter/water_deep = Color(0.06, 0.09, 0.11, 1)
+shader_parameter/water_murky = Color(0.10, 0.08, 0.06, 1)
+shader_parameter/foam_color = Color(0.30, 0.32, 0.30, 1)
+shader_parameter/flow_speed = 0.4
+shader_parameter/wave_intensity = 0.65
+shader_parameter/foam_amount = 0.08
+shader_parameter/depth_variation = 0.75
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_camp"]
+shader = ExtResource("15_forest")
+shader_parameter/earth_base = Color(0.10, 0.08, 0.05, 1)
+shader_parameter/earth_dark = Color(0.06, 0.05, 0.03, 1)
+shader_parameter/moss_color = Color(0.05, 0.08, 0.04, 1)
+shader_parameter/leaf_litter = Color(0.12, 0.08, 0.04, 1)
+shader_parameter/pine_needle = Color(0.08, 0.065, 0.035, 1)
+shader_parameter/patch_scale = 0.8
+shader_parameter/detail_intensity = 0.7
+shader_parameter/moss_amount = 0.1
+shader_parameter/leaf_amount = 0.15
+
 [node name="TradingHub" type="Node2D"]
 script = ExtResource("1_test")
 
@@ -86,7 +124,22 @@ offset_bottom = 8000.0
 [node name="GrassArea" type="Polygon2D" parent="Environment"]
 z_index = -2
 material = SubResource("ShaderMaterial_grass")
-polygon = PackedVector2Array(-12000, -5000, -11600, -4920, -11200, -5060, -10800, -4940, -10400, -5040, -10000, -4900, -9600, -5070, -9200, -4950, -8800, -5020, -8400, -4880, -8000, -5050, -7600, -4960, -7200, -5030, -6800, -4900, -6400, -5060, -6000, -4940, -5600, -5010, -5200, -4880, -4800, -5050, -4400, -4930, -4000, -5040, -3600, -4900, -3200, -5060, -2800, -4950, -2400, -5020, -2000, -4890, -1600, -5050, -1200, -4940, -800, -5030, -400, -4900, 0, -5060, 400, -4920, 800, -5010, 1200, -4880, 1600, -5050, 2000, -4940, 2400, -5030, 2800, -4900, 3200, -5060, 3600, -4950, 4000, -5020, 4400, -4890, 4800, -5050, 5200, -4930, 5600, -5040, 6000, -4900, 6400, -5060, 6800, -4940, 7200, -5010, 7600, -4880, 8000, -5050, 8400, -4960, 8800, -5030, 9200, -4900, 9600, -5060, 10000, -4940, 10400, -5020, 10800, -4890, 11200, -5050, 11600, -4930, 12000, -5000, 12000, -12000, -12000, -12000)
+polygon = PackedVector2Array(-12000, -5000, -11600, -4920, -11200, -5060, -10800, -4940, -10400, -5040, -10000, -4900, -9600, -5070, -9200, -4950, -8800, -5020, -8400, -4880, -8000, -5050, -7600, -4960, -7200, -5030, -6800, -4900, -6400, -5060, -6000, -4940, -5600, -5010, -5200, -4880, -4800, -5050, -4400, -4930, -4000, -5040, -3600, -4900, -3200, -5060, -2800, -4950, -2400, -5020, -2000, -4890, -1600, -5050, -1200, -4940, -800, -5030, -400, -4900, 0, -5060, 400, -4920, 800, -5010, 1200, -4880, 1600, -5050, 2000, -4940, 2400, -5030, 2800, -4900, 3200, -5060, 3600, -4950, 4000, -5020, 4400, -4890, 4800, -5050, 5200, -4930, 5600, -5040, 6000, -4900, 6400, -5060, 6800, -4940, 7200, -5010, 7600, -4880, 8000, -5050, 8400, -4960, 8800, -5030, 9200, -4900, 9600, -5060, 10000, -4940, 10400, -5020, 10800, -4890, 11200, -5050, 11600, -4930, 12000, -5000, 12000, -5500, -12000, -5500)
+
+[node name="ForestZone" type="Polygon2D" parent="Environment"]
+z_index = -2
+material = SubResource("ShaderMaterial_forest")
+polygon = PackedVector2Array(-12000, -5500, -11500, -5550, -11000, -5480, -10500, -5560, -10000, -5500, -9500, -5540, -9000, -5470, -8500, -5550, -8000, -5500, -7500, -5530, -7000, -5480, -6500, -5560, -6000, -5500, -5500, -5540, -5000, -5470, -4500, -5550, -4000, -5500, -3500, -5520, -3000, -5480, -2500, -5550, -2000, -5500, -1500, -5530, -1000, -5470, -500, -5550, 0, -5500, 500, -5540, 1000, -5480, 1500, -5560, 2000, -5500, 2500, -5520, 3000, -5470, 3500, -5550, 4000, -5500, 4500, -5530, 5000, -5480, 5500, -5560, 6000, -5500, 6500, -5540, 7000, -5470, 7500, -5550, 8000, -5500, 8500, -5520, 9000, -5480, 9500, -5550, 10000, -5500, 10500, -5530, 11000, -5480, 11500, -5560, 12000, -5500, 12000, -9500, -12000, -9500)
+
+[node name="TrapperCampGround" type="Polygon2D" parent="Environment"]
+z_index = -2
+material = SubResource("ShaderMaterial_camp")
+polygon = PackedVector2Array(-12000, -9500, 12000, -9500, 12000, -11000, -12000, -11000)
+
+[node name="RiverZone" type="Polygon2D" parent="Environment"]
+z_index = -2
+material = SubResource("ShaderMaterial_river")
+polygon = PackedVector2Array(-12000, -11000, -11500, -11050, -11000, -10980, -10500, -11040, -10000, -11000, -9500, -11030, -9000, -10970, -8500, -11050, -8000, -11000, -7500, -11020, -7000, -10980, -6500, -11040, -6000, -11000, -5500, -11030, -5000, -10970, -4500, -11050, -4000, -11000, -3500, -11020, -3000, -10980, -2500, -11040, -2000, -11000, -1500, -11030, -1000, -10970, -500, -11050, 0, -11000, 500, -11020, 1000, -10980, 1500, -11040, 2000, -11000, 2500, -11030, 3000, -10970, 3500, -11050, 4000, -11000, 4500, -11020, 5000, -10980, 5500, -11040, 6000, -11000, 6500, -11030, 7000, -10970, 7500, -11050, 8000, -11000, 8500, -11020, 9000, -10980, 9500, -11040, 10000, -11000, 10500, -11030, 11000, -10980, 11500, -11050, 12000, -11000, 12000, -14000, -12000, -14000)
 
 [node name="CaveWallsLeft" type="Polygon2D" parent="Environment"]
 z_index = 1
@@ -351,3 +404,256 @@ position = Vector2(2, -125)
 [node name="CollisionShape2D" type="CollisionShape2D" parent="InteractiveObjects/RockSeat6Collision"]
 position = Vector2(-4, -0.5)
 shape = SubResource("RectangleShape2D_rock3")
+
+[node name="TrapperCamp" type="Node2D" parent="."]
+z_index = 2
+
+[node name="CentralCampfire" type="Node2D" parent="TrapperCamp"]
+position = Vector2(0, -10200)
+
+[node name="FirePit" type="Polygon2D" parent="TrapperCamp/CentralCampfire"]
+color = Color(0.15, 0.1, 0.08, 1)
+polygon = PackedVector2Array(-60, -30, -40, -50, 0, -55, 40, -50, 60, -30, 55, 0, 40, 30, 0, 40, -40, 30, -55, 0)
+
+[node name="FireGlow" type="Polygon2D" parent="TrapperCamp/CentralCampfire"]
+z_index = 1
+color = Color(0.8, 0.3, 0.1, 0.6)
+polygon = PackedVector2Array(-25, -15, -15, -25, 0, -28, 15, -25, 25, -15, 22, 0, 15, 15, 0, 20, -15, 15, -22, 0)
+
+[node name="SkinningStation" type="Node2D" parent="TrapperCamp"]
+position = Vector2(-400, -10100)
+
+[node name="Log" type="Polygon2D" parent="TrapperCamp/SkinningStation"]
+color = Color(0.25, 0.18, 0.1, 1)
+polygon = PackedVector2Array(-80, -20, -70, -35, 70, -35, 80, -20, 80, 10, 70, 25, -70, 25, -80, 10)
+
+[node name="LogShadow" type="Polygon2D" parent="TrapperCamp/SkinningStation"]
+z_index = -1
+color = Color(0, 0, 0, 0.35)
+polygon = PackedVector2Array(-85, 15, -70, 35, 70, 35, 85, 15, 80, 0, -80, 0)
+
+[node name="CraftingTent" type="Node2D" parent="TrapperCamp"]
+position = Vector2(450, -10150)
+
+[node name="TentBase" type="Polygon2D" parent="TrapperCamp/CraftingTent"]
+color = Color(0.35, 0.28, 0.2, 1)
+polygon = PackedVector2Array(-100, 60, -120, 0, -100, -60, 0, -80, 100, -60, 120, 0, 100, 60, 0, 80)
+
+[node name="TentTop" type="Polygon2D" parent="TrapperCamp/CraftingTent"]
+z_index = 1
+color = Color(0.4, 0.32, 0.22, 1)
+polygon = PackedVector2Array(-80, 40, -90, 0, -80, -40, 0, -55, 80, -40, 90, 0, 80, 40, 0, 55)
+
+[node name="TentShadow" type="Polygon2D" parent="TrapperCamp/CraftingTent"]
+z_index = -1
+color = Color(0, 0, 0, 0.3)
+polygon = PackedVector2Array(-100, 70, -120, 10, 120, 10, 100, 70)
+
+[node name="PeltDryingRack" type="Node2D" parent="TrapperCamp"]
+position = Vector2(-150, -10400)
+
+[node name="RackFrame" type="Polygon2D" parent="TrapperCamp/PeltDryingRack"]
+color = Color(0.3, 0.22, 0.12, 1)
+polygon = PackedVector2Array(-100, -5, -100, 5, -95, 5, -95, 60, -90, 60, -90, 5, 90, 5, 90, 60, 95, 60, 95, 5, 100, 5, 100, -5, 95, -5, 95, -60, 90, -60, 90, -5, -90, -5, -90, -60, -95, -60, -95, -5)
+
+[node name="HangingPelt1" type="Polygon2D" parent="TrapperCamp/PeltDryingRack"]
+color = Color(0.45, 0.35, 0.25, 1)
+polygon = PackedVector2Array(-70, -3, -30, -3, -28, 45, -72, 45)
+
+[node name="HangingPelt2" type="Polygon2D" parent="TrapperCamp/PeltDryingRack"]
+color = Color(0.5, 0.38, 0.28, 1)
+polygon = PackedVector2Array(30, -3, 70, -3, 72, 40, 28, 40)
+
+[node name="KeelboatWorkshop" type="Node2D" parent="TrapperCamp"]
+position = Vector2(200, -10600)
+
+[node name="WorkbenchBase" type="Polygon2D" parent="TrapperCamp/KeelboatWorkshop"]
+color = Color(0.28, 0.2, 0.12, 1)
+polygon = PackedVector2Array(-120, -40, 120, -40, 130, -20, 130, 40, -130, 40, -130, -20)
+
+[node name="BoatHullWIP" type="Polygon2D" parent="TrapperCamp/KeelboatWorkshop"]
+z_index = 1
+color = Color(0.35, 0.25, 0.15, 1)
+polygon = PackedVector2Array(-100, -15, -80, -35, 80, -35, 100, -15, 90, 20, -90, 20)
+
+[node name="WorkshopShadow" type="Polygon2D" parent="TrapperCamp/KeelboatWorkshop"]
+z_index = -1
+color = Color(0, 0, 0, 0.3)
+polygon = PackedVector2Array(-130, 50, 130, 50, 140, 30, -140, 30)
+
+[node name="StorageCache" type="Node2D" parent="TrapperCamp"]
+position = Vector2(-500, -10450)
+
+[node name="CacheBox" type="Polygon2D" parent="TrapperCamp/StorageCache"]
+color = Color(0.3, 0.22, 0.14, 1)
+polygon = PackedVector2Array(-50, -30, 50, -30, 55, -20, 55, 30, -55, 30, -55, -20)
+
+[node name="CacheLid" type="Polygon2D" parent="TrapperCamp/StorageCache"]
+z_index = 1
+color = Color(0.35, 0.26, 0.16, 1)
+polygon = PackedVector2Array(-55, -32, 55, -32, 55, -25, -55, -25)
+
+[node name="RiverDock" type="Node2D" parent="TrapperCamp"]
+position = Vector2(0, -10900)
+
+[node name="DockPlatform" type="Polygon2D" parent="TrapperCamp/RiverDock"]
+color = Color(0.28, 0.2, 0.12, 1)
+polygon = PackedVector2Array(-150, -30, 150, -30, 160, 0, 160, 80, -160, 80, -160, 0)
+
+[node name="DockPlanks" type="Polygon2D" parent="TrapperCamp/RiverDock"]
+z_index = 1
+color = Color(0.32, 0.24, 0.14, 1)
+polygon = PackedVector2Array(-140, -25, 140, -25, 140, 70, -140, 70)
+
+[node name="DockExtension" type="Polygon2D" parent="TrapperCamp/RiverDock"]
+color = Color(0.26, 0.18, 0.1, 1)
+polygon = PackedVector2Array(-60, 80, 60, 80, 50, 180, -50, 180)
+
+[node name="CampRocks" type="Node2D" parent="TrapperCamp"]
+
+[node name="Rock1" type="Polygon2D" parent="TrapperCamp/CampRocks"]
+position = Vector2(300, -10080)
+color = Color(0.25, 0.22, 0.2, 1)
+polygon = PackedVector2Array(-25, -15, 0, -20, 25, -15, 30, 0, 25, 15, 0, 20, -25, 15, -30, 0)
+
+[node name="Rock2" type="Polygon2D" parent="TrapperCamp/CampRocks"]
+position = Vector2(-350, -10300)
+color = Color(0.28, 0.25, 0.22, 1)
+polygon = PackedVector2Array(-35, -20, 0, -28, 35, -20, 40, 0, 35, 20, 0, 28, -35, 20, -40, 0)
+
+[node name="Rock3" type="Polygon2D" parent="TrapperCamp/CampRocks"]
+position = Vector2(500, -10500)
+color = Color(0.22, 0.2, 0.18, 1)
+polygon = PackedVector2Array(-20, -12, 0, -16, 20, -12, 24, 0, 20, 12, 0, 16, -20, 12, -24, 0)
+
+[node name="ForestTrees" type="Node2D" parent="."]
+z_index = 3
+
+[node name="TreeRow1" type="Node2D" parent="ForestTrees"]
+
+[node name="Tree1" type="Polygon2D" parent="ForestTrees/TreeRow1"]
+position = Vector2(-600, -6000)
+color = Color(0.08, 0.12, 0.06, 1)
+polygon = PackedVector2Array(-40, 20, -60, -20, -50, -60, -30, -90, 0, -110, 30, -90, 50, -60, 60, -20, 40, 20, 0, 30)
+
+[node name="Tree1Trunk" type="Polygon2D" parent="ForestTrees/TreeRow1"]
+position = Vector2(-600, -6000)
+z_index = -1
+color = Color(0.2, 0.14, 0.08, 1)
+polygon = PackedVector2Array(-12, 30, -10, 60, 10, 60, 12, 30)
+
+[node name="Tree2" type="Polygon2D" parent="ForestTrees/TreeRow1"]
+position = Vector2(200, -6200)
+color = Color(0.07, 0.11, 0.055, 1)
+polygon = PackedVector2Array(-35, 18, -55, -18, -45, -55, -25, -85, 0, -100, 25, -85, 45, -55, 55, -18, 35, 18, 0, 28)
+
+[node name="Tree2Trunk" type="Polygon2D" parent="ForestTrees/TreeRow1"]
+position = Vector2(200, -6200)
+z_index = -1
+color = Color(0.18, 0.12, 0.07, 1)
+polygon = PackedVector2Array(-10, 28, -8, 55, 8, 55, 10, 28)
+
+[node name="Tree3" type="Polygon2D" parent="ForestTrees/TreeRow1"]
+position = Vector2(700, -5900)
+color = Color(0.09, 0.13, 0.065, 1)
+polygon = PackedVector2Array(-45, 22, -65, -22, -55, -65, -33, -95, 0, -115, 33, -95, 55, -65, 65, -22, 45, 22, 0, 32)
+
+[node name="Tree3Trunk" type="Polygon2D" parent="ForestTrees/TreeRow1"]
+position = Vector2(700, -5900)
+z_index = -1
+color = Color(0.22, 0.15, 0.09, 1)
+polygon = PackedVector2Array(-14, 32, -12, 65, 12, 65, 14, 32)
+
+[node name="TreeRow2" type="Node2D" parent="ForestTrees"]
+
+[node name="Tree4" type="Polygon2D" parent="ForestTrees/TreeRow2"]
+position = Vector2(-900, -7000)
+color = Color(0.075, 0.115, 0.058, 1)
+polygon = PackedVector2Array(-50, 25, -70, -25, -60, -70, -36, -105, 0, -125, 36, -105, 60, -70, 70, -25, 50, 25, 0, 35)
+
+[node name="Tree5" type="Polygon2D" parent="ForestTrees/TreeRow2"]
+position = Vector2(-200, -7300)
+color = Color(0.085, 0.125, 0.063, 1)
+polygon = PackedVector2Array(-38, 19, -58, -19, -48, -58, -28, -88, 0, -105, 28, -88, 48, -58, 58, -19, 38, 19, 0, 29)
+
+[node name="Tree6" type="Polygon2D" parent="ForestTrees/TreeRow2"]
+position = Vector2(400, -7100)
+color = Color(0.072, 0.108, 0.054, 1)
+polygon = PackedVector2Array(-42, 21, -62, -21, -52, -62, -31, -93, 0, -110, 31, -93, 52, -62, 62, -21, 42, 21, 0, 31)
+
+[node name="Tree7" type="Polygon2D" parent="ForestTrees/TreeRow2"]
+position = Vector2(900, -7400)
+color = Color(0.088, 0.128, 0.064, 1)
+polygon = PackedVector2Array(-48, 24, -68, -24, -58, -68, -35, -102, 0, -120, 35, -102, 58, -68, 68, -24, 48, 24, 0, 34)
+
+[node name="TreeRow3" type="Node2D" parent="ForestTrees"]
+
+[node name="Tree8" type="Polygon2D" parent="ForestTrees/TreeRow3"]
+position = Vector2(-700, -8200)
+color = Color(0.078, 0.118, 0.059, 1)
+polygon = PackedVector2Array(-44, 22, -64, -22, -54, -64, -32, -96, 0, -114, 32, -96, 54, -64, 64, -22, 44, 22, 0, 32)
+
+[node name="Tree9" type="Polygon2D" parent="ForestTrees/TreeRow3"]
+position = Vector2(0, -8000)
+color = Color(0.082, 0.122, 0.061, 1)
+polygon = PackedVector2Array(-52, 26, -72, -26, -62, -72, -37, -108, 0, -128, 37, -108, 62, -72, 72, -26, 52, 26, 0, 36)
+
+[node name="Tree10" type="Polygon2D" parent="ForestTrees/TreeRow3"]
+position = Vector2(600, -8300)
+color = Color(0.07, 0.105, 0.052, 1)
+polygon = PackedVector2Array(-40, 20, -60, -20, -50, -60, -30, -90, 0, -107, 30, -90, 50, -60, 60, -20, 40, 20, 0, 30)
+
+[node name="TreeRow4" type="Node2D" parent="ForestTrees"]
+
+[node name="Tree11" type="Polygon2D" parent="ForestTrees/TreeRow4"]
+position = Vector2(-500, -9000)
+color = Color(0.076, 0.114, 0.057, 1)
+polygon = PackedVector2Array(-46, 23, -66, -23, -56, -66, -34, -99, 0, -117, 34, -99, 56, -66, 66, -23, 46, 23, 0, 33)
+
+[node name="Tree12" type="Polygon2D" parent="ForestTrees/TreeRow4"]
+position = Vector2(300, -9200)
+color = Color(0.084, 0.124, 0.062, 1)
+polygon = PackedVector2Array(-43, 21, -63, -21, -53, -63, -32, -94, 0, -112, 32, -94, 53, -63, 63, -21, 43, 21, 0, 31)
+
+[node name="WildlifeSpawns" type="Node2D" parent="."]
+
+[node name="BeaverSpawn1" type="Marker2D" parent="WildlifeSpawns"]
+position = Vector2(-400, -12500)
+
+[node name="BeaverSpawn2" type="Marker2D" parent="WildlifeSpawns"]
+position = Vector2(500, -12800)
+
+[node name="BeaverSpawn3" type="Marker2D" parent="WildlifeSpawns"]
+position = Vector2(-800, -13200)
+
+[node name="FoxSpawn1" type="Marker2D" parent="WildlifeSpawns"]
+position = Vector2(-600, -7500)
+
+[node name="FoxSpawn2" type="Marker2D" parent="WildlifeSpawns"]
+position = Vector2(700, -8000)
+
+[node name="RabbitSpawn1" type="Marker2D" parent="WildlifeSpawns"]
+position = Vector2(-300, -6500)
+
+[node name="RabbitSpawn2" type="Marker2D" parent="WildlifeSpawns"]
+position = Vector2(400, -7200)
+
+[node name="RabbitSpawn3" type="Marker2D" parent="WildlifeSpawns"]
+position = Vector2(0, -8500)
+
+[node name="WolfSpawn1" type="Marker2D" parent="WildlifeSpawns"]
+position = Vector2(-700, -9000)
+
+[node name="WolfSpawn2" type="Marker2D" parent="WildlifeSpawns"]
+position = Vector2(600, -9300)
+
+[node name="WildlifeSpawner" type="Node2D" parent="."]
+script = ExtResource("17_spawner")
+spawn_area_min = Vector2(-3000, -9500)
+spawn_area_max = Vector2(3000, -5700)
+max_animals = 15
+spawn_interval = 2.5
+player_proximity_required = 3000.0
+despawn_distance = 4500.0
+rabbit_weight = 65
+fox_weight = 35

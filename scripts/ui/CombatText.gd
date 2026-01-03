@@ -16,7 +16,8 @@ enum TextType {
 	GOLD,      # Gold text for gold pickup (world-space, near mob)
 	SKILL_UP,  # Bronze/copper text for weapon skill gain (world-space, near mob)
 	BLOCK,     # Bright blue "BLOCKED!" text
-	PARTIAL_BLOCK  # Gray-blue "Partial Block" text
+	PARTIAL_BLOCK,  # Gray-blue "Partial Block" text
+	ITEM       # Rarity-colored text for item pickup (world-space, near mob)
 }
 
 # Spawn area settings - rectangle above enemy
@@ -105,6 +106,11 @@ func _ready() -> void:
 			add_theme_color_override("font_color", Color(0.6, 0.7, 0.85))  # Gray-blue
 			add_theme_font_size_override("font_size", 18)
 			_animate_pop_small()
+		TextType.ITEM:
+			# Default white, will be overridden by _apply_rarity_color
+			add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+			add_theme_font_size_override("font_size", 18)
+			_animate_reward()
 
 	# Add thick black outline for readability
 	add_theme_color_override("font_outline_color", Color.BLACK)
@@ -173,6 +179,24 @@ func _animate_reward() -> void:
 	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.08)
 	tween.tween_property(self, "modulate:a", 0.0, 0.5).set_delay(1.0)
 
+func _apply_rarity_color(rarity: String) -> void:
+	"""Apply rarity-based color to item text"""
+	var color: Color
+	match rarity.to_upper():
+		"COMMON":
+			color = Color(0.85, 0.85, 0.85)  # Light gray
+		"UNCOMMON":
+			color = Color(0.4, 0.9, 0.4)  # Green
+		"RARE":
+			color = Color(0.3, 0.5, 0.95)  # Blue
+		"EPIC":
+			color = Color(0.7, 0.3, 0.9)  # Purple
+		"LEGENDARY":
+			color = Color(1.0, 0.6, 0.1)  # Orange
+		_:
+			color = Color(0.9, 0.9, 0.9)  # Default white-ish
+	add_theme_color_override("font_color", color)
+
 ## Helper function to calculate position offset based on direction
 static func _get_position_offset_for_direction(direction: Vector2) -> Vector2:
 	"""Calculate spawn position offset based on player's facing direction"""
@@ -229,6 +253,17 @@ static func create_gold(amount: int, world_pos: Vector2, parent: Node) -> Combat
 	var variance = Vector2(randf_range(-15, 15), randf_range(-10, 10))
 	var spawn_pos = world_pos + Vector2(0, -25) + variance
 	return _create_text("+%d Gold" % amount, TextType.GOLD, spawn_pos, parent)
+
+static func create_item(item_name: String, quantity: int, rarity: String, world_pos: Vector2, parent: Node) -> CombatText:
+	# Item floats up-right with variance (offset from gold position)
+	var variance = Vector2(randf_range(-10, 20), randf_range(-10, 10))
+	var spawn_pos = world_pos + Vector2(15, -40) + variance
+	var display_text = "+%s" % item_name if quantity <= 1 else "+%s x%d" % [item_name, quantity]
+	var combat_text = _create_text(display_text, TextType.ITEM, spawn_pos, parent)
+	# Apply rarity color after creation
+	if combat_text:
+		combat_text._apply_rarity_color(rarity)
+	return combat_text
 
 static func create_skill_up(amount: float, category: String, world_pos: Vector2, parent: Node) -> CombatText:
 	# Skill floats up-right with variance

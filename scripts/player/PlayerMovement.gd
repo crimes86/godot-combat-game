@@ -157,10 +157,10 @@ func clamp_to_world_bounds(pos: Vector2) -> Vector2:
 	# Check if we're in TestHub/TradingHub - use expanded bounds
 	var current_scene = player.get_tree().current_scene
 	if current_scene and current_scene.name in ["TestHub", "TradingHub"]:
-		# TestHub bounds: X: -6000 to 6000, Y: -8000 to 8000
-		var x_min = -6000.0 + buffer
-		var x_max = 6000.0 - buffer
-		var y_min = -8000.0 + buffer
+		# TradingHub bounds: X: -12000 to 12000, Y: -14000 to 8000 (includes 1620 river expansion)
+		var x_min = -12000.0 + buffer
+		var x_max = 12000.0 - buffer
+		var y_min = -14000.0 + buffer
 		var y_max = 8000.0 - buffer
 		return Vector2(
 			clamp(pos.x, x_min, x_max),

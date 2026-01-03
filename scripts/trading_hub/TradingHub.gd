@@ -25,13 +25,19 @@ const EXIT_SOUTH_Y: float = 6800.0  # Exit when near end of south corridor (unus
 const EXIT_WEST_X: float = -4600.0  # Exit when in west passage gradient zone
 const EXIT_EAST_X: float = 4600.0   # Exit when in east passage gradient zone
 
-# Zone 2 preview area: Y=-2800 to Y=-8000 (massive 16,000 wide area)
+# Zone 2 layout (north of cave): Grass -> Forest -> Trapper Camp -> River
 # The cliff wall with cave mouth is at Y=-2000 to Y=-2800
-# Deep Zone 2 transition: Y < -7800 (blocked until full Zone 2 implemented)
 const ZONE2_CLIFF_Y: float = -2000.0        # Where cliff wall begins
 const ZONE2_GRASS_Y: float = -2800.0        # Where grass starts (above cliff)
-const ZONE2_DEEP_BLOCKED: float = -7800.0   # Blocked transition to full Zone 2
 const ZONE2_WIDTH: float = 8000.0           # Half-width (-8000 to 8000)
+
+# 1620 expansion zones (Missouri River / Trapper Camp)
+const FOREST_START_Y: float = -5500.0       # Where forest begins (grass ends)
+const FOREST_END_Y: float = -9500.0         # Where forest ends
+const TRAPPER_CAMP_START_Y: float = -9500.0 # Where trapper camp begins
+const TRAPPER_CAMP_END_Y: float = -11000.0  # Where trapper camp ends
+const RIVER_START_Y: float = -11000.0       # Where river begins (shoreline)
+const RIVER_END_Y: float = -14000.0         # Far shore of river
 
 # Zoom limits - restricted in cave, open in Zone 2
 const CAVE_ZOOM_MIN: float = 1.0            # Can't zoom out much in cave (tight corridors)
@@ -277,12 +283,12 @@ func _setup_camera() -> void:
 			var original_smoothing = camera.position_smoothing_enabled
 			camera.position_smoothing_enabled = false
 
-			# Camera limits for the full hub + Zone 2 preview layout:
-			# X: -8500 to +8500 (Zone 2 is 16,000 wide, cave extends to ±5500)
-			# Y: -8500 (Zone 2 deep) to +7000 (south corridor end)
-			camera.limit_left = -8500
-			camera.limit_right = 8500
-			camera.limit_top = -8500
+			# Camera limits for the full hub + 1620 expansion layout:
+			# X: -12500 to +12500 (full scene width with buffer)
+			# Y: -14500 (river far shore) to +7000 (south corridor end)
+			camera.limit_left = -12500
+			camera.limit_right = 12500
+			camera.limit_top = -14500
 			camera.limit_bottom = 7000
 
 			# Force camera to snap to player position immediately
@@ -621,10 +627,10 @@ func _check_exit() -> void:
 		_exit_to_zone1(1)
 		return
 
-	# Zone 2 deep boundary check - block full Zone 2 transition
-	if pos.y < ZONE2_DEEP_BLOCKED:
-		print("[TradingHub] Full Zone 2 not yet implemented!")
-		local_player.position.y = ZONE2_DEEP_BLOCKED + 50  # Push back
+	# River north boundary check - block going beyond the river
+	if pos.y < RIVER_END_Y:
+		print("[TradingHub] Beyond river - future expansion zone!")
+		local_player.position.y = RIVER_END_Y + 50  # Push back
 
 	# Zone 2 preview area boundaries (massive 16,000 wide area)
 	if pos.y < ZONE2_GRASS_Y:
@@ -2032,6 +2038,14 @@ func _spawn_zone2_trees() -> void:
 
 		# Skip area near cave entrance
 		if pos.y > -3500 and abs(pos.x) < 2500:
+			continue
+
+		# Skip trapper camp area (Y: -9500 to -11000, X: -800 to 800)
+		if pos.y < -9300 and pos.y > -11200 and abs(pos.x) < 800:
+			continue
+
+		# Skip river shoreline area (Y < -10800)
+		if pos.y < -10800:
 			continue
 
 		# Check minimum spacing

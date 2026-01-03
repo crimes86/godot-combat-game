@@ -1700,22 +1700,22 @@ func request_loot_gold(enemy_network_id: int) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int) -> void:
-	"""Server broadcasts that gold was looted from a corpse."""
+	"""Server broadcasts that gold was looted from a corpse.
+	Note: The looter already received gold via optimistic update in LootBodyUI.
+	This RPC handles corpse sync for all clients."""
+	LogManager.debug("_client_gold_looted: enemy=%d, looter=%d, gold=%d" % [enemy_network_id, looter_id, gold_amount], "loot")
+
+	# Note: Looter already added gold optimistically in LootBodyUI
+	# This RPC is mainly for syncing corpse state across all clients
+
+	# Handle corpse cleanup (only if enemy still exists)
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
+		LogManager.debug("_client_gold_looted: Enemy already gone, skipping corpse cleanup", "loot")
 		return
 
 	# Clear gold on this client
 	enemy.corpse_gold = 0
-
-	# Only the looter gets the gold added to their stats
-	if multiplayer.get_unique_id() == looter_id:
-		CharacterStats.add_gold(gold_amount)
-		LogManager.info("You looted %d gold" % gold_amount, "loot")
-
-		# Queue the notification for staggered display (prevents flash on AOE loot)
-		var corpse_pos = enemy.global_position if is_instance_valid(enemy) else Vector2.ZERO
-		_queue_gold_loot_notification(gold_amount, corpse_pos)
 
 	# Check if corpse is now fully empty
 	enemy.check_if_looted_empty()
@@ -1802,15 +1802,12 @@ func request_loot_item(enemy_network_id: int, item_index: int) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int, item_json: String) -> void:
-	"""Server broadcasts that an item was looted from a corpse."""
-	LogManager.debug("_client_item_looted received: enemy=%d, looter=%d, index=%d" % [enemy_network_id, looter_id, item_index], "loot")
+	"""Server broadcasts that an item was looted from a corpse.
+	Note: The looter already received item via optimistic update in LootBodyUI.
+	This RPC handles corpse sync for all clients."""
+	LogManager.debug("_client_item_looted: enemy=%d, looter=%d, index=%d" % [enemy_network_id, looter_id, item_index], "loot")
 
-	var enemy = get_enemy(enemy_network_id)
-	if not enemy or not is_instance_valid(enemy):
-		LogManager.debug("_client_item_looted: Enemy not found or invalid", "loot")
-		return
-
-	# Deserialize and validate item from JSON
+	# Deserialize item from JSON for corpse sync (need name for matching)
 	var item: Dictionary = {}
 	if item_json.length() > 0:
 		var parsed = JSON.parse_string(item_json)
@@ -1822,11 +1819,23 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 		else:
 			LogManager.warn("Failed to parse item JSON: %s" % item_json, "loot")
 			return
+	else:
+		LogManager.warn("Empty item_json in _client_item_looted", "loot")
+		return
 
 	var item_name = item.get("name", "")
 
+	# Note: Looter already added item and showed notification optimistically in LootBodyUI
+	# This RPC is mainly for syncing corpse state across all clients
+
+	# Handle corpse cleanup (only if enemy still exists)
+	var enemy = get_enemy(enemy_network_id)
+	if not enemy or not is_instance_valid(enemy):
+		LogManager.debug("_client_item_looted: Enemy already gone, skipping corpse cleanup", "loot")
+		return
+
 	# Remove item from local corpse loot
-	# For server: already removed in request_loot_item, skip removal but still process inventory
+	# For server: already removed in request_loot_item, skip removal
 	# For clients: need to remove from local corpse using the index provided by server
 	if not multiplayer.is_server():
 		var removed = false
@@ -1861,15 +1870,6 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 		if not removed:
 			LogManager.warn("Could not find '%s' (loot_id=%d) in corpse loot to remove (expected index %d)" % [item_name, loot_id, item_index], "loot")
 		LogManager.debug("Client corpse now has %d items" % enemy.corpse_loot.size(), "loot")
-
-	# Only the looter gets the item added to their inventory
-	if multiplayer.get_unique_id() == looter_id:
-		if InventorySystem.add_item(item):
-			var item_rarity = item.get("rarity", "Common")
-			LogManager.info("Looted: %s from corpse" % item_name, "loot")
-			NotificationManager.notify_item_added(item_name, 1, item_rarity)
-		else:
-			LogManager.warn("Inventory full! Cannot loot %s" % item_name, "inventory")
 
 	# Check if corpse is now fully empty
 	enemy.check_if_looted_empty()

@@ -1,6 +1,7 @@
-[gd_scene load_steps=7 format=3 uid="uid://c2ui1a8yb4sjg"]
+[gd_scene load_steps=8 format=3 uid="uid://c2ui1a8yb4sjg"]
 
 [ext_resource type="Script" uid="uid://cj7t06dyghm45" path="res://scripts/game_world.gd" id="1_0vfqx"]
+[ext_resource type="Script" path="res://scripts/wildlife/WildlifeSpawner.gd" id="8_wildlife"]
 [ext_resource type="PackedScene" uid="uid://campfire001" path="res://scenes/world/campfire.tscn" id="1_ywgp6"]
 [ext_resource type="Shader" uid="uid://cifouq3oevtjm" path="res://shaders/ground_variation.gdshader" id="4_ground"]
 [ext_resource type="PackedScene" path="res://scenes/npcs/vendor.tscn" id="6_6c6v5"]
@@ -43,3 +44,14 @@ position = Vector2(-6000, 0)
 
 [node name="Wanderer" parent="." instance=ExtResource("7_wanderer")]
 position = Vector2(-5750, 0)
+
+[node name="WildlifeSpawner" type="Node2D" parent="."]
+script = ExtResource("8_wildlife")
+spawn_area_min = Vector2(-8000, -4000)
+spawn_area_max = Vector2(15000, 4000)
+max_animals = 8
+spawn_interval = 4.0
+player_proximity_required = 3500.0
+despawn_distance = 5000.0
+rabbit_weight = 80
+fox_weight = 20
