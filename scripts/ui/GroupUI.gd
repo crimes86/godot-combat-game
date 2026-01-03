@@ -91,7 +91,11 @@ func _connect_signals() -> void:
 
 func _exit_tree() -> void:
 	# Disconnect signals to prevent memory leaks
-	var group_manager = get_node_or_null("/root/GroupManager")
+	# Use Engine.get_main_loop() to safely access autoloads even if node is outside scene tree
+	var scene_tree = Engine.get_main_loop() as SceneTree
+	var group_manager = null
+	if scene_tree and scene_tree.root:
+		group_manager = scene_tree.root.get_node_or_null("GroupManager")
 	if group_manager:
 		if group_manager.group_updated.is_connected(_on_group_updated):
 			group_manager.group_updated.disconnect(_on_group_updated)

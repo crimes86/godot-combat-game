@@ -663,8 +663,12 @@ func _exit_tree() -> void:
 	# Restore original zoom limits when leaving hub
 	if local_player and is_instance_valid(local_player):
 		_restore_zoom_limits()
-	if has_node("/root/TradingHubManager"):
-		get_node("/root/TradingHubManager").set_player_in_hub(false)
+	# Use Engine.get_main_loop() to safely access autoloads even if node is outside scene tree
+	var scene_tree = Engine.get_main_loop() as SceneTree
+	if scene_tree and scene_tree.root:
+		var hub_manager = scene_tree.root.get_node_or_null("TradingHubManager")
+		if hub_manager:
+			hub_manager.set_player_in_hub(false)
 
 func _update_zoom_limits() -> void:
 	"""Update camera zoom limits based on whether player is in cave or Zone 2"""

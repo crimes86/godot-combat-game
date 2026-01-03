@@ -125,10 +125,13 @@ signal corpse_looted_empty(corpse)  # Emitted when all items taken from corpse
 
 func _exit_tree() -> void:
 	# Unregister from NetworkEnemyManager when freed to prevent "freed instance" crashes
+	# Use Engine.get_main_loop() to safely access autoloads even if node is outside scene tree
 	if network_id > 0:
-		var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-		if network_enemy_mgr:
-			network_enemy_mgr.unregister_enemy(network_id)
+		var scene_tree = Engine.get_main_loop() as SceneTree
+		if scene_tree and scene_tree.root:
+			var network_enemy_mgr = scene_tree.root.get_node_or_null("NetworkEnemyManager")
+			if network_enemy_mgr:
+				network_enemy_mgr.unregister_enemy(network_id)
 
 # ============================================
 # HP SCALING (REBALANCED)

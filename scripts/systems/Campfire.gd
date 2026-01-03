@@ -291,6 +291,22 @@ func _is_local_player(body: Node2D) -> bool:
 	var player_authority = body.get_multiplayer_authority() if body.has_method("get_multiplayer_authority") else 1
 	return player_authority == local_peer_id
 
+@rpc("authority", "call_remote", "reliable")
+func _sync_campfire_heal(current_hp: float, max_hp: float) -> void:
+	"""Server syncs campfire healing to client."""
+	# Find local player and update their health
+	var game_world = get_node_or_null("/root/GameWorld")
+	if game_world:
+		var players_container = game_world.get_node_or_null("Players")
+		if players_container:
+			for p in players_container.get_children():
+				if p.get_multiplayer_authority() == multiplayer.get_unique_id():
+					p.current_health = current_hp
+					p.max_health = max_hp
+					if p.health_bar and p.health_bar.has_method("update_health"):
+						p.health_bar.update_health(current_hp, max_hp)
+					break
+
 func _heal_all_players_in_warmth(delta: float) -> void:
 	"""Heal all players currently in campfire warmth.
 	- Community campfires: ALL players in warmth get healed using shared fuel pool.
@@ -340,7 +356,15 @@ func _heal_all_players_in_warmth(delta: float) -> void:
 
 			# Apply healing using this player's pool rate
 			if p.has_method("heal"):
-				p.heal(player_heal_rate * heal_interval)
+				p.heal(player_heal_rate * heal_interval, "campfire")
+
+				# Sync health to client (server-side healing needs to be synced)
+				# Extra safety: verify player is still valid and connected before RPC
+				if multiplayer.is_server() and is_instance_valid(p) and "current_health" in p and "max_health" in p:
+					var peer_id = p.get_multiplayer_authority()
+					# Only send RPC if peer is still connected
+					if peer_id != 1 and peer_id in multiplayer.get_peers():
+						_sync_campfire_heal.rpc_id(peer_id, p.current_health, p.max_health)
 
 				# Only play healing sound for LOCAL player
 				if _is_local_player(p):

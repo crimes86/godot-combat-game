@@ -1721,10 +1721,13 @@ func create_lava_pool(pos: Vector2, container: Node2D, rng: RandomNumberGenerato
 		# Connect discovery signal
 		discovery_area.body_entered.connect(func(body):
 			if body.is_in_group("player"):
-				var quest_manager = discovery_area.get_node_or_null("/root/QuestManager")
-				if quest_manager and quest_manager.has_method("on_location_discovered"):
-					quest_manager.on_location_discovered("lava_pool")
-					print("🔥 Discovered lava pool!")
+				# Use Engine.get_main_loop() to safely access autoloads even if discovery_area is being freed
+				var scene_tree = Engine.get_main_loop() as SceneTree
+				if scene_tree and scene_tree.root:
+					var quest_manager = scene_tree.root.get_node_or_null("QuestManager")
+					if quest_manager and quest_manager.has_method("on_location_discovered"):
+						quest_manager.on_location_discovered("lava_pool")
+						print("🔥 Discovered lava pool!")
 		)
 
 	container.add_child(lava_pool)

@@ -111,7 +111,7 @@ var screenshot_mode = false
 var tutorial_skeletons: Array = []  # Active tutorial skeletons
 var dead_tutorial_skeletons: Array = []  # Pending respawns: [{position, level, death_time}]
 const TUTORIAL_RESPAWN_TIME: float = 90.0  # Match ChunkAwareSpawnManager respawn time
-const TUTORIAL_MIN_CAMPFIRE_DISTANCE: float = 800.0  # Minimum distance from campfire for respawns
+const TUTORIAL_MIN_CAMPFIRE_DISTANCE: float = 1100.0  # Minimum distance from campfire for respawns
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DEBUG TOGGLES - Disable these one by one to find freeze cause
@@ -3000,25 +3000,26 @@ func spawn_tutorial_skeletons():
 	var campfire_pos = CAMPFIRE_POS
 
 	# Spawn positions in a ring well outside the safe zone
-	# Place them at 850-1000 radius so they don't aggro players at campfire
+	# Place them at 1100-1300 radius so they don't aggro players at campfire
+	# The campfire safe zone is 250 units, but spawns should be much further to avoid walk-in
 	var spawn_positions = [
 		# Level 1 skeletons (10 total, spread around) - noob practice targets
-		{"offset": Vector2(900, -150), "level": 1},   # East-north
-		{"offset": Vector2(900, 150), "level": 1},    # East-south
-		{"offset": Vector2(920, 0), "level": 1},      # East center
-		{"offset": Vector2(-900, 0), "level": 1},     # West
-		{"offset": Vector2(-880, 200), "level": 1},   # West-south
-		{"offset": Vector2(-880, -200), "level": 1},  # West-north
-		{"offset": Vector2(0, 880), "level": 1},      # South
-		{"offset": Vector2(250, 860), "level": 1},    # South-east
-		{"offset": Vector2(-250, 860), "level": 1},   # South-west
-		{"offset": Vector2(0, -900), "level": 1},     # North
+		{"offset": Vector2(1100, -200), "level": 1},   # East-north
+		{"offset": Vector2(1100, 200), "level": 1},    # East-south
+		{"offset": Vector2(1150, 0), "level": 1},      # East center
+		{"offset": Vector2(-1100, 0), "level": 1},     # West
+		{"offset": Vector2(-1100, 250), "level": 1},   # West-south
+		{"offset": Vector2(-1100, -250), "level": 1},  # West-north
+		{"offset": Vector2(0, 1100), "level": 1},      # South
+		{"offset": Vector2(300, 1100), "level": 1},    # South-east
+		{"offset": Vector2(-300, 1100), "level": 1},   # South-west
+		{"offset": Vector2(0, -1100), "level": 1},     # North
 		# Level 2 skeletons (5 total, slightly further)
-		{"offset": Vector2(1000, -350), "level": 2},  # East-north far
-		{"offset": Vector2(1000, 350), "level": 2},   # East-south far
-		{"offset": Vector2(-950, -250), "level": 2},  # West-north
-		{"offset": Vector2(-950, 250), "level": 2},   # West-south
-		{"offset": Vector2(0, -1000), "level": 2},    # North far
+		{"offset": Vector2(1200, -400), "level": 2},  # East-north far
+		{"offset": Vector2(1200, 400), "level": 2},   # East-south far
+		{"offset": Vector2(-1150, -300), "level": 2},  # West-north
+		{"offset": Vector2(-1150, 300), "level": 2},   # West-south
+		{"offset": Vector2(0, -1200), "level": 2},    # North far
 	]
 
 	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
@@ -3060,8 +3061,10 @@ func _on_tutorial_skeleton_died(spawn_pos: Vector2, level: int) -> void:
 		"level": level,
 		"death_time": Time.get_ticks_msec() / 1000.0
 	})
-	print("💀 [RESPAWN] Tutorial skeleton died at (%d, %d), added to respawn queue (total pending: %d)" % [
-		int(spawn_pos.x), int(spawn_pos.y), dead_tutorial_skeletons.size()
+	var campfire = CAMPFIRE_POS
+	var dist = spawn_pos.distance_to(campfire)
+	print("💀 [RESPAWN] Tutorial skeleton died, original spawn=(%d, %d), dist_from_campfire=%.0f, pending=%d" % [
+		int(spawn_pos.x), int(spawn_pos.y), dist, dead_tutorial_skeletons.size()
 	])
 
 func check_tutorial_respawns() -> void:

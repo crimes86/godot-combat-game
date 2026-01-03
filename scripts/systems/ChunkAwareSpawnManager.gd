@@ -767,8 +767,26 @@ func _on_roaming_enemy_died(enemy: Node, chunk_key: String, enemy_type: String) 
 
 	# Record death for respawn
 	if respawn_time > 0:
+		# Use death position, but if it's in a safe zone, push it out
+		var death_pos = enemy.global_position
+		var respawn_pos = death_pos
+
+		# Check if death position is in a safe zone - if so, push it out
+		for zone in SAFE_ZONES:
+			var dist = death_pos.distance_to(zone.pos)
+			if dist < zone.radius + 200.0:  # Add buffer to keep enemies well outside
+				# Push position outward from safe zone center
+				var direction = (death_pos - zone.pos).normalized()
+				if direction == Vector2.ZERO:
+					direction = Vector2.RIGHT
+				respawn_pos = zone.pos + direction * (zone.radius + 300.0)
+				print("⚠️ [RESPAWN] Roaming %s died in safe zone, pushing respawn from (%d,%d) to (%d,%d)" % [
+					enemy_type, int(death_pos.x), int(death_pos.y), int(respawn_pos.x), int(respawn_pos.y)
+				])
+				break
+
 		chunk_data.dead_enemies.append({
-			"position": enemy.global_position,
+			"position": respawn_pos,
 			"level": enemy.enemy_level,
 			"death_time": Time.get_ticks_msec() / 1000.0,
 			"enemy_type": enemy_type,
@@ -1006,8 +1024,26 @@ func _on_enemy_died(enemy: Node, chunk_key: String) -> void:
 		elif enemy.name.to_lower().contains("spider"):
 			enemy_type = "spider"
 
+		# Use death position, but if it's in a safe zone, push it out
+		var death_pos = enemy.global_position
+		var respawn_pos = death_pos
+
+		# Check if death position is in a safe zone - if so, push it out
+		for zone in SAFE_ZONES:
+			var dist = death_pos.distance_to(zone.pos)
+			if dist < zone.radius + 200.0:  # Add buffer to keep enemies well outside
+				# Push position outward from safe zone center
+				var direction = (death_pos - zone.pos).normalized()
+				if direction == Vector2.ZERO:
+					direction = Vector2.RIGHT
+				respawn_pos = zone.pos + direction * (zone.radius + 300.0)
+				print("⚠️ [RESPAWN] %s died in safe zone, pushing respawn from (%d,%d) to (%d,%d)" % [
+					enemy_type, int(death_pos.x), int(death_pos.y), int(respawn_pos.x), int(respawn_pos.y)
+				])
+				break
+
 		chunk_data.dead_enemies.append({
-			"position": enemy.global_position,
+			"position": respawn_pos,
 			"level": enemy.enemy_level,
 			"death_time": Time.get_ticks_msec() / 1000.0,
 			"enemy_type": enemy_type
