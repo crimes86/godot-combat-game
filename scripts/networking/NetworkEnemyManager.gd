@@ -157,6 +157,13 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	violation_cooldowns.erase(peer_id)
 	client_known_enemies.erase(peer_id)  # Clean up enemy visibility tracking
 
+func _is_peer_connected(peer_id: int) -> bool:
+	"""Check if a peer is still connected before sending RPCs.
+	Prevents 'unknown peer ID' errors when peers disconnect mid-sync."""
+	if peer_id == 1:
+		return true  # Server is always "connected"
+	return peer_id in multiplayer.get_peers()
+
 func _record_violation(peer_id: int, violation_type: String) -> bool:
 	"""Record an anti-cheat violation and apply exponential backoff.
 	Returns true if the action should be blocked, false if just warned."""
@@ -858,6 +865,10 @@ func _sync_enemy_positions() -> void:
 		if peer_id == 1:
 			continue
 
+		# Skip if peer disconnected during iteration
+		if not _is_peer_connected(peer_id):
+			continue
+
 		var player_pos = player_positions[peer_id]
 		var positions_for_player: Dictionary = {}
 
@@ -975,6 +986,10 @@ func _update_client_enemy_visibility() -> void:
 
 	# For each client, check which enemies should be visible
 	for peer_id in player_positions:
+		# Skip if peer disconnected during iteration
+		if not _is_peer_connected(peer_id):
+			continue
+
 		var player_pos = player_positions[peer_id]
 
 		# Initialize tracking dict for this peer if needed
@@ -1007,6 +1022,10 @@ func _update_client_enemy_visibility() -> void:
 			# Else: enemy is in hysteresis zone, don't change state
 
 		# Spawn new enemies for this client
+		# Check peer still connected before sending batch of RPCs
+		if not _is_peer_connected(peer_id):
+			continue
+
 		for network_id in enemies_to_spawn:
 			var enemy = enemies[network_id]
 			if not is_instance_valid(enemy):
@@ -1023,6 +1042,10 @@ func _update_client_enemy_visibility() -> void:
 				spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path)
 
 		# Despawn enemies that left view for this client
+		# Check peer again before despawn batch
+		if not _is_peer_connected(peer_id):
+			continue
+
 		for network_id in enemies_to_despawn:
 			known.erase(network_id)
 			despawn_enemy_for_client.rpc_id(peer_id, network_id)
@@ -1054,6 +1077,10 @@ func spawn_enemy_for_nearby_clients(network_id: int, enemy: Node) -> void:
 		var peer_id = player.get_multiplayer_authority()
 		if peer_id == 1:
 			continue  # Skip server
+
+		# Skip if peer disconnected
+		if not _is_peer_connected(peer_id):
+			continue
 
 		var distance = player.global_position.distance_to(enemy_pos)
 		if distance <= SPAWN_RADIUS:
@@ -1334,6 +1361,10 @@ func _on_peer_connected(peer_id: int) -> void:
 		var distance = player_pos.distance_to(enemy.global_position)
 		if distance > SPAWN_RADIUS:
 			continue  # Skip - too far from player
+
+		# Check peer still connected before sending RPC
+		if not _is_peer_connected(peer_id):
+			break
 
 		# Mark as known
 		client_known_enemies[peer_id][network_id] = true
