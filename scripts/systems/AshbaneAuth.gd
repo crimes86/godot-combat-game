@@ -795,7 +795,7 @@ func _handle_heartbeat_failure() -> void:
 		_set_connection_status(ConnectionStatus.CONNECTING)  # Show "reconnecting" state
 
 func _on_data_sync_tick() -> void:
-	"""Periodic sync of achievement and forge data"""
+	"""Periodic sync of achievement data (NOT forge items - those are event-driven)"""
 	if connection_status != ConnectionStatus.CONNECTED:
 		return  # Don't try to sync if disconnected
 
@@ -805,9 +805,8 @@ func _on_data_sync_tick() -> void:
 	LogManager.info("Syncing achievement data...", "ashbane")
 	_fetch_profile()
 
-	# Also refresh forge items
-	if ForgeItemManager:
-		ForgeItemManager.fetch_forged_items()
+	# NOTE: Forge items are NOT polled here - they're fetched once on login
+	# and refreshed only after specific events (forge, trade, bridge-in/out)
 
 func _refresh_all_data() -> void:
 	"""Refresh all data after connection is restored"""
