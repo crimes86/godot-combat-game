@@ -1160,6 +1160,54 @@ class GameLog(Base):
     user = relationship("User", backref="game_logs")
 
 
+class GameEventLog(Base):
+    """
+    Gameplay telemetry for kills, loot, and combat events.
+
+    Used for anti-cheat detection, audit trails, and analytics.
+    Separate from GameLog which handles debug/error logs.
+
+    Event types:
+    - kill: Enemy killed (xp_granted, gold_dropped, enemy_type)
+    - loot_gold: Gold picked up from corpse/chest
+    - loot_item: Item picked up from corpse/chest
+    - damage_dealt: Damage dealt to enemy (for anomaly detection)
+    - resource_gather: Wood/stone harvested
+    """
+    __tablename__ = 'game_event_logs'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    character_id = Column(Integer, ForeignKey('characters.id'), nullable=True, index=True)
+
+    # Event classification
+    event_type = Column(String(32), nullable=False, index=True)  # kill, loot_gold, loot_item, etc.
+    event_data = Column(JSON, nullable=False)  # Flexible payload per event type
+
+    # Context
+    session_id = Column(String(64), nullable=True, index=True)
+    is_multiplayer = Column(Boolean, default=False)
+    zone_id = Column(String(32), nullable=True, index=True)
+    position_x = Column(Float, nullable=True)
+    position_y = Column(Float, nullable=True)
+
+    # Timestamps
+    client_timestamp = Column(DateTime, nullable=True)  # Client-reported time
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Request metadata
+    ip_address = Column(String(45), nullable=True)
+    client_version = Column(String(16), nullable=True)
+
+    # Anti-cheat flags
+    is_suspicious = Column(Boolean, default=False, index=True)
+    suspicious_reason = Column(String(128), nullable=True)
+
+    # Relationships
+    user = relationship("User")
+    character = relationship("Character")
+
+
 class SeasonalRanking(Base):
     """
     All-time leaderboard tracking cumulative tree performance (Fix #9).
