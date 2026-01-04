@@ -481,7 +481,9 @@ func save_player_data(username: String, data: Dictionary) -> bool:
 		"position_x", "position_y", "current_phase",
 		"inventory", "equipment", "appearance",
 		"total_playtime_seconds",
-		"quests"
+		"quests",
+		# Duel statistics
+		"duel_wins", "duel_losses", "duel_daily_opponents"
 	]
 
 	for field in allowed_fields:
@@ -506,6 +508,84 @@ func reset_all_online_status() -> void:
 		players_data[username]["is_online"] = false
 	save_database()
 	LogManager.info("Reset online status for all players", "database")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DUEL STATISTICS
+# ═══════════════════════════════════════════════════════════════════════════
+
+func record_duel_result(winner_username: String, loser_username: String) -> bool:
+	"""Record a duel result. Returns true if this was a valid (countable) duel."""
+	var today = Time.get_date_string_from_system()
+
+	# Check if winner already dueled loser today (anti-abuse)
+	if _has_dueled_today(winner_username, loser_username):
+		LogManager.info("Duel not counted (already dueled today): %s vs %s" % [winner_username, loser_username], "duel")
+		return false
+
+	# Update winner stats
+	if players_data.has(winner_username):
+		var winner = players_data[winner_username]
+		winner["duel_wins"] = winner.get("duel_wins", 0) + 1
+		_add_daily_opponent(winner_username, loser_username, today)
+
+	# Update loser stats
+	if players_data.has(loser_username):
+		var loser = players_data[loser_username]
+		loser["duel_losses"] = loser.get("duel_losses", 0) + 1
+		_add_daily_opponent(loser_username, winner_username, today)
+
+	save_database()
+	LogManager.info("Duel recorded: %s defeated %s" % [winner_username, loser_username], "duel")
+	return true
+
+func _has_dueled_today(username: String, opponent: String) -> bool:
+	"""Check if player has already dueled this opponent today"""
+	if not players_data.has(username):
+		return false
+
+	var today = Time.get_date_string_from_system()
+	var daily = players_data[username].get("duel_daily_opponents", {})
+	var today_opponents = daily.get(today, [])
+	return opponent in today_opponents
+
+func _add_daily_opponent(username: String, opponent: String, today: String) -> void:
+	"""Add opponent to today's dueled list and clean up old entries"""
+	if not players_data.has(username):
+		return
+
+	var player = players_data[username]
+	if not player.has("duel_daily_opponents"):
+		player["duel_daily_opponents"] = {}
+
+	# Clean up entries older than today
+	var daily = player["duel_daily_opponents"]
+	var to_remove = []
+	for date_key in daily.keys():
+		if date_key != today:
+			to_remove.append(date_key)
+	for old_date in to_remove:
+		daily.erase(old_date)
+
+	# Add today's opponent
+	if not daily.has(today):
+		daily[today] = []
+	if opponent not in daily[today]:
+		daily[today].append(opponent)
+
+func get_duel_stats(username: String) -> Dictionary:
+	"""Get duel statistics for a player"""
+	if not players_data.has(username):
+		return {"wins": 0, "losses": 0, "win_rate": 0.0}
+
+	var player = players_data[username]
+	var wins = player.get("duel_wins", 0)
+	var losses = player.get("duel_losses", 0)
+	var total = wins + losses
+	var win_rate = 0.0
+	if total > 0:
+		win_rate = float(wins) / float(total) * 100.0
+
+	return {"wins": wins, "losses": losses, "win_rate": win_rate}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RATE LIMITING (prevent brute force)

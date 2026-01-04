@@ -193,6 +193,47 @@ func _end_duel_local(winner_id: int, loser_id: int) -> void:
 	duel_ended.emit(winner_id, loser_id)
 	LogManager.info("END_COMPLETE winner=%d loser=%d peer=%d" % [winner_id, loser_id, my_id], "duel")
 
+	# Record duel result (server only)
+	if multiplayer.is_server():
+		_record_duel_stats(winner_id, loser_id)
+
+func _record_duel_stats(winner_id: int, loser_id: int) -> void:
+	"""Record duel result to database (server only).
+	Guest duels are allowed but not tracked to prevent feeding."""
+	var winner_info = _get_player_auth_info(winner_id)
+	var loser_info = _get_player_auth_info(loser_id)
+
+	# Skip if either player is a guest (can duel, but stats not tracked)
+	if winner_info.is_guest or loser_info.is_guest:
+		LogManager.info("Duel not tracked (guest involved): %s vs %s" % [winner_info.username, loser_info.username], "duel")
+		return
+
+	if winner_info.username.is_empty() or loser_info.username.is_empty():
+		LogManager.warn("Cannot record duel: missing username (winner=%s, loser=%s)" % [winner_info.username, loser_info.username], "duel")
+		return
+
+	if DatabaseManager:
+		var counted = DatabaseManager.record_duel_result(winner_info.username, loser_info.username)
+		if counted:
+			LogManager.info("DUEL_RECORDED winner=%s loser=%s" % [winner_info.username, loser_info.username], "duel")
+
+func _get_player_auth_info(peer_id: int) -> Dictionary:
+	"""Get player auth info (username, is_guest) from peer ID via NetworkManager"""
+	var default_info = {"username": "", "is_guest": true}
+
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if not network_manager:
+		return default_info
+
+	if not network_manager.authenticated_players.has(peer_id):
+		return default_info
+
+	var auth = network_manager.authenticated_players[peer_id]
+	return {
+		"username": auth.get("username", ""),
+		"is_guest": auth.get("is_guest", true)
+	}
+
 func _cancel_duel_local(player1_id: int, player2_id: int, reason: String) -> void:
 	"""Cancel duel without declaring a winner"""
 	active_duels.erase(player1_id)
