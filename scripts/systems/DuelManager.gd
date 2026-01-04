@@ -776,9 +776,11 @@ func apply_pvp_damage(target_id: int, damage: int, attacker_id: int, new_health:
 		target_player.take_damage(damage, "player", attacker_id)
 		LogManager.info("DMG_RPC RECV tgt=%d dmg=%d atk=%d peer=%d" % [target_id, damage, attacker_id, my_id], "duel")
 	else:
-		# Non-target clients: Update visual health bar immediately (reliable sync)
+		# Non-target clients: Update visual health bar and show combat text
 		if new_health >= 0 and max_health > 0:
 			_update_remote_health_bar(target_player, new_health, max_health)
+		# Show combat text on attacker's screen (and other observers)
+		_spawn_remote_combat_text(target_player, damage)
 
 func _update_remote_health_bar(player_node: Node, new_health: int, max_health: int) -> void:
 	"""Update a remote player's health bar visual (called on non-target clients)"""
@@ -795,6 +797,14 @@ func _update_remote_health_bar(player_node: Node, new_health: int, max_health: i
 	var health_bar = player_node.get_node_or_null("HealthBar")
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(new_health, max_health)
+
+func _spawn_remote_combat_text(target_player: Node, damage: int) -> void:
+	"""Spawn combat text on non-target clients (attacker sees damage numbers)"""
+	if not target_player or not is_instance_valid(target_player):
+		return
+
+	# Use CombatText static method to show damage at target's position
+	CombatText.create_damage(damage, target_player.global_position, get_tree().root, Vector2.ZERO)
 
 # ============================================
 # DAMAGE VALIDATION HELPERS
