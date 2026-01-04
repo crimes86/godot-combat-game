@@ -4866,6 +4866,10 @@ func create_portrait_hud() -> void:
 		# Update health on existing HUD
 		if portrait_hud.has_method("update_health"):
 			portrait_hud.update_health(current_health, max_health)
+		# Update player name (may have changed after auth)
+		if portrait_hud.has_method("set_player_name") and NetworkManager:
+			var player_name = NetworkManager.player_name if NetworkManager.player_name else "Player"
+			portrait_hud.set_player_name(player_name)
 		print("🖼️ Portrait HUD already exists, reusing existing instance")
 		return
 

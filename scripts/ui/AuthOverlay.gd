@@ -199,12 +199,21 @@ func _finish_auth(user_data: Dictionary, is_new_character: bool = true) -> void:
 
 		LogManager.info("Existing character detected - redirecting to Armory", "auth")
 
+		# Update NetworkManager player name for when they join a new game
+		if NetworkManager:
+			NetworkManager.set_player_name(display_name)
+
 		await get_tree().create_timer(1.5).timeout
 		_hide_overlay()
 
 		# Disconnect from current game if in multiplayer
 		if NetworkManager and NetworkManager.peer != null:
 			NetworkManager.close_connection()
+
+		# Destroy PortraitHUD - it shouldn't persist into Armory
+		var portrait_hud = get_node_or_null("/root/PortraitHUD")
+		if portrait_hud:
+			portrait_hud.queue_free()
 
 		# Go to Armory scene
 		get_tree().change_scene_to_file("res://scenes/ui/Armory.tscn")
