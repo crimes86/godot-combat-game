@@ -10752,13 +10752,13 @@ func _on_host_server_pressed() -> void:
 	if AshbaneAuth:
 		host_player_data = {
 			"username": AshbaneAuth.username,
-			"character_name": AshbaneAuth.username,
+			"character_name": AshbaneAuth.display_name if AshbaneAuth.display_name else AshbaneAuth.username,
 			"tier": profile.get("tier", "initiate"),
 			"total_achievements": profile.get("total_achievements", 0)
 		}
 
-	# Set player name
-	var player_name = AshbaneAuth.username if AshbaneAuth else "Host"
+	# Set player name (prefer display_name over internal username)
+	var player_name = AshbaneAuth.display_name if AshbaneAuth and AshbaneAuth.display_name else "Host"
 	NetworkManager.set_player_name(player_name)
 
 	LogManager.info("Starting LAN server on port %d" % LAN_SERVER_PORT, "armory")

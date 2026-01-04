@@ -118,10 +118,11 @@ func host_game(port: int = DEFAULT_PORT, host_player_data: Dictionary = {}) -> b
 		var host_id = multiplayer.get_unique_id()
 		var host_is_guest = host_player_data.is_empty()
 
-		# Use username from player_data if authenticated, otherwise use random player_name
+		# Use display_name/character_name from player_data if authenticated, otherwise use random player_name
 		var display_name = player_name
 		if not host_is_guest:
-			display_name = host_player_data.get("character_name", host_player_data.get("username", player_name))
+			# Prefer display_name > character_name > username
+			display_name = host_player_data.get("display_name", host_player_data.get("character_name", host_player_data.get("username", player_name)))
 			player_name = display_name  # Update player_name to match authenticated name
 
 		connected_players[host_id] = {
@@ -782,7 +783,8 @@ func receive_login_response(success: bool, error: String, player_data: Dictionar
 		is_authenticated = true
 		is_guest = player_data.get("id", 0) < 0  # Negative ID = guest
 		local_player_data = player_data
-		player_name = player_data.get("character_name", player_data.get("username", "Player"))
+		# Prefer display_name > character_name > username > "Player"
+		player_name = player_data.get("display_name", player_data.get("character_name", player_data.get("username", "Player")))
 
 		# Start auto-save for non-guest players
 		if not is_guest and DatabaseManager:
