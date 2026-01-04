@@ -1712,6 +1712,11 @@ func _client_gold_looted(enemy_network_id: int, looter_id: int, gold_amount: int
 	This RPC handles corpse sync for all clients."""
 	LogManager.debug("_client_gold_looted: enemy=%d, looter=%d, gold=%d" % [enemy_network_id, looter_id, gold_amount], "loot")
 
+	# Log gold loot to backend telemetry (only for the looter)
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer else 1
+	if looter_id == my_peer_id and AshbaneAuth and AshbaneAuth.is_authenticated:
+		TelemetryManager.log_loot_gold("enemy_corpse", str(enemy_network_id), gold_amount)
+
 	# Note: Looter already added gold optimistically in LootBodyUI
 	# This RPC is mainly for syncing corpse state across all clients
 
@@ -1831,6 +1836,14 @@ func _client_item_looted(enemy_network_id: int, looter_id: int, item_index: int,
 		return
 
 	var item_name = item.get("name", "")
+
+	# Log item loot to backend telemetry (only for the looter)
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer else 1
+	if looter_id == my_peer_id and AshbaneAuth and AshbaneAuth.is_authenticated:
+		var item_id = item.get("id", item_name.to_snake_case())
+		var item_rarity = item.get("rarity", "Common")
+		var quantity = item.get("quantity", 1)
+		TelemetryManager.log_loot_item("enemy_corpse", str(enemy_network_id), item_id, item_name, item_rarity, quantity)
 
 	# Note: Looter already added item and showed notification optimistically in LootBodyUI
 	# This RPC is mainly for syncing corpse state across all clients

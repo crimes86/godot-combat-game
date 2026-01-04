@@ -1572,6 +1572,14 @@ func die() -> void:
 					var category = WeaponSkillManager.get_category_for_weapon(weapon_type)
 					CombatText.create_skill_up(skill_gain, category, global_position, game_world)
 
+			# Log kill to backend telemetry (anti-cheat audit trail)
+			if AshbaneAuth and AshbaneAuth.is_authenticated:
+				var type_name = get_script().get_global_name().to_lower() if get_script() else "skeleton"
+				if type_name == "enemy" or type_name.is_empty():
+					type_name = "skeleton"
+				var weapon_id = CharacterStats.equipped_weapon.weapon_name if CharacterStats.equipped_weapon else "unarmed"
+				TelemetryManager.log_kill(type_name, enemy_level, xp_reward, gold_drop, weapon_id, false, 0, get_meta("network_id", 0))
+
 	# Store gold in corpse for looting (skip if already set by server in multiplayer)
 	if corpse_gold == 0:
 		corpse_gold = gold_drop
