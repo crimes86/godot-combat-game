@@ -15,8 +15,15 @@ class_name Campfire
 ##   and ALL players in warmth radius receive healing and crit buffs. Used for spawn/home areas.
 ## - Competitive campfires (is_community_campfire = false): Ownership-based system where only
 ##   the owning group benefits from the fire. Used for ruins and contested areas.
+##
+## Allegiance System (use_allegiance_system = true):
+## - Player-dropped campfires use allegiance instead of party for ownership
+## - Same allegiance players can contribute fuel and receive buffs
+## - Rogue players have individual campfires (can't share with anyone)
+## - Different allegiances cannot benefit from each other's fires
 
 @export var is_community_campfire: bool = false  # If true, all players can fuel and benefit (home/spawn campfires)
+@export var use_allegiance_system: bool = false  # If true, uses allegiance instead of party for ownership
 @export var starts_unlit: bool = false  # If true, campfire starts unlit and requires fuel to ignite
 
 # Unlit state - player-placed campfires start unlit
@@ -71,6 +78,7 @@ const COMMUNITY_POOL_KEY: int = -2  # Key for shared community campfire pool
 # Campfire ownership system - only one group can own and benefit from a campfire at a time
 var owner_pool_key: int = NO_OWNER  # The group/player that owns this campfire
 var owner_group_members: Array = []  # Peer IDs of all members in the owning group
+var owner_allegiance: String = ""  # The allegiance ID of the owner (for allegiance-based campfires)
 const RELEASE_TIMER_DURATION: float = 60.0  # Seconds until campfire becomes free when no owners nearby
 var release_timer: float = 0.0  # Current countdown (0 = not counting)
 var is_releasing: bool = false  # True when countdown is active
@@ -1906,7 +1914,9 @@ func _can_local_player_extinguish() -> bool:
 	return false
 
 func _is_player_owner(player_node: Node) -> bool:
-	"""Check if a specific player node is part of the owning group."""
+	"""Check if a specific player node is part of the owning group.
+	- Allegiance system: Checks if player's allegiance matches owner's allegiance
+	- Party system: Checks if player's peer ID is in owner group members"""
 	if owner_pool_key == NO_OWNER:
 		return false
 
@@ -1915,41 +1925,79 @@ func _is_player_owner(player_node: Node) -> bool:
 	if player_node.has_method("get_multiplayer_authority"):
 		player_peer_id = player_node.get_multiplayer_authority()
 
+	# Allegiance-based ownership check
+	if use_allegiance_system:
+		var player_allegiance = _get_player_allegiance(player_node)
+
+		# Owner is a rogue - only match by peer ID (rogues can't share)
+		if owner_allegiance.is_empty():
+			return player_peer_id in owner_group_members
+
+		# Player is a rogue - they can't benefit from non-rogue campfires
+		if player_allegiance.is_empty():
+			return false
+
+		# Check if allegiances match (same allegiance = same team)
+		return player_allegiance == owner_allegiance
+
+	# Party-based ownership check (default)
 	return player_peer_id in owner_group_members
 
 func _claim_ownership() -> void:
-	"""Claim ownership of this campfire for the local player's group."""
+	"""Claim ownership of this campfire for the local player's group/allegiance."""
 	var pool_key = _get_player_fuel_pool_key()
 	owner_pool_key = pool_key
+
+	# Track owner's allegiance for allegiance-based campfires
+	if use_allegiance_system:
+		var char_stats = get_node_or_null("/root/CharacterStats")
+		if char_stats:
+			owner_allegiance = char_stats.get_allegiance()
+		else:
+			owner_allegiance = ""
+		print("🔥 Campfire claimed by allegiance: '%s' (pool_key: %d)" % [owner_allegiance if not owner_allegiance.is_empty() else "ROGUE", pool_key])
+	else:
+		owner_allegiance = ""  # Not using allegiance system
+		print("🔥 Campfire claimed by pool_key: %d, owner_members: %s" % [pool_key, owner_group_members])
+
 	_update_owner_group_members()
 	is_releasing = false
 	release_timer = 0.0
 	_update_release_timer_ui()
-	print("🔥 Campfire claimed by pool_key: %d, owner_members: %s" % [pool_key, owner_group_members])
 
 	# Sync ownership to all clients
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-		_sync_ownership_to_clients.rpc(owner_pool_key, owner_group_members)
+		_sync_ownership_to_clients.rpc(owner_pool_key, owner_group_members, owner_allegiance)
 
 func _release_ownership() -> void:
 	"""Release ownership of this campfire, making it claimable."""
 	print("🔥 Campfire released from pool_key: %d" % owner_pool_key)
 	owner_pool_key = NO_OWNER
 	owner_group_members.clear()
+	owner_allegiance = ""
 	is_releasing = false
 	release_timer = 0.0
 	_update_release_timer_ui()
 
 	# Sync release to all clients
 	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-		_sync_ownership_to_clients.rpc(NO_OWNER, [])
+		_sync_ownership_to_clients.rpc(NO_OWNER, [], "")
 
 func _update_owner_group_members() -> void:
-	"""Update the list of peer IDs in the owning group."""
+	"""Update the list of peer IDs in the owning group.
+	For allegiance system, we track the single claimer's peer ID (allegiance matching is done separately)."""
 	owner_group_members.clear()
 	if owner_pool_key == NO_OWNER:
 		return
 
+	# Allegiance-based ownership: Only track the original claimer's peer ID
+	# Allegiance matching is done dynamically in _is_player_owner()
+	if use_allegiance_system:
+		var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+		owner_group_members.append(my_id)
+		return
+
+	# Party-based ownership
 	if owner_pool_key == SOLO_POOL_KEY:
 		# Solo player - just add their peer ID
 		var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
@@ -1961,7 +2009,7 @@ func _update_owner_group_members() -> void:
 			owner_group_members = group_manager.group_members.duplicate()
 
 func _is_any_owner_nearby() -> bool:
-	"""Check if any owner group member is within the aura radius.
+	"""Check if any owner (by group or allegiance) is within the aura radius.
 	Uses the larger of heal/crit aura so players can fight at edge of their buffs."""
 	if owner_pool_key == NO_OWNER:
 		return false
@@ -1979,13 +2027,8 @@ func _is_any_owner_nearby() -> bool:
 		if not is_instance_valid(player_node):
 			continue
 
-		# Get player's peer ID
-		var player_peer_id = 1
-		if player_node.has_method("get_multiplayer_authority"):
-			player_peer_id = player_node.get_multiplayer_authority()
-
-		# Check if this player is an owner
-		if player_peer_id in owner_group_members:
+		# Check if this player is an owner (handles both allegiance and party systems)
+		if _is_player_owner(player_node):
 			# Check if within ownership radius (aura edge)
 			var distance = global_position.distance_to(player_node.global_position)
 			if distance <= ownership_radius:
@@ -2038,14 +2081,18 @@ func _get_owner_fuel_pool() -> Dictionary:
 # ═══════════════════════════════════════════════════════════════════════════
 
 @rpc("authority", "call_local", "reliable")
-func _sync_ownership_to_clients(new_owner_pool_key: int, new_owner_members: Array) -> void:
+func _sync_ownership_to_clients(new_owner_pool_key: int, new_owner_members: Array, new_owner_allegiance: String = "") -> void:
 	"""Receive ownership sync from server."""
 	owner_pool_key = new_owner_pool_key
 	owner_group_members = new_owner_members.duplicate()
+	owner_allegiance = new_owner_allegiance
 	is_releasing = false
 	release_timer = 0.0
 	_update_release_timer_ui()
-	print("🔥 [CLIENT] Ownership synced: pool_key=%d, members=%s" % [owner_pool_key, owner_group_members])
+	if use_allegiance_system:
+		print("🔥 [CLIENT] Ownership synced: allegiance='%s', pool_key=%d" % [owner_allegiance if not owner_allegiance.is_empty() else "ROGUE", owner_pool_key])
+	else:
+		print("🔥 [CLIENT] Ownership synced: pool_key=%d, members=%s" % [owner_pool_key, owner_group_members])
 
 @rpc("authority", "call_local", "reliable")
 func _sync_fuel_to_clients(pool_key: int, wood: int, bone_embers: int) -> void:
@@ -2141,7 +2188,25 @@ func _update_release_timer_ui() -> void:
 
 func _get_player_fuel_pool_key() -> int:
 	"""Get the fuel pool key for the local player.
-	Returns group_leader_id if in a group, or SOLO_POOL_KEY (-1) if solo."""
+	- Allegiance system: Returns allegiance hash or peer ID for rogues
+	- Party system: Returns group_leader_id if in a group, or SOLO_POOL_KEY (-1) if solo."""
+
+	# Allegiance-based ownership (for player-dropped campfires)
+	if use_allegiance_system:
+		var char_stats = get_node_or_null("/root/CharacterStats")
+		if char_stats:
+			var allegiance = char_stats.get_allegiance()
+			if allegiance.is_empty():
+				# Rogues get unique solo pools based on their peer ID
+				var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+				return my_id
+			else:
+				# Same allegiance players share a pool (use negative hash to avoid collision with peer IDs)
+				return -abs(allegiance.hash())
+		# Fallback to solo if no CharacterStats
+		return SOLO_POOL_KEY
+
+	# Party-based ownership (default)
 	var group_manager = get_node_or_null("/root/GroupManager")
 	if group_manager and group_manager.has_group():
 		return group_manager.group_leader
@@ -2159,21 +2224,66 @@ func _get_or_create_fuel_pool(pool_key: int) -> Dictionary:
 	return group_fuel_pools[pool_key]
 
 func _get_fuel_pool_for_player(player_node: Node) -> Dictionary:
-	"""Get the appropriate fuel pool for a specific player."""
-	var group_manager = get_node_or_null("/root/GroupManager")
-	if not group_manager:
-		return _get_or_create_fuel_pool(SOLO_POOL_KEY)
+	"""Get the appropriate fuel pool for a specific player.
+	- Allegiance system: Uses player's allegiance to determine pool
+	- Party system: Uses player's group membership to determine pool"""
 
 	# Get player's peer ID
 	var player_peer_id = 1
 	if player_node.has_method("get_multiplayer_authority"):
 		player_peer_id = player_node.get_multiplayer_authority()
 
+	# Allegiance-based pool selection (for player-dropped campfires)
+	if use_allegiance_system:
+		# Try to get player's CharacterStats from their node
+		var player_allegiance = _get_player_allegiance(player_node)
+		if player_allegiance.is_empty():
+			# Rogues get unique solo pools based on their peer ID
+			return _get_or_create_fuel_pool(player_peer_id)
+		else:
+			# Same allegiance players share a pool
+			return _get_or_create_fuel_pool(-abs(player_allegiance.hash()))
+
+	# Party-based pool selection (default)
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager:
+		return _get_or_create_fuel_pool(SOLO_POOL_KEY)
+
 	# Check if this player is in a group
 	if group_manager.is_group_member(player_peer_id):
 		return _get_or_create_fuel_pool(group_manager.group_leader)
 
 	return _get_or_create_fuel_pool(SOLO_POOL_KEY)
+
+func _get_player_allegiance(player_node: Node) -> String:
+	"""Get a player's allegiance from their node.
+	Tries multiple methods to find the allegiance."""
+	# Try direct property access
+	if "allegiance_id" in player_node:
+		return player_node.allegiance_id
+
+	# Try method call
+	if player_node.has_method("get_allegiance"):
+		return player_node.get_allegiance()
+
+	# Try to find CharacterStats child
+	var stats = player_node.get_node_or_null("CharacterStats")
+	if stats and "allegiance_id" in stats:
+		return stats.allegiance_id
+
+	# For local player, use autoload
+	var player_peer_id = 1
+	if player_node.has_method("get_multiplayer_authority"):
+		player_peer_id = player_node.get_multiplayer_authority()
+
+	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	if player_peer_id == my_id:
+		var char_stats = get_node_or_null("/root/CharacterStats")
+		if char_stats:
+			return char_stats.get_allegiance()
+
+	# Default to empty (rogue) if we can't determine allegiance
+	return ""
 
 func get_wood_count_for_player() -> int:
 	"""Get wood count for the campfire's relevant fuel pool.

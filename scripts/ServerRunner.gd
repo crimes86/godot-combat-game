@@ -114,8 +114,27 @@ func _start_dedicated_server(args: Array):
 # CLI ADMIN INTERFACE
 # ═══════════════════════════════════════════════════════════════════════════
 
+var cli_enabled: bool = true
+
 func _start_cli_thread() -> void:
 	"""Start background thread to read stdin commands."""
+	# Skip CLI if --no-cli flag is set (for systemd/daemon mode)
+	var args = OS.get_cmdline_user_args()
+	if "--no-cli" in args:
+		print("🎮 CLI admin interface disabled (--no-cli)")
+		cli_enabled = false
+		return
+
+	# Try to detect if stdin is available
+	# In systemd/nohup, stdin reading causes issues
+	if OS.has_feature("standalone"):
+		# Check if we're likely running from systemd/daemon
+		var ppid = OS.get_environment("INVOCATION_ID")  # systemd sets this
+		if not ppid.is_empty():
+			print("🎮 CLI admin interface disabled (systemd detected)")
+			cli_enabled = false
+			return
+
 	command_mutex = Mutex.new()
 	stdin_thread = Thread.new()
 	stdin_thread.start(_stdin_reader_thread)
@@ -123,12 +142,23 @@ func _start_cli_thread() -> void:
 
 func _stdin_reader_thread() -> void:
 	"""Background thread that reads stdin line by line."""
-	while is_dedicated_server:
+	var empty_count := 0
+	while is_dedicated_server and cli_enabled:
 		var line = OS.read_string_from_stdin().strip_edges()
 		if not line.is_empty():
+			empty_count = 0
 			command_mutex.lock()
 			command_queue.append(line)
 			command_mutex.unlock()
+		else:
+			# stdin might be closed - throttle to avoid spin loop
+			empty_count += 1
+			if empty_count > 100:
+				# Too many empty reads, stdin is likely closed
+				print("⚠️ CLI: stdin closed, disabling CLI thread")
+				cli_enabled = false
+				return
+			OS.delay_msec(10)  # Small delay to prevent CPU spin
 
 func _process_cli_commands() -> void:
 	"""Process any queued CLI commands (called from main thread)."""
