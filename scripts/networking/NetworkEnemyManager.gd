@@ -58,6 +58,17 @@ const MAX_TIMEOUT_MS: int = 60000  # Max timeout (60 seconds)
 
 # Tutorial crit tracking (server-side) - tracks hits per player on training dummy
 var tutorial_dummy_hits: Dictionary = {}  # Dictionary[int, int] - peer_id -> hit_count
+
+# PvE Damage Contribution Tracking (server-side)
+# Tracks damage dealt by each player to each enemy for kill credit calculation
+# enemy_network_id -> {peer_id: total_damage}
+var enemy_damage_tracking: Dictionary = {}
+
+# Group XP sharing radius - players within this range of the dying enemy get XP
+const GROUP_XP_RADIUS: float = 2000.0
+# Group XP bonus caps - prevents abuse with massive parties
+const GROUP_XP_BONUS_PER_MEMBER: float = 0.10  # +10% per extra member
+const GROUP_XP_BONUS_MAX: float = 0.50  # Max +50% bonus (caps at 6 participants)
 const TUTORIAL_FORCE_CRIT_HITS: int = 5  # Force crit after this many hits on dummy during tutorial
 
 # Dead player tracking (server-side) - enemies stop attacking dead players
@@ -288,9 +299,11 @@ func register_enemy(enemy: Node) -> int:
 	return id
 
 func unregister_enemy(network_id: int) -> void:
-	"""Remove enemy from registry."""
+	"""Remove enemy from registry and clean up tracking data."""
 	if enemies.has(network_id):
 		enemies.erase(network_id)
+	# Clean up damage tracking to prevent memory leaks
+	_clear_damage_tracking(network_id)
 
 func get_enemy(network_id: int) -> Node:
 	"""Get enemy by network ID. Returns null if enemy is freed or doesn't exist."""
@@ -458,6 +471,9 @@ func _apply_damage_internal(enemy_network_id: int, damage: float, is_crit: bool,
 	enemy.current_health -= damage
 	enemy.current_health = max(enemy.current_health, 0.0)
 
+	# Track damage contribution for kill credit calculation
+	_track_damage_contribution(enemy_network_id, attacker_id, damage)
+
 	# Broadcast damage to all clients for visual feedback (include attacker_id so only attacker plays sounds)
 	rpc("_client_enemy_damaged", enemy_network_id, damage, enemy.current_health, enemy.max_health, is_crit, is_weakpoint, attacker_id)
 
@@ -515,6 +531,9 @@ func request_damage(enemy_network_id: int, damage: float, is_crit: bool, is_weak
 	# Apply damage server-side
 	enemy.current_health -= damage
 	enemy.current_health = max(enemy.current_health, 0.0)
+
+	# Track damage contribution for kill credit calculation
+	_track_damage_contribution(enemy_network_id, attacker_id, damage)
 
 	# Broadcast damage to all clients for visual feedback (include attacker_id so only attacker plays sounds)
 	rpc("_client_enemy_damaged", enemy_network_id, damage, enemy.current_health, enemy.max_health, is_crit, is_weakpoint, attacker_id)
@@ -666,27 +685,125 @@ func _trigger_attack_feedback_for_attacker(enemy: Node, is_crit: bool, is_weakpo
 			return
 
 # ═══════════════════════════════════════════════════════════════════════════
+# DAMAGE CONTRIBUTION TRACKING (Server-side for kill credit)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _track_damage_contribution(enemy_network_id: int, attacker_id: int, damage: float) -> void:
+	"""Track damage dealt by a player to an enemy for kill credit calculation."""
+	if attacker_id <= 0:
+		return
+
+	if not enemy_damage_tracking.has(enemy_network_id):
+		enemy_damage_tracking[enemy_network_id] = {}
+
+	var tracking = enemy_damage_tracking[enemy_network_id]
+	if not tracking.has(attacker_id):
+		tracking[attacker_id] = 0.0
+	tracking[attacker_id] += damage
+
+func _get_kill_credit_id(enemy_network_id: int) -> int:
+	"""Get the player ID who dealt the most damage (kill credit)."""
+	if not enemy_damage_tracking.has(enemy_network_id):
+		return -1
+
+	var tracking = enemy_damage_tracking[enemy_network_id]
+	var max_damage = 0.0
+	var credit_id = -1
+
+	for peer_id in tracking.keys():
+		if tracking[peer_id] > max_damage:
+			max_damage = tracking[peer_id]
+			credit_id = peer_id
+
+	return credit_id
+
+func _get_damage_contributions(enemy_network_id: int) -> Dictionary:
+	"""Get all damage contributions for an enemy. Returns {peer_id: damage}."""
+	if not enemy_damage_tracking.has(enemy_network_id):
+		return {}
+	return enemy_damage_tracking[enemy_network_id].duplicate()
+
+func _clear_damage_tracking(enemy_network_id: int) -> void:
+	"""Clear damage tracking for an enemy (call on death/despawn)."""
+	enemy_damage_tracking.erase(enemy_network_id)
+
+func _get_nearby_group_members(enemy_position: Vector2, contributor_ids: Array) -> Array:
+	"""Get group members within XP sharing radius of the enemy.
+	Returns array of peer_ids who should receive group XP."""
+	var group_members = []
+	var game_world = get_node_or_null("/root/GameWorld")
+	if not game_world:
+		return group_members
+
+	# Get GroupManager
+	var group_manager = get_node_or_null("/root/GroupManager")
+	if not group_manager or not group_manager.has_method("has_group"):
+		return group_members
+	if not group_manager.has_group():
+		return group_members
+
+	# Get all players in the world
+	var players = get_tree().get_nodes_in_group("player")
+	for player in players:
+		if not is_instance_valid(player):
+			continue
+
+		var peer_id = player.get_multiplayer_authority()
+
+		# Skip if already a contributor (they get contribution XP, not group XP)
+		if peer_id in contributor_ids:
+			continue
+
+		# Check if in group
+		if not group_manager.is_group_member(peer_id) and group_manager.group_leader_id != peer_id:
+			continue
+
+		# Check distance
+		var distance = player.global_position.distance_to(enemy_position)
+		if distance <= GROUP_XP_RADIUS:
+			group_members.append(peer_id)
+
+	return group_members
+
+# ═══════════════════════════════════════════════════════════════════════════
 # DEATH SYSTEM (Server Authoritative)
 # ═══════════════════════════════════════════════════════════════════════════
 
-func _handle_enemy_death(enemy_network_id: int, killer_id: int) -> void:
-	"""Server handles enemy death - generates loot, broadcasts to clients."""
+func _handle_enemy_death(enemy_network_id: int, last_attacker_id: int) -> void:
+	"""Server handles enemy death - calculates kill credit, generates loot, broadcasts to clients."""
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
 		return
+
+	# Calculate kill credit (most damage) vs killing blow (last hit)
+	var kill_credit_id = _get_kill_credit_id(enemy_network_id)
+	if kill_credit_id < 0:
+		kill_credit_id = last_attacker_id  # Fallback to last attacker
+
+	# Get all damage contributions for XP distribution
+	var contributions = _get_damage_contributions(enemy_network_id)
+	var contributions_json = JSON.stringify(contributions)
+
+	# Get nearby group members for group XP sharing
+	var contributor_ids = contributions.keys()
+	var group_members = _get_nearby_group_members(enemy.global_position, contributor_ids)
+	var group_json = JSON.stringify(group_members)
 
 	# Generate loot server-side (deterministic from this point)
 	var loot_data = _generate_loot(enemy)
 
 	# Serialize loot items to JSON string for reliable RPC transmission
-	# Godot's RPC has issues with Array[Dictionary] serialization
 	var loot_json = JSON.stringify(loot_data.items)
-	LogManager.debug("Sending death for enemy #%d with %d items, json length: %d" % [
-		enemy_network_id, loot_data.items.size(), loot_json.length()
+	LogManager.debug("Sending death for enemy #%d with %d items, kill_credit=%d, last_hit=%d, contributors=%d, group=%d" % [
+		enemy_network_id, loot_data.items.size(), kill_credit_id, last_attacker_id,
+		contributions.size(), group_members.size()
 	], "loot")
 
-	# Broadcast death to all clients (loot as JSON string)
-	rpc("_client_enemy_died", enemy_network_id, killer_id, loot_json, loot_data.gold)
+	# Broadcast death to all clients with contribution data
+	rpc("_client_enemy_died", enemy_network_id, kill_credit_id, last_attacker_id, loot_json, loot_data.gold, contributions_json, group_json)
+
+	# Clear damage tracking for this enemy
+	_clear_damage_tracking(enemy_network_id)
 
 var _loot_id_counter: int = 0  # Unique ID generator for loot items
 
@@ -711,8 +828,8 @@ func _generate_loot(enemy: Node) -> Dictionary:
 	return {"items": items, "gold": gold}
 
 @rpc("authority", "call_local", "reliable")
-func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_json: String, loot_gold: int) -> void:
-	"""Server broadcasts enemy death to all clients."""
+func _client_enemy_died(enemy_network_id: int, kill_credit_id: int, last_attacker_id: int, loot_json: String, loot_gold: int, contributions_json: String = "{}", group_json: String = "[]") -> void:
+	"""Server broadcasts enemy death to all clients with damage contribution data."""
 	var enemy = get_enemy(enemy_network_id)
 	if not enemy or not is_instance_valid(enemy):
 		return
@@ -729,29 +846,49 @@ func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_json: String
 		else:
 			LogManager.warn("Failed to parse loot JSON: %s" % loot_json, "loot")
 
-	LogManager.debug("[%s] Enemy #%d died - received %d loot items, %d gold (json len: %d)" % [
+	# Parse damage contributions
+	var contributions: Dictionary = {}
+	if contributions_json.length() > 2:  # "{}" is 2 chars
+		var parsed_contrib = JSON.parse_string(contributions_json)
+		if parsed_contrib is Dictionary:
+			contributions = parsed_contrib
+
+	# Parse group members for XP sharing
+	var group_members: Array = []
+	if group_json.length() > 2:  # "[]" is 2 chars
+		var parsed_group = JSON.parse_string(group_json)
+		if parsed_group is Array:
+			group_members = parsed_group
+
+	LogManager.debug("[%s] Enemy #%d died - %d loot, %d gold, credit=%d, last_hit=%d, contributors=%d, group=%d" % [
 		"Server" if is_server else "Client",
 		enemy_network_id,
 		loot_items.size(),
 		loot_gold,
-		loot_json.length()
+		kill_credit_id,
+		last_attacker_id,
+		contributions.size(),
+		group_members.size()
 	], "loot")
 
 	# Set loot (generated by server) - must happen BEFORE die() to override local generation
 	enemy.corpse_loot = loot_items
 	enemy.corpse_gold = loot_gold
 
-	# Debug: verify loot was set correctly
-	LogManager.debug("[%s] Verified enemy.corpse_loot has %d items after assignment" % [
-		"Server" if is_server else "Client",
-		enemy.corpse_loot.size()
-	], "loot")
+	# Store kill credit data for XP distribution
+	# kill_credit_id = player who dealt most damage (gets rare loot eligibility)
+	# last_attacker_id = player who dealt killing blow
+	# contributions = {peer_id: damage} for all contributors
+	# group_members = [peer_id, ...] for nearby group members who get shared XP
+	enemy.set_meta("kill_credit_id", kill_credit_id)
+	enemy.set_meta("last_attacker_id", last_attacker_id)
+	enemy.set_meta("damage_contributions", contributions)
+	enemy.set_meta("group_xp_members", group_members)
 
-	# Store killer ID for XP attribution
-	enemy.set_meta("killer_peer_id", killer_id)
+	# Legacy: also set killer_peer_id for backward compatibility
+	enemy.set_meta("killer_peer_id", kill_credit_id)
 
 	# Connect corpse_clicked signal NOW (GameWorld should be loaded by the time enemies die)
-	# This is more reliable than connecting during spawn when GameWorld may not exist yet
 	if not multiplayer.is_server():
 		_ensure_corpse_signal_connected(enemy)
 		if OS.is_debug_build():
@@ -761,7 +898,7 @@ func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_json: String
 
 	# Call die() which handles:
 	# - Weakpoint cleanup
-	# - XP grant (only to the player who killed)
+	# - XP grant to all contributors + group members
 	# - Death animation
 	# - Corpse transition
 	if not enemy.is_dying:
@@ -774,9 +911,9 @@ func _client_enemy_died(enemy_network_id: int, killer_id: int, loot_json: String
 		if OS.is_debug_build():
 			print("💀 [_client_enemy_died] Enemy already dying, skipping die(): %s" % enemy.name)
 
-	# Track kill for quest objectives (local player only)
+	# Track kill for quest objectives (kill credit holder gets quest progress)
 	var local_peer_id = multiplayer.get_unique_id()
-	if killer_id == local_peer_id:
+	if kill_credit_id == local_peer_id:
 		_track_quest_kill(enemy)
 
 func _track_quest_kill(enemy: Node) -> void:

@@ -1546,25 +1546,57 @@ func die() -> void:
 			child.monitorable = false
 			child.queue_free()
 
-	# Grant XP to player - in multiplayer, only to the killer
-	var should_grant_xp = true
+	# Grant XP to contributors and nearby group members
+	# New system: everyone who contributed damage OR is in group nearby gets XP
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	var should_grant_xp = false
+	var xp_multiplier = 1.0
+	var is_kill_credit = false
+
 	if multiplayer.has_multiplayer_peer():
-		# In multiplayer, only grant XP if we're the killer
-		var killer_id = get_meta("killer_peer_id", -1)
-		var my_peer_id = multiplayer.get_unique_id()
-		should_grant_xp = (killer_id == my_peer_id)
+		# Check contribution-based XP system
+		var kill_credit_id = get_meta("kill_credit_id", -1)
+		var contributions = get_meta("damage_contributions", {})
+		var group_members = get_meta("group_xp_members", [])
+
+		# Calculate group size for bonus (contributors + nearby group members)
+		# Bonus: +10% per extra participant, capped at +50% (6 participants max benefit)
+		var total_participants = contributions.size() + group_members.size()
+		var bonus_members = max(0, total_participants - 1)
+		var raw_bonus = bonus_members * 0.10  # +10% per extra
+		var capped_bonus = min(raw_bonus, 0.50)  # Cap at +50%
+		var group_bonus = 1.0 + capped_bonus
+
+		# Check if we're the kill credit holder (most damage = rare loot eligibility)
+		is_kill_credit = (kill_credit_id == my_peer_id)
+
+		# Check if we contributed damage
+		var my_peer_str = str(my_peer_id)
+		if contributions.has(my_peer_str) or contributions.has(my_peer_id):
+			should_grant_xp = true
+			xp_multiplier = group_bonus
+		# Check if we're a nearby group member
+		elif my_peer_id in group_members:
+			should_grant_xp = true
+			xp_multiplier = group_bonus
+	else:
+		# Single player - always grant XP
+		should_grant_xp = true
+		is_kill_credit = true
 
 	if should_grant_xp:
 		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 		if player and player.has_method("gain_experience"):
-			player.gain_experience(xp_reward)
+			var final_xp = int(xp_reward * xp_multiplier)
+			player.gain_experience(final_xp)
+
 			# Show world-space XP text floating up from mob
 			var game_world = get_tree().get_first_node_in_group("game_world")
 			if game_world:
-				CombatText.create_xp(xp_reward, global_position, game_world)
+				CombatText.create_xp(final_xp, global_position, game_world)
 
-			# Grant weapon skill on kill
-			if CharacterStats.equipped_weapon and WeaponSkillManager:
+			# Grant weapon skill on kill (only to kill credit holder)
+			if is_kill_credit and CharacterStats.equipped_weapon and WeaponSkillManager:
 				var weapon_type = CharacterStats.equipped_weapon.weapon_type
 				var skill_gain = WeaponSkillManager.on_kill(weapon_type)
 				# Show skill-up text near enemy (only if meaningful gain)
@@ -1572,8 +1604,8 @@ func die() -> void:
 					var category = WeaponSkillManager.get_category_for_weapon(weapon_type)
 					CombatText.create_skill_up(skill_gain, category, global_position, game_world)
 
-			# Log kill to backend telemetry (anti-cheat audit trail)
-			if AshbaneAuth and AshbaneAuth.is_authenticated:
+			# Log kill to backend telemetry (only for kill credit holder)
+			if is_kill_credit and AshbaneAuth and AshbaneAuth.is_authenticated:
 				var type_name = get_script().get_global_name().to_lower() if get_script() else "skeleton"
 				if type_name == "enemy" or type_name.is_empty():
 					type_name = "skeleton"
