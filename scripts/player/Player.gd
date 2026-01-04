@@ -1917,6 +1917,10 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 		LogManager.debug("TAKE_DMG DENY aura: peer=%d src=%d" % [my_id, source_player_id], "duel")
 		return
 
+	# DUEL ISOLATION: Block PvE damage during duel (fair 1v1)
+	if is_dueling and source_type == "pve":
+		return  # Mobs can't interfere with duels
+
 	# Handle player damage (PvP)
 	if source_type == "player":
 		if is_dueling:
@@ -2602,6 +2606,11 @@ func process_passive_healing(delta: float) -> void:
 
 	# Don't heal if already at full health
 	if current_health >= max_health:
+		return
+
+	# DUEL ISOLATION: No passive regen during duel (fair 1v1)
+	if is_dueling:
+		passive_heal_timer = 0.0  # Reset timer during duel
 		return
 
 	# Don't heal if still in combat (must wait out_of_combat_delay after last damage)
