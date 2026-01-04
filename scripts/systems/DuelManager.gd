@@ -170,24 +170,28 @@ func _start_duel_local(player1_id: int, player2_id: int) -> void:
 
 func _end_duel_local(winner_id: int, loser_id: int) -> void:
 	"""End duel and declare winner (called by server)"""
+	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+
 	if not active_duels.has(winner_id) or not active_duels.has(loser_id):
-		push_warning("Attempted to end non-existent duel")
+		# This is expected when server broadcasts to self - not an error
 		return
 
-	# Remove duel state
+	LogManager.info("END_LOCAL winner=%d loser=%d peer=%d" % [winner_id, loser_id, my_id], "duel")
+
+	# Remove duel state first (before any operations that might fail)
 	active_duels.erase(winner_id)
 	active_duels.erase(loser_id)
 
-	# Notify players to exit duel state
+	# Notify players to exit duel state (with error handling)
 	_notify_player_exit_duel(winner_id)
 	_notify_player_exit_duel(loser_id)
 
-	# Apply safe aura to both players
+	# Apply safe aura to both players (with error handling)
 	_apply_safe_aura(winner_id)
 	_apply_safe_aura(loser_id)
 
 	duel_ended.emit(winner_id, loser_id)
-	print("Duel ended: %d wins, %d loses" % [winner_id, loser_id])
+	LogManager.info("END_COMPLETE winner=%d loser=%d peer=%d" % [winner_id, loser_id, my_id], "duel")
 
 func _cancel_duel_local(player1_id: int, player2_id: int, reason: String) -> void:
 	"""Cancel duel without declaring a winner"""
@@ -392,17 +396,29 @@ func _notify_player_enter_duel(player_id: int, opponent_id: int) -> void:
 func _notify_player_exit_duel(player_id: int) -> void:
 	"""Notify a player to exit duel state"""
 	var player = _get_player_node(player_id)
-	if player and player.has_method("exit_duel_state"):
-		player.exit_duel_state()
+	if not player:
+		LogManager.debug("exit_duel skip: player=%d node=null" % player_id, "duel")
+		return
+	if not player.has_method("exit_duel_state"):
+		LogManager.debug("exit_duel skip: player=%d no_method" % player_id, "duel")
+		return
+	player.exit_duel_state()
+	LogManager.debug("exit_duel OK: player=%d" % player_id, "duel")
 
 func _notify_player_safe_aura(player_id: int, active: bool) -> void:
 	"""Notify a player about safe aura state change"""
 	var player = _get_player_node(player_id)
-	if player:
-		if active and player.has_method("apply_safe_aura"):
+	if not player:
+		LogManager.debug("safe_aura skip: player=%d node=null active=%s" % [player_id, active], "duel")
+		return
+	if active:
+		if player.has_method("apply_safe_aura"):
 			player.apply_safe_aura()
-		elif not active and player.has_method("remove_safe_aura"):
+			LogManager.debug("safe_aura APPLY: player=%d" % player_id, "duel")
+	else:
+		if player.has_method("remove_safe_aura"):
 			player.remove_safe_aura()
+			LogManager.debug("safe_aura REMOVE: player=%d" % player_id, "duel")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PUBLIC API (for UI and commands)
@@ -597,9 +613,12 @@ func _client_countdown_started(player1_id: int, player2_id: int, duration: int) 
 	LogManager.info("COUNTDOWN p1=%d p2=%d dur=%d peer=%d" % [player1_id, player2_id, duration, my_id], "duel")
 	_start_countdown(player1_id, player2_id)
 
-@rpc("authority", "call_local", "reliable")
+@rpc("authority", "reliable")
 func _client_duel_ended(winner_id: int, loser_id: int) -> void:
-	"""Server notifies clients that duel has ended"""
+	"""Server notifies clients that duel has ended (clients only - server already processed)"""
+	# Skip if we're the server - we already called _end_duel_local before broadcasting
+	if multiplayer.is_server():
+		return
 	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
 	LogManager.info("END winner=%d loser=%d peer=%d" % [winner_id, loser_id, my_id], "duel")
 	_end_duel_local(winner_id, loser_id)
@@ -660,8 +679,19 @@ func request_pvp_damage(target_id: int, damage: int) -> void:
 	# Log accepted damage request
 	LogManager.info("DMG_REQ OK atk=%d tgt=%d dmg=%d duel=%s" % [attacker_id, target_id, damage, is_in_duel], "duel")
 
-	# Apply damage via RPC to all clients
-	rpc("apply_pvp_damage", target_id, damage, attacker_id)
+	# Get target's health info for visual sync (before damage on server)
+	var target_current_health: int = -1
+	var target_max_health: int = -1
+	if target_player.get("current_health") != null:
+		# Calculate health AFTER damage (clamped to 1 HP for duel threshold)
+		var new_hp = target_player.current_health - damage
+		if is_in_duel and new_hp < 1:
+			new_hp = 1  # Duel stops at 1 HP
+		target_current_health = int(max(new_hp, 0))
+		target_max_health = int(target_player.max_health) if target_player.get("max_health") != null else 100
+
+	# Apply damage via RPC to all clients (with health info for visual sync)
+	rpc("apply_pvp_damage", target_id, damage, attacker_id, target_current_health, target_max_health)
 
 	# IMPORTANT: If the server is the target, process damage locally immediately
 	var my_id = multiplayer.get_unique_id()
@@ -731,8 +761,9 @@ func _is_in_safe_zone(player_node: Node) -> bool:
 	return chunk_x == 0
 
 @rpc("authority", "call_local", "reliable")
-func apply_pvp_damage(target_id: int, damage: int, attacker_id: int) -> void:
-	"""Server broadcasts PvP damage to all clients"""
+func apply_pvp_damage(target_id: int, damage: int, attacker_id: int, new_health: int = -1, max_health: int = -1) -> void:
+	"""Server broadcasts PvP damage to all clients
+	new_health/max_health: For visual sync on non-target clients"""
 	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
 
 	var target_player = _get_player_node(target_id)
@@ -740,10 +771,30 @@ func apply_pvp_damage(target_id: int, damage: int, attacker_id: int) -> void:
 		LogManager.warn("DMG_RPC FAIL node: tgt=%d peer=%d" % [target_id, my_id], "duel")
 		return
 
-	# Only the target processes the actual damage
+	# Target processes actual damage
 	if my_id == target_id and target_player.has_method("take_damage"):
 		target_player.take_damage(damage, "player", attacker_id)
 		LogManager.info("DMG_RPC RECV tgt=%d dmg=%d atk=%d peer=%d" % [target_id, damage, attacker_id, my_id], "duel")
+	else:
+		# Non-target clients: Update visual health bar immediately (reliable sync)
+		if new_health >= 0 and max_health > 0:
+			_update_remote_health_bar(target_player, new_health, max_health)
+
+func _update_remote_health_bar(player_node: Node, new_health: int, max_health: int) -> void:
+	"""Update a remote player's health bar visual (called on non-target clients)"""
+	if not player_node or not is_instance_valid(player_node):
+		return
+
+	# Update the player node's health values for consistency
+	if player_node.get("current_health") != null:
+		player_node.current_health = new_health
+	if player_node.get("max_health") != null:
+		player_node.max_health = max_health
+
+	# Update the visual health bar
+	var health_bar = player_node.get_node_or_null("HealthBar")
+	if health_bar and health_bar.has_method("update_health"):
+		health_bar.update_health(new_health, max_health)
 
 # ============================================
 # DAMAGE VALIDATION HELPERS
