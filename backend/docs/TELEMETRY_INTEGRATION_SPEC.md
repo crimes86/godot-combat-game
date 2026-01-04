@@ -1,8 +1,14 @@
 # Gameplay Telemetry Integration Spec
 
-**Status:** Backend Complete - Awaiting Godot Integration
+**Status:** Backend + TelemetryManager Complete - Integration Points Pending
 **Priority:** High (Security/Anti-Cheat)
 **Affects:** Godot Client + Godot Server (requires rebuild of both)
+
+## What's Done
+
+- ✅ Backend endpoints (`/api/telemetry/*`)
+- ✅ `TelemetryManager.gd` updated with gameplay telemetry methods
+- ⏳ Integration hooks in Enemy.gd, NetworkEnemyManager.gd (see below)
 
 ---
 
@@ -212,143 +218,28 @@ if AshbaneAuth.is_authenticated():
 
 ---
 
-### 4. Create TelemetryManager Autoload
+### 4. TelemetryManager (Already Updated ✅)
 
-**New File:** `scripts/systems/TelemetryManager.gd`
+**File:** `scripts/systems/TelemetryManager.gd` - **ALREADY UPDATED**
+
+The TelemetryManager autoload has been extended with gameplay telemetry methods:
 
 ```gdscript
-extends Node
-
-## TelemetryManager - Sends gameplay events to backend for anti-cheat auditing.
-## Events are batched and sent periodically to reduce network overhead.
-
-const BATCH_INTERVAL := 5.0  # Send batch every 5 seconds
-const MAX_BATCH_SIZE := 50
-
-var _event_queue: Array = []
-var _session_id: String = ""
-var _batch_timer: Timer
-
-func _ready():
-    _session_id = _generate_session_id()
-
-    _batch_timer = Timer.new()
-    _batch_timer.wait_time = BATCH_INTERVAL
-    _batch_timer.timeout.connect(_flush_batch)
-    _batch_timer.autostart = true
-    add_child(_batch_timer)
-
-func _generate_session_id() -> String:
-    # Generate UUID for this game session
-    var uuid = ""
-    for i in range(32):
-        if i == 8 or i == 12 or i == 16 or i == 20:
-            uuid += "-"
-        uuid += "0123456789abcdef"[randi() % 16]
-    return uuid
-
-func log_kill(kill_data: Dictionary) -> void:
-    """Queue a kill event for batch submission."""
-    _queue_event("kill", kill_data)
-
-func log_loot(loot_data: Dictionary) -> void:
-    """Queue a loot event for batch submission."""
-    _queue_event("loot", loot_data)
-
-func log_resource(resource_data: Dictionary) -> void:
-    """Queue a resource gathering event."""
-    _queue_event("resource", resource_data)
-
-func _queue_event(event_type: String, event_data: Dictionary) -> void:
-    var event = {
-        "event_type": event_type,
-        "event_data": event_data,
-        "session_id": _session_id,
-        "is_multiplayer": multiplayer.has_multiplayer_peer(),
-        "zone_id": _get_current_zone(),
-        "position_x": _get_player_x(),
-        "position_y": _get_player_y(),
-        "client_timestamp": Time.get_unix_time_from_system()
-    }
-
-    _event_queue.append(event)
-
-    # Flush immediately if batch is full
-    if _event_queue.size() >= MAX_BATCH_SIZE:
-        _flush_batch()
-
-func _flush_batch() -> void:
-    if _event_queue.is_empty():
-        return
-
-    if not AshbaneAuth.is_authenticated():
-        # Clear queue if not authenticated - can't send
-        _event_queue.clear()
-        return
-
-    var batch = {
-        "session_id": _session_id,
-        "client_version": ProjectSettings.get_setting("application/config/version", "unknown"),
-        "events": _event_queue.duplicate()
-    }
-
-    _event_queue.clear()
-
-    # Fire and forget - don't wait for response
-    AshbaneAuth.post_authenticated_async("/api/telemetry/batch", batch)
-
-func _get_current_zone() -> String:
-    var game_world = get_tree().get_first_node_in_group("game_world")
-    if game_world and game_world.has_method("get_current_zone"):
-        return game_world.get_current_zone()
-    return "unknown"
-
-func _get_player_x() -> float:
-    var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-    return player.global_position.x if player else 0.0
-
-func _get_player_y() -> float:
-    var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
-    return player.global_position.y if player else 0.0
-
-func _notification(what):
-    if what == NOTIFICATION_WM_CLOSE_REQUEST:
-        # Flush remaining events before exit
-        _flush_batch()
+# New methods available:
+TelemetryManager.log_kill(enemy_type, enemy_level, xp_granted, gold_dropped, weapon_used, was_critical, overkill_damage, enemy_network_id)
+TelemetryManager.log_loot_gold(source_type, source_id, gold_amount)
+TelemetryManager.log_loot_item(source_type, source_id, item_id, item_name, item_rarity, quantity)
+TelemetryManager.log_resource(resource_type, source_type, amount)
+TelemetryManager.get_session_id()
 ```
 
-**Register as Autoload in `project.godot`:**
-```
-[autoload]
-TelemetryManager="*res://scripts/systems/TelemetryManager.gd"
-```
+**Already registered as Autoload** - no changes needed to `project.godot`.
 
 ---
 
-### 5. Add Async POST Helper to AshbaneAuth
+### 5. AshbaneAuth (No Changes Needed ✅)
 
-**File:** `scripts/systems/AshbaneAuth.gd`
-
-Add this helper for fire-and-forget requests:
-
-```gdscript
-func post_authenticated_async(endpoint: String, data: Dictionary) -> void:
-    """Fire-and-forget authenticated POST. Does not wait for response."""
-    if not is_authenticated():
-        return
-
-    var http = HTTPRequest.new()
-    add_child(http)
-    http.request_completed.connect(func(_r, _c, _h, _b): http.queue_free())
-
-    var headers = [
-        "Content-Type: application/json",
-        "Authorization: Bearer " + _session_token
-    ]
-
-    var json_body = JSON.stringify(data)
-    http.request(API_URL + endpoint, headers, HTTPClient.METHOD_POST, json_body)
-```
+TelemetryManager handles its own HTTP requests using the existing `AshbaneAuth.auth_token` and `AshbaneAuth.get_api_base()` methods. No changes needed to AshbaneAuth.
 
 ---
 
@@ -400,37 +291,35 @@ Flagged events are logged with `is_suspicious = true` for review.
 
 ## Testing Checklist
 
-1. [ ] TelemetryManager autoload registered
-2. [ ] AshbaneAuth.post_authenticated_async() added
-3. [ ] Kill events logged in Enemy.gd
-4. [ ] Gold loot events logged in NetworkEnemyManager.gd
-5. [ ] Item loot events logged in NetworkEnemyManager.gd
+1. [x] TelemetryManager autoload registered (already was)
+2. [x] TelemetryManager gameplay methods added
+3. [ ] Kill events logged in Enemy.gd ⚠️ **REQUIRES CLIENT REBUILD**
+4. [ ] Gold loot events logged in NetworkEnemyManager.gd ⚠️ **REQUIRES CLIENT REBUILD**
+5. [ ] Item loot events logged in NetworkEnemyManager.gd ⚠️ **REQUIRES CLIENT REBUILD**
 6. [ ] Events appear in backend database
 7. [ ] Batch submission working (check every 5 seconds)
 8. [ ] Suspicious events flagged correctly
-9. [ ] Server build updated (if using dedicated server)
+9. [ ] Server build updated ⚠️ **REQUIRES SERVER REBUILD**
 10. [ ] Client build redistributed
 
 ---
 
 ## Files Changed Summary
 
-### Backend (Already Complete)
+### Backend (Complete ✅)
 - `app/models.py` - Added `GameEventLog` model
 - `app/routes/telemetry_routes.py` - New file with endpoints
 - `app/main.py` - Registered telemetry router
 - `alembic/versions/d9e3b2c4f5a6_*.py` - Migration
 
-### Godot Client (TODO)
-- `scripts/systems/TelemetryManager.gd` - **NEW FILE**
-- `scripts/systems/AshbaneAuth.gd` - Add `post_authenticated_async()`
-- `scripts/enemies/Enemy.gd` - Add kill logging
-- `scripts/networking/NetworkEnemyManager.gd` - Add loot logging
-- `project.godot` - Register TelemetryManager autoload
+### Godot Client (Partial ✅)
+- `scripts/systems/TelemetryManager.gd` - **UPDATED** with gameplay telemetry
+- `scripts/enemies/Enemy.gd` - **TODO:** Add kill logging hook
+- `scripts/networking/NetworkEnemyManager.gd` - **TODO:** Add loot logging hooks
 
-### Godot Server (TODO - if using dedicated server)
-- Same changes as client, OR
-- Centralized server-side telemetry (recommended for security)
+### Godot Server (TODO ⚠️ REQUIRES REBUILD)
+- Same changes as client will be picked up automatically
+- Consider: Centralized server-side telemetry (recommended for security)
 
 ---
 

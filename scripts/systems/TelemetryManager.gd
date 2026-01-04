@@ -6,6 +6,12 @@ extends Node
 ##   Automatic: Hooks into LogManager.log_written signal
 ##   Manual: TelemetryManager.track_event("player_died", {"zone": "forest"})
 ##
+## Gameplay Telemetry (anti-cheat):
+##   TelemetryManager.log_kill(enemy_type, enemy_level, xp, gold, weapon)
+##   TelemetryManager.log_loot_gold(source_type, source_id, amount)
+##   TelemetryManager.log_loot_item(source_type, source_id, item_id, item_name, rarity)
+##   TelemetryManager.log_resource(resource_type, source_type, amount)
+##
 ## Configuration:
 ##   TelemetryManager.enabled = true/false
 ##   TelemetryManager.remote_min_level = LogManager.LogLevel.INFO
@@ -14,6 +20,8 @@ extends Node
 signal batch_sent(count: int)
 signal batch_failed(error: String)
 signal telemetry_enabled_changed(enabled: bool)
+signal gameplay_batch_sent(count: int)
+signal gameplay_batch_failed(error: String)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -33,6 +41,12 @@ var always_send_categories: Array[String] = ["anticheat", "error", "crash", "due
 
 ## API endpoint path (appended to AshbaneAuth.get_api_base())
 var api_endpoint: String = "/api/logs/batch"
+
+## Gameplay telemetry endpoint (kills, loot, combat events)
+var gameplay_api_endpoint: String = "/api/telemetry/batch"
+
+## Enable gameplay telemetry (requires authentication)
+var gameplay_telemetry_enabled: bool = true
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BATCHING SETTINGS
@@ -66,6 +80,14 @@ var _last_send_failed: bool = false
 var _total_sent: int = 0
 var _total_dropped: int = 0
 
+# Gameplay telemetry state (kills, loot, combat)
+var _pending_gameplay_events: Array = []
+var _gameplay_http_request: HTTPRequest = null
+var _is_sending_gameplay: bool = false
+var _gameplay_retry_count: int = 0
+var _gameplay_total_sent: int = 0
+var _session_id: String = ""
+
 # ═══════════════════════════════════════════════════════════════════════════
 # LIFECYCLE
 # ═══════════════════════════════════════════════════════════════════════════
@@ -83,6 +105,7 @@ func _ready() -> void:
 		return
 	await get_tree().process_frame
 
+	_session_id = _generate_session_id()
 	_setup_timer()
 	_setup_http()
 	_connect_to_log_manager()
@@ -96,6 +119,9 @@ func _exit_tree() -> void:
 	# Try to flush remaining logs before exit
 	if not _pending_logs.is_empty() and enabled:
 		_flush_batch_sync()
+	# Also flush gameplay events
+	if not _pending_gameplay_events.is_empty() and gameplay_telemetry_enabled:
+		_flush_gameplay_batch_sync()
 
 func _setup_timer() -> void:
 	_batch_timer = Timer.new()
@@ -109,6 +135,12 @@ func _setup_http() -> void:
 	_http_request.timeout = 30.0
 	_http_request.request_completed.connect(_on_request_completed)
 	add_child(_http_request)
+
+	# Separate HTTP request for gameplay telemetry
+	_gameplay_http_request = HTTPRequest.new()
+	_gameplay_http_request.timeout = 30.0
+	_gameplay_http_request.request_completed.connect(_on_gameplay_request_completed)
+	add_child(_gameplay_http_request)
 
 func _connect_to_log_manager() -> void:
 	if LogManager:
@@ -155,8 +187,103 @@ func get_stats() -> Dictionary:
 		"total_sent": _total_sent,
 		"total_dropped": _total_dropped,
 		"is_sending": _is_sending,
-		"last_failed": _last_send_failed
+		"last_failed": _last_send_failed,
+		"gameplay_pending": _pending_gameplay_events.size(),
+		"gameplay_total_sent": _gameplay_total_sent,
+		"session_id": _session_id
 	}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GAMEPLAY TELEMETRY API (Anti-Cheat)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func log_kill(enemy_type: String, enemy_level: int, xp_granted: int, gold_dropped: int,
+		weapon_used: String = "", was_critical: bool = false, overkill_damage: int = 0,
+		enemy_network_id: int = 0) -> void:
+	"""Log an enemy kill event for anti-cheat auditing."""
+	if not gameplay_telemetry_enabled or not _is_authenticated():
+		return
+
+	var event_data = {
+		"enemy_type": enemy_type,
+		"enemy_level": enemy_level,
+		"enemy_network_id": enemy_network_id,
+		"xp_granted": xp_granted,
+		"gold_dropped": gold_dropped,
+		"weapon_used": weapon_used,
+		"was_critical": was_critical,
+		"overkill_damage": overkill_damage
+	}
+
+	_queue_gameplay_event("kill", event_data)
+
+
+func log_loot_gold(source_type: String, source_id: String, gold_amount: int) -> void:
+	"""Log gold pickup for anti-cheat auditing.
+
+	source_type: enemy_corpse, chest, tree, rock, ground
+	source_id: enemy_network_id or chest identifier
+	"""
+	if not gameplay_telemetry_enabled or not _is_authenticated():
+		return
+
+	var event_data = {
+		"loot_type": "gold",
+		"source_type": source_type,
+		"source_id": source_id,
+		"gold_amount": gold_amount,
+		"quantity": 1
+	}
+
+	_queue_gameplay_event("loot", event_data)
+
+
+func log_loot_item(source_type: String, source_id: String, item_id: String,
+		item_name: String = "", item_rarity: String = "Common", quantity: int = 1) -> void:
+	"""Log item pickup for anti-cheat auditing.
+
+	source_type: enemy_corpse, chest, tree, rock, ground
+	source_id: enemy_network_id or chest identifier
+	"""
+	if not gameplay_telemetry_enabled or not _is_authenticated():
+		return
+
+	var event_data = {
+		"loot_type": "item",
+		"source_type": source_type,
+		"source_id": source_id,
+		"gold_amount": 0,
+		"item_id": item_id,
+		"item_name": item_name,
+		"item_rarity": item_rarity,
+		"quantity": quantity
+	}
+
+	_queue_gameplay_event("loot", event_data)
+
+
+func log_resource(resource_type: String, source_type: String, amount: int) -> void:
+	"""Log resource gathering for anti-cheat auditing.
+
+	resource_type: wood, stone, ore, herb
+	source_type: tree, rock, node, bush
+	"""
+	if not gameplay_telemetry_enabled or not _is_authenticated():
+		return
+
+	var event_data = {
+		"resource_type": resource_type,
+		"source_type": source_type,
+		"amount": amount
+	}
+
+	_queue_gameplay_event("resource", event_data)
+
+
+func get_session_id() -> String:
+	"""Get the current session ID for this game session."""
+	return _session_id
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INTERNAL METHODS
@@ -228,6 +355,9 @@ func _on_batch_timer() -> void:
 	"""Timer callback to flush batched logs"""
 	if not _pending_logs.is_empty():
 		_flush_batch()
+	# Also flush gameplay events on the same timer
+	if not _pending_gameplay_events.is_empty():
+		_flush_gameplay_batch()
 
 func _flush_batch() -> void:
 	"""Send pending logs to backend (supports both authenticated and anonymous)"""
@@ -365,3 +495,170 @@ func _is_multiplayer_host() -> bool:
 	if multiplayer:
 		return multiplayer.is_server()
 	return false
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GAMEPLAY TELEMETRY INTERNALS
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _generate_session_id() -> String:
+	"""Generate a unique session ID for this game session."""
+	var chars = "0123456789abcdef"
+	var uuid = ""
+	for i in range(32):
+		if i == 8 or i == 12 or i == 16 or i == 20:
+			uuid += "-"
+		uuid += chars[randi() % 16]
+	return uuid
+
+
+func _queue_gameplay_event(event_type: String, event_data: Dictionary) -> void:
+	"""Queue a gameplay event for batch submission."""
+	var event = {
+		"event_type": event_type,
+		"event_data": event_data,
+		"session_id": _session_id,
+		"is_multiplayer": multiplayer.has_multiplayer_peer() if multiplayer else false,
+		"zone_id": _get_current_zone(),
+		"position_x": _get_player_position().x,
+		"position_y": _get_player_position().y,
+		"client_timestamp": Time.get_unix_time_from_system(),
+		"client_version": _get_client_version()
+	}
+
+	_pending_gameplay_events.append(event)
+
+	# Flush immediately if batch is full
+	if _pending_gameplay_events.size() >= MAX_BATCH_SIZE:
+		_flush_gameplay_batch()
+
+
+func _flush_gameplay_batch() -> void:
+	"""Send pending gameplay events to backend."""
+	if _pending_gameplay_events.is_empty() or _is_sending_gameplay:
+		return
+
+	if not _is_authenticated():
+		# Gameplay telemetry requires authentication
+		_pending_gameplay_events.clear()
+		return
+
+	_is_sending_gameplay = true
+	var batch = _pending_gameplay_events.duplicate()
+	_pending_gameplay_events.clear()
+
+	var payload = {
+		"session_id": _session_id,
+		"client_version": _get_client_version(),
+		"events": batch
+	}
+
+	var url = _get_gameplay_api_url()
+	var headers = _get_auth_headers()
+
+	var json_body = JSON.stringify(payload)
+	var error = _gameplay_http_request.request(url, headers, HTTPClient.METHOD_POST, json_body)
+
+	if error != OK:
+		LogManager.warn("Failed to send gameplay telemetry: %s" % error, "telemetry")
+		# Put events back for retry
+		_pending_gameplay_events.append_array(batch)
+		_is_sending_gameplay = false
+
+
+func _flush_gameplay_batch_sync() -> void:
+	"""Synchronous flush for exit (best effort)."""
+	if _pending_gameplay_events.is_empty() or not _is_authenticated():
+		return
+
+	var http = HTTPRequest.new()
+	add_child(http)
+
+	var payload = {
+		"session_id": _session_id,
+		"client_version": _get_client_version(),
+		"events": _pending_gameplay_events
+	}
+
+	var url = _get_gameplay_api_url()
+	var headers = _get_auth_headers()
+
+	http.request(url, headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
+	# Don't wait for response - best effort on exit
+
+
+func _on_gameplay_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	"""Handle gameplay telemetry HTTP response."""
+	_is_sending_gameplay = false
+
+	if result != HTTPRequest.RESULT_SUCCESS:
+		LogManager.warn("Gameplay telemetry request failed (result: %d)" % result, "telemetry")
+		_handle_gameplay_failure()
+		return
+
+	if response_code != 200:
+		var body_text = body.get_string_from_utf8()
+		LogManager.warn("Gameplay telemetry rejected (code: %d): %s" % [response_code, body_text.substr(0, 100)], "telemetry")
+		_handle_gameplay_failure()
+		return
+
+	# Success!
+	_gameplay_retry_count = 0
+
+	# Parse response to get count
+	var json = JSON.new()
+	if json.parse(body.get_string_from_utf8()) == OK:
+		var data = json.get_data()
+		if data is Dictionary and data.has("events_logged"):
+			_gameplay_total_sent += data.events_logged
+			gameplay_batch_sent.emit(data.events_logged)
+
+			# Log if any events were flagged as suspicious
+			if data.has("events_flagged") and data.events_flagged > 0:
+				LogManager.warn("Gameplay telemetry: %d events flagged as suspicious" % data.events_flagged, "anticheat")
+
+
+func _handle_gameplay_failure() -> void:
+	"""Handle gameplay telemetry send failure."""
+	_gameplay_retry_count += 1
+
+	if _gameplay_retry_count >= MAX_RETRY_ATTEMPTS:
+		LogManager.error("Gameplay telemetry: Max retries reached, dropping batch", "telemetry")
+		_gameplay_retry_count = 0
+		gameplay_batch_failed.emit("Max retries exceeded")
+		return
+
+	# Exponential backoff
+	var delay = RETRY_BACKOFF_BASE * pow(2, _gameplay_retry_count - 1)
+
+	var tree = get_tree()
+	if tree:
+		tree.create_timer(delay).timeout.connect(_flush_gameplay_batch)
+
+
+func _get_gameplay_api_url() -> String:
+	"""Get full API URL for gameplay telemetry endpoint."""
+	if AshbaneAuth and AshbaneAuth.has_method("get_api_base"):
+		return AshbaneAuth.get_api_base() + gameplay_api_endpoint
+	return "https://api.ashbane.net" + gameplay_api_endpoint
+
+
+func _get_current_zone() -> String:
+	"""Get the current zone/area identifier."""
+	var game_world = get_tree().get_first_node_in_group("game_world") if get_tree() else null
+	if game_world and game_world.has_method("get_current_zone"):
+		return game_world.get_current_zone()
+	# Fallback: try to get from ChunkExpansionManager
+	if ChunkExpansionManager and ChunkExpansionManager.has_method("get_current_chunk_id"):
+		return str(ChunkExpansionManager.get_current_chunk_id())
+	return "unknown"
+
+
+func _get_player_position() -> Vector2:
+	"""Get the player's current world position."""
+	var tree = get_tree()
+	if not tree:
+		return Vector2.ZERO
+	var player = tree.get_first_node_in_group(Constants.GROUP_PLAYER) if Constants else null
+	if player:
+		return player.global_position
+	return Vector2.ZERO
