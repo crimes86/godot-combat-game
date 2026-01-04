@@ -10712,10 +10712,13 @@ func _on_enter_world_pressed() -> void:
 	if not NetworkManager.connection_failed.is_connected(_on_server_connection_failed):
 		NetworkManager.connection_failed.connect(_on_server_connection_failed)
 
-	# Set player name from auth
+	# Set player name from auth (prefer display_name over internal username)
 	var player_name = "Player"
-	if AshbaneAuth and not AshbaneAuth.username.is_empty():
-		player_name = AshbaneAuth.username
+	if AshbaneAuth:
+		if not AshbaneAuth.display_name.is_empty():
+			player_name = AshbaneAuth.display_name
+		elif not AshbaneAuth.username.is_empty():
+			player_name = AshbaneAuth.username
 	NetworkManager.set_player_name(player_name)
 
 	LogManager.info("Connecting to production server at %s:%d" % [PRODUCTION_SERVER_IP, LAN_SERVER_PORT], "armory")

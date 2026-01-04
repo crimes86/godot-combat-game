@@ -160,28 +160,31 @@ func _load_server_character(character: Dictionary) -> void:
 
 func _finish_auth(user_data: Dictionary, is_new_character: bool = true) -> void:
 	"""Complete the auth flow and return to game or Armory"""
-	var username = user_data.get("username", "Player")
+	# Prefer display_name (e.g., "Player #1") over internal username (e.g., "ashbane-XXXXXXXX")
+	var display_name = user_data.get("display_name", "")
+	if display_name.is_empty():
+		display_name = AshbaneAuth.display_name if AshbaneAuth and not AshbaneAuth.display_name.is_empty() else user_data.get("username", "Player")
 
 	if is_new_character:
 		# New account - guest progress synced, continue playing
 		if status_label:
-			status_label.text = "Welcome, %s!\n\nYour progress has been saved.\nResuming game..." % username
+			status_label.text = "Welcome, %s!\n\nYour progress has been saved.\nResuming game..." % display_name
 
 		# Update player name in NetworkManager and UI
 		if NetworkManager:
-			NetworkManager.set_player_name(username)
+			NetworkManager.set_player_name(display_name)
 
 		# Update PortraitHUD if it exists
 		var portrait_hud = get_node_or_null("/root/PortraitHUD")
 		if portrait_hud and portrait_hud.has_method("set_player_name"):
-			portrait_hud.set_player_name(username)
+			portrait_hud.set_player_name(display_name)
 
 		# Update local player's health bar nameplate
 		var player = get_tree().get_first_node_in_group("player")
 		if player:
 			var health_bar = player.get_node_or_null("HealthBar")
 			if health_bar and health_bar.has_method("set_player_name"):
-				health_bar.set_player_name(username)
+				health_bar.set_player_name(display_name)
 				if health_bar.has_method("set_name_color"):
 					health_bar.set_name_color(Color(0.4, 0.8, 1.0, 1.0))
 
@@ -192,7 +195,7 @@ func _finish_auth(user_data: Dictionary, is_new_character: bool = true) -> void:
 	else:
 		# Existing character - redirect to Armory to properly load it
 		if status_label:
-			status_label.text = "Welcome back, %s!\n\nYou have an existing character.\nLoading Armory..." % username
+			status_label.text = "Welcome back, %s!\n\nYou have an existing character.\nLoading Armory..." % display_name
 
 		LogManager.info("Existing character detected - redirecting to Armory", "auth")
 
