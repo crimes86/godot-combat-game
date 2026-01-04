@@ -29,7 +29,8 @@ const DATA_SYNC_INTERVAL: float = 30.0  # Sync achievement data every 30 seconds
 # Auth state
 var auth_token: String = ""
 var user_id: int = -1
-var username: String = ""
+var username: String = ""  # Internal username (ashbane-XXXXXXXX)
+var display_name: String = ""  # User-friendly name (Player #N)
 var ashbane_tier: Dictionary = {}
 var providers: Array = []
 var achievements: Array = []
@@ -144,6 +145,7 @@ func logout() -> void:
 	auth_token = ""
 	user_id = -1
 	username = ""
+	display_name = ""
 	ashbane_tier = {}
 	providers = []
 	achievements = []
@@ -377,6 +379,7 @@ func _handle_auth_success(data: Dictionary) -> void:
 	auth_token = data.get("token", "")
 	user_id = data.get("user_id", -1)
 	username = data.get("username", "")
+	display_name = data.get("display_name", "Player #%d" % user_id if user_id >= 0 else "")
 
 	if auth_token == "" or user_id < 0:
 		auth_failed.emit("Invalid auth data received")
@@ -481,6 +484,7 @@ func _on_profile_response(result: int, response_code: int, headers: PackedString
 	# Update local state
 	user_id = data.get("user_id", user_id)
 	username = data.get("username", username)
+	display_name = data.get("display_name", "Player #%d" % user_id if user_id >= 0 else display_name)
 	total_achievements = data.get("total_achievements", 0)
 	ashbane_tier = data.get("ashbane", {})
 	if ashbane_tier == null:
@@ -577,6 +581,7 @@ func _handle_connection_failure() -> void:
 	auth_token = ""
 	user_id = -1
 	username = ""
+	display_name = ""
 	ashbane_tier = {}
 	providers = []
 	achievements = []
@@ -629,6 +634,7 @@ func _load_saved_token() -> void:
 	auth_token = data.get("token", "")
 	user_id = data.get("user_id", -1)
 	username = data.get("username", "")
+	display_name = data.get("display_name", "Player #%d" % user_id if user_id >= 0 else "")
 
 	if auth_token != "" and user_id > 0:
 		is_guest = false
@@ -656,6 +662,7 @@ func _save_token() -> void:
 		"token": auth_token,
 		"user_id": user_id,
 		"username": username,
+		"display_name": display_name,
 		"saved_at": Time.get_unix_time_from_system()
 	}
 

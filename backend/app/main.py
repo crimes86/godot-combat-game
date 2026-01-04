@@ -3742,6 +3742,7 @@ async def check_device_auth_status(request: Request, device_code: str, db: DbSes
         "status": "success",
         "user_id": record.user_id,
         "username": record.username,
+        "display_name": f"Player #{record.user_id}",  # User-friendly name
         "token": record.session_token,  # Godot stores this for API calls
     }
     db.delete(record)
@@ -3990,6 +3991,7 @@ async def get_current_user_api(
     return {
         "user_id": user.id,
         "username": user.username,
+        "display_name": f"Player #{user.id}",  # User-friendly name (sequential ID)
         "total_achievements": total_achievements,
         "by_rarity": rarity_counts,
         "ashbane": {
