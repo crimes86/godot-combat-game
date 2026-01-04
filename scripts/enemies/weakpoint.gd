@@ -403,6 +403,15 @@ func hit() -> void:
 		print("[PvP Weakpoint] hit() called, calling _apply_pvp_weakpoint_damage()")
 		_apply_pvp_weakpoint_damage()
 
+		# Spawn combat text for PvP weakpoint hit (shows crit damage on defender)
+		if damage_per_hit > 0:
+			var defender = get_parent()
+			if defender and defender.is_in_group("player"):
+				# Use CombatText to show weakpoint damage (yellow/crit style)
+				var spawn_pos = global_position
+				var parent_node = defender.get_parent() if defender.get_parent() else get_tree().root
+				CombatText.create_weakpoint(damage_per_hit, spawn_pos, parent_node)
+
 	# 🔊 Play satisfying bone-crack sound (randomized with pitch variation)
 	var sound_manager = get_node_or_null("/root/SoundManager")
 	if sound_manager:

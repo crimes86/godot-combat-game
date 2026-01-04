@@ -336,10 +336,23 @@ func _get_local_player() -> Node2D:
 	return null
 
 func _get_player_name(peer_id: int) -> String:
-	"""Get player name from NetworkManager"""
+	"""Get player name from NetworkManager or player node"""
+	# Try NetworkManager's connected_players first
 	if NetworkManager and NetworkManager.connected_players.has(peer_id):
-		return NetworkManager.connected_players[peer_id].get("name", "Player")
-	return "Player"
+		var name = NetworkManager.connected_players[peer_id].get("name", "")
+		if name and name != "":
+			return name
+
+	# Try getting from the player node's health bar (it displays their name)
+	if closest_player_node and is_instance_valid(closest_player_node):
+		var health_bar = closest_player_node.get_node_or_null("HealthBar")
+		if health_bar and health_bar.get("player_name_label"):
+			var label = health_bar.player_name_label
+			if label and label.text and label.text != "":
+				return label.text
+
+	# Fallback: use peer ID in name
+	return "Player #%d" % peer_id
 
 func _is_player_busy() -> bool:
 	"""Check if player is in a UI or state that blocks interaction"""

@@ -4376,6 +4376,10 @@ func _sync_local_player_position():
 	if not local_player or not is_instance_valid(local_player):
 		return
 
+	# Guard against disconnected multiplayer (e.g., post-duel server crash)
+	if not multiplayer.has_multiplayer_peer():
+		return
+
 	var my_id = multiplayer.get_unique_id()
 	var pos = local_player.global_position
 	var anim = _get_player_animation(local_player)

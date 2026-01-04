@@ -611,6 +611,14 @@ func _client_countdown_started(player1_id: int, player2_id: int, duration: int) 
 	"""Server notifies clients that countdown has started"""
 	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
 	LogManager.info("COUNTDOWN p1=%d p2=%d dur=%d peer=%d" % [player1_id, player2_id, duration, my_id], "duel")
+
+	# Notify participant that duel was accepted (only show to involved players)
+	if my_id == player1_id or my_id == player2_id:
+		var opponent_id = player2_id if my_id == player1_id else player1_id
+		var opponent_name = _get_player_name(opponent_id)
+		if NotificationManager:
+			NotificationManager.show_notification("Duel accepted! Fighting %s" % opponent_name, "INFO")
+
 	_start_countdown(player1_id, player2_id)
 
 @rpc("authority", "reliable")

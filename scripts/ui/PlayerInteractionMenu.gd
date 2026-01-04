@@ -119,138 +119,150 @@ func hide_menu() -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _create_ui() -> void:
-	"""Create the menu UI"""
+	"""Create the menu UI - modern styled interaction panel"""
 	# Main panel - centered on screen
 	main_panel = PanelContainer.new()
 	main_panel.name = "InteractionMenuPanel"
 
-	# Center positioning
+	# Center positioning - slightly larger for better readability
 	main_panel.set_anchors_preset(Control.PRESET_CENTER)
-	main_panel.custom_minimum_size = Vector2(280, 220)
-	main_panel.offset_left = -140
-	main_panel.offset_right = 140
-	main_panel.offset_top = -110
-	main_panel.offset_bottom = 110
+	main_panel.custom_minimum_size = Vector2(300, 260)
+	main_panel.offset_left = -150
+	main_panel.offset_right = 150
+	main_panel.offset_top = -130
+	main_panel.offset_bottom = 130
 
-	# Panel styling
+	# Panel styling - darker background with gold accent border
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = BG_COLOR
+	panel_style.bg_color = Color(0.08, 0.08, 0.1, 0.95)  # Near-black
 	panel_style.border_width_left = 2
 	panel_style.border_width_right = 2
-	panel_style.border_width_top = 2
+	panel_style.border_width_top = 3  # Thicker top for accent
 	panel_style.border_width_bottom = 2
-	panel_style.border_color = BORDER_COLOR
-	panel_style.corner_radius_top_left = 8
-	panel_style.corner_radius_top_right = 8
-	panel_style.corner_radius_bottom_left = 8
-	panel_style.corner_radius_bottom_right = 8
-	panel_style.shadow_size = 10
-	panel_style.shadow_color = Color(0, 0, 0, 0.6)
-	panel_style.shadow_offset = Vector2(0, 4)
+	panel_style.border_color = Color(0.6, 0.5, 0.3, 0.9)  # Gold/bronze
+	panel_style.corner_radius_top_left = 6
+	panel_style.corner_radius_top_right = 6
+	panel_style.corner_radius_bottom_left = 6
+	panel_style.corner_radius_bottom_right = 6
+	panel_style.shadow_size = 15
+	panel_style.shadow_color = Color(0, 0, 0, 0.7)
+	panel_style.shadow_offset = Vector2(0, 6)
 	main_panel.add_theme_stylebox_override("panel", panel_style)
 
 	# Margin container
 	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 15)
-	margin.add_theme_constant_override("margin_right", 15)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_bottom", 14)
 	main_panel.add_child(margin)
 
 	# Main VBox
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", 12)
 	margin.add_child(vbox)
 
-	# Header
+	# Header with player name - prominent display
 	var header = Label.new()
 	header.name = "Header"
-	header.text = "Interact with Player"
-	header.add_theme_font_size_override("font_size", 16)
-	header.add_theme_color_override("font_color", HEADER_COLOR)
+	header.text = "Player"  # Will be updated with actual name
+	header.add_theme_font_size_override("font_size", 20)
+	header.add_theme_color_override("font_color", Color(0.95, 0.85, 0.6))  # Gold text
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(header)
 
-	# Separator
+	# Decorative separator - styled line
 	var sep = HSeparator.new()
-	sep.add_theme_constant_override("separation", 4)
+	var sep_style = StyleBoxFlat.new()
+	sep_style.bg_color = Color(0.5, 0.45, 0.3, 0.6)
+	sep_style.set_content_margin_all(1)
+	sep.add_theme_stylebox_override("separator", sep_style)
 	vbox.add_child(sep)
 
 	# Button container
 	var btn_vbox = VBoxContainer.new()
-	btn_vbox.add_theme_constant_override("separation", 8)
+	btn_vbox.add_theme_constant_override("separation", 10)
 	vbox.add_child(btn_vbox)
 
-	# Inspect button
+	# Inspect button - blue theme with icon
 	inspect_button = Button.new()
-	inspect_button.text = "Inspect Equipment"
-	inspect_button.custom_minimum_size.y = 36
-	_style_button(inspect_button, Color(0.3, 0.45, 0.6, 0.8))
+	inspect_button.text = "  Inspect Equipment"
+	inspect_button.custom_minimum_size.y = 42
+	_style_button(inspect_button, Color(0.2, 0.35, 0.5, 0.9), Color(0.3, 0.5, 0.7))
 	inspect_button.pressed.connect(_on_inspect_pressed)
 	btn_vbox.add_child(inspect_button)
 
-	# Trade button
+	# Trade button - green/gold theme with icon
 	trade_button = Button.new()
-	trade_button.text = "Request Trade"
-	trade_button.custom_minimum_size.y = 36
-	_style_button(trade_button, Color(0.4, 0.5, 0.3, 0.8))
+	trade_button.text = "  Request Trade"
+	trade_button.custom_minimum_size.y = 42
+	_style_button(trade_button, Color(0.35, 0.45, 0.25, 0.9), Color(0.5, 0.6, 0.35))
 	trade_button.pressed.connect(_on_trade_pressed)
 	btn_vbox.add_child(trade_button)
 
-	# Duel button
+	# Duel button - red theme with icon
 	duel_button = Button.new()
-	duel_button.text = "Challenge to Duel"
-	duel_button.custom_minimum_size.y = 36
-	_style_button(duel_button, Color(0.55, 0.35, 0.35, 0.8))
+	duel_button.text = "  Challenge to Duel"
+	duel_button.custom_minimum_size.y = 42
+	_style_button(duel_button, Color(0.5, 0.25, 0.25, 0.9), Color(0.7, 0.35, 0.35))
 	duel_button.pressed.connect(_on_duel_pressed)
 	btn_vbox.add_child(duel_button)
 
-	# Separator before cancel
-	var sep2 = HSeparator.new()
-	sep2.add_theme_constant_override("separation", 2)
-	vbox.add_child(sep2)
+	# Spacer before cancel
+	var spacer = Control.new()
+	spacer.custom_minimum_size.y = 4
+	vbox.add_child(spacer)
 
-	# Cancel button
+	# Cancel button - subtle gray
 	cancel_button = Button.new()
 	cancel_button.text = "Cancel"
-	cancel_button.custom_minimum_size.y = 30
-	_style_button(cancel_button, Color(0.3, 0.3, 0.32, 0.7))
+	cancel_button.custom_minimum_size.y = 34
+	_style_button(cancel_button, Color(0.25, 0.25, 0.28, 0.8), Color(0.35, 0.35, 0.4))
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	vbox.add_child(cancel_button)
 
 	add_child(main_panel)
 
-func _style_button(button: Button, color: Color) -> void:
-	"""Apply consistent button styling"""
+func _style_button(button: Button, color: Color, hover_color: Color = Color.BLACK) -> void:
+	"""Apply consistent button styling with custom hover color"""
+	# If no hover color provided, use lightened version of base
+	if hover_color == Color.BLACK:
+		hover_color = color.lightened(0.2)
+
 	var style = StyleBoxFlat.new()
 	style.bg_color = color
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
+	style.corner_radius_top_left = 5
+	style.corner_radius_top_right = 5
+	style.corner_radius_bottom_left = 5
+	style.corner_radius_bottom_right = 5
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	style.border_width_bottom = 2
+	style.border_color = color.darkened(0.3)  # Subtle bottom border for depth
 
 	var hover = style.duplicate()
-	hover.bg_color = color.lightened(0.15)
+	hover.bg_color = hover_color
+	hover.border_color = hover_color.darkened(0.2)
 
 	var pressed = style.duplicate()
-	pressed.bg_color = color.darkened(0.1)
+	pressed.bg_color = color.darkened(0.15)
+	pressed.border_width_bottom = 1
 
 	var disabled = style.duplicate()
-	disabled.bg_color = Color(0.25, 0.25, 0.27, 0.5)
+	disabled.bg_color = Color(0.2, 0.2, 0.22, 0.6)
+	disabled.border_color = Color(0.15, 0.15, 0.18, 0.5)
 
 	button.add_theme_stylebox_override("normal", style)
 	button.add_theme_stylebox_override("hover", hover)
 	button.add_theme_stylebox_override("pressed", pressed)
 	button.add_theme_stylebox_override("disabled", disabled)
 
-	button.add_theme_font_size_override("font_size", 14)
-	button.add_theme_color_override("font_color", TEXT_COLOR)
+	button.add_theme_font_size_override("font_size", 15)
+	button.add_theme_color_override("font_color", Color(0.9, 0.9, 0.92))
 	button.add_theme_color_override("font_hover_color", Color.WHITE)
-	button.add_theme_color_override("font_disabled_color", Color(0.5, 0.5, 0.5, 0.7))
+	button.add_theme_color_override("font_disabled_color", Color(0.45, 0.45, 0.48, 0.7))
 
 func _update_header() -> void:
 	"""Update the header with target player name"""
@@ -332,8 +344,12 @@ func _on_duel_pressed() -> void:
 	if DuelManager:
 		var result = DuelManager.request_duel(target_player_id)
 		if result.success:
+			# Show "waiting for response" message
 			if NotificationManager:
-				NotificationManager.show_notification(result.message, "INFO")
+				NotificationManager.show_notification(
+					"Duel request sent to %s. Waiting for response..." % target_player_name,
+					"INFO"
+				)
 		else:
 			if NotificationManager:
 				NotificationManager.show_notification(result.message, "ERROR")
