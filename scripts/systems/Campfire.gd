@@ -1034,6 +1034,12 @@ func update_ground_mist(delta: float) -> void:
 	var heal_radius = 50.0 + (owner_wood * 8.375)  # 50-468.75px
 	var crit_radius = 50.0 + (owner_bone_embers * 4.1875)  # 50-468.75px
 
+	# Skip visual updates if visuals not created (server mode)
+	if not heal_mist or not is_instance_valid(heal_mist):
+		return
+	if not crit_mist or not is_instance_valid(crit_mist):
+		return
+
 	# Dynamically set z-index: smaller aura always on top
 	if heal_radius < crit_radius:
 		# Heal is smaller - put it on top
@@ -1050,9 +1056,10 @@ func update_ground_mist(delta: float) -> void:
 		heal_mist.visible = true
 
 		# Update heal mist particle emission points to match aura size
-		var heal_mist_particles = fire_sprite.get_node_or_null("HealMistParticles")
-		if heal_mist_particles:
-			heal_mist_particles.emission_points = create_emission_ring(heal_radius, 32)  # Update ring size
+		if fire_sprite and is_instance_valid(fire_sprite):
+			var heal_mist_particles = fire_sprite.get_node_or_null("HealMistParticles")
+			if heal_mist_particles:
+				heal_mist_particles.emission_points = create_emission_ring(heal_radius, 32)  # Update ring size
 	else:
 		heal_mist.visible = false
 
@@ -1062,9 +1069,10 @@ func update_ground_mist(delta: float) -> void:
 		crit_mist.visible = true
 
 		# Update crit mist particle emission points to match aura size
-		var crit_mist_particles = fire_sprite.get_node_or_null("CritMistParticles")
-		if crit_mist_particles:
-			crit_mist_particles.emission_points = create_emission_ring(crit_radius, 32)  # Update ring size
+		if fire_sprite and is_instance_valid(fire_sprite):
+			var crit_mist_particles = fire_sprite.get_node_or_null("CritMistParticles")
+			if crit_mist_particles:
+				crit_mist_particles.emission_points = create_emission_ring(crit_radius, 32)  # Update ring size
 	else:
 		crit_mist.visible = false
 
@@ -2693,19 +2701,20 @@ func update_visual_intensity() -> void:
 			flame.scale.y = flame_scale_y
 
 	# Increase ember and spark particle intensity with fuel
-	var ember_particles = fire_sprite.get_node_or_null("EmberParticles")
-	if ember_particles:
-		# Base amount: 15, scale up to 30 with full fuel
-		ember_particles.amount = int(15 + (total_fuel_percent * 15))
-		# Increase velocity for more dramatic effect
-		ember_particles.initial_velocity_max = 25.0 + (total_fuel_percent * 25.0)  # Up to 50
+	if fire_sprite and is_instance_valid(fire_sprite):
+		var ember_particles = fire_sprite.get_node_or_null("EmberParticles")
+		if ember_particles:
+			# Base amount: 15, scale up to 30 with full fuel
+			ember_particles.amount = int(15 + (total_fuel_percent * 15))
+			# Increase velocity for more dramatic effect
+			ember_particles.initial_velocity_max = 25.0 + (total_fuel_percent * 25.0)  # Up to 50
 
-	var spark_particles = fire_sprite.get_node_or_null("SparkParticles")
-	if spark_particles:
-		# Base amount: 20, scale up to 40 with full fuel
-		spark_particles.amount = int(20 + (total_fuel_percent * 20))
-		# Increase velocity
-		spark_particles.initial_velocity_max = 60.0 + (total_fuel_percent * 40.0)  # Up to 100
+		var spark_particles = fire_sprite.get_node_or_null("SparkParticles")
+		if spark_particles:
+			# Base amount: 20, scale up to 40 with full fuel
+			spark_particles.amount = int(20 + (total_fuel_percent * 20))
+			# Increase velocity
+			spark_particles.initial_velocity_max = 60.0 + (total_fuel_percent * 40.0)  # Up to 100
 
 	# Add ghostly glow to fire light based on fuel
 	if fire_light and is_instance_valid(fire_light):
@@ -2769,17 +2778,18 @@ func update_visual_intensity() -> void:
 			crit_particles.initial_velocity_max = 180.0 + (bone_percent * 60.0)  # Up to 240
 
 	# Enable/disable mist particles based on fuel
-	var heal_mist_particles = fire_sprite.get_node_or_null("HealMistParticles")
-	if heal_mist_particles:
-		heal_mist_particles.emitting = current_wood > 0
-	var crit_mist_particles = fire_sprite.get_node_or_null("CritMistParticles")
-	if crit_mist_particles:
-		crit_mist_particles.emitting = current_bone_embers > 0
+	if fire_sprite and is_instance_valid(fire_sprite):
+		var heal_mist_particles = fire_sprite.get_node_or_null("HealMistParticles")
+		if heal_mist_particles:
+			heal_mist_particles.emitting = current_wood > 0
+		var crit_mist_particles = fire_sprite.get_node_or_null("CritMistParticles")
+		if crit_mist_particles:
+			crit_mist_particles.emitting = current_bone_embers > 0
 
-	# Enable/disable aurora particles based on fuel
-	var aurora_particles = fire_sprite.get_node_or_null("AuroraParticles")
-	if aurora_particles:
-		aurora_particles.emitting = (current_wood > 0 or current_bone_embers > 0)
+		# Enable/disable aurora particles based on fuel
+		var aurora_particles = fire_sprite.get_node_or_null("AuroraParticles")
+		if aurora_particles:
+			aurora_particles.emitting = (current_wood > 0 or current_bone_embers > 0)
 
 func update_coal_pulsing() -> void:
 	"""Animate coal pulsing every frame - synchronized breathing with varied intensity"""
