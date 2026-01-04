@@ -200,8 +200,8 @@ func _finish_auth(user_data: Dictionary, is_new_character: bool = true) -> void:
 		_hide_overlay()
 
 		# Disconnect from current game if in multiplayer
-		if NetworkManager and NetworkManager.is_connected_to_server():
-			NetworkManager.disconnect_from_server()
+		if NetworkManager and NetworkManager.peer != null:
+			NetworkManager.close_connection()
 
 		# Go to Armory scene
 		get_tree().change_scene_to_file("res://scenes/ui/Armory.tscn")
