@@ -647,9 +647,10 @@ func _get_current_zone() -> String:
 	var game_world = get_tree().get_first_node_in_group("game_world") if get_tree() else null
 	if game_world and game_world.has_method("get_current_zone"):
 		return game_world.get_current_zone()
-	# Fallback: try to get from ChunkExpansionManager
-	if ChunkExpansionManager and ChunkExpansionManager.has_method("get_current_chunk_id"):
-		return str(ChunkExpansionManager.get_current_chunk_id())
+	# Fallback: try to get from ChunkExpansionManager (if it exists as autoload)
+	var chunk_mgr = get_node_or_null("/root/ChunkExpansionManager")
+	if chunk_mgr and chunk_mgr.has_method("get_current_chunk_id"):
+		return str(chunk_mgr.get_current_chunk_id())
 	return "unknown"
 
 
