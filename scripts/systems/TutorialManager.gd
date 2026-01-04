@@ -322,13 +322,11 @@ func show_blacksmith_tutorial() -> void:
 
 	set_prompt_text("Press [F] to talk to the Wanderer!")
 
-	# Show arrow to blacksmith
+	# Show directional arrow pointing to blacksmith (from player position)
 	show_arrow_to_target(get_blacksmith_position())
 
-	# Show big green arrow on the blacksmith itself
-	var blacksmith = get_tree().get_first_node_in_group("vendor")
-	if blacksmith and blacksmith.has_method("show_tutorial_arrow"):
-		blacksmith.show_tutorial_arrow()
+	# NOTE: Only show ONE arrow to avoid double arrow issue
+	# The TutorialArrow (directional) is sufficient - the vendor's green arrow is redundant
 
 func show_accept_quest_tutorial() -> void:
 	"""Step 8: Accept first quest from blacksmith"""

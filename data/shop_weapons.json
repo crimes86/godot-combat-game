@@ -81,7 +81,7 @@
 			"base_damage": 5,
 			"attack_speed": "medium",
 			"required_level": 1,
-			"price": 0,
+			"price": 5,
 			"rarity": "Common",
 			"zone": 1
 		},
@@ -93,7 +93,7 @@
 			"base_damage": 6,
 			"attack_speed": "medium",
 			"required_level": 1,
-			"price": 0,
+			"price": 5,
 			"rarity": "Common",
 			"zone": 1
 		},
@@ -105,7 +105,7 @@
 			"base_damage": 3,
 			"attack_speed": "fast",
 			"required_level": 1,
-			"price": 0,
+			"price": 5,
 			"rarity": "Common",
 			"zone": 1
 		},
@@ -117,7 +117,7 @@
 			"base_damage": 6,
 			"attack_speed": "medium",
 			"required_level": 1,
-			"price": 0,
+			"price": 10,
 			"rarity": "Uncommon",
 			"zone": 1
 		},
@@ -132,7 +132,7 @@
 			"bow_range": 400.0,
 			"arrow_speed": 500.0,
 			"required_level": 1,
-			"price": 0,
+			"price": 10,
 			"rarity": "Common",
 			"zone": 1
 		},
@@ -147,7 +147,7 @@
 			"heal_radius": 70,
 			"attack_speed": "medium",
 			"required_level": 1,
-			"price": 0,
+			"price": 5,
 			"rarity": "Common",
 			"zone": 1,
 			"notes": "Starter healing staff"
@@ -161,7 +161,7 @@
 			"base_damage": 12,
 			"attack_speed": "medium",
 			"required_level": 5,
-			"price": 0,
+			"price": 50,
 			"rarity": "Uncommon",
 			"zone": 2
 		},
@@ -173,7 +173,7 @@
 			"base_damage": 18,
 			"attack_speed": "slow",
 			"required_level": 5,
-			"price": 0,
+			"price": 60,
 			"rarity": "Uncommon",
 			"zone": 2,
 			"notes": "Slow speed compensated by high damage"
@@ -186,7 +186,7 @@
 			"base_damage": 5,
 			"attack_speed": "fast",
 			"required_level": 5,
-			"price": 0,
+			"price": 40,
 			"rarity": "Uncommon",
 			"zone": 2
 		},
@@ -198,7 +198,7 @@
 			"base_damage": 10,
 			"attack_speed": "fast",
 			"required_level": 5,
-			"price": 0,
+			"price": 55,
 			"rarity": "Uncommon",
 			"zone": 2
 		},
@@ -210,7 +210,7 @@
 			"base_damage": 14,
 			"attack_speed": "medium",
 			"required_level": 5,
-			"price": 0,
+			"price": 50,
 			"rarity": "Uncommon",
 			"zone": 2
 		},
@@ -222,7 +222,7 @@
 			"base_damage": 14,
 			"attack_speed": "medium",
 			"required_level": 5,
-			"price": 0,
+			"price": 50,
 			"rarity": "Uncommon",
 			"zone": 2
 		},
@@ -237,7 +237,7 @@
 			"bow_range": 500.0,
 			"arrow_speed": 650.0,
 			"required_level": 5,
-			"price": 0,
+			"price": 60,
 			"rarity": "Uncommon",
 			"zone": 2
 		},
@@ -252,7 +252,7 @@
 			"heal_radius": 85,
 			"attack_speed": "medium",
 			"required_level": 5,
-			"price": 0,
+			"price": 45,
 			"rarity": "Uncommon",
 			"zone": 2,
 			"notes": "Better healing staff for zone 2"
@@ -265,7 +265,7 @@
 			"base_damage": 20,
 			"attack_speed": "slow",
 			"required_level": 5,
-			"price": 0,
+			"price": 65,
 			"rarity": "Uncommon",
 			"zone": 2,
 			"notes": "Two-handed weapon with great damage"
@@ -278,7 +278,7 @@
 			"base_damage": 9,
 			"attack_speed": "fast",
 			"required_level": 5,
-			"price": 0,
+			"price": 45,
 			"rarity": "Uncommon",
 			"zone": 2
 		},

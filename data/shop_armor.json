@@ -40,7 +40,7 @@
 				"str": 2,
 				"vit": 3
 			},
-			"price": 0,
+			"price": 8,
 			"value": 75,
 			"can_trade": true,
 			"stackable": false,
@@ -63,7 +63,7 @@
 				"str": 3,
 				"vit": 5
 			},
-			"price": 0,
+			"price": 15,
 			"value": 125,
 			"can_trade": true,
 			"stackable": false,
@@ -86,7 +86,7 @@
 				"str": 1,
 				"vit": 2
 			},
-			"price": 0,
+			"price": 5,
 			"value": 50,
 			"can_trade": true,
 			"stackable": false,
@@ -109,7 +109,7 @@
 				"str": 2,
 				"vit": 3
 			},
-			"price": 0,
+			"price": 8,
 			"value": 75,
 			"can_trade": true,
 			"stackable": false,
@@ -132,7 +132,7 @@
 				"str": 1,
 				"vit": 2
 			},
-			"price": 0,
+			"price": 5,
 			"value": 50,
 			"can_trade": true,
 			"stackable": false,
@@ -155,7 +155,7 @@
 				"str": 1,
 				"vit": 1
 			},
-			"price": 0,
+			"price": 4,
 			"value": 35,
 			"can_trade": true,
 			"stackable": false,
@@ -180,7 +180,7 @@
 				"dex": 3,
 				"agi": 2
 			},
-			"price": 0,
+			"price": 7,
 			"value": 60,
 			"can_trade": true,
 			"stackable": false,
@@ -204,7 +204,7 @@
 				"dex": 4,
 				"agi": 3
 			},
-			"price": 0,
+			"price": 12,
 			"value": 100,
 			"can_trade": true,
 			"stackable": false,
@@ -228,7 +228,7 @@
 				"dex": 2,
 				"agi": 1
 			},
-			"price": 0,
+			"price": 5,
 			"value": 40,
 			"can_trade": true,
 			"stackable": false,
@@ -252,7 +252,7 @@
 				"dex": 3,
 				"agi": 2
 			},
-			"price": 0,
+			"price": 7,
 			"value": 60,
 			"can_trade": true,
 			"stackable": false,
@@ -276,7 +276,7 @@
 				"dex": 2,
 				"agi": 2
 			},
-			"price": 0,
+			"price": 5,
 			"value": 40,
 			"can_trade": true,
 			"stackable": false,
@@ -299,7 +299,7 @@
 				"dex": 2,
 				"agi": 1
 			},
-			"price": 0,
+			"price": 4,
 			"value": 30,
 			"can_trade": true,
 			"stackable": false,
@@ -324,7 +324,7 @@
 				"int": 3,
 				"wis": 2
 			},
-			"price": 0,
+			"price": 6,
 			"value": 50,
 			"can_trade": true,
 			"stackable": false,
@@ -348,7 +348,7 @@
 				"int": 4,
 				"wis": 3
 			},
-			"price": 0,
+			"price": 10,
 			"value": 90,
 			"can_trade": true,
 			"stackable": false,
@@ -372,7 +372,7 @@
 				"int": 2,
 				"wis": 1
 			},
-			"price": 0,
+			"price": 4,
 			"value": 30,
 			"can_trade": true,
 			"stackable": false,
@@ -396,7 +396,7 @@
 				"int": 3,
 				"wis": 2
 			},
-			"price": 0,
+			"price": 6,
 			"value": 50,
 			"can_trade": true,
 			"stackable": false,
@@ -420,7 +420,7 @@
 				"int": 2,
 				"wis": 2
 			},
-			"price": 0,
+			"price": 4,
 			"value": 30,
 			"can_trade": true,
 			"stackable": false,
@@ -443,7 +443,7 @@
 				"int": 2,
 				"wis": 1
 			},
-			"price": 0,
+			"price": 3,
 			"value": 25,
 			"can_trade": true,
 			"stackable": false,
