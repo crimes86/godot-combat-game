@@ -41,6 +41,10 @@ const ICON_SIZE = 46  # SLOT_SIZE - 8, matches inventory
 var vendor: Vendor = null
 var quest_message_label: Label = null  # Message label inside Quests tab
 
+# Backend purchase tracking
+var _pending_purchase: Dictionary = {}  # Tracks in-flight purchase {type, index, item_data}
+var _purchase_in_progress: bool = false
+
 # Forge tab colors
 const FORGE_RARITY_COLORS = {
 	"common": Color(0.6, 0.6, 0.6),
@@ -86,6 +90,10 @@ func _ready() -> void:
 	# Connect tab changes for tutorial system
 	if tab_container:
 		tab_container.tab_changed.connect(_on_tab_changed)
+
+	# Connect to backend purchase signal (for authenticated users)
+	if AshbaneAuth:
+		AshbaneAuth.vendor_purchase_completed.connect(_on_backend_purchase_completed)
 
 	# Create quest message label inside Quests tab (at bottom of tab content)
 	_create_quest_message_label()
@@ -746,6 +754,10 @@ func purchase_weapon(index: int) -> void:
 	if index < 0 or index >= vendor.weapons_for_sale.size():
 		return
 
+	if _purchase_in_progress:
+		show_message("Purchase in progress...", Color(0.9, 0.7, 0.2))
+		return
+
 	var weapon: Weapon = vendor.weapons_for_sale[index]
 
 	# Double-check: prevent duplicate purchases (failsafe for rapid clicking)
@@ -754,30 +766,24 @@ func purchase_weapon(index: int) -> void:
 		populate_weapons()  # Refresh UI to show "Owned"
 		return
 
-	var success = vendor.purchase_weapon(index)
-
-	if success:
+	# Check if user is authenticated - use backend for secure purchase
+	if AshbaneAuth and AshbaneAuth.is_authenticated:
+		var item_id = vendor.get_weapon_id(index)
 		var price = vendor.get_weapon_price_data(index)
+		_pending_purchase = {
+			"type": "weapon",
+			"index": index,
+			"weapon": weapon,
+			"price": price,
+			"rarity_str": Weapon.Rarity.keys()[weapon.rarity]
+		}
+		_purchase_in_progress = true
+		show_message("Purchasing...", Color(0.7, 0.7, 0.7))
+		AshbaneAuth.purchase_from_vendor(item_id, "weapons", 1)
+		return
 
-		# Get rarity as string
-		var rarity_str = Weapon.Rarity.keys()[weapon.rarity]
-
-		# Show item added notification
-		NotificationManager.notify_item_added(weapon.weapon_name, 1, rarity_str)
-
-		item_purchased.emit(weapon.weapon_name, price)
-
-		# Play gold loot sound
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
-
-		# Refresh the UI
-		update_gold_display()
-		populate_weapons()
-		populate_armor()
-	else:
-		show_message("Cannot purchase this item!", Color.RED)
+	# Guest: require login to purchase (prevents client-side cheating)
+	_show_login_required_message()
 
 func purchase_armor(index: int) -> void:
 	"""Attempt to purchase armor"""
@@ -787,11 +793,16 @@ func purchase_armor(index: int) -> void:
 	if index < 0 or index >= vendor.armor_for_sale.size():
 		return
 
+	if _purchase_in_progress:
+		show_message("Purchase in progress...", Color(0.9, 0.7, 0.2))
+		return
+
 	var armor_data = vendor.armor_for_sale[index]
 	var price = armor_data.get("price", 0)
 	var armor_name = armor_data.get("name", "Unknown")
 	var armor_slot = armor_data.get("slot", "")
 	var armor_rarity = armor_data.get("rarity", "COMMON")
+	var item_id = armor_data.get("id", armor_name.to_snake_case())
 
 	# Double-check: prevent duplicate purchases (failsafe for rapid clicking)
 	if _player_owns_armor(armor_name, armor_slot):
@@ -799,32 +810,23 @@ func purchase_armor(index: int) -> void:
 		populate_armor()  # Refresh UI to show "Owned"
 		return
 
-	# Check gold
-	if not CharacterStats.can_afford(price):
-		show_message("Not enough gold!", Color.RED)
+	# Check if user is authenticated - use backend for secure purchase
+	if AshbaneAuth and AshbaneAuth.is_authenticated:
+		_pending_purchase = {
+			"type": "armor",
+			"index": index,
+			"item_data": armor_data,
+			"price": price,
+			"name": armor_name,
+			"rarity_str": armor_rarity
+		}
+		_purchase_in_progress = true
+		show_message("Purchasing...", Color(0.7, 0.7, 0.7))
+		AshbaneAuth.purchase_from_vendor(item_id, "armor", 1)
 		return
 
-	# Purchase successful
-	if CharacterStats.spend_gold(price):
-		# Add armor to inventory
-		InventorySystem.add_item(armor_data)
-
-		# Show item added notification
-		NotificationManager.notify_item_added(armor_name, 1, armor_rarity)
-
-		item_purchased.emit(armor_name, price)
-
-		# Play gold loot sound
-		var sound_manager = get_node_or_null("/root/SoundManager")
-		if sound_manager:
-			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
-
-		# Refresh the UI
-		update_gold_display()
-		populate_armor()
-		populate_sell_items()
-	else:
-		show_message("Cannot purchase this item!", Color.RED)
+	# Guest: require login to purchase (prevents client-side cheating)
+	_show_login_required_message()
 
 func purchase_tool(index: int) -> void:
 	"""Attempt to purchase a tool"""
@@ -834,10 +836,14 @@ func purchase_tool(index: int) -> void:
 	if index < 0 or index >= vendor.tools_for_sale.size():
 		return
 
+	if _purchase_in_progress:
+		show_message("Purchase in progress...", Color(0.9, 0.7, 0.2))
+		return
+
 	var tool_data = vendor.tools_for_sale[index]
 	var price = tool_data.get("price", 0)
 	var tool_name = tool_data.get("name", "Unknown")
-	var tool_type = tool_data.get("tool_type", "tool")
+	var tool_type = tool_data.get("tool_type", tool_data.get("type", "tool"))
 	var tool_rarity = tool_data.get("rarity", "COMMON")
 
 	# Double-check: prevent duplicate purchases (failsafe for rapid clicking)
@@ -846,6 +852,18 @@ func purchase_tool(index: int) -> void:
 		populate_tools()  # Refresh UI to show "Owned"
 		return
 
+	# Check if user is authenticated - use backend for secure purchase
+	if AshbaneAuth and AshbaneAuth.is_authenticated:
+		# NOTE: Tools are hardcoded in Vendor.gd, not in backend catalog (no shop_tools.json)
+		# For now, allow local purchase for authenticated users since tools are free
+		# TODO: Add shop_tools.json to backend when paid tools are added
+		pass
+	else:
+		# Guest: require login to purchase (prevents client-side cheating)
+		_show_login_required_message()
+		return
+
+	# Local purchase for tools (authenticated users only, tools are free)
 	# Check gold (skip check if item is free)
 	if price > 0 and not CharacterStats.can_afford(price):
 		show_message("Not enough gold!", Color.RED)
@@ -870,8 +888,6 @@ func purchase_tool(index: int) -> void:
 		update_gold_display()
 		populate_tools()
 		populate_sell_items()
-
-		# Inventory notification handles feedback - no need for extra message
 	else:
 		show_message("Cannot purchase this item!", Color.RED)
 
@@ -888,6 +904,72 @@ func show_message(text: String, color: Color) -> void:
 	await get_tree().create_timer(3.0).timeout
 	if message_label:
 		message_label.hide()
+
+func _show_login_required_message() -> void:
+	"""Show message prompting guest to login to make purchases"""
+	show_message("Login required to purchase! Press ESC → Main Menu → Login", Color(1.0, 0.7, 0.3))
+
+	# Also trigger a notification for visibility
+	if NotificationManager:
+		NotificationManager.show_notification("Login to Purchase", "Create an account to buy items and save your progress!", Color(1.0, 0.7, 0.3))
+
+func _on_backend_purchase_completed(success: bool, response: Dictionary) -> void:
+	"""Handle response from backend purchase API"""
+	_purchase_in_progress = false
+
+	if not _pending_purchase.is_empty():
+		var purchase_type = _pending_purchase.get("type", "")
+
+		if success:
+			# Update gold from server response (authoritative)
+			var new_gold = response.get("new_gold_balance", -1)
+			if new_gold >= 0:
+				CharacterStats.gold = new_gold
+
+			# Add item to local inventory based on type
+			match purchase_type:
+				"weapon":
+					var weapon = _pending_purchase.get("weapon")
+					var price = _pending_purchase.get("price", 0)
+					if weapon:
+						var weapon_dict = vendor.weapon_to_dict(weapon, price)
+						InventorySystem.add_item(weapon_dict)
+						NotificationManager.notify_item_added(weapon.weapon_name, 1, _pending_purchase.get("rarity_str", "COMMON"))
+						item_purchased.emit(weapon.weapon_name, response.get("gold_spent", price))
+
+				"armor":
+					var item_data = _pending_purchase.get("item_data", {})
+					if not item_data.is_empty():
+						InventorySystem.add_item(item_data)
+						NotificationManager.notify_item_added(_pending_purchase.get("name", "Item"), 1, _pending_purchase.get("rarity_str", "COMMON"))
+						item_purchased.emit(_pending_purchase.get("name", "Item"), response.get("gold_spent", 0))
+
+				"tool":
+					var item_data = _pending_purchase.get("item_data", {})
+					if not item_data.is_empty():
+						InventorySystem.add_item(item_data)
+						NotificationManager.notify_item_added(_pending_purchase.get("name", "Item"), 1, _pending_purchase.get("rarity_str", "COMMON"))
+						item_purchased.emit(_pending_purchase.get("name", "Item"), response.get("gold_spent", 0))
+
+			# Play gold loot sound
+			var sound_manager = get_node_or_null("/root/SoundManager")
+			if sound_manager:
+				sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
+
+			# Refresh UI
+			update_gold_display()
+			populate_weapons()
+			populate_armor()
+			populate_tools()
+			populate_sell_items()
+
+		else:
+			# Purchase failed - show error
+			var error_msg = response.get("message", "Purchase failed")
+			show_message(error_msg, Color.RED)
+
+		# Clear pending purchase
+		_pending_purchase = {}
 
 func _create_quest_message_label() -> void:
 	"""Create a message label above the shop window for quest feedback"""

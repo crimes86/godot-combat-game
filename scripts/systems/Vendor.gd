@@ -13,6 +13,7 @@ signal shop_closed()
 
 var weapons_for_sale: Array = []
 var weapon_prices: Array = []  # Parallel array for weapon prices
+var weapon_ids: Array = []  # Parallel array for weapon IDs (for backend API)
 var armor_for_sale: Array = []
 var tools_for_sale: Array = []  # Gathering tools (axe, pickaxe, etc)
 var misc_for_sale: Array = []  # Misc items (seeds, kits, consumables)
@@ -424,9 +425,11 @@ func load_shop_data() -> void:
 						var weapon = create_weapon_from_data(weapon_data)
 						if weapon:
 							weapons_for_sale.append(weapon)
-							# Store price alongside weapon
+							# Store price and ID alongside weapon
 							var price = weapon_data.get("price", 0)
+							var item_id = weapon_data.get("id", weapon.weapon_name.to_snake_case())
 							weapon_prices.append(price)
+							weapon_ids.append(item_id)
 							print("   Loaded weapon: %s (zone %d, price: %d)" % [weapon.weapon_name, weapon_zone, price])
 				else:
 					Constants.log_warning("Invalid weapon entry in shop_weapons.json (not a Dictionary)")
@@ -518,7 +521,7 @@ func load_starter_tools() -> void:
 		"type": "placeable",
 		"placeable_type": "campfire",
 		"value": 25,
-		"price": 500,  # Changed to 500 gold (was free)
+		"price": 0,  # Free starter item
 		"rarity": "COMMON",
 		"stackable": true,
 		"max_stack": 5,
@@ -533,7 +536,7 @@ func load_starter_tools() -> void:
 		"type": "consumable",
 		"consumable_type": "world_tree_seed",
 		"value": 500,
-		"price": 1000,  # 1,000 gold
+		"price": 0,  # Free starter item
 		"rarity": "RARE",
 		"stackable": false,
 		"quantity": 1,
@@ -558,7 +561,7 @@ func load_starter_tools() -> void:
 	tools_for_sale.append(campfire_kit)
 	tools_for_sale.append(world_tree_seed)
 	tools_for_sale.append(empty_vial)
-	print("   Loaded 5 starter tools (World Tree Seed: 1000g, Empty Vial: 50g)")
+	print("   Loaded 5 starter tools (Campfire Kit: free, World Tree Seed: free, Empty Vial: 50g)")
 
 func create_weapon_from_data(data: Dictionary) -> Weapon:
 	"""Create a Weapon resource from JSON data"""
@@ -711,6 +714,12 @@ func get_weapon_price_data(index: int) -> int:
 	if index >= 0 and index < weapon_prices.size():
 		return weapon_prices[index]
 	return 0
+
+func get_weapon_id(index: int) -> String:
+	# Get weapon ID from stored array (for backend API)
+	if index >= 0 and index < weapon_ids.size():
+		return weapon_ids[index]
+	return ""
 
 func weapon_to_dict(weapon: Weapon, price: int) -> Dictionary:
 	"""Convert a Weapon resource to a dictionary for inventory storage"""

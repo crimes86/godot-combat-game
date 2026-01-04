@@ -829,3 +829,117 @@ func get_connection_status_name() -> String:
 			return "Connected"
 		_:
 			return "Unknown"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VENDOR PURCHASE API
+# ═══════════════════════════════════════════════════════════════════════════
+
+signal vendor_purchase_completed(success: bool, response: Dictionary)
+
+func purchase_from_vendor(item_id: String, vendor_type: String, quantity: int = 1) -> void:
+	"""
+	Purchase an item from the vendor via backend API.
+	Emits vendor_purchase_completed when done.
+
+	vendor_type: "weapons", "armor", "misc", "tools"
+	"""
+	if not is_authenticated or auth_token == "":
+		LogManager.warning("Cannot purchase: not authenticated", "vendor")
+		vendor_purchase_completed.emit(false, {"error": "NOT_AUTHENTICATED", "message": "You must be logged in to purchase items"})
+		return
+
+	if connection_status != ConnectionStatus.CONNECTED:
+		LogManager.warning("Cannot purchase: not connected to backend", "vendor")
+		vendor_purchase_completed.emit(false, {"error": "NOT_CONNECTED", "message": "Cannot connect to server"})
+		return
+
+	var url = get_api_base() + "/api/vendor/purchase"
+	var headers = [
+		"Authorization: Bearer " + auth_token,
+		"Content-Type: application/json",
+		"ngrok-skip-browser-warning: true"
+	]
+
+	var body = JSON.stringify({
+		"item_id": item_id,
+		"vendor_type": vendor_type,
+		"quantity": quantity
+	})
+
+	var request = HTTPRequest.new()
+	request.timeout = 10.0
+	add_child(request)
+	request.request_completed.connect(_on_vendor_purchase_response.bind(request))
+
+	LogManager.info("Purchasing %s from %s vendor..." % [item_id, vendor_type], "vendor")
+
+	var error = request.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		LogManager.error("Failed to send purchase request: %d" % error, "vendor")
+		request.queue_free()
+		vendor_purchase_completed.emit(false, {"error": "REQUEST_FAILED", "message": "Failed to send request"})
+
+func _on_vendor_purchase_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS:
+		LogManager.error("Purchase request failed: result=%d" % result, "vendor")
+		vendor_purchase_completed.emit(false, {"error": "CONNECTION_ERROR", "message": "Connection error"})
+		return
+
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+
+	if parse_result != OK:
+		LogManager.error("Failed to parse purchase response", "vendor")
+		vendor_purchase_completed.emit(false, {"error": "PARSE_ERROR", "message": "Invalid server response"})
+		return
+
+	var data = json.get_data()
+
+	if response_code == 200 and data.get("success", false):
+		LogManager.info("Purchase successful: %s for %d gold" % [data.get("item", {}).get("name", "?"), data.get("gold_spent", 0)], "vendor")
+		vendor_purchase_completed.emit(true, data)
+	else:
+		# Error response
+		var error_msg = data.get("message", data.get("detail", {}).get("message", "Purchase failed"))
+		var error_code = data.get("error", data.get("detail", {}).get("error", "UNKNOWN"))
+		LogManager.warning("Purchase failed: %s - %s" % [error_code, error_msg], "vendor")
+		vendor_purchase_completed.emit(false, {"error": error_code, "message": error_msg})
+
+func get_vendor_character_info(callback: Callable) -> void:
+	"""Get character gold and level from backend"""
+	if not is_authenticated or auth_token == "":
+		callback.call(false, {})
+		return
+
+	var url = get_api_base() + "/api/vendor/character"
+	var headers = [
+		"Authorization: Bearer " + auth_token,
+		"ngrok-skip-browser-warning: true"
+	]
+
+	var request = HTTPRequest.new()
+	request.timeout = 10.0
+	add_child(request)
+	request.request_completed.connect(_on_vendor_character_response.bind(request, callback))
+
+	var error = request.request(url, headers, HTTPClient.METHOD_GET)
+	if error != OK:
+		request.queue_free()
+		callback.call(false, {})
+
+func _on_vendor_character_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest, callback: Callable) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		callback.call(false, {})
+		return
+
+	var json = JSON.new()
+	if json.parse(body.get_string_from_utf8()) != OK:
+		callback.call(false, {})
+		return
+
+	var data = json.get_data()
+	callback.call(true, data)
