@@ -911,7 +911,7 @@ func _show_login_required_message() -> void:
 
 	# Also trigger a notification for visibility
 	if NotificationManager:
-		NotificationManager.show_notification("Login to Purchase", "Create an account to buy items and save your progress!", Color(1.0, 0.7, 0.3))
+		NotificationManager.show_notification("Login to purchase items and save progress", "WARNING")
 
 func _on_backend_purchase_completed(success: bool, response: Dictionary) -> void:
 	"""Handle response from backend purchase API"""
