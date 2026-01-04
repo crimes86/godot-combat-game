@@ -6561,6 +6561,10 @@ app.include_router(server_stats_router)
 app.include_router(vendor_router)
 app.include_router(telemetry_router)
 
+# Alias /api/character/initialize to the vendor route (spec says /api/character/initialize)
+from app.routes.vendor_routes import initialize_character as _init_char
+app.post("/api/character/initialize", tags=["character"])(_init_char)
+
 # Icon caching proxy
 from app.routes.icon_cache import router as icon_cache_router
 app.include_router(icon_cache_router, prefix="/api", tags=["icons"])
