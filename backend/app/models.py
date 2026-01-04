@@ -56,6 +56,45 @@ class User(Base):
     achievement_credits = relationship("AchievementCredit", back_populates="user")
     wallet_accounts = relationship("WalletAccount", back_populates="user")
     contributor_profile = relationship("ContributorProfile", back_populates="user", uselist=False)
+    characters = relationship("Character", back_populates="user")
+
+
+class Character(Base):
+    """
+    Game character for a user.
+
+    Each user can have multiple characters. Gold and inventory are stored
+    per-character to enable server-side purchase validation.
+
+    Gold is stored as a dedicated column for atomic updates (prevents race conditions).
+    Inventory and other stats are stored in the character_data JSON blob.
+    """
+    __tablename__ = 'characters'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    name = Column(String(64), nullable=False)
+
+    # Core stats (dedicated columns for atomic updates)
+    level = Column(Integer, default=1, nullable=False)
+    gold = Column(Integer, default=100, nullable=False)  # Starting gold
+
+    # Extended data (inventory, equipment, stats, etc.)
+    character_data = Column(JSON, default=dict, nullable=False)
+
+    # Character state
+    is_active = Column(Boolean, default=True, index=True)  # Currently selected character
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_played_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="characters")
+
+    __table_args__ = (
+        # Unique character names per user
+        UniqueConstraint('user_id', 'name', name='unique_character_name_per_user'),
+    )
+
 
 class ProviderAccount(Base):
     __tablename__ = 'provider_accounts'

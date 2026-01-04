@@ -57,6 +57,7 @@ from app.routes.contribution_routes import router as contribution_router
 from app.routes.forge_routes import router as forge_router, init_forge_routes
 from app.routes.tapestry_routes import router as tapestry_router, init_tapestry_routes
 from app.routes.server_stats_routes import router as server_stats_router, init_server_stats_routes
+from app.routes.vendor_routes import router as vendor_router, init_vendor_routes
 from app.services.activity_service import (
     log_activity, ActivityCategory, AuthAction, ProviderAction,
     TapestryAction, ContributionAction, ForgeAction, SocialAction
@@ -136,6 +137,7 @@ async def startup_event():
     init_forge_routes(get_current_user, get_admin_user)
     init_tapestry_routes(get_current_user)
     init_server_stats_routes(get_current_user)
+    init_vendor_routes(get_current_user, limiter)
 
     # Only seed mock activity in development mode
     if DEV_MODE:
@@ -6532,6 +6534,7 @@ app.include_router(contribution_router)
 app.include_router(forge_router)
 app.include_router(tapestry_router)
 app.include_router(server_stats_router)
+app.include_router(vendor_router)
 
 # Icon caching proxy
 from app.routes.icon_cache import router as icon_cache_router
