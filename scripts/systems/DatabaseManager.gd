@@ -483,7 +483,9 @@ func save_player_data(username: String, data: Dictionary) -> bool:
 		"total_playtime_seconds",
 		"quests",
 		# Duel statistics
-		"duel_wins", "duel_losses", "duel_daily_opponents"
+		"duel_wins", "duel_losses", "duel_daily_opponents",
+		# Allegiance/PvP state
+		"allegiance_id", "allegiance_last_change"
 	]
 
 	for field in allowed_fields:

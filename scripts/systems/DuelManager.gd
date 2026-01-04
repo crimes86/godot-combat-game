@@ -792,22 +792,17 @@ func _can_damage_player_server(attacker: Node, target: Node, attacker_id: int, t
 	# Different allegiance = can damage
 	return true
 
+const CAMPFIRE_POSITION := Vector2(-6000, 0)  # Spawn campfire location
+const SAFE_ZONE_RADIUS := 1500.0  # Large safe radius around campfire for trading
+
 func _is_in_safe_zone(player_node: Node) -> bool:
-	"""Check if player is in a safe zone (chunk 0 = spawn area)"""
+	"""Check if player is within safe radius of the campfire"""
 	if not player_node or not is_instance_valid(player_node):
 		return false
 
 	var pos = player_node.global_position
-	var chunk_size = 8000.0  # Default chunk size
-
-	# Try to get chunk size from ChunkBasedPropSystem
-	var prop_system = get_node_or_null("/root/GameWorld/ChunkBasedPropSystem")
-	if prop_system and prop_system.get("CHUNK_SIZE"):
-		chunk_size = prop_system.CHUNK_SIZE
-
-	# Chunk 0 is from x=0 to x=chunk_size
-	var chunk_x = int(floor(pos.x / chunk_size))
-	return chunk_x == 0
+	var distance_to_campfire = pos.distance_to(CAMPFIRE_POSITION)
+	return distance_to_campfire <= SAFE_ZONE_RADIUS
 
 @rpc("authority", "call_local", "reliable")
 func apply_pvp_damage(target_id: int, damage: int, attacker_id: int, new_health: int = -1, max_health: int = -1) -> void:
