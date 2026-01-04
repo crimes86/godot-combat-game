@@ -748,7 +748,7 @@ func _on_authentication_required():
 		# Guest mode - automatically send guest login
 		var guest_name = name_input.text.strip_edges() if name_input else ""
 		if guest_name.is_empty():
-			guest_name = "Guest_%d" % (randi() % 10000)
+			guest_name = "Guest"  # Server adds suffix if needed for conflicts
 		if server_status_label:
 			server_status_label.text = "Joining as guest..."
 		NetworkManager.send_guest_login(guest_name)

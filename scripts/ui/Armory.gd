@@ -10791,9 +10791,12 @@ func _on_server_connected() -> void:
 		NetworkManager.login_failed.connect(_on_login_failed)
 
 	# Send authentication request to server
-	var player_name = "Player"
-	if AshbaneAuth and not AshbaneAuth.username.is_empty():
-		player_name = AshbaneAuth.username
+	var player_name = "Guest"
+	if AshbaneAuth:
+		if not AshbaneAuth.display_name.is_empty():
+			player_name = AshbaneAuth.display_name
+		elif not AshbaneAuth.username.is_empty():
+			player_name = AshbaneAuth.username
 	LogManager.info("Sending guest authentication as: %s" % player_name, "armory")
 	NetworkManager.send_guest_login(player_name)
 

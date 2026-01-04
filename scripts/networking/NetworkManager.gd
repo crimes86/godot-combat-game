@@ -699,7 +699,7 @@ func _sanitize_guest_name(raw_name: String) -> String:
 			sanitized += c
 
 	if sanitized.is_empty():
-		sanitized = "Guest_%d" % (randi() % 10000)
+		sanitized = "Guest"  # Server adds suffix if conflicts
 
 	return sanitized
 
