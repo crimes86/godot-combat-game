@@ -808,6 +808,10 @@ func _update_remote_health_bar(player_node: Node, new_health: int, max_health: i
 
 func _spawn_remote_combat_text(target_player: Node, damage: int) -> void:
 	"""Spawn combat text on non-target clients (attacker sees damage numbers)"""
+	# Skip on server - no UI rendering on headless server
+	if multiplayer.is_server():
+		return
+
 	if not target_player or not is_instance_valid(target_player):
 		return
 
