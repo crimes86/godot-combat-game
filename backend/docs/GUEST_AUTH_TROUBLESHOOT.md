@@ -1,7 +1,15 @@
 # Guest Auth Flow - Backend Troubleshooting
 
-**Status:** Not working as expected
+**Status:** ✅ Fixed
 **Issue:** Existing accounts getting `is_new: true` instead of `is_new: false`
+
+## Root Cause (Fixed)
+
+The query was using `ForgedAchievement.user_id` which **doesn't exist**. ForgedAchievement uses:
+- `wallet_account_id` → links to WalletAccount (which has user_id)
+- `current_owner_id` → current owner after trades (NULL = original forger)
+
+Fixed query now properly joins through WalletAccount and checks both forged items and traded items.
 
 ## Expected Behavior
 

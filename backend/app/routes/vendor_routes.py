@@ -13,10 +13,11 @@ from typing import Callable, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import or_
 from sqlalchemy.orm import Session as DbSession
 
 from app.database import SessionLocal
-from app.models import User, Character
+from app.models import User, Character, ForgedAchievement, WalletAccount
 from app.services.vendor_service import vendor_service
 
 logger = logging.getLogger(__name__)
@@ -366,3 +367,115 @@ async def get_vendor_catalog(
         "items": items_with_prices,
         "count": len(items_with_prices)
     }
+
+
+class CharacterInitializeRequest(BaseModel):
+    gold: int = 0
+    level: int = 1
+    experience: int = 0
+    inventory: list = []
+    equipped_weapon: str = ""
+
+
+class CharacterInitializeResponse(BaseModel):
+    success: bool
+    message: str
+    character: dict
+
+
+@router.post("/character/initialize", response_model=CharacterInitializeResponse)
+async def initialize_character(
+    payload: CharacterInitializeRequest,
+    request: Request,
+    db: DbSession = Depends(get_db),
+    user: User = Depends(get_current_user_dep)
+):
+    """
+    Initialize character with guest progress (only if character is brand new).
+
+    Called when a guest user authenticates mid-game to preserve their progress.
+    If character already exists with progress, returns existing character data.
+    """
+    character = get_active_character(user, db)
+
+    # Check if this is a "played" character (not brand new)
+    # Check multiple indicators: level, gold, inventory, forge items, or any prior play
+
+    # ForgedAchievement uses wallet_account_id (for forger) and current_owner_id (for trades)
+    # Items owned by user: forged by them (current_owner_id NULL) OR traded to them (current_owner_id == user.id)
+
+    # Count items user currently owns (either forged or received via trade)
+    forge_items_count = db.query(ForgedAchievement).join(
+        WalletAccount, ForgedAchievement.wallet_account_id == WalletAccount.id
+    ).filter(
+        or_(
+            # Items forged by user and still owned (current_owner_id is NULL)
+            (WalletAccount.user_id == user.id) & (ForgedAchievement.current_owner_id == None),
+            # Items traded to user
+            ForgedAchievement.current_owner_id == user.id
+        )
+    ).count()
+
+    has_forge_items = forge_items_count > 0
+    has_played_before = character.last_played_at is not None
+    inventory_len = len((character.character_data or {}).get("inventory", []))
+
+    # Debug logging
+    logger.info(f"[GUEST_INIT] User {user.id} ({user.username}): level={character.level}, gold={character.gold}, "
+                f"inventory_len={inventory_len}, forge_items={forge_items_count}, "
+                f"last_played={character.last_played_at}")
+
+    is_existing_character = (
+        character.level > 1 or
+        character.gold > 100 or
+        inventory_len > 0 or
+        has_forge_items or
+        has_played_before
+    )
+
+    logger.info(f"[GUEST_INIT] User {user.id}: is_existing={is_existing_character} "
+                f"(level>1:{character.level > 1}, gold>100:{character.gold > 100}, "
+                f"inv:{inventory_len > 0}, forge:{has_forge_items}, played:{has_played_before})")
+    
+    if is_existing_character:
+        # Return existing character - don't overwrite with guest data
+        logger.info(f"User {user.id} has existing character (level {character.level}, {character.gold} gold) - not applying guest progress")
+        return CharacterInitializeResponse(
+            success=True,
+            message="Existing character loaded",
+            character={
+                "gold": character.gold,
+                "level": character.level,
+                "experience": (character.character_data or {}).get("experience", 0),
+                "is_new": False
+            }
+        )
+    
+    # Apply guest progress with caps (anti-cheat)
+    capped_gold = min(payload.gold, 1000)  # Cap at 1000 gold
+    capped_level = min(payload.level, 5)   # Cap at level 5
+    capped_xp = min(payload.experience, 2000)  # Cap XP
+    
+    character.gold = max(capped_gold, character.gold)  # Take higher value
+    character.level = max(capped_level, character.level)
+    
+    # Update character_data with experience
+    data = character.character_data or {}
+    data["experience"] = capped_xp
+    data["equipped_weapon"] = payload.equipped_weapon
+    character.character_data = data
+    
+    db.commit()
+    
+    logger.info(f"Initialized character for user {user.id} with guest progress: level {character.level}, {character.gold} gold")
+    
+    return CharacterInitializeResponse(
+        success=True,
+        message="Character initialized with guest progress",
+        character={
+            "gold": character.gold,
+            "level": character.level,
+            "experience": capped_xp,
+            "is_new": True
+        }
+    )
