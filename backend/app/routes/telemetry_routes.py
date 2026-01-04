@@ -455,3 +455,135 @@ async def get_recent_events(
         ],
         "count": len(events)
     }
+
+
+@router.get("/stats")
+async def get_telemetry_stats(
+    request: Request,
+    hours: int = 24,
+    db: DbSession = Depends(get_db),
+    user: User = Depends(get_current_user_dep)
+):
+    """
+    Get gameplay telemetry statistics (Admin only for full stats).
+
+    Returns aggregate stats for kills, loot, and suspicious activity.
+    """
+    from datetime import timedelta
+
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+    # Total events (all time)
+    total_all = db.query(func.count(GameEventLog.id)).scalar() or 0
+
+    # Events in time window
+    total = db.query(func.count(GameEventLog.id)).filter(
+        GameEventLog.created_at >= cutoff
+    ).scalar() or 0
+
+    # Count by event type
+    type_counts = dict(
+        db.query(GameEventLog.event_type, func.count(GameEventLog.id))
+        .filter(GameEventLog.created_at >= cutoff)
+        .group_by(GameEventLog.event_type)
+        .all()
+    )
+
+    # Suspicious events
+    suspicious_count = db.query(func.count(GameEventLog.id)).filter(
+        and_(
+            GameEventLog.created_at >= cutoff,
+            GameEventLog.is_suspicious == True
+        )
+    ).scalar() or 0
+
+    # Top suspicious reasons
+    suspicious_reasons = dict(
+        db.query(GameEventLog.suspicious_reason, func.count(GameEventLog.id))
+        .filter(
+            and_(
+                GameEventLog.created_at >= cutoff,
+                GameEventLog.is_suspicious == True,
+                GameEventLog.suspicious_reason.isnot(None)
+            )
+        )
+        .group_by(GameEventLog.suspicious_reason)
+        .order_by(func.count(GameEventLog.id).desc())
+        .limit(5)
+        .all()
+    )
+
+    # Unique users and sessions
+    unique_users = db.query(func.count(func.distinct(GameEventLog.user_id))).filter(
+        GameEventLog.created_at >= cutoff
+    ).scalar() or 0
+
+    unique_sessions = db.query(func.count(func.distinct(GameEventLog.session_id))).filter(
+        GameEventLog.created_at >= cutoff
+    ).scalar() or 0
+
+    # Top zones
+    zone_counts = dict(
+        db.query(GameEventLog.zone_id, func.count(GameEventLog.id))
+        .filter(
+            and_(
+                GameEventLog.created_at >= cutoff,
+                GameEventLog.zone_id.isnot(None)
+            )
+        )
+        .group_by(GameEventLog.zone_id)
+        .order_by(func.count(GameEventLog.id).desc())
+        .limit(5)
+        .all()
+    )
+
+    # Calculate gold and XP totals from kill events
+    kill_events = db.query(GameEventLog).filter(
+        and_(
+            GameEventLog.created_at >= cutoff,
+            GameEventLog.event_type == "kill"
+        )
+    ).all()
+
+    total_kills = len(kill_events)
+    total_xp = sum(e.event_data.get("xp_granted", 0) for e in kill_events)
+    total_gold_dropped = sum(e.event_data.get("gold_dropped", 0) for e in kill_events)
+
+    # Gold looted
+    loot_gold_events = db.query(GameEventLog).filter(
+        and_(
+            GameEventLog.created_at >= cutoff,
+            GameEventLog.event_type == "loot_gold"
+        )
+    ).all()
+    total_gold_looted = sum(e.event_data.get("gold_amount", 0) for e in loot_gold_events)
+
+    # Items looted count
+    items_looted = type_counts.get("loot_item", 0)
+
+    return {
+        "hours": hours,
+        "total_events_all": total_all,
+        "total_events": total,
+        "by_type": {
+            "kills": type_counts.get("kill", 0),
+            "loot_gold": type_counts.get("loot_gold", 0),
+            "loot_item": type_counts.get("loot_item", 0),
+            "resource": type_counts.get("resource", 0),
+            "damage": type_counts.get("damage", 0)
+        },
+        "totals": {
+            "kills": total_kills,
+            "xp_granted": total_xp,
+            "gold_dropped": total_gold_dropped,
+            "gold_looted": total_gold_looted,
+            "items_looted": items_looted
+        },
+        "suspicious": {
+            "count": suspicious_count,
+            "by_reason": suspicious_reasons
+        },
+        "unique_users": unique_users,
+        "unique_sessions": unique_sessions,
+        "top_zones": zone_counts
+    }

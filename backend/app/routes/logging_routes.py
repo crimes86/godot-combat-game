@@ -683,6 +683,19 @@ async def view_logs_html(
             </div>
         </div>
 
+        <!-- Section: Gameplay Telemetry (Anti-Cheat) -->
+        <div id="gameplay-telemetry-section" style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <h2 style="color:#10b981;font-size:16px;margin:0;">⚔️ Gameplay Telemetry</h2>
+                <span style="background:#10b981;color:white;padding:2px 8px;border-radius:4px;font-size:10px;">ANTI-CHEAT</span>
+                <span id="gameplay-status" style="font-size:12px;color:#666;">● Loading...</span>
+                <span id="gameplay-refresh" style="font-size:12px;color:#666;cursor:pointer;margin-left:auto;" onclick="loadGameplayStats()">🔄 Refresh</span>
+            </div>
+            <div id="gameplay-stats-container" class="stats-bar" style="background:#1a2e1a;">
+                <div style="color:#666;padding:10px;">Loading gameplay stats...</div>
+            </div>
+        </div>
+
         <!-- Client Logs Section -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
             <h2 style="color:#4a9eff;font-size:14px;margin:0;">Client Logs</h2>
@@ -1056,6 +1069,73 @@ async def view_logs_html(
         // Load server stats on page load and refresh every 30s
         loadServerStats();
         setInterval(loadServerStats, 30000);
+
+        // Gameplay Telemetry Stats
+        function loadGameplayStats() {{
+            document.getElementById('gameplay-stats-container').innerHTML = '<div style="color:#666;padding:10px;">Loading...</div>';
+            fetch('/api/telemetry/stats?hours=24')
+                .then(r => r.json())
+                .then(data => {{
+                    const suspiciousColor = data.suspicious.count > 0 ? '#ff4444' : '#10b981';
+                    const html = `
+                        <div class="stat-item">
+                            <span class="stat-value" style="color:#10b981;">${{data.total_events_all.toLocaleString()}}</span>
+                            <span class="stat-label">Total Events</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value good">${{data.total_events.toLocaleString()}}</span>
+                            <span class="stat-label">Last 24h</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" style="color:#ef4444;">⚔️ ${{data.by_type.kills.toLocaleString()}}</span>
+                            <span class="stat-label">Kills</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" style="color:#eab308;">💰 ${{data.totals.gold_looted.toLocaleString()}}</span>
+                            <span class="stat-label">Gold Looted</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" style="color:#8b5cf6;">📦 ${{data.by_type.loot_item}}</span>
+                            <span class="stat-label">Items Looted</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" style="color:#06b6d4;">✨ ${{data.totals.xp_granted.toLocaleString()}}</span>
+                            <span class="stat-label">XP Granted</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value">${{data.unique_sessions}}</span>
+                            <span class="stat-label">Sessions</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" style="color:${{suspiciousColor}};">🚨 ${{data.suspicious.count}}</span>
+                            <span class="stat-label">Suspicious</span>
+                        </div>
+                    `;
+                    document.getElementById('gameplay-stats-container').innerHTML = html;
+
+                    // Update status
+                    const statusEl = document.getElementById('gameplay-status');
+                    if (data.suspicious.count > 0) {{
+                        statusEl.innerHTML = '🔴 ' + data.suspicious.count + ' suspicious';
+                        statusEl.style.color = '#ff4444';
+                    }} else if (data.total_events > 0) {{
+                        statusEl.innerHTML = '🟢 Active';
+                        statusEl.style.color = '#10b981';
+                    }} else {{
+                        statusEl.innerHTML = '⚪ No events';
+                        statusEl.style.color = '#666';
+                    }}
+                }})
+                .catch(e => {{
+                    document.getElementById('gameplay-stats-container').innerHTML = '<div style="color:#888;padding:10px;">⏳ Awaiting Godot integration (TelemetryManager hooks)</div>';
+                    document.getElementById('gameplay-status').innerHTML = '⚪ Pending';
+                    document.getElementById('gameplay-status').style.color = '#666';
+                }});
+        }}
+
+        // Load gameplay stats on page load and refresh every 30s
+        loadGameplayStats();
+        setInterval(loadGameplayStats, 30000);
         </script>
 
         <!-- Server Detail Modal -->
