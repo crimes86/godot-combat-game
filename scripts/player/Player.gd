@@ -68,6 +68,8 @@ var duel_opponent_id: int = -1
 var has_safe_aura: bool = false
 var duel_aura_node: Node2D = null
 var safe_aura_node: Node2D = null
+var duel_aura_tween: Tween = null  # Track tween to kill on removal
+var safe_aura_tween: Tween = null  # Track tween to kill on removal
 var blood_color: Color = Color(0.6, 0.05, 0.05, 0.9)  # Dark blood red (used for PvP hit effects)
 
 # Allegiance System (synced for network visibility)
@@ -2301,10 +2303,14 @@ func _create_duel_aura() -> void:
 	duel_aura_node.add_child(circle)
 
 	add_child(duel_aura_node)
-	_start_aura_pulse(duel_aura_node, Color(1.0, 0.3, 0.2, 0.4), Color(1.0, 0.5, 0.3, 0.6))
+	duel_aura_tween = _start_aura_pulse(duel_aura_node, Color(1.0, 0.3, 0.2, 0.4), Color(1.0, 0.5, 0.3, 0.6))
 
 func _remove_duel_aura() -> void:
 	"""Remove duel aura visual"""
+	# Kill the tween first to prevent it from accessing freed nodes
+	if duel_aura_tween and duel_aura_tween.is_valid():
+		duel_aura_tween.kill()
+		duel_aura_tween = null
 	if duel_aura_node and is_instance_valid(duel_aura_node):
 		duel_aura_node.queue_free()
 		duel_aura_node = null
@@ -2323,10 +2329,14 @@ func _create_safe_aura() -> void:
 	safe_aura_node.add_child(circle)
 
 	add_child(safe_aura_node)
-	_start_aura_pulse(safe_aura_node, Color(1.0, 0.85, 0.3, 0.35), Color(1.0, 0.95, 0.5, 0.5))
+	safe_aura_tween = _start_aura_pulse(safe_aura_node, Color(1.0, 0.85, 0.3, 0.35), Color(1.0, 0.95, 0.5, 0.5))
 
 func _remove_safe_aura_visual() -> void:
 	"""Remove safe aura visual"""
+	# Kill the tween first to prevent it from accessing freed nodes
+	if safe_aura_tween and safe_aura_tween.is_valid():
+		safe_aura_tween.kill()
+		safe_aura_tween = null
 	if safe_aura_node and is_instance_valid(safe_aura_node):
 		safe_aura_node.queue_free()
 		safe_aura_node = null
@@ -2345,19 +2355,20 @@ func _create_aura_circle(color: Color, radius: float) -> Polygon2D:
 	circle.color = color
 	return circle
 
-func _start_aura_pulse(aura_node: Node2D, color_min: Color, color_max: Color) -> void:
-	"""Start pulsing animation on aura"""
+func _start_aura_pulse(aura_node: Node2D, color_min: Color, color_max: Color) -> Tween:
+	"""Start pulsing animation on aura. Returns the tween so it can be killed on removal."""
 	if not aura_node or not is_instance_valid(aura_node):
-		return
+		return null
 
 	var circle = aura_node.get_child(0) as Polygon2D
 	if not circle:
-		return
+		return null
 
 	# Create looping tween for pulse effect
 	var tween = create_tween().set_loops()
 	tween.tween_property(circle, "color", color_max, 0.6).set_ease(Tween.EASE_IN_OUT)
 	tween.tween_property(circle, "color", color_min, 0.6).set_ease(Tween.EASE_IN_OUT)
+	return tween
 
 # ============================================
 # PVP WEAKPOINT SYSTEM (v2 - Multi-click gem weakpoints)
