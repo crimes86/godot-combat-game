@@ -1506,6 +1506,13 @@ async def battlenet_login(request: Request, db: DbSession = Depends(get_db), rea
                     status_code=400,
                 )
 
+    # Clear stale OAuth state from previous attempts (prevents "state mismatch" errors)
+    stale_keys = [k for k in request.session.keys() if k.startswith("_state_battlenet_")]
+    for key in stale_keys:
+        del request.session[key]
+    if stale_keys:
+        logger.info(f"[BATTLENET] Cleared {len(stale_keys)} stale OAuth state(s) from session")
+
     # Store reauth flag in session so callback knows this is a token refresh
     if reauth:
         request.session["battlenet_reauth"] = True
@@ -2091,6 +2098,13 @@ async def discord_login(request: Request, db: DbSession = Depends(get_db), devic
                 status_code=400,
             )
 
+    # Clear stale OAuth state from previous attempts (prevents "state mismatch" errors)
+    stale_keys = [k for k in request.session.keys() if k.startswith("_state_discord_")]
+    for key in stale_keys:
+        del request.session[key]
+    if stale_keys:
+        logger.info(f"[DISCORD] Cleared {len(stale_keys)} stale OAuth state(s) from session")
+
     # Store device_code in session for callback (Godot auth flow)
     if device_code:
         request.session["device_code"] = device_code
@@ -2274,6 +2288,14 @@ async def github_login(request: Request, db: DbSession = Depends(get_db)):
                 {"request": request, "message": "You already have a GitHub account linked. Unlink it before claiming another."},
                 status_code=400,
             )
+
+    # Clear stale OAuth state from previous attempts (prevents "state mismatch" errors)
+    stale_keys = [k for k in request.session.keys() if k.startswith("_state_github_")]
+    for key in stale_keys:
+        del request.session[key]
+    if stale_keys:
+        logger.info(f"[GITHUB] Cleared {len(stale_keys)} stale OAuth state(s) from session")
+
     redirect_uri = f"{APP_URL}/auth/github/callback"
     logger.info("Initiating GitHub login flow")
     return await oauth.github.authorize_redirect(request, redirect_uri)

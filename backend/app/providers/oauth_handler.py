@@ -266,6 +266,13 @@ def create_oauth_routes(
                         {"request": request, "message": f"You already have a {config.display_name} account linked."}
                     )
 
+        # Clear stale OAuth state from previous attempts (prevents "state mismatch" errors)
+        stale_keys = [k for k in request.session.keys() if k.startswith(f"_state_{provider}_")]
+        for key in stale_keys:
+            del request.session[key]
+        if stale_keys:
+            logger.info(f"[{provider.upper()}] Cleared {len(stale_keys)} stale OAuth state(s) from session")
+
         # Build callback URL (do NOT include device_code in URL - causes double-encoding issues)
         # Device code is stored in session instead and retrieved in callback
         callback_url = f"{app_url}/auth/{provider}/callback"
