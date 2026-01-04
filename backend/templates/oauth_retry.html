@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Retrying Login - Ashbane</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
+  <meta http-equiv="refresh" content="2;url={{ retry_url }}" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: #121214;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Roboto Mono', monospace;
+      color: #e0e0e0;
+    }
+
+    .retry-wrapper {
+      text-align: center;
+      padding: 2.5rem;
+      background: rgba(20, 20, 22, 0.95);
+      border: 1px solid rgba(90, 90, 90, 0.5);
+      border-radius: 16px;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        0 4px 0 rgba(0,0,0,0.3),
+        0 8px 20px rgba(0,0,0,0.4);
+      max-width: 480px;
+      margin: 20px;
+    }
+
+    .logo-header {
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      filter: drop-shadow(0 0 6px #ff6a00) drop-shadow(0 0 12px #ff4500);
+    }
+
+    .logo-text {
+      font-size: 1.8rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: #fff;
+      text-shadow:
+        0 0 5px #fff,
+        0 0 10px #fff,
+        0 0 20px #ff6a00,
+        0 0 40px #ff4500;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(255, 106, 0, 0.2);
+      border-top-color: #ff6a00;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1.5rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #ff6a00;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 1rem;
+      text-shadow: 0 0 10px rgba(255, 106, 0, 0.4);
+    }
+
+    .message {
+      font-size: 0.9rem;
+      color: #999;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    .retry-button {
+      display: inline-block;
+      padding: 0.8rem 2rem;
+      background: linear-gradient(180deg, rgba(255,106,0,0.3) 0%, rgba(255,69,0,0.2) 100%);
+      border: 1px solid rgba(255, 106, 0, 0.5);
+      color: #ff6a00;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      border-radius: 8px;
+      transition: all 0.25s ease;
+      box-shadow: 0 0 15px rgba(255, 106, 0, 0.2);
+    }
+
+    .retry-button:hover {
+      transform: translateY(-2px);
+      background: linear-gradient(180deg, rgba(255,106,0,0.4) 0%, rgba(255,69,0,0.3) 100%);
+      box-shadow: 0 0 25px rgba(255, 106, 0, 0.4);
+    }
+
+    .footer {
+      margin-top: 1.5rem;
+      font-size: 0.65rem;
+      color: #555;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+  <div class="retry-wrapper">
+    <div class="logo-header">
+      <img src="/static/logo/ashbane-icon-256.png" alt="" class="logo-icon" />
+      <span class="logo-text">Ashbane</span>
+      <img src="/static/logo/ashbane-icon-256.png" alt="" class="logo-icon" />
+    </div>
+
+    <div class="spinner"></div>
+    <h1>Session Expired</h1>
+    <p class="message">
+      Your {{ provider }} login session expired.<br/>
+      Automatically retrying in 2 seconds...
+    </p>
+    <a href="{{ retry_url }}" class="retry-button">Retry Now</a>
+    <div class="footer">&copy; 2025 Ashbane</div>
+  </div>
+</body>
+</html>

@@ -2083,20 +2083,9 @@ async def psn_link(
 @app.get("/auth/discord/login")
 async def discord_login(request: Request, db: DbSession = Depends(get_db), device_code: Optional[str] = None):
     """Initiate Discord OAuth flow"""
-    token = get_session_token(request)
-    current_user = get_user_from_session(db, token) if token else None
-    if current_user:
-        existing_active = (
-            db.query(ProviderAccount)
-            .filter_by(user_id=current_user.id, provider_name="discord", is_active=True)
-            .first()
-        )
-        if existing_active:
-            return templates.TemplateResponse(
-                "error.html",
-                {"request": request, "message": "You already have a Discord account linked. Unlink it before claiming another."},
-                status_code=400,
-            )
+    # Note: We allow the OAuth flow even if user is logged in and has Discord linked.
+    # The callback will handle re-authentication with the same account (allowed)
+    # vs trying to link a different Discord account (blocked).
 
     # Clear stale OAuth state from previous attempts (prevents "state mismatch" errors)
     stale_keys = [k for k in request.session.keys() if k.startswith("_state_discord_")]
@@ -2110,6 +2099,12 @@ async def discord_login(request: Request, db: DbSession = Depends(get_db), devic
         request.session["device_code"] = device_code
         logger.info(f"[DISCORD] Stored device_code {device_code[:8]}... in session")
 
+    # Debug: Log session contents and set a marker to verify session continuity
+    import secrets
+    session_marker = secrets.token_hex(4)
+    request.session["_discord_session_marker"] = session_marker
+    logger.info(f"[DISCORD] Session before redirect - marker={session_marker}, all_keys={list(request.session.keys())}")
+
     redirect_uri = f"{APP_URL}/auth/discord/callback"
     logger.info("Initiating Discord login flow")
     return await oauth.discord.authorize_redirect(request, redirect_uri)
@@ -2119,6 +2114,13 @@ async def discord_login(request: Request, db: DbSession = Depends(get_db), devic
 async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
     """Handle Discord OAuth callback"""
     try:
+        # Debug: Log state info for troubleshooting OAuth issues
+        callback_state = request.query_params.get("state", "NO_STATE")
+        session_states = [k for k in request.session.keys() if k.startswith("_state_discord_")]
+        session_marker = request.session.get("_discord_session_marker", "NONE")
+        all_keys = list(request.session.keys())
+        logger.info(f"[DISCORD] Callback received - state={callback_state[:16]}..., session_marker={session_marker}, all_keys={all_keys}")
+
         oauth_token = await oauth.discord.authorize_access_token(request)
 
         # Get user info from Discord
@@ -2153,18 +2155,42 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
         current_user = get_user_from_session(db, session_token) if session_token else None
 
         if current_user:
-            # Logged in user - link Discord to their account
+            # Logged in user - check if they already have Discord linked
             existing_active = (
                 db.query(ProviderAccount)
                 .filter_by(user_id=current_user.id, provider_name="discord", is_active=True)
                 .first()
             )
             if existing_active:
-                return templates.TemplateResponse(
-                    "error.html",
-                    {"request": request, "message": "You already have a Discord account linked."},
-                    status_code=400,
-                )
+                # Check if it's the SAME Discord account (re-auth is OK)
+                if existing_active.provider_user_id == discord_id:
+                    # Same Discord - just update tokens and continue (re-authentication)
+                    logger.info(f"[DISCORD] Re-authentication with same Discord account for user {current_user.id}")
+                    existing_active.access_token = oauth_token.get("access_token")
+                    existing_active.profile_data = {
+                        "username": discord_username,
+                        "discriminator": discord_discriminator,
+                        "display_name": display_name,
+                        "avatar_url": avatar_url,
+                    }
+                    db.commit()
+                    # Handle device auth flow or redirect to dashboard
+                    device_code = request.session.pop("device_code", None)
+                    if device_code and device_code in pending_device_codes:
+                        session_token = create_session(db, current_user)
+                        complete_device_auth(device_code, current_user.id, current_user.username, session_token, db)
+                        return templates.TemplateResponse(
+                            "auth_success.html",
+                            {"request": request, "provider": "Discord", "username": display_name}
+                        )
+                    return RedirectResponse(url="/dashboard", status_code=303)
+                else:
+                    # Different Discord - block linking another
+                    return templates.TemplateResponse(
+                        "error.html",
+                        {"request": request, "message": "You already have a different Discord account linked. Unlink it first before linking another."},
+                        status_code=400,
+                    )
 
             # Check if this Discord is linked to another user
             existing_discord = (
@@ -2233,7 +2259,10 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
 
         else:
             # Not logged in - use unified login flow
-            device_code = request.session.get("device_code")
+            device_code = request.session.pop("device_code", None)
+            # Only use device_code if it's still pending (not stale)
+            if device_code and device_code not in pending_device_codes:
+                device_code = None
             return handle_provider_login(
                 db=db,
                 request=request,
@@ -2251,13 +2280,26 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
             )
 
     except Exception as e:
-        logger.error(f"[DISCORD] Callback error: {e}", exc_info=True)
+        # Enhanced error logging for OAuth debugging
+        callback_state = request.query_params.get("state", "NO_STATE")
+        session_states = [k for k in request.session.keys() if k.startswith("_state_discord_")]
+        logger.error(f"[DISCORD] Callback error: {e}")
+        logger.error(f"[DISCORD] State mismatch debug - callback_state={callback_state[:16] if callback_state else 'None'}..., session_states={session_states}")
+
+        # Clear any stale state so next attempt will work
+        stale_keys = [k for k in request.session.keys() if k.startswith("_state_discord_")]
+        for key in stale_keys:
+            del request.session[key]
+
         # Return 400 for OAuth errors (invalid state, expired code, etc.)
         error_msg = str(e).lower()
         if any(x in error_msg for x in ["state", "code", "token", "invalid", "expired", "mismatch"]):
+            # Get device_code if present for retry URL
+            device_code = request.session.get("device_code", "")
+            retry_url = f"/auth/discord/login?device_code={device_code}" if device_code else "/auth/discord/login"
             return templates.TemplateResponse(
-                "error.html",
-                {"request": request, "message": "Discord login failed: Invalid or expired authorization. Please try again."},
+                "oauth_retry.html",
+                {"request": request, "provider": "Discord", "retry_url": retry_url},
                 status_code=400
             )
         return templates.TemplateResponse(
