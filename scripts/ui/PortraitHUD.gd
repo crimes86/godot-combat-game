@@ -30,7 +30,13 @@ var _health_text: Label  # HP percentage text
 var _name_label: Label
 var _level_badge: Control
 var _level_label: Label
+var _safe_zone_badge: Control  # Safe zone indicator
+var _safe_zone_label: Label
 var _allegiance: String = "ashbane"  # Current allegiance (future: could be other factions)
+
+# Safe zone colors
+const SAFE_ZONE_COLOR := Color(0.2, 0.7, 0.3, 0.95)  # Green
+const PVP_ZONE_COLOR := Color(0.8, 0.25, 0.2, 0.95)  # Red
 
 # State
 var _current_health: float = 100.0
@@ -68,6 +74,9 @@ func _build_ui() -> void:
 
 	# Health bar (right of portrait)
 	_create_health_bar()
+
+	# Safe zone indicator (below health bar)
+	_create_safe_zone_badge()
 
 func _create_name_label() -> void:
 	# Name positioned right above the health bar (not above shield)
@@ -196,6 +205,45 @@ func _create_level_badge() -> void:
 	_level_label.add_theme_font_size_override("font_size", 14)
 	_level_label.add_theme_color_override("font_color", Color(0.95, 0.9, 0.7))
 	_level_badge.add_child(_level_label)
+
+func _create_safe_zone_badge() -> void:
+	# Small badge positioned below the health bar
+	var bar_x = SHIELD_WIDTH + 10
+	var bar_y = (SHIELD_HEIGHT - HEALTH_BAR_HEIGHT) / 2 + 8
+	var badge_y = bar_y + HEALTH_BAR_HEIGHT + 6  # Below health bar with small gap
+
+	_safe_zone_badge = Control.new()
+	_safe_zone_badge.name = "SafeZoneBadge"
+	_safe_zone_badge.position = Vector2(bar_x, badge_y)
+	_safe_zone_badge.size = Vector2(70, 16)
+	_safe_zone_badge.z_index = 1
+	_container.add_child(_safe_zone_badge)
+
+	# Background rounded rect (drawn via _draw)
+	var badge_bg = ColorRect.new()
+	badge_bg.name = "BadgeBG"
+	badge_bg.position = Vector2.ZERO
+	badge_bg.size = Vector2(70, 16)
+	badge_bg.color = SAFE_ZONE_COLOR
+	_safe_zone_badge.add_child(badge_bg)
+
+	# Label
+	_safe_zone_label = Label.new()
+	_safe_zone_label.name = "SafeZoneLabel"
+	_safe_zone_label.position = Vector2(0, 0)
+	_safe_zone_label.size = Vector2(70, 16)
+	_safe_zone_label.text = "SAFE ZONE"
+	_safe_zone_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_safe_zone_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_safe_zone_label.add_theme_font_size_override("font_size", 10)
+	_safe_zone_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	_safe_zone_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	_safe_zone_label.add_theme_constant_override("shadow_offset_x", 1)
+	_safe_zone_label.add_theme_constant_override("shadow_offset_y", 1)
+	_safe_zone_badge.add_child(_safe_zone_label)
+
+	# Default to hidden (will be updated by Player)
+	_safe_zone_badge.visible = false
 
 func _create_health_bar() -> void:
 	var bar_x = SHIELD_WIDTH + 10
@@ -411,3 +459,24 @@ func set_player_name(player_name: String) -> void:
 func set_tier_color(color: Color) -> void:
 	_tier_color = color
 	_update_frame_color()
+
+func set_safe_zone_status(is_safe: bool) -> void:
+	"""Update safe zone indicator visibility and color"""
+	if not _safe_zone_badge:
+		return
+
+	_safe_zone_badge.visible = true  # Always show when status changes
+
+	# Get background ColorRect
+	var badge_bg = _safe_zone_badge.get_node_or_null("BadgeBG")
+	if not badge_bg:
+		return
+
+	if is_safe:
+		badge_bg.color = SAFE_ZONE_COLOR
+		_safe_zone_label.text = "SAFE ZONE"
+		_safe_zone_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	else:
+		badge_bg.color = PVP_ZONE_COLOR
+		_safe_zone_label.text = "PVP ZONE"
+		_safe_zone_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))

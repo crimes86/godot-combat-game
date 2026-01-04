@@ -151,6 +151,9 @@ var inventory_ui: CanvasLayer = null
 
 # Portrait HUD (WoW-style health display)
 var portrait_hud: CanvasLayer = null
+var _last_safe_zone_state: bool = false  # Track to avoid spamming HUD updates
+const SAFE_ZONE_CENTER := Vector2(-6000, 0)  # Campfire position
+const SAFE_ZONE_RADIUS := 1500.0  # Match DuelManager safe zone
 
 # Duel UI components
 var duel_request_popup: CanvasLayer = null
@@ -1029,6 +1032,9 @@ func _physics_process(delta: float) -> void:
 
 	# Process logout timer
 	_process_logout_timer(delta, input_direction)
+
+	# Update safe zone indicator (only check when position changes significantly)
+	_update_safe_zone_indicator()
 
 	# Handle player death
 	if current_health <= 0 and not is_dead:
@@ -5072,6 +5078,26 @@ func create_portrait_hud() -> void:
 		portrait_hud.update_health(current_health, max_health)
 
 	print("Portrait HUD added to scene tree")
+
+	# Set initial safe zone state
+	_update_safe_zone_indicator()
+
+func _update_safe_zone_indicator() -> void:
+	"""Check if player is in safe zone and update HUD indicator"""
+	if not portrait_hud or not portrait_hud.has_method("set_safe_zone_status"):
+		return
+
+	var is_in_safe = _is_in_safe_zone()
+
+	# Only update HUD if state changed (avoid spamming)
+	if is_in_safe != _last_safe_zone_state:
+		_last_safe_zone_state = is_in_safe
+		portrait_hud.set_safe_zone_status(is_in_safe)
+
+func _is_in_safe_zone() -> bool:
+	"""Check if player is within safe radius of campfire"""
+	var distance_to_campfire = global_position.distance_to(SAFE_ZONE_CENTER)
+	return distance_to_campfire <= SAFE_ZONE_RADIUS
 
 func create_duel_ui() -> void:
 	"""Create and add duel UI components to scene tree"""

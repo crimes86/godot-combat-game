@@ -1706,7 +1706,6 @@ func die() -> void:
 			print("💀 [Enemy.die] Could not find player or PlayerCombat node")
 	else:
 		var killer_id = get_meta("killer_peer_id", -1)
-		var my_peer_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
 		print("💀 [Enemy.die] Skipping weapon tracking - not XP grantee (killer=%d, me=%d)" % [killer_id, my_peer_id])
 
 	# Transition to corpse state (don't despawn)
