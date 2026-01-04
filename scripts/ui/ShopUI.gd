@@ -80,6 +80,9 @@ func _ready() -> void:
 		push_warning("ShopUI: sell_list not found")
 	if not message_label:
 		push_warning("ShopUI: message_label not found")
+	else:
+		# Start with message hidden (use modulate to prevent layout jumping)
+		message_label.modulate.a = 0.0
 
 	# Connect close button
 	if close_button:
@@ -898,20 +901,44 @@ func show_message(text: String, color: Color) -> void:
 
 	message_label.text = text
 	message_label.add_theme_color_override("font_color", color)
-	message_label.show()
+	# Use modulate instead of show/hide to prevent layout jumping
+	message_label.modulate.a = 1.0
 
-	# Hide after 3 seconds
+	# Fade out after 3 seconds
 	await get_tree().create_timer(3.0).timeout
 	if message_label:
-		message_label.hide()
+		message_label.modulate.a = 0.0
 
 func _show_login_required_message() -> void:
-	"""Show message prompting guest to login to make purchases"""
-	show_message("Login required to purchase! Press ESC → Main Menu → Login", Color(1.0, 0.7, 0.3))
+	"""Show auth overlay prompting guest to login to make purchases"""
+	# Trigger the in-game auth overlay
+	if AuthOverlay:
+		# Connect signals if not already connected
+		if not AuthOverlay.auth_success.is_connected(_on_auth_overlay_success):
+			AuthOverlay.auth_success.connect(_on_auth_overlay_success)
+		if not AuthOverlay.auth_cancelled.is_connected(_on_auth_overlay_cancelled):
+			AuthOverlay.auth_cancelled.connect(_on_auth_overlay_cancelled)
 
-	# Also trigger a notification for visibility
-	if NotificationManager:
-		NotificationManager.show_notification("Login to purchase items and save progress", "WARNING")
+		# Hide shop UI while auth overlay is shown
+		visible = false
+		AuthOverlay.show_auth_prompt()
+	else:
+		# Fallback if AuthOverlay not available
+		show_message("Login required to purchase! Press ESC → Main Menu → Login", Color(1.0, 0.7, 0.3))
+
+func _on_auth_overlay_success(user_data: Dictionary) -> void:
+	"""Guest successfully authenticated - they can now purchase"""
+	# Show shop UI again
+	visible = true
+	show_message("Login successful! You can now make purchases.", Color(0.4, 0.9, 0.5))
+	# Refresh gold display
+	update_gold_display()
+
+func _on_auth_overlay_cancelled() -> void:
+	"""Guest cancelled auth - return to shop"""
+	# Show shop UI again
+	visible = true
+	show_message("Login cancelled. Login to make purchases.", Color(1.0, 0.7, 0.3))
 
 func _on_backend_purchase_completed(success: bool, response: Dictionary) -> void:
 	"""Handle response from backend purchase API"""

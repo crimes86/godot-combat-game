@@ -130,8 +130,10 @@ func _ready() -> void:
 
 func _setup_tier_data() -> void:
 	"""Initialize tier-specific settings from ChunkBasedPropSystem.ROCK_TIERS"""
-	# Try to get tier data from ChunkBasedPropSystem
-	var prop_system = get_node_or_null("/root/ChunkBasedPropSystem")
+	# Try to get tier data from ChunkBasedPropSystem (only if in tree)
+	var prop_system = null
+	if is_inside_tree():
+		prop_system = get_node_or_null("/root/ChunkBasedPropSystem")
 	if prop_system and "ROCK_TIERS" in prop_system:
 		if prop_system.ROCK_TIERS.has(rock_tier):
 			tier_data = prop_system.ROCK_TIERS[rock_tier]

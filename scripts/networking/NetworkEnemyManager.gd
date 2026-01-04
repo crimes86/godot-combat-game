@@ -931,8 +931,11 @@ func _client_sync_positions(positions: Dictionary) -> void:
 			# Update animation if enemy has animated sprite
 			var sprite = enemy.get_node_or_null("Sprite")
 			if sprite and sprite is AnimatedSprite2D and data.has("anim"):
-				if sprite.animation != data.anim:
-					sprite.play(data.anim)
+				var anim_name = data.anim
+				# Only play if animation exists in sprite frames
+				if sprite.sprite_frames and sprite.sprite_frames.has_animation(anim_name):
+					if sprite.animation != anim_name:
+						sprite.play(anim_name)
 
 func _get_enemy_animation(enemy: Node) -> String:
 	"""Get current animation name for enemy.

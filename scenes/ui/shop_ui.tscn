@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3 uid="uid://shop_ui_001"]
 
 [ext_resource type="Script" path="res://scripts/ui/ShopUI.gd" id="1_shop"]
-[ext_resource type="Texture2D" uid="uid://gold_coins_icon" path="res://assets/icons/gold_coins.png" id="2_gold"]
+[ext_resource type="Texture2D" uid="uid://gold_coins_icon" path="res://assets/icons/materials/gold_coins.png" id="2_gold"]
 
 [node name="ShopUI" type="CanvasLayer"]
 process_mode = 3
@@ -65,7 +65,7 @@ text = "X"
 flat = true
 
 [node name="MessageLabel" type="Label" parent="Control/Panel/MarginContainer/VBoxContainer"]
-visible = false
+modulate = Color(1, 1, 1, 0)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "Message goes here"

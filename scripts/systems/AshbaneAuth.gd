@@ -320,6 +320,12 @@ func _stop_polling() -> void:
 		_poll_timer = null
 	_device_code = ""
 
+func cancel_auth() -> void:
+	"""Cancel an in-progress authentication attempt"""
+	if _is_polling:
+		LogManager.info("Auth cancelled by user", "ashbane")
+		_stop_polling()
+
 func _poll_auth_status() -> void:
 	"""Check if user has completed browser auth"""
 	if _device_code == "":
