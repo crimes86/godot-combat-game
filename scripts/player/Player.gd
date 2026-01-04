@@ -76,6 +76,12 @@ var blood_color: Color = Color(0.6, 0.05, 0.05, 0.9)  # Dark blood red (used for
 # "" = Rogue (no allegiance), "ashbane" = Ashbane faction
 var allegiance_id: String = "ashbane"
 
+# PvP Statistics Tracking (runtime, resets on death)
+var pvp_damage_received_from: Dictionary = {}  # {attacker_peer_id: total_damage}
+var last_attacker_id: int = -1  # Most recent attacker (for killing blow)
+var recent_healers: Dictionary = {}  # {healer_peer_id: timestamp} - for assist credit
+const PVP_ASSIST_WINDOW: float = 15.0  # Seconds within which healing counts for assist
+
 # PvP Weakpoint System (HP threshold-based, scales with level like PvE)
 # Two windows per duel: first at 70% HP, second at 35% HP
 const PVP_WEAKPOINT_THRESHOLDS: Array = [0.70, 0.35]  # Trigger at 70%, 35% HP
@@ -1457,6 +1463,8 @@ func attempt_heal() -> void:
 
 func heal_allies(allies: Array, heal_amount: float) -> void:
 	"""Apply healing to all allies in the array. Healer sees all heal numbers."""
+	var my_peer_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+
 	for ally in allies:
 		if not is_instance_valid(ally):
 			continue
@@ -1466,15 +1474,15 @@ func heal_allies(allies: Array, heal_amount: float) -> void:
 		var is_server = multiplayer.is_server()
 
 		if has_peer and not is_server:
-			# Client: request heal through server
+			# Client: request heal through server (server will add healer ID)
 			var ally_peer_id = ally.get_multiplayer_authority()
 			var network_manager = get_node_or_null("/root/NetworkManager")
 			if network_manager and network_manager.has_method("request_player_heal"):
 				network_manager.request_player_heal.rpc_id(1, ally_peer_id, heal_amount)
 		else:
-			# Server or single player: apply heal directly
+			# Server or single player: apply heal directly with healer ID
 			if ally.has_method("heal"):
-				ally.heal(heal_amount)
+				ally.heal(heal_amount, "player", my_peer_id)
 
 		# Healer always sees heal text for allies they healed
 		CombatText.create_heal(heal_amount, ally.global_position, get_tree().root, Vector2.ZERO)
@@ -1957,8 +1965,8 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 				return
 		else:
 			# OPEN-WORLD PvP: Server already validated allegiance rules
-			# Just accept the damage (no duel mechanics like weakpoints or 1HP threshold)
-			pass
+			# Track damage for kill credit calculation
+			_track_pvp_damage(source_player_id, int(amount))
 
 	# Cancel logout if taking damage (combat logging prevention)
 	if logout_timer_active:
@@ -2048,9 +2056,10 @@ func take_damage(amount: float, source_type: String = "pve", source_player_id: i
 		print("Player death triggered!")
 		die()
 
-func heal(amount: float, source_type: String = "self") -> void:
+func heal(amount: float, source_type: String = "self", healer_id: int = -1) -> void:
 	"""Heal the player by the given amount
-	source_type: 'self' (potions), 'player' (ally heals), 'campfire', 'passive'"""
+	source_type: 'self' (potions), 'player' (ally heals), 'campfire', 'passive'
+	healer_id: Peer ID of the player who healed (for assist tracking)"""
 	# During duel: block outside player healing (campfire/ally heals blocked)
 	# Self-heals (potions) are allowed
 	if is_dueling and source_type in ["player", "campfire"]:
@@ -2066,6 +2075,10 @@ func heal(amount: float, source_type: String = "self") -> void:
 
 	var actual_heal = min(amount, max_health - current_health)
 	current_health += actual_heal
+
+	# Track healer for PvP assist credit (if healed by another player)
+	if source_type == "player" and healer_id > 0:
+		_track_healer(healer_id)
 
 	# Update health bar
 	if health_bar and health_bar.has_method("update_health"):
@@ -4554,6 +4567,152 @@ func _is_minimap_hovered() -> bool:
 	return false
 
 # ═══════════════════════════════════════════════════════════════════════════
+# PVP STATISTICS TRACKING
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _track_pvp_damage(attacker_id: int, damage: int) -> void:
+	"""Track damage received from a player for kill credit calculation"""
+	if attacker_id <= 0:
+		return
+
+	# Track last attacker (for killing blow)
+	last_attacker_id = attacker_id
+
+	# Accumulate damage from this attacker
+	if not pvp_damage_received_from.has(attacker_id):
+		pvp_damage_received_from[attacker_id] = 0
+	pvp_damage_received_from[attacker_id] += damage
+
+func _track_healer(healer_id: int) -> void:
+	"""Track that a player healed us (for assist credit when we get a kill)"""
+	if healer_id <= 0:
+		return
+
+	var current_time = Time.get_unix_time_from_system()
+	recent_healers[healer_id] = current_time
+
+func _get_recent_healers() -> Array:
+	"""Get list of healer IDs who healed us within the assist window"""
+	var current_time = Time.get_unix_time_from_system()
+	var valid_healers = []
+
+	for healer_id in recent_healers.keys():
+		var heal_time = recent_healers[healer_id]
+		if current_time - heal_time <= PVP_ASSIST_WINDOW:
+			valid_healers.append(healer_id)
+
+	return valid_healers
+
+func _reset_pvp_tracking() -> void:
+	"""Reset PvP tracking data (called on death)"""
+	pvp_damage_received_from.clear()
+	last_attacker_id = -1
+	recent_healers.clear()
+
+func _get_pvp_kill_credit_id() -> int:
+	"""Get the player ID who dealt the most damage (kill credit)"""
+	if pvp_damage_received_from.is_empty():
+		return -1
+
+	var max_damage = 0
+	var credit_id = -1
+
+	for attacker_id in pvp_damage_received_from.keys():
+		var damage = pvp_damage_received_from[attacker_id]
+		if damage > max_damage:
+			max_damage = damage
+			credit_id = attacker_id
+
+	return credit_id
+
+func _record_pvp_death_stats() -> void:
+	"""Record PvP statistics when dying to another player (server only)"""
+	if not multiplayer.is_server():
+		return
+
+	# Get victim info
+	var victim_info = _get_my_auth_info()
+	if victim_info.username.is_empty() or victim_info.is_guest:
+		LogManager.info("PvP death not tracked (victim is guest or unknown)", "pvp")
+		return
+
+	# Record death for victim
+	if DatabaseManager:
+		DatabaseManager.record_pvp_death(victim_info.username)
+
+	# Get killing blow player
+	var killing_blow_id = last_attacker_id
+	var kill_credit_id = _get_pvp_kill_credit_id()
+
+	# Process all attackers for damage dealt tracking
+	for attacker_id in pvp_damage_received_from.keys():
+		var attacker_info = _get_player_auth_info_by_id(attacker_id)
+		if attacker_info.username.is_empty() or attacker_info.is_guest:
+			continue
+
+		var damage = pvp_damage_received_from[attacker_id]
+		var is_killing_blow = (attacker_id == killing_blow_id)
+		var is_credit = (attacker_id == kill_credit_id)
+
+		if DatabaseManager:
+			DatabaseManager.record_pvp_kill(
+				attacker_info.username,
+				victim_info.username,
+				damage,
+				is_killing_blow,
+				is_credit
+			)
+
+		# Award assists to healers of the killer (if killing blow or credit)
+		if is_killing_blow or is_credit:
+			_award_pvp_assists(attacker_id, attacker_info.username)
+
+func _award_pvp_assists(killer_id: int, killer_username: String) -> void:
+	"""Award assists to players who recently healed the killer"""
+	# Get the killer's player node to check their recent healers
+	var killer_node = _get_player_node_by_id(killer_id)
+	if not killer_node or not killer_node.has_method("_get_recent_healers"):
+		return
+
+	var healer_ids = killer_node._get_recent_healers()
+	for healer_id in healer_ids:
+		if healer_id == killer_id:
+			continue  # Can't assist yourself
+
+		var healer_info = _get_player_auth_info_by_id(healer_id)
+		if healer_info.username.is_empty() or healer_info.is_guest:
+			continue
+
+		if DatabaseManager:
+			DatabaseManager.record_pvp_assist(healer_info.username, killer_username)
+
+func _get_my_auth_info() -> Dictionary:
+	"""Get this player's auth info (username, is_guest)"""
+	var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+	return _get_player_auth_info_by_id(my_id)
+
+func _get_player_auth_info_by_id(peer_id: int) -> Dictionary:
+	"""Get player auth info (username, is_guest) from peer ID via NetworkManager"""
+	var default_info = {"username": "", "is_guest": true}
+	var network_manager = get_node_or_null("/root/NetworkManager")
+	if not network_manager:
+		return default_info
+	if not network_manager.authenticated_players.has(peer_id):
+		return default_info
+	var auth = network_manager.authenticated_players[peer_id]
+	return {
+		"username": auth.get("username", ""),
+		"is_guest": auth.get("is_guest", true)
+	}
+
+func _get_player_node_by_id(peer_id: int) -> Node:
+	"""Get player node by peer ID"""
+	for player in get_tree().get_nodes_in_group("player"):
+		if player.get_multiplayer_authority() == peer_id:
+			return player
+	return null
+
+# ═══════════════════════════════════════════════════════════════════════════
 # DEATH & RESPAWN
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -4581,6 +4740,14 @@ func die() -> void:
 
 	# Track death for forged armor/accessory stats
 	_record_equipment_death()
+
+	# Record PvP statistics if killed by another player (server only)
+	if last_attacker_id > 0 and not pvp_damage_received_from.is_empty():
+		_record_pvp_death_stats()
+		print("   ⚔️ PvP death recorded (killer: %d, %d attackers)" % [last_attacker_id, pvp_damage_received_from.size()])
+
+	# Reset PvP tracking for next life
+	_reset_pvp_tracking()
 
 	# Close any open loot UIs on death
 	for child in get_tree().root.get_children():

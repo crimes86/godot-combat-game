@@ -1050,8 +1050,8 @@ func request_player_heal(target_peer_id: int, heal_amount: float) -> void:
 			push_warning("Allegiance: Player %d cannot heal player %d" % [healer_peer_id, target_peer_id])
 			return
 
-		# Apply heal on server
-		target_player.heal(heal_amount)
+		# Apply heal on server (pass healer ID for assist tracking)
+		target_player.heal(heal_amount, "player", healer_peer_id)
 		LogManager.debug("Player %d healed player %d for %.1f" % [healer_peer_id, target_peer_id, heal_amount], "combat")
 
 		# Sync health to the target player's client

@@ -485,7 +485,9 @@ func save_player_data(username: String, data: Dictionary) -> bool:
 		# Duel statistics
 		"duel_wins", "duel_losses", "duel_daily_opponents",
 		# Allegiance/PvP state
-		"allegiance_id", "allegiance_last_change"
+		"allegiance_id", "allegiance_last_change",
+		# Open-world PvP statistics
+		"pvp_kills", "pvp_kill_credits", "pvp_assists", "pvp_damage_dealt", "pvp_deaths"
 	]
 
 	for field in allowed_fields:
@@ -588,6 +590,82 @@ func get_duel_stats(username: String) -> Dictionary:
 		win_rate = float(wins) / float(total) * 100.0
 
 	return {"wins": wins, "losses": losses, "win_rate": win_rate}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OPEN-WORLD PVP STATISTICS
+# ═══════════════════════════════════════════════════════════════════════════
+
+func record_pvp_kill(killer_username: String, victim_username: String, damage_dealt: int, is_killing_blow: bool, is_kill_credit: bool) -> void:
+	"""Record a PvP kill. Called when a player kills another in open-world PvP.
+	is_killing_blow: True if this player dealt the final hit
+	is_kill_credit: True if this player dealt the most damage overall"""
+	if not players_data.has(killer_username):
+		return
+
+	var killer = players_data[killer_username]
+
+	# Always add damage dealt
+	killer["pvp_damage_dealt"] = killer.get("pvp_damage_dealt", 0) + damage_dealt
+
+	# Killing blow (final hit)
+	if is_killing_blow:
+		killer["pvp_kills"] = killer.get("pvp_kills", 0) + 1
+		LogManager.info("PVP_KILL %s killed %s (killing blow)" % [killer_username, victim_username], "pvp")
+
+	# Kill credit (most damage)
+	if is_kill_credit and not is_killing_blow:
+		# Only count as separate credit if not also the killing blow
+		killer["pvp_kill_credits"] = killer.get("pvp_kill_credits", 0) + 1
+		LogManager.info("PVP_CREDIT %s credited for kill on %s (most damage)" % [killer_username, victim_username], "pvp")
+
+	save_database()
+
+func record_pvp_death(victim_username: String) -> void:
+	"""Record a PvP death for the victim"""
+	if not players_data.has(victim_username):
+		return
+
+	var victim = players_data[victim_username]
+	victim["pvp_deaths"] = victim.get("pvp_deaths", 0) + 1
+	save_database()
+	LogManager.info("PVP_DEATH %s died in PvP" % victim_username, "pvp")
+
+func record_pvp_assist(healer_username: String, killer_username: String) -> void:
+	"""Record a PvP assist for a healer whose target got a kill"""
+	if not players_data.has(healer_username):
+		return
+
+	var healer = players_data[healer_username]
+	healer["pvp_assists"] = healer.get("pvp_assists", 0) + 1
+	save_database()
+	LogManager.info("PVP_ASSIST %s assisted %s's kill" % [healer_username, killer_username], "pvp")
+
+func get_pvp_stats(username: String) -> Dictionary:
+	"""Get PvP statistics for a player"""
+	if not players_data.has(username):
+		return {"kills": 0, "kill_credits": 0, "assists": 0, "damage_dealt": 0, "deaths": 0, "kd_ratio": 0.0}
+
+	var player = players_data[username]
+	var kills = player.get("pvp_kills", 0)
+	var kill_credits = player.get("pvp_kill_credits", 0)
+	var assists = player.get("pvp_assists", 0)
+	var damage = player.get("pvp_damage_dealt", 0)
+	var deaths = player.get("pvp_deaths", 0)
+
+	var kd_ratio = 0.0
+	if deaths > 0:
+		kd_ratio = float(kills) / float(deaths)
+	elif kills > 0:
+		kd_ratio = float(kills)  # Infinite K/D shown as kill count
+
+	return {
+		"kills": kills,
+		"kill_credits": kill_credits,
+		"assists": assists,
+		"damage_dealt": damage,
+		"deaths": deaths,
+		"kd_ratio": kd_ratio
+	}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RATE LIMITING (prevent brute force)

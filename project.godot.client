@@ -1,0 +1,124 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+;
+; CLIENT BUILD - Full UI autoloads for desktop/player builds
+
+config_version=5
+
+[application]
+
+config/name="Dreadland"
+run/main_scene="res://scenes/ui/MainMenu.tscn"
+run/max_fps=0
+config/features=PackedStringArray("4.5", "Forward Plus")
+config/icon="res://assets/branding/ashbane-icon-256.png"
+
+[autoload]
+
+ServerRunner="*res://scripts/ServerRunner.gd"
+Constants="*res://scripts/constants.gd"
+UITheme="*res://scripts/systems/UITheme.gd"
+LogManager="*res://scripts/systems/LogManager.gd"
+SoundManager="*res://scripts/systems/sound_manager.gd"
+CharacterStats="*res://scripts/systems/CharacterStats.gd"
+InventorySystem="*res://scripts/systems/InventorySystem.gd"
+LootSpawnManager="*res://scripts/systems/LootSpawnManager.gd"
+NotificationManager="*res://scripts/systems/NotificationManager.gd"
+InteractionManager="*res://scripts/systems/InteractionManager.gd"
+DatabaseManager="*res://scripts/systems/DatabaseManager.gd"
+NetworkManager="*res://scripts/networking/NetworkManager.gd"
+NetworkEnemyManager="*res://scripts/networking/NetworkEnemyManager.gd"
+TimeManager="*res://scripts/systems/TimeManager.gd"
+GroupManager="*res://scripts/systems/GroupManager.gd"
+QuestManager="*res://scripts/systems/QuestManager.gd"
+DuelManager="*res://scripts/systems/DuelManager.gd"
+GameInput="*res://scripts/systems/GameInput.gd"
+AshbaneAuth="*res://scripts/systems/AshbaneAuth.gd"
+GameConfig="*res://scripts/systems/GameConfig.gd"
+TelemetryManager="*res://scripts/systems/TelemetryManager.gd"
+AshbaneCosmetics="*res://scripts/systems/AshbaneCosmetics.gd"
+ForgeItemDB="*res://scripts/systems/ForgeItemDB.gd"
+ForgeItemManager="*res://scripts/systems/ForgeItemManager.gd"
+TradingManager="*res://scripts/systems/TradingManager.gd"
+SpatialGrid="*res://scripts/systems/SpatialGrid.gd"
+TradingHubManager="*res://scripts/trading_hub/TradingHubManager.gd"
+WorldTreeManager="*res://scripts/systems/WorldTreeManager.gd"
+WeaponStatsTracker="*res://scripts/systems/WeaponStatsTracker.gd"
+WeaponSkillManager="*res://scripts/systems/WeaponSkillManager.gd"
+PlayerInteractionController="*res://scripts/systems/PlayerInteractionController.gd"
+PlaytestBot="*res://scripts/debug/PlaytestBot.gd"
+AccountAdmin="*res://scripts/ui/AccountAdminPanel.gd"
+CursorManager="*res://scripts/systems/CursorManager.gd"
+VFXLayer="*res://scripts/systems/VFXLayer.gd"
+ItemIconGenerator="*res://scripts/systems/ItemIconGenerator.gd"
+GroupUI="*res://scripts/ui/GroupUI.gd"
+TutorialManager="*res://scripts/systems/TutorialManager.gd"
+QuestTrackerUI="*res://scripts/ui/QuestTrackerUI.gd"
+BugReportUI="*res://scripts/ui/BugReportUI.gd"
+MobileInput="*res://scripts/mobile/MobileInput.gd"
+ForgeVisualEffects="*res://scripts/systems/ForgeVisualEffects.gd"
+RecentlyAdvertisedUI="*res://scripts/ui/RecentlyAdvertisedUI.gd"
+TradeWindowUI="*res://scripts/ui/TradeWindowUI.gd"
+ItemInspectionUI="*res://scripts/ui/ItemInspectionUI.gd"
+PlayerInteractionMenu="*res://scripts/ui/PlayerInteractionMenu.gd"
+PlayerInspectUI="*res://scripts/ui/PlayerInspectUI.gd"
+Minimap="*res://scripts/ui/Minimap.gd"
+CombatJuice="*res://scripts/systems/CombatJuice.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+window/vsync/vsync_mode=0
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/version_generator/plugin.cfg")
+
+[gui]
+
+theme/default_font_generate_mipmaps=true
+theme/default_font="res://assets/fonts/Inter-Regular.ttf"
+
+[input]
+
+move_up={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":87,"key_label":0,"unicode":119,"location":0,"echo":false,"script":null)
+]
+}
+move_down={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":83,"key_label":0,"unicode":115,"location":0,"echo":false,"script":null)
+]
+}
+move_left={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":65,"key_label":0,"unicode":97,"location":0,"echo":false,"script":null)
+]
+}
+move_right={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":68,"key_label":0,"unicode":100,"location":0,"echo":false,"script":null)
+]
+}
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
+[physics]
+
+common/physics_ticks_per_second=60
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0
