@@ -11,8 +11,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Default test price for items with price=0
-DEFAULT_TEST_PRICE = 5
+# Note: Free items (price=0) should stay free
+# Previously had DEFAULT_TEST_PRICE = 5 which broke free items
 
 
 class VendorService:
@@ -125,11 +125,8 @@ class VendorService:
         if item is None:
             return None
 
-        price = item.get("price", 0)
-        # Use default test price if item is free (for testing)
-        if price == 0:
-            price = DEFAULT_TEST_PRICE
-        return price
+        # Return actual price from JSON (free items stay free)
+        return item.get("price", 0)
 
     def get_valid_vendor_types(self) -> list[str]:
         """Get list of valid vendor types."""

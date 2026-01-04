@@ -150,6 +150,11 @@ func _input(event: InputEvent) -> void:
 
 func start_tutorial(player_node: Node) -> void:
 	"""Start the tutorial for a new player"""
+	# Guard against double initialization (prevents duplicate arrows)
+	if current_step != TutorialStep.INACTIVE:
+		print("📚 Tutorial already active (step %d), ignoring duplicate start" % current_step)
+		return
+
 	player = player_node
 	print("📚 Tutorial starting for player")
 
@@ -756,6 +761,11 @@ func clear_key_prompts() -> void:
 
 func create_arrow_indicator() -> void:
 	"""Create arrow that points to targets in world space"""
+	# Clean up any existing arrow first (prevents duplicates)
+	if arrow_indicator and is_instance_valid(arrow_indicator):
+		arrow_indicator.queue_free()
+		arrow_indicator = null
+
 	arrow_indicator = Node2D.new()
 	arrow_indicator.name = "ArrowIndicator"
 	arrow_indicator.visible = false
