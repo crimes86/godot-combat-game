@@ -348,9 +348,26 @@ func _receive_player_death() -> void:
 	# Mark as dead so we don't process further
 	is_dead = true
 
+	# Hide allegiance shield
+	var shield = get_node_or_null("AllegianceShield")
+	if shield:
+		shield.visible = false
+
+	# Hide health bar (includes name label)
+	if health_bar:
+		health_bar.visible = false
+
 	# Play death animation on this remote player
 	var character_sprite = get_node_or_null("CharacterSprite")
-	if character_sprite and character_sprite.sprite_frames and character_sprite.sprite_frames.has_animation("hurt"):
+	if not character_sprite:
+		print("💀 [DEATH SYNC] No CharacterSprite found on %s" % name)
+		return
+
+	# Check what animations are available
+	var has_hurt = character_sprite.sprite_frames and character_sprite.sprite_frames.has_animation("hurt")
+	print("💀 [DEATH SYNC] %s has hurt animation: %s" % [name, has_hurt])
+
+	if has_hurt:
 		character_sprite.stop()
 		character_sprite.play("hurt")
 
@@ -361,10 +378,10 @@ func _receive_player_death() -> void:
 			character_sprite.frame = frame_count - 1
 			print("💀 [DEATH SYNC] %s frozen on corpse frame %d" % [name, frame_count - 1])
 		, CONNECT_ONE_SHOT)
-
-	# Hide health bar
-	if health_bar:
-		health_bar.visible = false
+	else:
+		# No hurt animation - just hide the sprite
+		print("💀 [DEATH SYNC] No hurt animation, hiding sprite for %s" % name)
+		character_sprite.visible = false
 
 # ========================================
 # GUN VISUAL EFFECTS SYNC
