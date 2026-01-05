@@ -773,12 +773,11 @@ func _attack_player_with_gun(target_player: Node, hit_pos: Vector2) -> void:
 	if not is_instance_valid(target_player):
 		return
 
-	# Only attack duel opponent
-	if player.is_dueling:
-		var target_id = _get_player_peer_id(target_player)
-		if target_id != player.duel_opponent_id:
-			print("[PvP] Gun hit - skipping non-opponent")
-			return
+	# Verify we can damage this player (duel rules OR allegiance rules)
+	var target_id = _get_player_peer_id(target_player)
+	if not _can_damage_player(target_player, target_id):
+		print("[PvP] Gun hit - cannot damage this player")
+		return
 
 	# Check for weakpoint hit first - guns can hit PvP weakpoints!
 	var weakpoint_hit = _try_hit_pvp_weakpoint(target_player, hit_pos)
@@ -813,11 +812,10 @@ func _attack_player_with_burst(target_player: Node, hit_pos: Vector2) -> void:
 	if not is_instance_valid(target_player):
 		return
 
-	# Only attack duel opponent
-	if player.is_dueling:
-		var target_id = _get_player_peer_id(target_player)
-		if target_id != player.duel_opponent_id:
-			return
+	# Verify we can damage this player (duel rules OR allegiance rules)
+	var target_id = _get_player_peer_id(target_player)
+	if not _can_damage_player(target_player, target_id):
+		return
 
 	# Check for weakpoint hit first - guns can hit PvP weakpoints!
 	var weakpoint_hit = _try_hit_pvp_weakpoint(target_player, hit_pos)
@@ -897,12 +895,11 @@ func _attack_player_with_bow(target_player: Node, hit_pos: Vector2) -> void:
 	if not is_instance_valid(target_player):
 		return
 
-	# Only attack duel opponent during duel
-	if player.is_dueling:
-		var target_id = _get_player_peer_id(target_player)
-		if target_id != player.duel_opponent_id:
-			print("[PvP] Bow hit - skipping non-opponent")
-			return
+	# Verify we can damage this player (duel rules OR allegiance rules)
+	var target_id = _get_player_peer_id(target_player)
+	if not _can_damage_player(target_player, target_id):
+		print("[PvP] Bow hit - cannot damage this player")
+		return
 
 	# Check for weakpoint hit first - bows can hit PvP weakpoints!
 	var weakpoint_hit = _try_hit_pvp_weakpoint(target_player, hit_pos)
@@ -1251,19 +1248,19 @@ func attempt_gun_attack() -> void:
 			_spawn_bullet_impact(cursor_pos, false)
 			_track_weapon_miss()
 
-	# PvP: Check for player hits during duel
-	if player.is_dueling:
-		# First check for direct weakpoint hits (weakpoints are above the player's body)
-		var weakpoint_hit = _check_pvp_weakpoint_hit_at_cursor(actual_target)
-		if weakpoint_hit:
-			print("[PvP] Gun directly hit weakpoint!")
-			_spawn_bullet_impact(actual_target, true)
-		else:
-			# Check for body hits
-			var player_hit_result = _check_bullet_path_player_collision(barrel_pos, cursor_pos, gun_radius)
-			if player_hit_result.hit:
-				print("[PvP] Gun hit player along bullet path!")
-				_attack_player_with_gun(player_hit_result.player, actual_target)
+	# PvP: Check for player hits (duel or open-world allegiance-based)
+	# _check_bullet_path_player_collision uses _can_damage_player which handles both cases
+	# First check for direct weakpoint hits (weakpoints are above the player's body)
+	var weakpoint_hit = _check_pvp_weakpoint_hit_at_cursor(actual_target)
+	if weakpoint_hit:
+		print("[PvP] Gun directly hit weakpoint!")
+		_spawn_bullet_impact(actual_target, true)
+	else:
+		# Check for body hits against valid PvP targets
+		var player_hit_result = _check_bullet_path_player_collision(barrel_pos, cursor_pos, gun_radius)
+		if player_hit_result.hit:
+			print("[PvP] Gun hit player along bullet path!")
+			_attack_player_with_gun(player_hit_result.player, actual_target)
 
 	# Start cooldown timer
 	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
@@ -1784,19 +1781,18 @@ func _fire_burst_round() -> void:
 		else:
 			_spawn_bullet_impact(burst_target_pos, false)
 
-	# PvP: Check for player hits during duel (burst weapons)
-	if player.is_dueling:
-		# First check for direct weakpoint hits (weakpoints are above the player's body)
-		var weakpoint_hit = _check_pvp_weakpoint_hit_at_cursor(actual_target)
-		if weakpoint_hit:
-			print("[PvP] Burst round directly hit weakpoint!")
-			_spawn_bullet_impact(actual_target, true)
-		else:
-			# Check for body hits
-			var player_hit_result = _check_bullet_path_player_collision(barrel_pos, burst_target_pos, gun_radius)
-			if player_hit_result.hit:
-				print("[PvP] Burst round hit player!")
-				_attack_player_with_burst(player_hit_result.player, actual_target)
+	# PvP: Check for player hits (duel or open-world allegiance-based)
+	# First check for direct weakpoint hits (weakpoints are above the player's body)
+	var weakpoint_hit = _check_pvp_weakpoint_hit_at_cursor(actual_target)
+	if weakpoint_hit:
+		print("[PvP] Burst round directly hit weakpoint!")
+		_spawn_bullet_impact(actual_target, true)
+	else:
+		# Check for body hits against valid PvP targets
+		var player_hit_result = _check_bullet_path_player_collision(barrel_pos, burst_target_pos, gun_radius)
+		if player_hit_result.hit:
+			print("[PvP] Burst round hit player!")
+			_attack_player_with_burst(player_hit_result.player, actual_target)
 
 	# Schedule next burst round or finish
 	if burst_shots_remaining > 0:
