@@ -3985,6 +3985,10 @@ func _request_existing_players(_deprecated_id: int = 0):
 				if OS.is_debug_build():
 					print("🔍 [PLAYER DEBUG] Sending player %d (pos: %s, gender: %d, weapon: %s, chest_forged: %s, weapon_forged: %s, name: %s, tier: %s) to client %d" % [existing_id, existing_player.global_position, gender, weapon_type, chest_forged_id, weapon_is_forged, p_name, p_tier, requester_id])
 				rpc_id(requester_id, "spawn_player", existing_id, existing_player.global_position, gender, weapon_type, feet_sprite, legs_sprite, chest_sprite, arms_sprite, hands_sprite, head_sprite, feet_forged_id, legs_forged_id, chest_forged_id, arms_forged_id, hands_forged_id, head_forged_id, weapon_glow_color, weapon_effect_name, weapon_theme, weapon_is_forged, weapon_item_id, p_name, p_is_guest, p_tier)
+				# Also sync allegiance to new joiner
+				var existing_allegiance = existing_player.get("allegiance_id")
+				if existing_allegiance != null:
+					rpc_id(requester_id, "_sync_player_allegiance", existing_id, existing_allegiance)
 			else:
 				if OS.is_debug_build():
 					print("🔍 [PLAYER DEBUG] Sending player %d (default pos) to client %d" % [existing_id, requester_id])
@@ -3998,6 +4002,32 @@ func _request_existing_players(_deprecated_id: int = 0):
 					var ashbane_data2 = p_data2.get("ashbane", {})
 					p_tier2 = ashbane_data2.get("tier", "initiate")
 				rpc_id(requester_id, "spawn_player", existing_id, Vector2.ZERO, 0, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", false, "", p_name2, p_is_guest2, p_tier2)
+				# Default allegiance for invalid players
+				rpc_id(requester_id, "_sync_player_allegiance", existing_id, "ashbane")
+
+@rpc("any_peer", "reliable")
+func _sync_player_allegiance(player_id: int, allegiance: String) -> void:
+	"""Sync a player's allegiance to this client (called by server on new joiner)"""
+	# Wait a frame to ensure player is spawned
+	await get_tree().process_frame
+
+	if not players.has(player_id):
+		return
+
+	var target_player = players[player_id]
+	if not is_instance_valid(target_player):
+		return
+
+	# Update the player's allegiance_id
+	target_player.allegiance_id = allegiance
+
+	# Update their shield display
+	var shield = target_player.get_node_or_null("AllegianceShield")
+	if shield and shield.has_method("set_allegiance"):
+		shield.set_allegiance(allegiance)
+
+	if OS.is_debug_build():
+		print("🛡️ [ALLEGIANCE] Synced player %d allegiance to '%s'" % [player_id, allegiance])
 
 func _on_player_connected(id: int):
 	"""Handle new player connection - DON'T spawn yet, wait for authentication"""

@@ -179,7 +179,16 @@ var movement_system: PlayerMovement = null
 # Multiplayer helper methods
 func get_current_animation() -> String:
 	var character_sprite = get_node_or_null("CharacterSprite")
-	if character_sprite and character_sprite.animation:
+	if not character_sprite:
+		return "idle_south"
+
+	# Check if gun mode is active (gun_body_sprite is visible for east/west)
+	var gun_body = character_sprite.get("gun_body_sprite")
+	if gun_body and gun_body.visible and gun_body.animation:
+		return gun_body.animation
+
+	# Regular mode - return main sprite animation
+	if character_sprite.animation:
 		return character_sprite.animation
 	return "idle_south"
 
