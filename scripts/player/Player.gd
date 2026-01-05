@@ -307,6 +307,66 @@ func _receive_animation_sync(anim_name: String) -> void:
 		character_sprite.play_lpc_animation(action, direction)
 
 # ========================================
+# DEATH ANIMATION SYNC
+# ========================================
+
+func _play_death_animation() -> void:
+	"""Play the hurt animation and freeze on last frame (corpse pose)."""
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if not character_sprite:
+		print("   ⚠️ No CharacterSprite found, waiting 0.5s...")
+		await get_tree().create_timer(0.5).timeout
+		return
+
+	# Check if hurt animation exists
+	if character_sprite.sprite_frames and character_sprite.sprite_frames.has_animation("hurt"):
+		print("   🎬 Playing death (hurt) animation...")
+		character_sprite.stop()
+		character_sprite.play("hurt")
+
+		# Wait for the animation to finish OR timeout after 1 second
+		var timeout = get_tree().create_timer(1.0)
+		var finished = false
+		character_sprite.animation_finished.connect(func(): finished = true, CONNECT_ONE_SHOT)
+		while not finished and timeout.time_left > 0:
+			await get_tree().process_frame
+
+		# Freeze on last frame (corpse pose)
+		var frame_count = character_sprite.sprite_frames.get_frame_count("hurt")
+		character_sprite.stop()
+		character_sprite.frame = frame_count - 1
+		print("   ✅ Death animation complete, frozen on frame %d" % (frame_count - 1))
+	else:
+		print("   ⚠️ No 'hurt' animation found, waiting 0.5s...")
+		await get_tree().create_timer(0.5).timeout
+
+@rpc("any_peer", "call_remote", "reliable")
+func _receive_player_death() -> void:
+	"""Receive death notification from another player - play their death animation."""
+	print("💀 [DEATH SYNC] Received death for player %s" % name)
+
+	# Mark as dead so we don't process further
+	is_dead = true
+
+	# Play death animation on this remote player
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if character_sprite and character_sprite.sprite_frames and character_sprite.sprite_frames.has_animation("hurt"):
+		character_sprite.stop()
+		character_sprite.play("hurt")
+
+		# When animation finishes, freeze on last frame
+		character_sprite.animation_finished.connect(func():
+			var frame_count = character_sprite.sprite_frames.get_frame_count("hurt")
+			character_sprite.stop()
+			character_sprite.frame = frame_count - 1
+			print("💀 [DEATH SYNC] %s frozen on corpse frame %d" % [name, frame_count - 1])
+		, CONNECT_ONE_SHOT)
+
+	# Hide health bar
+	if health_bar:
+		health_bar.visible = false
+
+# ========================================
 # GUN VISUAL EFFECTS SYNC
 # ========================================
 
@@ -4841,26 +4901,12 @@ func die() -> void:
 	# Disable player controls during death
 	set_physics_process(false)
 
-	# ✨ Play death animation (hurt animation) and wait for it to complete
-	var anim_sprite = get_node_or_null("PlayerSprite") as AnimatedSprite2D
-	if anim_sprite and anim_sprite.sprite_frames:
-		if anim_sprite.sprite_frames.has_animation("hurt"):
-			print("   🎬 Playing death (hurt) animation...")
-			anim_sprite.stop()  # Stop any current animation
-			anim_sprite.play("hurt")
+	# Broadcast death to other players so they see the animation
+	if multiplayer.has_multiplayer_peer() and is_multiplayer_authority():
+		rpc("_receive_player_death")
 
-			# Wait for the animation to finish OR timeout after 1 second
-			var timer = get_tree().create_timer(1.0)
-			await anim_sprite.animation_finished
-			print("   ✅ Death animation complete")
-		else:
-			print("   ⚠️ No 'hurt' animation found in sprite_frames")
-			print("   Available animations: ", anim_sprite.sprite_frames.get_animation_names())
-			await get_tree().create_timer(0.5).timeout
-	else:
-		# Fallback if animation doesn't exist
-		print("   ⚠️ No AnimatedSprite2D or sprite_frames found, waiting 0.5s...")
-		await get_tree().create_timer(0.5).timeout
+	# ✨ Play death animation (hurt animation) and wait for it to complete
+	await _play_death_animation()
 
 	# === SPAWN CORPSE WITH ALL LOOT ===
 	var corpse_scene = load("res://scenes/world/PlayerCorpse.tscn")
