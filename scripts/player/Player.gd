@@ -177,6 +177,11 @@ var movement_modifiers: Dictionary = {}  # source_name -> multiplier (0.0-1.0)
 var movement_system: PlayerMovement = null
 
 # Multiplayer helper methods
+# Animation sync tracking - to avoid spamming RPCs when animation hasn't changed
+var _last_synced_animation: String = ""
+var _animation_sync_timer: float = 0.0
+const ANIMATION_SYNC_INTERVAL: float = 0.1  # Sync at most 10 times per second
+
 func get_current_animation() -> String:
 	var character_sprite = get_node_or_null("CharacterSprite")
 	if not character_sprite:
@@ -256,6 +261,50 @@ func _receive_shoot_animation(lpc_direction: String) -> void:
 	character_sprite_node.play_lpc_animation("shoot", lpc_direction)
 	if OS.is_debug_build():
 		print("🔫 [SHOOT] Animation triggered on %s" % name)
+
+# ========================================
+# ANIMATION SYNC (walk/idle/facing)
+# ========================================
+
+func _sync_animation_to_network(delta: float) -> void:
+	"""Sync current animation to other players (throttled)."""
+	_animation_sync_timer += delta
+	if _animation_sync_timer < ANIMATION_SYNC_INTERVAL:
+		return
+	_animation_sync_timer = 0.0
+
+	# Only sync if we have multiplayer and are the authority
+	if not multiplayer.has_multiplayer_peer():
+		return
+	if not is_multiplayer_authority():
+		return
+
+	# Get current animation and check if it changed
+	var current_anim = get_current_animation()
+	if current_anim == _last_synced_animation:
+		return
+
+	_last_synced_animation = current_anim
+	# Broadcast to other players (unreliable_ordered for animation updates - lower overhead)
+	rpc("_receive_animation_sync", current_anim)
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func _receive_animation_sync(anim_name: String) -> void:
+	"""Receive animation update from another player."""
+	var character_sprite = get_node_or_null("CharacterSprite")
+	if not character_sprite:
+		return
+
+	# Parse animation name (format: "action_direction" e.g. "walk_east", "idle_south")
+	var parts = anim_name.rsplit("_", true, 1)
+	if parts.size() != 2:
+		return
+
+	var action = parts[0]
+	var direction = parts[1]
+
+	if character_sprite.has_method("play_lpc_animation"):
+		character_sprite.play_lpc_animation(action, direction)
 
 # ========================================
 # GUN VISUAL EFFECTS SYNC
@@ -985,10 +1034,13 @@ func _physics_process(delta: float) -> void:
 		global_position.y = clamp(global_position.y, y_min, y_max)
 
 	update_facing_direction()
-	
+
 	# Update LPC animation
 	update_lpc_animation(input_direction)
-	
+
+	# Sync animation to other players (throttled to avoid spam)
+	_sync_animation_to_network(delta)
+
 	# Update visualizers based on weapon type
 	update_cone_visualizer()
 	update_circle_visualizer()
