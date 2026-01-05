@@ -2428,16 +2428,23 @@ func _request_pvp_weakpoint_window_spawn() -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _sync_pvp_weakpoint_window_spawn(target_peer_id: int) -> void:
 	"""Server broadcasts weakpoint window spawn to all peers.
-	This RPC is called on the target player's node, so we spawn directly on self."""
+	This RPC is called on the target player's node, so we spawn directly on self.
+	IMPORTANT: Only the ATTACKER should see weakpoints, not the victim."""
 	print("[PvP] _sync_pvp_weakpoint_window_spawn received for peer %d on node %s" % [target_peer_id, name])
 
-	# Verify this is the correct player node (the one that should get weakpoints)
-	var my_authority = get_multiplayer_authority()
-	if my_authority != target_peer_id:
-		print("[PvP] Skipping - this node (authority %d) is not target peer %d" % [my_authority, target_peer_id])
+	# Verify this is the correct player node (the one that should get weakpoints ON them)
+	var node_authority = get_multiplayer_authority()
+	if node_authority != target_peer_id:
+		print("[PvP] Skipping - this node (authority %d) is not target peer %d" % [node_authority, target_peer_id])
 		return
 
-	print("[PvP] Spawning weakpoints on self: %s" % name)
+	# CRITICAL: Don't show weakpoints to the victim - only the attacker should see them
+	var local_player_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	if local_player_id == target_peer_id:
+		print("[PvP] Skipping - victim (%d) doesn't see their own weakpoints" % local_player_id)
+		return
+
+	print("[PvP] Spawning weakpoints on target %s (visible to attacker %d)" % [name, local_player_id])
 	_create_pvp_weakpoints_local()
 
 func _create_pvp_weakpoints_local() -> void:
