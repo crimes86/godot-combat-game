@@ -1237,6 +1237,10 @@ func perform_attack() -> void:
 			# Sync shadow animation
 			if enemy.shadow_sprite and enemy.shadow_sprite.sprite_frames.has_animation(attack_anim):
 				enemy.shadow_sprite.play(attack_anim)
+		else:
+			# Debug: Animation missing - log available animations
+			var available = anim_sprite.sprite_frames.get_animation_names()
+			push_warning("⚠️ Attack animation '%s' missing! Available: %s" % [attack_anim, available])
 
 	# ✨ Small delay for attack animation to play before dealing damage
 	await get_tree().create_timer(0.2).timeout
@@ -1358,6 +1362,24 @@ func _on_enemy_damaged(_damage: float, is_crit: bool) -> void:
 	"""Called when enemy takes damage - this triggers combat!"""
 	if not is_in_combat:
 		is_in_combat = true
+
+		# CRITICAL FIX: Find and set player reference when attacked from range
+		# Without this, ranged attacks wouldn't trigger proper combat response
+		# because process_combat() would disengage due to null player reference
+		if not player or not is_instance_valid(player):
+			# Find the nearest alive player to chase
+			var nearest_player: CharacterBody2D = null
+			var nearest_distance: float = INF
+			var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+			for p in players:
+				if is_instance_valid(p) and not _is_player_dead(p):
+					var dist = enemy.global_position.distance_to(p.global_position)
+					if dist < nearest_distance:
+						nearest_distance = dist
+						nearest_player = p
+			if nearest_player:
+				player = nearest_player
+				cached_player = nearest_player
 
 		# Chain aggro - alert nearby allies when attacked!
 		trigger_chain_aggro()

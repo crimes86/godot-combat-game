@@ -403,7 +403,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 	var roaming_spawned = 0
 
 	# Per-pool spawn limits to prevent crowding
-	const MAX_ENEMIES_PER_MONSTER_POOL: int = 8
+	const MAX_ENEMIES_PER_MONSTER_POOL: int = 12
 	const MAX_ENEMIES_PER_REGULAR_POOL: int = 4
 
 	# Track spawns per pool (by index)

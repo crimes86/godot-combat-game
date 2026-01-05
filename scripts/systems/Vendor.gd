@@ -141,6 +141,7 @@ func _connect_quest_signals() -> void:
 		var qm = get_node("/root/QuestManager")
 		qm.active_quests_changed.connect(_update_quest_indicator)
 		qm.quests_loaded.connect(_update_quest_indicator)
+		qm.quest_availability_changed.connect(_update_quest_indicator)  # Refresh on level up
 
 	# Connect to TutorialManager to refresh indicator when tutorial steps change
 	var tutorial_mgr = get_node_or_null("/root/TutorialManager")

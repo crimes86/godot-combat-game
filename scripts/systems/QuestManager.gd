@@ -26,6 +26,7 @@ signal quest_turned_in(quest_id: String)
 signal active_quests_changed()
 signal quests_loaded()
 signal quest_reward_choice_needed(quest_id: String, quest_name: String, options: Array)  # For item reward selection
+signal quest_availability_changed()  # Emitted when quests become available (level up, prereq met)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DATA STORAGE
@@ -355,6 +356,9 @@ func _update_quest_availability() -> void:
 				print("📜 Quest now available: %s" % quest.get("name", quest_id))
 		else:
 			quest_states[quest_id] = QuestState.LOCKED
+
+	# Notify listeners (Vendors) that quest availability may have changed
+	quest_availability_changed.emit()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # OBJECTIVE TRACKING

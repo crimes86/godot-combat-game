@@ -312,8 +312,9 @@ func record_kill(enemy_type: String, is_elite: bool = false, is_boss: bool = fal
 
 
 func calculate_kill_xp(enemy_level: int, is_elite: bool, is_boss: bool, party_size: int) -> int:
-	"""Calculate XP from a kill based on enemy level and party size.
-	Item XP is NOT split - everyone gets full XP. Group bonus encourages grouping."""
+	"""Calculate XP from a kill based on enemy level, player level difference, and party size.
+	Item XP is NOT split - everyone gets full XP. Group bonus encourages grouping.
+	XP falls off when player outlevels enemies (20% reduction per level above enemy)."""
 	# Base XP scales with enemy level
 	var base_xp = enemy_level * 5
 
@@ -322,6 +323,14 @@ func calculate_kill_xp(enemy_level: int, is_elite: bool, is_boss: bool, party_si
 		base_xp = int(base_xp * 3.0)  # Bosses give 3x
 	elif is_elite:
 		base_xp = int(base_xp * 1.5)  # Elites give 1.5x
+
+	# XP falloff when player outlevels enemy
+	# 20% reduction per level above enemy, minimum 10% XP (never 0)
+	var player_level = CharacterStats.level if CharacterStats else 1
+	var level_diff = player_level - enemy_level
+	if level_diff > 0:
+		var falloff = maxf(0.1, 1.0 - (level_diff * 0.2))  # Min 10% XP at 5+ levels above
+		base_xp = int(base_xp * falloff)
 
 	# Group bonus: +10% per party member beyond 1
 	var group_multiplier = 1.0 + (party_size - 1) * 0.10

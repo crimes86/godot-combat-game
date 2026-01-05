@@ -84,12 +84,6 @@ var release_timer: float = 0.0  # Current countdown (0 = not counting)
 var is_releasing: bool = false  # True when countdown is active
 var release_timer_ui: Control = null  # UI showing time until release
 
-# Skeleton spawning from fuel (every 5 fuel items spawns a skeleton)
-const FUEL_PER_SKELETON: int = 5
-const MAX_CAMPFIRE_SKELETONS: int = 10  # Maximum active skeletons per campfire
-var cumulative_fuel_added: int = 0  # Tracks total fuel for skeleton spawning
-var campfire_skeletons: Array = []  # Track skeletons spawned by this campfire
-
 # Healing system
 var heal_rate: float = 5.0  # HP per interval (scales with fuel)
 var heal_interval: float = 1.0  # Heal every 1 second
@@ -2373,9 +2367,6 @@ func add_wood_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> bool:
 		if is_unlit:
 			light_campfire()
 
-	# Track cumulative fuel for skeleton spawning
-	track_fuel_for_skeletons(amount)
-
 	# Play sound
 	if added > 0:
 		var sound_manager = get_node_or_null("/root/SoundManager")
@@ -2416,9 +2407,6 @@ func add_bone_ember_fuel_to_pool(amount: int, enhanced_sound: bool = false) -> b
 		# Light the fire if it was unlit
 		if is_unlit:
 			light_campfire()
-
-	# Track cumulative fuel for skeleton spawning
-	track_fuel_for_skeletons(amount)
 
 	# Play sound
 	if added > 0:
@@ -2585,9 +2573,6 @@ func _server_add_wood_fuel(amount: int, enhanced_sound: bool) -> bool:
 		# Sync fuel state to all clients
 		_sync_fuel_state_to_clients()
 
-	# Track cumulative fuel for skeleton spawning (all fuel counts, even wasted)
-	track_fuel_for_skeletons(amount)
-
 	# Play fire fuel sound on all clients
 	if multiplayer.has_multiplayer_peer():
 		_play_fuel_sound.rpc(enhanced_sound)
@@ -2665,9 +2650,6 @@ func _server_add_bone_ember_fuel(amount: int, enhanced_sound: bool) -> bool:
 		# Sync fuel state to all clients
 		_sync_fuel_state_to_clients()
 
-	# Track cumulative fuel for skeleton spawning (all fuel counts, even wasted)
-	track_fuel_for_skeletons(amount)
-
 	# Play fire fuel sound on all clients
 	if multiplayer.has_multiplayer_peer():
 		_play_fuel_sound.rpc(enhanced_sound)
@@ -2685,103 +2667,6 @@ func _track_quest_fuel(amount: int) -> void:
 
 	var qm = get_node("/root/QuestManager")
 	qm.on_campfire_fueled(amount)
-
-func track_fuel_for_skeletons(amount: int) -> void:
-	"""Track cumulative fuel and spawn skeletons every 5 items"""
-	var old_total = cumulative_fuel_added
-	cumulative_fuel_added += amount
-
-	# Calculate how many skeletons to spawn
-	var old_skeleton_threshold = old_total / FUEL_PER_SKELETON
-	var new_skeleton_threshold = cumulative_fuel_added / FUEL_PER_SKELETON
-	var skeletons_to_spawn = new_skeleton_threshold - old_skeleton_threshold
-
-	if skeletons_to_spawn > 0:
-		print("🔥💀 Fuel threshold reached! Spawning %d skeleton(s) (total fuel: %d)" % [skeletons_to_spawn, cumulative_fuel_added])
-		for i in range(skeletons_to_spawn):
-			spawn_campfire_skeleton()
-
-func spawn_campfire_skeleton() -> void:
-	"""Spawn a skeleton that's attracted to the campfire"""
-	# In multiplayer, clients request spawn from server
-	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
-		_request_skeleton_spawn.rpc_id(1)  # Send request to server (peer 1)
-		return
-
-	_do_spawn_campfire_skeleton()
-
-@rpc("any_peer", "reliable")
-func _request_skeleton_spawn() -> void:
-	"""Client requests server to spawn a campfire skeleton"""
-	if not multiplayer.is_server():
-		return
-	print("🌐 Server received skeleton spawn request from peer %d" % multiplayer.get_remote_sender_id())
-	_do_spawn_campfire_skeleton()
-
-func _do_spawn_campfire_skeleton() -> void:
-	"""Actually spawn the skeleton (server only)"""
-	# Clean up dead/invalid skeletons from tracking array
-	_cleanup_dead_skeletons()
-
-	# Check if we're at the skeleton cap
-	if campfire_skeletons.size() >= MAX_CAMPFIRE_SKELETONS:
-		print("🔥💀 Campfire at max skeletons (%d), not spawning more" % MAX_CAMPFIRE_SKELETONS)
-		return
-
-	# Find a random spawn position 800-1200 units away from campfire
-	var spawn_distance = randf_range(800.0, 1200.0)
-	var spawn_angle = randf() * TAU
-	var spawn_pos = global_position + Vector2(cos(spawn_angle), sin(spawn_angle)) * spawn_distance
-
-	# Load enemy scene
-	var enemy_scene = load("res://scenes/enemies/enemy.tscn")
-	if not enemy_scene:
-		push_warning("Cannot spawn campfire skeleton: enemy scene not found at res://scenes/enemies/enemy.tscn")
-		return
-
-	var skeleton = enemy_scene.instantiate()
-	skeleton.global_position = spawn_pos
-
-	# Set random level 1-6 for home campfire skeletons
-	skeleton.enemy_level = randi_range(1, 6)
-
-	# Mark this skeleton as campfire-attracted (set meta BEFORE adding to tree)
-	skeleton.set_meta("campfire_target", self)
-	skeleton.set_meta("campfire_spawn_time", Time.get_ticks_msec())
-	skeleton.set_meta("is_campfire_skeleton", true)
-
-	# Add to enemies group BEFORE adding to tree - this is critical!
-	# game_world._on_node_added() checks group membership to auto-connect corpse_clicked signal
-	skeleton.add_to_group(Constants.GROUP_ENEMIES)
-
-	# Generate unique name for network sync
-	var skeleton_name = "CampfireSkeleton_%d_%d" % [Time.get_ticks_msec(), randi() % 1000]
-	skeleton.name = skeleton_name
-
-	# Add to scene tree
-	# This triggers game_world._on_node_added() which will connect corpse_clicked signal
-	get_tree().root.add_child(skeleton)
-
-	# Track this skeleton
-	campfire_skeletons.append(skeleton)
-
-	# Register with NetworkEnemyManager for multiplayer sync
-	var network_enemy_mgr = get_node_or_null("/root/NetworkEnemyManager")
-	if network_enemy_mgr:
-		var network_id = network_enemy_mgr.register_enemy(skeleton)
-		# Sync to NEARBY clients only (interest management)
-		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-			network_enemy_mgr.spawn_enemy_for_nearby_clients(network_id, skeleton)
-
-	print("💀🔥 Spawned campfire skeleton at %s (%d/%d active)" % [spawn_pos, campfire_skeletons.size(), MAX_CAMPFIRE_SKELETONS])
-
-func _cleanup_dead_skeletons() -> void:
-	"""Remove dead or invalid skeletons from tracking array"""
-	var valid_skeletons: Array = []
-	for skeleton in campfire_skeletons:
-		if is_instance_valid(skeleton) and not skeleton.is_corpse:
-			valid_skeletons.append(skeleton)
-	campfire_skeletons = valid_skeletons
 
 func update_visual_intensity() -> void:
 	"""Update campfire visual intensity based on fuel levels"""

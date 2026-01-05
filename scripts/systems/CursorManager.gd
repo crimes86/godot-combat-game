@@ -73,11 +73,11 @@ func check_enemy_under_cursor() -> bool:
 	if not camera:
 		return false
 
-	# Convert screen position to world position
+	# Convert screen position to world position using canvas transform
+	# This correctly handles camera bounds/limits at map edges
 	var mouse_screen_pos = viewport.get_mouse_position()
-	# Simpler conversion: screen pos relative to camera
-	var camera_offset = mouse_screen_pos - viewport.get_visible_rect().size / 2
-	var mouse_world_pos = camera.global_position + camera_offset / camera.zoom
+	var canvas_transform = viewport.get_canvas_transform()
+	var mouse_world_pos = canvas_transform.affine_inverse() * mouse_screen_pos
 
 	# Check enemies group
 	var enemies = get_tree().get_nodes_in_group(Constants.GROUP_ENEMIES)

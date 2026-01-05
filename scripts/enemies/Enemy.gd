@@ -289,6 +289,12 @@ func _ready() -> void:
 			# Setup skeleton animations from ALL sprite sheets
 			setup_skeleton_animations(anim_sprite, walk_tex, slash_tex, hurt_tex)
 
+			# Debug: Verify attack animations were created
+			if anim_sprite.sprite_frames:
+				var has_attack = anim_sprite.sprite_frames.has_animation("attack_down")
+				if not has_attack:
+					push_warning("⚠️ ATTACK ANIMATIONS MISSING for %s! slash_tex=%s" % [name, slash_tex != null])
+
 			# Verify sprite_frames was set
 			if not anim_sprite.sprite_frames:
 				push_error("❌ Failed to setup sprite_frames!")
@@ -399,12 +405,14 @@ func setup_skeleton_animations(anim_sprite: AnimatedSprite2D, walk_tex: Texture2
 	# Setup ATTACK animations from slash texture (6 frames per row)
 	if slash_tex:
 		var slash_img = slash_tex.get_image()
-
-		# Attack animations - 4 rows (UP, LEFT, DOWN, RIGHT), 6 frames each
-		create_skeleton_animation(sprite_frames, slash_img, "attack_up", 0, 6, 12.0, false)
-		create_skeleton_animation(sprite_frames, slash_img, "attack_left", 1, 6, 12.0, false)
-		create_skeleton_animation(sprite_frames, slash_img, "attack_down", 2, 6, 12.0, false)
-		create_skeleton_animation(sprite_frames, slash_img, "attack_right", 3, 6, 12.0, false)
+		if slash_img:
+			# Attack animations - 4 rows (UP, LEFT, DOWN, RIGHT), 6 frames each
+			create_skeleton_animation(sprite_frames, slash_img, "attack_up", 0, 6, 12.0, false)
+			create_skeleton_animation(sprite_frames, slash_img, "attack_left", 1, 6, 12.0, false)
+			create_skeleton_animation(sprite_frames, slash_img, "attack_down", 2, 6, 12.0, false)
+			create_skeleton_animation(sprite_frames, slash_img, "attack_right", 3, 6, 12.0, false)
+		else:
+			push_error("❌ Failed to get image from slash texture! Size: %s" % slash_tex.get_size())
 
 	# Setup HURT animation from hurt texture (6 frames, single row)
 	if hurt_tex:

@@ -25,6 +25,8 @@ const HEADER_FONT_SIZE = 18
 const QUEST_NAME_FONT_SIZE = 16
 const OBJECTIVE_FONT_SIZE = 14
 const TUTORIAL_FONT_SIZE = 16  # Larger for readability
+const NEW_QUEST_COLOR = Color(0.2, 0.8, 0.4, 1.0)  # Green for new quests available
+const ARROW_UPDATE_INTERVAL = 0.1  # Update direction arrow every 100ms
 
 var main_panel: PanelContainer
 var quest_container: VBoxContainer
@@ -34,6 +36,12 @@ var _fade_tween: Tween = null
 
 # Tutorial tracking
 var tutorial_entry: VBoxContainer = null
+
+# New quests available tracking
+var new_quests_entry: VBoxContainer = null
+var direction_arrow: Label = null
+var arrow_update_timer: float = 0.0
+
 var tutorial_steps: Array = [
 	{"name": "Learn Movement", "desc": "Press W, A, S, D keys"},
 	{"name": "Find Dummy", "desc": "Walk to Training Dummy"},
@@ -62,6 +70,8 @@ func _connect_signals() -> void:
 		QuestManager.active_quests_changed.connect(_refresh_tracker)
 		QuestManager.quest_progress_updated.connect(_on_progress_updated)
 		QuestManager.quests_loaded.connect(_refresh_tracker)
+		if QuestManager.has_signal("quest_availability_changed"):
+			QuestManager.quest_availability_changed.connect(_refresh_tracker)
 		print("📋 QuestTrackerUI connected to QuestManager")
 
 	# Connect to TutorialManager for tutorial tracking
@@ -82,11 +92,21 @@ func _exit_tree() -> void:
 			QuestManager.quest_progress_updated.disconnect(_on_progress_updated)
 		if QuestManager.quests_loaded.is_connected(_refresh_tracker):
 			QuestManager.quests_loaded.disconnect(_refresh_tracker)
+		if QuestManager.has_signal("quest_availability_changed") and QuestManager.quest_availability_changed.is_connected(_refresh_tracker):
+			QuestManager.quest_availability_changed.disconnect(_refresh_tracker)
 	if TutorialManager:
 		if TutorialManager.tutorial_step_completed.is_connected(_on_tutorial_step_completed):
 			TutorialManager.tutorial_step_completed.disconnect(_on_tutorial_step_completed)
 		if TutorialManager.tutorial_completed.is_connected(_on_tutorial_completed):
 			TutorialManager.tutorial_completed.disconnect(_on_tutorial_completed)
+
+func _process(delta: float) -> void:
+	# Update direction arrow if new quests entry is visible
+	if direction_arrow and is_instance_valid(direction_arrow):
+		arrow_update_timer += delta
+		if arrow_update_timer >= ARROW_UPDATE_INTERVAL:
+			arrow_update_timer = 0.0
+			_update_direction_arrow()
 
 func _create_ui() -> void:
 	"""Build the quest tracker UI"""
@@ -178,6 +198,12 @@ func _refresh_tracker() -> void:
 		tutorial_entry.queue_free()
 		tutorial_entry = null
 
+	# Clear new quests entry and direction arrow
+	if new_quests_entry and is_instance_valid(new_quests_entry):
+		new_quests_entry.queue_free()
+		new_quests_entry = null
+	direction_arrow = null
+
 	var has_content = false
 
 	# Show tutorial progress if tutorial is active
@@ -198,6 +224,11 @@ func _refresh_tracker() -> void:
 				var entry = _create_quest_entry(quest)
 				quest_container.add_child(entry)
 				quest_entries.append(entry)
+		else:
+			# No active quests - check if quests are available
+			if QuestManager.has_available_quests("blacksmith"):
+				_create_new_quests_entry()
+				has_content = true
 
 	# Show/hide panel based on content
 	main_panel.visible = has_content
@@ -433,3 +464,93 @@ func _on_tutorial_step_completed(completed_step: int) -> void:
 func _on_tutorial_completed() -> void:
 	"""Handle tutorial completion - refresh tracker to remove tutorial entry"""
 	_refresh_tracker()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NEW QUESTS AVAILABLE
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _create_new_quests_entry() -> void:
+	"""Create 'New Quests Available!' entry with direction arrow"""
+	new_quests_entry = VBoxContainer.new()
+	new_quests_entry.name = "NewQuestsEntry"
+	new_quests_entry.add_theme_constant_override("separation", 4)
+
+	# Header with green color
+	var header = Label.new()
+	header.name = "NewQuestsHeader"
+	header.text = "NEW QUESTS AVAILABLE!"
+	header.add_theme_font_size_override("font_size", QUEST_NAME_FONT_SIZE)
+	header.add_theme_color_override("font_color", NEW_QUEST_COLOR)
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	new_quests_entry.add_child(header)
+
+	# Direction indicator row
+	var dir_hbox = HBoxContainer.new()
+	dir_hbox.name = "DirectionRow"
+
+	# Arrow pointing to blacksmith
+	direction_arrow = Label.new()
+	direction_arrow.name = "DirectionArrow"
+	direction_arrow.text = "→"  # Will be updated dynamically
+	direction_arrow.add_theme_font_size_override("font_size", 20)
+	direction_arrow.add_theme_color_override("font_color", NEW_QUEST_COLOR)
+	dir_hbox.add_child(direction_arrow)
+
+	# Description
+	var desc = Label.new()
+	desc.name = "Description"
+	desc.text = " Visit the Blacksmith"
+	desc.add_theme_font_size_override("font_size", OBJECTIVE_FONT_SIZE)
+	desc.add_theme_color_override("font_color", OBJECTIVE_COLOR)
+	dir_hbox.add_child(desc)
+
+	new_quests_entry.add_child(dir_hbox)
+
+	# Add to container
+	quest_container.add_child(new_quests_entry)
+
+	# Initial arrow update
+	_update_direction_arrow()
+
+func _update_direction_arrow() -> void:
+	"""Update the direction arrow to point towards the blacksmith"""
+	if not direction_arrow or not is_instance_valid(direction_arrow):
+		return
+
+	# Get player position
+	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
+	if not player:
+		direction_arrow.text = "→"
+		return
+
+	# Get vendor (blacksmith) position
+	var vendor = get_tree().get_first_node_in_group("vendor")
+	if not vendor:
+		direction_arrow.text = "→"
+		return
+
+	# Calculate direction from player to vendor
+	var direction = (vendor.global_position - player.global_position).normalized()
+	var angle = rad_to_deg(direction.angle())
+
+	# Convert angle to arrow character
+	# Godot angle: 0=right, 90=down, -90=up, 180/-180=left
+	var arrow_char = "→"
+	if angle >= -22.5 and angle < 22.5:
+		arrow_char = "→"  # Right
+	elif angle >= 22.5 and angle < 67.5:
+		arrow_char = "↘"  # Down-right
+	elif angle >= 67.5 and angle < 112.5:
+		arrow_char = "↓"  # Down
+	elif angle >= 112.5 and angle < 157.5:
+		arrow_char = "↙"  # Down-left
+	elif angle >= 157.5 or angle < -157.5:
+		arrow_char = "←"  # Left
+	elif angle >= -157.5 and angle < -112.5:
+		arrow_char = "↖"  # Up-left
+	elif angle >= -112.5 and angle < -67.5:
+		arrow_char = "↑"  # Up
+	elif angle >= -67.5 and angle < -22.5:
+		arrow_char = "↗"  # Up-right
+
+	direction_arrow.text = arrow_char
