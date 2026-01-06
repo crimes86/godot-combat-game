@@ -652,9 +652,11 @@ func _play_hit_sounds(enemy: Node, is_crit: bool, is_weakpoint: bool, _attacker_
 
 	var weapon_type = ""
 	var is_bow = false
+	var is_gun = false
 	if CharacterStats.equipped_weapon:
 		weapon_type = CharacterStats.equipped_weapon.weapon_type
 		is_bow = CharacterStats.equipped_weapon.is_bow_weapon() if CharacterStats.equipped_weapon.has_method("is_bow_weapon") else false
+		is_gun = CharacterStats.equipped_weapon.is_gun_weapon() if CharacterStats.equipped_weapon.has_method("is_gun_weapon") else false
 
 	# Bows skip ALL sounds here - they play their own impact sound via _spawn_arrow_impact
 	if is_bow:
@@ -662,6 +664,9 @@ func _play_hit_sounds(enemy: Node, is_crit: bool, is_weakpoint: bool, _attacker_
 
 	if is_crit:
 		sound_manager.play_critical_hit_sound(enemy.global_position, -8.0)
+	elif is_gun:
+		# Guns use bullet impact sounds (flesh/armor) instead of melee hit sounds
+		sound_manager.play_bullet_impact_sound(enemy.global_position, false, -10.0)
 	else:
 		sound_manager.play_normal_hit_sound(enemy.global_position, -12.0, weapon_type)
 
@@ -1069,24 +1074,20 @@ func _client_sync_positions(positions: Dictionary) -> void:
 			var sprite = enemy.get_node_or_null("Sprite")
 			if sprite and sprite is AnimatedSprite2D and data.has("anim"):
 				var anim_name = data.anim
-				# Debug: Log when attack animation gets interrupted
-				if sprite.animation.begins_with("attack_") and not anim_name.begins_with("attack_"):
-					print("[NetworkEnemyMgr] ⚠️ INTERRUPTING attack '%s' with '%s' (is_playing=%s, frame=%d)" % [
-						sprite.animation, anim_name, sprite.is_playing(), sprite.frame
-					])
-				# Debug: Log attack animations being received
-				if anim_name.begins_with("attack_"):
-					print("[NetworkEnemyMgr] 📥 CLIENT recv attack anim: enemy=%s anim='%s' has_anim=%s current='%s'" % [
-						enemy.name, anim_name,
-						sprite.sprite_frames.has_animation(anim_name) if sprite.sprite_frames else false,
-						sprite.animation
-					])
+				var prev_anim = sprite.animation
+
 				# Only play if animation exists in sprite frames
 				if sprite.sprite_frames and sprite.sprite_frames.has_animation(anim_name):
-					if sprite.animation != anim_name:
+					if prev_anim != anim_name:
 						sprite.play(anim_name)
-						if anim_name.begins_with("attack_"):
-							print("[NetworkEnemyMgr] ▶️ CLIENT playing attack anim '%s'" % anim_name)
+
+						# CLIENT-SIDE SOUNDS: Play sounds when animation changes
+						# Server is headless (no audio), so client must play sounds
+						var sound_manager = get_node_or_null("/root/SoundManager")
+						if sound_manager and enemy.is_inside_tree():
+							# Attack sound when attack animation starts
+							if anim_name.begins_with("attack_") and not prev_anim.begins_with("attack_"):
+								sound_manager.play_skeleton_attack_sound(enemy.global_position, -14.0)
 
 func _get_enemy_animation(enemy: Node) -> String:
 	"""Get current animation name for enemy.

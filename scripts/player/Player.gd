@@ -273,6 +273,10 @@ func _sync_animation_to_network(delta: float) -> void:
 		return
 	_animation_sync_timer = 0.0
 
+	# Don't sync animations when dead
+	if is_dead:
+		return
+
 	# Only sync if we have multiplayer and are the authority
 	if not multiplayer.has_multiplayer_peer():
 		return
@@ -291,6 +295,11 @@ func _sync_animation_to_network(delta: float) -> void:
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _receive_animation_sync(anim_name: String) -> void:
 	"""Receive animation update from another player."""
+	# Don't override death animation - animation sync can arrive after death RPC
+	if is_dead:
+		print("💀 [ANIM SYNC] Blocked animation '%s' for dead player %s" % [anim_name, name])
+		return
+
 	var character_sprite = get_node_or_null("CharacterSprite")
 	if not character_sprite:
 		return
@@ -318,20 +327,38 @@ func _play_death_animation() -> void:
 		await get_tree().create_timer(0.5).timeout
 		return
 
-	# Check if hurt animation exists
-	if character_sprite.sprite_frames and character_sprite.sprite_frames.has_animation("hurt"):
-		print("   🎬 Playing death (hurt) animation...")
+	# Use play_death_animation() which hides all equipment layers
+	if character_sprite.has_method("play_death_animation"):
+		var frame_count = character_sprite.play_death_animation()
+		print("   🎬 Playing death animation (hiding equipment, frame_count=%d)..." % frame_count)
+
+		if frame_count > 0:
+			# Wait for the animation to finish OR timeout after 1 second
+			var timeout = get_tree().create_timer(1.0)
+			var finished = false
+			character_sprite.animation_finished.connect(func(): finished = true, CONNECT_ONE_SHOT)
+			while not finished and timeout.time_left > 0:
+				await get_tree().process_frame
+
+			# Freeze on last frame (corpse pose)
+			character_sprite.stop()
+			character_sprite.frame = frame_count - 1
+			print("   ✅ Death animation complete, frozen on frame %d" % (frame_count - 1))
+		else:
+			print("   ⚠️ No hurt animation frames, waiting 0.5s...")
+			await get_tree().create_timer(0.5).timeout
+	elif character_sprite.sprite_frames and character_sprite.sprite_frames.has_animation("hurt"):
+		# Fallback for non-SimpleLPCSprite
+		print("   🎬 Playing death (hurt) animation (fallback)...")
 		character_sprite.stop()
 		character_sprite.play("hurt")
 
-		# Wait for the animation to finish OR timeout after 1 second
 		var timeout = get_tree().create_timer(1.0)
 		var finished = false
 		character_sprite.animation_finished.connect(func(): finished = true, CONNECT_ONE_SHOT)
 		while not finished and timeout.time_left > 0:
 			await get_tree().process_frame
 
-		# Freeze on last frame (corpse pose)
 		var frame_count = character_sprite.sprite_frames.get_frame_count("hurt")
 		character_sprite.stop()
 		character_sprite.frame = frame_count - 1
@@ -363,25 +390,36 @@ func _receive_player_death() -> void:
 		print("💀 [DEATH SYNC] No CharacterSprite found on %s" % name)
 		return
 
-	# Check what animations are available
-	var has_hurt = character_sprite.sprite_frames and character_sprite.sprite_frames.has_animation("hurt")
-	print("💀 [DEATH SYNC] %s has hurt animation: %s" % [name, has_hurt])
+	# Use play_death_animation() which hides all equipment layers and plays hurt
+	if character_sprite.has_method("play_death_animation"):
+		var frame_count = character_sprite.play_death_animation()
+		print("💀 [DEATH SYNC] %s playing death animation (frame_count=%d)" % [name, frame_count])
 
-	if has_hurt:
-		character_sprite.stop()
-		character_sprite.play("hurt")
-
-		# When animation finishes, freeze on last frame
-		character_sprite.animation_finished.connect(func():
-			var frame_count = character_sprite.sprite_frames.get_frame_count("hurt")
-			character_sprite.stop()
-			character_sprite.frame = frame_count - 1
-			print("💀 [DEATH SYNC] %s frozen on corpse frame %d" % [name, frame_count - 1])
-		, CONNECT_ONE_SHOT)
+		if frame_count > 0:
+			# When animation finishes, freeze on last frame
+			character_sprite.animation_finished.connect(func():
+				character_sprite.stop()
+				character_sprite.frame = frame_count - 1
+				print("💀 [DEATH SYNC] %s frozen on corpse frame %d" % [name, frame_count - 1])
+			, CONNECT_ONE_SHOT)
 	else:
-		# No hurt animation - just hide the sprite
-		print("💀 [DEATH SYNC] No hurt animation, hiding sprite for %s" % name)
-		character_sprite.visible = false
+		# Fallback for non-SimpleLPCSprite
+		var has_hurt = character_sprite.sprite_frames and character_sprite.sprite_frames.has_animation("hurt")
+		print("💀 [DEATH SYNC] %s has hurt animation: %s (fallback)" % [name, has_hurt])
+
+		if has_hurt:
+			character_sprite.stop()
+			character_sprite.play("hurt")
+
+			character_sprite.animation_finished.connect(func():
+				var frame_count = character_sprite.sprite_frames.get_frame_count("hurt")
+				character_sprite.stop()
+				character_sprite.frame = frame_count - 1
+				print("💀 [DEATH SYNC] %s frozen on corpse frame %d" % [name, frame_count - 1])
+			, CONNECT_ONE_SHOT)
+		else:
+			print("💀 [DEATH SYNC] No hurt animation, hiding sprite for %s" % name)
+			character_sprite.visible = false
 
 # ========================================
 # GUN VISUAL EFFECTS SYNC
@@ -1180,6 +1218,10 @@ func _physics_process(delta: float) -> void:
 
 func update_lpc_animation(velocity_dir: Vector2) -> void:
 	"""Update animation - NO FLIPPING, use row-based directions!"""
+	# Don't update animation when dead - preserve corpse pose
+	if is_dead:
+		return
+
 	var character_sprite = get_node_or_null("CharacterSprite")
 	if not character_sprite:
 		return

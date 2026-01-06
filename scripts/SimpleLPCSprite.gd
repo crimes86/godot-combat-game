@@ -1060,6 +1060,54 @@ func has_multi_slash() -> bool:
 	"""Returns true if this weapon has multiple slash variants."""
 	return weapon_slash_variants.size() > 1
 
+func play_death_animation() -> int:
+	"""Play death (hurt) animation with equipment faded/lowered.
+	Returns the frame count for freezing on corpse pose."""
+	# Lower equipment z-index so body hurt animation shows on top
+	# Also make equipment semi-transparent so body is clearly visible
+	_fade_layer_for_death(shadow_sprite)
+	_fade_layer_for_death(cape_sprite)
+	_fade_layer_for_death(base_head_sprite)
+	_fade_layer_for_death(boots_sprite)
+	_fade_layer_for_death(pants_sprite)
+	_fade_layer_for_death(shirt_sprite)
+	_fade_layer_for_death(arms_sprite)
+	_fade_layer_for_death(hands_sprite)
+	_fade_layer_for_death(head_sprite)
+	_fade_layer_for_death(hair_sprite)
+	# Hide combat equipment - doesn't make sense on corpse
+	if shield_sprite:
+		shield_sprite.visible = false
+	if weapon_sprite:
+		weapon_sprite.visible = false
+	if gun_body_sprite:
+		gun_body_sprite.visible = false
+
+	# Make sure body (self) is on top and visible
+	z_index = 10
+	modulate.a = 1.0
+
+	# Play hurt animation on base body
+	if sprite_frames and sprite_frames.has_animation("hurt"):
+		stop()
+		play("hurt")
+		print("💀 [SimpleLPCSprite] Playing hurt animation, frame_count=%d" % sprite_frames.get_frame_count("hurt"))
+		return sprite_frames.get_frame_count("hurt")
+
+	print("💀 [SimpleLPCSprite] WARNING: No hurt animation found!")
+	return 0
+
+func _fade_layer_for_death(layer: AnimatedSprite2D) -> void:
+	"""Lower z-index and fade equipment layer for death animation."""
+	if not layer:
+		return
+	# Lower z-index to be below body (body will be at z=10)
+	layer.z_index = -5
+	# Fade to 40% opacity so body animation is clearly visible
+	layer.modulate.a = 0.4
+	# Stop any animation
+	layer.stop()
+
 func play_lpc_animation(anim_name: String, direction: String):
 	"""Play animation with direction - NO FLIPPING!"""
 	current_direction = direction

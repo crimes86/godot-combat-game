@@ -260,11 +260,19 @@ func _ready():
 
 	# Check if user is already authenticated (saved token)
 	if AshbaneAuth and AshbaneAuth.is_logged_in():
-		# Already logged in - go straight to Armory
-		LogManager.info("User already authenticated, transitioning to Armory", "ashbane")
+		# Has saved token - but need to validate it's not expired before transitioning
+		LogManager.info("Found saved session, validating token...", "ashbane")
 		_set_menu_panel_visible(false)
-		await get_tree().create_timer(0.5).timeout  # Brief delay for scene to fully load
-		_transition_to_armory()
+
+		# Wait for token validation (profile fetch will either succeed or fail with 401)
+		var validated = await _wait_for_session_validation()
+
+		if validated:
+			LogManager.info("Session validated, transitioning to Armory", "ashbane")
+			_transition_to_armory()
+		else:
+			LogManager.info("Session expired, showing login panel", "ashbane")
+			_show_ashbane_panel()
 	else:
 		# IMPORTANT: Show Ashbane panel FIRST (authenticate before playing)
 		# Hide the normal menu panel and show Ashbane panel on startup
@@ -2273,6 +2281,45 @@ func _on_ashbane_profile_updated(profile: Dictionary):
 # ═══════════════════════════════════════════════════════════════════════════
 # ARMORY TRANSITION
 # ═══════════════════════════════════════════════════════════════════════════
+
+func _wait_for_session_validation() -> bool:
+	"""Wait for AshbaneAuth to validate saved token.
+	Returns true if session is valid, false if expired/invalid."""
+	if not AshbaneAuth:
+		return false
+
+	# Connect to both possible outcomes
+	var result = {"validated": false, "completed": false}
+
+	var on_profile_updated = func(_profile: Dictionary):
+		result.validated = true
+		result.completed = true
+
+	var on_auth_failed = func(_error: String):
+		result.validated = false
+		result.completed = true
+
+	# Connect signals (one-shot)
+	AshbaneAuth.profile_updated.connect(on_profile_updated, CONNECT_ONE_SHOT)
+	AshbaneAuth.auth_failed.connect(on_auth_failed, CONNECT_ONE_SHOT)
+
+	# Wait for one of the signals (timeout after 10 seconds)
+	var timeout = 10.0
+	var elapsed = 0.0
+	while not result.completed and elapsed < timeout:
+		await get_tree().create_timer(0.1).timeout
+		elapsed += 0.1
+
+	# Cleanup any remaining connections if we timed out
+	if not result.completed:
+		if AshbaneAuth.profile_updated.is_connected(on_profile_updated):
+			AshbaneAuth.profile_updated.disconnect(on_profile_updated)
+		if AshbaneAuth.auth_failed.is_connected(on_auth_failed):
+			AshbaneAuth.auth_failed.disconnect(on_auth_failed)
+		LogManager.warning("Session validation timed out", "ashbane")
+		return false
+
+	return result.validated
 
 func _transition_to_armory():
 	"""Transition to Armory scene after authentication"""
