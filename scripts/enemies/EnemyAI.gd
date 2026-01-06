@@ -201,6 +201,10 @@ func _ready() -> void:
 	# Connect to damage signal to detect player attacks
 	if enemy.has_signal("damage_taken"):
 		enemy.damage_taken.connect(_on_enemy_damaged)
+		var is_guardian = enemy.get_meta("is_guardian", false)
+		print("[EnemyAI] ✅ Connected damage_taken signal for %s (guardian=%s)" % [enemy.name, is_guardian])
+	else:
+		print("[EnemyAI] ❌ NO damage_taken signal on %s!" % enemy.name)
 
 	# Fixed speed (no level scaling - equipment may add bonuses later)
 	# Note: combat_speed (185) and patrol_speed (50) use @export defaults
@@ -245,17 +249,23 @@ func _ready() -> void:
 		if is_server_mode:
 			var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
 			var has_nearby_player = false
+			var is_guardian_init = enemy.get_meta("is_guardian", false)
+			print("[EnemyAI] 🚀 INIT: enemy=%s guardian=%s server_mode=true players=%d" % [enemy.name, is_guardian_init, players.size()])
+
 			for p in players:
 				if is_instance_valid(p) and not _is_player_dead(p):
 					var dist = enemy.global_position.distance_to(p.global_position)
+					print("[EnemyAI] 🚀   player=%s dist=%.0f sleep_dist=%.0f" % [p.name, dist, SLEEP_DISTANCE])
 					if dist <= SLEEP_DISTANCE:
 						has_nearby_player = true
 						break
 
 			if not has_nearby_player:
 				# No players nearby - start sleeping to save CPU
+				print("[EnemyAI] 😴 STARTING ASLEEP: enemy=%s guardian=%s (no nearby players)" % [enemy.name, is_guardian_init])
 				change_state(State.SLEEPING)
 			else:
+				print("[EnemyAI] 🏃 STARTING PATROL: enemy=%s guardian=%s" % [enemy.name, is_guardian_init])
 				pick_new_patrol_target()
 				change_state(State.PATROLLING)
 		else:
@@ -323,6 +333,11 @@ func _physics_process(delta: float) -> void:
 	# only check once per second if they should wake up.
 	# ═══════════════════════════════════════════════════════════════
 	if current_state == State.SLEEPING:
+		# CRITICAL FIX: Set idle animation even when sleeping so clients see something
+		# Without this, sleeping enemies appear completely frozen (no animation)
+		if enemy.current_animation == "" or enemy.current_animation == null:
+			enemy.current_animation = "idle_down"
+
 		sleep_check_timer += delta
 		if sleep_check_timer < SLEEP_CHECK_INTERVAL:
 			# Still sleeping - skip ALL processing
@@ -333,9 +348,13 @@ func _physics_process(delta: float) -> void:
 		# Check if any player is within wake distance
 		var should_wake = false
 		var players = get_tree().get_nodes_in_group(Constants.GROUP_PLAYER)
+		var is_guardian = enemy.get_meta("is_guardian", false)
+		print("[EnemyAI] 💤 SLEEP CHECK: enemy=%s guardian=%s players_found=%d" % [enemy.name, is_guardian, players.size()])
+
 		for p in players:
 			if is_instance_valid(p) and not _is_player_dead(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
+				print("[EnemyAI] 💤   player=%s dist=%.0f wake_dist=%.0f" % [p.name, dist, WAKE_DISTANCE])
 				if dist <= WAKE_DISTANCE:
 					should_wake = true
 					cached_player = p
@@ -343,6 +362,7 @@ func _physics_process(delta: float) -> void:
 
 		if should_wake:
 			# Wake up and resume patrolling
+			print("[EnemyAI] 🌅 WAKING UP: enemy=%s guardian=%s" % [enemy.name, is_guardian])
 			change_state(State.PATROLLING)
 		else:
 			# Stay asleep
@@ -1361,6 +1381,10 @@ func trigger_chain_aggro() -> void:
 
 func _on_enemy_damaged(_damage: float, is_crit: bool) -> void:
 	"""Called when enemy takes damage - this triggers combat!"""
+	var is_guardian = enemy.get_meta("is_guardian", false) if enemy else false
+	print("[EnemyAI] 🎯 _on_enemy_damaged called! enemy=%s guardian=%s damage=%.1f is_in_combat=%s state=%s" % [
+		enemy.name if enemy else "null", is_guardian, _damage, is_in_combat, get_state_name()])
+
 	if not is_in_combat:
 		is_in_combat = true
 

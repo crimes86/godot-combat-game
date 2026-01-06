@@ -799,6 +799,9 @@ func _on_click_area_input(_viewport: Node, event: InputEvent, _shape_idx: int) -
 	return
 
 func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = false) -> void:
+	var is_guardian = get_meta("is_guardian", false)
+	print("[Enemy] 💥 take_damage called! enemy=%s guardian=%s amount=%.1f" % [name, is_guardian, amount])
+
 	if is_dying:
 		return
 
@@ -816,6 +819,7 @@ func take_damage(amount: float, is_crit: bool = false, is_weakpoint_hit: bool = 
 	Constants.log_combat("Enemy hit! Damage: %d (Crit: %s, Weakpoint: %s) | Health: %d/%d" % [amount, is_crit, is_weakpoint_hit, current_health, max_health])
 
 	# ✨ NEW: Emit signal for player to handle feedback
+	print("[Enemy] 📡 Emitting damage_taken signal for %s (guardian=%s)" % [name, is_guardian])
 	damage_taken.emit(amount, is_crit)
 
 	# ✨ NEW: Trigger hit flash visual feedback
