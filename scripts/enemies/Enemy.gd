@@ -1595,7 +1595,15 @@ func die() -> void:
 	if should_grant_xp:
 		var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)
 		if player and player.has_method("gain_experience"):
-			var final_xp = int(xp_reward * xp_multiplier)
+			# Apply XP falloff based on player level vs enemy level
+			# Green (1-2 below) = full XP, Blue (3-5 below) = reduced, Gray (6+ below) = minimal
+			var player_level = CharacterStats.level if CharacterStats else 1
+			var level_diff = player_level - enemy_level
+			var falloff = 1.0
+			if level_diff > 0:
+				# 20% reduction per level above enemy, minimum 10% XP
+				falloff = maxf(0.1, 1.0 - (level_diff * 0.2))
+			var final_xp = int(xp_reward * xp_multiplier * falloff)
 			player.gain_experience(final_xp)
 
 			# Show world-space XP text floating up from mob

@@ -225,8 +225,8 @@ func _refresh_tracker() -> void:
 				quest_container.add_child(entry)
 				quest_entries.append(entry)
 		else:
-			# No active quests - check if quests are available
-			if QuestManager.has_available_quests("blacksmith"):
+			# No active quests - check if quests are available from ANY giver
+			if QuestManager.has_any_available_quests():
 				_create_new_quests_entry()
 				has_content = true
 

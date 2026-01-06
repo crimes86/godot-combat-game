@@ -599,6 +599,13 @@ func has_available_quests(giver: String = "blacksmith") -> bool:
 	"""Check if giver has available quests"""
 	return get_available_quests(giver).size() > 0
 
+func has_any_available_quests() -> bool:
+	"""Check if ANY quests are available (from any giver)"""
+	for quest_id in all_quests.keys():
+		if get_quest_state(quest_id) == QuestState.AVAILABLE:
+			return true
+	return false
+
 func has_completed_quests(giver: String = "blacksmith") -> bool:
 	"""Check if giver has quests ready for turn-in"""
 	return get_completed_quests(giver).size() > 0
