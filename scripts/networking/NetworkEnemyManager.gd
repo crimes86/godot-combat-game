@@ -1069,17 +1069,35 @@ func _client_sync_positions(positions: Dictionary) -> void:
 			var sprite = enemy.get_node_or_null("Sprite")
 			if sprite and sprite is AnimatedSprite2D and data.has("anim"):
 				var anim_name = data.anim
+				# Debug: Log when attack animation gets interrupted
+				if sprite.animation.begins_with("attack_") and not anim_name.begins_with("attack_"):
+					print("[NetworkEnemyMgr] ⚠️ INTERRUPTING attack '%s' with '%s' (is_playing=%s, frame=%d)" % [
+						sprite.animation, anim_name, sprite.is_playing(), sprite.frame
+					])
+				# Debug: Log attack animations being received
+				if anim_name.begins_with("attack_"):
+					print("[NetworkEnemyMgr] 📥 CLIENT recv attack anim: enemy=%s anim='%s' has_anim=%s current='%s'" % [
+						enemy.name, anim_name,
+						sprite.sprite_frames.has_animation(anim_name) if sprite.sprite_frames else false,
+						sprite.animation
+					])
 				# Only play if animation exists in sprite frames
 				if sprite.sprite_frames and sprite.sprite_frames.has_animation(anim_name):
 					if sprite.animation != anim_name:
 						sprite.play(anim_name)
+						if anim_name.begins_with("attack_"):
+							print("[NetworkEnemyMgr] ▶️ CLIENT playing attack anim '%s'" % anim_name)
 
 func _get_enemy_animation(enemy: Node) -> String:
 	"""Get current animation name for enemy.
 	Uses enemy.current_animation variable which works on dedicated servers without sprites."""
 	# Use the tracked animation state (works on headless server without sprites)
 	if "current_animation" in enemy:
-		return enemy.current_animation
+		var anim = enemy.current_animation
+		# Debug: Log attack animations being synced
+		if anim.begins_with("attack_"):
+			print("[NetworkEnemyMgr] 📤 SYNC attack anim: enemy=%s anim='%s'" % [enemy.name, anim])
+		return anim
 
 	# Fallback: try to read from sprite (for backwards compatibility)
 	var sprite = enemy.get_node_or_null("Sprite")

@@ -1226,6 +1226,7 @@ func perform_attack() -> void:
 	# CRITICAL: Always set current_animation for network sync (even on server without sprites)
 	# This allows NetworkEnemyManager to sync the attack animation to clients
 	enemy.current_animation = attack_anim
+	print("[EnemyAI] 🗡️ ATTACK: enemy=%s set current_animation='%s'" % [enemy.name, attack_anim])
 
 	# Play attack animation (only if we have sprites - skipped on dedicated server)
 	if anim_sprite and anim_sprite.sprite_frames:
@@ -1621,6 +1622,14 @@ func update_enemy_animation(velocity: Vector2) -> void:
 	# Calculate animation name
 	var prefix = "walk_" if is_moving else "idle_"
 	var anim_name = prefix + dir_str
+
+	# CRITICAL FIX: Don't overwrite attack animation during attack
+	# On dedicated server there's no anim_sprite, so we must check is_performing_attack flag
+	# This prevents walk/idle from immediately overwriting attack animation before network sync
+	if is_performing_attack and enemy.current_animation.begins_with("attack_"):
+		# Preserve attack animation - let it sync to clients
+		print("[EnemyAI] 🛡️ PRESERVED attack anim '%s' (is_performing_attack=true)" % enemy.current_animation)
+		return
 
 	# ALWAYS update enemy.current_animation for server sync (works without sprites on dedicated server)
 	enemy.current_animation = anim_name
