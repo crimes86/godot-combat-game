@@ -1185,10 +1185,11 @@ func _update_client_enemy_visibility() -> void:
 
 			# Send spawn RPC to this specific client
 			var scene_path = _infer_enemy_scene_path(enemy.name)
+			var is_guardian = enemy.get_meta("is_guardian", false)
 			if enemy is TrainingDummy:
 				spawn_training_dummy_on_clients.rpc_id(peer_id, network_id, enemy.global_position)
 			else:
-				spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path)
+				spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path, is_guardian)
 
 		# Despawn enemies that left view for this client
 		# Check peer again before despawn batch
@@ -1242,10 +1243,11 @@ func spawn_enemy_for_nearby_clients(network_id: int, enemy: Node) -> void:
 				client_known_enemies[peer_id][network_id] = true
 
 				var scene_path = _infer_enemy_scene_path(enemy.name)
+				var is_guardian = enemy.get_meta("is_guardian", false)
 				if enemy is TrainingDummy:
 					spawn_training_dummy_on_clients.rpc_id(peer_id, network_id, enemy.global_position)
 				else:
-					spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path)
+					spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path, is_guardian)
 
 				if OS.is_debug_build():
 					print("🌐 [Spawn] Enemy %d spawned for nearby peer %d (dist: %.0f)" % [network_id, peer_id, distance])
@@ -1272,9 +1274,10 @@ func despawn_enemy_for_client(network_id: int) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 @rpc("authority", "call_local", "reliable")
-func spawn_enemy_on_clients(network_id: int, pos: Vector2, level: int, enemy_name: String, scene_path: String = "") -> void:
+func spawn_enemy_on_clients(network_id: int, pos: Vector2, level: int, enemy_name: String, scene_path: String = "", is_guardian: bool = false) -> void:
 	"""Server tells clients to spawn an enemy.
-	scene_path: Optional explicit scene path. If empty, inferred from enemy_name."""
+	scene_path: Optional explicit scene path. If empty, inferred from enemy_name.
+	is_guardian: Whether this is a guardian skeleton (affects AI behavior and loot)."""
 	if multiplayer.is_server():
 		return  # Server already spawned
 
@@ -1303,6 +1306,10 @@ func spawn_enemy_on_clients(network_id: int, pos: Vector2, level: int, enemy_nam
 	enemy.enemy_level = level
 	enemy.name = enemy_name
 	enemy.network_id = network_id
+
+	# Set guardian metadata so client knows this is a guardian (affects display name and loot)
+	if is_guardian:
+		enemy.set_meta("is_guardian", true)
 
 	# Register locally
 	enemies[network_id] = enemy
@@ -1525,7 +1532,8 @@ func _on_peer_connected(peer_id: int) -> void:
 		else:
 			# Regular enemy - infer scene path from name for proper type sync
 			var scene_path = _infer_enemy_scene_path(enemy.name)
-			spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path)
+			var is_guardian = enemy.get_meta("is_guardian", false)
+			spawn_enemy_on_clients.rpc_id(peer_id, network_id, enemy.global_position, enemy.enemy_level, enemy.name, scene_path, is_guardian)
 
 	print("🌐 [Connect] Peer %d: Spawned %d/%d enemies within %.0f units" % [
 		peer_id, spawned_count, total_count, SPAWN_RADIUS
