@@ -161,12 +161,13 @@ func _ready():
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 
 func _on_peer_disconnected(peer_id: int) -> void:
-	"""Clean up attack cooldown and violation tracking when a player disconnects"""
+	"""Clean up all per-player tracking when a player disconnects"""
 	attack_cooldowns.erase(peer_id)
 	tutorial_dummy_hits.erase(peer_id)
 	violation_counts.erase(peer_id)
 	violation_cooldowns.erase(peer_id)
 	client_known_enemies.erase(peer_id)  # Clean up enemy visibility tracking
+	dead_players.erase(peer_id)  # Clean up death state tracking
 
 func _is_peer_connected(peer_id: int) -> bool:
 	"""Check if a peer is still connected before sending RPCs.

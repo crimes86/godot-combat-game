@@ -485,7 +485,8 @@ func become_corpse() -> void:
 	remove_from_group("spiders")
 	add_to_group("corpses")
 
-	if corpse_gold > 0 or corpse_loot.size() > 0:
+	# Client-only - creates looping tweens that leak on server
+	if not _is_server_mode and (corpse_gold > 0 or corpse_loot.size() > 0):
 		add_loot_indicator()
 		if OS.is_debug_build():
 			print("🕷️ [Spider.become_corpse] Added loot indicator - gold: %d, items: %d" % [corpse_gold, corpse_loot.size()])

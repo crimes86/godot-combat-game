@@ -889,6 +889,12 @@ func play_hurt_stagger() -> void:
 
 func grow_for_crit_window(_difficulty: float = 1.0) -> void:
 	"""Visual effect: grow sprite and spawn weakpoints (called by CritWindowManager)"""
+	# Server doesn't need visual effects - only crit window state
+	if _is_server_mode:
+		in_crit_window = true
+		spawn_weakpoints()  # Server still needs weakpoints for hit validation
+		return
+
 	# Guard: Don't start if dying, already in window, or currently transitioning
 	if is_dying or in_crit_window or _crit_window_transitioning:
 		return
@@ -1368,6 +1374,12 @@ func shrink_after_crit_window() -> void:
 	"""Visual effect: shrink sprite and cleanup weakpoints (called by CritWindowManager)"""
 	# Guard: Don't shrink if not in crit window or already shrinking
 	if not in_crit_window:
+		return
+
+	# Server doesn't need visual effects - just cleanup state
+	if _is_server_mode:
+		in_crit_window = false
+		weakpoints.clear()
 		return
 
 	# Mark as transitioning during async shrink
@@ -1885,11 +1897,11 @@ func become_corpse() -> void:
 	remove_from_group(Constants.GROUP_ENEMIES)
 	add_to_group("corpses")
 
-	# Add loot indicator if has gold OR items
-	if corpse_gold > 0 or corpse_loot.size() > 0:
+	# Add loot indicator if has gold OR items (client-only - creates looping tweens)
+	if not _is_server_mode and (corpse_gold > 0 or corpse_loot.size() > 0):
 		print("   ✨ Adding loot indicator (sparkles) - Gold: %d, Items: %d" % [corpse_gold, corpse_loot.size()])
 		add_loot_indicator()
-	else:
+	elif not _is_server_mode:
 		print("   ⚫ No loot - no indicator")
 
 	# Darken sprite for corpse appearance
