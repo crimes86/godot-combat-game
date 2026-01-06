@@ -71,14 +71,17 @@ var _is_server_mode: bool = false
 # ═══════════════════════════════════════════════════════════════════════════
 
 func _ready() -> void:
+	print("[RuinsSpawnPoint] 🏛️ _ready() START at %s" % global_position)
+
 	# Check if running on dedicated server
 	_is_server_mode = "--server" in OS.get_cmdline_user_args()
 
 	# Load guardian skeleton scene
 	skeleton_scene = load("res://scenes/enemies/guardian_skeleton.tscn")
 	if not skeleton_scene:
-		push_error("Could not load guardian_skeleton.tscn!")
+		push_error("[RuinsSpawnPoint] ❌ Could not load guardian_skeleton.tscn!")
 		return
+	print("[RuinsSpawnPoint] ✅ Loaded guardian_skeleton.tscn")
 
 	# Cache altar light reference (only on client)
 	if not _is_server_mode:
@@ -91,15 +94,18 @@ func _ready() -> void:
 	# Initialize chest kill target (randomized)
 	chest_kill_target = randi_range(chest_kill_threshold_min, chest_kill_threshold_max)
 
+	print("[RuinsSpawnPoint] 🔄 Awaiting process_frame...")
 	# Wait one frame for tree setup
 	await get_tree().process_frame
+	print("[RuinsSpawnPoint] ✅ process_frame done, spawning initial guardians...")
 
 	# Initial pool - spawn a few skeletons immediately
 	for i in range(mini(4, pool_capacity)):
+		print("[RuinsSpawnPoint] 🛡️ Spawning guardian %d/4..." % (i + 1))
 		spawn_skeleton()
 		await get_tree().create_timer(0.1).timeout  # Stagger spawns
 
-	print("Ruins spawn point initialized at %s (pool: 0/%d, chest target: %d kills)" % [global_position, pool_capacity, chest_kill_target])
+	print("[RuinsSpawnPoint] ✅ Ruins spawn point initialized at %s (pool: %d/%d, chest target: %d kills)" % [global_position, active_skeletons.size(), pool_capacity, chest_kill_target])
 
 func _exit_tree() -> void:
 	set_physics_process(false)

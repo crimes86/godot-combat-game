@@ -202,6 +202,8 @@ func _ready() -> void:
 	if enemy.has_signal("damage_taken"):
 		enemy.damage_taken.connect(_on_enemy_damaged)
 		var is_guardian = enemy.get_meta("is_guardian", false)
+		if is_guardian:
+			print("[EnemyAI] 🛡️ GUARDIAN INIT: %s at pos=%s patrol_radius=%.0f" % [enemy.name, enemy.global_position, patrol_radius])
 		print("[EnemyAI] ✅ Connected damage_taken signal for %s (guardian=%s)" % [enemy.name, is_guardian])
 	else:
 		print("[EnemyAI] ❌ NO damage_taken signal on %s!" % enemy.name)
@@ -550,6 +552,13 @@ func _physics_process(delta: float) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func process_patrolling(delta: float) -> void:
+	# Debug: Log guardian patrol activity periodically
+	if enemy and enemy.get_meta("is_guardian", false):
+		debug_update_timer += delta
+		if debug_update_timer >= 5.0:  # Log every 5 seconds
+			debug_update_timer = 0.0
+			print("[EnemyAI] 🛡️ GUARDIAN PATROL: %s at %s → target=%s vel=%s" % [enemy.name, enemy.global_position, patrol_target, enemy.velocity])
+
 	# ═══════════════════════════════════════════════════════════════
 	# SLEEP CHECK (Server-side optimization)
 	# If on dedicated server and no players are within sleep distance,
@@ -1516,10 +1525,15 @@ func _player_has_ranged_weapon() -> bool:
 func change_state(new_state: State) -> void:
 	if current_state == new_state:
 		return
-	
+
+	var old_state = current_state
 	current_state = new_state
 	state_timer = 0.0
-	
+
+	# Debug: Log guardian state changes
+	if enemy and enemy.get_meta("is_guardian", false):
+		print("[EnemyAI] 🛡️ GUARDIAN STATE: %s → %s (enemy=%s)" % [get_state_name_for_state(old_state), get_state_name_for_state(new_state), enemy.name])
+
 	# State entry
 	match new_state:
 		State.PATROLLING:
