@@ -911,17 +911,18 @@ func show_message(text: String, color: Color) -> void:
 
 func _show_login_required_message() -> void:
 	"""Show auth overlay prompting guest to login to make purchases"""
-	# Trigger the in-game auth overlay
-	if AuthOverlay:
+	# Trigger the in-game auth overlay (use get_node_or_null to avoid parse errors on server)
+	var auth_overlay = get_node_or_null("/root/AuthOverlay")
+	if auth_overlay:
 		# Connect signals if not already connected
-		if not AuthOverlay.auth_success.is_connected(_on_auth_overlay_success):
-			AuthOverlay.auth_success.connect(_on_auth_overlay_success)
-		if not AuthOverlay.auth_cancelled.is_connected(_on_auth_overlay_cancelled):
-			AuthOverlay.auth_cancelled.connect(_on_auth_overlay_cancelled)
+		if not auth_overlay.auth_success.is_connected(_on_auth_overlay_success):
+			auth_overlay.auth_success.connect(_on_auth_overlay_success)
+		if not auth_overlay.auth_cancelled.is_connected(_on_auth_overlay_cancelled):
+			auth_overlay.auth_cancelled.connect(_on_auth_overlay_cancelled)
 
 		# Hide shop UI while auth overlay is shown
 		visible = false
-		AuthOverlay.show_auth_prompt()
+		auth_overlay.show_auth_prompt()
 	else:
 		# Fallback if AuthOverlay not available
 		show_message("Login required to purchase! Press ESC → Main Menu → Login", Color(1.0, 0.7, 0.3))
