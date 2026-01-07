@@ -13,6 +13,7 @@ export_presets.cfg
 data_*/
 
 # Build artifacts
+builds/
 *.exe
 *.pck
 *.app
