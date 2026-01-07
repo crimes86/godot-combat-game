@@ -57,21 +57,21 @@ void fragment() {
     // === ROLLING HILLS LAYER: Gradient noise for smooth organic terrain ===
     // Gradient noise produces smooth continuous hills without grid artifacts
     float elevation = fbm(world_pos * hill_scale, 5);
-    float hill_height = (elevation - 0.5) * 2.0;
+    float hill_height = (elevation - 0.5) * 3.0;  // Wider range for more contrast
 
-    // Gentle shading - hilltops lighter, valleys darker
-    float hill_shade = hill_height * 0.07 * hill_intensity;
+    // Strong shading - hilltops lighter, valleys darker
+    float hill_shade = hill_height * 0.25 * hill_intensity;
     color += vec3(hill_shade);
 
-    // Subtle directional shadow (light from top-left)
+    // Directional shadow for depth (light from top-left)
     vec2 offset_pos = world_pos + vec2(800.0, 500.0);
     float slope = fbm(offset_pos * hill_scale * 0.9, 4);
-    float ridge_shadow = (slope - 0.5) * 0.05 * hill_intensity;
+    float ridge_shadow = (slope - 0.5) * 0.18 * hill_intensity;
     color += vec3(ridge_shadow);
 
-    // Very subtle color temperature shift
-    color.r += hill_height * 0.012 * hill_intensity;
-    color.b -= hill_height * 0.008 * hill_intensity;
+    // Color temperature shift - warm hilltops, cool valleys
+    color.r += hill_height * 0.05 * hill_intensity;
+    color.b -= hill_height * 0.03 * hill_intensity;
 
     // === LAYER 1: Very subtle large-scale variation (barely visible) ===
     float large_variation = fbm(world_pos * 0.00015, 3);
