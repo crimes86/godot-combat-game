@@ -29,6 +29,10 @@ var tutorial_arrow: Polygon2D = null
 var tutorial_arrow_tween: Tween = null
 var tutorial_arrow_flash_tween: Tween = null
 
+# First-time player visual enhancement (Wanderer only)
+var first_encounter_glow: Node2D = null
+var first_encounter_pulse_tween: Tween = null
+
 var _is_server_mode: bool = false
 
 func _ready() -> void:
@@ -120,16 +124,20 @@ func create_quest_indicator() -> void:
 	quest_indicator = Label.new()
 	quest_indicator.name = "QuestIndicator"
 	quest_indicator.text = "!"
-	quest_indicator.add_theme_font_size_override("font_size", 28)
+
+	# Larger indicator for Wanderer to catch attention
+	var is_wanderer = vendor_name.to_lower() == "wanderer"
+	var font_size = 40 if is_wanderer else 28
+	quest_indicator.add_theme_font_size_override("font_size", font_size)
 	quest_indicator.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))  # Golden yellow
 	quest_indicator.add_theme_color_override("font_outline_color", Color(0.3, 0.2, 0.0))
-	quest_indicator.add_theme_constant_override("outline_size", 3)
+	quest_indicator.add_theme_constant_override("outline_size", 4 if is_wanderer else 3)
 	quest_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	quest_indicator.position = Vector2(-8, -85)  # Above the name tag
+	quest_indicator.position = Vector2(-12 if is_wanderer else -8, -95 if is_wanderer else -85)  # Above the name tag
 	quest_indicator.z_index = 100
 	add_child(quest_indicator)
 
-	# Start bobbing animation
+	# Start bobbing animation (more dramatic for Wanderer)
 	_start_quest_indicator_animation()
 
 	# Connect to QuestManager signals for indicator updates
@@ -200,14 +208,19 @@ func _update_quest_indicator() -> void:
 	quest_indicator.visible = false
 
 func _start_quest_indicator_animation() -> void:
-	"""Animate the quest indicator with a gentle bob"""
+	"""Animate the quest indicator with a gentle bob (more dramatic for Wanderer)"""
 	if not quest_indicator or not is_instance_valid(quest_indicator):
 		return
 
+	var is_wanderer = vendor_name.to_lower() == "wanderer"
+	var bob_height = 15.0 if is_wanderer else 10.0
+	var bob_speed = 0.5 if is_wanderer else 0.6
+	var base_y = -100.0 if is_wanderer else -85.0
+
 	var tween = create_tween()
 	tween.set_loops()  # Loop forever
-	tween.tween_property(quest_indicator, "position:y", -90.0, 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-	tween.tween_property(quest_indicator, "position:y", -80.0, 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(quest_indicator, "position:y", base_y - bob_height, bob_speed).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(quest_indicator, "position:y", base_y, bob_speed).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
 func hide_quest_indicator() -> void:
 	"""Hide the quest indicator after player has talked to blacksmith"""
@@ -339,6 +352,61 @@ func setup_wanderer_sprite() -> void:
 	animated_sprite.play("idle")
 
 	Constants.debug_log("🧳 Wanderer sprite loaded and animating")
+
+	# Add first-encounter glow effect for new players
+	_create_first_encounter_glow()
+
+func _create_first_encounter_glow() -> void:
+	"""Create a subtle glow effect around the Wanderer for first-time players"""
+	if has_talked_to_player:
+		return  # Already talked, no glow needed
+
+	# Create a soft circular glow behind the sprite
+	first_encounter_glow = Node2D.new()
+	first_encounter_glow.name = "FirstEncounterGlow"
+	first_encounter_glow.z_index = -1  # Behind sprite
+	add_child(first_encounter_glow)
+
+	# Create multiple circles for a soft glow effect
+	for i in range(3):
+		var glow_circle = Polygon2D.new()
+		var radius = 50.0 + (i * 20.0)  # 50, 70, 90 pixel radii
+		var points = PackedVector2Array()
+		for angle in range(0, 360, 10):
+			var rad = deg_to_rad(angle)
+			points.append(Vector2(cos(rad) * radius, sin(rad) * radius - 32))  # Offset up to center on sprite
+		glow_circle.polygon = points
+		glow_circle.color = Color(1.0, 0.7, 0.3, 0.15 - (i * 0.04))  # Warm orange, fading out
+		first_encounter_glow.add_child(glow_circle)
+
+	# Start subtle pulse animation
+	_start_first_encounter_pulse()
+
+func _start_first_encounter_pulse() -> void:
+	"""Animate the glow with a gentle pulse"""
+	if not first_encounter_glow or not is_instance_valid(first_encounter_glow):
+		return
+
+	first_encounter_pulse_tween = create_tween()
+	first_encounter_pulse_tween.set_loops()
+	first_encounter_pulse_tween.tween_property(first_encounter_glow, "modulate:a", 0.6, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	first_encounter_pulse_tween.tween_property(first_encounter_glow, "modulate:a", 1.0, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+func _remove_first_encounter_glow() -> void:
+	"""Remove the first-encounter glow after player talks to Wanderer"""
+	if first_encounter_pulse_tween and first_encounter_pulse_tween.is_valid():
+		first_encounter_pulse_tween.kill()
+		first_encounter_pulse_tween = null
+
+	if first_encounter_glow and is_instance_valid(first_encounter_glow):
+		# Fade out then remove
+		var fade_tween = create_tween()
+		fade_tween.tween_property(first_encounter_glow, "modulate:a", 0.0, 0.5)
+		fade_tween.tween_callback(func():
+			if first_encounter_glow:
+				first_encounter_glow.queue_free()
+				first_encounter_glow = null
+		)
 
 func _physics_process(delta: float) -> void:
 	# Face the campfire when idle (no shop open, no player in range)
@@ -671,6 +739,9 @@ func _on_first_interaction() -> void:
 		return
 
 	has_talked_to_player = true
+
+	# Remove the first-encounter glow effect (Wanderer only)
+	_remove_first_encounter_glow()
 
 	# Dismiss spawn hints on the player
 	var player = get_tree().get_first_node_in_group(Constants.GROUP_PLAYER)

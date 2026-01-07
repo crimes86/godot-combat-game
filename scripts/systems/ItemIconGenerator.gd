@@ -85,6 +85,14 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 	var sprite_name = item.get("sprite_name", "")
 	var slot = item.get("slot", "")
 
+	# Infer type from other fields if missing
+	if item_type == "" and item.has("weapon_type"):
+		item_type = "weapon"
+	elif item_type == "" and item.has("tool_type"):
+		item_type = "tool"
+	elif item_type == "" and slot in ["chest", "legs", "feet", "head", "hands", "arms"]:
+		item_type = "armor"
+
 	# Handle materials with procedural icons
 	# Also check for known material names even if type isn't set
 	var known_materials = ["Bone Ember", "Dry Log", "Ancient Skull", "Cursed Femur", "Lich's Finger Bone",

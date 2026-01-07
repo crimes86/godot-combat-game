@@ -361,7 +361,7 @@ func show_accept_quest_tutorial() -> void:
 	show_ui_arrow_to_quests_tab()
 
 func show_completion_message() -> void:
-	"""Show tutorial complete message"""
+	"""Show tutorial complete message - minimal, just hint at Wanderer"""
 	clear_prompt()
 	clear_arrow()
 	clear_ui_arrow()
@@ -369,7 +369,8 @@ func show_completion_message() -> void:
 	waiting_for_quests_tab = false
 	waiting_for_accept_button = false
 
-	set_prompt_text("Tutorial Complete! Good luck, adventurer!", SUCCESS_COLOR)
+	# Minimal hint - the Wanderer's enhanced ! indicator does the rest
+	set_prompt_text("Talk to the Wanderer to get started!", HIGHLIGHT_COLOR)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STEP COMPLETION CHECKS
@@ -383,7 +384,8 @@ func check_movement_complete() -> void:
 		step_transitioning = true
 		# Small delay to let them see success
 		await get_tree().create_timer(0.5).timeout
-		advance_to_step(TutorialStep.FIND_DUMMY)
+		# Skip directly to complete - the Wanderer's ! indicator is the tutorial now
+		advance_to_step(TutorialStep.COMPLETE)
 		step_transitioning = false
 
 func check_dummy_reached() -> void:
@@ -476,24 +478,15 @@ func check_quest_accepted() -> void:
 # EXTERNAL EVENT HANDLERS (called by other systems)
 # ═══════════════════════════════════════════════════════════════════════════
 
-func on_dummy_hit(is_crit: bool = false) -> void:
-	"""Called when player hits the training dummy"""
-	print("📚 [Tutorial] on_dummy_hit called - current_step: %s, is_crit: %s" % [TutorialStep.keys()[current_step], is_crit])
+func on_dummy_hit(_is_crit: bool = false) -> void:
+	"""Called when player hits the training dummy - minimal feedback now"""
+	# Tutorial is now just WASD/SPACE hints, so no more combat tutorial tracking
+	# The dummy can still be hit for practice but we don't spam feedback
+	dummy_hits += 1
 
-	# Show feedback during attack and crit window steps
-	if current_step == TutorialStep.ATTACK_DUMMY or current_step == TutorialStep.CRIT_WINDOW:
-		dummy_hits += 1
-		print("📚 [Tutorial] dummy_hits: %d" % dummy_hits)
-
-		# Show feedback based on hit type
-		if is_crit:
-			show_hit_feedback("CRITICAL STRIKE!", Color(1.0, 0.6, 0.2, 1.0))  # Orange
-		else:
-			show_hit_feedback("GOOD!", SUCCESS_COLOR)  # Green
-
-		# Progress after enough hits
-		if current_step == TutorialStep.ATTACK_DUMMY and dummy_hits >= 3:
-			advance_to_step(TutorialStep.CRIT_WINDOW)
+	# Occasional "Good!" every 5 hits to let player know they're doing it right
+	if dummy_hits % 5 == 0:
+		show_hit_feedback("Good!", SUCCESS_COLOR)
 
 func on_crit_window_opened() -> void:
 	"""Called when a crit window opens on the training dummy"""

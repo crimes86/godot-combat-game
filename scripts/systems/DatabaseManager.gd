@@ -849,16 +849,21 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 		LogManager.info("Sanitized data for: %s" % username, "database")
 
 	# Apply inventory (with validation)
-	var inv_json = data.get("inventory", "")
-	if inv_json is String and not inv_json.is_empty():
-		var inv_data = JSON.parse_string(inv_json)
-		if inv_data:
-			var validated_inv = validate_inventory_data(inv_data)
-			if validated_inv:
-				InventorySystem.load_save_data(validated_inv)
-				LogManager.debug("Loaded inventory for: %s" % username, "inventory")
-			else:
-				push_warning("[DatabaseManager] Invalid inventory data for: %s, starting fresh" % username)
+	# SKIP if authenticated user already loaded inventory from backend (prevents duplicates)
+	var backend_already_loaded = AshbaneAuth and AshbaneAuth.is_authenticated and InventorySystem.get_item_count() > 0
+	if backend_already_loaded:
+		LogManager.info("Skipping local inventory load - already loaded %d items from backend" % InventorySystem.get_item_count(), "inventory")
+	else:
+		var inv_json = data.get("inventory", "")
+		if inv_json is String and not inv_json.is_empty():
+			var inv_data = JSON.parse_string(inv_json)
+			if inv_data:
+				var validated_inv = validate_inventory_data(inv_data)
+				if validated_inv:
+					InventorySystem.load_save_data(validated_inv)
+					LogManager.debug("Loaded inventory for: %s" % username, "inventory")
+				else:
+					push_warning("[DatabaseManager] Invalid inventory data for: %s, starting fresh" % username)
 
 	# Sync forged items to inventory AFTER loading saved inventory
 	# This merges any forged items that aren't already in the save

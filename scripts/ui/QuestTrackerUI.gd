@@ -48,7 +48,7 @@ var tutorial_steps: Array = [
 	{"name": "Attack", "desc": "Click to attack dummy"},
 	{"name": "Crit Window", "desc": "Keep attacking..."},
 	{"name": "Hit Weakpoint", "desc": "Destroy weakpoints (0/3)"},
-	{"name": "Visit Blacksmith", "desc": "Talk to Blacksmith"},
+	{"name": "Visit Wanderer", "desc": "Talk to Wanderer"},
 	{"name": "Accept Quest", "desc": "Accept a quest"},
 	{"name": "Kill Skeleton", "desc": "Defeat a skeleton"},
 ]
@@ -499,7 +499,7 @@ func _create_new_quests_entry() -> void:
 	# Description
 	var desc = Label.new()
 	desc.name = "Description"
-	desc.text = " Visit the Blacksmith"
+	desc.text = " Visit the Wanderer"
 	desc.add_theme_font_size_override("font_size", OBJECTIVE_FONT_SIZE)
 	desc.add_theme_color_override("font_color", OBJECTIVE_COLOR)
 	dir_hbox.add_child(desc)
