@@ -81,10 +81,10 @@ const OPEN_WORLD_ENEMY_MIX: Dictionary = {
 }
 
 ## Spawn distribution percentages
-const SPAWN_DIST_MONSTER_POOLS: float = 0.20  # 20% at monster lava lakes
-const SPAWN_DIST_REGULAR_POOLS: float = 0.10  # 10% at regular pools
-const SPAWN_DIST_ROAMING: float = 0.25        # 25% random roaming
-const SPAWN_DIST_OPEN_WORLD: float = 0.45     # 45% grid-based open world fill
+const SPAWN_DIST_MONSTER_POOLS: float = 0.35  # 35% at monster lava lakes (28 enemies)
+const SPAWN_DIST_REGULAR_POOLS: float = 0.10  # 10% at regular pools (8 enemies)
+const SPAWN_DIST_ROAMING: float = 0.20        # 20% random roaming (16 enemies)
+const SPAWN_DIST_OPEN_WORLD: float = 0.35     # 35% grid-based open world fill (28 enemies)
 
 ## Safe zones - no enemies spawn within these areas
 ## Campfire is at west side of chunk -1 (X: -6000) for West→East progression
@@ -412,7 +412,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 	var open_world_spawned = 0
 
 	# Per-pool spawn limits to prevent crowding
-	const MAX_ENEMIES_PER_MONSTER_POOL: int = 12
+	const MAX_ENEMIES_PER_MONSTER_POOL: int = 15  # Increased for large POI lakes
 	const MAX_ENEMIES_PER_REGULAR_POOL: int = 4
 
 	# Track spawns per pool (by index)
@@ -459,7 +459,7 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 
 			if spawn_at_edge:
 				# Edge spawn: further from pool (lower end of chunk range)
-				var edge_dist = pool.radius + spawn_rng.randf_range(80, 200)
+				var edge_dist = pool.radius + spawn_rng.randf_range(150, 300)
 				spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * edge_dist
 				# Chunk-based level: -1→1-3, 0→6-7, 1→10-11
 				if chunk_x <= -1:
@@ -469,9 +469,9 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 				else:
 					level = spawn_rng.randi_range(10, 11)
 			else:
-				# Core spawn: just outside the lava edge (higher end of chunk range)
-				# Spawn just outside pool radius (not inside!)
-				var core_dist = pool.radius + spawn_rng.randf_range(20, 60)
+				# Core spawn: around the pool perimeter (higher end of chunk range)
+				# Spawn outside pool radius - use larger offset to avoid lava
+				var core_dist = pool.radius + spawn_rng.randf_range(80, 150)
 				spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * core_dist
 				# Chunk-based level: -1→3-5, 0→7-9, 1→11-12
 				if chunk_x <= -1:
@@ -510,9 +510,9 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			selected_pool_idx = available_pools[spawn_rng.randi() % available_pools.size()]
 			var pool = regular_pools[selected_pool_idx]
 
-			# Spawn at the edge of small pools - increased distance range
+			# Spawn at the edge of small pools - outside the lava
 			var angle = spawn_rng.randf() * TAU
-			var edge_dist = pool.radius + spawn_rng.randf_range(30, 120)
+			var edge_dist = pool.radius + spawn_rng.randf_range(60, 150)
 			spawn_pos = pool.pos + Vector2(cos(angle), sin(angle)) * edge_dist
 			# Chunk-based level (lower end): -1→1-3, 0→6-7, 1→10-11
 			if chunk_x <= -1:
