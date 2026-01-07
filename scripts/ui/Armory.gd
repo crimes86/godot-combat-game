@@ -10874,6 +10874,10 @@ func _load_game_world() -> void:
 	# Save window position before transitioning
 	_save_window_position()
 
+	# Load character data from backend before entering game
+	if AshbaneAuth and AshbaneAuth.is_authenticated:
+		await _load_character_from_backend()
+
 	# Disable buttons to prevent double-clicks during transition
 	if enter_world_button:
 		enter_world_button.disabled = true
@@ -10900,6 +10904,91 @@ func _load_game_world() -> void:
 	var tree = get_tree()
 	if tree:
 		tree.change_scene_to_file("res://main.tscn")
+
+func _load_character_from_backend() -> void:
+	"""Load character data from backend before entering game - persistent world."""
+	var url = AshbaneAuth.get_api_base() + "/api/vendor/character/initialize"
+	var headers = [
+		"Content-Type: application/json",
+		"Authorization: Bearer " + AshbaneAuth.auth_token
+	]
+	# Send empty progress - we want to load existing character, not create new
+	var body = JSON.stringify({
+		"gold": 0,
+		"level": 1,
+		"experience": 0,
+		"inventory": [],
+		"equipped_weapon": ""
+	})
+
+	var request = HTTPRequest.new()
+	request.timeout = 5.0
+	add_child(request)
+
+	var error = request.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		LogManager.warning("Failed to load character from backend: %d" % error, "armory")
+		request.queue_free()
+		return
+
+	# Wait for response
+	var result = await request.request_completed
+	request.queue_free()
+
+	var response_result = result[0]
+	var response_code = result[1]
+	var response_body = result[3]
+
+	if response_result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		LogManager.warning("Failed to load character: HTTP %d" % response_code, "armory")
+		return
+
+	var response = JSON.parse_string(response_body.get_string_from_utf8())
+	if not response or not response is Dictionary:
+		LogManager.warning("Invalid character response from backend", "armory")
+		return
+
+	var character = response.get("character", {})
+	var is_new = character.get("is_new", true)
+
+	if is_new:
+		LogManager.info("New character - starting fresh", "armory")
+		return
+
+	# Load existing character data
+	if character.has("gold"):
+		CharacterStats.gold = character.gold
+	if character.has("level"):
+		CharacterStats.level = character.level
+	if character.has("experience"):
+		CharacterStats.experience = character.experience
+
+	# Load inventory
+	if character.has("inventory") and character.inventory is Array:
+		InventorySystem.inventory_items.clear()
+		for i in range(InventorySystem.max_slots):
+			InventorySystem.inventory_items.append(null)
+		for item in character.inventory:
+			if item != null and item is Dictionary:
+				InventorySystem.add_item(item)
+		LogManager.info("Loaded %d inventory items from backend" % character.inventory.size(), "armory")
+
+	# Load equipped armor
+	if character.has("equipped_armor") and character.equipped_armor is Dictionary:
+		for slot in character.equipped_armor:
+			var armor_item = character.equipped_armor[slot]
+			if armor_item != null and armor_item is Dictionary:
+				CharacterStats.equipped_armor[slot] = armor_item
+
+	# Load equipped weapon ID
+	if character.has("equipped_weapon") and character.equipped_weapon != "":
+		CharacterStats.equipped_weapon_data = {"id": character.equipped_weapon}
+
+	LogManager.info("Loaded character from backend: Level %d, %d gold, %d items" % [
+		character.get("level", 1),
+		character.get("gold", 0),
+		character.get("inventory", []).size()
+	], "armory")
 
 func _fade_to_black(duration: float) -> void:
 	"""Create and animate a fade-to-black overlay"""

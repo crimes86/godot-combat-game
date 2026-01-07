@@ -6034,11 +6034,37 @@ func _complete_logout() -> void:
 		var appearance = get_appearance_data()
 		AshbaneAuth.save_appearance(appearance)
 
+		# Full character sync to backend - persistent world save
+		var inventory_data = []
+		for item in InventorySystem.inventory_items:
+			if item != null:
+				inventory_data.append(item)
+
+		var equipped_armor_data = {}
+		for slot in CharacterStats.equipped_armor:
+			var armor_item = CharacterStats.equipped_armor[slot]
+			if armor_item != null:
+				equipped_armor_data[slot] = armor_item
+
+		var equipped_weapon_id = ""
+		if CharacterStats.equipped_weapon_data and not CharacterStats.equipped_weapon_data.is_empty():
+			equipped_weapon_id = CharacterStats.equipped_weapon_data.get("id", CharacterStats.equipped_weapon_data.get("name", ""))
+
+		AshbaneAuth.sync_character_to_backend(
+			CharacterStats.level,
+			CharacterStats.experience,
+			CharacterStats.gold,
+			inventory_data,
+			equipped_weapon_id,
+			equipped_armor_data
+		)
+
 	# Sync state to server before disconnecting (give RPC time to complete)
 	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
 		NetworkManager.client_sync_state()
-		# Small delay to let the RPC go through before disconnecting
-		await get_tree().create_timer(0.2).timeout
+
+	# Small delay to let sync requests complete before disconnecting
+	await get_tree().create_timer(0.5).timeout
 
 	# Close connection and return to main menu
 	if NetworkManager:

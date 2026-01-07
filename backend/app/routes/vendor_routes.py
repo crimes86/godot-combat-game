@@ -415,6 +415,95 @@ async def get_vendor_catalog(
     }
 
 
+class LogoutSyncRequest(BaseModel):
+    """Request body for full character sync on logout."""
+    gold: int = Field(..., ge=0, le=999999999)
+    level: int = Field(..., ge=1, le=100)
+    experience: int = Field(default=0, ge=0, le=999999999)
+    inventory: list = []
+    equipped_weapon: str = ""
+    equipped_armor: dict = {}  # slot -> armor_id mapping
+
+
+class LogoutSyncResponse(BaseModel):
+    """Response for logout sync."""
+    success: bool
+    message: str
+    gold: int = 0
+    level: int = 1
+
+
+@router.post("/character/logout-sync", response_model=LogoutSyncResponse)
+async def logout_sync(
+    payload: LogoutSyncRequest,
+    request: Request,
+    db: DbSession = Depends(get_db),
+    user: User = Depends(get_current_user_dep)
+):
+    """
+    Full character sync on logout - saves everything for persistent world.
+
+    Called when player disconnects to save:
+    - Gold (from all sources: loot, chests, harvesting)
+    - Level and experience
+    - Full inventory (looted items, harvested materials, etc.)
+    - Equipped items
+
+    Note: This trusts client data since user is authenticated.
+    Anti-cheat measures should be server-side during gameplay, not at save time.
+    """
+    character = get_active_character(user, db)
+
+    # Update gold (accept client value - persistent world)
+    character.gold = payload.gold
+
+    # Update level (with sanity cap)
+    character.level = min(payload.level, 100)
+
+    # Update character_data with full inventory and equipment
+    data = character.character_data or {}
+    data["experience"] = payload.experience
+    data["equipped_weapon"] = payload.equipped_weapon
+    data["equipped_armor"] = payload.equipped_armor
+
+    # Merge inventory: keep server-side purchased items, add client items
+    # Server inventory has items with "purchased_at" field from vendor purchases
+    server_inventory = data.get("inventory", [])
+    server_item_ids = {item.get("id") for item in server_inventory if item.get("purchased_at")}
+
+    # Client inventory - filter out items that came from server purchases
+    # (they're already tracked server-side)
+    client_inventory = []
+    for item in payload.inventory:
+        # Skip if this is a server-tracked purchased item
+        if item.get("id") in server_item_ids:
+            continue
+        # Add looted/harvested items
+        client_inventory.append(item)
+
+    # Combine: server purchases + client looted items
+    combined_inventory = server_inventory + client_inventory
+    data["inventory"] = combined_inventory
+
+    character.character_data = data
+    character.last_played_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(character)
+
+    logger.info(
+        f"[LOGOUT_SYNC] User {user.id}: gold={character.gold}, level={character.level}, "
+        f"inventory={len(combined_inventory)} items (server={len(server_inventory)}, client={len(client_inventory)})"
+    )
+
+    return LogoutSyncResponse(
+        success=True,
+        message="Character saved",
+        gold=character.gold,
+        level=character.level
+    )
+
+
 class CharacterInitializeRequest(BaseModel):
     gold: int = 0
     level: int = 1
@@ -484,15 +573,19 @@ async def initialize_character(
                 f"inv:{inventory_len > 0}, forge:{has_forge_items}, played:{has_played_before})")
     
     if is_existing_character:
-        # Return existing character - don't overwrite with guest data
+        # Return existing character with full data - don't overwrite with guest data
         logger.info(f"User {user.id} has existing character (level {character.level}, {character.gold} gold) - not applying guest progress")
+        char_data = character.character_data or {}
         return CharacterInitializeResponse(
             success=True,
             message="Existing character loaded",
             character={
                 "gold": character.gold,
                 "level": character.level,
-                "experience": (character.character_data or {}).get("experience", 0),
+                "experience": char_data.get("experience", 0),
+                "inventory": char_data.get("inventory", []),
+                "equipped_weapon": char_data.get("equipped_weapon", ""),
+                "equipped_armor": char_data.get("equipped_armor", {}),
                 "is_new": False
             }
         )

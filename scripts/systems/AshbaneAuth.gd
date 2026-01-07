@@ -990,6 +990,75 @@ func _on_vendor_sell_response(result: int, response_code: int, _headers: PackedS
 		vendor_sell_completed.emit(false, {"error": error_code, "message": error_msg})
 
 
+signal character_sync_completed(success: bool, response: Dictionary)
+
+func sync_character_to_backend(level: int, experience: int, gold: int, inventory: Array, equipped_weapon: String, equipped_armor: Dictionary) -> void:
+	"""
+	Full character sync to backend on logout - persistent world save.
+	Saves gold, level, XP, inventory, and equipped items.
+	Emits character_sync_completed when done.
+	"""
+	if not is_authenticated or auth_token == "":
+		LogManager.warning("Cannot sync character: not authenticated", "auth")
+		character_sync_completed.emit(false, {"error": "NOT_AUTHENTICATED"})
+		return
+
+	var url = get_api_base() + "/api/vendor/character/logout-sync"
+	var headers = [
+		"Authorization: Bearer " + auth_token,
+		"Content-Type: application/json",
+		"ngrok-skip-browser-warning: true"
+	]
+
+	var body = JSON.stringify({
+		"gold": gold,
+		"level": level,
+		"experience": experience,
+		"inventory": inventory,
+		"equipped_weapon": equipped_weapon,
+		"equipped_armor": equipped_armor
+	})
+
+	var request = HTTPRequest.new()
+	request.timeout = 5.0  # Short timeout for logout
+	add_child(request)
+	request.request_completed.connect(_on_character_sync_response.bind(request))
+
+	LogManager.info("Syncing character to backend: level=%d, gold=%d, inventory=%d items" % [level, gold, inventory.size()], "auth")
+
+	var error = request.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		LogManager.error("Failed to send character sync request: %d" % error, "auth")
+		request.queue_free()
+		character_sync_completed.emit(false, {"error": "REQUEST_FAILED"})
+
+func _on_character_sync_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS:
+		LogManager.error("Character sync failed: result=%d" % result, "auth")
+		character_sync_completed.emit(false, {"error": "CONNECTION_ERROR"})
+		return
+
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+
+	if parse_result != OK:
+		LogManager.error("Failed to parse character sync response", "auth")
+		character_sync_completed.emit(false, {"error": "PARSE_ERROR"})
+		return
+
+	var data = json.get_data()
+
+	if response_code == 200 and data.get("success", false):
+		LogManager.info("Character synced to backend: level=%d" % data.get("level", 0), "auth")
+		character_sync_completed.emit(true, data)
+	else:
+		var error_msg = data.get("detail", "Sync failed")
+		LogManager.warning("Character sync failed: %s" % error_msg, "auth")
+		character_sync_completed.emit(false, {"error": "SYNC_FAILED", "message": error_msg})
+
+
 func get_vendor_character_info(callback: Callable) -> void:
 	"""Get character gold and level from backend"""
 	if not is_authenticated or auth_token == "":

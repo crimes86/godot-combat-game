@@ -151,12 +151,37 @@ func _load_server_character(character: Dictionary) -> void:
 	if character.has("experience"):
 		CharacterStats.experience = character.experience
 
+	# Load inventory from server
+	if character.has("inventory") and character.inventory is Array:
+		# Clear existing inventory and load server data
+		InventorySystem.inventory_items.clear()
+		for i in range(InventorySystem.max_slots):
+			InventorySystem.inventory_items.append(null)
+
+		# Add items from server
+		for item in character.inventory:
+			if item != null and item is Dictionary:
+				InventorySystem.add_item(item)
+
+		LogManager.info("Loaded %d inventory items from server" % character.inventory.size(), "auth")
+
+	# Load equipped armor from server
+	if character.has("equipped_armor") and character.equipped_armor is Dictionary:
+		for slot in character.equipped_armor:
+			var armor_item = character.equipped_armor[slot]
+			if armor_item != null and armor_item is Dictionary:
+				CharacterStats.equipped_armor[slot] = armor_item
+		LogManager.info("Loaded equipped armor from server", "auth")
+
+	# Load equipped weapon from server (just the ID - actual equipping happens in-game)
+	if character.has("equipped_weapon") and character.equipped_weapon != "":
+		CharacterStats.equipped_weapon_data = {"id": character.equipped_weapon}
+		LogManager.info("Loaded equipped weapon: %s" % character.equipped_weapon, "auth")
+
 	LogManager.info("Loaded server character: Level %d, %d gold" % [
 		character.get("level", 1),
 		character.get("gold", 0)
 	], "auth")
-
-	# TODO: Also sync inventory from server if needed
 
 func _finish_auth(user_data: Dictionary, is_new_character: bool = true) -> void:
 	"""Complete the auth flow and return to game or Armory"""
