@@ -1,12 +1,14 @@
 shader_type canvas_item;
 
-// Ground variation shader - SUBTLE visual interest without additional nodes
-// Designed to be barely noticeable but add texture to flat ground
+// Ground variation shader with rolling hills effect
+// Creates illusion of undulating terrain through shading
 
 // Dark stone grey - cool tint to counteract any warm bleed
 uniform vec4 base_color : source_color = vec4(0.15, 0.15, 0.17, 1.0);
 uniform float world_scale : hint_range(0.0001, 0.01) = 0.001;
-uniform float intensity : hint_range(0.0, 1.0) = 0.75;  // Overall effect strength
+uniform float intensity : hint_range(0.0, 1.0) = 0.75;  // Fine texture strength
+uniform float hill_intensity : hint_range(0.0, 1.0) = 0.6;  // Rolling hills strength
+uniform float hill_scale : hint_range(0.00001, 0.001) = 0.00008;  // Size of hills
 
 // Noise functions
 float hash(vec2 p) {
@@ -47,6 +49,29 @@ void fragment() {
     // Start with base color
     vec3 color = base_color.rgb;
 
+    // === ROLLING HILLS LAYER: Visible elevation shading ===
+    // Large smooth noise for hill elevation
+    float elevation = fbm(world_pos * hill_scale, 4);
+    // Remap to -1 to 1 range with smooth falloff
+    float hill_height = (elevation - 0.5) * 2.0;
+
+    // Hilltops are lighter, valleys are darker
+    float hill_shade = hill_height * 0.08 * hill_intensity;
+    color += vec3(hill_shade);
+
+    // Add directional shadow bands (light from top-left)
+    // This creates the illusion of slopes
+    vec2 offset_pos = world_pos + vec2(500.0, 300.0);
+    float slope_noise = fbm(offset_pos * hill_scale * 0.7, 3);
+    float slope = (slope_noise - 0.5);
+    // Horizontal ridges - darker on one side suggests facing away from light
+    float ridge_shadow = slope * 0.04 * hill_intensity;
+    color += vec3(ridge_shadow);
+
+    // Subtle warm tint on hilltops, cool tint in valleys
+    color.r += hill_height * 0.015 * hill_intensity;
+    color.b -= hill_height * 0.01 * hill_intensity;
+
     // === LAYER 1: Very subtle large-scale variation (barely visible) ===
     float large_variation = fbm(world_pos * 0.00015, 3);
     // Neutral grey variation - no warm tint
@@ -71,8 +96,8 @@ void fragment() {
     float dust = smoothstep(0.6, 0.7, dust_noise) * 0.008 * intensity;
     color += dust;
 
-    // Clamp to valid range (allow darker, limit lighter)
-    color = clamp(color, base_color.rgb - vec3(0.05), base_color.rgb + vec3(0.02));
+    // Clamp to valid range (expanded for hill variation)
+    color = clamp(color, base_color.rgb - vec3(0.10), base_color.rgb + vec3(0.08));
 
     COLOR = vec4(color, 1.0);
 }

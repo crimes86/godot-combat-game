@@ -12,6 +12,8 @@ shader = ExtResource("4_ground")
 shader_parameter/base_color = Color(0.15, 0.15, 0.17, 1)
 shader_parameter/world_scale = 2e-05
 shader_parameter/intensity = 0.4
+shader_parameter/hill_intensity = 0.7
+shader_parameter/hill_scale = 0.00006
 
 [node name="GameWorld" type="Node2D"]
 script = ExtResource("1_0vfqx")
