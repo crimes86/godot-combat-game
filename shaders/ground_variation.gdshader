@@ -55,26 +55,33 @@ void fragment() {
     float elevation1 = fbm(world_pos * hill_scale, 6);  // Main hills
     float elevation2 = fbm(world_pos * hill_scale * 1.7 + vec2(1000.0, 500.0), 5);  // Medium detail
     float elevation3 = fbm(world_pos * hill_scale * 3.1 + vec2(2000.0, 1500.0), 4);  // Fine detail
+    float elevation4 = fbm(world_pos * hill_scale * 5.7 + vec2(3500.0, 2800.0), 3);  // Extra fine
 
     // Blend layers for smooth organic result
-    float elevation = elevation1 * 0.5 + elevation2 * 0.3 + elevation3 * 0.2;
+    float elevation = elevation1 * 0.4 + elevation2 * 0.3 + elevation3 * 0.2 + elevation4 * 0.1;
     float hill_height = (elevation - 0.5) * 2.0;
 
-    // Hilltops are lighter, valleys are darker
-    float hill_shade = hill_height * 0.14 * hill_intensity;
+    // Soft S-curve to feather transitions (compress extremes)
+    hill_height = sign(hill_height) * pow(abs(hill_height), 0.7);
+
+    // Hilltops are lighter, valleys are darker (reduced contrast)
+    float hill_shade = hill_height * 0.10 * hill_intensity;
     color += vec3(hill_shade);
 
     // Add directional shadow for depth (light from top-left)
     vec2 offset_pos = world_pos + vec2(500.0, 300.0);
     float slope1 = fbm(offset_pos * hill_scale * 0.8, 5);
     float slope2 = fbm(offset_pos * hill_scale * 2.3 + vec2(800.0, 400.0), 4);
-    float slope = (slope1 * 0.6 + slope2 * 0.4 - 0.5);
-    float ridge_shadow = slope * 0.08 * hill_intensity;
+    float slope3 = fbm(offset_pos * hill_scale * 4.1 + vec2(1200.0, 900.0), 3);
+    float slope = (slope1 * 0.5 + slope2 * 0.3 + slope3 * 0.2 - 0.5);
+    // Feather shadow transitions
+    slope = sign(slope) * pow(abs(slope), 0.7);
+    float ridge_shadow = slope * 0.06 * hill_intensity;
     color += vec3(ridge_shadow);
 
-    // Subtle warm tint on hilltops, cool tint in valleys
-    color.r += hill_height * 0.025 * hill_intensity;
-    color.b -= hill_height * 0.015 * hill_intensity;
+    // Very subtle warm tint on hilltops, cool tint in valleys
+    color.r += hill_height * 0.015 * hill_intensity;
+    color.b -= hill_height * 0.010 * hill_intensity;
 
     // === LAYER 1: Very subtle large-scale variation (barely visible) ===
     float large_variation = fbm(world_pos * 0.00015, 3);
