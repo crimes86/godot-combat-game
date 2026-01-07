@@ -176,6 +176,9 @@ var movement_modifiers: Dictionary = {}  # source_name -> multiplier (0.0-1.0)
 # Movement subsystem (handles dash, speed modifiers)
 var movement_system: PlayerMovement = null
 
+# Alpha barrier message cooldown
+var _alpha_barrier_msg_cooldown: float = 0.0
+
 # Multiplayer helper methods
 # Animation sync tracking - to avoid spamming RPCs when animation hasn't changed
 var _last_synced_animation: String = ""
@@ -1102,6 +1105,10 @@ func _physics_process(delta: float) -> void:
 	if not is_multiplayer_authority():
 		return
 
+	# Update alpha barrier message cooldown
+	if _alpha_barrier_msg_cooldown > 0:
+		_alpha_barrier_msg_cooldown -= delta
+
 	# Get input direction (used for movement and animation)
 	# Block movement input when chat is focused
 	var input_direction := Vector2.ZERO
@@ -1147,6 +1154,12 @@ func _physics_process(delta: float) -> void:
 		var y_max = Constants.CHUNK_SIZE / 2 - 50
 		global_position.x = clamp(global_position.x, x_min, x_max)
 		global_position.y = clamp(global_position.y, y_min, y_max)
+
+	# Alpha barrier - limit to chunk -1 during alpha testing
+	if Constants.ALPHA_MODE and global_position.x > Constants.ALPHA_BARRIER_X:
+		global_position.x = Constants.ALPHA_BARRIER_X
+		velocity.x = min(velocity.x, 0)  # Stop eastward movement
+		_show_alpha_barrier_message()
 
 	update_facing_direction()
 
@@ -6619,3 +6632,15 @@ func refresh_forged_weapon_effects() -> void:
 	var forged_data = CharacterStats.get_equipped_weapon_data()
 	if forged_data.get("is_forged", false):
 		_apply_forged_weapon_effects(forged_data)
+
+# Alpha barrier message (with cooldown to avoid spam)
+func _show_alpha_barrier_message() -> void:
+	if _alpha_barrier_msg_cooldown > 0:
+		return
+	_alpha_barrier_msg_cooldown = 5.0  # 5 second cooldown
+
+	var notification_manager = get_node_or_null("/root/NotificationManager")
+	if notification_manager and notification_manager.has_method("show_warning"):
+		notification_manager.show_warning("Alpha Boundary - Eastern lands coming soon!")
+	else:
+		print("[Alpha] Eastern boundary reached - area locked for alpha testing")

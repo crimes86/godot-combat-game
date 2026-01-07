@@ -196,6 +196,10 @@ const WORLD_HEIGHT: int = 8000  # CHUNK_SIZE
 const WORLD_BOUNDARY_THICKNESS: float = 100.0
 const WORLD_EDGE_BUFFER: float = 300.0  # Keep props away from edges
 
+# Alpha Test Barrier - limits players to chunk -1 during alpha
+const ALPHA_MODE: bool = true  # Set to false to unlock full world
+const ALPHA_BARRIER_X: float = -100.0  # Eastern boundary for alpha (chunk -1 ends at X=0)
+
 # Terrain Generation
 const TERRAIN_PATCH_SPACING: int = 900  # Distance between terrain patches
 const TERRAIN_PATCH_COVERAGE: float = 0.8  # 80% of grid spots get patches (1 - 0.2)
