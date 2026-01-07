@@ -789,7 +789,7 @@ func save_current_player_state() -> bool:
 	var stats_data = CharacterStats.get_save_data()
 	save_data["level"] = stats_data.get("level", 1)
 	save_data["xp"] = stats_data.get("experience", 0)
-	save_data["gold"] = stats_data.get("gold", 100)
+	save_data["gold"] = stats_data.get("gold", 0)
 	save_data["strength"] = stats_data.get("strength", 10)
 	save_data["agility"] = stats_data.get("agility", 10)
 	save_data["dexterity"] = stats_data.get("dexterity", 10)

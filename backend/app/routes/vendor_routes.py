@@ -76,7 +76,7 @@ def get_active_character(user: User, db: DbSession) -> Character:
             user_id=user.id,
             name=user.username or f"Hero_{user.id}",
             level=1,
-            gold=100,
+            gold=0,  # Starting gold is 0 - matches client
             character_data={},
             is_active=True
         )
@@ -427,14 +427,14 @@ async def initialize_character(
 
     is_existing_character = (
         character.level > 1 or
-        character.gold > 100 or
+        character.gold > 0 or  # Starting gold is 0
         inventory_len > 0 or
         has_forge_items or
         has_played_before
     )
 
     logger.info(f"[GUEST_INIT] User {user.id}: is_existing={is_existing_character} "
-                f"(level>1:{character.level > 1}, gold>100:{character.gold > 100}, "
+                f"(level>1:{character.level > 1}, gold>0:{character.gold > 0}, "
                 f"inv:{inventory_len > 0}, forge:{has_forge_items}, played:{has_played_before})")
     
     if is_existing_character:

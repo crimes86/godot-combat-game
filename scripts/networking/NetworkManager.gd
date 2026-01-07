@@ -977,7 +977,7 @@ func _build_local_player_state() -> Dictionary:
 	var stats_data = CharacterStats.get_save_data()
 	state["level"] = stats_data.get("level", 1)
 	state["xp"] = stats_data.get("experience", 0)
-	state["gold"] = stats_data.get("gold", 100)
+	state["gold"] = stats_data.get("gold", 0)
 	state["strength"] = stats_data.get("strength", 10)
 	state["agility"] = stats_data.get("agility", 10)
 	state["dexterity"] = stats_data.get("dexterity", 10)

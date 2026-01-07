@@ -1,23 +1,6 @@
 {
 	"weapons": [
 		{
-			"_comment": "========== FREE TEST WEAPONS (Zone 1) ==========",
-			"id": "test_bow",
-			"name": "Test Bow",
-			"description": "A simple bow for testing bow animations. Click to shoot arrows at the cursor.",
-			"weapon_type": "bow",
-			"base_damage": 4,
-			"attack_speed": "medium",
-			"bow_radius": 32.0,
-			"bow_range": 450.0,
-			"arrow_speed": 600.0,
-			"required_level": 1,
-			"price": 0,
-			"rarity": "Common",
-			"zone": 1,
-			"notes": "Free test weapon for bow animations"
-		},
-		{
 			"id": "test_scimitar",
 			"name": "Test Scimitar",
 			"description": "A curved blade for testing scimitar animations.",
@@ -59,20 +42,6 @@
 			"notes": "Free starter weapon - intentionally weak to encourage buying upgrades"
 		},
 		{
-			"id": "rusty_dagger",
-			"name": "Rusty Dagger",
-			"description": "A worn blade that's seen better days. Strikes fast, hits light.",
-			"weapon_type": "dagger",
-			"base_damage": 2,
-			"attack_speed": "fast",
-			"required_level": 1,
-			"price": 0,
-			"rarity": "Common",
-			"sprite_path": "res://assets/equipment/weapons/dagger/standard/walk.png",
-			"zone": 1,
-			"notes": "Free starter dagger"
-		},
-		{
 			"_comment": "========== ZONE 1 TIER 1: PURCHASABLE WEAPONS ==========",
 			"id": "rusty_blade",
 			"name": "Rusty Blade",
@@ -105,9 +74,10 @@
 			"base_damage": 3,
 			"attack_speed": "fast",
 			"required_level": 1,
-			"price": 5,
+			"price": 0,
 			"rarity": "Common",
-			"zone": 1
+			"zone": 1,
+			"notes": "Free starter dagger"
 		},
 		{
 			"id": "bronze_spear",
@@ -147,10 +117,10 @@
 			"heal_radius": 70,
 			"attack_speed": "medium",
 			"required_level": 1,
-			"price": 5,
+			"price": 0,
 			"rarity": "Common",
 			"zone": 1,
-			"notes": "Starter healing staff"
+			"notes": "Free starter healing staff"
 		},
 		{
 			"_comment": "========== ZONE 2 TIER 2: MID-TIER WEAPONS ==========",
@@ -312,24 +282,6 @@
 			"zone": 4,
 			"drop_only": true,
 			"notes": "Legendary drop - high damage fast weapon"
-		},
-		{
-			"_comment": "========== SUPPORT WEAPONS ==========",
-			"id": "healing_staff",
-			"name": "Healing Staff",
-			"description": "Channel restorative energy to heal nearby allies. Click to create a healing circle at your cursor.",
-			"weapon_type": "staff",
-			"attack_mode": "ranged_heal",
-			"healing_power": 10,
-			"heal_radius": 80,
-			"base_damage": 0,
-			"attack_speed": "medium",
-			"required_level": 1,
-			"price": 0,
-			"rarity": "Common",
-			"sprite_path": "res://assets/weapons/staff/thrust.png",
-			"zone": 1,
-			"notes": "Free starter healing weapon"
 		}
 	]
 }
