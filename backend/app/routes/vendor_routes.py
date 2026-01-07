@@ -107,6 +107,7 @@ def add_item_to_inventory(character: Character, item: dict, quantity: int = 1):
             if inv_item.get("id") == item["id"]:
                 inv_item["quantity"] = inv_item.get("quantity", 1) + quantity
                 character.character_data = data
+                flag_modified(character, 'character_data')
                 return
 
     # Add new item entry
@@ -134,6 +135,7 @@ def add_item_to_inventory(character: Character, item: dict, quantity: int = 1):
 
     data["inventory"].append(new_item)
     character.character_data = data
+    flag_modified(character, 'character_data')
 
 
 # =============================================================================
@@ -605,9 +607,10 @@ async def initialize_character(
     data["experience"] = capped_xp
     data["equipped_weapon"] = payload.equipped_weapon
     character.character_data = data
-    
+    flag_modified(character, 'character_data')
+
     db.commit()
-    
+
     logger.info(f"Initialized character for user {user.id} with guest progress: level {character.level}, {character.gold} gold")
     
     return CharacterInitializeResponse(
