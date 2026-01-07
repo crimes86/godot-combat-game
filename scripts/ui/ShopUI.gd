@@ -882,10 +882,11 @@ func purchase_tool(index: int) -> void:
 
 		item_purchased.emit(tool_name, price)
 
-		# Play gold loot sound
+		# Play purchase sounds (gold + item pickup layered)
 		var sound_manager = get_node_or_null("/root/SoundManager")
 		if sound_manager:
 			sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
+			sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -10.0)
 
 		# Refresh the UI
 		update_gold_display()
@@ -979,10 +980,11 @@ func _on_backend_purchase_completed(success: bool, response: Dictionary) -> void
 						NotificationManager.notify_item_added(_pending_purchase.get("name", "Item"), 1, _pending_purchase.get("rarity_str", "COMMON"))
 						item_purchased.emit(_pending_purchase.get("name", "Item"), response.get("gold_spent", 0))
 
-			# Play gold loot sound
+			# Play purchase sounds (gold + item pickup layered)
 			var sound_manager = get_node_or_null("/root/SoundManager")
 			if sound_manager:
 				sound_manager.play_sound_2d(sound_manager.SoundType.GOLD_LOOT, -12.0)
+				sound_manager.play_sound_2d(sound_manager.SoundType.ITEM_PICKUP, -10.0)
 
 			# Refresh UI
 			update_gold_display()
@@ -1334,9 +1336,17 @@ func _complete_sell(slot: int, item: Dictionary, override_gold: int = -1) -> voi
 	var total_value = item_value * quantity
 	var item_rarity = item.get("rarity", "COMMON")
 
-	# Remove from inventory and add gold for entire stack
+	# Remove from inventory
 	InventorySystem.remove_item(slot)
-	CharacterStats.add_gold(total_value)
+
+	# Sync gold with backend if authenticated
+	if AshbaneAuth and AshbaneAuth.is_authenticated:
+		AshbaneAuth.sell_to_vendor(total_value, item_name)
+		# Gold will be updated when backend responds - update locally too for immediate feedback
+		CharacterStats.add_gold(total_value)
+	else:
+		# Guest mode - local only
+		CharacterStats.add_gold(total_value)
 
 	# Show item removed notification
 	NotificationManager.notify_item_removed(item_name, quantity, item_rarity)
@@ -1593,6 +1603,7 @@ func create_quest_card(quest: Dictionary, is_complete: bool) -> PanelContainer:
 		gold_hbox.add_theme_constant_override("separation", 4)
 		var gold_icon = TextureRect.new()
 		gold_icon.texture = preload("res://assets/icons/materials/gold_coins.png")
+		gold_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		gold_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		gold_icon.custom_minimum_size = Vector2(16, 16)
 		gold_hbox.add_child(gold_icon)

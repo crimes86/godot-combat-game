@@ -267,6 +267,52 @@ async def purchase_item(
     )
 
 
+class SellRequest(BaseModel):
+    """Request body for vendor sell."""
+    item_value: int = Field(..., ge=0, le=999999)
+    item_name: str = Field(default="Item")
+
+
+class SellResponse(BaseModel):
+    """Response for successful sale."""
+    success: bool
+    gold_earned: int = 0
+    new_gold_balance: int = 0
+    error: Optional[str] = None
+
+
+@router.post("/sell", response_model=SellResponse)
+async def sell_item(
+    request: Request,
+    sell: SellRequest,
+    db: DbSession = Depends(get_db),
+    user: User = Depends(get_current_user_dep)
+):
+    """
+    Sell an item to vendor - adds gold to character balance.
+
+    Client handles inventory removal, this just awards gold server-side.
+    """
+    character = get_active_character(user, db)
+
+    # Add gold
+    character.gold += sell.item_value
+    character.last_played_at = datetime.utcnow()
+    db.commit()
+    db.refresh(character)
+
+    logger.info(
+        f"Sell: user={user.id} char={character.id} item={sell.item_name} "
+        f"value={sell.item_value} new_balance={character.gold}"
+    )
+
+    return SellResponse(
+        success=True,
+        gold_earned=sell.item_value,
+        new_gold_balance=character.gold
+    )
+
+
 @router.get("/character", response_model=CharacterInfoResponse)
 async def get_character_info(
     request: Request,

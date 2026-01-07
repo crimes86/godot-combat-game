@@ -919,6 +919,77 @@ func _on_vendor_purchase_response(result: int, response_code: int, _headers: Pac
 		LogManager.warning("Purchase failed: %s - %s" % [error_code, error_msg], "vendor")
 		vendor_purchase_completed.emit(false, {"error": error_code, "message": error_msg})
 
+
+signal vendor_sell_completed(success: bool, response: Dictionary)
+
+func sell_to_vendor(item_value: int, item_name: String = "Item") -> void:
+	"""
+	Sell an item to the vendor via backend API.
+	Emits vendor_sell_completed when done.
+	"""
+	if not is_authenticated or auth_token == "":
+		LogManager.warning("Cannot sell: not authenticated", "vendor")
+		vendor_sell_completed.emit(false, {"error": "NOT_AUTHENTICATED", "message": "You must be logged in to sell items"})
+		return
+
+	if connection_status != ConnectionStatus.CONNECTED:
+		LogManager.warning("Cannot sell: not connected to backend", "vendor")
+		vendor_sell_completed.emit(false, {"error": "NOT_CONNECTED", "message": "Cannot connect to server"})
+		return
+
+	var url = get_api_base() + "/api/vendor/sell"
+	var headers = [
+		"Authorization: Bearer " + auth_token,
+		"Content-Type: application/json",
+		"ngrok-skip-browser-warning: true"
+	]
+
+	var body = JSON.stringify({
+		"item_value": item_value,
+		"item_name": item_name
+	})
+
+	var request = HTTPRequest.new()
+	request.timeout = 10.0
+	add_child(request)
+	request.request_completed.connect(_on_vendor_sell_response.bind(request))
+
+	LogManager.info("Selling %s for %d gold..." % [item_name, item_value], "vendor")
+
+	var error = request.request(url, headers, HTTPClient.METHOD_POST, body)
+	if error != OK:
+		LogManager.error("Failed to send sell request: %d" % error, "vendor")
+		request.queue_free()
+		vendor_sell_completed.emit(false, {"error": "REQUEST_FAILED", "message": "Failed to send request"})
+
+func _on_vendor_sell_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray, request: HTTPRequest) -> void:
+	request.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS:
+		LogManager.error("Sell request failed: result=%d" % result, "vendor")
+		vendor_sell_completed.emit(false, {"error": "CONNECTION_ERROR", "message": "Connection error"})
+		return
+
+	var json = JSON.new()
+	var parse_result = json.parse(body.get_string_from_utf8())
+
+	if parse_result != OK:
+		LogManager.error("Failed to parse sell response", "vendor")
+		vendor_sell_completed.emit(false, {"error": "PARSE_ERROR", "message": "Invalid server response"})
+		return
+
+	var data = json.get_data()
+
+	if response_code == 200 and data.get("success", false):
+		LogManager.info("Sell successful: earned %d gold (total: %d)" % [data.get("gold_earned", 0), data.get("new_gold_balance", 0)], "vendor")
+		vendor_sell_completed.emit(true, data)
+	else:
+		var error_msg = data.get("message", data.get("detail", {}).get("message", "Sell failed"))
+		var error_code = data.get("error", data.get("detail", {}).get("error", "UNKNOWN"))
+		LogManager.warning("Sell failed: %s - %s" % [error_code, error_msg], "vendor")
+		vendor_sell_completed.emit(false, {"error": error_code, "message": error_msg})
+
+
 func get_vendor_character_info(callback: Callable) -> void:
 	"""Get character gold and level from backend"""
 	if not is_authenticated or auth_token == "":

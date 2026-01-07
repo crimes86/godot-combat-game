@@ -230,7 +230,9 @@ theme_override_constants/separation = 4
 
 [node name="GoldIcon" type="TextureRect" parent="Control/GoldContainer"]
 layout_mode = 2
+custom_minimum_size = Vector2(24, 24)
 texture = ExtResource("2_gold")
+expand_mode = 1
 stretch_mode = 5
 
 [node name="GoldLabel" type="Label" parent="Control/GoldContainer"]
