@@ -253,9 +253,6 @@ func populate_weapons() -> void:
 
 		print("   Adding weapon: %s (price: %d)" % [weapon.weapon_name, price])
 
-		# Check if player already owns this weapon
-		var already_owned = _player_owns_weapon(weapon.weapon_name)
-
 		# Build stats string based on weapon type
 		var stats: String
 		if weapon.is_healing_weapon():
@@ -285,7 +282,7 @@ func populate_weapons() -> void:
 			get_rarity_color(weapon.rarity),
 			item_data,
 			func(): purchase_weapon(i),
-			already_owned
+			false  # Allow buying duplicates
 		)
 
 		weapons_list.add_child(item_slot)
@@ -310,9 +307,6 @@ func populate_tools() -> void:
 		var tool_type_raw = tool_data.get("tool_type", "tool")
 		var tool_type = tool_type_raw.capitalize()
 
-		# Check if player already owns this tool
-		var already_owned = _player_owns_tool(tool_name, tool_type_raw)
-
 		# Create item data dict for icon generation
 		var item_data = tool_data.duplicate()
 		# Only set type to "tool" if not already specified (preserve consumable/placeable types)
@@ -332,7 +326,7 @@ func populate_tools() -> void:
 			get_armor_rarity_color(tool_data.get("rarity", "COMMON")),
 			item_data,
 			func(): purchase_tool(i),
-			already_owned
+			false  # Allow buying duplicates
 		)
 
 		tools_list.add_child(item_slot)
@@ -351,9 +345,6 @@ func populate_armor() -> void:
 		var armor_data = vendor.armor_for_sale[i]
 		var armor_name = armor_data.get("name", "Unknown")
 
-		# Check if player already owns this armor (in inventory or equipped)
-		var already_owned = _player_owns_armor(armor_name, armor_data.get("slot", ""))
-
 		# Create item data dict for icon generation
 		var item_data = armor_data.duplicate()
 		item_data["type"] = "armor"
@@ -367,7 +358,7 @@ func populate_armor() -> void:
 			get_armor_rarity_color(armor_data.get("rarity", "COMMON")),
 			item_data,
 			func(): purchase_armor(i),
-			already_owned
+			false  # Allow buying duplicates
 		)
 
 		armor_list.add_child(item_slot)
@@ -763,12 +754,6 @@ func purchase_weapon(index: int) -> void:
 
 	var weapon: Weapon = vendor.weapons_for_sale[index]
 
-	# Double-check: prevent duplicate purchases (failsafe for rapid clicking)
-	if _player_owns_weapon(weapon.weapon_name):
-		show_message("You already own this weapon!", Color(0.9, 0.7, 0.2))
-		populate_weapons()  # Refresh UI to show "Owned"
-		return
-
 	# Check if user is authenticated - use backend for secure purchase
 	if AshbaneAuth and AshbaneAuth.is_authenticated:
 		var item_id = vendor.get_weapon_id(index)
@@ -807,12 +792,6 @@ func purchase_armor(index: int) -> void:
 	var armor_rarity = armor_data.get("rarity", "COMMON")
 	var item_id = armor_data.get("id", armor_name.to_snake_case())
 
-	# Double-check: prevent duplicate purchases (failsafe for rapid clicking)
-	if _player_owns_armor(armor_name, armor_slot):
-		show_message("You already own this armor!", Color(0.9, 0.7, 0.2))
-		populate_armor()  # Refresh UI to show "Owned"
-		return
-
 	# Check if user is authenticated - use backend for secure purchase
 	if AshbaneAuth and AshbaneAuth.is_authenticated:
 		_pending_purchase = {
@@ -848,12 +827,6 @@ func purchase_tool(index: int) -> void:
 	var tool_name = tool_data.get("name", "Unknown")
 	var tool_type = tool_data.get("tool_type", tool_data.get("type", "tool"))
 	var tool_rarity = tool_data.get("rarity", "COMMON")
-
-	# Double-check: prevent duplicate purchases (failsafe for rapid clicking)
-	if _player_owns_tool(tool_name, tool_type):
-		show_message("You already own this tool!", Color(0.9, 0.7, 0.2))
-		populate_tools()  # Refresh UI to show "Owned"
-		return
 
 	# Check if user is authenticated - use backend for secure purchase
 	if AshbaneAuth and AshbaneAuth.is_authenticated:
