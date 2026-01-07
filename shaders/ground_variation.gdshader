@@ -59,14 +59,14 @@ void fragment() {
     float elevation = fbm(world_pos * hill_scale, 5);
     float hill_height = (elevation - 0.5) * 3.0;  // Wider range for more contrast
 
-    // Strong shading - hilltops lighter, valleys darker
-    float hill_shade = hill_height * 0.25 * hill_intensity;
+    // Moderate shading - hilltops lighter, valleys darker (reduced darkness)
+    float hill_shade = hill_height * 0.16 * hill_intensity;
     color += vec3(hill_shade);
 
     // Directional shadow for depth (light from top-left)
     vec2 offset_pos = world_pos + vec2(800.0, 500.0);
     float slope = fbm(offset_pos * hill_scale * 0.9, 4);
-    float ridge_shadow = (slope - 0.5) * 0.18 * hill_intensity;
+    float ridge_shadow = (slope - 0.5) * 0.10 * hill_intensity;
     color += vec3(ridge_shadow);
 
     // Color temperature shift - warm hilltops, cool valleys
@@ -77,17 +77,17 @@ void fragment() {
     float large_variation = fbm(world_pos * 0.00015, 3);
     color += (large_variation - 0.5) * vec3(0.025, 0.022, 0.020) * intensity;
 
-    // === LAYER 2: Fine grain texture (subtle speckles) ===
+    // === LAYER 2: Fine grain texture (visible speckles) ===
     float fine_grain = noise(world_pos * 0.005);
-    color += (fine_grain - 0.5) * 0.045 * intensity;
+    color += (fine_grain - 0.5) * 0.06 * intensity;
 
     // === LAYER 3: Medium noise patches ===
     float medium_noise = fbm(world_pos * 0.0008, 2);
-    color += (medium_noise - 0.5) * vec3(0.035, 0.030, 0.028) * intensity;
+    color += (medium_noise - 0.5) * vec3(0.045, 0.040, 0.038) * intensity;
 
-    // === LAYER 4: Scattered darker specks (subtle dirt/pebbles) ===
+    // === LAYER 4: Scattered darker specks (dirt/pebbles) ===
     float speck_noise = noise(world_pos * 0.010);
-    float specks = smoothstep(0.65, 0.80, speck_noise) * 0.03 * intensity;
+    float specks = smoothstep(0.62, 0.78, speck_noise) * 0.05 * intensity;
     color -= specks;
 
     // === LAYER 5: Lighter dust/ash patches ===
