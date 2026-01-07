@@ -1417,6 +1417,9 @@ async def view_logs_html(
                 .then(r => r.json())
                 .then(data => {{
                     const suspiciousClass = data.suspicious.count > 0 ? 'error' : 'muted';
+                    const duels = data.duels || {{}};
+                    const duelErrorClass = duels.error > 0 ? 'error' : 'muted';
+
                     const html = `
                         <div class="stat-item">
                             <span class="stat-value success">${{data.total_events_all.toLocaleString()}}</span>
@@ -1428,27 +1431,35 @@ async def view_logs_html(
                         </div>
                         <div class="stat-item">
                             <span class="stat-value error">⚔️ ${{data.by_type.kills.toLocaleString()}}</span>
-                            <span class="stat-label">Kills</span>
+                            <span class="stat-label">PvE Kills</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-value warn">💰 ${{data.totals.gold_looted.toLocaleString()}}</span>
                             <span class="stat-label">Gold Looted</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value purple">📦 ${{data.by_type.loot_item}}</span>
-                            <span class="stat-label">Items Looted</span>
-                        </div>
-                        <div class="stat-item">
                             <span class="stat-value info">✨ ${{data.totals.xp_granted.toLocaleString()}}</span>
                             <span class="stat-label">XP Granted</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value sm">${{data.unique_sessions}}</span>
-                            <span class="stat-label">Sessions</span>
-                        </div>
-                        <div class="stat-item">
                             <span class="stat-value ${{suspiciousClass}}">🚨 ${{data.suspicious.count}}</span>
                             <span class="stat-label">Suspicious</span>
+                        </div>
+                        <div class="stat-item" style="border-left:2px solid #f59e0b;padding-left:14px;">
+                            <span class="stat-value warn">🤺 ${{duels.initiated || 0}}</span>
+                            <span class="stat-label">Duels Started</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value success">✓ ${{duels.completed || 0}}</span>
+                            <span class="stat-label">Completed</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value ${{duels.forfeit > 0 ? 'warn' : 'muted'}}">🏳️ ${{duels.forfeit || 0}}</span>
+                            <span class="stat-label">Forfeits</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value ${{duelErrorClass}}">⚠️ ${{duels.error || 0}}</span>
+                            <span class="stat-label">Errors</span>
                         </div>
                     `;
                     document.getElementById('gameplay-stats-container').innerHTML = html;

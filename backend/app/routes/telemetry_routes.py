@@ -99,9 +99,21 @@ class ResourceEvent(BaseModel):
     amount: int = Field(ge=1, le=100)
 
 
+class DuelEvent(BaseModel):
+    """PvP duel event data."""
+    duel_id: str = Field(..., max_length=64)  # Unique duel identifier
+    opponent_id: Optional[int] = None  # Opponent user ID
+    opponent_name: Optional[str] = Field(None, max_length=64)
+    outcome: str = Field(..., pattern="^(initiated|won|lost|draw|forfeit|error|timeout)$")
+    duration_seconds: Optional[float] = Field(None, ge=0, le=3600)
+    damage_dealt: int = Field(default=0, ge=0)
+    damage_taken: int = Field(default=0, ge=0)
+    error_reason: Optional[str] = Field(None, max_length=256)
+
+
 class TelemetryEventRequest(BaseModel):
     """Single telemetry event submission."""
-    event_type: str = Field(..., pattern="^(kill|loot|resource|damage)$")
+    event_type: str = Field(..., pattern="^(kill|loot|resource|damage|duel)$")
     event_data: dict
     session_id: Optional[str] = Field(None, max_length=64)
     is_multiplayer: bool = False
@@ -585,7 +597,8 @@ async def get_telemetry_stats(
             "loot_gold": type_counts.get("loot_gold", 0),
             "loot_item": type_counts.get("loot_item", 0),
             "resource": type_counts.get("resource", 0),
-            "damage": type_counts.get("damage", 0)
+            "damage": type_counts.get("damage", 0),
+            "duel": type_counts.get("duel", 0)
         },
         "totals": {
             "kills": total_kills,
@@ -601,7 +614,8 @@ async def get_telemetry_stats(
         "unique_users": unique_users,
         "unique_sessions": unique_sessions,
         "top_zones": zone_counts,
-        "backend_ops": _get_backend_ops_stats(db, cutoff)
+        "backend_ops": _get_backend_ops_stats(db, cutoff),
+        "duels": _get_duel_stats(db, cutoff)
     }
 
 
@@ -647,6 +661,84 @@ def _get_backend_ops_stats(db: DbSession, cutoff: datetime) -> dict:
         "loads": type_counts.get("character_load", 0),
         "gold_spent": total_gold_spent,
         "gold_earned": total_gold_earned,
+    }
+
+
+def _get_duel_stats(db: DbSession, cutoff: datetime) -> dict:
+    """Get PvP duel statistics for the given time window."""
+    # Get all duel events in the time window
+    duel_events = db.query(GameEventLog).filter(
+        and_(
+            GameEventLog.created_at >= cutoff,
+            GameEventLog.event_type == "duel"
+        )
+    ).all()
+
+    # Count by outcome
+    outcome_counts = {
+        "initiated": 0,
+        "completed": 0,  # won + lost + draw
+        "won": 0,
+        "lost": 0,
+        "draw": 0,
+        "forfeit": 0,
+        "error": 0,
+        "timeout": 0
+    }
+
+    total_duration = 0
+    completed_count = 0
+    error_reasons = {}
+
+    for event in duel_events:
+        outcome = event.event_data.get("outcome", "unknown")
+
+        if outcome == "initiated":
+            outcome_counts["initiated"] += 1
+        elif outcome == "won":
+            outcome_counts["won"] += 1
+            outcome_counts["completed"] += 1
+            duration = event.event_data.get("duration_seconds", 0)
+            if duration:
+                total_duration += duration
+                completed_count += 1
+        elif outcome == "lost":
+            outcome_counts["lost"] += 1
+            outcome_counts["completed"] += 1
+            duration = event.event_data.get("duration_seconds", 0)
+            if duration:
+                total_duration += duration
+                completed_count += 1
+        elif outcome == "draw":
+            outcome_counts["draw"] += 1
+            outcome_counts["completed"] += 1
+            duration = event.event_data.get("duration_seconds", 0)
+            if duration:
+                total_duration += duration
+                completed_count += 1
+        elif outcome == "forfeit":
+            outcome_counts["forfeit"] += 1
+        elif outcome == "error":
+            outcome_counts["error"] += 1
+            reason = event.event_data.get("error_reason", "unknown")
+            error_reasons[reason] = error_reasons.get(reason, 0) + 1
+        elif outcome == "timeout":
+            outcome_counts["timeout"] += 1
+
+    avg_duration = total_duration / completed_count if completed_count > 0 else 0
+
+    return {
+        "total_events": len(duel_events),
+        "initiated": outcome_counts["initiated"],
+        "completed": outcome_counts["completed"],
+        "won": outcome_counts["won"],
+        "lost": outcome_counts["lost"],
+        "draw": outcome_counts["draw"],
+        "forfeit": outcome_counts["forfeit"],
+        "error": outcome_counts["error"],
+        "timeout": outcome_counts["timeout"],
+        "avg_duration_seconds": round(avg_duration, 1),
+        "error_reasons": error_reasons
     }
 
 
