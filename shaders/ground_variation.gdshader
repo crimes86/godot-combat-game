@@ -85,9 +85,9 @@ void fragment() {
     float medium_noise = fbm(world_pos * 0.0008, 2);
     color += (medium_noise - 0.5) * vec3(0.045, 0.040, 0.038) * intensity;
 
-    // === LAYER 4: Scattered darker specks (dirt/pebbles) ===
-    float speck_noise = noise(world_pos * 0.010);
-    float specks = smoothstep(0.62, 0.78, speck_noise) * 0.05 * intensity;
+    // === LAYER 4: Scattered darker specks (subtle dirt/pebbles) ===
+    float speck_noise = noise(world_pos * 0.008);
+    float specks = smoothstep(0.72, 0.88, speck_noise) * 0.025 * intensity;
     color -= specks;
 
     // === LAYER 5: Lighter dust/ash patches ===
