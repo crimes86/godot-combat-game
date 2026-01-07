@@ -341,6 +341,8 @@ func _do_equip_best_gear():
 	# Find and equip best gear from inventory
 	var inventory = _get_inventory_items()
 	for item in inventory:
+		if not item:
+			continue
 		if item.get("type") == "armor":
 			var slot = item.get("slot", "")
 			var current = _get_equipped_armor(slot)
