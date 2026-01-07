@@ -46,6 +46,10 @@ class User(Base):
     is_admin = Column(Boolean, default=False, nullable=False)  # Bypass cooldowns, testing features
     appearance_data = Column(JSON, nullable=True)  # Character appearance for Armory preview
 
+    # Local account support (username/password, no linked providers required)
+    is_local_account = Column(Boolean, default=False, nullable=False)
+    password_hash = Column(String(128), nullable=True)  # bcrypt hash for local accounts
+
     # Contributor cosmetics (earned via community contributions)
     active_title = Column(String(64), nullable=True)      # "Archivist", "Lorekeeper", "Curator"
     active_badges = Column(JSON, default=list)            # ["lorekeeper_badge", "curator_badge"]

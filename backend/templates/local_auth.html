@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% if mode == 'register' %}Create Account{% else %}Login{% endif %} – Ashbane</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png" />
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <link rel="stylesheet" href="/static/css/ashbane-theme.css" />
+  <style>
+    .login-wrapper {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .login-card {
+      position: relative;
+      width: 100%;
+      max-width: 420px;
+      padding: 2rem;
+      background: rgba(20, 20, 22, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(90,90,90,0.5);
+      border-radius: 16px;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        0 4px 0 rgba(0,0,0,0.3),
+        0 8px 20px rgba(0,0,0,0.4);
+    }
+
+    .login-title {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1.2rem;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .login-subtitle {
+      font-size: 0.8rem;
+      color: #888;
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.75rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 0.4rem;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(50, 50, 50, 0.3);
+      border: 2px solid rgba(90, 90, 90, 0.5);
+      border-radius: 8px;
+      color: #fff;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      box-sizing: border-box;
+    }
+
+    .form-group input:focus {
+      border-color: #ff6a00;
+      box-shadow: 0 0 15px rgba(255, 106, 0, 0.3);
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(255,106,0,0.3) 0%, rgba(255,69,0,0.2) 100%);
+      border: 2px solid rgba(255, 106, 0, 0.5);
+      border-radius: 8px;
+      color: #ff6a00;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 0.5rem;
+    }
+
+    .submit-btn:hover {
+      background: linear-gradient(180deg, rgba(255,106,0,0.4) 0%, rgba(255,69,0,0.3) 100%);
+      box-shadow: 0 0 20px rgba(255, 106, 0, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .toggle-mode {
+      text-align: center;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(90, 90, 90, 0.3);
+    }
+
+    .toggle-mode span {
+      color: #666;
+      font-size: 0.85rem;
+    }
+
+    .toggle-mode a {
+      color: #ff6a00;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .toggle-mode a:hover {
+      text-decoration: underline;
+    }
+
+    .back-link {
+      display: block;
+      text-align: center;
+      margin-top: 1rem;
+      color: #666;
+      font-size: 0.8rem;
+      text-decoration: none;
+    }
+
+    .back-link:hover {
+      color: #888;
+    }
+
+    .info-box {
+      background: rgba(255, 106, 0, 0.08);
+      border: 1px solid rgba(255, 106, 0, 0.2);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .info-box p {
+      color: #999;
+      font-size: 0.75rem;
+      line-height: 1.4;
+      margin: 0;
+    }
+
+    .info-box strong {
+      color: #ff6a00;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-card">
+      {% if mode == 'register' %}
+      <div class="login-title">Create Account</div>
+      <div class="login-subtitle">Create a local Ashbane account</div>
+
+      <div class="info-box">
+        <p>
+          <strong>Note:</strong> Local accounts don't have linked gaming platforms.
+          You can link providers later from your dashboard to unlock forged items.
+        </p>
+      </div>
+
+      <form action="/auth/local/register" method="POST">
+        {% if device_code %}
+        <input type="hidden" name="device_code" value="{{ device_code }}" />
+        {% endif %}
+
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required
+                 minlength="3" maxlength="32" pattern="[a-zA-Z0-9_]+"
+                 placeholder="Choose a username" autocomplete="username" />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required
+                 minlength="6" placeholder="Choose a password" autocomplete="new-password" />
+        </div>
+
+        <button type="submit" class="submit-btn">Create Account</button>
+      </form>
+
+      <div class="toggle-mode">
+        <span>Already have an account?</span>
+        <a href="/auth/local/form?mode=login{% if device_code %}&device_code={{ device_code }}{% endif %}">Login</a>
+      </div>
+
+      {% else %}
+      <div class="login-title">Login</div>
+      <div class="login-subtitle">Sign in with your Ashbane account</div>
+
+      <form action="/auth/local/login" method="POST">
+        {% if device_code %}
+        <input type="hidden" name="device_code" value="{{ device_code }}" />
+        {% endif %}
+
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required
+                 placeholder="Enter your username" autocomplete="username" />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required
+                 placeholder="Enter your password" autocomplete="current-password" />
+        </div>
+
+        <button type="submit" class="submit-btn">Login</button>
+      </form>
+
+      <div class="toggle-mode">
+        <span>Don't have an account?</span>
+        <a href="/auth/local/form?mode=register{% if device_code %}&device_code={{ device_code }}{% endif %}">Create one</a>
+      </div>
+      {% endif %}
+
+      <a href="/login{% if device_code %}?device_code={{ device_code }}{% endif %}" class="back-link">
+        &larr; Back to login options
+      </a>
+    </div>
+  </div>
+</body>
+</html>

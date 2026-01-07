@@ -37,3 +37,4 @@ eth-account>=0.11.0
 
 # System monitoring
 psutil>=5.9.0
+bcrypt

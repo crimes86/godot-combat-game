@@ -279,7 +279,8 @@ if _enhanced_icons_dir.exists():
 
 # Build provider list from registry (only enabled providers)
 def get_all_providers_list():
-    """Get list of enabled providers for templates"""
+    """Get list of enabled providers for templates (excludes LOCAL providers like PSN)"""
+    from app.providers import ProviderType
     return [
         {
             "name": name,
@@ -289,6 +290,7 @@ def get_all_providers_list():
             "achievement_support": config.achievement_support.value,
         }
         for name, config in get_enabled_providers().items()
+        if config.type != ProviderType.LOCAL  # Exclude LOCAL providers (e.g., PSN) - they can only be linked, not used for login
     ]
 
 all_providers = get_all_providers_list()
@@ -2079,6 +2081,171 @@ async def psn_link(
             {"success": False, "message": f"Error linking PlayStation: {str(e)}"},
             status_code=500
         )
+
+
+# =============================================================================
+# LOCAL ACCOUNT AUTHENTICATION (Username/Password)
+# =============================================================================
+
+import bcrypt
+
+@app.post("/auth/local/register")
+async def local_register(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Register a new local account with username/password.
+    No provider required - user can link providers later from dashboard.
+    """
+    try:
+        form = await request.form()
+        username = form.get("username", "").strip()
+        password = form.get("password", "").strip()
+        device_code = form.get("device_code", "").strip() or None
+
+        # Validation
+        if not username or len(username) < 3:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Username must be at least 3 characters."},
+                status_code=400
+            )
+
+        if len(username) > 32:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Username must be 32 characters or less."},
+                status_code=400
+            )
+
+        # Only alphanumeric and underscores
+        import re
+        if not re.match(r'^[a-zA-Z0-9_]+$', username):
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Username can only contain letters, numbers, and underscores."},
+                status_code=400
+            )
+
+        if not password or len(password) < 6:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Password must be at least 6 characters."},
+                status_code=400
+            )
+
+        # Check if username already exists
+        existing = db.query(User).filter(User.username == username).first()
+        if existing:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Username already taken. Please choose another."},
+                status_code=400
+            )
+
+        # Hash password
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+        # Create user
+        new_user = User(
+            username=username,
+            is_local_account=True,
+            password_hash=password_hash,
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+
+        logger.info(f"[LOCAL] New local account registered: {username} (ID: {new_user.id})")
+
+        # Handle device auth flow or web login
+        return make_auth_response(request, new_user, device_code, "local", db)
+
+    except Exception as e:
+        logger.error(f"[LOCAL] Registration error: {e}", exc_info=True)
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "message": "Registration failed. Please try again."},
+            status_code=500
+        )
+
+
+@app.post("/auth/local/login")
+async def local_login(
+    request: Request,
+    db: DbSession = Depends(get_db),
+):
+    """
+    Login with existing local account username/password.
+    """
+    try:
+        form = await request.form()
+        username = form.get("username", "").strip()
+        password = form.get("password", "").strip()
+        device_code = form.get("device_code", "").strip() or None
+
+        if not username or not password:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Username and password are required."},
+                status_code=400
+            )
+
+        # Find user
+        user = db.query(User).filter(User.username == username).first()
+
+        if not user:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Invalid username or password."},
+                status_code=401
+            )
+
+        # Check if it's a local account
+        if not user.is_local_account or not user.password_hash:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "This account uses provider login. Please use the appropriate login button."},
+                status_code=400
+            )
+
+        # Verify password
+        if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "message": "Invalid username or password."},
+                status_code=401
+            )
+
+        logger.info(f"[LOCAL] Login successful: {username} (ID: {user.id})")
+
+        # Handle device auth flow or web login
+        return make_auth_response(request, user, device_code, "local", db)
+
+    except Exception as e:
+        logger.error(f"[LOCAL] Login error: {e}", exc_info=True)
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "message": "Login failed. Please try again."},
+            status_code=500
+        )
+
+
+@app.get("/auth/local/form")
+async def local_auth_form(request: Request, device_code: Optional[str] = None, mode: str = "login"):
+    """
+    Show the local account login/register form.
+    mode: "login" or "register"
+    """
+    return templates.TemplateResponse(
+        "local_auth.html",
+        {
+            "request": request,
+            "device_code": device_code,
+            "mode": mode,
+        }
+    )
 
 
 # =============================================================================
