@@ -35,11 +35,11 @@
 			"base_damage": 2,
 			"attack_speed": "medium",
 			"required_level": 1,
-			"price": 0,
+			"price": 3,
 			"rarity": "Common",
 			"sprite_path": "res://assets/weapons/mace/walk.png",
 			"zone": 1,
-			"notes": "Free starter weapon - intentionally weak to encourage buying upgrades"
+			"notes": "Starter weapon - intentionally weak to encourage buying upgrades"
 		},
 		{
 			"_comment": "========== ZONE 1 TIER 1: PURCHASABLE WEAPONS ==========",
@@ -74,10 +74,10 @@
 			"base_damage": 3,
 			"attack_speed": "fast",
 			"required_level": 1,
-			"price": 0,
+			"price": 3,
 			"rarity": "Common",
 			"zone": 1,
-			"notes": "Free starter dagger"
+			"notes": "Starter dagger"
 		},
 		{
 			"id": "bronze_spear",
@@ -117,10 +117,10 @@
 			"heal_radius": 70,
 			"attack_speed": "medium",
 			"required_level": 1,
-			"price": 0,
+			"price": 3,
 			"rarity": "Common",
 			"zone": 1,
-			"notes": "Free starter healing staff"
+			"notes": "Starter healing staff"
 		},
 		{
 			"_comment": "========== ZONE 2 TIER 2: MID-TIER WEAPONS ==========",

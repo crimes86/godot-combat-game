@@ -16,7 +16,7 @@
 			"stat_bonuses": {
 				"vit": 2
 			},
-			"price": 0,
+			"price": 5,
 			"value": 50,
 			"can_trade": true,
 			"stackable": false,
@@ -467,7 +467,7 @@
 				"str": 3,
 				"vit": 5
 			},
-			"price": 0,
+			"price": 75,
 			"value": 225,
 			"can_trade": true,
 			"stackable": false,
@@ -490,7 +490,7 @@
 				"str": 5,
 				"vit": 8
 			},
-			"price": 0,
+			"price": 125,
 			"value": 375,
 			"can_trade": true,
 			"stackable": false,
@@ -513,7 +513,7 @@
 				"str": 2,
 				"vit": 3
 			},
-			"price": 0,
+			"price": 50,
 			"value": 150,
 			"can_trade": true,
 			"stackable": false,
@@ -536,7 +536,7 @@
 				"str": 3,
 				"vit": 5
 			},
-			"price": 0,
+			"price": 75,
 			"value": 225,
 			"can_trade": true,
 			"stackable": false,
@@ -559,7 +559,7 @@
 				"str": 2,
 				"vit": 4
 			},
-			"price": 0,
+			"price": 50,
 			"value": 150,
 			"can_trade": true,
 			"stackable": false,
@@ -582,7 +582,7 @@
 				"str": 2,
 				"vit": 2
 			},
-			"price": 0,
+			"price": 35,
 			"value": 110,
 			"can_trade": true,
 			"stackable": false,
