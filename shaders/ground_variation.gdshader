@@ -55,8 +55,8 @@ void fragment() {
     // Remap to -1 to 1 range with smooth falloff
     float hill_height = (elevation - 0.5) * 2.0;
 
-    // Hilltops are lighter, valleys are darker
-    float hill_shade = hill_height * 0.08 * hill_intensity;
+    // Hilltops are lighter, valleys are darker (boosted for visibility)
+    float hill_shade = hill_height * 0.18 * hill_intensity;
     color += vec3(hill_shade);
 
     // Add directional shadow bands (light from top-left)
@@ -65,12 +65,12 @@ void fragment() {
     float slope_noise = fbm(offset_pos * hill_scale * 0.7, 3);
     float slope = (slope_noise - 0.5);
     // Horizontal ridges - darker on one side suggests facing away from light
-    float ridge_shadow = slope * 0.04 * hill_intensity;
+    float ridge_shadow = slope * 0.10 * hill_intensity;
     color += vec3(ridge_shadow);
 
-    // Subtle warm tint on hilltops, cool tint in valleys
-    color.r += hill_height * 0.015 * hill_intensity;
-    color.b -= hill_height * 0.01 * hill_intensity;
+    // Warm tint on hilltops, cool tint in valleys (boosted)
+    color.r += hill_height * 0.03 * hill_intensity;
+    color.b -= hill_height * 0.02 * hill_intensity;
 
     // === LAYER 1: Very subtle large-scale variation (barely visible) ===
     float large_variation = fbm(world_pos * 0.00015, 3);
@@ -96,8 +96,8 @@ void fragment() {
     float dust = smoothstep(0.6, 0.7, dust_noise) * 0.008 * intensity;
     color += dust;
 
-    // Clamp to valid range (expanded for hill variation)
-    color = clamp(color, base_color.rgb - vec3(0.10), base_color.rgb + vec3(0.08));
+    // Clamp to valid range (expanded for visible hill variation)
+    color = clamp(color, base_color.rgb - vec3(0.15), base_color.rgb + vec3(0.15));
 
     COLOR = vec4(color, 1.0);
 }
