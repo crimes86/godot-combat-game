@@ -18,7 +18,8 @@ float hash(vec2 p) {
 float noise(vec2 p) {
     vec2 i = floor(p);
     vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
+    // Quintic interpolation for smooth 1st and 2nd derivatives (no visible grid)
+    f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
 
     float a = hash(i);
     float b = hash(i + vec2(1.0, 0.0));
