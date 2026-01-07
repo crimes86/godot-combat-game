@@ -138,6 +138,9 @@ func _on_login_failed(error: String):
 	enabled = false
 
 func _input(event):
+	# F4 toggle only works in editor/debug builds - blocked in release
+	if not (OS.has_feature("editor") or OS.is_debug_build()):
+		return
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F4:
 		toggle_bot()
 

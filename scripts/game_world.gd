@@ -1736,7 +1736,10 @@ func add_campfire_decorations(parent: Node2D, center: Vector2, clearing_radius: 
 
 func _input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
+		# F12 screenshot mode only works in editor/debug builds
 		if event.keycode == KEY_F12:
+			if not (OS.has_feature("editor") or OS.is_debug_build()):
+				return
 			toggle_screenshot_mode()
 
 func toggle_screenshot_mode():

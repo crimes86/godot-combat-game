@@ -228,8 +228,8 @@ const DEBUG_UPDATE_INTERVAL: float = 0.1  # How often to refresh debug visuals (
 ## Signal emitted when F3 debug display is toggled
 signal debug_display_toggled(visible: bool)
 
-## Master debug flag - set to false for production
-@export var ENABLE_DEBUG: bool = true
+## Master debug flag - auto-detects based on build type
+@export var ENABLE_DEBUG: bool = OS.has_feature("editor") or OS.is_debug_build()
 
 ## F3 Debug display visibility
 var debug_display_visible: bool = false

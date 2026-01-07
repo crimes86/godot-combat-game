@@ -106,12 +106,19 @@ func _on_logout() -> void:
 	_debug_claims_cleared = false
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DEBUG - Remove after testing
+# DEBUG - Only available in editor/debug builds
 # ═══════════════════════════════════════════════════════════════════════════════
+
+func _is_debug_build() -> bool:
+	"""Check if running in editor or debug build - guards all debug functions."""
+	return OS.has_feature("editor") or OS.is_debug_build()
 
 func debug_reset_all_claims() -> void:
 	"""DEBUG: Reset ALL forge claims so items can be reclaimed for testing.
 	This clears: inventory forged items, claimed_in_game flags, and playtest claims."""
+	if not _is_debug_build():
+		push_warning("[ForgeItemManager] debug_reset_all_claims blocked in release build")
+		return
 
 	# 1. Clear forged items from inventory
 	var inv_cleared = 0
@@ -150,12 +157,17 @@ func debug_reset_all_claims() -> void:
 
 func debug_clear_claimed_items() -> void:
 	"""DEBUG: Alias for debug_reset_all_claims()"""
+	if not _is_debug_build():
+		return
 	debug_reset_all_claims()
 
 func debug_inject_all_as_forgeable() -> void:
 	"""DEBUG: Inject ALL items from ForgeItemDB as forgeable achievements.
 	This gives the user forge opportunities for every item in the catalog.
 	Skips items that are already forged (owned)."""
+	if not _is_debug_build():
+		push_warning("[ForgeItemManager] debug_inject_all_as_forgeable blocked in release build")
+		return
 	# Set debug mode flag to prevent backend from overwriting our injected list
 	_debug_forge_mode = true
 
@@ -203,6 +215,9 @@ func debug_inject_all_as_forgeable() -> void:
 func debug_inject_test_achievement(achievement_key: String = "steam_1145360_SLAYER") -> void:
 	"""DEBUG: Inject a test achievement as forgeable (simulates backend sync)
 	Use ForgeItemDB keys like 'steam_1145360_SLAYER' for Adamant Rail"""
+	if not _is_debug_build():
+		push_warning("[ForgeItemManager] debug_inject_test_achievement blocked in release build")
+		return
 	var forge_db = ForgeItemDB.FORGE_ITEMS.get(achievement_key)
 	if not forge_db:
 		print("[ForgeItemManager] DEBUG: Unknown achievement key: %s" % achievement_key)
@@ -235,6 +250,9 @@ func debug_inject_test_achievement(achievement_key: String = "steam_1145360_SLAY
 
 func debug_forge_test_item(achievement_key: String = "steam_1145360_SLAYER") -> void:
 	"""DEBUG: Directly forge a test item into inventory (skip backend)"""
+	if not _is_debug_build():
+		push_warning("[ForgeItemManager] debug_forge_test_item blocked in release build")
+		return
 	var forge_db = ForgeItemDB.FORGE_ITEMS.get(achievement_key)
 	if not forge_db:
 		print("[ForgeItemManager] DEBUG: Unknown achievement key: %s" % achievement_key)
