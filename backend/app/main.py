@@ -1513,6 +1513,12 @@ async def battlenet_login(request: Request, db: DbSession = Depends(get_db), rea
     if stale_keys:
         logger.info(f"[BATTLENET] Cleared {len(stale_keys)} stale OAuth state(s) from session")
 
+    # Store device_code in session if present (for Godot flow)
+    device_code = request.query_params.get("device_code")
+    if device_code:
+        request.session["device_code"] = device_code
+        logger.info(f"[BATTLENET] Stored device_code {device_code[:8]}... in session")
+
     # Store reauth flag in session so callback knows this is a token refresh
     if reauth:
         request.session["battlenet_reauth"] = True
@@ -1772,14 +1778,12 @@ async def xbox_login(request: Request, db: DbSession = Depends(get_db)):
 
     # Store device_code in session if present (for Godot flow)
     device_code = request.query_params.get("device_code")
+    if device_code:
+        request.session["device_code"] = device_code
 
     # OpenXBL auth URL - redirect_uri is configured in OpenXBL app settings
     # Format: https://xbl.io/app/auth/{public_key}
     auth_url = f"https://xbl.io/app/auth/{OPENXBL_API_KEY}"
-
-    # Store device_code in state parameter if present
-    if device_code:
-        auth_url += f"?state={device_code}"
 
     logger.info(f"[XBOX] Redirecting to OpenXBL auth: {auth_url}")
     return RedirectResponse(url=auth_url)
@@ -1791,7 +1795,8 @@ async def xbox_callback(request: Request, db: DbSession = Depends(get_db)):
     try:
         # OpenXBL returns a 'code' parameter
         code = request.query_params.get("code")
-        device_code = request.query_params.get("device_code")
+        # device_code was stored in session during xbox_login (OpenXBL doesn't pass state back)
+        device_code = request.session.pop("device_code", None)
 
         if not code:
             error = request.query_params.get("error", "No authorization code received")
@@ -2176,7 +2181,7 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
                     db.commit()
                     # Handle device auth flow or redirect to dashboard
                     device_code = request.session.pop("device_code", None)
-                    if device_code and device_code in pending_device_codes:
+                    if device_code and get_device_code_data(device_code, db):
                         session_token = create_session(db, current_user)
                         complete_device_auth(device_code, current_user.id, current_user.username, session_token, db)
                         return templates.TemplateResponse(
@@ -2261,7 +2266,7 @@ async def discord_callback(request: Request, db: DbSession = Depends(get_db)):
             # Not logged in - use unified login flow
             device_code = request.session.pop("device_code", None)
             # Only use device_code if it's still pending (not stale)
-            if device_code and device_code not in pending_device_codes:
+            if device_code and not get_device_code_data(device_code, db):
                 device_code = None
             return handle_provider_login(
                 db=db,
@@ -2337,6 +2342,12 @@ async def github_login(request: Request, db: DbSession = Depends(get_db)):
         del request.session[key]
     if stale_keys:
         logger.info(f"[GITHUB] Cleared {len(stale_keys)} stale OAuth state(s) from session")
+
+    # Store device_code in session if present (for Godot flow)
+    device_code = request.query_params.get("device_code")
+    if device_code:
+        request.session["device_code"] = device_code
+        logger.info(f"[GITHUB] Stored device_code {device_code[:8]}... in session")
 
     redirect_uri = f"{APP_URL}/auth/github/callback"
     logger.info("Initiating GitHub login flow")
@@ -5836,12 +5847,21 @@ async def get_available_providers():
     - gaming: Providers with achievement sync (Steam, Battle.net, Xbox, etc.)
     - social: Login-only providers (Discord, Twitch, Google, etc.)
 
+    Excludes LOCAL type providers (like PSN) that require manual token entry
+    and cannot be used for OAuth login flow.
+
     Useful for Godot to show available login options.
     """
+    from app.providers import ProviderType
+
     gaming = []
     social = []
 
     for name, config in get_enabled_providers().items():
+        # Skip LOCAL providers - they can't be used for OAuth login (e.g., PSN requires manual NPSSO token)
+        if config.type == ProviderType.LOCAL:
+            continue
+
         provider_info = {
             "name": name,
             "display_name": config.display_name,
