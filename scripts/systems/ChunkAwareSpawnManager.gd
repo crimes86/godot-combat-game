@@ -17,9 +17,9 @@ class_name ChunkAwareSpawnManager
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-## Enemies per chunk - reduced from 80 to lower server CPU load
-## 40 spawns + camps near lava pools = manageable density for dedicated server
-const ENEMIES_PER_CHUNK: int = 40
+## Enemies per chunk - restored to 80 after fixing memory leaks
+## Distribution: pools (30%) + roaming (25%) + open world fill (45%)
+const ENEMIES_PER_CHUNK: int = 80
 
 ## Camp system - higher density clusters near environmental features
 const CAMP_SPAWN_RADIUS: float = 150.0  # Enemies spawn within this radius of camp center
@@ -70,6 +70,21 @@ const DIRE_WOLF_CHANCE: float = 0.08  # 8% chance for a roaming wolf to be a dir
 const ROAMING_SKELETON_WEIGHT: float = 0.40  # 40% roaming skeletons in open areas
 const SPIDER_SPAWN_WEIGHT: float = 0.50  # Of remaining 60%: 50% spiders = 30% total
 # Remaining 50% of 60% = 30% wolves
+
+## Open World Fill - grid-based spawning to fill bare areas
+## Divides chunk into cells and spawns enemies to ensure coverage
+const OPEN_WORLD_CELL_SIZE: float = 1000.0  # 1000px cells = 8x8 grid per chunk
+const OPEN_WORLD_ENEMY_MIX: Dictionary = {
+	"skeleton": 0.50,  # 50% skeletons
+	"wolf": 0.25,      # 25% wolves
+	"spider": 0.25     # 25% spiders
+}
+
+## Spawn distribution percentages
+const SPAWN_DIST_MONSTER_POOLS: float = 0.20  # 20% at monster lava lakes
+const SPAWN_DIST_REGULAR_POOLS: float = 0.10  # 10% at regular pools
+const SPAWN_DIST_ROAMING: float = 0.25        # 25% random roaming
+const SPAWN_DIST_OPEN_WORLD: float = 0.45     # 45% grid-based open world fill
 
 ## Safe zones - no enemies spawn within these areas
 ## Campfire is at west side of chunk -1 (X: -6000) for West→East progression
@@ -363,44 +378,38 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		chunk_key, monster_pools.size(), regular_pools.size()
 	])
 
-	# Distribution: 45% at monster lakes, 30% at regular pools, 25% roaming wolves/spiders
-	# Skeletons spawn at lava, wolves/spiders roam open areas
+	# Distribution: 20% monster lakes, 10% regular pools, 25% roaming, 45% open world fill
+	# This ensures enemies are spread across the entire chunk, not just clustered at pools
 	var has_lava = total_lava > 0
-	var monster_count = int(count * 0.45) if monster_pools.size() > 0 else 0
-	var regular_count = int(count * 0.30) if regular_pools.size() > 0 else 0
-	var roaming_count = int(count * 0.25)  # Always have roaming enemies
+	var monster_count = int(count * SPAWN_DIST_MONSTER_POOLS) if monster_pools.size() > 0 else 0
+	var regular_count = int(count * SPAWN_DIST_REGULAR_POOLS) if regular_pools.size() > 0 else 0
+	var roaming_count = int(count * SPAWN_DIST_ROAMING)
+	var open_world_count = int(count * SPAWN_DIST_OPEN_WORLD)
 
-	# If no lava pools, shift all skeleton spawns to roaming
+	# If no lava pools, shift pool spawns to open world fill
 	if not has_lava:
-		roaming_count = count
+		open_world_count += monster_count + regular_count
 		monster_count = 0
 		regular_count = 0
 
-	# Calculate remainder and distribute
-	var remainder = count - monster_count - regular_count - roaming_count
+	# Calculate remainder and add to open world fill
+	var remainder = count - monster_count - regular_count - roaming_count - open_world_count
 	if remainder > 0:
-		roaming_count += remainder
+		open_world_count += remainder
 
-	# Handle missing anchor types by redistributing
+	# Handle missing anchor types by redistributing to open world
 	if monster_pools.size() == 0 and monster_count > 0:
-		if regular_pools.size() > 0:
-			regular_count += monster_count / 2
-			roaming_count += monster_count - monster_count / 2
-		else:
-			roaming_count += monster_count
+		open_world_count += monster_count
 		monster_count = 0
 
 	if regular_pools.size() == 0 and regular_count > 0:
-		if monster_pools.size() > 0:
-			monster_count += regular_count / 2
-			roaming_count += regular_count - regular_count / 2
-		else:
-			roaming_count += regular_count
+		open_world_count += regular_count
 		regular_count = 0
 
 	var monster_spawned = 0
 	var regular_spawned = 0
 	var roaming_spawned = 0
+	var open_world_spawned = 0
 
 	# Per-pool spawn limits to prevent crowding
 	const MAX_ENEMIES_PER_MONSTER_POOL: int = 12
@@ -413,6 +422,9 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 	# World Y bounds (half chunk height)
 	var world_y_min = -Constants.CHUNK_SIZE / 2
 	var world_y_max = Constants.CHUNK_SIZE / 2
+
+	# Generate grid cells for open world fill (must be after y bounds are declared)
+	var open_world_cells = _generate_open_world_cells(chunk_min_x, chunk_max_x, world_y_min, world_y_max, all_pools)
 
 	while spawned < count and attempts < max_attempts:
 		attempts += 1
@@ -544,6 +556,35 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 			else:
 				continue
 
+		# Phase 4: Open World Fill (45%) - grid-based spawning to fill bare areas
+		# This ensures enemies are spread across the entire chunk, not just at pools
+		elif open_world_spawned < open_world_count and open_world_cells.size() > 0:
+			# Pick a random cell from available cells
+			var cell_idx = spawn_rng.randi() % open_world_cells.size()
+			var cell = open_world_cells[cell_idx]
+
+			# Random position within the cell
+			spawn_pos = Vector2(
+				spawn_rng.randf_range(cell.x, cell.x + OPEN_WORLD_CELL_SIZE - 50),
+				spawn_rng.randf_range(cell.y, cell.y + OPEN_WORLD_CELL_SIZE - 50)
+			)
+
+			# Determine level based on chunk position
+			if chunk_x <= -1:
+				level = spawn_rng.randi_range(1, 5)
+			elif chunk_x == 0:
+				level = spawn_rng.randi_range(6, 9)
+			else:
+				level = spawn_rng.randi_range(10, 12)
+
+			if is_valid_spawn_position(spawn_pos) and is_position_spaced(spawn_pos, spawn_positions):
+				open_world_spawned += 1
+				spawn_type = "open_world"
+				# Remove used cell to spread enemies across grid
+				open_world_cells.remove_at(cell_idx)
+			else:
+				continue
+
 		# All quotas filled
 		else:
 			break
@@ -556,8 +597,11 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		# Spawn the enemy based on type
 		var enemy: Node = null
 		if spawn_type == "roaming":
-			# Roaming spawn - spawn wolf or spider
+			# Roaming spawn - spawn wolf or spider (random mix)
 			enemy = spawn_roaming_enemy(spawn_pos, level, chunk_key)
+		elif spawn_type == "open_world":
+			# Open world fill - mixed enemy types based on OPEN_WORLD_ENEMY_MIX
+			enemy = _spawn_open_world_enemy(spawn_pos, level, chunk_key)
 		else:
 			# Lava pool spawn - spawn skeleton
 			enemy = spawn_single_enemy(spawn_pos, level, chunk_key)
@@ -571,8 +615,8 @@ func spawn_enemies_in_chunk(chunk_key: String, count: int) -> void:
 		print("✨ Spawned %d enemies in chunk %s (total: %d)" % [
 			spawned, chunk_key, chunk_data.get_alive_count()
 		])
-		print("   📍 Monster lakes: %d (L1-6), Regular pools: %d (L1-3), Roaming: %d (skeletons/wolves/spiders)" % [
-			monster_spawned, regular_spawned, roaming_spawned
+		print("   📍 Pools: %d, Roaming: %d, Open World: %d" % [
+			monster_spawned + regular_spawned, roaming_spawned, open_world_spawned
 		])
 
 func spawn_single_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
@@ -643,6 +687,67 @@ func find_open_area_spawn(min_x: float, max_x: float, min_y: float, max_y: float
 			return pos
 
 	return Vector2.ZERO
+
+
+func _generate_open_world_cells(min_x: float, max_x: float, min_y: float, max_y: float, lava_pools: Array) -> Array:
+	"""Generate grid cells for open world spawning, excluding pools and safe zones"""
+	var cells: Array = []
+	var cell_size = OPEN_WORLD_CELL_SIZE
+
+	# Generate grid
+	var x = min_x
+	while x < max_x:
+		var y = min_y
+		while y < max_y:
+			var cell_center = Vector2(x + cell_size / 2, y + cell_size / 2)
+			var is_valid = true
+
+			# Check if cell overlaps with safe zones
+			for zone in SAFE_ZONES:
+				if cell_center.distance_to(zone.pos) < zone.radius + cell_size / 2:
+					is_valid = false
+					break
+
+			# Check if cell overlaps with lava pools (they have their own spawns)
+			if is_valid:
+				for pool in lava_pools:
+					var pool_pos = pool.pos if pool is Dictionary else pool
+					var pool_radius = pool.radius if pool is Dictionary else 100.0
+					# Give pools extra buffer so open world spawns don't overlap
+					if cell_center.distance_to(pool_pos) < pool_radius + ROAMING_SPAWN_DISTANCE_MIN:
+						is_valid = false
+						break
+
+			# Check if cell overlaps with ruins exclusion zones
+			if is_valid:
+				for ruins_pos in ruins_areas:
+					if cell_center.distance_to(ruins_pos) < RUINS_EXCLUSION_RADIUS + cell_size / 2:
+						is_valid = false
+						break
+
+			if is_valid:
+				cells.append(Vector2(x, y))
+
+			y += cell_size
+		x += cell_size
+
+	# Shuffle cells so spawns are distributed randomly across the grid
+	cells.shuffle()
+	return cells
+
+
+func _spawn_open_world_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
+	"""Spawn an enemy for open world fill with configured type mix"""
+	var roll = spawn_rng.randf()
+
+	# Use OPEN_WORLD_ENEMY_MIX: 50% skeleton, 25% wolf, 25% spider
+	if roll < OPEN_WORLD_ENEMY_MIX.skeleton:
+		return spawn_single_enemy(pos, level, chunk_key)
+	elif roll < OPEN_WORLD_ENEMY_MIX.skeleton + OPEN_WORLD_ENEMY_MIX.wolf:
+		var is_dire = spawn_rng.randf() < DIRE_WOLF_CHANCE
+		return spawn_single_wolf_roaming(pos, level, chunk_key, is_dire)
+	else:
+		return spawn_single_spider(pos, level, chunk_key)
 
 
 func spawn_roaming_enemy(pos: Vector2, level: int, chunk_key: String) -> Node:
