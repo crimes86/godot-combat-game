@@ -6,9 +6,9 @@ shader_type canvas_item;
 // Dark stone grey - cool tint to counteract any warm bleed
 uniform vec4 base_color : source_color = vec4(0.15, 0.15, 0.17, 1.0);
 uniform float world_scale : hint_range(0.0001, 0.01) = 0.001;
-uniform float intensity : hint_range(0.0, 1.0) = 0.75;  // Fine texture strength
-uniform float hill_intensity : hint_range(0.0, 1.0) = 0.6;  // Rolling hills strength
-uniform float hill_scale : hint_range(0.00001, 0.001) = 0.00008;  // Size of hills
+uniform float intensity : hint_range(0.0, 1.0) = 0.5;  // Fine texture strength (reduced)
+uniform float hill_intensity : hint_range(0.0, 1.0) = 0.25;  // Rolling hills strength (subtle)
+uniform float hill_scale : hint_range(0.00001, 0.001) = 0.00006;  // Size of hills (larger = softer)
 
 // Gradient noise (Perlin-style) - no grid artifacts
 vec2 hash2(vec2 p) {
@@ -59,19 +59,19 @@ void fragment() {
     float elevation = fbm(world_pos * hill_scale, 5);
     float hill_height = (elevation - 0.5) * 3.0;  // Wider range for more contrast
 
-    // Moderate shading - hilltops lighter, valleys darker (reduced darkness)
-    float hill_shade = hill_height * 0.16 * hill_intensity;
+    // Subtle shading - hilltops lighter, valleys darker (very subtle)
+    float hill_shade = hill_height * 0.06 * hill_intensity;
     color += vec3(hill_shade);
 
-    // Directional shadow for depth (light from top-left)
+    // Directional shadow for depth (light from top-left) - reduced
     vec2 offset_pos = world_pos + vec2(800.0, 500.0);
-    float slope = fbm(offset_pos * hill_scale * 0.9, 4);
-    float ridge_shadow = (slope - 0.5) * 0.10 * hill_intensity;
+    float slope = fbm(offset_pos * hill_scale * 0.9, 3);  // fewer octaves = softer
+    float ridge_shadow = (slope - 0.5) * 0.04 * hill_intensity;
     color += vec3(ridge_shadow);
 
-    // Color temperature shift - warm hilltops, cool valleys
-    color.r += hill_height * 0.05 * hill_intensity;
-    color.b -= hill_height * 0.03 * hill_intensity;
+    // Color temperature shift - warm hilltops, cool valleys (minimal)
+    color.r += hill_height * 0.02 * hill_intensity;
+    color.b -= hill_height * 0.01 * hill_intensity;
 
     // === LAYER 1: Large-scale color variation ===
     float large_variation = fbm(world_pos * 0.00015, 3);

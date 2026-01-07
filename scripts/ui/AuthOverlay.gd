@@ -155,7 +155,7 @@ func _load_server_character(character: Dictionary) -> void:
 	if character.has("inventory") and character.inventory is Array:
 		# Clear existing inventory and load server data
 		InventorySystem.inventory_items.clear()
-		for i in range(InventorySystem.max_slots):
+		for i in range(InventorySystem.current_slot_count):
 			InventorySystem.inventory_items.append(null)
 
 		# Add items from server

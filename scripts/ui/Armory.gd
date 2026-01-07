@@ -10966,7 +10966,7 @@ func _load_character_from_backend() -> void:
 	# Load inventory
 	if character.has("inventory") and character.inventory is Array:
 		InventorySystem.inventory_items.clear()
-		for i in range(InventorySystem.max_slots):
+		for i in range(InventorySystem.current_slot_count):
 			InventorySystem.inventory_items.append(null)
 		for item in character.inventory:
 			if item != null and item is Dictionary:
