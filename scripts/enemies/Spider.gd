@@ -193,6 +193,16 @@ func play_animation(anim_name: String) -> void:
 	# Always track animation for server sync (even without sprite on dedicated server)
 	current_animation = anim_name
 
+	# Handle idle animations - pause on current frame
+	if anim_name.begins_with("idle_"):
+		_is_idle = true
+		# Extract direction from idle_down -> walk_down for sprite
+		var walk_anim = "walk_" + anim_name.split("_")[1]
+		if sprite and SPIDER_ANIMS.has(walk_anim):
+			var anim_data = SPIDER_ANIMS[walk_anim]
+			sprite.region_rect = Rect2(0, anim_data.row * FRAME_SIZE.y, FRAME_SIZE.x, FRAME_SIZE.y)
+		return
+
 	if _current_anim == anim_name:
 		return
 
@@ -812,6 +822,11 @@ func _set_spawn_position() -> void:
 
 func _physics_process(delta: float) -> void:
 	if is_dying or is_corpse:
+		return
+
+	# CLIENT: Don't run AI - server controls movement and animation
+	# Clients receive position/animation via NetworkEnemyManager sync
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
 		return
 
 	if attack_cooldown > 0:

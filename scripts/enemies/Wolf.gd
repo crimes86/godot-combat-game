@@ -538,9 +538,12 @@ func play_animation(anim_name: String) -> void:
 	var anim_type = parts[0]  # walk, run, attack, die, howl, idle
 	var direction = parts[1]  # left, right, up, down
 
-	# "idle" maps to "walk" with no movement
+	# Set idle flag based on animation type
 	if anim_type == "idle":
-		anim_type = "walk"
+		_is_idle = true
+		anim_type = "walk"  # idle uses walk sprite sheet
+	else:
+		_is_idle = false  # Resume animation for walk/run/attack
 
 	# Set direction and animation type
 	_set_direction(direction)
@@ -1297,6 +1300,11 @@ func _set_spawn_position() -> void:
 
 func _physics_process(delta: float) -> void:
 	if is_dying or is_corpse:
+		return
+
+	# CLIENT: Don't run AI - server controls movement and animation
+	# Clients receive position/animation via NetworkEnemyManager sync
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
 		return
 
 	# Don't move while howling
