@@ -696,6 +696,33 @@ async def view_logs_html(
             </div>
         </div>
 
+        <!-- Section: Backend Operations -->
+        <div id="backend-ops-section" style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <h2 style="color:#f59e0b;font-size:16px;margin:0;">🔧 Backend Operations</h2>
+                <span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:10px;">ECONOMY</span>
+                <span id="backend-ops-status" style="font-size:12px;color:#666;">● Loading...</span>
+            </div>
+            <div id="backend-ops-container" class="stats-bar" style="background:#2e2a1a;">
+                <div style="color:#666;padding:10px;">Loading backend stats...</div>
+            </div>
+        </div>
+
+        <!-- Section: Forge Economy -->
+        <div id="forge-economy-section" style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <h2 style="color:#a855f7;font-size:16px;margin:0;">⚒️ Forge Economy</h2>
+                <span style="background:#a855f7;color:white;padding:2px 8px;border-radius:4px;font-size:10px;">NFT</span>
+                <span id="forge-economy-status" style="font-size:12px;color:#666;">● Loading...</span>
+                <span id="forge-economy-refresh" style="font-size:12px;color:#666;cursor:pointer;margin-left:auto;" onclick="loadForgeEconomy()">🔄 Refresh</span>
+            </div>
+            <div id="forge-economy-container" class="stats-bar" style="background:#2a1a2e;">
+                <div style="color:#666;padding:10px;">Loading forge economy stats...</div>
+            </div>
+            <div id="forge-alerts-container" style="margin-top:10px;display:none;">
+            </div>
+        </div>
+
         <!-- Client Logs Section -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
             <h2 style="color:#4a9eff;font-size:14px;margin:0;">Client Logs</h2>
@@ -1125,18 +1152,420 @@ async def view_logs_html(
                         statusEl.innerHTML = '⚪ No events';
                         statusEl.style.color = '#666';
                     }}
+
+                    // Populate backend ops section from same response
+                    if (data.backend_ops) {{
+                        const ops = data.backend_ops;
+                        const totalOps = ops.purchases + ops.sells + ops.saves + ops.loads;
+                        const backendHtml = `
+                            <div class="stat-item">
+                                <span class="stat-value" style="color:#f59e0b;">🛒 ${{ops.purchases}}</span>
+                                <span class="stat-label">Purchases</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" style="color:#84cc16;">💸 ${{ops.sells}}</span>
+                                <span class="stat-label">Sales</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" style="color:#ef4444;">-${{ops.gold_spent.toLocaleString()}}</span>
+                                <span class="stat-label">Gold Spent</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" style="color:#22c55e;">+${{ops.gold_earned.toLocaleString()}}</span>
+                                <span class="stat-label">Gold Earned</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" style="color:#3b82f6;">💾 ${{ops.saves}}</span>
+                                <span class="stat-label">Saves</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" style="color:#8b5cf6;">📂 ${{ops.loads}}</span>
+                                <span class="stat-label">Loads</span>
+                            </div>
+                        `;
+                        document.getElementById('backend-ops-container').innerHTML = backendHtml;
+
+                        const backendStatus = document.getElementById('backend-ops-status');
+                        if (totalOps > 0) {{
+                            backendStatus.innerHTML = '🟢 ' + totalOps + ' operations';
+                            backendStatus.style.color = '#f59e0b';
+                        }} else {{
+                            backendStatus.innerHTML = '⚪ No operations';
+                            backendStatus.style.color = '#666';
+                        }}
+                    }}
                 }})
                 .catch(e => {{
                     document.getElementById('gameplay-stats-container').innerHTML = '<div style="color:#888;padding:10px;">⏳ Awaiting Godot integration (TelemetryManager hooks)</div>';
                     document.getElementById('gameplay-status').innerHTML = '⚪ Pending';
                     document.getElementById('gameplay-status').style.color = '#666';
+                    document.getElementById('backend-ops-container').innerHTML = '<div style="color:#888;padding:10px;">⏳ No data</div>';
+                    document.getElementById('backend-ops-status').innerHTML = '⚪ Pending';
+                    document.getElementById('backend-ops-status').style.color = '#666';
                 }});
         }}
 
         // Load gameplay stats on page load and refresh every 30s
         loadGameplayStats();
         setInterval(loadGameplayStats, 30000);
+
+        // Forge Economy Stats
+        function loadForgeEconomy() {{
+            document.getElementById('forge-economy-container').innerHTML = '<div style="color:#666;padding:10px;">Loading...</div>';
+            fetch('/api/telemetry/economy?hours=24')
+                .then(r => r.json())
+                .then(data => {{
+                    const c = data.circulation;
+                    const t = data.trading;
+                    const f = data.forge_credits;
+                    const a = data.alerts;
+                    const r = data.recent_activity;
+
+                    const alertCount = a.large_trades_10k + a.very_large_trades_50k + a.high_frequency_traders;
+                    const alertColor = alertCount > 0 ? '#ef4444' : '#a855f7';
+
+                    const html = `
+                        <div class="stat-item" onclick="showEconomyModal('circulation')" style="cursor:pointer;" title="Click for details">
+                            <span class="stat-value" style="color:#a855f7;">🔮 ${{c.total_forged}}</span>
+                            <span class="stat-label">Total Forged</span>
+                        </div>
+                        <div class="stat-item" onclick="showEconomyModal('circulation')" style="cursor:pointer;" title="Click for details">
+                            <span class="stat-value" style="color:#22c55e;">🎮 ${{c.in_game}}</span>
+                            <span class="stat-label">In-Game</span>
+                        </div>
+                        <div class="stat-item" onclick="showEconomyModal('circulation')" style="cursor:pointer;" title="Click for details">
+                            <span class="stat-value" style="color:#3b82f6;">🌉 ${{c.bridged_out}}</span>
+                            <span class="stat-label">Bridged Out</span>
+                        </div>
+                        <div class="stat-item" onclick="showEconomyModal('circulation')" style="cursor:pointer;" title="Click for details">
+                            <span class="stat-value" style="color:#ef4444;">💀 ${{c.destroyed}}</span>
+                            <span class="stat-label">Destroyed</span>
+                        </div>
+                        <div class="stat-item" onclick="showEconomyModal('trading')" style="cursor:pointer;" title="Click for details">
+                            <span class="stat-value" style="color:#eab308;">🔄 ${{t.total_trades}}</span>
+                            <span class="stat-label">Trades (24h)</span>
+                        </div>
+                        <div class="stat-item" onclick="showEconomyModal('trading')" style="cursor:pointer;" title="Click for details">
+                            <span class="stat-value" style="color:#f59e0b;">💰 ${{t.gold_volume.toLocaleString()}}</span>
+                            <span class="stat-label">Gold Volume</span>
+                        </div>
+                        <div class="stat-item" onclick="showEconomyModal('credits')" style="cursor:pointer;" title="Click for details">
+                            <span class="stat-value" style="color:#06b6d4;">🎫 ${{f.credits_available}}</span>
+                            <span class="stat-label">Useable Credits</span>
+                        </div>
+                        <div class="stat-item" onclick="showEconomyModal('alerts')" style="cursor:pointer;" title="Click for details">
+                            <span class="stat-value" style="color:${{alertColor}};">🚨 ${{alertCount}}</span>
+                            <span class="stat-label">Alerts</span>
+                        </div>
+                    `;
+                    document.getElementById('forge-economy-container').innerHTML = html;
+
+                    // Show alerts if any
+                    const alertsDiv = document.getElementById('forge-alerts-container');
+                    if (alertCount > 0) {{
+                        let alertHtml = '<div style="background:#1a1a1d;border:1px solid #ef4444;border-radius:8px;padding:10px;">';
+                        alertHtml += '<div style="color:#ef4444;font-weight:bold;margin-bottom:8px;">⚠️ Economy Alerts (24h)</div>';
+                        if (a.very_large_trades_50k > 0) {{
+                            alertHtml += `<div style="color:#ff6b6b;">• ${{a.very_large_trades_50k}} trades over 50k gold (potential RMT)</div>`;
+                        }}
+                        if (a.large_trades_10k > 0) {{
+                            alertHtml += `<div style="color:#ffa500;">• ${{a.large_trades_10k}} trades over 10k gold</div>`;
+                        }}
+                        if (a.high_frequency_traders > 0) {{
+                            alertHtml += `<div style="color:#ffa500;">• ${{a.high_frequency_traders}} high-frequency traders (>5 trades)</div>`;
+                        }}
+                        alertHtml += '</div>';
+                        alertsDiv.innerHTML = alertHtml;
+                        alertsDiv.style.display = 'block';
+                    }} else {{
+                        alertsDiv.style.display = 'none';
+                    }}
+
+                    // Update status
+                    const statusEl = document.getElementById('forge-economy-status');
+                    if (alertCount > 0) {{
+                        statusEl.innerHTML = '🔴 ' + alertCount + ' alerts';
+                        statusEl.style.color = '#ef4444';
+                    }} else if (c.total_forged > 0) {{
+                        statusEl.innerHTML = '🟢 ' + c.total_forged + ' items';
+                        statusEl.style.color = '#a855f7';
+                    }} else {{
+                        statusEl.innerHTML = '⚪ No forged items';
+                        statusEl.style.color = '#666';
+                    }}
+                }})
+                .catch(e => {{
+                    document.getElementById('forge-economy-container').innerHTML = '<div style="color:#888;padding:10px;">⏳ Economy data unavailable</div>';
+                    document.getElementById('forge-economy-status').innerHTML = '⚪ Unavailable';
+                    document.getElementById('forge-economy-status').style.color = '#666';
+                }});
+        }}
+
+        // Load forge economy on page load and refresh every 60s
+        loadForgeEconomy();
+        setInterval(loadForgeEconomy, 60000);
+
+        // Economy Detail Modals
+        function showEconomyModal(section) {{
+            const modal = document.getElementById('economyDetailModal');
+            const content = document.getElementById('economyDetailContent');
+            const title = document.getElementById('economyModalTitle');
+
+            const titles = {{
+                circulation: '🔮 Item Circulation',
+                trading: '🔄 Trading Activity',
+                credits: '🎫 Forge Credits',
+                alerts: '🚨 Economy Alerts'
+            }};
+            title.textContent = titles[section] || section;
+            content.innerHTML = '<div style="text-align:center;padding:40px;color:#666;">Loading...</div>';
+            modal.style.display = 'block';
+
+            fetch(`/api/telemetry/economy/details/${{section}}?hours=24`)
+                .then(r => r.json())
+                .then(data => {{
+                    let html = '';
+
+                    if (section === 'circulation') {{
+                        html = renderCirculationDetail(data);
+                    }} else if (section === 'trading') {{
+                        html = renderTradingDetail(data);
+                    }} else if (section === 'credits') {{
+                        html = renderCreditsDetail(data);
+                    }} else if (section === 'alerts') {{
+                        html = renderAlertsDetail(data);
+                    }}
+
+                    content.innerHTML = html;
+                }})
+                .catch(e => {{
+                    content.innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load details</div>';
+                }});
+        }}
+
+        function closeEconomyModal() {{
+            document.getElementById('economyDetailModal').style.display = 'none';
+        }}
+
+        function renderCirculationDetail(data) {{
+            const s = data.summary;
+            let html = `
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+                    <div style="background:#1f1f23;padding:15px;border-radius:8px;">
+                        <h4 style="color:#a855f7;margin:0 0 10px 0;">By Rarity</h4>
+                        ${{Object.entries(s.by_rarity).map(([r, c]) => `
+                            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #333;">
+                                <span style="color:${{getRarityColor(r)}};">${{r || 'Unknown'}}</span>
+                                <span style="color:#fff;">${{c}}</span>
+                            </div>
+                        `).join('')}}
+                    </div>
+                    <div style="background:#1f1f23;padding:15px;border-radius:8px;">
+                        <h4 style="color:#3b82f6;margin:0 0 10px 0;">By Status</h4>
+                        ${{Object.entries(s.by_status).map(([st, c]) => `
+                            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #333;">
+                                <span style="color:#888;">${{st}}</span>
+                                <span style="color:#fff;">${{c}}</span>
+                            </div>
+                        `).join('')}}
+                        <div style="display:flex;justify-content:space-between;padding:4px 0;">
+                            <span style="color:#ef4444;">Destroyed</span>
+                            <span style="color:#fff;">${{s.destroyed}}</span>
+                        </div>
+                    </div>
+                </div>
+                <h4 style="color:#fff;margin:0 0 10px 0;">Recent Forged Items</h4>
+                <div style="max-height:300px;overflow-y:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#1f1f23;">
+                                <th style="padding:8px;text-align:left;color:#888;">Token</th>
+                                <th style="padding:8px;text-align:left;color:#888;">Item</th>
+                                <th style="padding:8px;text-align:left;color:#888;">Rarity</th>
+                                <th style="padding:8px;text-align:left;color:#888;">Status</th>
+                                <th style="padding:8px;text-align:left;color:#888;">Trades</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${{data.items.map(i => `
+                                <tr style="border-bottom:1px solid #333;">
+                                    <td style="padding:8px;color:#666;">#${{i.token_id}}</td>
+                                    <td style="padding:8px;color:#fff;">${{i.item_name || i.item_id}}</td>
+                                    <td style="padding:8px;color:${{getRarityColor(i.item_rarity)}};">${{i.item_rarity || '-'}}</td>
+                                    <td style="padding:8px;color:#888;">${{i.bridge_status}}</td>
+                                    <td style="padding:8px;color:#888;">${{i.trade_count}}</td>
+                                </tr>
+                            `).join('')}}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            return html;
+        }}
+
+        function renderTradingDetail(data) {{
+            let html = '';
+
+            if (data.top_traders.length > 0) {{
+                html += `
+                    <h4 style="color:#f59e0b;margin:0 0 10px 0;">Top Traders (24h)</h4>
+                    <div style="background:#1f1f23;padding:15px;border-radius:8px;margin-bottom:20px;">
+                        ${{data.top_traders.map((t, i) => `
+                            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #333;">
+                                <span><span style="color:#666;">#${{i+1}}</span> <span style="color:#fff;">${{t.username}}</span></span>
+                                <span><span style="color:#eab308;">${{t.trade_count}} trades</span> · <span style="color:#f59e0b;">${{t.gold_volume.toLocaleString()}}g</span></span>
+                            </div>
+                        `).join('')}}
+                    </div>
+                `;
+            }}
+
+            html += `<h4 style="color:#fff;margin:0 0 10px 0;">Recent Trades</h4>`;
+
+            if (data.recent_trades.length === 0) {{
+                html += '<div style="color:#666;padding:20px;text-align:center;">No trades in the last 24 hours</div>';
+            }} else {{
+                html += `
+                    <div style="max-height:300px;overflow-y:auto;">
+                        <table style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#1f1f23;">
+                                    <th style="padding:8px;text-align:left;color:#888;">Time</th>
+                                    <th style="padding:8px;text-align:left;color:#888;">Item</th>
+                                    <th style="padding:8px;text-align:left;color:#888;">From</th>
+                                    <th style="padding:8px;text-align:left;color:#888;">To</th>
+                                    <th style="padding:8px;text-align:right;color:#888;">Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${{data.recent_trades.map(t => `
+                                    <tr style="border-bottom:1px solid #333;">
+                                        <td style="padding:8px;color:#666;">${{new Date(t.traded_at).toLocaleString()}}</td>
+                                        <td style="padding:8px;color:${{getRarityColor(t.item_rarity)}};">${{t.item_name}}</td>
+                                        <td style="padding:8px;color:#888;">${{t.from_user}}</td>
+                                        <td style="padding:8px;color:#888;">${{t.to_user}}</td>
+                                        <td style="padding:8px;text-align:right;color:${{t.is_gift ? '#22c55e' : '#eab308'}};">${{t.is_gift ? '🎁 Gift' : t.price_gold.toLocaleString() + 'g'}}</td>
+                                    </tr>
+                                `).join('')}}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }}
+            return html;
+        }}
+
+        function renderCreditsDetail(data) {{
+            if (data.users.length === 0) {{
+                return '<div style="color:#666;padding:40px;text-align:center;">No users with forge credits</div>';
+            }}
+
+            return `
+                <div style="background:#1f1f23;padding:15px;border-radius:8px;margin-bottom:20px;">
+                    <div style="color:#888;font-size:12px;margin-bottom:8px;">Achievement Mappings in items.json: <span style="color:#22c55e;">${{data.achievement_mappings_count || 0}}</span></div>
+                    <div style="color:#888;font-size:12px;">Only achievements with mappings can be forged into items.</div>
+                </div>
+                <div style="max-height:350px;overflow-y:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#1f1f23;">
+                                <th style="padding:8px;text-align:left;color:#888;">User</th>
+                                <th style="padding:8px;text-align:right;color:#888;">Useable</th>
+                                <th style="padding:8px;text-align:right;color:#888;">Unmapped</th>
+                                <th style="padding:8px;text-align:right;color:#888;">Forged</th>
+                                <th style="padding:8px;text-align:right;color:#888;">Available</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${{data.users.map(u => `
+                                <tr style="border-bottom:1px solid #333;">
+                                    <td style="padding:8px;color:#fff;">${{u.username}}</td>
+                                    <td style="padding:8px;text-align:right;color:#22c55e;">${{u.useable_credits}}</td>
+                                    <td style="padding:8px;text-align:right;color:#666;">${{u.unmapped_credits.toLocaleString()}}</td>
+                                    <td style="padding:8px;text-align:right;color:#a855f7;">${{u.items_forged}}</td>
+                                    <td style="padding:8px;text-align:right;color:${{u.credits_available > 0 ? '#06b6d4' : '#666'}};">${{u.credits_available}}</td>
+                                </tr>
+                            `).join('')}}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }}
+
+        function renderAlertsDetail(data) {{
+            let html = '';
+
+            if (data.large_trades.length > 0) {{
+                html += `
+                    <h4 style="color:#ef4444;margin:0 0 10px 0;">Large Trades (>10k gold)</h4>
+                    <div style="max-height:200px;overflow-y:auto;margin-bottom:20px;">
+                        <table style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#1f1f23;">
+                                    <th style="padding:8px;text-align:left;color:#888;">Time</th>
+                                    <th style="padding:8px;text-align:left;color:#888;">Item</th>
+                                    <th style="padding:8px;text-align:left;color:#888;">From → To</th>
+                                    <th style="padding:8px;text-align:right;color:#888;">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${{data.large_trades.map(t => `
+                                    <tr style="border-bottom:1px solid #333;background:${{t.severity === 'critical' ? 'rgba(239,68,68,0.1)' : 'transparent'}};">
+                                        <td style="padding:8px;color:#666;">${{new Date(t.traded_at).toLocaleString()}}</td>
+                                        <td style="padding:8px;color:#fff;">${{t.item_name}}</td>
+                                        <td style="padding:8px;color:#888;">${{t.from_user}} → ${{t.to_user}}</td>
+                                        <td style="padding:8px;text-align:right;color:${{t.severity === 'critical' ? '#ef4444' : '#f59e0b'}};">${{t.price_gold.toLocaleString()}}g ${{t.severity === 'critical' ? '⚠️' : ''}}</td>
+                                    </tr>
+                                `).join('')}}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }} else {{
+                html += '<div style="background:#1a2e1a;padding:15px;border-radius:8px;color:#22c55e;margin-bottom:20px;">✓ No large trades detected</div>';
+            }}
+
+            if (data.high_frequency_traders.length > 0) {{
+                html += `
+                    <h4 style="color:#f59e0b;margin:0 0 10px 0;">High Frequency Traders (>5 trades/24h)</h4>
+                    <div style="background:#1f1f23;padding:15px;border-radius:8px;">
+                        ${{data.high_frequency_traders.map(t => `
+                            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #333;">
+                                <span style="color:#fff;">${{t.username}}</span>
+                                <span style="color:#f59e0b;">${{t.trade_count}} trades</span>
+                            </div>
+                        `).join('')}}
+                    </div>
+                `;
+            }} else {{
+                html += '<div style="background:#1a2e1a;padding:15px;border-radius:8px;color:#22c55e;">✓ No high-frequency traders detected</div>';
+            }}
+
+            return html;
+        }}
+
+        function getRarityColor(rarity) {{
+            const colors = {{
+                'Common': '#9ca3af',
+                'Uncommon': '#22c55e',
+                'Rare': '#3b82f6',
+                'Epic': '#a855f7',
+                'Legendary': '#f59e0b'
+            }};
+            return colors[rarity] || '#666';
+        }}
         </script>
+
+        <!-- Economy Detail Modal -->
+        <div id="economyDetailModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:1001;overflow-y:auto;">
+            <div style="max-width:800px;margin:40px auto;background:#1a1a1d;border-radius:12px;border:1px solid #a855f7;">
+                <div style="padding:20px;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center;">
+                    <h2 id="economyModalTitle" style="margin:0;color:#a855f7;">Economy Details</h2>
+                    <button onclick="closeEconomyModal()" style="background:none;border:none;color:#888;font-size:24px;cursor:pointer;">×</button>
+                </div>
+                <div id="economyDetailContent" style="padding:20px;"></div>
+            </div>
+        </div>
 
         <!-- Server Detail Modal -->
         <div id="serverDetailModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:1000;overflow-y:auto;">

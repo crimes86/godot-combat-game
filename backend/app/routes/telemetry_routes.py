@@ -10,13 +10,17 @@ import logging
 from datetime import datetime, timedelta
 from typing import Callable, Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy import func, and_
 
 from app.database import SessionLocal
-from app.models import User, Character, GameEventLog
+from app.models import (
+    User, Character, GameEventLog, ForgedAchievement, ItemTrade,
+    TradeListing, AchievementCredit, WalletAccount, BridgeTransaction, Achievement
+)
+from app.services.item_forge_service import get_achievement_mappings
 from app.routes.vendor_routes import get_active_character
 
 logger = logging.getLogger(__name__)
@@ -335,11 +339,20 @@ async def log_batch(
             except (ValueError, OSError):
                 pass
 
+        # Normalize event_type for loot events to match individual endpoint format
+        # Client sends event_type="loot" with loot_type in event_data
+        # Stats queries expect "loot_gold" or "loot_item"
+        event_type = event_req.event_type
+        if event_type == "loot" and isinstance(event_req.event_data, dict):
+            loot_type = event_req.event_data.get("loot_type")
+            if loot_type in ("gold", "item"):
+                event_type = f"loot_{loot_type}"
+
         # Create event
         event = GameEventLog(
             user_id=user.id,
             character_id=character.id,
-            event_type=event_req.event_type,
+            event_type=event_type,
             event_data=event_req.event_data,
             session_id=event_req.session_id or batch.session_id,
             is_multiplayer=event_req.is_multiplayer,
@@ -585,5 +598,482 @@ async def get_telemetry_stats(
         },
         "unique_users": unique_users,
         "unique_sessions": unique_sessions,
-        "top_zones": zone_counts
+        "top_zones": zone_counts,
+        "backend_ops": _get_backend_ops_stats(db, cutoff)
     }
+
+
+def _get_backend_ops_stats(db: DbSession, cutoff: datetime) -> dict:
+    """Get backend operation stats for the given time window."""
+    # Count backend operations by type
+    backend_types = ["vendor_purchase", "vendor_sell", "character_save", "character_load"]
+
+    type_counts = dict(
+        db.query(GameEventLog.event_type, func.count(GameEventLog.id))
+        .filter(
+            and_(
+                GameEventLog.created_at >= cutoff,
+                GameEventLog.event_type.in_(backend_types)
+            )
+        )
+        .group_by(GameEventLog.event_type)
+        .all()
+    )
+
+    # Calculate totals from event data
+    purchase_events = db.query(GameEventLog).filter(
+        and_(
+            GameEventLog.created_at >= cutoff,
+            GameEventLog.event_type == "vendor_purchase"
+        )
+    ).all()
+
+    sell_events = db.query(GameEventLog).filter(
+        and_(
+            GameEventLog.created_at >= cutoff,
+            GameEventLog.event_type == "vendor_sell"
+        )
+    ).all()
+
+    total_gold_spent = sum(e.event_data.get("gold_spent", 0) for e in purchase_events)
+    total_gold_earned = sum(e.event_data.get("gold_earned", 0) for e in sell_events)
+
+    return {
+        "purchases": type_counts.get("vendor_purchase", 0),
+        "sells": type_counts.get("vendor_sell", 0),
+        "saves": type_counts.get("character_save", 0),
+        "loads": type_counts.get("character_load", 0),
+        "gold_spent": total_gold_spent,
+        "gold_earned": total_gold_earned,
+    }
+
+
+# =============================================================================
+# FORGE ECONOMY STATISTICS
+# =============================================================================
+
+@router.get("/economy")
+async def get_forge_economy_stats(
+    hours: int = Query(default=24, ge=1, le=720),  # Up to 30 days
+    db: DbSession = Depends(get_db)
+):
+    """
+    Get comprehensive forge economy statistics.
+
+    Includes:
+    - Forge item circulation (in-game, bridged, destroyed)
+    - Trading activity (forged items, gold volume)
+    - User forge credits
+    - Suspicious economy activity
+    """
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+    # === FORGED ITEM CIRCULATION ===
+    total_forged = db.query(ForgedAchievement).count()
+
+    # By bridge status
+    in_game = db.query(ForgedAchievement).filter(
+        ForgedAchievement.bridge_status == "in_game",
+        ForgedAchievement.destroyed_at.is_(None)
+    ).count()
+
+    bridged_out = db.query(ForgedAchievement).filter(
+        ForgedAchievement.bridge_status == "bridged",
+        ForgedAchievement.destroyed_at.is_(None)
+    ).count()
+
+    bridging = db.query(ForgedAchievement).filter(
+        ForgedAchievement.bridge_status.in_(["bridging_out", "bridging_in"]),
+        ForgedAchievement.destroyed_at.is_(None)
+    ).count()
+
+    destroyed = db.query(ForgedAchievement).filter(
+        ForgedAchievement.destroyed_at.isnot(None)
+    ).count()
+
+    # By rarity
+    rarity_counts = dict(
+        db.query(ForgedAchievement.item_rarity, func.count(ForgedAchievement.id))
+        .filter(ForgedAchievement.destroyed_at.is_(None))
+        .group_by(ForgedAchievement.item_rarity)
+        .all()
+    )
+
+    # Recent forges
+    recent_forges = db.query(ForgedAchievement).filter(
+        ForgedAchievement.forged_at >= cutoff
+    ).count()
+
+    # === TRADING ACTIVITY ===
+    # Total trades in period
+    total_trades = db.query(ItemTrade).filter(
+        ItemTrade.traded_at >= cutoff
+    ).count()
+
+    # Trades with gold (not gifts)
+    paid_trades = db.query(ItemTrade).filter(
+        ItemTrade.traded_at >= cutoff,
+        ItemTrade.price_gold > 0
+    ).count()
+
+    gift_trades = total_trades - paid_trades
+
+    # Gold volume
+    gold_volume_result = db.query(func.sum(ItemTrade.price_gold)).filter(
+        ItemTrade.traded_at >= cutoff
+    ).scalar()
+    gold_volume = gold_volume_result or 0
+
+    # Tax collected
+    tax_collected_result = db.query(func.sum(ItemTrade.tax_applied)).filter(
+        ItemTrade.traded_at >= cutoff
+    ).scalar()
+    tax_collected = tax_collected_result or 0
+
+    # Average trade price
+    avg_price_result = db.query(func.avg(ItemTrade.price_gold)).filter(
+        ItemTrade.traded_at >= cutoff,
+        ItemTrade.price_gold > 0
+    ).scalar()
+    avg_trade_price = int(avg_price_result) if avg_price_result else 0
+
+    # Active listings
+    active_listings = db.query(TradeListing).filter(
+        TradeListing.expires_at > datetime.utcnow()
+    ).count()
+
+    # === FORGE CREDITS ===
+    # Get achievement mappings to determine which credits are actually useable
+    achievement_mappings = get_achievement_mappings()
+    mapping_keys = set(achievement_mappings.keys())  # Set of "app_id:api_name"
+
+    # Get all original claim credits with their achievement details
+    credits_with_achievements = db.query(AchievementCredit, Achievement).join(
+        Achievement, AchievementCredit.achievement_id == Achievement.id
+    ).filter(
+        AchievementCredit.is_original_claim == True
+    ).all()
+
+    # Count useable credits (those with valid achievement mappings)
+    useable_credits = 0
+    for credit, achievement in credits_with_achievements:
+        key = f"{achievement.app_id}:{achievement.api_name}"
+        if key in mapping_keys:
+            useable_credits += 1
+
+    total_credits = len(credits_with_achievements)
+
+    # Users with ANY credits (for display)
+    users_with_credits = db.query(func.count(func.distinct(AchievementCredit.user_id))).filter(
+        AchievementCredit.is_original_claim == True
+    ).scalar() or 0
+
+    # Credits used (forged into items)
+    credits_used = db.query(ForgedAchievement).filter(
+        ForgedAchievement.achievement_credit_id.isnot(None)
+    ).count()
+
+    credits_available = useable_credits - credits_used
+
+    # === SUSPICIOUS ACTIVITY ===
+    # Large gold trades (>10k)
+    large_trades = db.query(ItemTrade).filter(
+        ItemTrade.traded_at >= cutoff,
+        ItemTrade.price_gold >= 10000
+    ).count()
+
+    # Very large trades (>50k) - potential RMT
+    very_large_trades = db.query(ItemTrade).filter(
+        ItemTrade.traded_at >= cutoff,
+        ItemTrade.price_gold >= 50000
+    ).count()
+
+    # High frequency traders (>5 trades in period)
+    high_freq_traders = db.query(ItemTrade.from_user_id).filter(
+        ItemTrade.traded_at >= cutoff
+    ).group_by(ItemTrade.from_user_id).having(
+        func.count(ItemTrade.id) > 5
+    ).count()
+
+    # Bridge activity
+    bridge_out_requests = db.query(BridgeTransaction).filter(
+        BridgeTransaction.requested_at >= cutoff,
+        BridgeTransaction.transaction_type == "bridge_out"
+    ).count()
+
+    bridge_in_requests = db.query(BridgeTransaction).filter(
+        BridgeTransaction.requested_at >= cutoff,
+        BridgeTransaction.transaction_type == "bridge_in"
+    ).count()
+
+    return {
+        "time_window_hours": hours,
+        "circulation": {
+            "total_forged": total_forged,
+            "in_game": in_game,
+            "bridged_out": bridged_out,
+            "bridging": bridging,
+            "destroyed": destroyed,
+            "by_rarity": {
+                "common": rarity_counts.get("Common", 0),
+                "uncommon": rarity_counts.get("Uncommon", 0),
+                "rare": rarity_counts.get("Rare", 0),
+                "epic": rarity_counts.get("Epic", 0),
+                "legendary": rarity_counts.get("Legendary", 0),
+            }
+        },
+        "trading": {
+            "total_trades": total_trades,
+            "paid_trades": paid_trades,
+            "gift_trades": gift_trades,
+            "gold_volume": gold_volume,
+            "tax_collected": tax_collected,
+            "avg_trade_price": avg_trade_price,
+            "active_listings": active_listings,
+        },
+        "forge_credits": {
+            "users_with_credits": users_with_credits,
+            "total_credits": total_credits,
+            "useable_credits": useable_credits,
+            "credits_used": credits_used,
+            "credits_available": credits_available,
+            "unmapped_credits": total_credits - useable_credits,
+        },
+        "recent_activity": {
+            "forges": recent_forges,
+            "bridge_out": bridge_out_requests,
+            "bridge_in": bridge_in_requests,
+        },
+        "alerts": {
+            "large_trades_10k": large_trades,
+            "very_large_trades_50k": very_large_trades,
+            "high_frequency_traders": high_freq_traders,
+        }
+    }
+
+
+@router.get("/economy/details/{section}")
+async def get_economy_section_details(
+    section: str,
+    hours: int = Query(default=24, ge=1, le=720),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: DbSession = Depends(get_db)
+):
+    """
+    Get detailed data for a specific economy section.
+
+    Sections:
+    - circulation: Items by rarity and status
+    - trading: Recent trades with details
+    - credits: Users with forge credits
+    - alerts: Suspicious activity details
+    """
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+    if section == "circulation":
+        # Get items grouped by status and rarity
+        items = db.query(ForgedAchievement).filter(
+            ForgedAchievement.destroyed_at.is_(None)
+        ).order_by(ForgedAchievement.forged_at.desc()).limit(limit).all()
+
+        # Get rarity breakdown
+        rarity_counts = dict(
+            db.query(ForgedAchievement.item_rarity, func.count(ForgedAchievement.id))
+            .filter(ForgedAchievement.destroyed_at.is_(None))
+            .group_by(ForgedAchievement.item_rarity)
+            .all()
+        )
+
+        # Get status breakdown
+        status_counts = dict(
+            db.query(ForgedAchievement.bridge_status, func.count(ForgedAchievement.id))
+            .filter(ForgedAchievement.destroyed_at.is_(None))
+            .group_by(ForgedAchievement.bridge_status)
+            .all()
+        )
+
+        # Get destroyed count
+        destroyed_count = db.query(ForgedAchievement).filter(
+            ForgedAchievement.destroyed_at.isnot(None)
+        ).count()
+
+        return {
+            "section": "circulation",
+            "summary": {
+                "by_rarity": rarity_counts,
+                "by_status": status_counts,
+                "destroyed": destroyed_count,
+            },
+            "items": [
+                {
+                    "token_id": item.token_id,
+                    "item_id": item.item_id,
+                    "item_name": item.item_name,
+                    "item_rarity": item.item_rarity,
+                    "bridge_status": item.bridge_status,
+                    "forged_at": item.forged_at.isoformat() if item.forged_at else None,
+                    "trade_count": item.trade_count,
+                    "current_owner_id": item.current_owner_id,
+                }
+                for item in items
+            ]
+        }
+
+    elif section == "trading":
+        # Get recent trades with full details
+        trades = db.query(ItemTrade).filter(
+            ItemTrade.traded_at >= cutoff
+        ).order_by(ItemTrade.traded_at.desc()).limit(limit).all()
+
+        # Get top traders by volume
+        top_sellers = db.query(
+            ItemTrade.from_user_id,
+            func.count(ItemTrade.id).label('trade_count'),
+            func.sum(ItemTrade.price_gold).label('gold_volume')
+        ).filter(
+            ItemTrade.traded_at >= cutoff
+        ).group_by(ItemTrade.from_user_id).order_by(
+            func.count(ItemTrade.id).desc()
+        ).limit(10).all()
+
+        # Get user names for top sellers
+        seller_ids = [s[0] for s in top_sellers]
+        users = {u.id: u.username for u in db.query(User).filter(User.id.in_(seller_ids)).all()}
+
+        return {
+            "section": "trading",
+            "time_window_hours": hours,
+            "top_traders": [
+                {
+                    "user_id": s[0],
+                    "username": users.get(s[0], "Unknown"),
+                    "trade_count": s[1],
+                    "gold_volume": s[2] or 0,
+                }
+                for s in top_sellers
+            ],
+            "recent_trades": [
+                {
+                    "trade_id": t.id,
+                    "traded_at": t.traded_at.isoformat() if t.traded_at else None,
+                    "item_name": t.forged_item.item_name if t.forged_item else "Unknown",
+                    "item_rarity": t.forged_item.item_rarity if t.forged_item else None,
+                    "from_user": t.from_user.username if t.from_user else "Unknown",
+                    "to_user": t.to_user.username if t.to_user else "Unknown",
+                    "price_gold": t.price_gold or 0,
+                    "tax_applied": t.tax_applied or 0,
+                    "is_gift": (t.price_gold or 0) == 0,
+                }
+                for t in trades
+            ]
+        }
+
+    elif section == "credits":
+        # Get achievement mappings to determine useable credits
+        achievement_mappings = get_achievement_mappings()
+        mapping_keys = set(achievement_mappings.keys())
+
+        # Get all credits with achievements for all users
+        all_credits = db.query(
+            AchievementCredit.user_id,
+            Achievement.app_id,
+            Achievement.api_name
+        ).join(
+            Achievement, AchievementCredit.achievement_id == Achievement.id
+        ).filter(
+            AchievementCredit.is_original_claim == True
+        ).all()
+
+        # Count per user: total and useable
+        user_stats = {}
+        for user_id, app_id, api_name in all_credits:
+            if user_id not in user_stats:
+                user_stats[user_id] = {"total": 0, "useable": 0}
+            user_stats[user_id]["total"] += 1
+            key = f"{app_id}:{api_name}"
+            if key in mapping_keys:
+                user_stats[user_id]["useable"] += 1
+
+        # Get user names
+        user_ids = list(user_stats.keys())
+        users = {u.id: u.username for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+
+        # Get forged counts per user
+        forged_counts = dict(
+            db.query(
+                WalletAccount.user_id,
+                func.count(ForgedAchievement.id)
+            ).join(ForgedAchievement, ForgedAchievement.wallet_account_id == WalletAccount.id)
+            .group_by(WalletAccount.user_id).all()
+        )
+
+        # Sort by useable credits descending
+        sorted_users = sorted(user_stats.items(), key=lambda x: x[1]["useable"], reverse=True)[:limit]
+
+        return {
+            "section": "credits",
+            "achievement_mappings_count": len(mapping_keys),
+            "users": [
+                {
+                    "user_id": user_id,
+                    "username": users.get(user_id, "Unknown"),
+                    "total_credits": stats["total"],
+                    "useable_credits": stats["useable"],
+                    "unmapped_credits": stats["total"] - stats["useable"],
+                    "items_forged": forged_counts.get(user_id, 0),
+                    "credits_available": stats["useable"] - forged_counts.get(user_id, 0),
+                }
+                for user_id, stats in sorted_users
+            ]
+        }
+
+    elif section == "alerts":
+        # Get detailed alert information
+
+        # Large trades (>10k)
+        large_trades = db.query(ItemTrade).filter(
+            ItemTrade.traded_at >= cutoff,
+            ItemTrade.price_gold >= 10000
+        ).order_by(ItemTrade.price_gold.desc()).limit(limit).all()
+
+        # High frequency traders
+        high_freq = db.query(
+            ItemTrade.from_user_id,
+            func.count(ItemTrade.id).label('trade_count')
+        ).filter(
+            ItemTrade.traded_at >= cutoff
+        ).group_by(ItemTrade.from_user_id).having(
+            func.count(ItemTrade.id) > 5
+        ).order_by(func.count(ItemTrade.id).desc()).all()
+
+        # Get user names
+        user_ids = list(set([t.from_user_id for t in large_trades] + [h[0] for h in high_freq]))
+        users = {u.id: u.username for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+
+        return {
+            "section": "alerts",
+            "time_window_hours": hours,
+            "large_trades": [
+                {
+                    "trade_id": t.id,
+                    "traded_at": t.traded_at.isoformat() if t.traded_at else None,
+                    "item_name": t.forged_item.item_name if t.forged_item else "Unknown",
+                    "from_user": users.get(t.from_user_id, "Unknown"),
+                    "to_user": t.to_user.username if t.to_user else "Unknown",
+                    "price_gold": t.price_gold,
+                    "severity": "critical" if t.price_gold >= 50000 else "warning",
+                }
+                for t in large_trades
+            ],
+            "high_frequency_traders": [
+                {
+                    "user_id": h[0],
+                    "username": users.get(h[0], "Unknown"),
+                    "trade_count": h[1],
+                }
+                for h in high_freq
+            ]
+        }
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown section: {section}")

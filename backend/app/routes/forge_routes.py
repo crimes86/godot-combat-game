@@ -14,6 +14,7 @@ import os
 
 from app.models import User, ForgedAchievement, AchievementCredit, WalletAccount, BridgeStatus
 from app.database import SessionLocal
+from app.services.telemetry_service import log_backend_event
 
 
 logger = logging.getLogger(__name__)
@@ -170,6 +171,23 @@ async def destroy_forged_item(
     forged.destroyed_by_user_id = current_user.id
     forged.current_owner_id = TREASURY_USER_ID
     forged.claimed_in_game_at = None  # No longer in anyone's inventory
+
+    # Log telemetry for item destruction
+    log_backend_event(
+        db=db,
+        user_id=current_user.id,
+        character_id=0,
+        event_type="forged_item_destroy",
+        event_data={
+            "token_id": forged.token_id,
+            "item_id": forged.item_id,
+            "item_name": forged.item_name,
+            "item_rarity": forged.item_rarity,
+            "reason": request_body.reason,
+            "gold_received": gold_received,
+        },
+        ip_address=request.client.host if request.client else None
+    )
 
     db.commit()
 

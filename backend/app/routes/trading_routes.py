@@ -15,9 +15,10 @@ from datetime import datetime, timedelta
 import logging
 
 from app.models import (
-    User, ForgedAchievement, ItemTrade, TradeListing, WalletAccount
+    User, ForgedAchievement, ItemTrade, TradeListing, WalletAccount, GameEventLog
 )
 from app.database import SessionLocal
+from app.services.telemetry_service import log_backend_event
 
 logger = logging.getLogger(__name__)
 
@@ -300,6 +301,28 @@ async def record_direct_trade(
     db.query(TradeListing).filter(
         TradeListing.forged_item_id == forged.id
     ).delete()
+
+    # Log telemetry for the trade
+    is_suspicious = trade_request.price_gold >= 50000  # Flag very large trades
+    log_backend_event(
+        db=db,
+        user_id=current_user.id,
+        character_id=0,  # Trading is user-level, not character-level
+        event_type="forged_item_trade",
+        event_data={
+            "token_id": forged.token_id,
+            "item_id": forged.item_id,
+            "item_name": forged.item_name,
+            "item_rarity": forged.item_rarity,
+            "from_user_id": current_user.id,
+            "to_user_id": recipient.id,
+            "price_gold": trade_request.price_gold,
+            "tax_applied": tax,
+            "trade_type": "direct",
+            "is_gift": trade_request.price_gold == 0,
+        },
+        ip_address=request.client.host if request.client else None
+    )
 
     db.commit()
     db.refresh(trade)

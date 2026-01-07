@@ -20,6 +20,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.database import SessionLocal
 from app.models import User, Character, ForgedAchievement, WalletAccount
 from app.services.vendor_service import vendor_service
+from app.services.telemetry_service import log_backend_event
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,24 @@ async def purchase_item(
         db.commit()
         db.refresh(character)
 
+        # Log telemetry event
+        log_backend_event(
+            db=db,
+            user_id=user.id,
+            character_id=character.id,
+            event_type="vendor_purchase",
+            event_data={
+                "item_id": purchase.item_id,
+                "item_name": item.get("name", "Unknown"),
+                "vendor_type": purchase.vendor_type,
+                "quantity": purchase.quantity,
+                "gold_spent": total_cost,
+                "new_balance": character.gold
+            },
+            ip_address=request.client.host if request.client else None
+        )
+        db.commit()  # Commit telemetry event
+
         logger.info(
             f"Purchase: user={user.id} char={character.id} item={purchase.item_id} "
             f"qty={purchase.quantity} cost={total_cost} new_balance={character.gold}"
@@ -301,6 +320,21 @@ async def sell_item(
     # Add gold
     character.gold += sell.item_value
     character.last_played_at = datetime.utcnow()
+
+    # Log telemetry event
+    log_backend_event(
+        db=db,
+        user_id=user.id,
+        character_id=character.id,
+        event_type="vendor_sell",
+        event_data={
+            "item_name": sell.item_name,
+            "gold_earned": sell.item_value,
+            "new_balance": character.gold
+        },
+        ip_address=request.client.host if request.client else None
+    )
+
     db.commit()
     db.refresh(character)
 
@@ -492,6 +526,24 @@ async def logout_sync(
     character.last_played_at = datetime.utcnow()
     flag_modified(character, 'character_data')
 
+    # Log telemetry event
+    log_backend_event(
+        db=db,
+        user_id=user.id,
+        character_id=character.id,
+        event_type="character_save",
+        event_data={
+            "gold": character.gold,
+            "level": character.level,
+            "experience": payload.experience,
+            "inventory_count": len(combined_inventory),
+            "server_items": len(server_inventory),
+            "client_items": len(client_inventory),
+            "equipped_weapon": payload.equipped_weapon,
+        },
+        ip_address=request.client.host if request.client else None
+    )
+
     db.commit()
     db.refresh(character)
 
@@ -580,6 +632,25 @@ async def initialize_character(
         # Return existing character with full data - don't overwrite with guest data
         logger.info(f"User {user.id} has existing character (level {character.level}, {character.gold} gold) - not applying guest progress")
         char_data = character.character_data or {}
+
+        # Log telemetry event for character load
+        log_backend_event(
+            db=db,
+            user_id=user.id,
+            character_id=character.id,
+            event_type="character_load",
+            event_data={
+                "gold": character.gold,
+                "level": character.level,
+                "experience": char_data.get("experience", 0),
+                "inventory_count": len(char_data.get("inventory", [])),
+                "is_new": False,
+                "has_forge_items": has_forge_items,
+            },
+            ip_address=request.client.host if request.client else None
+        )
+        db.commit()
+
         return CharacterInitializeResponse(
             success=True,
             message="Existing character loaded",
@@ -608,6 +679,24 @@ async def initialize_character(
     data["equipped_weapon"] = payload.equipped_weapon
     character.character_data = data
     flag_modified(character, 'character_data')
+
+    # Log telemetry event for new character initialization
+    log_backend_event(
+        db=db,
+        user_id=user.id,
+        character_id=character.id,
+        event_type="character_load",
+        event_data={
+            "gold": character.gold,
+            "level": character.level,
+            "experience": capped_xp,
+            "inventory_count": 0,
+            "is_new": True,
+            "guest_gold": payload.gold,
+            "guest_level": payload.level,
+        },
+        ip_address=request.client.host if request.client else None
+    )
 
     db.commit()
 
