@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session as DbSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import SessionLocal
 from app.models import User, Character, ForgedAchievement, WalletAccount
@@ -487,6 +488,7 @@ async def logout_sync(
 
     character.character_data = data
     character.last_played_at = datetime.utcnow()
+    flag_modified(character, 'character_data')
 
     db.commit()
     db.refresh(character)
