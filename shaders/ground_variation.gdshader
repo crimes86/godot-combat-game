@@ -73,28 +73,26 @@ void fragment() {
     color.r += hill_height * 0.05 * hill_intensity;
     color.b -= hill_height * 0.03 * hill_intensity;
 
-    // === LAYER 1: Very subtle large-scale variation (barely visible) ===
+    // === LAYER 1: Large-scale color variation ===
     float large_variation = fbm(world_pos * 0.00015, 3);
-    // Neutral grey variation - no warm tint
-    color += (large_variation - 0.5) * vec3(0.006, 0.006, 0.006) * intensity;
+    color += (large_variation - 0.5) * vec3(0.025, 0.022, 0.020) * intensity;
 
-    // === LAYER 2: Fine grain texture (small speckles) ===
-    float fine_grain = noise(world_pos * 0.008);
-    color += (fine_grain - 0.5) * 0.025 * intensity;
+    // === LAYER 2: Fine grain texture (visible speckles) ===
+    float fine_grain = noise(world_pos * 0.006);
+    color += (fine_grain - 0.5) * 0.08 * intensity;
 
-    // === LAYER 3: Medium noise for slight color shifts ===
-    float medium_noise = fbm(world_pos * 0.0004, 2);
-    // Neutral grey shifts - no warm tint
-    color += (medium_noise - 0.5) * vec3(0.008, 0.008, 0.008) * intensity;
+    // === LAYER 3: Medium noise patches ===
+    float medium_noise = fbm(world_pos * 0.0008, 2);
+    color += (medium_noise - 0.5) * vec3(0.035, 0.030, 0.028) * intensity;
 
-    // === LAYER 4: Tiny scattered darker specks (boosted) ===
-    float speck_noise = noise(world_pos * 0.015);
-    float specks = smoothstep(0.6, 0.75, speck_noise) * 0.035 * intensity;
+    // === LAYER 4: Scattered darker specks (dirt/pebbles) ===
+    float speck_noise = noise(world_pos * 0.012);
+    float specks = smoothstep(0.55, 0.70, speck_noise) * 0.10 * intensity;
     color -= specks;
 
-    // === LAYER 5: Very faint lighter dust patches (reduced) ===
-    float dust_noise = fbm(world_pos * 0.0003 + vec2(100.0, 200.0), 2);
-    float dust = smoothstep(0.6, 0.7, dust_noise) * 0.008 * intensity;
+    // === LAYER 5: Lighter dust/ash patches ===
+    float dust_noise = fbm(world_pos * 0.0005 + vec2(100.0, 200.0), 2);
+    float dust = smoothstep(0.50, 0.65, dust_noise) * 0.04 * intensity;
     color += dust;
 
     // Clamp to valid range (expanded for visible hill variation)
