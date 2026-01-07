@@ -528,70 +528,323 @@ async def view_logs_html(
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Ashbane Logs</title>
+        <title>Ashbane Operations Dashboard</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
+            * {{ box-sizing: border-box; }}
             body {{
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: #1a1a1d;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #0f0f12 0%, #1a1a1f 100%);
                 color: #e0e0e0;
                 margin: 0;
-                padding: 20px;
+                padding: 24px;
+                min-height: 100vh;
             }}
-            h1 {{ color: #ff6a00; margin-bottom: 5px; }}
-            .stats {{ color: #888; margin-bottom: 20px; }}
-            .stats-bar {{
+            .dashboard-container {{
+                max-width: 1400px;
+                margin: 0 auto;
+            }}
+
+            /* Header */
+            .dashboard-header {{
                 display: flex;
-                gap: 20px;
-                background: #252528;
-                padding: 15px 20px;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 24px;
+                padding-bottom: 20px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            }}
+            .dashboard-title {{
+                display: flex;
+                align-items: center;
+                gap: 16px;
+            }}
+            .dashboard-title h1 {{
+                margin: 0;
+                font-size: 28px;
+                font-weight: 700;
+                background: linear-gradient(135deg, #ff6a00 0%, #ff8533 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }}
+            .dashboard-title .version {{
+                background: rgba(255,106,0,0.15);
+                color: #ff8533;
+                padding: 4px 10px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            .itch-btn {{
+                background: linear-gradient(135deg, #fa5c5c 0%, #e84545 100%);
+                color: white;
+                padding: 12px 24px;
                 border-radius: 8px;
-                margin-bottom: 20px;
-                flex-wrap: wrap;
+                font-weight: 600;
+                text-decoration: none;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                box-shadow: 0 4px 12px rgba(250,92,92,0.3);
+                transition: transform 0.2s, box-shadow 0.2s;
+            }}
+            .itch-btn:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(250,92,92,0.4);
+                text-decoration: none;
+            }}
+
+            /* Section Cards */
+            .section-card {{
+                background: rgba(30,30,35,0.8);
+                border: 1px solid rgba(255,255,255,0.06);
+                border-radius: 16px;
+                padding: 20px 24px;
+                margin-bottom: 16px;
+                backdrop-filter: blur(10px);
+            }}
+            .section-header {{
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 16px;
+            }}
+            .section-icon {{
+                font-size: 20px;
+            }}
+            .section-title {{
+                font-size: 15px;
+                font-weight: 600;
+                margin: 0;
+            }}
+            .section-badge {{
+                padding: 3px 10px;
+                border-radius: 6px;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+            }}
+            .section-status {{
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }}
+            .section-status .dot {{
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                display: inline-block;
+            }}
+            .section-actions {{
+                margin-left: auto;
+                display: flex;
+                gap: 12px;
+                align-items: center;
+            }}
+            .refresh-btn {{
+                color: #666;
+                cursor: pointer;
+                font-size: 12px;
+                padding: 6px 12px;
+                border-radius: 6px;
+                transition: background 0.2s;
+            }}
+            .refresh-btn:hover {{
+                background: rgba(255,255,255,0.05);
+                color: #888;
+            }}
+
+            /* Stats Grid */
+            .stats-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+                gap: 16px;
             }}
             .stat-item {{
                 display: flex;
                 flex-direction: column;
+                padding: 12px 16px;
+                background: rgba(0,0,0,0.2);
+                border-radius: 10px;
+                transition: background 0.2s;
+            }}
+            .stat-item.clickable {{
+                cursor: pointer;
+            }}
+            .stat-item.clickable:hover {{
+                background: rgba(255,255,255,0.05);
             }}
             .stat-value {{
-                font-size: 20px;
-                font-weight: bold;
+                font-size: 24px;
+                font-weight: 700;
                 color: #fff;
+                line-height: 1.2;
             }}
-            .stat-value.error {{ color: #ff4444; }}
-            .stat-value.warn {{ color: #f5a623; }}
-            .stat-value.good {{ color: #4a9eff; }}
+            .stat-value.sm {{ font-size: 18px; }}
+            .stat-value.error {{ color: #ef4444; }}
+            .stat-value.warn {{ color: #f59e0b; }}
+            .stat-value.success {{ color: #22c55e; }}
+            .stat-value.info {{ color: #3b82f6; }}
+            .stat-value.purple {{ color: #a855f7; }}
+            .stat-value.muted {{ color: #666; }}
             .stat-label {{
                 font-size: 11px;
-                color: #888;
+                color: #666;
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
+                margin-top: 4px;
+                font-weight: 500;
             }}
-            .filters {{
-                background: #252528;
-                padding: 15px;
-                border-radius: 8px;
-                margin-bottom: 20px;
+            .stat-icon {{
+                font-size: 16px;
+                margin-right: 6px;
+            }}
+
+            /* Server Cards */
+            .server-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 16px;
+            }}
+            .server-card {{
+                background: rgba(0,0,0,0.3);
+                border: 1px solid rgba(255,255,255,0.06);
+                border-radius: 12px;
+                padding: 16px 20px;
+            }}
+            .server-card.online {{
+                border-left: 3px solid #22c55e;
+            }}
+            .server-card.offline {{
+                border-left: 3px solid #ef4444;
+            }}
+            .server-header {{
                 display: flex;
-                gap: 15px;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 12px;
+            }}
+            .server-name {{
+                font-weight: 600;
+                font-size: 14px;
+            }}
+            .server-type {{
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 600;
+            }}
+            .server-uptime {{
+                color: #666;
+                font-size: 11px;
+                margin-left: auto;
+            }}
+            .server-metrics {{
+                display: flex;
+                gap: 20px;
+            }}
+            .server-metric {{
+                display: flex;
+                flex-direction: column;
+            }}
+            .server-metric-value {{
+                font-size: 16px;
+                font-weight: 600;
+            }}
+            .server-metric-label {{
+                font-size: 10px;
+                color: #666;
+                text-transform: uppercase;
+            }}
+
+            /* Color themes for sections */
+            .section-card.client {{ border-top: 3px solid #3b82f6; }}
+            .section-card.client .section-title {{ color: #60a5fa; }}
+            .section-card.client .section-badge {{ background: #1e40af; color: #93c5fd; }}
+
+            .section-card.server {{ border-top: 3px solid #8b5cf6; }}
+            .section-card.server .section-title {{ color: #a78bfa; }}
+            .section-card.server .section-badge {{ background: #5b21b6; color: #c4b5fd; }}
+
+            .section-card.gameplay {{ border-top: 3px solid #22c55e; }}
+            .section-card.gameplay .section-title {{ color: #4ade80; }}
+            .section-card.gameplay .section-badge {{ background: #166534; color: #86efac; }}
+
+            .section-card.backend {{ border-top: 3px solid #f59e0b; }}
+            .section-card.backend .section-title {{ color: #fbbf24; }}
+            .section-card.backend .section-badge {{ background: #92400e; color: #fcd34d; }}
+
+            .section-card.forge {{ border-top: 3px solid #a855f7; }}
+            .section-card.forge .section-title {{ color: #c084fc; }}
+            .section-card.forge .section-badge {{ background: #6b21a8; color: #d8b4fe; }}
+
+            .section-card.blockchain {{ border-top: 3px solid #06b6d4; }}
+            .section-card.blockchain .section-title {{ color: #22d3ee; }}
+            .section-card.blockchain .section-badge {{ background: #155e75; color: #67e8f9; }}
+
+            .section-card.logs {{ border-top: 3px solid #64748b; }}
+            .section-card.logs .section-title {{ color: #94a3b8; }}
+
+            /* Alert button */
+            .alert-btn {{
+                background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                color: white;
+                border: none;
+                padding: 10px 18px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-weight: 600;
+                font-size: 13px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                box-shadow: 0 2px 8px rgba(239,68,68,0.3);
+                transition: transform 0.2s;
+            }}
+            .alert-btn:hover {{
+                transform: translateY(-1px);
+            }}
+
+            /* Filters */
+            .filters {{
+                background: rgba(0,0,0,0.2);
+                padding: 16px;
+                border-radius: 10px;
+                margin-bottom: 16px;
+                display: flex;
+                gap: 12px;
                 align-items: center;
                 flex-wrap: wrap;
             }}
             .filters select, .filters input {{
-                background: #1a1a1d;
-                border: 1px solid #444;
+                background: rgba(0,0,0,0.3);
+                border: 1px solid rgba(255,255,255,0.1);
                 color: #e0e0e0;
-                padding: 8px 12px;
-                border-radius: 4px;
+                padding: 10px 14px;
+                border-radius: 8px;
+                font-size: 13px;
+            }}
+            .filters select:focus, .filters input:focus {{
+                outline: none;
+                border-color: #ff6a00;
             }}
             .filters button {{
-                background: #ff6a00;
+                background: linear-gradient(135deg, #ff6a00 0%, #ff8533 100%);
                 color: white;
                 border: none;
-                padding: 8px 20px;
-                border-radius: 4px;
+                padding: 10px 24px;
+                border-radius: 8px;
                 cursor: pointer;
+                font-weight: 600;
+                font-size: 13px;
             }}
-            .filters button:hover {{ background: #ff8533; }}
+            .filters button:hover {{ opacity: 0.9; }}
+
+            /* Table */
             table {{
                 width: 100%;
                 border-collapse: collapse;
@@ -599,135 +852,204 @@ async def view_logs_html(
             }}
             th {{
                 text-align: left;
-                padding: 10px 8px;
-                background: #252528;
-                color: #ff6a00;
+                padding: 12px 10px;
+                background: rgba(0,0,0,0.3);
+                color: #ff8533;
+                font-weight: 600;
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
                 position: sticky;
                 top: 0;
             }}
             td {{
-                padding: 8px;
-                border-bottom: 1px solid #333;
+                padding: 10px;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
                 vertical-align: top;
             }}
-            tr:hover {{ background: #252528; }}
+            tr:hover {{ background: rgba(255,255,255,0.02); }}
             .pagination {{
-                margin-top: 20px;
-                padding: 15px;
-                background: #252528;
-                border-radius: 8px;
+                margin-top: 16px;
+                padding: 16px;
+                background: rgba(0,0,0,0.2);
+                border-radius: 10px;
             }}
-            a {{ text-decoration: none; }}
+            a {{ color: #60a5fa; text-decoration: none; }}
             a:hover {{ text-decoration: underline; }}
+
+            /* Two-column layout for top sections */
+            .grid-2col {{
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 16px;
+            }}
+            @media (max-width: 900px) {{
+                .grid-2col {{ grid-template-columns: 1fr; }}
+            }}
         </style>
     </head>
     <body>
-        <h1>Ashbane Operations Dashboard</h1>
+        <div class="dashboard-container">
 
-        <!-- Section: Client Telemetry (Godot) -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <h2 style="color:#4a9eff;font-size:16px;margin:0;">📱 Client Telemetry</h2>
-            <span style="background:#2563eb;color:white;padding:2px 8px;border-radius:4px;font-size:10px;">GODOT</span>
-            <span id="client-status" style="font-size:12px;color:#4ade80;">● Receiving</span>
-        </div>
-        <div class="stats-bar">
-            <div class="stat-item">
-                <span class="stat-value" id="stat-total-logs">{total_logs_all:,}</span>
-                <span class="stat-label">Total Logs</span>
+        <!-- Header -->
+        <div class="dashboard-header">
+            <div class="dashboard-title">
+                <h1>Ashbane Operations</h1>
+                <span class="version">ALPHA</span>
             </div>
-            <div class="stat-item">
-                <span class="stat-value good" id="stat-logs-24h">{logs_24h:,}</span>
-                <span class="stat-label">Last 24h</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value {'error' if errors_24h > 0 else ''}" id="stat-errors-24h">{errors_24h}</span>
-                <span class="stat-label">Errors (24h)</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value {'warn' if warns_24h > 0 else ''}" id="stat-warns-24h">{warns_24h}</span>
-                <span class="stat-label">Warnings (24h)</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value" id="stat-sessions-24h">{unique_sessions_24h}</span>
-                <span class="stat-label">Sessions (24h)</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value" id="stat-users-24h">{unique_users_24h}</span>
-                <span class="stat-label">Users (24h)</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value">{db_size_str}</span>
-                <span class="stat-label">Database</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value">{disk_str}</span>
-                <span class="stat-label">Disk Usage</span>
-            </div>
-            <div class="stat-item" style="margin-left:auto;">
-                <button onclick="openSuspiciousModal()" style="background:#ff4444;color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-weight:bold;">
-                    🚨 Suspicious IPs
-                </button>
-            </div>
+            <a href="https://ashbanepvp.itch.io/ashbane" target="_blank" class="itch-btn">
+                <span style="font-size:18px;">🎮</span> Download on itch.io
+            </a>
         </div>
 
-        <!-- Section: Server Infrastructure (Python Agents) -->
-        <div id="server-stats-section" style="margin-bottom:20px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                <h2 style="color:#ff6a00;font-size:16px;margin:0;">🖥️ Server Infrastructure</h2>
-                <span style="background:#7c3aed;color:white;padding:2px 8px;border-radius:4px;font-size:10px;">AGENTS</span>
-                <span id="server-status" style="font-size:12px;color:#666;">● Loading...</span>
-                <span id="server-stats-refresh" style="font-size:12px;color:#666;cursor:pointer;margin-left:auto;" onclick="loadServerStats()">🔄 Refresh</span>
+        <!-- Row 1: Client Telemetry + Server Infrastructure -->
+        <div class="grid-2col">
+
+        <!-- Section: Client Telemetry -->
+        <div class="section-card client">
+            <div class="section-header">
+                <span class="section-icon">📊</span>
+                <h2 class="section-title">Client Telemetry</h2>
+                <span class="section-badge">GODOT</span>
+                <span class="section-status"><span class="dot" style="background:#22c55e;"></span> Receiving</span>
+                <div class="section-actions">
+                    <button class="alert-btn" onclick="openSuspiciousModal()">🚨 Suspicious IPs</button>
+                </div>
             </div>
-            <div id="server-stats-container" style="display:flex;gap:15px;flex-wrap:wrap;">
-                <div style="color:#666;padding:20px;">Loading server stats...</div>
+            <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="stat-item">
+                    <span class="stat-value">{total_logs_all:,}</span>
+                    <span class="stat-label">Total Logs</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value info">{logs_24h:,}</span>
+                    <span class="stat-label">Last 24h</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value {'error' if errors_24h > 0 else 'muted'}">{errors_24h}</span>
+                    <span class="stat-label">Errors</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value {'warn' if warns_24h > 0 else 'muted'}">{warns_24h}</span>
+                    <span class="stat-label">Warnings</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value sm">{unique_sessions_24h}</span>
+                    <span class="stat-label">Sessions</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value sm">{unique_users_24h}</span>
+                    <span class="stat-label">Users</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value sm">{db_size_str}</span>
+                    <span class="stat-label">Database</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value sm">{disk_str}</span>
+                    <span class="stat-label">Disk</span>
+                </div>
             </div>
         </div>
 
-        <!-- Section: Gameplay Telemetry (Anti-Cheat) -->
-        <div id="gameplay-telemetry-section" style="margin-bottom:20px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                <h2 style="color:#10b981;font-size:16px;margin:0;">⚔️ Gameplay Telemetry</h2>
-                <span style="background:#10b981;color:white;padding:2px 8px;border-radius:4px;font-size:10px;">ANTI-CHEAT</span>
-                <span id="gameplay-status" style="font-size:12px;color:#666;">● Loading...</span>
-                <span id="gameplay-refresh" style="font-size:12px;color:#666;cursor:pointer;margin-left:auto;" onclick="loadGameplayStats()">🔄 Refresh</span>
+        <!-- Section: Server Infrastructure -->
+        <div class="section-card server" id="server-stats-section">
+            <div class="section-header">
+                <span class="section-icon">🖥️</span>
+                <h2 class="section-title">Infrastructure</h2>
+                <span class="section-badge">AGENTS</span>
+                <span class="section-status" id="server-status"><span class="dot" style="background:#666;"></span> Loading...</span>
+                <div class="section-actions">
+                    <span class="refresh-btn" onclick="loadServerStats()">🔄 Refresh</span>
+                </div>
             </div>
-            <div id="gameplay-stats-container" class="stats-bar" style="background:#1a2e1a;">
-                <div style="color:#666;padding:10px;">Loading gameplay stats...</div>
+            <div id="server-stats-container" class="server-grid">
+                <div style="color:#666;padding:20px;">Loading...</div>
+            </div>
+        </div>
+
+        </div>
+
+        <!-- Row 2: Gameplay + Backend Operations -->
+        <div class="grid-2col">
+
+        <!-- Section: Gameplay Telemetry -->
+        <div class="section-card gameplay" id="gameplay-telemetry-section">
+            <div class="section-header">
+                <span class="section-icon">⚔️</span>
+                <h2 class="section-title">Gameplay Telemetry</h2>
+                <span class="section-badge">ANTI-CHEAT</span>
+                <span class="section-status" id="gameplay-status"><span class="dot" style="background:#666;"></span> Loading...</span>
+                <div class="section-actions">
+                    <span class="refresh-btn" onclick="loadGameplayStats()">🔄 Refresh</span>
+                </div>
+            </div>
+            <div id="gameplay-stats-container" class="stats-grid">
+                <div style="color:#666;padding:10px;">Loading...</div>
             </div>
         </div>
 
         <!-- Section: Backend Operations -->
-        <div id="backend-ops-section" style="margin-bottom:20px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                <h2 style="color:#f59e0b;font-size:16px;margin:0;">🔧 Backend Operations</h2>
-                <span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:4px;font-size:10px;">ECONOMY</span>
-                <span id="backend-ops-status" style="font-size:12px;color:#666;">● Loading...</span>
+        <div class="section-card backend" id="backend-ops-section">
+            <div class="section-header">
+                <span class="section-icon">💰</span>
+                <h2 class="section-title">Economy / Vendor</h2>
+                <span class="section-badge">BACKEND</span>
+                <span class="section-status" id="backend-ops-status"><span class="dot" style="background:#666;"></span> Loading...</span>
             </div>
-            <div id="backend-ops-container" class="stats-bar" style="background:#2e2a1a;">
-                <div style="color:#666;padding:10px;">Loading backend stats...</div>
+            <div id="backend-ops-container" class="stats-grid">
+                <div style="color:#666;padding:10px;">Loading...</div>
             </div>
         </div>
+
+        </div>
+
+        <!-- Row 3: Forge Economy + Blockchain -->
+        <div class="grid-2col">
 
         <!-- Section: Forge Economy -->
-        <div id="forge-economy-section" style="margin-bottom:20px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                <h2 style="color:#a855f7;font-size:16px;margin:0;">⚒️ Forge Economy</h2>
-                <span style="background:#a855f7;color:white;padding:2px 8px;border-radius:4px;font-size:10px;">NFT</span>
-                <span id="forge-economy-status" style="font-size:12px;color:#666;">● Loading...</span>
-                <span id="forge-economy-refresh" style="font-size:12px;color:#666;cursor:pointer;margin-left:auto;" onclick="loadForgeEconomy()">🔄 Refresh</span>
+        <div class="section-card forge" id="forge-economy-section">
+            <div class="section-header">
+                <span class="section-icon">⚒️</span>
+                <h2 class="section-title">Forge Economy</h2>
+                <span class="section-badge">NFT</span>
+                <span class="section-status" id="forge-economy-status"><span class="dot" style="background:#666;"></span> Loading...</span>
+                <div class="section-actions">
+                    <span class="refresh-btn" onclick="loadForgeEconomy()">🔄 Refresh</span>
+                </div>
             </div>
-            <div id="forge-economy-container" class="stats-bar" style="background:#2a1a2e;">
-                <div style="color:#666;padding:10px;">Loading forge economy stats...</div>
+            <div id="forge-economy-container" class="stats-grid">
+                <div style="color:#666;padding:10px;">Loading...</div>
             </div>
-            <div id="forge-alerts-container" style="margin-top:10px;display:none;">
-            </div>
+            <div id="forge-alerts-container" style="margin-top:12px;display:none;"></div>
         </div>
 
-        <!-- Client Logs Section -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <h2 style="color:#4a9eff;font-size:14px;margin:0;">Client Logs</h2>
-            <span style="color:#666;font-size:12px;">Showing {len(logs)} of {total} logs (offset: {offset})</span>
+        <!-- Section: Blockchain -->
+        <div class="section-card blockchain" id="blockchain-section">
+            <div class="section-header">
+                <span class="section-icon">⛓️</span>
+                <h2 class="section-title">Blockchain</h2>
+                <span class="section-badge">POLYGON</span>
+                <span class="section-status" id="blockchain-status"><span class="dot" style="background:#666;"></span> Loading...</span>
+                <div class="section-actions">
+                    <span class="refresh-btn" onclick="loadBlockchainStatus()">🔄 Refresh</span>
+                </div>
+            </div>
+            <div id="blockchain-container" class="stats-grid">
+                <div style="color:#666;padding:10px;">Loading...</div>
+            </div>
+            <div id="bridge-activity-container" style="margin-top:12px;display:none;"></div>
         </div>
+
+        </div>
+
+        <!-- Section: Client Logs -->
+        <div class="section-card logs">
+            <div class="section-header">
+                <span class="section-icon">📋</span>
+                <h2 class="section-title">Client Logs</h2>
+                <span style="color:#666;font-size:12px;margin-left:8px;">Showing {len(logs)} of {total} logs</span>
+            </div>
 
         <form class="filters" method="get">
             <select name="category">{cat_options}</select>
@@ -766,6 +1088,9 @@ async def view_logs_html(
             Page {(offset // limit) + 1} of {(total // limit) + 1}
             {next_link}
         </div>
+
+        </div><!-- /section-card logs -->
+        </div><!-- /dashboard-container -->
 
         <!-- Suspicious IPs Modal -->
         <div id="suspiciousModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:1000;overflow-y:auto;">
@@ -835,57 +1160,51 @@ async def view_logs_html(
                 .then(servers => {{
                     let html = '';
                     servers.forEach(server => {{
-                        const statusColor = server.status === 'online' ? '#4ade80' : server.status === 'stale' ? '#f5a623' : '#ff4444';
-                        const statusIcon = server.status === 'online' ? '🟢' : server.status === 'stale' ? '🟡' : '🔴';
-                        const cpuColor = server.cpu_percent > 80 ? '#ff4444' : server.cpu_percent > 60 ? '#f5a623' : '#4ade80';
-                        const memColor = server.memory_percent > 80 ? '#ff4444' : server.memory_percent > 60 ? '#f5a623' : '#4ade80';
-                        const diskColor = server.disk_percent > 80 ? '#ff4444' : server.disk_percent > 60 ? '#f5a623' : '#4ade80';
+                        const statusColor = server.status === 'online' ? '#22c55e' : server.status === 'stale' ? '#f59e0b' : '#ef4444';
+                        const cpuColor = server.cpu_percent > 80 ? '#ef4444' : server.cpu_percent > 60 ? '#f59e0b' : '#22c55e';
+                        const memColor = server.memory_percent > 80 ? '#ef4444' : server.memory_percent > 60 ? '#f59e0b' : '#22c55e';
+                        const diskColor = server.disk_percent > 80 ? '#ef4444' : server.disk_percent > 60 ? '#f59e0b' : '#22c55e';
+                        const statusClass = server.status === 'online' ? 'online' : 'offline';
 
                         const isGameServer = server.server_type === 'gameserver';
                         const typeIcon = isGameServer ? '🎮' : '🖥️';
                         const typeBadge = isGameServer ?
-                            '<span style="background:#7c3aed;color:white;padding:2px 6px;border-radius:4px;font-size:10px;margin-left:5px;">GAME</span>' :
-                            '<span style="background:#2563eb;color:white;padding:2px 6px;border-radius:4px;font-size:10px;margin-left:5px;">API</span>';
+                            '<span class="server-type" style="background:#5b21b6;color:#c4b5fd;">GAME</span>' :
+                            '<span class="server-type" style="background:#1e40af;color:#93c5fd;">API</span>';
 
                         const uptimeStr = formatUptime(server.uptime_seconds);
                         const playerInfo = server.players_online !== null ?
-                            `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #333;">
-                                <span style="color:#4a9eff;font-weight:bold;font-size:18px;">${{server.players_online}}</span>
-                                <span style="color:#666;">/${{server.players_max || '?'}} players</span>
+                            `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);">
+                                <span style="color:#3b82f6;font-weight:700;font-size:20px;">${{server.players_online}}</span>
+                                <span style="color:#666;font-size:12px;">/ ${{server.players_max || '?'}} players</span>
                             </div>` : '';
 
-                        // Show game instances count for gameservers
                         const instancesInfo = (isGameServer && server.game_instances_count > 0) ?
-                            `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #333;">
-                                <span style="color:#7c3aed;font-weight:bold;font-size:14px;">🎮 ${{server.game_instances_count}}</span>
-                                <span style="color:#666;font-size:12px;"> instance${{server.game_instances_count > 1 ? 's' : ''}} running</span>
+                            `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);">
+                                <span style="color:#a855f7;font-weight:600;font-size:14px;">🎮 ${{server.game_instances_count}}</span>
+                                <span style="color:#666;font-size:11px;"> instance${{server.game_instances_count > 1 ? 's' : ''}} running</span>
                             </div>` : '';
 
                         html += `
-                            <div style="background:#252528;border-radius:8px;padding:15px;min-width:280px;border-left:3px solid ${{statusColor}};" onclick="openServerDetail('${{server.server_id}}')" class="server-card">
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                                    <div>
-                                        <span style="font-size:16px;">${{typeIcon}}</span>
-                                        <span style="color:#fff;font-weight:bold;">${{server.server_id}}</span>
-                                        ${{typeBadge}}
-                                    </div>
-                                    <span style="font-size:14px;" title="${{server.status}}">${{statusIcon}}</span>
+                            <div class="server-card ${{statusClass}}" onclick="openServerDetail('${{server.server_id}}')" style="cursor:pointer;">
+                                <div class="server-header">
+                                    <span style="font-size:16px;">${{typeIcon}}</span>
+                                    <span class="server-name">${{server.server_id}}</span>
+                                    ${{typeBadge}}
+                                    <span class="server-uptime">Up ${{uptimeStr}}</span>
                                 </div>
-                                <div style="color:#888;font-size:11px;margin-bottom:10px;">
-                                    ${{server.hostname || 'Unknown host'}} • Up ${{uptimeStr}}
-                                </div>
-                                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
-                                    <div>
-                                        <div style="color:${{cpuColor}};font-weight:bold;font-size:16px;">${{server.cpu_percent.toFixed(0)}}%</div>
-                                        <div style="color:#666;font-size:10px;">CPU</div>
+                                <div class="server-metrics">
+                                    <div class="server-metric">
+                                        <span class="server-metric-value" style="color:${{cpuColor}};">${{server.cpu_percent.toFixed(0)}}%</span>
+                                        <span class="server-metric-label">CPU</span>
                                     </div>
-                                    <div>
-                                        <div style="color:${{memColor}};font-weight:bold;font-size:16px;">${{server.memory_percent.toFixed(0)}}%</div>
-                                        <div style="color:#666;font-size:10px;">MEM</div>
+                                    <div class="server-metric">
+                                        <span class="server-metric-value" style="color:${{memColor}};">${{server.memory_percent.toFixed(0)}}%</span>
+                                        <span class="server-metric-label">MEM</span>
                                     </div>
-                                    <div>
-                                        <div style="color:${{diskColor}};font-weight:bold;font-size:16px;">${{server.disk_percent.toFixed(0)}}%</div>
-                                        <div style="color:#666;font-size:10px;">DISK</div>
+                                    <div class="server-metric">
+                                        <span class="server-metric-value" style="color:${{diskColor}};">${{server.disk_percent.toFixed(0)}}%</span>
+                                        <span class="server-metric-label">DISK</span>
                                     </div>
                                 </div>
                                 ${{playerInfo}}
@@ -895,33 +1214,27 @@ async def view_logs_html(
                     }});
 
                     if (servers.length === 0) {{
-                        html = '<div style="color:#666;padding:20px;background:#252528;border-radius:8px;">No servers reporting. Deploy monitoring agents to see stats.</div>';
-                        document.getElementById('server-status').innerHTML = '⚪ No agents';
-                        document.getElementById('server-status').style.color = '#666';
+                        html = '<div style="color:#666;padding:20px;text-align:center;">No servers reporting</div>';
+                        document.getElementById('server-status').innerHTML = '<span class="dot" style="background:#666;"></span> No agents';
                     }} else {{
-                        // Update status indicator based on server health
                         const onlineCount = servers.filter(s => s.status === 'online').length;
                         const offlineCount = servers.filter(s => s.status === 'offline').length;
                         const staleCount = servers.filter(s => s.status === 'stale').length;
 
                         if (offlineCount > 0) {{
-                            document.getElementById('server-status').innerHTML = `🔴 ${{offlineCount}} offline`;
-                            document.getElementById('server-status').style.color = '#ff4444';
+                            document.getElementById('server-status').innerHTML = `<span class="dot" style="background:#ef4444;"></span> ${{offlineCount}} offline`;
                         }} else if (staleCount > 0) {{
-                            document.getElementById('server-status').innerHTML = `🟡 ${{staleCount}} stale`;
-                            document.getElementById('server-status').style.color = '#f5a623';
+                            document.getElementById('server-status').innerHTML = `<span class="dot" style="background:#f59e0b;"></span> ${{staleCount}} stale`;
                         }} else {{
-                            document.getElementById('server-status').innerHTML = `🟢 ${{onlineCount}} online`;
-                            document.getElementById('server-status').style.color = '#4ade80';
+                            document.getElementById('server-status').innerHTML = `<span class="dot" style="background:#22c55e;"></span> ${{onlineCount}} online`;
                         }}
                     }}
 
                     document.getElementById('server-stats-container').innerHTML = html;
                 }})
                 .catch(e => {{
-                    document.getElementById('server-stats-container').innerHTML = '<div style="color:#ff4444;padding:20px;">Error loading server stats: ' + e + '</div>';
-                    document.getElementById('server-status').innerHTML = '🔴 Error';
-                    document.getElementById('server-status').style.color = '#ff4444';
+                    document.getElementById('server-stats-container').innerHTML = '<div style="color:#ef4444;padding:20px;">Error loading</div>';
+                    document.getElementById('server-status').innerHTML = '<span class="dot" style="background:#ef4444;"></span> Error';
                 }});
         }}
 
@@ -1103,83 +1416,78 @@ async def view_logs_html(
             fetch('/api/telemetry/stats?hours=24')
                 .then(r => r.json())
                 .then(data => {{
-                    const suspiciousColor = data.suspicious.count > 0 ? '#ff4444' : '#10b981';
+                    const suspiciousClass = data.suspicious.count > 0 ? 'error' : 'muted';
                     const html = `
                         <div class="stat-item">
-                            <span class="stat-value" style="color:#10b981;">${{data.total_events_all.toLocaleString()}}</span>
+                            <span class="stat-value success">${{data.total_events_all.toLocaleString()}}</span>
                             <span class="stat-label">Total Events</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value good">${{data.total_events.toLocaleString()}}</span>
+                            <span class="stat-value info">${{data.total_events.toLocaleString()}}</span>
                             <span class="stat-label">Last 24h</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value" style="color:#ef4444;">⚔️ ${{data.by_type.kills.toLocaleString()}}</span>
+                            <span class="stat-value error">⚔️ ${{data.by_type.kills.toLocaleString()}}</span>
                             <span class="stat-label">Kills</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value" style="color:#eab308;">💰 ${{data.totals.gold_looted.toLocaleString()}}</span>
+                            <span class="stat-value warn">💰 ${{data.totals.gold_looted.toLocaleString()}}</span>
                             <span class="stat-label">Gold Looted</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value" style="color:#8b5cf6;">📦 ${{data.by_type.loot_item}}</span>
+                            <span class="stat-value purple">📦 ${{data.by_type.loot_item}}</span>
                             <span class="stat-label">Items Looted</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value" style="color:#06b6d4;">✨ ${{data.totals.xp_granted.toLocaleString()}}</span>
+                            <span class="stat-value info">✨ ${{data.totals.xp_granted.toLocaleString()}}</span>
                             <span class="stat-label">XP Granted</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value">${{data.unique_sessions}}</span>
+                            <span class="stat-value sm">${{data.unique_sessions}}</span>
                             <span class="stat-label">Sessions</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value" style="color:${{suspiciousColor}};">🚨 ${{data.suspicious.count}}</span>
+                            <span class="stat-value ${{suspiciousClass}}">🚨 ${{data.suspicious.count}}</span>
                             <span class="stat-label">Suspicious</span>
                         </div>
                     `;
                     document.getElementById('gameplay-stats-container').innerHTML = html;
 
-                    // Update status
                     const statusEl = document.getElementById('gameplay-status');
                     if (data.suspicious.count > 0) {{
-                        statusEl.innerHTML = '🔴 ' + data.suspicious.count + ' suspicious';
-                        statusEl.style.color = '#ff4444';
+                        statusEl.innerHTML = '<span class="dot" style="background:#ef4444;"></span> ' + data.suspicious.count + ' suspicious';
                     }} else if (data.total_events > 0) {{
-                        statusEl.innerHTML = '🟢 Active';
-                        statusEl.style.color = '#10b981';
+                        statusEl.innerHTML = '<span class="dot" style="background:#22c55e;"></span> Active';
                     }} else {{
-                        statusEl.innerHTML = '⚪ No events';
-                        statusEl.style.color = '#666';
+                        statusEl.innerHTML = '<span class="dot" style="background:#666;"></span> No events';
                     }}
 
-                    // Populate backend ops section from same response
                     if (data.backend_ops) {{
                         const ops = data.backend_ops;
                         const totalOps = ops.purchases + ops.sells + ops.saves + ops.loads;
                         const backendHtml = `
                             <div class="stat-item">
-                                <span class="stat-value" style="color:#f59e0b;">🛒 ${{ops.purchases}}</span>
+                                <span class="stat-value warn">🛒 ${{ops.purchases}}</span>
                                 <span class="stat-label">Purchases</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-value" style="color:#84cc16;">💸 ${{ops.sells}}</span>
+                                <span class="stat-value success">💸 ${{ops.sells}}</span>
                                 <span class="stat-label">Sales</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-value" style="color:#ef4444;">-${{ops.gold_spent.toLocaleString()}}</span>
+                                <span class="stat-value error sm">-${{ops.gold_spent.toLocaleString()}}</span>
                                 <span class="stat-label">Gold Spent</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-value" style="color:#22c55e;">+${{ops.gold_earned.toLocaleString()}}</span>
+                                <span class="stat-value success sm">+${{ops.gold_earned.toLocaleString()}}</span>
                                 <span class="stat-label">Gold Earned</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-value" style="color:#3b82f6;">💾 ${{ops.saves}}</span>
+                                <span class="stat-value info">💾 ${{ops.saves}}</span>
                                 <span class="stat-label">Saves</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-value" style="color:#8b5cf6;">📂 ${{ops.loads}}</span>
+                                <span class="stat-value purple">📂 ${{ops.loads}}</span>
                                 <span class="stat-label">Loads</span>
                             </div>
                         `;
@@ -1187,21 +1495,17 @@ async def view_logs_html(
 
                         const backendStatus = document.getElementById('backend-ops-status');
                         if (totalOps > 0) {{
-                            backendStatus.innerHTML = '🟢 ' + totalOps + ' operations';
-                            backendStatus.style.color = '#f59e0b';
+                            backendStatus.innerHTML = '<span class="dot" style="background:#22c55e;"></span> ' + totalOps + ' ops';
                         }} else {{
-                            backendStatus.innerHTML = '⚪ No operations';
-                            backendStatus.style.color = '#666';
+                            backendStatus.innerHTML = '<span class="dot" style="background:#666;"></span> No ops';
                         }}
                     }}
                 }})
                 .catch(e => {{
-                    document.getElementById('gameplay-stats-container').innerHTML = '<div style="color:#888;padding:10px;">⏳ Awaiting Godot integration (TelemetryManager hooks)</div>';
-                    document.getElementById('gameplay-status').innerHTML = '⚪ Pending';
-                    document.getElementById('gameplay-status').style.color = '#666';
-                    document.getElementById('backend-ops-container').innerHTML = '<div style="color:#888;padding:10px;">⏳ No data</div>';
-                    document.getElementById('backend-ops-status').innerHTML = '⚪ Pending';
-                    document.getElementById('backend-ops-status').style.color = '#666';
+                    document.getElementById('gameplay-stats-container').innerHTML = '<div style="color:#666;padding:20px;text-align:center;">Awaiting data</div>';
+                    document.getElementById('gameplay-status').innerHTML = '<span class="dot" style="background:#666;"></span> Pending';
+                    document.getElementById('backend-ops-container').innerHTML = '<div style="color:#666;padding:20px;text-align:center;">No data</div>';
+                    document.getElementById('backend-ops-status').innerHTML = '<span class="dot" style="background:#666;"></span> Pending';
                 }});
         }}
 
@@ -1219,60 +1523,58 @@ async def view_logs_html(
                     const t = data.trading;
                     const f = data.forge_credits;
                     const a = data.alerts;
-                    const r = data.recent_activity;
 
                     const alertCount = a.large_trades_10k + a.very_large_trades_50k + a.high_frequency_traders;
-                    const alertColor = alertCount > 0 ? '#ef4444' : '#a855f7';
+                    const alertClass = alertCount > 0 ? 'error' : 'muted';
 
                     const html = `
-                        <div class="stat-item" onclick="showEconomyModal('circulation')" style="cursor:pointer;" title="Click for details">
-                            <span class="stat-value" style="color:#a855f7;">🔮 ${{c.total_forged}}</span>
+                        <div class="stat-item clickable" onclick="showEconomyModal('circulation')" title="Click for details">
+                            <span class="stat-value purple">🔮 ${{c.total_forged}}</span>
                             <span class="stat-label">Total Forged</span>
                         </div>
-                        <div class="stat-item" onclick="showEconomyModal('circulation')" style="cursor:pointer;" title="Click for details">
-                            <span class="stat-value" style="color:#22c55e;">🎮 ${{c.in_game}}</span>
+                        <div class="stat-item clickable" onclick="showEconomyModal('circulation')" title="Click for details">
+                            <span class="stat-value success">🎮 ${{c.in_game}}</span>
                             <span class="stat-label">In-Game</span>
                         </div>
-                        <div class="stat-item" onclick="showEconomyModal('circulation')" style="cursor:pointer;" title="Click for details">
-                            <span class="stat-value" style="color:#3b82f6;">🌉 ${{c.bridged_out}}</span>
+                        <div class="stat-item clickable" onclick="showEconomyModal('circulation')" title="Click for details">
+                            <span class="stat-value info">🌉 ${{c.bridged_out}}</span>
                             <span class="stat-label">Bridged Out</span>
                         </div>
-                        <div class="stat-item" onclick="showEconomyModal('circulation')" style="cursor:pointer;" title="Click for details">
-                            <span class="stat-value" style="color:#ef4444;">💀 ${{c.destroyed}}</span>
+                        <div class="stat-item clickable" onclick="showEconomyModal('circulation')" title="Click for details">
+                            <span class="stat-value ${{c.destroyed > 0 ? 'error' : 'muted'}}">💀 ${{c.destroyed}}</span>
                             <span class="stat-label">Destroyed</span>
                         </div>
-                        <div class="stat-item" onclick="showEconomyModal('trading')" style="cursor:pointer;" title="Click for details">
-                            <span class="stat-value" style="color:#eab308;">🔄 ${{t.total_trades}}</span>
+                        <div class="stat-item clickable" onclick="showEconomyModal('trading')" title="Click for details">
+                            <span class="stat-value warn">🔄 ${{t.total_trades}}</span>
                             <span class="stat-label">Trades (24h)</span>
                         </div>
-                        <div class="stat-item" onclick="showEconomyModal('trading')" style="cursor:pointer;" title="Click for details">
-                            <span class="stat-value" style="color:#f59e0b;">💰 ${{t.gold_volume.toLocaleString()}}</span>
+                        <div class="stat-item clickable" onclick="showEconomyModal('trading')" title="Click for details">
+                            <span class="stat-value warn sm">💰 ${{t.gold_volume.toLocaleString()}}</span>
                             <span class="stat-label">Gold Volume</span>
                         </div>
-                        <div class="stat-item" onclick="showEconomyModal('credits')" style="cursor:pointer;" title="Click for details">
-                            <span class="stat-value" style="color:#06b6d4;">🎫 ${{f.credits_available}}</span>
-                            <span class="stat-label">Useable Credits</span>
+                        <div class="stat-item clickable" onclick="showEconomyModal('credits')" title="Click for details">
+                            <span class="stat-value info">🎫 ${{f.credits_available}}</span>
+                            <span class="stat-label">Credits</span>
                         </div>
-                        <div class="stat-item" onclick="showEconomyModal('alerts')" style="cursor:pointer;" title="Click for details">
-                            <span class="stat-value" style="color:${{alertColor}};">🚨 ${{alertCount}}</span>
+                        <div class="stat-item clickable" onclick="showEconomyModal('alerts')" title="Click for details">
+                            <span class="stat-value ${{alertClass}}">🚨 ${{alertCount}}</span>
                             <span class="stat-label">Alerts</span>
                         </div>
                     `;
                     document.getElementById('forge-economy-container').innerHTML = html;
 
-                    // Show alerts if any
                     const alertsDiv = document.getElementById('forge-alerts-container');
                     if (alertCount > 0) {{
-                        let alertHtml = '<div style="background:#1a1a1d;border:1px solid #ef4444;border-radius:8px;padding:10px;">';
-                        alertHtml += '<div style="color:#ef4444;font-weight:bold;margin-bottom:8px;">⚠️ Economy Alerts (24h)</div>';
+                        let alertHtml = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;">';
+                        alertHtml += '<div style="color:#ef4444;font-weight:600;margin-bottom:8px;font-size:13px;">⚠️ Economy Alerts (24h)</div>';
                         if (a.very_large_trades_50k > 0) {{
-                            alertHtml += `<div style="color:#ff6b6b;">• ${{a.very_large_trades_50k}} trades over 50k gold (potential RMT)</div>`;
+                            alertHtml += `<div style="color:#fca5a5;font-size:12px;margin-bottom:4px;">• ${{a.very_large_trades_50k}} trades over 50k gold</div>`;
                         }}
                         if (a.large_trades_10k > 0) {{
-                            alertHtml += `<div style="color:#ffa500;">• ${{a.large_trades_10k}} trades over 10k gold</div>`;
+                            alertHtml += `<div style="color:#fcd34d;font-size:12px;margin-bottom:4px;">• ${{a.large_trades_10k}} trades over 10k gold</div>`;
                         }}
                         if (a.high_frequency_traders > 0) {{
-                            alertHtml += `<div style="color:#ffa500;">• ${{a.high_frequency_traders}} high-frequency traders (>5 trades)</div>`;
+                            alertHtml += `<div style="color:#fcd34d;font-size:12px;">• ${{a.high_frequency_traders}} high-frequency traders</div>`;
                         }}
                         alertHtml += '</div>';
                         alertsDiv.innerHTML = alertHtml;
@@ -1281,29 +1583,253 @@ async def view_logs_html(
                         alertsDiv.style.display = 'none';
                     }}
 
-                    // Update status
                     const statusEl = document.getElementById('forge-economy-status');
                     if (alertCount > 0) {{
-                        statusEl.innerHTML = '🔴 ' + alertCount + ' alerts';
-                        statusEl.style.color = '#ef4444';
+                        statusEl.innerHTML = '<span class="dot" style="background:#ef4444;"></span> ' + alertCount + ' alerts';
                     }} else if (c.total_forged > 0) {{
-                        statusEl.innerHTML = '🟢 ' + c.total_forged + ' items';
-                        statusEl.style.color = '#a855f7';
+                        statusEl.innerHTML = '<span class="dot" style="background:#22c55e;"></span> ' + c.total_forged + ' items';
                     }} else {{
-                        statusEl.innerHTML = '⚪ No forged items';
-                        statusEl.style.color = '#666';
+                        statusEl.innerHTML = '<span class="dot" style="background:#666;"></span> No items';
                     }}
                 }})
                 .catch(e => {{
-                    document.getElementById('forge-economy-container').innerHTML = '<div style="color:#888;padding:10px;">⏳ Economy data unavailable</div>';
-                    document.getElementById('forge-economy-status').innerHTML = '⚪ Unavailable';
-                    document.getElementById('forge-economy-status').style.color = '#666';
+                    document.getElementById('forge-economy-container').innerHTML = '<div style="color:#666;padding:20px;text-align:center;">Unavailable</div>';
+                    document.getElementById('forge-economy-status').innerHTML = '<span class="dot" style="background:#666;"></span> Unavailable';
                 }});
         }}
 
         // Load forge economy on page load and refresh every 60s
         loadForgeEconomy();
         setInterval(loadForgeEconomy, 60000);
+
+        // Blockchain Status
+        function loadBlockchainStatus() {{
+            document.getElementById('blockchain-container').innerHTML = '<div style="color:#666;padding:10px;">Loading...</div>';
+            fetch('/api/telemetry/blockchain')
+                .then(r => r.json())
+                .then(data => {{
+                    const r = data.relayer;
+                    const i = data.indexer;
+                    const b = data.bridge_activity;
+
+                    const relayerConnected = r.connected;
+                    const indexerRunning = i.running;
+                    const pendingTotal = b.pending.bridge_out + b.pending.bridge_in;
+
+                    const html = `
+                        <div class="stat-item clickable" onclick="showBlockchainModal('relayer')" title="Click for details">
+                            <span class="stat-value sm ${{relayerConnected ? 'success' : 'error'}}">
+                                ${{relayerConnected ? '✓ Online' : '✗ Offline'}}
+                            </span>
+                            <span class="stat-label">Relayer</span>
+                        </div>
+                        <div class="stat-item clickable" onclick="showBlockchainModal('relayer')" title="Click for details">
+                            <span class="stat-value sm ${{r.balance_matic !== null ? 'success' : 'muted'}}">
+                                ${{r.balance_matic !== null ? r.balance_matic.toFixed(4) : '—'}}
+                            </span>
+                            <span class="stat-label">MATIC</span>
+                        </div>
+                        <div class="stat-item clickable" onclick="showBlockchainModal('indexer')" title="Click for details">
+                            <span class="stat-value sm ${{indexerRunning ? 'success' : 'warn'}}">
+                                ${{indexerRunning ? '✓ Running' : '○ Stopped'}}
+                            </span>
+                            <span class="stat-label">Indexer</span>
+                        </div>
+                        <div class="stat-item clickable" onclick="showBlockchainModal('indexer')" title="Click for details">
+                            <span class="stat-value sm muted">
+                                ${{i.last_processed_block > 0 ? '#' + i.last_processed_block.toLocaleString() : '—'}}
+                            </span>
+                            <span class="stat-label">Block</span>
+                        </div>
+                        <div class="stat-item clickable" onclick="showBlockchainModal('bridge')" title="Click for details">
+                            <span class="stat-value info">🌉 ${{b.items.bridged_out}}</span>
+                            <span class="stat-label">Bridged</span>
+                        </div>
+                        <div class="stat-item clickable" onclick="showBlockchainModal('bridge')" title="Click for details">
+                            <span class="stat-value ${{pendingTotal > 0 ? 'warn' : 'muted'}}">⏳ ${{pendingTotal}}</span>
+                            <span class="stat-label">Pending</span>
+                        </div>
+                        <div class="stat-item clickable" onclick="showBlockchainModal('bridge')" title="Click for details">
+                            <span class="stat-value info sm">↗ ${{b.totals.bridge_out_completed}}</span>
+                            <span class="stat-label">Out</span>
+                        </div>
+                        <div class="stat-item clickable" onclick="showBlockchainModal('bridge')" title="Click for details">
+                            <span class="stat-value success sm">↙ ${{b.totals.bridge_in_completed}}</span>
+                            <span class="stat-label">In</span>
+                        </div>
+                    `;
+                    document.getElementById('blockchain-container').innerHTML = html;
+
+                    const statusEl = document.getElementById('blockchain-status');
+                    if (!r.configured) {{
+                        statusEl.innerHTML = '<span class="dot" style="background:#666;"></span> Not Configured';
+                    }} else if (relayerConnected && indexerRunning) {{
+                        statusEl.innerHTML = '<span class="dot" style="background:#22c55e;"></span> Online';
+                    }} else if (relayerConnected || indexerRunning) {{
+                        statusEl.innerHTML = '<span class="dot" style="background:#f59e0b;"></span> Partial';
+                    }} else {{
+                        statusEl.innerHTML = '<span class="dot" style="background:#ef4444;"></span> Offline';
+                    }}
+
+                    window._blockchainData = data;
+                }})
+                .catch(e => {{
+                    document.getElementById('blockchain-container').innerHTML = '<div style="color:#666;padding:20px;text-align:center;">Unavailable</div>';
+                    document.getElementById('blockchain-status').innerHTML = '<span class="dot" style="background:#666;"></span> Error';
+                }});
+        }}
+
+        function showBlockchainModal(section) {{
+            const data = window._blockchainData;
+            if (!data) return;
+
+            const modal = document.getElementById('economyDetailModal');
+            const content = document.getElementById('economyDetailContent');
+            const title = document.getElementById('economyModalTitle');
+
+            const titles = {{
+                relayer: '⛓️ Relayer Status',
+                indexer: '📡 Transfer Indexer',
+                bridge: '🌉 Bridge Activity'
+            }};
+            title.textContent = titles[section] || section;
+            modal.style.display = 'block';
+
+            let html = '';
+
+            if (section === 'relayer') {{
+                const r = data.relayer;
+                const c = data.chain_config;
+                html = `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                        <div style="background:#1f1f23;padding:15px;border-radius:8px;">
+                            <h4 style="color:#3b82f6;margin:0 0 15px 0;">Connection</h4>
+                            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333;">
+                                <span style="color:#888;">Status</span>
+                                <span style="color:${{r.connected ? '#22c55e' : '#ef4444'}};">${{r.connected ? 'Connected' : 'Disconnected'}}</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333;">
+                                <span style="color:#888;">Configured</span>
+                                <span style="color:${{r.configured ? '#22c55e' : '#ef4444'}};">${{r.configured ? 'Yes' : 'No'}}</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333;">
+                                <span style="color:#888;">Balance</span>
+                                <span style="color:#fff;">${{r.balance_matic !== null ? r.balance_matic.toFixed(6) + ' MATIC' : 'Unknown'}}</span>
+                            </div>
+                        </div>
+                        <div style="background:#1f1f23;padding:15px;border-radius:8px;">
+                            <h4 style="color:#3b82f6;margin:0 0 15px 0;">Configuration</h4>
+                            <div style="padding:8px 0;border-bottom:1px solid #333;">
+                                <div style="color:#888;font-size:11px;">Relayer Address</div>
+                                <div style="color:#fff;font-family:monospace;font-size:12px;word-break:break-all;">${{r.address || 'Not set'}}</div>
+                            </div>
+                            <div style="padding:8px 0;border-bottom:1px solid #333;">
+                                <div style="color:#888;font-size:11px;">Contract Address</div>
+                                <div style="color:#fff;font-family:monospace;font-size:12px;word-break:break-all;">${{r.contract_address || 'Not set'}}</div>
+                            </div>
+                            <div style="padding:8px 0;">
+                                <div style="color:#888;font-size:11px;">RPC URL</div>
+                                <div style="color:#fff;font-family:monospace;font-size:12px;word-break:break-all;">${{c.rpc_url}}</div>
+                            </div>
+                        </div>
+                    </div>
+                    ${{!r.configured ? '<div style="background:#2e1a1a;border:1px solid #ef4444;border-radius:8px;padding:15px;margin-top:20px;color:#ef4444;">⚠️ Set POLYGON_RPC_URL, RELAYER_PRIVATE_KEY, and FORGED_ITEMS_CONTRACT env vars to enable blockchain</div>' : ''}}
+                `;
+            }} else if (section === 'indexer') {{
+                const i = data.indexer;
+                html = `
+                    <div style="background:#1f1f23;padding:15px;border-radius:8px;">
+                        <h4 style="color:#3b82f6;margin:0 0 15px 0;">Transfer Indexer</h4>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333;">
+                            <span style="color:#888;">Status</span>
+                            <span style="color:${{i.running ? '#22c55e' : '#f59e0b'}};">${{i.running ? 'Running' : 'Stopped'}}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333;">
+                            <span style="color:#888;">Last Block Scanned</span>
+                            <span style="color:#fff;">${{i.last_processed_block > 0 ? '#' + i.last_processed_block.toLocaleString() : 'Not started'}}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333;">
+                            <span style="color:#888;">Chain ID</span>
+                            <span style="color:#fff;">${{i.chain_id || 'Not set'}}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333;">
+                            <span style="color:#888;">Poll Interval</span>
+                            <span style="color:#fff;">${{i.poll_interval_seconds || 30}}s</span>
+                        </div>
+                        <div style="padding:8px 0;">
+                            <div style="color:#888;font-size:11px;">Contract Address</div>
+                            <div style="color:#fff;font-family:monospace;font-size:12px;word-break:break-all;">${{i.contract_address || 'Not set'}}</div>
+                        </div>
+                    </div>
+                    <div style="background:#1a2e1a;padding:15px;border-radius:8px;margin-top:15px;color:#888;font-size:12px;">
+                        The indexer watches for NFT Transfer events on-chain to detect external sales (OpenSea, etc.) and sync ownership back to the database.
+                    </div>
+                `;
+            }} else if (section === 'bridge') {{
+                const b = data.bridge_activity;
+                html = `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+                        <div style="background:#1f1f23;padding:15px;border-radius:8px;">
+                            <h4 style="color:#f59e0b;margin:0 0 15px 0;">Pending</h4>
+                            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333;">
+                                <span style="color:#888;">Bridge Out</span>
+                                <span style="color:${{b.pending.bridge_out > 0 ? '#f59e0b' : '#666'}};">${{b.pending.bridge_out}}</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;padding:8px 0;">
+                                <span style="color:#888;">Bridge In</span>
+                                <span style="color:${{b.pending.bridge_in > 0 ? '#f59e0b' : '#666'}};">${{b.pending.bridge_in}}</span>
+                            </div>
+                        </div>
+                        <div style="background:#1f1f23;padding:15px;border-radius:8px;">
+                            <h4 style="color:#22c55e;margin:0 0 15px 0;">Completed (All Time)</h4>
+                            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333;">
+                                <span style="color:#888;">Bridge Out</span>
+                                <span style="color:#06b6d4;">${{b.totals.bridge_out_completed}}</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #333;">
+                                <span style="color:#888;">Bridge In</span>
+                                <span style="color:#22c55e;">${{b.totals.bridge_in_completed}}</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;padding:8px 0;">
+                                <span style="color:#888;">External Transfers</span>
+                                <span style="color:#a855f7;">${{b.totals.external_transfers}}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <h4 style="color:#fff;margin:0 0 10px 0;">Recent Transactions (24h)</h4>
+                    ${{b.recent_transactions.length === 0 ? '<div style="color:#666;padding:20px;text-align:center;">No bridge transactions in the last 24 hours</div>' : `
+                        <div style="max-height:200px;overflow-y:auto;">
+                            <table style="width:100%;border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:#1f1f23;">
+                                        <th style="padding:8px;text-align:left;color:#888;">Type</th>
+                                        <th style="padding:8px;text-align:left;color:#888;">Status</th>
+                                        <th style="padding:8px;text-align:left;color:#888;">Time</th>
+                                        <th style="padding:8px;text-align:left;color:#888;">Tx Hash</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${{b.recent_transactions.map(tx => `
+                                        <tr style="border-bottom:1px solid #333;">
+                                            <td style="padding:8px;color:${{tx.type === 'bridge_out' ? '#06b6d4' : tx.type === 'bridge_in' ? '#22c55e' : '#a855f7'}};">${{tx.type}}</td>
+                                            <td style="padding:8px;color:${{tx.status === 'completed' ? '#22c55e' : tx.status === 'pending' ? '#f59e0b' : '#ef4444'}};">${{tx.status}}</td>
+                                            <td style="padding:8px;color:#888;">${{tx.requested_at ? new Date(tx.requested_at).toLocaleString() : '—'}}</td>
+                                            <td style="padding:8px;color:#666;font-family:monospace;font-size:11px;">${{tx.tx_hash || '—'}}</td>
+                                        </tr>
+                                    `).join('')}}
+                                </tbody>
+                            </table>
+                        </div>
+                    `}}
+                `;
+            }}
+
+            content.innerHTML = html;
+        }}
+
+        // Load blockchain status on page load and refresh every 60s
+        loadBlockchainStatus();
+        setInterval(loadBlockchainStatus, 60000);
 
         // Economy Detail Modals
         function showEconomyModal(section) {{

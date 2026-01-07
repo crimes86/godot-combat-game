@@ -21,6 +21,8 @@ from app.models import (
     TradeListing, AchievementCredit, WalletAccount, BridgeTransaction, Achievement
 )
 from app.services.item_forge_service import get_achievement_mappings
+from app.services.relayer_service import relayer_service
+from app.services.transfer_indexer_service import get_indexer_status
 from app.routes.vendor_routes import get_active_character
 
 logger = logging.getLogger(__name__)
@@ -1077,3 +1079,140 @@ async def get_economy_section_details(
 
     else:
         raise HTTPException(status_code=400, detail=f"Unknown section: {section}")
+
+
+# =============================================================================
+# BLOCKCHAIN STATUS
+# =============================================================================
+
+@router.get("/blockchain")
+async def get_blockchain_status(
+    db: DbSession = Depends(get_db)
+):
+    """
+    Get blockchain integration status.
+
+    Includes:
+    - Relayer status (connected, balance, address)
+    - Indexer status (running, last block scanned)
+    - Bridge activity (pending, completed, items bridged out)
+    """
+    import os
+
+    # === RELAYER STATUS ===
+    relayer_initialized = relayer_service._initialized
+    relayer_address = relayer_service.get_relayer_address()
+    relayer_balance = None
+
+    if relayer_initialized:
+        try:
+            relayer_balance = relayer_service.get_balance()
+        except:
+            pass
+
+    relayer_status = {
+        "configured": bool(os.environ.get("POLYGON_RPC_URL") and os.environ.get("RELAYER_PRIVATE_KEY")),
+        "connected": relayer_initialized,
+        "address": relayer_address,
+        "balance_matic": relayer_balance,
+        "contract_address": os.environ.get("FORGED_ITEMS_CONTRACT", "Not configured"),
+    }
+
+    # === INDEXER STATUS ===
+    indexer_status = get_indexer_status()
+
+    # === BRIDGE ACTIVITY ===
+    # Pending bridge-out requests
+    pending_bridge_out = db.query(BridgeTransaction).filter(
+        BridgeTransaction.transaction_type == "bridge_out",
+        BridgeTransaction.status == "pending"
+    ).count()
+
+    # Pending bridge-in requests
+    pending_bridge_in = db.query(BridgeTransaction).filter(
+        BridgeTransaction.transaction_type == "bridge_in",
+        BridgeTransaction.status == "pending"
+    ).count()
+
+    # Items currently bridged out (not in game)
+    items_bridged_out = db.query(ForgedAchievement).filter(
+        ForgedAchievement.bridge_status == "bridged",
+        ForgedAchievement.destroyed_at.is_(None)
+    ).count()
+
+    # Items currently bridging (in transit)
+    items_bridging = db.query(ForgedAchievement).filter(
+        ForgedAchievement.bridge_status.in_(["bridging_out", "bridging_in"]),
+        ForgedAchievement.destroyed_at.is_(None)
+    ).count()
+
+    # Recent bridge transactions (last 24h)
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    recent_bridges = db.query(BridgeTransaction).filter(
+        BridgeTransaction.requested_at >= cutoff
+    ).order_by(BridgeTransaction.requested_at.desc()).limit(10).all()
+
+    # External transfers detected (OpenSea sales, etc)
+    external_transfers_24h = db.query(BridgeTransaction).filter(
+        BridgeTransaction.transaction_type == "external_transfer",
+        BridgeTransaction.requested_at >= cutoff
+    ).count()
+
+    # Total bridge transactions ever
+    total_bridge_out = db.query(BridgeTransaction).filter(
+        BridgeTransaction.transaction_type == "bridge_out",
+        BridgeTransaction.status == "completed"
+    ).count()
+
+    total_bridge_in = db.query(BridgeTransaction).filter(
+        BridgeTransaction.transaction_type == "bridge_in",
+        BridgeTransaction.status == "completed"
+    ).count()
+
+    total_external = db.query(BridgeTransaction).filter(
+        BridgeTransaction.transaction_type == "external_transfer"
+    ).count()
+
+    bridge_activity = {
+        "pending": {
+            "bridge_out": pending_bridge_out,
+            "bridge_in": pending_bridge_in,
+        },
+        "items": {
+            "bridged_out": items_bridged_out,
+            "bridging": items_bridging,
+        },
+        "totals": {
+            "bridge_out_completed": total_bridge_out,
+            "bridge_in_completed": total_bridge_in,
+            "external_transfers": total_external,
+        },
+        "last_24h": {
+            "external_transfers": external_transfers_24h,
+        },
+        "recent_transactions": [
+            {
+                "id": tx.id,
+                "type": tx.transaction_type,
+                "status": tx.status,
+                "requested_at": tx.requested_at.isoformat() if tx.requested_at else None,
+                "completed_at": tx.completed_at.isoformat() if tx.completed_at else None,
+                "tx_hash": tx.tx_hash[:16] + "..." if tx.tx_hash else None,
+            }
+            for tx in recent_bridges
+        ]
+    }
+
+    # === CHAIN CONFIG ===
+    chain_config = {
+        "chain_id": os.environ.get("CHAIN_ID", "Not configured"),
+        "rpc_url": os.environ.get("RPC_URL") or os.environ.get("POLYGON_RPC_URL", "Not configured"),
+        "platform_wallet": os.environ.get("PLATFORM_WALLET_ADDRESS", "Not configured"),
+    }
+
+    return {
+        "relayer": relayer_status,
+        "indexer": indexer_status,
+        "bridge_activity": bridge_activity,
+        "chain_config": chain_config,
+    }
