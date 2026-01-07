@@ -77,17 +77,17 @@ void fragment() {
     float large_variation = fbm(world_pos * 0.00015, 3);
     color += (large_variation - 0.5) * vec3(0.025, 0.022, 0.020) * intensity;
 
-    // === LAYER 2: Fine grain texture (visible speckles) ===
-    float fine_grain = noise(world_pos * 0.006);
-    color += (fine_grain - 0.5) * 0.08 * intensity;
+    // === LAYER 2: Fine grain texture (subtle speckles) ===
+    float fine_grain = noise(world_pos * 0.005);
+    color += (fine_grain - 0.5) * 0.045 * intensity;
 
     // === LAYER 3: Medium noise patches ===
     float medium_noise = fbm(world_pos * 0.0008, 2);
     color += (medium_noise - 0.5) * vec3(0.035, 0.030, 0.028) * intensity;
 
-    // === LAYER 4: Scattered darker specks (dirt/pebbles) ===
-    float speck_noise = noise(world_pos * 0.012);
-    float specks = smoothstep(0.55, 0.70, speck_noise) * 0.10 * intensity;
+    // === LAYER 4: Scattered darker specks (subtle dirt/pebbles) ===
+    float speck_noise = noise(world_pos * 0.010);
+    float specks = smoothstep(0.65, 0.80, speck_noise) * 0.03 * intensity;
     color -= specks;
 
     // === LAYER 5: Lighter dust/ash patches ===
