@@ -190,6 +190,10 @@ func check_crit_window_click(mouse_pos: Vector2) -> bool:
 	if not crit_window_manager:
 		return false
 
+	# Body attacks during crit window are still capped by weapon speed
+	if not can_attack:
+		return false
+
 	# Check all enemies in range for active crit windows
 	var enemies = get_enemies_in_cone()
 	for enemy in enemies:
@@ -213,6 +217,10 @@ func check_crit_window_click(mouse_pos: Vector2) -> bool:
 func is_holding_on_crit_window_enemy(mouse_pos: Vector2) -> bool:
 	"""Check if mouse is held over an enemy with active crit window"""
 	if not crit_window_manager:
+		return false
+
+	# Body attacks during crit window are still capped - check cooldown first
+	if not can_attack:
 		return false
 
 	var enemies = get_enemies_in_cone()
@@ -400,13 +408,26 @@ func try_melee_pvp_weakpoint_attack(mouse_pos: Vector2) -> bool:
 	return false
 
 func handle_crit_window_attack(enemy: Node, _click_pos: Vector2) -> void:
-	"""Handle attack during crit window - deal normal damage to enemy body"""
+	"""Handle attack during crit window - deal normal damage to enemy body (CAPPED by weapon speed)"""
 	if not is_instance_valid(enemy):
 		return
+
+	# Body attacks during crit window are STILL capped by weapon attack speed
+	# Only WEAKPOINT hits (handled by is_clicking_on_weakpoint) bypass cooldown
+	if not can_attack:
+		return
+
+	# Apply cooldown - body attacks don't bypass attack speed
+	can_attack = false
+	if player:
+		player.can_attack = false
 
 	# During crit window, clicking on enemy body deals normal damage
 	# (weakpoints are handled separately by is_clicking_on_weakpoint)
 	apply_damage_with_feedback(enemy, attack_damage, false, false)
+
+	# Start cooldown timer
+	player.get_tree().create_timer(attack_cooldown).timeout.connect(finish_attack_cooldown)
 
 func attempt_attack() -> void:
 	"""Try to perform an attack"""

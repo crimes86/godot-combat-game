@@ -246,7 +246,8 @@ func setup_shadow() -> void:
 
 	var tex = ImageTexture.create_from_image(img)
 	shadow_sprite.texture = tex
-	shadow_sprite.position = Vector2(0, 0)
+	# Position shadow below spider (sprite is centered, 64x64 - shadow goes near bottom)
+	shadow_sprite.position = Vector2(0, 20)
 	shadow_sprite.z_index = -1
 	add_child(shadow_sprite)
 

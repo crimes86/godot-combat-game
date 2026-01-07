@@ -202,6 +202,10 @@ func _ready() -> void:
 		return
 
 	# --- CLIENT-ONLY VISUAL SETUP BELOW ---
+	# Hide placeholder sprite immediately to prevent pink artifact during async setup
+	if sprite:
+		sprite.visible = false
+
 	if health_bar and health_bar.has_method("update_health"):
 		health_bar.update_health(current_health, max_health)
 		health_bar.visible = false  # Start hidden, show when player is within 375px
@@ -316,6 +320,17 @@ func _ready() -> void:
 
 			# Apply level-based visual scaling (West→East progression)
 			apply_level_visual_scaling()
+
+			# Materialize effect - fade in smoothly from invisible
+			anim_sprite.modulate.a = 0.0
+			anim_sprite.visible = true
+			if shadow_sprite:
+				shadow_sprite.modulate.a = 0.0
+				shadow_sprite.visible = true
+			var materialize_tween = create_tween()
+			materialize_tween.tween_property(anim_sprite, "modulate:a", 1.0, 0.3).set_ease(Tween.EASE_OUT)
+			if shadow_sprite:
+				materialize_tween.parallel().tween_property(shadow_sprite, "modulate:a", 0.6, 0.3).set_ease(Tween.EASE_OUT)  # Shadow stays semi-transparent
 
 			# Play random idle direction for natural look
 			var idle_directions = ["idle_up", "idle_down", "idle_left", "idle_right"]

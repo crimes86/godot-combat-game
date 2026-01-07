@@ -1071,24 +1071,41 @@ func _client_sync_positions(positions: Dictionary) -> void:
 			# NOTE: in_crit_window is NOT synced from server
 			# Crit windows are per-player/local only - each player manages their own
 
-			# Update animation if enemy has animated sprite
-			var sprite = enemy.get_node_or_null("Sprite")
-			if sprite and sprite is AnimatedSprite2D and data.has("anim"):
+			# Update animation - support both AnimatedSprite2D and region_rect-based sprites
+			if data.has("anim"):
 				var anim_name = data.anim
-				var prev_anim = sprite.animation
+				var prev_anim = enemy.current_animation if "current_animation" in enemy else ""
 
-				# Only play if animation exists in sprite frames
-				if sprite.sprite_frames and sprite.sprite_frames.has_animation(anim_name):
+				# Method 1: Enemy has play_animation() method (Wolf, Spider with region_rect)
+				if enemy.has_method("play_animation"):
 					if prev_anim != anim_name:
-						sprite.play(anim_name)
+						enemy.play_animation(anim_name)
+						_play_enemy_animation_sound(enemy, anim_name, prev_anim)
+				else:
+					# Method 2: AnimatedSprite2D (Skeleton, etc.)
+					var sprite = enemy.get_node_or_null("Sprite")
+					if sprite and sprite is AnimatedSprite2D:
+						var sprite_prev_anim = sprite.animation
+						# Only play if animation exists in sprite frames
+						if sprite.sprite_frames and sprite.sprite_frames.has_animation(anim_name):
+							if sprite_prev_anim != anim_name:
+								sprite.play(anim_name)
+								_play_enemy_animation_sound(enemy, anim_name, sprite_prev_anim)
 
-						# CLIENT-SIDE SOUNDS: Play sounds when animation changes
-						# Server is headless (no audio), so client must play sounds
-						var sound_manager = get_node_or_null("/root/SoundManager")
-						if sound_manager and enemy.is_inside_tree():
-							# Attack sound when attack animation starts
-							if anim_name.begins_with("attack_") and not prev_anim.begins_with("attack_"):
-								sound_manager.play_skeleton_attack_sound(enemy.global_position, -14.0)
+func _play_enemy_animation_sound(enemy: Node, anim_name: String, prev_anim: String) -> void:
+	"""CLIENT-SIDE SOUNDS: Play sounds when animation changes.
+	Server is headless (no audio), so client must play sounds."""
+	var sound_manager = get_node_or_null("/root/SoundManager")
+	if sound_manager and enemy.is_inside_tree():
+		# Attack sound when attack animation starts
+		if anim_name.begins_with("attack_") and not prev_anim.begins_with("attack_"):
+			# Different sounds for different enemy types
+			if enemy.name.begins_with("Wolf"):
+				sound_manager.play_wolf_attack_sound(enemy.global_position, -14.0)
+			elif enemy.name.begins_with("Spider"):
+				pass  # TODO: Add spider attack sound when available
+			else:
+				sound_manager.play_skeleton_attack_sound(enemy.global_position, -14.0)
 
 func _get_enemy_animation(enemy: Node) -> String:
 	"""Get current animation name for enemy.

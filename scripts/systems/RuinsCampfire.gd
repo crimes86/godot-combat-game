@@ -355,6 +355,7 @@ func update_skeleton_patrol_spawn(data: Dictionary, delta: float) -> void:
 		# Reset stuck detection for the new state
 		data["stuck_timer"] = 0.0
 		data["last_position"] = skeleton.global_position
+		data["walking_ai_configured"] = false  # Reset so AI gets configured once
 		# print("  💀 Skeleton %d heading to ruins" % data["index"])
 
 func update_skeleton_walking_to_ruins(data: Dictionary, delta: float) -> void:
@@ -415,26 +416,18 @@ func update_skeleton_walking_to_ruins(data: Dictionary, delta: float) -> void:
 			ai.pick_new_patrol_target()
 
 	else:
-		# Override AI's patrol target to go to their guard position
+		# Let EnemyAI handle movement naturally - just set patrol target once
 		if skeleton.has_node("EnemyAI"):
 			var ai = skeleton.get_node("EnemyAI")
-			# CRITICAL FIX: Set spawn_position so AI knows where to patrol from
-			# Without this, spawn_position might be (0,0) and AI won't move properly
-			ai.spawn_position = skeleton.global_position
 
-			# Make sure AI is in patrol state and actively moving
-			if ai.current_state != ai.State.PATROLLING:
-				ai.change_state(ai.State.PATROLLING)
-
-			# Only set patrol target if not blocked by another skeleton
-			# This lets the AI's avoidance system work
-			if not ai.is_path_blocked_by_enemy():
+			# Only configure AI once per state, not every frame
+			if not data.get("walking_ai_configured", false):
+				ai.spawn_position = skeleton.global_position
 				ai.patrol_target = guard_pos
-				ai.is_paused = false  # Make sure not paused
-			else:
-				# Blocked - let skeleton pause briefly before trying again
-				ai.is_paused = true
-				ai.pause_timer = randf_range(0.5, 1.5)
+				ai.is_paused = false
+				if ai.current_state != ai.State.PATROLLING:
+					ai.change_state(ai.State.PATROLLING)
+				data["walking_ai_configured"] = true
 
 func update_skeleton_guarding_ruins(data: Dictionary, delta: float) -> void:
 	"""Skeleton patrols around their designated guard spot"""
@@ -465,7 +458,8 @@ func respawn_skeleton(data: Dictionary) -> void:
 
 	var skeleton = skeleton_scene.instantiate()
 	skeleton.global_position = spawn_pos
-	skeleton.name = "RuinsSkeleton_" + str(data["index"])
+	# Use unique timestamp to avoid name collision with corpse
+	skeleton.name = "RuinsSkeleton_%d_%d" % [data["index"], Time.get_ticks_msec()]
 	skeleton.enemy_level = randi_range(guardian_min_level, guardian_max_level)  # Random level 7-10
 
 	get_parent().add_child(skeleton)
@@ -500,6 +494,7 @@ func respawn_skeleton(data: Dictionary) -> void:
 	data["patrol_timer"] = patrol_before_ruins_time
 	data["last_position"] = spawn_pos
 	data["stuck_timer"] = 0.0
+	data["walking_ai_configured"] = false  # Reset for next walk cycle
 
 func _on_skeleton_died(skeleton: Node) -> void:
 	"""Called when a skeleton dies"""
