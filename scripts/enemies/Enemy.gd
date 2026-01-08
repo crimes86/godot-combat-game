@@ -144,9 +144,11 @@ func _exit_tree() -> void:
 # Level 30: 1,047 HP
 
 func _ready() -> void:
-	# Set collision layers: enemies on layer 1, detect layers 1 (other entities) and 2 (obstacles like trees)
+	# Set collision layers: enemies on layer 1, detect only obstacles (layer 2)
+	# NOTE: Enemies do NOT collide with players (layer 1) to prevent "bulldozing" effect
+	# where players could push enemies into lava. Combat uses Area2D hitboxes instead.
 	collision_layer = 1
-	collision_mask = 3  # Bitmask: 1 (layer 1) + 2 (layer 2) = 3
+	collision_mask = 2  # Only obstacles - no player collision
 
 	# Determine enemy type for HP multipliers
 	var is_guardian = get_meta("is_guardian", false)
