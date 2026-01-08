@@ -41,6 +41,7 @@ var selected_gender: Gender = Gender.MALE  # Will be set at game start
 @export var attack_cone_angle: float = Constants.PLAYER_ATTACK_CONE_ANGLE
 var can_attack: bool = true
 var attack_direction: Vector2 = Vector2.RIGHT
+var ai_facing_override: bool = false  # When true, AI controls facing direction (MCP bridge)
 var is_mouse_held: bool = false
 var hold_attack_timer: float = 0.0
 
@@ -1173,9 +1174,10 @@ func _physics_process(delta: float) -> void:
 	update_cone_visualizer()
 	update_circle_visualizer()
 	
-	# Update attack direction for combat
+	# Update attack direction for combat (unless AI is controlling facing)
 	var aim_pos := GameInput.get_aim_position()
-	attack_direction = GameInput.get_aim_direction()
+	if not ai_facing_override:
+		attack_direction = GameInput.get_aim_direction()
 	# Sync attack direction to combat subsystem
 	if combat_system:
 		combat_system.attack_direction = attack_direction
@@ -1307,7 +1309,8 @@ func convert_to_lpc_direction(dir_string: String) -> String:
 		_: return "south"
 
 func update_facing_direction() -> void:
-	attack_direction = GameInput.get_aim_direction()
+	if not ai_facing_override:
+		attack_direction = GameInput.get_aim_direction()
 
 	# ✨ ISOMETRIC STYLE: Flip sprite instead of rotating player
 	# Player node stays at 0 rotation, sprite flips left/right
@@ -6050,6 +6053,8 @@ func _complete_logout() -> void:
 		if CharacterStats.equipped_weapon_data and not CharacterStats.equipped_weapon_data.is_empty():
 			equipped_weapon_id = CharacterStats.equipped_weapon_data.get("id", CharacterStats.equipped_weapon_data.get("name", ""))
 
+		# Start the sync and WAIT for it to complete before changing scenes
+		# This prevents inventory changes from being lost if user quickly re-enters
 		AshbaneAuth.sync_character_to_backend(
 			CharacterStats.level,
 			CharacterStats.experience,
@@ -6059,20 +6064,42 @@ func _complete_logout() -> void:
 			equipped_armor_data
 		)
 
+		# Wait for sync to complete (with timeout to prevent infinite hang)
+		var sync_completed = false
+		var sync_timeout = 5.0  # Max 5 seconds to wait for sync
+		var sync_start = Time.get_ticks_msec()
+
+		# Connect to completion signal temporarily
+		var on_sync_done = func(_success: bool, _response: Dictionary):
+			sync_completed = true
+
+		if not AshbaneAuth.character_sync_completed.is_connected(on_sync_done):
+			AshbaneAuth.character_sync_completed.connect(on_sync_done, CONNECT_ONE_SHOT)
+
+		# Wait for completion or timeout
+		while not sync_completed and (Time.get_ticks_msec() - sync_start) < sync_timeout * 1000:
+			await get_tree().create_timer(0.1).timeout
+
+		if sync_completed:
+			print("[Player] Character sync completed successfully")
+		else:
+			print("[Player] Character sync timed out after %.1fs" % sync_timeout)
+
 	# Sync state to server before disconnecting (give RPC time to complete)
 	if NetworkManager and NetworkManager.is_authenticated and not NetworkManager.is_host:
 		NetworkManager.client_sync_state()
 
-	# Small delay to let sync requests complete before disconnecting
-	await get_tree().create_timer(0.5).timeout
+	# Small delay to let network RPC complete
+	await get_tree().create_timer(0.3).timeout
 
-	# Close connection and return to main menu
+	# Close connection and return to Armory (pre-game hub)
+	# User can then logout from Armory to go back to MainMenu login screen
 	if NetworkManager:
 		NetworkManager.close_connection()
 
 	var tree = get_tree()
 	if tree:
-		tree.change_scene_to_file("res://scenes/ui/MainMenu.tscn")
+		tree.change_scene_to_file("res://scenes/ui/Armory.tscn")
 
 func _process_logout_timer(delta: float, input_direction: Vector2) -> void:
 	"""Process logout countdown - cancel if player moves or takes damage"""
