@@ -311,12 +311,24 @@ func _cmd_move_to(target: Vector2) -> Dictionary:
 
 func _update_pathing(_delta: float):
 	if not _is_pathing or not player:
+		# If we're in healing mode but not pathing, we're at the campfire - wait to heal
+		if _is_healing and not _is_pathing:
+			var hp_percent = _get_player_hp_percent()
+			if hp_percent >= HEAL_RESUME_THRESHOLD:
+				print("[MCPBridge] Healed to %.0f%%, resuming combat!" % (hp_percent * 100))
+				_is_healing = false
+				# Resume auto-combat
+				_auto_combat = true
+				_combat_target = _find_nearest_alive_enemy()
 		return
 
 	var dist = player.global_position.distance_to(_move_target)
 	if dist < 20:
 		_is_pathing = false
 		_release_inputs()
+		# If we reached campfire while healing, stay in healing mode
+		if _is_healing:
+			print("[MCPBridge] Reached campfire, waiting to heal...")
 		return
 
 	var dir = player.global_position.direction_to(_move_target)
@@ -1306,38 +1318,51 @@ func _update_auto_combat(delta: float):
 			_attack_timer = ATTACK_COOLDOWN
 
 func _try_loot_nearby() -> void:
-	"""Try to loot any nearby items after a kill"""
+	"""Try to loot any nearby corpses after a kill"""
 	if not player:
 		return
 
 	var pos = player.global_position
-	var loot_range := 80.0  # Close range for auto-loot
+	var loot_range := 120.0  # Range to check for corpses
 
-	# Check for items in "items" group
-	for item in get_tree().get_nodes_in_group("items"):
+	# Check for corpses (enemy bodies with loot)
+	for corpse in get_tree().get_nodes_in_group("corpses"):
+		if not is_instance_valid(corpse):
+			continue
+		var d = corpse.global_position.distance_to(pos)
+		if d <= loot_range:
+			# Check if corpse has loot
+			var has_gold = "corpse_gold" in corpse and corpse.corpse_gold > 0
+			var has_items = "corpse_loot" in corpse and corpse.corpse_loot.size() > 0
+
+			if has_gold or has_items:
+				# Collect gold directly
+				if has_gold:
+					CharacterStats.gold += corpse.corpse_gold
+					print("[MCPBridge] Auto-looted %d gold from %s" % [corpse.corpse_gold, corpse.name])
+					corpse.corpse_gold = 0
+
+				# Collect items directly to inventory
+				if has_items:
+					for item in corpse.corpse_loot:
+						if InventorySystem and InventorySystem.has_method("add_item"):
+							InventorySystem.add_item(item)
+							print("[MCPBridge] Auto-looted item: %s" % item.get("name", "Unknown"))
+					corpse.corpse_loot.clear()
+
+				# Mark corpse as looted (triggers despawn)
+				if corpse.has_method("check_if_looted_empty"):
+					corpse.check_if_looted_empty()
+
+	# Also check for pickable bones (separate from corpses)
+	for item in get_tree().get_nodes_in_group("pickable_bones"):
 		if not is_instance_valid(item):
 			continue
 		var d = item.global_position.distance_to(pos)
 		if d <= loot_range:
 			if item.has_method("pick_up_item"):
 				item.pick_up_item()
-				print("[MCPBridge] Auto-looted: %s" % item.name)
-			elif item.has_method("pickup"):
-				item.pickup(player)
-				print("[MCPBridge] Auto-looted: %s" % item.name)
-
-	# Check for items in "loot" group
-	for item in get_tree().get_nodes_in_group("loot"):
-		if not is_instance_valid(item):
-			continue
-		var d = item.global_position.distance_to(pos)
-		if d <= loot_range:
-			if item.has_method("collect"):
-				item.collect()
-				print("[MCPBridge] Auto-looted: %s" % item.name)
-			elif item.has_method("pickup"):
-				item.pickup(player)
-				print("[MCPBridge] Auto-looted: %s" % item.name)
+				print("[MCPBridge] Auto-looted bone: %s" % item.name)
 
 func _find_nearest_alive_enemy() -> Node2D:
 	var nearest: Node2D = null
