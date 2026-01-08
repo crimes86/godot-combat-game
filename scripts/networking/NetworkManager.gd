@@ -355,9 +355,9 @@ func player_joined(id: int, player_info: Dictionary):
 	# Emit signal for UI (ChatUI uses this for "joined the game" message)
 	player_authenticated.emit(id, player_name)
 
-	# ✨ FIX: Update health bar name label for this player on all clients
-	# Use call_deferred to ensure player is spawned first
-	call_deferred("_update_player_name_label", id, player_name)
+	# NOTE: Player name labels are set by game_world.gd when players spawn (line ~4288)
+	# No need to call _update_player_name_label here - it causes warnings for players
+	# that haven't spawned yet (e.g., when client first joins and receives existing player list)
 
 var _name_update_retries: Dictionary = {}  # peer_id -> retry count
 
