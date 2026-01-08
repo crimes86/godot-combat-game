@@ -503,24 +503,38 @@ async def logout_sync(
     data["equipped_weapon"] = payload.equipped_weapon
     data["equipped_armor"] = payload.equipped_armor
 
-    # Merge inventory: keep server-side purchased items, add client items
-    # Server inventory has items with "purchased_at" field from vendor purchases
+    # Trust client inventory - user is authenticated, respect their sales/deletions
+    # But preserve purchased_at metadata from server for provenance tracking
     server_inventory = data.get("inventory", [])
-    server_item_ids = {item.get("id") for item in server_inventory if item.get("purchased_at")}
 
-    # Client inventory - filter out items that came from server purchases
-    # (they're already tracked server-side)
-    client_inventory = []
+    # Build lookup of server items with purchased_at metadata
+    server_metadata = {}
+    for item in server_inventory:
+        item_id = item.get("id")
+        if item_id and item.get("purchased_at"):
+            server_metadata[item_id] = item.get("purchased_at")
+
+    # Trust client inventory, preserving purchased_at metadata where applicable
+    final_inventory = []
     for item in payload.inventory:
-        # Skip if this is a server-tracked purchased item
-        if item.get("id") in server_item_ids:
-            continue
-        # Add looted/harvested items
-        client_inventory.append(item)
+        # Convert to dict if needed (Pydantic model or dict)
+        item_dict = dict(item) if hasattr(item, '__iter__') and not isinstance(item, dict) else item
+        if hasattr(item, 'dict'):
+            item_dict = item.dict()
+        elif hasattr(item, 'model_dump'):
+            item_dict = item.model_dump()
+        else:
+            item_dict = dict(item) if not isinstance(item, dict) else item
 
-    # Combine: server purchases + client looted items
-    combined_inventory = server_inventory + client_inventory
-    data["inventory"] = combined_inventory
+        item_id = item_dict.get("id")
+
+        # Preserve purchased_at metadata from server if not already present
+        if item_id and item_id in server_metadata and "purchased_at" not in item_dict:
+            item_dict["purchased_at"] = server_metadata[item_id]
+
+        final_inventory.append(item_dict)
+
+    data["inventory"] = final_inventory
 
     character.character_data = data
     character.last_played_at = datetime.utcnow()
@@ -536,9 +550,9 @@ async def logout_sync(
             "gold": character.gold,
             "level": character.level,
             "experience": payload.experience,
-            "inventory_count": len(combined_inventory),
-            "server_items": len(server_inventory),
-            "client_items": len(client_inventory),
+            "inventory_count": len(final_inventory),
+            "server_items_before": len(server_inventory),
+            "metadata_preserved": len(server_metadata),
             "equipped_weapon": payload.equipped_weapon,
         },
         ip_address=request.client.host if request.client else None
@@ -549,7 +563,7 @@ async def logout_sync(
 
     logger.info(
         f"[LOGOUT_SYNC] User {user.id}: gold={character.gold}, level={character.level}, "
-        f"inventory={len(combined_inventory)} items (server={len(server_inventory)}, client={len(client_inventory)})"
+        f"inventory={len(final_inventory)} items (was {len(server_inventory)}, preserved {len(server_metadata)} purchase timestamps)"
     )
 
     return LogoutSyncResponse(

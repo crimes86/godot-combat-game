@@ -6064,9 +6064,9 @@ func _complete_logout() -> void:
 			equipped_armor_data
 		)
 
-		# Wait for sync to complete (with timeout to prevent infinite hang)
+		# Wait for sync to complete (with short timeout - backend now trusts client inventory)
 		var sync_completed = false
-		var sync_timeout = 5.0  # Max 5 seconds to wait for sync
+		var sync_timeout = 2.0  # Max 2 seconds for HTTP roundtrip
 		var sync_start = Time.get_ticks_msec()
 
 		# Connect to completion signal temporarily
