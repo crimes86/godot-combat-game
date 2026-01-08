@@ -367,16 +367,31 @@ func _create_first_encounter_glow() -> void:
 	first_encounter_glow.z_index = -1  # Behind sprite
 	add_child(first_encounter_glow)
 
-	# Create multiple circles for a soft glow effect
-	for i in range(3):
+	# Create smooth gradient glow with many layers for soft falloff
+	# More layers = smoother gradient, smaller step size
+	var num_layers = 12
+	var max_radius = 70.0
+	var min_radius = 20.0
+	var center_offset = Vector2(0, 10)  # Center on mid-body of sprite
+
+	for i in range(num_layers):
 		var glow_circle = Polygon2D.new()
-		var radius = 50.0 + (i * 20.0)  # 50, 70, 90 pixel radii
+		# Radius decreases from outer to inner (draw outer first for proper layering)
+		var t = float(i) / float(num_layers - 1)  # 0.0 to 1.0
+		var radius = lerp(max_radius, min_radius, t)
+
+		# Create smooth circle with many points
 		var points = PackedVector2Array()
-		for angle in range(0, 360, 10):
-			var rad = deg_to_rad(angle)
-			points.append(Vector2(cos(rad) * radius, sin(rad) * radius - 32))  # Offset up to center on sprite
+		var point_count = 64  # Smooth circle
+		for p in range(point_count):
+			var angle = (float(p) / float(point_count)) * TAU
+			points.append(Vector2(cos(angle) * radius, sin(angle) * radius) + center_offset)
 		glow_circle.polygon = points
-		glow_circle.color = Color(1.0, 0.7, 0.3, 0.15 - (i * 0.04))  # Warm orange, fading out
+
+		# Gradient: inner is brighter, outer is more transparent
+		# Use warm golden color that matches the campfire aesthetic
+		var alpha = lerp(0.02, 0.12, t)  # Outer=0.02, Inner=0.12
+		glow_circle.color = Color(1.0, 0.8, 0.4, alpha)
 		first_encounter_glow.add_child(glow_circle)
 
 	# Start subtle pulse animation

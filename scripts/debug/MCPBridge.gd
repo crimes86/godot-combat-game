@@ -80,13 +80,27 @@ var _attack_timer := 0.0
 # Campfire/healing state
 var _campfire_target: Node2D = null
 var _is_healing := false  # True when at campfire healing
-const HEAL_RETREAT_THRESHOLD := 0.50  # Retreat at 50% HP (earlier to avoid death)
-const HEAL_RESUME_THRESHOLD := 0.90  # Resume combat at 90% HP
+const HEAL_RETREAT_THRESHOLD := 0.75  # Retreat at 75% HP (earlier to avoid death)
+const HEAL_RESUME_THRESHOLD := 0.95  # Resume combat at 95% HP
 
 # Looting state
 var _loot_target: Node2D = null
 var _is_looting := false
 const LOOT_PICKUP_RANGE := 30.0
+
+# Post-kill loot timing
+var _post_kill_loot_timer := 0.0
+const POST_KILL_LOOT_DELAY := 0.5  # Pause after kill to loot
+var _is_looting_pause := false  # True when pausing to loot after a kill
+
+# Death tracking - return to corpse for gear
+var _last_death_position := Vector2.ZERO
+var _had_gear_on_death := false
+var _death_time := 0
+
+# Aggro/threat detection
+const AGGRO_DETECTION_RADIUS := 250.0  # Check for active threats this close
+const SAFE_LOOT_RADIUS := 180.0  # Only loot if no enemies this close (increased for more looting)
 
 # Obstacle avoidance / stuck detection
 var _last_position := Vector2.ZERO
@@ -115,8 +129,89 @@ func _ready():
 func _process(delta):
 	_accept_connections()
 	_read_commands()
+	_check_hp_emergency()  # ALWAYS check HP - retreat if too low
+	_check_immediate_threats()  # ALWAYS check for attacks on us
 	_update_pathing(delta)
 	_update_auto_combat(delta)
+
+func _check_hp_emergency():
+	"""Emergency HP check - retreat to campfire if too low, regardless of current activity"""
+	if not ai_controlled:
+		return
+
+	player = _find_player()
+	if not player:
+		return
+
+	# Already heading to campfire
+	if _is_healing:
+		return
+
+	var hp_percent = _get_player_hp_percent()
+	if hp_percent < HEAL_RETREAT_THRESHOLD:
+		print("[MCPBridge] EMERGENCY! HP at %.0f%% - retreating to campfire!" % (hp_percent * 100))
+		# Stop EVERYTHING and head to campfire
+		_auto_combat = false
+		_is_pathing = false
+		_is_looting_pause = false
+		_release_inputs()
+		_is_healing = true
+
+		# Find and go to campfire
+		var campfire_result = _find_campfire(1500.0)
+		if campfire_result.has("campfires") and campfire_result.campfires.size() > 0:
+			var cf = campfire_result.campfires[0]
+			_move_target = Vector2(cf.x, cf.y)
+			_is_pathing = true
+			print("[MCPBridge] Heading to campfire at %.0f, %.0f" % [cf.x, cf.y])
+
+func _check_immediate_threats():
+	"""Check if we're being attacked and react immediately"""
+	if not ai_controlled:
+		return
+
+	player = _find_player()
+	if not player:
+		return
+
+	# Check for enemies very close that might be attacking us
+	var pos = player.global_position
+	var immediate_threat: Node2D = null
+	var threat_dist := 999999.0
+
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e):
+			continue
+		if e.has_method("is_dead") and e.is_dead():
+			continue
+		if _get_enemy_hp(e) <= 0:
+			continue
+
+		var d = e.global_position.distance_to(pos)
+
+		# Check if this enemy is targeting us (very close = probably attacking)
+		if d < 100.0:  # Very close threat
+			var is_targeting := false
+			if "current_target" in e and e.current_target == player:
+				is_targeting = true
+			elif "target" in e and e.target == player:
+				is_targeting = true
+			elif "aggro_target" in e and e.aggro_target == player:
+				is_targeting = true
+
+			# If enemy is close AND targeting us, that's immediate danger
+			if is_targeting or d < 60.0:
+				if d < threat_dist:
+					threat_dist = d
+					immediate_threat = e
+
+	# If there's an immediate threat and we're NOT already in combat, engage!
+	if immediate_threat and not _auto_combat and not _is_healing:
+		print("[MCPBridge] IMMEDIATE THREAT! Enemy at %.0f range - engaging!" % threat_dist)
+		_combat_target = immediate_threat
+		_auto_combat = true
+		_is_pathing = false
+		_release_inputs()
 
 func _physics_process(_delta):
 	# Run facing update in physics_process to override player's mouse-based facing
@@ -290,6 +385,26 @@ func _handle_command(cmd: Dictionary) -> Dictionary:
 		"get_forge_items":
 			return _get_forge_items(cmd.get("type", ""))
 
+		# Debug: Get nearby corpses
+		"get_corpses":
+			return _get_nearby_corpses(cmd.get("radius", 300.0))
+
+		# Manual loot command
+		"loot_all":
+			return _cmd_loot_all(cmd.get("radius", 150.0))
+
+		# Return to death location
+		"return_to_corpse":
+			return _cmd_return_to_corpse()
+
+		# Get aggro/threat status
+		"get_threats":
+			return _get_threat_status()
+
+		# Skip tutorial
+		"skip_tutorial":
+			return _cmd_skip_tutorial()
+
 		_:
 			return {error = "Unknown action: %s" % cmd.get("action", "")}
 
@@ -332,6 +447,12 @@ func _update_pathing(delta: float):
 				# Resume auto-combat
 				_auto_combat = true
 				_combat_target = _find_nearest_alive_enemy()
+		return
+
+	# CRITICAL: Check for environmental hazards (lava) during pathing
+	if _check_lava_hazard():
+		print("[MCPBridge] IN LAVA during pathing! Moving to safety!")
+		_move_out_of_hazard()
 		return
 
 	# THREAT DETECTION: Check for nearby enemies while pathing (not healing)
@@ -384,6 +505,11 @@ func _update_pathing(delta: float):
 
 	# Normal movement toward target
 	_release_inputs()
+
+	# FACE THE DIRECTION WE'RE MOVING (fixes backwards walking)
+	if not _auto_combat:  # Don't override combat facing
+		_set_face_target(_move_target)
+
 	if dir.x < -0.3: Input.action_press("move_left")
 	elif dir.x > 0.3: Input.action_press("move_right")
 	if dir.y < -0.3: Input.action_press("move_up")
@@ -1327,10 +1453,24 @@ func _update_auto_combat(delta: float):
 		return
 
 	_attack_timer -= delta
+	_post_kill_loot_timer -= delta
 	player = _find_player()
 
 	if not player:
+		# Player died - track death position for return
+		if _last_death_position == Vector2.ZERO or _death_time == 0:
+			# This might be first check after death - position already reset
+			pass
 		_auto_combat = false
+		return
+
+	# Track player position for death tracking
+	_track_player_for_death()
+
+	# CRITICAL: Check for environmental hazards (lava) - move out immediately!
+	if _check_lava_hazard():
+		print("[MCPBridge] IN LAVA! Moving to safety!")
+		_move_out_of_hazard()
 		return
 
 	# Check player HP - retreat to campfire if below threshold
@@ -1362,28 +1502,68 @@ func _update_auto_combat(delta: float):
 	if not is_instance_valid(_combat_target) or not _combat_target.is_inside_tree():
 		_combat_target = _find_nearest_alive_enemy()
 		if not _combat_target:
+			# No more enemies - safe to loot!
+			_try_loot_if_safe()
 			_auto_combat = false
 			_release_inputs()
 			print("[MCPBridge] Auto-combat: No more enemies")
 			return
 
-	# Check if target is dead (method or HP check)
+	# Check if target is TRULY dead (must pass multiple checks)
 	var target_dead = false
+	var hp = _get_enemy_hp(_combat_target)
+
+	# Method 1: is_dead() method
 	if _combat_target.has_method("is_dead") and _combat_target.is_dead():
 		target_dead = true
-	elif _get_enemy_hp(_combat_target) <= 0:
+	# Method 2: HP at exactly 0 or below
+	elif hp <= 0:
+		target_dead = true
+	# Method 3: Enemy removed from scene tree
+	elif not _combat_target.is_inside_tree():
 		target_dead = true
 
+	# SAFETY CHECK: If HP is very low but not 0, KEEP ATTACKING - don't loot!
+	if hp > 0 and hp < 20:
+		print("[MCPBridge] Enemy at %.1f HP - FINISHING OFF!" % hp)
+		target_dead = false  # Override - keep attacking!
+
 	if target_dead:
-		print("[MCPBridge] Auto-combat: Enemy defeated! Finding next target...")
-		# Try to loot nearby items after kill
-		_try_loot_nearby()
+		print("[MCPBridge] Auto-combat: Enemy defeated!")
+
+		# CRITICAL: Find next target FIRST - before ANY looting!
 		_combat_target = _find_nearest_alive_enemy()
-		if not _combat_target:
-			_auto_combat = false
+
+		if _combat_target:
+			var next_dist = player.global_position.distance_to(_combat_target.global_position)
+
+			# If enemy is close, SKIP LOOTING entirely and fight immediately!
+			if next_dist < 120.0:
+				print("[MCPBridge] Enemy at %.0f - NO LOOTING, fighting!" % next_dist)
+				_is_looting_pause = false
+				# Don't return - continue to combat logic below
+			else:
+				# Enemy is far enough - safe to quick-loot
+				print("[MCPBridge] Enemy at %.0f - quick looting..." % next_dist)
+				_try_loot_nearby()
+				_is_looting_pause = false
+		else:
+			# No more enemies - safe to loot everything!
+			print("[MCPBridge] No more enemies - LOOTING AREA!")
 			_release_inputs()
+			_try_loot_nearby()
+			_auto_combat = false
 			print("[MCPBridge] Auto-combat: All enemies defeated!")
 			return
+
+	# Handle looting pause - stay still briefly after looting
+	if _is_looting_pause:
+		if _post_kill_loot_timer > 0:
+			_release_inputs()  # Stay still during loot pause
+			return
+		else:
+			print("[MCPBridge] Loot pause complete - resuming combat")
+			_is_looting_pause = false
 
 	var dist = player.global_position.distance_to(_combat_target.global_position)
 
@@ -1393,6 +1573,21 @@ func _update_auto_combat(delta: float):
 	if dist > COMBAT_RANGE:
 		# Move toward enemy - face first!
 		var dir = player.global_position.direction_to(_combat_target.global_position)
+
+		# CRITICAL: Check if moving toward enemy would put us in lava!
+		var next_pos = player.global_position + dir * 50.0  # Check 50 pixels ahead
+		if _is_position_in_lava(next_pos):
+			print("[MCPBridge] PATH BLOCKED BY LAVA! Finding different target...")
+			# Current target leads into lava - find a different one
+			var alt_target = _find_nearest_alive_enemy()
+			if alt_target and alt_target != _combat_target:
+				_combat_target = alt_target
+				return
+			else:
+				# No safe targets - stop and wait
+				_release_inputs()
+				print("[MCPBridge] All paths blocked by lava - waiting")
+				return
 
 		# Stuck detection during combat movement
 		var moved_dist = player.global_position.distance_to(_last_position)
@@ -1429,13 +1624,14 @@ func _update_auto_combat(delta: float):
 			_cmd_attack()
 			_attack_timer = ATTACK_COOLDOWN
 
-func _try_loot_nearby() -> void:
-	"""Try to loot any nearby corpses after a kill"""
+func _try_loot_nearby() -> int:
+	"""Try to loot any nearby corpses after a kill. Returns count of items looted."""
 	if not player:
-		return
+		return 0
 
 	var pos = player.global_position
-	var loot_range := 120.0  # Range to check for corpses
+	var loot_range := 150.0  # Increased range to check for corpses
+	var total_looted := 0
 
 	# Check for corpses (enemy bodies with loot)
 	for corpse in get_tree().get_nodes_in_group("corpses"):
@@ -1450,16 +1646,22 @@ func _try_loot_nearby() -> void:
 			if has_gold or has_items:
 				# Collect gold directly
 				if has_gold:
-					CharacterStats.gold += corpse.corpse_gold
-					print("[MCPBridge] Auto-looted %d gold from %s" % [corpse.corpse_gold, corpse.name])
+					var gold_amt = corpse.corpse_gold
+					CharacterStats.gold += gold_amt
+					print("[MCPBridge] LOOTED %d gold from %s (total: %d)" % [gold_amt, corpse.name, CharacterStats.gold])
 					corpse.corpse_gold = 0
+					total_looted += 1
 
 				# Collect items directly to inventory
 				if has_items:
 					for item in corpse.corpse_loot:
 						if InventorySystem and InventorySystem.has_method("add_item"):
-							InventorySystem.add_item(item)
-							print("[MCPBridge] Auto-looted item: %s" % item.get("name", "Unknown"))
+							var added = InventorySystem.add_item(item)
+							if added:
+								print("[MCPBridge] LOOTED item: %s" % item.get("name", "Unknown"))
+								total_looted += 1
+							else:
+								print("[MCPBridge] Inventory full - couldn't loot %s" % item.get("name", "Unknown"))
 					corpse.corpse_loot.clear()
 
 				# Mark corpse as looted (triggers despawn)
@@ -1474,7 +1676,54 @@ func _try_loot_nearby() -> void:
 		if d <= loot_range:
 			if item.has_method("pick_up_item"):
 				item.pick_up_item()
-				print("[MCPBridge] Auto-looted bone: %s" % item.name)
+				print("[MCPBridge] LOOTED bone: %s" % item.name)
+				total_looted += 1
+
+	# Also try "items" and "loot" groups for dropped items
+	for group_name in ["items", "loot"]:
+		for item in get_tree().get_nodes_in_group(group_name):
+			if not is_instance_valid(item):
+				continue
+			var d = item.global_position.distance_to(pos)
+			if d <= loot_range:
+				# Try various pickup methods
+				if item.has_method("collect"):
+					item.collect()
+					print("[MCPBridge] LOOTED (collect): %s" % item.name)
+					total_looted += 1
+				elif item.has_method("pickup"):
+					item.pickup(player)
+					print("[MCPBridge] LOOTED (pickup): %s" % item.name)
+					total_looted += 1
+				elif item.has_method("_on_body_entered"):
+					# Simulate collision pickup
+					item._on_body_entered(player)
+					print("[MCPBridge] LOOTED (body_entered): %s" % item.name)
+					total_looted += 1
+
+	if total_looted > 0:
+		print("[MCPBridge] *** Looted %d items total ***" % total_looted)
+
+	return total_looted
+
+func _is_position_in_lava(pos: Vector2) -> bool:
+	"""Check if a given position is inside a lava pool"""
+	var lava_range := 70.0  # Slightly smaller than pool radius
+
+	# Check all lava pools
+	for node in get_tree().get_nodes_in_group("interactable"):
+		if node is CleanseableLavaPool:
+			if node.global_position.distance_to(pos) < lava_range:
+				return true
+
+	# Also check by node name pattern
+	for node in get_tree().current_scene.get_children():
+		if "lava" in node.name.to_lower() or "Lava" in node.name:
+			if node is Node2D:
+				if node.global_position.distance_to(pos) < lava_range:
+					return true
+
+	return false
 
 func _find_nearest_alive_enemy() -> Node2D:
 	var nearest: Node2D = null
@@ -1490,6 +1739,15 @@ func _find_nearest_alive_enemy() -> Node2D:
 		if "current_health" in e and e.current_health <= 0:
 			continue
 		if "current_hp" in e and e.current_hp <= 0:
+			continue
+
+		# Skip Training Dummies - they're not real enemies
+		if "trainingdummy" in e.name.to_lower() or "training" in e.name.to_lower():
+			continue
+
+		# CRITICAL: Skip enemies that are standing in lava - don't chase them!
+		if _is_position_in_lava(e.global_position):
+			print("[MCPBridge] Skipping enemy in lava: %s" % e.name)
 			continue
 
 		var d = e.global_position.distance_to(pos)
@@ -1792,3 +2050,386 @@ func _format_forge_item(item: Dictionary) -> Dictionary:
 		weapon_type = item.get("weapon_type", ""),
 		cosmetic_only = item.get("cosmetic_only", true)
 	}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CORPSE / LOOT DEBUG
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _get_nearby_corpses(radius: float) -> Dictionary:
+	"""Get nearby corpses and their loot state for debugging"""
+	var corpses := []
+	var bones := []
+	var pos = player.global_position if player else Vector2.ZERO
+
+	# Check corpses group
+	for corpse in get_tree().get_nodes_in_group("corpses"):
+		if not is_instance_valid(corpse):
+			continue
+		var d = corpse.global_position.distance_to(pos)
+		if d <= radius:
+			var loot_count = 0
+			var gold = 0
+			if "corpse_loot" in corpse:
+				loot_count = corpse.corpse_loot.size()
+			if "corpse_gold" in corpse:
+				gold = corpse.corpse_gold
+			corpses.append({
+				name = corpse.name,
+				x = corpse.global_position.x,
+				y = corpse.global_position.y,
+				dist = d,
+				gold = gold,
+				loot_count = loot_count,
+				is_corpse = corpse.get("is_corpse") if "is_corpse" in corpse else true
+			})
+
+	# Check pickable bones
+	for bone in get_tree().get_nodes_in_group("pickable_bones"):
+		if not is_instance_valid(bone):
+			continue
+		var d = bone.global_position.distance_to(pos)
+		if d <= radius:
+			bones.append({
+				name = bone.name,
+				x = bone.global_position.x,
+				y = bone.global_position.y,
+				dist = d
+			})
+
+	corpses.sort_custom(func(a, b): return a.dist < b.dist)
+	bones.sort_custom(func(a, b): return a.dist < b.dist)
+	return {corpses = corpses, bones = bones, corpse_count = corpses.size(), bone_count = bones.size()}
+
+func _cmd_loot_all(radius: float) -> Dictionary:
+	"""Manually loot all nearby corpses and bones"""
+	if not ai_controlled:
+		return {error = "Not in AI control mode"}
+
+	player = _find_player()
+	if not player:
+		return {error = "No player found"}
+
+	var pos = player.global_position
+	var looted_gold := 0
+	var looted_items := []
+
+	# Loot corpses
+	for corpse in get_tree().get_nodes_in_group("corpses"):
+		if not is_instance_valid(corpse):
+			continue
+		var d = corpse.global_position.distance_to(pos)
+		if d <= radius:
+			# Get gold
+			if "corpse_gold" in corpse and corpse.corpse_gold > 0:
+				looted_gold += corpse.corpse_gold
+				CharacterStats.gold += corpse.corpse_gold
+				corpse.corpse_gold = 0
+
+			# Get items
+			if "corpse_loot" in corpse:
+				while corpse.corpse_loot.size() > 0:
+					var item = corpse.corpse_loot[0]
+					if InventorySystem and InventorySystem.has_method("add_item"):
+						if InventorySystem.add_item(item):
+							looted_items.append(item.get("name", "Unknown"))
+							corpse.corpse_loot.remove_at(0)
+						else:
+							break  # Inventory full
+					else:
+						break
+
+			# Check if empty
+			if corpse.has_method("check_if_looted_empty"):
+				corpse.check_if_looted_empty()
+
+	# Loot bones
+	for bone in get_tree().get_nodes_in_group("pickable_bones"):
+		if not is_instance_valid(bone):
+			continue
+		var d = bone.global_position.distance_to(pos)
+		if d <= radius:
+			if bone.has_method("pick_up_item"):
+				bone.pick_up_item()
+				looted_items.append("Bone Ember")
+
+	return {
+		ok = true,
+		gold = looted_gold,
+		items = looted_items,
+		item_count = looted_items.size()
+	}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TUTORIAL SKIP
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _cmd_skip_tutorial() -> Dictionary:
+	"""Skip the tutorial via TutorialManager"""
+	var tutorial_mgr = get_node_or_null("/root/TutorialManager")
+	if not tutorial_mgr:
+		# Try finding it in the scene tree
+		for node in get_tree().get_nodes_in_group("tutorial"):
+			if node.has_method("skip_tutorial"):
+				tutorial_mgr = node
+				break
+
+	if not tutorial_mgr:
+		# Try to find it as autoload
+		if has_node("/root/TutorialManager"):
+			tutorial_mgr = get_node("/root/TutorialManager")
+
+	if tutorial_mgr and tutorial_mgr.has_method("skip_tutorial"):
+		tutorial_mgr.skip_tutorial()
+		return {ok = true, skipped = true}
+
+	return {error = "TutorialManager not found"}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DEATH TRACKING & RETURN TO CORPSE
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _track_player_for_death():
+	"""Track player position continuously so we know where they died"""
+	if not player or not is_instance_valid(player):
+		return
+
+	# Only update if player has gear equipped (worth returning for)
+	var has_gear = false
+	if CharacterStats:
+		# Check if wearing armor or weapon
+		if "equipped_weapon" in CharacterStats and CharacterStats.equipped_weapon:
+			has_gear = true
+		if "equipped_armor" in CharacterStats:
+			for slot in CharacterStats.equipped_armor:
+				if CharacterStats.equipped_armor[slot]:
+					has_gear = true
+					break
+
+	# Track position if we're away from spawn and have gear
+	var spawn_pos = Vector2(-6000, 0)  # Default spawn
+	var dist_from_spawn = player.global_position.distance_to(spawn_pos)
+	if dist_from_spawn > 100 and has_gear:
+		_last_death_position = player.global_position
+		_had_gear_on_death = has_gear
+		_death_time = Time.get_ticks_msec()
+
+func _cmd_return_to_corpse() -> Dictionary:
+	"""Return to last death position to recover gear/loot"""
+	if not ai_controlled:
+		return {error = "Not in AI control mode"}
+
+	player = _find_player()
+	if not player:
+		return {error = "No player found"}
+
+	# Check if we have a valid death position
+	if _last_death_position == Vector2.ZERO:
+		return {error = "No death position recorded"}
+
+	# Check if death was recent (within 5 minutes)
+	var time_since_death = Time.get_ticks_msec() - _death_time
+	if time_since_death > 300000:  # 5 minutes
+		return {error = "Death too long ago (%.0f seconds)" % (time_since_death / 1000.0)}
+
+	# Start moving to death position WITH auto-combat for self-defense!
+	# This is safer than just running blindly
+	_move_target = _last_death_position
+	_is_pathing = true
+	# ENABLE combat - we need to defend ourselves during corpse run
+	# But we prioritize pathing, not hunting enemies
+	_auto_combat = false  # Start with no aggro, but threat detection in _update_pathing will engage
+
+	return {
+		ok = true,
+		target = {
+			x = _last_death_position.x,
+			y = _last_death_position.y
+		},
+		had_gear = _had_gear_on_death,
+		time_since_death = time_since_death / 1000.0,
+		note = "THREAT_DETECTION_ENABLED - will engage enemies within 80 range"
+	}
+
+func _try_loot_if_safe() -> int:
+	"""Loot nearby corpses ONLY if no enemies are close. Returns count looted."""
+	if not player:
+		return 0
+
+	# Check for nearby threats first
+	var threat_count = _count_nearby_threats(SAFE_LOOT_RADIUS)
+	if threat_count > 0:
+		print("[MCPBridge] %d threats within %.0f - skipping loot" % [threat_count, SAFE_LOOT_RADIUS])
+		return 0
+
+	# Safe to loot!
+	return _try_loot_nearby()
+
+func _count_nearby_threats(radius: float) -> int:
+	"""Count living enemies within radius"""
+	var count := 0
+	var pos = player.global_position if player else Vector2.ZERO
+
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e):
+			continue
+		if e.has_method("is_dead") and e.is_dead():
+			continue
+		if "current_health" in e and e.current_health <= 0:
+			continue
+		if "current_hp" in e and e.current_hp <= 0:
+			continue
+
+		var d = e.global_position.distance_to(pos)
+		if d <= radius:
+			count += 1
+
+	return count
+
+func _get_threat_status() -> Dictionary:
+	"""Get current threat/aggro status for AI decision making"""
+	player = _find_player()
+	if not player:
+		return {error = "No player found"}
+
+	var pos = player.global_position
+	var threats := []
+	var total_threat := 0
+
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(e):
+			continue
+		if e.has_method("is_dead") and e.is_dead():
+			continue
+
+		var hp = _get_enemy_hp(e)
+		if hp <= 0:
+			continue
+
+		var d = e.global_position.distance_to(pos)
+		if d <= AGGRO_DETECTION_RADIUS:
+			# Check if enemy is targeting us
+			var is_targeting := false
+			if "current_target" in e and e.current_target == player:
+				is_targeting = true
+			elif "target" in e and e.target == player:
+				is_targeting = true
+			elif "aggro_target" in e and e.aggro_target == player:
+				is_targeting = true
+
+			threats.append({
+				name = e.name,
+				dist = d,
+				hp = hp,
+				is_targeting = is_targeting,
+				x = e.global_position.x,
+				y = e.global_position.y
+			})
+			total_threat += 1
+
+	threats.sort_custom(func(a, b): return a.dist < b.dist)
+
+	var safe_to_loot = total_threat == 0 or (threats.size() > 0 and threats[0].dist > SAFE_LOOT_RADIUS)
+
+	# Check for lava hazards
+	var in_lava = _check_lava_hazard()
+
+	return {
+		threats = threats,
+		threat_count = total_threat,
+		safe_to_loot = safe_to_loot,
+		nearest_dist = threats[0].dist if threats.size() > 0 else -1,
+		player_hp_percent = _get_player_hp_percent() * 100,
+		in_lava = in_lava
+	}
+
+func _check_lava_hazard() -> bool:
+	"""Check if player is standing in or near a lava pool"""
+	if not player:
+		return false
+
+	var pos = player.global_position
+	var lava_range := 80.0  # Distance to consider "in lava"
+
+	# Check for lava pools by group
+	for lava in get_tree().get_nodes_in_group("lava_pools"):
+		if not is_instance_valid(lava):
+			continue
+		var d = lava.global_position.distance_to(pos)
+		if d < lava_range:
+			return true
+
+	# Check for CleanseableLavaPool class
+	for node in get_tree().get_nodes_in_group("interactable"):
+		if node is CleanseableLavaPool:
+			var d = node.global_position.distance_to(pos)
+			if d < lava_range:
+				return true
+
+	# Check by node name pattern
+	for node in get_tree().current_scene.get_children():
+		if "lava" in node.name.to_lower() or "Lava" in node.name:
+			if node is Node2D:
+				var d = node.global_position.distance_to(pos)
+				if d < lava_range:
+					return true
+
+	return false
+
+func _find_nearest_lava() -> Node2D:
+	"""Find the nearest lava pool to the player"""
+	if not player:
+		return null
+
+	var pos = player.global_position
+	var nearest: Node2D = null
+	var nearest_dist := 999999.0
+
+	# Check for lava pools by group
+	for lava in get_tree().get_nodes_in_group("lava_pools"):
+		if not is_instance_valid(lava):
+			continue
+		var d = lava.global_position.distance_to(pos)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest = lava
+
+	# Check for CleanseableLavaPool class
+	for node in get_tree().get_nodes_in_group("interactable"):
+		if node is CleanseableLavaPool:
+			var d = node.global_position.distance_to(pos)
+			if d < nearest_dist:
+				nearest_dist = d
+				nearest = node
+
+	# Check by node name pattern
+	for node in get_tree().current_scene.get_children():
+		if "lava" in node.name.to_lower() or "Lava" in node.name:
+			if node is Node2D:
+				var d = node.global_position.distance_to(pos)
+				if d < nearest_dist:
+					nearest_dist = d
+					nearest = node
+
+	return nearest
+
+func _move_out_of_hazard():
+	"""Move away from lava/hazard immediately"""
+	if not player:
+		return
+
+	var lava = _find_nearest_lava()
+	if not lava:
+		return
+
+	# Calculate escape direction - move AWAY from lava
+	var escape_dir = lava.global_position.direction_to(player.global_position)
+	if escape_dir.length() < 0.1:
+		# We're right on top of it - pick a random direction
+		escape_dir = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
+
+	# Move in escape direction
+	_release_inputs()
+	if escape_dir.x < -0.3: Input.action_press("move_left")
+	elif escape_dir.x > 0.3: Input.action_press("move_right")
+	if escape_dir.y < -0.3: Input.action_press("move_up")
+	elif escape_dir.y > 0.3: Input.action_press("move_down")

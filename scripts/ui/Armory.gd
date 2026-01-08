@@ -1504,27 +1504,32 @@ func _build_news_section() -> Control:
 	news_list.add_theme_constant_override("separation", 16)
 	scroll.add_child(news_list)
 
-	# Sample news items (will be replaced with real data later)
+	# News items - updated Jan 2026
 	var news_items = [
 		{
-			"date": "Dec 26",
-			"title": "Alpha Build d42fd87",
-			"content": "New launcher UI with Forge integration. Fixed cape animations and icon rendering."
+			"date": "LIVE",
+			"title": "Server Status: ONLINE",
+			"content": "Alpha server is up and accepting connections. Jump in and explore!"
 		},
 		{
-			"date": "Dec 24",
+			"date": "Jan 7",
+			"title": "Itch.io Alpha Release",
+			"content": "Ashbane is now available on itch.io! Download the latest build and join the alpha test."
+		},
+		{
+			"date": "Jan 7",
+			"title": "Tutorial Simplified",
+			"content": "Streamlined new player experience. Talk to the Wanderer to get started with quests."
+		},
+		{
+			"date": "Jan 6",
+			"title": "Multiplayer Sync Fixes",
+			"content": "Fixed enemy animations, death sync, and version compatibility for dedicated servers."
+		},
+		{
+			"date": "Jan 5",
 			"title": "Forge System Live",
-			"content": "116 achievement items now available to forge. Connect your wallet to mint items."
-		},
-		{
-			"date": "Dec 20",
-			"title": "Trading Hub Update",
-			"content": "Player-to-player trading now available. Visit the Trading Hub in-game."
-		},
-		{
-			"date": "Dec 15",
-			"title": "Combat Improvements",
-			"content": "Weapon skills, dodge mechanics, and combat juice effects added."
+			"content": "116 achievement items available to forge. Connect gaming accounts to unlock items."
 		}
 	]
 
@@ -1539,20 +1544,29 @@ func _create_news_card(item: Dictionary) -> Control:
 	var card = VBoxContainer.new()
 	card.add_theme_constant_override("separation", 4)
 
-	# Date
+	# Date - special styling for "LIVE" status
+	var date_text = item.get("date", "")
+	var is_live_status = date_text == "LIVE"
+
 	var date_label = Label.new()
-	date_label.text = item.get("date", "")
-	date_label.add_theme_font_size_override("font_size", 14)  # Smaller date
-	date_label.add_theme_color_override("font_color", TEXT_MUTED)
+	date_label.text = date_text
+	date_label.add_theme_font_size_override("font_size", 14)
+	if is_live_status:
+		date_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))  # Bright green
+	else:
+		date_label.add_theme_color_override("font_color", TEXT_MUTED)
 	date_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card.add_child(date_label)
 
-	# Title
+	# Title - green for server status
 	var title_label = Label.new()
 	title_label.text = item.get("title", "")
 	title_label.add_theme_font_override("font", default_font)
-	title_label.add_theme_font_size_override("font_size", 18)  # Medium title
-	title_label.add_theme_color_override("font_color", TEXT_PRIMARY)
+	title_label.add_theme_font_size_override("font_size", 18)
+	if is_live_status:
+		title_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))  # Bright green
+	else:
+		title_label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card.add_child(title_label)
@@ -4598,7 +4612,76 @@ func _on_forge_button_pressed() -> void:
 	if _forge_selected_item.is_empty():
 		return
 
+	# Guest mode - show login required message
+	if current_state == ArmoryState.GUEST:
+		_show_login_required_for_forge()
+		return
+
 	_show_forge_confirmation()
+
+func _show_login_required_for_forge() -> void:
+	"""Show message that login is required to forge items"""
+	var overlay = ColorRect.new()
+	overlay.name = "LoginRequiredOverlay"
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.z_index = 100
+	add_child(overlay)
+
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(center)
+
+	var panel = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(320, 0)
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.07, 0.06, 0.98)
+	panel_style.set_corner_radius_all(8)
+	panel_style.set_border_width_all(2)
+	panel_style.border_color = Color(0.5, 0.5, 0.52, 0.8)
+	panel_style.shadow_color = Color(0, 0, 0, 0.4)
+	panel_style.shadow_size = 12
+	panel.add_theme_stylebox_override("panel", panel_style)
+	center.add_child(panel)
+
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 16)
+	margin.add_child(vbox)
+
+	var title = Label.new()
+	title.text = "Login Required"
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", Color(0.92, 0.92, 0.94))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	var msg = Label.new()
+	msg.text = "You need to log in to forge items.\nGuest mode allows browsing only."
+	msg.add_theme_font_size_override("font_size", 14)
+	msg.add_theme_color_override("font_color", Color(0.7, 0.7, 0.72))
+	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(msg)
+
+	var btn_hbox = HBoxContainer.new()
+	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_hbox.add_theme_constant_override("separation", 12)
+	vbox.add_child(btn_hbox)
+
+	var ok_btn = Button.new()
+	ok_btn.text = "OK"
+	ok_btn.custom_minimum_size = Vector2(100, 36)
+	_style_button(ok_btn, ButtonTheme.ACTION, ButtonSize.MEDIUM)
+	ok_btn.pressed.connect(func(): overlay.queue_free())
+	btn_hbox.add_child(ok_btn)
 
 func _show_forge_confirmation() -> void:
 	"""Show premium forge confirmation dialog with item details"""

@@ -6,15 +6,17 @@ extends Control
 const PRODUCTION_SERVER_IP = "104.131.181.120"
 
 # ═══════════════════════════════════════════════════════════════════════════
-# ASHBANE THEME COLORS - Medieval fantasy (WoW/Shadowbane inspired)
+# ASHBANE THEME COLORS - Use UITheme for consistency with Armory
 # ═══════════════════════════════════════════════════════════════════════════
-const ASHBANE_BG_DARK = Color(0.05, 0.04, 0.03, 0.98)  # Warm charcoal
-const ASHBANE_BG_PANEL = Color(0.08, 0.06, 0.05, 0.95)  # Dark brown-gray
-const ASHBANE_ACCENT_PRIMARY = Color(0.7, 0.15, 0.1, 1.0)  # Deep crimson
-const ASHBANE_ACCENT_GOLD = Color(0.85, 0.65, 0.2, 1.0)  # Antique gold
-const ASHBANE_BORDER_GLOW = Color(0.5, 0.12, 0.08, 0.6)  # Crimson glow
-const ASHBANE_TEXT_PRIMARY = Color(0.95, 0.90, 0.82, 1.0)  # Parchment white
-const ASHBANE_TEXT_SECONDARY = Color(0.55, 0.50, 0.45, 1.0)  # Warm gray
+const ASHBANE_BG_DARK = Color(0.07, 0.07, 0.08, 0.98)  # Neutral charcoal (matches UITheme.BG_COLOR)
+const ASHBANE_BG_PANEL = Color(0.07, 0.07, 0.08, 0.95)  # Neutral panel (matches UITheme.BG_COLOR)
+const ASHBANE_ACCENT_PRIMARY = Color(0.50, 0.50, 0.52, 1.0)  # Neutral stone gray (matches UITheme.BORDER_COLOR)
+const ASHBANE_ACCENT_GOLD = Color(0.85, 0.65, 0.2, 1.0)  # Antique gold (keep for highlights)
+const ASHBANE_BORDER_GLOW = Color(0.55, 0.55, 0.58, 0.5)  # Neutral glow (matches UITheme.BORDER_GLOW)
+const ASHBANE_TEXT_PRIMARY = Color(0.92, 0.92, 0.94, 1.0)  # Clean white (matches UITheme.TEXT_COLOR)
+const ASHBANE_TEXT_SECONDARY = Color(0.52, 0.52, 0.55, 0.8)  # Neutral gray (matches UITheme.TEXT_MUTED)
+# Orange accent for logo pulse
+const ASHBANE_ACCENT_ORANGE = Color(1.0, 0.5, 0.1, 1.0)  # Orange for tree icon pulse
 # Legacy alias for compatibility
 const ASHBANE_ACCENT_CYAN = ASHBANE_ACCENT_PRIMARY
 
@@ -1677,149 +1679,61 @@ func _update_provider_icons_state():
 			icon.modulate = Color(0.5, 0.5, 0.55, 0.7)
 
 func _create_ashbane_logo_icon() -> Control:
-	"""Create the Ashbane logo icon - M-ashbane shape with trophy on top using Line2D"""
+	"""Create the Ashbane tree logo icon with orange pulsing glow"""
 	var container = Control.new()
 	container.name = "AshbaneLogoIcon"
-	container.custom_minimum_size = Vector2(60, 48)
+	container.custom_minimum_size = Vector2(64, 64)
 
-	var w = 60.0
-	var h = 48.0
-	var cx = w / 2.0
-	var logo_color = ASHBANE_ACCENT_CYAN
-	var line_width = 2.5
+	# Load the tree icon texture
+	var tree_texture = load("res://assets/ui/logo/ashbane_tree_64.png")
+	if not tree_texture:
+		tree_texture = load("res://assets/ui/logo/ashbane_tree.png")
+	if not tree_texture:
+		tree_texture = load("res://assets/branding/ashbane-icon-64.png")
 
-	# M-Ashbane shape dimensions
-	var ashbane_top = h * 0.5
-	var ashbane_bottom = h * 0.95
-	var outer_width = w * 0.7
-	var inner_width = w * 0.28
-
-	var left_outer = cx - outer_width / 2
-	var left_inner = cx - inner_width / 2
-	var right_outer = cx + outer_width / 2
-	var right_inner = cx + inner_width / 2
-
-	# M-Ashbane shape (the shelf/fireplace ashbane)
-	var ashbane_line = Line2D.new()
-	ashbane_line.name = "AshbaneLine"
-	ashbane_line.width = line_width
-	ashbane_line.default_color = logo_color
-	ashbane_line.joint_mode = Line2D.LINE_JOINT_ROUND
-	ashbane_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	ashbane_line.end_cap_mode = Line2D.LINE_CAP_ROUND
-	ashbane_line.add_point(Vector2(left_outer, ashbane_bottom))    # Bottom left
-	ashbane_line.add_point(Vector2(left_outer, ashbane_top))       # Top left outer
-	ashbane_line.add_point(Vector2(left_inner, ashbane_top))       # Shelf left edge
-	ashbane_line.add_point(Vector2(left_inner, ashbane_top + 10))  # Shelf inner left (deeper dip)
-	ashbane_line.add_point(Vector2(right_inner, ashbane_top + 10)) # Shelf inner right (deeper dip)
-	ashbane_line.add_point(Vector2(right_inner, ashbane_top))      # Shelf right edge
-	ashbane_line.add_point(Vector2(right_outer, ashbane_top))      # Top right outer
-	ashbane_line.add_point(Vector2(right_outer, ashbane_bottom))   # Bottom right
-	ashbane_line.modulate.a = 0  # Start invisible for animation
-	container.add_child(ashbane_line)
-
-	# Trophy sitting on the shelf
-	var trophy_bottom = ashbane_top - 2
-	var trophy_top = h * 0.08
-	var trophy_width = w * 0.28
-
-	# Group all trophy parts for easier animation
-	var trophy_group = Control.new()
-	trophy_group.name = "TrophyGroup"
-	trophy_group.modulate.a = 0  # Start invisible
-	container.add_child(trophy_group)
-
-	# Trophy base
-	var trophy_base = Line2D.new()
-	trophy_base.width = line_width
-	trophy_base.default_color = logo_color
-	trophy_base.add_point(Vector2(cx - trophy_width * 0.25, trophy_bottom))
-	trophy_base.add_point(Vector2(cx + trophy_width * 0.25, trophy_bottom))
-	trophy_group.add_child(trophy_base)
-
-	# Trophy stem (goes up into cup)
-	var trophy_stem = Line2D.new()
-	trophy_stem.width = line_width
-	trophy_stem.default_color = logo_color
-	trophy_stem.add_point(Vector2(cx, trophy_bottom))
-	trophy_stem.add_point(Vector2(cx, trophy_bottom - 5))
-	trophy_group.add_child(trophy_stem)
-
-	# Trophy stand - extends down through M to complete the letter (slightly duller)
-	var trophy_stand = Line2D.new()
-	trophy_stand.width = line_width
-	trophy_stand.default_color = Color(logo_color.r * 0.6, logo_color.g * 0.6, logo_color.b * 0.6, 0.7)
-	trophy_stand.add_point(Vector2(cx, trophy_bottom))
-	trophy_stand.add_point(Vector2(cx, ashbane_bottom))
-	trophy_group.add_child(trophy_stand)
-
-	# Trophy cup (left side)
-	var cup_left = Line2D.new()
-	cup_left.width = line_width
-	cup_left.default_color = logo_color
-	cup_left.add_point(Vector2(cx - trophy_width * 0.12, trophy_bottom - 5))
-	cup_left.add_point(Vector2(cx - trophy_width * 0.45, trophy_top))
-	trophy_group.add_child(cup_left)
-
-	# Trophy cup (right side)
-	var cup_right = Line2D.new()
-	cup_right.width = line_width
-	cup_right.default_color = logo_color
-	cup_right.add_point(Vector2(cx + trophy_width * 0.12, trophy_bottom - 5))
-	cup_right.add_point(Vector2(cx + trophy_width * 0.45, trophy_top))
-	trophy_group.add_child(cup_right)
-
-	# Trophy rim
-	var cup_rim = Line2D.new()
-	cup_rim.width = line_width
-	cup_rim.default_color = logo_color
-	cup_rim.add_point(Vector2(cx - trophy_width * 0.45, trophy_top))
-	cup_rim.add_point(Vector2(cx + trophy_width * 0.45, trophy_top))
-	trophy_group.add_child(cup_rim)
-
-	# Left handle (simple arc approximation with lines)
-	var handle_left = Line2D.new()
-	handle_left.width = line_width - 0.5
-	handle_left.default_color = logo_color
-	handle_left.add_point(Vector2(cx - trophy_width * 0.45, trophy_top + 2))
-	handle_left.add_point(Vector2(cx - trophy_width * 0.58, trophy_top + 5))
-	handle_left.add_point(Vector2(cx - trophy_width * 0.45, trophy_top + 8))
-	trophy_group.add_child(handle_left)
-
-	# Right handle
-	var handle_right = Line2D.new()
-	handle_right.width = line_width - 0.5
-	handle_right.default_color = logo_color
-	handle_right.add_point(Vector2(cx + trophy_width * 0.45, trophy_top + 2))
-	handle_right.add_point(Vector2(cx + trophy_width * 0.58, trophy_top + 5))
-	handle_right.add_point(Vector2(cx + trophy_width * 0.45, trophy_top + 8))
-	trophy_group.add_child(handle_right)
+	# Create the tree icon
+	var tree_icon = TextureRect.new()
+	tree_icon.name = "TreeIcon"
+	tree_icon.texture = tree_texture
+	tree_icon.custom_minimum_size = Vector2(64, 64)
+	tree_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tree_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tree_icon.modulate.a = 0  # Start invisible for fade-in
+	container.add_child(tree_icon)
 
 	# Start animation after a short delay
-	_animate_ashbane_logo.call_deferred(ashbane_line, trophy_group)
+	_animate_tree_logo.call_deferred(tree_icon)
 
 	return container
 
-func _animate_ashbane_logo(ashbane_line: Line2D, trophy_group: Control):
-	"""Animate the logo: M draws in, then trophy fades in, then subtle pulse"""
+var _logo_pulse_tween: Tween = null
+
+func _animate_tree_logo(tree_icon: TextureRect):
+	"""Animate the tree logo: fade in, then continuous orange pulse"""
 	await get_tree().create_timer(0.3).timeout
 
-	var tween = create_tween()
+	# Phase 1: Fade in
+	var intro_tween = create_tween()
+	intro_tween.tween_property(tree_icon, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_OUT)
+	await intro_tween.finished
 
-	# Phase 1: M-ashbane fades/draws in
-	tween.tween_property(ashbane_line, "modulate:a", 1.0, 0.4).set_ease(Tween.EASE_OUT)
+	# Phase 2: Continuous orange pulsing glow
+	_start_logo_pulse(tree_icon)
 
-	# Phase 2: Trophy drops in and fades
-	tween.tween_property(trophy_group, "position:y", -3.0, 0.0)  # Start slightly above
-	tween.tween_property(trophy_group, "modulate:a", 1.0, 0.3).set_ease(Tween.EASE_OUT)
-	tween.parallel().tween_property(trophy_group, "position:y", 0.0, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BOUNCE)
+func _start_logo_pulse(tree_icon: TextureRect):
+	"""Start the continuous orange pulse animation on the tree logo"""
+	if _logo_pulse_tween and _logo_pulse_tween.is_valid():
+		_logo_pulse_tween.kill()
 
-	# Phase 3: Subtle glow pulse
-	tween.tween_interval(0.2)
-	tween.tween_property(ashbane_line, "modulate", Color(1.3, 1.3, 1.3, 1.0), 0.15)
-	tween.parallel().tween_property(trophy_group, "modulate", Color(1.3, 1.3, 1.3, 1.0), 0.15)
-	tween.tween_property(ashbane_line, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
-	tween.parallel().tween_property(trophy_group, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.2)
+	_logo_pulse_tween = create_tween()
+	_logo_pulse_tween.set_loops()  # Infinite loop
+
+	# Pulse to orange glow
+	var orange_glow = Color(1.4, 0.8, 0.4, 1.0)  # Warm orange tint
+	var normal = Color(1.0, 1.0, 1.0, 1.0)
+
+	_logo_pulse_tween.tween_property(tree_icon, "modulate", orange_glow, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_logo_pulse_tween.tween_property(tree_icon, "modulate", normal, 1.2).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
 func _style_logout_button(button: Button):
 	"""Style the small logout button"""
@@ -2051,18 +1965,14 @@ func _on_ashbane_login_pressed():
 		_on_ashbane_auth_failed("Ashbane service not available")
 
 func _on_ashbane_skip_pressed():
-	"""Handle skip/continue button based on auth state"""
+	"""Handle skip/continue button - both logged in and guest go to Armory"""
 	_play_click_sound()
+	_hide_ashbane_panel()
 
-	# Check if user is authenticated with Ashbane
-	if AshbaneAuth and AshbaneAuth.is_authenticated:
-		# Authenticated user - go directly to Armory (pre-game hub)
-		_hide_ashbane_panel()
-		_transition_to_armory()
-	else:
-		# Guest - go directly to server selection
-		_hide_ashbane_panel()
-		_on_guest_play_pressed()
+	# Both authenticated users and guests go to Armory
+	# Armory handles guest mode (browse-only forge catalog, default player)
+	# Guest can click "Enter World" from Armory to connect to production server
+	_transition_to_armory()
 
 func _proceed_to_main_menu():
 	"""Show main menu with PLAY button after Ashbane auth/skip"""
@@ -2814,15 +2724,24 @@ func _on_version_check_completed(result: int, response_code: int, headers: Packe
 		_show_update_prompt(server_version, download_url)
 
 func _is_version_outdated(client: String, server: String) -> bool:
-	"""Check if client version is older than server version"""
+	"""Check if client version is older than server version (semver comparison)"""
 	# Empty server version means no update info available
 	if server == "":
 		return false
 	# If versions match, not outdated
 	if client == server:
 		return false
-	# Different versions - server has newer version
-	return true
+	# Compare semver: only outdated if client < server
+	var client_parts = client.split(".")
+	var server_parts = server.split(".")
+	for i in range(max(client_parts.size(), server_parts.size())):
+		var c = int(client_parts[i]) if i < client_parts.size() else 0
+		var s = int(server_parts[i]) if i < server_parts.size() else 0
+		if c < s:
+			return true  # Client is behind
+		elif c > s:
+			return false  # Client is ahead
+	return false  # Equal
 
 func _show_update_prompt(new_version: String, download_url: String) -> void:
 	"""Show non-blocking update available dialog"""

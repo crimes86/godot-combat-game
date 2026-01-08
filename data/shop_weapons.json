@@ -55,18 +55,6 @@
 			"zone": 1
 		},
 		{
-			"id": "bone_club",
-			"name": "Bone Club",
-			"description": "A heavy club made from skeleton bones. Surprisingly sturdy.",
-			"weapon_type": "mace",
-			"base_damage": 6,
-			"attack_speed": "medium",
-			"required_level": 1,
-			"price": 5,
-			"rarity": "Common",
-			"zone": 1
-		},
-		{
 			"id": "chipped_dirk",
 			"name": "Chipped Dirk",
 			"description": "A fast slashing blade. Quick strikes make up for low damage.",

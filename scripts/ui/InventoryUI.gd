@@ -202,6 +202,34 @@ func create_inventory_ui() -> void:
 	slot_counter_label.add_theme_color_override("font_color", ACCENT_COLOR)
 	bottom_bar.add_child(slot_counter_label)
 
+	# Sort button
+	var sort_button = Button.new()
+	sort_button.name = "SortButton"
+	sort_button.text = "Sort"
+	sort_button.custom_minimum_size = Vector2(50, 24)
+	sort_button.add_theme_font_size_override("font_size", 12)
+
+	# Style the button to match UI theme
+	var sort_btn_style = StyleBoxFlat.new()
+	sort_btn_style.bg_color = Color(0.2, 0.2, 0.24, 0.9)
+	sort_btn_style.border_color = BORDER_COLOR
+	sort_btn_style.set_border_width_all(1)
+	sort_btn_style.set_corner_radius_all(4)
+	sort_button.add_theme_stylebox_override("normal", sort_btn_style)
+
+	var sort_btn_hover = sort_btn_style.duplicate()
+	sort_btn_hover.bg_color = Color(0.28, 0.28, 0.32, 0.95)
+	sort_button.add_theme_stylebox_override("hover", sort_btn_hover)
+
+	var sort_btn_pressed = sort_btn_style.duplicate()
+	sort_btn_pressed.bg_color = Color(0.15, 0.15, 0.18, 0.95)
+	sort_button.add_theme_stylebox_override("pressed", sort_btn_pressed)
+
+	sort_button.add_theme_color_override("font_color", TEXT_COLOR)
+	sort_button.add_theme_color_override("font_hover_color", Color.WHITE)
+	sort_button.pressed.connect(_on_sort_pressed)
+	bottom_bar.add_child(sort_button)
+
 	add_child(main_panel)
 
 func create_inventory_slot(slot_index: int) -> Control:
@@ -403,6 +431,80 @@ func get_rarity_glow_color(rarity_str: String) -> Color:
 			return Color(1.0, 0.85, 0.2, 1.0)  # Bright gold
 		_:
 			return BORDER_INNER
+
+# ============================================
+# INVENTORY SORTING
+# ============================================
+
+# Rarity order (higher = better, sorted first)
+const RARITY_ORDER = {
+	"ARTIFACT": 6,
+	"LEGENDARY": 5,
+	"EPIC": 4,
+	"RARE": 3,
+	"UNCOMMON": 2,
+	"COMMON": 1,
+}
+
+# Item type order (grouped together)
+const TYPE_ORDER = {
+	"weapon": 1,
+	"armor": 2,
+	"tool": 3,
+	"consumable": 4,
+	"material": 5,
+	"misc": 6,
+}
+
+func _on_sort_pressed() -> void:
+	"""Sort inventory by rarity (best first) then by item type"""
+	SoundManager.play_button_click_sound()
+	_sort_inventory()
+	refresh_all()
+
+func _sort_inventory() -> void:
+	"""Sort all inventory items - rarity descending, then type, then name"""
+	# Collect all non-empty items
+	var items_with_indices: Array = []
+	for i in range(InventorySystem.inventory_items.size()):
+		var item = InventorySystem.inventory_items[i]
+		if item != null and not item.is_empty():
+			items_with_indices.append(item.duplicate())
+
+	# Sort items
+	items_with_indices.sort_custom(_compare_items)
+
+	# Clear inventory and re-add sorted items
+	for i in range(InventorySystem.inventory_items.size()):
+		InventorySystem.inventory_items[i] = null
+
+	for i in range(items_with_indices.size()):
+		InventorySystem.inventory_items[i] = items_with_indices[i]
+
+	# Emit signal so other UIs update
+	InventorySystem.inventory_changed.emit()
+
+func _compare_items(a: Dictionary, b: Dictionary) -> bool:
+	"""Compare two items for sorting. Returns true if a should come before b."""
+	# Get rarity values (higher = better = comes first)
+	var rarity_a = RARITY_ORDER.get(a.get("rarity", "COMMON").to_upper(), 0)
+	var rarity_b = RARITY_ORDER.get(b.get("rarity", "COMMON").to_upper(), 0)
+
+	# Sort by rarity descending (best first)
+	if rarity_a != rarity_b:
+		return rarity_a > rarity_b
+
+	# Same rarity - sort by item type
+	var type_a = TYPE_ORDER.get(a.get("type", "misc").to_lower(), 99)
+	var type_b = TYPE_ORDER.get(b.get("type", "misc").to_lower(), 99)
+
+	if type_a != type_b:
+		return type_a < type_b
+
+	# Same type - sort alphabetically by name
+	var name_a = a.get("name", "").to_lower()
+	var name_b = b.get("name", "").to_lower()
+	return name_a < name_b
 
 func toggle_ui() -> void:
 	"""Toggle inventory UI visibility"""

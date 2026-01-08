@@ -30,19 +30,11 @@ func _ready() -> void:
 	canvas_layer.follow_viewport_enabled = true  # Follow the active viewport
 	add_child(canvas_layer)
 
-	# Create container for notifications (center of screen, works in both fullscreen and windowed)
+	# Create container for notifications - use full screen coverage with centered children
 	notification_container = Control.new()
 	notification_container.name = "NotificationContainer"
-	notification_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	notification_container.anchor_left = 0.5
-	notification_container.anchor_right = 0.5
-	notification_container.anchor_top = 0.45  # Center-ish, visible in 720p windowed mode
-	notification_container.anchor_bottom = 0.45
-	notification_container.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	notification_container.grow_vertical = Control.GROW_DIRECTION_END
-	notification_container.offset_left = -150
-	notification_container.offset_right = 150
-	notification_container.custom_minimum_size = Vector2(300, 0)
+	notification_container.set_anchors_preset(Control.PRESET_FULL_RECT)  # Cover entire screen
+	notification_container.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block input
 	notification_container.z_index = 1000  # High z-index within the layer
 	canvas_layer.add_child(notification_container)
 
@@ -102,6 +94,12 @@ func show_notification(message: String, type: String = "INFO") -> void:
 
 ## Queue a notification for staggered display
 func _queue_notification(data: Dictionary) -> void:
+	# Skip if no container (server mode)
+	if not notification_container:
+		print("⚠️ [Notification] No container - skipping notification")
+		return
+
+	print("📢 [Notification] Queued: %s" % str(data))
 	pending_notifications.append(data)
 	if not is_processing_queue:
 		_start_processing_queue()
@@ -158,29 +156,39 @@ func _create_notification() -> ItemNotification:
 	return notification
 
 func _show_notification(notification: ItemNotification) -> void:
+	# Guard: ensure container exists (client mode only)
+	if not notification_container or not is_instance_valid(notification_container):
+		print("⚠️ NotificationManager: No container - notification not shown")
+		notification.queue_free()
+		return
+
 	# If we're at max capacity, push out the oldest notification
 	if notification_queue.size() >= MAX_VISIBLE_NOTIFICATIONS:
 		_push_out_oldest()
 
 	# Shift all existing notifications downward to make room (animated)
 	var shift_duration = 0.15  # Quick shift
+	var viewport_size = notification_container.get_viewport_rect().size
+	var base_y = viewport_size.y * 0.45  # Base Y position (45% from top)
 
 	for i in range(notification_queue.size()):
 		var existing_notification = notification_queue[i]
 		if is_instance_valid(existing_notification):
 			# Move down by one notification_spacing (positive Y = down)
-			var new_y = (notification_queue.size() - i) * notification_spacing
+			var new_y = base_y + (notification_queue.size() - i) * notification_spacing
 			var tween = create_tween()
 			tween.tween_property(existing_notification, "position:y", new_y, shift_duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
-	# Update container position based on current WINDOW size (not viewport - they can differ)
-	var window_size = DisplayServer.window_get_size()
-	notification_container.position = Vector2(window_size.x * 0.5 - 150, window_size.y * 0.45)
-
-	# Add the new notification at the top (position 0) immediately
+	# Add the new notification at center of screen
 	notification_queue.append(notification)
-	notification.position = Vector2(0, 0)
 	notification_container.add_child(notification)
+
+	# Position at center of screen, offset upward (45% from top)
+	var center_x = viewport_size.x / 2.0
+	notification.position = Vector2(center_x - 150, base_y)  # Center the 300px wide label
+	notification.pivot_offset = Vector2(150, 20)  # Center pivot for scaling animation
+
+	print("📢 [Notification] Shown: '%s' at pos %s (viewport=%s, visible=%s)" % [notification.text, notification.position, viewport_size, notification.visible])
 
 	# Connect to cleanup signal
 	notification.notification_finished.connect(_on_notification_finished.bind(notification))

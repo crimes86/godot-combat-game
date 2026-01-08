@@ -69,6 +69,10 @@ Commands:
     Forge items:
     forge_items [type]      - Get forge items (type: shield, weapon, head, etc.)
 
+    Death Recovery:
+    return_to_corpse        - Return to last death location for gear
+    threats                 - Get threat/aggro status (safe to loot?)
+
 Examples:
     python mcp_control.py ping
     python mcp_control.py take_control
@@ -303,6 +307,27 @@ def main():
     elif command == "forge_items":
         item_type = args[0] if args else ""
         cmd = {"action": "get_forge_items", "type": item_type}
+
+    # Corpse/loot debug
+    elif command == "corpses":
+        radius = float(args[0]) if args else 300.0
+        cmd = {"action": "get_corpses", "radius": radius}
+
+    elif command == "loot_all":
+        radius = float(args[0]) if args else 150.0
+        cmd = {"action": "loot_all", "radius": radius}
+
+    # Death recovery
+    elif command == "return_to_corpse":
+        cmd = {"action": "return_to_corpse"}
+
+    # Threat/aggro status
+    elif command == "threats":
+        cmd = {"action": "get_threats"}
+
+    # Skip tutorial
+    elif command == "skip_tutorial":
+        cmd = {"action": "skip_tutorial"}
 
     else:
         print(f"Unknown command: {command}")
