@@ -1283,6 +1283,10 @@ func _on_delete_confirmed() -> void:
 				InventorySystem.remove_item(source_index)
 			refresh_all()
 
+			# Trigger immediate save to prevent item coming back if user logs out quickly
+			if DatabaseManager and DatabaseManager.current_username != "":
+				DatabaseManager.save_current_player_state()
+
 	pending_delete_data = {}
 
 func _on_gold_changed(_amount: int, _total: int) -> void:

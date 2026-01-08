@@ -7,6 +7,7 @@ extends Node
 # DEBUG SETTINGS - Set to true to enable verbose logging
 # ============================================
 const DEBUG_FORGED_ICONS: bool = false  # Debug forged item icon loading
+const DEBUG_ICON_LOADING: bool = false  # Debug all icon loading (enable to trace failures)
 
 # ============================================
 # ENHANCED ICONS - 256x256 upscaled versions
@@ -131,6 +132,8 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 	# Determine the sprite path based on item type
 	var sprite_path = _get_sprite_path(item_type, sprite_name, item)
 	if sprite_path.is_empty():
+		if DEBUG_ICON_LOADING:
+			print("⚠️ [IconGen] No sprite path for: %s (type=%s, sprite_name=%s, slot=%s)" % [item_name, item_type, sprite_name, slot])
 		return null
 
 	# Determine best facing direction for this item
@@ -147,13 +150,21 @@ func get_item_icon(item: Dictionary) -> Texture2D:
 	if USE_ENHANCED_ICONS:
 		var enhanced_icon = _try_load_enhanced_equipment_icon(item_type, sprite_name, slot, item)
 		if enhanced_icon:
+			if DEBUG_ICON_LOADING:
+				print("✅ [IconGen] Enhanced icon loaded for: %s" % item_name)
 			icon_cache[cache_key] = enhanced_icon
 			return enhanced_icon
+		elif DEBUG_ICON_LOADING:
+			print("⚠️ [IconGen] No enhanced icon for: %s (type=%s, sprite=%s, slot=%s)" % [item_name, item_type, sprite_name, slot])
 
 	# Generate the icon from sprite sheet (fallback)
 	var icon = _generate_icon_from_sprite(sprite_path, direction, slot)
 	if icon:
+		if DEBUG_ICON_LOADING:
+			print("✅ [IconGen] Generated icon from sprite: %s" % item_name)
 		icon_cache[cache_key] = icon
+	elif DEBUG_ICON_LOADING:
+		print("❌ [IconGen] Failed to generate icon for: %s from %s" % [item_name, sprite_path])
 
 	return icon
 
@@ -176,23 +187,26 @@ func _get_sprite_path(item_type: String, sprite_name: String, item: Dictionary) 
 	"""Determine the sprite sheet path for an item"""
 	match item_type:
 		"armor":
-			# Armor requires sprite_name
-			if sprite_name.is_empty():
-				return ""
 			var slot = item.get("slot", "")
+			# If sprite_name is missing, try to infer from item name
+			var effective_sprite_name = sprite_name
+			if effective_sprite_name.is_empty():
+				effective_sprite_name = _infer_sprite_name_from_item(item, slot)
+			if effective_sprite_name.is_empty():
+				return ""
 			match slot:
 				"chest":
-					return "res://assets/characters/shirt/%s_walk.png" % sprite_name
+					return "res://assets/characters/shirt/%s_walk.png" % effective_sprite_name
 				"legs":
-					return "res://assets/characters/pants/%s_walk.png" % sprite_name
+					return "res://assets/characters/pants/%s_walk.png" % effective_sprite_name
 				"feet":
-					return "res://assets/characters/boots/%s_walk.png" % sprite_name
+					return "res://assets/characters/boots/%s_walk.png" % effective_sprite_name
 				"head":
-					return "res://assets/characters/head/%s_walk.png" % sprite_name
+					return "res://assets/characters/head/%s_walk.png" % effective_sprite_name
 				"hands":
-					return "res://assets/characters/hands/%s_walk.png" % sprite_name
+					return "res://assets/characters/hands/%s_walk.png" % effective_sprite_name
 				"arms":
-					return "res://assets/characters/arms/%s_walk.png" % sprite_name
+					return "res://assets/characters/arms/%s_walk.png" % effective_sprite_name
 		"weapon":
 			# Weapons use walk.png for cleaner icons (consistent 64x64 tiles)
 			var weapon_type = item.get("weapon_type", "sword")
@@ -385,6 +399,53 @@ func _auto_crop_image(img: Image) -> Image:
 func clear_cache() -> void:
 	"""Clear the icon cache (call when sprites change)"""
 	icon_cache.clear()
+
+# Known item name to sprite_name mappings for armor/clothes
+const ITEM_NAME_TO_SPRITE = {
+	# Starting clothes
+	"Tattered Shirt": "white_shirt",
+	"Tattered Pants": "green_pants",
+	# Common armor (add more as needed)
+	"White Shirt": "white_shirt",
+	"Green Pants": "green_pants",
+	"Leather Boots": "leather_boots",
+	"Leather Gloves": "leather_gloves",
+	"Leather Cap": "leather_cap",
+}
+
+func _infer_sprite_name_from_item(item: Dictionary, slot: String) -> String:
+	"""Infer sprite_name from item name or other properties"""
+	var item_name = item.get("name", "")
+
+	# Check direct mapping first
+	if ITEM_NAME_TO_SPRITE.has(item_name):
+		return ITEM_NAME_TO_SPRITE[item_name]
+
+	# Try to generate sprite name from item name
+	# e.g., "Leather Boots" -> "leather_boots"
+	if item_name != "":
+		var snake_name = item_name.to_lower().replace(" ", "_").replace("'", "")
+		# Check if the file might exist with this name
+		var test_paths = []
+		match slot:
+			"chest":
+				test_paths.append("res://assets/characters/shirt/%s_walk.png" % snake_name)
+			"legs":
+				test_paths.append("res://assets/characters/pants/%s_walk.png" % snake_name)
+			"feet":
+				test_paths.append("res://assets/characters/boots/%s_walk.png" % snake_name)
+			"head":
+				test_paths.append("res://assets/characters/head/%s_walk.png" % snake_name)
+			"hands":
+				test_paths.append("res://assets/characters/hands/%s_walk.png" % snake_name)
+			"arms":
+				test_paths.append("res://assets/characters/arms/%s_walk.png" % snake_name)
+
+		for path in test_paths:
+			if ResourceLoader.exists(path):
+				return snake_name
+
+	return ""
 
 func _generate_material_icon(item_name: String, item: Dictionary) -> Texture2D:
 	"""Load or generate material icon - tries file first, falls back to procedural"""

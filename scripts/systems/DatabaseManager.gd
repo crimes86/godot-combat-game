@@ -802,6 +802,12 @@ func save_current_player_state() -> bool:
 	var inv_data = InventorySystem.get_save_data()
 	save_data["inventory"] = JSON.stringify(inv_data)
 
+	# Locally deleted forged items (prevents re-sync of items user deleted)
+	if ForgeItemManager:
+		var deleted_items = ForgeItemManager.get_locally_deleted_items()
+		if deleted_items.size() > 0:
+			save_data["deleted_forged_items"] = JSON.stringify(deleted_items)
+
 	# Playtime
 	save_data["total_playtime_seconds"] = stats_data.get("total_playtime", 0)
 
@@ -864,6 +870,15 @@ func apply_player_data_to_systems(username: String, player: Node = null) -> void
 					LogManager.debug("Loaded inventory for: %s" % username, "inventory")
 				else:
 					push_warning("[DatabaseManager] Invalid inventory data for: %s, starting fresh" % username)
+
+	# Load locally deleted forged items BEFORE sync (prevents re-sync of deleted items)
+	var deleted_json = data.get("deleted_forged_items", "")
+	if deleted_json is String and not deleted_json.is_empty():
+		var deleted_data = JSON.parse_string(deleted_json)
+		if deleted_data and deleted_data is Dictionary:
+			if ForgeItemManager:
+				ForgeItemManager.set_locally_deleted_items(deleted_data)
+				LogManager.info("Loaded %d locally deleted forged items" % deleted_data.size(), "forge")
 
 	# Sync forged items to inventory AFTER loading saved inventory
 	# This merges any forged items that aren't already in the save

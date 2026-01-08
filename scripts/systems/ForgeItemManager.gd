@@ -29,6 +29,10 @@ var _forge_status_loaded: bool = false
 var _debug_forge_mode: bool = false  # When true, backend won't overwrite debug-injected forgeable list
 var _debug_claims_cleared: bool = false  # When true, sync_to_inventory will skip re-adding items
 
+# Locally deleted forged items - prevents re-sync until server confirms deletion
+# Keys: token_id (string), item_id, or any unique identifier
+var _locally_deleted_items: Dictionary = {}  # id -> timestamp of deletion
+
 # Wallet and bridge status
 var _wallet_connected: bool = false
 var _wallet_address: String = ""
@@ -99,6 +103,7 @@ func _on_logout() -> void:
 	_forged_items.clear()
 	_forged_items_by_id.clear()
 	_forgeable_achievements.clear()
+	_locally_deleted_items.clear()
 	_is_loaded = false
 	_forge_status_loaded = false
 	_synced_to_inventory = false
@@ -709,27 +714,36 @@ func sync_to_inventory() -> int:
 		return 0
 
 	var added_count = 0
+	var skipped_deleted = 0
 	for forged in _forged_items:
 		# Only sync items that have been claimed on server
 		if not forged.get("claimed_in_game", false):
+			continue
+
+		# Skip items that were locally deleted (user deleted but server may not know)
+		if _is_locally_deleted(forged):
+			skipped_deleted += 1
 			continue
 
 		var inventory_item = _convert_to_inventory_format(forged)
 		if inventory_item.is_empty():
 			continue
 
-		# Check if already in inventory (by forged_id)
+		# Check if already in inventory - use multiple ID fields for robust deduplication
 		# NOTE: token_id can be float from JSON (e.g., 134.0), must convert to int first
 		var token_id = forged.get("token_id", 0)
 		if token_id is float:
 			token_id = int(token_id)
 		var forged_id = str(token_id) if token_id else forged.get("item_id", "")
-		if _is_item_in_inventory(forged_id):
+		if _is_item_in_inventory(forged_id, forged):
 			continue
 
 		if InventorySystem.add_item(inventory_item):
 			added_count += 1
 			item_synced_to_inventory.emit(inventory_item)
+
+	if skipped_deleted > 0:
+		LogManager.info("Skipped %d locally deleted forged items during sync" % skipped_deleted, "forge")
 
 	if added_count > 0:
 		LogManager.info("Synced %d forged items to inventory (fallback)" % added_count, "forge")
@@ -842,16 +856,58 @@ func is_item_claimed(item_id: String) -> bool:
 	var forged_id = str(token_id) if token_id else forged.get("item_id", "")
 	return _is_item_in_inventory(forged_id)
 
-func _is_item_in_inventory(forged_id: String) -> bool:
-	"""Check if a forged item is already in inventory (local check)"""
+func _is_item_in_inventory(forged_id: String, forged_item: Dictionary = {}) -> bool:
+	"""Check if a forged item is already in inventory (local check)
+	Uses multiple ID fields to ensure robust deduplication."""
+	# Build a set of IDs to check against
+	var ids_to_check: Array = [forged_id]
+
+	# If we have the full forged item, gather all possible IDs
+	if not forged_item.is_empty():
+		var token_id = forged_item.get("token_id", 0)
+		if token_id is float:
+			token_id = int(token_id)
+		if token_id and token_id != 0:
+			ids_to_check.append(str(token_id))
+
+		var db_forged_id = forged_item.get("forged_id", 0)
+		if db_forged_id is float:
+			db_forged_id = int(db_forged_id)
+		if db_forged_id and db_forged_id != 0:
+			ids_to_check.append(str(db_forged_id))
+
+		var item_id = forged_item.get("item_id", "")
+		if item_id != "":
+			ids_to_check.append(item_id)
+
 	for slot in range(InventorySystem.inventory_items.size()):
 		var item = InventorySystem.inventory_items[slot]
-		if item:
-			# Check by forged_id first, then by item_id as fallback
-			if item.get("forged_id", "") == str(forged_id):
+		if not item or not item.get("is_forged", false):
+			continue
+
+		# Check against all possible ID fields in the inventory item
+		var inv_forged_id = str(item.get("forged_id", ""))
+		var inv_item_id = str(item.get("item_id", ""))
+		var inv_token_id = item.get("token_id", 0)
+		if inv_token_id is float:
+			inv_token_id = int(inv_token_id)
+		var inv_token_str = str(inv_token_id) if inv_token_id else ""
+
+		# Check all ID combinations
+		for check_id in ids_to_check:
+			if check_id == "":
+				continue
+			if inv_forged_id == check_id or inv_item_id == check_id or inv_token_str == check_id:
 				return true
-			if item.get("item_id", "") == forged_id:
+
+		# Fallback: Check by name if IDs don't match (catches edge cases)
+		if not forged_item.is_empty():
+			var forged_name = forged_item.get("item_name", "")
+			var inv_name = item.get("name", "")
+			if forged_name != "" and forged_name == inv_name:
+				LogManager.warning("Forged item '%s' found by name match (IDs didn't match) - forged_id=%s, inv_forged_id=%s" % [forged_name, forged_id, inv_forged_id], "forge")
 				return true
+
 	return false
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -865,6 +921,10 @@ func destroy_item(token_id: int, reason: String = "player_delete", callback: Cal
 	"""Permanently destroy a forged item (vendor sale, player delete, etc).
 	Item is transferred to treasury wallet and soft-deleted for potential recovery.
 	Returns: { "success": bool, "gold_received": int, "error": String }"""
+
+	# Track locally deleted items to prevent re-sync on login
+	# This is crucial for when server call fails but we still remove locally
+	_mark_as_locally_deleted(token_id)
 
 	if not AshbaneAuth or not AshbaneAuth.is_logged_in():
 		LogManager.warning("Cannot destroy item - not authenticated", "forge")
@@ -1004,6 +1064,56 @@ func _mark_unclaimed_in_cache(token_id: int) -> void:
 			item["claimed_in_game"] = false
 			LogManager.debug("Marked token_id %d as unclaimed in cache" % token_id, "forge")
 			break
+
+func _mark_as_locally_deleted(token_id: int) -> void:
+	"""Mark item as locally deleted to prevent re-sync on login.
+	This persists until the server confirms the item is actually deleted."""
+	var token_str = str(token_id)
+	_locally_deleted_items[token_str] = Time.get_unix_time_from_system()
+
+	# Also find and store the item_id for this token
+	for item in _forged_items:
+		var item_token = item.get("token_id", 0)
+		if item_token is float:
+			item_token = int(item_token)
+		if item_token == token_id:
+			var item_id = item.get("item_id", "")
+			if item_id != "":
+				_locally_deleted_items[item_id] = Time.get_unix_time_from_system()
+			break
+
+	LogManager.info("Marked token_id %d as locally deleted (prevents re-sync)" % token_id, "forge")
+
+func _is_locally_deleted(forged: Dictionary) -> bool:
+	"""Check if a forged item has been locally deleted (should skip sync)"""
+	# Check token_id
+	var token_id = forged.get("token_id", 0)
+	if token_id is float:
+		token_id = int(token_id)
+	if token_id and str(token_id) in _locally_deleted_items:
+		return true
+
+	# Check item_id
+	var item_id = forged.get("item_id", "")
+	if item_id != "" and item_id in _locally_deleted_items:
+		return true
+
+	# Check forged_id (database ID)
+	var forged_id = forged.get("forged_id", 0)
+	if forged_id is float:
+		forged_id = int(forged_id)
+	if forged_id and str(forged_id) in _locally_deleted_items:
+		return true
+
+	return false
+
+func get_locally_deleted_items() -> Dictionary:
+	"""Get the locally deleted items dictionary (for save/load)"""
+	return _locally_deleted_items.duplicate()
+
+func set_locally_deleted_items(deleted: Dictionary) -> void:
+	"""Set the locally deleted items dictionary (from save/load)"""
+	_locally_deleted_items = deleted.duplicate()
 
 func _convert_to_inventory_format(forged: Dictionary) -> Dictionary:
 	"""Convert forged item from API format to inventory format"""
