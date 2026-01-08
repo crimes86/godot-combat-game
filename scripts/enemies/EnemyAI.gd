@@ -804,12 +804,17 @@ func process_combat(delta: float) -> void:
 		var nearest_player: CharacterBody2D = null
 		var nearest_distance: float = INF
 		for p in cached_players:
-			if is_instance_valid(p) and not _is_player_dead(p):
+			# Skip dead players AND players in campfire safe zone (don't switch targets to safe players)
+			if is_instance_valid(p) and not _is_player_dead(p) and not _is_player_in_campfire_safe_zone(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_distance:
 					nearest_distance = dist
 					nearest_player = p
-		player = nearest_player
+
+		# Only update target if we found a valid one
+		# If no valid targets (all dead or in safe zone), keep current target for disengage check
+		if nearest_player:
+			player = nearest_player
 
 	if not player or not is_instance_valid(player):
 		disengage()
@@ -817,6 +822,11 @@ func process_combat(delta: float) -> void:
 
 	# Disengage if target player is dead - don't camp the corpse!
 	if _is_player_dead(player):
+		disengage()
+		return
+
+	# Also disengage if target entered campfire safe zone
+	if _is_player_in_campfire_safe_zone(player):
 		disengage()
 		return
 
@@ -902,17 +912,21 @@ func process_combat(delta: float) -> void:
 # ═══════════════════════════════════════════════════════════════════════════
 
 func process_attacking(delta: float) -> void:
-	# In multiplayer, find the nearest ALIVE player
+	# In multiplayer, find the nearest ALIVE player (excluding safe zone players)
 	if multiplayer.has_multiplayer_peer():
 		var nearest_player: CharacterBody2D = null
 		var nearest_distance: float = INF
 		for p in cached_players:
-			if is_instance_valid(p) and not _is_player_dead(p):
+			# Skip dead players AND players in campfire safe zone
+			if is_instance_valid(p) and not _is_player_dead(p) and not _is_player_in_campfire_safe_zone(p):
 				var dist = enemy.global_position.distance_to(p.global_position)
 				if dist < nearest_distance:
 					nearest_distance = dist
 					nearest_player = p
-		player = nearest_player
+
+		# Only update target if we found a valid one
+		if nearest_player:
+			player = nearest_player
 
 	if not player or not is_instance_valid(player):
 		disengage()
@@ -920,6 +934,11 @@ func process_attacking(delta: float) -> void:
 
 	# Disengage if target player is dead - don't camp the corpse!
 	if _is_player_dead(player):
+		disengage()
+		return
+
+	# Also disengage if target entered campfire safe zone
+	if _is_player_in_campfire_safe_zone(player):
 		disengage()
 		return
 

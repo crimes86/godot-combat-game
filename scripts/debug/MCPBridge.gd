@@ -80,13 +80,25 @@ var _attack_timer := 0.0
 # Campfire/healing state
 var _campfire_target: Node2D = null
 var _is_healing := false  # True when at campfire healing
-const HEAL_RETREAT_THRESHOLD := 0.30  # Retreat at 30% HP
+const HEAL_RETREAT_THRESHOLD := 0.50  # Retreat at 50% HP (earlier to avoid death)
 const HEAL_RESUME_THRESHOLD := 0.90  # Resume combat at 90% HP
 
 # Looting state
 var _loot_target: Node2D = null
 var _is_looting := false
 const LOOT_PICKUP_RANGE := 30.0
+
+# Obstacle avoidance / stuck detection
+var _last_position := Vector2.ZERO
+var _stuck_counter := 0
+var _avoidance_direction := 0  # -1 = left/up, 1 = right/down, 0 = none
+var _avoidance_timer := 0.0
+const STUCK_THRESHOLD := 3  # Frames of no movement to consider stuck
+const AVOIDANCE_DURATION := 0.4  # Time to move in avoidance direction
+
+# Threat awareness during pathing
+const THREAT_DETECTION_RANGE := 150.0  # Detect enemies within this range
+const THREAT_RESPONSE_RANGE := 80.0  # Engage if enemies this close
 
 func _ready():
 	# Only run in debug builds
@@ -309,7 +321,7 @@ func _cmd_move_to(target: Vector2) -> Dictionary:
 	_is_pathing = true
 	return {ok = true, target = {x = target.x, y = target.y}}
 
-func _update_pathing(_delta: float):
+func _update_pathing(delta: float):
 	if not _is_pathing or not player:
 		# If we're in healing mode but not pathing, we're at the campfire - wait to heal
 		if _is_healing and not _is_pathing:
@@ -322,21 +334,98 @@ func _update_pathing(_delta: float):
 				_combat_target = _find_nearest_alive_enemy()
 		return
 
+	# THREAT DETECTION: Check for nearby enemies while pathing (not healing)
+	if not _is_healing and not _auto_combat:
+		var nearest_enemy = _find_nearest_alive_enemy()
+		if nearest_enemy:
+			var enemy_dist = player.global_position.distance_to(nearest_enemy.global_position)
+			if enemy_dist < THREAT_RESPONSE_RANGE:
+				# Enemy very close - engage immediately!
+				print("[MCPBridge] THREAT! Enemy at %.0f range - engaging!" % enemy_dist)
+				_is_pathing = false
+				_release_inputs()
+				_combat_target = nearest_enemy
+				_auto_combat = true
+				return
+
 	var dist = player.global_position.distance_to(_move_target)
 	if dist < 20:
 		_is_pathing = false
 		_release_inputs()
+		_stuck_counter = 0
+		_avoidance_direction = 0
 		# If we reached campfire while healing, stay in healing mode
 		if _is_healing:
 			print("[MCPBridge] Reached campfire, waiting to heal...")
 		return
 
 	var dir = player.global_position.direction_to(_move_target)
+
+	# Stuck detection - check if we haven't moved much since last frame
+	var moved_dist = player.global_position.distance_to(_last_position)
+	_last_position = player.global_position
+
+	# Handle avoidance timer (currently trying to go around an obstacle)
+	if _avoidance_timer > 0:
+		_avoidance_timer -= delta
+		_apply_avoidance_movement(dir)
+		return
+
+	# Check if stuck (trying to move but not moving much)
+	if moved_dist < 1.0:  # Less than 1 pixel of movement
+		_stuck_counter += 1
+		if _stuck_counter >= STUCK_THRESHOLD:
+			# We're stuck! Try to go around the obstacle
+			_start_avoidance(dir)
+			return
+	else:
+		_stuck_counter = 0
+		_avoidance_direction = 0  # Reset if we're moving normally
+
+	# Normal movement toward target
 	_release_inputs()
 	if dir.x < -0.3: Input.action_press("move_left")
 	elif dir.x > 0.3: Input.action_press("move_right")
 	if dir.y < -0.3: Input.action_press("move_up")
 	elif dir.y > 0.3: Input.action_press("move_down")
+
+func _start_avoidance(dir: Vector2):
+	"""Start obstacle avoidance - move perpendicular to the blocked direction"""
+	_stuck_counter = 0
+	_avoidance_timer = AVOIDANCE_DURATION
+
+	# Alternate avoidance direction each time we get stuck
+	if _avoidance_direction == 0:
+		_avoidance_direction = 1 if randf() > 0.5 else -1
+	else:
+		_avoidance_direction = -_avoidance_direction  # Try the other way
+
+	print("[MCPBridge] Stuck! Trying avoidance direction: %d" % _avoidance_direction)
+	_apply_avoidance_movement(dir)
+
+func _apply_avoidance_movement(dir: Vector2):
+	"""Move perpendicular to the intended direction to get around obstacles"""
+	_release_inputs()
+
+	# Determine perpendicular direction based on which axis has more movement
+	if abs(dir.x) > abs(dir.y):
+		# Moving mostly horizontally - try vertical avoidance
+		if _avoidance_direction > 0:
+			Input.action_press("move_down")
+		else:
+			Input.action_press("move_up")
+		# Also continue moving in the original horizontal direction
+		if dir.x < 0: Input.action_press("move_left")
+		elif dir.x > 0: Input.action_press("move_right")
+	else:
+		# Moving mostly vertically - try horizontal avoidance
+		if _avoidance_direction > 0:
+			Input.action_press("move_right")
+		else:
+			Input.action_press("move_left")
+		# Also continue moving in the original vertical direction
+		if dir.y < 0: Input.action_press("move_up")
+		elif dir.y > 0: Input.action_press("move_down")
 
 # ═══════════════════════════════════════════════════════════════════
 # FACING DIRECTION CONTROL
@@ -1304,6 +1393,27 @@ func _update_auto_combat(delta: float):
 	if dist > COMBAT_RANGE:
 		# Move toward enemy - face first!
 		var dir = player.global_position.direction_to(_combat_target.global_position)
+
+		# Stuck detection during combat movement
+		var moved_dist = player.global_position.distance_to(_last_position)
+		_last_position = player.global_position
+
+		# Handle avoidance timer
+		if _avoidance_timer > 0:
+			_avoidance_timer -= delta
+			_apply_avoidance_movement(dir)
+			return
+
+		# Check if stuck
+		if moved_dist < 1.0:
+			_stuck_counter += 1
+			if _stuck_counter >= STUCK_THRESHOLD:
+				_start_avoidance(dir)
+				return
+		else:
+			_stuck_counter = 0
+			_avoidance_direction = 0
+
 		_release_inputs()
 		if dir.x < -0.3: Input.action_press("move_left")
 		elif dir.x > 0.3: Input.action_press("move_right")
@@ -1311,6 +1421,8 @@ func _update_auto_combat(delta: float):
 		elif dir.y > 0.3: Input.action_press("move_down")
 	else:
 		# In range - stop and attack!
+		_stuck_counter = 0
+		_avoidance_direction = 0
 		_release_inputs()
 		if _attack_timer <= 0:
 			# Use combat system to attack (facing is handled by _update_facing)
